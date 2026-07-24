@@ -166,6 +166,13 @@ describe('paragraph-properties capsule: a styled paragraph is editable, w:pPr pr
     expect(openDocxSession(docx(uncapturable)).editable).toBe(false);
   });
 
+  test('a table cell paragraph with opening-tag WHITESPACE keeps the table read-only (no lexical loss)', () => {
+    // A cell paragraph does not capture an attributes capsule; opening-tag whitespace would be lost
+    // on regeneration, so the whole table stays read-only.
+    const cellWs = '<w:p><w:r><w:t>intro</w:t></w:r></w:p><w:tbl><w:tr><w:tc><w:p\n ><w:r><w:t>cell</w:t></w:r></w:p></w:tc></w:tr></w:tbl>';
+    expect(openDocxSession(docx(cellWs)).editable).toBe(false);
+  });
+
   test('joining a styled paragraph with the next keeps the FIRST paragraph w:pPr (first-survivor)', () => {
     const session = openDocxSession(docx(STYLED));
     const doc = session.projectDoc();
@@ -201,6 +208,76 @@ describe('paragraph-properties capsule: a styled paragraph is editable, w:pPr pr
     const reopened = openDocxSession(session.save());
     expect(reopened.bodyText()).toBe('Ti\ntle\nbody');
     expect(reopened.editable).toBe(true);
+  });
+});
+
+describe('paragraph-attributes capsule: rsid/paraId paragraphs are editable, attrs preserved (3.1/3.2)', () => {
+  const RSID =
+    '<w:p w:rsidR="00AB12" w14:paraId="1F2E3D4C"><w:r><w:t>alpha</w:t></w:r></w:p>' +
+    '<w:p><w:r><w:t>beta</w:t></w:r></w:p>';
+  const rsidDoc = () => docx(RSID);
+
+  test('a paragraph carrying w:rsidR + w14:paraId opens editable, attrs preserved through save+reopen', () => {
+    const session = openDocxSession(rsidDoc());
+    expect(session.editable).toBe(true);
+    const res = session.applyPmDoc(withFirstParagraphText(session.projectDoc(), 'ALPHA'));
+    expect(res.committed).toBe(true);
+    const savedXml = strFromU8(unzipSync(session.save())['word/document.xml']);
+    expect(savedXml).toContain('<w:p w:rsidR="00AB12" w14:paraId="1F2E3D4C">'); // attributes re-spliced byte-exact
+    expect(savedXml).toContain('ALPHA');
+    expect(openDocxSession(session.save()).bodyText()).toBe('ALPHA\nbeta');
+  });
+
+  test('an UNRELATED self-closing empty paragraph stays byte-exact through a structural edit', () => {
+    // A self-closing <w:p/> that is not touched by a split must not be expanded to <w:p></w:p>.
+    const doc = '<w:p/><w:p><w:r><w:t>abcd</w:t></w:r></w:p>';
+    const session = openDocxSession(docx(doc));
+    expect(session.editable).toBe(true);
+    const pm = session.projectDoc();
+    // Split the SECOND paragraph "abcd" -> "ab" + "cd"; the first (empty self-closed) is untouched.
+    const split = docSchema.node('doc', null, [
+      pm.child(0),
+      docSchema.node('paragraph', { semId: pm.child(1).attrs.semId }, docSchema.text('ab')),
+      docSchema.node('paragraph', { semId: null }, docSchema.text('cd')),
+    ]);
+    expect(session.applyPmDoc(split).committed).toBe(true);
+    const savedXml = strFromU8(unzipSync(session.save())['word/document.xml']);
+    expect(savedXml).toContain('<w:p/>'); // the untouched empty paragraph kept its self-closing form
+  });
+
+  test('splitting keeps the tail namespace context its inherited w:pPr needs (drops only the unique id)', () => {
+    // The paragraph declares xmlns:w14 on its opening tag and its w:pPr USES w14:beforeAutospacing.
+    // On split, the tail inherits the w:pPr, so it must also inherit xmlns:w14 — but NOT the unique
+    // w14:paraId.
+    const nsDoc =
+      '<w:p xmlns:w14="http://x" w14:paraId="AAAA"><w:pPr><w:spacing w14:beforeAutospacing="1"/></w:pPr><w:r><w:t>abcd</w:t></w:r></w:p>';
+    const session = openDocxSession(docx(nsDoc));
+    expect(session.editable).toBe(true);
+    const pm = session.projectDoc();
+    const split = docSchema.node('doc', null, [
+      docSchema.node('paragraph', { semId: pm.child(0).attrs.semId }, docSchema.text('ab')),
+      docSchema.node('paragraph', { semId: null }, docSchema.text('cd')),
+    ]);
+    expect(session.applyPmDoc(split).committed).toBe(true);
+    const savedXml = strFromU8(unzipSync(session.save())['word/document.xml']);
+    expect(savedXml.match(/xmlns:w14="http:\/\/x"/g)?.length).toBe(2); // both halves declare it
+    expect(savedXml.match(/w14:paraId="AAAA"/g)?.length).toBe(1); // the unique id only on the head
+    expect(savedXml.match(/w14:beforeAutospacing="1"/g)?.length).toBe(2); // both keep the shared pPr
+  });
+
+  test('splitting an rsid/paraId paragraph does NOT duplicate the w14:paraId (tail opens fresh)', () => {
+    const session = openDocxSession(rsidDoc());
+    const doc = session.projectDoc();
+    const split = docSchema.node('doc', null, [
+      docSchema.node('paragraph', { semId: doc.child(0).attrs.semId }, docSchema.text('al')),
+      docSchema.node('paragraph', { semId: null }, docSchema.text('pha')),
+      ...Array.from({ length: doc.childCount - 1 }, (_, i) => doc.child(i + 1)),
+    ]);
+    expect(session.applyPmDoc(split).committed).toBe(true);
+    const savedXml = strFromU8(unzipSync(session.save())['word/document.xml']);
+    // The paraId appears EXACTLY once (the head); the tail opens as a plain <w:p>.
+    expect(savedXml.match(/w14:paraId="1F2E3D4C"/g)?.length).toBe(1);
+    expect(session.bodyText()).toBe('al\npha\nbeta');
   });
 });
 

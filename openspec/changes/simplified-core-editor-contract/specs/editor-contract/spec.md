@@ -2,7 +2,7 @@
 
 ### Requirement: The adapter-facing surface exposes no engine types
 
-An adapter drives the editor through `Editor` (the facade) and supplies
+An adapter SHALL drive the editor through `Editor` (the facade) and supply
 `EditorHost`. Whatever else the contract exposes, no member of the public
 surface SHALL reference an editing-engine or layout-internal type. The surface
 is deliberately open-ended and expected to grow; this requirement constrains
@@ -24,7 +24,8 @@ geometry are derived from current state, not carried in the render list.
 #### Scenario: Pointer handling resolves without an engine coordinate
 
 - **WHEN** the adapter passes a client-space point to `hitTest`
-- **THEN** it receives a `DocPoint` of `{ docPos, scope }`
+- **THEN** it receives a PM-free semantic hit target carrying frame identity,
+  scope, stable semantic identity, position or atomic target, and affinity
 - **AND** it never reads or constructs an engine position
 
 #### Scenario: Selection overlays read content-space rectangles
@@ -46,23 +47,26 @@ performs no measurement or layout.
 - **THEN** the host's `onDisplay` receives the new `DisplayPage[]`
 - **AND** the host supplies no measurement callback to produce them
 
-### Requirement: Document offsets are the only positions crossing the boundary
+### Requirement: PM-free semantic positions are the only positions crossing the boundary
 
-Every content-bearing `DisplayItem` SHALL carry `docFrom`, `docTo`, and a view
-`scope`. Selection maps to geometry through these offsets alone.
+Every content-bearing `DisplayItem` SHALL carry or reference a PM-free semantic
+range with scope, stable semantic identity, position/atomic-target semantics,
+and affinity as applicable. Selection SHALL map to geometry through the
+revision-tagged interaction frame and engine geometry queries, not through
+ProseMirror positions, browser DOM ranges, or accumulated display-item lengths.
 
 #### Scenario: Selection maps to painted content
 
 - **WHEN** the current selection covers a range
-- **THEN** its rectangles are resolved from items whose `docFrom`/`docTo` bound
-  the range within the matching `scope`
+- **THEN** its rectangles are resolved from the interaction frame's semantic
+  position/cluster index within the matching scope and revision
 - **AND** the adapter holds no engine position at any step
 
 ### Requirement: The contract adds no test surface of its own
 
-This change is declarations plus design. Its acceptance is the contract
-package's own typecheck and the consumer type test; it introduces no additional
-test suites.
+This change SHALL add declarations and design but no runtime test surface. Its
+acceptance is the contract package's own typecheck and the consumer type test;
+it introduces no additional test suites.
 
 #### Scenario: Acceptance is typecheck-only
 

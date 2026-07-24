@@ -34,12 +34,13 @@
 - [ ] 4.3 Prototype the selected clipped/repositioned input-host technique near the engine caret and record how browser IME/input UI follows the active caret on the supported platform matrix.
 - [ ] 4.4 Add composition tests for start/update/end/cancel, repeated updates, blur, dead keys, surrogate pairs, combining clusters, RTL input, remote invalidation, and capability-boundary rejection with no duplicate or lost text.
 - [ ] 4.5 Add clipboard, beforeinput, drag/drop, keyboard-command, mobile/virtual-keyboard, and focus-transfer tests proving events use existing bounded parsing and store-first validation.
-- [ ] 4.6 Add accessibility-tree tests proving the hidden ProseMirror projection and engine semantic projection do not expose duplicate documents or contradictory focus/editability.
-- [ ] 4.7 Run the browser/platform gate through public adapter builds and either approve the hidden-host mechanism with recorded evidence or stop and revise it before page-interaction work continues.
+- [ ] 4.6 Implement the minimum single semantic/accessibility projection required for the body-paragraph gate, including reading order, editability, focus, and selection mapped to canonical identities.
+- [ ] 4.7 Add accessibility-tree tests proving the hidden ProseMirror projection and engine semantic projection do not expose duplicate documents or contradictory focus/editability.
+- [ ] 4.8 Run the browser/platform gate through public adapter builds and either approve the hidden-host mechanism with recorded evidence or stop and revise it before page-interaction work continues.
 
 ## 5. Shared pointer and keyboard interaction controller
 
-- [ ] 5.1 Implement a framework-neutral interaction controller that accepts host metrics and native event intent and returns semantic selection, command, focus, capture, scroll, or typed rejection effects.
+- [ ] 5.1 Implement a framework-neutral interaction controller that accepts host metrics and native event intent and returns ProseMirror selection/command requests through `EditorBinding`, focus, capture, scroll, or typed rejection effects without owning parallel selection state.
 - [ ] 5.2 Implement single-click caret placement and shift-click extension through frame-bound hit targets and `EditorBinding`.
 - [ ] 5.3 Implement Unicode-aware double-click word and capability-owned triple-click block selection without splitting grapheme clusters.
 - [ ] 5.4 Implement pointer-drag selection with capture across lines and pages, preserving semantic anchors when layout frames change.
@@ -78,24 +79,27 @@
 - [ ] 8.7 Run the representative 300–500-page corpus and record mounted display pages, DOM nodes, ProseMirror nodes/DOM, retained memory, input latency, active-frame latency, scroll work, and downstream convergence against ratified budgets.
 - [ ] 8.8 Keep the complete hidden ProseMirror projection if the gate passes; if it fails for measured projection cost, record the evidence and create the bounded mounted-window implementation task without changing canonical or public semantics.
 - [ ] 8.9 If a bounded ProseMirror window is required, prove selection, IME, history, clipboard, anchors, collaboration, window movement, and public-driver equivalence before enabling it.
+- [ ] 8.10 Pass and record the first `interactive-paginated` acceptance gate for the supported body-paragraph matrix through both public adapters, including direct page input, caret/selection, IME, accessibility, async frame coherence, virtualization, save/reopen, and ratified performance; update only the interaction claim and do not require or infer the feature-WYSIWYG claim.
 
 ## 9. Capability-declared fallback and feature lanes
 
 - [ ] 9.1 Extend capability registration with rendering, hit ownership, selection/navigation, fallback editing, typed editing, save/reopen, paired-adapter, and evidence declarations that default closed.
 - [ ] 9.2 Add a shared precommit fallback guard that checks exact ownership, accepted ProseMirror steps, semantic operation mapping, boundary crossing, and preservation obligations before store mutation.
 - [ ] 9.3 Add reverse-reconciliation and rejection tests proving unsupported fallback intent cannot leak into canonical state or move selection into an invalid projection.
-- [ ] 9.4 Complete the body-paragraph lane for text, marks, paragraph selection, formatting, IME, collaboration, layout repaint, and deterministic DOCX save/reopen through both adapters.
-- [ ] 9.5 Complete the first table lane for cell hit ownership, caret/navigation within owned cell text, cell selection geometry, supported typed operations, boundary rejection, fragmentation geometry, and save/reopen evidence.
-- [ ] 9.6 Complete the first image lane for atomic hit ownership, node selection, keyboard traversal, supported delete/replace commands, wrap/transform geometry, read-only unsupported handles, and save/reopen evidence.
-- [ ] 9.7 Define a repeatable lane checklist for controls, links, headers/footers, annotations, notes, fields, shapes, and later features so each can land independently without widening existing claims.
-- [ ] 9.8 Add hostile and preservation fixtures proving fallback edits retain unowned XML children, attributes, relationships, media, extension markup, and preservation capsules byte-equivalently where required.
+- [ ] 9.4 Run the separate body-paragraph feature-WYSIWYG comparator bundle for the exact supported text/mark/paragraph matrix and update that claim only if authored, style, shaping, pagination, display, interaction, accessibility, DOCX, and relevant output evidence passes.
+- [ ] 9.5 Complete the first table `interactive-paginated` lane for owned cell text, cell hit ownership, caret/navigation, cell selection geometry, boundary rejection, fragmentation geometry, paired adapters, and save/reopen; keep row/column, merge/split, dimensions, borders, shading, header-row, and other unproven operations read-only.
+- [ ] 9.6 Run the separate table feature-WYSIWYG comparator bundle for the exact proven table matrix and update only that matrix's claim.
+- [ ] 9.7 Complete the first image `interactive-paginated` lane for atomic hit ownership, node selection, keyboard traversal, supported delete/replace commands, wrap/transform geometry, paired adapters, read-only unsupported handles, and save/reopen.
+- [ ] 9.8 Run the separate image feature-WYSIWYG comparator bundle for the exact proven image matrix and update only that matrix's claim.
+- [ ] 9.9 Define a repeatable two-gate lane checklist for controls, links, headers/footers, annotations, notes, fields, shapes, and later features so each can land independently without widening existing claims.
+- [ ] 9.10 Add hostile and preservation fixtures proving fallback edits retain unowned XML children, attributes, relationships, media, extension markup, and preservation capsules byte-equivalently where required.
 
 ## 10. Accessibility, parity, claims, and final gates
 
-- [ ] 10.1 Implement the selected single semantic/accessibility projection with reading order, roles, names, editability, selection, current focus, and actions mapped to canonical semantic identities.
+- [ ] 10.1 Complete the single semantic/accessibility projection for every claimed feature lane with reading order, roles, names, editability, selection, current focus, and actions mapped to canonical semantic identities.
 - [ ] 10.2 Prove accessibility focus can request virtualized content without identity loss and that pointer, keyboard, and accessibility actions produce equivalent semantic commands.
 - [ ] 10.3 Run identical engine-neutral `EditorDriver` interaction suites against installed-style React and Vue packages with no private ProseMirror or engine-module access.
-- [ ] 10.4 Add comparator bundles for each declared interactive feature: authored state, resolved style, shaping/layout, display geometry, interaction geometry, semantic/accessibility output, DOCX save/reopen, and relevant PDF/print output.
+- [ ] 10.4 Verify that every feature-WYSIWYG claim has its own comparator bundle for authored state, resolved style, shaping/layout, display geometry, interaction geometry, semantic/accessibility output, DOCX save/reopen, and relevant PDF/print output.
 - [ ] 10.5 Update the feature-support matrix and docs to claim only the exact rendered, read-only, fallback-editable, typed-editable, interactive-paginated, or feature-WYSIWYG matrix proven by evidence.
 - [ ] 10.6 Add a guard that fails CI if paginated preview repaint alone is labeled interactive-paginated/WYSIWYG or if diagnostic split mode is used as acceptance evidence.
 - [ ] 10.7 Run targeted typecheck, unit/property tests, paired adapter parity, API extraction, i18n validation where strings changed, browser interaction suites, save/reopen fixtures, security checks, and representative performance gates.

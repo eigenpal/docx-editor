@@ -3,7 +3,7 @@
 // so it can never drop or corrupt authored OOXML.
 
 import { describe, expect, test } from 'bun:test';
-import { extractParagraphPropertiesCapsule, paragraphInnerWithCapsule } from '../src/package/preservation-capsule.ts';
+import { extractParagraphPropertiesCapsule, paragraphInnerWithCapsule, extractParagraphOpenAttributes } from '../src/package/preservation-capsule.ts';
 
 describe('extractParagraphPropertiesCapsule', () => {
   test('captures a leading w:pPr verbatim (attribute order + whitespace preserved)', () => {
@@ -23,6 +23,11 @@ describe('extractParagraphPropertiesCapsule', () => {
   test('handles > inside an attribute value in the w:pPr opening tag', () => {
     const slice = '<w:p><w:pPr w:x="a>b"><w:jc w:val="left"/></w:pPr><w:r><w:t>x</w:t></w:r></w:p>';
     expect(extractParagraphPropertiesCapsule(slice)).toBe('<w:pPr w:x="a>b"><w:jc w:val="left"/></w:pPr>');
+  });
+
+  test('finds the w:pPr even when the w:p opening tag has a > inside an attribute value (quote-aware)', () => {
+    const slice = '<w:p x:value="a>b"><w:pPr><w:jc w:val="center"/></w:pPr><w:r><w:t>x</w:t></w:r></w:p>';
+    expect(extractParagraphPropertiesCapsule(slice)).toBe('<w:pPr><w:jc w:val="center"/></w:pPr>');
   });
 
   test('returns null when there is no leading w:pPr', () => {
@@ -89,3 +94,22 @@ describe('paragraphInnerWithCapsule', () => {
     expect(paragraphInnerWithCapsule(undefined, '<w:r><w:t>x</w:t></w:r>')).toBe('<w:r><w:t>x</w:t></w:r>');
   });
 });
+
+describe('extractParagraphOpenAttributes', () => {
+  test('captures the w:p opening attributes verbatim (leading whitespace preserved)', () => {
+    expect(extractParagraphOpenAttributes('<w:p w:rsidR="00AB" w:rsidRDefault="00CD"><w:r><w:t>x</w:t></w:r></w:p>')).toBe(' w:rsidR="00AB" w:rsidRDefault="00CD"');
+  });
+  test("returns '' for a plain <w:p> (no attributes)", () => {
+    expect(extractParagraphOpenAttributes('<w:p><w:r><w:t>x</w:t></w:r></w:p>')).toBe('');
+  });
+  test('captures attributes of a self-closing empty paragraph', () => {
+    expect(extractParagraphOpenAttributes('<w:p w:rsidR="00AB"/>')).toBe(' w:rsidR="00AB"');
+  });
+  test('handles > inside an attribute value', () => {
+    expect(extractParagraphOpenAttributes('<w:p w:x="a>b"><w:r/></w:p>')).toBe(' w:x="a>b"');
+  });
+  test('does not match w:pPr as the paragraph tag', () => {
+    // A slice that does not begin with a w:p element has no paragraph opening tag.
+    expect(extractParagraphOpenAttributes('<w:pPr/>')).toBeNull();
+  });
+})

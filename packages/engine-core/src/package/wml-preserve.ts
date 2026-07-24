@@ -9,7 +9,7 @@ import { readXml, textContent, type XmlNode } from './xml-reader.ts';
 import { scanCellParagraphSpans } from './wml-scan.ts';
 import { paragraphXml } from './wml-serialize.ts';
 import { el, blockFromText } from './wml-parse.ts';
-import { extractParagraphPropertiesCapsule } from './preservation-capsule.ts';
+import { extractParagraphPropertiesCapsule, extractParagraphOpenAttributes } from './preservation-capsule.ts';
 import { IdentityAllocator } from '../model/identity.ts';
 import { blockHashContent, blockPatchEdited, blockSerialize, isTopLevelEditable, registerCoreBlockCapability } from '../model/index.ts';
 import { stableHash } from '../comparators/index.ts';
@@ -53,8 +53,11 @@ export function hashPreservableBlock(block: Block): string {
 function reparseBlockWithCapsule(sliceText: string, alloc: IdentityAllocator): Block | undefined {
   const block = blockFromText(sliceText, alloc);
   if (block && block.kind === 'paragraph') {
-    const capsule = extractParagraphPropertiesCapsule(sliceText);
-    if (capsule) return { ...block, pPrCapsule: capsule };
+    const pPr = extractParagraphPropertiesCapsule(sliceText);
+    const attrs = extractParagraphOpenAttributes(sliceText);
+    if (pPr || attrs) {
+      return { ...block, ...(pPr ? { pPrCapsule: pPr } : {}), ...(attrs ? { pAttrsCapsule: attrs } : {}) };
+    }
   }
   return block;
 }
@@ -139,17 +142,29 @@ export function sliceIsFullyCapturedParagraph(sliceText: string, opts?: { readon
   // sits before it, or it is not the leading child) stays read-only. `capsule !== null` means the
   // leading w:pPr was captured, so paragraphFullyCaptured may skip it.
   const hasPPrChild = pEl.children.some((c) => c.type === 'element' && c.name === 'w:pPr');
-  if (hasPPrChild && !allowCapsule) return false; // capsules not captured here (cell) -> stay read-only
   const capsule = extractParagraphPropertiesCapsule(sliceText);
+  // The BYTE extractor catches ANY non-empty opening-tag content (attributes AND lexical whitespace
+  // like `<w:p\n>`), which `pEl.attributes` misses — so it, not the parsed element, is the fail-close
+  // signal. Capsules are only captured/reinserted for TOP-LEVEL paragraphs (allowCapsule); where they
+  // are not (table cells), a paragraph carrying a w:pPr OR any opening-tag content stays read-only.
+  const attrsCapsule = extractParagraphOpenAttributes(sliceText);
+  const hasOpeningContent = !!attrsCapsule; // non-empty string => real attributes or whitespace bytes
+  if ((hasPPrChild || hasOpeningContent) && !allowCapsule) return false;
   if (hasPPrChild && capsule === null) return false; // an uncapturable w:pPr -> fail closed
-  return paragraphFullyCaptured(pEl, { pPrCapsuled: capsule !== null });
+  if (attrsCapsule === null) return false; // the opening tag could not be cleanly captured -> fail closed
+  return paragraphFullyCaptured(pEl, {
+    pPrCapsuled: capsule !== null,
+    pAttrsCapsuled: hasOpeningContent,
+  });
 }
 
 export function paragraphFullyCaptured(
   pEl: Extract<XmlNode, { type: 'element' }>,
-  opts?: { readonly pPrCapsuled?: boolean },
+  opts?: { readonly pPrCapsuled?: boolean; readonly pAttrsCapsuled?: boolean },
 ): boolean {
-  if (Object.keys(pEl.attributes).length > 0) return false;
+  // Paragraph opening-tag attributes (rsid…) are preserved verbatim as a capsule when captured;
+  // otherwise the paragraph is not byte-faithfully regenerable and stays read-only.
+  if (!opts?.pAttrsCapsuled && Object.keys(pEl.attributes).length > 0) return false;
   let pPrConsumed = false;
   let sawRun = false;
   for (const c of pEl.children) {
@@ -303,7 +318,17 @@ function regenerateBlockRegion(
   }
   const regionStart = docRanges[0][1].start;
   const regionEnd = docRanges[docRanges.length - 1][1].end;
-  const newBody = blocks.map((b) => blockSerialize(b)).join(''); // each editable block via its capability
+  // An UNCHANGED block that survived the structural edit (same id, content hash still equal to its
+  // baseline) is emitted VERBATIM from its original slice — preserving every lexical detail the
+  // serializer cannot reproduce (a self-closing `<w:p/>`, opening-tag whitespace, attribute style).
+  // Only CHANGED (a split head) and NEW (a split tail) blocks are regenerated via their capability.
+  const originalById = new Map(docRanges.map(([id, r]) => [id, { slice: original.slice(r.start, r.end), baselineHash: r.baselineHash }]));
+  const newBody = blocks
+    .map((b) => {
+      const orig = originalById.get(b.id);
+      return orig && hashPreservableBlock(b) === orig.baselineHash ? orig.slice : blockSerialize(b);
+    })
+    .join('');
   return original.slice(0, regionStart) + newBody + original.slice(regionEnd);
 }
 

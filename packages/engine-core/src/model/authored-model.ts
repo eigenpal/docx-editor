@@ -40,6 +40,11 @@ export interface ParagraphRecord {
    *  unmodeled properties stays editable (its runs) without losing them. Absent when the paragraph
    *  had no properties, or when they were not cleanly capturable (the paragraph then stays read-only). */
   readonly pPrCapsule?: string;
+  /** An ownership-scoped capsule for the paragraph's `<w:p …>` opening-tag ATTRIBUTES (verbatim,
+   *  incl. leading whitespace, e.g. ` w:rsidR="00AB"`) — revision ids the model does not represent.
+   *  Re-spliced as `<w:p{pAttrsCapsule}>` so a paragraph carrying rsid/other attributes stays
+   *  editable. Absent when the paragraph had no attributes. */
+  readonly pAttrsCapsule?: string;
 }
 
 // --- Tables (task 2.7 / fidelity slice 1, ADR-S10). Structural preservation:

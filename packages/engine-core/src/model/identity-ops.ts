@@ -13,6 +13,19 @@ import {
 } from './authored-model.ts';
 import { IdentityAllocator } from './identity.ts';
 
+/** The subset of a paragraph's opening-tag attributes a SPLIT/derived paragraph may inherit: every
+ *  attribute EXCEPT the unique per-paragraph identities (`w14:paraId`, `w14:textId`), which must not
+ *  be duplicated. Namespace declarations (`xmlns:*`), markup-compatibility (`mc:*`), and revision ids
+ *  (`w:rsid*`) are kept, so the tail's inherited `w:pPr` keeps the namespace/markup context those
+ *  bytes depend on. Quote-aware. */
+export function inheritableParagraphAttributes(attrs: string): string {
+  let out = attrs;
+  for (const name of ['w14:paraId', 'w14:textId']) {
+    out = out.replace(new RegExp(`\\s+${name}\\s*=\\s*("[^"]*"|'[^']*')`, 'g'), '');
+  }
+  return out;
+}
+
 function findParagraph(
   model: PackageModel,
   paragraphId: string,
@@ -75,12 +88,18 @@ export function splitParagraph(
   // The tail inherits the head's paragraph properties — including the ownership-scoped w:pPr capsule
   // — so splitting a styled paragraph gives BOTH halves those properties (as Word does) and never
   // drops the capsule.
+  // The w:pPr capsule (styles/spacing) is shared by both split halves, as Word does. The opening
+  // ATTRIBUTES capsule is INHERITED WITHOUT its unique identities (w14:paraId/textId) so the tail
+  // does not duplicate the head's identity, but KEEPS the namespace declarations + markup-compat +
+  // rsid the copied w:pPr may depend on (a w:pPr using a w14: attribute needs the tail's xmlns:w14).
+  const tailAttrs = para.pAttrsCapsule ? inheritableParagraphAttributes(para.pAttrsCapsule) : undefined;
   const tail: ParagraphRecord = {
     kind: 'paragraph',
     id: tailId,
     runs: tailRuns,
     props: para.props,
     ...(para.pPrCapsule ? { pPrCapsule: para.pPrCapsule } : {}),
+    ...(tailAttrs ? { pAttrsCapsule: tailAttrs } : {}),
   };
   const blocks = loc.story.blocks as ParagraphRecord[];
   const next = [...blocks.slice(0, loc.index), first, tail, ...blocks.slice(loc.index + 1)];

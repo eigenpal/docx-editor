@@ -230,6 +230,7 @@ registerCoreBlockCapability({
       runs: normalizeRuns(p.runs),
       ...(p.props ? { props: p.props } : {}),
       ...(p.pPrCapsule ? { pPrCapsule: p.pPrCapsule } : {}),
+      ...(p.pAttrsCapsule ? { pAttrsCapsule: p.pAttrsCapsule } : {}),
     };
   },
   normalize: (block) => normalizeParagraph(block as ParagraphRecord),

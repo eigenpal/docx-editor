@@ -20,7 +20,7 @@ import {
   paragraphFullyCaptured,
   sliceIsFullyCapturedParagraph,
 } from '../wml-preserve.ts';
-import { extractParagraphPropertiesCapsule } from '../preservation-capsule.ts';
+import { extractParagraphPropertiesCapsule, extractParagraphOpenAttributes } from '../preservation-capsule.ts';
 import {
   createEmptyModel,
   bodyStoryId,
@@ -121,8 +121,11 @@ export function parseDocx(bytes: Uint8Array, options: ParseOptions = {}): ParseR
       // source slice), so a paragraph carrying unmodeled properties can stay editable and re-splice
       // them verbatim (document-engine 3.2). The baseline hash is then computed WITH the capsule.
       if (block.kind === 'paragraph') {
-        const capsule = extractParagraphPropertiesCapsule(docText.slice(span.start, span.end));
-        if (capsule) block = { ...block, pPrCapsule: capsule };
+        const slice = docText.slice(span.start, span.end);
+        const pPr = extractParagraphPropertiesCapsule(slice);
+        const attrs = extractParagraphOpenAttributes(slice);
+        if (pPr) block = { ...block, pPrCapsule: pPr };
+        if (attrs) block = { ...block, pAttrsCapsule: attrs }; // only when non-empty
       }
       blocks.push(block);
       blockRanges.set(block.id, {

@@ -17,9 +17,10 @@ function runXml(run: RunRecord): string {
 }
 
 export function paragraphXml(p: ParagraphRecord): string {
-  // Re-splice the ownership-scoped w:pPr capsule (verbatim) ahead of the runs — the OOXML child
-  // order for w:p. Undefined capsule => runs only (byte-identical to the pre-capsule serializer).
-  return `<w:p>${paragraphInnerWithCapsule(p.pPrCapsule, p.runs.map(runXml).join(''))}</w:p>`;
+  // Re-splice the ownership-scoped opening-tag ATTRIBUTES on <w:p …>, and the w:pPr capsule
+  // (verbatim) ahead of the runs — the OOXML child order for w:p. Undefined capsules => `<w:p>` +
+  // runs only (byte-identical to the pre-capsule serializer).
+  return `<w:p${p.pAttrsCapsule ?? ''}>${paragraphInnerWithCapsule(p.pPrCapsule, p.runs.map(runXml).join(''))}</w:p>`;
 }
 
 // Register the block-serialize capabilities (comprehensive 3.3). A paragraph regenerates from the

@@ -33,6 +33,12 @@ rendered result.
   editing only when it declares ownership, forward/reverse mapping, rejection
   boundaries, interaction behavior, and save/reopen evidence. Otherwise its
   content remains visible and read-only.
+- Reconcile active provisional contracts: replace flat display-offset geometry
+  with PM-free semantic/frame-bound targets, clarify that geometry-aware
+  gestures still become native ProseMirror selections through `EditorBinding`,
+  permit capability-owned selective edits within one safe top-level block in a
+  partial document, and scope structural feature claims to the exact proven
+  operation matrix.
 - Separate two claims:
   - **interactive paginated editing** means a supported feature is directly
     editable on the rendered pages;
@@ -55,10 +61,11 @@ rendered result.
 
 ### Modified Capabilities
 
-None. This change composes active `document-engine`,
-`comprehensive-ooxml-prosemirror-coverage`, `partial-body-editability`,
-`simplified-core-editor-contract`, and `public-package-topology` contracts
-without replacing their completion authority.
+None in the archived baseline under `openspec/specs/`. This change directly
+reconciles the still-active provisional `document-engine`,
+`comprehensive-ooxml-prosemirror-coverage`, `partial-body-editability`, and
+`simplified-core-editor-contract` source changes while retaining their
+independent completion authority.
 
 ## Impact
 

@@ -222,6 +222,13 @@ The interaction controller handles:
 - keyboard commands, beforeinput, clipboard, drag/drop, and IME;
 - zoom and scroll changes.
 
+The controller owns gesture interpretation and geometry-aware target
+calculation, not editable selection state. It converts each target into a
+ProseMirror selection or command through `EditorBinding`; ProseMirror remains
+the owner of live selection, transaction, plugin, clipboard, and composition
+state. The interaction frame is a revision-tagged projection of that state, not
+a second selection model.
+
 For commands already implemented correctly by ProseMirror, the controller
 forwards native input after synchronizing the PM selection. Geometry-dependent
 navigation uses engine line/cluster data to calculate the next semantic target,

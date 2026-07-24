@@ -25,15 +25,14 @@ export type ParagraphPropertiesCapsule = string;
  *  `w:pPr` children are never themselves `w:pPr`, so the first `</w:pPr>` closes it unambiguously. */
 export function extractParagraphPropertiesCapsule(paragraphSlice: string): ParagraphPropertiesCapsule | null {
   const s = paragraphSlice;
-  // Locate the end of the `<w:p …>` opening tag. A self-closing `<w:p/>` carries no properties.
+  // Locate the end of the `<w:p …>` opening tag, QUOTE-AWARE (a '>' inside an attribute value must
+  // not end the tag). A self-closing `<w:p/>` carries no properties.
   const open = s.indexOf('<w:p');
-  if (open < 0) return null;
-  // The opening tag ends at the first '>' that is not inside an attribute value. Paragraph opening
-  // attributes are simple (w:rsid* etc.) with no '>' in values, so the first '>' after `<w:p` ends it.
-  const openEnd = s.indexOf('>', open);
-  if (openEnd < 0) return null;
-  if (s[openEnd - 1] === '/') return null; // `<w:p/>` — empty paragraph, no properties
-  let i = openEnd + 1;
+  if (open < 0 || !startsWithTag(s, open, 'w:p')) return null;
+  const openTag = findSelfCloseOrOpenEnd(s, open);
+  if (openTag === null) return null;
+  if (openTag.selfClosing) return null; // `<w:p …/>` — empty paragraph, no properties
+  let i = openTag.tagEnd + 1;
   // Skip insignificant whitespace between the opening tag and the first child.
   while (i < s.length && /\s/.test(s[i])) i += 1;
   // A comment/PI before the properties would be lost by regeneration — fail closed.
@@ -147,4 +146,28 @@ function findSelfCloseOrOpenEnd(s: string, at: number): { tagEnd: number; selfCl
  *  `w:pPr` (if any) comes first, then the runs — exactly the OOXML child order for `w:p`. */
 export function paragraphInnerWithCapsule(capsule: ParagraphPropertiesCapsule | undefined, runsXml: string): string {
   return `${capsule ?? ''}${runsXml}`;
+}
+
+/** The verbatim attribute text of a paragraph's `<w:p …>` opening tag (e.g. ` w:rsidR="00AB"`) — an
+ *  ownership-scoped capsule for the unmodeled paragraph attributes (revision ids the model does not
+ *  represent). Includes the exact leading whitespace so it re-splices byte-identically as
+ *  `<w:p{attrs}>`. Empty means no attributes. */
+export type ParagraphAttributesCapsule = string;
+
+/** Extract the exact attribute text of a paragraph's opening `<w:p …>` tag from its source slice,
+ *  byte-identical. Returns the attribute string (which may be '' when there are none), or null when
+ *  the opening tag cannot be cleanly located (malformed / not a w:p). A self-closing `<w:p …/>` (an
+ *  empty paragraph) returns its attributes too. */
+export function extractParagraphOpenAttributes(paragraphSlice: string): ParagraphAttributesCapsule | null {
+  const s = paragraphSlice;
+  const open = s.indexOf('<w:p');
+  if (open < 0 || !startsWithTag(s, open, 'w:p')) return null;
+  const tag = findSelfCloseOrOpenEnd(s, open);
+  if (tag === null) return null;
+  // Attributes span from just after the element name to the end of the opening tag, dropping a
+  // trailing '/' for a self-closing tag.
+  const attrsStart = open + '<w:p'.length;
+  const attrsEnd = tag.selfClosing ? tag.tagEnd - 1 : tag.tagEnd;
+  if (attrsEnd < attrsStart) return null;
+  return s.slice(attrsStart, attrsEnd);
 }

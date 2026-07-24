@@ -114,8 +114,10 @@ state.
 The shared interaction controller SHALL implement single-click caret placement,
 shift-click extension, pointer-drag range selection with capture and
 autoscroll, Unicode-aware double-click word selection, and capability-owned
-triple-click block selection. React and Vue SHALL delegate these semantics to
-the shared controller.
+triple-click block selection. It SHALL convert geometry-aware targets into
+ProseMirror selections through `EditorBinding`; ProseMirror SHALL remain the
+owner of live selection and transaction state. React and Vue SHALL delegate
+these semantics to the shared controller.
 
 #### Scenario: User drags across a page boundary
 - **WHEN** a pointer drag leaves one page and enters the next while selection capture is active

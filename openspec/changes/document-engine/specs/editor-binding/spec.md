@@ -8,10 +8,20 @@ backend-owned editor fragment.
 
 > **PM stays native (see ADR-S10).** The binding replaces PM's role as durable
 > canonical storage ONLY. It MUST NOT reimplement ProseMirror's transaction,
-> selection, or IME machinery with a custom editor engine; it maps PM transactions
-> to `DocOp`s and projects `ModelChange` to minimal PM transactions, and lets PM own
-> all other in-browser editing behavior. This is why the binding is a mapping layer,
-> not a new editor.
+> selection-state, or IME machinery with a custom editor engine; it maps PM
+> transactions to `DocOp`s and projects `ModelChange` to minimal PM transactions.
+> An engine-geometry interaction controller MAY convert page pointer gestures or
+> visual navigation into ProseMirror selections and commands through this binding,
+> but ProseMirror remains the owner of the live selection, transaction, plugin,
+> clipboard, and composition state. The controller MUST NOT maintain a parallel
+> editable document or bypass PM transaction semantics. This is why the binding is
+> a mapping layer, not a new editor.
+
+#### Scenario: Engine geometry places a page caret
+- **WHEN** a page hit-test resolves a semantic caret target
+- **THEN** the interaction controller MUST ask `EditorBinding` to create the
+  corresponding ProseMirror selection, and subsequent native input MUST flow
+  through ProseMirror's normal transaction machinery
 
 #### Scenario: Binding package is removed
 - **WHEN** the engine runs headless without the binding package

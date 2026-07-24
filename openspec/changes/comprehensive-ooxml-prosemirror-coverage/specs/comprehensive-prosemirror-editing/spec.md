@@ -77,14 +77,22 @@ direction without erasing unedited authored distinctions.
 - **WHEN** a supported style command is executed
 - **THEN** the canonical paragraph stores the authored style reference and rendering resolves it without materializing inherited properties
 
-### Requirement: Structural features become editable only with complete semantics
+### Requirement: Structural feature claims require complete declared semantics
 The binding MUST keep tables, SDTs, sections, columns, related stories, notes,
 drawings, links, bookmarks, fields, comments, and revisions read-only until their semantic
 operations, validation, locks, ownership, serialization, and reopen behavior pass
-conformance.
+conformance for the exact declared interaction. A capability MAY enable a
+narrow operation such as owned table-cell text editing or atomic image
+selection independently, but it MUST report only that proven matrix and MUST
+keep every unproven operation read-only. An aggregate structural-feature editing
+claim requires the complete declared operation set.
 
-#### Scenario: Table capability becomes editable
-- **WHEN** table editing is enabled
+#### Scenario: Table cell text lane becomes editable
+- **WHEN** table-cell text ownership, selection, mapping, validation, serialization, and reopen pass while structural table operations remain incomplete
+- **THEN** only the proven cell-text matrix MAY be enabled and row/column, merge/split, dimension, border, shading, and header-row operations MUST remain read-only
+
+#### Scenario: Complete table editing claim becomes enabled
+- **WHEN** aggregate table editing is declared
 - **THEN** cell text, row/column insertion and deletion, merge/split, dimensions, borders, shading, and header-row operations preserve canonical identities and pass save/reopen evidence
 
 #### Scenario: Content control is locked

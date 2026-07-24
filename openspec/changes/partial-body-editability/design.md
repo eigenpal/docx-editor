@@ -12,7 +12,9 @@ Unsupported figures are commonly inline children of `w:p`. Until ownership-scope
 
 - Derive full, partial, or no body editability from preservation evidence for each top-level block.
 - Keep canonical block kinds semantic; a paragraph remains a paragraph even when its current source slice is read-only.
-- Project every read-only block as an immutable, identity-bound boundary while keeping safe paragraphs editable.
+- Project every read-only block as an immutable, identity-bound boundary while
+  keeping each capability-owned block with a proven selective-save path
+  editable.
 - Guarantee before canonical commit that every operation allowed in partial mode has a lossless selective-save path.
 - Preserve read-only ranges and unrelated package parts verbatim after editing a safe neighbor.
 - Expose structured region diagnostics consistently to headless consumers and both browser adapters.
@@ -21,8 +23,9 @@ Unsupported figures are commonly inline children of `w:p`. Until ownership-scope
 
 - Editing text within a paragraph that also contains an unsupported inline child.
 - Ownership-scoped inline preservation capsules.
-- Rendering or semantically editing unsupported figures, tables, or content controls.
-- Structural paragraph operations in a partially editable body.
+- Rendering or semantically editing figures, tables, or content controls that
+  lack their own complete capability and selective serializer.
+- Structural top-level body operations in a partially editable body.
 - Locally regenerating a patchable run of blocks between read-only boundaries.
 - Changing trust-boundary failures into read-only opens.
 
@@ -53,13 +56,26 @@ The policy is recomputed after canonical changes that can affect block identity 
 
 Alternative considered: put a `readOnly` flag on ProseMirror attrs and trust it during reverse mapping. Rejected because projection data is untrusted reconciliation input; the binding must validate against canonical policy by semantic ID.
 
-### 3. Allow only in-place owned paragraph edits in partial mode
+### 3. Allow only capability-owned edits inside one patchable block in partial mode
 
-In partial mode the binding may emit only the existing in-place paragraph run operation for a patchable block. Split, join, insert, delete, reorder, multi-paragraph paste, and any transaction crossing or disturbing a read-only boundary are rejected before `DocumentStore.apply`.
+In partial mode the binding may emit only operations claimed by the patchable
+block's installed capability and proven reproducible by its selective
+serializer. The initial lane is in-place paragraph run editing. A later fully
+owned table or other structural block may permit its own internal operations
+while unrelated top-level blocks remain read-only. Top-level body split, join,
+insert, delete, reorder, multi-block paste, and any transaction crossing or
+disturbing a read-only boundary are rejected before `DocumentStore.apply`.
 
 Disabling structural key bindings improves UX, but the binding remains the authoritative guard because transactions may originate from plugins, clipboard handling, tests, or future adapters.
 
-This global structural restriction matches the current serializer: a changed block count invokes whole-region regeneration, which is intentionally unavailable when any original block is not fully captured. Local structural editing between read-only boundaries is deferred until preservation can replace a bounded contiguous run and update its range index safely.
+This top-level structural restriction matches the current serializer: a changed
+body-block count invokes whole-region regeneration, which is intentionally
+unavailable when any original block is not fully captured. Internal operations
+within one fully owned top-level range are allowed only when that capability can
+replace or patch the exact range and update its preservation evidence safely.
+Local top-level structural editing between read-only boundaries remains
+deferred until preservation can replace a bounded contiguous run and update its
+range index safely.
 
 ### 4. Keep selective serialization authoritative and eliminate normalization false positives
 
@@ -67,7 +83,8 @@ A partially editable session saves through `writeDocx`, not by returning the ori
 
 - verify source and baseline hashes,
 - emit unchanged ranges verbatim,
-- invoke the registered paragraph patcher only for a changed safe paragraph, and
+- invoke only the registered capability patcher/serializer for a changed safe
+  top-level block, and
 - fail closed rather than regenerate unowned content.
 
 Before partial mode is claimed, preservation baseline comparison must use the same deterministic normalized semantic form as the store. Store normalization must not make an untouched preserved block appear edited. Tests will cover opening, editing a different paragraph, saving, and reopening fixtures whose untouched blocks normalize internally.
@@ -104,7 +121,8 @@ Rendering remains sourced from the canonical layout pipeline. A read-only paragr
 
 1. Add the per-block assessment while retaining `isModelBodyPatchable` as a compatibility projection of `mode === 'full'`.
 2. Add binding policy input and tests for paragraph-kind atoms before relaxing the session gate.
-3. Add the partial-mode operation allowlist and normalization-safe preservation evidence.
+3. Add the capability-owned partial-mode operation allowlist and
+   normalization-safe preservation evidence, beginning with paragraph text.
 4. Change session/editor policy so partial documents mount the editing surface and save through selective serialization.
 5. Add public snapshot fields and paired adapter conformance fixtures.
 6. Keep a rollback path by forcing partial assessments to `none`; existing wholly editable and wholly read-only behavior then remains available without changing stored documents.

@@ -25,7 +25,8 @@ the engine can be replaced without touching an adapter.
 - No editing-engine types on the public surface, ever.
 - Core owns layout and measurement; the adapter paints a positioned list and
   forwards events.
-- Selection maps to geometry through document offsets, not engine positions.
+- Selection maps to geometry through PM-free semantic positions and a coherent
+  interaction frame, not editing-engine positions or browser DOM ranges.
 - React and Vue consume the identical contract.
 
 ## Roles
@@ -54,22 +55,23 @@ render items:
 - `getDisplay(): readonly DisplayPage[]`
 - `getSelectionRects(range?): readonly Rect[]`
 - `getCaretRect(pos?): Rect | null`
-- `hitTest(point): DocPoint | null`
+- `hitTest(point, frameId?): SemanticHitTarget | null`
 - `getPageGeometry(): { index, box }[]`
 - `getScrollGeometry(): { contentHeight, pageTops }`
 
-`hitTest` takes a client-space point and returns a document position, so pointer
-handling never touches an engine coordinate.
+`hitTest` takes a client-space point and optional interaction-frame identity and
+returns a PM-free semantic target, so pointer handling never touches an editing-
+engine or layout-internal coordinate.
 
 ### The positioned render IR
 
 `getDisplay()` and the `display` event deliver `DisplayPage[]`. A page is a box
 and an ordered `DisplayItem[]`:
 
-- `text` — a box plus shaped `GlyphRun[]`; carries `docFrom`/`docTo`, `blockId`,
-  `scope`.
+- `text` — a box plus shaped `GlyphRun[]`; references its semantic range/cluster
+  map, `blockId`, and `scope`.
 - `image` — a box plus a resolved same-origin/embedded source; carries
-  `docFrom`/`docTo`, `scope`.
+  semantic/atomic hit ownership and `scope`.
 - `fill` — a colored box.
 - `tableBorder` — drawn segments, optionally a page-break cut edge.
 - `decoration` — a comment or tracked-change range marker, by reference id.
@@ -87,12 +89,15 @@ new content kinds add a variant and are surfaced by `rendering-engine`.
 primitive — core measures and lays out, then hands the host a `DisplayPage[]` to
 paint.
 
-### Document offsets are the only positions that cross the boundary
+### PM-free semantic positions are the only positions that cross the boundary
 
-`DocPoint` is `{ docPos, scope }`. Render items carry document offsets. This is
-the single mechanism that maps selection to geometry, so the adapter never holds
-or interprets an engine position, and `EditorSnapshot` is named to avoid
-colliding with any engine state type.
+Public semantic points carry scope, stable semantic identity, position or atomic
+target, affinity, and interaction-frame identity without exposing ProseMirror
+or layout-internal types. Render items reference the same semantic position and
+cluster index. This is the single mechanism that maps selection to geometry, so
+the adapter never accumulates display lengths, reads DOM ranges, or interprets
+an engine position. `EditorSnapshot` is named to avoid colliding with any engine
+state type.
 
 ### Coverage
 
