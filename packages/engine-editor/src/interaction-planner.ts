@@ -236,6 +236,53 @@ function pointerOnPageBackground(
  */
 const NON_MUTATING_COMMANDS = new Set(['undo', 'redo', 'setSelection']);
 
+// ─── Synchronous stale-frame protection (task 5.7a) ──────────────────────────
+// A selection is only as trustworthy as the frame it was minted on. Every
+// endpoint is re-resolved against the semantic index of the frame being acted
+// on, synchronously, before any effect is planned. A superseded frame or an
+// offset the current canonical state no longer contains is refused with a typed
+// outcome — never clamped, never applied at a stale numeric offset.
+
+function resolveTextTargetAgainstCanonicalState(
+  frame: InteractionFrame,
+  target: Extract<SemanticTarget, { kind: 'text' }>,
+): InteractionEffect | null {
+  const story = frame.semanticIndex.stories.find((candidate) => candidate.storyId === target.identity.storyId);
+  if (!story) {
+    return rejectEffect('invalidTarget', 'selection story is not present in current canonical state', frame.id);
+  }
+  const block = story.blocks.find((candidate) => candidate.identity.blockId === target.identity.blockId);
+  if (!block) {
+    return rejectEffect('invalidTarget', 'selection block is not present in current canonical state', frame.id);
+  }
+  if (!Number.isInteger(target.graphemeOffset)) {
+    return rejectEffect('invalidTarget', 'selection grapheme offset is not an integer', frame.id);
+  }
+  if (target.graphemeOffset < 0 || target.graphemeOffset > block.graphemeCount) {
+    return rejectEffect('invalidTarget', 'selection grapheme offset is outside current canonical state', frame.id);
+  }
+  return null;
+}
+
+/**
+ * Re-resolve a frame-bound selection against the frame it will be applied to.
+ * Returns a typed rejection, or null when every endpoint still exists.
+ */
+export function resolveSelectionAgainstCanonicalState(
+  frame: InteractionFrame,
+  selection: SemanticSelection,
+): InteractionEffect | null {
+  if (selection.frameId.value !== frame.id.value) {
+    return rejectEffect('staleFrame', 'selection was minted on a superseded interaction frame', frame.id);
+  }
+  for (const endpoint of [selection.anchor, selection.head]) {
+    if (endpoint.kind !== 'text') continue;
+    const rejection = resolveTextTargetAgainstCanonicalState(frame, endpoint);
+    if (rejection) return rejection;
+  }
+  return null;
+}
+
 function readOnlyBlockInSelection(frame: InteractionFrame, selection: SemanticSelection | null): boolean {
   if (!selection) return false;
   const endpoints = [selection.anchor, selection.head];
@@ -361,6 +408,12 @@ function planClick(context: InteractionPlannerContext, intent: ClickInteractionI
   if (!selectionOutcome.ok) {
     return attachNavigation({ frameId, effects: [selectionOutcome.effect] }, nav);
   }
+  // Shift-click composes a range from the frame's retained anchor, so the
+  // composed selection is re-resolved before it can reach the store (task 5.7a).
+  const staleAnchor = resolveSelectionAgainstCanonicalState(context.frame, selectionOutcome.selection);
+  if (staleAnchor) {
+    return attachNavigation({ frameId, effects: [staleAnchor] }, nav);
+  }
 
   return attachNavigation(
     {
@@ -385,7 +438,11 @@ export function planInteraction(context: InteractionPlannerContext, intent: Inte
   const navFor = (kind: string) => navigationSessionPlanForIntent(context.navigationSession, kind);
 
   switch (intent.kind) {
-    case 'semanticSelection':
+    case 'semanticSelection': {
+      const staleOrInvalid = resolveSelectionAgainstCanonicalState(context.frame, intent.selection);
+      if (staleOrInvalid) {
+        return { frameId, effects: [staleOrInvalid] };
+      }
       return attachNavigation(
         {
           frameId,
@@ -396,6 +453,7 @@ export function planInteraction(context: InteractionPlannerContext, intent: Inte
         },
         navFor('semanticSelection'),
       );
+    }
     case 'focus':
       return { frameId, effects: [{ kind: 'focus', frameId }] };
     case 'blur':

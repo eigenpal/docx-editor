@@ -53,6 +53,26 @@ describe('navigation sidecar store (task 5.5 review)', () => {
     expect(store.get({ value: 4 }).shapingSupported).toBe(true);
   });
 
+  test('a pruned frame id serves empty geometry rather than a superseded neighbour (task 5.7a)', () => {
+    const store = new NavigationSidecarStore();
+    const stale = { value: 1 };
+    store.publish(stale, sample());
+    for (let i = 2; i <= 4; i += 1) store.publish({ value: i }, sample());
+    const served = store.get(stale);
+    expect(served.visualLines).toEqual([]);
+    expect(served.traversalByBlockId).toEqual({});
+    expect(served).not.toBe(store.get({ value: 4 }));
+  });
+
+  test('rebasing an unknown layout id cannot fabricate geometry for a new frame (task 5.7a)', () => {
+    const store = new NavigationSidecarStore();
+    const unknown = { value: 41 };
+    const target = { value: 42 };
+    store.rebase(unknown, target);
+    expect(store.get(target).visualLines).toEqual([]);
+    expect(store.get(target).shapingSupported).toBe(false);
+  });
+
   test('InteractionFrameStore seeds sidecar on layout and clears on destroy', () => {
     const { frame, navigation, store } = publishFrameBundle();
     expect(navigation.visualLines.length).toBeGreaterThan(0);

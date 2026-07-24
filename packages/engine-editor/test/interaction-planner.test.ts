@@ -331,7 +331,7 @@ describe('body-paragraph interaction subset (task 5.6a)', () => {
     ).toMatchObject({ kind: 'reject', code: 'readOnly' });
   });
 
-  test('history and selection commands stay available over a read-only selection', () => {
+  test('history and selection commands stay available over a read-only selection (5.6a)', () => {
     const base = publishFrame(modelWithTableCell('cell text'));
     const frame: InteractionFrame = {
       ...base,
@@ -358,5 +358,159 @@ describe('body-paragraph interaction subset (task 5.6a)', () => {
         command: { type: 'undo' },
       }).effects,
     ).toEqual([{ kind: 'execCommand', frameId: frame.id, command: { type: 'undo' } }]);
+  });
+});
+
+describe('synchronous stale-frame protection (task 5.7a)', () => {
+  function planSelection(frame: InteractionFrame, selection: SemanticSelection) {
+    return planInteraction(plannerContext(frame), {
+      kind: 'semanticSelection',
+      frameId: frame.id,
+      selection,
+    });
+  }
+
+  test('a selection minted on a superseded frame cannot mutate the current frame', () => {
+    const frame = publishFrame();
+    const blockId = frame.semanticIndex.stories[0]!.blocks[0]!.identity.blockId;
+    const stale: SemanticSelection = {
+      ...selectionForBlock(frame, blockId, 0, 1),
+      frameId: { value: frame.id.value - 1 },
+    };
+    const plan = planSelection(frame, stale);
+    expect(plan.effects).toHaveLength(1);
+    expect(plan.effects[0]).toMatchObject({ kind: 'reject', code: 'staleFrame', frameId: frame.id });
+    expect(plan.effects.some((e) => e.kind === 'syncSelection')).toBe(false);
+  });
+
+  test('grapheme offsets beyond current canonical state are refused, not clamped', () => {
+    const frame = publishFrame();
+    const blockId = frame.semanticIndex.stories[0]!.blocks[0]!.identity.blockId;
+    const graphemeCount = frame.semanticIndex.stories[0]!.blocks[0]!.graphemeCount;
+    const plan = planSelection(frame, selectionForBlock(frame, blockId, graphemeCount + 1, graphemeCount + 4));
+    expect(plan.effects).toHaveLength(1);
+    expect(plan.effects[0]).toMatchObject({ kind: 'reject', code: 'invalidTarget' });
+    expect(plan.effects.some((e) => e.kind === 'syncSelection')).toBe(false);
+  });
+
+  test('an offset exactly at the trailing caret stop stays valid', () => {
+    const frame = publishFrame();
+    const block = frame.semanticIndex.stories[0]!.blocks[0]!;
+    const plan = planSelection(frame, selectionForBlock(frame, block.identity.blockId, 0, block.graphemeCount));
+    expect(plan.effects.map((e) => e.kind)).toEqual(['syncSelection', 'focus']);
+  });
+
+  test('a block deleted from canonical state cannot receive a selection', () => {
+    const frame = publishFrame();
+    const source = selectionForBlock(frame, frame.semanticIndex.stories[0]!.blocks[0]!.identity.blockId, 0, 1);
+    const ghostTarget = (endpoint: SemanticSelection['anchor']) => ({
+      ...(endpoint as Extract<SemanticSelection['anchor'], { kind: 'text' }>),
+      identity: { storyId: 'st-1', blockId: 'deleted-block' },
+    });
+    const plan = planSelection(frame, {
+      ...source,
+      anchor: ghostTarget(source.anchor),
+      head: ghostTarget(source.head),
+    });
+    expect(plan.effects).toHaveLength(1);
+    expect(plan.effects[0]).toMatchObject({ kind: 'reject', code: 'invalidTarget' });
+    expect(plan.effects.some((e) => e.kind === 'syncSelection')).toBe(false);
+  });
+
+  test('a story absent from canonical state cannot receive a selection', () => {
+    const frame = publishFrame();
+    const source = selectionForBlock(frame, frame.semanticIndex.stories[0]!.blocks[0]!.identity.blockId, 0, 1);
+    const ghostStory = (endpoint: SemanticSelection['anchor']) => ({
+      ...(endpoint as Extract<SemanticSelection['anchor'], { kind: 'text' }>),
+      identity: { storyId: 'st-missing', blockId: 'p-1' },
+    });
+    const plan = planSelection(frame, {
+      ...source,
+      anchor: ghostStory(source.anchor),
+      head: ghostStory(source.head),
+    });
+    expect(plan.effects[0]).toMatchObject({ kind: 'reject', code: 'invalidTarget' });
+  });
+
+  test('negative and non-integer offsets fail closed', () => {
+    const frame = publishFrame();
+    const blockId = frame.semanticIndex.stories[0]!.blocks[0]!.identity.blockId;
+    for (const offset of [-1, 1.5, Number.NaN, Number.POSITIVE_INFINITY]) {
+      const plan = planSelection(frame, selectionForBlock(frame, blockId, offset, 1));
+      expect(plan.effects[0]).toMatchObject({ kind: 'reject', code: 'invalidTarget' });
+      expect(plan.effects.some((e) => e.kind === 'syncSelection')).toBe(false);
+    }
+  });
+
+  test('resolution reads the frame handed to the planner, not a retained one', () => {
+    const first = publishFrame();
+    const blockId = first.semanticIndex.stories[0]!.blocks[0]!.identity.blockId;
+    const shrunk: InteractionFrame = {
+      ...first,
+      id: { value: first.id.value + 1 },
+      semanticIndex: {
+        ...first.semanticIndex,
+        stories: first.semanticIndex.stories.map((story) => ({
+          ...story,
+          blocks: story.blocks.map((block) => ({ ...block, graphemeCount: 1 })),
+        })),
+      },
+    };
+    const wasValid = selectionForBlock(first, blockId, 0, 4);
+    expect(planSelection(first, wasValid).effects.map((e) => e.kind)).toEqual(['syncSelection', 'focus']);
+    const rebound: SemanticSelection = { ...wasValid, frameId: shrunk.id };
+    expect(planSelection(shrunk, rebound).effects[0]).toMatchObject({
+      kind: 'reject',
+      code: 'invalidTarget',
+    });
+  });
+});
+
+describe('shift-click anchor re-resolution (task 5.7a)', () => {
+  test('a retained anchor beyond current canonical state cannot extend a range', () => {
+    const base = publishFrame();
+    const block = base.semanticIndex.stories[0]!.blocks[0]!;
+    const frame: InteractionFrame = {
+      ...base,
+      selection: selectionForBlock(base, block.identity.blockId, block.graphemeCount + 6, block.graphemeCount + 6),
+    };
+    const textItem = frame.display[0]!.items.find((item) => item.kind === 'text')!;
+    const point = clientPointForStackedText(
+      frame,
+      0,
+      { x: textItem.box.x + textItem.box.width / 2, y: textItem.box.y + textItem.box.height / 2 },
+      METRICS,
+    );
+    const plan = planInteraction(plannerContext(frame), {
+      kind: 'click',
+      frameId: frame.id,
+      clientPoint: point,
+      shiftKey: true,
+    });
+    expect(plan.effects[0]).toMatchObject({ kind: 'reject', code: 'invalidTarget' });
+    expect(plan.effects.some((e) => e.kind === 'syncSelection')).toBe(false);
+  });
+
+  test('a valid retained anchor still extends a range', () => {
+    const base = publishFrame();
+    const block = base.semanticIndex.stories[0]!.blocks[0]!;
+    const frame: InteractionFrame = {
+      ...base,
+      selection: selectionForBlock(base, block.identity.blockId, 0, 0),
+    };
+    const textItem = frame.display[0]!.items.find((item) => item.kind === 'text')!;
+    const point = clientPointForStackedText(
+      frame,
+      0,
+      { x: textItem.box.x + textItem.box.width / 2, y: textItem.box.y + textItem.box.height / 2 },
+      METRICS,
+    );
+    const plan = planInteraction(plannerContext(frame), {
+      kind: 'click',
+      frameId: frame.id,
+      clientPoint: point,
+      shiftKey: true,
+    });
+    expect(plan.effects.map((e) => e.kind)).toEqual(['syncSelection', 'focus']);
   });
 });
