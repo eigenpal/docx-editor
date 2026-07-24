@@ -1,6 +1,6 @@
 # Interactive paginated editing — accelerated execution tasks
 
-Progress: **62 / 114** complete.
+Progress: **63 / 114** complete.
 
 | Baseline | Count |
 | --- | --- |
@@ -163,7 +163,7 @@ checkout/revert forbidden authority modules.
 ## M5 — Vue equivalent shell and interaction parity
 
 - [x] 6.3 Implement the equivalent Vue composition; adapter CSS import-only and behaviorally paired. **Deliverable:** Vue host matches React one-surface event/overlay wiring.
-- [ ] M5.1 Port polished shell presentation to Vue with the same inventory matrix as M4. **Deliverable:** paired visual shell on Vue harness; same can/exec and display-only ruler rules.
+- [x] M5.1 Port polished shell presentation to Vue with the same inventory matrix as M4. **Deliverable:** paired visual shell on Vue harness; same can/exec and display-only ruler rules.
 - [ ] M5.2 Create `e2e/vue-one-surface.interaction.spec.ts` and `package.json` script `test:e2e:vue-one-surface-interaction` before first use; mirror M3.1 target-location pattern. **Deliverable:** spec green via `bun run test:e2e:vue-one-surface-interaction`.
 - [ ] M5-R1 Run: `bun run verify:real-adapter-smoke`; `bun run verify:real-adapter-gate`; `bun run test:e2e:vue-one-surface-interaction`; `bun run check:parity-contract`; `bun run typecheck`; `openspec validate interactive-paginated-editing --strict`; `git diff --cached --check`; `git diff --check`. Write results to `openspec/changes/interactive-paginated-editing/evidence/m5/verification-log.md`. Stage and commit per staging manifest.
 - [ ] M5-R2 Write `openspec/changes/interactive-paginated-editing/evidence/m5/summary.md`; stage and commit per staging manifest; no public claim upgrade.
@@ -346,7 +346,7 @@ esac
 | **M4-R2** | `openspec/changes/interactive-paginated-editing/evidence/m4/manual-chrome-shell.md`, `openspec/changes/interactive-paginated-editing/tasks.md` |
 | **M4-R3** | `openspec/changes/interactive-paginated-editing/evidence/m4/summary.md`, `packages/react/src/useEditorSnapshot.ts`, `packages/react/src/DocxEditorToolbar.tsx`, `packages/react/src/HorizontalRuler.tsx`, `packages/react/src/VerticalRuler.tsx`, `packages/react/src/PageIndicator.tsx`, `packages/react/src/index.ts`, `openspec/changes/interactive-paginated-editing/tasks.md` (self-review found the chrome never re-rendered; fixing beats recording it). **Checkbox intentionally left unchecked — the gate needs an INDEPENDENT reviewer, and a self-review is not one.** |
 | **6.3** | `packages/vue/src/DocxEditor.ts`, `packages/vue/src/paintDisplay.ts`, `packages/vue/test/docx-editor-one-surface.test.ts`, `examples/vue/src/styles.css`, `examples/vue/src/main.ts`, `examples/shared/DocxAdapterHarness.vue`, `openspec/changes/interactive-paginated-editing/tasks.md` (the Vue demo never imported the core stylesheet, so it had no `--doc-*` tokens at all and painted caret/selection/page transparent)
-| **M5.1** | `packages/vue/src/DocxEditorShell.vue`, `packages/vue/src/DocxEditorToolbar.vue`, `packages/vue/src/HorizontalRuler.vue`, `packages/vue/src/VerticalRuler.vue`, `packages/vue/src/DocxEditorTitleBar.vue`, `packages/vue/src/PageIndicator.vue`, `openspec/changes/interactive-paginated-editing/tasks.md` |
+| **M5.1** | `packages/vue/src/DocxEditorShell.ts`, `packages/vue/src/DocxEditorToolbar.ts`, `packages/vue/src/HorizontalRuler.ts`, `packages/vue/src/VerticalRuler.ts`, `packages/vue/src/DocxEditorTitleBar.ts`, `packages/vue/src/PageIndicator.ts`, `packages/vue/src/useEditorSnapshot.ts`, `packages/vue/src/index.ts`, `packages/engine-editor/src/ruler-ticks.ts`, `packages/engine-editor/src/toolbar-commands.ts`, `packages/engine-editor/src/index.ts`, `packages/engine-editor/test/ruler-ticks.test.ts`, `packages/engine-editor/test/toolbar-commands.test.ts`, `packages/react/src/rulerTicks.ts`, `packages/react/src/toolbarCommands.ts`, `examples/shared/DocxAdapterHarness.vue`, `openspec/changes/interactive-paginated-editing/tasks.md` (**`.ts` not `.vue`**: this package is SFC-free and typechecks with plain `tsc`, so a `.vue` file needs `vue-tsc` or a shim that erases prop types. Ruler ticks and toolbar can/exec moved into the engine — platform-agnostic logic belongs in core called by both adapters, not duplicated per framework.)
 | **M5.2** | `e2e/vue-one-surface.interaction.spec.ts`, `package.json`, `examples/shared/DocxAdapterHarness.vue`, `openspec/changes/interactive-paginated-editing/tasks.md` |
 | **M5-R1** | `openspec/changes/interactive-paginated-editing/evidence/m5/verification-log.md`, `openspec/changes/interactive-paginated-editing/tasks.md` |
 | **M5-R2** | `openspec/changes/interactive-paginated-editing/evidence/m5/summary.md`, `openspec/changes/interactive-paginated-editing/tasks.md` |

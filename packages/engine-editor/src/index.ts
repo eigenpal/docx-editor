@@ -41,3 +41,20 @@ export {
   type KeyboardModifiers,
 } from './adapter-event-bridge.ts';
 export { emptySemanticIndex } from './interaction-frame.ts';
+export {
+  generateRulerTicks,
+  rulerPageBox,
+  PX_PER_INCH,
+  PX_PER_CM,
+  type RulerTick,
+  type RulerUnit,
+} from './ruler-ticks.ts';
+export {
+  runSave,
+  runToolbarCommand,
+  toolbarCommand,
+  toolbarCommandState,
+  toolbarCommandStates,
+  type ToolbarCommandId,
+  type ToolbarCommandState,
+} from './toolbar-commands.ts';

@@ -8,7 +8,7 @@ import {
   toolbarCommand,
   toolbarCommandState,
   toolbarCommandStates,
-} from '../src/toolbarCommands.ts';
+} from '../src/toolbar-commands.ts';
 
 interface Calls {
   readonly can: EditorCommand[];

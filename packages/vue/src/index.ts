@@ -25,3 +25,10 @@ export type {
 } from '@docx-editor.dev/core-contract/editor';
 export type { DisplayPage, DisplayItem, DocPoint } from '@docx-editor.dev/core-contract/geometry';
 export type { DocxDocument } from '@docx-editor.dev/core-contract/types';
+export { default as DocxEditorShell } from './DocxEditorShell';
+export { default as DocxEditorTitleBar } from './DocxEditorTitleBar';
+export { default as DocxEditorToolbar } from './DocxEditorToolbar';
+export { default as PageIndicator } from './PageIndicator';
+export { default as HorizontalRuler } from './HorizontalRuler';
+export { default as VerticalRuler, RULER_WIDTH } from './VerticalRuler';
+export { useEditorSnapshot } from './useEditorSnapshot';

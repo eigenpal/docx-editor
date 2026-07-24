@@ -6,7 +6,15 @@
 -->
 <script setup lang="ts">
 import { onBeforeUnmount, onMounted, ref, watch } from 'vue';
-import { DocxEditor } from '@docx-editor.dev/vue';
+import {
+  DocxEditor,
+  DocxEditorShell,
+  DocxEditorTitleBar,
+  DocxEditorToolbar,
+  HorizontalRuler,
+  PageIndicator,
+  VerticalRuler,
+} from '@docx-editor.dev/vue';
 import { createEditorDriver, type EditorDriver } from '@docx-editor.dev/engine-editor';
 import type { Editor } from '@docx-editor.dev/vue';
 
@@ -15,6 +23,9 @@ const props = defineProps<{ fixtureUrl: string; initialZoom?: number }>();
 const bytes = ref<Uint8Array | null>(null);
 const status = ref('Loading…');
 const zoom = ref(props.initialZoom ?? 1);
+// The document title is SHELL state: the engine owns no title contract (M4.0).
+const title = ref('Untitled document');
+const editorInstance = ref<Editor | null>(null);
 
 async function load(url: string): Promise<void> {
   try {
@@ -39,7 +50,12 @@ function onReady(editor: Editor): void {
   // The public Editor facade, so browser gates can assert TYPED OUTCOMES and not
   // just visible results — matching the React harness.
   (window as unknown as { __docxAdapterEditor?: Editor }).__docxAdapterEditor = editor;
+  editorInstance.value = editor;
   status.value = driver.editable() ? 'Editable (paragraphs)' : 'Read-only (contains tables/SDTs)';
+}
+
+function onSave(): void {
+  void editorInstance.value?.save();
 }
 
 onMounted(() => {
@@ -60,8 +76,13 @@ onBeforeUnmount(() => {
     <div style="padding: 8px 12px; font: 13px system-ui, sans-serif; color: #333; border-bottom: 1px solid #e0e0e0">
       <span data-testid="adapter-status">{{ status }}</span>
     </div>
-    <div style="flex: 1; min-height: 0; overflow: auto; padding: 16px">
+    <DocxEditorShell>
+      <template #titleBar><DocxEditorTitleBar v-model:title="title" /></template>
+      <template #toolbar><DocxEditorToolbar :editor="editorInstance" @save="onSave" /></template>
+      <template #horizontalRuler><HorizontalRuler :editor="editorInstance" :zoom="zoom" /></template>
+      <template #verticalRuler><VerticalRuler :editor="editorInstance" :zoom="zoom" /></template>
+      <template #pageIndicator><PageIndicator :editor="editorInstance" /></template>
       <DocxEditor v-if="bytes" :document="bytes" :zoom="zoom" @ready="onReady" />
-    </div>
+    </DocxEditorShell>
   </div>
 </template>

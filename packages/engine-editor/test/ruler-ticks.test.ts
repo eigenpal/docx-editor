@@ -1,7 +1,7 @@
 // Display-only ruler geometry (interactive-paginated-editing M4.4).
 
 import { describe, expect, test } from 'bun:test';
-import { generateRulerTicks, PX_PER_INCH, rulerPageBox } from '../src/rulerTicks.ts';
+import { generateRulerTicks, PX_PER_INCH, rulerPageBox } from '../src/ruler-ticks.ts';
 
 describe('ruler ticks (task M4.4)', () => {
   test('an inch ruler labels whole inches and never the origin', () => {
