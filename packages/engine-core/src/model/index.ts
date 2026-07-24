@@ -41,7 +41,7 @@ export { createEmptyModel, bodyStoryId } from './create.ts';
 export { type SerializedModel, encodeModel, decodeModel, validatePreservation } from './serialize.ts';
 export { appendParagraph, insertParagraph, insertTextIntoParagraph, setParagraphRuns, paragraphText } from './edit.ts';
 export { normalizeRuns } from './normalize-runs.ts';
-export { canonicalParagraphProps, canonicalRunProps } from './paragraph-props.ts';
+export { canonicalParagraphProps, canonicalRunProps, canonicalStyle, canonicalDocDefaults } from './paragraph-props.ts';
 export {
   type BlockKind,
   type CoreBlockCapability,

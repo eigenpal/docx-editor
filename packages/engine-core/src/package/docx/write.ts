@@ -16,6 +16,8 @@ import {
   validatePreservation,
   canonicalRunProps,
   canonicalParagraphProps,
+  canonicalStyle,
+  canonicalDocDefaults,
   REL_TYPES,
   CONTENT_TYPES,
   type PackageModel,
@@ -107,14 +109,14 @@ function rPrXml(p: RunProps): string {
 }
 
 function stylesXml(styles: readonly StyleRecord[], docDefaults?: DocDefaults): string {
-  // w:docDefaults (the lowest style-resolution layer) must round-trip too, or a from-scratch model's
-  // document-wide defaults are silently lost.
-  const defaults =
-    docDefaults?.runProps && rPrXml(docDefaults.runProps)
-      ? `<w:docDefaults><w:rPrDefault>${rPrXml(docDefaults.runProps)}</w:rPrDefault></w:docDefaults>`
-      : '';
+  // Canonicalize so the emitted bytes match the digest + what the parser yields on reopen. w:docDefaults
+  // (the lowest style-resolution layer) round-trips too, or a from-scratch model's defaults are lost.
+  const dd = canonicalDocDefaults(docDefaults);
+  const defaults = dd ? `<w:docDefaults><w:rPrDefault>${rPrXml(dd.runProps!)}</w:rPrDefault></w:docDefaults>` : '';
   const body = styles
-    .map((st) => {
+    .map((raw) => {
+      const st = canonicalStyle(raw);
+      if (!st.id) throw new Error('from-scratch export cannot emit a style with an empty styleId (would be dropped on reopen)');
       const name = `<w:name w:val="${xmlAttr(st.name, 'style name')}"/>`;
       const basedOn = st.basedOn ? `<w:basedOn w:val="${xmlAttr(st.basedOn, 'style basedOn')}"/>` : '';
       const rPr = st.runProps ? rPrXml(st.runProps) : '';
@@ -134,28 +136,63 @@ function numberingXml(nums: readonly NumberingRecord[]): string {
   return `${XML_DECL}<w:numbering xmlns:w="${W_NS}">${body}</w:numbering>`;
 }
 
-/** Validate the from-scratch OPC package invariants before writing so the output is guaranteed
- *  openable: the content-type index builds AND resolves the main document part to the required
- *  wordprocessingml main type (override precedence honored), the relationship set builds, and there
- *  is EXACTLY ONE internal root officeDocument relationship resolving to word/document.xml. */
+/** The set of part names writeDocx WILL emit for a from-scratch model: the main document part, every
+ *  declared xml part (media parts already fail closed earlier), and the .rels part for every owner
+ *  that has relationships. Used to close the OPC graph (content-type coverage + target resolution). */
+function emittedPartNames(model: PackageModel): Set<string> {
+  const out = new Set<string>([MAIN_PART]);
+  for (const [partName, part] of model.parts) if (part.kind === 'xml') out.add(partName);
+  const owners = new Set(model.relationships.map((r) => r.ownerPart));
+  for (const owner of owners) out.add(relsPathFor(owner));
+  return out;
+}
+
+/** Validate the from-scratch OPC package invariants so the output is a CLOSED, openable graph: the
+ *  content-type index builds and covers EVERY emitted part (the main part resolving to the
+ *  wordprocessingml main type, override precedence honored); the relationship set builds; there is
+ *  EXACTLY ONE root officeDocument relationship total, internal and resolving to word/document.xml;
+ *  and every relationship's owner + internal target is an emitted part (no dangling edges). */
 function assertFromScratchPackageValid(model: PackageModel): void {
   const ct = buildContentTypeIndex(model.contentTypes);
   if (!ct.ok) throw new Error(`invalid content types: ${JSON.stringify(ct.error)}`);
-  // Resolve (not merely search) so a removed override that falls through to a generic xml Default is
-  // caught — the main part MUST resolve to the wordprocessingml main type.
-  const mainCt = resolveContentType(ct.index, MAIN_PART);
-  if (!mainCt.ok || mainCt.contentType !== CONTENT_TYPES.documentMain) {
-    throw new Error('from-scratch package: /word/document.xml does not resolve to the main document content type');
+  const emitted = emittedPartNames(model);
+  // Every emitted part must resolve to a content type (else Word cannot open it); the main part MUST
+  // resolve to the wordprocessingml main type (resolve, not search — a fall-through xml Default is
+  // caught).
+  for (const part of emitted) {
+    const r = resolveContentType(ct.index, part);
+    if (!r.ok) throw new Error(`from-scratch package: emitted part ${part} has no content type`);
+    if (part === MAIN_PART && r.contentType !== CONTENT_TYPES.documentMain) {
+      throw new Error('from-scratch package: /word/document.xml does not resolve to the main document content type');
+    }
   }
   const rels = buildRelationshipSet(model.relationships);
   if (!rels.ok) throw new Error(`invalid relationships: ${JSON.stringify(rels.error)}`);
+  // Exactly one root officeDocument relationship TOTAL — internal, resolving to the main part. An
+  // extra external/dangling one is rejected.
   const rootOfficeDoc = (rels.byOwner.get('/') ?? []).filter((r) => r.type === REL_TYPES.officeDocument);
-  const internalToMain = rootOfficeDoc.filter((r) => {
-    const resolved = resolveRelationship(r);
-    return resolved.mode === 'Internal' && resolved.target.ok && resolved.target.partName === MAIN_PART;
-  });
-  if (internalToMain.length !== 1) {
-    throw new Error('from-scratch package: expected exactly one internal root officeDocument relationship to /word/document.xml');
+  if (rootOfficeDoc.length !== 1) {
+    throw new Error(`from-scratch package: expected exactly one root officeDocument relationship, found ${rootOfficeDoc.length}`);
+  }
+  const rootResolved = resolveRelationship(rootOfficeDoc[0]);
+  if (!(rootResolved.mode === 'Internal' && rootResolved.target.ok && rootResolved.target.partName === MAIN_PART)) {
+    throw new Error('from-scratch package: the root officeDocument relationship must be internal and target /word/document.xml');
+  }
+  // No dangling edges: every relationship's owner is the package root or an emitted part, and every
+  // internal target resolves to an emitted part (external targets are validated for sink-safety).
+  for (const rel of model.relationships) {
+    if (rel.ownerPart !== '/' && !emitted.has(rel.ownerPart)) {
+      throw new Error(`from-scratch package: relationship ${rel.id} has a non-existent owner ${rel.ownerPart}`);
+    }
+    const resolved = resolveRelationship(rel);
+    if (resolved.mode === 'Internal') {
+      if (!resolved.target.ok) throw new Error(`from-scratch package: relationship ${rel.id} has an invalid internal target ${rel.rawTarget}`);
+      if (!emitted.has(resolved.target.partName)) {
+        throw new Error(`from-scratch package: relationship ${rel.id} targets a non-emitted part ${resolved.target.partName}`);
+      }
+    } else if (!resolved.sinkSafe.ok) {
+      throw new Error(`from-scratch package: relationship ${rel.id} has an unsafe external target`);
+    }
   }
 }
 
@@ -164,14 +201,18 @@ function assertFromScratchPackageValid(model: PackageModel): void {
  *  does not fully represent numbering definitions, the complete run-formatting vocabulary, or
  *  verbatim capsules from parse; rather than emit lossy/invalid OOXML, reject them here. */
 function assertFromScratchSerializable(model: PackageModel): void {
-  // Only a body story is serializable from scratch (headers/footers need section references we do
-  // not model). Validate STORIES directly — a story with no backing part would otherwise be silently
-  // dropped by the parts loop.
+  // EXACTLY ONE body story is serializable from scratch (headers/footers need section references we
+  // do not model; a second body would be silently dropped by the single-document-part export while
+  // the digest still counts it). Validate STORIES directly — a story with no backing part would
+  // otherwise slip past the parts loop.
+  let bodyCount = 0;
   for (const story of model.stories.values()) {
     if (story.kind !== 'body') {
       throw new Error(`from-scratch export supports only a body story, not '${story.kind}' (section references / item wrappers not modeled)`);
     }
+    bodyCount += 1;
   }
+  if (bodyCount !== 1) throw new Error(`from-scratch export requires exactly one body story, found ${bodyCount}`);
   if (model.numbering.length > 0) {
     throw new Error('from-scratch export cannot emit numbering (abstract list definitions are not modeled) — fails closed');
   }

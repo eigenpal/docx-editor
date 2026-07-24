@@ -8,7 +8,7 @@
 
 import type { PackageModel, Block, Story, RunRecord } from '../model/authored-model.ts';
 import { normalizeRuns } from '../model/normalize-runs.ts';
-import { canonicalParagraphProps, canonicalRunProps } from '../model/paragraph-props.ts';
+import { canonicalParagraphProps, canonicalRunProps, canonicalStyle, canonicalDocDefaults } from '../model/paragraph-props.ts';
 import { hashPreservableBlock } from './wml-preserve.ts';
 import { stableHash } from '../comparators/canonical.ts';
 
@@ -60,9 +60,11 @@ function storyDigest(s: Story): unknown {
 export function authoredStateProjection(model: PackageModel): unknown {
   return {
     stories: [...model.stories.values()].map((s) => storyDigest(s)),
-    styles: model.styles,
+    // Canonicalize styles + docDefaults so a degenerate authored value (runProps:{}, isDefault:false,
+    // empty basedOn) digests the same form the serializer emits and the parser yields on reopen.
+    styles: model.styles.map(canonicalStyle),
     numbering: model.numbering,
-    docDefaults: model.docDefaults ?? null, // document-wide default formatting is authored state
+    docDefaults: canonicalDocDefaults(model.docDefaults) ?? null,
   };
 }
 

@@ -4,6 +4,7 @@
 // output uses verbatim preservation instead and only regenerates fully-captured blocks.
 
 import { escapeXmlChecked } from './sinks.ts';
+import { isRunPropertiesCapsule, isParagraphPropertiesCapsule, isParagraphAttrsCapsule } from './preservation-capsule.ts';
 import { type Block, type ParagraphRecord, type ParagraphProps, type RunRecord, canonicalParagraphProps, canonicalRunProps, registerCoreBlockCapability, blockSerialize } from '../model/index.ts';
 
 /** Escape run text: validate fail-closed, then escape a literal CR as &#xD;. An unescaped CR is
@@ -15,12 +16,21 @@ function escapeRunText(text: string): string {
 
 function runXml(run: RunRecord): string {
   // An ownership-scoped w:rPr capsule (verbatim, full run properties) is re-spliced INSTEAD of
-  // regenerating rPr from the modeled props — the capsule already holds everything.
-  if (run.rPrCapsule) return `<w:r>${run.rPrCapsule}<w:t xml:space="preserve">${escapeRunText(run.text)}</w:t></w:r>`;
+  // regenerating rPr. SECURITY: the capsule is interpolated verbatim, so it MUST be a lone balanced
+  // w:rPr — validate at the sink so a forged capsule from ANY path (a direct setParagraphRuns DocOp,
+  // a paste) can never break out of the tag / inject sibling OOXML. Fail closed on an invalid one.
+  if (run.rPrCapsule) {
+    if (!isRunPropertiesCapsule(run.rPrCapsule)) throw new Error('run rPr capsule is not a lone balanced w:rPr (rejected at serialize)');
+    return `<w:r>${run.rPrCapsule}<w:t xml:space="preserve">${escapeRunText(run.text)}</w:t></w:r>`;
+  }
   // Regenerate rPr from the modeled props in OOXML child order (w:rStyle before the toggles). Only
-  // the round-trippable subset is emitted here; from-scratch export fails closed on anything else
-  // (underline / explicit-false), so a serialized run always reparses to the same props.
+  // the round-trippable subset (styleId + bold/italic PRESENCE) can be regenerated symmetrically —
+  // underline and explicit-false toggles do not reparse to the same value (the direct-run parser is
+  // presence-based), so fail closed rather than silently drop them (applies to EVERY path, including
+  // an edited preserved run, not only from-scratch).
   const props = canonicalRunProps(run.props);
+  if (props?.underline !== undefined) throw new Error('run underline is not round-trippable via the presence-based parser (rejected at serialize)');
+  if (props?.bold === false || props?.italic === false) throw new Error('explicit-false run toggle is not round-trippable (rejected at serialize)');
   const rStyle = props?.styleId ? `<w:rStyle w:val="${escapeXmlChecked(props.styleId, 'run styleId')}"/>` : '';
   const b = props?.bold ? '<w:b/>' : '';
   const i = props?.italic ? '<w:i/>' : '';
@@ -46,10 +56,17 @@ function pPrFromProps(raw: ParagraphProps): string {
 }
 
 export function paragraphXml(p: ParagraphRecord): string {
-  // Re-splice the ownership-scoped opening-tag ATTRIBUTES on <w:p …>. For the paragraph properties:
-  // a verbatim pPr capsule wins (re-spliced byte-exact); otherwise emit modeled props (w:pStyle /
-  // w:numPr) so a from-scratch or fully-modeled paragraph's style/numbering is not lost. Undefined
-  // capsule + no props => `<w:p>` + runs only (byte-identical to the pre-capsule serializer).
+  // SECURITY: the paragraph capsules are interpolated verbatim, so validate them at the sink — the
+  // attrs capsule must be a well-formed attribute list (no tag breakout) and the pPr capsule a lone
+  // balanced w:pPr — so a forged capsule from any path cannot inject sibling OOXML. Fail closed.
+  if (p.pAttrsCapsule !== undefined && !isParagraphAttrsCapsule(p.pAttrsCapsule)) {
+    throw new Error('paragraph attrs capsule is not a well-formed attribute list (rejected at serialize)');
+  }
+  if (p.pPrCapsule !== undefined && !isParagraphPropertiesCapsule(p.pPrCapsule)) {
+    throw new Error('paragraph pPr capsule is not a lone balanced w:pPr (rejected at serialize)');
+  }
+  // A verbatim pPr capsule wins (re-spliced byte-exact); otherwise emit modeled props (w:pStyle /
+  // w:numPr). Undefined capsule + no props => `<w:p>` + runs only.
   const pPr = p.pPrCapsule ?? (p.props ? pPrFromProps(p.props) : '');
   return `<w:p${p.pAttrsCapsule ?? ''}>${pPr}${p.runs.map(runXml).join('')}</w:p>`;
 }

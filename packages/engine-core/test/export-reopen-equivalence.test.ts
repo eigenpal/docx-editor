@@ -8,6 +8,7 @@ import { readFileSync } from 'node:fs';
 import { unzipSync, strFromU8 } from 'fflate';
 import { parseDocx } from '../src/package/docx/read.ts';
 import { writeDocx } from '../src/package/docx/write.ts';
+import { paragraphXml } from '../src/package/wml-serialize.ts';
 import { authoredStateDigest } from '../src/package/authored-digest.ts';
 import { compareZipContainers } from '../src/package/package-comparator.ts';
 import { createEmptyModel, bodyStoryId, REL_TYPES, type PackageModel, type Story, type Block } from '../src/model/index.ts';
@@ -299,7 +300,7 @@ describe('from-scratch export fails closed on what it cannot faithfully serializ
         r.ownerPart === '/' && r.type === REL_TYPES.officeDocument ? { ...r, targetMode: 'External' as const, rawTarget: 'http://evil/doc.xml' } : r,
       ),
     }));
-    expect(() => writeDocx(model)).toThrow(/internal root officeDocument/);
+    expect(() => writeDocx(model)).toThrow(/must be internal/);
   });
 
   test('rejects a non-body story present in model.stories even without a backing part (sol #7)', () => {
@@ -308,5 +309,64 @@ describe('from-scratch export fails closed on what it cannot faithfully serializ
       stories: new Map(m.stories).set('st-hdr', { id: 'st-hdr', kind: 'header', blocks: [] }),
     }));
     expect(() => writeDocx(model)).toThrow(/only a body story/);
+  });
+
+  test('rejects MORE THAN ONE body story (only the first would serialize; round-7 #3)', () => {
+    const model = withParts((m) => ({
+      ...m,
+      stories: new Map(m.stories).set('st-body2', { id: 'st-body2', kind: 'body', blocks: [] }),
+    }));
+    expect(() => writeDocx(model)).toThrow(/exactly one body story/);
+  });
+
+  test('rejects a dangling internal relationship targeting a non-emitted part (round-7 #2)', () => {
+    const model = withParts((m) => ({
+      ...m,
+      relationships: [
+        ...m.relationships,
+        { ownerPart: '/word/document.xml', id: 'rId9', type: 'urn:x/img', rawTarget: 'media/missing.png', targetMode: 'Internal', order: 9 },
+      ],
+    }));
+    expect(() => writeDocx(model)).toThrow(/non-emitted part/);
+  });
+
+  test('rejects a relationship owned by a non-existent part (round-7 #2)', () => {
+    const model = withParts((m) => ({
+      ...m,
+      relationships: [
+        ...m.relationships,
+        { ownerPart: '/word/ghost.xml', id: 'rId1', type: 'urn:x', rawTarget: 'x.xml', targetMode: 'Internal', order: 9 },
+      ],
+    }));
+    expect(() => writeDocx(model)).toThrow(/non-existent owner/);
+  });
+});
+
+describe('serialization sink rejects forged capsules from ANY path (round-7 #1 security)', () => {
+  const run = (rPrCapsule: string) => ({ kind: 'paragraph' as const, id: 'p', runs: [{ text: 'x', rPrCapsule }] });
+  test('runXml rejects an rPr capsule that is not a lone balanced w:rPr (tag breakout)', () => {
+    // The exact injection the review flagged: a self-closing w:rPr followed by sibling OOXML.
+    expect(() => paragraphXml(run('<w:rPr/><w:t>INJECTED</w:t>'))).toThrow(/lone balanced w:rPr/);
+    expect(() => paragraphXml(run('<w:rPr><w:b/></w:rPr><w:object/>'))).toThrow(/lone balanced w:rPr/);
+  });
+  test('runXml accepts a genuine lone w:rPr capsule (the parse-origin form)', () => {
+    expect(paragraphXml(run('<w:rPr><w:b/><w:color w:val="FF0000"/></w:rPr>'))).toContain('<w:color w:val="FF0000"/>');
+  });
+  test('paragraphXml rejects a forged pPr capsule / attrs capsule (tag breakout)', () => {
+    expect(() => paragraphXml({ kind: 'paragraph', id: 'p', pPrCapsule: '<w:pPr/><w:r><w:t>x</w:t></w:r>', runs: [] })).toThrow(/lone balanced w:pPr/);
+    expect(() => paragraphXml({ kind: 'paragraph', id: 'p', pAttrsCapsule: '><w:evil/>', runs: [] })).toThrow(/well-formed attribute list/);
+  });
+});
+
+describe('degenerate style/docDefaults values digest their canonical form (round-7 #5)', () => {
+  test('a style with runProps:{} / isDefault:false / empty basedOn digests as its canonical style', () => {
+    const base = createEmptyModel();
+    const degenerate: PackageModel = {
+      ...base,
+      docDefaults: { runProps: {} },
+      styles: [{ id: 'Normal', name: 'Normal', type: 'paragraph', isDefault: true, basedOn: '', runProps: {} }],
+    };
+    const clean: PackageModel = { ...base, styles: [{ id: 'Normal', name: 'Normal', type: 'paragraph', isDefault: true }] };
+    expect(authoredStateDigest(degenerate)).toBe(authoredStateDigest(clean));
   });
 });

@@ -8,6 +8,7 @@ import { describe, expect, test } from 'bun:test';
 import { readFileSync } from 'node:fs';
 import { zipSync, unzipSync, strToU8, strFromU8 } from 'fflate';
 import { parseDocx } from '../src/package/docx/read.ts';
+import { readXml } from '../src/package/xml-reader.ts';
 import { writeDocx, documentXml } from '../src/package/docx/write.ts';
 import { compareZipContainers } from '../src/package/package-comparator.ts';
 import { bodyStoryId, createEmptyModel, type PackageModel, type Story, type Block, type ParagraphRecord } from '../src/model/index.ts';
@@ -53,10 +54,9 @@ function editFirstPlainParagraph(model: PackageModel, text: string): PackageMode
   return { ...model, stories: new Map(model.stories).set(bodyId, { ...body, blocks }) };
 }
 
+/** True when the part exists and is well-formed XML (actually parsed, not assumed). */
 function validXml(part: Uint8Array | undefined): boolean {
-  if (!part) return false;
-  // Reopen the exported package to confirm the changed part parses (well-formed + accepted).
-  return true; // per-part parse is asserted via a full reopen at each call site
+  return part !== undefined && readXml(strFromU8(part)).ok;
 }
 
 describe(`package-part diff fixtures v${DIFF_FIXTURE_VERSION}: untouched parts byte-identical, changed parts valid`, () => {
@@ -141,11 +141,17 @@ describe(`package-part diff fixtures v${DIFF_FIXTURE_VERSION}: untouched parts b
       } as Story),
     };
     const first = writeDocx(model);
-    const reExport = writeDocx(parseDocx(first).ok ? (parseDocx(first) as { model: PackageModel }).model : model);
+    // The from-scratch package MUST reopen (no silent fallback) and re-export with no unowned drift.
+    const reopened = parseDocx(first);
+    expect(reopened.ok).toBe(true);
+    if (!reopened.ok) throw new Error('from-scratch package did not reopen');
+    const reExport = writeDocx(reopened.model);
     expect(compareZipContainers(first, reExport).unownedChanged).toEqual([]);
-    // Required parts present + valid.
+    // Required parts present + actually valid XML.
     const parts = unzipSync(first);
     expect(validXml(parts['[Content_Types].xml'])).toBe(true);
+    expect(validXml(parts['word/document.xml'])).toBe(true);
+    expect(validXml(parts['_rels/.rels'])).toBe(true);
     expect(strFromU8(parts['word/document.xml'])).toContain('from scratch');
   });
 });

@@ -183,6 +183,33 @@ export function isRunPropertiesCapsule(s: string): boolean {
   return els.length === 1 && els[0].name === 'w:rPr';
 }
 
+/** Same lone-balanced-element check as isRunPropertiesCapsule, for a paragraph's leading `<w:pPr>`.
+ *  Rejects trailing content (`<w:pPr/><w:r>…` injection) or a non-w:pPr root. */
+export function isParagraphPropertiesCapsule(s: string): boolean {
+  const t = s.trim();
+  if (t.length === 0) return true; // an empty capsule is a no-op splice
+  if (!t.startsWith('<w:pPr') || !startsWithTag(t, 0, 'w:pPr')) return false;
+  const end = matchElementEnd(t, 0, 'w:pPr');
+  if (end === null || end !== t.length) return false;
+  const parsed = readXml(t);
+  if (!parsed.ok) return false;
+  const els = parsed.nodes.filter((n) => n.type === 'element');
+  return els.length === 1 && els[0].name === 'w:pPr';
+}
+
+/** Validate a paragraph opening-tag ATTRIBUTES capsule (e.g. ` w:rsidR="00AB" w14:paraId="X"`): it is
+ *  spliced as `<w:p{capsule}>`, so it must be exactly a well-formed attribute list that closes no tag
+ *  early. Parse `<w:p{capsule}/>` and require a single childless w:p element — an embedded `>`/`<` or
+ *  a stray attribute value breaks that and is rejected (XML-injection boundary). */
+export function isParagraphAttrsCapsule(s: string): boolean {
+  if (s.length === 0) return true;
+  if (s.includes('<') || s.includes('>')) return false; // no tag breakout in an attribute list
+  const parsed = readXml(`<w:p${s}/>`);
+  if (!parsed.ok) return false;
+  const els = parsed.nodes.filter((n) => n.type === 'element');
+  return els.length === 1 && els[0].name === 'w:p' && els[0].children.length === 0;
+}
+
 /** Split a paragraph's inner content into its direct top-level `<w:r>…</w:r>` (or `<w:r/>`) run
  *  slices, in document order — so each run's rPr capsule can be extracted and aligned to the parsed
  *  runs (which, for a fully-captured paragraph, are exactly these direct children in order). Returns

@@ -4,7 +4,7 @@
 // `{}`, `{styleId: ''}`, and `{ilvl: NaN}` all canonicalize to the same absence the parser produces
 // on reopen — closing the round-trip asymmetry a truthiness-only check leaves open.
 
-import type { ParagraphProps, RunProps } from './authored-model.ts';
+import type { ParagraphProps, RunProps, StyleRecord, DocDefaults } from './authored-model.ts';
 
 /** Return the canonical form of paragraph props, or undefined when nothing meaningful remains.
  *  Empty-string ids are dropped; ilvl is kept only when a finite integer. */
@@ -28,4 +28,26 @@ export function canonicalRunProps(props: RunProps | undefined): RunProps | undef
   if (props.italic !== undefined) out.italic = props.italic;
   if (props.underline !== undefined) out.underline = props.underline;
   return Object.keys(out).length > 0 ? out : undefined;
+}
+
+/** Canonical form of a style record, matching what the serializer emits and the parser reads back:
+ *  isDefault only when true, basedOn only when non-empty, runProps canonicalized (empty -> absent).
+ *  (id/name/type are required and passed through.) */
+export function canonicalStyle(s: StyleRecord): StyleRecord {
+  const rp = canonicalRunProps(s.runProps);
+  return {
+    id: s.id,
+    name: s.name,
+    type: s.type,
+    ...(s.isDefault ? { isDefault: true as const } : {}),
+    ...(s.basedOn ? { basedOn: s.basedOn } : {}),
+    ...(rp ? { runProps: rp } : {}),
+  };
+}
+
+/** Canonical document defaults, or undefined when the run-property defaults are empty (matching what
+ *  the serializer emits and the parser yields on reopen). */
+export function canonicalDocDefaults(d: DocDefaults | undefined): DocDefaults | undefined {
+  const rp = canonicalRunProps(d?.runProps);
+  return rp ? { runProps: rp } : undefined;
 }
