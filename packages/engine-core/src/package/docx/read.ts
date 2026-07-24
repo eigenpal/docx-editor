@@ -8,7 +8,7 @@ import { resolveCoreRegistry } from '../../capabilities/index.ts';
 import { readXml, findElement, childElements, type XmlNode } from '../xml-reader.ts';
 import { scanBodyBlockSpans, ScanError, type BlockSpan } from '../wml-scan.ts';
 import {
-  el, collectParagraphElements, paragraphFromElement, blockFromSpan,
+  el, collectParagraphElements, collectRunElements, paragraphFromElement, blockFromSpan,
   treeHasTable, treeHasBlockSdt, deepHasTable, deepHasBlockSdt, deepCountTables,
   countModelTables, hasNonWWordBinding, countTreeBlocks,
 } from '../wml-parse.ts';
@@ -16,6 +16,7 @@ import { relatedStoryParts, parseStoryParagraphs, parseStyles, parseDocDefaults,
 import {
   DOC_PART,
   hashPreservableBlock,
+  hashStoryContent,
   hashSourceSlice,
   paragraphFullyCaptured,
   sliceIsFullyCapturedParagraph,
@@ -106,6 +107,7 @@ export function parseDocx(bytes: Uint8Array, options: ParseOptions = {}): ParseR
   }
   const blocks: Block[] = [];
   let preservation: PreservationState | undefined;
+  let lossyParse = false; // set when the flat parse discards unmodeled pPr/rPr (non-preserving path)
   if (wantsPreservation) {
     // A preserved (table / content-control) document MUST scan cleanly and its spans
     // MUST match the parsed tree's top-level blocks exactly, or ranges could mis-own
@@ -162,7 +164,10 @@ export function parseDocx(bytes: Uint8Array, options: ParseOptions = {}): ParseR
     }
     preservation = { originalParts: new Map([[DOC_PART, docText]]), blockRanges, packageParts: new Map(zip.entries) };
   } else if (body) {
-    for (const p of collectParagraphElements(body)) blocks.push(paragraphFromElement(p, alloc));
+    for (const p of collectParagraphElements(body)) {
+      blocks.push(paragraphFromElement(p, alloc));
+      if (paragraphDroppedProps(p)) lossyParse = true; // flat parse discarded unmodeled pPr/rPr
+    }
   }
   if (blocks.length === 0) blocks.push({ kind: 'paragraph', id: alloc.allocate('paragraph'), runs: [] });
 
@@ -191,6 +196,16 @@ export function parseDocx(bytes: Uint8Array, options: ParseOptions = {}): ParseR
   const styles = parseStyles(zip.entries);
   const docDefaults = parseDocDefaults(zip.entries);
   const numbering = parseNumbering(zip.entries);
+  // Baseline hash of every NON-BODY story, so the preserved export (which re-emits related-story
+  // parts verbatim) can fail closed if one was edited rather than silently discard the edit.
+  const finalPreservation: PreservationState | undefined = preservation
+    ? {
+        ...preservation,
+        relatedStoryHashes: new Map(
+          [...stories.values()].filter((s) => s.kind !== 'body').map((s) => [s.id, hashStoryContent(s.blocks)] as const),
+        ),
+      }
+    : undefined;
   const model: PackageModel = {
     ...base,
     stories,
@@ -198,13 +213,40 @@ export function parseDocx(bytes: Uint8Array, options: ParseOptions = {}): ParseR
     ...(docDefaults ? { docDefaults } : {}),
     numbering,
     identity: alloc.state(),
-    ...(preservation ? { preservation } : {}),
+    ...(finalPreservation ? { preservation: finalPreservation } : {}),
+    provenance: 'parsed',
+    ...(lossyParse ? { lossyParse: true } : {}), // flat parse dropped unmodeled OOXML -> non-exportable from scratch
   };
   validatePreservation(model); // integer/in-bounds/exists/non-overlapping
   return { ok: true, model };
 }
 
 type XmlElement = Extract<XmlNode, { type: 'element' }>;
+
+// The pPr / rPr children the coarse flat parse faithfully models (paragraphFromElement / parseRun).
+// A w:pStyle / w:numPr paragraph prop and a w:rStyle char-style link or a bare (presence) w:b / w:i
+// round-trip; ANY other child — w:spacing, w:jc, w:color, w:u, an explicit-false toggle — is dropped
+// or changed by the flat parse, so its presence means the parse was lossy.
+const FLAT_MODELED_PPR = new Set(['w:pStyle', 'w:numPr']);
+function runRPrDropsProps(rPr: XmlElement): boolean {
+  for (const c of rPr.children) {
+    if (!el(c)) continue;
+    if (c.name === 'w:rStyle') continue;
+    if ((c.name === 'w:b' || c.name === 'w:i') && Object.keys(c.attributes).length === 0) continue; // bare presence toggle
+    return true; // w:u, w:color, an explicit-false b/i (has w:val), or anything else = dropped/changed
+  }
+  return false;
+}
+/** True when a flat (non-preserving) parse of this paragraph discarded unmodeled pPr/rPr content. */
+function paragraphDroppedProps(pEl: XmlElement): boolean {
+  const pPr = childElements(pEl, 'w:pPr')[0];
+  if (pPr && pPr.children.some((c) => el(c) && !FLAT_MODELED_PPR.has(c.name))) return true;
+  for (const runEl of collectRunElements(pEl)) {
+    const rPr = childElements(runEl, 'w:rPr')[0];
+    if (rPr && runRPrDropsProps(rPr)) return true;
+  }
+  return false;
+}
 
 // The exact content types writeDocx re-emits — a present value that differs would be
 // rewritten (lossy), so the gate requires these precisely.

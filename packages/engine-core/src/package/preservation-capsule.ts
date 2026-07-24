@@ -172,11 +172,55 @@ export function extractParagraphRunRPrCapsules(paragraphSlice: string): (RunProp
  *  capsule that arrives from untrusted input (a pasted `data-raw-rpr` span): a value that is not a
  *  lone balanced w:rPr is rejected, so no attacker-selected/unescaped OOXML can be re-emitted on save
  *  (CLAUDE.md untrusted-input / XML-injection boundary). Balanced-matched + well-formedness checked. */
+/** Strictly validate the attribute syntax of EVERY tag in a capsule string: each attribute is
+ *  `name="value"` / `name='value'` with a quoted value and a UNIQUE name. The neutral reader
+ *  (readXml) is lenient — it accepts a bare attribute (`<w:rPr x/>`), an unquoted value
+ *  (`foo=bar`), or a duplicate name — which, re-emitted VERBATIM, would produce invalid XML. This
+ *  scan (comment/CDATA/PI/quote aware) rejects those before a forged capsule is interpolated. */
+export function hasStrictAttributes(s: string): boolean {
+  let i = 0;
+  while (i < s.length) {
+    if (s[i] !== '<') { i++; continue; } // text between tags
+    if (s.startsWith('<!--', i)) { const e = s.indexOf('-->', i); if (e < 0) return false; i = e + 3; continue; }
+    if (s.startsWith('<![CDATA[', i)) { const e = s.indexOf(']]>', i); if (e < 0) return false; i = e + 3; continue; }
+    if (s.startsWith('<?', i)) { const e = s.indexOf('?>', i); if (e < 0) return false; i = e + 2; continue; }
+    if (s.startsWith('</', i)) { const e = s.indexOf('>', i); if (e < 0) return false; i = e + 1; continue; } // end tag
+    i++; // past '<'
+    const nameStart = i;
+    while (i < s.length && /[\w:.-]/.test(s[i]!)) i++;
+    if (i === nameStart) return false; // no element name
+    const seen = new Set<string>();
+    for (;;) {
+      while (i < s.length && /\s/.test(s[i]!)) i++;
+      if (i >= s.length) return false;
+      if (s[i] === '>') { i++; break; }
+      if (s[i] === '/' && s[i + 1] === '>') { i += 2; break; }
+      const anStart = i;
+      while (i < s.length && /[\w:.-]/.test(s[i]!)) i++;
+      if (i === anStart) return false; // a bare token that is not a name = malformed attribute
+      const name = s.slice(anStart, i);
+      if (seen.has(name)) return false; // duplicate attribute
+      seen.add(name);
+      while (i < s.length && /\s/.test(s[i]!)) i++;
+      if (s[i] !== '=') return false; // attribute must have a value
+      i++;
+      while (i < s.length && /\s/.test(s[i]!)) i++;
+      const q = s[i];
+      if (q !== '"' && q !== "'") return false; // value must be quoted
+      const vEnd = s.indexOf(q, i + 1);
+      if (vEnd < 0) return false;
+      i = vEnd + 1;
+    }
+  }
+  return true;
+}
+
 export function isRunPropertiesCapsule(s: string): boolean {
   const t = s.trim();
   if (!t.startsWith('<w:rPr') || !startsWithTag(t, 0, 'w:rPr')) return false;
   const end = matchElementEnd(t, 0, 'w:rPr');
   if (end === null || end !== t.length) return false; // trailing content -> not a lone element
+  if (!hasStrictAttributes(t)) return false; // reject lenient-but-invalid attribute syntax
   const parsed = readXml(t);
   if (!parsed.ok) return false;
   const els = parsed.nodes.filter((n) => n.type === 'element');
@@ -191,6 +235,7 @@ export function isParagraphPropertiesCapsule(s: string): boolean {
   if (!t.startsWith('<w:pPr') || !startsWithTag(t, 0, 'w:pPr')) return false;
   const end = matchElementEnd(t, 0, 'w:pPr');
   if (end === null || end !== t.length) return false;
+  if (!hasStrictAttributes(t)) return false;
   const parsed = readXml(t);
   if (!parsed.ok) return false;
   const els = parsed.nodes.filter((n) => n.type === 'element');
@@ -204,7 +249,9 @@ export function isParagraphPropertiesCapsule(s: string): boolean {
 export function isParagraphAttrsCapsule(s: string): boolean {
   if (s.length === 0) return true;
   if (s.includes('<') || s.includes('>')) return false; // no tag breakout in an attribute list
-  const parsed = readXml(`<w:p${s}/>`);
+  const wrapped = `<w:p${s}/>`;
+  if (!hasStrictAttributes(wrapped)) return false; // reject bare/unquoted/duplicate attributes
+  const parsed = readXml(wrapped);
   if (!parsed.ok) return false;
   const els = parsed.nodes.filter((n) => n.type === 'element');
   return els.length === 1 && els[0].name === 'w:p' && els[0].children.length === 0;

@@ -59,7 +59,7 @@ export function el(node: XmlNode): node is Extract<XmlNode, { type: 'element' }>
 const RUN_WRAPPERS = new Set(['w:hyperlink', 'w:ins', 'w:del', 'w:smartTag', 'w:sdt', 'w:sdtContent', 'w:fldSimple']);
 
 /** Collect every w:r element under a node, recursing through run wrappers. */
-function collectRunElements(node: Extract<XmlNode, { type: 'element' }>): Extract<XmlNode, { type: 'element' }>[] {
+export function collectRunElements(node: Extract<XmlNode, { type: 'element' }>): Extract<XmlNode, { type: 'element' }>[] {
   const runs: Extract<XmlNode, { type: 'element' }>[] = [];
   for (const child of node.children) {
     if (!el(child)) continue;

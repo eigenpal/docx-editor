@@ -61,6 +61,7 @@ export function createEmptyModel(): PackageModel {
     numbering: [],
     parts,
     identity: alloc.state(),
+    provenance: 'created',
   };
 }
 

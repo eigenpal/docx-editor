@@ -5,7 +5,7 @@
 
 import { describe, expect, test } from 'bun:test';
 import { readFileSync } from 'node:fs';
-import { unzipSync, strFromU8 } from 'fflate';
+import { zipSync, unzipSync, strToU8, strFromU8 } from 'fflate';
 import { parseDocx } from '../src/package/docx/read.ts';
 import { writeDocx } from '../src/package/docx/write.ts';
 import { paragraphXml } from '../src/package/wml-serialize.ts';
@@ -355,6 +355,77 @@ describe('serialization sink rejects forged capsules from ANY path (round-7 #1 s
   test('paragraphXml rejects a forged pPr capsule / attrs capsule (tag breakout)', () => {
     expect(() => paragraphXml({ kind: 'paragraph', id: 'p', pPrCapsule: '<w:pPr/><w:r><w:t>x</w:t></w:r>', runs: [] })).toThrow(/lone balanced w:pPr/);
     expect(() => paragraphXml({ kind: 'paragraph', id: 'p', pAttrsCapsule: '><w:evil/>', runs: [] })).toThrow(/well-formed attribute list/);
+  });
+});
+
+describe('product-reachable data-loss / injection guards (round-9)', () => {
+  test('serialize rejects a lenient-but-invalid capsule (bare/unquoted/duplicate attributes)', () => {
+    const p = (rPrCapsule: string) => ({ kind: 'paragraph' as const, id: 'p', runs: [{ text: 'x', rPrCapsule }] });
+    // readXml accepts these leniently; re-emitting them verbatim would be invalid XML, so the strict
+    // sink validation must reject each (product path: a forged setParagraphRuns DocOp).
+    expect(() => paragraphXml(p('<w:rPr x/>'))).toThrow(/lone balanced w:rPr/);
+    expect(() => paragraphXml(p('<w:rPr a="1" a="2"/>'))).toThrow(/lone balanced w:rPr/);
+    expect(() => paragraphXml(p('<w:rPr foo=bar/>'))).toThrow(/lone balanced w:rPr/);
+    // A genuine captured capsule still serializes.
+    expect(paragraphXml(p('<w:rPr><w:b/></w:rPr>'))).toContain('<w:b/>');
+  });
+
+  test('a header/footer edit is rejected on export (no silent related-story loss)', () => {
+    // A real package with a header; edit the header story at the model level; export must fail closed
+    // rather than copy the original header part and discard the edit.
+    const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
+    const withHeader = zipSync({
+      '[Content_Types].xml': strToU8(
+        '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">' +
+          '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>' +
+          '<Default Extension="xml" ContentType="application/xml"/>' +
+          '<Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/></Types>',
+      ),
+      '_rels/.rels': strToU8(
+        '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/></Relationships>',
+      ),
+      'word/_rels/document.xml.rels': strToU8(
+        '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rIdH" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/header" Target="header1.xml"/></Relationships>',
+      ),
+      'word/document.xml': strToU8(`<w:document xmlns:w="${W}"><w:body><w:p><w:r><w:t>body</w:t></w:r></w:p></w:body></w:document>`),
+      'word/header1.xml': strToU8(`<w:hdr xmlns:w="${W}"><w:p><w:r><w:t>original header</w:t></w:r></w:p></w:hdr>`),
+    });
+    const parsed = parseDocx(withHeader, { preserveAll: true });
+    expect(parsed.ok).toBe(true);
+    if (!parsed.ok) throw new Error('parse failed');
+    // Unedited export is fine.
+    expect(() => writeDocx(parsed.model)).not.toThrow();
+    // Edit the header story's paragraph and re-export -> must fail closed.
+    const headerStory = [...parsed.model.stories.values()].find((s) => s.kind === 'header')!;
+    const editedStories = new Map(parsed.model.stories).set(headerStory.id, {
+      ...headerStory,
+      blocks: [{ kind: 'paragraph' as const, id: (headerStory.blocks[0] as { id: string }).id, runs: [{ text: 'EDITED HEADER' }] }],
+    });
+    expect(() => writeDocx({ ...parsed.model, stories: editedStories })).toThrow(/related story|related-story/);
+  });
+
+  test('a non-preserving flat parse that dropped unmodeled OOXML is non-exportable from scratch', () => {
+    const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
+    // A paragraph carrying an unmodeled w:jc + a run w:color: the flat parse drops both, so the model
+    // is marked lossy and writeDocx fails closed (rather than silently exporting without them).
+    const bytes = zipSync({
+      '[Content_Types].xml': strToU8('<Types/>'),
+      'word/document.xml': strToU8(
+        `<w:document xmlns:w="${W}"><w:body><w:p><w:pPr><w:jc w:val="center"/></w:pPr><w:r><w:rPr><w:color w:val="FF0000"/></w:rPr><w:t>styled</w:t></w:r></w:p></w:body></w:document>`,
+      ),
+    });
+    const parsed = parseDocx(bytes); // NON-preserving (default)
+    expect(parsed.ok).toBe(true);
+    if (!parsed.ok) throw new Error('parse failed');
+    expect(parsed.model.lossyParse).toBe(true);
+    expect(() => writeDocx(parsed.model)).toThrow(/dropped unmodeled OOXML/);
+    // Whereas a fully-modeled paragraph (only text) flat-parses cleanly and exports fine.
+    const plain = parseDocx(zipSync({ '[Content_Types].xml': strToU8('<Types/>'), 'word/document.xml': strToU8(`<w:document xmlns:w="${W}"><w:body><w:p><w:r><w:t>hi</w:t></w:r></w:p></w:body></w:document>`) }));
+    expect(plain.ok).toBe(true);
+    if (plain.ok) {
+      expect(plain.model.lossyParse).toBeUndefined();
+      expect(() => writeDocx(plain.model)).not.toThrow();
+    }
   });
 });
 

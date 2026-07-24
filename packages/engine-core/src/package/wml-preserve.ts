@@ -46,6 +46,12 @@ export function hashPreservableBlock(block: Block): string {
   return stableHash(contentForHash(block));
 }
 
+/** Id-independent content hash of a whole story's blocks — used to detect (and fail closed on) an
+ *  edit to a related (non-body) story, whose part the preserved export re-emits verbatim. */
+export function hashStoryContent(blocks: readonly Block[]): string {
+  return stableHash(blocks.map((b) => contentForHash(b)));
+}
+
 /** Reparse a block's source slice for integrity checks, CAPTURING the same ownership-scoped w:pPr
  *  capsule the original parse did — so the reparsed block's baseline hash matches the one computed at
  *  parse time (both include the capsule). Without this a paragraph that carried a captured w:pPr

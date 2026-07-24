@@ -320,6 +320,18 @@ export interface PackageModel {
   readonly identity: IdentityState;
   /** Original-part text plus per-block source ranges for lossless re-emit (see below). */
   readonly preservation?: PreservationState;
+  /** How this model came to be. `'created'` (createEmptyModel) is fully modeled, so it may take the
+   *  from-scratch export path. `'parsed'` (parseDocx) may carry unmodeled OOXML the flat parse
+   *  dropped; without a preservation index it MUST NOT be re-serialized from scratch (that would
+   *  silently lose the unmodeled properties), so writeDocx fails closed on a parsed, non-preserved
+   *  model. Undefined is treated as `'created'` for backward compatibility. */
+  readonly provenance?: 'created' | 'parsed';
+  /** Set when a NON-preserving flat parse dropped unmodeled OOXML (a w:pPr/w:rPr child the coarse
+   *  model does not represent, e.g. w:spacing / w:color / w:u). Such a model cannot be re-serialized
+   *  from scratch without silently losing that formatting, so writeDocx fails closed on it. A model
+   *  with no dropped content (created from scratch, or the flat parse of a fully-modeled document) is
+   *  not lossy and re-exports safely. */
+  readonly lossyParse?: boolean;
 }
 
 /** Source range of one preservable block within a retained original part. */
@@ -354,6 +366,13 @@ export interface PreservationState {
    * (styles, rels, media, headers, ...) is re-emitted byte-for-byte.
    */
   readonly packageParts?: ReadonlyMap<string, Uint8Array>;
+  /**
+   * Baseline content hash of each NON-BODY story (header/footer/note/comment) captured at parse.
+   * The preserved export re-emits those parts VERBATIM (it only patches the body document part), so
+   * an edit to a related story would be silently discarded. writeDocx compares the current story to
+   * this baseline and FAILS CLOSED on any divergence rather than lose the edit.
+   */
+  readonly relatedStoryHashes?: ReadonlyMap<string, string>;
 }
 
 // Standard OOXML/OPC relationship type URIs used by create-from-scratch.

@@ -8,7 +8,7 @@ import { writeZip, strToU8 } from '../zip.ts';
 import { blockXml } from '../wml-serialize.ts';
 import { W_NS } from '../wml-parse.ts';
 import { escapeXmlChecked } from '../sinks.ts';
-import { DOC_PART, emitPreservedPart } from '../wml-preserve.ts';
+import { DOC_PART, emitPreservedPart, hashStoryContent } from '../wml-preserve.ts';
 import { buildRelationshipSet, resolveRelationship, type RelationshipRecord } from '../relationships.ts';
 import { buildContentTypeIndex, resolveContentType, type ContentTypeRecords } from '../content-types.ts';
 import {
@@ -136,6 +136,22 @@ function numberingXml(nums: readonly NumberingRecord[]): string {
   return `${XML_DECL}<w:numbering xmlns:w="${W_NS}">${body}</w:numbering>`;
 }
 
+/** Fail closed if any related (non-body) story diverges from its parse-time baseline — the preserved
+ *  export re-emits those parts verbatim, so it cannot reflect such an edit and must not silently drop
+ *  it. (Related-story patching is a future increment; until then a related edit is rejected.) */
+function assertRelatedStoriesUnchanged(model: PackageModel): void {
+  const baselines = model.preservation?.relatedStoryHashes;
+  for (const story of model.stories.values()) {
+    if (story.kind === 'body') continue;
+    const baseline = baselines?.get(story.id);
+    // A related story with a baseline that no longer matches was edited; one with NO baseline was
+    // added after parse. Either way the verbatim export cannot represent it — fail closed.
+    if (baseline === undefined || baseline !== hashStoryContent(story.blocks)) {
+      throw new Error(`related story ${story.id} (${story.kind}) was edited; the preserved export cannot patch related-story parts yet — rejected to avoid silent loss`);
+    }
+  }
+}
+
 /** The set of part names writeDocx WILL emit for a from-scratch model: the main document part, every
  *  declared xml part (media parts already fail closed earlier), and the .rels part for every owner
  *  that has relationships. Used to close the OPC graph (content-type coverage + target resolution). */
@@ -257,9 +273,22 @@ function assertFromScratchSerializable(model: PackageModel): void {
 export function writeDocx(model: PackageModel): Uint8Array {
   const preserved = model.preservation?.packageParts;
   if (preserved && preserved.size > 0) {
+    // The preserved export patches ONLY the body document part and re-emits every other part
+    // verbatim. An edit to a related (non-body) story would therefore be silently discarded, so fail
+    // closed if any related story diverges from its parse-time baseline.
+    assertRelatedStoriesUnchanged(model);
     const entries = new Map(preserved);
     entries.set(DOC_PART, strToU8(documentXml(model))); // patch only the main document part
     return writeZip(entries);
+  }
+
+  // A flat (non-preserving) parse that DROPPED unmodeled OOXML (w:spacing, color, fonts, underline)
+  // reached the from-scratch path — regenerating from the coarse model would silently lose that
+  // formatting. Fail closed: such a document must be opened WITH preservation, not from-scratch
+  // re-serialized. (createEmptyModel-origin models, and the flat parse of a fully-modeled document,
+  // carry no dropped content and export fine.)
+  if (model.lossyParse) {
+    throw new Error('cannot from-scratch export a model whose flat parse dropped unmodeled OOXML — open it with preservation (preserveAll)');
   }
 
   // From-scratch: validate OPC invariants + fail closed on anything not faithfully serializable,
