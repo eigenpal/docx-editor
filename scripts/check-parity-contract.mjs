@@ -56,7 +56,11 @@ function extractInterfaceFields(snapshotText, interfaceName) {
       else if (ch === '}') depth--;
     }
     if (depth === 0 && i > startIdx) break;
-    const match = /^ {4}(\w+)\??:/.exec(line);
+    // Accept BOTH member forms: `name: Type;` and a method signature
+    // `name(): Type;`. Matching only the former made method-style members such
+    // as `getEditor(): Editor | null` invisible to the gate, so a ref method
+    // could be added or dropped on one adapter without the check noticing.
+    const match = /^ {4}(\w+)\??[(:]/.exec(line);
     if (match) fields.add(match[1]);
   }
   return fields;
@@ -72,13 +76,25 @@ function extractRefMembers(snapshotText) {
 }
 
 /**
- * Vue's DocxEditorRef is a type alias (`type DocxEditorRef = EditorRefLike & { ... }`).
- * The members live inside the intersected object literal, not a named interface.
+ * Vue's DocxEditorRef has taken two shapes.
+ *
+ * Legacy: a type alias intersecting a shared base
+ * (`type DocxEditorRef = EditorRefLike & { ... }`), whose members live in the
+ * intersected object literal rather than a named interface.
+ *
+ * Greenfield: a plain `interface DocxEditorRef`, declaring every member
+ * directly — the same shape React uses. That is BETTER parity, not worse, so
+ * the checker accepts it instead of failing to find the alias.
  */
 function extractVueRefMembers(snapshotText) {
   const lines = snapshotText.split('\n');
   const startIdx = lines.findIndex((l) => l.startsWith('export type DocxEditorRef '));
-  if (startIdx === -1) return null;
+  if (startIdx === -1) {
+    // No alias — fall back to the interface form and report null only if that
+    // is missing too, so a genuinely absent DocxEditorRef still fails loudly.
+    const asInterface = extractInterfaceFields(snapshotText, 'DocxEditorRef');
+    return asInterface.size > 0 ? asInterface : null;
+  }
   const fields = new Set();
   let inBlock = false;
   for (let i = startIdx; i < lines.length; i++) {

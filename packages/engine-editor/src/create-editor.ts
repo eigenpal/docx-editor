@@ -151,6 +151,8 @@ export function createEditor(config: EditorConfig): Editor {
   let layoutToken = 0;
   let cancelScheduledLayout: (() => void) | null = null;
   let dragSession: PointerDragSession | null = null;
+  let scrollTrackedEl: HTMLElement | null = null;
+  let detachScrollTracking: (() => void) | null = null;
   let navigationSession: NavigationSession | null = null;
   let documentGeneration = 0;
 
@@ -344,7 +346,27 @@ export function createEditor(config: EditorConfig): Editor {
     });
     mountedBodyEl = bodyEl;
     updateInputHostFromFrame();
+    trackScrollForInputHost();
     syncPaintedPagesAssistivePolicy();
+  }
+
+  // Scrolling moves the caret in CLIENT space without changing the selection or
+  // the layout, so nothing else re-places the input host and it drifts away from
+  // the caret — taking the browser's IME and autofill UI with it. The engine
+  // owns input-host policy, so it watches the scroll container itself rather
+  // than making every adapter remember to.
+  function trackScrollForInputHost(): void {
+    const scroll = host.getScrollContainer?.();
+    if (!scroll || scroll === scrollTrackedEl) return;
+    detachScrollTracking?.();
+    const onScroll = (): void => updateInputHostFromFrame();
+    scroll.addEventListener('scroll', onScroll, { passive: true });
+    scrollTrackedEl = scroll;
+    detachScrollTracking = () => {
+      scroll.removeEventListener('scroll', onScroll);
+      scrollTrackedEl = null;
+      detachScrollTracking = null;
+    };
   }
 
   function rejectPointer(
@@ -764,6 +786,7 @@ export function createEditor(config: EditorConfig): Editor {
       destroyed = true;
       dragSession = null;
       navigationSession = null;
+      detachScrollTracking?.();
       cancelScheduledLayoutWork();
       frames.cancelPendingLayout();
       frames.clearNavigationSidecar();
