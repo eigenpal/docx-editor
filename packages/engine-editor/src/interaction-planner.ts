@@ -10,8 +10,10 @@ import type {
   PointerInteractionIntent,
   SemanticSelection,
   SemanticTarget,
+  WordSegmentRecord,
 } from '@docx-editor.dev/core-contract/interaction';
 import { hitTestPointer } from './interaction-geometry.ts';
+import { blockSelectionFromHit, wordSelectionFromHit } from './word-selection.ts';
 
 export interface InteractionPlannerContext {
   readonly frame: InteractionFrame;
@@ -117,11 +119,48 @@ function validateNormalizedClickIntent(
     }
   }
   if (intent.clickCount !== undefined) {
-    if (!Number.isFinite(intent.clickCount) || !Number.isInteger(intent.clickCount) || intent.clickCount !== 1) {
-      return rejectEffect('unsupported', 'only a normalized single click (clickCount 1) is supported', frameId);
+    if (
+      !Number.isFinite(intent.clickCount) ||
+      !Number.isInteger(intent.clickCount) ||
+      intent.clickCount < 1 ||
+      intent.clickCount > 3
+    ) {
+      return rejectEffect('unsupported', 'clickCount must be 1, 2, or 3', frameId);
     }
   }
+  if (intent.clickCount !== undefined && intent.clickCount > 1 && intent.shiftKey) {
+    return rejectEffect('unsupported', 'shift-modified multi-click is not supported', frameId);
+  }
   return null;
+}
+
+function blockRecordForTarget(frame: InteractionFrame, target: Extract<SemanticTarget, { kind: 'text' }>) {
+  return frame.semanticIndex.stories
+    .flatMap((story) => story.blocks)
+    .find(
+      (block) =>
+        block.identity.storyId === target.identity.storyId &&
+        block.identity.blockId === target.identity.blockId,
+    );
+}
+
+function selectionFromWordHit(
+  frame: InteractionFrame,
+  target: Extract<SemanticTarget, { kind: 'text' }>,
+  wordSegments: readonly WordSegmentRecord[],
+  paragraphGraphemeCount: number,
+): SemanticSelection {
+  const { anchor, head } = wordSelectionFromHit(target, wordSegments, paragraphGraphemeCount);
+  return { frameId: frame.id, scope: target.scope, anchor, head };
+}
+
+function selectionFromBlockHit(
+  frame: InteractionFrame,
+  target: Extract<SemanticTarget, { kind: 'text' }>,
+  paragraphGraphemeCount: number,
+): SemanticSelection {
+  const { anchor, head } = blockSelectionFromHit(target, paragraphGraphemeCount);
+  return { frameId: frame.id, scope: target.scope, anchor, head };
 }
 
 function planClick(context: InteractionPlannerContext, intent: ClickInteractionIntent): InteractionPlan {
@@ -155,6 +194,50 @@ function planClick(context: InteractionPlannerContext, intent: ClickInteractionI
     return {
       frameId,
       effects: [rejectEffect('unsupported', 'only editable text targets may create a caret or range', frameId)],
+    };
+  }
+
+  const clickCount = intent.clickCount ?? 1;
+
+  if (clickCount === 2) {
+    const block = blockRecordForTarget(context.frame, hit.value.target);
+    if (!block) {
+      return {
+        frameId,
+        effects: [rejectEffect('invalidTarget', 'word selection target block is missing from semantic index', frameId)],
+      };
+    }
+    return {
+      frameId,
+      effects: [
+        {
+          kind: 'syncSelection',
+          frameId,
+          selection: selectionFromWordHit(context.frame, hit.value.target, block.wordSegments, block.graphemeCount),
+        },
+        { kind: 'focus', frameId },
+      ],
+    };
+  }
+
+  if (clickCount === 3) {
+    const block = blockRecordForTarget(context.frame, hit.value.target);
+    if (!block) {
+      return {
+        frameId,
+        effects: [rejectEffect('invalidTarget', 'block selection target block is missing from semantic index', frameId)],
+      };
+    }
+    return {
+      frameId,
+      effects: [
+        {
+          kind: 'syncSelection',
+          frameId,
+          selection: selectionFromBlockHit(context.frame, hit.value.target, block.graphemeCount),
+        },
+        { kind: 'focus', frameId },
+      ],
     };
   }
 

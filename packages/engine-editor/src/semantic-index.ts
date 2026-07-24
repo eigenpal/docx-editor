@@ -13,7 +13,11 @@ import {
 import {
   graphemeCount,
   segmentGraphemes,
+  segmentWords,
+  resolveDefaultWordBoundary,
   utf16OffsetToGrapheme,
+  wordSegmentsToGraphemeRecords,
+  type WordBoundary,
 } from '@docx-editor.dev/engine-layout';
 import type { ViewScope } from '@docx-editor.dev/core-contract/editor';
 import type {
@@ -122,6 +126,7 @@ function whitespaceSubranges(text: string): readonly { readonly utf16From: numbe
 function buildBlockRecords(
   storyId: string,
   located: readonly LocatedParagraph[],
+  wordBoundary: WordBoundary,
 ): { records: BlockSemanticRecord[]; paragraphs: ParagraphRecord[] } {
   const paragraphs = located.map((l) => l.paragraph);
   const records = located.map(({ paragraph, context }, orderIndex) => {
@@ -134,6 +139,7 @@ function buildBlockRecords(
       utf16Length: text.length,
       empty: text.length === 0,
       readOnly,
+      wordSegments: wordSegmentsToGraphemeRecords(text, segmentWords(text, wordBoundary)),
     };
   });
   return { records, paragraphs };
@@ -162,6 +168,8 @@ function paragraphRegions(
         kind: 'lineWhitespace',
         utf16From: sub.utf16From,
         utf16To: sub.utf16To,
+        graphemeFrom: utf16OffsetToGrapheme(text, sub.utf16From),
+        graphemeTo: utf16OffsetToGrapheme(text, sub.utf16To),
       });
     }
     if (!record.empty) {
@@ -196,13 +204,17 @@ function structuralRegions(
 }
 
 /** Build the canonical semantic index for the body story. */
-export function buildSemanticIndex(model: PackageModel, scope: ViewScope = { kind: 'body' }): SemanticPositionIndex {
+export function buildSemanticIndex(
+  model: PackageModel,
+  scope: ViewScope = { kind: 'body' },
+  wordBoundary: WordBoundary = resolveDefaultWordBoundary(),
+): SemanticPositionIndex {
   const storyId = bodyStoryId(model);
   const story = model.stories.get(storyId)!;
   const located: LocatedParagraph[] = [];
   walkParagraphs(story.blocks, { inTopLevelBodyFlow: true, inTableCell: false }, located);
 
-  const { records, paragraphs } = buildBlockRecords(storyId, located);
+  const { records, paragraphs } = buildBlockRecords(storyId, located, wordBoundary);
   const storyIndex: StorySemanticIndex = { storyId, scope, blocks: records };
   const caretStops = records.flatMap((b) => caretStopsForParagraph(scope, b));
   const ownershipRegions = [

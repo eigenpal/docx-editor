@@ -276,7 +276,7 @@ describe('interaction planner click (task 5.2)', () => {
     }
   });
 
-  test('clickCount accepts undefined or 1 and rejects other normalized values', () => {
+  test('clickCount accepts undefined, 1, 2, or 3 and rejects other normalized values', () => {
     const frame = publishFrame(modelWith(['x']));
     const item = frame.display[0]!.items.find((i) => i.kind === 'text');
     if (item?.kind !== 'text') throw new Error('text');
@@ -285,8 +285,14 @@ describe('interaction planner click (task 5.2)', () => {
     expect(planInteraction(plannerContext(frame), clickIntent(frame, point, { clickCount: 1 })).effects[0]).toMatchObject({
       kind: 'syncSelection',
     });
+    expect(planInteraction(plannerContext(frame), clickIntent(frame, point, { clickCount: 2 })).effects[0]).toMatchObject({
+      kind: 'syncSelection',
+    });
+    expect(planInteraction(plannerContext(frame), clickIntent(frame, point, { clickCount: 3 })).effects[0]).toMatchObject({
+      kind: 'syncSelection',
+    });
 
-    for (const clickCount of [0, -1, 2, Number.NaN, Number.POSITIVE_INFINITY, 1.5]) {
+    for (const clickCount of [0, -1, 4, Number.NaN, Number.POSITIVE_INFINITY, 1.5]) {
       expectRejectOnly(
         planInteraction(plannerContext(frame), clickIntent(frame, point, { clickCount })),
         'unsupported',
@@ -431,7 +437,10 @@ describe('interaction planner click (task 5.2)', () => {
     });
 
     expectRejectOnly(planInteraction(plannerContext(frame), clickIntent(frame, point, { button: 2 })), 'unsupported');
-    expectRejectOnly(planInteraction(plannerContext(frame), clickIntent(frame, point, { clickCount: 2 })), 'unsupported');
+    expectRejectOnly(
+      planInteraction(plannerContext(frame), clickIntent(frame, point, { clickCount: 2, shiftKey: true })),
+      'unsupported',
+    );
 
     const imageFrame = publishFrame(modelWith(['before']));
     const page = imageFrame.display[0]!;

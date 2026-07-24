@@ -402,6 +402,120 @@ describe('createEditor dispatchInteraction click (task 5.2)', () => {
     editor.destroy();
     body.remove();
   });
+
+  test('double-click and triple-click dispatch syncSelection, focus, overlay geometry, and preserve model revision', () => {
+    const body = document.createElement('div');
+    document.body.append(body);
+    const editor = createEditor({
+      host: hostWith(body),
+      document: createEditableParagraphFixture(),
+      accessibleName: 'Editor',
+    });
+    const revisionBefore = editor.getDocumentHandle().revision;
+    const frame = editor.getInteractionFrame();
+    const textItem = frame.display[0]!.items.find((i) => i.kind === 'text');
+    if (textItem?.kind !== 'text') throw new Error('text');
+    const block = frame.semanticIndex.stories[0]!.blocks.find(
+      (b) => b.identity.blockId === textItem.semantic.identity.blockId,
+    )!;
+
+    const wordCluster = textItem.clusters[2] ?? textItem.clusters[0]!;
+    const doublePoint = clientPointForStackedText(frame, 0, {
+      x: wordCluster.box.x + wordCluster.box.width * 0.5,
+      y: wordCluster.box.y + wordCluster.box.height / 2,
+    });
+    const double = editor.dispatchInteraction({
+      kind: 'click',
+      frameId: frame.id,
+      clientPoint: doublePoint,
+      clickCount: 2,
+    });
+    expect(double.outcome.ok).toBe(true);
+    if (double.outcome.ok) {
+      expect(double.outcome.frameId).toEqual(editor.getInteractionFrame().id);
+      expect(double.outcome.frameId.value).toBeGreaterThan(frame.id.value);
+    }
+    const afterDouble = editor.getInteractionFrame();
+    expect(afterDouble.selection?.anchor.graphemeOffset).toBeLessThan(afterDouble.selection?.head.graphemeOffset ?? 0);
+    expect(afterDouble.selectionGeometry).not.toBeNull();
+    expect(afterDouble.focus.focused).toBe(true);
+    expect(editor.getDocumentHandle().revision).toBe(revisionBefore);
+
+    const triplePoint = clientPointForStackedText(afterDouble, 0, {
+      x: textItem.clusters[0]!.box.x + 1,
+      y: textItem.clusters[0]!.box.y + textItem.clusters[0]!.box.height / 2,
+    });
+    const triple = editor.dispatchInteraction({
+      kind: 'click',
+      frameId: afterDouble.id,
+      clientPoint: triplePoint,
+      clickCount: 3,
+    });
+    expect(triple.outcome.ok).toBe(true);
+    if (triple.outcome.ok) {
+      expect(triple.outcome.frameId).toEqual(editor.getInteractionFrame().id);
+      expect(triple.outcome.frameId.value).toBeGreaterThan(afterDouble.id.value);
+    }
+    const afterTriple = editor.getInteractionFrame();
+    expect(afterTriple.selection?.anchor).toMatchObject({
+      graphemeOffset: 0,
+      identity: block.identity,
+    });
+    expect(afterTriple.selection?.head).toMatchObject({
+      graphemeOffset: block.graphemeCount,
+      identity: block.identity,
+    });
+    expect(afterTriple.selectionGeometry).not.toBeNull();
+    expect(afterTriple.caret).not.toBeNull();
+    expect(afterTriple.focus.focused).toBe(true);
+    expect(editor.getDocumentHandle().revision).toBe(revisionBefore);
+
+    editor.destroy();
+    body.remove();
+  });
+
+  test('failed double-click intents leave PM frame focus and model revision unchanged', () => {
+    const body = document.createElement('div');
+    document.body.append(body);
+    const editor = createEditor({
+      host: hostWith(body),
+      document: createEditableParagraphFixture(),
+      accessibleName: 'Editor',
+    });
+    const frame = editor.getInteractionFrame();
+    const textItem = frame.display[0]!.items.find((i) => i.kind === 'text');
+    if (textItem?.kind !== 'text') throw new Error('text');
+    const cluster = textItem.clusters[1] ?? textItem.clusters[0]!;
+    const validPoint = clientPointForStackedText(frame, 0, {
+      x: cluster.box.x + cluster.box.width * 0.5,
+      y: cluster.box.y + cluster.box.height / 2,
+    });
+    const before = editorInteractionSnapshot(editor);
+
+    const shiftDouble = editor.dispatchInteraction({
+      kind: 'click',
+      frameId: editor.getInteractionFrame().id,
+      clientPoint: validPoint,
+      clickCount: 2,
+      shiftKey: true,
+    });
+    expect(shiftDouble.outcome.ok).toBe(false);
+    if (!shiftDouble.outcome.ok) expect(shiftDouble.outcome.code).toBe('unsupported');
+    expect(editorInteractionSnapshot(editor)).toEqual(before);
+
+    const badCount = editor.dispatchInteraction({
+      kind: 'click',
+      frameId: editor.getInteractionFrame().id,
+      clientPoint: validPoint,
+      clickCount: 4,
+    });
+    expect(badCount.outcome.ok).toBe(false);
+    if (!badCount.outcome.ok) expect(badCount.outcome.code).toBe('unsupported');
+    expect(editorInteractionSnapshot(editor)).toEqual(before);
+
+    editor.destroy();
+    body.remove();
+  });
 });
 
 describe('createEditor focus frame coherence (task 5.1)', () => {

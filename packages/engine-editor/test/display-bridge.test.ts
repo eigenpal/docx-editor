@@ -1,7 +1,7 @@
 // The display bridge reconciles the engine layout IR with model-derived semantic ranges.
 
 import { describe, expect, test } from 'bun:test';
-import { toDisplayPages } from '../src/display-bridge.ts';
+import { deriveLineWhitespaceBox, toDisplayPages } from '../src/display-bridge.ts';
 import { layoutBody, HelveticaMetrics, type Page } from '@docx-editor.dev/engine-layout';
 import {
   createEmptyModel,
@@ -120,6 +120,19 @@ describe('engine layout IR -> contract display IR', () => {
         expect(cluster.affinity).toBe(expected);
       }
     }
+  });
+
+  test('lineWhitespace regions receive precise gap boxes between painted slices', () => {
+    const model = modelWith(['ab cd']);
+    const layout = layoutBody(model, LAYOUT);
+    const { display, semanticIndex } = toDisplayPages(model, layout.pages);
+    const blockId = semanticIndex.stories[0]!.blocks[0]!.identity.blockId;
+    const ws = semanticIndex.ownershipRegions.find((r) => r.kind === 'lineWhitespace' && r.identity.blockId === blockId)!;
+    const items = display[0]!.items.filter((i) => i.kind === 'text') as Extract<(typeof display)[0]['items'][number], { kind: 'text' }>[];
+    expect(items).toHaveLength(2);
+    const derived = deriveLineWhitespaceBox(ws, items, 5);
+    expect(derived).toEqual(ws.box);
+    expect(derived!.width).toBeLessThan(items[0]!.box.width + items[1]!.box.width);
   });
 
   test('empty paragraph emits line-area geometry with stable identity and no visible runs', () => {

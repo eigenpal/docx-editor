@@ -13,6 +13,7 @@
   "scripts": {
     "typecheck": "tsc --noEmit",
     "dev:a11y-harness": "vite",
+    "test:a11y-harness-vite-exports": "bun scripts/verify-a11y-harness-vite-exports.mjs",
     "test:e2e:a11y-tree": "playwright test e2e/accessibility-tree.spec.ts --config playwright.config.ts --timeout=30000 --workers=1",
     "test:lighthouse:a11y-harness": "node scripts/run-lighthouse-a11y-harness.mjs",
     "verify:a11y-tree": "bun run test:e2e:a11y-tree && bun run test:lighthouse:a11y-harness"

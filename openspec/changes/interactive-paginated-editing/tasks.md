@@ -42,7 +42,7 @@
 
 - [x] 5.1 Implement a framework-neutral interaction controller that accepts host metrics and native event intent and returns ProseMirror selection/command requests through `EditorBinding`, focus, capture, scroll, or typed rejection effects without owning parallel selection state.
 - [x] 5.2 Implement single-click caret placement and shift-click extension through frame-bound hit targets and `EditorBinding`.
-- [ ] 5.3 Implement Unicode-aware double-click word and capability-owned triple-click block selection without splitting grapheme clusters.
+- [x] 5.3 Implement Unicode-aware double-click word and capability-owned triple-click block selection without splitting grapheme clusters.
 - [ ] 5.4 Implement pointer-drag selection with capture across lines and pages, preserving semantic anchors when layout frames change.
 - [ ] 5.5 Implement logical horizontal navigation and engine-geometry vertical, Home/End, and page navigation with retained visual advance and bidi/affinity tests.
 - [ ] 5.6 Implement declared behavior for editable text, read-only/selectable text, atomic objects, controls, annotations, page background, margins, and inter-page gaps.

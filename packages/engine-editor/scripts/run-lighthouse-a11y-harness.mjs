@@ -5,12 +5,17 @@ import { spawn } from 'node:child_process';
 import { mkdir, writeFile, readFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+import {
+  HarnessTaskFailure,
+  harnessBaseUrl,
+  runWithOptionalSpawnedHarness,
+} from './a11y-harness-lifecycle.mjs';
 
 const packageRoot = join(dirname(fileURLToPath(import.meta.url)), '..');
 const outDir = join(packageRoot, 'test-results/lighthouse');
 const jsonPath = join(outDir, 'a11y-harness-lighthouse.json');
 const port = Number(process.env.A11Y_HARNESS_PORT ?? 5299);
-const url = process.env.A11Y_HARNESS_URL ?? `http://127.0.0.1:${port}/`;
+const url = process.env.A11Y_HARNESS_URL ?? harnessBaseUrl(port);
 const startupTimeoutMs = Number(process.env.A11Y_HARNESS_STARTUP_MS ?? 60_000);
 
 function run(cmd, args, options = {}) {
@@ -21,92 +26,56 @@ function run(cmd, args, options = {}) {
   });
 }
 
-async function waitForHarness(targetUrl, timeoutMs) {
-  const started = Date.now();
-  while (Date.now() - started < timeoutMs) {
-    try {
-      const response = await fetch(targetUrl, { redirect: 'follow' });
-      if (response.ok) return;
-    } catch {
-      // retry until timeout
-    }
-    await new Promise((resolve) => setTimeout(resolve, 250));
-  }
-  throw new Error(`harness server did not start: ${targetUrl}`);
-}
-
 async function main() {
   await mkdir(outDir, { recursive: true });
 
-  let server = null;
-  let spawned = false;
-  try {
-    await waitForHarness(url, 2_000);
-  } catch {
-    spawned = true;
-    server = spawn('bun', ['run', 'dev:a11y-harness'], {
-      cwd: packageRoot,
-      stdio: ['ignore', 'pipe', 'pipe'],
-      env: { ...process.env, A11Y_HARNESS_PORT: String(port) },
-    });
-
-    let serverLog = '';
-    server.stdout?.on('data', (chunk) => {
-      serverLog += chunk.toString();
-    });
-    server.stderr?.on('data', (chunk) => {
-      serverLog += chunk.toString();
-    });
-
-    try {
-      await waitForHarness(url, startupTimeoutMs);
-    } catch (error) {
-      console.error(serverLog);
-      throw error;
-    }
-  }
-
-  const stopServer = () => {
-    if (spawned && server && !server.killed) server.kill('SIGTERM');
-  };
-  process.on('exit', stopServer);
-  process.on('SIGINT', () => {
-    stopServer();
-    process.exit(130);
-  });
-  process.on('SIGTERM', () => {
-    stopServer();
-    process.exit(143);
-  });
+  let serverLog = '';
 
   try {
-    const lighthouseCode = await run('bunx', [
-      'lighthouse',
-      url,
-      '--quiet',
-      '--chrome-flags=--headless=new',
-      '--only-categories=accessibility',
-      '--output=json',
-      `--output-path=${jsonPath}`,
-    ]);
-    if (lighthouseCode !== 0) {
-      console.error(`lighthouse exited with code ${lighthouseCode}`);
-      process.exit(lighthouseCode);
-    }
+    await runWithOptionalSpawnedHarness(
+      {
+        url,
+        cwd: packageRoot,
+        port,
+        startupTimeoutMs,
+        onSpawnedLog: (chunk) => {
+          serverLog += chunk;
+        },
+      },
+      async () => {
+        const lighthouseCode = await run('bunx', [
+          'lighthouse',
+          url,
+          '--quiet',
+          '--chrome-flags=--headless=new',
+          '--only-categories=accessibility',
+          '--output=json',
+          `--output-path=${jsonPath}`,
+        ]);
+        if (lighthouseCode !== 0) {
+          throw new HarnessTaskFailure(`lighthouse exited with code ${lighthouseCode}`, lighthouseCode);
+        }
 
-    const report = JSON.parse(await readFile(jsonPath, 'utf8'));
-    const gateModule = await import(pathToFileURL(join(packageRoot, 'scripts/lighthouse-a11y-gate.ts')).href);
-    const summary = gateModule.evaluateLighthouseGate(report, url);
-    await writeFile(join(outDir, 'a11y-harness-lighthouse-summary.json'), JSON.stringify(summary, null, 2));
-    console.log(JSON.stringify(summary, null, 2));
+        const report = JSON.parse(await readFile(jsonPath, 'utf8'));
+        const gateModule = await import(pathToFileURL(join(packageRoot, 'scripts/lighthouse-a11y-gate.ts')).href);
+        const summary = gateModule.evaluateLighthouseGate(report, url);
+        await writeFile(join(outDir, 'a11y-harness-lighthouse-summary.json'), JSON.stringify(summary, null, 2));
+        console.log(JSON.stringify(summary, null, 2));
 
-    const exitCode = gateModule.lighthouseGateExitCode(summary);
-    if (exitCode !== 0) {
-      console.error('lighthouse accessibility gate failed');
-      process.exit(exitCode);
+        const gateExitCode = gateModule.lighthouseGateExitCode(summary);
+        if (gateExitCode !== 0) {
+          throw new HarnessTaskFailure('lighthouse accessibility gate failed', gateExitCode);
+        }
+      },
+    );
+  } catch (error) {
+    if (serverLog) console.error(serverLog);
+    if (error instanceof HarnessTaskFailure) {
+      console.error(error.message);
+      process.exitCode = error.exitCode;
+      return;
     }
-  } finally {
-    stopServer();
+    throw error;
   }
 }
 

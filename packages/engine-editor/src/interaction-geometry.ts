@@ -177,6 +177,36 @@ function ownershipTarget(region: OwnershipRegion, frame: InteractionFrame): Sema
   };
 }
 
+function whitespaceTargetFromRegion(
+  region: OwnershipRegion,
+  local: Point,
+  frame: InteractionFrame,
+): SemanticTarget | null {
+  if (region.kind !== 'lineWhitespace' || region.graphemeFrom === undefined || region.graphemeTo === undefined || !region.box) {
+    return null;
+  }
+  const block = blockRecord(frame, region.identity.blockId);
+  if (!block) return null;
+  const relX = local.x - region.box.x;
+  const ratio = region.box.width > 0 ? relX / region.box.width : 0;
+  if (ratio < 0.5) {
+    return {
+      kind: 'text',
+      scope: region.scope,
+      identity: region.identity,
+      graphemeOffset: region.graphemeFrom,
+      affinity: 'downstream',
+    };
+  }
+  return {
+    kind: 'text',
+    scope: region.scope,
+    identity: region.identity,
+    graphemeOffset: region.graphemeTo,
+    affinity: 'downstream',
+  };
+}
+
 function candidatesForPage(pageIndex: number, page: InteractionFrame['display'][number], frame: InteractionFrame): HitCandidate[] {
   const out: HitCandidate[] = [];
   page.items.forEach((item, zOrder) => {
@@ -209,6 +239,17 @@ function candidatesForPage(pageIndex: number, page: InteractionFrame['display'][
   );
   for (const region of frame.semanticIndex.ownershipRegions) {
     if (region.pageIndex !== pageIndex || !region.box) continue;
+    if (region.kind === 'lineWhitespace') {
+      out.push({
+        zOrder: -1,
+        box: region.box,
+        writingMode: HORIZONTAL_WRITING_MODE,
+        pointerTransparent: false,
+        synthetic: false,
+        resolveAt: (local) => whitespaceTargetFromRegion(region, local, frame),
+      });
+      continue;
+    }
     if (paintedTextBlocks.has(region.identity.blockId)) continue;
     out.push({
       zOrder: -1,
@@ -286,12 +327,49 @@ function overlayFromPageLocal(
   return { rect: clippedRect, clip };
 }
 
+function caretRectForLineWhitespace(
+  frame: InteractionFrame,
+  target: Extract<SemanticTarget, { kind: 'text' }>,
+  region: OwnershipRegion,
+): CaretGeometry | null {
+  if (region.kind !== 'lineWhitespace' || !region.box || region.pageIndex === undefined) return null;
+  if (region.graphemeFrom === undefined || region.graphemeTo === undefined) return null;
+  if (target.graphemeOffset < region.graphemeFrom || target.graphemeOffset > region.graphemeTo) return null;
+  const block = blockRecord(frame, target.identity.blockId);
+  if (!block || block.readOnly) return null;
+  const atTrailingEdge = target.graphemeOffset === region.graphemeTo;
+  const x = atTrailingEdge ? region.box.x + region.box.width : region.box.x;
+  const overlay = overlayFromPageLocal(
+    frame,
+    region.pageIndex,
+    { x, y: region.box.y, width: 1, height: region.box.height },
+    { pageIndex: region.pageIndex, zOrder: 0, writingMode: HORIZONTAL_WRITING_MODE },
+  );
+  if (overlay === 'singular' || !overlay) return null;
+  return {
+    frameId: frame.id,
+    rect: overlay.rect,
+    pageIndex: region.pageIndex,
+    writingDirection: 'ltr',
+    writingMode: HORIZONTAL_WRITING_MODE,
+    affinity: target.affinity,
+    clip: overlay.clip,
+  };
+}
+
 function caretRectForTextTarget(
   frame: InteractionFrame,
   target: Extract<SemanticTarget, { kind: 'text' }>,
 ): CaretGeometry | null {
   const block = blockRecord(frame, target.identity.blockId);
   if (!block || block.readOnly) return null;
+
+  for (const region of frame.semanticIndex.ownershipRegions) {
+    if (region.identity.blockId !== target.identity.blockId) continue;
+    const fromWhitespace = caretRectForLineWhitespace(frame, target, region);
+    if (fromWhitespace) return fromWhitespace;
+  }
+
   const stop = frame.semanticIndex.caretStops.find(
     (s) =>
       s.target.kind === 'text' &&
@@ -349,6 +427,7 @@ function caretRectForTextTarget(
 
   for (const region of frame.semanticIndex.ownershipRegions) {
     if (region.identity.blockId !== target.identity.blockId || !region.box || region.pageIndex === undefined) continue;
+    if (region.kind === 'lineWhitespace') continue;
     const atEnd = target.graphemeOffset >= block.graphemeCount;
     const x = atEnd ? region.box.x + Math.max(1, region.box.width) : region.box.x;
     const overlay = overlayFromPageLocal(

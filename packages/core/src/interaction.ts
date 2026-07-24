@@ -80,11 +80,28 @@ export interface OwnershipRegion {
   readonly identity: SemanticIdentity;
   readonly role: InteractionRole;
   readonly kind: 'paragraph' | 'lineWhitespace' | 'trailing' | 'structural';
-  /** UTF-16 subrange within the paragraph for whitespace-owned regions (no painted box yet). */
+  /** UTF-16 subrange within the paragraph for whitespace-owned regions. */
   readonly utf16From?: number;
   readonly utf16To?: number;
+  /**
+   * Half-open grapheme range for `lineWhitespace` regions, aligned to paragraph grapheme
+   * boundaries. Invariant: when present, `graphemeFrom < graphemeTo` and both lie in
+   * `[0, paragraphGraphemeCount]`. Derived from canonical model text, never display items.
+   */
+  readonly graphemeFrom?: number;
+  readonly graphemeTo?: number;
   readonly pageIndex?: number;
   readonly box?: Rect;
+}
+
+/** Model-derived Unicode word segment within one paragraph (half-open grapheme range). */
+export interface WordSegmentRecord {
+  /** Grapheme index where this segment starts (inclusive). */
+  readonly graphemeFrom: number;
+  /** Grapheme index where this segment ends (exclusive); always a paragraph grapheme boundary. */
+  readonly graphemeTo: number;
+  /** Whether Intl (or the bounded fallback) classified the segment as word-like. */
+  readonly wordLike: boolean;
 }
 
 /** One block entry in canonical story order. */
@@ -95,6 +112,15 @@ export interface BlockSemanticRecord {
   readonly utf16Length: number;
   readonly empty: boolean;
   readonly readOnly: boolean;
+  /**
+   * Canonical model-derived word segments for double-click selection on this paragraph.
+   * Built from run-joined paragraph text via {@link WordSegmentRecord} grapheme ranges;
+   * never from display items, DOM, or ProseMirror positions. Endpoints always align with
+   * grapheme cluster boundaries (combining marks, surrogate pairs, ZWJ, variation selectors).
+   * When {@link Intl.Segmenter} is unavailable, segments use a bounded deterministic fallback
+   * that is grapheme-safe but not full UAX #29 word-boundary conformance.
+   */
+  readonly wordSegments: readonly WordSegmentRecord[];
 }
 
 /** Model-derived semantic ordering for one story/scope. */

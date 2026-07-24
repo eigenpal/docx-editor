@@ -1,6 +1,10 @@
 import { defineConfig } from 'vite';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import {
+  A11Y_HARNESS_OPTIMIZED_THIRD_PARTY,
+  A11Y_HARNESS_WORKSPACE_PACKAGES,
+} from './scripts/a11y-harness-vite-policy.ts';
 
 const packageRoot = dirname(fileURLToPath(import.meta.url));
 const browserRoot = join(packageRoot, 'browser');
@@ -24,21 +28,9 @@ export default defineConfig({
     preserveSymlinks: true,
   },
   optimizeDeps: {
-    include: [
-      '@docx-editor.dev/core-contract/editor',
-      '@docx-editor.dev/core-contract/interaction',
-      '@docx-editor.dev/core-contract/geometry',
-      '@docx-editor.dev/core-contract/types',
-      '@docx-editor.dev/engine-binding',
-      '@docx-editor.dev/engine-core',
-      '@docx-editor.dev/engine-layout',
-      '@docx-editor.dev/engine-output',
-      'prosemirror-model',
-      'prosemirror-state',
-      'prosemirror-view',
-      'prosemirror-commands',
-      'prosemirror-keymap',
-      'fflate',
-    ],
+    // Workspace packages export TypeScript source and change frequently; prebundling
+    // caches stale export surfaces (e.g. resolveDefaultWordBoundary in task 5.3).
+    exclude: [...A11Y_HARNESS_WORKSPACE_PACKAGES],
+    include: [...A11Y_HARNESS_OPTIMIZED_THIRD_PARTY],
   },
 });

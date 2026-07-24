@@ -25,7 +25,7 @@ export default defineConfig({
   webServer: {
     command: 'bun run dev:a11y-harness',
     url: baseUrl,
-    reuseExistingServer: !process.env.CI,
+    reuseExistingServer: false,
     timeout: 60_000,
     cwd: '.',
   },

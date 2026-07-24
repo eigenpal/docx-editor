@@ -48,6 +48,21 @@ export function modelWithTableCell(cellText: string): PackageModel {
   };
 }
 
+export function modelWithRunSplit(parts: readonly string[]): PackageModel {
+  const model = createEmptyModel();
+  const storyId = bodyStoryId(model);
+  const store = new DocumentStore(model);
+  const first = (model.stories.get(storyId)!.blocks[0] as ParagraphRecord).id;
+  store.transact(HUMAN, (c) =>
+    c.apply({
+      op: 'setParagraphRuns',
+      paragraphId: first,
+      runs: parts.map((text) => ({ text })),
+    }),
+  );
+  return store.currentModel;
+}
+
 export function publishFrame(
   model = modelWith(['hello']),
   options: { pageGapPx?: number; layout?: Parameters<typeof layoutBody>[1] } = {},

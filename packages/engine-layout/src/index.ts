@@ -35,6 +35,21 @@ export {
   GRAPHEME_SEGMENTER_LOCALE,
 } from './grapheme.ts';
 export {
+  type WordBoundary,
+  type WordSegment,
+  type GraphemeWordSegmentRecord,
+  type WordBoundaryResolverDeps,
+  createIntlWordBoundary,
+  createBoundedFallbackWordBoundary,
+  createDefaultWordBoundary,
+  resolveDefaultWordBoundary,
+  segmentWords,
+  wordSegmentsToGraphemeRecords,
+  boundedFallbackWordSegments,
+  isIntlWordSegmenterAvailable,
+  WORD_SEGMENTER_LOCALE,
+} from './word-segment.ts';
+export {
   type LayoutBuilder,
   type BlockLayoutContext,
   type BlockLayout,

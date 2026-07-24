@@ -7,7 +7,7 @@ import type {
   GlyphRun,
   BorderSeg,
 } from '@docx-editor.dev/core-contract/geometry';
-import type { SemanticPositionIndex } from '@docx-editor.dev/core-contract/interaction';
+import type { OwnershipRegion, SemanticPositionIndex } from '@docx-editor.dev/core-contract/interaction';
 import type { ColorValue, Rect, ViewScope } from '@docx-editor.dev/core-contract/editor';
 import type { PositionedInteractionMeta } from '@docx-editor.dev/core-contract/interaction';
 import type { PackageModel } from '@docx-editor.dev/engine-core';
@@ -57,11 +57,96 @@ function unionRect(a: Rect, b: Rect): Rect {
   return { x, y, width: right - x, height: bottom - y };
 }
 
+type BridgedTextItem = Extract<ContractItem, { kind: 'text' }>;
+
+function sliceStartX(item: BridgedTextItem): number {
+  return item.clusters.length > 0 ? item.clusters[0]!.box.x : item.box.x;
+}
+
+function sliceEndX(item: BridgedTextItem): number {
+  if (item.clusters.length === 0) return item.box.x + item.box.width;
+  const last = item.clusters[item.clusters.length - 1]!;
+  return last.box.x + last.box.width;
+}
+
+function sameLine(a: Rect, b: Rect): boolean {
+  return Math.abs(a.y - b.y) < 0.5 && Math.abs(a.height - b.height) < 0.5;
+}
+
+function utf16WidthPerUnit(item: BridgedTextItem): number | null {
+  const span = item.semantic.utf16To - item.semantic.utf16From;
+  if (span <= 0) return null;
+  return item.box.width / span;
+}
+
+function adjacentSliceUsesTransform(...items: readonly (BridgedTextItem | undefined)[]): boolean {
+  return items.some((item) => item?.interaction?.transform !== undefined);
+}
+
+/** Derive a precise lineWhitespace hit box from adjacent painted text slices; omit when not exact. */
+export function deriveLineWhitespaceBox(
+  region: OwnershipRegion,
+  textItems: readonly BridgedTextItem[],
+  paragraphUtf16Length: number,
+): Rect | undefined {
+  if (region.kind !== 'lineWhitespace') return undefined;
+  if (region.utf16From === undefined || region.utf16To === undefined) return undefined;
+  if (region.graphemeFrom === undefined || region.graphemeTo === undefined) return undefined;
+  if (region.utf16From >= region.utf16To) return undefined;
+
+  const utf16From = region.utf16From;
+  const utf16To = region.utf16To;
+  const utf16Len = utf16To - utf16From;
+  const sorted = [...textItems].sort((a, b) => a.semantic.utf16From - b.semantic.utf16From);
+  const prev = sorted.filter((item) => item.semantic.utf16To <= utf16From).at(-1);
+  const next = sorted.find((item) => item.semantic.utf16From >= utf16To);
+
+  // Transform-aware gap geometry is out of scope for task 5.3; fail closed rather than emit page-space boxes.
+  if (adjacentSliceUsesTransform(prev, next)) return undefined;
+
+  if (prev && next && sameLine(prev.box, next.box)) {
+    const startX = sliceEndX(prev);
+    const endX = sliceStartX(next);
+    if (endX <= startX) return undefined;
+    return { x: startX, y: prev.box.y, width: endX - startX, height: prev.box.height };
+  }
+
+  if (!prev && next) {
+    const unit = utf16WidthPerUnit(next);
+    if (unit === null) return undefined;
+    const width = unit * utf16Len;
+    const endX = sliceStartX(next);
+    if (width <= 0) return undefined;
+    return { x: endX - width, y: next.box.y, width, height: next.box.height };
+  }
+
+  if (prev && !next) {
+    const unit = utf16WidthPerUnit(prev);
+    if (unit === null) return undefined;
+    const width = unit * utf16Len;
+    const startX = sliceEndX(prev);
+    if (width <= 0) return undefined;
+    return { x: startX, y: prev.box.y, width, height: prev.box.height };
+  }
+
+  if (sorted.length === 1 && sorted[0]!.clusters.length === 0 && paragraphUtf16Length > 0) {
+    const line = sorted[0]!;
+    const width = (line.box.width / paragraphUtf16Length) * utf16Len;
+    const startX = line.box.x + (line.box.width / paragraphUtf16Length) * utf16From;
+    if (width <= 0) return undefined;
+    return { x: startX, y: line.box.y, width, height: line.box.height };
+  }
+
+  return undefined;
+}
+
 function enrichOwnershipRegions(
   display: readonly DisplayPage[],
   semanticIndex: SemanticPositionIndex,
 ): SemanticPositionIndex {
   const paragraphBounds = new Map<string, { pageIndex: number; box: Rect }>();
+  const textByParagraphPage = new Map<string, BridgedTextItem[]>();
+
   for (const page of display) {
     page.items.forEach((item, zOrder) => {
       if (item.kind !== 'text') return;
@@ -69,18 +154,31 @@ function enrichOwnershipRegions(
       const prev = paragraphBounds.get(pid);
       const next = { pageIndex: page.index, box: item.box };
       paragraphBounds.set(pid, prev ? { pageIndex: page.index, box: unionRect(prev.box, item.box) } : next);
+      const key = `${pid}:${page.index}`;
+      const list = textByParagraphPage.get(key) ?? [];
+      list.push(item);
+      textByParagraphPage.set(key, list);
       void zOrder;
     });
   }
 
+  const blockUtf16 = new Map<string, number>();
+  for (const block of semanticIndex.stories.flatMap((s) => s.blocks)) {
+    blockUtf16.set(block.identity.blockId, block.utf16Length);
+  }
+
   const ownershipRegions = semanticIndex.ownershipRegions.map((region) => {
     const bounds = paragraphBounds.get(region.identity.blockId);
-    if (!bounds) return region;
     if (region.kind === 'paragraph' || region.kind === 'trailing') {
+      if (!bounds) return region;
       return { ...region, pageIndex: bounds.pageIndex, box: bounds.box };
     }
-    if (region.kind === 'lineWhitespace' && region.utf16From !== undefined && region.utf16To !== undefined) {
-      return { ...region, pageIndex: bounds.pageIndex, box: bounds.box };
+    if (region.kind === 'lineWhitespace') {
+      const pageIndex = bounds?.pageIndex ?? 0;
+      const items = textByParagraphPage.get(`${region.identity.blockId}:${pageIndex}`) ?? [];
+      const box = deriveLineWhitespaceBox(region, items, blockUtf16.get(region.identity.blockId) ?? 0);
+      if (!box) return region;
+      return { ...region, pageIndex, box };
     }
     return region;
   });

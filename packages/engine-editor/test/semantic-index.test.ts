@@ -2,6 +2,7 @@
 
 import { describe, expect, test } from 'bun:test';
 import { buildSemanticIndex, caretAffinity, paragraphEditableInLane } from '../src/semantic-index.ts';
+import { createBoundedFallbackWordBoundary } from '@docx-editor.dev/engine-layout';
 import { deepFreezeValue } from '../src/interaction-frame.ts';
 import {
   createEmptyModel,
@@ -70,6 +71,8 @@ describe('semantic position index', () => {
     expect(ws).toHaveLength(1);
     expect(ws[0]!.utf16From).toBe(5);
     expect(ws[0]!.utf16To).toBe(6);
+    expect(ws[0]!.graphemeFrom).toBe(5);
+    expect(ws[0]!.graphemeTo).toBe(6);
     expect(ws[0]!.box).toBeUndefined();
   });
 
@@ -77,6 +80,28 @@ describe('semantic position index', () => {
     expect(caretAffinity(0, 3)).toBe('downstream');
     expect(caretAffinity(3, 3)).toBe('downstream');
     expect(caretAffinity(2, 3)).toBe('upstream');
+  });
+
+  test('block records include model-derived word segments with grapheme-safe endpoints', () => {
+    const index = buildSemanticIndex(modelWithParagraphs(["don't a😀b"]));
+    const block = index.stories[0]!.blocks[0]!;
+    expect(block.wordSegments.length).toBeGreaterThan(0);
+    for (const seg of block.wordSegments) {
+      expect(seg.graphemeFrom).toBeLessThan(seg.graphemeTo);
+      expect(seg.graphemeTo).toBeLessThanOrEqual(block.graphemeCount);
+    }
+  });
+
+  test('buildSemanticIndex accepts injected word boundary for fallback segmentation', () => {
+    const model = modelWithParagraphs(['a—b']);
+    const intl = buildSemanticIndex(model);
+    const fallback = buildSemanticIndex(model, { kind: 'body' }, createBoundedFallbackWordBoundary());
+    expect(intl.stories[0]!.blocks[0]!.wordSegments.some((s) => s.wordLike && s.graphemeTo - s.graphemeFrom === 1)).toBe(true);
+    expect(fallback.stories[0]!.blocks[0]!.wordSegments).toEqual([
+      { graphemeFrom: 0, graphemeTo: 1, wordLike: true },
+      { graphemeFrom: 1, graphemeTo: 2, wordLike: false },
+      { graphemeFrom: 2, graphemeTo: 3, wordLike: true },
+    ]);
   });
 
   test('deep-frozen semanticIndex rejects mutation', () => {
