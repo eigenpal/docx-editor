@@ -7,6 +7,7 @@ import type { CaretEdgeItem, DisplayItem, TextItem, VisualLineIdentity } from '.
 import { LineTracker } from './line-tracker.ts';
 import { segmentGraphemes, utf16OffsetToGrapheme } from './grapheme.ts';
 import { isCumulativeGeometryTrustedFromLineOrigin, isWholeGraphemeHorizontalBoundary } from './horizontal-boundary.ts';
+import { capsuleToggle } from './capsule-run-style.ts';
 
 export interface ParagraphLayoutSink {
   push(item: DisplayItem): void;
@@ -58,7 +59,12 @@ function runStyleAt(
   for (const run of p.runs) {
     const end = cursor + run.text.length;
     if (utf16Offset < end) {
-      return { bold: run.props?.bold === true, italic: run.props?.italic === true };
+      // A preserved run carries its formatting verbatim in rPrCapsule rather than
+      // in props, so reading props alone paints every reopened run unstyled.
+      return {
+        bold: run.props?.bold === true || capsuleToggle(run.rPrCapsule, 'w:b'),
+        italic: run.props?.italic === true || capsuleToggle(run.rPrCapsule, 'w:i'),
+      };
     }
     cursor = end;
   }
