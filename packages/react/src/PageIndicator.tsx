@@ -6,6 +6,7 @@
 
 import type { ReactNode } from 'react';
 import type { Editor } from '@docx-editor.dev/core-contract/editor';
+import { useEditorSnapshot } from './useEditorSnapshot';
 
 export interface PageIndicatorProps {
   readonly editor: Editor | null;
@@ -21,6 +22,7 @@ export interface PageIndicatorProps {
  * the legacy shell, and never intercepts pointer events.
  */
 export function PageIndicator({ editor, visible = true, format }: PageIndicatorProps): ReactNode {
+  useEditorSnapshot(editor);
   if (!editor) return null;
   const total = editor.getTotalPages();
   if (total <= 1) return null;

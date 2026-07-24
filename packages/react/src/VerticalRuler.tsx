@@ -5,6 +5,7 @@
 
 import type { ReactNode } from 'react';
 import type { Editor } from '@docx-editor.dev/core-contract/editor';
+import { useEditorSnapshot } from './useEditorSnapshot';
 import { generateRulerTicks, rulerPageBox, type RulerUnit } from './rulerTicks';
 
 /** Matches the legacy `RULER_WIDTH` so the shell gutter is unchanged. */
@@ -17,6 +18,7 @@ export interface VerticalRulerProps {
 }
 
 export function VerticalRuler({ editor, zoom = 1, unit = 'inch' }: VerticalRulerProps): ReactNode {
+  useEditorSnapshot(editor);
   if (!editor) return null;
   const box = rulerPageBox(editor.getPageGeometry());
   if (!box) return null;

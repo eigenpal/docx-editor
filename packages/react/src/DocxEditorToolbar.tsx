@@ -12,6 +12,7 @@
 
 import type { ReactNode } from 'react';
 import type { Editor } from '@docx-editor.dev/core-contract/editor';
+import { useEditorSnapshot } from './useEditorSnapshot';
 import { runToolbarCommand, toolbarCommandState, type ToolbarCommandId } from './toolbarCommands';
 
 /** Material Symbol paths, inlined — the repo ships no icon font. */
@@ -70,6 +71,8 @@ export interface DocxEditorToolbarProps {
 }
 
 export function DocxEditorToolbar({ editor, onSave }: DocxEditorToolbarProps): ReactNode {
+  // Re-render as the selection and document change, or `can()` answers go stale.
+  useEditorSnapshot(editor);
   return (
     <div className="ep-toolbar" role="toolbar" aria-label="Formatting" data-testid="docx-editor-toolbar">
       <div className="ep-toolbar__group">

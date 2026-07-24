@@ -42,3 +42,4 @@ export { PageIndicator, type PageIndicatorProps } from './PageIndicator';
 export { HorizontalRuler, type HorizontalRulerProps } from './HorizontalRuler';
 export { VerticalRuler, RULER_WIDTH, type VerticalRulerProps } from './VerticalRuler';
 export { generateRulerTicks, rulerPageBox, PX_PER_INCH, PX_PER_CM, type RulerTick, type RulerUnit } from './rulerTicks';
+export { useEditorSnapshot } from './useEditorSnapshot';

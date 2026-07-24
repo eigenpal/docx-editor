@@ -8,6 +8,7 @@
 
 import type { ReactNode } from 'react';
 import type { Editor } from '@docx-editor.dev/core-contract/editor';
+import { useEditorSnapshot } from './useEditorSnapshot';
 import { generateRulerTicks, rulerPageBox, type RulerUnit } from './rulerTicks';
 
 export interface HorizontalRulerProps {
@@ -17,6 +18,7 @@ export interface HorizontalRulerProps {
 }
 
 export function HorizontalRuler({ editor, zoom = 1, unit = 'inch' }: HorizontalRulerProps): ReactNode {
+  useEditorSnapshot(editor);
   if (!editor) return null;
   const box = rulerPageBox(editor.getPageGeometry());
   if (!box) return null;
