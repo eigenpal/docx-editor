@@ -5,7 +5,20 @@
  */
 
 import type { ContentControlSummary, DocEdits, DocQueries, DocQueryResults } from './index';
-import type { DisplayPage, DocPoint } from './geometry';
+import type { DisplayPage } from './geometry';
+import type {
+  CaretGeometry,
+  HitTestOptions,
+  InteractionFrame,
+  InteractionHostMetrics,
+  InteractionOutcome,
+  SelectionGeometry,
+  SelectionGeometryOptions,
+  ScrollGeometry,
+  SemanticHitTarget,
+  SemanticSelection,
+  SemanticTarget,
+} from './interaction';
 import type {
   ColorValue,
   ContentControlFilter,
@@ -24,6 +37,7 @@ import type {
 } from './types';
 
 export type * from './types';
+export type * from './interaction';
 
 const NOT_IMPLEMENTED = 'contract-only stub: no implementation';
 
@@ -105,13 +119,17 @@ export type ViewScope = Exclude<EditorScope, { kind: 'all' }>;
 
 /**
  * A position the engine can resolve. Kept deliberately open: any accepted
- * address form, including a `hitTest` result. New forms may be added without
- * breaking callers, so do not treat this as a closed set.
+ * address form, including a {@link SemanticTarget} or `hitTest` result. New
+ * forms may be added without breaking callers, so do not treat this as a closed set.
  */
-export type EditorPosition = DocAnchor | DocLocation | DocPoint;
+export type EditorPosition = DocAnchor | DocLocation | SemanticTarget;
 
 /** A selection expressed with any accepted position form. */
-export type EditorSelection = DocRange | { from: EditorPosition; to: EditorPosition } | DocPoint;
+export type EditorSelection =
+  | DocRange
+  | SemanticSelection
+  | { from: EditorPosition; to: EditorPosition }
+  | SemanticTarget;
 
 /**
  * Everything a framework adapter must supply. The adapter is a renderer and an
@@ -131,6 +149,8 @@ export interface EditorHost {
 
   /** Coalesces engine work. Returns a canceller. */
   scheduleFrame(callback: () => void): () => void;
+  /** Current client scroll/zoom/origin metrics for client-coordinate interaction APIs. */
+  getInteractionHostMetrics?(): InteractionHostMetrics | null;
   /**
    * Runs after the adapter has flushed its own render: `useLayoutEffect` in
    * React, `nextTick` in Vue. Two phases, because engine paint and adapter
@@ -176,23 +196,39 @@ export interface Editor {
   getTotalPages(): number;
   getCurrentPage(mode?: 'viewport' | 'caret'): number;
 
+  // ─── Interaction frame (coherent display + geometry projection) ────────────
+  /**
+   * The current immutable interaction frame. Display, page/scroll geometry,
+   * semantic selection, caret/selection overlays, focus, composition, and current
+   * page observations are read from this single publication.
+   */
+  getInteractionFrame(): InteractionFrame;
+
   // ─── Geometry (core owns layout; the adapter only paints and forwards) ─────
-  /** The current positioned render list. Also delivered via the `display`
-   * event and `EditorHost.onDisplay`. */
+  /** The current positioned render list from {@link getInteractionFrame}. Also
+   * delivered via the `display` event and `EditorHost.onDisplay`. */
   getDisplay(): readonly DisplayPage[];
-  /** Selection rectangles in content-pixel space; defaults to the current
-   * selection. Accepts any position form (including a `hitTest` result).
-   * Empty when the selection is collapsed. */
-  getSelectionRects(range?: EditorSelection): readonly Rect[];
-  /** Caret rectangle for a position; defaults to the current caret. Accepts
-   * any position form, including a `hitTest` result. */
+  /** Selection rectangles in content-pixel space from the current frame; defaults
+   * to the current selection. Empty when collapsed. */
+  getSelectionRects(range?: EditorSelection, options?: SelectionGeometryOptions): readonly Rect[];
+  /** Caret rectangle from the current frame; defaults to the current caret. */
   getCaretRect(pos?: EditorPosition): Rect | null;
-  /** Resolve a client-space point to a document position for pointer handling.
-   * The returned `DocPoint` is accepted directly by `setSelection`,
-   * `getCaretRect`, and `getSelectionRects`. */
-  hitTest(point: Point): DocPoint | null;
+  /** Frame-bound caret overlay geometry including page and writing direction. */
+  getCaretGeometry(pos?: EditorPosition): CaretGeometry | null;
+  /** Frame-bound visible selection overlay geometry. */
+  getSelectionGeometry(range?: EditorSelection, options?: SelectionGeometryOptions): SelectionGeometry | null;
+  /**
+   * Resolve client-space coordinates to a semantic hit target. Returns `null` only when no eligible
+   * target exists (e.g. page margin). For typed stale, pending, read-only, invalid, or unsupported
+   * outcomes callers MUST use {@link resolvePointer}; `hitTest` does not surface those rejections.
+   */
+  hitTest(point: Point, options?: HitTestOptions): SemanticHitTarget | null;
+  /** Page boxes from the current interaction frame. */
   getPageGeometry(): readonly { index: number; box: Rect }[];
-  getScrollGeometry(): { contentHeight: number; pageTops: readonly number[] };
+  /** Scroll extent from the current interaction frame. */
+  getScrollGeometry(): ScrollGeometry;
+  /** Resolve pointer intent with typed stale/pending/read-only outcomes (see driver). */
+  resolvePointer(point: Point, options?: HitTestOptions): InteractionOutcome<SemanticHitTarget>;
 
   /** Replaces the module-scope cache-invalidation calls adapters make today. */
   relayout(options?: { sync?: boolean }): void;

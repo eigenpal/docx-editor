@@ -20,3 +20,4 @@ export {
   pageText,
   displayText,
 } from './driver.ts';
+export { emptySemanticIndex } from './interaction-frame.ts';

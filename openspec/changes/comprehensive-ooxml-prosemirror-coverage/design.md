@@ -166,6 +166,8 @@ interface OoxmlSupportClaim {
   edit: SupportState;
   serialize: SupportState;
   reopen: SupportState;
+  /** Optional interaction/WYSIWYG lane; vocabulary owned by interactive-paginated-editing. */
+  interaction?: InteractionSupportState;
   evidence: readonly EvidenceId[];
 }
 
@@ -175,13 +177,66 @@ type SupportState =
   | 'readOnly'
   | 'partial'
   | 'supported';
+
+/** User-visible interaction and WYSIWYG claim lane (owned by interactive-paginated-editing). */
+type InteractionSupportState =
+  | 'none'
+  | 'rendered'
+  | 'interactive-read-only'
+  | 'fallback-editable'
+  | 'typed-editable'
+  | 'interactive-paginated'
+  | 'feature-wysiwyg';
 ```
 
+**Label mapping:** the manifest literal is always `feature-wysiwyg` (kebab-case, machine
+key). Documentation, task prose, and comparator bundle names MAY use the human-facing
+label **feature-WYSIWYG**; CI and generated reports MUST use the literal only.
+
+Each capability claim MAY also declare an `interaction: InteractionSupportState`.
+Monotonicity order (lowest to highest):
+
+`none` → `rendered` → `interactive-read-only` → `fallback-editable` → `typed-editable`
+→ `interactive-paginated` → `feature-wysiwyg`
+
+State meanings:
+
+- `none` — no interaction claim recorded; the default when the optional `interaction`
+  lane is omitted or explicitly unset. Does not assert visible rendering.
+- `rendered` — paginated preview repaint (and related pipeline `render` evidence) only;
+  no direct page interaction claim.
+- `interactive-read-only` — visible on the paginated surface with engine hit ownership
+  and selectable/read-only interaction roles, but no editable caret or mutation path on
+  that surface.
+- `fallback-editable` — capability-proven generic text editing within an owned region.
+- `typed-editable` — capability-proven typed commands beyond generic fallback editing.
+- `interactive-paginated` — direct page pointer/keyboard editing on the one-surface
+  paginated interaction path through both public adapters, plus save/reopen.
+- `feature-wysiwyg` — full per-feature comparator bundle for the declared matrix only.
+
+Monotonicity rules:
+
+- A claim MUST NOT skip levels or declare a higher state without evidence for every
+  intermediate requirement.
+- `rendered` requires pipeline `render` evidence only (paginated preview repaint and
+  production-adapter load/save/reopen qualify); it MUST NOT imply pointer or typed editing
+  on the paginated surface.
+- `interactive-read-only` requires `rendered` plus hit/selection ownership evidence
+  without an editable caret on the paginated surface.
+- `fallback-editable` and `typed-editable` require capability-owned binding proof per
+  `partial-body-editability` and `interactive-paginated-editing`.
+- `interactive-paginated` requires direct page interaction and save/reopen through both
+  public adapters; paginated preview repaint and diagnostic split-mode smoke alone MUST
+  NOT upgrade this state.
+- `feature-wysiwyg` requires the full per-feature comparator bundle; no aggregate product
+  claim may be inferred from a single lane.
+
 CI validates unique ownership, known QNames/contexts, stage monotonicity, required
-evidence, and capability-handler presence. Reports show separate counts for XSD
-inventory, encountered fixture contexts, modeled contexts, rendered contexts, and
-editable contexts. Product documentation maps these granular claims to existing
-user-facing feature IDs; it does not expose raw QName percentages as marketing.
+evidence, interaction-state monotonicity, and capability-handler presence. Reports show
+separate counts for XSD inventory, encountered fixture contexts, modeled contexts,
+rendered contexts, editable contexts, and interaction lanes. Product documentation maps
+these granular claims to existing user-facing feature IDs; it does not expose raw QName
+percentages as marketing.
 
 ### 7. Implement fixture coverage in dependency-ordered waves
 

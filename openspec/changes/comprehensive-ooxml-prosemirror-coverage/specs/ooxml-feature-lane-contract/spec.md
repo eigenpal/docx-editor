@@ -87,3 +87,28 @@ and resource limits.
 #### Scenario: Fixture contains malformed field instructions
 - **WHEN** malformed field instructions are encountered
 - **THEN** they remain inert authored content and are neither executed nor reinterpreted as commands
+
+### Requirement: Interaction and WYSIWYG claims use a shared vocabulary
+The support manifest MUST declare an optional `interaction` lane using the shared
+literals `none`, `rendered`, `interactive-read-only`, `fallback-editable`,
+`typed-editable`, `interactive-paginated`, and `feature-wysiwyg`. The machine key
+`feature-wysiwyg` MUST be used in manifest data; human-facing prose MAY label the same
+state **feature-WYSIWYG**. Vocabulary rules and monotonicity MUST be owned by
+`interactive-paginated-editing`; pipeline `SupportState` values in this change remain
+independent.
+
+#### Scenario: Interaction lane is omitted
+- **WHEN** a capability claim omits the optional `interaction` field
+- **THEN** its interaction lane MUST be treated as `none` and MUST NOT imply rendering or page interaction
+
+#### Scenario: Read-only paginated interaction is recorded
+- **WHEN** a capability is visible on paginated output with hit/selection ownership but no editable caret on that surface
+- **THEN** its interaction lane MAY be `interactive-read-only` and MUST NOT be reported as `fallback-editable` or higher without additional evidence
+
+#### Scenario: Paginated preview repaint is recorded
+- **WHEN** a capability repaints committed canonical state on paginated output without direct page editing evidence
+- **THEN** its interaction lane MUST remain `rendered` or lower and MUST NOT be reported as `interactive-paginated` or `feature-wysiwyg`
+
+#### Scenario: One feature passes full WYSIWYG comparators
+- **WHEN** a declared feature matrix passes every feature-WYSIWYG comparator bundle for that matrix
+- **THEN** only that matrix MAY be reported as `feature-wysiwyg` and no whole-product claim SHALL be inferred

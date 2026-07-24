@@ -20,6 +20,11 @@
       "import": "./src/geometry.ts",
       "default": "./src/geometry.ts"
     },
+    "./interaction": {
+      "types": "./src/interaction.ts",
+      "import": "./src/interaction.ts",
+      "default": "./src/interaction.ts"
+    },
     "./plugin": {
       "types": "./src/plugin.ts",
       "import": "./src/plugin.ts",

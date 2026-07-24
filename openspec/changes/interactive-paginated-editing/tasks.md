@@ -1,31 +1,31 @@
 ## 1. Authority, status, and conformance vocabulary
 
-- [ ] 1.1 Replace every landed "WYSIWYG" checkpoint that currently proves only model-to-preview repaint with "paginated preview repaint", and link direct editing completion to this change.
-- [ ] 1.2 Add the rendered, interactive-read-only, fallback-editable, typed-editable, interactive-paginated, and feature-WYSIWYG states to the shared feature-support manifest without changing unrelated feature claims.
-- [ ] 1.3 Cross-reference this change from the binding, layout, partial-editability, paired-adapter, package-topology, and comprehensive coverage tasks that supply prerequisites; retain their independent completion gates.
-- [ ] 1.4 Add an authority/import test proving adapters cannot import ProseMirror, implement document geometry, or bypass the public `Editor`/`EditorHost` facade.
-- [ ] 1.5 Freeze the supported browser/platform matrix for pointer, keyboard, clipboard, IME, accessibility, and mobile/virtual-keyboard evidence before implementation claims begin.
+- [x] 1.1 Replace every landed "WYSIWYG" checkpoint that currently proves only model-to-preview repaint with "paginated preview repaint", and link direct editing completion to this change.
+- [x] 1.2 Add the rendered, interactive-read-only, fallback-editable, typed-editable, interactive-paginated, and feature-WYSIWYG states to the shared feature-support manifest without changing unrelated feature claims.
+- [x] 1.3 Cross-reference this change from the binding, layout, partial-editability, paired-adapter, package-topology, and comprehensive coverage tasks that supply prerequisites; retain their independent completion gates.
+- [x] 1.4 Add an authority/import test proving adapters cannot import ProseMirror, implement document geometry, or bypass the public `Editor`/`EditorHost` facade.
+- [x] 1.5 Freeze the supported browser/platform matrix for pointer, keyboard, clipboard, IME, accessibility, and mobile/virtual-keyboard evidence before implementation claims begin.
 
 ## 2. Interaction contracts and immutable frames
 
-- [ ] 2.1 Add PM-free contracts for interaction-frame identity, model/layout revisions, semantic hit targets, caret geometry, selection geometry, focus/composition state, and typed stale/pending/read-only/invalid outcomes.
-- [ ] 2.2 Extend the public editor facade so display, page geometry, selection, caret, and hit-test results can be consumed from one provably coherent interaction frame.
-- [ ] 2.3 Implement immutable interaction-frame construction in `engine-editor`, including selection-only frames that safely reuse an unchanged layout revision.
-- [ ] 2.4 Publish frame replacement atomically and retain the last complete frame while newer derived work is pending.
-- [ ] 2.5 Add adversarial tests that interleave selection changes, model commits, resource/configuration epoch changes, cancelled layout, and adapter reads and prove no mixed-revision geometry is observable.
-- [ ] 2.6 Define engine-neutral `EditorDriver` operations and observations for client-coordinate pointer input, semantic selection, current page, frame identity, caret/range geometry, focus, composition, and typed rejected interaction.
+- [x] 2.1 Add PM-free contracts for interaction-frame identity, model/layout revisions, semantic hit targets, caret geometry, selection geometry, focus/composition state, and typed stale/pending/read-only/invalid outcomes.
+- [x] 2.2 Extend the public editor facade so display, page geometry, selection, caret, and hit-test results can be consumed from one provably coherent interaction frame.
+- [x] 2.3 Implement immutable interaction-frame construction in `engine-editor`, including selection-only frames that safely reuse an unchanged layout revision.
+- [x] 2.4 Publish frame replacement atomically and retain the last complete frame while newer derived work is pending.
+- [x] 2.5 Add adversarial tests that interleave selection changes, model commits, resource/configuration epoch changes, cancelled layout, and adapter reads and prove no mixed-revision geometry is observable.
+- [x] 2.6 Define engine-neutral `EditorDriver` operations and observations for client-coordinate pointer input, semantic selection, current page, frame identity, caret/range geometry, focus, composition, and typed rejected interaction.
 
 ## 3. Semantic positions, clusters, and geometry
 
-- [ ] 3.1 Freeze geometry fixtures for empty/trailing paragraphs, tabs, whitespace, combining characters, surrogate pairs, ligatures, RTL/bidi runs, vertical movement, page boundaries, transformed items, table cells, atomic images, and read-only content.
-- [ ] 3.2 Replace provisional display-item accumulated offsets with model-derived story/scope, stable semantic identity, grapheme offset or atomic target, and affinity indexes.
-- [ ] 3.3 Emit shaped-cluster-to-semantic-position maps that preserve grapheme boundaries, bidi affinity, logical order, and deterministic tie breaking.
-- [ ] 3.4 Emit explicit caret stops and ownership regions for empty paragraphs, trailing positions, line areas, structural boundaries, and capability-owned whitespace.
-- [ ] 3.5 Implement client-to-content coordinate conversion through scroll, zoom, page offsets, clipping, writing mode, and invertible item transforms.
-- [ ] 3.6 Implement reverse-z-order hit testing with pointer-transparent decoration, clipping, hit ownership, interaction roles, and fail-closed non-invertible transforms.
-- [ ] 3.7 Implement engine-derived collapsed caret rectangles with page, clipping, writing direction, transform, and affinity data.
-- [ ] 3.8 Implement engine-derived visible rectangles for text and currently supported node/table-cell/control/story/annotation selections while retaining complete semantic ranges offscreen.
-- [ ] 3.9 Add deterministic and property tests for semantic-position round trips, coordinate-transform round trips, cluster edge ties, empty content, overlap/z-order, clipping, and malformed geometry.
+- [x] 3.1 Freeze geometry fixtures for empty/trailing paragraphs, tabs, whitespace, combining characters, surrogate pairs, ligatures, RTL/bidi runs, vertical movement, page boundaries, transformed items, table cells, atomic images, and read-only content.
+- [x] 3.2 Replace provisional display-item accumulated offsets with model-derived story/scope, stable semantic identity, grapheme offset or atomic target, and affinity indexes.
+- [x] 3.3 Emit shaped-cluster-to-semantic-position maps that preserve grapheme boundaries, bidi affinity, logical order, and deterministic tie breaking.
+- [x] 3.4 Emit explicit caret stops and ownership regions for empty paragraphs, trailing positions, line areas, structural boundaries, and capability-owned whitespace.
+- [x] 3.5 Implement client-to-content coordinate conversion through scroll, zoom, page offsets, clipping, writing mode, and invertible item transforms.
+- [x] 3.6 Implement reverse-z-order hit testing with pointer-transparent decoration, clipping, hit ownership, interaction roles, and fail-closed non-invertible transforms.
+- [x] 3.7 Implement engine-derived collapsed caret rectangles with page, clipping, writing direction, transform, and affinity data.
+- [x] 3.8 Implement engine-derived visible rectangles for text and currently supported node/table-cell/control/story/annotation selections while retaining complete semantic ranges offscreen.
+- [x] 3.9 Add deterministic and property tests for semantic-position round trips, coordinate-transform round trips, cluster edge ties, empty content, overlap/z-order, clipping, and malformed geometry.
 
 ## 4. Hidden input-host falsification gate
 

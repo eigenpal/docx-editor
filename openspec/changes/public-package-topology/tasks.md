@@ -16,6 +16,11 @@
 
 ## 3. Stabilize the production browser composition
 
+> **Prerequisite owner:** One-surface page interaction, hidden input-host falsification,
+> and adapter thin-host authority are owned by
+> [`interactive-paginated-editing`](../interactive-paginated-editing/). This section
+> retains its independent completion gate.
+
 - [ ] 3.1 Complete the private `engine-editor` composition so load, editability, command/query, canonical commit, rejection, layout, display, save, error, and disposal behavior no longer depends on example orchestration.
 - [ ] 3.2 Replace adapter-local geometry derivation with one `engine-layout` positioned IR and one common `engine-output/dom` paint path.
 - [ ] 3.3 Split `engine-output` entry graphs so DOM/common output does not import or initialize the PDF backend.

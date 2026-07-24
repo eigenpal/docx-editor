@@ -145,6 +145,7 @@ registerBlockLayout('table', (block, ctx) => {
 registerBlockLayout('paragraph', (block, ctx) => {
   const p = block as ParagraphRecord;
   let offset = 0;
+  let pushed = false;
   for (const run of p.runs) {
     const bold = run.props?.bold === true;
     const italic = run.props?.italic === true;
@@ -172,9 +173,23 @@ registerBlockLayout('paragraph', (block, ctx) => {
         anchor: { paragraphId: p.id, offset },
       };
       ctx.builder.push(item);
+      pushed = true;
       ctx.x += wordWidth;
       offset += part.length;
     }
+  }
+  if (!pushed) {
+    ctx.builder.push({
+      type: 'text',
+      x: ctx.margin,
+      y: ctx.y,
+      width: ctx.contentRight - ctx.margin,
+      height: ctx.metrics.lineHeight,
+      text: '',
+      bold: false,
+      italic: false,
+      anchor: { paragraphId: p.id, offset: 0 },
+    });
   }
   ctx.newLine(); // paragraph break
 });

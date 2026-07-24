@@ -15,7 +15,14 @@ import {
   type EditorHost,
   type EditorSnapshot,
 } from '../editor';
-import { type DisplayPage, type DocPoint } from '../geometry';
+import { type DisplayPage } from '../geometry';
+import {
+  type InteractionFrame,
+  type InteractionFrameId,
+  type SelectionGeometryOptions,
+  type SemanticHitTarget,
+  type SemanticTarget,
+} from '../interaction';
 import { type McpContext, type McpToolDefinition } from '../mcp';
 import { type Extension, type PluginContext, type RenderedPage } from '../plugin';
 import type { DocAnchor, DocxDocument } from '../types';
@@ -32,15 +39,17 @@ const tableCmd: EditorCommand = { type: 'insertTable', rows: 3, cols: 4 };
 
 // Declaration-only public entries must resolve for a consumer without exposing
 // any ProseMirror-facing types.
-declare const point: DocPoint;
-const docPos: number = point.docPos;
+declare const target: SemanticTarget;
+declare const frame: InteractionFrame;
+const frameId: InteractionFrameId = frame.id;
 const pages: readonly DisplayPage[] = [];
+void target;
+void frameId;
 declare const extension: Extension;
 declare const tool: McpToolDefinition;
 declare const pluginContext: PluginContext;
 const rendered: RenderedPage | null = pluginContext.getRenderedPage(1);
 const handlerResult: Promise<unknown> = tool.handler({}, {} as McpContext);
-void docPos;
 void pages;
 void extension;
 void rendered;
@@ -92,15 +101,28 @@ export function exercise(editor: Editor, doc: DocxDocument): void {
   void bold;
 
   // Geometry queries are typed and never expose an editing engine's positions.
-  const display: readonly DisplayPage[] = editor.getDisplay();
-  const firstPage: number | undefined = display[0]?.index;
+  const frame: InteractionFrame = editor.getInteractionFrame();
+  const firstPage: number | undefined = frame.display[0]?.index;
+  const scrollGap: number = editor.getScrollGeometry().pageGapPx;
   const rectCount: number = editor.getSelectionRects().length;
   const caretX: number | undefined = editor.getCaretRect()?.x;
-  const hitPos: number | undefined = editor.hitTest({ x: 10, y: 20 })?.docPos;
+  const hit: SemanticHitTarget | null = editor.hitTest({ x: 10, y: 20 });
+  const hitFrame: InteractionFrameId | undefined = hit?.frameId;
+  const pointer = editor.resolvePointer({ x: 10, y: 20 });
+  const viewportOptions: SelectionGeometryOptions = { visiblePageIndices: [0] };
+  const filteredRects: number = editor.getSelectionRects(undefined, viewportOptions).length;
+  const filteredGeometry = editor.getSelectionGeometry(undefined, viewportOptions);
+  if (!pointer.ok) {
+    const code: string = pointer.code;
+    void code;
+  }
   void firstPage;
+  void scrollGap;
   void rectCount;
   void caretX;
-  void hitPos;
+  void hitFrame;
+  void filteredRects;
+  void filteredGeometry;
 
   // Document-layer queries are typed the same way.
   const paras = queryDoc(doc, { type: 'paragraphs' });

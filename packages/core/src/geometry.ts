@@ -16,14 +16,20 @@
  */
 
 import type { ViewScope } from './editor';
+import type {
+  PositionedInteractionMeta,
+  SemanticAtomicSpan,
+  SemanticTextSpan,
+  ShapedCluster,
+} from './interaction';
 import type { ColorValue, Point, Rect } from './types';
 
 export type * from './types';
 
 /**
- * A resolved document position inside one view. Distinct from `DocAnchor`
- * (`{ paraId, search }`) on purpose: a hit test resolves to a concrete document
- * offset in a specific view, not to a searchable anchor.
+ * @deprecated Superseded by {@link SemanticTarget} and {@link SemanticHitTarget}
+ * in `core/interaction`. Provisional flat document offsets are not part of the
+ * interaction-frame contract.
  */
 export interface DocPoint {
   /** Zero-based document offset within the addressed view. */
@@ -70,11 +76,11 @@ export interface BorderSeg {
 }
 
 /**
- * One positioned thing to paint. Every content-bearing item carries
- * `docFrom`/`docTo`/`scope`, which is what lets selection map to geometry
- * without the adapter ever holding a document position of its own. Items that
- * are repainted slices (repeated table headers, merged-cell continuations) set
- * `synthetic: true` so selection mapping can skip them.
+ * One positioned thing to paint. Content-bearing items carry model-derived
+ * {@link SemanticTextSpan} / {@link SemanticAtomicSpan} ranges and shaped
+ * cluster maps — not accumulated display offsets. Items that are repainted slices
+ * (repeated table headers, merged-cell continuations) set `synthetic: true` so
+ * selection mapping can skip them.
  *
  * **This union is intentionally non-exhaustive.** It starts with the common
  * cases; the engine may emit further kinds (shapes, text boxes, watermarks,
@@ -87,23 +93,34 @@ export type DisplayItem =
       readonly kind: 'text';
       readonly box: Rect;
       readonly runs: readonly GlyphRun[];
-      readonly docFrom: number;
-      readonly docTo: number;
-      readonly blockId: number;
+      readonly semantic: SemanticTextSpan;
+      readonly clusters: readonly ShapedCluster[];
       readonly scope: ViewScope;
+      /**
+       * @deprecated Compatibility only — derived from {@link semantic}, not from
+       * display accumulation. Do not use in new logic.
+       */
+      readonly docFrom?: number;
+      readonly docTo?: number;
+      readonly blockId?: number;
       /** A repainted slice (e.g. repeated header); not selectable. */
       readonly synthetic?: boolean;
+      readonly interaction?: PositionedInteractionMeta;
     }
   | {
       readonly kind: 'image';
       readonly box: Rect;
       readonly src: ImageRef;
-      readonly docFrom: number;
-      readonly docTo: number;
+      readonly semantic: SemanticAtomicSpan;
       readonly scope: ViewScope;
+      /** @deprecated Compatibility only — do not use in new logic. */
+      readonly docFrom?: number;
+      readonly docTo?: number;
+      /** A repainted slice (e.g. repeated header); not selectable. */
       readonly synthetic?: boolean;
+      readonly interaction?: PositionedInteractionMeta;
     }
-  | { readonly kind: 'fill'; readonly box: Rect; readonly color: ColorValue }
+  | { readonly kind: 'fill'; readonly box: Rect; readonly color: ColorValue; readonly interaction?: PositionedInteractionMeta }
   | {
       readonly kind: 'tableBorder';
       readonly segments: readonly BorderSeg[];
@@ -117,6 +134,7 @@ export type DisplayItem =
       readonly refId: string;
       /** Free-form detail for the role (revision subtype, author, colour, …). */
       readonly detail?: Readonly<Record<string, unknown>>;
+      readonly interaction?: PositionedInteractionMeta;
     }
   /**
    * Escape hatch for anything not yet modelled as a first-class variant. Lets
@@ -128,6 +146,7 @@ export type DisplayItem =
       readonly name: string;
       readonly box: Rect;
       readonly detail?: unknown;
+      readonly interaction?: PositionedInteractionMeta;
     };
 
 /** One painted page: its box in content space and the items inside it. */

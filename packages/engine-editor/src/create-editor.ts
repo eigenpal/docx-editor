@@ -24,6 +24,20 @@ import type {
 } from '@docx-editor.dev/core-contract/editor';
 import type { DisplayPage } from '@docx-editor.dev/core-contract/geometry';
 import type { Point, Rect, Unsubscribe, ExecResult } from '@docx-editor.dev/core-contract/types';
+import type {
+  CaretGeometry,
+  HitTestOptions,
+  InteractionFrame,
+  InteractionHostMetrics,
+  InteractionOutcome,
+  InteractionOutcomeCode,
+  SelectionGeometry,
+  SelectionGeometryOptions,
+  SemanticHitTarget,
+  SemanticPositionIndex,
+  SemanticSelection,
+  SemanticTarget,
+} from '@docx-editor.dev/core-contract/interaction';
 import {
   openDocxSession,
   mountEditSurface,
@@ -32,6 +46,8 @@ import {
 } from '@docx-editor.dev/engine-binding';
 import { layoutBody, HelveticaMetrics } from '@docx-editor.dev/engine-layout';
 import { toDisplayPages } from './display-bridge.ts';
+import { InteractionFrameStore, emptyInteractionFrame } from './interaction-frame.ts';
+import { hitTestPointer, deriveCaretGeometry, deriveSelectionGeometry } from './interaction-geometry.ts';
 
 // US Letter, 1in margins, in twips — the same geometry the read-only preview uses.
 const LAYOUT = { pageWidth: 12240, pageHeight: 15840, margin: 1440 } as const;
@@ -96,7 +112,9 @@ export function createEditor(config: EditorConfig): Editor {
   let surface: EditSurface | null = null;
   let sharedUnsub: (() => void) | null = null; // store subscription for a live read-only shared view
   let mountedBodyEl: HTMLElement | null = null; // the element `surface` is bound to (host may swap it)
-  let displayPages: readonly DisplayPage[] = [];
+  const frames = new InteractionFrameStore();
+  let resourceEpoch = 0;
+  const configurationEpoch = 0;
   let handle: DocumentHandle | null = null;
   // True when this editor adopted ANOTHER editor's store via a handle. Such an editor renders and
   // reads the shared store but does NOT mount its own edit surface: two independent PM surfaces on
@@ -106,14 +124,70 @@ export function createEditor(config: EditorConfig): Editor {
   let sharedView = false;
   let activeScope: ViewScope = { kind: 'body' };
   let destroyed = false;
+  let layoutToken = 0;
+  let cancelScheduledLayout: (() => void) | null = null;
 
-  function relayoutAndPaint(): void {
-    if (!session || destroyed) return;
+  function currentFrame(): InteractionFrame {
+    if (destroyed) return emptyInteractionFrame();
+    return frames.getFrame() ?? emptyInteractionFrame();
+  }
+
+  function layoutInput(display: readonly DisplayPage[], semanticIndex: SemanticPositionIndex) {
+    return {
+      modelRevision: session!.revision(),
+      resourceEpoch,
+      configurationEpoch,
+      display,
+      semanticIndex,
+      selection: null,
+      caret: null,
+      selectionGeometry: null,
+      focus: { scope: activeScope, focused: false },
+      composition: { active: false, scope: null },
+      currentPage: { viewport: 0, caret: 0 },
+    };
+  }
+
+  function emitLayoutFrame(frame: InteractionFrame): void {
+    host.onDisplay?.(frame.display);
+    host.onTotalPages?.(frame.display.length);
+    emit('display', frame.display);
+  }
+
+  function completeLayoutPublication(token: number, pendingTarget?: number): void {
+    if (destroyed || token !== layoutToken || !session) return;
     const layout = layoutBody(session.currentModel(), { ...LAYOUT, metrics: new HelveticaMetrics() });
-    displayPages = toDisplayPages(layout.pages);
-    host.onDisplay?.(displayPages);
-    host.onTotalPages?.(displayPages.length);
-    emit('display', displayPages);
+    const bridged = toDisplayPages(session.currentModel(), layout.pages);
+    const input = layoutInput(bridged.display, bridged.semanticIndex);
+    const frame =
+      pendingTarget !== undefined
+        ? frames.tryCompletePendingLayout(input) ?? null
+        : frames.publishLayout(input);
+    if (!frame) return;
+    emitLayoutFrame(frame);
+  }
+
+  function cancelScheduledLayoutWork(): void {
+    layoutToken += 1;
+    cancelScheduledLayout?.();
+    cancelScheduledLayout = null;
+  }
+
+  function relayoutAndPaint(sync = true): void {
+    if (!session || destroyed) return;
+    if (!sync) {
+      const targetRevision = session.revision();
+      frames.beginPendingLayout(targetRevision);
+      cancelScheduledLayoutWork();
+      const token = layoutToken;
+      cancelScheduledLayout = host.scheduleFrame(() => {
+        cancelScheduledLayout = null;
+        completeLayoutPublication(token, targetRevision);
+      });
+      return;
+    }
+    cancelScheduledLayoutWork();
+    completeLayoutPublication(layoutToken);
   }
 
   // Mount the edit surface if it is wanted (editable + not view-mode) and the host body element is
@@ -130,10 +204,32 @@ export function createEditor(config: EditorConfig): Editor {
     mountedBodyEl = bodyEl;
   }
 
-  // Called by the edit surface after every committed edit / undo / redo.
+  function rejectPointer(
+    code: InteractionOutcomeCode,
+    reason: string,
+    frameId?: InteractionFrame['id'],
+  ): InteractionOutcome<SemanticHitTarget> {
+    return frameId ? { ok: false, code, reason, frameId } : { ok: false, code, reason };
+  }
+
+  function resolveHostMetrics(options?: HitTestOptions): InteractionHostMetrics | undefined {
+    if (options?.hostMetrics) return options.hostMetrics;
+    return host.getInteractionHostMetrics?.() ?? undefined;
+  }
+
+  function resolvePointer(point: Point, options?: HitTestOptions): InteractionOutcome<SemanticHitTarget> {
+    const frame = currentFrame();
+    if (options?.frameId && options.frameId.value !== frame.id.value) {
+      return rejectPointer('staleFrame', 'pointer request targets a superseded interaction frame', frame.id);
+    }
+    if (frame.completeness.kind === 'pending') {
+      return rejectPointer('pendingLayout', 'layout for the current model revision is not yet published', frame.id);
+    }
+    return hitTestPointer(frame, point, resolveHostMetrics(options), { frameId: options?.frameId });
+  }
   function onModelChanged(): void {
     if (!session || destroyed) return;
-    relayoutAndPaint();
+    relayoutAndPaint(true);
     emit('change', { revision: session.revision() });
   }
 
@@ -216,37 +312,63 @@ export function createEditor(config: EditorConfig): Editor {
       formatting: null,
       table: null,
       image: null,
-      page: { current: 0, total: displayPages.length },
+      page: { current: currentFrame().currentPage.viewport, total: currentFrame().display.length },
     }),
 
-    getTotalPages: () => displayPages.length,
-    getCurrentPage: () => 0, // viewport/caret current-page tracking is a follow-up (needs scroll wiring)
+    getTotalPages: () => currentFrame().display.length,
+    getCurrentPage: (mode = 'viewport') =>
+      mode === 'caret' ? currentFrame().currentPage.caret : currentFrame().currentPage.viewport,
 
-    // ─── Geometry: core owns layout; the adapter only paints what onDisplay delivers. ───
-    getDisplay: () => displayPages,
-    getSelectionRects: (_range?: EditorSelection): readonly Rect[] => [], // selection geometry: follow-up
-    getCaretRect: (_pos?: EditorPosition): Rect | null => null,
-    hitTest: (_point: Point) => null, // pointer→position mapping: follow-up (contract flat-pos model)
-    getPageGeometry: () => displayPages.map((p) => ({ index: p.index, box: p.box })),
-    getScrollGeometry() {
-      const pageTops: number[] = [];
-      let top = 0;
-      for (const p of displayPages) {
-        pageTops.push(top);
-        top += p.box.height;
-      }
-      return { contentHeight: top, pageTops };
+    getInteractionFrame: () => currentFrame(),
+
+    getDisplay: () => currentFrame().display,
+    getSelectionRects: (range?: EditorSelection, options?: SelectionGeometryOptions): readonly Rect[] => {
+      const frame = currentFrame();
+      const selection =
+        range && typeof range === 'object' && 'anchor' in range && 'head' in range
+          ? (range as SemanticSelection)
+          : frame.selection;
+      if (!selection) return [];
+      const outcome = deriveSelectionGeometry(frame, selection, options);
+      return outcome.ok ? outcome.value.rects : [];
     },
+    getCaretRect: (pos?: EditorPosition): Rect | null => {
+      const target = pos && typeof pos === 'object' && 'kind' in pos ? (pos as SemanticTarget) : undefined;
+      return deriveCaretGeometry(currentFrame(), target)?.rect ?? null;
+    },
+    getCaretGeometry: (pos?: EditorPosition): CaretGeometry | null => {
+      const target = pos && typeof pos === 'object' && 'kind' in pos ? (pos as SemanticTarget) : undefined;
+      return deriveCaretGeometry(currentFrame(), target);
+    },
+    getSelectionGeometry: (range?: EditorSelection, options?: SelectionGeometryOptions): SelectionGeometry | null => {
+      const frame = currentFrame();
+      const selection =
+        range && typeof range === 'object' && 'anchor' in range && 'head' in range
+          ? (range as SemanticSelection)
+          : frame.selection;
+      if (!selection) return null;
+      const outcome = deriveSelectionGeometry(frame, selection, options);
+      return outcome.ok ? outcome.value : null;
+    },
+    hitTest: (_point: Point, options?: HitTestOptions): SemanticHitTarget | null => {
+      const outcome = resolvePointer(_point, options);
+      return outcome.ok ? outcome.value : null;
+    },
+    resolvePointer,
+    getPageGeometry: () => currentFrame().pageGeometry,
+    getScrollGeometry: () => currentFrame().scrollGeometry,
 
-    relayout: (_options?: { sync?: boolean }) => {
-      ensureSurface(); // a late-available host body element mounts here
-      relayoutAndPaint();
+    relayout: (options?: { sync?: boolean }) => {
+      ensureSurface();
+      relayoutAndPaint(options?.sync !== false);
     },
     focus: (_scope?: EditorScope) => surface?.focus(),
     destroy() {
       // Detach THIS editor's projection/host resources; an externally owned (shared-handle) session
       // is NOT disposed here — the handle keeps the store alive for any other editor holding it.
       destroyed = true;
+      cancelScheduledLayoutWork();
+      frames.cancelPendingLayout();
       surface?.destroy();
       surface = null;
       mountedBodyEl = null;
@@ -254,7 +376,6 @@ export function createEditor(config: EditorConfig): Editor {
       sharedUnsub = null;
       session = null;
       handle = null;
-      displayPages = [];
       for (const set of Object.values(handlers)) set.clear();
     },
 

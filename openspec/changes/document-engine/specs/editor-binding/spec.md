@@ -16,6 +16,10 @@ backend-owned editor fragment.
 > clipboard, and composition state. The controller MUST NOT maintain a parallel
 > editable document or bypass PM transaction semantics. This is why the binding is
 > a mapping layer, not a new editor.
+>
+> **Interaction plane owner:** The controller, hidden input-host falsification, and
+> direct page interaction conformance are owned by `interactive-paginated-editing`.
+> This binding specification retains its independent completion gate.
 
 #### Scenario: Engine geometry places a page caret
 - **WHEN** a page hit-test resolves a semantic caret target

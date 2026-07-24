@@ -58,8 +58,10 @@
    a content drop): the store merges adjacent identical-format runs into its canonical form
    on commit, so an edited document's redundant run boundaries may coalesce — text and
    formatting are fully preserved. Reviewed 4 rounds with cursor-agent gpt-5.6-sol.
-   FOLLOW-ON (landed after the checkpoint): (a) WYSIWYG — the editable view now repaints a
-   paginated display from store.model on every committed edit, not just the raw PM surface;
+   FOLLOW-ON (landed after the checkpoint): (a) paginated preview repaint — the editable
+   view now repaints a paginated display from store.model on every committed edit, not just
+   the raw PM surface; direct page interaction and interactive-paginated claims remain
+   owned by `interactive-paginated-editing`;
    (b) ORDINARY DOCX are editable via SELECTIVE PRESERVATION — parseDocx { preserveAll }
    opens a styles/relationships/section-properties document editable, patching only the
    edited top-level paragraphs (fully-captured, else fail closed) while everything else is
@@ -241,6 +243,11 @@
 
 ## 6. Editor binding and ProseMirror projection
 
+> **Prerequisite owner:** Page pointer gestures, IME routing, and geometry-aware
+> navigation into ProseMirror selections are owned by
+> [`interactive-paginated-editing`](../interactive-paginated-editing/). This section
+> retains its independent completion gate.
+
 > **Scope:** Implement the smallest paragraph-only subset of 6.1–6.5 immediately for
 > active-queue item 3: project body paragraphs, map insertion/deletion through one
 > canonical transaction, reconcile after commit, relayout, save, and reopen. Keep
@@ -276,6 +283,11 @@
 - [ ] 7.13 Generate the exact external target union with ASCII-hex paraId normalization, NFC case-sensitive scalar phrase matching preserving whitespace, zero-based occurrence, document boundary, grapheme endpoint/affinity, and defined Endpoint/Preconditions; implement the normative operation-category lock/permission matrix exactly.
 
 ## 8. Resolved caches, layout, display list, and outputs
+
+> **Prerequisite owner:** Semantic hit testing, caret/selection geometry, page-window
+> virtualization, and interaction-frame publication are owned by
+> [`interactive-paginated-editing`](../interactive-paginated-editing/). This section
+> retains its independent completion gate.
 
 - [ ] 8.1 Bake off `harfbuzzjs` plus `fontkit`, Unicode bidi/UAX #14 libraries, `Intl.Segmenter`, and licensed fallbacks under `technology-selection.md`; then implement the frozen `ShapingEnvironment`, fixed-point scale/rounding, and exact glyph/cluster/advance comparator.
 - [x] 8.2 Implement dependency-graph construction and closure expansion for style, numbering, section, story, font, image, table, field, note, and annotation keys before any cache consumer; verify instrumentation never reuses an entry whose dependency changed.

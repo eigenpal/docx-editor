@@ -22,6 +22,19 @@ export {
 export { type MetricsPort, DeterministicMetrics, HelveticaMetrics } from './metrics.ts';
 export { type LayoutOptions, layoutBody, hitTest } from './layout.ts';
 export {
+  type GraphemeBoundary,
+  type GraphemeSegment,
+  intlGraphemeBoundary,
+  segmentGraphemes,
+  graphemeCount,
+  utf16OffsetToGrapheme,
+  graphemeOffsetToUtf16,
+  setGraphemeBoundary,
+  resetGraphemeBoundary,
+  isIntlSegmenterAvailable,
+  GRAPHEME_SEGMENTER_LOCALE,
+} from './grapheme.ts';
+export {
   type LayoutBuilder,
   type BlockLayoutContext,
   type BlockLayout,

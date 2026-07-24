@@ -433,8 +433,8 @@ parsers.
 
 ## Open Questions
 
-- Exact browser/platform matrix for the hidden input-host IME and mobile gate
-  must be fixed before task implementation begins.
+- Exact browser/platform matrix for the hidden input-host IME and mobile gate is
+  frozen in `browser-platform-matrix.md` (task 1.5).
 - Numerical input-to-visible-frame, scroll, DOM-node, memory, and mounted-PM
   thresholds are ratified from the existing representative benchmark corpus,
   not invented in this change.

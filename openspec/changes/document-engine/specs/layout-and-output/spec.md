@@ -169,3 +169,14 @@ the cluster map and anchor affinity.
 #### Scenario: Rotated clipped image overlays text
 - **WHEN** a pointer lies inside the text box but under the visible transformed image
 - **THEN** hit testing MUST select the topmost visible eligible item after transform and clip evaluation
+
+### Requirement: Layout geometry supplies interaction prerequisites only
+Layout MUST emit semantic position indexes, caret rectangles, selection rectangles,
+and client-space hit targets as the sole geometry authority for visible interaction.
+Direct page interaction, interaction-frame publication, and adapter overlay composition
+MUST be owned by `interactive-paginated-editing`; this layout specification retains
+its independent completion gate.
+
+#### Scenario: Adapter receives a pointer coordinate
+- **WHEN** a public adapter forwards host-space input through the editor facade
+- **THEN** hit results and overlay geometry MUST come from layout-derived interaction data, not adapter or ProseMirror DOM measurement

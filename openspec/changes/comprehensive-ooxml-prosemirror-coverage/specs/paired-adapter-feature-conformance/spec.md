@@ -86,3 +86,14 @@ hooks and MUST remove them only after public adapter conformance passes.
 #### Scenario: Temporary edit query path is retired
 - **WHEN** both public adapters pass the production editing and comprehensive-fixture conformance matrix
 - **THEN** the `?edit=1` source-only path can be removed without reducing tested behavior or public API coverage
+
+### Requirement: Direct page interaction is a separate conformance owner
+This specification MUST NOT treat paginated preview repaint, load, and save/reopen
+smoke as interactive paginated editing or feature-WYSIWYG evidence. Direct page
+pointer input, caret/selection overlays, IME, and one-surface browser evidence
+MUST be owned by `interactive-paginated-editing`; this paired-adapter specification
+retains its independent completion gate.
+
+#### Scenario: Preview repaint passes without page caret
+- **WHEN** both adapters repaint committed edits on paginated output but pointer and IME do not operate on that surface
+- **THEN** conformance for this change MAY record paginated preview repaint only and MUST NOT upgrade interaction claims

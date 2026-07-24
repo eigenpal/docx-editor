@@ -5,7 +5,15 @@ import { describe, expect, test } from 'bun:test';
 import { createEditor, createEditorDriver, displayText } from '../src/index.ts';
 import type { EditorHost } from '@docx-editor.dev/core-contract/editor';
 import type { DisplayPage } from '@docx-editor.dev/core-contract/geometry';
+import type { InteractionHostMetrics } from '@docx-editor.dev/core-contract/interaction';
 import { createEmptyModel, writeDocx } from '@docx-editor.dev/engine-core';
+import { contentToClient } from '../src/coordinate-mapper.ts';
+
+const METRICS: InteractionHostMetrics = {
+  clientOrigin: { x: 24, y: 36 },
+  scrollOffset: { x: 6, y: 10 },
+  zoom: 1.5,
+};
 
 const docxBytes = (): Uint8Array => writeDocx(createEmptyModel());
 function nullHost(): EditorHost {
@@ -48,6 +56,43 @@ describe('EditorDriver over the production editor', () => {
     expect(driver.exec({ type: 'toggleMark', mark: 'bold' })).toMatchObject({ ok: false, code: 'unsupported' });
     expect(Array.isArray(driver.query({ type: 'paragraphs' }))).toBe(true);
     expect(driver.selection()).toBeNull();
+    driver.dispose();
+  });
+
+  test('exposes interaction-frame observations and semanticSelection', () => {
+    const editor = createEditor({ host: nullHost(), document: docxBytes() });
+    const driver = createEditorDriver(editor);
+    const frame = driver.interactionFrame();
+    expect(driver.frameId()).toEqual(frame.id);
+    expect(frame.display.length).toBe(driver.displaySnapshot().pageCount);
+    expect(typeof driver.currentPage()).toBe('number');
+    expect(typeof driver.focusState().focused).toBe('boolean');
+    expect(typeof driver.compositionState().active).toBe('boolean');
+    expect(driver.semanticSelection()).toBeNull();
+    expect(driver.caretGeometry()).toBeNull();
+    expect(driver.selectionGeometry()).toBeNull();
+    driver.dispose();
+  });
+
+  test('pointerAt requires explicit metrics and resolves loaded content hits', () => {
+    const editor = createEditor({ host: nullHost(), document: docxBytes() });
+    const driver = createEditorDriver(editor);
+    const frame = driver.interactionFrame();
+    expect(driver.pointerAt({ x: 12, y: 34 }).ok).toBe(false);
+    const item = frame.display[0]?.items.find((i) => i.kind === 'text');
+    if (item?.kind !== 'text') throw new Error('text');
+    const cluster = item.clusters[0] ?? { box: item.box };
+    const stacked = frame.pageGeometry[0]!.box;
+    const content = {
+      x: stacked.x + cluster.box.x + cluster.box.width * 0.4,
+      y: stacked.y + cluster.box.y + cluster.box.height / 2,
+    };
+    const client = contentToClient(content, METRICS);
+    if (!client.ok) throw new Error('client');
+    const pointer = driver.pointerAt(client.value, { hostMetrics: METRICS });
+    expect(pointer.ok).toBe(true);
+    if (!pointer.ok) throw new Error('pointer');
+    expect(pointer.value.role).toBe('editableText');
     driver.dispose();
   });
 

@@ -9,9 +9,14 @@
 
 ## 2. Build the formal OOXML support manifest
 
+> **Prerequisite owner:** Direct page interaction, caret/selection geometry, and
+> `interactive-paginated` / `feature-wysiwyg` claims are owned by
+> [`interactive-paginated-editing`](../interactive-paginated-editing/). This section
+> retains its independent completion gate.
+
 - [ ] 2.1 Generate and check in the versioned ECMA-376 XSD QName/type/context inventory from `reference/ecma-376/part1/schemas`.
 - [ ] 2.2 Add a reviewed Strict-to-Transitional namespace-family mapping and tests rejecting implicit or ambiguous namespace equivalence.
-- [ ] 2.3 Define `OoxmlSupportClaim`, `SupportState`, context selectors, capability IDs, evidence IDs, comparator IDs, and source-schema versions.
+- [ ] 2.3 Define `OoxmlSupportClaim`, `SupportState`, `InteractionSupportState`, context selectors, capability IDs, evidence IDs, comparator IDs, and source-schema versions.
 - [ ] 2.4 Add manifest validation for known QNames, legal contexts, unique ownership, replacement/version rules, and stage-specific evidence.
 - [ ] 2.5 Add stage consistency checks preventing editable claims without model, preservation, semantic-operation, binding, serialization, and reopen evidence.
 - [ ] 2.6 Generate separate parse, model, preserve, render, PM-project, edit, serialize, and reopen coverage reports for XSD inventory and encountered fixture contexts.
@@ -33,6 +38,11 @@
 - [ ] 3.11 Add a template and generator for a new feature lane including manifest claim, capability registrations, focused fixture, comparators, and paired adapter scenario.
 
 ## 4. Promote one production editor composition
+
+> **Prerequisite owner:** Paired public-adapter browser interaction conformance beyond
+> paginated preview repaint is owned by
+> [`interactive-paginated-editing`](../interactive-paginated-editing/). Retire example-only
+> split composition only after that change's gates pass; this section retains its gate.
 
 - [x] 4.1 Move framework-independent session ownership from `examples/shared/docxEditorSession.ts` behind the production `Editor` implementation.
 - [x] 4.2 Move ProseMirror mounting, canonical commit, rejection snap-back, paginated repaint, save, and disposal from `examples/shared/mountDocxEditor.ts` behind `Editor` plus `EditorHost`.

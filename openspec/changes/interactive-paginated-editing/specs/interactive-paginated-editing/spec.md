@@ -304,21 +304,25 @@ keyboard interaction.
 - **THEN** the editor SHALL materialize the required semantic/page window or provide an equivalent bounded semantic projection without losing focus identity
 
 ### Requirement: Interaction and WYSIWYG claims are separate
-The support manifest SHALL distinguish rendered, interactive-read-only,
-fallback-editable, typed-editable, interactive-paginated, and feature-WYSIWYG
-states. `interactive-paginated` SHALL require direct page interaction and
-save/reopen through both public adapters. `feature-WYSIWYG` SHALL additionally
+The support manifest SHALL distinguish `none`, `rendered`, `interactive-read-only`,
+`fallback-editable`, `typed-editable`, `interactive-paginated`, and the machine
+literal `feature-wysiwyg`. Human-facing documentation MAY label that last state
+**feature-WYSIWYG**; manifest data MUST use `feature-wysiwyg` only. Omitted
+`interaction` fields MUST be treated as `none`. `interactive-read-only` SHALL
+require visible paginated hit/selection ownership without an editable caret on
+that surface. `interactive-paginated` SHALL require direct page interaction and
+save/reopen through both public adapters. `feature-wysiwyg` SHALL additionally
 require authored-state, style, shaping, pagination, display,
 semantic/accessibility, interaction, DOCX round-trip, and relevant output
 comparators for the declared feature matrix.
 
 #### Scenario: Paginated repaint works without direct interaction
 - **WHEN** canonical edits repaint a separate paginated preview but pointer, caret, selection, and IME do not operate on that preview
-- **THEN** the feature SHALL be reported as paginated preview repaint only and SHALL NOT be reported as interactive-paginated or WYSIWYG
+- **THEN** the feature SHALL be reported as paginated preview repaint only and SHALL NOT be reported as interactive-paginated or feature-wysiwyg
 
 #### Scenario: One feature passes full evidence
 - **WHEN** a declared feature matrix passes every feature-WYSIWYG comparator
-- **THEN** only that matrix MAY be reported as feature-WYSIWYG and no whole-product claim SHALL be inferred
+- **THEN** only that matrix MAY be reported as `feature-wysiwyg` and no whole-product claim SHALL be inferred
 
 ### Requirement: Large-document editing-window decision gate
 The initial implementation SHALL use a complete hidden ProseMirror projection.

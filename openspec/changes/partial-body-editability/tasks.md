@@ -1,5 +1,10 @@
 ## 1. Preservation-backed body access policy
 
+> **Prerequisite owner:** Read-only boundaries, fallback-editable lanes, and typed edit
+> claims on the rendered surface are coordinated with
+> [`interactive-paginated-editing`](../interactive-paginated-editing/). This change
+> retains its independent completion gate.
+
 - [ ] 1.1 Add focused engine-core tests for `full`, `partial`, and `none` body modes, including tables, block content controls, paragraphs with unsupported inline children, missing ranges, and non-contiguous ranges.
 - [ ] 1.2 Replace the single-result body patchability diagnostic with an immutable per-block access policy containing patchable IDs, all region/body diagnostics, document mode, and structural-mutation allowance; retain `isModelBodyPatchable` as the compatibility check for `mode === 'full'`.
 - [ ] 1.3 Add regression evidence for an untouched preserved block whose store representation normalizes, then align preservation baseline/edit comparison with deterministic store normalization so editing a different paragraph cannot create a false changed-block result.
