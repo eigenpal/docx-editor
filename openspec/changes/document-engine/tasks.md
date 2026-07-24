@@ -193,12 +193,12 @@
 
 ## 3. Preservation, identity, and selective serialization
 
-- [ ] 3.1 Define ownership-scoped preservation capsules for unknown elements, attributes, parts, relationships, lexical values, and significant ordering; verify supported edits invalidate only capsules owned by replaced regions.
-- [ ] 3.2 Implement capsule capture and reinsertion for supported-parent and unsupported-part fixtures; verify export and reopen preserve unknown material and relative ordering beside edited content.
-- [ ] 3.3 Implement stable identity allocation and preservation for stories, blocks, paragraphs, tables, rows, cells, anchorable runs, parts, relationships, controls, bookmarks, comments, revisions, and annotations; add deterministic collision tests.
-- [ ] 3.4 Implement identity rules for split, join, move, semantic replacement, deletion, and undo restoration; verify exact IDs across forward, undo, redo, save, and reopen sequences.
-- [ ] 3.5 Implement QName validation, controlled prefix allocation, XML value escaping, URI validation, and capsule namespace/sibling reinsertion; validate regenerated parts and injection fixtures.
-- [ ] 3.6 Implement byte-range selective patching with an exact uncompressed XML-part range comparator and a semantic ZIP-container comparator that permits recompression metadata/CRC/size/offset/directory changes; preserve every unowned XML byte and reuse eligible untouched entries.
+- [x] 3.1 Define ownership-scoped preservation capsules for unknown elements, attributes, parts, relationships, lexical values, and significant ordering; verify supported edits invalidate only capsules owned by replaced regions.
+- [x] 3.2 Implement capsule capture and reinsertion for supported-parent and unsupported-part fixtures; verify export and reopen preserve unknown material and relative ordering beside edited content.
+- [x] 3.3 Implement stable identity allocation and preservation for stories, blocks, paragraphs, tables, rows, cells, anchorable runs, parts, relationships, controls, bookmarks, comments, revisions, and annotations; add deterministic collision tests.
+- [x] 3.4 Implement identity rules for split, join, move, semantic replacement, deletion, and undo restoration; verify exact IDs across forward, undo, redo, save, and reopen sequences.
+- [x] 3.5 Implement QName validation, controlled prefix allocation, XML value escaping, URI validation, and capsule namespace/sibling reinsertion; validate regenerated parts and injection fixtures.
+- [x] 3.6 Implement byte-range selective patching with an exact uncompressed XML-part range comparator and a semantic ZIP-container comparator that permits recompression metadata/CRC/size/offset/directory changes; preserve every unowned XML byte and reuse eligible untouched entries.
 - [ ] 3.7 Implement complete DOCX export for opened and newly created models, including required content types, relationships, media, and related stories; verify both outputs reopen to equivalent authored-state hashes.
 - [ ] 3.8 Build versioned package-part diff fixtures covering authored omission, raw lexical values, unsupported capsules, all supported stories, localized edits, relationship edits, and create-from-scratch; assert byte identity for eligible untouched parts and semantic plus XML validity for changed parts.
 - [ ] 3.9 Run one combined import-edit-selective-export-reopen adversarial fixture covering same-part unowned bytes, capsules/namespaces/siblings, omissions/raw values, relationship/content-type conflicts, unsafe URLs/CSS/XML, inert fields/macros/ActiveX/OLE/embedded objects/executable relationships, explicit scrub classification, schema validity, and zero filesystem/network access.

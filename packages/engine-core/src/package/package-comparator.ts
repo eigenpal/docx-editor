@@ -119,11 +119,14 @@ export function compareZipContainers(
   opts: { owned?: Iterable<string>; limits?: ZipLimits } = {},
 ): ZipContainerResult {
   const empty: string[] = [];
-  // Compression method must NOT affect equality: readZip's per-entry ratio guard would reject a
-  // legitimately highly-compressed archive (identical uncompressed bytes, different deflate level).
-  // So relax the ratio heuristic while KEEPING the absolute entry-count + total-inflated-size caps
-  // (the real zip-bomb guard). Callers may override with their own limits.
-  const limits: ZipLimits = opts.limits ?? { ...DEFAULT_ZIP_LIMITS, maxRatio: Number.MAX_SAFE_INTEGER };
+  // Read under the SAFE default bounds (entry-count, total-inflated-size, AND the pre-inflation
+  // ratio guard) so an untrusted archive cannot be a memory-amplification/zip-bomb vector. The
+  // ratio cap does mean two archives whose parts legitimately deflate past DEFAULT ratio (rare for
+  // real DOCX XML) could return `readError` instead of comparing equal — a trusted caller who
+  // KNOWS its inputs are safe (e.g. its own save() output) opts into a relaxed `maxRatio` via
+  // `opts.limits`. Compression method still never affects equality for any archive both readers
+  // admit, since the entries map holds only uncompressed bytes.
+  const limits: ZipLimits = opts.limits ?? DEFAULT_ZIP_LIMITS;
   const a = readZip(before, limits);
   const b = readZip(after, limits);
   if (!a.ok) return { equal: false, changed: empty, added: empty, removed: empty, unownedChanged: empty, readError: `before: ${a.reason}` };

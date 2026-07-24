@@ -156,16 +156,36 @@ describe('semantic ZIP-container comparator (3.6)', () => {
     expect(res.equal).toBe(true);
   });
 
-  test('a highly-compressed archive is not a false mismatch (compression method excluded)', () => {
-    // Same uncompressed parts, but a large repetitive part that deflates past the reader's default
-    // 200:1 ratio guard — equality must NOT depend on that (compression method is ephemera).
-    const big = 'A'.repeat(300_000); // ~300 KB, deflates far past 200:1
-    const parts = { '[Content_Types].xml': CT, 'word/document.xml': `<w:document xmlns:w="${W}"><w:body><w:p><w:r><w:t>${big}</w:t></w:r></w:p></w:body></w:document>` };
+  test('compression method is excluded from equality (stored vs deflated, within safe ratio)', () => {
+    // Same uncompressed parts zipped at different deflate levels: the compressed framing differs but
+    // the uncompressed maps are identical, so the comparator reports equal. The payload is varied
+    // enough to stay under the safe default ratio cap (this is the common real-DOCX case).
+    const body = Array.from({ length: 400 }, (_, i) => `<w:p><w:r><w:t>line ${i} of the document body</w:t></w:r></w:p>`).join('');
+    const parts = { '[Content_Types].xml': CT, 'word/document.xml': `<w:document xmlns:w="${W}"><w:body>${body}</w:body></w:document>` };
     const stored = zipSync(Object.fromEntries(Object.entries(parts).map(([k, v]) => [k, strToU8(v)])), { level: 0 });
     const squeezed = zipSync(Object.fromEntries(Object.entries(parts).map(([k, v]) => [k, strToU8(v)])), { level: 9 });
+    expect(stored).not.toEqual(squeezed); // different compressed framing
     const res = compareZipContainers(stored, squeezed);
     expect(res.readError).toBeUndefined();
     expect(res.equal).toBe(true);
+  });
+
+  test('a pathologically-compressible part is guarded by default, comparable via opt-in relaxed limits', () => {
+    // A part that deflates FAR past the default 200:1 ratio: the safe default reader rejects it (so
+    // an untrusted archive cannot be a memory-amplification vector), but a trusted caller can opt
+    // into a relaxed maxRatio to compare its own known-safe output.
+    const big = 'A'.repeat(300_000); // ~300 KB of one byte -> deflates past 1000:1
+    const parts = { '[Content_Types].xml': CT, 'word/document.xml': `<w:document xmlns:w="${W}"><w:body><w:p><w:r><w:t>${big}</w:t></w:r></w:p></w:body></w:document>` };
+    const squeezed = zipSync(Object.fromEntries(Object.entries(parts).map(([k, v]) => [k, strToU8(v)])), { level: 9 });
+    const stored = zipSync(Object.fromEntries(Object.entries(parts).map(([k, v]) => [k, strToU8(v)])), { level: 0 });
+    // Default: the pathological ratio is rejected, not silently compared.
+    expect(compareZipContainers(stored, squeezed).readError).toContain('too-large');
+    // Opt-in relaxed ratio (keeping the absolute size/entry caps): now they compare equal.
+    const relaxed = compareZipContainers(stored, squeezed, {
+      limits: { maxEntries: 10_000, maxTotalBytes: 512 * 1024 * 1024, maxRatio: Number.MAX_SAFE_INTEGER },
+    });
+    expect(relaxed.readError).toBeUndefined();
+    expect(relaxed.equal).toBe(true);
   });
 
   test('a bounded-read rejection surfaces as readError, not a false match', () => {
