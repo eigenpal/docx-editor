@@ -1,6 +1,6 @@
 # Interactive paginated editing — accelerated execution tasks
 
-Progress: **35 / 114** complete.
+Progress: **38 / 114** complete.
 
 | Baseline | Count |
 | --- | --- |
@@ -108,7 +108,7 @@ passes.
 
 ### M1 review and evidence
 
-- [ ] M1-R1 Run: `bun test packages/engine-editor/test/keyboard-navigation.test.ts packages/engine-editor/test/navigation-session.test.ts packages/engine-editor/test/navigation-production.test.ts packages/engine-editor/test/line-catalog.test.ts packages/engine-editor/test/interaction-planner.test.ts packages/engine-core/test/adapter-authority.test.ts`; `bun run typecheck`; `openspec validate interactive-paginated-editing --strict`; `git diff --check`. Write pass/fail counts to `openspec/changes/interactive-paginated-editing/evidence/m1/verification-log.md`. Stage and commit per staging manifest. **Expected:** all listed tests pass; strict validation pass.
+- [x] M1-R1 Run: `bun test packages/engine-editor/test/keyboard-navigation.test.ts packages/engine-editor/test/navigation-session.test.ts packages/engine-editor/test/navigation-production.test.ts packages/engine-editor/test/line-catalog.test.ts packages/engine-editor/test/interaction-planner.test.ts packages/engine-core/test/adapter-authority.test.ts`; `bun run typecheck`; `openspec validate interactive-paginated-editing --strict`; `git diff --check`. Write pass/fail counts to `openspec/changes/interactive-paginated-editing/evidence/m1/verification-log.md`. Stage and commit per staging manifest. **Expected:** all listed tests pass; strict validation pass.
 - [ ] M1-R2 Write `openspec/changes/interactive-paginated-editing/evidence/m1/summary.md`; mark **5.5**, **5.6a**, **5.7a** complete; stage and commit per staging manifest; leave **5.6**, **5.7**, **5.8** unchecked.
 
 ---
