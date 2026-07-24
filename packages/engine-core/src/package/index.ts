@@ -70,6 +70,9 @@ export {
 } from './docx/read.ts';
 export { isRunPropertiesCapsule } from './preservation-capsule.ts';
 export { writeDocx, documentXml } from './docx/write.ts';
+// Authored-state digest (3.7): semantic-content fingerprint, volatile id/preservation/revision
+// bookkeeping excluded — equal across a complete-export save+reopen iff authored content is equal.
+export { authoredStateDigest, authoredStateProjection } from './authored-digest.ts';
 // Package-level fidelity comparators (3.6): exact uncompressed XML-part range comparator +
 // semantic ZIP-container comparator (permits recompression ephemera, flags unowned changes).
 export {

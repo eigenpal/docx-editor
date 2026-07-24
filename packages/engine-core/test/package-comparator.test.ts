@@ -132,17 +132,18 @@ describe('semantic ZIP-container comparator (3.6)', () => {
     expect(res.changed).toEqual(['/word/document.xml']);
   });
 
-  test('a real writer round-trip of a preserved package changes no unowned part', () => {
-    // A package the writer preserves (round-trips through parse→model→write) must, unedited, leave
-    // every non-body part byte-identical. Declare the body part owned (the writer canonicalizes its
-    // XML header/xml:space even with no semantic edit) and assert nothing else moved.
+  test('a real writer round-trip of a PRESERVED package changes NO part at all (byte-identical)', () => {
+    // A package opened with preservation re-emits EVERY part byte-for-byte on an unedited save (the
+    // customXml part included). So the semantic ZIP comparison is fully equal with no owned set —
+    // nothing moved, nothing dropped, nothing added.
     const original = docx(base);
-    const resaved = writeDocx(readModel(original));
-    const res = compareZipContainers(original, resaved, {
-      owned: ['/word/document.xml', '/[Content_Types].xml', '/_rels/.rels', '/word/styles.xml', '/customXml/item1.xml'],
-    });
-    // Whatever the writer does, it must not touch a part outside the declared owned set.
+    const parsed = parseDocx(original, { preserveAll: true });
+    expect(parsed.ok).toBe(true);
+    if (!parsed.ok) throw new Error('parse failed');
+    const resaved = writeDocx(parsed.model);
+    const res = compareZipContainers(original, resaved);
     expect(res.unownedChanged).toEqual([]);
+    expect(res.equal).toBe(true);
   });
 
   test('OPC case-insensitive part names are the SAME part, not a false add/remove', () => {
