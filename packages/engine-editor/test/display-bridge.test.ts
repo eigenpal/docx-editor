@@ -250,6 +250,9 @@ describe('frame overlay geometry for adapters (task M2.2)', () => {
     void store;
     return {
       ...frame,
+      // A caret is only painted for a FOCUSED editor, so a fixture that expects
+      // caret geometry has to be focused.
+      focus: { scope: { kind: 'body' as const }, focused: true },
       selection,
       caret,
       selectionGeometry: geometry.ok ? geometry.value : null,
@@ -374,6 +377,7 @@ describe('overlay correctness for a collapsed caret (task 6.4)', () => {
     expect(geometry.ok).toBe(true);
     const withCaret = {
       ...frame,
+      focus: { scope: { kind: 'body' as const }, focused: true },
       selection: collapsed,
       caret: deriveCaretGeometry(frame, collapsed.head as never),
       selectionGeometry: geometry.ok ? geometry.value : null,
@@ -391,10 +395,29 @@ describe('overlay correctness for a collapsed caret (task 6.4)', () => {
     const geometry = deriveSelectionGeometry(frame, range);
     const withRange = {
       ...frame,
+      focus: { scope: { kind: 'body' as const }, focused: true },
       selection: range,
       caret: deriveCaretGeometry(frame, range.head as never),
       selectionGeometry: geometry.ok ? geometry.value : null,
     };
     expect(overlaysForFrame(withRange).selection.length).toBeGreaterThan(0);
+  });
+});
+
+describe('caret visibility follows focus (task 6.5)', () => {
+  test('an unfocused frame paints no caret even when caret geometry exists', () => {
+    const { frame } = publishFrameBundle(modelWith(['hello']));
+    const blockId = frame.semanticIndex.stories[0]!.blocks[0]!.identity.blockId;
+    const selection = selectionForBlock(frame, blockId, 2, 2);
+    const caret = deriveCaretGeometry(frame, selection.head as never);
+    expect(caret).not.toBeNull();
+
+    const unfocused = { ...frame, focus: { scope: { kind: 'body' as const }, focused: false }, selection, caret };
+    // Word does not blink a caret at a document nobody is editing, and painting
+    // one at mount made the two adapters disagree on their initial state.
+    expect(overlaysForFrame(unfocused).caret).toBeNull();
+
+    const focused = { ...unfocused, focus: { scope: { kind: 'body' as const }, focused: true } };
+    expect(overlaysForFrame(focused).caret).not.toBeNull();
   });
 });

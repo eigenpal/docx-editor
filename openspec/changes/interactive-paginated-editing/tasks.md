@@ -1,6 +1,6 @@
 # Interactive paginated editing — accelerated execution tasks
 
-Progress: **66 / 114** complete.
+Progress: **67 / 114** complete.
 
 | Baseline | Count |
 | --- | --- |
@@ -350,7 +350,7 @@ esac
 | **M5.2** | `e2e/vue-one-surface.interaction.spec.ts`, `package.json`, `examples/shared/DocxAdapterHarness.vue`, `openspec/changes/interactive-paginated-editing/tasks.md` |
 | **M5-R1** | `openspec/changes/interactive-paginated-editing/evidence/m5/verification-log.md`, `packages/engine-editor/src/create-editor.ts`, `scripts/check-parity-contract.mjs`, `scripts/parity/parity.contract.json`, `openspec/changes/interactive-paginated-editing/tasks.md` (the gate exposed a real input-host scroll defect, and `check:parity-contract` was measuring a pre-greenfield surface; both fixed in tracked files, neither preserve-listed API snapshot touched)
 | **M5-R2** | `openspec/changes/interactive-paginated-editing/evidence/m5/summary.md`, `openspec/changes/interactive-paginated-editing/tasks.md` |
-| **6.5** | `e2e/paired-one-surface.interaction.spec.ts`, `package.json`, `openspec/changes/interactive-paginated-editing/tasks.md` |
+| **6.5** | `e2e/paired-one-surface.interaction.spec.ts`, `package.json`, `packages/engine-editor/src/display-bridge.ts`, `packages/engine-editor/test/display-bridge.test.ts`, `openspec/changes/interactive-paginated-editing/tasks.md` (the paired gate found the adapters disagreeing on initial caret visibility; fixed in the shared helper so both agree)
 | **6.6** | `examples/vite/src/App.tsx`, `examples/vue/src/App.vue`, `openspec/changes/interactive-paginated-editing/tasks.md` |
 | **M6.1** | `openspec/changes/interactive-paginated-editing/browser-platform-matrix.md`, `openspec/changes/interactive-paginated-editing/tasks.md` |
 | **M6-R1** | `openspec/changes/interactive-paginated-editing/evidence/m6/verification-log.md`, `openspec/changes/interactive-paginated-editing/tasks.md` |

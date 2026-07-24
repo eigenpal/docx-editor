@@ -313,7 +313,11 @@ function toPageLocalRect(frame: InteractionFrame, pageIndex: number, rect: Rect)
  * empty geometry rather than guessing when the frame carries no selection.
  */
 export function overlaysForFrame(frame: InteractionFrame): FrameOverlays {
-  const caretGeometry = frame.caret;
+  // An unfocused editor shows no caret. Word does not blink a caret at a
+  // document nobody is editing, and painting one at mount made the two adapters
+  // disagree on their initial state: whichever synced its overlays first showed
+  // a caret the other did not.
+  const caretGeometry = frame.focus.focused ? frame.caret : null;
   let caret: OverlayBox | null = null;
   if (caretGeometry) {
     const rect = toPageLocalRect(frame, caretGeometry.pageIndex, caretGeometry.rect);
