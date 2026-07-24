@@ -30,11 +30,25 @@ export function canonicalRunProps(props: RunProps | undefined): RunProps | undef
   return Object.keys(out).length > 0 ? out : undefined;
 }
 
+/** The run-property subset that survives inside a w:style / w:docDefaults w:rPr: only the bold/italic/
+ *  underline toggles round-trip there (rPrXml emits and parseRPr reads exactly these). A run styleId
+ *  (w:rStyle) is a character-style LINK, meaningless as a style default and neither emitted nor parsed
+ *  in that context, so it is dropped — otherwise it would drift out of the model on reopen. */
+function canonicalStyleRunProps(props: RunProps | undefined): RunProps | undefined {
+  const rp = canonicalRunProps(props);
+  if (!rp) return undefined;
+  const out: { bold?: boolean; italic?: boolean; underline?: boolean } = {};
+  if (rp.bold !== undefined) out.bold = rp.bold;
+  if (rp.italic !== undefined) out.italic = rp.italic;
+  if (rp.underline !== undefined) out.underline = rp.underline;
+  return Object.keys(out).length > 0 ? out : undefined;
+}
+
 /** Canonical form of a style record, matching what the serializer emits and the parser reads back:
- *  isDefault only when true, basedOn only when non-empty, runProps canonicalized (empty -> absent).
- *  (id/name/type are required and passed through.) */
+ *  isDefault only when true, basedOn only when non-empty, runProps reduced to the toggles that
+ *  round-trip in a style context. (id/name/type are required and passed through.) */
 export function canonicalStyle(s: StyleRecord): StyleRecord {
-  const rp = canonicalRunProps(s.runProps);
+  const rp = canonicalStyleRunProps(s.runProps);
   return {
     id: s.id,
     name: s.name,
@@ -48,6 +62,6 @@ export function canonicalStyle(s: StyleRecord): StyleRecord {
 /** Canonical document defaults, or undefined when the run-property defaults are empty (matching what
  *  the serializer emits and the parser yields on reopen). */
 export function canonicalDocDefaults(d: DocDefaults | undefined): DocDefaults | undefined {
-  const rp = canonicalRunProps(d?.runProps);
+  const rp = canonicalStyleRunProps(d?.runProps);
   return rp ? { runProps: rp } : undefined;
 }

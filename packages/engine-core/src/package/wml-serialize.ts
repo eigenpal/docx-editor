@@ -56,19 +56,23 @@ function pPrFromProps(raw: ParagraphProps): string {
 }
 
 export function paragraphXml(p: ParagraphRecord): string {
+  // An empty-string capsule is a no-op splice, treated as ABSENT so it never suppresses modeled props
+  // (a `??` on '' would keep the empty string and drop the props).
+  const attrsCapsule = p.pAttrsCapsule ? p.pAttrsCapsule : undefined;
+  const pPrCapsule = p.pPrCapsule ? p.pPrCapsule : undefined;
   // SECURITY: the paragraph capsules are interpolated verbatim, so validate them at the sink — the
   // attrs capsule must be a well-formed attribute list (no tag breakout) and the pPr capsule a lone
   // balanced w:pPr — so a forged capsule from any path cannot inject sibling OOXML. Fail closed.
-  if (p.pAttrsCapsule !== undefined && !isParagraphAttrsCapsule(p.pAttrsCapsule)) {
+  if (attrsCapsule !== undefined && !isParagraphAttrsCapsule(attrsCapsule)) {
     throw new Error('paragraph attrs capsule is not a well-formed attribute list (rejected at serialize)');
   }
-  if (p.pPrCapsule !== undefined && !isParagraphPropertiesCapsule(p.pPrCapsule)) {
+  if (pPrCapsule !== undefined && !isParagraphPropertiesCapsule(pPrCapsule)) {
     throw new Error('paragraph pPr capsule is not a lone balanced w:pPr (rejected at serialize)');
   }
   // A verbatim pPr capsule wins (re-spliced byte-exact); otherwise emit modeled props (w:pStyle /
   // w:numPr). Undefined capsule + no props => `<w:p>` + runs only.
-  const pPr = p.pPrCapsule ?? (p.props ? pPrFromProps(p.props) : '');
-  return `<w:p${p.pAttrsCapsule ?? ''}>${pPr}${p.runs.map(runXml).join('')}</w:p>`;
+  const pPr = pPrCapsule ?? (p.props ? pPrFromProps(p.props) : '');
+  return `<w:p${attrsCapsule ?? ''}>${pPr}${p.runs.map(runXml).join('')}</w:p>`;
 }
 
 // Register the block-serialize capabilities (comprehensive 3.3). A paragraph regenerates from the

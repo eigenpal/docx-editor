@@ -29,8 +29,10 @@ function blockDigest(b: Block): unknown {
     });
     return {
       k: 'paragraph',
-      pPr: b.pPrCapsule ?? null,
-      attrs: b.pAttrsCapsule ?? null,
+      // An empty-string capsule is a no-op the serializer treats as absent — digest it as null so the
+      // two representations never drift.
+      pPr: b.pPrCapsule ? b.pPrCapsule : null,
+      attrs: b.pAttrsCapsule ? b.pAttrsCapsule : null,
       // Canonicalize modeled props so a degenerate value ({} / '' id / non-integer ilvl) digests the
       // same absence the parser produces on reopen.
       props: canonicalParagraphProps(b.props) ?? null,

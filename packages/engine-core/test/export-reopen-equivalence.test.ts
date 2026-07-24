@@ -369,4 +369,48 @@ describe('degenerate style/docDefaults values digest their canonical form (round
     const clean: PackageModel = { ...base, styles: [{ id: 'Normal', name: 'Normal', type: 'paragraph', isDefault: true }] };
     expect(authoredStateDigest(degenerate)).toBe(authoredStateDigest(clean));
   });
+
+  test('a run styleId inside a style/docDefaults rPr is dropped (not round-trippable there; round-8)', () => {
+    const base = createEmptyModel();
+    // rPrXml/parseRPr do not carry w:rStyle inside a style/docDefaults context, so a styleId there
+    // must NOT appear in the digest (else it drifts out of the model on reopen).
+    const withStyleId: PackageModel = {
+      ...base,
+      docDefaults: { runProps: { styleId: 'Emphasis', bold: true } },
+      styles: [{ id: 'Normal', name: 'Normal', type: 'paragraph', isDefault: true, runProps: { styleId: 'Emphasis', bold: true } }],
+    };
+    const withoutStyleId: PackageModel = {
+      ...base,
+      docDefaults: { runProps: { bold: true } },
+      styles: [{ id: 'Normal', name: 'Normal', type: 'paragraph', isDefault: true, runProps: { bold: true } }],
+    };
+    expect(authoredStateDigest(withStyleId)).toBe(authoredStateDigest(withoutStyleId));
+    // And it genuinely round-trips: reopen the export and confirm the digest is stable.
+    expect(authoredStateDigest(reopenModeled(writeDocx(withStyleId)))).toBe(authoredStateDigest(withStyleId));
+  });
+
+  test('an empty-string capsule is treated as absent (no props suppression / digest drift; round-8)', () => {
+    const base = createEmptyModel();
+    const sid = bodyStoryId(base);
+    // A paragraph with an EMPTY pPr capsule AND modeled props: the empty capsule must not suppress
+    // the props (both in serialization and digest).
+    const emptyCapsule: PackageModel = {
+      ...base,
+      stories: new Map(base.stories).set(sid, {
+        id: sid,
+        kind: 'body',
+        blocks: [{ kind: 'paragraph', id: 'p-1', pPrCapsule: '', props: { styleId: 'Heading1' }, runs: [{ text: 'x' }] }],
+      }),
+    };
+    const noCapsule: PackageModel = {
+      ...base,
+      stories: new Map(base.stories).set(sid, {
+        id: sid,
+        kind: 'body',
+        blocks: [{ kind: 'paragraph', id: 'p-1', props: { styleId: 'Heading1' }, runs: [{ text: 'x' }] }],
+      }),
+    };
+    expect(authoredStateDigest(emptyCapsule)).toBe(authoredStateDigest(noCapsule));
+    expect(strFromU8(unzipSync(writeDocx(emptyCapsule))['word/document.xml'])).toContain('<w:pStyle w:val="Heading1"/>');
+  });
 });
