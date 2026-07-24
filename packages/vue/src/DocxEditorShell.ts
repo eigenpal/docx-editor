@@ -11,6 +11,11 @@
 
 import { defineComponent, h } from 'vue';
 
+/** The shell takes no props; slots supply all chrome. */
+export interface DocxEditorShellProps {
+  readonly _slotsOnly?: never;
+}
+
 export default defineComponent({
   name: 'DocxEditorShell',
   setup(_props, { slots }) {

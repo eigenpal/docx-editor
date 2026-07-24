@@ -25,10 +25,34 @@ export type {
 } from '@docx-editor.dev/core-contract/editor';
 export type { DisplayPage, DisplayItem, DocPoint } from '@docx-editor.dev/core-contract/geometry';
 export type { DocxDocument } from '@docx-editor.dev/core-contract/types';
-export { default as DocxEditorShell } from './DocxEditorShell';
-export { default as DocxEditorTitleBar } from './DocxEditorTitleBar';
-export { default as DocxEditorToolbar } from './DocxEditorToolbar';
-export { default as PageIndicator } from './PageIndicator';
-export { default as HorizontalRuler } from './HorizontalRuler';
-export { default as VerticalRuler, RULER_WIDTH } from './VerticalRuler';
+export { default as DocxEditorShell, type DocxEditorShellProps } from './DocxEditorShell';
+export { default as DocxEditorTitleBar, type DocxEditorTitleBarProps } from './DocxEditorTitleBar';
+export { default as DocxEditorToolbar, type DocxEditorToolbarProps } from './DocxEditorToolbar';
+export { default as PageIndicator, type PageIndicatorProps } from './PageIndicator';
+export { default as HorizontalRuler, type HorizontalRulerProps } from './HorizontalRuler';
+export { default as VerticalRuler, RULER_WIDTH, type VerticalRulerProps } from './VerticalRuler';
+export {
+  default as DocxEditorSidebar,
+  DEFERRED_DIALOGS,
+  type DocxEditorSidebarProps,
+  type SidebarPanel,
+  type DeferredDialogId,
+} from './DocxEditorSidebar';
 export { useEditorSnapshot } from './useEditorSnapshot';
+// The shared engine helpers both adapters expose, so the two package surfaces
+// match (enforced by `bun run check:export-parity`).
+export {
+  runSave,
+  runToolbarCommand,
+  toolbarCommand,
+  toolbarCommandState,
+  toolbarCommandStates,
+  type ToolbarCommandId,
+  type ToolbarCommandState,
+  generateRulerTicks,
+  rulerPageBox,
+  PX_PER_INCH,
+  PX_PER_CM,
+  type RulerTick,
+  type RulerUnit,
+} from '@docx-editor.dev/engine-editor';

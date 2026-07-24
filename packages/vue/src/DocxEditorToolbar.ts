@@ -38,6 +38,11 @@ const LABELS: Record<ToolbarCommandId | 'save', string> = {
 const FORMATTING: readonly ToolbarCommandId[] = ['bold', 'italic', 'underline'];
 const HISTORY: readonly ToolbarCommandId[] = ['undo', 'redo'];
 
+export interface DocxEditorToolbarProps {
+  readonly editor: Editor | null;
+  readonly showSave?: boolean;
+}
+
 export default defineComponent({
   name: 'DocxEditorToolbar',
   props: {

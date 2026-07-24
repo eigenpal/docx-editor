@@ -13,6 +13,12 @@ import { useEditorSnapshot } from './useEditorSnapshot';
 /** Matches React's `RULER_WIDTH` and the legacy gutter. */
 export const RULER_WIDTH = 20;
 
+export interface VerticalRulerProps {
+  readonly editor: Editor | null;
+  readonly zoom?: number;
+  readonly unit?: RulerUnit;
+}
+
 export default defineComponent({
   name: 'VerticalRuler',
   props: {

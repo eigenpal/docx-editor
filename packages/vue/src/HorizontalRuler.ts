@@ -10,6 +10,12 @@ import type { Editor } from '@docx-editor.dev/core-contract/editor';
 import { generateRulerTicks, rulerPageBox, type RulerUnit } from '@docx-editor.dev/engine-editor';
 import { useEditorSnapshot } from './useEditorSnapshot';
 
+export interface HorizontalRulerProps {
+  readonly editor: Editor | null;
+  readonly zoom?: number;
+  readonly unit?: RulerUnit;
+}
+
 export default defineComponent({
   name: 'HorizontalRuler',
   props: {

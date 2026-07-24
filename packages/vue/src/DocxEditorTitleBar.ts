@@ -7,6 +7,11 @@
 
 import { defineComponent, h } from 'vue';
 
+export interface DocxEditorTitleBarProps {
+  readonly title: string;
+  readonly readOnly?: boolean;
+}
+
 export default defineComponent({
   name: 'DocxEditorTitleBar',
   props: {

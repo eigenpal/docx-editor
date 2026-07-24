@@ -8,6 +8,11 @@ import { computed, defineComponent, h, type PropType } from 'vue';
 import type { Editor } from '@docx-editor.dev/core-contract/editor';
 import { useEditorSnapshot } from './useEditorSnapshot';
 
+export interface PageIndicatorProps {
+  readonly editor: Editor | null;
+  readonly visible?: boolean;
+}
+
 export default defineComponent({
   name: 'PageIndicator',
   props: {
