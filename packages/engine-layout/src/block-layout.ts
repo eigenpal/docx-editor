@@ -8,6 +8,7 @@
 import { type Block, registeredBlockKinds } from '@docx-editor.dev/engine-core';
 import type { DisplayItem } from './display-item.ts';
 import type { MetricsPort } from './metrics.ts';
+import { type DependencyKey, keyId } from './dependency-graph.ts';
 
 /** The minimal builder a layout handler pushes into (the PageBuilder implements it). */
 export interface LayoutBuilder {
@@ -46,6 +47,51 @@ export function layoutBlock(block: Block, ctx: BlockLayoutContext): void {
   if (!fn) throw new Error(`no block layout handler registered for kind '${block.kind}'`);
   fn(block, ctx);
 }
+
+// ─── 3.6 layout registration lanes beyond display emission: resolution dependencies, semantic
+// roles (a11y), and hit ownership. A block kind registers these ALONGSIDE its layout handler, so a
+// new kind declares what it depends on + how it is read/hit without editing a central switch. ───
+
+/** The authored resolution keys a block reads (style/numbering/section/font/...), for the
+ *  dependency-graph closure (8.2) that gates resolved-cache reuse (8.3). */
+export type BlockDependencies = (block: Block) => readonly DependencyKey[];
+const dependencyRegistry = new Map<string, BlockDependencies>();
+export function registerBlockDependencies(kind: string, fn: BlockDependencies): void {
+  if (dependencyRegistry.has(kind)) throw new Error(`duplicate block dependency declaration for kind '${kind}'`);
+  dependencyRegistry.set(kind, fn);
+}
+/** The resolution dependencies a block reads (empty when the kind declared none), DEDUPED by key —
+ *  a container composing children can list the same key (e.g. docDefaults) more than once; a
+ *  dependency set has each key once. */
+export function blockDependencies(block: Block): readonly DependencyKey[] {
+  const raw = dependencyRegistry.get(block.kind)?.(block) ?? [];
+  const seen = new Set<string>();
+  const out: DependencyKey[] = [];
+  for (const k of raw) {
+    const id = keyId(k);
+    if (seen.has(id)) continue;
+    seen.add(id);
+    out.push(k);
+  }
+  return out;
+}
+
+/** The accessibility/semantic role a block kind projects to (reading-order + tagged output). */
+const semanticRoleRegistry = new Map<string, string>();
+export function registerBlockSemanticRole(kind: string, role: string): void {
+  if (semanticRoleRegistry.has(kind)) throw new Error(`duplicate semantic role for kind '${kind}'`);
+  semanticRoleRegistry.set(kind, role);
+}
+export const blockSemanticRole = (kind: string): string | undefined => semanticRoleRegistry.get(kind);
+
+/** Hit ownership: the block that owns a hit is the one identified by the anchor a layout item
+ *  carries (anchor.paragraphId). This is the single hit-ownership rule — a block owns exactly the
+ *  display items anchored to it — exposed so a backend maps a hit to its owning block without a
+ *  per-kind switch. */
+export const hitOwner = (anchor: { paragraphId: string }): string => anchor.paragraphId;
+
+/** Whether a block kind has registered its resolution-dependency + semantic-role lanes (3.6). */
+export const hasLayoutMetadata = (kind: string): boolean => dependencyRegistry.has(kind) && semanticRoleRegistry.has(kind);
 
 /** Whether a block kind has a registered layout handler. */
 export const hasBlockLayout = (kind: string): boolean => registry.has(kind);

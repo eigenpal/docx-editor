@@ -7,6 +7,7 @@
 import {
   bodyStoryId,
   blockRegistryVersion,
+  blockNestedBlocks,
   type PackageModel,
   type Block,
   type ParagraphRecord,
@@ -19,9 +20,13 @@ import {
   registerBlockLayout,
   layoutBlock,
   assertLayoutLaneComplete,
+  registerBlockDependencies,
+  registerBlockSemanticRole,
+  blockDependencies,
   type BlockLayoutContext,
   type LayoutBuilder,
 } from './block-layout.ts';
+import type { DependencyKey } from './dependency-graph.ts';
 
 /** Expand block-level SDTs (content controls) into their nested blocks so downstream
  *  flow code sees only paragraphs and tables. A content control is transparent to
@@ -173,6 +178,45 @@ registerBlockLayout('paragraph', (block, ctx) => {
   }
   ctx.newLine(); // paragraph break
 });
+
+// Built-in resolution-dependency + semantic-role lanes (comprehensive 3.6). These declare a block's
+// INTRINSIC + NESTED-child dependencies (feeding the 8.2 closure that gates 8.3 cache reuse) and its
+// a11y role. NOTE (scope boundary): the block-level extractor cannot see its containing story or
+// section — those CONTEXTUAL edges (section page geometry) are added by the graph builder that
+// composes the document, which has that context; here each block declares only what it reads itself
+// plus its children's composed dependencies. Every content block also reads document defaults.
+const DOC_DEFAULTS: DependencyKey = { kind: 'style', id: 'docDefaults' };
+
+registerBlockDependencies('paragraph', (block) => {
+  const p = block as ParagraphRecord;
+  const deps: DependencyKey[] = [DOC_DEFAULTS];
+  if (p.props?.styleId) deps.push({ kind: 'style', id: p.props.styleId }); // paragraph style
+  if (p.props?.numId) deps.push({ kind: 'numbering', id: p.props.numId }); // list numbering
+  for (const r of p.runs) if (r.props?.styleId) deps.push({ kind: 'style', id: r.props.styleId }); // character styles
+  return deps;
+});
+registerBlockSemanticRole('paragraph', 'paragraph');
+
+registerBlockDependencies('table', (block) => {
+  const t = block as TableRecord;
+  // A table STYLE is a style identity (StyleRecord type 'table'), NOT a separate 'table' key — so a
+  // change to that style value invalidates cached table layout through the same style closure.
+  const deps: DependencyKey[] = [DOC_DEFAULTS];
+  if (t.props?.styleId) deps.push({ kind: 'style', id: t.props.styleId });
+  // Compose the nested cells' block dependencies (a cached table reuse must invalidate when any
+  // nested paragraph's style/numbering changes). Each nested block's own extractor recurses.
+  for (const nested of blockNestedBlocks(t)) deps.push(...blockDependencies(nested));
+  return deps;
+});
+registerBlockSemanticRole('table', 'table');
+
+registerBlockDependencies('sdt', (block) => {
+  // A transparent SDT reads nothing itself; it composes its nested blocks' dependencies.
+  const deps: DependencyKey[] = [];
+  for (const nested of blockNestedBlocks(block)) deps.push(...blockDependencies(nested));
+  return deps;
+});
+registerBlockSemanticRole('sdt', 'group');
 
 interface TableCtx {
   readonly margin: number;

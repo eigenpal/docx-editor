@@ -25,8 +25,23 @@ export {
   type LayoutBuilder,
   type BlockLayoutContext,
   type BlockLayout,
+  type BlockDependencies,
   registerBlockLayout,
   layoutBlock,
   hasBlockLayout,
   assertLayoutLaneComplete,
+  registerBlockDependencies,
+  blockDependencies,
+  registerBlockSemanticRole,
+  blockSemanticRole,
+  hitOwner,
+  hasLayoutMetadata,
 } from './block-layout.ts';
+export { type DependencyKind, type DependencyKey, keyId, DependencyGraph } from './dependency-graph.ts';
+export {
+  type OperationSnapshot,
+  type CacheProvenance,
+  type CacheMiss,
+  type CacheLookup,
+  ResolvedCache,
+} from './resolved-cache.ts';

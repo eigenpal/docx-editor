@@ -4,7 +4,16 @@
 
 import { describe, expect, test } from 'bun:test';
 import { layoutBody, type LayoutOptions } from '../src/layout.ts';
-import { registerBlockLayout, hasBlockLayout, assertLayoutLaneComplete } from '../src/block-layout.ts';
+import {
+  registerBlockLayout,
+  hasBlockLayout,
+  assertLayoutLaneComplete,
+  blockDependencies,
+  blockSemanticRole,
+  hitOwner,
+  hasLayoutMetadata,
+} from '../src/block-layout.ts';
+import { keyId } from '../src/dependency-graph.ts';
 import { DeterministicMetrics } from '../src/metrics.ts';
 import {
   createEmptyModel,
@@ -50,6 +59,56 @@ describe('layout dispatches blocks through the registry', () => {
   test('an unregistered block kind fails closed rather than being silently skipped', () => {
     const model = modelWith([{ kind: 'mystery' } as unknown as Block]);
     expect(() => layoutBody(model, opts())).toThrow(/no block layout handler registered/);
+  });
+});
+
+describe('layout metadata lanes: resolution dependencies + semantic roles + hit ownership (3.6)', () => {
+  test('a paragraph declares docDefaults + its style + numbering + character-style dependencies', () => {
+    const p: Block = {
+      kind: 'paragraph',
+      id: 'p',
+      runs: [{ text: 'x', props: { styleId: 'Emphasis' } }],
+      props: { styleId: 'Heading1', numId: '3' },
+    };
+    expect(blockDependencies(p).map(keyId).sort()).toEqual([
+      'numbering:3',
+      'style:Emphasis',
+      'style:Heading1',
+      'style:docDefaults',
+    ]);
+    expect(blockSemanticRole('paragraph')).toBe('paragraph');
+  });
+
+  test('a table style is a STYLE key (not a table key) + docDefaults + nested cell dependencies', () => {
+    const t: Block = {
+      kind: 'table',
+      id: 't',
+      props: { styleId: 'TableGrid' },
+      rows: [
+        {
+          id: 'r',
+          cells: [{ id: 'c', blocks: [{ kind: 'paragraph', id: 'cp', runs: [{ text: 'x' }], props: { styleId: 'Cell' } }] }],
+        },
+      ],
+    } as unknown as Block;
+    // A table style is a StyleRecord identity -> 'style:TableGrid', not 'table:...'; nested paragraph
+    // style is composed so a cached table invalidates when a cell paragraph's style changes.
+    expect(blockDependencies(t).map(keyId).sort()).toEqual(['style:Cell', 'style:TableGrid', 'style:docDefaults']);
+    expect(blockSemanticRole('table')).toBe('table');
+    // A transparent SDT reads nothing itself but composes nested block deps.
+    const s: Block = { kind: 'sdt', id: 's', props: {}, blocks: [{ kind: 'paragraph', id: 'sp', runs: [{ text: 'y' }], props: { numId: '9' } }] };
+    expect(blockDependencies(s).map(keyId).sort()).toEqual(['numbering:9', 'style:docDefaults']);
+    expect(blockSemanticRole('sdt')).toBe('group');
+  });
+
+  test('the built-in kinds all registered their dependency + semantic-role lanes', () => {
+    expect(hasLayoutMetadata('paragraph')).toBe(true);
+    expect(hasLayoutMetadata('table')).toBe(true);
+    expect(hasLayoutMetadata('sdt')).toBe(true);
+  });
+
+  test('hit ownership maps a display anchor to its owning block', () => {
+    expect(hitOwner({ paragraphId: 'p-42' })).toBe('p-42');
   });
 });
 

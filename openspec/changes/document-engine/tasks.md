@@ -278,8 +278,8 @@
 ## 8. Resolved caches, layout, display list, and outputs
 
 - [ ] 8.1 Bake off `harfbuzzjs` plus `fontkit`, Unicode bidi/UAX #14 libraries, `Intl.Segmenter`, and licensed fallbacks under `technology-selection.md`; then implement the frozen `ShapingEnvironment`, fixed-point scale/rounding, and exact glyph/cluster/advance comparator.
-- [ ] 8.2 Implement dependency-graph construction and closure expansion for style, numbering, section, story, font, image, table, field, note, and annotation keys before any cache consumer; verify instrumentation never reuses an entry whose dependency changed.
-- [ ] 8.3 Implement caches recording revision as provenance and permitting cross-revision reuse only for unchanged dependency/input fingerprints and producer version against immutable operation resource/configuration/extension/shaping snapshots; restart affected work on epoch changes.
+- [x] 8.2 Implement dependency-graph construction and closure expansion for style, numbering, section, story, font, image, table, field, note, and annotation keys before any cache consumer; verify instrumentation never reuses an entry whose dependency changed.
+- [x] 8.3 Implement caches recording revision as provenance and permitting cross-revision reuse only for unchanged dependency/input fingerprints and producer version against immutable operation resource/configuration/extension/shaping snapshots; restart affected work on epoch changes.
 - [ ] 8.4 Implement deterministic measurement for paragraphs, lists, controls, inline and floating images, fields, comments, revisions, and relationship-backed resources; verify missing or over-limit resources produce typed diagnostics or declared fallback without external fetch.
 - [ ] 8.5 Implement section, column, header, footer, note, and page-flow layout with authored geometry and dependencies; verify a header-height change invalidates every dependent section page.
 - [ ] 8.6 Implement table layout for fixed and auto widths, merged cells, row splitting, repeated headers, clipping, and closing borders; verify deterministic fragments for rows and vertical merges crossing pages.
