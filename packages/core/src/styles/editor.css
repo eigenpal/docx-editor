@@ -150,6 +150,11 @@
    * caret stays visible against the inverted page. */
   --doc-caret: #000000;
 
+  /* The paper itself. Like Word, the sheet stays white regardless of app chrome;
+   * the dark theme re-points this below and inverts the page. Declared here
+   * because a page with no background is invisible against the app background. */
+  --doc-page-bg: #ffffff;
+
   /* Document scroll container scrollbar */
   --doc-scrollbar-size: 14px;
   --doc-scrollbar-thumb: color-mix(in srgb, var(--doc-text-muted) 45%, transparent);

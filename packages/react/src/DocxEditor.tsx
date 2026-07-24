@@ -164,7 +164,10 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
       <div
         ref={scrollRef}
         data-testid="docx-editor-scroll"
-        className={`ep-one-surface ep-one-surface__viewport${className ? ` ${className}` : ''}`}
+        // `ep-root` is the library's style scope: every --doc-* token is declared
+        // under it. Without it the caret, selection highlight, and page background
+        // all resolve to nothing and paint invisibly on a white page.
+        className={`ep-root ep-one-surface ep-one-surface__viewport${className ? ` ${className}` : ''}`}
       >
         <div
           ref={pagesRef}

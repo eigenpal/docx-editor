@@ -1,6 +1,6 @@
 # Interactive paginated editing — accelerated execution tasks
 
-Progress: **48 / 114** complete.
+Progress: **49 / 114** complete.
 
 | Baseline | Count |
 | --- | --- |
@@ -134,7 +134,7 @@ insufficient.
 - [x] 6.2 Wire React host coordinates, focus, pointer capture, keyboard/native input, scroll, zoom, and frame lifecycle to the shared controller using only public contracts. **Deliverable:** `packages/react/src/DocxEditor.tsx` routes real pointer events on painted output to the interaction controller.
 - [x] 6.4 Render caret and selection overlays from interaction-frame geometry with correct clipping, transforms, writing direction, zoom, pointer transparency, and explicit handle/control exceptions. **Deliverable:** visible caret/selection on painted pages in React harness.
 - [x] M3.1 Create `e2e/react-one-surface.interaction.spec.ts`, `e2e/oneSurfaceHelpers.ts`, and `package.json` script `test:e2e:react-one-surface-interaction` (`playwright test --config e2e/editor-smoke.config.ts e2e/react-one-surface.interaction.spec.ts`) before first use. Scenarios: locate M2.3 click target → real pointer click center → type/backspace → shift-click → double-click → drag selection → keyboard nav → clipboard paste → synthetic composition → undo/redo → save/reopen. **Deliverable:** spec green via `bun run test:e2e:react-one-surface-interaction`; no `authorizeCaret` primary proof.
-- [ ] M3.2 Record manual Chrome DevTools pass in `openspec/changes/interactive-paginated-editing/evidence/m3/manual-chrome-checklist.md`: start `bun run dev:react -- --port 5273 --strictPort --force`; open `http://127.0.0.1:5273/?realAdapter=1`; follow runbook §5 M3.2 steps. Stage and commit per staging manifest.
+- [x] M3.2 Record manual Chrome DevTools pass in `openspec/changes/interactive-paginated-editing/evidence/m3/manual-chrome-checklist.md`: start `bun run dev:react -- --port 5273 --strictPort --force`; open `http://127.0.0.1:5273/?realAdapter=1`; follow runbook §5 M3.2 steps. Stage and commit per staging manifest.
 - [ ] M3-R1 Run: `bun run verify:real-adapter-smoke`; `bun run verify:real-adapter-gate`; `bun run test:e2e:react-one-surface-interaction`; `bun run typecheck`; `openspec validate interactive-paginated-editing --strict`; `git diff --cached --check`; `git diff --check`. Write results to `openspec/changes/interactive-paginated-editing/evidence/m3/verification-log.md`. Stage and commit per staging manifest. **Expected:** smoke 2/2, gate 12/12, one-surface spec all pass.
 - [ ] M3-R2 Write `openspec/changes/interactive-paginated-editing/evidence/m3/summary.md`; update `openspec/changes/interactive-paginated-editing/browser-platform-matrix.md`; stage and commit per staging manifest; allowed claim: **internal React one-surface alpha only**.
 
@@ -331,7 +331,7 @@ esac
 | **6.2** | `packages/react/src/DocxEditor.tsx`, `packages/react/src/../../engine-editor/src/adapter-event-bridge.ts`, `packages/react/test/docx-editor-one-surface.test.ts`, `openspec/changes/interactive-paginated-editing/tasks.md` (bridge element shape widened so a real `HTMLElement` satisfies it — found only when React first compiled against the M2.1 bridge) |
 | **6.4** | `packages/react/src/paintDisplay.tsx`, `packages/engine-editor/src/display-bridge.ts`, `packages/engine-editor/test/display-bridge.test.ts`, `packages/core/src/styles/editor.css`, `openspec/changes/interactive-paginated-editing/tasks.md` (collapsed-caret fix belongs in `overlaysForFrame`, not in per-adapter paint, or React and Vue would each need it) |
 | **M3.1** | `e2e/react-one-surface.interaction.spec.ts`, `e2e/oneSurfaceHelpers.ts`, `e2e/editor-smoke.config.ts`, `package.json`, `packages/engine-editor/src/adapter-event-bridge.ts`, `packages/engine-editor/test/adapter-event-bridge.test.ts`, `examples/shared/DocxAdapterHarness.tsx`, `openspec/changes/interactive-paginated-editing/tasks.md` (config `testMatch` had to accept `*.interaction.spec.ts` or the spec is never discovered; the bridge fixes are the two product bugs this spec caught)
-| **M3.2** | `openspec/changes/interactive-paginated-editing/evidence/m3/manual-chrome-checklist.md`, `openspec/changes/interactive-paginated-editing/tasks.md` |
+| **M3.2** | `openspec/changes/interactive-paginated-editing/evidence/m3/manual-chrome-checklist.md`, `packages/react/src/DocxEditor.tsx`, `packages/core/src/styles/editor.css`, `openspec/changes/interactive-paginated-editing/tasks.md` (the manual pass found the surface was outside `.ep-root` and that two tokens had no light-mode value; fixing what the checklist found beats recording it as broken) |
 | **M3-R1** | `openspec/changes/interactive-paginated-editing/evidence/m3/verification-log.md`, `openspec/changes/interactive-paginated-editing/tasks.md` |
 | **M3-R2** | `openspec/changes/interactive-paginated-editing/evidence/m3/summary.md`, `openspec/changes/interactive-paginated-editing/browser-platform-matrix.md`, `openspec/changes/interactive-paginated-editing/tasks.md` |
 | **M4.0** | `packages/react/src/toolbarCommands.ts`, `packages/react/test/toolbarCommands.test.ts`, `docs/api/docx-editor-react/index.api.md`, `openspec/changes/interactive-paginated-editing/tasks.md` |
