@@ -1,6 +1,6 @@
 # Interactive paginated editing — accelerated execution tasks
 
-Progress: **52 / 114** complete.
+Progress: **53 / 114** complete.
 
 | Baseline | Count |
 | --- | --- |
@@ -147,7 +147,7 @@ user-visible shell behavior component-by-component via `git show`; never wholesa
 checkout/revert forbidden authority modules.
 
 - [x] M4.0 Ensure PM-free toolbar prerequisites: `Editor.can(command)` before `Editor.exec(command)` for **bold**, **italic**, **underline**, **undo**, and **redo**; save button calls **`Editor.save()`** directly; run `bun run api:extract` + `bun run api:check`. Document title ownership stays in shell/example local state. **Deliverable:** typed command wiring + API snapshot.
-- [ ] M4.1 Write shell port inventory and demo-boundary record in `openspec/changes/interactive-paginated-editing/evidence/m4/inventory.md` (retired file → port decision → greenfield contract; museum Apps vs preview default). **Deliverable:** signed port/replace matrix per `design.md` D14.
+- [x] M4.1 Write shell port inventory and demo-boundary record in `openspec/changes/interactive-paginated-editing/evidence/m4/inventory.md` (retired file → port decision → greenfield contract; museum Apps vs preview default). **Deliverable:** signed port/replace matrix per `design.md` D14.
 - [ ] M4.2 Port core shell layout and page backdrop/shadow presentation from `DocxEditorShell.tsx` onto the greenfield React host. **Deliverable:** scroll host, backdrop, content scoping match retired presentation; no `PagedEditor` or retired hooks.
 - [ ] M4.3 Port document title chrome and page indicator. **Deliverable:** title in local shell state; `PageIndicator` from public editor page queries.
 - [ ] M4.4 Port horizontal and vertical rulers as **display-only** components using **`Editor.getPageGeometry()`** only; omit or disable margin/tab markers and drag controls (no section-geometry contract in this change). **Deliverable:** rulers align to painted page geometry; no margin/tab mutation paths.
