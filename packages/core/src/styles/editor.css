@@ -1382,10 +1382,22 @@
   overscroll-behavior: contain;
 }
 
+/* The page stack is the engine's content origin: the engine publishes page 0 at
+ * content (0, 0), and `measureInteractionHostMetrics` reports this element's
+ * client origin as that point.
+ *
+ * So the stack must HUG its pages. `width: max-content` makes the box exactly as
+ * wide as the widest page and `margin-inline: auto` centers the whole stack in a
+ * wider viewport — the pretty centered look, with the stack's top-left still
+ * sitting on the page's top-left. Centering pages *inside* a full-width stack
+ * (`align-items: center` on a stretched box) instead offsets every page from the
+ * stack origin, which shifts every hit test by that offset and makes clicks land
+ * on "page background". */
 .ep-one-surface__pages {
   display: flex;
   flex-direction: column;
-  align-items: center;
+  width: max-content;
+  margin-inline: auto;
   gap: var(--doc-page-gap);
   /* Zoom origin must match the engine's assumption: scale about the top-left
    * of the stack, so client→content conversion is a plain divide by zoom. */

@@ -59,10 +59,16 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
         getHfHostEl: () => null,
         getPagesContainer: () => pagesRef.current,
         getScrollContainer: () => scrollRef.current,
+        // Measured from the PAGES stack, not the scroll container. The engine
+        // publishes page boxes starting at content (0, 0), so the client origin
+        // it needs is the origin of that stack — which already accounts for
+        // scroll position and for the stack being centered in a wider viewport.
+        // Measuring the scroll container instead shifts every hit test by the
+        // centering offset and lands clicks outside page geometry.
         getInteractionHostMetrics: () => {
-          const scroll = scrollRef.current;
-          if (!scroll) return null;
-          return measureInteractionHostMetrics(scroll, propsRef.current.zoom ?? 1);
+          const pagesEl = pagesRef.current;
+          if (!pagesEl) return null;
+          return measureInteractionHostMetrics(pagesEl, propsRef.current.zoom ?? 1);
         },
         scheduleFrame: (cb) => {
           const id = requestAnimationFrame(cb);

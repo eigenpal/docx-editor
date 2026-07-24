@@ -11,6 +11,13 @@ import type { Editor } from '@docx-editor.dev/react';
 declare global {
   interface Window {
     __docxAdapterDriver?: EditorDriver;
+    /**
+     * The public `Editor` facade, exposed so browser gates can dispatch a real
+     * interaction and assert the TYPED OUTCOME, not just the visible result. A
+     * silent no-op and a typed rejection look identical on screen; the
+     * one-surface specs have to tell them apart.
+     */
+    __docxAdapterEditor?: Editor;
     __docxAdapterHarness?: {
       setZoom(zoom: number): void;
       getZoom(): number;
@@ -42,6 +49,7 @@ export function DocxAdapterHarness({
     return () => {
       cancelled = true;
       delete window.__docxAdapterDriver;
+      delete window.__docxAdapterEditor;
       delete window.__docxAdapterHarness;
     };
   }, [fixtureUrl]);
@@ -56,6 +64,7 @@ export function DocxAdapterHarness({
   const onReady = (editor: Editor): void => {
     const driver = createEditorDriver(editor);
     window.__docxAdapterDriver = driver;
+    window.__docxAdapterEditor = editor;
     setStatus(driver.editable() ? 'Editable (paragraphs)' : 'Read-only (contains tables/SDTs)');
   };
 
