@@ -470,6 +470,26 @@ describe('keyboard commands through focused PM host', () => {
     parent.remove();
   });
 
+  test('Shift-ArrowRight extends PM selection without canonical mutation', () => {
+    const { session, store, binding, p1 } = editableSession('abcde');
+    const parent = document.createElement('div');
+    document.body.append(parent);
+    const surface = mountInputSurface(session, parent);
+    authorizeFocus(surface, collapsedSelection(session, p1, 0));
+    const dom = pmDom(parent);
+    const revBefore = store.currentRevision;
+    dispatchKey(dom, 'ArrowRight', { shiftKey: true });
+    dispatchKey(dom, 'ArrowRight', { shiftKey: true });
+    dispatchKey(dom, 'ArrowRight', { shiftKey: true });
+    const pmSel = surface.getPmSelection();
+    expect(pmSel.empty).toBe(false);
+    expect(pmSel.from).toBe(pmFrom(binding, p1, 0));
+    expect(pmSel.to).toBe(pmFrom(binding, p1, 3));
+    expect(store.currentRevision).toBe(revBefore);
+    surface.destroy();
+    parent.remove();
+  });
+
   test('ArrowLeft/ArrowRight and Home/End move PM selection without canonical mutation', () => {
     const { session, store, binding, p1 } = editableSession('abcde');
     const parent = document.createElement('div');

@@ -56,6 +56,7 @@ import { toDisplayPages } from './display-bridge.ts';
 import { InteractionFrameStore, emptyInteractionFrame } from './interaction-frame.ts';
 import { hitTestPointer, deriveCaretGeometry, deriveSelectionGeometry } from './interaction-geometry.ts';
 import { contentToClient } from './coordinate-mapper.ts';
+import { execErrorFromInteraction, invalidSetSelection, semanticSelectionFromCommand, unsupportedSetSelection } from './set-selection.ts';
 
 // US Letter, 1in margins, in twips — the same geometry the read-only preview uses.
 const LAYOUT = { pageWidth: 12240, pageHeight: 15840, margin: 1440 } as const;
@@ -353,6 +354,47 @@ export function createEditor(config: EditorConfig): Editor {
 
   if (config.document !== undefined) loadSource(config.document);
 
+  function execSetSelection(command: Extract<EditorCommand, { type: 'setSelection' }>): ExecResult {
+    if (destroyed) return unsupportedSetSelection('editor is destroyed');
+    if (readOnly || sharedView || !session?.editable) {
+      return { ok: false, code: 'locked', reason: 'setSelection rejected because the editor is read-only' };
+    }
+    if (!surface?.semanticProjectionAttached) {
+      return unsupportedSetSelection('edit surface is not mounted');
+    }
+    if (activeScope.kind !== 'body') {
+      return unsupportedSetSelection('setSelection is supported for body scope only');
+    }
+    const frame = currentFrame();
+    if (frame.completeness.kind === 'pending') {
+      return { ok: false, code: 'unsupported', reason: 'layout for the current model revision is not yet published' };
+    }
+    const selection = semanticSelectionFromCommand(command, frame.id, activeScope);
+    if (!selection) return invalidSetSelection('setSelection requires semantic targets in the active scope');
+    const outcome = surface.syncSemanticSelection({ frameId: frame.id, selection });
+    if (!outcome.ok) return { ok: false, code: execErrorFromInteraction(outcome.code), reason: outcome.reason };
+    return { ok: true, changed: false };
+  }
+
+  function canSetSelection(command: Extract<EditorCommand, { type: 'setSelection' }>): CanResult {
+    if (destroyed) return { ok: false, code: 'unsupported', reason: 'editor is destroyed' };
+    if (readOnly || sharedView || !session?.editable) {
+      return { ok: false, code: 'locked', reason: 'setSelection rejected because the editor is read-only' };
+    }
+    if (!surface?.semanticProjectionAttached) {
+      return { ok: false, code: 'unsupported', reason: 'edit surface is not mounted' };
+    }
+    if (activeScope.kind !== 'body') {
+      return { ok: false, code: 'unsupported', reason: 'setSelection is supported for body scope only' };
+    }
+    if (currentFrame().completeness.kind === 'pending') {
+      return { ok: false, code: 'unsupported', reason: 'layout for the current model revision is not yet published' };
+    }
+    const selection = semanticSelectionFromCommand(command, currentFrame().id, activeScope);
+    if (!selection) return { ok: false, code: 'invalidArgs', reason: 'setSelection requires semantic targets in the active scope' };
+    return { ok: true };
+  }
+
   const editor: Editor = {
     load: loadSource,
     async save(): Promise<ArrayBuffer> {
@@ -364,12 +406,18 @@ export function createEditor(config: EditorConfig): Editor {
     },
 
     // ─── Commands / queries: wired feature-by-feature in section 5. ───────────
-    exec: (_command: EditorCommand): ExecResult => UNSUPPORTED('command execution'),
-    can: (_command: EditorCommand): CanResult => ({
-      ok: false,
-      code: 'unsupported',
-      reason: 'command execution is not wired yet (section 5)',
-    }),
+    exec(command: EditorCommand): ExecResult {
+      if (command.type === 'setSelection') return execSetSelection(command);
+      return UNSUPPORTED('command execution');
+    },
+    can(command: EditorCommand): CanResult {
+      if (command.type === 'setSelection') return canSetSelection(command);
+      return {
+        ok: false,
+        code: 'unsupported',
+        reason: 'command execution is not wired yet (section 5)',
+      };
+    },
     setActiveScope: (scope: ViewScope) => {
       activeScope = scope;
     },

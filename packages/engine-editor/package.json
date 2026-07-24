@@ -11,7 +11,11 @@
     }
   },
   "scripts": {
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "dev:a11y-harness": "vite",
+    "test:e2e:a11y-tree": "playwright test e2e/accessibility-tree.spec.ts --config playwright.config.ts --timeout=30000 --workers=1",
+    "test:lighthouse:a11y-harness": "node scripts/run-lighthouse-a11y-harness.mjs",
+    "verify:a11y-tree": "bun run test:e2e:a11y-tree && bun run test:lighthouse:a11y-harness"
   },
   "dependencies": {
     "@docx-editor.dev/core-contract": "workspace:*",
@@ -22,7 +26,10 @@
   },
   "devDependencies": {
     "@happy-dom/global-registrator": "^20.8.3",
-    "typescript": "^5.3.3"
+    "@playwright/test": "^1.60.0",
+    "fflate": "^0.8.2",
+    "typescript": "^5.3.3",
+    "vite": "^8.0.10"
   },
   "license": "Apache-2.0"
 }

@@ -67,6 +67,12 @@ jobs:
       - name: Run tests
         run: bun test
 
+      - name: Install Playwright Chromium
+        run: bunx playwright install chromium
+
+      - name: Chromium accessibility-tree gate
+        run: bun run verify:a11y-tree
+
       - name: CLA logic tests
         run: bash .github/cla/cla.test.sh
 

@@ -202,10 +202,11 @@ export function applyAtomAccessibilityLabels(
 ): void {
   for (const node of root.querySelectorAll(ATOM_EMBED_SELECTOR)) {
     if (!(node instanceof HTMLElement)) continue;
-    node.setAttribute('aria-readonly', 'true');
-    node.setAttribute('tabindex', '-1');
     node.textContent = '';
     const kind = node.getAttribute('data-kind') ?? '';
+    node.setAttribute('role', kind === 'table' ? 'img' : 'group');
+    node.setAttribute('aria-readonly', 'true');
+    node.setAttribute('tabindex', '-1');
     const label = labels?.[kind];
     if (label) node.setAttribute('aria-label', label);
     else node.removeAttribute('aria-label');

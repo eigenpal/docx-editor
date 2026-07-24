@@ -205,6 +205,18 @@ export function mountEditSurface(
     return true;
   }
 
+  function extendSelectionHorizontally(state: EditorState, dispatch: NonNullable<Parameters<typeof selectTextblockStart>[1]>, dir: -1 | 1): boolean {
+    const { selection } = state;
+    const $head = selection.$head;
+    if (!$head.parent.isTextblock) return false;
+    const innerStart = $head.start();
+    const innerEnd = innerStart + $head.parent.content.size;
+    const next = safeHorizontalPos(state.doc, $head.pos, dir, innerStart, innerEnd);
+    if (next === null) return false;
+    dispatch(state.tr.setSelection(TextSelection.create(state.doc, selection.anchor, next)).scrollIntoView());
+    return true;
+  }
+
   const plugins = interactionAuthorized
     ? [
         keymap({
@@ -214,6 +226,8 @@ export function mountEditSurface(
           'Shift-Mod-z': () => doRedo(),
           ArrowLeft: (state, dispatch) => (dispatch ? moveSelectionHorizontally(state, dispatch, -1) : false),
           ArrowRight: (state, dispatch) => (dispatch ? moveSelectionHorizontally(state, dispatch, 1) : false),
+          'Shift-ArrowLeft': (state, dispatch) => (dispatch ? extendSelectionHorizontally(state, dispatch, -1) : false),
+          'Shift-ArrowRight': (state, dispatch) => (dispatch ? extendSelectionHorizontally(state, dispatch, 1) : false),
           Home: selectTextblockStart,
           End: selectTextblockEnd,
         }),
