@@ -1,7 +1,12 @@
 // The display bridge reconciles the engine layout IR with model-derived semantic ranges.
 
 import { describe, expect, test } from 'bun:test';
-import { cssMatrix, overlaysForFrame, toDisplayPages } from '../src/display-bridge.ts';
+import {
+  cssMatrix,
+  firstEditableGlyphTarget,
+  overlaysForFrame,
+  toDisplayPages,
+} from '../src/display-bridge.ts';
 import {
   caretOverlayForTarget,
   deriveCaretGeometry,
@@ -304,5 +309,58 @@ describe('frame overlay geometry for adapters (task M2.2)', () => {
     const again = overlaysForFrame(frame);
     // Same frame in, identical boxes out: no host metrics, no zoom, no DOM.
     expect(overlays).toEqual(again);
+  });
+});
+
+describe('deterministic one-surface click target (task M2.3)', () => {
+  test('the target is the first editable body glyph with real text, not whitespace', () => {
+    const { frame } = publishFrameBundle(modelWith(['   hello world']));
+    const target = firstEditableGlyphTarget(frame);
+    expect(target).not.toBeNull();
+    const page = frame.display.find((p) => p.index === target!.pageIndex)!;
+    const item = page.items[target!.itemIndex]!;
+    expect(item.kind).toBe('text');
+    const run = (item as Extract<typeof item, { kind: 'text' }>).runs[target!.runIndex]!;
+    expect(run.text.trim().length).toBeGreaterThan(0);
+  });
+
+  test('the target reports a center point inside its own glyph box', () => {
+    const { frame } = publishFrameBundle(modelWith(['hello']));
+    const target = firstEditableGlyphTarget(frame)!;
+    expect(target.center.x).toBeGreaterThan(target.box.x);
+    expect(target.center.x).toBeLessThan(target.box.x + target.box.width);
+    expect(target.center.y).toBeGreaterThan(target.box.y);
+    expect(target.center.y).toBeLessThan(target.box.y + target.box.height);
+  });
+
+  test('a read-only first block is skipped in favour of the first editable one', () => {
+    const { frame } = publishFrameBundle(modelWith(['first', 'second']));
+    const firstBlockId = frame.semanticIndex.stories[0]!.blocks[0]!.identity.blockId;
+    const readOnlyFirst = {
+      ...frame,
+      semanticIndex: {
+        ...frame.semanticIndex,
+        stories: frame.semanticIndex.stories.map((story) => ({
+          ...story,
+          blocks: story.blocks.map((block) =>
+            block.identity.blockId === firstBlockId ? { ...block, readOnly: true } : block,
+          ),
+        })),
+      },
+    };
+    const target = firstEditableGlyphTarget(readOnlyFirst)!;
+    const page = readOnlyFirst.display.find((p) => p.index === target.pageIndex)!;
+    const item = page.items[target.itemIndex] as Extract<(typeof page.items)[number], { kind: 'text' }>;
+    expect(item.semantic.identity.blockId).not.toBe(firstBlockId);
+  });
+
+  test('an empty document has no click target rather than a fabricated one', () => {
+    const { frame } = publishFrameBundle(modelWith([""]));
+    expect(firstEditableGlyphTarget(frame)).toBeNull();
+  });
+
+  test('the target is stable across repeated calls on the same frame', () => {
+    const { frame } = publishFrameBundle(modelWith(['hello world', 'second line']));
+    expect(firstEditableGlyphTarget(frame)).toEqual(firstEditableGlyphTarget(frame));
   });
 });

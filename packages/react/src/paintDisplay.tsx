@@ -1,7 +1,13 @@
 import type { CSSProperties, ReactElement } from 'react';
 import type { DisplayItem, DisplayPage } from '@docx-editor.dev/core-contract/geometry';
-import type { FrameOverlays, OverlayBox } from '@docx-editor.dev/engine-editor';
-import { runStyle, colorToCss, borderSegLine, cssMatrix } from '@docx-editor.dev/engine-editor';
+import type { FrameOverlays, GlyphClickTarget, OverlayBox } from '@docx-editor.dev/engine-editor';
+import {
+  runStyle,
+  colorToCss,
+  borderSegLine,
+  cssMatrix,
+  ONE_SURFACE_CLICK_TARGET,
+} from '@docx-editor.dev/engine-editor';
 
 /**
  * Render a positioned `DisplayPage[]` to DOM. The adapter paints items where the
@@ -13,7 +19,11 @@ import { runStyle, colorToCss, borderSegLine, cssMatrix } from '@docx-editor.dev
  * layer above the content so a click still reaches the page and resolves through
  * the engine hit test.
  */
-export function paintDisplay(pages: readonly DisplayPage[], overlays?: FrameOverlays): ReactElement {
+export function paintDisplay(
+  pages: readonly DisplayPage[],
+  overlays?: FrameOverlays,
+  clickTarget?: GlyphClickTarget | null,
+): ReactElement {
   return (
     <>
       {pages.map((page) => (
@@ -23,7 +33,11 @@ export function paintDisplay(pages: readonly DisplayPage[], overlays?: FrameOver
           className="ep-one-surface__page"
           style={{ position: 'relative', width: page.box.width, height: page.box.height }}
         >
-          <div className="ep-one-surface__content">{page.items.flatMap((item, i) => paintItem(item, i))}</div>
+          <div className="ep-one-surface__content">
+            {page.items.flatMap((item, i) =>
+              paintItem(item, i, clickTarget?.pageIndex === page.index && clickTarget.itemIndex === i ? clickTarget : null),
+            )}
+          </div>
           {overlays ? paintOverlayLayer(page.index, overlays) : null}
         </div>
       ))}
@@ -67,7 +81,7 @@ function paintOverlayLayer(pageIndex: number, overlays: FrameOverlays): ReactEle
   );
 }
 
-function paintItem(item: DisplayItem, key: number): ReactElement[] {
+function paintItem(item: DisplayItem, key: number, clickTarget: GlyphClickTarget | null = null): ReactElement[] {
   switch (item.kind) {
     case 'text':
       // A text item may carry several runs (different styles); paint each at its own box.
@@ -78,6 +92,7 @@ function paintItem(item: DisplayItem, key: number): ReactElement[] {
             key={`${key}.${r}`}
             data-doc-from={item.docFrom}
             data-doc-to={item.docTo}
+            data-testid={clickTarget?.runIndex === r ? ONE_SURFACE_CLICK_TARGET : undefined}
             style={{
               position: 'absolute',
               left: run.box.x,

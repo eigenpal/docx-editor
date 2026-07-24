@@ -74,6 +74,29 @@ function renderTextItem(item: TextItem, doc: Document): HTMLElement {
   return span;
 }
 
+/**
+ * Public test-target attribute for the first editable body glyph
+ * (interactive-paginated-editing M2.3). Browser gates click the center of this
+ * element instead of a hardcoded page coordinate, so a layout change moves the
+ * target with the text rather than silently aiming a click at whitespace.
+ */
+export const ONE_SURFACE_CLICK_TARGET = 'one-surface-click-target';
+
+/**
+ * Stamp the click-target attribute on the first rendered text element that
+ * carries non-whitespace content. Returns that element, or null when the page
+ * has no inked glyph — never fabricates a target.
+ */
+export function markOneSurfaceClickTarget(pageEl: HTMLElement): HTMLElement | null {
+  const spans = pageEl.querySelectorAll('span[data-para]');
+  for (const span of Array.from(spans)) {
+    if ((span.textContent ?? '').trim().length === 0) continue;
+    span.setAttribute('data-testid', ONE_SURFACE_CLICK_TARGET);
+    return span as HTMLElement;
+  }
+  return null;
+}
+
 /** Paint a full layout into a container element. Returns the page elements. */
 export function renderToDom(layout: LayoutResult, container: HTMLElement, doc: Document = document): HTMLElement[] {
   const pages: HTMLElement[] = [];

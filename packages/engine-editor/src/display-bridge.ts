@@ -353,3 +353,60 @@ export function cssMatrix(transform: AffineTransform): string {
   const { a, b, c, d, tx, ty } = transform;
   return `matrix(${a}, ${b}, ${c}, ${d}, ${tx}, ${ty})`;
 }
+
+// ─── Deterministic click target (interactive-paginated-editing M2.3) ─────────
+//
+// Browser gates must click a real glyph, never a coordinate someone measured
+// once and pasted into a spec. A click on whitespace or a margin is a valid
+// no-op in the 5.6a subset, so a test that aims at one proves nothing. This
+// picks the first editable body glyph that actually has ink, and the adapters
+// stamp `data-testid="one-surface-click-target"` on exactly that element.
+
+/** Public test-target identity for the first editable body glyph. */
+export const ONE_SURFACE_CLICK_TARGET = 'one-surface-click-target' as const;
+
+export interface GlyphClickTarget {
+  readonly pageIndex: number;
+  /** Index into `DisplayPage.items`, matching the adapter's paint order. */
+  readonly itemIndex: number;
+  /** Index into the text item's `runs`, matching the adapter's paint order. */
+  readonly runIndex: number;
+  /** Page-local box of the run. */
+  readonly box: Rect;
+  /** Page-local center of the run — the point a gate should click. */
+  readonly center: { readonly x: number; readonly y: number };
+}
+
+/**
+ * Locate the first editable body glyph carrying non-whitespace text. Returns
+ * null for an empty or wholly read-only document rather than inventing a target.
+ */
+export function firstEditableGlyphTarget(frame: InteractionFrame): GlyphClickTarget | null {
+  const readOnlyBlocks = new Set<string>();
+  for (const story of frame.semanticIndex.stories) {
+    for (const block of story.blocks) {
+      if (block.readOnly) readOnlyBlocks.add(block.identity.blockId);
+    }
+  }
+
+  for (const page of [...frame.display].sort((a, b) => a.index - b.index)) {
+    for (let itemIndex = 0; itemIndex < page.items.length; itemIndex += 1) {
+      const item = page.items[itemIndex]!;
+      if (item.kind !== 'text') continue;
+      if (readOnlyBlocks.has(item.semantic.identity.blockId)) continue;
+      for (let runIndex = 0; runIndex < item.runs.length; runIndex += 1) {
+        const run = item.runs[runIndex]!;
+        if (run.text.trim().length === 0) continue;
+        if (run.box.width <= 0 || run.box.height <= 0) continue;
+        return {
+          pageIndex: page.index,
+          itemIndex,
+          runIndex,
+          box: run.box,
+          center: { x: run.box.x + run.box.width / 2, y: run.box.y + run.box.height / 2 },
+        };
+      }
+    }
+  }
+  return null;
+}

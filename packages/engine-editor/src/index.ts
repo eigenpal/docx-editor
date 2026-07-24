@@ -15,7 +15,10 @@ export {
   toDisplayPages,
   overlaysForFrame,
   cssMatrix,
+  firstEditableGlyphTarget,
+  ONE_SURFACE_CLICK_TARGET,
   type FrameOverlays,
+  type GlyphClickTarget,
   type OverlayBox,
 } from './display-bridge.ts';
 export { colorToCss, runStyle, borderSegLine, type RunStyle, type BorderLine } from './paint-style.ts';
