@@ -236,7 +236,9 @@
       "dependencies": {
         "@docx-editor.dev/agents": "workspace:*",
         "@docx-editor.dev/core": "^0.0.1",
+        "@docx-editor.dev/engine-binding": "workspace:*",
         "@docx-editor.dev/engine-core": "workspace:*",
+        "@docx-editor.dev/engine-editor": "workspace:*",
         "@docx-editor.dev/engine-layout": "workspace:*",
         "@docx-editor.dev/engine-output": "workspace:*",
         "@docx-editor.dev/i18n": "workspace:*",

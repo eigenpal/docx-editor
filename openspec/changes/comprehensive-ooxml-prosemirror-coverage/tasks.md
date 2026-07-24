@@ -41,7 +41,7 @@
 - [x] 4.5 Wire `packages/vue` to the same production `Editor` and prove prop, event, lifecycle, and imperative-handle parity.
 - [x] 4.6 Unify the display paint path so React and Vue consume every common display-item kind without deriving geometry.
 - [x] 4.7 Publish one engine-neutral `EditorDriver` covering load, editability, command, query, selection, display snapshot, save, reopen, and dispose.
-- [ ] 4.8 Migrate paired browser smoke tests from the temporary window driver to the stable driver while retaining identical scenarios for React and Vue.
+- [x] 4.8 Migrate paired browser smoke tests from the temporary window driver to the stable driver while retaining identical scenarios for React and Vue.
 - [x] 4.9 Add structured read-only diagnostics naming the blocking capability, QName/context, story, and missing pipeline lane.
 - [ ] 4.10 Retire the example-only edit mount, duplicate preview composition, contract stub path, and PM-facing E2E hooks after public adapter tests pass.
 

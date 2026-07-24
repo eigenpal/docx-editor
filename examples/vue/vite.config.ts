@@ -40,6 +40,10 @@ export default defineConfig({
             replacement: path.join(monorepoRoot, 'packages/vue/src/index.ts'),
           },
           {
+            find: '@docx-editor.dev/engine-editor',
+            replacement: path.join(monorepoRoot, 'packages/engine-editor/src/index.ts'),
+          },
+          {
             find: '@docx-editor.dev/i18n',
             replacement: path.join(monorepoRoot, 'packages/i18n/src/index.ts'),
           },

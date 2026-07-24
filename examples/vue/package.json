@@ -14,8 +14,10 @@
     "@docx-editor.dev/vue": "workspace:*",
     "vue": "^3.5.0",
     "@docx-editor.dev/engine-core": "workspace:*",
+    "@docx-editor.dev/engine-binding": "workspace:*",
     "@docx-editor.dev/engine-layout": "workspace:*",
-    "@docx-editor.dev/engine-output": "workspace:*"
+    "@docx-editor.dev/engine-output": "workspace:*",
+    "@docx-editor.dev/engine-editor": "workspace:*"
   },
   "devDependencies": {
     "@vitejs/plugin-vue": "^6.0.6",

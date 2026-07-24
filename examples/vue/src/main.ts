@@ -6,16 +6,22 @@ import { createApp } from 'vue';
 const params = new URLSearchParams(location.search);
 const enginePreview = params.get('preview') === 'engine';
 const editMode = params.get('edit') === '1';
+// `?realAdapter=1` mounts the PRODUCTION @docx-editor.dev/vue DocxEditor with DOCX bytes and exposes
+// the stable EditorDriver on window (comprehensive 4.4/4.8), matching the React harness route.
+const realAdapter = params.get('realAdapter') === '1';
 const base = import.meta.env.BASE_URL;
 // `?fixture=<name>.docx` picks which same-origin fixture the preview loads (default
 // with-tables.docx). Sanitized to a bare .docx basename so the value can never become a
 // path-traversal or cross-origin URL.
 const fixtureParam = params.get('fixture') ?? '';
-const defaultFixture = editMode ? 'editable-sample.docx' : 'with-tables.docx';
+const defaultFixture = editMode || realAdapter ? 'editable-sample.docx' : 'with-tables.docx';
 const fixtureName = /^[\w.-]+\.docx$/.test(fixtureParam) ? fixtureParam : defaultFixture;
 
 void (async () => {
-  if (editMode) {
+  if (realAdapter) {
+    const DocxAdapterHarness = (await import('../../shared/DocxAdapterHarness.vue')).default;
+    createApp(DocxAdapterHarness, { fixtureUrl: `${base}${fixtureName}` }).mount('#app');
+  } else if (editMode) {
     const DocxEditable = (await import('../../shared/DocxEditable.vue')).default;
     createApp(DocxEditable, { fixtureUrl: `${base}${fixtureName}` }).mount('#app');
   } else if (enginePreview) {
