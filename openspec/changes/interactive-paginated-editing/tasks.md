@@ -1,6 +1,6 @@
 # Interactive paginated editing — accelerated execution tasks
 
-Progress: **67 / 114** complete.
+Progress: **68 / 114** complete.
 
 | Baseline | Count |
 | --- | --- |
@@ -175,7 +175,7 @@ checkout/revert forbidden authority modules.
 Not the formal public **`interactive-paginated`** claim (that remains **8.10**).
 
 - [ ] 6.5 Create `e2e/paired-one-surface.interaction.spec.ts` and `package.json` script `test:e2e:paired-one-surface-interaction` covering React + Vue bounded-document fixture through the one-surface path (click target → type → selection → `Editor.can({ type: 'toggleMark', mark: 'bold' })` then `Editor.exec({ type: 'toggleMark', mark: 'bold' })` → clipboard → synthetic composition → undo/redo → **`Editor.save()`** reopen). **Deliverable:** paired spec green; supersedes separate React/Vue rows in CI when wired.
-- [ ] 6.6 Make split edit/preview explicitly diagnostic; remove from normal demo startup after paired preview baseline passes. **Deliverable:** default preview demo uses greenfield one-surface + shell; `?edit=1` diagnostic only.
+- [x] 6.6 Make split edit/preview explicitly diagnostic; remove from normal demo startup after paired preview baseline passes. **Deliverable:** default preview demo uses greenfield one-surface + shell; `?edit=1` diagnostic only.
 - [ ] M6.1 Update `openspec/changes/interactive-paginated-editing/browser-platform-matrix.md` and internal preview notes for **paired bounded-document internal/preview alpha**; feature-support manifest and public docs MUST remain below `interactive-paginated`. **Deliverable:** honesty rules explicit that **8.10** is first public claim.
 - [ ] M6-R1 Run: `bun run verify:real-adapter-smoke`; `bun run verify:real-adapter-gate`; `bun run verify:a11y-tree`; `bun run test:e2e:paired-one-surface-interaction`; `bun run check:parity-contract`; `bun run typecheck`; `openspec validate interactive-paginated-editing --strict`; `git diff --cached --check`; `git diff --check`. Write results to `openspec/changes/interactive-paginated-editing/evidence/m6/verification-log.md`. Stage and commit per staging manifest.
 - [ ] M6-R2 Manual paired preview checklist in `openspec/changes/interactive-paginated-editing/evidence/m6/manual-chrome-paired.md` (Vue `http://127.0.0.1:5274/?realAdapter=1` and React `http://127.0.0.1:5273/?realAdapter=1`); independent review (no Blocker/High); write `openspec/changes/interactive-paginated-editing/evidence/m6/summary.md`; mark **6.5** and **6.6** complete; stage and commit per staging manifest. **Allowed:** internal/preview alpha — **not** public `interactive-paginated`.
@@ -351,7 +351,7 @@ esac
 | **M5-R1** | `openspec/changes/interactive-paginated-editing/evidence/m5/verification-log.md`, `packages/engine-editor/src/create-editor.ts`, `scripts/check-parity-contract.mjs`, `scripts/parity/parity.contract.json`, `openspec/changes/interactive-paginated-editing/tasks.md` (the gate exposed a real input-host scroll defect, and `check:parity-contract` was measuring a pre-greenfield surface; both fixed in tracked files, neither preserve-listed API snapshot touched)
 | **M5-R2** | `openspec/changes/interactive-paginated-editing/evidence/m5/summary.md`, `openspec/changes/interactive-paginated-editing/tasks.md` |
 | **6.5** | `e2e/paired-one-surface.interaction.spec.ts`, `package.json`, `packages/engine-editor/src/display-bridge.ts`, `packages/engine-editor/test/display-bridge.test.ts`, `openspec/changes/interactive-paginated-editing/tasks.md` (the paired gate found the adapters disagreeing on initial caret visibility; fixed in the shared helper so both agree)
-| **6.6** | `examples/vite/src/App.tsx`, `examples/vue/src/App.vue`, `openspec/changes/interactive-paginated-editing/tasks.md` |
+| **6.6** | `examples/vite/src/main.tsx`, `examples/vue/src/main.ts`, `openspec/changes/interactive-paginated-editing/evidence/m4/demo-boundary.md`, `openspec/changes/interactive-paginated-editing/tasks.md` (the default switch lives in the ROUTING entrypoints, not in the museum `App` components, which stay untouched behind `?museum=1`)
 | **M6.1** | `openspec/changes/interactive-paginated-editing/browser-platform-matrix.md`, `openspec/changes/interactive-paginated-editing/tasks.md` |
 | **M6-R1** | `openspec/changes/interactive-paginated-editing/evidence/m6/verification-log.md`, `openspec/changes/interactive-paginated-editing/tasks.md` |
 | **M6-R2** | `openspec/changes/interactive-paginated-editing/evidence/m6/manual-chrome-paired.md`, `openspec/changes/interactive-paginated-editing/evidence/m6/summary.md`, `openspec/changes/interactive-paginated-editing/tasks.md` |

@@ -9,7 +9,11 @@ const enginePreview = params.get('preview') === 'engine';
 const editMode = params.get('edit') === '1';
 // `?realAdapter=1` mounts the PRODUCTION @docx-editor.dev/vue DocxEditor with DOCX bytes and exposes
 // the stable EditorDriver on window (comprehensive 4.4/4.8), matching the React harness route.
-const realAdapter = params.get('realAdapter') === '1';
+// The one-surface editor is now the DEFAULT (task 6.6): `/` mounts it with no
+// query parameter, matching React. `?realAdapter=1` still works so existing
+// gates and bookmarks keep resolving, but it is no longer required.
+const legacyMuseum = params.get('museum') === '1';
+const realAdapter = !enginePreview && !editMode && !legacyMuseum;
 const zoomParam = params.get('zoom');
 const initialZoom = zoomParam && Number.isFinite(Number(zoomParam)) && Number(zoomParam) > 0 ? Number(zoomParam) : 1;
 const base = import.meta.env.BASE_URL;
@@ -31,6 +35,8 @@ void (async () => {
     const EnginePreview = (await import('../../shared/EnginePreview.vue')).default;
     createApp(EnginePreview, { fixtureUrl: `${base}${fixtureName}` }).mount('#app');
   } else {
+    // Legacy museum App — reference only, reachable at `?museum=1`. Never the
+    // default and never a claim surface (see evidence/m4/demo-boundary.md).
     // @vite-ignore keeps vite's dependency scanner out of the full editor graph so the
     // edit/preview modes pre-bundle and load independently of it.
     const App = (await import(/* @vite-ignore */ './App.vue')).default;

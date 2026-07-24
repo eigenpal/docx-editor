@@ -5,23 +5,28 @@ about each.
 
 ## Surfaces
 
+> **Updated at task 6.6 (M6):** the one-surface editor is now the **default**.
+> `/` mounts it in both adapters with no query parameter; `?realAdapter=1` still
+> resolves so existing gates and bookmarks keep working. The museum App moved
+> behind an explicit `?museum=1`.
+
 | URL | Surface | What it is | Claim allowed |
 | --- | --- | --- | --- |
-| `?realAdapter=1` | **One-surface editor** | The production `@docx-editor.dev/react` adapter with the M4 shell. Real pointer and keyboard input on painted pages. | **Internal React alpha with shell.** The only surface any interaction claim is made about. |
+| `/` (default) and `?realAdapter=1` | **One-surface editor** | The production adapter with the M4/M5.1 shell. Real pointer and keyboard input on painted pages. | **Internal/preview alpha only.** The only surface any interaction claim is made about. |
 | `?edit=1` | **Diagnostic split edit/preview** | A visible/hidden ProseMirror pane beside a paginated preview. Proves the model pipeline commits and repaints. | **Non-conformance UI.** Explicitly **not** painted-page interaction. Task 6.6 removes it from normal startup. |
 | `?enginePreview=1` | Read-only engine preview | Paginated paint, no editing. | Paginated preview repaint only. |
-| `/` (default `App`) | Retired museum | Reference only. | **None.** Never a claim surface. |
+| `?museum=1` | Retired museum | Reference only, no longer the default. | **None.** Never a claim surface. |
 
 The routing comment in `examples/vite/src/main.tsx` states this at the branch
 itself, so the next person reading the code sees the boundary without finding
 this file.
 
-## The `/` default is unchanged in M4
+## The `/` default switched at task 6.6
 
-M4 does **not** switch the root URL. That is **M6 / task 6.6**, and it is gated
-on the paired one-surface baseline passing in *both* adapters. Vue has no
-one-surface wiring yet (6.3 / M5), so switching `/` now would make the default
-demo better in React and broken in Vue.
+M4 deliberately did **not** switch the root URL: Vue had no one-surface wiring
+yet, so switching then would have made the default demo good in React and broken
+in Vue. Task 6.6 switched it only after the paired baseline passed in both
+adapters (`test:e2e:paired-one-surface-interaction`, 7/7).
 
 ## What the shell does not add
 
