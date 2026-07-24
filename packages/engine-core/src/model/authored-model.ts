@@ -102,6 +102,10 @@ export interface Shading {
   readonly color?: string; // hex pattern color or 'auto'
   readonly themeFill?: string; // w:themeFill
   readonly themeColor?: string; // w:themeColor
+  readonly themeFillTint?: string; // w:themeFillTint
+  readonly themeFillShade?: string; // w:themeFillShade
+  readonly themeTint?: string; // w:themeTint
+  readonly themeShade?: string; // w:themeShade
 }
 
 /** A measured width (w:tblW / w:tcW / w:tblInd / w:tblCellSpacing / margins). The

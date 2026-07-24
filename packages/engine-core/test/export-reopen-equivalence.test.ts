@@ -10,7 +10,7 @@ import { parseDocx } from '../src/package/docx/read.ts';
 import { writeDocx } from '../src/package/docx/write.ts';
 import { authoredStateDigest } from '../src/package/authored-digest.ts';
 import { compareZipContainers } from '../src/package/package-comparator.ts';
-import { createEmptyModel, bodyStoryId, type PackageModel, type Story } from '../src/model/index.ts';
+import { createEmptyModel, bodyStoryId, REL_TYPES, type PackageModel, type Story, type Block } from '../src/model/index.ts';
 
 const FIX = `${import.meta.dir}/../../../e2e/fixtures`;
 
@@ -111,7 +111,7 @@ describe('created-from-scratch model: complete export reopens to an equivalent a
     expect(authoredStateDigest(reopenModeled(second))).toBe(authoredStateDigest(model));
   });
 
-  test('modeled paragraph props (styleId/numPr) + docDefaults round-trip (sol #3)', () => {
+  test('modeled paragraph styleId + run styleId/bold/italic + docDefaults round-trip (sol #3)', () => {
     const base = createEmptyModel();
     const sid = bodyStoryId(base);
     const model: PackageModel = {
@@ -121,17 +121,18 @@ describe('created-from-scratch model: complete export reopens to an equivalent a
         id: sid,
         kind: 'body',
         blocks: [
-          { kind: 'paragraph', id: 'p-1', props: { styleId: 'Heading1' }, runs: [{ text: 'Title' }] },
-          { kind: 'paragraph', id: 'p-2', props: { numId: '3', ilvl: 1 }, runs: [{ text: 'item' }] },
+          { kind: 'paragraph', id: 'p-1', props: { styleId: 'Heading1' }, runs: [{ text: 'Title', props: { styleId: 'Emphasis' } }] },
+          { kind: 'paragraph', id: 'p-2', runs: [{ text: 'b', props: { bold: true } }, { text: 'i', props: { italic: true } }] },
         ],
       }),
     };
     const reopened = reopenModeled(writeDocx(model));
-    // The style link, numbering, and document defaults all survive export + reopen.
+    // The paragraph style link, run style link/toggles, and document defaults all survive.
     expect(authoredStateDigest(reopened)).toBe(authoredStateDigest(model));
     const body = [...reopened.stories.values()].find((s) => s.kind === 'body')!;
     const p0 = body.blocks[0] as Extract<(typeof body.blocks)[number], { kind: 'paragraph' }>;
     expect(p0.props?.styleId).toBe('Heading1');
+    expect(p0.runs[0].props?.styleId).toBe('Emphasis');
     expect(reopened.docDefaults?.runProps?.bold).toBe(true);
   });
 
@@ -254,5 +255,58 @@ describe('from-scratch export fails closed on what it cannot faithfully serializ
   test('rejects a package missing the required root officeDocument relationship', () => {
     const model = withParts((m) => ({ ...m, relationships: m.relationships.filter((r) => r.ownerPart !== '/') }));
     expect(() => writeDocx(model)).toThrow(/root officeDocument relationship/);
+  });
+
+  function withBody(blocks: Block[]): PackageModel {
+    const base = createEmptyModel();
+    const sid = bodyStoryId(base);
+    return { ...base, stories: new Map(base.stories).set(sid, { id: sid, kind: 'body', blocks }) };
+  }
+
+  test('rejects paragraph numbering (numPr) — the abstract list definition is not modeled (sol #2)', () => {
+    expect(() => writeDocx(withBody([{ kind: 'paragraph', id: 'p-1', props: { numId: '3', ilvl: 1 }, runs: [{ text: 'x' }] }]))).toThrow(/numbering/);
+  });
+
+  test('rejects a model-level numbering record (no abstractNum definition emitted)', () => {
+    const base = createEmptyModel();
+    expect(() => writeDocx({ ...base, numbering: [{ numId: '1', abstractId: '0' }] })).toThrow(/numbering/);
+  });
+
+  test('rejects run underline / explicit-false toggles (not round-trippable via the parser; sol #1)', () => {
+    expect(() => writeDocx(withBody([{ kind: 'paragraph', id: 'p-1', runs: [{ text: 'u', props: { underline: true } }] }]))).toThrow(/underline/);
+    expect(() => writeDocx(withBody([{ kind: 'paragraph', id: 'p-1', runs: [{ text: 'b', props: { bold: false } }] }]))).toThrow(/explicit-false/);
+  });
+
+  test('rejects a from-scratch run carrying an rPr capsule (verbatim-injection risk; sol #3)', () => {
+    const model = withBody([{ kind: 'paragraph', id: 'p-1', runs: [{ text: 'x', rPrCapsule: '<w:rPr/><w:t>INJECTED</w:t>' }] }]);
+    expect(() => writeDocx(model)).toThrow(/capsule/);
+  });
+
+  test('rejects a main content type that falls through to the generic xml default (sol #5)', () => {
+    // Drop the /word/document.xml Override but keep the xml -> application/xml Default: the main part
+    // no longer resolves to the wordprocessingml main type.
+    const model = withParts((m) => ({
+      ...m,
+      contentTypes: { defaults: m.contentTypes.defaults, overrides: m.contentTypes.overrides.filter((o) => o.partName !== '/word/document.xml') },
+    }));
+    expect(() => writeDocx(model)).toThrow(/main document content type/);
+  });
+
+  test('rejects an EXTERNAL root officeDocument relationship (must be internal to the main part; sol #6)', () => {
+    const model = withParts((m) => ({
+      ...m,
+      relationships: m.relationships.map((r) =>
+        r.ownerPart === '/' && r.type === REL_TYPES.officeDocument ? { ...r, targetMode: 'External' as const, rawTarget: 'http://evil/doc.xml' } : r,
+      ),
+    }));
+    expect(() => writeDocx(model)).toThrow(/internal root officeDocument/);
+  });
+
+  test('rejects a non-body story present in model.stories even without a backing part (sol #7)', () => {
+    const model = withParts((m) => ({
+      ...m,
+      stories: new Map(m.stories).set('st-hdr', { id: 'st-hdr', kind: 'header', blocks: [] }),
+    }));
+    expect(() => writeDocx(model)).toThrow(/only a body story/);
   });
 });

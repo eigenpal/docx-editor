@@ -4,7 +4,7 @@
 // output uses verbatim preservation instead and only regenerates fully-captured blocks.
 
 import { escapeXmlChecked } from './sinks.ts';
-import { type Block, type ParagraphRecord, type ParagraphProps, type RunRecord, canonicalParagraphProps, registerCoreBlockCapability, blockSerialize } from '../model/index.ts';
+import { type Block, type ParagraphRecord, type ParagraphProps, type RunRecord, canonicalParagraphProps, canonicalRunProps, registerCoreBlockCapability, blockSerialize } from '../model/index.ts';
 
 /** Escape run text: validate fail-closed, then escape a literal CR as &#xD;. An unescaped CR is
  *  legal XML but silently normalized to LF by every parser's line-ending rule, so it would not
@@ -15,13 +15,16 @@ function escapeRunText(text: string): string {
 
 function runXml(run: RunRecord): string {
   // An ownership-scoped w:rPr capsule (verbatim, full run properties) is re-spliced INSTEAD of
-  // regenerating rPr from the modeled bold/italic — the capsule already holds everything (incl. b/i).
-  const props = run.props;
-  const rPr = run.rPrCapsule
-    ? run.rPrCapsule
-    : props?.bold || props?.italic
-      ? `<w:rPr>${props.bold ? '<w:b/>' : ''}${props.italic ? '<w:i/>' : ''}</w:rPr>`
-      : '';
+  // regenerating rPr from the modeled props — the capsule already holds everything.
+  if (run.rPrCapsule) return `<w:r>${run.rPrCapsule}<w:t xml:space="preserve">${escapeRunText(run.text)}</w:t></w:r>`;
+  // Regenerate rPr from the modeled props in OOXML child order (w:rStyle before the toggles). Only
+  // the round-trippable subset is emitted here; from-scratch export fails closed on anything else
+  // (underline / explicit-false), so a serialized run always reparses to the same props.
+  const props = canonicalRunProps(run.props);
+  const rStyle = props?.styleId ? `<w:rStyle w:val="${escapeXmlChecked(props.styleId, 'run styleId')}"/>` : '';
+  const b = props?.bold ? '<w:b/>' : '';
+  const i = props?.italic ? '<w:i/>' : '';
+  const rPr = rStyle || b || i ? `<w:rPr>${rStyle}${b}${i}</w:rPr>` : '';
   return `<w:r>${rPr}<w:t xml:space="preserve">${escapeRunText(run.text)}</w:t></w:r>`;
 }
 

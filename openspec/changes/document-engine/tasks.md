@@ -200,7 +200,7 @@
 - [x] 3.5 Implement QName validation, controlled prefix allocation, XML value escaping, URI validation, and capsule namespace/sibling reinsertion; validate regenerated parts and injection fixtures.
 - [x] 3.6 Implement byte-range selective patching with an exact uncompressed XML-part range comparator and a semantic ZIP-container comparator that permits recompression metadata/CRC/size/offset/directory changes; preserve every unowned XML byte and reuse eligible untouched entries.
 - [x] 3.7 Implement complete DOCX export for opened and newly created models, including required content types, relationships, media, and related stories; verify both outputs reopen to equivalent authored-state hashes.
-- [ ] 3.8 Build versioned package-part diff fixtures covering authored omission, raw lexical values, unsupported capsules, all supported stories, localized edits, relationship edits, and create-from-scratch; assert byte identity for eligible untouched parts and semantic plus XML validity for changed parts.
+- [x] 3.8 Build versioned package-part diff fixtures covering authored omission, raw lexical values, unsupported capsules, all supported stories, localized edits, relationship edits, and create-from-scratch; assert byte identity for eligible untouched parts and semantic plus XML validity for changed parts.
 - [ ] 3.9 Run one combined import-edit-selective-export-reopen adversarial fixture covering same-part unowned bytes, capsules/namespaces/siblings, omissions/raw values, relationship/content-type conflicts, unsafe URLs/CSS/XML, inert fields/macros/ActiveX/OLE/embedded objects/executable relationships, explicit scrub classification, schema validity, and zero filesystem/network access.
 
 ## 4. Semantic store, operations, anchors, and history

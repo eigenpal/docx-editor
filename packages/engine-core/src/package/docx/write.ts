@@ -9,14 +9,18 @@ import { blockXml } from '../wml-serialize.ts';
 import { W_NS } from '../wml-parse.ts';
 import { escapeXmlChecked } from '../sinks.ts';
 import { DOC_PART, emitPreservedPart } from '../wml-preserve.ts';
-import { buildRelationshipSet, type RelationshipRecord } from '../relationships.ts';
-import { buildContentTypeIndex, type ContentTypeRecords } from '../content-types.ts';
+import { buildRelationshipSet, resolveRelationship, type RelationshipRecord } from '../relationships.ts';
+import { buildContentTypeIndex, resolveContentType, type ContentTypeRecords } from '../content-types.ts';
 import {
   bodyStoryId,
   validatePreservation,
+  canonicalRunProps,
+  canonicalParagraphProps,
   REL_TYPES,
   CONTENT_TYPES,
   type PackageModel,
+  type Block,
+  type ParagraphRecord,
   type StyleRecord,
   type NumberingRecord,
   type RunProps,
@@ -130,23 +134,73 @@ function numberingXml(nums: readonly NumberingRecord[]): string {
   return `${XML_DECL}<w:numbering xmlns:w="${W_NS}">${body}</w:numbering>`;
 }
 
-/** Validate the from-scratch package invariants before writing so the output is guaranteed openable:
- *  content-type index builds (no conflicting defaults / duplicate overrides / invalid MIME), the
- *  relationship set builds (no duplicate ids per owner), the required root officeDocument
- *  relationship and the main-part content type are present. Fails closed on any violation. */
+/** Validate the from-scratch OPC package invariants before writing so the output is guaranteed
+ *  openable: the content-type index builds AND resolves the main document part to the required
+ *  wordprocessingml main type (override precedence honored), the relationship set builds, and there
+ *  is EXACTLY ONE internal root officeDocument relationship resolving to word/document.xml. */
 function assertFromScratchPackageValid(model: PackageModel): void {
   const ct = buildContentTypeIndex(model.contentTypes);
   if (!ct.ok) throw new Error(`invalid content types: ${JSON.stringify(ct.error)}`);
+  // Resolve (not merely search) so a removed override that falls through to a generic xml Default is
+  // caught — the main part MUST resolve to the wordprocessingml main type.
+  const mainCt = resolveContentType(ct.index, MAIN_PART);
+  if (!mainCt.ok || mainCt.contentType !== CONTENT_TYPES.documentMain) {
+    throw new Error('from-scratch package: /word/document.xml does not resolve to the main document content type');
+  }
   const rels = buildRelationshipSet(model.relationships);
   if (!rels.ok) throw new Error(`invalid relationships: ${JSON.stringify(rels.error)}`);
-  const rootRels = rels.byOwner.get('/') ?? [];
-  if (!rootRels.some((r) => r.type === REL_TYPES.officeDocument && r.rawTarget.replace(/^\//, '') === 'word/document.xml')) {
-    throw new Error('from-scratch package missing the required root officeDocument relationship to word/document.xml');
+  const rootOfficeDoc = (rels.byOwner.get('/') ?? []).filter((r) => r.type === REL_TYPES.officeDocument);
+  const internalToMain = rootOfficeDoc.filter((r) => {
+    const resolved = resolveRelationship(r);
+    return resolved.mode === 'Internal' && resolved.target.ok && resolved.target.partName === MAIN_PART;
+  });
+  if (internalToMain.length !== 1) {
+    throw new Error('from-scratch package: expected exactly one internal root officeDocument relationship to /word/document.xml');
   }
-  const hasMainCt =
-    model.contentTypes.overrides.some((o) => o.partName === MAIN_PART && o.contentType === CONTENT_TYPES.documentMain) ||
-    model.contentTypes.defaults.some((d) => d.extension.toLowerCase() === 'xml');
-  if (!hasMainCt) throw new Error('from-scratch package missing the main document content type');
+}
+
+/** Fail closed on any authored feature the from-scratch serializer cannot round-trip losslessly, so
+ *  whatever it DOES emit reopens to an equivalent authored state. The preservation-oriented model
+ *  does not fully represent numbering definitions, the complete run-formatting vocabulary, or
+ *  verbatim capsules from parse; rather than emit lossy/invalid OOXML, reject them here. */
+function assertFromScratchSerializable(model: PackageModel): void {
+  // Only a body story is serializable from scratch (headers/footers need section references we do
+  // not model). Validate STORIES directly — a story with no backing part would otherwise be silently
+  // dropped by the parts loop.
+  for (const story of model.stories.values()) {
+    if (story.kind !== 'body') {
+      throw new Error(`from-scratch export supports only a body story, not '${story.kind}' (section references / item wrappers not modeled)`);
+    }
+  }
+  if (model.numbering.length > 0) {
+    throw new Error('from-scratch export cannot emit numbering (abstract list definitions are not modeled) — fails closed');
+  }
+  const walk = (blocks: readonly Block[]): void => {
+    for (const b of blocks) {
+      if (b.kind !== 'paragraph') {
+        // table/sdt are preservation-only (never authored from scratch); their serializer already
+        // fails closed, but reject early with a clear message.
+        throw new Error(`from-scratch export cannot serialize a '${b.kind}' block (preservation-only)`);
+      }
+      const p = b as ParagraphRecord;
+      if (p.pPrCapsule || p.pAttrsCapsule) {
+        throw new Error('from-scratch export cannot carry a preservation capsule (capsules originate only from parse)');
+      }
+      const cp = canonicalParagraphProps(p.props); // degenerate '' numId canonicalizes to absent
+      if (cp?.numId !== undefined || cp?.ilvl !== undefined) {
+        throw new Error('from-scratch export cannot emit paragraph numbering (numPr) — the list definition is not modeled');
+      }
+      for (const r of p.runs) {
+        if (r.rPrCapsule) throw new Error('from-scratch export cannot carry a run rPr capsule (verbatim capsule injection risk; capsules come only from parse)');
+        // Only the round-trippable run subset (styleId + bold/italic presence) is serialized; an
+        // explicit-false toggle or underline would not reparse to the same value, so fail closed.
+        const rp = canonicalRunProps(r.props);
+        if (rp?.underline !== undefined) throw new Error('from-scratch export cannot emit run underline (not round-trippable via the presence-based parser)');
+        if (rp?.bold === false || rp?.italic === false) throw new Error('from-scratch export cannot emit an explicit-false run toggle (parser is presence-based)');
+      }
+    }
+  };
+  walk(model.stories.get(bodyStoryId(model))!.blocks);
 }
 
 /**
@@ -167,8 +221,10 @@ export function writeDocx(model: PackageModel): Uint8Array {
     return writeZip(entries);
   }
 
-  // From-scratch: validate OPC invariants, then build the whole package from the model.
+  // From-scratch: validate OPC invariants + fail closed on anything not faithfully serializable,
+  // then build the whole package from the model.
   assertFromScratchPackageValid(model);
+  assertFromScratchSerializable(model);
   const entries = new Map<string, Uint8Array>();
   entries.set('/[Content_Types].xml', strToU8(contentTypesXml(model.contentTypes)));
 

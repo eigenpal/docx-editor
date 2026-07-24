@@ -204,10 +204,15 @@ function parseShd(el: Extract<XmlNode, { type: 'element' }> | undefined): Shadin
     ...(attr(shd, 'w:val') !== undefined ? { val: attr(shd, 'w:val') } : {}),
     ...(attr(shd, 'w:fill') !== undefined ? { fill: attr(shd, 'w:fill') } : {}),
     ...(attr(shd, 'w:color') !== undefined ? { color: attr(shd, 'w:color') } : {}),
-    // Theme-relative shading (a table can be shaded ONLY via these) — parse them into the model so
-    // two tables differing solely by theme fill/color are distinct in the content hash.
+    // Theme-relative shading (a table can be shaded ONLY via these) — parse EVERY CT_Shd theme
+    // attribute so two tables differing solely by any theme fill/color/tint/shade are distinct in the
+    // content hash.
     ...(attr(shd, 'w:themeFill') !== undefined ? { themeFill: attr(shd, 'w:themeFill') } : {}),
     ...(attr(shd, 'w:themeColor') !== undefined ? { themeColor: attr(shd, 'w:themeColor') } : {}),
+    ...(attr(shd, 'w:themeFillTint') !== undefined ? { themeFillTint: attr(shd, 'w:themeFillTint') } : {}),
+    ...(attr(shd, 'w:themeFillShade') !== undefined ? { themeFillShade: attr(shd, 'w:themeFillShade') } : {}),
+    ...(attr(shd, 'w:themeTint') !== undefined ? { themeTint: attr(shd, 'w:themeTint') } : {}),
+    ...(attr(shd, 'w:themeShade') !== undefined ? { themeShade: attr(shd, 'w:themeShade') } : {}),
   };
   return Object.keys(out).length > 0 ? out : undefined;
 }

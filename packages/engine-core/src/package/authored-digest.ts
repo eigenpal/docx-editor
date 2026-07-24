@@ -8,7 +8,7 @@
 
 import type { PackageModel, Block, Story, RunRecord } from '../model/authored-model.ts';
 import { normalizeRuns } from '../model/normalize-runs.ts';
-import { canonicalParagraphProps } from '../model/paragraph-props.ts';
+import { canonicalParagraphProps, canonicalRunProps } from '../model/paragraph-props.ts';
 import { hashPreservableBlock } from './wml-preserve.ts';
 import { stableHash } from '../comparators/canonical.ts';
 
@@ -23,7 +23,10 @@ function blockDigest(b: Block): unknown {
     // Strip volatile ids BEFORE normalizing so adjacent identically-formatted runs merge regardless
     // of their (excluded) ids — then lexically-different-but-equivalent segmentations ([{"a"},{"b"}]
     // vs [{"ab"}]) share a digest, matching how the model treats them.
-    const idless = b.runs.map((r) => ({ text: r.text, ...(r.props ? { props: r.props } : {}), ...(r.rPrCapsule ? { rPrCapsule: r.rPrCapsule } : {}) }));
+    const idless = b.runs.map((r) => {
+      const rp = canonicalRunProps(r.props);
+      return { text: r.text, ...(rp ? { props: rp } : {}), ...(r.rPrCapsule ? { rPrCapsule: r.rPrCapsule } : {}) };
+    });
     return {
       k: 'paragraph',
       pPr: b.pPrCapsule ?? null,

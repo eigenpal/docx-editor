@@ -11,7 +11,7 @@
 import type { Block, ParagraphRecord, TableRecord, SdtRecord, TableCellRecord, TableRowRecord } from './authored-model.ts';
 import type { IdentityAllocator } from './identity.ts';
 import { normalizeRuns } from './normalize-runs.ts';
-import { canonicalParagraphProps } from './paragraph-props.ts';
+import { canonicalParagraphProps, canonicalRunProps } from './paragraph-props.ts';
 
 export type BlockKind = Block['kind']; // 'paragraph' | 'table' | 'sdt'
 
@@ -229,7 +229,10 @@ registerCoreBlockCapability({
     // id-bearing but content-equal runs still merge and the hash is id-independent) and canonicalize
     // props (so a degenerate value hashes the same absence the parser yields), keeping the hash
     // symmetric across save+reopen.
-    const idlessRuns = p.runs.map((r) => ({ text: r.text, ...(r.props ? { props: r.props } : {}), ...(r.rPrCapsule ? { rPrCapsule: r.rPrCapsule } : {}) }));
+    const idlessRuns = p.runs.map((r) => {
+      const rp = canonicalRunProps(r.props);
+      return { text: r.text, ...(rp ? { props: rp } : {}), ...(r.rPrCapsule ? { rPrCapsule: r.rPrCapsule } : {}) };
+    });
     const props = canonicalParagraphProps(p.props);
     return {
       kind: 'paragraph',
