@@ -92,14 +92,18 @@ describe('createEditor lifecycle (byte-native, PM-free host)', () => {
     editor.destroy();
   });
 
-  test('a document handle round-trips: another editor can load it', () => {
+  test('a document handle is a same-store hand-off (not a byte clone)', async () => {
     const a = createEditor({ host: makeHost().host, document: docxBytes() });
     const handle = a.getDocumentHandle();
     expect(typeof handle.revision).toBe('number');
-    // The handle is a real source: a second editor loads it without a parse error.
+    // A second editor loads the handle: it shares A's exact store, so its handle tracks the same
+    // live revision and its save reproduces the identical document.
     const { host, displays } = makeHost();
     const b = createEditor({ host, document: handle });
     expect(displays.length).toBeGreaterThan(0); // loaded + painted, no error
+    expect(b.getDocumentHandle().revision).toBe(handle.revision); // same live revision source
+    const [ba, bb] = [await a.save(), await b.save()];
+    expect(new Uint8Array(bb)).toEqual(new Uint8Array(ba)); // same store -> identical bytes
     a.destroy();
     b.destroy();
   });

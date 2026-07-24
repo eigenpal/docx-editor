@@ -12,4 +12,11 @@ export const ENGINE_EDITOR_PACKAGE = '@docx-editor.dev/engine-editor' as const;
 
 export { createEditor } from './create-editor.ts';
 export { toDisplayPages } from './display-bridge.ts';
-export { colorToCss, runStyle, borderSegBox, type RunStyle } from './paint-style.ts';
+export { colorToCss, runStyle, borderSegLine, type RunStyle, type BorderLine } from './paint-style.ts';
+export {
+  type EditorDriver,
+  type DisplaySnapshot,
+  createEditorDriver,
+  pageText,
+  displayText,
+} from './driver.ts';

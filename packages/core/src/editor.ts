@@ -75,7 +75,8 @@ export interface EditorConfig {
   locale?: string;
   zoom?: number;
   /** `'view'` opens the document read-only (no edit surface is mounted) even when it is otherwise
-   *  editable; `'edit'` (default) mounts the editing surface for a patchable document. */
+   *  editable; `'edit'` (default) mounts the editing surface for a patchable document. Sampled at
+   *  construction only — switching mode at runtime is not reactive; recreate the editor to change it. */
   mode?: 'edit' | 'view';
 }
 
@@ -305,6 +306,9 @@ export interface EditorSnapshot {
   readonly scope: EditorScope;
   readonly isLoading: boolean;
   readonly parseError: string | null;
+  /** Whether the loaded document is being edited: a patchable document opened in edit mode. A
+   *  read-only document (tables/SDTs/unpreservable) or `mode: 'view'` reports false. */
+  readonly editable: boolean;
   readonly zoom: number;
   readonly selection: DocRange | null;
   readonly formatting: RunFormatting | null;

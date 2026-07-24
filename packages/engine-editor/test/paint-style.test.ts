@@ -2,7 +2,7 @@
 // paints identically in React and Vue, hex fills are valid CSS, and borders have paintable boxes.
 
 import { describe, expect, test } from 'bun:test';
-import { colorToCss, runStyle, borderSegBox } from '../src/paint-style.ts';
+import { colorToCss, runStyle, borderSegLine } from '../src/paint-style.ts';
 import type { GlyphRun, BorderSeg } from '@docx-editor.dev/core-contract/geometry';
 
 describe('colorToCss', () => {
@@ -17,7 +17,7 @@ describe('colorToCss', () => {
 });
 
 describe('runStyle', () => {
-  test('carries the run typography the paint used to drop', () => {
+  test('carries the run typography the paint used to drop (incl. underline + strike)', () => {
     const run: GlyphRun = {
       text: 'x',
       box: { x: 0, y: 0, width: 10, height: 20 },
@@ -26,6 +26,8 @@ describe('runStyle', () => {
       color: { kind: 'hex', value: '223344' },
       bold: true,
       italic: true,
+      underline: true,
+      strike: true,
     };
     expect(runStyle(run)).toEqual({
       fontFamily: 'Georgia',
@@ -33,17 +35,22 @@ describe('runStyle', () => {
       color: '#223344',
       fontWeight: 'bold',
       fontStyle: 'italic',
+      textDecoration: 'underline line-through',
     });
+  });
+  test('no decorations -> undefined textDecoration', () => {
+    const run: GlyphRun = { text: 'x', box: { x: 0, y: 0, width: 1, height: 1 }, fontFamily: 'A', fontSizePx: 10, color: { kind: 'auto' }, bold: false, italic: false };
+    expect(runStyle(run).textDecoration).toBeUndefined();
   });
 });
 
-describe('borderSegBox', () => {
-  test('a horizontal segment becomes a 1px-tall box at its min corner', () => {
-    const seg: BorderSeg = { from: { x: 10, y: 5 }, to: { x: 110, y: 5 }, widthPx: 1, color: { kind: 'hex', value: '000000' }, style: 'single' };
-    expect(borderSegBox(seg)).toEqual({ x: 10, y: 5, width: 100, height: 1, color: '#000000' });
+describe('borderSegLine', () => {
+  test('a horizontal segment is a horizontal line honoring its CSS style', () => {
+    const seg: BorderSeg = { from: { x: 10, y: 5 }, to: { x: 110, y: 5 }, widthPx: 2, color: { kind: 'hex', value: '000000' }, style: 'dashed' };
+    expect(borderSegLine(seg)).toEqual({ x: 10, y: 5, length: 100, horizontal: true, widthPx: 2, color: '#000000', cssStyle: 'dashed' });
   });
-  test('a vertical segment becomes a 1px-wide box', () => {
+  test("a vertical 'single' segment maps to CSS 'solid'", () => {
     const seg: BorderSeg = { from: { x: 10, y: 5 }, to: { x: 10, y: 55 }, widthPx: 1, color: { kind: 'hex', value: '000000' }, style: 'single' };
-    expect(borderSegBox(seg)).toEqual({ x: 10, y: 5, width: 1, height: 50, color: '#000000' });
+    expect(borderSegLine(seg)).toEqual({ x: 10, y: 5, length: 50, horizontal: false, widthPx: 1, color: '#000000', cssStyle: 'solid' });
   });
 });

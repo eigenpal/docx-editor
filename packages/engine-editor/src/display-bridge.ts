@@ -74,26 +74,36 @@ function rectItems(it: RectItem): ContractItem[] {
 }
 
 /** Map engine-layout pages to the contract display list (twips → px, anchors → GlyphRuns + doc
- *  positions). Block ids are assigned in first-seen paragraph order, and text doc-offsets accumulate
- *  monotonically across the whole view (all pages), both threaded through this single call. */
+ *  positions). Text doc-offsets are TRUE flat offsets across the addressed view: each paragraph's
+ *  base is the cumulative length of all prior paragraphs (+1 boundary), and an item's docFrom is its
+ *  paragraph base + its within-paragraph anchor offset — correct regardless of spacing or how a
+ *  paragraph is split into layout items. Block ids follow first-seen paragraph order. */
 export function toDisplayPages(pages: readonly Page[]): DisplayPage[] {
-  const blockIds = new Map<string, number>();
-  const blockIdOf = (paragraphId: string): number => {
-    let n = blockIds.get(paragraphId);
-    if (n === undefined) {
-      n = blockIds.size;
-      blockIds.set(paragraphId, n);
+  // Pass 1: each paragraph's length (max anchor.offset + text length seen) in first-seen order.
+  const order: string[] = [];
+  const paraLen = new Map<string, number>();
+  for (const page of pages) {
+    for (const it of page.items) {
+      if (it.type !== 'text') continue;
+      if (!paraLen.has(it.anchor.paragraphId)) order.push(it.anchor.paragraphId);
+      const end = it.anchor.offset + it.text.length; // UTF-16, matching the layout's own advance
+      paraLen.set(it.anchor.paragraphId, Math.max(paraLen.get(it.anchor.paragraphId) ?? 0, end));
     }
-    return n;
-  };
-  let docOffset = 0; // running flat offset across the addressed view
+  }
+  // Cumulative flat base + block id per paragraph.
+  const base = new Map<string, number>();
+  const blockId = new Map<string, number>();
+  let acc = 0;
+  order.forEach((pid, i) => {
+    base.set(pid, acc);
+    blockId.set(pid, i);
+    acc += (paraLen.get(pid) ?? 0) + 1; // +1: a boundary slot so paragraphs never overlap
+  });
+
   const bridgeItem = (it: DisplayItem): ContractItem[] => {
     switch (it.type) {
-      case 'text': {
-        const item = textItem(it, blockIdOf(it.anchor.paragraphId), docOffset);
-        docOffset += it.text.length + 1; // + a boundary so consecutive runs never collide
-        return [item];
-      }
+      case 'text':
+        return [textItem(it, blockId.get(it.anchor.paragraphId)!, base.get(it.anchor.paragraphId)! + it.anchor.offset)];
       case 'rect':
         return rectItems(it);
     }

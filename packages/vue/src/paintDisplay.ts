@@ -1,6 +1,6 @@
 import { h, type VNode } from 'vue';
 import type { DisplayItem, DisplayPage } from '@docx-editor.dev/core-contract/geometry';
-import { runStyle, colorToCss, borderSegBox } from '@docx-editor.dev/engine-editor';
+import { runStyle, colorToCss, borderSegLine } from '@docx-editor.dev/engine-editor';
 
 /**
  * Render a positioned `DisplayPage[]` to VNodes. The adapter paints items where
@@ -41,6 +41,7 @@ function paintItem(item: DisplayItem, key: number): VNode[] {
               fontWeight: s.fontWeight,
               fontStyle: s.fontStyle,
               color: s.color,
+              textDecoration: s.textDecoration,
               whiteSpace: 'pre',
             },
           },
@@ -78,16 +79,19 @@ function paintItem(item: DisplayItem, key: number): VNode[] {
       ];
     case 'tableBorder':
       return item.segments.map((seg, s) => {
-        const b = borderSegBox(seg);
+        const b = borderSegLine(seg);
+        // A line: a zero-thickness div bordered on the running side, honoring the CSS border-style.
+        const border = `${b.widthPx}px ${b.cssStyle} ${b.color ?? 'currentColor'}`;
         return h('div', {
           key: `${key}.${s}`,
           style: {
             position: 'absolute',
             left: `${b.x}px`,
             top: `${b.y}px`,
-            width: `${b.width}px`,
-            height: `${b.height}px`,
-            backgroundColor: b.color,
+            width: `${b.horizontal ? b.length : 0}px`,
+            height: `${b.horizontal ? 0 : b.length}px`,
+            borderTop: b.horizontal ? border : undefined,
+            borderLeft: b.horizontal ? undefined : border,
           },
         });
       });

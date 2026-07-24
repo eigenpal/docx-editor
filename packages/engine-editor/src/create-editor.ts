@@ -36,9 +36,11 @@ import { toDisplayPages } from './display-bridge.ts';
 // US Letter, 1in margins, in twips — the same geometry the read-only preview uses.
 const LAYOUT = { pageWidth: 12240, pageHeight: 15840, margin: 1440 } as const;
 
-// Maps a minted DocumentHandle to a producer of its current bytes. Weak so a handle (and the bytes
-// it can regenerate) is collectable once no caller holds it — no global document leak.
-const handleBytes = new WeakMap<DocumentHandle, () => Uint8Array>();
+// Maps a minted DocumentHandle to the SESSION it addresses, so load(handle) is a same-store hand-off
+// (docx-editor-object-model: "attach ... to the same store without copying canonical state"), NOT a
+// byte clone — edits in either editor are visible in the other. Weak, so a handle + its session are
+// collectable once no caller holds the handle.
+const handleSessions = new WeakMap<DocumentHandle, DocxEditorSession>();
 
 const isArrayBuffer = (v: unknown): v is ArrayBuffer =>
   v instanceof ArrayBuffer || Object.prototype.toString.call(v) === '[object ArrayBuffer]';
@@ -46,8 +48,6 @@ const isArrayBuffer = (v: unknown): v is ArrayBuffer =>
 const isBytesView = (v: unknown): v is ArrayBufferView => ArrayBuffer.isView(v);
 
 function sourceToBytes(source: DocumentSource): Uint8Array {
-  const producer = handleBytes.get(source as DocumentHandle);
-  if (producer) return producer();
   if (isBytesView(source)) return new Uint8Array(source.buffer, source.byteOffset, source.byteLength);
   if (isArrayBuffer(source)) return new Uint8Array(source);
   throw new Error('createEditor: unrecognized DocumentSource (expected DOCX bytes or a handle from getDocumentHandle)');
@@ -63,14 +63,17 @@ const UNSUPPORTED = (what: string): ExecResult => ({
   reason: `${what} is not wired yet (section 5)`,
 });
 
-// Neutral, correctly-typed defaults for the not-yet-wired query surface: array queries must return
-// [] (a consumer may .map/.filter), text '', booleans false, else null. Keeps a consumer working
-// until the real query lands (section 5) instead of returning a wrongly-typed value that crashes.
-const ARRAY_QUERIES = new Set(['trackedChanges', 'paragraphs', 'findText', 'contentControls', 'comments', 'styles', 'variables']);
+// Neutral, correctly-typed defaults for the not-yet-wired query surface (matched to the contract
+// result types): array queries return [] (a consumer may .map/.filter), object queries {}, text '',
+// booleans false, else null. Keeps a consumer working until the real query lands (section 5) instead
+// of returning a wrongly-typed value that crashes.
+const ARRAY_QUERIES = new Set(['paragraphs', 'findText', 'contentControls', 'revisions', 'comments', 'trackedChanges']);
+const OBJECT_QUERIES = new Set(['styles', 'variables']); // StyleDefinitions / Record<string,string>
 const STRING_QUERIES = new Set(['selectedText']);
 const BOOLEAN_QUERIES = new Set(['isInsideToc']);
 function queryDefault(type: string): unknown {
   if (ARRAY_QUERIES.has(type)) return [];
+  if (OBJECT_QUERIES.has(type)) return {};
   if (STRING_QUERIES.has(type)) return '';
   if (BOOLEAN_QUERIES.has(type)) return false;
   return null;
@@ -91,6 +94,7 @@ export function createEditor(config: EditorConfig): Editor {
 
   let session: DocxEditorSession | null = null;
   let surface: EditSurface | null = null;
+  let mountedBodyEl: HTMLElement | null = null; // the element `surface` is bound to (host may swap it)
   let displayPages: readonly DisplayPage[] = [];
   let handle: DocumentHandle | null = null;
   let activeScope: ViewScope = { kind: 'body' };
@@ -106,11 +110,17 @@ export function createEditor(config: EditorConfig): Editor {
   }
 
   // Mount the edit surface if it is wanted (editable + not view-mode) and the host body element is
-  // now available — the host may return null through first render, so this is retried on relayout.
+  // available — the host may return null through first render (retried on relayout), or later return
+  // a DIFFERENT element (a conforming host need not keep it stable), in which case rebind to the new
+  // one so editing never stays attached to a detached node.
   function ensureSurface(): void {
-    if (destroyed || surface || readOnly || !session || !session.editable) return;
+    if (destroyed || readOnly || !session || !session.editable) return;
     const bodyEl = host.getBodyHostEl();
-    if (bodyEl) surface = mountEditSurface(bodyEl, session, { onModelChanged });
+    if (!bodyEl) return;
+    if (surface && bodyEl === mountedBodyEl) return; // already mounted on this element
+    if (surface) surface.destroy(); // element was replaced — rebind
+    surface = mountEditSurface(bodyEl, session, { onModelChanged });
+    mountedBodyEl = bodyEl;
   }
 
   // Called by the edit surface after every committed edit / undo / redo.
@@ -123,22 +133,29 @@ export function createEditor(config: EditorConfig): Editor {
   function loadSource(source: DocumentSource): void {
     if (destroyed) return;
     let next: DocxEditorSession;
-    try {
-      next = openDocxSession(sourceToBytes(source));
-    } catch (err) {
-      // Transactional: a parse failure keeps the current document intact.
-      emit('error', Object.assign(new Error(String((err as Error)?.message ?? err)), { code: 'parse' }));
-      return;
+    const shared = handleSessions.get(source as DocumentHandle);
+    if (shared) {
+      next = shared; // same-store hand-off from another editor's handle (no re-parse, no clone)
+    } else {
+      try {
+        next = openDocxSession(sourceToBytes(source));
+      } catch (err) {
+        // Transactional: a parse failure keeps the current document intact.
+        emit('error', Object.assign(new Error(String((err as Error)?.message ?? err)), { code: 'parse' }));
+        return;
+      }
     }
     surface?.destroy();
     surface = null;
+    mountedBodyEl = null;
     session = next;
-    // A stable handle for THIS document: live revision + a bytes producer registered weakly.
+    // A stable handle for THIS document: live revision + the SESSION registered weakly, so another
+    // editor loading the handle shares this exact store.
     const h: DocumentHandle = Object.defineProperty({} as DocumentHandle, 'revision', {
       enumerable: true,
       get: () => next.revision(),
     });
-    handleBytes.set(h, () => next.save());
+    handleSessions.set(h, next);
     handle = h;
     ensureSurface();
     relayoutAndPaint();
@@ -174,6 +191,7 @@ export function createEditor(config: EditorConfig): Editor {
       scope: activeScope,
       isLoading: false,
       parseError: null,
+      editable: !readOnly && session?.editable === true,
       zoom,
       selection: null,
       formatting: null,
@@ -207,9 +225,12 @@ export function createEditor(config: EditorConfig): Editor {
     },
     focus: (_scope?: EditorScope) => surface?.focus(),
     destroy() {
+      // Detach THIS editor's projection/host resources; an externally owned (shared-handle) session
+      // is NOT disposed here — the handle keeps the store alive for any other editor holding it.
       destroyed = true;
       surface?.destroy();
       surface = null;
+      mountedBodyEl = null;
       session = null;
       handle = null;
       displayPages = [];

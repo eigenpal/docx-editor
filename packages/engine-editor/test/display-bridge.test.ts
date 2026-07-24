@@ -24,8 +24,8 @@ describe('engine layout IR -> contract display IR', () => {
     expect(item.box).toEqual({ x: 96, y: 96, width: 20, height: 16 });
     expect(item.runs).toHaveLength(1);
     expect(item.runs[0]).toMatchObject({ text: 'hi', bold: true, italic: false, fontFamily: 'Helvetica' });
-    expect(item.docFrom).toBe(0); // running view offset starts at 0 (not the per-paragraph offset)
-    expect(item.docTo).toBe(2); // + UTF-16 length of 'hi'
+    expect(item.docFrom).toBe(5); // flat view offset = paragraph base (0, first para) + anchor.offset (5)
+    expect(item.docTo).toBe(7); // + UTF-16 length of 'hi'
     expect(item.scope).toEqual({ kind: 'body' });
   });
 

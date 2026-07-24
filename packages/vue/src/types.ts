@@ -10,6 +10,7 @@ export type EditorMode = 'edit' | 'view';
 export interface DocxEditorProps {
   /** A document to load: DOCX bytes or an existing handle. */
   document?: DocumentSource;
+  /** 'edit' (default) or 'view' (read-only). Applied at mount only — not reactive; remount to change. */
   mode?: EditorMode;
   zoom?: number;
   locale?: string;
