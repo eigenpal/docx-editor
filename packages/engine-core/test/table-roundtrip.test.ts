@@ -75,6 +75,23 @@ describe('surrounding body content stays ordered', () => {
   });
 });
 
+describe('theme-relative cell shading is modeled (so the content hash distinguishes it)', () => {
+  function tableWithShd(shd: string): PackageModel {
+    const inner = `<w:tbl><w:tr><w:tc><w:tcPr>${shd}</w:tcPr><w:p><w:r><w:t>c</w:t></w:r></w:p></w:tc></w:tr></w:tbl>`;
+    const r = parseDocx(docx(inner));
+    if (!r.ok) throw new Error('parse failed');
+    return r.model;
+  }
+  test('two tables differing ONLY by w:themeFill get different authored-state digests', () => {
+    const a = tableWithShd('<w:shd w:val="clear" w:themeFill="accent1"/>');
+    const b = tableWithShd('<w:shd w:val="clear" w:themeFill="accent2"/>');
+    expect(authoredStateDigest(a)).not.toBe(authoredStateDigest(b));
+    // A matching theme fill still hashes equal (the field is modeled, not ignored wholesale).
+    const a2 = tableWithShd('<w:shd w:val="clear" w:themeFill="accent1"/>');
+    expect(authoredStateDigest(a)).toBe(authoredStateDigest(a2));
+  });
+});
+
 describe('namespace-qualified unknown children survive save/reopen', () => {
   test('an mc: element inside a table and text between blocks round-trip verbatim', () => {
     const inner =

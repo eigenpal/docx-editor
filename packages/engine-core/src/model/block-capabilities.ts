@@ -11,6 +11,7 @@
 import type { Block, ParagraphRecord, TableRecord, SdtRecord, TableCellRecord, TableRowRecord } from './authored-model.ts';
 import type { IdentityAllocator } from './identity.ts';
 import { normalizeRuns } from './normalize-runs.ts';
+import { canonicalParagraphProps } from './paragraph-props.ts';
 
 export type BlockKind = Block['kind']; // 'paragraph' | 'table' | 'sdt'
 
@@ -224,11 +225,16 @@ registerCoreBlockCapability({
     const p = block as ParagraphRecord;
     // The pPr capsule is part of the paragraph's identity: two paragraphs with the same runs but
     // different (or absent) authored properties are distinct, and an unchanged capsule keeps a
-    // text-edited paragraph's baseline stable.
+    // text-edited paragraph's baseline stable. Strip volatile run ids BEFORE normalization (so
+    // id-bearing but content-equal runs still merge and the hash is id-independent) and canonicalize
+    // props (so a degenerate value hashes the same absence the parser yields), keeping the hash
+    // symmetric across save+reopen.
+    const idlessRuns = p.runs.map((r) => ({ text: r.text, ...(r.props ? { props: r.props } : {}), ...(r.rPrCapsule ? { rPrCapsule: r.rPrCapsule } : {}) }));
+    const props = canonicalParagraphProps(p.props);
     return {
       kind: 'paragraph',
-      runs: normalizeRuns(p.runs),
-      ...(p.props ? { props: p.props } : {}),
+      runs: normalizeRuns(idlessRuns),
+      ...(props ? { props } : {}),
       ...(p.pPrCapsule ? { pPrCapsule: p.pPrCapsule } : {}),
       ...(p.pAttrsCapsule ? { pAttrsCapsule: p.pAttrsCapsule } : {}),
     };

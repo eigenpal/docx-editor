@@ -204,6 +204,10 @@ function parseShd(el: Extract<XmlNode, { type: 'element' }> | undefined): Shadin
     ...(attr(shd, 'w:val') !== undefined ? { val: attr(shd, 'w:val') } : {}),
     ...(attr(shd, 'w:fill') !== undefined ? { fill: attr(shd, 'w:fill') } : {}),
     ...(attr(shd, 'w:color') !== undefined ? { color: attr(shd, 'w:color') } : {}),
+    // Theme-relative shading (a table can be shaded ONLY via these) — parse them into the model so
+    // two tables differing solely by theme fill/color are distinct in the content hash.
+    ...(attr(shd, 'w:themeFill') !== undefined ? { themeFill: attr(shd, 'w:themeFill') } : {}),
+    ...(attr(shd, 'w:themeColor') !== undefined ? { themeColor: attr(shd, 'w:themeColor') } : {}),
   };
   return Object.keys(out).length > 0 ? out : undefined;
 }
