@@ -8,6 +8,7 @@ import {
   type Story,
   type PartRecord,
   type StyleRecord,
+  type DocDefaults,
   type NumberingRecord,
   type IdentityState,
   type BlockRange,
@@ -21,15 +22,20 @@ export interface SerializedModel {
   readonly relationships: readonly RelationshipRecord[];
   readonly stories: readonly Story[];
   readonly styles: readonly StyleRecord[];
+  readonly docDefaults?: DocDefaults;
   readonly numbering: readonly NumberingRecord[];
   readonly parts: readonly PartRecord[];
   readonly identity: IdentityState;
+  readonly provenance?: 'created' | 'parsed';
+  readonly lossyParse?: boolean;
   /** Snapshot form of PreservationState (Maps -> ordered pair arrays). Omitted when empty. */
   readonly preservation?: {
     readonly originalParts: readonly (readonly [string, string])[];
     readonly blockRanges: readonly (readonly [string, BlockRange])[];
     /** [partName, hex-encoded bytes] for the verbatim package parts. */
     readonly packageParts?: readonly (readonly [string, string])[];
+    /** [storyId, content hash] baselines for related (non-body) stories. */
+    readonly relatedStoryHashes?: readonly (readonly [string, string])[];
   };
 }
 
@@ -41,9 +47,12 @@ export function encodeModel(model: PackageModel): SerializedModel {
     relationships: model.relationships,
     stories: [...model.stories.values()],
     styles: model.styles,
+    ...(model.docDefaults ? { docDefaults: model.docDefaults } : {}),
     numbering: model.numbering,
     parts: [...model.parts.values()],
     identity: model.identity,
+    ...(model.provenance ? { provenance: model.provenance } : {}),
+    ...(model.lossyParse ? { lossyParse: true } : {}),
     ...(hasPreservation
       ? {
           preservation: {
@@ -51,6 +60,9 @@ export function encodeModel(model: PackageModel): SerializedModel {
             blockRanges: [...p!.blockRanges],
             ...(p!.packageParts && p!.packageParts.size > 0
               ? { packageParts: [...p!.packageParts].map(([name, bytes]) => [name, bytesToHex(bytes)] as const) }
+              : {}),
+            ...(p!.relatedStoryHashes && p!.relatedStoryHashes.size > 0
+              ? { relatedStoryHashes: [...p!.relatedStoryHashes] }
               : {}),
           },
         }
@@ -69,14 +81,19 @@ function mapFromPairs<V>(pairs: readonly (readonly [string, V])[], what: string)
 }
 
 export function decodeModel(s: SerializedModel): PackageModel {
-  const base = {
+  // Carry the export-safety metadata through a snapshot round-trip too, or a restored model would
+  // lose its lossyParse / provenance / related-story baselines and re-open the guarded data-loss holes.
+  const base: PackageModel = {
     contentTypes: s.contentTypes,
     relationships: s.relationships,
     stories: new Map(s.stories.map((story) => [story.id, story])),
     styles: s.styles,
+    ...(s.docDefaults ? { docDefaults: s.docDefaults } : {}),
     numbering: s.numbering,
     parts: new Map(s.parts.map((part) => [part.partName, part])),
     identity: s.identity,
+    ...(s.provenance ? { provenance: s.provenance } : {}),
+    ...(s.lossyParse ? { lossyParse: true } : {}),
   };
   if (!s.preservation) return base;
   const originalParts = mapFromPairs(s.preservation.originalParts, 'preservation part');
@@ -84,7 +101,13 @@ export function decodeModel(s: SerializedModel): PackageModel {
   const packageParts = s.preservation.packageParts
     ? mapFromPairs(s.preservation.packageParts.map(([n, h]) => [n, hexToBytes(h)] as const), 'preservation package part')
     : undefined;
-  const model: PackageModel = { ...base, preservation: { originalParts, blockRanges, ...(packageParts ? { packageParts } : {}) } };
+  const relatedStoryHashes = s.preservation.relatedStoryHashes
+    ? mapFromPairs(s.preservation.relatedStoryHashes, 'related story hash')
+    : undefined;
+  const model: PackageModel = {
+    ...base,
+    preservation: { originalParts, blockRanges, ...(packageParts ? { packageParts } : {}), ...(relatedStoryHashes ? { relatedStoryHashes } : {}) },
+  };
   validatePreservation(model); // full validation on a restored snapshot, not just duplicates
   return model;
 }

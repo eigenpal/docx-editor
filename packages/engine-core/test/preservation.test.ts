@@ -47,6 +47,26 @@ describe('preservation encode/decode', () => {
     expect('preservation' in encoded).toBe(false);
     expect(decodeModel(encoded).preservation).toBeUndefined();
   });
+
+  test('export-safety metadata (provenance / lossyParse / docDefaults / relatedStoryHashes) survives a snapshot round-trip', () => {
+    // A snapshot must not drop the guards, or a restored model could re-open the data-loss holes.
+    const created = decodeModel(encodeModel(createEmptyModel()));
+    expect(created.provenance).toBe('created'); // stays exportable from scratch
+
+    const base = withPreservation();
+    const guarded: PackageModel = {
+      ...base,
+      provenance: 'parsed',
+      lossyParse: true,
+      docDefaults: { runProps: { bold: true } },
+      preservation: { ...base.preservation!, relatedStoryHashes: new Map([['st-hdr', 'hash-1']]) },
+    };
+    const decoded = decodeModel(encodeModel(guarded));
+    expect(decoded.provenance).toBe('parsed');
+    expect(decoded.lossyParse).toBe(true);
+    expect(decoded.docDefaults?.runProps?.bold).toBe(true);
+    expect(decoded.preservation!.relatedStoryHashes!.get('st-hdr')).toBe('hash-1');
+  });
 });
 
 describe('preservation decode validation', () => {
