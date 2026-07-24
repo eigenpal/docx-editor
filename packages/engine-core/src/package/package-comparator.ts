@@ -11,7 +11,8 @@
 // Both operate on canonical uncompressed bytes, never on the raw ZIP structure, so recompression
 // ephemera are excluded by construction (they live in the archive framing, not the entries map).
 
-import { readZip, type ZipLimits } from './zip.ts';
+import { readZip, DEFAULT_ZIP_LIMITS, type ZipLimits } from './zip.ts';
+import { partNameKey } from './opc-names.ts';
 
 /** An owned (patched) byte range within the BEFORE part, with the bytes it was replaced by. */
 export interface OwnedRange {
@@ -53,6 +54,11 @@ export function reassembleXmlPartRanges(before: Uint8Array, owned: readonly Owne
   const chunks: Uint8Array[] = [];
   let cursor = 0;
   for (const r of owned) {
+    // Non-integer offsets would be silently truncated by subarray() and mis-patch a neighbouring
+    // byte, so a fractional/NaN/unsafe range fails closed rather than replacing the wrong region.
+    if (!Number.isSafeInteger(r.start) || !Number.isSafeInteger(r.end)) {
+      throw new Error(`owned range [${r.start},${r.end}) has a non-integer offset`);
+    }
     if (!(r.start >= cursor && r.end >= r.start && r.end <= before.length)) {
       throw new Error(`owned range [${r.start},${r.end}) is out of order, overlapping, or out of bounds (cursor ${cursor}, len ${before.length})`);
     }
@@ -113,22 +119,39 @@ export function compareZipContainers(
   opts: { owned?: Iterable<string>; limits?: ZipLimits } = {},
 ): ZipContainerResult {
   const empty: string[] = [];
-  const a = readZip(before, opts.limits);
-  const b = readZip(after, opts.limits);
+  // Compression method must NOT affect equality: readZip's per-entry ratio guard would reject a
+  // legitimately highly-compressed archive (identical uncompressed bytes, different deflate level).
+  // So relax the ratio heuristic while KEEPING the absolute entry-count + total-inflated-size caps
+  // (the real zip-bomb guard). Callers may override with their own limits.
+  const limits: ZipLimits = opts.limits ?? { ...DEFAULT_ZIP_LIMITS, maxRatio: Number.MAX_SAFE_INTEGER };
+  const a = readZip(before, limits);
+  const b = readZip(after, limits);
   if (!a.ok) return { equal: false, changed: empty, added: empty, removed: empty, unownedChanged: empty, readError: `before: ${a.reason}` };
   if (!b.ok) return { equal: false, changed: empty, added: empty, removed: empty, unownedChanged: empty, readError: `after: ${b.reason}` };
 
-  const owned = new Set(opts.owned ?? []);
+  // OPC part names are ASCII-case-insensitive: `/Word/Document.xml` and `/word/document.xml` are the
+  // SAME part. Compare on the case-folded key so a mere case difference is not a false add/remove,
+  // and fold `owned` the same way. (readZip already rejects OPC-equivalent duplicates within one
+  // archive, so each folded key maps to one part per side.)
+  const byKey = (entries: ReadonlyMap<string, Uint8Array>) => {
+    const m = new Map<string, { name: string; bytes: Uint8Array }>();
+    for (const [name, bytes] of entries) m.set(partNameKey(name), { name, bytes });
+    return m;
+  };
+  const aByKey = byKey(a.entries);
+  const bByKey = byKey(b.entries);
+  const owned = new Set([...(opts.owned ?? [])].map(partNameKey));
+
   const changed: string[] = [];
   const added: string[] = [];
   const removed: string[] = [];
-  for (const [name, beforeBytes] of a.entries) {
-    const afterBytes = b.entries.get(name);
-    if (afterBytes === undefined) removed.push(name);
-    else if (!bytesEqual(beforeBytes, afterBytes)) changed.push(name);
+  for (const [key, av] of aByKey) {
+    const bv = bByKey.get(key);
+    if (bv === undefined) removed.push(av.name);
+    else if (!bytesEqual(av.bytes, bv.bytes)) changed.push(av.name);
   }
-  for (const name of b.entries.keys()) if (!a.entries.has(name)) added.push(name);
+  for (const [key, bv] of bByKey) if (!aByKey.has(key)) added.push(bv.name);
 
-  const unownedChanged = [...changed, ...added, ...removed].filter((n) => !owned.has(n)).sort();
+  const unownedChanged = [...changed, ...added, ...removed].filter((n) => !owned.has(partNameKey(n))).sort();
   return { equal: unownedChanged.length === 0, changed, added, removed, unownedChanged };
 }

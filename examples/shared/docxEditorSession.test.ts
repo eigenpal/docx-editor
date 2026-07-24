@@ -7,6 +7,7 @@
 import { describe, expect, test } from 'bun:test';
 import { zipSync, strToU8, unzipSync, strFromU8 } from 'fflate';
 import { docSchema } from '@docx-editor.dev/engine-binding';
+import { compareZipContainers } from '@docx-editor.dev/engine-core';
 import { openDocxSession } from './docxEditorSession.ts';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
@@ -341,17 +342,49 @@ describe('run-properties capsule: a styled run (font/color) is editable, rPr pre
 });
 
 describe('combined adversarial capsule fixture: import -> edit -> export -> reopen (3.9)', () => {
-  // One document exercising ALL three capsule types at once, plus an unknown package part and an
-  // untouched neighbour: a styled paragraph (w:pPr + w:p attributes + a run w:rPr), a plain
-  // paragraph, and an unsupported customXml part that must survive verbatim beside the edit.
-  const BODY =
+  // One VALID OOXML/OPC document exercising ALL three capsule types at once, plus an unknown package
+  // part and an untouched neighbour: a styled paragraph (w:pPr + w:p attributes + a run w:rPr), a
+  // plain paragraph, and an unsupported customXml part that must survive verbatim beside the edit.
+  const W14 = 'http://schemas.microsoft.com/office/word/2010/wordml';
+  const FIRST_PARA =
     '<w:p w:rsidR="00AB12" w14:paraId="1F2E3D4C"><w:pPr><w:pStyle w:val="Heading1"/><w:jc w:val="center"/></w:pPr>' +
-    '<w:r><w:rPr><w:rFonts w:ascii="Arial"/><w:color w:val="C00000"/><w:sz w:val="32"/></w:rPr><w:t>Title</w:t></w:r></w:p>' +
-    '<w:p><w:r><w:t>plain neighbour</w:t></w:r></w:p>';
-  const UNKNOWN_PART = { 'customXml/item1.xml': '<b:root xmlns:b="urn:x"><b:v>keep me</b:v></b:root>' };
+    '<w:r><w:rPr><w:rFonts w:ascii="Arial"/><w:color w:val="C00000"/><w:sz w:val="32"/></w:rPr><w:t>Title</w:t></w:r></w:p>';
+  const NEIGHBOUR = '<w:p><w:r><w:t>plain neighbour</w:t></w:r></w:p>';
+  const CUSTOM_XML = '<b:root xmlns:b="urn:x"><b:v>keep me</b:v></b:root>';
 
-  test('every capsule (pPr + attrs + rPr) survives an edit; the unknown part + neighbour stay verbatim', () => {
-    const bytes = docx(BODY, UNKNOWN_PART);
+  // A self-contained, namespace-valid package (w14 declared on the root, a content-type for the
+  // custom-xml part) so a namespace-aware validator accepts it and Word would not "repair" it.
+  function adversarialDocx(): Uint8Array {
+    return zipSync({
+      '[Content_Types].xml': strToU8(
+        '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">' +
+          '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>' +
+          '<Default Extension="xml" ContentType="application/xml"/>' +
+          '<Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>' +
+          '</Types>',
+      ),
+      '_rels/.rels': strToU8(
+        '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">' +
+          '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/>' +
+          '</Relationships>',
+      ),
+      'word/document.xml': strToU8(
+        `<w:document xmlns:w="${W}" xmlns:w14="${W14}"><w:body>${FIRST_PARA}${NEIGHBOUR}</w:body></w:document>`,
+      ),
+      'customXml/item1.xml': strToU8(CUSTOM_XML),
+    });
+  }
+
+  // Split a document.xml body into its top-level paragraph spans (each `<w:p ...>...</w:p>`), so a
+  // test can assert the COMPLETE byte span of a paragraph — proving a capsule stayed on ITS owner
+  // and did not migrate onto a sibling.
+  function paraSpans(xml: string): string[] {
+    const body = xml.slice(xml.indexOf('<w:body>') + '<w:body>'.length, xml.indexOf('</w:body>'));
+    return body.split('</w:p>').filter((s) => s.length > 0).map((s) => s + '</w:p>');
+  }
+
+  test('every capsule (pPr + attrs + rPr) survives an edit and stays on its OWNER; neighbour + unknown part verbatim', () => {
+    const bytes = adversarialDocx();
     const session = openDocxSession(bytes);
     expect(session.editable).toBe(true);
 
@@ -366,30 +399,41 @@ describe('combined adversarial capsule fixture: import -> edit -> export -> reop
 
     const saved = session.save();
     const savedXml = strFromU8(unzipSync(saved)['word/document.xml']);
-    // ALL three capsules preserved on the edited paragraph, with the new text.
-    expect(savedXml).toContain('<w:p w:rsidR="00AB12" w14:paraId="1F2E3D4C">'); // attributes
-    expect(savedXml).toContain('<w:pPr><w:pStyle w:val="Heading1"/><w:jc w:val="center"/></w:pPr>'); // properties
-    expect(savedXml).toContain('<w:rPr><w:rFonts w:ascii="Arial"/><w:color w:val="C00000"/><w:sz w:val="32"/></w:rPr>'); // run props
-    expect(savedXml).toContain('Title EDITED');
-    // The plain neighbour is untouched, and the unknown package part survives verbatim.
-    expect(savedXml).toContain('<w:p><w:r><w:t>plain neighbour</w:t></w:r></w:p>');
-    expect(strFromU8(unzipSync(saved)['customXml/item1.xml'])).toBe(UNKNOWN_PART['customXml/item1.xml']);
 
-    // Reopen: the edit survives, everything is still editable + preserved.
+    // Assert the COMPLETE span of BOTH paragraphs (ownership proof): the first paragraph carries ALL
+    // three capsules + the edited text and NOTHING from the neighbour; the neighbour is byte-exact
+    // unchanged, so a broken writer that moved a capsule onto it would fail here.
+    const spans = paraSpans(savedXml);
+    expect(spans.length).toBe(2);
+    const [p0, p1] = spans;
+    // The edited first paragraph = the original span with only "Title" -> "Title EDITED".
+    // The rPr capsule is verbatim; only the EDITED run's own w:t is re-serialized (gaining the
+    // xml:space attribute the writer emits for edited text — the documented, accepted lexical drift).
+    expect(p0).toBe(FIRST_PARA.replace('<w:t>Title</w:t>', '<w:t xml:space="preserve">Title EDITED</w:t>'));
+    expect(p1).toBe(NEIGHBOUR); // neighbour untouched, no capsule migrated onto it
+    // The unknown package part survives verbatim.
+    expect(strFromU8(unzipSync(saved)['customXml/item1.xml'])).toBe(CUSTOM_XML);
+
+    // Reopen: the edit survives, and the SAME complete spans + unknown part are still preserved
+    // (not just individual fragments — a full re-verification after a second round-trip).
     const reopened = openDocxSession(saved);
     expect(reopened.editable).toBe(true);
     expect(reopened.bodyText()).toBe('Title EDITED\nplain neighbour');
-    const reXml = strFromU8(unzipSync(reopened.save())['word/document.xml']);
-    expect(reXml).toContain('<w:color w:val="C00000"/>');
-    expect(reXml).toContain('<w:pStyle w:val="Heading1"/>');
-    expect(reXml).toContain('w14:paraId="1F2E3D4C"');
+    const reSaved = reopened.save();
+    const reSpans = paraSpans(strFromU8(unzipSync(reSaved)['word/document.xml']));
+    expect(reSpans[0]).toBe(FIRST_PARA.replace('<w:t>Title</w:t>', '<w:t xml:space="preserve">Title EDITED</w:t>'));
+    expect(reSpans[1]).toBe(NEIGHBOUR);
+    expect(strFromU8(unzipSync(reSaved)['customXml/item1.xml'])).toBe(CUSTOM_XML);
   });
 
-  test('an UNEDITED save of the combined fixture is byte-identical (full verbatim preservation)', () => {
-    const bytes = docx(BODY, UNKNOWN_PART);
+  test('an UNEDITED save preserves EVERY package part (not just the body) — semantic ZIP identity', () => {
+    const bytes = adversarialDocx();
     const session = openDocxSession(bytes);
-    // No edit: the whole package re-emits byte-for-byte.
-    expect(strFromU8(unzipSync(session.save())['word/document.xml'])).toBe(strFromU8(unzipSync(bytes)['word/document.xml']));
+    // No edit: every uncompressed part re-emits byte-for-byte, so no unowned part changed/added/
+    // removed (the customXml part is NOT silently dropped — the weakness of a body-only check).
+    const res = compareZipContainers(bytes, session.save());
+    expect(res.unownedChanged).toEqual([]);
+    expect(res.equal).toBe(true);
   });
 });
 

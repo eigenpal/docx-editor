@@ -52,6 +52,12 @@ describe('exact uncompressed XML-part range comparator (3.6)', () => {
     expect(strFromU8(reassembleXmlPartRanges(before, owned))).toBe('<w:body/>');
   });
 
+  test('a non-integer (fractional / NaN) offset fails closed, never silently truncates', () => {
+    // subarray() would truncate 0.9 -> 0 and mis-replace byte A; the guard must reject it.
+    expect(() => reassembleXmlPartRanges(before, [{ start: 0.9, end: 1.9, replacement: enc('X') }])).toThrow(/non-integer/);
+    expect(() => reassembleXmlPartRanges(before, [{ start: 0, end: Number.NaN, replacement: enc('X') }])).toThrow(/non-integer/);
+  });
+
   test('an out-of-order / overlapping / out-of-bounds owned set fails closed', () => {
     expect(() => reassembleXmlPartRanges(before, [{ start: 10, end: 5, replacement: enc('') }])).toThrow(/out of order/);
     expect(() =>
@@ -137,6 +143,29 @@ describe('semantic ZIP-container comparator (3.6)', () => {
     });
     // Whatever the writer does, it must not touch a part outside the declared owned set.
     expect(res.unownedChanged).toEqual([]);
+  });
+
+  test('OPC case-insensitive part names are the SAME part, not a false add/remove', () => {
+    // `/Word/Document.xml` and `/word/document.xml` are OPC-equivalent; a case-only difference must
+    // not be reported as one added + one removed part.
+    const lower = zipSync({ 'word/document.xml': strToU8('<x/>'), '[Content_Types].xml': strToU8(CT) });
+    const upper = zipSync({ 'Word/Document.xml': strToU8('<x/>'), '[Content_Types].xml': strToU8(CT) });
+    const res = compareZipContainers(lower, upper);
+    expect(res.added).toEqual([]);
+    expect(res.removed).toEqual([]);
+    expect(res.equal).toBe(true);
+  });
+
+  test('a highly-compressed archive is not a false mismatch (compression method excluded)', () => {
+    // Same uncompressed parts, but a large repetitive part that deflates past the reader's default
+    // 200:1 ratio guard — equality must NOT depend on that (compression method is ephemera).
+    const big = 'A'.repeat(300_000); // ~300 KB, deflates far past 200:1
+    const parts = { '[Content_Types].xml': CT, 'word/document.xml': `<w:document xmlns:w="${W}"><w:body><w:p><w:r><w:t>${big}</w:t></w:r></w:p></w:body></w:document>` };
+    const stored = zipSync(Object.fromEntries(Object.entries(parts).map(([k, v]) => [k, strToU8(v)])), { level: 0 });
+    const squeezed = zipSync(Object.fromEntries(Object.entries(parts).map(([k, v]) => [k, strToU8(v)])), { level: 9 });
+    const res = compareZipContainers(stored, squeezed);
+    expect(res.readError).toBeUndefined();
+    expect(res.equal).toBe(true);
   });
 
   test('a bounded-read rejection surfaces as readError, not a false match', () => {
