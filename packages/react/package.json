@@ -34,7 +34,8 @@
     }
   },
   "devDependencies": {
-    "@docx-editor.dev/core-contract": "workspace:*"
+    "@docx-editor.dev/core-contract": "workspace:*",
+    "@docx-editor.dev/engine-editor": "workspace:*"
   },
   "keywords": [
     "docx",

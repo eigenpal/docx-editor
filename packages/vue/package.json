@@ -49,6 +49,7 @@
   },
   "devDependencies": {
     "@docx-editor.dev/core-contract": "workspace:*",
+    "@docx-editor.dev/engine-editor": "workspace:*",
     "vite-plugin-dts": "^5.0.0"
   }
 }

@@ -1,24 +1,28 @@
-import type { Editor } from '@docx-editor.dev/core-contract/editor';
-import type { DocxDocument } from '@docx-editor.dev/core-contract/types';
+import type { Editor, DocumentSource } from '@docx-editor.dev/core-contract/editor';
 
 export type EditorMode = 'edit' | 'view';
 
 /**
  * Props for the Vue `DocxEditor`. The adapter is a thin renderer over the
- * `Editor` contract; it holds no editing-engine state of its own.
+ * `Editor` contract; it holds no editing-engine state of its own and never
+ * imports ProseMirror or OOXML feature logic.
  */
 export interface DocxEditorProps {
-  document?: DocxDocument;
+  /** A document to load: DOCX bytes or an existing handle. */
+  document?: DocumentSource;
   mode?: EditorMode;
   zoom?: number;
   locale?: string;
+  author?: string;
 }
 
 /** Exposed instance handle. Advanced callers reach the facade via `getEditor`. */
 export interface DocxEditorRef {
-  exec: Editor['exec'];
-  snapshot: Editor['snapshot'];
+  load: Editor['load'];
   save: Editor['save'];
   focus: Editor['focus'];
+  exec: Editor['exec'];
+  snapshot: Editor['snapshot'];
+  getDocumentHandle: Editor['getDocumentHandle'];
   getEditor(): Editor | null;
 }

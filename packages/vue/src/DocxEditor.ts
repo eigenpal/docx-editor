@@ -1,7 +1,7 @@
 import { defineComponent, h, onBeforeUnmount, onMounted, ref, watch, type PropType } from 'vue';
-import { createEditor, type Editor, type EditorHost } from '@docx-editor.dev/core-contract/editor';
+import type { Editor, EditorHost, DocumentSource, DocumentChange } from '@docx-editor.dev/core-contract/editor';
+import { createEditor } from '@docx-editor.dev/engine-editor';
 import type { DisplayPage } from '@docx-editor.dev/core-contract/geometry';
-import type { DocxDocument } from '@docx-editor.dev/core-contract/types';
 import { paintDisplay } from './paintDisplay';
 import type { EditorMode } from './types';
 
@@ -13,14 +13,15 @@ import type { EditorMode } from './types';
 export default defineComponent({
   name: 'DocxEditor',
   props: {
-    document: { type: Object as PropType<DocxDocument>, default: undefined },
+    document: { type: [ArrayBuffer, Uint8Array, Object] as unknown as PropType<DocumentSource>, default: undefined },
     mode: { type: String as PropType<EditorMode>, default: 'edit' },
     zoom: { type: Number, default: undefined },
     locale: { type: String, default: undefined },
+    author: { type: String, default: undefined },
   },
   emits: {
     ready: (_editor: Editor) => true,
-    change: (_document: DocxDocument) => true,
+    change: (_change: DocumentChange) => true,
   },
   setup(props, { emit, expose }) {
     const bodyEl = ref<HTMLDivElement | null>(null);
@@ -49,9 +50,10 @@ export default defineComponent({
         document: props.document,
         zoom: props.zoom,
         locale: props.locale,
+        author: props.author,
       });
       emit('ready', editor);
-      editor.on('change', (doc) => emit('change', doc));
+      editor.on('change', (change) => emit('change', change));
     });
 
     // Reload on document change (does not fire on initial value — createEditor
@@ -69,10 +71,12 @@ export default defineComponent({
     });
 
     expose({
-      exec: (...args: Parameters<Editor['exec']>) => editor!.exec(...args),
-      snapshot: (...args: Parameters<Editor['snapshot']>) => editor!.snapshot(...args),
+      load: (...args: Parameters<Editor['load']>) => editor!.load(...args),
       save: () => editor!.save(),
       focus: (...args: Parameters<Editor['focus']>) => editor!.focus(...args),
+      exec: (...args: Parameters<Editor['exec']>) => editor!.exec(...args),
+      snapshot: (...args: Parameters<Editor['snapshot']>) => editor!.snapshot(...args),
+      getDocumentHandle: () => editor!.getDocumentHandle(),
       getEditor: () => editor,
     });
 

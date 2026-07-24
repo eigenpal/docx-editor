@@ -12,7 +12,6 @@ import type {
   DocAnchor,
   DocLocation,
   DocRange,
-  DocxDocument,
   Point,
   Rect,
   Revision,
@@ -28,9 +27,45 @@ export type * from './types';
 
 const NOT_IMPLEMENTED = 'contract-only stub: no implementation';
 
+/**
+ * An opaque handle to a loaded document — its stable identity and current
+ * revision. The canonical authored state is the engine's `PackageModel`, NOT a
+ * simplified tree; advanced automation (`DocxEditor.run(handle, …)`) addresses a
+ * document through this handle rather than a serialized structure. Kept
+ * deliberately minimal and open so it can carry more identity later without a
+ * breaking change.
+ */
+export interface DocumentHandle {
+  /** The document's current store revision. */
+  readonly revision: number;
+}
+
+/**
+ * What `createEditor`/`load` accept as a document: raw DOCX bytes, or an existing
+ * in-memory `DocumentHandle` (shared/handed off). The engine is byte-native
+ * (`PackageModel` is canonical); there is intentionally no structured-tree input,
+ * which would be lossy against the canonical package.
+ */
+export type DocumentSource = ArrayBuffer | Uint8Array | DocumentHandle;
+
+/**
+ * The payload of the `change` event / `onChange`. It carries revision + identity
+ * deltas, NOT serialized bytes: serializing a whole DOCX on every keystroke would
+ * be prohibitive for large documents. Call `save()` to get bytes on demand.
+ */
+export interface DocumentChange {
+  /** The store revision after this change. */
+  readonly revision: number;
+  /** Block ids created/deleted/edited by this change, when the engine reports them. */
+  readonly created?: readonly string[];
+  readonly deleted?: readonly string[];
+  readonly dirty?: readonly string[];
+}
+
 export interface EditorConfig {
   host: EditorHost;
-  document?: DocxDocument;
+  /** A document to load at construction: DOCX bytes or an existing handle. */
+  document?: DocumentSource;
   /** Defaults to `createStarterKit()` from `core/plugin`. */
   extensions?: readonly Extension[];
   /** Ambient author for authored commands (comments, tracked changes), sourced
@@ -114,9 +149,13 @@ export interface PendingScrollRestore {
 }
 
 export interface Editor {
-  load(document: DocxDocument): void;
+  /** Load a new document (DOCX bytes or a handle), replacing the current one. */
+  load(document: DocumentSource): void;
+  /** Serialize the current canonical document to DOCX bytes — on demand, never per keystroke. */
   save(): Promise<ArrayBuffer>;
-  getDocument(): DocxDocument;
+  /** An opaque handle to the current document (identity + revision). Replaces the former
+   *  structured `getDocument()`; the canonical state is the engine `PackageModel`, not a tree. */
+  getDocumentHandle(): DocumentHandle;
 
   exec(command: EditorCommand, options?: { scope?: EditorScope }): ExecResult;
   /** Dry run: reports whether `exec` would apply. Never reports `changed`. */
@@ -282,12 +321,19 @@ export interface EditorError extends Error {
 }
 
 export interface EditorEvents {
-  change: (document: DocxDocument) => void;
+  change: (change: DocumentChange) => void;
   selectionChange: (snapshot: EditorSnapshot) => void;
   display: (pages: readonly DisplayPage[]) => void;
   error: (error: EditorError) => void;
 }
 
+/**
+ * CONTRACT-ONLY stub. The production implementation lives in
+ * `@docx-editor.dev/engine-editor` (it composes the engine packages, which this
+ * declaration package may not import) and is what the React/Vue adapters call;
+ * it becomes `@docx-editor.dev/core/editor` at the section 7/14 migration. This
+ * throwing stub only exists so the contract package typechecks standalone.
+ */
 export function createEditor(_config: EditorConfig): Editor {
   throw new Error(NOT_IMPLEMENTED);
 }

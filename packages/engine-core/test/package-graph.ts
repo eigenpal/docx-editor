@@ -40,6 +40,7 @@ export const LAYOUT = '@docx-editor.dev/engine-layout';
 export const OUTPUT = '@docx-editor.dev/engine-output';
 export const SERVER = '@docx-editor.dev/engine-server';
 export const CLIENTS = '@docx-editor.dev/engine-clients';
+export const EDITOR = '@docx-editor.dev/engine-editor';
 
 export const PACKAGE_RULES: readonly PackageRule[] = [
   {
@@ -92,6 +93,17 @@ export const PACKAGE_RULES: readonly PackageRule[] = [
     internalDeps: [CORE],
     domAllowed: false,
     forbidden: [PROSEMIRROR, YJS, PDF, TRANSPORT, DOM_LIB],
+  },
+  {
+    dir: 'engine-editor',
+    name: EDITOR,
+    // The browser editor composition root: it may compose binding (PM-free surface), layout, and
+    // output. It is the ONLY package above the binding/layout/output trio.
+    internalDeps: [CORE, BINDING, LAYOUT, OUTPUT],
+    domAllowed: true,
+    // The facade is PM-FREE: it composes engine-binding's PM-free mount, never importing PM
+    // directly. It also does not touch Yjs, transport, or pdf-lib directly (output owns PDF).
+    forbidden: [PROSEMIRROR, YJS, PDF, TRANSPORT],
   },
 ];
 

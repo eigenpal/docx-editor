@@ -15,6 +15,7 @@
         "@happy-dom/global-registrator": "^20.8.3",
         "@microsoft/api-extractor": "^7.50.0",
         "@microsoft/tsdoc": "^0.16.0",
+        "@playwright/test": "^1.60.0",
         "@testing-library/react": "^16.0.0",
         "@types/bun": "^1.0.0",
         "@types/react": "19.2.17",
@@ -290,6 +291,11 @@
       "version": "0.0.0",
       "dependencies": {
         "@docx-editor.dev/engine-core": "workspace:*",
+        "prosemirror-commands": "^1.7.1",
+        "prosemirror-keymap": "^1.2.3",
+        "prosemirror-model": "^1.25.4",
+        "prosemirror-state": "^1.4.4",
+        "prosemirror-view": "^1.41.8",
       },
       "devDependencies": {
         "typescript": "^5.3.3",
@@ -311,6 +317,20 @@
       "dependencies": {
         "fast-xml-parser": "^4.5.0",
         "fflate": "^0.8.2",
+      },
+      "devDependencies": {
+        "typescript": "^5.3.3",
+      },
+    },
+    "packages/engine-editor": {
+      "name": "@docx-editor.dev/engine-editor",
+      "version": "0.0.0",
+      "dependencies": {
+        "@docx-editor.dev/core-contract": "workspace:*",
+        "@docx-editor.dev/engine-binding": "workspace:*",
+        "@docx-editor.dev/engine-core": "workspace:*",
+        "@docx-editor.dev/engine-layout": "workspace:*",
+        "@docx-editor.dev/engine-output": "workspace:*",
       },
       "devDependencies": {
         "typescript": "^5.3.3",
@@ -401,6 +421,7 @@
       "version": "0.0.1",
       "devDependencies": {
         "@docx-editor.dev/core-contract": "workspace:*",
+        "@docx-editor.dev/engine-editor": "workspace:*",
       },
       "peerDependencies": {
         "react": "^18.0.0 || ^19.0.0",
@@ -416,6 +437,7 @@
       "version": "0.0.1",
       "devDependencies": {
         "@docx-editor.dev/core-contract": "workspace:*",
+        "@docx-editor.dev/engine-editor": "workspace:*",
         "vite-plugin-dts": "^5.0.0",
       },
       "peerDependencies": {
@@ -579,6 +601,8 @@
     "@docx-editor.dev/engine-clients": ["@docx-editor.dev/engine-clients@workspace:packages/engine-clients"],
 
     "@docx-editor.dev/engine-core": ["@docx-editor.dev/engine-core@workspace:packages/engine-core"],
+
+    "@docx-editor.dev/engine-editor": ["@docx-editor.dev/engine-editor@workspace:packages/engine-editor"],
 
     "@docx-editor.dev/engine-layout": ["@docx-editor.dev/engine-layout@workspace:packages/engine-layout"],
 
@@ -995,6 +1019,8 @@
     "@pdf-lib/upng": ["@pdf-lib/upng@1.0.1", "", { "dependencies": { "pako": "^1.0.10" } }, "sha512-dQK2FUMQtowVP00mtIksrlZhdFXQZPC+taih1q4CvPZ5vqdxR/LKBaFg0oAfzd1GlHZXXSPdQfzQnt+ViGvEIQ=="],
 
     "@pkgjs/parseargs": ["@pkgjs/parseargs@0.11.0", "", {}, "sha512-+1VkjdD0QBLPodGrJUeqarH8VAIvQODIbwh9XpP5Syisf7YoQgsJKPNFoqqLQlu+VQ/tVSshMR6loPMn8U+dPg=="],
+
+    "@playwright/test": ["@playwright/test@1.61.1", "", { "dependencies": { "playwright": "1.61.1" }, "bin": { "playwright": "cli.js" } }, "sha512-8nKv6+0RJSL9FE4jYOEGXnPeM/Hg12qZpmqzZjRh3qM0Y7c3z1mrOTfFLids72RDQYVh9WpLEfR5WdpNX4fkig=="],
 
     "@polka/url": ["@polka/url@1.0.0-next.29", "", {}, "sha512-wwQAWhWSuHaag8c4q/KN/vCoeOJYshAIvMQwD4GpSb3OiZklFfvAgmj0VCBBImRpuF/aFgIRzllXlVX93Jevww=="],
 
@@ -2666,6 +2692,10 @@
 
     "pkg-types": ["pkg-types@2.3.1", "", { "dependencies": { "confbox": "^0.2.4", "exsolve": "^1.0.8", "pathe": "^2.0.3" } }, "sha512-y+ichcgc2LrADuhLNAx8DFjVfgz91pRxfZdI3UDhxHvcVEZsenLO+7XaU5vOp0u/7V/wZ+plyuQxtrDlZJ+yeg=="],
 
+    "playwright": ["playwright@1.61.1", "", { "dependencies": { "playwright-core": "1.61.1" }, "optionalDependencies": { "fsevents": "2.3.2" }, "bin": { "playwright": "cli.js" } }, "sha512-DWnY5o3YbLWK4GovuAVwpqL+1VwGNdUGrRr++8j8PtQQzvAVZUIMjKQ90fY689sEJZJBbZVw1rXaOKSTitkzPQ=="],
+
+    "playwright-core": ["playwright-core@1.61.1", "", { "bin": { "playwright-core": "cli.js" } }, "sha512-h7Qlt6m4REp25qvIdvbDtVmD4LqVXfpRxhORv9L0jzETM05p4fuPJ3dKyuSXQxDSbXnmS79HAgi9589lGSpLkg=="],
+
     "possible-typed-array-names": ["possible-typed-array-names@1.1.0", "", {}, "sha512-/+5VFTchJDoVj3bhoqi6UeymcD00DAwb1nJwamzPvHEszJ4FpF6SNNbUbOS8yI56qHzdV8eK0qEfOSiodkTdxg=="],
 
     "postcss": ["postcss@8.5.13", "", { "dependencies": { "nanoid": "^3.3.11", "picocolors": "^1.1.1", "source-map-js": "^1.2.1" } }, "sha512-qif0+jGGZoLWdHey3UFHHWP0H7Gbmsk8T5VEqyYFbWqPr1XqvLGBbk/sl8V5exGmcYJklJOhOQq1pV9IcsiFag=="],
@@ -4029,6 +4059,8 @@
     "periscopic/is-reference": ["is-reference@3.0.3", "", { "dependencies": { "@types/estree": "^1.0.6" } }, "sha512-ixkJoqQvAP88E6wLydLGGqCJsrFUnqoH6HnaczB8XmDH1oaWU+xxdptvikTgaEhtZ53Ky6YXiBuUI2WXLMCwjw=="],
 
     "pizzip/pako": ["pako@2.1.0", "", {}, "sha512-w+eufiZ1WuJYgPXbV/PO3NCMEc3xqylkKHzp8bxp1uW4qaSNQUkwmLLEc3kKsfz8lpV1F8Ht3U1Cm+9Srog2ug=="],
+
+    "playwright/fsevents": ["fsevents@2.3.2", "", { "os": "darwin" }, "sha512-xiqMQR4xAeHTuB9uWm+fFRcIOgKBMiOBP+eXiyT7jsgVCq1bkVygt00oASowB7EdtpOHaaPgKt812P9ab+DDKA=="],
 
     "postcss-calc/postcss-selector-parser": ["postcss-selector-parser@7.1.1", "", { "dependencies": { "cssesc": "^3.0.0", "util-deprecate": "^1.0.2" } }, "sha512-orRsuYpJVw8LdAwqqLykBj9ecS5/cRHlI5+nvTo8LcCKmzDmqVORXtOIYEEQuL9D4BxtA1lm5isAqzQZCoQ6Eg=="],
 

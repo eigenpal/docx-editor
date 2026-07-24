@@ -1,5 +1,6 @@
 import { forwardRef, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react';
-import { createEditor, type Editor, type EditorHost } from '@docx-editor.dev/core-contract/editor';
+import type { Editor, EditorHost } from '@docx-editor.dev/core-contract/editor';
+import { createEditor } from '@docx-editor.dev/engine-editor';
 import type { DisplayPage } from '@docx-editor.dev/core-contract/geometry';
 import { paintDisplay } from './paintDisplay';
 import type { DocxEditorProps, DocxEditorRef } from './types';
@@ -44,10 +45,10 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
     // teardown, so undo/selection/scroll survive parent re-renders.
     useEffect(() => {
       const p = propsRef.current;
-      const editor = createEditor({ host, document: p.document, zoom: p.zoom, locale: p.locale });
+      const editor = createEditor({ host, document: p.document, zoom: p.zoom, locale: p.locale, author: p.author });
       editorRef.current = editor;
       propsRef.current.onReady?.(editor);
-      const off = editor.on('change', (d) => propsRef.current.onChange?.(d));
+      const off = editor.on('change', (c) => propsRef.current.onChange?.(c));
       return () => {
         off();
         editor.destroy();
@@ -69,10 +70,12 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
     useImperativeHandle(
       ref,
       () => ({
-        exec: (command, options) => editorRef.current!.exec(command, options),
-        snapshot: (options) => editorRef.current!.snapshot(options),
+        load: (document) => editorRef.current!.load(document),
         save: () => editorRef.current!.save(),
         focus: (scope) => editorRef.current!.focus(scope),
+        exec: (command, options) => editorRef.current!.exec(command, options),
+        snapshot: (options) => editorRef.current!.snapshot(options),
+        getDocumentHandle: () => editorRef.current!.getDocumentHandle(),
         getEditor: () => editorRef.current,
       }),
       []

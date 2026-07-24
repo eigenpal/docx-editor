@@ -31,6 +31,7 @@ does not collide with the `@docx-editor.dev/core` alias adapters resolve today.
 | `@docx-editor.dev/engine-output` | DOM paint, print, native PDF, a11y projection, hit-testing over `DisplayItem[]` | core, layout | yes |
 | `@docx-editor.dev/engine-server` | Addressable-sync hub, versioned RPC, headless parse/edit/layout/save/export, tenant isolation, streaming | core, sync, layout, output | no |
 | `@docx-editor.dev/engine-clients` | Generated language clients (schema bindings only) | core | no |
+| `@docx-editor.dev/engine-editor` | Browser editor composition root: the production `createEditor`; composes the PM-free binding surface + layout + display into the PM-free `Editor`/`EditorHost` contract. Becomes `@docx-editor.dev/core/editor` at migration | core, binding, layout, output | yes |
 
 ## Dependency rules (the DAG)
 
@@ -41,8 +42,15 @@ engine-core            (base; depends on nothing internal)
   ├── engine-layout    (+ shaping/font/unicode libs)
   │     └── engine-output   (+ pdf-lib/pdfkit; DOM backends)
   ├── engine-server    (composes sync + layout + output; + transport)
-  └── engine-clients   (generated)
+  ├── engine-clients   (generated)
+  └── engine-editor    (composes binding + layout + output; PM-free browser editor)
 ```
+
+`engine-editor` is the only package above the binding/layout/output trio. It is
+PM-free: it composes `engine-binding`'s PM-free edit surface and never imports
+`prosemirror-*` directly, so ProseMirror stays contained to `engine-binding`.
+`engine-server` deliberately does NOT depend on `engine-binding`, so no headless
+/ server path transitively pulls in ProseMirror.
 
 Edges point "downward" only: no package imports a sibling not listed in its
 `internalDeps`, so `engine-core` can never depend on `engine-sync`,

@@ -1,30 +1,33 @@
-import type { Editor } from '@docx-editor.dev/core-contract/editor';
-import type { DocxDocument } from '@docx-editor.dev/core-contract/types';
+import type { Editor, DocumentSource, DocumentChange } from '@docx-editor.dev/core-contract/editor';
 
 export type EditorMode = 'edit' | 'view';
 
 /**
  * Props for the React `DocxEditor`. The adapter is a thin renderer over the
- * `Editor` contract; it holds no editing-engine state of its own.
+ * `Editor` contract; it holds no editing-engine state of its own and never
+ * imports ProseMirror or OOXML feature logic.
  */
 export interface DocxEditorProps {
-  /** A parsed document to load. */
-  document?: DocxDocument;
+  /** A document to load: DOCX bytes or an existing handle. */
+  document?: DocumentSource;
   mode?: EditorMode;
   zoom?: number;
   locale?: string;
+  author?: string;
   className?: string;
   /** Fired after the underlying `Editor` is created. */
   onReady?: (editor: Editor) => void;
-  /** Fired when the document changes. */
-  onChange?: (document: DocxDocument) => void;
+  /** Fired when the document changes (revision + identity deltas, not bytes). */
+  onChange?: (change: DocumentChange) => void;
 }
 
 /** Imperative handle. Advanced callers reach the full facade via `getEditor`. */
 export interface DocxEditorRef {
-  exec: Editor['exec'];
-  snapshot: Editor['snapshot'];
+  load: Editor['load'];
   save: Editor['save'];
   focus: Editor['focus'];
+  exec: Editor['exec'];
+  snapshot: Editor['snapshot'];
+  getDocumentHandle: Editor['getDocumentHandle'];
   getEditor(): Editor | null;
 }
