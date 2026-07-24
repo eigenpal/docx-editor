@@ -70,6 +70,16 @@ export {
 } from './docx/read.ts';
 export { isRunPropertiesCapsule } from './preservation-capsule.ts';
 export { writeDocx, documentXml } from './docx/write.ts';
+// Package-level fidelity comparators (3.6): exact uncompressed XML-part range comparator +
+// semantic ZIP-container comparator (permits recompression ephemera, flags unowned changes).
+export {
+  compareXmlPartRanges,
+  reassembleXmlPartRanges,
+  compareZipContainers,
+  type OwnedRange,
+  type XmlPartRangeResult,
+  type ZipContainerResult,
+} from './package-comparator.ts';
 // Feature-lane contract: register a new top-level block kind's element parser without editing a
 // central switch. The parse registry now lives in the unified block-capability module (model),
 // re-exported here for the package-facing feature-lane API.

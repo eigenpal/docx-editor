@@ -340,6 +340,59 @@ describe('run-properties capsule: a styled run (font/color) is editable, rPr pre
   });
 });
 
+describe('combined adversarial capsule fixture: import -> edit -> export -> reopen (3.9)', () => {
+  // One document exercising ALL three capsule types at once, plus an unknown package part and an
+  // untouched neighbour: a styled paragraph (w:pPr + w:p attributes + a run w:rPr), a plain
+  // paragraph, and an unsupported customXml part that must survive verbatim beside the edit.
+  const BODY =
+    '<w:p w:rsidR="00AB12" w14:paraId="1F2E3D4C"><w:pPr><w:pStyle w:val="Heading1"/><w:jc w:val="center"/></w:pPr>' +
+    '<w:r><w:rPr><w:rFonts w:ascii="Arial"/><w:color w:val="C00000"/><w:sz w:val="32"/></w:rPr><w:t>Title</w:t></w:r></w:p>' +
+    '<w:p><w:r><w:t>plain neighbour</w:t></w:r></w:p>';
+  const UNKNOWN_PART = { 'customXml/item1.xml': '<b:root xmlns:b="urn:x"><b:v>keep me</b:v></b:root>' };
+
+  test('every capsule (pPr + attrs + rPr) survives an edit; the unknown part + neighbour stay verbatim', () => {
+    const bytes = docx(BODY, UNKNOWN_PART);
+    const session = openDocxSession(bytes);
+    expect(session.editable).toBe(true);
+
+    // Edit WITHIN the styled run, keeping its capsule mark (an in-run text edit).
+    const doc = session.projectDoc();
+    const firstRun = doc.child(0).child(0);
+    const edited = docSchema.node('doc', null, [
+      docSchema.node('paragraph', doc.child(0).attrs, docSchema.text('Title EDITED', firstRun.marks)),
+      ...Array.from({ length: doc.childCount - 1 }, (_, i) => doc.child(i + 1)),
+    ]);
+    expect(session.applyPmDoc(edited).committed).toBe(true);
+
+    const saved = session.save();
+    const savedXml = strFromU8(unzipSync(saved)['word/document.xml']);
+    // ALL three capsules preserved on the edited paragraph, with the new text.
+    expect(savedXml).toContain('<w:p w:rsidR="00AB12" w14:paraId="1F2E3D4C">'); // attributes
+    expect(savedXml).toContain('<w:pPr><w:pStyle w:val="Heading1"/><w:jc w:val="center"/></w:pPr>'); // properties
+    expect(savedXml).toContain('<w:rPr><w:rFonts w:ascii="Arial"/><w:color w:val="C00000"/><w:sz w:val="32"/></w:rPr>'); // run props
+    expect(savedXml).toContain('Title EDITED');
+    // The plain neighbour is untouched, and the unknown package part survives verbatim.
+    expect(savedXml).toContain('<w:p><w:r><w:t>plain neighbour</w:t></w:r></w:p>');
+    expect(strFromU8(unzipSync(saved)['customXml/item1.xml'])).toBe(UNKNOWN_PART['customXml/item1.xml']);
+
+    // Reopen: the edit survives, everything is still editable + preserved.
+    const reopened = openDocxSession(saved);
+    expect(reopened.editable).toBe(true);
+    expect(reopened.bodyText()).toBe('Title EDITED\nplain neighbour');
+    const reXml = strFromU8(unzipSync(reopened.save())['word/document.xml']);
+    expect(reXml).toContain('<w:color w:val="C00000"/>');
+    expect(reXml).toContain('<w:pStyle w:val="Heading1"/>');
+    expect(reXml).toContain('w14:paraId="1F2E3D4C"');
+  });
+
+  test('an UNEDITED save of the combined fixture is byte-identical (full verbatim preservation)', () => {
+    const bytes = docx(BODY, UNKNOWN_PART);
+    const session = openDocxSession(bytes);
+    // No edit: the whole package re-emits byte-for-byte.
+    expect(strFromU8(unzipSync(session.save())['word/document.xml'])).toBe(strFromU8(unzipSync(bytes)['word/document.xml']));
+  });
+});
+
 describe('document with a table: read-only, verbatim, never flattened', () => {
   test('opens read-only; edits are refused and the save stays byte-identical', () => {
     const before = docx(WITH_TABLE);
