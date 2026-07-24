@@ -7,6 +7,7 @@
 // which is exactly the equivalence a complete-export round-trip must preserve.
 
 import type { PackageModel, Block, Story, RunRecord } from '../model/authored-model.ts';
+import { normalizeRuns } from '../model/normalize-runs.ts';
 import { stableHash } from '../comparators/canonical.ts';
 
 function runDigest(r: RunRecord): unknown {
@@ -17,11 +18,13 @@ function runDigest(r: RunRecord): unknown {
 
 function blockDigest(b: Block, model: PackageModel): unknown {
   if (b.kind === 'paragraph') {
+    // Normalize runs first so lexically-different-but-equivalent segmentations ([{"a"},{"b"}] vs
+    // [{"ab"}]) share a digest — the model treats them as equal, so the fingerprint must too.
     return {
       k: 'paragraph',
       pPr: b.pPrCapsule ?? null,
       attrs: b.pAttrsCapsule ?? null,
-      runs: b.runs.map(runDigest),
+      runs: normalizeRuns(b.runs).map(runDigest),
     };
   }
   // Non-paragraph blocks (table, sdt) are preserved verbatim and never regenerated; their authored
@@ -40,16 +43,17 @@ function storyDigest(s: Story, model: PackageModel): unknown {
 
 /**
  * A canonical projection of a model's authored content: stories (in order, by kind + blocks),
- * styles, numbering, content types, and relationships — with volatile identity/preservation/revision
- * bookkeeping stripped. Feed to `stableHash` for the authored-state fingerprint.
+ * styles, and numbering — with volatile identity/preservation/revision bookkeeping stripped.
+ * contentTypes/relationships are DELIBERATELY excluded: parseDocx does not model per-file OPC
+ * records (it returns createEmptyModel defaults, the actual bytes living in the verbatim
+ * preservation index), so hashing them would be false assurance — they are always equal regardless
+ * of the file. OPC-record preservation is proven by the byte/container comparators, not this digest.
  */
 export function authoredStateProjection(model: PackageModel): unknown {
   return {
     stories: [...model.stories.values()].map((s) => storyDigest(s, model)),
     styles: model.styles,
     numbering: model.numbering,
-    contentTypes: model.contentTypes,
-    relationships: model.relationships,
   };
 }
 

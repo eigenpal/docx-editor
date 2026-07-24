@@ -109,4 +109,67 @@ describe('created-from-scratch model: complete export reopens to an equivalent a
     // Both round-trips agree on authored state, and the re-export reopens to the same hash again.
     expect(authoredStateDigest(reopenModeled(second))).toBe(authoredStateDigest(model));
   });
+
+  test('adjacent equivalent runs and one merged run share a digest (normalization; sol #10)', () => {
+    const base = createEmptyModel();
+    const sid = bodyStoryId(base);
+    const split: PackageModel = {
+      ...base,
+      stories: new Map(base.stories).set(sid, { id: sid, kind: 'body', blocks: [{ kind: 'paragraph', id: 'p-1', runs: [{ text: 'a' }, { text: 'b' }] }] }),
+    };
+    const merged: PackageModel = {
+      ...base,
+      stories: new Map(base.stories).set(sid, { id: sid, kind: 'body', blocks: [{ kind: 'paragraph', id: 'p-1', runs: [{ text: 'ab' }] }] }),
+    };
+    expect(authoredStateDigest(split)).toBe(authoredStateDigest(merged));
+  });
+});
+
+describe('from-scratch export fails closed on what it cannot faithfully serialize (sol #5-#8)', () => {
+  function withParts(mutate: (m: PackageModel) => PackageModel): PackageModel {
+    const base = createEmptyModel();
+    return mutate(base);
+  }
+
+  test('rejects a declared media part (no authored bytes) rather than dangle its rel', () => {
+    const model = withParts((m) => ({
+      ...m,
+      parts: new Map(m.parts).set('/word/media/image1.png', { kind: 'media', partName: '/word/media/image1.png' }),
+    }));
+    expect(() => writeDocx(model)).toThrow(/media part/);
+  });
+
+  test('rejects a footnote/comment story kind (needs item wrappers + section refs we do not emit)', () => {
+    const model = withParts((m) => {
+      const sid = 'st-note';
+      return {
+        ...m,
+        stories: new Map(m.stories).set(sid, { id: sid, kind: 'footnote', blocks: [] }),
+        parts: new Map(m.parts).set('/word/footnotes.xml', { kind: 'xml', partName: '/word/footnotes.xml', storyId: sid }),
+      };
+    });
+    expect(() => writeDocx(model)).toThrow(/footnote/);
+  });
+
+  test('rejects an invalid XML 1.0 control character in an authored style name', () => {
+    const badName = `Bad${String.fromCharCode(1)}Name`; // U+0001 is forbidden in XML 1.0
+    const model = withParts((m) => ({ ...m, styles: [{ id: 'Normal', name: badName, type: 'paragraph', isDefault: true }] }));
+    expect(() => writeDocx(model)).toThrow(/not valid in XML 1\.0/);
+  });
+
+  test('rejects duplicate relationship ids for one owner (invalid OPC)', () => {
+    const model = withParts((m) => ({
+      ...m,
+      relationships: [
+        ...m.relationships,
+        { ownerPart: '/word/document.xml', id: 'rId1', type: 'urn:x', rawTarget: 'x.xml', targetMode: 'Internal', order: 9 },
+      ],
+    }));
+    expect(() => writeDocx(model)).toThrow(/invalid relationships|duplicate-id/);
+  });
+
+  test('rejects a package missing the required root officeDocument relationship', () => {
+    const model = withParts((m) => ({ ...m, relationships: m.relationships.filter((r) => r.ownerPart !== '/') }));
+    expect(() => writeDocx(model)).toThrow(/root officeDocument relationship/);
+  });
 });
