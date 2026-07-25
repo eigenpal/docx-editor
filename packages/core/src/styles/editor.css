@@ -1719,15 +1719,72 @@
 .ep-toolbar {
   display: flex;
   align-items: center;
-  gap: 4px;
+  /* Wraps at M6V.1: the full legacy group set is far wider than one row at a
+   * document-width viewport, and the legacy chrome wrapped rather than clipping or
+   * scrolling. A clipped toolbar would silently hide the controls the parity
+   * screenshots are supposed to show. */
+  flex-wrap: wrap;
+  gap: 4px 0;
   padding: 6px 12px;
   background: var(--doc-surface);
+  border-bottom: 1px solid var(--doc-border);
+}
+
+/* One group plus the separator that precedes it, so the pair wraps together and a
+ * separator never becomes the first thing on a wrapped row. */
+.ep-toolbar__group-wrap {
+  display: inline-flex;
+  align-items: center;
 }
 
 .ep-toolbar__group {
   display: flex;
   align-items: center;
   gap: 2px;
+}
+
+/* A picker (style, font, size, zoom) present for visual parity only. Rendered as a
+ * disabled combobox because that is its legacy shape, and the parity gate compares
+ * shapes, not just presence. */
+.ep-toolbar__picker {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 30px;
+  min-width: 76px;
+  max-width: 140px;
+  padding: 0 6px;
+  border: 1px solid var(--doc-border);
+  border-radius: 4px;
+  background: var(--doc-surface);
+  color: var(--doc-text-subtle);
+  font-size: 12px;
+  cursor: default;
+}
+
+.ep-toolbar__picker-value {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.ep-toolbar__picker-caret {
+  margin-left: auto;
+  font-size: 10px;
+}
+
+/* Visually hidden but present for assistive technology: a parity-only picker has no
+ * tooltip of its own, so its unavailable reason is exposed here instead. */
+.ep-sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
 }
 
 .ep-toolbar__separator {

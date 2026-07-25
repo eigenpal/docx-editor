@@ -83,7 +83,8 @@
     "imagePropertiesShortcut": "Propriedades da imagem (texto alternativo, borda)...",
     "clearFormatting": "Limpar formatação",
     "commentsAndChanges": null,
-    "moreItems": null
+    "moreItems": null,
+    "unavailableInPreview": null
   },
   "alignment": {
     "alignLeft": "Alinhar à esquerda",

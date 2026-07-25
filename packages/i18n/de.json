@@ -83,7 +83,8 @@
     "imagePropertiesShortcut": "Bildeigenschaften (Alternativtext, Rahmen)...",
     "clearFormatting": "Formatierung löschen",
     "commentsAndChanges": "Kommentare & Änderungen",
-    "moreItems": "{count, plural, one {# weiteres Element} other {# weitere Elemente}}"
+    "moreItems": "{count, plural, one {# weiteres Element} other {# weitere Elemente}}",
+    "unavailableInPreview": null
   },
   "alignment": {
     "alignLeft": "Linksbündig",

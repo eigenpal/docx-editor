@@ -83,7 +83,8 @@
     "imagePropertiesShortcut": "Görsel özellikleri (alternatif metin, kenarlık)...",
     "clearFormatting": "Biçimlendirmeyi temizle",
     "commentsAndChanges": null,
-    "moreItems": null
+    "moreItems": null,
+    "unavailableInPreview": null
   },
   "alignment": {
     "alignLeft": "Sola hizala",

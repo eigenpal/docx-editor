@@ -1,4 +1,4 @@
-// Toolbar (interactive-paginated-editing M4.5).
+// Toolbar (interactive-paginated-editing M4.5, extended to full legacy parity at M6V.1).
 // Shared adapter presentation and compatibility behavior.
 // presentation. The legacy toolbar imported `prosemirror-history` and read
 // `undoDepth`/`redoDepth` off a PM `EditorState` to decide what was enabled —
@@ -6,105 +6,167 @@
 //
 // Here every control's enabled state is one `Editor.can(command)` answer, and a
 // click runs `Editor.exec(command)` only after `can` said yes. Save is not a
-// command: it calls `Editor.save()` directly. A control the engine cannot
-// honour renders disabled with the engine's own reason as its tooltip, so the
-// UI can never claim a capability the engine does not have.
+// command: it calls `Editor.save()` directly. A control the engine cannot honour
+// renders disabled with the engine's own reason as its tooltip, so the UI can
+// never claim a capability the engine does not have.
+//
+// M6V.1 renders the COMPLETE legacy group set for visual parity. Groups, ordering,
+// icons, and i18n keys all come from `LEGACY_CHROME_GROUPS` in engine-editor so
+// React and Vue cannot drift — a previous round of this change grew 24 React-only
+// exports by putting shared shape in one adapter, and only a full-repo
+// export-parity sweep caught it.
+//
+// Only undo, redo, bold, italic, and save may act. Everything else is present,
+// visible, and permanently disabled: dropping it would understate the parity gap,
+// and enabling it would claim a capability that does not exist.
 
 import type { ReactNode } from 'react';
 import type { Editor } from '@docx-editor.dev/core-contract/editor';
+import {
+  LEGACY_CHROME_GROUPS,
+  LEGACY_CHROME_UNAVAILABLE_KEY,
+  type LegacyChromeControl,
+} from '@docx-editor.dev/engine-editor';
 import { useEditorSnapshot } from './useEditorSnapshot';
-import { runToolbarCommand, toolbarCommandState, type ToolbarCommandId } from './toolbarCommands';
+import { runToolbarCommand, toolbarCommandState } from './toolbarCommands';
 
-/** Material Symbol paths, inlined — the repo ships no icon font. */
-const ICONS: Record<ToolbarCommandId | 'save', string> = {
-  bold: 'M8 19V5h5.2c1.4 0 2.5.4 3.3 1.1.8.7 1.2 1.6 1.2 2.8 0 .7-.2 1.3-.5 1.8s-.8.9-1.4 1.2c.8.2 1.4.6 1.8 1.2.4.6.7 1.3.7 2.1 0 1.2-.4 2.2-1.3 2.9-.9.7-2 1-3.5 1H8Zm2.8-2.3h2.4c.6 0 1.1-.2 1.4-.5.3-.3.5-.7.5-1.3s-.2-1-.5-1.3c-.3-.3-.8-.5-1.5-.5h-2.3v3.6Zm0-5.8h2c.6 0 1.1-.1 1.4-.4.3-.3.5-.7.5-1.2s-.2-.9-.5-1.2c-.3-.3-.8-.4-1.4-.4h-2v3.2Z',
-  italic: 'M5 19v-2.2h3.2l3-9.6H8V5h8v2.2h-3.2l-3 9.6H13V19H5Z',
-  underline: 'M5 21v-2h14v2H5Zm7-4c-1.7 0-3-.5-4-1.5-1-1-1.4-2.3-1.4-4V3h2.3v8.6c0 1 .3 1.8.8 2.4.6.6 1.3.9 2.3.9s1.8-.3 2.3-.9c.6-.6.8-1.4.8-2.4V3H17v8.5c0 1.7-.5 3-1.4 4-1 1-2.3 1.5-3.9 1.5Z',
-  undo: 'M7.5 18c-.4 0-.8-.1-1-.4-.3-.3-.4-.6-.4-1s.1-.8.4-1c.2-.3.6-.4 1-.4h6.9c1.1 0 2-.4 2.8-1.1.8-.8 1.2-1.7 1.2-2.8s-.4-2-1.2-2.8c-.8-.7-1.7-1.1-2.8-1.1H7.9l2 2c.3.3.4.6.4 1s-.1.7-.4 1c-.3.3-.6.4-1 .4s-.7-.1-1-.4L3.4 8.6c-.3-.3-.4-.6-.4-1s.1-.7.4-1L7.9 2c.3-.3.6-.4 1-.4s.7.1 1 .4c.3.3.4.6.4 1s-.1.7-.4 1l-2 2h6.5c1.9 0 3.5.6 4.8 1.9 1.3 1.3 2 2.8 2 4.7s-.7 3.5-2 4.8c-1.3 1.3-2.9 1.9-4.8 1.9H7.5Z',
-  redo: 'M9.6 18c-1.9 0-3.5-.6-4.8-1.9-1.3-1.3-2-2.9-2-4.8s.7-3.4 2-4.7C6.1 5.3 7.7 4.7 9.6 4.7h6.5l-2-2c-.3-.3-.4-.6-.4-1s.1-.7.4-1c.3-.3.6-.4 1-.4s.7.1 1 .4l4.5 4.6c.3.3.4.6.4 1s-.1.7-.4 1L16.1 12c-.3.3-.6.4-1 .4s-.7-.1-1-.4c-.3-.3-.4-.6-.4-1s.1-.7.4-1l2-2H9.6c-1.1 0-2 .4-2.8 1.1-.8.8-1.2 1.7-1.2 2.8s.4 2 1.2 2.8c.8.7 1.7 1.1 2.8 1.1h6.9c.4 0 .8.1 1 .4.3.2.4.6.4 1s-.1.7-.4 1c-.2.3-.6.4-1 .4H9.6Z',
-  save: 'M5 21c-.6 0-1-.2-1.4-.6C3.2 20 3 19.6 3 19V5c0-.6.2-1 .6-1.4C4 3.2 4.4 3 5 3h11.2L21 7.8V19c0 .6-.2 1-.6 1.4-.4.4-.8.6-1.4.6H5Zm7-3c.8 0 1.5-.3 2.1-.9.6-.6.9-1.3.9-2.1s-.3-1.5-.9-2.1c-.6-.6-1.3-.9-2.1-.9s-1.5.3-2.1.9c-.6.6-.9 1.3-.9 2.1s.3 1.5.9 2.1c.6.6 1.3.9 2.1.9ZM6 10h9V6H6v4Z',
-};
+/**
+ * Resolves an i18n key to display text.
+ *
+ * Required, not optional with an English fallback. `packages/i18n/en.json` is the
+ * repo's single source of truth for user-facing strings, so shipping a fallback
+ * table inside the adapter would create a second one — and CLAUDE.md forbids
+ * hardcoded user-facing English in components. The host supplies the translator;
+ * the adapter only ever holds keys.
+ */
+export type Translate = (key: string) => string;
 
-const LABELS: Record<ToolbarCommandId | 'save', string> = {
-  bold: 'Bold',
-  italic: 'Italic',
-  underline: 'Underline',
-  undo: 'Undo',
-  redo: 'Redo',
-  save: 'Save',
-};
-
-const FORMATTING: readonly ToolbarCommandId[] = ['bold', 'italic', 'underline'];
-const HISTORY: readonly ToolbarCommandId[] = ['undo', 'redo'];
-
-function ToolbarIcon({ id }: { readonly id: ToolbarCommandId | 'save' }): ReactNode {
+function ToolbarIcon({ paths }: { readonly paths: readonly string[] }): ReactNode {
   return (
-    <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" focusable="false">
-      <path d={ICONS[id]} fill="currentColor" />
+    <svg viewBox="0 -960 960 960" width="18" height="18" aria-hidden="true" focusable="false">
+      {paths.map((d) => (
+        <path key={d} d={d} fill="currentColor" />
+      ))}
     </svg>
   );
 }
 
-function CommandButton({ editor, id }: { readonly editor: Editor | null; readonly id: ToolbarCommandId }): ReactNode {
-  const state = toolbarCommandState(editor, id);
+function ControlButton({
+  editor,
+  control,
+  t,
+  onSave,
+}: {
+  readonly editor: Editor | null;
+  readonly control: LegacyChromeControl;
+  readonly t: Translate;
+  readonly onSave?: () => void;
+}): ReactNode {
+  const label = t(control.labelKey);
+
+  // A picker (font, size, style, zoom) renders as a disabled combobox rather than
+  // a button, because that is its legacy shape and the parity gate compares shapes.
+  if (control.paths === null) {
+    return (
+      <span className="ep-toolbar__picker" data-testid={`toolbar-${control.id}`} aria-disabled="true">
+        <span className="ep-toolbar__picker-value">{control.valueKey ? t(control.valueKey) : ''}</span>
+        <span className="ep-toolbar__picker-caret" aria-hidden="true">
+          ▾
+        </span>
+        <span className="ep-sr-only">{`${label} — ${t(LEGACY_CHROME_UNAVAILABLE_KEY)}`}</span>
+      </span>
+    );
+  }
+
+  if (control.state.kind === 'parityOnly') {
+    const reason = `${label} — ${t(LEGACY_CHROME_UNAVAILABLE_KEY)}`;
+    return (
+      <button
+        type="button"
+        className="ep-toolbar__button"
+        data-testid={`toolbar-${control.id}`}
+        data-parity-only="true"
+        disabled
+        title={reason}
+        aria-label={reason}
+      >
+        <ToolbarIcon paths={control.paths} />
+      </button>
+    );
+  }
+
+  if (control.state.kind === 'save') {
+    return (
+      <button
+        type="button"
+        className="ep-toolbar__button"
+        data-testid={`toolbar-${control.id}`}
+        disabled={!editor || !onSave}
+        title={label}
+        aria-label={label}
+        onMouseDown={(event) => event.preventDefault()}
+        onClick={onSave}
+      >
+        <ToolbarIcon paths={control.paths} />
+      </button>
+    );
+  }
+
+  const commandId = control.state.command;
+  const state = toolbarCommandState(editor, commandId);
+  // No active/pressed state.
+  //
+  // A toolbar should show whether bold is currently ON, and the repo's own guidance
+  // says controls must reflect live editor state rather than being static. It is
+  // omitted here because `CanResult` is `{ ok } | { ok, code, reason }` — the public
+  // contract can answer "may this run?" but not "is it currently applied?".
+  // Surfacing it needs a new public query, and M6V.1 is explicitly a visual-shell
+  // gate that must not widen the feature surface. Tracked as a known gap.
   return (
     <button
       type="button"
       className="ep-toolbar__button"
-      data-testid={`toolbar-${id}`}
+      data-testid={`toolbar-${control.id}`}
       disabled={!state.enabled}
       // The engine's own words, never an adapter paraphrase.
-      title={state.disabledReason ?? LABELS[id]}
-      aria-label={LABELS[id]}
+      title={state.disabledReason ?? label}
+      aria-label={label}
       onMouseDown={(event) => event.preventDefault()} // keep focus on the editor
-      onClick={() => runToolbarCommand(editor, id)}
+      onClick={() => runToolbarCommand(editor, commandId)}
     >
-      <ToolbarIcon id={id} />
+      <ToolbarIcon paths={control.paths} />
     </button>
   );
 }
 
 export interface DocxEditorToolbarProps {
   readonly editor: Editor | null;
+  /** Resolves i18n keys. The adapter ships no English of its own. */
+  readonly t: Translate;
   /** Save handler — the host decides what to do with the bytes. */
   readonly onSave?: () => void;
 }
 
-export function DocxEditorToolbar({ editor, onSave }: DocxEditorToolbarProps): ReactNode {
+export function DocxEditorToolbar({ editor, t, onSave }: DocxEditorToolbarProps): ReactNode {
   // Re-render as the selection and document change, or `can()` answers go stale.
   useEditorSnapshot(editor);
   return (
-    <div className="ep-toolbar" role="toolbar" aria-label="Formatting" data-testid="docx-editor-toolbar">
-      <div className="ep-toolbar__group">
-        {HISTORY.map((id) => (
-          <CommandButton key={id} editor={editor} id={id} />
-        ))}
-      </div>
-      <div className="ep-toolbar__separator" role="separator" />
-      <div className="ep-toolbar__group">
-        {FORMATTING.map((id) => (
-          <CommandButton key={id} editor={editor} id={id} />
-        ))}
-      </div>
-      {onSave ? (
-        <>
-          <div className="ep-toolbar__separator" role="separator" />
-          <div className="ep-toolbar__group">
-            <button
-              type="button"
-              className="ep-toolbar__button"
-              data-testid="toolbar-save"
-              disabled={!editor}
-              title={LABELS.save}
-              aria-label={LABELS.save}
-              onMouseDown={(event) => event.preventDefault()}
-              onClick={onSave}
-            >
-              <ToolbarIcon id="save" />
-            </button>
+    <div
+      className="ep-toolbar"
+      role="toolbar"
+      aria-label={t('toolbar.ariaLabel')}
+      data-testid="docx-editor-toolbar"
+    >
+      {LEGACY_CHROME_GROUPS.map((group, index) => (
+        <div key={group.id} className="ep-toolbar__group-wrap">
+          {index > 0 ? <div className="ep-toolbar__separator" role="separator" /> : null}
+          <div className="ep-toolbar__group" role="group" aria-label={t(group.labelKey)} data-group={group.id}>
+            {group.controls.map((control) => (
+              <ControlButton key={control.id} editor={editor} control={control} t={t} onSave={onSave} />
+            ))}
           </div>
-        </>
-      ) : null}
+        </div>
+      ))}
     </div>
   );
 }

@@ -58,3 +58,14 @@ export {
   type ToolbarCommandId,
   type ToolbarCommandState,
 } from './toolbar-commands.ts';
+
+export {
+  LEGACY_CHROME_GROUPS,
+  LEGACY_CHROME_MENUS,
+  LEGACY_CHROME_UNAVAILABLE_KEY,
+  legacyChromeControlCount,
+  type LegacyChromeControl,
+  type LegacyChromeControlState,
+  type LegacyChromeCommandId,
+  type LegacyChromeGroup,
+} from './legacy-chrome.ts';

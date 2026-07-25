@@ -83,7 +83,8 @@
     "imagePropertiesShortcut": "Properti gambar (alt text, border)...",
     "clearFormatting": "Hapus Pemformatan",
     "commentsAndChanges": "Komentar & Perubahan",
-    "moreItems": "{count} item lainnya"
+    "moreItems": "{count} item lainnya",
+    "unavailableInPreview": null
   },
   "alignment": {
     "alignLeft": "Rata Kiri",

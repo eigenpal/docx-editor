@@ -16,6 +16,24 @@ import {
   VerticalRuler,
 } from '@docx-editor.dev/vue';
 import { createEditorDriver, type EditorDriver } from '@docx-editor.dev/engine-editor';
+import en from '../../packages/i18n/en.json';
+
+/**
+ * Resolve an i18n key against `packages/i18n/en.json`, imported directly.
+ *
+ * The HOST owns localization: the published adapters hold only i18n keys so they
+ * ship no English of their own (CLAUDE.md forbids hardcoded user-facing English in
+ * components, and en.json is the single source of truth). Identical to the React
+ * harness's resolver, so the two demos localize the same way.
+ */
+function translate(key: string): string {
+  const value = key.split('.').reduce<unknown>((node, part) => {
+    return node && typeof node === 'object' ? (node as Record<string, unknown>)[part] : undefined;
+  }, en as Record<string, unknown>);
+  // Surfacing the key is deliberate when a string is missing: falling back to the
+  // last segment reads like a real label and hides the gap.
+  return typeof value === 'string' ? value : key;
+}
 import type { Editor } from '@docx-editor.dev/vue';
 
 const props = defineProps<{ fixtureUrl: string; initialZoom?: number }>();
@@ -78,7 +96,7 @@ onBeforeUnmount(() => {
     </div>
     <DocxEditorShell>
       <template #titleBar><DocxEditorTitleBar v-model:title="title" /></template>
-      <template #toolbar><DocxEditorToolbar :editor="editorInstance" @save="onSave" /></template>
+      <template #toolbar><DocxEditorToolbar :editor="editorInstance" :t="translate" :on-save="onSave" /></template>
       <template #horizontalRuler><HorizontalRuler :editor="editorInstance" :zoom="zoom" /></template>
       <template #verticalRuler><VerticalRuler :editor="editorInstance" :zoom="zoom" /></template>
       <template #pageIndicator><PageIndicator :editor="editorInstance" /></template>

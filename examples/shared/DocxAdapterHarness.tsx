@@ -14,6 +14,24 @@ import {
   VerticalRuler,
 } from '@docx-editor.dev/react';
 import { createEditorDriver, type EditorDriver } from '@docx-editor.dev/engine-editor';
+import en from '../../packages/i18n/en.json';
+
+/**
+ * Resolve an i18n key against `packages/i18n/en.json`, imported directly.
+ *
+ * The HOST owns localization, not the adapter: the published adapters hold only
+ * i18n keys so they ship no English of their own (CLAUDE.md forbids hardcoded
+ * user-facing English in components, and `en.json` is the single source of truth).
+ * The demo is the host here, so it does the resolving.
+ */
+function translate(key: string): string {
+  const value = key.split('.').reduce<unknown>((node, part) => {
+    return node && typeof node === 'object' ? (node as Record<string, unknown>)[part] : undefined;
+  }, en as Record<string, unknown>);
+  // Surfacing the key is deliberate when a string is missing: a silent fallback to
+  // the key's last segment reads like a real label and hides the gap.
+  return typeof value === 'string' ? value : key;
+}
 import type { Editor } from '@docx-editor.dev/react';
 
 declare global {
@@ -91,7 +109,7 @@ export function DocxAdapterHarness({
       </div>
       <DocxEditorShell
         titleBar={<DocxEditorTitleBar title={title} onTitleChange={setTitle} />}
-        toolbar={<DocxEditorToolbar editor={editor} onSave={onSave} />}
+        toolbar={<DocxEditorToolbar editor={editor} t={translate} onSave={onSave} />}
         horizontalRuler={<HorizontalRuler editor={editor} zoom={zoom} />}
         verticalRuler={<VerticalRuler editor={editor} zoom={zoom} />}
         pageIndicator={<PageIndicator editor={editor} />}

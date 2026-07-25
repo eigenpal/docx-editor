@@ -83,7 +83,8 @@
     "imagePropertiesShortcut": "מאפייני תמונה",
     "clearFormatting": "נקה עיצוב",
     "commentsAndChanges": null,
-    "moreItems": null
+    "moreItems": null,
+    "unavailableInPreview": null
   },
   "alignment": {
     "alignLeft": "יישור לשמאל",

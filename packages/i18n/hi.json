@@ -83,7 +83,8 @@
     "imagePropertiesShortcut": "चित्र की विशेषताएँ (ऑल्ट टेक्स्ट, बॉर्डर)...",
     "clearFormatting": "प्रारूपण साफ करें",
     "commentsAndChanges": null,
-    "moreItems": null
+    "moreItems": null,
+    "unavailableInPreview": null
   },
   "alignment": {
     "alignLeft": "बाएं संरेखित करें",
