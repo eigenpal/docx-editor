@@ -54,7 +54,7 @@ function blockRuns(block: Block): readonly RunRecord[] {
  *  only the PRESENCE of bold/italic. A run carrying a stable id, a styleId, underline, or an
  *  explicit-off bold/italic would lose that metadata if its paragraph were re-set from a
  *  projected (PM-derived) run list — so such a paragraph must never be overwritten by an edit. */
-function runIsProjectable(run: RunRecord): boolean {
+export function runIsProjectable(run: RunRecord): boolean {
   if (run.id !== undefined) return false;
   const p = run.props;
   if (!p) return true;
@@ -113,7 +113,11 @@ function nodeMatchesBlock(node: PMNode | undefined, block: Block | undefined): b
   if (role === 'atom') {
     // A read-only atom must match a NON-editable-kind block by id AND kind (isBindingEditableKind
     // is the single source of truth for what the reverse lane treats as editable, == paragraph).
-    return !isBindingEditableKind(block.kind) && node.attrs.semId === block.id && node.attrs.kind === block.kind;
+    // Identity and kind only. The kind-editability requirement was dropped for M6P.1:
+    // a PARAGRAPH may legitimately be an atom now, when the access policy found no
+    // lossless patch path for its current source slice. Fail-closed either way — a
+    // forged atom naming a patchable paragraph makes it immutable, never editable.
+    return node.attrs.semId === block.id && node.attrs.kind === block.kind;
   }
   if (role === 'paragraph') return isBindingEditableKind(block.kind) && node.attrs.semId === block.id;
   return false;
@@ -186,8 +190,19 @@ export class EditorBinding {
   }
 
   /** Project current authored state into a ProseMirror doc / state. */
+  /**
+   * Block ids the body access policy marks read-only for the current revision.
+   * Empty means "kind decides", which is the pre-M6P.1 behavior.
+   */
+  private readOnlyBlockIds: ReadonlySet<string> = new Set();
+
+  /** Install the per-block access policy. Recomputed by the session per revision. */
+  setReadOnlyBlockIds(ids: ReadonlySet<string>): void {
+    this.readOnlyBlockIds = ids;
+  }
+
   projectDoc(): PMNode {
-    return modelToDoc(this.store.currentModel);
+    return modelToDoc(this.store.currentModel, this.readOnlyBlockIds);
   }
   createState(): EditorState {
     return EditorState.create({ schema: docSchema, doc: this.projectDoc() });
@@ -237,8 +252,26 @@ export class EditorBinding {
         // A read-only atom must map to its EXACT block — same id AND same kind. Checking kind
         // too rejects a retyped atom (e.g. a table node relabelled 'sdt') that would otherwise
         // commit zero ops and leave the view diverged from the model.
-        if (isBindingEditableKind(block.kind) || node.attrs.semId !== block.id || node.attrs.kind !== block.kind) {
+        // Identity and kind must match exactly, which rejects a retyped atom (a table
+        // relabelled 'sdt') that would otherwise commit zero ops and leave the view
+        // diverged from the model.
+        //
+        // The kind-editability test was removed for M6P.1: a PARAGRAPH is now
+        // legitimately an atom when the body access policy found no lossless patch path
+        // for its current source slice. Keeping it rejected every edit in a partially
+        // editable document — measured on the comprehensive fixture, where 70 of 237
+        // paragraphs carry unmodeled inline OOXML.
+        //
+        // Still fail-closed: an atom commits no ops, so a paragraph wrongly projected as
+        // one becomes immutable, never wrongly editable. The policy is validated on the
+        // projection side, which is the authority.
+        if (node.attrs.semId !== block.id || node.attrs.kind !== block.kind) {
           throw new BindingRejection('read-only block moved, replaced, or retyped');
+        }
+        if (!this.readOnlyBlockIds.has(block.id) && isBindingEditableKind(block.kind)) {
+          // An atom naming a block the policy says IS editable means the projection and
+          // the policy disagree — refuse rather than silently freeze the paragraph.
+          throw new BindingRejection('read-only atom names an editable block');
         }
       } else if (role === 'paragraph') {
         if (!isBindingEditableKind(block.kind) || node.attrs.semId !== block.id) {

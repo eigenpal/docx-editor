@@ -19,7 +19,7 @@ export {
   buildDocSchema,
 } from './binding-capabilities.ts';
 export { modelToDoc, paragraphNodeToRuns } from './projection.ts';
-export { EditorBinding, type ForwardResult } from './binding.ts';
+export { runIsProjectable, EditorBinding, type ForwardResult } from './binding.ts';
 export { type SelectionAnchor, captureSelection, resolveSelection } from './selection.ts';
 export { observeComposition, deriveCompositionOverlay, mapCompositionRangeAfterRemote, applyCompositionOverlay, remoteChangePreservesCompositionAnchor, type CompositionCancelCode, type CompositionCancelOutcome } from './composition.ts';
 export {

@@ -83,9 +83,17 @@ export function buildDocSchema(): Schema {
   return composedSchema;
 }
 
-/** Project a block through its registered projector (or the default read-only projector). */
-export function projectBlock(block: Block, schema: Schema): PMNode {
-  const fn = projectors.get(block.kind) ?? defaultProjector;
+/**
+ * Project a block through its registered projector (or the default read-only projector).
+ *
+ * `forceReadOnly` routes a block to the read-only atom projector regardless of its kind
+ * (partial-body-editability, task M6P.1). Editability is CONTEXTUAL — a paragraph whose
+ * current source slice carries unmodeled inline OOXML cannot be patched losslessly even
+ * though `paragraph` is an editable kind — so the projector cannot be chosen from
+ * `block.kind` alone. The canonical kind is unchanged; only this projection differs.
+ */
+export function projectBlock(block: Block, schema: Schema, forceReadOnly = false): PMNode {
+  const fn = forceReadOnly ? defaultProjector : projectors.get(block.kind) ?? defaultProjector;
   if (!fn) throw new Error(`no binding projector registered for block kind '${block.kind}'`);
   return fn(block, schema);
 }

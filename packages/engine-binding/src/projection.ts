@@ -11,9 +11,12 @@ import { projectBlock } from './binding-capabilities.ts';
 /** Project the body story into a ProseMirror doc. Each block projects through its capability
  *  (paragraphs editable; every other kind a read-only atom carrying its authored semId), so
  *  unsupported content stays visible and structurally intact rather than flattened. */
-export function modelToDoc(model: PackageModel): PMNode {
+export function modelToDoc(model: PackageModel, readOnlyBlockIds?: ReadonlySet<string>): PMNode {
   const story = model.stories.get(bodyStoryId(model))!;
-  const nodes = story.blocks.map((b) => projectBlock(b, docSchema));
+  // A block the body access policy marks read-only projects as an immutable atom even
+  // when its kind is editable (M6P.1): a paragraph carrying unmodeled inline OOXML has
+  // no lossless patch path, so it must be visible and untouchable rather than editable.
+  const nodes = story.blocks.map((b) => projectBlock(b, docSchema, readOnlyBlockIds?.has(b.id) === true));
   return docSchema.node('doc', null, nodes.length > 0 ? nodes : [docSchema.node('paragraph', { semId: null })]);
 }
 
