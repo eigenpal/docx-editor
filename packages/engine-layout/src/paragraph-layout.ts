@@ -317,8 +317,21 @@ export function layoutParagraphInBox(
     while (g < paragraphGraphemeCount && paragraphSegments[g]!.utf16From < token.utf16To) {
       const seg = paragraphSegments[g]!;
       if (g > lastEdgeGrapheme) pushEdge(g);
+      // BOTH bounds are clamped to code units this token owns.
+      //
+      // The first version clamped only the lower bound, which fixed a cluster that
+      // starts in a whitespace token and continues into a word, and left the mirror
+      // case open: a cluster that starts in a WORD token and ends in the following
+      // whitespace still ran to `seg.utf16To`, past `token.utf16To`, and the
+      // whitespace branch then advanced those same code units again. Round-5 review
+      // measured `ab<U+0600> cd` at 708 against a ground-truth 648 — one whole space
+      // advance — and 10 lines versus 7 for the control at pageWidth 4780. Reachable
+      // with any GCB=Prepend code point before whitespace (U+0600-0605, U+06DD,
+      // U+070F, U+0890, U+0891, U+08E2, U+0D4E, U+110BD, U+110CD), all confirmed to
+      // cluster forward across every Unicode space separator.
       const advanceFromUtf16 = Math.max(seg.utf16From, token.utf16From);
-      for (let utf16 = advanceFromUtf16; utf16 < seg.utf16To; utf16 += 1) {
+      const advanceToUtf16 = Math.min(seg.utf16To, token.utf16To);
+      for (let utf16 = advanceFromUtf16; utf16 < advanceToUtf16; utf16 += 1) {
         const style = runStyleAt(p, utf16);
         cursor.x += metrics.advance(charAt(p, utf16), style.bold, style.italic);
       }

@@ -137,6 +137,13 @@ test.describe('paired one-surface interaction (task 6.5)', () => {
         const editor = window.__docxAdapterEditor!;
         const out: Record<string, string> = {};
         for (const key of ['Home', 'End', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight']) {
+          // Read `res.outcome.ok`, not `res.ok`. `dispatchInteraction` returns
+          // `{ outcome, hostEffects }`, so `res.ok` is always `undefined`: every key
+          // recorded the literal string "refused: " and the assertion below passed for
+          // accepted AND refused keys alike. Round-5 review proved it vacuous — for a
+          // genuinely refused PageUp the computed value was "refused: " and this spec
+          // still passed. It was the guard for the round-4 dead-keys defect, so it
+          // protected nothing.
           const res = editor.dispatchInteraction({
             kind: 'geometryKeyboard',
             frameId: editor.getInteractionFrame().id,
@@ -145,8 +152,8 @@ test.describe('paired one-surface interaction (task 6.5)', () => {
             altKey: false,
             ctrlKey: false,
             metaKey: false,
-          } as never) as { ok: boolean; reason?: string };
-          out[key] = res.ok ? 'ok' : `refused: ${res.reason ?? ''}`;
+          } as never) as { outcome: { ok: boolean; reason?: string } };
+          out[key] = res.outcome.ok ? 'ok' : `refused: ${res.outcome.reason ?? ''}`;
         }
         return out;
       });

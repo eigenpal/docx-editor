@@ -68,7 +68,14 @@ function ControlButton({
   // a button, because that is its legacy shape and the parity gate compares shapes.
   if (control.paths === null) {
     return (
-      <span className="ep-toolbar__picker" data-testid={`toolbar-${control.id}`} aria-disabled="true">
+      <span
+        className="ep-toolbar__picker"
+        data-testid={`toolbar-${control.id}`}
+        aria-disabled="true"
+        // A picker is a <span> and takes no focus itself, but a mousedown still blurs
+        // the editor. Same reasoning as the disabled buttons below.
+        onMouseDown={(event) => event.preventDefault()}
+      >
         <span className="ep-toolbar__picker-value">{control.valueKey ? t(control.valueKey) : ''}</span>
         <span className="ep-toolbar__picker-caret" aria-hidden="true">
           ▾
@@ -89,6 +96,12 @@ function ControlButton({
         disabled
         title={reason}
         aria-label={reason}
+        // Even a DISABLED control must not steal focus. Round-5 review measured all 24
+        // parity-only controls moving `document.activeElement` to BODY, dropping
+        // `frame.focus.focused`, un-painting the caret, and leaving all six geometry
+        // keys refused — 24/24 in both adapters. Clicking the visible Underline button
+        // cost the user their caret and their keyboard.
+        onMouseDown={(event) => event.preventDefault()}
       >
         <ToolbarIcon paths={control.paths} />
       </button>

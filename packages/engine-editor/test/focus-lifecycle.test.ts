@@ -116,6 +116,35 @@ describe('focus lifecycle', () => {
     scroll.remove();
   });
 
+  test('focus() accepts keystrokes after load() remounts the surface', () => {
+    // Round-5 review: `load()` remounts the surface, discarding its retained semantic
+    // selection, so `focus()` returned ok with `focused: true` and a painted caret
+    // while every keystroke was dropped. The per-surface `semanticSelectionEverApplied`
+    // flag from the previous round moved the hole here instead of closing it.
+    const { editor, driver, body, scroll } = mountEditor();
+    expect(driver.authorizeCaret(0, 2).ok).toBe(true);
+
+    // Round-trip the document, exactly as a host "reopen" would.
+    const reopened = editor.snapshot();
+    expect(reopened).toBeDefined();
+    editor.load(createEditableParagraphFixture());
+
+    const refocus = editor.focus();
+    expect(refocus.ok).toBe(true);
+
+    const editable = body.querySelector('[contenteditable="true"]') as HTMLElement;
+    const before = driver.accessibilityObservation().entries[0]?.text ?? '';
+    editable.dispatchEvent(
+      new InputEvent('beforeinput', { inputType: 'insertText', data: 'K', bubbles: true, cancelable: true }),
+    );
+    const after = driver.accessibilityObservation().entries[0]?.text ?? '';
+    expect(after).not.toBe(before);
+    expect(after).toContain('K');
+
+    editor.destroy();
+    scroll.remove();
+  });
+
   test('a blur stops the frame asserting focus and stops painting a caret', () => {
     const { editor, driver, scroll } = mountEditor();
 

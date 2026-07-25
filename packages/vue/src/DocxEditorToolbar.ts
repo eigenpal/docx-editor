@@ -59,7 +59,15 @@ function control(
   if (c.paths === null) {
     return h(
       'span',
-      { key: c.id, class: 'ep-toolbar__picker', 'data-testid': `toolbar-${c.id}`, 'aria-disabled': 'true' },
+      {
+        key: c.id,
+        class: 'ep-toolbar__picker',
+        'data-testid': `toolbar-${c.id}`,
+        'aria-disabled': 'true',
+        // A picker is a <span>, so it does not take focus itself, but a mousedown
+        // still blurs the editor. Same reasoning as the disabled buttons above.
+        onMousedown: (event: MouseEvent) => event.preventDefault(),
+      },
       [
         h('span', { class: 'ep-toolbar__picker-value' }, c.valueKey ? t(c.valueKey) : ''),
         h('span', { class: 'ep-toolbar__picker-caret', 'aria-hidden': 'true' }, '▾'),
@@ -81,6 +89,12 @@ function control(
         disabled: true,
         title: reason,
         'aria-label': reason,
+        // Even a DISABLED control must not steal focus. Round-5 review measured all
+        // 24 parity-only controls moving `document.activeElement` to BODY, dropping
+        // `frame.focus.focused`, un-painting the caret, and leaving all six geometry
+        // keys refused — 24/24 in both adapters. Clicking the visible Underline
+        // button cost the user their caret and their keyboard.
+        onMousedown: (event: MouseEvent) => event.preventDefault(),
       },
       [icon(c.paths)],
     );
@@ -141,9 +155,19 @@ export default defineComponent({
   },
   setup(props) {
     // Re-render as the selection and document change, or `can()` answers go stale.
-    useEditorSnapshot(() => props.editor);
-    return () =>
-      h(
+    //
+    // `revision.value` MUST be read inside the render closure. Discarding the ref
+    // gives Vue no reactive dependency, and the rewrite that introduced this file
+    // dropped the `computed(() => { void revision.value; ... })` the previous version
+    // had. Round-5 review proved the consequence by differential: patch `Editor.can`
+    // to refuse, fire one event, and React's controls correctly become disabled with
+    // the engine's reason while Vue's stayed enabled with their original titles —
+    // a permanently stale toolbar, invisible to all five parity gates. React works
+    // regardless because `setRevision` re-renders unconditionally; Vue does not.
+    const revision = useEditorSnapshot(() => props.editor);
+    return () => {
+      void revision.value;
+      return h(
         'div',
         {
           class: 'ep-toolbar',
@@ -167,5 +191,6 @@ export default defineComponent({
           ]),
         ),
       );
+    };
   },
 });

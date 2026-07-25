@@ -237,6 +237,25 @@ export function createEditor(config: EditorConfig): Editor {
     });
   }
 
+  /**
+   * Build a public snapshot. Hoisted out of the `Editor` literal so the
+   * `selectionChange` event can carry one.
+   */
+  function buildSnapshot(): EditorSnapshot {
+    return {
+      scope: activeScope,
+      isLoading: false,
+      parseError: null,
+      editable: !readOnly && !sharedView && session?.editable === true,
+      zoom,
+      selection: null,
+      formatting: null,
+      table: null,
+      image: null,
+      page: { current: currentFrame().currentPage.viewport, total: currentFrame().display.length },
+    };
+  }
+
   function publishSelectionOverlay(selection: SemanticSelection, focus: FocusObservation): void {
     if (!session) return;
     const base = currentFrame();
@@ -271,6 +290,19 @@ export function createEditor(config: EditorConfig): Editor {
       composition: compositionObservation(),
       currentPage: { viewport: base.currentPage.viewport, caret: caretPage },
     });
+    // Emit `selectionChange`.
+    //
+    // Round-5 review found this event had FOUR subscribers and ZERO emitters, and
+    // the consequence was severe: `layoutInput` seeds a frame with
+    // `selection: null, caret: null, focus: { focused: false }` and `emitLayoutFrame`
+    // fires `display` from THAT frame, so an adapter repaints with no caret. This
+    // function then restores selection, focus, and caret — but emitted nothing, so
+    // nothing told the adapter to repaint the overlay layer. Measured: click a glyph
+    // (caret painted), `relayout()` or any zoom change, and the painted caret is
+    // gone permanently while `frame.caret` is non-null and `focus.focused` is true.
+    // Both adapters. `verify:real-adapter-gate`'s zoom scenario stayed green because
+    // it inspects `getInputHostObservation()` and never the painted caret.
+    emit('selectionChange', buildSnapshot());
     // Tell the surface its retained selection is current on the frame we just
     // published. Without this the retained tag is stale the instant we publish, and
     // `focus({ frameId: currentFrame().id })` — the only frame id a caller can
@@ -802,18 +834,7 @@ export function createEditor(config: EditorConfig): Editor {
     query<K extends keyof EditorQueries>(query: { type: K } & EditorQueries[K]): EditorQueryResults[K] {
       return queryDefault(query.type as string) as EditorQueryResults[K];
     },
-    snapshot: (): EditorSnapshot => ({
-      scope: activeScope,
-      isLoading: false,
-      parseError: null,
-      editable: !readOnly && !sharedView && session?.editable === true,
-      zoom,
-      selection: null,
-      formatting: null,
-      table: null,
-      image: null,
-      page: { current: currentFrame().currentPage.viewport, total: currentFrame().display.length },
-    }),
+    snapshot: (): EditorSnapshot => buildSnapshot(),
 
     getTotalPages: () => currentFrame().display.length,
     getCurrentPage: (mode = 'viewport') =>
@@ -905,21 +926,37 @@ export function createEditor(config: EditorConfig): Editor {
         return { ok: false, code: 'unsupported', reason: 'edit surface is not mounted' };
       }
       const frameId = currentFrame().id;
-      const outcome = surface.focus({ frameId });
-      if (!outcome.ok) return outcome;
       const obs = surface.getAccessibilityObservation({ frameId, scope: activeScope });
-      if (obs.selection) {
-        const frame = currentFrame();
-        publishSelectionOverlay(
-          {
+      const frame = currentFrame();
+      const observed = obs.selection
+        ? {
             frameId,
             scope: obs.scope,
             anchor: canonicalAffinityFor(frame, obs.selection.anchor),
             head: canonicalAffinityFor(frame, obs.selection.head),
-          },
-          { scope: activeScope, focused: true },
-        );
-      }
+          }
+        : null;
+
+      // Focus through the SYNC path whenever a selection is observable.
+      //
+      // `surface.focus({ frameId })` alone authorizes input only if the surface still
+      // holds a retained semantic selection. `load()` remounts the surface, which
+      // discards it, so after a reload `focus()` returned ok, the frame reported
+      // `focused: true`, a caret painted — and every keystroke was silently dropped.
+      // Round-5 review measured exactly that in both adapters: `modelRevision` stayed
+      // 0 and the typed text appeared nowhere, while a real click recovered instantly.
+      // An earlier attempt gated authorization on a per-surface
+      // `semanticSelectionEverApplied` flag, which moved the hole here rather than
+      // closing it.
+      //
+      // The sync path establishes the semantic selection AND authorizes input in one
+      // step, and re-applying the surface's own observed selection is idempotent, so
+      // this is correct on a fresh mount and on a warm one alike.
+      const outcome = observed
+        ? surface.focus({ sync: { frameId, selection: observed } })
+        : surface.focus({ frameId });
+      if (!outcome.ok) return outcome;
+      if (observed) publishSelectionOverlay(observed, { scope: activeScope, focused: true });
       return { ok: true, value: undefined, frameId: currentFrame().id };
     },
     destroy() {
