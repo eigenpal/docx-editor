@@ -20,6 +20,7 @@ import { DocxEditorOverlays } from './DocxEditor/DocxEditorOverlays';
 import { useContextMenus } from './DocxEditor/hooks/useContextMenus';
 import { useFormattingActions } from './DocxEditor/hooks/useFormattingActions';
 import { useFileIO } from './DocxEditor/hooks/useFileIO';
+import { useTableDialogs, type BorderSpec } from './DocxEditor/hooks/useTableDialogs';
 import {
   useSelectionTracker,
   type SelectionStateDelta,
@@ -225,6 +226,24 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
     );
 
     // The image menu's own state hook, ported.
+    // Table toolbar actions and their dialogs, ported. The border spec is the shared
+    // record legacy threads through the toolbar: a border colour or width picked from a
+    // dropdown lands here and the NEXT border action uses it.
+    const borderSpecRef = useRef<BorderSpec>({
+      style: 'single',
+      size: 4,
+      color: { kind: 'hex', value: '000000' },
+    });
+    const {
+      tablePropsOpen,
+      setTablePropsOpen,
+      splitCellDialogState,
+      openSplitCellDialog,
+      handleTableAction,
+      handleSplitCellDialogClose,
+      handleSplitCellDialogApply,
+    } = useTableDialogs({ editorRef, borderSpecRef });
+
     // File in and out, ported. Save serializes the canonical package through the engine;
     // open loads bytes into it. The hidden inputs go in the shell's `fileInputs` slot,
     // which this file had left empty.
@@ -274,7 +293,7 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
     } = useContextMenus({
       editorRef,
       focusActiveEditor: () => editorRef.current?.focus(),
-      openSplitCellDialog: () => {},
+      openSplitCellDialog,
       i18n: undefined,
       onAddComment: () => {},
     });
@@ -681,7 +700,7 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
               onOpenImageProperties={() => {}}
               onPageSetup={() => {}}
               onWatermark={() => {}}
-              onTableAction={() => {}}
+              onTableAction={handleTableAction}
             />
           }
           pagedArea={surface}
@@ -718,18 +737,12 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
               hyperlinkDialog={hyperlinkDialog}
               onHyperlinkSubmit={() => {}}
               onHyperlinkRemove={() => {}}
-              tablePropsOpen={false}
-              onTablePropsClose={() => {}}
+              tablePropsOpen={tablePropsOpen}
+              onTablePropsClose={() => setTablePropsOpen(false)}
               editor={editorRef.current}
-              splitCellDialogState={{
-                isOpen: false,
-                initialRows: 1,
-                initialCols: 1,
-                minRows: 1,
-                minCols: 1,
-              }}
-              onSplitCellDialogClose={() => {}}
-              onSplitCellDialogApply={() => {}}
+              splitCellDialogState={splitCellDialogState}
+              onSplitCellDialogClose={handleSplitCellDialogClose}
+              onSplitCellDialogApply={handleSplitCellDialogApply}
               imagePositionOpen={false}
               onImagePositionClose={() => {}}
               onApplyImagePosition={() => {}}

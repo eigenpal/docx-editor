@@ -407,6 +407,23 @@ export interface EditorCommands extends EditorCommandShape<DocEdits> {
   setCellFill: { color: ColorValue };
   toggleHeaderRow: Record<never, never>;
   /**
+   * Table and cell borders, in the vocabulary legacy's table toolbar uses: a scope
+   * (every edge, the outside ring, the inside grid, one named edge, or none) plus the
+   * border spec the toolbar carries — style, size in eighths of a point, and colour.
+   * `scope: 'none'` removes borders and ignores `spec`.
+   */
+  setTableBorders: {
+    scope: 'all' | 'outside' | 'inside' | 'none' | 'top' | 'bottom' | 'left' | 'right';
+    spec?: { style: string; size: number; color: ColorValue };
+  };
+
+  /**
+   * Select a table region — the whole table, the current row, or the current column.
+   * Legacy's table toolbar offers all three.
+   */
+  selectTableRegion: { region: 'table' | 'row' | 'column' };
+
+  /**
    * Table-level properties from the table properties dialog: preferred width and
    * its unit (`dxa`, `pct`, `auto`), and horizontal justification. `null` clears a
    * property; omitting it leaves the current value alone.
