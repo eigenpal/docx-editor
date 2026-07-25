@@ -18,6 +18,8 @@ import { DocxEditorMenuBar } from './DocxEditor/DocxEditorMenuBar';
 import { DocxEditorToolbar } from './DocxEditor/DocxEditorToolbar';
 import { DocxEditorSidebar } from './DocxEditor/DocxEditorSidebar';
 import { HorizontalRuler } from './ui/HorizontalRuler';
+import type { SectionProperties } from '../legacy-core-compat';
+import { pixelsToTwips } from '../legacy-core-compat';
 import { VerticalRuler } from './ui/VerticalRuler';
 import { PageIndicator } from './DocxEditor/PageIndicator';
 import type { DocxEditorProps, DocxEditorRef } from '../types';
@@ -112,6 +114,38 @@ const LEGACY_CONTENT_STYLE: CSSProperties = {
   flexDirection: 'column',
 };
 
+
+
+/**
+ * Section geometry for the legacy rulers, derived from what the engine publishes.
+ *
+ * The legacy rulers take a `SectionProperties` record because legacy read section data
+ * straight from the document model. The greenfield engine publishes the same geometry
+ * through `Editor.getPageGeometry()` — page box plus the `contentBox` the layout actually
+ * used — so the record is BUILT from that rather than the adapter reaching into a model
+ * it does not own. Margins are uniform on all four sides in the engine today; that is
+ * what is reported, and nothing here invents a per-side value.
+ *
+ * Returns `undefined` before layout publishes, so the rulers render their bare scale
+ * rather than one positioned against guessed geometry.
+ */
+function sectionPropsFromGeometry(editor: Editor | null): SectionProperties | undefined {
+  const page = editor?.getPageGeometry()[0];
+  if (!page) return undefined;
+  const left = Math.round(pixelsToTwips(page.contentBox.x - page.box.x));
+  const top = Math.round(pixelsToTwips(page.contentBox.y - page.box.y));
+  const right = Math.round(
+    pixelsToTwips(page.box.width - (page.contentBox.x - page.box.x) - page.contentBox.width),
+  );
+  const bottom = Math.round(
+    pixelsToTwips(page.box.height - (page.contentBox.y - page.box.y) - page.contentBox.height),
+  );
+  return {
+    pageWidth: Math.round(pixelsToTwips(page.box.width)),
+    pageHeight: Math.round(pixelsToTwips(page.box.height)),
+    margins: { left, right, top, bottom },
+  } as SectionProperties;
+}
 
 export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
   function DocxEditor(props, ref) {
@@ -349,13 +383,13 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
             <div className="docx-editor__scroll-container" style={LEGACY_SCROLLER_STYLE}>
               {/* Sticky at the scroller's top so it tracks horizontal scroll, as legacy. */}
               <div className="docx-editor__ruler-row" style={LEGACY_RULER_ROW_STYLE}>
-                <HorizontalRuler editor={editorRef.current} zoom={zoomFactor} />
+                <HorizontalRuler sectionProps={sectionPropsFromGeometry(editorRef.current)} zoom={zoomFactor} editable={false} />
               </div>
               <div style={LEGACY_CONTENT_ROW_STYLE}>
                 <div className="docx-editor__content" style={LEGACY_CONTENT_STYLE}>
                   {/* Anchors itself to the page, so it sits immediately left of the
                       document rather than in the window's left gutter (M6V.1). */}
-                  <VerticalRuler editor={editorRef.current} zoom={zoomFactor} />
+                  <VerticalRuler sectionProps={sectionPropsFromGeometry(editorRef.current)} zoom={zoomFactor} editable={false} />
                   {/* Outline toggle, in the left gutter as in the reference. */}
                   <button
                     type="button"
@@ -374,7 +408,11 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
                 </div>
               </div>
             </div>
-            <PageIndicator editor={editorRef.current} />
+            <PageIndicator
+              currentPage={(editorRef.current?.getCurrentPage('viewport') ?? 0) + 1}
+              totalPages={editorRef.current?.getTotalPages() ?? 0}
+              visible={(editorRef.current?.getTotalPages() ?? 0) > 1}
+            />
           </div>
           <DocxEditorSidebar editor={editorRef.current} open={false} t={t} />
         </div>

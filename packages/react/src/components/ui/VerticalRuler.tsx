@@ -1,80 +1,384 @@
-// Display-only vertical ruler (interactive-paginated-editing M4.4).
-// Shared adapter presentation and compatibility behavior.
-// presentation for the same reason as the horizontal ruler: the legacy top and
-// bottom margin drag handles have no greenfield contract to write through.
+/**
+ * VerticalRuler Component
+ *
+ * A vertical ruler that displays alongside the document with:
+ * - Page height scale with tick marks
+ * - Top and bottom margin indicators
+ * - Optional dragging to adjust margins
+ * - Support for zoom levels
+ *
+ * Similar to Google Docs' vertical ruler.
+ */
 
-import type { ReactNode } from 'react';
-import type { Editor } from '@docx-editor.dev/core-contract/editor';
-import { useEditorSnapshot } from '../../useEditorSnapshot';
-import { generateRulerTicks, rulerPageBox, type RulerUnit } from '../../rulerTicks';
+import React, { useState, useRef, useCallback, useEffect } from 'react';
+import type { CSSProperties } from 'react';
+import type { SectionProperties } from '../../legacy-core-compat';
+import { twipsToPixels, pixelsToTwips, formatPx } from '../../legacy-core-compat';
+import { useTranslation } from '../../i18n';
 
-/** Matches the legacy `RULER_WIDTH` so the shell gutter is unchanged. */
-export const RULER_WIDTH = 20;
-
-/** Matches `.docx-editor__content .ep-one-surface__viewport` padding, so the ruler's zero
- *  lines up with the top of the first page instead of floating above it. */
-const PAGE_TOP_PADDING = 24;
-/** Breathing room between the ruler and the page edge, as legacy. */
-const PAGE_RULER_GAP = 6;
+// ============================================================================
+// TYPES
+// ============================================================================
 
 export interface VerticalRulerProps {
-  readonly editor: Editor | null;
-  readonly zoom?: number;
-  readonly unit?: RulerUnit;
+  /** Section properties for page layout */
+  sectionProps?: SectionProperties | null;
+  /** Zoom level (1.0 = 100%) */
+  zoom?: number;
+  /** Whether margins can be dragged to adjust */
+  editable?: boolean;
+  /** Callback when top margin changes (in twips) */
+  onTopMarginChange?: (marginTwips: number) => void;
+  /** Callback when bottom margin changes (in twips) */
+  onBottomMarginChange?: (marginTwips: number) => void;
+  /** Unit to display (inches or cm) */
+  unit?: 'inch' | 'cm';
+  /** Additional CSS class name */
+  className?: string;
+  /** Additional inline styles */
+  style?: CSSProperties;
 }
 
-export function VerticalRuler({ editor, zoom = 1, unit = 'inch' }: VerticalRulerProps): ReactNode {
-  useEditorSnapshot(editor);
-  if (!editor) return null;
-  const box = rulerPageBox(editor.getPageGeometry());
-  if (!box) return null;
-  const ticks = generateRulerTicks(box.height, unit);
-  // Margin zones, mirroring the horizontal ruler (M6V.6). Without them only one of the
-  // two rulers showed the page's margins, which reads as a bug rather than a choice.
-  const page = editor.getPageGeometry()[0];
-  const content = page?.contentBox;
-  const topMargin = content ? content.y - page!.box.y : 0;
-  const bottomMargin = content ? box.height - (topMargin + content.height) : 0;
+type MarkerType = 'topMargin' | 'bottomMargin';
+
+// ============================================================================
+// CONSTANTS
+// ============================================================================
+
+const DEFAULT_PAGE_HEIGHT_TWIPS = 15840; // 11 inches
+const DEFAULT_MARGIN_TWIPS = 1440; // 1 inch
+const TWIPS_PER_INCH = 1440;
+const TWIPS_PER_CM = 567;
+
+// Ruler styling - Google Docs style
+// Exported so the outline toggle/panel can inset past the vertical ruler
+// (it overlays the editor's left edge) instead of rendering on top of it.
+export const RULER_WIDTH = 20;
+const RULER_TEXT_COLOR = 'var(--doc-text-muted)';
+const RULER_TICK_COLOR = 'var(--doc-text-subtle)';
+const MARKER_COLOR = 'var(--doc-primary)';
+const MARKER_HOVER_COLOR = 'var(--doc-primary)';
+const MARKER_ACTIVE_COLOR = 'var(--doc-primary-hover)';
+
+// ============================================================================
+// MAIN COMPONENT
+// ============================================================================
+
+export function VerticalRuler({
+  sectionProps,
+  zoom = 1,
+  editable = false,
+  onTopMarginChange,
+  onBottomMarginChange,
+  unit = 'inch',
+  className = '',
+  style,
+}: VerticalRulerProps): React.ReactElement {
+  const { t } = useTranslation();
+  const [dragging, setDragging] = useState<MarkerType | null>(null);
+  const [hoveredMarker, setHoveredMarker] = useState<MarkerType | null>(null);
+  const rulerRef = useRef<HTMLDivElement>(null);
+
+  // Get page dimensions
+  const pageHeightTwips = sectionProps?.pageHeight ?? DEFAULT_PAGE_HEIGHT_TWIPS;
+  const topMarginTwips = sectionProps?.marginTop ?? DEFAULT_MARGIN_TWIPS;
+  const bottomMarginTwips = sectionProps?.marginBottom ?? DEFAULT_MARGIN_TWIPS;
+
+  // Convert to pixels with zoom
+  const pageHeightPx = twipsToPixels(pageHeightTwips) * zoom;
+  const topMarginPx = twipsToPixels(topMarginTwips) * zoom;
+  const bottomMarginPx = twipsToPixels(bottomMarginTwips) * zoom;
+
+  // Handle drag start
+  const handleDragStart = useCallback(
+    (e: React.MouseEvent, marker: MarkerType) => {
+      if (!editable) return;
+      e.preventDefault();
+      setDragging(marker);
+    },
+    [editable]
+  );
+
+  // Handle drag
+  const handleDrag = useCallback(
+    (e: MouseEvent) => {
+      if (!dragging || !rulerRef.current) return;
+
+      const rect = rulerRef.current.getBoundingClientRect();
+      const y = e.clientY - rect.top;
+
+      const positionTwips = pixelsToTwips(y / zoom);
+
+      if (dragging === 'topMargin') {
+        const maxMargin = pageHeightTwips - bottomMarginTwips - 720;
+        const newMargin = Math.max(0, Math.min(positionTwips, maxMargin));
+        onTopMarginChange?.(Math.round(newMargin));
+      } else if (dragging === 'bottomMargin') {
+        const fromBottom = pageHeightTwips - positionTwips;
+        const maxMargin = pageHeightTwips - topMarginTwips - 720;
+        const newMargin = Math.max(0, Math.min(fromBottom, maxMargin));
+        onBottomMarginChange?.(Math.round(newMargin));
+      }
+    },
+    [
+      dragging,
+      zoom,
+      pageHeightTwips,
+      topMarginTwips,
+      bottomMarginTwips,
+      onTopMarginChange,
+      onBottomMarginChange,
+    ]
+  );
+
+  // Handle drag end
+  const handleDragEnd = useCallback(() => {
+    setDragging(null);
+  }, []);
+
+  // Add/remove document event listeners
+  useEffect(() => {
+    if (dragging) {
+      document.addEventListener('mousemove', handleDrag);
+      document.addEventListener('mouseup', handleDragEnd);
+      return () => {
+        document.removeEventListener('mousemove', handleDrag);
+        document.removeEventListener('mouseup', handleDragEnd);
+      };
+    }
+  }, [dragging, handleDrag, handleDragEnd]);
+
+  // Generate tick marks
+  const ticks = generateVerticalTicks(pageHeightTwips, zoom, unit);
+
+  const rulerStyle: CSSProperties = {
+    position: 'relative',
+    width: RULER_WIDTH,
+    height: formatPx(pageHeightPx),
+    backgroundColor: 'transparent',
+    overflow: 'visible',
+    userSelect: 'none',
+    cursor: dragging ? 'ns-resize' : 'default',
+    ...style,
+  };
+
   return (
-    // Positioned against the PAGE, not the viewport gutter.
-    //
-    // Mounted at the content column's left edge it rendered against the window with its
-    // scale running down the far edge of the screen, nowhere near the document — an
-    // owner review called it out and it was removed outright. The page is centred in the
-    // viewport, so anchoring at 50% and stepping back half the page plus the ruler's own
-    // width puts it exactly where the legacy product has it: immediately left of the
-    // page, top-aligned with it.
     <div
-      className="ep-ruler ep-ruler--vertical"
-      data-testid="vertical-ruler"
-      role="presentation"
-      aria-hidden="true"
-      style={{
-        width: RULER_WIDTH,
-        height: box.height * zoom,
-        position: 'absolute',
-        top: PAGE_TOP_PADDING,
-        left: '50%',
-        marginLeft: -((box.width * zoom) / 2) - RULER_WIDTH - PAGE_RULER_GAP,
-        // Presentation only: it must never intercept a click meant for the page.
-        pointerEvents: 'none',
-      }}
+      ref={rulerRef}
+      className={`docx-vertical-ruler ${className}`}
+      style={rulerStyle}
+      role="slider"
+      aria-label={t('ruler.vertical')}
+      aria-orientation="vertical"
     >
-      {topMargin > 0 ? (
-        <div className="ep-ruler__margin ep-ruler__margin--top" style={{ height: topMargin * zoom }} />
-      ) : null}
-      {bottomMargin > 0 ? (
-        <div className="ep-ruler__margin ep-ruler__margin--bottom" style={{ height: bottomMargin * zoom }} />
-      ) : null}
-      {ticks.map((tick) => (
-        <div
-          key={tick.position}
-          className="ep-ruler__tick"
-          style={{ top: tick.position * zoom, width: tick.height }}
-        >
-          {tick.label ? <span className="ep-ruler__label">{tick.label}</span> : null}
-        </div>
-      ))}
+      {/* Tick marks */}
+      <div
+        style={{
+          position: 'absolute',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          pointerEvents: 'none',
+        }}
+      >
+        {ticks.map((tick, index) => (
+          <VerticalTick key={index} tick={tick} />
+        ))}
+      </div>
+
+      {/* Top margin marker */}
+      <VerticalMarginMarker
+        type="topMargin"
+        position={topMarginPx}
+        editable={editable}
+        isDragging={dragging === 'topMargin'}
+        isHovered={hoveredMarker === 'topMargin'}
+        onMouseEnter={() => setHoveredMarker('topMargin')}
+        onMouseLeave={() => setHoveredMarker(null)}
+        onMouseDown={(e) => handleDragStart(e, 'topMargin')}
+      />
+
+      {/* Bottom margin marker */}
+      <VerticalMarginMarker
+        type="bottomMargin"
+        position={pageHeightPx - bottomMarginPx}
+        editable={editable}
+        isDragging={dragging === 'bottomMargin'}
+        isHovered={hoveredMarker === 'bottomMargin'}
+        onMouseEnter={() => setHoveredMarker('bottomMargin')}
+        onMouseLeave={() => setHoveredMarker(null)}
+        onMouseDown={(e) => handleDragStart(e, 'bottomMargin')}
+      />
     </div>
   );
 }
+
+// ============================================================================
+// SUB-COMPONENTS
+// ============================================================================
+
+interface VerticalTickData {
+  position: number;
+  width: number;
+  label?: string;
+}
+
+function VerticalTick({ tick }: { tick: VerticalTickData }): React.ReactElement {
+  const tickStyle: CSSProperties = {
+    position: 'absolute',
+    top: formatPx(tick.position),
+    right: 0,
+    height: 1,
+    width: tick.width,
+    backgroundColor: RULER_TICK_COLOR,
+  };
+
+  const labelStyle: CSSProperties = {
+    position: 'absolute',
+    top: formatPx(tick.position),
+    left: 2,
+    transform: 'translateY(-50%)',
+    fontSize: '9px',
+    color: RULER_TEXT_COLOR,
+    fontFamily: 'sans-serif',
+    whiteSpace: 'nowrap',
+  };
+
+  return (
+    <>
+      <div style={tickStyle} />
+      {tick.label && <div style={labelStyle}>{tick.label}</div>}
+    </>
+  );
+}
+
+interface VerticalMarginMarkerProps {
+  type: 'topMargin' | 'bottomMargin';
+  position: number;
+  editable: boolean;
+  isDragging: boolean;
+  isHovered: boolean;
+  onMouseEnter: () => void;
+  onMouseLeave: () => void;
+  onMouseDown: (e: React.MouseEvent) => void;
+}
+
+function VerticalMarginMarker({
+  type,
+  position,
+  editable,
+  isDragging,
+  isHovered,
+  onMouseEnter,
+  onMouseLeave,
+  onMouseDown,
+}: VerticalMarginMarkerProps): React.ReactElement {
+  const { t } = useTranslation();
+  const color = isDragging ? MARKER_ACTIVE_COLOR : isHovered ? MARKER_HOVER_COLOR : MARKER_COLOR;
+
+  const markerStyle: CSSProperties = {
+    position: 'absolute',
+    top: formatPx(position - 5),
+    right: 0,
+    width: RULER_WIDTH,
+    height: 10,
+    cursor: editable ? 'ns-resize' : 'default',
+    zIndex: isDragging ? 10 : 1,
+  };
+
+  // Triangle pointing left (for top) or right (for bottom)
+  const triangleStyle: CSSProperties = {
+    position: 'absolute',
+    top: 0,
+    right: 2,
+    width: 0,
+    height: 0,
+    borderTop: '5px solid transparent',
+    borderBottom: '5px solid transparent',
+    borderRight: `8px solid ${color}`,
+    transition: 'border-right-color 0.1s',
+  };
+
+  return (
+    <div
+      className={`docx-ruler-marker docx-ruler-marker-${type}`}
+      style={markerStyle}
+      onMouseEnter={onMouseEnter}
+      onMouseLeave={onMouseLeave}
+      onMouseDown={onMouseDown}
+      role="slider"
+      aria-label={type === 'topMargin' ? t('ruler.topMargin') : t('ruler.bottomMargin')}
+      aria-orientation="vertical"
+      tabIndex={editable ? 0 : -1}
+    >
+      <div style={triangleStyle} />
+    </div>
+  );
+}
+
+// ============================================================================
+// UTILITY FUNCTIONS
+// ============================================================================
+
+function generateVerticalTicks(
+  pageHeightTwips: number,
+  zoom: number,
+  unit: 'inch' | 'cm'
+): VerticalTickData[] {
+  const ticks: VerticalTickData[] = [];
+
+  if (unit === 'inch') {
+    const eighthInchTwips = TWIPS_PER_INCH / 8;
+    const totalEighths = Math.ceil(pageHeightTwips / eighthInchTwips);
+
+    for (let i = 0; i <= totalEighths; i++) {
+      const twipsPos = i * eighthInchTwips;
+      if (twipsPos > pageHeightTwips) break;
+
+      const pxPos = twipsToPixels(twipsPos) * zoom;
+
+      if (i % 8 === 0) {
+        const inches = i / 8;
+        ticks.push({
+          position: pxPos,
+          width: 10,
+          label: inches > 0 ? String(inches) : undefined,
+        });
+      } else if (i % 4 === 0) {
+        ticks.push({ position: pxPos, width: 6 });
+      } else if (i % 2 === 0) {
+        ticks.push({ position: pxPos, width: 4 });
+      } else {
+        ticks.push({ position: pxPos, width: 2 });
+      }
+    }
+  } else {
+    const mmTwips = TWIPS_PER_CM / 10;
+    const totalMm = Math.ceil(pageHeightTwips / mmTwips);
+
+    for (let i = 0; i <= totalMm; i++) {
+      const twipsPos = i * mmTwips;
+      if (twipsPos > pageHeightTwips) break;
+
+      const pxPos = twipsToPixels(twipsPos) * zoom;
+
+      if (i % 10 === 0) {
+        const cm = i / 10;
+        ticks.push({
+          position: pxPos,
+          width: 10,
+          label: cm > 0 ? String(cm) : undefined,
+        });
+      } else if (i % 5 === 0) {
+        ticks.push({ position: pxPos, width: 6 });
+      } else {
+        ticks.push({ position: pxPos, width: 3 });
+      }
+    }
+  }
+
+  return ticks;
+}
+
+export default VerticalRuler;

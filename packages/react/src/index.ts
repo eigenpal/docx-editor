@@ -34,12 +34,12 @@ export {
   type ToolbarCommandId,
   type ToolbarCommandState,
 } from './toolbarCommands';
-export { DocxEditorShell, type DocxEditorShellProps } from './components/DocxEditor/DocxEditorShell';
+export { DocxEditorShell } from './components/DocxEditor/DocxEditorShell';
 export { DocxEditorTitleBar, type DocxEditorTitleBarProps } from './components/DocxEditor/DocxEditorTitleBar';
 export { DocxEditorToolbar, type DocxEditorToolbarProps } from './components/DocxEditor/DocxEditorToolbar';
 export { DocxEditorMenuBar, type DocxEditorMenuBarProps } from './components/DocxEditor/DocxEditorMenuBar';
 export { DocxEditorSidebar, DEFERRED_DIALOGS, type DocxEditorSidebarProps, type SidebarPanel, type DeferredDialogId } from './components/DocxEditor/DocxEditorSidebar';
-export { PageIndicator, type PageIndicatorProps } from './components/DocxEditor/PageIndicator';
+export { PageIndicator } from './components/DocxEditor/PageIndicator';
 export { HorizontalRuler, type HorizontalRulerProps } from './components/ui/HorizontalRuler';
 export { VerticalRuler, RULER_WIDTH, type VerticalRulerProps } from './components/ui/VerticalRuler';
 export { generateRulerTicks, rulerPageBox, PX_PER_INCH, PX_PER_CM, type RulerTick, type RulerUnit } from './rulerTicks';

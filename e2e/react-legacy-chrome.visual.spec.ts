@@ -47,7 +47,10 @@ test.describe('M6V.1 legacy chrome visual parity (React)', () => {
         pillOverflowX: getComputedStyle(bar).overflowX,
         horizontalRuler: has('.docx-editor__ruler-row'),
         rulerPosition: getComputedStyle(rulerRow).position,
-        verticalRuler: has('.ep-ruler--vertical'),
+        // `.docx-vertical-ruler` is the LEGACY class. The ported ruler replaced my
+        // interim one, whose `.ep-ruler--vertical` class had been introduced in the interim implementation; the gate
+        // follows the legacy markup rather than the other way round.
+        verticalRuler: has('.docx-vertical-ruler'),
         scrollContainer: has('.docx-editor__scroll-container'),
         workspace: has('.docx-editor__content'),
         pages: count('[data-page-index]'),

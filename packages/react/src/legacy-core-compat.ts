@@ -730,7 +730,15 @@ export type EmphasisMark = string;
 export type LineSpacingRule = string;
 export interface ShadingProperties { [key: string]: unknown }
 export interface BorderSpec { [key: string]: unknown }
-export interface TabMark { [key: string]: unknown }
+/** Compatibility contract for the shared adapter surface. */
+export interface TabMark {
+  /** Position in twips from left margin */
+  position: number;
+  /** Alignment at tab stop */
+  alignment: TabJustify;
+  /** Leader character */
+  leader?: TabLeader;
+}
 export interface ParagraphSpacingOverrides { [key: string]: unknown }
 
 /** Alias under the name `toolbarUtils` imports it. */
@@ -902,3 +910,328 @@ export interface FloatingTableProperties {
 }
 
 export type TableWidthType = 'auto' | 'dxa' | 'nil' | 'pct';
+
+// --- Shell shapes ---------------------------------------------------------------------
+
+/** Compatibility contract for the shared adapter surface. */
+export interface HeadingInfo {
+  /** The text content of the heading */
+  text: string;
+  /** Outline level (0 = Heading 1, 1 = Heading 2, etc.) */
+  level: number;
+  /** ProseMirror document position of the paragraph node */
+  pmPos: number;
+}
+
+/** Compatibility contract for the shared adapter surface.
+ *  these fields (page width, margins), so an opaque shape produced 25 type errors — the
+ *  fifth time in this port that a hand-written shape failed where the real one works. */
+export interface SectionProperties {
+  // Page size
+  /** Page width in twips */
+  pageWidth?: number;
+  /** Page height in twips */
+  pageHeight?: number;
+  /** Page orientation */
+  orientation?: PageOrientation;
+
+  // Margins
+  /** Top margin in twips */
+  marginTop?: number;
+  /** Bottom margin in twips */
+  marginBottom?: number;
+  /** Left margin in twips */
+  marginLeft?: number;
+  /** Right margin in twips */
+  marginRight?: number;
+  /** Header distance from top in twips */
+  headerDistance?: number;
+  /** Footer distance from bottom in twips */
+  footerDistance?: number;
+  /** Gutter margin in twips */
+  gutter?: number;
+
+  // Columns
+  /** Number of columns */
+  columnCount?: number;
+  /** Space between columns in twips */
+  columnSpace?: number;
+  /** Equal width columns */
+  equalWidth?: boolean;
+  /** Separator line between columns */
+  separator?: boolean;
+  /** Individual column definitions */
+  columns?: Column[];
+  /**
+   * Number of columns the footnote area is laid out in (`w15:footnoteColumns`).
+   * Word's "Footnote layout → Columns" setting, independent of the body column
+   * count above. Undefined/1 means the footnote area follows the body (single
+   * column for a single-column section). See ECMA-376 + the w15 extension.
+   */
+  footnoteColumns?: number;
+
+  // Section behavior
+  /** Section start type */
+  sectionStart?: SectionStart;
+  /** Vertical alignment of text */
+  verticalAlign?: VerticalAlign;
+  /** Right-to-left section */
+  bidi?: boolean;
+
+  // Headers and footers
+  /** Header references */
+  headerReferences?: HeaderReference[];
+  /** Footer references */
+  footerReferences?: FooterReference[];
+  /** Different first page header/footer */
+  titlePg?: boolean;
+  /** Different odd/even page headers/footers */
+  evenAndOddHeaders?: boolean;
+
+  // Line numbers
+  /** Line numbering settings */
+  lineNumbers?: {
+    start?: number;
+    countBy?: number;
+    distance?: number;
+    restart?: LineNumberRestart;
+  };
+  /** Page numbering settings (`w:pgNumType`). */
+  pageNumbers?: {
+    start?: number;
+    format?: string;
+    chapterStyle?: number;
+    chapterSeparator?: string;
+  };
+
+  // Page borders
+  /** Page borders */
+  pageBorders?: {
+    top?: BorderSpec;
+    bottom?: BorderSpec;
+    left?: BorderSpec;
+    right?: BorderSpec;
+    /** Display setting */
+    display?: 'allPages' | 'firstPage' | 'notFirstPage';
+    /** Offset from */
+    offsetFrom?: 'page' | 'text';
+    /** Z-order */
+    zOrder?: 'front' | 'back';
+  };
+
+  // Background
+  /** Page background */
+  background?: {
+    color?: ColorValue;
+    themeColor?: ThemeColorSlot;
+    themeTint?: string;
+    themeShade?: string;
+  };
+
+  // Footnote/Endnote properties
+  /** Footnote properties for this section */
+  footnotePr?: FootnoteProperties;
+  /** Endnote properties for this section */
+  endnotePr?: EndnoteProperties;
+
+  // Document grid
+  /** Document grid */
+  docGrid?: {
+    type?: 'default' | 'lines' | 'linesAndChars' | 'snapToChars';
+    linePitch?: number;
+    charSpace?: number;
+  };
+
+  // Paper source
+  /** First page paper source */
+  paperSrcFirst?: number;
+  /** Other pages paper source */
+  paperSrcOther?: number;
+}
+
+/** STUB — tracked changes are not modelled by the engine, so the shell always receives
+ *  an empty result and renders no tracked-change chrome. Shape follows the legacy
+ *  `extractTrackedChanges` result. */
+/** Compatibility contract for the shared adapter surface. */
+export interface TrackedChangeEntry {
+  /**
+   * Revision shape. Inline shapes (`insertion`, `deletion`, `replacement`)
+   * wrap text runs; the rest are structural revisions on node attrs.
+   *
+   * - `insertion` — text was added (`<w:ins>`).
+   * - `deletion` — text was struck through but not removed (`<w:del>`).
+   * - `replacement` — an adjacent deletion + insertion carrying the same
+   *   revision identity; sidebar shows one combined card. `deletedText`
+   *   and `insertionRevisionId` are set on this variant.
+   * - `paragraphMarkInsertion` / `paragraphMarkDeletion` — Enter /
+   *   Backspace produced a tracked paragraph break (`<w:pPr><w:rPr><w:ins/>` /
+   *   `<w:del/>`).
+   * - `paragraphPropertiesChanged` — formatting (alignment, spacing,
+   *   etc.) on the paragraph was changed (`<w:pPrChange>`).
+   * - `runPropertiesChanged` — formatting on an exact text run was changed
+   *   (`<w:rPrChange>`).
+   * - `rowInserted` / `rowDeleted` / `rowPropertiesChanged` — table
+   *   row authored / removed / formatted (`<w:trPr><w:ins/>` / `<w:del/>`
+   *   / `<w:trPrChange>`).
+   * - `cellInserted` / `cellDeleted` / `cellMerged` /
+   *   `cellPropertiesChanged` — per-cell revisions
+   *   (`<w:cellIns>` / `<w:cellDel>` / `<w:cellMerge>` / `<w:tcPrChange>`).
+   * - `tablePropertiesChanged` — table-level formatting
+   *   (`<w:tblPrChange>`).
+   */
+  type:
+    | 'insertion'
+    | 'deletion'
+    | 'replacement'
+    | 'paragraphMarkInsertion'
+    | 'paragraphMarkDeletion'
+    | 'paragraphPropertiesChanged'
+    | 'runPropertiesChanged'
+    | 'rowInserted'
+    | 'rowDeleted'
+    | 'rowPropertiesChanged'
+    | 'cellInserted'
+    | 'cellDeleted'
+    | 'cellMerged'
+    | 'cellPropertiesChanged'
+    | 'tableInserted'
+    | 'tableDeleted'
+    | 'tablePropertiesChanged';
+  /**
+   * Affected text. For inline types this is the run's text; for
+   * structural types it's the surrounding paragraph / cell content
+   * (truncated by the sidebar before display).
+   */
+  text: string;
+  /**
+   * Only set when `type === 'replacement'` — the text the user removed.
+   * The inserted text lives in {@link TrackedChangeEntry.text}.
+   */
+  deletedText?: string;
+  /** Author that minted the revision (`w:author`). */
+  author: string;
+  /** ISO timestamp the revision was minted (`w:date`). May be undefined for legacy imports. */
+  date?: string;
+  /**
+   * Document position where the revision starts. For inline types this
+   * is the start of the marked text run; for structural types it's the
+   * containing paragraph / row / cell / table node's start position.
+   * Used by the sidebar to anchor the card at the correct vertical
+   * offset.
+   */
+  from: number;
+  /**
+   * Document position where the revision ends. For inline coalesced
+   * runs that span multiple paragraphs, this is the END position of the
+   * LAST run in the group; the intervening structural positions are not
+   * preserved.
+   */
+  to: number;
+  /**
+   * The `w:id` of the revision. Pass to
+   * {@link acceptChangeById} / {@link rejectChangeById} to resolve every
+   * site sharing this id — including pPrIns paragraph attrs and
+   * subsequent typed runs in the same editing session.
+   */
+  revisionId: number;
+  /**
+   * Only set when `type === 'replacement'`. Editor-authored replacements
+   * normally share one id, but this remains available for explicitly linked
+   * legacy replacements whose insertion half has a distinct id.
+   */
+  insertionRevisionId?: number;
+  /**
+   * Extra `w:id`s that map to the same logical revision as this card.
+   * Populated only for structural revisions that intentionally group several
+   * OOXML ids (for example, all rows of one inserted table). Inline revisions
+   * remain independently actionable by `w:id`.
+   */
+  coalescedRevisionIds?: number[];
+}
+
+/** STUB result — tracked changes are not modelled by the engine, so the shell always
+ *  receives an empty set and renders no tracked-change chrome. */
+export interface TrackedChangesResult {
+  entries: TrackedChangeEntry[];
+  commentRevisions?: Map<string, string>;
+}
+
+// --- Unit conversion ------------------------------------------------------------------
+//
+// COPIED verbatim from the legacy core's `utils/units.ts`. The rulers convert twips to
+// pixels on every tick, and an approximated constant here would misplace every mark on
+// the scale.
+
+/** Twips per inch (1 inch = 1440 twips) */
+export const TWIPS_PER_INCH = 1440;
+const STANDARD_DPI = 96;
+export const PIXELS_PER_INCH = STANDARD_DPI;
+
+export function twipsToPixels(twips: number): number {
+  return (twips / TWIPS_PER_INCH) * PIXELS_PER_INCH;
+}
+
+export function pixelsToTwips(px: number): number {
+  return (px / PIXELS_PER_INCH) * TWIPS_PER_INCH;
+}
+
+export function roundPixels(px: number, decimalPlaces: number = 2): number {
+  const factor = Math.pow(10, decimalPlaces);
+  return Math.round(px * factor) / factor;
+}
+
+export function formatPx(px: number): string {
+  return `${roundPixels(px)}px`;
+}
+
+// Shared adapter presentation and compatibility behavior.
+// types — the rulers read page size, orientation and margins through them.
+export interface Column {
+  /** Column width in twips */
+  width?: number;
+  /** Space after column in twips */
+  space?: number;
+}
+
+export interface EndnoteProperties {
+  position?: EndnotePosition;
+  numFmt?: NumberFormat;
+  numStart?: number;
+  numRestart?: NoteNumberRestart;
+}
+
+export interface FooterReference {
+  type: HeaderFooterType;
+  rId: string;
+}
+
+export interface FootnoteProperties {
+  position?: FootnotePosition;
+  numFmt?: NumberFormat;
+  numStart?: number;
+  numRestart?: NoteNumberRestart;
+}
+
+export interface HeaderReference {
+  type: HeaderFooterType;
+  rId: string;
+}
+
+export type LineNumberRestart = 'continuous' | 'newPage' | 'newSection';
+
+export type PageOrientation = 'portrait' | 'landscape';
+
+export type SectionStart = 'continuous' | 'nextPage' | 'oddPage' | 'evenPage' | 'nextColumn';
+
+export type VerticalAlign = 'top' | 'center' | 'both' | 'bottom';
+
+// Siblings named by the shared section/footnote types.
+export type EndnotePosition = 'sectEnd' | 'docEnd';
+export type FootnotePosition = 'pageBottom' | 'beneathText' | 'sectEnd' | 'docEnd';
+export type HeaderFooterType = 'default' | 'first' | 'even';
+export type NoteNumberRestart = 'continuous' | 'eachSect' | 'eachPage';
+
+
+// Named by the shared TabMark.
+export type TabJustify = 'left' | 'center' | 'right' | 'decimal' | 'bar' | 'clear' | 'num';
+export type TabLeader = 'none' | 'dot' | 'hyphen' | 'underscore' | 'heavy' | 'middleDot';

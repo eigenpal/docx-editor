@@ -1,42 +1,48 @@
-// Page indicator (interactive-paginated-editing M4.3).
-// Shared adapter presentation and compatibility behavior.
-// component was handed `currentPage`/`totalPages` computed by the adapter from
-// scroll measurement; this one reads them from the public editor queries, so
-// the adapter never measures the document to decide what page it is on.
-
-import type { ReactNode } from 'react';
-import type { Editor } from '@docx-editor.dev/core-contract/editor';
-import { useEditorSnapshot } from '../../useEditorSnapshot';
-
-export interface PageIndicatorProps {
-  readonly editor: Editor | null;
-  /** Fade out when the user is not scrolling, as the legacy indicator did. */
-  readonly visible?: boolean;
-  /** `{current} of {total}` formatter — supplied by the host's i18n. */
-  readonly format?: (current: number, total: number) => string;
-}
+import { useTranslation } from '../../i18n';
 
 /**
- * `current of total`, read from `Editor.getCurrentPage()` and
- * `Editor.getTotalPages()`. Renders nothing for a single-page document, matching
- * the legacy shell, and never intercepts pointer events.
+ * Floating page indicator shown next to the scrollbar while the user
+ * scrolls a multi-page document. Wrapped so the `{current} of {total}`
+ * template runs through `t()`; `useTranslation()` only works inside
+ * `<LocaleProvider>`, which `DocxEditor`'s own body is not.
  */
-export function PageIndicator({ editor, visible = true, format }: PageIndicatorProps): ReactNode {
-  useEditorSnapshot(editor);
-  if (!editor) return null;
-  const total = editor.getTotalPages();
-  if (total <= 1) return null;
-  const current = editor.getCurrentPage('viewport') + 1;
-  const label = format ? format(current, total) : `${current} of ${total}`;
+export function PageIndicator({
+  currentPage,
+  totalPages,
+  visible,
+}: {
+  currentPage: number;
+  totalPages: number;
+  visible: boolean;
+}) {
+  const { t } = useTranslation();
   return (
     <div
-      className="ep-shell__page-indicator-chip"
-      data-testid="page-indicator"
-      style={{ opacity: visible ? 1 : 0 }}
+      style={{
+        position: 'absolute',
+        right: 24,
+        top: '50%',
+        transform: 'translateY(-50%)',
+        backgroundColor: 'var(--doc-overlay)',
+        // The overlay is always a dark scrim (both themes), so text stays light
+        // — --doc-on-primary flips dark in dark mode and would vanish here.
+        color: '#fff',
+        padding: '6px 12px',
+        borderRadius: '4px',
+        fontSize: '12px',
+        fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
+        fontWeight: 500,
+        whiteSpace: 'nowrap',
+        pointerEvents: 'none',
+        zIndex: 1000,
+        opacity: visible ? 1 : 0,
+        transition: 'opacity 0.3s ease',
+        userSelect: 'none',
+      }}
       aria-live="polite"
       role="status"
     >
-      {label}
+      {t('viewer.pageIndicator', { current: currentPage, total: totalPages })}
     </div>
   );
 }
