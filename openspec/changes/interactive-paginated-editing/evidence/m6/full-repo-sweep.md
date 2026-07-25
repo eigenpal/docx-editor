@@ -52,6 +52,7 @@ package surfaces had silently diverged.
 | `check:adapter-css-thin` | Pass | gate repaired at 6.1; it had been failing on a missing file |
 | `check:editor-contract` | **Pass — repaired** | had been throwing ENOENT on `packages/react/src/components/DocxEditor.tsx`, a path the strip deleted. Repointed at the greenfield types; allowlists reset from ~18 retired props to the three real divergences. |
 | `check:public-docs-surface` | **Fail — pre-existing, and NOT a stale-path bug** | see below |
+| `api:check` (react, vue) | **Pass — after rebuild + re-extract** | Named by M4.0 and by the matrix, this was never run during the milestone and was FAILING (`API surface drift in 1 entry` for react). It also could not have measured anything useful: the extractor reads `dist`, which was a build predating this change, so it compared stale to stale. Both packages rebuilt, both snapshots re-extracted, and each now contains this change's new exports. Found by independent evidence audit. |
 | `bun run typecheck` | Fail — pre-existing | `@docx-editor.dev/nuxt` TS5097 only; every package this change touched typechecks clean |
 | `openspec validate --strict` | Pass | |
 
