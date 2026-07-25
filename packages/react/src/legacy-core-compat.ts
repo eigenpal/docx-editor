@@ -1344,3 +1344,41 @@ export interface ParagraphContent {
 export interface ListRendering { [key: string]: unknown }
 export interface ParagraphPropertyChange { [key: string]: unknown }
 export interface TrackedChangeInfo { [key: string]: unknown }
+
+
+// --- Toolbar-facing document + table context -----------------------------------------
+// Compatibility shapes, narrowed to the fields the ported chrome reads.
+
+/**
+ * The legacy document wrapper. The ported toolbar reads exactly two paths off it —
+ * `package.styles.styles` and `package.theme` — so those are what this declares. The
+ * greenfield engine publishes both through capabilities (`getDocumentStyles`, and the
+ * theme is not exposed yet), which is why nothing constructs one of these today.
+ */
+export interface Document {
+  package: {
+    styles?: { styles?: Style[] };
+    theme?: Theme;
+  };
+}
+
+/** Compatibility contract for the shared adapter surface.
+ * ProseMirror node and document position; this adapter must not name ProseMirror types,
+ * and the engine addresses blocks by id, so they are declared opaque here rather than
+ * given a shape that implies a position vocabulary this engine does not have.
+ */
+export interface TableContextInfo {
+  isInTable: boolean;
+  table?: unknown;
+  tablePos?: number;
+  rowIndex?: number;
+  columnIndex?: number;
+  rowCount?: number;
+  columnCount?: number;
+  hasMultiCellSelection?: boolean;
+  canSplitCell?: boolean;
+  /** Current cell's dominant border color, if any */
+  cellBorderColor?: ColorValue;
+  /** Current cell's background/fill color (RGB hex without #), if any */
+  cellBackgroundColor?: string;
+}

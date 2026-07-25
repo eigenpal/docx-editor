@@ -13,10 +13,10 @@ import {
 } from '@docx-editor.dev/engine-editor';
 import type { DisplayPage } from '@docx-editor.dev/core-contract/geometry';
 import { paintDisplay } from '../paintDisplay';
-// The legacy title + menu components. My DocxEditorTitleBar/DocxEditorMenuBar are
-// deleted: two versions of one control is the drift the port rule warns about.
-import { DocumentName, Logo, MenuBar, TitleBar, TitleBarRight } from './TitleBar';
-import { Toolbar } from './Toolbar';
+// The title bar is composed by DocxEditorToolbar (via EditorToolbar's compound parts),
+// which is where legacy assembles it — this file no longer composes it separately.
+import { DocxEditorToolbar } from './DocxEditor/DocxEditorToolbar';
+import type { EditorMode } from './DocxEditor/internals/editing-modes';
 import { useOutlineSidebar } from './DocxEditor/hooks/useOutlineSidebar';
 import { useScrollPageInfo } from './DocxEditor/hooks/useScrollPageInfo';
 import { EditorToolbarContext } from './EditorToolbarContext';
@@ -136,6 +136,27 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
       scrollContainerRef: scrollRef,
       isLoading: pages.length === 0,
     });
+
+    // Chrome state the ported toolbar owns the controls for. The comments sidebar has
+    // nothing to show while `getComments` is a stub, but the toggle is wired rather than
+    // absent — a missing control reads as "unsupported forever".
+    const [editingMode, setEditingMode] = useState<EditorMode>('editing');
+    const [showCommentsSidebar, setShowCommentsSidebar] = useState(false);
+    const [expandedSidebarItem, setExpandedSidebarItem] = useState<string | null>(null);
+
+    // `selectionFormatting` is how the legacy toolbar drives its active states and value
+    // displays — `active={currentFormatting.bold}` and the pickers' current font/size/
+    // style. Supplying it from the engine's derivation is the wiring that makes B/I
+    // highlight and the pickers show the caret's actual formatting.
+    const f = editorRef.current?.getSelectionFormatting();
+    const selectionFormatting = {
+      ...(f?.bold !== undefined ? { bold: f.bold } : {}),
+      ...(f?.italic !== undefined ? { italic: f.italic } : {}),
+      ...(f?.underline !== undefined ? { underline: f.underline } : {}),
+      ...(f?.fontFamily ? { fontFamily: f.fontFamily } : {}),
+      ...(f?.fontSizeHalfPoints ? { fontSize: f.fontSizeHalfPoints } : {}),
+      ...(f?.styleId ? { styleId: f.styleId } : {}),
+    };
 
     // Collect headings on open, as legacy did — it walked the editing engine's
     // document tree; here the engine derives the outline from the authored model.
@@ -350,11 +371,11 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
           readOnlyProp={false}
           showOutline={showOutline}
           showOutlineButton
-          sidebarOpen={false}
+          sidebarOpen={showCommentsSidebar}
           minLayoutWidth={0}
           toolbarHeight={toolbarHeight}
           editorScrollLeft={editorScrollLeft}
-          expandedSidebarItem={null}
+          expandedSidebarItem={expandedSidebarItem}
           trackedChanges={[]}
           onScrollContainerMouseDown={() => {}}
           onEditorBgMouseDown={() => {}}
@@ -397,59 +418,78 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
           agentPanelOpen={false}
           onAgentPanelClose={() => {}}
           toolbar={
-            /* Wrapper carries `toolbarRefCallback`, which is how the outline panel learns
-               the toolbar's height. Class list matches the legacy toolbar wrapper.
+            /* The legacy DocxEditorToolbar, not the composition had been inlined here. It
+               owns the measuring wrapper, the title-bar row, the comments/mode/agent
+               controls and the toolbar band — all of which had been partly rebuilt.
 
-               `documentFonts` now comes from the engine's real inventory rather than the
-               picker's placeholder. Wiring it here is the point of the capability: the
-               ported Toolbar already accepts the prop, so nothing in the legacy component
-               changes. */
-            <div ref={toolbarRefCallback} className="z-50 flex flex-col gap-0 flex-shrink-0">
-            {/* Title bar and toolbar share the measured wrapper, as legacy's
-                DocxEditorToolbar has it — which is also why `toolbarHeight` (the outline
-                panel's top offset) counts both rows.
-
-                The DEMO owns what sits left and right of the title — brand lockup,
-                adapter and example switchers, theme toggle, Open/New/Save — and passes
-                them through these slots, exactly as the legacy demo does. The editor
-                supplies only the document name and menu bar, which are its own. */}
-            <div className="flex flex-col bg-doc-surface shadow-sm flex-shrink-0">
-              <TitleBar>
-                <Logo>{renderTitleBarLeft?.()}</Logo>
-                <DocumentName value={title ?? ''} onChange={(next) => onTitleChange?.(next)} />
-                <MenuBar />
-                <TitleBarRight>{renderTitleBarRight?.()}</TitleBarRight>
-              </TitleBar>
-            </div>
-            <Toolbar
-              /* `currentFormatting` is how the legacy toolbar drives its active states
-                 and value displays — `active={currentFormatting.bold}` and the pickers'
-                 current font/size/style. Supplying it from the engine's derivation is the
-                 wiring that makes B/I highlight and the pickers show the caret's actual
-                 formatting. */
-              currentFormatting={(() => {
-                const f = editorRef.current?.getSelectionFormatting();
-                if (!f) return {};
-                return {
-                  ...(f.bold !== undefined ? { bold: f.bold } : {}),
-                  ...(f.italic !== undefined ? { italic: f.italic } : {}),
-                  ...(f.underline !== undefined ? { underline: f.underline } : {}),
-                  ...(f.fontFamily ? { fontFamily: f.fontFamily } : {}),
-                  ...(f.fontSizeHalfPoints ? { fontSize: f.fontSizeHalfPoints } : {}),
-                  ...(f.styleId ? { styleId: f.styleId } : {}),
-                };
-              })()}
+               Engine-backed props: `document` is the legacy-shaped projection the ported
+               toolbar reads styles off (it takes `document?.package.styles?.styles`), and
+               `editor` answers canUndo/canRedo. Everything the engine cannot answer yet
+               is passed as the honest empty value, not a guess: no table or image
+               context, no theme, no watermark or page-setup dialogs. */
+            <DocxEditorToolbar
+              toolbarRefCallback={toolbarRefCallback}
+              agentPanelOpen={false}
+              setAgentPanelOpen={() => {}}
+              document={{
+                package: {
+                  styles: {
+                    styles: (editorRef.current?.getDocumentStyles() ?? []).map((st) => ({
+                      styleId: st.styleId,
+                      name: st.name,
+                      type: 'paragraph' as const,
+                    })),
+                  },
+                },
+              }}
+              theme={null}
+              editor={editorRef.current}
+              selectionFormatting={selectionFormatting}
+              tableContext={null}
+              imageContext={null}
+              readOnly={false}
+              editingMode={editingMode}
+              setEditingMode={setEditingMode}
+              setShowCommentsSidebar={setShowCommentsSidebar}
+              setExpandedSidebarItem={setExpandedSidebarItem}
+              showCommentsSidebar={showCommentsSidebar}
+              agentPanel={undefined}
+              renderLogo={renderTitleBarLeft}
+              documentName={title ?? ''}
+              onDocumentNameChange={onTitleChange}
+              documentNameEditable={true}
+              renderTitleBarRight={renderTitleBarRight}
+              toolbarExtra={null}
+              fontFamilies={undefined}
               documentFonts={(editorRef.current?.getDocumentFonts() ?? []).map((name) => ({
                 name,
                 fontFamily: name,
               }))}
-              documentStyles={(editorRef.current?.getDocumentStyles() ?? []).map((s) => ({
-                styleId: s.styleId,
-                name: s.name,
-                type: s.type as 'paragraph',
-              }))}
+              zoom={zoomFactor}
+              showZoomControl
+              onFormat={() => {}}
+              onUndo={() => void editorRef.current?.exec({ type: 'undo' })}
+              onRedo={() => void editorRef.current?.exec({ type: 'redo' })}
+              onPrint={() => {}}
+              showFileOpen={false}
+              showHelpMenu
+              onOpen={() => {}}
+              onSave={() => onSave?.()}
+              onZoomChange={() => {}}
+              onRefocusEditor={() => editorRef.current?.focus()}
+              onInsertTable={() => {}}
+              onInsertImage={() => {}}
+              onInsertPageBreak={() => {}}
+              onInsertSectionBreakNextPage={() => {}}
+              onInsertSectionBreakContinuous={() => {}}
+              onInsertTOC={() => {}}
+              onImageWrapType={() => {}}
+              onImageTransform={() => {}}
+              onOpenImageProperties={() => {}}
+              onPageSetup={() => {}}
+              onWatermark={() => {}}
+              onTableAction={() => {}}
             />
-            </div>
           }
           pagedArea={surface}
           overlays={null}
