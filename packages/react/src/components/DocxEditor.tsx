@@ -18,6 +18,7 @@ import { paintDisplay } from '../paintDisplay';
 import { DocumentName, Logo, MenuBar, TitleBar, TitleBarRight } from './TitleBar';
 import { Toolbar } from './Toolbar';
 import { useOutlineSidebar } from './DocxEditor/hooks/useOutlineSidebar';
+import { useScrollPageInfo } from './DocxEditor/hooks/useScrollPageInfo';
 import { EditorToolbarContext } from './EditorToolbarContext';
 import { DocxEditorShell } from './DocxEditor/DocxEditorShell';
 import type { SectionProperties } from '../legacy-core-compat';
@@ -53,6 +54,23 @@ const LEGACY_CONTAINER_STYLE: CSSProperties = {
   height: '100%',
   width: '100%',
   backgroundColor: 'var(--doc-bg)',
+};
+
+const LEGACY_MAIN_CONTENT_STYLE: CSSProperties = {
+  display: 'flex',
+  flex: 1,
+  minHeight: 0, // Allow flex item to shrink below content size
+  minWidth: 0, // Allow flex item to shrink below content width on narrow viewports
+  flexDirection: 'row',
+};
+
+const LEGACY_EDITOR_CONTAINER_STYLE: CSSProperties = {
+  flex: 1,
+  minHeight: 0,
+  minWidth: 0, // Allow flex item to shrink below content width on narrow viewports
+  overflow: 'auto', // Sole scroll container — the page stack sizes to content
+  position: 'relative',
+  overflowAnchor: 'none',
 };
 
 
@@ -248,16 +266,33 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
       editorRef.current?.relayout();
     }, [zoomFactor]);
 
-    // The painted surface. Unchanged whether or not chrome is rendered, so the
-    // scroll container, host metrics, and every existing selector stay identical.
+    // The floating page pill: current page, total, and the fade-out after scrolling
+    // stops — all from the legacy hook, reading the engine instead of a layout object.
+    const { scrollPageInfo } = useScrollPageInfo({
+      scrollContainerRef: scrollRef,
+      pagesContainerRef: pagesRef,
+      editorRef,
+      zoom: zoomFactor,
+    });
+
+    // The painted surface.
+    //
+    // WHICH ELEMENT SCROLLS depends on whether chrome is rendered. Bare, this viewport
+    // is the scroll container, as it has always been. Inside the shell, the shell's
+    // `.docx-editor__scroll-container` is the sole scroller — that is legacy's structure,
+    // and it is what the page indicator, the outline panel's horizontal tracking and the
+    // sticky ruler are all written against. Two nested `overflow: auto` boxes meant
+    // neither was bounded: every ancestor grew to the full document height and the WINDOW
+    // scrolled, which is why the indicator never left page 1.
+    const chromeOn = Boolean(t);
     const surface = (
       <div
-        ref={scrollRef}
+        ref={chromeOn ? null : scrollRef}
         data-testid="docx-editor-scroll"
         // `ep-root` is the library's style scope: every --doc-* token is declared
         // under it. Without it the caret, selection highlight, and page background
         // all resolve to nothing and paint invisibly on a white page.
-        className={`ep-root ep-one-surface ep-one-surface__viewport${className ? ` ${className}` : ''}`}
+        className={`ep-root ep-one-surface ep-one-surface__viewport${chromeOn ? ' ep-one-surface__viewport--hosted' : ''}${className ? ` ${className}` : ''}`}
       >
         <div
           ref={pagesRef}
@@ -292,36 +327,6 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
           onSave,
         }}
       >
-      <div
-        className={`ep-root docx-editor${className ? ` ${className}` : ''}`}
-        style={LEGACY_CONTAINER_STYLE}
-        data-testid="docx-editor"
-      >
-        {/* Title bar. The DEMO owns what sits left and right — brand lockup, adapter
-            and example switchers, theme toggle, Open/New/Save — and passes them through
-            these slots, exactly as the legacy demo does (App.tsx:835-865). The editor
-            supplies only the document name and menu bar, which are its own.
-
-            The interim brand block, React/Vue toggle, theme toggle and action buttons
-            are deleted. `AdapterSwitcher` and `ExampleSwitcher` already existed in
-            `examples/shared`; rebuilding them here is what kept the header drifting. */}
-        {/* Title bar AND toolbar share one white container, as legacy's EditorToolbar
-            does (`flex flex-col bg-doc-surface shadow-sm flex-shrink-0`). That is why the
-            reference shows white continuing below the toolbar with the grey workspace
-            starting under it; mine ended the white at the title bar. */}
-        <div className="flex flex-col bg-doc-surface shadow-sm flex-shrink-0">
-        {/* The legacy TitleBar compound component, not my hand-rolled row. It owns the
-            layout — `flex items-stretch bg-doc-surface pt-2 pb-1`, logo `pl-3 pr-1`,
-            middle column `flex-1 min-w-0 py-1`, right `px-3` — which is where the gaps
-            and paddings the owner flagged actually come from. Mine were authored
-            (`gap-3 px-3.5 py-1.5`, `pl-[18px]`). */}
-        <TitleBar>
-          <Logo>{renderTitleBarLeft?.()}</Logo>
-          <DocumentName value={title ?? ''} onChange={(next) => onTitleChange?.(next)} />
-          <MenuBar />
-          <TitleBarRight>{renderTitleBarRight?.()}</TitleBarRight>
-        </TitleBar>
-        </div>
         {/* The legacy DocxEditorShell, which was ported and sitting unused while this
             file duplicated its layout — a rule-3 violation an independent audit caught.
             It owns the scroll container, ruler placement, outline button position and
@@ -337,10 +342,10 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
           containerRef={null}
           scrollContainerRef={scrollRef}
           editorContentRef={null}
-          className={undefined}
-          containerStyle={{}}
-          mainContentStyle={{}}
-          editorContainerStyle={{}}
+          className={className}
+          containerStyle={LEGACY_CONTAINER_STYLE}
+          mainContentStyle={LEGACY_MAIN_CONTENT_STYLE}
+          editorContainerStyle={LEGACY_EDITOR_CONTAINER_STYLE}
           showRuler
           readOnlyProp={false}
           showOutline={showOutline}
@@ -387,11 +392,7 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
             scrollLeft: editorScrollLeft,
           }}
           onToggleOutline={handleToggleOutline}
-          scrollPageInfo={{
-            currentPage: (editorRef.current?.getCurrentPage('viewport') ?? 0) + 1,
-            totalPages: editorRef.current?.getTotalPages() ?? 0,
-            visible: (editorRef.current?.getTotalPages() ?? 0) > 1,
-          }}
+          scrollPageInfo={scrollPageInfo}
           agentPanel={undefined}
           agentPanelOpen={false}
           onAgentPanelClose={() => {}}
@@ -404,6 +405,22 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
                ported Toolbar already accepts the prop, so nothing in the legacy component
                changes. */
             <div ref={toolbarRefCallback} className="z-50 flex flex-col gap-0 flex-shrink-0">
+            {/* Title bar and toolbar share the measured wrapper, as legacy's
+                DocxEditorToolbar has it — which is also why `toolbarHeight` (the outline
+                panel's top offset) counts both rows.
+
+                The DEMO owns what sits left and right of the title — brand lockup,
+                adapter and example switchers, theme toggle, Open/New/Save — and passes
+                them through these slots, exactly as the legacy demo does. The editor
+                supplies only the document name and menu bar, which are its own. */}
+            <div className="flex flex-col bg-doc-surface shadow-sm flex-shrink-0">
+              <TitleBar>
+                <Logo>{renderTitleBarLeft?.()}</Logo>
+                <DocumentName value={title ?? ''} onChange={(next) => onTitleChange?.(next)} />
+                <MenuBar />
+                <TitleBarRight>{renderTitleBarRight?.()}</TitleBarRight>
+              </TitleBar>
+            </div>
             <Toolbar
               /* `currentFormatting` is how the legacy toolbar drives its active states
                  and value displays — `active={currentFormatting.bold}` and the pickers'
@@ -439,7 +456,6 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
           dialogs={null}
           fileInputs={null}
         />
-      </div>
       </EditorToolbarContext.Provider>
     );
   }

@@ -1611,14 +1611,18 @@
 /* Legacy shell regions, ported at M6V.1. Geometry that the legacy code kept inline
  * stays inline in `DocxEditorShell.tsx`; only what it expressed in CSS is here.
  *
- * ONE DELIBERATE DEVIATION, recorded rather than hidden: legacy made
- * `.docx-editor__scroll-container` the sole scroller, with the horizontal ruler
- * `position: sticky` inside it. Here the editor's own `.ep-one-surface__viewport`
- * remains the scroller, because the engine's input-host tracking, drag autoscroll,
- * and twelve passing React interaction scenarios are all wired to it, and moving the
- * scroll authority is a behavioural change that belongs in its own task rather than
- * inside a visual-parity port. The shell's container therefore does not scroll, and
- * the ruler row is sticky against the viewport instead. */
+ * A DEVIATION RECORDED HERE EARLIER IS NOW REVERTED: this file used to keep
+ * `.ep-one-surface__viewport` as the scroller inside the shell as well. With the shell's
+ * container also declaring `overflow: auto`, neither box ended up bounded — the whole
+ * chain grew to document height and the window scrolled, so the page indicator never
+ * left page 1. Legacy's structure is restored: inside the shell,
+ * `.docx-editor__scroll-container` is the sole scroller and the viewport is inert.
+ * Bare (no chrome), the viewport still scrolls and nothing about it changes. */
+
+/* Hosted in the shell: the shell's container scrolls, not this box. */
+.ep-one-surface__viewport--hosted {
+  overflow: visible;
+}
 /* The title + menu column, INSIDE the header row (legacy layout). It used to render as
  * two full-width bands under the header, which turned a single ~110px product band into
  * three tall stacked strips with the menu floating in whitespace. */

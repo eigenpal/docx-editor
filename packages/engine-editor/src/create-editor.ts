@@ -1107,6 +1107,18 @@ export function createEditor(config: EditorConfig): Editor {
     snapshot: (): EditorSnapshot => buildSnapshot(),
 
     getTotalPages: () => currentFrame().display.length,
+    /**
+     * `'caret'` is derived (from caret geometry's page index). `'viewport'` is NOT:
+     * `frame.currentPage.viewport` is seeded to 0 and carried forward, so it answers
+     * page 1 at every scroll position.
+     *
+     * It cannot be derived here today. Display page boxes are page-LOCAL — every page
+     * publishes `{x: 0, y: 0}` — so there is no stacked content space to test a scroll
+     * offset against; how pages are stacked (order, gaps, padding) is knowledge the
+     * painting adapter holds, not the engine. Deriving it needs the display to publish
+     * each page's placement in a shared content space. Until then a host that wants a
+     * page indicator reads it from what it painted, which is what the React adapter does.
+     */
     getCurrentPage: (mode = 'viewport') =>
       mode === 'caret' ? currentFrame().currentPage.caret : currentFrame().currentPage.viewport,
 
