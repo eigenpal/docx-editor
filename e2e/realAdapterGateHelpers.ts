@@ -24,8 +24,17 @@ declare global {
   }
 }
 
+/**
+ * Mount the real adapter on a PINNED fixture (M6D.1 follow-up).
+ *
+ * This gate proves the hidden input-host mechanism, not which document the demo opens by
+ * default. When M6D.1 changed the React default to the comprehensive fixture, every
+ * assertion here — written against `editable-sample.docx` content — went red. A gate must
+ * control its own input rather than inherit a product default that is free to change.
+ */
 export async function mountRealAdapter(page: Page, baseUrl: string, query = 'realAdapter=1'): Promise<void> {
-  await page.goto(`${baseUrl}/?${query}`);
+  const pinned = query.includes('fixture=') ? query : `${query}&fixture=editable-sample.docx`;
+  await page.goto(`${baseUrl}/?${pinned}`);
   await page.waitForFunction(() => !!window.__docxAdapterDriver);
   await expect(page.getByTestId('adapter-status')).toHaveText('Editable (paragraphs)');
 }

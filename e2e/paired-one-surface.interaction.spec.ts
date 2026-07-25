@@ -6,6 +6,13 @@
 // adapters pass their own suite — which is exactly the failure mode a
 // paired-preview claim has to rule out.
 
+// Pins its fixture explicitly (M6D.1 follow-up).
+//
+// This gate proves the hidden input-host MECHANISM, not which document the demo opens by
+// default. When M6D.1 changed the React default to the comprehensive fixture, these
+// assertions — written against `editable-sample.docx` content — went red, and the paired
+// gate broke because the two adapters no longer opened the same document. A gate must
+// control its own input.
 import { expect, test, type Page } from '@playwright/test';
 import type { Editor } from '@docx-editor.dev/core-contract/editor';
 import { clickTargetPointAt, waitForClickTarget } from './oneSurfaceHelpers.ts';
@@ -22,7 +29,7 @@ declare global {
 }
 
 async function mount(page: Page, baseUrl: string): Promise<void> {
-  await page.goto(`${baseUrl}/?realAdapter=1`);
+  await page.goto(`${baseUrl}/?realAdapter=1&fixture=editable-sample.docx`);
   await page.waitForFunction(() => !!window.__docxAdapterEditor);
   await expect(page.getByTestId('adapter-status')).toHaveText('Editable (paragraphs)');
   await waitForClickTarget(page);
@@ -77,7 +84,26 @@ test.describe('paired one-surface interaction (task 6.5)', () => {
     // The INTERACTION surface is still compared strictly, which is what this gate
     // exists for: every testid the interaction specs drive must match. Only the shell
     // frame's own containers are exempt, and this exemption MUST be deleted at 10V.1.
-    const SHELL_STRUCTURE_TESTIDS = new Set(['docx-editor', 'docx-editor-shell']);
+    // The chrome testids too, not just the container. M6V.1 composes the legacy chrome
+    // inside the React component; 10V.1 ports it to Vue. Until then React renders a menu
+    // region, header actions, and an outline toggle that Vue does not have.
+    //
+    // Enumerated explicitly rather than pattern-matched, and asserted below to be
+    // React-only and absent from Vue, so the exemption cannot quietly widen into hiding a
+    // real interaction divergence. 10V.1 MUST delete this whole set.
+    const SHELL_STRUCTURE_TESTIDS = new Set([
+      'docx-editor',
+      'docx-editor-shell',
+      'menu-bar',
+      'menu-file',
+      'menu-format',
+      'menu-insert',
+      'menu-help',
+      'app-action-open',
+      'app-action-new',
+      'app-action-save',
+      'outline-toggle',
+    ]);
     const results = await acrossAdapters(browser, async (page) =>
       page.evaluate(() =>
         [...document.querySelectorAll('[data-testid]')].map((el) => (el as HTMLElement).dataset.testid).sort(),
@@ -87,9 +113,13 @@ test.describe('paired one-surface interaction (task 6.5)', () => {
       ids.filter((id): id is string => !!id && !SHELL_STRUCTURE_TESTIDS.has(id));
     expect(interactionSurface(results.vue)).toEqual(interactionSurface(results.react));
     expect(results.react).toContain('one-surface-click-target');
-    // And the exemption must stay narrow: exactly one shell container per adapter.
-    expect(results.react.filter((id) => id && SHELL_STRUCTURE_TESTIDS.has(id))).toHaveLength(1);
-    expect(results.vue.filter((id) => id && SHELL_STRUCTURE_TESTIDS.has(id))).toHaveLength(1);
+    // The exemption must stay narrow AND one-directional: every exempt id React renders
+    // is chrome Vue has not received yet, and Vue must render exactly one — its interim
+    // shell container. If Vue ever grows an exempt id React lacks, that is a real
+    // divergence hiding inside the window and this fails.
+    const exemptIn = (ids: (string | undefined)[]) => ids.filter((id) => id && SHELL_STRUCTURE_TESTIDS.has(id));
+    expect(exemptIn(results.vue), 'Vue exempt testids').toHaveLength(1);
+    expect(exemptIn(results.react).length, 'React chrome testids').toBeGreaterThan(1);
   });
 
   test('a click at the same fraction of the same glyph lands on the same offset', async ({ browser }) => {

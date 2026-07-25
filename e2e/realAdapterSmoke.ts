@@ -4,6 +4,13 @@
 // createEditor — so the same scenario proves both published package entries load, paginate, report
 // editability, save, and round-trip identically. Run against the ?realAdapter=1 route.
 
+// Pins its fixture explicitly (M6D.1 follow-up).
+//
+// This gate proves the hidden input-host MECHANISM, not which document the demo opens by
+// default. When M6D.1 changed the React default to the comprehensive fixture, these
+// assertions — written against `editable-sample.docx` content — went red, and the paired
+// gate broke because the two adapters no longer opened the same document. A gate must
+// control its own input.
 import { test, expect } from '@playwright/test';
 
 declare global {
@@ -20,7 +27,7 @@ declare global {
 export function realAdapterSmoke(adapter: string, baseUrl: string): void {
   test.describe(`${adapter} production adapter`, () => {
     test('the real package entry loads, paginates, reports editable, saves, and round-trips', async ({ page }) => {
-      await page.goto(`${baseUrl}/?realAdapter=1`);
+      await page.goto(`${baseUrl}/?realAdapter=1&fixture=editable-sample.docx`);
       await expect(page.getByTestId('adapter-status')).toHaveText('Editable (paragraphs)');
 
       // The stable driver is exposed by the real adapter's createEditor.

@@ -202,8 +202,13 @@ export function applyAtomAccessibilityLabels(
 ): void {
   for (const node of root.querySelectorAll(ATOM_EMBED_SELECTOR)) {
     if (!(node instanceof HTMLElement)) continue;
-    node.textContent = '';
     const kind = node.getAttribute('data-kind') ?? '';
+    // A read-only PARAGRAPH keeps its text. Clearing every atom removed 21.3% of the
+    // document from the only assistive representation once partial editability started
+    // projecting unpatchable paragraphs as atoms — the painted pages are aria-hidden, so
+    // nothing else announces them. A table or SDT atom still clears: it has no text
+    // projection, and its label comes from `data-kind`.
+    if (kind !== 'paragraph') node.textContent = '';
     node.setAttribute('role', kind === 'table' ? 'img' : 'group');
     node.setAttribute('aria-readonly', 'true');
     node.setAttribute('tabindex', '-1');

@@ -45,8 +45,19 @@ registerBindingNode(
     atom: true,
     selectable: true,
     draggable: false,
-    attrs: { semId: { default: null }, kind: { default: 'block' } },
+    // `text` carries a read-only PARAGRAPH's content for assistive technology.
+    //
+    // Partial editability (M6P.1) projects a paragraph with no lossless patch path as a
+    // read-only atom. The atom had no text, and the painted pages are
+    // `aria-hidden="true" role="presentation"`, so the ProseMirror projection is the ONLY
+    // assistive representation of the document — which meant 21.3% of the flagship
+    // fixture's body text, including every section heading, was unreachable to a screen
+    // reader. Independent review measured 1,833 of 8,601 characters missing.
+    //
+    // Empty for a table or SDT atom, which has no text projection to lose.
+    attrs: { semId: { default: null }, kind: { default: 'block' }, text: { default: '' } },
     toDOM(node) {
+      const text = String(node.attrs.text ?? '');
       return [
         'div',
         {
@@ -56,6 +67,9 @@ registerBindingNode(
           'data-block-role': 'readOnlyAtom',
           contenteditable: 'false',
         },
+        // A TEXT child, built through the DOM spec rather than any HTML string, so a
+        // screen reader reads the paragraph even though it cannot be edited.
+        ...(text ? [text] : []),
       ];
     },
   },
@@ -104,7 +118,15 @@ registerBlockProjector('paragraph', (block, schema) => {
   const inline = p.runs.filter((r) => r.text.length > 0).map((r) => runToText(r, schema));
   return schema.node('paragraph', { semId: p.id }, inline);
 }); // paragraph editability is the reverse-lane fact BINDING_EDITABLE_KINDS, not a projector flag
-registerDefaultBlockProjector((block: Block, schema) => schema.node('blockEmbed', { semId: block.id, kind: block.kind }));
+registerDefaultBlockProjector((block: Block, schema) =>
+  schema.node('blockEmbed', {
+    semId: block.id,
+    kind: block.kind,
+    // A read-only PARAGRAPH keeps its text so assistive technology can still read it.
+    // Other kinds project no text and lose nothing.
+    text: block.kind === 'paragraph' ? (block as ParagraphRecord).runs.map((r) => r.text).join('') : '',
+  }),
+);
 
 // The composed ProseMirror schema — a REAL Schema built once from every capability registered
 // above (a lazy Proxy stand-in was tried and rejected: it is not transparently a Schema, so PM

@@ -117,3 +117,50 @@ describe('partial body editability', () => {
     }
   });
 });
+
+// --- Assistive coverage (M6P.1 regression guard) -----------------------------------
+//
+// Partial editability projects an unpatchable paragraph as a read-only ATOM. The atom
+// carried no text and the painted pages are `aria-hidden`, so those paragraphs vanished
+// from the ONLY assistive representation of the document: independent review measured
+// 1,833 of 8,601 body characters (21.3%) unreachable, including every section heading.
+// This asserts the reviewer's own metric on the real fixture, and fails if a future
+// change reintroduces a text-free atom or re-clears a paragraph atom's textContent.
+describe('assistive coverage of read-only blocks', () => {
+  test('every body paragraph is reachable in the accessibility projection', async () => {
+    await import('./dom-setup.ts');
+    const { DOMSerializer } = await import('prosemirror-model');
+    const { applyAtomAccessibilityLabels } = await import('../src/accessibility-projection.ts');
+
+    const { bodyStoryId } = await import('@docx-editor.dev/engine-core');
+    const model = parseDocx(bytes()).model;
+    // What the DOCUMENT says: every body paragraph's text, from the canonical model.
+    const wanted = (model.stories.get(bodyStoryId(model))?.blocks ?? [])
+      .filter((b) => b.kind === 'paragraph')
+      .map((b) => (b as { runs: { text: string }[] }).runs.map((r) => r.text).join(''))
+      .filter((t) => t.trim().length > 0);
+    expect(wanted.length).toBeGreaterThan(100);
+
+    const session = openDocxSession(bytes());
+    const doc = session.projectDoc();
+    // Sanity: this fixture must actually EXERCISE the atom path, or the guard is vacuous.
+    let atoms = 0;
+    doc.forEach((n) => {
+      if (n.type.name === 'blockEmbed') atoms += 1;
+    });
+    expect(atoms, 'fixture projects no read-only atoms').toBeGreaterThan(10);
+
+    const root = document.createElement('div');
+    root.append(DOMSerializer.fromSchema(doc.type.schema).serializeFragment(doc.content));
+    applyAtomAccessibilityLabels(root, { table: 'Table' });
+    const reachable = root.textContent ?? '';
+
+    const missing = wanted.filter((t) => !reachable.includes(t));
+    const missingChars = missing.reduce((n, t) => n + t.length, 0);
+    const totalChars = wanted.reduce((n, t) => n + t.length, 0);
+    expect(
+      missingChars,
+      `${missingChars}/${totalChars} chars unreachable; first: ${JSON.stringify(missing[0]?.slice(0, 60))}`,
+    ).toBe(0);
+  });
+});

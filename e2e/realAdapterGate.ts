@@ -1,6 +1,13 @@
 // Paired Chromium gate for production React/Vue adapters (interactive-paginated 4.8).
 // Proves the hidden input-host mechanism through public @docx-editor.dev/react|vue entries.
 
+// Pins its fixture explicitly (M6D.1 follow-up).
+//
+// This gate proves the hidden input-host MECHANISM, not which document the demo opens by
+// default. When M6D.1 changed the React default to the comprehensive fixture, these
+// assertions — written against `editable-sample.docx` content — went red, and the paired
+// gate broke because the two adapters no longer opened the same document. A gate must
+// control its own input.
 import { test, expect } from '@playwright/test';
 import {
   assertAppliedPlacementState,

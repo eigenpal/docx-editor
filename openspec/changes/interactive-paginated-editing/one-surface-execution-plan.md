@@ -14,12 +14,27 @@ manifests.
 
 ---
 
-## 1. Goal and non-negotiable architecture
+## 1. Claude handoff goal
 
-**Goal:** Prove body-paragraph editing on engine-painted pages, port the polished
-retired shell, reach Vue parity, and record paired bounded-document
-**internal/preview alpha** at M6. The **first formal public `interactive-paginated`
-claim** is task **8.10**.
+This file is the **single execution runbook** to give Claude Code. `tasks.md`
+contains the formal checkbox text and staging manifests; the proposal, design,
+and capability spec are normative references, not additional task lists.
+
+**Immediate goal:** opening **`http://127.0.0.1:5273/`** loads
+`e2e/fixtures/comprehensive-word-element-test.docx` in the production
+`packages/react/src/DocxEditor.tsx`, renders the polished retired React chrome,
+and lets a user click supported body text, type, select naturally, use familiar
+ProseMirror keyboard commands, apply bold/italic, undo/redo, save, and reopen.
+
+Visual and behavioral reference:
+
+- deployed reference: **https://latest.docx-editor.dev/react/**
+- source archaeology: **the recorded presentation baseline**
+
+Claude SHOULD use Chrome DevTools against both the deployed reference and local
+React URL to compare component hierarchy, dimensions, spacing, icons, disabled
+states, scrolling, selection, focus, and keyboard behavior. The deployed site is
+a product-behavior reference, not source or architectural authority.
 
 **Non-negotiable architecture:**
 
@@ -29,34 +44,75 @@ claim** is task **8.10**.
 4. Save button: **`Editor.save()`** directly — not can/exec.
 5. Rulers: **display-only** via **`Editor.getPageGeometry()`**; margin/tab markers omitted or disabled.
 6. Forbidden wholesale restore: `PagedEditor`, `useLayoutPipeline`, `usePagesPointer`, `OffscreenEditorHost`, retired flow/pagination/painter models.
-7. Port presentation component-by-component from ref the recorded presentation baseline.
+7. Port presentation component-by-component from ref the recorded presentation baseline, using `https://latest.docx-editor.dev/react/` as the live visual/behavioral reference.
+8. `packages/react/src/DocxEditor.tsx` is the sole React product root: it composes chrome and the painted-page surface internally. Examples supply fixtures/configuration only and never assemble a second shell around an incomplete package component.
 
 ---
 
-## 2. Exact current state
+## 2. Ordered React task list
 
-| Item | Value |
-| --- | --- |
-| Progress | **32 / 114** complete |
-| M0 historical (tasks 1–4) | **28** |
-| Pre-**5.5** (+ 5.1–5.4) | **32** |
-| **5.5** | unchecked, in progress |
-| M0-R1 / M0-R2 | unchecked verification |
-| React dev | `bun run dev:react -- --port 5273 --strictPort --force` |
-| Vue dev | `bun run dev:vue -- --port 5274 --strictPort --force` |
-| React harness URL | `http://127.0.0.1:5273/?realAdapter=1` |
-| Vue harness URL | `http://127.0.0.1:5274/?realAdapter=1` |
+Work these in order. Do not restart completed M0–M6 implementation and do not
+wait for Vue. Each row ends with its focused evidence, verification, and one
+normal commit before moving to the next row.
+
+| Order | Task | Concrete outcome | Hard pass boundary |
+| --- | --- | --- | --- |
+| 1 | **M6D.1 — default comprehensive fixture** | Bare React `/` loads all nine pages of the canonical comprehensive fixture through the production component; `?fixture=` remains available. | Chrome shows the expected document without query parameters; page count and representative text match; bytes match the canonical fixture. Editability is not part of this wiring task. |
+| 2 | **M6P.1 — partial body editability** | Replace document-wide read-only with a per-block policy: safe preserved paragraphs are editable while tables, SDTs, unsupported structures, and unsafe paragraphs remain immutable. | The comprehensive fixture reports `partial`; one safe paragraph supports edit/save/reopen; crossing or disturbing read-only boundaries refuses; untouched complex ranges and package parts remain preserved. |
+| 3 | **M6V.1 — actual retired React chrome** | `DocxEditor.tsx` directly composes the old title/menu/toolbar/rulers/workspace/page indicator/sidebar/dialog-launch presentation. | Fixed-viewport local screenshots are compared with `https://latest.docx-editor.dev/react/` and the presentation reference; no named chrome region is missing; only undo, redo, bold, italic, and save can dispatch. |
+| 4 | **M6K.1 — native ProseMirror command behavior** | PM owns semantic editing, deletion, Enter, history, shortcuts, and logical horizontal selection; engine owns paginated geometry and safety preflight. | Differential real-browser gate matches raw PM for the declared matrix; stale/invalid `setSelection` refuses; PM cannot pre-empt an engine-refused geometry key; partial-mode structural commands still refuse safely. |
+| 5 | **M6S.1 — natural selection presentation** | Select the best React presentation among merged engine rectangles, native Range/Selection, and CSS Custom Highlight without changing semantic authority. | Spaces, run boundaries, wrapping, paragraphs, graphemes, bidi, zoom, clipping, and cross-page selection show no false gaps; copy/focus/IME/a11y remain correct. |
+| 6 | **React goal gate** | The comprehensive document is visibly loaded and its safe paragraphs are practically editable beside preserved read-only structures in the polished old product chrome. | Run all focused React gates plus typecheck and strict OpenSpec validation; perform the manual journey below; fresh independent correctness, security, and architecture reviewers report zero Blocker/Critical/High findings on current HEAD. |
+
+### Manual goal journey
+
+At `http://127.0.0.1:5273/`, without query parameters:
+
+1. Confirm the comprehensive fixture and complete old React chrome are visible.
+2. Confirm the session reports `partial`, with stable diagnostics for read-only regions.
+3. Click a supported body paragraph and type text.
+4. Click a table or SDT and confirm it remains visible but refuses editing without moving the canonical selection into it.
+5. Select text across spaces and formatting-run boundaries within the editable paragraph; no false visual gaps.
+6. Attempt a selection/edit across a read-only boundary and confirm atomic refusal.
+7. Exercise Left/Right, Shift-Left/Right, Cmd/Ctrl+A, word deletion,
+   Enter/Shift-Enter, selection deletion, undo, and redo.
+8. Apply bold and italic; confirm unavailable controls remain visibly disabled.
+9. Save, reopen the exported bytes, and confirm the supported edit persists.
+10. Confirm unsupported structures are preserved/read-only or explicit fallback,
+   never silently discarded.
+
+### No-early-exit rule
+
+Claude MUST continue until all six rows pass or a concrete external blocker
+prevents progress. An existing implementation, passing unit tests, an
+author-produced review, or a page that merely renders does not satisfy the goal.
+For each failed gate: reproduce it, add a focused regression, fix the root cause,
+verify, commit, and continue. Launch fresh independent reviewers at the final
+React goal gate. Only Blocker/Critical/High findings block completion; record
+Medium/Low without opening an endless polish loop.
+
+Current ledger authority: `tasks.md` (**70 / 120** complete when this runbook was
+updated). Re-read its first line after every commit rather than copying this
+snapshot into progress reports.
 
 ---
 
-## 3. Retired archaeology (read-only ref `checkpoint-9bb06c38`)
+## 3. Retired reference and archaeology
 
 ```bash
-git show checkpoint-checkpoint-9bb06c38f43c0dc297e3de8b5b488b241e134be1:packages/react/src/components/DocxEditor/DocxEditorShell.tsx | less
-git ls-tree -r --name-only checkpoint-checkpoint-9bb06c38f43c0dc297e3de8b5b488b241e134be1 packages/react/src/components/DocxEditor/
+git show checkpoint-9bb06c38f43c0dc297e3de8b5b488b241e134be1:packages/react/src/components/DocxEditor/DocxEditorShell.tsx | less
+git ls-tree -r --name-only checkpoint-9bb06c38f43c0dc297e3de8b5b488b241e134be1 packages/react/src/components/DocxEditor/
 ```
 
-Never port: `PagedEditor.tsx`, `OffscreenEditorHost.tsx`, `useLayoutPipeline.ts`, `usePagesPointer.ts`.
+Open `https://latest.docx-editor.dev/react/` in Chrome for the working product
+reference. Compare observable presentation and interaction; do not copy runtime
+state or infer architectural authority from its DOM.
+
+Do not wholesale restore `PagedEditor.tsx`, `OffscreenEditorHost.tsx`,
+`useLayoutPipeline.ts`, `usePagesPointer.ts`, or the retired flow/pagination/
+painter models. Their behavior and presentation may be studied and selectively
+implemented, but their old geometry/layout authority MUST NOT run beside the
+greenfield engine.
 
 ---
 
@@ -71,6 +127,11 @@ git diff --check
 ```
 
 **Expected:** exit 0; validation prints `Change 'interactive-paginated-editing' is valid`.
+
+**Fast-path review policy:** only Blocker/Critical/High findings stop delivery.
+Record Medium/Low findings for later; do not fix or re-review them unless they
+fail an explicit gate or new evidence raises their severity. Run focused checks
+per granular task and reserve broad suites for their declared milestone gates.
 
 ### M1 (5.5 + 5.6a + 5.7a)
 
@@ -127,7 +188,8 @@ bun run dev:vue -- --port 5274 --strictPort --force
 
 File: `openspec/changes/interactive-paginated-editing/evidence/m3/manual-chrome-checklist.md`
 
-Open **`http://127.0.0.1:5273/?realAdapter=1`**.
+Open **`http://127.0.0.1:5273/`**. `?realAdapter=1` remains a compatibility
+alias, not the primary goal URL.
 
 | Step | Chrome agent action | Assert |
 | --- | --- | --- |
@@ -144,7 +206,8 @@ Open **`http://127.0.0.1:5273/?realAdapter=1`**.
 
 File: `openspec/changes/interactive-paginated-editing/evidence/m4/manual-chrome-shell.md`
 
-Open **`http://127.0.0.1:5273/?realAdapter=1`**.
+Open **`http://127.0.0.1:5273/`** and compare it with
+**`https://latest.docx-editor.dev/react/`** at the same viewport.
 
 | Step | Action | Assert |
 | --- | --- | --- |
@@ -248,7 +311,7 @@ Unrelated dirty files stay unstaged.
 4. `git diff --cached --check`
 5. Staged security check when manifest includes `packages/` or `examples/` paths.
 6. `git commit -m "feat: land 5.6a body-paragraph interaction roles"`
-7. Progress note: `interactive-paginated-editing: 33/114 — 5.6a complete`
+7. Progress note: `interactive-paginated-editing: 71/120 — M6D.1 complete`
 
 M0 evidence entrypoints:
 
@@ -269,13 +332,17 @@ M0 evidence entrypoints:
 
 ## 10. Priority order
 
-1. M0-R1/R2
-2. **5.5** + **5.6a** + **5.7a**
-3. M2 (+ **M2.3** click target)
-4. M3 React proof
-5. M4 shell (can/exec + `Editor.save()`, `getPageGeometry()` rulers)
-6. M5 Vue
-7. M6 paired preview
-8. **M6V.1 full retired chrome immediately after M6 review closure**
-9. **M6S.1 browser-native selection-presentation bake-off**
-10. Sections 7–8 → **8.10**
+1. **M6D.1** — load the comprehensive fixture at bare React `/`.
+2. **M6P.1** — implement per-block partial editability so safe paragraphs remain
+   editable beside immutable tables, SDTs, and unsupported structures.
+3. **M6V.1** — port and approve the actual retired React chrome using the
+   deployed reference and presentation reference.
+4. **M6K.1** — restore natural ProseMirror commands and close stale/refused
+   selection pre-emption defects.
+5. **M6S.1** — approve natural selection presentation on React.
+6. **React goal gate** — save/reopen journey, broad React verification, and
+   fresh independent review until zero Blocker/Critical/High findings.
+7. Sections 7–9 and 10.1–10.6 on the approved React reference surface.
+8. **10V.1** — mechanically port the completed React UI/selection presentation
+   to Vue.
+9. 10.7–10.8 final paired verification and independent review.
