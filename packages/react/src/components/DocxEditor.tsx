@@ -290,13 +290,22 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
       []
     );
 
-    // Zoom scales the whole page stack from its top-left. The same factor is
-    // reported to the engine through host metrics, so client-to-content mapping
-    // stays a plain divide and paint and hit testing agree.
-    const zoomFactor = props.zoom ?? 1;
+    // Zoom scales the whole page stack from its top-left. The ENGINE owns the factor
+    // (`getZoom`/`setZoom`), so the paint transform, the host metrics hit testing divides
+    // by, and the toolbar's percentage are one number rather than three that can drift.
+    // `props.zoom` seeds it and is honoured on change, so an existing controlled host
+    // keeps working; the toolbar drives it through `setZoom` after that.
+    // The tick exists to re-render after a zoom change; the engine holds the value, so
+    // there is nothing else to store.
+    const [, setZoomTick] = useState(0);
+    const zoomFactor = editorRef.current?.getZoom() ?? props.zoom ?? 1;
+    const applyZoom = useCallback((next: number) => {
+      if (editorRef.current?.setZoom(next).ok) setZoomTick((n) => n + 1);
+    }, []);
+    const propZoom = props.zoom;
     useEffect(() => {
-      editorRef.current?.relayout();
-    }, [zoomFactor]);
+      if (propZoom !== undefined) applyZoom(propZoom);
+    }, [propZoom, applyZoom]);
 
     // The floating page pill: current page, total, and the fade-out after scrolling
     // stops — all from the legacy hook, reading the engine instead of a layout object.
@@ -487,7 +496,7 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
               showHelpMenu
               onOpen={() => {}}
               onSave={() => onSave?.()}
-              onZoomChange={() => {}}
+              onZoomChange={applyZoom}
               onRefocusEditor={() => editorRef.current?.focus()}
               onInsertTable={() => {}}
               onInsertImage={() => {}}

@@ -290,6 +290,21 @@ export interface Editor {
   getTotalPages(): number;
   getCurrentPage(mode?: 'viewport' | 'caret'): number;
 
+  /**
+   * Display scale of the painted pages. 1 is 100%.
+   *
+   * Zoom is ENGINE-OWNED rather than a host prop, so the toolbar's zoom control, the
+   * scale a host paints at, and the factor hit testing divides by cannot disagree —
+   * a host that scaled its own transform without telling the engine would land every
+   * click at the wrong content point.
+   */
+  getZoom(): number;
+  /**
+   * Set the display scale. Values outside a sane range are rejected rather than
+   * clamped silently, so a caller learns its input was refused.
+   */
+  setZoom(zoom: number): ExecResult;
+
   // ─── Interaction frame (coherent display + geometry projection) ────────────
   /**
    * The current immutable interaction frame. Display, page/scroll geometry,

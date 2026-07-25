@@ -127,7 +127,9 @@ export function createEditor(config: EditorConfig): Editor {
   // Destructure ONCE so no long-lived closure retains `config` (and thus config.document bytes).
   const host = config.host;
   const readOnly = config.mode === 'view';
-  const zoom = config.zoom ?? 1; // the adapter applies zoom on paint; carried in snapshot()
+  // Engine-owned so the paint scale and the factor hit testing divides by are the same
+  // number. A host reads it back through `getZoom()` rather than holding its own copy.
+  let zoom = config.zoom ?? 1;
   const accessibleNamePolicy = resolveAccessibilityNamePolicy(config.accessibleName);
 
   type Handlers = { [E in keyof EditorEvents]: Set<EditorEvents[E]> };
@@ -1105,6 +1107,22 @@ export function createEditor(config: EditorConfig): Editor {
       return queryDefault(query.type as string) as EditorQueryResults[K];
     },
     snapshot: (): EditorSnapshot => buildSnapshot(),
+
+    getZoom: () => zoom,
+    setZoom: (next: number): ExecResult => {
+      // Refused rather than clamped: a caller that asked for 0 or NaN has a bug, and
+      // silently substituting 1 hides it. The bounds match what the zoom control offers.
+      if (!Number.isFinite(next) || next < 0.1 || next > 5) {
+        return { ok: false, code: 'invalidArgs', reason: `zoom must be between 0.1 and 5, got ${next}` };
+      }
+      if (next === zoom) return { ok: true, changed: false };
+      zoom = next;
+      // Relayout, not just repaint: line breaking is measured in content coordinates, so
+      // the display itself does not change with scale — but the host needs a frame to
+      // repaint at the new scale, and host metrics must be re-read.
+      relayoutAndPaint();
+      return { ok: true, changed: true };
+    },
 
     getTotalPages: () => currentFrame().display.length,
     /**
