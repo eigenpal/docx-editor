@@ -253,10 +253,15 @@ Not the formal public **`interactive-paginated`** claim (that remains **8.10**).
   React dropdown is a radix `Select.Root`/`Trigger` styled with Tailwind utilities over
   the shared token palette, and it carries its localized unavailable reason on the
   control itself. No build work was required — Tailwind already scans the adapter
-  sources. Still hand-rolled: the colour-split control, the zoom and font-size steppers,
-  the toggle buttons, and the editing-mode pill. **Owner decision: one styling system, not two.** The
-  nine hand-rolled rules (`.ep-toolbar__stepper*`, `.ep-toolbar__color*`,
-  `.ep-toolbar__picker*`) are DELETED from the core stylesheet rather than kept alive for
+  sources. **The toolbar controls are now fully converted**: dropdown
+  (radix `Select`), stepper, colour-split, chevron, and every icon button use Tailwind
+  utilities over the shared token palette, with no hand-rolled CSS left on the React
+  side. The `modePill` shape is declared by no descriptor entry and renders nothing —
+  either give it a descriptor or drop the shape.
+
+  **Owner decision: one styling system, not two.** The
+  fourteen hand-rolled rules (`.ep-toolbar__stepper*`, `.ep-toolbar__color*`,
+  `.ep-toolbar__picker*`, `.ep-toolbar__button*`) are DELETED from the core stylesheet rather than kept alive for
   Vue. `packages/vue/src/DocxEditorToolbar.ts:64,72` still emits those class names, so the
   Vue toolbar controls are knowingly unstyled until 10V.1 migrates them to the same
   Tailwind/radix treatment — the owner chose that over carrying a bespoke stylesheet
