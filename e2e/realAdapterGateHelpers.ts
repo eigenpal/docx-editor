@@ -147,6 +147,47 @@ export async function assertCaretPlacement(page: Page): Promise<void> {
       return placement;
     })
     .not.toBeNull();
+
+  // Both values compared above are computed in JS: the rect the engine ASKED
+  // for, against the rect it believes the caret occupies. That pair agrees even
+  // when the DOM disagrees with both — a `contain`, `transform`, or `filter` on
+  // any ancestor makes the host a containing block for its own fixed-positioned
+  // clip shell and silently relocates it. That exact bug shipped in the
+  // one-surface stylesheet and this gate could not see it, so the real rendered
+  // position is now asserted too.
+  await assertInputHostRenderedAtCaret(page);
+}
+
+/**
+ * The clip shell's ACTUAL `getBoundingClientRect()` versus the caret's client
+ * rect. Reads the DOM, so it catches an ancestor that has quietly changed what
+ * `position: fixed` resolves against.
+ */
+export async function assertInputHostRenderedAtCaret(page: Page): Promise<void> {
+  await expect
+    .poll(async () =>
+      page.evaluate(() => {
+        const shell = document.querySelector('[data-docx-input-host-clip]');
+        const caret = window.__docxAdapterDriver!.caretClientRect();
+        if (!shell || !caret) return null;
+        const rendered = shell.getBoundingClientRect();
+        return {
+          dx: Math.round(Math.abs(rendered.x - caret.x)),
+          dy: Math.round(Math.abs(rendered.y - caret.y)),
+        };
+      }),
+    )
+    // Same 3px tolerance as the requested-rect comparison.
+    .toMatchObject({ dx: expect.any(Number), dy: expect.any(Number) });
+
+  const drift = await page.evaluate(() => {
+    const shell = document.querySelector('[data-docx-input-host-clip]')!;
+    const caret = window.__docxAdapterDriver!.caretClientRect()!;
+    const rendered = shell.getBoundingClientRect();
+    return { dx: Math.abs(rendered.x - caret.x), dy: Math.abs(rendered.y - caret.y) };
+  });
+  expect(drift.dx, 'rendered input host drifted horizontally from the caret').toBeLessThan(3);
+  expect(drift.dy, 'rendered input host drifted vertically from the caret').toBeLessThan(3);
 }
 
 export async function assertAppliedPlacementState(

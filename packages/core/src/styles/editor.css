@@ -1484,12 +1484,23 @@
 /* The hidden ProseMirror input host. Position, size, clipping, and opacity are
  * owned imperatively by engine-binding's input-host module, which keeps the
  * host attached, non-`display:none`, and tracking the engine caret so browser
- * IME and autofill UI follow it. This class is a marker and containment hint
- * only and MUST NOT set geometry or visibility, or it would fight that policy.
- */
-.ep-one-surface__input-host {
-  contain: strict;
-}
+ * IME and autofill UI follow it.
+ *
+ * This class declares NO properties on purpose. It previously set
+ * `contain: strict`, which was a bug: strict containment implies layout
+ * containment, and a layout-contained element becomes the containing block for
+ * `position: fixed` descendants and clips them to its padding box. The engine
+ * mounts its clip shell inside this element and positions that shell `fixed` at
+ * the caret's CLIENT rect, so containment made those client coordinates resolve
+ * against this div rather than the viewport — measured in Chromium as an anchor
+ * offset equal to the whole page-stack height (y 80 -> 2080 on a 2000px stack).
+ * Every IME candidate window, composition popup, and autofill prompt was
+ * anchored that far from the caret, and the engine's scroll-tracking
+ * re-placement became a no-op.
+ *
+ * Do NOT add layout-affecting properties here. `contain`, `transform`,
+ * `filter`, `perspective`, `will-change`, and `backdrop-filter` each create a
+ * containing block for fixed descendants and would reintroduce this. */
 
 /* The host must never expose a second visible or assistive copy of the
  * document, so its projected content is not painted. */
