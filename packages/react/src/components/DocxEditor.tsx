@@ -25,6 +25,7 @@ import { useHyperlinkActions } from './DocxEditor/hooks/useHyperlinkActions';
 import { useWatermarkControls } from './DocxEditor/hooks/useWatermarkControls';
 import { usePageSetupControls } from './DocxEditor/hooks/usePageSetupControls';
 import { useActiveEditor } from './DocxEditor/hooks/useActiveEditor';
+import { useTableOfContentsActions } from './DocxEditor/hooks/useTableOfContentsActions';
 import {
   useSelectionTracker,
   type SelectionStateDelta,
@@ -237,6 +238,12 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
     );
 
     // The image menu's own state hook, ported.
+    // Table-of-contents updates, ported — including legacy's deferred second pass, which
+    // exists because refreshing a TOC changes page numbers, which repaginates, which
+    // changes the numbers the TOC should show.
+    const { runTableOfContentsUpdate, handleTableOfContentsInserted } =
+      useTableOfContentsActions({ editorRef });
+
     // Active-editor routing, ported. Every call site below used to repeat
     // `() => editorRef.current?.focus()`; the rule lives in one place again.
     const { focusActiveEditor, undoActiveEditor, redoActiveEditor } = useActiveEditor({
@@ -330,6 +337,7 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
       editorRef,
       focusActiveEditor,
       hyperlinkDialog,
+      onTableOfContentsInserted: handleTableOfContentsInserted,
     });
 
     // The ported context-menu hook. It owns the text menu's state, the item list, the
@@ -348,6 +356,7 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
       editorRef,
       focusActiveEditor,
       openSplitCellDialog,
+      onUpdateTableOfContents: runTableOfContentsUpdate,
       i18n: undefined,
       onAddComment: () => {},
     });
