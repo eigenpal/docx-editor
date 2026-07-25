@@ -56,6 +56,7 @@ export interface BridgePointerEvent {
 /** The keyboard-event fields the bridge reads. */
 export interface BridgeKeyboardEvent {
   readonly key: string;
+  stopPropagation(): void;
   readonly shiftKey?: boolean;
   readonly ctrlKey?: boolean;
   readonly metaKey?: boolean;
@@ -162,7 +163,7 @@ const POINTER_KINDS = {
  * listener it added; calling it twice is safe.
  */
 export function attachAdapterEventBridge(element: BridgeElement, port: BridgeEditorPort): () => void {
-  const registered: { type: string; listener: (event: any) => void }[] = [];
+  const registered: { type: string; listener: (event: any) => void; capture: boolean }[] = [];
 
   // A drag ends with the browser firing `click` on top of `pointerup`. Forwarding
   // that click would place a collapsed caret and wipe the range the user just
@@ -172,9 +173,9 @@ export function attachAdapterEventBridge(element: BridgeElement, port: BridgeEdi
   let pressPoint: { x: number; y: number } | null = null;
   let pointerDragged = false;
 
-  function on(type: string, listener: (event: any) => void): void {
-    element.addEventListener(type, listener);
-    registered.push({ type, listener });
+  function on(type: string, listener: (event: any) => void, capture = false): void {
+    element.addEventListener(type, listener, capture ? { capture: true } : undefined);
+    registered.push({ type, listener, capture });
   }
 
   function dispatch(intent: InteractionIntent): InteractionDispatchResult | null {
@@ -214,20 +215,43 @@ export function attachAdapterEventBridge(element: BridgeElement, port: BridgeEdi
     });
   }
 
-  on('keydown', (event: BridgeKeyboardEvent) => {
-    const frameId = port.getInteractionFrameId();
-    if (!frameId) return;
-    if (keyboardIntentKind(event.key, modifiersOf(event)) !== 'geometryKeyboard') return;
-    const result = dispatch({
-      kind: 'geometryKeyboard',
-      frameId,
-      key: event.key,
-      ...modifiersOf(event),
-    });
-    // Only swallow the key when the engine actually moved the caret. A rejected
-    // navigation must fall through to native handling rather than dead-ending.
-    if (result?.outcome.ok) event.preventDefault();
-  });
+  // CAPTURE phase, deliberately. ProseMirror's own keymap is installed on
+  // `view.dom`, which is a DESCENDANT of this element, so a bubble-phase
+  // listener here runs AFTER PM has already handled the key. Independent review
+  // measured the consequence: with the caret at grapheme 3, one ArrowRight that
+  // the engine refused left PM's head at 4 while the painted caret stayed at 3 —
+  // the real insertion point sitting somewhere the user cannot see, so the next
+  // character lands in the wrong place. Capture runs ancestor-to-target, so the
+  // engine is consulted first.
+  on(
+    'keydown',
+    (event: BridgeKeyboardEvent) => {
+      const frameId = port.getInteractionFrameId();
+      if (!frameId) return;
+      if (keyboardIntentKind(event.key, modifiersOf(event)) !== 'geometryKeyboard') return;
+
+      // Claim the key before anything downstream can act on it. The engine is
+      // the only geometry authority, so for the keys it owns the answer is
+      // either "the engine moved the caret" or "nothing happens" — never
+      // "something else moved the caret invisibly".
+      //
+      // This reverses an earlier decision. The previous comment read "a rejected
+      // navigation must fall through to native handling rather than
+      // dead-ending", but native handling here IS ProseMirror moving a caret the
+      // engine cannot paint. An inert key is strictly safer than an invisible
+      // one.
+      event.preventDefault();
+      event.stopPropagation();
+
+      dispatch({
+        kind: 'geometryKeyboard',
+        frameId,
+        key: event.key,
+        ...modifiersOf(event),
+      });
+    },
+    true,
+  );
 
   on('focusin', () => {
     const frameId = port.getInteractionFrameId();
@@ -245,7 +269,11 @@ export function attachAdapterEventBridge(element: BridgeElement, port: BridgeEdi
   return () => {
     if (disposed) return;
     disposed = true;
-    for (const { type, listener } of registered) element.removeEventListener(type, listener);
+    // Removal must pass the same capture flag the listener was added with, or
+    // the listener survives the disposer.
+    for (const { type, listener, capture } of registered) {
+      element.removeEventListener(type, listener, capture ? { capture: true } : undefined);
+    }
     registered.length = 0;
   };
 }

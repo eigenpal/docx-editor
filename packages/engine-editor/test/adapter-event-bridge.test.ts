@@ -24,14 +24,26 @@ class FakeElement implements BridgeElement {
   readonly released: number[] = [];
   readonly scrolled: { x: number; y: number }[] = [];
 
-  addEventListener(type: string, listener: Listener): void {
+  readonly captureFlags = new Map<Listener, boolean>();
+
+  addEventListener(type: string, listener: Listener, options?: unknown): void {
     const set = this.listeners.get(type) ?? new Set<Listener>();
     set.add(listener);
     this.listeners.set(type, set);
+    this.captureFlags.set(listener, (options as { capture?: boolean } | undefined)?.capture === true);
   }
 
-  removeEventListener(type: string, listener: Listener): void {
+  removeEventListener(type: string, listener: Listener, options?: unknown): void {
+    // Mirror the DOM: removal only matches when the capture flag matches.
+    const added = this.captureFlags.get(listener);
+    const removing = (options as { capture?: boolean } | undefined)?.capture === true;
+    if (added !== undefined && added !== removing) return;
     this.listeners.get(type)?.delete(listener);
+    this.captureFlags.delete(listener);
+  }
+
+  captureOf(type: string): boolean[] {
+    return [...(this.listeners.get(type) ?? [])].map((l) => this.captureFlags.get(l) === true);
   }
 
   setPointerCapture(pointerId: number): void {
@@ -103,8 +115,15 @@ function pointerEvent(overrides: Partial<BridgePointerEvent> = {}): BridgePointe
 
 function keyEvent(key: string, overrides: Partial<BridgeKeyboardEvent> = {}) {
   let defaultPrevented = false;
+  let propagationStopped = false;
   return {
     key,
+    stopPropagation: () => {
+      propagationStopped = true;
+    },
+    get propagationStopped() {
+      return propagationStopped;
+    },
     shiftKey: false,
     ctrlKey: false,
     metaKey: false,
@@ -218,7 +237,14 @@ describe('adapter event bridge wiring (task M2.1)', () => {
     expect(letter.defaultPrevented).toBe(false);
   });
 
-  test('a rejected geometry key does not preventDefault, so the host keeps native behavior', () => {
+  test('a rejected geometry key is swallowed rather than left to native handling', () => {
+    // THIS ASSERTION WAS INVERTED. It previously required that a refused
+    // geometry key NOT preventDefault, "so the host keeps native behavior".
+    // Independent review showed native behavior here is ProseMirror's own keymap
+    // moving the caret: with the caret at grapheme 3 and the engine refusing one
+    // ArrowRight, PM's head went to 4 while the painted caret stayed at 3, so
+    // the next typed character edited a position the user could not see. The
+    // test was encoding the defect.
     const element = new FakeElement();
     const port = fakePort({
       dispatchInteraction: () => ({
@@ -229,7 +255,7 @@ describe('adapter event bridge wiring (task M2.1)', () => {
     attachAdapterEventBridge(element, port);
     const arrow = keyEvent('ArrowDown');
     element.emit('keydown', arrow);
-    expect(arrow.defaultPrevented).toBe(false);
+    expect(arrow.defaultPrevented).toBe(true);
   });
 
   test('focus and blur forward as engine intents', () => {
@@ -380,5 +406,65 @@ describe('real pointermove button semantics (task M3.1)', () => {
     element.emit('pointerup', pointerEvent({ clientX: 140, clientY: 200, button: 0, buttons: 0 }));
     element.emit('click', pointerEvent({ clientX: 140, clientY: 200, button: 0, buttons: 0 }));
     expect(port.intents.some((i) => i.kind === 'click')).toBe(false);
+  });
+});
+
+describe('geometry keys are claimed before ProseMirror sees them (independent review, HIGH)', () => {
+  test('keydown is registered in the CAPTURE phase', () => {
+    const element = new FakeElement();
+    attachAdapterEventBridge(element, fakePort());
+    // ProseMirror's keymap lives on view.dom, a DESCENDANT of the bridge
+    // element. A bubble-phase listener here runs after PM has already moved the
+    // caret, so the engine must be consulted in capture.
+    expect(element.captureOf('keydown')).toEqual([true]);
+    // Pointer listeners stay in the bubble phase.
+    expect(element.captureOf('pointerdown')).toEqual([false]);
+  });
+
+  test('a refused geometry key is still swallowed, so nothing else moves the caret', () => {
+    const element = new FakeElement();
+    const port = fakePort({
+      dispatchInteraction: () => ({
+        outcome: { ok: false, code: 'unsupported', reason: 'crosses a read-only boundary', frameId: FRAME_ID },
+        hostEffects: [],
+      }),
+    });
+    attachAdapterEventBridge(element, port);
+    const arrow = keyEvent('ArrowRight');
+    element.emit('keydown', arrow);
+    // Previously this fell through "to native handling", which meant PM moving a
+    // caret the engine cannot paint: PM head 4 while the painted caret stayed
+    // at 3. An inert key is strictly safer than an invisible one.
+    expect(arrow.defaultPrevented).toBe(true);
+    expect((arrow as unknown as { propagationStopped: boolean }).propagationStopped).toBe(true);
+  });
+
+  test('an accepted geometry key is also swallowed', () => {
+    const element = new FakeElement();
+    const port = fakePort();
+    attachAdapterEventBridge(element, port);
+    const arrow = keyEvent('ArrowDown');
+    element.emit('keydown', arrow);
+    expect(arrow.defaultPrevented).toBe(true);
+    expect(port.intents.map((i) => i.kind)).toEqual(['geometryKeyboard']);
+  });
+
+  test('a text key is untouched and reaches the input host', () => {
+    const element = new FakeElement();
+    const port = fakePort();
+    attachAdapterEventBridge(element, port);
+    const letter = keyEvent('a');
+    element.emit('keydown', letter);
+    expect(letter.defaultPrevented).toBe(false);
+    expect((letter as unknown as { propagationStopped: boolean }).propagationStopped).toBe(false);
+    expect(port.intents).toHaveLength(0);
+  });
+
+  test('dispose removes a capture-phase listener', () => {
+    const element = new FakeElement();
+    const dispose = attachAdapterEventBridge(element, fakePort());
+    dispose();
+    // A mismatched capture flag on removal silently leaves the listener behind.
+    expect(element.listenerCount()).toBe(0);
   });
 });
