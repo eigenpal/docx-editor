@@ -99,3 +99,19 @@ describe('coordinate mapper', () => {
     expect(applyInverseAffine(singular, { x: 1, y: 1 })).toBeNull();
   });
 });
+
+describe('malformed host metrics reject rather than throw (re-review, LOW)', () => {
+  test('a partial metrics object yields a typed rejection', () => {
+    for (const bad of [
+      {} as never,
+      { clientOrigin: null, scrollOffset: { x: 0, y: 0 }, zoom: 1 } as never,
+      { clientOrigin: { x: 0, y: 0 }, scrollOffset: undefined, zoom: 1 } as never,
+    ]) {
+      // The contract promises a typed rejection; this used to throw on the
+      // dereference of clientOrigin.x.
+      expect(() => validateHostMetrics(bad)).not.toThrow();
+      const outcome = validateHostMetrics(bad);
+      expect(outcome.ok).toBe(false);
+    }
+  });
+});

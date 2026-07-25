@@ -40,6 +40,11 @@ function isFiniteRect(rect: Rect): boolean {
 }
 
 function isFiniteMetrics(metrics: InteractionHostMetrics): boolean {
+  // Shape first. This used to dereference `metrics.clientOrigin.x` directly, so a
+  // host returning a partial metrics object threw instead of producing the typed
+  // rejection the contract promises.
+  if (typeof metrics.clientOrigin !== 'object' || metrics.clientOrigin === null) return false;
+  if (typeof metrics.scrollOffset !== 'object' || metrics.scrollOffset === null) return false;
   return isFinitePoint(metrics.clientOrigin) && isFinitePoint(metrics.scrollOffset) && Number.isFinite(metrics.zoom);
 }
 

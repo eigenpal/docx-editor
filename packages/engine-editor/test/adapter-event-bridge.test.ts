@@ -468,3 +468,20 @@ describe('geometry keys are claimed before ProseMirror sees them (independent re
     expect(element.listenerCount()).toBe(0);
   });
 });
+
+describe('pointercancel clears drag state (re-review, LOW)', () => {
+  test('a cancelled drag does not swallow the next click', () => {
+    const element = new FakeElement();
+    const port = fakePort();
+    attachAdapterEventBridge(element, port);
+    element.emit('pointerdown', pointerEvent({ clientX: 100, clientY: 200 }));
+    element.emit('pointermove', pointerEvent({ clientX: 160, clientY: 200, button: -1 }));
+    element.emit('pointercancel', pointerEvent({ clientX: 160, clientY: 200, buttons: 0 }));
+    // Previously pointerDragged stayed true, so this next genuine click was
+    // discarded as "concluding a drag".
+    element.emit('pointerdown', pointerEvent({ clientX: 300, clientY: 400 }));
+    element.emit('pointerup', pointerEvent({ clientX: 300, clientY: 400, buttons: 0 }));
+    element.emit('click', pointerEvent({ clientX: 300, clientY: 400, buttons: 0 }));
+    expect(port.intents.some((i) => i.kind === 'click')).toBe(true);
+  });
+});

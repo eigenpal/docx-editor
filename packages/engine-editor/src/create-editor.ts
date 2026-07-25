@@ -535,8 +535,17 @@ export function createEditor(config: EditorConfig): Editor {
     if (currentFrame().completeness.kind === 'pending') {
       return { ok: false, code: 'unsupported', reason: 'layout for the current model revision is not yet published' };
     }
-    const selection = semanticSelectionFromCommand(command, currentFrame().id, activeScope);
+    const frame = currentFrame();
+    const selection = semanticSelectionFromCommand(command, frame.id, activeScope);
     if (!selection) return { ok: false, code: 'invalidArgs', reason: 'setSelection requires semantic targets in the active scope' };
+    // `can` must answer the same question `exec` will. Re-review measured this
+    // returning ok:true for the four inputs exec refuses — offset 9999, -5, 1.5,
+    // and a superseded frameId — so a caller that gates on `can` was told yes and
+    // then refused. A `can` that lies is worse than no `can`.
+    const staleOrInvalid = resolveSelectionAgainstCanonicalState(frame, selection);
+    if (staleOrInvalid && staleOrInvalid.kind === 'reject') {
+      return { ok: false, code: execErrorFromInteraction(staleOrInvalid.code), reason: staleOrInvalid.reason };
+    }
     return { ok: true };
   }
 

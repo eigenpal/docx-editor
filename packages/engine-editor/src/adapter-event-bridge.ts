@@ -197,6 +197,11 @@ export function attachAdapterEventBridge(element: BridgeElement, port: BridgeEdi
         pointerDragged = false;
       } else if (domType === 'pointermove' && pressPoint) {
         if (movedBeyondSlop(pressPoint, event)) pointerDragged = true;
+      } else if (domType === 'pointercancel') {
+        // A cancelled gesture must clear drag state too. Leaving it set made the
+        // NEXT genuine click get swallowed as "concluding a drag".
+        pressPoint = null;
+        pointerDragged = false;
       } else if (domType === 'click') {
         const concludedDrag = pointerDragged;
         pressPoint = null;
