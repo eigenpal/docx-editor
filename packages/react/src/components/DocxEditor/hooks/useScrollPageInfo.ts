@@ -17,13 +17,10 @@ interface ScrollPageInfo {
  */
 export function useScrollPageInfo({
   scrollContainerRef,
-  pagesContainerRef,
   editorRef,
   zoom,
 }: {
   scrollContainerRef: React.RefObject<HTMLDivElement | null>;
-  /** The painted page stack. This adapter placed the pages, so it is what knows where they are. */
-  pagesContainerRef: React.RefObject<HTMLDivElement | null>;
   editorRef: React.RefObject<Editor | null>;
   zoom: number;
 }) {
@@ -40,28 +37,14 @@ export function useScrollPageInfo({
 
     const handleScroll = () => {
       // Legacy computed the visible page from the layout's per-page heights and the
-      // scroll offset. The engine cannot answer this one: its display page boxes are
-      // page-local (every page reports y = 0), so the stacking is knowledge this adapter
-      // holds — it is what painted them. The count still comes from the engine; only the
-      // placement is read back from the DOM.
-      //
-      // The page under the viewport's vertical MIDPOINT is the one being read, which is
-      // what a reader would call the current page when two pages straddle the viewport.
-      const totalPages = editorRef.current?.getTotalPages() ?? 0;
-      const pagesEl = pagesContainerRef.current;
-      if (totalPages === 0 || !pagesEl) return;
-      const band = scrollContainerEl.getBoundingClientRect();
-      const midpoint = band.top + band.height / 2;
-      let currentPage = totalPages;
-      const painted = pagesEl.children;
-      for (let i = 0; i < painted.length; i += 1) {
-        if (midpoint < painted[i]!.getBoundingClientRect().bottom) {
-          currentPage = i + 1;
-          break;
-        }
-      }
+      // scroll offset. The engine resolves it against the same scroll container it was
+      // handed, so this asks rather than re-derives. Page numbers are 0-based there and
+      // 1-based in the pill.
+      const editor = editorRef.current;
+      const totalPages = editor?.getTotalPages() ?? 0;
+      if (!editor || totalPages === 0) return;
 
-      setScrollPageInfo({ currentPage, totalPages, visible: true });
+      setScrollPageInfo({ currentPage: editor.getCurrentPage('viewport') + 1, totalPages, visible: true });
 
       if (scrollFadeTimerRef.current) {
         clearTimeout(scrollFadeTimerRef.current);
@@ -78,7 +61,7 @@ export function useScrollPageInfo({
         clearTimeout(scrollFadeTimerRef.current);
       }
     };
-  }, [scrollContainerEl, pagesContainerRef, editorRef, zoom]);
+  }, [scrollContainerEl, editorRef, zoom]);
 
   return { scrollPageInfo, setScrollPageInfo };
 }

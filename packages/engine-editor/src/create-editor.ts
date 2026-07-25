@@ -62,7 +62,7 @@ import { toDisplayPages } from './display-bridge.ts';
 import { InteractionFrameStore, emptyInteractionFrame } from './interaction-frame.ts';
 import type { NavigationGeometry } from './navigation-geometry.ts';
 import { hitTestPointer, deriveCaretGeometry, deriveSelectionGeometry } from './interaction-geometry.ts';
-import { contentToClient } from './coordinate-mapper.ts';
+import { clientToContent, contentToClient } from './coordinate-mapper.ts';
 import { execErrorFromInteraction, invalidSetSelection, semanticSelectionFromCommand, unsupportedSetSelection } from './set-selection.ts';
 import {
   planInteraction,
@@ -224,6 +224,26 @@ export function createEditor(config: EditorConfig): Editor {
     if (!scroll) return undefined;
     const rect = scroll.getBoundingClientRect();
     return { x: rect.x, y: rect.y, width: rect.width, height: rect.height };
+  }
+
+  /** See `getCurrentPage`. Derived on demand rather than published per scroll frame. */
+  function viewportPage(): number {
+    const frame = currentFrame();
+    const pages = frame.pageGeometry;
+    if (pages.length === 0) return frame.currentPage.viewport;
+    const scroll = host.getScrollContainer?.();
+    const metrics = host.getInteractionHostMetrics?.();
+    if (!scroll || !metrics) return frame.currentPage.viewport;
+    const rect = scroll.getBoundingClientRect();
+    const midpoint = clientToContent({ x: rect.x, y: rect.y + rect.height / 2 }, metrics);
+    if (!midpoint.ok) return frame.currentPage.viewport;
+    const y = midpoint.value.y;
+    for (let i = 0; i < pages.length; i += 1) {
+      // Past this page's bottom means the midpoint is either inside it or in the gap
+      // above it; both read as this page.
+      if (y < pages[i]!.box.y + pages[i]!.box.height) return i;
+    }
+    return pages.length - 1;
   }
 
   function updateInputHostFromFrame(): void {
@@ -1126,19 +1146,24 @@ export function createEditor(config: EditorConfig): Editor {
 
     getTotalPages: () => currentFrame().display.length,
     /**
-     * `'caret'` is derived (from caret geometry's page index). `'viewport'` is NOT:
-     * `frame.currentPage.viewport` is seeded to 0 and carried forward, so it answers
-     * page 1 at every scroll position.
+     * Which page the reader is looking at (`'viewport'`), or the one holding the caret.
      *
-     * It cannot be derived here today. Display page boxes are page-LOCAL — every page
-     * publishes `{x: 0, y: 0}` — so there is no stacked content space to test a scroll
-     * offset against; how pages are stacked (order, gaps, padding) is knowledge the
-     * painting adapter holds, not the engine. Deriving it needs the display to publish
-     * each page's placement in a shared content space. Until then a host that wants a
-     * page indicator reads it from what it painted, which is what the React adapter does.
+     * `frame.currentPage.viewport` is seeded to 0 and carried forward, so reading it
+     * answered "page 1" at every scroll position. This derives the answer instead, from
+     * `frame.pageGeometry` — the STACKED page boxes, where each page's `y` is its top in
+     * one shared content space, gaps included. (The `display` boxes are page-LOCAL, every
+     * page reporting `y: 0`; testing a scroll offset against those returns the last page
+     * at any scroll, which is a mistake this comment exists to prevent repeating.)
+     *
+     * The page under the scroll container's vertical MIDPOINT is the one being read —
+     * what a reader would call the current page when two pages straddle the viewport. A
+     * midpoint in the gap between pages resolves to the page below it.
+     *
+     * Falls back to the carried frame value when there is no scroll container or no host
+     * metrics to map with, which is the honest answer for a host that mounted neither.
      */
     getCurrentPage: (mode = 'viewport') =>
-      mode === 'caret' ? currentFrame().currentPage.caret : currentFrame().currentPage.viewport,
+      mode === 'caret' ? currentFrame().currentPage.caret : viewportPage(),
 
     getInteractionFrame: () => currentFrame(),
 

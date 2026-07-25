@@ -390,7 +390,6 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
     // stops — all from the legacy hook, reading the engine instead of a layout object.
     const { scrollPageInfo } = useScrollPageInfo({
       scrollContainerRef: scrollRef,
-      pagesContainerRef: pagesRef,
       editorRef,
       zoom: zoomFactor,
     });
