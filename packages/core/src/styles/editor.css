@@ -1989,22 +1989,35 @@
   gap: 8px;
 }
 
+/* VERBATIM from the legacy demo's `styles.button` in
+ * examples/vite/src/App.tsx. The hand-rolled
+ * version used `color: var(--doc-text-subtle)` and no font-weight, which rendered the
+ * header actions washed out next to the reference's solid 500-weight labels. */
 .docx-editor__app-action {
   padding: 6px 12px;
   border: 1px solid var(--doc-border);
   border-radius: 6px;
   background: var(--doc-surface);
-  color: var(--doc-text-subtle);
+  color: var(--doc-text);
   font-size: 13px;
+  font-weight: 500;
+  white-space: nowrap;
+  transition: all 0.15s;
+  /* Parity-only: they look right and do nothing, with the reason on the tooltip. */
   cursor: default;
   pointer-events: none;
 }
 
-/* The legacy header's primary action is a solid dark button. */
+/* `styles.newButton` — the secondary action sits on the subtle background. */
+.docx-editor__app-action:not(.docx-editor__app-action--primary):nth-of-type(2) {
+  background: var(--doc-bg-subtle);
+}
+
+/* `styles.fileInputLabel` — the primary action is a solid dark button. */
 .docx-editor__app-action--primary {
   background: var(--doc-text);
   border-color: var(--doc-text);
-  color: var(--doc-surface);
+  color: var(--doc-on-primary);
 }
 
 /* The page floats on the workspace backdrop with a drop shadow, as in the reference. */
@@ -2039,7 +2052,17 @@
   pointer-events: none;
 }
 
-.docx-editor__framework-option,
+/* The framework toggle carries TEXT labels ("React"/"Vue"), so it keeps a padded pill.
+ * Folding it into the theme toggle's rule below forced both options to a 26px square and
+ * crushed the labels into "ReactVue". */
+.docx-editor__framework-option {
+  padding: 3px 10px;
+  border-radius: 6px;
+  font-size: 12px;
+  color: var(--doc-text-subtle);
+  white-space: nowrap;
+}
+
 /* VERBATIM from the legacy demo's theme toggle in
  * examples/vite/src/App.tsx: a 26px round button
  * per option, not a padded pill. The hand-rolled `padding: 3px 10px; border-radius: 6px`
