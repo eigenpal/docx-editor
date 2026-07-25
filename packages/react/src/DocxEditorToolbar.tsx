@@ -292,7 +292,15 @@ export function DocxEditorToolbar({ editor, t, onSave }: DocxEditorToolbarProps)
   useEditorSnapshot(editor);
   return (
     <div
-      className="ep-toolbar"
+      // VERBATIM from the legacy toolbar root in
+      // packages/react/src/components/Toolbar.tsx:679.
+      // The hand-rolled `.ep-toolbar` rule invented its own padding, margins, min-height
+      // AND a `--doc-toolbar-pill` colour token that does not exist in legacy — the band
+      // is `bg-muted`, which is why the colour never matched.
+      className={clsx(
+        'ep-toolbar',
+        'flex items-center px-2 py-1 bg-muted rounded-full min-h-[36px] overflow-x-auto mx-2 mb-1',
+      )}
       role="toolbar"
       aria-label={t('toolbar.ariaLabel')}
       data-testid="docx-editor-toolbar"
@@ -313,9 +321,15 @@ export function DocxEditorToolbar({ editor, t, onSave }: DocxEditorToolbarProps)
       onMouseDown={(event) => event.preventDefault()}
     >
       {LEGACY_CHROME_GROUPS.map((group, index) => (
-        <div key={group.id} className="ep-toolbar__group-wrap">
-          {index > 0 ? <div className="ep-toolbar__separator" role="separator" /> : null}
-          <div className="ep-toolbar__group" role="group" aria-label={t(group.labelKey)} data-group={group.id}>
+        <div key={group.id} className="ep-toolbar__group-wrap inline-flex items-center">
+          {/* `Toolbar.tsx:365` — a real 1px element, not a border on the group. */}
+          {index > 0 ? <div className="w-px h-6 bg-border mx-1.5" role="separator" /> : null}
+          <div
+            className="ep-toolbar__group flex items-center gap-px px-1.5"
+            role="group"
+            aria-label={t(group.labelKey)}
+            data-group={group.id}
+          >
             {group.controls.map((control) => (
               <ControlButton key={control.id} editor={editor} control={control} t={t} onSave={onSave} />
             ))}

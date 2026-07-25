@@ -69,7 +69,6 @@
   --doc-card: #f8fbff; /* collapsed comment / suggestion cards (near-white) */
   --doc-bg: #f8f9fa; /* app background behind the page */
   --doc-bg-subtle: #f5f5f5; /* subtle section backgrounds */
-  --doc-toolbar-pill: #f0f3f7; /* the ribbon band, distinct from both surface and bg */
   --doc-bg-hover: #f1f3f4; /* hover states */
   --doc-bg-input: #f8f9fa; /* input backgrounds */
 
@@ -209,7 +208,6 @@
   --doc-surface: #1f1f1f; /* ribbon / toolbar / title bar */
   --doc-card: #2d2d2d; /* collapsed comment / suggestion cards */
   --doc-bg: #262626; /* workspace behind the page */
-  --doc-toolbar-pill: #2b2b2b; /* the ribbon band */
   --doc-bg-subtle: #2d2d2d; /* dropdowns, dialogs, panels */
   --doc-bg-hover: #3a3a3a; /* hover states */
   --doc-bg-input: #333333; /* input fields */
@@ -1769,23 +1767,13 @@
  * full-width flat bar with a bottom border and `flex-wrap: wrap`, which is a
  * different control and the wrong overflow behaviour — legacy SCROLLS horizontally
  * rather than wrapping, so the bar stays one row tall at any viewport. */
+/* Geometry and colour now come from the legacy Tailwind classes on the element itself
+ * (Toolbar.tsx:679: `flex items-center px-2 py-1 bg-muted rounded-full min-h-[36px]
+ * overflow-x-auto mx-2 mb-1`). Only the scroll behaviour stays here: the pill scrolls
+ * horizontally and must never become a second VERTICAL scroller. */
 .ep-toolbar {
-  display: flex;
-  align-items: center;
   flex-wrap: nowrap;
-  overflow-x: auto;
-  gap: 0;
-  min-height: 40px;
-  padding: 4px 10px;
-  /* Inset from the window edge, as legacy. Edge-to-edge, the pill's rounded ends were
-   * off-screen and the row read as a bare strip of icons rather than a ribbon. */
-  margin: 6px 14px 8px;
-  border-radius: 9999px;
-  /* #f5f5f5 on a white header was invisible; the legacy ribbon is a clearly distinct
-   * band. */
-  background: var(--doc-toolbar-pill);
   flex-shrink: 0;
-  /* The pill scrolls; it must not become a second vertical scroller. */
   overflow-y: hidden;
   scrollbar-width: thin;
 }
@@ -1797,25 +1785,6 @@
   align-items: center;
 }
 
-/* Group separation, VERBATIM from the legacy `ToolbarGroup`:
- * `flex items-center gap-px px-1.5 border-r border-border/50 last:border-r-0 first:pl-0`.
- * The hand-rolled version here was a centred ::before hairline with its own margins,
- * which is why the group spacing never matched the reference — legacy borders the GROUP,
- * it does not insert a divider between groups. */
-.ep-toolbar__group-wrap {
-  gap: 1px;
-  padding-left: 0.375rem;
-  padding-right: 0.375rem;
-  border-right: 1px solid color-mix(in srgb, var(--doc-border) 50%, transparent);
-}
-
-.ep-toolbar__group-wrap:last-child {
-  border-right: 0;
-}
-
-.ep-toolbar__group-wrap:first-child {
-  padding-left: 0;
-}
 
 .ep-toolbar__group {
   display: flex;
@@ -2142,4 +2111,20 @@
 .ep-ruler__margin--end {
   right: 0;
   border-left: 1px solid var(--doc-shadow-subtle);
+}
+
+/* The vertical ruler's zones run the other axis; the shared `.ep-ruler__margin` rule
+ * pins top/bottom, so these override the horizontal defaults. */
+.ep-ruler__margin--top {
+  left: 0;
+  right: 0;
+  bottom: auto;
+  border-bottom: 1px solid var(--doc-shadow-subtle);
+}
+
+.ep-ruler__margin--bottom {
+  left: 0;
+  right: 0;
+  top: auto;
+  border-top: 1px solid var(--doc-shadow-subtle);
 }
