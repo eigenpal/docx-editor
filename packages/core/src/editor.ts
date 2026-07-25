@@ -192,6 +192,22 @@ export interface Editor {
   exec(command: EditorCommand, options?: { scope?: EditorScope }): ExecResult;
   /** Dry run: reports whether `exec` would apply. Never reports `changed`. */
   can(command: EditorCommand, options?: { scope?: EditorScope }): CanResult;
+  /**
+   * Whether a formatting command is currently APPLIED at the selection — distinct from
+   * `can`, which answers whether it may run.
+   *
+   * A toolbar must show that bold is on, and the repo's own guidance is that controls
+   * reflect live editor state rather than being static. `can` cannot answer this, and the
+   * legacy adapter answered it by reading a ProseMirror `EditorState` directly, which the
+   * greenfield architecture forbids in adapters.
+   *
+   * DELIBERATE PLACEHOLDER: this returns `false` for every command today. The wiring is
+   * what matters first — adapters read active state through the public facade, so filling
+   * this in later lights up both toolbars with no adapter change. It must never return a
+   * value it has not actually derived from canonical state; `false` is the honest answer
+   * while the derivation does not exist.
+   */
+  isActive(command: EditorCommand, options?: { scope?: EditorScope }): boolean;
   setActiveScope(scope: ViewScope): void;
   getActiveScope(): ViewScope;
 

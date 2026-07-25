@@ -860,6 +860,16 @@ export function createEditor(config: EditorConfig): Editor {
         reason: 'command execution is not wired yet (section 5)',
       };
     },
+    // Whether a formatting command is currently APPLIED (vs `can`, "may it run?").
+    //
+    // PLACEHOLDER by design: always `false`. Deriving it needs mark state at the
+    // selection read from canonical model state, which does not exist yet. The value of
+    // landing it now is the WIRING — both adapters read active state through this one
+    // public method, so filling it in lights up their toolbars with no adapter change.
+    // It must never guess: `false` is the honest answer until the derivation is real, and
+    // a toolbar that renders "bold is on" when it is not is worse than one that never
+    // highlights.
+    isActive: (_command: EditorCommand): boolean => false,
     setActiveScope: (scope: ViewScope) => {
       activeScope = scope;
       navigationSession = null;

@@ -52,7 +52,14 @@ describe('toolbar command wiring (task M4.0)', () => {
 
   test('a control asks can() and is enabled by its answer', () => {
     const { editor, calls } = fakeEditor(ALLOW);
-    expect(toolbarCommandState(editor, 'bold')).toEqual({ id: 'bold', enabled: true, disabledReason: null });
+    // `active` comes from `Editor.isActive`, a placeholder that returns false today; the
+    // fake editor omits the method entirely, which must read as "not active", never crash.
+    expect(toolbarCommandState(editor, 'bold')).toEqual({
+      id: 'bold',
+      enabled: true,
+      disabledReason: null,
+      active: false,
+    });
     expect(calls.can).toEqual([{ type: 'toggleMark', mark: 'bold' }]);
   });
 

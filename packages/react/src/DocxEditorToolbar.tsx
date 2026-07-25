@@ -238,17 +238,18 @@ function ControlButton({
 
   const commandId = control.state.command;
   const state = toolbarCommandState(editor, commandId);
-  // No active/pressed state.
+  // Active/pressed state, wired through the public facade.
   //
-  // A toolbar should show whether bold is currently ON, and the repo's own guidance
-  // says controls must reflect live editor state rather than being static. It is
-  // omitted here because `CanResult` is `{ ok } | { ok, code, reason }` — the public
-  // contract can answer "may this run?" but not "is it currently applied?".
-  // Surfacing it needs a new public query, and M6V.1 is explicitly a visual-shell
-  // gate that must not widen the feature surface. Tracked as a known gap.
+  // `Editor.isActive` is a deliberate placeholder returning `false` today; the wiring is
+  // the point. Both adapters read active state through one public method, so filling in
+  // the derivation lights up the toolbars with no adapter change — and the active
+  // treatment below is the legacy one (`--doc-toggle-active-bg`: a dark slab in light
+  // mode, a Word-accent tint in dark), not an invented look.
   return (
     <button
       type="button"
+      data-active={state.active ? 'true' : undefined}
+      aria-pressed={state.active}
       className={clsx(
           // Same resting/hover/disabled treatment as the legacy Select trigger, so the
           // ribbon reads as one control set rather than two.

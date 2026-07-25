@@ -45,6 +45,10 @@ export interface ToolbarCommandState {
   readonly enabled: boolean;
   /** The engine's reason when disabled — surfaced as a tooltip, never invented. */
   readonly disabledReason: string | null;
+  /** Whether the command is currently APPLIED at the selection, from `Editor.isActive`.
+   *  A placeholder in the engine today (always `false`), so the wiring exists in both
+   *  adapters before the derivation does. */
+  readonly active: boolean;
 }
 
 /**
@@ -53,11 +57,15 @@ export interface ToolbarCommandState {
  * @public
  */
 export function toolbarCommandState(editor: Editor | null, id: ToolbarCommandId): ToolbarCommandState {
-  if (!editor) return { id, enabled: false, disabledReason: 'editor is not ready' };
+  if (!editor) return { id, enabled: false, disabledReason: 'editor is not ready', active: false };
   const result: CanResult = editor.can(COMMANDS[id]);
+  // Optional call: `isActive` is newer than this helper's callers, and a host or test
+  // double built against the earlier contract must not crash the toolbar. Absent means
+  // "not active", which is the same honest default the engine placeholder returns.
+  const active = editor.isActive?.(COMMANDS[id]) ?? false;
   return result.ok
-    ? { id, enabled: true, disabledReason: null }
-    : { id, enabled: false, disabledReason: result.reason };
+    ? { id, enabled: true, disabledReason: null, active }
+    : { id, enabled: false, disabledReason: result.reason, active };
 }
 
 /**
