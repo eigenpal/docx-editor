@@ -64,6 +64,9 @@ import { AdapterSwitcher } from './AdapterSwitcher';
 import { ExampleSwitcher } from './ExampleSwitcher';
 
 /** `styles.button` / `newButton` / `fileInputLabel` from the legacy demo's App.tsx. */
+// Shared adapter presentation and compatibility behavior.
+// 1px border the source does not have, which made the title-bar row taller than the
+// reference — exactly the kind of authored value the port rule forbids.
 const DEMO_BUTTON: React.CSSProperties = {
   padding: '6px 12px',
   background: 'var(--doc-surface)',
@@ -76,14 +79,29 @@ const DEMO_BUTTON: React.CSSProperties = {
   transition: 'all 0.15s',
   whiteSpace: 'nowrap',
 };
-const DEMO_SECONDARY_BUTTON: React.CSSProperties = { ...DEMO_BUTTON, background: 'var(--doc-bg-subtle)' };
+const DEMO_SECONDARY_BUTTON: React.CSSProperties = {
+  padding: '6px 12px',
+  background: 'var(--doc-bg-subtle)',
+  color: 'var(--doc-text)',
+  border: '1px solid var(--doc-border)',
+  borderRadius: '6px',
+  cursor: 'pointer',
+  fontSize: '13px',
+  fontWeight: 500,
+  transition: 'all 0.15s',
+  whiteSpace: 'nowrap',
+};
 const DEMO_PRIMARY_BUTTON: React.CSSProperties = {
-  ...DEMO_BUTTON,
+  padding: '6px 12px',
   background: 'var(--doc-text)',
   color: 'var(--doc-on-primary)',
-  border: '1px solid var(--doc-text)',
+  borderRadius: '6px',
+  cursor: 'pointer',
+  fontSize: '13px',
+  fontWeight: 500,
+  transition: 'background 0.15s',
+  whiteSpace: 'nowrap',
 };
-
 
 /** Fumadocs-style segmented light/dark toggle (sun/moon, sliding highlight). */
 function ThemeToggle({
