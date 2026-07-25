@@ -53,7 +53,13 @@ describe('React one-surface wiring (task 6.2)', () => {
 
   test('the surface uses the shared one-surface CSS classes, not inline forks', () => {
     expect(editorSource).toContain('ep-one-surface');
-    expect(paintSource).toContain('ep-one-surface__page');
+    // The page wrapper is `layout-page` with the legacy data attributes, matching the
+    // markup the legacy painter emitted so anything keyed on the page element still
+    // resolves. The layers INSIDE it stay one-surface classes — those are the greenfield
+    // painter's own, and they position the stack the engine's hit testing assumes.
+    expect(paintSource).toContain('layout-page');
+    expect(paintSource).toContain('data-page-number');
+    expect(paintSource).toContain('ep-one-surface__content');
     expect(paintSource).toContain('ep-one-surface__content');
     expect(paintSource).toContain('ep-one-surface__overlay');
   });

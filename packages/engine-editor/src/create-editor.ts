@@ -870,6 +870,26 @@ export function createEditor(config: EditorConfig): Editor {
     // a toolbar that renders "bold is on" when it is not is worse than one that never
     // highlights.
     isActive: (_command: EditorCommand): boolean => false,
+
+    // Capabilities the ported legacy UI asks for. All STUBS, all returning the honest
+    // empty answer, each naming what deriving it needs. See `isActive` above for why a
+    // stub must never guess.
+
+    /** STUB — needs the style table read out of the package model's styles part. */
+    getDocumentStyles: () => [],
+
+    /** STUB — needs a font inventory walked from run properties and the theme. */
+    getDocumentFonts: () => [],
+
+    /** STUB — needs heading levels resolved from paragraph styles across the body. */
+    getOutline: () => [],
+
+    /** STUB — needs the comments part parsed and its anchors mapped to block ids. */
+    getComments: () => [],
+
+    /** STUB — needs resolved run/paragraph properties at the selection, which is the
+     *  same derivation `isActive` waits on. */
+    getSelectionFormatting: () => null,
     setActiveScope: (scope: ViewScope) => {
       activeScope = scope;
       navigationSession = null;

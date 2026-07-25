@@ -208,6 +208,38 @@ export interface Editor {
    * while the derivation does not exist.
    */
   isActive(command: EditorCommand, options?: { scope?: EditorScope }): boolean;
+
+  // ── Capabilities the ported legacy UI asks for ──────────────────────────────────────
+  //
+  // The legacy React components read these from a ProseMirror `EditorState` or the old
+  // document model. Adapters may do neither here, so each is a method on this contract,
+  // implemented in the engine as a STUB returning the honest empty answer. The UI wires
+  // to them today and lights up when the derivation lands, with no adapter change.
+  //
+  // Every one of these MUST return empty rather than a guess. A style list that invents
+  // entries, or a comment count that is not real, is worse than a control that shows
+  // nothing — see the `isActive` note above.
+
+  /** Paragraph/character styles defined by the document, for the style picker. */
+  getDocumentStyles(): readonly { readonly styleId: string; readonly name: string; readonly type: string }[];
+
+  /** Font families the document actually uses, for the font picker. */
+  getDocumentFonts(): readonly string[];
+
+  /** Heading outline for the navigation panel, in document order. */
+  getOutline(): readonly { readonly text: string; readonly level: number; readonly blockId: string }[];
+
+  /** Comment threads anchored in the document. */
+  getComments(): readonly { readonly id: string; readonly text: string; readonly resolved: boolean }[];
+
+  /** Formatting at the current selection, for toolbar value display (font, size, colour,
+   *  alignment, list state). `null` when nothing is selected or nothing is derivable. */
+  getSelectionFormatting(): {
+    readonly fontFamily?: string;
+    readonly fontSizeHalfPoints?: number;
+    readonly styleId?: string;
+    readonly alignment?: string;
+  } | null;
   setActiveScope(scope: ViewScope): void;
   getActiveScope(): ViewScope;
 
