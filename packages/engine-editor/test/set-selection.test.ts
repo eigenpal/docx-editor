@@ -184,3 +184,29 @@ describe('getDocumentFonts derives the real inventory', () => {
     body.remove();
   });
 });
+
+// `getDocumentStyles` reports the document's own style table.
+describe('getDocumentStyles derives the real style table', () => {
+  test('reports paragraph styles the fixture defines, and only paragraph styles', async () => {
+    const { readFileSync } = await import('node:fs');
+    const path = await import('node:path');
+    const fixture = path.resolve(import.meta.dir, '../../../e2e/fixtures/comprehensive-word-element-test.docx');
+    const body = document.createElement('div');
+    document.body.append(body);
+    const editor = createEditor({ host: hostWith(body), document: new Uint8Array(readFileSync(fixture)) });
+
+    const styles = editor.getDocumentStyles();
+    expect(styles.length, 'no styles derived from a document with headings').toBeGreaterThan(1);
+    // The picker offers paragraph styles only; a character style there would apply
+    // something the control cannot express.
+    expect(styles.every((s) => s.type === 'paragraph')).toBe(true);
+    // Every row is renderable — no blank names.
+    expect(styles.every((s) => s.name.length > 0 && s.styleId.length > 0)).toBe(true);
+    // A document with H1-H5 must surface at least one heading style.
+    expect(styles.some((s) => /heading/i.test(s.styleId) || /heading/i.test(s.name)),
+      `derived: ${JSON.stringify(styles.slice(0, 8))}`).toBe(true);
+
+    editor.destroy();
+    body.remove();
+  });
+});

@@ -875,8 +875,24 @@ export function createEditor(config: EditorConfig): Editor {
     // empty answer, each naming what deriving it needs. See `isActive` above for why a
     // stub must never guess.
 
-    /** STUB — needs the style table read out of the package model's styles part. */
-    getDocumentStyles: () => [],
+    /**
+     * Styles the document defines, for the style picker.
+     *
+     * Derived: the model already carries a parsed style table, so this reports it
+     * directly rather than re-reading the styles part. Filtered to paragraph styles,
+     * which is what the picker offers — a character or table style there would apply
+     * something the control cannot express.
+     *
+     * `name` falls back to the id when a style declares none, so the picker never renders
+     * a blank row.
+     */
+    getDocumentStyles: () => {
+      if (!session) return [];
+      return session
+        .currentModel()
+        .styles.filter((style) => style.type === 'paragraph')
+        .map((style) => ({ styleId: style.id, name: style.name || style.id, type: style.type }));
+    },
 
     /**
      * Fonts the document actually uses, for the font picker.

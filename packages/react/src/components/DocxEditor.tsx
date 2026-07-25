@@ -371,6 +371,11 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
                 name,
                 fontFamily: name,
               }))}
+              documentStyles={(editorRef.current?.getDocumentStyles() ?? []).map((s) => ({
+                styleId: s.styleId,
+                name: s.name,
+                type: s.type as 'paragraph',
+              }))}
             />
           }
           pagedArea={surface}
