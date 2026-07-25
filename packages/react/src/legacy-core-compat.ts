@@ -1116,6 +1116,14 @@ export function twipsToPixels(twips: number): number {
   return (twips / TWIPS_PER_INCH) * PIXELS_PER_INCH;
 }
 
+/** Compatibility contract for the shared adapter surface. */
+export const EMUS_PER_INCH = 914400;
+
+/** Compatibility contract for the shared adapter surface. */
+export function pixelsToEmu(px: number): number {
+  return Math.round((px / PIXELS_PER_INCH) * EMUS_PER_INCH);
+}
+
 export function pixelsToTwips(px: number): number {
   return (px / PIXELS_PER_INCH) * TWIPS_PER_INCH;
 }
@@ -1359,6 +1367,9 @@ export interface Document {
   package: {
     styles?: { styles?: Style[] };
     theme?: Theme;
+    document?: {
+      finalSectionProperties?: SectionProperties;
+    };
   };
 }
 
@@ -1382,3 +1393,26 @@ export interface TableContextInfo {
   /** Current cell's background/fill color (RGB hex without #), if any */
   cellBackgroundColor?: string;
 }
+
+
+// --- Image layout ---------------------------------------------------------------------
+// Compatibility shapes. `ImageAttrs` was the ProseMirror image node's attribute record and
+// `ImageLayoutTarget` the argument of its wrap-type command; both are named here so the
+// ported image menu keeps its legacy signatures without this adapter naming ProseMirror.
+// Only the fields the ported menu and layout module read are declared.
+
+export interface ImageAttrs {
+  cssFloat?: 'left' | 'right' | 'none';
+}
+
+/** `wp:anchor` wrap types, plus the two square variants and inline. */
+export type ImageLayoutTarget =
+  | 'square'
+  | 'tight'
+  | 'through'
+  | 'topAndBottom'
+  | 'behind'
+  | 'inFront'
+  | 'squareLeft'
+  | 'squareRight'
+  | 'inline';

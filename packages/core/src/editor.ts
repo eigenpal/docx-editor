@@ -399,6 +399,16 @@ export interface EditorCommands extends EditorCommandShape<DocEdits> {
   splitCell: { rows: number; cols: number };
   setCellFill: { color: ColorValue };
   toggleHeaderRow: Record<never, never>;
+  /**
+   * Table-level properties from the table properties dialog: preferred width and
+   * its unit (`dxa`, `pct`, `auto`), and horizontal justification. `null` clears a
+   * property; omitting it leaves the current value alone.
+   */
+  setTableProperties: {
+    width?: number | null;
+    widthType?: string | null;
+    justification?: 'left' | 'center' | 'right' | null;
+  };
 
   // Page/section breaks go through the inherited `insertBreak`. The Office JS
   // API we intend to expose has a single insertBreak(breakType); section

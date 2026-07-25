@@ -16,6 +16,8 @@ import { paintDisplay } from '../paintDisplay';
 // The title bar is composed by DocxEditorToolbar (via EditorToolbar's compound parts),
 // which is where legacy assembles it — this file no longer composes it separately.
 import { DocxEditorToolbar } from './DocxEditor/DocxEditorToolbar';
+import { DocxEditorOverlays } from './DocxEditor/DocxEditorOverlays';
+import { useImageContextMenu } from './ImageContextMenu';
 import { OUTLINE_RESERVED_SPACE, OUTLINE_BUTTON_RESERVED_SPACE } from './DocumentOutline';
 import { SIDEBAR_DOCUMENT_SHIFT } from './sidebar/constants';
 import { RULER_WIDTH } from './ui/VerticalRuler';
@@ -140,6 +142,10 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
       scrollContainerRef: scrollRef,
       isLoading: pages.length === 0,
     });
+
+    // The image menu's own state hook, ported. It opens from an image right-click, which
+    // needs `getSelectedImage` — a stub returning null — so it stays closed today.
+    const imageContextMenu = useImageContextMenu();
 
     // Colour mode, resolved as legacy resolves it: 'system' subscribes to the OS setting
     // and re-syncs immediately, correcting a stale seed if it changed while the mode was
@@ -548,7 +554,26 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
             />
           }
           pagedArea={surface}
-          overlays={null}
+          overlays={
+            /* The ported overlay block. Its menus stay CLOSED: legacy derives the item
+               list in `useContextMenus`, which reads the editing engine's selection and
+               dispatches its commands, and that derivation has no engine counterpart yet.
+               Opening a menu with nothing in it would swallow the browser's own context
+               menu and give the reader less than they have now, so the component is
+               mounted and wired while `onEditorContextMenu` stays a no-op — when the item
+               derivation lands, only that handler changes. */
+            <DocxEditorOverlays
+              contextMenu={{ isOpen: false, position: { x: 0, y: 0 }, hasSelection: false }}
+              contextMenuItems={[]}
+              onContextMenuAction={() => {}}
+              onContextMenuClose={() => {}}
+              imageContextMenu={imageContextMenu}
+              onImageWrapApply={() => {}}
+              imageContextMenuTextActions={[]}
+              onOpenImageProperties={() => {}}
+              readOnly={false}
+            />
+          }
           dialogs={null}
           fileInputs={null}
         />
