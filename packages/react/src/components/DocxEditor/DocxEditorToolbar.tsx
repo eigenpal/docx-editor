@@ -26,7 +26,6 @@ import type { ReactNode } from 'react';
 import type { Editor } from '@docx-editor.dev/core-contract/editor';
 import {
   LEGACY_CHROME_GROUPS,
-  LEGACY_CHROME_UNAVAILABLE_KEY,
   type LegacyChromeControl,
 } from '@docx-editor.dev/engine-editor';
 import { useEditorSnapshot } from '../../useEditorSnapshot';
@@ -98,8 +97,8 @@ function ControlButton({
         className="inline-flex h-[30px] items-center gap-1"
         data-testid={`toolbar-${control.id}`}
         aria-disabled="true"
-        title={`${label} — ${t(LEGACY_CHROME_UNAVAILABLE_KEY)}`}
-        aria-label={`${label} — ${t(LEGACY_CHROME_UNAVAILABLE_KEY)}`}
+        title={label}
+        aria-label={label}
         onMouseDown={noFocusSteal}
       >
         {/* VERBATIM from the legacy stepper buttons. */}
@@ -126,8 +125,8 @@ function ControlButton({
         )}
         data-testid={`toolbar-${control.id}`}
         aria-disabled="true"
-        title={`${label} — ${t(LEGACY_CHROME_UNAVAILABLE_KEY)}`}
-        aria-label={`${label} — ${t(LEGACY_CHROME_UNAVAILABLE_KEY)}`}
+        title={label}
+        aria-label={label}
         onMouseDown={noFocusSteal}
       >
         {/* Glyph above the colour bar, as the legacy split control renders it. */}
@@ -176,8 +175,8 @@ function ControlButton({
           // The reason belongs on the control itself, not in a visually-hidden child:
           // the trigger is a real button, and the parity gate requires every
           // `data-parity-only` control to carry a LOCALIZED reason it can read.
-          title={`${label} — ${t(LEGACY_CHROME_UNAVAILABLE_KEY)}`}
-          aria-label={`${label} — ${t(LEGACY_CHROME_UNAVAILABLE_KEY)}`}
+          title={label}
+          aria-label={label}
           onMouseDown={noFocusSteal}
         >
           {control.paths ? <ToolbarIcon paths={control.paths} /> : null}
@@ -191,8 +190,7 @@ function ControlButton({
   }
 
   if (control.state.kind === 'parityOnly') {
-    const reason = `${label} — ${t(LEGACY_CHROME_UNAVAILABLE_KEY)}`;
-    return (
+        return (
       <button
         type="button"
         className={clsx(
@@ -206,8 +204,8 @@ function ControlButton({
         data-testid={`toolbar-${control.id}`}
         data-parity-only="true"
         disabled
-        title={reason}
-        aria-label={reason}
+        title={label}
+        aria-label={label}
         // Even a DISABLED control must not steal focus. Round-5 review measured all 24
         // parity-only controls moving `document.activeElement` to BODY, dropping
         // `frame.focus.focused`, un-painting the caret, and leaving all six geometry
