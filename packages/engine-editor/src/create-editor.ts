@@ -926,6 +926,14 @@ export function createEditor(config: EditorConfig): Editor {
         focus: { scope: null, focused: false },
         selectionRange: null,
         atomicObjectId: null,
+        // The per-block policy. Omitting it here silently reverted this path to
+        // document-wide editability: on the painted-pages-only configuration (no mounted
+        // surface) all 70 locked paragraphs of the flagship fixture came back
+        // `editableParagraph, readOnly: false` — the exact defect the observation fix was
+        // supposed to close, still live on the path that has no ProseMirror to disagree
+        // with. `ObserveAccessibilityInput.readOnlyBlockIds` is now REQUIRED so a future
+        // caller cannot omit it by accident.
+        readOnlyBlockIds: session?.readOnlyBlockIds ?? new Set<string>(),
         model: session?.currentModel() ?? createEmptyModel(),
         owner: 'none',
         paintedPagesAssistiveRole: null,

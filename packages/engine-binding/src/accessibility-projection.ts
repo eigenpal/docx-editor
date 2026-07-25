@@ -36,9 +36,10 @@ export interface ObserveAccessibilityInput {
   readonly owner: AccessibilityProjectionOwner;
   readonly paintedPagesAssistiveRole: 'presentation' | null;
   /** Body blocks the per-block policy locks (partial editability). A paragraph in this
-   *  set is NOT editable, however editable its kind is. Optional so callers that have no
-   *  policy (a plain read-only view) keep working. */
-  readonly readOnlyBlockIds?: ReadonlySet<string>;
+   *  set is NOT editable, however editable its kind is. REQUIRED: when this was optional,
+   *  one caller omitted it and silently reverted to document-wide editability. A caller
+   *  with no policy passes an empty set explicitly. */
+  readonly readOnlyBlockIds: ReadonlySet<string>;
 }
 
 export interface AccessibilityObservationRequest {
@@ -281,7 +282,9 @@ export interface CaptureAccessibilityStateInput {
 /** Capture live focus/selection state for accessibility observation (binding-internal). */
 export function captureAccessibilityState(input: CaptureAccessibilityStateInput): Omit<
   ObserveAccessibilityInput,
-  'model' | 'modelRevision'
+  // `readOnlyBlockIds` comes from the SESSION, not from live view state, so it is added
+  // by `observeAccessibilityFromSession` rather than captured here.
+  'model' | 'modelRevision' | 'readOnlyBlockIds'
 > {
   const { view, scope, editable, name, frameId, owner, paintedPagesAssistiveRole } = input;
   const doc = view.dom.ownerDocument;
@@ -307,7 +310,8 @@ export function captureAccessibilityState(input: CaptureAccessibilityStateInput)
 export function observeAccessibilityFromSession(
   session: DocxEditorSession,
   request: AccessibilityObservationRequest,
-  state: Omit<ObserveAccessibilityInput, 'model' | 'modelRevision' | 'frameId' | 'scope'>,
+  // `readOnlyBlockIds` is supplied from the SESSION below, so a caller must not pass it.
+  state: Omit<ObserveAccessibilityInput, 'model' | 'modelRevision' | 'frameId' | 'scope' | 'readOnlyBlockIds'>,
 ): AccessibilityObservation {
   return observeAccessibility({
     ...state,
