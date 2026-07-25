@@ -28,6 +28,7 @@ import { useActiveEditor } from './DocxEditor/hooks/useActiveEditor';
 import { useTableOfContentsActions } from './DocxEditor/hooks/useTableOfContentsActions';
 import { useFloatingCommentBtn } from './DocxEditor/hooks/useFloatingCommentBtn';
 import { useDocumentLoader } from './DocxEditor/hooks/useDocumentLoader';
+import { useCommentManagement } from './DocxEditor/hooks/useCommentManagement';
 import { MaterialSymbol } from './ui/Icons';
 import {
   useSelectionTracker,
@@ -573,14 +574,22 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
     const minLayoutWidth =
       2 * outlineLeftAllowance + maxPageWidthPx + (sidebarOpen ? SIDEBAR_DOCUMENT_SHIFT * 2 : 0);
 
+    // Comment state, ported. The controlled/uncontrolled split is legacy's: a host that
+    // passes `comments` owns the array, and every mutation goes out through
+    // `onCommentsChange` instead of touching internal state.
+    const {
+      isAddingCommentRef,
+      setAddCommentYPosition,
+      floatingCommentBtn,
+      setFloatingCommentBtn,
+    } = useCommentManagement({
+      commentsProp: undefined,
+      onCommentDelete: undefined,
+      onCommentsChange: undefined,
+    });
+
     // The floating "Add comment" button beside a selection, ported. It is positioned
-    // from the engine's selection geometry and page box; `onAddComment` below is what
-    // it would fan out to once comments exist.
-    const isAddingCommentRef = useRef(false);
-    const [floatingCommentBtn, setFloatingCommentBtn] = useState<{
-      top: number;
-      left: number;
-    } | null>(null);
+    // from the engine's selection geometry and page box.
     const { recomputeFloatingCommentBtn } = useFloatingCommentBtn({
       editorRef,
       scrollContainerRef: scrollRef,
@@ -634,6 +643,7 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
                 // opening the sidebar. The engine has no comment vocabulary, so this
                 // opens the sidebar and records where the card should sit; the mark
                 // lands when `getComments` and its command counterpart do.
+                setAddCommentYPosition(floatingCommentBtn.top);
                 setShowCommentsSidebar(true);
                 isAddingCommentRef.current = true;
                 setFloatingCommentBtn(null);
