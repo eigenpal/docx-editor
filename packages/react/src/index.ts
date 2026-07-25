@@ -35,10 +35,9 @@ export {
   type ToolbarCommandState,
 } from './toolbarCommands';
 export { DocxEditorShell } from './components/DocxEditor/DocxEditorShell';
-export { DocxEditorTitleBar, type DocxEditorTitleBarProps } from './components/DocxEditor/DocxEditorTitleBar';
-export { DocxEditorToolbar, type DocxEditorToolbarProps } from './components/DocxEditor/DocxEditorToolbar';
-export { DocxEditorMenuBar, type DocxEditorMenuBarProps } from './components/DocxEditor/DocxEditorMenuBar';
-export { DocxEditorSidebar, DEFERRED_DIALOGS, type DocxEditorSidebarProps, type SidebarPanel, type DeferredDialogId } from './components/DocxEditor/DocxEditorSidebar';
+// The legacy components replace the interim ones that used to be exported here.
+export { Toolbar, ToolbarButton, ToolbarGroup, type ToolbarProps } from './components/Toolbar';
+export { TitleBar, MenuBar, DocumentName, Logo, TitleBarRight } from './components/TitleBar';
 export { PageIndicator } from './components/DocxEditor/PageIndicator';
 export { HorizontalRuler, type HorizontalRulerProps } from './components/ui/HorizontalRuler';
 export { VerticalRuler, RULER_WIDTH, type VerticalRulerProps } from './components/ui/VerticalRuler';

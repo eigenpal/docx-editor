@@ -59,6 +59,32 @@ declare global {
  */
 const PM_REFERENCE_FALLBACK = ['The quick brown fox jumps over the lazy dog', 'Second paragraph here', 'Third'];
 
+import { BrandLogo } from './BrandLogo';
+import { AdapterSwitcher } from './AdapterSwitcher';
+import { ExampleSwitcher } from './ExampleSwitcher';
+
+/** `styles.button` / `newButton` / `fileInputLabel` from the legacy demo's App.tsx. */
+const DEMO_BUTTON: React.CSSProperties = {
+  padding: '6px 12px',
+  background: 'var(--doc-surface)',
+  border: '1px solid var(--doc-border)',
+  borderRadius: '6px',
+  cursor: 'pointer',
+  fontSize: '13px',
+  fontWeight: 500,
+  color: 'var(--doc-text)',
+  transition: 'all 0.15s',
+  whiteSpace: 'nowrap',
+};
+const DEMO_SECONDARY_BUTTON: React.CSSProperties = { ...DEMO_BUTTON, background: 'var(--doc-bg-subtle)' };
+const DEMO_PRIMARY_BUTTON: React.CSSProperties = {
+  ...DEMO_BUTTON,
+  background: 'var(--doc-text)',
+  color: 'var(--doc-on-primary)',
+  border: '1px solid var(--doc-text)',
+};
+
+
 export function DocxAdapterHarness({
   fixtureUrl,
   initialZoom = 1,
@@ -143,6 +169,28 @@ export function DocxAdapterHarness({
           zoom={zoom}
           onReady={onReady}
           t={translate}
+          // The demo owns the title-bar slots, as the legacy demo does — brand lockup and
+          // the adapter/example switchers on the left, Open/New/Save on the right.
+          // `AdapterSwitcher` and `ExampleSwitcher` are the components that already ship
+          // in `examples/shared`; the editor no longer hand-rolls its own versions.
+          renderTitleBarLeft={() => (
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <BrandLogo />
+              <AdapterSwitcher current="react" />
+              <ExampleSwitcher current="Vite" />
+            </div>
+          )}
+          renderTitleBarRight={() => (
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <button style={DEMO_PRIMARY_BUTTON} >
+                Open DOCX
+              </button>
+              <button style={DEMO_SECONDARY_BUTTON}>New</button>
+              <button style={DEMO_BUTTON} onClick={onSave}>
+                Save
+              </button>
+            </div>
+          )}
           title={title}
           onTitleChange={setTitle}
           onSave={onSave}

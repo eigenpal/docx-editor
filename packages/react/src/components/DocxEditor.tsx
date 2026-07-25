@@ -13,11 +13,11 @@ import {
 } from '@docx-editor.dev/engine-editor';
 import type { DisplayPage } from '@docx-editor.dev/core-contract/geometry';
 import { paintDisplay } from '../paintDisplay';
-import { DocxEditorTitleBar } from './DocxEditor/DocxEditorTitleBar';
-import { DocxEditorMenuBar } from './DocxEditor/DocxEditorMenuBar';
-import { DocxEditorToolbar } from './DocxEditor/DocxEditorToolbar';
-import { DocxEditorSidebar } from './DocxEditor/DocxEditorSidebar';
-import { BrandLogo } from './ui/BrandLogo';
+// The legacy title + menu components. My DocxEditorTitleBar/DocxEditorMenuBar are
+// deleted: two versions of one control is the drift the port rule warns about.
+import { DocumentName, MenuBar } from './TitleBar';
+import { Toolbar } from './Toolbar';
+import { EditorToolbarContext } from './EditorToolbarContext';
 import { HorizontalRuler } from './ui/HorizontalRuler';
 import { Z_INDEX } from '../styles/zIndex';
 import type { SectionProperties } from '../legacy-core-compat';
@@ -49,23 +49,6 @@ import type { DocxEditorProps, DocxEditorRef } from '../types';
  * (`minHeight/minWidth: 0`) or the page stops scrolling, and `overflowAnchor: none`
  * stops the browser fighting the engine over scroll position during relayout.
  */
-/** i18n keys for the header actions. Keys only — the adapter ships no English. */
-/** `styles.button` from the legacy demo's App.tsx, verbatim. */
-const LEGACY_APP_BUTTON_STYLE: CSSProperties = {
-  padding: '6px 12px',
-  background: 'var(--doc-surface)',
-  border: '1px solid var(--doc-border)',
-  borderRadius: '6px',
-  cursor: 'pointer',
-  fontSize: '13px',
-  fontWeight: 500,
-  color: 'var(--doc-text)',
-  transition: 'all 0.15s',
-  whiteSpace: 'nowrap',
-};
-
-const APP_ACTION_KEYS = { open: 'toolbar.open', new: 'app.newDocument', save: 'toolbar.save' } as const;
-
 const LEGACY_CONTAINER_STYLE: CSSProperties = {
   display: 'flex',
   flexDirection: 'column',
@@ -165,7 +148,7 @@ function sectionPropsFromGeometry(editor: Editor | null): SectionProperties | un
 
 export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
   function DocxEditor(props, ref) {
-    const { document: doc, className, t, title, onTitleChange, onSave } = props;
+    const { document: doc, className, t, title, onTitleChange, onSave, renderTitleBarLeft, renderTitleBarRight } = props;
 
     const bodyRef = useRef<HTMLDivElement | null>(null);
     const pagesRef = useRef<HTMLDivElement | null>(null);
@@ -333,77 +316,44 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
     if (!t) return surface;
 
     return (
+      <EditorToolbarContext.Provider
+        value={{
+          onUndo: () => void editorRef.current?.exec({ type: 'undo' }),
+          onRedo: () => void editorRef.current?.exec({ type: 'redo' }),
+          onSave,
+        }}
+      >
       <div
         className={`ep-root docx-editor${className ? ` ${className}` : ''}`}
         style={LEGACY_CONTAINER_STYLE}
         data-testid="docx-editor"
       >
-        {/* Application header. The legacy product's top row: product identity on the
-            left, document actions on the right. Every action here is parity-only and
-            disabled — M6V.1 permits only undo, redo, bold, italic, and save to act, and
-            save already has its toolbar control. */}
+        {/* Title bar. The DEMO owns what sits left and right — brand lockup, adapter
+            and example switchers, theme toggle, Open/New/Save — and passes them through
+            these slots, exactly as the legacy demo does (App.tsx:835-865). The editor
+            supplies only the document name and menu bar, which are its own.
+
+            The interim brand block, React/Vue toggle, theme toggle and action buttons
+            are deleted. `AdapterSwitcher` and `ExampleSwitcher` already existed in
+            `examples/shared`; rebuilding them here is what kept the header drifting. */}
         <div className="flex flex-shrink-0 items-center gap-3 border-b border-border bg-background px-3.5 py-1.5">
-          <div className="flex items-center gap-2">
-            {/* The real lockup — `BrandLogo`, the same component the docx-editor.dev
-                header uses (DocxIcon + wordmark + the EigenPal mark). It replaces the
-                icon and text the interim implementation had here, including the asterisk that mark
-                carries and my version never had. */}
-            <BrandLogo />
-            {/* Framework segmented toggle. Parity-only: this build IS the React adapter,
-                and Vue chrome is task 10V.1. */}
-            <span className="inline-flex items-center rounded-lg border border-border bg-muted p-0.5" role="group" aria-label={t('app.framework')}>
-              <span className="whitespace-nowrap rounded-md bg-background px-2.5 py-[3px] text-xs text-foreground shadow-sm">React</span>
-              <span className="whitespace-nowrap rounded-md px-2.5 py-[3px] text-xs text-muted-foreground">Vue</span>
-            </span>
-          </div>
-          {/* Title and menu sit INSIDE the header row, as a compact column between the
-              brand and the actions. Rendering them as their own full-width bands below
-              the header is what made the chrome three tall stacked strips instead of the
-              legacy product's single ~110px band. */}
+          {renderTitleBarLeft?.()}
           <div className="flex min-w-0 flex-1 flex-col items-start justify-center pl-[18px]">
-            <DocxEditorTitleBar title={title ?? ''} onTitleChange={onTitleChange} />
-            <DocxEditorMenuBar t={t} />
+            <DocumentName value={title ?? ''} onChange={(next) => onTitleChange?.(next)} />
+            <MenuBar />
           </div>
-          <div className="flex items-center gap-2">
-            {/* Light/dark toggle. Parity-only — the document canvas is deliberately not
-                themed (it must stay Word-faithful), so a working toggle here would imply
-                a capability the renderer does not have. */}
-            <span className="mr-1 inline-flex items-center rounded-lg border border-border bg-muted p-0.5" role="group" aria-label={t('app.theme')}>
-              <span className="grid h-[26px] w-[26px] place-items-center rounded-full bg-background text-xs text-foreground shadow-sm transition-colors" aria-hidden="true">☀</span>
-              <span className="grid h-[26px] w-[26px] place-items-center rounded-full text-xs text-muted-foreground transition-colors" aria-hidden="true">☾</span>
-            </span>
-            {(['open', 'new', 'save'] as const).map((action) => (
-              <button
-                key={action}
-                type="button"
-                // Styles COPIED VERBATIM from the legacy demo's `styles` object in
-                // examples/vite/src/App.tsx — `fileInputLabel` for the
-                // primary action, `newButton` for the secondary, `button` for the rest.
-                // The interim version translated those values into Tailwind utilities,
-                // which is authoring, not copying: the numbers drifted from the source
-                // they came from.
-                style={{
-                  ...LEGACY_APP_BUTTON_STYLE,
-                  ...(action === 'open'
-                    ? { background: 'var(--doc-text)', color: 'var(--doc-on-primary)', border: '1px solid var(--doc-text)' }
-                    : action === 'new'
-                      ? { background: 'var(--doc-bg-subtle)' }
-                      : {}),
-                }}
-                data-testid={`app-action-${action}`}
-                data-parity-only="true"
-                disabled
-                title={`${t(APP_ACTION_KEYS[action])} — ${t('formattingBar.unavailableInPreview')}`}
-                aria-label={`${t(APP_ACTION_KEYS[action])} — ${t('formattingBar.unavailableInPreview')}`}
-              >
-                {t(APP_ACTION_KEYS[action])}
-              </button>
-            ))}
-          </div>
+          {renderTitleBarRight?.()}
         </div>
         <div style={LEGACY_MAIN_STYLE}>
           <div style={LEGACY_COLUMN_STYLE}>
-            <DocxEditorToolbar editor={editorRef.current} t={t} onSave={onSave} />
+            {/* The LEGACY toolbar (components/Toolbar.tsx), not my descriptor-driven
+                one. `LEGACY_CHROME_GROUPS` was an interim control list — wrong set,
+                wrong order, four alignment buttons where legacy has one split control,
+                plus image/table/download controls the product does not show. Legacy's own
+                composition is the source of truth. Every prop is optional, so it renders
+                its full control set now and each handler wires to the engine as the
+                matching capability lands. */}
+            <Toolbar />
             <div className="docx-editor__scroll-container" style={LEGACY_SCROLLER_STYLE}>
               {/* Sticky at the scroller's top so it tracks horizontal scroll, as legacy. */}
               <div className="flex justify-center py-1 flex-shrink-0 bg-doc-bg" style={LEGACY_RULER_ROW_STYLE}>
@@ -458,9 +408,11 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
               visible={(editorRef.current?.getTotalPages() ?? 0) > 1}
             />
           </div>
-          <DocxEditorSidebar editor={editorRef.current} open={false} t={t} />
+          {/* The interim sidebar is deleted. The legacy sidebar comes across with
+              the dialogs and comment panels in the remaining port step. */}
         </div>
       </div>
+      </EditorToolbarContext.Provider>
     );
   }
 );

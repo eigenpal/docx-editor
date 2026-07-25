@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react';
 import type { Editor, DocumentSource, DocumentChange } from '@docx-editor.dev/core-contract/editor';
 
 export type EditorMode = 'edit' | 'view';
@@ -8,6 +9,17 @@ export type EditorMode = 'edit' | 'view';
  * imports ProseMirror or OOXML feature logic.
  */
 export interface DocxEditorProps {
+  /**
+   * Title-bar slots, as the legacy editor took them.
+   *
+   * The demo owns what goes here — brand lockup, adapter/example switchers, theme
+   * toggle, Open/New/Save — and passes them in (see `App.tsx:835-865` in the legacy
+   * repo). the interim implementation had those regions inside this component instead, which is why
+   * they kept drifting from the product: `AdapterSwitcher` and `ExampleSwitcher` already
+   * existed in `examples/shared` and those regions had drifted from the product.
+   */
+  readonly renderTitleBarLeft?: () => ReactNode;
+  readonly renderTitleBarRight?: () => ReactNode;
   /**
    * Resolves i18n keys for the legacy chrome (task M6V.1).
    *
