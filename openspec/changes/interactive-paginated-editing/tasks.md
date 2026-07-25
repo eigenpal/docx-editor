@@ -269,6 +269,32 @@ Not the formal public **`interactive-paginated`** claim (that remains **8.10**).
   passed) is unaffected because it asserts behavior, not styling. **10V.1 MUST convert
   the Vue toolbar, not restore the CSS.**
 
+- [ ] M6V.4 **Replace the hand-written toolbar icon paths with the real icon registry.**
+  Owner directive, explicit: do not hand-author icon SVG paths. `LEGACY_CHROME_GROUPS` in
+  `packages/engine-editor/src/retired-chrome.ts` currently carries locally defined raw `d` strings
+  by hand; they are approximations of Material Symbols and must not ship. The authoritative
+  sources, per the owner:
+
+  - React registry (**source of truth**):
+    `packages/react/src/components/ui/Icons.tsx`
+    — 997 lines, ~99 icons, one exported component each, `viewBox="0 -960 960 960"`.
+  - Vue component: `packages/vue/src/components/ui/MaterialSymbol.vue`
+  - Vue paths: `packages/vue/src/components/ui/icon-paths.json`, GENERATED from the React
+    registry by `scripts/extract-icons.mjs` — so Vue is never hand-edited and the two
+    adapters cannot drift.
+
+  Note the layering consequence: icons are ADAPTER-specific in the retired design, but the
+  greenfield descriptor puts them in `engine-editor` so both adapters read one list. Either
+  the descriptor carries icon NAMES and each adapter resolves them through its own
+  registry (matches the retired split, keeps `extract-icons.mjs` meaningful), or the
+  registry moves into the shared package (contradicts it). Decide before wiring; the
+  descriptor's control ids are already the natural key. Core keeps only SVGs tied to
+  framework-independent document behavior.
+
+  Pass boundary: no `d=` string is authored by hand anywhere in the chrome path;
+  `scripts/extract-icons.mjs` regenerates Vue's JSON from the React registry; a
+  fixed-viewport screenshot matches the reference glyph for glyph.
+
 - [ ] M6E.1 **Repoint the `?edit=1` editing smoke suite at the painted surface.** All 14
   `e2e/editorSmoke.ts` tests (7 × React and Vue) fail on a click timeout and have for at
   least 14 commits, predating M6D.1/M6P.1/M6V.1/M6K.1/M6S.1. Root cause, measured: the

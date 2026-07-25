@@ -47,7 +47,11 @@ export type LegacyChromeCommandId = 'undo' | 'redo' | 'bold' | 'italic';
  * buttons is the difference an owner review called out as "not visual parity" — the
  * regions were all present and it still did not look like the product.
  */
-export type LegacyChromeShape = 'icon' | 'stepper' | 'dropdown' | 'colorSplit' | 'modePill';
+/** `modePill` is deliberately absent. It was declared, never used by any control, and
+ *  rendered nothing — the editing-mode control below is a `dropdown`, which is what the
+ *  legacy product shows. A shape no descriptor names is a branch adapters must implement
+ *  and can never exercise. */
+export type LegacyChromeShape = 'icon' | 'stepper' | 'dropdown' | 'colorSplit';
 
 export interface LegacyChromeControl {
   readonly id: string;
