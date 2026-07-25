@@ -186,9 +186,16 @@ export interface ListState {
 }
 
 /**
- * STUB. The legacy helper filtered a font list against names the document cannot use.
- * The engine exposes no font inventory yet (`Editor` has no font query), so this returns
- * the input unchanged rather than silently dropping fonts a user asked for.
+ * STUB — and verified unportable, not merely unchecked.
+ *
+ * The real `excludeFontsByName` lives in the legacy core's `utils/documentPickerFonts.ts`,
+ * which imports `fontExtractor`, `fontResolver` and `fontLoader` and walks a legacy
+ * `Document` tree — `DocxPackage`, `Paragraph`, `Run`. That is precisely the model the
+ * greenfield replaced, so the chain cannot come across; I tried and reverted it.
+ *
+ * The capability it needs is `Editor.getDocumentFonts()`, already declared on the public
+ * contract. Until that derives a real inventory this returns the input unchanged, rather
+ * than silently dropping fonts the caller asked for.
  */
 export function excludeFontsByName<T extends { name: string }>(
   fonts: readonly T[] | undefined,
