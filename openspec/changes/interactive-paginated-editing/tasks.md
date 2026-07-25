@@ -262,11 +262,38 @@ Not the formal public **`interactive-paginated`** claim (that remains **8.10**).
   `bun run test:e2e:editor` is green in both adapters with no test clicking a
   `pointer-events: none` element.
 
+- [ ] M6V.2 **Finish retired chrome visual parity — M6V.1 shipped structure, not polish.**
+  Owner review of the running editor against `https://latest.docx-editor.dev/react/`
+  found the chrome materially worse-looking than the reference. Fixed already: the title
+  and menu were rendering as two full-width bands below the header instead of a compact
+  column inside it; the ribbon pill was `#f5f5f5` on white, i.e. invisible, and
+  edge-to-edge so its rounded ends were off-screen; dropdown carets were literal `▾` text
+  glyphs; control groups had no separators; and the demo's status strip sat above the
+  product header. Still open: (a) the vertical ruler is REMOVED — it rendered in the
+  viewport's left gutter with its scale down the window edge rather than against the page,
+  and the visual gate now asserts its absence pending this task; (b) the toolbar clips at
+  the right edge instead of fitting or overflowing into a menu as retired does; (c) the
+  split alignment control renders its caret as a detached button; (d) removing the React
+  vertical ruler broke `test:e2e:paired-one-surface-interaction` (Vue still renders
+  `vertical-ruler`, React no longer does) — that gate is RED until the ruler is
+  reintroduced correctly or Vue follows. **Owner directive: do NOT hand-roll this CSS.** Build the
+  controls the way the old adapter did — `@radix-ui/react-select` for every dropdown
+  (style/font/size/colour/alignment/line-spacing/editing-mode), `clsx` for class
+  composition, and Tailwind for layout, mirroring
+  `packages/react/package.json` and the markup at
+  ref `checkpoint-9bb06c38`. Both deps are now installed in `packages/react` (the previous
+  `minimumReleaseAge` install blocker no longer reproduces). Note this intentionally
+  cuts against the "adapter CSS is thin, all chrome styling lives in the core
+  stylesheet" rule in CLAUDE.md; the owner's instruction takes precedence, and
+  `check:adapter-css-thin` will need its scope revisited as part of this task rather
+  than worked around. Pass boundary is
+  M6V.1's: a fixed-viewport Chrome screenshot compared side by side with the reference.
+
 ---
 
 ## M6V — Full retired-chrome visual parity
 
-- [x] M6V.1 **React-first reference implementation; immediate next delivery task after the in-flight M4-R3/M6-R2 review-fix loop closes.** Port the actual retired React chrome markup, component hierarchy, icon placement, spacing, and CSS component-by-component from presentation reference **the recorded presentation baseline** instead of approximating it with a new generic toolbar. The React root demo MUST show the complete application/title/menu region, full toolbar/ribbon groups, horizontal and vertical rulers, document workspace/page chrome, page indicator, and sidebar/dialog launch surfaces. Existing neutral control metadata may supply labels/icons, but it MUST NOT substitute for the retired component structure or visual layout. Replace only retired authority wiring with PM-free `Editor.can`/`Editor.exec`/`Editor.query`/`Editor.save`/`Editor.getPageGeometry` calls. The only enabled actions are **undo, redo, bold, italic** when `Editor.can(command)` succeeds, plus **save** through `Editor.save()`; underline and every other control remain visible but disabled with a localized unavailable reason. Direct ProseMirror, retired layout/painter, DOM-selection authority, and adapter-owned geometry authority remain forbidden. **React pass boundary:** a fixed-viewport Chrome screenshot is compared side-by-side with the retired React reference in `openspec/changes/interactive-paginated-editing/evidence/m6/retired-visual-parity-react.md`; no named chrome region is missing; every unproven control is observably disabled and cannot dispatch; `bun run test:e2e:react-one-surface-interaction`, `bun run check:adapter-css-thin`, and the adapter-authority test remain green. Do not start Vue visual work until this React gate passes.
+- [ ] M6V.1 **REOPENED (owner visual review — see M6V.2). React-first reference implementation; immediate next delivery task after the in-flight M4-R3/M6-R2 review-fix loop closes.** Port the actual retired React chrome markup, component hierarchy, icon placement, spacing, and CSS component-by-component from presentation reference **the recorded presentation baseline** instead of approximating it with a new generic toolbar. The React root demo MUST show the complete application/title/menu region, full toolbar/ribbon groups, horizontal and vertical rulers, document workspace/page chrome, page indicator, and sidebar/dialog launch surfaces. Existing neutral control metadata may supply labels/icons, but it MUST NOT substitute for the retired component structure or visual layout. Replace only retired authority wiring with PM-free `Editor.can`/`Editor.exec`/`Editor.query`/`Editor.save`/`Editor.getPageGeometry` calls. The only enabled actions are **undo, redo, bold, italic** when `Editor.can(command)` succeeds, plus **save** through `Editor.save()`; underline and every other control remain visible but disabled with a localized unavailable reason. Direct ProseMirror, retired layout/painter, DOM-selection authority, and adapter-owned geometry authority remain forbidden. **React pass boundary:** a fixed-viewport Chrome screenshot is compared side-by-side with the retired React reference in `openspec/changes/interactive-paginated-editing/evidence/m6/retired-visual-parity-react.md`; no named chrome region is missing; every unproven control is observably disabled and cannot dispatch; `bun run test:e2e:react-one-surface-interaction`, `bun run check:adapter-css-thin`, and the adapter-authority test remain green. Do not start Vue visual work until this React gate passes.
 
   **Mandatory integration boundary:** `packages/react/src/DocxEditor.tsx` itself MUST compose and render the complete chrome and greenfield painted-page surface. Mounting the published `<DocxEditor document={...} />` MUST produce the complete editor without requiring a consumer or example to import and assemble `DocxEditorShell`, title bar, toolbar, rulers, page indicator, or sidebar. Those pieces may remain private implementation details called by `DocxEditor.tsx`; they MUST NOT form a second product root. `examples/shared/DocxAdapterHarness.tsx` is fixture/configuration glue only and MUST NOT own product-shell composition. Visual and interaction gates MUST mount the production `DocxEditor` directly, so a polished wrapper around an incomplete package component cannot satisfy M6V.1.
 

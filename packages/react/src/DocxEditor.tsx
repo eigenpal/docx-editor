@@ -18,7 +18,6 @@ import { DocxEditorMenuBar } from './DocxEditorMenuBar';
 import { DocxEditorToolbar } from './DocxEditorToolbar';
 import { DocxEditorSidebar } from './DocxEditorSidebar';
 import { HorizontalRuler } from './HorizontalRuler';
-import { VerticalRuler } from './VerticalRuler';
 import { PageIndicator } from './PageIndicator';
 import type { DocxEditorProps, DocxEditorRef } from './types';
 
@@ -112,13 +111,6 @@ const LEGACY_CONTENT_STYLE: CSSProperties = {
   flexDirection: 'column',
 };
 
-const LEGACY_VRULER_STYLE: CSSProperties = {
-  position: 'absolute',
-  left: 0,
-  top: 0,
-  zIndex: 30,
-  paddingTop: 48,
-};
 
 export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
   function DocxEditor(props, ref) {
@@ -318,6 +310,14 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
               <span className="docx-editor__framework-option">Vue</span>
             </span>
           </div>
+          {/* Title and menu sit INSIDE the header row, as a compact column between the
+              brand and the actions. Rendering them as their own full-width bands below
+              the header is what made the chrome three tall stacked strips instead of the
+              legacy product's single ~110px band. */}
+          <div className="docx-editor__title-region">
+            <DocxEditorTitleBar title={title ?? ''} onTitleChange={onTitleChange} />
+            <DocxEditorMenuBar t={t} />
+          </div>
           <div className="docx-editor__app-actions">
             {/* Light/dark toggle. Parity-only — the document canvas is deliberately not
                 themed (it must stay Word-faithful), so a working toggle here would imply
@@ -342,10 +342,6 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
             ))}
           </div>
         </div>
-        <div className="docx-editor__title-region docx-editor__title-region--indented">
-          <DocxEditorTitleBar title={title ?? ''} onTitleChange={onTitleChange} />
-          <DocxEditorMenuBar t={t} />
-        </div>
         <div style={LEGACY_MAIN_STYLE}>
           <div style={LEGACY_COLUMN_STYLE}>
             <DocxEditorToolbar editor={editorRef.current} t={t} onSave={onSave} />
@@ -356,11 +352,6 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
               </div>
               <div style={LEGACY_CONTENT_ROW_STYLE}>
                 <div className="docx-editor__content" style={LEGACY_CONTENT_STYLE}>
-                  {/* At the content's left edge; `paddingTop` must match the pages
-                      container's top padding or the ruler drifts off the page. */}
-                  <div style={LEGACY_VRULER_STYLE}>
-                    <VerticalRuler editor={editorRef.current} zoom={zoomFactor} />
-                  </div>
                   {/* Outline toggle, in the left gutter as in the reference. */}
                   <button
                     type="button"

@@ -122,7 +122,10 @@ export function DocxAdapterHarness({
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', minHeight: 0 }}>
-      <div style={{ padding: '8px 12px', font: '13px system-ui, sans-serif', color: '#333', borderBottom: '1px solid #e0e0e0' }}>
+      {/* Gate-visible status, VISUALLY hidden: it was a full-width grey strip pinned
+          above the product's own header, which is not part of the editor and made the
+          demo look like a debug page. The testid stays so e2e keeps reading it. */}
+      <div style={{ position: 'absolute', width: 1, height: 1, overflow: 'hidden', clipPath: 'inset(50%)', whiteSpace: 'nowrap' }}>
         <span data-testid="adapter-status">{status}</span>
       </div>
       {/* Raw ProseMirror reference for the M6K.1 differential gate, behind `?pmref=1`

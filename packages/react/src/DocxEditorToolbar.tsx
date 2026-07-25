@@ -30,6 +30,17 @@ import {
 import { useEditorSnapshot } from './useEditorSnapshot';
 import { runToolbarCommand, toolbarCommandState } from './toolbarCommands';
 
+/** The legacy dropdown chevron. A literal "▾" text glyph rendered at the font's own
+ *  weight and baseline, which read as a stray character next to the Material Symbols
+ *  icons rather than as part of the control. */
+function Caret(): React.ReactElement {
+  return (
+    <svg className="ep-toolbar__picker-caret" viewBox="0 -960 960 960" width="14" height="14" aria-hidden="true" focusable="false">
+      <path d="M480-360 280-560h400L480-360Z" fill="currentColor" />
+    </svg>
+  );
+}
+
 /**
  * Resolves an i18n key to display text.
  *
@@ -98,7 +109,7 @@ function ControlButton({
           {control.paths ? <ToolbarIcon paths={control.paths} /> : null}
           <span className="ep-toolbar__color-swatch" style={{ background: control.swatch ?? 'transparent' }} />
         </span>
-        <span className="ep-toolbar__picker-caret" aria-hidden="true">▾</span>
+        <Caret />
         <span className="ep-sr-only">{`${label} — ${t(LEGACY_CHROME_UNAVAILABLE_KEY)}`}</span>
       </span>
     );
@@ -115,7 +126,7 @@ function ControlButton({
       >
         {control.paths ? <ToolbarIcon paths={control.paths} /> : null}
         {value ? <span className="ep-toolbar__picker-value">{value}</span> : null}
-        <span className="ep-toolbar__picker-caret" aria-hidden="true">▾</span>
+        <Caret />
         <span className="ep-sr-only">{`${label} — ${t(LEGACY_CHROME_UNAVAILABLE_KEY)}`}</span>
       </span>
     );

@@ -66,7 +66,11 @@ test.describe('M6V.1 legacy chrome visual parity (React)', () => {
     expect(regions.pillOverflowX, 'formatting bar scrolls rather than wrapping').toBe('auto');
     expect(regions.horizontalRuler, 'horizontal ruler').toBe(true);
     expect(regions.rulerPosition, 'ruler row is sticky').toBe('sticky');
-    expect(regions.verticalRuler, 'vertical ruler').toBe(true);
+    // The vertical ruler is REMOVED, deliberately, and M6V.1 is reopened for it.
+    // It rendered against the viewport's left gutter with its scale running down the
+    // window edge, outside the page entirely — the legacy reference shows nothing there.
+    // Task M6V.2 owns reintroducing it positioned against the page, as legacy does.
+    expect(regions.verticalRuler, 'vertical ruler (see M6V.2)').toBe(false);
     expect(regions.scrollContainer, 'scroll container').toBe(true);
     expect(regions.workspace, 'workspace/page chrome').toBe(true);
     expect(regions.pages, 'painted page').toBeGreaterThan(0);

@@ -69,6 +69,7 @@
   --doc-card: #f8fbff; /* collapsed comment / suggestion cards (near-white) */
   --doc-bg: #f8f9fa; /* app background behind the page */
   --doc-bg-subtle: #f5f5f5; /* subtle section backgrounds */
+  --doc-toolbar-pill: #f0f3f7; /* the ribbon band, distinct from both surface and bg */
   --doc-bg-hover: #f1f3f4; /* hover states */
   --doc-bg-input: #f8f9fa; /* input backgrounds */
 
@@ -208,6 +209,7 @@
   --doc-surface: #1f1f1f; /* ribbon / toolbar / title bar */
   --doc-card: #2d2d2d; /* collapsed comment / suggestion cards */
   --doc-bg: #262626; /* workspace behind the page */
+  --doc-toolbar-pill: #2b2b2b; /* the ribbon band */
   --doc-bg-subtle: #2d2d2d; /* dropdowns, dialogs, panels */
   --doc-bg-hover: #3a3a3a; /* hover states */
   --doc-bg-input: #333333; /* input fields */
@@ -1623,8 +1625,18 @@
  * scroll authority is a behavioural change that belongs in its own task rather than
  * inside a visual-parity port. The shell's container therefore does not scroll, and
  * the ruler row is sticky against the viewport instead. */
+/* The title + menu column, INSIDE the header row (legacy layout). It used to render as
+ * two full-width bands under the header, which turned a single ~110px product band into
+ * three tall stacked strips with the menu floating in whitespace. */
 .docx-editor__title-region {
-  flex-shrink: 0;
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  gap: 0;
+  padding-left: 18px;
 }
 
 .docx-editor__scroll-container {
@@ -1763,11 +1775,15 @@
   flex-wrap: nowrap;
   overflow-x: auto;
   gap: 0;
-  min-height: 36px;
-  padding: 4px 8px;
-  margin: 0 8px 4px;
+  min-height: 40px;
+  padding: 4px 10px;
+  /* Inset from the window edge, as legacy. Edge-to-edge, the pill's rounded ends were
+   * off-screen and the row read as a bare strip of icons rather than a ribbon. */
+  margin: 6px 14px 8px;
   border-radius: 9999px;
-  background: var(--doc-bg-subtle);
+  /* #f5f5f5 on a white header was invisible; the legacy ribbon is a clearly distinct
+   * band. */
+  background: var(--doc-toolbar-pill);
   flex-shrink: 0;
   /* The pill scrolls; it must not become a second vertical scroller. */
   overflow-y: hidden;
@@ -1779,6 +1795,19 @@
 .ep-toolbar__group-wrap {
   display: inline-flex;
   align-items: center;
+}
+
+/* A hairline between control groups. Without it the toolbar is one undifferentiated
+ * strip of icons; the legacy product separates history / zoom / style / font /
+ * formatting / alignment / lists / insert bands, which is most of what makes it
+ * readable at a glance. */
+.ep-toolbar__group-wrap + .ep-toolbar__group-wrap::before {
+  content: '';
+  align-self: center;
+  width: 1px;
+  height: 20px;
+  margin: 0 6px;
+  background: var(--doc-border);
 }
 
 .ep-toolbar__group {
@@ -1793,16 +1822,19 @@
 .ep-toolbar__picker {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
+  justify-content: space-between;
+  gap: 6px;
   height: 30px;
   min-width: 76px;
-  max-width: 140px;
-  padding: 0 6px;
-  border: 1px solid var(--doc-border);
+  max-width: 150px;
+  padding: 0 8px;
+  /* Flat until hovered, like the legacy control. A permanent 1px box around every
+   * dropdown made the toolbar look like a form, not a ribbon. */
+  border: 1px solid transparent;
   border-radius: 4px;
-  background: var(--doc-surface);
-  color: var(--doc-text-subtle);
-  font-size: 12px;
+  background: transparent;
+  color: var(--doc-text);
+  font-size: 13px;
   cursor: default;
 }
 
@@ -1813,6 +1845,8 @@
 }
 
 .ep-toolbar__picker-caret {
+  flex: 0 0 auto;
+  opacity: 0.55;
   margin-left: auto;
   font-size: 10px;
 }
@@ -2001,9 +2035,8 @@
 .docx-editor__app-header {
   display: flex;
   align-items: center;
-  justify-content: space-between;
   gap: 12px;
-  padding: 8px 14px;
+  padding: 6px 14px;
   flex-shrink: 0;
   border-bottom: 1px solid var(--doc-border);
   background: var(--doc-surface);
@@ -2153,8 +2186,10 @@
 .docx-editor__theme-option { padding: 3px 8px; }
 
 /* Title indented to align with the page, as in the reference, rather than flush left. */
+/* Retained so an existing consumer's selector still resolves; the region is indented by
+ * default now that it lives inside the header row. */
 .docx-editor__title-region--indented {
-  padding-left: 20px;
+  padding-left: 18px;
 }
 
 /* Outline toggle: a circular button in the left gutter. */
