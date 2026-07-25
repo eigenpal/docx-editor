@@ -458,6 +458,28 @@ export interface EditorCommands extends EditorCommandShape<DocEdits> {
   removeTabMark: { positionTwips: number };
 
   /**
+   * Replace one found match with `text`. Addressed by {@link TextMatch} rather than a
+   * `DocTarget` because that is what `findMatches` hands back, and re-deriving a target
+   * from it in the caller is where an off-by-one would come from. An empty `text`
+   * deletes the match, which is what a find/replace dialog means by replacing with
+   * nothing.
+   */
+  replaceMatch: { match: TextMatch; text: string };
+
+  /**
+   * Replace EVERY match of `query` in one undoable step. Separate from looping
+   * `replaceMatch` because each replacement shifts the offsets of the ones after it —
+   * legacy applied its edits back-to-front for exactly this reason, and that ordering
+   * belongs with whoever owns the offsets.
+   */
+  replaceAllMatches: {
+    query: string;
+    text: string;
+    matchCase?: boolean;
+    wholeWord?: boolean;
+  };
+
+  /**
    * How the selected image sits relative to text. `inline` flows in the line; the rest
    * are `wp:anchor` variants, with `squareLeft`/`squareRight` distinguishing which side
    * text wraps on. Legacy's vocabulary, unchanged.
