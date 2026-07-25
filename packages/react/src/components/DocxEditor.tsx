@@ -18,6 +18,11 @@ import { paintDisplay } from '../paintDisplay';
 import { DocxEditorToolbar } from './DocxEditor/DocxEditorToolbar';
 import { DocxEditorOverlays } from './DocxEditor/DocxEditorOverlays';
 import { useImageContextMenu } from './ImageContextMenu';
+import { useKeyboardShortcuts } from './DocxEditor/hooks/useKeyboardShortcuts';
+import { useFindReplace } from '../hooks/useFindReplace';
+import { DocxEditorDialogs } from './DocxEditor/DocxEditorDialogs';
+import type { FindOptions, FindResult } from './dialogs/findReplaceUtils';
+import { useHyperlinkDialog } from './dialogs/HyperlinkDialog';
 import { OUTLINE_RESERVED_SPACE, OUTLINE_BUTTON_RESERVED_SPACE } from './DocumentOutline';
 import { SIDEBAR_DOCUMENT_SHIFT } from './sidebar/constants';
 import { RULER_WIDTH } from './ui/VerticalRuler';
@@ -142,6 +147,39 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
       scrollContainerRef: scrollRef,
       isLoading: pages.length === 0,
     });
+
+    // Find/replace and hyperlink dialog state, both ported hooks, driven by the ported
+    // keyboard shortcuts below (Cmd+F / Cmd+H / Cmd+K, plus Cmd+O and table delete).
+    const findReplace = useFindReplace();
+    const hyperlinkDialog = useHyperlinkDialog();
+    useKeyboardShortcuts({
+      editorRef,
+      disableFindReplaceShortcuts: false,
+      showFileOpen: false,
+      findReplace,
+      hyperlinkDialog,
+    });
+
+    // Find counts for real: `findMatches` derives matches over the canonical text.
+    //
+    // The MATCH LIST stays empty on purpose. This dialog addresses a match by
+    // paragraph index, run index and character offsets — an address into the legacy
+    // document tree — while the engine addresses it by block id and offset. Filling
+    // those fields would mean inventing indices, and a dialog that jumps to the wrong
+    // place is worse than one that reports the count and does not jump. Navigation and
+    // replace are inert for the same reason: moving the selection to a match and
+    // rewriting it are separate capabilities the engine does not expose.
+    const findResultRef = useRef<FindResult | null>(null);
+    const handleFind = useCallback((searchText: string, options: FindOptions): FindResult | null => {
+      const matches =
+        editorRef.current?.findMatches(searchText, {
+          matchCase: options.matchCase,
+          wholeWord: options.matchWholeWord,
+        }) ?? [];
+      const result: FindResult = { matches: [], totalCount: matches.length, currentIndex: -1 };
+      findResultRef.current = result;
+      return result;
+    }, []);
 
     // The image menu's own state hook, ported. It opens from an image right-click, which
     // needs `getSelectedImage` — a stub returning null — so it stays closed today.
@@ -574,7 +612,54 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
               readOnly={false}
             />
           }
-          dialogs={null}
+          dialogs={
+            /* The ported dialog block. Find/replace runs against the engine's
+               `findMatches`; the rest open and close but apply nothing, because the
+               commands behind them are refused by the engine today — each of those
+               handlers is a named capability on the contract, not a missing dialog. */
+            <DocxEditorDialogs
+              findReplace={findReplace}
+              findResultRef={findResultRef}
+              onFind={handleFind}
+              onFindNext={() => null}
+              onFindPrevious={() => null}
+              onReplace={() => false}
+              onReplaceAll={() => 0}
+              hyperlinkDialog={hyperlinkDialog}
+              onHyperlinkSubmit={() => {}}
+              onHyperlinkRemove={() => {}}
+              tablePropsOpen={false}
+              onTablePropsClose={() => {}}
+              editor={editorRef.current}
+              splitCellDialogState={{
+                isOpen: false,
+                initialRows: 1,
+                initialCols: 1,
+                minRows: 1,
+                minCols: 1,
+              }}
+              onSplitCellDialogClose={() => {}}
+              onSplitCellDialogApply={() => {}}
+              imagePositionOpen={false}
+              onImagePositionClose={() => {}}
+              onApplyImagePosition={() => {}}
+              imagePropsOpen={false}
+              onImagePropsClose={() => {}}
+              onApplyImageProperties={() => {}}
+              pmImageContext={null}
+              showPageSetup={false}
+              onPageSetupClose={() => {}}
+              onPageSetupApply={() => {}}
+              showWatermark={false}
+              onWatermarkClose={() => {}}
+              onWatermarkApply={() => {}}
+              currentWatermark={undefined}
+              document={null}
+              footnotePropsOpen={false}
+              onFootnotePropsClose={() => {}}
+              onApplyFootnoteProperties={() => {}}
+            />
+          }
           fileInputs={null}
         />
       </EditorToolbarContext.Provider>

@@ -469,6 +469,11 @@ export interface TableContext {
 export interface HyperlinkInfo {
   readonly href: string;
   readonly range: DocRange;
+  /**
+   * `w:tooltip` on the `w:hyperlink` — the text Word shows on hover, and what the
+   * hyperlink dialog seeds its tooltip field with when editing an existing link.
+   */
+  readonly tooltip?: string;
 }
 
 /**
