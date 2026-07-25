@@ -965,7 +965,7 @@ export function createEditor(config: EditorConfig): Editor {
       // The run containing the head offset. Offsets are grapheme-based; run text is
       // UTF-16, so this walks by run length and clamps — an offset past the end belongs
       // to the last run, which is where a caret at paragraph end sits.
-      const runs = (block as { runs: readonly { text: string; props?: { bold?: boolean; italic?: boolean; styleId?: string }; rPrCapsule?: string }[] }).runs;
+      const runs = (block as { runs: readonly { text: string; props?: { bold?: boolean; italic?: boolean; underline?: boolean; styleId?: string }; rPrCapsule?: string }[] }).runs;
       let remaining = head.graphemeOffset ?? 0;
       let run = runs[0];
       for (const r of runs) {
@@ -984,6 +984,12 @@ export function createEditor(config: EditorConfig): Editor {
         ...(font ? { fontFamily: font } : {}),
         ...(Number.isFinite(sizeHalfPoints) ? { fontSizeHalfPoints: sizeHalfPoints } : {}),
         ...(run.props?.styleId ? { styleId: run.props.styleId } : {}),
+        // Marks the toolbar reflects. Authored explicitly on the run, so `undefined`
+        // means "not set here" and is left out rather than reported as false — the run
+        // may inherit it from its style, which this does not resolve.
+        ...(run.props?.bold !== undefined ? { bold: run.props.bold } : {}),
+        ...(run.props?.italic !== undefined ? { italic: run.props.italic } : {}),
+        ...(run.props?.underline !== undefined ? { underline: run.props.underline } : {}),
       };
     },
 

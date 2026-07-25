@@ -367,6 +367,23 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
                ported Toolbar already accepts the prop, so nothing in the legacy component
                changes. */
             <Toolbar
+              /* `currentFormatting` is how the legacy toolbar drives its active states
+                 and value displays — `active={currentFormatting.bold}` and the pickers'
+                 current font/size/style. Supplying it from the engine's derivation is the
+                 wiring that makes B/I highlight and the pickers show the caret's actual
+                 formatting. */
+              currentFormatting={(() => {
+                const f = editorRef.current?.getSelectionFormatting();
+                if (!f) return {};
+                return {
+                  ...(f.bold !== undefined ? { bold: f.bold } : {}),
+                  ...(f.italic !== undefined ? { italic: f.italic } : {}),
+                  ...(f.underline !== undefined ? { underline: f.underline } : {}),
+                  ...(f.fontFamily ? { fontFamily: f.fontFamily } : {}),
+                  ...(f.fontSizeHalfPoints ? { fontSize: f.fontSizeHalfPoints } : {}),
+                  ...(f.styleId ? { styleId: f.styleId } : {}),
+                };
+              })()}
               documentFonts={(editorRef.current?.getDocumentFonts() ?? []).map((name) => ({
                 name,
                 fontFamily: name,

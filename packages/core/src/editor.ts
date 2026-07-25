@@ -239,6 +239,9 @@ export interface Editor {
     readonly fontSizeHalfPoints?: number;
     readonly styleId?: string;
     readonly alignment?: string;
+    readonly bold?: boolean;
+    readonly italic?: boolean;
+    readonly underline?: boolean;
   } | null;
 
   /** Find matches for a query, for the find/replace dialog. */
