@@ -885,9 +885,20 @@ export function createEditor(config: EditorConfig): Editor {
      * verbatim `<w:rPr>`, and `w:rFonts w:ascii` is where the family lives. Walking the
      * body's runs yields the real inventory in document order, de-duplicated.
      *
-     * Returns `[]` for a document whose runs carry no explicit font — that is a true
-     * answer (the fonts come from styles/theme, which this does not yet resolve), not a
-     * placeholder list.
+     * DELIBERATE SUBSET of the legacy definition, which is
+     * `utils/fontExtractor.ts:extractFonts` in the earlier editor implementation. That one scans SIX
+     * sources: the theme, `styles.xml`, document content, headers, footers, and the font
+     * table. This scans body run capsules only, because the rest need parts the
+     * greenfield model does not surface here yet.
+     *
+     * It cannot be ported directly — it takes a legacy `DocxPackage`, the model this
+     * engine replaced. Widening it means surfacing the styles/theme/font-table parts and
+     * reading those, in that order; the legacy file is the specification for what to
+     * cover.
+     *
+     * Returns `[]` for a document whose runs carry no explicit font. True, not a
+     * placeholder — those fonts come from styles and the theme, which this does not yet
+     * reach.
      */
     getDocumentFonts: () => {
       if (!session) return [];
