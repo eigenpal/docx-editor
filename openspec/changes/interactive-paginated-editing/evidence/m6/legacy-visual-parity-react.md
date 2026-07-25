@@ -1,7 +1,29 @@
-# M6V.1 — retired chrome visual parity (React)
+# M6V.1 — retired chrome visual parity (React) — REOPENED
 
-Recorded at `checkpoint-cb0a726c`+ (this task's commit). React only; Vue is deferred to **10V.1**
-by owner direction.
+> **This task is REOPENED and its checkbox is unchecked again.** Owner review of
+> `checkpoint-3315fd89` found it proved only STRUCTURAL PRESENCE — the named regions exist and the
+> control counts match — which is not visual parity. The chrome was still built from a
+> neutral metadata model rather than from the retired components themselves, so it does
+> not look like the reference at
+> https://www.docx-editor.dev/editor.
+>
+> The accepted approach is now to REUSE the actual retired React presentation from
+> the recorded presentation baseline — `TitleBar.tsx`, `Toolbar.tsx`,
+> `EditorToolbar.tsx`, `ResponsiveToolbar.tsx`, `UnifiedSidebar.tsx`, the ruler
+> components and their CSS — behind one thin compatibility adapter onto the public
+> `Editor` facade, integrated into `DocxEditor.tsx` directly rather than into a new
+> shell. The neutral metadata may supply labels, icons, and ordering; it may not
+> substitute for the retired structure or presentation.
+>
+> Also corrected: parity must be captured against the comprehensive
+> `examples/vite/public/sample.docx`, not `editable-sample.docx`, with the preview and
+> status diagnostic banners excluded, and both reference and current screenshots
+> COMMITTED under evidence rather than left in a gitignored directory.
+>
+> What follows is the record of the superseded attempt, kept because its measurements
+> and the two deviations it documents remain accurate.
+
+---
 
 Reference: the recorded presentation baseline.
 Screenshot: `screenshots/m6v1-react-retired-chrome.png`, fixed viewport **1440 x 900**.
