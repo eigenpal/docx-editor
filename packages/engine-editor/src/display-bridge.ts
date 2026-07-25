@@ -16,7 +16,7 @@ import type {
 import type { ColorValue, Rect, ViewScope } from '@docx-editor.dev/core-contract/editor';
 import type { PositionedInteractionMeta } from '@docx-editor.dev/core-contract/interaction';
 import type { PackageModel } from '@docx-editor.dev/engine-core';
-import type { CaretEdgeItem, Page, TextItem, RectItem } from '@docx-editor.dev/engine-layout';
+import type { Page, TextItem, RectItem } from '@docx-editor.dev/engine-layout';
 import { HelveticaMetrics, semanticHorizontalBoundaries, type MetricsPort } from '@docx-editor.dev/engine-layout';
 import {
   buildSemanticIndex,
@@ -84,23 +84,52 @@ function unionRect(a: Rect, b: Rect): Rect {
  * Keyed on the `pages` array identity, which `layoutBody` returns fresh per layout,
  * so a new layout gets a new index with no explicit eviction.
  */
-const edgesByParagraphCache = new WeakMap<readonly Page[], Map<string, CaretEdgeItem[]>>();
+interface EdgeGeometry {
+  readonly x: number;
+  readonly y: number;
+  readonly height: number;
+}
 
-function caretEdgesForParagraph(pages: readonly Page[], paragraphId: string): readonly CaretEdgeItem[] {
+/**
+ * Navigable caret-edge geometry keyed by (paragraph, grapheme offset).
+ *
+ * Grouping edges by paragraph was not enough. A whitespace ownership region still
+ * scanned every edge OF ITS PARAGRAPH, and there is one region per whitespace run, so
+ * cost stayed O(regions x edges) INSIDE a single paragraph. Independent review proved
+ * the exponent was still ~1.80 at HEAD and that the trigger is plain prose with zero
+ * formatting: a 533-byte .docx spends 2,428 ms in `toDisplayPages`, and 80,000
+ * characters as ONE paragraph costs 10x the same text split across 250 paragraphs.
+ *
+ * An offset-keyed map makes each region O(1). The previous guard could not see this
+ * because all three of its tests scale PARAGRAPH COUNT while the quadratic is within
+ * a paragraph — the fifth generation of the same trap: right layer, wrong axis.
+ */
+const edgesByParagraphCache = new WeakMap<readonly Page[], Map<string, Map<number, EdgeGeometry>>>();
+
+function navigableEdgesForParagraph(pages: readonly Page[], paragraphId: string): Map<number, EdgeGeometry> {
   let byParagraph = edgesByParagraphCache.get(pages);
   if (!byParagraph) {
     byParagraph = new Map();
     for (const page of pages) {
       for (const item of page.items) {
-        if (item.type !== 'caretEdge') continue;
-        const list = byParagraph.get(item.paragraphId);
-        if (list) list.push(item);
-        else byParagraph.set(item.paragraphId, [item]);
+        if (item.type !== 'caretEdge' || !item.navigable) continue;
+        let byOffset = byParagraph.get(item.paragraphId);
+        if (!byOffset) {
+          byOffset = new Map();
+          byParagraph.set(item.paragraphId, byOffset);
+        }
+        // LAST wins, which is what the previous scan did by overwriting as it walked
+        // pages in order. It matters: an all-whitespace paragraph publishes two edges
+        // for offset 0 at different x (a separate open defect), and last-wins makes
+        // `right <= left` so the region is dropped and paragraph ownership takes over.
+        // Taking the leftmost instead produced a box and broke whitespace-only
+        // double-click selection — caught by an existing test.
+        byOffset.set(item.graphemeOffset, { x: px(item.x), y: px(item.y), height: px(item.height) });
       }
     }
     edgesByParagraphCache.set(pages, byParagraph);
   }
-  return byParagraph.get(paragraphId) ?? [];
+  return byParagraph.get(paragraphId) ?? new Map();
 }
 
 function whitespaceBoxFromCaretEdges(
@@ -112,26 +141,16 @@ function whitespaceBoxFromCaretEdges(
   graphemeFrom: number,
   graphemeTo: number,
 ): Rect | undefined {
-  let left: number | undefined;
-  let right: number | undefined;
-  let y: number | undefined;
-  let height: number | undefined;
-  {
-    // Only this paragraph's edges, not every item on every page.
-    for (const item of caretEdgesForParagraph(pages, paragraphId)) {
-      if (!item.navigable) continue;
-      if (item.graphemeOffset === graphemeFrom) {
-        left = px(item.x);
-        y = px(item.y);
-        height = px(item.height);
-      }
-      if (item.graphemeOffset === graphemeTo) {
-        right = px(item.x);
-        y ??= px(item.y);
-        height ??= px(item.height);
-      }
-    }
-  }
+  // Two O(1) map reads, not a scan of the paragraph's edges per region.
+  const byOffset = navigableEdgesForParagraph(pages, paragraphId);
+  const fromEdge = byOffset.get(graphemeFrom);
+  const toEdge = byOffset.get(graphemeTo);
+  const left = fromEdge?.x;
+  const right = toEdge?.x;
+  // Preserves the previous precedence: geometry from the `from` edge when present,
+  // otherwise from the `to` edge.
+  const y = fromEdge?.y ?? toEdge?.y;
+  const height = fromEdge?.height ?? toEdge?.height;
   if (left === undefined || right === undefined || y === undefined || height === undefined) return undefined;
   if (right <= left) return undefined;
   return { x: left, y, width: right - left, height };

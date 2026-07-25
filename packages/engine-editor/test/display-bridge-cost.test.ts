@@ -75,20 +75,67 @@ describe('display publication cost', () => {
     expect(timePublish(4000)).toBeLessThan(8000);
   });
 
+  test('cost does not depend on how the SAME text is split into paragraphs', () => {
+    // The axis the first version of this file missed, and review named it: all three
+    // original tests scaled PARAGRAPH COUNT while one quadratic lived INSIDE a
+    // paragraph, so the guard sampled exactly the region where cost looked fine.
+    // Holding total text constant and varying only the split exposes it.
+    //
+    // Measured before the fix: 80,000 characters as ONE paragraph cost 1,854 ms against
+    // 181 ms for the same text in 250 paragraphs — 10x worse at identical total text.
+    // After: 171 ms as one paragraph, now the cheapest split rather than the worst.
+    const words = (n: number) => Array.from({ length: n }, (_, j) => `w${j % 97}`).join(' ');
+    const split = (paragraphs: number, wordsEach: number) => {
+      const base = createEmptyModel();
+      const storyId = bodyStoryId(base);
+      const story = base.stories.get(storyId)!;
+      const blocks: ParagraphRecord[] = Array.from({ length: paragraphs }, (_, i) => ({
+        kind: 'paragraph',
+        id: `p${i}`,
+        runs: [{ text: words(wordsEach) }],
+      }));
+      const model = { ...base, stories: new Map(base.stories).set(storyId, { ...story, blocks }) };
+      const laid = layoutBody(model, LAYOUT) as unknown as { pages?: unknown[] };
+      const started = Date.now();
+      toDisplayPages(model, (laid.pages ?? laid) as never);
+      return Date.now() - started;
+    };
+    const many = split(250, 64); // 16,000 words spread out
+    const one = split(1, 16000); // the same 16,000 words in ONE paragraph
+    // One paragraph must not be dramatically worse than the same text spread out.
+    expect(one).toBeLessThan(Math.max(many, 40) * 4);
+  });
+
+  test('a single paragraph with many whitespace runs is not quadratic', () => {
+    // Same axis, as a scaling assertion: whitespace-run count inside ONE paragraph.
+    // Measured 2.29 / 1.65 / 2.14 / 2.22 per doubling at 2k-32k words, i.e. linear.
+    const oneParagraph = (wordCount: number) => {
+      const base = createEmptyModel();
+      const storyId = bodyStoryId(base);
+      const story = base.stories.get(storyId)!;
+      const text = Array.from({ length: wordCount }, (_, j) => `w${j % 97}`).join(' ');
+      const p: ParagraphRecord = { kind: 'paragraph', id: 'p-ws', runs: [{ text }] };
+      const model = { ...base, stories: new Map(base.stories).set(storyId, { ...story, blocks: [p] }) };
+      const laid = layoutBody(model, LAYOUT) as unknown as { pages?: unknown[] };
+      const started = Date.now();
+      toDisplayPages(model, (laid.pages ?? laid) as never);
+      return Date.now() - started;
+    };
+    const small = oneParagraph(4000);
+    const large = oneParagraph(16000);
+    // 4x the whitespace runs must not cost ~16x.
+    expect(large).toBeLessThan(Math.max(small, 40) * 8);
+  });
+
   test('a whitespace-free paragraph with alternating run styles stays interactive', () => {
-    // STATED HONESTLY: this shape is still SUPER-LINEAR through the bridge after the
-    // four indexing fixes. Measured exponent ~1.7 (ratios per doubling: 1.50, 2.73,
-    // 3.39, 3.31 at 200/400/800/1600/3200 style segments), against ~1.95 before.
-    // Absolute cost fell from 21.8 s to 1.47 s at 73,600 characters.
-    //
-    // So this is deliberately an ABSOLUTE budget and is NOT a linearity claim. The
-    // sibling test above asserts scaling for ordinary documents, where the fix does
-    // make cost near-linear; asserting it here would encode something untrue, which is
-    // the exact mistake the previous generation of these guards made.
-    //
-    // The residual term is unlocated and is recorded as an OPEN finding rather than
-    // tolerated silently. This budget exists to catch a return to the 20-second
-    // behavior, not to certify the shape as fixed.
+    // This shape WAS still super-linear (exponent ~1.7) when this file was first
+    // written, and was recorded here as open rather than tolerated. Review then
+    // located the cause — `resolveEdgePaintSlice` ran three to five full
+    // `slices.filter(...)` passes per caret edge, and a whitespace-free paragraph puts
+    // every slice and every edge on one visual line — and it is now indexed.
+    // Measured after: 178 ms at 73,600 characters (was 1,471 ms after the first round
+    // of bridge fixes, and 21,753 ms before them), ratios 1.41 / 1.79 / 1.86 / 2.23 per
+    // doubling, i.e. linear.
     const shape = (segments: number) => {
       const base = createEmptyModel();
       const storyId = bodyStoryId(base);

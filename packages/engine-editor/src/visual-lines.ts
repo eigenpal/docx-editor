@@ -167,6 +167,101 @@ function buildNavigationPaintSliceIndex(
   return withGaps;
 }
 
+interface SliceIndex {
+  /** Real (non-synthetic) slices, ascending by `utf16End`. */
+  readonly real: readonly PaintSliceSpan[];
+  readonly endingAt: Map<number, PaintSliceSpan[]>;
+  readonly startingAt: Map<number, PaintSliceSpan[]>;
+  readonly realStartingAt: Map<number, PaintSliceSpan[]>;
+  readonly realEndingAt: Map<number, PaintSliceSpan[]>;
+  /** All slices ascending by `anchor`, for the containing-interval lookup. */
+  readonly byAnchor: readonly PaintSliceSpan[];
+  /** Longest slice, bounding how far back the containing scan must walk. */
+  readonly maxSpan: number;
+}
+
+/**
+ * Paint-slice lookup index, built once per slice array.
+ *
+ * `resolveEdgePaintSlice` ran three to five `slices.filter(...)` passes over the
+ * fragment's entire paint-slice array, once per CARET EDGE — and a whitespace-free
+ * paragraph puts every slice and every edge on one visual line, so cost was
+ * O(edges x slicesPerLine). Independent review located it here after the earlier
+ * bridge fixes, and proved it by holding characters and edges fixed at 16,000 while
+ * varying only slices-per-line: 1 slice 31 ms, 16,000 slices 997 ms, strictly
+ * proportional.
+ *
+ * Keyed on the array identity, which is rebuilt per layout.
+ */
+const sliceIndexCache = new WeakMap<readonly PaintSliceSpan[], SliceIndex>();
+
+function push(map: Map<number, PaintSliceSpan[]>, key: number, slice: PaintSliceSpan): void {
+  const list = map.get(key);
+  if (list) list.push(slice);
+  else map.set(key, [slice]);
+}
+
+function sliceIndexFor(slices: readonly PaintSliceSpan[]): SliceIndex {
+  const cached = sliceIndexCache.get(slices);
+  if (cached) return cached;
+  const endingAt = new Map<number, PaintSliceSpan[]>();
+  const startingAt = new Map<number, PaintSliceSpan[]>();
+  const realStartingAt = new Map<number, PaintSliceSpan[]>();
+  const realEndingAt = new Map<number, PaintSliceSpan[]>();
+  const real: PaintSliceSpan[] = [];
+  let maxSpan = 0;
+  for (const slice of slices) {
+    push(endingAt, slice.utf16End, slice);
+    push(startingAt, slice.anchor, slice);
+    if (!slice.syntheticWhitespace) {
+      real.push(slice);
+      push(realStartingAt, slice.anchor, slice);
+      push(realEndingAt, slice.utf16End, slice);
+    }
+    const span = slice.utf16End - slice.anchor;
+    if (span > maxSpan) maxSpan = span;
+  }
+  // `realSlices.filter(...).at(-1)` relied on ascending `utf16End`; make it explicit.
+  real.sort((a, b) => a.utf16End - b.utf16End);
+  const byAnchor = [...slices].sort((a, b) => a.anchor - b.anchor);
+  const index: SliceIndex = { real, endingAt, startingAt, realStartingAt, realEndingAt, byAnchor, maxSpan };
+  sliceIndexCache.set(slices, index);
+  return index;
+}
+
+/** Slices strictly containing `offset`, found without scanning the whole array. */
+function containingSlices(index: SliceIndex, offset: number): PaintSliceSpan[] {
+  const { byAnchor, maxSpan } = index;
+  // Last position whose anchor is < offset.
+  let lo = 0;
+  let hi = byAnchor.length;
+  while (lo < hi) {
+    const mid = (lo + hi) >> 1;
+    if (byAnchor[mid]!.anchor < offset) lo = mid + 1;
+    else hi = mid;
+  }
+  const out: PaintSliceSpan[] = [];
+  // Only slices that could still reach past `offset` — bounded by the longest span.
+  for (let i = lo - 1; i >= 0 && byAnchor[i]!.anchor > offset - maxSpan - 1; i -= 1) {
+    const slice = byAnchor[i]!;
+    if (slice.anchor < offset && offset < slice.utf16End) out.push(slice);
+  }
+  return out;
+}
+
+/** Last real slice ending at or before `offset`, by binary search over `real`. */
+function lastRealEndingAtOrBefore(index: SliceIndex, offset: number): PaintSliceSpan | undefined {
+  const { real } = index;
+  let lo = 0;
+  let hi = real.length;
+  while (lo < hi) {
+    const mid = (lo + hi) >> 1;
+    if (real[mid]!.utf16End <= offset) lo = mid + 1;
+    else hi = mid;
+  }
+  return lo > 0 ? real[lo - 1] : undefined;
+}
+
 /** Resolve paint-slice metadata for one caret edge UTF-16 offset; null when ambiguous. */
 function resolveEdgePaintSlice(
   utf16Offset: number,
@@ -175,15 +270,15 @@ function resolveEdgePaintSlice(
 ): { meta: FragmentInteractionMeta; paintSliceAnchor: number } | null {
   if (slices.length === 0) return null;
 
-  const realSlices = slices.filter((slice) => !slice.syntheticWhitespace);
+  const index = sliceIndexFor(slices);
 
   if (utf16Offset === paragraphUtf16Length) {
-    const ending = realSlices.find((slice) => slice.utf16End === utf16Offset);
+    const ending = index.realEndingAt.get(utf16Offset)?.[0];
     if (ending) return { meta: ending.meta, paintSliceAnchor: ending.anchor };
   }
 
-  const left = slices.filter((slice) => slice.utf16End === utf16Offset);
-  const right = slices.filter((slice) => slice.anchor === utf16Offset);
+  const left = index.endingAt.get(utf16Offset) ?? [];
+  const right = index.startingAt.get(utf16Offset) ?? [];
   if (left.length === 1 && right.length === 1) {
     const leftSlice = left[0]!;
     const rightSlice = right[0]!;
@@ -202,11 +297,11 @@ function resolveEdgePaintSlice(
     return null;
   }
 
-  const containing = slices.filter((slice) => slice.anchor < utf16Offset && utf16Offset < slice.utf16End);
+  const containing = containingSlices(index, utf16Offset);
   if (containing.length === 1) {
     const slice = containing[0]!;
     if (slice.syntheticWhitespace) {
-      const adjacentReal = realSlices.filter((real) => real.utf16End <= utf16Offset).at(-1);
+      const adjacentReal = lastRealEndingAtOrBefore(index, utf16Offset);
       if (!adjacentReal) return null;
       return { meta: adjacentReal.meta, paintSliceAnchor: adjacentReal.anchor };
     }
@@ -214,7 +309,7 @@ function resolveEdgePaintSlice(
   }
   if (containing.length > 1) return null;
 
-  const atAnchor = realSlices.filter((slice) => slice.anchor === utf16Offset);
+  const atAnchor = index.realStartingAt.get(utf16Offset) ?? [];
   if (atAnchor.length === 1) {
     return { meta: atAnchor[0]!.meta, paintSliceAnchor: atAnchor[0]!.anchor };
   }
