@@ -1,0 +1,93 @@
+/**
+ * @docx-editor.dev/react/dialogs
+ *
+ * Modal dialogs for hyperlinks, find/replace, paste-special, page setup,
+ * and keyboard shortcuts. Pair with the hooks under
+ * `@docx-editor.dev/react/hooks` when wiring custom UI.
+ *
+ * @example
+ * ```tsx
+ * import { HyperlinkDialog, FindReplaceDialog } from '@docx-editor.dev/react/dialogs';
+ * ```
+ *
+ * @packageDocumentation
+ * @public
+ */
+
+// Hyperlink dialog for inserting and editing hyperlinks
+export {
+  HyperlinkDialog,
+  type HyperlinkDialogProps,
+  type HyperlinkData,
+  type BookmarkOption,
+  // Utility functions
+  isValidUrl,
+  normalizeUrl,
+  getUrlType,
+  createHyperlinkData,
+  createBookmarkLinkData,
+  isExternalHyperlinkData,
+  isBookmarkHyperlinkData,
+  getDisplayText,
+  emailToMailto,
+  phoneToTel,
+  extractBookmarksForDialog,
+} from './HyperlinkDialog';
+
+// Find and Replace dialog for searching and replacing text
+export {
+  FindReplaceDialog,
+  type FindReplaceDialogProps,
+  type FindMatch,
+  type FindOptions,
+  type FindResult,
+  type HighlightOptions,
+  // Utility functions
+  createDefaultFindOptions,
+  findAllMatches,
+  escapeRegexString,
+  createSearchPattern,
+  replaceAllInContent,
+  replaceFirstInContent,
+  getMatchCountText,
+  isEmptySearch,
+  getDefaultHighlightOptions,
+} from './FindReplaceDialog';
+
+// Paste Special dialog for paste options
+export {
+  PasteSpecialDialog,
+  type PasteSpecialDialogProps,
+  type PasteOption,
+  type UsePasteSpecialReturn,
+  type UsePasteSpecialOptions,
+  // Hook
+  usePasteSpecial,
+  // Utility functions
+  getPasteOption,
+  getAllPasteOptions,
+  getDefaultPasteOption,
+  isPasteSpecialShortcut,
+} from './PasteSpecialDialog';
+
+// Page Setup dialog for page size, orientation, and margins
+export { PageSetupDialog, type PageSetupDialogProps } from './PageSetupDialog';
+
+// Keyboard Shortcuts dialog for showing all shortcuts
+export {
+  KeyboardShortcutsDialog,
+  type KeyboardShortcutsDialogProps,
+  type KeyboardShortcut,
+  type ShortcutCategory,
+  type UseKeyboardShortcutsDialogOptions,
+  type UseKeyboardShortcutsDialogReturn,
+  // Hook
+  useKeyboardShortcutsDialog,
+  // Utility functions
+  getDefaultShortcuts,
+  getShortcutsByCategory,
+  getCommonShortcuts,
+  getCategoryLabel,
+  getAllCategories,
+  formatShortcutKeys,
+} from './KeyboardShortcutsDialog';

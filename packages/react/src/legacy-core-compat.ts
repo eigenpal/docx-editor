@@ -1221,3 +1221,38 @@ export * from './lib/stylePreview';
 export * from './lib/fontOptions';
 export * from './lib/highlightColors';
 export * from './lib/colorResolver';
+
+// --- Clipboard and watermark ------------------------------------------------------------
+//
+// Named by the ported PasteSpecialDialog and WatermarkDialog. Both are STUBS: the engine
+// exposes neither a clipboard read nor a watermark model, and `Editor.getWatermark()` is
+// the capability the latter waits on.
+//
+// The dialogs are ported anyway rather than skipped — that is the point of the stub
+// pattern. They render, and they light up when the capabilities derive.
+
+/** Compatibility shape — the interim one used html/text/rtf and the dialog reads runs,
+ *  fromWord, fromEditor and plainText. */
+export interface ParsedClipboardContent {
+  /** Runs parsed from clipboard */
+  runs: unknown[];
+  /** Whether content came from Word */
+  fromWord: boolean;
+  /** Whether content came from our editor */
+  fromEditor: boolean;
+  /** Original plain text */
+  plainText: string;
+}
+
+/** STUB — no clipboard read on the engine, so the dialog offers no formats rather than
+ *  claiming a payload it cannot produce. Takes the event the caller passes. */
+export async function readFromClipboard(_event?: unknown): Promise<ParsedClipboardContent | null> {
+  return null;
+}
+
+
+
+// Watermark types, presets and display sizing come from the ported module: it has no
+// imports, so the real `pictureWatermarkDisplayEmu` and `DEFAULT_WATERMARK_PRESETS` are
+// available rather than the empty versions I first wrote.
+export * from './lib/watermark';
