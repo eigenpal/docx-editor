@@ -174,6 +174,10 @@ export default defineComponent({
           role: 'toolbar',
           'aria-label': props.t('toolbar.ariaLabel'),
           'data-testid': 'docx-editor-toolbar',
+          // Focus protection on the CONTAINER — see the React counterpart. A disabled
+          // form control never receives mousedown in Chromium, so a per-button handler
+          // is dead code, and `pointer-events: none` just moves the blur here.
+          onMousedown: (event: MouseEvent) => event.preventDefault(),
         },
         LEGACY_CHROME_GROUPS.map((group, index) =>
           h('div', { key: group.id, class: 'ep-toolbar__group-wrap' }, [

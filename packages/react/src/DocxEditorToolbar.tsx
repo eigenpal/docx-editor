@@ -169,6 +169,21 @@ export function DocxEditorToolbar({ editor, t, onSave }: DocxEditorToolbarProps)
       role="toolbar"
       aria-label={t('toolbar.ariaLabel')}
       data-testid="docx-editor-toolbar"
+      // Focus protection belongs HERE, on the container, not on each control.
+      //
+      // Per-button `onMouseDown={preventDefault}` is dead code on a disabled control:
+      // Chromium does not dispatch mouse events to disabled form controls, so the
+      // handler never runs while focus still leaves the editor. Round-6 review proved
+      // it with a real trusted click and explained why round 5 measured it as fixed —
+      // under synthetic `dispatchEvent` the handler DOES fire and `activeElement` never
+      // moves, so a JS-driven probe reports success either way. 20 of 29 controls were
+      // still losing the caret, focus, and all six geometry keys in the real app.
+      //
+      // `pointer-events: none` on the button is also not enough: the click then lands
+      // on this container, whose mousedown blurs the editor just the same. One handler
+      // on the container covers every child, disabled or not, and cannot be bypassed
+      // by adding a control later.
+      onMouseDown={(event) => event.preventDefault()}
     >
       {LEGACY_CHROME_GROUPS.map((group, index) => (
         <div key={group.id} className="ep-toolbar__group-wrap">
