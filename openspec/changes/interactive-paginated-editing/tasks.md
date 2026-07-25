@@ -269,6 +269,42 @@ Not the formal public **`interactive-paginated`** claim (that remains **8.10**).
   passed) is unaffected because it asserts behavior, not styling. **10V.1 MUST convert
   the Vue toolbar, not restore the CSS.**
 
+- [ ] M6V.5 **Port the retired UI 1:1 — owner directive, and it SUPERSEDES piecemeal class
+  matching.** The rule, in the owner's words: *all UI should be exactly as in retired except
+  for the page rendered that represents the Word doc; all retired styling should be
+  preserved 1:1.* The greenfield painter keeps the document canvas — that is the one
+  deliberate divergence, and CLAUDE.md already says the canvas stays Word-faithful and
+  unthemed. Everything else — toolbar, pickers, rulers, menus, sidebar, header — is a
+  VERBATIM port, not a reimplementation.
+
+  This supersedes how M6V.1/M6V.2/M6V.3 were executed. Three rounds of hand-tuning values
+  that existed on disk (`h-[30px]` vs `h-8`, `text-[13px]` vs `text-sm`, invented icon `d`
+  strings, a bespoke stepper) were each caught by owner review, not by any gate. The
+  failure mode is that an approximation looks right to the author and wrong to the person
+  who knows the product.
+
+  Port these from `packages/react/src/`, replacing
+  ONLY the authority wiring (ProseMirror/retired layout → `Editor.can/exec/query/save/
+  getPageGeometry`), never the markup or classes:
+
+  - `components/Toolbar.tsx` and `components/ui/ResponsiveToolbar.tsx` (grouping, overflow)
+  - `components/ui/Select.tsx`, `StylePicker.tsx`, `FontPicker.tsx`, `FontSizePicker.tsx`,
+    `ColorPicker.tsx`, `LineSpacingPicker.tsx`, `AlignmentButtons.tsx`, `ListButtons.tsx`
+  - `components/ui/HorizontalRuler.tsx`, `VerticalRuler.tsx` (margin zones, indent markers)
+  - `components/ui/Icons.tsx` (already implemented verbatim; see M6V.4 for the descriptor swap)
+  - the demo header in `examples/vite/src/main.tsx` (brand row, framework toggle, the
+    chevron button, theme toggle, Open/New/Save)
+
+  Known open detail: the bordered look on the style and font pickers does NOT come from
+  those components — both pass only `h-8 text-sm` to `SelectTrigger`, and their call site
+  in `Toolbar.tsx` passes no `className`. Find where it does come from before styling it;
+  do not invent a border.
+
+  One item is NOT styling and cannot be implemented: the active state on bold/italic. Retired
+  read `undoDepth`/mark state off a ProseMirror `EditorState`, which the greenfield
+  architecture forbids in adapters. `Editor.can()` answers "may this run?", not "is it
+  applied?", so a public query must exist first. Track it separately rather than faking it.
+
 - [ ] M6V.4 **Replace the hand-written toolbar icon paths with the real icon registry.**
   Owner directive, explicit: do not hand-author icon SVG paths. `LEGACY_CHROME_GROUPS` in
   `packages/engine-editor/src/retired-chrome.ts` currently carries locally defined raw `d` strings
