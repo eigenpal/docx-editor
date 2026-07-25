@@ -35,6 +35,10 @@ export interface ObserveAccessibilityInput {
   readonly model: PackageModel;
   readonly owner: AccessibilityProjectionOwner;
   readonly paintedPagesAssistiveRole: 'presentation' | null;
+  /** Body blocks the per-block policy locks (partial editability). A paragraph in this
+   *  set is NOT editable, however editable its kind is. Optional so callers that have no
+   *  policy (a plain read-only view) keep working. */
+  readonly readOnlyBlockIds?: ReadonlySet<string>;
 }
 
 export interface AccessibilityObservationRequest {
@@ -61,7 +65,11 @@ function entryRoleForBlock(block: Block, editableParagraph: boolean): Accessibil
 }
 
 /** Build canonical ordered accessibility entries for the body story. */
-export function buildAccessibilityEntries(model: PackageModel, scope: ViewScope): readonly AccessibilityEntry[] {
+export function buildAccessibilityEntries(
+  model: PackageModel,
+  scope: ViewScope,
+  readOnlyBlockIds: ReadonlySet<string> = new Set(),
+): readonly AccessibilityEntry[] {
   if (scope.kind !== 'body') return [];
   const storyId = bodyStoryId(model);
   const story = model.stories.get(storyId);
@@ -70,7 +78,13 @@ export function buildAccessibilityEntries(model: PackageModel, scope: ViewScope)
   const entries: AccessibilityEntry[] = [];
   let orderIndex = 0;
   for (const block of flattenSdt(story.blocks)) {
-    const editableParagraph = block.kind === 'paragraph' && isTopLevelEditable('paragraph');
+    // The KIND alone is not the answer. Partial editability locks individual paragraphs,
+    // and reporting one of those as `editableParagraph, readOnly: false` made the public
+    // observation disagree with both the DOM (`aria-readonly="true"`) and the reverse
+    // mapper, which refuses the edit. `unsupportedStructure` already existed for this and
+    // was dead code.
+    const editableParagraph =
+      block.kind === 'paragraph' && isTopLevelEditable('paragraph') && !readOnlyBlockIds.has(block.id);
     const role = entryRoleForBlock(block, editableParagraph);
     if (block.kind === 'paragraph') {
       entries.push({
@@ -177,7 +191,7 @@ export function observeAccessibility(input: ObserveAccessibilityInput): Accessib
     modelRevision: input.modelRevision,
     editable: input.editable,
     name: input.name,
-    entries: buildAccessibilityEntries(input.model, input.scope),
+    entries: buildAccessibilityEntries(input.model, input.scope, input.readOnlyBlockIds),
     focus: input.focus,
     selection: buildSelectionObservation(input, storyId),
     paintedPagesAssistiveRole: input.paintedPagesAssistiveRole,
@@ -301,5 +315,6 @@ export function observeAccessibilityFromSession(
     scope: request.scope,
     model: session.currentModel(),
     modelRevision: session.revision(),
+    readOnlyBlockIds: session.readOnlyBlockIds,
   });
 }

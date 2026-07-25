@@ -99,12 +99,11 @@ describe('partial body editability', () => {
     // that a `full`-mode document commits — asserted below — so the difference measured
     // here is genuinely partial mode refusing structural mutation.
     //
-    // What this does NOT claim: that the `structuralMutationAllowed` preflight in
-    // `applyPmDoc` is what rejects THIS doc — for a tail split the reverse matcher gets
-    // there first. The preflight is still load-bearing for other shapes: security review
-    // showed that with it disabled, a join deleting a read-only paragraph committed. That
-    // specific hole is now closed in the join lane and asserted in
-    // `read-only-blocks.test.ts`.
+    // The preflight IS what rejects this doc. Two earlier versions of this comment got
+    // that wrong in both directions: first claiming the preflight was load-bearing when
+    // the construction was refused elsewhere, then claiming it was redundant when it is
+    // not. With a well-formed tail split — marks preserved, so `trySplit` recognises it —
+    // disabling the preflight commits the split. Verified in both directions.
     const doc = session.projectDoc();
     const schema = doc.type.schema;
     // The LAST editable paragraph, with no read-only block after it. Splitting an
@@ -131,10 +130,17 @@ describe('partial body editability', () => {
         nodes.push(node);
         return;
       }
-      const text = node.textContent;
+      // Preserve the text node's MARKS. Rebuilding from `node.textContent` drops the
+      // paragraph's `rPrCapsule`, so `trySplit` saw a runs mismatch and refused as a
+      // generic structural edit — the rejection had nothing to do with partial mode, and
+      // the test stayed green with the preflight deleted.
+      const inline: import('prosemirror-model').Node[] = [];
+      node.forEach((child) => inline.push(child));
+      const first = inline[0]!;
+      const text = first.text ?? '';
       const cut = Math.floor(text.length / 2);
-      nodes.push(node.type.create(node.attrs, schema.text(text.slice(0, cut))));
-      nodes.push(node.type.create(node.attrs, schema.text(text.slice(cut))));
+      nodes.push(node.type.create(node.attrs, schema.text(text.slice(0, cut), first.marks)));
+      nodes.push(node.type.create(node.attrs, schema.text(text.slice(cut), first.marks)));
     });
     const split = schema.node('doc', null, nodes as never);
     expect(split.childCount, 'the doc must really have one more block').toBe(doc.childCount + 1);
@@ -190,7 +196,7 @@ describe('partial body editability', () => {
 // Partial editability projects an unpatchable paragraph as a read-only ATOM. The atom
 // carried no text and the painted pages are `aria-hidden`, so those paragraphs vanished
 // from the ONLY assistive representation of the document: independent review measured
-// 1,833 of 8,601 body characters (21.3%) unreachable, including every section heading.
+// 1,813 of 8,581 body characters (21.1%) unreachable, including every section heading.
 // This asserts the reviewer's own metric on the real fixture, and fails if a future
 // change reintroduces a text-free atom or re-clears a paragraph atom's textContent.
 describe('assistive coverage of read-only blocks', () => {
@@ -229,5 +235,35 @@ describe('assistive coverage of read-only blocks', () => {
       missingChars,
       `${missingChars}/${totalChars} chars unreachable; first: ${JSON.stringify(missing[0]?.slice(0, 60))}`,
     ).toBe(0);
+  });
+});
+
+// --- The public observation must report the policy (correctness review, High 1) ------
+//
+// The accessibility observation derived editability from the block KIND alone, so on a
+// partial document every paragraph came back `editableParagraph, readOnly: false` —
+// including the ones projected as read-only atoms, whose DOM already said
+// `aria-readonly="true"`. Two public surfaces disagreeing about the same block is worse
+// than either answer alone, and consumers (the demo harness, the e2e gate helpers) filter
+// on exactly this role to decide what they may address.
+describe('accessibility entries reflect per-block editability', () => {
+  test('a locked paragraph is reported unsupportedStructure, not editableParagraph', async () => {
+    const { buildAccessibilityEntries } = await import('../src/accessibility-projection.ts');
+    const { bodyStoryId } = await import('@docx-editor.dev/engine-core');
+    const session = openDocxSession(bytes());
+    expect(session.mode).toBe('partial');
+    const locked = session.readOnlyBlockIds;
+    expect(locked.size, 'fixture locks no block').toBeGreaterThan(0);
+
+    const model = session.currentModel();
+    const scope = { kind: 'body', storyId: bodyStoryId(model) } as never;
+    const entries = buildAccessibilityEntries(model, scope, locked);
+
+    // Every locked paragraph is reported as such…
+    const wrong = entries.filter((e) => locked.has(e.identity.blockId) && e.role === 'editableParagraph');
+    expect(wrong.map((e) => e.identity.blockId)).toEqual([]);
+    expect(entries.filter((e) => locked.has(e.identity.blockId)).every((e) => e.readOnly)).toBe(true);
+    // …and the document is still mostly editable, or this would pass by locking everything.
+    expect(entries.filter((e) => e.role === 'editableParagraph').length).toBeGreaterThan(100);
   });
 });

@@ -152,3 +152,50 @@ describe('the join lane honors the read-only policy', () => {
     expect(bodyBlockKinds(store)).toEqual(['paragraph', 'paragraph']);
   });
 });
+
+// --- The reverse mapper's policy checks (independent correctness review, High 3) -----
+//
+// Both read-only branches in the reverse mapper shipped with NO regression guard: they
+// could be disabled together and the whole engine suite stayed green. The join-lane hole
+// found next door was reachable from a plain native delete, so an unguarded fix here is a
+// live risk, not hygiene. These two tests pin each branch.
+describe('the reverse mapper validates both directions against the policy', () => {
+  const THREE = '<w:p><w:r><w:t>one</w:t></w:r></w:p><w:p><w:r><w:t>two</w:t></w:r></w:p>';
+
+  test('editing a paragraph the policy locks is rejected, not committed', () => {
+    // binding.ts: `edit targets a read-only block`. Without it the store commits
+    // setParagraphRuns for content with no lossless patch path, and the failure surfaces
+    // at SAVE with the model already mutated.
+    const store = storeFrom(THREE);
+    const binding = new EditorBinding(store);
+    const locked = store.currentModel.stories.get(bodyStoryId(store.currentModel))!.blocks[0].id;
+    // Project FIRST (unlocked), so the doc holds an editable paragraph node for the block
+    // the policy locks a moment later — exactly the disagreement the branch exists for.
+    const doc = binding.projectDoc();
+    binding.setReadOnlyBlockIds(new Set([locked]));
+    const edited: import('prosemirror-model').Node[] = [];
+    doc.forEach((n, _off, i) => {
+      edited.push(i === 0 ? n.type.create(n.attrs, docSchema.text('EDITED')) : n);
+    });
+    const res = binding.commitFromDoc(docSchema.node('doc', null, edited));
+    expect(res.rejected).toBe(true);
+    expect(res.ops.length).toBe(0);
+    expect(store.currentModel.stories.get(bodyStoryId(store.currentModel))!.blocks[0]).toMatchObject({
+      runs: [{ text: 'one' }],
+    });
+  });
+
+  test('an atom naming a block the policy says is editable is rejected', () => {
+    // binding.ts: `read-only atom names an editable block`. Projection and policy
+    // disagreeing must fail closed rather than silently freezing a paragraph.
+    const store = storeFrom(THREE);
+    const binding = new EditorBinding(store);
+    const ids = store.currentModel.stories.get(bodyStoryId(store.currentModel))!.blocks.map((b) => b.id);
+    binding.setReadOnlyBlockIds(new Set([ids[0]]));
+    const doc = binding.projectDoc(); // block 0 projects as an atom
+    binding.setReadOnlyBlockIds(new Set()); // …and the policy now says it is editable
+    const res = binding.commitFromDoc(doc);
+    expect(res.rejected).toBe(true);
+    expect(res.ops.length).toBe(0);
+  });
+});

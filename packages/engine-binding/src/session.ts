@@ -46,6 +46,8 @@ export interface DocxEditorSession {
   readonly readOnlyRegions: readonly ReadOnlyDiagnostic[];
   /** Whether top-level split/join/insert/delete/reorder is permitted. */
   readonly structuralMutationAllowed: boolean;
+  /** Body blocks the policy locks — the same set installed on the binding. */
+  readonly readOnlyBlockIds: ReadonlySet<string>;
   /** When the document opened read-only, a structured diagnostic naming the blocking capability,
    *  QName/context, story, and missing pipeline lane (comprehensive 4.9); null when editable. */
   readonly readOnlyReason: ReadOnlyDiagnostic | null;
@@ -186,6 +188,14 @@ export function openDocxSession(bytes: Uint8Array): DocxEditorSession {
     get structuralMutationAllowed() {
       refreshPolicy();
       return assessment.structuralMutationAllowed;
+    },
+    // The SAME ids installed on the binding. The accessibility observation used to derive
+    // editability from the block kind alone, so every paragraph in a partial document was
+    // reported `editableParagraph, readOnly: false` — including the ones projected as
+    // read-only atoms, whose DOM already carried `aria-readonly="true"`.
+    get readOnlyBlockIds() {
+      refreshPolicy();
+      return readOnlyIdsFrom(store.currentModel, assessment);
     },
     projectDoc: () => binding.projectDoc(),
     applyPmDoc(doc) {

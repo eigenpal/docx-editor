@@ -50,9 +50,9 @@ registerBindingNode(
     // Partial editability (M6P.1) projects a paragraph with no lossless patch path as a
     // read-only atom. The atom had no text, and the painted pages are
     // `aria-hidden="true" role="presentation"`, so the ProseMirror projection is the ONLY
-    // assistive representation of the document — which meant 21.3% of the flagship
+    // assistive representation of the document — which meant 21.1% of the flagship
     // fixture's body text, including every section heading, was unreachable to a screen
-    // reader. Independent review measured 1,833 of 8,601 characters missing.
+    // reader. Independent review measured 1,813 of 8,581 characters missing.
     //
     // Empty for a table or SDT atom, which has no text projection to lose.
     attrs: { semId: { default: null }, kind: { default: 'block' }, text: { default: '' } },

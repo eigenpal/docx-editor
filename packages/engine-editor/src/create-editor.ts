@@ -641,6 +641,18 @@ export function createEditor(config: EditorConfig): Editor {
     if (staleOrInvalid && staleOrInvalid.kind === 'reject') {
       return { ok: false, code: execErrorFromInteraction(staleOrInvalid.code), reason: staleOrInvalid.reason };
     }
+    // A partially editable document locks INDIVIDUAL blocks, and the canonical selection
+    // must not move into one. The `session.editable` check above is document-wide, so on a
+    // partial document this returned ok for a locked paragraph: the frame's selection
+    // moved in, while the accessibility observation reported no selection and the reverse
+    // mapper refused every keystroke that followed. Refusing here keeps the two public
+    // observations telling the same story.
+    for (const end of [selection.anchor, selection.head]) {
+      const blockId = (end as { identity?: { blockId?: string } }).identity?.blockId;
+      if (blockId && session.readOnlyBlockIds.has(blockId)) {
+        return { ok: false, code: 'locked', reason: `setSelection rejected: block ${blockId} is read-only` };
+      }
+    }
     const outcome = surface.syncSemanticSelection({ frameId: frame.id, selection });
     if (!outcome.ok) return { ok: false, code: execErrorFromInteraction(outcome.code), reason: outcome.reason };
     // Publish the frame too.

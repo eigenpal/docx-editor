@@ -75,7 +75,7 @@ At `http://127.0.0.1:5273/`, without query parameters:
 5. Select text across spaces and formatting-run boundaries within the editable paragraph; no false visual gaps.
 6. Attempt a selection/edit across a read-only boundary and confirm atomic refusal.
 7. Exercise Left/Right, Shift-Left/Right, Cmd/Ctrl+A, word deletion,
-   Enter/Shift-Enter, selection deletion, undo, and redo.
+   Enter (Shift+Enter is deliberately refused — see M6K.2), selection deletion, undo, and redo.
 8. Apply bold and italic; confirm unavailable controls remain visibly disabled.
 9. Save, reopen the exported bytes, and confirm the supported edit persists.
 10. Confirm unsupported structures are preserved/read-only or explicit fallback,

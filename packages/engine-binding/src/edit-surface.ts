@@ -137,10 +137,11 @@ const TOGGLEABLE_MARKS = new Set(['bold', 'italic']);
 /**
  * `beforeinput` types ProseMirror and the browser own, not this bridge (M6K.1).
  *
- * ProseMirror MUST own command execution for deletion by word and by line, and for
- * line breaks. Approximating them here produced worse behavior than raw PM and left
- * the platform shortcuts dead. Each entry removes a range or inserts a break and
- * carries no external payload, so admitting it does not widen the trust boundary.
+ * ProseMirror MUST own command execution for deletion by word and by line.
+ * Approximating them here produced worse behavior than raw PM and left the platform
+ * shortcuts dead. Each entry removes a RANGE and carries no external payload, so
+ * admitting it does not widen the trust boundary. Line breaks are NOT here — see the
+ * `insertLineBreak` note in the set below.
  */
 const DELEGATED_TO_PROSEMIRROR = new Set([
   'deleteWordBackward',
@@ -154,8 +155,9 @@ const DELEGATED_TO_PROSEMIRROR = new Set([
   //
   // It looks like it belongs here, and it was here: delegating it let the browser
   // insert a break that ProseMirror then reconciled — except the composed schema
-  // registers no hard-break node and the model has no `w:br` run, so PM dropped it
-  // and the document revision never moved. The user pressed a key, saw nothing, and
+  // registers no hard-break node, and while the PARSER maps `w:br`/`w:cr` into run text
+  // as "\n", the serializer has no path back to `w:br` — so an inserted break cannot
+  // round-trip. PM dropped it and the document revision never moved. The user pressed a key, saw nothing, and
   // got no diagnostic: a silent no-op, which is the one outcome worse than an honest
   // refusal. Delegation only works for a type the reverse lane can actually express.
   //
