@@ -18,13 +18,9 @@ import { paintDisplay } from '../paintDisplay';
 import { DocumentName, Logo, MenuBar, TitleBar, TitleBarRight } from './TitleBar';
 import { Toolbar } from './Toolbar';
 import { EditorToolbarContext } from './EditorToolbarContext';
-import { OutlineToggleButton } from './DocxEditor/OutlineToggleButton';
-import { HorizontalRuler } from './ui/HorizontalRuler';
-import { Z_INDEX } from '../styles/zIndex';
+import { DocxEditorShell } from './DocxEditor/DocxEditorShell';
 import type { SectionProperties } from '../legacy-core-compat';
 import { pixelsToTwips } from '../legacy-core-compat';
-import { VerticalRuler } from './ui/VerticalRuler';
-import { PageIndicator } from './DocxEditor/PageIndicator';
 import type { DocxEditorProps, DocxEditorRef } from '../types';
 
 /**
@@ -56,62 +52,6 @@ const LEGACY_CONTAINER_STYLE: CSSProperties = {
   height: '100%',
   width: '100%',
   backgroundColor: 'var(--doc-bg)',
-};
-
-const LEGACY_MAIN_STYLE: CSSProperties = {
-  display: 'flex',
-  flex: 1,
-  minHeight: 0,
-  minWidth: 0,
-  flexDirection: 'row',
-};
-
-const LEGACY_COLUMN_STYLE: CSSProperties = {
-  position: 'relative',
-  flex: 1,
-  minHeight: 0,
-  minWidth: 0,
-  display: 'flex',
-  flexDirection: 'column',
-};
-
-const LEGACY_SCROLLER_STYLE: CSSProperties = {
-  flex: 1,
-  minHeight: 0,
-  minWidth: 0,
-  position: 'relative',
-  display: 'flex',
-  flexDirection: 'column',
-  overflowAnchor: 'none',
-};
-
-const LEGACY_RULER_ROW_STYLE: CSSProperties = {
-  display: 'flex',
-  justifyContent: 'center',
-  paddingTop: 4,
-  paddingBottom: 4,
-  paddingLeft: 20,
-  paddingRight: 20,
-  flexShrink: 0,
-  backgroundColor: 'var(--doc-bg)',
-  position: 'sticky',
-  top: 0,
-  zIndex: 30,
-};
-
-const LEGACY_CONTENT_ROW_STYLE: CSSProperties = {
-  display: 'flex',
-  flex: 1,
-  minHeight: 0,
-  position: 'relative',
-};
-
-const LEGACY_CONTENT_STYLE: CSSProperties = {
-  position: 'relative',
-  flex: 1,
-  minWidth: 0,
-  display: 'flex',
-  flexDirection: 'column',
 };
 
 
@@ -158,9 +98,6 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
     const [pages, setPages] = useState<readonly DisplayPage[]>([]);
     const [overlays, setOverlays] = useState<FrameOverlays>({ caret: null, selection: [] });
     const [clickTarget, setClickTarget] = useState<GlyphClickTarget | null>(null);
-    // Bumped on scroll so the page chip re-reads `getCurrentPage('viewport')`. The engine
-    // answers live; without this the chip painted once and froze at page 1.
-    const [scrollTick, setScrollTick] = useState(0);
 
     // Latest props/callbacks, read inside effects without retriggering them.
     const propsRef = useRef(props);
@@ -236,14 +173,6 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
     // Forward real pointer, keyboard, and focus events on the painted pages to
     // the shared controller. The bridge owns normalization for both adapters;
     // its disposer must run on unmount or listeners outlive the editor.
-    useEffect(() => {
-      const el = scrollRef.current;
-      if (!el) return undefined;
-      const onScroll = () => setScrollTick((n) => n + 1);
-      el.addEventListener('scroll', onScroll, { passive: true });
-      return () => el.removeEventListener('scroll', onScroll);
-    }, []);
-
     useEffect(() => {
       const surface = scrollRef.current;
       if (!surface) return undefined;
@@ -364,66 +293,80 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
           <MenuBar />
           <TitleBarRight>{renderTitleBarRight?.()}</TitleBarRight>
         </TitleBar>
-            <Toolbar />
         </div>
-        <div style={LEGACY_MAIN_STYLE}>
-          <div style={LEGACY_COLUMN_STYLE}>
-            {/* The LEGACY toolbar (components/Toolbar.tsx), not my descriptor-driven
-                one. `LEGACY_CHROME_GROUPS` was an interim control list — wrong set,
-                wrong order, four alignment buttons where legacy has one split control,
-                plus image/table/download controls the product does not show. Legacy's own
-                composition is the source of truth. Every prop is optional, so it renders
-                its full control set now and each handler wires to the engine as the
-                matching capability lands. */}
-            <div className="docx-editor__scroll-container" style={LEGACY_SCROLLER_STYLE}>
-              {/* Sticky at the scroller's top so it tracks horizontal scroll, as legacy. */}
-              <div className="flex justify-center py-1 flex-shrink-0 bg-doc-bg" style={LEGACY_RULER_ROW_STYLE}>
-                <HorizontalRuler sectionProps={sectionPropsFromGeometry(editorRef.current)} zoom={zoomFactor} editable={false} />
-              </div>
-              <div style={LEGACY_CONTENT_ROW_STYLE}>
-                <div className="docx-editor__content" style={LEGACY_CONTENT_STYLE}>
-                  {/* Anchors itself to the page, so it sits immediately left of the
-                      document rather than in the window's left gutter (M6V.1). */}
-                  {/* Wrapper COPIED from the legacy shell (DocxEditorShell.tsx:222-233):
-                      absolute at the editor content's left edge, `paddingTop: 48` to
-                      match the pages container's own padding so the ruler's zero lines up
-                      with the first page. Placement is only correct once the legacy shell
-                      composes the content area; until then this reproduces legacy's own
-                      values rather than a position estimated to look right. */}
-                  <div
-                    style={{
-                      position: 'absolute',
-                      left: 0,
-                      top: 0,
-                      zIndex: Z_INDEX.ruler,
-                      paddingTop: 48,
-                    }}
-                  >
-                    <VerticalRuler
-                      sectionProps={sectionPropsFromGeometry(editorRef.current)}
-                      zoom={zoomFactor}
-                      editable={false}
-                    />
-                  </div>
-                  {/* The LEGACY OutlineToggleButton, not my inline button. It carries
-                      `.docx-outline-toggle`, whose disc/ring/hover live in the shared
-                      stylesheet; my Tailwind version overrode all of it, and the label
-                      appended a preview disclaimer that legacy never had. */}
-                  <OutlineToggleButton onClick={() => {}} topPx={24} scrollLeft={0} leftOffset={24} />
-                  {surface}
-                </div>
-              </div>
-            </div>
-            <PageIndicator
-              key={scrollTick}
-              currentPage={(editorRef.current?.getCurrentPage('viewport') ?? 0) + 1}
-              totalPages={editorRef.current?.getTotalPages() ?? 0}
-              visible={(editorRef.current?.getTotalPages() ?? 0) > 1}
-            />
-          </div>
-          {/* The interim sidebar is deleted. The legacy sidebar comes across with
-              the dialogs and comment panels in the remaining port step. */}
-        </div>
+        {/* The legacy DocxEditorShell, which was ported and sitting unused while this
+            file duplicated its layout — a rule-3 violation an independent audit caught.
+            It owns the scroll container, ruler placement, outline button position and
+            page-indicator anchoring, all of which had been reimplemented with authored
+            values. Slots take what this component already had.
+
+            Ruler callbacks are no-ops: this change owns no section-geometry contract, so
+            the rulers stay display-only (M4.4). Indents and tab marks are absent from the
+            engine, so they report zero/none rather than a guess. */}
+        <DocxEditorShell
+          i18n={undefined as never}
+          onEditorError={() => {}}
+          containerRef={null}
+          scrollContainerRef={scrollRef}
+          editorContentRef={null}
+          className={undefined}
+          containerStyle={{}}
+          mainContentStyle={{}}
+          editorContainerStyle={{}}
+          showRuler
+          readOnlyProp={false}
+          showOutline={false}
+          showOutlineButton
+          sidebarOpen={false}
+          minLayoutWidth={0}
+          toolbarHeight={0}
+          editorScrollLeft={0}
+          expandedSidebarItem={null}
+          trackedChanges={[]}
+          onScrollContainerMouseDown={() => {}}
+          onEditorBgMouseDown={() => {}}
+          onEditorContextMenu={() => {}}
+          horizontalRulerProps={{
+            sectionProps: sectionPropsFromGeometry(editorRef.current),
+            zoom: zoomFactor,
+            unit: 'inch',
+            editable: false,
+            onLeftMarginChange: () => {},
+            onRightMarginChange: () => {},
+            indentLeft: 0,
+            indentRight: 0,
+            onIndentLeftChange: () => {},
+            onIndentRightChange: () => {},
+            firstLineIndent: 0,
+            hangingIndent: false,
+            onFirstLineIndentChange: () => {},
+            tabMarks: null,
+            onTabMarkRemove: () => {},
+          }}
+          verticalRulerProps={{
+            sectionProps: sectionPropsFromGeometry(editorRef.current),
+            zoom: zoomFactor,
+            unit: 'inch',
+            editable: false,
+            onTopMarginChange: () => {},
+            onBottomMarginChange: () => {},
+          }}
+          outlineProps={{ headings: [], onHeadingClick: () => {}, onClose: () => {}, topOffset: 0, scrollLeft: 0 }}
+          onToggleOutline={() => {}}
+          scrollPageInfo={{
+            currentPage: (editorRef.current?.getCurrentPage('viewport') ?? 0) + 1,
+            totalPages: editorRef.current?.getTotalPages() ?? 0,
+            visible: (editorRef.current?.getTotalPages() ?? 0) > 1,
+          }}
+          agentPanel={undefined}
+          agentPanelOpen={false}
+          onAgentPanelClose={() => {}}
+          toolbar={<Toolbar />}
+          pagedArea={surface}
+          overlays={null}
+          dialogs={null}
+          fileInputs={null}
+        />
       </div>
       </EditorToolbarContext.Provider>
     );
