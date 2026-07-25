@@ -238,6 +238,11 @@ export function createEditor(config: EditorConfig): Editor {
       composition: base.composition,
       currentPage: { viewport: base.currentPage.viewport, caret: caretPage },
     });
+    // Tell the surface its retained selection is current on the frame we just
+    // published. Without this the retained tag is stale the instant we publish, and
+    // `focus({ frameId: currentFrame().id })` — the only frame id a caller can
+    // legitimately hold — always fails the surface's stale-frame check.
+    surface?.retainSelectionOnFrame(currentFrame().id);
     updateInputHostFromFrame();
   }
 
@@ -633,6 +638,23 @@ export function createEditor(config: EditorConfig): Editor {
         },
         blur: () => {
           surface?.blur();
+          // Republish focus so the frame stops asserting focus.
+          //
+          // This used to call `surface.blur()` and nothing else, so `frame.focus`
+          // kept its last value. Independent review measured the result: click a
+          // glyph, then click the shell's document-title input, and the frame still
+          // reported `focused: true` with a blinking caret painted on the page while
+          // every keystroke went to the title field — the visible caret disagreeing
+          // with the real insertion point, which is the exact state the interaction
+          // frame exists to make impossible.
+          //
+          // The selection is retained, not discarded: blur moves input focus away,
+          // it does not unmake the selection, and `overlaysForFrame` paints a caret
+          // only for a focused frame.
+          const frame = currentFrame();
+          if (frame.selection) {
+            publishSelectionOverlay(frame.selection, { scope: activeScope, focused: false });
+          }
         },
         execCommand: (command) => {
           if (command.type === 'setSelection') return execSetSelection(command);

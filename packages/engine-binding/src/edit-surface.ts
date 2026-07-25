@@ -81,6 +81,24 @@ export interface EditSurface {
   updateInputHostPlacement(request: InputHostPlacementRequest): InputHostPlacement;
   retainSelectionForOwnedPopup(): void;
   releaseOwnedPopup(): void;
+  /**
+   * Re-tag the retained selection as current on `frameId`, without re-applying it
+   * to the projection.
+   *
+   * The engine retains a selection while frame F is current and then publishes the
+   * overlay, which mints F+1. That left the retained tag stale by construction, so
+   * `focus({ frameId })` with the only frame id a caller can legitimately obtain —
+   * the current one — always failed the stale-frame check. Independent review
+   * measured `Editor.focus()` returning `staleFrame` after every dispatched
+   * interaction in both adapters, making programmatic re-entry impossible.
+   *
+   * The fix belongs here rather than in `focus()`: the stale-frame check is a real
+   * guard (a caller holding a superseded frame must not be granted input
+   * authorization, and a test asserts it), so the answer is to keep the tag
+   * truthful rather than to stop checking it. Content is untouched — this only
+   * records that the same selection is current on the newer frame.
+   */
+  retainSelectionOnFrame(frameId: InteractionFrameId): void;
   getSelectionAnchor(): SelectionAnchor;
   getSelectionRange(): SelectionRangeAnchors;
   getPmSelection(): PmSelectionSnapshot;
@@ -774,6 +792,11 @@ export function mountEditSurface(
         if (!frameId) {
           return { ok: false, code: 'invalidTarget', reason: 'focus requires current interaction frame identity' };
         }
+        // The stale-frame guard stays: a caller that does not hold the frame the
+        // retained selection belongs to must not be granted input authorization.
+        // What changed is that the ENGINE now keeps the retained tag current via
+        // `retainSelectionOnFrame`, so this check tests the caller rather than
+        // failing on an unavoidable race. See that method for the history.
         if (retainedSemanticSelection.frameId.value !== frameId.value) {
           return {
             ok: false,
@@ -829,6 +852,16 @@ export function mountEditSurface(
     },
     releaseOwnedPopup() {
       ownedPopupDepth = Math.max(0, ownedPopupDepth - 1);
+    },
+    retainSelectionOnFrame(frameId) {
+      if (!retainedSemanticSelection) return;
+      // Both ids: `SemanticSelection` carries its own, and
+      // `resolveSemanticSelection` rejects a request whose two ids disagree.
+      retainedSemanticSelection = {
+        ...retainedSemanticSelection,
+        frameId,
+        selection: { ...retainedSemanticSelection.selection, frameId },
+      };
     },
     getSelectionAnchor: () => captureSelection(view.state),
     getSelectionRange: () => captureSelectionRange(view.state),
