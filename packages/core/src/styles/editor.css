@@ -1837,50 +1837,6 @@
   background: var(--doc-border);
 }
 
-.ep-toolbar__button {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 30px;
-  height: 30px;
-  border: none;
-  border-radius: 4px;
-  background: transparent;
-  color: var(--doc-text);
-  cursor: pointer;
-}
-
-.ep-toolbar__button:hover:not(:disabled) {
-  background: var(--doc-bg-hover);
-}
-
-.ep-toolbar__button:focus-visible {
-  outline: none;
-  box-shadow: 0 0 0 2px var(--doc-focus-ring);
-}
-
-.ep-toolbar__button:disabled {
-  color: var(--doc-text-subtle);
-  cursor: default;
-  /* Required, together with the container's mousedown handler, to stop a disabled
-   * control stealing focus from the editor.
-   *
-   * Neither half works alone, which is why this took three attempts. Chromium
-   * dispatches NO mouse event to a disabled form control, so a per-button
-   * `preventDefault` is dead code AND the container never sees the event either —
-   * yet the browser still moves focus off the editor. `pointer-events: none` makes
-   * the click fall through to `.ep-toolbar`, whose handler can then preventDefault
-   * it. Round-6 review measured 20 of 29 controls losing the caret, focus, and all
-   * six geometry keys in the real app; round 5 had scored it fixed because a
-   * synthetic `dispatchEvent` probe DOES run the handler and never moves focus. */
-  pointer-events: none;
-}
-
-.ep-toolbar__button[aria-pressed='true'] {
-  background: var(--doc-toggle-active-bg);
-  color: var(--doc-toggle-active-fg);
-}
-
 /* Sidebar frame (interactive-paginated-editing M4.6). */
 
 .ep-sidebar {

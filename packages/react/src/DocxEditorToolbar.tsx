@@ -178,7 +178,12 @@ function ControlButton({
     return (
       <button
         type="button"
-        className="ep-toolbar__button"
+        className={clsx(
+          'inline-flex h-[30px] w-[30px] items-center justify-center rounded border-none',
+          'bg-transparent text-foreground/90 transition-colors',
+          'hover:enabled:bg-black/[0.06] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+          'disabled:cursor-default disabled:text-foreground/35',
+        )}
         data-testid={`toolbar-${control.id}`}
         data-parity-only="true"
         disabled
@@ -200,7 +205,12 @@ function ControlButton({
     return (
       <button
         type="button"
-        className="ep-toolbar__button"
+        className={clsx(
+          'inline-flex h-[30px] w-[30px] items-center justify-center rounded border-none',
+          'bg-transparent text-foreground/90 transition-colors',
+          'hover:enabled:bg-black/[0.06] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+          'disabled:cursor-default disabled:text-foreground/35',
+        )}
         data-testid={`toolbar-${control.id}`}
         disabled={!editor || !onSave}
         title={label}
@@ -226,7 +236,12 @@ function ControlButton({
   return (
     <button
       type="button"
-      className="ep-toolbar__button"
+      className={clsx(
+          'inline-flex h-[30px] w-[30px] items-center justify-center rounded border-none',
+          'bg-transparent text-foreground/90 transition-colors',
+          'hover:enabled:bg-black/[0.06] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+          'disabled:cursor-default disabled:text-foreground/35',
+        )}
       data-testid={`toolbar-${control.id}`}
       disabled={!state.enabled}
       // The engine's own words, never an adapter paraphrase.
