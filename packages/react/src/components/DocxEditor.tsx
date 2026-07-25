@@ -29,6 +29,7 @@ import { useTableOfContentsActions } from './DocxEditor/hooks/useTableOfContents
 import { useFloatingCommentBtn } from './DocxEditor/hooks/useFloatingCommentBtn';
 import { useDocumentLoader } from './DocxEditor/hooks/useDocumentLoader';
 import { useCommentManagement } from './DocxEditor/hooks/useCommentManagement';
+import { useCommentLifecycle } from './DocxEditor/hooks/useCommentLifecycle';
 import { MaterialSymbol } from './ui/Icons';
 import {
   useSelectionTracker,
@@ -578,6 +579,7 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
     // passes `comments` owns the array, and every mutation goes out through
     // `onCommentsChange` instead of touching internal state.
     const {
+      setComments,
       isAddingCommentRef,
       setAddCommentYPosition,
       floatingCommentBtn,
@@ -586,6 +588,21 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
       commentsProp: undefined,
       onCommentDelete: undefined,
       onCommentsChange: undefined,
+    });
+
+    // Comment bookkeeping that runs off document load, ported: thread comments under the
+    // tracked change they overlap, and auto-open the sidebar once if the document arrives
+    // with revisions. Both feed on capabilities that are stubs, so neither fires yet —
+    // the latch and the threading map are wired so they will when those land.
+    const trackedChangesLoadedRef = useRef(false);
+    const commentToRevision = useMemo(() => new Map<number, number>(), []);
+    useCommentLifecycle({
+      commentToRevision,
+      setComments,
+      isLoading: pages.length === 0,
+      trackedChangesCount: editorRef.current?.getTrackedChanges().length ?? 0,
+      setShowCommentsSidebar,
+      trackedChangesLoadedRef,
     });
 
     // The floating "Add comment" button beside a selection, ported. It is positioned
