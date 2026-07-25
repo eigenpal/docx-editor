@@ -300,6 +300,31 @@ Not the formal public **`interactive-paginated`** claim (that remains **8.10**).
   rendering an empty box. A missing icon must break the build or a test, never render
   blank — CLAUDE.md's existing warning is that a missing name renders raw text.
 
+  **Verified id → registry-name mapping** (control ids from `retired-chrome.ts`, names from
+  the registry's `export function Icon*`, both enumerated rather than guessed). Every
+  icon-bearing control has an exact counterpart, so nothing needs inventing:
+
+  | control id | icon | control id | icon |
+  | --- | --- | --- | --- |
+  | `undo` | `Undo` | `redo` | `Redo` |
+  | `bold` | `Bold` | `italic` | `Italic` |
+  | `underline` | `Underline` | `strikethrough` | `Strikethrough` |
+  | `superscript` | `Superscript` | `subscript` | `Subscript` |
+  | `fontColor` | `TextColor` | `highlightColor` | `Highlight` |
+  | `insertLink` | `Link` | `clearFormatting` | `FormatClear` |
+  | `alignLeft` | `AlignLeft` | `alignCenter` | `AlignCenter` |
+  | `alignRight` | `AlignRight` | `alignJustify` | `AlignJustify` |
+  | `lineSpacing` | `LineSpacing` | `bulletList` | `ListBulleted` |
+  | `numberedList` | `ListNumbered` | `decreaseIndent` | `IndentDecrease` |
+  | `increaseIndent` | `IndentIncrease` | `insertImage` | `Image` |
+  | `imageProperties` | `Tune` | `insertTable` | `Table` |
+  | `comments` | `Comment` | `save` | `FileDownload` |
+
+  `style`, `fontFamily`, `fontSize`, `zoom`, and `editingMode` carry no icon today
+  (`paths: null` — they render as value dropdowns/steppers); `editingMode` is the one to
+  reconsider, since the reference shows a glyph beside "Editing" (`EditNote` is the
+  closest registry entry — confirm against the reference before using it).
+
   Pass boundary: no `d=` string is authored by hand anywhere in the chrome path;
   `scripts/extract-icons.mjs` regenerates Vue's JSON from the React registry; a
   fixed-viewport screenshot matches the reference glyph for glyph.
