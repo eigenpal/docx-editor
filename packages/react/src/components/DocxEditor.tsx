@@ -17,7 +17,7 @@ import type { DisplayPage } from '@docx-editor.dev/core-contract/geometry';
 import { DocxEditorPagedArea } from './DocxEditor/DocxEditorPagedArea';
 import { DocxEditorToolbar } from './DocxEditor/DocxEditorToolbar';
 import { DocxEditorOverlays } from './DocxEditor/DocxEditorOverlays';
-import { useImageContextMenu } from './ImageContextMenu';
+import { useContextMenus } from './DocxEditor/hooks/useContextMenus';
 import { useKeyboardShortcuts } from './DocxEditor/hooks/useKeyboardShortcuts';
 import { useFindReplace } from '../hooks/useFindReplace';
 import { DocxEditorDialogs } from './DocxEditor/DocxEditorDialogs';
@@ -219,9 +219,25 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
     );
 
     // The image menu's own state hook, ported.
-    // The image menu's own state hook, ported. It opens from an image right-click, which
-    // needs `getSelectedImage` — a stub returning null — so it stays closed today.
-    const imageContextMenu = useImageContextMenu();
+    // The ported context-menu hook. It owns the text menu's state, the item list, the
+    // image menu, and the action dispatcher — all of which this file previously passed as
+    // empty placeholders.
+    const {
+      contextMenu,
+      imageContextMenu,
+      handleEditorContextMenu,
+      handleContextMenuClose,
+      handleImageWrapApply,
+      imageContextMenuTextActions,
+      contextMenuItems,
+      handleContextMenuAction,
+    } = useContextMenus({
+      editorRef,
+      focusActiveEditor: () => editorRef.current?.focus(),
+      openSplitCellDialog: () => {},
+      i18n: undefined,
+      onAddComment: () => {},
+    });
 
     // Colour mode, resolved as legacy resolves it: 'system' subscribes to the OS setting
     // and re-syncs immediately, correcting a stale seed if it changed while the mode was
@@ -506,7 +522,7 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
           trackedChanges={[]}
           onScrollContainerMouseDown={() => {}}
           onEditorBgMouseDown={() => {}}
-          onEditorContextMenu={() => {}}
+          onEditorContextMenu={handleEditorContextMenu}
           horizontalRulerProps={{
             sectionProps: sectionPropsFromGeometry(editorRef.current),
             zoom: zoomFactor,
@@ -620,21 +636,18 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
           }
           pagedArea={surface}
           overlays={
-            /* The ported overlay block. Its menus stay CLOSED: legacy derives the item
-               list in `useContextMenus`, which reads the editing engine's selection and
-               dispatches its commands, and that derivation has no engine counterpart yet.
-               Opening a menu with nothing in it would swallow the browser's own context
-               menu and give the reader less than they have now, so the component is
-               mounted and wired while `onEditorContextMenu` stays a no-op — when the item
-               derivation lands, only that handler changes. */
+            /* The ported overlay block, driven by the ported `useContextMenus`. Clipboard
+               and selection-addressed edits run through the contract; table entries appear
+               only when the engine says the caret is in a table, which is a stub today, so
+               they stay out of the menu rather than appearing and doing nothing. */
             <DocxEditorOverlays
-              contextMenu={{ isOpen: false, position: { x: 0, y: 0 }, hasSelection: false }}
-              contextMenuItems={[]}
-              onContextMenuAction={() => {}}
-              onContextMenuClose={() => {}}
+              contextMenu={contextMenu}
+              contextMenuItems={contextMenuItems}
+              onContextMenuAction={handleContextMenuAction}
+              onContextMenuClose={handleContextMenuClose}
               imageContextMenu={imageContextMenu}
-              onImageWrapApply={() => {}}
-              imageContextMenuTextActions={[]}
+              onImageWrapApply={handleImageWrapApply}
+              imageContextMenuTextActions={imageContextMenuTextActions}
               onOpenImageProperties={() => {}}
               readOnly={false}
             />
