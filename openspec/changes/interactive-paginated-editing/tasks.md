@@ -386,6 +386,25 @@ Not the formal public **`interactive-paginated`** claim (that remains **8.10**).
   reconsider, since the reference shows a glyph beside "Editing" (`EditNote` is the
   closest registry entry — confirm against the reference before using it).
 
+  **Remaining step, and the one open decision.** The swap itself is mechanical: set
+  `icon: <material name>` on the 24 controls and delete the hand-drawn `d` strings. What
+  is NOT decided is where the generated paths live so the shared descriptor can use them.
+  `scripts/extract-icons.mjs` writes to `packages/vue/src/components/ui/icon-paths.json`,
+  and `engine-editor` must not import from `packages/vue` — that inverts the dependency
+  DAG. Three options, in preference order:
+
+  1. Have the extractor ALSO emit into `engine-editor` (or a shared location both read),
+     keeping one generated source and no cross-adapter import. Preferred.
+  2. Keep icons fully adapter-side: the descriptor carries only the name, and each adapter
+     resolves it — React through `Icons.tsx`, Vue through its JSON. Matches the retired
+     split most closely, but needs a name→component map in React.
+  3. Move the registry into the shared package. Rejected earlier: it makes the generator
+     pointless and puts presentation in the engine.
+
+  Do not resolve this by importing the Vue JSON from `engine-editor` or from the React
+  adapter's test — the test does so today only because it is a test, and that is already
+  the loosest link in the chain.
+
   Pass boundary: no `d=` string is authored by hand anywhere in the chrome path;
   `scripts/extract-icons.mjs` regenerates Vue's JSON from the React registry; a
   fixed-viewport screenshot matches the reference glyph for glyph.
