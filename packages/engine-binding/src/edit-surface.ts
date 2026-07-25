@@ -134,6 +134,26 @@ export type EditSurfaceCommandResult =
  * disables the control.
  */
 const TOGGLEABLE_MARKS = new Set(['bold', 'italic']);
+/**
+ * `beforeinput` types ProseMirror and the browser own, not this bridge (M6K.1).
+ *
+ * ProseMirror MUST own command execution for deletion by word and by line, and for
+ * line breaks. Approximating them here produced worse behavior than raw PM and left
+ * the platform shortcuts dead. Each entry removes a range or inserts a break and
+ * carries no external payload, so admitting it does not widen the trust boundary.
+ */
+const DELEGATED_TO_PROSEMIRROR = new Set([
+  'deleteWordBackward',
+  'deleteWordForward',
+  'deleteSoftLineBackward',
+  'deleteSoftLineForward',
+  'deleteHardLineBackward',
+  'deleteHardLineForward',
+  'deleteEntireSoftLine',
+  // Shift+Enter. Distinct from `insertParagraph`, which splits the block.
+  'insertLineBreak',
+]);
+
 
 export interface MountEditSurfaceOptions {
   onModelChanged?: () => void;
@@ -520,6 +540,24 @@ export function mountEditSurface(
         if (inputType === 'insertFromPaste' || inputType === 'insertFromDrop') {
           return false;
         }
+        // DELEGATED to ProseMirror and the browser (task M6K.1).
+        //
+        // These were falling through to the catch-all below, which `preventDefault`s
+        // and records `unsupportedInputType` — so Cmd/Ctrl+Backspace, Alt/Option+
+        // Backspace, their forward variants, and Shift+Enter were all silently dead.
+        // The bridge had reduced editing to basic character deletion and then
+        // rejected everything else, which is strictly worse than raw ProseMirror.
+        //
+        // Returning false lets the contenteditable perform the edit and PM's own DOM
+        // observer reconcile it into a transaction, which is how raw PM behaves — so
+        // word and line deletion match the platform exactly instead of being
+        // approximated here. The store still updates through `dispatchTransaction`,
+        // so the model stays canonical.
+        //
+        // Safe at the trust boundary: every type here removes a RANGE or inserts a
+        // line break. None carries external data, unlike paste and drop, which keep
+        // their bounded handling above.
+        if (DELEGATED_TO_PROSEMIRROR.has(inputType)) return false;
         recordInputRejection({
           code: 'unsupportedInputType',
           reason: `beforeinput type ${inputType} is not supported`,

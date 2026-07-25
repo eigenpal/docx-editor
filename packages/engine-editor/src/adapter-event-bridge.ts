@@ -72,16 +72,20 @@ export interface KeyboardModifiers {
 }
 
 /** Keys whose meaning is a position on the painted page, so the engine owns them. */
-const GEOMETRY_KEYS = new Set([
-  'ArrowLeft',
-  'ArrowRight',
-  'ArrowUp',
-  'ArrowDown',
-  'Home',
-  'End',
-  'PageUp',
-  'PageDown',
-]);
+/**
+ * Keys the ENGINE owns, because answering them requires painted-page geometry.
+ *
+ * Logical Left/Right are deliberately NOT here (task M6K.1). Horizontal movement by
+ * one grapheme is a semantic operation ProseMirror already does correctly, including
+ * every Shift/Cmd/Ctrl/Alt variant for word and line jumps, and reimplementing it in
+ * the bridge produced strictly worse behavior than raw PM. Vertical movement and
+ * line/page edges genuinely need layout: only the engine knows where a visual line
+ * begins, where a soft wrap falls, or which page is mounted.
+ *
+ * The split is therefore "needs geometry" versus "needs the document", not
+ * "navigation" versus "editing".
+ */
+const GEOMETRY_KEYS = new Set(['ArrowUp', 'ArrowDown', 'Home', 'End', 'PageUp', 'PageDown']);
 
 /**
  * Map a native `detail` count into the 1..3 range the planner accepts. A fourth

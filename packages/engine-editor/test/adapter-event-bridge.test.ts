@@ -152,7 +152,9 @@ describe('adapter event bridge normalizers (task M2.1)', () => {
   });
 
   test('geometry keys route to the engine and text keys stay with the input host', () => {
-    for (const key of ['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Home', 'End', 'PageUp', 'PageDown']) {
+    // Only keys that NEED layout to answer. Vertical movement and line/page edges do;
+    // horizontal movement by a grapheme does not.
+    for (const key of ['ArrowUp', 'ArrowDown', 'Home', 'End', 'PageUp', 'PageDown']) {
       expect(keyboardIntentKind(key, {})).toBe('geometryKeyboard');
     }
     for (const key of ['a', 'Backspace', 'Delete', 'Enter', 'Tab', 'z', ' ']) {
@@ -160,13 +162,31 @@ describe('adapter event bridge normalizers (task M2.1)', () => {
     }
   });
 
+  test('logical Left/Right belong to ProseMirror, with every modifier variant', () => {
+    // M6K.1: the bridge used to claim these and reimplement grapheme movement.
+    // ProseMirror already does it correctly, including word and line jumps under
+    // Cmd/Ctrl/Alt, so claiming them made behavior worse than raw PM.
+    for (const key of ['ArrowLeft', 'ArrowRight']) {
+      expect(keyboardIntentKind(key, {})).toBe('native');
+      expect(keyboardIntentKind(key, { shiftKey: true })).toBe('native');
+      expect(keyboardIntentKind(key, { altKey: true })).toBe('native');
+      expect(keyboardIntentKind(key, { metaKey: true })).toBe('native');
+      expect(keyboardIntentKind(key, { ctrlKey: true })).toBe('native');
+      expect(keyboardIntentKind(key, { shiftKey: true, altKey: true })).toBe('native');
+    }
+  });
+
   test('shortcut modifiers keep geometry keys away from the engine planner', () => {
-    // Ctrl/Meta arrow combinations are word-jump and browser shortcuts; the
-    // planner rejects modified navigation, so they must not be claimed here.
-    expect(keyboardIntentKind('ArrowLeft', { ctrlKey: true })).toBe('native');
-    expect(keyboardIntentKind('ArrowLeft', { metaKey: true })).toBe('native');
-    expect(keyboardIntentKind('ArrowLeft', { altKey: true })).toBe('native');
-    expect(keyboardIntentKind('ArrowLeft', { shiftKey: true })).toBe('geometryKeyboard');
+    // Ctrl/Meta/Alt combinations are word-jump, line-jump, and browser shortcuts, all
+    // of which ProseMirror already implements correctly, so the engine must not claim
+    // them. Rewritten for M6K.1 against ArrowDown: the previous version asserted
+    // Shift+ArrowLeft was engine-owned, which is the ownership that task reverses.
+    expect(keyboardIntentKind('ArrowDown', { ctrlKey: true })).toBe('native');
+    expect(keyboardIntentKind('ArrowDown', { metaKey: true })).toBe('native');
+    expect(keyboardIntentKind('ArrowDown', { altKey: true })).toBe('native');
+    // Unmodified and Shift-extended vertical movement DOES need layout, so it stays.
+    expect(keyboardIntentKind('ArrowDown', {})).toBe('geometryKeyboard');
+    expect(keyboardIntentKind('ArrowDown', { shiftKey: true })).toBe('geometryKeyboard');
   });
 });
 
@@ -430,7 +450,9 @@ describe('geometry keys are claimed before ProseMirror sees them (independent re
       }),
     });
     attachAdapterEventBridge(element, port);
-    const arrow = keyEvent('ArrowRight');
+    // ArrowDown, not ArrowRight: horizontal movement belongs to ProseMirror as of
+    // M6K.1, so it is no longer a key the engine claims or can refuse.
+    const arrow = keyEvent('ArrowDown');
     element.emit('keydown', arrow);
     // Previously this fell through "to native handling", which meant PM moving a
     // caret the engine cannot paint: PM head 4 while the painted caret stayed
