@@ -430,6 +430,20 @@ export class EditorBinding {
     if (!runsEqual(paragraphNodeToRuns(survivor), [...blockRuns(x), ...blockRuns(y)])) {
       throw new BindingRejection('join combined with an edit is not supported');
     }
+    // A join DELETES Y. Every other lane validates the block it touches against the
+    // read-only policy; this one did not, and that made it the way to destroy an
+    // unpatchable block. Delegation is what makes it reachable: a native
+    // `deleteWordBackward`/`deleteHardLineBackward` at the start of the paragraph after a
+    // read-only atom lets the browser remove the `contenteditable="false"` block itself,
+    // and PM reconciles a doc with one fewer top-level node — which lands right here.
+    //
+    // Independent security review proved the store committed the deletion and the block
+    // was gone. Only the `structuralMutationAllowed` preflight in the session stood in
+    // the way, one layer up and for an unrelated reason. Both ends are checked: X
+    // survives but absorbs Y's runs, so neither may be read-only.
+    if (this.readOnlyBlockIds.has(y.id) || this.readOnlyBlockIds.has(x.id)) {
+      throw new BindingRejection('edit targets a read-only block');
+    }
     return [{ op: 'joinParagraphs', firstId: x.id, secondId: y.id }];
   }
 

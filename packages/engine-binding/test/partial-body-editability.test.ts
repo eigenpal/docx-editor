@@ -100,11 +100,11 @@ describe('partial body editability', () => {
     // here is genuinely partial mode refusing structural mutation.
     //
     // What this does NOT claim: that the `structuralMutationAllowed` preflight in
-    // `applyPmDoc` is what rejects it. Disabling that preflight was verified to leave
-    // this rejection unchanged; the installed read-only policy makes the reverse matcher
-    // refuse any top-level block-count change first. The preflight is documented
-    // defense-in-depth for callers that reach the store by another route, and it is
-    // deliberately not asserted here as though it were load-bearing.
+    // `applyPmDoc` is what rejects THIS doc — for a tail split the reverse matcher gets
+    // there first. The preflight is still load-bearing for other shapes: security review
+    // showed that with it disabled, a join deleting a read-only paragraph committed. That
+    // specific hole is now closed in the join lane and asserted in
+    // `read-only-blocks.test.ts`.
     const doc = session.projectDoc();
     const schema = doc.type.schema;
     // The LAST editable paragraph, with no read-only block after it. Splitting an

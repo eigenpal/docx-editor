@@ -101,3 +101,54 @@ describe('projection preserves non-paragraph blocks as read-only atoms', () => {
     expect(bodyBlockKinds(store)).toEqual(['paragraph', 'table', 'paragraph']);
   });
 });
+
+// --- The join lane (independent security review, High 1) ----------------------------
+//
+// Every reverse lane validates the block it touches against the read-only policy. The
+// JOIN lane did not, and a join DELETES its second block — so a read-only paragraph
+// could be removed from the canonical store outright. Delegation makes it reachable
+// without any special client: a native `deleteWordBackward` at the start of the
+// paragraph after a read-only block lets the browser remove the block itself, and
+// ProseMirror reconciles a doc with one fewer top-level node straight into this lane.
+//
+// The paragraph below is the dangerous shape: read-only, but with NO text runs, so the
+// "join combined with an edit" check passes (survivor runs === X's runs + nothing) and
+// every kind/alignment check passes too. Nothing else stood in the way.
+describe('the join lane honors the read-only policy', () => {
+  const EMPTY_MIDDLE =
+    '<w:p><w:r><w:t>before</w:t></w:r></w:p>' +
+    '<w:p><w:pPr><w:pStyle w:val="Locked"/></w:pPr></w:p>' +
+    '<w:p><w:r><w:t>after</w:t></w:r></w:p>';
+
+  function joinAwayMiddle(store: DocumentStore, readOnly: readonly string[]) {
+    const binding = new EditorBinding(store);
+    binding.setReadOnlyBlockIds(new Set(readOnly));
+    const doc = binding.projectDoc();
+    const kept: import('prosemirror-model').Node[] = [];
+    doc.forEach((n, _off, i) => {
+      if (i !== 1) kept.push(n);
+    });
+    return binding.commitFromDoc(docSchema.node('doc', null, kept));
+  }
+
+  test('joining away a read-only paragraph is rejected and the block survives', () => {
+    const store = storeFrom(EMPTY_MIDDLE);
+    const ids = store.currentModel.stories.get(bodyStoryId(store.currentModel))!.blocks.map((b) => b.id);
+    const res = joinAwayMiddle(store, [ids[1]]);
+    expect(res.rejected).toBe(true);
+    expect(res.ops.length).toBe(0);
+    // The canonical store still holds all three paragraphs.
+    expect(bodyBlockKinds(store)).toEqual(['paragraph', 'paragraph', 'paragraph']);
+  });
+
+  test('the same join is allowed when no block is read-only', () => {
+    // The control. Without it, "rejected" could mean this join shape never maps at all,
+    // which would make the assertion above true for the wrong reason.
+    const store = storeFrom(EMPTY_MIDDLE);
+    const res = joinAwayMiddle(store, []);
+    expect(res.ops).toEqual([
+      { op: 'joinParagraphs', firstId: expect.any(String), secondId: expect.any(String) },
+    ]);
+    expect(bodyBlockKinds(store)).toEqual(['paragraph', 'paragraph']);
+  });
+});

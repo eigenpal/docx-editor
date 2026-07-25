@@ -202,12 +202,16 @@ export function openDocxSession(bytes: Uint8Array): DocxEditorSession {
       // transaction can also originate from a plugin, clipboard handling, a test, or a
       // future adapter. Disabled bindings are UX; this is defense in depth.
       //
-      // REDUNDANT TODAY, deliberately kept. With the read-only policy installed, the
-      // reverse matcher in `commitFromDoc` already refuses any top-level block-count
-      // change in partial mode: disabling this branch was measured to leave every
-      // rejection unchanged. It stays because it is cheap, states the rule where the
-      // rule is decided, and does not depend on the matcher's behavior — but no test
-      // asserts it as load-bearing, because it is not.
+      // NOT redundant. An earlier comment here claimed it was — that disabling this
+      // branch left every rejection unchanged. That was measured on constructions the
+      // reverse matcher happens to refuse anyway, and independent security review
+      // disproved it: with this branch disabled, a join that DELETES a read-only
+      // paragraph committed against the canonical store and the block was gone.
+      //
+      // The join lane now checks the read-only policy itself (`mapJoin` in binding.ts),
+      // which is where that particular hole belonged. This branch remains the
+      // document-level rule — in partial mode the top-level block count may not change
+      // at all — and it is the only thing enforcing it for shapes no lane inspects.
       refreshPolicy();
       if (!assessment.structuralMutationAllowed) {
         const blocks = store.currentModel.stories.get(bodyStoryId(store.currentModel))?.blocks ?? [];
