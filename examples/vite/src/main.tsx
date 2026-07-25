@@ -26,7 +26,11 @@ const base = import.meta.env.BASE_URL;
 // with-tables.docx). Sanitized to a bare .docx basename so the value can never become a
 // path-traversal or cross-origin URL.
 const fixtureParam = params.get('fixture') ?? '';
-const defaultFixture = editMode || realAdapter ? 'editable-sample.docx' : 'with-tables.docx';
+// The canonical comprehensive fixture (task M6D.1). Served straight from
+// `e2e/fixtures/` by a vite plugin, so the demo and the e2e suite read the SAME bytes
+// and a second copy cannot drift. `?fixture=` still overrides it.
+const COMPREHENSIVE_FIXTURE = 'comprehensive-word-element-test.docx';
+const defaultFixture = editMode || realAdapter ? COMPREHENSIVE_FIXTURE : 'with-tables.docx';
 const fixtureName = /^[\w.-]+\.docx$/.test(fixtureParam) ? fixtureParam : defaultFixture;
 
 const container = document.getElementById('app');

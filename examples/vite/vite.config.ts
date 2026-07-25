@@ -1,4 +1,5 @@
-import { defineConfig } from 'vite';
+import { defineConfig, type Plugin } from 'vite';
+import { readFile } from 'node:fs/promises';
 import react from '@vitejs/plugin-react';
 import tailwindcss from 'tailwindcss';
 import autoprefixer from 'autoprefixer';
@@ -15,6 +16,46 @@ async function fetchGitHubStars(): Promise<number | null> {
   return null;
 }
 
+
+/**
+ * Serve the canonical comprehensive fixture from ONE byte source (task M6D.1).
+ *
+ * The demo's bare `/` must load `e2e/fixtures/comprehensive-word-element-test.docx`.
+ * Copying it into `examples/vite/public/` would create a second DOCX that silently
+ * drifts from the fixture the e2e suite asserts against — the task explicitly calls
+ * for an asset mapping or an automated byte-identical copy instead. This maps the URL
+ * onto the real file at request time, so there is exactly one source of bytes and it
+ * cannot go stale.
+ *
+ * `build` copies it once into the output, so the deployed demo serves the same bytes
+ * rather than depending on a dev-only route.
+ */
+function canonicalFixturePlugin(): Plugin {
+  const url = '/comprehensive-word-element-test.docx';
+  const source = path.join(monorepoRoot, 'e2e/fixtures/comprehensive-word-element-test.docx');
+  return {
+    name: 'docx-editor-canonical-fixture',
+    configureServer(server) {
+      server.middlewares.use((req, res, next) => {
+        if (!req.url || req.url.split('?')[0] !== url) return next();
+        readFile(source)
+          .then((bytes) => {
+            res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document');
+            res.end(bytes);
+          })
+          .catch(next);
+      });
+    },
+    async generateBundle() {
+      this.emitFile({
+        type: 'asset',
+        fileName: 'comprehensive-word-element-test.docx',
+        source: await readFile(source),
+      });
+    },
+  };
+}
+
 export default defineConfig(async () => {
   const stars = await fetchGitHubStars();
   // `@docx-editor.dev/core` lives in a separate repo and is consumed from npm,
@@ -28,7 +69,7 @@ export default defineConfig(async () => {
 
   return {
     base: process.env.VITE_BASE_PATH ?? '/',
-    plugins: [react()],
+    plugins: [react(), canonicalFixturePlugin()],
     root: __dirname,
     resolve: {
       alias: usePublished

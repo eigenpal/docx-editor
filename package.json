@@ -79,7 +79,8 @@
     "verify:real-adapter-gate": "bun run test:e2e:real-adapter-gate",
     "test:e2e:a11y-tree": "playwright test --config packages/engine-editor/playwright.config.ts --timeout=30000 --workers=1",
     "verify:a11y-tree": "cd packages/engine-editor && bun run verify:a11y-tree",
-    "test:e2e:react-legacy-chrome-visual": "playwright test --config e2e/editor-smoke.config.ts e2e/react-legacy-chrome.visual.spec.ts"
+    "test:e2e:react-legacy-chrome-visual": "playwright test --config e2e/editor-smoke.config.ts e2e/react-legacy-chrome.visual.spec.ts",
+    "test:e2e:react-default-fixture": "playwright test --config e2e/editor-smoke.config.ts e2e/react-default-comprehensive-fixture.spec.ts"
   },
   "devDependencies": {
     "@changesets/changelog-github": "^0.7.0",
