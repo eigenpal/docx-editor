@@ -21,6 +21,11 @@ export interface DocxEditorProps {
   readonly renderTitleBarLeft?: () => ReactNode;
   readonly renderTitleBarRight?: () => ReactNode;
   /**
+   * Chrome colour mode. `'system'` follows the OS and re-resolves when it changes.
+   * Only the editor CHROME is themed — the document canvas stays Word-faithful.
+   */
+  readonly colorMode?: 'light' | 'dark' | 'system';
+  /**
    * Resolves i18n keys for the legacy chrome (task M6V.1).
    *
    * Supplying it renders the full application chrome — title, menu region, toolbar,

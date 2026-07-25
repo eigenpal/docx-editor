@@ -16,6 +16,7 @@ import { paintDisplay } from '../paintDisplay';
 // The title bar is composed by DocxEditorToolbar (via EditorToolbar's compound parts),
 // which is where legacy assembles it — this file no longer composes it separately.
 import { DocxEditorToolbar } from './DocxEditor/DocxEditorToolbar';
+import { prefersColorSchemeDark, resolveIsDark, subscribeSystemDark } from '../lib/colorMode';
 import type { EditorMode } from './DocxEditor/internals/editing-modes';
 import { useOutlineSidebar } from './DocxEditor/hooks/useOutlineSidebar';
 import { useScrollPageInfo } from './DocxEditor/hooks/useScrollPageInfo';
@@ -108,7 +109,7 @@ function sectionPropsFromGeometry(editor: Editor | null): SectionProperties | un
 
 export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
   function DocxEditor(props, ref) {
-    const { document: doc, className, t, title, onTitleChange, onSave, renderTitleBarLeft, renderTitleBarRight } = props;
+    const { document: doc, className, t, title, onTitleChange, onSave, renderTitleBarLeft, renderTitleBarRight, colorMode = 'light' } = props;
 
     const bodyRef = useRef<HTMLDivElement | null>(null);
     const pagesRef = useRef<HTMLDivElement | null>(null);
@@ -136,6 +137,16 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
       scrollContainerRef: scrollRef,
       isLoading: pages.length === 0,
     });
+
+    // Colour mode, resolved as legacy resolves it: 'system' subscribes to the OS setting
+    // and re-syncs immediately, correcting a stale seed if it changed while the mode was
+    // pinned. Only `.dark` on the chrome root moves; the canvas is untouched.
+    const [systemDark, setSystemDark] = useState(prefersColorSchemeDark);
+    useEffect(() => {
+      if (colorMode !== 'system') return;
+      return subscribeSystemDark(setSystemDark);
+    }, [colorMode]);
+    const isDark = resolveIsDark(colorMode, systemDark);
 
     // Chrome state the ported toolbar owns the controls for. The comments sidebar has
     // nothing to show while `getComments` is a stub, but the toggle is wired rather than
@@ -364,6 +375,7 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
           scrollContainerRef={scrollRef}
           editorContentRef={null}
           className={className}
+          isDark={isDark}
           containerStyle={LEGACY_CONTAINER_STYLE}
           mainContentStyle={LEGACY_MAIN_CONTENT_STYLE}
           editorContainerStyle={LEGACY_EDITOR_CONTAINER_STYLE}
