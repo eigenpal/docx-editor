@@ -21,6 +21,8 @@ import { useContextMenus } from './DocxEditor/hooks/useContextMenus';
 import { useFormattingActions } from './DocxEditor/hooks/useFormattingActions';
 import { useFileIO } from './DocxEditor/hooks/useFileIO';
 import { useTableDialogs, type BorderSpec } from './DocxEditor/hooks/useTableDialogs';
+import { useHyperlinkActions } from './DocxEditor/hooks/useHyperlinkActions';
+import { useWatermarkControls } from './DocxEditor/hooks/useWatermarkControls';
 import {
   useSelectionTracker,
   type SelectionStateDelta,
@@ -226,6 +228,24 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
     );
 
     // The image menu's own state hook, ported.
+    // Hyperlink and watermark actions, ported. Both dialogs were opening onto no-op
+    // handlers; they now reach the contract's commands.
+    const {
+      handleHyperlinkSubmit,
+      handleHyperlinkRemove,
+    } = useHyperlinkActions({
+      editorRef,
+      focusActiveEditor: () => editorRef.current?.focus(),
+      hyperlinkDialog,
+    });
+    const {
+      showWatermark,
+      setShowWatermark,
+      handleOpenWatermark,
+      currentWatermark,
+      handleWatermarkApply,
+    } = useWatermarkControls({ readOnly: false, editorRef });
+
     // Table toolbar actions and their dialogs, ported. The border spec is the shared
     // record legacy threads through the toolbar: a border colour or width picked from a
     // dropdown lands here and the NEXT border action uses it.
@@ -699,7 +719,7 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
               onImageTransform={() => {}}
               onOpenImageProperties={() => {}}
               onPageSetup={() => {}}
-              onWatermark={() => {}}
+              onWatermark={handleOpenWatermark}
               onTableAction={handleTableAction}
             />
           }
@@ -735,8 +755,8 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
               onReplace={() => false}
               onReplaceAll={() => 0}
               hyperlinkDialog={hyperlinkDialog}
-              onHyperlinkSubmit={() => {}}
-              onHyperlinkRemove={() => {}}
+              onHyperlinkSubmit={handleHyperlinkSubmit}
+              onHyperlinkRemove={handleHyperlinkRemove}
               tablePropsOpen={tablePropsOpen}
               onTablePropsClose={() => setTablePropsOpen(false)}
               editor={editorRef.current}
@@ -753,10 +773,10 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
               showPageSetup={false}
               onPageSetupClose={() => {}}
               onPageSetupApply={() => {}}
-              showWatermark={false}
-              onWatermarkClose={() => {}}
-              onWatermarkApply={() => {}}
-              currentWatermark={undefined}
+              showWatermark={showWatermark}
+              onWatermarkClose={() => setShowWatermark(false)}
+              onWatermarkApply={handleWatermarkApply}
+              currentWatermark={currentWatermark}
               document={null}
               footnotePropsOpen={false}
               onFootnotePropsClose={() => {}}
