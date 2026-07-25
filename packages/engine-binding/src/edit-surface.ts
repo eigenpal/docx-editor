@@ -150,8 +150,17 @@ const DELEGATED_TO_PROSEMIRROR = new Set([
   'deleteHardLineBackward',
   'deleteHardLineForward',
   'deleteEntireSoftLine',
-  // Shift+Enter. Distinct from `insertParagraph`, which splits the block.
-  'insertLineBreak',
+  // `insertLineBreak` (Shift+Enter) is deliberately ABSENT.
+  //
+  // It looks like it belongs here, and it was here: delegating it let the browser
+  // insert a break that ProseMirror then reconciled — except the composed schema
+  // registers no hard-break node and the model has no `w:br` run, so PM dropped it
+  // and the document revision never moved. The user pressed a key, saw nothing, and
+  // got no diagnostic: a silent no-op, which is the one outcome worse than an honest
+  // refusal. Delegation only works for a type the reverse lane can actually express.
+  //
+  // It falls through to the rejection below, so Shift+Enter reports
+  // `unsupportedInputType` until a `w:br` run and its round-trip exist.
 ]);
 
 
@@ -554,7 +563,7 @@ export function mountEditSurface(
         //
         // These were falling through to the catch-all below, which `preventDefault`s
         // and records `unsupportedInputType` — so Cmd/Ctrl+Backspace, Alt/Option+
-        // Backspace, their forward variants, and Shift+Enter were all silently dead.
+        // Backspace, and their forward variants were all silently dead.
         // The bridge had reduced editing to basic character deletion and then
         // rejected everything else, which is strictly worse than raw ProseMirror.
         //
@@ -564,9 +573,9 @@ export function mountEditSurface(
         // approximated here. The store still updates through `dispatchTransaction`,
         // so the model stays canonical.
         //
-        // Safe at the trust boundary: every type here removes a RANGE or inserts a
-        // line break. None carries external data, unlike paste and drop, which keep
-        // their bounded handling above.
+        // Safe at the trust boundary: every type here removes a RANGE. None inserts
+        // content or carries external data, unlike paste and drop, which keep their
+        // bounded handling above.
         if (DELEGATED_TO_PROSEMIRROR.has(inputType)) return false;
         recordInputRejection({
           code: 'unsupportedInputType',

@@ -200,7 +200,14 @@ export function openDocxSession(bytes: Uint8Array): DocxEditorSession {
       //
       // Enforced here rather than only by disabling key bindings, because a
       // transaction can also originate from a plugin, clipboard handling, a test, or a
-      // future adapter. Disabled bindings are UX; this is the guard.
+      // future adapter. Disabled bindings are UX; this is defense in depth.
+      //
+      // REDUNDANT TODAY, deliberately kept. With the read-only policy installed, the
+      // reverse matcher in `commitFromDoc` already refuses any top-level block-count
+      // change in partial mode: disabling this branch was measured to leave every
+      // rejection unchanged. It stays because it is cheap, states the rule where the
+      // rule is decided, and does not depend on the matcher's behavior — but no test
+      // asserts it as load-bearing, because it is not.
       refreshPolicy();
       if (!assessment.structuralMutationAllowed) {
         const blocks = store.currentModel.stories.get(bodyStoryId(store.currentModel))?.blocks ?? [];

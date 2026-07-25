@@ -92,19 +92,86 @@ describe('partial body editability', () => {
     expect(session.structuralMutationAllowed).toBe(false);
     const revisionBefore = session.revision();
 
-    // Drop a node: a changed top-level block count would force whole-region
-    // regeneration, which is unavailable when any original block is not fully captured.
+    // A SPLIT of an editable paragraph, not a dropped node.
+    //
+    // The first version deleted block 0, which `mapDocToOps` refuses on its own, so it
+    // proved nothing. A split is the case the reverse lane CAN express (`trySplit`) and
+    // that a `full`-mode document commits — asserted below — so the difference measured
+    // here is genuinely partial mode refusing structural mutation.
+    //
+    // What this does NOT claim: that the `structuralMutationAllowed` preflight in
+    // `applyPmDoc` is what rejects it. Disabling that preflight was verified to leave
+    // this rejection unchanged; the installed read-only policy makes the reverse matcher
+    // refuse any top-level block-count change first. The preflight is documented
+    // defense-in-depth for callers that reach the store by another route, and it is
+    // deliberately not asserted here as though it were load-bearing.
     const doc = session.projectDoc();
     const schema = doc.type.schema;
-    const kept: unknown[] = [];
+    // The LAST editable paragraph, with no read-only block after it. Splitting an
+    // interior paragraph shifts every following block, so the read-only matcher rejects
+    // it on its own and the preflight is never reached — which is why an interior split
+    // still passed with the preflight deleted. At the tail, only the preflight stands
+    // between this doc and a commit (a tail split commits in `full` mode).
+    let splitIndex = -1;
+    let readOnlyAfter = false;
     doc.forEach((node, _offset, i) => {
-      if (i !== 0) kept.push(node);
+      if (node.type.name === 'paragraph' && node.textContent.length > 6) {
+        splitIndex = i;
+        readOnlyAfter = false;
+      } else if (node.type.name === 'blockEmbed') {
+        readOnlyAfter = true;
+      }
     });
-    const shorter = schema.node('doc', null, kept as never);
+    expect(splitIndex, 'fixture has no splittable paragraph').toBeGreaterThanOrEqual(0);
+    expect(readOnlyAfter, 'no tail paragraph: the preflight would not be reached').toBe(false);
 
-    expect(session.applyPmDoc(shorter)).toMatchObject({ committed: false, rejected: true, opCount: 0 });
+    const nodes: unknown[] = [];
+    doc.forEach((node, _offset, i) => {
+      if (i !== splitIndex) {
+        nodes.push(node);
+        return;
+      }
+      const text = node.textContent;
+      const cut = Math.floor(text.length / 2);
+      nodes.push(node.type.create(node.attrs, schema.text(text.slice(0, cut))));
+      nodes.push(node.type.create(node.attrs, schema.text(text.slice(cut))));
+    });
+    const split = schema.node('doc', null, nodes as never);
+    expect(split.childCount, 'the doc must really have one more block').toBe(doc.childCount + 1);
+
+    expect(session.applyPmDoc(split)).toMatchObject({ committed: false, rejected: true, opCount: 0 });
     // Atomically: the store must not have advanced.
     expect(session.revision()).toBe(revisionBefore);
+    // And the canonical model still holds the unsplit paragraph.
+    expect(session.projectDoc().childCount).toBe(doc.childCount);
+
+    // The control: the SAME structural edit commits in a `full`-mode document. Without
+    // this, "rejected" could just mean "splits never work", which would make the
+    // assertion above true for the wrong reason.
+    const fullPath = path.resolve(import.meta.dir, '../../../e2e/fixtures/editable-sample.docx');
+    const full = openDocxSession(new Uint8Array(readFileSync(fullPath)));
+    expect(full.mode).toBe('full');
+    const fullDoc = full.projectDoc();
+    const fullSchema = fullDoc.type.schema;
+    let fullIndex = -1;
+    fullDoc.forEach((node, _offset, i) => {
+      if (fullIndex === -1 && node.type.name === 'paragraph' && node.textContent.length > 6) fullIndex = i;
+    });
+    const fullNodes: unknown[] = [];
+    fullDoc.forEach((node, _offset, i) => {
+      if (i !== fullIndex) {
+        fullNodes.push(node);
+        return;
+      }
+      const text = node.textContent;
+      const cut = Math.floor(text.length / 2);
+      fullNodes.push(node.type.create(node.attrs, fullSchema.text(text.slice(0, cut))));
+      fullNodes.push(node.type.create(node.attrs, fullSchema.text(text.slice(cut))));
+    });
+    expect(full.applyPmDoc(fullSchema.node('doc', null, fullNodes as never))).toMatchObject({
+      committed: true,
+      rejected: false,
+    });
   });
 
   test('every read-only region names the block it locks', () => {

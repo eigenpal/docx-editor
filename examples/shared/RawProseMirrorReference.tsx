@@ -11,7 +11,7 @@
 // pagination, and no preservation.
 
 import { useEffect, useRef } from 'react';
-import { EditorState } from 'prosemirror-state';
+import { EditorState, TextSelection } from 'prosemirror-state';
 import { EditorView } from 'prosemirror-view';
 import { Schema } from 'prosemirror-model';
 import { baseKeymap } from 'prosemirror-commands';
@@ -34,6 +34,15 @@ declare global {
     __rawPmText?: () => string;
     /** Head offset within its paragraph, so selection can be compared too. */
     __rawPmHead?: () => { paragraph: number; offset: number };
+    /**
+     * Put the caret at a KNOWN offset in a paragraph.
+     *
+     * A differential gate must drive both surfaces from the same place. Clicking the
+     * reference lands the caret wherever the glyph run happens to fall, so a word-wise
+     * delete could remove a trailing "." in one surface and a whole word in the other,
+     * and the difference would read as an engine defect.
+     */
+    __rawPmSetHead?: (paragraph: number, offset: number) => void;
   }
 }
 
@@ -60,6 +69,15 @@ export function RawProseMirrorReference({ paragraphs }: { readonly paragraphs: r
       view.state.doc.forEach((n) => out.push(n.textContent));
       return out.join('\n');
     };
+    window.__rawPmSetHead = (paragraph, offset) => {
+      let base = 0;
+      view.state.doc.forEach((n, pos, i) => {
+        if (i === paragraph) base = pos + 1;
+      });
+      const pos = Math.min(base + offset, view.state.doc.content.size - 1);
+      view.dispatch(view.state.tr.setSelection(TextSelection.create(view.state.doc, pos)));
+      view.focus();
+    };
     window.__rawPmHead = () => {
       const { $head } = view.state.selection;
       return { paragraph: $head.index(0), offset: $head.parentOffset };
@@ -69,6 +87,7 @@ export function RawProseMirrorReference({ paragraphs }: { readonly paragraphs: r
       delete window.__rawPmView;
       delete window.__rawPmText;
       delete window.__rawPmHead;
+      delete window.__rawPmSetHead;
     };
   }, [paragraphs]);
 

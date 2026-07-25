@@ -51,7 +51,13 @@ declare global {
  * the document, so the two editors provably begin identical: the gate compares COMMAND
  * BEHAVIOR, and a mismatch in starting content would look like a command difference.
  */
-const PM_REFERENCE_PARAGRAPHS = ['The quick brown fox jumps over the lazy dog', 'Second paragraph here', 'Third'];
+/**
+ * Fallback seed for the raw ProseMirror reference, used only if the document exposes no
+ * editable paragraphs. The reference is normally seeded from the OPEN DOCUMENT (below):
+ * a differential gate that holds different text in the two surfaces cannot compare them,
+ * and the M6K.1 gate quietly asserted only against the reference because of it.
+ */
+const PM_REFERENCE_FALLBACK = ['The quick brown fox jumps over the lazy dog', 'Second paragraph here', 'Third'];
 
 export function DocxAdapterHarness({
   fixtureUrl,
@@ -66,6 +72,9 @@ export function DocxAdapterHarness({
   // The document title is SHELL state: the engine owns no title contract (M4.0).
   const [title, setTitle] = useState('Untitled document');
   const [editor, setEditor] = useState<Editor | null>(null);
+  // Seeded from the real document once it opens, so the raw ProseMirror reference and
+  // the production surface start from the SAME paragraphs.
+  const [refParagraphs, setRefParagraphs] = useState<string[] | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -98,6 +107,13 @@ export function DocxAdapterHarness({
     window.__docxAdapterEditor = editor;
     setEditor(editor);
     setStatus(driver.editable() ? 'Editable (paragraphs)' : 'Read-only (contains tables/SDTs)');
+    const paragraphs = driver
+      .accessibilityObservation()
+      .entries.filter((e) => e.role === 'editableParagraph')
+      .map((e) => e.text)
+      .filter((t) => t.trim().length > 0)
+      .slice(0, 3);
+    setRefParagraphs(paragraphs.length > 0 ? paragraphs : PM_REFERENCE_FALLBACK);
   };
 
   const onSave = (): void => {
@@ -111,8 +127,8 @@ export function DocxAdapterHarness({
       </div>
       {/* Raw ProseMirror reference for the M6K.1 differential gate, behind `?pmref=1`
           so it never appears in the normal demo. */}
-      {new URLSearchParams(window.location.search).get('pmref') === '1' && (
-        <RawProseMirrorReference paragraphs={PM_REFERENCE_PARAGRAPHS} />
+      {new URLSearchParams(window.location.search).get('pmref') === '1' && refParagraphs && (
+        <RawProseMirrorReference paragraphs={refParagraphs} />
       )}
       {/* The production component composes its OWN chrome (task M6V.1). The demo no
           longer assembles a second shell out of the exported pieces — that is exactly
