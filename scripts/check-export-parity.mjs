@@ -21,10 +21,16 @@ const REACT_PKG = resolve(ROOT, 'packages/react/package.json');
 const VUE_PKG = resolve(ROOT, 'packages/vue/package.json');
 const REACT_INDEX = resolve(ROOT, 'packages/react/src/index.ts');
 const VUE_INDEX = resolve(ROOT, 'packages/vue/src/index.ts');
-const OPT_OUT = resolve(
-  ROOT,
-  'openspec/changes/vue-editor-robust-implementation/notes/intentional-export-divergence.md'
-);
+// Divergence opt-out notes. MULTIPLE paths, because the original single path pointed
+// at a change that has since been archived — so `existsSync` was false and the gate
+// silently allowed nothing while still reporting "0 documented divergences". An
+// independent architecture review flagged it as a dead escape hatch. Every path that
+// exists is read; a missing one is simply skipped.
+const OPT_OUT_PATHS = [
+  'openspec/changes/interactive-paginated-editing/notes/intentional-export-divergence.md',
+  'openspec/changes/vue-editor-robust-implementation/notes/intentional-export-divergence.md',
+  'openspec/changes/archive/2026-07-22-vue-editor-robust-implementation/notes/intentional-export-divergence.md',
+].map((p) => resolve(ROOT, p));
 
 const STRICT_NAMED_EXPORTS = true;
 
@@ -33,13 +39,15 @@ function exportSubpaths(pkgPath) {
 }
 
 function loadAllowedDivergences() {
-  if (!existsSync(OPT_OUT)) return new Set();
   // Match only the FIRST backtick group on a list-item line. Prose secondary
   // backticks (`renamed from \`A\` to \`B\``) won't widen the opt-out.
   const allowed = new Set();
-  for (const line of readFileSync(OPT_OUT, 'utf8').split('\n')) {
-    const m = line.match(/^\s*-\s+`([^`]+)`/);
-    if (m) allowed.add(m[1]);
+  for (const path of OPT_OUT_PATHS) {
+    if (!existsSync(path)) continue;
+    for (const line of readFileSync(path, 'utf8').split('\n')) {
+      const m = line.match(/^\s*-\s+`([^`]+)`/);
+      if (m) allowed.add(m[1]);
+    }
   }
   return allowed;
 }
@@ -95,7 +103,7 @@ let failed = false;
 if (failed) {
   console.error(
     'Resolution: add the missing surface to the lagging adapter, or document the intentional divergence in\n' +
-      '  openspec/changes/vue-editor-robust-implementation/notes/intentional-export-divergence.md'
+      '  openspec/changes/interactive-paginated-editing/notes/intentional-export-divergence.md'
   );
   process.exit(1);
 }

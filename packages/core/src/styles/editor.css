@@ -1743,18 +1743,28 @@
  * are enabled by Editor.can(command); a disabled control carries the engine's
  * own reason as its tooltip. */
 
+/* Legacy formatting bar: a PILL, not a flat bar.
+ *
+ * The legacy root was `flex items-center px-2 py-1 bg-muted rounded-full
+ * min-h-[36px] overflow-x-auto mx-2 mb-1`. An earlier M6V.1 attempt made it a
+ * full-width flat bar with a bottom border and `flex-wrap: wrap`, which is a
+ * different control and the wrong overflow behaviour — legacy SCROLLS horizontally
+ * rather than wrapping, so the bar stays one row tall at any viewport. */
 .ep-toolbar {
   display: flex;
   align-items: center;
-  /* Wraps at M6V.1: the full legacy group set is far wider than one row at a
-   * document-width viewport, and the legacy chrome wrapped rather than clipping or
-   * scrolling. A clipped toolbar would silently hide the controls the parity
-   * screenshots are supposed to show. */
-  flex-wrap: wrap;
-  gap: 4px 0;
-  padding: 6px 12px;
-  background: var(--doc-surface);
-  border-bottom: 1px solid var(--doc-border);
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  gap: 0;
+  min-height: 36px;
+  padding: 4px 8px;
+  margin: 0 8px 4px;
+  border-radius: 9999px;
+  background: var(--doc-bg-subtle);
+  flex-shrink: 0;
+  /* The pill scrolls; it must not become a second vertical scroller. */
+  overflow-y: hidden;
+  scrollbar-width: thin;
 }
 
 /* One group plus the separator that precedes it, so the pair wraps together and a
@@ -1912,4 +1922,69 @@
   min-height: 0;
   overflow: auto;
   padding: 12px;
+}
+
+/* Title/menu region and sidebar (M6V.1). Legacy rendered a menu row above the
+ * formatting pill and an outline/agent sidebar as the main row's second flex child. */
+.docx-editor__menu-bar {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 2px 10px 0;
+  flex-shrink: 0;
+}
+
+.docx-editor__menu-item {
+  padding: 3px 8px;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--doc-text-subtle);
+  font-size: 13px;
+  cursor: default;
+}
+
+.docx-editor__sidebar {
+  display: flex;
+  flex-direction: column;
+  width: 260px;
+  flex-shrink: 0;
+  border-left: 1px solid var(--doc-border);
+  background: var(--doc-surface);
+}
+
+.docx-editor__sidebar-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--doc-border);
+  font-size: 13px;
+  color: var(--doc-text);
+}
+
+.docx-editor__sidebar-empty {
+  padding: 10px;
+  font-size: 12px;
+  color: var(--doc-text-subtle);
+}
+
+/* Dialog launch surfaces: present and disabled for visual parity. */
+.docx-editor__launchers {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 10px;
+}
+
+.docx-editor__launcher {
+  text-align: left;
+  padding: 5px 8px;
+  border: 1px solid var(--doc-border);
+  border-radius: 4px;
+  background: var(--doc-surface);
+  color: var(--doc-text-subtle);
+  font-size: 12px;
+  cursor: default;
+  pointer-events: none;
 }

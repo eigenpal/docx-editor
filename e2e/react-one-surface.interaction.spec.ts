@@ -250,7 +250,13 @@ test.describe('React one-surface interaction (task M3.1)', () => {
 
     const lost: string[] = [];
     for (const id of disabledIds) {
-      const box = await page.locator(`[data-testid="${id}"]`).boundingBox();
+      const control = page.locator(`[data-testid="${id}"]`);
+      // Scroll into view BEFORE measuring. The formatting bar scrolls horizontally
+      // (legacy `overflow-x: auto`), so measuring first and clicking by coordinate
+      // afterwards races the scroll and lands the click outside the control — which
+      // looks exactly like the defect under test.
+      await control.scrollIntoViewIfNeeded();
+      const box = await control.boundingBox();
       if (!box) continue;
       await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
       const state = await page.evaluate(() => ({

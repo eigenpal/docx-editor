@@ -6,7 +6,9 @@
 import React, { useEffect, useState } from 'react';
 import {
   DocxEditor,
+  DocxEditorMenuBar,
   DocxEditorShell,
+  DocxEditorSidebar,
   DocxEditorTitleBar,
   DocxEditorToolbar,
   HorizontalRuler,
@@ -108,7 +110,13 @@ export function DocxAdapterHarness({
         <span data-testid="adapter-status">{status}</span>
       </div>
       <DocxEditorShell
-        titleBar={<DocxEditorTitleBar title={title} onTitleChange={setTitle} />}
+        titleBar={
+          <>
+            <DocxEditorTitleBar title={title} onTitleChange={setTitle} />
+            <DocxEditorMenuBar t={translate} />
+          </>
+        }
+        sidebar={<DocxEditorSidebar editor={editor} open t={translate} />}
         toolbar={<DocxEditorToolbar editor={editor} t={translate} onSave={onSave} />}
         horizontalRuler={<HorizontalRuler editor={editor} zoom={zoom} />}
         verticalRuler={<VerticalRuler editor={editor} zoom={zoom} />}

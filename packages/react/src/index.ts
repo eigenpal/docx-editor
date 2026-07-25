@@ -37,6 +37,7 @@ export {
 export { DocxEditorShell, type DocxEditorShellProps } from './DocxEditorShell';
 export { DocxEditorTitleBar, type DocxEditorTitleBarProps } from './DocxEditorTitleBar';
 export { DocxEditorToolbar, type DocxEditorToolbarProps } from './DocxEditorToolbar';
+export { DocxEditorMenuBar, type DocxEditorMenuBarProps } from './DocxEditorMenuBar';
 export { DocxEditorSidebar, DEFERRED_DIALOGS, type DocxEditorSidebarProps, type SidebarPanel, type DeferredDialogId } from './DocxEditorSidebar';
 export { PageIndicator, type PageIndicatorProps } from './PageIndicator';
 export { HorizontalRuler, type HorizontalRulerProps } from './HorizontalRuler';
