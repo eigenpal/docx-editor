@@ -12,7 +12,6 @@ import {
   type GlyphClickTarget,
 } from '@docx-editor.dev/engine-editor';
 import type { DisplayPage } from '@docx-editor.dev/core-contract/geometry';
-import clsx from 'clsx';
 import { paintDisplay } from '../paintDisplay';
 import { DocxEditorTitleBar } from './DocxEditor/DocxEditorTitleBar';
 import { DocxEditorMenuBar } from './DocxEditor/DocxEditorMenuBar';
@@ -51,6 +50,20 @@ import type { DocxEditorProps, DocxEditorRef } from '../types';
  * stops the browser fighting the engine over scroll position during relayout.
  */
 /** i18n keys for the header actions. Keys only — the adapter ships no English. */
+/** `styles.button` from the legacy demo's App.tsx, verbatim. */
+const LEGACY_APP_BUTTON_STYLE: CSSProperties = {
+  padding: '6px 12px',
+  background: 'var(--doc-surface)',
+  border: '1px solid var(--doc-border)',
+  borderRadius: '6px',
+  cursor: 'pointer',
+  fontSize: '13px',
+  fontWeight: 500,
+  color: 'var(--doc-text)',
+  transition: 'all 0.15s',
+  whiteSpace: 'nowrap',
+};
+
 const APP_ACTION_KEYS = { open: 'toolbar.open', new: 'app.newDocument', save: 'toolbar.save' } as const;
 
 const LEGACY_CONTAINER_STYLE: CSSProperties = {
@@ -363,15 +376,20 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
               <button
                 key={action}
                 type="button"
-                className={clsx(
-                  'whitespace-nowrap rounded-md border px-3 py-1.5 text-[13px] font-medium transition-all',
-                  'cursor-default pointer-events-none',
-                  action === 'open'
-                    ? 'border-foreground bg-foreground text-background'
+                // Styles COPIED VERBATIM from the legacy demo's `styles` object in
+                // examples/vite/src/App.tsx — `fileInputLabel` for the
+                // primary action, `newButton` for the secondary, `button` for the rest.
+                // The interim version translated those values into Tailwind utilities,
+                // which is authoring, not copying: the numbers drifted from the source
+                // they came from.
+                style={{
+                  ...LEGACY_APP_BUTTON_STYLE,
+                  ...(action === 'open'
+                    ? { background: 'var(--doc-text)', color: 'var(--doc-on-primary)', border: '1px solid var(--doc-text)' }
                     : action === 'new'
-                      ? 'border-border bg-muted text-foreground'
-                      : 'border-border bg-background text-foreground',
-                )}
+                      ? { background: 'var(--doc-bg-subtle)' }
+                      : {}),
+                }}
                 data-testid={`app-action-${action}`}
                 data-parity-only="true"
                 disabled
