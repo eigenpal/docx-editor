@@ -410,49 +410,143 @@ export interface ReadOnlyDiagnostic {
 
 export type BodyPatchability = { readonly editable: true } | { readonly editable: false; readonly diagnostic: ReadOnlyDiagnostic };
 
+/**
+ * Per-block editability of the body (partial-body-editability, task M6P.1).
+ *
+ * `diagnoseBodyPatchability` answers one body-wide boolean and stops at the FIRST
+ * blocking block, so a single table anywhere makes an entire document immutable. That
+ * is stricter than the lower layers require: preservation already indexes per-block
+ * source ranges, re-emits unchanged ranges verbatim, and patches a changed paragraph
+ * only after its slice passes the lossless-capture guard.
+ *
+ * This assessment reports every block instead of the first failure, so safe preserved
+ * paragraphs stay editable beside immutable tables, SDTs, images, and paragraphs
+ * carrying unmodeled inline OOXML.
+ *
+ * Patchability is CONTEXTUAL evidence from the current preservation snapshot, source
+ * range, and capability ownership — not an intrinsic property of a `ParagraphRecord`.
+ * A paragraph stays a paragraph even when its current source slice is read-only, so
+ * layout and queries keep their semantics.
+ */
+export interface BodyEditabilityAssessment {
+  /** `full` every block patchable, `partial` at least one, `none` no editable region. */
+  readonly mode: 'full' | 'partial' | 'none';
+  /** Top-level block ids that may be edited in place. */
+  readonly patchableBlockIds: ReadonlySet<string>;
+  /** One structured diagnostic per read-only block, or the body-level failure. */
+  readonly regions: readonly ReadOnlyDiagnostic[];
+  /**
+   * Whether top-level split/join/insert/delete/reorder is allowed.
+   *
+   * False in partial mode: a changed body-block count invokes whole-region
+   * regeneration, which is unavailable when any original block is not fully captured.
+   * Also false when blocks are non-contiguous, because the unowned bytes between them
+   * would be dropped by a structural edit — while still permitting an independently
+   * patchable paragraph's in-place edit, which never replaces inter-block bytes.
+   */
+  readonly structuralMutationAllowed: boolean;
+}
+
 /** Decide whether the body is selectively editable AND, when not, WHY — the structured read-only
  *  diagnostic (4.9). `isModelBodyPatchable` is the boolean projection of this. */
-export function diagnoseBodyPatchability(model: PackageModel): BodyPatchability {
-  // Resolve the body story defensively: a model with no body story is simply not editable (and
-  // cannot be named), never a thrown error — the guards below must reach a diagnostic, not crash.
+export function assessBodyEditability(model: PackageModel): BodyEditabilityAssessment {
+  const none = (diagnostic: ReadOnlyDiagnostic): BodyEditabilityAssessment => ({
+    mode: 'none',
+    patchableBlockIds: new Set(),
+    regions: [diagnostic],
+    structuralMutationAllowed: false,
+  });
+
   let story: string;
   try {
     story = bodyStoryId(model);
   } catch {
-    return { editable: false, diagnostic: { code: 'empty-body', message: 'model has no body story', story: '', missingLane: 'lossless-capture' } };
+    return none({ code: 'empty-body', message: 'model has no body story', story: '', missingLane: 'lossless-capture' });
   }
-  const ro = (d: Omit<ReadOnlyDiagnostic, 'story'>): BodyPatchability => ({ editable: false, diagnostic: { ...d, story } });
+  const bodyLevel = (d: Omit<ReadOnlyDiagnostic, 'story'>): ReadOnlyDiagnostic => ({ ...d, story });
   const pres = model.preservation;
-  if (!pres) return ro({ code: 'no-preservation', message: 'document has no preservation snapshot (not parsed losslessly)', missingLane: 'preservation' });
+  if (!pres) {
+    return none(bodyLevel({ code: 'no-preservation', message: 'document has no preservation snapshot (not parsed losslessly)', missingLane: 'preservation' }));
+  }
   const docText = pres.originalParts.get(DOC_PART);
-  if (docText === undefined) return ro({ code: 'no-document-part', message: `no ${DOC_PART} in the preservation snapshot`, missingLane: 'preservation' });
+  if (docText === undefined) {
+    return none(bodyLevel({ code: 'no-document-part', message: `no ${DOC_PART} in the preservation snapshot`, missingLane: 'preservation' }));
+  }
   const blocks = model.stories.get(story)?.blocks ?? [];
-  if (blocks.length === 0) return ro({ code: 'empty-body', message: 'the body has no blocks to edit', missingLane: 'lossless-capture' });
+  if (blocks.length === 0) {
+    return none(bodyLevel({ code: 'empty-body', message: 'the body has no blocks to edit', missingLane: 'lossless-capture' }));
+  }
 
+  const patchableBlockIds = new Set<string>();
+  const regions: ReadOnlyDiagnostic[] = [];
   const ranges: { start: number; end: number }[] = [];
+
+  // Classify EVERY block. The body-wide predicate returned at the first failure, which
+  // is exactly what made one table immutabilize a whole document.
   for (const b of blocks) {
     const qname = BLOCK_QNAME[b.kind];
+    const region = (d: Omit<ReadOnlyDiagnostic, 'story'>) => regions.push({ ...d, story });
     if (!isTopLevelEditable(b.kind)) {
-      return ro({ code: 'non-editable-kind', message: `body block '${b.kind}' (${qname ?? b.kind}) is not top-level editable; it opens read-only to preserve it`, blockId: b.id, blockKind: b.kind, qname, missingLane: 'editable-capability' });
+      region({ code: 'non-editable-kind', message: `body block '${b.kind}' (${qname ?? b.kind}) is not top-level editable; it stays read-only to preserve it`, blockId: b.id, blockKind: b.kind, qname, missingLane: 'editable-capability' });
+      continue;
     }
     const r = pres.blockRanges.get(b.id);
     if (!r || r.partName !== DOC_PART) {
-      return ro({ code: 'no-source-range', message: `block '${b.id}' (${qname ?? b.kind}) has no captured source range in ${DOC_PART}`, blockId: b.id, blockKind: b.kind, qname, missingLane: 'source-range' });
+      region({ code: 'no-source-range', message: `block '${b.id}' (${qname ?? b.kind}) has no captured source range in ${DOC_PART}`, blockId: b.id, blockKind: b.kind, qname, missingLane: 'source-range' });
+      continue;
     }
     if (!sliceIsFullyCapturedParagraph(docText.slice(r.start, r.end))) {
-      return ro({ code: 'unmodeled-content', message: `paragraph '${b.id}' (${qname ?? b.kind}) carries OOXML the model does not fully capture; editing it needs preservation capsules`, blockId: b.id, blockKind: b.kind, qname, missingLane: 'lossless-capture' });
+      region({ code: 'unmodeled-content', message: `paragraph '${b.id}' (${qname ?? b.kind}) carries OOXML the model does not fully capture; editing it needs preservation capsules`, blockId: b.id, blockKind: b.kind, qname, missingLane: 'lossless-capture' });
+      continue;
     }
+    patchableBlockIds.add(b.id);
     ranges.push({ start: r.start, end: r.end });
   }
-  // The body blocks must be CONTIGUOUS direct siblings. Any bytes between consecutive block ranges —
-  // an inter-block comment/PI, a bookmark, or a wrapping element's boundary (an SDT or
-  // </w:customXml>) — would be dropped the moment a structural edit regenerates the block region.
+
+  // Contiguity gates STRUCTURAL mutation only. Unowned bytes between siblings would be
+  // dropped when a structural edit regenerates the block region; an in-place patch of
+  // one paragraph never touches them.
   ranges.sort((a, b) => a.start - b.start);
+  let contiguous = true;
   for (let i = 1; i < ranges.length; i += 1) {
     if (ranges[i].start !== ranges[i - 1].end) {
-      return ro({ code: 'non-contiguous-blocks', message: 'unowned bytes between sibling body blocks (a comment, bookmark, or wrapping boundary) would be lost on a structural edit', missingLane: 'contiguity' });
+      contiguous = false;
+      regions.push(bodyLevel({ code: 'non-contiguous-blocks', message: 'unowned bytes between sibling body blocks (a comment, bookmark, or wrapping boundary) would be lost on a structural edit', missingLane: 'contiguity' }));
+      break;
     }
   }
-  return { editable: true };
+
+  const allPatchable = patchableBlockIds.size === blocks.length;
+  const mode = patchableBlockIds.size === 0 ? 'none' : allPatchable && contiguous ? 'full' : 'partial';
+  return {
+    mode,
+    patchableBlockIds,
+    regions,
+    // Only a wholly patchable, contiguous body may change its block count.
+    structuralMutationAllowed: mode === 'full',
+  };
+}
+
+/**
+ * Body-wide patchability — the compatibility projection of `assessBodyEditability`.
+ *
+ * Retained deliberately (migration step 1): `editable` is now exactly
+ * `mode === 'full'`, so every existing caller keeps its previous behavior while
+ * partial-mode consumers read the richer assessment.
+ */
+export function diagnoseBodyPatchability(model: PackageModel): BodyPatchability {
+  const assessment = assessBodyEditability(model);
+  if (assessment.mode === 'full') return { editable: true };
+  // The first region, matching the original behavior of returning at the first
+  // blocking block. A partial body is still `editable: false` here BY DESIGN: this
+  // predicate answers "is the whole body patchable", and callers that can honour a
+  // partially editable document read `assessBodyEditability` instead.
+  const diagnostic = assessment.regions[0] ?? {
+    code: 'empty-body',
+    message: 'the body has no editable region',
+    story: '',
+    missingLane: 'lossless-capture',
+  };
+  return { editable: false, diagnostic };
 }
 

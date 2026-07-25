@@ -64,9 +64,11 @@ export {
   parseDocx,
   isPlainEditableDocx,
   isModelBodyPatchable,
+  assessBodyEditability,
   diagnoseBodyPatchability,
   type ReadOnlyDiagnostic,
   type BodyPatchability,
+  type BodyEditabilityAssessment,
 } from './docx/read.ts';
 export { isRunPropertiesCapsule } from './preservation-capsule.ts';
 export { writeDocx, documentXml } from './docx/write.ts';
