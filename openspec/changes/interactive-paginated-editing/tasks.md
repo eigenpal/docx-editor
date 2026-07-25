@@ -269,6 +269,23 @@ Not the formal public **`interactive-paginated`** claim (that remains **8.10**).
   passed) is unaffected because it asserts behavior, not styling. **10V.1 MUST convert
   the Vue toolbar, not restore the CSS.**
 
+- [ ] M6V.6 **Expose page margins so the rulers can render their margin zones.** Measured
+  blocker, not a styling gap: `Editor.getPageGeometry()` returns
+  `readonly { index: number; box: Rect }[]` and nothing else, while the retired
+  `ui/HorizontalRuler.tsx` draws its grey margin zones from left/right margin pixels
+  (`MARGIN_ZONE_COLOR = var(--doc-shadow-subtle)`, a 1px inner border, `ew-resize` when
+  editable). With only a page box there is nothing to derive them from, and guessing a
+  margin would put a wrong ruler over a correct page.
+
+  Follow the `Editor.isActive` precedent the owner set: extend the public shape (a content
+  box or explicit margins per page), return real values where the engine already knows
+  them, and wire both rulers to read it. Correct wiring first; the ruler lights up when
+  the values are real. Do NOT hardcode a default margin to make it look right.
+
+  Note this change owns no section-geometry contract (M4.4 made the rulers deliberately
+  display-only), so the zones stay non-interactive: no drag handles, no margin mutation.
+  Retired's `ew-resize` cursor and `onMouseDown` handlers are explicitly out of scope.
+
 - [ ] M6V.5 **Port the retired UI 1:1 — owner directive, and it SUPERSEDES piecemeal class
   matching.** The rule, in the owner's words: *all UI should be exactly as in retired except
   for the page rendered that represents the Word doc; all retired styling should be
