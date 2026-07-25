@@ -258,10 +258,21 @@ export function createEditor(config: EditorConfig): Editor {
       anchor: obs.selection.anchor,
       head: obs.selection.head,
     };
-    if (!deriveCaretGeometry(frame, selection.head)) {
-      updateInputHostFromFrame();
-      return;
-    }
+    // Publish even when caret geometry is unavailable.
+    //
+    // This used to bail here, and the consequence was severe: after a single
+    // keystroke `deriveCaretGeometry` can fail at the position adjacent to the
+    // freshly split run, so nothing was published and the frame kept the layout
+    // seed's `selection: null, focus: { focused: false }`. The authority was fine
+    // throughout — the accessibility observation still reported focused with a
+    // live head — but every subsequent geometry key was refused with "requires a
+    // focused interaction frame", and once refused keys stopped falling through
+    // to ProseMirror the caret became immovable until the user clicked again.
+    //
+    // A missing caret RECTANGLE means "paint no caret", never "discard the
+    // selection and focus". `publishSelectionOverlay` already tolerates a null
+    // caret, and `overlaysForFrame` paints one only for a focused frame, so the
+    // worst case is an unpainted caret rather than a dead keyboard.
     publishSelectionOverlay(selection, obs.focus);
   }
 

@@ -7,7 +7,7 @@ import type { InteractionHostMetrics } from '@docx-editor.dev/core-contract/inte
 import { createEmptyModel, writeDocx } from '@docx-editor.dev/engine-core';
 import { contentToClient } from '../src/coordinate-mapper.ts';
 import { frameMembersCoherent } from '../src/interaction-frame.ts';
-import { modelWith } from './interaction-test-helpers.ts';
+import { modelWith, publishFrameBundle, selectionForBlock } from './interaction-test-helpers.ts';
 
 const METRICS: InteractionHostMetrics = {
   clientOrigin: { x: 32, y: 48 },
@@ -228,5 +228,36 @@ describe('createEditor interaction frame', () => {
     editor.destroy();
     flush();
     expect(pendingCount()).toBe(0);
+  });
+});
+
+describe('a missing caret rectangle must not discard focus (re-review, HIGH)', () => {
+  test('publishSelection keeps focus and selection when caret geometry is null', () => {
+    const { frame, store } = publishFrameBundle(modelWith(['hello world']));
+    const blockId = frame.semanticIndex.stories[0]!.blocks[0]!.identity.blockId;
+    const selection = selectionForBlock(frame, blockId, 3, 3);
+
+    // Exactly the shape reconcileSelectionOverlayAfterLayout produces when
+    // deriveCaretGeometry fails: a live selection and focus, no caret rect.
+    const published = store.publishSelection({
+      modelRevision: frame.revisions.modelRevision,
+      layoutRevision: frame.revisions.layoutRevision,
+      selection,
+      caret: null,
+      selectionGeometry: null,
+      focus: { scope: { kind: 'body' }, focused: true },
+      composition: { active: false, scope: null },
+      currentPage: { viewport: 0, caret: 0 },
+    });
+
+    // The old code bailed instead of publishing, so the frame kept the layout
+    // seed's focused:false / selection:null. Every later geometry key was then
+    // refused for "requires a focused interaction frame", and once refused keys
+    // stopped falling through to ProseMirror the caret became immovable.
+    expect(published.focus.focused).toBe(true);
+    expect(published.selection).not.toBeNull();
+    expect(published.selection!.head).toMatchObject({ graphemeOffset: 3 });
+    // No caret rect means paint no caret — not lose the selection.
+    expect(published.caret).toBeNull();
   });
 });
