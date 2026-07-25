@@ -210,3 +210,30 @@ describe('getDocumentStyles derives the real style table', () => {
     body.remove();
   });
 });
+
+// `getOutline` follows the legacy heading rule: styleId `Heading<n>` gives level n-1,
+// bounded 0..8, text trimmed, empty headings skipped.
+describe('getOutline derives real headings', () => {
+  test('reports the fixture headings in document order with correct levels', async () => {
+    const { readFileSync } = await import('node:fs');
+    const path = await import('node:path');
+    const fixture = path.resolve(import.meta.dir, '../../../e2e/fixtures/comprehensive-word-element-test.docx');
+    const body = document.createElement('div');
+    document.body.append(body);
+    const editor = createEditor({ host: hostWith(body), document: new Uint8Array(readFileSync(fixture)) });
+
+    const outline = editor.getOutline();
+    expect(outline.length, 'no headings from a document with H1-H5').toBeGreaterThan(2);
+    // Every entry is renderable and addressable.
+    expect(outline.every((h) => h.text.trim().length > 0 && h.blockId.length > 0)).toBe(true);
+    // Levels stay in the legacy range.
+    expect(outline.every((h) => h.level >= 0 && h.level <= 8)).toBe(true);
+    // The fixture has H1 through H5, so more than one distinct level must appear —
+    // a flat outline would mean the level derivation is not working.
+    expect(new Set(outline.map((h) => h.level)).size,
+      `levels: ${JSON.stringify(outline.slice(0, 6))}`).toBeGreaterThan(1);
+
+    editor.destroy();
+    body.remove();
+  });
+});

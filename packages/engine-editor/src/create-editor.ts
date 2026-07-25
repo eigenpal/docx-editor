@@ -931,8 +931,37 @@ export function createEditor(config: EditorConfig): Editor {
       return [...seen];
     },
 
-    /** STUB — needs heading levels resolved from paragraph styles across the body. */
-    getOutline: () => [],
+    /**
+     * Heading outline for the navigation panel, in document order.
+     *
+     * Follows the legacy rule exactly: a paragraph is a heading when its style id matches
+     * `Heading<n>`, giving level `n - 1`, bounded to 0..8. Text is the concatenated run
+     * text, trimmed; a heading whose text is empty is skipped, because an outline row
+     * with no label is worse than a shorter outline.
+     *
+     * The legacy version also honoured an explicit `outlineLevel` attribute, which the
+     * greenfield paragraph props do not carry — a paragraph that sets `w:outlineLvl`
+     * without a heading style is therefore missed. `blockId` replaces the legacy
+     * `pmPos`, since the caller resolves position through the engine, not a PM document.
+     */
+    getOutline: () => {
+      if (!session) return [];
+      const model = session.currentModel();
+      const blocks = model.stories.get(bodyStoryId(model))?.blocks ?? [];
+      const out: { text: string; level: number; blockId: string }[] = [];
+      for (const block of blocks) {
+        if (block.kind !== 'paragraph') continue;
+        const paragraph = block as { id: string; props?: { styleId?: string }; runs: readonly { text: string }[] };
+        const match = /^[Hh]eading(\d)$/.exec(paragraph.props?.styleId ?? '');
+        if (!match) continue;
+        const level = Number(match[1]) - 1;
+        if (level < 0 || level > 8) continue;
+        const text = paragraph.runs.map((r) => r.text).join('').trim();
+        if (!text) continue;
+        out.push({ text, level, blockId: paragraph.id });
+      }
+      return out;
+    },
 
     /** STUB — needs the comments part parsed and its anchors mapped to block ids. */
     getComments: () => [],

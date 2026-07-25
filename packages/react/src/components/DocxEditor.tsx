@@ -351,7 +351,20 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
             onTopMarginChange: () => {},
             onBottomMarginChange: () => {},
           }}
-          outlineProps={{ headings: [], onHeadingClick: () => {}, onClose: () => {}, topOffset: 0, scrollLeft: 0 }}
+          outlineProps={{
+            // Real headings from the engine. `pmPos` is the legacy field name and the
+            // ported DocumentOutline still reads it; the engine addresses blocks by id,
+            // so the index stands in until the panel is wired to scroll by block.
+            headings: (editorRef.current?.getOutline() ?? []).map((h, i) => ({
+              text: h.text,
+              level: h.level,
+              pmPos: i,
+            })),
+            onHeadingClick: () => {},
+            onClose: () => {},
+            topOffset: 0,
+            scrollLeft: 0,
+          }}
           onToggleOutline={() => {}}
           scrollPageInfo={{
             currentPage: (editorRef.current?.getCurrentPage('viewport') ?? 0) + 1,
