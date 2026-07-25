@@ -156,7 +156,7 @@ export function createEditor(config: EditorConfig): Editor {
   let layoutToken = 0;
   let cancelScheduledLayout: (() => void) | null = null;
   let dragSession: PointerDragSession | null = null;
-  let scrollTrackedEl: HTMLElement | null = null;
+  let scrollTrackingAttached = false;
   let detachScrollTracking: (() => void) | null = null;
   let navigationSession: NavigationSession | null = null;
   let documentGeneration = 0;
@@ -415,16 +415,42 @@ export function createEditor(config: EditorConfig): Editor {
   // the caret — taking the browser's IME and autofill UI with it. The engine
   // owns input-host policy, so it watches the scroll container itself rather
   // than making every adapter remember to.
+  /**
+   * Re-place the input host whenever the caret moves in CLIENT space.
+   *
+   * This used to attach a `scroll` listener to `host.getScrollContainer()` alone,
+   * which covered exactly one of the ways a viewport moves. Independent review
+   * measured the gap: `window.scrollTo(0, 300)` left the clip shell 300px from the
+   * caret in React and 400px in Vue, while `getInputHostObservation()` still
+   * reported `placementReason: 'applied'` — so the public observation asserted a
+   * correct placement that was hundreds of pixels wrong, taking the browser's IME
+   * candidate window, autofill, and virtual keyboard with it.
+   *
+   * A single capture-phase listener on the document replaces per-element tracking:
+   * `scroll` does not bubble, but it does propagate along the CAPTURE path, so this
+   * sees every scrollable ancestor including the document scrolling element,
+   * without the engine having to know which element scrolls. `resize` and the
+   * `visualViewport` events cover window resize and mobile pinch-zoom / on-screen
+   * keyboard, which move the caret in client space without any scroll at all.
+   */
   function trackScrollForInputHost(): void {
-    const scroll = host.getScrollContainer?.();
-    if (!scroll || scroll === scrollTrackedEl) return;
-    detachScrollTracking?.();
-    const onScroll = (): void => updateInputHostFromFrame();
-    scroll.addEventListener('scroll', onScroll, { passive: true });
-    scrollTrackedEl = scroll;
+    if (scrollTrackingAttached) return;
+    const doc = host.getBodyHostEl?.()?.ownerDocument ?? globalThis.document;
+    if (!doc) return;
+    const win = doc.defaultView;
+    const onViewportChange = (): void => updateInputHostFromFrame();
+    doc.addEventListener('scroll', onViewportChange, { capture: true, passive: true });
+    win?.addEventListener('resize', onViewportChange, { passive: true });
+    const visual = win?.visualViewport ?? null;
+    visual?.addEventListener('scroll', onViewportChange, { passive: true });
+    visual?.addEventListener('resize', onViewportChange, { passive: true });
+    scrollTrackingAttached = true;
     detachScrollTracking = () => {
-      scroll.removeEventListener('scroll', onScroll);
-      scrollTrackedEl = null;
+      doc.removeEventListener('scroll', onViewportChange, { capture: true } as EventListenerOptions);
+      win?.removeEventListener('resize', onViewportChange);
+      visual?.removeEventListener('scroll', onViewportChange);
+      visual?.removeEventListener('resize', onViewportChange);
+      scrollTrackingAttached = false;
       detachScrollTracking = null;
     };
   }

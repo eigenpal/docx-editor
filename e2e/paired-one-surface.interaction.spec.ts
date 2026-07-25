@@ -351,6 +351,68 @@ test.describe('paired one-surface interaction (task 6.5)', () => {
     expect(results.vue).toEqual(results.react);
   });
 
+  test('the input host follows the caret through container AND window scroll', async ({ browser }) => {
+    // Two review findings meet here. The engine tracked `scroll` on exactly one
+    // element, so a window/ancestor scroll left the hidden ProseMirror host at a
+    // stale client position — measured 300px drift in React, 400px in Vue, with
+    // `placementReason` still reporting 'applied'. And the Vue demo's viewport never
+    // scrolled at all (clientHeight === scrollHeight, assigned scrollTop did not
+    // stick), so the scroll leg of this gate passed vacuously on one adapter.
+    const results = await acrossAdapters(browser, async (page) => {
+      const point = await clickTargetPointAt(page, 0.3);
+      await page.mouse.click(point.x, point.y);
+
+      const drift = async (): Promise<{ dx: number; dy: number; reason: string | null }> =>
+        page.evaluate(() => {
+          const editor = window.__docxAdapterEditor!;
+          const caret = editor.getCaretClientRect?.() ?? null;
+          const shell = document.querySelector('[data-docx-input-host] > *') as HTMLElement | null;
+          const obs = (editor as unknown as { getInputHostObservation?: () => { placementReason?: string } })
+            .getInputHostObservation?.();
+          if (!caret || !shell) return { dx: -1, dy: -1, reason: obs?.placementReason ?? null };
+          const r = shell.getBoundingClientRect();
+          return {
+            dx: Math.abs(r.x - caret.x),
+            dy: Math.abs(r.y - caret.y),
+            reason: obs?.placementReason ?? null,
+          };
+        });
+
+      const atRest = await drift();
+
+      // The editor's own scroll container.
+      const containerScrolled = await page.evaluate(() => {
+        const el = document.querySelector('[data-testid="docx-editor-scroll"]') as HTMLElement | null;
+        if (!el) return { moved: false, scrollable: false };
+        const scrollable = el.scrollHeight > el.clientHeight;
+        el.scrollTop = 120;
+        return { moved: el.scrollTop > 0, scrollable };
+      });
+      await page.waitForTimeout(80);
+      const afterContainer = await drift();
+
+      // And the window/document, which the engine never watched.
+      await page.evaluate(() => window.scrollTo(0, 300));
+      await page.waitForTimeout(80);
+      const afterWindow = await drift();
+
+      return { atRest, containerScrolled, afterContainer, afterWindow };
+    });
+
+    for (const adapter of ['react', 'vue'] as const) {
+      const r = results[adapter];
+      // The container must genuinely be a scroller, or the leg proves nothing.
+      expect(r.containerScrolled.scrollable, `${adapter} viewport is scrollable`).toBe(true);
+      expect(r.containerScrolled.moved, `${adapter} scrollTop sticks`).toBe(true);
+      for (const [label, d] of Object.entries(r)) {
+        if (label === 'containerScrolled') continue;
+        const m = d as { dx: number; dy: number };
+        expect(m.dx, `${adapter} ${label} dx`).toBeLessThan(3);
+        expect(m.dy, `${adapter} ${label} dy`).toBeLessThan(3);
+      }
+    }
+  });
+
   test('undo and redo reverse and restore identically in both adapters', async ({ browser }) => {
     const results = await acrossAdapters(browser, async (page) => {
       const original = await paintedText(page);
