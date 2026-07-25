@@ -1,7 +1,7 @@
 // Paragraph-wide tokenization, wrapping, and caret measurement (task 5.5).
 // Run boundaries affect paint slices only — never line breaks, lineId, or caret edges.
 
-import type { ParagraphRecord } from '@docx-editor.dev/engine-core';
+import type { ParagraphRecord, RunRecord } from '@docx-editor.dev/engine-core';
 import type { MetricsPort } from './metrics.ts';
 import type { CaretEdgeItem, DisplayItem, TextItem, VisualLineIdentity } from './display-item.ts';
 import { LineTracker } from './line-tracker.ts';
@@ -51,6 +51,32 @@ function tokenizeParagraph(fullText: string): FlowToken[] {
   return tokens;
 }
 
+/**
+ * Resolved bold/italic per RunRecord, memoized.
+ *
+ * `runStyleAt` is called once per UTF-16 code unit during layout, and a
+ * preserved run's `rPrCapsule` is verbatim file bytes with no size bound.
+ * Resolving the capsule inside that loop made layout cost `chars x capsuleBytes`:
+ * independent review measured a 600-character paragraph taking 124 ms with no
+ * capsule, 338 ms at 2 MB, and 990 ms at 8 MB, and showed that the zip limits
+ * admit a ~32 MB capsule inside a ~160 KB .docx — roughly 27 s of frozen main
+ * thread on open, zero clicks. A WeakMap keyed on the run makes it once per run.
+ */
+const runStyleCache = new WeakMap<RunRecord, { bold: boolean; italic: boolean }>();
+
+function resolveRunStyle(run: RunRecord): { bold: boolean; italic: boolean } {
+  const cached = runStyleCache.get(run);
+  if (cached) return cached;
+  // A preserved run carries its formatting verbatim in rPrCapsule rather than in
+  // props, so reading props alone paints every reopened run unstyled.
+  const resolved = {
+    bold: run.props?.bold === true || capsuleToggle(run.rPrCapsule, 'w:b'),
+    italic: run.props?.italic === true || capsuleToggle(run.rPrCapsule, 'w:i'),
+  };
+  runStyleCache.set(run, resolved);
+  return resolved;
+}
+
 function runStyleAt(
   p: ParagraphRecord,
   utf16Offset: number,
@@ -59,12 +85,7 @@ function runStyleAt(
   for (const run of p.runs) {
     const end = cursor + run.text.length;
     if (utf16Offset < end) {
-      // A preserved run carries its formatting verbatim in rPrCapsule rather than
-      // in props, so reading props alone paints every reopened run unstyled.
-      return {
-        bold: run.props?.bold === true || capsuleToggle(run.rPrCapsule, 'w:b'),
-        italic: run.props?.italic === true || capsuleToggle(run.rPrCapsule, 'w:i'),
-      };
+      return resolveRunStyle(run);
     }
     cursor = end;
   }
