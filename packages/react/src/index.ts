@@ -25,15 +25,6 @@ export type {
 } from '@docx-editor.dev/core-contract/editor';
 export type { DisplayPage, DisplayItem, DocPoint } from '@docx-editor.dev/core-contract/geometry';
 export type { DocxDocument } from '@docx-editor.dev/core-contract/types';
-export {
-  runSave,
-  runToolbarCommand,
-  toolbarCommand,
-  toolbarCommandState,
-  toolbarCommandStates,
-  type ToolbarCommandId,
-  type ToolbarCommandState,
-} from './toolbarCommands';
 export { DocxEditorShell } from './components/DocxEditor/DocxEditorShell';
 // The legacy components replace the interim ones that used to be exported here.
 export { Toolbar, ToolbarButton, ToolbarGroup, type ToolbarProps } from './components/Toolbar';

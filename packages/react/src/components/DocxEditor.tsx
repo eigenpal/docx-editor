@@ -18,6 +18,7 @@ import { paintDisplay } from '../paintDisplay';
 import { DocumentName, MenuBar } from './TitleBar';
 import { Toolbar } from './Toolbar';
 import { EditorToolbarContext } from './EditorToolbarContext';
+import { OutlineToggleButton } from './DocxEditor/OutlineToggleButton';
 import { HorizontalRuler } from './ui/HorizontalRuler';
 import { Z_INDEX } from '../styles/zIndex';
 import type { SectionProperties } from '../legacy-core-compat';
@@ -157,6 +158,9 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
     const [pages, setPages] = useState<readonly DisplayPage[]>([]);
     const [overlays, setOverlays] = useState<FrameOverlays>({ caret: null, selection: [] });
     const [clickTarget, setClickTarget] = useState<GlyphClickTarget | null>(null);
+    // Bumped on scroll so the page chip re-reads `getCurrentPage('viewport')`. The engine
+    // answers live; without this the chip painted once and froze at page 1.
+    const [scrollTick, setScrollTick] = useState(0);
 
     // Latest props/callbacks, read inside effects without retriggering them.
     const propsRef = useRef(props);
@@ -232,6 +236,14 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
     // Forward real pointer, keyboard, and focus events on the painted pages to
     // the shared controller. The bridge owns normalization for both adapters;
     // its disposer must run on unmount or listeners outlive the editor.
+    useEffect(() => {
+      const el = scrollRef.current;
+      if (!el) return undefined;
+      const onScroll = () => setScrollTick((n) => n + 1);
+      el.addEventListener('scroll', onScroll, { passive: true });
+      return () => el.removeEventListener('scroll', onScroll);
+    }, []);
+
     useEffect(() => {
       const surface = scrollRef.current;
       if (!surface) return undefined;
@@ -384,25 +396,17 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
                       editable={false}
                     />
                   </div>
-                  {/* Outline toggle, in the left gutter as in the reference. */}
-                  <button
-                    type="button"
-                    className="absolute left-6 top-6 z-10 grid h-9 w-9 place-items-center rounded-full border border-border bg-background text-muted-foreground shadow-sm"
-                    data-testid="outline-toggle"
-                    data-parity-only="true"
-                    disabled
-                    title={`${t('toolbar.tableOfContents')} — ${t('formattingBar.unavailableInPreview')}`}
-                    aria-label={`${t('toolbar.tableOfContents')} — ${t('formattingBar.unavailableInPreview')}`}
-                  >
-                    <svg viewBox="0 -960 960 960" width="18" height="18" aria-hidden="true" focusable="false">
-                      <path d="M120-240v-80h240v80H120Zm0-200v-80h480v80H120Zm0-200v-80h720v80H120Z" fill="currentColor" />
-                    </svg>
-                  </button>
+                  {/* The LEGACY OutlineToggleButton, not my inline button. It carries
+                      `.docx-outline-toggle`, whose disc/ring/hover live in the shared
+                      stylesheet; my Tailwind version overrode all of it, and the label
+                      appended a preview disclaimer that legacy never had. */}
+                  <OutlineToggleButton onClick={() => {}} topPx={24} scrollLeft={0} leftOffset={24} />
                   {surface}
                 </div>
               </div>
             </div>
             <PageIndicator
+              key={scrollTick}
               currentPage={(editorRef.current?.getCurrentPage('viewport') ?? 0) + 1}
               totalPages={editorRef.current?.getTotalPages() ?? 0}
               visible={(editorRef.current?.getTotalPages() ?? 0) > 1}
