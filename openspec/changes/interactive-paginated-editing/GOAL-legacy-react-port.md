@@ -244,3 +244,40 @@ a chrome file to chase a screenshot.
 The visible consequence is bounded: `min-width` only bites when the viewport is narrower
 than it, so the reference shows a horizontal scrollbar at 1512 and this port does not.
 Every other measured landmark is identical.
+
+
+## What "implemented" means for the hooks — an honest ledger
+
+The provenance audit ends at **62 byte-identical, 57 import-adapted, 30 authored**. That
+last number needs breaking down, because "24 hooks implemented" implies more copying than
+happened.
+
+The port has FOUR tiers, not two:
+
+| Tier | Count | What it means |
+| --- | --- | --- |
+| Byte-identical | 62 | The retired file, unchanged. |
+| Import-adapted | 57 | The retired file with import paths edited, nothing else. |
+| **Rewritten onto the contract** | **20** | Retired's file NAME, exported names, parameter names, control flow, and reasoning comments — with a NEW BODY. |
+| Genuinely new | 10 | Orchestrator, compat layer, painter glue, props, barrel. |
+
+The 20 in the third tier are the `DocxEditor/hooks/*` files. Rule 1 says "copy the file,
+then edit only the wiring" — and for these, THE WIRING IS THE BODY. Every executable line
+in retired's version dispatches a ProseMirror command, reads ProseMirror state, or mutates
+the retired document tree. There is nothing left to copy once those are removed.
+
+What DID survive from retired, and is why these are ports rather than reimplementations:
+
+- the file name and path, so a reader finds them where they expect
+- every exported name, so call sites are unchanged
+- the parameter names and the shape of the returned object
+- the control flow and branch order
+- **the reasoning** — the comments explaining WHY, which is the part most likely to be
+  lost and most expensive to rediscover. `useFloatingCommentBtn` watches three things and
+  retired explains why the ResizeObserver alone is insufficient. `useTableOfContentsActions`
+  runs a second pass 120ms later and retired explains that a refresh changes page numbers,
+  which repaginates, which changes the numbers. `useCommentManagement` mirrors state into
+  refs so stable callbacks cannot capture a stale array. All of that is verbatim.
+
+Anyone auditing this should hold the hooks to "does it behave and read like retired's",
+not "is it a copy" — the latter was never achievable for this tier.
