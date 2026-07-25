@@ -15,6 +15,13 @@ const SRC = join(import.meta.dir, '..', 'src');
 // adapter is being ported onto (see GOAL-legacy-react-port.md).
 const editorSource = readFileSync(join(SRC, 'components', 'DocxEditor.tsx'), 'utf8');
 const paintSource = readFileSync(join(SRC, 'paintDisplay.tsx'), 'utf8');
+// The paged area is its own component, at the path the legacy layout uses. It holds the
+// surface markup this file used to find in `DocxEditor.tsx`; the assertions moved with
+// it rather than being dropped.
+const pagedAreaSource = readFileSync(
+  join(SRC, 'components', 'DocxEditor', 'DocxEditorPagedArea.tsx'),
+  'utf8'
+);
 
 describe('React one-surface wiring (task 6.2)', () => {
   test('pointer and keyboard input route through the shared adapter bridge', () => {
@@ -42,6 +49,7 @@ describe('React one-surface wiring (task 6.2)', () => {
     for (const forbidden of ['getBoundingClientRect', 'getClientRects', 'elementFromPoint', 'caretRangeFromPoint']) {
       expect(editorSource).not.toContain(forbidden);
       expect(paintSource).not.toContain(forbidden);
+      expect(pagedAreaSource).not.toContain(forbidden);
     }
   });
 
@@ -52,11 +60,14 @@ describe('React one-surface wiring (task 6.2)', () => {
   test('the adapter never imports ProseMirror or a private engine package', () => {
     for (const forbidden of ['prosemirror', 'engine-binding', 'engine-layout', 'engine-core']) {
       expect(editorSource.toLowerCase()).not.toContain(forbidden);
+      expect(pagedAreaSource.toLowerCase()).not.toContain(forbidden);
     }
   });
 
   test('the surface uses the shared one-surface CSS classes, not inline forks', () => {
-    expect(editorSource).toContain('ep-one-surface');
+    expect(pagedAreaSource).toContain('ep-one-surface');
+    expect(pagedAreaSource).toContain('ep-one-surface__pages');
+    expect(pagedAreaSource).toContain('ep-one-surface__input-host');
     // The page wrapper is `layout-page` with the legacy data attributes, matching the
     // markup the legacy painter emitted so anything keyed on the page element still
     // resolves. The layers INSIDE it stay one-surface classes — those are the greenfield

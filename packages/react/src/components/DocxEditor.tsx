@@ -12,9 +12,9 @@ import {
   type GlyphClickTarget,
 } from '@docx-editor.dev/engine-editor';
 import type { DisplayPage } from '@docx-editor.dev/core-contract/geometry';
-import { paintDisplay } from '../paintDisplay';
 // The title bar is composed by DocxEditorToolbar (via EditorToolbar's compound parts),
 // which is where legacy assembles it — this file no longer composes it separately.
+import { DocxEditorPagedArea } from './DocxEditor/DocxEditorPagedArea';
 import { DocxEditorToolbar } from './DocxEditor/DocxEditorToolbar';
 import { DocxEditorOverlays } from './DocxEditor/DocxEditorOverlays';
 import { useImageContextMenu } from './ImageContextMenu';
@@ -405,27 +405,17 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
     // scrolled, which is why the indicator never left page 1.
     const chromeOn = Boolean(t);
     const surface = (
-      <div
-        ref={chromeOn ? null : scrollRef}
-        data-testid="docx-editor-scroll"
-        // `ep-root` is the library's style scope: every --doc-* token is declared
-        // under it. Without it the caret, selection highlight, and page background
-        // all resolve to nothing and paint invisibly on a white page.
-        className={`ep-root ep-one-surface ep-one-surface__viewport${chromeOn ? ' ep-one-surface__viewport--hosted' : ''}${className ? ` ${className}` : ''}`}
-      >
-        <div
-          ref={pagesRef}
-          className="ep-one-surface__pages"
-          style={{ transform: `scale(${zoomFactor})`, transformOrigin: 'top left' }}
-        >
-          {paintDisplay(pages, overlays, clickTarget)}
-        </div>
-        <div
-          ref={bodyRef}
-          className="ep-one-surface__input-host"
-          style={{ position: 'fixed', width: 0, height: 0, overflow: 'visible', pointerEvents: 'none' }}
-        />
-      </div>
+      <DocxEditorPagedArea
+        pages={pages}
+        overlays={overlays}
+        clickTarget={clickTarget}
+        zoom={zoomFactor}
+        scrollRef={chromeOn ? null : scrollRef}
+        pagesRef={pagesRef}
+        bodyRef={bodyRef}
+        hosted={chromeOn}
+        className={className}
+      />
     );
 
     // Chrome is composed HERE, in the production component (task M6V.1) — not in a
