@@ -438,6 +438,25 @@ export interface EditorCommands extends EditorCommandShape<DocEdits> {
   // API we intend to expose has a single insertBreak(breakType); section
   // subtypes (continuous / next-page / even / odd) ride that open breakType
   // when it lands, not a separate command here.
+  /**
+   * Section-level page setup: the fields Word's Page Setup dialog and the rulers'
+   * margin drags change. Twips throughout, matching OOXML. Every field is optional —
+   * a margin drag sends one, the dialog sends several — and an omitted field is left
+   * as it is rather than reset.
+   */
+  setPageSetup: {
+    pageWidth?: number;
+    pageHeight?: number;
+    marginTop?: number;
+    marginRight?: number;
+    marginBottom?: number;
+    marginLeft?: number;
+    orientation?: 'portrait' | 'landscape';
+  };
+
+  /** Remove the tab stop at this position (twips) from the current paragraph. */
+  removeTabMark: { positionTwips: number };
+
   setWatermark: { watermark: Watermark | null };
   refreshToc: { tocId?: string };
 

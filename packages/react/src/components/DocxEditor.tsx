@@ -23,6 +23,7 @@ import { useFileIO } from './DocxEditor/hooks/useFileIO';
 import { useTableDialogs, type BorderSpec } from './DocxEditor/hooks/useTableDialogs';
 import { useHyperlinkActions } from './DocxEditor/hooks/useHyperlinkActions';
 import { useWatermarkControls } from './DocxEditor/hooks/useWatermarkControls';
+import { usePageSetupControls } from './DocxEditor/hooks/usePageSetupControls';
 import {
   useSelectionTracker,
   type SelectionStateDelta,
@@ -119,11 +120,18 @@ function sectionPropsFromGeometry(editor: Editor | null): SectionProperties | un
   const bottom = Math.round(
     pixelsToTwips(page.box.height - (page.contentBox.y - page.box.y) - page.contentBox.height),
   );
+  // FLAT margin fields, which is what `SectionProperties` declares and what the rulers
+  // read. This used to build a nested `margins` object behind an `as` cast — the cast
+  // compiled, the rulers got `marginLeft: undefined`, and their margin zones never
+  // rendered against real geometry.
   return {
     pageWidth: Math.round(pixelsToTwips(page.box.width)),
     pageHeight: Math.round(pixelsToTwips(page.box.height)),
-    margins: { left, right, top, bottom },
-  } as SectionProperties;
+    marginLeft: left,
+    marginRight: right,
+    marginTop: top,
+    marginBottom: bottom,
+  };
 }
 
 export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
@@ -228,6 +236,24 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
     );
 
     // The image menu's own state hook, ported.
+    // Page setup and the ruler drag handlers, ported. The rulers were wired to no-ops,
+    // so dragging a margin did nothing at all; they now reach `setPageSetup`, which the
+    // engine refuses, so a drag snaps back instead of silently pretending.
+    const {
+      showPageSetup,
+      setShowPageSetup,
+      handleOpenPageSetup,
+      handleLeftMarginChange,
+      handleRightMarginChange,
+      handleTopMarginChange,
+      handleBottomMarginChange,
+      handlePageSetupApply,
+      handleIndentLeftChange,
+      handleIndentRightChange,
+      handleFirstLineIndentChange,
+      handleTabMarkRemove,
+    } = usePageSetupControls({ readOnly: false, editorRef });
+
     // Hyperlink and watermark actions, ported. Both dialogs were opening onto no-op
     // handlers; they now reach the contract's commands.
     const {
@@ -616,26 +642,28 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
             sectionProps: sectionPropsFromGeometry(editorRef.current),
             zoom: zoomFactor,
             unit: 'inch',
-            editable: false,
-            onLeftMarginChange: () => {},
-            onRightMarginChange: () => {},
+            editable: true,
+            onLeftMarginChange: handleLeftMarginChange,
+            onRightMarginChange: handleRightMarginChange,
+            // Paragraph indents and tab stops have no capability behind them yet, so the
+            // ruler shows none rather than a guessed zero-indent it would then draw.
             indentLeft: 0,
             indentRight: 0,
-            onIndentLeftChange: () => {},
-            onIndentRightChange: () => {},
+            onIndentLeftChange: handleIndentLeftChange,
+            onIndentRightChange: handleIndentRightChange,
             firstLineIndent: 0,
             hangingIndent: false,
-            onFirstLineIndentChange: () => {},
+            onFirstLineIndentChange: handleFirstLineIndentChange,
             tabMarks: null,
-            onTabMarkRemove: () => {},
+            onTabMarkRemove: handleTabMarkRemove,
           }}
           verticalRulerProps={{
             sectionProps: sectionPropsFromGeometry(editorRef.current),
             zoom: zoomFactor,
             unit: 'inch',
-            editable: false,
-            onTopMarginChange: () => {},
-            onBottomMarginChange: () => {},
+            editable: true,
+            onTopMarginChange: handleTopMarginChange,
+            onBottomMarginChange: handleBottomMarginChange,
           }}
           outlineProps={{
             headings: outlineHeadings,
@@ -718,7 +746,7 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
               onImageWrapType={() => {}}
               onImageTransform={() => {}}
               onOpenImageProperties={() => {}}
-              onPageSetup={() => {}}
+              onPageSetup={handleOpenPageSetup}
               onWatermark={handleOpenWatermark}
               onTableAction={handleTableAction}
             />
@@ -770,9 +798,9 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
               onImagePropsClose={() => {}}
               onApplyImageProperties={() => {}}
               pmImageContext={null}
-              showPageSetup={false}
-              onPageSetupClose={() => {}}
-              onPageSetupApply={() => {}}
+              showPageSetup={showPageSetup}
+              onPageSetupClose={() => setShowPageSetup(false)}
+              onPageSetupApply={handlePageSetupApply}
               showWatermark={showWatermark}
               onWatermarkClose={() => setShowWatermark(false)}
               onWatermarkApply={handleWatermarkApply}
