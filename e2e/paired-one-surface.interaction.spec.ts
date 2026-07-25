@@ -173,4 +173,86 @@ test.describe('paired one-surface interaction (task 6.5)', () => {
     });
     expect(results.vue).toEqual(results.react);
   });
+
+  test('bold via can then exec produces the same document in both adapters', async ({ browser }) => {
+    const results = await acrossAdapters(browser, async (page) => {
+      const from = await clickTargetPointAt(page, 0.05);
+      const to = await clickTargetPointAt(page, 0.95);
+      await page.mouse.move(from.x, from.y);
+      await page.mouse.down();
+      for (let i = 1; i <= 6; i += 1) await page.mouse.move(from.x + ((to.x - from.x) * i) / 6, from.y);
+      await page.mouse.up();
+      return page.evaluate(() => {
+        const editor = window.__docxAdapterEditor!;
+        // can() before exec(), the rule the toolbar follows.
+        const can = editor.can({ type: 'toggleMark', mark: 'bold' });
+        if (!can.ok) return { can: false, exec: null, boldRuns: [] as string[] };
+        const exec = editor.exec({ type: 'toggleMark', mark: 'bold' });
+        const boldRuns = editor
+          .getInteractionFrame()
+          .display.flatMap((p) => p.items)
+          .flatMap((item) => (item.kind === 'text' ? item.runs : []))
+          .filter((run) => run.bold)
+          .map((run) => run.text);
+        return { can: true, exec, boldRuns };
+      });
+    });
+    expect(results.vue).toEqual(results.react);
+    expect(results.react.can).toBe(true);
+    expect(results.react.boldRuns.length).toBeGreaterThan(0);
+  });
+
+  test('clipboard paste lands identically in both adapters', async ({ browser }) => {
+    const results = await acrossAdapters(browser, async (page) => {
+      const point = await clickTargetPointAt(page, 0.1);
+      await page.mouse.click(point.x, point.y);
+      await page.evaluate(() => {
+        const pm = document.querySelector('.ProseMirror')!;
+        const data = new DataTransfer();
+        data.setData('text/plain', 'PairedPaste');
+        pm.dispatchEvent(new ClipboardEvent('paste', { clipboardData: data, bubbles: true, cancelable: true }));
+      });
+      await expect.poll(async () => await paintedText(page)).toContain('PairedPaste');
+      return paintedText(page);
+    });
+    expect(results.vue).toEqual(results.react);
+  });
+
+  test('an IME composition commits identically in both adapters', async ({ browser }) => {
+    const results = await acrossAdapters(browser, async (page) => {
+      const point = await clickTargetPointAt(page, 0.1);
+      await page.mouse.click(point.x, point.y);
+      const cdp = await page.context().newCDPSession(page);
+      await cdp.send('Input.imeSetComposition', { text: 'には', selectionStart: 2, selectionEnd: 2 });
+      await cdp.send('Input.insertText', { text: 'にほん' });
+      await expect.poll(async () => await paintedText(page)).toContain('にほん');
+      const text = await paintedText(page);
+      // Committed once, not twice.
+      return { text, occurrences: text.split('にほん').length - 1 };
+    });
+    expect(results.vue).toEqual(results.react);
+    expect(results.react.occurrences).toBe(1);
+  });
+
+  test('undo and redo reverse and restore identically in both adapters', async ({ browser }) => {
+    const results = await acrossAdapters(browser, async (page) => {
+      const original = await paintedText(page);
+      const point = await clickTargetPointAt(page, 0.1);
+      await page.mouse.click(point.x, point.y);
+      // One character: typing bursts are not coalesced into a single undo step,
+      // so a multi-character assertion would pin an unspecified policy.
+      await page.keyboard.type('P');
+      await expect.poll(async () => await paintedText(page)).not.toBe(original);
+      const typed = await paintedText(page);
+
+      const undo = process.platform === 'darwin' ? 'Meta+z' : 'Control+z';
+      const redo = process.platform === 'darwin' ? 'Meta+Shift+z' : 'Control+y';
+      await page.keyboard.press(undo);
+      await expect.poll(async () => await paintedText(page)).toBe(original);
+      await page.keyboard.press(redo);
+      await expect.poll(async () => await paintedText(page)).toBe(typed);
+      return { original, typed, final: await paintedText(page) };
+    });
+    expect(results.vue).toEqual(results.react);
+  });
 });
