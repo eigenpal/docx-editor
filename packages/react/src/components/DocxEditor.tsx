@@ -27,6 +27,7 @@ import { usePageSetupControls } from './DocxEditor/hooks/usePageSetupControls';
 import { useActiveEditor } from './DocxEditor/hooks/useActiveEditor';
 import { useTableOfContentsActions } from './DocxEditor/hooks/useTableOfContentsActions';
 import { useFloatingCommentBtn } from './DocxEditor/hooks/useFloatingCommentBtn';
+import { useDocumentLoader } from './DocxEditor/hooks/useDocumentLoader';
 import { MaterialSymbol } from './ui/Icons';
 import {
   useSelectionTracker,
@@ -240,6 +241,11 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
     );
 
     // The image menu's own state hook, ported.
+    // Document lifecycle, ported: load on prop change (skipping the value createEditor
+    // already loaded) and publish the font inventory the pickers read. This replaces the
+    // inline reload effect and the inline `getDocumentFonts` call this file carried.
+    const { documentFonts } = useDocumentLoader({ editorRef, document: doc });
+
     // Table-of-contents updates, ported — including legacy's deferred second pass, which
     // exists because refreshing a TOC changes page numbers, which repaginates, which
     // changes the numbers the TOC should show.
@@ -503,17 +509,6 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
       });
       return detach;
     }, [syncFromFrame]);
-
-    // Reload on document-identity change (skip the initial mount, which already
-    // loaded it via createEditor).
-    const seededDoc = useRef(true);
-    useEffect(() => {
-      if (seededDoc.current) {
-        seededDoc.current = false;
-        return;
-      }
-      if (doc) editorRef.current?.load(doc);
-    }, [doc]);
 
     useImperativeHandle(
       ref,
@@ -804,10 +799,7 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
               renderTitleBarRight={renderTitleBarRight}
               toolbarExtra={null}
               fontFamilies={undefined}
-              documentFonts={(editorRef.current?.getDocumentFonts() ?? []).map((name) => ({
-                name,
-                fontFamily: name,
-              }))}
+              documentFonts={documentFonts}
               zoom={zoomFactor}
               showZoomControl
               onFormat={handleFormat}
