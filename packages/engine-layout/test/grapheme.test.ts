@@ -9,6 +9,7 @@ import {
   resetGraphemeBoundary,
   segmentGraphemes,
   setGraphemeBoundary,
+  utf16OffsetToGrapheme,
 } from '../src/grapheme.ts';
 
 afterEach(() => resetGraphemeBoundary());
@@ -32,5 +33,24 @@ describe('Intl.Segmenter grapheme boundary', () => {
     expect(segmentGraphemes('e\u0301')).toHaveLength(1);
     expect(segmentGraphemes('😀')).toHaveLength(1);
     expect(intlGraphemeBoundary.segment('')).toEqual([]);
+  });
+
+  test('changing the boundary invalidates the utf16 index, not just the segment memo', () => {
+    // Independent review proved this cache survived both boundary switches: with a
+    // one-grapheme boundary warm, utf16OffsetToGrapheme('wxyz', 3) answered 0 and
+    // KEPT answering 0 after resetGraphemeBoundary() instead of the correct 3 —
+    // a wrong utf16<->grapheme mapping, i.e. wrong caret and selection offsets.
+    setGraphemeBoundary({
+      segment: (text: string) => [{ index: 0, text, utf16From: 0, utf16To: text.length }],
+    });
+    expect(utf16OffsetToGrapheme('wxyz', 3)).toBe(0);
+    resetGraphemeBoundary();
+    expect(utf16OffsetToGrapheme('wxyz', 3)).toBe(3);
+  });
+
+  test('the utf16 index maps astral text by grapheme, not by code unit', () => {
+    expect(utf16OffsetToGrapheme('abcd', 3)).toBe(3);
+    // A surrogate pair is two UTF-16 units but one grapheme, so offset 2 is grapheme 1.
+    expect(utf16OffsetToGrapheme('\u{1F600}x', 2)).toBe(1);
   });
 });

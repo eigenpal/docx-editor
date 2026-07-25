@@ -90,10 +90,23 @@ export function resetGraphemeBoundary(): void {
  * Safe to cache because segmentation is a pure function of the text and the
  * active boundary implementation; `setGraphemeBoundary` clears it.
  */
-/** Drop the memo — required whenever the boundary implementation changes. */
+/**
+ * Drop every memo — required whenever the boundary implementation changes.
+ *
+ * This used to clear only `memoText`/`memoSegments`, leaving the utf16->grapheme
+ * index below alive across `setGraphemeBoundary` and `resetGraphemeBoundary`.
+ * Independent review proved the consequence: with a one-grapheme-per-string
+ * boundary installed, `utf16OffsetToGrapheme('wxyz', 3)` returns 0, and after
+ * `resetGraphemeBoundary()` it still returned 0 instead of 3 — a wrong
+ * utf16<->grapheme mapping, i.e. wrong caret and selection offsets, and a cache
+ * able to mask a regression in the very boundary under test.
+ */
 function clearGraphemeMemo(): void {
   memoText = null;
   memoSegments = null;
+  indexedText = null;
+  indexedOffsets = null;
+  indexedCount = 0;
 }
 
 export function graphemeCount(text: string): number {

@@ -77,27 +77,58 @@ function resolveRunStyle(run: RunRecord): { bold: boolean; italic: boolean } {
   return resolved;
 }
 
+/**
+ * Per-paragraph run start offsets, so locating the run covering a UTF-16 offset
+ * is a binary search rather than a walk from run 0.
+ *
+ * `runStyleAt` and `charAt` are each called once per code unit, and both used to
+ * scan `p.runs` from the beginning, making layout O(chars x runs) on top of the
+ * segmentation amplifier. Keyed on the paragraph record, which is immutable.
+ */
+const runIndexCache = new WeakMap<ParagraphRecord, { starts: Int32Array }>();
+
+function runStartsOf(p: ParagraphRecord): Int32Array {
+  const cached = runIndexCache.get(p);
+  if (cached) return cached.starts;
+  const starts = new Int32Array(p.runs.length + 1);
+  let cursor = 0;
+  for (let i = 0; i < p.runs.length; i += 1) {
+    starts[i] = cursor;
+    cursor += p.runs[i]!.text.length;
+  }
+  starts[p.runs.length] = cursor;
+  runIndexCache.set(p, { starts });
+  return starts;
+}
+
+/** Index of the run covering `utf16Offset`, or -1 when past the end. */
+function runIndexAt(p: ParagraphRecord, utf16Offset: number): number {
+  const starts = runStartsOf(p);
+  if (utf16Offset < 0 || utf16Offset >= starts[p.runs.length]!) return -1;
+  let lo = 0;
+  let hi = p.runs.length - 1;
+  while (lo < hi) {
+    const mid = (lo + hi + 1) >> 1;
+    if (starts[mid]! <= utf16Offset) lo = mid;
+    else hi = mid - 1;
+  }
+  return lo;
+}
+
 function runStyleAt(
   p: ParagraphRecord,
   utf16Offset: number,
 ): { bold: boolean; italic: boolean } {
-  let cursor = 0;
-  for (const run of p.runs) {
-    const end = cursor + run.text.length;
-    if (utf16Offset < end) {
-      return resolveRunStyle(run);
-    }
-    cursor = end;
-  }
-  return { bold: false, italic: false };
+  const i = runIndexAt(p, utf16Offset);
+  if (i === -1) return { bold: false, italic: false };
+  return resolveRunStyle(p.runs[i]!);
 }
 
 function charAt(p: ParagraphRecord, utf16Offset: number): string {
-  let cursor = 0;
-  for (const run of p.runs) {
-    const end = cursor + run.text.length;
-    if (utf16Offset < end) return run.text[utf16Offset - cursor] ?? ' ';
-    cursor = end;
+  const i = runIndexAt(p, utf16Offset);
+  if (i !== -1) {
+    const run = p.runs[i]!;
+    return run.text[utf16Offset - runStartsOf(p)[i]!] ?? ' ';
   }
   return ' ';
 }
@@ -111,10 +142,26 @@ function advanceRangeWidth(metrics: MetricsPort, p: ParagraphRecord, from: numbe
   return width;
 }
 
-function utf16AtGraphemeBoundary(fullText: string, graphemeOffset: number): number {
-  const segments = segmentGraphemes(fullText);
-  if (graphemeOffset >= segments.length) return fullText.length;
-  return segments[graphemeOffset]?.index ?? fullText.length;
+/**
+ * UTF-16 offset of a grapheme boundary, read from the paragraph's already-computed
+ * segments.
+ *
+ * Takes the segments rather than re-deriving them: this is called once per caret
+ * edge, i.e. once per character, and re-entering `segmentGraphemes` here is what
+ * made layout quadratic once the memo holding the paragraph text was evicted.
+ *
+ * Reads `utf16From`, not `index`. It previously returned `index` — the grapheme
+ * index — into a field named `utf16Offset`. The two coincide for ASCII, so the
+ * whole test corpus agreed; they diverge for any astral or combining text, which
+ * published a wrong UTF-16 offset on every caret edge of such a paragraph.
+ */
+function utf16AtGraphemeBoundary(
+  segments: readonly { readonly utf16From: number }[],
+  fullTextLength: number,
+  graphemeOffset: number,
+): number {
+  if (graphemeOffset >= segments.length) return fullTextLength;
+  return segments[graphemeOffset]?.utf16From ?? fullTextLength;
 }
 
 function caretEdgeNavigable(
@@ -129,7 +176,8 @@ function caretEdgeNavigable(
 function pushCaretEdge(
   sink: ParagraphLayoutSink,
   paragraphId: string,
-  fullText: string,
+  segments: readonly { readonly utf16From: number }[],
+  fullTextLength: number,
   graphemeOffset: number,
   x: number,
   y: number,
@@ -145,7 +193,7 @@ function pushCaretEdge(
     height,
     paragraphId,
     graphemeOffset,
-    utf16Offset: utf16AtGraphemeBoundary(fullText, graphemeOffset),
+    utf16Offset: utf16AtGraphemeBoundary(segments, fullTextLength, graphemeOffset),
     affinity: graphemeOffset === 0 ? 'downstream' : 'upstream',
     line,
     navigable,
@@ -166,7 +214,10 @@ export function layoutParagraphInBox(
   options: { trailingNewLine?: boolean } = {},
 ): { x: number; y: number } {
   const fullText = paragraphFullText(p);
-  const paragraphGraphemeCount = segmentGraphemes(fullText).length;
+  // Segment the paragraph ONCE and keep the result for the whole layout. Every
+  // per-character probe below reads from this array; none re-enters segmentation.
+  const paragraphSegments = segmentGraphemes(fullText);
+  const paragraphGraphemeCount = paragraphSegments.length;
   const tracker = new LineTracker(p.id);
   const tokens = tokenizeParagraph(fullText);
   const placed: PlacedSlice[] = [];
@@ -176,7 +227,8 @@ export function layoutParagraphInBox(
     pushCaretEdge(
       sink,
       p.id,
-      fullText,
+      paragraphSegments,
+      fullText.length,
       graphemeOffset,
       cursor.x,
       cursor.y,
@@ -216,16 +268,22 @@ export function layoutParagraphInBox(
       y: cursor.y,
       line: tracker.identity(sink.currentPageIndex()),
     });
-    emitPaintSlices(p, metrics, sink, [placed[placed.length - 1]!]);
+    emitPaintSlices(p, fullText, metrics, sink, [placed[placed.length - 1]!]);
 
-    const graphemes = segmentGraphemes(token.text);
-    for (const seg of graphemes) {
-      pushEdge(utf16OffsetToGrapheme(fullText, token.utf16From + seg.utf16From));
-      for (let ci = 0; ci < seg.text.length; ci += 1) {
-        const utf16 = token.utf16From + seg.utf16From + ci;
+    // Walk the PARAGRAPH's own segments inside this token's range rather than
+    // segmenting `token.text`. Tokens split on whitespace, which is always a
+    // grapheme boundary, so the paragraph's boundaries within a token are exactly
+    // the token's own — and segmenting the token was what evicted the memo holding
+    // the paragraph text, re-segmenting the whole paragraph once per token.
+    let g = utf16OffsetToGrapheme(fullText, token.utf16From);
+    while (g < paragraphGraphemeCount && paragraphSegments[g]!.utf16From < token.utf16To) {
+      const seg = paragraphSegments[g]!;
+      pushEdge(g);
+      for (let utf16 = seg.utf16From; utf16 < seg.utf16To; utf16 += 1) {
         const style = runStyleAt(p, utf16);
         cursor.x += metrics.advance(charAt(p, utf16), style.bold, style.italic);
       }
+      g += 1;
     }
     pushEdge(utf16OffsetToGrapheme(fullText, token.utf16To));
   }
@@ -251,9 +309,16 @@ export function layoutParagraphInBox(
   return { x: cursor.x, y: cursor.y };
 }
 
-/** Split positioned line tokens at run boundaries for paint-only TextItems. */
+/**
+ * Split positioned line tokens at run boundaries for paint-only TextItems.
+ *
+ * Takes `fullText` rather than rebuilding it: this runs once per placed slice, and
+ * `paragraphFullText` joins every run, so rebuilding it here cost O(chars) per
+ * slice — a second quadratic term independent of segmentation.
+ */
 function emitPaintSlices(
   p: ParagraphRecord,
+  fullText: string,
   metrics: MetricsPort,
   sink: ParagraphLayoutSink,
   placed: readonly PlacedSlice[],
@@ -278,7 +343,7 @@ function emitPaintSlices(
         y: slice.y,
         width: partWidth,
         height: metrics.lineHeight,
-        text: paragraphFullText(p).slice(cursor, runEnd),
+        text: fullText.slice(cursor, runEnd),
         bold: style.bold,
         italic: style.italic,
         anchor: { paragraphId: p.id, offset: cursor },

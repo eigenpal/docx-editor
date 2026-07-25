@@ -3,15 +3,18 @@
 import type { MetricsPort } from './metrics.ts';
 import { segmentGraphemes } from './grapheme.ts';
 
-/** Single-entry memo so a per-character probe does not re-segment the paragraph. */
-let segText: string | null = null;
-let segCache: readonly { readonly text: string }[] | null = null;
-
+/**
+ * Segments for a per-character probe.
+ *
+ * This module used to keep its OWN single-entry memo here. It had no invalidation
+ * path at all, so it survived `setGraphemeBoundary`/`resetGraphemeBoundary` and
+ * answered for a boundary implementation that was no longer installed. Deleting it
+ * and deferring to the memo inside `segmentGraphemes` — which is cleared when the
+ * boundary changes — removes the stale-cache class rather than duplicating it, and
+ * costs nothing now that the memo is no longer evicted once per token.
+ */
 function segmentsOf(fullText: string): readonly { readonly text: string }[] {
-  if (segText === fullText && segCache) return segCache;
-  segCache = segmentGraphemes(fullText);
-  segText = fullText;
-  return segCache;
+  return segmentGraphemes(fullText);
 }
 
 function graphemeAtIndex(fullText: string, graphemeIndex: number): string {
@@ -108,9 +111,20 @@ let trustText: string | null = null;
 let trustLineStart = -1;
 let trustCheckedUpTo = -1;
 let trustFirstUnprovable: number | null = null;
+/**
+ * The watermark answers a question about `metrics.provesCharacterAdvance`, so the
+ * port is part of the key. Keyed only on `(fullText, lineStart)`, independent
+ * review warmed it with a permissive port and then got `true` from a stricter port
+ * for an offset that returns `false` from cold — publishing a caret edge as
+ * `navigable` / `per-grapheme-advance` whose advance is unprovable, which is the
+ * exact state this probe exists to refuse. The cache is module-global, so it
+ * crossed editor instances with different ports over equal paragraph text.
+ */
+let trustMetrics: MetricsPort | null = null;
 
 function prefixProvableUpTo(metrics: MetricsPort, fullText: string, lineStart: number, upTo: number): boolean {
-  if (trustText !== fullText || trustLineStart !== lineStart || trustCheckedUpTo > upTo) {
+  if (trustMetrics !== metrics || trustText !== fullText || trustLineStart !== lineStart || trustCheckedUpTo > upTo) {
+    trustMetrics = metrics;
     trustText = fullText;
     trustLineStart = lineStart;
     trustCheckedUpTo = lineStart;
