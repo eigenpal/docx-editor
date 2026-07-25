@@ -231,8 +231,14 @@ export function layoutParagraphInBox(
   const tokens = tokenizeParagraph(fullText);
   const placed: PlacedSlice[] = [];
   let lineStartGraphemeOffset = 0;
+  // Highest grapheme offset an edge was emitted for on the CURRENT line. Reset at
+  // each wrap, because a wrap deliberately emits an edge at the same offset on the
+  // new line — that pair is how the two sides of a soft break are addressable.
+  // Within a line it prevents a straddling cluster being emitted twice.
+  let lastEdgeGrapheme = -1;
 
   const pushEdge = (graphemeOffset: number) => {
+    lastEdgeGrapheme = Math.max(lastEdgeGrapheme, graphemeOffset);
     pushCaretEdge(
       sink,
       p.id,
@@ -253,11 +259,16 @@ export function layoutParagraphInBox(
   for (const token of tokens) {
     if (token.kind === 'whitespace') {
       for (let i = token.utf16From; i < token.utf16To; i += 1) {
-        pushEdge(utf16OffsetToGrapheme(fullText, i));
+        const g = utf16OffsetToGrapheme(fullText, i);
+        if (g > lastEdgeGrapheme) pushEdge(g);
         const style = runStyleAt(p, i);
         cursor.x += metrics.advance(charAt(p, i), style.bold, style.italic);
       }
-      pushEdge(utf16OffsetToGrapheme(fullText, token.utf16To));
+      // Clamped for the same straddle reason as the word branch below: when a
+      // cluster begins in this whitespace token and continues into the next word,
+      // `token.utf16To` maps back to THIS cluster and would emit a duplicate edge.
+      const trailing = utf16OffsetToGrapheme(fullText, token.utf16To);
+      if (trailing > lastEdgeGrapheme) pushEdge(trailing);
       continue;
     }
 
@@ -266,6 +277,7 @@ export function layoutParagraphInBox(
       lineStartGraphemeOffset = utf16OffsetToGrapheme(fullText, token.utf16From);
       tracker.wrap(sink.currentPageIndex());
       newLine();
+      lastEdgeGrapheme = -1; // a new line re-addresses the wrap offset
       pushEdge(lineStartGraphemeOffset);
     }
 
@@ -280,21 +292,34 @@ export function layoutParagraphInBox(
     emitPaintSlices(p, fullText, metrics, sink, [placed[placed.length - 1]!]);
 
     // Walk the PARAGRAPH's own segments inside this token's range rather than
-    // segmenting `token.text`. Tokens split on whitespace, which is always a
-    // grapheme boundary, so the paragraph's boundaries within a token are exactly
-    // the token's own — and segmenting the token was what evicted the memo holding
-    // the paragraph text, re-segmenting the whole paragraph once per token.
+    // segmenting `token.text` — segmenting the token is what evicted the memo
+    // holding the paragraph text and made layout quadratic.
+    //
+    // A grapheme cluster CAN straddle a token boundary. An earlier version of this
+    // loop asserted the opposite ("whitespace is always a grapheme boundary"),
+    // which is false: `space + U+0301` is a single cluster and `/(\s+)/` splits
+    // inside it. The cluster then began in the whitespace token, whose branch had
+    // already advanced the space, and this loop restarted at `seg.utf16From` — the
+    // space again — double-counting one advance. Independent review measured the
+    // result as a changed line count (6 lines to 7 on a 300-character paragraph
+    // with 24 such sequences), i.e. different wrapping and pagination, reachable
+    // from any .docx carrying an orphaned combining mark after whitespace.
+    //
+    // `advanceFromUtf16` is therefore clamped to code units this token actually
+    // owns, and an edge already emitted for a straddling cluster is not re-emitted.
     let g = utf16OffsetToGrapheme(fullText, token.utf16From);
     while (g < paragraphGraphemeCount && paragraphSegments[g]!.utf16From < token.utf16To) {
       const seg = paragraphSegments[g]!;
-      pushEdge(g);
-      for (let utf16 = seg.utf16From; utf16 < seg.utf16To; utf16 += 1) {
+      if (g > lastEdgeGrapheme) pushEdge(g);
+      const advanceFromUtf16 = Math.max(seg.utf16From, token.utf16From);
+      for (let utf16 = advanceFromUtf16; utf16 < seg.utf16To; utf16 += 1) {
         const style = runStyleAt(p, utf16);
         cursor.x += metrics.advance(charAt(p, utf16), style.bold, style.italic);
       }
       g += 1;
     }
-    pushEdge(utf16OffsetToGrapheme(fullText, token.utf16To));
+    const trailingEdge = utf16OffsetToGrapheme(fullText, token.utf16To);
+    if (trailingEdge > lastEdgeGrapheme) pushEdge(trailingEdge);
   }
 
   if (placed.length === 0) {

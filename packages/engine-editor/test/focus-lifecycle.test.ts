@@ -83,6 +83,39 @@ describe('focus lifecycle', () => {
     scroll.remove();
   });
 
+  test('focus() after a committed edit still accepts keystrokes', () => {
+    // Round-4 review: `focus()` clears input authorization at the top and only
+    // restored it on the sync and retained-selection branches. A commit nulls the
+    // retained selection, so after any typed edit `focus()` returned ok: true and
+    // left input unauthorized — every subsequent keystroke silently dropped, with
+    // the call reporting success.
+    const { editor, driver, body, scroll } = mountEditor();
+    expect(driver.authorizeCaret(0, 2).ok).toBe(true);
+    const editable = body.querySelector('[contenteditable="true"]') as HTMLElement;
+    const type = (data: string): void => {
+      editable.dispatchEvent(
+        new InputEvent('beforeinput', { inputType: 'insertText', data, bubbles: true, cancelable: true }),
+      );
+    };
+
+    type('A');
+    const afterFirst = driver.accessibilityObservation().entries[0]?.text ?? '';
+    expect(afterFirst).toContain('A');
+
+    // Re-focus programmatically, exactly as an adapter's `ref.focus()` would.
+    const refocus = editor.focus();
+    expect(refocus.ok).toBe(true);
+
+    // And the editor must still be able to take input.
+    type('B');
+    const afterSecond = driver.accessibilityObservation().entries[0]?.text ?? '';
+    expect(afterSecond).toContain('B');
+    expect(afterSecond.length).toBe(afterFirst.length + 1);
+
+    editor.destroy();
+    scroll.remove();
+  });
+
   test('a blur stops the frame asserting focus and stops painting a caret', () => {
     const { editor, driver, scroll } = mountEditor();
 

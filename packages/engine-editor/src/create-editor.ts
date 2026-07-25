@@ -240,7 +240,23 @@ export function createEditor(config: EditorConfig): Editor {
   function publishSelectionOverlay(selection: SemanticSelection, focus: FocusObservation): void {
     if (!session) return;
     const base = currentFrame();
-    const selectionForFrame = { ...selection, frameId: base.id };
+    // Normalize affinity HERE, at the single point where a selection becomes part of
+    // a published frame, rather than at each producer.
+    //
+    // The first attempt normalized at two call sites and missed the rest: round-4
+    // review measured a plain click in inter-word whitespace still publishing a
+    // non-canonical affinity, which left the caret painted but Home, End, PageUp,
+    // PageDown, ArrowUp and ArrowDown all refused. Every producer — click,
+    // shift-click, double and triple click, drag, keyboard navigation, the
+    // executor's own publish callback, `exec({setSelection})` — funnels through this
+    // function, so normalizing once here cannot be bypassed by a new producer, and
+    // no future caller has to remember.
+    const selectionForFrame: SemanticSelection = {
+      ...selection,
+      frameId: base.id,
+      anchor: canonicalAffinityFor(base, selection.anchor),
+      head: canonicalAffinityFor(base, selection.head),
+    };
     const caret = deriveCaretGeometry(base, selectionForFrame.head);
     const selectionGeometryOutcome = deriveSelectionGeometry(base, selectionForFrame);
     const selectionGeometry = selectionGeometryOutcome.ok ? selectionGeometryOutcome.value : null;

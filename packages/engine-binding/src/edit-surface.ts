@@ -211,6 +211,21 @@ export function mountEditSurface(
 
   let ownedPopupDepth = 0;
   let retainedSemanticSelection: SemanticSelectionSyncRequest | null = null;
+  /**
+   * Whether a semantic selection was EVER applied to this surface.
+   *
+   * `retainedSemanticSelection` is not enough to answer that: `commitEdit` nulls it
+   * on every commit, so it cannot distinguish "the engine never established a
+   * selection here" from "it did, and then the user typed". Those two need opposite
+   * answers on `focus()`, and conflating them broke one or the other:
+   *
+   * - Never synced: focus MUST NOT authorize input. A caller must not be able to
+   *   obtain input authorization just by presenting a frame id, and
+   *   `input-events.test.ts` asserts exactly that.
+   * - Synced, then committed: focus MUST authorize, or `focus()` returns ok while
+   *   silently dropping every following keystroke — measured by round-4 review.
+   */
+  let semanticSelectionEverApplied = false;
   let localCommitDepth = 0;
   let layoutPending = false;
 
@@ -779,6 +794,7 @@ export function mountEditSurface(
       };
     }
     retainedSemanticSelection = request;
+    semanticSelectionEverApplied = true;
     return { ok: true, value: undefined, frameId: request.frameId };
   }
 
@@ -829,6 +845,23 @@ export function mountEditSurface(
         return { ok: false, code: 'invalidTarget', reason: 'focus requires current interaction frame identity' };
       }
       view.focus();
+      // Re-authorize input on this branch too.
+      //
+      // `focus()` clears `inputAuthorized` at the top and only the two branches
+      // above restored it. `commitEdit` nulls the retained selection on every
+      // commit, so after any typed edit `focus()` fell through to here, returned
+      // `ok: true`, and left input UNAUTHORIZED — round-4 review measured the next
+      // keystrokes being dropped entirely while the call reported success. A
+      // successful focus that cannot accept a keystroke is worse than the
+      // `staleFrame` refusal it replaced, because nothing signals the failure.
+      //
+      // Reaching here means the caller supplied the current frame id and there is
+      // no retained selection to re-apply, which is a legitimate focus: the same
+      // condition the two branches above authorize under — PROVIDED a semantic
+      // selection was established at some point. Without that proviso this would
+      // hand input authorization to any caller holding a frame id, which is a
+      // separate asserted property.
+      if (interactionAuthorized && semanticSelectionEverApplied) inputAuthorized = true;
       return { ok: true, value: undefined, frameId };
     },
     blur() {

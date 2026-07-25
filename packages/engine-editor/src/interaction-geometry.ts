@@ -190,20 +190,26 @@ function whitespaceTargetFromRegion(
   if (!block) return null;
   const relX = local.x - region.box.x;
   const ratio = region.box.width > 0 ? relX / region.box.width : 0;
-  if (ratio < 0.5) {
-    return {
-      kind: 'text',
-      scope: region.scope,
-      identity: region.identity,
-      graphemeOffset: region.graphemeFrom,
-      affinity: 'downstream',
-    };
-  }
+  // Affinity stays 'downstream' on BOTH branches, deliberately.
+  //
+  // Round-4 review correctly found that a click here published a non-canonical
+  // affinity for an interior offset, leaving the caret painted while Home, End,
+  // PageUp, PageDown, ArrowUp and ArrowDown were all refused. The fix for that is
+  // in `publishSelectionOverlay`, which now normalizes every selection entering a
+  // frame — one chokepoint every producer passes through.
+  //
+  // Normalizing HERE as well was tried and reverted: this target also feeds
+  // word- and block-selection range construction, where the two endpoints' affinity
+  // is what orders `from`/`to`, and rewriting it broke double-click whitespace
+  // selection and non-word segment selection. Producer-side affinity is a
+  // range-ordering hint; canonical-per-offset is a caret-addressing rule. They are
+  // different jobs and must not be collapsed.
+  const graphemeOffset = ratio < 0.5 ? region.graphemeFrom : region.graphemeTo;
   return {
     kind: 'text',
     scope: region.scope,
     identity: region.identity,
-    graphemeOffset: region.graphemeTo,
+    graphemeOffset,
     affinity: 'downstream',
   };
 }
