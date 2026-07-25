@@ -210,3 +210,37 @@ Chrome hooks that need a capability decision each, in rough value order:
   `getInteractionFrame().selection`, not the query. Every selection-TARGETED command
   (`applyFormatting`, `setParagraphStyle`) needs a `DocTarget` and so stays inert until
   that query lands.
+
+
+## The last screenshot delta, resolved by arithmetic
+
+At 1512x723 in one tab, ten of eleven chrome landmarks are pixel-identical to
+`latest.docx-editor.dev/react`. The eleventh is the ruler row's `min-width`: 984 locally,
+1576 on the reference.
+
+That value is `minLayoutWidth`, implemented from retired verbatim:
+`2 * outlineLeftAllowance + maxPageWidthPx + (sidebarOpen ? SIDEBAR_DOCUMENT_SHIFT * 2 : 0)`.
+
+The reference's inputs were MEASURED, not assumed: outline panel closed, toggle visible,
+page 816px, ruler `padding-right: 20px` (so its `sidebarOpen` is false). Enumerating every
+branch of the retired formula with retired's own constants:
+
+| Branch | Sidebar | Result |
+| --- | --- | --- |
+| outline button (12+36+16 + ruler 20) | closed | **984** — what this port renders |
+| outline button | open | 1336 |
+| outline panel (12+240+16 + ruler 20) | closed | 1392 |
+| outline panel | open | 1744 |
+
+None is 1576. Solving backwards, 1576 with page 816 and the sidebar closed implies an
+allowance of 380, which no combination of retired's constants produces.
+
+**Conclusion: the deployed reference is not running the source in `the earlier editor implementation`.**
+This port follows the source, which is what the rules say to do — the retired FILE wins.
+Changing the constant to make the number match a deployment whose source is not available
+would be precisely the hand-tuning rule 2 forbids, and it would put an authored value into
+a chrome file to chase a screenshot.
+
+The visible consequence is bounded: `min-width` only bites when the viewport is narrower
+than it, so the reference shows a horizontal scrollbar at 1512 and this port does not.
+Every other measured landmark is identical.
