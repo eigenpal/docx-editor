@@ -19,6 +19,7 @@ import { DocxEditorToolbar } from './DocxEditor/DocxEditorToolbar';
 import { DocxEditorOverlays } from './DocxEditor/DocxEditorOverlays';
 import { useContextMenus } from './DocxEditor/hooks/useContextMenus';
 import { useFormattingActions } from './DocxEditor/hooks/useFormattingActions';
+import { useFileIO } from './DocxEditor/hooks/useFileIO';
 import { useKeyboardShortcuts } from './DocxEditor/hooks/useKeyboardShortcuts';
 import { useFindReplace } from '../hooks/useFindReplace';
 import { DocxEditorDialogs } from './DocxEditor/DocxEditorDialogs';
@@ -220,6 +221,24 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
     );
 
     // The image menu's own state hook, ported.
+    // File in and out, ported. Save serializes the canonical package through the engine;
+    // open loads bytes into it. The hidden inputs go in the shell's `fileInputs` slot,
+    // which this file had left empty.
+    const {
+      imageInputRef,
+      docxInputRef,
+      handleDirectPrint,
+      handleDownloadDocument,
+      handleOpenDocument,
+      handleDocxFileChange,
+      handleInsertImageClick,
+      handleImageFileChange,
+    } = useFileIO({
+      editorRef,
+      documentName: title,
+      onDocumentNameChange: onTitleChange,
+    });
+
     // Toolbar actions, ported. Bold and italic apply for real (`toggleMark` is wired in
     // the engine); everything else returns an unsupported result, so the button does
     // nothing rather than something unintended.
@@ -637,15 +656,15 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
               onFormat={handleFormat}
               onUndo={() => void editorRef.current?.exec({ type: 'undo' })}
               onRedo={() => void editorRef.current?.exec({ type: 'redo' })}
-              onPrint={() => {}}
-              showFileOpen={false}
+              onPrint={handleDirectPrint}
+              showFileOpen
               showHelpMenu
-              onOpen={() => {}}
-              onSave={() => onSave?.()}
+              onOpen={handleOpenDocument}
+              onSave={() => (onSave ? onSave() : handleDownloadDocument())}
               onZoomChange={applyZoom}
               onRefocusEditor={() => editorRef.current?.focus()}
               onInsertTable={handleInsertTable}
-              onInsertImage={() => {}}
+              onInsertImage={handleInsertImageClick}
               onInsertPageBreak={handleInsertPageBreak}
               onInsertSectionBreakNextPage={handleInsertSectionBreakNextPage}
               onInsertSectionBreakContinuous={handleInsertSectionBreakContinuous}
@@ -724,7 +743,25 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
               onApplyFootnoteProperties={() => {}}
             />
           }
-          fileInputs={null}
+          fileInputs={
+            /* Hidden pickers behind File ▸ Open and Insert ▸ Image, as legacy has them. */
+            <>
+              <input
+                ref={docxInputRef}
+                type="file"
+                accept=".docx"
+                style={{ display: 'none' }}
+                onChange={handleDocxFileChange}
+              />
+              <input
+                ref={imageInputRef}
+                type="file"
+                accept="image/*"
+                style={{ display: 'none' }}
+                onChange={handleImageFileChange}
+              />
+            </>
+          }
         />
       </EditorToolbarContext.Provider>
     );
