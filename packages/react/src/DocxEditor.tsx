@@ -1,4 +1,5 @@
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react';
+import type { CSSProperties } from 'react';
 import type { Editor, EditorHost } from '@docx-editor.dev/core-contract/editor';
 import type { InteractionIntent } from '@docx-editor.dev/core-contract/interaction';
 import {
@@ -12,6 +13,13 @@ import {
 } from '@docx-editor.dev/engine-editor';
 import type { DisplayPage } from '@docx-editor.dev/core-contract/geometry';
 import { paintDisplay } from './paintDisplay';
+import { DocxEditorTitleBar } from './DocxEditorTitleBar';
+import { DocxEditorMenuBar } from './DocxEditorMenuBar';
+import { DocxEditorToolbar } from './DocxEditorToolbar';
+import { DocxEditorSidebar } from './DocxEditorSidebar';
+import { HorizontalRuler } from './HorizontalRuler';
+import { VerticalRuler } from './VerticalRuler';
+import { PageIndicator } from './PageIndicator';
 import type { DocxEditorProps, DocxEditorRef } from './types';
 
 /**
@@ -27,9 +35,91 @@ import type { DocxEditorProps, DocxEditorRef } from './types';
  * `measureInteractionHostMetrics`, hands raw client coordinates to the engine,
  * and paints back the caret and selection geometry the engine returns.
  */
+
+/**
+ * Legacy chrome geometry, ported verbatim from `DocxEditor.tsx` and
+ * `DocxEditorShell.tsx` at 9bb06c38 (task M6V.1).
+ *
+ * These were inline style objects in the legacy code, not CSS classes, and the values
+ * are load-bearing: the scroll container must be the flex child that shrinks
+ * (`minHeight/minWidth: 0`) or the page stops scrolling, and `overflowAnchor: none`
+ * stops the browser fighting the engine over scroll position during relayout.
+ */
+const LEGACY_CONTAINER_STYLE: CSSProperties = {
+  display: 'flex',
+  flexDirection: 'column',
+  height: '100%',
+  width: '100%',
+  backgroundColor: 'var(--doc-bg)',
+};
+
+const LEGACY_MAIN_STYLE: CSSProperties = {
+  display: 'flex',
+  flex: 1,
+  minHeight: 0,
+  minWidth: 0,
+  flexDirection: 'row',
+};
+
+const LEGACY_COLUMN_STYLE: CSSProperties = {
+  position: 'relative',
+  flex: 1,
+  minHeight: 0,
+  minWidth: 0,
+  display: 'flex',
+  flexDirection: 'column',
+};
+
+const LEGACY_SCROLLER_STYLE: CSSProperties = {
+  flex: 1,
+  minHeight: 0,
+  minWidth: 0,
+  position: 'relative',
+  display: 'flex',
+  flexDirection: 'column',
+  overflowAnchor: 'none',
+};
+
+const LEGACY_RULER_ROW_STYLE: CSSProperties = {
+  display: 'flex',
+  justifyContent: 'center',
+  paddingTop: 4,
+  paddingBottom: 4,
+  paddingLeft: 20,
+  paddingRight: 20,
+  flexShrink: 0,
+  backgroundColor: 'var(--doc-bg)',
+  position: 'sticky',
+  top: 0,
+  zIndex: 30,
+};
+
+const LEGACY_CONTENT_ROW_STYLE: CSSProperties = {
+  display: 'flex',
+  flex: 1,
+  minHeight: 0,
+  position: 'relative',
+};
+
+const LEGACY_CONTENT_STYLE: CSSProperties = {
+  position: 'relative',
+  flex: 1,
+  minWidth: 0,
+  display: 'flex',
+  flexDirection: 'column',
+};
+
+const LEGACY_VRULER_STYLE: CSSProperties = {
+  position: 'absolute',
+  left: 0,
+  top: 0,
+  zIndex: 30,
+  paddingTop: 48,
+};
+
 export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
   function DocxEditor(props, ref) {
-    const { document: doc, className } = props;
+    const { document: doc, className, t, title, onTitleChange, onSave } = props;
 
     const bodyRef = useRef<HTMLDivElement | null>(null);
     const pagesRef = useRef<HTMLDivElement | null>(null);
@@ -160,7 +250,9 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
       editorRef.current?.relayout();
     }, [zoomFactor]);
 
-    return (
+    // The painted surface. Unchanged whether or not chrome is rendered, so the
+    // scroll container, host metrics, and every existing selector stay identical.
+    const surface = (
       <div
         ref={scrollRef}
         data-testid="docx-editor-scroll"
@@ -181,6 +273,52 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
           className="ep-one-surface__input-host"
           style={{ position: 'fixed', width: 0, height: 0, overflow: 'visible', pointerEvents: 'none' }}
         />
+      </div>
+    );
+
+    // Chrome is composed HERE, in the production component (task M6V.1) — not in a
+    // second shell under `examples/`, which is how the demo and the published
+    // component drift apart.
+    //
+    // Opt-in through `t`: the adapter ships no English of its own, so a host that has
+    // not supplied a translator gets the bare surface it gets today rather than a
+    // toolbar labelled with raw i18n keys. Every existing consumer and every existing
+    // selector is therefore unaffected.
+    if (!t) return surface;
+
+    return (
+      <div
+        className={`ep-root docx-editor${className ? ` ${className}` : ''}`}
+        style={LEGACY_CONTAINER_STYLE}
+        data-testid="docx-editor"
+      >
+        <div className="docx-editor__title-region">
+          <DocxEditorTitleBar title={title ?? ''} onTitleChange={onTitleChange} />
+          <DocxEditorMenuBar t={t} />
+        </div>
+        <div style={LEGACY_MAIN_STYLE}>
+          <div style={LEGACY_COLUMN_STYLE}>
+            <DocxEditorToolbar editor={editorRef.current} t={t} onSave={onSave} />
+            <div className="docx-editor__scroll-container" style={LEGACY_SCROLLER_STYLE}>
+              {/* Sticky at the scroller's top so it tracks horizontal scroll, as legacy. */}
+              <div className="docx-editor__ruler-row" style={LEGACY_RULER_ROW_STYLE}>
+                <HorizontalRuler editor={editorRef.current} zoom={zoomFactor} />
+              </div>
+              <div style={LEGACY_CONTENT_ROW_STYLE}>
+                <div className="docx-editor__content" style={LEGACY_CONTENT_STYLE}>
+                  {/* At the content's left edge; `paddingTop` must match the pages
+                      container's top padding or the ruler drifts off the page. */}
+                  <div style={LEGACY_VRULER_STYLE}>
+                    <VerticalRuler editor={editorRef.current} zoom={zoomFactor} />
+                  </div>
+                  {surface}
+                </div>
+              </div>
+            </div>
+            <PageIndicator editor={editorRef.current} />
+          </div>
+          <DocxEditorSidebar editor={editorRef.current} open t={t} />
+        </div>
       </div>
     );
   }

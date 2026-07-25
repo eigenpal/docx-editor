@@ -8,6 +8,24 @@ export type EditorMode = 'edit' | 'view';
  * imports ProseMirror or OOXML feature logic.
  */
 export interface DocxEditorProps {
+  /**
+   * Resolves i18n keys for the legacy chrome (task M6V.1).
+   *
+   * Supplying it renders the full application chrome — title, menu region, toolbar,
+   * rulers, page indicator, and sidebar — around the painted surface. Omitting it
+   * renders the bare surface, which is what every existing consumer gets today.
+   *
+   * Required for chrome rather than defaulted, because `packages/i18n/en.json` is the
+   * repo's single source of truth for user-facing strings and the adapter must ship no
+   * English of its own.
+   */
+  t?: (key: string) => string;
+  /** Document title shown in the chrome's title bar. */
+  title?: string;
+  /** Called when the title is edited. Omitting it makes the title read-only. */
+  onTitleChange?: (title: string) => void;
+  /** Save handler for the chrome's save control. Runs `Editor.save()` at the host. */
+  onSave?: () => void;
   /** A document to load: DOCX bytes or an existing handle. */
   document?: DocumentSource;
   /** 'edit' (default) or 'view' (read-only). Applied at mount only — not reactive; remount to change. */

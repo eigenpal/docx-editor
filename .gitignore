@@ -36,7 +36,10 @@ coverage/
 playwright-report/
 test-results/
 
-screenshots/
+# Root-only: this was a bare `screenshots/`, which matches a directory of that name at
+# ANY depth and silently swallowed committed OpenSpec evidence. The comment above always
+# said "in root"; the pattern now says it too.
+/screenshots/
 
 # Environment
 .env

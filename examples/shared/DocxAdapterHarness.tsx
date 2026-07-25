@@ -6,14 +6,6 @@
 import React, { useEffect, useState } from 'react';
 import {
   DocxEditor,
-  DocxEditorMenuBar,
-  DocxEditorShell,
-  DocxEditorSidebar,
-  DocxEditorTitleBar,
-  DocxEditorToolbar,
-  HorizontalRuler,
-  PageIndicator,
-  VerticalRuler,
 } from '@docx-editor.dev/react';
 import { createEditorDriver, type EditorDriver } from '@docx-editor.dev/engine-editor';
 import en from '../../packages/i18n/en.json';
@@ -109,21 +101,21 @@ export function DocxAdapterHarness({
       <div style={{ padding: '8px 12px', font: '13px system-ui, sans-serif', color: '#333', borderBottom: '1px solid #e0e0e0' }}>
         <span data-testid="adapter-status">{status}</span>
       </div>
-      <DocxEditorShell
-        titleBar={
-          <>
-            <DocxEditorTitleBar title={title} onTitleChange={setTitle} />
-            <DocxEditorMenuBar t={translate} />
-          </>
-        }
-        sidebar={<DocxEditorSidebar editor={editor} open t={translate} />}
-        toolbar={<DocxEditorToolbar editor={editor} t={translate} onSave={onSave} />}
-        horizontalRuler={<HorizontalRuler editor={editor} zoom={zoom} />}
-        verticalRuler={<VerticalRuler editor={editor} zoom={zoom} />}
-        pageIndicator={<PageIndicator editor={editor} />}
-      >
-        {bytes && <DocxEditor document={bytes} zoom={zoom} onReady={onReady} />}
-      </DocxEditorShell>
+      {/* The production component composes its OWN chrome (task M6V.1). The demo no
+          longer assembles a second shell out of the exported pieces — that is exactly
+          how the demo and the published component drift apart. Supplying `t` turns the
+          chrome on; everything else is the component's business. */}
+      {bytes && (
+        <DocxEditor
+          document={bytes}
+          zoom={zoom}
+          onReady={onReady}
+          t={translate}
+          title={title}
+          onTitleChange={setTitle}
+          onSave={onSave}
+        />
+      )}
     </div>
   );
 }
