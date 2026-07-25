@@ -2040,18 +2040,29 @@
 }
 
 .docx-editor__framework-option,
+/* VERBATIM from the legacy demo's theme toggle in
+ * examples/vite/src/App.tsx: a 26px round button
+ * per option, not a padded pill. The hand-rolled `padding: 3px 10px; border-radius: 6px`
+ * produced a wider, squarer control than the reference. */
 .docx-editor__theme-option {
-  padding: 3px 10px;
-  border-radius: 6px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border: none;
+  border-radius: 9999px;
   font-size: 12px;
   color: var(--doc-text-subtle);
+  transition: background 0.15s, color 0.15s;
 }
 
 .docx-editor__framework-option--active,
 .docx-editor__theme-option--active {
   background: var(--doc-surface);
   color: var(--doc-text);
-  box-shadow: 0 1px 2px rgb(0 0 0 / 8%);
+  /* The legacy shadow token, not a hand-mixed rgba. */
+  box-shadow: 0 1px 2px var(--doc-shadow-subtle);
 }
 
 .docx-editor__theme { margin-left: 0; margin-right: 4px; }
