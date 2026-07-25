@@ -26,6 +26,7 @@ const EXPECTED_GROUPS = [
   'listFormatting',
   'image',
   'table',
+  'review',
   'file',
 ];
 
@@ -90,7 +91,7 @@ describe('legacy chrome descriptor', () => {
   });
 
   test('the count is stable, so a dropped control fails rather than passing quietly', () => {
-    expect(legacyChromeControlCount()).toBe(29);
+    expect(legacyChromeControlCount()).toBe(31);
   });
 
   test('the menu region carries the legacy menus', () => {

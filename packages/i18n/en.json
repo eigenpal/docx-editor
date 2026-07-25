@@ -875,6 +875,13 @@
   },
   "app": {
     "name": "DOCX Editor",
-    "newDocument": "New"
+    "newDocument": "New",
+    "by": "by EigenPal",
+    "framework": "Framework",
+    "theme": "Theme"
+  },
+  "editingMode": {
+    "label": "Editing mode",
+    "editing": "Editing"
   }
 }

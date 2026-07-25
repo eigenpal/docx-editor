@@ -875,6 +875,13 @@
   },
   "app": {
     "name": null,
-    "newDocument": null
+    "newDocument": null,
+    "by": null,
+    "framework": null,
+    "theme": null
+  },
+  "editingMode": {
+    "editing": null,
+    "label": null
   }
 }

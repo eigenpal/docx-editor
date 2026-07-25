@@ -444,6 +444,12 @@ export function createEditor(config: EditorConfig): Editor {
       // `EditorDriver.compositionState()` reflect a live composition instead of a
       // constant `{ active: false }`. Selection and focus are carried through
       // unchanged; only the composition field differs.
+      // PM moved its own selection (arrows, Select All, word jumps). Re-read the
+      // observation and republish, so the painted caret follows the real insertion
+      // point rather than the last committed one.
+      onSelectionChanged: () => {
+        reconcileSelectionOverlayAfterLayout();
+      },
       onCompositionChange: () => {
         const frame = currentFrame();
         if (frame.selection) publishSelectionOverlay(frame.selection, frame.focus);

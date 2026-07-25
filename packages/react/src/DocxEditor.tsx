@@ -301,15 +301,31 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
             save already has its toolbar control. */}
         <div className="docx-editor__app-header">
           <div className="docx-editor__brand">
-            <svg viewBox="0 -960 960 960" width="22" height="22" aria-hidden="true" focusable="false">
+            <svg viewBox="0 -960 960 960" width="26" height="26" aria-hidden="true" focusable="false">
               <path
                 d="M320-240h320v-80H320v80Zm0-160h320v-80H320v80ZM240-80q-33 0-56.5-23.5T160-160v-640q0-33 23.5-56.5T240-880h320l240 240v480q0 33-23.5 56.5T720-80H240Zm280-520v-200H240v640h480v-440H520Z"
                 fill="currentColor"
               />
             </svg>
-            <span className="docx-editor__brand-name">{t('app.name')}</span>
+            <span className="docx-editor__brand-text">
+              <span className="docx-editor__brand-name">{t('app.name')}</span>
+              <span className="docx-editor__brand-by">{t('app.by')}</span>
+            </span>
+            {/* Framework segmented toggle. Parity-only: this build IS the React adapter,
+                and Vue chrome is task 10V.1. */}
+            <span className="docx-editor__framework" role="group" aria-label={t('app.framework')}>
+              <span className="docx-editor__framework-option docx-editor__framework-option--active">React</span>
+              <span className="docx-editor__framework-option">Vue</span>
+            </span>
           </div>
           <div className="docx-editor__app-actions">
+            {/* Light/dark toggle. Parity-only — the document canvas is deliberately not
+                themed (it must stay Word-faithful), so a working toggle here would imply
+                a capability the renderer does not have. */}
+            <span className="docx-editor__theme" role="group" aria-label={t('app.theme')}>
+              <span className="docx-editor__theme-option docx-editor__theme-option--active" aria-hidden="true">☀</span>
+              <span className="docx-editor__theme-option" aria-hidden="true">☾</span>
+            </span>
             {(['open', 'new', 'save'] as const).map((action) => (
               <button
                 key={action}
@@ -326,7 +342,7 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
             ))}
           </div>
         </div>
-        <div className="docx-editor__title-region">
+        <div className="docx-editor__title-region docx-editor__title-region--indented">
           <DocxEditorTitleBar title={title ?? ''} onTitleChange={onTitleChange} />
           <DocxEditorMenuBar t={t} />
         </div>
@@ -345,6 +361,20 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
                   <div style={LEGACY_VRULER_STYLE}>
                     <VerticalRuler editor={editorRef.current} zoom={zoomFactor} />
                   </div>
+                  {/* Outline toggle, in the left gutter as in the reference. */}
+                  <button
+                    type="button"
+                    className="docx-editor__outline-toggle"
+                    data-testid="outline-toggle"
+                    data-parity-only="true"
+                    disabled
+                    title={`${t('toolbar.tableOfContents')} — ${t('formattingBar.unavailableInPreview')}`}
+                    aria-label={`${t('toolbar.tableOfContents')} — ${t('formattingBar.unavailableInPreview')}`}
+                  >
+                    <svg viewBox="0 -960 960 960" width="18" height="18" aria-hidden="true" focusable="false">
+                      <path d="M120-240v-80h240v80H120Zm0-200v-80h480v80H120Zm0-200v-80h720v80H120Z" fill="currentColor" />
+                    </svg>
+                  </button>
                   {surface}
                 </div>
               </div>

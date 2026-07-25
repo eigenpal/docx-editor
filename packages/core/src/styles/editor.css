@@ -2099,3 +2099,79 @@
 .docx-editor__content .ep-one-surface__page {
   box-shadow: 0 1px 3px rgb(60 64 67 / 30%), 0 4px 8px 3px rgb(60 64 67 / 15%);
 }
+
+/* Brand block, framework/theme toggles, and outline button (M6V.1, second pass).
+ * All parity-only: this build IS the React adapter (Vue chrome is 10V.1), and the
+ * document canvas is deliberately unthemed so it stays Word-faithful. */
+.docx-editor__brand-text {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.1;
+}
+
+.docx-editor__brand-by {
+  font-size: 10px;
+  color: var(--doc-text-subtle);
+}
+
+.docx-editor__framework,
+.docx-editor__theme {
+  display: inline-flex;
+  align-items: center;
+  margin-left: 10px;
+  padding: 2px;
+  border: 1px solid var(--doc-border);
+  border-radius: 8px;
+  background: var(--doc-bg-subtle);
+  cursor: default;
+  pointer-events: none;
+}
+
+.docx-editor__framework-option,
+.docx-editor__theme-option {
+  padding: 3px 10px;
+  border-radius: 6px;
+  font-size: 12px;
+  color: var(--doc-text-subtle);
+}
+
+.docx-editor__framework-option--active,
+.docx-editor__theme-option--active {
+  background: var(--doc-surface);
+  color: var(--doc-text);
+  box-shadow: 0 1px 2px rgb(0 0 0 / 8%);
+}
+
+.docx-editor__theme { margin-left: 0; margin-right: 4px; }
+.docx-editor__theme-option { padding: 3px 8px; }
+
+/* Title indented to align with the page, as in the reference, rather than flush left. */
+.docx-editor__title-region--indented {
+  padding-left: 20px;
+}
+
+/* Outline toggle: a circular button in the left gutter. */
+.docx-editor__outline-toggle {
+  position: absolute;
+  left: 26px;
+  top: 44px;
+  z-index: 31;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border: 1px solid var(--doc-border);
+  border-radius: 50%;
+  background: var(--doc-surface);
+  color: var(--doc-text-subtle);
+  cursor: default;
+  pointer-events: none;
+  box-shadow: 0 1px 2px rgb(0 0 0 / 8%);
+}
+
+/* The pill needs enough fill to read AS a pill against the workspace. */
+.ep-toolbar {
+  background: var(--doc-bg-subtle);
+  border: 1px solid var(--doc-border);
+}

@@ -60,8 +60,8 @@ test.describe('M6V.1 legacy chrome visual parity (React)', () => {
     expect(regions.titleBar, 'title bar').toBe(true);
     expect(regions.menuBar, 'menu region').toBe(true);
     expect(regions.menuItems, 'menu items').toBe(4);
-    expect(regions.toolbarControls, 'toolbar controls').toBe(29);
-    expect(regions.toolbarGroups, 'toolbar groups').toBe(11);
+    expect(regions.toolbarControls, 'toolbar controls').toBe(31);
+    expect(regions.toolbarGroups, 'toolbar groups').toBe(12);
     expect(regions.pillRadius, 'formatting bar is a pill').toBe('9999px');
     expect(regions.pillOverflowX, 'formatting bar scrolls rather than wrapping').toBe('auto');
     expect(regions.horizontalRuler, 'horizontal ruler').toBe(true);
@@ -70,8 +70,11 @@ test.describe('M6V.1 legacy chrome visual parity (React)', () => {
     expect(regions.scrollContainer, 'scroll container').toBe(true);
     expect(regions.workspace, 'workspace/page chrome').toBe(true);
     expect(regions.pages, 'painted page').toBeGreaterThan(0);
-    expect(regions.sidebar, 'sidebar').toBe(true);
-    expect(regions.dialogLaunchers, 'dialog launch surfaces').toBe(7);
+    // The sidebar is CLOSED by default, matching the reference. It was asserted open
+    // when this spec was written; the reference shows no panel until the user opens
+    // one, and an always-open 260px panel is itself a parity defect.
+    expect(regions.sidebar, 'sidebar closed by default').toBe(false);
+    expect(regions.dialogLaunchers, 'dialog launchers hidden with the sidebar').toBe(0);
   });
 
   test('exactly five controls are enabled and nothing else can dispatch', async ({ page }) => {
@@ -96,7 +99,10 @@ test.describe('M6V.1 legacy chrome visual parity (React)', () => {
       for (const el of parityOnly) el.click();
       return { count: parityOnly.length, missingReason, before, after: editor.getDocumentHandle().revision };
     });
-    expect(probe.count, 'parity-only controls').toBeGreaterThan(30);
+    // Floor, not an exact count: the sidebar's launchers are no longer rendered by
+    // default, so the previous threshold of 30 counted controls the reference does not
+    // show. What must hold is that the toolbar and menu are overwhelmingly parity-only.
+    expect(probe.count, 'parity-only controls').toBeGreaterThan(20);
     expect(probe.missingReason, 'controls with no localized reason').toBe(0);
     expect(probe.after, 'a disabled control mutated the document').toBe(probe.before);
   });

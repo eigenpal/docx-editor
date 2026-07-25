@@ -167,6 +167,15 @@ export interface MountEditSurfaceOptions {
    * `{ active: false }` throughout a live composition.
    */
   onCompositionChange?: (active: boolean) => void;
+  /**
+   * Called when ProseMirror changes its selection WITHOUT changing the document.
+   *
+   * PM owns logical horizontal movement and Select All (task M6K.1), and those commit
+   * nothing — so without this the engine's interaction frame would keep the selection
+   * from the last commit and the painted caret would stop following the caret the user
+   * is actually moving.
+   */
+  onSelectionChanged?: () => void;
   accessibleName?: string;
   accessibilityAtomLabels?: Readonly<Record<string, string>>;
   /** When true, mount a read-only semantic projection (contenteditable false, no input authorization). */
@@ -223,6 +232,7 @@ export function mountEditSurface(
   const interactionAuthorized = !readOnlyProjection && session.editable;
   const onModelChanged = options.onModelChanged ?? (() => {});
   const onCompositionChange = options.onCompositionChange ?? (() => {});
+  const onSelectionChanged = options.onSelectionChanged ?? (() => {});
   const doc = mountParent.ownerDocument ?? document;
   const accessibleNamePolicy = resolveAccessibilityNamePolicy(options.accessibleName);
   const atomLabels = options.accessibilityAtomLabels;
@@ -609,6 +619,14 @@ export function mountEditSurface(
       if (reconciling) return;
       if (tr.selectionSet && !tr.docChanged) {
         retainedSemanticSelection = null;
+        // Tell the engine that ProseMirror moved its own selection (task M6K.1).
+        //
+        // PM now owns logical Left/Right, Select All, and every word/line jump, and
+        // those produce a selection-only transaction that commits nothing. Without
+        // this the interaction frame kept the selection from the last COMMIT, so the
+        // painted caret stopped tracking the real insertion point the moment the user
+        // pressed an arrow — the exact divergence the frame exists to prevent.
+        onSelectionChanged();
         return;
       }
       if (!tr.docChanged) return;
