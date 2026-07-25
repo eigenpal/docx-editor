@@ -120,3 +120,43 @@ describe('createEditor setSelection refuses read-only blocks', () => {
     body.remove();
   });
 });
+
+// `getSelectionFormatting` is no longer a stub — it derives run properties from canonical
+// state. The value of the test is that it fails if the derivation regresses to `null`,
+// which is exactly what a stub returns and what typecheck cannot distinguish.
+describe('getSelectionFormatting derives from canonical state', () => {
+  test('reports the font and size the document actually carries', async () => {
+    const { readFileSync } = await import('node:fs');
+    const path = await import('node:path');
+    const fixture = path.resolve(import.meta.dir, '../../../e2e/fixtures/comprehensive-word-element-test.docx');
+    const body = document.createElement('div');
+    document.body.append(body);
+    const editor = createEditor({ host: hostWith(body), document: new Uint8Array(readFileSync(fixture)) });
+
+    // A freshly opened document already carries a caret, so the derivation has something
+    // to read immediately — my assumption that it would be null was wrong.
+
+    const entry = editor
+      .getAccessibilityObservation()
+      .entries.find((e) => e.role === 'editableParagraph' && e.text.length > 3);
+    expect(entry, 'fixture has no editable paragraph').toBeDefined();
+    editor.exec({
+      type: 'setSelection',
+      range: {
+        frameId: editor.getInteractionFrame().id,
+        scope: { kind: 'body' },
+        anchor: { kind: 'text', scope: { kind: 'body' }, identity: entry!.identity, graphemeOffset: 1, affinity: 'downstream' },
+        head: { kind: 'text', scope: { kind: 'body' }, identity: entry!.identity, graphemeOffset: 1, affinity: 'downstream' },
+      } as never,
+    });
+
+    const fmt = editor.getSelectionFormatting();
+    expect(fmt, 'derivation returned null with a live selection').not.toBeNull();
+    // The comprehensive fixture bakes rFonts/sz onto its runs, so both must come through.
+    expect(typeof fmt!.fontFamily, `got ${JSON.stringify(fmt)}`).toBe('string');
+    expect(fmt!.fontSizeHalfPoints).toBeGreaterThan(0);
+
+    editor.destroy();
+    body.remove();
+  });
+});

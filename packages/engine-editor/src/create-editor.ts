@@ -56,7 +56,7 @@ import {
   resolveAccessibilityNamePolicy,
   observeAccessibility,
 } from '@docx-editor.dev/engine-binding';
-import { createEmptyModel } from '@docx-editor.dev/engine-core';
+import { createEmptyModel, bodyStoryId } from '@docx-editor.dev/engine-core';
 import { layoutBody, HelveticaMetrics } from '@docx-editor.dev/engine-layout';
 import { toDisplayPages } from './display-bridge.ts';
 import { InteractionFrameStore, emptyInteractionFrame } from './interaction-frame.ts';
@@ -889,7 +889,53 @@ export function createEditor(config: EditorConfig): Editor {
 
     /** STUB — needs resolved run/paragraph properties at the selection, which is the
      *  same derivation `isActive` waits on. */
-    getSelectionFormatting: () => null,
+    /**
+     * Run properties at the selection head, derived from CANONICAL state.
+     *
+     * No longer a stub. The model carries what the toolbar needs: `RunProps` holds
+     * bold/italic/underline, and a run whose formatting the model does not represent
+     * carries its verbatim `<w:rPr>` in `rPrCapsule` — which is where font family and
+     * size live for most real documents. Reading the capsule is read-only and bounded:
+     * a fixed attribute match on bytes this engine itself preserved, never a parse of
+     * anything new.
+     *
+     * Returns `null` when there is no selection or the block is not a paragraph, rather
+     * than a default — an empty toolbar is honest, a fabricated "Calibri 11" is not.
+     */
+    getSelectionFormatting: () => {
+      const head = currentFrame().selection?.head;
+      if (!head || head.kind !== 'text' || !session) return null;
+      const blockId = head.identity?.blockId;
+      if (!blockId) return null;
+      const model = session.currentModel();
+      const blocks = model.stories.get(bodyStoryId(model))?.blocks ?? [];
+      const block = blocks.find((b) => b.id === blockId);
+      if (!block || block.kind !== 'paragraph') return null;
+
+      // The run containing the head offset. Offsets are grapheme-based; run text is
+      // UTF-16, so this walks by run length and clamps — an offset past the end belongs
+      // to the last run, which is where a caret at paragraph end sits.
+      const runs = (block as { runs: readonly { text: string; props?: { bold?: boolean; italic?: boolean; styleId?: string }; rPrCapsule?: string }[] }).runs;
+      let remaining = head.graphemeOffset ?? 0;
+      let run = runs[0];
+      for (const r of runs) {
+        run = r;
+        if (remaining < r.text.length) break;
+        remaining -= r.text.length;
+      }
+      if (!run) return null;
+
+      const capsule = run.rPrCapsule ?? '';
+      // Bounded attribute reads on our own preserved bytes. No backtracking construct.
+      const font = /<w:rFonts[^>]*w:ascii="([^"]{0,64})"/.exec(capsule)?.[1];
+      const sizeHalfPoints = Number(/<w:sz\b[^>]*w:val="(\d{1,4})"/.exec(capsule)?.[1] ?? NaN);
+
+      return {
+        ...(font ? { fontFamily: font } : {}),
+        ...(Number.isFinite(sizeHalfPoints) ? { fontSizeHalfPoints: sizeHalfPoints } : {}),
+        ...(run.props?.styleId ? { styleId: run.props.styleId } : {}),
+      };
+    },
 
     /** STUB — needs a text search over the canonical model with grapheme-safe offsets. */
     findMatches: (_query: string) => [],
