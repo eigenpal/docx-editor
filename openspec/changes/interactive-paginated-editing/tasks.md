@@ -283,13 +283,22 @@ Not the formal public **`interactive-paginated`** claim (that remains **8.10**).
     registry by `scripts/extract-icons.mjs` — so Vue is never hand-edited and the two
     adapters cannot drift.
 
-  Note the layering consequence: icons are ADAPTER-specific in the retired design, but the
-  greenfield descriptor puts them in `engine-editor` so both adapters read one list. Either
-  the descriptor carries icon NAMES and each adapter resolves them through its own
-  registry (matches the retired split, keeps `extract-icons.mjs` meaningful), or the
-  registry moves into the shared package (contradicts it). Decide before wiring; the
-  descriptor's control ids are already the natural key. Core keeps only SVGs tied to
-  framework-independent document behavior.
+  **Layering decision (made, not open): the descriptor carries icon NAMES; each adapter
+  resolves them through its own registry.** Icons are adapter-specific in the retired
+  design, while the greenfield descriptor lives in `engine-editor` so both adapters read
+  one control list. Carrying names satisfies both: `engine-editor` owns WHICH control
+  shows WHICH icon (shared, so the adapters cannot drift on ordering or coverage), and each
+  adapter owns HOW that name becomes SVG — which is what keeps `scripts/extract-icons.mjs`
+  meaningful, since it regenerates Vue's JSON from React's registry. Moving the registry
+  into the shared package would make that generator pointless and put presentation in the
+  engine. Core keeps only SVGs tied to framework-independent document behavior.
+
+  Mechanically: replace `paths: readonly string[] | null` on `LegacyChromeControl` with
+  `icon: string | null` (the registry's export name minus the `Icon` prefix, e.g.
+  `'Undo'`), port `Icons.tsx` verbatim into `packages/react/src/components/ui/`, resolve
+  by name in `DocxEditorToolbar.tsx`, and fail loudly on an unknown name rather than
+  rendering an empty box. A missing icon must break the build or a test, never render
+  blank — CLAUDE.md's existing warning is that a missing name renders raw text.
 
   Pass boundary: no `d=` string is authored by hand anywhere in the chrome path;
   `scripts/extract-icons.mjs` regenerates Vue's JSON from the React registry; a
