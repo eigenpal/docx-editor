@@ -1256,3 +1256,91 @@ export async function readFromClipboard(_event?: unknown): Promise<ParsedClipboa
 // imports, so the real `pictureWatermarkDisplayEmu` and `DEFAULT_WATERMARK_PRESETS` are
 // available rather than the empty versions I first wrote.
 export * from './lib/watermark';
+
+// --- Sidebar shapes ---------------------------------------------------------------------
+// Shared adapter presentation and compatibility behavior.
+export interface Comment {
+  /** Comment ID (matches commentRangeStart/End) */
+  id: number;
+  /** Author name */
+  author: string;
+  /** Author initials */
+  initials?: string;
+  /** Date */
+  date?: string;
+  /** Comment content (paragraphs) */
+  content: Paragraph[];
+  /** Parent comment ID (for replies) */
+  parentId?: number;
+  /** Whether the comment is resolved/done */
+  done?: boolean;
+}
+
+export interface Paragraph {
+  type: 'paragraph';
+  /** Unique paragraph ID */
+  paraId?: string;
+  /** Text ID */
+  textId?: string;
+  /** Paragraph formatting */
+  formatting?: ParagraphFormatting;
+  /** Paragraph-level tracked property changes (w:pPrChange) */
+  propertyChanges?: ParagraphPropertyChange[];
+  /**
+   * Paragraph-mark insertion tracking (`<w:pPr><w:rPr><w:ins/>`). Set when
+   * this paragraph's terminating pilcrow was added as a tracked change —
+   * e.g., the user pressed Enter mid-paragraph in suggesting mode. Reject
+   * joins this paragraph with the following one.
+   */
+  pPrIns?: TrackedChangeInfo;
+  /**
+   * Paragraph-mark deletion tracking (`<w:pPr><w:rPr><w:del/>`). Set when
+   * this paragraph's terminating pilcrow was deleted as a tracked change —
+   * e.g., the user pressed Backspace at the start of the next paragraph in
+   * suggesting mode. Accept joins this paragraph with the following one.
+   */
+  pPrDel?: TrackedChangeInfo;
+  /** Paragraph content */
+  content: ParagraphContent[];
+  /**
+   * Block-level bookmark markers that sit as direct children of the parent
+   * block container (`w:body`/`w:tc`/`w:sdtContent`) immediately BEFORE this
+   * paragraph's `w:p`, i.e. `<w:bookmarkStart/><w:p>`. OOXML allows
+   * `w:bookmarkStart`/`w:bookmarkEnd` between paragraphs; the block content
+   * model only carries paragraphs/tables/SDTs, so these markers ride on the
+   * adjacent block to survive the round trip. Side (leading vs trailing) is
+   * chosen from the marker's position so start/end nesting is preserved.
+   */
+  leadingBlockMarkers?: (BookmarkStart | BookmarkEnd)[];
+  /**
+   * Block-level bookmark markers that sit immediately AFTER this paragraph's
+   * `w:p` (e.g. `<w:p></w:p><w:bookmarkEnd/>`). See {@link leadingBlockMarkers}.
+   */
+  trailingBlockMarkers?: (BookmarkStart | BookmarkEnd)[];
+  /** Computed list rendering (if this is a list item) */
+  listRendering?: ListRendering;
+  /** Word's cached layout says this paragraph started on a new rendered page. */
+  renderedPageBreakBefore?: boolean;
+  /**
+   * Source paragraph began with a literal `<w:br w:type="page"/>`. Layout treats
+   * it like `pageBreakBefore`; serialization uses this flag to keep the original
+   * hard-break shape instead of canonicalizing it to paragraph properties.
+   */
+  sourceLeadingPageBreak?: boolean;
+  /** Synthetic empty paragraph inserted after a terminal column break for PM layout only. */
+  sourceColumnBreakContinuation?: boolean;
+  /** Section properties (if this paragraph ends a section) */
+  sectionProperties?: SectionProperties;
+}
+// Siblings named by the shared Paragraph. Opaque: the sidebar cards carry paragraph
+// values through without inspecting these fields, and pulling the whole legacy content
+// model across for them would import the document tree this engine replaced.
+export interface ParagraphContent {
+  type: string;
+  text: string;
+  content: ParagraphContent[];
+  [key: string]: unknown;
+}
+export interface ListRendering { [key: string]: unknown }
+export interface ParagraphPropertyChange { [key: string]: unknown }
+export interface TrackedChangeInfo { [key: string]: unknown }
