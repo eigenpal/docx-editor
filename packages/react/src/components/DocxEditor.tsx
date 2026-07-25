@@ -26,6 +26,8 @@ import { useWatermarkControls } from './DocxEditor/hooks/useWatermarkControls';
 import { usePageSetupControls } from './DocxEditor/hooks/usePageSetupControls';
 import { useActiveEditor } from './DocxEditor/hooks/useActiveEditor';
 import { useTableOfContentsActions } from './DocxEditor/hooks/useTableOfContentsActions';
+import { useFloatingCommentBtn } from './DocxEditor/hooks/useFloatingCommentBtn';
+import { MaterialSymbol } from './ui/Icons';
 import {
   useSelectionTracker,
   type SelectionStateDelta,
@@ -391,6 +393,9 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
     // first handler identity. A ref keeps that subscriber calling the CURRENT one.
     const handleSelectionChangeRef = useRef(handleSelectionChange);
     handleSelectionChangeRef.current = handleSelectionChange;
+    // Assigned below, once `useFloatingCommentBtn` has run — the editor's subscriber is
+    // created once and reads whatever is current at fire time.
+    const recomputeFloatingCommentBtnRef = useRef<() => void>(() => {});
 
     // Collect headings on open, as legacy did — it walked the editing engine's
     // document tree; here the engine derives the outline from the authored model.
@@ -462,6 +467,7 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
       const offSelection = editor.on('selectionChange', () => {
         syncFromFrame();
         handleSelectionChangeRef.current();
+        recomputeFloatingCommentBtnRef.current();
       });
       const offDisplay = editor.on('display', () => syncFromFrame());
       syncFromFrame();
@@ -572,6 +578,26 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
     const minLayoutWidth =
       2 * outlineLeftAllowance + maxPageWidthPx + (sidebarOpen ? SIDEBAR_DOCUMENT_SHIFT * 2 : 0);
 
+    // The floating "Add comment" button beside a selection, ported. It is positioned
+    // from the engine's selection geometry and page box; `onAddComment` below is what
+    // it would fan out to once comments exist.
+    const isAddingCommentRef = useRef(false);
+    const [floatingCommentBtn, setFloatingCommentBtn] = useState<{
+      top: number;
+      left: number;
+    } | null>(null);
+    const { recomputeFloatingCommentBtn } = useFloatingCommentBtn({
+      editorRef,
+      scrollContainerRef: scrollRef,
+      pagesContainerRef: pagesRef,
+      isAddingCommentRef,
+      setFloatingCommentBtn,
+      readOnly: false,
+      isLoading: pages.length === 0,
+      zoom: zoomFactor,
+    });
+    recomputeFloatingCommentBtnRef.current = recomputeFloatingCommentBtn;
+
     // The floating page pill: current page, total, and the fade-out after scrolling
     // stops — all from the legacy hook, reading the engine instead of a layout object.
     const { scrollPageInfo } = useScrollPageInfo({
@@ -601,6 +627,46 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
         bodyRef={bodyRef}
         hosted={chromeOn}
         className={className}
+        overlayChildren={
+          floatingCommentBtn != null && (
+            <button
+              type="button"
+              title="Add comment"
+              onMouseDown={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                // Legacy marked the range with a pending comment mark here before
+                // opening the sidebar. The engine has no comment vocabulary, so this
+                // opens the sidebar and records where the card should sit; the mark
+                // lands when `getComments` and its command counterpart do.
+                setShowCommentsSidebar(true);
+                isAddingCommentRef.current = true;
+                setFloatingCommentBtn(null);
+              }}
+              style={{
+                position: 'absolute',
+                top: floatingCommentBtn.top,
+                left: floatingCommentBtn.left,
+                transform: 'translate(-50%, -50%)',
+                zIndex: 50,
+                width: 28,
+                height: 28,
+                borderRadius: 6,
+                border: '1px solid var(--doc-focus-ring)',
+                backgroundColor: 'var(--doc-surface)',
+                color: 'var(--doc-primary)',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                boxShadow: '0 1px 3px var(--doc-shadow)',
+                transition: 'background-color 0.15s ease, box-shadow 0.15s ease',
+              }}
+            >
+              <MaterialSymbol name="add_comment" size={16} />
+            </button>
+          )
+        }
       />
     );
 

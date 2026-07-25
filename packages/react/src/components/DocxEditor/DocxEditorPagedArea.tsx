@@ -20,7 +20,7 @@
  *    so hit testing is a plain subtract-and-divide.
  *  - `inputHost` is where the hidden semantic projection mounts.
  */
-import type { RefObject } from 'react';
+import type { ReactNode, RefObject } from 'react';
 import type { DisplayPage } from '@docx-editor.dev/core-contract/geometry';
 import type { FrameOverlays, GlyphClickTarget } from '@docx-editor.dev/engine-editor';
 import { paintDisplay } from '../../paintDisplay';
@@ -40,6 +40,12 @@ export interface DocxEditorPagedAreaProps {
   /** True when rendered inside the shell, which owns scrolling. */
   hosted: boolean;
   className?: string | undefined;
+  /**
+   * Absolutely-positioned affordances that sit over the pages — today the floating
+   * "Add comment" button. Legacy rendered them inside this component; they arrive as a
+   * slot so the button's own markup stays in one place with the state that drives it.
+   */
+  overlayChildren?: ReactNode;
 }
 
 export function DocxEditorPagedArea({
@@ -52,6 +58,7 @@ export function DocxEditorPagedArea({
   bodyRef,
   hosted,
   className,
+  overlayChildren,
 }: DocxEditorPagedAreaProps) {
   return (
     <div
@@ -74,6 +81,7 @@ export function DocxEditorPagedArea({
         className="ep-one-surface__input-host"
         style={{ position: 'fixed', width: 0, height: 0, overflow: 'visible', pointerEvents: 'none' }}
       />
+      {overlayChildren}
     </div>
   );
 }
