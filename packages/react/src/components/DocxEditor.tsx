@@ -18,6 +18,7 @@ import { DocxEditorTitleBar } from './DocxEditor/DocxEditorTitleBar';
 import { DocxEditorMenuBar } from './DocxEditor/DocxEditorMenuBar';
 import { DocxEditorToolbar } from './DocxEditor/DocxEditorToolbar';
 import { DocxEditorSidebar } from './DocxEditor/DocxEditorSidebar';
+import { BrandLogo } from './ui/BrandLogo';
 import { HorizontalRuler } from './ui/HorizontalRuler';
 import { Z_INDEX } from '../styles/zIndex';
 import type { SectionProperties } from '../legacy-core-compat';
@@ -330,16 +331,11 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
             save already has its toolbar control. */}
         <div className="flex flex-shrink-0 items-center gap-3 border-b border-border bg-background px-3.5 py-1.5">
           <div className="flex items-center gap-2">
-            <svg viewBox="0 -960 960 960" width="26" height="26" aria-hidden="true" focusable="false">
-              <path
-                d="M320-240h320v-80H320v80Zm0-160h320v-80H320v80ZM240-80q-33 0-56.5-23.5T160-160v-640q0-33 23.5-56.5T240-880h320l240 240v480q0 33-23.5 56.5T720-80H240Zm280-520v-200H240v640h480v-440H520Z"
-                fill="currentColor"
-              />
-            </svg>
-            <span className="inline-flex flex-col gap-px">
-              <span className="whitespace-nowrap text-[15px] font-semibold leading-[1.1] tracking-[-0.005em] text-foreground">{t('app.name')}</span>
-              <span className="inline-flex items-center gap-1 text-[11px] leading-[1.1] text-muted-foreground">{t('app.by')}</span>
-            </span>
+            {/* The real lockup — `BrandLogo`, the same component the docx-editor.dev
+                header uses (DocxIcon + wordmark + the EigenPal mark). It replaces the
+                icon and text the interim implementation had here, including the asterisk that mark
+                carries and my version never had. */}
+            <BrandLogo />
             {/* Framework segmented toggle. Parity-only: this build IS the React adapter,
                 and Vue chrome is task 10V.1. */}
             <span className="inline-flex items-center rounded-lg border border-border bg-muted p-0.5" role="group" aria-label={t('app.framework')}>
