@@ -21,7 +21,11 @@ describe('React one-surface wiring (task 6.2)', () => {
     expect(editorSource).toContain('attachAdapterEventBridge');
     // The adapter must not hand-roll listeners for input the bridge owns —
     // that is exactly how React and Vue drift apart.
-    for (const forbidden of ['onPointerDown=', 'onPointerMove=', 'onPointerUp=', 'onClick=', 'onKeyDown=']) {
+    // `onClick=` is NOT forbidden: the ported legacy components take click handlers for
+    // their buttons (the outline toggle, header actions), and legacy's own DocxEditor
+    // passes them. What must not appear is pointer/keyboard handling for the painted
+    // surface, which is what the bridge owns and what actually drifts between adapters.
+    for (const forbidden of ['onPointerDown=', 'onPointerMove=', 'onPointerUp=', 'onKeyDown=']) {
       expect(editorSource).not.toContain(forbidden);
     }
   });
