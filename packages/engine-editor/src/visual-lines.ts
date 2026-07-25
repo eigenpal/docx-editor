@@ -1,6 +1,6 @@
 // Build layout-authoritative visual line records for keyboard navigation (task 5.5).
 
-import type { SemanticPositionIndex } from '@docx-editor.dev/core-contract/interaction';
+import type { BlockSemanticRecord, SemanticPositionIndex } from '@docx-editor.dev/core-contract/interaction';
 import type { PackageModel } from '@docx-editor.dev/engine-core';
 import type { CaretEdgeItem, Page, VisualLineIdentity as LayoutLineIdentity } from '@docx-editor.dev/engine-layout';
 import { caretAffinity, paragraphGraphemeCountById, paragraphTextById, twipsToPx } from './semantic-index.ts';
@@ -13,8 +13,32 @@ import type {
 
 const px = twipsToPx;
 
-function blockRecord(index: SemanticPositionIndex, blockId: string) {
-  return index.stories.flatMap((s) => s.blocks).find((b) => b.identity.blockId === blockId);
+/**
+ * Block records by id, indexed once per semantic index.
+ *
+ * This allocated a flattened array of EVERY block and then linear-searched it, on
+ * every call — and it is called per caret edge, i.e. once per character. That made
+ * `buildVisualLines` the dominant quadratic in display publication: independent
+ * review measured an ORDINARY 4,000-paragraph / 38 KB / 75-page document (plain
+ * sentences, one run each) freezing `createEditor()` for 120.7 s on open and again on
+ * every keystroke, with 8,000 paragraphs taking 8.9 minutes. After the other three
+ * bridge terms were indexed, `buildVisualLines` alone still accounted for 6,361 ms of
+ * a 6,601 ms publish at 4,000 paragraphs — this call is why.
+ *
+ * Keyed on the index object, which is rebuilt per layout.
+ */
+const blockRecordCache = new WeakMap<SemanticPositionIndex, Map<string, BlockSemanticRecord>>();
+
+function blockRecord(index: SemanticPositionIndex, blockId: string): BlockSemanticRecord | undefined {
+  let byId = blockRecordCache.get(index);
+  if (!byId) {
+    byId = new Map();
+    for (const story of index.stories) {
+      for (const block of story.blocks) byId.set(block.identity.blockId, block);
+    }
+    blockRecordCache.set(index, byId);
+  }
+  return byId.get(blockId);
 }
 
 function roleForBlock(index: SemanticPositionIndex, blockId: string) {

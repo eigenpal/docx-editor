@@ -8,28 +8,50 @@ import { caretAffinity, twipsToPx } from './semantic-index.ts';
 
 const px = twipsToPx;
 
-function caretXByGraphemeOffset(pages: readonly Page[], paragraphId: string): Map<number, number> {
-  const map = new Map<number, number>();
-  for (const page of pages) {
-    for (const item of page.items) {
-      if (item.type !== 'caretEdge' || item.paragraphId !== paragraphId) continue;
-      const x = px(item.x);
-      const prev = map.get(item.graphemeOffset);
-      if (prev === undefined || x < prev) map.set(item.graphemeOffset, x);
-    }
-  }
-  return map;
+interface ParagraphEdgeIndex {
+  readonly xByOffset: Map<number, number>;
+  readonly horizontal: Set<number>;
 }
 
-function horizontalNavigableOffsets(pages: readonly Page[], paragraphId: string): Set<number> {
-  const out = new Set<number>();
-  for (const page of pages) {
-    for (const item of page.items) {
-      if (item.type !== 'caretEdge' || item.paragraphId !== paragraphId) continue;
-      if (item.horizontalNavigable) out.add(item.graphemeOffset);
+/**
+ * Caret-edge index for EVERY paragraph, built in one pass over the pages.
+ *
+ * These two helpers each scanned every item on every page and were called once per
+ * painted text item, so publishing a display list was O(items x items). Independent
+ * review attributed 33.6% of a 6-second `createEditor()` to exactly these two
+ * functions in a CPU profile, and measured the whole bridge at growth exponent 1.95
+ * over four doublings.
+ *
+ * Keyed on the `pages` array identity: `layoutBody` returns a fresh array per
+ * layout, so a new layout naturally gets a new index without explicit eviction, and
+ * a WeakMap lets the old one be collected with its pages. One entry is enough
+ * because `toDisplayPages` processes one layout at a time, but a WeakMap costs
+ * nothing extra and is robust if that stops being true.
+ */
+const edgeIndexCache = new WeakMap<readonly Page[], Map<string, ParagraphEdgeIndex>>();
+
+function edgeIndexFor(pages: readonly Page[], paragraphId: string): ParagraphEdgeIndex {
+  let byParagraph = edgeIndexCache.get(pages);
+  if (!byParagraph) {
+    byParagraph = new Map();
+    // ONE pass over every page, indexing all paragraphs at once.
+    for (const page of pages) {
+      for (const item of page.items) {
+        if (item.type !== 'caretEdge') continue;
+        let entry = byParagraph.get(item.paragraphId);
+        if (!entry) {
+          entry = { xByOffset: new Map<number, number>(), horizontal: new Set<number>() };
+          byParagraph.set(item.paragraphId, entry);
+        }
+        const x = px(item.x);
+        const prev = entry.xByOffset.get(item.graphemeOffset);
+        if (prev === undefined || x < prev) entry.xByOffset.set(item.graphemeOffset, x);
+        if (item.horizontalNavigable) entry.horizontal.add(item.graphemeOffset);
+      }
     }
+    edgeIndexCache.set(pages, byParagraph);
   }
-  return out;
+  return byParagraph.get(paragraphId) ?? { xByOffset: new Map(), horizontal: new Set() };
 }
 
 /** Build grapheme clusters for one painted slice from layout caret edges only. */
@@ -42,8 +64,7 @@ export function clustersFromLayoutCaretEdges(
   paragraphGraphemeCount: number,
   direction: 'ltr' | 'rtl' = 'ltr',
 ): ShapedCluster[] {
-  const xByOffset = caretXByGraphemeOffset(pages, paragraphId);
-  const horizontal = horizontalNavigableOffsets(pages, paragraphId);
+  const { xByOffset, horizontal } = edgeIndexFor(pages, paragraphId);
   const segments = segmentGraphemes(sliceText);
   if (segments.length === 0) return [];
 

@@ -345,17 +345,76 @@ export function semanticTextSpan(
   };
 }
 
-export function paragraphTextById(model: PackageModel, paragraphId: string, storyId = bodyStoryId(model)): string {
+/**
+ * Paragraph text by id, indexed once per (model, story).
+ *
+ * This walked the ENTIRE story and re-joined every run on every call, and
+ * `toDisplayPages` calls it once per text item AND once per caret edge — i.e. once
+ * per character. That made publishing a display list quadratic in document size,
+ * independently of anything in `layoutBody`.
+ *
+ * Independent review measured it on ORDINARY documents, no crafted markup: plain
+ * sentences, one run per paragraph, realistic zip ratio.
+ *
+ *   500 paragraphs  (6 KB, 10 pages)  createEditor()   1.72 s
+ *   1,000           (11 KB, 19 pages)                  8.27 s
+ *   2,000           (20 KB, 38 pages)                 23.5 s
+ *   4,000           (38 KB, 75 pages)                120.7 s
+ *   8,000           (75 KB, 149 pages)               534 s  (8.9 min)
+ *
+ * A 75-page Word document froze the main thread for two minutes on open and again
+ * on every keystroke. Four prior rounds hunted this in `layoutBody`, where it never
+ * was; the cost guards added for it instrument `layoutBody` and therefore read
+ * perfectly linear on inputs that freeze the product for 20+ seconds.
+ *
+ * Keyed on the model, which is immutable — `store.apply` produces a new one — so a
+ * commit naturally invalidates the index rather than needing explicit eviction. A
+ * WeakMap keeps it collectable with the model.
+ */
+const paragraphTextIndex = new WeakMap<PackageModel, Map<string, Map<string, string>>>();
+
+function paragraphTextsForStory(model: PackageModel, storyId: string): Map<string, string> {
+  let perStory = paragraphTextIndex.get(model);
+  if (!perStory) {
+    perStory = new Map();
+    paragraphTextIndex.set(model, perStory);
+  }
+  const cached = perStory.get(storyId);
+  if (cached) return cached;
+
+  const texts = new Map<string, string>();
   const story = model.stories.get(storyId);
-  if (!story) return '';
-  const located: LocatedParagraph[] = [];
-  walkParagraphs(story.blocks, { inTopLevelBodyFlow: storyId === bodyStoryId(model), inTableCell: storyId !== bodyStoryId(model) }, located);
-  const found = located.find((l) => l.paragraph.id === paragraphId);
-  return found ? paragraphText(found.paragraph) : '';
+  if (story) {
+    const located: LocatedParagraph[] = [];
+    walkParagraphs(
+      story.blocks,
+      { inTopLevelBodyFlow: storyId === bodyStoryId(model), inTableCell: storyId !== bodyStoryId(model) },
+      located,
+    );
+    for (const l of located) texts.set(l.paragraph.id, paragraphText(l.paragraph));
+  }
+  perStory.set(storyId, texts);
+  return texts;
 }
 
+export function paragraphTextById(model: PackageModel, paragraphId: string, storyId = bodyStoryId(model)): string {
+  return paragraphTextsForStory(model, storyId).get(paragraphId) ?? '';
+}
+
+/** Grapheme count by paragraph id, memoized alongside the text for the same reason. */
+const paragraphGraphemeCounts = new WeakMap<PackageModel, Map<string, number>>();
+
 export function paragraphGraphemeCountById(model: PackageModel, paragraphId: string): number {
-  return graphemeCount(paragraphTextById(model, paragraphId));
+  let counts = paragraphGraphemeCounts.get(model);
+  if (!counts) {
+    counts = new Map();
+    paragraphGraphemeCounts.set(model, counts);
+  }
+  const cached = counts.get(paragraphId);
+  if (cached !== undefined) return cached;
+  const value = graphemeCount(paragraphTextById(model, paragraphId));
+  counts.set(paragraphId, value);
+  return value;
 }
 
 export const twipsToPx = (twips: number): number => twips / 15;

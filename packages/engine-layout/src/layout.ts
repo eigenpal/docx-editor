@@ -310,7 +310,41 @@ function columnWidths(table: TableRecord, contentWidth: number): number[] {
       return Number.isFinite(tw) && tw > 0 ? Math.round(tw) : Math.round(contentWidth / table.grid!.length);
     });
   }
-  const colCount = Math.max(1, ...table.rows.map((r) => r.cells.reduce((n, c) => n + Math.max(1, c.props?.gridSpan ?? 1), 0)));
+  // Two separate file-driven hazards live in this one line, both found by review.
+  //
+  // 1. `gridSpan` came straight from the file into `Array.from({ length })`, the
+  //    pattern CLAUDE.md forbids outright ("never feed a file-supplied number into
+  //    allocation"). `intAttr` has no upper bound, so a 965-BYTE .docx with one
+  //    table, one row, one cell and `<w:gridSpan w:val="500000000"/>` allocated
+  //    12.9 GB and spent 107 s in `layoutBody` — an immediate OOM kill in a tab,
+  //    zero clicks, on open. `layoutBody` runs synchronously from `loadSource`
+  //    inside no `try`, so there is no graceful path either.
+  // 2. `Math.max(1, ...rows.map(...))` spreads one argument per ROW. V8 throws
+  //    `RangeError: Maximum call stack size exceeded` above ~130,000 arguments, and
+  //    review proved a 652 KB .docx (8.4 MB XML, zip ratio 13 — inside every limit)
+  //    reaching exactly that. The editor would die on open in Chrome rather than be
+  //    slow. JSC tolerates 200,000 arguments, which is why `bun test` can never
+  //    catch it: the repo's runner is the one engine that does not throw.
+  //
+  // So: accumulate with a fold (no spread, no arity limit), clamp each cell's span
+  // before it is summed, and clamp the total. `MAX_TABLE_COLUMNS` is far above
+  // anything Word authors (its UI caps at 63) while keeping the allocation bounded.
+  const MAX_TABLE_COLUMNS = 1024;
+  let colCount = 1;
+  for (const row of table.rows) {
+    let rowCols = 0;
+    for (const cell of row.cells) {
+      const span = cell.props?.gridSpan;
+      const safeSpan = Number.isInteger(span) && span! > 1 ? Math.min(span!, MAX_TABLE_COLUMNS) : 1;
+      rowCols += safeSpan;
+      if (rowCols >= MAX_TABLE_COLUMNS) break;
+    }
+    if (rowCols > colCount) colCount = rowCols;
+    if (colCount >= MAX_TABLE_COLUMNS) {
+      colCount = MAX_TABLE_COLUMNS;
+      break;
+    }
+  }
   const w = Math.floor(contentWidth / colCount);
   return Array.from({ length: colCount }, () => w);
 }

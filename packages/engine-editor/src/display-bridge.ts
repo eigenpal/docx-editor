@@ -10,12 +10,13 @@ import type {
 import type {
   AffineTransform,
   InteractionFrame,
+  BlockSemanticRecord,
   SemanticPositionIndex,
 } from '@docx-editor.dev/core-contract/interaction';
 import type { ColorValue, Rect, ViewScope } from '@docx-editor.dev/core-contract/editor';
 import type { PositionedInteractionMeta } from '@docx-editor.dev/core-contract/interaction';
 import type { PackageModel } from '@docx-editor.dev/engine-core';
-import type { Page, TextItem, RectItem } from '@docx-editor.dev/engine-layout';
+import type { CaretEdgeItem, Page, TextItem, RectItem } from '@docx-editor.dev/engine-layout';
 import { HelveticaMetrics, semanticHorizontalBoundaries, type MetricsPort } from '@docx-editor.dev/engine-layout';
 import {
   buildSemanticIndex,
@@ -69,10 +70,45 @@ function unionRect(a: Rect, b: Rect): Rect {
   return { x, y, width: right - x, height: bottom - y };
 }
 
+/**
+ * Caret edges grouped by paragraph, in ONE pass over the pages.
+ *
+ * `whitespaceBoxFromCaretEdges` scanned every item on every page, and it is called
+ * once per `lineWhitespace` ownership region — one or more per paragraph. That made
+ * it O(regions x items), the dominant term of four independent quadratics review
+ * measured in `toDisplayPages`: an ORDINARY 4,000-paragraph / 38 KB / 75-page
+ * document froze `createEditor()` for 120.7 s on open and again on every keystroke,
+ * and 8,000 paragraphs took 8.9 minutes. Nothing crafted — plain sentences, one run
+ * per paragraph.
+ *
+ * Keyed on the `pages` array identity, which `layoutBody` returns fresh per layout,
+ * so a new layout gets a new index with no explicit eviction.
+ */
+const edgesByParagraphCache = new WeakMap<readonly Page[], Map<string, CaretEdgeItem[]>>();
+
+function caretEdgesForParagraph(pages: readonly Page[], paragraphId: string): readonly CaretEdgeItem[] {
+  let byParagraph = edgesByParagraphCache.get(pages);
+  if (!byParagraph) {
+    byParagraph = new Map();
+    for (const page of pages) {
+      for (const item of page.items) {
+        if (item.type !== 'caretEdge') continue;
+        const list = byParagraph.get(item.paragraphId);
+        if (list) list.push(item);
+        else byParagraph.set(item.paragraphId, [item]);
+      }
+    }
+    edgesByParagraphCache.set(pages, byParagraph);
+  }
+  return byParagraph.get(paragraphId) ?? [];
+}
+
 function whitespaceBoxFromCaretEdges(
   pages: readonly Page[],
   paragraphId: string,
-  pageIndex: number,
+  // Retained for call-site clarity: the paragraph's edges are already page-scoped by
+  // the grouped index, so filtering by page here would be redundant.
+  _pageIndex: number,
   graphemeFrom: number,
   graphemeTo: number,
 ): Rect | undefined {
@@ -80,10 +116,10 @@ function whitespaceBoxFromCaretEdges(
   let right: number | undefined;
   let y: number | undefined;
   let height: number | undefined;
-  for (const page of pages) {
-    if (page.index !== pageIndex) continue;
-    for (const item of page.items) {
-      if (item.type !== 'caretEdge' || item.paragraphId !== paragraphId || !item.navigable) continue;
+  {
+    // Only this paragraph's edges, not every item on every page.
+    for (const item of caretEdgesForParagraph(pages, paragraphId)) {
+      if (!item.navigable) continue;
       if (item.graphemeOffset === graphemeFrom) {
         left = px(item.x);
         y = px(item.y);
@@ -149,6 +185,29 @@ export interface DisplayBridgeResult {
   readonly navigationGeometry: NavigationGeometry;
 }
 
+/**
+ * Block records by id, per semantic index.
+ *
+ * `stories[0].blocks.find(...)` ran once per painted text item, so publishing a
+ * display list was O(items x blocks). On an ordinary 8,000-paragraph document that
+ * is 64 million comparisons, and it was one of four independent quadratic terms
+ * review measured in `toDisplayPages` (whole-bridge exponent 1.95). Keyed on the
+ * index object, which is rebuilt per layout.
+ */
+const blocksByIdCache = new WeakMap<SemanticPositionIndex, Map<string, BlockSemanticRecord>>();
+
+function blockRecordById(index: SemanticPositionIndex, blockId: string): BlockSemanticRecord | undefined {
+  let byId = blocksByIdCache.get(index);
+  if (!byId) {
+    byId = new Map();
+    for (const story of index.stories) {
+      for (const block of story.blocks) byId.set(block.identity.blockId, block);
+    }
+    blocksByIdCache.set(index, byId);
+  }
+  return byId.get(blockId);
+}
+
 function textItem(
   model: PackageModel,
   storyId: string,
@@ -182,7 +241,7 @@ function textItem(
     paragraphGraphemeCount,
   );
   const legacy = deprecatedFlatDocOffset(semanticIndex, it.anchor.paragraphId, utf16From, utf16To);
-  const block = semanticIndex.stories[0]?.blocks.find((b) => b.identity.blockId === it.anchor.paragraphId);
+  const block = blockRecordById(semanticIndex, it.anchor.paragraphId);
   const role = block?.readOnly ? 'selectableText' : 'editableText';
   return {
     kind: 'text',
@@ -252,7 +311,7 @@ export function toDisplayPages(
 
   const enrichedIndex = enrichOwnershipRegions(pages, display, semanticIndex);
   const { metaBySliceKey, conflicts } = collectFragmentMetaFromLayout(pages, (paragraphId) => {
-    const block = enrichedIndex.stories[0]?.blocks.find((b) => b.identity.blockId === paragraphId);
+    const block = blockRecordById(enrichedIndex, paragraphId);
     return block?.readOnly ? 'selectableText' : 'editableText';
   });
   const semanticHorizontalBoundariesByBlockId: Record<string, readonly number[]> = {};

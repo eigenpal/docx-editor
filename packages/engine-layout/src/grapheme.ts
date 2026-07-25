@@ -75,9 +75,36 @@ export function graphemeBoundaryEpoch(): number {
 let memoText: string | null = null;
 let memoSegments: readonly GraphemeSegment[] | null = null;
 
+/**
+ * Secondary memo slot.
+ *
+ * ONE entry is not enough. Two different texts are interleaved on the hot path — a
+ * paragraph's full text and the text of a painted slice within it — so a single slot
+ * thrashes and every call is a full `Intl.Segmenter` pass. That is the same shape as
+ * the round-3 defect (a token evicting the paragraph), and review measured it again
+ * in `toDisplayPages`: segmented characters grew at exponent 2.00, reaching 3,202x
+ * the paragraph length.
+ *
+ * Two slots with a move-to-front swap, not a Map: the keys are file-derived strings
+ * of unbounded size, so a growing cache would trade a freeze for a leak.
+ */
+let memoText2: string | null = null;
+let memoSegments2: readonly GraphemeSegment[] | null = null;
+
 export function segmentGraphemes(text: string): readonly GraphemeSegment[] {
   if (memoText === text && memoSegments) return memoSegments;
+  if (memoText2 === text && memoSegments2) {
+    // Promote, so the two live texts stay resident whichever order they arrive in.
+    const segments = memoSegments2;
+    memoText2 = memoText;
+    memoSegments2 = memoSegments;
+    memoText = text;
+    memoSegments = segments;
+    return segments;
+  }
   const segments = activeBoundary.segment(text);
+  memoText2 = memoText;
+  memoSegments2 = memoSegments;
   memoText = text;
   memoSegments = segments;
   return segments;
@@ -121,6 +148,8 @@ function clearGraphemeMemo(): void {
   boundaryEpoch += 1;
   memoText = null;
   memoSegments = null;
+  memoText2 = null;
+  memoSegments2 = null;
   indexedText = null;
   indexedOffsets = null;
   indexedCount = 0;
