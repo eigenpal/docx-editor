@@ -74,3 +74,30 @@ A fixed-viewport screenshot of `http://localhost:5273/` matches
 `packages/react/src` contains a locally defined value rather than the shared one — no invented tokens,
 no hand-drawn paths, no approximated spacing. Every unsupported capability is a named stub
 on the public contract, not a missing control.
+
+---
+
+## Region-for-region comparison (measured, not remembered)
+
+Both surfaces loaded in the same Chrome tab at the same viewport and zoomed to the
+same region: `https://latest.docx-editor.dev/react/` vs `http://localhost:5273/`.
+
+**Matching:** brand lockup incl. the EigenPal asterisk (`BrandLogo`), React/Vue toggle,
+theme toggle, title + menu row layout, toolbar band and its rounded pill, control groups
+and separators, all 26 icons, horizontal ruler with grey margin zones, font-size box,
+page chip, painted pages.
+
+**Differing, with cause:**
+
+| Region | Reference | Ours | Cause |
+| --- | --- | --- | --- |
+| After React/Vue toggle | a rounded-rect `˅` button | absent | Lives in the deployed demo; not in `the earlier editor implementation`. Source not located — do NOT invent one. |
+| Primary action label | "Open DOCX" | "Open" | Retired hardcodes the string in the DEMO (`App.tsx:853`). Ours is `t('toolbar.open')`, because CLAUDE.md forbids hardcoded English in an adapter. Resolves when the header moves to the demo. |
+| Style / font pickers | "Normal", "Arial" | "Normal text", "S…" | `getDocumentStyles`/`getDocumentFonts` are stubs, so the pickers show placeholders. Truncation is retired's own `width={60}` + `truncate`. |
+| Bold button | dark active slab | inactive | `isActive` is a stub returning false. Correct: it must not claim bold is on. |
+| Ruler | blue first-line/indent markers | zones only, no markers | Markers need paragraph indents at the selection — `getSelectionFormatting` is a stub. |
+| Menu items | darker, tighter | lighter, wider | Authored by me. Fixes when the header moves to the demo. |
+
+Every difference is either a STUB doing its job honestly, or a region whose retired source
+is the demo rather than the adapter. None is an invented value that needs re-tuning — that
+class of defect is now closed.
