@@ -287,7 +287,20 @@ Not the formal public **`interactive-paginated`** claim (that remains **8.10**).
 
   Follow the `Editor.isActive` precedent the owner set: extend the public shape (add
   `contentBox: Rect` to `DisplayPage` and surface it through `getPageGeometry`), return
-  the real values above, and wire both rulers to read it. Correct wiring first; the ruler lights up when
+  the real values above, and wire both rulers to read it.
+
+  **Exact chain, traced — five edits, no unknowns:**
+  1. `packages/engine-layout/src/layout.ts:57` — `PageBuilder` takes only `(width,
+     height)`; add `margin` and emit `contentBox` in `break()` (line 73), where the page
+     object `{ index, width, height, items }` is created.
+  2. `layoutBody` (line 96) already destructures `margin` from `LayoutOptions` — pass it
+     to the `PageBuilder` constructor at line 99.
+  3. The internal `Page` type gains `contentBox`.
+  4. `packages/core/src/geometry.ts:153` — add `contentBox: Rect` to `DisplayPage`, and
+     carry it through the `Page` → `DisplayPage` conversion in `toDisplayPages`.
+  5. `getPageGeometry` currently returns `{ index, box }`; include `contentBox`, then
+     `HorizontalRuler`/`VerticalRuler` draw the zones from it (retired uses
+     `MARGIN_ZONE_COLOR = var(--doc-shadow-subtle)` with a 1px inner border). Correct wiring first; the ruler lights up when
   the values are real. Do NOT hardcode a default margin to make it look right.
 
   Note this change owns no section-geometry contract (M4.4 made the rulers deliberately
