@@ -101,3 +101,48 @@ page chip, painted pages.
 Every difference is either a STUB doing its job honestly, or a region whose retired source
 is the demo rather than the adapter. None is an invented value that needs re-tuning — that
 class of defect is now closed.
+
+## Port state (measured, not estimated)
+
+Provenance across `packages/react/src`, comparing every file against BOTH retired
+`react/src` and retired `core/src` (an earlier count compared only against `react/src`
+and so mislabelled every relocated core module as authored):
+
+**129 files — 61 byte-identical, 57 import-adapted, 11 authored.**
+
+The 11 authored files, and why each is:
+
+| File | Why it is not a copy |
+| --- | --- |
+| `components/DocxEditor.tsx` | The orchestrator. Retired's is 1,996 lines over ~20 hooks that read the editing engine's state and dispatch its commands; each needs a capability decision, not a copy. The largest open item. |
+| `types.ts` | This package's public props. |
+| `index.ts` | This package's barrel. |
+| `retired-core-compat.ts` | Supplies retired type names the implemented files import, so they need no edits beyond an import path. |
+| `hooks/useScrollPageInfo.ts` | Implemented, then adapted: the engine cannot answer which page is in the viewport (below), so it reads placement from the painted stack. |
+| `paintDisplay.tsx`, `rulerTicks.ts`, `useEditorSnapshot.ts`, `plugin-api/core-types.ts` | Greenfield painter/engine glue. `core-types.ts` is in fact byte-identical to retired `core/src/plugin-api/types.ts`; the audit misses it on filename. |
+
+### Named components
+
+Twelve of the thirteen components the goal names are implemented. `DocxEditorPagedArea` is
+NOT, deliberately: it wraps `PagedEditor`, retired's ProseMirror + layout painter, which
+rule 4 excludes. Its greenfield counterpart is `paintDisplay` + the `ep-one-surface`
+elements.
+
+### Capabilities
+
+Every capability the goal lists is a named method on `packages/core/src/editor.ts`.
+Derived for real: `getSelectionFormatting`, `getDocumentStyles`, `getDocumentFonts`,
+`getOutline`, `findMatches`, `getZoom`/`setZoom`. Honest stubs, each stating what
+deriving it requires: `isActive`, `getComments`, `getTrackedChanges`, `getSelectedTable`,
+`getSelectedImage`, `getPageSetup`, `getWatermark`, `getHeaderFooterState`.
+
+Two capabilities are deliberately NOT derived, because the inputs do not exist:
+
+- `getCurrentPage('viewport')` — display page boxes are page-LOCAL (every page reports
+  `y: 0`), so there is no stacked content space to test a scroll offset against. An
+  implementation that tested against them returned the last page at any scroll and was
+  reverted. Deriving it needs the display to publish each page's placement in a shared
+  content space.
+- The find dialog's match LIST — it addresses a match by paragraph, run and character
+  index; the engine addresses it by block id and offset. The COUNT is real; inventing
+  the indices would send the dialog to the wrong place.
