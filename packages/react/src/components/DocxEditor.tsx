@@ -24,6 +24,7 @@ import { useTableDialogs, type BorderSpec } from './DocxEditor/hooks/useTableDia
 import { useHyperlinkActions } from './DocxEditor/hooks/useHyperlinkActions';
 import { useWatermarkControls } from './DocxEditor/hooks/useWatermarkControls';
 import { usePageSetupControls } from './DocxEditor/hooks/usePageSetupControls';
+import { useActiveEditor } from './DocxEditor/hooks/useActiveEditor';
 import {
   useSelectionTracker,
   type SelectionStateDelta,
@@ -236,6 +237,13 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
     );
 
     // The image menu's own state hook, ported.
+    // Active-editor routing, ported. Every call site below used to repeat
+    // `() => editorRef.current?.focus()`; the rule lives in one place again.
+    const { focusActiveEditor, undoActiveEditor, redoActiveEditor } = useActiveEditor({
+      hfEditPosition: null,
+      editorRef,
+    });
+
     // Page setup and the ruler drag handlers, ported. The rulers were wired to no-ops,
     // so dragging a margin did nothing at all; they now reach `setPageSetup`, which the
     // engine refuses, so a drag snaps back instead of silently pretending.
@@ -261,7 +269,7 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
       handleHyperlinkRemove,
     } = useHyperlinkActions({
       editorRef,
-      focusActiveEditor: () => editorRef.current?.focus(),
+      focusActiveEditor,
       hyperlinkDialog,
     });
     const {
@@ -320,7 +328,7 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
       handleInsertTOC,
     } = useFormattingActions({
       editorRef,
-      focusActiveEditor: () => editorRef.current?.focus(),
+      focusActiveEditor,
       hyperlinkDialog,
     });
 
@@ -338,7 +346,7 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
       handleContextMenuAction,
     } = useContextMenus({
       editorRef,
-      focusActiveEditor: () => editorRef.current?.focus(),
+      focusActiveEditor,
       openSplitCellDialog,
       i18n: undefined,
       onAddComment: () => {},
@@ -600,8 +608,8 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
     return (
       <EditorToolbarContext.Provider
         value={{
-          onUndo: () => void editorRef.current?.exec({ type: 'undo' }),
-          onRedo: () => void editorRef.current?.exec({ type: 'redo' }),
+          onUndo: undoActiveEditor,
+          onRedo: redoActiveEditor,
           onSave,
         }}
       >
@@ -728,15 +736,15 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
               zoom={zoomFactor}
               showZoomControl
               onFormat={handleFormat}
-              onUndo={() => void editorRef.current?.exec({ type: 'undo' })}
-              onRedo={() => void editorRef.current?.exec({ type: 'redo' })}
+              onUndo={undoActiveEditor}
+              onRedo={redoActiveEditor}
               onPrint={handleDirectPrint}
               showFileOpen
               showHelpMenu
               onOpen={handleOpenDocument}
               onSave={() => (onSave ? onSave() : handleDownloadDocument())}
               onZoomChange={applyZoom}
-              onRefocusEditor={() => editorRef.current?.focus()}
+              onRefocusEditor={focusActiveEditor}
               onInsertTable={handleInsertTable}
               onInsertImage={handleInsertImageClick}
               onInsertPageBreak={handleInsertPageBreak}
