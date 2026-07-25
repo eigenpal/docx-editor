@@ -240,6 +240,41 @@ export interface Editor {
     readonly styleId?: string;
     readonly alignment?: string;
   } | null;
+
+  /** Find matches for a query, for the find/replace dialog. */
+  findMatches(query: string, options?: { readonly matchCase?: boolean; readonly wholeWord?: boolean }): readonly {
+    readonly blockId: string;
+    readonly start: number;
+    readonly length: number;
+  }[];
+
+  /** The image at the selection, for the image toolbar and transform controls. */
+  getSelectedImage(): { readonly id: string; readonly widthEmu: number; readonly heightEmu: number } | null;
+
+  /** The table containing the selection, for the table toolbar. `null` outside a table. */
+  getSelectedTable(): {
+    readonly blockId: string;
+    readonly rowCount: number;
+    readonly columnCount: number;
+    readonly cell: { readonly row: number; readonly column: number } | null;
+  } | null;
+
+  /** Section page setup — size, orientation and margins — for the page-setup dialog. */
+  getPageSetup(): {
+    readonly pageWidthTwips: number;
+    readonly pageHeightTwips: number;
+    readonly orientation: 'portrait' | 'landscape';
+    readonly marginsTwips: { readonly top: number; readonly right: number; readonly bottom: number; readonly left: number };
+  } | null;
+
+  /** The document watermark, for the watermark dialog. */
+  getWatermark(): { readonly kind: 'text' | 'image'; readonly text?: string } | null;
+
+  /** Header/footer editing state: which region is being edited, if any. */
+  getHeaderFooterState(): { readonly editing: 'header' | 'footer' | null; readonly sectionIndex: number } | null;
+
+  /** Tracked changes in the document, for the review sidebar. */
+  getTrackedChanges(): readonly { readonly id: string; readonly kind: string; readonly author?: string }[];
   setActiveScope(scope: ViewScope): void;
   getActiveScope(): ViewScope;
 

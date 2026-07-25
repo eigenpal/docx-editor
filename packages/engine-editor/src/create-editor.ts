@@ -890,6 +890,30 @@ export function createEditor(config: EditorConfig): Editor {
     /** STUB — needs resolved run/paragraph properties at the selection, which is the
      *  same derivation `isActive` waits on. */
     getSelectionFormatting: () => null,
+
+    /** STUB — needs a text search over the canonical model with grapheme-safe offsets. */
+    findMatches: (_query: string) => [],
+
+    /** STUB — needs the drawing/image parts resolved and mapped to the selection. */
+    getSelectedImage: () => null,
+
+    /** STUB — needs table geometry and the selection's cell address. This change owns no
+     *  table editing surface, so it stays empty rather than implying one exists. */
+    getSelectedTable: () => null,
+
+    /** STUB — needs section properties surfaced; layout uses a single uniform margin
+     *  today, so reporting four independent sides would overstate what the engine has. */
+    getPageSetup: () => null,
+
+    /** STUB — needs the watermark drawing resolved from the header parts. */
+    getWatermark: () => null,
+
+    /** STUB — header/footer editing has no engine surface yet; `null` means "not
+     *  editing", which is always true right now. */
+    getHeaderFooterState: () => null,
+
+    /** STUB — needs w:ins/w:del revisions parsed; the model does not carry them. */
+    getTrackedChanges: () => [],
     setActiveScope: (scope: ViewScope) => {
       activeScope = scope;
       navigationSession = null;
