@@ -23,7 +23,7 @@ export interface DocxEditorMenuBarProps {
 export function DocxEditorMenuBar({ t }: DocxEditorMenuBarProps): ReactNode {
   const unavailable = t(LEGACY_CHROME_UNAVAILABLE_KEY);
   return (
-    <div className="docx-editor__menu-bar" role="menubar" aria-label={t('toolbar.ariaLabel')} data-testid="menu-bar">
+    <div className="flex flex-shrink-0 items-center gap-0.5 pt-0.5" role="menubar" aria-label={t('toolbar.ariaLabel')} data-testid="menu-bar">
       {LEGACY_CHROME_MENUS.map((menu) => {
         const label = t(menu.labelKey);
         const reason = `${label} — ${unavailable}`;
@@ -32,7 +32,7 @@ export function DocxEditorMenuBar({ t }: DocxEditorMenuBarProps): ReactNode {
             key={menu.id}
             type="button"
             role="menuitem"
-            className="docx-editor__menu-item"
+            className="cursor-default rounded px-2 py-0.5 text-[13px] text-muted-foreground"
             data-testid={`menu-${menu.id}`}
             data-parity-only="true"
             disabled

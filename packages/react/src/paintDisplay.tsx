@@ -37,11 +37,25 @@ export function paintDisplay(
   return (
     <>
       {pages.map((page) => (
+        // `layout-page` with the legacy data attributes and inline page styling, as the
+        // legacy painter emitted it. Anything keyed on the page element — legacy CSS,
+        // selectors, tooling — then finds what it expects. Width and height stay ENGINE
+        // values: the greenfield painter owns the canvas, so nothing here invents
+        // geometry, only the wrapper's identity and its non-geometric paint.
         <div
           key={page.index}
+          className="layout-page"
+          data-page-number={page.index + 1}
           data-page-index={page.index}
-          className="ep-one-surface__page"
-          style={{ position: 'relative', width: page.box.width, height: page.box.height }}
+          style={{
+            position: 'relative',
+            width: page.box.width,
+            height: page.box.height,
+            backgroundColor: 'var(--doc-page-bg, #ffffff)',
+            overflow: 'hidden',
+            color: 'var(--doc-page-text, #000000)',
+            boxShadow: 'rgba(0, 0, 0, 0.15) 0px 2px 8px',
+          }}
         >
           <div className="ep-one-surface__content">
             {page.items.flatMap((item, i) =>

@@ -12,6 +12,7 @@ import {
   type GlyphClickTarget,
 } from '@docx-editor.dev/engine-editor';
 import type { DisplayPage } from '@docx-editor.dev/core-contract/geometry';
+import clsx from 'clsx';
 import { paintDisplay } from '../paintDisplay';
 import { DocxEditorTitleBar } from './DocxEditor/DocxEditorTitleBar';
 import { DocxEditorMenuBar } from './DocxEditor/DocxEditorMenuBar';
@@ -327,46 +328,54 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
             left, document actions on the right. Every action here is parity-only and
             disabled — M6V.1 permits only undo, redo, bold, italic, and save to act, and
             save already has its toolbar control. */}
-        <div className="docx-editor__app-header">
-          <div className="docx-editor__brand">
+        <div className="flex flex-shrink-0 items-center gap-3 border-b border-border bg-background px-3.5 py-1.5">
+          <div className="flex items-center gap-2">
             <svg viewBox="0 -960 960 960" width="26" height="26" aria-hidden="true" focusable="false">
               <path
                 d="M320-240h320v-80H320v80Zm0-160h320v-80H320v80ZM240-80q-33 0-56.5-23.5T160-160v-640q0-33 23.5-56.5T240-880h320l240 240v480q0 33-23.5 56.5T720-80H240Zm280-520v-200H240v640h480v-440H520Z"
                 fill="currentColor"
               />
             </svg>
-            <span className="docx-editor__brand-text">
-              <span className="docx-editor__brand-name">{t('app.name')}</span>
-              <span className="docx-editor__brand-by">{t('app.by')}</span>
+            <span className="inline-flex flex-col gap-px">
+              <span className="whitespace-nowrap text-[15px] font-semibold leading-[1.1] tracking-[-0.005em] text-foreground">{t('app.name')}</span>
+              <span className="inline-flex items-center gap-1 text-[11px] leading-[1.1] text-muted-foreground">{t('app.by')}</span>
             </span>
             {/* Framework segmented toggle. Parity-only: this build IS the React adapter,
                 and Vue chrome is task 10V.1. */}
-            <span className="docx-editor__framework" role="group" aria-label={t('app.framework')}>
-              <span className="docx-editor__framework-option docx-editor__framework-option--active">React</span>
-              <span className="docx-editor__framework-option">Vue</span>
+            <span className="inline-flex items-center rounded-lg border border-border bg-muted p-0.5" role="group" aria-label={t('app.framework')}>
+              <span className="whitespace-nowrap rounded-md bg-background px-2.5 py-[3px] text-xs text-foreground shadow-sm">React</span>
+              <span className="whitespace-nowrap rounded-md px-2.5 py-[3px] text-xs text-muted-foreground">Vue</span>
             </span>
           </div>
           {/* Title and menu sit INSIDE the header row, as a compact column between the
               brand and the actions. Rendering them as their own full-width bands below
               the header is what made the chrome three tall stacked strips instead of the
               legacy product's single ~110px band. */}
-          <div className="docx-editor__title-region">
+          <div className="flex min-w-0 flex-1 flex-col items-start justify-center pl-[18px]">
             <DocxEditorTitleBar title={title ?? ''} onTitleChange={onTitleChange} />
             <DocxEditorMenuBar t={t} />
           </div>
-          <div className="docx-editor__app-actions">
+          <div className="flex items-center gap-2">
             {/* Light/dark toggle. Parity-only — the document canvas is deliberately not
                 themed (it must stay Word-faithful), so a working toggle here would imply
                 a capability the renderer does not have. */}
-            <span className="docx-editor__theme" role="group" aria-label={t('app.theme')}>
-              <span className="docx-editor__theme-option docx-editor__theme-option--active" aria-hidden="true">☀</span>
-              <span className="docx-editor__theme-option" aria-hidden="true">☾</span>
+            <span className="mr-1 inline-flex items-center rounded-lg border border-border bg-muted p-0.5" role="group" aria-label={t('app.theme')}>
+              <span className="grid h-[26px] w-[26px] place-items-center rounded-full bg-background text-xs text-foreground shadow-sm transition-colors" aria-hidden="true">☀</span>
+              <span className="grid h-[26px] w-[26px] place-items-center rounded-full text-xs text-muted-foreground transition-colors" aria-hidden="true">☾</span>
             </span>
             {(['open', 'new', 'save'] as const).map((action) => (
               <button
                 key={action}
                 type="button"
-                className={`docx-editor__app-action${action === 'open' ? ' docx-editor__app-action--primary' : ''}`}
+                className={clsx(
+                  'whitespace-nowrap rounded-md border px-3 py-1.5 text-[13px] font-medium transition-all',
+                  'cursor-default pointer-events-none',
+                  action === 'open'
+                    ? 'border-foreground bg-foreground text-background'
+                    : action === 'new'
+                      ? 'border-border bg-muted text-foreground'
+                      : 'border-border bg-background text-foreground',
+                )}
                 data-testid={`app-action-${action}`}
                 data-parity-only="true"
                 disabled
@@ -383,7 +392,7 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
             <DocxEditorToolbar editor={editorRef.current} t={t} onSave={onSave} />
             <div className="docx-editor__scroll-container" style={LEGACY_SCROLLER_STYLE}>
               {/* Sticky at the scroller's top so it tracks horizontal scroll, as legacy. */}
-              <div className="docx-editor__ruler-row" style={LEGACY_RULER_ROW_STYLE}>
+              <div className="flex justify-center py-1 flex-shrink-0 bg-doc-bg" style={LEGACY_RULER_ROW_STYLE}>
                 <HorizontalRuler sectionProps={sectionPropsFromGeometry(editorRef.current)} zoom={zoomFactor} editable={false} />
               </div>
               <div style={LEGACY_CONTENT_ROW_STYLE}>
@@ -414,7 +423,7 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
                   {/* Outline toggle, in the left gutter as in the reference. */}
                   <button
                     type="button"
-                    className="docx-editor__outline-toggle"
+                    className="absolute left-6 top-6 z-10 grid h-9 w-9 place-items-center rounded-full border border-border bg-background text-muted-foreground shadow-sm"
                     data-testid="outline-toggle"
                     data-parity-only="true"
                     disabled
