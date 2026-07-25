@@ -242,9 +242,35 @@ ENGINE gaps, not authored values:**
 | `maxPageWidthPx` | 1056 (landscape section) | 816 | Layout uses one fixed page size (`LAYOUT` in `create-editor.ts`); per-section page size is not read |
 
 So the ruler width is not a porting defect and needs no decision about hand-tuning a
-constant. It closes when those two capabilities land — `getComments`, and per-section page
-geometry in layout. The lesson worth keeping: when an equation does not balance, solve for
-the unknown before concluding the other side is running different code.
+constant. The lesson worth keeping: when an equation does not balance, solve for the
+unknown before concluding the other side is running different code.
+
+### Confirmed by loading the SAME document on both sides
+
+The two were showing different documents (9 pages locally, 26 on the reference), which
+makes any content-dependent measurement meaningless. Loading the reference's own
+`sample.docx` (36,928 bytes) locally:
+
+| | Reference | Here |
+| --- | --- | --- |
+| Pages | 26 | 10 |
+| Distinct page widths | `[816, 1056]` | `[816]` |
+| Ruler `min-width` | 1576 | 984 |
+
+Identical input, so the difference is entirely in layout: every page is laid out at
+Letter portrait and the landscape section is ignored.
+
+### Why this cannot be closed here
+
+`LAYOUT` in `create-editor.ts` is a fixed `{ pageWidth: 12240, pageHeight: 15840,
+margin: 1440 }` because THE MODEL DOES NOT CARRY SECTION PROPERTIES. `read.ts` says so
+directly: a `w:sectPr` among the body's children "would vanish". Honouring per-section
+page size therefore needs `w:sectPr` parsed into the model first — a change to
+`packages/engine-core/src/package/docx/read.ts`, which is on this task's PRESERVE list.
+
+The last visual difference is one authorization away, not one refactor away: it needs
+permission to modify `read.ts` (or that work sequenced into a change that owns the
+lossless package model).
 
 ## The DocxEditor hooks: implemented, excluded, remaining
 
