@@ -17,6 +17,7 @@ import { paintDisplay } from '../paintDisplay';
 // deleted: two versions of one control is the drift the port rule warns about.
 import { DocumentName, Logo, MenuBar, TitleBar, TitleBarRight } from './TitleBar';
 import { Toolbar } from './Toolbar';
+import { useOutlineSidebar } from './DocxEditor/hooks/useOutlineSidebar';
 import { EditorToolbarContext } from './EditorToolbarContext';
 import { DocxEditorShell } from './DocxEditor/DocxEditorShell';
 import type { SectionProperties } from '../legacy-core-compat';
@@ -102,6 +103,33 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
     // Latest props/callbacks, read inside effects without retriggering them.
     const propsRef = useRef(props);
     propsRef.current = props;
+
+    const {
+      showOutline,
+      setShowOutline,
+      outlineHeadings,
+      setHeadingInfos,
+      toolbarHeight,
+      toolbarRefCallback,
+      editorScrollLeft,
+    } = useOutlineSidebar({
+      showOutlineProp: false,
+      editorRef,
+      scrollContainerRef: scrollRef,
+      isLoading: pages.length === 0,
+    });
+
+    // Collect headings on open, as legacy did — it walked the editing engine's
+    // document tree; here the engine derives the outline from the authored model.
+    const handleToggleOutline = useCallback(() => {
+      setShowOutline((prev) => {
+        if (!prev) {
+          const headings = editorRef.current?.getOutline() ?? [];
+          setHeadingInfos(headings.map((h, i) => ({ text: h.text, level: h.level, pmPos: i })));
+        }
+        return !prev;
+      });
+    }, [setShowOutline, setHeadingInfos]);
 
     // Re-read the published frame and repaint the overlay layer. Runs after
     // every display and selection change so the caret cannot lag the model.
@@ -315,12 +343,12 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
           editorContainerStyle={{}}
           showRuler
           readOnlyProp={false}
-          showOutline={false}
+          showOutline={showOutline}
           showOutlineButton
           sidebarOpen={false}
           minLayoutWidth={0}
-          toolbarHeight={0}
-          editorScrollLeft={0}
+          toolbarHeight={toolbarHeight}
+          editorScrollLeft={editorScrollLeft}
           expandedSidebarItem={null}
           trackedChanges={[]}
           onScrollContainerMouseDown={() => {}}
@@ -352,20 +380,13 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
             onBottomMarginChange: () => {},
           }}
           outlineProps={{
-            // Real headings from the engine. `pmPos` is the legacy field name and the
-            // ported DocumentOutline still reads it; the engine addresses blocks by id,
-            // so the index stands in until the panel is wired to scroll by block.
-            headings: (editorRef.current?.getOutline() ?? []).map((h, i) => ({
-              text: h.text,
-              level: h.level,
-              pmPos: i,
-            })),
+            headings: outlineHeadings,
             onHeadingClick: () => {},
-            onClose: () => {},
-            topOffset: 0,
-            scrollLeft: 0,
+            onClose: () => setShowOutline(false),
+            topOffset: toolbarHeight,
+            scrollLeft: editorScrollLeft,
           }}
-          onToggleOutline={() => {}}
+          onToggleOutline={handleToggleOutline}
           scrollPageInfo={{
             currentPage: (editorRef.current?.getCurrentPage('viewport') ?? 0) + 1,
             totalPages: editorRef.current?.getTotalPages() ?? 0,
@@ -375,10 +396,14 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
           agentPanelOpen={false}
           onAgentPanelClose={() => {}}
           toolbar={
-            /* `documentFonts` now comes from the engine's real inventory rather than the
+            /* Wrapper carries `toolbarRefCallback`, which is how the outline panel learns
+               the toolbar's height. Class list matches the legacy toolbar wrapper.
+
+               `documentFonts` now comes from the engine's real inventory rather than the
                picker's placeholder. Wiring it here is the point of the capability: the
                ported Toolbar already accepts the prop, so nothing in the legacy component
                changes. */
+            <div ref={toolbarRefCallback} className="z-50 flex flex-col gap-0 flex-shrink-0">
             <Toolbar
               /* `currentFormatting` is how the legacy toolbar drives its active states
                  and value displays — `active={currentFormatting.bold}` and the pickers'
@@ -407,6 +432,7 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
                 type: s.type as 'paragraph',
               }))}
             />
+            </div>
           }
           pagedArea={surface}
           overlays={null}
