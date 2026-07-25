@@ -14,7 +14,7 @@ import {
   resolveParagraphStyleOptions,
 } from '../../legacy-core-compat';
 import { useTranslation } from '../../i18n';
-import type { TranslationKey } from '../../legacy-core-compat';
+import type { TranslationKey } from '../../i18n';
 
 // ============================================================================
 // TYPES

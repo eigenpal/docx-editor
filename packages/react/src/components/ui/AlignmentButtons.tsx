@@ -16,7 +16,7 @@ import { Tooltip } from './Tooltip';
 import { cn } from '../../lib/utils';
 import { useFixedDropdown } from '../../hooks/useFixedDropdown';
 import { useTranslation } from '../../i18n';
-import type { TranslationKey } from '../../legacy-core-compat';
+import type { TranslationKey } from '../../i18n';
 
 // ============================================================================
 // TYPES

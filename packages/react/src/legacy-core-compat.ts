@@ -102,18 +102,41 @@ export interface FontOption {
 export type StyleType = 'paragraph' | 'character' | 'numbering' | 'table';
 
 /** Minimal shapes the ported controls read. Widened as real engine types land. */
+/** Compatibility contract for the shared adapter surface.
+ *  `type` is REQUIRED there; the interim version made it optional and StylePicker
+ *  failed against it. */
 export interface Style {
+  /** Style ID */
   styleId: string;
+  /** Style type */
+  type: StyleType;
+  /** Display name */
   name?: string;
-  type?: StyleType;
+  /** Based on style ID */
   basedOn?: string;
+  /** Next style after Enter (for paragraph styles) */
+  next?: string;
+  /** Linked style (paragraph/character pair) */
+  link?: string;
   [key: string]: unknown;
 }
 export interface Theme {
   [key: string]: unknown;
 }
+/** Compatibility contract for the shared adapter surface. */
 export interface ThemeColorScheme {
-  [key: string]: unknown;
+  dk1?: string;
+  lt1?: string;
+  dk2?: string;
+  lt2?: string;
+  accent1?: string;
+  accent2?: string;
+  accent3?: string;
+  accent4?: string;
+  accent5?: string;
+  accent6?: string;
+  hlink?: string;
+  folHlink?: string;
 }
 /** Compatibility contract for the shared adapter surface. */
 export type ThemeColorSlot = string;
@@ -129,11 +152,23 @@ export interface ThemeMatrixCell {
   /** Human-readable label (e.g., "Accent 1, Lighter 60%") */
   label: string;
 }
-/** The legacy core allows a bare hex string or a themed reference. */
-export type ColorValue = string | { rgb: string };
+/** Includes the theme tint and shade fields consumed by ColorPicker. */
+export interface ColorValue {
+  /** RGB hex value without # (e.g., "FF0000") */
+  rgb?: string;
+  /** Theme color slot reference */
+  themeColor?: ThemeColorSlot;
+  /** Tint modifier (0-255 as hex string, e.g., "80") - makes color lighter */
+  themeTint?: string;
+  /** Shade modifier (0-255 as hex string) - makes color darker */
+  themeShade?: string;
+  /** Auto color - context-dependent (usually black for text) */
+  auto?: boolean;
+}
 
 /** Compatibility contract for the shared adapter surface. */
-export type ListType = 'none' | 'bullet' | 'ordered';
+/** Compatibility contract for the shared adapter surface. */
+export type ListType = 'bullet' | 'numbered' | 'none';
 export interface ListState {
   type: ListType;
   level: number;
@@ -147,10 +182,10 @@ export interface ListState {
  * the input unchanged rather than silently dropping fonts a user asked for.
  */
 export function excludeFontsByName<T extends { name: string }>(
-  fonts: readonly T[],
+  fonts: readonly T[] | undefined,
   _exclude?: readonly string[],
 ): T[] {
-  return [...fonts];
+  return fonts ? [...fonts] : [];
 }
 
 // --- Helpers the ported controls call -------------------------------------------------
@@ -169,7 +204,7 @@ export function generateThemeTintShadeMatrix(_scheme?: ThemeColorScheme | null):
 }
 
 /** STUB — no style preview data on the engine yet; the picker falls back to plain text. */
-export function getStylePreviewProps(_style?: Style | null): Record<string, unknown> {
+export function getStylePreviewProps(_style?: { styleId: string } | null): Record<string, unknown> {
   return {};
 }
 
@@ -178,20 +213,29 @@ export function getStylePreviewProps(_style?: Style | null): Record<string, unkn
 // instead of claiming a list the document may not have.
 export const createDefaultListState = (): ListState => ({ type: 'none', level: 0, isInList: false });
 export const createBulletListState = (): ListState => ({ type: 'bullet', level: 0, isInList: true });
-export const createNumberedListState = (): ListState => ({ type: 'ordered', level: 0, isInList: true });
+export const createNumberedListState = (): ListState => ({ type: 'numbered', level: 0, isInList: true });
 export const isAnyListState = (s?: ListState | null): boolean => !!s?.isInList;
 export const isBulletListState = (s?: ListState | null): boolean => s?.type === 'bullet';
-export const isNumberedListState = (s?: ListState | null): boolean => s?.type === 'ordered';
+export const isNumberedListState = (s?: ListState | null): boolean => s?.type === 'numbered';
 
 /** STUB — no colour resolution against the document theme yet; a bare hex passes
  *  through and a themed reference yields its rgb, never a guessed theme colour. */
-export function resolveColor(value?: ColorValue | null): string | undefined {
-  if (!value) return undefined;
-  return typeof value === 'string' ? value : value.rgb;
+/** Compatibility contract for the shared adapter surface.
+ *  makes the return non-optional — my one-arg version returned `string | undefined` and
+ *  the ported ColorPicker failed against it. */
+export function resolveColor(
+  color: ColorValue | undefined | null,
+  _theme?: Theme | null,
+  defaultColor: string = '000000',
+): string {
+  if (!color || color.auto) return defaultColor;
+  return color.rgb ?? defaultColor;
 }
 
-/** Re-exported so ported controls can name it where legacy imported it from i18n. */
-export type TranslationKey = string;
+// `TranslationKey` deliberately NOT declared here. Aliasing it to `string` shadowed the
+// real union derived from `en.json` and broke every `t(labelKey)` call; the keys the
+// ported controls use (alignment.*, lineSpacing.*) already exist in the catalogue, so
+// controls import the real type from `../../i18n`.
 export const getNextIndentLevel = (level?: number): number => Math.min((level ?? 0) + 1, 8);
 export const getPreviousIndentLevel = (level?: number): number => Math.max((level ?? 0) - 1, 0);
 
@@ -206,15 +250,39 @@ export function resolveHighlightColor(value?: string | null): string | undefined
   return value ?? undefined;
 }
 
-/** STUB — alias of `resolveColor` under the name the legacy pickers import. */
-export function resolveColorToHex(value?: ColorValue | null): string | undefined {
-  return resolveColor(value);
+/**
+ * Signature copied from the legacy core (`color`, `theme`). STUB body: with no theme
+ * resolution on the engine, a literal colour passes through and a theme-bound one yields
+ * its rgb — never a colour invented from a theme we cannot read.
+ */
+export function resolveColorToHex(
+  color: ColorValue | undefined | null,
+  _theme?: Theme | null,
+): string | undefined {
+  if (!color || color.auto) return undefined;
+  return color.rgb;
 }
 
 /** STUB — no document style inventory on the engine yet, so the style picker shows
  *  whatever the caller passes and nothing is synthesized. */
-export function resolveParagraphStyleOptions(styles?: readonly Style[] | null): Style[] {
-  return styles ? [...styles] : [];
+/** Compatibility contract for the shared adapter surface.
+ *  `StyleOption[]` depends on; returning the raw `Style` (optional name) broke it. */
+export interface ResolvedStyleOption {
+  styleId: string;
+  name: string;
+  priority: number;
+  fontSize?: number;
+  bold?: boolean;
+  italic?: boolean;
+  color?: string;
+}
+
+/** Signature copied from the legacy core; filters to paragraph styles as it does. */
+export function resolveParagraphStyleOptions(styles: Style[] | undefined): ResolvedStyleOption[] {
+  if (!styles || styles.length === 0) return [];
+  return styles
+    .filter((s) => s.type === 'paragraph')
+    .map((s, i) => ({ styleId: s.styleId, name: s.name ?? s.styleId, priority: i }));
 }
 
 /** Copied shape from the legacy core: cycles a list type without engine state. */

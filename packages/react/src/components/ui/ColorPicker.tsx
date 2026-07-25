@@ -11,7 +11,7 @@ import type { ThemeMatrixCell } from '../../legacy-core-compat';
 import { useFixedDropdown } from '../../hooks/useFixedDropdown';
 import { MaterialSymbol } from './MaterialSymbol';
 import { useTranslation } from '../../i18n';
-import type { TranslationKey } from '../../legacy-core-compat';
+import type { TranslationKey } from '../../i18n';
 
 // ============================================================================
 // TYPES
