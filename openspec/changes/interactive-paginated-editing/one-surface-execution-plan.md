@@ -239,7 +239,7 @@ After the security check on code paths, always run `git diff --cached --check`.
 
 ## 8. Granular commit protocol
 
-Each counted checkbox through **M6-R2** gets **exactly one normal commit**. No git tags.
+Each counted checkbox through **M6S.1** gets **exactly one normal commit**. No git tags.
 Unrelated dirty files stay unstaged.
 
 1. Complete deliverable; run verification commands.
@@ -276,4 +276,6 @@ M0 evidence entrypoints:
 5. M4 shell (can/exec + `Editor.save()`, `getPageGeometry()` rulers)
 6. M5 Vue
 7. M6 paired preview
-8. Sections 7–8 → **8.10**
+8. **M6V.1 full retired chrome immediately after M6 review closure**
+9. **M6S.1 browser-native selection-presentation bake-off**
+10. Sections 7–8 → **8.10**

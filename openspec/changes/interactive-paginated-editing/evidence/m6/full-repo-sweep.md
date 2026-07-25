@@ -1,26 +1,50 @@
 # Full-repository sweep (M6 handoff)
 
-Recorded: 2026-07-25 at `checkpoint-cb228b0a`. Run because this session landed 41 commits
-while mostly exercising targeted suites; a reviewer's first question is whether
-anything else in the repo regressed.
+Re-run at **`checkpoint-fd4db029`** (2026-07-25), after the round-3 review fixes.
 
-## Result: no regressions from this session's work
+> **This file was previously wrong, and the correction matters.** It recorded
+> "1814 pass, 6 fail — no regressions from this session's work" measured at
+> `checkpoint-cb228b0a`, then went untouched through fourteen further commits, six of which
+> changed product code. One of those (`checkpoint-5d739a2a`) fixed a caret/focus regression
+> *introduced in-session* by `checkpoint-0e9e41bf`, so the "no regressions" conclusion was
+> falsified after it was written and the sweep was never re-run; a later commit
+> edited this file and left `1814` in place. Caught by the round-3 evidence audit.
+> Numbers below are valid only for the commit named above.
+
+## Result at `checkpoint-fd4db029`
 
 ```bash
 bun test
 ```
 
-**1814 pass, 6 fail, 2 errors, 212000 expect() calls across 186 files.**
+**1853 pass, 5 fail, 2 errors, 212,107 expect() calls across 189 files (56.4s).**
 
-Every failure is pre-existing. Each was re-run at **`checkpoint-90e74c0a`** — this
-session's starting commit, before any of its work — and fails identically there:
+Named failures, all in `packages/core/spike/tests/**`, all pre-existing:
 
-| Failure | Pre-existing at `checkpoint-90e74c0a`? |
-| --- | --- |
-| `a11y harness vite workspace exports` | Yes — vite child process spawn, recorded since M2 |
-| `package test migration inventory` (2 tests) | Yes — 8 pass / 2 fail at session start |
-| `surviving test boundary guard` (1 test) | Yes — 4 pass / 1 fail at session start |
-| 2 errors | Playwright specs picked up by the bun runner from `packages/core/spike/node_modules` — a harness artifact, not a product failure |
+| Failure | File | Pre-existing at `checkpoint-90e74c0a`? |
+| --- | --- | --- |
+| `package test migration inventory` — retired sources absent / retained on disk | `migration-inventory.test.ts` | Yes |
+| `package test migration inventory` — engine-neutral import closures | same | Yes |
+| `surviving test boundary guard` — retired core subpaths / workspace aliases | `test-boundary-guard.test.ts` | Yes |
+| 2 errors | Playwright specs the bun runner globs up | Yes — harness artifact, not a product failure |
+
+Independent audit re-ran the baseline in a throwaway clone and confirmed the same
+failure set at `checkpoint-90e74c0a` (1716 pass / 6 fail / 2 errors there).
+
+### Why the count moved from 6 fail to 5
+
+`a11y harness vite workspace exports` was previously counted as a failure. It is
+**not** a code failure: the test spawns its own vite dev server on the fixed port
+**5299**, and leftover *detached* harness servers from earlier gate runs were still
+holding it, so every later run died with "harness child exited before ready
+(signal)". Clearing the leftover listener makes it pass (`"ok": true`, probe
+`resolveDefaultWordBoundary`, phases fresh + cached).
+
+Worth recording as a hazard, not a footnote: the failure looks exactly like a
+regression, two independent reviewers each correctly guessed "environmental"
+without being able to confirm it, and the real cause was process hygiene.
+**Check `lsof -ti:5299` before believing that test's verdict.** Same hazard on
+5273/5274.
 
 ## One real regression, found and fixed
 
@@ -35,8 +59,9 @@ prevent, and invisible to every suite that had been passing.
 
 Fixed at `checkpoint-cb228b0a`: Vue declares named prop interfaces for every shell
 component, gains the sidebar counterpart, and re-exports the same shared engine
-helpers. **Named-export parity: 47 names match.** The paired interaction gate is
-still 7/7 after the change.
+helpers. **Named-export parity: 47 names match** — independently reproduced, and
+the baseline was 15, so the drift really was introduced and fixed inside this
+change. The paired interaction gate is 14/14 at `checkpoint-fd4db029`.
 
 This is the argument for running the whole suite before handing off: eleven
 targeted suites and six browser gates were all green while the two published
@@ -46,7 +71,7 @@ package surfaces had silently diverged.
 
 | Check | Result | Note |
 | --- | --- | --- |
-| `bun test` | 1814 pass / 6 fail | all failures pre-existing |
+| `bun test` | 1853 pass / 5 fail | all failures pre-existing (see above) |
 | `check:export-parity` | **Pass — 47 names match** | fixed this session |
 | `check:parity-contract` | **Pass** | gate repaired at M5-R1; it had been measuring a pre-greenfield surface |
 | `check:adapter-css-thin` | Pass | gate repaired at 6.1; it had been failing on a missing file |
@@ -91,4 +116,13 @@ Fails identically at `checkpoint-90e74c0a`.
 `packages/engine-core/src/package/docx/read.ts` and
 `packages/engine-core/src/package/preservation-capsule.ts` remain modified and
 unstaged; `docs/api/docx-editor-react/*` and `docs/api/docx-editor-vue/*` remain
-untracked. None was staged in any of this session's 41 commits.
+untracked. None was staged in any commit of this change; independently verified across the
+whole range by the round-3 evidence audit.
+
+## Browser gates at `checkpoint-fd4db029`
+
+| Gate | Result |
+| --- | --- |
+| `verify:real-adapter-smoke` | 2/2 |
+| `verify:real-adapter-gate` | 12/12 |
+| `test:e2e:paired-one-surface-interaction` | 14/14 |

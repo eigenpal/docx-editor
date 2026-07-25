@@ -39,9 +39,10 @@ if (container) {
     // the polished shell, and the only surface any interaction claim is made
     // about. `?edit=1` is the DIAGNOSTIC split edit/preview pane — it proves
     // the model pipeline, never painted-page interaction, and task 6.6 removes
-    // it from normal startup. `?enginePreview=1` and the default `App` are
-    // read-only museum surfaces kept for reference. The `/` default does NOT
-    // switch to the one-surface editor until M6 (task 6.6).
+    // it from normal startup. `?preview=engine` is the read-only engine preview
+    // and `?museum=1` is the legacy museum, both reference-only. The bare `/`
+    // default IS the one-surface editor (task 6.6 landed); anything that is not
+    // an explicit opt-out falls through to it.
     if (realAdapter) {
       const { DocxAdapterHarness } = await import('../../shared/DocxAdapterHarness.tsx');
       view = <DocxAdapterHarness fixtureUrl={`${base}${fixtureName}`} initialZoom={initialZoom} />;

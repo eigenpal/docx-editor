@@ -56,11 +56,20 @@ function tokenizeParagraph(fullText: string): FlowToken[] {
  *
  * `runStyleAt` is called once per UTF-16 code unit during layout, and a
  * preserved run's `rPrCapsule` is verbatim file bytes with no size bound.
- * Resolving the capsule inside that loop made layout cost `chars x capsuleBytes`:
- * independent review measured a 600-character paragraph taking 124 ms with no
- * capsule, 338 ms at 2 MB, and 990 ms at 8 MB, and showed that the zip limits
- * admit a ~32 MB capsule inside a ~160 KB .docx — roughly 27 s of frozen main
- * thread on open, zero clicks. A WeakMap keyed on the run makes it once per run.
+ * Resolving the capsule inside that loop made layout cost `chars x capsuleBytes`,
+ * and the zip limits admit a ~32 MB capsule inside a ~160 KB .docx. A WeakMap
+ * keyed on the run makes it once per run instead.
+ *
+ * The property that matters is that the capsule cost is now CONSTANT in paragraph
+ * length, not that it is small. Measured at this commit with an ~8 MB capsule, the
+ * added cost is flat across a 20x range of text: 300 chars +402 ms, 1,200 chars
+ * +406 ms, 6,000 chars +402 ms. An 8 MB capsule still costs ~400 ms once, which is
+ * a real but bounded cost paid per distinct run.
+ *
+ * Earlier revisions of this comment and of `layout-cost.test.ts` carried pre-fix
+ * figures that cannot both be true (144,956 ms at 2 MB versus 990 ms at 8 MB —
+ * four times the data for 1/146th the time). Neither is reproducible now and
+ * neither is relied on; the numbers above were measured directly.
  */
 const runStyleCache = new WeakMap<RunRecord, { bold: boolean; italic: boolean }>();
 

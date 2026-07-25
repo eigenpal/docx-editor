@@ -20,14 +20,19 @@ performance gates.
 Chromium desktop is the only platform that may block merge for the production-adapter
 lanes above until additional rows are ratified and wired into CI.
 
-## Future named lanes (not automated until tasks land)
+## Named lanes
+
+Three of these are now automated and passing; the `Status` column per row is
+authoritative. The section was headed "Future named lanes (not automated until
+tasks land)" after the first three lanes had already landed, which the round-3
+evidence audit flagged as one of several places this file contradicted itself.
 
 | Lane name | Task gate | Automated tooling (planned) | Manual tooling (planned) | Exact requirements | Status |
 | --- | --- | --- | --- | --- | --- |
 | **React one-surface alpha** | M3 (`M3.1`, `6.2`, `6.4`, `M2.3`) | `bun run test:e2e:react-one-surface-interaction` — **11 scenarios, all passing** | `openspec/changes/interactive-paginated-editing/evidence/m3/manual-chrome-checklist.md` on `http://localhost:5273/?realAdapter=1` after `bun run dev:react -- --port 5273 --strictPort` (vite binds IPv6 `[::1]`, so `127.0.0.1` refuses the connection) | `[data-testid="one-surface-click-target"]` center click → type/backspace → shift/double/drag → keyboard nav → paste → real CDP IME composition → undo/redo → **`Editor.save()`** reopen; no `authorizeCaret`-only proof | **AUTOMATED — passing (M3, 2026-07-25)** |
-| **React one-surface alpha + polished shell** | M4 (`M4.0`–`M4.7`, `M4-R1`–`M4-R3`) | M3 spec regression; `bun run api:check` after M4.0 | `openspec/changes/interactive-paginated-editing/evidence/m4/inventory.md`, `openspec/changes/interactive-paginated-editing/evidence/m4/demo-boundary.md`, `openspec/changes/interactive-paginated-editing/evidence/m4/manual-chrome-shell.md` on `http://127.0.0.1:5273/?realAdapter=1` | M3 matrix passes; `Editor.can({ type: 'toggleMark', mark: 'bold' })` then `Editor.exec({ type: 'toggleMark', mark: 'bold' })`; **`Editor.save()`** for save; rulers via **`Editor.getPageGeometry()`** only; museum Apps reference-only | **Not automated** |
+| **React one-surface alpha + polished shell** | M4 (`M4.0`–`M4.7`, `M4-R1`–`M4-R3`) | M3 spec regression; `bun run api:check` after M4.0 | `openspec/changes/interactive-paginated-editing/evidence/m4/inventory.md`, `openspec/changes/interactive-paginated-editing/evidence/m4/demo-boundary.md`, `openspec/changes/interactive-paginated-editing/evidence/m4/manual-chrome-shell.md` on `http://localhost:5273/?realAdapter=1` | M3 matrix passes; `Editor.can({ type: 'toggleMark', mark: 'bold' })` then `Editor.exec({ type: 'toggleMark', mark: 'bold' })`; **`Editor.save()`** for save; rulers via **`Editor.getPageGeometry()`** only; museum Apps reference-only | **Not automated** |
 | **Vue one-surface alpha** | M5 (`M5.2`, `6.3`, `M5.1`) | `bun run test:e2e:vue-one-surface-interaction` — **11 scenarios, all passing** | `openspec/changes/interactive-paginated-editing/evidence/m5/verification-log.md` on `http://localhost:5274/` (vite binds IPv6 `[::1]`, so `127.0.0.1` refuses) | Same deterministic target + matrix as React | **AUTOMATED — passing (M5, 2026-07-25)** |
-| **Paired bounded-document preview alpha** | M6 (`6.5`, `6.6`, `M6.1`, `M6-R1`, `M6-R2`) | `bun run test:e2e:paired-one-surface-interaction` — **7 scenarios comparing the adapters TO EACH OTHER, all passing** | `openspec/changes/interactive-paginated-editing/evidence/m6/manual-chrome-paired.md` on React `http://localhost:5273/` and Vue `http://localhost:5274/` (both now default, no query parameter) | Identical bounded-document matrix both adapters; demo off diagnostic split; **public manifest below `interactive-paginated`** | **AUTOMATED — passing (M6, 2026-07-25)** |
+| **Paired bounded-document preview alpha** | M6 (`6.5`, `6.6`, `M6.1`, `M6-R1`, `M6-R2`) | `bun run test:e2e:paired-one-surface-interaction` — **14 scenarios comparing the adapters TO EACH OTHER, all passing** | `openspec/changes/interactive-paginated-editing/evidence/m6/manual-chrome-paired.md` on React `http://localhost:5273/` and Vue `http://localhost:5274/` (both now default, no query parameter) | Identical bounded-document matrix both adapters; demo off diagnostic split; **public manifest below `interactive-paginated`** | **AUTOMATED — passing (M6, 2026-07-25)** |
 | **Formal public interactive-paginated** | **8.10** (after **7.x** + **8.1–8.9**) | Expanded paired specs + benchmark harness | `openspec/changes/interactive-paginated-editing/evidence/m8/benchmark.md` | Async coherence, virtualization, ratified 300–500-page budgets | **Not claimed** |
 
 ## Not yet automated (explicit gap)
@@ -61,17 +66,17 @@ table to `interactive-paginated`.
 | --- | --- | --- | --- |
 | Load / paginated paint / save / reopen (production adapters) | `verify:real-adapter-smoke` via `?realAdapter=1` | Manual | Not claimed |
 | Hidden input-host mechanism (production adapters) | `verify:real-adapter-gate` via `?realAdapter=1` | Manual | Not claimed |
-| React one-surface alpha (painted-page pointer/type) | Planned `test:e2e:react-one-surface-interaction` | Not claimed | Not claimed |
-| Vue one-surface alpha | Planned `test:e2e:vue-one-surface-interaction` | Not claimed | Not claimed |
-| Paired preview alpha (M6) | Planned `test:e2e:paired-one-surface-interaction` | Not claimed | Not claimed |
+| React one-surface alpha (painted-page pointer/type) | **AUTOMATED — `test:e2e:react-one-surface-interaction`, 11 scenarios passing** | Not claimed | Not claimed |
+| Vue one-surface alpha | **AUTOMATED — `test:e2e:vue-one-surface-interaction`, 11 scenarios passing** | Not claimed | Not claimed |
+| Paired preview alpha (M6) | **AUTOMATED — `test:e2e:paired-one-surface-interaction`, 14 scenarios passing** | Not claimed | Not claimed |
 | Formal public `interactive-paginated` | Task **8.10** benchmark suite | Not claimed | Not claimed |
-| Pointer / click / drag on paginated surface | **Not automated** | Not claimed | Not claimed |
-| Typed edit on paginated surface | **Not automated** | Not claimed | Not claimed |
-| Keyboard navigation on paginated surface | **Not automated** | Not claimed | Not claimed |
+| Pointer / click / drag on paginated surface | Automated (React, Vue, paired) | Not claimed | Not claimed |
+| Typed edit on paginated surface | Automated (React, Vue, paired) | Not claimed | Not claimed |
+| Keyboard navigation on paginated surface | Automated (React, Vue, paired) | Not claimed | Not claimed |
 | Clipboard PASTE on paginated surface | Automated (React, Vue, paired) | Not claimed | Not claimed |
 | Clipboard cut/copy on paginated surface | **Not automated** | Not claimed | Not claimed |
 | Keyboard / undo / redo (diagnostic split `?edit=1` only) | `editorSmoke` — diagnostic, non-interactive-paginated | Manual | Not claimed |
-| IME / composition | Synthetic lifecycle in adapter gate only | Manual Chromium only | Not claimed |
+| IME / composition | Synthetic lifecycle in adapter gate, plus real CDP `Input.imeSetComposition` in the paired spec (commit and geometry-key gating) | Manual Chromium only | Not claimed |
 | Accessibility traversal | Engine harness + adapter gate (Chromium) | Manual | Not claimed |
 | Virtual keyboard | N/A (desktop) | N/A | Not claimed |
 

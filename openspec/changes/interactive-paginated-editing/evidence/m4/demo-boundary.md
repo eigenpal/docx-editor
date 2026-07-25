@@ -14,7 +14,15 @@ about each.
 | --- | --- | --- | --- |
 | `/` (default) and `?realAdapter=1` | **One-surface editor** | The production adapter with the M4/M5.1 shell. Real pointer and keyboard input on painted pages. | **Internal/preview alpha only.** The only surface any interaction claim is made about. |
 | `?edit=1` | **Diagnostic split edit/preview** | A visible/hidden ProseMirror pane beside a paginated preview. Proves the model pipeline commits and repaints. | **Non-conformance UI.** Explicitly **not** painted-page interaction. Task 6.6 removes it from normal startup. |
-| `?enginePreview=1` | Read-only engine preview | Paginated paint, no editing. | Paginated preview repaint only. |
+| `?preview=engine` | Read-only engine preview | Paginated paint, no editing. | Paginated preview repaint only. |
+
+> **Corrected.** This row previously read `?enginePreview=1`. Both entrypoints test
+> `params.get('preview') === 'engine'`, and `?enginePreview=1` satisfies none of the
+> three opt-outs — so it falls through and mounts the **one-surface editor**, the
+> opposite of what the row promised. Since M4.7's whole deliverable is this
+> boundary record, a reviewer following it would have exercised the editor while
+> believing they were in the read-only preview. Caught by the round-3 evidence
+> audit.
 | `?museum=1` | Retired museum | Reference only, no longer the default. | **None.** Never a claim surface. |
 
 The routing comment in `examples/vite/src/main.tsx` states this at the branch

@@ -99,12 +99,28 @@ describe('paragraph layout cost', () => {
   });
 
   test('an oversized preservation capsule does not amplify layout', () => {
-    // Review measured 144,956ms at 2MB before per-run memoization.
-    const text = 'x '.repeat(300);
-    const none = timeLayout([{ text }]);
+    // The invariant is that capsule cost does not scale with paragraph length.
+    // Measured at this commit with an ~8MB capsule the added cost is flat — 300
+    // chars +402ms, 1,200 chars +406ms, 6,000 chars +402ms — so the
+    // `chars x capsuleBytes` amplification is genuinely gone. (Two pre-fix
+    // figures in the record, 144,956ms at 2MB and 990ms at 8MB, are mutually
+    // inconsistent and neither is reproducible; this test does not rely on them.)
+    // Asserted as flatness, not as a budget. An absolute ceiling would pass just
+    // as happily if the cost DID scale with length but stayed under the number,
+    // which is the mistake the sibling test above documents.
     const filler = '<w:rFonts w:ascii="Inter"/>'.repeat(80_000); // ~2MB
-    const big = timeLayout([{ text, rPrCapsule: `<w:rPr>${filler}<w:b/></w:rPr>` }]);
-    console.log(`no capsule: ${none}ms | 2MB capsule: ${big}ms`);
-    expect(big).toBeLessThan(none * 3 + 400);
+    const capsule = `<w:rPr>${filler}<w:b/></w:rPr>`;
+    const deltaAt = (chars: number): number => {
+      const text = 'x '.repeat(chars / 2);
+      const none = timeLayout([{ text }]);
+      const big = timeLayout([{ text, rPrCapsule: capsule }]);
+      return big - none;
+    };
+    const short = deltaAt(300);
+    const long = deltaAt(6000);
+    console.log(`2MB capsule delta: 300 chars ${short}ms | 6000 chars ${long}ms`);
+    // 20x the text must not multiply the capsule cost. Generous slack for noise
+    // on a shared machine; the pre-fix behavior was a ~20x difference here.
+    expect(long).toBeLessThan(Math.max(short, 20) * 4);
   });
 });

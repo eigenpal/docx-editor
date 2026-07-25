@@ -50,9 +50,15 @@ bun run typecheck
 
 Evidence that this predates M1 and is unrelated to it:
 
-- Every TS5097 site is in `engine-binding` or `engine-layout`. The M1 commits
-  (`checkpoint-aef0c191`, `checkpoint-c2e4721a`) touch only
-  `packages/engine-editor/src/interaction-planner.ts` and three test files.
+- The TS5097 sites span four engine packages, measured at `checkpoint-fd4db029`:
+  **163 `engine-core`, 54 `engine-editor`, 31 `engine-binding`, 21
+  `engine-layout`**. (This bullet previously asserted "every TS5097 site is in
+  `engine-binding` or `engine-layout`", which is false — the conclusion below is
+  unaffected, but the evidence offered for it was wrong. Caught by the round-3
+  evidence audit, reproduced here.) The M1 commits (`checkpoint-aef0c191`, `checkpoint-c2e4721a`) touch
+  only `packages/engine-editor/src/interaction-planner.ts` and three test files,
+  so they cannot be the cause of an error class that predates them across all
+  four packages.
 - `packages/nuxt/tsconfig.json` has not been modified since the `checkpoint-6130fecd`
   repository migration.
 - The error class is a tsconfig flag condition affecting every file in those

@@ -45,7 +45,23 @@ it is now defined in `:root` and re-pointed by the dark theme.
 | Policy | Behavior |
 | --- | --- |
 | Key ownership | Geometry keys (arrows, Home/End, PageUp/PageDown) go to the engine planner. Text, Backspace, Delete, Enter, Tab, and every ctrl/meta/alt shortcut stay with the hidden ProseMirror host. |
-| Rejected navigation | Does **not** `preventDefault`, so an unsupported key falls through to native handling instead of dead-ending. |
+| Rejected navigation | **Swallowed** — a refused geometry key is `preventDefault`ed and does not fall through to native handling. |
+
+> **Policy reversal, recorded.** This row previously said the opposite: that a
+> refused key does *not* `preventDefault` and falls through to native handling.
+> That was the shipped behavior at M2 and it was wrong, because "native handling"
+> here means ProseMirror moving a caret the engine cannot paint — an invisible
+> caret rather than an inert key. Commit `checkpoint-0e9e41bf` reversed the policy and
+> inverted the M2.1 test in place (now named "a refused geometry key is swallowed
+> rather than left to native handling"). This summary was not corrected at the
+> time, so an independent reviewer following it got the pre-reversal contract;
+> caught by the round-3 evidence audit.
+>
+> Consequence discovered later: because refused keys are inert, a bug that refuses
+> them wrongly produces *dead keys* with no fallback. That is exactly what
+> happened with the caret-affinity defect fixed in `checkpoint-a5bf5b95`, and it is why the
+> paired gate now asserts that no geometry key is refused for want of caret
+> geometry after typing.
 | Click counting | A fourth rapid click restarts the 1..3 cycle rather than clamping to triple-click. |
 | Non-primary buttons | Never forwarded. |
 | Host effects | Pointer capture and scroll are applied host-side; the engine only asks. |

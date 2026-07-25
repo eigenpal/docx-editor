@@ -1,6 +1,6 @@
 # Interactive paginated editing — accelerated execution tasks
 
-Progress: **70 / 114** complete.
+Progress: **70 / 116** complete.
 
 | Baseline | Count |
 | --- | --- |
@@ -35,6 +35,8 @@ Evidence artifacts live under `openspec/changes/interactive-paginated-editing/ev
 | **M4** | Polished retired shell + `Editor.can`/`Editor.exec` toolbar + display-only rulers | Internal React alpha with shell |
 | **M5** | Vue equivalent shell + interaction parity | None (pre-paired preview) |
 | **M6** | Paired bounded-document internal/preview alpha + default demo switch | **Internal/preview alpha only** — not public `interactive-paginated` |
+| **M6V** | Full retired-chrome visual parity on the greenfield editor | Visual parity only; no wider editing or conformance claim |
+| **M6S** | Browser-native selection-presentation bake-off | Rendering optimization only; semantic ownership remains unchanged |
 | **7–10** | Full roles, async, virtualization, collab, feature lanes, final gates | Public `interactive-paginated` at **8.10** only |
 
 ---
@@ -182,6 +184,18 @@ Not the formal public **`interactive-paginated`** claim (that remains **8.10**).
 
 ---
 
+## M6V — Full retired-chrome visual parity
+
+- [ ] M6V.1 **Immediate next delivery task after the in-flight M4-R3/M6-R2 review-fix loop closes.** Reproduce the complete user-visible retired editor chrome from presentation reference **the recorded presentation baseline** on the greenfield React and Vue root demos: application/title/menu region, full toolbar/ribbon group presentation, horizontal and vertical rulers, document workspace/page chrome, page indicator, and sidebar/dialog launch surfaces. Reuse or re-express presentation only and connect it through PM-free `Editor.can`/`Editor.exec`/`Editor.query`/`Editor.save`/`Editor.getPageGeometry` contracts. The only enabled actions in this task are **undo, redo, bold, italic** when their corresponding `Editor.can(command)` succeeds, plus **save** through `Editor.save()`; underline and every other retired button/menu/dialog/action MUST remain visible for visual parity but disabled with a localized unavailable reason. Direct ProseMirror, retired layout/painter, DOM-selection authority, and adapter-owned geometry authority remain forbidden. **Pass boundary:** fixed-viewport Chrome screenshots for React and Vue are compared side-by-side with the retired reference and recorded in `openspec/changes/interactive-paginated-editing/evidence/m6/retired-visual-parity.md`; no named chrome region is missing; React/Vue screenshots are visually paired; every unproven control is observably disabled and cannot dispatch; `bun run test:e2e:react-one-surface-interaction`, `bun run test:e2e:vue-one-surface-interaction`, `bun run test:e2e:paired-one-surface-interaction`, `bun run check:adapter-css-thin`, and the adapter-authority test remain green. This is a visual-shell gate only and MUST NOT widen feature-support or `interactive-paginated` claims.
+
+---
+
+## M6S — Browser-native selection presentation
+
+- [ ] M6S.1 Run and record a DOM selection-presentation bake-off between **(a)** merged engine-painted line rectangles, **(b)** a browser-native `Range`/`Selection` projection, and **(c)** CSS Custom Highlight ranges, then adopt the lowest-cost supported projection that matches Word/browser selection fidelity. ProseMirror MUST remain semantic selection owner; the engine MUST remain hit-test and geometry authority; browser selection/highlight state MUST be write-only presentation derived from the current interaction frame and MUST NOT be read back as canonical state. **Pass boundary:** selected spaces, formatting-run boundaries, wrapped lines, paragraph boundaries, ligatures, combining clusters, bidi visual discontinuities, zoom, clipping, and cross-page ranges render without false gaps; copy preserves the exact semantic text including whitespace; hidden input focus, IME, accessibility ownership, and pointer/keyboard selection remain unchanged; unsupported browsers fail over to merged engine rectangles; React and Vue use the same chosen policy. Record compatibility, benchmark results, rejected alternatives, screenshots, and the winner in `openspec/changes/interactive-paginated-editing/evidence/m6/selection-presentation-bakeoff.md`; keep paired interaction, accessibility-tree, and adapter-authority gates green. This task changes presentation performance/fidelity only and MUST NOT widen feature-support claims.
+
+---
+
 ## 7. Asynchronous layout, repaint, and failure handling
 
 Deferred until after M6 unless required to unblock a Blocker. Full **5.7**
@@ -246,8 +260,30 @@ depends on this section.
 
 ## Granular commit protocol (every accelerated task)
 
-Each counted checkbox through **M6-R2** ends with exactly **one normal commit**.
+Each counted checkbox through **M6V.1** ends with exactly **one normal commit**.
 Unrelated dirty files MUST remain unstaged. No milestone summary commits. No git tags.
+
+> **The staging manifest is NOT a complete record of this change's commits, and
+> should not be read as one.** A round-3 evidence audit found 16 of 51 commits in
+> `checkpoint-90e74c0a..checkpoint-e3a55ad9` carrying no checkbox and no manifest row, several of them
+> changing `engine-layout`, `engine-editor`, and the core stylesheet — plus one
+> commit (`checkpoint-78c75dee`) landing five checkboxes (M4.2–M4.6) at once against the
+> one-commit rule, with no amendment note.
+>
+> Two distinct causes, worth separating:
+>
+> - **Review-fix and gate-repair commits have no checkbox by design.** Findings
+>   from independent review are not tasks, so there is no manifest row to match.
+>   These are expected to be unrepresented, and the protocol should have said so.
+> - **`checkpoint-78c75dee` is a real protocol violation**, recorded here rather than
+>   rewritten, since the history is the record.
+>
+> To reconstruct what a commit staged, use `git log`/`git show`, not this manifest.
+> Preserve-list discipline, unlike commit granularity, was independently verified
+> clean across the whole range: no commit staged
+> `packages/engine-core/src/package/docx/read.ts`,
+> `packages/engine-core/src/package/preservation-capsule.ts`, or
+> `docs/api/docx-editor-{react,vue}/*`.
 
 1. Run task verification commands; write results into the task's evidence file when listed.
 2. Stage **only** the literal paths in that task's staging manifest row.
@@ -255,7 +291,7 @@ Unrelated dirty files MUST remain unstaged. No milestone summary commits. No git
 4. Run `git diff --cached --check`.
 5. When manifest includes code under `packages/` or `examples/`, run §Staged security check on the same path list.
 6. Commit with a conventional message naming the task id.
-7. Post progress: `interactive-paginated-editing: 33/114 — 5.6a complete`.
+7. Post progress: `interactive-paginated-editing: 33/116 — 5.6a complete`.
 
 ### Staged security check (fail closed)
 
@@ -355,6 +391,8 @@ esac
 | **M6.1** | `openspec/changes/interactive-paginated-editing/browser-platform-matrix.md`, `openspec/changes/interactive-paginated-editing/tasks.md` |
 | **M6-R1** | `openspec/changes/interactive-paginated-editing/evidence/m6/verification-log.md`, `openspec/changes/interactive-paginated-editing/tasks.md` |
 | **M6-R2** | `openspec/changes/interactive-paginated-editing/evidence/m6/manual-chrome-paired.md`, `openspec/changes/interactive-paginated-editing/evidence/m6/summary.md`, `openspec/changes/interactive-paginated-editing/tasks.md`. **Checkbox intentionally left unchecked — the manual paired pass is done and recorded, but the task also requires an INDEPENDENT review, and the evidence in this directory is author-produced. Same reason M4-R3 is open.** |
+| **M6S.1** | `packages/engine-editor/src/selection-presentation.ts`, `packages/engine-editor/src/index.ts`, `packages/engine-editor/test/selection-presentation.test.ts`, `packages/react/src/paintDisplay.tsx`, `packages/vue/src/paintDisplay.ts`, `packages/core/src/styles/editor.css`, `e2e/paired-selection-presentation.spec.ts`, `package.json`, `openspec/changes/interactive-paginated-editing/browser-platform-matrix.md`, `openspec/changes/interactive-paginated-editing/evidence/m6/selection-presentation-bakeoff.md`, `openspec/changes/interactive-paginated-editing/tasks.md` |
+| **M6V.1** | `packages/react/src/DocxEditorShell.tsx`, `packages/react/src/DocxEditorTitleBar.tsx`, `packages/react/src/DocxEditorToolbar.tsx`, `packages/react/src/DocxEditorSidebar.tsx`, `packages/react/src/index.ts`, `packages/vue/src/DocxEditorShell.ts`, `packages/vue/src/DocxEditorTitleBar.ts`, `packages/vue/src/DocxEditorToolbar.ts`, `packages/vue/src/DocxEditorSidebar.ts`, `packages/vue/src/index.ts`, `packages/core/src/styles/editor.css`, `examples/shared/DocxAdapterHarness.tsx`, `examples/shared/DocxAdapterHarness.vue`, `e2e/paired-retired-chrome.visual.spec.ts`, `package.json`, `openspec/changes/interactive-paginated-editing/evidence/m6/retired-visual-parity.md`, `openspec/changes/interactive-paginated-editing/tasks.md` |
 | **7-R1** | `openspec/changes/interactive-paginated-editing/evidence/m7/summary.md`, `openspec/changes/interactive-paginated-editing/tasks.md` |
 | **8.7** | `openspec/changes/interactive-paginated-editing/evidence/m8/benchmark.md`, `openspec/changes/interactive-paginated-editing/tasks.md` |
 | **8-R1** | `openspec/changes/interactive-paginated-editing/evidence/m8/summary.md`, `openspec/changes/interactive-paginated-editing/evidence/m8/benchmark.md`, `openspec/changes/interactive-paginated-editing/tasks.md` |
