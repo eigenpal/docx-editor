@@ -66,15 +66,30 @@ async function acrossAdapters<T>(
 
 test.describe('paired one-surface interaction (task 6.5)', () => {
   test('both adapters expose the same public interaction surface', async ({ browser }) => {
+    // SHELL-STRUCTURE testids are excluded for the duration of one declared window.
+    //
+    // M6V.1 ports the legacy React shell hierarchy (React ONLY, by owner direction),
+    // and 10V.1 mechanically ports the finished result to Vue. Between those two tasks
+    // the two adapters legitimately expose different shell containers — React the
+    // legacy `docx-editor`, Vue the interim `docx-editor-shell` — so asserting full
+    // testid equality here would fail on the divergence the plan requires.
+    //
+    // The INTERACTION surface is still compared strictly, which is what this gate
+    // exists for: every testid the interaction specs drive must match. Only the shell
+    // frame's own containers are exempt, and this exemption MUST be deleted at 10V.1.
+    const SHELL_STRUCTURE_TESTIDS = new Set(['docx-editor', 'docx-editor-shell']);
     const results = await acrossAdapters(browser, async (page) =>
       page.evaluate(() =>
         [...document.querySelectorAll('[data-testid]')].map((el) => (el as HTMLElement).dataset.testid).sort(),
       ),
     );
-    // Same testids means a browser gate written against one adapter runs
-    // unchanged against the other.
-    expect(results.vue).toEqual(results.react);
+    const interactionSurface = (ids: (string | undefined)[]) =>
+      ids.filter((id): id is string => !!id && !SHELL_STRUCTURE_TESTIDS.has(id));
+    expect(interactionSurface(results.vue)).toEqual(interactionSurface(results.react));
     expect(results.react).toContain('one-surface-click-target');
+    // And the exemption must stay narrow: exactly one shell container per adapter.
+    expect(results.react.filter((id) => id && SHELL_STRUCTURE_TESTIDS.has(id))).toHaveLength(1);
+    expect(results.vue.filter((id) => id && SHELL_STRUCTURE_TESTIDS.has(id))).toHaveLength(1);
   });
 
   test('a click at the same fraction of the same glyph lands on the same offset', async ({ browser }) => {

@@ -1606,9 +1606,36 @@
 /* Document scroll region padding: breathing room around the sheet, matching the
  * legacy backdrop. Applied to the viewport rather than the page stack so it
  * cannot shift the stack origin away from the engine's page origin. */
-.ep-shell .ep-one-surface__viewport {
+.ep-shell .ep-one-surface__viewport,
+.docx-editor__content .ep-one-surface__viewport {
   padding: 24px 0;
   scrollbar-gutter: stable both-edges;
+}
+
+/* Legacy shell regions, ported at M6V.1. Geometry that the legacy code kept inline
+ * stays inline in `DocxEditorShell.tsx`; only what it expressed in CSS is here.
+ *
+ * ONE DELIBERATE DEVIATION, recorded rather than hidden: legacy made
+ * `.docx-editor__scroll-container` the sole scroller, with the horizontal ruler
+ * `position: sticky` inside it. Here the editor's own `.ep-one-surface__viewport`
+ * remains the scroller, because the engine's input-host tracking, drag autoscroll,
+ * and twelve passing React interaction scenarios are all wired to it, and moving the
+ * scroll authority is a behavioural change that belongs in its own task rather than
+ * inside a visual-parity port. The shell's container therefore does not scroll, and
+ * the ruler row is sticky against the viewport instead. */
+.docx-editor__title-region {
+  flex-shrink: 0;
+}
+
+.docx-editor__scroll-container {
+  display: flex;
+  flex-direction: column;
+}
+
+.docx-editor__content {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
 }
 
 /* Title chrome and page indicator (interactive-paginated-editing M4.3). */
