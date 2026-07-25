@@ -32,12 +32,12 @@ import {
 import { useEditorSnapshot } from './useEditorSnapshot';
 import { runToolbarCommand, toolbarCommandState } from './toolbarCommands';
 
-/** The legacy dropdown chevron. A literal "▾" text glyph rendered at the font's own
- *  weight and baseline, which read as a stray character next to the Material Symbols
- *  icons rather than as part of the control. */
+/** The legacy dropdown chevron. Replaces a literal "▾" text glyph, which rendered at the
+ *  font's own weight and baseline and read as a stray character beside the Material
+ *  Symbols icons rather than as part of the control. */
 function Caret(): React.ReactElement {
   return (
-    <svg className="ep-toolbar__picker-caret" viewBox="0 -960 960 960" width="14" height="14" aria-hidden="true" focusable="false">
+    <svg className="shrink-0 opacity-60" viewBox="0 -960 960 960" width="14" height="14" aria-hidden="true" focusable="false">
       <path d="M480-360 280-560h400L480-360Z" fill="currentColor" />
     </svg>
   );
@@ -84,17 +84,29 @@ function ControlButton({
   const noFocusSteal = (event: { preventDefault: () => void }) => event.preventDefault();
 
   if (control.shape === 'stepper') {
+    // Tailwind utilities over the shared token palette, per the owner directive: ONE
+    // styling system, not a bespoke stylesheet beside it. The `.ep-toolbar__stepper*`,
+    // `__color*`, and `__picker*` rules are deleted from the core stylesheet; Vue still
+    // renders those class names and is knowingly unstyled here until it migrates at
+    // 10V.1, which the owner chose over carrying two systems.
     return (
       <span
-        className="ep-toolbar__stepper"
+        className="inline-flex h-[30px] items-center gap-1"
         data-testid={`toolbar-${control.id}`}
         aria-disabled="true"
+        title={`${label} — ${t(LEGACY_CHROME_UNAVAILABLE_KEY)}`}
+        aria-label={`${label} — ${t(LEGACY_CHROME_UNAVAILABLE_KEY)}`}
         onMouseDown={noFocusSteal}
       >
-        <span className="ep-toolbar__stepper-btn" aria-hidden="true">−</span>
-        <span className="ep-toolbar__stepper-value">{control.valueText ?? ''}</span>
-        <span className="ep-toolbar__stepper-btn" aria-hidden="true">+</span>
-        <span className="ep-sr-only">{`${label} — ${t(LEGACY_CHROME_UNAVAILABLE_KEY)}`}</span>
+        <span className="grid h-6 w-6 place-items-center rounded text-[15px] leading-none text-foreground/70" aria-hidden="true">
+          −
+        </span>
+        <span className="min-w-[3ch] rounded border border-border/70 px-1.5 py-0.5 text-center text-[13px] tabular-nums text-foreground/90">
+          {control.valueText ?? ''}
+        </span>
+        <span className="grid h-6 w-6 place-items-center rounded text-[15px] leading-none text-foreground/70" aria-hidden="true">
+          +
+        </span>
       </span>
     );
   }
@@ -102,17 +114,25 @@ function ControlButton({
   if (control.shape === 'colorSplit') {
     return (
       <span
-        className="ep-toolbar__color"
+        className={clsx(
+          'inline-flex h-[30px] items-center gap-0.5 rounded px-1',
+          'text-foreground/90 transition-colors hover:bg-black/[0.04]',
+        )}
         data-testid={`toolbar-${control.id}`}
         aria-disabled="true"
+        title={`${label} — ${t(LEGACY_CHROME_UNAVAILABLE_KEY)}`}
+        aria-label={`${label} — ${t(LEGACY_CHROME_UNAVAILABLE_KEY)}`}
         onMouseDown={noFocusSteal}
       >
-        <span className="ep-toolbar__color-glyph" aria-hidden="true">
+        {/* Glyph above the colour bar, as the legacy split control renders it. */}
+        <span className="flex flex-col items-center gap-[2px]" aria-hidden="true">
           {control.paths ? <ToolbarIcon paths={control.paths} /> : null}
-          <span className="ep-toolbar__color-swatch" style={{ background: control.swatch ?? 'transparent' }} />
+          <span
+            className="h-[3px] w-[16px] rounded-[1px]"
+            style={{ background: control.swatch ?? 'transparent' }}
+          />
         </span>
         <Caret />
-        <span className="ep-sr-only">{`${label} — ${t(LEGACY_CHROME_UNAVAILABLE_KEY)}`}</span>
       </span>
     );
   }
@@ -122,8 +142,8 @@ function ControlButton({
     // Radix `Select`, as the legacy adapter used, rather than a hand-rolled span. The
     // trigger is a real button with the right ARIA and disabled semantics, and its look
     // comes from Tailwind utilities over the shared token palette instead of bespoke
-    // `.ep-toolbar__picker` rules. Parity-only for now, so the trigger is disabled and no
-    // content is mounted — M6V.2 wires the real option lists.
+    // `.ep-toolbar__picker` rules, which are now deleted. Parity-only for now, so the
+    // trigger is disabled and no content is mounted — M6V.3 wires the real option lists.
     return (
       <Select.Root disabled>
         <Select.Trigger
@@ -145,7 +165,7 @@ function ControlButton({
         >
           {control.paths ? <ToolbarIcon paths={control.paths} /> : null}
           {value ? <span className="truncate">{value}</span> : null}
-          <Select.Icon className="shrink-0 opacity-55">
+          <Select.Icon asChild>
             <Caret />
           </Select.Icon>
         </Select.Trigger>

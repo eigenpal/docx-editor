@@ -1816,41 +1816,6 @@
   gap: 2px;
 }
 
-/* A picker (style, font, size, zoom) present for visual parity only. Rendered as a
- * disabled combobox because that is its legacy shape, and the parity gate compares
- * shapes, not just presence. */
-.ep-toolbar__picker {
-  display: inline-flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 6px;
-  height: 30px;
-  min-width: 76px;
-  max-width: 150px;
-  padding: 0 8px;
-  /* Flat until hovered, like the legacy control. A permanent 1px box around every
-   * dropdown made the toolbar look like a form, not a ribbon. */
-  border: 1px solid transparent;
-  border-radius: 4px;
-  background: transparent;
-  color: var(--doc-text);
-  font-size: 13px;
-  cursor: default;
-}
-
-.ep-toolbar__picker-value {
-  overflow: hidden;
-  white-space: nowrap;
-  text-overflow: ellipsis;
-}
-
-.ep-toolbar__picker-caret {
-  flex: 0 0 auto;
-  opacity: 0.55;
-  margin-left: auto;
-  font-size: 10px;
-}
-
 /* Visually hidden but present for assistive technology: a parity-only picker has no
  * tooltip of its own, so its unavailable reason is exposed here instead. */
 .ep-sr-only {
@@ -2077,62 +2042,6 @@
   background: var(--doc-text);
   border-color: var(--doc-text);
   color: var(--doc-surface);
-}
-
-/* Numeric stepper with a visible value (zoom, font size) — a legacy control shape that
- * an icon button cannot stand in for. */
-.ep-toolbar__stepper {
-  display: inline-flex;
-  align-items: center;
-  gap: 2px;
-  height: 30px;
-  padding: 0 4px;
-  color: var(--doc-text-subtle);
-  font-size: 12px;
-  cursor: default;
-}
-
-.ep-toolbar__stepper-btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 20px;
-  height: 20px;
-  border-radius: 4px;
-  font-size: 13px;
-}
-
-.ep-toolbar__stepper-value {
-  min-width: 34px;
-  text-align: center;
-  padding: 2px 4px;
-  border: 1px solid var(--doc-border);
-  border-radius: 4px;
-  background: var(--doc-surface);
-}
-
-/* Split colour control: a glyph sitting over its colour swatch, with its own caret. */
-.ep-toolbar__color {
-  display: inline-flex;
-  align-items: center;
-  gap: 1px;
-  height: 30px;
-  padding: 0 3px;
-  color: var(--doc-text-subtle);
-  cursor: default;
-}
-
-.ep-toolbar__color-glyph {
-  display: inline-flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 1px;
-}
-
-.ep-toolbar__color-swatch {
-  width: 16px;
-  height: 3px;
-  border-radius: 1px;
 }
 
 /* The page floats on the workspace backdrop with a drop shadow, as in the reference. */

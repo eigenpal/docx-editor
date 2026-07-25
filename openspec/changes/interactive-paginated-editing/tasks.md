@@ -254,10 +254,15 @@ Not the formal public **`interactive-paginated`** claim (that remains **8.10**).
   the shared token palette, and it carries its localized unavailable reason on the
   control itself. No build work was required — Tailwind already scans the adapter
   sources. Still hand-rolled: the colour-split control, the zoom and font-size steppers,
-  the toggle buttons, and the editing-mode pill. `.ep-toolbar__picker` and
-  `.ep-toolbar__picker-value` could NOT be deleted yet because
-  `packages/vue/src/DocxEditorToolbar.ts:64,72` still renders those classes; the rules
-  die when Vue converts under 10V.1, not before.
+  the toggle buttons, and the editing-mode pill. **Owner decision: one styling system, not two.** The
+  nine hand-rolled rules (`.ep-toolbar__stepper*`, `.ep-toolbar__color*`,
+  `.ep-toolbar__picker*`) are DELETED from the core stylesheet rather than kept alive for
+  Vue. `packages/vue/src/DocxEditorToolbar.ts:64,72` still emits those class names, so the
+  Vue toolbar controls are knowingly unstyled until 10V.1 migrates them to the same
+  Tailwind/radix treatment — the owner chose that over carrying a bespoke stylesheet
+  beside Tailwind. Vue's behavioral gate (`test:e2e:vue-one-surface-interaction`, 11
+  passed) is unaffected because it asserts behavior, not styling. **10V.1 MUST convert
+  the Vue toolbar, not restore the CSS.**
 
 - [ ] M6E.1 **Repoint the `?edit=1` editing smoke suite at the painted surface.** All 14
   `e2e/editorSmoke.ts` tests (7 × React and Vue) fail on a click timeout and have for at
