@@ -298,6 +298,59 @@ test.describe('paired one-surface interaction (task 6.5)', () => {
     expect(results.react.occurrences).toBe(1);
   });
 
+  test('an active composition is visible to the frame and blocks geometry keys', async ({ browser }) => {
+    // `frame.composition` was hardcoded `{ active: false }` and the surface's
+    // composition observation was never read, so the public
+    // `EditorDriver.compositionState()` was a constant. Independent review measured
+    // ArrowDown during a live composition returning ok:true and moving the painted
+    // caret to a different paragraph while the IME kept composing in the original.
+    const results = await acrossAdapters(browser, async (page) => {
+      const point = await clickTargetPointAt(page, 0.3);
+      await page.mouse.click(point.x, point.y);
+      const cdp = await page.context().newCDPSession(page);
+      await cdp.send('Input.imeSetComposition', { text: 'には', selectionStart: 2, selectionEnd: 2 });
+
+      const during = await page.evaluate(() => {
+        const editor = window.__docxAdapterEditor!;
+        const frame = editor.getInteractionFrame();
+        const head = frame.selection?.head as { kind?: string; identity?: { blockId: string } } | undefined;
+        const blockBefore = head?.kind === 'text' ? head.identity!.blockId : null;
+        const res = editor.dispatchInteraction({
+          kind: 'geometryKeyboard',
+          frameId: frame.id,
+          key: 'ArrowDown',
+          shiftKey: false,
+          altKey: false,
+          ctrlKey: false,
+          metaKey: false,
+        } as never) as { outcome: { ok: boolean; code?: string } };
+        const after = editor.getInteractionFrame().selection?.head as
+          | { kind?: string; identity?: { blockId: string } }
+          | undefined;
+        return {
+          compositionActive: frame.composition.active,
+          arrowAccepted: res.outcome.ok,
+          arrowCode: res.outcome.code ?? null,
+          blockUnchanged: blockBefore === (after?.kind === 'text' ? after.identity!.blockId : null),
+        };
+      });
+
+      // The composition must still commit correctly afterwards.
+      await cdp.send('Input.insertText', { text: 'にほん' });
+      await expect.poll(async () => await paintedText(page)).toContain('にほん');
+      return during;
+    });
+
+    for (const adapter of ['react', 'vue'] as const) {
+      const r = results[adapter];
+      expect(r.compositionActive, `${adapter} frame sees the composition`).toBe(true);
+      expect(r.arrowAccepted, `${adapter} ArrowDown during composition`).toBe(false);
+      expect(r.arrowCode, `${adapter} refusal code`).toBe('unsupported');
+      expect(r.blockUnchanged, `${adapter} caret stayed in the composing block`).toBe(true);
+    }
+    expect(results.vue).toEqual(results.react);
+  });
+
   test('undo and redo reverse and restore identically in both adapters', async ({ browser }) => {
     const results = await acrossAdapters(browser, async (page) => {
       const original = await paintedText(page);

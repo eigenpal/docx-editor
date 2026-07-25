@@ -38,6 +38,15 @@ export interface InteractionPlannerContext {
   readonly documentGeneration?: number;
   readonly resolveParagraphText?: ParagraphTextResolver;
   readonly navigationGeometry?: NavigationGeometry;
+  /**
+   * Whether an IME composition is live right now.
+   *
+   * Read from the surface at dispatch time rather than from `frame.composition`:
+   * the frame is an immutable snapshot published before the composition started, so
+   * its composition field is stale exactly when this decision is made. The frame
+   * still carries composition state for adapters that render it.
+   */
+  readonly compositionActive?: boolean;
 }
 
 /** Controller plan plus optional transactional navigation-session metadata (task 5.5). */
@@ -75,6 +84,23 @@ function validatePreconditions(
   }
   if (requiresCoordinateMetrics(intent) && !context.hostMetrics) {
     return rejectEffect('invalidTarget', 'explicit InteractionHostMetrics are required', frame.id);
+  }
+  // A live IME composition owns the caret.
+  //
+  // Geometry keys were accepted during composition, and independent review
+  // measured the result: with a composition live in one paragraph, ArrowDown
+  // returned `ok: true` and moved the painted caret to a DIFFERENT paragraph while
+  // the IME kept composing in the original one; the IME never saw the key, because
+  // the bridge preventDefaults it. Text integrity survived (the binding protects
+  // the composition anchor), but for the whole composition the visible caret
+  // pointed somewhere the insertion point was not, and the engine reported success
+  // for a move it had not really made.
+  //
+  // Refused rather than forwarded: the bridge owns these keys in capture phase, so
+  // handing them to the IME is not on the table here, and a typed refusal is what
+  // the outcome contract promises.
+  if (intent.kind === 'geometryKeyboard' && (context.compositionActive ?? frame.composition.active)) {
+    return rejectEffect('unsupported', 'geometry navigation is unavailable while an IME composition is active', frame.id);
   }
   return null;
 }

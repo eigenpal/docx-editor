@@ -42,6 +42,7 @@ import type {
   AccessibilityObservation,
   InputHostObservation,
   FocusObservation,
+  CompositionObservation,
 } from '@docx-editor.dev/core-contract/interaction';
 import {
   openDocxSession,
@@ -181,9 +182,25 @@ export function createEditor(config: EditorConfig): Editor {
       caret: null,
       selectionGeometry: null,
       focus: { scope: activeScope, focused: false },
-      composition: { active: false, scope: null },
+      composition: compositionObservation(),
       currentPage: { viewport: 0, caret: 0 },
     };
+  }
+
+  /**
+   * Live IME composition state from the surface.
+   *
+   * This was hardcoded to `{ active: false, scope: null }` and
+   * `surface.getCompositionObservation()` was never called, so `frame.composition`
+   * — and therefore the public `EditorDriver.compositionState()` — was a constant
+   * lie. Independent review measured the consequence: with a composition live in
+   * one paragraph, ArrowDown was accepted, returned `ok: true`, and moved the
+   * painted caret to a DIFFERENT paragraph while the IME kept composing in the
+   * original one. Nothing could refuse it, because no layer could see that a
+   * composition was active.
+   */
+  function compositionObservation(): CompositionObservation {
+    return surface?.getCompositionObservation() ?? { active: false, scope: null };
   }
 
   function caretClientRect(frame = currentFrame()): Rect | null {
@@ -235,7 +252,7 @@ export function createEditor(config: EditorConfig): Editor {
       caret,
       selectionGeometry,
       focus,
-      composition: base.composition,
+      composition: compositionObservation(),
       currentPage: { viewport: base.currentPage.viewport, caret: caretPage },
     });
     // Tell the surface its retained selection is current on the frame we just
@@ -375,6 +392,14 @@ export function createEditor(config: EditorConfig): Editor {
     if (surface) surface.destroy();
     surface = mountEditSurface(bodyEl, session, {
       onModelChanged,
+      // Republish so `frame.composition` and the public
+      // `EditorDriver.compositionState()` reflect a live composition instead of a
+      // constant `{ active: false }`. Selection and focus are carried through
+      // unchanged; only the composition field differs.
+      onCompositionChange: () => {
+        const frame = currentFrame();
+        if (frame.selection) publishSelectionOverlay(frame.selection, frame.focus);
+      },
       accessibleName: config.accessibleName,
       accessibilityAtomLabels: config.accessibilityAtomLabels,
       readOnlyProjection: readOnly || !session.editable,
@@ -595,6 +620,9 @@ export function createEditor(config: EditorConfig): Editor {
           ? paragraphTextById(session.currentModel(), identity.blockId, identity.storyId)
           : '') satisfies ParagraphTextResolver,
       navigationGeometry: frames.getNavigationGeometry(frame.id),
+      // Live, not `frame.composition`: the frame was published before the
+      // composition started, so its snapshot is stale exactly when it matters.
+      compositionActive: compositionObservation().active,
     };
     const dragKinds = new Set(['pointerDown', 'pointerMove', 'pointerUp', 'pointerCancel']);
     let planned: PlannedInteraction;

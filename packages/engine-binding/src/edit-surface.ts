@@ -137,6 +137,16 @@ const TOGGLEABLE_MARKS = new Set(['bold', 'italic']);
 
 export interface MountEditSurfaceOptions {
   onModelChanged?: () => void;
+  /**
+   * Called when an IME composition starts or ends.
+   *
+   * `frame.composition` — and the public `EditorDriver.compositionState()` — is
+   * built from `getCompositionObservation()`, but nothing told the engine when to
+   * re-read it, so a composition could start and end without any frame reflecting
+   * it. Independent review measured the observable field as a constant
+   * `{ active: false }` throughout a live composition.
+   */
+  onCompositionChange?: (active: boolean) => void;
   accessibleName?: string;
   accessibilityAtomLabels?: Readonly<Record<string, string>>;
   /** When true, mount a read-only semantic projection (contenteditable false, no input authorization). */
@@ -192,6 +202,7 @@ export function mountEditSurface(
   const readOnlyProjection = options.readOnlyProjection ?? !session.editable;
   const interactionAuthorized = !readOnlyProjection && session.editable;
   const onModelChanged = options.onModelChanged ?? (() => {});
+  const onCompositionChange = options.onCompositionChange ?? (() => {});
   const doc = mountParent.ownerDocument ?? document;
   const accessibleNamePolicy = resolveAccessibilityNamePolicy(options.accessibleName);
   const atomLabels = options.accessibilityAtomLabels;
@@ -503,6 +514,7 @@ export function mountEditSurface(
       },
       compositionstart: () => {
         imeComposing = true;
+        onCompositionChange(true);
         lastCompositionCancel = null;
         const range = captureSelectionRange(view.state);
         const anchor = range.anchor;
@@ -613,6 +625,7 @@ export function mountEditSurface(
 
   function flushComposition() {
     imeComposing = false;
+    onCompositionChange(false);
     const snapshot = compositionSnapshot;
     compositionSnapshot = undefined;
     compositionRange = undefined;
