@@ -59,7 +59,11 @@ class PageBuilder {
   private items: DisplayItem[] = [];
   private pageIndex = 0;
 
-  constructor(private readonly width: number, private readonly height: number) {}
+  constructor(
+    private readonly width: number,
+    private readonly height: number,
+    private readonly margin: number,
+  ) {}
 
   push(item: DisplayItem): void {
     this.items.push(item);
@@ -70,7 +74,18 @@ class PageBuilder {
   }
 
   break(): void {
-    this.pages.push({ index: this.pageIndex, width: this.width, height: this.height, items: this.items });
+    this.pages.push({
+      index: this.pageIndex,
+      width: this.width,
+      height: this.height,
+      contentBox: {
+        x: this.margin,
+        y: this.margin,
+        width: Math.max(0, this.width - this.margin * 2),
+        height: Math.max(0, this.height - this.margin * 2),
+      },
+      items: this.items,
+    });
     this.items = [];
     this.pageIndex += 1;
   }
@@ -96,7 +111,7 @@ export function layoutBody(model: PackageModel, opts: LayoutOptions): LayoutResu
   const { pageWidth, pageHeight, margin, metrics } = opts;
   const contentRight = pageWidth - margin;
   const contentBottom = pageHeight - margin;
-  const builder = new PageBuilder(pageWidth, pageHeight);
+  const builder = new PageBuilder(pageWidth, pageHeight, margin);
 
   // The shared mutable layout context: each block kind's registered handler advances the cursor and
   // pushes items through it; a container kind recurses via ctx.layoutBlocks. No block.kind switch.

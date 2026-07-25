@@ -248,7 +248,11 @@ export interface Editor {
    */
   hitTest(point: Point, options?: HitTestOptions): SemanticHitTarget | null;
   /** Page boxes from the current interaction frame. */
-  getPageGeometry(): readonly { index: number; box: Rect }[];
+  /** Page boxes in stack coordinates, each with the text area the engine laid out.
+   *  `contentBox` is the page inset by the section margin — rulers draw margin zones from
+   *  it instead of assuming a default. The engine's margin is uniform on all four sides
+   *  today, so this must not be presented as per-side fidelity it does not have. */
+  getPageGeometry(): readonly { index: number; box: Rect; contentBox: Rect }[];
   /** Scroll extent from the current interaction frame. */
   getScrollGeometry(): ScrollGeometry;
   /** Resolve pointer intent with typed stale/pending/read-only outcomes (see driver). */

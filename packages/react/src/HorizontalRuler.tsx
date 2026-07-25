@@ -23,6 +23,14 @@ export function HorizontalRuler({ editor, zoom = 1, unit = 'inch' }: HorizontalR
   const box = rulerPageBox(editor.getPageGeometry());
   if (!box) return null;
   const ticks = generateRulerTicks(box.width, unit);
+  // Margin zones, from the page's laid-out content box (M6V.6). The legacy ruler shades
+  // the margins with `--doc-shadow-subtle` and a 1px inner border; without them the ruler
+  // is a bare tick strip that shows nothing about the page. A page with no known content
+  // box yields no zones rather than a guessed margin.
+  const page = editor.getPageGeometry()[0];
+  const content = page?.contentBox;
+  const leftMargin = content ? content.x : 0;
+  const rightMargin = content ? box.width - (content.x + content.width) : 0;
   return (
     <div
       className="ep-ruler ep-ruler--horizontal"
@@ -31,6 +39,12 @@ export function HorizontalRuler({ editor, zoom = 1, unit = 'inch' }: HorizontalR
       aria-hidden="true"
       style={{ width: box.width * zoom }}
     >
+      {leftMargin > 0 ? (
+        <div className="ep-ruler__margin ep-ruler__margin--start" style={{ width: leftMargin * zoom }} />
+      ) : null}
+      {rightMargin > 0 ? (
+        <div className="ep-ruler__margin ep-ruler__margin--end" style={{ width: rightMargin * zoom }} />
+      ) : null}
       {ticks.map((tick) => (
         <div
           key={tick.position}

@@ -2123,3 +2123,23 @@
   background: var(--doc-bg-subtle);
   border: 1px solid var(--doc-border);
 }
+
+/* Ruler margin zones (M6V.6), from the legacy `ui/HorizontalRuler.tsx`:
+ * `MARGIN_ZONE_COLOR = var(--doc-shadow-subtle)` with a 1px border on the inner edge. */
+.ep-ruler__margin {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  background: var(--doc-shadow-subtle);
+  pointer-events: none;
+}
+
+.ep-ruler__margin--start {
+  left: 0;
+  border-right: 1px solid var(--doc-shadow-subtle);
+}
+
+.ep-ruler__margin--end {
+  right: 0;
+  border-left: 1px solid var(--doc-shadow-subtle);
+}

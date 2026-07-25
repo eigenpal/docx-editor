@@ -23,7 +23,7 @@ import { emptyNavigationGeometry } from './navigation-geometry.ts';
 export const DEFAULT_PAGE_GAP_PX = 24 as const;
 
 export interface StackedPageGeometry {
-  readonly pageGeometry: readonly { index: number; box: Rect }[];
+  readonly pageGeometry: readonly { index: number; box: Rect; contentBox: Rect }[];
   readonly scrollGeometry: { contentHeight: number; pageTops: readonly number[]; pageGapPx: number };
 }
 
@@ -33,7 +33,7 @@ export function buildStackedPageGeometry(
   pageGapPx: number = DEFAULT_PAGE_GAP_PX,
 ): StackedPageGeometry {
   const pageTops: number[] = [];
-  const pageGeometry: { index: number; box: Rect }[] = [];
+  const pageGeometry: { index: number; box: Rect; contentBox: Rect }[] = [];
   let top = 0;
   for (let i = 0; i < display.length; i += 1) {
     const page = display[i]!;
@@ -41,6 +41,13 @@ export function buildStackedPageGeometry(
     pageGeometry.push({
       index: page.index,
       box: { x: page.box.x, y: top, width: page.box.width, height: page.box.height },
+      // Same coordinate space as `box`: the content offset is relative to the page, so
+      // the page's own `y` in the stack has to be added back in.
+      // Falls back to the full page box when a producer predates `contentBox` (older
+      // fixtures, a host on an earlier contract). That reads as "no margin known", so a
+      // ruler draws no zones — never a guessed margin, which would put a wrong scale over
+      // a correct page.
+      contentBox: contentBoxOf(page, top),
     });
     top += page.box.height;
     if (i < display.length - 1) top += pageGapPx;
@@ -89,6 +96,13 @@ export function deepFreezeValue<T>(value: T): T {
   const record = value as Record<string, unknown>;
   for (const key of Object.keys(record)) deepFreezeValue(record[key]);
   return Object.freeze(value);
+}
+
+/** A page's content box in stack coordinates, or its full box when unknown. */
+function contentBoxOf(page: DisplayPage, top: number): Rect {
+  const cb = (page as { contentBox?: Rect }).contentBox;
+  if (!cb) return { x: page.box.x, y: top, width: page.box.width, height: page.box.height };
+  return { x: cb.x, y: top + cb.y, width: cb.width, height: cb.height };
 }
 
 function pageGeometryFromDisplay(display: readonly DisplayPage[], pageGapPx: number = DEFAULT_PAGE_GAP_PX) {
@@ -393,7 +407,7 @@ export class InteractionFrameStore {
     currentPage: { viewport: number; caret: number },
     reuseGeometry?: {
       display: readonly DisplayPage[];
-      pageGeometry: readonly { index: number; box: Rect }[];
+      pageGeometry: readonly { index: number; box: Rect; contentBox: Rect }[];
       scrollGeometry: { contentHeight: number; pageTops: readonly number[]; pageGapPx: number };
     },
     pageGapPx: number = DEFAULT_PAGE_GAP_PX,

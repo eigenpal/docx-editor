@@ -154,5 +154,9 @@ export interface DisplayPage {
   /** Zero-based page index. */
   readonly index: number;
   readonly box: Rect;
+  /** The laid-out text area — the page box inset by the section margin. Backends and
+   *  rulers read the margin from here instead of re-deriving or assuming one; the
+   *  engine's margin is uniform on all four sides today. */
+  readonly contentBox: Rect;
   readonly items: readonly DisplayItem[];
 }

@@ -313,6 +313,12 @@ export function toDisplayPages(
   const display = pages.map((page) => ({
     index: page.index,
     box: { x: 0, y: 0, width: px(page.width), height: px(page.height) },
+    contentBox: {
+      x: px(page.contentBox.x),
+      y: px(page.contentBox.y),
+      width: px(page.contentBox.width),
+      height: px(page.contentBox.height),
+    },
     items: page.items.flatMap((it, zOrder) => {
       switch (it.type) {
         case 'text':

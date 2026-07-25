@@ -376,7 +376,14 @@ export interface InteractionFrame {
   readonly completeness: FrameCompleteness;
   readonly display: readonly DisplayPage[];
   readonly semanticIndex: SemanticPositionIndex;
-  readonly pageGeometry: readonly { readonly index: number; readonly box: Rect }[];
+  readonly pageGeometry: readonly {
+    readonly index: number;
+    readonly box: Rect;
+    /** The page's text area in the same coordinate space as `box` — the page inset by the
+     *  section margin. Rulers draw their margin zones from this rather than assuming a
+     *  default; the engine's margin is uniform on all four sides today. */
+    readonly contentBox: Rect;
+  }[];
   readonly scrollGeometry: ScrollGeometry;
   readonly selection: SemanticSelection | null;
   readonly caret: CaretGeometry | null;
