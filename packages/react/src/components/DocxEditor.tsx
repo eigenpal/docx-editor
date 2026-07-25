@@ -12,15 +12,15 @@ import {
   type GlyphClickTarget,
 } from '@docx-editor.dev/engine-editor';
 import type { DisplayPage } from '@docx-editor.dev/core-contract/geometry';
-import { paintDisplay } from './paintDisplay';
-import { DocxEditorTitleBar } from './DocxEditorTitleBar';
-import { DocxEditorMenuBar } from './DocxEditorMenuBar';
-import { DocxEditorToolbar } from './DocxEditorToolbar';
-import { DocxEditorSidebar } from './DocxEditorSidebar';
-import { HorizontalRuler } from './HorizontalRuler';
-import { VerticalRuler } from './VerticalRuler';
-import { PageIndicator } from './PageIndicator';
-import type { DocxEditorProps, DocxEditorRef } from './types';
+import { paintDisplay } from '../paintDisplay';
+import { DocxEditorTitleBar } from './DocxEditor/DocxEditorTitleBar';
+import { DocxEditorMenuBar } from './DocxEditor/DocxEditorMenuBar';
+import { DocxEditorToolbar } from './DocxEditor/DocxEditorToolbar';
+import { DocxEditorSidebar } from './DocxEditor/DocxEditorSidebar';
+import { HorizontalRuler } from './ui/HorizontalRuler';
+import { VerticalRuler } from './ui/VerticalRuler';
+import { PageIndicator } from './DocxEditor/PageIndicator';
+import type { DocxEditorProps, DocxEditorRef } from '../types';
 
 /**
  * React host for the DOCX editor. It supplies an `EditorHost` (DOM handles,

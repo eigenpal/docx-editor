@@ -11,7 +11,9 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 const SRC = join(import.meta.dir, '..', 'src');
-const editorSource = readFileSync(join(SRC, 'DocxEditor.tsx'), 'utf8');
+// `components/DocxEditor.tsx`, matching the legacy React package layout that this
+// adapter is being ported onto (see GOAL-legacy-react-port.md).
+const editorSource = readFileSync(join(SRC, 'components', 'DocxEditor.tsx'), 'utf8');
 const paintSource = readFileSync(join(SRC, 'paintDisplay.tsx'), 'utf8');
 
 describe('React one-surface wiring (task 6.2)', () => {

@@ -29,8 +29,8 @@ import {
   LEGACY_CHROME_UNAVAILABLE_KEY,
   type LegacyChromeControl,
 } from '@docx-editor.dev/engine-editor';
-import { useEditorSnapshot } from './useEditorSnapshot';
-import { runToolbarCommand, toolbarCommandState } from './toolbarCommands';
+import { useEditorSnapshot } from '../../useEditorSnapshot';
+import { runToolbarCommand, toolbarCommandState } from '../../toolbarCommands';
 
 /** The legacy dropdown chevron. Replaces a literal "▾" text glyph, which rendered at the
  *  font's own weight and baseline and read as a stray character beside the Material

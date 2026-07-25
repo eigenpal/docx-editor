@@ -6,7 +6,7 @@
 
 import type { ReactNode } from 'react';
 import type { Editor } from '@docx-editor.dev/core-contract/editor';
-import { useEditorSnapshot } from './useEditorSnapshot';
+import { useEditorSnapshot } from '../../useEditorSnapshot';
 
 export interface PageIndicatorProps {
   readonly editor: Editor | null;

@@ -8,8 +8,8 @@
 
 import type { ReactNode } from 'react';
 import type { Editor } from '@docx-editor.dev/core-contract/editor';
-import { useEditorSnapshot } from './useEditorSnapshot';
-import { generateRulerTicks, rulerPageBox, type RulerUnit } from './rulerTicks';
+import { useEditorSnapshot } from '../../useEditorSnapshot';
+import { generateRulerTicks, rulerPageBox, type RulerUnit } from '../../rulerTicks';
 
 export interface HorizontalRulerProps {
   readonly editor: Editor | null;

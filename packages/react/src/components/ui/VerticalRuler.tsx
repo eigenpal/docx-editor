@@ -5,8 +5,8 @@
 
 import type { ReactNode } from 'react';
 import type { Editor } from '@docx-editor.dev/core-contract/editor';
-import { useEditorSnapshot } from './useEditorSnapshot';
-import { generateRulerTicks, rulerPageBox, type RulerUnit } from './rulerTicks';
+import { useEditorSnapshot } from '../../useEditorSnapshot';
+import { generateRulerTicks, rulerPageBox, type RulerUnit } from '../../rulerTicks';
 
 /** Matches the legacy `RULER_WIDTH` so the shell gutter is unchanged. */
 export const RULER_WIDTH = 20;
@@ -29,6 +29,12 @@ export function VerticalRuler({ editor, zoom = 1, unit = 'inch' }: VerticalRuler
   const box = rulerPageBox(editor.getPageGeometry());
   if (!box) return null;
   const ticks = generateRulerTicks(box.height, unit);
+  // Margin zones, mirroring the horizontal ruler (M6V.6). Without them only one of the
+  // two rulers showed the page's margins, which reads as a bug rather than a choice.
+  const page = editor.getPageGeometry()[0];
+  const content = page?.contentBox;
+  const topMargin = content ? content.y - page!.box.y : 0;
+  const bottomMargin = content ? box.height - (topMargin + content.height) : 0;
   return (
     // Positioned against the PAGE, not the viewport gutter.
     //
@@ -54,6 +60,12 @@ export function VerticalRuler({ editor, zoom = 1, unit = 'inch' }: VerticalRuler
         pointerEvents: 'none',
       }}
     >
+      {topMargin > 0 ? (
+        <div className="ep-ruler__margin ep-ruler__margin--top" style={{ height: topMargin * zoom }} />
+      ) : null}
+      {bottomMargin > 0 ? (
+        <div className="ep-ruler__margin ep-ruler__margin--bottom" style={{ height: bottomMargin * zoom }} />
+      ) : null}
       {ticks.map((tick) => (
         <div
           key={tick.position}
