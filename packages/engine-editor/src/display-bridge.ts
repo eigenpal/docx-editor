@@ -422,16 +422,91 @@ export function overlaysForFrame(frame: InteractionFrame): FrameOverlays {
   if (geometry && !geometry.collapsed) {
     // rects[i] and pageIndices[i] are pushed in lockstep by the geometry
     // derivation, so a rect is only paintable when it still has its page.
+    const local: OverlayBox[] = [];
     geometry.rects.forEach((rect, index) => {
       const pageIndex = geometry.pageIndices[index];
       if (pageIndex === undefined) return;
-      const local = toPageLocalRect(frame, pageIndex, rect);
-      if (!local) return;
-      selection.push({ pageIndex, rect: local });
+      const pageLocal = toPageLocalRect(frame, pageIndex, rect);
+      if (!pageLocal) return;
+      local.push({ pageIndex, rect: pageLocal });
     });
+    selection.push(...mergeSelectionRunsPerLine(local));
   }
 
   return { caret, selection };
+}
+
+
+/**
+ * Coalesce selection rectangles into one run per visual line (task M6S.1).
+ *
+ * The engine derives one rectangle per painted RUN, and the painter emits one
+ * absolutely positioned box per run with no line box between them. A selection therefore
+ * showed a visible hole wherever whitespace fell on a run boundary — the defect an owner
+ * reported with screenshots, where "Arial | Times New Roman | Courier New" highlighted as
+ * separate islands with gaps at the separators.
+ *
+ * The per-run rectangles are individually CORRECT; what was missing is that a reader
+ * perceives a selection as continuous along a line. Merging adjacent rectangles that
+ * share a line closes the gaps without touching semantic authority: ProseMirror still
+ * owns the selection, the engine still owns geometry, and nothing about copy, focus, IME,
+ * or accessibility changes — this is presentation only.
+ *
+ * Same line means same page and vertically overlapping, compared with a tolerance rather
+ * than by equality: runs of different font sizes on one line have different heights and
+ * tops, so `top === top` would refuse to merge exactly the mixed-formatting lines that
+ * show the worst gaps. Merged rectangles take the union, so a taller run keeps its height.
+ *
+ * Rectangles are NOT merged across a gap wider than a space: a genuine gap — a tab, a
+ * right-aligned tail, an empty table cell — is real and must stay visible, or the
+ * selection would claim to cover content it does not.
+ */
+function mergeSelectionRunsPerLine(boxes: readonly OverlayBox[]): OverlayBox[] {
+  if (boxes.length < 2) return [...boxes];
+
+  const sorted = [...boxes].sort((a, b) => {
+    if (a.pageIndex !== b.pageIndex) return a.pageIndex - b.pageIndex;
+    if (Math.abs(a.rect.y - b.rect.y) > 1) return a.rect.y - b.rect.y;
+    return a.rect.x - b.rect.x;
+  });
+
+  const out: OverlayBox[] = [];
+  for (const box of sorted) {
+    const previous = out[out.length - 1];
+    if (previous && canMergeOnLine(previous, box)) {
+      out[out.length - 1] = unionOnLine(previous, box);
+      continue;
+    }
+    out.push(box);
+  }
+  return out;
+}
+
+/** Whether two rectangles sit on the same visual line and are adjacent enough to join. */
+function canMergeOnLine(a: OverlayBox, b: OverlayBox): boolean {
+  if (a.pageIndex !== b.pageIndex) return false;
+  // A transformed or clipped rect has geometry the union would misrepresent.
+  if (a.transform || b.transform || a.clip || b.clip) return false;
+  // Vertical overlap, not equal tops: mixed font sizes on one line differ in both.
+  const aBottom = a.rect.y + a.rect.height;
+  const bBottom = b.rect.y + b.rect.height;
+  const overlap = Math.min(aBottom, bBottom) - Math.max(a.rect.y, b.rect.y);
+  if (overlap <= Math.min(a.rect.height, b.rect.height) * 0.5) return false;
+  // Adjacent, or separated by no more than a wide space. A real gap stays a gap.
+  const gap = b.rect.x - (a.rect.x + a.rect.width);
+  return gap <= Math.max(a.rect.height, b.rect.height) * 0.6;
+}
+
+function unionOnLine(a: OverlayBox, b: OverlayBox): OverlayBox {
+  const left = Math.min(a.rect.x, b.rect.x);
+  const top = Math.min(a.rect.y, b.rect.y);
+  const right = Math.max(a.rect.x + a.rect.width, b.rect.x + b.rect.width);
+  const bottom = Math.max(a.rect.y + a.rect.height, b.rect.y + b.rect.height);
+  return {
+    pageIndex: a.pageIndex,
+    rect: { x: left, y: top, width: right - left, height: bottom - top },
+    ...(a.writingDirection ? { writingDirection: a.writingDirection } : {}),
+  };
 }
 
 /** An engine affine transform as a CSS `matrix(...)`, in CSS argument order. */
