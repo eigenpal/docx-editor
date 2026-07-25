@@ -46,6 +46,13 @@ export interface DocxEditorPagedAreaProps {
    * slot so the button's own markup stays in one place with the state that drives it.
    */
   overlayChildren?: ReactNode;
+  /**
+   * A double-click landed on the pages. The CALLER decides what is under the point by
+   * asking the engine (`hitTest`) — this component reports the client coordinates and
+   * derives nothing, because deriving geometry here is exactly what the one-surface
+   * contract forbids and what the engine exists to answer.
+   */
+  onPagesDoubleClick?: (point: { x: number; y: number }) => void;
 }
 
 export function DocxEditorPagedArea({
@@ -59,6 +66,7 @@ export function DocxEditorPagedArea({
   hosted,
   className,
   overlayChildren,
+  onPagesDoubleClick,
 }: DocxEditorPagedAreaProps) {
   return (
     <div
@@ -71,6 +79,7 @@ export function DocxEditorPagedArea({
     >
       <div
         ref={pagesRef}
+        onDoubleClick={(e) => onPagesDoubleClick?.({ x: e.clientX, y: e.clientY })}
         className="ep-one-surface__pages"
         style={{ transform: `scale(${zoom})`, transformOrigin: 'top left' }}
       >

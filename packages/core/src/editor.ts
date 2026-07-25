@@ -458,6 +458,19 @@ export interface EditorCommands extends EditorCommandShape<DocEdits> {
   removeTabMark: { positionTwips: number };
 
   /**
+   * Open a header or footer for editing, materialising an empty one if the section has
+   * none — which is what a double-click on the header band means in Word. `firstPage`
+   * selects the `w:titlePg` variant.
+   */
+  editHeaderFooter: { position: 'header' | 'footer'; firstPage?: boolean; sectionIndex?: number };
+
+  /** Leave header/footer editing and return to the body. */
+  exitHeaderFooter: Record<never, never>;
+
+  /** Delete the header or footer being edited, and its relationship. */
+  removeHeaderFooter: { position: 'header' | 'footer'; firstPage?: boolean };
+
+  /**
    * Replace one found match with `text`. Addressed by {@link TextMatch} rather than a
    * `DocTarget` because that is what `findMatches` hands back, and re-deriving a target
    * from it in the caller is where an off-by-one would come from. An empty `text`

@@ -32,6 +32,7 @@ import { useCommentManagement } from './DocxEditor/hooks/useCommentManagement';
 import { useCommentLifecycle } from './DocxEditor/hooks/useCommentLifecycle';
 import { useImageActions } from './DocxEditor/hooks/useImageActions';
 import { useFindReplaceBridge } from './DocxEditor/hooks/useFindReplaceBridge';
+import { useHeaderFooterEditing } from './DocxEditor/hooks/useHeaderFooterEditing';
 import { MaterialSymbol } from './ui/Icons';
 import {
   useSelectionTracker,
@@ -208,10 +209,40 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
     const { runTableOfContentsUpdate, handleTableOfContentsInserted } =
       useTableOfContentsActions({ editorRef });
 
+    // Header/footer editing, ported. `getHeaderFooterState` is a stub returning null, so
+    // a double-click on the header band is refused and nothing opens — the workflow is
+    // wired so that capability plus its three commands light it up with no change here.
+    const [hfEditPosition, setHfEditPosition] = useState<'header' | 'footer' | null>(null);
+    const [hfEditIsFirstPage, setHfEditIsFirstPage] = useState(false);
+    const { handleHeaderFooterDoubleClick, handleBodyClick } = useHeaderFooterEditing({
+      editorRef,
+      hfEditPosition,
+      setHfEditPosition,
+      hfEditIsFirstPage,
+      setHfEditIsFirstPage,
+    });
+
+    // A double-click on the pages: ask the ENGINE what is under the point rather than
+    // deriving it here. A hit that resolves to a header or footer scope opens that
+    // region; anything else is an ordinary double-click the interaction bridge handles.
+    const handlePagesDoubleClick = useCallback(
+      (point: { x: number; y: number }) => {
+        const hit = editorRef.current?.hitTest(point);
+        const scope = hit?.target?.scope;
+        if (scope?.kind !== 'headerFooter') return;
+        // The engine names the region by relationship id; which of header or footer it
+        // is comes from the state capability, and that is a stub returning null — so
+        // nothing opens today and nothing is guessed from the pointer's height.
+        const state = editorRef.current?.getHeaderFooterState();
+        if (state?.editing) handleHeaderFooterDoubleClick(state.editing);
+      },
+      [editorRef, handleHeaderFooterDoubleClick]
+    );
+
     // Active-editor routing, ported. Every call site below used to repeat
     // `() => editorRef.current?.focus()`; the rule lives in one place again.
     const { focusActiveEditor, undoActiveEditor, redoActiveEditor } = useActiveEditor({
-      hfEditPosition: null,
+      hfEditPosition,
       editorRef,
     });
 
@@ -618,6 +649,7 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
         bodyRef={bodyRef}
         hosted={chromeOn}
         className={className}
+        onPagesDoubleClick={handlePagesDoubleClick}
         overlayChildren={
           floatingCommentBtn != null && (
             <button
@@ -711,7 +743,7 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
           expandedSidebarItem={expandedSidebarItem}
           trackedChanges={[]}
           onScrollContainerMouseDown={() => {}}
-          onEditorBgMouseDown={() => {}}
+          onEditorBgMouseDown={handleBodyClick}
           onEditorContextMenu={handleEditorContextMenu}
           horizontalRulerProps={{
             sectionProps: sectionPropsFromGeometry(editorRef.current),
