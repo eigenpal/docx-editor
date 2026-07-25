@@ -13,7 +13,6 @@ import {
   DocxEditorToolbar,
   HorizontalRuler,
   PageIndicator,
-  VerticalRuler,
 } from '@docx-editor.dev/vue';
 import { createEditorDriver, type EditorDriver } from '@docx-editor.dev/engine-editor';
 import en from '../../packages/i18n/en.json';
@@ -98,7 +97,6 @@ onBeforeUnmount(() => {
       <template #titleBar><DocxEditorTitleBar v-model:title="title" /></template>
       <template #toolbar><DocxEditorToolbar :editor="editorInstance" :t="translate" :on-save="onSave" /></template>
       <template #horizontalRuler><HorizontalRuler :editor="editorInstance" :zoom="zoom" /></template>
-      <template #verticalRuler><VerticalRuler :editor="editorInstance" :zoom="zoom" /></template>
       <template #pageIndicator><PageIndicator :editor="editorInstance" /></template>
       <DocxEditor v-if="bytes" :document="bytes" :zoom="zoom" @ready="onReady" />
     </DocxEditorShell>

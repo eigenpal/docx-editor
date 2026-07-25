@@ -273,16 +273,27 @@ Not the formal public **`interactive-paginated`** claim (that remains **8.10**).
   viewport's left gutter with its scale down the window edge rather than against the page,
   and the visual gate now asserts its absence pending this task; (b) the toolbar clips at
   the right edge instead of fitting or overflowing into a menu as retired does; (c) the
-  split alignment control renders its caret as a detached button; (d) removing the React
-  vertical ruler broke `test:e2e:paired-one-surface-interaction` (Vue still renders
-  `vertical-ruler`, React no longer does) — that gate is RED until the ruler is
-  reintroduced correctly or Vue follows. **Owner directive: do NOT hand-roll this CSS.** Build the
+  split alignment control renders its caret as a detached button; (d) the vertical ruler is
+  currently unmounted in BOTH adapters, so the paired gate stays green and parity stays
+  honest; reintroducing it must land in React and Vue together. **Owner directive: do NOT hand-roll this CSS.** Build the
   controls the way the old adapter did — `@radix-ui/react-select` for every dropdown
   (style/font/size/colour/alignment/line-spacing/editing-mode), `clsx` for class
   composition, and Tailwind for layout, mirroring
   `packages/react/package.json` and the markup at
   ref `checkpoint-9bb06c38`. Both deps are now installed in `packages/react` (the previous
-  `minimumReleaseAge` install blocker no longer reproduces). Note this intentionally
+  `minimumReleaseAge` install blocker no longer reproduces).
+
+  **The port needs no build work — this was verified, not assumed.** Tailwind is already
+  wired end to end: `tailwind.config.js` scans `packages/react/src/**/*.{ts,tsx}` and
+  `examples/**`, `packages/core/tailwind-preset.cjs` is present and is the shared palette,
+  `packages/core/src/styles/editor.css` already carries `@tailwind utilities`, and
+  `examples/vite/vite.config.ts:110` loads the plugin against the root config. Utilities
+  are therefore live in the adapter today. Diffing `--doc-*` tokens between
+  `the shared editor stylesheet` and ours
+  returns **zero missing** — the token layer is fully implemented. So the remaining work is
+  exactly: replace the hand-rolled control markup and its bespoke CSS with Tailwind
+  utilities plus radix `Select`, following the markup at ref `checkpoint-9bb06c38`, and DELETE the
+  hand-rolled rules rather than layering over them. Note this intentionally
   cuts against the "adapter CSS is thin, all chrome styling lives in the core
   stylesheet" rule in CLAUDE.md; the owner's instruction takes precedence, and
   `check:adapter-css-thin` will need its scope revisited as part of this task rather
