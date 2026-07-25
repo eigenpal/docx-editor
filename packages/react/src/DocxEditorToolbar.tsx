@@ -98,13 +98,15 @@ function ControlButton({
         aria-label={`${label} — ${t(LEGACY_CHROME_UNAVAILABLE_KEY)}`}
         onMouseDown={noFocusSteal}
       >
-        <span className="grid h-6 w-6 place-items-center rounded text-[15px] leading-none text-foreground/70" aria-hidden="true">
+        {/* VERBATIM from the legacy stepper buttons. */}
+        <span className="grid h-7 w-7 place-items-center rounded text-muted-foreground hover:text-foreground hover:bg-muted/80" aria-hidden="true">
           −
         </span>
-        <span className="min-w-[3ch] rounded border border-border/70 px-1.5 py-0.5 text-center text-[13px] tabular-nums text-foreground/90">
+        {/* VERBATIM from the legacy `ui/FontSizePicker.tsx` value input. */}
+        <span className="h-7 w-10 text-center text-sm border border-border bg-doc-bg-input text-doc-text grid place-items-center rounded">
           {control.valueText ?? ''}
         </span>
-        <span className="grid h-6 w-6 place-items-center rounded text-[15px] leading-none text-foreground/70" aria-hidden="true">
+        <span className="grid h-7 w-7 place-items-center rounded text-muted-foreground hover:text-foreground hover:bg-muted/80" aria-hidden="true">
           +
         </span>
       </span>
