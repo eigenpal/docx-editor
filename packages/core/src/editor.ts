@@ -245,11 +245,18 @@ export interface Editor {
   } | null;
 
   /** Find matches for a query, for the find/replace dialog. */
-  findMatches(query: string, options?: { readonly matchCase?: boolean; readonly wholeWord?: boolean }): readonly {
-    readonly blockId: string;
-    readonly start: number;
-    readonly length: number;
-  }[];
+  findMatches(
+    query: string,
+    options?: { readonly matchCase?: boolean; readonly wholeWord?: boolean }
+  ): readonly TextMatch[];
+
+  /**
+   * Move the selection to a found match — what a find dialog's next/previous do.
+   *
+   * Separate from `findMatches` because finding is a read and selecting is a write, and
+   * a caller may want the count without moving the caret.
+   */
+  selectMatch(match: TextMatch): ExecResult;
 
   /** The image at the selection, for the image toolbar and transform controls. */
   getSelectedImage(): { readonly id: string; readonly widthEmu: number; readonly heightEmu: number } | null;
@@ -464,6 +471,32 @@ export interface TableContext {
   readonly columns: number;
   readonly rowIndex: number;
   readonly columnIndex: number;
+}
+
+/**
+ * One occurrence of a search query in the document.
+ *
+ * Carries TWO addresses on purpose. `blockId` + `start` is the engine's own: stable
+ * across edits and independent of ordering. `paragraphIndex` + `runIndex` + `runOffset`
+ * is the positional one a find/replace UI needs to show and navigate results, and it is
+ * derived from the same walk rather than left to the caller to reconstruct — a caller
+ * guessing at run boundaries would send the selection to the wrong place.
+ *
+ * A match can span runs when formatting changes mid-word; the run address is where it
+ * STARTS.
+ */
+export interface TextMatch {
+  readonly blockId: string;
+  /** Character offset within the paragraph's concatenated run text. */
+  readonly start: number;
+  readonly length: number;
+  /** Ordinal among PARAGRAPHS in the body, skipping tables and other non-paragraph blocks. */
+  readonly paragraphIndex: number;
+  /** Index of the run the match starts in, and the offset within that run. */
+  readonly runIndex: number;
+  readonly runOffset: number;
+  /** The matched text as it appears in the document. */
+  readonly text: string;
 }
 
 export interface HyperlinkInfo {

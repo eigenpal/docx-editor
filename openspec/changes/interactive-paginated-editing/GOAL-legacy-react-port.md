@@ -143,6 +143,9 @@ Two capabilities are deliberately NOT derived, because the inputs do not exist:
   implementation that tested against them returned the last page at any scroll and was
   reverted. Deriving it needs the display to publish each page's placement in a shared
   content space.
-- The find dialog's match LIST — it addresses a match by paragraph, run and character
-  index; the engine addresses it by block id and offset. The COUNT is real; inventing
-  the indices would send the dialog to the wrong place.
+- ~~The find dialog's match LIST~~ — RESOLVED. The positional address the dialog needs
+  (paragraph ordinal, run index, offset within the run) is derivable from the same walk
+  `findMatches` already does, so `TextMatch` carries it alongside the engine's own
+  `blockId` + offset and the list is real. What remains unsupported is MOVING to a match,
+  and that is now `Editor.selectMatch` — a named stub that refuses, so the dialog lists
+  and counts but does not advance the caret, and it learns that from the capability.

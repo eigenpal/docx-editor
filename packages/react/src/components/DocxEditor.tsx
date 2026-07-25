@@ -1,6 +1,6 @@
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react';
 import type { CSSProperties } from 'react';
-import type { Editor, EditorHost } from '@docx-editor.dev/core-contract/editor';
+import type { Editor, EditorHost, TextMatch } from '@docx-editor.dev/core-contract/editor';
 import type { InteractionIntent } from '@docx-editor.dev/core-contract/interaction';
 import {
   attachAdapterEventBridge,
@@ -21,7 +21,7 @@ import { useImageContextMenu } from './ImageContextMenu';
 import { useKeyboardShortcuts } from './DocxEditor/hooks/useKeyboardShortcuts';
 import { useFindReplace } from '../hooks/useFindReplace';
 import { DocxEditorDialogs } from './DocxEditor/DocxEditorDialogs';
-import type { FindOptions, FindResult } from './dialogs/findReplaceUtils';
+import type { FindMatch, FindOptions, FindResult } from './dialogs/findReplaceUtils';
 import { useHyperlinkDialog } from './dialogs/HyperlinkDialog';
 import { OUTLINE_RESERVED_SPACE, OUTLINE_BUTTON_RESERVED_SPACE } from './DocumentOutline';
 import { SIDEBAR_DOCUMENT_SHIFT } from './sidebar/constants';
@@ -160,27 +160,65 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
       hyperlinkDialog,
     });
 
-    // Find counts for real: `findMatches` derives matches over the canonical text.
+    // Find, wired to the engine's derivation.
     //
-    // The MATCH LIST stays empty on purpose. This dialog addresses a match by
-    // paragraph index, run index and character offsets — an address into the legacy
-    // document tree — while the engine addresses it by block id and offset. Filling
-    // those fields would mean inventing indices, and a dialog that jumps to the wrong
-    // place is worse than one that reports the count and does not jump. Navigation and
-    // replace are inert for the same reason: moving the selection to a match and
-    // rewriting it are separate capabilities the engine does not expose.
+    // The engine resolves each match to BOTH addresses — its own `blockId` + offset, and
+    // the paragraph/run/offset triple this dialog is written against — so the match list
+    // is real rather than empty, and nothing here reconstructs run boundaries.
+    //
+    // Navigation goes through `selectMatch`, which the engine refuses today (it needs
+    // offset-addressed selection). The dialog therefore lists and counts matches but does
+    // not move the caret, and it learns that from the capability rather than from a
+    // handler hard-coded to do nothing.
     const findResultRef = useRef<FindResult | null>(null);
-    const handleFind = useCallback((searchText: string, options: FindOptions): FindResult | null => {
-      const matches =
-        editorRef.current?.findMatches(searchText, {
-          matchCase: options.matchCase,
-          wholeWord: options.matchWholeWord,
-        }) ?? [];
-      const result: FindResult = { matches: [], totalCount: matches.length, currentIndex: -1 };
-      findResultRef.current = result;
-      return result;
-    }, []);
+    const engineMatchesRef = useRef<readonly TextMatch[]>([]);
 
+    const toFindMatch = useCallback(
+      (m: TextMatch): FindMatch => ({
+        paragraphIndex: m.paragraphIndex,
+        contentIndex: m.runIndex,
+        startOffset: m.runOffset,
+        endOffset: m.runOffset + m.length,
+        text: m.text,
+      }),
+      []
+    );
+
+    const handleFind = useCallback(
+      (searchText: string, options: FindOptions): FindResult | null => {
+        const matches =
+          editorRef.current?.findMatches(searchText, {
+            matchCase: options.matchCase,
+            wholeWord: options.matchWholeWord,
+          }) ?? [];
+        engineMatchesRef.current = matches;
+        const result: FindResult = {
+          matches: matches.map(toFindMatch),
+          totalCount: matches.length,
+          currentIndex: matches.length > 0 ? 0 : -1,
+        };
+        findResultRef.current = result;
+        return result;
+      },
+      [toFindMatch]
+    );
+
+    const step = useCallback(
+      (delta: 1 | -1): FindMatch | null => {
+        const result = findResultRef.current;
+        const matches = engineMatchesRef.current;
+        if (!result || matches.length === 0) return null;
+        const next = (result.currentIndex + delta + matches.length) % matches.length;
+        // Only advance if the engine actually moved the selection. Reporting a new
+        // current match while the caret stayed put is the lie this guards against.
+        if (!editorRef.current?.selectMatch(matches[next]!).ok) return null;
+        result.currentIndex = next;
+        return toFindMatch(matches[next]!);
+      },
+      [toFindMatch]
+    );
+
+    // The image menu's own state hook, ported.
     // The image menu's own state hook, ported. It opens from an image right-click, which
     // needs `getSelectedImage` — a stub returning null — so it stays closed today.
     const imageContextMenu = useImageContextMenu();
@@ -610,8 +648,8 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
               findReplace={findReplace}
               findResultRef={findResultRef}
               onFind={handleFind}
-              onFindNext={() => null}
-              onFindPrevious={() => null}
+              onFindNext={() => step(1)}
+              onFindPrevious={() => step(-1)}
               onReplace={() => false}
               onReplaceAll={() => 0}
               hyperlinkDialog={hyperlinkDialog}

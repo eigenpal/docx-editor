@@ -21,6 +21,7 @@ import type {
   CanResult,
   DocumentSource,
   DocumentHandle,
+  TextMatch,
 } from '@docx-editor.dev/core-contract/editor';
 import type { DisplayPage } from '@docx-editor.dev/core-contract/geometry';
 import type { Point, Rect, Unsubscribe, ExecResult } from '@docx-editor.dev/core-contract/types';
@@ -1076,20 +1077,60 @@ export function createEditor(config: EditorConfig): Editor {
       }
       const model = session.currentModel();
       const blocks = model.stories.get(bodyStoryId(model))?.blocks ?? [];
-      const out: { blockId: string; start: number; length: number }[] = [];
+      const out: TextMatch[] = [];
+      // `paragraphIndex` counts PARAGRAPHS, not blocks: a caller enumerating paragraphs
+      // (which is what every consumer of this does) would not see a table in the middle
+      // and would be off by one for everything after it.
+      let paragraphIndex = -1;
       for (const block of blocks) {
         if (block.kind !== 'paragraph') continue;
+        paragraphIndex += 1;
         const paragraph = block as { id: string; runs: readonly { text: string }[] };
         const text = paragraph.runs.map((r) => r.text).join('');
         re.lastIndex = 0;
         for (let m = re.exec(text); m !== null; m = re.exec(text)) {
-          out.push({ blockId: paragraph.id, start: m.index, length: m[0].length });
+          // Resolve the paragraph offset to the run that contains it. A match can span
+          // runs (formatting changes mid-word); `runIndex`/`runOffset` address where it
+          // STARTS, which is what a caller needs to place a selection there.
+          let runIndex = 0;
+          let runOffset = m.index;
+          for (let r = 0; r < paragraph.runs.length; r += 1) {
+            const len = paragraph.runs[r]!.text.length;
+            if (runOffset < len || r === paragraph.runs.length - 1) {
+              runIndex = r;
+              break;
+            }
+            runOffset -= len;
+          }
+          out.push({
+            blockId: paragraph.id,
+            start: m.index,
+            length: m[0].length,
+            paragraphIndex,
+            runIndex,
+            runOffset,
+            text: m[0],
+          });
           // A zero-length match (possible with \b on an empty escape) would loop forever.
           if (m[0].length === 0) re.lastIndex += 1;
         }
       }
       return out;
     },
+
+    /**
+     * STUB — `findMatches` resolves WHERE a match is, but moving the selection there
+     * needs a semantic position built from `blockId` + `start`, and that mapping (offset
+     * within a paragraph's concatenated run text to a canonical position with affinity)
+     * is the same derivation `setSelection` waits on for offset-addressed input.
+     * Refusing is the honest answer: a find dialog learns navigation is unavailable
+     * rather than silently leaving the caret where it was and reporting success.
+     */
+    selectMatch: (_match: TextMatch): ExecResult => ({
+      ok: false,
+      code: 'unsupported',
+      reason: 'selectMatch needs offset-addressed selection, which is not wired yet',
+    }),
 
     /** STUB — needs the drawing/image parts resolved and mapped to the selection. */
     getSelectedImage: () => null,
