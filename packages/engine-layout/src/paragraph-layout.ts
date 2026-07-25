@@ -113,6 +113,12 @@ function runStartsOf(p: ParagraphRecord): Int32Array {
 /** Index of the run covering `utf16Offset`, or -1 when past the end. */
 function runIndexAt(p: ParagraphRecord, utf16Offset: number): number {
   const starts = runStartsOf(p);
+  // `Number.isInteger` first: `NaN < 0` and `NaN >= total` are BOTH false, so a
+  // non-finite offset fell through this guard and returned run 0. With an empty
+  // `p.runs` that made `runStyleAt` dereference `p.runs[0]`, throwing where the
+  // pre-fix linear scan had returned a neutral style. Not reachable from a current
+  // call site (every offset is a derived integer), fixed as defence in depth.
+  if (!Number.isInteger(utf16Offset)) return -1;
   if (utf16Offset < 0 || utf16Offset >= starts[p.runs.length]!) return -1;
   let lo = 0;
   let hi = p.runs.length - 1;
@@ -359,6 +365,28 @@ function emitPaintSlices(
 ): void {
   for (const slice of placed) {
     let cursor = slice.utf16From;
+    // Accumulated, not recomputed.
+    //
+    // This was `advanceRangeWidth(metrics, p, slice.utf16From, cursor)` — a fresh
+    // measurement of the whole slice prefix for EVERY style segment inside it, i.e.
+    // k^2*m/2 `metrics.advance` calls for k segments of m characters. Independent
+    // security review measured a 4,039-byte .docx — one whitespace-free paragraph
+    // with runs alternating bold every 23 characters — freezing `createEditor()`
+    // for 45.2 s on open with zero clicks, at 736,460,001 `advance()` calls and a
+    // measured growth exponent of 2.05 over four doublings. It re-runs per
+    // keystroke, and a whitespace-free token is not exotic: CJK text has no
+    // whitespace, so an entire CJK paragraph is one token.
+    //
+    // The prefix is exactly the sum of the segment widths already emitted, so
+    // carrying it forward is both cheaper and simpler.
+    //
+    // This is the FOURTH iteration on this defect class, and the reason the earlier
+    // three missed it is worth recording: each guard instrumented whatever the
+    // previous fix had addressed. `layout-cost.test.ts` counts segmented characters,
+    // which for this shape is exactly 1.0x linear, while `advance()` runs 4,003x per
+    // character. A guard that counts the wrong quantity reads as coverage. The
+    // companion test now counts `metrics.advance` calls.
+    let prefixWidth = 0;
     while (cursor < slice.utf16To) {
       const style = runStyleAt(p, cursor);
       let runEnd = slice.utf16To;
@@ -369,7 +397,6 @@ function emitPaintSlices(
           break;
         }
       }
-      const prefixWidth = advanceRangeWidth(metrics, p, slice.utf16From, cursor);
       const partWidth = advanceRangeWidth(metrics, p, cursor, runEnd);
       const item: TextItem = {
         type: 'text',
@@ -384,6 +411,7 @@ function emitPaintSlices(
         line: slice.line,
       };
       sink.push(item);
+      prefixWidth += partWidth;
       cursor = runEnd;
     }
   }

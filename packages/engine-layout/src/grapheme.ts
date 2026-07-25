@@ -54,6 +54,22 @@ function createIntlBoundary(): GraphemeBoundary {
 export const intlGraphemeBoundary: GraphemeBoundary = createIntlBoundary();
 
 let activeBoundary: GraphemeBoundary = intlGraphemeBoundary;
+/**
+ * Bumped whenever the boundary implementation changes.
+ *
+ * Any cache whose value depends on segmentation must include this in its key, not
+ * just clear its own entries. `horizontal-boundary.ts` keyed its geometry-trust
+ * watermark on `(text, lineStart, metricsPort)` and independent review proved that
+ * still stale: warmed under a per-code-unit boundary, `'ab<CJK>'` reported trusted
+ * and KEPT reporting trusted after installing a grouping boundary, publishing
+ * `navigable: true` for an edge whose advance is unprovable.
+ */
+let boundaryEpoch = 0;
+
+/** Current boundary generation, for callers that cache segmentation-derived answers. */
+export function graphemeBoundaryEpoch(): number {
+  return boundaryEpoch;
+}
 
 /** Test hook: replace the grapheme boundary without changing call sites. */
 let memoText: string | null = null;
@@ -102,6 +118,7 @@ export function resetGraphemeBoundary(): void {
  * able to mask a regression in the very boundary under test.
  */
 function clearGraphemeMemo(): void {
+  boundaryEpoch += 1;
   memoText = null;
   memoSegments = null;
   indexedText = null;

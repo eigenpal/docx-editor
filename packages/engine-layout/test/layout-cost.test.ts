@@ -59,6 +59,68 @@ afterEach(() => {
   resetGraphemeBoundary();
 });
 
+/**
+ * Count `metrics.advance` calls during one layout.
+ *
+ * A SECOND instrument, because counting segmented characters was structurally blind
+ * to the third amplifier: for a whitespace-free paragraph with alternating run
+ * styles, segmentation is exactly 1.0x linear while `advance()` ran 4,003x per
+ * character. Independent review measured a 4,039-byte .docx freezing the main
+ * thread for 45 seconds while the segmentation guard read perfectly clean.
+ *
+ * The lesson is general enough to state: a cost guard must instrument the quantity
+ * that actually amplifies, and each fix in this area moved which quantity that was.
+ */
+function countAdvanceCalls(runs: ParagraphRecord['runs']): { calls: number; chars: number } {
+  const base = new HelveticaMetrics();
+  let calls = 0;
+  const counting = {
+    ...base,
+    shaping: base.shaping,
+    lineHeight: base.lineHeight,
+    advance: (ch: string, bold: boolean, italic: boolean) => {
+      calls += 1;
+      return base.advance(ch, bold, italic);
+    },
+    provesCharacterAdvance: (ch: string) => base.provesCharacterAdvance(ch),
+  } as unknown as HelveticaMetrics;
+  layoutBody(modelWith(runs), { ...LAYOUT, metrics: counting });
+  return { calls, chars: runs.reduce((n, r) => n + r.text.length, 0) };
+}
+
+describe('paragraph layout advance work', () => {
+  test('a whitespace-free paragraph with alternating run styles stays linear', () => {
+    // The reviewer's exact shape: no whitespace anywhere (so the paragraph is ONE
+    // token) and a style flip every 23 characters. Cost was k^2*m/2 in the number of
+    // style segments, from `prefixWidth` being re-measured per segment.
+    //
+    // A whitespace-free token is not a crafted edge case — CJK text has no
+    // whitespace, so an ordinary CJK paragraph is one token.
+    const runs = Array.from({ length: 400 }, (_, i) => ({
+      text: 'x'.repeat(23),
+      ...(i % 2 === 0 ? { props: { bold: true } } : {}),
+    }));
+    const { calls, chars } = countAdvanceCalls(runs);
+    // Linear means a small constant multiple of the character count. The measured
+    // pre-fix ratio for this shape was ~400x (k/2 with k=800 segments).
+    expect(calls).toBeLessThan(chars * 6);
+  });
+
+  test('advance work grows linearly as style segments multiply', () => {
+    const shape = (segments: number) =>
+      countAdvanceCalls(
+        Array.from({ length: segments }, (_, i) => ({
+          text: 'x'.repeat(23),
+          ...(i % 2 === 0 ? { props: { bold: true } } : {}),
+        })),
+      );
+    const small = shape(200);
+    const large = shape(800);
+    // 4x the segments must cost about 4x, not 16x.
+    expect(large.calls).toBeLessThan(small.calls * 8);
+  });
+});
+
 describe('paragraph layout segmentation work', () => {
   test('segmentation is proportional to the paragraph, not to paragraph x tokens', () => {
     // Independent review measured 201 full-paragraph passes for a 200-word

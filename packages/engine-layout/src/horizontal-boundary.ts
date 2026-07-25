@@ -1,7 +1,7 @@
 // Semantic whole-grapheme horizontal boundaries vs geometry-trusted caret edges (task 5.5).
 
 import type { MetricsPort } from './metrics.ts';
-import { segmentGraphemes } from './grapheme.ts';
+import { graphemeBoundaryEpoch, segmentGraphemes } from './grapheme.ts';
 
 /**
  * Segments for a per-character probe.
@@ -121,9 +121,27 @@ let trustFirstUnprovable: number | null = null;
  * crossed editor instances with different ports over equal paragraph text.
  */
 let trustMetrics: MetricsPort | null = null;
+/**
+ * The installed grapheme boundary is part of the key too.
+ *
+ * Adding `trustMetrics` closed only half of this: `graphemeAtIndex` goes through
+ * `segmentGraphemes`, so the answer also depends on which boundary is installed.
+ * Review proved both directions on `'ab<CJK>'` — warm under a per-code-unit
+ * boundary then switch to a grouping one and the stale `true` survived, and the
+ * reverse produced a stale `false` where cold returns `true`.
+ */
+let trustEpoch = -1;
 
 function prefixProvableUpTo(metrics: MetricsPort, fullText: string, lineStart: number, upTo: number): boolean {
-  if (trustMetrics !== metrics || trustText !== fullText || trustLineStart !== lineStart || trustCheckedUpTo > upTo) {
+  const epoch = graphemeBoundaryEpoch();
+  if (
+    trustEpoch !== epoch ||
+    trustMetrics !== metrics ||
+    trustText !== fullText ||
+    trustLineStart !== lineStart ||
+    trustCheckedUpTo > upTo
+  ) {
+    trustEpoch = epoch;
     trustMetrics = metrics;
     trustText = fullText;
     trustLineStart = lineStart;

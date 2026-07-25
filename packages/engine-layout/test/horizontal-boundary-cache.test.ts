@@ -10,6 +10,7 @@
 
 import { describe, expect, test } from 'bun:test';
 import { isCumulativeGeometryTrustedFromLineOrigin } from '../src/horizontal-boundary.ts';
+import { resetGraphemeBoundary, setGraphemeBoundary } from '../src/grapheme.ts';
 import { PER_GRAPHEME_SHAPING } from '../src/shaping.ts';
 import type { MetricsPort } from '../src/metrics.ts';
 
@@ -53,5 +54,41 @@ describe('cumulative geometry trust cache', () => {
   test('a line origin is trusted regardless of port strictness', () => {
     const strict = portProving('');
     expect(isCumulativeGeometryTrustedFromLineOrigin(strict, TEXT, 3, 3)).toBe(true);
+  });
+
+  test('changing the grapheme boundary invalidates the watermark', () => {
+    // Keying on the metrics port closed only half of this. `graphemeAtIndex` goes
+    // through `segmentGraphemes`, so the answer also depends on WHICH boundary is
+    // installed. Round-4 review proved both directions: warmed under a per-code-unit
+    // boundary, a stale `true` survived a switch to a grouping boundary — publishing
+    // `navigable: true` for an edge whose advance is unprovable, exactly what this
+    // probe exists to refuse.
+    const text = 'ab中'; // CJK third character
+    const port = portProving('ab'); // proves ASCII only, not the CJK unit
+
+    // Per-code-unit boundary: each character is its own grapheme.
+    setGraphemeBoundary({
+      segment: (t: string) => [...t].map((ch, i) => ({ index: i, text: ch, utf16From: i, utf16To: i + 1 })),
+    });
+    const perUnit = isCumulativeGeometryTrustedFromLineOrigin(port, text, 0, 2);
+
+    // Grouping boundary: the whole string is one grapheme, so offset 2 sits inside
+    // a cluster containing the unprovable CJK unit.
+    setGraphemeBoundary({
+      segment: (t: string) => [{ index: 0, text: t, utf16From: 0, utf16To: t.length }],
+    });
+    const grouped = isCumulativeGeometryTrustedFromLineOrigin(port, text, 0, 2);
+
+    // Establish the grouped answer from cold, so the comparison is against truth
+    // rather than against whatever happened to be cached.
+    resetGraphemeBoundary();
+    setGraphemeBoundary({
+      segment: (t: string) => [{ index: 0, text: t, utf16From: 0, utf16To: t.length }],
+    });
+    const groupedCold = isCumulativeGeometryTrustedFromLineOrigin(port, text, 0, 2);
+
+    expect(grouped).toBe(groupedCold);
+    expect(perUnit).not.toBe(groupedCold);
+    resetGraphemeBoundary();
   });
 });
