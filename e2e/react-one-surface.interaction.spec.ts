@@ -226,6 +226,42 @@ test.describe('React one-surface interaction (task M3.1)', () => {
     expect((await probe(page)).head).toBe(placed.head);
   });
 
+  test('clicking a disabled toolbar control keeps the caret, focus, and geometry keys', async ({ page }) => {
+    // Guarded with REAL trusted clicks, deliberately. The previous fix for this was
+    // scored 24/24 correct by a probe using synthetic `dispatchEvent` — which DOES run
+    // an element's mousedown handler and never moves focus, so it reported success with
+    // and without the fix. Chromium dispatches NO mouse event to a disabled form
+    // control, so the handler was dead code while focus still left the editor: round-6
+    // review measured 20 of 29 controls losing the painted caret, `focus.focused`, and
+    // all six geometry keys in the real app.
+    //
+    // `page.mouse.click` sends a trusted event through the browser's real hit testing,
+    // which is the only way this assertion means anything.
+    const point = await clickTargetPointAt(page, 0.3);
+    await page.mouse.click(point.x, point.y);
+    await expectCaretPainted(page);
+
+    const disabledIds = await page.evaluate(() =>
+      [...document.querySelectorAll('[data-testid^="toolbar-"]')]
+        .filter((el) => el.hasAttribute('data-parity-only') || el.classList.contains('ep-toolbar__picker'))
+        .map((el) => (el as HTMLElement).dataset.testid!),
+    );
+    expect(disabledIds.length).toBeGreaterThan(10);
+
+    const lost: string[] = [];
+    for (const id of disabledIds) {
+      const box = await page.locator(`[data-testid="${id}"]`).boundingBox();
+      if (!box) continue;
+      await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
+      const state = await page.evaluate(() => ({
+        caret: document.querySelectorAll('[data-testid="one-surface-caret"]').length,
+        focused: window.__docxAdapterEditor!.getInteractionFrame().focus.focused,
+      }));
+      if (state.caret === 0 || !state.focused) lost.push(id);
+    }
+    expect(lost, `controls that stole focus: ${lost.join(', ')}`).toEqual([]);
+  });
+
   test('clipboard paste inserts at the clicked caret', async ({ page, context }) => {
     await context.grantPermissions(['clipboard-read', 'clipboard-write']);
     const point = await clickTargetPointAt(page, 0.1);

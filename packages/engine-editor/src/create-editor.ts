@@ -637,6 +637,22 @@ export function createEditor(config: EditorConfig): Editor {
     }
     const outcome = surface.syncSemanticSelection({ frameId: frame.id, selection });
     if (!outcome.ok) return { ok: false, code: execErrorFromInteraction(outcome.code), reason: outcome.reason };
+    // Publish the frame too.
+    //
+    // This moved the REAL insertion point and returned ok while publishing nothing,
+    // so the painted caret stayed where it was. Round-6 review measured
+    // `frame.selection` and `caret.rect.x` unchanged with zero emissions while the
+    // surface correctly reported the new range — and then one keystroke turned
+    // "primera linea" into "pZra linea": the caret was painted at offset 2 while Z
+    // replaced graphemes 1-5.
+    //
+    // It also falsified the comment on `publishSelectionOverlay` claiming every
+    // producer funnels through it, `exec({setSelection})` included. Now it does.
+    //
+    // The existing test masked it by calling `editor.focus()` between `exec` and its
+    // assertions — the one operation that repairs the frame — and then asserting only
+    // on `getAccessibilityObservation()`, never on `getInteractionFrame()`.
+    publishSelectionOverlay(selection, { scope: activeScope, focused: currentFrame().focus.focused });
     return { ok: true, changed: false };
   }
 

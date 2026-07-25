@@ -63,6 +63,8 @@ function layoutText(text: string, pageWidth = 12240) {
  */
 const COMBINING_ACUTE = '\u0301';
 const NBSP = '\u00a0';
+/** U+0600 ARABIC NUMBER SIGN: GCB=Prepend, so it clusters with what FOLLOWS it. */
+const PREPEND = '\u0600';
 
 describe('grapheme cluster straddling a token boundary', () => {
   test('a combining mark after a space advances the space exactly once', () => {
@@ -79,6 +81,34 @@ describe('grapheme cluster straddling a token boundary', () => {
     const straddle = layoutText(`ab${NBSP}${COMBINING_ACUTE}cd`);
     const attached = layoutText(`ab${COMBINING_ACUTE}${NBSP}cd`);
     expect(straddle.finalX).toBe(attached.finalX);
+  });
+
+  test('a Prepend code point BEFORE whitespace is not double-counted', () => {
+    // The UPPER-bound clamp had zero coverage: round-6 review reverted
+    // `Math.min(seg.utf16To, token.utf16To)` and all five tests here still passed,
+    // because every case in this file put a combining mark AFTER whitespace — the
+    // LOWER bound. The mirror case needs a GCB=Prepend code point BEFORE whitespace,
+    // and a repo-wide search found none in any test.
+    //
+    // U+0600 ARABIC NUMBER SIGN clusters FORWARD across the following space, so the
+    // cluster starts in the word token and ends inside the whitespace token. Review
+    // confirmed all nine Prepend code points (U+0600-0605, U+06DD, U+070F, U+0890,
+    // U+0891, U+08E2, U+0D4E, U+110BD, U+110CD) cluster this way across every Unicode
+    // space separator. Reverting the clamp inflates the advance by one whole space,
+    // which changes wrap decisions and therefore pagination.
+    const straddle = layoutText(`ab${PREPEND} cd`);
+    const attached = layoutText(`ab ${PREPEND}cd`);
+    // Same code units, so a correct layout gives the same total advance.
+    expect(straddle.finalX).toBe(attached.finalX);
+  });
+
+  test('Prepend before every Unicode space separator is not double-counted', () => {
+    // Breadth, because one code point passing does not prove the class does.
+    for (const space of ['\u0020', '\u00a0', '\u2000', '\u3000', '\u202f', '\u205f', '\u1680']) {
+      const straddle = layoutText(`ab${PREPEND}${space}cd`);
+      const attached = layoutText(`ab${space}${PREPEND}cd`);
+      expect(straddle.finalX, `space U+${space.codePointAt(0)!.toString(16)}`).toBe(attached.finalX);
+    }
   });
 
   test('many straddles do not change the line count versus the ASCII control', () => {
