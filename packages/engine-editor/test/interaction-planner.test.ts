@@ -12,7 +12,11 @@ import {
   selectionForBlock,
   stackedFrame,
 } from './interaction-test-helpers.ts';
-import { planInteraction, type InteractionPlannerContext } from '../src/interaction-planner.ts';
+import {
+  planInteraction,
+  resolveSelectionAgainstCanonicalState,
+  type InteractionPlannerContext,
+} from '../src/interaction-planner.ts';
 
 const METRICS: InteractionHostMetrics = {
   clientOrigin: { x: 0, y: 0 },
@@ -512,5 +516,45 @@ describe('shift-click anchor re-resolution (task 5.7a)', () => {
       shiftKey: true,
     });
     expect(plan.effects.map((e) => e.kind)).toEqual(['syncSelection', 'focus']);
+  });
+});
+
+describe('setSelection refuses rather than clamps (independent review, HIGH)', () => {
+  test('an out-of-range grapheme offset is refused, not silently relocated', () => {
+    const frame = publishFrame();
+    const block = frame.semanticIndex.stories[0]!.blocks[0]!;
+    const beyond = selectionForBlock(frame, block.identity.blockId, block.graphemeCount + 500, block.graphemeCount + 900);
+    const rejection = resolveSelectionAgainstCanonicalState(frame, beyond);
+    // Review measured `graphemeOffsetToUtf16` clamping 9999 -> 13 and reporting
+    // ok:true. Clamping means the next keystroke edits text the caller never
+    // pointed at, with no diagnostic.
+    expect(rejection).not.toBeNull();
+    expect(rejection).toMatchObject({ kind: 'reject', code: 'invalidTarget' });
+  });
+
+  test('a selection minted on a superseded frame is refused, not rebound', () => {
+    const frame = publishFrame();
+    const blockId = frame.semanticIndex.stories[0]!.blocks[0]!.identity.blockId;
+    const stale: SemanticSelection = {
+      ...selectionForBlock(frame, blockId, 0, 1),
+      frameId: { value: 999999 },
+    };
+    // The bug was that rangeToSelection rewrote frameId to the current frame,
+    // so the staleFrame check could never fire from the setSelection path.
+    expect(resolveSelectionAgainstCanonicalState(frame, stale)).toMatchObject({
+      kind: 'reject',
+      code: 'staleFrame',
+    });
+  });
+
+  test('a non-integer offset is refused rather than thrown', () => {
+    const frame = publishFrame();
+    const blockId = frame.semanticIndex.stories[0]!.blocks[0]!.identity.blockId;
+    // Review found 1.5 escaping as an uncaught TypeError out of public exec,
+    // breaking the ExecResult contract.
+    expect(resolveSelectionAgainstCanonicalState(frame, selectionForBlock(frame, blockId, 1.5, 2))).toMatchObject({
+      kind: 'reject',
+      code: 'invalidTarget',
+    });
   });
 });

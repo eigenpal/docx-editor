@@ -37,7 +37,12 @@ function rangeToSelection(
   scope: ViewScope,
 ): SemanticSelection | null {
   if (isSemanticSelection(range)) {
-    return { ...range, frameId, scope: range.scope.kind === scope.kind ? range.scope : scope };
+    // Keep the CALLER's frameId. Rewriting it to the current frame made the
+    // staleFrame check structurally unreachable from this path: a selection
+    // minted on a superseded frame was silently rebound to the live one and
+    // applied. Only a range with no frame of its own (an EditorPosition pair)
+    // binds to the current frame below.
+    return { ...range, scope: range.scope.kind === scope.kind ? range.scope : scope };
   }
   if (isSemanticTarget(range)) {
     return { frameId, scope, anchor: range, head: range };

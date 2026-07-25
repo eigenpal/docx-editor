@@ -63,7 +63,11 @@ import type { NavigationGeometry } from './navigation-geometry.ts';
 import { hitTestPointer, deriveCaretGeometry, deriveSelectionGeometry } from './interaction-geometry.ts';
 import { contentToClient } from './coordinate-mapper.ts';
 import { execErrorFromInteraction, invalidSetSelection, semanticSelectionFromCommand, unsupportedSetSelection } from './set-selection.ts';
-import { planInteraction, type PlannedInteraction } from './interaction-planner.ts';
+import {
+  planInteraction,
+  resolveSelectionAgainstCanonicalState,
+  type PlannedInteraction,
+} from './interaction-planner.ts';
 import { executeInteractionPlan } from './interaction-executor.ts';
 import { planPointerDragInteraction, type PointerDragSession } from './drag-session.ts';
 import { commitDragSessionAfterExecution } from './drag-dispatch.ts';
@@ -491,6 +495,16 @@ export function createEditor(config: EditorConfig): Editor {
     }
     const selection = semanticSelectionFromCommand(command, frame.id, activeScope);
     if (!selection) return invalidSetSelection('setSelection requires semantic targets in the active scope');
+    // The public setSelection surface must re-resolve against canonical state
+    // like every other path to the store's selection. Without this it reached
+    // `graphemeOffsetToUtf16`, which CLAMPS: offset 9999 on a 13-grapheme
+    // paragraph returned ok:true with the head silently relocated to 13, so the
+    // next keystroke edited text the caller never pointed at. Refuse, never
+    // clamp (task 5.7a).
+    const staleOrInvalid = resolveSelectionAgainstCanonicalState(frame, selection);
+    if (staleOrInvalid && staleOrInvalid.kind === 'reject') {
+      return { ok: false, code: execErrorFromInteraction(staleOrInvalid.code), reason: staleOrInvalid.reason };
+    }
     const outcome = surface.syncSemanticSelection({ frameId: frame.id, selection });
     if (!outcome.ok) return { ok: false, code: execErrorFromInteraction(outcome.code), reason: outcome.reason };
     return { ok: true, changed: false };
