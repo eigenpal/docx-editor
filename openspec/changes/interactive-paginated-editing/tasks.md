@@ -289,13 +289,12 @@ Not the formal public **`interactive-paginated`** claim (that remains **8.10**).
   column inside it; the ribbon pill was `#f5f5f5` on white, i.e. invisible, and
   edge-to-edge so its rounded ends were off-screen; dropdown carets were literal `▾` text
   glyphs; control groups had no separators; and the demo's status strip sat above the
-  product header. Still open: (a) the vertical ruler is REMOVED — it rendered in the
-  viewport's left gutter with its scale down the window edge rather than against the page,
-  and the visual gate now asserts its absence pending this task; (b) the toolbar clips at
+  product header. Still open: (a) DONE — the vertical ruler is back in
+  both adapters, anchored to the page (50% minus half the page width minus its own width)
+  and top-aligned with it, instead of rendering in the viewport's left gutter; the visual
+  gate asserts its presence again; (b) the toolbar clips at
   the right edge instead of fitting or overflowing into a menu as retired does; (c) the
-  split alignment control renders its caret as a detached button; (d) the vertical ruler is
-  currently unmounted in BOTH adapters, so the paired gate stays green and parity stays
-  honest; reintroducing it must land in React and Vue together. **Owner directive: do NOT hand-roll this CSS.** Build the
+  split alignment control renders its caret as a detached button; **Owner directive: do NOT hand-roll this CSS.** Build the
   controls the way the old adapter did — `@radix-ui/react-select` for every dropdown
   (style/font/size/colour/alignment/line-spacing/editing-mode), `clsx` for class
   composition, and Tailwind for layout, mirroring

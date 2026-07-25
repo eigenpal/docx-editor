@@ -18,6 +18,7 @@ import { DocxEditorMenuBar } from './DocxEditorMenuBar';
 import { DocxEditorToolbar } from './DocxEditorToolbar';
 import { DocxEditorSidebar } from './DocxEditorSidebar';
 import { HorizontalRuler } from './HorizontalRuler';
+import { VerticalRuler } from './VerticalRuler';
 import { PageIndicator } from './PageIndicator';
 import type { DocxEditorProps, DocxEditorRef } from './types';
 
@@ -352,6 +353,9 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
               </div>
               <div style={LEGACY_CONTENT_ROW_STYLE}>
                 <div className="docx-editor__content" style={LEGACY_CONTENT_STYLE}>
+                  {/* Anchors itself to the page, so it sits immediately left of the
+                      document rather than in the window's left gutter (M6V.1). */}
+                  <VerticalRuler editor={editorRef.current} zoom={zoomFactor} />
                   {/* Outline toggle, in the left gutter as in the reference. */}
                   <button
                     type="button"
