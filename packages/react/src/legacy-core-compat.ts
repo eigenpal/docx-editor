@@ -120,7 +120,9 @@ export interface Style {
   link?: string;
   [key: string]: unknown;
 }
+/** The theme fields the ported colour resolver reads. */
 export interface Theme {
+  colorScheme?: ThemeColorScheme;
   [key: string]: unknown;
 }
 /** Compatibility contract for the shared adapter surface. */
@@ -192,16 +194,16 @@ export function excludeFontsByName<T extends { name: string }>(
 // Shared adapter presentation and compatibility behavior.
 // not have yet is a stub returning the empty answer, per the port goal.
 
-/** Copied verbatim from the legacy core. */
+/** Copied verbatim from the legacy core's `utils/units.ts`. */
 export function halfPointsToPoints(halfPoints: number): number {
   return halfPoints / 2;
 }
 
-/** STUB — the engine exposes no theme colour scheme yet, so the picker shows its
- *  standard palette and no theme row, rather than a fabricated one. */
-export function generateThemeTintShadeMatrix(_scheme?: ThemeColorScheme | null): ThemeMatrixCell[][] {
-  return [];
+/** Copied verbatim from the legacy core's `utils/units.ts`. */
+export function pointsToHalfPoints(points: number): number {
+  return Math.round(points * 2);
 }
+
 
 /** STUB — no style preview data on the engine yet; the picker falls back to plain text. */
 export function getStylePreviewProps(_style?: { styleId: string } | null): Record<string, unknown> {
@@ -211,57 +213,7 @@ export function getStylePreviewProps(_style?: { styleId: string } | null): Recor
 // List state. The engine exposes no list state, so every predicate answers "not a list"
 // and the constructors produce inert values. The list buttons therefore render inactive
 // instead of claiming a list the document may not have.
-export const createDefaultListState = (): ListState => ({ type: 'none', level: 0, isInList: false });
-export const createBulletListState = (): ListState => ({ type: 'bullet', level: 0, isInList: true });
-export const createNumberedListState = (): ListState => ({ type: 'numbered', level: 0, isInList: true });
-export const isAnyListState = (s?: ListState | null): boolean => !!s?.isInList;
-export const isBulletListState = (s?: ListState | null): boolean => s?.type === 'bullet';
-export const isNumberedListState = (s?: ListState | null): boolean => s?.type === 'numbered';
 
-/** STUB — no colour resolution against the document theme yet; a bare hex passes
- *  through and a themed reference yields its rgb, never a guessed theme colour. */
-/** Compatibility contract for the shared adapter surface.
- *  makes the return non-optional — my one-arg version returned `string | undefined` and
- *  the ported ColorPicker failed against it. */
-export function resolveColor(
-  color: ColorValue | undefined | null,
-  _theme?: Theme | null,
-  defaultColor: string = '000000',
-): string {
-  if (!color || color.auto) return defaultColor;
-  return color.rgb ?? defaultColor;
-}
-
-// `TranslationKey` deliberately NOT declared here. Aliasing it to `string` shadowed the
-// real union derived from `en.json` and broke every `t(labelKey)` call; the keys the
-// ported controls use (alignment.*, lineSpacing.*) already exist in the catalogue, so
-// controls import the real type from `../../i18n`.
-export const getNextIndentLevel = (level?: number): number => Math.min((level ?? 0) + 1, 8);
-export const getPreviousIndentLevel = (level?: number): number => Math.max((level ?? 0) - 1, 0);
-
-/** Compatibility contract for the shared adapter surface. */
-export function pointsToHalfPoints(points: number): number {
-  return Math.round(points * 2);
-}
-
-/** STUB — the engine exposes no highlight palette resolution; the raw value passes
- *  through so a document colour is never replaced by a guessed one. */
-export function resolveHighlightColor(value?: string | null): string | undefined {
-  return value ?? undefined;
-}
-
-/**
- * Signature copied from the legacy core (`color`, `theme`). STUB body: with no theme
- * resolution on the engine, a literal colour passes through and a theme-bound one yields
- * its rgb — never a colour invented from a theme we cannot read.
- */
-export function resolveColorToHex(
-  color: ColorValue | undefined | null,
-  _theme?: Theme | null,
-): string | undefined {
-  if (!color || color.auto) return undefined;
-  return color.rgb;
-}
 
 /** STUB — no document style inventory on the engine yet, so the style picker shows
  *  whatever the caller passes and nothing is synthesized. */
@@ -285,12 +237,6 @@ export function resolveParagraphStyleOptions(styles: Style[] | undefined): Resol
     .map((s, i) => ({ styleId: s.styleId, name: s.name ?? s.styleId, priority: i }));
 }
 
-/** Copied shape from the legacy core: cycles a list type without engine state. */
-export function toggleListType(state: ListState, type: ListType): ListState {
-  return state.type === type
-    ? { ...state, type: 'none', isInList: false }
-    : { ...state, type, isInList: true };
-}
 export interface TextFormatting {
   // Basic formatting
   /** Bold (w:b) */
@@ -1235,3 +1181,31 @@ export type NoteNumberRestart = 'continuous' | 'eachSect' | 'eachPage';
 // Named by the shared TabMark.
 export type TabJustify = 'left' | 'center' | 'right' | 'decimal' | 'bar' | 'clear' | 'num';
 export type TabLeader = 'none' | 'dot' | 'hyphen' | 'underscore' | 'heavy' | 'middleDot';
+
+
+// --- Colour resolution: PORTED, not stubbed --------------------------------------------
+//
+// `utils/colorResolver.ts` from the legacy core is a pure function over theme data — its
+// only import is type-only — so it is used directly rather than being stubbed. That
+// restores real theme tint/shade matrices in the colour picker, real highlight mapping,
+// and real hex resolution, none of which needed engine state after all.
+export {
+  resolveColor,
+  resolveColorToHex,
+  resolveHighlightColor,
+  resolveShadingColor,
+  getThemeTintShadeHex,
+  generateThemeTintShadeMatrix,
+  colorsEqual,
+  parseColorString,
+  ensureHexPrefix,
+  resolveHighlightToCss,
+} from './lib/colorResolver';
+
+
+// --- List state: PORTED, not stubbed ---------------------------------------------------
+//
+// `utils/listState.ts` from the legacy core has NO imports at all — 58 lines of pure
+// predicates and constructors — so it is used directly. The interim stubs answered "not a list"
+// unconditionally; these answer correctly for whatever state the caller holds.
+export * from './lib/listState';
