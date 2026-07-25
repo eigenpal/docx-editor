@@ -8,6 +8,7 @@ import {
   DocxEditor,
 } from '@docx-editor.dev/react';
 import { createEditorDriver, type EditorDriver } from '@docx-editor.dev/engine-editor';
+import { RawProseMirrorReference } from './RawProseMirrorReference';
 import en from '../../packages/i18n/en.json';
 
 /**
@@ -44,6 +45,13 @@ declare global {
     };
   }
 }
+
+/**
+ * Body text the raw PM reference starts from. Kept in the harness rather than read from
+ * the document, so the two editors provably begin identical: the gate compares COMMAND
+ * BEHAVIOR, and a mismatch in starting content would look like a command difference.
+ */
+const PM_REFERENCE_PARAGRAPHS = ['The quick brown fox jumps over the lazy dog', 'Second paragraph here', 'Third'];
 
 export function DocxAdapterHarness({
   fixtureUrl,
@@ -101,6 +109,11 @@ export function DocxAdapterHarness({
       <div style={{ padding: '8px 12px', font: '13px system-ui, sans-serif', color: '#333', borderBottom: '1px solid #e0e0e0' }}>
         <span data-testid="adapter-status">{status}</span>
       </div>
+      {/* Raw ProseMirror reference for the M6K.1 differential gate, behind `?pmref=1`
+          so it never appears in the normal demo. */}
+      {new URLSearchParams(window.location.search).get('pmref') === '1' && (
+        <RawProseMirrorReference paragraphs={PM_REFERENCE_PARAGRAPHS} />
+      )}
       {/* The production component composes its OWN chrome (task M6V.1). The demo no
           longer assembles a second shell out of the exported pieces — that is exactly
           how the demo and the published component drift apart. Supplying `t` turns the
