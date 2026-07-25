@@ -20,6 +20,10 @@ import { DocxEditorOverlays } from './DocxEditor/DocxEditorOverlays';
 import { useContextMenus } from './DocxEditor/hooks/useContextMenus';
 import { useFormattingActions } from './DocxEditor/hooks/useFormattingActions';
 import { useFileIO } from './DocxEditor/hooks/useFileIO';
+import {
+  useSelectionTracker,
+  type SelectionStateDelta,
+} from './DocxEditor/hooks/useSelectionTracker';
 import { useKeyboardShortcuts } from './DocxEditor/hooks/useKeyboardShortcuts';
 import { useFindReplace } from '../hooks/useFindReplace';
 import { DocxEditorDialogs } from './DocxEditor/DocxEditorDialogs';
@@ -292,19 +296,19 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
     const [showCommentsSidebar, setShowCommentsSidebar] = useState(false);
     const [expandedSidebarItem, setExpandedSidebarItem] = useState<string | null>(null);
 
-    // `selectionFormatting` is how the legacy toolbar drives its active states and value
-    // displays — `active={currentFormatting.bold}` and the pickers' current font/size/
-    // style. Supplying it from the engine's derivation is the wiring that makes B/I
-    // highlight and the pickers show the caret's actual formatting.
-    const f = editorRef.current?.getSelectionFormatting();
-    const selectionFormatting = {
-      ...(f?.bold !== undefined ? { bold: f.bold } : {}),
-      ...(f?.italic !== undefined ? { italic: f.italic } : {}),
-      ...(f?.underline !== undefined ? { underline: f.underline } : {}),
-      ...(f?.fontFamily ? { fontFamily: f.fontFamily } : {}),
-      ...(f?.fontSizeHalfPoints ? { fontSize: f.fontSizeHalfPoints } : {}),
-      ...(f?.styleId ? { styleId: f.styleId } : {}),
-    };
+    // Toolbar state for the current selection, from the ported tracker. This block used
+    // to be an inline derivation in this file; the hook owns it now, and the delta it
+    // emits is legacy's shape.
+    const [selectionDelta, setSelectionDelta] = useState<SelectionStateDelta>({});
+    const { handleSelectionChange } = useSelectionTracker({
+      editorRef,
+      applySelectionDelta: setSelectionDelta,
+    });
+    const selectionFormatting = selectionDelta.selectionFormatting ?? {};
+    // The editor is constructed once, so its `selectionChange` subscriber closes over the
+    // first handler identity. A ref keeps that subscriber calling the CURRENT one.
+    const handleSelectionChangeRef = useRef(handleSelectionChange);
+    handleSelectionChangeRef.current = handleSelectionChange;
 
     // Collect headings on open, as legacy did — it walked the editing engine's
     // document tree; here the engine derives the outline from the authored model.
@@ -373,7 +377,10 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
         propsRef.current.onChange?.(c);
         syncFromFrame();
       });
-      const offSelection = editor.on('selectionChange', () => syncFromFrame());
+      const offSelection = editor.on('selectionChange', () => {
+        syncFromFrame();
+        handleSelectionChangeRef.current();
+      });
       const offDisplay = editor.on('display', () => syncFromFrame());
       syncFromFrame();
       return () => {
