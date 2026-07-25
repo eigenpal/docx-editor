@@ -139,7 +139,35 @@ export function capsuleToggle(capsule: string | undefined, tag: 'w:b' | 'w:i'): 
       i = close === -1 ? capsule.length : close + 3;
       continue;
     }
+    // `w:rPrChange` (ECMA-376 17.13.5.31) is a legitimate `w:rPr` child holding
+    // the run's PREVIOUS properties for a tracked change. Its nested `w:rPr` is
+    // history, not current formatting, and the last-wins rule would otherwise let
+    // that historical value beat the live one — mis-rendering ordinary Word
+    // documents with tracked changes, no crafted markup required.
+    if (capsule.startsWith('<w:rPrChange', i)) {
+      const close = capsule.indexOf('</w:rPrChange>', i);
+      if (close === -1) {
+        // Unterminated: skip the rest rather than read history as current.
+        break;
+      }
+      i = close + '</w:rPrChange>'.length;
+      continue;
+    }
+    // A processing instruction is legal in element content and is not an element.
+    if (capsule.startsWith('<?', i)) {
+      const close = capsule.indexOf('?>', i + 2);
+      i = close === -1 ? capsule.length : close + 2;
+      continue;
+    }
     if (!capsule.startsWith(open, i)) {
+      // Skip quoted attribute text in the OUTER walk too, so a toggle spelled
+      // inside another element's attribute value is not mistaken for markup.
+      if (capsule[i] === '"' || capsule[i] === "'") {
+        const quote = capsule[i]!;
+        const close = capsule.indexOf(quote, i + 1);
+        i = close === -1 ? capsule.length : close + 1;
+        continue;
+      }
       i += 1;
       continue;
     }

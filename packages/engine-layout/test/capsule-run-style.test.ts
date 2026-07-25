@@ -122,3 +122,43 @@ describe('capsules crafted to disagree with Word (independent security review)',
     expect(capsuleToggle(capsule, 'w:i')).toBe(false);
   });
 });
+
+describe('vectors found by the second security pass', () => {
+  test('w:rPrChange history does not override current formatting', () => {
+    // ECMA-376 17.13.5.31: w:rPrChange holds the run's PREVIOUS properties for a
+    // tracked change. Reported ON because the flat scan saw the nested w:b and
+    // last-wins let history beat the live value. This shape needs no attacker —
+    // it is what Word writes for a tracked formatting change.
+    const capsule =
+      '<w:rPr><w:b w:val="0"/><w:rPrChange w:id="1" w:author="A"><w:rPr><w:b/></w:rPr></w:rPrChange></w:rPr>';
+    expect(capsuleToggle(capsule, 'w:b')).toBe(false);
+    // And the reverse: currently bold, previously not.
+    const nowBold =
+      '<w:rPr><w:b/><w:rPrChange w:id="1" w:author="A"><w:rPr><w:b w:val="0"/></w:rPr></w:rPrChange></w:rPr>';
+    expect(capsuleToggle(nowBold, 'w:b')).toBe(true);
+  });
+
+  test('an unterminated w:rPrChange does not leak history as current', () => {
+    expect(capsuleToggle('<w:rPr><w:b w:val="0"/><w:rPrChange><w:rPr><w:b/>', 'w:b')).toBe(false);
+  });
+
+  test('a processing instruction is not an element', () => {
+    expect(capsuleToggle('<w:rPr><?p <w:b/>?></w:rPr>', 'w:b')).toBe(false);
+    expect(capsuleToggle('<w:rPr><?p x?><w:b/></w:rPr>', 'w:b')).toBe(true);
+    expect(capsuleToggle('<w:rPr><?p <w:b/>', 'w:b')).toBe(false);
+  });
+
+  test('a toggle spelled inside another attribute value is not markup', () => {
+    // The outer walk was not quote-aware, only elementEnd was.
+    expect(capsuleToggle('<w:rPr><w:rFonts w:ascii="<w:b/>"/></w:rPr>', 'w:b')).toBe(false);
+    expect(capsuleToggle('<w:rPr><w:rFonts w:ascii="<w:b/>"/><w:b/></w:rPr>', 'w:b')).toBe(true);
+  });
+
+  test('the added skips cannot hang on pathological input', () => {
+    const started = Date.now();
+    expect(capsuleToggle('<w:rPr>' + '<?p x?>'.repeat(50_000) + '<w:b/></w:rPr>', 'w:b')).toBe(true);
+    expect(capsuleToggle('<w:rPr>' + '"a"'.repeat(50_000) + '<w:b/></w:rPr>', 'w:b')).toBe(true);
+    expect(capsuleToggle('<w:rPr>' + '<w:rPrChange><w:rPr><w:b/></w:rPr></w:rPrChange>'.repeat(5_000) + '</w:rPr>', 'w:b')).toBe(false);
+    expect(Date.now() - started).toBeLessThan(500);
+  });
+});

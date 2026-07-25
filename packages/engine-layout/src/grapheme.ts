@@ -56,29 +56,93 @@ export const intlGraphemeBoundary: GraphemeBoundary = createIntlBoundary();
 let activeBoundary: GraphemeBoundary = intlGraphemeBoundary;
 
 /** Test hook: replace the grapheme boundary without changing call sites. */
+let memoText: string | null = null;
+let memoSegments: readonly GraphemeSegment[] | null = null;
+
+export function segmentGraphemes(text: string): readonly GraphemeSegment[] {
+  if (memoText === text && memoSegments) return memoSegments;
+  const segments = activeBoundary.segment(text);
+  memoText = text;
+  memoSegments = segments;
+  return segments;
+}
+
 export function setGraphemeBoundary(boundary: GraphemeBoundary): void {
   activeBoundary = boundary;
+  clearGraphemeMemo();
 }
 
 export function resetGraphemeBoundary(): void {
   activeBoundary = intlGraphemeBoundary;
+  clearGraphemeMemo();
 }
 
-export function segmentGraphemes(text: string): readonly GraphemeSegment[] {
-  return activeBoundary.segment(text);
+/**
+ * Single-entry memo at the source.
+ *
+ * Segmentation is a full `Intl.Segmenter` pass over the whole paragraph, and
+ * several layout probes call it once per character — `utf16AtGraphemeBoundary`,
+ * the boundary tests, `semanticHorizontalBoundaries`. Memoizing each caller
+ * separately kept missing one, so the memo lives here where every caller
+ * benefits. One entry, not a Map: the keys are file-derived strings of unbounded
+ * size, and a growing cache would trade a freeze for a leak.
+ *
+ * Safe to cache because segmentation is a pure function of the text and the
+ * active boundary implementation; `setGraphemeBoundary` clears it.
+ */
+/** Drop the memo — required whenever the boundary implementation changes. */
+function clearGraphemeMemo(): void {
+  memoText = null;
+  memoSegments = null;
 }
 
 export function graphemeCount(text: string): number {
   return segmentGraphemes(text).length;
 }
 
+/**
+ * Single-entry memo of the utf16 -> grapheme index for one text.
+ *
+ * `utf16OffsetToGrapheme` is called once per character during paragraph layout,
+ * and it previously ran a full `Intl.Segmenter` pass AND a linear scan on every
+ * call, making layout quadratic in paragraph length. Independent review measured
+ * a single 20,000-character paragraph — a ~20 KB .docx, no capsule, no crafted
+ * markup — freezing the main thread for 117 seconds on open: 600 chars 132 ms,
+ * 2,400 chars 1.85 s, 10,000 chars 29.1 s.
+ *
+ * The hot loop asks about the same text repeatedly, so one cached entry collapses
+ * the segmentation to once per text and the scan to an O(1) array read. One entry
+ * rather than a Map, because the keys here are file-derived strings of unbounded
+ * size and an unbounded cache would just trade a freeze for a leak.
+ */
+let indexedText: string | null = null;
+let indexedOffsets: Int32Array | null = null;
+let indexedCount = 0;
+
+function graphemeIndexFor(text: string): { offsets: Int32Array; count: number } {
+  if (indexedText === text && indexedOffsets) {
+    return { offsets: indexedOffsets, count: indexedCount };
+  }
+  const segments = segmentGraphemes(text);
+  // offsets[i] is the grapheme index containing utf16 offset i; one extra slot
+  // holds the end position, so a clamped offset never reads out of range.
+  const offsets = new Int32Array(text.length + 1);
+  for (const seg of segments) {
+    for (let i = seg.utf16From; i < seg.utf16To && i < text.length; i += 1) {
+      offsets[i] = seg.index;
+    }
+  }
+  offsets[text.length] = segments.length;
+  indexedText = text;
+  indexedOffsets = offsets;
+  indexedCount = segments.length;
+  return { offsets, count: segments.length };
+}
+
 export function utf16OffsetToGrapheme(text: string, utf16Offset: number): number {
   const clamped = Math.max(0, Math.min(utf16Offset, text.length));
-  for (const seg of segmentGraphemes(text)) {
-    if (clamped <= seg.utf16From) return seg.index;
-    if (clamped < seg.utf16To) return seg.index;
-  }
-  return graphemeCount(text);
+  const { offsets } = graphemeIndexFor(text);
+  return offsets[clamped]!;
 }
 
 export function graphemeOffsetToUtf16(text: string, graphemeOffset: number): number {
