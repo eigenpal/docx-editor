@@ -18,6 +18,7 @@ import { DocxEditorMenuBar } from './DocxEditor/DocxEditorMenuBar';
 import { DocxEditorToolbar } from './DocxEditor/DocxEditorToolbar';
 import { DocxEditorSidebar } from './DocxEditor/DocxEditorSidebar';
 import { HorizontalRuler } from './ui/HorizontalRuler';
+import { Z_INDEX } from '../styles/zIndex';
 import type { SectionProperties } from '../legacy-core-compat';
 import { pixelsToTwips } from '../legacy-core-compat';
 import { VerticalRuler } from './ui/VerticalRuler';
@@ -389,7 +390,27 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
                 <div className="docx-editor__content" style={LEGACY_CONTENT_STYLE}>
                   {/* Anchors itself to the page, so it sits immediately left of the
                       document rather than in the window's left gutter (M6V.1). */}
-                  <VerticalRuler sectionProps={sectionPropsFromGeometry(editorRef.current)} zoom={zoomFactor} editable={false} />
+                  {/* Wrapper COPIED from the legacy shell (DocxEditorShell.tsx:222-233):
+                      absolute at the editor content's left edge, `paddingTop: 48` to
+                      match the pages container's own padding so the ruler's zero lines up
+                      with the first page. Placement is only correct once the legacy shell
+                      composes the content area; until then this reproduces legacy's own
+                      values rather than a position estimated to look right. */}
+                  <div
+                    style={{
+                      position: 'absolute',
+                      left: 0,
+                      top: 0,
+                      zIndex: Z_INDEX.ruler,
+                      paddingTop: 48,
+                    }}
+                  >
+                    <VerticalRuler
+                      sectionProps={sectionPropsFromGeometry(editorRef.current)}
+                      zoom={zoomFactor}
+                      editable={false}
+                    />
+                  </div>
                   {/* Outline toggle, in the left gutter as in the reference. */}
                   <button
                     type="button"
