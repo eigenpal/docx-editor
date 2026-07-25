@@ -457,6 +457,55 @@ export interface EditorCommands extends EditorCommandShape<DocEdits> {
   /** Remove the tab stop at this position (twips) from the current paragraph. */
   removeTabMark: { positionTwips: number };
 
+  /**
+   * How the selected image sits relative to text. `inline` flows in the line; the rest
+   * are `wp:anchor` variants, with `squareLeft`/`squareRight` distinguishing which side
+   * text wraps on. Legacy's vocabulary, unchanged.
+   */
+  setImageWrapType: {
+    target:
+      | 'inline'
+      | 'square'
+      | 'squareLeft'
+      | 'squareRight'
+      | 'tight'
+      | 'through'
+      | 'topAndBottom'
+      | 'behind'
+      | 'inFront';
+    /** Where an inline image sat, so promoting it to an anchor keeps its place. */
+    initialPositionEmu?: { horizontalEmu: number; verticalEmu: number };
+  };
+
+  /** Rotate or flip the selected image. Legacy composed these into a CSS transform. */
+  transformImage: { action: 'rotateCW' | 'rotateCCW' | 'flipH' | 'flipV' };
+
+  /** Anchor position of the selected floating image, from the position dialog. */
+  setImagePosition: {
+    horizontalEmu?: number;
+    verticalEmu?: number;
+    relativeToH?: string;
+    relativeToV?: string;
+  };
+
+  /** Size, alt text and border of the selected image, from the properties dialog. */
+  setImageProperties: {
+    widthEmu?: number;
+    heightEmu?: number;
+    alt?: string;
+    borderWidthEmu?: number;
+    borderColor?: ColorValue;
+  };
+
+  /**
+   * Footnote and endnote properties for the section — numbering format, restart rule
+   * and position, as Word's dialog offers them.
+   */
+  setNoteProperties: {
+    footnote?: { numFmt?: string; numRestart?: string; position?: string; numStart?: number };
+    endnote?: { numFmt?: string; numRestart?: string; position?: string; numStart?: number };
+  };
+
   setWatermark: { watermark: Watermark | null };
   refreshToc: { tocId?: string };
 

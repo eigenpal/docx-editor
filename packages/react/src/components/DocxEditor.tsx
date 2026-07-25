@@ -30,6 +30,7 @@ import { useFloatingCommentBtn } from './DocxEditor/hooks/useFloatingCommentBtn'
 import { useDocumentLoader } from './DocxEditor/hooks/useDocumentLoader';
 import { useCommentManagement } from './DocxEditor/hooks/useCommentManagement';
 import { useCommentLifecycle } from './DocxEditor/hooks/useCommentLifecycle';
+import { useImageActions } from './DocxEditor/hooks/useImageActions';
 import { MaterialSymbol } from './ui/Icons';
 import {
   useSelectionTracker,
@@ -575,6 +576,22 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
     const minLayoutWidth =
       2 * outlineLeftAllowance + maxPageWidthPx + (sidebarOpen ? SIDEBAR_DOCUMENT_SHIFT * 2 : 0);
 
+    // Image actions and the footnote dialog, ported. Five handlers here were no-ops.
+    const {
+      imagePositionOpen,
+      setImagePositionOpen,
+      imagePropsOpen,
+      setImagePropsOpen,
+      footnotePropsOpen,
+      setFootnotePropsOpen,
+      handleImageWrapType,
+      handleImageTransform,
+      handleApplyImagePosition,
+      handleOpenImageProperties,
+      handleApplyImageProperties,
+      handleApplyFootnoteProperties,
+    } = useImageActions({ editorRef });
+
     // Comment state, ported. The controlled/uncontrolled split is legacy's: a host that
     // passes `comments` owns the array, and every mutation goes out through
     // `onCommentsChange` instead of touching internal state.
@@ -845,9 +862,9 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
               onInsertSectionBreakNextPage={handleInsertSectionBreakNextPage}
               onInsertSectionBreakContinuous={handleInsertSectionBreakContinuous}
               onInsertTOC={handleInsertTOC}
-              onImageWrapType={() => {}}
-              onImageTransform={() => {}}
-              onOpenImageProperties={() => {}}
+              onImageWrapType={handleImageWrapType}
+              onImageTransform={handleImageTransform}
+              onOpenImageProperties={handleOpenImageProperties}
               onPageSetup={handleOpenPageSetup}
               onWatermark={handleOpenWatermark}
               onTableAction={handleTableAction}
@@ -867,7 +884,7 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
               imageContextMenu={imageContextMenu}
               onImageWrapApply={handleImageWrapApply}
               imageContextMenuTextActions={imageContextMenuTextActions}
-              onOpenImageProperties={() => {}}
+              onOpenImageProperties={handleOpenImageProperties}
               readOnly={false}
             />
           }
@@ -893,12 +910,12 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
               splitCellDialogState={splitCellDialogState}
               onSplitCellDialogClose={handleSplitCellDialogClose}
               onSplitCellDialogApply={handleSplitCellDialogApply}
-              imagePositionOpen={false}
-              onImagePositionClose={() => {}}
-              onApplyImagePosition={() => {}}
-              imagePropsOpen={false}
-              onImagePropsClose={() => {}}
-              onApplyImageProperties={() => {}}
+              imagePositionOpen={imagePositionOpen}
+              onImagePositionClose={() => setImagePositionOpen(false)}
+              onApplyImagePosition={handleApplyImagePosition}
+              imagePropsOpen={imagePropsOpen}
+              onImagePropsClose={() => setImagePropsOpen(false)}
+              onApplyImageProperties={handleApplyImageProperties}
               pmImageContext={null}
               showPageSetup={showPageSetup}
               onPageSetupClose={() => setShowPageSetup(false)}
@@ -908,9 +925,9 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
               onWatermarkApply={handleWatermarkApply}
               currentWatermark={currentWatermark}
               document={null}
-              footnotePropsOpen={false}
-              onFootnotePropsClose={() => {}}
-              onApplyFootnoteProperties={() => {}}
+              footnotePropsOpen={footnotePropsOpen}
+              onFootnotePropsClose={() => setFootnotePropsOpen(false)}
+              onApplyFootnoteProperties={handleApplyFootnoteProperties}
             />
           }
           fileInputs={
