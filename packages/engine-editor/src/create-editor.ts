@@ -1022,8 +1022,44 @@ export function createEditor(config: EditorConfig): Editor {
       };
     },
 
-    /** STUB — needs a text search over the canonical model with grapheme-safe offsets. */
-    findMatches: (_query: string) => [],
+    /**
+     * Text matches across the body, for find/replace.
+     *
+     * Search semantics follow the legacy definition: the query is regex-escaped (this
+     * surface takes literal text only — a raw-regex mode would need its own flag and its
+     * own catastrophic-backtracking guard), `matchWholeWord` wraps it in `\b`, and
+     * `matchCase` selects the `g`/`gi` flag.
+     *
+     * Offsets are UTF-16 into the paragraph's concatenated run text, which is the same
+     * space the selection uses, so a caller can turn a match straight into a selection.
+     * An empty query returns nothing rather than every position.
+     */
+    findMatches: (query: string, options?: { matchCase?: boolean; wholeWord?: boolean }) => {
+      if (!session || !query) return [];
+      const escaped = query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const pattern = options?.wholeWord ? `\\b${escaped}\\b` : escaped;
+      let re: RegExp;
+      try {
+        re = new RegExp(pattern, options?.matchCase ? 'g' : 'gi');
+      } catch {
+        return [];
+      }
+      const model = session.currentModel();
+      const blocks = model.stories.get(bodyStoryId(model))?.blocks ?? [];
+      const out: { blockId: string; start: number; length: number }[] = [];
+      for (const block of blocks) {
+        if (block.kind !== 'paragraph') continue;
+        const paragraph = block as { id: string; runs: readonly { text: string }[] };
+        const text = paragraph.runs.map((r) => r.text).join('');
+        re.lastIndex = 0;
+        for (let m = re.exec(text); m !== null; m = re.exec(text)) {
+          out.push({ blockId: paragraph.id, start: m.index, length: m[0].length });
+          // A zero-length match (possible with \b on an empty escape) would loop forever.
+          if (m[0].length === 0) re.lastIndex += 1;
+        }
+      }
+      return out;
+    },
 
     /** STUB — needs the drawing/image parts resolved and mapped to the selection. */
     getSelectedImage: () => null,

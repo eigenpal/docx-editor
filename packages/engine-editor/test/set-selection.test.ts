@@ -237,3 +237,37 @@ describe('getOutline derives real headings', () => {
     body.remove();
   });
 });
+
+// `findMatches` searches canonical text with the legacy semantics.
+describe('findMatches searches the canonical model', () => {
+  test('finds real occurrences and honours case and whole-word', async () => {
+    const { readFileSync } = await import('node:fs');
+    const path = await import('node:path');
+    const fixture = path.resolve(import.meta.dir, '../../../e2e/fixtures/comprehensive-word-element-test.docx');
+    const body = document.createElement('div');
+    document.body.append(body);
+    const editor = createEditor({ host: hostWith(body), document: new Uint8Array(readFileSync(fixture)) });
+
+    // An empty query matches nothing, rather than every position.
+    expect(editor.findMatches('')).toEqual([]);
+
+    const hits = editor.findMatches('Heading');
+    expect(hits.length, 'no matches for a word the fixture repeats').toBeGreaterThan(2);
+    expect(hits.every((h) => h.blockId.length > 0 && h.length === 'Heading'.length)).toBe(true);
+
+    // Case-insensitive by default, so lowercase finds the same occurrences.
+    expect(editor.findMatches('heading').length).toBe(hits.length);
+    // With matchCase, the lowercase query must find strictly fewer.
+    expect(editor.findMatches('heading', { matchCase: true }).length).toBeLessThan(hits.length);
+
+    // Whole-word: a fragment matches loosely but not as a word.
+    expect(editor.findMatches('eadin').length).toBeGreaterThan(0);
+    expect(editor.findMatches('eadin', { wholeWord: true })).toEqual([]);
+
+    // Regex metacharacters are escaped — this is a literal search surface.
+    expect(editor.findMatches('.*')).toEqual([]);
+
+    editor.destroy();
+    body.remove();
+  });
+});
