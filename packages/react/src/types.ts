@@ -1,5 +1,11 @@
 import type { ReactNode } from 'react';
-import type { Editor, DocumentSource, DocumentChange } from '@docx-editor.dev/core-contract/editor';
+import type {
+  DocumentChange,
+  DocumentHandle,
+  DocumentSource,
+  Editor,
+  TextMatch,
+} from '@docx-editor.dev/core-contract/editor';
 
 export type EditorMode = 'edit' | 'view';
 
@@ -58,12 +64,45 @@ export interface DocxEditorProps {
 }
 
 /** Imperative handle. Advanced callers reach the full facade via `getEditor`. */
+/**
+ * The imperative handle, in legacy's shape so a host that held a ref keeps calling what
+ * it called. Three of legacy's methods are deliberately absent — `getAgent`,
+ * `getDocument` and `getEditorRef` — because they exposed the legacy document tree and a
+ * ProseMirror view; `getDocumentHandle` and `getEditor` replace them.
+ *
+ * Methods whose capability is still a stub return the honest empty answer (`false`,
+ * `null`, `0`) rather than pretending, so a caller can tell "not supported yet" from
+ * "did nothing".
+ */
 export interface DocxEditorRef {
-  load: Editor['load'];
-  save: Editor['save'];
-  focus: Editor['focus'];
-  exec: Editor['exec'];
-  snapshot: Editor['snapshot'];
-  getDocumentHandle: Editor['getDocumentHandle'];
+  load(document: DocumentSource): void;
+  loadDocumentBuffer(buffer: DocumentSource): Promise<void>;
+  save(): Promise<ArrayBuffer | null>;
+  getDocumentHandle(): DocumentHandle | null;
   getEditor(): Editor | null;
+
+  focus(): void;
+  getZoom(): number;
+  setZoom(zoom: number): void;
+  getCurrentPage(): number;
+  getTotalPages(): number;
+  scrollToPage(pageNumber: number): boolean;
+  scrollToParaId(paraId: string): boolean;
+  print(): void;
+
+  updateTableOfContents(): boolean;
+  findInDocument(
+    query: string,
+    options?: { caseSensitive?: boolean; limit?: number }
+  ): readonly TextMatch[];
+
+  addComment(options: { paraId: string; text: string; author: string }): number | null;
+  replyToComment(commentId: number, text: string, author: string): number | null;
+  resolveComment(commentId: number): boolean;
+  proposeChange(options: {
+    paraId: string;
+    search: string;
+    replaceWith: string;
+    author: string;
+  }): number | null;
 }

@@ -305,6 +305,13 @@ export interface Editor {
    * a host that scaled its own transform without telling the engine would land every
    * click at the wrong content point.
    */
+  /**
+   * Scroll a page or a block into view. Returns false when the target does not exist or
+   * the host has no scroll container — a caller can tell "not found" from "scrolled".
+   */
+  scrollToPage(pageNumber: number): boolean;
+  scrollToBlock(blockId: string): boolean;
+
   getZoom(): number;
   /**
    * Set the display scale. Values outside a sane range are rejected rather than

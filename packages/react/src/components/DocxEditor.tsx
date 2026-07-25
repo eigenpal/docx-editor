@@ -1,4 +1,4 @@
-import { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react';
+import { forwardRef, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { CSSProperties } from 'react';
 import type { Editor, EditorHost } from '@docx-editor.dev/core-contract/editor';
 import type { InteractionIntent } from '@docx-editor.dev/core-contract/interaction';
@@ -33,6 +33,7 @@ import { useCommentLifecycle } from './DocxEditor/hooks/useCommentLifecycle';
 import { useImageActions } from './DocxEditor/hooks/useImageActions';
 import { useFindReplaceBridge } from './DocxEditor/hooks/useFindReplaceBridge';
 import { useHeaderFooterEditing } from './DocxEditor/hooks/useHeaderFooterEditing';
+import { useDocxEditorRefApi } from './DocxEditor/hooks/useDocxEditorRefApi';
 import { MaterialSymbol } from './ui/Icons';
 import {
   useSelectionTracker,
@@ -306,6 +307,7 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
     const {
       imageInputRef,
       docxInputRef,
+      handleSave,
       handleDirectPrint,
       handleDownloadDocument,
       handleOpenDocument,
@@ -497,19 +499,16 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
       return detach;
     }, [syncFromFrame]);
 
-    useImperativeHandle(
+    // The imperative handle, ported. This file used to build a seven-method version
+    // inline; the hook builds legacy's shape.
+    useDocxEditorRefApi({
       ref,
-      () => ({
-        load: (document) => editorRef.current!.load(document),
-        save: () => editorRef.current!.save(),
-        focus: (scope) => editorRef.current!.focus(scope),
-        exec: (command, options) => editorRef.current!.exec(command, options),
-        snapshot: (options) => editorRef.current!.snapshot(options),
-        getDocumentHandle: () => editorRef.current!.getDocumentHandle(),
-        getEditor: () => editorRef.current,
-      }),
-      []
-    );
+      editorRef,
+      focusActiveEditor,
+      runTableOfContentsUpdate,
+      handleSave,
+      handleDirectPrint,
+    });
 
     // Zoom scales the whole page stack from its top-left. The ENGINE owns the factor
     // (`getZoom`/`setZoom`), so the paint transform, the host metrics hit testing divides

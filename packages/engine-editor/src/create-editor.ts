@@ -1169,6 +1169,15 @@ export function createEditor(config: EditorConfig): Editor {
     },
     snapshot: (): EditorSnapshot => buildSnapshot(),
 
+    /**
+     * STUB — needs the host's scroll container driven from the stacked page geometry the
+     * frame already publishes (`scrollGeometry.pageTops`), plus a block-to-page mapping
+     * for `scrollToBlock`. Returning false rather than silently doing nothing lets a
+     * caller distinguish "no such page" from "scrolled there".
+     */
+    scrollToPage: (_pageNumber: number) => false,
+    scrollToBlock: (_blockId: string) => false,
+
     getZoom: () => zoom,
     setZoom: (next: number): ExecResult => {
       // Refused rather than clamped: a caller that asked for 0 or NaN has a bug, and
