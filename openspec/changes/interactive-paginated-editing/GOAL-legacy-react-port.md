@@ -192,10 +192,18 @@ Chrome hooks that need a capability decision each, in rough value order:
 
 ## Two engine findings worth carrying forward
 
-- `exec({ type: 'toggleMark', mark: 'bold' })` returns `{ ok: true, changed: true }`, so
-  the toolbar's bold and italic reach the model. `underline` is DELIBERATELY refused:
-  `w:u` carries a style (single/double/wave), and a boolean would downgrade the author's
-  formatting on save.
+- The toolbar's bold and italic reach the model. Verified end to end: drag-select a range
+  with real pointer events, click Bold, and the document revision moves 0 → 1 with the
+  text repainting bold. `underline` is DELIBERATELY refused: `w:u` carries a style
+  (single/double/wave), and a boolean would downgrade the author's formatting on save.
+
+  TWO THINGS MADE THIS LOOK BROKEN, and both are worth remembering. A pointer press placed
+  the caret but never FOCUSED the editor, so keystrokes went to `document.body` — the
+  adapter now calls `Editor.focus()` on `pointerDown`, as retired's pointer handler did.
+  And with a COLLAPSED caret, toggling a mark sets stored marks rather than changing text,
+  so the revision correctly does not move; only a range selection proves the path. A
+  browser automation `left_click` that emits no `pointerdown` also never reaches the
+  bridge, which is a harness artefact rather than a product defect.
 - `query({ type: 'selection' })` answers `null` even when a selection exists — it is part
   of the query surface that is not wired yet. The published interaction frame DOES carry
   the selection, so anything asking "is something selected" must read

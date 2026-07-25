@@ -375,7 +375,14 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
       const detach = attachAdapterEventBridge(surface, {
         getInteractionFrameId: () => editorRef.current?.getInteractionFrame().id ?? null,
         dispatchInteraction: (intent: InteractionIntent) => {
-          const result = editorRef.current!.dispatchInteraction(intent);
+          const editor = editorRef.current!;
+          const result = editor.dispatchInteraction(intent);
+          // A pointer press makes the editor ACTIVE, not just placed. Without this the
+          // caret landed where the reader clicked but focus stayed on `document.body`, so
+          // every keystroke — typing, and the toolbar's toggles, which apply at the
+          // selection — went nowhere. Legacy did the same thing in its pointer handler
+          // (`focusActiveEditor`); the engine exposes it as `focus()`.
+          if (intent.kind === 'pointerDown') editor.focus();
           syncFromFrame();
           return result;
         },
