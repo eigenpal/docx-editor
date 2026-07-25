@@ -118,6 +118,13 @@ export interface Style {
   next?: string;
   /** Linked style (paragraph/character pair) */
   link?: string;
+  /** Run properties the ported `stylePreview` reads to build its preview CSS. */
+  rPr?: TextFormatting;
+  /** Whether the style is surfaced in the styles gallery (`w:qFormat`). */
+  qFormat?: boolean;
+  hidden?: boolean;
+  semiHidden?: boolean;
+  uiPriority?: number;
   [key: string]: unknown;
 }
 /** The theme fields the ported colour resolver reads. */

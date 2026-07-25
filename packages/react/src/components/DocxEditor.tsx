@@ -348,13 +348,20 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
             The interim brand block, React/Vue toggle, theme toggle and action buttons
             are deleted. `AdapterSwitcher` and `ExampleSwitcher` already existed in
             `examples/shared`; rebuilding them here is what kept the header drifting. */}
-        <div className="flex flex-shrink-0 items-center gap-3 border-b border-border bg-background px-3.5 py-1.5">
+        {/* Title bar AND toolbar share one white container, as legacy's EditorToolbar
+            does (`flex flex-col bg-doc-surface shadow-sm flex-shrink-0`). That is why the
+            reference shows white continuing below the toolbar with the grey workspace
+            starting under it; mine ended the white at the title bar. */}
+        <div className="flex flex-col bg-doc-surface shadow-sm flex-shrink-0">
+        <div className="flex items-center gap-3 px-3.5 py-1.5">
           {renderTitleBarLeft?.()}
           <div className="flex min-w-0 flex-1 flex-col items-start justify-center pl-[18px]">
             <DocumentName value={title ?? ''} onChange={(next) => onTitleChange?.(next)} />
             <MenuBar />
           </div>
           {renderTitleBarRight?.()}
+        </div>
+            <Toolbar />
         </div>
         <div style={LEGACY_MAIN_STYLE}>
           <div style={LEGACY_COLUMN_STYLE}>
@@ -365,7 +372,6 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
                 composition is the source of truth. Every prop is optional, so it renders
                 its full control set now and each handler wires to the engine as the
                 matching capability lands. */}
-            <Toolbar />
             <div className="docx-editor__scroll-container" style={LEGACY_SCROLLER_STYLE}>
               {/* Sticky at the scroller's top so it tracks horizontal scroll, as legacy. */}
               <div className="flex justify-center py-1 flex-shrink-0 bg-doc-bg" style={LEGACY_RULER_ROW_STYLE}>
