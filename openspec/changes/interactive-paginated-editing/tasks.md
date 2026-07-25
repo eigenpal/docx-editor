@@ -224,30 +224,30 @@ Not the formal public **`interactive-paginated`** claim (that remains **8.10**).
   production surface advances the revision, survives save and reopen as `w:br`, and the
   parity gate asserts it is no longer refused.
 
-- [ ] M6P.2 **Stop delegated deletes from silently dropping a preserved `w:rPr`.** Found by
+- [x] M6P.2 **Stop delegated deletes from silently dropping a preserved `w:rPr`.** Found by
   independent security review of M6K.1; a lossless-preservation violation, not a
-  vulnerability. `rawRunProps` has no `parseDOM` (correct, for paste safety), and
+  vulnerability. `rawRunProps` had no `parseDOM` (deliberately, for paste safety), and
   delegation is the only input path where ProseMirror's DOM observer RE-PARSES the DOM.
-  A word/line delete crossing a run boundary marks the capsule's mark view `NODE_DIRTY`,
-  `MarkViewDesc.parseRule()` returns null, and the mark is dropped — so the run's
-  authored `w:rPr` is gone. `commitFromDoc` does not reject (a capsule run is
-  projectable), and the capsule is permanently lost on save. Proven: a run carrying
+  A word/line delete crossing a run boundary marked the capsule's mark view `NODE_DIRTY`,
+  `MarkViewDesc.parseRule()` returned null, and the mark was dropped — the run's authored
+  `w:rPr` was gone, `commitFromDoc` did not reject (a capsule run is projectable), and the
+  formatting was lost on save. Proven: a run carrying
   `<w:color w:val="FF0000"/><w:sz w:val="48"/>` re-emitted as bare `<w:r><w:t>`.
 
-  Two guards were considered and are NOT sufficient — record them so they are not
-  re-attempted: rejecting when a model capsule's text no longer appears misses the proven
-  case (the capsule run is edited within itself, "styled text" → "styled tex"), and
-  rejecting when capsule count drops breaks the legitimate removal path, where bold/italic
-  `excludes: 'rawRunProps'` and intentionally materializes the mark. The candidate design
-  is an opaque capsule-id registry: `toDOM` emits `data-raw-rpr-ref="<id>"`, `parseDOM`
-  resolves the id through a per-binding map and drops unknown ids, so the capsule XML never
-  travels through the DOM and pasted HTML cannot forge one.
+  Two guards were considered and rejected — recorded so they are not re-attempted:
+  rejecting when a model capsule's text no longer appears misses the proven case (the
+  capsule run is edited within itself), and rejecting when capsule count drops breaks the
+  legitimate removal path, where bold/italic `excludes: 'rawRunProps'` and intentionally
+  materializes the mark.
 
-  The current gates cannot see this: `checkpoint-46fb2440` pinned them to `editable-sample.docx`,
-  which has **0 capsule runs**, while the demo default has **100 across 28 paragraphs that
-  mix capsule and plain runs**. Pass boundary: a real-Chromium delegated word-delete across
-  a run boundary in a capsule-bearing fixture either preserves the capsule or refuses, and
-  the gate asserts `rPr` survival rather than text-length deltas.
+  **Resolved** by an opaque capsule-ref registry: `toDOM` emits
+  `data-raw-rpr-ref="<id>"`, and `parseDOM` resolves the id through a map populated only
+  by the model projection, dropping unknown refs. The security invariant is unchanged and
+  strengthened in statement — capsule BYTES never travel through the DOM, so forging a ref
+  can at most re-apply a capsule already in this document, and `input-policy.ts` still
+  refuses pasted HTML matching `data-raw-rpr` before it gets that far. Guarded by a
+  serialize/parse round-trip test and a rewritten security test; both fail when the
+  `parseDOM` rule is removed.
 
 - [ ] M6E.1 **Repoint the `?edit=1` editing smoke suite at the painted surface.** All 14
   `e2e/editorSmoke.ts` tests (7 × React and Vue) fail on a click timeout and have for at

@@ -78,10 +78,31 @@ describe('composed schema + per-kind projection', () => {
     expect(set[0].attrs.rpr).toBe('<w:rPr><w:i/></w:rPr>');
   });
 
-  test('rawRunProps has no parseDOM — a pasted data-raw-rpr span carries no capsule (security)', () => {
-    // Verbatim re-emit makes a paste-origin capsule an injection vector; the schema accepts a capsule
-    // ONLY from the model projection, never from untrusted clipboard DOM.
-    expect(docSchema.marks.rawRunProps.spec.parseDOM).toBeUndefined();
+  test('a capsule can only come from the model projection, never from DOM bytes (security)', () => {
+    // The invariant is NOT "there is no parseDOM" — that version silently DROPPED the
+    // capsule whenever ProseMirror re-parsed a dirty mark view, which is exactly what a
+    // delegated word-delete across a run boundary does, losing the run's authored w:rPr on
+    // save. What must hold is that capsule BYTES never travel through the DOM: the DOM
+    // carries an opaque ref, resolved through a registry the model projection alone fills.
+    const rule = docSchema.marks.rawRunProps.spec.parseDOM?.[0];
+    expect(rule?.tag).toBe('span[data-raw-rpr-ref]');
+    const attrsOf = (attrs: Record<string, string>) =>
+      rule!.getAttrs!({ getAttribute: (n: string) => attrs[n] ?? null } as never);
+
+    // Forged ref → no capsule. The text pastes plain, as before.
+    expect(attrsOf({ 'data-raw-rpr-ref': 'not-a-real-ref' })).toBe(false);
+    // Raw bytes in the DOM → no capsule: nothing reads them, and the rule needs a ref.
+    expect(attrsOf({ 'data-raw-rpr': '<w:rPr><w:object/></w:rPr>' })).toBe(false);
+
+    // A ref minted by projecting the MODEL resolves to exactly the authored bytes.
+    const rpr = '<w:rPr><w:i/></w:rPr>';
+    const dom = docSchema.marks.rawRunProps.create({ rpr }).type.spec.toDOM!(
+      docSchema.marks.rawRunProps.create({ rpr }),
+      true,
+    ) as [string, Record<string, string>, number];
+    const ref = dom[1]['data-raw-rpr-ref'];
+    expect(ref).toBeTruthy();
+    expect(attrsOf({ 'data-raw-rpr-ref': ref })).toEqual({ rpr });
   });
 
   test('registered block nodes declare reverse-mapping roles (the forward mapper dispatches on them)', () => {
@@ -161,4 +182,27 @@ describe('binding lane feature-completeness (comprehensive 3.9)', () => {
     }
     expect(() => new EditorBinding(store)).not.toThrow(); // restored version re-validates clean
   });
+});
+
+// A capsule must survive ProseMirror RE-PARSING the DOM, which is what a delegated
+// native word/line delete causes (the browser edits, PM's observer reconciles). Before
+// the ref registry the mark was dropped and the run's authored w:rPr was lost on save.
+test('a capsule survives a DOM round-trip through the schema', async () => {
+  await import('./dom-setup.ts');
+  const { DOMParser: PMDOMParser, DOMSerializer } = await import('prosemirror-model');
+  const rpr = '<w:rPr><w:color w:val="FF0000"/><w:sz w:val="48"/></w:rPr>';
+  const paragraph = docSchema.node('paragraph', { semId: 'p-1' }, [
+    docSchema.text('styled text', [docSchema.marks.rawRunProps.create({ rpr })]),
+  ]);
+  const doc = docSchema.node('doc', null, [paragraph]);
+
+  // Serialize to DOM and parse straight back, exactly as PM's observer does.
+  const host = document.createElement('div');
+  host.append(DOMSerializer.fromSchema(docSchema).serializeFragment(doc.content));
+  const reparsed = PMDOMParser.fromSchema(docSchema).parse(host);
+
+  const text = reparsed.firstChild!.firstChild!;
+  expect(text.text).toBe('styled text');
+  expect(text.marks.map((m) => m.type.name)).toEqual(['rawRunProps']);
+  expect(text.marks[0].attrs.rpr).toBe(rpr);
 });

@@ -87,19 +87,70 @@ registerBindingMark('italic', { excludes: 'rawRunProps', toDOM: () => ['em', 0],
 // with different capsules carry different `rpr` attrs and stay separate; identical capsules merge
 // (same formatting). The capsule is opaque — the editor cannot toggle its formatting; typed text
 // gets no capsule mark (default formatting). Rendered inert (a plain span carrying the bytes).
+/**
+ * Capsule bytes by opaque id, minted only when the MODEL projects a run (see `runToText`).
+ *
+ * The capsule must survive ProseMirror's DOM re-parse. Delegated `beforeinput` types let
+ * the BROWSER perform the edit and PM's DOM observer reconcile it — the only input path
+ * that re-parses. A word or line delete crossing a run boundary marks the capsule's mark
+ * view `NODE_DIRTY`, `MarkViewDesc.parseRule()` then returns null, and with no `parseDOM`
+ * rule the mark was silently dropped: the run's authored `w:rPr` was gone, `commitFromDoc`
+ * did not reject (a capsule run is projectable), and the formatting was lost on save.
+ * Independent security review reproduced it — a run carrying `<w:color w:val="FF0000"/>`
+ * re-emitted as a bare `<w:r><w:t>`.
+ *
+ * The fix cannot be "parse the bytes back out of the DOM": the capsule is re-emitted
+ * VERBATIM into document.xml, so accepting DOM-supplied bytes would reopen the OOXML/OLE
+ * injection vector the missing `parseDOM` was there to close. Instead the DOM carries only
+ * an opaque REFERENCE, and resolution goes through this registry, so the bytes never
+ * travel through the DOM. The worst an attacker can do by forging a ref is re-apply a
+ * capsule ALREADY present in this document — no new bytes enter the package. (And forged
+ * markup does not get that far anyway: `input-policy.ts` refuses pasted HTML matching
+ * `data-raw-rpr`, which `data-raw-rpr-ref` contains.)
+ */
+const capsuleById = new Map<string, string>();
+const idByCapsule = new Map<string, string>();
+
+/** Mint (or reuse) the opaque id for a capsule projected from the canonical model. */
+function capsuleRef(rpr: string): string {
+  const existing = idByCapsule.get(rpr);
+  if (existing) return existing;
+  const id = `c${idByCapsule.size + 1}`;
+  idByCapsule.set(rpr, id);
+  capsuleById.set(id, rpr);
+  return id;
+}
+
+/** Test seam: the bytes a ref resolves to, or undefined for an unknown ref. */
+export function resolveCapsuleRef(ref: string): string | undefined {
+  return capsuleById.get(ref);
+}
+
 registerBindingMark('rawRunProps', {
   attrs: { rpr: {} },
   // Self-exclusion (a run has ONE rPr), and bold/italic exclude it (above) so the opaque capsule and
   // the modeled marks never coexist.
   excludes: 'rawRunProps',
-  toDOM: (mark) => ['span', { 'data-raw-rpr': String(mark.attrs.rpr) }, 0],
-  // SECURITY: NO parseDOM. The capsule is re-emitted VERBATIM into document.xml, and even a balanced
-  // w:rPr can carry attacker OOXML (a nested w:object/OLE, duplicate attributes) that a "valid single
-  // w:rPr" check cannot scrub. So a capsule may ONLY come from the ORIGINAL parsed document (lossless
-  // preservation of bytes already in the file) — NEVER from pasted/untrusted DOM. Without a parseDOM
-  // rule, a pasted `data-raw-rpr` span carries no capsule (its text pastes as plain), closing the
-  // untrusted-input / OLE-injection vector. In-editor editing of an original styled run still works:
-  // the mark comes from the model projection (toDOM), and paragraphNodeToRuns re-validates it.
+  toDOM: (mark) => ['span', { 'data-raw-rpr-ref': capsuleRef(String(mark.attrs.rpr)) }, 0],
+  // Resolves ONLY through the registry above. An unrecognized ref returns false, so the
+  // mark is dropped and the text parses plain — the old behavior, for anything that did
+  // not come from this document's own projection.
+  parseDOM: [
+    {
+      tag: 'span[data-raw-rpr-ref]',
+      getAttrs: (dom: HTMLElement | string) => {
+        if (typeof dom === 'string') return false;
+        const rpr = capsuleById.get(dom.getAttribute('data-raw-rpr-ref') ?? '');
+        return rpr === undefined ? false : { rpr };
+      },
+    },
+  ],
+  // SECURITY: the capsule is re-emitted VERBATIM into document.xml, and even a balanced w:rPr can
+  // carry attacker OOXML (a nested w:object/OLE, duplicate attributes) that a "valid single w:rPr"
+  // check cannot scrub. So capsule BYTES may only come from the ORIGINAL parsed document, never from
+  // DOM. That invariant is unchanged: the DOM carries an opaque ref, and `getAttrs` resolves it
+  // through a registry populated exclusively by the model projection. paragraphNodeToRuns still
+  // re-validates the resulting capsule.
 });
 
 function runToText(run: RunRecord, schema: Schema): PMNode {
