@@ -67,7 +67,7 @@ M6-R2 both require a reviewer who is not the author. Both remain open.
 | **M4-R3** independent review | **Open** — self-review only; a reviewer's starting list is in `../m4/summary.md` |
 | **M6-R2** independent review | **Open** — same reason |
 | Undo coalescing | Deferred; specs assert a single character rather than pin a policy |
-| Per-cluster selection gaps | **Reclassified: required interaction-fidelity defect, not cosmetic.** Owner decision, and the mechanism is now understood — see below. Tracked as **M6V.1**. |
+| Per-cluster selection gaps | **Reclassified: required interaction-fidelity defect, not cosmetic.** Owner decision, and the mechanism is now understood — see below. Tracked as **M6S.1**. |
 | Underline modelled as a style | `document-engine` lossless-package-model change |
 | `@docx-editor.dev/nuxt` TS5097 | Pre-existing, unrelated to this change |
 | React/Vue API snapshots | **M4.0's "API snapshot" deliverable is NOT met.** Both files are untracked, so `api:check` cannot detect drift on the two packages this change expands. They are also on an explicit never-stage instruction, so this change cannot close it by committing them; it needs an owner decision about whether the greenfield adapter surface gets a committed baseline. |
@@ -84,7 +84,7 @@ inline `span.layout-run` children under `white-space: pre`, which is why selecti
 covered whitespace continuously there.
 
 So this is a painter-structure defect, not a rectangle-rounding defect, and
-coalescing rects on top of a per-run painter would only paper over it. **M6V.1**
+coalescing rects on top of a per-run painter would only paper over it. **M6S.1**
 covers it: prove copied text retains selected spaces first, then make
 engine-derived overlays continuously cover selected whitespace per visual line,
 with wrapped-line, run-split, bidi, React, and Vue tests.

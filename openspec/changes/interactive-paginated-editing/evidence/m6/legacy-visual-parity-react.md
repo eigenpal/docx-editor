@@ -23,30 +23,32 @@ shell, title bar, 4 menu items, 29 toolbar controls in 11 groups, sticky horizon
 ruler, vertical ruler, scroll container, workspace, **9 pages**, sidebar, 7 dialog
 launchers, status **"Editable (paragraphs)"**.
 
-## Visual parity: NOT met
+## Visual parity: closer, still NOT met
 
-Comparing the two screenshots directly, the current chrome differs materially from the
-deployed reference. Recorded precisely rather than summarised, because "regions present"
-was exactly the false pass that got the previous attempt rejected.
+Second pass implemented the retired control SHAPES, which was the largest delta: the reference
+toolbar is not a row of uniform icon buttons.
 
-| Region | Reference | Current | Gap |
-| --- | --- | --- | --- |
-| Application header | Logo "DOCX Editor / by EigenPal", React\|Vue segmented toggle, overflow chevron; right side: light/dark toggle, black **Open DOCX**, **New**, **Save** | absent | whole row missing |
-| Title placement | Title (`sample`) indented ~318px, menu row beneath it | title far left, menu beneath | horizontal placement wrong |
-| Toolbar composition | Zoom stepper (− 100% +), style dropdown (`Normal`), font dropdown (`Arial`), size stepper (− 26 +), B I U S, font-colour **A** with swatch + caret, highlighter with swatch + caret, link, super/subscript, alignment **dropdown**, lists, indent −/+, line-spacing dropdown, clear format, comments toggle (dark pill), **Editing** mode dropdown | flat icon buttons plus four inert combobox stubs | control TYPES differ: steppers, split colour buttons, and mode dropdown are not modelled |
-| Toolbar frame | Full-width pill inset ~10px, pale fill, one row | pill present, correct radius/overflow | close |
-| Horizontal ruler | Indent markers (blue triangles), grey margin zones, spans page width only | plain tick scale, spans wider | markers and margin shading missing |
-| Left gutter | Circular outline-toggle button | absent | missing |
-| Sidebar | Not shown by default | 260px panel always shown | should be closed by default |
-| Page | Centred with drop shadow | centred, flat | shadow missing |
+Now rendered from the production component, measured in Chromium at 1440x900:
+application header with brand and 3 disabled actions, **2 steppers** (`− 100% +`,
+`− 11 +`), **4 dropdowns** (`Normal text`, `Sans Serif`, alignment, line spacing),
+**2 split colour controls** (glyph over swatch with caret), 21 icon buttons, sidebar
+closed by default, page carrying the reference's drop shadow, 9 pages, status
+**"Editable (paragraphs)"**.
 
-## Assessment
+### Remaining gaps
 
-The structural half of M6V.1 is done and the composition now lives in the right place.
-The presentational half is not: the reference's toolbar is built from labelled dropdowns,
-steppers, and split colour controls, and the current one is a row of uniform icon
-buttons. Reaching parity means porting those retired control components themselves
-(`ResponsiveToolbar`, `EditorToolbar`, the pickers and colour controls), not restyling
-the generic ones.
+| Region | Reference | Current |
+| --- | --- | --- |
+| Brand block | Logo + "DOCX Editor" + "by EigenPal" subtitle, React\|Vue segmented toggle, overflow chevron | logo + name only |
+| Header right | Light/dark theme toggle before the action buttons | absent |
+| Title placement | Title indented to align with the page (~318px) | flush left |
+| Toolbar frame | Clearly tinted pill, inset from both edges | pill geometry correct, fill too faint to read as a pill |
+| Toolbar tail | Comments toggle (dark pill) and **Editing** mode dropdown at the right end | absent |
+| Horizontal ruler | Indent markers (blue triangles) and shaded margin zones | plain tick scale |
+| Left gutter | Circular outline-toggle button | absent |
 
-**M6V.1 stays unchecked.** The gap table above is the remaining worklist.
+These are additive: each is a control or affordance to port, not a structural change.
+The composition, control shapes, spacing, workspace, page shadow, and sidebar behavior
+now match.
+
+**M6V.1 stays unchecked.** The table above is the remaining worklist.

@@ -1988,3 +1988,114 @@
   cursor: default;
   pointer-events: none;
 }
+
+/* Application header (M6V.1). The legacy product's top row: identity left, document
+ * actions right. Actions are parity-only and disabled. */
+.docx-editor__app-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 14px;
+  flex-shrink: 0;
+  border-bottom: 1px solid var(--doc-border);
+  background: var(--doc-surface);
+}
+
+.docx-editor__brand {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--doc-text);
+}
+
+.docx-editor__brand-name {
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+.docx-editor__app-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.docx-editor__app-action {
+  padding: 6px 12px;
+  border: 1px solid var(--doc-border);
+  border-radius: 6px;
+  background: var(--doc-surface);
+  color: var(--doc-text-subtle);
+  font-size: 13px;
+  cursor: default;
+  pointer-events: none;
+}
+
+/* The legacy header's primary action is a solid dark button. */
+.docx-editor__app-action--primary {
+  background: var(--doc-text);
+  border-color: var(--doc-text);
+  color: var(--doc-surface);
+}
+
+/* Numeric stepper with a visible value (zoom, font size) — a legacy control shape that
+ * an icon button cannot stand in for. */
+.ep-toolbar__stepper {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  height: 30px;
+  padding: 0 4px;
+  color: var(--doc-text-subtle);
+  font-size: 12px;
+  cursor: default;
+}
+
+.ep-toolbar__stepper-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 4px;
+  font-size: 13px;
+}
+
+.ep-toolbar__stepper-value {
+  min-width: 34px;
+  text-align: center;
+  padding: 2px 4px;
+  border: 1px solid var(--doc-border);
+  border-radius: 4px;
+  background: var(--doc-surface);
+}
+
+/* Split colour control: a glyph sitting over its colour swatch, with its own caret. */
+.ep-toolbar__color {
+  display: inline-flex;
+  align-items: center;
+  gap: 1px;
+  height: 30px;
+  padding: 0 3px;
+  color: var(--doc-text-subtle);
+  cursor: default;
+}
+
+.ep-toolbar__color-glyph {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1px;
+}
+
+.ep-toolbar__color-swatch {
+  width: 16px;
+  height: 3px;
+  border-radius: 1px;
+}
+
+/* The page floats on the workspace backdrop with a drop shadow, as in the reference. */
+.docx-editor__content .ep-one-surface__page {
+  box-shadow: 0 1px 3px rgb(60 64 67 / 30%), 0 4px 8px 3px rgb(60 64 67 / 15%);
+}

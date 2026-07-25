@@ -872,5 +872,9 @@
       "summary": "{count, plural, one {# step} other {# steps}}",
       "earlier": "+ {count, plural, one {# earlier step} other {# earlier steps}}"
     }
+  },
+  "app": {
+    "name": "DOCX Editor",
+    "newDocument": "New"
   }
 }

@@ -64,22 +64,58 @@ function ControlButton({
 }): ReactNode {
   const label = t(control.labelKey);
 
-  // A picker (font, size, style, zoom) renders as a disabled combobox rather than
-  // a button, because that is its legacy shape and the parity gate compares shapes.
-  if (control.paths === null) {
+  // A control's SHAPE, not just its presence. The legacy toolbar mixes labelled
+  // dropdowns, numeric steppers with visible values, and split colour controls; a row of
+  // uniform icon buttons has every region present and still does not look like the
+  // product, which is what an owner review rejected.
+  const noFocusSteal = (event: { preventDefault: () => void }) => event.preventDefault();
+
+  if (control.shape === 'stepper') {
+    return (
+      <span
+        className="ep-toolbar__stepper"
+        data-testid={`toolbar-${control.id}`}
+        aria-disabled="true"
+        onMouseDown={noFocusSteal}
+      >
+        <span className="ep-toolbar__stepper-btn" aria-hidden="true">−</span>
+        <span className="ep-toolbar__stepper-value">{control.valueText ?? ''}</span>
+        <span className="ep-toolbar__stepper-btn" aria-hidden="true">+</span>
+        <span className="ep-sr-only">{`${label} — ${t(LEGACY_CHROME_UNAVAILABLE_KEY)}`}</span>
+      </span>
+    );
+  }
+
+  if (control.shape === 'colorSplit') {
+    return (
+      <span
+        className="ep-toolbar__color"
+        data-testid={`toolbar-${control.id}`}
+        aria-disabled="true"
+        onMouseDown={noFocusSteal}
+      >
+        <span className="ep-toolbar__color-glyph" aria-hidden="true">
+          {control.paths ? <ToolbarIcon paths={control.paths} /> : null}
+          <span className="ep-toolbar__color-swatch" style={{ background: control.swatch ?? 'transparent' }} />
+        </span>
+        <span className="ep-toolbar__picker-caret" aria-hidden="true">▾</span>
+        <span className="ep-sr-only">{`${label} — ${t(LEGACY_CHROME_UNAVAILABLE_KEY)}`}</span>
+      </span>
+    );
+  }
+
+  if (control.shape === 'dropdown' || control.paths === null) {
+    const value = control.valueKey ? t(control.valueKey) : '';
     return (
       <span
         className="ep-toolbar__picker"
         data-testid={`toolbar-${control.id}`}
         aria-disabled="true"
-        // A picker is a <span> and takes no focus itself, but a mousedown still blurs
-        // the editor. Same reasoning as the disabled buttons below.
-        onMouseDown={(event) => event.preventDefault()}
+        onMouseDown={noFocusSteal}
       >
-        <span className="ep-toolbar__picker-value">{control.valueKey ? t(control.valueKey) : ''}</span>
-        <span className="ep-toolbar__picker-caret" aria-hidden="true">
-          ▾
-        </span>
+        {control.paths ? <ToolbarIcon paths={control.paths} /> : null}
+        {value ? <span className="ep-toolbar__picker-value">{value}</span> : null}
+        <span className="ep-toolbar__picker-caret" aria-hidden="true">▾</span>
         <span className="ep-sr-only">{`${label} — ${t(LEGACY_CHROME_UNAVAILABLE_KEY)}`}</span>
       </span>
     );

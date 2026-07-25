@@ -45,6 +45,9 @@ import type { DocxEditorProps, DocxEditorRef } from './types';
  * (`minHeight/minWidth: 0`) or the page stops scrolling, and `overflowAnchor: none`
  * stops the browser fighting the engine over scroll position during relayout.
  */
+/** i18n keys for the header actions. Keys only — the adapter ships no English. */
+const APP_ACTION_KEYS = { open: 'toolbar.open', new: 'app.newDocument', save: 'toolbar.save' } as const;
+
 const LEGACY_CONTAINER_STYLE: CSSProperties = {
   display: 'flex',
   flexDirection: 'column',
@@ -292,6 +295,37 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
         style={LEGACY_CONTAINER_STYLE}
         data-testid="docx-editor"
       >
+        {/* Application header. The legacy product's top row: product identity on the
+            left, document actions on the right. Every action here is parity-only and
+            disabled — M6V.1 permits only undo, redo, bold, italic, and save to act, and
+            save already has its toolbar control. */}
+        <div className="docx-editor__app-header">
+          <div className="docx-editor__brand">
+            <svg viewBox="0 -960 960 960" width="22" height="22" aria-hidden="true" focusable="false">
+              <path
+                d="M320-240h320v-80H320v80Zm0-160h320v-80H320v80ZM240-80q-33 0-56.5-23.5T160-160v-640q0-33 23.5-56.5T240-880h320l240 240v480q0 33-23.5 56.5T720-80H240Zm280-520v-200H240v640h480v-440H520Z"
+                fill="currentColor"
+              />
+            </svg>
+            <span className="docx-editor__brand-name">{t('app.name')}</span>
+          </div>
+          <div className="docx-editor__app-actions">
+            {(['open', 'new', 'save'] as const).map((action) => (
+              <button
+                key={action}
+                type="button"
+                className={`docx-editor__app-action${action === 'open' ? ' docx-editor__app-action--primary' : ''}`}
+                data-testid={`app-action-${action}`}
+                data-parity-only="true"
+                disabled
+                title={`${t(APP_ACTION_KEYS[action])} — ${t('formattingBar.unavailableInPreview')}`}
+                aria-label={`${t(APP_ACTION_KEYS[action])} — ${t('formattingBar.unavailableInPreview')}`}
+              >
+                {t(APP_ACTION_KEYS[action])}
+              </button>
+            ))}
+          </div>
+        </div>
         <div className="docx-editor__title-region">
           <DocxEditorTitleBar title={title ?? ''} onTitleChange={onTitleChange} />
           <DocxEditorMenuBar t={t} />
@@ -317,7 +351,7 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
             </div>
             <PageIndicator editor={editorRef.current} />
           </div>
-          <DocxEditorSidebar editor={editorRef.current} open t={t} />
+          <DocxEditorSidebar editor={editorRef.current} open={false} t={t} />
         </div>
       </div>
     );

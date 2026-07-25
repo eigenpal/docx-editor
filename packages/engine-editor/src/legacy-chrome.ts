@@ -37,8 +37,26 @@ export type LegacyChromeControlState =
 /** The commands M6V.1 permits to be enabled. */
 export type LegacyChromeCommandId = 'undo' | 'redo' | 'bold' | 'italic';
 
+/**
+ * The SHAPE a control renders as (task M6V.1).
+ *
+ * The legacy toolbar is not a row of uniform icon buttons: it mixes labelled dropdowns
+ * (`Normal`, `Arial`, alignment, line spacing), numeric steppers with visible values
+ * (zoom `- 100% +`, size `- 26 +`), split colour controls (a glyph over a colour swatch
+ * with its own caret), and a mode pill (`Editing`). Rendering all of them as icon
+ * buttons is the difference an owner review called out as "not visual parity" — the
+ * regions were all present and it still did not look like the product.
+ */
+export type LegacyChromeShape = 'icon' | 'stepper' | 'dropdown' | 'colorSplit' | 'modePill';
+
 export interface LegacyChromeControl {
   readonly id: string;
+  /** How it renders. Defaults to `icon`. */
+  readonly shape?: LegacyChromeShape;
+  /** Displayed value for a stepper or dropdown (an i18n key, or a literal for numbers). */
+  readonly valueText?: string;
+  /** Swatch colour for a `colorSplit` control. */
+  readonly swatch?: string;
   /** i18n key for the accessible name and tooltip. Never hardcoded English. */
   readonly labelKey: string;
   /** Material Symbols path data, or null for a non-icon control (a picker). */
@@ -79,6 +97,8 @@ export const LEGACY_CHROME_GROUPS: readonly LegacyChromeGroup[] = [
     controls: [
     {
       id: 'zoom',
+      shape: 'stepper',
+      valueText: '100%',
       labelKey: 'formattingBar.groups.zoom',
       paths: null,
       valueKey: 'zoom.zoomLevel',
@@ -92,6 +112,7 @@ export const LEGACY_CHROME_GROUPS: readonly LegacyChromeGroup[] = [
     controls: [
     {
       id: 'style',
+      shape: 'dropdown',
       labelKey: 'styles.selectAriaLabel',
       paths: null,
       valueKey: 'styles.normalText',
@@ -105,6 +126,7 @@ export const LEGACY_CHROME_GROUPS: readonly LegacyChromeGroup[] = [
     controls: [
     {
       id: 'fontFamily',
+      shape: 'dropdown',
       labelKey: 'font.selectAriaLabel',
       paths: null,
       valueKey: 'font.sansSerif',
@@ -112,6 +134,8 @@ export const LEGACY_CHROME_GROUPS: readonly LegacyChromeGroup[] = [
     },
     {
       id: 'fontSize',
+      shape: 'stepper',
+      valueText: '11',
       labelKey: 'fontSize.listLabel',
       paths: null,
       valueKey: 'fontSize.label',
@@ -149,12 +173,16 @@ export const LEGACY_CHROME_GROUPS: readonly LegacyChromeGroup[] = [
     },
     {
       id: 'fontColor',
+    shape: 'colorSplit',
+    swatch: '#d93025',
       labelKey: 'formattingBar.fontColor',
       paths: ['M80 0v-160h800V0H80Zm140-280 210-560h100l210 560h-96l-50-144H368l-52 144h-96Zm176-224h168l-82-232h-4l-82 232Z'],
       state: { kind: 'parityOnly' },
     },
     {
       id: 'highlightColor',
+    shape: 'colorSplit',
+    swatch: '#fff2a8',
       labelKey: 'formattingBar.highlightColor',
       paths: ['M544-400 440-504 240-304l104 104 200-200Zm-47-161 104 104 199-199-104-104-199 199Zm-84-28 216 216-229 229q-24 24-56 24t-56-24l-2-2-26 26H60l126-126-2-2q-24-24-24-56t24-56l229-229Zm0 0 227-227q24-24 56-24t56 24l104 104q24 24 24 56t-24 56L629-373 413-589Z'],
       state: { kind: 'parityOnly' },
@@ -197,6 +225,7 @@ export const LEGACY_CHROME_GROUPS: readonly LegacyChromeGroup[] = [
     controls: [
     {
       id: 'alignLeft',
+    shape: 'dropdown',
       labelKey: 'alignment.alignLeft',
       paths: ['M120-120v-80h720v80H120Zm0-160v-80h480v80H120Zm0-160v-80h720v80H120Zm0-160v-80h480v80H120Zm0-160v-80h720v80H120Z'],
       state: { kind: 'parityOnly' },
@@ -221,6 +250,7 @@ export const LEGACY_CHROME_GROUPS: readonly LegacyChromeGroup[] = [
     },
     {
       id: 'lineSpacing',
+    shape: 'dropdown',
       labelKey: 'lineSpacing.label',
       paths: ['M240-160 80-320l56-56 64 62v-332l-64 62-56-56 160-160 160 160-56 56-64-62v332l64-62 56 56-160 160Zm240-40v-80h400v80H480Zm0-240v-80h400v80H480Zm0-240v-80h400v80H480Z'],
       state: { kind: 'parityOnly' },
