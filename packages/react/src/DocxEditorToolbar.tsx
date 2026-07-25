@@ -20,6 +20,8 @@
 // visible, and permanently disabled: dropping it would understate the parity gap,
 // and enabling it would claim a capability that does not exist.
 
+import * as Select from '@radix-ui/react-select';
+import clsx from 'clsx';
 import type { ReactNode } from 'react';
 import type { Editor } from '@docx-editor.dev/core-contract/editor';
 import {
@@ -117,18 +119,37 @@ function ControlButton({
 
   if (control.shape === 'dropdown' || control.paths === null) {
     const value = control.valueKey ? t(control.valueKey) : '';
+    // Radix `Select`, as the legacy adapter used, rather than a hand-rolled span. The
+    // trigger is a real button with the right ARIA and disabled semantics, and its look
+    // comes from Tailwind utilities over the shared token palette instead of bespoke
+    // `.ep-toolbar__picker` rules. Parity-only for now, so the trigger is disabled and no
+    // content is mounted — M6V.2 wires the real option lists.
     return (
-      <span
-        className="ep-toolbar__picker"
-        data-testid={`toolbar-${control.id}`}
-        aria-disabled="true"
-        onMouseDown={noFocusSteal}
-      >
-        {control.paths ? <ToolbarIcon paths={control.paths} /> : null}
-        {value ? <span className="ep-toolbar__picker-value">{value}</span> : null}
-        <Caret />
-        <span className="ep-sr-only">{`${label} — ${t(LEGACY_CHROME_UNAVAILABLE_KEY)}`}</span>
-      </span>
+      <Select.Root disabled>
+        <Select.Trigger
+          className={clsx(
+            'inline-flex h-[30px] max-w-[150px] items-center justify-between gap-1.5',
+            'rounded border border-transparent bg-transparent px-2 text-[13px]',
+            'text-foreground/90 outline-none transition-colors',
+            'hover:border-border hover:bg-black/[0.04]',
+            'disabled:cursor-default disabled:opacity-100',
+          )}
+          data-testid={`toolbar-${control.id}`}
+          data-parity-only="true"
+          // The reason belongs on the control itself, not in a visually-hidden child:
+          // the trigger is a real button, and the parity gate requires every
+          // `data-parity-only` control to carry a LOCALIZED reason it can read.
+          title={`${label} — ${t(LEGACY_CHROME_UNAVAILABLE_KEY)}`}
+          aria-label={`${label} — ${t(LEGACY_CHROME_UNAVAILABLE_KEY)}`}
+          onMouseDown={noFocusSteal}
+        >
+          {control.paths ? <ToolbarIcon paths={control.paths} /> : null}
+          {value ? <span className="truncate">{value}</span> : null}
+          <Select.Icon className="shrink-0 opacity-55">
+            <Caret />
+          </Select.Icon>
+        </Select.Trigger>
+      </Select.Root>
     );
   }
 
