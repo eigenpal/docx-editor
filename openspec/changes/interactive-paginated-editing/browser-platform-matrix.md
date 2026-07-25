@@ -35,9 +35,9 @@ lanes above until additional rows are ratified and wired into CI.
 | Claim | Current status |
 | --- | --- |
 | Direct pointer click/drag on the **paginated interaction surface** | **Both adapters: automated and passing**, and proven IDENTICAL by `test:e2e:paired-one-surface-interaction`. Still does not satisfy public `interactive-paginated` — that remains task **8.10** after async layout, virtualization, and the performance budgets |
-| Typed editing on the **paginated interaction surface** (caret on painted pages) | **Both adapters: automated and passing** — a click places the caret, typing commits to the canonical model and repaints, and the resulting document is byte-identical across adapters. Still does not satisfy public `interactive-paginated` |
-| Clipboard cut/copy/paste initiated from the paginated surface | **Not automated** |
-| Keyboard navigation derived from engine page/line geometry on the paginated surface | **Not automated** |
+| Typed editing on the **paginated interaction surface** (caret on painted pages) | **Both adapters: automated and passing** — a click places the caret, typing commits to the canonical model and repaints, and the resulting **painted text** is identical across adapters after a save-and-reopen round trip (`test:e2e:paired-one-surface-interaction`). This previously read "byte-identical across adapters", which no artifact supported: the paired spec compares painted `textContent`, not saved bytes or a checksum. Still does not satisfy public `interactive-paginated` |
+| Clipboard paste initiated from the paginated surface | **Automated in both adapters** — React/Vue one-surface specs and the paired spec. Cut/copy from the painted surface remain **not automated**. |
+| Keyboard navigation derived from engine page/line geometry on the paginated surface | **Automated in both adapters** — ArrowRight/Left/End/Home from a clicked caret, React and Vue one-surface specs |
 | Caret placement after mid-word insert at paragraph start via painted surface | **Not claimed** — gate uses end-of-paragraph trusted input |
 | Public **`interactive-paginated`** body-paragraph claim | **Not claimed** — first formal claim at task **8.10** only |
 
@@ -68,7 +68,8 @@ table to `interactive-paginated`.
 | Pointer / click / drag on paginated surface | **Not automated** | Not claimed | Not claimed |
 | Typed edit on paginated surface | **Not automated** | Not claimed | Not claimed |
 | Keyboard navigation on paginated surface | **Not automated** | Not claimed | Not claimed |
-| Clipboard on paginated surface | **Not automated** | Not claimed | Not claimed |
+| Clipboard PASTE on paginated surface | Automated (React, Vue, paired) | Not claimed | Not claimed |
+| Clipboard cut/copy on paginated surface | **Not automated** | Not claimed | Not claimed |
 | Keyboard / undo / redo (diagnostic split `?edit=1` only) | `editorSmoke` — diagnostic, non-interactive-paginated | Manual | Not claimed |
 | IME / composition | Synthetic lifecycle in adapter gate only | Manual Chromium only | Not claimed |
 | Accessibility traversal | Engine harness + adapter gate (Chromium) | Manual | Not claimed |
