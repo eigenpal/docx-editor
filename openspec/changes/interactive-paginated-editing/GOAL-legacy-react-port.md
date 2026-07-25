@@ -212,6 +212,101 @@ Chrome hooks that need a capability decision each, in rough value order:
   that query lands.
 
 
+## The last screenshot delta, RESOLVED — and an earlier conclusion corrected
+
+At 1512x723 in one tab, ten of eleven chrome landmarks are pixel-identical to
+`latest.docx-editor.dev/react`. The eleventh is the ruler row's `min-width`: 984 locally,
+1576 on the reference.
+
+**An earlier version of this note concluded the deployment must be running different
+source, because no branch of retired's `minLayoutWidth` formula produced 1576. That was
+wrong.** It assumed `maxPageWidthPx` was 816 for both. Solving the formula for the
+unknown instead of assuming it:
+
+```
+1576 = 2 * outlineLeftAllowance + maxPageWidthPx + (sidebarOpen ? SIDEBAR_DOCUMENT_SHIFT * 2 : 0)
+1576 = 2 * 84                   + maxPageWidthPx + 352
+       maxPageWidthPx = 1056
+```
+
+1056px is 15840 twips / 15 — LANDSCAPE Letter. Verified against the reference's DOM: its
+pages measure `[816, 1056]`, so the document has a landscape section, and it has six
+comment cards so `sidebarOpen` is true.
+
+**The formula is identical on both sides. The two inputs differ, and both differences are
+ENGINE gaps, not authored values:**
+
+| Input | Reference | Here | Why |
+| --- | --- | --- | --- |
+| `sidebarOpen` | true (6 comments) | false | `getComments` is a stub returning `[]` |
+| `maxPageWidthPx` | 1056 (landscape section) | 816 | Layout uses one fixed page size (`LAYOUT` in `create-editor.ts`); per-section page size is not read |
+
+So the ruler width is not a porting defect and needs no decision about hand-tuning a
+constant. It closes when those two capabilities land — `getComments`, and per-section page
+geometry in layout. The lesson worth keeping: when an equation does not balance, solve for
+the unknown before concluding the other side is running different code.
+
+## The DocxEditor hooks: implemented, excluded, remaining
+
+Retired has 34 hooks under `components/DocxEditor/hooks/`. They are not one category.
+
+### Implemented (8)
+
+`useControllableBoolean`, `useResetEditorState`, `useOutlineSidebar`, `useScrollPageInfo`,
+`useKeyboardShortcuts`, `useContextMenus`, `useFormattingActions`, plus
+`hooks/useCommentSidebarItems`. Each is the retired file with its engine calls swapped for
+contract calls.
+
+### EXCLUDED by rule 4 — retired's layout and painter
+
+These are `PagedEditor` internals, and they say so in their own doc headers. Rule 4 hands
+the document canvas to the greenfield painter, so porting them would mean importing the
+layout engine this repo replaced. Each already has a greenfield counterpart:
+
+| Hook | Its own description | What replaces it |
+| --- | --- | --- |
+| `useLayoutPipeline` (585) | "Layout pipeline hook for PagedEditor. Owns the 4-step layout pass (PM doc → content nodes → metrics → page layout → paint)" | `engine-layout` + the engine's display bridge |
+| `usePagesPointer` (890) | "Pointer-routing hook for PagedEditor. Owns every mouse path that lands on the visible pages" | `attachAdapterEventBridge` + the engine's interaction controller |
+| `useSelectionOverlay` (306) | selection rects painted over the pages | `getSelectionGeometry` / `overlaysForFrame` |
+| `usePagedScrollApi` (265), `usePagedEditorRefApi` (237) | PagedEditor's own scroll and ref API | `getScrollGeometry`, `EditorHost.onScrollRestore` |
+| `useTableResizeState` (294), `useImageInteractions` (184) | drag handles on painted pages | engine interaction intents (not yet surfaced) |
+| `useLayoutTriggers` (86), `usePaintedPagesReadyDispatcher` (37), `usePaintedPagesGuardLifecycle` (18) | retired paint lifecycle | the engine's frame lifecycle |
+
+This is a decision, not a deferral: they are excluded, and the row above says what carries
+each responsibility instead.
+
+### Remaining (13)
+
+Chrome hooks that need a capability decision each, in rough value order:
+`useFileIO` (280), `useTableDialogs` (374), `useSelectionTracker` (242),
+`useDocxEditorRefApi` (292), `useDocumentLoader` (183), `usePageSetupControls` (147),
+`useHyperlinkActions` (144), `useCommentManagement` (142), `useFloatingCommentBtn` (100),
+`useTableOfContentsActions` (80), `useCommentLifecycle` (63), `useActiveEditor` (54),
+`useWatermarkControls` (44), `useFindReplaceBridge` (251), `useHeaderFooterEditing` (318),
+`useImageActions` (221).
+
+## Two engine findings worth carrying forward
+
+- The toolbar's bold and italic reach the model. Verified end to end: drag-select a range
+  with real pointer events, click Bold, and the document revision moves 0 → 1 with the
+  text repainting bold. `underline` is DELIBERATELY refused: `w:u` carries a style
+  (single/double/wave), and a boolean would downgrade the author's formatting on save.
+
+  TWO THINGS MADE THIS LOOK BROKEN, and both are worth remembering. A pointer press placed
+  the caret but never FOCUSED the editor, so keystrokes went to `document.body` — the
+  adapter now calls `Editor.focus()` on `pointerDown`, as retired's pointer handler did.
+  And with a COLLAPSED caret, toggling a mark sets stored marks rather than changing text,
+  so the revision correctly does not move; only a range selection proves the path. A
+  browser automation `left_click` that emits no `pointerdown` also never reaches the
+  bridge, which is a harness artefact rather than a product defect.
+- `query({ type: 'selection' })` answers `null` even when a selection exists — it is part
+  of the query surface that is not wired yet. The published interaction frame DOES carry
+  the selection, so anything asking "is something selected" must read
+  `getInteractionFrame().selection`, not the query. Every selection-TARGETED command
+  (`applyFormatting`, `setParagraphStyle`) needs a `DocTarget` and so stays inert until
+  that query lands.
+
+
 ## The last screenshot delta, resolved by arithmetic
 
 At 1512x723 in one tab, ten of eleven chrome landmarks are pixel-identical to
