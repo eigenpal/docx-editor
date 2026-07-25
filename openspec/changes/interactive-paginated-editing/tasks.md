@@ -277,9 +277,17 @@ Not the formal public **`interactive-paginated`** claim (that remains **8.10**).
   editable). With only a page box there is nothing to derive them from, and guessing a
   margin would put a wrong ruler over a correct page.
 
-  Follow the `Editor.isActive` precedent the owner set: extend the public shape (a content
-  box or explicit margins per page), return real values where the engine already knows
-  them, and wire both rulers to read it. Correct wiring first; the ruler lights up when
+  **The value already exists — this is plumbing, not derivation.** `layoutBody`
+  (`packages/engine-layout/src/layout.ts:96`) takes a uniform `margin` from
+  `LayoutOptions` and computes `contentRight = pageWidth - margin` /
+  `contentBottom = pageHeight - margin` from it. So a real content box can be published
+  today; nothing needs inventing. Note the engine's margin is currently UNIFORM on all
+  four sides, while Word carries four independent values — publish what the engine
+  actually laid out, and do not present it as per-side fidelity it does not have.
+
+  Follow the `Editor.isActive` precedent the owner set: extend the public shape (add
+  `contentBox: Rect` to `DisplayPage` and surface it through `getPageGeometry`), return
+  the real values above, and wire both rulers to read it. Correct wiring first; the ruler lights up when
   the values are real. Do NOT hardcode a default margin to make it look right.
 
   Note this change owns no section-geometry contract (M4.4 made the rulers deliberately
