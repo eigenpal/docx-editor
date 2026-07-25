@@ -120,5 +120,27 @@ row has no scrolling ancestor; `examples/vite/screenshots/` became untracked-vis
 | `check:export-parity` | pass, 49 names |
 | `check:editor-contract` | pass |
 | `check:adapter-css-thin` | pass |
-| `check:parity-contract` | **FAIL — correctly, on the stale untracked snapshot** |
+| `check:public-docs-surface` | **FAIL — 25 undocumented public names** |
+| `check:parity-contract` | **FAIL — 4 props missing from the React snapshot** |
 | `typecheck` | only `@docx-editor.dev/nuxt` TS5097, pre-existing |
+
+### Correction to this table (independent architecture review)
+
+This table originally omitted `check:public-docs-surface` and mis-stated the parity
+failure, so it understated the gate. Three things are true and were not recorded:
+
+1. `bun run check:parity` is an `&&` chain that **exits at `check:public-docs-surface`**,
+   so `check:parity-contract` never runs inside the composite. Reporting the composite as
+   "red on the parity contract" was wrong; it is red earlier.
+2. The 25 missing names (`renderAsync`, `DocxEditorHandle`, `RenderAsyncOptions`, the
+   React toolbar and plugin surfaces) were dropped by `checkpoint-701c1a9f` / `checkpoint-12fedecf`
+   (`refactor(react|vue)!: strip adapter onto the Editor contract`) — before this change
+   and outside its scope, but they belong in the record.
+3. `docs/api/docx-editor-react/index.api.md` and its Vue counterpart were **deleted from
+   git** by those same commits and now exist only as untracked local files. On a clean CI
+   clone `check-parity-contract.mjs` exits with `Missing required file`, not with the
+   drift reported here — meaning the recorded diagnosis reproduces only on this machine.
+
+None of this is caused by M6D.1/M6P.1/M6V.1/M6K.1/M6S.1, and none of it is fixed by
+writing a snapshot from the current source: restoring deleted public API and re-tracking
+API Extractor output is an owner decision, not a gate-closing convenience.

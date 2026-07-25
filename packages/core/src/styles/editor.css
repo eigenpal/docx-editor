@@ -1685,6 +1685,13 @@
   white-space: nowrap;
   user-select: none;
   transition: opacity 0.3s ease;
+  /* A status readout, never a control. Both PageIndicator components document that
+   * this element "never intercepts pointer events", but nothing enforced it: Playwright
+   * click logs show the chip among the elements intercepting pointer events over the
+   * document. (It is NOT the cause of the `?edit=1` smoke failures — those click a
+   * paragraph inside the hidden input-host shell; see task M6E.1. This makes the
+   * component's own documented contract true.) */
+  pointer-events: none;
 }
 
 /* Display-only rulers (interactive-paginated-editing M4.4). No margin or tab

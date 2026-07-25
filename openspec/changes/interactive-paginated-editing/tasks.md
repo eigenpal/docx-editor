@@ -204,9 +204,38 @@ Not the formal public **`interactive-paginated`** claim (that remains **8.10**).
 
 ## M6K — ProseMirror-native keyboard and text-selection behavior
 
-- [x] M6K.1 **React-first interaction correction; complete before M6S.1 and the final React gate.** Stop reimplementing semantic editing commands in the one-surface bridge. ProseMirror MUST own command execution for Backspace/Delete, word and soft/hard-line deletion, Enter/Shift-Enter, Select All, undo/redo, formatting shortcuts, logical Left/Right, and their Shift/Cmd/Ctrl/Alt/Option variants. The bridge/input policy MUST admit the corresponding safe native `beforeinput` intents, including `deleteWordBackward`, `deleteWordForward`, `deleteSoftLineBackward`, `deleteSoftLineForward`, `deleteHardLineBackward`, and `deleteHardLineForward`, instead of reducing them to basic character deletion or rejecting them. The engine MUST continue to own Up/Down, Home/End, PageUp/PageDown, painted-page and unsupported-structure boundaries, stale-frame validation, read-only/capability preflight, and all hit-test/layout geometry. Engine capture-phase preflight MUST run before any ProseMirror handler for engine-owned keys; a refused command MUST leave both the ProseMirror selection and painted caret unchanged. After ProseMirror handles a command or changes its selection, `EditorBinding` MUST publish the resulting semantic selection into the current interaction frame before the next visible overlay is accepted. `Editor.exec({ type: 'setSelection' })` MUST pass through the same current-frame and semantic-range validator, refusing stale frame IDs and invalid offsets rather than clamping or replacing caller provenance. No adapter may read DOM selection as canonical state.
+- [x] M6K.1 **React-first interaction correction; complete before M6S.1 and the final React gate.** Stop reimplementing semantic editing commands in the one-surface bridge. ProseMirror MUST own command execution for Backspace/Delete, word and soft/hard-line deletion, Enter, Select All, undo/redo, formatting shortcuts, logical Left/Right, and their Shift/Cmd/Ctrl/Alt/Option variants. The bridge/input policy MUST admit the corresponding safe native `beforeinput` intents, including `deleteWordBackward`, `deleteWordForward`, `deleteSoftLineBackward`, `deleteSoftLineForward`, `deleteHardLineBackward`, and `deleteHardLineForward`, instead of reducing them to basic character deletion or rejecting them. The engine MUST continue to own Up/Down, Home/End, PageUp/PageDown, painted-page and unsupported-structure boundaries, stale-frame validation, read-only/capability preflight, and all hit-test/layout geometry. Engine capture-phase preflight MUST run before any ProseMirror handler for engine-owned keys; a refused command MUST leave both the ProseMirror selection and painted caret unchanged. After ProseMirror handles a command or changes its selection, `EditorBinding` MUST publish the resulting semantic selection into the current interaction frame before the next visible overlay is accepted. `Editor.exec({ type: 'setSelection' })` MUST pass through the same current-frame and semantic-range validator, refusing stale frame IDs and invalid offsets rather than clamping or replacing caller provenance. No adapter may read DOM selection as canonical state.
 
-  **Differential pass boundary:** add a real-browser React gate that drives the production `packages/react/src/DocxEditor.tsx` surface and a raw ProseMirror reference initialized from the same body-paragraph document. Compare resulting document content, paragraph structure, marks, history state, and semantic selection after Cmd/Ctrl+A; Cmd/Ctrl+Backspace/Delete; Alt/Option+Backspace/Delete; logical Left/Right with Shift/Cmd/Ctrl/Alt/Option combinations; Enter/Shift-Enter; undo/redo; deletion of non-collapsed selections; and paragraph joins/splits. Platform-inapplicable shortcuts MUST be recorded, not silently treated as passes. Add explicit regressions proving an engine-refused Up/Down/Home/End/PageUp/PageDown or boundary crossing cannot be pre-empted by ProseMirror, and proving composition, clipboard, accessibility ownership, read-only policy, stale-frame refusal, grapheme integrity, and hidden-host focus remain green. Record the command matrix, browser/OS results, intentional differences, and Chrome evidence in `openspec/changes/interactive-paginated-editing/evidence/m6/prosemirror-command-parity.md`. This is an interaction-correctness gate, not polish, and MUST NOT widen feature-support claims.
+  **Differential pass boundary:** add a real-browser React gate that drives the production `packages/react/src/DocxEditor.tsx` surface and a raw ProseMirror reference initialized from the same body-paragraph document. Compare resulting document content, paragraph structure, marks, history state, and semantic selection after Cmd/Ctrl+A; Cmd/Ctrl+Backspace/Delete; Alt/Option+Backspace/Delete; logical Left/Right with Shift/Cmd/Ctrl/Alt/Option combinations; Enter; undo/redo; deletion of non-collapsed selections; and paragraph joins/splits. Platform-inapplicable shortcuts MUST be recorded, not silently treated as passes. Add explicit regressions proving an engine-refused Up/Down/Home/End/PageUp/PageDown or boundary crossing cannot be pre-empted by ProseMirror, and proving composition, clipboard, accessibility ownership, read-only policy, stale-frame refusal, grapheme integrity, and hidden-host focus remain green. Record the command matrix, browser/OS results, intentional differences, and Chrome evidence in `openspec/changes/interactive-paginated-editing/evidence/m6/prosemirror-command-parity.md`. This is an interaction-correctness gate, not polish, and MUST NOT widen feature-support claims.
+
+  **Accepted deviation — Shift+Enter.** This task originally required ProseMirror to own
+  Shift+Enter. It cannot: the composed schema registers no hard-break node and the model
+  has no `w:br` run, so delegating `insertLineBreak` let the browser insert a break that
+  ProseMirror then dropped — the key did nothing and the revision never moved. A silent
+  no-op is worse than a refusal, so the input policy now refuses `insertLineBreak`. The
+  requirement is narrowed to Enter above, and the missing capability is owned by
+  **M6K.2** below rather than left implied.
+
+- [ ] M6K.2 **Line break (`w:br`) round-trip.** Add a hard-break run to the model, its
+  capability parse/serialize, a projector and schema node in `engine-binding`, and the
+  reverse mapping in `mapDocToOps`, then return `insertLineBreak` to the delegated set in
+  `edit-surface.ts`. Until this lands, Shift+Enter is refused rather than silently
+  dropped (see the accepted deviation in M6K.1). Pass boundary: a Shift+Enter in the
+  production surface advances the revision, survives save and reopen as `w:br`, and the
+  parity gate asserts it is no longer refused.
+
+- [ ] M6E.1 **Repoint the `?edit=1` editing smoke suite at the painted surface.** All 14
+  `e2e/editorSmoke.ts` tests (7 × React and Vue) fail on a click timeout and have for at
+  least 14 commits, predating M6D.1/M6P.1/M6V.1/M6K.1/M6S.1. Root cause, measured: the
+  suite clicks `getByTestId('editor-host').locator('p')`, but that paragraph now lives
+  inside the hidden input-host shell — computed `opacity: 0`, `pointer-events: none`,
+  `clip-path: inset(0px)`, `position: fixed` — so the click can never land. The tests
+  target a surface that stopped being interactive when the input host became an
+  accessibility/IME projection. They MUST drive the painted pages the way the one-surface
+  gates do, not the hidden host. Two of the seven also assert superseded behavior: a
+  document with a table now opens `partial`, not read-only (M6P.1). Pass boundary:
+  `bun run test:e2e:editor` is green in both adapters with no test clicking a
+  `pointer-events: none` element.
 
 ---
 
