@@ -147,12 +147,19 @@ function ControlButton({
     return (
       <Select.Root disabled>
         <Select.Trigger
+          // VERBATIM from the legacy `ui/Select.tsx` trigger at
+          // packages/react/src/components/ui/Select.tsx,
+          // rather than an approximation of it. The earlier hand-tuned values (h-[30px],
+          // text-[13px], hover:border-border) were close but visibly off against the
+          // reference — the owner compared the two side by side.
           className={clsx(
-            'inline-flex h-[30px] max-w-[150px] items-center justify-between gap-1.5',
-            'rounded border border-transparent bg-transparent px-2 text-[13px]',
-            'text-foreground/90 outline-none transition-colors',
-            'hover:border-border hover:bg-black/[0.04]',
-            'disabled:cursor-default disabled:opacity-100',
+            'flex h-8 items-center justify-between gap-1 rounded px-2 py-1',
+            'text-sm text-foreground bg-transparent',
+            'hover:bg-muted/80 focus:outline-none focus:bg-muted/80',
+            'disabled:cursor-not-allowed disabled:opacity-50',
+            'transition-colors duration-150',
+            '[&>span]:truncate',
+            'max-w-[150px]',
           )}
           data-testid={`toolbar-${control.id}`}
           data-parity-only="true"
@@ -179,10 +186,12 @@ function ControlButton({
       <button
         type="button"
         className={clsx(
-          'inline-flex h-[30px] w-[30px] items-center justify-center rounded border-none',
-          'bg-transparent text-foreground/90 transition-colors',
-          'hover:enabled:bg-black/[0.06] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
-          'disabled:cursor-default disabled:text-foreground/35',
+          // Same resting/hover/disabled treatment as the legacy Select trigger, so the
+          // ribbon reads as one control set rather than two.
+          'inline-flex h-8 w-8 items-center justify-center rounded border-none',
+          'bg-transparent text-foreground transition-colors duration-150',
+          'hover:enabled:bg-muted/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+          'disabled:cursor-not-allowed disabled:opacity-50',
         )}
         data-testid={`toolbar-${control.id}`}
         data-parity-only="true"
@@ -206,10 +215,12 @@ function ControlButton({
       <button
         type="button"
         className={clsx(
-          'inline-flex h-[30px] w-[30px] items-center justify-center rounded border-none',
-          'bg-transparent text-foreground/90 transition-colors',
-          'hover:enabled:bg-black/[0.06] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
-          'disabled:cursor-default disabled:text-foreground/35',
+          // Same resting/hover/disabled treatment as the legacy Select trigger, so the
+          // ribbon reads as one control set rather than two.
+          'inline-flex h-8 w-8 items-center justify-center rounded border-none',
+          'bg-transparent text-foreground transition-colors duration-150',
+          'hover:enabled:bg-muted/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+          'disabled:cursor-not-allowed disabled:opacity-50',
         )}
         data-testid={`toolbar-${control.id}`}
         disabled={!editor || !onSave}
@@ -237,10 +248,12 @@ function ControlButton({
     <button
       type="button"
       className={clsx(
-          'inline-flex h-[30px] w-[30px] items-center justify-center rounded border-none',
-          'bg-transparent text-foreground/90 transition-colors',
-          'hover:enabled:bg-black/[0.06] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
-          'disabled:cursor-default disabled:text-foreground/35',
+          // Same resting/hover/disabled treatment as the legacy Select trigger, so the
+          // ribbon reads as one control set rather than two.
+          'inline-flex h-8 w-8 items-center justify-center rounded border-none',
+          'bg-transparent text-foreground transition-colors duration-150',
+          'hover:enabled:bg-muted/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+          'disabled:cursor-not-allowed disabled:opacity-50',
         )}
       data-testid={`toolbar-${control.id}`}
       disabled={!state.enabled}
