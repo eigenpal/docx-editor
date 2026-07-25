@@ -212,37 +212,14 @@ export function pointsToHalfPoints(points: number): number {
 }
 
 
-/** STUB — no style preview data on the engine yet; the picker falls back to plain text. */
-export function getStylePreviewProps(_style?: { styleId: string } | null): Record<string, unknown> {
-  return {};
-}
-
-// List state. The engine exposes no list state, so every predicate answers "not a list"
-// and the constructors produce inert values. The list buttons therefore render inactive
-// instead of claiming a list the document may not have.
-
-
-/** STUB — no document style inventory on the engine yet, so the style picker shows
- *  whatever the caller passes and nothing is synthesized. */
-/** Compatibility contract for the shared adapter surface.
- *  `StyleOption[]` depends on; returning the raw `Style` (optional name) broke it. */
-export interface ResolvedStyleOption {
-  styleId: string;
-  name: string;
-  priority: number;
-  fontSize?: number;
-  bold?: boolean;
-  italic?: boolean;
-  color?: string;
-}
-
-/** Signature copied from the legacy core; filters to paragraph styles as it does. */
-export function resolveParagraphStyleOptions(styles: Style[] | undefined): ResolvedStyleOption[] {
-  if (!styles || styles.length === 0) return [];
-  return styles
-    .filter((s) => s.type === 'paragraph')
-    .map((s, i) => ({ styleId: s.styleId, name: s.name ?? s.styleId, priority: i }));
-}
+// `getStylePreviewProps`, `resolveParagraphStyleOptions` and `ResolvedStyleOption` are
+// NOT declared here — they come from the ported `./lib/stylePreview`, re-exported below.
+//
+// The interim stubs for them used to live at this spot, and a local declaration SHADOWS a
+// `export *`, so the ported implementations were being silently ignored: the style picker
+// still got `{}` from a preview function that had been real for several commits. Nothing
+// failed loudly, which is why it survived — the same class of defect as the icon swap
+// that reported success while leaving nine controls hand-drawn.
 
 export interface TextFormatting {
   // Basic formatting
@@ -600,61 +577,69 @@ export interface TableCell {
   content: BlockContent[];
 }
 // --- Table split geometry ---------------------------------------------------------------
-  //
-  // The engine exposes no table mutation surface. Keep this compatibility API typed but
-  // inert so the toolbar cannot compute or imply an edit that Editor.exec cannot apply.
-  export interface CellAnchor<T> {
-    data: T;
-    row: number;
-    col: number;
-    rowspan: number;
-    colspan: number;
-  }
-  
-  export interface SplitLayoutResult<T> {
-    anchors: CellAnchor<T>[];
-    deltaRows: number;
-    deltaCols: number;
-    newRowCount: number;
-  }
-  
-  export function buildAnchorMaps<T>(_anchors: CellAnchor<T>[]): {
-    byStart: Map<string, CellAnchor<T>>;
-    byCoveredSlot: Map<string, CellAnchor<T>>;
-  } {
-    return { byStart: new Map(), byCoveredSlot: new Map() };
-  }
-  
-  export function computeSplitDialogDefaults(rowspan: number, colspan: number): TableSplitConfig {
-    return {
-      minRows: Math.max(1, rowspan),
-      minCols: Math.max(1, colspan),
-      initialRows: Math.max(1, rowspan),
-      initialCols: Math.max(1, colspan),
-    };
-  }
-  
-  export function computeSplitLayout<T>(
-    _anchors: CellAnchor<T>[],
-    _target: CellAnchor<T>,
-    _rows: number,
-    _cols: number,
-    _totalRows: number,
-    _createSplitCellData: (isOriginal: boolean, rowOffset: number, colOffset: number) => T
-  ): SplitLayoutResult<T> {
-    return { anchors: [], deltaRows: 0, deltaCols: 0, newRowCount: 0 };
-  }
-  
-  export function redistributeColumnWidths(
-    existing: number[],
-    _startCol: number,
-    _currentSpan: number,
-    _targetSpan: number
-  ): number[] {
-    return [...existing];
-  }
-  
-  /** Compatibility contract for the shared adapter surface.
+//
+// The engine exposes no table mutation surface. Keep this compatibility API typed but
+// inert so the toolbar cannot compute or imply an edit that Editor.exec cannot apply.
+export interface CellAnchor<T> {
+  data: T;
+  row: number;
+  col: number;
+  rowspan: number;
+  colspan: number;
+}
+
+export interface SplitLayoutResult<T> {
+  anchors: CellAnchor<T>[];
+  deltaRows: number;
+  deltaCols: number;
+  newRowCount: number;
+}
+
+export function buildAnchorMaps<T>(_anchors: CellAnchor<T>[]): {
+  byStart: Map<string, CellAnchor<T>>;
+  byCoveredSlot: Map<string, CellAnchor<T>>;
+} {
+  return { byStart: new Map(), byCoveredSlot: new Map() };
+}
+
+export function computeSplitDialogDefaults(rowspan: number, colspan: number): TableSplitConfig {
+  return {
+    minRows: Math.max(1, rowspan),
+    minCols: Math.max(1, colspan),
+    initialRows: Math.max(1, rowspan),
+    initialCols: Math.max(1, colspan),
+  };
+}
+
+export function computeSplitLayout<T>(
+  _anchors: CellAnchor<T>[],
+  _target: CellAnchor<T>,
+  _rows: number,
+  _cols: number,
+  _totalRows: number,
+  _createSplitCellData: (isOriginal: boolean, rowOffset: number, colOffset: number) => T
+): SplitLayoutResult<T> {
+  return { anchors: [], deltaRows: 0, deltaCols: 0, newRowCount: 0 };
+}
+
+export function redistributeColumnWidths(
+  existing: number[],
+  _startCol: number,
+  _currentSpan: number,
+  _targetSpan: number
+): number[] {
+  return [...existing];
+}
+
+/** Compatibility contract for the shared adapter surface. */
+export interface TableSplitConfig {
+  initialCols: number;
+  initialRows: number;
+  minCols: number;
+  minRows: number;
+}
+
+/** Compatibility contract for the shared adapter surface.
  *  named highlight. The map itself is empty until the engine exposes highlight state. */
 export const HIGHLIGHT_COLORS: Readonly<Record<string, string>> = {};
 export function mapHexToHighlightName(_hex?: string | null): string | undefined {
@@ -1216,3 +1201,16 @@ export {
 // predicates and constructors — so it is used directly. The interim stubs answered "not a list"
 // unconditionally; these answer correctly for whatever state the caller holds.
 export * from './lib/listState';
+
+// --- Ported pure modules ----------------------------------------------------------------
+//
+// These were stubbed until an audit against the legacy source showed each is pure — five
+// of the six have NO imports at all. Re-exported here so the ported controls resolve the
+// real implementations through the same module path they already import from.
+//
+// Order matters: a local declaration shadows a star-export, so nothing above may declare
+// a name these modules provide.
+export * from './lib/stylePreview';
+export * from './lib/fontOptions';
+export * from './lib/highlightColors';
+export * from './lib/colorResolver';
