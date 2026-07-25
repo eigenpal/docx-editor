@@ -15,7 +15,7 @@ import type { DisplayPage } from '@docx-editor.dev/core-contract/geometry';
 import { paintDisplay } from '../paintDisplay';
 // The legacy title + menu components. My DocxEditorTitleBar/DocxEditorMenuBar are
 // deleted: two versions of one control is the drift the port rule warns about.
-import { DocumentName, MenuBar } from './TitleBar';
+import { DocumentName, Logo, MenuBar, TitleBar, TitleBarRight } from './TitleBar';
 import { Toolbar } from './Toolbar';
 import { EditorToolbarContext } from './EditorToolbarContext';
 import { OutlineToggleButton } from './DocxEditor/OutlineToggleButton';
@@ -353,14 +353,17 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
             reference shows white continuing below the toolbar with the grey workspace
             starting under it; mine ended the white at the title bar. */}
         <div className="flex flex-col bg-doc-surface shadow-sm flex-shrink-0">
-        <div className="flex items-center gap-3 px-3.5 py-1.5">
-          {renderTitleBarLeft?.()}
-          <div className="flex min-w-0 flex-1 flex-col items-start justify-center pl-[18px]">
-            <DocumentName value={title ?? ''} onChange={(next) => onTitleChange?.(next)} />
-            <MenuBar />
-          </div>
-          {renderTitleBarRight?.()}
-        </div>
+        {/* The legacy TitleBar compound component, not my hand-rolled row. It owns the
+            layout — `flex items-stretch bg-doc-surface pt-2 pb-1`, logo `pl-3 pr-1`,
+            middle column `flex-1 min-w-0 py-1`, right `px-3` — which is where the gaps
+            and paddings the owner flagged actually come from. Mine were authored
+            (`gap-3 px-3.5 py-1.5`, `pl-[18px]`). */}
+        <TitleBar>
+          <Logo>{renderTitleBarLeft?.()}</Logo>
+          <DocumentName value={title ?? ''} onChange={(next) => onTitleChange?.(next)} />
+          <MenuBar />
+          <TitleBarRight>{renderTitleBarRight?.()}</TitleBarRight>
+        </TitleBar>
             <Toolbar />
         </div>
         <div style={LEGACY_MAIN_STYLE}>
