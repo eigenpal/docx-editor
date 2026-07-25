@@ -1,5 +1,6 @@
 // ProseMirror edit-surface mount (document-engine 4.2; interactive-paginated 4.1–4.2).
 
+import { releaseCapsuleRefs } from './schema.ts';
 import { EditorView } from 'prosemirror-view';
 import { EditorState, TextSelection } from 'prosemirror-state';
 import { keymap } from 'prosemirror-keymap';
@@ -1053,6 +1054,10 @@ export function mountEditSurface(
   const priorDestroy = surface.destroy.bind(surface);
   surface.destroy = () => {
     priorDestroy();
+    // Drop this document's capsule refs. Without it a ref minted while an attacker's
+    // document was open still resolved after the victim's document replaced it, and the
+    // attacker's verbatim `w:rPr` bytes could be written into the victim's package.
+    releaseCapsuleRefs();
   };
 
   if (options.testHooks?.onReady) {

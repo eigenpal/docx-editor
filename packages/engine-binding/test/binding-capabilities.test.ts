@@ -206,3 +206,37 @@ test('a capsule survives a DOM round-trip through the schema', async () => {
   expect(text.marks.map((m) => m.type.name)).toEqual(['rawRunProps']);
   expect(text.marks[0].attrs.rpr).toBe(rpr);
 });
+
+// Cross-document capsule bleed (independent security review of a05381a2).
+//
+// The registry was module-level with sequential ids and no teardown, so a ref minted
+// while an ATTACKER's document was open still resolved after a VICTIM document replaced
+// it — and `isRunPropertiesCapsule` only checks "lone balanced w:rPr", so the payload
+// could carry w:object/OLE into the victim's package. Both legs are covered here.
+test('a capsule ref cannot be guessed, and does not survive the document that minted it', async () => {
+  const { releaseCapsuleRefs, resolveCapsuleRef } = await import('../src/schema.ts');
+  const rpr = '<w:rPr><w:rFonts w:ascii="PWNED"/></w:rPr>';
+  const dom = docSchema.marks.rawRunProps.spec.toDOM!(
+    docSchema.marks.rawRunProps.create({ rpr }),
+    true,
+  ) as [string, Record<string, string>, number];
+  const ref = dom[1]['data-raw-rpr-ref'];
+
+  // Not craftable offline: the id is not a projection-order counter.
+  expect(ref).not.toBe('c1');
+  expect(ref).toMatch(/^[a-z0-9]{9,}-\d+$/);
+  expect(resolveCapsuleRef(ref)).toBe(rpr);
+
+  // And it dies with the document that minted it, which is what surface.destroy() does.
+  releaseCapsuleRefs();
+  expect(resolveCapsuleRef(ref)).toBeUndefined();
+  // A ref minted afterwards is in a different namespace, so the old string stays dead.
+  const next = (
+    docSchema.marks.rawRunProps.spec.toDOM!(
+      docSchema.marks.rawRunProps.create({ rpr }),
+      true,
+    ) as [string, Record<string, string>, number]
+  )[1]['data-raw-rpr-ref'];
+  expect(next).not.toBe(ref);
+  expect(resolveCapsuleRef(ref)).toBeUndefined();
+});

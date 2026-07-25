@@ -88,7 +88,9 @@ registerBindingMark('italic', { excludes: 'rawRunProps', toDOM: () => ['em', 0],
 // (same formatting). The capsule is opaque — the editor cannot toggle its formatting; typed text
 // gets no capsule mark (default formatting). Rendered inert (a plain span carrying the bytes).
 /**
- * Capsule bytes by opaque id, minted only when the MODEL projects a run (see `runToText`).
+ * Capsule bytes by opaque id, minted in `toDOM` — reachable only for marks that already
+ * carry model-derived bytes, since `runToText` builds them from the canonical model and
+ * `parseDOM` is registry-gated (an unknown ref yields no mark).
  *
  * The capsule must survive ProseMirror's DOM re-parse. Delegated `beforeinput` types let
  * the BROWSER perform the edit and PM's DOM observer reconcile it — the only input path
@@ -111,14 +113,50 @@ registerBindingMark('italic', { excludes: 'rawRunProps', toDOM: () => ['em', 0],
 const capsuleById = new Map<string, string>();
 const idByCapsule = new Map<string, string>();
 
+/**
+ * Per-realm nonce, regenerated whenever the registry is released.
+ *
+ * The first version numbered refs `c1`, `c2`, … in projection order, and kept them for
+ * the page lifetime. Both were exploitable, and independent security review reproduced
+ * it end to end: an attacker authors document A, knows their capsule lands at `c1`,
+ * and a `<span data-raw-rpr-ref="c1">` pasted into VICTIM document B resolved to A's
+ * bytes and was written into B's `document.xml`. `isRunPropertiesCapsule` only checks
+ * "lone balanced w:rPr", so the payload can carry `w:object`/OLE — precisely the vector
+ * the missing `parseDOM` had closed.
+ *
+ * Sequential ids let the payload be crafted offline; the nonce is generated at runtime
+ * in the victim's browser, so a ref cannot be guessed ahead of time. Releasing on
+ * teardown closes the other leg, where a live ref is carried out of A by a real copy.
+ */
+let capsuleNonce = mintNonce();
+
+function mintNonce(): string {
+  const bytes = new Uint8Array(9);
+  const c = (globalThis as { crypto?: Crypto }).crypto;
+  if (c?.getRandomValues) c.getRandomValues(bytes);
+  else for (let i = 0; i < bytes.length; i += 1) bytes[i] = (i * 2654435761) % 256;
+  return Array.from(bytes, (b) => b.toString(36)).join('');
+}
+
 /** Mint (or reuse) the opaque id for a capsule projected from the canonical model. */
 function capsuleRef(rpr: string): string {
   const existing = idByCapsule.get(rpr);
   if (existing) return existing;
-  const id = `c${idByCapsule.size + 1}`;
+  const id = `${capsuleNonce}-${idByCapsule.size + 1}`;
   idByCapsule.set(rpr, id);
   capsuleById.set(id, rpr);
   return id;
+}
+
+/**
+ * Drop every capsule ref and re-nonce, so no ref minted for the previous document
+ * resolves again. Called when an edit surface is destroyed — which is what happens
+ * before another document is loaded into the same realm.
+ */
+export function releaseCapsuleRefs(): void {
+  capsuleById.clear();
+  idByCapsule.clear();
+  capsuleNonce = mintNonce();
 }
 
 /** Test seam: the bytes a ref resolves to, or undefined for an unknown ref. */
