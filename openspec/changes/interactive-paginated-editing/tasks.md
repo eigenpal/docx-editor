@@ -249,6 +249,16 @@ Not the formal public **`interactive-paginated`** claim (that remains **8.10**).
   serialize/parse round-trip test and a rewritten security test; both fail when the
   `parseDOM` rule is removed.
 
+- [ ] M6V.3 **Finish the radix/Tailwind control port.** M6V.2's first slice landed: the
+  React dropdown is a radix `Select.Root`/`Trigger` styled with Tailwind utilities over
+  the shared token palette, and it carries its localized unavailable reason on the
+  control itself. No build work was required — Tailwind already scans the adapter
+  sources. Still hand-rolled: the colour-split control, the zoom and font-size steppers,
+  the toggle buttons, and the editing-mode pill. `.ep-toolbar__picker` and
+  `.ep-toolbar__picker-value` could NOT be deleted yet because
+  `packages/vue/src/DocxEditorToolbar.ts:64,72` still renders those classes; the rules
+  die when Vue converts under 10V.1, not before.
+
 - [ ] M6E.1 **Repoint the `?edit=1` editing smoke suite at the painted surface.** All 14
   `e2e/editorSmoke.ts` tests (7 × React and Vue) fail on a click timeout and have for at
   least 14 commits, predating M6D.1/M6P.1/M6V.1/M6K.1/M6S.1. Root cause, measured: the
