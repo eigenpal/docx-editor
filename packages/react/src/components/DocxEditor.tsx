@@ -16,6 +16,9 @@ import { paintDisplay } from '../paintDisplay';
 // The title bar is composed by DocxEditorToolbar (via EditorToolbar's compound parts),
 // which is where legacy assembles it — this file no longer composes it separately.
 import { DocxEditorToolbar } from './DocxEditor/DocxEditorToolbar';
+import { OUTLINE_RESERVED_SPACE, OUTLINE_BUTTON_RESERVED_SPACE } from './DocumentOutline';
+import { SIDEBAR_DOCUMENT_SHIFT } from './sidebar/constants';
+import { RULER_WIDTH } from './ui/VerticalRuler';
 import { prefersColorSchemeDark, resolveIsDark, subscribeSystemDark } from '../lib/colorMode';
 import type { EditorMode } from './DocxEditor/internals/editing-modes';
 import { useOutlineSidebar } from './DocxEditor/hooks/useOutlineSidebar';
@@ -307,6 +310,38 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
       if (propZoom !== undefined) applyZoom(propZoom);
     }, [propZoom, applyZoom]);
 
+    // Horizontal space the layout must reserve, computed exactly as legacy computes it.
+    // Passing 0 (what this file did) meant the centered page never cleared the outline
+    // panel or made room for the comments sidebar, so the page sat centred while the
+    // reference shifted it left.
+    //
+    // Legacy read the widest page width off the document's section properties; the engine
+    // publishes the laid-out page box, so the widest PAINTED page is what is measured —
+    // same quantity, taken from what layout actually produced.
+    const outlineLeftAllowance =
+      (showOutline ? OUTLINE_RESERVED_SPACE : OUTLINE_BUTTON_RESERVED_SPACE) +
+      // The outline toggle/panel inset past the vertical ruler when it's shown,
+      // so the page must clear that extra width too.
+      RULER_WIDTH;
+    const maxPageWidthPx = Math.round(
+      Math.max(0, ...(editorRef.current?.getPageGeometry() ?? []).map((p) => p.box.width)),
+    );
+    // Legacy reserves the sidebar's width when there is something to show in it
+    // (`sidebarOpen = allSidebarItems.length > 0`), not when the toggle is on. Same rule
+    // here, asked of the engine. Both capabilities are stubs returning [], so the space
+    // is not reserved today and the page stays centred — and the moment the engine can
+    // answer, the layout shifts with no change here.
+    //
+    // The CARDS are a separate question: `useCommentSidebarItems` is ported and ready,
+    // but the engine's comment shape carries no author, date or paragraph content, so
+    // there is nothing to build a card from yet. See the `getComments` stub.
+    const sidebarItemCount =
+      (editorRef.current?.getComments().length ?? 0) +
+      (editorRef.current?.getTrackedChanges().length ?? 0);
+    const sidebarOpen = sidebarItemCount > 0;
+    const minLayoutWidth =
+      2 * outlineLeftAllowance + maxPageWidthPx + (sidebarOpen ? SIDEBAR_DOCUMENT_SHIFT * 2 : 0);
+
     // The floating page pill: current page, total, and the fade-out after scrolling
     // stops — all from the legacy hook, reading the engine instead of a layout object.
     const { scrollPageInfo } = useScrollPageInfo({
@@ -392,8 +427,8 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
           readOnlyProp={false}
           showOutline={showOutline}
           showOutlineButton
-          sidebarOpen={showCommentsSidebar}
-          minLayoutWidth={0}
+          sidebarOpen={sidebarOpen}
+          minLayoutWidth={minLayoutWidth}
           toolbarHeight={toolbarHeight}
           editorScrollLeft={editorScrollLeft}
           expandedSidebarItem={expandedSidebarItem}
