@@ -104,6 +104,70 @@ test.describe('paired one-surface interaction (task 6.5)', () => {
     expect(results.vue).toEqual(results.react);
   });
 
+  test('the caret stays painted and geometry keys stay alive after typing', async ({ browser }) => {
+    // The typing scenario above asserted painted TEXT only. Independent review
+    // found that hid a defect in the primary editing loop: after any keystroke the
+    // reconciled selection was published with an affinity the caret-stop index does
+    // not contain, so `frame.caret` was null, no caret element existed, and Home,
+    // End, PageUp, PageDown, ArrowUp and ArrowDown were all refused with
+    // `invalidTarget` — dead keys, because the bridge swallows them in capture
+    // phase. Both adapters. Nothing in the suite looked at the caret after typing.
+    const results = await acrossAdapters(browser, async (page) => {
+      // Click mid-glyph so the caret lands at an INTERIOR offset. At the paragraph
+      // end the buggy affinity happened to be correct, which is why the headless
+      // end-of-paragraph test also stayed green.
+      const point = await clickTargetPointAt(page, 0.4);
+      await page.mouse.click(point.x, point.y);
+      await page.keyboard.type('Q');
+      await expect.poll(async () => await paintedText(page)).toContain('Q');
+
+      const afterTyping = await page.evaluate(() => {
+        const frame = window.__docxAdapterEditor!.getInteractionFrame();
+        const head = frame.selection?.head as { kind?: string; affinity?: string } | undefined;
+        return {
+          caretInFrame: frame.caret !== null,
+          focused: frame.focus.focused,
+          headAffinity: head?.kind === 'text' ? head.affinity : null,
+          caretInDom: document.querySelectorAll('[data-testid="one-surface-caret"]').length,
+        };
+      });
+
+      // Every geometry key must be answerable, not refused for want of a caret.
+      const keyOutcomes = await page.evaluate(() => {
+        const editor = window.__docxAdapterEditor!;
+        const out: Record<string, string> = {};
+        for (const key of ['Home', 'End', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight']) {
+          const res = editor.dispatchInteraction({
+            kind: 'geometryKeyboard',
+            frameId: editor.getInteractionFrame().id,
+            key,
+            shiftKey: false,
+            altKey: false,
+            ctrlKey: false,
+            metaKey: false,
+          } as never) as { ok: boolean; reason?: string };
+          out[key] = res.ok ? 'ok' : `refused: ${res.reason ?? ''}`;
+        }
+        return out;
+      });
+
+      return { afterTyping, keyOutcomes };
+    });
+
+    for (const adapter of ['react', 'vue'] as const) {
+      const { afterTyping, keyOutcomes } = results[adapter];
+      expect(afterTyping.focused, `${adapter} focus after typing`).toBe(true);
+      expect(afterTyping.caretInFrame, `${adapter} frame.caret after typing`).toBe(true);
+      expect(afterTyping.caretInDom, `${adapter} painted caret after typing`).toBeGreaterThan(0);
+      expect(afterTyping.headAffinity, `${adapter} head affinity`).toBe('upstream');
+      for (const [key, outcome] of Object.entries(keyOutcomes)) {
+        expect(outcome, `${adapter} ${key} after typing`).not.toContain('caret');
+      }
+    }
+    // And the two adapters must agree.
+    expect(results.vue).toEqual(results.react);
+  });
+
   test('the same drag selects the same range', async ({ browser }) => {
     const results = await acrossAdapters(browser, async (page) => {
       const from = await clickTargetPointAt(page, 0.05);

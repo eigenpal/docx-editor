@@ -27,6 +27,7 @@ import type {
   OwnershipRegion,
   SemanticIdentity,
   SemanticPositionIndex,
+  SemanticTarget,
   SemanticTextSpan,
   StorySemanticIndex,
 } from '@docx-editor.dev/core-contract/interaction';
@@ -91,9 +92,47 @@ export function paragraphEditableInLane(context: ParagraphTraversalContext): boo
   return isTopLevelEditable('paragraph');
 }
 
+/**
+ * The single affinity the caret-stop index publishes for a grapheme offset.
+ *
+ * `caretStopsForParagraph` emits exactly one stop per offset using this rule, so
+ * this function — not the caller's guess — decides which affinity is addressable.
+ */
 export function caretAffinity(graphemeOffset: number, paragraphGraphemeCount: number): InteractionAffinity {
   if (graphemeOffset >= paragraphGraphemeCount) return 'downstream';
   return graphemeOffset === 0 ? 'downstream' : 'upstream';
+}
+
+/**
+ * Re-stamp an observed text target with the canonical affinity for its offset.
+ *
+ * The edit surface captures a selection as `(paragraph semId, offset, affinity)`
+ * with affinity hardcoded to `'after'` — it projects ProseMirror state and has no
+ * line geometry, so it cannot know which side of a wrap the caret sits on. That
+ * maps to `'downstream'` for every offset, while `caretAffinity` makes `upstream`
+ * canonical for every interior offset.
+ *
+ * Independent review measured the consequence: after any keystroke or relayout the
+ * reconciled selection was published as `downstream`, `caretStops` at that offset
+ * held only `upstream`, and the caret-rect lookup requires an exact match — so
+ * `frame.caret` was null, no caret element existed in the DOM, and Home, End,
+ * PageUp, PageDown, ArrowUp and ArrowDown were all refused with `invalidTarget`
+ * ("requires a line-resolved caret" / "could not be seeded from caret geometry").
+ * Because the adapter bridge swallows geometry keys in capture phase, they were
+ * dead keys rather than falling through. Both adapters, primary editing loop.
+ *
+ * Normalizing here keeps one authority for affinity: the index that publishes the
+ * stops. Non-text targets pass through unchanged.
+ */
+export function withCanonicalAffinity(
+  target: SemanticTarget,
+  graphemeCountOf: (blockId: string) => number | undefined,
+): SemanticTarget {
+  if (target.kind !== 'text') return target;
+  const count = graphemeCountOf(target.identity.blockId);
+  if (count === undefined) return target;
+  const canonical = caretAffinity(target.graphemeOffset, count);
+  return canonical === target.affinity ? target : { ...target, affinity: canonical };
 }
 
 function caretStopsForParagraph(scope: ViewScope, record: BlockSemanticRecord): CaretStop[] {

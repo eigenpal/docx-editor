@@ -72,7 +72,7 @@ import { executeInteractionPlan } from './interaction-executor.ts';
 import { planPointerDragInteraction, type PointerDragSession } from './drag-session.ts';
 import { commitDragSessionAfterExecution } from './drag-dispatch.ts';
 import { commitNavigationSessionAfterExecution, type NavigationSession } from './navigation-session.ts';
-import { paragraphTextById } from './semantic-index.ts';
+import { paragraphTextById, withCanonicalAffinity } from './semantic-index.ts';
 import { scopesEqual, type ParagraphTextResolver } from './bidi-policy.ts';
 
 // US Letter, 1in margins, in twips — the same geometry the read-only preview uses.
@@ -241,6 +241,21 @@ export function createEditor(config: EditorConfig): Editor {
     updateInputHostFromFrame();
   }
 
+  /**
+   * Re-stamp an observed endpoint with the affinity the caret-stop index publishes
+   * for its offset. The edit surface cannot know affinity (no line geometry), so it
+   * reports a constant; the index is the authority.
+   */
+  function canonicalAffinityFor(frame: InteractionFrame, target: SemanticTarget): SemanticTarget {
+    return withCanonicalAffinity(target, (blockId) => {
+      for (const story of frame.semanticIndex.stories) {
+        const block = story.blocks.find((b) => b.identity.blockId === blockId);
+        if (block) return block.graphemeCount;
+      }
+      return undefined;
+    });
+  }
+
   function reconcileSelectionOverlayAfterLayout(): void {
     if (!surface?.semanticProjectionAttached || !session) {
       updateInputHostFromFrame();
@@ -255,8 +270,8 @@ export function createEditor(config: EditorConfig): Editor {
     const selection: SemanticSelection = {
       frameId: frame.id,
       scope: obs.scope,
-      anchor: obs.selection.anchor,
-      head: obs.selection.head,
+      anchor: canonicalAffinityFor(frame, obs.selection.anchor),
+      head: canonicalAffinityFor(frame, obs.selection.head),
     };
     // Publish even when caret geometry is unavailable.
     //
@@ -802,12 +817,13 @@ export function createEditor(config: EditorConfig): Editor {
       if (!outcome.ok) return outcome;
       const obs = surface.getAccessibilityObservation({ frameId, scope: activeScope });
       if (obs.selection) {
+        const frame = currentFrame();
         publishSelectionOverlay(
           {
             frameId,
             scope: obs.scope,
-            anchor: obs.selection.anchor,
-            head: obs.selection.head,
+            anchor: canonicalAffinityFor(frame, obs.selection.anchor),
+            head: canonicalAffinityFor(frame, obs.selection.head),
           },
           { scope: activeScope, focused: true },
         );

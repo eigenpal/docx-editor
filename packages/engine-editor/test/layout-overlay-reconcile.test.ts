@@ -89,4 +89,69 @@ describe('layout overlay reconciliation (task 4.8)', () => {
     editor.destroy();
     scroll.remove();
   });
+
+  test('typing at an INTERIOR offset keeps the caret painted and geometry keys alive', () => {
+    // The test above types at the paragraph END, which is the one offset where
+    // `caretAffinity` returns 'downstream' and therefore agrees with the constant
+    // affinity the edit surface reports. That is why it stayed green while the
+    // primary editing loop was broken everywhere else: at any interior offset the
+    // reconciled selection was published 'downstream', the only caret stop there is
+    // 'upstream', and the exact-affinity lookup returned null — so `frame.caret` was
+    // null, no caret painted, and Home/End/PageUp/PageDown/ArrowUp/ArrowDown were
+    // all refused with `invalidTarget`.
+    const body = document.createElement('div');
+    const scroll = document.createElement('div');
+    scroll.getBoundingClientRect = () =>
+      ({ x: 0, y: 0, width: 640, height: 480, top: 0, left: 0, right: 640, bottom: 480, toJSON: () => ({}) }) as DOMRect;
+    document.body.append(scroll);
+    scroll.append(body);
+
+    const editor = createEditor({ host: hostWithBody(body, scroll), document: createEditableParagraphFixture() });
+    const driver = createEditorDriver(editor);
+    const text = driver.accessibilityObservation().entries.filter((e) => e.role === 'editableParagraph')[0]!.text;
+    const interior = 2;
+    expect(text.length).toBeGreaterThan(interior + 2);
+
+    expect(driver.authorizeCaret(0, interior).ok).toBe(true);
+    const editable = body.querySelector('[contenteditable="true"]') as HTMLElement;
+    editable.dispatchEvent(
+      new InputEvent('beforeinput', { inputType: 'insertText', data: 'z', bubbles: true, cancelable: true }),
+    );
+
+    const frame = editor.getInteractionFrame();
+    expect(frame.selection).not.toBeNull();
+    expect(frame.focus.focused).toBe(true);
+    // The published head must carry the affinity the caret-stop index publishes.
+    const head = frame.selection!.head;
+    expect(head.kind).toBe('text');
+    if (head.kind === 'text') {
+      expect(head.graphemeOffset).toBe(interior + 1);
+      expect(head.affinity).toBe('upstream');
+    }
+    // And the caret must actually be paintable.
+    expect(frame.caret).not.toBeNull();
+    expect(driver.caretClientRect()).not.toBeNull();
+
+    // Geometry keys must still be answerable rather than refused for want of a
+    // line-resolved caret.
+    for (const key of ['Home', 'End', 'ArrowUp', 'ArrowDown']) {
+      const result = editor.dispatchInteraction({
+        kind: 'geometryKeyboard',
+        frameId: editor.getInteractionFrame().id,
+        key,
+        shiftKey: false,
+        altKey: false,
+        ctrlKey: false,
+        metaKey: false,
+      });
+      // A single-line fixture legitimately has nowhere to go vertically; what must
+      // NOT happen is a refusal caused by missing caret geometry.
+      if (!result.ok) {
+        expect(result.reason ?? '').not.toContain('caret');
+      }
+    }
+
+    editor.destroy();
+    scroll.remove();
+  });
 });

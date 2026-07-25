@@ -473,12 +473,23 @@ function caretRectForTextTarget(
     if (fromWhitespace) return fromWhitespace;
   }
 
+  // Match on (block, offset) and accept the index's canonical affinity.
+  //
+  // The index publishes exactly ONE stop per grapheme offset (`caretAffinity`), so
+  // an offset-level match is unambiguous: there is only one geometric position to
+  // return. Requiring an exact affinity match instead meant any caller carrying a
+  // different affinity got `null` — which review measured as an unpainted caret and
+  // six dead navigation keys after every keystroke, because the edit surface reports
+  // a constant affinity it has no line geometry to derive.
+  //
+  // `withCanonicalAffinity` normalizes at the observation boundary; this is the
+  // second line of defense, so a future caller that guesses affinity degrades to a
+  // correct rect rather than to a dead keyboard.
   const stop = frame.semanticIndex.caretStops.find(
     (s) =>
       s.target.kind === 'text' &&
       s.target.identity.blockId === target.identity.blockId &&
-      s.target.graphemeOffset === target.graphemeOffset &&
-      s.target.affinity === target.affinity,
+      s.target.graphemeOffset === target.graphemeOffset,
   );
   if (!stop || stop.role !== 'editableText') return null;
 
