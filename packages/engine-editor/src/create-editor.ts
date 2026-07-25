@@ -963,7 +963,15 @@ export function createEditor(config: EditorConfig): Editor {
       return out;
     },
 
-    /** STUB — needs the comments part parsed and its anchors mapped to block ids. */
+    /**
+     * STUB — the comments part IS read, but not in a shape a comment list can be built
+     * from: every `w:comment` entry's paragraphs are concatenated into a single
+     * `kind: 'comment'` story, so per-comment boundaries are lost, and `w:id`,
+     * `w:author`, `w:date` and `w:initials` are never captured. Deriving this needs the
+     * story reader to keep one story per `w:comment` and carry those four attributes,
+     * plus `w:commentRangeStart`/`End` mapped onto block ids for the anchors.
+     * Returning a merged, author-less blob instead would be a guess.
+     */
     getComments: () => [],
 
     /** STUB — needs resolved run/paragraph properties at the selection, which is the
@@ -1079,7 +1087,14 @@ export function createEditor(config: EditorConfig): Editor {
      *  editing", which is always true right now. */
     getHeaderFooterState: () => null,
 
-    /** STUB — needs w:ins/w:del revisions parsed; the model does not carry them. */
+    /**
+     * STUB — `w:ins` and `w:del` are treated as plain run wrappers: their runs are
+     * unwrapped into the paragraph and the revision's `w:id`, `w:author` and `w:date`
+     * are dropped, while `w:delText` is dropped outright. Nothing in the model says a
+     * run was inserted or deleted, so there is no revision list to return. Deriving
+     * this needs those wrappers to survive parsing as marked spans carrying their
+     * author/date, and `w:delText` retained as deleted text.
+     */
     getTrackedChanges: () => [],
     setActiveScope: (scope: ViewScope) => {
       activeScope = scope;
