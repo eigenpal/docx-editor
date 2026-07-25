@@ -149,3 +149,56 @@ Two capabilities are deliberately NOT derived, because the inputs do not exist:
   `blockId` + offset and the list is real. What remains unsupported is MOVING to a match,
   and that is now `Editor.selectMatch` — a named stub that refuses, so the dialog lists
   and counts but does not advance the caret, and it learns that from the capability.
+
+
+## The DocxEditor hooks: implemented, excluded, remaining
+
+Retired has 34 hooks under `components/DocxEditor/hooks/`. They are not one category.
+
+### Implemented (8)
+
+`useControllableBoolean`, `useResetEditorState`, `useOutlineSidebar`, `useScrollPageInfo`,
+`useKeyboardShortcuts`, `useContextMenus`, `useFormattingActions`, plus
+`hooks/useCommentSidebarItems`. Each is the retired file with its engine calls swapped for
+contract calls.
+
+### EXCLUDED by rule 4 — retired's layout and painter
+
+These are `PagedEditor` internals, and they say so in their own doc headers. Rule 4 hands
+the document canvas to the greenfield painter, so porting them would mean importing the
+layout engine this repo replaced. Each already has a greenfield counterpart:
+
+| Hook | Its own description | What replaces it |
+| --- | --- | --- |
+| `useLayoutPipeline` (585) | "Layout pipeline hook for PagedEditor. Owns the 4-step layout pass (PM doc → content nodes → metrics → page layout → paint)" | `engine-layout` + the engine's display bridge |
+| `usePagesPointer` (890) | "Pointer-routing hook for PagedEditor. Owns every mouse path that lands on the visible pages" | `attachAdapterEventBridge` + the engine's interaction controller |
+| `useSelectionOverlay` (306) | selection rects painted over the pages | `getSelectionGeometry` / `overlaysForFrame` |
+| `usePagedScrollApi` (265), `usePagedEditorRefApi` (237) | PagedEditor's own scroll and ref API | `getScrollGeometry`, `EditorHost.onScrollRestore` |
+| `useTableResizeState` (294), `useImageInteractions` (184) | drag handles on painted pages | engine interaction intents (not yet surfaced) |
+| `useLayoutTriggers` (86), `usePaintedPagesReadyDispatcher` (37), `usePaintedPagesGuardLifecycle` (18) | retired paint lifecycle | the engine's frame lifecycle |
+
+This is a decision, not a deferral: they are excluded, and the row above says what carries
+each responsibility instead.
+
+### Remaining (13)
+
+Chrome hooks that need a capability decision each, in rough value order:
+`useFileIO` (280), `useTableDialogs` (374), `useSelectionTracker` (242),
+`useDocxEditorRefApi` (292), `useDocumentLoader` (183), `usePageSetupControls` (147),
+`useHyperlinkActions` (144), `useCommentManagement` (142), `useFloatingCommentBtn` (100),
+`useTableOfContentsActions` (80), `useCommentLifecycle` (63), `useActiveEditor` (54),
+`useWatermarkControls` (44), `useFindReplaceBridge` (251), `useHeaderFooterEditing` (318),
+`useImageActions` (221).
+
+## Two engine findings worth carrying forward
+
+- `exec({ type: 'toggleMark', mark: 'bold' })` returns `{ ok: true, changed: true }`, so
+  the toolbar's bold and italic reach the model. `underline` is DELIBERATELY refused:
+  `w:u` carries a style (single/double/wave), and a boolean would downgrade the author's
+  formatting on save.
+- `query({ type: 'selection' })` answers `null` even when a selection exists — it is part
+  of the query surface that is not wired yet. The published interaction frame DOES carry
+  the selection, so anything asking "is something selected" must read
+  `getInteractionFrame().selection`, not the query. Every selection-TARGETED command
+  (`applyFormatting`, `setParagraphStyle`) needs a `DocTarget` and so stays inert until
+  that query lands.

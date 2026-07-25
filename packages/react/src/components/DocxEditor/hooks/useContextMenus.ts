@@ -1,5 +1,6 @@
 import { useCallback, useMemo, useState } from 'react';
 import type { Editor } from '@docx-editor.dev/core-contract/editor';
+import type { SemanticTarget } from '@docx-editor.dev/core-contract/interaction';
 import type { ImageLayoutTarget, TableContextInfo } from '../../../legacy-core-compat';
 import type { WrapType } from '../../../lib/wrapTypes';
 import { en as defaultLocale } from '@docx-editor.dev/i18n';
@@ -8,6 +9,16 @@ import type { Translations } from '@docx-editor.dev/i18n';
 import { useImageContextMenu } from '../../ImageContextMenu';
 import { type TextContextAction, type TextContextMenuItem } from '../../TextContextMenu';
 import { formatKeys } from '../../dialogs/KeyboardShortcutsDialog/ShortcutItem';
+
+/** Whether two semantic targets address the same spot. */
+function sameTarget(a: SemanticTarget, b: SemanticTarget): boolean {
+  if (a.kind !== b.kind) return false;
+  if (a.kind === 'atomic' && b.kind === 'atomic') return a.objectId === b.objectId;
+  if (a.kind === 'text' && b.kind === 'text') {
+    return a.graphemeOffset === b.graphemeOffset && a.identity.blockId === b.identity.blockId;
+  }
+  return false;
+}
 
 /**
  * The menu's view of the document, asked of the engine.
@@ -24,10 +35,17 @@ function menuStateFor(editor: Editor | null): {
   cursorInToc: boolean;
   tableContext: TableContextInfo | null;
 } {
-  const selection = editor?.query({ type: 'selection' }) ?? null;
+  // The published interaction frame, not `query({ type: 'selection' })` — that query is
+  // part of the unwired query surface and answers null even when a selection exists,
+  // which would leave the menu permanently reporting "nothing selected".
+  const selection = editor?.getInteractionFrame().selection ?? null;
   const table = editor?.getSelectedTable() ?? null;
   return {
-    hasSelection: selection !== null && selection.from !== selection.to,
+    // A selection spans something when its two ends differ. Both ends are semantic
+    // targets: a text target carries an identity and a grapheme offset, an atomic one an
+    // object id. Compared structurally rather than by reference, because the frame mints
+    // fresh target objects on every publish.
+    hasSelection: selection !== null && !sameTarget(selection.anchor, selection.head),
     cursorInTable: table !== null,
     cursorInToc: false,
     tableContext: table

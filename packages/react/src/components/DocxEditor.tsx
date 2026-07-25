@@ -18,6 +18,7 @@ import { DocxEditorPagedArea } from './DocxEditor/DocxEditorPagedArea';
 import { DocxEditorToolbar } from './DocxEditor/DocxEditorToolbar';
 import { DocxEditorOverlays } from './DocxEditor/DocxEditorOverlays';
 import { useContextMenus } from './DocxEditor/hooks/useContextMenus';
+import { useFormattingActions } from './DocxEditor/hooks/useFormattingActions';
 import { useKeyboardShortcuts } from './DocxEditor/hooks/useKeyboardShortcuts';
 import { useFindReplace } from '../hooks/useFindReplace';
 import { DocxEditorDialogs } from './DocxEditor/DocxEditorDialogs';
@@ -219,6 +220,22 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
     );
 
     // The image menu's own state hook, ported.
+    // Toolbar actions, ported. Bold and italic apply for real (`toggleMark` is wired in
+    // the engine); everything else returns an unsupported result, so the button does
+    // nothing rather than something unintended.
+    const {
+      handleFormat,
+      handleInsertTable,
+      handleInsertPageBreak,
+      handleInsertSectionBreakNextPage,
+      handleInsertSectionBreakContinuous,
+      handleInsertTOC,
+    } = useFormattingActions({
+      editorRef,
+      focusActiveEditor: () => editorRef.current?.focus(),
+      hyperlinkDialog,
+    });
+
     // The ported context-menu hook. It owns the text menu's state, the item list, the
     // image menu, and the action dispatcher — all of which this file previously passed as
     // empty placeholders.
@@ -610,7 +627,7 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
               }))}
               zoom={zoomFactor}
               showZoomControl
-              onFormat={() => {}}
+              onFormat={handleFormat}
               onUndo={() => void editorRef.current?.exec({ type: 'undo' })}
               onRedo={() => void editorRef.current?.exec({ type: 'redo' })}
               onPrint={() => {}}
@@ -620,12 +637,12 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
               onSave={() => onSave?.()}
               onZoomChange={applyZoom}
               onRefocusEditor={() => editorRef.current?.focus()}
-              onInsertTable={() => {}}
+              onInsertTable={handleInsertTable}
               onInsertImage={() => {}}
-              onInsertPageBreak={() => {}}
-              onInsertSectionBreakNextPage={() => {}}
-              onInsertSectionBreakContinuous={() => {}}
-              onInsertTOC={() => {}}
+              onInsertPageBreak={handleInsertPageBreak}
+              onInsertSectionBreakNextPage={handleInsertSectionBreakNextPage}
+              onInsertSectionBreakContinuous={handleInsertSectionBreakContinuous}
+              onInsertTOC={handleInsertTOC}
               onImageWrapType={() => {}}
               onImageTransform={() => {}}
               onOpenImageProperties={() => {}}
