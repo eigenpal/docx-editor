@@ -104,6 +104,23 @@ function hasLoneSurrogate(text: string): boolean {
 
 /** Whether a PM node corresponds to a canonical block by KIND and semId — NOT by content,
  *  so an in-place text edit still "matches" its block (same identity, different runs). */
+/**
+ * The read-only policy currently in force, for the module-level alignment helpers.
+ *
+ * `nodeMatchesBlock` feeds `firstDivergence`, `trySplit`, `mapJoin`, `mapInsert`, and
+ * `mapPasteIntoParagraph`, none of which are instance methods. Without the policy here
+ * a `paragraph` node carrying a policy-read-only block's `semId` aligned as an ordinary
+ * editable paragraph, and the reverse mapper emitted `setParagraphRuns` for a block that
+ * has no lossless patch path — the store committed and `emitPreservedPart` then threw at
+ * SAVE. `partial-body-editability/specs` requires that projection to be rejected at
+ * reverse mapping, and both the spec scenario and the "never commit then fail to save"
+ * rule were unimplemented.
+ *
+ * Set from the instance immediately before each mapping pass, so it always reflects the
+ * policy for the revision being mapped.
+ */
+let activeReadOnlyBlockIds: ReadonlySet<string> = new Set();
+
 function nodeMatchesBlock(node: PMNode | undefined, block: Block | undefined): boolean {
   if (!node || !block) return false;
   // A read-only atom must match its block by id AND kind — so a retyped atom (a table relabelled
@@ -119,7 +136,11 @@ function nodeMatchesBlock(node: PMNode | undefined, block: Block | undefined): b
     // forged atom naming a patchable paragraph makes it immutable, never editable.
     return node.attrs.semId === block.id && node.attrs.kind === block.kind;
   }
-  if (role === 'paragraph') return isBindingEditableKind(block.kind) && node.attrs.semId === block.id;
+  // A paragraph node may only align to a block the POLICY says is editable. Kind alone
+  // is not enough: a paragraph carrying unmodeled inline OOXML is a read-only region.
+  if (role === 'paragraph') {
+    return isBindingEditableKind(block.kind) && !activeReadOnlyBlockIds.has(block.id) && node.attrs.semId === block.id;
+  }
   return false;
 }
 
@@ -199,6 +220,7 @@ export class EditorBinding {
   /** Install the per-block access policy. Recomputed by the session per revision. */
   setReadOnlyBlockIds(ids: ReadonlySet<string>): void {
     this.readOnlyBlockIds = ids;
+    activeReadOnlyBlockIds = ids;
   }
 
   projectDoc(): PMNode {
@@ -276,6 +298,12 @@ export class EditorBinding {
       } else if (role === 'paragraph') {
         if (!isBindingEditableKind(block.kind) || node.attrs.semId !== block.id) {
           throw new BindingRejection('paragraph reordered or retargeted');
+        }
+        // The policy, not just the kind. A projected paragraph naming a read-only block
+        // would otherwise commit `setParagraphRuns` for content with no lossless patch
+        // path, and the failure would surface at save with the store already mutated.
+        if (this.readOnlyBlockIds.has(block.id)) {
+          throw new BindingRejection('edit targets a read-only block');
         }
         // The reverse lane's run mapping is paragraph-shaped (BINDING_EDITABLE_KINDS is paragraph);
         // narrow to ParagraphRecord and fail closed if a future editable kind is not paragraph-shaped.
@@ -444,6 +472,7 @@ export class EditorBinding {
    *  that disturbs a read-only block is refused (fail closed): no ops, no commit. */
   commitFromDoc(newDoc: PMNode): ForwardResult {
     let ops: DocOp[];
+    activeReadOnlyBlockIds = this.readOnlyBlockIds;
     try {
       ops = this.mapDocToOps(newDoc);
     } catch (e) {

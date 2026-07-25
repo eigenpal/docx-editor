@@ -148,7 +148,24 @@ export function openDocxSession(bytes: Uint8Array): DocxEditorSession {
   // `editable` is now "this document has at least one editable region". Read-only blocks
   // stay visible and are projected as immutable atoms, so they cannot be edited, pasted
   // over, or disturbed; the binding validates every projected id against this policy.
-  const assessment = assessBodyEditability(model);
+  // Recomputed per canonical revision, not captured once at load.
+  //
+  // The design is explicit that policy is "recomputed after canonical changes that can
+  // affect block identity or preservation evidence" and "keyed by canonical revision".
+  // Computing it once meant undo, redo, and a remote/agent commit through the shared
+  // store all left the projection and the guards running on a stale snapshot — a block
+  // could become read-only, or stop being read-only, with nothing rebuilt.
+  let assessment = assessBodyEditability(model);
+  let assessedRevision = store.currentRevision;
+  const refreshPolicy = (): void => {
+    if (store.currentRevision === assessedRevision) return;
+    assessment = assessBodyEditability(store.currentModel);
+    assessedRevision = store.currentRevision;
+    binding.setReadOnlyBlockIds(readOnlyIdsFrom(store.currentModel, assessment));
+  };
+  // `editable` stays the OPEN-time answer: a document that opened with an editable
+  // region does not lose its surface mid-session because one paragraph became
+  // unpatchable. Per-block policy still tightens through `refreshPolicy`.
   const editable = assessment.mode !== 'none';
   binding.setReadOnlyBlockIds(readOnlyIdsFrom(model, assessment));
 
@@ -158,9 +175,18 @@ export function openDocxSession(bytes: Uint8Array): DocxEditorSession {
     // document is editable, so it has no single blocking reason — its per-region
     // diagnostics are the honest answer and are exposed separately.
     readOnlyReason: assessment.mode === 'none' ? (assessment.regions[0] ?? null) : null,
-    mode: assessment.mode,
-    readOnlyRegions: assessment.regions,
-    structuralMutationAllowed: assessment.structuralMutationAllowed,
+    get mode() {
+      refreshPolicy();
+      return assessment.mode;
+    },
+    get readOnlyRegions() {
+      refreshPolicy();
+      return assessment.regions;
+    },
+    get structuralMutationAllowed() {
+      refreshPolicy();
+      return assessment.structuralMutationAllowed;
+    },
     projectDoc: () => binding.projectDoc(),
     applyPmDoc(doc) {
       if (!editable) return { committed: false, rejected: true, opCount: 0 };
@@ -175,6 +201,7 @@ export function openDocxSession(bytes: Uint8Array): DocxEditorSession {
       // Enforced here rather than only by disabling key bindings, because a
       // transaction can also originate from a plugin, clipboard handling, a test, or a
       // future adapter. Disabled bindings are UX; this is the guard.
+      refreshPolicy();
       if (!assessment.structuralMutationAllowed) {
         const blocks = store.currentModel.stories.get(bodyStoryId(store.currentModel))?.blocks ?? [];
         if (doc.childCount !== blocks.length) {
@@ -197,8 +224,18 @@ export function openDocxSession(bytes: Uint8Array): DocxEditorSession {
       const m = store.currentModel;
       return m.stories.get(bodyStoryId(m))!.blocks.map((b) => b.id);
     },
-    undo: () => (editable && store.canUndo() ? store.undo().ok : false),
-    redo: () => (editable && store.canRedo() ? store.redoLast().ok : false),
+    // Undo and redo mutate the model without passing through `applyPmDoc`, so they must
+    // refresh the policy themselves or the projection keeps a superseded read-only set.
+    undo: () => {
+      const ok = editable && store.canUndo() ? store.undo().ok : false;
+      if (ok) refreshPolicy();
+      return ok;
+    },
+    redo: () => {
+      const ok = editable && store.canRedo() ? store.redoLast().ok : false;
+      if (ok) refreshPolicy();
+      return ok;
+    },
     subscribe: (onChange) => store.subscribe(() => onChange()),
     currentModel: () => store.currentModel,
     revision: () => store.currentRevision,

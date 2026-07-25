@@ -12,7 +12,11 @@
     "deferredInVue": {
       "className": "React takes an explicit className prop. Vue applies `class` as a native fallthrough attribute, so it is not a declared prop — the capability exists on both, the declaration only on React.",
       "onChange": "React takes a callback prop. Vue exposes the same signal as a `change` EMIT, which is the idiomatic Vue form and does not appear in DocxEditorProps.",
-      "onReady": "React takes a callback prop. Vue exposes the same signal as a `ready` EMIT."
+      "onReady": "React takes a callback prop. Vue exposes the same signal as a `ready` EMIT.",
+      "t": "M6V.1 chrome: React composes the legacy chrome inside DocxEditor when a translator is supplied. Vue's chrome port is task 10V.1, which MUST remove this entry.",
+      "title": "M6V.1 chrome title. Deferred to 10V.1 with `t`.",
+      "onTitleChange": "M6V.1 chrome title editing. Deferred to 10V.1 with `t`.",
+      "onSave": "M6V.1 chrome save control. Deferred to 10V.1 with `t`."
     },
     "vueExclusive": {}
   },

@@ -62,11 +62,20 @@ describe('display publication cost', () => {
     // 4x the paragraphs must not cost ~16x. Measured after indexing the four terms:
     // 500 -> 133 ms, 1,000 -> 234 ms, 2,000 -> 488 ms, 4,000 -> 1,205 ms,
     // 8,000 -> 3,088 ms, against a pre-fix 4,000 -> 120.7 s.
-    const small = timePublish(500);
-    const large = timePublish(2000);
-    // Generous slack for a shared machine and for the genuinely linear terms, while
-    // still far below the ~16x a quadratic produces.
-    expect(large).toBeLessThan(Math.max(small, 40) * 8);
+    // 2,000 -> 8,000, not 500 -> 2,000. The smaller range is where this guard PASSED
+    // through a real quadratic: independent review found `deprecatedFlatDocOffset`
+    // scanning every block per painted item, and the full-path exponent only climbed
+    // 1.19 -> 1.48 -> 1.64 -> 2.04 across successive doublings. At 500/2000 the linear
+    // terms still dominate and the ratio looks fine, so the guard has to sample where
+    // the quadratic would actually show.
+    // An EIGHT-fold span, because a four-fold one is not decisive here. Verified by
+    // reverting the fix: at 500->2000 and at 2000->8000 the ratio stayed under 8x even
+    // WITH the quadratic present, so both of those guards passed through the defect.
+    // Across 8x, linear is ~8x and quadratic is ~64x, which no amount of machine noise
+    // confuses.
+    const small = timePublish(2000);
+    const large = timePublish(16000);
+    expect(large).toBeLessThan(Math.max(small, 40) * 20);
   });
 
   test('an ordinary 75-page document publishes within an interactive budget', () => {

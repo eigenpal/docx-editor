@@ -310,19 +310,47 @@ export function buildTraversalLinksForModel(
 }
 
 /** Deprecated flat view offsets derived from model semantic UTF-16 ranges, not painted items. */
+/**
+ * Flat offsets by block id, built once per semantic index.
+ *
+ * This walked every block accumulating a running offset, and `toDisplayPages` calls it
+ * once per painted text item — so publishing a display list was O(items x blocks). It is
+ * the sixth time a quadratic has been found in this path, and the reason it survived the
+ * previous five is instructive: every SIBLING scan in `toDisplayPages` was memoized in
+ * earlier rounds (`blockRecordById`, `whitespaceBoxFromCaretEdges`, `paragraphTextById`),
+ * and this one was left because no guard instrumented it.
+ *
+ * Independent review measured it dominating a 7,752 ms publish at 5,180 ms, and an
+ * ORDINARY ~18 KB document — 6,000 plain one-run paragraphs, no crafting — freezing the
+ * synchronous open path for 1.25 s, re-paid on every document-changing keystroke. Full
+ * path exponent reached 2.04.
+ *
+ * Keyed on the index object, which is rebuilt per layout.
+ */
+const flatOffsetCache = new WeakMap<SemanticPositionIndex, Map<string, { acc: number; orderIndex: number }>>();
+
+function flatOffsetsFor(index: SemanticPositionIndex): Map<string, { acc: number; orderIndex: number }> {
+  let byId = flatOffsetCache.get(index);
+  if (byId) return byId;
+  byId = new Map();
+  let acc = 0;
+  for (const block of index.stories[0]?.blocks ?? []) {
+    byId.set(block.identity.blockId, { acc, orderIndex: block.orderIndex });
+    acc += block.utf16Length + 1;
+  }
+  flatOffsetCache.set(index, byId);
+  return byId;
+}
+
 export function deprecatedFlatDocOffset(
   index: SemanticPositionIndex,
   blockId: string,
   utf16From: number,
   utf16To: number,
 ): { docFrom: number; docTo: number; blockId: number } {
-  const story = index.stories[0]!;
-  let acc = 0;
-  for (const block of story.blocks) {
-    if (block.identity.blockId === blockId) {
-      return { docFrom: acc + utf16From, docTo: acc + utf16To, blockId: block.orderIndex };
-    }
-    acc += block.utf16Length + 1;
+  const entry = flatOffsetsFor(index).get(blockId);
+  if (entry) {
+    return { docFrom: entry.acc + utf16From, docTo: entry.acc + utf16To, blockId: entry.orderIndex };
   }
   return { docFrom: utf16From, docTo: utf16To, blockId: 0 };
 }
