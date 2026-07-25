@@ -1797,17 +1797,24 @@
   align-items: center;
 }
 
-/* A hairline between control groups. Without it the toolbar is one undifferentiated
- * strip of icons; the legacy product separates history / zoom / style / font /
- * formatting / alignment / lists / insert bands, which is most of what makes it
- * readable at a glance. */
-.ep-toolbar__group-wrap + .ep-toolbar__group-wrap::before {
-  content: '';
-  align-self: center;
-  width: 1px;
-  height: 20px;
-  margin: 0 6px;
-  background: var(--doc-border);
+/* Group separation, VERBATIM from the legacy `ToolbarGroup`:
+ * `flex items-center gap-px px-1.5 border-r border-border/50 last:border-r-0 first:pl-0`.
+ * The hand-rolled version here was a centred ::before hairline with its own margins,
+ * which is why the group spacing never matched the reference — legacy borders the GROUP,
+ * it does not insert a divider between groups. */
+.ep-toolbar__group-wrap {
+  gap: 1px;
+  padding-left: 0.375rem;
+  padding-right: 0.375rem;
+  border-right: 1px solid color-mix(in srgb, var(--doc-border) 50%, transparent);
+}
+
+.ep-toolbar__group-wrap:last-child {
+  border-right: 0;
+}
+
+.ep-toolbar__group-wrap:first-child {
+  padding-left: 0;
 }
 
 .ep-toolbar__group {

@@ -54,6 +54,10 @@ function Caret(): React.ReactElement {
  */
 export type Translate = (key: string) => string;
 
+/** Legacy picker widths, from the `<StylePicker width={120} />` / `<FontPicker
+ *  width={60} />` / `<FontSizePicker width={42} />` call sites in the legacy Toolbar. */
+const PICKER_WIDTH: Record<string, number> = { style: 120, fontFamily: 60, fontSize: 42 };
+
 function ToolbarIcon({ paths }: { readonly paths: readonly string[] }): ReactNode {
   return (
     <svg viewBox="0 -960 960 960" width="18" height="18" aria-hidden="true" focusable="false">
@@ -161,8 +165,12 @@ function ControlButton({
             'disabled:cursor-not-allowed disabled:opacity-50',
             'transition-colors duration-150',
             '[&>span]:truncate',
-            'max-w-[150px]',
           )}
+          // Fixed widths from the legacy call site in `Toolbar.tsx`: the style picker is
+          // 120px, the font picker 60px, the font-size picker 42px. Left to shrink-wrap,
+          // the controls jitter as their value changes and the groups never line up with
+          // the reference.
+          style={{ width: PICKER_WIDTH[control.id] ?? undefined }}
           data-testid={`toolbar-${control.id}`}
           data-parity-only="true"
           // The reason belongs on the control itself, not in a visually-hidden child:
