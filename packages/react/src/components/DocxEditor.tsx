@@ -361,7 +361,18 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
           agentPanel={undefined}
           agentPanelOpen={false}
           onAgentPanelClose={() => {}}
-          toolbar={<Toolbar />}
+          toolbar={
+            /* `documentFonts` now comes from the engine's real inventory rather than the
+               picker's placeholder. Wiring it here is the point of the capability: the
+               ported Toolbar already accepts the prop, so nothing in the legacy component
+               changes. */
+            <Toolbar
+              documentFonts={(editorRef.current?.getDocumentFonts() ?? []).map((name) => ({
+                name,
+                fontFamily: name,
+              }))}
+            />
+          }
           pagedArea={surface}
           overlays={null}
           dialogs={null}

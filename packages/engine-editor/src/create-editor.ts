@@ -878,8 +878,31 @@ export function createEditor(config: EditorConfig): Editor {
     /** STUB — needs the style table read out of the package model's styles part. */
     getDocumentStyles: () => [],
 
-    /** STUB — needs a font inventory walked from run properties and the theme. */
-    getDocumentFonts: () => [],
+    /**
+     * Fonts the document actually uses, for the font picker.
+     *
+     * Derived, not stubbed: every run that carries unmodeled formatting keeps its
+     * verbatim `<w:rPr>`, and `w:rFonts w:ascii` is where the family lives. Walking the
+     * body's runs yields the real inventory in document order, de-duplicated.
+     *
+     * Returns `[]` for a document whose runs carry no explicit font — that is a true
+     * answer (the fonts come from styles/theme, which this does not yet resolve), not a
+     * placeholder list.
+     */
+    getDocumentFonts: () => {
+      if (!session) return [];
+      const model = session.currentModel();
+      const blocks = model.stories.get(bodyStoryId(model))?.blocks ?? [];
+      const seen = new Set<string>();
+      for (const block of blocks) {
+        if (block.kind !== 'paragraph') continue;
+        for (const run of (block as { runs: readonly { rPrCapsule?: string }[] }).runs) {
+          const family = /<w:rFonts[^>]*w:ascii="([^"]{0,64})"/.exec(run.rPrCapsule ?? '')?.[1];
+          if (family) seen.add(family);
+        }
+      }
+      return [...seen];
+    },
 
     /** STUB — needs heading levels resolved from paragraph styles across the body. */
     getOutline: () => [],

@@ -160,3 +160,27 @@ describe('getSelectionFormatting derives from canonical state', () => {
     body.remove();
   });
 });
+
+// `getDocumentFonts` derives the real inventory. The fixture's own description names the
+// families it uses, so this asserts against the document rather than a fixed list.
+describe('getDocumentFonts derives the real inventory', () => {
+  test('reports the families the fixture actually carries', async () => {
+    const { readFileSync } = await import('node:fs');
+    const path = await import('node:path');
+    const fixture = path.resolve(import.meta.dir, '../../../e2e/fixtures/comprehensive-word-element-test.docx');
+    const body = document.createElement('div');
+    document.body.append(body);
+    const editor = createEditor({ host: hostWith(body), document: new Uint8Array(readFileSync(fixture)) });
+
+    const fonts = editor.getDocumentFonts();
+    expect(fonts.length, 'no fonts derived from a document that names five').toBeGreaterThan(1);
+    // De-duplicated: a family used by many runs appears once.
+    expect(new Set(fonts).size).toBe(fonts.length);
+    // The fixture's "Font Variations" section lists these; at least one must come through.
+    expect(fonts.some((f) => ['Arial', 'Times New Roman', 'Courier New', 'Georgia', 'Verdana'].includes(f)),
+      `derived: ${JSON.stringify(fonts)}`).toBe(true);
+
+    editor.destroy();
+    body.remove();
+  });
+});
