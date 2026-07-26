@@ -33,6 +33,9 @@ type PlacedLine = {
   readonly line: VisualLineIdentity;
 };
 
+/** `w:tab` parses to U+0009; see `emitPaintSlices` for why it ends a paint run. */
+const TAB = '\t';
+
 function paragraphFullText(p: ParagraphRecord): string {
   return p.runs.map((r) => r.text).join('');
 }
@@ -259,7 +262,38 @@ export function layoutParagraphInBox(
   // page index of the line it belongs to rather than the one about to start.
   let lineStartUtf16 = 0;
   let lineStartX = cursor.x;
-  let paintedAny = false;
+  // A paragraph with no VISIBLE glyph still owns its whole line.
+  //
+  // The line-area placeholder used to be emitted whenever nothing was painted, which
+  // before grouping included a whitespace-only paragraph — whitespace painted nothing.
+  // Grouping paints those spaces, so keying the placeholder on "nothing painted" silently
+  // dropped it, and with it the full-width box that `enrichOwnershipRegions` unions into
+  // paragraph and trailing ownership. Independent review measured the consequence on
+  // `'   '`: clicking anywhere past the first ~12 px of a blank spacer line stopped
+  // placing a caret at all, where it used to place one everywhere on the line.
+  //
+  // Keyed on "no visible glyph" instead, so an empty AND a whitespace-only paragraph both
+  // keep it. It is pushed BEFORE the line's painted text so it takes a lower paint order:
+  // the measured whitespace clusters win where they exist and the placeholder answers the
+  // rest of the line. It carries no runs, so it is invisible to paint and to the wrapping
+  // signature, and it deliberately does NOT re-emit a caret edge — the duplicate offset-0
+  // edge that used to produce was what stopped a whitespace-only paragraph deriving a
+  // whitespace box at all.
+  const hasVisibleGlyph = /\S/u.test(fullText);
+  if (!hasVisibleGlyph) {
+    sink.push({
+      type: 'text',
+      x: contentLeft,
+      y: cursor.y,
+      width: Math.max(1, contentRight - contentLeft),
+      height: metrics.lineHeight,
+      text: '',
+      bold: false,
+      italic: false,
+      anchor: { paragraphId: p.id, offset: 0 },
+      line: tracker.identity(sink.currentPageIndex()),
+    });
+  }
   // Highest grapheme offset an edge was emitted for on the CURRENT line. Reset at
   // each wrap, because a wrap deliberately emits an edge at the same offset on the
   // new line — that pair is how the two sides of a soft break are addressable.
@@ -293,7 +327,6 @@ export function layoutParagraphInBox(
       y: cursor.y,
       line: tracker.identity(sink.currentPageIndex()),
     });
-    paintedAny = true;
   };
 
   pushEdge(0);
@@ -373,22 +406,6 @@ export function layoutParagraphInBox(
 
   emitLine(fullText.length);
 
-  if (!paintedAny) {
-    sink.push({
-      type: 'text',
-      x: contentLeft,
-      y: cursor.y,
-      width: Math.max(1, contentRight - contentLeft),
-      height: metrics.lineHeight,
-      text: '',
-      bold: false,
-      italic: false,
-      anchor: { paragraphId: p.id, offset: 0 },
-      line: tracker.identity(sink.currentPageIndex()),
-    });
-    pushEdge(0);
-  }
-
   pushEdge(paragraphGraphemeCount);
   if (options.trailingNewLine !== false) newLine();
   return { x: cursor.x, y: cursor.y };
@@ -400,6 +417,19 @@ export function layoutParagraphInBox(
  * Grouping happens here and only here: consecutive code units whose RESOLVED paint
  * properties are equal become one item. A style change ends an item, so adjacent runs
  * can neither merge nor inherit each other's formatting.
+ *
+ * A TAB also ends an item, and that is a paint-correctness rule rather than a style one.
+ * `w:tab` parses to U+0009, and layout gives it a FIXED advance like any other character.
+ * Every paint backend sets `white-space: pre` and none sets `tab-size`, so once grouping
+ * put a tab inside painted text the browser advanced to its own 8-column tab stop and
+ * every glyph after the tab rendered somewhere layout never measured — independent review
+ * measured `'ab\tcd'` painting `cd` 32 px into the span against a measured 24 px, with the
+ * error compounding per tab and reaching any tab-separated line or TOC leader.
+ *
+ * Splitting there fixes it without weakening grouping or dropping the tab: each piece is
+ * absolutely positioned at its own measured `x`, so CSS expansion inside the tab's own
+ * piece cannot move the piece after it. The tab stays real text in its own item, tabs are
+ * rare, and no other line pays for this.
  *
  * Takes `fullText` rather than rebuilding it: this runs once per line, and
  * `paragraphFullText` joins every run, so rebuilding it here cost O(chars) per
@@ -437,10 +467,15 @@ function emitPaintSlices(
   let prefixWidth = 0;
   while (cursor < slice.utf16To) {
     const style = runStyleAt(p, cursor);
+    const startsOnTab = charAt(p, cursor) === TAB;
     let runEnd = slice.utf16To;
     for (let pos = cursor + 1; pos < slice.utf16To; pos += 1) {
       const next = runStyleAt(p, pos);
-      if (next.bold !== style.bold || next.italic !== style.italic) {
+      if (
+        next.bold !== style.bold ||
+        next.italic !== style.italic ||
+        (charAt(p, pos) === TAB) !== startsOnTab
+      ) {
         runEnd = pos;
         break;
       }

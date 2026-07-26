@@ -436,8 +436,14 @@ function candidatesForPage(
   for (const region of frame.semanticIndex.ownershipRegions) {
     if (region.pageIndex !== pageIndex || !region.box) continue;
     if (region.kind === 'lineWhitespace') {
-      // Fallback only: painted clusters already answer for this whitespace.
-      if (whitespaceRegionIsPainted(frame, region)) continue;
+      // Fallback only, enforced by ORDER rather than by a coverage test.
+      //
+      // Ownership regions enter at `zOrder: -1` and every painted item enters at its
+      // layout index, which is always >= 0, so a painted run that covers the point always
+      // outranks the region for it. A coverage test here was measured to change no
+      // behaviour at all (removing it left the whole suite green) while costing a lookup
+      // and a binary search per region per hit test, so it is not worth paying for. Caret
+      // geometry has no equivalent ordering and does test coverage explicitly.
       out.push({
         zOrder: -1,
         box: region.box,
@@ -683,13 +689,22 @@ function caretRectForTextTarget(
   const block = blockRecord(frame, target.identity.blockId);
   if (!block || block.readOnly) return null;
 
-  // Same fallback rule as hit testing: a whitespace region only answers for whitespace no
-  // painted cluster represents, so caret geometry and hit testing cannot disagree.
+  // A whitespace region only answers for whitespace no painted cluster represents, so
+  // caret geometry and hit testing cannot disagree.
+  //
+  // The cheap offset-range test runs FIRST. Asking `whitespaceRegionIsPainted` per region
+  // meant a single-paragraph document paid a map lookup and a binary search for each of
+  // its ~12,000 whitespace regions on every caret derivation; independent review measured
+  // caret derivation at 18-30x its previous cost (0.09 ms -> 1.65 ms per fresh frame,
+  // 31.8 ms -> 255 ms over 200 warm derivations) and confirmed this line was the whole
+  // delta. `caretRectForLineWhitespace` rejects on a plain integer comparison, so only the
+  // one region that actually contains the offset ever reaches the guard.
   for (const region of frame.semanticIndex.ownershipRegions) {
     if (region.identity.blockId !== target.identity.blockId) continue;
-    if (whitespaceRegionIsPainted(frame, region)) continue;
     const fromWhitespace = caretRectForLineWhitespace(frame, target, region);
-    if (fromWhitespace) return fromWhitespace;
+    if (!fromWhitespace) continue;
+    if (whitespaceRegionIsPainted(frame, region)) continue;
+    return fromWhitespace;
   }
 
   // Match on (block, offset) and accept the index's canonical affinity.

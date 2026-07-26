@@ -498,3 +498,51 @@ definitions. Reproducing manually, `insertOneCharacter` does not advance the sto
 outside `run()`, so the edit-path timing for this fixture is NOT re-measured here and the
 pre-change 1,220.9 ms figure stands unrefreshed. Do not read an edit-path claim into this
 phase.
+
+### Phase-2 review — findings and corrections
+
+An independent read-only review of `checkpoint-e9da25e6` returned no Blocker and two High. Both are
+fixed; the claims they invalidated are corrected here rather than edited away.
+
+**High 1 — a whitespace-only paragraph lost its full-width clickable line.** The line-area
+placeholder was keyed on "nothing was painted", which grouping made false for a paragraph
+of spaces. Review measured `'   '`: before, a click anywhere on the line placed the caret
+at offset 0; after, everything past the ~12 px of painted spaces was rejected outright,
+because paragraph and trailing ownership boxes are the union of painted items and had
+shrunk to the width of the spaces. It is now keyed on "no visible glyph", so empty AND
+whitespace-only paragraphs keep it, and it is pushed before the line's painted text so
+measured clusters still win where they exist.
+
+**High 2 — tabs painted as literal U+0009 and CSS expanded them.** `w:tab` parses to a tab
+character and layout gives it a fixed advance; every paint backend sets `white-space: pre`
+and none sets `tab-size`, so once grouping put a tab inside painted text the browser
+advanced to its own 8-column stop. Review measured `'ab\tcd'` painting `cd` 32 px into the
+span against a measured 24 px, compounding per tab, on any tab-separated line or TOC
+leader. A tab now ends a paint run, so each piece is absolutely positioned at its own
+measured x and expansion inside the tab's own piece cannot move the piece after it.
+
+**Corrections to claims made above.**
+
+- "They remain the fallback for whitespace split across a line break" — NOT what happens.
+  At a wrap the offset gets a caret edge on both lines, `right <= left`, and the trailing
+  space is dropped from clusters AND from the region's box. That whitespace has no exact
+  owner on either path; the grouped item's box still covers it, so the click falls through
+  to `nearestClusterEdge` and gets the glyph convention. It was a dead zone before this
+  change and is now answered inconsistently with an inline space. Recorded as a known gap
+  and pinned by `whitespace split across a line break belongs to no painted cluster`.
+- "answers a pointer inside a WHITESPACE cluster in the convention the ownership region
+  used" — holds only where a whitespace cluster survives, i.e. not at a wrap point.
+- "They are not a wrapping change; they are lines that now exist in the paint projection" —
+  understated: those lines had also lost their full-width hit box (High 1).
+- "That restored 187.7 ms" — restoration was verified on the SELECTION path only. Review
+  measured the caret path at 18-30x its pre-guard cost, because the guard ran per
+  ownership region ahead of the cheap offset-range test. Reordered so only the region that
+  contains the offset reaches it.
+- The coverage test in `candidatesForPage` was removed: review proved deleting it left the
+  suite green, i.e. it changed no behaviour. Hit-test fallback is enforced by ORDER —
+  regions enter at `zOrder: -1`, painted items at a non-negative layout index — which is
+  now asserted directly. Caret geometry has no such ordering and keeps its coverage test.
+
+Review independently corroborated the wrapping invariant on 13 text shapes x 4 page widths
+with zero signature or page-count differences, and confirmed no new quadratic in
+`emitPaintSlices` and no leak in the coverage `WeakMap`.

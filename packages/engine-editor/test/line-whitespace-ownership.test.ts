@@ -322,9 +322,22 @@ describe('lineWhitespace ownership (task 5.3 defect)', () => {
     // A whitespace-only paragraph is now PAINTED — it is real text, not an empty line — so
     // its whitespace region does derive a box. What must not change is the selection: the
     // paragraph is one whitespace word segment, so double-click still takes the whole block.
-    const painted = frame.display.flatMap((p) => p.items).find((i) => i.kind === 'text');
-    if (painted?.kind !== 'text') throw new Error('painted');
-    expect(painted.runs.map((r) => r.text).join('')).toBe('   ');
+    const items = frame.display
+      .flatMap((p) => p.items)
+      .filter((i): i is Extract<typeof i, { kind: 'text' }> => i.kind === 'text');
+    expect(items.map((i) => i.runs.map((r) => r.text).join('')).join('')).toBe('   ');
+    // The full-width line-area placeholder is still there, so `para.box` still spans the
+    // line and a click anywhere on a blank spacer line still resolves. Review measured the
+    // regression when it was dropped: everything past the ~12 px of painted spaces was
+    // rejected outright.
+    expect(para.box.width).toBeGreaterThan(frame.display[0]!.box.width / 2);
+    const farAlongTheLine = clientPointForStackedText(
+      frame,
+      para.pageIndex ?? 0,
+      { x: para.box.x + para.box.width * 0.9, y: para.box.y + para.box.height * 0.5 },
+      METRICS,
+    );
+    expect(hitTestPointer(frame, farAlongTheLine, METRICS).ok).toBe(true);
     const point = clientPointForStackedText(
       frame,
       para.pageIndex ?? 0,

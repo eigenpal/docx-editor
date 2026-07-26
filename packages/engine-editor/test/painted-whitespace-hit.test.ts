@@ -168,7 +168,9 @@ describe('painted whitespace hit testing (renderer run grouping phase 2)', () =>
 
   test('tabs are real painted text with their own cluster', () => {
     const frame = publishFrame(modelWith(['ab\tcd']));
-    expect(itemText(paintedItems(frame)[0]!)).toBe('ab\tcd');
+    // A tab ends a paint run — CSS expands `\t` to its own tab stop, so it must not share
+    // a positioned span with the glyphs after it. The text is still all there.
+    expect(paintedItems(frame).map(itemText)).toEqual(['ab', '\t', 'cd']);
     const hit = textHit(frame, pointInCluster(frame, 2, 0.25));
     if (hit.target.kind !== 'text') throw new Error('text');
     expect(hit.target.graphemeOffset).toBe(2);
@@ -341,9 +343,26 @@ describe('painted whitespace hit testing (renderer run grouping phase 2)', () =>
     expect(caret!.rect.x).not.toBeCloseTo(stackedPageX + cluster.box.x + 200, 5);
   });
 
-  test('lineWhitespace ownership survives as a fallback when whitespace is unpainted', () => {
-    // "ab cd" at a page width that wraps between the words: the space belongs to no
-    // painted cluster on either line, so the region must stay a candidate.
+  test('a whitespace region always ranks BELOW painted text that covers the same point', () => {
+    // This ordering, not a coverage test, is what makes the region a fallback in hit
+    // testing: regions enter at zOrder -1 and painted items at their layout index, which
+    // is never negative. Assert the property directly so the ordering cannot drift.
+    const frame = publishFrame(modelWith(['ab cd']));
+    for (const item of paintedItems(frame)) {
+      expect(item.interaction?.zOrder ?? 0).toBeGreaterThanOrEqual(0);
+    }
+    // And the observable consequence: the point inside the space resolves through the
+    // painted cluster, whose exact grapheme range it is.
+    const hit = textHit(frame, pointInCluster(frame, 2, 0.25));
+    if (hit.target.kind !== 'text') throw new Error('text');
+    expect(hit.target.graphemeOffset).toBe(2);
+  });
+
+  test('whitespace split across a line break belongs to no painted cluster', () => {
+    // "ab cd" at a page width that wraps between the words. The wrap offset gets a caret
+    // edge on BOTH lines, so the trailing space measures `right <= left` and is dropped
+    // from clusters and from the region's box alike. Recording the real behaviour: there
+    // is no cluster AND no region box here, so this whitespace has no exact owner at all.
     const narrow = { ...LAYOUT, pageWidth: 2000 };
     const frame = publishFrame(modelWith(['ab cd']), { layout: narrow });
     const items = paintedItems(frame);
@@ -353,6 +372,10 @@ describe('painted whitespace hit testing (renderer run grouping phase 2)', () =>
       item.clusters.some((cluster) => cluster.graphemeFrom <= 2 && 3 <= cluster.graphemeTo),
     );
     expect(covered).toBe(false);
+    const region = frame.semanticIndex.ownershipRegions.find(
+      (r) => r.kind === 'lineWhitespace' && r.graphemeFrom === 2,
+    );
+    expect(region?.box).toBeUndefined();
   });
 
   test('unicode: combining marks, emoji, CJK and RTL keep one cluster per grapheme', () => {

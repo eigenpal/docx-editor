@@ -148,3 +148,58 @@ describe('paint runs are clipped to visual lines, not to words', () => {
     }
   });
 });
+
+// Two defects independent review found in the first grouping implementation. Both are
+// caused by whitespace becoming real painted text, and neither was covered by the specs
+// above, so they are pinned separately.
+describe('grouping regressions found by review', () => {
+  test('a whitespace-only paragraph keeps a full-width line-area placeholder', () => {
+    // Grouping paints the spaces, so "nothing was painted" stopped being true and the
+    // placeholder disappeared — taking with it the full-width box that paragraph and
+    // trailing ownership union, so a click past the spaces stopped placing a caret.
+    const items = textItems(layoutRuns([{ text: '   ' }]));
+    const placeholder = items.find((i) => i.text === '');
+    expect(placeholder).toBeDefined();
+    expect(placeholder!.width).toBe(WIDE.pageWidth - 2 * WIDE.margin);
+    // The spaces are still painted, and still BEFORE the placeholder is consulted:
+    // the placeholder is pushed first so measured clusters take precedence on overlap.
+    const painted = items.filter((i) => i.text.length > 0);
+    expect(painted.map((i) => i.text).join('')).toBe('   ');
+    expect(items.indexOf(placeholder!)).toBeLessThan(items.indexOf(painted[0]!));
+  });
+
+  test('an empty paragraph still emits exactly one full-width placeholder', () => {
+    const items = textItems(layoutRuns([{ text: '' }]));
+    expect(items).toHaveLength(1);
+    expect(items[0]!.text).toBe('');
+    expect(items[0]!.width).toBe(WIDE.pageWidth - 2 * WIDE.margin);
+  });
+
+  test('a paragraph with visible glyphs emits NO placeholder', () => {
+    const items = textItems(layoutRuns([{ text: 'ab cd' }]));
+    expect(items.every((i) => i.text.length > 0)).toBe(true);
+  });
+
+  test('a TAB ends a paint run so CSS tab expansion cannot move the next glyph', () => {
+    // Every paint backend sets `white-space: pre` and none sets `tab-size`, so a tab
+    // inside painted text advances to the browser's own 8-column stop. Each piece is
+    // positioned at its own measured x, so expansion inside the tab's piece is contained.
+    const items = textItems(layoutRuns([{ text: 'ab\tcd' }]));
+    expect(items.map((i) => i.text)).toEqual(['ab', '\t', 'cd']);
+    // Contiguous and in measured positions — the tab occupies exactly its advance.
+    const sorted = [...items].sort((a, b) => a.x - b.x);
+    for (let i = 1; i < sorted.length; i += 1) {
+      expect(sorted[i]!.x).toBeCloseTo(sorted[i - 1]!.x + sorted[i - 1]!.width, 5);
+    }
+  });
+
+  test('consecutive tabs group together and stay separate from the text', () => {
+    const items = textItems(layoutRuns([{ text: 'a\t\tb' }]));
+    expect(items.map((i) => i.text)).toEqual(['a', '\t\t', 'b']);
+  });
+
+  test('splitting at tabs does not split at ordinary spaces', () => {
+    const items = textItems(layoutRuns([{ text: 'a b c' }]));
+    expect(items.map((i) => i.text)).toEqual(['a b c']);
+  });
+});
