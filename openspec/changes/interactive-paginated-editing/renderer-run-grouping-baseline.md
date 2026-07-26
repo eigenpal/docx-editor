@@ -272,11 +272,42 @@ regions" among the interaction contracts grouping MUST NOT weaken. A lower DOM c
 bought with a selection regression is not progress, so the tree was left green and the
 specs parked as `describe.skip` rather than committed red.
 
+### Root cause found — it is not a priority number
+
+`candidatesForPage` in `packages/engine-editor/src/interaction-geometry.ts` gives every
+painted item its ARRAY INDEX as `zOrder`:
+
+```ts
+page.items.forEach((item, zOrder) => { … zOrder: meta?.zOrder ?? zOrder … })
+```
+
+and candidates are sorted `(a, b) => b.zOrder - a.zOrder`, highest first. On the large
+fixture the last text item therefore has `zOrder` ≈ 11,000. `lineWhitespace` regions are
+pushed with a hard-coded `zOrder: -1`.
+
+So raising the regions to `zOrder: 1` — the fix that was tried and failed — never had a
+chance: it still loses to every text item on the page. There is no number that works
+either, because the item indices are unbounded and grow with document size. Picking
+`Number.MAX_SAFE_INTEGER` would "work" while making whitespace regions beat genuinely
+overlapping content that is supposed to win, e.g. a floating image above a line.
+
+**The fix is a TIER, not a number.** Whitespace ownership regions must be resolved as a
+distinct pass ahead of painted text, because they carry the exact grapheme range for
+spaces that a painted item can now only approximate by advance refinement. Concretely:
+sort by `(tier, zOrder)` where ownership regions occupy a tier above painted text, or
+consult ownership regions first and fall back to items — and keep synthetic/read-only
+exclusion applied to both tiers identically, so the new pass cannot become a way to hit
+content that painted-item resolution would have refused.
+
+Note the three failing box-position assertions (`whitespace box sits before first painted
+slice`, and its trailing twin) are NOT bugs under the new design — they assert that
+whitespace lives in the GAP between painted items, which is exactly what run grouping
+removes. They must be re-pointed at the ownership region's own geometry rather than at its
+relationship to a paint box. The double-click and planner tests are the real gate.
+
 ### For the next attempt
 
-1. Decide the authority for whitespace hit regions once whitespace is painted. The region
-   is derived from measured caret edges and is more precise than the paint box, so it
-   should stay authoritative — but the resolution order has to make that true.
+1. Implement the tiered resolution above; do not reach for another `zOrder` constant.
 2. Re-point the two index-based layout tests to semantic identity (already proven).
 3. Re-run `engine-editor` in full: the seven failures above are the gate.
 4. Only then measure, and compare against the size table above using the same harness.
