@@ -117,8 +117,42 @@ painted elements, so they stay comparable after elements are merged:
   concatenated in `x` order. Same signature ⇒ the same words landed on the same lines.
 - **Visible text hash** — the signature's text content, ordered.
 
-Recorded via the harness's `invariants` block on each run rather than pasted here, since
-they are hashes whose only use is equality against a later run.
+### Recorded values — comprehensive fixture (`sample.docx`), at commit `checkpoint-d8088364`
+
+```json
+{
+  "pages": 10,
+  "visibleTextHash": "7db92471020ea16add6eb0be218f2690b487a6f02591e278397bcd1c2e6e175b",
+  "visibleTextNormalisedHash": "d104bc5c601e213f5f432f6c789d9d54fc7163edb3aa1f3372af6d369a2b4062",
+  "visibleTextChars": 13275,
+  "wrappingSignatureHash": "c64083340fea85ece21f4c2eb89340d7f3916d6e4bc9aa8c7477f8c4a1f479f1",
+  "wrappingSignatureNormalisedHash": "c64083340fea85ece21f4c2eb89340d7f3916d6e4bc9aa8c7477f8c4a1f479f1",
+  "wrappingLines": 419
+}
+```
+
+The RAW and NORMALISED wrapping hashes are identical here, which is itself the proof of
+the whitespace defect the review found: painted runs contain no whitespace today, so
+collapsing whitespace changes nothing. After grouping paints spaces the raw hash MUST
+change and the normalised one must not — that asymmetry is the check.
+
+### DOM identity, corrected — all three tiers, 5 repetitions
+
+```json
+{
+  "pageShells":          { "preserved": true, "tagged": 10 },
+  "contentLayers":       { "preserved": true, "tagged": 10 },
+  "sampledTextElements": { "preserved": true, "tagged": 30 },
+  "selectionMutations":  { "added": 0, "removed": 0, "attributes": 0, "characterData": 0 }
+}
+```
+
+Re-measured with the content layer and sampled leaf text elements tagged, not just the
+page shells. Identity holds at every tier and a selection-only frame produces ZERO
+mutations of any kind. The original conclusion survives the corrected method — but it is
+now supported by the measurement rather than asserted past it.
+
+Selection-only dispatch, 5 repetitions: `[16.7, 25.6, 25.6, 26.1, 28.5]` ms.
 
 ## What the baseline already tells us about the work
 

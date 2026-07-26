@@ -120,27 +120,76 @@ function domShape() {
   };
 }
 
-/** Wait for a frame the engine has actually painted, not just a timer. */
+/**
+ * Wait for a painted frame — WITH A FALLBACK, because `requestAnimationFrame` does not
+ * fire at all in a hidden tab.
+ *
+ * This is not hypothetical: under browser automation the tab is frequently
+ * `visibilityState === 'hidden'`, rAF is suspended, and a plain rAF wait hangs forever.
+ * The first version of this harness did exactly that and never completed a run — which
+ * is the real reason it had never executed, beyond the `setSelection` defect.
+ *
+ * When the document is hidden the frame wait degrades to a timeout, and `run()` flags
+ * every paint-complete number as unreliable rather than reporting a timer as a paint.
+ */
+const HIDDEN_FRAME_FALLBACK_MS = 32;
 const nextPaint = () =>
-  new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+  new Promise((resolve) => {
+    let settled = false;
+    const done = () => {
+      if (settled) return;
+      settled = true;
+      resolve();
+    };
+    requestAnimationFrame(() => requestAnimationFrame(done));
+    setTimeout(done, HIDDEN_FRAME_FALLBACK_MS);
+  });
 
+const stats = (raw) => {
+  const s = [...raw].sort((a, b) => a - b);
+  const r2 = (n) => Math.round(n * 100) / 100;
+  return {
+    samples: s.map(r2),
+    median: r2(s[Math.floor(s.length / 2)]),
+    min: r2(s[0]),
+    max: r2(s[s.length - 1]),
+  };
+};
+
+/**
+ * Two numbers per operation, deliberately.
+ *
+ * The first version measured only `dispatch → two chained rAFs`, which carries a fixed
+ * ~16-33 ms floor set by the display refresh rate. A fast operation then reads as "one
+ * frame" no matter how little work it did, the floor differs between a 60 Hz and a
+ * 120 Hz machine, and after grouping the improved case bottoms out at the floor and
+ * UNDERSTATES the win — on the metric this change is judged by.
+ *
+ * `dispatchMs` is the synchronous cost, taken before yielding. `toPaintMs` includes the
+ * frame wait. `rafFloorMs` (measured separately) is what to subtract from it.
+ */
 async function time(label, fn, repetitions) {
-  const samples = [];
+  const dispatch = [];
+  const toPaint = [];
   for (let i = 0; i < repetitions; i += 1) {
     const t0 = performance.now();
     await fn(i);
+    dispatch.push(performance.now() - t0);
+    await nextPaint();
+    toPaint.push(performance.now() - t0);
+  }
+  return { label, repetitions, dispatchMs: stats(dispatch), toPaintMs: stats(toPaint) };
+}
+
+/** The cost of the frame wait alone, so a reader can tell work from cadence. */
+async function measureRafFloor(repetitions) {
+  const samples = [];
+  for (let i = 0; i < repetitions; i += 1) {
+    const t0 = performance.now();
     await nextPaint();
     samples.push(performance.now() - t0);
   }
-  samples.sort((a, b) => a - b);
-  return {
-    label,
-    repetitions,
-    samples: samples.map((s) => Math.round(s * 100) / 100),
-    median: Math.round(samples[Math.floor(samples.length / 2)] * 100) / 100,
-    min: Math.round(samples[0] * 100) / 100,
-    max: Math.round(samples[samples.length - 1] * 100) / 100,
-  };
+  return stats(samples);
 }
 
 /**
@@ -148,26 +197,51 @@ async function time(label, fn, repetitions) {
  * objects are still mounted. An attribute would be copied onto a rebuilt node and report
  * false success; a property on the element object cannot be.
  */
+/**
+ * Tag THREE tiers and report each separately.
+ *
+ * The first version tagged only `pagesEl().children` — the `.layout-page` shells, which
+ * React keys by page index and essentially never replaces. Every one of the ~11k text
+ * elements inside could be unmounted and rebuilt while that check still reported
+ * `preserved: true`, and it was cited as proof that page content survives. The tier that
+ * requirement 4 is actually about is the content layer and the text elements in it.
+ */
 function markPageContent() {
-  const marks = [];
-  for (const page of pagesEl().children) {
+  const root = pagesEl();
+  const tag = (el) => {
     const token = Symbol('baseline');
-    page.__baselineToken = token;
-    marks.push({ page, token });
+    el.__baselineToken = token;
+    return { el, token };
+  };
+  const shells = [...root.children].map(tag);
+  const contentLayers = [...root.querySelectorAll(CONTENT_SELECTOR)].map(tag);
+  // A sample of leaf text elements — first, middle and last of each content layer — so a
+  // rebuild anywhere in the tier is visible without tagging all 11k.
+  const leaves = [];
+  for (const layer of root.querySelectorAll(CONTENT_SELECTOR)) {
+    const kids = [...layer.children];
+    if (kids.length === 0) continue;
+    for (const idx of [0, Math.floor(kids.length / 2), kids.length - 1]) {
+      if (kids[idx]) leaves.push(tag(kids[idx]));
+    }
   }
-  return marks;
+  return { shells, contentLayers, leaves };
+}
+
+function survived(marks) {
+  for (const { el, token } of marks) {
+    if (!el.isConnected) return { preserved: false, reason: 'element detached' };
+    if (el.__baselineToken !== token) return { preserved: false, reason: 'element replaced' };
+  }
+  return { preserved: true, tagged: marks.length };
 }
 
 function pageContentSurvived(marks) {
-  const live = [...pagesEl().children];
-  if (live.length !== marks.length) return { preserved: false, reason: 'page count changed' };
-  for (let i = 0; i < marks.length; i += 1) {
-    if (live[i] !== marks[i].page) return { preserved: false, reason: `page ${i} element replaced` };
-    if (live[i].__baselineToken !== marks[i].token) {
-      return { preserved: false, reason: `page ${i} lost its token` };
-    }
-  }
-  return { preserved: true };
+  return {
+    pageShells: survived(marks.shells),
+    contentLayers: survived(marks.contentLayers),
+    sampledTextElements: survived(marks.leaves),
+  };
 }
 
 /** Count DOM mutations under the pages container while `fn` runs — framework-neutral. */
@@ -176,41 +250,90 @@ async function countMutations(fn) {
   let added = 0;
   let removed = 0;
   let attributes = 0;
+  // characterData is counted because after grouping a repaint may rewrite line text IN
+  // PLACE, producing no added/removed nodes at all. Reporting only childList would read
+  // as "nothing changed" while every line's text was replaced.
+  let characterData = 0;
   const observer = new MutationObserver((records) => {
     for (const r of records) {
       added += r.addedNodes.length;
       removed += r.removedNodes.length;
       if (r.type === 'attributes') attributes += 1;
+      if (r.type === 'characterData') characterData += 1;
     }
   });
   observer.observe(root, { childList: true, subtree: true, attributes: true, characterData: true });
   await fn();
   await nextPaint();
   observer.disconnect();
-  return { added, removed, attributes };
+  return { added, removed, attributes, characterData };
 }
 
-/** Place a collapsed caret in the first paragraph that has text, via the engine. */
-function caretAtStart() {
-  const display = editor().getDisplay();
-  for (const page of display) {
+/**
+ * Build a real `SemanticSelection` for a collapsed caret at `graphemeOffset` in the first
+ * painted paragraph.
+ *
+ * The first version of this harness called `editor.setSelection(...)`, which DOES NOT
+ * EXIST — `setSelection` is a COMMAND, reached through `exec`. `run()` threw on its first
+ * timing and never produced a result, which is how a harness can look finished and have
+ * never executed. The shape below matches `engine-editor/src/driver.ts`.
+ */
+function collapsedSelectionAt(graphemeOffset) {
+  const e = editor();
+  for (const page of e.getDisplay()) {
     for (const item of page.items) {
-      if (item.kind === 'text' && item.semantic) return item.semantic;
+      if (item.kind !== 'text' || !item.semantic) continue;
+      const target = (offset, affinity) => ({
+        kind: 'text',
+        scope: item.semantic.scope ?? { kind: 'body' },
+        identity: {
+          storyId: item.semantic.identity.storyId,
+          blockId: item.semantic.identity.blockId,
+        },
+        graphemeOffset: offset,
+        affinity,
+      });
+      const offset = Math.min(graphemeOffset, item.semantic.graphemeTo ?? graphemeOffset);
+      return {
+        frameId: e.getInteractionFrame().id,
+        scope: item.semantic.scope ?? { kind: 'body' },
+        anchor: target(offset, 'upstream'),
+        head: target(offset, 'downstream'),
+      };
     }
   }
   return null;
 }
 
-export async function run({ fixtureUrl = '/large-styled-text.docx', repetitions = 5 } = {}) {
-  const e = editor();
+/** Run a selection command and REFUSE to time a refusal. A rejected command that is
+ *  recorded as a fast timing is worse than no measurement. */
+function applySelection(range) {
+  const result = editor().exec({ type: 'setSelection', range });
+  if (!result.ok) throw new Error(`setSelection refused: ${result.code} ${result.reason}`);
+  return result;
+}
+
+export async function run({
+  fixtureUrl = '/large-styled-text.docx',
+  repetitions = 5,
+  commit = 'unrecorded',
+} = {}) {
 
   // ── Provenance ──────────────────────────────────────────────────────────────
-  const fixtureBytes = new Uint8Array(await (await fetch(fixtureUrl)).arrayBuffer());
-  const fixtureHash = await sha256(String.fromCharCode(...fixtureBytes.subarray(0, 8192)));
+  // WHOLE file, so it compares directly against `shasum -a 256`. The first version
+  // hashed only the first 8 KB and called it `fixtureHeadHash`, which could not be
+  // compared against the recorded hash and was blind to changes past byte 8192 — i.e.
+  // to almost all of `word/document.xml`.
+  const fixtureBuffer = await (await fetch(fixtureUrl)).arrayBuffer();
+  const fixtureBytes = new Uint8Array(fixtureBuffer);
+  const fixtureSha256 = [...new Uint8Array(await crypto.subtle.digest('SHA-256', fixtureBuffer))]
+    .map((b) => b.toString(16).padStart(2, '0'))
+    .join('');
 
-  // ── COLD: load the fixture and time the first paint ──────────────────────────
+  // ── Load the fixture and time the first paint ────────────────────────────────
   const coldStart = performance.now();
-  e.load(fixtureBytes);
+  editor().load(fixtureBytes);
+  const loadReturnedMs = Math.round((performance.now() - coldStart) * 100) / 100;
   await nextPaint();
   const initialPaintMs = Math.round((performance.now() - coldStart) * 100) / 100;
 
@@ -218,79 +341,101 @@ export async function run({ fixtureUrl = '/large-styled-text.docx', repetitions 
   const dom = domShape();
   const signature = wrappingSignature();
   const text = visibleText();
+  const rafFloorMs = await measureRafFloor(repetitions);
 
-  // ── WARM timings ────────────────────────────────────────────────────────────
-  // Selection-only: move the caret without touching the model. This is the frame that
-  // must NOT rebuild page content.
-  const target = caretAtStart();
-  const selectionMarks = markPageContent();
+  // ── Selection-only: the frame that must not rebuild page content ─────────────
+  const marks = markPageContent();
   const selectionMutations = await countMutations(async () => {
-    if (target) e.setSelection({ anchor: target.from ?? target, head: target.to ?? target });
+    const range = collapsedSelectionAt(3);
+    if (range) applySelection(range);
   });
-  const selectionIdentity = pageContentSurvived(selectionMarks);
+  const domIdentity = pageContentSurvived(marks);
 
   const selectionTiming = await time(
     'selection-only update',
     async (i) => {
-      if (!target) return;
-      // Alternate ends so consecutive runs are not no-ops the engine can skip.
-      const at = i % 2 === 0 ? target.from ?? target : target.to ?? target;
-      e.setSelection({ anchor: at, head: at });
+      // Alternate offsets so no repetition is a no-op the engine can skip — a refused or
+      // unchanged command would otherwise be timed as if it were work.
+      const range = collapsedSelectionAt(i % 2 === 0 ? 2 : 5);
+      if (range) applySelection(range);
     },
-    repetitions
+    repetitions,
   );
 
-  const editTiming = await time(
-    'one-character edit',
-    async () => {
-      e.exec({ type: 'toggleMark', mark: 'bold' });
-    },
-    repetitions
-  );
-
-  const scroller = document.querySelector('.docx-editor__scroll-container') ?? pagesEl().parentElement;
+  const scroller =
+    document.querySelector('.docx-editor__scroll-container') ?? pagesEl().parentElement;
   const scrollTiming = await time(
     'scroll',
     async (i) => {
-      if (scroller) scroller.scrollTop = (i + 1) * 800;
+      // Bounded and cycled: a monotonically increasing scrollTop hits the extent and the
+      // late repetitions become no-ops.
+      if (scroller) scroller.scrollTop = ((i % 5) + 1) * 600;
     },
-    repetitions
+    repetitions,
   );
   if (scroller) scroller.scrollTop = 0;
-
-  const memory = performance.memory
-    ? {
-        usedJSHeapMB: Math.round(performance.memory.usedJSHeapSize / 1048576),
-        totalJSHeapMB: Math.round(performance.memory.totalJSHeapSize / 1048576),
-        note: 'Chrome-only, coarse; comparable only between runs on the same browser.',
-      }
-    : { note: 'performance.memory unavailable in this browser' };
 
   return {
     provenance: {
       fixtureUrl,
       fixtureBytes: fixtureBytes.length,
-      fixtureHeadHash: fixtureHash,
+      fixtureSha256,
+      commit,
+      takenAt: new Date().toISOString(),
       userAgent: navigator.userAgent,
       hardwareConcurrency: navigator.hardwareConcurrency,
       deviceMemoryGB: navigator.deviceMemory ?? null,
       devicePixelRatio: window.devicePixelRatio,
       viewport: { width: window.innerWidth, height: window.innerHeight },
-      zoom: e.getZoom(),
+      zoom: editor().getZoom(),
       repetitions,
-      warmState: 'cold load, then warm repetitions',
-      takenAt: 'see commit date of the recorded baseline file',
+      // NOT a cold start: the process and JIT are warm, this is the first load OF THIS
+      // FIXTURE into an already-running page.
+      warmState: 'warm process, first load of this fixture',
+      documentHidden: document.hidden,
+      paintTimingsReliable: !document.hidden,
     },
     invariants: {
       pages: shape.pages,
       visibleTextHash: await sha256(text),
+      // Whitespace-NORMALISED, because whitespace is not painted before grouping and is
+      // painted after: the raw hash necessarily changes and cannot distinguish "grouping
+      // added the spaces it should have" from "grouping moved the text". The raw hash is
+      // kept as a within-version regression check only.
+      visibleTextNormalisedHash: await sha256(text.replace(/\s+/g, ' ').trim()),
       visibleTextChars: text.length,
       wrappingSignatureHash: await sha256(signature.join('\n')),
+      wrappingSignatureNormalisedHash: await sha256(
+        signature.map((l) => l.replace(/\s+/g, ' ')).join('\n'),
+      ),
       wrappingLines: signature.length,
     },
     size: { ...shape, ...dom },
-    timings: { initialPaintMs, selection: selectionTiming, edit: editTiming, scroll: scrollTiming },
-    domIdentity: { selectionOnly: selectionIdentity, selectionMutations },
-    memory,
+    timings: {
+      // `toPaintMs` is only meaningful with a visible tab; see `paintTimingsReliable`.
+      // `dispatchMs` is synchronous and is valid either way.
+      loadReturnedMs,
+      initialPaintMs,
+      rafFloorMs,
+      selection: selectionTiming,
+      scroll: scrollTiming,
+      oneCharacterEdit:
+        'NOT MEASURED — there is no insertText command on the contract, so a real ' +
+        'character insertion only reaches the store through the hidden input host and ' +
+        'cannot be driven from here. Substituting exec(toggleMark) was wrong: it ' +
+        'recorded a changed:false no-op as an edit timing.',
+    },
+    domIdentity: { selectionOnly: domIdentity, selectionMutations },
+    reactCommits:
+      'NOT MEASURED — needs a <Profiler> in the demo tree exposed on window. Do not ' +
+      'attribute selection cost to reconciliation without it.',
+    memory: performance.memory
+      ? {
+          usedJSHeapMB: Math.round(performance.memory.usedJSHeapSize / 1048576),
+          note:
+            'Single reading with no pre/post delta and no forced GC, so it is dominated ' +
+            'by uncollected garbage. Not a retained-memory measurement.',
+        }
+      : { note: 'performance.memory unavailable' },
   };
 }

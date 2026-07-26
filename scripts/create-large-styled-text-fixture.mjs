@@ -155,7 +155,17 @@ function buildBody() {
   parts.push(para(run('4. Whitespace preservation', '<w:b/>')));
   parts.push(para(run('Repeated     spaces     between     words.')));
   parts.push(para(run('   Leading spaces and trailing spaces.   ')));
-  parts.push(para(run('Tab\tseparated\tcolumns\there.')));
+  // REAL `<w:tab/>` elements — what Word actually writes. Authoring a literal \t inside
+  // `w:t` exercises a shape the parser never sees from a genuine document, and this repo
+  // has already been burned once by a literal-tab root cause.
+  parts.push(
+    para(
+      run('Tab') + '<w:r><w:tab/></w:r>' + run('separated') + '<w:r><w:tab/></w:r>' + run('columns.')
+    )
+  );
+  // Kept deliberately as a HOSTILE-INPUT case: a literal tab inside w:t. It must not
+  // crash or be normalised away, but it is not how Word encodes a tab.
+  parts.push(para(run('Hostile literal tab:\tstill one run.')));
   parts.push(para(run('Non breaking spaces hold together.')));
   parts.push(para('')); // empty paragraph
   parts.push(para(run('Text after an empty paragraph.')));
@@ -168,6 +178,23 @@ function buildBody() {
   );
 
   // 5. UNICODE — punctuation, symbols, and the scripts the correctness gates name.
+  // PARAGRAPH shading (`w:pPr/w:shd`), distinct from the character shading above.
+  parts.push(para(run('4b. Paragraph shading', '<w:b/>')));
+  parts.push(
+    para(
+      run('This whole paragraph carries a shaded background from its paragraph properties.'),
+      '<w:shd w:val="clear" w:color="auto" w:fill="FFF3C4"/>'
+    )
+  );
+  parts.push(
+    para(
+      run('A second shaded paragraph, with ') +
+        run('a bold run inside it', '<w:b/>') +
+        run(', so paragraph and character shading resolve together.'),
+      '<w:shd w:val="clear" w:color="auto" w:fill="E6F4EA"/>'
+    )
+  );
+
   parts.push(para(run('5. Unicode, symbols and scripts', '<w:b/>')));
   parts.push(para(run('Punctuation: — – … “quoted” ‘single’ © ® ™ § ¶')));
   parts.push(para(run('Symbols: † ‡ • ° ± ≠ ≤ ≥ ∞ ∑')));
@@ -176,6 +203,26 @@ function buildBody() {
   parts.push(para(run('Emoji: 📄 ✅ 🔍 🌐')));
   parts.push(para(run('CJK: 漢字とかな，中文段落，한글 문장.')));
   parts.push(para(run('RTL: שלום עולם and مرحبا بالعالم mixed with Latin.')));
+
+  // 5b. STYLE-INHERITED formatting. These runs carry NO direct rPr for the property that
+  // makes them bold/coloured — it arrives from `styles.xml`. This is the case a grouping
+  // key built from direct `rPr` gets WRONG: two runs with identical direct properties
+  // whose RESOLVED style differs must not merge.
+  parts.push(para(run('5c. Style-inherited formatting (no direct rPr)', '<w:b/>')));
+  parts.push(
+    para(
+      run('Plain direct run, then ') +
+        run('a run whose bold comes from a character style', '<w:rStyle w:val="StrongEmph"/>') +
+        run(', then plain again.')
+    )
+  );
+  parts.push(
+    para(
+      run('Two adjacent runs, identical direct properties, ') +
+        run('different resolved style', '<w:rStyle w:val="StrongEmph"/>') +
+        run(' — these must never group together.')
+    )
+  );
 
   // 6. MIXED FORMATTING INSIDE A WORD — a run boundary mid-word must not become a
   //    wrapping opportunity, and grouping must not merge across it.
@@ -195,13 +242,22 @@ function buildBody() {
 }
 
 const CONTENT_TYPES_XML = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/></Types>`;
+<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/><Override PartName="/word/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.styles+xml"/></Types>`;
+
+/**
+ * `docDefaults` plus one character style, so at least some formatting reaches a run by
+ * RESOLUTION rather than by direct `rPr`. Without this the fixture cannot exercise the
+ * failure mode where a grouping key over direct properties merges runs whose resolved
+ * style differs.
+ */
+const STYLES_XML = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:styles xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:docDefaults><w:rPrDefault><w:rPr><w:rFonts w:ascii="Calibri" w:hAnsi="Calibri"/><w:sz w:val="22"/></w:rPr></w:rPrDefault></w:docDefaults><w:style w:type="character" w:styleId="StrongEmph"><w:name w:val="Strong Emphasis"/><w:rPr><w:b/><w:color w:val="7A0F0F"/></w:rPr></w:style></w:styles>`;
 
 const RELS_XML = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/></Relationships>`;
 
 const DOCUMENT_RELS_XML = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"></Relationships>`;
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/></Relationships>`;
 
 function documentXml(body) {
   return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
@@ -225,6 +281,7 @@ async function main() {
   add('[Content_Types].xml', CONTENT_TYPES_XML);
   add('_rels/.rels', RELS_XML);
   add('word/_rels/document.xml.rels', DOCUMENT_RELS_XML);
+  add('word/styles.xml', STYLES_XML);
   add('word/document.xml', documentXml(buildBody()));
 
   const bytes = await zip.generateAsync({
