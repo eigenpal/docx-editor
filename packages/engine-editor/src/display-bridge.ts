@@ -290,8 +290,31 @@ export class DisplayBridgeCache {
   rotate(): void {
     this.previous = this.current;
     this.current = new Map();
+    this.otherPrevious = this.other;
+    this.other = new Map();
     this.reused = 0;
     this.built = 0;
+  }
+
+  /**
+   * Generic two-generation memo for any frozen, content-derived array.
+   *
+   * Used for the per-block horizontal-boundary tables, which walk every grapheme of every
+   * paragraph on every layout to answer a question that depends only on the text and the
+   * metrics — over the whole document that is another pass in the six figures.
+   */
+  private other = new Map<string, unknown>();
+  private otherPrevious = new Map<string, unknown>();
+
+  memo<T>(key: string, build: () => T): T {
+    const hit = (this.other.get(key) ?? this.otherPrevious.get(key)) as T | undefined;
+    if (hit !== undefined) {
+      this.other.set(key, hit);
+      return hit;
+    }
+    const built = deepFreezeValue(build());
+    this.other.set(key, built);
+    return built;
   }
 
   clustersFor(key: string, build: () => ShapedCluster[]): readonly ShapedCluster[] {
@@ -462,10 +485,11 @@ export function toDisplayPages(
   for (const block of enrichedIndex.stories[0]?.blocks ?? []) {
     if (block.readOnly) continue;
     const text = paragraphTextById(model, block.identity.blockId, storyId);
-    semanticHorizontalBoundariesByBlockId[block.identity.blockId] = semanticHorizontalBoundaries(
-      metrics,
-      text
-    );
+    // Depends only on the text and the metrics, so an untouched paragraph reuses its table.
+    const build = () => semanticHorizontalBoundaries(metrics, text);
+    semanticHorizontalBoundariesByBlockId[block.identity.blockId] = cache
+      ? cache.memo('hb\u001F' + block.identity.blockId + '\u001F' + text, build)
+      : build();
   }
   const visualLines = buildVisualLines(pages, enrichedIndex, model, metaBySliceKey, conflicts);
   const traversalByBlockId = recordFromTraversalMap(buildTraversalLinksForModel(model));
