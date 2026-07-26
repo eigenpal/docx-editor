@@ -84,6 +84,35 @@ What the numbers DO support: a selection-only click adds 1 node and removes 0 at
 fixture sizes, and page SHELLS survive. Anything stronger needs the content tier tagged
 and a `<Profiler>` in the tree.
 
+## Large styled-text fixture — re-measured after the fixture changes
+
+The fixture gained `styles.xml`, paragraph shading and real `<w:tab/>` runs (see H5), so
+the earlier numbers no longer describe it. Directly verified against the regenerated
+fixture (SHA-256 `5de877f4…`):
+
+| Metric | Before fixture fix | After |
+| --- | --- | --- |
+| Pages | 23 | **24** |
+| Total DOM nodes under `.ep-one-surface__pages` | 11,235 | **11,313** |
+
+A full harness run on this fixture was started and had to be left in progress. What it
+established before it finished is itself worth recording, because it is the strongest
+argument yet for this change:
+
+- **A single character insertion takes TENS OF SECONDS.** The store revision advanced one
+  step roughly every 30 s across five insertions (`editReachedModel: true`, revision
+  0 → 5). On the comprehensive fixture the same operation dispatches in 260 ms.
+- **A single scroll step takes 15-30 s**, repainting all 11,313 elements.
+
+Neither is a frame-wait artefact: both were observed by polling the store revision and
+`scrollTop` from outside the run, not from the harness's own timers.
+
+This reframes the change's value. The baseline was framed around DOM node count and
+selection cost; on a realistically sized styled document the dominant cost is that EVERY
+edit and EVERY scroll repaints an 11k-element tree. Requirement 4 (static page content,
+overlays keyed separately) is therefore not a nice-to-have next to grouping — on this
+fixture it is the larger of the two wins.
+
 ## Open defects in this baseline — read before trusting a number
 
 An independent review of this phase found the following. They are recorded rather than
