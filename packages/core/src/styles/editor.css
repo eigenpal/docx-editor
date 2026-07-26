@@ -145,6 +145,20 @@
   --doc-focus-ring: rgba(26, 115, 232, 0.4);
   --doc-selection: rgba(26, 115, 232, 0.3);
 
+  /* The page sheet itself — the paper.
+   *
+   * Declared here for the DEFAULT theme, which it was not: `--doc-page-bg` existed only
+   * inside the dark block (and a dark print override), so
+   * `.ep-one-surface__page { background: var(--doc-page-bg) }` resolved to nothing in light
+   * mode and the sheet painted TRANSPARENT — a box-shadow around a see-through interior,
+   * because neither the viewport nor the surface sets a background either. The same silent
+   * `var()` failure as the caret, in the same file, found by the scope-aware token check
+   * rather than by a report.
+   *
+   * A literal, not a themed token: the canvas is deliberately not themed, and dark mode
+   * overrides it to the grey Word uses. */
+  --doc-page-bg: #ffffff;
+
   /* Caret on the document canvas.
    *
    * A LITERAL rather than var(--doc-text): the canvas is deliberately not themed, so the

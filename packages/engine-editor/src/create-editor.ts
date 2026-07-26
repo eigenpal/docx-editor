@@ -239,6 +239,11 @@ export function createEditor(config: EditorConfig): Editor {
 
   function caretClientRect(frame = currentFrame()): Rect | null {
     if (!frame.caret) return null;
+    const target = frame.selection?.head;
+    if (target) {
+      const realized = host.getRenderedTextGeometry?.()?.caretRect(target, frame.id);
+      if (realized) return realized;
+    }
     const metrics = host.getInteractionHostMetrics?.();
     if (!metrics) return null;
     const origin = contentToClient({ x: frame.caret.rect.x, y: frame.caret.rect.y }, metrics);

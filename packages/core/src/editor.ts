@@ -16,6 +16,7 @@ import type {
   InteractionIntent,
   InteractionDispatchResult,
   InteractionOutcome,
+  RenderedTextGeometryPort,
   SelectionGeometry,
   SelectionGeometryOptions,
   ScrollGeometry,
@@ -159,6 +160,8 @@ export interface EditorHost {
   scheduleFrame(callback: () => void): () => void;
   /** Current client scroll/zoom/origin metrics for client-coordinate interaction APIs. */
   getInteractionHostMetrics?(): InteractionHostMetrics | null;
+  /** Optional browser realization of the current painted text geometry. */
+  getRenderedTextGeometry?(): RenderedTextGeometryPort | null;
   /**
    * Runs after the adapter has flushed its own render: `useLayoutEffect` in
    * React, `nextTick` in Vue. Two phases, because engine paint and adapter

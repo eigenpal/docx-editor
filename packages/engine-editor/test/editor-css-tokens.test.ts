@@ -38,27 +38,43 @@ function consumedTokens(source: string): Map<string, boolean> {
 }
 
 /**
- * The stylesheet up to the first dark-mode block.
+ * Extents of every dark-mode rule, by brace matching from each dark selector.
  *
- * NOT a general "default theme" slice, and the difference matters. Review pointed out that
- * the whole-file check below cannot catch the original defect — `--doc-caret` declared only
- * inside `.ep-root.dark` — and suggested applying this slice to it. That does not work on
- * this stylesheet: plenty of ordinary default-theme declarations sit AFTER the dark block
- * (`--doc-page-gap: 24px` at ~1387, `--doc-page-bg`), so the slice reports them missing.
- * Verified by trying it: two false positives immediately.
+ * The invariant is NOT positional. Slicing to "text before the first dark block" was tried
+ * and is wrong on this stylesheet: ordinary default-theme declarations sit after it
+ * (`--doc-page-gap`, `--doc-page-bg`), so it reports false positives.
  *
- * Catching the class properly needs scope-aware parsing — resolving which declarations are
- * reachable without a dark selector — not a positional cut. Until then the general check
- * stays whole-file (it catches a token that is declared NOWHERE, which is a real class) and
- * the dark-only class is covered per token, explicitly, below. That is a narrower guarantee
- * than the file header implies, so it is stated here rather than left to be discovered.
+ * What actually holds is that DARK MODE OVERRIDES A DEFAULT — it never introduces a token.
+ * So a token declared only inside dark rules has no default value, `var()` yields the
+ * guaranteed-invalid value, and the declaration is silently dropped in the default theme.
+ * That is exactly how the caret shipped invisible, and how the page sheet shipped
+ * transparent; declaration ORDER is irrelevant to it.
  */
-const DARK_BLOCK = /\.ep-root\.dark|\[data-theme=['"]dark['"]\]|prefers-color-scheme:\s*dark/;
+const DARK_SELECTOR = /\.ep-root\.dark|\[data-theme=['"]dark['"]\]|prefers-color-scheme:\s*dark/g;
 
-function defaultThemeSource(source: string): string {
-  const darkAt = source.search(DARK_BLOCK);
-  return darkAt === -1 ? source : source.slice(0, darkAt);
+function darkRanges(source: string): { from: number; to: number }[] {
+  const ranges: { from: number; to: number }[] = [];
+  DARK_SELECTOR.lastIndex = 0;
+  let match: RegExpExecArray | null;
+  while ((match = DARK_SELECTOR.exec(source)) !== null) {
+    const open = source.indexOf('{', match.index);
+    if (open === -1) continue;
+    let depth = 0;
+    let i = open;
+    for (; i < source.length; i += 1) {
+      if (source[i] === '{') depth += 1;
+      else if (source[i] === '}') {
+        depth -= 1;
+        if (depth === 0) break;
+      }
+    }
+    ranges.push({ from: match.index, to: i });
+  }
+  return ranges;
 }
+
+const inAnyRange = (at: number, ranges: readonly { from: number; to: number }[]) =>
+  ranges.some((r) => at >= r.from && at <= r.to);
 
 describe('editor stylesheet custom properties', () => {
   test('every consumed --doc-* token is declared somewhere, or always has a fallback', () => {

@@ -18,6 +18,18 @@ export interface InteractionFrameId {
   readonly value: number;
 }
 
+/**
+ * Browser-backend realization of semantic text geometry in client-space CSS pixels.
+ *
+ * Semantic selection remains engine-owned. This optional port only reports how
+ * the current DOM backend actually rasterized a revision-tagged text position.
+ */
+export interface RenderedTextGeometryPort {
+  caretRect(target: SemanticTarget, frameId: InteractionFrameId): Rect | null;
+  selectionRects(range: SemanticSelection, frameId: InteractionFrameId): readonly Rect[];
+  targetAtPoint(point: Point, frameId: InteractionFrameId): SemanticTarget | null;
+}
+
 /** Revisions and epochs every frame member is tagged against. */
 export interface InteractionRevisions {
   /** Canonical store revision when this frame was published. */

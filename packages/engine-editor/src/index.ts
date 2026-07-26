@@ -38,6 +38,13 @@ export {
 } from './driver.ts';
 export { measureInteractionHostMetrics } from './host-metrics.ts';
 export {
+  createDomRenderedTextGeometryPort,
+  semanticRangeForRun,
+  type DomRenderedTextGeometryOptions,
+  type DomRenderedTextGeometryPort,
+  type RunSemanticRange,
+} from './rendered-text-geometry.ts';
+export {
   attachAdapterEventBridge,
   keyboardIntentKind,
   normalizeClickCount,

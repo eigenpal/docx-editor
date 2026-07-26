@@ -65,12 +65,31 @@ describe('every block registry tolerates module re-evaluation', () => {
       fileURLToPath(new URL('../src/block-layout.ts', import.meta.url)),
       'utf8',
     );
-    const registrars = [...source.matchAll(/export function (register\w+)\(/g)].map((m) => m[1]!);
+    // Both `export function registerX(` and `export const registerX = (`, and generics.
+    const registrars = [
+      ...source.matchAll(/export (?:function|const) (register\w+)\s*[<(=]/g),
+    ].map((m) => m[1]!);
     expect(registrars.length).toBeGreaterThanOrEqual(3);
     for (const name of registrars) {
-      const body = source.slice(source.indexOf(`export function ${name}(`));
-      // Up to `): void`, not the first `{` — the options bag itself opens a brace.
-      const signature = body.slice(0, body.indexOf('): void'));
+      // Bounded by the registrar's OWN parameter list, by paren matching.
+      //
+      // Slicing to the first `): void` was unanchored: a registrar returning anything else
+      // has no `): void`, so the slice ran past it into the NEXT function — which does
+      // declare `replace?: boolean` — and the guard passed. Review demonstrated it with a
+      // fourth registry returning an unregister handle: 5 pass, 0 fail, while the throw-on-
+      // duplicate shape it exists to catch was sitting right there.
+      const at = source.indexOf(`export function ${name}(`);
+      const open = source.indexOf('(', at);
+      let depth = 0;
+      let close = open;
+      for (; close < source.length; close += 1) {
+        if (source[close] === '(') depth += 1;
+        else if (source[close] === ')') {
+          depth -= 1;
+          if (depth === 0) break;
+        }
+      }
+      const signature = source.slice(open, close);
       expect(signature).toMatch(/replace\?: boolean/);
     }
   });
