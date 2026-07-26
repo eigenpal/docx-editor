@@ -17,11 +17,11 @@ import {
   type SdtRecord,
 } from '@docx-editor.dev/engine-core';
 import {
-  registerBlockLayout,
+  registerBuiltInBlockLayout,
   layoutBlock,
   assertLayoutLaneComplete,
-  registerBlockDependencies,
-  registerBlockSemanticRole,
+  registerBuiltInBlockDependencies,
+  registerBuiltInBlockSemanticRole,
   blockDependencies,
   type BlockLayoutContext,
   type LayoutBuilder,
@@ -145,51 +145,41 @@ export function layoutBody(model: PackageModel, opts: LayoutOptions): LayoutResu
 // Register the built-in block-layout handlers (comprehensive 3.7). A block-level SDT (content
 // control) is TRANSPARENT to flow layout — its nested blocks lay out in place through the same
 // dispatch; tables paginate via layoutTable; a paragraph breaks into lines by advance width.
-registerBlockLayout('sdt', (block, ctx) => ctx.layoutBlocks((block as SdtRecord).blocks), {
-  replace: true,
+registerBuiltInBlockLayout('sdt', (block, ctx) => ctx.layoutBlocks((block as SdtRecord).blocks));
+
+registerBuiltInBlockLayout('table', (block, ctx) => {
+  ctx.y = layoutTable(
+    block as TableRecord,
+    {
+      margin: ctx.margin,
+      contentRight: ctx.contentRight,
+      contentBottom: ctx.contentBottom,
+      metrics: ctx.metrics,
+      builder: ctx.builder,
+    },
+    ctx.y
+  );
+  ctx.x = ctx.margin;
 });
 
-registerBlockLayout(
-  'table',
-  (block, ctx) => {
-    ctx.y = layoutTable(
-      block as TableRecord,
-      {
-        margin: ctx.margin,
-        contentRight: ctx.contentRight,
-        contentBottom: ctx.contentBottom,
-        metrics: ctx.metrics,
-        builder: ctx.builder,
-      },
-      ctx.y
-    );
-    ctx.x = ctx.margin;
-  },
-  { replace: true }
-);
-
-registerBlockLayout(
-  'paragraph',
-  (block, ctx) => {
-    const cursor = { x: ctx.x, y: ctx.y };
-    const next = layoutParagraphInBox(
-      block as ParagraphRecord,
-      cursor,
-      ctx.margin,
-      ctx.contentRight,
-      ctx.metrics,
-      ctx.builder,
-      () => {
-        ctx.newLine();
-        cursor.x = ctx.x;
-        cursor.y = ctx.y;
-      }
-    );
-    ctx.x = next.x;
-    ctx.y = next.y;
-  },
-  { replace: true }
-);
+registerBuiltInBlockLayout('paragraph', (block, ctx) => {
+  const cursor = { x: ctx.x, y: ctx.y };
+  const next = layoutParagraphInBox(
+    block as ParagraphRecord,
+    cursor,
+    ctx.margin,
+    ctx.contentRight,
+    ctx.metrics,
+    ctx.builder,
+    () => {
+      ctx.newLine();
+      cursor.x = ctx.x;
+      cursor.y = ctx.y;
+    }
+  );
+  ctx.x = next.x;
+  ctx.y = next.y;
+});
 
 // Built-in resolution-dependency + semantic-role lanes (comprehensive 3.6). These declare a block's
 // INTRINSIC + NESTED-child dependencies (feeding the 8.2 closure that gates 8.3 cache reuse) and its
@@ -199,48 +189,36 @@ registerBlockLayout(
 // plus its children's composed dependencies. Every content block also reads document defaults.
 const DOC_DEFAULTS: DependencyKey = { kind: 'style', id: 'docDefaults' };
 
-registerBlockDependencies(
-  'paragraph',
-  (block) => {
-    const p = block as ParagraphRecord;
-    const deps: DependencyKey[] = [DOC_DEFAULTS];
-    if (p.props?.styleId) deps.push({ kind: 'style', id: p.props.styleId }); // paragraph style
-    if (p.props?.numId) deps.push({ kind: 'numbering', id: p.props.numId }); // list numbering
-    for (const r of p.runs) if (r.props?.styleId) deps.push({ kind: 'style', id: r.props.styleId }); // character styles
-    return deps;
-  },
-  { replace: true }
-);
-registerBlockSemanticRole('paragraph', 'paragraph', { replace: true });
+registerBuiltInBlockDependencies('paragraph', (block) => {
+  const p = block as ParagraphRecord;
+  const deps: DependencyKey[] = [DOC_DEFAULTS];
+  if (p.props?.styleId) deps.push({ kind: 'style', id: p.props.styleId }); // paragraph style
+  if (p.props?.numId) deps.push({ kind: 'numbering', id: p.props.numId }); // list numbering
+  for (const r of p.runs) if (r.props?.styleId) deps.push({ kind: 'style', id: r.props.styleId }); // character styles
+  return deps;
+});
+registerBuiltInBlockSemanticRole('paragraph', 'paragraph');
 
-registerBlockDependencies(
-  'table',
-  (block) => {
-    const t = block as TableRecord;
-    // A table STYLE is a style identity (StyleRecord type 'table'), NOT a separate 'table' key — so a
-    // change to that style value invalidates cached table layout through the same style closure.
-    const deps: DependencyKey[] = [DOC_DEFAULTS];
-    if (t.props?.styleId) deps.push({ kind: 'style', id: t.props.styleId });
-    // Compose the nested cells' block dependencies (a cached table reuse must invalidate when any
-    // nested paragraph's style/numbering changes). Each nested block's own extractor recurses.
-    for (const nested of blockNestedBlocks(t)) deps.push(...blockDependencies(nested));
-    return deps;
-  },
-  { replace: true }
-);
-registerBlockSemanticRole('table', 'table', { replace: true });
+registerBuiltInBlockDependencies('table', (block) => {
+  const t = block as TableRecord;
+  // A table STYLE is a style identity (StyleRecord type 'table'), NOT a separate 'table' key — so a
+  // change to that style value invalidates cached table layout through the same style closure.
+  const deps: DependencyKey[] = [DOC_DEFAULTS];
+  if (t.props?.styleId) deps.push({ kind: 'style', id: t.props.styleId });
+  // Compose the nested cells' block dependencies (a cached table reuse must invalidate when any
+  // nested paragraph's style/numbering changes). Each nested block's own extractor recurses.
+  for (const nested of blockNestedBlocks(t)) deps.push(...blockDependencies(nested));
+  return deps;
+});
+registerBuiltInBlockSemanticRole('table', 'table');
 
-registerBlockDependencies(
-  'sdt',
-  (block) => {
-    // A transparent SDT reads nothing itself; it composes its nested blocks' dependencies.
-    const deps: DependencyKey[] = [];
-    for (const nested of blockNestedBlocks(block)) deps.push(...blockDependencies(nested));
-    return deps;
-  },
-  { replace: true }
-);
-registerBlockSemanticRole('sdt', 'group', { replace: true });
+registerBuiltInBlockDependencies('sdt', (block) => {
+  // A transparent SDT reads nothing itself; it composes its nested blocks' dependencies.
+  const deps: DependencyKey[] = [];
+  for (const nested of blockNestedBlocks(block)) deps.push(...blockDependencies(nested));
+  return deps;
+});
+registerBuiltInBlockSemanticRole('sdt', 'group');
 
 interface TableCtx {
   readonly margin: number;

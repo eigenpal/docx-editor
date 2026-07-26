@@ -45,14 +45,27 @@ const registry = new Map<string, BlockLayout>();
  * capabilities claiming one kind is still an error, which is what the guard is for; a module
  * re-registering its own kind is not.
  */
-export function registerBlockLayout(
-  kind: string,
-  fn: BlockLayout,
-  options: { readonly replace?: boolean } = {}
-): void {
-  if (registry.has(kind) && options.replace !== true) {
-    throw new Error(`duplicate block layout handler for kind '${kind}'`);
-  }
+export function registerBlockLayout(kind: string, fn: BlockLayout): void {
+  if (registry.has(kind)) throw new Error(`duplicate block layout handler for kind '${kind}'`);
+  registry.set(kind, fn);
+}
+
+/**
+ * Re-registration, for THIS PACKAGE's built-ins only.
+ *
+ * `replace` used to be a public boolean on the registrars, which meant the invariant "two
+ * different capabilities must not claim one kind" was enforced by convention: any caller
+ * could pass it and silently take over `paragraph`. Review flagged that, and it mattered most
+ * for dependencies — a replaced layout handler breaks visibly, a replaced dependency
+ * extractor breaks resolved-cache invalidation and surfaces as stale layout that reads like a
+ * caching bug.
+ *
+ * These are deliberately NOT re-exported from the package index, so the escape hatch is
+ * structural rather than documented. Hot reload needs it because the built-ins register at
+ * module scope and a re-evaluation creates fresh closures, so identity comparison cannot
+ * substitute for an explicit opt-in.
+ */
+export function registerBuiltInBlockLayout(kind: string, fn: BlockLayout): void {
   registry.set(kind, fn);
 }
 
@@ -79,14 +92,14 @@ const dependencyRegistry = new Map<string, BlockDependencies>();
  * the reload cascade simply moved from `duplicate block layout handler` to `duplicate block
  * dependency declaration`. Any further registry added here needs the same treatment.
  */
-export function registerBlockDependencies(
-  kind: string,
-  fn: BlockDependencies,
-  options: { readonly replace?: boolean } = {}
-): void {
-  if (dependencyRegistry.has(kind) && options.replace !== true) {
+export function registerBlockDependencies(kind: string, fn: BlockDependencies): void {
+  if (dependencyRegistry.has(kind))
     throw new Error(`duplicate block dependency declaration for kind '${kind}'`);
-  }
+  dependencyRegistry.set(kind, fn);
+}
+
+/** Built-ins only; see {@link registerBuiltInBlockLayout}. */
+export function registerBuiltInBlockDependencies(kind: string, fn: BlockDependencies): void {
   dependencyRegistry.set(kind, fn);
 }
 /** The resolution dependencies a block reads (empty when the kind declared none), DEDUPED by key —
@@ -107,14 +120,13 @@ export function blockDependencies(block: Block): readonly DependencyKey[] {
 
 /** The accessibility/semantic role a block kind projects to (reading-order + tagged output). */
 const semanticRoleRegistry = new Map<string, string>();
-export function registerBlockSemanticRole(
-  kind: string,
-  role: string,
-  options: { readonly replace?: boolean } = {}
-): void {
-  if (semanticRoleRegistry.has(kind) && options.replace !== true) {
-    throw new Error(`duplicate semantic role for kind '${kind}'`);
-  }
+export function registerBlockSemanticRole(kind: string, role: string): void {
+  if (semanticRoleRegistry.has(kind)) throw new Error(`duplicate semantic role for kind '${kind}'`);
+  semanticRoleRegistry.set(kind, role);
+}
+
+/** Built-ins only; see {@link registerBuiltInBlockLayout}. */
+export function registerBuiltInBlockSemanticRole(kind: string, role: string): void {
   semanticRoleRegistry.set(kind, role);
 }
 export const blockSemanticRole = (kind: string): string | undefined =>
