@@ -32,6 +32,7 @@ export interface DragPlannerContext {
   readonly editable: boolean;
   readonly readOnly: boolean;
   readonly hostMetrics?: InteractionHostMetrics;
+  readonly realizedTextTarget?: Extract<SemanticTarget, { kind: 'text' }> | null;
   readonly modelRevision: number;
   readonly navigationSession?: NavigationSession | null;
 }
@@ -377,6 +378,9 @@ function resolveEditableTextHit(
 ):
   | { ok: true; target: Extract<SemanticTarget, { kind: 'text' }> }
   | { ok: false; effect: InteractionEffect } {
+  if (context.realizedTextTarget) {
+    return { ok: true, target: context.realizedTextTarget };
+  }
   const hit = hitTestPointer(context.frame, intent.clientPoint, context.hostMetrics, {
     frameId: context.frame.id,
   });

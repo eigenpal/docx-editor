@@ -32,6 +32,7 @@ export interface InteractionPlannerContext {
   readonly editable: boolean;
   readonly readOnly: boolean;
   readonly hostMetrics?: InteractionHostMetrics;
+  readonly realizedTextTarget?: Extract<SemanticTarget, { kind: 'text' }> | null;
   readonly modelRevision?: number;
   readonly activeScope?: ViewScope;
   readonly navigationSession?: NavigationSession | null;
@@ -401,21 +402,49 @@ function planClick(
     return attachNavigation({ frameId, effects: [clickRejection] }, nav);
   }
 
-  const hit = hitTestPointer(context.frame, intent.clientPoint, context.hostMetrics, {
-    frameId: intent.frameId,
-  });
-  if (!hit.ok) {
-    if (
-      hit.code === 'invalidTarget' &&
-      pointerOnPageBackground(context.frame, intent.clientPoint, context.hostMetrics)
-    ) {
+  let textTarget = context.realizedTextTarget ?? null;
+  if (!textTarget) {
+    const hit = hitTestPointer(context.frame, intent.clientPoint, context.hostMetrics, {
+      frameId: intent.frameId,
+    });
+    if (!hit.ok) {
+      if (
+        hit.code === 'invalidTarget' &&
+        pointerOnPageBackground(context.frame, intent.clientPoint, context.hostMetrics)
+      ) {
+        return attachNavigation(
+          {
+            frameId,
+            effects: [
+              rejectEffect(
+                'invalidTarget',
+                'pointer is on page background or a page margin, which owns no caret position',
+                frameId
+              ),
+            ],
+          },
+          nav
+        );
+      }
+      return attachNavigation(
+        { frameId, effects: [rejectEffect(hit.code, hit.reason, hit.frameId ?? frameId)] },
+        nav
+      );
+    }
+    if (hit.value.role === 'selectableText') {
+      return attachNavigation(
+        { frameId, effects: [rejectEffect('readOnly', 'hit target is read-only text', frameId)] },
+        nav
+      );
+    }
+    if (hit.value.role !== 'editableText') {
       return attachNavigation(
         {
           frameId,
           effects: [
             rejectEffect(
-              'invalidTarget',
-              'pointer is on page background or a page margin, which owns no caret position',
+              'unsupported',
+              `hit target role ${hit.value.role} is not supported for click selection (task 5.6+)`,
               frameId
             ),
           ],
@@ -423,53 +452,28 @@ function planClick(
         nav
       );
     }
-    return attachNavigation(
-      { frameId, effects: [rejectEffect(hit.code, hit.reason, hit.frameId ?? frameId)] },
-      nav
-    );
-  }
-
-  if (hit.value.role === 'selectableText') {
-    return attachNavigation(
-      { frameId, effects: [rejectEffect('readOnly', 'hit target is read-only text', frameId)] },
-      nav
-    );
-  }
-  if (hit.value.role !== 'editableText') {
-    return attachNavigation(
-      {
-        frameId,
-        effects: [
-          rejectEffect(
-            'unsupported',
-            `hit target role ${hit.value.role} is not supported for click selection (task 5.6+)`,
-            frameId
-          ),
-        ],
-      },
-      nav
-    );
-  }
-  if (hit.value.target.kind !== 'text') {
-    return attachNavigation(
-      {
-        frameId,
-        effects: [
-          rejectEffect(
-            'unsupported',
-            'only editable text targets may create a caret or range',
-            frameId
-          ),
-        ],
-      },
-      nav
-    );
+    if (hit.value.target.kind !== 'text') {
+      return attachNavigation(
+        {
+          frameId,
+          effects: [
+            rejectEffect(
+              'unsupported',
+              'only editable text targets may create a caret or range',
+              frameId
+            ),
+          ],
+        },
+        nav
+      );
+    }
+    textTarget = hit.value.target;
   }
 
   const clickCount = intent.clickCount ?? 1;
 
   if (clickCount === 2) {
-    const block = blockRecordForTarget(context.frame, hit.value.target);
+    const block = blockRecordForTarget(context.frame, textTarget);
     if (!block) {
       return attachNavigation(
         {
@@ -494,7 +498,7 @@ function planClick(
             frameId,
             selection: selectionFromWordHit(
               context.frame,
-              hit.value.target,
+              textTarget,
               block.wordSegments,
               block.graphemeCount
             ),
@@ -507,7 +511,7 @@ function planClick(
   }
 
   if (clickCount === 3) {
-    const block = blockRecordForTarget(context.frame, hit.value.target);
+    const block = blockRecordForTarget(context.frame, textTarget);
     if (!block) {
       return attachNavigation(
         {
@@ -530,7 +534,7 @@ function planClick(
           {
             kind: 'syncSelection',
             frameId,
-            selection: selectionFromBlockHit(context.frame, hit.value.target, block.graphemeCount),
+            selection: selectionFromBlockHit(context.frame, textTarget, block.graphemeCount),
           },
           { kind: 'focus', frameId },
         ],
@@ -541,7 +545,7 @@ function planClick(
 
   const selectionOutcome = selectionFromEditableTextHit(
     context.frame,
-    hit.value.target,
+    textTarget,
     intent.shiftKey
   );
   if (!selectionOutcome.ok) {

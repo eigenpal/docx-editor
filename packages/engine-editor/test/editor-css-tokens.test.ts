@@ -93,6 +93,37 @@ describe('editor stylesheet custom properties', () => {
     expect(declaredTokens(beforeDark).has('--doc-caret')).toBe(true);
   });
 
+  test('no --doc-* token is declared ONLY inside dark-mode rules', () => {
+    // Mutation-verified, both historical instances:
+    //
+    //   remove the default `--doc-caret`   -> CAUGHT
+    //   remove the default `--doc-page-bg` -> CAUGHT
+    //
+    // A previous commit recorded this as PARTIAL, catching the caret and missing the page
+    // background. That was wrong for an embarrassing reason: the test did not exist. A patch
+    // anchor had not matched, `darkRanges` sat unused, and the mutation I ran was exercising
+    // the OLD positional check. The lesson is that "the guard is partial" and "the guard is
+    // absent" produce the same green suite, so a guard has to be mutation-tested the moment
+    // it is written, not reasoned about.
+    //
+    // Dark mode OVERRIDES a default; it never introduces a token. A token declared only
+    // inside dark rules has no default value, so `var()` yields the guaranteed-invalid value
+    // and the declaration is silently dropped in the light theme. That is exactly how the
+    // caret shipped invisible and the page sheet shipped transparent, and declaration ORDER
+    // is irrelevant to it — a positional slice was tried first and produced false positives
+    // on this stylesheet.
+    const ranges = darkRanges(withoutComments);
+    expect(ranges.length).toBeGreaterThan(0);
+    const declaredAnywhere = new Set<string>();
+    const declaredOutsideDark = new Set<string>();
+    for (const match of withoutComments.matchAll(/(--doc-[\w-]+)\s*:/g)) {
+      declaredAnywhere.add(match[1]!);
+      if (!inAnyRange(match.index!, ranges)) declaredOutsideDark.add(match[1]!);
+    }
+    const darkOnly = [...declaredAnywhere].filter((t) => !declaredOutsideDark.has(t)).sort();
+    expect(darkOnly).toEqual([]);
+  });
+
   test('the caret rule paints a colour rather than relying on a default', () => {
     const rule = /\.ep-one-surface__caret\s*\{([^}]*)\}/.exec(withoutComments);
     expect(rule).not.toBeNull();

@@ -20,7 +20,7 @@ import {
   type ParagraphRecord,
 } from '@docx-editor.dev/engine-core';
 import { DisplayBridgeCache, toDisplayPages, type BridgeInvalidation } from '../src/display-bridge.ts';
-import { LAYOUT } from './interaction-test-helpers.ts';
+import { LAYOUT, modelWithTableCell } from './interaction-test-helpers.ts';
 
 const HUMAN = ORIGIN_IDS.mutationHuman;
 const metrics = new HelveticaMetrics();
@@ -160,5 +160,25 @@ describe('eviction reaches every cache and does not retain keys forever', () => 
     bridge(store.currentModel, cache);
     bridge(store.currentModel, cache, { deleted: ['never-existed'] });
     expect(cache.evicted).toBe(0);
+  });
+});
+
+// Paragraphs inside containers are reported too.
+//
+// `paragraphRecordsOf` walked `story.blocks` only, so no paragraph inside a table row, cell
+// or SDT was ever reported created/changed/deleted, and on a table-heavy document the dirty
+// set was empty and the feature inert. Benign for correctness — ids only evict — but it meant
+// prompt release of deleted blocks did not happen for the documents with the most blocks.
+describe('dirty ids cover paragraphs inside containers', () => {
+  test('a paragraph in a table cell is evictable by id', () => {
+    const cache = new DisplayBridgeCache();
+    const model = modelWithTableCell('cell text here');
+    bridge(model, cache);
+    const before = cache.built + cache.linesBuilt;
+    expect(before).toBeGreaterThan(0);
+
+    // Name the CELL paragraph dirty. It is only reachable by recursing into rows/cells.
+    bridge(model, cache, { changed: ['p-cell'] });
+    expect(cache.evicted).toBe(1);
   });
 });

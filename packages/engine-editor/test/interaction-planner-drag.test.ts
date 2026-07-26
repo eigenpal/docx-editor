@@ -120,6 +120,58 @@ function dragDownMoveUp(
 }
 
 describe('pointer drag session reducer (task 5.4)', () => {
+  test('pointer down prefers browser-realized bold text target over approximate layout hit', () => {
+    const frame = publishFrame(modelWith(['abcdef']));
+    const item = frame.display[0]!.items.find((candidate) => candidate.kind === 'text');
+    if (item?.kind !== 'text') throw new Error('text');
+    const approximatePoint = clientOnCluster(frame, 0, item.clusters[0]!, 0.1);
+    const realizedTextTarget = {
+      kind: 'text' as const,
+      scope: item.semantic.scope,
+      identity: item.semantic.identity,
+      graphemeOffset: 4,
+      affinity: 'downstream' as const,
+    };
+
+    const down = planPointerDragInteraction(
+      { ...plannerContext(frame), realizedTextTarget },
+      pointerDown(frame, approximatePoint),
+      null,
+    );
+
+    expect(down.nextSessionOnSuccess?.anchor).toEqual(realizedTextTarget);
+  });
+
+  test('trailing click preserves the browser-realized bold text target', () => {
+    const frame = publishFrame(modelWith(['abcdef']));
+    const item = frame.display[0]!.items.find((candidate) => candidate.kind === 'text');
+    if (item?.kind !== 'text') throw new Error('text');
+    const approximatePoint = clientOnCluster(frame, 0, item.clusters[0]!, 0.1);
+    const realizedTextTarget = {
+      kind: 'text' as const,
+      scope: item.semantic.scope,
+      identity: item.semantic.identity,
+      graphemeOffset: 4,
+      affinity: 'downstream' as const,
+    };
+
+    const click = planInteraction(
+      { ...plannerContext(frame), realizedTextTarget },
+      {
+        kind: 'click',
+        frameId: frame.id,
+        clientPoint: approximatePoint,
+        button: 0,
+        clickCount: 1,
+      },
+    );
+    const sync = click.effects.find((effect) => effect.kind === 'syncSelection');
+
+    expect(sync?.kind === 'syncSelection' ? sync.selection.head : null).toEqual(
+      realizedTextTarget,
+    );
+  });
+
   test('down → move → up on one line: capture, fixed anchor, moving head, release', () => {
     const frame = publishFrame(modelWith(['abcdef']));
     const item = frame.display[0]!.items.find((i) => i.kind === 'text');

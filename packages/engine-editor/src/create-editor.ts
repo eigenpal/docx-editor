@@ -481,10 +481,31 @@ export function createEditor(config: EditorConfig): Editor {
 
   function paragraphRecordsOf(model: PackageModel): Map<string, unknown> {
     const records = new Map<string, unknown>();
-    for (const story of model.stories.values()) {
-      for (const block of story.blocks) {
-        if (block.kind === 'paragraph') records.set(block.id, block);
+    // RECURSES into containers. Walking `story.blocks` alone never reached a paragraph inside
+    // a table row or cell, or inside an SDT, so on a table-heavy document the dirty set was
+    // empty and the feature was inert — review found it. Benign for correctness, because ids
+    // only ever evict, but it meant the one thing this adds over fingerprints (prompt release
+    // of deleted blocks) did not happen for exactly the documents with the most blocks.
+    const visit = (blocks: readonly { kind: string; id: string }[]): void => {
+      for (const block of blocks) {
+        if (block.kind === 'paragraph') {
+          records.set(block.id, block);
+          continue;
+        }
+        const container = block as unknown as {
+          blocks?: readonly { kind: string; id: string }[];
+          rows?: readonly {
+            cells?: readonly { blocks?: readonly { kind: string; id: string }[] }[];
+          }[];
+        };
+        if (container.blocks) visit(container.blocks);
+        for (const row of container.rows ?? []) {
+          for (const cell of row.cells ?? []) if (cell.blocks) visit(cell.blocks);
+        }
       }
+    };
+    for (const story of model.stories.values()) {
+      visit(story.blocks as readonly { kind: string; id: string }[]);
     }
     return records;
   }
