@@ -71,8 +71,12 @@ const frames = new InteractionFrameStore();
 const stage = { store: [] as number[], layout: [] as number[], bridge: [] as number[], publish: [] as number[], total: [] as number[] };
 let counts: Record<string, unknown> = {};
 
+// ONE port for the whole run, matching the editor. A fresh port per layout gives the
+// horizontal-boundary memo a new key every layout and a 0% hit rate, so a profiler that
+// constructs one per iteration measures a configuration production does not have.
+const metrics = new HelveticaMetrics();
+
 for (let i = 0; i < samples; i += 1) {
-  const metrics = new HelveticaMetrics();
   const t0 = performance.now();
   const applied = store.transact(HUMAN, (c) =>
     c.apply({ op: 'insertText', paragraphId, offset: 0, text: 'x' })

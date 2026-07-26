@@ -440,6 +440,18 @@ export function createEditor(config: EditorConfig): Editor {
 
   // One per editor: unchanged painted slices reuse their frozen clusters across layouts.
   const bridgeCache = new DisplayBridgeCache();
+  /**
+   * ONE metrics port for the editor's lifetime, not one per layout.
+   *
+   * The port is immutable, so a fresh instance per layout bought nothing and cost
+   * everything: the horizontal-boundary memo keys on the port instance (it has to — the
+   * table is a function of the metrics, and review caught stale output across a port swap),
+   * so a new instance every layout meant a new key every layout and a 0% hit rate. Review
+   * measured 21 of 21 boundary tables reused with a shared port and 0 of 21 with a fresh
+   * one, worth 19.4 ms of bridge and 16.5 ms of total per keystroke — the whole of the
+   * memo, silently undone.
+   */
+  const metrics = new HelveticaMetrics();
 
   function emitLayoutFrame(frame: InteractionFrame): void {
     host.onDisplay?.(frame.display);
@@ -451,7 +463,6 @@ export function createEditor(config: EditorConfig): Editor {
 
   function completeLayoutPublication(token: number, pendingTarget?: number): void {
     if (destroyed || token !== layoutToken || !session) return;
-    const metrics = new HelveticaMetrics();
     const layout = layoutBody(session.currentModel(), { ...LAYOUT, metrics });
     const bridged = toDisplayPages(session.currentModel(), layout.pages, metrics, bridgeCache);
     const input = layoutInput(bridged.display, bridged.semanticIndex, bridged.navigationGeometry);
