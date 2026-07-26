@@ -145,6 +145,18 @@
   --doc-focus-ring: rgba(26, 115, 232, 0.4);
   --doc-selection: rgba(26, 115, 232, 0.3);
 
+  /* Caret on the document canvas.
+   *
+   * A LITERAL rather than var(--doc-text): the canvas is deliberately not themed, so the
+   * caret tracks the paper it sits on, not the UI chrome. The dark-mode block overrides it
+   * for the inverted canvas.
+   *
+   * This was missing entirely and only ever declared in the dark block, so
+   * `.ep-one-surface__caret { background: var(--doc-caret) }` resolved to nothing in the
+   * default theme and painted a 1px transparent div — the caret was correctly positioned,
+   * visible and non-blinking-off, and simply had no colour. */
+  --doc-caret: #202124;
+
   /* Document scroll container scrollbar */
   --doc-scrollbar-size: 14px;
   --doc-scrollbar-thumb: color-mix(in srgb, var(--doc-text-muted) 45%, transparent);
