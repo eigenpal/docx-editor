@@ -203,3 +203,62 @@ describe('grouping regressions found by review', () => {
     expect(items.map((i) => i.text)).toEqual(['a b c']);
   });
 });
+
+// A word wider than the content box must BREAK, not run off the page.
+//
+// The wrap test is `cursor.x + width > contentRight && cursor.x > contentLeft`. For a token
+// wider than the whole content box the second clause is false as soon as the token starts a
+// line, so it never fired again and the word overflowed the right margin — visible on any
+// pasted URL, hash, or unspaced run. Word breaks at the last grapheme that fits.
+describe('over-long words break instead of overflowing', () => {
+  const WIDE_BOX = { pageWidth: 12240, pageHeight: 15840, margin: 1440, metrics: new HelveticaMetrics() };
+  const contentLeft = WIDE_BOX.margin;
+  const contentRight = WIDE_BOX.pageWidth - WIDE_BOX.margin;
+
+  test('a single word longer than the line is split across lines', () => {
+    const long = 'd'.repeat(4000);
+    const items = textItems(layoutRuns([{ text: long }], WIDE_BOX));
+    expect(items.length).toBeGreaterThan(1);
+    // Every piece stays inside the content box.
+    for (const item of items) {
+      expect(item.x).toBeGreaterThanOrEqual(contentLeft - 0.01);
+      expect(item.x + item.width).toBeLessThanOrEqual(contentRight + 0.01);
+    }
+    // And no character is lost or duplicated.
+    expect(items.map((i) => i.text).join('')).toBe(long);
+  });
+
+  test('the break point depends on how much of the line is already used', () => {
+    const long = 'd'.repeat(4000);
+    const alone = textItems(layoutRuns([{ text: long }], WIDE_BOX));
+    const afterPrefix = textItems(layoutRuns([{ text: `prefix ${long}` }], WIDE_BOX));
+    // Starting further right means fewer characters fit on the first line.
+    const firstAlone = alone.filter((i) => i.y === alone[0]!.y).map((i) => i.text).join('');
+    const firstAfter = afterPrefix
+      .filter((i) => i.y === afterPrefix[0]!.y)
+      .map((i) => i.text)
+      .join('');
+    expect(firstAfter.length).toBeLessThan(firstAlone.length + 'prefix '.length);
+  });
+
+  test('ordinary prose is unaffected', () => {
+    const sentence = 'one two three four five six seven eight';
+    const items = textItems(layoutRuns([{ text: sentence }], WIDE_BOX));
+    expect(items).toHaveLength(1);
+    expect(items[0]!.text).toBe(sentence);
+  });
+
+  test('a grapheme wider than the whole content box still paints rather than looping', () => {
+    const tiny = { ...WIDE_BOX, pageWidth: WIDE_BOX.margin * 2 + 4 };
+    const items = textItems(layoutRuns([{ text: 'WWWW' }], tiny));
+    expect(items.map((i) => i.text).join('')).toBe('WWWW');
+  });
+
+  test('breaking respects grapheme clusters, never splitting one', () => {
+    // Combining marks must stay with their base character across a forced break.
+    const long = 'é'.repeat(3000);
+    const items = textItems(layoutRuns([{ text: long }], WIDE_BOX));
+    expect(items.map((i) => i.text).join('')).toBe(long);
+    for (const item of items) expect(item.text.startsWith('́')).toBe(false);
+  });
+});

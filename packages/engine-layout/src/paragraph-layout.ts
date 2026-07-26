@@ -394,6 +394,45 @@ export function layoutParagraphInBox(
       // cluster forward across every Unicode space separator.
       const advanceFromUtf16 = Math.max(seg.utf16From, token.utf16From);
       const advanceToUtf16 = Math.min(seg.utf16To, token.utf16To);
+
+      // EMERGENCY BREAK inside an over-long word.
+      //
+      // The wrap test above is `cursor.x + width > contentRight && cursor.x > contentLeft`.
+      // For a token wider than the whole content box that second clause is false the moment
+      // the token starts a line, so it never fired again and the word ran straight off the
+      // right edge of the page — visible on any pasted URL, hash, or unspaced run.
+      //
+      // Word breaks such a word at the last grapheme that fits and continues on the next
+      // line. Breaking here, per grapheme, rather than in `tokenizeParagraph`, is what keeps
+      // the decision dependent on where the word actually STARTS: the same word breaks at a
+      // different character depending on how much of the line was already used.
+      //
+      // Guarded on `cursor.x > contentLeft` so a single grapheme wider than the content box
+      // still paints rather than looping forever on an empty line.
+      let graphemeWidth = 0;
+      for (let utf16 = advanceFromUtf16; utf16 < advanceToUtf16; utf16 += 1) {
+        const style = runStyleAt(p, utf16);
+        graphemeWidth += metrics.advance(charAt(p, utf16), style.bold, style.italic);
+      }
+      // `contentRight > contentLeft` guards a DEGENERATE content box. A page narrower than
+      // its own margins puts the right edge left of the left edge, so every grapheme
+      // "overflows" and this would break after each one. Existing fixtures do exactly that
+      // (pageWidth 2800 with margin 1440), and three tests caught it immediately.
+      if (
+        contentRight > contentLeft &&
+        cursor.x + graphemeWidth > contentRight &&
+        cursor.x > contentLeft
+      ) {
+        emitLine(advanceFromUtf16);
+        lineStartGraphemeOffset = g;
+        tracker.wrap(sink.currentPageIndex());
+        newLine();
+        lineStartUtf16 = advanceFromUtf16;
+        lineStartX = cursor.x;
+        lastEdgeGrapheme = -1;
+        pushEdge(lineStartGraphemeOffset);
+      }
+
       for (let utf16 = advanceFromUtf16; utf16 < advanceToUtf16; utf16 += 1) {
         const style = runStyleAt(p, utf16);
         cursor.x += metrics.advance(charAt(p, utf16), style.bold, style.italic);
