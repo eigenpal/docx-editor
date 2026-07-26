@@ -90,3 +90,58 @@ they are hashes whose only use is equality against a later run.
    properties would merge runs that differ in underline, colour, size, or caps.
 3. Selection-only cost is dominated by reconciliation over every painted element, which
    is why requirement 4 pairs with grouping rather than standing alone.
+
+
+## Phase 2 attempt — the transformation works, whitespace ownership blocks it
+
+The line-clipping change was implemented and measured, then REVERTED. Recording it here
+because the finding is the useful part, and the next attempt should start from it rather
+than rediscover it.
+
+### What was built
+
+`layoutParagraphInBox` emitted a paint slice per WORD token; whitespace tokens advanced
+the cursor and emitted nothing. The change accumulated `[lineStartUtf16, wrapPoint)` and
+emitted once per visual line, splitting only where the resolved style changes. A line's
+text is contiguous in UTF-16 — wrapping only happens BETWEEN tokens — so whitespace comes
+along as real painted text for free.
+
+It worked: all nine new specs in `packages/engine-layout/test/line-run-grouping.test.ts`
+passed, and the whole `engine-layout` suite (118 tests) stayed green after two existing
+tests were re-pointed from item INDEX to semantic identity — which the change document
+already warns about ("tests MUST address stable semantic identity rather than assume raw
+item or run indices survive grouping"). Both were literally asserting one-element-per-word
+(`textItems[1]` = `"world"`).
+
+### Why it was reverted
+
+It broke SEVEN `engine-editor` tests, all `lineWhitespace` ownership:
+
+- `double-click on inline whitespace selects exactly grapheme 2..3` returned offset 0
+- leading/trailing whitespace box position assertions
+- two display-bridge whitespace-geometry tests
+- the interaction planner's non-word segment selection
+
+Root cause: whitespace ownership regions are registered as hit candidates at
+`zOrder: -1`, BELOW painted text. They only ever won because whitespace was not painted —
+the text items had a literal gap where the spaces were. Once a text item covers its own
+spaces, it shadows the region that carries their exact grapheme range, and a double click
+resolves to the neighbouring word instead of the whitespace segment.
+
+Raising the regions to `zOrder: 1` was tried and is NOT sufficient on its own — the same
+seven still fail, so the box geometry or the resolution order needs more than a priority
+flip. That is where the next attempt should start.
+
+This is exactly the trade the change document forbids: requirement 3 lists "whitespace hit
+regions" among the interaction contracts grouping MUST NOT weaken. A lower DOM count
+bought with a selection regression is not progress, so the tree was left green and the
+specs parked as `describe.skip` rather than committed red.
+
+### For the next attempt
+
+1. Decide the authority for whitespace hit regions once whitespace is painted. The region
+   is derived from measured caret edges and is more precise than the paint box, so it
+   should stay authoritative — but the resolution order has to make that true.
+2. Re-point the two index-based layout tests to semantic identity (already proven).
+3. Re-run `engine-editor` in full: the seven failures above are the gate.
+4. Only then measure, and compare against the size table above using the same harness.
