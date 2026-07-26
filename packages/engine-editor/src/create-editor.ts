@@ -59,7 +59,8 @@ import {
 } from '@docx-editor.dev/engine-binding';
 import { createEmptyModel, bodyStoryId } from '@docx-editor.dev/engine-core';
 import { layoutBody, HelveticaMetrics } from '@docx-editor.dev/engine-layout';
-import { DisplayBridgeCache, toDisplayPages } from './display-bridge.ts';
+import type { PackageModel } from '@docx-editor.dev/engine-core';
+import { DisplayBridgeCache, toDisplayPages, type BridgeInvalidation } from './display-bridge.ts';
 import { InteractionFrameStore, emptyInteractionFrame } from './interaction-frame.ts';
 import type { NavigationGeometry } from './navigation-geometry.ts';
 import {
@@ -453,6 +454,51 @@ export function createEditor(config: EditorConfig): Editor {
    */
   const metrics = new HelveticaMetrics();
 
+  /**
+   * Block ids created, changed or deleted since the last publication.
+   *
+   * This is the `ModelChange` dirty set, derived from `DocumentStore`'s own structural
+   * sharing rather than plumbed through the edit surface: `notifyModelChanged` carries no
+   * arguments, and widening it across `engine-binding` to pass a change that the store
+   * already makes observable would be more moving parts for the same information. An
+   * untouched paragraph keeps its `ParagraphRecord` object identity across a commit —
+   * measured at 137 of 140 on a one-character edit into a 24-page document — so a record-map
+   * diff reports exactly which blocks the commit touched.
+   *
+   * Fed to the bridge for EVICTION only. Dirty ids cannot replace fingerprints: they say
+   * which blocks the user edited, never which blocks MOVED, and inserting a line reflows
+   * everything below it while those ids stay clean. Fingerprints catch both and remain what
+   * decides reuse; this only takes cache entries AWAY, so it can cost a rebuild and can
+   * never serve stale geometry. What it adds over fingerprints alone is prompt release of
+   * DELETED blocks, which otherwise linger until they age out of two generations.
+   */
+  let publishedRecords = new Map<string, unknown>();
+
+  function paragraphRecordsOf(model: PackageModel): Map<string, unknown> {
+    const records = new Map<string, unknown>();
+    for (const story of model.stories.values()) {
+      for (const block of story.blocks) {
+        if (block.kind === 'paragraph') records.set(block.id, block);
+      }
+    }
+    return records;
+  }
+
+  function takeInvalidation(model: PackageModel): BridgeInvalidation {
+    const current = paragraphRecordsOf(model);
+    const created: string[] = [];
+    const changed: string[] = [];
+    const deleted: string[] = [];
+    for (const [id, record] of current) {
+      const previous = publishedRecords.get(id);
+      if (previous === undefined) created.push(id);
+      else if (previous !== record) changed.push(id);
+    }
+    for (const id of publishedRecords.keys()) if (!current.has(id)) deleted.push(id);
+    publishedRecords = current;
+    return { created, changed, deleted };
+  }
+
   function emitLayoutFrame(frame: InteractionFrame): void {
     host.onDisplay?.(frame.display);
     host.onTotalPages?.(frame.display.length);
@@ -463,8 +509,15 @@ export function createEditor(config: EditorConfig): Editor {
 
   function completeLayoutPublication(token: number, pendingTarget?: number): void {
     if (destroyed || token !== layoutToken || !session) return;
-    const layout = layoutBody(session.currentModel(), { ...LAYOUT, metrics });
-    const bridged = toDisplayPages(session.currentModel(), layout.pages, metrics, bridgeCache);
+    const model = session.currentModel();
+    const layout = layoutBody(model, { ...LAYOUT, metrics });
+    const bridged = toDisplayPages(
+      model,
+      layout.pages,
+      metrics,
+      bridgeCache,
+      takeInvalidation(model)
+    );
     const input = layoutInput(bridged.display, bridged.semanticIndex, bridged.navigationGeometry);
     const frame =
       pendingTarget !== undefined
@@ -638,6 +691,10 @@ export function createEditor(config: EditorConfig): Editor {
         return;
       }
       sharedView = false;
+      // A new document shares no records with the old one; without this the first
+      // publication after a load reports every block as created and evicts nothing that
+      // belonged to the previous document.
+      publishedRecords = new Map();
     }
     surface?.destroy();
     surface = null;
@@ -1034,10 +1091,21 @@ export function createEditor(config: EditorConfig): Editor {
      */
     getDocumentStyles: () => {
       if (!session) return [];
-      return session
-        .currentModel()
-        .styles.filter((style) => style.type === 'paragraph')
-        .map((style) => ({ styleId: style.id, name: style.name || style.id, type: style.type }));
+      return (
+        session
+          .currentModel()
+          .styles.filter((style) => style.type === 'paragraph')
+          .map((style) => ({ styleId: style.id, name: style.name || style.id, type: style.type }))
+          // DEDUPED by styleId. A .docx may define the same style id more than once — a
+          // latent definition alongside a real one, or a document that merges two style
+          // tables — and the picker keys its options on this id, so duplicates made React
+          // warn `Encountered two children with the same key, 'Heading1'` for every heading
+          // level and left the list with entries it could omit or duplicate. First wins,
+          // which is the definition the rest of the resolver already honours.
+          .filter(
+            (style, index, all) => all.findIndex((s) => s.styleId === style.styleId) === index
+          )
+      );
     },
 
     /**

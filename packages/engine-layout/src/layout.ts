@@ -145,41 +145,51 @@ export function layoutBody(model: PackageModel, opts: LayoutOptions): LayoutResu
 // Register the built-in block-layout handlers (comprehensive 3.7). A block-level SDT (content
 // control) is TRANSPARENT to flow layout — its nested blocks lay out in place through the same
 // dispatch; tables paginate via layoutTable; a paragraph breaks into lines by advance width.
-registerBlockLayout('sdt', (block, ctx) => ctx.layoutBlocks((block as SdtRecord).blocks));
-
-registerBlockLayout('table', (block, ctx) => {
-  ctx.y = layoutTable(
-    block as TableRecord,
-    {
-      margin: ctx.margin,
-      contentRight: ctx.contentRight,
-      contentBottom: ctx.contentBottom,
-      metrics: ctx.metrics,
-      builder: ctx.builder,
-    },
-    ctx.y
-  );
-  ctx.x = ctx.margin;
+registerBlockLayout('sdt', (block, ctx) => ctx.layoutBlocks((block as SdtRecord).blocks), {
+  replace: true,
 });
 
-registerBlockLayout('paragraph', (block, ctx) => {
-  const cursor = { x: ctx.x, y: ctx.y };
-  const next = layoutParagraphInBox(
-    block as ParagraphRecord,
-    cursor,
-    ctx.margin,
-    ctx.contentRight,
-    ctx.metrics,
-    ctx.builder,
-    () => {
-      ctx.newLine();
-      cursor.x = ctx.x;
-      cursor.y = ctx.y;
-    }
-  );
-  ctx.x = next.x;
-  ctx.y = next.y;
-});
+registerBlockLayout(
+  'table',
+  (block, ctx) => {
+    ctx.y = layoutTable(
+      block as TableRecord,
+      {
+        margin: ctx.margin,
+        contentRight: ctx.contentRight,
+        contentBottom: ctx.contentBottom,
+        metrics: ctx.metrics,
+        builder: ctx.builder,
+      },
+      ctx.y
+    );
+    ctx.x = ctx.margin;
+  },
+  { replace: true }
+);
+
+registerBlockLayout(
+  'paragraph',
+  (block, ctx) => {
+    const cursor = { x: ctx.x, y: ctx.y };
+    const next = layoutParagraphInBox(
+      block as ParagraphRecord,
+      cursor,
+      ctx.margin,
+      ctx.contentRight,
+      ctx.metrics,
+      ctx.builder,
+      () => {
+        ctx.newLine();
+        cursor.x = ctx.x;
+        cursor.y = ctx.y;
+      }
+    );
+    ctx.x = next.x;
+    ctx.y = next.y;
+  },
+  { replace: true }
+);
 
 // Built-in resolution-dependency + semantic-role lanes (comprehensive 3.6). These declare a block's
 // INTRINSIC + NESTED-child dependencies (feeding the 8.2 closure that gates 8.3 cache reuse) and its

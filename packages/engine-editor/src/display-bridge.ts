@@ -296,6 +296,7 @@ export class DisplayBridgeCache {
     this.other = new Map();
     this.linesPrevious = this.lines;
     this.lines = new Map();
+    this.evicted = 0;
     this.reused = 0;
     this.built = 0;
     this.linesReused = 0;
@@ -312,7 +313,8 @@ export class DisplayBridgeCache {
   private other = new Map<string, unknown>();
   private otherPrevious = new Map<string, unknown>();
 
-  memo<T>(key: string, build: () => T): T {
+  memo<T>(key: string, build: () => T, blockId?: string): T {
+    if (blockId !== undefined) this.trackKey(blockId, key);
     const hit = (this.other.get(key) ?? this.otherPrevious.get(key)) as T | undefined;
     if (hit !== undefined) {
       this.other.set(key, hit);
@@ -329,7 +331,12 @@ export class DisplayBridgeCache {
   linesReused = 0;
   linesBuilt = 0;
 
-  linesFor(key: string, build: () => PreOrderVisualLine[]): readonly PreOrderVisualLine[] {
+  linesFor(
+    key: string,
+    build: () => PreOrderVisualLine[],
+    blockId?: string
+  ): readonly PreOrderVisualLine[] {
+    if (blockId !== undefined) this.trackKey(blockId, key);
     const hit = this.lines.get(key) ?? this.linesPrevious.get(key);
     if (hit) {
       this.linesReused += 1;
@@ -342,7 +349,58 @@ export class DisplayBridgeCache {
     return built;
   }
 
-  clustersFor(key: string, build: () => ShapedCluster[]): readonly ShapedCluster[] {
+  /**
+   * Every cache key that belongs to a block, so a dirty id can evict it directly.
+   *
+   * Without this the only way a stale entry leaves is by aging out of the two generations,
+   * which is correct for CHANGED blocks (their fingerprint differs, so they miss) but leaks
+   * for DELETED ones: nothing ever asks for them again and they sit in the map until two
+   * more layouts pass.
+   */
+  private keysByBlock = new Map<string, Set<string>>();
+
+  private trackKey(blockId: string, key: string): void {
+    const existing = this.keysByBlock.get(blockId);
+    if (existing) existing.add(key);
+    else this.keysByBlock.set(blockId, new Set([key]));
+  }
+
+  /**
+   * Drop everything cached for these blocks.
+   *
+   * EVICTION ONLY, and that is the whole safety argument. A dirty-id list says which blocks
+   * the user edited; it cannot say which blocks MOVED, because inserting a line reflows
+   * every block below it while their ids stay clean. Fingerprints catch both, so they remain
+   * the thing that decides reuse. Dirty ids are layered on top and may only take entries
+   * AWAY — they can over-invalidate, costing a rebuild, and can never cause stale geometry
+   * to be served.
+   */
+  invalidateBlocks(blockIds: Iterable<string>): void {
+    for (const blockId of blockIds) {
+      const keys = this.keysByBlock.get(blockId);
+      if (!keys) continue;
+      for (const key of keys) {
+        this.current.delete(key);
+        this.previous.delete(key);
+        this.lines.delete(key);
+        this.linesPrevious.delete(key);
+        this.other.delete(key);
+        this.otherPrevious.delete(key);
+      }
+      this.keysByBlock.delete(blockId);
+      this.evicted += 1;
+    }
+  }
+
+  /** Blocks evicted by id since the last rotate; reported by the profiler. */
+  evicted = 0;
+
+  clustersFor(
+    key: string,
+    build: () => ShapedCluster[],
+    blockId?: string
+  ): readonly ShapedCluster[] {
+    if (blockId !== undefined) this.trackKey(blockId, key);
     const hit = this.current.get(key) ?? this.previous.get(key);
     if (hit) {
       this.reused += 1;
@@ -509,7 +567,8 @@ function textItem(
   const clusters = cache
     ? cache.clustersFor(
         clusterCacheKey(it.anchor.paragraphId, it, box, paragraphGraphemeCount, edgeDigest),
-        buildClusters
+        buildClusters,
+        it.anchor.paragraphId
       )
     : buildClusters();
   const legacy = deprecatedFlatDocOffset(semanticIndex, it.anchor.paragraphId, utf16From, utf16To);
@@ -555,13 +614,34 @@ function rectItems(it: RectItem): ContractItem[] {
 }
 
 /** Map engine-layout pages to contract display + model-derived semantic index. */
+/**
+ * Blocks a `ModelChange` reported as created, changed or deleted since the last publication.
+ *
+ * Consumed for EVICTION only — see `DisplayBridgeCache.invalidateBlocks` for why that is the
+ * safe direction. Optional: omitting it leaves reuse entirely to fingerprints, which is what
+ * every caller did before and is still correct, just slower to release deleted blocks.
+ */
+export interface BridgeInvalidation {
+  readonly created?: readonly string[];
+  readonly changed?: readonly string[];
+  readonly deleted?: readonly string[];
+}
+
 export function toDisplayPages(
   model: PackageModel,
   pages: readonly Page[],
   metrics: MetricsPort = new HelveticaMetrics(),
-  cache?: DisplayBridgeCache
+  cache?: DisplayBridgeCache,
+  invalidation?: BridgeInvalidation
 ): DisplayBridgeResult {
   cache?.rotate();
+  if (cache && invalidation) {
+    cache.invalidateBlocks([
+      ...(invalidation.created ?? []),
+      ...(invalidation.changed ?? []),
+      ...(invalidation.deleted ?? []),
+    ]);
+  }
   const edgeDigests = cache ? paragraphPaintDigests(pages) : new Map<string, number>();
   const semanticIndex = buildSemanticIndex(model, BODY);
   const storyId = semanticIndex.stories[0]!.storyId;
@@ -632,7 +712,8 @@ export function toDisplayPages(
             block.identity.blockId +
             '\u001F' +
             text,
-          build
+          build,
+          block.identity.blockId
         )
       : build();
   }
