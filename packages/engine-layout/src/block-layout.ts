@@ -71,9 +71,22 @@ export function layoutBlock(block: Block, ctx: BlockLayoutContext): void {
  *  dependency-graph closure (8.2) that gates resolved-cache reuse (8.3). */
 export type BlockDependencies = (block: Block) => readonly DependencyKey[];
 const dependencyRegistry = new Map<string, BlockDependencies>();
-export function registerBlockDependencies(kind: string, fn: BlockDependencies): void {
-  if (dependencyRegistry.has(kind))
+/**
+ * `replace` for the same reason as {@link registerBlockLayout}: these run at module scope, so
+ * a dev server's hot reload re-ran them and threw, killing the reload.
+ *
+ * This is the SECOND registry with that shape and it was missed when the first was fixed —
+ * the reload cascade simply moved from `duplicate block layout handler` to `duplicate block
+ * dependency declaration`. Any further registry added here needs the same treatment.
+ */
+export function registerBlockDependencies(
+  kind: string,
+  fn: BlockDependencies,
+  options: { readonly replace?: boolean } = {}
+): void {
+  if (dependencyRegistry.has(kind) && options.replace !== true) {
     throw new Error(`duplicate block dependency declaration for kind '${kind}'`);
+  }
   dependencyRegistry.set(kind, fn);
 }
 /** The resolution dependencies a block reads (empty when the kind declared none), DEDUPED by key —
@@ -94,8 +107,14 @@ export function blockDependencies(block: Block): readonly DependencyKey[] {
 
 /** The accessibility/semantic role a block kind projects to (reading-order + tagged output). */
 const semanticRoleRegistry = new Map<string, string>();
-export function registerBlockSemanticRole(kind: string, role: string): void {
-  if (semanticRoleRegistry.has(kind)) throw new Error(`duplicate semantic role for kind '${kind}'`);
+export function registerBlockSemanticRole(
+  kind: string,
+  role: string,
+  options: { readonly replace?: boolean } = {}
+): void {
+  if (semanticRoleRegistry.has(kind) && options.replace !== true) {
+    throw new Error(`duplicate semantic role for kind '${kind}'`);
+  }
   semanticRoleRegistry.set(kind, role);
 }
 export const blockSemanticRole = (kind: string): string | undefined =>

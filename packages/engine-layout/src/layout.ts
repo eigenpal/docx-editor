@@ -199,36 +199,48 @@ registerBlockLayout(
 // plus its children's composed dependencies. Every content block also reads document defaults.
 const DOC_DEFAULTS: DependencyKey = { kind: 'style', id: 'docDefaults' };
 
-registerBlockDependencies('paragraph', (block) => {
-  const p = block as ParagraphRecord;
-  const deps: DependencyKey[] = [DOC_DEFAULTS];
-  if (p.props?.styleId) deps.push({ kind: 'style', id: p.props.styleId }); // paragraph style
-  if (p.props?.numId) deps.push({ kind: 'numbering', id: p.props.numId }); // list numbering
-  for (const r of p.runs) if (r.props?.styleId) deps.push({ kind: 'style', id: r.props.styleId }); // character styles
-  return deps;
-});
-registerBlockSemanticRole('paragraph', 'paragraph');
+registerBlockDependencies(
+  'paragraph',
+  (block) => {
+    const p = block as ParagraphRecord;
+    const deps: DependencyKey[] = [DOC_DEFAULTS];
+    if (p.props?.styleId) deps.push({ kind: 'style', id: p.props.styleId }); // paragraph style
+    if (p.props?.numId) deps.push({ kind: 'numbering', id: p.props.numId }); // list numbering
+    for (const r of p.runs) if (r.props?.styleId) deps.push({ kind: 'style', id: r.props.styleId }); // character styles
+    return deps;
+  },
+  { replace: true }
+);
+registerBlockSemanticRole('paragraph', 'paragraph', { replace: true });
 
-registerBlockDependencies('table', (block) => {
-  const t = block as TableRecord;
-  // A table STYLE is a style identity (StyleRecord type 'table'), NOT a separate 'table' key — so a
-  // change to that style value invalidates cached table layout through the same style closure.
-  const deps: DependencyKey[] = [DOC_DEFAULTS];
-  if (t.props?.styleId) deps.push({ kind: 'style', id: t.props.styleId });
-  // Compose the nested cells' block dependencies (a cached table reuse must invalidate when any
-  // nested paragraph's style/numbering changes). Each nested block's own extractor recurses.
-  for (const nested of blockNestedBlocks(t)) deps.push(...blockDependencies(nested));
-  return deps;
-});
-registerBlockSemanticRole('table', 'table');
+registerBlockDependencies(
+  'table',
+  (block) => {
+    const t = block as TableRecord;
+    // A table STYLE is a style identity (StyleRecord type 'table'), NOT a separate 'table' key — so a
+    // change to that style value invalidates cached table layout through the same style closure.
+    const deps: DependencyKey[] = [DOC_DEFAULTS];
+    if (t.props?.styleId) deps.push({ kind: 'style', id: t.props.styleId });
+    // Compose the nested cells' block dependencies (a cached table reuse must invalidate when any
+    // nested paragraph's style/numbering changes). Each nested block's own extractor recurses.
+    for (const nested of blockNestedBlocks(t)) deps.push(...blockDependencies(nested));
+    return deps;
+  },
+  { replace: true }
+);
+registerBlockSemanticRole('table', 'table', { replace: true });
 
-registerBlockDependencies('sdt', (block) => {
-  // A transparent SDT reads nothing itself; it composes its nested blocks' dependencies.
-  const deps: DependencyKey[] = [];
-  for (const nested of blockNestedBlocks(block)) deps.push(...blockDependencies(nested));
-  return deps;
-});
-registerBlockSemanticRole('sdt', 'group');
+registerBlockDependencies(
+  'sdt',
+  (block) => {
+    // A transparent SDT reads nothing itself; it composes its nested blocks' dependencies.
+    const deps: DependencyKey[] = [];
+    for (const nested of blockNestedBlocks(block)) deps.push(...blockDependencies(nested));
+    return deps;
+  },
+  { replace: true }
+);
+registerBlockSemanticRole('sdt', 'group', { replace: true });
 
 interface TableCtx {
   readonly margin: number;
