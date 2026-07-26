@@ -229,6 +229,12 @@ interface CachedChunk {
 
 const chunkCache = new WeakMap<ParagraphRecord, CachedChunk>();
 
+/**
+ * Reuse counters for the profiler, so "one edit rebuilds one block" is a REPORTED number
+ * rather than an inference from a wall-clock total. Reset per `buildSemanticIndex`.
+ */
+export const semanticChunkStats = { reused: 0, rebuilt: 0 };
+
 function chunkKey(storyId: string, scope: ViewScope, readOnly: boolean): string {
   return [storyId, scope.kind, readOnly ? 'ro' : 'rw'].join('\u001F');
 }
@@ -242,7 +248,11 @@ function blockChunk(
 ): BlockSemanticChunk {
   const key = chunkKey(storyId, scope, readOnly);
   const cached = chunkCache.get(paragraph);
-  if (cached && cached.key === key && cached.boundary === wordBoundary) return cached.chunk;
+  if (cached && cached.key === key && cached.boundary === wordBoundary) {
+    semanticChunkStats.reused += 1;
+    return cached.chunk;
+  }
+  semanticChunkStats.rebuilt += 1;
 
   const text = paragraphText(paragraph);
   const id = identity(storyId, paragraph.id);
@@ -395,6 +405,8 @@ export function buildSemanticIndex(
 ): SemanticPositionIndex {
   const storyId = bodyStoryId(model);
   const story = model.stories.get(storyId)!;
+  semanticChunkStats.reused = 0;
+  semanticChunkStats.rebuilt = 0;
   const located: LocatedParagraph[] = [];
   walkParagraphs(story.blocks, { inTopLevelBodyFlow: true, inTableCell: false }, located);
 

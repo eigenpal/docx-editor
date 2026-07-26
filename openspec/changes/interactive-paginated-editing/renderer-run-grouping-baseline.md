@@ -984,3 +984,41 @@ builds — it would have passed with every cluster wrong, and it did. It now com
 contents, boxes and semantic spans, across four successive edits against a warm cache, plus
 the exact trailing-styled-space-at-a-wrap shape review used. Eight of eleven key mutations
 review tried survived the old suite; the content comparison is what catches them.
+
+## Profiler, committed
+
+`scripts/profile/edit-pipeline.ts` replaces the scratch harnesses these numbers came from.
+Two properties the scratch versions got wrong and this does not:
+
+- Stage boundaries are non-overlapping and measured on one clock in a single pass, so the
+  parts sum to the total by construction and the run reports `partsSumToTotal` next to
+  `total` so a reader can check it. An earlier profile timed freeze costs independently,
+  outside publication, and its three numbers summed to nearly twice the stage they explained.
+- Reuse is COUNTED, not inferred. "One edit rebuilds one block" is the actual incrementality
+  claim and no wall-clock total can establish it.
+
+```
+bun scripts/profile/edit-pipeline.ts examples/vite/public/large-styled-text.docx 9
+```
+
+Reported per run: paragraphs, pages, display items, glyph runs, clusters, navigation edges,
+visual lines, caret stops, ownership regions, and reused-vs-rebuilt counts for painted
+slices, paragraph line sets and semantic block chunks.
+
+On a one-character edit into the 24-page styled fixture:
+
+| Chunk kind | Reused | Rebuilt |
+| --- | --- | --- |
+| Painted slices | 1,381 | 2 |
+| Paragraph line sets | 139 | 1 |
+| Semantic block chunks | 139 | 1 |
+
+Two painted slices rebuild rather than one because the edited paragraph paints as two
+slices; 139/140 on both per-paragraph caches is the store's own structural sharing showing
+through.
+
+**Timings in this section were NOT taken on an idle machine** — a review agent was running
+differential tests concurrently and the same command reported 146 ms against the 126 ms
+measured earlier. The reuse COUNTS are load-independent and stand; the timings in the round-4
+table are the ones taken on an idle machine and should be re-taken with this script before
+being quoted again.

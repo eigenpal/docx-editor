@@ -10,6 +10,7 @@
 /** Stable package identity used by the import-graph / package-authority checks. */
 export const ENGINE_EDITOR_PACKAGE = '@docx-editor.dev/engine-editor' as const;
 
+export { semanticChunkStats } from './semantic-index.ts';
 export { createEditor } from './create-editor.ts';
 export {
   toDisplayPages,
