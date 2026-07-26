@@ -403,24 +403,13 @@ export function buildVisualLines(
    * (106,539), which is the whole point: the key must be cheaper than what it avoids.
    *
    * Read-only state is included because it becomes each edge's `role`.
-   *
-   * `zOrder` is deliberately NOT covered, and this is a known, measured deviation rather
-   * than an oversight. It is a per-PAGE running index over all text items, so a paragraph
-   * earlier on the page gaining or losing a slice shifts every later one: review reproduced
-   * a reused line publishing 3 where a fresh build gives 4. Both fixes cost more than the
-   * cache saves — keying on it collapses reuse within a page for any edit, and re-stamping
-   * it means rebuilding the `interaction` object on all ~106,000 edges, since each edge
-   * carries its own copy. Nothing reads `FragmentInteractionMeta.zOrder` at runtime: hit
-   * testing uses `PositionedInteractionMeta.zOrder` on display items, which is rebuilt every
-   * layout, and `overlayFromPageLocal` reads only writingMode, transform and clip. If a
-   * reader ever appears, this trade has to be revisited.
    */
   const keyByParagraph = new Map<string, string>();
   if (cache && conflictSet.size === 0) {
     const parts = new Map<string, string[]>();
     for (const page of pages) {
-      for (const item of page.items) {
-        if (item.type !== 'text') continue;
+      page.items.forEach((item, zOrder) => {
+        if (item.type !== 'text') return;
         const id = item.anchor.paragraphId;
         let bucket = parts.get(id);
         if (!bucket) {
@@ -429,6 +418,13 @@ export function buildVisualLines(
         }
         bucket.push(
           String(page.index),
+          // STACKING. `zOrder` is the item's page-relative index, so a paragraph earlier on
+          // the page gaining or losing a slice shifts every later one. It is copied into
+          // every one of that line's caret edges, so re-stamping it after reuse would mean
+          // rebuilding ~106,000 interaction objects — more than the cache saves. Keying on
+          // it instead means a structural edit rebuilds the lines after it, which is rare
+          // and is the right trade: history-dependent published geometry is not.
+          String(zOrder),
           String(item.x),
           String(item.y),
           String(item.width),
@@ -436,7 +432,7 @@ export function buildVisualLines(
           String(item.anchor.offset),
           item.text
         );
-      }
+      });
     }
     for (const [id, bucket] of parts) keyByParagraph.set(id, bucket.join('\u001F'));
   }

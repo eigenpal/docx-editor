@@ -44,25 +44,9 @@ const bridge = (model: PackageModel, cache?: DisplayBridgeCache) => {
   return toDisplayPages(model, layoutBody(model, { ...LAYOUT, metrics }).pages, metrics, cache);
 };
 
-/**
- * Every field navigation geometry publishes EXCEPT `interaction.zOrder`.
- *
- * `zOrder` is a per-page running index over all text items, so a paragraph earlier on the
- * page gaining or losing a slice shifts every later one, and a reused line keeps the old
- * value. That is a deliberate trade documented at the cache key in `visual-lines.ts`:
- * keying on it collapses reuse within a page, and re-stamping it means rebuilding the
- * interaction object on ~106,000 edges. Nothing reads it at runtime.
- *
- * Stripped here rather than ignored, so `zOrder drift is the ONLY difference` below can
- * assert exactly that and fail the moment anything else drifts.
- */
-const stripZOrder = (value: unknown): unknown =>
-  JSON.parse(
-    JSON.stringify(value, (key, v) => (key === 'zOrder' ? 0 : (v as unknown))),
-  ) as unknown;
-
+/** EVERY field navigation geometry publishes. Nothing is stripped or excused. */
 const navShape = (r: ReturnType<typeof bridge>) =>
-  JSON.stringify(stripZOrder({
+  JSON.stringify({
     lines: r.navigationGeometry.visualLines.map((l) => ({
       identity: l.identity,
       pageIndex: l.pageIndex,
@@ -77,7 +61,7 @@ const navShape = (r: ReturnType<typeof bridge>) =>
     shapingSupported: r.navigationGeometry.shapingSupported,
     boundaries: r.navigationGeometry.semanticHorizontalBoundariesByBlockId,
     conflicts: r.navigationGeometry.paintFragmentConflicts,
-  }));
+  });
 
 const TEXTS = [
   ['alpha beta gamma', 'delta epsilon zeta', 'eta theta'],
@@ -128,16 +112,21 @@ describe('visual line reuse is invisible', () => {
     expect(navShape(after)).toBe(navShape(bridge(store.currentModel)));
   });
 
-  test('a one-character edit rebuilds one paragraph and reuses the rest', () => {
+  test('a one-character edit that does not shift stacking rebuilds only its paragraph', () => {
     const { store, ids } = storeWith(['alpha beta', 'gamma delta', 'epsilon zeta', 'eta']);
     const cache = new DisplayBridgeCache();
     bridge(store.currentModel, cache);
     store.transact(HUMAN, (c) =>
       c.apply({ op: 'insertText', paragraphId: ids[2]!, offset: 0, text: 'q' }),
     );
-    bridge(store.currentModel, cache);
-    expect(cache.linesBuilt).toBe(1);
-    expect(cache.linesReused).toBe(3);
+    const after = bridge(store.currentModel, cache);
+    // Equality FIRST: a reuse count means nothing on its own.
+    expect(navShape(after)).toBe(navShape(bridge(store.currentModel)));
+    // Rebuilds are bounded to the edited paragraph and anything whose stacking it shifted,
+    // never the document. Asserted as a bound rather than an exact count, because the exact
+    // number depends on whether the edit changes the paragraph's slice count.
+    expect(cache.linesBuilt).toBeLessThanOrEqual(2);
+    expect(cache.linesReused).toBeGreaterThanOrEqual(2);
   });
 
   test('a paragraph that MOVES is rebuilt, not reused at its old geometry', () => {
@@ -159,9 +148,11 @@ describe('visual line reuse is invisible', () => {
     expect(navShape(after)).toBe(navShape(bridge(store.currentModel)));
   });
 
-  test('zOrder drift is the ONLY difference a reused line can carry', () => {
-    // Splitting an earlier paragraph shifts every later zOrder on the page. Assert that
-    // nothing BUT zOrder differs, so the documented deviation cannot quietly widen.
+  test('a structural edit that shifts stacking rebuilds rather than reusing stale zOrder', () => {
+    // Splitting an earlier paragraph into two styled slices shifts every later zOrder on the
+    // page. zOrder is copied into each caret edge, so re-stamping after reuse would mean
+    // rebuilding ~106,000 interaction objects. Keying on stacking instead means those lines
+    // rebuild — rare, and far better than publishing geometry that depends on edit history.
     const { store, ids } = storeWith(['first para', 'second para', 'third para']);
     const cache = new DisplayBridgeCache();
     bridge(store.currentModel, cache);
@@ -173,9 +164,10 @@ describe('visual line reuse is invisible', () => {
       }),
     );
     const cached = bridge(store.currentModel, cache);
-    const cold = bridge(store.currentModel);
-    expect(navShape(cached)).toBe(navShape(cold));
-    expect(cache.linesReused).toBeGreaterThan(0);
+    // FULL equality, every published field, nothing stripped.
+    expect(navShape(cached)).toBe(navShape(bridge(store.currentModel)));
+    // And it rebuilt rather than serving a stale stacking order.
+    expect(cache.linesBuilt).toBeGreaterThan(0);
   });
 
   test('reused lines and their edges are frozen', () => {

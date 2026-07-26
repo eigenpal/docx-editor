@@ -1022,3 +1022,52 @@ differential tests concurrently and the same command reported 146 ms against the
 measured earlier. The reuse COUNTS are load-independent and stand; the timings in the round-4
 table are the ones taken on an idle machine and should be re-taken with this script before
 being quoted again.
+
+## Round 5 — zOrder is no longer history-dependent
+
+The previous round documented `zOrder` drift in reused visual lines as a deliberate trade.
+That was the wrong call: documenting stale published data does not make it safe. Geometry
+that depends on edit history rather than document state is a defect regardless of whether a
+reader exists today.
+
+Fixed by keying the visual-line cache on STACKING. The painted item's page-relative index is
+now part of the per-paragraph key, so a structural edit that adds or removes a slice ahead of
+other paragraphs on the same page rebuilds their lines instead of serving them with a stale
+order. The two alternatives both cost more than the cache saves: re-stamping means rebuilding
+the `interaction` object on ~106,000 caret edges, because every edge carries its own copy,
+and removing `zOrder` from the published contract is a public API change.
+
+`visual-line-cache.test.ts` no longer strips anything. `navShape` compares EVERY published
+field, and the structural-edit test asserts full equality plus a rebuild.
+
+Reuse on a one-character edit into the 24-page fixture, after the change:
+
+| Chunk kind | Reused | Rebuilt |
+| --- | --- | --- |
+| Painted slices | 1,381 | 2 |
+| Paragraph line sets | 131 | 9 |
+| Semantic block chunks | 139 | 1 |
+
+Line-set reuse falls from 139 to 131 because this edit changes the edited paragraph's slice
+count, which shifts stacking for the eight paragraphs after it on its page. That is the
+intended trade.
+
+## Benchmark provenance — the alternating A/B is NOT done
+
+Two attempts, both invalid, both discarded rather than reported:
+
+1. A detached worktree at the pre-change commit resolves `@docx-editor.dev/*` through the
+   shared `node_modules`, which symlinks back to the working tree's `packages/`. Both arms
+   ran the CURRENT engine and reported ~146 ms each.
+2. Rewriting the harness to import the worktree's own sources fails at the pre-change
+   commit, because that commit has no `DisplayBridgeCache` for the harness to construct.
+
+A valid alternating A/B needs a harness that compiles against both arms — i.e. the cache
+passed optionally, which the production signature already supports but the scratch harness
+does not. Until that exists, the ratio rests on sequential runs taken on an idle machine, and
+the absolute baseline remains soft. Independent review measured the pre-change total nearer
+508 ms than 519.8 ms, which puts the 4x threshold at ~127 ms rather than ~130 ms.
+
+Every timing taken while a review agent was running is contaminated — the same command
+reported 126 ms idle and 135-154 ms under load. Only idle numbers are quoted in the tables
+above, and the reuse COUNTS are load-independent.
