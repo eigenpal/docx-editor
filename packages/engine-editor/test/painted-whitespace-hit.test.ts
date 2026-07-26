@@ -30,6 +30,7 @@ import {
   clientPointForStackedText,
   modelWith,
   modelWithTableCell,
+  modelWithRunSplit,
   publishFrame,
   LAYOUT,
 } from './interaction-test-helpers.ts';
@@ -410,5 +411,72 @@ describe('painted whitespace hit testing (renderer run grouping phase 2)', () =>
     expect(stale.ok).toBe(false);
     if (stale.ok) throw new Error('stale');
     expect(stale.code).toBe('staleFrame');
+  });
+});
+
+// Two caret defects independent review measured after run grouping. Both come from the
+// same place: a line is now routinely SEVERAL painted items (style split, tab split, and a
+// blank line's full-width placeholder emitted ahead of its painted spaces), and caret
+// derivation used to answer from the first item that could produce a box at all.
+describe('caret geometry picks the right item on a multi-item line', () => {
+  const caretXs = (frame: InteractionFrame, offsets: readonly number[]) => {
+    const block = frame.semanticIndex.stories[0]!.blocks[0]!;
+    return offsets.map((graphemeOffset) => {
+      const geometry = deriveCaretGeometry(frame, {
+        kind: 'text',
+        scope: { kind: 'body' },
+        identity: block.identity,
+        graphemeOffset,
+        affinity: graphemeOffset === 0 ? 'downstream' : 'upstream',
+      });
+      return geometry ? Math.round(geometry.rect.x * 100) / 100 : null;
+    });
+  };
+
+  test('a blank line advances the caret across its spaces instead of pinning it', () => {
+    // The full-width placeholder has no clusters, so it used to answer for EVERY offset:
+    // 0..2 all landed on its left edge and 3 on the right content margin, 612 px away.
+    const frame = publishFrame(modelWith(['   ']));
+    const xs = caretXs(frame, [0, 1, 2, 3]);
+    expect(xs.every((x) => x !== null)).toBe(true);
+    for (let i = 1; i < xs.length; i += 1) expect(xs[i]!).toBeGreaterThan(xs[i - 1]!);
+    // And the last one is at the end of the painted spaces, not at the content margin.
+    const painted = paintedItems(frame).find((item) => itemText(item).length > 0)!;
+    expect(xs[3]!).toBeCloseTo(painted.box.x + painted.box.width, 1);
+  });
+
+  test('an empty paragraph still resolves its single caret', () => {
+    const frame = publishFrame(modelWith(['']));
+    expect(caretXs(frame, [0])[0]).not.toBeNull();
+  });
+
+  test('end-of-paragraph caret lands after the LAST piece of a tab-split line', () => {
+    // 'ab\tcd' paints as three items. The end caret used to resolve against the first
+    // item's last cluster and sat at the right edge of "ab".
+    const frame = publishFrame(modelWith(['ab\tcd']));
+    const items = paintedItems(frame);
+    expect(items).toHaveLength(3);
+    const rightmost = items.reduce((a, b) => (a.box.x + a.box.width >= b.box.x + b.box.width ? a : b));
+    const block = frame.semanticIndex.stories[0]!.blocks[0]!;
+    const end = caretXs(frame, [block.graphemeCount])[0];
+    expect(end).toBeCloseTo(rightmost.box.x + rightmost.box.width, 1);
+  });
+
+  test('end-of-paragraph caret lands after the last piece of a STYLE-split line too', () => {
+    const frame = publishFrame(modelWithRunSplit(['plain ', 'more']));
+    const block = frame.semanticIndex.stories[0]!.blocks[0]!;
+    const items = paintedItems(frame);
+    const rightmost = items.reduce((a, b) => (a.box.x + a.box.width >= b.box.x + b.box.width ? a : b));
+    expect(caretXs(frame, [block.graphemeCount])[0]).toBeCloseTo(
+      rightmost.box.x + rightmost.box.width,
+      1,
+    );
+  });
+
+  test('interior carets on a tab-split line stay in ascending order', () => {
+    const frame = publishFrame(modelWith(['ab\tcd']));
+    const xs = caretXs(frame, [0, 1, 2, 3, 4, 5]);
+    expect(xs.every((x) => x !== null)).toBe(true);
+    for (let i = 1; i < xs.length; i += 1) expect(xs[i]!).toBeGreaterThan(xs[i - 1]!);
   });
 });

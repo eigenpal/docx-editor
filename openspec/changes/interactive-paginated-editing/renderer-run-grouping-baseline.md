@@ -680,3 +680,87 @@ An honest control needs an isolated `bun install`, which is blocked by the pre-e
 project notes. Until that is resolved, the correct claim is: **this set is unchanged in
 membership across every commit in this phase, and no failure in it names a file this phase
 edits** — not that it is proven pre-existing.
+
+## Incremental phase, round 2 — chunk reuse, and CORRECTIONS to round 1
+
+### Corrections forced by independent review
+
+- **The "421.1 ms / 1.23x" total was not supported.** Review re-measured the same two
+  commits over 7-9 samples and got ~446 ms after, not 421.1 — a real ratio of about
+  **1.16x**. The publication claim (258.9 -> ~190 ms) DID reproduce; the total did not, and
+  the claimed 98.7 ms total delta exceeded the 68.6 ms publication delta it was attributed
+  to, which should have been caught by arithmetic alone. The supporting sentence
+  "the remaining 421 ms is bridge (216 ms) plus publication (190 ms)" also does not add up
+  and silently drops layout and store.
+- **The commit message for `checkpoint-9bd2b354` says 191.6 / 423.1 while the doc said 190.3 / 421.1**
+  for the same measurement. Neither is authoritative; the reproduced figures are.
+- **The step-1 profile is labelled `checkpoint-609fca41` but is a post-grouping run.** At the real
+  `checkpoint-609fca41` there are 11,243 display items and the total is 587.3 ms. The 519.8 ms figure
+  belongs with the 1,383-item table beneath it, i.e. at `checkpoint-6bb2b6ec`. The
+  "Linear scan (`checkpoint-609fca41`) 0.84 ms" row carries the same wrong label, and that 0.84 ms is
+  target-dependent: a target in the LAST block medians 2.25 ms. The caret-stop decision
+  still holds on the corrected numbers, but the argument is 4x, not 20x.
+- The retraction of the non-additive freeze sub-timings was itself checked and is correct:
+  reproduced, the three independently measured numbers sum to 475.8 ms against an actual
+  `publishLayout` of 259.4 ms on the same frame.
+
+### Two caret defects the review measured, both now fixed
+
+Grouping makes a line SEVERAL painted items — a style split, the tab split, and a blank
+line's full-width placeholder emitted ahead of its painted spaces. `caretRectForTextTarget`
+answered from the first item that could produce a box at all, and its two paragraph-level
+fallbacks therefore fired on the wrong item:
+
+- `'   '` put offsets 0, 1 and 2 all at x=96 and offset 3 at x=720, the right content
+  margin, against a correct 96/100/104/108. Arrow-right did not move the caret and End
+  jumped 612 px. Selection geometry over the same range stayed correct, so the caret
+  disagreed with its own selection.
+- `'ab\tcd'` put the end-of-paragraph caret at 112 instead of 135.2; `'a\t\tb'` at 104
+  instead of 128. The consumer bug predates grouping (a style split already did it) but the
+  tab split newly makes every tab-containing paragraph hit it.
+
+Fixed by ranking across all items instead of taking the first: a cluster that CONTAINS the
+offset always wins; otherwise an end-of-paragraph fallback resolves against the item
+reaching furthest into the paragraph; and a zero-cluster placeholder answers only when the
+block painted no clusters at all.
+
+### Chunk reuse
+
+`BlockSemanticChunk` carries everything a block contributes that depends only on the block —
+identity, grapheme/UTF-16 counts, read-only state, word segments, caret stops and
+content-derived ownership regions — frozen at construction. `orderIndex` is deliberately
+excluded, because it is the block's position and changes when an earlier block is inserted
+while everything else stays valid.
+
+Keyed on the PARAGRAPH RECORD OBJECT. `DocumentStore` applies operations with structural
+sharing, measured at 137 of 140 records retaining identity across a one-character edit, so
+the record is an exact key: it captures text and run properties with no hashing and cannot
+serve a stale hit, because any change produces a new object. The secondary key covers story
+id, scope, read-only state and the word-boundary instance.
+
+Cluster reuse in the display bridge is keyed the same way in spirit — a fingerprint of the
+painted slice (paragraph, UTF-16 span, box, text) — and on a one-character edit **1,382 of
+1,383 slices reuse and 1 rebuilds**.
+
+### Measured, same machine, 9 samples, three repeats
+
+| Stage | `checkpoint-6bb2b6ec` | Now |
+| --- | --- | --- |
+| Store apply | 0.4 ms | 0.4 ms |
+| `layoutBody` | 26.6 ms | ~27 ms |
+| Bridge | 235.8 ms | **190.8 / 197.4 / 191.6 ms** |
+| Publication | 258.9 ms | **141.3 / 144.4 / 140.9 ms** |
+| **Total** | **519.8 ms** | **358.7 / 361.3 / 360.5 ms** |
+
+**1.44x. The 4x gate (<= 130 ms) is NOT met.**
+
+### What is left, and why chunking alone did not reach it
+
+Reuse now covers clusters and the semantic index. It does NOT cover navigation geometry:
+`buildVisualLines` still rebuilds all **106,539** caret edges every layout, and that is the
+largest single remaining item. Per-line navigation chunks are the next step.
+
+The flat arrays are also still concatenated eagerly. That is cheaper than it sounds — one
+allocation and a pointer copy, against constructing the objects — and the freeze walk over
+them short-circuits per element now that chunks are frozen. But it is still an O(document)
+traversal per keystroke, and a lazy per-block view is what removes it.

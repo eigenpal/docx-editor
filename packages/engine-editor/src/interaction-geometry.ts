@@ -608,20 +608,19 @@ function caretRectForLineWhitespace(
   };
 }
 
-function caretBoxForTargetOnItem(
+/**
+ * Caret box from a cluster that actually CONTAINS the offset, or null.
+ *
+ * This is the only answer that is unambiguously about this item. The two fallbacks that
+ * used to live here — a zero-cluster item, and an offset at or past the paragraph end —
+ * are answers about the PARAGRAPH, and returning them from the first item scanned is what
+ * made them wrong. They now live in `caretBoxFallbackOnItem` and are ranked across all
+ * items by the caller.
+ */
+function caretBoxFromClusters(
   target: Extract<SemanticTarget, { kind: 'text' }>,
-  block: NonNullable<ReturnType<typeof blockRecord>>,
   item: Extract<DisplayItem, { kind: 'text' }>
 ): Rect | null {
-  if (item.clusters.length === 0) {
-    const atEnd = target.graphemeOffset >= block.graphemeCount;
-    return {
-      x: atEnd ? item.box.x + item.box.width : item.box.x,
-      y: item.box.y,
-      width: 1,
-      height: item.box.height,
-    };
-  }
   for (const cluster of item.clusters) {
     if (target.graphemeOffset < cluster.graphemeFrom || target.graphemeOffset > cluster.graphemeTo)
       continue;
@@ -633,9 +632,57 @@ function caretBoxForTargetOnItem(
       height: cluster.box.height,
     };
   }
+  return null;
+}
+
+/**
+ * Paragraph-level fallback for an offset no cluster of THIS item contains.
+ *
+ * Two shapes, and both were previously returned by whichever item happened to be scanned
+ * first, which independent review measured as two live caret defects:
+ *
+ *  - A zero-cluster item. A blank line's full-width placeholder is exactly that, and it is
+ *    emitted BEFORE the line's painted spaces so that painted clusters win a hit test. In
+ *    caret derivation there is no z-order, only array order, so the placeholder answered
+ *    for every offset: `'   '` put offsets 0..2 all at x=96 and offset 3 at x=720, the
+ *    right content margin, against a correct 96/100/104/108. Arrow-right did not move the
+ *    caret and End jumped 612 px.
+ *  - An offset at or past the paragraph end. Grouping already split a line at a style
+ *    change, and the tab fix splits it again, so a line is routinely several items; the
+ *    first one's last cluster is not the end of the paragraph. `'ab\tcd'` put the End
+ *    caret at 112 instead of 135.2.
+ *
+ * Ranked by the caller instead: a real cluster beats any fallback, an end-of-paragraph
+ * fallback resolves against the LAST cluster in the block, and a placeholder answers only
+ * when the block painted no clusters at all.
+ */
+function caretBoxFallbackOnItem(
+  target: Extract<SemanticTarget, { kind: 'text' }>,
+  block: NonNullable<ReturnType<typeof blockRecord>>,
+  item: Extract<DisplayItem, { kind: 'text' }>
+): { rect: Rect; kind: 'placeholder' | 'paragraphEnd'; rank: number } | null {
+  if (item.clusters.length === 0) {
+    const atEnd = target.graphemeOffset >= block.graphemeCount;
+    return {
+      rect: {
+        x: atEnd ? item.box.x + item.box.width : item.box.x,
+        y: item.box.y,
+        width: 1,
+        height: item.box.height,
+      },
+      kind: 'placeholder',
+      rank: 0,
+    };
+  }
   if (target.graphemeOffset >= block.graphemeCount) {
     const last = item.clusters[item.clusters.length - 1]!;
-    return { x: last.box.x + last.box.width, y: last.box.y, width: 1, height: last.box.height };
+    return {
+      rect: { x: last.box.x + last.box.width, y: last.box.y, width: 1, height: last.box.height },
+      kind: 'paragraphEnd',
+      // Rank by how far into the paragraph this item reaches, so the LAST piece of the
+      // last line wins rather than the first piece of the first one.
+      rank: last.graphemeTo,
+    };
   }
   return null;
 }
@@ -688,7 +735,10 @@ export function displayBackedCaretOverlay(
     for (const item of page.items) {
       if (item.kind !== 'text' || item.semantic.identity.blockId !== target.identity.blockId)
         continue;
-      const caretBox = caretBoxForTargetOnItem(target, block, item);
+      const caretBox =
+        caretBoxFromClusters(target, item) ??
+        caretBoxFallbackOnItem(target, block, item)?.rect ??
+        null;
       if (!caretBox) continue;
       const overlay = overlayFromPageLocal(frame, page.index, caretBox, item.interaction);
       if (overlay === 'singular') return 'singular';
@@ -752,23 +802,55 @@ function caretRectForTextTarget(
   );
   if (!stop || stop.role !== 'editableText') return null;
 
+  // Scan EVERY item of the block before answering. A cluster that contains the offset is
+  // the answer; otherwise the best-ranked paragraph-level fallback is, and a placeholder
+  // only counts when the block painted no clusters at all.
+  let best: {
+    rect: Rect;
+    kind: 'placeholder' | 'paragraphEnd';
+    rank: number;
+    pageIndex: number;
+    item: Extract<DisplayItem, { kind: 'text' }>;
+  } | null = null;
+  let blockHasClusters = false;
   for (const page of frame.display) {
     for (const item of page.items) {
       if (item.kind !== 'text' || item.semantic.identity.blockId !== target.identity.blockId)
         continue;
-      const caretBox = caretBoxForTargetOnItem(target, block, item);
-      if (!caretBox) continue;
-      const overlay = overlayFromPageLocal(frame, page.index, caretBox, item.interaction);
-      if (overlay === 'singular' || !overlay) continue;
+      if (item.clusters.length > 0) blockHasClusters = true;
+      const exact = caretBoxFromClusters(target, item);
+      if (exact) {
+        const overlay = overlayFromPageLocal(frame, page.index, exact, item.interaction);
+        if (overlay === 'singular' || !overlay) continue;
+        return {
+          frameId: frame.id,
+          rect: overlay.rect,
+          pageIndex: page.index,
+          writingDirection: item.interaction?.writingDirection ?? 'ltr',
+          writingMode: HORIZONTAL_WRITING_MODE,
+          affinity: target.affinity,
+          clip: overlay.clip,
+          transform: item.interaction?.transform,
+        };
+      }
+      const fallback = caretBoxFallbackOnItem(target, block, item);
+      if (fallback && (!best || fallback.rank > best.rank)) {
+        best = { ...fallback, pageIndex: page.index, item };
+      }
+    }
+  }
+  if (best && !(best.kind === 'placeholder' && blockHasClusters)) {
+    const overlay = overlayFromPageLocal(frame, best.pageIndex, best.rect, best.item.interaction);
+    if (overlay !== 'singular' && overlay) {
       return {
         frameId: frame.id,
         rect: overlay.rect,
-        pageIndex: page.index,
-        writingDirection: item.interaction?.writingDirection ?? 'ltr',
+        pageIndex: best.pageIndex,
+        writingDirection: best.item.interaction?.writingDirection ?? 'ltr',
         writingMode: HORIZONTAL_WRITING_MODE,
         affinity: target.affinity,
         clip: overlay.clip,
-        transform: item.interaction?.transform,
+        transform: best.item.interaction?.transform,
       };
     }
   }

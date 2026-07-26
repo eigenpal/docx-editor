@@ -27,6 +27,7 @@ import type {
   OwnershipRegion,
   SemanticIdentity,
   SemanticPositionIndex,
+  WordSegmentRecord,
   SemanticTarget,
   SemanticTextSpan,
   StorySemanticIndex,
@@ -177,6 +178,140 @@ function whitespaceSubranges(
   return out;
 }
 
+/**
+ * Everything a block contributes to the semantic index that depends only on the block.
+ *
+ * A one-character edit changes ONE paragraph, but the index was rebuilt whole on every
+ * keystroke: 106,913 caret stops, 11,391 ownership regions and a word segmentation for
+ * every paragraph in the document. None of that depends on where the block sits on a page —
+ * only on its text, its scope and whether it is read-only.
+ *
+ * `orderIndex` is deliberately NOT part of a chunk. It is the block's position in the story
+ * and changes when an earlier block is inserted or removed, while everything else here
+ * stays valid, so the record is re-stamped per layout around shared arrays.
+ */
+export interface BlockSemanticChunk {
+  readonly identity: SemanticIdentity;
+  readonly graphemeCount: number;
+  readonly utf16Length: number;
+  readonly empty: boolean;
+  readonly readOnly: boolean;
+  readonly wordSegments: readonly WordSegmentRecord[];
+  readonly caretStops: readonly CaretStop[];
+  /** Content-derived regions only; boxes are attached later from layout geometry. */
+  readonly ownershipRegions: readonly OwnershipRegion[];
+}
+
+/**
+ * Chunk reuse keyed on the PARAGRAPH RECORD OBJECT.
+ *
+ * `DocumentStore` applies operations with structural sharing, so an untouched paragraph
+ * keeps its identity across a commit — measured at 137 of 140 records on a one-character
+ * edit into the 24-page styled fixture. That makes the record itself an exact key: it
+ * captures text and run properties with no hashing and no chance of a stale hit, because
+ * any change to the paragraph produces a new object.
+ *
+ * The secondary key covers everything outside the paragraph that a chunk depends on. Scope
+ * and story id are embedded in every caret stop and region; read-only state changes whether
+ * caret stops exist at all; and the word boundary is what `wordSegments` was segmented
+ * with. Getting any of those wrong would serve a chunk built for a different context.
+ */
+interface CachedChunk {
+  readonly key: string;
+  /**
+   * Compared by REFERENCE. `WordBoundary` is a bare `{ segment }` interface with nothing to
+   * key on, and `resolveDefaultWordBoundary` memoizes its instance, so identity is both
+   * stable in production and correctly distinguishing when a test injects its own.
+   */
+  readonly boundary: WordBoundary;
+  readonly chunk: BlockSemanticChunk;
+}
+
+const chunkCache = new WeakMap<ParagraphRecord, CachedChunk>();
+
+function chunkKey(storyId: string, scope: ViewScope, readOnly: boolean): string {
+  return [storyId, scope.kind, readOnly ? 'ro' : 'rw'].join('\u001F');
+}
+
+function blockChunk(
+  storyId: string,
+  scope: ViewScope,
+  paragraph: ParagraphRecord,
+  readOnly: boolean,
+  wordBoundary: WordBoundary
+): BlockSemanticChunk {
+  const key = chunkKey(storyId, scope, readOnly);
+  const cached = chunkCache.get(paragraph);
+  if (cached && cached.key === key && cached.boundary === wordBoundary) return cached.chunk;
+
+  const text = paragraphText(paragraph);
+  const id = identity(storyId, paragraph.id);
+  const base = {
+    identity: id,
+    orderIndex: 0,
+    graphemeCount: graphemeCount(text),
+    utf16Length: text.length,
+    empty: text.length === 0,
+    readOnly,
+    wordSegments: wordSegmentsToGraphemeRecords(text, segmentWords(text, wordBoundary)),
+  } satisfies BlockSemanticRecord;
+
+  const chunk: BlockSemanticChunk = {
+    identity: id,
+    graphemeCount: base.graphemeCount,
+    utf16Length: base.utf16Length,
+    empty: base.empty,
+    readOnly,
+    wordSegments: base.wordSegments,
+    caretStops: caretStopsForParagraph(scope, base),
+    ownershipRegions: contentOwnershipRegions(scope, id, text, readOnly, base.empty),
+  };
+  // Frozen at construction so publication's freeze walk stops here on every later reuse.
+  deepFreezeChunk(chunk);
+  chunkCache.set(paragraph, { key, boundary: wordBoundary, chunk });
+  return chunk;
+}
+
+/** Recursive freeze, local so this module does not depend on the frame store. */
+function deepFreezeChunk(value: unknown): void {
+  if (value === null || typeof value !== 'object') return;
+  if (Object.isFrozen(value)) return;
+  if (Array.isArray(value)) {
+    for (const item of value) deepFreezeChunk(item);
+    Object.freeze(value);
+    return;
+  }
+  const record = value as Record<string, unknown>;
+  for (const k of Object.keys(record)) deepFreezeChunk(record[k]);
+  Object.freeze(value);
+}
+
+/** Paragraph, lineWhitespace and trailing regions for one block, without geometry. */
+function contentOwnershipRegions(
+  scope: ViewScope,
+  id: SemanticIdentity,
+  text: string,
+  readOnly: boolean,
+  empty: boolean
+): OwnershipRegion[] {
+  const role = textRole(readOnly);
+  const regions: OwnershipRegion[] = [{ scope, identity: id, role, kind: 'paragraph' }];
+  for (const sub of whitespaceSubranges(text)) {
+    regions.push({
+      scope,
+      identity: id,
+      role,
+      kind: 'lineWhitespace',
+      utf16From: sub.utf16From,
+      utf16To: sub.utf16To,
+      graphemeFrom: utf16OffsetToGrapheme(text, sub.utf16From),
+      graphemeTo: utf16OffsetToGrapheme(text, sub.utf16To),
+    });
+  }
+  if (!empty) regions.push({ scope, identity: id, role, kind: 'trailing' });
+  return regions;
+}
+
 function buildBlockRecords(
   storyId: string,
   located: readonly LocatedParagraph[],
@@ -233,45 +368,6 @@ export function buildTraversalLinks(
   return links;
 }
 
-function paragraphRegions(
-  scope: ViewScope,
-  paragraphs: readonly ParagraphRecord[],
-  records: readonly BlockSemanticRecord[]
-): OwnershipRegion[] {
-  const regions: OwnershipRegion[] = [];
-  for (let i = 0; i < records.length; i += 1) {
-    const record = records[i]!;
-    const text = paragraphText(paragraphs[i]!);
-    regions.push({
-      scope,
-      identity: record.identity,
-      role: textRole(record.readOnly),
-      kind: 'paragraph',
-    });
-    for (const sub of whitespaceSubranges(text)) {
-      regions.push({
-        scope,
-        identity: record.identity,
-        role: textRole(record.readOnly),
-        kind: 'lineWhitespace',
-        utf16From: sub.utf16From,
-        utf16To: sub.utf16To,
-        graphemeFrom: utf16OffsetToGrapheme(text, sub.utf16From),
-        graphemeTo: utf16OffsetToGrapheme(text, sub.utf16To),
-      });
-    }
-    if (!record.empty) {
-      regions.push({
-        scope,
-        identity: record.identity,
-        role: textRole(record.readOnly),
-        kind: 'trailing',
-      });
-    }
-  }
-  return regions;
-}
-
 function structuralRegions(
   storyId: string,
   scope: ViewScope,
@@ -302,11 +398,24 @@ export function buildSemanticIndex(
   const located: LocatedParagraph[] = [];
   walkParagraphs(story.blocks, { inTopLevelBodyFlow: true, inTableCell: false }, located);
 
-  const { records, paragraphs } = buildBlockRecords(storyId, located, wordBoundary);
+  // Assemble from per-block chunks so an untouched paragraph contributes the SAME frozen
+  // caret-stop, ownership-region and word-segment arrays it contributed last layout.
+  const chunks = located.map(({ paragraph, context }) =>
+    blockChunk(storyId, scope, paragraph, !paragraphEditableInLane(context), wordBoundary)
+  );
+  const records: BlockSemanticRecord[] = chunks.map((chunk, orderIndex) => ({
+    identity: chunk.identity,
+    orderIndex,
+    graphemeCount: chunk.graphemeCount,
+    utf16Length: chunk.utf16Length,
+    empty: chunk.empty,
+    readOnly: chunk.readOnly,
+    wordSegments: chunk.wordSegments,
+  }));
   const storyIndex: StorySemanticIndex = { storyId, scope, blocks: records };
-  const caretStops = records.flatMap((b) => caretStopsForParagraph(scope, b));
+  const caretStops = chunks.flatMap((chunk) => chunk.caretStops);
   const ownershipRegions = [
-    ...paragraphRegions(scope, paragraphs, records),
+    ...chunks.flatMap((chunk) => chunk.ownershipRegions),
     ...structuralRegions(storyId, scope, story.blocks),
   ];
 
