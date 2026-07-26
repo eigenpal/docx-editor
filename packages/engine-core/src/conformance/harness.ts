@@ -55,18 +55,26 @@ export function replayFixture(fixture: ConformanceFixture, store: ReplayStore): 
     }
     if (want.outcome === 'applied') {
       if (got.committedRevision !== want.committedRevision) {
-        mismatches.push(`${at}: revision ${got.committedRevision} != expected ${want.committedRevision}`);
+        mismatches.push(
+          `${at}: revision ${got.committedRevision} != expected ${want.committedRevision}`
+        );
       }
       if (want.authoredStateHash !== undefined) {
         if (got.authoredState === undefined) {
           mismatches.push(`${at}: store returned no authored state to hash`);
         } else {
           // Compare the fixture's frozen hash by re-deriving via the comparator.
-          const fresh = compareArtifacts('authoredState', got.authoredState, got.authoredState).equal;
+          const fresh = compareArtifacts(
+            'authoredState',
+            got.authoredState,
+            got.authoredState
+          ).equal;
           if (!fresh) mismatches.push(`${at}: authored state is not self-consistent`);
           const actual = hashAuthored(got.authoredState);
           if (actual !== want.authoredStateHash) {
-            mismatches.push(`${at}: authoredStateHash ${actual} != expected ${want.authoredStateHash}`);
+            mismatches.push(
+              `${at}: authoredStateHash ${actual} != expected ${want.authoredStateHash}`
+            );
           }
         }
       }

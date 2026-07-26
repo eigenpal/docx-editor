@@ -11,7 +11,9 @@
 const HREF_SCHEMES = new Set(['http', 'https', 'mailto', 'tel', 'ftp']);
 const SCHEME_RE = /^([a-zA-Z][a-zA-Z0-9+.-]*):/;
 
-export type HrefProjection = { readonly ok: true; readonly href: string } | { readonly ok: false; readonly inert: true };
+export type HrefProjection =
+  | { readonly ok: true; readonly href: string }
+  | { readonly ok: false; readonly inert: true };
 
 /**
  * Project a file-derived URL for a DOM/navigation sink. Strips embedded
@@ -109,7 +111,17 @@ export function isInertExecutable(kind: string): boolean {
 
 // Allowlisted pure internal field instructions that MAY be evaluated (design
 // D14); everything else — DDE, INCLUDETEXT, INCLUDEPICTURE, MACROBUTTON — is inert.
-const EVALUABLE_FIELDS = new Set(['PAGE', 'NUMPAGES', 'PAGEREF', 'REF', 'SEQ', 'TOC', 'DATE', 'TIME', 'STYLEREF']);
+const EVALUABLE_FIELDS = new Set([
+  'PAGE',
+  'NUMPAGES',
+  'PAGEREF',
+  'REF',
+  'SEQ',
+  'TOC',
+  'DATE',
+  'TIME',
+  'STYLEREF',
+]);
 
 /** Whether a field instruction's leading keyword is safe to evaluate. */
 export function isEvaluableField(instruction: string): boolean {

@@ -15,7 +15,7 @@ import { IdentityAllocator } from './identity.ts';
 /** Append an empty paragraph to a story; returns the updated model and new id. */
 export function appendParagraph(
   model: PackageModel,
-  storyId: string,
+  storyId: string
 ): { model: PackageModel; paragraphId: string } {
   const story = model.stories.get(storyId);
   if (!story) throw new Error(`unknown story ${storyId}`);
@@ -36,7 +36,7 @@ export function insertParagraph(
   model: PackageModel,
   storyId: string,
   index: number,
-  runs: readonly RunRecord[],
+  runs: readonly RunRecord[]
 ): { model: PackageModel; paragraphId: string } {
   const story = model.stories.get(storyId);
   if (!story) throw new Error(`unknown story ${storyId}`);
@@ -58,7 +58,7 @@ export function insertTextIntoParagraph(
   model: PackageModel,
   paragraphId: string,
   text: string,
-  props?: RunRecord['props'],
+  props?: RunRecord['props']
 ): PackageModel {
   for (const [storyId, story] of model.stories) {
     const idx = story.blocks.findIndex((b) => b.kind === 'paragraph' && b.id === paragraphId);
@@ -79,7 +79,7 @@ export function insertTextIntoParagraph(
 export function setParagraphRuns(
   model: PackageModel,
   paragraphId: string,
-  runs: readonly RunRecord[],
+  runs: readonly RunRecord[]
 ): PackageModel {
   for (const [storyId, story] of model.stories) {
     const idx = story.blocks.findIndex((b) => b.kind === 'paragraph' && b.id === paragraphId);

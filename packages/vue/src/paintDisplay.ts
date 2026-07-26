@@ -22,7 +22,7 @@ import {
 export function paintDisplay(
   pages: readonly DisplayPage[],
   overlays?: FrameOverlays,
-  clickTarget?: GlyphClickTarget | null,
+  clickTarget?: GlyphClickTarget | null
 ): VNode[] {
   return pages.map((page) =>
     h(
@@ -31,7 +31,11 @@ export function paintDisplay(
         key: page.index,
         'data-page-index': page.index,
         class: 'ep-one-surface__page',
-        style: { position: 'relative', width: `${page.box.width}px`, height: `${page.box.height}px` },
+        style: {
+          position: 'relative',
+          width: `${page.box.width}px`,
+          height: `${page.box.height}px`,
+        },
       },
       [
         h(
@@ -41,9 +45,11 @@ export function paintDisplay(
             paintItem(
               item,
               i,
-              clickTarget?.pageIndex === page.index && clickTarget.itemIndex === i ? clickTarget : null,
-            ),
-          ),
+              clickTarget?.pageIndex === page.index && clickTarget.itemIndex === i
+                ? clickTarget
+                : null
+            )
+          )
         ),
         ...(overlays ? [paintOverlayLayer(page.index, overlays)] : []),
       ]
@@ -73,7 +79,11 @@ function paintOverlayLayer(pageIndex: number, overlays: FrameOverlays): VNode {
   const rects = overlays.selection.filter((box) => box.pageIndex === pageIndex);
   return h('div', { class: 'ep-one-surface__overlay' }, [
     ...rects.map((box, i) =>
-      h('div', { key: `sel.${i}`, class: 'ep-one-surface__selection-rect', style: overlayStyle(box) })
+      h('div', {
+        key: `sel.${i}`,
+        class: 'ep-one-surface__selection-rect',
+        style: overlayStyle(box),
+      })
     ),
     ...(caret
       ? [
@@ -87,7 +97,11 @@ function paintOverlayLayer(pageIndex: number, overlays: FrameOverlays): VNode {
   ]);
 }
 
-function paintItem(item: DisplayItem, key: number, clickTarget: GlyphClickTarget | null = null): VNode[] {
+function paintItem(
+  item: DisplayItem,
+  key: number,
+  clickTarget: GlyphClickTarget | null = null
+): VNode[] {
   switch (item.kind) {
     case 'text':
       return item.runs.map((run, r) => {

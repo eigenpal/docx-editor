@@ -8,7 +8,7 @@ export class LimitExceededError extends Error {
   constructor(
     readonly label: string,
     readonly limit: number,
-    readonly attempted: number,
+    readonly attempted: number
   ) {
     super(`${label}: attempted ${attempted} exceeds limit ${limit}`);
     this.name = 'LimitExceededError';
@@ -20,7 +20,7 @@ export class BoundedCounter {
 
   constructor(
     readonly label: string,
-    readonly limit: number,
+    readonly limit: number
   ) {
     if (!Number.isFinite(limit) || limit < 0) {
       throw new Error(`BoundedCounter limit must be a finite non-negative number, got ${limit}`);

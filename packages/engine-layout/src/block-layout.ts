@@ -58,7 +58,8 @@ export function layoutBlock(block: Block, ctx: BlockLayoutContext): void {
 export type BlockDependencies = (block: Block) => readonly DependencyKey[];
 const dependencyRegistry = new Map<string, BlockDependencies>();
 export function registerBlockDependencies(kind: string, fn: BlockDependencies): void {
-  if (dependencyRegistry.has(kind)) throw new Error(`duplicate block dependency declaration for kind '${kind}'`);
+  if (dependencyRegistry.has(kind))
+    throw new Error(`duplicate block dependency declaration for kind '${kind}'`);
   dependencyRegistry.set(kind, fn);
 }
 /** The resolution dependencies a block reads (empty when the kind declared none), DEDUPED by key —
@@ -83,7 +84,8 @@ export function registerBlockSemanticRole(kind: string, role: string): void {
   if (semanticRoleRegistry.has(kind)) throw new Error(`duplicate semantic role for kind '${kind}'`);
   semanticRoleRegistry.set(kind, role);
 }
-export const blockSemanticRole = (kind: string): string | undefined => semanticRoleRegistry.get(kind);
+export const blockSemanticRole = (kind: string): string | undefined =>
+  semanticRoleRegistry.get(kind);
 
 /** Hit ownership: the block that owns a hit is the one identified by the anchor a layout item
  *  carries (anchor.paragraphId). This is the single hit-ownership rule — a block owns exactly the
@@ -92,7 +94,8 @@ export const blockSemanticRole = (kind: string): string | undefined => semanticR
 export const hitOwner = (anchor: { paragraphId: string }): string => anchor.paragraphId;
 
 /** Whether a block kind has registered its resolution-dependency + semantic-role lanes (3.6). */
-export const hasLayoutMetadata = (kind: string): boolean => dependencyRegistry.has(kind) && semanticRoleRegistry.has(kind);
+export const hasLayoutMetadata = (kind: string): boolean =>
+  dependencyRegistry.has(kind) && semanticRoleRegistry.has(kind);
 
 /** Whether a block kind has a registered layout handler. */
 export const hasBlockLayout = (kind: string): boolean => registry.has(kind);
@@ -106,6 +109,8 @@ export const hasBlockLayout = (kind: string): boolean => registry.has(kind);
 export function assertLayoutLaneComplete(): void {
   const missing = registeredBlockKinds().filter((kind) => !registry.has(kind));
   if (missing.length > 0) {
-    throw new Error(`layout lane incomplete — no layout handler for block kind(s): ${missing.join(', ')}`);
+    throw new Error(
+      `layout lane incomplete — no layout handler for block kind(s): ${missing.join(', ')}`
+    );
   }
 }

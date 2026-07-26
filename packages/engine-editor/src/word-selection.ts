@@ -11,7 +11,7 @@ export function resolveWordRangeAtHit(
   wordSegments: readonly WordSegmentRecord[],
   graphemeOffset: number,
   affinity: InteractionAffinity,
-  paragraphGraphemeCount: number,
+  paragraphGraphemeCount: number
 ): { readonly graphemeFrom: number; readonly graphemeTo: number } {
   if (paragraphGraphemeCount === 0) {
     return { graphemeFrom: 0, graphemeTo: 0 };
@@ -38,7 +38,7 @@ export function resolveWordRangeAtHit(
   }
 
   const containing = wordSegments.find(
-    (seg) => seg.graphemeFrom <= graphemeOffset && graphemeOffset < seg.graphemeTo,
+    (seg) => seg.graphemeFrom <= graphemeOffset && graphemeOffset < seg.graphemeTo
   );
   if (containing) {
     return { graphemeFrom: containing.graphemeFrom, graphemeTo: containing.graphemeTo };
@@ -51,7 +51,7 @@ export function resolveWordRangeAtHit(
 function textTarget(
   base: Extract<SemanticTarget, { kind: 'text' }>,
   graphemeOffset: number,
-  affinity: InteractionAffinity,
+  affinity: InteractionAffinity
 ): Extract<SemanticTarget, { kind: 'text' }> {
   return { ...base, graphemeOffset, affinity };
 }
@@ -60,13 +60,16 @@ function textTarget(
 export function wordSelectionFromHit(
   hit: Extract<SemanticTarget, { kind: 'text' }>,
   wordSegments: readonly WordSegmentRecord[],
-  paragraphGraphemeCount: number,
-): { anchor: Extract<SemanticTarget, { kind: 'text' }>; head: Extract<SemanticTarget, { kind: 'text' }> } {
+  paragraphGraphemeCount: number
+): {
+  anchor: Extract<SemanticTarget, { kind: 'text' }>;
+  head: Extract<SemanticTarget, { kind: 'text' }>;
+} {
   const range = resolveWordRangeAtHit(
     wordSegments,
     hit.graphemeOffset,
     hit.affinity,
-    paragraphGraphemeCount,
+    paragraphGraphemeCount
   );
   const anchorAffinity: InteractionAffinity = 'downstream';
   const headAffinity: InteractionAffinity =
@@ -80,8 +83,11 @@ export function wordSelectionFromHit(
 /** Build a full editable-paragraph block selection (triple-click). */
 export function blockSelectionFromHit(
   hit: Extract<SemanticTarget, { kind: 'text' }>,
-  paragraphGraphemeCount: number,
-): { anchor: Extract<SemanticTarget, { kind: 'text' }>; head: Extract<SemanticTarget, { kind: 'text' }> } {
+  paragraphGraphemeCount: number
+): {
+  anchor: Extract<SemanticTarget, { kind: 'text' }>;
+  head: Extract<SemanticTarget, { kind: 'text' }>;
+} {
   return {
     anchor: textTarget(hit, 0, 'downstream'),
     head: textTarget(hit, paragraphGraphemeCount, 'downstream'),
@@ -92,7 +98,7 @@ export function blockSelectionFromHit(
 export function endpointsOnGraphemeBoundaries(
   paragraphGraphemeCount: number,
   graphemeFrom: number,
-  graphemeTo: number,
+  graphemeTo: number
 ): boolean {
   const valid = (offset: number) =>
     Number.isInteger(offset) && offset >= 0 && offset <= paragraphGraphemeCount;

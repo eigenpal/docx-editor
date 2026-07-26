@@ -29,7 +29,9 @@ export default defineComponent({
       void revision.value;
       return props.editor ? rulerPageBox(props.editor.getPageGeometry()) : null;
     });
-    const ticks = computed(() => (box.value ? generateRulerTicks(box.value.width, props.unit) : []));
+    const ticks = computed(() =>
+      box.value ? generateRulerTicks(box.value.width, props.unit) : []
+    );
     return () =>
       box.value
         ? h(
@@ -49,9 +51,9 @@ export default defineComponent({
                   class: 'ep-ruler__tick',
                   style: { left: `${tick.position * props.zoom}px`, height: `${tick.height}px` },
                 },
-                tick.label ? [h('span', { class: 'ep-ruler__label' }, tick.label)] : [],
-              ),
-            ),
+                tick.label ? [h('span', { class: 'ep-ruler__label' }, tick.label)] : []
+              )
+            )
           )
         : null;
   },

@@ -1,6 +1,9 @@
 // Bounded clipboard/drop input policy at the untrusted trust boundary (interactive-paginated 4.5).
 
-import type { InputObservation, InputRejectionObservation } from '@docx-editor.dev/core-contract/interaction';
+import type {
+  InputObservation,
+  InputRejectionObservation,
+} from '@docx-editor.dev/core-contract/interaction';
 import type { Schema } from 'prosemirror-model';
 import { Slice } from 'prosemirror-model';
 import { sanitizeHref } from '@docx-editor.dev/engine-core';
@@ -42,7 +45,9 @@ export function observeInput(lastRejection: InputRejection | null): InputObserva
   return { lastRejection };
 }
 
-export function boundClipboardText(text: string): { ok: true; text: string } | { ok: false; rejection: InputRejection } {
+export function boundClipboardText(
+  text: string
+): { ok: true; text: string } | { ok: false; rejection: InputRejection } {
   if (text.length > INPUT_POLICY_LIMITS.maxPlainTextChars) {
     return {
       ok: false,
@@ -72,7 +77,10 @@ function stripUrlControls(value: string): string {
 }
 
 /** Bounded decode of HTML character references in a URL attribute value. Fail closed on runaway expansion. */
-export function decodeHtmlCharacterReferences(raw: string, maxOutput = INPUT_POLICY_LIMITS.maxDecodedUrlChars): string | null {
+export function decodeHtmlCharacterReferences(
+  raw: string,
+  maxOutput = INPUT_POLICY_LIMITS.maxDecodedUrlChars
+): string | null {
   let out = '';
   for (let i = 0; i < raw.length; ) {
     if (out.length >= maxOutput) return null;
@@ -110,7 +118,10 @@ export function decodeHtmlCharacterReferences(raw: string, maxOutput = INPUT_POL
 }
 
 /** Bounded percent-decoding for URL obfuscation (linear passes, fail closed on expansion). */
-export function decodePercentEncoding(raw: string, maxOutput = INPUT_POLICY_LIMITS.maxDecodedUrlChars): string | null {
+export function decodePercentEncoding(
+  raw: string,
+  maxOutput = INPUT_POLICY_LIMITS.maxDecodedUrlChars
+): string | null {
   let current = raw;
   for (let pass = 0; pass < 3; pass += 1) {
     if (current.length > maxOutput) return null;
@@ -160,7 +171,8 @@ export function scanUntrustedUrl(raw: string): InputRejection | null {
     return unsafeResource('clipboard URL attribute resolves to a forbidden scheme');
   }
   const href = sanitizeHref(normalized);
-  if (!href.ok) return unsafeResource('clipboard URL attribute is not allowlisted for runtime sinks');
+  if (!href.ok)
+    return unsafeResource('clipboard URL attribute is not allowlisted for runtime sinks');
   return null;
 }
 
@@ -170,7 +182,10 @@ export function scanUntrustedUrl(raw: string): InputRejection | null {
  */
 export function scanUntrustedClipboardHtml(html: string): InputRejection | null {
   if (FORGED_CAPABILITY_MARKUP_RE.test(html)) {
-    return { code: 'capabilityBoundary', reason: 'clipboard HTML attempts to forge capability-owned markup' };
+    return {
+      code: 'capabilityBoundary',
+      reason: 'clipboard HTML attempts to forge capability-owned markup',
+    };
   }
   if (REMOTE_RESOURCE_TAG_RE.test(html)) {
     return unsafeResource('clipboard HTML contains remote resource-bearing tags');
@@ -193,7 +208,9 @@ export function scanUntrustedClipboardHtml(html: string): InputRejection | null 
   return null;
 }
 
-export function boundClipboardHtml(html: string): { ok: true; html: string } | { ok: false; rejection: InputRejection } {
+export function boundClipboardHtml(
+  html: string
+): { ok: true; html: string } | { ok: false; rejection: InputRejection } {
   if (html.length > INPUT_POLICY_LIMITS.maxHtmlChars) {
     return {
       ok: false,
@@ -246,8 +263,11 @@ export function validatePastedSlice(slice: Slice, _schema: Schema): InputRejecti
   return null;
 }
 
-export function rejectClipboardDataTransfer(dataTransfer: DataTransfer | null): InputRejection | null {
-  if (!dataTransfer) return { code: 'unsupportedStructure', reason: 'clipboard event missing data transfer' };
+export function rejectClipboardDataTransfer(
+  dataTransfer: DataTransfer | null
+): InputRejection | null {
+  if (!dataTransfer)
+    return { code: 'unsupportedStructure', reason: 'clipboard event missing data transfer' };
   if (dataTransfer.files.length > 0) {
     return { code: 'filePayload', reason: 'clipboard file payloads are rejected' };
   }
@@ -255,7 +275,8 @@ export function rejectClipboardDataTransfer(dataTransfer: DataTransfer | null): 
 }
 
 export function rejectDropDataTransfer(dataTransfer: DataTransfer | null): InputRejection | null {
-  if (!dataTransfer) return { code: 'unsupportedStructure', reason: 'drop event missing data transfer' };
+  if (!dataTransfer)
+    return { code: 'unsupportedStructure', reason: 'drop event missing data transfer' };
   if (dataTransfer.files.length > 0) {
     return { code: 'filePayload', reason: 'drop file payloads are rejected without fetch' };
   }

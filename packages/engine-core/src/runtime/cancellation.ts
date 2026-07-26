@@ -14,7 +14,7 @@ export class CancellationError extends Error {
   constructor(
     /** True when the commit is already published and only derived work is cancelled. */
     readonly derivedOnly: boolean,
-    reason?: string,
+    reason?: string
   ) {
     super(reason ? `cancelled: ${reason}` : 'cancelled');
     this.name = 'CancellationError';

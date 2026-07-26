@@ -33,7 +33,11 @@ export * from './model/index.ts';
 export * from './store/index.ts';
 
 // Style resolution: derived effective formatting (section 6). Never mutates authored state.
-export { createStyleResolver, resolveRunProps, type StyleResolver } from './resolve/style-resolver.ts';
+export {
+  createStyleResolver,
+  resolveRunProps,
+  type StyleResolver,
+} from './resolve/style-resolver.ts';
 
 // Shared utilities used by peripheral packages (opaque byte encoding).
 export { utf8ToHex, hexToUtf8 } from './util/hex.ts';

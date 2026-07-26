@@ -12,7 +12,13 @@
 // depth-guarded. This slice resolves bold/italic/underline; font/size/color/theme
 // resolution and paragraph-property resolution are later increments.
 
-import type { PackageModel, StyleRecord, RunProps, RunRecord, ParagraphRecord } from '../model/index.ts';
+import type {
+  PackageModel,
+  StyleRecord,
+  RunProps,
+  RunRecord,
+  ParagraphRecord,
+} from '../model/index.ts';
 
 /** Cap on how far a basedOn chain is followed. Bounds work on a hostile styles.xml
  *  (deep or cyclic basedOn) — a real inheritance chain is only a few levels deep. */
@@ -84,6 +90,10 @@ export function createStyleResolver(model: PackageModel): StyleResolver {
 
 /** Convenience one-shot resolve (builds a resolver per call — prefer
  *  {@link createStyleResolver} when resolving many runs). */
-export function resolveRunProps(model: PackageModel, para: ParagraphRecord, run: RunRecord): RunProps {
+export function resolveRunProps(
+  model: PackageModel,
+  para: ParagraphRecord,
+  run: RunRecord
+): RunProps {
   return createStyleResolver(model).runProps(para, run);
 }

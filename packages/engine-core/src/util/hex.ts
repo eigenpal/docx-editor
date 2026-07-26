@@ -11,7 +11,8 @@ export function utf8ToHex(s: string): string {
 
 export function hexToUtf8(hex: string): string {
   let bin = '';
-  for (let i = 0; i < hex.length; i += 2) bin += String.fromCharCode(parseInt(hex.slice(i, i + 2), 16));
+  for (let i = 0; i < hex.length; i += 2)
+    bin += String.fromCharCode(parseInt(hex.slice(i, i + 2), 16));
   return decodeURIComponent(escape(bin));
 }
 

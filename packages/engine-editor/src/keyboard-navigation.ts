@@ -8,7 +8,11 @@ import type {
   SemanticSelection,
   SemanticTarget,
 } from '@docx-editor.dev/core-contract/interaction';
-import { scopesEqual, validateKeyboardBidiTrust, type ParagraphTextResolver } from './bidi-policy.ts';
+import {
+  scopesEqual,
+  validateKeyboardBidiTrust,
+  type ParagraphTextResolver,
+} from './bidi-policy.ts';
 import { deriveCaretGeometry } from './interaction-geometry.ts';
 import type { CaretStopProvenance, NavigationGeometry } from './navigation-geometry.ts';
 import { traversalLinksForBlock } from './navigation-geometry.ts';
@@ -63,7 +67,7 @@ export interface KeyboardNavigationInput {
 const MODIFIER_KEYS = ['shiftKey', 'ctrlKey', 'metaKey', 'altKey'] as const;
 
 function validateKeyboardModifiers(
-  intent: GeometryKeyboardInteractionIntent,
+  intent: GeometryKeyboardInteractionIntent
 ): { ok: true } | { ok: false; reason: string } {
   for (const key of MODIFIER_KEYS) {
     const value = intent[key];
@@ -74,12 +78,11 @@ function validateKeyboardModifiers(
   return { ok: true };
 }
 
-
 function validateBidiForNavigation(
   frame: InteractionFrame,
   selection: SemanticSelection,
   paragraphText: ParagraphTextResolver,
-  destination: Extract<SemanticTarget, { kind: 'text' }> | null,
+  destination: Extract<SemanticTarget, { kind: 'text' }> | null
 ): { ok: true } | { ok: false; reason: string } {
   const extra = destination ? [destination] : [];
   return validateKeyboardBidiTrust(frame, selection, paragraphText, extra);
@@ -88,7 +91,7 @@ function validateBidiForNavigation(
 function rejectEffect(
   code: 'invalidTarget' | 'unsupported' | 'readOnly',
   reason: string,
-  frameId: InteractionFrame['id'],
+  frameId: InteractionFrame['id']
 ): InteractionEffect {
   return { kind: 'reject', code, reason, frameId };
 }
@@ -102,7 +105,7 @@ function blockRecord(frame: InteractionFrame, blockId: string, storyId: string) 
 function compareTargets(
   frame: InteractionFrame,
   a: Extract<SemanticTarget, { kind: 'text' }>,
-  b: Extract<SemanticTarget, { kind: 'text' }>,
+  b: Extract<SemanticTarget, { kind: 'text' }>
 ): number | null {
   if (a.identity.storyId !== b.identity.storyId) return null;
   const aBlock = blockRecord(frame, a.identity.blockId, a.identity.storyId);
@@ -122,31 +125,46 @@ export function selectionCollapsed(frame: InteractionFrame, selection: SemanticS
 
 function validateEditableTarget(
   frame: InteractionFrame,
-  target: Extract<SemanticTarget, { kind: 'text' }>,
+  target: Extract<SemanticTarget, { kind: 'text' }>
 ): { ok: true } | { ok: false; effect: InteractionEffect } {
   const block = blockRecord(frame, target.identity.blockId, target.identity.storyId);
   if (!block) {
     return {
       ok: false,
-      effect: rejectEffect('invalidTarget', 'navigation target block is missing from semantic index', frame.id),
+      effect: rejectEffect(
+        'invalidTarget',
+        'navigation target block is missing from semantic index',
+        frame.id
+      ),
     };
   }
   if (block.readOnly) {
     return {
       ok: false,
-      effect: rejectEffect('readOnly', 'navigation into read-only text is not supported in task 5.5', frame.id),
+      effect: rejectEffect(
+        'readOnly',
+        'navigation into read-only text is not supported in task 5.5',
+        frame.id
+      ),
     };
   }
   if (target.graphemeOffset < 0 || target.graphemeOffset > block.graphemeCount) {
     return {
       ok: false,
-      effect: rejectEffect('invalidTarget', 'navigation target grapheme offset is out of range', frame.id),
+      effect: rejectEffect(
+        'invalidTarget',
+        'navigation target grapheme offset is out of range',
+        frame.id
+      ),
     };
   }
   return { ok: true };
 }
 
-function rebindTarget(scope: SemanticSelection['scope'], target: Extract<SemanticTarget, { kind: 'text' }>) {
+function rebindTarget(
+  scope: SemanticSelection['scope'],
+  target: Extract<SemanticTarget, { kind: 'text' }>
+) {
   return { ...target, scope };
 }
 
@@ -154,7 +172,7 @@ function selectionFromHead(
   frame: InteractionFrame,
   selection: SemanticSelection,
   head: Extract<SemanticTarget, { kind: 'text' }>,
-  shiftKey: boolean,
+  shiftKey: boolean
 ): SemanticSelection {
   const anchor =
     shiftKey && selection.anchor.kind === 'text'
@@ -171,7 +189,7 @@ function selectionFromHead(
 function collapseSelection(
   frame: InteractionFrame,
   selection: SemanticSelection,
-  backward: boolean,
+  backward: boolean
 ): Extract<SemanticTarget, { kind: 'text' }> {
   if (selection.anchor.kind !== 'text' || selection.head.kind !== 'text') {
     return selection.head as Extract<SemanticTarget, { kind: 'text' }>;
@@ -186,7 +204,7 @@ function blockedByStructuralBoundary(
   frame: InteractionFrame,
   navigation: NavigationGeometry,
   block: NonNullable<ReturnType<typeof blockRecord>>,
-  dir: -1 | 1,
+  dir: -1 | 1
 ): boolean {
   const links = traversalLinksForBlock(navigation, block.identity.blockId);
   const linkedId = dir < 0 ? links.previousEditableBlockId : links.nextEditableBlockId;
@@ -201,7 +219,7 @@ function adjacentEditableBlock(
   frame: InteractionFrame,
   navigation: NavigationGeometry,
   current: Extract<SemanticTarget, { kind: 'text' }>,
-  dir: -1 | 1,
+  dir: -1 | 1
 ): Extract<SemanticTarget, { kind: 'text' }> | null | 'readOnly' {
   const block = blockRecord(frame, current.identity.blockId, current.identity.storyId);
   if (!block) return null;
@@ -224,18 +242,29 @@ function adjacentEditableBlock(
 function validateScopeCompatible(
   frame: InteractionFrame,
   selection: SemanticSelection,
-  target: Extract<SemanticTarget, { kind: 'text' }>,
+  target: Extract<SemanticTarget, { kind: 'text' }>
 ): { ok: true } | { ok: false; effect: InteractionEffect } {
   if (!scopesEqual(selection.scope, target.scope)) {
     return {
       ok: false,
-      effect: rejectEffect('unsupported', 'cross-scope keyboard navigation is not supported in task 5.5', frame.id),
+      effect: rejectEffect(
+        'unsupported',
+        'cross-scope keyboard navigation is not supported in task 5.5',
+        frame.id
+      ),
     };
   }
-  if (selection.head.kind === 'text' && target.identity.storyId !== selection.head.identity.storyId) {
+  if (
+    selection.head.kind === 'text' &&
+    target.identity.storyId !== selection.head.identity.storyId
+  ) {
     return {
       ok: false,
-      effect: rejectEffect('unsupported', 'cross-story keyboard navigation is not supported in task 5.5', frame.id),
+      effect: rejectEffect(
+        'unsupported',
+        'cross-story keyboard navigation is not supported in task 5.5',
+        frame.id
+      ),
     };
   }
   return { ok: true };
@@ -246,38 +275,56 @@ export function moveHorizontal(
   navigation: NavigationGeometry,
   selection: SemanticSelection,
   key: 'ArrowLeft' | 'ArrowRight',
-  shiftKey: boolean,
-): { ok: true; head: Extract<SemanticTarget, { kind: 'text' }>; provenance: CaretStopProvenance } | { ok: false; effect: InteractionEffect } {
+  shiftKey: boolean
+):
+  | { ok: true; head: Extract<SemanticTarget, { kind: 'text' }>; provenance: CaretStopProvenance }
+  | { ok: false; effect: InteractionEffect } {
   const backward = key === 'ArrowLeft';
   const dir = backward ? -1 : 1;
   if (!shiftKey && !selectionCollapsed(frame, selection)) {
-    return { ok: true, head: collapseSelection(frame, selection, backward), provenance: 'geometry' };
+    return {
+      ok: true,
+      head: collapseSelection(frame, selection, backward),
+      provenance: 'geometry',
+    };
   }
   const head = selection.head;
   if (head.kind !== 'text' || selection.anchor.kind !== 'text') {
     return {
       ok: false,
-      effect: rejectEffect('invalidTarget', 'keyboard navigation requires a text selection', frame.id),
+      effect: rejectEffect(
+        'invalidTarget',
+        'keyboard navigation requires a text selection',
+        frame.id
+      ),
     };
   }
   const block = blockRecord(frame, head.identity.blockId, head.identity.storyId);
   if (!block) {
     return {
       ok: false,
-      effect: rejectEffect('invalidTarget', 'navigation head block is missing from semantic index', frame.id),
+      effect: rejectEffect(
+        'invalidTarget',
+        'navigation head block is missing from semantic index',
+        frame.id
+      ),
     };
   }
   if (block.readOnly) {
     return {
       ok: false,
-      effect: rejectEffect('readOnly', 'navigation into read-only text is not supported in task 5.5', frame.id),
+      effect: rejectEffect(
+        'readOnly',
+        'navigation into read-only text is not supported in task 5.5',
+        frame.id
+      ),
     };
   }
   const transitionStops = horizontalTransitionStopsForBlock(
     navigation,
     head.identity.storyId,
     head.identity.blockId,
-    block.graphemeCount,
+    block.graphemeCount
   );
   if (transitionStops.length === 0) {
     return {
@@ -285,10 +332,22 @@ export function moveHorizontal(
       effect: rejectEffect('unsupported', 'block has no horizontal transition stops', frame.id),
     };
   }
-  if (!isHorizontalTransitionOffset(navigation, head.identity.storyId, head.identity.blockId, head.graphemeOffset, block.graphemeCount)) {
+  if (
+    !isHorizontalTransitionOffset(
+      navigation,
+      head.identity.storyId,
+      head.identity.blockId,
+      head.graphemeOffset,
+      block.graphemeCount
+    )
+  ) {
     return {
       ok: false,
-      effect: rejectEffect('invalidTarget', 'caret is not on a trusted horizontal transition stop', frame.id),
+      effect: rejectEffect(
+        'invalidTarget',
+        'caret is not on a trusted horizontal transition stop',
+        frame.id
+      ),
     };
   }
   const firstStop = transitionStops[0]!;
@@ -300,14 +359,22 @@ export function moveHorizontal(
     if (adjacent === 'readOnly') {
       return {
         ok: false,
-        effect: rejectEffect('unsupported', 'navigation crosses a read-only or unsupported block boundary', frame.id),
+        effect: rejectEffect(
+          'unsupported',
+          'navigation crosses a read-only or unsupported block boundary',
+          frame.id
+        ),
       };
     }
     if (!adjacent) {
       if (blockedByStructuralBoundary(frame, navigation, block, dir)) {
         return {
           ok: false,
-          effect: rejectEffect('unsupported', 'navigation crosses a read-only or unsupported block boundary', frame.id),
+          effect: rejectEffect(
+            'unsupported',
+            'navigation crosses a read-only or unsupported block boundary',
+            frame.id
+          ),
         };
       }
       return { ok: true, head, provenance: 'geometry' };
@@ -320,13 +387,24 @@ export function moveHorizontal(
   if (!next) {
     return {
       ok: false,
-      effect: rejectEffect('invalidTarget', 'no trusted horizontal transition destination', frame.id),
+      effect: rejectEffect(
+        'invalidTarget',
+        'no trusted horizontal transition destination',
+        frame.id
+      ),
     };
   }
-  if (next.provenance === 'geometry' && !destinationOverlayVisible(frame, navigation, next.target)) {
+  if (
+    next.provenance === 'geometry' &&
+    !destinationOverlayVisible(frame, navigation, next.target)
+  ) {
     return {
       ok: false,
-      effect: rejectEffect('invalidTarget', 'horizontal navigation destination is not visible', frame.id),
+      effect: rejectEffect(
+        'invalidTarget',
+        'horizontal navigation destination is not visible',
+        frame.id
+      ),
     };
   }
   return { ok: true, head: next.target, provenance: next.provenance };
@@ -343,34 +421,56 @@ export function moveVertical(
   navigation: NavigationGeometry,
   selection: SemanticSelection,
   key: 'ArrowUp' | 'ArrowDown',
-  visualAdvanceX: number,
-): { ok: true; head: Extract<SemanticTarget, { kind: 'text' }>; visualAdvanceX: number } | { ok: false; effect: InteractionEffect } {
+  visualAdvanceX: number
+):
+  | { ok: true; head: Extract<SemanticTarget, { kind: 'text' }>; visualAdvanceX: number }
+  | { ok: false; effect: InteractionEffect } {
   const catalog = buildLineCatalog(frame, navigation);
   if (!catalog.ok) {
     return { ok: false, effect: rejectEffect('unsupported', catalog.reason, frame.id) };
   }
   const head = selection.head;
   if (head.kind !== 'text') {
-    return { ok: false, effect: rejectEffect('invalidTarget', 'vertical navigation requires a text caret', frame.id) };
+    return {
+      ok: false,
+      effect: rejectEffect('invalidTarget', 'vertical navigation requires a text caret', frame.id),
+    };
   }
   const currentLine = lineForTarget(catalog.lines, head, frame, navigation);
   if (!currentLine) {
-    return { ok: false, effect: rejectEffect('invalidTarget', 'current caret line is not in the line catalog', frame.id) };
+    return {
+      ok: false,
+      effect: rejectEffect(
+        'invalidTarget',
+        'current caret line is not in the line catalog',
+        frame.id
+      ),
+    };
   }
   const targetLineOrder = currentLine.lineOrder + (key === 'ArrowUp' ? -1 : 1);
   const targetLine = catalog.lines.find(
     (line) =>
       line.lineOrder === targetLineOrder &&
       line.storyId === head.identity.storyId &&
-      scopesEqual(line.scope, selection.scope),
+      scopesEqual(line.scope, selection.scope)
   );
   if (!targetLine) return { ok: true, head, visualAdvanceX };
   const stop = nearestStopOnLine(targetLine, visualAdvanceX);
   if (stop.role !== 'editableText') {
-    return { ok: false, effect: rejectEffect('readOnly', 'vertical navigation target is read-only', frame.id) };
+    return {
+      ok: false,
+      effect: rejectEffect('readOnly', 'vertical navigation target is read-only', frame.id),
+    };
   }
   if (!destinationOverlayVisible(frame, navigation, stop.target)) {
-    return { ok: false, effect: rejectEffect('invalidTarget', 'vertical navigation destination is not visible', frame.id) };
+    return {
+      ok: false,
+      effect: rejectEffect(
+        'invalidTarget',
+        'vertical navigation destination is not visible',
+        frame.id
+      ),
+    };
   }
   const scopeOk = validateScopeCompatible(frame, selection, stop.target);
   if (!scopeOk.ok) return scopeOk;
@@ -382,44 +482,64 @@ export function movePage(
   navigation: NavigationGeometry,
   selection: SemanticSelection,
   key: 'PageUp' | 'PageDown',
-  visualAdvanceX: number,
-): { ok: true; head: Extract<SemanticTarget, { kind: 'text' }>; visualAdvanceX: number } | { ok: false; effect: InteractionEffect } {
+  visualAdvanceX: number
+):
+  | { ok: true; head: Extract<SemanticTarget, { kind: 'text' }>; visualAdvanceX: number }
+  | { ok: false; effect: InteractionEffect } {
   const catalog = buildLineCatalog(frame, navigation);
   if (!catalog.ok) {
     return { ok: false, effect: rejectEffect('unsupported', catalog.reason, frame.id) };
   }
   const head = selection.head;
   if (head.kind !== 'text') {
-    return { ok: false, effect: rejectEffect('invalidTarget', 'page navigation requires a text caret', frame.id) };
+    return {
+      ok: false,
+      effect: rejectEffect('invalidTarget', 'page navigation requires a text caret', frame.id),
+    };
   }
   const caret = deriveCaretGeometry(frame, head);
   if (!caret) {
-    return { ok: false, effect: rejectEffect('invalidTarget', 'page navigation requires caret geometry', frame.id) };
+    return {
+      ok: false,
+      effect: rejectEffect('invalidTarget', 'page navigation requires caret geometry', frame.id),
+    };
   }
   const relativeY = pageRelativeY(frame, caret.pageIndex, caret.rect.y + caret.rect.height / 2);
   if (relativeY === null) {
     return {
       ok: false,
-      effect: rejectEffect('invalidTarget', 'page navigation could not resolve relative page position', frame.id),
+      effect: rejectEffect(
+        'invalidTarget',
+        'page navigation could not resolve relative page position',
+        frame.id
+      ),
     };
   }
   const targetPage = caret.pageIndex + (key === 'PageUp' ? -1 : 1);
   if (!frame.display.some((page) => page.index === targetPage)) {
     return {
       ok: false,
-      effect: rejectEffect('invalidTarget', 'target page is not mounted in the current interaction frame', frame.id),
+      effect: rejectEffect(
+        'invalidTarget',
+        'target page is not mounted in the current interaction frame',
+        frame.id
+      ),
     };
   }
   const pageLines = catalog.lines.filter(
     (line) =>
       line.pageIndex === targetPage &&
       line.storyId === head.identity.storyId &&
-      scopesEqual(line.scope, selection.scope),
+      scopesEqual(line.scope, selection.scope)
   );
   if (pageLines.length === 0) {
     return {
       ok: false,
-      effect: rejectEffect('invalidTarget', 'target page has no navigable lines in the current frame', frame.id),
+      effect: rejectEffect(
+        'invalidTarget',
+        'target page has no navigable lines in the current frame',
+        frame.id
+      ),
     };
   }
   let bestLine = pageLines[0]!;
@@ -434,10 +554,16 @@ export function movePage(
   }
   const stop = nearestStopOnLine(bestLine, visualAdvanceX);
   if (stop.role !== 'editableText') {
-    return { ok: false, effect: rejectEffect('readOnly', 'page navigation target is read-only', frame.id) };
+    return {
+      ok: false,
+      effect: rejectEffect('readOnly', 'page navigation target is read-only', frame.id),
+    };
   }
   if (!destinationOverlayVisible(frame, navigation, stop.target)) {
-    return { ok: false, effect: rejectEffect('invalidTarget', 'page navigation destination is not visible', frame.id) };
+    return {
+      ok: false,
+      effect: rejectEffect('invalidTarget', 'page navigation destination is not visible', frame.id),
+    };
   }
   const scopeOk = validateScopeCompatible(frame, selection, stop.target);
   if (!scopeOk.ok) return scopeOk;
@@ -447,7 +573,7 @@ export function movePage(
 function keyboardReject(
   priorSession: NavigationSession | null,
   frameId: InteractionFrame['id'],
-  effect: InteractionEffect,
+  effect: InteractionEffect
 ): { plan: InteractionPlan; navigation: NavigationSessionPlan } {
   return {
     plan: { frameId, effects: [effect] },
@@ -459,7 +585,7 @@ function keyboardSuccess(
   frame: InteractionFrame,
   selection: SemanticSelection,
   priorSession: NavigationSession | null,
-  nextSession: NavigationSession | null,
+  nextSession: NavigationSession | null
 ): { plan: InteractionPlan; navigation: NavigationSessionPlan } {
   return {
     plan: {
@@ -482,11 +608,15 @@ function finalizeKeyboardMove(
   head: Extract<SemanticTarget, { kind: 'text' }>,
   shiftKey: boolean,
   paragraphText: ParagraphTextResolver,
-  destinationProvenance: CaretStopProvenance = 'geometry',
+  destinationProvenance: CaretStopProvenance = 'geometry'
 ): { plan: InteractionPlan; navigation: NavigationSessionPlan } {
   const bidiDest = validateBidiForNavigation(frame, selection, paragraphText, head);
   if (!bidiDest.ok) {
-    return keyboardReject(priorSession, frame.id, rejectEffect('unsupported', bidiDest.reason, frame.id));
+    return keyboardReject(
+      priorSession,
+      frame.id,
+      rejectEffect('unsupported', bidiDest.reason, frame.id)
+    );
   }
   const collapsedNoOp =
     !shiftKey &&
@@ -505,10 +635,15 @@ function finalizeKeyboardMove(
     return keyboardReject(
       priorSession,
       frame.id,
-      rejectEffect('invalidTarget', 'keyboard navigation destination is not visible', frame.id),
+      rejectEffect('invalidTarget', 'keyboard navigation destination is not visible', frame.id)
     );
   }
-  return keyboardSuccess(frame, selectionFromHead(frame, selection, head, shiftKey), priorSession, nextSession);
+  return keyboardSuccess(
+    frame,
+    selectionFromHead(frame, selection, head, shiftKey),
+    priorSession,
+    nextSession
+  );
 }
 
 /** Plan keyboard navigation after shared planner preconditions succeed. */
@@ -516,39 +651,63 @@ export function planKeyboardNavigation(input: KeyboardNavigationInput): {
   plan: InteractionPlan;
   navigation: NavigationSessionPlan;
 } {
-  const { frame, intent, priorSession, documentGeneration, modelRevision, paragraphText, navigation } = input;
+  const {
+    frame,
+    intent,
+    priorSession,
+    documentGeneration,
+    modelRevision,
+    paragraphText,
+    navigation,
+  } = input;
   const frameId = frame.id;
 
   const modifiers = validateKeyboardModifiers(intent);
   if (!modifiers.ok) {
-    return keyboardReject(priorSession, frameId, rejectEffect('unsupported', modifiers.reason, frameId));
+    return keyboardReject(
+      priorSession,
+      frameId,
+      rejectEffect('unsupported', modifiers.reason, frameId)
+    );
   }
   if (intent.ctrlKey === true || intent.metaKey === true || intent.altKey === true) {
     return keyboardReject(
       priorSession,
       frameId,
-      rejectEffect('unsupported', 'modified keyboard navigation is not supported in task 5.5', frameId),
+      rejectEffect(
+        'unsupported',
+        'modified keyboard navigation is not supported in task 5.5',
+        frameId
+      )
     );
   }
   if (!SUPPORTED_KEYS.has(intent.key)) {
     return keyboardReject(
       priorSession,
       frameId,
-      rejectEffect('unsupported', `unsupported geometry keyboard key ${intent.key}`, frameId),
+      rejectEffect('unsupported', `unsupported geometry keyboard key ${intent.key}`, frameId)
     );
   }
   if (!frame.focus.focused) {
     return keyboardReject(
       priorSession,
       frameId,
-      rejectEffect('invalidTarget', 'geometry keyboard navigation requires a focused interaction frame', frameId),
+      rejectEffect(
+        'invalidTarget',
+        'geometry keyboard navigation requires a focused interaction frame',
+        frameId
+      )
     );
   }
   if (!navigation.shapingSupported) {
     return keyboardReject(
       priorSession,
       frameId,
-      rejectEffect('unsupported', 'layout shaping does not support exact keyboard navigation caret edges', frameId),
+      rejectEffect(
+        'unsupported',
+        'layout shaping does not support exact keyboard navigation caret edges',
+        frameId
+      )
     );
   }
   const selection = frame.selection;
@@ -556,14 +715,22 @@ export function planKeyboardNavigation(input: KeyboardNavigationInput): {
     return keyboardReject(
       priorSession,
       frameId,
-      rejectEffect('invalidTarget', 'keyboard navigation requires a current semantic selection', frameId),
+      rejectEffect(
+        'invalidTarget',
+        'keyboard navigation requires a current semantic selection',
+        frameId
+      )
     );
   }
   if (selection.anchor.kind !== 'text' || selection.head.kind !== 'text') {
     return keyboardReject(
       priorSession,
       frameId,
-      rejectEffect('unsupported', 'keyboard navigation for non-text selections is deferred to task 5.6', frameId),
+      rejectEffect(
+        'unsupported',
+        'keyboard navigation for non-text selections is deferred to task 5.6',
+        frameId
+      )
     );
   }
 
@@ -571,36 +738,64 @@ export function planKeyboardNavigation(input: KeyboardNavigationInput): {
     return keyboardReject(
       priorSession,
       frameId,
-      rejectEffect('unsupported', 'cross-story keyboard navigation is not supported in task 5.5', frameId),
+      rejectEffect(
+        'unsupported',
+        'cross-story keyboard navigation is not supported in task 5.5',
+        frameId
+      )
     );
   }
 
   const mixed = validateKeyboardBidiTrust(frame, selection, paragraphText);
   if (!mixed.ok) {
-    return keyboardReject(priorSession, frameId, rejectEffect('unsupported', mixed.reason, frameId));
+    return keyboardReject(
+      priorSession,
+      frameId,
+      rejectEffect('unsupported', mixed.reason, frameId)
+    );
   }
 
   const shiftKey = intent.shiftKey === true;
 
   if (HORIZONTAL_KEYS.has(intent.key)) {
-    const moved = moveHorizontal(frame, navigation, selection, intent.key as 'ArrowLeft' | 'ArrowRight', shiftKey);
+    const moved = moveHorizontal(
+      frame,
+      navigation,
+      selection,
+      intent.key as 'ArrowLeft' | 'ArrowRight',
+      shiftKey
+    );
     if (!moved.ok) return keyboardReject(priorSession, frameId, moved.effect);
     const usable = validateEditableTarget(frame, moved.head);
     if (!usable.ok) return keyboardReject(priorSession, frameId, usable.effect);
-    return finalizeKeyboardMove(frame, navigation, selection, priorSession, null, moved.head, shiftKey, paragraphText, moved.provenance);
+    return finalizeKeyboardMove(
+      frame,
+      navigation,
+      selection,
+      priorSession,
+      null,
+      moved.head,
+      shiftKey,
+      paragraphText,
+      moved.provenance
+    );
   }
 
   if (LINE_EDGE_KEYS.has(intent.key)) {
     const catalog = buildLineCatalog(frame, navigation);
     if (!catalog.ok) {
-      return keyboardReject(priorSession, frameId, rejectEffect('unsupported', catalog.reason, frameId));
+      return keyboardReject(
+        priorSession,
+        frameId,
+        rejectEffect('unsupported', catalog.reason, frameId)
+      );
     }
     const head = selection.head;
     if (head.kind !== 'text') {
       return keyboardReject(
         priorSession,
         frameId,
-        rejectEffect('invalidTarget', 'Home/End requires a text caret', frameId),
+        rejectEffect('invalidTarget', 'Home/End requires a text caret', frameId)
       );
     }
     const currentLine = lineForTarget(catalog.lines, head, frame, navigation);
@@ -608,14 +803,27 @@ export function planKeyboardNavigation(input: KeyboardNavigationInput): {
       return keyboardReject(
         priorSession,
         frameId,
-        rejectEffect('invalidTarget', 'Home/End requires a line-resolved caret', frameId),
+        rejectEffect('invalidTarget', 'Home/End requires a line-resolved caret', frameId)
       );
     }
     const stop = lineEdgeTarget(currentLine, intent.key === 'Home' ? 'start' : 'end');
     if (stop.role !== 'editableText') {
-      return keyboardReject(priorSession, frameId, rejectEffect('readOnly', 'line-edge navigation target is read-only', frameId));
+      return keyboardReject(
+        priorSession,
+        frameId,
+        rejectEffect('readOnly', 'line-edge navigation target is read-only', frameId)
+      );
     }
-    return finalizeKeyboardMove(frame, navigation, selection, priorSession, null, stop.target, shiftKey, paragraphText);
+    return finalizeKeyboardMove(
+      frame,
+      navigation,
+      selection,
+      priorSession,
+      null,
+      stop.target,
+      shiftKey,
+      paragraphText
+    );
   }
 
   if (VERTICAL_KEYS.has(intent.key)) {
@@ -630,14 +838,18 @@ export function planKeyboardNavigation(input: KeyboardNavigationInput): {
         return keyboardReject(
           priorSession,
           frameId,
-          rejectEffect('unsupported', 'visual advance seeding hit non-invertible geometry', frameId),
+          rejectEffect('unsupported', 'visual advance seeding hit non-invertible geometry', frameId)
         );
       }
       if (seeded === null) {
         return keyboardReject(
           priorSession,
           frameId,
-          rejectEffect('invalidTarget', 'visual advance could not be seeded from caret geometry', frameId),
+          rejectEffect(
+            'invalidTarget',
+            'visual advance could not be seeded from caret geometry',
+            frameId
+          )
         );
       }
       visualAdvanceX = seeded;
@@ -646,18 +858,39 @@ export function planKeyboardNavigation(input: KeyboardNavigationInput): {
     const moved =
       intent.key === 'PageUp' || intent.key === 'PageDown'
         ? movePage(frame, navigation, selection, intent.key, visualAdvanceX)
-        : moveVertical(frame, navigation, selection, intent.key as 'ArrowUp' | 'ArrowDown', visualAdvanceX);
+        : moveVertical(
+            frame,
+            navigation,
+            selection,
+            intent.key as 'ArrowUp' | 'ArrowDown',
+            visualAdvanceX
+          );
     if (!moved.ok) return keyboardReject(priorSession, frameId, moved.effect);
     const usable = validateEditableTarget(frame, moved.head);
     if (!usable.ok) return keyboardReject(priorSession, frameId, usable.effect);
     const nextSelection = selectionFromHead(frame, selection, moved.head, shiftKey);
-    const nextSession = buildNavigationSession(frame, nextSelection, moved.visualAdvanceX, documentGeneration, modelRevision);
-    return finalizeKeyboardMove(frame, navigation, selection, priorSession, nextSession, moved.head, shiftKey, paragraphText);
+    const nextSession = buildNavigationSession(
+      frame,
+      nextSelection,
+      moved.visualAdvanceX,
+      documentGeneration,
+      modelRevision
+    );
+    return finalizeKeyboardMove(
+      frame,
+      navigation,
+      selection,
+      priorSession,
+      nextSession,
+      moved.head,
+      shiftKey,
+      paragraphText
+    );
   }
 
   return keyboardReject(
     priorSession,
     frameId,
-    rejectEffect('unsupported', `geometry keyboard key ${intent.key} is not implemented`, frameId),
+    rejectEffect('unsupported', `geometry keyboard key ${intent.key} is not implemented`, frameId)
   );
 }

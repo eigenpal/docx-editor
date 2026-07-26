@@ -14,7 +14,7 @@ export interface NavigableCaretStop {
 export function geometryStopsForBlock(
   navigation: NavigationGeometry,
   storyId: string,
-  blockId: string,
+  blockId: string
 ): readonly NavigableCaretStop[] {
   const stops: NavigableCaretStop[] = [];
   const seen = new Set<string>();
@@ -25,10 +25,17 @@ export function geometryStopsForBlock(
       const key = `${edge.target.graphemeOffset}:${edge.target.affinity}`;
       if (seen.has(key)) continue;
       seen.add(key);
-      stops.push({ target: edge.target, graphemeOffset: edge.target.graphemeOffset, provenance: 'geometry' });
+      stops.push({
+        target: edge.target,
+        graphemeOffset: edge.target.graphemeOffset,
+        provenance: 'geometry',
+      });
     }
   }
-  return stops.sort((a, b) => a.graphemeOffset - b.graphemeOffset || a.target.affinity.localeCompare(b.target.affinity));
+  return stops.sort(
+    (a, b) =>
+      a.graphemeOffset - b.graphemeOffset || a.target.affinity.localeCompare(b.target.affinity)
+  );
 }
 
 /** Horizontal transition stops: geometry trust plus semantic whole-grapheme boundaries. */
@@ -36,7 +43,7 @@ export function horizontalTransitionStopsForBlock(
   navigation: NavigationGeometry,
   storyId: string,
   blockId: string,
-  paragraphGraphemeCount: number,
+  paragraphGraphemeCount: number
 ): readonly NavigableCaretStop[] {
   const geometry = geometryStopsForBlock(navigation, storyId, blockId);
   const byOffset = new Map<number, NavigableCaretStop>();
@@ -57,7 +64,8 @@ export function horizontalTransitionStopsForBlock(
     });
   }
   return [...byOffset.values()].sort(
-    (a, b) => a.graphemeOffset - b.graphemeOffset || a.target.affinity.localeCompare(b.target.affinity),
+    (a, b) =>
+      a.graphemeOffset - b.graphemeOffset || a.target.affinity.localeCompare(b.target.affinity)
   );
 }
 
@@ -65,7 +73,7 @@ export function horizontalTransitionStopsForBlock(
 export function navigableStopsForBlock(
   navigation: NavigationGeometry,
   storyId: string,
-  blockId: string,
+  blockId: string
 ): readonly NavigableCaretStop[] {
   return geometryStopsForBlock(navigation, storyId, blockId);
 }
@@ -74,9 +82,11 @@ export function hasGeometryStopAtOffset(
   navigation: NavigationGeometry,
   storyId: string,
   blockId: string,
-  graphemeOffset: number,
+  graphemeOffset: number
 ): boolean {
-  return geometryStopsForBlock(navigation, storyId, blockId).some((stop) => stop.graphemeOffset === graphemeOffset);
+  return geometryStopsForBlock(navigation, storyId, blockId).some(
+    (stop) => stop.graphemeOffset === graphemeOffset
+  );
 }
 
 export function isHorizontalTransitionOffset(
@@ -84,11 +94,14 @@ export function isHorizontalTransitionOffset(
   storyId: string,
   blockId: string,
   graphemeOffset: number,
-  paragraphGraphemeCount: number,
+  paragraphGraphemeCount: number
 ): boolean {
-  return horizontalTransitionStopsForBlock(navigation, storyId, blockId, paragraphGraphemeCount).some(
-    (stop) => stop.graphemeOffset === graphemeOffset,
-  );
+  return horizontalTransitionStopsForBlock(
+    navigation,
+    storyId,
+    blockId,
+    paragraphGraphemeCount
+  ).some((stop) => stop.graphemeOffset === graphemeOffset);
 }
 
 /** @deprecated */
@@ -96,7 +109,7 @@ export function hasNavigableStopAtOffset(
   navigation: NavigationGeometry,
   storyId: string,
   blockId: string,
-  graphemeOffset: number,
+  graphemeOffset: number
 ): boolean {
   return hasGeometryStopAtOffset(navigation, storyId, blockId, graphemeOffset);
 }
@@ -106,24 +119,27 @@ export function isNavigableOffset(
   storyId: string,
   blockId: string,
   graphemeOffset: number,
-  affinity?: Extract<SemanticTarget, { kind: 'text' }>['affinity'],
+  affinity?: Extract<SemanticTarget, { kind: 'text' }>['affinity']
 ): boolean {
   const stops = geometryStopsForBlock(navigation, storyId, blockId);
-  if (affinity === undefined) return hasGeometryStopAtOffset(navigation, storyId, blockId, graphemeOffset);
-  return stops.some((stop) => stop.graphemeOffset === graphemeOffset && stop.target.affinity === affinity);
+  if (affinity === undefined)
+    return hasGeometryStopAtOffset(navigation, storyId, blockId, graphemeOffset);
+  return stops.some(
+    (stop) => stop.graphemeOffset === graphemeOffset && stop.target.affinity === affinity
+  );
 }
 
 export function nextHorizontalTransitionStop(
   navigation: NavigationGeometry,
   head: Extract<SemanticTarget, { kind: 'text' }>,
   dir: -1 | 1,
-  paragraphGraphemeCount: number,
+  paragraphGraphemeCount: number
 ): { target: Extract<SemanticTarget, { kind: 'text' }>; provenance: CaretStopProvenance } | null {
   const stops = horizontalTransitionStopsForBlock(
     navigation,
     head.identity.storyId,
     head.identity.blockId,
-    paragraphGraphemeCount,
+    paragraphGraphemeCount
   );
   if (stops.length === 0) return null;
   const currentIndex = stops.findIndex((stop) => stop.graphemeOffset === head.graphemeOffset);
@@ -137,7 +153,7 @@ export function nextHorizontalTransitionStop(
 export function nextNavigableHorizontalStop(
   navigation: NavigationGeometry,
   head: Extract<SemanticTarget, { kind: 'text' }>,
-  dir: -1 | 1,
+  dir: -1 | 1
 ): Extract<SemanticTarget, { kind: 'text' }> | null {
   const stops = geometryStopsForBlock(navigation, head.identity.storyId, head.identity.blockId);
   if (stops.length === 0) return null;

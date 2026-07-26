@@ -1,10 +1,5 @@
 // Runtime ports, budgets, cancellation, and per-operation snapshots (task 0.3).
-export {
-  type ResourceLimits,
-  HARD_CEILINGS,
-  DEFAULT_LIMITS,
-  resolveLimits,
-} from './limits.ts';
+export { type ResourceLimits, HARD_CEILINGS, DEFAULT_LIMITS, resolveLimits } from './limits.ts';
 export { BoundedCounter, LimitExceededError } from './counter.ts';
 export { Budget, BudgetError, type Reservation } from './budget.ts';
 export {

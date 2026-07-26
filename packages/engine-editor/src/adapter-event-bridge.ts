@@ -104,7 +104,10 @@ export function normalizeClickCount(detail: number | undefined): number {
  * else — text, Backspace, Delete, Enter, Tab, and every ctrl/meta/alt shortcut —
  * stays with the hidden ProseMirror input host, which is the editing engine.
  */
-export function keyboardIntentKind(key: string, modifiers: KeyboardModifiers): 'geometryKeyboard' | 'native' {
+export function keyboardIntentKind(
+  key: string,
+  modifiers: KeyboardModifiers
+): 'geometryKeyboard' | 'native' {
   if (!GEOMETRY_KEYS.has(key)) return 'native';
   if (modifiers.ctrlKey || modifiers.metaKey || modifiers.altKey) return 'native';
   return 'geometryKeyboard';
@@ -114,7 +117,10 @@ export function keyboardIntentKind(key: string, modifiers: KeyboardModifiers): '
 const DRAG_SLOP_PX = 3;
 
 function movedBeyondSlop(press: { x: number; y: number }, event: BridgePointerEvent): boolean {
-  return Math.abs(event.clientX - press.x) > DRAG_SLOP_PX || Math.abs(event.clientY - press.y) > DRAG_SLOP_PX;
+  return (
+    Math.abs(event.clientX - press.x) > DRAG_SLOP_PX ||
+    Math.abs(event.clientY - press.y) > DRAG_SLOP_PX
+  );
 }
 
 /**
@@ -166,7 +172,10 @@ const POINTER_KINDS = {
  * Attach the bridge to a host element. Returns a disposer that removes every
  * listener it added; calling it twice is safe.
  */
-export function attachAdapterEventBridge(element: BridgeElement, port: BridgeEditorPort): () => void {
+export function attachAdapterEventBridge(
+  element: BridgeElement,
+  port: BridgeEditorPort
+): () => void {
   const registered: { type: string; listener: (event: any) => void; capture: boolean }[] = [];
 
   // A drag ends with the browser firing `click` on top of `pointerup`. Forwarding
@@ -259,7 +268,7 @@ export function attachAdapterEventBridge(element: BridgeElement, port: BridgeEdi
         ...modifiersOf(event),
       });
     },
-    true,
+    true
   );
 
   on('focusin', () => {

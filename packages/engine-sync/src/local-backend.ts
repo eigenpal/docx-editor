@@ -33,7 +33,7 @@ interface Payload {
 export class LocalBackend implements ReplicatedStoreBackend {
   constructor(
     readonly documentId: string,
-    private readonly store: DocumentStore,
+    private readonly store: DocumentStore
   ) {}
 
   static fromModel(documentId: string, model: PackageModel): LocalBackend {
@@ -92,7 +92,8 @@ export class LocalBackend implements ReplicatedStoreBackend {
 
   decodeUpdate(update: ReplicationUpdate): { model: SerializedModel; revision: number } {
     if (update.envelope !== 'update') throw new Error('not an update envelope');
-    if (update.documentId !== this.documentId) throw new Error('update belongs to another document');
+    if (update.documentId !== this.documentId)
+      throw new Error('update belongs to another document');
     return JSON.parse(hexToUtf8(update.bytesHex)) as Payload;
   }
 }

@@ -42,7 +42,7 @@ export default defineComponent({
               'aria-live': 'polite',
               role: 'status',
             },
-            label.value,
+            label.value
           )
         : null;
   },

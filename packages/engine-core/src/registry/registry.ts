@@ -29,7 +29,7 @@ export class RegistryError extends Error {
     readonly code: RegistryErrorCode,
     message: string,
     /** Stable identities responsible for the failure (extensions, ids). */
-    readonly responsible: readonly string[] = [],
+    readonly responsible: readonly string[] = []
   ) {
     super(message);
     this.name = 'RegistryError';
@@ -81,7 +81,7 @@ export interface ResolveOptions {
 
 export function resolve(
   bundles: readonly FeatureBundle[],
-  options: ResolveOptions = {},
+  options: ResolveOptions = {}
 ): ResolvedRegistry {
   // 1. Validate identity and version; reject duplicate extensions.
   const extensions = new Map<string, FeatureBundle>();
@@ -95,7 +95,8 @@ export function resolve(
     for (const c of b.contributions) {
       assertValidId(c.id, c.kind);
       parseSemVerOrThrow(c.version, `${b.id} → ${c.id}`);
-      if (c.replaces) parseRangeOrThrow(c.replaces.targetRange, `${b.id} → replaces ${c.replaces.targetId}`);
+      if (c.replaces)
+        parseRangeOrThrow(c.replaces.targetRange, `${b.id} → replaces ${c.replaces.targetId}`);
     }
   }
 
@@ -159,7 +160,7 @@ export function resolve(
         throw new RegistryError(
           'id-collision',
           `${c.kind} id ${c.id} registered by both ${pair[0]} and ${pair[1]}`,
-          pair,
+          pair
         );
       }
       base.set(key, c);
@@ -176,7 +177,7 @@ export function resolve(
       throw new RegistryError(
         'replacement-target-missing',
         `${first.ext} replaces missing target ${first.c.replaces!.targetId}`,
-        [first.ext, first.c.replaces!.targetId],
+        [first.ext, first.c.replaces!.targetId]
       );
     }
     const policy = target.replaceable ?? { kind: 'none' };
@@ -186,14 +187,14 @@ export function resolve(
         throw new RegistryError(
           'replacement-version-mismatch',
           `${ext} replaces ${c.replaces!.targetId}@${target.version} outside range ${c.replaces!.targetRange}`,
-          [ext, c.replaces!.targetId],
+          [ext, c.replaces!.targetId]
         );
       }
       if (policy.kind === 'none') {
         throw new RegistryError(
           'unauthorized-replacement',
           `${c.replaces!.targetId} does not authorize replacement (attempted by ${ext})`,
-          [ext, c.replaces!.targetId],
+          [ext, c.replaces!.targetId]
         );
       }
     }
@@ -212,14 +213,14 @@ export function resolve(
 
 function pickReplacementWinner(
   target: Contribution,
-  list: { ext: string; c: Contribution }[],
+  list: { ext: string; c: Contribution }[]
 ): Contribution {
   const policy = target.replaceable ?? { kind: 'none' };
   if (list.length === 1) return list[0].c;
 
   if (policy.kind === 'priority') {
     const ranked = [...list].sort(
-      (a, b) => (b.c.replaces!.priority ?? 0) - (a.c.replaces!.priority ?? 0),
+      (a, b) => (b.c.replaces!.priority ?? 0) - (a.c.replaces!.priority ?? 0)
     );
     const top = ranked[0].c.replaces!.priority ?? 0;
     const tied = ranked.filter((r) => (r.c.replaces!.priority ?? 0) === top);
@@ -228,7 +229,7 @@ function pickReplacementWinner(
       throw new RegistryError(
         'ambiguous-replacement',
         `multiple replacers of ${target.id} share top priority ${top}: ${names.join(', ')}`,
-        names,
+        names
       );
     }
     return ranked[0].c;
@@ -239,7 +240,7 @@ function pickReplacementWinner(
   throw new RegistryError(
     'ambiguous-replacement',
     `multiple replacers of ${target.id}: ${names.join(', ')}`,
-    names,
+    names
   );
 }
 
@@ -259,7 +260,11 @@ function detectCycle(extensions: Map<string, FeatureBundle>): void {
       if (c === GREY) {
         const from = stack.indexOf(dep);
         const cycle = [...stack.slice(from), dep];
-        throw new RegistryError('dependency-cycle', `dependency cycle: ${cycle.join(' -> ')}`, cycle);
+        throw new RegistryError(
+          'dependency-cycle',
+          `dependency cycle: ${cycle.join(' -> ')}`,
+          cycle
+        );
       }
       if (c === WHITE) visit(dep);
     }
@@ -276,9 +281,11 @@ function parseSemVerOrThrow(version: string, who: string): void {
   try {
     parseSemVer(version);
   } catch {
-    throw new RegistryError('invalid-version', `invalid version ${JSON.stringify(version)} in ${who}`, [
-      who,
-    ]);
+    throw new RegistryError(
+      'invalid-version',
+      `invalid version ${JSON.stringify(version)} in ${who}`,
+      [who]
+    );
   }
 }
 
@@ -287,8 +294,10 @@ function parseRangeOrThrow(range: string, who: string): void {
     // `satisfies` parses the range; use a throwaway version to force parsing.
     satisfies('0.0.0', range);
   } catch {
-    throw new RegistryError('invalid-version', `invalid version range ${JSON.stringify(range)} in ${who}`, [
-      who,
-    ]);
+    throw new RegistryError(
+      'invalid-version',
+      `invalid version range ${JSON.stringify(range)} in ${who}`,
+      [who]
+    );
   }
 }

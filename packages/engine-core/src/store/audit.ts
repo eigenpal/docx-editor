@@ -47,7 +47,7 @@ export class ReplayJournal {
   private readonly entries: JournalEntry[] = [];
   constructor(
     private readonly authToken: string,
-    private readonly maxEntries = 10_000,
+    private readonly maxEntries = 10_000
   ) {}
 
   append(entry: JournalEntry): void {

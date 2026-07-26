@@ -14,7 +14,12 @@ import {
   selectTextblockEnd,
   toggleMark,
 } from 'prosemirror-commands';
-import type { InteractionFrameId, InteractionOutcome, InputObservation, AccessibilityObservation } from '@docx-editor.dev/core-contract/interaction';
+import type {
+  InteractionFrameId,
+  InteractionOutcome,
+  InputObservation,
+  AccessibilityObservation,
+} from '@docx-editor.dev/core-contract/interaction';
 import {
   captureSelection,
   captureSelectionRange,
@@ -75,7 +80,10 @@ export interface EditSurface {
   readonly interactionAuthorized: boolean;
   readonly semanticProjectionAttached: boolean;
   readonly inputHostState: InputHostAssistiveState;
-  focus(options?: { sync?: SemanticSelectionSyncRequest; frameId?: InteractionFrameId }): InteractionOutcome<void>;
+  focus(options?: {
+    sync?: SemanticSelectionSyncRequest;
+    frameId?: InteractionFrameId;
+  }): InteractionOutcome<void>;
   blur(): void;
   destroy(): void;
   syncSemanticSelection(request: SemanticSelectionSyncRequest): InteractionOutcome<void>;
@@ -111,7 +119,10 @@ export interface EditSurface {
    * The PM-free vocabulary the public `Editor.can`/`Editor.exec` route through
    * (interactive-paginated-editing M4.0) — adapters never see ProseMirror.
    */
-  runEditCommand(command: EditSurfaceCommand, options?: { dryRun?: boolean }): EditSurfaceCommandResult;
+  runEditCommand(
+    command: EditSurfaceCommand,
+    options?: { dryRun?: boolean }
+  ): EditSurfaceCommandResult;
 }
 
 /** The editing commands the surface can run today. */
@@ -166,7 +177,6 @@ const DELEGATED_TO_PROSEMIRROR = new Set([
   // `unsupportedInputType` until a `w:br` run and its round-trip exist.
 ]);
 
-
 export interface MountEditSurfaceOptions {
   onModelChanged?: () => void;
   /**
@@ -216,7 +226,7 @@ export interface MountEditSurfaceOptions {
 function applyAnchorsToView(
   view: EditorView,
   range: { anchor: SelectionAnchor; head: SelectionAnchor },
-  atomicObjectId?: string,
+  atomicObjectId?: string
 ): boolean {
   const doc = view.state.doc;
   if (atomicObjectId) {
@@ -238,7 +248,7 @@ function applyAnchorsToView(
 export function mountEditSurface(
   mountParent: HTMLElement,
   session: DocxEditorSession,
-  options: MountEditSurfaceOptions = {},
+  options: MountEditSurfaceOptions = {}
 ): EditSurface {
   const readOnlyProjection = options.readOnlyProjection ?? !session.editable;
   const interactionAuthorized = !readOnlyProjection && session.editable;
@@ -248,7 +258,10 @@ export function mountEditSurface(
   const doc = mountParent.ownerDocument ?? document;
   const accessibleNamePolicy = resolveAccessibilityNamePolicy(options.accessibleName);
   const atomLabels = options.accessibilityAtomLabels;
-  const inputHost = createInputHostController(doc, { ...options.inputHost, accessibleName: options.accessibleName });
+  const inputHost = createInputHostController(doc, {
+    ...options.inputHost,
+    accessibleName: options.accessibleName,
+  });
   mountParent.append(inputHost.root);
 
   let ownedPopupDepth = 0;
@@ -280,7 +293,13 @@ export function mountEditSurface(
   }
 
   /** Step one UTF-16 code unit without landing inside a surrogate pair. */
-  function safeHorizontalPos(doc: EditorState['doc'], pos: number, dir: -1 | 1, innerStart: number, innerEnd: number): number | null {
+  function safeHorizontalPos(
+    doc: EditorState['doc'],
+    pos: number,
+    dir: -1 | 1,
+    innerStart: number,
+    innerEnd: number
+  ): number | null {
     let next = pos + dir;
     if (next < innerStart || next > innerEnd) return null;
     if (dir > 0 && pos < doc.content.size) {
@@ -303,10 +322,15 @@ export function mountEditSurface(
    * Provisional PM keymap navigation (happy-dom lacks native contenteditable caret moves).
    * Engine-aware visual navigation is task 5; real browser native behavior is task 4.8.
    */
-  function moveSelectionHorizontally(state: EditorState, dispatch: NonNullable<Parameters<typeof selectTextblockStart>[1]>, dir: -1 | 1): boolean {
+  function moveSelectionHorizontally(
+    state: EditorState,
+    dispatch: NonNullable<Parameters<typeof selectTextblockStart>[1]>,
+    dir: -1 | 1
+  ): boolean {
     const { selection } = state;
     if (!selection.empty) {
-      const pos = dir < 0 ? Math.min(selection.from, selection.to) : Math.max(selection.from, selection.to);
+      const pos =
+        dir < 0 ? Math.min(selection.from, selection.to) : Math.max(selection.from, selection.to);
       dispatch(state.tr.setSelection(TextSelection.create(state.doc, pos)).scrollIntoView());
       return true;
     }
@@ -320,7 +344,11 @@ export function mountEditSurface(
     return true;
   }
 
-  function extendSelectionHorizontally(state: EditorState, dispatch: NonNullable<Parameters<typeof selectTextblockStart>[1]>, dir: -1 | 1): boolean {
+  function extendSelectionHorizontally(
+    state: EditorState,
+    dispatch: NonNullable<Parameters<typeof selectTextblockStart>[1]>,
+    dir: -1 | 1
+  ): boolean {
     const { selection } = state;
     const $head = selection.$head;
     if (!$head.parent.isTextblock) return false;
@@ -328,7 +356,11 @@ export function mountEditSurface(
     const innerEnd = innerStart + $head.parent.content.size;
     const next = safeHorizontalPos(state.doc, $head.pos, dir, innerStart, innerEnd);
     if (next === null) return false;
-    dispatch(state.tr.setSelection(TextSelection.create(state.doc, selection.anchor, next)).scrollIntoView());
+    dispatch(
+      state.tr
+        .setSelection(TextSelection.create(state.doc, selection.anchor, next))
+        .scrollIntoView()
+    );
     return true;
   }
 
@@ -339,10 +371,14 @@ export function mountEditSurface(
           'Mod-z': () => doUndo(),
           'Mod-y': () => doRedo(),
           'Shift-Mod-z': () => doRedo(),
-          ArrowLeft: (state, dispatch) => (dispatch ? moveSelectionHorizontally(state, dispatch, -1) : false),
-          ArrowRight: (state, dispatch) => (dispatch ? moveSelectionHorizontally(state, dispatch, 1) : false),
-          'Shift-ArrowLeft': (state, dispatch) => (dispatch ? extendSelectionHorizontally(state, dispatch, -1) : false),
-          'Shift-ArrowRight': (state, dispatch) => (dispatch ? extendSelectionHorizontally(state, dispatch, 1) : false),
+          ArrowLeft: (state, dispatch) =>
+            dispatch ? moveSelectionHorizontally(state, dispatch, -1) : false,
+          ArrowRight: (state, dispatch) =>
+            dispatch ? moveSelectionHorizontally(state, dispatch, 1) : false,
+          'Shift-ArrowLeft': (state, dispatch) =>
+            dispatch ? extendSelectionHorizontally(state, dispatch, -1) : false,
+          'Shift-ArrowRight': (state, dispatch) =>
+            dispatch ? extendSelectionHorizontally(state, dispatch, 1) : false,
           Home: selectTextblockStart,
           End: selectTextblockEnd,
         }),
@@ -388,10 +424,14 @@ export function mountEditSurface(
       return rejectUnauthorizedInput('input rejected because the edit surface was destroyed');
     }
     if (layoutPending) {
-      return rejectUnauthorizedInput('input rejected because layout for the current interaction frame is pending');
+      return rejectUnauthorizedInput(
+        'input rejected because layout for the current interaction frame is pending'
+      );
     }
     if (!inputAuthorized) {
-      return rejectUnauthorizedInput('input rejected because focus did not authorize semantic sync');
+      return rejectUnauthorizedInput(
+        'input rejected because focus did not authorize semantic sync'
+      );
     }
     return null;
   }
@@ -645,7 +685,10 @@ export function mountEditSurface(
       if (imeComposing) {
         pendingCompositionCommit = true;
         if (compositionSnapshot) {
-          pendingComposedText = deriveCompositionOverlay(compositionSnapshot, pmParagraphText(compositionSnapshot.paragraphId));
+          pendingComposedText = deriveCompositionOverlay(
+            compositionSnapshot,
+            pmParagraphText(compositionSnapshot.paragraphId)
+          );
         }
         return;
       }
@@ -663,7 +706,8 @@ export function mountEditSurface(
   function pmParagraphText(paragraphId: string): string {
     let text = '';
     view.state.doc.forEach((node) => {
-      if (node.type.name === 'paragraph' && node.attrs.semId === paragraphId) text = node.textContent;
+      if (node.type.name === 'paragraph' && node.attrs.semId === paragraphId)
+        text = node.textContent;
     });
     return text;
   }
@@ -673,7 +717,11 @@ export function mountEditSurface(
     return overlay.length > 0;
   }
 
-  function cancelComposition(code: CompositionCancelOutcome['code'], reason: string, anchor?: SelectionAnchor) {
+  function cancelComposition(
+    code: CompositionCancelOutcome['code'],
+    reason: string,
+    anchor?: SelectionAnchor
+  ) {
     lastCompositionCancel = { code, reason };
     pendingCompositionCommit = false;
     reprojectFromModel(anchor ?? compositionSnapshot?.anchor ?? captureSelection(view.state), true);
@@ -691,7 +739,12 @@ export function mountEditSurface(
     const canonical = paragraphText(session.currentModel(), snapshot.paragraphId) ?? '';
     const mapped = mapCompositionRangeAfterRemote(snapshot, canonical);
     if (!mapped) return;
-    const merged = applyCompositionOverlay(canonical, mapped.selectionStart, mapped.selectionEnd, overlay);
+    const merged = applyCompositionOverlay(
+      canonical,
+      mapped.selectionStart,
+      mapped.selectionEnd,
+      overlay
+    );
     let innerStart: number | null = null;
     let innerEnd = 0;
     view.state.doc.forEach((node, offset) => {
@@ -702,7 +755,9 @@ export function mountEditSurface(
     });
     if (innerStart === null) return;
     reconciling = true;
-    view.dispatch(view.state.tr.insertText(merged, innerStart, innerEnd).setMeta('addToHistory', false));
+    view.dispatch(
+      view.state.tr.insertText(merged, innerStart, innerEnd).setMeta('addToHistory', false)
+    );
     reconciling = false;
   }
 
@@ -720,12 +775,19 @@ export function mountEditSurface(
     pendingCompositionCommit = false;
     const anchor = snapshot?.anchor;
 
-    if (deferredRemote && snapshot && !remoteChangePreservesCompositionAnchor(
-      snapshot,
-      paragraphText(session.currentModel(), snapshot.paragraphId) ?? '',
-      session.revision(),
-    )) {
-      cancelComposition('remoteInvalidation', 'remote canonical change intersected the composition anchor');
+    if (
+      deferredRemote &&
+      snapshot &&
+      !remoteChangePreservesCompositionAnchor(
+        snapshot,
+        paragraphText(session.currentModel(), snapshot.paragraphId) ?? '',
+        session.revision()
+      )
+    ) {
+      cancelComposition(
+        'remoteInvalidation',
+        'remote canonical change intersected the composition anchor'
+      );
       applyDeferredRemote();
       return;
     }
@@ -738,13 +800,19 @@ export function mountEditSurface(
     if (hadPending && compositionHasNetPmChange(overlay, snapshot)) {
       const res = commitEdit(anchor);
       if (res.rejected) {
-        cancelComposition('capabilityBoundary', 'composition crossed an unsupported capability boundary');
+        cancelComposition(
+          'capabilityBoundary',
+          'composition crossed an unsupported capability boundary'
+        );
         applyDeferredRemote();
         return;
       }
       if (res.committed) lastCompositionCancel = null;
     } else if (hadPending && snapshot && overlay.length === 0) {
-      lastCompositionCancel = { code: 'cancelled', reason: 'composition ended without committed text' };
+      lastCompositionCancel = {
+        code: 'cancelled',
+        reason: 'composition ended without committed text',
+      };
       reprojectFromModel(anchor, false);
     }
 
@@ -887,7 +955,11 @@ export function mountEditSurface(
       }
       if (retainedSemanticSelection) {
         if (!frameId) {
-          return { ok: false, code: 'invalidTarget', reason: 'focus requires current interaction frame identity' };
+          return {
+            ok: false,
+            code: 'invalidTarget',
+            reason: 'focus requires current interaction frame identity',
+          };
         }
         // The stale-frame guard stays: a caller that does not hold the frame the
         // retained selection belongs to must not be granted input authorization.
@@ -910,7 +982,11 @@ export function mountEditSurface(
         return synced;
       }
       if (!frameId) {
-        return { ok: false, code: 'invalidTarget', reason: 'focus requires current interaction frame identity' };
+        return {
+          ok: false,
+          code: 'invalidTarget',
+          reason: 'focus requires current interaction frame identity',
+        };
       }
       view.focus();
       // Re-authorize input on this branch too.
@@ -1017,7 +1093,11 @@ export function mountEditSurface(
       }
       const markType = view.state.schema.marks[command.mark];
       if (!markType) {
-        return { ok: false, code: 'unsupported', reason: `mark ${command.mark} is not in the schema` };
+        return {
+          ok: false,
+          code: 'unsupported',
+          reason: `mark ${command.mark} is not in the schema`,
+        };
       }
       const toggle = toggleMark(markType);
       if (dryRun) return { ok: true, changed: toggle(view.state) };
@@ -1037,7 +1117,7 @@ export function mountEditSurface(
           frameId: request.frameId,
           owner: 'proseMirrorInputHost',
           paintedPagesAssistiveRole: 'presentation',
-        }),
+        })
       ),
   };
 
@@ -1071,7 +1151,8 @@ export function mountEditSurface(
       view.dom.dispatchEvent(new CompositionEvent(type, { bubbles: true, cancelable: true, data }));
     };
     const replaceComposedText = (text: string) => {
-      if (!compositionRange) compositionRange = { from: view.state.selection.from, to: view.state.selection.to };
+      if (!compositionRange)
+        compositionRange = { from: view.state.selection.from, to: view.state.selection.to };
       const { from, to } = compositionRange;
       if (text.length === 0) {
         if (to > from) view.dispatch(view.state.tr.delete(from, to));

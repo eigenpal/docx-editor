@@ -18,14 +18,20 @@ export interface RelationshipRecord {
   readonly order: number; // significant order within the owner's rels
 }
 
-export type RelationshipError = { readonly code: 'duplicate-id'; readonly ownerPart: string; readonly id: string };
+export type RelationshipError = {
+  readonly code: 'duplicate-id';
+  readonly ownerPart: string;
+  readonly id: string;
+};
 
 export type RelationshipSetResult =
   | { readonly ok: true; readonly byOwner: ReadonlyMap<string, readonly RelationshipRecord[]> }
   | { readonly ok: false; readonly error: RelationshipError };
 
 /** Group relationships by owner in authored order; reject duplicate ids per owner. */
-export function buildRelationshipSet(records: readonly RelationshipRecord[]): RelationshipSetResult {
+export function buildRelationshipSet(
+  records: readonly RelationshipRecord[]
+): RelationshipSetResult {
   const byOwner = new Map<string, RelationshipRecord[]>();
   const idsByOwner = new Map<string, Set<string>>();
   for (const rec of [...records].sort((a, b) => a.order - b.order)) {
@@ -54,7 +60,15 @@ export type ResolvedRelationship =
  */
 export function resolveRelationship(rec: RelationshipRecord): ResolvedRelationship {
   if (rec.targetMode === 'External') {
-    return { mode: 'External', sinkSafe: validateExternalTarget(rec.rawTarget), raw: rec.rawTarget };
+    return {
+      mode: 'External',
+      sinkSafe: validateExternalTarget(rec.rawTarget),
+      raw: rec.rawTarget,
+    };
   }
-  return { mode: 'Internal', target: resolveInternalTarget(rec.ownerPart, rec.rawTarget), raw: rec.rawTarget };
+  return {
+    mode: 'Internal',
+    target: resolveInternalTarget(rec.ownerPart, rec.rawTarget),
+    raw: rec.rawTarget,
+  };
 }

@@ -113,7 +113,7 @@ export function compareArtifacts(
   name: ComparatorName,
   left: unknown,
   right: unknown,
-  opts: { epsilon?: number } = {},
+  opts: { epsilon?: number } = {}
 ): ComparisonResult {
   const d = COMPARATORS[name];
   switch (d.mode) {

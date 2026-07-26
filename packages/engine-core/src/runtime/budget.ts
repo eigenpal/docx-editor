@@ -32,7 +32,7 @@ export class Budget {
 
   constructor(
     readonly label: string,
-    readonly capacity: number,
+    readonly capacity: number
   ) {
     this.used = new BoundedCounter(`${label}.budget`, capacity);
   }
@@ -95,12 +95,12 @@ export class Budget {
     if (this.disposed) return;
     if (this.children.size > 0) {
       throw new BudgetError(
-        `${this.label}: cannot release with ${this.children.size} child budget(s) outstanding`,
+        `${this.label}: cannot release with ${this.children.size} child budget(s) outstanding`
       );
     }
     if (this.activeReservations > 0) {
       throw new BudgetError(
-        `${this.label}: cannot release with ${this.activeReservations} reservation(s) outstanding`,
+        `${this.label}: cannot release with ${this.activeReservations} reservation(s) outstanding`
       );
     }
     const errors: unknown[] = [];
@@ -118,7 +118,9 @@ export class Budget {
       this.parent = undefined;
     }
     if (errors.length > 0) {
-      throw new BudgetError(`${this.label}: ${errors.length} cleanup error(s); first: ${String(errors[0])}`);
+      throw new BudgetError(
+        `${this.label}: ${errors.length} cleanup error(s); first: ${String(errors[0])}`
+      );
     }
   }
 

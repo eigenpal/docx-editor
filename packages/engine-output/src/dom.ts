@@ -5,7 +5,12 @@
 // 1/1440in) convert to CSS px (96/in).
 
 import type { LayoutResult, Page, TextItem, RectItem } from '@docx-editor.dev/engine-layout';
-import { registerDisplayItemRenderer, renderDisplayItem, displayItemLayer, orderedLayers } from './output-capabilities.ts';
+import {
+  registerDisplayItemRenderer,
+  renderDisplayItem,
+  displayItemLayer,
+  orderedLayers,
+} from './output-capabilities.ts';
 
 const TWIPS_PER_PX = 15; // 1440 twips/in ÷ 96 px/in
 
@@ -98,7 +103,11 @@ export function markOneSurfaceClickTarget(pageEl: HTMLElement): HTMLElement | nu
 }
 
 /** Paint a full layout into a container element. Returns the page elements. */
-export function renderToDom(layout: LayoutResult, container: HTMLElement, doc: Document = document): HTMLElement[] {
+export function renderToDom(
+  layout: LayoutResult,
+  container: HTMLElement,
+  doc: Document = document
+): HTMLElement[] {
   const pages: HTMLElement[] = [];
   for (const page of layout.pages) {
     const el = renderPageElement(page, doc);

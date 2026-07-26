@@ -11,13 +11,16 @@ export function buildModelChange(
   commitId: string,
   origin: string,
   effects: readonly OpEffect[],
-  normalized: boolean,
+  normalized: boolean
 ): ModelChange {
   const dirty = new Set<string>();
   const deleted = new Set<string>();
   const created = new Set<string>();
   const moves: { id: string; from: number; to: number }[] = [];
-  const splitJoin: ({ split: { from: string; tail: string } } | { join: { kept: string; removed: string } })[] = [];
+  const splitJoin: (
+    | { split: { from: string; tail: string } }
+    | { join: { kept: string; removed: string } }
+  )[] = [];
   const dependencyKeys = new Set<string>();
 
   for (const e of effects) {

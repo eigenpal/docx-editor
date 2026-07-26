@@ -25,7 +25,7 @@ export class YjsBinding {
 
   constructor(
     readonly store: DocumentStore,
-    private readonly backend: YjsBackend,
+    private readonly backend: YjsBackend
   ) {}
 
   /** Whether the binding is currently wired. */

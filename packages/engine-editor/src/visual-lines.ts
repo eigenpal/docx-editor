@@ -1,9 +1,21 @@
 // Build layout-authoritative visual line records for keyboard navigation (task 5.5).
 
-import type { BlockSemanticRecord, SemanticPositionIndex } from '@docx-editor.dev/core-contract/interaction';
+import type {
+  BlockSemanticRecord,
+  SemanticPositionIndex,
+} from '@docx-editor.dev/core-contract/interaction';
 import type { PackageModel } from '@docx-editor.dev/engine-core';
-import type { CaretEdgeItem, Page, VisualLineIdentity as LayoutLineIdentity } from '@docx-editor.dev/engine-layout';
-import { caretAffinity, paragraphGraphemeCountById, paragraphTextById, twipsToPx } from './semantic-index.ts';
+import type {
+  CaretEdgeItem,
+  Page,
+  VisualLineIdentity as LayoutLineIdentity,
+} from '@docx-editor.dev/engine-layout';
+import {
+  caretAffinity,
+  paragraphGraphemeCountById,
+  paragraphTextById,
+  twipsToPx,
+} from './semantic-index.ts';
 import type {
   FragmentInteractionMeta,
   VisualCaretEdge,
@@ -29,7 +41,10 @@ const px = twipsToPx;
  */
 const blockRecordCache = new WeakMap<SemanticPositionIndex, Map<string, BlockSemanticRecord>>();
 
-function blockRecord(index: SemanticPositionIndex, blockId: string): BlockSemanticRecord | undefined {
+function blockRecord(
+  index: SemanticPositionIndex,
+  blockId: string
+): BlockSemanticRecord | undefined {
   let byId = blockRecordCache.get(index);
   if (!byId) {
     byId = new Map();
@@ -64,7 +79,11 @@ type PaintSliceSpan = {
   readonly syntheticWhitespace?: boolean;
 };
 
-function paintSliceMetaKey(pageIndex: number, line: LayoutLineIdentity, anchorOffset: number): string {
+function paintSliceMetaKey(
+  pageIndex: number,
+  line: LayoutLineIdentity,
+  anchorOffset: number
+): string {
   return `${pageIndex}:${line.lineId}:${line.fragmentId}:${anchorOffset}`;
 }
 
@@ -96,7 +115,9 @@ function fragmentConflictComparable(meta: FragmentInteractionMeta): string {
 }
 
 function augmentSlicesWithWhitespaceGaps(slices: readonly PaintSliceSpan[]): PaintSliceSpan[] {
-  const sorted = [...slices].filter((slice) => !slice.syntheticWhitespace).sort((a, b) => a.anchor - b.anchor);
+  const sorted = [...slices]
+    .filter((slice) => !slice.syntheticWhitespace)
+    .sort((a, b) => a.anchor - b.anchor);
   const augmented: PaintSliceSpan[] = [...sorted];
   for (let i = 0; i < sorted.length - 1; i += 1) {
     const left = sorted[i]!;
@@ -116,7 +137,7 @@ function augmentSlicesWithWhitespaceGaps(slices: readonly PaintSliceSpan[]): Pai
 
 function buildRealPaintSliceIndex(
   pages: readonly Page[],
-  roleForParagraph: (paragraphId: string) => FragmentInteractionMeta['role'],
+  roleForParagraph: (paragraphId: string) => FragmentInteractionMeta['role']
 ): Map<string, PaintSliceSpan[]> {
   const byFragment = new Map<string, PaintSliceSpan[]>();
   for (const page of pages) {
@@ -149,7 +170,7 @@ function buildRealPaintSliceIndex(
   for (const [fragKey, spans] of byFragment) {
     byFragment.set(
       fragKey,
-      [...spans].sort((a, b) => a.anchor - b.anchor),
+      [...spans].sort((a, b) => a.anchor - b.anchor)
     );
   }
   return byFragment;
@@ -157,7 +178,7 @@ function buildRealPaintSliceIndex(
 
 function buildNavigationPaintSliceIndex(
   pages: readonly Page[],
-  roleForParagraph: (paragraphId: string) => FragmentInteractionMeta['role'],
+  roleForParagraph: (paragraphId: string) => FragmentInteractionMeta['role']
 ): Map<string, PaintSliceSpan[]> {
   const real = buildRealPaintSliceIndex(pages, roleForParagraph);
   const withGaps = new Map<string, PaintSliceSpan[]>();
@@ -224,7 +245,15 @@ function sliceIndexFor(slices: readonly PaintSliceSpan[]): SliceIndex {
   // `realSlices.filter(...).at(-1)` relied on ascending `utf16End`; make it explicit.
   real.sort((a, b) => a.utf16End - b.utf16End);
   const byAnchor = [...slices].sort((a, b) => a.anchor - b.anchor);
-  const index: SliceIndex = { real, endingAt, startingAt, realStartingAt, realEndingAt, byAnchor, maxSpan };
+  const index: SliceIndex = {
+    real,
+    endingAt,
+    startingAt,
+    realStartingAt,
+    realEndingAt,
+    byAnchor,
+    maxSpan,
+  };
   sliceIndexCache.set(slices, index);
   return index;
 }
@@ -266,7 +295,7 @@ function lastRealEndingAtOrBefore(index: SliceIndex, offset: number): PaintSlice
 function resolveEdgePaintSlice(
   utf16Offset: number,
   paragraphUtf16Length: number,
-  slices: readonly PaintSliceSpan[],
+  slices: readonly PaintSliceSpan[]
 ): { meta: FragmentInteractionMeta; paintSliceAnchor: number } | null {
   if (slices.length === 0) return null;
 
@@ -324,7 +353,7 @@ export function buildVisualLines(
   semanticIndex: SemanticPositionIndex,
   model: PackageModel,
   metaBySliceKey: Readonly<Record<string, FragmentInteractionMeta>>,
-  paintFragmentConflicts: readonly string[],
+  paintFragmentConflicts: readonly string[]
 ): VisualLineRecord[] {
   void metaBySliceKey;
   const story = semanticIndex.stories[0];
@@ -354,7 +383,7 @@ export function buildVisualLines(
       const resolved = resolveEdgePaintSlice(
         edgeItem.utf16Offset,
         paragraphUtf16Length,
-        sliceIndex.get(fragKey) ?? [],
+        sliceIndex.get(fragKey) ?? []
       );
       if (!resolved) continue;
 
@@ -383,7 +412,9 @@ export function buildVisualLines(
           identity: { storyId: story.storyId, blockId: edgeItem.paragraphId },
           graphemeOffset: edgeItem.graphemeOffset,
           affinity:
-            edgeItem.affinity === 'downstream' ? 'downstream' : caretAffinity(edgeItem.graphemeOffset, paragraphGraphemeCount),
+            edgeItem.affinity === 'downstream'
+              ? 'downstream'
+              : caretAffinity(edgeItem.graphemeOffset, paragraphGraphemeCount),
         },
         role: roleForParagraph(edgeItem.paragraphId),
         pageLocalX: px(edgeItem.x),
@@ -400,7 +431,9 @@ export function buildVisualLines(
     }
   }
 
-  const blockOrder = new Map(story.blocks.map((block) => [block.identity.blockId, block.orderIndex]));
+  const blockOrder = new Map(
+    story.blocks.map((block) => [block.identity.blockId, block.orderIndex])
+  );
 
   const sorted = [...buckets.values()].sort((a, b) => {
     const blockA = [...a.edges.values()][0]?.target.identity.blockId ?? '';
@@ -408,7 +441,8 @@ export function buildVisualLines(
     const orderDiff = (blockOrder.get(blockA) ?? 0) - (blockOrder.get(blockB) ?? 0);
     if (orderDiff !== 0) return orderDiff;
     if (a.line.lineIndex !== b.line.lineIndex) return a.line.lineIndex - b.line.lineIndex;
-    if (a.line.fragmentIndex !== b.line.fragmentIndex) return a.line.fragmentIndex - b.line.fragmentIndex;
+    if (a.line.fragmentIndex !== b.line.fragmentIndex)
+      return a.line.fragmentIndex - b.line.fragmentIndex;
     return a.pageIndex - b.pageIndex;
   });
 
@@ -430,7 +464,9 @@ export function buildVisualLines(
     }
     const blockId = [...bucket.edges.values()][0]?.target.identity.blockId ?? '';
     const edges = [...bucket.edges.values()].sort(
-      (left, right) => left.pageLocalX - right.pageLocalX || left.target.graphemeOffset - right.target.graphemeOffset,
+      (left, right) =>
+        left.pageLocalX - right.pageLocalX ||
+        left.target.graphemeOffset - right.target.graphemeOffset
     );
     const xs = edges.map((edge) => edge.pageLocalX);
     const ys = edges.map((edge) => edge.pageLocalY);
@@ -455,7 +491,7 @@ export function buildVisualLines(
 
 export function collectFragmentMetaFromLayout(
   pages: readonly Page[],
-  roleForParagraph: (paragraphId: string) => FragmentInteractionMeta['role'],
+  roleForParagraph: (paragraphId: string) => FragmentInteractionMeta['role']
 ): { metaBySliceKey: Record<string, FragmentInteractionMeta>; conflicts: readonly string[] } {
   const bySlice: Record<string, FragmentInteractionMeta> = {};
   const byFragment: Record<string, FragmentInteractionMeta> = {};

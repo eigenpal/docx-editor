@@ -1,11 +1,7 @@
 // Unicode word segmentation for semantic double-click selection (interactive-paginated-editing 5.3).
 // Uses Intl.Segmenter through an explicit replaceable boundary; fallback is bounded and grapheme-safe.
 
-import {
-  segmentGraphemes,
-  utf16OffsetToGrapheme,
-  type GraphemeSegment,
-} from './grapheme.ts';
+import { segmentGraphemes, utf16OffsetToGrapheme, type GraphemeSegment } from './grapheme.ts';
 
 export interface WordSegment {
   readonly utf16From: number;
@@ -28,7 +24,7 @@ type IntlWordSegment = {
 
 type IntlWordSegmenterCtor = new (
   locales?: string | string[],
-  options?: { granularity: 'word' },
+  options?: { granularity: 'word' }
 ) => { segment(input: string): Iterable<IntlWordSegment> };
 
 export function isIntlWordSegmenterAvailable(): boolean {
@@ -39,7 +35,7 @@ function requireIntlWordSegmenter(): IntlWordSegmenterCtor {
   const Seg = (Intl as unknown as { Segmenter?: IntlWordSegmenterCtor }).Segmenter;
   if (typeof Seg !== 'function') {
     throw new Error(
-      `Intl.Segmenter is required for word segmentation (locale: ${WORD_SEGMENTER_LOCALE})`,
+      `Intl.Segmenter is required for word segmentation (locale: ${WORD_SEGMENTER_LOCALE})`
     );
   }
   return Seg;
@@ -47,7 +43,9 @@ function requireIntlWordSegmenter(): IntlWordSegmenterCtor {
 
 /** Intl.Segmenter word boundary for the invariant locale. */
 export function createIntlWordBoundary(): WordBoundary {
-  const segmenter = new (requireIntlWordSegmenter())(WORD_SEGMENTER_LOCALE, { granularity: 'word' });
+  const segmenter = new (requireIntlWordSegmenter())(WORD_SEGMENTER_LOCALE, {
+    granularity: 'word',
+  });
   return {
     segment(text: string): readonly WordSegment[] {
       const out: WordSegment[] = [];
@@ -76,7 +74,7 @@ function segmentRange(
   graphemes: readonly GraphemeSegment[],
   fromIndex: number,
   toIndex: number,
-  wordLike: boolean,
+  wordLike: boolean
 ): WordSegment {
   const first = graphemes[fromIndex]!;
   const last = graphemes[toIndex - 1]!;
@@ -148,7 +146,10 @@ export function resolveDefaultWordBoundary(): WordBoundary {
   return resolvedProductionBoundary;
 }
 
-export function segmentWords(text: string, boundary: WordBoundary = resolveDefaultWordBoundary()): readonly WordSegment[] {
+export function segmentWords(
+  text: string,
+  boundary: WordBoundary = resolveDefaultWordBoundary()
+): readonly WordSegment[] {
   return boundary.segment(text);
 }
 
@@ -161,7 +162,7 @@ export interface GraphemeWordSegmentRecord {
 /** Map UTF-16 word segments to grapheme-safe half-open ranges within one paragraph. */
 export function wordSegmentsToGraphemeRecords(
   text: string,
-  segments: readonly WordSegment[],
+  segments: readonly WordSegment[]
 ): readonly GraphemeWordSegmentRecord[] {
   return segments.map((seg) => ({
     graphemeFrom: utf16OffsetToGrapheme(text, seg.utf16From),

@@ -42,7 +42,7 @@ function paragraphEditableInLane(context: ParagraphTraversalContext): boolean {
 function walk(
   blocks: readonly Block[],
   context: ParagraphTraversalContext,
-  blockId: string,
+  blockId: string
 ): ParagraphOwnership | null {
   for (const block of flattenSdt(blocks)) {
     if (block.kind === 'paragraph' && block.id === blockId) {
@@ -56,7 +56,11 @@ function walk(
     if (block.kind === 'table') {
       for (const row of (block as TableRecord).rows) {
         for (const cell of row.cells) {
-          const found = walk(cell.blocks, { inTopLevelBodyFlow: false, inTableCell: true }, blockId);
+          const found = walk(
+            cell.blocks,
+            { inTopLevelBodyFlow: false, inTableCell: true },
+            blockId
+          );
           if (found) return found;
         }
       }
@@ -66,7 +70,11 @@ function walk(
 }
 
 /** Locate a paragraph and whether the binding lane may edit it. */
-export function paragraphOwnership(model: PackageModel, blockId: string, storyId = bodyStoryId(model)): ParagraphOwnership | null {
+export function paragraphOwnership(
+  model: PackageModel,
+  blockId: string,
+  storyId = bodyStoryId(model)
+): ParagraphOwnership | null {
   const story = model.stories.get(storyId);
   if (!story) return null;
   return walk(story.blocks, { inTopLevelBodyFlow: true, inTableCell: false }, blockId);
@@ -76,7 +84,7 @@ export function paragraphOwnership(model: PackageModel, blockId: string, storyId
 export function topLevelBlockKind(
   model: PackageModel,
   blockId: string,
-  storyId = bodyStoryId(model),
+  storyId = bodyStoryId(model)
 ): 'paragraph' | 'readOnlyBlock' | 'missing' {
   const story = model.stories.get(storyId);
   if (!story) return 'missing';

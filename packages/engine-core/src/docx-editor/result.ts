@@ -6,7 +6,13 @@
 
 import type { StoreFailure } from '../store/index.ts';
 
-export type ResultStatus = 'ok' | 'validation' | 'conflict' | 'resource' | 'authorization' | 'aborted';
+export type ResultStatus =
+  | 'ok'
+  | 'validation'
+  | 'conflict'
+  | 'resource'
+  | 'authorization'
+  | 'aborted';
 
 export type Result<T = void> =
   | { readonly status: 'ok'; readonly value: T; readonly revision: number }

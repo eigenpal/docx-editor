@@ -28,7 +28,7 @@ export function inheritableParagraphAttributes(attrs: string): string {
 
 function findParagraph(
   model: PackageModel,
-  paragraphId: string,
+  paragraphId: string
 ): { storyId: string; index: number; story: Story } | undefined {
   for (const [storyId, story] of model.stories) {
     const index = story.blocks.findIndex((b) => b.kind === 'paragraph' && b.id === paragraphId);
@@ -38,7 +38,10 @@ function findParagraph(
 }
 
 /** Split a run list at a character offset into [head, tail], splitting a run if needed. */
-export function splitRunsAt(runs: readonly RunRecord[], offset: number): [RunRecord[], RunRecord[]] {
+export function splitRunsAt(
+  runs: readonly RunRecord[],
+  offset: number
+): [RunRecord[], RunRecord[]] {
   const head: RunRecord[] = [];
   const tail: RunRecord[] = [];
   let remaining = offset;
@@ -56,7 +59,11 @@ export function splitRunsAt(runs: readonly RunRecord[], offset: number): [RunRec
   return [head, tail];
 }
 
-function replaceStory(model: PackageModel, storyId: string, blocks: readonly ParagraphRecord[]): PackageModel {
+function replaceStory(
+  model: PackageModel,
+  storyId: string,
+  blocks: readonly ParagraphRecord[]
+): PackageModel {
   const story = model.stories.get(storyId)!;
   const stories = new Map(model.stories);
   stories.set(storyId, { ...story, blocks });
@@ -73,7 +80,7 @@ export function splitParagraph(
   model: PackageModel,
   paragraphId: string,
   charOffset: number,
-  opts: { tailId?: string } = {},
+  opts: { tailId?: string } = {}
 ): SplitResult {
   const loc = findParagraph(model, paragraphId);
   if (!loc) throw new Error(`paragraph ${paragraphId} not found`);
@@ -92,7 +99,9 @@ export function splitParagraph(
   // ATTRIBUTES capsule is INHERITED WITHOUT its unique identities (w14:paraId/textId) so the tail
   // does not duplicate the head's identity, but KEEPS the namespace declarations + markup-compat +
   // rsid the copied w:pPr may depend on (a w:pPr using a w14: attribute needs the tail's xmlns:w14).
-  const tailAttrs = para.pAttrsCapsule ? inheritableParagraphAttributes(para.pAttrsCapsule) : undefined;
+  const tailAttrs = para.pAttrsCapsule
+    ? inheritableParagraphAttributes(para.pAttrsCapsule)
+    : undefined;
   const tail: ParagraphRecord = {
     kind: 'paragraph',
     id: tailId,
@@ -107,7 +116,11 @@ export function splitParagraph(
 }
 
 /** Join `secondId` into `firstId`; the first survivor keeps its id, the second is removed. */
-export function joinParagraphs(model: PackageModel, firstId: string, secondId: string): PackageModel {
+export function joinParagraphs(
+  model: PackageModel,
+  firstId: string,
+  secondId: string
+): PackageModel {
   const first = findParagraph(model, firstId);
   const second = findParagraph(model, secondId);
   if (!first || !second) throw new Error('join target not found');
@@ -122,7 +135,12 @@ export function joinParagraphs(model: PackageModel, firstId: string, secondId: s
 }
 
 /** Move a block within its story; identity is retained. */
-export function moveBlock(model: PackageModel, storyId: string, fromIndex: number, toIndex: number): PackageModel {
+export function moveBlock(
+  model: PackageModel,
+  storyId: string,
+  fromIndex: number,
+  toIndex: number
+): PackageModel {
   const story = model.stories.get(storyId);
   if (!story) throw new Error(`unknown story ${storyId}`);
   const blocks = [...story.blocks];
@@ -144,7 +162,7 @@ export function replaceParagraph(
   model: PackageModel,
   paragraphId: string,
   newRuns: readonly RunRecord[],
-  opts: { newId?: string } = {},
+  opts: { newId?: string } = {}
 ): ReplaceResult {
   const loc = findParagraph(model, paragraphId);
   if (!loc) throw new Error(`paragraph ${paragraphId} not found`);
@@ -170,7 +188,12 @@ export function deleteParagraph(model: PackageModel, paragraphId: string): Delet
   if (!loc) throw new Error(`paragraph ${paragraphId} not found`);
   const removed = loc.story.blocks[loc.index] as ParagraphRecord;
   const blocks = (loc.story.blocks as ParagraphRecord[]).filter((_, i) => i !== loc.index);
-  return { model: replaceStory(model, loc.storyId, blocks), storyId: loc.storyId, index: loc.index, removed };
+  return {
+    model: replaceStory(model, loc.storyId, blocks),
+    storyId: loc.storyId,
+    index: loc.index,
+    removed,
+  };
 }
 
 /** Undo of delete: reinsert the removed paragraph at its index with its exact id. */
@@ -178,7 +201,7 @@ export function restoreParagraph(
   model: PackageModel,
   storyId: string,
   index: number,
-  paragraph: ParagraphRecord,
+  paragraph: ParagraphRecord
 ): PackageModel {
   const story = model.stories.get(storyId);
   if (!story) throw new Error(`unknown story ${storyId}`);

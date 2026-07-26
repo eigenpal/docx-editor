@@ -55,9 +55,7 @@ export function useImageActions({ editorRef }: { editorRef: React.RefObject<Edit
         ...(data.horizontal?.posOffset !== undefined
           ? { horizontalEmu: data.horizontal.posOffset }
           : {}),
-        ...(data.vertical?.posOffset !== undefined
-          ? { verticalEmu: data.vertical.posOffset }
-          : {}),
+        ...(data.vertical?.posOffset !== undefined ? { verticalEmu: data.vertical.posOffset } : {}),
         ...(data.horizontal?.relativeTo ? { relativeToH: data.horizontal.relativeTo } : {}),
         ...(data.vertical?.relativeTo ? { relativeToV: data.vertical.relativeTo } : {}),
       });

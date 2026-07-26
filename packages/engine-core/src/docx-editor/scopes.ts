@@ -13,7 +13,10 @@ export type Scope =
 
 export type ScopeResolution =
   | { readonly ok: true; readonly storyId: string }
-  | { readonly ok: false; readonly reason: 'aggregate-not-writable' | 'unknown-story' | 'no-active-story' };
+  | {
+      readonly ok: false;
+      readonly reason: 'aggregate-not-writable' | 'unknown-story' | 'no-active-story';
+    };
 
 export interface ScopeContext {
   /** The currently active story (e.g. an editing cursor in a header). */
@@ -25,13 +28,19 @@ export interface ScopeContext {
  * active story — if that is a header/footer, the write goes there, never the body.
  * Aggregate is read-only and cannot resolve to a write target.
  */
-export function resolveWriteScope(model: PackageModel, scope: Scope | undefined, ctx: ScopeContext = {}): ScopeResolution {
+export function resolveWriteScope(
+  model: PackageModel,
+  scope: Scope | undefined,
+  ctx: ScopeContext = {}
+): ScopeResolution {
   const s: Scope = scope ?? { kind: 'active' };
   switch (s.kind) {
     case 'body':
       return { ok: true, storyId: bodyStoryId(model) };
     case 'story':
-      return model.stories.has(s.storyId) ? { ok: true, storyId: s.storyId } : { ok: false, reason: 'unknown-story' };
+      return model.stories.has(s.storyId)
+        ? { ok: true, storyId: s.storyId }
+        : { ok: false, reason: 'unknown-story' };
     case 'active': {
       if (ctx.activeStoryId === undefined) return { ok: false, reason: 'no-active-story' };
       return model.stories.has(ctx.activeStoryId)
@@ -44,7 +53,11 @@ export function resolveWriteScope(model: PackageModel, scope: Scope | undefined,
 }
 
 /** The story ids a READ scope spans (aggregate = all stories). */
-export function resolveReadScope(model: PackageModel, scope: Scope | undefined, ctx: ScopeContext = {}): string[] {
+export function resolveReadScope(
+  model: PackageModel,
+  scope: Scope | undefined,
+  ctx: ScopeContext = {}
+): string[] {
   const s: Scope = scope ?? { kind: 'active' };
   if (s.kind === 'aggregate') return [...model.stories.keys()];
   const w = resolveWriteScope(model, s, ctx);

@@ -34,7 +34,13 @@ export type AnchorRestore =
   | { readonly ok: true; readonly bytesHex: string; readonly affinity: 'before' | 'after' }
   | {
       readonly ok: false;
-      readonly reason: 'wrong-document' | 'version-mismatch' | 'backend-mismatch' | 'schema-unmigratable' | 'stale-checkpoint' | 'malformed';
+      readonly reason:
+        | 'wrong-document'
+        | 'version-mismatch'
+        | 'backend-mismatch'
+        | 'schema-unmigratable'
+        | 'stale-checkpoint'
+        | 'malformed';
     };
 
 /** Serialize an anchor for a trusted channel (never crosses a public JSON/RPC target). */

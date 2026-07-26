@@ -17,7 +17,7 @@ export const GRAPHEME_SEGMENTER_LOCALE = 'und' as const;
 
 type IntlSegmenterCtor = new (
   locales?: string | string[],
-  options?: { granularity: 'grapheme' },
+  options?: { granularity: 'grapheme' }
 ) => { segment(input: string): Iterable<{ segment: string; index: number }> };
 
 export function isIntlSegmenterAvailable(): boolean {
@@ -28,14 +28,16 @@ function requireIntlSegmenter(): IntlSegmenterCtor {
   const Seg = (Intl as unknown as { Segmenter?: IntlSegmenterCtor }).Segmenter;
   if (typeof Seg !== 'function') {
     throw new Error(
-      `Intl.Segmenter is required for deterministic grapheme segmentation (locale: ${GRAPHEME_SEGMENTER_LOCALE})`,
+      `Intl.Segmenter is required for deterministic grapheme segmentation (locale: ${GRAPHEME_SEGMENTER_LOCALE})`
     );
   }
   return Seg;
 }
 
 function createIntlBoundary(): GraphemeBoundary {
-  const segmenter = new (requireIntlSegmenter())(GRAPHEME_SEGMENTER_LOCALE, { granularity: 'grapheme' });
+  const segmenter = new (requireIntlSegmenter())(GRAPHEME_SEGMENTER_LOCALE, {
+    granularity: 'grapheme',
+  });
   return {
     segment(text: string): readonly GraphemeSegment[] {
       const out: GraphemeSegment[] = [];

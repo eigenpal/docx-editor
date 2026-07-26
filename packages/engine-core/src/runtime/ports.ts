@@ -21,7 +21,11 @@ export interface SchedulingPort {
 }
 /** Redacted observability sink (raw text never enters here — design D5). */
 export interface AuditPort {
-  record(entry: { readonly kind: string; readonly at: number; readonly meta?: Record<string, unknown> }): void;
+  record(entry: {
+    readonly kind: string;
+    readonly at: number;
+    readonly meta?: Record<string, unknown>;
+  }): void;
 }
 /** Read/write/export authorization decisions. */
 export interface AuthorizationPort {
@@ -106,7 +110,7 @@ export class DeterministicClock implements ClockPort {
   private t: number;
   constructor(
     start = 0,
-    private readonly step = 1,
+    private readonly step = 1
   ) {
     this.t = start;
   }

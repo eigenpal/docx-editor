@@ -34,7 +34,16 @@ export interface Annotation {
 function inactivate(a: Annotation, at: { block: string; offset: number }): Annotation {
   switch (a.policy) {
     case 'collapse':
-      return { ...a, state: 'collapsed', range: { startBlock: at.block, startOffset: at.offset, endBlock: at.block, endOffset: at.offset } };
+      return {
+        ...a,
+        state: 'collapsed',
+        range: {
+          startBlock: at.block,
+          startOffset: at.offset,
+          endBlock: at.block,
+          endOffset: at.offset,
+        },
+      };
     case 'detach':
       return { ...a, state: 'detached' };
     case 'tombstone':
@@ -66,7 +75,12 @@ export function onBlockDeleted(a: Annotation, blockId: string): Annotation {
  * Offsets after the deletion shift left; a range wholly inside the deletion is
  * inactivated per policy.
  */
-export function onRangeDeleted(a: Annotation, blockId: string, from: number, to: number): Annotation {
+export function onRangeDeleted(
+  a: Annotation,
+  blockId: string,
+  from: number,
+  to: number
+): Annotation {
   if (a.state !== 'active' || to <= from) return a;
   const len = to - from;
   const shift = (block: string, off: number): number => {

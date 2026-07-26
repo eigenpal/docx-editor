@@ -88,7 +88,13 @@ export function DocxEditorPagedArea({
       <div
         ref={bodyRef}
         className="ep-one-surface__input-host"
-        style={{ position: 'fixed', width: 0, height: 0, overflow: 'visible', pointerEvents: 'none' }}
+        style={{
+          position: 'fixed',
+          width: 0,
+          height: 0,
+          overflow: 'visible',
+          pointerEvents: 'none',
+        }}
       />
       {overlayChildren}
     </div>

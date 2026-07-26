@@ -53,10 +53,18 @@ function flattenSdt(blocks: readonly Block[]): Block[] {
   return out;
 }
 
-function walkParagraphs(blocks: readonly Block[], context: ParagraphTraversalContext, out: LocatedParagraph[]): void {
+function walkParagraphs(
+  blocks: readonly Block[],
+  context: ParagraphTraversalContext,
+  out: LocatedParagraph[]
+): void {
   for (const block of blocks) {
     if (block.kind === 'sdt') {
-      walkParagraphs((block as SdtRecord).blocks, { inTopLevelBodyFlow: false, inTableCell: context.inTableCell }, out);
+      walkParagraphs(
+        (block as SdtRecord).blocks,
+        { inTopLevelBodyFlow: false, inTableCell: context.inTableCell },
+        out
+      );
       continue;
     }
     if (block.kind === 'paragraph') {
@@ -98,7 +106,10 @@ export function paragraphEditableInLane(context: ParagraphTraversalContext): boo
  * `caretStopsForParagraph` emits exactly one stop per offset using this rule, so
  * this function — not the caller's guess — decides which affinity is addressable.
  */
-export function caretAffinity(graphemeOffset: number, paragraphGraphemeCount: number): InteractionAffinity {
+export function caretAffinity(
+  graphemeOffset: number,
+  paragraphGraphemeCount: number
+): InteractionAffinity {
   if (graphemeOffset >= paragraphGraphemeCount) return 'downstream';
   return graphemeOffset === 0 ? 'downstream' : 'upstream';
 }
@@ -126,7 +137,7 @@ export function caretAffinity(graphemeOffset: number, paragraphGraphemeCount: nu
  */
 export function withCanonicalAffinity(
   target: SemanticTarget,
-  graphemeCountOf: (blockId: string) => number | undefined,
+  graphemeCountOf: (blockId: string) => number | undefined
 ): SemanticTarget {
   if (target.kind !== 'text') return target;
   const count = graphemeCountOf(target.identity.blockId);
@@ -154,7 +165,9 @@ function caretStopsForParagraph(scope: ViewScope, record: BlockSemanticRecord): 
   return stops;
 }
 
-function whitespaceSubranges(text: string): readonly { readonly utf16From: number; readonly utf16To: number }[] {
+function whitespaceSubranges(
+  text: string
+): readonly { readonly utf16From: number; readonly utf16To: number }[] {
   const out: { utf16From: number; utf16To: number }[] = [];
   const re = /\s+/g;
   let match: RegExpExecArray | null;
@@ -167,7 +180,7 @@ function whitespaceSubranges(text: string): readonly { readonly utf16From: numbe
 function buildBlockRecords(
   storyId: string,
   located: readonly LocatedParagraph[],
-  wordBoundary: WordBoundary,
+  wordBoundary: WordBoundary
 ): { records: BlockSemanticRecord[]; paragraphs: ParagraphRecord[] } {
   const paragraphs = located.map((l) => l.paragraph);
   const records = located.map(({ paragraph, context }, orderIndex) => {
@@ -189,11 +202,14 @@ function buildBlockRecords(
 /** Top-level editable paragraph adjacency links for keyboard navigation (task 5.5). */
 export function buildTraversalLinks(
   storyBlocks: readonly Block[],
-  records: readonly BlockSemanticRecord[],
+  records: readonly BlockSemanticRecord[]
 ): Map<string, BlockTraversalLinks> {
   const byId = new Map(records.map((record) => [record.identity.blockId, record]));
   const links = new Map<string, BlockTraversalLinks>(
-    records.map((record) => [record.identity.blockId, { previousEditableBlockId: null, nextEditableBlockId: null }]),
+    records.map((record) => [
+      record.identity.blockId,
+      { previousEditableBlockId: null, nextEditableBlockId: null },
+    ])
   );
   let lastEditable: string | null = null;
   for (const block of storyBlocks) {
@@ -220,7 +236,7 @@ export function buildTraversalLinks(
 function paragraphRegions(
   scope: ViewScope,
   paragraphs: readonly ParagraphRecord[],
-  records: readonly BlockSemanticRecord[],
+  records: readonly BlockSemanticRecord[]
 ): OwnershipRegion[] {
   const regions: OwnershipRegion[] = [];
   for (let i = 0; i < records.length; i += 1) {
@@ -259,7 +275,7 @@ function paragraphRegions(
 function structuralRegions(
   storyId: string,
   scope: ViewScope,
-  blocks: readonly Block[],
+  blocks: readonly Block[]
 ): OwnershipRegion[] {
   const regions: OwnershipRegion[] = [];
   for (const block of flattenSdt(blocks)) {
@@ -279,7 +295,7 @@ function structuralRegions(
 export function buildSemanticIndex(
   model: PackageModel,
   scope: ViewScope = { kind: 'body' },
-  wordBoundary: WordBoundary = resolveDefaultWordBoundary(),
+  wordBoundary: WordBoundary = resolveDefaultWordBoundary()
 ): SemanticPositionIndex {
   const storyId = bodyStoryId(model);
   const story = model.stories.get(storyId)!;
@@ -299,7 +315,7 @@ export function buildSemanticIndex(
 
 export function buildTraversalLinksForModel(
   model: PackageModel,
-  wordBoundary: WordBoundary = resolveDefaultWordBoundary(),
+  wordBoundary: WordBoundary = resolveDefaultWordBoundary()
 ): Map<string, BlockTraversalLinks> {
   const storyId = bodyStoryId(model);
   const story = model.stories.get(storyId)!;
@@ -327,9 +343,14 @@ export function buildTraversalLinksForModel(
  *
  * Keyed on the index object, which is rebuilt per layout.
  */
-const flatOffsetCache = new WeakMap<SemanticPositionIndex, Map<string, { acc: number; orderIndex: number }>>();
+const flatOffsetCache = new WeakMap<
+  SemanticPositionIndex,
+  Map<string, { acc: number; orderIndex: number }>
+>();
 
-function flatOffsetsFor(index: SemanticPositionIndex): Map<string, { acc: number; orderIndex: number }> {
+function flatOffsetsFor(
+  index: SemanticPositionIndex
+): Map<string, { acc: number; orderIndex: number }> {
   let byId = flatOffsetCache.get(index);
   if (byId) return byId;
   byId = new Map();
@@ -346,11 +367,15 @@ export function deprecatedFlatDocOffset(
   index: SemanticPositionIndex,
   blockId: string,
   utf16From: number,
-  utf16To: number,
+  utf16To: number
 ): { docFrom: number; docTo: number; blockId: number } {
   const entry = flatOffsetsFor(index).get(blockId);
   if (entry) {
-    return { docFrom: entry.acc + utf16From, docTo: entry.acc + utf16To, blockId: entry.orderIndex };
+    return {
+      docFrom: entry.acc + utf16From,
+      docTo: entry.acc + utf16To,
+      blockId: entry.orderIndex,
+    };
   }
   return { docFrom: utf16From, docTo: utf16To, blockId: 0 };
 }
@@ -361,7 +386,7 @@ export function semanticTextSpan(
   paragraphId: string,
   paragraphFullText: string,
   utf16From: number,
-  utf16To: number,
+  utf16To: number
 ): SemanticTextSpan {
   return {
     scope,
@@ -416,8 +441,11 @@ function paragraphTextsForStory(model: PackageModel, storyId: string): Map<strin
     const located: LocatedParagraph[] = [];
     walkParagraphs(
       story.blocks,
-      { inTopLevelBodyFlow: storyId === bodyStoryId(model), inTableCell: storyId !== bodyStoryId(model) },
-      located,
+      {
+        inTopLevelBodyFlow: storyId === bodyStoryId(model),
+        inTableCell: storyId !== bodyStoryId(model),
+      },
+      located
     );
     for (const l of located) texts.set(l.paragraph.id, paragraphText(l.paragraph));
   }
@@ -425,7 +453,11 @@ function paragraphTextsForStory(model: PackageModel, storyId: string): Map<strin
   return texts;
 }
 
-export function paragraphTextById(model: PackageModel, paragraphId: string, storyId = bodyStoryId(model)): string {
+export function paragraphTextById(
+  model: PackageModel,
+  paragraphId: string,
+  storyId = bodyStoryId(model)
+): string {
   return paragraphTextsForStory(model, storyId).get(paragraphId) ?? '';
 }
 

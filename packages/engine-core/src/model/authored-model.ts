@@ -267,7 +267,14 @@ export interface SdtRecord {
 // Table and block-SDT land here; the union stays open for future block kinds.
 export type Block = ParagraphRecord | TableRecord | SdtRecord;
 
-export type StoryKind = 'body' | 'header' | 'footer' | 'footnote' | 'endnote' | 'comment' | 'textbox';
+export type StoryKind =
+  | 'body'
+  | 'header'
+  | 'footer'
+  | 'footnote'
+  | 'endnote'
+  | 'comment'
+  | 'textbox';
 
 export interface Story {
   readonly id: string;

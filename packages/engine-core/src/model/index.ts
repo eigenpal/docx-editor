@@ -38,10 +38,26 @@ export {
 } from './authored-model.ts';
 export { type IdKindName, IdentityAllocator } from './identity.ts';
 export { createEmptyModel, bodyStoryId } from './create.ts';
-export { type SerializedModel, encodeModel, decodeModel, validatePreservation } from './serialize.ts';
-export { appendParagraph, insertParagraph, insertTextIntoParagraph, setParagraphRuns, paragraphText } from './edit.ts';
+export {
+  type SerializedModel,
+  encodeModel,
+  decodeModel,
+  validatePreservation,
+} from './serialize.ts';
+export {
+  appendParagraph,
+  insertParagraph,
+  insertTextIntoParagraph,
+  setParagraphRuns,
+  paragraphText,
+} from './edit.ts';
 export { normalizeRuns } from './normalize-runs.ts';
-export { canonicalParagraphProps, canonicalRunProps, canonicalStyle, canonicalDocDefaults } from './paragraph-props.ts';
+export {
+  canonicalParagraphProps,
+  canonicalRunProps,
+  canonicalStyle,
+  canonicalDocDefaults,
+} from './paragraph-props.ts';
 export {
   type BlockKind,
   type CoreBlockCapability,

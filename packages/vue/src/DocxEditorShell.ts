@@ -24,12 +24,18 @@ export default defineComponent({
         slots.titleBar ? h('div', { class: 'ep-shell__title' }, slots.titleBar()) : null,
         slots.toolbar ? h('div', { class: 'ep-shell__toolbar' }, slots.toolbar()) : null,
         h('div', { class: 'ep-shell__document' }, [
-          slots.horizontalRuler ? h('div', { class: 'ep-shell__ruler-h' }, slots.horizontalRuler()) : null,
+          slots.horizontalRuler
+            ? h('div', { class: 'ep-shell__ruler-h' }, slots.horizontalRuler())
+            : null,
           h('div', { class: 'ep-shell__canvas' }, [
-            slots.verticalRuler ? h('div', { class: 'ep-shell__ruler-v' }, slots.verticalRuler()) : null,
+            slots.verticalRuler
+              ? h('div', { class: 'ep-shell__ruler-v' }, slots.verticalRuler())
+              : null,
             slots.default ? slots.default() : null,
           ]),
-          slots.pageIndicator ? h('div', { class: 'ep-shell__page-indicator' }, slots.pageIndicator()) : null,
+          slots.pageIndicator
+            ? h('div', { class: 'ep-shell__page-indicator' }, slots.pageIndicator())
+            : null,
         ]),
       ]);
   },

@@ -8,7 +8,14 @@
 // operation is fetched independently, so a caller only requires the op it uses. New block kinds
 // register a capability here instead of editing every switch (design decision 1).
 
-import type { Block, ParagraphRecord, TableRecord, SdtRecord, TableCellRecord, TableRowRecord } from './authored-model.ts';
+import type {
+  Block,
+  ParagraphRecord,
+  TableRecord,
+  SdtRecord,
+  TableCellRecord,
+  TableRowRecord,
+} from './authored-model.ts';
 import type { IdentityAllocator } from './identity.ts';
 import { normalizeRuns } from './normalize-runs.ts';
 import { canonicalParagraphProps, canonicalRunProps } from './paragraph-props.ts';
@@ -76,7 +83,10 @@ const registry = new Map<BlockKind, CoreBlockCapability>();
 /** The PARSE lane, folded into this one registry module so there is no SEPARATE global parser Map
  *  elsewhere (registry unification). Keyed by OOXML root element name; each records the block kind
  *  it produces so an editable kind's parser presence can be verified. */
-const blockParsers = new Map<string, { readonly parse: BlockElementParser; readonly kind: BlockKind }>();
+const blockParsers = new Map<
+  string,
+  { readonly parse: BlockElementParser; readonly kind: BlockKind }
+>();
 
 // A monotonically increasing version bumped on EVERY registration. A memoized resolver (the
 // document-open completeness/resolution) keys its cache on this, so a registration AFTER an open
@@ -93,7 +103,9 @@ export function registerCoreBlockCapability(cap: CoreBlockCapability): void {
   if (prev) {
     for (const key of Object.keys(cap) as (keyof CoreBlockCapability)[]) {
       if (key !== 'kind' && cap[key] !== undefined && prev[key] !== undefined) {
-        throw new Error(`duplicate core block capability op '${String(key)}' for kind '${cap.kind}'`);
+        throw new Error(
+          `duplicate core block capability op '${String(key)}' for kind '${cap.kind}'`
+        );
       }
     }
   }
@@ -118,45 +130,63 @@ export function registerCoreBlockCapability(cap: CoreBlockCapability): void {
 export function registerBlockElementParser<K extends BlockKind>(
   elementName: string,
   parse: (element: unknown, alloc: IdentityAllocator) => Extract<Block, { kind: K }>,
-  kind: K,
+  kind: K
 ): void {
-  if (blockParsers.has(elementName)) throw new Error(`duplicate parser for block element '${elementName}'`);
+  if (blockParsers.has(elementName))
+    throw new Error(`duplicate parser for block element '${elementName}'`);
   const guarded: BlockElementParser = (element, alloc) => {
     const block = parse(element, alloc);
-    if (block.kind !== kind) throw new Error(`parser for '${elementName}' declared kind '${kind}' but produced '${block.kind}'`);
+    if (block.kind !== kind)
+      throw new Error(
+        `parser for '${elementName}' declared kind '${kind}' but produced '${block.kind}'`
+      );
     return block;
   };
   blockParsers.set(elementName, { parse: guarded, kind });
   registrationVersion += 1;
 }
 /** The registered parser for a block element name, if any. */
-export const blockElementParser = (elementName: string): BlockElementParser | undefined => blockParsers.get(elementName)?.parse;
+export const blockElementParser = (elementName: string): BlockElementParser | undefined =>
+  blockParsers.get(elementName)?.parse;
 /** Whether some element parser produces a given block kind (the parse lane of that editable kind). */
-export const kindHasParser = (kind: BlockKind): boolean => [...blockParsers.values()].some((p) => p.kind === kind);
+export const kindHasParser = (kind: BlockKind): boolean =>
+  [...blockParsers.values()].some((p) => p.kind === kind);
 
-function opFor<K extends keyof CoreBlockCapability>(kind: BlockKind, op: K): NonNullable<CoreBlockCapability[K]> {
+function opFor<K extends keyof CoreBlockCapability>(
+  kind: BlockKind,
+  op: K
+): NonNullable<CoreBlockCapability[K]> {
   const cap = registry.get(kind);
   const fn = cap?.[op];
-  if (!fn) throw new Error(`no core block capability '${String(op)}' registered for block kind '${kind}'`);
+  if (!fn)
+    throw new Error(`no core block capability '${String(op)}' registered for block kind '${kind}'`);
   return fn as NonNullable<CoreBlockCapability[K]>;
 }
 
 /** Parse a top-level block element by its root element name through the unified registry, or
  *  undefined for an unregistered element (caller fails closed). */
-export const blockParseElement = (elementName: string, element: unknown, alloc: IdentityAllocator): Block | undefined =>
-  blockParsers.get(elementName)?.parse(element, alloc);
+export const blockParseElement = (
+  elementName: string,
+  element: unknown,
+  alloc: IdentityAllocator
+): Block | undefined => blockParsers.get(elementName)?.parse(element, alloc);
 
-export const blockHashContent = (block: Block, recurse: RecurseHash): unknown => opFor(block.kind, 'hashContent')(block, recurse);
-export const blockNormalize = (block: Block, recurse: RecurseNormalize): Block => opFor(block.kind, 'normalize')(block, recurse);
+export const blockHashContent = (block: Block, recurse: RecurseHash): unknown =>
+  opFor(block.kind, 'hashContent')(block, recurse);
+export const blockNormalize = (block: Block, recurse: RecurseNormalize): Block =>
+  opFor(block.kind, 'normalize')(block, recurse);
 export const blockSerialize = (block: Block): string => opFor(block.kind, 'serialize')(block);
-export const blockPatchEdited = (ctx: PatchContext): readonly BlockPatch[] => opFor(ctx.block.kind, 'patchEdited')(ctx);
+export const blockPatchEdited = (ctx: PatchContext): readonly BlockPatch[] =>
+  opFor(ctx.block.kind, 'patchEdited')(ctx);
 export const hasBlockSerialize = (kind: BlockKind): boolean => !!registry.get(kind)?.serialize;
 /** Whether a block kind may be semantically edited as a top-level body block (design decision 3).
  *  A kind with no declared policy is treated as non-editable (preserved read-only), so a new kind
  *  is safe by default until it registers real editable handlers. */
-export const isTopLevelEditable = (kind: BlockKind): boolean => registry.get(kind)?.editPolicy?.topLevelEditable === true;
+export const isTopLevelEditable = (kind: BlockKind): boolean =>
+  registry.get(kind)?.editPolicy?.topLevelEditable === true;
 /** The DocOp ids a block kind owns as semantic operations (empty if it declares none). */
-export const blockSemanticOps = (kind: BlockKind): readonly string[] => registry.get(kind)?.semanticOps ?? [];
+export const blockSemanticOps = (kind: BlockKind): readonly string[] =>
+  registry.get(kind)?.semanticOps ?? [];
 /** Every block kind that has registered any capability. */
 export const registeredBlockKinds = (): BlockKind[] => [...registry.keys()];
 /** Whether a kind has registered a given kind-keyed core op (parse is element-keyed, not per-kind). */
@@ -188,7 +218,8 @@ export function restoreBlockRegistryForTest(snap: BlockRegistrySnapshot): void {
   registrationVersion += 1;
 }
 /** The nested body blocks a block holds (empty for a leaf kind). */
-export const blockNestedBlocks = (block: Block): readonly Block[] => registry.get(block.kind)?.nestedBlocks?.(block) ?? [];
+export const blockNestedBlocks = (block: Block): readonly Block[] =>
+  registry.get(block.kind)?.nestedBlocks?.(block) ?? [];
 /** Walk a block and all its descendants (pre-order) through the registry — no central switch. */
 export function walkBlockTree(blocks: readonly Block[], visit: (block: Block) => void): void {
   for (const b of blocks) {
@@ -201,7 +232,9 @@ export function walkBlockTree(blocks: readonly Block[], visit: (block: Block) =>
 
 function normalizeParagraph(p: ParagraphRecord): ParagraphRecord {
   const runs = normalizeRuns(p.runs);
-  return runs.length === p.runs.length && runs.every((r, i) => r === p.runs[i]) ? p : { ...p, runs };
+  return runs.length === p.runs.length && runs.every((r, i) => r === p.runs[i])
+    ? p
+    : { ...p, runs };
 }
 function normalizeCell(cell: TableCellRecord, recurse: RecurseNormalize): TableCellRecord {
   const blocks = recurse(cell.blocks);
@@ -231,7 +264,11 @@ registerCoreBlockCapability({
     // symmetric across save+reopen.
     const idlessRuns = p.runs.map((r) => {
       const rp = canonicalRunProps(r.props);
-      return { text: r.text, ...(rp ? { props: rp } : {}), ...(r.rPrCapsule ? { rPrCapsule: r.rPrCapsule } : {}) };
+      return {
+        text: r.text,
+        ...(rp ? { props: rp } : {}),
+        ...(r.rPrCapsule ? { rPrCapsule: r.rPrCapsule } : {}),
+      };
     });
     const props = canonicalParagraphProps(p.props);
     return {
@@ -299,5 +336,6 @@ registerCoreBlockCapability({
     });
     return changed ? { ...t, rows } : t;
   },
-  nestedBlocks: (block) => (block as TableRecord).rows.flatMap((r) => r.cells.flatMap((c) => c.blocks)),
+  nestedBlocks: (block) =>
+    (block as TableRecord).rows.flatMap((r) => r.cells.flatMap((c) => c.blocks)),
 });

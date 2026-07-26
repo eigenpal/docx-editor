@@ -9,8 +9,16 @@ import { blockXml } from '../wml-serialize.ts';
 import { W_NS } from '../wml-parse.ts';
 import { escapeXmlChecked } from '../sinks.ts';
 import { DOC_PART, emitPreservedPart, hashStoryContent } from '../wml-preserve.ts';
-import { buildRelationshipSet, resolveRelationship, type RelationshipRecord } from '../relationships.ts';
-import { buildContentTypeIndex, resolveContentType, type ContentTypeRecords } from '../content-types.ts';
+import {
+  buildRelationshipSet,
+  resolveRelationship,
+  type RelationshipRecord,
+} from '../relationships.ts';
+import {
+  buildContentTypeIndex,
+  resolveContentType,
+  type ContentTypeRecords,
+} from '../content-types.ts';
 import {
   bodyStoryId,
   validatePreservation,
@@ -69,11 +77,17 @@ export function documentXml(model: PackageModel): string {
 function contentTypesXml(ct: ContentTypeRecords): string {
   const defaults = [...ct.defaults]
     .sort((a, b) => a.order - b.order)
-    .map((d) => `<Default Extension="${xmlAttr(d.extension, 'content-type extension')}" ContentType="${xmlAttr(d.contentType, 'content type')}"/>`)
+    .map(
+      (d) =>
+        `<Default Extension="${xmlAttr(d.extension, 'content-type extension')}" ContentType="${xmlAttr(d.contentType, 'content type')}"/>`
+    )
     .join('');
   const overrides = [...ct.overrides]
     .sort((a, b) => a.order - b.order)
-    .map((o) => `<Override PartName="${xmlAttr(o.partName, 'content-type part name')}" ContentType="${xmlAttr(o.contentType, 'content type')}"/>`)
+    .map(
+      (o) =>
+        `<Override PartName="${xmlAttr(o.partName, 'content-type part name')}" ContentType="${xmlAttr(o.contentType, 'content type')}"/>`
+    )
     .join('');
   return `${XML_DECL}<Types xmlns="${CT_NS}">${defaults}${overrides}</Types>`;
 }
@@ -84,7 +98,7 @@ function relationshipsXml(recs: readonly RelationshipRecord[]): string {
     .map(
       (r) =>
         `<Relationship Id="${xmlAttr(r.id, 'relationship id')}" Type="${xmlAttr(r.type, 'relationship type')}" Target="${xmlAttr(r.rawTarget, 'relationship target')}"` +
-        `${r.targetMode === 'External' ? ' TargetMode="External"' : ''}/>`,
+        `${r.targetMode === 'External' ? ' TargetMode="External"' : ''}/>`
     )
     .join('');
   return `${XML_DECL}<Relationships xmlns="${REL_NS}">${rels}</Relationships>`;
@@ -112,13 +126,20 @@ function stylesXml(styles: readonly StyleRecord[], docDefaults?: DocDefaults): s
   // Canonicalize so the emitted bytes match the digest + what the parser yields on reopen. w:docDefaults
   // (the lowest style-resolution layer) round-trips too, or a from-scratch model's defaults are lost.
   const dd = canonicalDocDefaults(docDefaults);
-  const defaults = dd ? `<w:docDefaults><w:rPrDefault>${rPrXml(dd.runProps!)}</w:rPrDefault></w:docDefaults>` : '';
+  const defaults = dd
+    ? `<w:docDefaults><w:rPrDefault>${rPrXml(dd.runProps!)}</w:rPrDefault></w:docDefaults>`
+    : '';
   const body = styles
     .map((raw) => {
       const st = canonicalStyle(raw);
-      if (!st.id) throw new Error('from-scratch export cannot emit a style with an empty styleId (would be dropped on reopen)');
+      if (!st.id)
+        throw new Error(
+          'from-scratch export cannot emit a style with an empty styleId (would be dropped on reopen)'
+        );
       const name = `<w:name w:val="${xmlAttr(st.name, 'style name')}"/>`;
-      const basedOn = st.basedOn ? `<w:basedOn w:val="${xmlAttr(st.basedOn, 'style basedOn')}"/>` : '';
+      const basedOn = st.basedOn
+        ? `<w:basedOn w:val="${xmlAttr(st.basedOn, 'style basedOn')}"/>`
+        : '';
       const rPr = st.runProps ? rPrXml(st.runProps) : '';
       return (
         `<w:style w:type="${xmlAttr(st.type, 'style type')}" w:styleId="${xmlAttr(st.id, 'style id')}"${st.isDefault ? ' w:default="1"' : ''}>` +
@@ -131,7 +152,10 @@ function stylesXml(styles: readonly StyleRecord[], docDefaults?: DocDefaults): s
 
 function numberingXml(nums: readonly NumberingRecord[]): string {
   const body = nums
-    .map((n) => `<w:num w:numId="${xmlAttr(n.numId, 'numId')}"><w:abstractNumId w:val="${xmlAttr(n.abstractId, 'abstractNumId')}"/></w:num>`)
+    .map(
+      (n) =>
+        `<w:num w:numId="${xmlAttr(n.numId, 'numId')}"><w:abstractNumId w:val="${xmlAttr(n.abstractId, 'abstractNumId')}"/></w:num>`
+    )
     .join('');
   return `${XML_DECL}<w:numbering xmlns:w="${W_NS}">${body}</w:numbering>`;
 }
@@ -147,7 +171,9 @@ function assertRelatedStoriesUnchanged(model: PackageModel): void {
     // A related story with a baseline that no longer matches was edited; one with NO baseline was
     // added after parse. Either way the verbatim export cannot represent it — fail closed.
     if (baseline === undefined || baseline !== hashStoryContent(story.blocks)) {
-      throw new Error(`related story ${story.id} (${story.kind}) was edited; the preserved export cannot patch related-story parts yet — rejected to avoid silent loss`);
+      throw new Error(
+        `related story ${story.id} (${story.kind}) was edited; the preserved export cannot patch related-story parts yet — rejected to avoid silent loss`
+      );
     }
   }
 }
@@ -179,32 +205,53 @@ function assertFromScratchPackageValid(model: PackageModel): void {
     const r = resolveContentType(ct.index, part);
     if (!r.ok) throw new Error(`from-scratch package: emitted part ${part} has no content type`);
     if (part === MAIN_PART && r.contentType !== CONTENT_TYPES.documentMain) {
-      throw new Error('from-scratch package: /word/document.xml does not resolve to the main document content type');
+      throw new Error(
+        'from-scratch package: /word/document.xml does not resolve to the main document content type'
+      );
     }
   }
   const rels = buildRelationshipSet(model.relationships);
   if (!rels.ok) throw new Error(`invalid relationships: ${JSON.stringify(rels.error)}`);
   // Exactly one root officeDocument relationship TOTAL — internal, resolving to the main part. An
   // extra external/dangling one is rejected.
-  const rootOfficeDoc = (rels.byOwner.get('/') ?? []).filter((r) => r.type === REL_TYPES.officeDocument);
+  const rootOfficeDoc = (rels.byOwner.get('/') ?? []).filter(
+    (r) => r.type === REL_TYPES.officeDocument
+  );
   if (rootOfficeDoc.length !== 1) {
-    throw new Error(`from-scratch package: expected exactly one root officeDocument relationship, found ${rootOfficeDoc.length}`);
+    throw new Error(
+      `from-scratch package: expected exactly one root officeDocument relationship, found ${rootOfficeDoc.length}`
+    );
   }
   const rootResolved = resolveRelationship(rootOfficeDoc[0]);
-  if (!(rootResolved.mode === 'Internal' && rootResolved.target.ok && rootResolved.target.partName === MAIN_PART)) {
-    throw new Error('from-scratch package: the root officeDocument relationship must be internal and target /word/document.xml');
+  if (
+    !(
+      rootResolved.mode === 'Internal' &&
+      rootResolved.target.ok &&
+      rootResolved.target.partName === MAIN_PART
+    )
+  ) {
+    throw new Error(
+      'from-scratch package: the root officeDocument relationship must be internal and target /word/document.xml'
+    );
   }
   // No dangling edges: every relationship's owner is the package root or an emitted part, and every
   // internal target resolves to an emitted part (external targets are validated for sink-safety).
   for (const rel of model.relationships) {
     if (rel.ownerPart !== '/' && !emitted.has(rel.ownerPart)) {
-      throw new Error(`from-scratch package: relationship ${rel.id} has a non-existent owner ${rel.ownerPart}`);
+      throw new Error(
+        `from-scratch package: relationship ${rel.id} has a non-existent owner ${rel.ownerPart}`
+      );
     }
     const resolved = resolveRelationship(rel);
     if (resolved.mode === 'Internal') {
-      if (!resolved.target.ok) throw new Error(`from-scratch package: relationship ${rel.id} has an invalid internal target ${rel.rawTarget}`);
+      if (!resolved.target.ok)
+        throw new Error(
+          `from-scratch package: relationship ${rel.id} has an invalid internal target ${rel.rawTarget}`
+        );
       if (!emitted.has(resolved.target.partName)) {
-        throw new Error(`from-scratch package: relationship ${rel.id} targets a non-emitted part ${resolved.target.partName}`);
+        throw new Error(
+          `from-scratch package: relationship ${rel.id} targets a non-emitted part ${resolved.target.partName}`
+        );
       }
     } else if (!resolved.sinkSafe.ok) {
       throw new Error(`from-scratch package: relationship ${rel.id} has an unsafe external target`);
@@ -224,36 +271,56 @@ function assertFromScratchSerializable(model: PackageModel): void {
   let bodyCount = 0;
   for (const story of model.stories.values()) {
     if (story.kind !== 'body') {
-      throw new Error(`from-scratch export supports only a body story, not '${story.kind}' (section references / item wrappers not modeled)`);
+      throw new Error(
+        `from-scratch export supports only a body story, not '${story.kind}' (section references / item wrappers not modeled)`
+      );
     }
     bodyCount += 1;
   }
-  if (bodyCount !== 1) throw new Error(`from-scratch export requires exactly one body story, found ${bodyCount}`);
+  if (bodyCount !== 1)
+    throw new Error(`from-scratch export requires exactly one body story, found ${bodyCount}`);
   if (model.numbering.length > 0) {
-    throw new Error('from-scratch export cannot emit numbering (abstract list definitions are not modeled) — fails closed');
+    throw new Error(
+      'from-scratch export cannot emit numbering (abstract list definitions are not modeled) — fails closed'
+    );
   }
   const walk = (blocks: readonly Block[]): void => {
     for (const b of blocks) {
       if (b.kind !== 'paragraph') {
         // table/sdt are preservation-only (never authored from scratch); their serializer already
         // fails closed, but reject early with a clear message.
-        throw new Error(`from-scratch export cannot serialize a '${b.kind}' block (preservation-only)`);
+        throw new Error(
+          `from-scratch export cannot serialize a '${b.kind}' block (preservation-only)`
+        );
       }
       const p = b as ParagraphRecord;
       if (p.pPrCapsule || p.pAttrsCapsule) {
-        throw new Error('from-scratch export cannot carry a preservation capsule (capsules originate only from parse)');
+        throw new Error(
+          'from-scratch export cannot carry a preservation capsule (capsules originate only from parse)'
+        );
       }
       const cp = canonicalParagraphProps(p.props); // degenerate '' numId canonicalizes to absent
       if (cp?.numId !== undefined || cp?.ilvl !== undefined) {
-        throw new Error('from-scratch export cannot emit paragraph numbering (numPr) — the list definition is not modeled');
+        throw new Error(
+          'from-scratch export cannot emit paragraph numbering (numPr) — the list definition is not modeled'
+        );
       }
       for (const r of p.runs) {
-        if (r.rPrCapsule) throw new Error('from-scratch export cannot carry a run rPr capsule (verbatim capsule injection risk; capsules come only from parse)');
+        if (r.rPrCapsule)
+          throw new Error(
+            'from-scratch export cannot carry a run rPr capsule (verbatim capsule injection risk; capsules come only from parse)'
+          );
         // Only the round-trippable run subset (styleId + bold/italic presence) is serialized; an
         // explicit-false toggle or underline would not reparse to the same value, so fail closed.
         const rp = canonicalRunProps(r.props);
-        if (rp?.underline !== undefined) throw new Error('from-scratch export cannot emit run underline (not round-trippable via the presence-based parser)');
-        if (rp?.bold === false || rp?.italic === false) throw new Error('from-scratch export cannot emit an explicit-false run toggle (parser is presence-based)');
+        if (rp?.underline !== undefined)
+          throw new Error(
+            'from-scratch export cannot emit run underline (not round-trippable via the presence-based parser)'
+          );
+        if (rp?.bold === false || rp?.italic === false)
+          throw new Error(
+            'from-scratch export cannot emit an explicit-false run toggle (parser is presence-based)'
+          );
       }
     }
   };
@@ -288,7 +355,9 @@ export function writeDocx(model: PackageModel): Uint8Array {
   // re-serialized. (createEmptyModel-origin models, and the flat parse of a fully-modeled document,
   // carry no dropped content and export fine.)
   if (model.lossyParse) {
-    throw new Error('cannot from-scratch export a model whose flat parse dropped unmodeled OOXML — open it with preservation (preserveAll)');
+    throw new Error(
+      'cannot from-scratch export a model whose flat parse dropped unmodeled OOXML — open it with preservation (preserveAll)'
+    );
   }
 
   // From-scratch: validate OPC invariants + fail closed on anything not faithfully serializable,
@@ -305,7 +374,8 @@ export function writeDocx(model: PackageModel): Uint8Array {
     list.push(r);
     relsByOwner.set(r.ownerPart, list);
   }
-  for (const [owner, recs] of relsByOwner) entries.set(relsPathFor(owner), strToU8(relationshipsXml(recs)));
+  for (const [owner, recs] of relsByOwner)
+    entries.set(relsPathFor(owner), strToU8(relationshipsXml(recs)));
 
   // EVERY declared XML part must be emitted with faithful content; a declared part we cannot
   // serialize (customXml, media, an unknown xml part) fails closed rather than leaving a dangling
@@ -313,19 +383,26 @@ export function writeDocx(model: PackageModel): Uint8Array {
   const bodyId = bodyStoryId(model);
   for (const [partName, part] of model.parts) {
     if (part.kind === 'media') {
-      throw new Error(`from-scratch export cannot serialize media part ${partName} (no authored bytes)`);
+      throw new Error(
+        `from-scratch export cannot serialize media part ${partName} (no authored bytes)`
+      );
     }
     if (partName === MAIN_PART) entries.set(partName, strToU8(documentXml(model)));
-    else if (partName === '/word/styles.xml') entries.set(partName, strToU8(stylesXml(model.styles, model.docDefaults)));
-    else if (partName === '/word/numbering.xml') entries.set(partName, strToU8(numberingXml(model.numbering)));
+    else if (partName === '/word/styles.xml')
+      entries.set(partName, strToU8(stylesXml(model.styles, model.docDefaults)));
+    else if (partName === '/word/numbering.xml')
+      entries.set(partName, strToU8(numberingXml(model.numbering)));
     else if (part.storyId && part.storyId !== bodyId) {
       // A related story (header/footer/note/comment) needs section references / item wrappers we do
       // not yet model — emitting the part alone would be inert or invalid, so fail closed.
-      throw new Error(`from-scratch export cannot serialize related story part ${partName} (section references not modeled)`);
+      throw new Error(
+        `from-scratch export cannot serialize related story part ${partName} (section references not modeled)`
+      );
     } else {
       throw new Error(`from-scratch export cannot serialize declared part ${partName}`);
     }
   }
-  if (!entries.has(MAIN_PART)) throw new Error('from-scratch package declares no main document part');
+  if (!entries.has(MAIN_PART))
+    throw new Error('from-scratch package declares no main document part');
   return writeZip(entries);
 }

@@ -1,7 +1,16 @@
 // Public setSelection command mapping (interactive-paginated-editing 4.7).
 
-import type { EditorCommand, EditorPosition, EditorSelection, ViewScope } from '@docx-editor.dev/core-contract/editor';
-import type { InteractionFrameId, SemanticSelection, SemanticTarget } from '@docx-editor.dev/core-contract/interaction';
+import type {
+  EditorCommand,
+  EditorPosition,
+  EditorSelection,
+  ViewScope,
+} from '@docx-editor.dev/core-contract/editor';
+import type {
+  InteractionFrameId,
+  SemanticSelection,
+  SemanticTarget,
+} from '@docx-editor.dev/core-contract/interaction';
 import type { ExecErrorCode, ExecResult } from '@docx-editor.dev/core-contract/types';
 import type { InteractionOutcomeCode } from '@docx-editor.dev/core-contract/interaction';
 
@@ -27,14 +36,22 @@ function positionToTarget(position: EditorPosition, scope: ViewScope): SemanticT
   return null;
 }
 
-function isEditorAnchorHeadRange(value: unknown): value is { anchor: EditorPosition; head: EditorPosition } {
-  return typeof value === 'object' && value !== null && 'anchor' in value && 'head' in value && !('frameId' in value);
+function isEditorAnchorHeadRange(
+  value: unknown
+): value is { anchor: EditorPosition; head: EditorPosition } {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    'anchor' in value &&
+    'head' in value &&
+    !('frameId' in value)
+  );
 }
 
 function rangeToSelection(
   range: EditorSelection,
   frameId: InteractionFrameId,
-  scope: ViewScope,
+  scope: ViewScope
 ): SemanticSelection | null {
   if (isSemanticSelection(range)) {
     // Keep the CALLER's frameId. Rewriting it to the current frame made the
@@ -66,7 +83,7 @@ function rangeToSelection(
 export function semanticSelectionFromCommand(
   command: Extract<EditorCommand, { type: 'setSelection' }>,
   frameId: InteractionFrameId,
-  scope: ViewScope,
+  scope: ViewScope
 ): SemanticSelection | null {
   if ('anchor' in command) {
     const anchor = positionToTarget(command.anchor, scope);

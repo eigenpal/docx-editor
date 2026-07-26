@@ -62,7 +62,7 @@ export function clustersFromLayoutCaretEdges(
   itemBox: Rect,
   sliceText: string,
   paragraphGraphemeCount: number,
-  direction: 'ltr' | 'rtl' = 'ltr',
+  direction: 'ltr' | 'rtl' = 'ltr'
 ): ShapedCluster[] {
   const { xByOffset, horizontal } = edgeIndexFor(pages, paragraphId);
   const segments = segmentGraphemes(sliceText);

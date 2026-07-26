@@ -12,7 +12,10 @@ import type {
 import type { ExecResult } from '@docx-editor.dev/core-contract/types';
 
 export interface InteractionExecutionContext {
-  syncSemanticSelection(request: { frameId: InteractionFrameId; selection: SemanticSelection }): InteractionOutcome<void>;
+  syncSemanticSelection(request: {
+    frameId: InteractionFrameId;
+    selection: SemanticSelection;
+  }): InteractionOutcome<void>;
   focus(request: { frameId: InteractionFrameId }): InteractionOutcome<void>;
   blur(): void;
   execCommand(command: EditorCommand): ExecResult;
@@ -25,8 +28,10 @@ export interface InteractionExecutionContext {
 function hostEffectFromPlan(plan: InteractionPlan): InteractionHostEffect[] {
   const hostEffects: InteractionHostEffect[] = [];
   for (const effect of plan.effects) {
-    if (effect.kind === 'capturePointer') hostEffects.push({ kind: 'capturePointer', pointerId: effect.pointerId });
-    if (effect.kind === 'releasePointer') hostEffects.push({ kind: 'releasePointer', pointerId: effect.pointerId });
+    if (effect.kind === 'capturePointer')
+      hostEffects.push({ kind: 'capturePointer', pointerId: effect.pointerId });
+    if (effect.kind === 'releasePointer')
+      hostEffects.push({ kind: 'releasePointer', pointerId: effect.pointerId });
     if (effect.kind === 'scroll') hostEffects.push({ kind: 'scroll', delta: effect.delta });
   }
   return hostEffects;
@@ -37,7 +42,11 @@ function rejectOnlyPlan(plan: InteractionPlan): InteractionDispatchResult | null
   if (!reject || reject.kind !== 'reject') return null;
   const hostEffects = hostEffectFromPlan(plan);
   const engineEffects = plan.effects.filter(
-    (effect) => effect.kind !== 'reject' && effect.kind !== 'capturePointer' && effect.kind !== 'releasePointer' && effect.kind !== 'scroll',
+    (effect) =>
+      effect.kind !== 'reject' &&
+      effect.kind !== 'capturePointer' &&
+      effect.kind !== 'releasePointer' &&
+      effect.kind !== 'scroll'
   );
   if (engineEffects.length > 0) return null;
   return {
@@ -54,7 +63,7 @@ function rejectOnlyPlan(plan: InteractionPlan): InteractionDispatchResult | null
 /** Apply one controller plan; host effects are returned for adapter passthrough. */
 export function executeInteractionPlan(
   ctx: InteractionExecutionContext,
-  plan: InteractionPlan,
+  plan: InteractionPlan
 ): InteractionDispatchResult {
   const rejectOnly = rejectOnlyPlan(plan);
   if (rejectOnly) return rejectOnly;
@@ -65,8 +74,10 @@ export function executeInteractionPlan(
 
   for (const effect of plan.effects) {
     if (terminalReject) {
-      if (effect.kind === 'capturePointer') hostEffects.push({ kind: 'capturePointer', pointerId: effect.pointerId });
-      if (effect.kind === 'releasePointer') hostEffects.push({ kind: 'releasePointer', pointerId: effect.pointerId });
+      if (effect.kind === 'capturePointer')
+        hostEffects.push({ kind: 'capturePointer', pointerId: effect.pointerId });
+      if (effect.kind === 'releasePointer')
+        hostEffects.push({ kind: 'releasePointer', pointerId: effect.pointerId });
       if (effect.kind === 'scroll') hostEffects.push({ kind: 'scroll', delta: effect.delta });
       continue;
     }
@@ -81,7 +92,10 @@ export function executeInteractionPlan(
         };
         break;
       case 'syncSelection': {
-        const outcome = ctx.syncSemanticSelection({ frameId: effect.frameId, selection: effect.selection });
+        const outcome = ctx.syncSemanticSelection({
+          frameId: effect.frameId,
+          selection: effect.selection,
+        });
         if (!outcome.ok) return { outcome, hostEffects: [] };
         lastSelection = effect.selection;
         break;

@@ -32,7 +32,7 @@ registerBindingNode(
     },
     parseDOM: [{ tag: 'p' }],
   },
-  'paragraph', // reverse-mapping role: an editable text block
+  'paragraph' // reverse-mapping role: an editable text block
 );
 
 // --- generic read-only capability: a non-paragraph authored block (table, SDT, ...) projected as
@@ -73,15 +73,23 @@ registerBindingNode(
       ];
     },
   },
-  'atom', // reverse-mapping role: a read-only projected block
+  'atom' // reverse-mapping role: a read-only projected block
 );
 registerBindingNode('text', { group: 'inline' });
 
 // bold/italic EXCLUDE the opaque rawRunProps capsule, so applying b/i to a capsule run REMOVES the
 // capsule and materializes the modeled mark (the user's edit wins, visibly) rather than being
 // discarded by the capsule.
-registerBindingMark('bold', { excludes: 'rawRunProps', toDOM: () => ['strong', 0], parseDOM: [{ tag: 'strong' }, { tag: 'b' }] });
-registerBindingMark('italic', { excludes: 'rawRunProps', toDOM: () => ['em', 0], parseDOM: [{ tag: 'em' }, { tag: 'i' }] });
+registerBindingMark('bold', {
+  excludes: 'rawRunProps',
+  toDOM: () => ['strong', 0],
+  parseDOM: [{ tag: 'strong' }, { tag: 'b' }],
+});
+registerBindingMark('italic', {
+  excludes: 'rawRunProps',
+  toDOM: () => ['em', 0],
+  parseDOM: [{ tag: 'em' }, { tag: 'i' }],
+});
 // An OPAQUE run-properties capsule mark: it carries the verbatim <w:rPr> bytes of a run whose
 // formatting the model does not represent, so editing the run's TEXT preserves its rPr. Two runs
 // with different capsules carry different `rpr` attrs and stay separate; identical capsules merge
@@ -213,8 +221,9 @@ registerDefaultBlockProjector((block: Block, schema) =>
     kind: block.kind,
     // A read-only PARAGRAPH keeps its text so assistive technology can still read it.
     // Other kinds project no text and lose nothing.
-    text: block.kind === 'paragraph' ? (block as ParagraphRecord).runs.map((r) => r.text).join('') : '',
-  }),
+    text:
+      block.kind === 'paragraph' ? (block as ParagraphRecord).runs.map((r) => r.text).join('') : '',
+  })
 );
 
 // The composed ProseMirror schema — a REAL Schema built once from every capability registered
@@ -225,4 +234,3 @@ registerDefaultBlockProjector((block: Block, schema) =>
 // registering a NEW node/mark AFTER engine-binding is imported is not yet supported (a deferred-
 // build entry point is a follow-up); the current editable surface is paragraph + read-only atom.
 export const docSchema: Schema = buildDocSchema();
-

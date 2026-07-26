@@ -12,7 +12,9 @@ export interface ClientTransport {
   call(method: string, params: unknown): DocxEditor.Result<string | undefined>;
 }
 
-export type ClientMethod = (params?: Record<string, unknown>) => DocxEditor.Result<string | undefined>;
+export type ClientMethod = (
+  params?: Record<string, unknown>
+) => DocxEditor.Result<string | undefined>;
 
 /**
  * Build a client whose methods are generated from the command registry: one

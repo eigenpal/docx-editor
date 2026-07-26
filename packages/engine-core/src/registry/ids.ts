@@ -37,7 +37,7 @@ export function assertValidId(id: string, kind?: IdKind): void {
   if (!isValidId(id)) {
     throw new Error(
       `invalid ${kind ?? 'registry'} id ${JSON.stringify(id)}: ` +
-        `must be reverse-domain (dev.docx-editor.core.x) or package-owned (@scope/pkg#kind/name)`,
+        `must be reverse-domain (dev.docx-editor.core.x) or package-owned (@scope/pkg#kind/name)`
     );
   }
 }

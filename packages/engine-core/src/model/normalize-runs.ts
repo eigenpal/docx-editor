@@ -11,7 +11,10 @@ import type { RunRecord } from './authored-model.ts';
 function sameProps(a: RunRecord, b: RunRecord): boolean {
   // Two runs merge only if BOTH their modeled props AND their verbatim rPr capsule match — a run
   // carrying an ownership-scoped rPr must never merge into a differently-formatted neighbour.
-  return canonicalize(a.props ?? null) === canonicalize(b.props ?? null) && (a.rPrCapsule ?? '') === (b.rPrCapsule ?? '');
+  return (
+    canonicalize(a.props ?? null) === canonicalize(b.props ?? null) &&
+    (a.rPrCapsule ?? '') === (b.rPrCapsule ?? '')
+  );
 }
 
 /** Merge adjacent identical-prop runs and drop empty runs (keeping run ids where set). */

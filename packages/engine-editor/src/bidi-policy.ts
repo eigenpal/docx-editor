@@ -1,10 +1,16 @@
 // Bidi trust policy for keyboard navigation (interactive-paginated-editing 5.5).
 
 import type { ViewScope } from '@docx-editor.dev/core-contract/editor';
-import type { InteractionFrame, SemanticIdentity, SemanticSelection, SemanticTarget } from '@docx-editor.dev/core-contract/interaction';
+import type {
+  InteractionFrame,
+  SemanticIdentity,
+  SemanticSelection,
+  SemanticTarget,
+} from '@docx-editor.dev/core-contract/interaction';
 
 /** Strong RTL scripts — keyboard navigation rejects all content containing these (fail closed). */
-const STRONG_RTL = /[\u0590-\u05FF\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\uFB1D-\uFDFF\uFE70-\uFEFF]/;
+const STRONG_RTL =
+  /[\u0590-\u05FF\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\uFB1D-\uFDFF\uFE70-\uFEFF]/;
 
 export type ParagraphTextResolver = (identity: SemanticIdentity, scope: ViewScope) => string;
 
@@ -20,7 +26,11 @@ export function blockContainsStrongRtl(text: string): boolean {
   return STRONG_RTL.test(text);
 }
 
-function clusterDirectionsForBlock(frame: InteractionFrame, identity: SemanticIdentity, scope: ViewScope): Set<'ltr' | 'rtl'> {
+function clusterDirectionsForBlock(
+  frame: InteractionFrame,
+  identity: SemanticIdentity,
+  scope: ViewScope
+): Set<'ltr' | 'rtl'> {
   const directions = new Set<'ltr' | 'rtl'>();
   for (const page of frame.display) {
     for (const item of page.items) {
@@ -37,18 +47,27 @@ function validateClusterDirectionTrust(
   frame: InteractionFrame,
   identity: SemanticIdentity,
   scope: ViewScope,
-  text: string,
+  text: string
 ): { ok: true } | { ok: false; reason: string } {
   const directions = clusterDirectionsForBlock(frame, identity, scope);
   if (directions.size > 1) {
-    return { ok: false, reason: 'mixed-direction cluster geometry is not supported for keyboard navigation' };
+    return {
+      ok: false,
+      reason: 'mixed-direction cluster geometry is not supported for keyboard navigation',
+    };
   }
   if (blockContainsStrongRtl(text)) {
-    return { ok: false, reason: 'strong RTL script content is not supported for keyboard navigation in task 5.5' };
+    return {
+      ok: false,
+      reason: 'strong RTL script content is not supported for keyboard navigation in task 5.5',
+    };
   }
   const onlyRtl = directions.size === 1 && directions.has('rtl');
   if (onlyRtl && !blockContainsStrongRtl(text)) {
-    return { ok: false, reason: 'RTL cluster metadata without trustworthy RTL script content is not supported' };
+    return {
+      ok: false,
+      reason: 'RTL cluster metadata without trustworthy RTL script content is not supported',
+    };
   }
   return { ok: true };
 }
@@ -58,7 +77,7 @@ export function validateKeyboardBidiTrust(
   frame: InteractionFrame,
   selection: SemanticSelection,
   paragraphText: ParagraphTextResolver,
-  extraTargets: readonly Extract<SemanticTarget, { kind: 'text' }>[] = [],
+  extraTargets: readonly Extract<SemanticTarget, { kind: 'text' }>[] = []
 ): { ok: true } | { ok: false; reason: string } {
   if (selection.anchor.kind !== 'text' || selection.head.kind !== 'text') {
     return { ok: false, reason: 'keyboard navigation requires text selection endpoints' };

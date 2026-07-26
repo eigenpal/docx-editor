@@ -30,13 +30,14 @@ export interface CompositionSnapshot {
 export function remoteChangePreservesCompositionAnchor(
   snapshot: CompositionSnapshot,
   currentParagraphText: string,
-  currentRevision: number,
+  currentRevision: number
 ): boolean {
   if (currentRevision <= snapshot.startRevision) return true;
   if (currentParagraphText === snapshot.paragraphText) return true;
   if (
     currentParagraphText.length > snapshot.paragraphText.length &&
-    currentParagraphText.slice(currentParagraphText.length - snapshot.paragraphText.length) === snapshot.paragraphText
+    currentParagraphText.slice(currentParagraphText.length - snapshot.paragraphText.length) ===
+      snapshot.paragraphText
   ) {
     return true;
   }
@@ -46,14 +47,15 @@ export function remoteChangePreservesCompositionAnchor(
 /** Map the composition UTF-16 range after a prefix-only remote canonical change. */
 export function mapCompositionRangeAfterRemote(
   snapshot: CompositionSnapshot,
-  currentParagraphText: string,
+  currentParagraphText: string
 ): { readonly selectionStart: number; readonly selectionEnd: number } | null {
   if (currentParagraphText === snapshot.paragraphText) {
     return { selectionStart: snapshot.selectionStart, selectionEnd: snapshot.selectionEnd };
   }
   if (
     currentParagraphText.length > snapshot.paragraphText.length &&
-    currentParagraphText.slice(currentParagraphText.length - snapshot.paragraphText.length) === snapshot.paragraphText
+    currentParagraphText.slice(currentParagraphText.length - snapshot.paragraphText.length) ===
+      snapshot.paragraphText
   ) {
     const inserted = currentParagraphText.length - snapshot.paragraphText.length;
     return {
@@ -68,7 +70,10 @@ export function mapCompositionRangeAfterRemote(
  * Deterministic overlay diff against the composition snapshot anchor.
  * Supports collapsed caret insertion and replacement of an initially selected UTF-16 range.
  */
-export function deriveCompositionOverlay(snapshot: CompositionSnapshot, currentParagraphText: string): string {
+export function deriveCompositionOverlay(
+  snapshot: CompositionSnapshot,
+  currentParagraphText: string
+): string {
   const prefix = snapshot.paragraphText.slice(0, snapshot.selectionStart);
   const suffix = snapshot.paragraphText.slice(snapshot.selectionEnd);
   if (!currentParagraphText.startsWith(prefix) || !currentParagraphText.endsWith(suffix)) return '';
@@ -80,14 +85,18 @@ export function applyCompositionOverlay(
   canonicalParagraphText: string,
   selectionStart: number,
   selectionEnd: number,
-  overlay: string,
+  overlay: string
 ): string {
-  return canonicalParagraphText.slice(0, selectionStart) + overlay + canonicalParagraphText.slice(selectionEnd);
+  return (
+    canonicalParagraphText.slice(0, selectionStart) +
+    overlay +
+    canonicalParagraphText.slice(selectionEnd)
+  );
 }
 
 export function observeComposition(
   active: boolean,
-  lastCancel: CompositionCancelOutcome | null = null,
+  lastCancel: CompositionCancelOutcome | null = null
 ): CompositionObservation {
   return {
     active,

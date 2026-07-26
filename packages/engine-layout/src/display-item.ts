@@ -75,7 +75,12 @@ export interface Page {
    *  than from a guessed default. The engine's margin is uniform on all four sides today,
    *  while Word carries four independent values — this is the former, and must not be
    *  presented as per-side fidelity it does not have. */
-  readonly contentBox: { readonly x: number; readonly y: number; readonly width: number; readonly height: number };
+  readonly contentBox: {
+    readonly x: number;
+    readonly y: number;
+    readonly width: number;
+    readonly height: number;
+  };
   readonly items: readonly DisplayItem[];
 }
 

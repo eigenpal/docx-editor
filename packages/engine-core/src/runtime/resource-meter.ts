@@ -7,11 +7,7 @@
 // limit tests are reproducible.
 
 import { BoundedCounter } from './counter.ts';
-import {
-  HARD_CEILINGS,
-  DEFAULT_LIMITS,
-  type ResourceLimits,
-} from './limits.ts';
+import { HARD_CEILINGS, DEFAULT_LIMITS, type ResourceLimits } from './limits.ts';
 
 export type LimitUnit = 'bytes' | 'count' | 'depth' | 'ratio' | 'passes';
 export type EnforcementPhase = 'package-read' | 'xml-parse' | 'layout' | 'output';
@@ -37,7 +33,10 @@ export const LIMIT_SPECS: Readonly<Record<keyof ResourceLimits, LimitSpec>> = Ob
 export const LIMIT_KEYS = Object.keys(LIMIT_SPECS) as (keyof ResourceLimits)[];
 
 /** A phase-scoped overflow-safe counter for one limit. */
-export function makeLimitCounter(limits: ResourceLimits, key: keyof ResourceLimits): BoundedCounter {
+export function makeLimitCounter(
+  limits: ResourceLimits,
+  key: keyof ResourceLimits
+): BoundedCounter {
   return new BoundedCounter(`${LIMIT_SPECS[key].phase}:${key}`, limits[key]);
 }
 

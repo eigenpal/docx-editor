@@ -25,7 +25,11 @@ import {
 } from '@docx-editor.dev/engine-core';
 import { docSchema } from './schema.ts';
 import { modelToDoc, paragraphNodeToRuns } from './projection.ts';
-import { nodeRole, isBindingEditableKind, assertBindingLaneComplete } from './binding-capabilities.ts';
+import {
+  nodeRole,
+  isBindingEditableKind,
+  assertBindingLaneComplete,
+} from './binding-capabilities.ts';
 
 const MUTATION = ORIGIN_IDS.mutationHuman;
 
@@ -139,7 +143,11 @@ function nodeMatchesBlock(node: PMNode | undefined, block: Block | undefined): b
   // A paragraph node may only align to a block the POLICY says is editable. Kind alone
   // is not enough: a paragraph carrying unmodeled inline OOXML is a read-only region.
   if (role === 'paragraph') {
-    return isBindingEditableKind(block.kind) && !activeReadOnlyBlockIds.has(block.id) && node.attrs.semId === block.id;
+    return (
+      isBindingEditableKind(block.kind) &&
+      !activeReadOnlyBlockIds.has(block.id) &&
+      node.attrs.semId === block.id
+    );
   }
   return false;
 }
@@ -170,7 +178,12 @@ function prefixAligns(nodes: readonly PMNode[], blocks: readonly Block[], count:
 }
 
 /** Whether nodes[ni..] correspond 1:1 and in order to blocks[bi..] by identity AND content. */
-function alignsAfter(nodes: readonly PMNode[], ni: number, blocks: readonly Block[], bi: number): boolean {
+function alignsAfter(
+  nodes: readonly PMNode[],
+  ni: number,
+  blocks: readonly Block[],
+  bi: number
+): boolean {
   if (nodes.length - ni !== blocks.length - bi) return false;
   for (let a = ni, b = bi; a < nodes.length; a += 1, b += 1) {
     const bl = blocks[b];
@@ -260,10 +273,13 @@ export class EditorBinding {
       }
       const pasted = this.mapPasteIntoParagraph(nodes, blocks, storyId);
       if (pasted) return pasted;
-      throw new BindingRejection('unsupported structural edit (paste or insertion combined with a change)');
+      throw new BindingRejection(
+        'unsupported structural edit (paste or insertion combined with a change)'
+      );
     }
     if (delta === -1) return this.mapJoin(nodes, blocks);
-    if (delta !== 0) throw new BindingRejection('unsupported structural edit (multi-paragraph deletion)');
+    if (delta !== 0)
+      throw new BindingRejection('unsupported structural edit (multi-paragraph deletion)');
 
     // Δ=0: strictly in-place. Each node maps 1:1 to its canonical block by kind + semId.
     const ops: DocOp[] = [];
@@ -307,12 +323,14 @@ export class EditorBinding {
         }
         // The reverse lane's run mapping is paragraph-shaped (BINDING_EDITABLE_KINDS is paragraph);
         // narrow to ParagraphRecord and fail closed if a future editable kind is not paragraph-shaped.
-        if (block.kind !== 'paragraph') throw new BindingRejection('editable block kind has no run reverse-mapping');
+        if (block.kind !== 'paragraph')
+          throw new BindingRejection('editable block kind has no run reverse-mapping');
         const runs = paragraphNodeToRuns(node);
         if (!runsEqual(block.runs, runs)) {
           // Overwriting a paragraph whose runs carry metadata the projection drops (id/styleId/
           // underline/explicit-off) would silently lose it — refuse rather than corrupt.
-          if (!paragraphIsProjectable(block)) throw new BindingRejection('paragraph carries unprojectable run metadata');
+          if (!paragraphIsProjectable(block))
+            throw new BindingRejection('paragraph carries unprojectable run metadata');
           ops.push({ op: 'setParagraphRuns', paragraphId: block.id, runs });
         }
       } else throw new BindingRejection(`unexpected node type '${node.type.name}'`);
@@ -332,12 +350,19 @@ export class EditorBinding {
     const head = nodes[bk];
     const tail = nodes[bk + 1];
     if (
-      bk < 0 || !x || x.kind !== 'paragraph' ||
-      !head || !isParagraph(head) || head.attrs.semId !== x.id ||
+      bk < 0 ||
+      !x ||
+      x.kind !== 'paragraph' ||
+      !head ||
+      !isParagraph(head) ||
+      head.attrs.semId !== x.id ||
       // The tail is the split's NEW half: PM leaves its id null (end-split) or copies the head's
       // id (mid-split). Any other id means it is forging an existing block's identity.
-      !tail || !isParagraph(tail) || (tail.attrs.semId !== null && tail.attrs.semId !== x.id) ||
-      !prefixAligns(nodes, blocks, bk) || !alignsAfter(nodes, bk + 2, blocks, bk + 1)
+      !tail ||
+      !isParagraph(tail) ||
+      (tail.attrs.semId !== null && tail.attrs.semId !== x.id) ||
+      !prefixAligns(nodes, blocks, bk) ||
+      !alignsAfter(nodes, bk + 2, blocks, bk + 1)
     ) {
       return null; // not a split shape — let the paste path try
     }
@@ -363,17 +388,31 @@ export class EditorBinding {
    *  (P's new content) plus k insertParagraph ops. Returns null when the shape does not match
    *  (every surrounding block must be unchanged in identity AND content), so nothing else is
    *  touched. */
-  private mapPasteIntoParagraph(nodes: readonly PMNode[], blocks: readonly Block[], storyId: string): DocOp[] | null {
+  private mapPasteIntoParagraph(
+    nodes: readonly PMNode[],
+    blocks: readonly Block[],
+    storyId: string
+  ): DocOp[] | null {
     // The prefix ends at the first block whose identity OR content changed — the paste target P.
     let prefix = 0;
-    while (prefix < blocks.length && nodeMatchesBlock(nodes[prefix], blocks[prefix]) && sameContent(nodes[prefix], blocks[prefix])) {
+    while (
+      prefix < blocks.length &&
+      nodeMatchesBlock(nodes[prefix], blocks[prefix]) &&
+      sameContent(nodes[prefix], blocks[prefix])
+    ) {
       prefix += 1;
     }
     const target = nodes[prefix];
     const block = blocks[prefix];
     // P must be an EXISTING paragraph (same id) whose content changed (guaranteed: the prefix
     // stopped here). A new (null) node here would be a pure insertion (handled by mapInsert).
-    if (!target || !isParagraph(target) || !block || block.kind !== 'paragraph' || target.attrs.semId !== block.id) {
+    if (
+      !target ||
+      !isParagraph(target) ||
+      !block ||
+      block.kind !== 'paragraph' ||
+      target.attrs.semId !== block.id
+    ) {
       return null;
     }
     const k = nodes.length - blocks.length; // number of NEW paragraphs after P
@@ -404,9 +443,16 @@ export class EditorBinding {
     if (affected.some((n) => paragraphNodeToRuns(n).some((r) => hasLoneSurrogate(r.text)))) {
       throw new BindingRejection('paste would split an astral character (surrogate) — refused');
     }
-    const ops: DocOp[] = [{ op: 'setParagraphRuns', paragraphId: block.id, runs: paragraphNodeToRuns(target) }];
+    const ops: DocOp[] = [
+      { op: 'setParagraphRuns', paragraphId: block.id, runs: paragraphNodeToRuns(target) },
+    ];
     for (let j = 0; j < k; j += 1) {
-      ops.push({ op: 'insertParagraph', storyId, index: prefix + 1 + j, runs: paragraphNodeToRuns(nodes[prefix + 1 + j]) });
+      ops.push({
+        op: 'insertParagraph',
+        storyId,
+        index: prefix + 1 + j,
+        runs: paragraphNodeToRuns(nodes[prefix + 1 + j]),
+      });
     }
     return ops;
   }
@@ -420,8 +466,13 @@ export class EditorBinding {
     const x = blocks[bk - 1];
     const survivor = nodes[bk - 1];
     if (
-      !y || y.kind !== 'paragraph' || !x || x.kind !== 'paragraph' ||
-      !survivor || !isParagraph(survivor) || survivor.attrs.semId !== x.id ||
+      !y ||
+      y.kind !== 'paragraph' ||
+      !x ||
+      x.kind !== 'paragraph' ||
+      !survivor ||
+      !isParagraph(survivor) ||
+      survivor.attrs.semId !== x.id ||
       !prefixAligns(nodes, blocks, bk - 1) || // the blocks BEFORE the survivor are unchanged
       !alignsAfter(nodes, bk, blocks, bk + 1) // the blocks after Y are unchanged
     ) {
@@ -453,12 +504,20 @@ export class EditorBinding {
    *  null when the shape is NOT a clean boundary insertion (so a Δ=1 caller can try a split);
    *  a mid-paragraph paste (which also splits) or an insert-plus-edit is not a clean insertion
    *  and falls through to fail closed. */
-  private mapInsert(nodes: readonly PMNode[], blocks: readonly Block[], storyId: string): DocOp[] | null {
+  private mapInsert(
+    nodes: readonly PMNode[],
+    blocks: readonly Block[],
+    storyId: string
+  ): DocOp[] | null {
     // The prefix ends at the first node that does not match its block by identity AND content.
     // A brand-new paragraph has semId null, which never matches an existing block, so the prefix
     // stops exactly where the inserted run begins.
     let prefix = 0;
-    while (prefix < blocks.length && nodeMatchesBlock(nodes[prefix], blocks[prefix]) && sameContent(nodes[prefix], blocks[prefix])) {
+    while (
+      prefix < blocks.length &&
+      nodeMatchesBlock(nodes[prefix], blocks[prefix]) &&
+      sameContent(nodes[prefix], blocks[prefix])
+    ) {
       prefix += 1;
     }
     const k = nodes.length - blocks.length;
@@ -472,12 +531,22 @@ export class EditorBinding {
     // Inserting a SINGLE EMPTY paragraph right after an existing paragraph is ambiguous with an
     // end-of-paragraph split (Enter). Defer to the split path so the new paragraph inherits the
     // source paragraph's properties (a split preserves style; a bare insert would not).
-    if (k === 1 && prefix >= 1 && blocks[prefix - 1].kind === 'paragraph' && pmTextLength(paragraphNodeToRuns(nodes[prefix])) === 0) {
+    if (
+      k === 1 &&
+      prefix >= 1 &&
+      blocks[prefix - 1].kind === 'paragraph' &&
+      pmTextLength(paragraphNodeToRuns(nodes[prefix])) === 0
+    ) {
       return null;
     }
     const ops: DocOp[] = [];
     for (let j = 0; j < k; j += 1) {
-      ops.push({ op: 'insertParagraph', storyId, index: prefix + j, runs: paragraphNodeToRuns(nodes[prefix + j]) });
+      ops.push({
+        op: 'insertParagraph',
+        storyId,
+        index: prefix + j,
+        runs: paragraphNodeToRuns(nodes[prefix + j]),
+      });
     }
     return ops;
   }

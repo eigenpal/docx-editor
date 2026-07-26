@@ -59,7 +59,11 @@ export function encodeModel(model: PackageModel): SerializedModel {
             originalParts: [...p!.originalParts],
             blockRanges: [...p!.blockRanges],
             ...(p!.packageParts && p!.packageParts.size > 0
-              ? { packageParts: [...p!.packageParts].map(([name, bytes]) => [name, bytesToHex(bytes)] as const) }
+              ? {
+                  packageParts: [...p!.packageParts].map(
+                    ([name, bytes]) => [name, bytesToHex(bytes)] as const
+                  ),
+                }
               : {}),
             ...(p!.relatedStoryHashes && p!.relatedStoryHashes.size > 0
               ? { relatedStoryHashes: [...p!.relatedStoryHashes] }
@@ -99,14 +103,22 @@ export function decodeModel(s: SerializedModel): PackageModel {
   const originalParts = mapFromPairs(s.preservation.originalParts, 'preservation part');
   const blockRanges = mapFromPairs(s.preservation.blockRanges, 'preservation block range');
   const packageParts = s.preservation.packageParts
-    ? mapFromPairs(s.preservation.packageParts.map(([n, h]) => [n, hexToBytes(h)] as const), 'preservation package part')
+    ? mapFromPairs(
+        s.preservation.packageParts.map(([n, h]) => [n, hexToBytes(h)] as const),
+        'preservation package part'
+      )
     : undefined;
   const relatedStoryHashes = s.preservation.relatedStoryHashes
     ? mapFromPairs(s.preservation.relatedStoryHashes, 'related story hash')
     : undefined;
   const model: PackageModel = {
     ...base,
-    preservation: { originalParts, blockRanges, ...(packageParts ? { packageParts } : {}), ...(relatedStoryHashes ? { relatedStoryHashes } : {}) },
+    preservation: {
+      originalParts,
+      blockRanges,
+      ...(packageParts ? { packageParts } : {}),
+      ...(relatedStoryHashes ? { relatedStoryHashes } : {}),
+    },
   };
   validatePreservation(model); // full validation on a restored snapshot, not just duplicates
   return model;
@@ -124,7 +136,10 @@ export function validatePreservation(model: PackageModel): void {
   // A preserved document that has source ranges MUST retain its package parts, or
   // writeDocx would silently fall back to a lossy minimal export. Reject the
   // inconsistent (tampered/partial) snapshot instead.
-  if ((p.originalParts.size > 0 || p.blockRanges.size > 0) && !(p.packageParts && p.packageParts.size > 0)) {
+  if (
+    (p.originalParts.size > 0 || p.blockRanges.size > 0) &&
+    !(p.packageParts && p.packageParts.size > 0)
+  ) {
     throw new Error('preservation has source ranges but no package parts (inconsistent snapshot)');
   }
   // NOTE: a range's blockId indexes the ORIGINAL document snapshot, not the live model.
@@ -135,9 +150,14 @@ export function validatePreservation(model: PackageModel): void {
   const byPart = new Map<string, { start: number; end: number }[]>();
   for (const [blockId, r] of p.blockRanges) {
     const text = p.originalParts.get(r.partName);
-    if (text === undefined) throw new Error(`preservation range for block ${blockId} references unknown part ${r.partName}`);
-    if (!Number.isInteger(r.start) || !Number.isInteger(r.end)) throw new Error(`non-integer preservation range for block ${blockId}`);
-    if (!(r.start >= 0 && r.start < r.end && r.end <= text.length)) throw new Error(`out-of-bounds preservation range for block ${blockId}`);
+    if (text === undefined)
+      throw new Error(
+        `preservation range for block ${blockId} references unknown part ${r.partName}`
+      );
+    if (!Number.isInteger(r.start) || !Number.isInteger(r.end))
+      throw new Error(`non-integer preservation range for block ${blockId}`);
+    if (!(r.start >= 0 && r.start < r.end && r.end <= text.length))
+      throw new Error(`out-of-bounds preservation range for block ${blockId}`);
     const list = byPart.get(r.partName) ?? [];
     list.push({ start: r.start, end: r.end });
     byPart.set(r.partName, list);
@@ -145,7 +165,8 @@ export function validatePreservation(model: PackageModel): void {
   for (const list of byPart.values()) {
     list.sort((a, b) => a.start - b.start);
     for (let i = 1; i < list.length; i += 1) {
-      if (list[i].start < list[i - 1].end) throw new Error('overlapping preservation ranges within one part');
+      if (list[i].start < list[i - 1].end)
+        throw new Error('overlapping preservation ranges within one part');
     }
   }
 }

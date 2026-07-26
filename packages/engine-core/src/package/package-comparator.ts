@@ -50,7 +50,10 @@ function concatBytes(chunks: Uint8Array[]): Uint8Array {
  * definition of "selective patch": unowned bytes come verbatim from before, owned ranges are the
  * only edits.
  */
-export function reassembleXmlPartRanges(before: Uint8Array, owned: readonly OwnedRange[]): Uint8Array {
+export function reassembleXmlPartRanges(
+  before: Uint8Array,
+  owned: readonly OwnedRange[]
+): Uint8Array {
   const chunks: Uint8Array[] = [];
   let cursor = 0;
   for (const r of owned) {
@@ -60,7 +63,9 @@ export function reassembleXmlPartRanges(before: Uint8Array, owned: readonly Owne
       throw new Error(`owned range [${r.start},${r.end}) has a non-integer offset`);
     }
     if (!(r.start >= cursor && r.end >= r.start && r.end <= before.length)) {
-      throw new Error(`owned range [${r.start},${r.end}) is out of order, overlapping, or out of bounds (cursor ${cursor}, len ${before.length})`);
+      throw new Error(
+        `owned range [${r.start},${r.end}) is out of order, overlapping, or out of bounds (cursor ${cursor}, len ${before.length})`
+      );
     }
     chunks.push(before.subarray(cursor, r.start)); // verbatim unowned gap
     chunks.push(r.replacement); // the only edited bytes
@@ -82,7 +87,11 @@ export interface XmlPartRangeResult {
  * patch of `before` over exactly `owned` — i.e. every UNOWNED byte survived verbatim and only the
  * declared ranges changed. No tolerance: XML-part bytes compare exactly.
  */
-export function compareXmlPartRanges(before: Uint8Array, after: Uint8Array, owned: readonly OwnedRange[]): XmlPartRangeResult {
+export function compareXmlPartRanges(
+  before: Uint8Array,
+  after: Uint8Array,
+  owned: readonly OwnedRange[]
+): XmlPartRangeResult {
   const expected = reassembleXmlPartRanges(before, owned);
   return bytesEqual(expected, after) ? { equal: true } : { equal: false, expected };
 }
@@ -116,7 +125,7 @@ export interface ZipContainerResult {
 export function compareZipContainers(
   before: Uint8Array,
   after: Uint8Array,
-  opts: { owned?: Iterable<string>; limits?: ZipLimits } = {},
+  opts: { owned?: Iterable<string>; limits?: ZipLimits } = {}
 ): ZipContainerResult {
   const empty: string[] = [];
   // Read under the SAFE default bounds (entry-count, total-inflated-size, AND the pre-inflation
@@ -129,8 +138,24 @@ export function compareZipContainers(
   const limits: ZipLimits = opts.limits ?? DEFAULT_ZIP_LIMITS;
   const a = readZip(before, limits);
   const b = readZip(after, limits);
-  if (!a.ok) return { equal: false, changed: empty, added: empty, removed: empty, unownedChanged: empty, readError: `before: ${a.reason}` };
-  if (!b.ok) return { equal: false, changed: empty, added: empty, removed: empty, unownedChanged: empty, readError: `after: ${b.reason}` };
+  if (!a.ok)
+    return {
+      equal: false,
+      changed: empty,
+      added: empty,
+      removed: empty,
+      unownedChanged: empty,
+      readError: `before: ${a.reason}`,
+    };
+  if (!b.ok)
+    return {
+      equal: false,
+      changed: empty,
+      added: empty,
+      removed: empty,
+      unownedChanged: empty,
+      readError: `after: ${b.reason}`,
+    };
 
   // OPC part names are ASCII-case-insensitive: `/Word/Document.xml` and `/word/document.xml` are the
   // SAME part. Compare on the case-folded key so a mere case difference is not a false add/remove,
@@ -155,6 +180,8 @@ export function compareZipContainers(
   }
   for (const [key, bv] of bByKey) if (!aByKey.has(key)) added.push(bv.name);
 
-  const unownedChanged = [...changed, ...added, ...removed].filter((n) => !owned.has(partNameKey(n))).sort();
+  const unownedChanged = [...changed, ...added, ...removed]
+    .filter((n) => !owned.has(partNameKey(n)))
+    .sort();
   return { equal: unownedChanged.length === 0, changed, added, removed, unownedChanged };
 }

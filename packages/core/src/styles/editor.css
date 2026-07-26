@@ -1663,7 +1663,12 @@
   border: 1px solid transparent;
   border-radius: 4px;
   padding: 4px 8px;
-  font: 500 15px/1.3 -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  font:
+    500 15px/1.3 -apple-system,
+    BlinkMacSystemFont,
+    'Segoe UI',
+    Roboto,
+    sans-serif;
   color: var(--doc-text);
   background: transparent;
 }
@@ -1691,7 +1696,12 @@
   color: #fff;
   padding: 6px 12px;
   border-radius: 4px;
-  font: 500 12px/1 -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  font:
+    500 12px/1 -apple-system,
+    BlinkMacSystemFont,
+    'Segoe UI',
+    Roboto,
+    sans-serif;
   white-space: nowrap;
   user-select: none;
   transition: opacity 0.3s ease;
@@ -1742,7 +1752,12 @@
 
 .ep-ruler__label {
   position: absolute;
-  font: 400 9px/1 -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  font:
+    400 9px/1 -apple-system,
+    BlinkMacSystemFont,
+    'Segoe UI',
+    Roboto,
+    sans-serif;
   color: var(--doc-text-muted);
 }
 
@@ -1784,7 +1799,6 @@
   display: inline-flex;
   align-items: center;
 }
-
 
 .ep-toolbar__group {
   display: flex;
@@ -1834,7 +1848,12 @@
 }
 
 .ep-sidebar__title {
-  font: 500 13px/1.2 -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  font:
+    500 13px/1.2 -apple-system,
+    BlinkMacSystemFont,
+    'Segoe UI',
+    Roboto,
+    sans-serif;
   color: var(--doc-text);
 }
 
@@ -1991,7 +2010,9 @@
 
 /* The page floats on the workspace backdrop with a drop shadow, as in the reference. */
 .docx-editor__content .ep-one-surface__page {
-  box-shadow: 0 1px 3px rgb(60 64 67 / 30%), 0 4px 8px 3px rgb(60 64 67 / 15%);
+  box-shadow:
+    0 1px 3px rgb(60 64 67 / 30%),
+    0 4px 8px 3px rgb(60 64 67 / 15%);
 }
 
 /* Brand block, framework/theme toggles, and outline button (M6V.1, second pass).
@@ -2046,7 +2067,9 @@
   border-radius: 9999px;
   font-size: 12px;
   color: var(--doc-text-subtle);
-  transition: background 0.15s, color 0.15s;
+  transition:
+    background 0.15s,
+    color 0.15s;
 }
 
 .docx-editor__framework-option--active,
@@ -2057,8 +2080,13 @@
   box-shadow: 0 1px 2px var(--doc-shadow-subtle);
 }
 
-.docx-editor__theme { margin-left: 0; margin-right: 4px; }
-.docx-editor__theme-option { padding: 3px 8px; }
+.docx-editor__theme {
+  margin-left: 0;
+  margin-right: 4px;
+}
+.docx-editor__theme-option {
+  padding: 3px 8px;
+}
 
 /* Title indented to align with the page, as in the reference, rather than flush left. */
 /* Retained so an existing consumer's selector still resolves; the region is indented by

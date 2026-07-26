@@ -98,7 +98,7 @@ function bodyParagraphs(store: DocumentStore): ParagraphRecord[] {
  */
 function readOnlyIdsFrom(
   model: PackageModel,
-  assessment: { readonly patchableBlockIds: ReadonlySet<string> },
+  assessment: { readonly patchableBlockIds: ReadonlySet<string> }
 ): ReadonlySet<string> {
   const ids = new Set<string>();
   let storyId: string;
@@ -133,7 +133,10 @@ export function openDocxSession(bytes: Uint8Array): DocxEditorSession {
   // flat parse (read-only) when strict preservation cannot be established.
   const parsed = parseDocx(bytes, { preserveAll: true });
   const result = parsed.ok ? parsed : parseDocx(bytes);
-  if (!result.ok) throw new Error(`cannot open document: ${result.reason}${result.detail ? ` (${result.detail})` : ''}`);
+  if (!result.ok)
+    throw new Error(
+      `cannot open document: ${result.reason}${result.detail ? ` (${result.detail})` : ''}`
+    );
   const model = result.model;
   const store = new DocumentStore(model);
   const binding = new EditorBinding(store);
@@ -224,7 +227,8 @@ export function openDocxSession(bytes: Uint8Array): DocxEditorSession {
       // at all — and it is the only thing enforcing it for shapes no lane inspects.
       refreshPolicy();
       if (!assessment.structuralMutationAllowed) {
-        const blocks = store.currentModel.stories.get(bodyStoryId(store.currentModel))?.blocks ?? [];
+        const blocks =
+          store.currentModel.stories.get(bodyStoryId(store.currentModel))?.blocks ?? [];
         if (doc.childCount !== blocks.length) {
           return { committed: false, rejected: true, opCount: 0 };
         }

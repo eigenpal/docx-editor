@@ -1,6 +1,13 @@
 // PM-free accessibility observation and painted-page assistive policy (interactive-paginated 4.6).
 
-import { bodyStoryId, isTopLevelEditable, type Block, type PackageModel, type ParagraphRecord, type SdtRecord } from '@docx-editor.dev/engine-core';
+import {
+  bodyStoryId,
+  isTopLevelEditable,
+  type Block,
+  type PackageModel,
+  type ParagraphRecord,
+  type SdtRecord,
+} from '@docx-editor.dev/engine-core';
 import type { ViewScope } from '@docx-editor.dev/core-contract/editor';
 import type {
   AccessibilityEntry,
@@ -61,7 +68,8 @@ function paragraphText(p: ParagraphRecord): string {
 }
 
 function entryRoleForBlock(block: Block, editableParagraph: boolean): AccessibilityEntryRole {
-  if (block.kind === 'paragraph') return editableParagraph ? 'editableParagraph' : 'unsupportedStructure';
+  if (block.kind === 'paragraph')
+    return editableParagraph ? 'editableParagraph' : 'unsupportedStructure';
   return 'readOnlyAtom';
 }
 
@@ -69,7 +77,7 @@ function entryRoleForBlock(block: Block, editableParagraph: boolean): Accessibil
 export function buildAccessibilityEntries(
   model: PackageModel,
   scope: ViewScope,
-  readOnlyBlockIds: ReadonlySet<string> = new Set(),
+  readOnlyBlockIds: ReadonlySet<string> = new Set()
 ): readonly AccessibilityEntry[] {
   if (scope.kind !== 'body') return [];
   const storyId = bodyStoryId(model);
@@ -85,7 +93,9 @@ export function buildAccessibilityEntries(
     // mapper, which refuses the edit. `unsupportedStructure` already existed for this and
     // was dead code.
     const editableParagraph =
-      block.kind === 'paragraph' && isTopLevelEditable('paragraph') && !readOnlyBlockIds.has(block.id);
+      block.kind === 'paragraph' &&
+      isTopLevelEditable('paragraph') &&
+      !readOnlyBlockIds.has(block.id);
     const role = entryRoleForBlock(block, editableParagraph);
     if (block.kind === 'paragraph') {
       entries.push({
@@ -114,7 +124,7 @@ function anchorToTarget(
   anchor: SelectionRangeAnchors['anchor'],
   model: PackageModel,
   scope: ViewScope,
-  storyId: string,
+  storyId: string
 ): SemanticTarget | null {
   if (!anchor.paragraphId) return null;
   const owned = paragraphOwnership(model, anchor.paragraphId, storyId);
@@ -131,10 +141,14 @@ function anchorToTarget(
 
 function buildSelectionObservation(
   input: ObserveAccessibilityInput,
-  storyId: string,
+  storyId: string
 ): AccessibilitySelectionObservation | null {
   if (input.atomicObjectId) {
-    const target: SemanticTarget = { kind: 'atomic', scope: input.scope, objectId: input.atomicObjectId };
+    const target: SemanticTarget = {
+      kind: 'atomic',
+      scope: input.scope,
+      objectId: input.atomicObjectId,
+    };
     return { collapsed: true, anchor: target, head: target };
   }
   if (!input.selectionRange) return null;
@@ -154,7 +168,9 @@ function freezeTarget(target: SemanticTarget): SemanticTarget {
   return Object.freeze({ ...target, identity: Object.freeze({ ...target.identity }) });
 }
 
-function freezeSelection(selection: AccessibilitySelectionObservation | null): AccessibilitySelectionObservation | null {
+function freezeSelection(
+  selection: AccessibilitySelectionObservation | null
+): AccessibilitySelectionObservation | null {
   if (!selection) return null;
   return Object.freeze({
     collapsed: selection.collapsed,
@@ -164,14 +180,16 @@ function freezeSelection(selection: AccessibilitySelectionObservation | null): A
 }
 
 /** Return a deeply frozen PM-free accessibility observation for conformance. */
-export function freezeAccessibilityObservation(obs: AccessibilityObservation): AccessibilityObservation {
+export function freezeAccessibilityObservation(
+  obs: AccessibilityObservation
+): AccessibilityObservation {
   const entries = Object.freeze(
     obs.entries.map((entry) =>
       Object.freeze({
         ...entry,
         identity: Object.freeze({ ...entry.identity }),
-      }),
-    ),
+      })
+    )
   );
   return Object.freeze({
     ...obs,
@@ -200,12 +218,16 @@ export function observeAccessibility(input: ObserveAccessibilityInput): Accessib
 }
 
 export function resolveAccessibilityNamePolicy(accessibleName?: string): AccessibilityNamePolicy {
-  if (accessibleName && accessibleName.length > 0) return { kind: 'provided', value: accessibleName };
+  if (accessibleName && accessibleName.length > 0)
+    return { kind: 'provided', value: accessibleName };
   return { kind: 'absent' };
 }
 
 /** Apply or clear the localized accessible name on the semantic projection mount. */
-export function applyAccessibleNamePolicy(mount: HTMLElement, policy: AccessibilityNamePolicy): void {
+export function applyAccessibleNamePolicy(
+  mount: HTMLElement,
+  policy: AccessibilityNamePolicy
+): void {
   if (policy.kind === 'provided') mount.setAttribute('aria-label', policy.value);
   else mount.removeAttribute('aria-label');
 }
@@ -213,7 +235,7 @@ export function applyAccessibleNamePolicy(mount: HTMLElement, policy: Accessibil
 /** Apply localized atom labels and read-only semantics after PM projection updates. */
 export function applyAtomAccessibilityLabels(
   root: HTMLElement,
-  labels?: Readonly<Record<string, string>>,
+  labels?: Readonly<Record<string, string>>
 ): void {
   for (const node of root.querySelectorAll(ATOM_EMBED_SELECTOR)) {
     if (!(node instanceof HTMLElement)) continue;
@@ -237,7 +259,7 @@ export function applyAtomAccessibilityLabels(
 export function reapplyAccessibilityProjectionDom(
   mount: HTMLElement,
   name: AccessibilityNamePolicy,
-  atomLabels?: Readonly<Record<string, string>>,
+  atomLabels?: Readonly<Record<string, string>>
 ): void {
   applyAccessibleNamePolicy(mount, name);
   applyAtomAccessibilityLabels(mount, atomLabels);
@@ -291,7 +313,9 @@ export function captureAccessibilityState(input: CaptureAccessibilityStateInput)
   const focused = !view.isDestroyed && (view.hasFocus() || doc?.activeElement === view.dom);
   const selection = view.state.selection;
   const atomicObjectId =
-    selection instanceof NodeSelectionCtor && selection.node.type.name === 'blockEmbed' && selection.node.attrs.semId
+    selection instanceof NodeSelectionCtor &&
+    selection.node.type.name === 'blockEmbed' &&
+    selection.node.attrs.semId
       ? String(selection.node.attrs.semId)
       : null;
   return {
@@ -311,7 +335,10 @@ export function observeAccessibilityFromSession(
   session: DocxEditorSession,
   request: AccessibilityObservationRequest,
   // `readOnlyBlockIds` is supplied from the SESSION below, so a caller must not pass it.
-  state: Omit<ObserveAccessibilityInput, 'model' | 'modelRevision' | 'frameId' | 'scope' | 'readOnlyBlockIds'>,
+  state: Omit<
+    ObserveAccessibilityInput,
+    'model' | 'modelRevision' | 'frameId' | 'scope' | 'readOnlyBlockIds'
+  >
 ): AccessibilityObservation {
   return observeAccessibility({
     ...state,

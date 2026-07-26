@@ -93,7 +93,7 @@ export function buildDocSchema(): Schema {
  * `block.kind` alone. The canonical kind is unchanged; only this projection differs.
  */
 export function projectBlock(block: Block, schema: Schema, forceReadOnly = false): PMNode {
-  const fn = forceReadOnly ? defaultProjector : projectors.get(block.kind) ?? defaultProjector;
+  const fn = forceReadOnly ? defaultProjector : (projectors.get(block.kind) ?? defaultProjector);
   if (!fn) throw new Error(`no binding projector registered for block kind '${block.kind}'`);
   return fn(block, schema);
 }
@@ -120,20 +120,23 @@ export function assertBindingLaneComplete(): void {
     } else if (!BINDING_EDITABLE_KINDS.has(kind)) {
       missing.push(
         `'${kind}' is core-editable but the binding reverse lane cannot map its edits to DocOps ` +
-          `(not in BINDING_EDITABLE_KINDS)`,
+          `(not in BINDING_EDITABLE_KINDS)`
       );
     }
   }
   void schema;
   if (missing.length > 0) {
-    throw new Error(`binding lane incomplete for editable block kinds:\n  - ${missing.join('\n  - ')}`);
+    throw new Error(
+      `binding lane incomplete for editable block kinds:\n  - ${missing.join('\n  - ')}`
+    );
   }
 }
 
 /** Snapshot the mutable binding PROJECTOR registry so a test that registers a projector can restore
  *  it and never leak into sibling/watch-mode tests. Node/mark specs and BINDING_EDITABLE_KINDS are
  *  fixed (composed once / constant) and need no snapshot. */
-export const snapshotBindingRegistryForTest = (): ReadonlyMap<string, BlockProjector> => new Map(projectors);
+export const snapshotBindingRegistryForTest = (): ReadonlyMap<string, BlockProjector> =>
+  new Map(projectors);
 export function restoreBindingRegistryForTest(snap: ReadonlyMap<string, BlockProjector>): void {
   projectors.clear();
   for (const [kind, fn] of snap) projectors.set(kind, fn);

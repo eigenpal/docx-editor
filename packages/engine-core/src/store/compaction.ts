@@ -18,7 +18,11 @@ export interface Compactable<S, U> {
 
 export type CompactionResult<S, U> =
   | { readonly ok: true; readonly checkpoint: Checkpoint<S, U>; readonly prior: Checkpoint<S, U> }
-  | { readonly ok: false; readonly reason: 'validation-failed'; readonly retained: Checkpoint<S, U> };
+  | {
+      readonly ok: false;
+      readonly reason: 'validation-failed';
+      readonly retained: Checkpoint<S, U>;
+    };
 
 /**
  * Compact `current`, folding its log into its snapshot. `arriving` are updates
@@ -29,7 +33,7 @@ export type CompactionResult<S, U> =
 export function compact<S, U>(
   current: Checkpoint<S, U>,
   ops: Compactable<S, U>,
-  arriving: readonly U[] = [],
+  arriving: readonly U[] = []
 ): CompactionResult<S, U> {
   // Fold the existing log into the snapshot.
   const folded = new Set<string>();

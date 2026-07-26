@@ -1,5 +1,10 @@
 import { defineComponent, h, onBeforeUnmount, onMounted, ref, watch, type PropType } from 'vue';
-import type { Editor, EditorHost, DocumentSource, DocumentChange } from '@docx-editor.dev/core-contract/editor';
+import type {
+  Editor,
+  EditorHost,
+  DocumentSource,
+  DocumentChange,
+} from '@docx-editor.dev/core-contract/editor';
 import type { InteractionIntent } from '@docx-editor.dev/core-contract/interaction';
 import {
   attachAdapterEventBridge,
@@ -28,7 +33,10 @@ import type { EditorMode } from './types';
 export default defineComponent({
   name: 'DocxEditor',
   props: {
-    document: { type: [ArrayBuffer, Uint8Array, Object] as unknown as PropType<DocumentSource>, default: undefined },
+    document: {
+      type: [ArrayBuffer, Uint8Array, Object] as unknown as PropType<DocumentSource>,
+      default: undefined,
+    },
     mode: { type: String as PropType<EditorMode>, default: 'edit' },
     zoom: { type: Number, default: undefined },
     locale: { type: String, default: undefined },
@@ -170,7 +178,13 @@ export default defineComponent({
           h('div', {
             ref: bodyEl,
             class: 'ep-one-surface__input-host',
-            style: { position: 'fixed', width: '0', height: '0', overflow: 'visible', pointerEvents: 'none' },
+            style: {
+              position: 'fixed',
+              width: '0',
+              height: '0',
+              overflow: 'visible',
+              pointerEvents: 'none',
+            },
           }),
         ]
       );

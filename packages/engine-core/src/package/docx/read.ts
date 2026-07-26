@@ -8,11 +8,26 @@ import { resolveCoreRegistry } from '../../capabilities/index.ts';
 import { readXml, findElement, childElements, type XmlNode } from '../xml-reader.ts';
 import { scanBodyBlockSpans, ScanError, type BlockSpan } from '../wml-scan.ts';
 import {
-  el, collectParagraphElements, collectRunElements, paragraphFromElement, blockFromSpan,
-  treeHasTable, treeHasBlockSdt, deepHasTable, deepHasBlockSdt, deepCountTables,
-  countModelTables, hasNonWWordBinding, countTreeBlocks,
+  el,
+  collectParagraphElements,
+  paragraphFromElement,
+  blockFromSpan,
+  treeHasTable,
+  treeHasBlockSdt,
+  deepHasTable,
+  deepHasBlockSdt,
+  deepCountTables,
+  countModelTables,
+  hasNonWWordBinding,
+  countTreeBlocks,
 } from '../wml-parse.ts';
-import { relatedStoryParts, parseStoryParagraphs, parseStyles, parseDocDefaults, parseNumbering } from '../wml-parts.ts';
+import {
+  relatedStoryParts,
+  parseStoryParagraphs,
+  parseStyles,
+  parseDocDefaults,
+  parseNumbering,
+} from '../wml-parts.ts';
 import {
   DOC_PART,
   hashPreservableBlock,
@@ -21,7 +36,11 @@ import {
   paragraphFullyCaptured,
   sliceIsFullyCapturedParagraph,
 } from '../wml-preserve.ts';
-import { extractParagraphPropertiesCapsule, extractParagraphOpenAttributes, extractParagraphRunRPrCapsules } from '../preservation-capsule.ts';
+import {
+  extractParagraphPropertiesCapsule,
+  extractParagraphOpenAttributes,
+  extractParagraphRunRPrCapsules,
+} from '../preservation-capsule.ts';
 import {
   createEmptyModel,
   bodyStoryId,
@@ -67,7 +86,11 @@ export function parseDocx(bytes: Uint8Array, options: ParseOptions = {}): ParseR
   // QNames, so such a document — including a table re-prefixed on a descendant — would
   // otherwise silently lose content; fail closed until names are resolved by URI.
   if (hasNonWWordBinding(xml.nodes)) {
-    return { ok: false, reason: 'xml-error', detail: 'wordprocessingml bound to a non-w namespace prefix (unsupported)' };
+    return {
+      ok: false,
+      reason: 'xml-error',
+      detail: 'wordprocessingml bound to a non-w namespace prefix (unsupported)',
+    };
   }
 
   const body = findElement(xml.nodes, 'w:body');
@@ -100,10 +123,18 @@ export function parseDocx(bytes: Uint8Array, options: ParseOptions = {}): ParseR
   // element. On the flat path nothing is preserved, so silently dropping it would lose
   // content; fail closed instead.
   if (body && !wantsPreservation && deepHasTable(body)) {
-    return { ok: false, reason: 'xml-error', detail: 'table in an unsupported container (fail closed)' };
+    return {
+      ok: false,
+      reason: 'xml-error',
+      detail: 'table in an unsupported container (fail closed)',
+    };
   }
   if (body && !wantsPreservation && deepHasBlockSdt(body)) {
-    return { ok: false, reason: 'xml-error', detail: 'block content control in an unsupported container (fail closed)' };
+    return {
+      ok: false,
+      reason: 'xml-error',
+      detail: 'block content control in an unsupported container (fail closed)',
+    };
   }
   const blocks: Block[] = [];
   let preservation: PreservationState | undefined;
@@ -114,11 +145,17 @@ export function parseDocx(bytes: Uint8Array, options: ParseOptions = {}): ParseR
     // content (guards decoy tags in comments, malformed nesting, and the reader's
     // non-strict well-formedness). Any failure rejects the document rather than falling
     // back to a lossy flat parse.
-    if (!spans || !body) return { ok: false, reason: 'xml-error', detail: 'preserved document failed strict span scan' };
+    if (!spans || !body)
+      return {
+        ok: false,
+        reason: 'xml-error',
+        detail: 'preserved document failed strict span scan',
+      };
     const blockRanges = new Map<string, BlockRange>();
     for (const span of spans) {
       let block = blockFromSpan(docText, span, alloc);
-      if (!block) return { ok: false, reason: 'xml-error', detail: 'preservation fragment parse failed' };
+      if (!block)
+        return { ok: false, reason: 'xml-error', detail: 'preservation fragment parse failed' };
       // Capture the paragraph's leading w:pPr as an ownership-scoped capsule (byte-exact from the
       // source slice), so a paragraph carrying unmodeled properties can stay editable and re-splice
       // them verbatim (document-engine 3.2). The baseline hash is then computed WITH the capsule.
@@ -139,7 +176,9 @@ export function parseDocx(bytes: Uint8Array, options: ParseOptions = {}): ParseR
           block = {
             ...block,
             runs: block.runs.map((r, i) =>
-              rPr[i] ? { text: r.text, ...(r.id !== undefined ? { id: r.id } : {}), rPrCapsule: rPr[i]! } : r,
+              rPr[i]
+                ? { text: r.text, ...(r.id !== undefined ? { id: r.id } : {}), rPrCapsule: rPr[i]! }
+                : r
             ),
           };
         }
@@ -160,16 +199,25 @@ export function parseDocx(bytes: Uint8Array, options: ParseOptions = {}): ParseR
     // table already activated preservation, a second table hidden in an unsupported
     // wrapper would leave semantic addressability silently incomplete. Fail closed.
     if (deepCountTables(body) !== countModelTables(blocks)) {
-      return { ok: false, reason: 'xml-error', detail: 'a table is not projected (hidden in an unsupported container)' };
+      return {
+        ok: false,
+        reason: 'xml-error',
+        detail: 'a table is not projected (hidden in an unsupported container)',
+      };
     }
-    preservation = { originalParts: new Map([[DOC_PART, docText]]), blockRanges, packageParts: new Map(zip.entries) };
+    preservation = {
+      originalParts: new Map([[DOC_PART, docText]]),
+      blockRanges,
+      packageParts: new Map(zip.entries),
+    };
   } else if (body) {
-    for (const p of collectParagraphElements(body)) {
-      blocks.push(paragraphFromElement(p, alloc));
-      if (paragraphDroppedProps(p)) lossyParse = true; // flat parse discarded unmodeled pPr/rPr
-    }
+    for (const p of collectParagraphElements(body)) blocks.push(paragraphFromElement(p, alloc));
+    // A flat parse is exportable-from-scratch ONLY if it dropped nothing the model cannot represent
+    // (wrappers, non-w:t run content, unmodeled pPr/rPr, or non-paragraph body children).
+    if (flatBodyIsLossy(body)) lossyParse = true;
   }
-  if (blocks.length === 0) blocks.push({ kind: 'paragraph', id: alloc.allocate('paragraph'), runs: [] });
+  if (blocks.length === 0)
+    blocks.push({ kind: 'paragraph', id: alloc.allocate('paragraph'), runs: [] });
 
   const base = createEmptyModel();
   const stories = new Map<string, Story>();
@@ -202,7 +250,9 @@ export function parseDocx(bytes: Uint8Array, options: ParseOptions = {}): ParseR
     ? {
         ...preservation,
         relatedStoryHashes: new Map(
-          [...stories.values()].filter((s) => s.kind !== 'body').map((s) => [s.id, hashStoryContent(s.blocks)] as const),
+          [...stories.values()]
+            .filter((s) => s.kind !== 'body')
+            .map((s) => [s.id, hashStoryContent(s.blocks)] as const)
         ),
       }
     : undefined;
@@ -223,10 +273,16 @@ export function parseDocx(bytes: Uint8Array, options: ParseOptions = {}): ParseR
 
 type XmlElement = Extract<XmlNode, { type: 'element' }>;
 
-// The pPr / rPr children the coarse flat parse faithfully models (paragraphFromElement / parseRun).
-// A w:pStyle / w:numPr paragraph prop and a w:rStyle char-style link or a bare (presence) w:b / w:i
-// round-trip; ANY other child — w:spacing, w:jc, w:color, w:u, an explicit-false toggle — is dropped
-// or changed by the flat parse, so its presence means the parse was lossy.
+// Whether a NON-preserving flat parse of the body is LOSSY — i.e. it encountered anything the coarse
+// model + serializer cannot round-trip, so re-exporting from scratch would silently drop it. This is
+// deliberately conservative: a body is lossless ONLY when every part is provably modeled.
+//   - body: every direct child is a w:p (a w:sectPr, w:altChunk, w:bookmarkStart, ... would vanish);
+//   - paragraph: every direct child is a w:pPr or a w:r (a w:hyperlink/w:ins/w:del/w:smartTag/
+//     w:fldSimple/w:bookmark wrapper is flattened, losing its metadata);
+//   - w:pPr: only w:pStyle / w:numPr (any other prop — w:jc, w:spacing, a paragraph-mark w:rPr — is dropped);
+//   - w:r: only a w:rPr + w:t children (a w:tab/w:br is re-emitted as a literal char, and
+//     w:delText/w:drawing/w:object/w:fldChar/w:instrText/w:sym/... are dropped entirely);
+//   - w:rPr: only a w:rStyle or a bare (presence) w:b / w:i (w:u, w:color, an explicit-false toggle drift).
 const FLAT_MODELED_PPR = new Set(['w:pStyle', 'w:numPr']);
 function runRPrDropsProps(rPr: XmlElement): boolean {
   for (const c of rPr.children) {
@@ -237,13 +293,35 @@ function runRPrDropsProps(rPr: XmlElement): boolean {
   }
   return false;
 }
-/** True when a flat (non-preserving) parse of this paragraph discarded unmodeled pPr/rPr content. */
-function paragraphDroppedProps(pEl: XmlElement): boolean {
-  const pPr = childElements(pEl, 'w:pPr')[0];
-  if (pPr && pPr.children.some((c) => el(c) && !FLAT_MODELED_PPR.has(c.name))) return true;
-  for (const runEl of collectRunElements(pEl)) {
-    const rPr = childElements(runEl, 'w:rPr')[0];
-    if (rPr && runRPrDropsProps(rPr)) return true;
+function runIsLossy(rEl: XmlElement): boolean {
+  for (const c of rEl.children) {
+    if (!el(c)) continue;
+    if (c.name === 'w:rPr') {
+      if (runRPrDropsProps(c)) return true;
+    } else if (c.name === 'w:t') continue;
+    else return true; // w:tab/w:br/w:cr/w:noBreakHyphen (re-emitted as literal) or dropped content
+  }
+  return false;
+}
+function paragraphIsLossy(pEl: XmlElement): boolean {
+  for (const c of pEl.children) {
+    if (!el(c)) continue;
+    if (c.name === 'w:pPr') {
+      if (c.children.some((x) => el(x) && !FLAT_MODELED_PPR.has(x.name))) return true;
+    } else if (c.name === 'w:r') {
+      if (runIsLossy(c)) return true;
+    } else {
+      return true; // a wrapper (hyperlink/ins/del/smartTag/fldSimple) or bookmark/comment marker
+    }
+  }
+  return false;
+}
+/** True when a flat (non-preserving) parse of this body discarded content the model cannot represent. */
+function flatBodyIsLossy(body: XmlElement): boolean {
+  for (const c of body.children) {
+    if (!el(c)) continue;
+    if (c.name !== 'w:p') return true; // w:sectPr, w:altChunk, w:tbl/w:sdt (shell), a stray marker, ...
+    if (paragraphIsLossy(c)) return true;
   }
   return false;
 }
@@ -268,11 +346,17 @@ function isStandardContentTypes(data: Uint8Array): boolean {
     if (c.name === 'Default') {
       const ext = (c.attributes['Extension'] ?? '').toLowerCase();
       const ct = c.attributes['ContentType'] ?? '';
-      if (ext === 'rels') { if (ct !== CT_RELS) return false; }
-      else if (ext === 'xml') { if (ct !== CT_XML) return false; }
-      else return false;
+      if (ext === 'rels') {
+        if (ct !== CT_RELS) return false;
+      } else if (ext === 'xml') {
+        if (ct !== CT_XML) return false;
+      } else return false;
     } else if (c.name === 'Override') {
-      if (c.attributes['PartName'] !== '/word/document.xml' || c.attributes['ContentType'] !== CT_MAIN) return false;
+      if (
+        c.attributes['PartName'] !== '/word/document.xml' ||
+        c.attributes['ContentType'] !== CT_MAIN
+      )
+        return false;
     } else return false;
   }
   return true;
@@ -358,7 +442,12 @@ export function isPlainEditableDocx(bytes: Uint8Array): boolean {
   const doc = roots[0];
   if (!onlyNamespaceAttrs(doc)) return false;
   const docChildren = doc.children.filter(el);
-  if (docChildren.length !== 1 || docChildren[0].name !== 'w:body' || !onlyNamespaceAttrs(docChildren[0])) return false;
+  if (
+    docChildren.length !== 1 ||
+    docChildren[0].name !== 'w:body' ||
+    !onlyNamespaceAttrs(docChildren[0])
+  )
+    return false;
   const body = docChildren[0];
   let sawParagraph = false;
   for (const child of body.children) {
@@ -384,7 +473,11 @@ export function isModelBodyPatchable(model: PackageModel): boolean {
 }
 
 /** The OOXML root element a block kind serializes to — for the read-only diagnostic's QName. */
-const BLOCK_QNAME: Readonly<Record<string, string>> = { paragraph: 'w:p', table: 'w:tbl', sdt: 'w:sdt' };
+const BLOCK_QNAME: Readonly<Record<string, string>> = {
+  paragraph: 'w:p',
+  table: 'w:tbl',
+  sdt: 'w:sdt',
+};
 
 /** Why a document opens read-only (comprehensive 4.9). Names the blocking capability, the QName +
  *  context, the story, and the missing pipeline lane, so a host can tell a user exactly what to fix
@@ -405,10 +498,17 @@ export interface ReadOnlyDiagnostic {
   readonly blockKind?: string;
   readonly qname?: string;
   /** The pipeline lane the document lacks for editing. */
-  readonly missingLane: 'preservation' | 'editable-capability' | 'source-range' | 'lossless-capture' | 'contiguity';
+  readonly missingLane:
+    | 'preservation'
+    | 'editable-capability'
+    | 'source-range'
+    | 'lossless-capture'
+    | 'contiguity';
 }
 
-export type BodyPatchability = { readonly editable: true } | { readonly editable: false; readonly diagnostic: ReadOnlyDiagnostic };
+export type BodyPatchability =
+  | { readonly editable: true }
+  | { readonly editable: false; readonly diagnostic: ReadOnlyDiagnostic };
 
 /**
  * Per-block editability of the body (partial-body-editability, task M6P.1).
@@ -461,20 +561,43 @@ export function assessBodyEditability(model: PackageModel): BodyEditabilityAsses
   try {
     story = bodyStoryId(model);
   } catch {
-    return none({ code: 'empty-body', message: 'model has no body story', story: '', missingLane: 'lossless-capture' });
+    return none({
+      code: 'empty-body',
+      message: 'model has no body story',
+      story: '',
+      missingLane: 'lossless-capture',
+    });
   }
   const bodyLevel = (d: Omit<ReadOnlyDiagnostic, 'story'>): ReadOnlyDiagnostic => ({ ...d, story });
   const pres = model.preservation;
   if (!pres) {
-    return none(bodyLevel({ code: 'no-preservation', message: 'document has no preservation snapshot (not parsed losslessly)', missingLane: 'preservation' }));
+    return none(
+      bodyLevel({
+        code: 'no-preservation',
+        message: 'document has no preservation snapshot (not parsed losslessly)',
+        missingLane: 'preservation',
+      })
+    );
   }
   const docText = pres.originalParts.get(DOC_PART);
   if (docText === undefined) {
-    return none(bodyLevel({ code: 'no-document-part', message: `no ${DOC_PART} in the preservation snapshot`, missingLane: 'preservation' }));
+    return none(
+      bodyLevel({
+        code: 'no-document-part',
+        message: `no ${DOC_PART} in the preservation snapshot`,
+        missingLane: 'preservation',
+      })
+    );
   }
   const blocks = model.stories.get(story)?.blocks ?? [];
   if (blocks.length === 0) {
-    return none(bodyLevel({ code: 'empty-body', message: 'the body has no blocks to edit', missingLane: 'lossless-capture' }));
+    return none(
+      bodyLevel({
+        code: 'empty-body',
+        message: 'the body has no blocks to edit',
+        missingLane: 'lossless-capture',
+      })
+    );
   }
 
   const patchableBlockIds = new Set<string>();
@@ -487,16 +610,37 @@ export function assessBodyEditability(model: PackageModel): BodyEditabilityAsses
     const qname = BLOCK_QNAME[b.kind];
     const region = (d: Omit<ReadOnlyDiagnostic, 'story'>) => regions.push({ ...d, story });
     if (!isTopLevelEditable(b.kind)) {
-      region({ code: 'non-editable-kind', message: `body block '${b.kind}' (${qname ?? b.kind}) is not top-level editable; it stays read-only to preserve it`, blockId: b.id, blockKind: b.kind, qname, missingLane: 'editable-capability' });
+      region({
+        code: 'non-editable-kind',
+        message: `body block '${b.kind}' (${qname ?? b.kind}) is not top-level editable; it stays read-only to preserve it`,
+        blockId: b.id,
+        blockKind: b.kind,
+        qname,
+        missingLane: 'editable-capability',
+      });
       continue;
     }
     const r = pres.blockRanges.get(b.id);
     if (!r || r.partName !== DOC_PART) {
-      region({ code: 'no-source-range', message: `block '${b.id}' (${qname ?? b.kind}) has no captured source range in ${DOC_PART}`, blockId: b.id, blockKind: b.kind, qname, missingLane: 'source-range' });
+      region({
+        code: 'no-source-range',
+        message: `block '${b.id}' (${qname ?? b.kind}) has no captured source range in ${DOC_PART}`,
+        blockId: b.id,
+        blockKind: b.kind,
+        qname,
+        missingLane: 'source-range',
+      });
       continue;
     }
     if (!sliceIsFullyCapturedParagraph(docText.slice(r.start, r.end))) {
-      region({ code: 'unmodeled-content', message: `paragraph '${b.id}' (${qname ?? b.kind}) carries OOXML the model does not fully capture; editing it needs preservation capsules`, blockId: b.id, blockKind: b.kind, qname, missingLane: 'lossless-capture' });
+      region({
+        code: 'unmodeled-content',
+        message: `paragraph '${b.id}' (${qname ?? b.kind}) carries OOXML the model does not fully capture; editing it needs preservation capsules`,
+        blockId: b.id,
+        blockKind: b.kind,
+        qname,
+        missingLane: 'lossless-capture',
+      });
       continue;
     }
     patchableBlockIds.add(b.id);
@@ -511,13 +655,21 @@ export function assessBodyEditability(model: PackageModel): BodyEditabilityAsses
   for (let i = 1; i < ranges.length; i += 1) {
     if (ranges[i].start !== ranges[i - 1].end) {
       contiguous = false;
-      regions.push(bodyLevel({ code: 'non-contiguous-blocks', message: 'unowned bytes between sibling body blocks (a comment, bookmark, or wrapping boundary) would be lost on a structural edit', missingLane: 'contiguity' }));
+      regions.push(
+        bodyLevel({
+          code: 'non-contiguous-blocks',
+          message:
+            'unowned bytes between sibling body blocks (a comment, bookmark, or wrapping boundary) would be lost on a structural edit',
+          missingLane: 'contiguity',
+        })
+      );
       break;
     }
   }
 
   const allPatchable = patchableBlockIds.size === blocks.length;
-  const mode = patchableBlockIds.size === 0 ? 'none' : allPatchable && contiguous ? 'full' : 'partial';
+  const mode =
+    patchableBlockIds.size === 0 ? 'none' : allPatchable && contiguous ? 'full' : 'partial';
   return {
     mode,
     patchableBlockIds,
@@ -549,4 +701,3 @@ export function diagnoseBodyPatchability(model: PackageModel): BodyPatchability 
   };
   return { editable: false, diagnostic };
 }
-

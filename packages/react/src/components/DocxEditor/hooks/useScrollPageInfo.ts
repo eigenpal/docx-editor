@@ -44,7 +44,11 @@ export function useScrollPageInfo({
       const totalPages = editor?.getTotalPages() ?? 0;
       if (!editor || totalPages === 0) return;
 
-      setScrollPageInfo({ currentPage: editor.getCurrentPage('viewport') + 1, totalPages, visible: true });
+      setScrollPageInfo({
+        currentPage: editor.getCurrentPage('viewport') + 1,
+        totalPages,
+        visible: true,
+      });
 
       if (scrollFadeTimerRef.current) {
         clearTimeout(scrollFadeTimerRef.current);

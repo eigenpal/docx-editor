@@ -45,10 +45,16 @@ function isFiniteMetrics(metrics: InteractionHostMetrics): boolean {
   // rejection the contract promises.
   if (typeof metrics.clientOrigin !== 'object' || metrics.clientOrigin === null) return false;
   if (typeof metrics.scrollOffset !== 'object' || metrics.scrollOffset === null) return false;
-  return isFinitePoint(metrics.clientOrigin) && isFinitePoint(metrics.scrollOffset) && Number.isFinite(metrics.zoom);
+  return (
+    isFinitePoint(metrics.clientOrigin) &&
+    isFinitePoint(metrics.scrollOffset) &&
+    Number.isFinite(metrics.zoom)
+  );
 }
 
-export function validateHostMetrics(metrics: InteractionHostMetrics | undefined): CoordinateOutcome<InteractionHostMetrics> {
+export function validateHostMetrics(
+  metrics: InteractionHostMetrics | undefined
+): CoordinateOutcome<InteractionHostMetrics> {
   if (!metrics) {
     return { ok: false, code: 'nonFinite', reason: 'explicit InteractionHostMetrics are required' };
   }
@@ -61,7 +67,10 @@ export function validateHostMetrics(metrics: InteractionHostMetrics | undefined)
   return { ok: true, value: metrics };
 }
 
-export function clientToContent(point: Point, metrics: InteractionHostMetrics): CoordinateOutcome<Point> {
+export function clientToContent(
+  point: Point,
+  metrics: InteractionHostMetrics
+): CoordinateOutcome<Point> {
   const valid = validateHostMetrics(metrics);
   if (!valid.ok) return valid;
   if (!isFinitePoint(point)) {
@@ -76,7 +85,10 @@ export function clientToContent(point: Point, metrics: InteractionHostMetrics): 
   };
 }
 
-export function contentToClient(point: Point, metrics: InteractionHostMetrics): CoordinateOutcome<Point> {
+export function contentToClient(
+  point: Point,
+  metrics: InteractionHostMetrics
+): CoordinateOutcome<Point> {
   const valid = validateHostMetrics(metrics);
   if (!valid.ok) return valid;
   if (!isFinitePoint(point)) {
@@ -127,7 +139,10 @@ export interface PageLocalPoint {
   readonly local: Point;
 }
 
-export function contentToPageLocal(content: Point, frame: InteractionFrame): CoordinateOutcome<PageLocalPoint> {
+export function contentToPageLocal(
+  content: Point,
+  frame: InteractionFrame
+): CoordinateOutcome<PageLocalPoint> {
   if (!isFinitePoint(content)) {
     return { ok: false, code: 'nonFinite', reason: 'content point is not finite' };
   }
@@ -150,7 +165,11 @@ export function contentToPageLocal(content: Point, frame: InteractionFrame): Coo
   return { ok: false, code: 'outOfBounds', reason: 'content point is outside page geometry' };
 }
 
-export function pageLocalToContent(pageIndex: number, local: Point, frame: InteractionFrame): CoordinateOutcome<Point> {
+export function pageLocalToContent(
+  pageIndex: number,
+  local: Point,
+  frame: InteractionFrame
+): CoordinateOutcome<Point> {
   if (!isFinitePoint(local)) {
     return { ok: false, code: 'nonFinite', reason: 'page-local point is not finite' };
   }
@@ -162,7 +181,12 @@ export function pageLocalToContent(pageIndex: number, local: Point, frame: Inter
 }
 
 export function pointInRect(point: Point, rect: Rect): boolean {
-  return point.x >= rect.x && point.x < rect.x + rect.width && point.y >= rect.y && point.y < rect.y + rect.height;
+  return (
+    point.x >= rect.x &&
+    point.x < rect.x + rect.width &&
+    point.y >= rect.y &&
+    point.y < rect.y + rect.height
+  );
 }
 
 export function intersectRects(a: Rect, b: Rect): Rect | null {
@@ -209,7 +233,7 @@ export function stackedContentRect(
   frame: InteractionFrame,
   pageIndex: number,
   pageLocal: Rect,
-  transform?: AffineTransform,
+  transform?: AffineTransform
 ): Rect | null {
   const stacked = pageStackBox(frame, pageIndex);
   if (!stacked) return null;
@@ -220,10 +244,20 @@ export function stackedContentRect(
     local = transformed;
   }
   if (!isFiniteRect(local)) return null;
-  return { x: stacked.x + local.x, y: stacked.y + local.y, width: local.width, height: local.height };
+  return {
+    x: stacked.x + local.x,
+    y: stacked.y + local.y,
+    width: local.width,
+    height: local.height,
+  };
 }
 
-export function clipStackedRect(frame: InteractionFrame, pageIndex: number, rect: Rect, clip?: Rect): Rect | null {
+export function clipStackedRect(
+  frame: InteractionFrame,
+  pageIndex: number,
+  rect: Rect,
+  clip?: Rect
+): Rect | null {
   if (!isFiniteRect(rect)) return null;
   if (!clip) return rect;
   const stackedClip = stackedContentRect(frame, pageIndex, clip);
@@ -233,7 +267,7 @@ export function clipStackedRect(frame: InteractionFrame, pageIndex: number, rect
 
 export function validateFrameIdentity(
   frame: InteractionFrame,
-  expectedId?: { readonly value: number },
+  expectedId?: { readonly value: number }
 ): CoordinateOutcome<InteractionFrame> {
   if (expectedId && expectedId.value !== frame.id.value) {
     return { ok: false, code: 'staleFrame', reason: 'interaction frame identity mismatch' };

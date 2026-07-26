@@ -5,7 +5,12 @@
 // capability through the section-0 registry; distribution boundaries (9.6) keep
 // this base free of PM/Yjs/transport/PDF (proven by the import-graph test).
 
-import { resolve, type FeatureBundle, type Contribution, type ResolvedRegistry } from '../registry/index.ts';
+import {
+  resolve,
+  type FeatureBundle,
+  type Contribution,
+  type ResolvedRegistry,
+} from '../registry/index.ts';
 import {
   registeredBlockKinds,
   isTopLevelEditable,
@@ -23,7 +28,12 @@ const VALID_DOC_OPS: ReadonlySet<string> = new Set(DOC_OP_KINDS);
 
 /** Pipeline roles an editable content-type capability must contribute. */
 export type PipelineRole = 'parse' | 'serialize' | 'command' | 'query';
-export const REQUIRED_EDITABLE_ROLES: readonly PipelineRole[] = ['parse', 'serialize', 'command', 'query'];
+export const REQUIRED_EDITABLE_ROLES: readonly PipelineRole[] = [
+  'parse',
+  'serialize',
+  'command',
+  'query',
+];
 
 export interface EditableCapability {
   readonly id: string;
@@ -68,12 +78,14 @@ export const BASE_BUNDLE: FeatureBundle = {
  */
 export function buildBaseRegistry(
   extra: readonly FeatureBundle[] = [],
-  editableCapabilities: readonly EditableCapability[] = [PARAGRAPH_CAPABILITY],
+  editableCapabilities: readonly EditableCapability[] = [PARAGRAPH_CAPABILITY]
 ): ResolvedRegistry {
   for (const cap of editableCapabilities) {
     const check = checkEditableComplete(cap);
     if (!check.ok) {
-      throw new Error(`editable capability ${check.capability} incomplete: missing ${check.missing.join(', ')}`);
+      throw new Error(
+        `editable capability ${check.capability} incomplete: missing ${check.missing.join(', ')}`
+      );
     }
   }
   return resolve([BASE_BUNDLE, ...extra]);
@@ -98,10 +110,13 @@ const REQUIRED_EDITABLE_BLOCK_OPS: readonly (keyof CoreBlockCapability)[] = [
  *  preservation, serialization, or semantic operations (comprehensive 3.9). A read-only kind needs
  *  only its preservation ops, so it is not required to be editable-complete. */
 export function assertCoreBlockRegistryComplete(): void {
-  if (!hasAnyBlockParser()) throw new Error('core registry incomplete: no block element parser is registered');
+  if (!hasAnyBlockParser())
+    throw new Error('core registry incomplete: no block element parser is registered');
   for (const kind of registeredBlockKinds()) {
     if (!isTopLevelEditable(kind)) continue;
-    const missing: string[] = REQUIRED_EDITABLE_BLOCK_OPS.filter((op) => !blockCapabilityHas(kind, op));
+    const missing: string[] = REQUIRED_EDITABLE_BLOCK_OPS.filter(
+      (op) => !blockCapabilityHas(kind, op)
+    );
     if (!kindHasParser(kind)) missing.push('parse'); // an editable kind must have its OWN parse lane
     const ops = blockSemanticOps(kind);
     // semanticOps must be non-empty AND name REAL DocOps (not arbitrary strings).
@@ -110,7 +125,8 @@ export function assertCoreBlockRegistryComplete(): void {
       const bogus = ops.filter((op) => !VALID_DOC_OPS.has(op));
       if (bogus.length > 0) missing.push(`semanticOps(unknown: ${bogus.join(',')})`);
     }
-    if (missing.length > 0) throw new Error(`editable block kind '${kind}' incomplete: missing ${missing.join(', ')}`);
+    if (missing.length > 0)
+      throw new Error(`editable block kind '${kind}' incomplete: missing ${missing.join(', ')}`);
   }
 }
 

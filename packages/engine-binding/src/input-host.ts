@@ -3,9 +3,15 @@
 // pointer-events:none on root/shell/mount prevents intercepting painted-page clicks.
 // Styles are applied with setProperty only — no file-derived HTML/CSS interpolation.
 
-import type { InteractionFrameId, InputHostPlacementReason } from '@docx-editor.dev/core-contract/interaction';
+import type {
+  InteractionFrameId,
+  InputHostPlacementReason,
+} from '@docx-editor.dev/core-contract/interaction';
 import type { Rect } from '@docx-editor.dev/core-contract/types';
-import { applyAccessibleNamePolicy, resolveAccessibilityNamePolicy } from './accessibility-projection.ts';
+import {
+  applyAccessibleNamePolicy,
+  resolveAccessibilityNamePolicy,
+} from './accessibility-projection.ts';
 
 export type { InputHostPlacementReason };
 
@@ -127,7 +133,10 @@ function applyPmMountStyles(mount: HTMLElement): void {
   mount.style.removeProperty('display');
 }
 
-export function createInputHostController(doc: Document, options: InputHostControllerOptions = {}): InputHostController {
+export function createInputHostController(
+  doc: Document,
+  options: InputHostControllerOptions = {}
+): InputHostController {
   const defaultViewport = options.viewport ?? DEFAULT_VIEWPORT;
   const root = doc.createElement('div');
   root.setAttribute('data-docx-input-host', 'true');
@@ -187,7 +196,8 @@ export function createInputHostController(doc: Document, options: InputHostContr
       }
 
       if (!rect) {
-        const fallbackSource = lastPlacement.reason === 'applied' ? lastPlacement.clientRect : FALLBACK_CLIENT_RECT;
+        const fallbackSource =
+          lastPlacement.reason === 'applied' ? lastPlacement.clientRect : FALLBACK_CLIENT_RECT;
         rect = clampRectToViewport(boundedRect(fallbackSource), viewport);
       } else {
         rect = clampRectToViewport(rect, viewport);
@@ -222,7 +232,10 @@ export interface InputHostComputedStyles {
 }
 
 /** Test helper: read computed styles relevant to visibility and hit testing. */
-export function readInputHostComputedStyles(el: HTMLElement, win: Window = el.ownerDocument?.defaultView ?? window): InputHostComputedStyles {
+export function readInputHostComputedStyles(
+  el: HTMLElement,
+  win: Window = el.ownerDocument?.defaultView ?? window
+): InputHostComputedStyles {
   const computed = win.getComputedStyle(el);
   return {
     display: computed.display,

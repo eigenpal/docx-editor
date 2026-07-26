@@ -19,10 +19,18 @@ export interface StoreFailure {
   readonly index?: number;
 }
 
-export type OpStatus = { readonly status: 'applied' } | { readonly status: 'aborted'; readonly failingIndices: readonly number[] } | { readonly status: 'failed'; readonly failure: StoreFailure };
+export type OpStatus =
+  | { readonly status: 'applied' }
+  | { readonly status: 'aborted'; readonly failingIndices: readonly number[] }
+  | { readonly status: 'failed'; readonly failure: StoreFailure };
 
 export type CommitResult =
-  | { readonly ok: true; readonly commitId: string; readonly revision: number; readonly modelChange: ModelChange }
+  | {
+      readonly ok: true;
+      readonly commitId: string;
+      readonly revision: number;
+      readonly modelChange: ModelChange;
+    }
   | { readonly ok: false; readonly failure: StoreFailure };
 
 export type BatchResult =
@@ -73,7 +81,9 @@ interface Commit {
  *  projection/awareness into history, audit, snapshot, and replication (design D5 / task 6.9). */
 function assertCanonicalOrigin(origin: string): void {
   if (NON_CANONICAL_ORIGINS.includes(origin)) {
-    throw new Error(`non-canonical origin '${origin}' may not perform a canonical store write (projection/awareness never enter history/audit)`);
+    throw new Error(
+      `non-canonical origin '${origin}' may not perform a canonical store write (projection/awareness never enter history/audit)`
+    );
   }
 }
 
@@ -99,7 +109,7 @@ export class DocumentStore {
       journal?: ReplayJournal;
       /** Injected time source (deterministic in tests); defaults to a monotonic counter. */
       clock?: () => number;
-    } = {},
+    } = {}
   ) {
     this.model = initial;
     this.revision = opts.revision ?? 0;
@@ -123,11 +133,21 @@ export class DocumentStore {
   }
 
   /** Synchronous transaction. Rejects async/nested/reentrant; rolls back on any failure. */
-  transact(origin: string, callback: (ctx: TransactionContext) => void, opts: TransactOptions = {}): CommitResult {
+  transact(
+    origin: string,
+    callback: (ctx: TransactionContext) => void,
+    opts: TransactOptions = {}
+  ): CommitResult {
     assertCanonicalOrigin(origin);
     if (this.inTransaction) throw new Error('nested/reentrant transaction is not allowed');
     if (opts.baseRevision !== undefined && opts.baseRevision !== this.revision) {
-      return { ok: false, failure: { kind: 'conflict', message: `baseRevision ${opts.baseRevision} != current ${this.revision}` } };
+      return {
+        ok: false,
+        failure: {
+          kind: 'conflict',
+          message: `baseRevision ${opts.baseRevision} != current ${this.revision}`,
+        },
+      };
     }
 
     this.inTransaction = true;
@@ -135,7 +155,12 @@ export class DocumentStore {
     const ctx: TransactionContext = {
       apply: (op) => {
         const v = validateDocOp(op);
-        if (!v.ok) throw new DocOpValidationError({ kind: 'validation', message: v.reason, index: staged.length });
+        if (!v.ok)
+          throw new DocOpValidationError({
+            kind: 'validation',
+            message: v.reason,
+            index: staged.length,
+          });
         staged.push(op);
       },
     };
@@ -170,8 +195,11 @@ export class DocumentStore {
     if (failingIndices.length > 0) {
       const results = ops.map<OpStatus>((_, i) =>
         failingIndices.includes(i)
-          ? { status: 'failed', failure: { kind: 'validation', message: `op ${i} invalid`, index: i } }
-          : { status: 'aborted', failingIndices },
+          ? {
+              status: 'failed',
+              failure: { kind: 'validation', message: `op ${i} invalid`, index: i },
+            }
+          : { status: 'aborted', failingIndices }
       );
       return { ok: false, revision: this.revision, results };
     }
@@ -220,7 +248,7 @@ export class DocumentStore {
    */
   publishDerived(
     model: PackageModel,
-    origin: string,
+    origin: string
   ): { ok: true; commitId: string; revision: number; modelChange: ModelChange } {
     assertCanonicalOrigin(origin);
     const before = this.model;
@@ -229,7 +257,14 @@ export class DocumentStore {
     this.commitCounter += 1;
     const commitId = `commit-${this.commitCounter}`;
     const normalized = normalize(model);
-    const modelChange = buildModelChange(fromRevision, this.revision, commitId, origin, [], normalized !== model);
+    const modelChange = buildModelChange(
+      fromRevision,
+      this.revision,
+      commitId,
+      origin,
+      [],
+      normalized !== model
+    );
     this.model = normalized;
     // Same suspension guard as publish(): a remote-derived commit while replicated
     // must NOT become undoable, or disconnect would re-expose an undo that removes
@@ -278,7 +313,11 @@ export class DocumentStore {
   }
 
   undo(): CommitResult {
-    if (this.isHistorySuspended) return { ok: false, failure: { kind: 'aborted', message: 'history suspended while replicated' } };
+    if (this.isHistorySuspended)
+      return {
+        ok: false,
+        failure: { kind: 'aborted', message: 'history suspended while replicated' },
+      };
     const commit = this.history.pop();
     if (!commit) return { ok: false, failure: { kind: 'aborted', message: 'nothing to undo' } };
     this.redo.push(commit);
@@ -290,23 +329,40 @@ export class DocumentStore {
   }
 
   redoLast(): CommitResult {
-    if (this.isHistorySuspended) return { ok: false, failure: { kind: 'aborted', message: 'history suspended while replicated' } };
+    if (this.isHistorySuspended)
+      return {
+        ok: false,
+        failure: { kind: 'aborted', message: 'history suspended while replicated' },
+      };
     const commit = this.redo.pop();
     if (!commit) return { ok: false, failure: { kind: 'aborted', message: 'nothing to redo' } };
     this.history.push(commit);
     this.model = commit.after;
     this.revision += 1;
-    const mc = { ...commit.modelChange, fromRevision: this.revision - 1, toRevision: this.revision, origin: 'redo' };
+    const mc = {
+      ...commit.modelChange,
+      fromRevision: this.revision - 1,
+      toRevision: this.revision,
+      origin: 'redo',
+    };
     this.notify(mc);
     return { ok: true, commitId: mc.commitId, revision: this.revision, modelChange: mc };
   }
 
   // --- anchors (opaque; task 4.2 surface, resolution refined in 4.8–4.10) ---
 
-  createAnchor(paragraphId: string, affinity: 'before' | 'after' = 'after'): AnchorHandle | undefined {
+  createAnchor(
+    paragraphId: string,
+    affinity: 'before' | 'after' = 'after'
+  ): AnchorHandle | undefined {
     for (const [storyId, story] of this.model.stories) {
       if (story.blocks.some((b) => b.id === paragraphId)) {
-        const rec: AnchorRecord = { __brand: 'AnchorHandle', storyId, blockId: paragraphId, affinity };
+        const rec: AnchorRecord = {
+          __brand: 'AnchorHandle',
+          storyId,
+          blockId: paragraphId,
+          affinity,
+        };
         return rec;
       }
     }
@@ -316,7 +372,8 @@ export class DocumentStore {
   resolveAnchor(handle: AnchorHandle): { storyId: string; blockId: string } | { invalid: true } {
     const rec = handle as AnchorRecord;
     const story = this.model.stories.get(rec.storyId);
-    if (story && story.blocks.some((b) => b.id === rec.blockId)) return { storyId: rec.storyId, blockId: rec.blockId };
+    if (story && story.blocks.some((b) => b.id === rec.blockId))
+      return { storyId: rec.storyId, blockId: rec.blockId };
     return { invalid: true };
   }
 
@@ -349,17 +406,25 @@ export class DocumentStore {
         effects.push(effect);
       }
     } catch (e) {
-      return { ok: false, failure: { kind: 'validation', message: e instanceof Error ? e.message : String(e) } };
+      return {
+        ok: false,
+        failure: { kind: 'validation', message: e instanceof Error ? e.message : String(e) },
+      };
     }
     const commit = this.publish(origin, working, effects, staged);
-    return { ok: true, commitId: commit.commitId, revision: commit.revision, modelChange: commit.modelChange };
+    return {
+      ok: true,
+      commitId: commit.commitId,
+      revision: commit.revision,
+      modelChange: commit.modelChange,
+    };
   }
 
   private publish(
     origin: string,
     working: PackageModel,
     effects: readonly OpEffect[],
-    ops: readonly DocOp[],
+    ops: readonly DocOp[]
   ): { commitId: string; revision: number; modelChange: ModelChange } {
     const normalized = normalize(working);
     const before = this.model;
@@ -367,7 +432,14 @@ export class DocumentStore {
     this.revision += 1;
     this.commitCounter += 1;
     const commitId = `commit-${this.commitCounter}`;
-    const modelChange = buildModelChange(fromRevision, this.revision, commitId, origin, effects, normalized !== working);
+    const modelChange = buildModelChange(
+      fromRevision,
+      this.revision,
+      commitId,
+      origin,
+      effects,
+      normalized !== working
+    );
     this.model = normalized;
     // While history is suspended (replicated), do NOT accumulate undoable commits —
     // otherwise disconnect would re-expose an undo path across the collaboration
@@ -392,7 +464,13 @@ export class DocumentStore {
       at,
     });
     if (ops.length > 0) {
-      this.journal?.append({ commitId, toRevision: mc.toRevision, origin: mc.origin, ops: [...ops], at });
+      this.journal?.append({
+        commitId,
+        toRevision: mc.toRevision,
+        origin: mc.origin,
+        ops: [...ops],
+        at,
+      });
     }
   }
 
@@ -405,7 +483,11 @@ export class DocumentStore {
       dirty: mc.dirty,
       deleted: mc.created,
       created: mc.deleted,
-      splitJoin: mc.splitJoin.map((sj) => ('split' in sj ? { join: { kept: sj.split.from, removed: sj.split.tail } } : { split: { from: sj.join.kept, tail: sj.join.removed } })),
+      splitJoin: mc.splitJoin.map((sj) =>
+        'split' in sj
+          ? { join: { kept: sj.split.from, removed: sj.split.tail } }
+          : { split: { from: sj.join.kept, tail: sj.join.removed } }
+      ),
       moves: mc.moves.map((m) => ({ id: m.id, from: m.to, to: m.from })),
     };
   }

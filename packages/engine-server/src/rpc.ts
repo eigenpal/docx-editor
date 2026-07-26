@@ -53,7 +53,10 @@ export class RpcTransportError extends Error {
 
 export class RpcServer {
   private readonly docs = new Map<string, DocxEditor.DocumentHandle>();
-  private readonly idempotency = new Map<string, { hash: string; response: RpcResponse; at: number }>();
+  private readonly idempotency = new Map<
+    string,
+    { hash: string; response: RpcResponse; at: number }
+  >();
   private readonly clock: () => number;
   private readonly retentionWindow: number;
 
@@ -107,7 +110,13 @@ export class RpcServer {
       if (prior && live) {
         if (prior.hash !== hash) {
           // Same key, different bound hash within retention -> conflict RESULT.
-          return { result: { status: 'conflict', message: 'idempotency key reused with a different request', revision: doc.revision } };
+          return {
+            result: {
+              status: 'conflict',
+              message: 'idempotency key reused with a different request',
+              revision: doc.revision,
+            },
+          };
         }
         return prior.response; // idempotent replay (a satisfied request is not re-CAS'd)
       }
@@ -115,7 +124,9 @@ export class RpcServer {
       // so a stale caller can retry against the current revision.
       const cas = this.casConflict(req, doc);
       if (cas) return cas;
-      const response: RpcResponse = { result: DocxEditor.mcp.dispatch(doc, req.method, req.params, req.scopeContext) };
+      const response: RpcResponse = {
+        result: DocxEditor.mcp.dispatch(doc, req.method, req.params, req.scopeContext),
+      };
       this.idempotency.set(mapKey, { hash, response, at: now });
       return response;
     }
@@ -131,7 +142,8 @@ export class RpcServer {
   /** Optimistic-concurrency check: if the caller pinned a base revision that no
    *  longer holds, return a conflict Result and perform no mutation. */
   private casConflict(req: RpcRequest, doc: DocxEditor.DocumentHandle): RpcResponse | undefined {
-    if (req.expectedRevision === undefined || req.expectedRevision === doc.revision) return undefined;
+    if (req.expectedRevision === undefined || req.expectedRevision === doc.revision)
+      return undefined;
     return {
       result: {
         status: 'conflict',
@@ -158,7 +170,12 @@ export class RpcClient {
   constructor(private readonly server: RpcServer) {}
 
   /** Call an RPC method; JSON round-trips the request AND response (wire boundary). */
-  call(documentId: string, method: string, params: unknown, opts: RpcCallOptions = {}): DocxEditor.Result<string | undefined> {
+  call(
+    documentId: string,
+    method: string,
+    params: unknown,
+    opts: RpcCallOptions = {}
+  ): DocxEditor.Result<string | undefined> {
     const wire: RpcRequest = JSON.parse(
       JSON.stringify({
         protocolVersion: RPC_PROTOCOL_VERSION,
@@ -170,7 +187,7 @@ export class RpcClient {
         idempotencyKey: opts.idempotencyKey,
         scopeContext: opts.scopeContext,
         expectedRevision: opts.expectedRevision,
-      }),
+      })
     );
     const response = this.server.handle(wire);
     return JSON.parse(JSON.stringify(response)).result;

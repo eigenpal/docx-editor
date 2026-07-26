@@ -9,7 +9,12 @@
 // control the engine cannot honour is disabled with the engine's own reason,
 // rather than looking live and failing silently when pressed.
 
-import type { CanResult, Editor, EditorCommand, ExecResult } from '@docx-editor.dev/core-contract/editor';
+import type {
+  CanResult,
+  Editor,
+  EditorCommand,
+  ExecResult,
+} from '@docx-editor.dev/core-contract/editor';
 
 /**
  * The controls this toolbar exposes.
@@ -56,7 +61,10 @@ export interface ToolbarCommandState {
  *
  * @public
  */
-export function toolbarCommandState(editor: Editor | null, id: ToolbarCommandId): ToolbarCommandState {
+export function toolbarCommandState(
+  editor: Editor | null,
+  id: ToolbarCommandId
+): ToolbarCommandState {
   if (!editor) return { id, enabled: false, disabledReason: 'editor is not ready', active: false };
   const result: CanResult = editor.can(COMMANDS[id]);
   // Optional call: `isActive` is newer than this helper's callers, and a host or test
@@ -75,7 +83,7 @@ export function toolbarCommandState(editor: Editor | null, id: ToolbarCommandId)
  */
 export function toolbarCommandStates(
   editor: Editor | null,
-  ids: readonly ToolbarCommandId[],
+  ids: readonly ToolbarCommandId[]
 ): readonly ToolbarCommandState[] {
   return ids.map((id) => toolbarCommandState(editor, id));
 }

@@ -32,5 +32,12 @@ export { TitleBar, MenuBar, DocumentName, Logo, TitleBarRight } from './componen
 export { PageIndicator } from './components/DocxEditor/PageIndicator';
 export { HorizontalRuler, type HorizontalRulerProps } from './components/ui/HorizontalRuler';
 export { VerticalRuler, RULER_WIDTH, type VerticalRulerProps } from './components/ui/VerticalRuler';
-export { generateRulerTicks, rulerPageBox, PX_PER_INCH, PX_PER_CM, type RulerTick, type RulerUnit } from './rulerTicks';
+export {
+  generateRulerTicks,
+  rulerPageBox,
+  PX_PER_INCH,
+  PX_PER_CM,
+  type RulerTick,
+  type RulerUnit,
+} from './rulerTicks';
 export { useEditorSnapshot } from './useEditorSnapshot';

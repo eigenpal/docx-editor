@@ -16,7 +16,12 @@ export interface MigrationStep<T> {
 export type MigrationFailure = 'no-path' | 'validation-failed' | 'migration-threw';
 
 export type MigrationResult<T> =
-  | { readonly ok: true; readonly version: number; readonly data: T; readonly applied: readonly number[] }
+  | {
+      readonly ok: true;
+      readonly version: number;
+      readonly data: T;
+      readonly applied: readonly number[];
+    }
   | {
       readonly ok: false;
       readonly reason: MigrationFailure;

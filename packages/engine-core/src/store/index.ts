@@ -31,12 +31,7 @@ export {
   type ResolvedTarget,
   resolveExternalTarget,
 } from './external-target.ts';
-export {
-  type AuditEntry,
-  type JournalEntry,
-  AuditIndex,
-  ReplayJournal,
-} from './audit.ts';
+export { type AuditEntry, type JournalEntry, AuditIndex, ReplayJournal } from './audit.ts';
 export {
   ANCHOR_ENVELOPE_VERSION,
   type AnchorEnvelope,

@@ -4,7 +4,11 @@
 // bake-off); the deterministic port here gives every character a fixed advance so
 // layout output is exactly reproducible for the cross-runtime comparator.
 
-import type { ShapingCapability, LigatureInteriorCaret, CharacterAdvanceProvable } from './shaping.ts';
+import type {
+  ShapingCapability,
+  LigatureInteriorCaret,
+  CharacterAdvanceProvable,
+} from './shaping.ts';
 import { ASCII_LATIN_SHAPING, PER_GRAPHEME_SHAPING } from './shaping.ts';
 
 export interface MetricsPort {

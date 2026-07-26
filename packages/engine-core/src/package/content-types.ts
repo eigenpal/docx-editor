@@ -33,7 +33,8 @@ export type ContentTypeError =
   | { readonly code: 'too-many-records'; readonly limit: number };
 
 // Media type per RFC 2045-ish: type "/" subtype, optional ";" parameters.
-const MIME_RE = /^[A-Za-z0-9][A-Za-z0-9!#$&^_.+-]*\/[A-Za-z0-9][A-Za-z0-9!#$&^_.+-]*(\s*;\s*[^;]+)*$/;
+const MIME_RE =
+  /^[A-Za-z0-9][A-Za-z0-9!#$&^_.+-]*\/[A-Za-z0-9][A-Za-z0-9!#$&^_.+-]*(\s*;\s*[^;]+)*$/;
 
 export function isValidMime(value: string): boolean {
   return MIME_RE.test(value);
@@ -61,7 +62,7 @@ export type IndexResult =
  */
 export function buildContentTypeIndex(
   records: ContentTypeRecords,
-  maxRecords = 100_000,
+  maxRecords = 100_000
 ): IndexResult {
   const counter = new BoundedCounter('content-type-records', maxRecords);
   const defaults = new Map<string, string>();
@@ -73,7 +74,8 @@ export function buildContentTypeIndex(
     } catch {
       return { ok: false, error: { code: 'too-many-records', limit: maxRecords } };
     }
-    if (!isValidMime(d.contentType)) return { ok: false, error: { code: 'invalid-mime', value: d.contentType } };
+    if (!isValidMime(d.contentType))
+      return { ok: false, error: { code: 'invalid-mime', value: d.contentType } };
     const key = extensionKey(d.extension);
     const existing = defaults.get(key);
     if (existing !== undefined && existing !== d.contentType) {
@@ -88,9 +90,11 @@ export function buildContentTypeIndex(
     } catch {
       return { ok: false, error: { code: 'too-many-records', limit: maxRecords } };
     }
-    if (!isValidMime(o.contentType)) return { ok: false, error: { code: 'invalid-mime', value: o.contentType } };
+    if (!isValidMime(o.contentType))
+      return { ok: false, error: { code: 'invalid-mime', value: o.contentType } };
     const norm: NameResult = normalizePartName(o.partName);
-    if (!norm.ok) return { ok: false, error: { code: 'invalid-override-name', partName: o.partName } };
+    if (!norm.ok)
+      return { ok: false, error: { code: 'invalid-override-name', partName: o.partName } };
     const key = partNameKey(norm.partName);
     const existing = overrides.get(key);
     if (existing !== undefined && existing !== o.contentType) {

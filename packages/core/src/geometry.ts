@@ -120,7 +120,12 @@ export type DisplayItem =
       readonly synthetic?: boolean;
       readonly interaction?: PositionedInteractionMeta;
     }
-  | { readonly kind: 'fill'; readonly box: Rect; readonly color: ColorValue; readonly interaction?: PositionedInteractionMeta }
+  | {
+      readonly kind: 'fill';
+      readonly box: Rect;
+      readonly color: ColorValue;
+      readonly interaction?: PositionedInteractionMeta;
+    }
   | {
       readonly kind: 'tableBorder';
       readonly segments: readonly BorderSeg[];

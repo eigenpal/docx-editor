@@ -54,7 +54,11 @@ export interface PlannedInteraction extends InteractionPlan {
   readonly navigation?: NavigationSessionPlan;
 }
 
-function rejectEffect(code: InteractionOutcomeCode, reason: string, frameId: InteractionFrame['id']): InteractionEffect {
+function rejectEffect(
+  code: InteractionOutcomeCode,
+  reason: string,
+  frameId: InteractionFrame['id']
+): InteractionEffect {
   return { kind: 'reject', code, reason, frameId };
 }
 
@@ -70,17 +74,29 @@ function requiresCoordinateMetrics(intent: InteractionIntent): boolean {
 
 function validatePreconditions(
   context: InteractionPlannerContext,
-  intent: InteractionIntent,
+  intent: InteractionIntent
 ): InteractionEffect | null {
   const { frame } = context;
   if ('frameId' in intent && intent.frameId.value !== frame.id.value) {
-    return rejectEffect('staleFrame', 'interaction intent targets a superseded interaction frame', frame.id);
+    return rejectEffect(
+      'staleFrame',
+      'interaction intent targets a superseded interaction frame',
+      frame.id
+    );
   }
   if (frame.completeness.kind === 'pending') {
-    return rejectEffect('pendingLayout', 'layout for the current model revision is not yet published', frame.id);
+    return rejectEffect(
+      'pendingLayout',
+      'layout for the current model revision is not yet published',
+      frame.id
+    );
   }
   if (context.readOnly || !context.editable) {
-    return rejectEffect('readOnly', 'interaction rejected because the editor is read-only', frame.id);
+    return rejectEffect(
+      'readOnly',
+      'interaction rejected because the editor is read-only',
+      frame.id
+    );
   }
   if (requiresCoordinateMetrics(intent) && !context.hostMetrics) {
     return rejectEffect('invalidTarget', 'explicit InteractionHostMetrics are required', frame.id);
@@ -99,8 +115,15 @@ function validatePreconditions(
   // Refused rather than forwarded: the bridge owns these keys in capture phase, so
   // handing them to the IME is not on the table here, and a typed refusal is what
   // the outcome contract promises.
-  if (intent.kind === 'geometryKeyboard' && (context.compositionActive ?? frame.composition.active)) {
-    return rejectEffect('unsupported', 'geometry navigation is unavailable while an IME composition is active', frame.id);
+  if (
+    intent.kind === 'geometryKeyboard' &&
+    (context.compositionActive ?? frame.composition.active)
+  ) {
+    return rejectEffect(
+      'unsupported',
+      'geometry navigation is unavailable while an IME composition is active',
+      frame.id
+    );
   }
   return null;
 }
@@ -116,23 +139,38 @@ function targetScopeCompatible(current: SemanticSelection, head: SemanticTarget)
 function selectionFromEditableTextHit(
   frame: InteractionFrame,
   target: Extract<SemanticTarget, { kind: 'text' }>,
-  shiftKey: boolean | undefined,
+  shiftKey: boolean | undefined
 ): { ok: true; selection: SemanticSelection } | { ok: false; effect: InteractionEffect } {
   if (shiftKey) {
     const current = frame.selection;
     if (!current) {
-      return { ok: false, effect: rejectEffect('invalidTarget', 'shift-click requires a current semantic selection', frame.id) };
+      return {
+        ok: false,
+        effect: rejectEffect(
+          'invalidTarget',
+          'shift-click requires a current semantic selection',
+          frame.id
+        ),
+      };
     }
     if (current.frameId.value !== frame.id.value) {
       return {
         ok: false,
-        effect: rejectEffect('invalidTarget', 'shift-click anchor is not projected on the current interaction frame', frame.id),
+        effect: rejectEffect(
+          'invalidTarget',
+          'shift-click anchor is not projected on the current interaction frame',
+          frame.id
+        ),
       };
     }
     if (!targetScopeCompatible(current, target)) {
       return {
         ok: false,
-        effect: rejectEffect('invalidTarget', 'shift-click target is incompatible with the current semantic selection', frame.id),
+        effect: rejectEffect(
+          'invalidTarget',
+          'shift-click target is incompatible with the current semantic selection',
+          frame.id
+        ),
       };
     }
     return {
@@ -160,14 +198,22 @@ type ClickInteractionIntent = PointerInteractionIntent & { readonly kind: 'click
 
 function validateNormalizedClickIntent(
   intent: ClickInteractionIntent,
-  frameId: InteractionFrame['id'],
+  frameId: InteractionFrame['id']
 ): InteractionEffect | null {
   if (intent.button !== undefined && intent.button !== 0) {
     return rejectEffect('unsupported', 'non-primary click button is not supported', frameId);
   }
   if (intent.buttons !== undefined) {
-    if (!Number.isFinite(intent.buttons) || !Number.isInteger(intent.buttons) || intent.buttons < 0) {
-      return rejectEffect('unsupported', 'click buttons bitmask is not a finite non-negative integer', frameId);
+    if (
+      !Number.isFinite(intent.buttons) ||
+      !Number.isInteger(intent.buttons) ||
+      intent.buttons < 0
+    ) {
+      return rejectEffect(
+        'unsupported',
+        'click buttons bitmask is not a finite non-negative integer',
+        frameId
+      );
     }
     if ((intent.buttons & ~1) !== 0) {
       return rejectEffect('unsupported', 'non-primary click buttons are not supported', frameId);
@@ -189,13 +235,16 @@ function validateNormalizedClickIntent(
   return null;
 }
 
-function blockRecordForTarget(frame: InteractionFrame, target: Extract<SemanticTarget, { kind: 'text' }>) {
+function blockRecordForTarget(
+  frame: InteractionFrame,
+  target: Extract<SemanticTarget, { kind: 'text' }>
+) {
   return frame.semanticIndex.stories
     .flatMap((story) => story.blocks)
     .find(
       (block) =>
         block.identity.storyId === target.identity.storyId &&
-        block.identity.blockId === target.identity.blockId,
+        block.identity.blockId === target.identity.blockId
     );
 }
 
@@ -203,7 +252,7 @@ function selectionFromWordHit(
   frame: InteractionFrame,
   target: Extract<SemanticTarget, { kind: 'text' }>,
   wordSegments: readonly WordSegmentRecord[],
-  paragraphGraphemeCount: number,
+  paragraphGraphemeCount: number
 ): SemanticSelection {
   const { anchor, head } = wordSelectionFromHit(target, wordSegments, paragraphGraphemeCount);
   return { frameId: frame.id, scope: target.scope, anchor, head };
@@ -212,7 +261,7 @@ function selectionFromWordHit(
 function selectionFromBlockHit(
   frame: InteractionFrame,
   target: Extract<SemanticTarget, { kind: 'text' }>,
-  paragraphGraphemeCount: number,
+  paragraphGraphemeCount: number
 ): SemanticSelection {
   const { anchor, head } = blockSelectionFromHit(target, paragraphGraphemeCount);
   return { frameId: frame.id, scope: target.scope, anchor, head };
@@ -220,7 +269,7 @@ function selectionFromBlockHit(
 
 function attachNavigation(
   plan: InteractionPlan,
-  navigation: NavigationSessionPlan | undefined,
+  navigation: NavigationSessionPlan | undefined
 ): PlannedInteraction {
   return navigation ? { ...plan, navigation } : plan;
 }
@@ -244,7 +293,7 @@ function attachNavigation(
 function pointerOnPageBackground(
   frame: InteractionFrame,
   clientPoint: Point,
-  metrics: InteractionHostMetrics | undefined,
+  metrics: InteractionHostMetrics | undefined
 ): boolean {
   if (!metrics) return false;
   const content = clientToContent(clientPoint, metrics);
@@ -271,21 +320,37 @@ const NON_MUTATING_COMMANDS = new Set(['undo', 'redo', 'setSelection']);
 
 function resolveTextTargetAgainstCanonicalState(
   frame: InteractionFrame,
-  target: Extract<SemanticTarget, { kind: 'text' }>,
+  target: Extract<SemanticTarget, { kind: 'text' }>
 ): InteractionEffect | null {
-  const story = frame.semanticIndex.stories.find((candidate) => candidate.storyId === target.identity.storyId);
+  const story = frame.semanticIndex.stories.find(
+    (candidate) => candidate.storyId === target.identity.storyId
+  );
   if (!story) {
-    return rejectEffect('invalidTarget', 'selection story is not present in current canonical state', frame.id);
+    return rejectEffect(
+      'invalidTarget',
+      'selection story is not present in current canonical state',
+      frame.id
+    );
   }
-  const block = story.blocks.find((candidate) => candidate.identity.blockId === target.identity.blockId);
+  const block = story.blocks.find(
+    (candidate) => candidate.identity.blockId === target.identity.blockId
+  );
   if (!block) {
-    return rejectEffect('invalidTarget', 'selection block is not present in current canonical state', frame.id);
+    return rejectEffect(
+      'invalidTarget',
+      'selection block is not present in current canonical state',
+      frame.id
+    );
   }
   if (!Number.isInteger(target.graphemeOffset)) {
     return rejectEffect('invalidTarget', 'selection grapheme offset is not an integer', frame.id);
   }
   if (target.graphemeOffset < 0 || target.graphemeOffset > block.graphemeCount) {
-    return rejectEffect('invalidTarget', 'selection grapheme offset is outside current canonical state', frame.id);
+    return rejectEffect(
+      'invalidTarget',
+      'selection grapheme offset is outside current canonical state',
+      frame.id
+    );
   }
   return null;
 }
@@ -296,10 +361,14 @@ function resolveTextTargetAgainstCanonicalState(
  */
 export function resolveSelectionAgainstCanonicalState(
   frame: InteractionFrame,
-  selection: SemanticSelection,
+  selection: SemanticSelection
 ): InteractionEffect | null {
   if (selection.frameId.value !== frame.id.value) {
-    return rejectEffect('staleFrame', 'selection was minted on a superseded interaction frame', frame.id);
+    return rejectEffect(
+      'staleFrame',
+      'selection was minted on a superseded interaction frame',
+      frame.id
+    );
   }
   for (const endpoint of [selection.anchor, selection.head]) {
     if (endpoint.kind !== 'text') continue;
@@ -309,7 +378,10 @@ export function resolveSelectionAgainstCanonicalState(
   return null;
 }
 
-function readOnlyBlockInSelection(frame: InteractionFrame, selection: SemanticSelection | null): boolean {
+function readOnlyBlockInSelection(
+  frame: InteractionFrame,
+  selection: SemanticSelection | null
+): boolean {
   if (!selection) return false;
   const endpoints = [selection.anchor, selection.head];
   return endpoints.some((endpoint) => {
@@ -318,7 +390,10 @@ function readOnlyBlockInSelection(frame: InteractionFrame, selection: SemanticSe
   });
 }
 
-function planClick(context: InteractionPlannerContext, intent: ClickInteractionIntent): PlannedInteraction {
+function planClick(
+  context: InteractionPlannerContext,
+  intent: ClickInteractionIntent
+): PlannedInteraction {
   const frameId = context.frame.id;
   const clickRejection = validateNormalizedClickIntent(intent, frameId);
   const nav = navigationSessionPlanForIntent(context.navigationSession, 'click');
@@ -326,9 +401,14 @@ function planClick(context: InteractionPlannerContext, intent: ClickInteractionI
     return attachNavigation({ frameId, effects: [clickRejection] }, nav);
   }
 
-  const hit = hitTestPointer(context.frame, intent.clientPoint, context.hostMetrics, { frameId: intent.frameId });
+  const hit = hitTestPointer(context.frame, intent.clientPoint, context.hostMetrics, {
+    frameId: intent.frameId,
+  });
   if (!hit.ok) {
-    if (hit.code === 'invalidTarget' && pointerOnPageBackground(context.frame, intent.clientPoint, context.hostMetrics)) {
+    if (
+      hit.code === 'invalidTarget' &&
+      pointerOnPageBackground(context.frame, intent.clientPoint, context.hostMetrics)
+    ) {
       return attachNavigation(
         {
           frameId,
@@ -336,18 +416,24 @@ function planClick(context: InteractionPlannerContext, intent: ClickInteractionI
             rejectEffect(
               'invalidTarget',
               'pointer is on page background or a page margin, which owns no caret position',
-              frameId,
+              frameId
             ),
           ],
         },
-        nav,
+        nav
       );
     }
-    return attachNavigation({ frameId, effects: [rejectEffect(hit.code, hit.reason, hit.frameId ?? frameId)] }, nav);
+    return attachNavigation(
+      { frameId, effects: [rejectEffect(hit.code, hit.reason, hit.frameId ?? frameId)] },
+      nav
+    );
   }
 
   if (hit.value.role === 'selectableText') {
-    return attachNavigation({ frameId, effects: [rejectEffect('readOnly', 'hit target is read-only text', frameId)] }, nav);
+    return attachNavigation(
+      { frameId, effects: [rejectEffect('readOnly', 'hit target is read-only text', frameId)] },
+      nav
+    );
   }
   if (hit.value.role !== 'editableText') {
     return attachNavigation(
@@ -357,20 +443,26 @@ function planClick(context: InteractionPlannerContext, intent: ClickInteractionI
           rejectEffect(
             'unsupported',
             `hit target role ${hit.value.role} is not supported for click selection (task 5.6+)`,
-            frameId,
+            frameId
           ),
         ],
       },
-      nav,
+      nav
     );
   }
   if (hit.value.target.kind !== 'text') {
     return attachNavigation(
       {
         frameId,
-        effects: [rejectEffect('unsupported', 'only editable text targets may create a caret or range', frameId)],
+        effects: [
+          rejectEffect(
+            'unsupported',
+            'only editable text targets may create a caret or range',
+            frameId
+          ),
+        ],
       },
-      nav,
+      nav
     );
   }
 
@@ -382,9 +474,15 @@ function planClick(context: InteractionPlannerContext, intent: ClickInteractionI
       return attachNavigation(
         {
           frameId,
-          effects: [rejectEffect('invalidTarget', 'word selection target block is missing from semantic index', frameId)],
+          effects: [
+            rejectEffect(
+              'invalidTarget',
+              'word selection target block is missing from semantic index',
+              frameId
+            ),
+          ],
         },
-        nav,
+        nav
       );
     }
     return attachNavigation(
@@ -394,12 +492,17 @@ function planClick(context: InteractionPlannerContext, intent: ClickInteractionI
           {
             kind: 'syncSelection',
             frameId,
-            selection: selectionFromWordHit(context.frame, hit.value.target, block.wordSegments, block.graphemeCount),
+            selection: selectionFromWordHit(
+              context.frame,
+              hit.value.target,
+              block.wordSegments,
+              block.graphemeCount
+            ),
           },
           { kind: 'focus', frameId },
         ],
       },
-      nav,
+      nav
     );
   }
 
@@ -409,9 +512,15 @@ function planClick(context: InteractionPlannerContext, intent: ClickInteractionI
       return attachNavigation(
         {
           frameId,
-          effects: [rejectEffect('invalidTarget', 'block selection target block is missing from semantic index', frameId)],
+          effects: [
+            rejectEffect(
+              'invalidTarget',
+              'block selection target block is missing from semantic index',
+              frameId
+            ),
+          ],
         },
-        nav,
+        nav
       );
     }
     return attachNavigation(
@@ -426,17 +535,24 @@ function planClick(context: InteractionPlannerContext, intent: ClickInteractionI
           { kind: 'focus', frameId },
         ],
       },
-      nav,
+      nav
     );
   }
 
-  const selectionOutcome = selectionFromEditableTextHit(context.frame, hit.value.target, intent.shiftKey);
+  const selectionOutcome = selectionFromEditableTextHit(
+    context.frame,
+    hit.value.target,
+    intent.shiftKey
+  );
   if (!selectionOutcome.ok) {
     return attachNavigation({ frameId, effects: [selectionOutcome.effect] }, nav);
   }
   // Shift-click composes a range from the frame's retained anchor, so the
   // composed selection is re-resolved before it can reach the store (task 5.7a).
-  const staleAnchor = resolveSelectionAgainstCanonicalState(context.frame, selectionOutcome.selection);
+  const staleAnchor = resolveSelectionAgainstCanonicalState(
+    context.frame,
+    selectionOutcome.selection
+  );
   if (staleAnchor) {
     return attachNavigation({ frameId, effects: [staleAnchor] }, nav);
   }
@@ -449,12 +565,15 @@ function planClick(context: InteractionPlannerContext, intent: ClickInteractionI
         { kind: 'focus', frameId },
       ],
     },
-    nav,
+    nav
   );
 }
 
 /** Pure planner: maps one intent and frame context to an ordered effect plan. */
-export function planInteraction(context: InteractionPlannerContext, intent: InteractionIntent): PlannedInteraction {
+export function planInteraction(
+  context: InteractionPlannerContext,
+  intent: InteractionIntent
+): PlannedInteraction {
   const rejection = validatePreconditions(context, intent);
   if (rejection) {
     return { frameId: context.frame.id, effects: [rejection] };
@@ -477,7 +596,7 @@ export function planInteraction(context: InteractionPlannerContext, intent: Inte
             { kind: 'focus', frameId },
           ],
         },
-        navFor('semanticSelection'),
+        navFor('semanticSelection')
       );
     }
     case 'focus':
@@ -493,7 +612,13 @@ export function planInteraction(context: InteractionPlannerContext, intent: Inte
       ) {
         return {
           frameId,
-          effects: [rejectEffect('readOnly', 'command rejected because the selection covers read-only text', frameId)],
+          effects: [
+            rejectEffect(
+              'readOnly',
+              'command rejected because the selection covers read-only text',
+              frameId
+            ),
+          ],
         };
       }
       return { frameId, effects: [{ kind: 'execCommand', frameId, command: intent.command }] };
@@ -502,7 +627,11 @@ export function planInteraction(context: InteractionPlannerContext, intent: Inte
         return {
           frameId,
           effects: [
-            rejectEffect('readOnly', 'native input rejected because the selection covers read-only text', frameId),
+            rejectEffect(
+              'readOnly',
+              'native input rejected because the selection covers read-only text',
+              frameId
+            ),
           ],
         };
       }
@@ -524,7 +653,7 @@ export function planInteraction(context: InteractionPlannerContext, intent: Inte
           rejectEffect(
             'unsupported',
             'pointer drag is handled by createEditor dispatchInteraction (task 5.4)',
-            frameId,
+            frameId
           ),
         ],
       };
@@ -535,7 +664,7 @@ export function planInteraction(context: InteractionPlannerContext, intent: Inte
           rejectEffect(
             'unsupported',
             'pointer cancel is handled by createEditor dispatchInteraction (task 5.4)',
-            frameId,
+            frameId
           ),
         ],
       };

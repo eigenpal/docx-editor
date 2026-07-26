@@ -23,7 +23,9 @@ export type ParagraphPropertiesCapsule = string;
  *  - a comment/PI sits before the properties (would be dropped),
  *  - the `w:pPr` is not well-formed XML on its own.
  *  `w:pPr` children are never themselves `w:pPr`, so the first `</w:pPr>` closes it unambiguously. */
-export function extractParagraphPropertiesCapsule(paragraphSlice: string): ParagraphPropertiesCapsule | null {
+export function extractParagraphPropertiesCapsule(
+  paragraphSlice: string
+): ParagraphPropertiesCapsule | null {
   const s = paragraphSlice;
   // Locate the end of the `<w:p …>` opening tag, QUOTE-AWARE (a '>' inside an attribute value must
   // not end the tag). A self-closing `<w:p/>` carries no properties.
@@ -153,7 +155,9 @@ export function extractRunPropertiesCapsule(runSlice: string): RunPropertiesCaps
  *  `w:pPr` is fine and skipped), so the caller can leave the runs uncapsuled. The result length
  *  equals the number of direct runs, matching the parsed `ParagraphRecord.runs` for a fully-captured
  *  paragraph. */
-export function extractParagraphRunRPrCapsules(paragraphSlice: string): (RunPropertiesCapsule | null)[] | null {
+export function extractParagraphRunRPrCapsules(
+  paragraphSlice: string
+): (RunPropertiesCapsule | null)[] | null {
   const s = paragraphSlice;
   const open = s.indexOf('<w:p');
   if (open < 0 || !startsWithTag(s, open, 'w:p')) return null;
@@ -177,14 +181,34 @@ export function extractParagraphRunRPrCapsules(paragraphSlice: string): (RunProp
  *  (readXml) is lenient — it accepts a bare attribute (`<w:rPr x/>`), an unquoted value
  *  (`foo=bar`), or a duplicate name — which, re-emitted VERBATIM, would produce invalid XML. This
  *  scan (comment/CDATA/PI/quote aware) rejects those before a forged capsule is interpolated. */
+const VALID_ENTITY = /^&(?:amp|lt|gt|quot|apos|#\d+|#x[0-9a-fA-F]+);/;
+/** An attribute value is XML-legal only if it contains no raw `<` and every `&` opens a valid entity
+ *  reference — otherwise the verbatim re-emit is malformed XML. */
+function attrValueOk(v: string): boolean {
+  for (let i = 0; i < v.length; i++) {
+    if (v[i] === '<') return false;
+    if (v[i] === '&' && !VALID_ENTITY.test(v.slice(i))) return false;
+  }
+  return true;
+}
 export function hasStrictAttributes(s: string): boolean {
   let i = 0;
   while (i < s.length) {
-    if (s[i] !== '<') { i++; continue; } // text between tags
-    if (s.startsWith('<!--', i)) { const e = s.indexOf('-->', i); if (e < 0) return false; i = e + 3; continue; }
-    if (s.startsWith('<![CDATA[', i)) { const e = s.indexOf(']]>', i); if (e < 0) return false; i = e + 3; continue; }
-    if (s.startsWith('<?', i)) { const e = s.indexOf('?>', i); if (e < 0) return false; i = e + 2; continue; }
-    if (s.startsWith('</', i)) { const e = s.indexOf('>', i); if (e < 0) return false; i = e + 1; continue; } // end tag
+    if (s[i] !== '<') {
+      i++;
+      continue;
+    } // text between tags
+    // A preservation capsule from a real w:rPr/w:pPr never carries a comment, CDATA, or a processing
+    // instruction; re-emitting one mid-document is at best suspicious and (for an xml declaration)
+    // invalid — reject them outright rather than skip.
+    if (s.startsWith('<!--', i) || s.startsWith('<![CDATA[', i) || s.startsWith('<?', i))
+      return false;
+    if (s.startsWith('</', i)) {
+      const e = s.indexOf('>', i);
+      if (e < 0) return false;
+      i = e + 1;
+      continue;
+    } // end tag
     i++; // past '<'
     const nameStart = i;
     while (i < s.length && /[\w:.-]/.test(s[i]!)) i++;
@@ -193,8 +217,14 @@ export function hasStrictAttributes(s: string): boolean {
     for (;;) {
       while (i < s.length && /\s/.test(s[i]!)) i++;
       if (i >= s.length) return false;
-      if (s[i] === '>') { i++; break; }
-      if (s[i] === '/' && s[i + 1] === '>') { i += 2; break; }
+      if (s[i] === '>') {
+        i++;
+        break;
+      }
+      if (s[i] === '/' && s[i + 1] === '>') {
+        i += 2;
+        break;
+      }
       const anStart = i;
       while (i < s.length && /[\w:.-]/.test(s[i]!)) i++;
       if (i === anStart) return false; // a bare token that is not a name = malformed attribute
@@ -209,6 +239,7 @@ export function hasStrictAttributes(s: string): boolean {
       if (q !== '"' && q !== "'") return false; // value must be quoted
       const vEnd = s.indexOf(q, i + 1);
       if (vEnd < 0) return false;
+      if (!attrValueOk(s.slice(i + 1, vEnd))) return false; // no raw '<' / bad '&' in the value
       i = vEnd + 1;
     }
   }
@@ -223,6 +254,12 @@ export function isRunPropertiesCapsule(s: string): boolean {
   if (!hasStrictAttributes(t)) return false; // reject lenient-but-invalid attribute syntax
   const parsed = readXml(t);
   if (!parsed.ok) return false;
+  // Exactly ONE top-level node, the w:rPr element — a stray text node (e.g. trailing `</w:rPr> x`)
+  // or a second element means it is not a lone capsule.
+  if (
+    parsed.nodes.some((n) => n.type !== 'element' && !(n.type === 'text' && n.value.trim() === ''))
+  )
+    return false;
   const els = parsed.nodes.filter((n) => n.type === 'element');
   return els.length === 1 && els[0].name === 'w:rPr';
 }
@@ -238,6 +275,10 @@ export function isParagraphPropertiesCapsule(s: string): boolean {
   if (!hasStrictAttributes(t)) return false;
   const parsed = readXml(t);
   if (!parsed.ok) return false;
+  if (
+    parsed.nodes.some((n) => n.type !== 'element' && !(n.type === 'text' && n.value.trim() === ''))
+  )
+    return false;
   const els = parsed.nodes.filter((n) => n.type === 'element');
   return els.length === 1 && els[0].name === 'w:pPr';
 }
@@ -292,7 +333,10 @@ export function splitDirectRunSlices(paragraphInner: string): string[] | null {
 
 /** Scan the `<w:pPr …>` opening tag starting at `at` (index of '<'), returning where the tag ends
  *  and whether it self-closes. Handles '>' inside attribute values (single/double quoted). */
-function findSelfCloseOrOpenEnd(s: string, at: number): { tagEnd: number; selfClosing: boolean } | null {
+function findSelfCloseOrOpenEnd(
+  s: string,
+  at: number
+): { tagEnd: number; selfClosing: boolean } | null {
   let i = at + 1;
   let quote: string | null = null;
   for (; i < s.length; i += 1) {
@@ -314,7 +358,10 @@ function findSelfCloseOrOpenEnd(s: string, at: number): { tagEnd: number; selfCl
 
 /** Serialize a paragraph's inner content with its capsule reinserted at the leading position: the
  *  `w:pPr` (if any) comes first, then the runs — exactly the OOXML child order for `w:p`. */
-export function paragraphInnerWithCapsule(capsule: ParagraphPropertiesCapsule | undefined, runsXml: string): string {
+export function paragraphInnerWithCapsule(
+  capsule: ParagraphPropertiesCapsule | undefined,
+  runsXml: string
+): string {
   return `${capsule ?? ''}${runsXml}`;
 }
 
@@ -328,7 +375,9 @@ export type ParagraphAttributesCapsule = string;
  *  byte-identical. Returns the attribute string (which may be '' when there are none), or null when
  *  the opening tag cannot be cleanly located (malformed / not a w:p). A self-closing `<w:p …/>` (an
  *  empty paragraph) returns its attributes too. */
-export function extractParagraphOpenAttributes(paragraphSlice: string): ParagraphAttributesCapsule | null {
+export function extractParagraphOpenAttributes(
+  paragraphSlice: string
+): ParagraphAttributesCapsule | null {
   const s = paragraphSlice;
   const open = s.indexOf('<w:p');
   if (open < 0 || !startsWithTag(s, open, 'w:p')) return null;

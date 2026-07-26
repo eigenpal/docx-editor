@@ -74,7 +74,14 @@ export function useFloatingCommentBtn({
     const left = (page.box.x + page.box.width) * zoom + pagesRect.left - containerRect.left;
 
     setFloatingCommentBtn({ top, left });
-  }, [editorRef, scrollContainerRef, pagesContainerRef, isAddingCommentRef, setFloatingCommentBtn, zoom]);
+  }, [
+    editorRef,
+    scrollContainerRef,
+    pagesContainerRef,
+    isAddingCommentRef,
+    setFloatingCommentBtn,
+    zoom,
+  ]);
 
   // Reposition on container resize (sidebar toggle, loading to ready, window resize).
   // Re-runs on the `isLoading` flip because the scroll container only mounts once the

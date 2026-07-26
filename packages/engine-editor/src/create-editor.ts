@@ -62,9 +62,18 @@ import { layoutBody, HelveticaMetrics } from '@docx-editor.dev/engine-layout';
 import { toDisplayPages } from './display-bridge.ts';
 import { InteractionFrameStore, emptyInteractionFrame } from './interaction-frame.ts';
 import type { NavigationGeometry } from './navigation-geometry.ts';
-import { hitTestPointer, deriveCaretGeometry, deriveSelectionGeometry } from './interaction-geometry.ts';
+import {
+  hitTestPointer,
+  deriveCaretGeometry,
+  deriveSelectionGeometry,
+} from './interaction-geometry.ts';
 import { clientToContent, contentToClient } from './coordinate-mapper.ts';
-import { execErrorFromInteraction, invalidSetSelection, semanticSelectionFromCommand, unsupportedSetSelection } from './set-selection.ts';
+import {
+  execErrorFromInteraction,
+  invalidSetSelection,
+  semanticSelectionFromCommand,
+  unsupportedSetSelection,
+} from './set-selection.ts';
 import {
   planInteraction,
   resolveSelectionAgainstCanonicalState,
@@ -73,7 +82,10 @@ import {
 import { executeInteractionPlan } from './interaction-executor.ts';
 import { planPointerDragInteraction, type PointerDragSession } from './drag-session.ts';
 import { commitDragSessionAfterExecution } from './drag-dispatch.ts';
-import { commitNavigationSessionAfterExecution, type NavigationSession } from './navigation-session.ts';
+import {
+  commitNavigationSessionAfterExecution,
+  type NavigationSession,
+} from './navigation-session.ts';
 import { paragraphTextById, withCanonicalAffinity } from './semantic-index.ts';
 import { scopesEqual, type ParagraphTextResolver } from './bidi-policy.ts';
 
@@ -92,9 +104,12 @@ const isArrayBuffer = (v: unknown): v is ArrayBuffer =>
 const isBytesView = (v: unknown): v is ArrayBufferView => ArrayBuffer.isView(v);
 
 function sourceToBytes(source: DocumentSource): Uint8Array {
-  if (isBytesView(source)) return new Uint8Array(source.buffer, source.byteOffset, source.byteLength);
+  if (isBytesView(source))
+    return new Uint8Array(source.buffer, source.byteOffset, source.byteLength);
   if (isArrayBuffer(source)) return new Uint8Array(source);
-  throw new Error('createEditor: unrecognized DocumentSource (expected DOCX bytes or a handle from getDocumentHandle)');
+  throw new Error(
+    'createEditor: unrecognized DocumentSource (expected DOCX bytes or a handle from getDocumentHandle)'
+  );
 }
 
 function bytesToArrayBuffer(u8: Uint8Array): ArrayBuffer {
@@ -111,7 +126,14 @@ const UNSUPPORTED = (what: string): ExecResult => ({
 // result types): array queries return [] (a consumer may .map/.filter), object queries {}, text '',
 // booleans false, else null. Keeps a consumer working until the real query lands (section 5) instead
 // of returning a wrongly-typed value that crashes.
-const ARRAY_QUERIES = new Set(['paragraphs', 'findText', 'contentControls', 'revisions', 'comments', 'trackedChanges']);
+const ARRAY_QUERIES = new Set([
+  'paragraphs',
+  'findText',
+  'contentControls',
+  'revisions',
+  'comments',
+  'trackedChanges',
+]);
 const STRING_QUERIES = new Set(['selectedText']);
 const BOOLEAN_QUERIES = new Set(['isInsideToc']);
 function queryDefault(type: string): unknown {
@@ -134,8 +156,16 @@ export function createEditor(config: EditorConfig): Editor {
   const accessibleNamePolicy = resolveAccessibilityNamePolicy(config.accessibleName);
 
   type Handlers = { [E in keyof EditorEvents]: Set<EditorEvents[E]> };
-  const handlers: Handlers = { change: new Set(), selectionChange: new Set(), display: new Set(), error: new Set() };
-  function emit<E extends keyof EditorEvents>(event: E, ...args: Parameters<EditorEvents[E]>): void {
+  const handlers: Handlers = {
+    change: new Set(),
+    selectionChange: new Set(),
+    display: new Set(),
+    error: new Set(),
+  };
+  function emit<E extends keyof EditorEvents>(
+    event: E,
+    ...args: Parameters<EditorEvents[E]>
+  ): void {
     for (const fn of handlers[event]) (fn as (...a: unknown[]) => void)(...args);
   }
 
@@ -172,7 +202,7 @@ export function createEditor(config: EditorConfig): Editor {
   function layoutInput(
     display: readonly DisplayPage[],
     semanticIndex: SemanticPositionIndex,
-    navigationGeometry: NavigationGeometry,
+    navigationGeometry: NavigationGeometry
   ) {
     return {
       modelRevision: session!.revision(),
@@ -424,7 +454,7 @@ export function createEditor(config: EditorConfig): Editor {
     const input = layoutInput(bridged.display, bridged.semanticIndex, bridged.navigationGeometry);
     const frame =
       pendingTarget !== undefined
-        ? frames.tryCompletePendingLayout(input) ?? null
+        ? (frames.tryCompletePendingLayout(input) ?? null)
         : frames.publishLayout(input);
     if (!frame) return;
     emitLayoutFrame(frame);
@@ -523,7 +553,9 @@ export function createEditor(config: EditorConfig): Editor {
     visual?.addEventListener('resize', onViewportChange, { passive: true });
     scrollTrackingAttached = true;
     detachScrollTracking = () => {
-      doc.removeEventListener('scroll', onViewportChange, { capture: true } as EventListenerOptions);
+      doc.removeEventListener('scroll', onViewportChange, {
+        capture: true,
+      } as EventListenerOptions);
       win?.removeEventListener('resize', onViewportChange);
       visual?.removeEventListener('scroll', onViewportChange);
       visual?.removeEventListener('resize', onViewportChange);
@@ -535,7 +567,7 @@ export function createEditor(config: EditorConfig): Editor {
   function rejectPointer(
     code: InteractionOutcomeCode,
     reason: string,
-    frameId?: InteractionFrame['id'],
+    frameId?: InteractionFrame['id']
   ): InteractionOutcome<SemanticHitTarget> {
     return frameId ? { ok: false, code, reason, frameId } : { ok: false, code, reason };
   }
@@ -545,13 +577,24 @@ export function createEditor(config: EditorConfig): Editor {
     return host.getInteractionHostMetrics?.() ?? undefined;
   }
 
-  function resolvePointer(point: Point, options?: HitTestOptions): InteractionOutcome<SemanticHitTarget> {
+  function resolvePointer(
+    point: Point,
+    options?: HitTestOptions
+  ): InteractionOutcome<SemanticHitTarget> {
     const frame = currentFrame();
     if (options?.frameId && options.frameId.value !== frame.id.value) {
-      return rejectPointer('staleFrame', 'pointer request targets a superseded interaction frame', frame.id);
+      return rejectPointer(
+        'staleFrame',
+        'pointer request targets a superseded interaction frame',
+        frame.id
+      );
     }
     if (frame.completeness.kind === 'pending') {
-      return rejectPointer('pendingLayout', 'layout for the current model revision is not yet published', frame.id);
+      return rejectPointer(
+        'pendingLayout',
+        'layout for the current model revision is not yet published',
+        frame.id
+      );
     }
     return hitTestPointer(frame, point, resolveHostMetrics(options), { frameId: options?.frameId });
   }
@@ -574,7 +617,10 @@ export function createEditor(config: EditorConfig): Editor {
         next = openDocxSession(sourceToBytes(source));
       } catch (err) {
         // Transactional: a parse failure keeps the current document intact.
-        emit('error', Object.assign(new Error(String((err as Error)?.message ?? err)), { code: 'parse' }));
+        emit(
+          'error',
+          Object.assign(new Error(String((err as Error)?.message ?? err)), { code: 'parse' })
+        );
         return;
       }
       sharedView = false;
@@ -632,7 +678,11 @@ export function createEditor(config: EditorConfig): Editor {
     }
     const result = surface.runEditCommand(command, { dryRun });
     if (!result.ok) {
-      return { ok: false, code: result.code === 'readOnly' ? 'locked' : 'unsupported', reason: result.reason };
+      return {
+        ok: false,
+        code: result.code === 'readOnly' ? 'locked' : 'unsupported',
+        reason: result.reason,
+      };
     }
     return { ok: true, changed: result.changed };
   }
@@ -640,7 +690,11 @@ export function createEditor(config: EditorConfig): Editor {
   function execSetSelection(command: Extract<EditorCommand, { type: 'setSelection' }>): ExecResult {
     if (destroyed) return unsupportedSetSelection('editor is destroyed');
     if (readOnly || sharedView || !session?.editable) {
-      return { ok: false, code: 'locked', reason: 'setSelection rejected because the editor is read-only' };
+      return {
+        ok: false,
+        code: 'locked',
+        reason: 'setSelection rejected because the editor is read-only',
+      };
     }
     if (!surface?.semanticProjectionAttached) {
       return unsupportedSetSelection('edit surface is not mounted');
@@ -650,10 +704,15 @@ export function createEditor(config: EditorConfig): Editor {
     }
     const frame = currentFrame();
     if (frame.completeness.kind === 'pending') {
-      return { ok: false, code: 'unsupported', reason: 'layout for the current model revision is not yet published' };
+      return {
+        ok: false,
+        code: 'unsupported',
+        reason: 'layout for the current model revision is not yet published',
+      };
     }
     const selection = semanticSelectionFromCommand(command, frame.id, activeScope);
-    if (!selection) return invalidSetSelection('setSelection requires semantic targets in the active scope');
+    if (!selection)
+      return invalidSetSelection('setSelection requires semantic targets in the active scope');
     // The public setSelection surface must re-resolve against canonical state
     // like every other path to the store's selection. Without this it reached
     // `graphemeOffsetToUtf16`, which CLAMPS: offset 9999 on a 13-grapheme
@@ -662,7 +721,11 @@ export function createEditor(config: EditorConfig): Editor {
     // clamp (task 5.7a).
     const staleOrInvalid = resolveSelectionAgainstCanonicalState(frame, selection);
     if (staleOrInvalid && staleOrInvalid.kind === 'reject') {
-      return { ok: false, code: execErrorFromInteraction(staleOrInvalid.code), reason: staleOrInvalid.reason };
+      return {
+        ok: false,
+        code: execErrorFromInteraction(staleOrInvalid.code),
+        reason: staleOrInvalid.reason,
+      };
     }
     // A partially editable document locks INDIVIDUAL blocks, and the canonical selection
     // must not move into one. The `session.editable` check above is document-wide, so on a
@@ -673,11 +736,16 @@ export function createEditor(config: EditorConfig): Editor {
     for (const end of [selection.anchor, selection.head]) {
       const blockId = (end as { identity?: { blockId?: string } }).identity?.blockId;
       if (blockId && session.readOnlyBlockIds.has(blockId)) {
-        return { ok: false, code: 'locked', reason: `setSelection rejected: block ${blockId} is read-only` };
+        return {
+          ok: false,
+          code: 'locked',
+          reason: `setSelection rejected: block ${blockId} is read-only`,
+        };
       }
     }
     const outcome = surface.syncSemanticSelection({ frameId: frame.id, selection });
-    if (!outcome.ok) return { ok: false, code: execErrorFromInteraction(outcome.code), reason: outcome.reason };
+    if (!outcome.ok)
+      return { ok: false, code: execErrorFromInteraction(outcome.code), reason: outcome.reason };
     // Publish the frame too.
     //
     // This moved the REAL insertion point and returned ok while publishing nothing,
@@ -693,41 +761,65 @@ export function createEditor(config: EditorConfig): Editor {
     // The existing test masked it by calling `editor.focus()` between `exec` and its
     // assertions — the one operation that repairs the frame — and then asserting only
     // on `getAccessibilityObservation()`, never on `getInteractionFrame()`.
-    publishSelectionOverlay(selection, { scope: activeScope, focused: currentFrame().focus.focused });
+    publishSelectionOverlay(selection, {
+      scope: activeScope,
+      focused: currentFrame().focus.focused,
+    });
     return { ok: true, changed: false };
   }
 
   function canSetSelection(command: Extract<EditorCommand, { type: 'setSelection' }>): CanResult {
     if (destroyed) return { ok: false, code: 'unsupported', reason: 'editor is destroyed' };
     if (readOnly || sharedView || !session?.editable) {
-      return { ok: false, code: 'locked', reason: 'setSelection rejected because the editor is read-only' };
+      return {
+        ok: false,
+        code: 'locked',
+        reason: 'setSelection rejected because the editor is read-only',
+      };
     }
     if (!surface?.semanticProjectionAttached) {
       return { ok: false, code: 'unsupported', reason: 'edit surface is not mounted' };
     }
     if (activeScope.kind !== 'body') {
-      return { ok: false, code: 'unsupported', reason: 'setSelection is supported for body scope only' };
+      return {
+        ok: false,
+        code: 'unsupported',
+        reason: 'setSelection is supported for body scope only',
+      };
     }
     if (currentFrame().completeness.kind === 'pending') {
-      return { ok: false, code: 'unsupported', reason: 'layout for the current model revision is not yet published' };
+      return {
+        ok: false,
+        code: 'unsupported',
+        reason: 'layout for the current model revision is not yet published',
+      };
     }
     const frame = currentFrame();
     const selection = semanticSelectionFromCommand(command, frame.id, activeScope);
-    if (!selection) return { ok: false, code: 'invalidArgs', reason: 'setSelection requires semantic targets in the active scope' };
+    if (!selection)
+      return {
+        ok: false,
+        code: 'invalidArgs',
+        reason: 'setSelection requires semantic targets in the active scope',
+      };
     // `can` must answer the same question `exec` will. Re-review measured this
     // returning ok:true for the four inputs exec refuses — offset 9999, -5, 1.5,
     // and a superseded frameId — so a caller that gates on `can` was told yes and
     // then refused. A `can` that lies is worse than no `can`.
     const staleOrInvalid = resolveSelectionAgainstCanonicalState(frame, selection);
     if (staleOrInvalid && staleOrInvalid.kind === 'reject') {
-      return { ok: false, code: execErrorFromInteraction(staleOrInvalid.code), reason: staleOrInvalid.reason };
+      return {
+        ok: false,
+        code: execErrorFromInteraction(staleOrInvalid.code),
+        reason: staleOrInvalid.reason,
+      };
     }
     return { ok: true };
   }
 
   function dispatchInteraction(
     intent: InteractionIntent,
-    options?: { hostMetrics?: InteractionHostMetrics },
+    options?: { hostMetrics?: InteractionHostMetrics }
   ): InteractionDispatchResult {
     if (destroyed) {
       return {
@@ -762,7 +854,7 @@ export function createEditor(config: EditorConfig): Editor {
       dragPlanResult = planPointerDragInteraction(
         { ...plannerBase, modelRevision: session?.revision() ?? frame.revisions.modelRevision },
         intent as Parameters<typeof planPointerDragInteraction>[1],
-        dragSession,
+        dragSession
       );
       planned = dragPlanResult.plan;
     } else {
@@ -791,7 +883,12 @@ export function createEditor(config: EditorConfig): Editor {
         },
         focus: (request) => {
           if (!surface) {
-            return { ok: false, code: 'unsupported', reason: 'edit surface is not mounted', frameId: request.frameId };
+            return {
+              ok: false,
+              code: 'unsupported',
+              reason: 'edit surface is not mounted',
+              frameId: request.frameId,
+            };
           }
           return surface.focus({ frameId: request.frameId });
         },
@@ -821,25 +918,36 @@ export function createEditor(config: EditorConfig): Editor {
         },
         delegateNativeInput: (request) => {
           if (!surface) {
-            return { ok: false, code: 'unsupported', reason: 'edit surface is not mounted', frameId: request.frameId };
+            return {
+              ok: false,
+              code: 'unsupported',
+              reason: 'edit surface is not mounted',
+              frameId: request.frameId,
+            };
           }
           return surface.focus({ frameId: request.frameId });
         },
         publishSelectionOverlay: (selection) => {
           const focus = currentFrame().focus;
-          publishSelectionOverlay(selection, focus.focused ? focus : { scope: activeScope, focused: true });
+          publishSelectionOverlay(
+            selection,
+            focus.focused ? focus : { scope: activeScope, focused: true }
+          );
         },
         currentFrameId: () => currentFrame().id,
       },
-      planned,
+      planned
     );
     if (dragPlanResult) {
       const finalized = commitDragSessionAfterExecution(dragPlanResult, execution);
       dragSession = finalized.session;
       if (dragPlanResult.navigation !== undefined) {
-        navigationSession = commitNavigationSessionAfterExecution(dragPlanResult.navigation, execution).session ?? null;
+        navigationSession =
+          commitNavigationSessionAfterExecution(dragPlanResult.navigation, execution).session ??
+          null;
       } else if (planned.navigation !== undefined) {
-        navigationSession = commitNavigationSessionAfterExecution(planned.navigation, execution).session ?? null;
+        navigationSession =
+          commitNavigationSessionAfterExecution(planned.navigation, execution).session ?? null;
       }
       if (finalized.supplementalHostEffects.length === 0) return execution;
       return {
@@ -848,7 +956,8 @@ export function createEditor(config: EditorConfig): Editor {
       };
     }
     if (planned.navigation !== undefined) {
-      navigationSession = commitNavigationSessionAfterExecution(planned.navigation, execution).session ?? null;
+      navigationSession =
+        commitNavigationSessionAfterExecution(planned.navigation, execution).session ?? null;
     }
     return execution;
   }
@@ -974,12 +1083,19 @@ export function createEditor(config: EditorConfig): Editor {
       const out: { text: string; level: number; blockId: string }[] = [];
       for (const block of blocks) {
         if (block.kind !== 'paragraph') continue;
-        const paragraph = block as { id: string; props?: { styleId?: string }; runs: readonly { text: string }[] };
+        const paragraph = block as {
+          id: string;
+          props?: { styleId?: string };
+          runs: readonly { text: string }[];
+        };
         const match = /^[Hh]eading(\d)$/.exec(paragraph.props?.styleId ?? '');
         if (!match) continue;
         const level = Number(match[1]) - 1;
         if (level < 0 || level > 8) continue;
-        const text = paragraph.runs.map((r) => r.text).join('').trim();
+        const text = paragraph.runs
+          .map((r) => r.text)
+          .join('')
+          .trim();
         if (!text) continue;
         out.push({ text, level, blockId: paragraph.id });
       }
@@ -1025,7 +1141,15 @@ export function createEditor(config: EditorConfig): Editor {
       // The run containing the head offset. Offsets are grapheme-based; run text is
       // UTF-16, so this walks by run length and clamps — an offset past the end belongs
       // to the last run, which is where a caret at paragraph end sits.
-      const runs = (block as { runs: readonly { text: string; props?: { bold?: boolean; italic?: boolean; underline?: boolean; styleId?: string }; rPrCapsule?: string }[] }).runs;
+      const runs = (
+        block as {
+          runs: readonly {
+            text: string;
+            props?: { bold?: boolean; italic?: boolean; underline?: boolean; styleId?: string };
+            rPrCapsule?: string;
+          }[];
+        }
+      ).runs;
       let remaining = head.graphemeOffset ?? 0;
       let run = runs[0];
       for (const r of runs) {
@@ -1164,7 +1288,9 @@ export function createEditor(config: EditorConfig): Editor {
       navigationSession = null;
     },
     getActiveScope: () => activeScope,
-    query<K extends keyof EditorQueries>(query: { type: K } & EditorQueries[K]): EditorQueryResults[K] {
+    query<K extends keyof EditorQueries>(
+      query: { type: K } & EditorQueries[K]
+    ): EditorQueryResults[K] {
       return queryDefault(query.type as string) as EditorQueryResults[K];
     },
     snapshot: (): EditorSnapshot => buildSnapshot(),
@@ -1183,7 +1309,11 @@ export function createEditor(config: EditorConfig): Editor {
       // Refused rather than clamped: a caller that asked for 0 or NaN has a bug, and
       // silently substituting 1 hides it. The bounds match what the zoom control offers.
       if (!Number.isFinite(next) || next < 0.1 || next > 5) {
-        return { ok: false, code: 'invalidArgs', reason: `zoom must be between 0.1 and 5, got ${next}` };
+        return {
+          ok: false,
+          code: 'invalidArgs',
+          reason: `zoom must be between 0.1 and 5, got ${next}`,
+        };
       }
       if (next === zoom) return { ok: true, changed: false };
       zoom = next;
@@ -1218,7 +1348,10 @@ export function createEditor(config: EditorConfig): Editor {
     getInteractionFrame: () => currentFrame(),
 
     getDisplay: () => currentFrame().display,
-    getSelectionRects: (range?: EditorSelection, options?: SelectionGeometryOptions): readonly Rect[] => {
+    getSelectionRects: (
+      range?: EditorSelection,
+      options?: SelectionGeometryOptions
+    ): readonly Rect[] => {
       const frame = currentFrame();
       const selection =
         range && typeof range === 'object' && 'anchor' in range && 'head' in range
@@ -1229,14 +1362,19 @@ export function createEditor(config: EditorConfig): Editor {
       return outcome.ok ? outcome.value.rects : [];
     },
     getCaretRect: (pos?: EditorPosition): Rect | null => {
-      const target = pos && typeof pos === 'object' && 'kind' in pos ? (pos as SemanticTarget) : undefined;
+      const target =
+        pos && typeof pos === 'object' && 'kind' in pos ? (pos as SemanticTarget) : undefined;
       return deriveCaretGeometry(currentFrame(), target)?.rect ?? null;
     },
     getCaretGeometry: (pos?: EditorPosition): CaretGeometry | null => {
-      const target = pos && typeof pos === 'object' && 'kind' in pos ? (pos as SemanticTarget) : undefined;
+      const target =
+        pos && typeof pos === 'object' && 'kind' in pos ? (pos as SemanticTarget) : undefined;
       return deriveCaretGeometry(currentFrame(), target);
     },
-    getSelectionGeometry: (range?: EditorSelection, options?: SelectionGeometryOptions): SelectionGeometry | null => {
+    getSelectionGeometry: (
+      range?: EditorSelection,
+      options?: SelectionGeometryOptions
+    ): SelectionGeometry | null => {
       const frame = currentFrame();
       const selection =
         range && typeof range === 'object' && 'anchor' in range && 'head' in range

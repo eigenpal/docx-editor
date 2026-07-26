@@ -93,12 +93,7 @@ export {
   registerBlockElementParser,
   blockElementParser,
 } from '../model/index.ts';
-export {
-  isValidNCName,
-  isValidQName,
-  assertValidQName,
-  PrefixAllocator,
-} from './qname.ts';
+export { isValidNCName, isValidQName, assertValidQName, PrefixAllocator } from './qname.ts';
 export {
   type HrefProjection,
   type InertExecutableKind,

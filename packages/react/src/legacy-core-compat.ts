@@ -199,7 +199,7 @@ export interface ListState {
  */
 export function excludeFontsByName<T extends { name: string }>(
   fonts: readonly T[] | undefined,
-  _exclude?: readonly string[],
+  _exclude?: readonly string[]
 ): T[] {
   return fonts ? [...fonts] : [];
 }
@@ -217,7 +217,6 @@ export function halfPointsToPoints(halfPoints: number): number {
 export function pointsToHalfPoints(points: number): number {
   return Math.round(points * 2);
 }
-
 
 // `getStylePreviewProps`, `resolveParagraphStyleOptions` and `ResolvedStyleOption` are
 // NOT declared here — they come from the ported `./lib/stylePreview`, re-exported below.
@@ -656,12 +655,11 @@ export function mapHexToHighlightName(_hex?: string | null): string | undefined 
 /** Compatibility contract for the shared adapter surface.
  *  `FontOption[]`. Kept here so the ported controls resolve it from one place. */
 export function normalizeFontFamilies(
-  fonts?: readonly (string | FontOption)[] | null,
+  fonts?: readonly (string | FontOption)[] | null
 ): FontOption[] | undefined {
   if (!fonts) return undefined;
   return fonts.map((f) => (typeof f === 'string' ? { name: f, fontFamily: f } : f));
 }
-
 
 // --- Opaque siblings ------------------------------------------------------------------
 //
@@ -673,8 +671,12 @@ export type UnderlineStyle = string;
 export type TextEffect = string;
 export type EmphasisMark = string;
 export type LineSpacingRule = string;
-export interface ShadingProperties { [key: string]: unknown }
-export interface BorderSpec { [key: string]: unknown }
+export interface ShadingProperties {
+  [key: string]: unknown;
+}
+export interface BorderSpec {
+  [key: string]: unknown;
+}
 /** Compatibility contract for the shared adapter surface. */
 export interface TabMark {
   /** Position in twips from left margin */
@@ -684,11 +686,12 @@ export interface TabMark {
   /** Leader character */
   leader?: TabLeader;
 }
-export interface ParagraphSpacingOverrides { [key: string]: unknown }
+export interface ParagraphSpacingOverrides {
+  [key: string]: unknown;
+}
 
 /** Alias under the name `toolbarUtils` imports it. */
 export const HIGHLIGHT_HEX_TO_NAME: Readonly<Record<string, string>> = HIGHLIGHT_COLORS;
-
 
 // Opaque siblings named by the shared table interfaces; the table controls pass them
 // through without inspecting them.
@@ -790,16 +793,30 @@ export interface TableLook {
   noHBand?: boolean;
   noVBand?: boolean;
 }
-export interface TablePropertyChange { [key: string]: unknown }
-export interface TableRowPropertyChange { [key: string]: unknown }
-export interface TableCellPropertyChange { [key: string]: unknown }
+export interface TablePropertyChange {
+  [key: string]: unknown;
+}
+export interface TableRowPropertyChange {
+  [key: string]: unknown;
+}
+export interface TableCellPropertyChange {
+  [key: string]: unknown;
+}
 
 // Named by the shared table interfaces. Opaque: the ported table controls carry these
 // values between engine calls without reading their contents.
-export interface BlockContent { [key: string]: unknown }
-export interface BookmarkStart { [key: string]: unknown }
-export interface BookmarkEnd { [key: string]: unknown }
-export interface TableStructuralChangeInfo { [key: string]: unknown }
+export interface BlockContent {
+  [key: string]: unknown;
+}
+export interface BookmarkStart {
+  [key: string]: unknown;
+}
+export interface BookmarkEnd {
+  [key: string]: unknown;
+}
+export interface TableStructuralChangeInfo {
+  [key: string]: unknown;
+}
 
 // Siblings named by the copied table formatting types.
 export interface CellMargins {
@@ -1184,11 +1201,9 @@ export type FootnotePosition = 'pageBottom' | 'beneathText' | 'sectEnd' | 'docEn
 export type HeaderFooterType = 'default' | 'first' | 'even';
 export type NoteNumberRestart = 'continuous' | 'eachSect' | 'eachPage';
 
-
 // Named by the shared TabMark.
 export type TabJustify = 'left' | 'center' | 'right' | 'decimal' | 'bar' | 'clear' | 'num';
 export type TabLeader = 'none' | 'dot' | 'hyphen' | 'underscore' | 'heavy' | 'middleDot';
-
 
 // --- Colour resolution: PORTED, not stubbed --------------------------------------------
 //
@@ -1208,7 +1223,6 @@ export {
   ensureHexPrefix,
   resolveHighlightToCss,
 } from './lib/colorResolver';
-
 
 // --- List state: PORTED, not stubbed ---------------------------------------------------
 //
@@ -1257,8 +1271,6 @@ export interface ParsedClipboardContent {
 export async function readFromClipboard(_event?: unknown): Promise<ParsedClipboardContent | null> {
   return null;
 }
-
-
 
 // Watermark types, presets and display sizing come from the ported module: it has no
 // imports, so the real `pictureWatermarkDisplayEmu` and `DEFAULT_WATERMARK_PRESETS` are
@@ -1349,10 +1361,15 @@ export interface ParagraphContent {
   content: ParagraphContent[];
   [key: string]: unknown;
 }
-export interface ListRendering { [key: string]: unknown }
-export interface ParagraphPropertyChange { [key: string]: unknown }
-export interface TrackedChangeInfo { [key: string]: unknown }
-
+export interface ListRendering {
+  [key: string]: unknown;
+}
+export interface ParagraphPropertyChange {
+  [key: string]: unknown;
+}
+export interface TrackedChangeInfo {
+  [key: string]: unknown;
+}
 
 // --- Toolbar-facing document + table context -----------------------------------------
 // Compatibility shapes, narrowed to the fields the ported chrome reads.
@@ -1393,7 +1410,6 @@ export interface TableContextInfo {
   /** Current cell's background/fill color (RGB hex without #), if any */
   cellBackgroundColor?: string;
 }
-
 
 // --- Image layout ---------------------------------------------------------------------
 // Compatibility shapes. `ImageAttrs` was the ProseMirror image node's attribute record and

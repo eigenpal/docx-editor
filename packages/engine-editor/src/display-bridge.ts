@@ -17,7 +17,11 @@ import type { ColorValue, Rect, ViewScope } from '@docx-editor.dev/core-contract
 import type { PositionedInteractionMeta } from '@docx-editor.dev/core-contract/interaction';
 import type { PackageModel } from '@docx-editor.dev/engine-core';
 import type { Page, TextItem, RectItem } from '@docx-editor.dev/engine-layout';
-import { HelveticaMetrics, semanticHorizontalBoundaries, type MetricsPort } from '@docx-editor.dev/engine-layout';
+import {
+  HelveticaMetrics,
+  semanticHorizontalBoundaries,
+  type MetricsPort,
+} from '@docx-editor.dev/engine-layout';
 import {
   buildSemanticIndex,
   buildTraversalLinksForModel,
@@ -28,7 +32,11 @@ import {
   twipsToPx,
 } from './semantic-index.ts';
 import { clustersFromLayoutCaretEdges } from './layout-clusters.ts';
-import { buildVisualLines, collectFragmentMetaFromLayout, layoutShapingSupported } from './visual-lines.ts';
+import {
+  buildVisualLines,
+  collectFragmentMetaFromLayout,
+  layoutShapingSupported,
+} from './visual-lines.ts';
 import {
   freezeNavigationGeometry,
   recordFromTraversalMap,
@@ -50,7 +58,7 @@ function interactionMeta(
   pageIndex: number,
   zOrder: number,
   role: PositionedInteractionMeta['role'] = 'editableText',
-  extra: Partial<PositionedInteractionMeta> = {},
+  extra: Partial<PositionedInteractionMeta> = {}
 ): PositionedInteractionMeta {
   return {
     pageIndex,
@@ -104,9 +112,15 @@ interface EdgeGeometry {
  * because all three of its tests scale PARAGRAPH COUNT while the quadratic is within
  * a paragraph — the fifth generation of the same trap: right layer, wrong axis.
  */
-const edgesByParagraphCache = new WeakMap<readonly Page[], Map<string, Map<number, EdgeGeometry>>>();
+const edgesByParagraphCache = new WeakMap<
+  readonly Page[],
+  Map<string, Map<number, EdgeGeometry>>
+>();
 
-function navigableEdgesForParagraph(pages: readonly Page[], paragraphId: string): Map<number, EdgeGeometry> {
+function navigableEdgesForParagraph(
+  pages: readonly Page[],
+  paragraphId: string
+): Map<number, EdgeGeometry> {
   let byParagraph = edgesByParagraphCache.get(pages);
   if (!byParagraph) {
     byParagraph = new Map();
@@ -124,7 +138,11 @@ function navigableEdgesForParagraph(pages: readonly Page[], paragraphId: string)
         // `right <= left` so the region is dropped and paragraph ownership takes over.
         // Taking the leftmost instead produced a box and broke whitespace-only
         // double-click selection — caught by an existing test.
-        byOffset.set(item.graphemeOffset, { x: px(item.x), y: px(item.y), height: px(item.height) });
+        byOffset.set(item.graphemeOffset, {
+          x: px(item.x),
+          y: px(item.y),
+          height: px(item.height),
+        });
       }
     }
     edgesByParagraphCache.set(pages, byParagraph);
@@ -139,7 +157,7 @@ function whitespaceBoxFromCaretEdges(
   // the grouped index, so filtering by page here would be redundant.
   _pageIndex: number,
   graphemeFrom: number,
-  graphemeTo: number,
+  graphemeTo: number
 ): Rect | undefined {
   // Two O(1) map reads, not a scan of the paragraph's edges per region.
   const byOffset = navigableEdgesForParagraph(pages, paragraphId);
@@ -151,7 +169,8 @@ function whitespaceBoxFromCaretEdges(
   // otherwise from the `to` edge.
   const y = fromEdge?.y ?? toEdge?.y;
   const height = fromEdge?.height ?? toEdge?.height;
-  if (left === undefined || right === undefined || y === undefined || height === undefined) return undefined;
+  if (left === undefined || right === undefined || y === undefined || height === undefined)
+    return undefined;
   if (right <= left) return undefined;
   return { x: left, y, width: right - left, height };
 }
@@ -159,7 +178,7 @@ function whitespaceBoxFromCaretEdges(
 function enrichOwnershipRegions(
   pages: readonly Page[],
   display: readonly DisplayPage[],
-  semanticIndex: SemanticPositionIndex,
+  semanticIndex: SemanticPositionIndex
 ): SemanticPositionIndex {
   const paragraphBounds = new Map<string, { pageIndex: number; box: Rect }>();
 
@@ -169,7 +188,10 @@ function enrichOwnershipRegions(
       const pid = item.semantic.identity.blockId;
       const prev = paragraphBounds.get(pid);
       const next = { pageIndex: page.index, box: item.box };
-      paragraphBounds.set(pid, prev ? { pageIndex: page.index, box: unionRect(prev.box, item.box) } : next);
+      paragraphBounds.set(
+        pid,
+        prev ? { pageIndex: page.index, box: unionRect(prev.box, item.box) } : next
+      );
     });
   }
 
@@ -187,7 +209,7 @@ function enrichOwnershipRegions(
         region.identity.blockId,
         pageIndex,
         region.graphemeFrom,
-        region.graphemeTo,
+        region.graphemeTo
       );
       if (!box) return region;
       return { ...region, pageIndex, box };
@@ -215,7 +237,10 @@ export interface DisplayBridgeResult {
  */
 const blocksByIdCache = new WeakMap<SemanticPositionIndex, Map<string, BlockSemanticRecord>>();
 
-function blockRecordById(index: SemanticPositionIndex, blockId: string): BlockSemanticRecord | undefined {
+function blockRecordById(
+  index: SemanticPositionIndex,
+  blockId: string
+): BlockSemanticRecord | undefined {
   let byId = blocksByIdCache.get(index);
   if (!byId) {
     byId = new Map();
@@ -234,7 +259,7 @@ function textItem(
   pages: readonly Page[],
   it: TextItem,
   pageIndex: number,
-  zOrder: number,
+  zOrder: number
 ): ContractItem {
   const box = boxOf(it);
   const run: GlyphRun = {
@@ -250,14 +275,21 @@ function textItem(
   const utf16From = it.anchor.offset;
   const utf16To = utf16From + it.text.length;
   const paragraphGraphemeCount = paragraphGraphemeCountById(model, it.anchor.paragraphId);
-  const semantic = semanticTextSpan(storyId, BODY, it.anchor.paragraphId, fullText, utf16From, utf16To);
+  const semantic = semanticTextSpan(
+    storyId,
+    BODY,
+    it.anchor.paragraphId,
+    fullText,
+    utf16From,
+    utf16To
+  );
   const clusters = clustersFromLayoutCaretEdges(
     pages,
     it.anchor.paragraphId,
     semantic,
     box,
     it.text,
-    paragraphGraphemeCount,
+    paragraphGraphemeCount
   );
   const legacy = deprecatedFlatDocOffset(semanticIndex, it.anchor.paragraphId, utf16From, utf16To);
   const block = blockRecordById(semanticIndex, it.anchor.paragraphId);
@@ -305,7 +337,7 @@ function rectItems(it: RectItem): ContractItem[] {
 export function toDisplayPages(
   model: PackageModel,
   pages: readonly Page[],
-  metrics: MetricsPort = new HelveticaMetrics(),
+  metrics: MetricsPort = new HelveticaMetrics()
 ): DisplayBridgeResult {
   const semanticIndex = buildSemanticIndex(model, BODY);
   const storyId = semanticIndex.stories[0]!.storyId;
@@ -328,7 +360,9 @@ export function toDisplayPages(
         case 'rect':
           return rectItems(it).map((item, rectZ) => ({
             ...item,
-            interaction: interactionMeta(page.index, zOrder + rectZ, 'background', { pointerTransparent: true }),
+            interaction: interactionMeta(page.index, zOrder + rectZ, 'background', {
+              pointerTransparent: true,
+            }),
           }));
       }
     }),
@@ -343,7 +377,10 @@ export function toDisplayPages(
   for (const block of enrichedIndex.stories[0]?.blocks ?? []) {
     if (block.readOnly) continue;
     const text = paragraphTextById(model, block.identity.blockId, storyId);
-    semanticHorizontalBoundariesByBlockId[block.identity.blockId] = semanticHorizontalBoundaries(metrics, text);
+    semanticHorizontalBoundariesByBlockId[block.identity.blockId] = semanticHorizontalBoundaries(
+      metrics,
+      text
+    );
   }
   const visualLines = buildVisualLines(pages, enrichedIndex, model, metaBySliceKey, conflicts);
   const traversalByBlockId = recordFromTraversalMap(buildTraversalLinksForModel(model));
@@ -407,7 +444,7 @@ export function overlaysForFrame(frame: InteractionFrame): FrameOverlays {
     const rect = toPageLocalRect(frame, caretGeometry.pageIndex, caretGeometry.rect);
     if (rect) {
       const clip = caretGeometry.clip
-        ? toPageLocalRect(frame, caretGeometry.pageIndex, caretGeometry.clip) ?? undefined
+        ? (toPageLocalRect(frame, caretGeometry.pageIndex, caretGeometry.clip) ?? undefined)
         : undefined;
       caret = {
         pageIndex: caretGeometry.pageIndex,
@@ -441,7 +478,6 @@ export function overlaysForFrame(frame: InteractionFrame): FrameOverlays {
 
   return { caret, selection };
 }
-
 
 /**
  * Coalesce selection rectangles into one run per visual line (task M6S.1).

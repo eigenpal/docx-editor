@@ -16,7 +16,11 @@ export interface ZipLimits {
   readonly maxRatio?: number;
 }
 
-export const DEFAULT_ZIP_LIMITS: ZipLimits = { maxEntries: 10_000, maxTotalBytes: 512 * 1024 * 1024, maxRatio: 200 };
+export const DEFAULT_ZIP_LIMITS: ZipLimits = {
+  maxEntries: 10_000,
+  maxTotalBytes: 512 * 1024 * 1024,
+  maxRatio: 200,
+};
 
 export type ZipReadResult =
   | { readonly ok: true; readonly entries: ReadonlyMap<string, Uint8Array> }
@@ -65,7 +69,8 @@ export function readZip(bytes: Uint8Array, limits: ZipLimits = DEFAULT_ZIP_LIMIT
         }
         seenNorms.add(key);
         // Compression-ratio zip-bomb guard, checked before decompressing.
-        if (file.originalSize / Math.max(1, file.size) > maxRatio) throw new ZipViolation('too-large');
+        if (file.originalSize / Math.max(1, file.size) > maxRatio)
+          throw new ZipViolation('too-large');
         totalUncompressed += file.originalSize;
         if (totalUncompressed > limits.maxTotalBytes) throw new ZipViolation('too-large');
         return true;
@@ -97,7 +102,8 @@ export function writeZip(entries: ReadonlyMap<string, Uint8Array>): Uint8Array {
     const norm = normalizePartName(partName);
     if (!norm.ok) throw new Error(`unsafe part name on write: ${partName} (${norm.reason})`);
     const fold = partNameKey(norm.partName); // OPC case-folded equivalence
-    if (seen.has(fold)) throw new Error(`OPC-equivalent duplicate part name on write: ${norm.partName}`);
+    if (seen.has(fold))
+      throw new Error(`OPC-equivalent duplicate part name on write: ${norm.partName}`);
     seen.add(fold);
     // Canonical part names carry a leading slash; ZIP entry names do not.
     record[norm.partName.replace(/^\//, '')] = data;

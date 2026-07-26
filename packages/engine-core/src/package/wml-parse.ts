@@ -56,10 +56,20 @@ export function el(node: XmlNode): node is Extract<XmlNode, { type: 'element' }>
 // w:fldSimple wraps a simple field's RESULT runs (ECMA-376 Part 1 §17.16.19); its
 // w:instr instruction attribute stays inert (not a run), but the result w:r text
 // is the displayed content and must be collected (e.g. "Page X of Y").
-const RUN_WRAPPERS = new Set(['w:hyperlink', 'w:ins', 'w:del', 'w:smartTag', 'w:sdt', 'w:sdtContent', 'w:fldSimple']);
+const RUN_WRAPPERS = new Set([
+  'w:hyperlink',
+  'w:ins',
+  'w:del',
+  'w:smartTag',
+  'w:sdt',
+  'w:sdtContent',
+  'w:fldSimple',
+]);
 
 /** Collect every w:r element under a node, recursing through run wrappers. */
-export function collectRunElements(node: Extract<XmlNode, { type: 'element' }>): Extract<XmlNode, { type: 'element' }>[] {
+export function collectRunElements(
+  node: Extract<XmlNode, { type: 'element' }>
+): Extract<XmlNode, { type: 'element' }>[] {
   const runs: Extract<XmlNode, { type: 'element' }>[] = [];
   for (const child of node.children) {
     if (!el(child)) continue;
@@ -142,14 +152,17 @@ export function parseRPr(rPr: Extract<XmlNode, { type: 'element' }>): RunProps {
  * here — structural tables in headers/footers/notes, and full related-part export,
  * are the next slice (body-level document.xml tables are the current one).
  */
-export function collectParagraphElements(container: Extract<XmlNode, { type: 'element' }>): Extract<XmlNode, { type: 'element' }>[] {
+export function collectParagraphElements(
+  container: Extract<XmlNode, { type: 'element' }>
+): Extract<XmlNode, { type: 'element' }>[] {
   const paras: Extract<XmlNode, { type: 'element' }>[] = [];
   for (const child of container.children) {
     if (!el(child)) continue;
     if (child.name === 'w:p') paras.push(child);
     else if (child.name === 'w:tbl') {
       for (const row of childElements(child, 'w:tr')) {
-        for (const cell of childElements(row, 'w:tc')) paras.push(...collectParagraphElements(cell));
+        for (const cell of childElements(row, 'w:tc'))
+          paras.push(...collectParagraphElements(cell));
       }
     } else if (child.name === 'w:sdt') {
       const content = childElements(child, 'w:sdtContent')[0];
@@ -174,9 +187,16 @@ function parseWidth(el: Extract<XmlNode, { type: 'element' }> | undefined): Tabl
 }
 
 const BORDER_EDGES: ReadonlyArray<[keyof Borders, string]> = [
-  ['top', 'w:top'], ['bottom', 'w:bottom'], ['left', 'w:left'], ['right', 'w:right'],
-  ['start', 'w:start'], ['end', 'w:end'], ['insideH', 'w:insideH'], ['insideV', 'w:insideV'],
-  ['tl2br', 'w:tl2br'], ['tr2bl', 'w:tr2bl'],
+  ['top', 'w:top'],
+  ['bottom', 'w:bottom'],
+  ['left', 'w:left'],
+  ['right', 'w:right'],
+  ['start', 'w:start'],
+  ['end', 'w:end'],
+  ['insideH', 'w:insideH'],
+  ['insideV', 'w:insideV'],
+  ['tl2br', 'w:tl2br'],
+  ['tr2bl', 'w:tr2bl'],
 ];
 
 function parseBorders(el: Extract<XmlNode, { type: 'element' }> | undefined): Borders | undefined {
@@ -209,18 +229,29 @@ function parseShd(el: Extract<XmlNode, { type: 'element' }> | undefined): Shadin
     // content hash.
     ...(attr(shd, 'w:themeFill') !== undefined ? { themeFill: attr(shd, 'w:themeFill') } : {}),
     ...(attr(shd, 'w:themeColor') !== undefined ? { themeColor: attr(shd, 'w:themeColor') } : {}),
-    ...(attr(shd, 'w:themeFillTint') !== undefined ? { themeFillTint: attr(shd, 'w:themeFillTint') } : {}),
-    ...(attr(shd, 'w:themeFillShade') !== undefined ? { themeFillShade: attr(shd, 'w:themeFillShade') } : {}),
+    ...(attr(shd, 'w:themeFillTint') !== undefined
+      ? { themeFillTint: attr(shd, 'w:themeFillTint') }
+      : {}),
+    ...(attr(shd, 'w:themeFillShade') !== undefined
+      ? { themeFillShade: attr(shd, 'w:themeFillShade') }
+      : {}),
     ...(attr(shd, 'w:themeTint') !== undefined ? { themeTint: attr(shd, 'w:themeTint') } : {}),
     ...(attr(shd, 'w:themeShade') !== undefined ? { themeShade: attr(shd, 'w:themeShade') } : {}),
   };
   return Object.keys(out).length > 0 ? out : undefined;
 }
 
-function parseMargins(el: Extract<XmlNode, { type: 'element' }> | undefined): CellMargins | undefined {
+function parseMargins(
+  el: Extract<XmlNode, { type: 'element' }> | undefined
+): CellMargins | undefined {
   if (!el) return undefined;
   const sides: ReadonlyArray<[keyof CellMargins, string]> = [
-    ['top', 'w:top'], ['bottom', 'w:bottom'], ['left', 'w:left'], ['right', 'w:right'], ['start', 'w:start'], ['end', 'w:end'],
+    ['top', 'w:top'],
+    ['bottom', 'w:bottom'],
+    ['left', 'w:left'],
+    ['right', 'w:right'],
+    ['start', 'w:start'],
+    ['end', 'w:end'],
   ];
   const out: Record<string, TableWidth> = {};
   for (const [key, tag] of sides) {
@@ -230,27 +261,47 @@ function parseMargins(el: Extract<XmlNode, { type: 'element' }> | undefined): Ce
   return Object.keys(out).length > 0 ? (out as CellMargins) : undefined;
 }
 
-function parseTableProps(tblPr: Extract<XmlNode, { type: 'element' }> | undefined): TableProps | undefined {
+function parseTableProps(
+  tblPr: Extract<XmlNode, { type: 'element' }> | undefined
+): TableProps | undefined {
   if (!tblPr) return undefined;
   const width = parseWidth(childElements(tblPr, 'w:tblW')[0]);
   const layoutEl = childElements(tblPr, 'w:tblLayout')[0];
   const props: TableProps = {
-    ...(childElements(tblPr, 'w:tblStyle')[0]?.attributes['w:val'] !== undefined ? { styleId: childElements(tblPr, 'w:tblStyle')[0].attributes['w:val'] } : {}),
+    ...(childElements(tblPr, 'w:tblStyle')[0]?.attributes['w:val'] !== undefined
+      ? { styleId: childElements(tblPr, 'w:tblStyle')[0].attributes['w:val'] }
+      : {}),
     ...(width ? { width } : {}),
-    ...(childElements(tblPr, 'w:jc')[0]?.attributes['w:val'] !== undefined ? { alignment: childElements(tblPr, 'w:jc')[0].attributes['w:val'] } : {}),
-    ...(parseWidth(childElements(tblPr, 'w:tblInd')[0]) ? { indent: parseWidth(childElements(tblPr, 'w:tblInd')[0])! } : {}),
-    ...(layoutEl?.attributes['w:type'] !== undefined ? { layout: layoutEl.attributes['w:type'] } : {}),
-    ...(parseWidth(childElements(tblPr, 'w:tblCellSpacing')[0]) ? { cellSpacing: parseWidth(childElements(tblPr, 'w:tblCellSpacing')[0])! } : {}),
-    ...(parseMargins(childElements(tblPr, 'w:tblCellMar')[0]) ? { cellMargins: parseMargins(childElements(tblPr, 'w:tblCellMar')[0])! } : {}),
-    ...(parseBorders(childElements(tblPr, 'w:tblBorders')[0]) ? { borders: parseBorders(childElements(tblPr, 'w:tblBorders')[0])! } : {}),
+    ...(childElements(tblPr, 'w:jc')[0]?.attributes['w:val'] !== undefined
+      ? { alignment: childElements(tblPr, 'w:jc')[0].attributes['w:val'] }
+      : {}),
+    ...(parseWidth(childElements(tblPr, 'w:tblInd')[0])
+      ? { indent: parseWidth(childElements(tblPr, 'w:tblInd')[0])! }
+      : {}),
+    ...(layoutEl?.attributes['w:type'] !== undefined
+      ? { layout: layoutEl.attributes['w:type'] }
+      : {}),
+    ...(parseWidth(childElements(tblPr, 'w:tblCellSpacing')[0])
+      ? { cellSpacing: parseWidth(childElements(tblPr, 'w:tblCellSpacing')[0])! }
+      : {}),
+    ...(parseMargins(childElements(tblPr, 'w:tblCellMar')[0])
+      ? { cellMargins: parseMargins(childElements(tblPr, 'w:tblCellMar')[0])! }
+      : {}),
+    ...(parseBorders(childElements(tblPr, 'w:tblBorders')[0])
+      ? { borders: parseBorders(childElements(tblPr, 'w:tblBorders')[0])! }
+      : {}),
     ...(parseShd(tblPr) ? { shading: parseShd(tblPr)! } : {}),
-    ...(childElements(tblPr, 'w:tblLook')[0]?.attributes['w:val'] !== undefined ? { look: childElements(tblPr, 'w:tblLook')[0].attributes['w:val'] } : {}),
+    ...(childElements(tblPr, 'w:tblLook')[0]?.attributes['w:val'] !== undefined
+      ? { look: childElements(tblPr, 'w:tblLook')[0].attributes['w:val'] }
+      : {}),
     ...(childElements(tblPr, 'w:bidiVisual').length > 0 ? { bidiVisual: true } : {}),
   };
   return Object.keys(props).length > 0 ? props : undefined;
 }
 
-function parseRowProps(trPr: Extract<XmlNode, { type: 'element' }> | undefined): TableRowProps | undefined {
+function parseRowProps(
+  trPr: Extract<XmlNode, { type: 'element' }> | undefined
+): TableRowProps | undefined {
   if (!trPr) return undefined;
   const h = childElements(trPr, 'w:trHeight')[0];
   const gb = intAttr(childElements(trPr, 'w:gridBefore')[0]?.attributes['w:val']);
@@ -262,27 +313,47 @@ function parseRowProps(trPr: Extract<XmlNode, { type: 'element' }> | undefined):
     ...(h?.attributes['w:hRule'] !== undefined ? { heightRule: h.attributes['w:hRule'] } : {}),
     ...(gb !== undefined ? { gridBefore: gb } : {}),
     ...(ga !== undefined ? { gridAfter: ga } : {}),
-    ...(parseWidth(childElements(trPr, 'w:wBefore')[0]) ? { widthBefore: parseWidth(childElements(trPr, 'w:wBefore')[0])! } : {}),
-    ...(parseWidth(childElements(trPr, 'w:wAfter')[0]) ? { widthAfter: parseWidth(childElements(trPr, 'w:wAfter')[0])! } : {}),
+    ...(parseWidth(childElements(trPr, 'w:wBefore')[0])
+      ? { widthBefore: parseWidth(childElements(trPr, 'w:wBefore')[0])! }
+      : {}),
+    ...(parseWidth(childElements(trPr, 'w:wAfter')[0])
+      ? { widthAfter: parseWidth(childElements(trPr, 'w:wAfter')[0])! }
+      : {}),
   };
   return Object.keys(props).length > 0 ? props : undefined;
 }
 
-function parseCellProps(tcPr: Extract<XmlNode, { type: 'element' }> | undefined): TableCellProps | undefined {
+function parseCellProps(
+  tcPr: Extract<XmlNode, { type: 'element' }> | undefined
+): TableCellProps | undefined {
   if (!tcPr) return undefined;
   const gridSpan = intAttr(childElements(tcPr, 'w:gridSpan')[0]?.attributes['w:val']);
   const vMergeEl = childElements(tcPr, 'w:vMerge')[0];
-  const vMerge: VMerge | undefined = vMergeEl ? (vMergeEl.attributes['w:val'] !== undefined ? { val: vMergeEl.attributes['w:val'] } : {}) : undefined;
+  const vMerge: VMerge | undefined = vMergeEl
+    ? vMergeEl.attributes['w:val'] !== undefined
+      ? { val: vMergeEl.attributes['w:val'] }
+      : {}
+    : undefined;
   const props: TableCellProps = {
-    ...(parseWidth(childElements(tcPr, 'w:tcW')[0]) ? { width: parseWidth(childElements(tcPr, 'w:tcW')[0])! } : {}),
+    ...(parseWidth(childElements(tcPr, 'w:tcW')[0])
+      ? { width: parseWidth(childElements(tcPr, 'w:tcW')[0])! }
+      : {}),
     ...(gridSpan !== undefined ? { gridSpan } : {}),
     ...(vMerge !== undefined ? { vMerge } : {}),
-    ...(parseBorders(childElements(tcPr, 'w:tcBorders')[0]) ? { borders: parseBorders(childElements(tcPr, 'w:tcBorders')[0])! } : {}),
+    ...(parseBorders(childElements(tcPr, 'w:tcBorders')[0])
+      ? { borders: parseBorders(childElements(tcPr, 'w:tcBorders')[0])! }
+      : {}),
     ...(parseShd(tcPr) ? { shading: parseShd(tcPr)! } : {}),
-    ...(childElements(tcPr, 'w:vAlign')[0]?.attributes['w:val'] !== undefined ? { vAlign: childElements(tcPr, 'w:vAlign')[0].attributes['w:val'] } : {}),
-    ...(parseMargins(childElements(tcPr, 'w:tcMar')[0]) ? { margins: parseMargins(childElements(tcPr, 'w:tcMar')[0])! } : {}),
+    ...(childElements(tcPr, 'w:vAlign')[0]?.attributes['w:val'] !== undefined
+      ? { vAlign: childElements(tcPr, 'w:vAlign')[0].attributes['w:val'] }
+      : {}),
+    ...(parseMargins(childElements(tcPr, 'w:tcMar')[0])
+      ? { margins: parseMargins(childElements(tcPr, 'w:tcMar')[0])! }
+      : {}),
     ...(childElements(tcPr, 'w:noWrap').length > 0 ? { noWrap: true } : {}),
-    ...(childElements(tcPr, 'w:textDirection')[0]?.attributes['w:val'] !== undefined ? { textDirection: childElements(tcPr, 'w:textDirection')[0].attributes['w:val'] } : {}),
+    ...(childElements(tcPr, 'w:textDirection')[0]?.attributes['w:val'] !== undefined
+      ? { textDirection: childElements(tcPr, 'w:textDirection')[0].attributes['w:val'] }
+      : {}),
   };
   return Object.keys(props).length > 0 ? props : undefined;
 }
@@ -291,7 +362,9 @@ function parseCellProps(tcPr: Extract<XmlNode, { type: 'element' }> | undefined)
  *  is present only when set (absent => omitted/inherit). Formatting VALUES stay omitted
  *  in authored state — the style resolver derives effective formatting, this only records
  *  the links (pStyle/numPr) resolution needs. */
-function parseParagraphProps(pEl: Extract<XmlNode, { type: 'element' }>): ParagraphProps | undefined {
+function parseParagraphProps(
+  pEl: Extract<XmlNode, { type: 'element' }>
+): ParagraphProps | undefined {
   const pPr = childElements(pEl, 'w:pPr')[0];
   if (!pPr) return undefined;
   const props: { styleId?: string; numId?: string; ilvl?: number } = {};
@@ -307,7 +380,10 @@ function parseParagraphProps(pEl: Extract<XmlNode, { type: 'element' }>): Paragr
   return Object.keys(props).length > 0 ? props : undefined;
 }
 
-export function paragraphFromElement(pEl: Extract<XmlNode, { type: 'element' }>, alloc: IdentityAllocator): ParagraphRecord {
+export function paragraphFromElement(
+  pEl: Extract<XmlNode, { type: 'element' }>,
+  alloc: IdentityAllocator
+): ParagraphRecord {
   const runs: RunRecord[] = [];
   for (const runEl of collectRunElements(pEl)) {
     const run = parseRun(runEl);
@@ -334,7 +410,9 @@ function cellBlocks(tc: Extract<XmlNode, { type: 'element' }>, alloc: IdentityAl
 }
 
 /** Rows of a table, descending block wrappers (w:sdt/w:customXml) that may wrap w:tr. */
-function collectRows(container: Extract<XmlNode, { type: 'element' }>): Extract<XmlNode, { type: 'element' }>[] {
+function collectRows(
+  container: Extract<XmlNode, { type: 'element' }>
+): Extract<XmlNode, { type: 'element' }>[] {
   const rows: Extract<XmlNode, { type: 'element' }>[] = [];
   for (const child of container.children) {
     if (!el(child)) continue;
@@ -348,7 +426,9 @@ function collectRows(container: Extract<XmlNode, { type: 'element' }>): Extract<
 }
 
 /** Cells of a row, descending block wrappers (w:sdt/w:customXml) that may wrap w:tc. */
-function collectCells(row: Extract<XmlNode, { type: 'element' }>): Extract<XmlNode, { type: 'element' }>[] {
+function collectCells(
+  row: Extract<XmlNode, { type: 'element' }>
+): Extract<XmlNode, { type: 'element' }>[] {
   const cells: Extract<XmlNode, { type: 'element' }>[] = [];
   for (const child of row.children) {
     if (!el(child)) continue;
@@ -361,18 +441,27 @@ function collectCells(row: Extract<XmlNode, { type: 'element' }>): Extract<XmlNo
   return cells;
 }
 
-function parseTable(tbl: Extract<XmlNode, { type: 'element' }>, alloc: IdentityAllocator): TableRecord {
+function parseTable(
+  tbl: Extract<XmlNode, { type: 'element' }>,
+  alloc: IdentityAllocator
+): TableRecord {
   const tblPr = childElements(tbl, 'w:tblPr')[0];
   const gridEl = childElements(tbl, 'w:tblGrid')[0];
   const grid: GridColumn[] = gridEl
-    ? childElements(gridEl, 'w:gridCol').map((c) => (c.attributes['w:w'] !== undefined ? { w: c.attributes['w:w'] } : {}))
+    ? childElements(gridEl, 'w:gridCol').map((c) =>
+        c.attributes['w:w'] !== undefined ? { w: c.attributes['w:w'] } : {}
+      )
     : [];
   const rows: TableRowRecord[] = collectRows(tbl).map((tr) => {
     const trPr = childElements(tr, 'w:trPr')[0];
     const cells: TableCellRecord[] = collectCells(tr).map((tc) => {
       const tcPr = childElements(tc, 'w:tcPr')[0];
       const props = parseCellProps(tcPr);
-      return { id: alloc.allocate('cell'), blocks: cellBlocks(tc, alloc), ...(props ? { props } : {}) };
+      return {
+        id: alloc.allocate('cell'),
+        blocks: cellBlocks(tc, alloc),
+        ...(props ? { props } : {}),
+      };
     });
     const props = parseRowProps(trPr);
     return { id: alloc.allocate('row'), cells, ...(props ? { props } : {}) };
@@ -411,7 +500,12 @@ const SDT_CONTROL_TYPES: ReadonlyMap<string, SdtControlType> = new Map([
   ['w:equation', 'equation'],
 ]);
 
-const SDT_LOCKS: ReadonlySet<string> = new Set(['unlocked', 'sdtLocked', 'contentLocked', 'sdtContentLocked']);
+const SDT_LOCKS: ReadonlySet<string> = new Set([
+  'unlocked',
+  'sdtLocked',
+  'contentLocked',
+  'sdtContentLocked',
+]);
 
 /** Parse the semantic header of a content control from w:sdtPr. Exhaustive control
  *  payload (glyphs, list items, date/binding, w14/w15 props) is NOT modeled — it rides
@@ -449,7 +543,10 @@ function parseSdtProps(sdtPr: Extract<XmlNode, { type: 'element' }> | undefined)
 
 /** Structural blocks of an SDT's w:sdtContent (paragraphs, tables, nested SDTs),
  *  descending only the transparent w:customXml grouping wrapper. */
-function parseSdtContentBlocks(content: Extract<XmlNode, { type: 'element' }>, alloc: IdentityAllocator): Block[] {
+function parseSdtContentBlocks(
+  content: Extract<XmlNode, { type: 'element' }>,
+  alloc: IdentityAllocator
+): Block[] {
   const blocks: Block[] = [];
   for (const child of content.children) {
     if (!el(child)) continue;
@@ -479,7 +576,11 @@ type ElementNode = Extract<XmlNode, { type: 'element' }>;
 
 // Built-in block kinds (the model-typed element node is cast from the registry's `unknown`); each
 // declares the block kind its parser produces so an editable kind's parse lane can be verified.
-registerBlockElementParser('w:p', (elx, alloc) => paragraphFromElement(elx as ElementNode, alloc), 'paragraph');
+registerBlockElementParser(
+  'w:p',
+  (elx, alloc) => paragraphFromElement(elx as ElementNode, alloc),
+  'paragraph'
+);
 registerBlockElementParser('w:tbl', (elx, alloc) => parseTable(elx as ElementNode, alloc), 'table');
 registerBlockElementParser('w:sdt', (elx, alloc) => parseSdt(elx as ElementNode, alloc), 'sdt');
 
@@ -494,7 +595,11 @@ export function blockFromText(text: string, alloc: IdentityAllocator): Block | u
   return blockParseElement(rootEl.name, rootEl, alloc);
 }
 
-export function blockFromSpan(docText: string, span: BlockSpan, alloc: IdentityAllocator): Block | undefined {
+export function blockFromSpan(
+  docText: string,
+  span: BlockSpan,
+  alloc: IdentityAllocator
+): Block | undefined {
   return blockFromText(docText.slice(span.start, span.end), alloc);
 }
 

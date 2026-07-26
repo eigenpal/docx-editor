@@ -74,7 +74,8 @@ function elementSpanEnd(s: string, lt: number): number {
       const o = openTagEnd(s, nx); // quote-aware: a '>' inside an attribute value is skipped
       if (s[o.end - 1] !== '>') throw new ScanError('unterminated close tag');
       // A close tag is `</name  >` — no attributes allowed (XML spec).
-      if (s.slice(nx + 2 + closeName.length, o.end - 1).trim() !== '') throw new ScanError('malformed close tag');
+      if (s.slice(nx + 2 + closeName.length, o.end - 1).trim() !== '')
+        throw new ScanError('malformed close tag');
       if (stack.pop() !== closeName) throw new ScanError('mismatched close tag');
       i = o.end;
     } else {
@@ -184,17 +185,42 @@ export function scanBodyBlockSpans(docText: string): BlockSpan[] {
 }
 
 /** Direct child element spans named `name` within a container's content [start,end). */
-function childSpans(s: string, start: number, end: number, name: string): { start: number; end: number }[] {
+function childSpans(
+  s: string,
+  start: number,
+  end: number,
+  name: string
+): { start: number; end: number }[] {
   const out: { start: number; end: number }[] = [];
   let i = start;
   while (i < end) {
     const lt = s.indexOf('<', i);
     if (lt < 0 || lt >= end) break;
-    if (s.startsWith('<!--', lt)) { const e = s.indexOf('-->', lt); i = e < 0 ? end : e + 3; continue; }
-    if (s.startsWith('<![CDATA[', lt)) { const e = s.indexOf(']]>', lt); i = e < 0 ? end : e + 3; continue; }
-    if (s.startsWith('<?', lt)) { const e = s.indexOf('?>', lt); i = e < 0 ? end : e + 2; continue; }
-    if (s.startsWith('<!', lt)) { const e = s.indexOf('>', lt); i = e < 0 ? end : e + 1; continue; }
-    if (s[lt + 1] === '/') { const gt = s.indexOf('>', lt); i = gt < 0 ? end : gt + 1; continue; }
+    if (s.startsWith('<!--', lt)) {
+      const e = s.indexOf('-->', lt);
+      i = e < 0 ? end : e + 3;
+      continue;
+    }
+    if (s.startsWith('<![CDATA[', lt)) {
+      const e = s.indexOf(']]>', lt);
+      i = e < 0 ? end : e + 3;
+      continue;
+    }
+    if (s.startsWith('<?', lt)) {
+      const e = s.indexOf('?>', lt);
+      i = e < 0 ? end : e + 2;
+      continue;
+    }
+    if (s.startsWith('<!', lt)) {
+      const e = s.indexOf('>', lt);
+      i = e < 0 ? end : e + 1;
+      continue;
+    }
+    if (s[lt + 1] === '/') {
+      const gt = s.indexOf('>', lt);
+      i = gt < 0 ? end : gt + 1;
+      continue;
+    }
     const nm = tagNameAt(s, lt);
     const span = elementSpanEnd(s, lt);
     if (nm === name) out.push({ start: lt, end: Math.min(span, end) });
@@ -204,7 +230,11 @@ function childSpans(s: string, start: number, end: number, name: string): { star
 }
 
 /** Content region [start,end) inside an element span (between its open and close tags). */
-function contentRegion(s: string, span: { start: number; end: number }, name: string): { start: number; end: number } {
+function contentRegion(
+  s: string,
+  span: { start: number; end: number },
+  name: string
+): { start: number; end: number } {
   const inner = openTagEnd(s, span.start).end;
   const closeAt = s.lastIndexOf('</' + name, span.end);
   return { start: inner, end: closeAt < 0 ? span.end : closeAt };
@@ -214,7 +244,10 @@ function contentRegion(s: string, span: { start: number; end: number }, name: st
  *  in document order (offsets relative to the slice). No wrapper/nested-table descent. */
 export function scanCellParagraphSpans(tableText: string): { start: number; end: number }[] {
   const out: { start: number; end: number }[] = [];
-  const tbl = childSpans(tableText, 0, tableText.length, 'w:tbl')[0] ?? { start: 0, end: tableText.length };
+  const tbl = childSpans(tableText, 0, tableText.length, 'w:tbl')[0] ?? {
+    start: 0,
+    end: tableText.length,
+  };
   const tblContent = contentRegion(tableText, tbl, 'w:tbl');
   for (const tr of childSpans(tableText, tblContent.start, tblContent.end, 'w:tr')) {
     const trc = contentRegion(tableText, tr, 'w:tr');

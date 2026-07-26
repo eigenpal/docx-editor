@@ -58,7 +58,11 @@ export namespace DocxEditor {
     tools: _mcpTools,
     commands: _COMMANDS,
     validateInput: _validateInput,
-    dispatch: (handle: _DocumentHandle, tool: string, input: unknown, ctx?: _ScopeContext): _Result<string | undefined> =>
-      _dispatchTool(handle.internalStore, tool, input, ctx),
+    dispatch: (
+      handle: _DocumentHandle,
+      tool: string,
+      input: unknown,
+      ctx?: _ScopeContext
+    ): _Result<string | undefined> => _dispatchTool(handle.internalStore, tool, input, ctx),
   };
 }

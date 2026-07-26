@@ -101,31 +101,40 @@ export function validateFixture(fixture: ConformanceFixture): ValidationResult {
     if (!Number.isInteger(step.baseRevision) || step.baseRevision < 0) {
       err(`${at}: baseRevision must be a non-negative integer`);
     }
-    if (step.baseRevision < lastRevision) err(`${at}: baseRevision regressed below ${lastRevision}`);
+    if (step.baseRevision < lastRevision)
+      err(`${at}: baseRevision regressed below ${lastRevision}`);
 
     const e = step.expect;
     if (e.outcome === 'applied') {
       if (e.committedRevision === undefined) err(`${at}: applied step needs committedRevision`);
       else if (e.committedRevision <= step.baseRevision) {
-        err(`${at}: committedRevision ${e.committedRevision} must exceed baseRevision ${step.baseRevision}`);
+        err(
+          `${at}: committedRevision ${e.committedRevision} must exceed baseRevision ${step.baseRevision}`
+        );
       } else lastRevision = e.committedRevision;
       if (e.modelChange) validateModelChange(e.modelChange, at, err);
     } else {
       // Failed/aborted steps commit nothing.
-      if (e.committedRevision !== undefined) err(`${at}: ${e.outcome} step must not commit a revision`);
-      if (e.authoredStateHash !== undefined) err(`${at}: ${e.outcome} step must not change authored state`);
+      if (e.committedRevision !== undefined)
+        err(`${at}: ${e.outcome} step must not commit a revision`);
+      if (e.authoredStateHash !== undefined)
+        err(`${at}: ${e.outcome} step must not change authored state`);
     }
     if (e.authoredStateHash !== undefined && !HASH_RE.test(e.authoredStateHash)) {
       err(`${at}: authoredStateHash must be 16-hex`);
     }
-    if (e.outputHash !== undefined && !HASH_RE.test(e.outputHash)) err(`${at}: outputHash must be 16-hex`);
+    if (e.outputHash !== undefined && !HASH_RE.test(e.outputHash))
+      err(`${at}: outputHash must be 16-hex`);
   });
 
   for (const env of [...(fixture.snapshots ?? []), ...(fixture.updates ?? [])]) {
-    if (env.documentId !== fixture.documentId) err(`envelope documentId ${env.documentId} != ${fixture.documentId}`);
+    if (env.documentId !== fixture.documentId)
+      err(`envelope documentId ${env.documentId} != ${fixture.documentId}`);
     if (!HEX_RE.test(env.bytesHex)) err('envelope bytesHex must be hex');
     if (env.bytesHex.length !== env.byteLength * 2) {
-      err(`envelope byteLength ${env.byteLength} disagrees with ${env.bytesHex.length / 2} decoded bytes`);
+      err(
+        `envelope byteLength ${env.byteLength} disagrees with ${env.bytesHex.length / 2} decoded bytes`
+      );
     }
   }
 

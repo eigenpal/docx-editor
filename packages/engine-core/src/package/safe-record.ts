@@ -9,7 +9,10 @@ export const DANGEROUS_KEYS: readonly string[] = ['__proto__', 'prototype', 'con
 const DANGEROUS = new Set(DANGEROUS_KEYS);
 
 export class DangerousKeyError extends Error {
-  constructor(readonly key: string, readonly path: string) {
+  constructor(
+    readonly key: string,
+    readonly path: string
+  ) {
     super(`dangerous key ${JSON.stringify(key)} at ${path || '<root>'}`);
     this.name = 'DangerousKeyError';
   }
@@ -49,7 +52,11 @@ function convert(value: unknown, path: string, seen: WeakSet<object>): unknown {
   // Own enumerable string keys only; never walk the prototype chain.
   for (const key of Object.keys(value as Record<string, unknown>)) {
     if (isDangerousKey(key)) throw new DangerousKeyError(key, path);
-    record[key] = convert((value as Record<string, unknown>)[key], path ? `${path}.${key}` : key, seen);
+    record[key] = convert(
+      (value as Record<string, unknown>)[key],
+      path ? `${path}.${key}` : key,
+      seen
+    );
   }
   seen.delete(value as object);
   return record;

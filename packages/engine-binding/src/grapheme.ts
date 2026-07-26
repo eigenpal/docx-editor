@@ -12,13 +12,15 @@ const GRAPHEME_LOCALE = 'und' as const;
 
 type IntlSegmenterCtor = new (
   locales?: string | string[],
-  options?: { granularity: 'grapheme' },
+  options?: { granularity: 'grapheme' }
 ) => { segment(input: string): Iterable<{ segment: string; index: number }> };
 
 function segmentGraphemes(text: string): readonly GraphemeSegment[] {
   const Seg = (Intl as unknown as { Segmenter?: IntlSegmenterCtor }).Segmenter;
   if (typeof Seg !== 'function') {
-    throw new Error(`Intl.Segmenter is required for semantic selection sync (locale: ${GRAPHEME_LOCALE})`);
+    throw new Error(
+      `Intl.Segmenter is required for semantic selection sync (locale: ${GRAPHEME_LOCALE})`
+    );
   }
   const segmenter = new Seg(GRAPHEME_LOCALE, { granularity: 'grapheme' });
   const out: GraphemeSegment[] = [];

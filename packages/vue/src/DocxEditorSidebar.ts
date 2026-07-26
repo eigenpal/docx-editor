@@ -52,24 +52,47 @@ export default defineComponent({
       // Renders nothing when closed or empty, so an empty shell never appears
       // as a broken feature.
       if (!props.open || !props.editor || items.length === 0) return null;
-      return h('aside', { class: 'ep-sidebar', 'data-testid': 'docx-editor-sidebar', 'aria-label': 'Document panels' }, [
-        h('div', { class: 'ep-sidebar__header' }, [
-          h('span', { class: 'ep-sidebar__title' }, items[0]!.title),
-          h(
-            'button',
-            { type: 'button', class: 'ep-sidebar__close', onClick: () => emit('close'), 'aria-label': 'Close panel' },
-            [
-              h('svg', { viewBox: '0 0 24 24', width: '16', height: '16', 'aria-hidden': 'true', focusable: 'false' }, [
-                h('path', {
-                  d: 'M6.4 19 5 17.6l5.6-5.6L5 6.4 6.4 5l5.6 5.6L17.6 5 19 6.4 13.4 12l5.6 5.6-1.4 1.4-5.6-5.6L6.4 19Z',
-                  fill: 'currentColor',
-                }),
-              ]),
-            ],
-          ),
-        ]),
-        h('div', { class: 'ep-sidebar__body' }, items[0]!.content),
-      ]);
+      return h(
+        'aside',
+        {
+          class: 'ep-sidebar',
+          'data-testid': 'docx-editor-sidebar',
+          'aria-label': 'Document panels',
+        },
+        [
+          h('div', { class: 'ep-sidebar__header' }, [
+            h('span', { class: 'ep-sidebar__title' }, items[0]!.title),
+            h(
+              'button',
+              {
+                type: 'button',
+                class: 'ep-sidebar__close',
+                onClick: () => emit('close'),
+                'aria-label': 'Close panel',
+              },
+              [
+                h(
+                  'svg',
+                  {
+                    viewBox: '0 0 24 24',
+                    width: '16',
+                    height: '16',
+                    'aria-hidden': 'true',
+                    focusable: 'false',
+                  },
+                  [
+                    h('path', {
+                      d: 'M6.4 19 5 17.6l5.6-5.6L5 6.4 6.4 5l5.6 5.6L17.6 5 19 6.4 13.4 12l5.6 5.6-1.4 1.4-5.6-5.6L6.4 19Z',
+                      fill: 'currentColor',
+                    }),
+                  ]
+                ),
+              ]
+            ),
+          ]),
+          h('div', { class: 'ep-sidebar__body' }, items[0]!.content),
+        ]
+      );
     };
   },
 });

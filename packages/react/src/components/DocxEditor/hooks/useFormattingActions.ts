@@ -117,7 +117,9 @@ export function useFormattingActions({
                         // Legacy carries tint/shade as hex strings (`"80"`); the contract
                         // takes numbers.
                         ...(colorVal.themeTint ? { tint: parseInt(colorVal.themeTint, 16) } : {}),
-                        ...(colorVal.themeShade ? { shade: parseInt(colorVal.themeShade, 16) } : {}),
+                        ...(colorVal.themeShade
+                          ? { shade: parseInt(colorVal.themeShade, 16) }
+                          : {}),
                       }
                     : colorVal.rgb
                       ? { kind: 'hex', value: colorVal.rgb }

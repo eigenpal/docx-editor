@@ -62,7 +62,7 @@ class PageBuilder {
   constructor(
     private readonly width: number,
     private readonly height: number,
-    private readonly margin: number,
+    private readonly margin: number
   ) {}
 
   push(item: DisplayItem): void {
@@ -157,7 +157,7 @@ registerBlockLayout('table', (block, ctx) => {
       metrics: ctx.metrics,
       builder: ctx.builder,
     },
-    ctx.y,
+    ctx.y
   );
   ctx.x = ctx.margin;
 });
@@ -175,7 +175,7 @@ registerBlockLayout('paragraph', (block, ctx) => {
       ctx.newLine();
       cursor.x = ctx.x;
       cursor.y = ctx.y;
-    },
+    }
   );
   ctx.x = next.x;
   ctx.y = next.y;
@@ -251,7 +251,8 @@ function layoutTable(table: TableRecord, ctx: TableCtx, startY: number): number 
       builder.break();
       y = margin;
       // Re-emit the header rows before a continuing body row (not before a header itself).
-      if (!isHeader) for (const hr of headerRows) y = emitRow(hr, cols, margin, y, metrics, push, builder);
+      if (!isHeader)
+        for (const hr of headerRows) y = emitRow(hr, cols, margin, y, metrics, push, builder);
     }
     y = emitRow(row, cols, margin, y, metrics, push, builder);
   }
@@ -267,7 +268,7 @@ function emitTable(
   top: number,
   metrics: MetricsPort,
   push: (it: DisplayItem) => void,
-  builder: LayoutBuilder,
+  builder: LayoutBuilder
 ): number {
   const cols = columnWidths(table, right - left);
   let y = top;
@@ -285,7 +286,7 @@ function emitRow(
   rowTop: number,
   metrics: MetricsPort,
   push: (it: DisplayItem) => void,
-  builder: LayoutBuilder,
+  builder: LayoutBuilder
 ): number {
   const total = cols.reduce((a, b) => a + b, 0);
   const cellData: { rect: RectItem; items: DisplayItem[] }[] = [];
@@ -303,11 +304,30 @@ function emitRow(
     const vm = cell.props?.vMerge;
     const isVMergeContinue = vm !== undefined && vm.val !== 'restart';
     if (!isVMergeContinue) {
-      const bottom = flowCell(cell, cellX + CELL_PAD, cellX + cellW - CELL_PAD, rowTop + CELL_PAD, metrics, builder, (it) => items.push(it));
+      const bottom = flowCell(
+        cell,
+        cellX + CELL_PAD,
+        cellX + cellW - CELL_PAD,
+        rowTop + CELL_PAD,
+        metrics,
+        builder,
+        (it) => items.push(it)
+      );
       if (bottom + CELL_PAD > rowBottom) rowBottom = bottom + CELL_PAD;
     }
     const fill = shadeFill(cell);
-    cellData.push({ rect: { type: 'rect', x: cellX, y: rowTop, width: cellW, height: 0, stroke: true, ...(fill ? { fill } : {}) }, items });
+    cellData.push({
+      rect: {
+        type: 'rect',
+        x: cellX,
+        y: rowTop,
+        width: cellW,
+        height: 0,
+        stroke: true,
+        ...(fill ? { fill } : {}),
+      },
+      items,
+    });
   }
   const rowHeight = rowBottom - rowTop;
   for (const { rect, items } of cellData) {
@@ -322,7 +342,9 @@ function columnWidths(table: TableRecord, contentWidth: number): number[] {
   if (table.grid && table.grid.length > 0) {
     return table.grid.map((c) => {
       const tw = c.w !== undefined ? Number(c.w) : NaN;
-      return Number.isFinite(tw) && tw > 0 ? Math.round(tw) : Math.round(contentWidth / table.grid!.length);
+      return Number.isFinite(tw) && tw > 0
+        ? Math.round(tw)
+        : Math.round(contentWidth / table.grid!.length);
     });
   }
   // Two separate file-driven hazards live in this one line, both found by review.
@@ -385,7 +407,7 @@ function flowCell(
   top: number,
   metrics: MetricsPort,
   builder: LayoutBuilder,
-  push: (it: DisplayItem) => void,
+  push: (it: DisplayItem) => void
 ): number {
   const cursor = { x: left, y: top };
   let started = false;
@@ -414,7 +436,7 @@ function flowCell(
         cursor.y += metrics.lineHeight;
         cursor.x = left;
       },
-      { trailingNewLine: false },
+      { trailingNewLine: false }
     );
   }
   return cursor.y + metrics.lineHeight;
@@ -425,7 +447,13 @@ function flowCell(
  * under the point, refined to a character offset within the item by advance. The
  * same inverse the DOM/PDF backends use — geometry is never re-derived.
  */
-export function hitTest(result: LayoutResult, pageIndex: number, px: number, py: number, metrics: MetricsPort): TextItem['anchor'] | undefined {
+export function hitTest(
+  result: LayoutResult,
+  pageIndex: number,
+  px: number,
+  py: number,
+  metrics: MetricsPort
+): TextItem['anchor'] | undefined {
   const page = result.pages[pageIndex];
   if (!page) return undefined;
   for (const item of page.items) {

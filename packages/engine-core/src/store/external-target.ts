@@ -21,10 +21,21 @@ export interface ExternalTarget {
   readonly kind?: 'paragraph';
 }
 
-export type ResolveFailure = 'missing' | 'ambiguous' | 'not-found' | 'out-of-bounds' | 'stale' | 'kind-mismatch';
+export type ResolveFailure =
+  | 'missing'
+  | 'ambiguous'
+  | 'not-found'
+  | 'out-of-bounds'
+  | 'stale'
+  | 'kind-mismatch';
 
 export type ResolvedTarget =
-  | { readonly ok: true; readonly paragraphId: string; readonly offset: number; readonly resolvedRevision: number }
+  | {
+      readonly ok: true;
+      readonly paragraphId: string;
+      readonly offset: number;
+      readonly resolvedRevision: number;
+    }
   | { readonly ok: false; readonly reason: ResolveFailure; readonly resolvedRevision: number };
 
 function findParagraph(store: DocumentStore, paragraphId: string): ParagraphRecord | undefined {
@@ -36,11 +47,19 @@ function findParagraph(store: DocumentStore, paragraphId: string): ParagraphReco
 }
 
 /** Resolve an external target to an internal (paragraphId, offset) without mutating. */
-export function resolveExternalTarget(store: DocumentStore, target: ExternalTarget): ResolvedTarget {
+export function resolveExternalTarget(
+  store: DocumentStore,
+  target: ExternalTarget
+): ResolvedTarget {
   const resolvedRevision = store.currentRevision;
-  const fail = (reason: ResolveFailure): ResolvedTarget => ({ ok: false, reason, resolvedRevision });
+  const fail = (reason: ResolveFailure): ResolvedTarget => ({
+    ok: false,
+    reason,
+    resolvedRevision,
+  });
 
-  if (target.baseRevision !== undefined && target.baseRevision !== resolvedRevision) return fail('stale');
+  if (target.baseRevision !== undefined && target.baseRevision !== resolvedRevision)
+    return fail('stale');
   if (target.kind !== undefined && target.kind !== 'paragraph') return fail('kind-mismatch');
 
   const para = findParagraph(store, target.paragraphId);

@@ -82,7 +82,9 @@ export function mcpTools(): McpTool[] {
   return COMMANDS.map((c) => ({ name: c.tool, description: c.description, inputSchema: c.input }));
 }
 
-export type ValidationResult = { readonly ok: true } | { readonly ok: false; readonly errors: readonly string[] };
+export type ValidationResult =
+  | { readonly ok: true }
+  | { readonly ok: false; readonly errors: readonly string[] };
 
 /** Validate input against a schema (required + type + no extra props). */
 export function validateInput(schema: JsonSchema, input: unknown): ValidationResult {
@@ -103,7 +105,9 @@ export function validateInput(schema: JsonSchema, input: unknown): ValidationRes
   return errors.length === 0 ? { ok: true } : { ok: false, errors };
 }
 
-type ScopeParse = { readonly ok: true; readonly scope: Scope | undefined } | { readonly ok: false; readonly error: string };
+type ScopeParse =
+  | { readonly ok: true; readonly scope: Scope | undefined }
+  | { readonly ok: false; readonly error: string };
 
 /**
  * Map the flat `scope`/`storyId` string inputs onto a structured {@link Scope}.
@@ -143,31 +147,51 @@ export function dispatchTool(
   store: DocumentStore,
   tool: string,
   input: unknown,
-  ctx: ScopeContext = {},
+  ctx: ScopeContext = {}
 ): Result<string | undefined> {
   const def = COMMANDS.find((c) => c.tool === tool);
-  if (!def) return { status: 'validation', message: `unknown tool: ${tool}`, revision: store.currentRevision };
+  if (!def)
+    return {
+      status: 'validation',
+      message: `unknown tool: ${tool}`,
+      revision: store.currentRevision,
+    };
 
   const v = validateInput(def.input, input);
-  if (!v.ok) return { status: 'validation', message: v.errors.join('; '), revision: store.currentRevision };
+  if (!v.ok)
+    return { status: 'validation', message: v.errors.join('; '), revision: store.currentRevision };
 
   const obj = input as Record<string, unknown>;
   switch (def.tool) {
     case 'insertText': {
       const r = store.transact(ORIGIN_IDS.mutationAgent, (c) =>
-        c.apply({ op: 'insertText', paragraphId: obj.paragraphId as string, text: obj.text as string }),
+        c.apply({
+          op: 'insertText',
+          paragraphId: obj.paragraphId as string,
+          text: obj.text as string,
+        })
       );
-      return r.ok ? ok(undefined, r.revision) : { status: r.failure.kind, message: r.failure.message, revision: store.currentRevision };
+      return r.ok
+        ? ok(undefined, r.revision)
+        : { status: r.failure.kind, message: r.failure.message, revision: store.currentRevision };
     }
     case 'appendParagraph': {
       const parsed = parseScopeInput(obj);
-      if (!parsed.ok) return { status: 'validation', message: parsed.error, revision: store.currentRevision };
+      if (!parsed.ok)
+        return { status: 'validation', message: parsed.error, revision: store.currentRevision };
       const resolved = resolveWriteScope(store.currentModel, parsed.scope, ctx);
-      if (!resolved.ok) return { status: 'validation', message: `scope: ${resolved.reason}`, revision: store.currentRevision };
+      if (!resolved.ok)
+        return {
+          status: 'validation',
+          message: `scope: ${resolved.reason}`,
+          revision: store.currentRevision,
+        };
       const r = store.transact(ORIGIN_IDS.mutationAgent, (c) =>
-        c.apply({ op: 'appendParagraph', storyId: resolved.storyId }),
+        c.apply({ op: 'appendParagraph', storyId: resolved.storyId })
       );
-      return r.ok ? ok(r.modelChange.created[0], r.revision) : { status: r.failure.kind, message: r.failure.message, revision: store.currentRevision };
+      return r.ok
+        ? ok(r.modelChange.created[0], r.revision)
+        : { status: r.failure.kind, message: r.failure.message, revision: store.currentRevision };
     }
     case 'getParagraphText': {
       const text = paragraphText(store.currentModel, obj.paragraphId as string);

@@ -67,7 +67,8 @@ export function resolveLimits(overrides?: Partial<ResourceLimits>): ResourceLimi
   for (const key of KEYS) {
     const ceiling = HARD_CEILINGS[key];
     const raw = overrides?.[key];
-    const chosen = typeof raw === 'number' && Number.isFinite(raw) && raw > 0 ? raw : DEFAULT_LIMITS[key];
+    const chosen =
+      typeof raw === 'number' && Number.isFinite(raw) && raw > 0 ? raw : DEFAULT_LIMITS[key];
     out[key] = Math.min(Math.floor(chosen), ceiling);
   }
   return Object.freeze(out) as ResourceLimits;

@@ -5,11 +5,13 @@
 // store batch and returns a typed Result. Tracked proxies are valid only while
 // their run is open. No ProseMirror, DOM, or backend type crosses this surface.
 
+import { DocumentStore, type DocOp } from '../store/index.ts';
 import {
-  DocumentStore,
-  type DocOp,
-} from '../store/index.ts';
-import { createEmptyModel, bodyStoryId, paragraphText, type ParagraphRecord } from '../model/index.ts';
+  createEmptyModel,
+  bodyStoryId,
+  paragraphText,
+  type ParagraphRecord,
+} from '../model/index.ts';
 import { ORIGIN_IDS } from '../registry/frozen-ids.ts';
 import { ok, type Result } from './result.ts';
 
@@ -92,7 +94,12 @@ export class RequestContext {
     this.queued = [];
     if (!batch.ok) {
       const failing = batch.results.flatMap((r, i) => (r.status === 'failed' ? [i] : []));
-      return { status: 'validation', message: 'batch rejected', revision: batch.revision, failingIndices: failing };
+      return {
+        status: 'validation',
+        message: 'batch rejected',
+        revision: batch.revision,
+        failingIndices: failing,
+      };
     }
     // Resolve created-paragraph proxies from the symbolic map.
     for (const p of this.pending) {
@@ -128,14 +135,16 @@ export class BodyProxy {
   /** @internal */
   constructor(
     private readonly ctx: RequestContext,
-    private readonly store: DocumentStore,
+    private readonly store: DocumentStore
   ) {}
 
   /** Live paragraph proxies for the body story. */
   get paragraphs(): ParagraphProxy[] {
     const storyId = bodyStoryId(this.store.currentModel);
     const story = this.store.currentModel.stories.get(storyId)!;
-    return story.blocks.map((b) => ParagraphProxy.forReal(this.ctx, this.store, (b as ParagraphRecord).id));
+    return story.blocks.map((b) =>
+      ParagraphProxy.forReal(this.ctx, this.store, (b as ParagraphRecord).id)
+    );
   }
 
   /** Queue creation of a paragraph; returns a proxy that resolves after sync. */
@@ -157,7 +166,7 @@ export class ParagraphProxy {
   private constructor(
     private readonly ctx: RequestContext,
     private readonly store: DocumentStore,
-    realId?: string,
+    realId?: string
   ) {
     this.realId = realId;
   }
@@ -208,9 +217,17 @@ export function run<T>(handle: DocumentHandle, callback: (ctx: RequestContext) =
 }
 
 /** Read-only query surface (design D8). */
-export function query(handle: DocumentHandle, q: { kind: 'paragraphText'; paragraphId: string }): Result<string> {
+export function query(
+  handle: DocumentHandle,
+  q: { kind: 'paragraphText'; paragraphId: string }
+): Result<string> {
   const store = handle.internalStore;
   const text = paragraphText(store.currentModel, q.paragraphId);
-  if (text === undefined) return { status: 'validation', message: 'paragraph not found', revision: store.currentRevision };
+  if (text === undefined)
+    return {
+      status: 'validation',
+      message: 'paragraph not found',
+      revision: store.currentRevision,
+    };
   return ok(text, store.currentRevision);
 }

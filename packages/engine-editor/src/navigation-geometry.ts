@@ -2,7 +2,12 @@
 // Not part of the public core-contract surface — keyed by interaction frame identity.
 
 import type { ViewScope } from '@docx-editor.dev/core-contract/editor';
-import type { InteractionRole, SemanticIdentity, SemanticTarget, PositionedInteractionMeta } from '@docx-editor.dev/core-contract/interaction';
+import type {
+  InteractionRole,
+  SemanticIdentity,
+  SemanticTarget,
+  PositionedInteractionMeta,
+} from '@docx-editor.dev/core-contract/interaction';
 import type { Rect } from '@docx-editor.dev/core-contract/types';
 import { deepFreezeValue } from './interaction-frame.ts';
 
@@ -87,16 +92,21 @@ export function freezeNavigationGeometry(geometry: NavigationGeometry): Navigati
               deepFreezeValue({
                 ...edge,
                 interaction: deepFreezeValue({ ...edge.interaction }),
-                target: deepFreezeValue({ ...edge.target, identity: deepFreezeValue({ ...edge.target.identity }) }),
-              }),
-            ),
+                target: deepFreezeValue({
+                  ...edge.target,
+                  identity: deepFreezeValue({ ...edge.target.identity }),
+                }),
+              })
+            )
           ),
-        }),
-      ),
+        })
+      )
     ),
     traversalByBlockId: deepFreezeValue({ ...geometry.traversalByBlockId }),
     shapingSupported: geometry.shapingSupported,
-    semanticHorizontalBoundariesByBlockId: deepFreezeValue({ ...geometry.semanticHorizontalBoundariesByBlockId }),
+    semanticHorizontalBoundariesByBlockId: deepFreezeValue({
+      ...geometry.semanticHorizontalBoundariesByBlockId,
+    }),
     paintFragmentConflicts: deepFreezeValue([...geometry.paintFragmentConflicts]),
   });
 }
@@ -113,11 +123,18 @@ export function emptyNavigationGeometry(): NavigationGeometry {
 
 export function traversalLinksForBlock(
   geometry: NavigationGeometry | null | undefined,
-  blockId: string,
+  blockId: string
 ): BlockTraversalLinks {
-  return geometry?.traversalByBlockId[blockId] ?? { previousEditableBlockId: null, nextEditableBlockId: null };
+  return (
+    geometry?.traversalByBlockId[blockId] ?? {
+      previousEditableBlockId: null,
+      nextEditableBlockId: null,
+    }
+  );
 }
 
-export function recordFromTraversalMap(map: ReadonlyMap<string, BlockTraversalLinks>): Readonly<Record<string, BlockTraversalLinks>> {
+export function recordFromTraversalMap(
+  map: ReadonlyMap<string, BlockTraversalLinks>
+): Readonly<Record<string, BlockTraversalLinks>> {
   return Object.freeze(Object.fromEntries(map));
 }

@@ -19,7 +19,10 @@ import type { InteractionHostMetrics } from '@docx-editor.dev/core-contract/inte
  * `transform-origin` on the stack must be its top-left corner, so scaling never
  * moves that origin and client-to-content stays a plain divide by zoom.
  */
-export function measureInteractionHostMetrics(pagesEl: HTMLElement, zoom: number): InteractionHostMetrics {
+export function measureInteractionHostMetrics(
+  pagesEl: HTMLElement,
+  zoom: number
+): InteractionHostMetrics {
   const rect = pagesEl.getBoundingClientRect();
   return {
     clientOrigin: { x: rect.left, y: rect.top },

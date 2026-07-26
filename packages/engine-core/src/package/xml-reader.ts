@@ -8,7 +8,12 @@
 import { XMLParser } from 'fast-xml-parser';
 
 export type XmlNode =
-  | { readonly type: 'element'; readonly name: string; readonly attributes: Readonly<Record<string, string>>; readonly children: readonly XmlNode[] }
+  | {
+      readonly type: 'element';
+      readonly name: string;
+      readonly attributes: Readonly<Record<string, string>>;
+      readonly children: readonly XmlNode[];
+    }
   | { readonly type: 'text'; readonly value: string };
 
 export type XmlRejection =
@@ -79,7 +84,10 @@ const parser = new XMLParser({
 });
 
 /** Read XML into an ordered tree, refusing DTDs/entities and bounding size. */
-export function readXml(xml: string, limits: XmlLimits = { maxBytes: 64 * 1024 * 1024 }): XmlResult {
+export function readXml(
+  xml: string,
+  limits: XmlLimits = { maxBytes: 64 * 1024 * 1024 }
+): XmlResult {
   if (xml.length > limits.maxBytes) return { ok: false, reason: 'too-large' };
   if (DOCTYPE_RE.test(xml)) return { ok: false, reason: 'dtd-forbidden' };
   if (ENTITY_DECL_RE.test(xml)) return { ok: false, reason: 'entity-forbidden' };
@@ -113,7 +121,8 @@ function convert(items: FxpNode[], depth: number): XmlNode[] {
     const tagKey = Object.keys(item).find((k) => k !== ':@');
     if (!tagKey) continue;
     const attributes: Record<string, string> = {};
-    for (const [k, v] of Object.entries(attrs)) attributes[k.replace(/^@_/, '')] = decodeXmlEntities(String(v));
+    for (const [k, v] of Object.entries(attrs))
+      attributes[k.replace(/^@_/, '')] = decodeXmlEntities(String(v));
     out.push({
       type: 'element',
       name: tagKey,
@@ -125,7 +134,10 @@ function convert(items: FxpNode[], depth: number): XmlNode[] {
 }
 
 /** Find the first descendant element with the given qualified name. */
-export function findElement(nodes: readonly XmlNode[], name: string): Extract<XmlNode, { type: 'element' }> | undefined {
+export function findElement(
+  nodes: readonly XmlNode[],
+  name: string
+): Extract<XmlNode, { type: 'element' }> | undefined {
   for (const node of nodes) {
     if (node.type !== 'element') continue;
     if (node.name === name) return node;
@@ -136,8 +148,13 @@ export function findElement(nodes: readonly XmlNode[], name: string): Extract<Xm
 }
 
 /** All direct child elements with the given name. */
-export function childElements(node: Extract<XmlNode, { type: 'element' }>, name: string): Extract<XmlNode, { type: 'element' }>[] {
-  return node.children.filter((c): c is Extract<XmlNode, { type: 'element' }> => c.type === 'element' && c.name === name);
+export function childElements(
+  node: Extract<XmlNode, { type: 'element' }>,
+  name: string
+): Extract<XmlNode, { type: 'element' }>[] {
+  return node.children.filter(
+    (c): c is Extract<XmlNode, { type: 'element' }> => c.type === 'element' && c.name === name
+  );
 }
 
 /** Concatenated text content of an element (all descendant text nodes). */

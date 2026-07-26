@@ -73,7 +73,9 @@ function locateParagraphs(doc: PMNode): Located[] {
  */
 export function resolveSelection(anchor: SelectionAnchor, newDoc: PMNode): TextSelection {
   const paras = locateParagraphs(newDoc);
-  const found = anchor.paragraphId ? paras.find((p) => p.node.attrs.semId === anchor.paragraphId) : undefined;
+  const found = anchor.paragraphId
+    ? paras.find((p) => p.node.attrs.semId === anchor.paragraphId)
+    : undefined;
 
   if (found) {
     const clamped = Math.max(0, Math.min(anchor.offset, found.node.content.size));
@@ -83,7 +85,8 @@ export function resolveSelection(anchor: SelectionAnchor, newDoc: PMNode): TextS
   // Deleted paragraph: collapse to a surviving boundary by affinity.
   if (paras.length === 0) return TextSelection.create(newDoc, 0);
   const target = anchor.affinity === 'before' ? paras[0] : paras[paras.length - 1];
-  const at = anchor.affinity === 'before' ? target.innerStart : target.innerStart + target.node.content.size;
+  const at =
+    anchor.affinity === 'before' ? target.innerStart : target.innerStart + target.node.content.size;
   return TextSelection.create(newDoc, at);
 }
 

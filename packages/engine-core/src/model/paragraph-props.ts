@@ -8,7 +8,9 @@ import type { ParagraphProps, RunProps, StyleRecord, DocDefaults } from './autho
 
 /** Return the canonical form of paragraph props, or undefined when nothing meaningful remains.
  *  Empty-string ids are dropped; ilvl is kept only when a finite integer. */
-export function canonicalParagraphProps(props: ParagraphProps | undefined): ParagraphProps | undefined {
+export function canonicalParagraphProps(
+  props: ParagraphProps | undefined
+): ParagraphProps | undefined {
   if (!props) return undefined;
   const out: { styleId?: string; numId?: string; ilvl?: number } = {};
   if (props.styleId) out.styleId = props.styleId; // non-empty only

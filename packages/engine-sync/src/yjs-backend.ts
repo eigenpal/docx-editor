@@ -45,7 +45,7 @@ function assertYjsCompatibleBlock(block: Block, storyId: string): void {
   // cells could themselves nest blocks) is rejected before it can be lost.
   throw new Error(
     `Yjs collaboration does not support '${block.kind}' blocks yet (story '${storyId}', ADR-S10); ` +
-      `do not create or connect a Yjs backend for a document containing tables.`,
+      `do not create or connect a Yjs backend for a document containing tables.`
   );
 }
 
@@ -77,7 +77,7 @@ export class YjsBackend implements ReplicatedStoreBackend {
     readonly documentId: string,
     /** Stable actor id — makes creation ids collision-free and tests deterministic. */
     readonly actorId: string,
-    opts: YjsBackendOptions = {},
+    opts: YjsBackendOptions = {}
   ) {
     const ownsDoc = opts.doc === undefined;
     this.doc = opts.doc ?? new Y.Doc({ gc: true });
@@ -112,7 +112,12 @@ export class YjsBackend implements ReplicatedStoreBackend {
 
   /** Seed a backend from an authored model (static parts live in `meta`). Pass
    *  `opts.doc` to seed the adapter onto your own provider-attached Y.Doc. */
-  static fromModel(documentId: string, actorId: string, model: PackageModel, opts: YjsBackendOptions = {}): YjsBackend {
+  static fromModel(
+    documentId: string,
+    actorId: string,
+    model: PackageModel,
+    opts: YjsBackendOptions = {}
+  ): YjsBackend {
     assertYjsCompatibleModel(model); // reject tables up front (path 1); never crash mid-seed
     const backend = new YjsBackend(documentId, actorId, opts);
     backend.doc.transact(() => {
@@ -124,7 +129,8 @@ export class YjsBackend implements ReplicatedStoreBackend {
         backend.storyOrder().push([story.id]);
         const order = new Y.Array<string>();
         backend.blockOrder().set(story.id, order);
-        for (const block of story.blocks) backend.appendBlockInternal(story.id, block as ParagraphRecord);
+        for (const block of story.blocks)
+          backend.appendBlockInternal(story.id, block as ParagraphRecord);
       }
     }, 'init');
     return backend;
@@ -144,7 +150,12 @@ export class YjsBackend implements ReplicatedStoreBackend {
   }
 
   /** Join an existing document by applying a peer's snapshot (shared base state). */
-  static join(documentId: string, actorId: string, snapshot: Snapshot, opts: YjsBackendOptions = {}): YjsBackend {
+  static join(
+    documentId: string,
+    actorId: string,
+    snapshot: Snapshot,
+    opts: YjsBackendOptions = {}
+  ): YjsBackend {
     const backend = new YjsBackend(documentId, actorId, opts);
     Y.applyUpdate(backend.doc, hexToBytes(snapshot.bytesHex), 'remote');
     return backend;
@@ -268,7 +279,8 @@ export class YjsBackend implements ReplicatedStoreBackend {
 
   /** Apply an opaque Yjs update from a peer (merges via CRDT). */
   applyUpdate(update: ReplicationUpdate): void {
-    if (update.documentId !== this.documentId) throw new Error('update belongs to another document');
+    if (update.documentId !== this.documentId)
+      throw new Error('update belongs to another document');
     Y.applyUpdate(this.doc, hexToBytes(update.bytesHex), 'remote');
   }
 

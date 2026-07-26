@@ -59,7 +59,7 @@ export function generateRulerTicks(lengthPx: number, unit: RulerUnit): RulerTick
 
 /** The first page's box, which the rulers measure against. */
 export function rulerPageBox(
-  pages: readonly { readonly index: number; readonly box: { width: number; height: number } }[],
+  pages: readonly { readonly index: number; readonly box: { width: number; height: number } }[]
 ): { width: number; height: number } | null {
   const first = [...pages].sort((a, b) => a.index - b.index)[0];
   return first ? first.box : null;

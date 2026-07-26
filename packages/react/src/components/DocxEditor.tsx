@@ -104,8 +104,6 @@ const LEGACY_EDITOR_CONTAINER_STYLE: CSSProperties = {
   overflowAnchor: 'none',
 };
 
-
-
 /**
  * Section geometry for the legacy rulers, derived from what the engine publishes.
  *
@@ -125,10 +123,10 @@ function sectionPropsFromGeometry(editor: Editor | null): SectionProperties | un
   const left = Math.round(pixelsToTwips(page.contentBox.x - page.box.x));
   const top = Math.round(pixelsToTwips(page.contentBox.y - page.box.y));
   const right = Math.round(
-    pixelsToTwips(page.box.width - (page.contentBox.x - page.box.x) - page.contentBox.width),
+    pixelsToTwips(page.box.width - (page.contentBox.x - page.box.x) - page.contentBox.width)
   );
   const bottom = Math.round(
-    pixelsToTwips(page.box.height - (page.contentBox.y - page.box.y) - page.contentBox.height),
+    pixelsToTwips(page.box.height - (page.contentBox.y - page.box.y) - page.contentBox.height)
   );
   // FLAT margin fields, which is what `SectionProperties` declares and what the rulers
   // read. This used to build a nested `margins` object behind an `as` cast — the cast
@@ -146,7 +144,17 @@ function sectionPropsFromGeometry(editor: Editor | null): SectionProperties | un
 
 export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
   function DocxEditor(props, ref) {
-    const { document: doc, className, t, title, onTitleChange, onSave, renderTitleBarLeft, renderTitleBarRight, colorMode = 'light' } = props;
+    const {
+      document: doc,
+      className,
+      t,
+      title,
+      onTitleChange,
+      onSave,
+      renderTitleBarLeft,
+      renderTitleBarRight,
+      colorMode = 'light',
+    } = props;
 
     const bodyRef = useRef<HTMLDivElement | null>(null);
     const pagesRef = useRef<HTMLDivElement | null>(null);
@@ -207,8 +215,9 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
     // Table-of-contents updates, ported — including legacy's deferred second pass, which
     // exists because refreshing a TOC changes page numbers, which repaginates, which
     // changes the numbers the TOC should show.
-    const { runTableOfContentsUpdate, handleTableOfContentsInserted } =
-      useTableOfContentsActions({ editorRef });
+    const { runTableOfContentsUpdate, handleTableOfContentsInserted } = useTableOfContentsActions({
+      editorRef,
+    });
 
     // Header/footer editing, ported. `getHeaderFooterState` is a stub returning null, so
     // a double-click on the header band is refused and nothing opens — the workflow is
@@ -267,10 +276,7 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
 
     // Hyperlink and watermark actions, ported. Both dialogs were opening onto no-op
     // handlers; they now reach the contract's commands.
-    const {
-      handleHyperlinkSubmit,
-      handleHyperlinkRemove,
-    } = useHyperlinkActions({
+    const { handleHyperlinkSubmit, handleHyperlinkRemove } = useHyperlinkActions({
       editorRef,
       focusActiveEditor,
       hyperlinkDialog,
@@ -541,7 +547,7 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
       // so the page must clear that extra width too.
       RULER_WIDTH;
     const maxPageWidthPx = Math.round(
-      Math.max(0, ...(editorRef.current?.getPageGeometry() ?? []).map((p) => p.box.width)),
+      Math.max(0, ...(editorRef.current?.getPageGeometry() ?? []).map((p) => p.box.width))
     );
     // Legacy reserves the sidebar's width when there is something to show in it
     // (`sidebarOpen = allSidebarItems.length > 0`), not when the toggle is on. Same rule

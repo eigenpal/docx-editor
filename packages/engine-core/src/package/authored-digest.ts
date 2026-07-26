@@ -8,7 +8,12 @@
 
 import type { PackageModel, Block, Story, RunRecord } from '../model/authored-model.ts';
 import { normalizeRuns } from '../model/normalize-runs.ts';
-import { canonicalParagraphProps, canonicalRunProps, canonicalStyle, canonicalDocDefaults } from '../model/paragraph-props.ts';
+import {
+  canonicalParagraphProps,
+  canonicalRunProps,
+  canonicalStyle,
+  canonicalDocDefaults,
+} from '../model/paragraph-props.ts';
 import { hashPreservableBlock } from './wml-preserve.ts';
 import { stableHash } from '../comparators/canonical.ts';
 
@@ -25,7 +30,11 @@ function blockDigest(b: Block): unknown {
     // vs [{"ab"}]) share a digest, matching how the model treats them.
     const idless = b.runs.map((r) => {
       const rp = canonicalRunProps(r.props);
-      return { text: r.text, ...(rp ? { props: rp } : {}), ...(r.rPrCapsule ? { rPrCapsule: r.rPrCapsule } : {}) };
+      return {
+        text: r.text,
+        ...(rp ? { props: rp } : {}),
+        ...(r.rPrCapsule ? { rPrCapsule: r.rPrCapsule } : {}),
+      };
     });
     return {
       k: 'paragraph',

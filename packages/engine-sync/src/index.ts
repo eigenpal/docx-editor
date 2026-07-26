@@ -17,4 +17,10 @@ export type { ReplicatedStoreBackend } from './backend.ts';
 export { LocalBackend, SNAPSHOT_SCHEMA_VERSION, NORMALIZATION_VERSION } from './local-backend.ts';
 export { YjsBackend, type YjsBackendOptions, assertYjsCompatibleModel } from './yjs-backend.ts';
 export { YjsBinding } from './binding.ts';
-export { type Role, type Presence, PresenceRegistry, canSubmitUpdate, canExport } from './awareness.ts';
+export {
+  type Role,
+  type Presence,
+  PresenceRegistry,
+  canSubmitUpdate,
+  canExport,
+} from './awareness.ts';

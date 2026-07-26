@@ -80,7 +80,9 @@ export function useFindReplaceBridge({ editorRef }: { editorRef: React.RefObject
       if (!result || result.currentIndex < 0) return false;
       const match = matches[result.currentIndex];
       if (!match) return false;
-      return editorRef.current?.exec({ type: 'replaceMatch', match, text: replaceText }).ok ?? false;
+      return (
+        editorRef.current?.exec({ type: 'replaceMatch', match, text: replaceText }).ok ?? false
+      );
     },
     [editorRef]
   );

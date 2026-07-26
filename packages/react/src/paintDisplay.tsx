@@ -32,7 +32,7 @@ export function paintDisplay(
   pages: readonly DisplayPage[],
   overlays?: FrameOverlays,
   clickTarget?: GlyphClickTarget | null,
-  controls?: readonly OverlayControl[],
+  controls?: readonly OverlayControl[]
 ): ReactElement {
   return (
     <>
@@ -59,7 +59,13 @@ export function paintDisplay(
         >
           <div className="ep-one-surface__content">
             {page.items.flatMap((item, i) =>
-              paintItem(item, i, clickTarget?.pageIndex === page.index && clickTarget.itemIndex === i ? clickTarget : null),
+              paintItem(
+                item,
+                i,
+                clickTarget?.pageIndex === page.index && clickTarget.itemIndex === i
+                  ? clickTarget
+                  : null
+              )
             )}
           </div>
           {overlays ? paintOverlayLayer(page.index, overlays, controls) : null}
@@ -98,7 +104,7 @@ function overlayStyle(box: OverlayBox): CSSProperties {
 function paintOverlayLayer(
   pageIndex: number,
   overlays: FrameOverlays,
-  controls?: readonly OverlayControl[],
+  controls?: readonly OverlayControl[]
 ): ReactElement {
   const caret = overlays.caret?.pageIndex === pageIndex ? overlays.caret : null;
   const rects = overlays.selection.filter((box) => box.pageIndex === pageIndex);
@@ -106,7 +112,11 @@ function paintOverlayLayer(
   return (
     <div className="ep-one-surface__overlay">
       {rects.map((box, i) => (
-        <div key={`sel.${i}`} className="ep-one-surface__selection-rect" style={overlayStyle(box)} />
+        <div
+          key={`sel.${i}`}
+          className="ep-one-surface__selection-rect"
+          style={overlayStyle(box)}
+        />
       ))}
       {caret ? (
         <div
@@ -127,7 +137,11 @@ function paintOverlayLayer(
   );
 }
 
-function paintItem(item: DisplayItem, key: number, clickTarget: GlyphClickTarget | null = null): ReactElement[] {
+function paintItem(
+  item: DisplayItem,
+  key: number,
+  clickTarget: GlyphClickTarget | null = null
+): ReactElement[] {
   switch (item.kind) {
     case 'text':
       // A text item may carry several runs (different styles); paint each at its own box.
@@ -162,7 +176,13 @@ function paintItem(item: DisplayItem, key: number, clickTarget: GlyphClickTarget
           key={key}
           src={item.src.url}
           alt={item.src.altText ?? ''}
-          style={{ position: 'absolute', left: item.box.x, top: item.box.y, width: item.box.width, height: item.box.height }}
+          style={{
+            position: 'absolute',
+            left: item.box.x,
+            top: item.box.y,
+            width: item.box.width,
+            height: item.box.height,
+          }}
         />,
       ];
     case 'fill':

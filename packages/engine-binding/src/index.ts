@@ -21,7 +21,15 @@ export {
 export { modelToDoc, paragraphNodeToRuns } from './projection.ts';
 export { runIsProjectable, EditorBinding, type ForwardResult } from './binding.ts';
 export { type SelectionAnchor, captureSelection, resolveSelection } from './selection.ts';
-export { observeComposition, deriveCompositionOverlay, mapCompositionRangeAfterRemote, applyCompositionOverlay, remoteChangePreservesCompositionAnchor, type CompositionCancelCode, type CompositionCancelOutcome } from './composition.ts';
+export {
+  observeComposition,
+  deriveCompositionOverlay,
+  mapCompositionRangeAfterRemote,
+  applyCompositionOverlay,
+  remoteChangePreservesCompositionAnchor,
+  type CompositionCancelCode,
+  type CompositionCancelOutcome,
+} from './composition.ts';
 export {
   INPUT_POLICY_LIMITS,
   REJECTED_PASTE_SLICE,

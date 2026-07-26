@@ -90,7 +90,13 @@ function readVal(element: string): string | null {
   while (i < element.length) {
     while (i < element.length && (isXmlSpace(element[i]) || element[i] === '/')) i += 1;
     const nameStart = i;
-    while (i < element.length && element[i] !== '=' && !isXmlSpace(element[i]) && element[i] !== '/') i += 1;
+    while (
+      i < element.length &&
+      element[i] !== '=' &&
+      !isXmlSpace(element[i]) &&
+      element[i] !== '/'
+    )
+      i += 1;
     const name = element.slice(nameStart, i);
     if (name.length === 0 && i >= element.length) break;
     while (i < element.length && isXmlSpace(element[i])) i += 1;

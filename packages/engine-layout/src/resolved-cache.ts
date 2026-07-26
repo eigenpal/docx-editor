@@ -37,16 +37,30 @@ export type CacheMiss =
   | { readonly hit: false; readonly reason: 'absent' }
   | { readonly hit: false; readonly reason: 'dependency-changed' }
   | { readonly hit: false; readonly reason: 'input-changed' }
-  | { readonly hit: false; readonly reason: 'epoch-changed'; readonly epoch: keyof OperationSnapshot };
-export type CacheLookup<V> = { readonly hit: true; readonly value: V; readonly provenance: CacheProvenance } | CacheMiss;
+  | {
+      readonly hit: false;
+      readonly reason: 'epoch-changed';
+      readonly epoch: keyof OperationSnapshot;
+    };
+export type CacheLookup<V> =
+  | { readonly hit: true; readonly value: V; readonly provenance: CacheProvenance }
+  | CacheMiss;
 
 /** The reuse gate: everything EXCEPT model revision must match. Returns the first mismatch (so a
  *  consumer can assert exactly why an entry was NOT reused), or null when the entry is reusable. */
 function firstMismatch(a: CacheProvenance, b: Omit<CacheProvenance, 'revision'>): CacheMiss | null {
-  if (a.dependencyFingerprint !== b.dependencyFingerprint) return { hit: false, reason: 'dependency-changed' };
+  if (a.dependencyFingerprint !== b.dependencyFingerprint)
+    return { hit: false, reason: 'dependency-changed' };
   if (a.inputFingerprint !== b.inputFingerprint) return { hit: false, reason: 'input-changed' };
-  const epochs: (keyof OperationSnapshot)[] = ['resourceEpoch', 'configEpoch', 'extensionFingerprint', 'shapingHash', 'producerVersion'];
-  for (const e of epochs) if (a[e] !== b[e]) return { hit: false, reason: 'epoch-changed', epoch: e };
+  const epochs: (keyof OperationSnapshot)[] = [
+    'resourceEpoch',
+    'configEpoch',
+    'extensionFingerprint',
+    'shapingHash',
+    'producerVersion',
+  ];
+  for (const e of epochs)
+    if (a[e] !== b[e]) return { hit: false, reason: 'epoch-changed', epoch: e };
   return null;
 }
 

@@ -22,7 +22,14 @@ export {
   type LayoutResult,
 } from './display-item.ts';
 export { type MetricsPort, DeterministicMetrics, HelveticaMetrics } from './metrics.ts';
-export { type ShapingCapability, PER_GRAPHEME_SHAPING, ASCII_LATIN_SHAPING, UNSUPPORTED_SHAPING, type LigatureInteriorCaret, type CharacterAdvanceProvable } from './shaping.ts';
+export {
+  type ShapingCapability,
+  PER_GRAPHEME_SHAPING,
+  ASCII_LATIN_SHAPING,
+  UNSUPPORTED_SHAPING,
+  type LigatureInteriorCaret,
+  type CharacterAdvanceProvable,
+} from './shaping.ts';
 export { layoutParagraphInBox, type ParagraphLayoutSink } from './paragraph-layout.ts';
 export {
   isWholeGraphemeHorizontalBoundary,
@@ -75,7 +82,12 @@ export {
   hitOwner,
   hasLayoutMetadata,
 } from './block-layout.ts';
-export { type DependencyKind, type DependencyKey, keyId, DependencyGraph } from './dependency-graph.ts';
+export {
+  type DependencyKind,
+  type DependencyKey,
+  keyId,
+  DependencyGraph,
+} from './dependency-graph.ts';
 export {
   type OperationSnapshot,
   type CacheProvenance,

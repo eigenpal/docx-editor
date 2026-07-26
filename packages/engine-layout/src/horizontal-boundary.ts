@@ -39,7 +39,7 @@ function caretEdgeGeometryTrusted(
   metrics: MetricsPort,
   fullText: string,
   graphemeOffset: number,
-  paragraphGraphemeCount: number,
+  paragraphGraphemeCount: number
 ): boolean {
   if (metrics.shaping.caretEdges !== 'per-grapheme-advance') return false;
   if (graphemeOffset === 0 || graphemeOffset === paragraphGraphemeCount) return true;
@@ -53,7 +53,11 @@ function caretEdgeGeometryTrusted(
   return !interior(fullText, graphemeOffset);
 }
 
-function opaqueLigatureInterior(metrics: MetricsPort, fullText: string, graphemeOffset: number): boolean {
+function opaqueLigatureInterior(
+  metrics: MetricsPort,
+  fullText: string,
+  graphemeOffset: number
+): boolean {
   if (metrics.shaping.ligatures !== 'opaque') return false;
   const interior = metrics.ligatureInteriorCaret;
   return interior?.(fullText, graphemeOffset) === true;
@@ -67,7 +71,7 @@ function opaqueLigatureInterior(metrics: MetricsPort, fullText: string, grapheme
 export function isWholeGraphemeHorizontalBoundary(
   metrics: MetricsPort,
   fullText: string,
-  graphemeOffset: number,
+  graphemeOffset: number
 ): boolean {
   const paragraphGraphemeCount = graphemeCountOf(fullText);
   if (graphemeOffset === 0 || graphemeOffset === paragraphGraphemeCount) return true;
@@ -79,7 +83,7 @@ export function isWholeGraphemeHorizontalBoundary(
 export function isGeometryTrustedCaretOffset(
   metrics: MetricsPort,
   fullText: string,
-  graphemeOffset: number,
+  graphemeOffset: number
 ): boolean {
   const paragraphGraphemeCount = graphemeCountOf(fullText);
   return caretEdgeGeometryTrusted(metrics, fullText, graphemeOffset, paragraphGraphemeCount);
@@ -132,7 +136,12 @@ let trustMetrics: MetricsPort | null = null;
  */
 let trustEpoch = -1;
 
-function prefixProvableUpTo(metrics: MetricsPort, fullText: string, lineStart: number, upTo: number): boolean {
+function prefixProvableUpTo(
+  metrics: MetricsPort,
+  fullText: string,
+  lineStart: number,
+  upTo: number
+): boolean {
   const epoch = graphemeBoundaryEpoch();
   if (
     trustEpoch !== epoch ||
@@ -164,7 +173,7 @@ export function isCumulativeGeometryTrustedFromLineOrigin(
   metrics: MetricsPort,
   fullText: string,
   lineStartGraphemeOffset: number,
-  graphemeOffset: number,
+  graphemeOffset: number
 ): boolean {
   if (metrics.shaping.caretEdges !== 'per-grapheme-advance') return false;
   if (graphemeOffset < lineStartGraphemeOffset) return false;
@@ -174,7 +183,10 @@ export function isCumulativeGeometryTrustedFromLineOrigin(
 }
 
 /** Sorted semantic horizontal transition offsets for one paragraph (0 and count always included). */
-export function semanticHorizontalBoundaries(metrics: MetricsPort, fullText: string): readonly number[] {
+export function semanticHorizontalBoundaries(
+  metrics: MetricsPort,
+  fullText: string
+): readonly number[] {
   const count = segmentGraphemes(fullText).length;
   const out = new Set<number>([0, count]);
   for (let offset = 1; offset < count; offset += 1) {

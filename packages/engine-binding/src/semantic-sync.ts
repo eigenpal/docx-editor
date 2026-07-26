@@ -22,7 +22,11 @@ function paragraphText(runs: readonly { text: string }[]): string {
   return runs.map((r) => r.text).join('');
 }
 
-function reject(code: 'readOnly' | 'invalidTarget' | 'staleFrame', reason: string, frameId?: InteractionFrameId): InteractionOutcome<never> {
+function reject(
+  code: 'readOnly' | 'invalidTarget' | 'staleFrame',
+  reason: string,
+  frameId?: InteractionFrameId
+): InteractionOutcome<never> {
   return frameId ? { ok: false, code, reason, frameId } : { ok: false, code, reason };
 }
 
@@ -30,19 +34,34 @@ function reject(code: 'readOnly' | 'invalidTarget' | 'staleFrame', reason: strin
 export function resolveSemanticTarget(
   session: DocxEditorSession,
   target: SemanticTarget,
-  frameId: InteractionFrameId,
+  frameId: InteractionFrameId
 ): InteractionOutcome<SelectionAnchor> {
   const model = session.currentModel();
   if (target.kind === 'atomic') {
-    const kind = topLevelBlockKind(model, target.objectId, target.scope.kind === 'body' ? bodyStoryId(model) : target.scope.kind);
-    if (kind === 'missing') return reject('invalidTarget', 'atomic target does not resolve to a canonical block', frameId);
-    if (kind === 'paragraph') return reject('readOnly', 'atomic target refers to an editable paragraph block', frameId);
+    const kind = topLevelBlockKind(
+      model,
+      target.objectId,
+      target.scope.kind === 'body' ? bodyStoryId(model) : target.scope.kind
+    );
+    if (kind === 'missing')
+      return reject(
+        'invalidTarget',
+        'atomic target does not resolve to a canonical block',
+        frameId
+      );
+    if (kind === 'paragraph')
+      return reject('readOnly', 'atomic target refers to an editable paragraph block', frameId);
     return { ok: true, value: { paragraphId: null, offset: 0, affinity: 'after' }, frameId };
   }
 
   const storyId = target.identity.storyId;
   const owned = paragraphOwnership(model, target.identity.blockId, storyId);
-  if (!owned) return reject('invalidTarget', 'text target paragraph is missing from the canonical model', frameId);
+  if (!owned)
+    return reject(
+      'invalidTarget',
+      'text target paragraph is missing from the canonical model',
+      frameId
+    );
   if (!owned.editable) {
     const reason =
       owned.rejectReason === 'tableCell'
@@ -55,7 +74,11 @@ export function resolveSemanticTarget(
   const offset = graphemeOffsetToUtf16(text, target.graphemeOffset);
   return {
     ok: true,
-    value: { paragraphId: owned.paragraph.id, offset, affinity: target.affinity === 'upstream' ? 'before' : 'after' },
+    value: {
+      paragraphId: owned.paragraph.id,
+      offset,
+      affinity: target.affinity === 'upstream' ? 'before' : 'after',
+    },
     frameId,
   };
 }
@@ -63,10 +86,14 @@ export function resolveSemanticTarget(
 /** Resolve a semantic selection range to anchor/head store-backed anchors. */
 export function resolveSemanticSelection(
   session: DocxEditorSession,
-  request: SemanticSelectionSyncRequest,
+  request: SemanticSelectionSyncRequest
 ): InteractionOutcome<{ readonly anchor: SelectionAnchor; readonly head: SelectionAnchor }> {
   if (request.selection.frameId.value !== request.frameId.value) {
-    return reject('staleFrame', 'semantic selection belongs to a superseded interaction frame', request.frameId);
+    return reject(
+      'staleFrame',
+      'semantic selection belongs to a superseded interaction frame',
+      request.frameId
+    );
   }
   const anchor = resolveSemanticTarget(session, request.selection.anchor, request.frameId);
   if (!anchor.ok) return anchor;

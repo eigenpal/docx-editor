@@ -11,10 +11,7 @@
 import React, { useState, useCallback, useEffect } from 'react';
 import type { CSSProperties } from 'react';
 import type { Watermark } from '../../legacy-core-compat';
-import {
-  pictureWatermarkDisplayEmu,
-  DEFAULT_WATERMARK_PRESETS,
-} from '../../legacy-core-compat';
+import { pictureWatermarkDisplayEmu, DEFAULT_WATERMARK_PRESETS } from '../../legacy-core-compat';
 import { useTranslation } from '../../i18n';
 
 export interface WatermarkDialogProps {

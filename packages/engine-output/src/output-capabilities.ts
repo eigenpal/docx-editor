@@ -21,7 +21,11 @@ interface Entry {
 const renderers = new Map<string, Entry>();
 
 /** Register the DOM renderer + paint layer for a display-item kind. Duplicates are rejected. */
-export function registerDisplayItemRenderer(type: string, render: DisplayItemRenderer, layer: number): void {
+export function registerDisplayItemRenderer(
+  type: string,
+  render: DisplayItemRenderer,
+  layer: number
+): void {
   if (renderers.has(type)) throw new Error(`duplicate display-item renderer for '${type}'`);
   renderers.set(type, { render, layer });
 }

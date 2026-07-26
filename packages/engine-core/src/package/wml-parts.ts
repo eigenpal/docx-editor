@@ -48,7 +48,9 @@ const STORY_SPECS: Record<string, StorySpec> = {
 };
 
 /** Related-story parts referenced by document.xml's relationships (internal only). */
-export function relatedStoryParts(entries: ReadonlyMap<string, Uint8Array>): { partName: string; spec: StorySpec }[] {
+export function relatedStoryParts(
+  entries: ReadonlyMap<string, Uint8Array>
+): { partName: string; spec: StorySpec }[] {
   const relsPart = entries.get('/word/_rels/document.xml.rels');
   if (!relsPart) return [];
   const rx = readXml(strFromU8(relsPart));
@@ -65,7 +67,10 @@ export function relatedStoryParts(entries: ReadonlyMap<string, Uint8Array>): { p
   return out;
 }
 
-export function parseStoryParagraphs(root: Extract<XmlNode, { type: 'element' }>, alloc: IdentityAllocator): ParagraphRecord[] {
+export function parseStoryParagraphs(
+  root: Extract<XmlNode, { type: 'element' }>,
+  alloc: IdentityAllocator
+): ParagraphRecord[] {
   return collectParagraphElements(root).map((p) => paragraphFromElement(p, alloc));
 }
 
@@ -82,9 +87,11 @@ export function parseStyles(entries: ReadonlyMap<string, Uint8Array>): StyleReco
     const id = style.attributes['w:styleId'];
     if (!id) continue;
     const t = style.attributes['w:type'];
-    const type: StyleRecord['type'] = t === 'character' || t === 'table' || t === 'numbering' ? t : 'paragraph';
+    const type: StyleRecord['type'] =
+      t === 'character' || t === 'table' || t === 'numbering' ? t : 'paragraph';
     const name = childElements(style, 'w:name')[0]?.attributes['w:val'] ?? id;
-    const isDefault = style.attributes['w:default'] === '1' || style.attributes['w:default'] === 'true';
+    const isDefault =
+      style.attributes['w:default'] === '1' || style.attributes['w:default'] === 'true';
     const basedOn = childElements(style, 'w:basedOn')[0]?.attributes['w:val'];
     const rPr = childElements(style, 'w:rPr')[0];
     const runProps = rPr ? parseRPr(rPr) : undefined;
@@ -102,7 +109,9 @@ export function parseStyles(entries: ReadonlyMap<string, Uint8Array>): StyleReco
 
 /** Parse word/styles.xml's w:docDefaults into document-wide default formatting — the
  *  lowest layer of style resolution. Resolution-only; never authored onto content. */
-export function parseDocDefaults(entries: ReadonlyMap<string, Uint8Array>): DocDefaults | undefined {
+export function parseDocDefaults(
+  entries: ReadonlyMap<string, Uint8Array>
+): DocDefaults | undefined {
   const part = entries.get('/word/styles.xml');
   if (!part) return undefined;
   const sx = readXml(strFromU8(part));

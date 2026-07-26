@@ -45,7 +45,7 @@ function deepFreeze<T>(value: T): T {
 
 function targetsEqual(
   a: Extract<SemanticTarget, { kind: 'text' }>,
-  b: Extract<SemanticTarget, { kind: 'text' }>,
+  b: Extract<SemanticTarget, { kind: 'text' }>
 ): boolean {
   return (
     a.graphemeOffset === b.graphemeOffset &&
@@ -56,10 +56,18 @@ function targetsEqual(
   );
 }
 
-function edgeToStop(frame: InteractionFrame, line: VisualLineRecord, edge: VisualLineRecord['edges'][number]): LineCaretStop | null {
+function edgeToStop(
+  frame: InteractionFrame,
+  line: VisualLineRecord,
+  edge: VisualLineRecord['edges'][number]
+): LineCaretStop | null {
   const stacked = pageStackBox(frame, line.pageIndex);
   if (!stacked) return null;
-  const content = pageLocalToContent(line.pageIndex, { x: edge.pageLocalX, y: edge.pageLocalY + edge.pageLocalHeight / 2 }, frame);
+  const content = pageLocalToContent(
+    line.pageIndex,
+    { x: edge.pageLocalX, y: edge.pageLocalY + edge.pageLocalHeight / 2 },
+    frame
+  );
   if (!content.ok) return null;
   return {
     target: deepFreeze({
@@ -77,7 +85,7 @@ function edgeToStop(frame: InteractionFrame, line: VisualLineRecord, edge: Visua
 function stopVisible(
   frame: InteractionFrame,
   navigation: NavigationGeometry | null | undefined,
-  stop: LineCaretStop,
+  stop: LineCaretStop
 ): boolean {
   const overlay = caretOverlayForTarget(frame, navigation, stop.target);
   return overlay !== null && overlay !== 'singular';
@@ -86,7 +94,7 @@ function stopVisible(
 /** Build visual lines from layout-published navigation geometry only. */
 export function buildLineCatalog(
   frame: InteractionFrame,
-  navigation: NavigationGeometry | null | undefined,
+  navigation: NavigationGeometry | null | undefined
 ): { ok: true; lines: readonly VisualLine[] } | { ok: false; reason: string } {
   const published = navigation?.visualLines;
   if (!published || published.length === 0) {
@@ -113,12 +121,25 @@ export function buildLineCatalog(
       scope: record.scope,
       line: record.line,
       contentY,
-      stops: deepFreeze(stops.map((stop) => deepFreeze({ ...stop, target: deepFreeze({ ...stop.target, identity: deepFreeze({ ...stop.target.identity }) }) }))),
+      stops: deepFreeze(
+        stops.map((stop) =>
+          deepFreeze({
+            ...stop,
+            target: deepFreeze({
+              ...stop.target,
+              identity: deepFreeze({ ...stop.target.identity }),
+            }),
+          })
+        )
+      ),
     });
   }
 
   if (lines.length === 0) {
-    return { ok: false, reason: 'no visible layout-published visual lines remain after clip filtering' };
+    return {
+      ok: false,
+      reason: 'no visible layout-published visual lines remain after clip filtering',
+    };
   }
 
   return { ok: true, lines: deepFreeze(lines) };
@@ -128,7 +149,7 @@ export function lineForTarget(
   lines: readonly VisualLine[],
   target: Extract<SemanticTarget, { kind: 'text' }>,
   frame: InteractionFrame,
-  navigation: NavigationGeometry | null | undefined,
+  navigation: NavigationGeometry | null | undefined
 ): VisualLine | null {
   const line =
     lines.find((line) => line.stops.some((stop) => targetsEqual(stop.target, target))) ??
@@ -138,8 +159,8 @@ export function lineForTarget(
           stop.target.identity.storyId === target.identity.storyId &&
           stop.target.identity.blockId === target.identity.blockId &&
           stop.target.graphemeOffset === target.graphemeOffset &&
-          scopesEqual(stop.target.scope, target.scope),
-      ),
+          scopesEqual(stop.target.scope, target.scope)
+      )
     ) ??
     null;
   if (!line) return null;
@@ -166,7 +187,7 @@ export function nearestStopOnLine(line: VisualLine, contentX: number): LineCaret
 export function caretContentX(
   frame: InteractionFrame,
   target: Extract<SemanticTarget, { kind: 'text' }>,
-  navigation: NavigationGeometry | null | undefined,
+  navigation: NavigationGeometry | null | undefined
 ): number | 'singular' | null {
   const catalog = buildLineCatalog(frame, navigation);
   if (!catalog.ok) return 'singular';
@@ -179,12 +200,16 @@ export function caretContentX(
         s.target.identity.storyId === target.identity.storyId &&
         s.target.identity.blockId === target.identity.blockId &&
         s.target.graphemeOffset === target.graphemeOffset &&
-        scopesEqual(s.target.scope, target.scope),
+        scopesEqual(s.target.scope, target.scope)
     );
   return stop?.contentX ?? null;
 }
 
-export function pageRelativeY(frame: InteractionFrame, pageIndex: number, contentY: number): number | null {
+export function pageRelativeY(
+  frame: InteractionFrame,
+  pageIndex: number,
+  contentY: number
+): number | null {
   const stacked = pageStackBox(frame, pageIndex);
   if (!stacked) return null;
   return contentY - stacked.y;
@@ -194,25 +219,33 @@ export function contentPointOnPage(
   frame: InteractionFrame,
   pageIndex: number,
   pageRelativeYValue: number,
-  contentX: number,
+  contentX: number
 ): Point | null {
   const point = pageLocalToContent(pageIndex, { x: 0, y: pageRelativeYValue }, frame);
   if (!point.ok) return null;
   return { x: contentX, y: point.value.y };
 }
 
-export function stopsForBlock(lines: readonly VisualLine[], storyId: string, blockId: string): readonly LineCaretStop[] {
-  return lines.filter((line) => line.storyId === storyId && line.blockId === blockId).flatMap((line) => line.stops);
+export function stopsForBlock(
+  lines: readonly VisualLine[],
+  storyId: string,
+  blockId: string
+): readonly LineCaretStop[] {
+  return lines
+    .filter((line) => line.storyId === storyId && line.blockId === blockId)
+    .flatMap((line) => line.stops);
 }
 
 export function measuredWhitespaceOffset(
   navigation: NavigationGeometry | null | undefined,
   blockId: string,
-  graphemeOffset: number,
+  graphemeOffset: number
 ): boolean {
   return (
-    navigation?.visualLines.some((line) =>
-      line.identity.blockId === blockId && line.edges.some((edge) => edge.target.graphemeOffset === graphemeOffset),
+    navigation?.visualLines.some(
+      (line) =>
+        line.identity.blockId === blockId &&
+        line.edges.some((edge) => edge.target.graphemeOffset === graphemeOffset)
     ) ?? false
   );
 }
@@ -220,7 +253,7 @@ export function measuredWhitespaceOffset(
 export function destinationOverlayVisible(
   frame: InteractionFrame,
   navigation: NavigationGeometry | null | undefined,
-  target: Extract<SemanticTarget, { kind: 'text' }>,
+  target: Extract<SemanticTarget, { kind: 'text' }>
 ): boolean {
   const overlay = caretOverlayForTarget(frame, navigation, target);
   return overlay !== null && overlay !== 'singular';

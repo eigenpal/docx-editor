@@ -59,7 +59,9 @@ export async function renderPdf(layout: LayoutResult): Promise<Uint8Array> {
 }
 
 /** Reload PDF bytes for semantic inspection (page count, validity). */
-export async function inspectPdf(bytes: Uint8Array): Promise<{ pageCount: number; valid: boolean }> {
+export async function inspectPdf(
+  bytes: Uint8Array
+): Promise<{ pageCount: number; valid: boolean }> {
   try {
     const pdf = await PDFDocument.load(bytes);
     return { pageCount: pdf.getPageCount(), valid: true };

@@ -20,12 +20,30 @@ export type DocOp =
       readonly runs: readonly RunRecord[];
       readonly symbolicId?: string;
     }
-  | { readonly op: 'insertText'; readonly paragraphId: string; readonly text: string; readonly props?: RunProps }
+  | {
+      readonly op: 'insertText';
+      readonly paragraphId: string;
+      readonly text: string;
+      readonly props?: RunProps;
+    }
   | { readonly op: 'splitParagraph'; readonly paragraphId: string; readonly offset: number }
   | { readonly op: 'joinParagraphs'; readonly firstId: string; readonly secondId: string }
-  | { readonly op: 'moveBlock'; readonly storyId: string; readonly fromIndex: number; readonly toIndex: number }
-  | { readonly op: 'replaceParagraph'; readonly paragraphId: string; readonly runs: readonly RunRecord[] }
-  | { readonly op: 'setParagraphRuns'; readonly paragraphId: string; readonly runs: readonly RunRecord[] }
+  | {
+      readonly op: 'moveBlock';
+      readonly storyId: string;
+      readonly fromIndex: number;
+      readonly toIndex: number;
+    }
+  | {
+      readonly op: 'replaceParagraph';
+      readonly paragraphId: string;
+      readonly runs: readonly RunRecord[];
+    }
+  | {
+      readonly op: 'setParagraphRuns';
+      readonly paragraphId: string;
+      readonly runs: readonly RunRecord[];
+    }
   | { readonly op: 'deleteParagraph'; readonly paragraphId: string };
 
 export type DocOpKind = DocOp['op'];
@@ -48,7 +66,9 @@ export const DOC_OP_KINDS = [
 // rejects WRONG entries; this rejects a MISSING one too (a newly added DocOp forces adding it here,
 // so it is never treated as a bogus semantic op).
 type _MissingDocOp = Exclude<DocOpKind, (typeof DOC_OP_KINDS)[number]>;
-const _docOpKindsExhaustive: _MissingDocOp extends never ? true : ['DOC_OP_KINDS missing', _MissingDocOp] = true;
+const _docOpKindsExhaustive: _MissingDocOp extends never
+  ? true
+  : ['DOC_OP_KINDS missing', _MissingDocOp] = true;
 void _docOpKindsExhaustive;
 
 /** Structural effect of one applied op, feeding ModelChange (task 4.7). */
@@ -73,7 +93,10 @@ export interface ModelChange {
   readonly deleted: readonly string[];
   readonly created: readonly string[];
   readonly moves: readonly { readonly id: string; readonly from: number; readonly to: number }[];
-  readonly splitJoin: readonly ({ readonly split: { from: string; tail: string } } | { readonly join: { kept: string; removed: string } })[];
+  readonly splitJoin: readonly (
+    | { readonly split: { from: string; tail: string } }
+    | { readonly join: { kept: string; removed: string } }
+  )[];
   readonly dependencyKeys: readonly string[];
   readonly normalized: boolean;
 }
@@ -100,13 +123,17 @@ export function isDocOp(v: unknown): v is DocOp {
   return typeof v === 'object' && v !== null && typeof (v as { op?: unknown }).op === 'string';
 }
 export function isModelChange(v: unknown): v is ModelChange {
-  return typeof v === 'object' && v !== null && (v as { change?: unknown }).change === 'model-change';
+  return (
+    typeof v === 'object' && v !== null && (v as { change?: unknown }).change === 'model-change'
+  );
 }
 export function isReplicationUpdate(v: unknown): v is ReplicationUpdate {
   return typeof v === 'object' && v !== null && (v as { envelope?: unknown }).envelope === 'update';
 }
 export function isSnapshot(v: unknown): v is Snapshot {
-  return typeof v === 'object' && v !== null && (v as { envelope?: unknown }).envelope === 'snapshot';
+  return (
+    typeof v === 'object' && v !== null && (v as { envelope?: unknown }).envelope === 'snapshot'
+  );
 }
 
 // Compile-time proof the contracts are mutually non-assignable (tsc-checked).

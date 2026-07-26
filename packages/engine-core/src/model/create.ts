@@ -40,12 +40,35 @@ export function createEmptyModel(): PackageModel {
 
   // Root package relationship -> main document; document -> styles, numbering.
   const relationships: RelationshipRecord[] = [
-    { ownerPart: '/', id: 'rId1', type: REL_TYPES.officeDocument, rawTarget: 'word/document.xml', targetMode: 'Internal', order: 0 },
-    { ownerPart: '/word/document.xml', id: 'rId1', type: REL_TYPES.styles, rawTarget: 'styles.xml', targetMode: 'Internal', order: 0 },
-    { ownerPart: '/word/document.xml', id: 'rId2', type: REL_TYPES.numbering, rawTarget: 'numbering.xml', targetMode: 'Internal', order: 1 },
+    {
+      ownerPart: '/',
+      id: 'rId1',
+      type: REL_TYPES.officeDocument,
+      rawTarget: 'word/document.xml',
+      targetMode: 'Internal',
+      order: 0,
+    },
+    {
+      ownerPart: '/word/document.xml',
+      id: 'rId1',
+      type: REL_TYPES.styles,
+      rawTarget: 'styles.xml',
+      targetMode: 'Internal',
+      order: 0,
+    },
+    {
+      ownerPart: '/word/document.xml',
+      id: 'rId2',
+      type: REL_TYPES.numbering,
+      rawTarget: 'numbering.xml',
+      targetMode: 'Internal',
+      order: 1,
+    },
   ];
 
-  const styles: StyleRecord[] = [{ id: 'Normal', name: 'Normal', type: 'paragraph', isDefault: true }];
+  const styles: StyleRecord[] = [
+    { id: 'Normal', name: 'Normal', type: 'paragraph', isDefault: true },
+  ];
 
   const parts = new Map<string, PartRecord>([
     ['/word/document.xml', { kind: 'xml', partName: '/word/document.xml', storyId: bodyId }],

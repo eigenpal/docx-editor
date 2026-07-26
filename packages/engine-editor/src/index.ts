@@ -21,7 +21,13 @@ export {
   type GlyphClickTarget,
   type OverlayBox,
 } from './display-bridge.ts';
-export { colorToCss, runStyle, borderSegLine, type RunStyle, type BorderLine } from './paint-style.ts';
+export {
+  colorToCss,
+  runStyle,
+  borderSegLine,
+  type RunStyle,
+  type BorderLine,
+} from './paint-style.ts';
 export {
   type EditorDriver,
   type DisplaySnapshot,

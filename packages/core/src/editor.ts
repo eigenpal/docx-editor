@@ -221,16 +221,28 @@ export interface Editor {
   // nothing — see the `isActive` note above.
 
   /** Paragraph/character styles defined by the document, for the style picker. */
-  getDocumentStyles(): readonly { readonly styleId: string; readonly name: string; readonly type: string }[];
+  getDocumentStyles(): readonly {
+    readonly styleId: string;
+    readonly name: string;
+    readonly type: string;
+  }[];
 
   /** Font families the document actually uses, for the font picker. */
   getDocumentFonts(): readonly string[];
 
   /** Heading outline for the navigation panel, in document order. */
-  getOutline(): readonly { readonly text: string; readonly level: number; readonly blockId: string }[];
+  getOutline(): readonly {
+    readonly text: string;
+    readonly level: number;
+    readonly blockId: string;
+  }[];
 
   /** Comment threads anchored in the document. */
-  getComments(): readonly { readonly id: string; readonly text: string; readonly resolved: boolean }[];
+  getComments(): readonly {
+    readonly id: string;
+    readonly text: string;
+    readonly resolved: boolean;
+  }[];
 
   /** Formatting at the current selection, for toolbar value display (font, size, colour,
    *  alignment, list state). `null` when nothing is selected or nothing is derivable. */
@@ -259,7 +271,11 @@ export interface Editor {
   selectMatch(match: TextMatch): ExecResult;
 
   /** The image at the selection, for the image toolbar and transform controls. */
-  getSelectedImage(): { readonly id: string; readonly widthEmu: number; readonly heightEmu: number } | null;
+  getSelectedImage(): {
+    readonly id: string;
+    readonly widthEmu: number;
+    readonly heightEmu: number;
+  } | null;
 
   /** The table containing the selection, for the table toolbar. `null` outside a table. */
   getSelectedTable(): {
@@ -274,17 +290,29 @@ export interface Editor {
     readonly pageWidthTwips: number;
     readonly pageHeightTwips: number;
     readonly orientation: 'portrait' | 'landscape';
-    readonly marginsTwips: { readonly top: number; readonly right: number; readonly bottom: number; readonly left: number };
+    readonly marginsTwips: {
+      readonly top: number;
+      readonly right: number;
+      readonly bottom: number;
+      readonly left: number;
+    };
   } | null;
 
   /** The document watermark, for the watermark dialog. */
   getWatermark(): { readonly kind: 'text' | 'image'; readonly text?: string } | null;
 
   /** Header/footer editing state: which region is being edited, if any. */
-  getHeaderFooterState(): { readonly editing: 'header' | 'footer' | null; readonly sectionIndex: number } | null;
+  getHeaderFooterState(): {
+    readonly editing: 'header' | 'footer' | null;
+    readonly sectionIndex: number;
+  } | null;
 
   /** Tracked changes in the document, for the review sidebar. */
-  getTrackedChanges(): readonly { readonly id: string; readonly kind: string; readonly author?: string }[];
+  getTrackedChanges(): readonly {
+    readonly id: string;
+    readonly kind: string;
+    readonly author?: string;
+  }[];
   setActiveScope(scope: ViewScope): void;
   getActiveScope(): ViewScope;
 
@@ -339,7 +367,10 @@ export interface Editor {
   /** Frame-bound caret overlay geometry including page and writing direction. */
   getCaretGeometry(pos?: EditorPosition): CaretGeometry | null;
   /** Frame-bound visible selection overlay geometry. */
-  getSelectionGeometry(range?: EditorSelection, options?: SelectionGeometryOptions): SelectionGeometry | null;
+  getSelectionGeometry(
+    range?: EditorSelection,
+    options?: SelectionGeometryOptions
+  ): SelectionGeometry | null;
   /**
    * Resolve client-space coordinates to a semantic hit target. Returns `null` only when no eligible
    * target exists (e.g. page margin). For typed stale, pending, read-only, invalid, or unsupported
@@ -363,7 +394,7 @@ export interface Editor {
    */
   dispatchInteraction(
     intent: InteractionIntent,
-    options?: { hostMetrics?: InteractionHostMetrics },
+    options?: { hostMetrics?: InteractionHostMetrics }
   ): InteractionDispatchResult;
   /** PM-free accessibility observation projecting the current interaction frame. */
   getAccessibilityObservation(): AccessibilityObservation;

@@ -9,9 +9,19 @@ import { readXml, textContent, type XmlNode } from './xml-reader.ts';
 import { scanCellParagraphSpans } from './wml-scan.ts';
 import { paragraphXml } from './wml-serialize.ts';
 import { el, blockFromText } from './wml-parse.ts';
-import { extractParagraphPropertiesCapsule, extractParagraphOpenAttributes, extractParagraphRunRPrCapsules } from './preservation-capsule.ts';
+import {
+  extractParagraphPropertiesCapsule,
+  extractParagraphOpenAttributes,
+  extractParagraphRunRPrCapsules,
+} from './preservation-capsule.ts';
 import { IdentityAllocator } from '../model/identity.ts';
-import { blockHashContent, blockPatchEdited, blockSerialize, isTopLevelEditable, registerCoreBlockCapability } from '../model/index.ts';
+import {
+  blockHashContent,
+  blockPatchEdited,
+  blockSerialize,
+  isTopLevelEditable,
+  registerCoreBlockCapability,
+} from '../model/index.ts';
 import { stableHash } from '../comparators/index.ts';
 import {
   bodyStoryId,
@@ -62,14 +72,20 @@ function reparseBlockWithCapsule(sliceText: string, alloc: IdentityAllocator): B
     const pPr = extractParagraphPropertiesCapsule(sliceText);
     const attrs = extractParagraphOpenAttributes(sliceText);
     if (pPr || attrs) {
-      block = { ...block, ...(pPr ? { pPrCapsule: pPr } : {}), ...(attrs ? { pAttrsCapsule: attrs } : {}) };
+      block = {
+        ...block,
+        ...(pPr ? { pPrCapsule: pPr } : {}),
+        ...(attrs ? { pAttrsCapsule: attrs } : {}),
+      };
     }
     const rPr = extractParagraphRunRPrCapsules(sliceText);
     if (rPr && rPr.length === block.runs.length && rPr.some((c) => c !== null)) {
       block = {
         ...block,
         runs: block.runs.map((r, i) =>
-          rPr[i] ? { text: r.text, ...(r.id !== undefined ? { id: r.id } : {}), rPrCapsule: rPr[i]! } : r,
+          rPr[i]
+            ? { text: r.text, ...(r.id !== undefined ? { id: r.id } : {}), rPrCapsule: rPr[i]! }
+            : r
         ),
       };
     }
@@ -108,7 +124,9 @@ function tableSkeleton(table: TableRecord): unknown {
       ...(r.props ? { props: r.props } : {}),
       cells: r.cells.map((c) => ({
         ...(c.props ? { props: c.props } : {}),
-        blocks: c.blocks.map((b) => (b.kind === 'table' ? tableSkeleton(b) : { kind: 'paragraph' })),
+        blocks: c.blocks.map((b) =>
+          b.kind === 'table' ? tableSkeleton(b) : { kind: 'paragraph' }
+        ),
       })),
     })),
   };
@@ -133,7 +151,10 @@ function tableSkeleton(table: TableRecord): unknown {
  *  lone `w:p`: a range drawn to swallow a following sibling (a `w:bookmarkStart`, an SDT
  *  boundary, stray text) is rejected, since regeneration re-emits only the paragraph and would
  *  delete everything else the range covered. */
-export function sliceIsFullyCapturedParagraph(sliceText: string, opts?: { readonly allowCapsule?: boolean }): boolean {
+export function sliceIsFullyCapturedParagraph(
+  sliceText: string,
+  opts?: { readonly allowCapsule?: boolean }
+): boolean {
   // A leading w:pPr is only capsule-able where the capsule is actually captured + reinserted — that
   // is TOP-LEVEL body paragraphs (allowCapsule defaults true). A table CELL paragraph has no capsule
   // captured, so its caller passes allowCapsule:false and a styled cell keeps the table read-only.
@@ -170,7 +191,9 @@ export function sliceIsFullyCapturedParagraph(sliceText: string, opts?: { readon
   // Per-run rPr capsules — only where they are captured/reinserted (top-level, allowCapsule). A cell
   // run's rPr is NOT captured, so a styled cell run stays read-only. `null` (unclean run structure)
   // yields no captures, so any run with an rPr beyond b/i falls back to the strict b/i check.
-  const runRPrCapsuled = allowCapsule ? (extractParagraphRunRPrCapsules(sliceText) ?? []).map((c) => c !== null) : [];
+  const runRPrCapsuled = allowCapsule
+    ? (extractParagraphRunRPrCapsules(sliceText) ?? []).map((c) => c !== null)
+    : [];
   return paragraphFullyCaptured(pEl, {
     pPrCapsuled: capsule !== null,
     pAttrsCapsuled: hasOpeningContent,
@@ -180,7 +203,11 @@ export function sliceIsFullyCapturedParagraph(sliceText: string, opts?: { readon
 
 export function paragraphFullyCaptured(
   pEl: Extract<XmlNode, { type: 'element' }>,
-  opts?: { readonly pPrCapsuled?: boolean; readonly pAttrsCapsuled?: boolean; readonly runRPrCapsuled?: readonly boolean[] },
+  opts?: {
+    readonly pPrCapsuled?: boolean;
+    readonly pAttrsCapsuled?: boolean;
+    readonly runRPrCapsuled?: readonly boolean[];
+  }
 ): boolean {
   // Paragraph opening-tag attributes (rsid…) are preserved verbatim as a capsule when captured;
   // otherwise the paragraph is not byte-faithfully regenerable and stays read-only.
@@ -189,7 +216,10 @@ export function paragraphFullyCaptured(
   let sawRun = false;
   let runIdx = 0; // index among DIRECT w:r children, aligned to opts.runRPrCapsuled
   for (const c of pEl.children) {
-    if (c.type === 'text') { if (c.value.trim() !== '') return false; continue; }
+    if (c.type === 'text') {
+      if (c.value.trim() !== '') return false;
+      continue;
+    }
     // A leading w:pPr preserved as an ownership-scoped capsule (opts.pPrCapsuled) is allowed: it is
     // re-spliced VERBATIM, so its own attributes/children don't need to be model-capturable. It MUST
     // be the single leading child (before any run); a second w:pPr, or one after a run, is not the
@@ -207,14 +237,20 @@ export function paragraphFullyCaptured(
     let tCount = 0;
     let rPrCount = 0;
     for (const rc of c.children) {
-      if (rc.type === 'text') { if (rc.value.trim() !== '') return false; continue; }
+      if (rc.type === 'text') {
+        if (rc.value.trim() !== '') return false;
+        continue;
+      }
       if (rc.name === 'w:rPr') {
         rPrCount += 1;
         if (rPrCount > 1) return false; // only the FIRST w:rPr is read on parse; a second would be dropped
         // A captured rPr is re-spliced VERBATIM, so its children don't need to be model-capturable.
         if (rPrCaptured) continue;
         for (const pr of rc.children) {
-          if (pr.type === 'text') { if (pr.value.trim() !== '') return false; continue; }
+          if (pr.type === 'text') {
+            if (pr.value.trim() !== '') return false;
+            continue;
+          }
           if (pr.name !== 'w:b' && pr.name !== 'w:i') return false; // only b/i are modeled
           if (Object.keys(pr.attributes).length > 0) return false; // explicit on/off not modeled
         }
@@ -240,7 +276,12 @@ export function paragraphFullyCaptured(
  *  smallest owned range), leaving all other bytes verbatim. Returns absolute-offset
  *  patches, or null to FAIL CLOSED (nested/complex table, structural/prop change, a
  *  changed cell paragraph that is not fully captured, or a span/model mismatch). */
-function patchEditedTable(tableText: string, tableStart: number, baseline: TableRecord, current: TableRecord): { start: number; end: number; xml: string }[] | null {
+function patchEditedTable(
+  tableText: string,
+  tableStart: number,
+  baseline: TableRecord,
+  current: TableRecord
+): { start: number; end: number; xml: string }[] | null {
   const baseParas = simpleCellParagraphs(baseline);
   const curParas = simpleCellParagraphs(current);
   if (!baseParas || !curParas || baseParas.length !== curParas.length) return null;
@@ -255,8 +296,17 @@ function patchEditedTable(tableText: string, tableStart: number, baseline: Table
     // silently delete that content.
     // Cell paragraphs do not capture a w:pPr capsule, so a styled cell paragraph fails closed here
     // (the whole table stays read-only) rather than dropping its properties on regeneration.
-    if (!sliceIsFullyCapturedParagraph(tableText.slice(spans[i].start, spans[i].end), { allowCapsule: false })) return null;
-    patches.push({ start: tableStart + spans[i].start, end: tableStart + spans[i].end, xml: paragraphXml(curParas[i]) });
+    if (
+      !sliceIsFullyCapturedParagraph(tableText.slice(spans[i].start, spans[i].end), {
+        allowCapsule: false,
+      })
+    )
+      return null;
+    patches.push({
+      start: tableStart + spans[i].start,
+      end: tableStart + spans[i].end,
+      xml: paragraphXml(curParas[i]),
+    });
   }
   return patches;
 }
@@ -268,19 +318,25 @@ function patchEditedTable(tableText: string, tableStart: number, baseline: Table
 registerCoreBlockCapability({
   kind: 'paragraph',
   patchEdited: (ctx) => {
-    if (ctx.reparsed.kind !== 'paragraph') throw new Error('block kind changed on edit — fail closed');
+    if (ctx.reparsed.kind !== 'paragraph')
+      throw new Error('block kind changed on edit — fail closed');
     // Regenerate in place ONLY if the ORIGINAL slice was fully captured (so regeneration drops no
     // unmodeled content — comments/PIs included), leaving every other byte verbatim.
-    if (!sliceIsFullyCapturedParagraph(ctx.sliceText)) throw new Error('paragraph carries unmodeled content — fail closed');
-    return [{ start: ctx.rangeStart, end: ctx.rangeEnd, xml: paragraphXml(ctx.block as ParagraphRecord) }];
+    if (!sliceIsFullyCapturedParagraph(ctx.sliceText))
+      throw new Error('paragraph carries unmodeled content — fail closed');
+    return [
+      { start: ctx.rangeStart, end: ctx.rangeEnd, xml: paragraphXml(ctx.block as ParagraphRecord) },
+    ];
   },
 });
 registerCoreBlockCapability({
   kind: 'table',
   patchEdited: (ctx) => {
-    if (ctx.reparsed.kind !== 'table' || ctx.block.kind !== 'table') throw new Error('block kind changed on edit — fail closed');
+    if (ctx.reparsed.kind !== 'table' || ctx.block.kind !== 'table')
+      throw new Error('block kind changed on edit — fail closed');
     const cellPatches = patchEditedTable(ctx.sliceText, ctx.rangeStart, ctx.reparsed, ctx.block);
-    if (!cellPatches) throw new Error('table was edited structurally or in unmodeled content — fail closed');
+    if (!cellPatches)
+      throw new Error('table was edited structurally or in unmodeled content — fail closed');
     return cellPatches;
   },
 });
@@ -310,21 +366,28 @@ registerCoreBlockCapability({
 function regenerateBlockRegion(
   blocks: readonly Block[],
   original: string,
-  docRanges: readonly (readonly [string, BlockRange])[],
+  docRanges: readonly (readonly [string, BlockRange])[]
 ): string {
-  if (docRanges.length === 0) throw new Error('structural edit with no preserved block region — fail closed');
+  if (docRanges.length === 0)
+    throw new Error('structural edit with no preserved block region — fail closed');
   const throwaway = new IdentityAllocator();
   for (const [id, r] of docRanges) {
     const sliceText = original.slice(r.start, r.end);
     if (!sliceIsFullyCapturedParagraph(sliceText)) {
-      throw new Error('structural edit to a document with a non-paragraph or unmodeled block — fail closed');
+      throw new Error(
+        'structural edit to a document with a non-paragraph or unmodeled block — fail closed'
+      );
     }
     // Integrity requires BOTH hashes to still agree with the source slice: the exact sourceHash
     // (byte-identical to parse time — rejects a tampered-but-normalization-equivalent slice) AND
     // the semantic baselineHash consistent with the reparsed slice (rejects an independently
     // tampered baselineHash field that would otherwise fool the edit-detection below).
     const reparsed = reparseBlockWithCapsule(sliceText, throwaway);
-    if (hashSourceSlice(sliceText) !== r.sourceHash || !reparsed || hashPreservableBlock(reparsed) !== r.baselineHash) {
+    if (
+      hashSourceSlice(sliceText) !== r.sourceHash ||
+      !reparsed ||
+      hashPreservableBlock(reparsed) !== r.baselineHash
+    ) {
       throw new Error(`preservation range for block ${id} drifted or was tampered — fail closed`);
     }
   }
@@ -338,7 +401,9 @@ function regenerateBlockRegion(
   // it would corrupt the document or lose content, so fail closed.
   for (let i = 1; i < docRanges.length; i += 1) {
     if (original.slice(docRanges[i - 1][1].end, docRanges[i][1].start).length !== 0) {
-      throw new Error('structural edit across non-contiguous blocks (inter-block content would be lost) — fail closed');
+      throw new Error(
+        'structural edit across non-contiguous blocks (inter-block content would be lost) — fail closed'
+      );
     }
   }
   const regionStart = docRanges[0][1].start;
@@ -347,7 +412,12 @@ function regenerateBlockRegion(
   // baseline) is emitted VERBATIM from its original slice — preserving every lexical detail the
   // serializer cannot reproduce (a self-closing `<w:p/>`, opening-tag whitespace, attribute style).
   // Only CHANGED (a split head) and NEW (a split tail) blocks are regenerated via their capability.
-  const originalById = new Map(docRanges.map(([id, r]) => [id, { slice: original.slice(r.start, r.end), baselineHash: r.baselineHash }]));
+  const originalById = new Map(
+    docRanges.map(([id, r]) => [
+      id,
+      { slice: original.slice(r.start, r.end), baselineHash: r.baselineHash },
+    ])
+  );
   const newBody = blocks
     .map((b) => {
       const orig = originalById.get(b.id);
@@ -357,9 +427,15 @@ function regenerateBlockRegion(
   return original.slice(0, regionStart) + newBody + original.slice(regionEnd);
 }
 
-export function emitPreservedPart(model: PackageModel, original: string, ranges: ReadonlyMap<string, BlockRange>): string {
+export function emitPreservedPart(
+  model: PackageModel,
+  original: string,
+  ranges: ReadonlyMap<string, BlockRange>
+): string {
   const bodyStory = model.stories.get(bodyStoryId(model))!;
-  const docRanges = [...ranges].filter(([, r]) => r.partName === DOC_PART).sort((a, b) => a[1].start - b[1].start);
+  const docRanges = [...ranges]
+    .filter(([, r]) => r.partName === DOC_PART)
+    .sort((a, b) => a[1].start - b[1].start);
   const rangeOrder = docRanges.map(([id]) => id);
   const bodyIds = bodyStory.blocks.map((b) => b.id);
   if (bodyIds.length !== rangeOrder.length || bodyIds.some((id, i) => id !== rangeOrder[i])) {
@@ -379,8 +455,14 @@ export function emitPreservedPart(model: PackageModel, original: string, ranges:
     // hash below — so a tampered slice that normalizes equal is still rejected.
     // Integrity requires BOTH: exact source bytes AND a baselineHash consistent with the reparsed
     // slice, so neither hash can be independently tampered to fool the edit-detection below.
-    if (!reparsed || hashSourceSlice(sliceText) !== r.sourceHash || hashPreservableBlock(reparsed) !== r.baselineHash) {
-      throw new Error(`preservation range for block ${id} does not match its baseline/source hash (tampered or drifted snapshot)`);
+    if (
+      !reparsed ||
+      hashSourceSlice(sliceText) !== r.sourceHash ||
+      hashPreservableBlock(reparsed) !== r.baselineHash
+    ) {
+      throw new Error(
+        `preservation range for block ${id} does not match its baseline/source hash (tampered or drifted snapshot)`
+      );
     }
     const block = byId.get(id)!;
     if (hashPreservableBlock(block) === r.baselineHash) continue; // unchanged -> verbatim
@@ -388,9 +470,13 @@ export function emitPreservedPart(model: PackageModel, original: string, ranges:
     // (fails closed inside the capability when the edit is not byte-faithfully patchable). The
     // block id is re-attached to any failure so diagnostics still name the offending block.
     try {
-      patches.push(...blockPatchEdited({ block, reparsed, sliceText, rangeStart: r.start, rangeEnd: r.end }));
+      patches.push(
+        ...blockPatchEdited({ block, reparsed, sliceText, rangeStart: r.start, rangeEnd: r.end })
+      );
     } catch (e) {
-      throw new Error(`preserved block ${id} was edited but could not be regenerated: ${(e as Error).message}`);
+      throw new Error(
+        `preserved block ${id} was edited but could not be regenerated: ${(e as Error).message}`
+      );
     }
   }
   patches.sort((a, b) => b.start - a.start); // highest offset first so earlier offsets stay valid

@@ -446,15 +446,31 @@ export interface GeometryKeyboardInteractionIntent {
 
 /** Native interaction intent accepted by the shared controller planner. */
 export type InteractionIntent =
-  | { readonly kind: 'semanticSelection'; readonly frameId: InteractionFrameId; readonly selection: SemanticSelection }
+  | {
+      readonly kind: 'semanticSelection';
+      readonly frameId: InteractionFrameId;
+      readonly selection: SemanticSelection;
+    }
   | { readonly kind: 'focus'; readonly frameId: InteractionFrameId }
   | { readonly kind: 'blur'; readonly frameId: InteractionFrameId }
-  | { readonly kind: 'command'; readonly frameId: InteractionFrameId; readonly command: import('./editor').EditorCommand }
+  | {
+      readonly kind: 'command';
+      readonly frameId: InteractionFrameId;
+      readonly command: import('./editor').EditorCommand;
+    }
   | { readonly kind: 'delegateNativeInput'; readonly frameId: InteractionFrameId }
   | PointerInteractionIntent
   | GeometryKeyboardInteractionIntent
-  | { readonly kind: 'capturePointer'; readonly frameId: InteractionFrameId; readonly pointerId: number }
-  | { readonly kind: 'releasePointer'; readonly frameId: InteractionFrameId; readonly pointerId: number }
+  | {
+      readonly kind: 'capturePointer';
+      readonly frameId: InteractionFrameId;
+      readonly pointerId: number;
+    }
+  | {
+      readonly kind: 'releasePointer';
+      readonly frameId: InteractionFrameId;
+      readonly pointerId: number;
+    }
   | { readonly kind: 'scroll'; readonly frameId: InteractionFrameId; readonly delta: Point };
 
 /** Engine effect: synchronize semantic selection through EditorBinding. */

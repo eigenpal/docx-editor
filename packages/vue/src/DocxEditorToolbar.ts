@@ -42,8 +42,14 @@ export interface DocxEditorToolbarProps {
 function icon(paths: readonly string[]): VNode {
   return h(
     'svg',
-    { viewBox: '0 -960 960 960', width: '18', height: '18', 'aria-hidden': 'true', focusable: 'false' },
-    paths.map((d) => h('path', { key: d, d, fill: 'currentColor' })),
+    {
+      viewBox: '0 -960 960 960',
+      width: '18',
+      height: '18',
+      'aria-hidden': 'true',
+      focusable: 'false',
+    },
+    paths.map((d) => h('path', { key: d, d, fill: 'currentColor' }))
   );
 }
 
@@ -51,7 +57,7 @@ function control(
   editor: Editor | null,
   c: LegacyChromeControl,
   t: Translate,
-  onSave: (() => void) | undefined,
+  onSave: (() => void) | undefined
 ): VNode {
   const label = t(c.labelKey);
 
@@ -72,7 +78,7 @@ function control(
         h('span', { class: 'ep-toolbar__picker-value' }, c.valueKey ? t(c.valueKey) : ''),
         h('span', { class: 'ep-toolbar__picker-caret', 'aria-hidden': 'true' }, '▾'),
         h('span', { class: 'ep-sr-only' }, `${label} — ${t(LEGACY_CHROME_UNAVAILABLE_KEY)}`),
-      ],
+      ]
     );
   }
 
@@ -96,7 +102,7 @@ function control(
         // button cost the user their caret and their keyboard.
         onMousedown: (event: MouseEvent) => event.preventDefault(),
       },
-      [icon(c.paths)],
+      [icon(c.paths)]
     );
   }
 
@@ -114,7 +120,7 @@ function control(
         onMousedown: (event: MouseEvent) => event.preventDefault(),
         onClick: () => onSave?.(),
       },
-      [icon(c.paths)],
+      [icon(c.paths)]
     );
   }
 
@@ -142,7 +148,7 @@ function control(
       onMousedown: (event: MouseEvent) => event.preventDefault(), // keep focus on the editor
       onClick: () => runToolbarCommand(editor, commandId),
     },
-    [icon(c.paths)],
+    [icon(c.paths)]
   );
 }
 
@@ -190,10 +196,10 @@ export default defineComponent({
                 'aria-label': props.t(group.labelKey),
                 'data-group': group.id,
               },
-              group.controls.map((c) => control(props.editor, c, props.t, props.onSave)),
+              group.controls.map((c) => control(props.editor, c, props.t, props.onSave))
             ),
-          ]),
-        ),
+          ])
+        )
       );
     };
   },

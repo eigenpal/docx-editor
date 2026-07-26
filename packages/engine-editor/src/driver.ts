@@ -41,7 +41,8 @@ export function pageText(page: DisplayPage): string {
     if (item.kind !== 'text') continue;
     const b = item.box;
     if (prev) {
-      if (Math.abs(b.y - prev.y) >= 1) out += '\n'; // wrapped / next line
+      if (Math.abs(b.y - prev.y) >= 1)
+        out += '\n'; // wrapped / next line
       else if (b.x - prev.right > 1) out += ' '; // a consumed inter-word space
       // else: contiguous run-parts of one word — no separator
     }
@@ -73,7 +74,9 @@ export interface EditorDriver {
   /** Whether the loaded document is being edited (patchable + edit mode). */
   editable(): boolean;
   exec(command: EditorCommand): ExecResult;
-  query<K extends keyof EditorQueries>(query: { type: K } & EditorQueries[K]): EditorQueryResults[K];
+  query<K extends keyof EditorQueries>(
+    query: { type: K } & EditorQueries[K]
+  ): EditorQueryResults[K];
   /** The current selection range, or null when collapsed/unavailable. */
   selection(): DocRange | null;
   /** The current coherent interaction frame. */
@@ -134,16 +137,25 @@ function headlessHost() {
 /** Wrap a production `Editor` in the stable driver. */
 export function createEditorDriver(editor: Editor): EditorDriver {
   function paragraphEntry(blockIndex: number) {
-    const entries = editor.getAccessibilityObservation().entries.filter((e) => e.role === 'editableParagraph');
+    const entries = editor
+      .getAccessibilityObservation()
+      .entries.filter((e) => e.role === 'editableParagraph');
     const entry = entries[blockIndex];
     if (!entry) throw new Error(`paragraph index ${blockIndex} is out of range`);
     return entry;
   }
 
-  function semanticSelection(blockIndex: number, anchorOffset: number, headOffset: number): SemanticSelection {
+  function semanticSelection(
+    blockIndex: number,
+    anchorOffset: number,
+    headOffset: number
+  ): SemanticSelection {
     const entry = paragraphEntry(blockIndex);
     const frameId = editor.getInteractionFrame().id;
-    const target = (offset: number, affinity: 'upstream' | 'downstream'): SemanticSelection['anchor'] => ({
+    const target = (
+      offset: number,
+      affinity: 'upstream' | 'downstream'
+    ): SemanticSelection['anchor'] => ({
       kind: 'text',
       scope: { kind: 'body' },
       identity: { storyId: entry.identity.storyId, blockId: entry.identity.blockId },
@@ -173,11 +185,19 @@ export function createEditorDriver(editor: Editor): EditorDriver {
     selectionGeometry: () => editor.getSelectionGeometry(),
     semanticSelection: () => editor.getInteractionFrame().selection,
     authorizeCaret(blockIndex, graphemeOffset) {
-      const set = editor.exec({ type: 'setSelection', range: semanticSelection(blockIndex, graphemeOffset, graphemeOffset) });
+      const set = editor.exec({
+        type: 'setSelection',
+        range: semanticSelection(blockIndex, graphemeOffset, graphemeOffset),
+      });
       if (!set.ok) {
         return {
           ok: false,
-          code: set.code === 'locked' ? 'readOnly' : set.code === 'invalidArgs' ? 'invalidTarget' : 'unsupported',
+          code:
+            set.code === 'locked'
+              ? 'readOnly'
+              : set.code === 'invalidArgs'
+                ? 'invalidTarget'
+                : 'unsupported',
           reason: set.reason,
         };
       }

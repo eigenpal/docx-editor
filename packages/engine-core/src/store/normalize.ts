@@ -5,7 +5,13 @@
 // each block through `blockNormalize`, so a new block kind normalizes by registering a capability,
 // not by editing a switch here. Identity is preserved (no id is minted or dropped).
 
-import { type PackageModel, type Story, type Block, blockNormalize, normalizeRuns } from '../model/index.ts';
+import {
+  type PackageModel,
+  type Story,
+  type Block,
+  blockNormalize,
+  normalizeRuns,
+} from '../model/index.ts';
 
 export { normalizeRuns };
 

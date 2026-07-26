@@ -24,13 +24,17 @@ export const DEFAULT_PAGE_GAP_PX = 24 as const;
 
 export interface StackedPageGeometry {
   readonly pageGeometry: readonly { index: number; box: Rect; contentBox: Rect }[];
-  readonly scrollGeometry: { contentHeight: number; pageTops: readonly number[]; pageGapPx: number };
+  readonly scrollGeometry: {
+    contentHeight: number;
+    pageTops: readonly number[];
+    pageGapPx: number;
+  };
 }
 
 /** Build frame-authoritative stacked page tops/boxes including inter-page gaps. */
 export function buildStackedPageGeometry(
   display: readonly DisplayPage[],
-  pageGapPx: number = DEFAULT_PAGE_GAP_PX,
+  pageGapPx: number = DEFAULT_PAGE_GAP_PX
 ): StackedPageGeometry {
   const pageTops: number[] = [];
   const pageGeometry: { index: number; box: Rect; contentBox: Rect }[] = [];
@@ -105,11 +109,17 @@ function contentBoxOf(page: DisplayPage, top: number): Rect {
   return { x: cb.x, y: top + cb.y, width: cb.width, height: cb.height };
 }
 
-function pageGeometryFromDisplay(display: readonly DisplayPage[], pageGapPx: number = DEFAULT_PAGE_GAP_PX) {
+function pageGeometryFromDisplay(
+  display: readonly DisplayPage[],
+  pageGapPx: number = DEFAULT_PAGE_GAP_PX
+) {
   return buildStackedPageGeometry(display, pageGapPx).pageGeometry;
 }
 
-function scrollGeometryFromDisplay(display: readonly DisplayPage[], pageGapPx: number = DEFAULT_PAGE_GAP_PX) {
+function scrollGeometryFromDisplay(
+  display: readonly DisplayPage[],
+  pageGapPx: number = DEFAULT_PAGE_GAP_PX
+) {
   return buildStackedPageGeometry(display, pageGapPx).scrollGeometry;
 }
 
@@ -125,16 +135,19 @@ function freezeDisplay(display: readonly DisplayPage[]): readonly DisplayPage[] 
               return deepFreezeValue({
                 ...item,
                 box: deepFreezeValue({ ...item.box }),
-                semantic: deepFreezeValue({ ...item.semantic, identity: deepFreezeValue({ ...item.semantic.identity }) }),
+                semantic: deepFreezeValue({
+                  ...item.semantic,
+                  identity: deepFreezeValue({ ...item.semantic.identity }),
+                }),
                 clusters: deepFreezeValue(
                   item.clusters.map((cluster) =>
-                    deepFreezeValue({ ...cluster, box: deepFreezeValue({ ...cluster.box }) }),
-                  ),
+                    deepFreezeValue({ ...cluster, box: deepFreezeValue({ ...cluster.box }) })
+                  )
                 ),
                 runs: deepFreezeValue(
                   item.runs.map((run: GlyphRun) =>
-                    deepFreezeValue({ ...run, box: deepFreezeValue({ ...run.box }) }),
-                  ),
+                    deepFreezeValue({ ...run, box: deepFreezeValue({ ...run.box }) })
+                  )
                 ),
               });
             }
@@ -157,8 +170,8 @@ function freezeDisplay(display: readonly DisplayPage[]): readonly DisplayPage[] 
                       ...seg,
                       from: deepFreezeValue({ ...seg.from }),
                       to: deepFreezeValue({ ...seg.to }),
-                    }),
-                  ),
+                    })
+                  )
                 ),
               });
             }
@@ -166,22 +179,25 @@ function freezeDisplay(display: readonly DisplayPage[]): readonly DisplayPage[] 
               return deepFreezeValue({ ...item, box: deepFreezeValue({ ...item.box }) });
             }
             return deepFreezeValue({ ...item, box: deepFreezeValue({ ...item.box }) });
-          }),
+          })
         ),
-      }),
-    ),
+      })
+    )
   );
 }
 
 function tagGeometry<T extends { frameId: InteractionFrameId }>(
   frameId: InteractionFrameId,
-  value: T | null,
+  value: T | null
 ): T | null {
   if (!value) return null;
   return deepFreezeValue({ ...value, frameId });
 }
 
-function freezeSemanticSelection(id: InteractionFrameId, selection: SemanticSelection | null): SemanticSelection | null {
+function freezeSemanticSelection(
+  id: InteractionFrameId,
+  selection: SemanticSelection | null
+): SemanticSelection | null {
   if (!selection) return null;
   return deepFreezeValue({
     ...selection,
@@ -200,7 +216,10 @@ function freezeCaret(id: InteractionFrameId, caret: CaretGeometry | null): Caret
   });
 }
 
-function freezeSelectionGeometry(id: InteractionFrameId, geometry: SelectionGeometry | null): SelectionGeometry | null {
+function freezeSelectionGeometry(
+  id: InteractionFrameId,
+  geometry: SelectionGeometry | null
+): SelectionGeometry | null {
   if (!geometry) return null;
   return deepFreezeValue({
     ...geometry,
@@ -219,10 +238,12 @@ function freezeSemanticIndex(index: SemanticPositionIndex): SemanticPositionInde
         deepFreezeValue({
           ...story,
           blocks: deepFreezeValue(
-            story.blocks.map((block) => deepFreezeValue({ ...block, identity: deepFreezeValue({ ...block.identity }) })),
+            story.blocks.map((block) =>
+              deepFreezeValue({ ...block, identity: deepFreezeValue({ ...block.identity }) })
+            )
           ),
-        }),
-      ),
+        })
+      )
     ),
     caretStops: deepFreezeValue(
       index.caretStops.map((stop) =>
@@ -230,10 +251,13 @@ function freezeSemanticIndex(index: SemanticPositionIndex): SemanticPositionInde
           ...stop,
           target:
             stop.target.kind === 'text'
-              ? deepFreezeValue({ ...stop.target, identity: deepFreezeValue({ ...stop.target.identity }) })
+              ? deepFreezeValue({
+                  ...stop.target,
+                  identity: deepFreezeValue({ ...stop.target.identity }),
+                })
               : deepFreezeValue({ ...stop.target }),
-        }),
-      ),
+        })
+      )
     ),
     ownershipRegions: deepFreezeValue(
       index.ownershipRegions.map((region) =>
@@ -241,8 +265,8 @@ function freezeSemanticIndex(index: SemanticPositionIndex): SemanticPositionInde
           ...region,
           identity: deepFreezeValue({ ...region.identity }),
           ...(region.box ? { box: deepFreezeValue({ ...region.box }) } : {}),
-        }),
-      ),
+        })
+      )
     ),
   });
 }
@@ -271,7 +295,11 @@ export function emptyInteractionFrame(): InteractionFrame {
     display: deepFreezeValue([]),
     semanticIndex: freezeSemanticIndex(emptySemanticIndex()),
     pageGeometry: deepFreezeValue([]),
-    scrollGeometry: deepFreezeValue({ contentHeight: 0, pageTops: deepFreezeValue([]), pageGapPx: DEFAULT_PAGE_GAP_PX }),
+    scrollGeometry: deepFreezeValue({
+      contentHeight: 0,
+      pageTops: deepFreezeValue([]),
+      pageGapPx: DEFAULT_PAGE_GAP_PX,
+    }),
     selection: null,
     caret: null,
     selectionGeometry: null,
@@ -287,14 +315,18 @@ export function frameMembersCoherent(frame: InteractionFrame): boolean {
   if (caret && caret.frameId.value !== id.value) return false;
   if (selection && selection.frameId.value !== id.value) return false;
   if (selectionGeometry && selectionGeometry.frameId.value !== id.value) return false;
-  if (frame.completeness.kind === 'pending' && frame.completeness.targetModelRevision < revisions.modelRevision) {
+  if (
+    frame.completeness.kind === 'pending' &&
+    frame.completeness.targetModelRevision < revisions.modelRevision
+  ) {
     return false;
   }
   for (const pg of frame.pageGeometry) {
     const displayPage = frame.display.find((p) => p.index === pg.index);
     const stackedTop = frame.scrollGeometry.pageTops[pg.index];
     if (!displayPage || stackedTop === undefined || pg.box.y !== stackedTop) return false;
-    if (pg.box.width !== displayPage.box.width || pg.box.height !== displayPage.box.height) return false;
+    if (pg.box.width !== displayPage.box.width || pg.box.height !== displayPage.box.height)
+      return false;
   }
   return true;
 }
@@ -349,7 +381,10 @@ export function adapterReadSnapshot(frame: InteractionFrame): FrameReadSnapshot 
 }
 
 /** True when repeated adapter reads observe one coherent publication identity. */
-export function readsAreCoherent(frame: InteractionFrame, reads: readonly FrameReadSnapshot[]): boolean {
+export function readsAreCoherent(
+  frame: InteractionFrame,
+  reads: readonly FrameReadSnapshot[]
+): boolean {
   if (reads.length === 0) return true;
   const first = reads[0]!;
   for (const read of reads) {
@@ -360,7 +395,8 @@ export function readsAreCoherent(frame: InteractionFrame, reads: readonly FrameR
     if (read.pageGeometryRef !== first.pageGeometryRef) return false;
     if (read.selectionFrameId?.value !== first.selectionFrameId?.value) return false;
     if (read.caretFrameId?.value !== first.caretFrameId?.value) return false;
-    if (read.selectionGeometryFrameId?.value !== first.selectionGeometryFrameId?.value) return false;
+    if (read.selectionGeometryFrameId?.value !== first.selectionGeometryFrameId?.value)
+      return false;
     if (!frameMembersCoherent(frame)) return false;
   }
   return true;
@@ -410,11 +446,13 @@ export class InteractionFrameStore {
       pageGeometry: readonly { index: number; box: Rect; contentBox: Rect }[];
       scrollGeometry: { contentHeight: number; pageTops: readonly number[]; pageGapPx: number };
     },
-    pageGapPx: number = DEFAULT_PAGE_GAP_PX,
+    pageGapPx: number = DEFAULT_PAGE_GAP_PX
   ): InteractionFrame {
     const frozenDisplay = reuseGeometry?.display ?? freezeDisplay(display);
-    const pageGeometry = reuseGeometry?.pageGeometry ?? pageGeometryFromDisplay(frozenDisplay, pageGapPx);
-    const scrollGeometry = reuseGeometry?.scrollGeometry ?? scrollGeometryFromDisplay(frozenDisplay, pageGapPx);
+    const pageGeometry =
+      reuseGeometry?.pageGeometry ?? pageGeometryFromDisplay(frozenDisplay, pageGapPx);
+    const scrollGeometry =
+      reuseGeometry?.scrollGeometry ?? scrollGeometryFromDisplay(frozenDisplay, pageGapPx);
     const frame: InteractionFrame = {
       id,
       revisions: deepFreezeValue({ ...revisions }),
@@ -437,7 +475,11 @@ export class InteractionFrameStore {
     return this.current;
   }
 
-  private attachNavigation(id: InteractionFrameId, geometry: NavigationGeometry | undefined, reuseFrom?: InteractionFrameId): void {
+  private attachNavigation(
+    id: InteractionFrameId,
+    geometry: NavigationGeometry | undefined,
+    reuseFrom?: InteractionFrameId
+  ): void {
     if (geometry) {
       this.navigationSidecar.publish(id, geometry);
       return;
@@ -469,7 +511,7 @@ export class InteractionFrameStore {
       input.composition,
       input.currentPage,
       undefined,
-      input.pageGapPx,
+      input.pageGapPx
     );
     this.attachNavigation(id, input.navigationGeometry ?? emptyNavigationGeometry());
     return frame;
@@ -486,7 +528,10 @@ export class InteractionFrameStore {
       throw new Error('InteractionFrameStore: model revision mismatch');
     }
     const id = this.mintId();
-    const revisions: InteractionRevisions = { ...base.revisions, modelRevision: input.modelRevision };
+    const revisions: InteractionRevisions = {
+      ...base.revisions,
+      modelRevision: input.modelRevision,
+    };
     const frame = this.buildFrame(
       id,
       revisions,
@@ -503,7 +548,7 @@ export class InteractionFrameStore {
         display: base.display,
         pageGeometry: base.pageGeometry,
         scrollGeometry: base.scrollGeometry,
-      },
+      }
     );
     this.attachNavigation(id, undefined, base.id);
     return frame;

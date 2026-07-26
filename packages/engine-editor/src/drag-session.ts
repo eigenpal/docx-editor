@@ -13,7 +13,11 @@ import type {
 } from '@docx-editor.dev/core-contract/interaction';
 import type { ViewScope } from '@docx-editor.dev/core-contract/editor';
 import { hitTestPointer } from './interaction-geometry.ts';
-import { navigationSessionPlanForIntent, type NavigationSession, type NavigationSessionPlan } from './navigation-session.ts';
+import {
+  navigationSessionPlanForIntent,
+  type NavigationSession,
+  type NavigationSessionPlan,
+} from './navigation-session.ts';
 
 export interface PointerDragSession {
   readonly pointerId: number;
@@ -34,7 +38,11 @@ export interface DragPlannerContext {
 
 export type DragTerminalIntent =
   | { readonly kind: 'none' }
-  | { readonly kind: 'release'; readonly pointerId: number; readonly cause: 'pointerUp' | 'pointerCancel' | 'abort' };
+  | {
+      readonly kind: 'release';
+      readonly pointerId: number;
+      readonly cause: 'pointerUp' | 'pointerCancel' | 'abort';
+    };
 
 export interface DragInteractionPlan {
   readonly plan: InteractionPlan;
@@ -52,14 +60,14 @@ function dragPlan(
   plan: InteractionPlan,
   nextSessionOnSuccess: PointerDragSession | null,
   terminal: DragTerminalIntent = { kind: 'none' },
-  navigation?: NavigationSessionPlan,
+  navigation?: NavigationSessionPlan
 ): DragInteractionPlan {
   return { priorSession, plan, nextSessionOnSuccess, terminal, navigation };
 }
 
 function navigationClearPlan(
   context: DragPlannerContext,
-  kind: 'pointerDown' | 'pointerUp',
+  kind: 'pointerDown' | 'pointerUp'
 ): NavigationSessionPlan | undefined {
   return navigationSessionPlanForIntent(context.navigationSession, kind);
 }
@@ -69,9 +77,16 @@ type DragPointerIntent =
   | (PointerInteractionIntent & { readonly kind: 'pointerMove' })
   | (PointerInteractionIntent & { readonly kind: 'pointerUp' })
   | (PointerInteractionIntent & { readonly kind: 'pointerCancel' });
-type DragPointerHitIntent = Extract<DragPointerIntent, { kind: 'pointerDown' | 'pointerMove' | 'pointerUp' }>;
+type DragPointerHitIntent = Extract<
+  DragPointerIntent,
+  { kind: 'pointerDown' | 'pointerMove' | 'pointerUp' }
+>;
 
-function rejectEffect(code: InteractionOutcomeCode, reason: string, frameId: InteractionFrame['id']): InteractionEffect {
+function rejectEffect(
+  code: InteractionOutcomeCode,
+  reason: string,
+  frameId: InteractionFrame['id']
+): InteractionEffect {
   return { kind: 'reject', code, reason, frameId };
 }
 
@@ -81,18 +96,21 @@ function releaseEffect(session: PointerDragSession): InteractionEffect {
 
 function storyForBlock(frame: InteractionFrame, blockId: string, storyId: string) {
   return frame.semanticIndex.stories.find(
-    (story) => story.storyId === storyId && story.blocks.some((block) => block.identity.blockId === blockId),
+    (story) =>
+      story.storyId === storyId && story.blocks.some((block) => block.identity.blockId === blockId)
   );
 }
 
 function blockRecord(frame: InteractionFrame, blockId: string, storyId: string) {
-  return storyForBlock(frame, blockId, storyId)?.blocks.find((block) => block.identity.blockId === blockId);
+  return storyForBlock(frame, blockId, storyId)?.blocks.find(
+    (block) => block.identity.blockId === blockId
+  );
 }
 
 function compareBlockOrder(
   frame: InteractionFrame,
   a: Extract<SemanticTarget, { kind: 'text' }>,
-  b: Extract<SemanticTarget, { kind: 'text' }>,
+  b: Extract<SemanticTarget, { kind: 'text' }>
 ): number | null {
   if (a.identity.storyId !== b.identity.storyId) return null;
   const anchorBlock = blockRecord(frame, a.identity.blockId, a.identity.storyId);
@@ -103,20 +121,34 @@ function compareBlockOrder(
 
 function textTargetUsable(
   frame: InteractionFrame,
-  target: Extract<SemanticTarget, { kind: 'text' }>,
+  target: Extract<SemanticTarget, { kind: 'text' }>
 ): { ok: true } | { ok: false; effect: InteractionEffect } {
   const block = blockRecord(frame, target.identity.blockId, target.identity.storyId);
   if (!block) {
     return {
       ok: false,
-      effect: rejectEffect('invalidTarget', 'drag target block is missing from semantic index', frame.id),
+      effect: rejectEffect(
+        'invalidTarget',
+        'drag target block is missing from semantic index',
+        frame.id
+      ),
     };
   }
   if (block.readOnly) {
-    return { ok: false, effect: rejectEffect('readOnly', 'drag target is read-only text', frame.id) };
+    return {
+      ok: false,
+      effect: rejectEffect('readOnly', 'drag target is read-only text', frame.id),
+    };
   }
   if (target.graphemeOffset < 0 || target.graphemeOffset > block.graphemeCount) {
-    return { ok: false, effect: rejectEffect('invalidTarget', 'drag target grapheme offset is out of range', frame.id) };
+    return {
+      ok: false,
+      effect: rejectEffect(
+        'invalidTarget',
+        'drag target grapheme offset is out of range',
+        frame.id
+      ),
+    };
   }
   return { ok: true };
 }
@@ -125,42 +157,63 @@ function textTargetUsable(
 export function validateEditableDragSpan(
   frame: InteractionFrame,
   anchor: Extract<SemanticTarget, { kind: 'text' }>,
-  head: Extract<SemanticTarget, { kind: 'text' }>,
+  head: Extract<SemanticTarget, { kind: 'text' }>
 ): { ok: true } | { ok: false; effect: InteractionEffect } {
   const frameId = frame.id;
   if (anchor.identity.storyId !== head.identity.storyId) {
-    return { ok: false, effect: rejectEffect('invalidTarget', 'drag span crosses stories', frameId) };
+    return {
+      ok: false,
+      effect: rejectEffect('invalidTarget', 'drag span crosses stories', frameId),
+    };
   }
   const story = storyForBlock(frame, anchor.identity.blockId, anchor.identity.storyId);
   if (!story) {
-    return { ok: false, effect: rejectEffect('invalidTarget', 'drag anchor story is missing from semantic index', frameId) };
+    return {
+      ok: false,
+      effect: rejectEffect(
+        'invalidTarget',
+        'drag anchor story is missing from semantic index',
+        frameId
+      ),
+    };
   }
   const anchorBlock = blockRecord(frame, anchor.identity.blockId, anchor.identity.storyId);
   const headBlock = blockRecord(frame, head.identity.blockId, head.identity.storyId);
   if (!anchorBlock || !headBlock) {
     return {
       ok: false,
-      effect: rejectEffect('invalidTarget', 'drag span endpoint block is missing from semantic index', frameId),
+      effect: rejectEffect(
+        'invalidTarget',
+        'drag span endpoint block is missing from semantic index',
+        frameId
+      ),
     };
   }
   if (anchorBlock.readOnly || headBlock.readOnly) {
-    return { ok: false, effect: rejectEffect('readOnly', 'drag span endpoint is read-only', frameId) };
+    return {
+      ok: false,
+      effect: rejectEffect('readOnly', 'drag span endpoint is read-only', frameId),
+    };
   }
   const order = compareBlockOrder(frame, anchor, head);
   if (order === null) {
-    return { ok: false, effect: rejectEffect('unsupported', 'drag span block order is not available', frameId) };
+    return {
+      ok: false,
+      effect: rejectEffect('unsupported', 'drag span block order is not available', frameId),
+    };
   }
   const startBlock = order <= 0 ? anchorBlock : headBlock;
   const endBlock = order <= 0 ? headBlock : anchorBlock;
   for (const block of story.blocks) {
-    if (block.orderIndex < startBlock.orderIndex || block.orderIndex > endBlock.orderIndex) continue;
+    if (block.orderIndex < startBlock.orderIndex || block.orderIndex > endBlock.orderIndex)
+      continue;
     if (block.readOnly) {
       return {
         ok: false,
         effect: rejectEffect(
           'unsupported',
           'drag span crosses a read-only or unsupported block boundary',
-          frameId,
+          frameId
         ),
       };
     }
@@ -174,7 +227,7 @@ export function validateEditableDragSpan(
 
 function rebindTarget(
   frame: InteractionFrame,
-  target: Extract<SemanticTarget, { kind: 'text' }>,
+  target: Extract<SemanticTarget, { kind: 'text' }>
 ): Extract<SemanticTarget, { kind: 'text' }> {
   return { ...target, scope: frame.selection?.scope ?? target.scope };
 }
@@ -182,7 +235,7 @@ function rebindTarget(
 function selectionFromSession(
   frame: InteractionFrame,
   session: PointerDragSession,
-  head: Extract<SemanticTarget, { kind: 'text' }>,
+  head: Extract<SemanticTarget, { kind: 'text' }>
 ): SemanticSelection {
   return {
     frameId: frame.id,
@@ -194,7 +247,7 @@ function selectionFromSession(
 
 function validatePointerIdentity(
   pointerId: number | undefined,
-  frameId: InteractionFrame['id'],
+  frameId: InteractionFrame['id']
 ): InteractionEffect | null {
   if (pointerId === undefined) {
     return rejectEffect('invalidTarget', 'pointerId is required for pointer drag', frameId);
@@ -205,17 +258,32 @@ function validatePointerIdentity(
   return null;
 }
 
-function validatePointerButton(intent: DragPointerIntent, frameId: InteractionFrame['id']): InteractionEffect | null {
+function validatePointerButton(
+  intent: DragPointerIntent,
+  frameId: InteractionFrame['id']
+): InteractionEffect | null {
   if (intent.kind === 'pointerDown') {
     if (intent.button !== undefined && intent.button !== 0) {
       return rejectEffect('unsupported', 'non-primary pointer button is not supported', frameId);
     }
     if (intent.buttons !== undefined) {
-      if (!Number.isFinite(intent.buttons) || !Number.isInteger(intent.buttons) || intent.buttons < 0) {
-        return rejectEffect('unsupported', 'pointer buttons bitmask is not a finite non-negative integer', frameId);
+      if (
+        !Number.isFinite(intent.buttons) ||
+        !Number.isInteger(intent.buttons) ||
+        intent.buttons < 0
+      ) {
+        return rejectEffect(
+          'unsupported',
+          'pointer buttons bitmask is not a finite non-negative integer',
+          frameId
+        );
       }
       if ((intent.buttons & ~1) !== 0) {
-        return rejectEffect('unsupported', 'non-primary pointer buttons are not supported', frameId);
+        return rejectEffect(
+          'unsupported',
+          'non-primary pointer buttons are not supported',
+          frameId
+        );
       }
     }
     if (intent.shiftKey || intent.ctrlKey || intent.metaKey || intent.altKey) {
@@ -227,18 +295,34 @@ function validatePointerButton(intent: DragPointerIntent, frameId: InteractionFr
       return rejectEffect('unsupported', 'modified pointer drag is not supported', frameId);
     }
     if (intent.buttons !== undefined) {
-      if (!Number.isFinite(intent.buttons) || !Number.isInteger(intent.buttons) || intent.buttons < 0) {
-        return rejectEffect('unsupported', 'pointer buttons bitmask is not a finite non-negative integer', frameId);
+      if (
+        !Number.isFinite(intent.buttons) ||
+        !Number.isInteger(intent.buttons) ||
+        intent.buttons < 0
+      ) {
+        return rejectEffect(
+          'unsupported',
+          'pointer buttons bitmask is not a finite non-negative integer',
+          frameId
+        );
       }
       if (intent.kind === 'pointerMove' && (intent.buttons & ~1) !== 0) {
-        return rejectEffect('unsupported', 'non-primary pointer buttons are not supported', frameId);
+        return rejectEffect(
+          'unsupported',
+          'non-primary pointer buttons are not supported',
+          frameId
+        );
       }
     }
   }
   return null;
 }
 
-function intentFrameStale(context: DragPlannerContext, intent: DragPointerIntent, session: PointerDragSession | null): boolean {
+function intentFrameStale(
+  context: DragPlannerContext,
+  intent: DragPointerIntent,
+  session: PointerDragSession | null
+): boolean {
   if (intent.frameId.value === context.frame.id.value) return false;
   if (session && context.modelRevision === session.modelRevision) return false;
   return true;
@@ -247,19 +331,36 @@ function intentFrameStale(context: DragPlannerContext, intent: DragPointerIntent
 function validateActiveDragPreconditions(
   context: DragPlannerContext,
   intent: DragPointerIntent,
-  session: PointerDragSession | null,
+  session: PointerDragSession | null
 ): InteractionEffect | null {
   const { frame } = context;
   if (intentFrameStale(context, intent, session)) {
-    return rejectEffect('staleFrame', 'interaction intent targets a superseded interaction frame', frame.id);
+    return rejectEffect(
+      'staleFrame',
+      'interaction intent targets a superseded interaction frame',
+      frame.id
+    );
   }
   if (frame.completeness.kind === 'pending') {
-    return rejectEffect('pendingLayout', 'layout for the current model revision is not yet published', frame.id);
+    return rejectEffect(
+      'pendingLayout',
+      'layout for the current model revision is not yet published',
+      frame.id
+    );
   }
   if (context.readOnly || !context.editable) {
-    return rejectEffect('readOnly', 'interaction rejected because the editor is read-only', frame.id);
+    return rejectEffect(
+      'readOnly',
+      'interaction rejected because the editor is read-only',
+      frame.id
+    );
   }
-  if ((intent.kind === 'pointerDown' || intent.kind === 'pointerMove' || intent.kind === 'pointerUp') && !context.hostMetrics) {
+  if (
+    (intent.kind === 'pointerDown' ||
+      intent.kind === 'pointerMove' ||
+      intent.kind === 'pointerUp') &&
+    !context.hostMetrics
+  ) {
     return rejectEffect('invalidTarget', 'explicit InteractionHostMetrics are required', frame.id);
   }
   return null;
@@ -272,9 +373,13 @@ function matchingPointer(session: PointerDragSession, intent: DragPointerIntent)
 
 function resolveEditableTextHit(
   context: DragPlannerContext,
-  intent: DragPointerHitIntent,
-): { ok: true; target: Extract<SemanticTarget, { kind: 'text' }> } | { ok: false; effect: InteractionEffect } {
-  const hit = hitTestPointer(context.frame, intent.clientPoint, context.hostMetrics, { frameId: context.frame.id });
+  intent: DragPointerHitIntent
+):
+  | { ok: true; target: Extract<SemanticTarget, { kind: 'text' }> }
+  | { ok: false; effect: InteractionEffect } {
+  const hit = hitTestPointer(context.frame, intent.clientPoint, context.hostMetrics, {
+    frameId: context.frame.id,
+  });
   if (!hit.ok) {
     return {
       ok: false,
@@ -282,7 +387,10 @@ function resolveEditableTextHit(
     };
   }
   if (hit.value.role === 'selectableText') {
-    return { ok: false, effect: rejectEffect('readOnly', 'hit target is read-only text', context.frame.id) };
+    return {
+      ok: false,
+      effect: rejectEffect('readOnly', 'hit target is read-only text', context.frame.id),
+    };
   }
   if (hit.value.role !== 'editableText') {
     return {
@@ -290,14 +398,18 @@ function resolveEditableTextHit(
       effect: rejectEffect(
         'unsupported',
         `hit target role ${hit.value.role} is not supported for drag selection (task 5.6+)`,
-        context.frame.id,
+        context.frame.id
       ),
     };
   }
   if (hit.value.target.kind !== 'text') {
     return {
       ok: false,
-      effect: rejectEffect('unsupported', 'only editable text targets may extend a drag selection', context.frame.id),
+      effect: rejectEffect(
+        'unsupported',
+        'only editable text targets may extend a drag selection',
+        context.frame.id
+      ),
     };
   }
   const usable = textTargetUsable(context.frame, hit.value.target);
@@ -306,36 +418,45 @@ function resolveEditableTextHit(
 }
 
 function anchorStillValid(frame: InteractionFrame, session: PointerDragSession): boolean {
-  const anchorBlock = blockRecord(frame, session.anchor.identity.blockId, session.anchor.identity.storyId);
+  const anchorBlock = blockRecord(
+    frame,
+    session.anchor.identity.blockId,
+    session.anchor.identity.storyId
+  );
   if (!anchorBlock || anchorBlock.readOnly) return false;
-  return session.anchor.graphemeOffset >= 0 && session.anchor.graphemeOffset <= anchorBlock.graphemeCount;
+  return (
+    session.anchor.graphemeOffset >= 0 && session.anchor.graphemeOffset <= anchorBlock.graphemeCount
+  );
 }
 
 function terminalRejectAndRelease(
   context: DragPlannerContext,
   session: PointerDragSession,
   effect: InteractionEffect,
-  cause: 'pointerUp' | 'abort' = 'abort',
+  cause: 'pointerUp' | 'abort' = 'abort'
 ): DragInteractionPlan {
   return dragPlan(
     session,
     { frameId: context.frame.id, effects: [effect, releaseEffect(session)] },
     null,
-    { kind: 'release', pointerId: session.pointerId, cause },
+    { kind: 'release', pointerId: session.pointerId, cause }
   );
 }
 
 function planPointerDown(
   context: DragPlannerContext,
   intent: Extract<DragPointerIntent, { kind: 'pointerDown' }>,
-  session: PointerDragSession | null,
+  session: PointerDragSession | null
 ): DragInteractionPlan {
   const frameId = context.frame.id;
   if (session) {
     return dragPlan(
       session,
-      { frameId, effects: [rejectEffect('unsupported', 'pointer drag session is already active', frameId)] },
-      session,
+      {
+        frameId,
+        effects: [rejectEffect('unsupported', 'pointer drag session is already active', frameId)],
+      },
+      session
     );
   }
   const pointerRejection = validatePointerIdentity(intent.pointerId, frameId);
@@ -371,21 +492,26 @@ function planPointerDown(
     },
     nextSession,
     { kind: 'none' },
-    navigationClearPlan(context, 'pointerDown'),
+    navigationClearPlan(context, 'pointerDown')
   );
 }
 
 function planPointerMove(
   context: DragPlannerContext,
   intent: Extract<DragPointerIntent, { kind: 'pointerMove' }>,
-  session: PointerDragSession | null,
+  session: PointerDragSession | null
 ): DragInteractionPlan {
   const frameId = context.frame.id;
   if (!session) {
     return dragPlan(
       null,
-      { frameId, effects: [rejectEffect('invalidTarget', 'pointer move without an active drag session', frameId)] },
-      null,
+      {
+        frameId,
+        effects: [
+          rejectEffect('invalidTarget', 'pointer move without an active drag session', frameId),
+        ],
+      },
+      null
     );
   }
   if (!matchingPointer(session, intent)) {
@@ -399,7 +525,11 @@ function planPointerMove(
     return terminalRejectAndRelease(
       context,
       session,
-      rejectEffect('staleFrame', 'model revision changed during pointer capture; drag cancelled', frameId),
+      rejectEffect(
+        'staleFrame',
+        'model revision changed during pointer capture; drag cancelled',
+        frameId
+      )
     );
   }
   const rejection = validateActiveDragPreconditions(context, intent, session);
@@ -410,7 +540,7 @@ function planPointerMove(
     return terminalRejectAndRelease(
       context,
       session,
-      rejectEffect('invalidTarget', 'drag anchor is no longer valid', frameId),
+      rejectEffect('invalidTarget', 'drag anchor is no longer valid', frameId)
     );
   }
   const hit = resolveEditableTextHit(context, intent);
@@ -432,38 +562,50 @@ function planPointerMove(
         { kind: 'publishSelectionOverlay', frameId, selection },
       ],
     },
-    nextSession,
+    nextSession
   );
 }
 
 function planTerminalPointerUp(
   context: DragPlannerContext,
   intent: Extract<DragPointerIntent, { kind: 'pointerUp' }>,
-  session: PointerDragSession,
+  session: PointerDragSession
 ): DragInteractionPlan {
   const frameId = context.frame.id;
   if (intentFrameStale(context, intent, session)) {
     return terminalRejectAndRelease(
       context,
       session,
-      rejectEffect('staleFrame', 'interaction intent targets a superseded interaction frame', frameId),
-      'pointerUp',
+      rejectEffect(
+        'staleFrame',
+        'interaction intent targets a superseded interaction frame',
+        frameId
+      ),
+      'pointerUp'
     );
   }
   if (context.modelRevision !== session.modelRevision) {
     return terminalRejectAndRelease(
       context,
       session,
-      rejectEffect('staleFrame', 'model revision changed during pointer capture; drag cancelled', frameId),
-      'pointerUp',
+      rejectEffect(
+        'staleFrame',
+        'model revision changed during pointer capture; drag cancelled',
+        frameId
+      ),
+      'pointerUp'
     );
   }
   if (context.frame.completeness.kind === 'pending') {
     return terminalRejectAndRelease(
       context,
       session,
-      rejectEffect('pendingLayout', 'layout for the current model revision is not yet published', frameId),
-      'pointerUp',
+      rejectEffect(
+        'pendingLayout',
+        'layout for the current model revision is not yet published',
+        frameId
+      ),
+      'pointerUp'
     );
   }
   if (context.readOnly || !context.editable) {
@@ -471,7 +613,7 @@ function planTerminalPointerUp(
       context,
       session,
       rejectEffect('readOnly', 'interaction rejected because the editor is read-only', frameId),
-      'pointerUp',
+      'pointerUp'
     );
   }
   if (!context.hostMetrics) {
@@ -479,7 +621,7 @@ function planTerminalPointerUp(
       context,
       session,
       rejectEffect('invalidTarget', 'explicit InteractionHostMetrics are required', frameId),
-      'pointerUp',
+      'pointerUp'
     );
   }
   if (!anchorStillValid(context.frame, session)) {
@@ -487,7 +629,7 @@ function planTerminalPointerUp(
       context,
       session,
       rejectEffect('invalidTarget', 'drag anchor is no longer valid', frameId),
-      'pointerUp',
+      'pointerUp'
     );
   }
   const hit = resolveEditableTextHit(context, intent);
@@ -511,21 +653,26 @@ function planTerminalPointerUp(
     },
     null,
     { kind: 'release', pointerId: session.pointerId, cause: 'pointerUp' },
-    navigationClearPlan(context, 'pointerUp'),
+    navigationClearPlan(context, 'pointerUp')
   );
 }
 
 function planPointerUp(
   context: DragPlannerContext,
   intent: Extract<DragPointerIntent, { kind: 'pointerUp' }>,
-  session: PointerDragSession | null,
+  session: PointerDragSession | null
 ): DragInteractionPlan {
   const frameId = context.frame.id;
   if (!session) {
     return dragPlan(
       null,
-      { frameId, effects: [rejectEffect('invalidTarget', 'pointer up without an active drag session', frameId)] },
-      null,
+      {
+        frameId,
+        effects: [
+          rejectEffect('invalidTarget', 'pointer up without an active drag session', frameId),
+        ],
+      },
+      null
     );
   }
   if (!matchingPointer(session, intent)) {
@@ -541,7 +688,7 @@ function planPointerUp(
 function planPointerCancel(
   context: DragPlannerContext,
   intent: Extract<DragPointerIntent, { kind: 'pointerCancel' }>,
-  session: PointerDragSession | null,
+  session: PointerDragSession | null
 ): DragInteractionPlan {
   const frameId = context.frame.id;
   if (!session) {
@@ -550,21 +697,25 @@ function planPointerCancel(
   if (!matchingPointer(session, intent)) {
     return dragPlan(session, { frameId, effects: [] }, session);
   }
-  return dragPlan(
-    session,
-    { frameId, effects: [releaseEffect(session)] },
-    null,
-    { kind: 'release', pointerId: session.pointerId, cause: 'pointerCancel' },
-  );
+  return dragPlan(session, { frameId, effects: [releaseEffect(session)] }, null, {
+    kind: 'release',
+    pointerId: session.pointerId,
+    cause: 'pointerCancel',
+  });
 }
 
 /** Pure drag reducer: maps one pointer intent + optional session to a plan and session transition. */
 export function planPointerDragInteraction(
   context: DragPlannerContext,
   intent: DragPointerIntent,
-  session: PointerDragSession | null,
+  session: PointerDragSession | null
 ): DragInteractionPlan {
-  if (session && (intent.kind === 'pointerMove' || intent.kind === 'pointerUp' || intent.kind === 'pointerCancel')) {
+  if (
+    session &&
+    (intent.kind === 'pointerMove' ||
+      intent.kind === 'pointerUp' ||
+      intent.kind === 'pointerCancel')
+  ) {
     if (intent.pointerId !== undefined && intent.pointerId !== session.pointerId) {
       return dragPlan(session, { frameId: context.frame.id, effects: [] }, session);
     }

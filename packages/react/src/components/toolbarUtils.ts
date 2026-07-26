@@ -14,10 +14,7 @@ import type { SelectionFormatting, FormattingAction } from './Toolbar';
 // Re-export the canonical highlight-color table from core. Local
 // import below so internal callers (extractFormattingState etc.)
 // can use it without going through the public surface.
-export {
-  HIGHLIGHT_HEX_TO_NAME,
-  mapHexToHighlightName,
-} from '../legacy-core-compat';
+export { HIGHLIGHT_HEX_TO_NAME, mapHexToHighlightName } from '../legacy-core-compat';
 import { mapHexToHighlightName } from '../legacy-core-compat';
 
 // ============================================================================

@@ -40,7 +40,7 @@ export function buildNavigationSession(
   selection: SemanticSelection,
   visualAdvanceX: number,
   documentGeneration: number,
-  modelRevision: number,
+  modelRevision: number
 ): NavigationSession {
   if (selection.anchor.kind !== 'text' || selection.head.kind !== 'text') {
     throw new Error('navigation session requires text selection endpoints');
@@ -67,7 +67,7 @@ export function sessionMatchesSelection(
   selection: SemanticSelection,
   _frame: InteractionFrame,
   documentGeneration: number,
-  modelRevision: number,
+  modelRevision: number
 ): boolean {
   if (selection.anchor.kind !== 'text' || selection.head.kind !== 'text') return false;
   return (
@@ -86,7 +86,13 @@ export function sessionMatchesSelection(
 
 /** Intents that clear visual-advance session only after successful execution. */
 export function navigationSessionClearsOnSuccess(kind: string): boolean {
-  return kind === 'semanticSelection' || kind === 'click' || kind === 'pointerDown' || kind === 'pointerUp' || kind === 'blur';
+  return (
+    kind === 'semanticSelection' ||
+    kind === 'click' ||
+    kind === 'pointerDown' ||
+    kind === 'pointerUp' ||
+    kind === 'blur'
+  );
 }
 
 /** @deprecated Use navigationSessionClearsOnSuccess */
@@ -94,13 +100,15 @@ export const navigationSessionResetsForIntent = navigationSessionClearsOnSuccess
 
 export function navigationSessionPlanForIntent(
   priorSession: NavigationSession | null | undefined,
-  kind: string,
+  kind: string
 ): NavigationSessionPlan | undefined {
   if (!navigationSessionClearsOnSuccess(kind)) return undefined;
   return { priorSession: priorSession ?? null, nextSessionOnSuccess: null };
 }
 
-type NavigationCommitInput = NavigationSessionPlan | { readonly navigation?: NavigationSessionPlan };
+type NavigationCommitInput =
+  | NavigationSessionPlan
+  | { readonly navigation?: NavigationSessionPlan };
 
 function resolveNavigationPlan(input: NavigationCommitInput): NavigationSessionPlan | undefined {
   if ('priorSession' in input) return input;
@@ -110,7 +118,7 @@ function resolveNavigationPlan(input: NavigationCommitInput): NavigationSessionP
 /** Accepts a session plan or a planner result carrying `navigation`. */
 export function commitNavigationSessionAfterExecution(
   navigationInput: NavigationCommitInput | undefined,
-  execution: InteractionDispatchResult,
+  execution: InteractionDispatchResult
 ): NavigationSessionCommit {
   const navigation = navigationInput ? resolveNavigationPlan(navigationInput) : undefined;
   if (!navigation) return { session: undefined };

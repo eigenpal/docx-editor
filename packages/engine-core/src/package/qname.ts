@@ -20,7 +20,8 @@ export function isValidQName(name: string): boolean {
 }
 
 export function assertValidQName(name: string): void {
-  if (!isValidQName(name)) throw new Error(`invalid QName for serialization: ${JSON.stringify(name)}`);
+  if (!isValidQName(name))
+    throw new Error(`invalid QName for serialization: ${JSON.stringify(name)}`);
 }
 
 /**
