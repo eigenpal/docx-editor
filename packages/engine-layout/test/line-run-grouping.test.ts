@@ -51,16 +51,7 @@ function linesOf(items: TextItem[]): string[] {
   );
 }
 
-// PARKED (`describe.skip`) — these pass against the phase-2 implementation, which is not
-// on this branch yet. They are committed RED-BY-DESIGN as the executable specification of
-// the target so the next session starts from a spec rather than from prose.
-//
-// The implementation was written and these nine all passed, as did the whole
-// engine-layout suite. It was reverted because it broke SEVEN engine-editor tests around
-// `lineWhitespace` ownership, and shipping that would have traded a DOM-count win for a
-// selection regression. See the phase-2 section of renderer-run-grouping-baseline.md for
-// exactly what broke and why.
-describe.skip('paint runs are clipped to visual lines, not to words', () => {
+describe('paint runs are clipped to visual lines, not to words', () => {
   test('a single-style line paints as ONE item regardless of word count', () => {
     const sentence = 'one two three four five six seven eight';
     const items = textItems(layoutRuns([{ text: sentence }]));

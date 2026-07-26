@@ -88,7 +88,14 @@ describe('engine layout IR -> contract display IR', () => {
     const edge = bundle.navigation.visualLines
       .flatMap((line) => line.edges)
       .find((entry) => entry.target.graphemeOffset === 3);
-    expect(edge?.interaction.paintSliceAnchor).toBe(3);
+    // Grouping makes "ab cd" ONE paint slice anchored at 0, so offset 3 no longer starts a
+    // slice of its own. The edge must still resolve to the slice that CONTAINS it.
+    const owning = bundle.frame.display
+      .flatMap((page) => page.items)
+      .find((item) => item.kind === 'text' && item.semantic.graphemeFrom <= 3 && 3 <= item.semantic.graphemeTo);
+    if (owning?.kind !== 'text') throw new Error('owning slice');
+    expect(edge?.interaction.paintSliceAnchor).toBe(owning.semantic.utf16From);
+    expect(edge?.interaction.paintSliceAnchor).toBe(0);
   });
 
   test('run-split multi-slice same fragment reports no paint conflicts', () => {
@@ -204,10 +211,14 @@ describe('engine layout IR -> contract display IR', () => {
     const blockId = semanticIndex.stories[0]!.blocks[0]!.identity.blockId;
     const ws = semanticIndex.ownershipRegions.find((r) => r.kind === 'lineWhitespace' && r.identity.blockId === blockId)!;
     const items = display[0]!.items.filter((i) => i.kind === 'text') as Extract<(typeof display)[0]['items'][number], { kind: 'text' }>[];
-    expect(items).toHaveLength(2);
+    // One grouped slice for the whole unstyled line, whitespace included.
+    expect(items).toHaveLength(1);
+    expect(items[0]!.runs.map((r) => r.text).join('')).toBe('ab cd');
+    // The region's box is still derived from measured caret edges and is still precise —
+    // it is now a range INSIDE the painted slice rather than a gap between two slices.
     expect(ws.box).toBeDefined();
     expect(ws.box!.width).toBeGreaterThan(0);
-    expect(ws.box!.width).toBeLessThan(items[0]!.box.width + items[1]!.box.width);
+    expect(ws.box!.width).toBeLessThan(items[0]!.box.width);
   });
 
   test('empty paragraph emits line-area geometry with stable identity and no visible runs', () => {

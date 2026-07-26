@@ -128,20 +128,40 @@ describe('lineWhitespace ownership (task 5.3 defect)', () => {
     expect(hit.value.target.graphemeOffset).toBeLessThanOrEqual(4);
   });
 
-  test('leading whitespace box sits before first painted slice', () => {
+  // These two used to assert that whitespace lives in the GAP between painted word items,
+  // which is exactly what run grouping removes: a grouped slice paints its own leading and
+  // trailing whitespace. They now assert the same thing the gap used to prove — that the
+  // region's measured geometry is the whitespace itself, at the correct end of the line —
+  // against the painted clusters that own it.
+  test('leading whitespace geometry is the first cluster of the painted slice', () => {
     const frame = frameFor(' ab');
     const ws = whitespaceRegion(frame)!;
-    const item = frame.display[0]!.items.find((i) => i.kind === 'text')!;
-    expect(ws!.box!.x + ws!.box!.width).toBeLessThanOrEqual(item.box.x + 0.01);
+    const item = frame.display[0]!.items.find((i) => i.kind === 'text');
+    if (item?.kind !== 'text') throw new Error('text');
+    expect(item.runs.map((r) => r.text).join('')).toBe(' ab');
     expect(ws).toMatchObject({ graphemeFrom: 0, graphemeTo: 1 });
+    const cluster = item.clusters.find((c) => c.graphemeFrom === 0)!;
+    expect(cluster.graphemeTo).toBe(1);
+    expect(ws!.box!.x).toBeCloseTo(cluster.box.x, 5);
+    expect(ws!.box!.width).toBeCloseTo(cluster.box.width, 5);
+    // It sits at the START of the slice it belongs to.
+    expect(ws!.box!.x).toBeCloseTo(item.box.x, 5);
   });
 
-  test('trailing inline whitespace box sits after last painted slice', () => {
+  test('trailing whitespace geometry is the last cluster of the painted slice', () => {
     const frame = frameFor('ab ');
     const ws = whitespaceRegion(frame)!;
-    const item = frame.display[0]!.items.find((i) => i.kind === 'text')!;
-    expect(ws!.box!.x).toBeGreaterThanOrEqual(item.box.x + item.box.width - 0.01);
+    const item = frame.display[0]!.items.find((i) => i.kind === 'text');
+    if (item?.kind !== 'text') throw new Error('text');
+    expect(item.runs.map((r) => r.text).join('')).toBe('ab ');
     expect(ws).toMatchObject({ graphemeFrom: 2, graphemeTo: 3 });
+    const cluster = item.clusters.find((c) => c.graphemeFrom === 2)!;
+    expect(cluster.graphemeTo).toBe(3);
+    expect(ws!.box!.x).toBeCloseTo(cluster.box.x, 5);
+    // It sits after every painted glyph on the line.
+    for (const other of item.clusters) {
+      if (other.graphemeFrom < 2) expect(other.box.x + other.box.width).toBeLessThanOrEqual(ws!.box!.x + 0.01);
+    }
   });
 
   test('painted text wins overlap; whitespace gap remains hittable between slices', () => {
@@ -294,12 +314,17 @@ describe('lineWhitespace ownership (task 5.3 defect)', () => {
     expect(hitTestPointer(frame, gapAfterFirstSlice, METRICS).ok).toBe(false);
   });
 
-  test('whitespace-only paragraph double-click selects full block via paragraph ownership', () => {
+  test('whitespace-only paragraph double-click selects full block', () => {
     const frame = publishFrame(modelWith(['   ']));
     const block = frame.semanticIndex.stories[0]!.blocks[0]!;
     const para = frame.semanticIndex.ownershipRegions.find((r) => r.kind === 'paragraph' && r.box);
     if (!para?.box) throw new Error('paragraph ownership');
-    expect(frame.semanticIndex.ownershipRegions.find((r) => r.kind === 'lineWhitespace')?.box).toBeUndefined();
+    // A whitespace-only paragraph is now PAINTED — it is real text, not an empty line — so
+    // its whitespace region does derive a box. What must not change is the selection: the
+    // paragraph is one whitespace word segment, so double-click still takes the whole block.
+    const painted = frame.display.flatMap((p) => p.items).find((i) => i.kind === 'text');
+    if (painted?.kind !== 'text') throw new Error('painted');
+    expect(painted.runs.map((r) => r.text).join('')).toBe('   ');
     const point = clientPointForStackedText(
       frame,
       para.pageIndex ?? 0,

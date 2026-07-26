@@ -6,7 +6,10 @@ import type { MetricsPort } from './metrics.ts';
 import type { CaretEdgeItem, DisplayItem, TextItem, VisualLineIdentity } from './display-item.ts';
 import { LineTracker } from './line-tracker.ts';
 import { segmentGraphemes, utf16OffsetToGrapheme } from './grapheme.ts';
-import { isCumulativeGeometryTrustedFromLineOrigin, isWholeGraphemeHorizontalBoundary } from './horizontal-boundary.ts';
+import {
+  isCumulativeGeometryTrustedFromLineOrigin,
+  isWholeGraphemeHorizontalBoundary,
+} from './horizontal-boundary.ts';
 import { capsuleToggle } from './capsule-run-style.ts';
 
 export interface ParagraphLayoutSink {
@@ -21,10 +24,10 @@ type FlowToken = {
   readonly text: string;
 };
 
-type PlacedSlice = {
+/** One visual line's worth of positioned text, before it is split at style boundaries. */
+type PlacedLine = {
   readonly utf16From: number;
   readonly utf16To: number;
-  readonly text: string;
   readonly x: number;
   readonly y: number;
   readonly line: VisualLineIdentity;
@@ -130,10 +133,7 @@ function runIndexAt(p: ParagraphRecord, utf16Offset: number): number {
   return lo;
 }
 
-function runStyleAt(
-  p: ParagraphRecord,
-  utf16Offset: number,
-): { bold: boolean; italic: boolean } {
+function runStyleAt(p: ParagraphRecord, utf16Offset: number): { bold: boolean; italic: boolean } {
   const i = runIndexAt(p, utf16Offset);
   if (i === -1) return { bold: false, italic: false };
   return resolveRunStyle(p.runs[i]!);
@@ -148,7 +148,12 @@ function charAt(p: ParagraphRecord, utf16Offset: number): string {
   return ' ';
 }
 
-function advanceRangeWidth(metrics: MetricsPort, p: ParagraphRecord, from: number, to: number): number {
+function advanceRangeWidth(
+  metrics: MetricsPort,
+  p: ParagraphRecord,
+  from: number,
+  to: number
+): number {
   let width = 0;
   for (let i = from; i < to; i += 1) {
     const style = runStyleAt(p, i);
@@ -173,7 +178,7 @@ function advanceRangeWidth(metrics: MetricsPort, p: ParagraphRecord, from: numbe
 function utf16AtGraphemeBoundary(
   segments: readonly { readonly utf16From: number }[],
   fullTextLength: number,
-  graphemeOffset: number,
+  graphemeOffset: number
 ): number {
   if (graphemeOffset >= segments.length) return fullTextLength;
   return segments[graphemeOffset]?.utf16From ?? fullTextLength;
@@ -183,9 +188,14 @@ function caretEdgeNavigable(
   metrics: MetricsPort,
   fullText: string,
   lineStartGraphemeOffset: number,
-  graphemeOffset: number,
+  graphemeOffset: number
 ): boolean {
-  return isCumulativeGeometryTrustedFromLineOrigin(metrics, fullText, lineStartGraphemeOffset, graphemeOffset);
+  return isCumulativeGeometryTrustedFromLineOrigin(
+    metrics,
+    fullText,
+    lineStartGraphemeOffset,
+    graphemeOffset
+  );
 }
 
 function pushCaretEdge(
@@ -199,7 +209,7 @@ function pushCaretEdge(
   height: number,
   line: VisualLineIdentity,
   navigable: boolean,
-  horizontalNavigable: boolean,
+  horizontalNavigable: boolean
 ): void {
   sink.push({
     type: 'caretEdge',
@@ -226,7 +236,7 @@ export function layoutParagraphInBox(
   metrics: MetricsPort,
   sink: ParagraphLayoutSink,
   newLine: () => void,
-  options: { trailingNewLine?: boolean } = {},
+  options: { trailingNewLine?: boolean } = {}
 ): { x: number; y: number } {
   const fullText = paragraphFullText(p);
   // Segment the paragraph ONCE and keep the result for the whole layout. Every
@@ -235,8 +245,21 @@ export function layoutParagraphInBox(
   const paragraphGraphemeCount = paragraphSegments.length;
   const tracker = new LineTracker(p.id);
   const tokens = tokenizeParagraph(fullText);
-  const placed: PlacedSlice[] = [];
   let lineStartGraphemeOffset = 0;
+  // Paint runs are clipped to VISUAL LINES, not to words.
+  //
+  // This used to emit one paint slice per word token and nothing at all for whitespace
+  // tokens, so element count scaled with word count and painted text contained no spaces.
+  // A line's text is contiguous in UTF-16 — wrapping only ever happens BETWEEN tokens —
+  // so accumulating `[lineStartUtf16, wrapPoint)` and flushing once per line both collapses
+  // the element count to (lines x style changes) and carries whitespace along as real text.
+  //
+  // Wrapping is unchanged: `tokens` still decides where lines break, and the flush happens
+  // BEFORE `tracker.wrap()`/`newLine()` so the emitted item carries the line identity, y and
+  // page index of the line it belongs to rather than the one about to start.
+  let lineStartUtf16 = 0;
+  let lineStartX = cursor.x;
+  let paintedAny = false;
   // Highest grapheme offset an edge was emitted for on the CURRENT line. Reset at
   // each wrap, because a wrap deliberately emits an edge at the same offset on the
   // new line — that pair is how the two sides of a soft break are addressable.
@@ -256,8 +279,21 @@ export function layoutParagraphInBox(
       metrics.lineHeight,
       tracker.identity(sink.currentPageIndex()),
       caretEdgeNavigable(metrics, fullText, lineStartGraphemeOffset, graphemeOffset),
-      isWholeGraphemeHorizontalBoundary(metrics, fullText, graphemeOffset),
+      isWholeGraphemeHorizontalBoundary(metrics, fullText, graphemeOffset)
     );
+  };
+
+  /** Flush `[lineStartUtf16, utf16To)` as this line's paint runs, split at style changes. */
+  const emitLine = (utf16To: number) => {
+    if (utf16To <= lineStartUtf16) return;
+    emitPaintSlices(p, fullText, metrics, sink, {
+      utf16From: lineStartUtf16,
+      utf16To,
+      x: lineStartX,
+      y: cursor.y,
+      line: tracker.identity(sink.currentPageIndex()),
+    });
+    paintedAny = true;
   };
 
   pushEdge(0);
@@ -280,22 +316,16 @@ export function layoutParagraphInBox(
 
     const width = advanceRangeWidth(metrics, p, token.utf16From, token.utf16To);
     if (cursor.x + width > contentRight && cursor.x > contentLeft) {
+      // Flush the finished line before the tracker and cursor move to the next one.
+      emitLine(token.utf16From);
       lineStartGraphemeOffset = utf16OffsetToGrapheme(fullText, token.utf16From);
       tracker.wrap(sink.currentPageIndex());
       newLine();
+      lineStartUtf16 = token.utf16From;
+      lineStartX = cursor.x;
       lastEdgeGrapheme = -1; // a new line re-addresses the wrap offset
       pushEdge(lineStartGraphemeOffset);
     }
-
-    placed.push({
-      utf16From: token.utf16From,
-      utf16To: token.utf16To,
-      text: token.text,
-      x: cursor.x,
-      y: cursor.y,
-      line: tracker.identity(sink.currentPageIndex()),
-    });
-    emitPaintSlices(p, fullText, metrics, sink, [placed[placed.length - 1]!]);
 
     // Walk the PARAGRAPH's own segments inside this token's range rather than
     // segmenting `token.text` — segmenting the token is what evicted the memo
@@ -341,7 +371,9 @@ export function layoutParagraphInBox(
     if (trailingEdge > lastEdgeGrapheme) pushEdge(trailingEdge);
   }
 
-  if (placed.length === 0) {
+  emitLine(fullText.length);
+
+  if (!paintedAny) {
     sink.push({
       type: 'text',
       x: contentLeft,
@@ -363,69 +395,71 @@ export function layoutParagraphInBox(
 }
 
 /**
- * Split positioned line tokens at run boundaries for paint-only TextItems.
+ * Split one positioned visual line at run boundaries into paint-only TextItems.
  *
- * Takes `fullText` rather than rebuilding it: this runs once per placed slice, and
+ * Grouping happens here and only here: consecutive code units whose RESOLVED paint
+ * properties are equal become one item. A style change ends an item, so adjacent runs
+ * can neither merge nor inherit each other's formatting.
+ *
+ * Takes `fullText` rather than rebuilding it: this runs once per line, and
  * `paragraphFullText` joins every run, so rebuilding it here cost O(chars) per
- * slice — a second quadratic term independent of segmentation.
+ * line — a second quadratic term independent of segmentation.
  */
 function emitPaintSlices(
   p: ParagraphRecord,
   fullText: string,
   metrics: MetricsPort,
   sink: ParagraphLayoutSink,
-  placed: readonly PlacedSlice[],
+  slice: PlacedLine
 ): void {
-  for (const slice of placed) {
-    let cursor = slice.utf16From;
-    // Accumulated, not recomputed.
-    //
-    // This was `advanceRangeWidth(metrics, p, slice.utf16From, cursor)` — a fresh
-    // measurement of the whole slice prefix for EVERY style segment inside it, i.e.
-    // k^2*m/2 `metrics.advance` calls for k segments of m characters. Independent
-    // security review measured a 4,039-byte .docx — one whitespace-free paragraph
-    // with runs alternating bold every 23 characters — freezing `createEditor()`
-    // for 45.2 s on open with zero clicks, at 736,460,001 `advance()` calls and a
-    // measured growth exponent of 2.05 over four doublings. It re-runs per
-    // keystroke, and a whitespace-free token is not exotic: CJK text has no
-    // whitespace, so an entire CJK paragraph is one token.
-    //
-    // The prefix is exactly the sum of the segment widths already emitted, so
-    // carrying it forward is both cheaper and simpler.
-    //
-    // This is the FOURTH iteration on this defect class, and the reason the earlier
-    // three missed it is worth recording: each guard instrumented whatever the
-    // previous fix had addressed. `layout-cost.test.ts` counts segmented characters,
-    // which for this shape is exactly 1.0x linear, while `advance()` runs 4,003x per
-    // character. A guard that counts the wrong quantity reads as coverage. The
-    // companion test now counts `metrics.advance` calls.
-    let prefixWidth = 0;
-    while (cursor < slice.utf16To) {
-      const style = runStyleAt(p, cursor);
-      let runEnd = slice.utf16To;
-      for (let pos = cursor + 1; pos < slice.utf16To; pos += 1) {
-        const next = runStyleAt(p, pos);
-        if (next.bold !== style.bold || next.italic !== style.italic) {
-          runEnd = pos;
-          break;
-        }
+  let cursor = slice.utf16From;
+  // Accumulated, not recomputed.
+  //
+  // This was `advanceRangeWidth(metrics, p, slice.utf16From, cursor)` — a fresh
+  // measurement of the whole slice prefix for EVERY style segment inside it, i.e.
+  // k^2*m/2 `metrics.advance` calls for k segments of m characters. Independent
+  // security review measured a 4,039-byte .docx — one whitespace-free paragraph
+  // with runs alternating bold every 23 characters — freezing `createEditor()`
+  // for 45.2 s on open with zero clicks, at 736,460,001 `advance()` calls and a
+  // measured growth exponent of 2.05 over four doublings. It re-runs per
+  // keystroke, and a whitespace-free token is not exotic: CJK text has no
+  // whitespace, so an entire CJK paragraph is one token.
+  //
+  // The prefix is exactly the sum of the segment widths already emitted, so
+  // carrying it forward is both cheaper and simpler.
+  //
+  // This is the FOURTH iteration on this defect class, and the reason the earlier
+  // three missed it is worth recording: each guard instrumented whatever the
+  // previous fix had addressed. `layout-cost.test.ts` counts segmented characters,
+  // which for this shape is exactly 1.0x linear, while `advance()` runs 4,003x per
+  // character. A guard that counts the wrong quantity reads as coverage. The
+  // companion test now counts `metrics.advance` calls.
+  let prefixWidth = 0;
+  while (cursor < slice.utf16To) {
+    const style = runStyleAt(p, cursor);
+    let runEnd = slice.utf16To;
+    for (let pos = cursor + 1; pos < slice.utf16To; pos += 1) {
+      const next = runStyleAt(p, pos);
+      if (next.bold !== style.bold || next.italic !== style.italic) {
+        runEnd = pos;
+        break;
       }
-      const partWidth = advanceRangeWidth(metrics, p, cursor, runEnd);
-      const item: TextItem = {
-        type: 'text',
-        x: slice.x + prefixWidth,
-        y: slice.y,
-        width: partWidth,
-        height: metrics.lineHeight,
-        text: fullText.slice(cursor, runEnd),
-        bold: style.bold,
-        italic: style.italic,
-        anchor: { paragraphId: p.id, offset: cursor },
-        line: slice.line,
-      };
-      sink.push(item);
-      prefixWidth += partWidth;
-      cursor = runEnd;
     }
+    const partWidth = advanceRangeWidth(metrics, p, cursor, runEnd);
+    const item: TextItem = {
+      type: 'text',
+      x: slice.x + prefixWidth,
+      y: slice.y,
+      width: partWidth,
+      height: metrics.lineHeight,
+      text: fullText.slice(cursor, runEnd),
+      bold: style.bold,
+      italic: style.italic,
+      anchor: { paragraphId: p.id, offset: cursor },
+      line: slice.line,
+    };
+    sink.push(item);
+    prefixWidth += partWidth;
+    cursor = runEnd;
   }
 }

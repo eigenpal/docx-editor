@@ -39,7 +39,9 @@ describe('layout dispatches blocks through the registry', () => {
     const model = modelWith([{ kind: 'paragraph', id: 'p', runs: [{ text: 'hello world' }] }]);
     const layout = layoutBody(model, opts());
     const texts = layout.pages.flatMap((pg) => pg.items).filter((i) => i.type === 'text');
-    expect(texts.map((t) => (t as { text: string }).text)).toEqual(['hello', 'world']);
+    // One paint run per visual line per style, not one per word: "hello world" is a
+    // single unstyled line, so it paints as one item WITH its space.
+    expect(texts.map((t) => (t as { text: string }).text)).toEqual(['hello world']);
     expect(texts.every((t) => (t as { anchor: { paragraphId: string } }).anchor.paragraphId === 'p')).toBe(true);
   });
 

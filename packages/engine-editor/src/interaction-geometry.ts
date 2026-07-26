@@ -48,7 +48,7 @@ interface HitCandidate {
 function reject<T>(
   code: 'staleFrame' | 'pendingLayout' | 'readOnly' | 'invalidTarget' | 'unsupported',
   reason: string,
-  frameId?: InteractionFrameId,
+  frameId?: InteractionFrameId
 ): InteractionOutcome<T> {
   return frameId ? { ok: false, code, reason, frameId } : { ok: false, code, reason };
 }
@@ -57,7 +57,9 @@ function okValue<T>(value: T, frameId: InteractionFrameId): InteractionOutcome<T
   return { ok: true, value, frameId };
 }
 
-function unsupportedWritingMode(mode: PositionedInteractionMeta['writingMode'] | undefined): boolean {
+function unsupportedWritingMode(
+  mode: PositionedInteractionMeta['writingMode'] | undefined
+): boolean {
   return mode !== undefined && mode !== HORIZONTAL_WRITING_MODE;
 }
 
@@ -72,7 +74,8 @@ function blockRecord(frame: InteractionFrame, blockId: string) {
 function roleForTarget(frame: InteractionFrame, target: SemanticTarget): InteractionRole {
   const stop = frame.semanticIndex.caretStops.find((s) => {
     if (s.target.kind !== target.kind) return false;
-    if (target.kind === 'atomic' && s.target.kind === 'atomic') return s.target.objectId === target.objectId;
+    if (target.kind === 'atomic' && s.target.kind === 'atomic')
+      return s.target.objectId === target.objectId;
     if (s.target.kind !== 'text' || target.kind !== 'text') return false;
     return (
       s.target.identity.blockId === target.identity.blockId &&
@@ -91,7 +94,7 @@ function localPointInItem(
   local: Point,
   box: Rect,
   clip: Rect | undefined,
-  transform: PositionedInteractionMeta['transform'],
+  transform: PositionedInteractionMeta['transform']
 ): Point | 'singular' | null {
   const relative = { x: local.x - box.x, y: local.y - box.y };
   let test = relative;
@@ -102,7 +105,12 @@ function localPointInItem(
   }
   if (!pointInRect(test, { x: 0, y: 0, width: box.width, height: box.height })) return null;
   if (clip) {
-    const clipRelative = { x: clip.x - box.x, y: clip.y - box.y, width: clip.width, height: clip.height };
+    const clipRelative = {
+      x: clip.x - box.x,
+      y: clip.y - box.y,
+      width: clip.width,
+      height: clip.height,
+    };
     if (!pointInRect(test, clipRelative)) return null;
   }
   return { x: test.x + box.x, y: test.y + box.y };
@@ -111,11 +119,12 @@ function localPointInItem(
 function nearestClusterEdge(
   local: Point,
   clusters: readonly ShapedCluster[],
-  paragraphGraphemeCount: number,
+  paragraphGraphemeCount: number
 ): Pick<Extract<SemanticTarget, { kind: 'text' }>, 'graphemeOffset' | 'affinity'> {
   if (clusters.length === 0) {
     return { graphemeOffset: 0, affinity: caretAffinity(0, paragraphGraphemeCount) };
   }
+
   let bestDist = Number.POSITIVE_INFINITY;
   let bestOffset = clusters[0]!.graphemeFrom;
   let bestAffinity = clusters[0]!.affinity;
@@ -129,7 +138,9 @@ function nearestClusterEdge(
       },
     ];
     for (const edge of edges) {
-      const dist = Math.abs(local.x - edge.x) + Math.abs(local.y - (cluster.box.y + cluster.box.height / 2)) * 0.01;
+      const dist =
+        Math.abs(local.x - edge.x) +
+        Math.abs(local.y - (cluster.box.y + cluster.box.height / 2)) * 0.01;
       if (dist < bestDist - 1e-9) {
         bestDist = dist;
         bestOffset = edge.offset;
@@ -148,14 +159,71 @@ function nearestClusterEdge(
   return { graphemeOffset: bestOffset, affinity: bestAffinity };
 }
 
+const WHITESPACE_ONLY = /^\s+$/u;
+
+/** The painted cluster the pointer is horizontally inside, if any. */
+function clusterUnderPoint(
+  local: Point,
+  clusters: readonly ShapedCluster[]
+): ShapedCluster | undefined {
+  return clusters.find(
+    (cluster) => local.x >= cluster.box.x && local.x < cluster.box.x + cluster.box.width
+  );
+}
+
+/** Text of `cluster` read from the item's own glyph runs, or `null` if it does not align. */
+function clusterText(
+  item: Extract<DisplayItem, { kind: 'text' }>,
+  cluster: ShapedCluster
+): string | null {
+  const text = item.runs.map((run) => run.text).join('');
+  const from = cluster.utf16From - item.semantic.utf16From;
+  const to = cluster.utf16To - item.semantic.utf16From;
+  if (from < 0 || to > text.length || to <= from) return null;
+  return text.slice(from, to);
+}
+
+/**
+ * Where a pointer inside a whitespace cluster addresses, in the SAME convention the
+ * `lineWhitespace` ownership region used before run grouping.
+ *
+ * Grouped items paint their own spaces and tabs, so a click on a space no longer falls in
+ * a gap between painted words and the region no longer answers it (see
+ * `whitespaceRegionIsPainted`). Reproducing the region's convention here is what keeps the
+ * behaviour identical: nearest edge for the offset, and producer-side affinity
+ * `downstream` on BOTH sides.
+ *
+ * The affinity is the load-bearing part. `resolveWordRangeAtHit` disambiguates a
+ * word-segment boundary by affinity, and `caretAffinity` makes every interior offset
+ * `upstream` — which is right for a glyph, where clicking the left edge of a character
+ * addresses the boundary before it, and wrong for whitespace, where it made a click in the
+ * left half of a space double-click-select the PRECEDING word rather than the space.
+ * Glyph clusters keep the nearest-edge policy untouched; only whitespace takes this path.
+ */
+function whitespaceEdgeInCluster(
+  local: Point,
+  cluster: ShapedCluster
+): Pick<Extract<SemanticTarget, { kind: 'text' }>, 'graphemeOffset' | 'affinity'> {
+  const ratio = cluster.box.width > 0 ? (local.x - cluster.box.x) / cluster.box.width : 0;
+  return {
+    graphemeOffset: ratio < 0.5 ? cluster.graphemeFrom : cluster.graphemeTo,
+    affinity: 'downstream',
+  };
+}
+
 function textTargetFromItem(
   item: Extract<DisplayItem, { kind: 'text' }>,
   local: Point,
-  frame: InteractionFrame,
+  frame: InteractionFrame
 ): SemanticTarget {
   const block = blockRecord(frame, item.semantic.identity.blockId);
   const paragraphGraphemeCount = block?.graphemeCount ?? item.semantic.graphemeTo;
-  const edge = nearestClusterEdge(local, item.clusters, paragraphGraphemeCount);
+  const under = clusterUnderPoint(local, item.clusters);
+  const underText = under ? clusterText(item, under) : null;
+  const edge =
+    under && underText !== null && WHITESPACE_ONLY.test(underText)
+      ? whitespaceEdgeInCluster(local, under)
+      : nearestClusterEdge(local, item.clusters, paragraphGraphemeCount);
   return {
     kind: 'text',
     scope: item.scope,
@@ -181,9 +249,14 @@ function ownershipTarget(region: OwnershipRegion, frame: InteractionFrame): Sema
 function whitespaceTargetFromRegion(
   region: OwnershipRegion,
   local: Point,
-  frame: InteractionFrame,
+  frame: InteractionFrame
 ): SemanticTarget | null {
-  if (region.kind !== 'lineWhitespace' || region.graphemeFrom === undefined || region.graphemeTo === undefined || !region.box) {
+  if (
+    region.kind !== 'lineWhitespace' ||
+    region.graphemeFrom === undefined ||
+    region.graphemeTo === undefined ||
+    !region.box
+  ) {
     return null;
   }
   const block = blockRecord(frame, region.identity.blockId);
@@ -214,7 +287,122 @@ function whitespaceTargetFromRegion(
   };
 }
 
-function candidatesForPage(pageIndex: number, page: InteractionFrame['display'][number], frame: InteractionFrame): HitCandidate[] {
+/**
+ * Grapheme ranges each block's PAINTED clusters actually cover, per frame.
+ *
+ * Run grouping made painted text the authority for whitespace, so a `lineWhitespace`
+ * ownership region must not stay a second, competing hit-test candidate over text that is
+ * already painted. It stays a FALLBACK: it is only registered when no painted cluster
+ * represents that whitespace — a run split across a line break, or a boundary layout could
+ * not publish as horizontally navigable.
+ *
+ * Built LAZILY, PER BLOCK, memoized on the frame. Two separate traps here, both measured:
+ *
+ *  - Per region is O(regions x clusters) inside a single paragraph, the exact shape
+ *    `enrichOwnershipRegions` has been bitten by four times. Intervals are therefore merged
+ *    and sorted once, so a coverage query is a binary search.
+ *  - Per FRAME, over the whole document, is just as bad by a different axis. The first
+ *    version built every block's intervals on first use; on the 24-page styled fixture that
+ *    is ~106,000 clusters sorted on every published frame, and a frame is published on every
+ *    selection change. It moved selection dispatch from 175.7 ms to 229.6 ms — a regression
+ *    introduced by the guard itself. Only the queried block is built, so caret derivation
+ *    pays for one paragraph and a page hit test pays for the blocks on that page.
+ */
+interface PaintedCoverage {
+  /** Painted text items per block, indexed once per frame. */
+  readonly itemsByBlock: Map<string, Extract<DisplayItem, { kind: 'text' }>[]>;
+  /** Merged `[from, to)` intervals per block, filled on first query for that block. */
+  readonly intervalsByBlock: Map<string, readonly number[]>;
+}
+
+const paintedCoverageCache = new WeakMap<InteractionFrame, PaintedCoverage>();
+
+function paintedCoverage(frame: InteractionFrame): PaintedCoverage {
+  const cached = paintedCoverageCache.get(frame);
+  if (cached) return cached;
+  const itemsByBlock = new Map<string, Extract<DisplayItem, { kind: 'text' }>[]>();
+  for (const page of frame.display) {
+    for (const item of page.items) {
+      if (item.kind !== 'text' || item.synthetic === true) continue;
+      const blockId = item.semantic.identity.blockId;
+      const bucket = itemsByBlock.get(blockId);
+      if (bucket) bucket.push(item);
+      else itemsByBlock.set(blockId, [item]);
+    }
+  }
+  const coverage: PaintedCoverage = { itemsByBlock, intervalsByBlock: new Map() };
+  paintedCoverageCache.set(frame, coverage);
+  return coverage;
+}
+
+function intervalsForBlock(frame: InteractionFrame, blockId: string): readonly number[] {
+  const coverage = paintedCoverage(frame);
+  const memoized = coverage.intervalsByBlock.get(blockId);
+  if (memoized) return memoized;
+  const spans: { from: number; to: number }[] = [];
+  for (const item of coverage.itemsByBlock.get(blockId) ?? []) {
+    for (const cluster of item.clusters) {
+      if (cluster.graphemeTo > cluster.graphemeFrom) {
+        spans.push({ from: cluster.graphemeFrom, to: cluster.graphemeTo });
+      }
+    }
+  }
+  spans.sort((a, b) => a.from - b.from || a.to - b.to);
+  const flat: number[] = [];
+  for (const span of spans) {
+    const lastEnd = flat.length > 0 ? flat[flat.length - 1]! : undefined;
+    if (lastEnd !== undefined && span.from <= lastEnd) {
+      if (span.to > lastEnd) flat[flat.length - 1] = span.to;
+      continue;
+    }
+    flat.push(span.from, span.to);
+  }
+  coverage.intervalsByBlock.set(blockId, flat);
+  return flat;
+}
+
+/** True when one painted interval fully contains `[from, to)`. */
+function rangeIsPainted(
+  frame: InteractionFrame,
+  blockId: string,
+  from: number,
+  to: number
+): boolean {
+  if (to <= from) return false;
+  const flat = intervalsForBlock(frame, blockId);
+  if (flat.length === 0) return false;
+  // Largest interval start <= from.
+  let lo = 0;
+  let hi = flat.length / 2 - 1;
+  let found = -1;
+  while (lo <= hi) {
+    const mid = (lo + hi) >> 1;
+    if (flat[mid * 2]! <= from) {
+      found = mid;
+      lo = mid + 1;
+    } else {
+      hi = mid - 1;
+    }
+  }
+  return found >= 0 && flat[found * 2 + 1]! >= to;
+}
+
+function whitespaceRegionIsPainted(frame: InteractionFrame, region: OwnershipRegion): boolean {
+  if (
+    region.kind !== 'lineWhitespace' ||
+    region.graphemeFrom === undefined ||
+    region.graphemeTo === undefined
+  ) {
+    return false;
+  }
+  return rangeIsPainted(frame, region.identity.blockId, region.graphemeFrom, region.graphemeTo);
+}
+
+function candidatesForPage(
+  pageIndex: number,
+  page: InteractionFrame['display'][number],
+  frame: InteractionFrame
+): HitCandidate[] {
   const out: HitCandidate[] = [];
   page.items.forEach((item, zOrder) => {
     if (item.kind === 'tableBorder') return;
@@ -226,7 +414,8 @@ function candidatesForPage(pageIndex: number, page: InteractionFrame['display'][
       transform: meta?.transform,
       writingMode: meta?.writingMode,
       pointerTransparent:
-        meta?.pointerTransparent ?? (item.kind === 'fill' || item.kind === 'decoration' || item.kind === 'custom'),
+        meta?.pointerTransparent ??
+        (item.kind === 'fill' || item.kind === 'decoration' || item.kind === 'custom'),
       synthetic: (item.kind === 'text' || item.kind === 'image') && item.synthetic === true,
     };
     if (item.kind === 'text') {
@@ -242,11 +431,13 @@ function candidatesForPage(pageIndex: number, page: InteractionFrame['display'][
   });
 
   const paintedTextBlocks = new Set(
-    page.items.filter((item) => item.kind === 'text').map((item) => item.semantic.identity.blockId),
+    page.items.filter((item) => item.kind === 'text').map((item) => item.semantic.identity.blockId)
   );
   for (const region of frame.semanticIndex.ownershipRegions) {
     if (region.pageIndex !== pageIndex || !region.box) continue;
     if (region.kind === 'lineWhitespace') {
+      // Fallback only: painted clusters already answer for this whitespace.
+      if (whitespaceRegionIsPainted(frame, region)) continue;
       out.push({
         zOrder: -1,
         box: region.box,
@@ -274,14 +465,18 @@ export function hitTestPointer(
   frame: InteractionFrame,
   clientPoint: Point,
   metrics: InteractionHostMetrics | undefined,
-  options?: { frameId?: InteractionFrameId },
+  options?: { frameId?: InteractionFrameId }
 ): InteractionOutcome<SemanticHitTarget> {
   const identity = validateFrameIdentity(frame, options?.frameId);
   if (!identity.ok) {
     return reject('staleFrame', identity.reason, frame.id);
   }
   if (frame.completeness.kind === 'pending') {
-    return reject('pendingLayout', 'layout for the current model revision is not yet published', frame.id);
+    return reject(
+      'pendingLayout',
+      'layout for the current model revision is not yet published',
+      frame.id
+    );
   }
   const host = validateHostMetrics(metrics);
   if (!host.ok) return reject('invalidTarget', host.reason, frame.id);
@@ -294,14 +489,25 @@ export function hitTestPointer(
   const page = frame.display.find((p) => p.index === pageLocal.value.pageIndex);
   if (!page) return reject('invalidTarget', 'page not found in frame display', frame.id);
 
-  const candidates = candidatesForPage(pageLocal.value.pageIndex, page, frame).sort((a, b) => b.zOrder - a.zOrder);
+  const candidates = candidatesForPage(pageLocal.value.pageIndex, page, frame).sort(
+    (a, b) => b.zOrder - a.zOrder
+  );
 
   for (const candidate of candidates) {
     if (candidate.synthetic || candidate.pointerTransparent) continue;
     if (unsupportedWritingMode(candidate.writingMode)) {
-      return reject('unsupported', 'only horizontal-tb writing mode is supported in the body-paragraph gate', frame.id);
+      return reject(
+        'unsupported',
+        'only horizontal-tb writing mode is supported in the body-paragraph gate',
+        frame.id
+      );
     }
-    const hitLocal = localPointInItem(pageLocal.value.local, candidate.box, candidate.clip, candidate.transform);
+    const hitLocal = localPointInItem(
+      pageLocal.value.local,
+      candidate.box,
+      candidate.clip,
+      candidate.transform
+    );
     if (hitLocal === 'singular') {
       return reject('invalidTarget', 'display item transform is not invertible', frame.id);
     }
@@ -310,7 +516,7 @@ export function hitTestPointer(
     if (!target) continue;
     return okValue(
       { frameId: frame.id, revisions: frame.revisions, target, role: roleForTarget(frame, target) },
-      frame.id,
+      frame.id
     );
   }
 
@@ -321,7 +527,7 @@ function overlayFromPageLocal(
   frame: InteractionFrame,
   pageIndex: number,
   pageLocal: Rect,
-  meta: PositionedInteractionMeta | undefined,
+  meta: PositionedInteractionMeta | undefined
 ): { rect: Rect; clip?: Rect } | 'singular' | null {
   if (unsupportedWritingMode(meta?.writingMode)) return null;
   const transform = meta?.transform;
@@ -331,7 +537,7 @@ function overlayFromPageLocal(
     const clipLocal = intersectRects(pageLocal, meta.clip);
     if (!clipLocal) return null;
     const clip = clipStackedRect(frame, pageIndex, stacked, clipLocal) ?? undefined;
-    const clippedRect = clip ? intersectRects(stacked, clip) ?? null : null;
+    const clippedRect = clip ? (intersectRects(stacked, clip) ?? null) : null;
     if (!clippedRect || clippedRect.width <= 0 || clippedRect.height <= 0) return null;
     return { rect: clippedRect, clip };
   }
@@ -342,11 +548,13 @@ function overlayFromPageLocal(
 function caretRectForLineWhitespace(
   frame: InteractionFrame,
   target: Extract<SemanticTarget, { kind: 'text' }>,
-  region: OwnershipRegion,
+  region: OwnershipRegion
 ): CaretGeometry | null {
-  if (region.kind !== 'lineWhitespace' || !region.box || region.pageIndex === undefined) return null;
+  if (region.kind !== 'lineWhitespace' || !region.box || region.pageIndex === undefined)
+    return null;
   if (region.graphemeFrom === undefined || region.graphemeTo === undefined) return null;
-  if (target.graphemeOffset < region.graphemeFrom || target.graphemeOffset > region.graphemeTo) return null;
+  if (target.graphemeOffset < region.graphemeFrom || target.graphemeOffset > region.graphemeTo)
+    return null;
   const block = blockRecord(frame, target.identity.blockId);
   if (!block || block.readOnly) return null;
   const atTrailingEdge = target.graphemeOffset === region.graphemeTo;
@@ -355,7 +563,7 @@ function caretRectForLineWhitespace(
     frame,
     region.pageIndex,
     { x, y: region.box.y, width: 1, height: region.box.height },
-    { pageIndex: region.pageIndex, zOrder: 0, writingMode: HORIZONTAL_WRITING_MODE },
+    { pageIndex: region.pageIndex, zOrder: 0, writingMode: HORIZONTAL_WRITING_MODE }
   );
   if (overlay === 'singular' || !overlay) return null;
   return {
@@ -372,7 +580,7 @@ function caretRectForLineWhitespace(
 function caretBoxForTargetOnItem(
   target: Extract<SemanticTarget, { kind: 'text' }>,
   block: NonNullable<ReturnType<typeof blockRecord>>,
-  item: Extract<DisplayItem, { kind: 'text' }>,
+  item: Extract<DisplayItem, { kind: 'text' }>
 ): Rect | null {
   if (item.clusters.length === 0) {
     const atEnd = target.graphemeOffset >= block.graphemeCount;
@@ -384,7 +592,8 @@ function caretBoxForTargetOnItem(
     };
   }
   for (const cluster of item.clusters) {
-    if (target.graphemeOffset < cluster.graphemeFrom || target.graphemeOffset > cluster.graphemeTo) continue;
+    if (target.graphemeOffset < cluster.graphemeFrom || target.graphemeOffset > cluster.graphemeTo)
+      continue;
     const atEnd = target.graphemeOffset >= cluster.graphemeTo;
     return {
       x: atEnd ? cluster.box.x + cluster.box.width : cluster.box.x,
@@ -404,7 +613,7 @@ function caretBoxForTargetOnItem(
 export function navigationEdgeCaretOverlay(
   frame: InteractionFrame,
   navigation: NavigationGeometry | null | undefined,
-  target: Extract<SemanticTarget, { kind: 'text' }>,
+  target: Extract<SemanticTarget, { kind: 'text' }>
 ): { rect: Rect; clip?: Rect } | 'singular' | null {
   if (!navigation) return null;
   const block = blockRecord(frame, target.identity.blockId);
@@ -430,7 +639,7 @@ export function navigationEdgeCaretOverlay(
           width: 1,
           height: edge.pageLocalHeight,
         },
-        meta,
+        meta
       );
     }
   }
@@ -440,13 +649,14 @@ export function navigationEdgeCaretOverlay(
 /** Caret overlay derived only from bridged display items (respects clip/transform). */
 export function displayBackedCaretOverlay(
   frame: InteractionFrame,
-  target: Extract<SemanticTarget, { kind: 'text' }>,
+  target: Extract<SemanticTarget, { kind: 'text' }>
 ): { rect: Rect; clip?: Rect } | 'singular' | null {
   const block = blockRecord(frame, target.identity.blockId);
   if (!block || block.readOnly) return null;
   for (const page of frame.display) {
     for (const item of page.items) {
-      if (item.kind !== 'text' || item.semantic.identity.blockId !== target.identity.blockId) continue;
+      if (item.kind !== 'text' || item.semantic.identity.blockId !== target.identity.blockId)
+        continue;
       const caretBox = caretBoxForTargetOnItem(target, block, item);
       if (!caretBox) continue;
       const overlay = overlayFromPageLocal(frame, page.index, caretBox, item.interaction);
@@ -461,20 +671,23 @@ export function displayBackedCaretOverlay(
 export function caretOverlayForTarget(
   frame: InteractionFrame,
   navigation: NavigationGeometry | null | undefined,
-  target: Extract<SemanticTarget, { kind: 'text' }>,
+  target: Extract<SemanticTarget, { kind: 'text' }>
 ): { rect: Rect; clip?: Rect } | 'singular' | null {
   return navigationEdgeCaretOverlay(frame, navigation, target);
 }
 
 function caretRectForTextTarget(
   frame: InteractionFrame,
-  target: Extract<SemanticTarget, { kind: 'text' }>,
+  target: Extract<SemanticTarget, { kind: 'text' }>
 ): CaretGeometry | null {
   const block = blockRecord(frame, target.identity.blockId);
   if (!block || block.readOnly) return null;
 
+  // Same fallback rule as hit testing: a whitespace region only answers for whitespace no
+  // painted cluster represents, so caret geometry and hit testing cannot disagree.
   for (const region of frame.semanticIndex.ownershipRegions) {
     if (region.identity.blockId !== target.identity.blockId) continue;
+    if (whitespaceRegionIsPainted(frame, region)) continue;
     const fromWhitespace = caretRectForLineWhitespace(frame, target, region);
     if (fromWhitespace) return fromWhitespace;
   }
@@ -495,13 +708,14 @@ function caretRectForTextTarget(
     (s) =>
       s.target.kind === 'text' &&
       s.target.identity.blockId === target.identity.blockId &&
-      s.target.graphemeOffset === target.graphemeOffset,
+      s.target.graphemeOffset === target.graphemeOffset
   );
   if (!stop || stop.role !== 'editableText') return null;
 
   for (const page of frame.display) {
     for (const item of page.items) {
-      if (item.kind !== 'text' || item.semantic.identity.blockId !== target.identity.blockId) continue;
+      if (item.kind !== 'text' || item.semantic.identity.blockId !== target.identity.blockId)
+        continue;
       const caretBox = caretBoxForTargetOnItem(target, block, item);
       if (!caretBox) continue;
       const overlay = overlayFromPageLocal(frame, page.index, caretBox, item.interaction);
@@ -520,7 +734,12 @@ function caretRectForTextTarget(
   }
 
   for (const region of frame.semanticIndex.ownershipRegions) {
-    if (region.identity.blockId !== target.identity.blockId || !region.box || region.pageIndex === undefined) continue;
+    if (
+      region.identity.blockId !== target.identity.blockId ||
+      !region.box ||
+      region.pageIndex === undefined
+    )
+      continue;
     if (region.kind === 'lineWhitespace') continue;
     const atEnd = target.graphemeOffset >= block.graphemeCount;
     const x = atEnd ? region.box.x + Math.max(1, region.box.width) : region.box.x;
@@ -528,7 +747,7 @@ function caretRectForTextTarget(
       frame,
       region.pageIndex,
       { x, y: region.box.y, width: 1, height: region.box.height },
-      { pageIndex: region.pageIndex, zOrder: 0, writingMode: HORIZONTAL_WRITING_MODE },
+      { pageIndex: region.pageIndex, zOrder: 0, writingMode: HORIZONTAL_WRITING_MODE }
     );
     if (overlay === 'singular' || !overlay) continue;
     return {
@@ -546,7 +765,7 @@ function caretRectForTextTarget(
 
 export function deriveCaretGeometry(
   frame: InteractionFrame,
-  target: SemanticTarget | null | undefined,
+  target: SemanticTarget | null | undefined
 ): CaretGeometry | null {
   const resolved = target ?? frame.selection?.head ?? null;
   if (!resolved) return frame.caret;
@@ -556,28 +775,33 @@ export function deriveCaretGeometry(
 
 function orderedTextRange(
   anchor: SemanticTarget,
-  head: SemanticTarget,
-): { from: Extract<SemanticTarget, { kind: 'text' }>; to: Extract<SemanticTarget, { kind: 'text' }> } | null {
+  head: SemanticTarget
+): {
+  from: Extract<SemanticTarget, { kind: 'text' }>;
+  to: Extract<SemanticTarget, { kind: 'text' }>;
+} | null {
   if (anchor.kind !== 'text' || head.kind !== 'text') return null;
   if (anchor.identity.blockId !== head.identity.blockId) return null;
   if (anchor.identity.storyId !== head.identity.storyId) return null;
   if (anchor.graphemeOffset < head.graphemeOffset) return { from: anchor, to: head };
   if (anchor.graphemeOffset > head.graphemeOffset) return { from: head, to: anchor };
-  if (anchor.affinity === 'upstream' && head.affinity === 'downstream') return { from: anchor, to: head };
-  if (anchor.affinity === 'downstream' && head.affinity === 'upstream') return { from: head, to: anchor };
+  if (anchor.affinity === 'upstream' && head.affinity === 'downstream')
+    return { from: anchor, to: head };
+  if (anchor.affinity === 'downstream' && head.affinity === 'upstream')
+    return { from: head, to: anchor };
   return { from: anchor, to: head };
 }
 
 function storyForBlock(frame: InteractionFrame, blockId: string, storyId: string) {
   return frame.semanticIndex.stories.find(
-    (story) => story.storyId === storyId && story.blocks.some((b) => b.identity.blockId === blockId),
+    (story) => story.storyId === storyId && story.blocks.some((b) => b.identity.blockId === blockId)
   );
 }
 
 function compareBlockOrder(
   frame: InteractionFrame,
   a: Extract<SemanticTarget, { kind: 'text' }>,
-  b: Extract<SemanticTarget, { kind: 'text' }>,
+  b: Extract<SemanticTarget, { kind: 'text' }>
 ): number | null {
   if (a.identity.storyId !== b.identity.storyId) return null;
   const story = storyForBlock(frame, a.identity.blockId, a.identity.storyId);
@@ -591,7 +815,7 @@ function compareBlockOrder(
 function selectionRangeForBlock(
   block: { readonly graphemeCount: number },
   startOffset: number,
-  endOffset: number,
+  endOffset: number
 ): { from: number; to: number } {
   const from = Math.max(0, Math.min(startOffset, block.graphemeCount));
   const to = Math.max(0, Math.min(endOffset, block.graphemeCount));
@@ -603,7 +827,7 @@ function selectionRectsForMultiBlockTextRange(
   selection: SemanticSelection,
   anchor: Extract<SemanticTarget, { kind: 'text' }>,
   head: Extract<SemanticTarget, { kind: 'text' }>,
-  options?: SelectionGeometryOptions,
+  options?: SelectionGeometryOptions
 ): SelectionGeometry | null {
   const story = storyForBlock(frame, anchor.identity.blockId, anchor.identity.storyId);
   if (!story || story.storyId !== head.identity.storyId) return null;
@@ -625,10 +849,14 @@ function selectionRectsForMultiBlockTextRange(
   const visible = options?.visiblePageIndices ? new Set(options.visiblePageIndices) : null;
 
   for (const block of story.blocks) {
-    if (block.orderIndex < startBlock.orderIndex || block.orderIndex > endBlock.orderIndex) continue;
+    if (block.orderIndex < startBlock.orderIndex || block.orderIndex > endBlock.orderIndex)
+      continue;
     if (block.readOnly) return null;
     let range: { from: number; to: number };
-    if (block.identity.blockId === startBlock.identity.blockId && block.identity.blockId === endBlock.identity.blockId) {
+    if (
+      block.identity.blockId === startBlock.identity.blockId &&
+      block.identity.blockId === endBlock.identity.blockId
+    ) {
       range = selectionRangeForBlock(block, startOffset, endOffset);
     } else if (block.identity.blockId === startBlock.identity.blockId) {
       range = selectionRangeForBlock(block, startOffset, block.graphemeCount);
@@ -660,7 +888,7 @@ function selectionRectsForMultiBlockTextRange(
       partialSelection,
       partialSelection.anchor as Extract<SemanticTarget, { kind: 'text' }>,
       partialSelection.head as Extract<SemanticTarget, { kind: 'text' }>,
-      options,
+      options
     );
     for (let i = 0; i < partial.rects.length; i += 1) {
       const pageIndex = partial.pageIndices[i];
@@ -675,7 +903,8 @@ function selectionRectsForMultiBlockTextRange(
     selection,
     rects,
     pageIndices,
-    collapsed: anchor.graphemeOffset === head.graphemeOffset &&
+    collapsed:
+      anchor.graphemeOffset === head.graphemeOffset &&
       anchor.identity.blockId === head.identity.blockId &&
       anchor.affinity === head.affinity,
   };
@@ -686,7 +915,7 @@ function selectionRectsForTextRange(
   selection: SemanticSelection,
   from: Extract<SemanticTarget, { kind: 'text' }>,
   to: Extract<SemanticTarget, { kind: 'text' }>,
-  options?: SelectionGeometryOptions,
+  options?: SelectionGeometryOptions
 ): SelectionGeometry {
   const visible = options?.visiblePageIndices ? new Set(options.visiblePageIndices) : null;
   const rects: Rect[] = [];
@@ -696,7 +925,8 @@ function selectionRectsForTextRange(
   for (const page of frame.display) {
     if (visible && !visible.has(page.index)) continue;
     for (const item of page.items) {
-      if (item.kind !== 'text' || item.semantic.identity.blockId !== from.identity.blockId) continue;
+      if (item.kind !== 'text' || item.semantic.identity.blockId !== from.identity.blockId)
+        continue;
       const meta = item.interaction;
       if (unsupportedWritingMode(meta?.writingMode)) continue;
       if (item.clusters.length === 0 && collapsed) {
@@ -709,7 +939,10 @@ function selectionRectsForTextRange(
       }
       for (const cluster of item.clusters) {
         if (collapsed) {
-          if (cluster.graphemeFrom <= from.graphemeOffset && from.graphemeOffset <= cluster.graphemeTo) {
+          if (
+            cluster.graphemeFrom <= from.graphemeOffset &&
+            from.graphemeOffset <= cluster.graphemeTo
+          ) {
             const overlay = overlayFromPageLocal(frame, page.index, cluster.box, meta);
             if (overlay && overlay !== 'singular') {
               rects.push(overlay.rect);
@@ -718,7 +951,8 @@ function selectionRectsForTextRange(
           }
           continue;
         }
-        if (cluster.graphemeTo <= from.graphemeOffset || cluster.graphemeFrom >= to.graphemeOffset) continue;
+        if (cluster.graphemeTo <= from.graphemeOffset || cluster.graphemeFrom >= to.graphemeOffset)
+          continue;
         const span = cluster.graphemeTo - cluster.graphemeFrom || 1;
         let slice = cluster.box;
         if (cluster.graphemeFrom < from.graphemeOffset) {
@@ -744,14 +978,18 @@ function selectionRectsForTextRange(
 export function deriveSelectionGeometry(
   frame: InteractionFrame,
   selection: SemanticSelection | null | undefined,
-  options?: SelectionGeometryOptions,
+  options?: SelectionGeometryOptions
 ): InteractionOutcome<SelectionGeometry> {
   const resolved = selection ?? frame.selection;
   if (!resolved) {
     return reject('invalidTarget', 'no semantic selection is available', frame.id);
   }
   if (resolved.anchor.kind === 'atomic' || resolved.head.kind === 'atomic') {
-    return reject('unsupported', 'atomic selection geometry is not proven in the body-paragraph lane', frame.id);
+    return reject(
+      'unsupported',
+      'atomic selection geometry is not proven in the body-paragraph lane',
+      frame.id
+    );
   }
   const blockA = blockRecord(frame, resolved.anchor.identity.blockId);
   const blockB = blockRecord(frame, resolved.head.identity.blockId);
@@ -765,13 +1003,26 @@ export function deriveSelectionGeometry(
     return reject('invalidTarget', 'cross-story selection geometry is not supported', frame.id);
   }
   if (resolved.anchor.identity.blockId !== resolved.head.identity.blockId) {
-    const multi = selectionRectsForMultiBlockTextRange(frame, resolved, resolved.anchor, resolved.head, options);
+    const multi = selectionRectsForMultiBlockTextRange(
+      frame,
+      resolved,
+      resolved.anchor,
+      resolved.head,
+      options
+    );
     if (!multi) {
-      return reject('unsupported', 'multi-block selection geometry could not be resolved in canonical story order', frame.id);
+      return reject(
+        'unsupported',
+        'multi-block selection geometry could not be resolved in canonical story order',
+        frame.id
+      );
     }
     return okValue(multi, frame.id);
   }
   const range = orderedTextRange(resolved.anchor, resolved.head);
   if (!range) return reject('invalidTarget', 'could not order text selection endpoints', frame.id);
-  return okValue(selectionRectsForTextRange(frame, resolved, range.from, range.to, options), frame.id);
+  return okValue(
+    selectionRectsForTextRange(frame, resolved, range.from, range.to, options),
+    frame.id
+  );
 }

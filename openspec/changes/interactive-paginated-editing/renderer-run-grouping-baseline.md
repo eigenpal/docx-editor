@@ -358,3 +358,143 @@ What the corrected figures actually say:
 
 So requirement 4 remains worth doing, but the evidence points at the EDIT path — layout
 plus display republication on every keystroke — as the dominant cost, not page repaint.
+
+## Phase 2 — COMPLETE. Paint runs are clipped to visual lines
+
+The transformation the section above parked is implemented. The blocker it named —
+`lineWhitespace` ownership competing with painted whitespace — was resolved by making the
+grouped run the single authority rather than by re-ranking two authorities.
+
+### What changed
+
+`layoutParagraphInBox` accumulates `[lineStartUtf16, wrapPoint)` and flushes ONE paint
+slice per visual line, split only where resolved style changes. Tokens still decide where
+lines break, so wrapping is untouched; a line's text is contiguous in UTF-16, so spaces and
+tabs come along as real painted text. The flush happens before `tracker.wrap()`/`newLine()`
+so an item carries the line identity, `y` and page index of the line it belongs to.
+
+Whitespace hit testing moved INTO the painted run. Clusters were already derived from
+layout caret edges over the item's grapheme span, so a grouped item's clusters now cover
+its own spaces with measured geometry and no new cluster machinery was needed. Two
+follow-on rules make that a single authority rather than a second one:
+
+- `textTargetFromItem` answers a pointer inside a WHITESPACE cluster in the convention the
+  ownership region used — nearest edge, producer-side affinity `downstream` on both sides.
+  The affinity is load-bearing: `resolveWordRangeAtHit` disambiguates a word-segment
+  boundary by affinity, and the canonical per-offset affinity (`upstream` for every
+  interior offset) made a click in the left half of a space double-click-select the
+  PRECEDING word. Glyph clusters keep the existing nearest-edge policy untouched.
+- `lineWhitespace` regions are registered as hit candidates, and consulted for caret
+  geometry, only when no painted cluster covers their grapheme range
+  (`whitespaceRegionIsPainted`). They remain the fallback for whitespace split across a
+  line break, or a boundary layout could not publish as horizontally navigable.
+
+No tier, no z-index constant, no `MAX_SAFE_INTEGER`. An overlapping floating image and a
+higher visual text layer still win, because the deferral is not a priority at all — the
+region simply stops being a candidate for whitespace the text already owns.
+
+### Measured: before/after, same model, same metrics, same page box
+
+`scripts`-free direct comparison: the same parsed `PackageModel` run through both copies of
+`layoutBody` (working tree, and a detached worktree at `checkpoint-609fca41`), so the only variable is
+the layout code. Full script in the phase-2 scratch run; the numbers:
+
+| Fixture | Pages | Text items | Painted chars | Words-on-lines |
+| --- | --- | --- | --- | --- |
+| `sample.docx` (comprehensive) | 10 → 10 | **2,331 → 728** (−68.8%) | 12,857 → 14,583 | identical hash |
+| `large-styled-text.docx` | 24 → 24 | **11,242 → 1,376** (−87.8%) | 95,645 → 106,774 | identical hash |
+| `Form025U.docx` | 3 → 3 | 423 → 228 (−46.1%) | 3,400 → 3,686 | identical hash |
+| `two-column-test.docx` | 1 → 1 | 343 → 41 (−88.0%) | 1,971 → 2,293 | identical hash |
+| `e2e-fixture.docx` | 2 → 2 | 536 → 99 (−81.5%) | 3,4xx → — | identical hash |
+| `comments-and-templates.docx` | 1 → 1 | 62 → 31 (−50.0%) | 457 → 495 | identical hash |
+| `styled-sample.docx` | 1 → 1 | 30 → 3 (−90.0%) | 142 → 169 | identical hash |
+| `block-sdt-showcase.docx` | 1 → 1 | 54 → 17 (−68.5%) | 218 → 255 | identical hash |
+| `with-tables.docx` | 1 → 1 | 15 → 11 (−26.7%) | 51 → 55 | identical hash |
+| `textbox-test.docx` | 1 → 1 | 92 → 23 (−75.0%) | 92 → — | identical hash |
+| `editable-sample.docx` | 1 → 1 | 10 → 3 (−70.0%) | 10 → — | identical hash |
+| `vanish-list-test.docx` | 1 → 1 | 38 → 9 (−76.3%) | 188 → 218 | identical hash |
+
+Twelve fixtures, every page count unchanged and every words-on-lines hash byte-identical.
+
+**On the invariant hash.** The baseline predicted the whitespace-NORMALISED hash would hold
+while the raw one changed. That prediction was wrong and the recorded normalised hashes are
+not usable as the check: normalising `\s+` → `' '` still leaves a space where before there
+was none (`Hello`+`world` → `Helloworld` before, `Hello world` → `Hello world` after). The
+comparable form is whitespace-REMOVED. `wordsOnLines` above strips all whitespace per line
+and drops lines that become empty, which is exactly "the same words landed on the same
+lines". Both other facts are reported separately rather than normalised away:
+
+- painted characters RISE by exactly the whitespace now painted;
+- `sample.docx` gains 20 wrapping lines and `vanish-list-test.docx` one. These are
+  whitespace-only lines that previously painted NOTHING (the empty-paragraph fallback
+  emits `runs: []`, which the signature skips). They are not a wrapping change; they are
+  lines that now exist in the paint projection because their text is real.
+
+### Measured: DOM, comprehensive fixture (`sample.docx`), browser harness
+
+| | Before (`checkpoint-21935f84`) | After |
+| --- | --- | --- |
+| Text items | 2,331 | **728** |
+| Glyph runs | 2,287 | **704** |
+| Painted text elements | 2,287 | **704** |
+| Total DOM nodes under `.ep-one-surface__pages` | 3,913 | **2,330** |
+| Pages | 10 | 10 |
+| Visible painted characters | 13,275 | 15,021 |
+
+On `large-styled-text.docx` the same DOM subtree goes from **11,312 to 1,446 nodes**.
+
+The engine-side and browser-side counts cross-validate: both report 2,331 and 11,242 text
+items before, measured by completely different paths.
+
+### Measured: DOM, large fixture (`large-styled-text.docx`), browser
+
+| | Before (`checkpoint-21935f84`) | After |
+| --- | --- | --- |
+| Text items | 11,242 | **1,376** |
+| Glyph runs | 11,240 | **1,374** |
+| Painted text elements | 11,240 | **1,374** |
+| Total DOM nodes under `.ep-one-surface__pages` | 11,312 | **1,446** |
+| Pages | 24 | 24 |
+| Load (dispatch) | 1,089.9 ms | 1,097 ms |
+
+### Selection-only frames: identity and cost
+
+Both fixtures, 5 alternating collapsed selections, `MutationObserver` over
+`.ep-one-surface__pages`, three tagged tiers (page shells, content layers, 60 sampled leaf
+text elements), tagged by `Symbol` expando so tagging cannot itself be what React preserves.
+
+| | Comprehensive | Large |
+| --- | --- | --- |
+| Page shells / content layers / sampled leaves preserved | yes / yes / yes | yes / yes / yes |
+| Nodes added, removed | 0, 0 | 0, 0 |
+| `characterData` mutations | 0 | 0 |
+| React commits | 1 | 1 |
+| React commit duration | 45.7 ms (was 35.1) | **37.2 ms (was 58.8)** |
+| Selection dispatch median | **24.5 ms (was 27.2)** | **187.7 ms (was 175.7)** |
+
+Selection dispatch on the large fixture is inside the pre-change spread
+(`[152.9, 164.7, 175.7, 182.4, 292.4]`); the comprehensive commit duration is a single
+sample and moved the wrong way, which is noise at this granularity rather than a result.
+
+### A regression this work introduced, found by measuring rather than by tests
+
+The first version of `whitespaceRegionIsPainted` built painted-cluster coverage for the
+WHOLE DOCUMENT on first use per frame. Every published frame therefore sorted ~106,000
+cluster intervals on the large fixture, and a frame is published on every selection change.
+Measured selection dispatch went 175.7 ms → **229.6 ms** — a regression caused by the guard
+itself, invisible to the whole test suite, which stayed green throughout.
+
+It is now built lazily per block and memoized, so caret derivation pays for one paragraph
+and a page hit test pays for the blocks on that page. That restored 187.7 ms. Recorded
+because the guard reads identically either way: the defect was entirely in WHEN it built.
+
+### Harness defect still open
+
+`renderer-baseline.js` `run()` does not complete on `large-styled-text.docx` — it was left
+running for over ten minutes twice with no error and no result, while the same call on
+`sample.docx` completes in seconds. Every large-fixture number above was therefore measured
+by direct instrumentation in the page rather than through `run()`, using the same
+definitions. Reproducing manually, `insertOneCharacter` does not advance the store revision
+outside `run()`, so the edit-path timing for this fixture is NOT re-measured here and the
+pre-change 1,220.9 ms figure stands unrefreshed. Do not read an edit-path claim into this
+phase.

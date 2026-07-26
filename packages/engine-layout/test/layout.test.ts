@@ -15,6 +15,13 @@ import {
 
 const HUMAN = ORIGIN_IDS.mutationHuman;
 
+/** Unstyled advance width of `text`, so a test can address a word inside a grouped item. */
+function measureWidth(metrics: DeterministicMetrics, text: string): number {
+  let width = 0;
+  for (const ch of text) width += metrics.advance(ch, false, false);
+  return width;
+}
+
 function opts(over: Partial<LayoutOptions> = {}): LayoutOptions {
   return { pageWidth: 12240, pageHeight: 15840, margin: 1440, metrics: new DeterministicMetrics(), ...over };
 }
@@ -37,11 +44,12 @@ describe('display-list emission', () => {
   test('emits anchored text items with fixed-point geometry', () => {
     const result = layoutBody(modelWith(['Hello world']), opts());
     const textItems = result.pages[0]!.items.filter((item) => item.type === 'text');
-    expect(textItems).toHaveLength(2); // "Hello" and "world"
-    expect(textItems[0]).toMatchObject({ type: 'text', text: 'Hello', x: 1440, y: 1440, line: expect.any(Object) });
+    // Grouping is per visual line per style, so one unstyled line is ONE item and the
+    // space between the words is part of its text rather than a gap between two items.
+    expect(textItems).toHaveLength(1);
+    expect(textItems[0]).toMatchObject({ type: 'text', text: 'Hello world', x: 1440, y: 1440, line: expect.any(Object) });
     expect(textItems[0].anchor).toMatchObject({ paragraphId: expect.any(String), offset: 0 });
-    expect(textItems[1]!.anchor.offset).toBe(6); // "Hello " = 6 chars
-    expect(Number.isInteger(textItems[1]!.x)).toBe(true); // integer geometry
+    expect(Number.isInteger(textItems[0]!.x)).toBe(true); // integer geometry
     const caretEdges = result.pages[0]!.items.filter((item) => item.type === 'caretEdge');
     expect(caretEdges.length).toBeGreaterThan(0);
   });
@@ -105,9 +113,13 @@ describe('hit-testing from the display list (8.9)', () => {
     const metrics = new DeterministicMetrics();
     const result = layoutBody(modelWith(['Hello world']), opts({ metrics }));
     const textItems = result.pages[0]!.items.filter((item) => item.type === 'text');
-    const second = textItems[1]!; // "world"
+    // Address the WORD, not an item index: "Hello world" is now one grouped item, so
+    // "world" is an offset inside it rather than `textItems[1]`.
+    const line = textItems[0]!;
+    const worldOffset = line.text.indexOf('world');
+    const worldX = line.x + measureWidth(metrics, line.text.slice(0, worldOffset));
     // A point inside "world" resolves back to its paragraph + offset 6.
-    const anchor = hitTest(result, 0, second.x + 5, second.y + 10, metrics);
+    const anchor = hitTest(result, 0, worldX + 5, line.y + 10, metrics);
     expect(anchor).toMatchObject({ offset: 6 });
     // A point in empty space returns nothing.
     expect(hitTest(result, 0, 100000, 100000, metrics)).toBeUndefined();
