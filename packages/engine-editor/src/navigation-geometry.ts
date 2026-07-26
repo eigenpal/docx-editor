@@ -78,37 +78,24 @@ export interface NavigationGeometry {
 }
 
 export function freezeNavigationGeometry(geometry: NavigationGeometry): NavigationGeometry {
-  return deepFreezeValue({
-    visualLines: deepFreezeValue(
-      geometry.visualLines.map((line) =>
-        deepFreezeValue({
-          ...line,
-          identity: deepFreezeValue({ ...line.identity }),
-          line: deepFreezeValue({ ...line.line }),
-          lineBox: deepFreezeValue({ ...line.lineBox }),
-          interaction: deepFreezeValue({ ...line.interaction }),
-          edges: deepFreezeValue(
-            line.edges.map((edge) =>
-              deepFreezeValue({
-                ...edge,
-                interaction: deepFreezeValue({ ...edge.interaction }),
-                target: deepFreezeValue({
-                  ...edge.target,
-                  identity: deepFreezeValue({ ...edge.target.identity }),
-                }),
-              })
-            )
-          ),
-        })
-      )
-    ),
-    traversalByBlockId: deepFreezeValue({ ...geometry.traversalByBlockId }),
-    shapingSupported: geometry.shapingSupported,
-    semanticHorizontalBoundariesByBlockId: deepFreezeValue({
-      ...geometry.semanticHorizontalBoundariesByBlockId,
-    }),
-    paintFragmentConflicts: deepFreezeValue([...geometry.paintFragmentConflicts]),
-  });
+  // Freeze IN PLACE. No clone.
+  //
+  // This rebuilt the whole graph — a fresh object for every visual line, its identity, its
+  // line id, its box, its interaction meta, and then for every caret edge plus that edge's
+  // interaction, target and target identity — and froze the copy. On the 24-page styled
+  // fixture that is 106,539 edges, so roughly 400,000 allocations per layout, thrown away
+  // as soon as the copy was frozen.
+  //
+  // `buildVisualLines` constructs these objects on this call and nobody else holds a
+  // mutable reference to them, so the copy bought nothing. This is the same defect already
+  // fixed in `freezeDisplay` and `freezeSemanticIndex`; it was missed here because
+  // navigation geometry is frozen inside the bridge rather than at publication, which made
+  // publication measure 0 ms for it and hid the cost one stage upstream.
+  //
+  // Freezing in place also lets a reused chunk short-circuit: `deepFreezeValue` returns
+  // immediately on an already-frozen value, so once per-line navigation chunks are reused
+  // this walk stops at the first frozen line instead of descending into its edges.
+  return deepFreezeValue(geometry);
 }
 
 export function emptyNavigationGeometry(): NavigationGeometry {
