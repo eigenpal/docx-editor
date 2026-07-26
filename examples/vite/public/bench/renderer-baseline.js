@@ -244,6 +244,52 @@ function pageContentSurvived(marks) {
   };
 }
 
+/**
+ * React commits during `fn`, from the `<Profiler>` the demo wraps the editor in.
+ *
+ * Returns nulls when the profiler is absent rather than guessing — attributing cost to
+ * reconciliation without this is the unsupported claim that got retracted from the first
+ * baseline.
+ */
+async function countCommits(fn) {
+  const p = window.__docxProfiler;
+  if (!p) {
+    await fn();
+    return { commits: null, totalDurationMs: null, note: 'no <Profiler> in the tree' };
+  }
+  p.reset();
+  await fn();
+  await nextPaint();
+  return {
+    commits: p.commits,
+    totalDurationMs: Math.round(p.totalDurationMs * 100) / 100,
+  };
+}
+
+/**
+ * A REAL one-character insertion, driven the way a keystroke reaches the store: a
+ * `beforeinput` on the focused input host. There is no `insertText` command on the
+ * contract, so substituting `exec(toggleMark)` — as the first version did — recorded a
+ * `changed: false` no-op under the name of a required measurement.
+ *
+ * Returns null when the host cannot be focused, so a failure is visible rather than
+ * being timed as a fast edit.
+ */
+function insertOneCharacter(ch) {
+  const e = editor();
+  e.focus();
+  const host = document.activeElement;
+  if (!host || !host.isContentEditable) return null;
+  const ev = new InputEvent('beforeinput', {
+    inputType: 'insertText',
+    data: ch,
+    bubbles: true,
+    cancelable: true,
+  });
+  host.dispatchEvent(ev);
+  return true;
+}
+
 /** Count DOM mutations under the pages container while `fn` runs — framework-neutral. */
 async function countMutations(fn) {
   const root = pagesEl();
@@ -362,6 +408,23 @@ export async function run({
     repetitions,
   );
 
+  // ── One-character edit ───────────────────────────────────────────────────────
+  const revisionBefore = editor().getDocumentHandle().revision;
+  const editTiming = await time(
+    'one-character edit',
+    async () => {
+      insertOneCharacter('x');
+    },
+    repetitions,
+  );
+  const revisionAfter = editor().getDocumentHandle().revision;
+  const editReachedModel = revisionAfter > revisionBefore;
+
+  const selectionCommits = await countCommits(async () => {
+    const range = collapsedSelectionAt(4);
+    if (range) applySelection(range);
+  });
+
   const scroller =
     document.querySelector('.docx-editor__scroll-container') ?? pagesEl().parentElement;
   const scrollTiming = await time(
@@ -419,16 +482,12 @@ export async function run({
       rafFloorMs,
       selection: selectionTiming,
       scroll: scrollTiming,
-      oneCharacterEdit:
-        'NOT MEASURED — there is no insertText command on the contract, so a real ' +
-        'character insertion only reaches the store through the hidden input host and ' +
-        'cannot be driven from here. Substituting exec(toggleMark) was wrong: it ' +
-        'recorded a changed:false no-op as an edit timing.',
+      // `editReachedModel` is the honesty check: if the store revision did not advance,
+      // the beforeinput never landed and the timing is of nothing.
+      oneCharacterEdit: { ...editTiming, editReachedModel, revisionBefore, revisionAfter },
     },
     domIdentity: { selectionOnly: domIdentity, selectionMutations },
-    reactCommits:
-      'NOT MEASURED — needs a <Profiler> in the demo tree exposed on window. Do not ' +
-      'attribute selection cost to reconciliation without it.',
+    reactCommits: { selectionOnly: selectionCommits },
     memory: performance.memory
       ? {
           usedJSHeapMB: Math.round(performance.memory.usedJSHeapSize / 1048576),

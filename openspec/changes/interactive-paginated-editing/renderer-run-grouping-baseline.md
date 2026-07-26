@@ -152,7 +152,39 @@ page shells. Identity holds at every tier and a selection-only frame produces ZE
 mutations of any kind. The original conclusion survives the corrected method — but it is
 now supported by the measurement rather than asserted past it.
 
-Selection-only dispatch, 5 repetitions: `[16.7, 25.6, 25.6, 26.1, 28.5]` ms.
+Selection-only dispatch, 5 repetitions: `[19.3, 25.6, 27.2, 27.7, 28.7]` ms, median 27.2.
+
+### React commits — now measured, and the retracted claim resolved
+
+A `<Profiler>` wraps the editor in the demo harness and exposes commit counts on
+`window.__docxProfiler`. On the comprehensive fixture (2,287 painted elements), a
+selection-only frame produces:
+
+```json
+{ "commits": 1, "totalDurationMs": 35.1 }
+```
+
+**ONE commit at 35 ms — not the "React reconciling every element" story that was
+retracted from the first version of this file.** With zero DOM mutations at every tier
+and a single 35 ms commit, React reconciliation is a real but modest part of the
+selection cost, and the ~27 ms synchronous dispatch is engine-side. Requirement 4's
+static-page split should therefore be justified by what it does on the LARGE fixture,
+where the element count is 5x higher — not by this one.
+
+### One-character edit — measured for real
+
+Driven as a `beforeinput`/`insertText` on the focused input host, which is how a keystroke
+actually reaches the store. The store revision advanced 0 → 5 over 5 repetitions
+(`editReachedModel: true`), so these time real edits rather than refusals:
+
+| | samples (ms) | median |
+| --- | --- | --- |
+| dispatch | 253, 255.7, 260.6, 265.1, 276.5 | 260.6 |
+| to paint | 999.4, 999.4, 1000.2, 1000.4, 1001 | 1000.2 |
+
+The `toPaint` column is ~1000 ms flat across every sample, which is the frame-wait
+fallback in a hidden tab rather than paint cost — see `paintTimingsReliable`. Only the
+dispatch column is meaningful under automation.
 
 ## What the baseline already tells us about the work
 

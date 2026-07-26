@@ -3,7 +3,43 @@
 // with DOCX bytes and exposes the stable engine-neutral EditorDriver on window, so a browser test
 // exercises the actual published package entry: props -> createEditor -> layout -> paint -> save.
 
-import React, { useEffect, useState } from 'react';
+import React, { Profiler, useEffect, useState } from 'react';
+
+/**
+ * React commit accounting for the renderer benchmarks.
+ *
+ * The run-grouping baseline needs commit counts, and asserting that a selection cost "is
+ * React reconciling N elements" without measuring it is exactly the unsupported claim an
+ * independent review caught. `Profiler` is the supported way to get it: `onRender` fires
+ * once per commit of the wrapped tree with the real `actualDuration`.
+ *
+ * Exposed on `window` because the harness is loaded from the console. Reset by the
+ * harness before each measured operation. Zero cost when nobody reads it — `Profiler` is
+ * a no-op in production builds.
+ */
+declare global {
+  interface Window {
+    __docxProfiler?: { commits: number; totalDurationMs: number; reset: () => void };
+  }
+}
+
+if (typeof window !== 'undefined' && !window.__docxProfiler) {
+  window.__docxProfiler = {
+    commits: 0,
+    totalDurationMs: 0,
+    reset() {
+      this.commits = 0;
+      this.totalDurationMs = 0;
+    },
+  };
+}
+
+const onEditorRender: React.ProfilerOnRenderCallback = (_id, _phase, actualDuration) => {
+  const p = typeof window !== 'undefined' ? window.__docxProfiler : undefined;
+  if (!p) return;
+  p.commits += 1;
+  p.totalDurationMs += actualDuration;
+};
 import {
   DocxEditor,
 } from '@docx-editor.dev/react';
@@ -280,6 +316,7 @@ export function DocxAdapterHarness({
           how the demo and the published component drift apart. Supplying `t` turns the
           chrome on; everything else is the component's business. */}
       {bytes && (
+        <Profiler id="docx-editor" onRender={onEditorRender}>
         <DocxEditor
           document={bytes}
           zoom={zoom}
@@ -313,6 +350,7 @@ export function DocxAdapterHarness({
           onSave={onSave}
           colorMode={colorMode}
         />
+        </Profiler>
       )}
     </div>
   );
