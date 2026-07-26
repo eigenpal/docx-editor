@@ -12,7 +12,9 @@ import type {
   PositionedInteractionMeta,
   SelectionGeometry,
   SelectionGeometryOptions,
+  BlockSemanticRecord,
   SemanticHitTarget,
+  SemanticPositionIndex,
   SemanticSelection,
   SemanticTarget,
   ShapedCluster,
@@ -63,12 +65,35 @@ function unsupportedWritingMode(
   return mode !== undefined && mode !== HORIZONTAL_WRITING_MODE;
 }
 
-function blockRecord(frame: InteractionFrame, blockId: string) {
-  for (const story of frame.semanticIndex.stories) {
-    const block = story.blocks.find((b) => b.identity.blockId === blockId);
-    if (block) return block;
+/**
+ * Block records keyed by id, per index.
+ *
+ * This was a linear `find` over every block of every story, and it is called from hit
+ * testing, caret derivation, selection geometry and role resolution — several times per
+ * interaction, and once per painted item in some paths. A few hundred entries, built once.
+ *
+ * Deliberately NOT extended to `caretStops`: that array holds one entry per GRAPHEME
+ * (106,907 on the 24-page styled fixture), and indexing it was measured as a net loss.
+ * A summary pass costs 10.8 ms against the 0.84 ms scan it replaces, a frame is published
+ * on every keystroke, and only one or two caret stops are queried per frame, so it never
+ * amortises. Blocks are few and queried often; caret stops are many and queried rarely.
+ */
+const blockRecordCache = new WeakMap<SemanticPositionIndex, Map<string, BlockSemanticRecord>>();
+
+function blockRecord(frame: InteractionFrame, blockId: string): BlockSemanticRecord | undefined {
+  const index = frame.semanticIndex;
+  let byId = blockRecordCache.get(index);
+  if (!byId) {
+    byId = new Map();
+    for (const story of index.stories) {
+      for (const block of story.blocks) {
+        // FIRST wins, matching what the `find` walk returned.
+        if (!byId.has(block.identity.blockId)) byId.set(block.identity.blockId, block);
+      }
+    }
+    blockRecordCache.set(index, byId);
   }
-  return undefined;
+  return byId.get(blockId);
 }
 
 function roleForTarget(frame: InteractionFrame, target: SemanticTarget): InteractionRole {
