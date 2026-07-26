@@ -2,9 +2,16 @@ import { GlobalRegistrator } from '@happy-dom/global-registrator';
 if (!GlobalRegistrator.isRegistered) GlobalRegistrator.register();
 
 import { describe, expect, test } from 'bun:test';
-import { createEditor } from '../src/create-editor.ts';
+import { createTestEditor as createEditor } from './create-test-editor.ts';
 import type { EditorHost } from '@docx-editor.dev/core-contract/editor';
-import { createEmptyModel, writeDocx, bodyStoryId, DocumentStore, ORIGIN_IDS, type ParagraphRecord } from '@docx-editor.dev/engine-core';
+import {
+  createEmptyModel,
+  writeDocx,
+  bodyStoryId,
+  DocumentStore,
+  ORIGIN_IDS,
+  type ParagraphRecord,
+} from '@docx-editor.dev/engine-core';
 import { IDENTITY_HOST_METRICS } from '../src/coordinate-mapper.ts';
 import { INPUT_HOST_MIN_WIDTH_PX, INPUT_HOST_MIN_HEIGHT_PX } from '@docx-editor.dev/engine-binding';
 
@@ -37,7 +44,17 @@ describe('frame-driven input host placement', () => {
     scroll.style.width = '640px';
     scroll.style.height = '480px';
     scroll.getBoundingClientRect = () =>
-      ({ x: 0, y: 0, width: 640, height: 480, top: 0, left: 0, right: 640, bottom: 480, toJSON: () => ({}) }) as DOMRect;
+      ({
+        x: 0,
+        y: 0,
+        width: 640,
+        height: 480,
+        top: 0,
+        left: 0,
+        right: 640,
+        bottom: 480,
+        toJSON: () => ({}),
+      }) as DOMRect;
     document.body.append(scroll);
     scroll.append(body);
 
@@ -73,7 +90,11 @@ describe('frame-driven input host placement', () => {
     const body = document.createElement('div');
     document.body.append(scroll);
     scroll.append(body);
-    const editor = createEditor({ host: hostWithBody(body, scroll), document: writeDocx(createEmptyModel()), mode: 'view' });
+    const editor = createEditor({
+      host: hostWithBody(body, scroll),
+      document: writeDocx(createEmptyModel()),
+      mode: 'view',
+    });
     const outcome = editor.focus();
     expect(outcome.ok).toBe(false);
     if (!outcome.ok) expect(outcome.code).toBe('readOnly');

@@ -8,7 +8,7 @@ import {
   type ParagraphRecord,
   type SdtRecord,
 } from '@docx-editor.dev/engine-core';
-import { layoutBody, HelveticaMetrics } from '@docx-editor.dev/engine-layout';
+import { layoutBody } from '@docx-editor.dev/engine-layout';
 import { toDisplayPages } from '../src/display-bridge.ts';
 import { buildTraversalLinksForModel } from '../src/semantic-index.ts';
 import { buildLineCatalog, caretContentX, destinationOverlayVisible } from '../src/line-catalog.ts';
@@ -16,9 +16,13 @@ import { freezeNavigationGeometry } from '../src/navigation-geometry.ts';
 import { caretOverlayForTarget } from '../src/interaction-geometry.ts';
 import { InteractionFrameStore } from '../src/interaction-frame.ts';
 import { deriveCaretGeometry } from '../src/interaction-geometry.ts';
-import { LAYOUT, modelWithRunSplit, modelWithParagraphTableParagraph, selectionForBlock } from './interaction-test-helpers.ts';
-
-const METRICS = new HelveticaMetrics();
+import {
+  LAYOUT,
+  modelWithRunSplit,
+  modelWithParagraphTableParagraph,
+  selectionForBlock,
+} from './interaction-test-helpers.ts';
+import { createHarfBuzzLayoutOptions } from '../../engine-layout/test/fixtures/layout-shaping.ts';
 
 function bridged(model: PackageModel, layout = LAYOUT) {
   const pages = layoutBody(model, layout).pages;
@@ -46,16 +50,22 @@ function publishBundle(model: PackageModel, layout = LAYOUT) {
 }
 
 describe('navigation production geometry (task 5.5 review)', () => {
-  test('proportional W/i offset 1 uses metrics width not half-word interpolation', () => {
+  test('proportional W/i offset 1 uses shaped width not half-word interpolation', () => {
     const model = modelWithRunSplit(['W', 'i']);
-    const layout = layoutBody(model, LAYOUT);
-    const edges = layout.pages.flatMap((page) => page.items.filter((item) => item.type === 'caretEdge'));
+    const shapedLayout = createHarfBuzzLayoutOptions();
+    const layout = layoutBody(model, shapedLayout);
+    const edges = layout.pages.flatMap((page) =>
+      page.items.filter((item) => item.type === 'caretEdge')
+    );
     const edge0 = edges.find((edge) => edge.graphemeOffset === 0);
     const edge1 = edges.find((edge) => edge.graphemeOffset === 1);
     expect(edge0).toBeDefined();
     expect(edge1).toBeDefined();
-    const wWidth = METRICS.advance('W', false, false);
-    const iWidth = METRICS.advance('i', false, false);
+    const textItems = layout.pages
+      .flatMap((page) => page.items)
+      .filter((item) => item.type === 'text');
+    const wWidth = textItems[0]!.shapedRun.clusters[0]!.advance;
+    const iWidth = textItems[0]!.shapedRun.clusters[1]!.advance;
     expect(wWidth).toBeGreaterThan(iWidth);
     const delta = edge1!.x - edge0!.x;
     expect(delta).toBe(wWidth);
@@ -87,7 +97,7 @@ describe('navigation production geometry (task 5.5 review)', () => {
       ...new Set(
         navigation.visualLines
           .filter((line) => line.identity.blockId === blockId)
-          .map((line) => line.line.lineIndex),
+          .map((line) => line.line.lineIndex)
       ),
     ].sort((a, b) => a - b);
     expect(lineIndexes.length).toBeGreaterThanOrEqual(2);
@@ -115,8 +125,16 @@ describe('navigation production geometry (task 5.5 review)', () => {
     const base = createEmptyModel();
     const storyId = bodyStoryId(base);
     const story = base.stories.get(storyId)!;
-    const before: ParagraphRecord = { kind: 'paragraph', id: 'p-before', runs: [{ text: 'before' }] };
-    const inside: ParagraphRecord = { kind: 'paragraph', id: 'p-inside', runs: [{ text: 'inside' }] };
+    const before: ParagraphRecord = {
+      kind: 'paragraph',
+      id: 'p-before',
+      runs: [{ text: 'before' }],
+    };
+    const inside: ParagraphRecord = {
+      kind: 'paragraph',
+      id: 'p-inside',
+      runs: [{ text: 'inside' }],
+    };
     const after: ParagraphRecord = { kind: 'paragraph', id: 'p-after', runs: [{ text: 'after' }] };
     const sdt: SdtRecord = { kind: 'sdt', id: 'sdt-1', blocks: [inside] };
     const model: PackageModel = {
@@ -144,7 +162,12 @@ describe('navigation production geometry (task 5.5 review)', () => {
           ...edge,
           interaction: {
             ...edge.interaction,
-            clip: { x: edge.pageLocalX + 500, y: edge.pageLocalY, width: 10, height: edge.pageLocalHeight },
+            clip: {
+              x: edge.pageLocalX + 500,
+              y: edge.pageLocalY,
+              width: 10,
+              height: edge.pageLocalHeight,
+            },
           },
         })),
       })),
@@ -153,7 +176,9 @@ describe('navigation production geometry (task 5.5 review)', () => {
     expect(destinationOverlayVisible(clippedFrame, clippedNav, head)).toBe(false);
     const catalog = buildLineCatalog(clippedFrame, clippedNav);
     if (catalog.ok) {
-      expect(catalog.lines.flatMap((line) => line.stops).some((stop) => stop.target.graphemeOffset === 2)).toBe(false);
+      expect(
+        catalog.lines.flatMap((line) => line.stops).some((stop) => stop.target.graphemeOffset === 2)
+      ).toBe(false);
     } else {
       expect(catalog.reason).toMatch(/visible|clip/i);
     }
@@ -164,9 +189,15 @@ describe('navigation production geometry (task 5.5 review)', () => {
     const model = modelWithParagraphTableParagraph(filler, 'cell-on-page-two', filler);
     const narrow = { ...LAYOUT, pageHeight: 4000 };
     const { navigation, bridge } = publishBundle(model, narrow);
-    const cellBlock = bridge.semanticIndex.stories[0]!.blocks.find((b) => !b.readOnly && b.identity.blockId !== bridge.semanticIndex.stories[0]!.blocks[0]!.identity.blockId);
+    const cellBlock = bridge.semanticIndex.stories[0]!.blocks.find(
+      (b) =>
+        !b.readOnly &&
+        b.identity.blockId !== bridge.semanticIndex.stories[0]!.blocks[0]!.identity.blockId
+    );
     expect(cellBlock).toBeDefined();
-    const cellLines = navigation.visualLines.filter((line) => line.identity.blockId === cellBlock!.identity.blockId);
+    const cellLines = navigation.visualLines.filter(
+      (line) => line.identity.blockId === cellBlock!.identity.blockId
+    );
     expect(cellLines.length).toBeGreaterThan(0);
     const pageIndexes = [...new Set(cellLines.map((line) => line.pageIndex))];
     expect(pageIndexes.some((page) => page > 0)).toBe(true);
@@ -176,12 +207,17 @@ describe('navigation production geometry (task 5.5 review)', () => {
     }
   });
 
-  test('combining mark with default Helvetica fails closed in navigation catalog', () => {
+  test('combining cluster publishes exact navigation geometry at its edge', () => {
     const model = modelWithRunSplit(['e\u0301x']);
     const { frame, navigation, bridge } = publishBundle(model);
     const textItems = bridge.display.flatMap((p) => p.items).filter((i) => i.kind === 'text');
     expect(textItems.some((i) => i.kind === 'text' && i.clusters.length > 0)).toBe(true);
-    expect(textItems.some((i) => i.kind === 'text' && i.clusters.some((c) => c.graphemeFrom === 0 && c.graphemeTo === 1))).toBe(true);
+    expect(
+      textItems.some(
+        (i) =>
+          i.kind === 'text' && i.clusters.some((c) => c.graphemeFrom === 0 && c.graphemeTo === 1)
+      )
+    ).toBe(true);
     const blockId = bridge.semanticIndex.stories[0]!.blocks[0]!.identity.blockId;
     const target = {
       kind: 'text' as const,
@@ -190,6 +226,6 @@ describe('navigation production geometry (task 5.5 review)', () => {
       graphemeOffset: 1,
       affinity: 'upstream' as const,
     };
-    expect(caretContentX(frame, target, navigation)).toBeNull();
+    expect(caretContentX(frame, target, navigation)).not.toBeNull();
   });
 });

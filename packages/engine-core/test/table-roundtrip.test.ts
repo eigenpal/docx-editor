@@ -7,7 +7,7 @@ import { describe, expect, test } from 'bun:test';
 import { readFileSync } from 'node:fs';
 import { zipSync, unzipSync, strToU8, strFromU8 } from 'fflate';
 import { parseDocx } from '../src/package/docx/read.ts';
-import { documentXml } from '../src/package/docx/write.ts';
+import { documentXml, writeDocx } from '../src/package/docx/write.ts';
 import { DocumentStore, ORIGIN_IDS, bodyStoryId, type TableRecord, type ParagraphRecord, type PackageModel, type Story, type Block } from '../src/index.ts';
 import { authoredStateDigest } from '../src/package/authored-digest.ts';
 
@@ -331,8 +331,7 @@ describe('editing a preserved table document', () => {
     // baseline-slice digest would have collapsed them to equal).
     expect(authoredStateDigest(edited)).not.toBe(authoredStateDigest(parsed.model));
     // And the edit round-trips: save -> reopen -> the reopened model digests the same as the edit.
-    const out = documentXml(edited);
-    const re = parseDocx(zipSync({ '[Content_Types].xml': strToU8('<Types/>'), 'word/document.xml': strToU8(out) }));
+    const re = parseDocx(writeDocx(edited));
     if (!re.ok) throw new Error('reopen failed');
     expect(authoredStateDigest(re.model)).toBe(authoredStateDigest(edited));
   });

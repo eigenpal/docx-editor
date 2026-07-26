@@ -80,7 +80,9 @@ describe('navigation session (task 5.5)', () => {
     const bundle = frameWithSelection(['The quick brown fox jumps over'], 10, narrow);
     const down = plan(bundle, 'ArrowDown', null, ['The quick brown fox jumps over']);
     expect(down.navigation.nextSessionOnSuccess).not.toBeNull();
-    const right = plan(bundle, 'ArrowRight', down.navigation.nextSessionOnSuccess, ['The quick brown fox jumps over']);
+    const right = plan(bundle, 'ArrowRight', down.navigation.nextSessionOnSuccess, [
+      'The quick brown fox jumps over',
+    ]);
     expect(right.navigation.nextSessionOnSuccess).toBeNull();
   });
 
@@ -162,22 +164,31 @@ describe('navigation session (task 5.5)', () => {
       composition: { active: false, scope: null },
       currentPage: { viewport: 0, caret: 0 },
     });
-    const downAgain = plan({ frame: rebound, navigation: wideNav }, 'ArrowDown', down.navigation.nextSessionOnSuccess, text);
+    const downAgain = plan(
+      { frame: rebound, navigation: wideNav },
+      'ArrowDown',
+      down.navigation.nextSessionOnSuccess,
+      text
+    );
     expect(downAgain.navigation.nextSessionOnSuccess?.visualAdvanceX).toBe(
-      down.navigation.nextSessionOnSuccess?.visualAdvanceX,
+      down.navigation.nextSessionOnSuccess?.visualAdvanceX
     );
   });
 
   test('document generation mismatch prevents session reuse', () => {
     const bundle = frameWithSelection(['abc'], 1);
     const session = buildNavigationSession(bundle.frame, bundle.frame.selection!, 10, DOC_GEN, 1);
-    expect(sessionMatchesSelection(session, bundle.frame.selection!, bundle.frame, DOC_GEN + 1, 1)).toBe(false);
+    expect(
+      sessionMatchesSelection(session, bundle.frame.selection!, bundle.frame, DOC_GEN + 1, 1)
+    ).toBe(false);
   });
 
   test('model revision mismatch prevents session reuse', () => {
     const bundle = frameWithSelection(['abc'], 1);
     const session = buildNavigationSession(bundle.frame, bundle.frame.selection!, 10, DOC_GEN, 1);
-    expect(sessionMatchesSelection(session, bundle.frame.selection!, bundle.frame, DOC_GEN, 2)).toBe(false);
+    expect(
+      sessionMatchesSelection(session, bundle.frame.selection!, bundle.frame, DOC_GEN, 2)
+    ).toBe(false);
   });
 
   test('semantic selection and pointer intents reset session policy', () => {
@@ -194,8 +205,18 @@ describe('navigation session (task 5.5)', () => {
     const navigation = { priorSession: prior, nextSessionOnSuccess: null };
     const execution = executeInteractionPlan(
       {
-        syncSemanticSelection: () => ({ ok: false, code: 'invalidTarget', reason: 'test', frameId: bundle.frame.id }),
-        focus: () => ({ ok: false, code: 'unsupported', reason: 'focus failed', frameId: bundle.frame.id }),
+        syncSemanticSelection: () => ({
+          ok: false,
+          code: 'invalidTarget',
+          reason: 'test',
+          frameId: bundle.frame.id,
+        }),
+        focus: () => ({
+          ok: false,
+          code: 'unsupported',
+          reason: 'focus failed',
+          frameId: bundle.frame.id,
+        }),
         blur: () => {},
         execCommand: () => ({ ok: false, code: 'unsupported', reason: 'no' }),
         delegateNativeInput: () => ({ ok: true, value: undefined, frameId: bundle.frame.id }),
@@ -209,10 +230,12 @@ describe('navigation session (task 5.5)', () => {
           { kind: 'focus', frameId: bundle.frame.id },
         ],
         navigation,
-      },
+      }
     );
     expect(execution.outcome.ok).toBe(false);
-    expect(commitNavigationSessionAfterExecution(navigation, execution).session?.visualAdvanceX).toBe(99);
+    expect(
+      commitNavigationSessionAfterExecution(navigation, execution).session?.visualAdvanceX
+    ).toBe(99);
   });
 
   test('scope identity mismatch prevents session reuse', () => {

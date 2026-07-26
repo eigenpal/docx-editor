@@ -16,7 +16,7 @@ import { fileURLToPath } from 'node:url';
 
 const CSS = readFileSync(
   fileURLToPath(new URL('../../core/src/styles/editor.css', import.meta.url)),
-  'utf8',
+  'utf8'
 );
 
 /** Strip comments so a token named inside prose is not mistaken for a declaration. */
@@ -88,8 +88,11 @@ describe('editor stylesheet custom properties', () => {
 
   test('--doc-caret is declared for the DEFAULT theme, not only for dark', () => {
     // The specific regression: declared once, inside the dark block.
-    const darkBlockStart = withoutComments.search(/\.ep-root\.dark|\[data-theme=['"]dark['"]\]|prefers-color-scheme:\s*dark/);
-    const beforeDark = darkBlockStart === -1 ? withoutComments : withoutComments.slice(0, darkBlockStart);
+    const darkBlockStart = withoutComments.search(
+      /\.ep-root\.dark|\[data-theme=['"]dark['"]\]|prefers-color-scheme:\s*dark/
+    );
+    const beforeDark =
+      darkBlockStart === -1 ? withoutComments : withoutComments.slice(0, darkBlockStart);
     expect(declaredTokens(beforeDark).has('--doc-caret')).toBe(true);
   });
 

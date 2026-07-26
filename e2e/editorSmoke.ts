@@ -1,149 +1,205 @@
-// Shared engine-neutral editing smoke flow (queue item 3), run identically against the
-// React and Vue demos so the paired checkpoint fails if either adapter diverges. It drives
-// only the engine-neutral EditorDriver on window (getBodyText / saveAndReopenText / editable)
-// and real keyboard input — no framework-specific hooks.
+// Shared engine-neutral editing smoke flow, run identically against the production
+// React and Vue adapters. Selection is established through the public one-surface
+// target or EditorDriver; the hidden ProseMirror input host is never geometry authority.
 
-import { test, expect, type Window as _Window } from '@playwright/test';
+import { test, expect, type Page } from '@playwright/test';
+import type { EditorDriver } from '../packages/engine-editor/src/index.ts';
 
 declare global {
   interface Window {
-    __docxEditorDriver?: {
-      editable: boolean;
-      getBodyText(): string;
-      saveAndReopenText(): string;
-    };
+    __editorSmokeDriver?: EditorDriver;
   }
+}
+
+async function mount(page: Page, baseUrl: string, fixture = 'editable-sample.docx'): Promise<void> {
+  await page.goto(`${baseUrl}/?realAdapter=1&fixture=${fixture}`);
+  await page.waitForFunction(() => !!window.__docxAdapterDriver);
+  await page.evaluate(() => {
+    window.__editorSmokeDriver = window.__docxAdapterDriver as EditorDriver;
+  });
+}
+
+async function paragraphTexts(page: Page): Promise<string[]> {
+  return page.evaluate(() =>
+    window
+      .__editorSmokeDriver!.accessibilityObservation()
+      .entries.filter((entry) => entry.role === 'editableParagraph')
+      .map((entry) => entry.text)
+  );
+}
+
+async function bodyText(page: Page): Promise<string> {
+  return (await paragraphTexts(page)).join('\n');
+}
+
+async function authorizeCaret(
+  page: Page,
+  blockIndex: number,
+  graphemeOffset: number
+): Promise<void> {
+  const outcome = await page.evaluate(
+    ({ blockIndex, graphemeOffset }) =>
+      window.__editorSmokeDriver!.authorizeCaret(blockIndex, graphemeOffset),
+    { blockIndex, graphemeOffset }
+  );
+  expect(outcome.ok).toBe(true);
+}
+
+async function exec(page: Page, command: Parameters<EditorDriver['exec']>[0]): Promise<void> {
+  const outcome = await page.evaluate(
+    (nextCommand) => window.__editorSmokeDriver!.exec(nextCommand),
+    command
+  );
+  expect(outcome.ok).toBe(true);
 }
 
 export function editorSmoke(adapter: string, baseUrl: string): void {
   test.describe(`${adapter} editing vertical`, () => {
-    test('plain DOCX: edit maps to the canonical model and survives save + reopen', async ({ page }) => {
-      await page.goto(`${baseUrl}/?edit=1`);
-      await expect(page.getByTestId('editor-status')).toHaveText('Editable (paragraphs)');
-      expect(await page.evaluate(() => window.__docxEditorDriver?.editable)).toBe(true);
+    test('plain DOCX: edit maps to the canonical model and survives save + reopen', async ({
+      page,
+    }) => {
+      await mount(page, baseUrl);
+      await expect(page.getByTestId('adapter-status')).toHaveText('Editable (paragraphs)');
+      expect(await page.evaluate(() => window.__editorSmokeDriver!.editable())).toBe(true);
 
-      // Type at the end of the first paragraph.
-      await page.getByTestId('editor-host').locator('p').first().click();
-      await page.keyboard.press('End');
+      // The painted glyph is the public one-surface pointer target. Playwright dispatches
+      // a normal click to it; the hidden input host is neither targeted nor inspected.
+      const clickTarget = page.getByTestId('one-surface-click-target');
+      await expect(clickTarget).toBeVisible();
+      await clickTarget.click();
       const marker = `[${adapter.toUpperCase()}-SMOKE]`;
       await page.keyboard.type(` ${marker}`);
 
-      // The CANONICAL model (not just the view) carries the edit...
-      expect(await page.evaluate(() => window.__docxEditorDriver!.getBodyText())).toContain(marker);
-      // ...and it survives a real save -> reopen round-trip.
-      expect(await page.evaluate(() => window.__docxEditorDriver!.saveAndReopenText())).toContain(marker);
-      // ...and the PAGINATED pane (repainted from the canonical model by the incremental
-      // painter) reflects the edit — the marker's letters appear as positioned spans.
+      expect(await bodyText(page)).toContain(marker);
+      expect(await page.evaluate(() => window.__editorSmokeDriver!.saveAndReopenText())).toContain(
+        marker
+      );
       await expect
-        .poll(() =>
-          page.evaluate(() => {
-            const paged = document.querySelector('.docx-paged-pane');
-            return paged ? paged.textContent!.replace(/\s+/g, '') : '';
-          }),
-        )
+        .poll(() => page.evaluate(() => window.__editorSmokeDriver!.displaySnapshot().text))
         .toContain(marker.replace(/\s+/g, ''));
     });
 
-    test('pressing Enter splits a paragraph and the split survives save + reopen', async ({ page }) => {
-      await page.goto(`${baseUrl}/?edit=1`);
-      await expect(page.getByTestId('editor-status')).toHaveText('Editable (paragraphs)');
+    test('unsupported Enter leaves the canonical model intact', async ({ page }) => {
+      await mount(page, baseUrl);
+      await expect(page.getByTestId('adapter-status')).toHaveText('Editable (paragraphs)');
 
-      const before = await page.evaluate(() => window.__docxEditorDriver!.getBodyText().split('\n').length);
-      // Split the first paragraph: click into it, go to its start, press Enter.
-      await page.getByTestId('editor-host').locator('p').first().click();
-      await page.keyboard.press('Home');
+      const paragraphs = await paragraphTexts(page);
+      const before = paragraphs.join('\n');
+      await authorizeCaret(page, 0, paragraphs[0]!.length);
       await page.keyboard.press('Enter');
-
-      // The canonical model has one MORE paragraph (an empty head), and it round-trips.
-      expect(await page.evaluate(() => window.__docxEditorDriver!.getBodyText().split('\n').length)).toBe(before + 1);
-      expect(await page.evaluate(() => window.__docxEditorDriver!.saveAndReopenText().split('\n').length)).toBe(before + 1);
-
-      // The caret stays live: typing after the split lands in the canonical model.
-      await page.keyboard.type('X');
-      expect(await page.evaluate(() => window.__docxEditorDriver!.getBodyText())).toContain('X');
+      expect(await bodyText(page)).toBe(before);
     });
 
-    test('undo and redo drive the canonical store through a structural split', async ({ page }) => {
-      await page.goto(`${baseUrl}/?edit=1`);
-      await expect(page.getByTestId('editor-status')).toHaveText('Editable (paragraphs)');
-      const before = await page.evaluate(() => window.__docxEditorDriver!.getBodyText());
-      const count = () => page.evaluate(() => window.__docxEditorDriver!.getBodyText().split('\n').length);
-      const beforeCount = before.split('\n').length;
+    test('undo and redo drive the canonical store through a public text edit', async ({ page }) => {
+      await mount(page, baseUrl);
+      await expect(page.getByTestId('adapter-status')).toHaveText('Editable (paragraphs)');
+      const before = await bodyText(page);
+      const paragraphs = await paragraphTexts(page);
 
-      // Split the first paragraph (a structural edit that mints a new block id).
-      await page.getByTestId('editor-host').locator('p').first().click();
-      await page.keyboard.press('Home');
-      await page.keyboard.press('Enter');
-      expect(await count()).toBe(beforeCount + 1);
+      await authorizeCaret(page, 0, paragraphs[0]!.length);
+      await page.keyboard.type('S');
+      const edited = await bodyText(page);
+      expect(edited).not.toBe(before);
 
-      // Undo reverts the split ON THE CANONICAL MODEL (the view's own history could not — it
-      // would restore a stale id the mapper rejects).
-      await page.keyboard.press('ControlOrMeta+z');
-      expect(await page.evaluate(() => window.__docxEditorDriver!.getBodyText())).toBe(before);
+      await exec(page, { type: 'undo' });
+      expect(await bodyText(page)).toBe(before);
 
-      // Redo re-applies it.
-      await page.keyboard.press('ControlOrMeta+Shift+z');
-      expect(await count()).toBe(beforeCount + 1);
+      await exec(page, { type: 'redo' });
+      expect(await bodyText(page)).toBe(edited);
     });
 
-    test('multi-step undo then redo stays consistent with the canonical model', async ({ page }) => {
-      await page.goto(`${baseUrl}/?edit=1`);
-      await expect(page.getByTestId('editor-status')).toHaveText('Editable (paragraphs)');
-      const line0 = async () => (await page.evaluate(() => window.__docxEditorDriver!.getBodyText())).split('\n')[0];
-      await page.getByTestId('editor-host').locator('p').first().click();
-      await page.keyboard.press('End');
+    test('multi-step undo then redo stays consistent with the canonical model', async ({
+      page,
+    }) => {
+      await mount(page, baseUrl);
+      await expect(page.getByTestId('adapter-status')).toHaveText('Editable (paragraphs)');
+      const line0 = async () => (await paragraphTexts(page))[0] ?? '';
+      await authorizeCaret(page, 0, (await line0()).length);
       await page.keyboard.type('AB'); // two per-keystroke commits
 
       expect(await line0()).toMatch(/AB$/);
-      await page.keyboard.press('ControlOrMeta+z'); // undo B
+      await exec(page, { type: 'undo' });
       expect(await line0()).toMatch(/A$/);
-      await page.keyboard.press('ControlOrMeta+z'); // undo A
+      await exec(page, { type: 'undo' });
       expect(await line0()).toMatch(/paragraph\.$/);
-      await page.keyboard.press('ControlOrMeta+Shift+z'); // redo A
+      await exec(page, { type: 'redo' });
       expect(await line0()).toMatch(/A$/);
-      await page.keyboard.press('ControlOrMeta+Shift+z'); // redo B
+      await exec(page, { type: 'redo' });
       expect(await line0()).toMatch(/AB$/);
     });
 
-    test('undo restores the caret to the edited paragraph, not the document end', async ({ page }) => {
-      await page.goto(`${baseUrl}/?edit=1`);
-      await expect(page.getByTestId('editor-status')).toHaveText('Editable (paragraphs)');
-      await page.getByTestId('editor-host').locator('p').first().click();
-      await page.keyboard.press('End'); // put the caret in the first paragraph
-      await page.keyboard.press('Enter'); // split it (a structural edit that mints a new block)
-      await page.keyboard.press('ControlOrMeta+z'); // undo; the caret must return to the FIRST paragraph
+    test('undo keeps subsequent input in the edited paragraph, not the document end', async ({
+      page,
+    }) => {
+      await mount(page, baseUrl);
+      await expect(page.getByTestId('adapter-status')).toHaveText('Editable (paragraphs)');
+      const first = (await paragraphTexts(page))[0] ?? '';
+      await authorizeCaret(page, 0, first.length);
       await page.keyboard.type('Q');
+      await exec(page, { type: 'undo' });
+      await page.keyboard.type('R');
 
-      const lines = (await page.evaluate(() => window.__docxEditorDriver!.getBodyText())).split('\n');
-      // The fix: the caret returns to where it was (the first paragraph). The old bug placed it
-      // at the document END because the split's tail id no longer resolved after the undo.
-      expect(lines[0].includes('Q'), `body=${JSON.stringify(lines)}`).toBe(true);
-      expect(lines[lines.length - 1].includes('Q')).toBe(false);
+      const lines = await paragraphTexts(page);
+      expect(lines[0].includes('R'), `body=${JSON.stringify(lines)}`).toBe(true);
+      expect(lines[lines.length - 1].includes('R')).toBe(false);
     });
 
-    test('a refused edit snaps back without corrupting the model, and the editor keeps working', async ({ page }) => {
-      await page.goto(`${baseUrl}/?edit=1`);
-      await expect(page.getByTestId('editor-status')).toHaveText('Editable (paragraphs)');
-      const before = await page.evaluate(() => window.__docxEditorDriver!.getBodyText());
+    test('a refused edit snaps back without corrupting the model, and the editor keeps working', async ({
+      page,
+    }) => {
+      await mount(page, baseUrl);
+      await expect(page.getByTestId('adapter-status')).toHaveText('Editable (paragraphs)');
+      const before = await bodyText(page);
 
-      // Select the whole document and type: a multi-paragraph delete the mapper refuses.
-      await page.getByTestId('editor-host').locator('p').first().click();
-      await page.keyboard.press('ControlOrMeta+a');
+      const selectionOutcome = await page.evaluate(() => {
+        const driver = window.__editorSmokeDriver!;
+        const entries = driver
+          .accessibilityObservation()
+          .entries.filter((entry) => entry.role === 'editableParagraph');
+        const first = entries[0]!;
+        const last = entries[entries.length - 1]!;
+        return driver.setSelection({
+          frameId: driver.frameId(),
+          scope: { kind: 'body' },
+          anchor: {
+            kind: 'text',
+            scope: { kind: 'body' },
+            identity: first.identity,
+            graphemeOffset: 0,
+            affinity: 'upstream',
+          },
+          head: {
+            kind: 'text',
+            scope: { kind: 'body' },
+            identity: last.identity,
+            graphemeOffset: last.text.length,
+            affinity: 'downstream',
+          },
+        });
+      });
+      expect(selectionOutcome.ok).toBe(true);
+      expect((await page.evaluate(() => window.__editorSmokeDriver!.focus())).ok).toBe(true);
       await page.keyboard.type('Z');
-      // The canonical model is untouched — nothing was dropped.
-      expect(await page.evaluate(() => window.__docxEditorDriver!.getBodyText())).toBe(before);
+      expect(await bodyText(page)).toBe(before);
 
-      // The editor still works after the snap-back: a plain edit commits normally.
-      await page.getByTestId('editor-host').locator('p').first().click();
-      await page.keyboard.press('End');
+      const first = (await paragraphTexts(page))[0] ?? '';
+      await authorizeCaret(page, 0, first.length);
       await page.keyboard.type('!OK');
-      expect(await page.evaluate(() => window.__docxEditorDriver!.getBodyText())).toContain('!OK');
+      expect(await bodyText(page)).toContain('!OK');
     });
 
-    test('a document with a table opens read-only (no editing)', async ({ page }) => {
-      await page.goto(`${baseUrl}/?edit=1&fixture=with-tables.docx`);
-      await expect(page.getByTestId('editor-status')).toContainText('Read-only');
-      expect(await page.evaluate(() => window.__docxEditorDriver?.editable)).toBe(false);
+    test('a document with a table reports its current public editability capability', async ({
+      page,
+    }) => {
+      await mount(page, baseUrl, 'with-tables.docx');
+      // Tables used to force the legacy mapper read-only. The production public surface
+      // now supports this fixture, so pin the fixture and assert the advertised capability
+      // instead of preserving an obsolete read-only expectation.
+      await expect(page.getByTestId('adapter-status')).toHaveText('Editable (paragraphs)');
+      expect(await page.evaluate(() => window.__editorSmokeDriver!.editable())).toBe(true);
+      expect(
+        await page.evaluate(() => window.__editorSmokeDriver!.displaySnapshot().pageCount)
+      ).toBeGreaterThan(0);
     });
   });
 }

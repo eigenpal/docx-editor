@@ -5,7 +5,23 @@
 import { describe, expect, test } from 'bun:test';
 import { readFileSync } from 'node:fs';
 import { parseDocx } from '@docx-editor.dev/engine-core';
+import { createDeterministicLayoutShaping } from '@docx-editor.dev/engine-layout';
 import { renderDocxPreview, renderModelPreview } from './enginePreview.ts';
+
+const options = {
+  shaping: createDeterministicLayoutShaping({
+    families: [
+      'Arial',
+      'Calibri',
+      'Cambria',
+      'Courier New',
+      'Georgia',
+      'Times New Roman',
+      'Verdana',
+    ],
+  }),
+  installedFonts: { aliasFor: () => 'DocxFont_preview_test' },
+};
 
 class El {
   style: Record<string, string> = {};
@@ -13,12 +29,30 @@ class El {
   attrs: Record<string, string> = {};
   textContent = '';
   ownerDocument: unknown;
-  constructor(readonly tag: string, owner?: unknown) { this.ownerDocument = owner; }
-  get firstChild() { return this.children[0] ?? null; }
-  setAttribute(k: string, v: string) { this.attrs[k] = v; }
-  getAttribute(k: string) { return this.attrs[k]; }
-  appendChild(c: El) { this.children.push(c); return c; }
-  removeChild(c: El) { const i = this.children.indexOf(c); if (i >= 0) this.children.splice(i, 1); return c; }
+  constructor(
+    readonly tag: string,
+    owner?: unknown
+  ) {
+    this.ownerDocument = owner;
+  }
+  get firstChild() {
+    return this.children[0] ?? null;
+  }
+  setAttribute(k: string, v: string) {
+    this.attrs[k] = v;
+  }
+  getAttribute(k: string) {
+    return this.attrs[k];
+  }
+  appendChild(c: El) {
+    this.children.push(c);
+    return c;
+  }
+  removeChild(c: El) {
+    const i = this.children.indexOf(c);
+    if (i >= 0) this.children.splice(i, 1);
+    return c;
+  }
 }
 function mockDom() {
   const doc = { createElement: (t: string) => new El(t, doc) } as unknown as Document;
@@ -33,7 +67,7 @@ describe('renderDocxPreview (shared read-only projection)', () => {
   test('renders a real table fixture: pages, cell rects, and cell text', () => {
     const bytes = readFileSync(`${import.meta.dir}/../../e2e/fixtures/with-tables.docx`);
     const { doc, container, el } = mockDom();
-    const result = renderDocxPreview(bytes, container, {}, doc);
+    const result = renderDocxPreview(bytes, container, options, doc);
 
     expect(result.ok).toBe(true);
     expect(result.pageCount).toBeGreaterThan(0);
@@ -62,7 +96,7 @@ describe('renderDocxPreview (shared read-only projection)', () => {
 
   test('an invalid file shows a visible error and does not throw', () => {
     const { doc, container, el } = mockDom();
-    const result = renderDocxPreview(new Uint8Array([1, 2, 3, 4]), container, {}, doc);
+    const result = renderDocxPreview(new Uint8Array([1, 2, 3, 4]), container, options, doc);
     expect(result.ok).toBe(false);
     expect(result.error).toBeDefined();
     const err = el.children.find((n) => n.attrs.class === 'docx-preview-error');
@@ -73,9 +107,9 @@ describe('renderDocxPreview (shared read-only projection)', () => {
   test('re-rendering into the same container replaces prior content (idempotent)', () => {
     const bytes = readFileSync(`${import.meta.dir}/../../e2e/fixtures/with-tables.docx`);
     const { doc, container, el } = mockDom();
-    renderDocxPreview(bytes, container, {}, doc);
+    renderDocxPreview(bytes, container, options, doc);
     const firstCount = el.children.length;
-    renderDocxPreview(bytes, container, {}, doc);
+    renderDocxPreview(bytes, container, options, doc);
     expect(el.children.length).toBe(firstCount); // not doubled
   });
 });
@@ -87,15 +121,18 @@ describe('renderModelPreview (paginated display from the canonical model)', () =
     expect(parsed.ok).toBe(true);
     if (!parsed.ok) return;
     const { doc, container, el } = mockDom();
-    const result = renderModelPreview(parsed.model, container, {}, doc);
+    const result = renderModelPreview(parsed.model, container, options, doc);
     expect(result.ok).toBe(true);
     expect(result.pageCount).toBeGreaterThan(0);
     // Re-rendering the same model is idempotent (used on every keystroke).
     const before = el.children.length;
-    renderModelPreview(parsed.model, container, {}, doc);
+    renderModelPreview(parsed.model, container, options, doc);
     expect(el.children.length).toBe(before);
     // The model's paragraph text reaches the paginated display.
-    const text = allNodes(el).filter((n) => n.tag === 'span').map((n) => n.textContent).join(' ');
+    const text = allNodes(el)
+      .filter((n) => n.tag === 'span')
+      .map((n) => n.textContent)
+      .join(' ');
     expect(text).toContain('Edit');
   });
 });
@@ -103,8 +140,8 @@ describe('renderModelPreview (paginated display from the canonical model)', () =
 describe('deterministic page count (locks React/Vue parity by construction)', () => {
   test('the same fixture always yields the same page count', () => {
     const bytes = readFileSync(`${import.meta.dir}/../../e2e/fixtures/repeated-table-header.docx`);
-    const a = renderDocxPreview(bytes, mockDom().container, {}, mockDom().doc);
-    const b = renderDocxPreview(bytes, mockDom().container, {}, mockDom().doc);
+    const a = renderDocxPreview(bytes, mockDom().container, options, mockDom().doc);
+    const b = renderDocxPreview(bytes, mockDom().container, options, mockDom().doc);
     // Both demos call this one path, so identical bytes -> identical page count.
     expect(a.ok && b.ok).toBe(true);
     expect(a.pageCount).toBe(b.pageCount);

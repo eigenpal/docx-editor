@@ -7,7 +7,7 @@ import { GlobalRegistrator } from '@happy-dom/global-registrator';
 if (!GlobalRegistrator.isRegistered) GlobalRegistrator.register();
 
 import { describe, expect, test } from 'bun:test';
-import { createEditor } from '../src/index.ts';
+import { createTestEditor as createEditor } from './create-test-editor.ts';
 import type { EditorHost } from '@docx-editor.dev/core-contract/editor';
 import type { DisplayPage } from '@docx-editor.dev/core-contract/geometry';
 import { createEmptyModel, writeDocx } from '@docx-editor.dev/engine-core';
@@ -15,7 +15,11 @@ import { createEmptyModel, writeDocx } from '@docx-editor.dev/engine-core';
 // A minimal, real DOCX: the empty authored model serialized to bytes.
 const docxBytes = (): Uint8Array => writeDocx(createEmptyModel());
 
-function makeHost(over: Partial<EditorHost> = {}): { host: EditorHost; displays: DisplayPage[][]; totals: number[] } {
+function makeHost(over: Partial<EditorHost> = {}): {
+  host: EditorHost;
+  displays: DisplayPage[][];
+  totals: number[];
+} {
   const displays: DisplayPage[][] = [];
   const totals: number[] = [];
   const host: EditorHost = {
@@ -49,19 +53,24 @@ describe('createEditor lifecycle (byte-native, PM-free host)', () => {
     const { host } = makeHost();
     const editor = createEditor({ host, document: docxBytes() });
     expect(editor.getDisplay().length).toBe(editor.getTotalPages());
-    expect(editor.getPageGeometry().map((p) => p.index)).toEqual(editor.getDisplay().map((p) => p.index));
+    expect(editor.getPageGeometry().map((p) => p.index)).toEqual(
+      editor.getDisplay().map((p) => p.index)
+    );
     editor.destroy();
   });
 
   test('save() returns real DOCX bytes that reopen', () => {
     const { host } = makeHost();
     const editor = createEditor({ host, document: docxBytes() });
-    return editor.save().then((buf) => {
-      expect(buf.byteLength).toBeGreaterThan(0);
-      // PK zip signature.
-      const sig = new Uint8Array(buf).slice(0, 2);
-      expect([sig[0], sig[1]]).toEqual([0x50, 0x4b]);
-    }).finally(() => editor.destroy());
+    return editor
+      .save()
+      .then((buf) => {
+        expect(buf.byteLength).toBeGreaterThan(0);
+        // PK zip signature.
+        const sig = new Uint8Array(buf).slice(0, 2);
+        expect([sig[0], sig[1]]).toEqual([0x50, 0x4b]);
+      })
+      .finally(() => editor.destroy());
   });
 
   test('getDocumentHandle carries a revision; change listeners subscribe/unsubscribe', () => {
@@ -79,7 +88,10 @@ describe('createEditor lifecycle (byte-native, PM-free host)', () => {
   test('the deferred command/query surface degrades gracefully instead of throwing', () => {
     const { host } = makeHost();
     const editor = createEditor({ host, document: docxBytes() });
-    expect(editor.exec({ type: 'toggleMark', mark: 'bold' })).toMatchObject({ ok: false, code: 'unsupported' });
+    expect(editor.exec({ type: 'toggleMark', mark: 'bold' })).toMatchObject({
+      ok: false,
+      code: 'unsupported',
+    });
     expect(editor.query({ type: 'selectedText' })).toBe('');
     expect(editor.snapshot().page.total).toBe(editor.getTotalPages());
     editor.destroy();

@@ -4,13 +4,29 @@
 
 import { describe, expect, test } from 'bun:test';
 import { renderPdf, inspectPdf, extractReadingOrder } from '../src/index.ts';
-import { layoutBody, DeterministicMetrics, type LayoutOptions } from '@docx-editor.dev/engine-layout';
-import { createEmptyModel, bodyStoryId, DocumentStore, ORIGIN_IDS, type ParagraphRecord } from '@docx-editor.dev/engine-core';
+import {
+  createDeterministicLayoutShaping,
+  layoutBody,
+  type LayoutOptions,
+} from '@docx-editor.dev/engine-layout';
+import {
+  createEmptyModel,
+  bodyStoryId,
+  DocumentStore,
+  ORIGIN_IDS,
+  type ParagraphRecord,
+} from '@docx-editor.dev/engine-core';
 
 const HUMAN = ORIGIN_IDS.mutationHuman;
 
 function opts(over: Partial<LayoutOptions> = {}): LayoutOptions {
-  return { pageWidth: 12240, pageHeight: 15840, margin: 1440, metrics: new DeterministicMetrics(), ...over };
+  return {
+    pageWidth: 12240,
+    pageHeight: 15840,
+    margin: 1440,
+    shaping: createDeterministicLayoutShaping(),
+    ...over,
+  };
 }
 
 function modelWith(paragraphs: string[]) {
@@ -22,7 +38,9 @@ function modelWith(paragraphs: string[]) {
   for (let i = 1; i < paragraphs.length; i++) {
     const r = store.transact(HUMAN, (c) => c.apply({ op: 'appendParagraph', storyId }));
     const pid = r.ok ? r.modelChange.created[0] : '';
-    store.transact(HUMAN, (c) => c.apply({ op: 'insertText', paragraphId: pid, text: paragraphs[i] }));
+    store.transact(HUMAN, (c) =>
+      c.apply({ op: 'insertText', paragraphId: pid, text: paragraphs[i] })
+    );
   }
   return store.currentModel;
 }
@@ -75,7 +93,18 @@ describe('non-DOM backends handle every display-item kind exhaustively (3.8)', (
         height: 15840,
         items: [
           { type: 'rect', x: 100, y: 100, width: 500, height: 200, stroke: true, fill: 'DDDDDD' },
-          { type: 'text', x: 120, y: 140, width: 300, height: 240, text: 'celltext', bold: false, italic: false, anchor: { paragraphId: 'p', offset: 0 }, line: { lineId: 'p:L0', fragmentId: 'p:L0:F0', lineIndex: 0, fragmentIndex: 0 } },
+          {
+            type: 'text',
+            x: 120,
+            y: 140,
+            width: 300,
+            height: 240,
+            text: 'celltext',
+            bold: false,
+            italic: false,
+            anchor: { paragraphId: 'p', offset: 0 },
+            line: { lineId: 'p:L0', fragmentId: 'p:L0:F0', lineIndex: 0, fragmentIndex: 0 },
+          },
         ],
       },
     ],

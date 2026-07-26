@@ -1,8 +1,8 @@
 import type { CSSProperties, ReactElement } from 'react';
 import type { DisplayItem, DisplayPage } from '@docx-editor.dev/core-contract/geometry';
 import type { FrameOverlays, GlyphClickTarget, OverlayBox } from '@docx-editor.dev/engine-editor';
+import type { InstalledDisplayFonts } from '@docx-editor.dev/engine-editor';
 import {
-  runStyle,
   colorToCss,
   borderSegLine,
   cssMatrix,
@@ -30,6 +30,7 @@ export interface OverlayControl {
  */
 export function paintDisplay(
   pages: readonly DisplayPage[],
+  installedFonts: InstalledDisplayFonts,
   overlays?: FrameOverlays,
   clickTarget?: GlyphClickTarget | null,
   controls?: readonly OverlayControl[]
@@ -62,6 +63,7 @@ export function paintDisplay(
               paintItem(
                 item,
                 i,
+                installedFonts,
                 clickTarget?.pageIndex === page.index && clickTarget.itemIndex === i
                   ? clickTarget
                   : null
@@ -146,13 +148,16 @@ function paintOverlayLayer(
 function paintItem(
   item: DisplayItem,
   key: number,
+  installedFonts: InstalledDisplayFonts,
   clickTarget: GlyphClickTarget | null = null
 ): ReactElement[] {
   switch (item.kind) {
     case 'text':
-      // A text item may carry several runs (different styles); paint each at its own box.
       return item.runs.map((run, r) => {
-        const s = runStyle(run);
+        void installedFonts;
+        const fixedToPx = 4 / (3 * run.shaping.fixedPointScale);
+        const baseline = run.verticalMetrics.baseline - run.box.y;
+        const color = colorToCss(run.color) ?? 'currentColor';
         return (
           <div
             key={`${key}.${r}`}
@@ -163,16 +168,51 @@ function paintItem(
               position: 'absolute',
               left: run.box.x,
               top: run.box.y,
-              fontFamily: s.fontFamily,
-              fontSize: s.fontSizePx,
-              fontWeight: s.fontWeight,
-              fontStyle: s.fontStyle,
-              color: s.color,
-              textDecoration: s.textDecoration,
-              whiteSpace: 'pre',
+              width: run.box.width,
+              height: run.box.height,
             }}
           >
-            {run.text}
+            <svg
+              aria-hidden={true}
+              focusable="false"
+              style={{
+                position: 'absolute',
+                inset: 0,
+                width: run.box.width,
+                height: run.box.height,
+                overflow: 'visible',
+                pointerEvents: 'none',
+              }}
+            >
+              {run.glyphs.map((glyph, glyphIndex) => {
+                const scale = run.fontSizePx / glyph.outline.unitsPerEm;
+                const x = (glyph.originX + glyph.offsetX) * fixedToPx;
+                const y = baseline - (glyph.originY + glyph.offsetY) * fixedToPx;
+                return (
+                  <path
+                    key={`${glyph.id}.${glyphIndex}`}
+                    d={glyph.outline.path}
+                    fill={color}
+                    transform={`translate(${x} ${y}) scale(${scale} ${-scale})`}
+                  />
+                );
+              })}
+            </svg>
+            <span
+              style={{
+                position: 'absolute',
+                width: 1,
+                height: 1,
+                margin: -1,
+                padding: 0,
+                overflow: 'hidden',
+                clipPath: 'inset(50%)',
+                whiteSpace: 'nowrap',
+                pointerEvents: 'none',
+              }}
+            >
+              {run.text}
+            </span>
           </div>
         );
       });

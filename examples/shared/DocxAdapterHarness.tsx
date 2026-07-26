@@ -40,12 +40,12 @@ const onEditorRender: React.ProfilerOnRenderCallback = (_id, _phase, actualDurat
   p.commits += 1;
   p.totalDurationMs += actualDuration;
 };
-import {
-  DocxEditor,
-} from '@docx-editor.dev/react';
-import { createEditorDriver, type EditorDriver } from '@docx-editor.dev/engine-editor';
+import { DocxEditor } from '@docx-editor.dev/react';
+import { createEditorDriver, type EditorDriver } from '../../packages/engine-editor/src/index.ts';
 import { RawProseMirrorReference } from './RawProseMirrorReference';
 import en from '../../packages/i18n/en.json';
+import { loadDemoFontConfiguration } from './demoFontShaping';
+import type { FontConfiguration } from '@docx-editor.dev/core-contract/editor';
 
 /**
  * Resolve an i18n key against `packages/i18n/en.json`, imported directly.
@@ -56,9 +56,12 @@ import en from '../../packages/i18n/en.json';
  * The demo is the host here, so it does the resolving.
  */
 function translate(key: string): string {
-  const value = key.split('.').reduce<unknown>((node, part) => {
-    return node && typeof node === 'object' ? (node as Record<string, unknown>)[part] : undefined;
-  }, en as Record<string, unknown>);
+  const value = key.split('.').reduce<unknown>(
+    (node, part) => {
+      return node && typeof node === 'object' ? (node as Record<string, unknown>)[part] : undefined;
+    },
+    en as Record<string, unknown>
+  );
   // Surfacing the key is deliberate when a string is missing: a silent fallback to
   // the key's last segment reads like a real label and hides the gap.
   return typeof value === 'string' ? value : key;
@@ -93,7 +96,11 @@ declare global {
  * a differential gate that holds different text in the two surfaces cannot compare them,
  * and the M6K.1 gate quietly asserted only against the reference because of it.
  */
-const PM_REFERENCE_FALLBACK = ['The quick brown fox jumps over the lazy dog', 'Second paragraph here', 'Third'];
+const PM_REFERENCE_FALLBACK = [
+  'The quick brown fox jumps over the lazy dog',
+  'Second paragraph here',
+  'Third',
+];
 
 import { BrandLogo } from './BrandLogo';
 import { AdapterSwitcher } from './AdapterSwitcher';
@@ -242,6 +249,7 @@ export function DocxAdapterHarness({
   readonly initialZoom?: number;
 }): React.ReactElement {
   const [bytes, setBytes] = useState<Uint8Array | null>(null);
+  const [fonts, setFonts] = useState<FontConfiguration | null>(null);
   const [status, setStatus] = useState('Loading…');
   const [zoom, setZoom] = useState(initialZoom);
   // The document title is SHELL state: the engine owns no title contract (M4.0).
@@ -258,8 +266,14 @@ export function DocxAdapterHarness({
     let cancelled = false;
     void (async () => {
       try {
-        const b = new Uint8Array(await (await fetch(fixtureUrl)).arrayBuffer());
-        if (!cancelled) setBytes(b);
+        const [b, shaping] = await Promise.all([
+          fetch(fixtureUrl).then(async (response) => new Uint8Array(await response.arrayBuffer())),
+          loadDemoFontConfiguration(),
+        ]);
+        if (!cancelled) {
+          setBytes(b);
+          setFonts(shaping);
+        }
       } catch (e) {
         if (!cancelled) setStatus(`Could not fetch fixture (${(e as Error).message}).`);
       }
@@ -303,7 +317,16 @@ export function DocxAdapterHarness({
       {/* Gate-visible status, VISUALLY hidden: it was a full-width grey strip pinned
           above the product's own header, which is not part of the editor and made the
           demo look like a debug page. The testid stays so e2e keeps reading it. */}
-      <div style={{ position: 'absolute', width: 1, height: 1, overflow: 'hidden', clipPath: 'inset(50%)', whiteSpace: 'nowrap' }}>
+      <div
+        style={{
+          position: 'absolute',
+          width: 1,
+          height: 1,
+          overflow: 'hidden',
+          clipPath: 'inset(50%)',
+          whiteSpace: 'nowrap',
+        }}
+      >
         <span data-testid="adapter-status">{status}</span>
       </div>
       {/* Raw ProseMirror reference for the M6K.1 differential gate, behind `?pmref=1`
@@ -315,41 +338,40 @@ export function DocxAdapterHarness({
           longer assembles a second shell out of the exported pieces — that is exactly
           how the demo and the published component drift apart. Supplying `t` turns the
           chrome on; everything else is the component's business. */}
-      {bytes && (
+      {bytes && fonts && (
         <Profiler id="docx-editor" onRender={onEditorRender}>
-        <DocxEditor
-          document={bytes}
-          zoom={zoom}
-          onReady={onReady}
-          t={translate}
-          // The demo owns the title-bar slots, as the legacy demo does — brand lockup and
-          // the adapter/example switchers on the left, Open/New/Save on the right.
-          // `AdapterSwitcher` and `ExampleSwitcher` are the components that already ship
-          // in `examples/shared`; the editor no longer hand-rolls its own versions.
-          renderTitleBarLeft={() => (
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <BrandLogo />
-              <AdapterSwitcher current="react" />
-              <ExampleSwitcher current="Vite" />
-            </div>
-          )}
-          renderTitleBarRight={() => (
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <ThemeToggle value={colorMode} onChange={setColorMode} />
-              <button style={DEMO_PRIMARY_BUTTON} >
-                Open DOCX
-              </button>
-              <button style={DEMO_SECONDARY_BUTTON}>New</button>
-              <button style={DEMO_BUTTON} onClick={onSave}>
-                Save
-              </button>
-            </div>
-          )}
-          title={title}
-          onTitleChange={setTitle}
-          onSave={onSave}
-          colorMode={colorMode}
-        />
+          <DocxEditor
+            document={bytes}
+            fonts={fonts}
+            zoom={zoom}
+            onReady={onReady}
+            t={translate}
+            // The demo owns the title-bar slots, as the legacy demo does — brand lockup and
+            // the adapter/example switchers on the left, Open/New/Save on the right.
+            // `AdapterSwitcher` and `ExampleSwitcher` are the components that already ship
+            // in `examples/shared`; the editor no longer hand-rolls its own versions.
+            renderTitleBarLeft={() => (
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <BrandLogo />
+                <AdapterSwitcher current="react" />
+                <ExampleSwitcher current="Vite" />
+              </div>
+            )}
+            renderTitleBarRight={() => (
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <ThemeToggle value={colorMode} onChange={setColorMode} />
+                <button style={DEMO_PRIMARY_BUTTON}>Open DOCX</button>
+                <button style={DEMO_SECONDARY_BUTTON}>New</button>
+                <button style={DEMO_BUTTON} onClick={onSave}>
+                  Save
+                </button>
+              </div>
+            )}
+            title={title}
+            onTitleChange={setTitle}
+            onSave={onSave}
+            colorMode={colorMode}
+          />
         </Profiler>
       )}
     </div>

@@ -1,15 +1,30 @@
-import { forwardRef, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  forwardRef,
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import type { CSSProperties } from 'react';
-import type { Editor, EditorHost } from '@docx-editor.dev/core-contract/editor';
+import type { Editor, EditorFontError, EditorHost } from '@docx-editor.dev/core-contract/editor';
 import type { InteractionIntent } from '@docx-editor.dev/core-contract/interaction';
 import {
   attachAdapterEventBridge,
+  createLayoutShaping,
   createEditor,
+  disposeLayoutShaping,
   firstEditableGlyphTarget,
+  installDisplayFonts,
   measureInteractionHostMetrics,
   overlaysForFrame,
+  PaintEpochGate,
+  toEditorFontError,
+  type BrowserFontSet,
   type FrameOverlays,
   type GlyphClickTarget,
+  type InstalledDisplayFonts,
 } from '@docx-editor.dev/engine-editor';
 import type { DisplayPage } from '@docx-editor.dev/core-contract/geometry';
 // The title bar is composed by DocxEditorToolbar (via EditorToolbar's compound parts),
@@ -160,7 +175,19 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
     const pagesRef = useRef<HTMLDivElement | null>(null);
     const scrollRef = useRef<HTMLDivElement | null>(null);
     const editorRef = useRef<Editor | null>(null);
+    const shapingRef = useRef<Awaited<ReturnType<typeof createLayoutShaping>> | null>(null);
+    const fontLeaseRef = useRef<InstalledDisplayFonts | null>(null);
+    const detachBridgeRef = useRef<(() => void) | null>(null);
+    const paintGateRef = useRef(new PaintEpochGate());
+    const committedPaintEpochRef = useRef(0);
+    const readyPublishedRef = useRef(false);
+    const [pendingPages, setPendingPages] = useState<{
+      readonly epoch: number;
+      readonly pages: readonly DisplayPage[];
+    } | null>(null);
     const [pages, setPages] = useState<readonly DisplayPage[]>([]);
+    const [installedFonts, setInstalledFonts] = useState<InstalledDisplayFonts | null>(null);
+    const [fontError, setFontError] = useState<EditorFontError | null>(null);
     const [overlays, setOverlays] = useState<FrameOverlays>({ caret: null, selection: [] });
     const [clickTarget, setClickTarget] = useState<GlyphClickTarget | null>(null);
 
@@ -441,7 +468,13 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
           const id = requestAnimationFrame(cb);
           return () => cancelAnimationFrame(id);
         },
-        onDisplay: (next) => setPages(next),
+        onDisplay: (next) => {
+          paintGateRef.current.detach();
+          detachBridgeRef.current?.();
+          detachBridgeRef.current = null;
+          const epoch = paintGateRef.current.beginFrame();
+          setPendingPages({ epoch, pages: next });
+        },
       }),
       []
     );
@@ -451,45 +484,136 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
     // teardown, so undo/selection/scroll survive parent re-renders.
     useEffect(() => {
       const p = propsRef.current;
-      const editor = createEditor({
-        host,
-        document: p.document,
-        zoom: p.zoom,
-        locale: p.locale,
-        author: p.author,
-        mode: p.mode,
-      });
-      editorRef.current = editor;
-      propsRef.current.onReady?.(editor);
-      const offChange = editor.on('change', (c) => {
-        propsRef.current.onChange?.(c);
-        syncFromFrame();
-      });
-      const offSelection = editor.on('selectionChange', () => {
-        syncFromFrame();
-        handleSelectionChangeRef.current();
-        recomputeFloatingCommentBtnRef.current();
-      });
-      const offDisplay = editor.on('display', () => syncFromFrame());
-      syncFromFrame();
+      let cancelled = false;
+      let disposeEditor: (() => void) | null = null;
+      void createLayoutShaping(p.fonts)
+        .then((layoutShaping) => {
+          if (cancelled) {
+            disposeLayoutShaping(layoutShaping);
+            return;
+          }
+          shapingRef.current = layoutShaping;
+          let editor: Editor;
+          try {
+            editor = createEditor({
+              host,
+              document: p.document,
+              zoom: p.zoom,
+              locale: p.locale,
+              author: p.author,
+              mode: p.mode,
+              layoutShaping,
+            });
+          } catch (error) {
+            shapingRef.current = null;
+            disposeLayoutShaping(layoutShaping);
+            throw error;
+          }
+          editorRef.current = editor;
+          const offChange = editor.on('change', (c) => {
+            propsRef.current.onChange?.(c);
+            syncFromFrame();
+          });
+          const offSelection = editor.on('selectionChange', () => {
+            syncFromFrame();
+            handleSelectionChangeRef.current();
+            recomputeFloatingCommentBtnRef.current();
+          });
+          const offDisplay = editor.on('display', () => syncFromFrame());
+          disposeEditor = () => {
+            offChange();
+            offSelection();
+            offDisplay();
+            editor.destroy();
+            disposeLayoutShaping(layoutShaping);
+          };
+          syncFromFrame();
+        })
+        .catch((error: unknown) => {
+          if (cancelled) return;
+          const typed = toEditorFontError(error);
+          setFontError(typed);
+          propsRef.current.onFontError?.(typed);
+        });
       return () => {
-        offChange();
-        offSelection();
-        offDisplay();
-        editor.destroy();
+        cancelled = true;
+        disposeEditor?.();
         editorRef.current = null;
+        shapingRef.current = null;
+        readyPublishedRef.current = false;
       };
     }, [host, syncFromFrame]);
+
+    // A display frame is not publishable until every exact layout-selected face
+    // has loaded. Keep the previous lease alive while the replacement loads so
+    // another editor or an overlapping frame cannot lose a shared registration.
+    useEffect(() => {
+      if (pendingPages === null) return undefined;
+      let cancelled = false;
+      setPages([]);
+      setInstalledFonts(null);
+      setFontError(null);
+      const shaping = shapingRef.current;
+      if (!shaping) return undefined;
+      const ownerDocument = pagesRef.current?.ownerDocument ?? globalThis.document;
+      void installDisplayFonts(
+        pendingPages.pages,
+        shaping.fonts,
+        ownerDocument.fonts as unknown as BrowserFontSet
+      )
+        .then((lease) => {
+          if (cancelled || !paintGateRef.current.isCurrent(pendingPages.epoch)) {
+            lease.release();
+            return;
+          }
+          fontLeaseRef.current?.release();
+          fontLeaseRef.current = lease;
+          committedPaintEpochRef.current = pendingPages.epoch;
+          setInstalledFonts(lease);
+          setPages(pendingPages.pages);
+        })
+        .catch((error: unknown) => {
+          if (cancelled || !paintGateRef.current.isCurrent(pendingPages.epoch)) return;
+          fontLeaseRef.current?.release();
+          fontLeaseRef.current = null;
+          const typed = toEditorFontError(error);
+          setFontError(typed);
+          propsRef.current.onFontError?.(typed);
+        });
+      return () => {
+        cancelled = true;
+      };
+    }, [pendingPages]);
+
+    useEffect(
+      () => () => {
+        fontLeaseRef.current?.release();
+        fontLeaseRef.current = null;
+      },
+      []
+    );
 
     // Forward real pointer, keyboard, and focus events on the painted pages to
     // the shared controller. The bridge owns normalization for both adapters;
     // its disposer must run on unmount or listeners outlive the editor.
-    useEffect(() => {
+    useLayoutEffect(() => {
+      if (!installedFonts) return undefined;
       const surface = scrollRef.current;
       if (!surface) return undefined;
+      if (!paintGateRef.current.commitPaint(committedPaintEpochRef.current)) return undefined;
       const detach = attachAdapterEventBridge(surface, {
         getInteractionFrameId: () => editorRef.current?.getInteractionFrame().id ?? null,
         dispatchInteraction: (intent: InteractionIntent) => {
+          if (!paintGateRef.current.interactionReady) {
+            return {
+              outcome: {
+                ok: false,
+                code: 'staleFrame',
+                reason: 'The matching font-backed display frame has not committed',
+              },
+              hostEffects: [],
+            };
+          }
           const editor = editorRef.current!;
           const result = editor.dispatchInteraction(intent);
           // A pointer press makes the editor ACTIVE, not just placed. Without this the
@@ -502,8 +626,17 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
           return result;
         },
       });
-      return detach;
-    }, [syncFromFrame]);
+      detachBridgeRef.current = detach;
+      if (!readyPublishedRef.current && editorRef.current) {
+        readyPublishedRef.current = true;
+        propsRef.current.onReady?.(editorRef.current);
+      }
+      return () => {
+        paintGateRef.current.detach();
+        if (detachBridgeRef.current === detach) detachBridgeRef.current = null;
+        detach();
+      };
+    }, [installedFonts, syncFromFrame]);
 
     // The imperative handle, ported. This file used to build a seven-method version
     // inline; the hook builds legacy's shape.
@@ -648,6 +781,8 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
         pages={pages}
         overlays={overlays}
         clickTarget={clickTarget}
+        installedFonts={installedFonts}
+        fontError={fontError?.message ?? null}
         zoom={zoomFactor}
         scrollRef={chromeOn ? null : scrollRef}
         pagesRef={pagesRef}

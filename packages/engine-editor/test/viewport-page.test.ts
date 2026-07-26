@@ -8,7 +8,7 @@
 // below is what catches that).
 
 import { describe, expect, test } from 'bun:test';
-import { createEditor } from '../src/index.ts';
+import { createTestEditor as createEditor } from './create-test-editor.ts';
 import type { Editor, EditorHost } from '@docx-editor.dev/core-contract/editor';
 import type { InteractionHostMetrics } from '@docx-editor.dev/core-contract/interaction';
 import { createEmptyModel, writeDocx } from '@docx-editor.dev/engine-core';

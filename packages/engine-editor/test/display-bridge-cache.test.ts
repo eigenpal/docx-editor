@@ -6,7 +6,7 @@
 // slice whose geometry or text actually changed does NOT.
 
 import { describe, expect, test } from 'bun:test';
-import { layoutBody, HelveticaMetrics } from '@docx-editor.dev/engine-layout';
+import { layoutBody } from '@docx-editor.dev/engine-layout';
 import {
   createEmptyModel,
   bodyStoryId,
@@ -25,7 +25,9 @@ function storeWith(texts: readonly string[]) {
   const storyId = bodyStoryId(model);
   const store = new DocumentStore(model);
   const first = (model.stories.get(storyId)!.blocks[0] as ParagraphRecord).id;
-  store.transact(HUMAN, (c) => c.apply({ op: 'insertText', paragraphId: first, text: texts[0] ?? '' }));
+  store.transact(HUMAN, (c) =>
+    c.apply({ op: 'insertText', paragraphId: first, text: texts[0] ?? '' })
+  );
   const ids = [first];
   for (let i = 1; i < texts.length; i += 1) {
     const r = store.transact(HUMAN, (c) => c.apply({ op: 'appendParagraph', storyId }));
@@ -37,8 +39,7 @@ function storeWith(texts: readonly string[]) {
 }
 
 function bridge(model: PackageModel, cache?: DisplayBridgeCache) {
-  const metrics = new HelveticaMetrics();
-  return toDisplayPages(model, layoutBody(model, { ...LAYOUT, metrics }).pages, metrics, cache);
+  return toDisplayPages(model, layoutBody(model, LAYOUT).pages, { cache });
 }
 
 function clustersByBlock(result: ReturnType<typeof bridge>) {
@@ -60,7 +61,9 @@ describe('display bridge reuses frozen clusters for unchanged slices', () => {
     expect(cache.built).toBeGreaterThan(0);
     expect(cache.reused).toBe(0);
 
-    store.transact(HUMAN, (c) => c.apply({ op: 'insertText', paragraphId: ids[1]!, offset: 0, text: 'x' }));
+    store.transact(HUMAN, (c) =>
+      c.apply({ op: 'insertText', paragraphId: ids[1]!, offset: 0, text: 'x' })
+    );
     const after = bridge(store.currentModel, cache);
 
     expect(cache.built).toBe(1);
@@ -102,7 +105,7 @@ describe('display bridge reuses frozen clusters for unchanged slices', () => {
       .find((i) => i.kind === 'text' && i.semantic.identity.blockId === ids[1]!)!.box.y;
 
     store.transact(HUMAN, (c) =>
-      c.apply({ op: 'insertText', paragraphId: ids[0]!, offset: 0, text: 'w '.repeat(400) }),
+      c.apply({ op: 'insertText', paragraphId: ids[0]!, offset: 0, text: 'w '.repeat(400) })
     );
     const after = bridge(store.currentModel, cache);
     const moved = after.display
@@ -122,12 +125,12 @@ describe('display bridge reuses frozen clusters for unchanged slices', () => {
         r.display.map((page) =>
           page.items
             .filter((i) => i.kind === 'text')
-            .map((i) => (i.kind === 'text' ? { s: i.semantic, c: i.clusters, b: i.box } : null)),
-        ),
+            .map((i) => (i.kind === 'text' ? { s: i.semantic, c: i.clusters, b: i.box } : null))
+        )
       );
     const { store, ids } = storeWith(['alpha beta', 'gamma delta']);
     expect(shape(bridge(store.currentModel, new DisplayBridgeCache()))).toBe(
-      shape(bridge(store.currentModel)),
+      shape(bridge(store.currentModel))
     );
 
     // And after edits, against a warm cache — the shape review actually broke.
@@ -135,7 +138,7 @@ describe('display bridge reuses frozen clusters for unchanged slices', () => {
     bridge(store.currentModel, cache);
     for (const text of ['x'.repeat(30), 'y', ' ', 'zz ']) {
       store.transact(HUMAN, (c) =>
-        c.apply({ op: 'insertText', paragraphId: ids[0]!, offset: 0, text }),
+        c.apply({ op: 'insertText', paragraphId: ids[0]!, offset: 0, text })
       );
       expect(shape(bridge(store.currentModel, cache))).toBe(shape(bridge(store.currentModel)));
     }
@@ -153,18 +156,18 @@ describe('display bridge reuses frozen clusters for unchanged slices', () => {
         op: 'setParagraphRuns',
         paragraphId: first,
         runs: [{ text: 'wrap '.repeat(12) }, { text: ' ', props: { bold: true } }],
-      }),
+      })
     );
     const shape = (r: ReturnType<typeof bridge>) =>
       JSON.stringify(
         r.display.flatMap((p) =>
-          p.items.filter((i) => i.kind === 'text').map((i) => (i.kind === 'text' ? i.clusters : [])),
-        ),
+          p.items.filter((i) => i.kind === 'text').map((i) => (i.kind === 'text' ? i.clusters : []))
+        )
       );
     const cache = new DisplayBridgeCache();
     bridge(store.currentModel, cache);
     store.transact(HUMAN, (c) =>
-      c.apply({ op: 'insertText', paragraphId: first, offset: 0, text: 'x'.repeat(30) }),
+      c.apply({ op: 'insertText', paragraphId: first, offset: 0, text: 'x'.repeat(30) })
     );
     expect(shape(bridge(store.currentModel, cache))).toBe(shape(bridge(store.currentModel)));
   });

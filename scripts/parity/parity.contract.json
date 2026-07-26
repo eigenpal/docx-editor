@@ -2,13 +2,7 @@
   "version": 1,
   "comment": "Paired DocxEditorProps / DocxEditorRef members across the React and Vue adapters. Rewritten for the GREENFIELD adapters: the previous contract enumerated the pre-rebuild surface (documentBuffer, commentsSidebarOpen, externalPlugins, showRuler, print, scrollToCommentId, ...), none of which either adapter exports since the strip at 701c1a9f, so every entry reported as missing from BOTH sides and the gate measured nothing.",
   "props": {
-    "paired": [
-      "author",
-      "document",
-      "locale",
-      "mode",
-      "zoom"
-    ],
+    "paired": ["author", "document", "fonts", "locale", "mode", "onFontError", "zoom"],
     "deferredInVue": {
       "className": "React takes an explicit className prop. Vue applies `class` as a native fallthrough attribute, so it is not a declared prop — the capability exists on both, the declaration only on React.",
       "onChange": "React takes a callback prop. Vue exposes the same signal as a `change` EMIT, which is the idiomatic Vue form and does not appear in DocxEditorProps.",
@@ -22,15 +16,7 @@
   },
   "ref": {
     "comment": "Greenfield DocxEditorRef is the SAME interface on both adapters — every member is declared directly on each side, so nothing is inherited and pairedViaInheritance is empty. Vue used to declare it as `type DocxEditorRef = EditorRefLike & { ... }`; it is now a plain interface matching React, which is stricter parity, not looser.",
-    "paired": [
-      "exec",
-      "focus",
-      "getDocumentHandle",
-      "getEditor",
-      "load",
-      "save",
-      "snapshot"
-    ],
+    "paired": ["exec", "focus", "getDocumentHandle", "getEditor", "load", "save", "snapshot"],
     "pairedViaInheritance": {},
     "vueExclusive": {}
   }

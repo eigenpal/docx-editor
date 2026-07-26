@@ -12,6 +12,7 @@ import {
   type Story,
 } from './authored-model.ts';
 import { IdentityAllocator } from './identity.ts';
+import { cloneRunRecord } from './edit.ts';
 
 /** The subset of a paragraph's opening-tag attributes a SPLIT/derived paragraph may inherit: every
  *  attribute EXCEPT the unique per-paragraph identities (`w14:paraId`, `w14:textId`), which must not
@@ -169,7 +170,11 @@ export function replaceParagraph(
   const alloc = new IdentityAllocator(model.identity);
   const newId = opts.newId ?? alloc.allocate('paragraph');
   const identity = opts.newId ? model.identity : alloc.state();
-  const replacement: ParagraphRecord = { kind: 'paragraph', id: newId, runs: [...newRuns] };
+  const replacement: ParagraphRecord = {
+    kind: 'paragraph',
+    id: newId,
+    runs: newRuns.map(cloneRunRecord),
+  };
   const blocks = [...loc.story.blocks] as ParagraphRecord[];
   blocks[loc.index] = replacement;
   return { model: { ...replaceStory(model, loc.storyId, blocks), identity }, newId };

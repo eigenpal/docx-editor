@@ -1,10 +1,21 @@
 // Cumulative geometry trust from line origin (task 5.5 review).
 
 import { describe, expect, test } from 'bun:test';
-import { createEmptyModel, bodyStoryId, DocumentStore, ORIGIN_IDS, type ParagraphRecord } from '@docx-editor.dev/engine-core';
-import { layoutBody, HelveticaMetrics, type CaretEdgeItem } from '../src/index.ts';
+import {
+  createEmptyModel,
+  bodyStoryId,
+  DocumentStore,
+  ORIGIN_IDS,
+  type ParagraphRecord,
+} from '@docx-editor.dev/engine-core';
+import { createDeterministicLayoutShaping, layoutBody, type CaretEdgeItem } from '../src/index.ts';
 
-const LAYOUT = { pageWidth: 12240, pageHeight: 15840, margin: 1440, metrics: new HelveticaMetrics() };
+const LAYOUT = {
+  pageWidth: 12240,
+  pageHeight: 15840,
+  margin: 1440,
+  shaping: createDeterministicLayoutShaping(),
+};
 const HUMAN = ORIGIN_IDS.mutationHuman;
 
 function navigableOffsets(text: string): number[] {
@@ -22,9 +33,9 @@ function navigableOffsets(text: string): number[] {
 }
 
 describe('cumulative geometry trust (task 5.5 review)', () => {
-  test('unsupported emoji poisons endpoint and subsequent edges on the line', () => {
-    expect(navigableOffsets('😀')).toEqual([0]);
-    expect(navigableOffsets('a😀')).toEqual([0, 1]);
-    expect(navigableOffsets('a😀b')).toEqual([0, 1]);
+  test('shaped clusters publish exact geometry for non-ASCII graphemes', () => {
+    expect(navigableOffsets('😀')).toEqual([0, 1]);
+    expect(navigableOffsets('a😀')).toEqual([0, 1, 2]);
+    expect(navigableOffsets('a😀b')).toEqual([0, 1, 2, 3]);
   });
 });

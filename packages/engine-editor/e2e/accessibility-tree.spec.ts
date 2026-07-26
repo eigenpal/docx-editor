@@ -14,18 +14,27 @@ function normalizeText(text: string): string {
 }
 
 test.describe('production editor accessibility tree', () => {
-  test('exposes exactly one canonical editable projection and hides painted pages', async ({ page }) => {
+  test('exposes exactly one canonical editable projection and hides painted pages', async ({
+    page,
+  }) => {
     await mountScenario(page, 'editable-named');
 
-    const paintedText = normalizeText(await page.evaluate(() => window.__a11yHarness!.paintedDomText()));
+    const paintedText = normalizeText(
+      await page.evaluate(() => window.__a11yHarness!.paintedDomText())
+    );
     expect(paintedText).toContain('primeralínea');
     expect(paintedText).toContain('caféñ日本語');
 
     expect(await page.evaluate(() => window.__a11yHarness!.pagesAriaHidden())).toBe(true);
-    expect(await page.evaluate(() => window.__a11yHarness!.pagesAssistiveMarker())).toBe('presentation-only');
+    expect(await page.evaluate(() => window.__a11yHarness!.pagesAssistiveMarker())).toBe(
+      'presentation-only'
+    );
 
     await expect(page.locator('[contenteditable="true"]')).toHaveCount(1);
-    await expect(page.locator('[contenteditable="true"]')).toHaveAttribute('aria-label', LOCALIZED_ACCESSIBLE_NAME);
+    await expect(page.locator('[contenteditable="true"]')).toHaveAttribute(
+      'aria-label',
+      LOCALIZED_ACCESSIBLE_NAME
+    );
 
     const tree = await assertSingleOwnerTree(page, { requiredText: 'primera línea' });
     expect(countSubstring(tree, 'café ñ 日本語')).toBe(1);
@@ -46,9 +55,14 @@ test.describe('production editor accessibility tree', () => {
     `);
   });
 
-  test('exposes localized accessible name when supplied and omits fallback when absent', async ({ page }) => {
+  test('exposes localized accessible name when supplied and omits fallback when absent', async ({
+    page,
+  }) => {
     await mountScenario(page, 'editable-named');
-    await expect(page.locator('[contenteditable="true"]')).toHaveAttribute('aria-label', LOCALIZED_ACCESSIBLE_NAME);
+    await expect(page.locator('[contenteditable="true"]')).toHaveAttribute(
+      'aria-label',
+      LOCALIZED_ACCESSIBLE_NAME
+    );
     await assertSingleOwnerTree(page);
 
     await page.evaluate(() => window.__a11yHarness!.mount({ scenario: 'editable-unnamed' }));
@@ -59,7 +73,9 @@ test.describe('production editor accessibility tree', () => {
     await assertSingleOwnerTree(page);
   });
 
-  test('editable mode is focusable; view mode is perceivable but not editable', async ({ page }) => {
+  test('editable mode is focusable; view mode is perceivable but not editable', async ({
+    page,
+  }) => {
     await mountScenario(page, 'editable-named');
     await authorizeCaret(page, 0, 0);
     const focusedObs = await page.evaluate(() => window.__a11yHarness!.getObservation());
@@ -79,24 +95,32 @@ test.describe('production editor accessibility tree', () => {
     await expect(page.locator('[contenteditable="false"]')).toHaveCount(1);
   });
 
-  test('read-only structural atoms expose localized labels and read-only semantics', async ({ page }) => {
+  test('read-only structural atoms expose localized labels and read-only semantics', async ({
+    page,
+  }) => {
     await mountScenario(page, 'read-only-mixed');
     const obs = await page.evaluate(() => window.__a11yHarness!.getObservation());
-    expect(obs.editable).toBe(false);
+    // The body has editable paragraphs on both sides of the unsupported table.
+    // Document editability and the atom's read-only status are distinct contracts.
+    expect(obs.editable).toBe(true);
     const atom = obs.entries.find((entry) => entry.role === 'readOnlyAtom');
     expect(atom?.atomKind).toBe('table');
     expect(atom?.readOnly).toBe(true);
 
     await expect(page.locator('.docx-block-embed[data-kind="table"]')).toHaveAttribute(
       'aria-label',
-      LOCALIZED_ATOM_LABELS.table,
+      LOCALIZED_ATOM_LABELS.table
     );
     await expect(page.getByLabel(LOCALIZED_ATOM_LABELS.table)).toHaveCount(1);
 
     const tree = await page.locator('[data-docx-input-host-mount]').ariaSnapshot();
     expect(tree).toContain('antes');
     expect(tree).toContain('después');
-    await expect(page.locator('[contenteditable="true"]')).toHaveCount(0);
+    await expect(page.locator('[contenteditable="true"]')).toHaveCount(1);
+    await expect(page.locator('.docx-block-embed[data-kind="table"]')).toHaveAttribute(
+      'contenteditable',
+      'false'
+    );
   });
 
   test('focus and native selection track exact canonical semantic selection', async ({ page }) => {
@@ -114,14 +138,15 @@ test.describe('production editor accessibility tree', () => {
       .poll(() =>
         page.evaluate(() => {
           const obs = window.__a11yHarness!.getObservation();
-          if (obs.selection?.anchor.kind !== 'text' || obs.selection.head.kind !== 'text') return null;
+          if (obs.selection?.anchor.kind !== 'text' || obs.selection.head.kind !== 'text')
+            return null;
           return {
             collapsed: obs.selection.collapsed,
             anchorOffset: obs.selection.anchor.graphemeOffset,
             headOffset: obs.selection.head.graphemeOffset,
             blockId: obs.selection.anchor.identity.blockId,
           };
-        }),
+        })
       )
       .toEqual({
         collapsed: false,
@@ -139,7 +164,9 @@ test.describe('production editor accessibility tree', () => {
     await assertSingleOwnerTree(page, { requiredText: 'primera línea' });
   });
 
-  test('accepted native input keeps one owner and one canonical tree instance', async ({ page }) => {
+  test('accepted native input keeps one owner and one canonical tree instance', async ({
+    page,
+  }) => {
     await mountScenario(page, 'editable-named');
     const revisionBefore = await page.evaluate(() => window.__a11yHarness!.getRevision());
     const endOffset = (await page.evaluate(() => window.__a11yHarness!.getParagraphText(0))).length;
@@ -161,7 +188,9 @@ test.describe('production editor accessibility tree', () => {
     expect(countSubstring(tree, 'primera línea')).toBe(1);
   });
 
-  test('composition lifecycle keeps one owner through start, update, end, and commit', async ({ page }) => {
+  test('composition lifecycle keeps one owner through start, update, end, and commit', async ({
+    page,
+  }) => {
     await mountScenario(page, 'editable-named');
     const revisionBefore = await page.evaluate(() => window.__a11yHarness!.getRevision());
     const endOffset = (await page.evaluate(() => window.__a11yHarness!.getParagraphText(0))).length;
@@ -171,7 +200,9 @@ test.describe('production editor accessibility tree', () => {
 
     const editable = page.locator('[contenteditable="true"]');
     await editable.evaluate((el) => {
-      el.dispatchEvent(new CompositionEvent('compositionstart', { bubbles: true, cancelable: true, data: '' }));
+      el.dispatchEvent(
+        new CompositionEvent('compositionstart', { bubbles: true, cancelable: true, data: '' })
+      );
     });
     await assertSingleOwnerTree(page);
 
@@ -179,24 +210,32 @@ test.describe('production editor accessibility tree', () => {
     await assertSingleOwnerTree(page);
 
     await editable.evaluate((el) => {
-      el.dispatchEvent(new CompositionEvent('compositionupdate', { bubbles: true, cancelable: true, data: 'X' }));
+      el.dispatchEvent(
+        new CompositionEvent('compositionupdate', { bubbles: true, cancelable: true, data: 'X' })
+      );
     });
     await assertSingleOwnerTree(page);
 
     await editable.evaluate((el) => {
-      el.dispatchEvent(new CompositionEvent('compositionend', { bubbles: true, cancelable: true, data: 'X' }));
+      el.dispatchEvent(
+        new CompositionEvent('compositionend', { bubbles: true, cancelable: true, data: 'X' })
+      );
     });
 
     await expect
       .poll(() => page.evaluate(() => window.__a11yHarness!.getParagraphText(0)))
       .toContain('X');
-    expect(await page.evaluate(() => window.__a11yHarness!.getRevision())).toBeGreaterThan(revisionBefore);
+    expect(await page.evaluate(() => window.__a11yHarness!.getRevision())).toBeGreaterThan(
+      revisionBefore
+    );
 
     const tree = await assertSingleOwnerTree(page, { requiredText: 'X' });
     expect(countSubstring(tree, 'primera línea')).toBe(1);
   });
 
-  test('blur, external reconciliation, relayout, container swap, and destroy stay coherent', async ({ page }) => {
+  test('blur, external reconciliation, relayout, container swap, and destroy stay coherent', async ({
+    page,
+  }) => {
     await mountScenario(page, 'editable-named');
     await authorizeCaret(page, 0, 0);
     await assertSingleOwnerTree(page, { requiredText: 'primera línea' });
@@ -206,7 +245,11 @@ test.describe('production editor accessibility tree', () => {
     expect(blurred.focus.focused).toBe(false);
     await assertSingleOwnerTree(page, { requiredText: 'primera línea' });
 
-    await authorizeCaret(page, 0, (await page.evaluate(() => window.__a11yHarness!.getParagraphText(0))).length);
+    await authorizeCaret(
+      page,
+      0,
+      (await page.evaluate(() => window.__a11yHarness!.getParagraphText(0))).length
+    );
     const editable = page.locator('[contenteditable="true"]');
     await editable.type('Q');
     await assertSingleOwnerTree(page, { requiredText: 'Q' });
@@ -214,18 +257,24 @@ test.describe('production editor accessibility tree', () => {
     const endOffset = (await page.evaluate(() => window.__a11yHarness!.getParagraphText(0))).length;
     await authorizeCaret(page, 0, endOffset);
     await editable.evaluate((el) => {
-      el.dispatchEvent(new CompositionEvent('compositionstart', { bubbles: true, cancelable: true, data: '' }));
+      el.dispatchEvent(
+        new CompositionEvent('compositionstart', { bubbles: true, cancelable: true, data: '' })
+      );
     });
     await editable.type('X');
     await editable.evaluate((el) => {
-      el.dispatchEvent(new CompositionEvent('compositionend', { bubbles: true, cancelable: true, data: 'X' }));
+      el.dispatchEvent(
+        new CompositionEvent('compositionend', { bubbles: true, cancelable: true, data: 'X' })
+      );
     });
     await expect
       .poll(() => page.evaluate(() => window.__a11yHarness!.getParagraphText(0)))
       .toContain('X');
     await assertSingleOwnerTree(page, { requiredText: 'X' });
 
-    await page.evaluate(() => window.__a11yHarness!.reloadEditableTexts(['remoto', '', 'café ñ 日本語']));
+    await page.evaluate(() =>
+      window.__a11yHarness!.reloadEditableTexts(['remoto', '', 'café ñ 日本語'])
+    );
     await assertSingleOwnerTree(page, { requiredText: 'remoto' });
 
     await page.evaluate(() => window.__a11yHarness!.relayout({ sync: false }));
@@ -233,10 +282,14 @@ test.describe('production editor accessibility tree', () => {
     await assertSingleOwnerTree(page, { requiredText: 'remoto' });
 
     await page.evaluate(() => window.__a11yHarness!.swapPagesContainer());
-    expect(await page.evaluate(() => window.__a11yHarness!.pagesAssistiveMarker())).toBe('presentation-only');
+    expect(await page.evaluate(() => window.__a11yHarness!.pagesAssistiveMarker())).toBe(
+      'presentation-only'
+    );
     await assertSingleOwnerTree(page, { requiredText: 'remoto' });
 
-    const pages = page.locator('[data-testid="harness-pages"], [data-testid="harness-pages-spare"]');
+    const pages = page.locator(
+      '[data-testid="harness-pages"], [data-testid="harness-pages-spare"]'
+    );
     await page.evaluate(() => window.__a11yHarness!.destroy());
     await expect(page.locator('[data-docx-input-host-mount]')).toHaveCount(0);
     await expect(page.locator('[contenteditable="true"]')).toHaveCount(0);

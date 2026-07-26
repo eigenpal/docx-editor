@@ -13,7 +13,8 @@ import { GlobalRegistrator } from '@happy-dom/global-registrator';
 if (!GlobalRegistrator.isRegistered) GlobalRegistrator.register();
 
 import { describe, expect, test } from 'bun:test';
-import { createEditor, createEditorDriver } from '../src/index.ts';
+import { createEditorDriver } from '../src/index.ts';
+import { createTestEditor as createEditor } from './create-test-editor.ts';
 import type { EditorHost } from '@docx-editor.dev/core-contract/editor';
 import { IDENTITY_HOST_METRICS } from '../src/coordinate-mapper.ts';
 import { createEditableParagraphFixture } from '../browser/fixtures.ts';
@@ -22,7 +23,17 @@ function mountEditor() {
   const body = document.createElement('div');
   const scroll = document.createElement('div');
   scroll.getBoundingClientRect = () =>
-    ({ x: 0, y: 0, width: 640, height: 480, top: 0, left: 0, right: 640, bottom: 480, toJSON: () => ({}) }) as DOMRect;
+    ({
+      x: 0,
+      y: 0,
+      width: 640,
+      height: 480,
+      top: 0,
+      left: 0,
+      right: 640,
+      bottom: 480,
+      toJSON: () => ({}),
+    }) as DOMRect;
   document.body.append(scroll);
   scroll.append(body);
   const host: EditorHost = {
@@ -114,7 +125,10 @@ describe('exec setSelection publishes the frame it moved', () => {
     if (before.kind !== 'text') throw new Error('expected a text head');
 
     const target = { ...before, graphemeOffset: 4 };
-    const result = editor.exec({ type: 'setSelection', range: { from: target, to: target } } as never);
+    const result = editor.exec({
+      type: 'setSelection',
+      range: { from: target, to: target },
+    } as never);
     expect(result.ok).toBe(true);
 
     const after = editor.getInteractionFrame().selection!.head;

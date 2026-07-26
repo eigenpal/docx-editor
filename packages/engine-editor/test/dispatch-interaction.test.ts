@@ -2,11 +2,15 @@ import { GlobalRegistrator } from '@happy-dom/global-registrator';
 if (!GlobalRegistrator.isRegistered) GlobalRegistrator.register();
 
 import { describe, expect, test } from 'bun:test';
-import { createEditor } from '../src/create-editor.ts';
+import { createTestEditor as createEditor } from './create-test-editor.ts';
 import type { Editor, EditorHost } from '@docx-editor.dev/core-contract/editor';
 import type { InteractionFrame } from '@docx-editor.dev/core-contract/interaction';
 import { createEditableParagraphFixture } from '../browser/fixtures.ts';
-import { clientPointForStackedText, publishFrame, selectionForBlock } from './interaction-test-helpers.ts';
+import {
+  clientPointForStackedText,
+  publishFrame,
+  selectionForBlock,
+} from './interaction-test-helpers.ts';
 import { contentToClient, IDENTITY_HOST_METRICS } from '../src/coordinate-mapper.ts';
 
 function hostWith(body: HTMLElement, metrics = IDENTITY_HOST_METRICS): EditorHost {
@@ -34,11 +38,20 @@ function frameObservation(frame: InteractionFrame) {
 }
 
 function selectionEndpoints(
-  selection: { anchor: { identity: unknown; graphemeOffset: number }; head: { identity: unknown; graphemeOffset: number } } | null | undefined,
+  selection:
+    | {
+        anchor: { identity: unknown; graphemeOffset: number };
+        head: { identity: unknown; graphemeOffset: number };
+      }
+    | null
+    | undefined
 ) {
   if (!selection) return null;
   return {
-    anchor: { identity: selection.anchor.identity, graphemeOffset: selection.anchor.graphemeOffset },
+    anchor: {
+      identity: selection.anchor.identity,
+      graphemeOffset: selection.anchor.graphemeOffset,
+    },
     head: { identity: selection.head.identity, graphemeOffset: selection.head.graphemeOffset },
   };
 }
@@ -81,7 +94,10 @@ describe('createEditor dispatchInteraction (task 5.1)', () => {
     }
     expect(dispatch.hostEffects).toEqual([]);
     expect(editor.getDocumentHandle().revision).toBe(revisionBefore);
-    expect(editor.getAccessibilityObservation().selection?.head).toMatchObject({ kind: 'text', graphemeOffset: 2 });
+    expect(editor.getAccessibilityObservation().selection?.head).toMatchObject({
+      kind: 'text',
+      graphemeOffset: 2,
+    });
     expect(editor.getInteractionFrame().focus.focused).toBe(true);
 
     editor.destroy();
@@ -133,7 +149,11 @@ describe('createEditor dispatchInteraction (task 5.1)', () => {
     expect(after.semanticFocus).toEqual(before.semanticFocus);
     expect(after.frame).toEqual(before.frame);
     expect(after.inputHost).toEqual(before.inputHost);
-    expect(editor.getAccessibilityObservation().entries.some((entry) => entry.identity.blockId === 'missing-block')).toBe(false);
+    expect(
+      editor
+        .getAccessibilityObservation()
+        .entries.some((entry) => entry.identity.blockId === 'missing-block')
+    ).toBe(false);
 
     editor.destroy();
     body.remove();
@@ -179,7 +199,10 @@ describe('createEditor dispatchInteraction (task 5.1)', () => {
     editor.relayout({ sync: false });
     expect(editor.getInteractionFrame().completeness.kind).toBe('pending');
     const pendingSnapshot = editorInteractionSnapshot(editor);
-    const pending = editor.dispatchInteraction({ kind: 'focus', frameId: editor.getInteractionFrame().id });
+    const pending = editor.dispatchInteraction({
+      kind: 'focus',
+      frameId: editor.getInteractionFrame().id,
+    });
     expect(pending.outcome.ok).toBe(false);
     if (!pending.outcome.ok) expect(pending.outcome.code).toBe('pendingLayout');
     expect(editorInteractionSnapshot(editor)).toEqual(pendingSnapshot);
@@ -305,20 +328,28 @@ describe('createEditor dispatchInteraction click (task 5.2)', () => {
       x: firstCluster.box.x + 1,
       y: firstCluster.box.y + firstCluster.box.height / 2,
     });
-    const first = editor.dispatchInteraction({ kind: 'click', frameId: frame.id, clientPoint: firstPoint });
+    const first = editor.dispatchInteraction({
+      kind: 'click',
+      frameId: frame.id,
+      clientPoint: firstPoint,
+    });
     expect(first.outcome.ok).toBe(true);
     const afterFirst = editor.getInteractionFrame();
     const secondPoint = clientPointForStackedText(afterFirst, 0, {
       x: lastCluster.box.x + lastCluster.box.width - 1,
       y: lastCluster.box.y + lastCluster.box.height / 2,
     });
-    const second = editor.dispatchInteraction({ kind: 'click', frameId: afterFirst.id, clientPoint: secondPoint });
+    const second = editor.dispatchInteraction({
+      kind: 'click',
+      frameId: afterFirst.id,
+      clientPoint: secondPoint,
+    });
     expect(second.outcome.ok).toBe(true);
     if (second.outcome.ok) {
       expect(second.outcome.frameId).toEqual(editor.getInteractionFrame().id);
     }
     expect(editor.getInteractionFrame().selection?.head.graphemeOffset).toBeGreaterThan(
-      afterFirst.selection?.head.graphemeOffset ?? -1,
+      afterFirst.selection?.head.graphemeOffset ?? -1
     );
 
     editor.destroy();
@@ -426,7 +457,7 @@ describe('createEditor dispatchInteraction click (task 5.2)', () => {
     const textItem = frame.display[0]!.items.find((i) => i.kind === 'text');
     if (textItem?.kind !== 'text') throw new Error('text');
     const block = frame.semanticIndex.stories[0]!.blocks.find(
-      (b) => b.identity.blockId === textItem.semantic.identity.blockId,
+      (b) => b.identity.blockId === textItem.semantic.identity.blockId
     )!;
 
     const wordCluster = textItem.clusters[2] ?? textItem.clusters[0]!;
@@ -446,7 +477,9 @@ describe('createEditor dispatchInteraction click (task 5.2)', () => {
       expect(double.outcome.frameId.value).toBeGreaterThan(frame.id.value);
     }
     const afterDouble = editor.getInteractionFrame();
-    expect(afterDouble.selection?.anchor.graphemeOffset).toBeLessThan(afterDouble.selection?.head.graphemeOffset ?? 0);
+    expect(afterDouble.selection?.anchor.graphemeOffset).toBeLessThan(
+      afterDouble.selection?.head.graphemeOffset ?? 0
+    );
     expect(afterDouble.selectionGeometry).not.toBeNull();
     expect(afterDouble.focus.focused).toBe(true);
     expect(editor.getDocumentHandle().revision).toBe(revisionBefore);
@@ -749,7 +782,9 @@ describe('createEditor dispatchInteraction click (task 5.2)', () => {
     expect(downA.hostEffects).toEqual([{ kind: 'capturePointer', pointerId: 11 }]);
     expect(downB.hostEffects).toEqual([{ kind: 'capturePointer', pointerId: 22 }]);
     expect(editorA.getAccessibilityObservation().selection?.anchor.graphemeOffset).toBe(0);
-    expect(editorB.getAccessibilityObservation().selection?.anchor.graphemeOffset).toBeGreaterThan(0);
+    expect(editorB.getAccessibilityObservation().selection?.anchor.graphemeOffset).toBeGreaterThan(
+      0
+    );
 
     const moveA = clientPointForStackedText(frameA, 0, {
       x: itemA.clusters.at(-1)!.box.x + itemA.clusters.at(-1)!.box.width * 0.8,
@@ -763,7 +798,7 @@ describe('createEditor dispatchInteraction click (task 5.2)', () => {
       buttons: 1,
     });
     expect(editorB.getAccessibilityObservation().selection?.head.graphemeOffset).toBe(
-      editorB.getAccessibilityObservation().selection?.anchor.graphemeOffset,
+      editorB.getAccessibilityObservation().selection?.anchor.graphemeOffset
     );
 
     const upA = editorA.dispatchInteraction({
@@ -873,10 +908,10 @@ describe('createEditor dispatchInteraction click (task 5.2)', () => {
     if (!move.outcome.ok) expect(move.outcome.code).toBe('unsupported');
     expect(move.hostEffects).toEqual([]);
     expect(selectionEndpoints(editor.getAccessibilityObservation().selection)).toEqual(
-      selectionEndpoints(afterDownSelection),
+      selectionEndpoints(afterDownSelection)
     );
     expect(selectionEndpoints(editor.getInteractionFrame().selection)).toEqual(
-      selectionEndpoints(afterDownFrameSelection),
+      selectionEndpoints(afterDownFrameSelection)
     );
 
     editor.setActiveScope({ kind: 'body' });
@@ -946,10 +981,10 @@ describe('createEditor dispatchInteraction click (task 5.2)', () => {
     if (!up.outcome.ok) expect(up.outcome.code).toBe('unsupported');
     expect(up.hostEffects).toEqual([{ kind: 'releasePointer', pointerId: 21 }]);
     expect(selectionEndpoints(editor.getAccessibilityObservation().selection)).toEqual(
-      selectionEndpoints(afterMoveSelection),
+      selectionEndpoints(afterMoveSelection)
     );
     expect(selectionEndpoints(editor.getInteractionFrame().selection)).toEqual(
-      selectionEndpoints(afterMoveFrameSelection),
+      selectionEndpoints(afterMoveFrameSelection)
     );
     expect(editor.getInteractionFrame().selectionGeometry).toEqual(afterMoveGeometry);
 

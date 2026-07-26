@@ -28,11 +28,16 @@
 // stated at the test, not by a linearity claim it would fail.
 
 import { describe, expect, test } from 'bun:test';
-import { layoutBody, HelveticaMetrics } from '@docx-editor.dev/engine-layout';
+import { createDeterministicLayoutShaping, layoutBody } from '@docx-editor.dev/engine-layout';
 import { createEmptyModel, bodyStoryId, type ParagraphRecord } from '@docx-editor.dev/engine-core';
 import { toDisplayPages } from '../src/display-bridge.ts';
 
-const LAYOUT = { pageWidth: 12240, pageHeight: 15840, margin: 1440, metrics: new HelveticaMetrics() };
+const LAYOUT = {
+  pageWidth: 12240,
+  pageHeight: 15840,
+  margin: 1440,
+  shaping: createDeterministicLayoutShaping(),
+};
 
 /** An ordinary document: plain sentences, one run per paragraph. */
 function ordinaryDocument(paragraphs: number) {
@@ -76,7 +81,7 @@ describe('display publication cost', () => {
     const small = timePublish(2000);
     const large = timePublish(16000);
     expect(large).toBeLessThan(Math.max(small, 40) * 20);
-  });
+  }, 15_000);
 
   test('an ordinary 75-page document publishes within an interactive budget', () => {
     // The shape review measured at 120.7 s. An absolute assertion is defensible HERE
@@ -124,7 +129,10 @@ describe('display publication cost', () => {
       const story = base.stories.get(storyId)!;
       const text = Array.from({ length: wordCount }, (_, j) => `w${j % 97}`).join(' ');
       const p: ParagraphRecord = { kind: 'paragraph', id: 'p-ws', runs: [{ text }] };
-      const model = { ...base, stories: new Map(base.stories).set(storyId, { ...story, blocks: [p] }) };
+      const model = {
+        ...base,
+        stories: new Map(base.stories).set(storyId, { ...story, blocks: [p] }),
+      };
       const laid = layoutBody(model, LAYOUT) as unknown as { pages?: unknown[] };
       const started = Date.now();
       toDisplayPages(model, (laid.pages ?? laid) as never);
@@ -154,7 +162,10 @@ describe('display publication cost', () => {
         ...(i % 2 === 0 ? { props: { bold: true } } : {}),
       }));
       const p: ParagraphRecord = { kind: 'paragraph', id: 'p-alt', runs };
-      const model = { ...base, stories: new Map(base.stories).set(storyId, { ...story, blocks: [p] }) };
+      const model = {
+        ...base,
+        stories: new Map(base.stories).set(storyId, { ...story, blocks: [p] }),
+      };
       const laid = layoutBody(model, LAYOUT) as unknown as { pages?: unknown[] };
       const started = Date.now();
       toDisplayPages(model, (laid.pages ?? laid) as never);

@@ -27,7 +27,7 @@ function session(pointerId = 1): PointerDragSession {
 function dragPlan(
   prior: PointerDragSession | null,
   next: PointerDragSession | null,
-  terminal: DragInteractionPlan['terminal'] = { kind: 'none' },
+  terminal: DragInteractionPlan['terminal'] = { kind: 'none' }
 ): DragInteractionPlan {
   return {
     priorSession: prior,
@@ -40,7 +40,7 @@ function dragPlan(
 function execution(
   ok: boolean,
   hostEffects: InteractionDispatchResult['hostEffects'] = [],
-  code = 'unsupported' as const,
+  code = 'unsupported' as const
 ): InteractionDispatchResult {
   if (ok) {
     return { outcome: { ok: true, value: undefined, frameId: FRAME_ID }, hostEffects };
@@ -61,7 +61,10 @@ describe('commitDragSessionAfterExecution (task 5.4)', () => {
   });
 
   test('pointerDown failure keeps prior null session without supplemental host effects', () => {
-    const result = commitDragSessionAfterExecution(dragPlan(null, null), execution(false, [], 'invalidTarget'));
+    const result = commitDragSessionAfterExecution(
+      dragPlan(null, null),
+      execution(false, [], 'invalidTarget')
+    );
     expect(result.session).toBeNull();
     expect(result.supplementalHostEffects).toEqual([]);
   });
@@ -69,7 +72,10 @@ describe('commitDragSessionAfterExecution (task 5.4)', () => {
   test('pointerMove sync failure reverts to priorSession', () => {
     const prior = session();
     const next = { ...prior, lastValidHead: { ...prior.lastValidHead, graphemeOffset: 2 } };
-    const result = commitDragSessionAfterExecution(dragPlan(prior, next), execution(false, [], 'unsupported'));
+    const result = commitDragSessionAfterExecution(
+      dragPlan(prior, next),
+      execution(false, [], 'unsupported')
+    );
     expect(result.session).toEqual(prior);
     expect(result.supplementalHostEffects).toEqual([]);
   });
@@ -78,7 +84,7 @@ describe('commitDragSessionAfterExecution (task 5.4)', () => {
     const prior = session(7);
     const result = commitDragSessionAfterExecution(
       dragPlan(prior, null, { kind: 'release', pointerId: 7, cause: 'pointerUp' }),
-      execution(false, [], 'unsupported'),
+      execution(false, [], 'unsupported')
     );
     expect(result.session).toBeNull();
     expect(result.supplementalHostEffects).toEqual([{ kind: 'releasePointer', pointerId: 7 }]);
@@ -88,7 +94,7 @@ describe('commitDragSessionAfterExecution (task 5.4)', () => {
     const prior = session(3);
     const result = commitDragSessionAfterExecution(
       dragPlan(prior, null, { kind: 'release', pointerId: 3, cause: 'pointerCancel' }),
-      execution(false, [{ kind: 'releasePointer', pointerId: 3 }], 'unsupported'),
+      execution(false, [{ kind: 'releasePointer', pointerId: 3 }], 'unsupported')
     );
     expect(result.session).toBeNull();
     expect(result.supplementalHostEffects).toEqual([]);
@@ -98,7 +104,7 @@ describe('commitDragSessionAfterExecution (task 5.4)', () => {
     const prior = session(5);
     const result = commitDragSessionAfterExecution(
       dragPlan(prior, null, { kind: 'release', pointerId: 5, cause: 'abort' }),
-      execution(false, [], 'staleFrame'),
+      execution(false, [], 'staleFrame')
     );
     expect(result.session).toBeNull();
     expect(result.supplementalHostEffects).toEqual([{ kind: 'releasePointer', pointerId: 5 }]);
@@ -108,7 +114,7 @@ describe('commitDragSessionAfterExecution (task 5.4)', () => {
     const prior = session();
     const result = commitDragSessionAfterExecution(
       dragPlan(prior, prior),
-      execution(false, [], 'pendingLayout'),
+      execution(false, [], 'pendingLayout')
     );
     expect(result.session).toEqual(prior);
     expect(result.supplementalHostEffects).toEqual([]);

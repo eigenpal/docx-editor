@@ -3,7 +3,11 @@
 import { describe, expect, test } from 'bun:test';
 import { bodyStoryId } from '@docx-editor.dev/engine-core';
 import { contentToClient } from '../src/coordinate-mapper.ts';
-import { deriveCaretGeometry, deriveSelectionGeometry, hitTestPointer } from '../src/interaction-geometry.ts';
+import {
+  deriveCaretGeometry,
+  deriveSelectionGeometry,
+  hitTestPointer,
+} from '../src/interaction-geometry.ts';
 import type { InteractionFrame } from '@docx-editor.dev/core-contract/interaction';
 import {
   LAYOUT,
@@ -20,8 +24,19 @@ const METRICS_OFFSET = {
   zoom: 1.5,
 };
 
-function clientOnCluster(frame: InteractionFrame, pageIndex: number, clusterBox: { x: number; y: number; width: number; height: number }, xRatio = 0.5, metrics = METRICS_OFFSET) {
-  return clientPointForStackedText(frame, pageIndex, { x: clusterBox.x + clusterBox.width * xRatio, y: clusterBox.y + clusterBox.height / 2 }, metrics);
+function clientOnCluster(
+  frame: InteractionFrame,
+  pageIndex: number,
+  clusterBox: { x: number; y: number; width: number; height: number },
+  xRatio = 0.5,
+  metrics = METRICS_OFFSET
+) {
+  return clientPointForStackedText(
+    frame,
+    pageIndex,
+    { x: clusterBox.x + clusterBox.width * xRatio, y: clusterBox.y + clusterBox.height / 2 },
+    metrics
+  );
 }
 
 describe('interaction geometry', () => {
@@ -55,7 +70,7 @@ describe('interaction geometry', () => {
     const outcome = hitTestPointer(
       frame,
       clientPointForStackedText(frame, 0, { x: tieX, y }, METRICS_OFFSET),
-      METRICS_OFFSET,
+      METRICS_OFFSET
     );
     expect(outcome.ok).toBe(true);
     if (!outcome.ok || outcome.value.target.kind !== 'text') throw new Error('hit');
@@ -72,9 +87,11 @@ describe('interaction geometry', () => {
     expect(item.clusters[0]!.graphemeTo - item.clusters[0]!.graphemeFrom).toBe(1);
     expect(item.clusters[0]!.utf16To - item.clusters[0]!.utf16From).toBe(text.length);
     const block = frame.semanticIndex.stories[0]!.blocks[0]!;
-    expect(frame.semanticIndex.caretStops.filter((s) => s.target.kind === 'text' && s.target.identity.blockId === block.identity.blockId)).toHaveLength(
-      block.graphemeCount + 1,
-    );
+    expect(
+      frame.semanticIndex.caretStops.filter(
+        (s) => s.target.kind === 'text' && s.target.identity.blockId === block.identity.blockId
+      )
+    ).toHaveLength(block.graphemeCount + 1);
     const cluster = item.clusters[0]!;
     const outcome = hitTestPointer(
       frame,
@@ -82,9 +99,9 @@ describe('interaction geometry', () => {
         frame,
         0,
         { x: cluster.box.x + cluster.box.width - 0.5, y: cluster.box.y + cluster.box.height / 2 },
-        METRICS_OFFSET,
+        METRICS_OFFSET
       ),
-      METRICS_OFFSET,
+      METRICS_OFFSET
     );
     expect(outcome.ok).toBe(true);
     if (!outcome.ok || outcome.value.target.kind !== 'text') throw new Error('hit');
@@ -104,10 +121,21 @@ describe('interaction geometry', () => {
   test('reverse z-order selects top eligible identity and skips synthetic/transparent layers', () => {
     const frame = publishFrame(modelWith(['low', 'high']));
     const page = frame.display[0]!;
-    const low = page.items.find((i) => i.kind === 'text' && i.semantic.identity.blockId !== page.items.at(-1)?.kind) as Extract<(typeof page.items)[number], { kind: 'text' }>;
-    const high = page.items.filter((i) => i.kind === 'text').at(-1) as Extract<(typeof page.items)[number], { kind: 'text' }>;
+    const low = page.items.find(
+      (i) => i.kind === 'text' && i.semantic.identity.blockId !== page.items.at(-1)?.kind
+    ) as Extract<(typeof page.items)[number], { kind: 'text' }>;
+    const high = page.items.filter((i) => i.kind === 'text').at(-1) as Extract<
+      (typeof page.items)[number],
+      { kind: 'text' }
+    >;
     const lowBox = low.box;
-    const highBox = { ...high.box, x: lowBox.x, y: lowBox.y, width: lowBox.width, height: lowBox.height };
+    const highBox = {
+      ...high.box,
+      x: lowBox.x,
+      y: lowBox.y,
+      width: lowBox.width,
+      height: lowBox.height,
+    };
     const display = [
       {
         ...page,
@@ -127,7 +155,12 @@ describe('interaction geometry', () => {
               writingMode: 'horizontal-tb' as const,
             },
           },
-          { ...high, box: highBox, synthetic: true, interaction: { ...high.interaction!, zOrder: 99 } },
+          {
+            ...high,
+            box: highBox,
+            synthetic: true,
+            interaction: { ...high.interaction!, zOrder: 99 },
+          },
           { ...high, box: highBox, interaction: { ...high.interaction!, zOrder: 100 } },
         ],
       },
@@ -153,14 +186,19 @@ describe('interaction geometry', () => {
     const patched = { ...frame, display };
     const outside = hitTestPointer(
       patched,
-      clientPointForStackedText(patched, 0, { x: item.box.x + 1, y: item.box.y + 2 }, METRICS_OFFSET),
-      METRICS_OFFSET,
+      clientPointForStackedText(
+        patched,
+        0,
+        { x: item.box.x + 1, y: item.box.y + 2 },
+        METRICS_OFFSET
+      ),
+      METRICS_OFFSET
     );
     expect(outside.ok).toBe(false);
     const inside = hitTestPointer(
       patched,
       clientPointForStackedText(patched, 0, { x: clip.x + 2, y: clip.y + 2 }, METRICS_OFFSET),
-      METRICS_OFFSET,
+      METRICS_OFFSET
     );
     expect(inside.ok).toBe(true);
   });
@@ -176,7 +214,12 @@ describe('interaction geometry', () => {
     };
     const display = [{ ...frame.display[0]!, items: [transformed] }];
     const patched = { ...frame, display };
-    const point = clientPointForStackedText(patched, 0, { x: item.box.x + 10, y: item.box.y + 5 }, METRICS_OFFSET);
+    const point = clientPointForStackedText(
+      patched,
+      0,
+      { x: item.box.x + 10, y: item.box.y + 5 },
+      METRICS_OFFSET
+    );
     const hit = hitTestPointer(patched, point, METRICS_OFFSET);
     expect(hit.ok).toBe(true);
     const target = {
@@ -194,13 +237,20 @@ describe('interaction geometry', () => {
 
   test('read-only table cell hit is selectable and produces no editable caret', () => {
     const frame = publishFrame(modelWithTableCell('locked'));
-    const item = frame.display.flatMap((p) => p.items).find((i) => i.kind === 'text' && i.semantic.identity.blockId === 'p-cell');
+    const item = frame.display
+      .flatMap((p) => p.items)
+      .find((i) => i.kind === 'text' && i.semantic.identity.blockId === 'p-cell');
     if (item?.kind !== 'text') throw new Error('text');
     const pageIndex = frame.display.find((p) => p.items.includes(item))!.index;
     const hit = hitTestPointer(
       frame,
-      clientPointForStackedText(frame, pageIndex, { x: item.box.x + 2, y: item.box.y + 2 }, METRICS_OFFSET),
-      METRICS_OFFSET,
+      clientPointForStackedText(
+        frame,
+        pageIndex,
+        { x: item.box.x + 2, y: item.box.y + 2 },
+        METRICS_OFFSET
+      ),
+      METRICS_OFFSET
     );
     expect(hit.ok).toBe(true);
     if (!hit.ok) throw new Error('hit');
@@ -212,7 +262,7 @@ describe('interaction geometry', () => {
         identity: { storyId: bodyStoryId(modelWithTableCell('locked')), blockId: 'p-cell' },
         graphemeOffset: 0,
         affinity: 'downstream',
-      }),
+      })
     ).toBeNull();
   });
 
@@ -249,8 +299,13 @@ describe('interaction geometry', () => {
     const patched = { ...frame, display };
     const outcome = hitTestPointer(
       patched,
-      clientPointForStackedText(patched, 0, { x: item.box.x + 2, y: item.box.y + 2 }, METRICS_OFFSET),
-      METRICS_OFFSET,
+      clientPointForStackedText(
+        patched,
+        0,
+        { x: item.box.x + 2, y: item.box.y + 2 },
+        METRICS_OFFSET
+      ),
+      METRICS_OFFSET
     );
     expect(outcome.ok).toBe(false);
     if (outcome.ok) throw new Error('expected unsupported');
@@ -271,8 +326,13 @@ describe('interaction geometry', () => {
     const patched = { ...frame, display: [{ ...frame.display[0]!, items: [broken] }] };
     const outcome = hitTestPointer(
       patched,
-      clientPointForStackedText(patched, 0, { x: item.box.x + 1, y: item.box.y + 1 }, METRICS_OFFSET),
-      METRICS_OFFSET,
+      clientPointForStackedText(
+        patched,
+        0,
+        { x: item.box.x + 1, y: item.box.y + 1 },
+        METRICS_OFFSET
+      ),
+      METRICS_OFFSET
     );
     expect(outcome.ok).toBe(false);
     expect(outcome.code).toBe('invalidTarget');
@@ -294,7 +354,9 @@ describe('interaction geometry', () => {
 
   test('stale frame identity is rejected', () => {
     const frame = publishFrame();
-    const outcome = hitTestPointer(frame, { x: 0, y: 0 }, METRICS_OFFSET, { frameId: { value: frame.id.value - 1 } });
+    const outcome = hitTestPointer(frame, { x: 0, y: 0 }, METRICS_OFFSET, {
+      frameId: { value: frame.id.value - 1 },
+    });
     expect(outcome.ok).toBe(false);
     expect(outcome.code).toBe('staleFrame');
   });

@@ -30,12 +30,16 @@ describe('caret blink restarts when the caret moves', () => {
 
   test('React keys the caret on its position', () => {
     const block = /className=\{`ep-one-surface__caret[\s\S]{0,400}?\/>/.exec(REACT);
-    expect(REACT).toMatch(/key=\{`caret\.\$\{caret\.pageIndex\}\.\$\{caret\.rect\.x\}\.\$\{caret\.rect\.y\}`\}/);
+    expect(REACT).toMatch(
+      /key=\{`caret\.\$\{caret\.pageIndex\}\.\$\{caret\.rect\.x\}\.\$\{caret\.rect\.y\}`\}/
+    );
     expect(block).not.toBeNull();
   });
 
   test('Vue keys the caret on its position, identically', () => {
-    expect(VUE).toMatch(/key: `caret\.\$\{caret\.pageIndex\}\.\$\{caret\.rect\.x\}\.\$\{caret\.rect\.y\}`/);
+    expect(VUE).toMatch(
+      /key: `caret\.\$\{caret\.pageIndex\}\.\$\{caret\.rect\.x\}\.\$\{caret\.rect\.y\}`/
+    );
   });
 
   test('both adapters use the SAME key expression', () => {

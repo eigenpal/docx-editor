@@ -10,13 +10,13 @@ describe('lighthouse accessibility gate', () => {
           'label-names': { id: 'label-names', title: 'Labels', score: 1 },
         },
       },
-      'http://localhost:5299/',
+      'http://localhost:5299/'
     );
     expect(lighthouseGateExitCode(passing)).toBe(0);
 
     const failingScore = evaluateLighthouseGate(
       { categories: { accessibility: { score: 0.96 } }, audits: {} },
-      'http://localhost:5299/',
+      'http://localhost:5299/'
     );
     expect(lighthouseGateExitCode(failingScore)).toBe(1);
 
@@ -27,7 +27,7 @@ describe('lighthouse accessibility gate', () => {
           'aria-hidden-body': { id: 'aria-hidden-body', title: 'Hidden body', score: 0 },
         },
       },
-      'http://localhost:5299/',
+      'http://localhost:5299/'
     );
     expect(failingAudit.failedAuditIds).toEqual(['aria-hidden-body']);
     expect(lighthouseGateExitCode(failingAudit)).toBe(1);

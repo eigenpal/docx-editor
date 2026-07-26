@@ -9,11 +9,20 @@
 
 import { afterEach, describe, expect, test } from 'bun:test';
 import { layoutBody } from '../src/layout.ts';
-import { HelveticaMetrics } from '../src/metrics.ts';
-import { intlGraphemeBoundary, resetGraphemeBoundary, setGraphemeBoundary } from '../src/grapheme.ts';
+import { createDeterministicLayoutShaping } from '../src/metrics.ts';
+import {
+  intlGraphemeBoundary,
+  resetGraphemeBoundary,
+  setGraphemeBoundary,
+} from '../src/grapheme.ts';
 import { createEmptyModel, bodyStoryId, type ParagraphRecord } from '@docx-editor.dev/engine-core';
 
-const LAYOUT = { pageWidth: 12240, pageHeight: 15840, margin: 1440, metrics: new HelveticaMetrics() };
+const LAYOUT = {
+  pageWidth: 12240,
+  pageHeight: 15840,
+  margin: 1440,
+  shaping: createDeterministicLayoutShaping(),
+};
 
 function modelWith(runs: ParagraphRecord['runs']) {
   const base = createEmptyModel();
@@ -60,7 +69,7 @@ afterEach(() => {
 });
 
 /**
- * Count `metrics.advance` calls during one layout.
+ * Count complete-span shaping calls during one layout.
  *
  * A SECOND instrument, because counting segmented characters was structurally blind
  * to the third amplifier: for a whitespace-free paragraph with alternating run
@@ -71,20 +80,19 @@ afterEach(() => {
  * The lesson is general enough to state: a cost guard must instrument the quantity
  * that actually amplifies, and each fix in this area moved which quantity that was.
  */
-function countAdvanceCalls(runs: ParagraphRecord['runs']): { calls: number; chars: number } {
-  const base = new HelveticaMetrics();
+function countShapeCalls(runs: ParagraphRecord['runs']): { calls: number; chars: number } {
+  const base = createDeterministicLayoutShaping();
   let calls = 0;
-  const counting = {
+  const shaping = {
     ...base,
-    shaping: base.shaping,
-    lineHeight: base.lineHeight,
-    advance: (ch: string, bold: boolean, italic: boolean) => {
-      calls += 1;
-      return base.advance(ch, bold, italic);
+    shaper: {
+      shape: (input: Parameters<typeof base.shaper.shape>[0]) => {
+        calls += 1;
+        return base.shaper.shape(input);
+      },
     },
-    provesCharacterAdvance: (ch: string) => base.provesCharacterAdvance(ch),
-  } as unknown as HelveticaMetrics;
-  layoutBody(modelWith(runs), { ...LAYOUT, metrics: counting });
+  };
+  layoutBody(modelWith(runs), { ...LAYOUT, shaping });
   return { calls, chars: runs.reduce((n, r) => n + r.text.length, 0) };
 }
 
@@ -100,7 +108,7 @@ describe('paragraph layout advance work', () => {
       text: 'x'.repeat(23),
       ...(i % 2 === 0 ? { props: { bold: true } } : {}),
     }));
-    const { calls, chars } = countAdvanceCalls(runs);
+    const { calls, chars } = countShapeCalls(runs);
     // Linear means a small constant multiple of the character count. The measured
     // pre-fix ratio for this shape was ~400x (k/2 with k=800 segments).
     expect(calls).toBeLessThan(chars * 6);
@@ -108,11 +116,11 @@ describe('paragraph layout advance work', () => {
 
   test('advance work grows linearly as style segments multiply', () => {
     const shape = (segments: number) =>
-      countAdvanceCalls(
+      countShapeCalls(
         Array.from({ length: segments }, (_, i) => ({
           text: 'x'.repeat(23),
           ...(i % 2 === 0 ? { props: { bold: true } } : {}),
-        })),
+        }))
       );
     const small = shape(200);
     const large = shape(800);

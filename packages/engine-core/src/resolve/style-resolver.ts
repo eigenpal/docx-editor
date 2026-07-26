@@ -7,10 +7,12 @@
 // Run-property precedence, lowest to highest (later overrides):
 //   docDefaults.rPr  ->  paragraph style rPr (basedOn chain, root->leaf)
 //                    ->  character style rPr (basedOn chain)  ->  direct run rPr
+// Within one layer/CT_Fonts slot, an authored theme attribute overrides the
+// corresponding concrete font attribute; a higher layer still overrides both.
 //
 // styleId values come from an untrusted DOCX, so basedOn chains are cycle- and
-// depth-guarded. This slice resolves bold/italic/underline; font/size/color/theme
-// resolution and paragraph-property resolution are later increments.
+// depth-guarded. This slice resolves authored run fonts, theme references, size,
+// color, and toggles; paragraph-property resolution remains a separate concern.
 
 import type {
   PackageModel,
@@ -18,6 +20,8 @@ import type {
   RunProps,
   RunRecord,
   ParagraphRecord,
+  RunFonts,
+  ThemeFonts,
 } from '../model/index.ts';
 
 /** Cap on how far a basedOn chain is followed. Bounds work on a hostile styles.xml
@@ -25,10 +29,35 @@ import type {
 const MAX_STYLE_DEPTH = 32;
 
 /** Merge run formatting: every DEFINED field of `over` overrides `base` (including an
- *  explicit `false`); omitted fields fall through. `parseRPr` only sets present fields,
- *  so a plain spread has exactly this override semantics. */
+ *  explicit `false`); omitted fields fall through. Font slots additionally clear the
+ *  inherited concrete/theme pair whenever either member is authored at the higher layer;
+ *  same-layer concrete+theme values are retained until theme resolution applies theme precedence. */
+const FONT_SLOTS = [
+  ['ascii', 'asciiTheme'],
+  ['hAnsi', 'hAnsiTheme'],
+  ['eastAsia', 'eastAsiaTheme'],
+  ['cs', 'csTheme'],
+] as const;
+
+function mergeFonts(base: RunFonts | undefined, over: RunFonts): RunFonts {
+  const merged: Record<string, string> = { ...(base ?? {}) };
+  for (const [familyKey, themeKey] of FONT_SLOTS) {
+    if (over[familyKey] === undefined && over[themeKey] === undefined) continue;
+    delete merged[familyKey];
+    delete merged[themeKey];
+    if (over[familyKey] !== undefined) merged[familyKey] = over[familyKey];
+    if (over[themeKey] !== undefined) merged[themeKey] = over[themeKey];
+  }
+  return merged;
+}
+
 function merge(base: RunProps, over: RunProps | undefined): RunProps {
-  return over ? { ...base, ...over } : base;
+  if (!over) return base;
+  return {
+    ...base,
+    ...over,
+    ...(over.fonts ? { fonts: mergeFonts(base.fonts, over.fonts) } : {}),
+  };
 }
 
 /** The formatting a run authors DIRECTLY (its rPr), excluding the non-formatting
@@ -36,6 +65,45 @@ function merge(base: RunProps, over: RunProps | undefined): RunProps {
 function directFormatting(props: RunProps): RunProps {
   const { styleId: _styleId, ...fmt } = props;
   return fmt;
+}
+
+function themeFamily(theme: ThemeFonts | undefined, reference: string): string | undefined {
+  if (!theme) return undefined;
+  switch (reference) {
+    case 'majorAscii':
+    case 'majorHAnsi':
+      return theme.majorLatin;
+    case 'minorAscii':
+    case 'minorHAnsi':
+      return theme.minorLatin;
+    case 'majorEastAsia':
+      return theme.majorEastAsia;
+    case 'minorEastAsia':
+      return theme.minorEastAsia;
+    case 'majorBidi':
+      return theme.majorComplexScript;
+    case 'minorBidi':
+      return theme.minorComplexScript;
+    default:
+      return undefined;
+  }
+}
+
+/** Add concrete families derived from theme references without removing their
+ * authored reference provenance. An explicit family always wins for its slot. */
+function resolveThemeReferences(props: RunProps, theme: ThemeFonts | undefined): RunProps {
+  if (!props.fonts) return props;
+  const fonts: Record<string, string> = { ...props.fonts };
+  for (const [familyKey, themeKey] of FONT_SLOTS) {
+    const reference = props.fonts[themeKey];
+    if (reference === undefined) continue;
+    // In CT_Fonts, a theme attribute supersedes the corresponding concrete
+    // attribute when both occur on the same effective property set.
+    delete fonts[familyKey];
+    const family = themeFamily(theme, reference);
+    if (family) fonts[familyKey] = family;
+  }
+  return { ...props, fonts };
 }
 
 export interface StyleResolver {
@@ -83,7 +151,7 @@ export function createStyleResolver(model: PackageModel): StyleResolver {
       const cStyle = run.props?.styleId;
       if (cStyle) eff = merge(eff, styleRunProps(cStyle));
       if (run.props) eff = merge(eff, directFormatting(run.props));
-      return eff;
+      return resolveThemeReferences(eff, model.themeFonts);
     },
   };
 }

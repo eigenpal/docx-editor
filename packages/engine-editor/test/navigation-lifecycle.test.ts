@@ -4,7 +4,7 @@ import { GlobalRegistrator } from '@happy-dom/global-registrator';
 if (!GlobalRegistrator.isRegistered) GlobalRegistrator.register();
 
 import { describe, expect, test } from 'bun:test';
-import { createEditor } from '../src/create-editor.ts';
+import { createTestEditor as createEditor } from './create-test-editor.ts';
 import type { EditorHost } from '@docx-editor.dev/core-contract/editor';
 import { createEmptyModel, writeDocx } from '@docx-editor.dev/engine-core';
 import { frameMembersCoherent } from '../src/interaction-frame.ts';
@@ -58,17 +58,29 @@ function makeControllableHost(body: HTMLElement | null = null) {
 describe('createEditor navigation lifecycle (task 5.5 review)', () => {
   test('load clears sidecar state and rejects stale frame intents', () => {
     const words = Array.from({ length: 40 }, (_, i) => `word${i}`).join(' ');
-    const editor = createEditor({ host: makeSyncHost(), document: createEditableFixtureWithTexts([words]) });
+    const editor = createEditor({
+      host: makeSyncHost(),
+      document: createEditableFixtureWithTexts([words]),
+    });
     const staleFrameId = editor.getInteractionFrame().id;
-    const blockId = editor.getInteractionFrame().semanticIndex.stories[0]!.blocks[0]!.identity.blockId;
+    const blockId =
+      editor.getInteractionFrame().semanticIndex.stories[0]!.blocks[0]!.identity.blockId;
     editor.dispatchInteraction({
       kind: 'semanticSelection',
       frameId: staleFrameId,
       selection: selectionForBlock(editor.getInteractionFrame(), blockId, 8, 8),
     });
-    editor.dispatchInteraction({ kind: 'geometryKeyboard', frameId: staleFrameId, key: 'ArrowDown' });
+    editor.dispatchInteraction({
+      kind: 'geometryKeyboard',
+      frameId: staleFrameId,
+      key: 'ArrowDown',
+    });
     editor.load(writeDocx(createEmptyModel()));
-    const stale = editor.dispatchInteraction({ kind: 'geometryKeyboard', frameId: staleFrameId, key: 'ArrowDown' });
+    const stale = editor.dispatchInteraction({
+      kind: 'geometryKeyboard',
+      frameId: staleFrameId,
+      key: 'ArrowDown',
+    });
     expect(stale.outcome.ok).toBe(false);
     if (!stale.outcome.ok) expect(stale.outcome.code).toBe('staleFrame');
     expect(frameMembersCoherent(editor.getInteractionFrame())).toBe(true);
@@ -79,10 +91,14 @@ describe('createEditor navigation lifecycle (task 5.5 review)', () => {
     const body = document.createElement('div');
     document.body.append(body);
     const words = Array.from({ length: 40 }, (_, i) => `word${i}`).join(' ');
-    const editor = createEditor({ host: makeSyncHost(body), document: createEditableFixtureWithTexts([words]) });
+    const editor = createEditor({
+      host: makeSyncHost(body),
+      document: createEditableFixtureWithTexts([words]),
+    });
     const blockId = editor.getAccessibilityObservation().entries[0]!.identity.blockId;
     const seed = 10;
-    const seedSelection = () => selectionForBlock(editor.getInteractionFrame(), blockId, seed, seed);
+    const seedSelection = () =>
+      selectionForBlock(editor.getInteractionFrame(), blockId, seed, seed);
 
     editor.dispatchInteraction({
       kind: 'semanticSelection',
@@ -119,7 +135,9 @@ describe('createEditor navigation lifecycle (task 5.5 review)', () => {
       key: 'ArrowDown',
     });
     expect(editor.getAccessibilityObservation().selection?.head.graphemeOffset).toBe(firstLanding);
-    expect(editor.getAccessibilityObservation().selection?.head.graphemeOffset).not.toBe(retainedLanding);
+    expect(editor.getAccessibilityObservation().selection?.head.graphemeOffset).not.toBe(
+      retainedLanding
+    );
     editor.destroy();
     body.remove();
   });
@@ -197,7 +215,11 @@ describe('createEditor navigation lifecycle (task 5.5 review)', () => {
     const editor = createEditor({ host: makeSyncHost(), document: writeDocx(createEmptyModel()) });
     const frameId = editor.getInteractionFrame().id;
     editor.destroy();
-    const late = editor.dispatchInteraction({ kind: 'geometryKeyboard', frameId, key: 'ArrowDown' });
+    const late = editor.dispatchInteraction({
+      kind: 'geometryKeyboard',
+      frameId,
+      key: 'ArrowDown',
+    });
     expect(late.outcome.ok).toBe(false);
     if (!late.outcome.ok) expect(late.outcome.code).toBe('unsupported');
   });

@@ -8,9 +8,30 @@
 
 import type { ContentTypeRecords, RelationshipRecord } from '../package/index.ts';
 
+/** Highest half-point size accepted into layout-facing authored state (1638 pt). */
+export const MAX_RUN_SIZE_HALF_POINTS = 3276;
+
+/** Authored w:rFonts attributes. Concrete and theme-relative values remain distinct;
+ *  every omitted attribute stays omitted until derived style resolution. */
+export interface RunFonts {
+  readonly ascii?: string;
+  readonly hAnsi?: string;
+  readonly eastAsia?: string;
+  readonly cs?: string;
+  readonly asciiTheme?: string;
+  readonly hAnsiTheme?: string;
+  readonly eastAsiaTheme?: string;
+  readonly csTheme?: string;
+}
+
 /** Run formatting. Every field is optional: absent = authored omission (inherit). */
 export interface RunProps {
   readonly styleId?: string;
+  readonly fonts?: RunFonts;
+  /** w:sz, in half-points. */
+  readonly sizeHalfPoints?: number;
+  /** Raw authored w:color value (for example RRGGBB or auto). */
+  readonly color?: string;
   readonly bold?: boolean; // explicit true/false is authored; undefined = omitted
   readonly italic?: boolean;
   readonly underline?: boolean;
@@ -21,12 +42,10 @@ export interface RunRecord {
   readonly id?: string;
   readonly text: string;
   readonly props?: RunProps;
-  /** An ownership-scoped preservation capsule for the run's leading `<w:rPr>` — the verbatim run
-   *  properties the model does not represent (fonts, size, color, underline styles, language, …),
-   *  captured byte-exact at parse (document-engine 3.1). Re-spliced ahead of the run text on
-   *  serialize INSTEAD of regenerating from `props`, so a run carrying unmodeled formatting stays
-   *  editable (its text) without losing it. When present, `props` (bold/italic) is not serialized —
-   *  the capsule already holds the full rPr. */
+  /** An ownership-scoped preservation capsule for the run's leading `<w:rPr>`, captured byte-exact
+   *  at parse. It retains lexical forms plus properties the model does not represent (underline
+   *  styles, language, and future extensions). Serialization re-splices it instead of regenerating
+   *  from `props`, while `props` remains the authored semantic projection used by resolution. */
   readonly rPrCapsule?: string;
 }
 
@@ -302,6 +321,16 @@ export interface DocDefaults {
   readonly runProps?: RunProps;
 }
 
+/** Theme font scheme projected from a:majorFont and a:minorFont. */
+export interface ThemeFonts {
+  readonly majorLatin?: string;
+  readonly minorLatin?: string;
+  readonly majorEastAsia?: string;
+  readonly minorEastAsia?: string;
+  readonly majorComplexScript?: string;
+  readonly minorComplexScript?: string;
+}
+
 export interface NumberingRecord {
   readonly numId: string;
   readonly abstractId: string;
@@ -322,6 +351,7 @@ export interface PackageModel {
   readonly stories: ReadonlyMap<string, Story>;
   readonly styles: readonly StyleRecord[];
   readonly docDefaults?: DocDefaults;
+  readonly themeFonts?: ThemeFonts;
   readonly numbering: readonly NumberingRecord[];
   readonly parts: ReadonlyMap<string, PartRecord>;
   readonly identity: IdentityState;
@@ -388,6 +418,8 @@ export const REL_TYPES = {
     'http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument',
   styles: 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles',
   numbering: 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/numbering',
+  theme: 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/theme',
+  themeStrict: 'http://purl.oclc.org/ooxml/officeDocument/relationships/theme',
 } as const;
 
 export const CONTENT_TYPES = {
@@ -396,4 +428,5 @@ export const CONTENT_TYPES = {
   documentMain: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml',
   styles: 'application/vnd.openxmlformats-officedocument.wordprocessingml.styles+xml',
   numbering: 'application/vnd.openxmlformats-officedocument.wordprocessingml.numbering+xml',
+  theme: 'application/vnd.openxmlformats-officedocument.theme+xml',
 } as const;

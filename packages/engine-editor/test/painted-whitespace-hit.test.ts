@@ -24,7 +24,11 @@ import type { DisplayItem, DisplayPage } from '@docx-editor.dev/core-contract/ge
 import { layoutBody } from '@docx-editor.dev/engine-layout';
 import { toDisplayPages } from '../src/display-bridge.ts';
 import { InteractionFrameStore, DEFAULT_PAGE_GAP_PX } from '../src/interaction-frame.ts';
-import { hitTestPointer, deriveCaretGeometry, deriveSelectionGeometry } from '../src/interaction-geometry.ts';
+import {
+  hitTestPointer,
+  deriveCaretGeometry,
+  deriveSelectionGeometry,
+} from '../src/interaction-geometry.ts';
 import { planInteraction } from '../src/interaction-planner.ts';
 import {
   clientPointForStackedText,
@@ -57,7 +61,7 @@ function itemText(item: TextDisplayItem): string {
 function clusterAt(frame: InteractionFrame, graphemeOffset: number) {
   for (const item of paintedItems(frame)) {
     const cluster = item.clusters.find(
-      (c) => c.graphemeFrom <= graphemeOffset && graphemeOffset < c.graphemeTo,
+      (c) => c.graphemeFrom <= graphemeOffset && graphemeOffset < c.graphemeTo
     );
     if (cluster) return { item, cluster };
   }
@@ -71,7 +75,7 @@ function pointInCluster(frame: InteractionFrame, graphemeOffset: number, ratio =
     frame,
     0,
     { x: cluster.box.x + cluster.box.width * ratio, y: cluster.box.y + cluster.box.height / 2 },
-    METRICS,
+    METRICS
   );
 }
 
@@ -84,13 +88,13 @@ function textHit(frame: InteractionFrame, point: { x: number; y: number }) {
 /** Publish a frame with extra display items appended to page 0, above the painted text. */
 function publishWithOverlay(
   text: string,
-  overlayFor: (page: DisplayPage) => readonly DisplayItem[],
+  overlayFor: (page: DisplayPage) => readonly DisplayItem[]
 ): InteractionFrame {
   const model = modelWith([text]);
   const layout = layoutBody(model, LAYOUT);
-  const bridged = toDisplayPages(model, layout.pages, LAYOUT.metrics);
+  const bridged = toDisplayPages(model, layout.pages);
   const display = bridged.display.map((page, index) =>
-    index === 0 ? { ...page, items: [...page.items, ...overlayFor(page)] } : page,
+    index === 0 ? { ...page, items: [...page.items, ...overlayFor(page)] } : page
   );
   const store = new InteractionFrameStore();
   return store.publishLayout({
@@ -136,7 +140,12 @@ describe('painted whitespace hit testing (renderer run grouping phase 2)', () =>
     const frame = publishFrame(modelWith(['ab cd']));
     const plan = planInteraction(
       { frame, editable: true, readOnly: false, hostMetrics: METRICS },
-      { kind: 'click', frameId: frame.id, clientPoint: pointInCluster(frame, 2, 0.25), clickCount: 2 },
+      {
+        kind: 'click',
+        frameId: frame.id,
+        clientPoint: pointInCluster(frame, 2, 0.25),
+        clickCount: 2,
+      }
     );
     const sync = plan.effects[0];
     if (sync?.kind !== 'syncSelection') throw new Error('syncSelection');
@@ -149,7 +158,12 @@ describe('painted whitespace hit testing (renderer run grouping phase 2)', () =>
     const block = frame.semanticIndex.stories[0]!.blocks[0]!;
     const plan = planInteraction(
       { frame, editable: true, readOnly: false, hostMetrics: METRICS },
-      { kind: 'click', frameId: frame.id, clientPoint: pointInCluster(frame, 2, 0.5), clickCount: 3 },
+      {
+        kind: 'click',
+        frameId: frame.id,
+        clientPoint: pointInCluster(frame, 2, 0.5),
+        clickCount: 3,
+      }
     );
     const sync = plan.effects[0];
     if (sync?.kind !== 'syncSelection') throw new Error('syncSelection');
@@ -221,7 +235,9 @@ describe('painted whitespace hit testing (renderer run grouping phase 2)', () =>
 
   test('read-only whitespace still refuses a caret at every click count', () => {
     const frame = publishFrame(modelWithTableCell('a b'));
-    const cellItem = paintedItems(frame).find((item) => item.semantic.identity.blockId === 'p-cell');
+    const cellItem = paintedItems(frame).find(
+      (item) => item.semantic.identity.blockId === 'p-cell'
+    );
     if (!cellItem) throw new Error('cell item');
     const space = cellItem.clusters.find((c) => c.graphemeFrom === 1);
     if (!space) throw new Error('space cluster');
@@ -229,12 +245,12 @@ describe('painted whitespace hit testing (renderer run grouping phase 2)', () =>
       frame,
       0,
       { x: space.box.x + space.box.width * 0.5, y: space.box.y + space.box.height / 2 },
-      METRICS,
+      METRICS
     );
     for (const clickCount of [1, 2, 3]) {
       const plan = planInteraction(
         { frame, editable: true, readOnly: false, hostMetrics: METRICS },
-        { kind: 'click', frameId: frame.id, clientPoint: point, clickCount },
+        { kind: 'click', frameId: frame.id, clientPoint: point, clickCount }
       );
       expect(plan.effects).toHaveLength(1);
       expect(plan.effects[0]).toMatchObject({ kind: 'reject', code: 'readOnly' });
@@ -274,7 +290,11 @@ describe('painted whitespace hit testing (renderer run grouping phase 2)', () =>
         {
           ...text,
           interaction: { ...text.interaction!, zOrder: (text.interaction?.zOrder ?? 0) + 100 },
-          clusters: text.clusters.map((cluster) => ({ ...cluster, graphemeFrom: 0, graphemeTo: 1 })),
+          clusters: text.clusters.map((cluster) => ({
+            ...cluster,
+            graphemeFrom: 0,
+            graphemeTo: 1,
+          })),
         },
       ];
     });
@@ -302,13 +322,13 @@ describe('painted whitespace hit testing (renderer run grouping phase 2)', () =>
     // caret geometry must follow the measured cluster and ignore the region entirely.
     const model = modelWith(['ab cd']);
     const layout = layoutBody(model, LAYOUT);
-    const bridged = toDisplayPages(model, layout.pages, LAYOUT.metrics);
+    const bridged = toDisplayPages(model, layout.pages);
     const semanticIndex = {
       ...bridged.semanticIndex,
       ownershipRegions: bridged.semanticIndex.ownershipRegions.map((region) =>
         region.kind === 'lineWhitespace' && region.box
           ? { ...region, box: { ...region.box, x: region.box.x + 200 } }
-          : region,
+          : region
       ),
     };
     const store = new InteractionFrameStore();
@@ -359,22 +379,21 @@ describe('painted whitespace hit testing (renderer run grouping phase 2)', () =>
     expect(hit.target.graphemeOffset).toBe(2);
   });
 
-  test('whitespace split across a line break belongs to no painted cluster', () => {
+  test('whitespace split across a line break keeps its line-local painted cluster', () => {
     // "ab cd" at a page width that wraps between the words. The wrap offset gets a caret
-    // edge on BOTH lines, so the trailing space measures `right <= left` and is dropped
-    // from clusters and from the region's box alike. Recording the real behaviour: there
-    // is no cluster AND no region box here, so this whitespace has no exact owner at all.
+    // edge on BOTH lines. The line-local edge index must choose the pair belonging to the
+    // painted slice, rather than combining edges from different lines into a negative interval.
     const narrow = { ...LAYOUT, pageWidth: 2000 };
     const frame = publishFrame(modelWith(['ab cd']), { layout: narrow });
     const items = paintedItems(frame);
     expect(items).toHaveLength(2);
     expect(items[0]!.box.y).not.toBe(items[1]!.box.y);
     const covered = items.some((item) =>
-      item.clusters.some((cluster) => cluster.graphemeFrom <= 2 && 3 <= cluster.graphemeTo),
+      item.clusters.some((cluster) => cluster.graphemeFrom <= 2 && 3 <= cluster.graphemeTo)
     );
-    expect(covered).toBe(false);
+    expect(covered).toBe(true);
     const region = frame.semanticIndex.ownershipRegions.find(
-      (r) => r.kind === 'lineWhitespace' && r.graphemeFrom === 2,
+      (r) => r.kind === 'lineWhitespace' && r.graphemeFrom === 2
     );
     expect(region?.box).toBeUndefined();
   });
@@ -456,7 +475,9 @@ describe('caret geometry picks the right item on a multi-item line', () => {
     const frame = publishFrame(modelWith(['ab\tcd']));
     const items = paintedItems(frame);
     expect(items).toHaveLength(3);
-    const rightmost = items.reduce((a, b) => (a.box.x + a.box.width >= b.box.x + b.box.width ? a : b));
+    const rightmost = items.reduce((a, b) =>
+      a.box.x + a.box.width >= b.box.x + b.box.width ? a : b
+    );
     const block = frame.semanticIndex.stories[0]!.blocks[0]!;
     const end = caretXs(frame, [block.graphemeCount])[0];
     expect(end).toBeCloseTo(rightmost.box.x + rightmost.box.width, 1);
@@ -466,10 +487,12 @@ describe('caret geometry picks the right item on a multi-item line', () => {
     const frame = publishFrame(modelWithRunSplit(['plain ', 'more']));
     const block = frame.semanticIndex.stories[0]!.blocks[0]!;
     const items = paintedItems(frame);
-    const rightmost = items.reduce((a, b) => (a.box.x + a.box.width >= b.box.x + b.box.width ? a : b));
+    const rightmost = items.reduce((a, b) =>
+      a.box.x + a.box.width >= b.box.x + b.box.width ? a : b
+    );
     expect(caretXs(frame, [block.graphemeCount])[0]).toBeCloseTo(
       rightmost.box.x + rightmost.box.width,
-      1,
+      1
     );
   });
 

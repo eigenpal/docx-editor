@@ -4,7 +4,13 @@
 // instrumentation never reuses an entry whose dependency changed.
 
 import { describe, expect, test } from 'bun:test';
-import { DependencyGraph, keyId, ResolvedCache, type CacheProvenance, type OperationSnapshot } from '../src/index.ts';
+import {
+  DependencyGraph,
+  keyId,
+  ResolvedCache,
+  type CacheProvenance,
+  type OperationSnapshot,
+} from '../src/index.ts';
 
 const SNAP: OperationSnapshot = {
   resourceEpoch: 1,
@@ -35,8 +41,14 @@ describe('DependencyGraph (8.2)', () => {
     const g = new DependencyGraph();
     g.addDependency('para:p1', { kind: 'style', id: 'Body' });
     g.addDependency('style:Body', { kind: 'font', id: 'Calibri' });
-    const v1 = new Map([['style:Body', 'h1'], ['font:Calibri', 'f1']]);
-    const v2 = new Map([['style:Body', 'h1'], ['font:Calibri', 'f2']]); // font changed
+    const v1 = new Map([
+      ['style:Body', 'h1'],
+      ['font:Calibri', 'f1'],
+    ]);
+    const v2 = new Map([
+      ['style:Body', 'h1'],
+      ['font:Calibri', 'f2'],
+    ]); // font changed
     expect(g.fingerprint('para:p1', v1)).not.toBe(g.fingerprint('para:p1', v2));
     // Absent value is distinct from any present value.
     const vAbsent = new Map([['style:Body', 'h1']]);
@@ -49,10 +61,13 @@ describe('ResolvedCache (8.3)', () => {
     revision: 1,
     dependencyFingerprint: 'dep-1',
     inputFingerprint: 'in-1',
+    resourceDependencies: [],
     ...SNAP,
     ...over,
   });
-  const want = (over: Partial<Omit<CacheProvenance, 'revision'>> = {}): Omit<CacheProvenance, 'revision'> => {
+  const want = (
+    over: Partial<Omit<CacheProvenance, 'revision'>> = {}
+  ): Omit<CacheProvenance, 'revision'> => {
     const { revision: _r, ...rest } = prov(over as Partial<CacheProvenance>);
     return rest;
   };
@@ -69,20 +84,30 @@ describe('ResolvedCache (8.3)', () => {
   test('misses name the reason: dependency, input, and each epoch', () => {
     const c = new ResolvedCache<string>();
     c.set('p1', 'v', prov());
-    expect(c.get('p1', want({ dependencyFingerprint: 'dep-2' }))).toMatchObject({ hit: false, reason: 'dependency-changed' });
-    expect(c.get('p1', want({ inputFingerprint: 'in-2' }))).toMatchObject({ hit: false, reason: 'input-changed' });
-    expect(c.get('p1', want({ resourceEpoch: 2 }))).toMatchObject({ hit: false, reason: 'epoch-changed', epoch: 'resourceEpoch' });
-    expect(c.get('p1', want({ shapingHash: 'shape-2' }))).toMatchObject({ hit: false, reason: 'epoch-changed', epoch: 'shapingHash' });
+    expect(c.get('p1', want({ dependencyFingerprint: 'dep-2' }))).toMatchObject({
+      hit: false,
+      reason: 'dependency-changed',
+    });
+    expect(c.get('p1', want({ inputFingerprint: 'in-2' }))).toMatchObject({
+      hit: false,
+      reason: 'input-changed',
+    });
+    expect(c.get('p1', want({ resourceEpoch: 2 })).hit).toBe(true);
+    expect(c.get('p1', want({ shapingHash: 'shape-2' }))).toMatchObject({
+      hit: false,
+      reason: 'epoch-changed',
+      epoch: 'shapingHash',
+    });
     expect(c.get('absent', want())).toMatchObject({ hit: false, reason: 'absent' });
   });
 
-  test('a font resource epoch bump invalidates without a model edit', () => {
+  test('a resource epoch bump alone preserves dependency-scoped entries', () => {
     const c = new ResolvedCache<string>();
     c.set('p1', 'v', prov({ revision: 9 }));
     // Same revision + fingerprints, only the resource epoch advanced.
-    expect(c.get('p1', want({ resourceEpoch: 2 })).hit).toBe(false);
-    expect(c.evictEpoch({ ...SNAP, resourceEpoch: 2 })).toBe(1); // stale entry evicted
-    expect(c.size).toBe(0);
+    expect(c.get('p1', want({ resourceEpoch: 2 })).hit).toBe(true);
+    expect(c.evictEpoch({ ...SNAP, resourceEpoch: 2 })).toBe(0);
+    expect(c.size).toBe(1);
   });
 
   test('instrumentation never reuses an entry whose dependency changed (8.2 guarantee)', () => {
@@ -94,11 +119,22 @@ describe('ResolvedCache (8.3)', () => {
     let computes = 0;
     const resolve = (values: ReadonlyMap<string, string>, revision: number): number => {
       const dep = g.fingerprint('para:p1', values);
-      const hit = c.get('para:p1', { dependencyFingerprint: dep, inputFingerprint: 'in', ...SNAP });
+      const hit = c.get('para:p1', {
+        dependencyFingerprint: dep,
+        inputFingerprint: 'in',
+        resourceDependencies: [],
+        ...SNAP,
+      });
       if (hit.hit) return hit.value;
       computes += 1;
       const v = computes; // a distinct result per real computation
-      c.set('para:p1', v, { revision, dependencyFingerprint: dep, inputFingerprint: 'in', ...SNAP });
+      c.set('para:p1', v, {
+        revision,
+        dependencyFingerprint: dep,
+        inputFingerprint: 'in',
+        resourceDependencies: [],
+        ...SNAP,
+      });
       return v;
     };
     const v1 = resolve(new Map([['style:Body', 'A']]), 1);

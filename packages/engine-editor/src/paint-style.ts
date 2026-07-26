@@ -17,22 +17,34 @@ export interface RunStyle {
   readonly fontFamily: string;
   readonly fontSizePx: number;
   readonly color: string | undefined;
-  readonly fontWeight: 'bold' | 'normal';
+  readonly fontWeight: number;
   readonly fontStyle: 'italic' | 'normal';
+  readonly direction: 'ltr' | 'rtl';
+  readonly widthPx: number;
+  readonly heightPx: number;
+  readonly fontFeatureSettings: string | undefined;
   /** CSS text-decoration (underline / line-through / both), or undefined for none. */
   readonly textDecoration: string | undefined;
 }
 
-export function runStyle(run: GlyphRun): RunStyle {
+export function runStyle(run: GlyphRun, installedFontAlias: string): RunStyle {
   const decos: string[] = [];
   if (run.underline) decos.push('underline');
   if (run.strike) decos.push('line-through');
   return {
-    fontFamily: run.fontFamily,
+    fontFamily: installedFontAlias,
     fontSizePx: run.fontSizePx,
     color: colorToCss(run.color),
-    fontWeight: run.bold ? 'bold' : 'normal',
-    fontStyle: run.italic ? 'italic' : 'normal',
+    fontWeight: run.fontWeight,
+    fontStyle: run.fontStyle,
+    direction: run.direction,
+    widthPx: run.box.width,
+    heightPx: run.box.height,
+    fontFeatureSettings:
+      (run.shaping.features ?? [])
+        .filter(([tag, value]) => /^[A-Za-z0-9]{4}$/.test(tag) && Number.isFinite(value))
+        .map(([tag, value]) => `"${tag}" ${value}`)
+        .join(', ') || undefined,
     textDecoration: decos.length ? decos.join(' ') : undefined,
   };
 }

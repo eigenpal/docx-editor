@@ -19,11 +19,15 @@
 
 import { describe, expect, test } from 'bun:test';
 import { layoutBody } from '../src/layout.ts';
-import { HelveticaMetrics } from '../src/metrics.ts';
+import { createDeterministicLayoutShaping } from '../src/metrics.ts';
 import { createEmptyModel, bodyStoryId, type ParagraphRecord } from '@docx-editor.dev/engine-core';
 
-const metrics = new HelveticaMetrics();
-const LAYOUT = { pageWidth: 12240, pageHeight: 15840, margin: 1440, metrics };
+const LAYOUT = {
+  pageWidth: 12240,
+  pageHeight: 15840,
+  margin: 1440,
+  shaping: createDeterministicLayoutShaping(),
+};
 
 function layoutText(text: string, pageWidth = 12240) {
   const base = createEmptyModel();
@@ -107,7 +111,9 @@ describe('grapheme cluster straddling a token boundary', () => {
     for (const space of ['\u0020', '\u00a0', '\u2000', '\u3000', '\u202f', '\u205f', '\u1680']) {
       const straddle = layoutText(`ab${PREPEND}${space}cd`);
       const attached = layoutText(`ab${space}${PREPEND}cd`);
-      expect(straddle.finalX, `space U+${space.codePointAt(0)!.toString(16)}`).toBe(attached.finalX);
+      expect(straddle.finalX, `space U+${space.codePointAt(0)!.toString(16)}`).toBe(
+        attached.finalX
+      );
     }
   });
 

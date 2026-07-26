@@ -12,7 +12,7 @@ const VUE_SRC = join(import.meta.dir, '..', 'src');
 const REACT_SRC = join(import.meta.dir, '..', '..', 'react', 'src');
 const editorSource = readFileSync(join(VUE_SRC, 'DocxEditor.ts'), 'utf8');
 const paintSource = readFileSync(join(VUE_SRC, 'paintDisplay.ts'), 'utf8');
-const reactEditorSource = readFileSync(join(REACT_SRC, 'DocxEditor.tsx'), 'utf8');
+const reactEditorSource = readFileSync(join(REACT_SRC, 'components', 'DocxEditor.tsx'), 'utf8');
 
 describe('Vue one-surface wiring (task 6.3)', () => {
   test('pointer and keyboard input route through the shared adapter bridge', () => {

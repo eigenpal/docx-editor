@@ -13,7 +13,6 @@ export const PER_GRAPHEME_SHAPING: ShapingCapability = {
   ligatures: 'disabled-per-grapheme',
 };
 
-/** ASCII Helvetica table coverage only — interior caret stops require per-codepoint proof. */
 export const ASCII_LATIN_SHAPING: ShapingCapability = {
   caretEdges: 'per-grapheme-advance',
   ligatures: 'disabled-per-grapheme',

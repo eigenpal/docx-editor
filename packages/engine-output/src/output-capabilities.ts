@@ -9,8 +9,18 @@
 
 import type { DisplayItem } from '@docx-editor.dev/engine-layout';
 
+export interface DisplayItemRendererContext {
+  readonly fontAlias: (
+    font: Extract<DisplayItem, { type: 'text' }>['shapingEnvironment']['font']
+  ) => string;
+}
+
 /** Render one display item into a DOM element. */
-export type DisplayItemRenderer = (item: DisplayItem, doc: Document) => HTMLElement;
+export type DisplayItemRenderer = (
+  item: DisplayItem,
+  doc: Document,
+  context?: DisplayItemRendererContext
+) => HTMLElement;
 
 interface Entry {
   readonly render: DisplayItemRenderer;
@@ -34,10 +44,14 @@ export function registerDisplayItemRenderer(
 export const displayItemLayer = (type: string): number => renderers.get(type)?.layer ?? 0;
 
 /** Render one display item through its registered renderer; fails closed on an unknown kind. */
-export function renderDisplayItem(item: DisplayItem, doc: Document): HTMLElement {
+export function renderDisplayItem(
+  item: DisplayItem,
+  doc: Document,
+  context?: DisplayItemRendererContext
+): HTMLElement {
   const entry = renderers.get(item.type);
   if (!entry) throw new Error(`no display-item renderer registered for kind '${item.type}'`);
-  return entry.render(item, doc);
+  return entry.render(item, doc, context);
 }
 
 /** The distinct paint layers present in an item list, in ascending order. */

@@ -9,6 +9,9 @@ import {
   isParagraphPropertiesCapsule,
   isParagraphAttrsCapsule,
 } from './preservation-capsule.ts';
+import { readXml, childElements } from './xml-reader.ts';
+import { parseRPr } from './wml-parse.ts';
+import { canonicalize } from '../comparators/index.ts';
 import {
   type Block,
   type ParagraphRecord,
@@ -18,6 +21,7 @@ import {
   canonicalRunProps,
   registerCoreBlockCapability,
   blockSerialize,
+  type RunProps,
 } from '../model/index.ts';
 
 /** Escape run text: validate fail-closed, then escape a literal CR as &#xD;. An unescaped CR is
@@ -25,6 +29,62 @@ import {
  *  survive a round-trip; the numeric reference preserves it exactly. */
 function escapeRunText(text: string): string {
   return escapeXmlChecked(text, 'run text').replace(/\r/g, '&#xD;');
+}
+
+/** Serialize the modeled CT_RPr subset in schema order. Theme attributes use
+ * OOXML's exact lexical names, including lowercase `w:cstheme`. */
+export function runPropsChildrenXml(props: RunProps, includeStyle = true): string {
+  const p = canonicalRunProps(props);
+  if (!p) return '';
+  const style =
+    includeStyle && p.styleId
+      ? `<w:rStyle w:val="${escapeXmlChecked(p.styleId, 'run styleId')}"/>`
+      : '';
+  const fonts = p.fonts
+    ? [
+        ['ascii', 'ascii'],
+        ['hAnsi', 'hAnsi'],
+        ['eastAsia', 'eastAsia'],
+        ['cs', 'cs'],
+        ['asciiTheme', 'asciiTheme'],
+        ['hAnsiTheme', 'hAnsiTheme'],
+        ['eastAsiaTheme', 'eastAsiaTheme'],
+        ['csTheme', 'cstheme'],
+      ]
+        .flatMap(([key, attribute]) => {
+          const value = p.fonts?.[key as keyof NonNullable<RunProps['fonts']>];
+          return value === undefined
+            ? []
+            : [` w:${attribute}="${escapeXmlChecked(value, `run font ${key}`)}"`];
+        })
+        .join('')
+    : '';
+  const rFonts = fonts ? `<w:rFonts${fonts}/>` : '';
+  const bold = p.bold !== undefined ? (p.bold ? '<w:b/>' : '<w:b w:val="0"/>') : '';
+  const italic = p.italic !== undefined ? (p.italic ? '<w:i/>' : '<w:i w:val="0"/>') : '';
+  const color =
+    p.color !== undefined ? `<w:color w:val="${escapeXmlChecked(p.color, 'run color')}"/>` : '';
+  const size = p.sizeHalfPoints !== undefined ? `<w:sz w:val="${p.sizeHalfPoints}"/>` : '';
+  const underline =
+    p.underline !== undefined
+      ? p.underline
+        ? '<w:u w:val="single"/>'
+        : '<w:u w:val="none"/>'
+      : '';
+  return `${style}${rFonts}${bold}${italic}${color}${size}${underline}`;
+}
+
+function capsuleModeledProps(capsule: string): RunProps | undefined {
+  const parsed = readXml(capsule);
+  if (!parsed.ok) return undefined;
+  const rPr = parsed.nodes.find(
+    (node): node is Extract<(typeof parsed.nodes)[number], { type: 'element' }> =>
+      node.type === 'element' && node.name === 'w:rPr'
+  );
+  if (!rPr) return undefined;
+  const props: RunProps = { ...parseRPr(rPr) };
+  const styleId = childElements(rPr, 'w:rStyle')[0]?.attributes['w:val'];
+  return canonicalRunProps(styleId ? { ...props, styleId } : props);
 }
 
 function runXml(run: RunRecord): string {
@@ -35,26 +95,17 @@ function runXml(run: RunRecord): string {
   if (run.rPrCapsule) {
     if (!isRunPropertiesCapsule(run.rPrCapsule))
       throw new Error('run rPr capsule is not a lone balanced w:rPr (rejected at serialize)');
+    if (
+      canonicalize(capsuleModeledProps(run.rPrCapsule) ?? null) !==
+      canonicalize(canonicalRunProps(run.props) ?? null)
+    )
+      throw new Error(
+        'run rPr capsule does not match semantic formatting; remove the capsule to own and regenerate formatting'
+      );
     return `<w:r>${run.rPrCapsule}<w:t xml:space="preserve">${escapeRunText(run.text)}</w:t></w:r>`;
   }
-  // Regenerate rPr from the modeled props in OOXML child order (w:rStyle before the toggles). Only
-  // the round-trippable subset (styleId + bold/italic PRESENCE) can be regenerated symmetrically —
-  // underline and explicit-false toggles do not reparse to the same value (the direct-run parser is
-  // presence-based), so fail closed rather than silently drop them (applies to EVERY path, including
-  // an edited preserved run, not only from-scratch).
-  const props = canonicalRunProps(run.props);
-  if (props?.underline !== undefined)
-    throw new Error(
-      'run underline is not round-trippable via the presence-based parser (rejected at serialize)'
-    );
-  if (props?.bold === false || props?.italic === false)
-    throw new Error('explicit-false run toggle is not round-trippable (rejected at serialize)');
-  const rStyle = props?.styleId
-    ? `<w:rStyle w:val="${escapeXmlChecked(props.styleId, 'run styleId')}"/>`
-    : '';
-  const b = props?.bold ? '<w:b/>' : '';
-  const i = props?.italic ? '<w:i/>' : '';
-  const rPr = rStyle || b || i ? `<w:rPr>${rStyle}${b}${i}</w:rPr>` : '';
+  const children = run.props ? runPropsChildrenXml(run.props) : '';
+  const rPr = children ? `<w:rPr>${children}</w:rPr>` : '';
   return `<w:r>${rPr}<w:t xml:space="preserve">${escapeRunText(run.text)}</w:t></w:r>`;
 }
 

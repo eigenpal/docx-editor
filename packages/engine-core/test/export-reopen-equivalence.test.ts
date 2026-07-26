@@ -11,7 +11,7 @@ import { writeDocx } from '../src/package/docx/write.ts';
 import { paragraphXml } from '../src/package/wml-serialize.ts';
 import { authoredStateDigest } from '../src/package/authored-digest.ts';
 import { compareZipContainers } from '../src/package/package-comparator.ts';
-import { createEmptyModel, bodyStoryId, REL_TYPES, type PackageModel, type Story, type Block } from '../src/model/index.ts';
+import { createEmptyModel, bodyStoryId, REL_TYPES, type PackageModel, type Story, type Block, type RunProps } from '../src/model/index.ts';
 
 const FIX = `${import.meta.dir}/../../../e2e/fixtures`;
 
@@ -273,11 +273,6 @@ describe('from-scratch export fails closed on what it cannot faithfully serializ
     expect(() => writeDocx({ ...base, numbering: [{ numId: '1', abstractId: '0' }] })).toThrow(/numbering/);
   });
 
-  test('rejects run underline / explicit-false toggles (not round-trippable via the parser; sol #1)', () => {
-    expect(() => writeDocx(withBody([{ kind: 'paragraph', id: 'p-1', runs: [{ text: 'u', props: { underline: true } }] }]))).toThrow(/underline/);
-    expect(() => writeDocx(withBody([{ kind: 'paragraph', id: 'p-1', runs: [{ text: 'b', props: { bold: false } }] }]))).toThrow(/explicit-false/);
-  });
-
   test('rejects a from-scratch run carrying an rPr capsule (verbatim-injection risk; sol #3)', () => {
     const model = withBody([{ kind: 'paragraph', id: 'p-1', runs: [{ text: 'x', rPrCapsule: '<w:rPr/><w:t>INJECTED</w:t>' }] }]);
     expect(() => writeDocx(model)).toThrow(/capsule/);
@@ -343,14 +338,25 @@ describe('from-scratch export fails closed on what it cannot faithfully serializ
 });
 
 describe('serialization sink rejects forged capsules from ANY path (round-7 #1 security)', () => {
-  const run = (rPrCapsule: string) => ({ kind: 'paragraph' as const, id: 'p', runs: [{ text: 'x', rPrCapsule }] });
+  const run = (rPrCapsule: string, props?: RunProps) => ({
+    kind: 'paragraph' as const,
+    id: 'p',
+    runs: [{ text: 'x', rPrCapsule, ...(props ? { props } : {}) }],
+  });
   test('runXml rejects an rPr capsule that is not a lone balanced w:rPr (tag breakout)', () => {
     // The exact injection the review flagged: a self-closing w:rPr followed by sibling OOXML.
     expect(() => paragraphXml(run('<w:rPr/><w:t>INJECTED</w:t>'))).toThrow(/lone balanced w:rPr/);
     expect(() => paragraphXml(run('<w:rPr><w:b/></w:rPr><w:object/>'))).toThrow(/lone balanced w:rPr/);
   });
   test('runXml accepts a genuine lone w:rPr capsule (the parse-origin form)', () => {
-    expect(paragraphXml(run('<w:rPr><w:b/><w:color w:val="FF0000"/></w:rPr>'))).toContain('<w:color w:val="FF0000"/>');
+    expect(
+      paragraphXml(
+        run('<w:rPr><w:b/><w:color w:val="FF0000"/></w:rPr>', {
+          bold: true,
+          color: 'FF0000',
+        })
+      )
+    ).toContain('<w:color w:val="FF0000"/>');
   });
   test('paragraphXml rejects a forged pPr capsule / attrs capsule (tag breakout)', () => {
     expect(() => paragraphXml({ kind: 'paragraph', id: 'p', pPrCapsule: '<w:pPr/><w:r><w:t>x</w:t></w:r>', runs: [] })).toThrow(/lone balanced w:pPr/);
@@ -367,7 +373,13 @@ describe('product-reachable data-loss / injection guards (round-9)', () => {
     expect(() => paragraphXml(p('<w:rPr a="1" a="2"/>'))).toThrow(/lone balanced w:rPr/);
     expect(() => paragraphXml(p('<w:rPr foo=bar/>'))).toThrow(/lone balanced w:rPr/);
     // A genuine captured capsule still serializes.
-    expect(paragraphXml(p('<w:rPr><w:b/></w:rPr>'))).toContain('<w:b/>');
+    expect(
+      paragraphXml({
+        kind: 'paragraph',
+        id: 'p',
+        runs: [{ text: 'x', rPrCapsule: '<w:rPr><w:b/></w:rPr>', props: { bold: true } }],
+      })
+    ).toContain('<w:b/>');
   });
 
   test('a header/footer edit is rejected on export (no silent related-story loss)', () => {

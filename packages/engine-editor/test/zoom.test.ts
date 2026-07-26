@@ -6,7 +6,7 @@
 // set reports that nothing changed.
 
 import { describe, expect, test } from 'bun:test';
-import { createEditor } from '../src/index.ts';
+import { createTestEditor as createEditor } from './create-test-editor.ts';
 import type { Editor, EditorHost } from '@docx-editor.dev/core-contract/editor';
 import { createEmptyModel, writeDocx } from '@docx-editor.dev/engine-core';
 
@@ -24,7 +24,11 @@ function host(): EditorHost {
 }
 
 const editorAt = (zoom?: number): Editor =>
-  createEditor({ host: host(), document: writeDocx(createEmptyModel()), ...(zoom === undefined ? {} : { zoom }) });
+  createEditor({
+    host: host(),
+    document: writeDocx(createEmptyModel()),
+    ...(zoom === undefined ? {} : { zoom }),
+  });
 
 describe('zoom', () => {
   test('defaults to 1 and reads back what config seeded', () => {

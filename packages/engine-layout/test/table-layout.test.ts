@@ -5,12 +5,17 @@
 import { describe, expect, test } from 'bun:test';
 import { readFileSync } from 'node:fs';
 import { zipSync, strToU8 } from 'fflate';
-import { layoutBody, DeterministicMetrics, type LayoutOptions } from '../src/index.ts';
+import { layoutBody, createDeterministicLayoutShaping, type LayoutOptions } from '../src/index.ts';
 import { parseDocx, bodyStoryId, type TableRecord } from '@docx-editor.dev/engine-core';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 function docxOf(inner: string): Uint8Array {
-  return zipSync({ '[Content_Types].xml': strToU8('<Types/>'), 'word/document.xml': strToU8(`<w:document xmlns:w="${W}"><w:body>${inner}</w:body></w:document>`) });
+  return zipSync({
+    '[Content_Types].xml': strToU8('<Types/>'),
+    'word/document.xml': strToU8(
+      `<w:document xmlns:w="${W}"><w:body>${inner}</w:body></w:document>`
+    ),
+  });
 }
 function parseInner(inner: string) {
   const r = parseDocx(docxOf(inner));
@@ -19,7 +24,13 @@ function parseInner(inner: string) {
 }
 
 function opts(over: Partial<LayoutOptions> = {}): LayoutOptions {
-  return { pageWidth: 12240, pageHeight: 15840, margin: 1440, metrics: new DeterministicMetrics(), ...over };
+  return {
+    pageWidth: 12240,
+    pageHeight: 15840,
+    margin: 1440,
+    shaping: createDeterministicLayoutShaping(),
+    ...over,
+  };
 }
 
 function withTablesModel() {
@@ -71,13 +82,19 @@ describe('table layout', () => {
   });
 
   test('a tblHeader row repeats atop each page when the table paginates', () => {
-    const header = '<w:tr><w:trPr><w:tblHeader/></w:trPr><w:tc><w:p><w:r><w:t>HDR</w:t></w:r></w:p></w:tc></w:tr>';
-    const bodyRows = Array.from({ length: 12 }, (_, i) => `<w:tr><w:tc><w:p><w:r><w:t>R${i}</w:t></w:r></w:p></w:tc></w:tr>`).join('');
+    const header =
+      '<w:tr><w:trPr><w:tblHeader/></w:trPr><w:tc><w:p><w:r><w:t>HDR</w:t></w:r></w:p></w:tc></w:tr>';
+    const bodyRows = Array.from(
+      { length: 12 },
+      (_, i) => `<w:tr><w:tc><w:p><w:r><w:t>R${i}</w:t></w:r></w:p></w:tc></w:tr>`
+    ).join('');
     const model = parseInner(`<w:tbl>${header}${bodyRows}</w:tbl>`);
     // A short page so the table spans multiple pages.
     const result = layoutBody(model, opts({ pageHeight: 3600 }));
     expect(result.pages.length).toBeGreaterThan(1);
-    const hdrOnPage = result.pages.map((p) => p.items.some((i) => i.type === 'text' && i.text === 'HDR'));
+    const hdrOnPage = result.pages.map((p) =>
+      p.items.some((i) => i.type === 'text' && i.text === 'HDR')
+    );
     expect(hdrOnPage[0]).toBe(true); // header on the first page
     expect(hdrOnPage[1]).toBe(true); // AND repeated on the second page
     expect(hdrOnPage.filter(Boolean).length).toBe(result.pages.length); // on every page the table occupies
@@ -90,7 +107,10 @@ describe('table layout', () => {
       '<w:tr><w:tc><w:tcPr><w:vMerge/></w:tcPr><w:p><w:r><w:t>SHOULDHIDE</w:t></w:r></w:p></w:tc>' +
       '<w:tc><w:p><w:r><w:t>b</w:t></w:r></w:p></w:tc></w:tr>';
     const result = layoutBody(parseInner(`<w:tbl>${rows}</w:tbl>`), opts());
-    const texts = result.pages.flatMap((p) => p.items).filter((i) => i.type === 'text').map((i) => (i.type === 'text' ? i.text : ''));
+    const texts = result.pages
+      .flatMap((p) => p.items)
+      .filter((i) => i.type === 'text')
+      .map((i) => (i.type === 'text' ? i.text : ''));
     expect(texts.filter((t) => t === 'merged')).toHaveLength(1); // the merged content appears once
     expect(texts).not.toContain('SHOULDHIDE'); // the continue cell emits no content
     expect(texts).toContain('a');
@@ -99,7 +119,9 @@ describe('table layout', () => {
 
   test('column widths come from the grid when present', () => {
     const model = withTablesModel();
-    const table = model.stories.get(bodyStoryId(model))!.blocks.find((b) => b.kind === 'table') as TableRecord;
+    const table = model.stories
+      .get(bodyStoryId(model))!
+      .blocks.find((b) => b.kind === 'table') as TableRecord;
     const result = layoutBody(model, opts());
     const rects = result.pages.flatMap((p) => p.items).filter((i) => i.type === 'rect');
     // Distinct left edges = distinct columns; a 3-column table yields 3 x-positions.

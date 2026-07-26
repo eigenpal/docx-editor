@@ -31,6 +31,104 @@ resource limits, and conformance remain engine responsibilities.
 
 ## Selected dependencies and mechanisms
 
+### Text shaping (HarfBuzz Task 4 slice) — SELECTED WITH LIMITATIONS
+
+The shaping bake-off selects `harfbuzzjs@1.4.0` (HarfBuzz `14.2.1`) as the
+production OpenType shaper in `@docx-editor.dev/engine-layout`. `fontkit` is not
+retained for shaping or metric access: the current HarfBuzz class API supplies
+glyph selection, clusters, OpenType features, advances, horizontal metrics, and
+face-table inspection needed by this slice. `fontkit` remains an unevaluated
+candidate for later PDF embedding/subsetting work only.
+
+- **Package and version:** exact `harfbuzzjs@1.4.0`, with no runtime
+  dependencies. The npm package reports 1,023,657 unpacked bytes across nine
+  files. Its production shaping artifacts are 57,714 bytes of class API,
+  26,687 bytes of Emscripten loader, and 390,365 bytes of WASM.
+- **License / redistribution:** `harfbuzzjs` is MIT-licensed. The conformance
+  fonts are unmodified DejaVu Fonts 2.37 regular and bold TTFs from the
+  authoritative upstream release. Their exact upstream license, attribution,
+  source URL, and SHA-256 digests are retained in
+  `packages/engine-layout/test/fixtures/fonts/`.
+- **Bundle evidence:** Vite 8.0.10 with `target: es2022` and ESM worker output
+  emits one 390.36 kB shaping WASM asset (163.89 kB gzip). The smoke's main
+  JavaScript chunk is 160.68 kB (47.98 kB gzip), its shared-source chunk is
+  147.79 kB, and its worker/parity entry chunks total 1.52 kB before
+  compression. The raw class API and WASM gzip to
+  12,653 and 160,411 bytes respectively. The npm package also contains an
+  unused 507,610-byte subset WASM artifact; the production smoke does not emit
+  it.
+- **Runtime loading and parity:** Bun server and module-worker tests load the
+  packaged WASM with no filesystem path supplied by the caller. A production
+  Chromium run of the Vite bundle shapes the same LTR positioned-mark and RTL
+  Arabic fixtures in the browser main thread and a module worker. A Bun
+  server-generated, committed canonical golden carries the pinned
+  library/version, full environment fingerprint, and exact runtime comparator:
+  text, direction, script/language, bidi level, every glyph ID/UTF-16
+  cluster/advance/offset, every cluster range/advance/caret edge/font-span
+  index, vertical metrics, and font-span identity, byte-hash provenance,
+  substitution, and fallback index. Chromium main and worker each compare their
+  canonical JSON byte-for-byte to that same golden; both passed with no console
+  errors. The Vite worker must use ESM output because `harfbuzzjs`
+  initializes through top-level await; the default IIFE worker build rejects
+  that syntax. `test/fixtures/vite.config.ts` records the required deployable
+  setting.
+- **Server runtime evidence:** on Apple M4 Pro, Bun 1.3.14, the 757,076-byte
+  regular fixture took 162.445 ms for hash/resource validation, 3.680 ms for
+  first shaping, and 0.039 ms median / 0.097 ms p95 across 1,000 warm shapes of
+  `office AV á سلام`. These are development-build measurements, not release
+  performance budgets.
+- **Exact output:** `harfbuzz-shaper.test.ts` records literal glyph IDs,
+  UTF-16 clusters, advances, offsets, vertical metrics, kerning, `liga` on/off,
+  positioned combining-mark behavior (`x` + U+0301 yields mark glyph 690 with
+  zero advance and fixed-point `offsetX = -34`), explicit
+  RTL/Arabic/language input, true regular and bold face output, all three
+  fixed-point tie rules, and repeated exact comparator equality. The shaper
+  processes a complete input span in one HarfBuzz buffer.
+- **Fixed-point policy:** font-unit values are converted to fixed-point points
+  as the exact rational
+  `fontUnits * fontSizeHalfPoints * fixedPointScale / (2 * unitsPerEm)`.
+  BigInt quotient/remainder arithmetic implements `halfAwayFromZero`,
+  `halfToEven`, and `towardZero` without floating-point ties.
+- **Security and bounds:** font bytes are copied at the resource boundary and
+  hash-bound to face identity. Bounded sfnt range and required-table checks run
+  there without constructing native HarfBuzz objects; native HarfBuzz metrics
+  validation runs once when the face enters the shaper cache. The shaper reads
+  owned `byteLength` and enforces its 16 MiB default before requesting a
+  defensive byte copy. Independent pre-shape ceilings default to 1,000,000
+  UTF-16 code units and 1,000,000 Unicode code points; both are checked before
+  and after normalization. `maxGlyphs` remains a typed 1,000,000-glyph
+  postcondition only. The `harfbuzzjs` class API cannot enforce a caller-defined
+  native output-allocation ceiling before `shape()` returns, so `maxGlyphs`
+  does not bound peak native allocation. Peak native memory during shaping is
+  bounded only by the pinned WASM module and host runtime, not by an
+  engine-supplied output limit. All configurable ceilings must be positive safe
+  integers. Over-limit text/font/input/output, malformed fonts, color-font
+  tables, variation requests, unevidenced fallback order, version mismatch,
+  and use after disposal are typed failures.
+- **Variable and color policy:** this slice rejects every non-empty variation
+  axis request as `unsupportedVariationAxes`; no default instance is silently
+  substituted. Fonts advertising `COLR`, `CPAL`, `CBDT`, `CBLC`, `sbix`, or
+  `SVG ` tables are rejected as `unsupportedColorFont`; no monochrome
+  degradation is silent.
+- **Lifecycle limitation:** the 1.4.0 class API registers Blob, Face, Font, and
+  Buffer pointers with `FinalizationRegistry`; source and prototype inspection
+  found no public `destroy()`/`dispose()` method. The shaper therefore reuses
+  one buffer and an explicit LRU face/font/blob cache (four faces by default,
+  with a validated positive safe-integer ceiling). Observable cache
+  instrumentation verifies creation, MRU promotion, least-recent eviction, and
+  recreation after eviction; valid cache admission performs no duplicate native
+  validation allocation. `HarfBuzzTextShaper.dispose()` clears reachable
+  cache/buffer references and prevents reuse, but it does not synchronously
+  destroy WASM pointers. Evicted entries and malformed admission attempts
+  remain collector-timed; total pending native memory is not claimed to be
+  bounded. The lifetime gate remains open.
+- **Still open:** fallback selection across multiple fonts, variable-font
+  shaping, color-font painting policy, Unicode bidi/UAX #14 selection,
+  cancellation, a caller-enforced pre-shape native output-allocation ceiling,
+  release-mode benchmark budgets, bundle acceptance, and explicit WASM pointer
+  destruction remain unevidenced. The lifetime/bundle/native-allocation gates
+  and broad document-engine task 8.1 remain open.
+
 ### Yjs collaboration primitives
 
 - `yjs` is the selected collaborative backend family.
@@ -106,19 +204,11 @@ production modules.
 
 ### Text shaping and fonts
 
-Evaluate `harfbuzzjs` plus `fontkit`.
-
-- HarfBuzz performs shaping: glyph selection, clusters, OpenType features,
-  kerning, ligatures, direction, script, language, and advances.
-- `fontkit` performs font parsing, table/metric access, fallback inspection,
-  embedding support, and font subsetting where its capabilities satisfy the
-  output contract.
-
-The bake-off must cover variable and relevant color fonts, malformed-font
-limits, WASM/runtime loading, deterministic fixed-point conversion, font
-fallback, licensing, bundle size, browser/worker/server parity, and exact
-glyph/cluster/advance fixtures. Neither library owns pagination or the
-`ShapingEnvironment` contract.
+The HarfBuzz Task 4 slice is selected above. The remaining bake-off covers
+licensed fallback selection, variable/color support beyond typed rejection,
+Unicode integration, cancellation, lifecycle improvements, and any later
+`fontkit` use for PDF embedding or subsetting. Neither dependency owns
+pagination or the `ShapingEnvironment` contract.
 
 ### Unicode segmentation, bidi, and line breaking
 

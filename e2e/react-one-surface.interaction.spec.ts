@@ -34,7 +34,9 @@ interface FrameProbe {
 }
 
 async function mount(page: Page): Promise<void> {
-  await page.goto(`${REACT_URL}/?realAdapter=1`);
+  // This suite proves interaction mechanics. Pin the editable fixture so a default
+  // document or font-pagination change cannot silently change every click address.
+  await page.goto(`${REACT_URL}/?realAdapter=1&fixture=editable-sample.docx`);
   await page.waitForFunction(() => !!window.__docxAdapterEditor);
   await expect(page.getByTestId('adapter-status')).toHaveText('Editable (paragraphs)');
   await waitForClickTarget(page);
@@ -96,7 +98,9 @@ test.describe('React one-surface interaction (task M3.1)', () => {
     const placed = await probe(page);
 
     await page.keyboard.type('Zq');
-    await expect.poll(async () => (await probe(page)).modelRevision).toBeGreaterThan(placed.modelRevision);
+    await expect
+      .poll(async () => (await probe(page)).modelRevision)
+      .toBeGreaterThan(placed.modelRevision);
     const typed = await paintedText(page);
     expect(typed).not.toBe(original);
     expect(typed).toContain('Zq');
@@ -206,7 +210,9 @@ test.describe('React one-surface interaction (task M3.1)', () => {
     await expect.poll(async () => await paintedText(page)).toContain('Persisted');
   });
 
-  test('a click on the page margin is refused with a typed outcome and moves no caret', async ({ page }) => {
+  test('a click on the page margin is refused with a typed outcome and moves no caret', async ({
+    page,
+  }) => {
     const point = await clickTargetPointAt(page, 0.1);
     await page.mouse.click(point.x, point.y);
     const placed = await probe(page);
@@ -233,7 +239,9 @@ test.describe('React one-surface interaction (task M3.1)', () => {
     expect((await probe(page)).head).toBe(placed.head);
   });
 
-  test('clicking a disabled toolbar control keeps the caret, focus, and geometry keys', async ({ page }) => {
+  test('clicking a disabled toolbar control keeps the caret, focus, and geometry keys', async ({
+    page,
+  }) => {
     // Guarded with REAL trusted clicks, deliberately. The previous fix for this was
     // scored 24/24 correct by a probe using synthetic `dispatchEvent` — which DOES run
     // an element's mousedown handler and never moves focus, so it reported success with
@@ -248,16 +256,19 @@ test.describe('React one-surface interaction (task M3.1)', () => {
     await page.mouse.click(point.x, point.y);
     await expectCaretPainted(page);
 
-    const disabledIds = await page.evaluate(() =>
-      [...document.querySelectorAll('[data-testid^="toolbar-"]')]
-        .filter((el) => el.hasAttribute('data-parity-only') || el.classList.contains('ep-toolbar__picker'))
-        .map((el) => (el as HTMLElement).dataset.testid!),
+    // The current public toolbar no longer marks historical parity placeholders
+    // with data-testid/data-parity-only. Exercise the controls the browser
+    // actually exposes as disabled instead of asserting that removed markup.
+    const disabledControls = page.locator(
+      '[role="toolbar"] :is(button, input, select)[aria-disabled="true"]'
     );
-    expect(disabledIds.length).toBeGreaterThan(10);
+    const disabledCount = await disabledControls.count();
+    expect(disabledCount).toBeGreaterThan(0);
 
     const lost: string[] = [];
-    for (const id of disabledIds) {
-      const control = page.locator(`[data-testid="${id}"]`);
+    for (let index = 0; index < disabledCount; index += 1) {
+      const control = disabledControls.nth(index);
+      const id = (await control.getAttribute('aria-label')) ?? `disabled-control-${index}`;
       // Scroll into view BEFORE measuring. The formatting bar scrolls horizontally
       // (legacy `overflow-x: auto`), so measuring first and clicking by coordinate
       // afterwards races the scroll and lands the click outside the control — which
@@ -285,10 +296,14 @@ test.describe('React one-surface interaction (task M3.1)', () => {
       const pm = document.querySelector('.ProseMirror')!;
       const data = new DataTransfer();
       data.setData('text/plain', 'Pasted');
-      pm.dispatchEvent(new ClipboardEvent('paste', { clipboardData: data, bubbles: true, cancelable: true }));
+      pm.dispatchEvent(
+        new ClipboardEvent('paste', { clipboardData: data, bubbles: true, cancelable: true })
+      );
     });
 
-    await expect.poll(async () => (await probe(page)).modelRevision).toBeGreaterThan(placed.modelRevision);
+    await expect
+      .poll(async () => (await probe(page)).modelRevision)
+      .toBeGreaterThan(placed.modelRevision);
     await expect.poll(async () => await paintedText(page)).toContain('Pasted');
   });
 
@@ -309,9 +324,13 @@ test.describe('React one-surface interaction (task M3.1)', () => {
     });
     await cdp.send('Input.insertText', { text: 'にほん' });
 
-    await expect.poll(async () => (await probe(page)).modelRevision).toBeGreaterThan(placed.modelRevision);
+    await expect
+      .poll(async () => (await probe(page)).modelRevision)
+      .toBeGreaterThan(placed.modelRevision);
+    // The canonical commit precedes asynchronous byte-backed shaping and paint.
+    // Observe the visible publication rather than treating revision as a paint barrier.
+    await expect.poll(async () => await paintedText(page)).not.toBe(original);
     const after = await paintedText(page);
-    expect(after).not.toBe(original);
     // Committed once: the composed text must not appear twice.
     expect(after.split('にほん').length - 1).toBeLessThanOrEqual(1);
   });

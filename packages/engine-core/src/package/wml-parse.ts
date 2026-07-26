@@ -35,6 +35,7 @@ import {
   walkBlockTree,
   registerBlockElementParser,
   blockParseElement,
+  MAX_RUN_SIZE_HALF_POINTS,
 } from '../model/index.ts';
 
 /** Parse a bounded integer attribute; NaN/Infinity/non-integers become undefined so
@@ -105,15 +106,12 @@ function parseRun(run: Extract<XmlNode, { type: 'element' }>): RunRecord | undef
     }
   }
   const rPr = childElements(run, 'w:rPr')[0];
-  const props: { styleId?: string; bold?: boolean; italic?: boolean } = {};
+  const props: RunProps = rPr ? { ...parseRPr(rPr) } : {};
   if (rPr) {
-    // Character-style link (w:rStyle) — the resolver's char-style layer. Formatting
-    // toggles stay presence-only here to preserve the from-scratch serialize contract
-    // (paragraphFullyCaptured already rejects runs with explicit-on/off b/i or an rStyle).
+    // Character-style link (w:rStyle) is separate from the formatting values parsed
+    // by parseRPr; it selects the resolver's character-style layer.
     const styleId = childElements(rPr, 'w:rStyle')[0]?.attributes['w:val'];
-    if (styleId) props.styleId = styleId;
-    if (childElements(rPr, 'w:b').length > 0) props.bold = true;
-    if (childElements(rPr, 'w:i').length > 0) props.italic = true;
+    if (styleId) (props as { styleId?: string }).styleId = styleId;
   }
   if (text.length === 0 && Object.keys(props).length === 0) return undefined;
   return Object.keys(props).length > 0 ? { text, props } : { text };
@@ -129,12 +127,54 @@ function toggleProp(rPr: Extract<XmlNode, { type: 'element' }>, name: string): b
   return !(v === '0' || v === 'false' || v === 'off');
 }
 
-/** Read run formatting (bold/italic/underline) from a w:rPr element, honoring explicit
- *  on/off. Shared by run, style, and docDefaults parsing. Every field is present only
- *  when the rPr sets it (absent => omitted/inherit). Underline: w:u @w:val="none" => off,
+/** Read authored fonts, half-point size, color, and toggles from a w:rPr element.
+ *  Shared by run, style, and docDefaults parsing. Every field is present only when
+ *  the rPr sets it (absent => omitted/inherit). Underline: w:u @w:val="none" => off,
  *  any other value or bare presence => on. */
 export function parseRPr(rPr: Extract<XmlNode, { type: 'element' }>): RunProps {
-  const props: { bold?: boolean; italic?: boolean; underline?: boolean } = {};
+  const props: {
+    fonts?: {
+      ascii?: string;
+      hAnsi?: string;
+      eastAsia?: string;
+      cs?: string;
+      asciiTheme?: string;
+      hAnsiTheme?: string;
+      eastAsiaTheme?: string;
+      csTheme?: string;
+    };
+    sizeHalfPoints?: number;
+    color?: string;
+    bold?: boolean;
+    italic?: boolean;
+    underline?: boolean;
+  } = {};
+  const rFonts = childElements(rPr, 'w:rFonts')[0];
+  if (rFonts) {
+    const fonts: NonNullable<typeof props.fonts> = {};
+    const names = [
+      ['ascii', 'w:ascii'],
+      ['hAnsi', 'w:hAnsi'],
+      ['eastAsia', 'w:eastAsia'],
+      ['cs', 'w:cs'],
+      ['asciiTheme', 'w:asciiTheme'],
+      ['hAnsiTheme', 'w:hAnsiTheme'],
+      ['eastAsiaTheme', 'w:eastAsiaTheme'],
+      ['csTheme', 'w:cstheme'],
+    ] as const;
+    for (const [name, attributeName] of names) {
+      const value = rFonts.attributes[attributeName];
+      if (value !== undefined) fonts[name] = value;
+    }
+    if (Object.keys(fonts).length > 0) props.fonts = fonts;
+  }
+  const sizeLexical = childElements(rPr, 'w:sz')[0]?.attributes['w:val'];
+  if (sizeLexical !== undefined && /^[0-9]+$/.test(sizeLexical)) {
+    const size = Number(sizeLexical);
+    if (Number.isSafeInteger(size) && size <= MAX_RUN_SIZE_HALF_POINTS) props.sizeHalfPoints = size;
+  }
+  const color = childElements(rPr, 'w:color')[0]?.attributes['w:val'];
+  if (color !== undefined) props.color = color;
   const b = toggleProp(rPr, 'w:b');
   if (b !== undefined) props.bold = b;
   const i = toggleProp(rPr, 'w:i');

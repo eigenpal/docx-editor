@@ -1,7 +1,10 @@
 // Double-click word and triple-click block planner tests (interactive-paginated-editing 5.3).
 
 import { describe, expect, test } from 'bun:test';
-import type { InteractionFrame, InteractionHostMetrics } from '@docx-editor.dev/core-contract/interaction';
+import type {
+  InteractionFrame,
+  InteractionHostMetrics,
+} from '@docx-editor.dev/core-contract/interaction';
 import { contentToClient, IDENTITY_HOST_METRICS } from '../src/coordinate-mapper.ts';
 import { deriveCaretGeometry } from '../src/interaction-geometry.ts';
 import { InteractionFrameStore } from '../src/interaction-frame.ts';
@@ -25,7 +28,7 @@ const METRICS: InteractionHostMetrics = {
 
 function plannerContext(
   frame: InteractionFrame,
-  overrides: Partial<InteractionPlannerContext> = {},
+  overrides: Partial<InteractionPlannerContext> = {}
 ): InteractionPlannerContext {
   return { frame, editable: true, readOnly: false, hostMetrics: METRICS, ...overrides };
 }
@@ -33,7 +36,12 @@ function plannerContext(
 function clickIntent(
   frame: InteractionFrame,
   clientPoint: { x: number; y: number },
-  overrides: Partial<{ shiftKey: boolean; clickCount: number; buttons: number; button: number }> = {},
+  overrides: Partial<{
+    shiftKey: boolean;
+    clickCount: number;
+    buttons: number;
+    button: number;
+  }> = {}
 ) {
   return { kind: 'click' as const, frameId: frame.id, clientPoint, ...overrides };
 }
@@ -42,20 +50,22 @@ function clientOnCluster(
   frame: InteractionFrame,
   pageIndex: number,
   cluster: { box: { x: number; y: number; width: number; height: number } },
-  xRatio = 0.5,
+  xRatio = 0.5
 ) {
   return clientPointForStackedText(
     frame,
     pageIndex,
     { x: cluster.box.x + cluster.box.width * xRatio, y: cluster.box.y + cluster.box.height / 2 },
-    METRICS,
+    METRICS
   );
 }
 
 function expectRejectOnly(plan: ReturnType<typeof planInteraction>, code?: string) {
   expect(plan.effects).toHaveLength(1);
   expect(plan.effects[0]).toMatchObject({ kind: 'reject', ...(code ? { code } : {}) });
-  expect(plan.effects.some((effect) => effect.kind === 'syncSelection' || effect.kind === 'focus')).toBe(false);
+  expect(
+    plan.effects.some((effect) => effect.kind === 'syncSelection' || effect.kind === 'focus')
+  ).toBe(false);
 }
 
 function syncSelection(plan: ReturnType<typeof planInteraction>) {
@@ -67,29 +77,40 @@ function syncSelection(plan: ReturnType<typeof planInteraction>) {
 function whitespaceRegion(frame: InteractionFrame, blockId?: string) {
   const id = blockId ?? frame.semanticIndex.stories[0]!.blocks[0]!.identity.blockId;
   return frame.semanticIndex.ownershipRegions.find(
-    (r) => r.kind === 'lineWhitespace' && r.identity.blockId === id && r.box,
+    (r) => r.kind === 'lineWhitespace' && r.identity.blockId === id && r.box
   );
 }
 
 function pointInWhitespaceBox(
   frame: InteractionFrame,
   region: NonNullable<ReturnType<typeof whitespaceRegion>>,
-  xRatio = 0.25,
+  xRatio = 0.25
 ) {
   const box = region.box!;
   return clientPointForStackedText(
     frame,
     region.pageIndex ?? 0,
     { x: box.x + box.width * xRatio, y: box.y + box.height / 2 },
-    METRICS,
+    METRICS
   );
 }
 
 function blockForTarget(frame: InteractionFrame, blockId: string) {
-  return frame.semanticIndex.stories.flatMap((s) => s.blocks).find((b) => b.identity.blockId === blockId)!;
+  return frame.semanticIndex.stories
+    .flatMap((s) => s.blocks)
+    .find((b) => b.identity.blockId === blockId)!;
 }
 
-function clusterCovering(item: { clusters: readonly { graphemeFrom: number; graphemeTo: number; box: { x: number; y: number; width: number; height: number } }[] }, graphemeIndex: number) {
+function clusterCovering(
+  item: {
+    clusters: readonly {
+      graphemeFrom: number;
+      graphemeTo: number;
+      box: { x: number; y: number; width: number; height: number };
+    }[];
+  },
+  graphemeIndex: number
+) {
   return (
     item.clusters.find((c) => c.graphemeFrom <= graphemeIndex && graphemeIndex < c.graphemeTo) ??
     item.clusters.find((c) => c.graphemeFrom === graphemeIndex) ??
@@ -110,10 +131,18 @@ function expectDoubleClickAtGrapheme(frame: InteractionFrame, graphemeIndex: num
   const cluster = clusterCovering(item, graphemeIndex);
   const point = clientOnCluster(frame, 0, cluster, 0.5);
   const expected = expectedDoubleClick(frame, point);
-  const sel = syncSelection(planInteraction(plannerContext(frame), clickIntent(frame, point, { clickCount: 2 })));
+  const sel = syncSelection(
+    planInteraction(plannerContext(frame), clickIntent(frame, point, { clickCount: 2 }))
+  );
   expect(sel.anchor.graphemeOffset).toBe(expected.anchor.graphemeOffset);
   expect(sel.head.graphemeOffset).toBe(expected.head.graphemeOffset);
-  expect(endpointsOnGraphemeBoundaries(blockForTarget(frame, item.semantic.identity.blockId).graphemeCount, sel.anchor.graphemeOffset, sel.head.graphemeOffset)).toBe(true);
+  expect(
+    endpointsOnGraphemeBoundaries(
+      blockForTarget(frame, item.semantic.identity.blockId).graphemeCount,
+      sel.anchor.graphemeOffset,
+      sel.head.graphemeOffset
+    )
+  ).toBe(true);
 }
 
 describe('interaction planner word/block click (task 5.3)', () => {
@@ -126,13 +155,17 @@ describe('interaction planner word/block click (task 5.3)', () => {
     const cafeCluster = item.clusters[0]!;
     const cafePlan = planInteraction(
       plannerContext(frame),
-      clickIntent(frame, clientOnCluster(frame, 0, cafeCluster), { clickCount: 2 }),
+      clickIntent(frame, clientOnCluster(frame, 0, cafeCluster), { clickCount: 2 })
     );
     const cafeSel = syncSelection(cafePlan);
     expect(cafeSel.anchor.graphemeOffset).toBeLessThan(cafeSel.head.graphemeOffset);
-    expect(endpointsOnGraphemeBoundaries(block.graphemeCount, cafeSel.anchor.graphemeOffset, cafeSel.head.graphemeOffset)).toBe(
-      true,
-    );
+    expect(
+      endpointsOnGraphemeBoundaries(
+        block.graphemeCount,
+        cafeSel.anchor.graphemeOffset,
+        cafeSel.head.graphemeOffset
+      )
+    ).toBe(true);
 
     const untrustedFrame = publishFrame(modelWith(['café']));
     const untrustedItem = untrustedFrame.display[0]!.items.find((i) => i.kind === 'text');
@@ -149,7 +182,7 @@ describe('interaction planner word/block click (task 5.3)', () => {
     const midCluster = item.clusters[2]!;
     const plan = planInteraction(
       plannerContext(frame),
-      clickIntent(frame, clientOnCluster(frame, 0, midCluster), { clickCount: 2 }),
+      clickIntent(frame, clientOnCluster(frame, 0, midCluster), { clickCount: 2 })
     );
     const sel = syncSelection(plan);
     expect(sel.anchor.graphemeOffset).toBe(0);
@@ -158,15 +191,20 @@ describe('interaction planner word/block click (task 5.3)', () => {
 
   test('triple-click selects full editable paragraph including empty paragraphs', () => {
     const emptyFrame = publishFrame(modelWith(['']));
-    const emptyRegion = emptyFrame.semanticIndex.ownershipRegions.find((r) => r.kind === 'paragraph' && r.box);
+    const emptyRegion = emptyFrame.semanticIndex.ownershipRegions.find(
+      (r) => r.kind === 'paragraph' && r.box
+    );
     if (!emptyRegion?.box) throw new Error('empty ownership');
     const emptyPoint = clientPointForStackedText(
       emptyFrame,
       emptyRegion.pageIndex ?? 0,
       { x: emptyRegion.box.x + 2, y: emptyRegion.box.y + 2 },
-      METRICS,
+      METRICS
     );
-    const emptyPlan = planInteraction(plannerContext(emptyFrame), clickIntent(emptyFrame, emptyPoint, { clickCount: 3 }));
+    const emptyPlan = planInteraction(
+      plannerContext(emptyFrame),
+      clickIntent(emptyFrame, emptyPoint, { clickCount: 3 })
+    );
     expect(syncSelection(emptyPlan)).toMatchObject({
       anchor: { graphemeOffset: 0 },
       head: { graphemeOffset: 0 },
@@ -179,7 +217,7 @@ describe('interaction planner word/block click (task 5.3)', () => {
     const cluster = item.clusters[3] ?? item.clusters[0]!;
     const plan = planInteraction(
       plannerContext(frame),
-      clickIntent(frame, clientOnCluster(frame, 0, cluster), { clickCount: 3 }),
+      clickIntent(frame, clientOnCluster(frame, 0, cluster), { clickCount: 3 })
     );
     const sel = syncSelection(plan);
     expect(sel.anchor.graphemeOffset).toBe(0);
@@ -193,15 +231,24 @@ describe('interaction planner word/block click (task 5.3)', () => {
     if (item?.kind !== 'text') throw new Error('text');
     const point = clientOnCluster(frame, 0, item.clusters[0]!);
 
-    expect(planInteraction(plannerContext(frame), clickIntent(frame, point, { clickCount: 2 })).effects[0]).toMatchObject({
+    expect(
+      planInteraction(plannerContext(frame), clickIntent(frame, point, { clickCount: 2 }))
+        .effects[0]
+    ).toMatchObject({
       kind: 'syncSelection',
     });
-    expect(planInteraction(plannerContext(frame), clickIntent(frame, point, { clickCount: 3 })).effects[0]).toMatchObject({
+    expect(
+      planInteraction(plannerContext(frame), clickIntent(frame, point, { clickCount: 3 }))
+        .effects[0]
+    ).toMatchObject({
       kind: 'syncSelection',
     });
 
     for (const clickCount of [0, -1, 4, Number.NaN, Number.POSITIVE_INFINITY, 1.5]) {
-      expectRejectOnly(planInteraction(plannerContext(frame), clickIntent(frame, point, { clickCount })), 'unsupported');
+      expectRejectOnly(
+        planInteraction(plannerContext(frame), clickIntent(frame, point, { clickCount })),
+        'unsupported'
+      );
     }
   });
 
@@ -210,8 +257,18 @@ describe('interaction planner word/block click (task 5.3)', () => {
     const item = frame.display[0]!.items.find((i) => i.kind === 'text');
     if (item?.kind !== 'text') throw new Error('text');
     const point = clientOnCluster(frame, 0, item.clusters[1] ?? item.clusters[0]!);
-    expectRejectOnly(planInteraction(plannerContext(frame), clickIntent(frame, point, { clickCount: 2, shiftKey: true })));
-    expectRejectOnly(planInteraction(plannerContext(frame), clickIntent(frame, point, { clickCount: 3, shiftKey: true })));
+    expectRejectOnly(
+      planInteraction(
+        plannerContext(frame),
+        clickIntent(frame, point, { clickCount: 2, shiftKey: true })
+      )
+    );
+    expectRejectOnly(
+      planInteraction(
+        plannerContext(frame),
+        clickIntent(frame, point, { clickCount: 3, shiftKey: true })
+      )
+    );
   });
 
   test('read-only table cell and atomic hits reject multi-click without sync/focus', () => {
@@ -225,15 +282,21 @@ describe('interaction planner word/block click (task 5.3)', () => {
       readOnlyCell,
       cellPage,
       { x: cellItem.box.x + 2, y: cellItem.box.y + 2 },
-      METRICS,
+      METRICS
     );
     expectRejectOnly(
-      planInteraction(plannerContext(readOnlyCell), clickIntent(readOnlyCell, cellPoint, { clickCount: 2 })),
-      'readOnly',
+      planInteraction(
+        plannerContext(readOnlyCell),
+        clickIntent(readOnlyCell, cellPoint, { clickCount: 2 })
+      ),
+      'readOnly'
     );
     expectRejectOnly(
-      planInteraction(plannerContext(readOnlyCell), clickIntent(readOnlyCell, cellPoint, { clickCount: 3 })),
-      'readOnly',
+      planInteraction(
+        plannerContext(readOnlyCell),
+        clickIntent(readOnlyCell, cellPoint, { clickCount: 3 })
+      ),
+      'readOnly'
     );
 
     const imageFrame = publishFrame(modelWith(['before']));
@@ -262,15 +325,21 @@ describe('interaction planner word/block click (task 5.3)', () => {
       atomicFrame,
       0,
       { x: imageItem.box.x + 2, y: imageItem.box.y + 2 },
-      METRICS,
+      METRICS
     );
     expectRejectOnly(
-      planInteraction(plannerContext(atomicFrame), clickIntent(atomicFrame, atomicPoint, { clickCount: 2 })),
-      'unsupported',
+      planInteraction(
+        plannerContext(atomicFrame),
+        clickIntent(atomicFrame, atomicPoint, { clickCount: 2 })
+      ),
+      'unsupported'
     );
     expectRejectOnly(
-      planInteraction(plannerContext(atomicFrame), clickIntent(atomicFrame, atomicPoint, { clickCount: 3 })),
-      'unsupported',
+      planInteraction(
+        plannerContext(atomicFrame),
+        clickIntent(atomicFrame, atomicPoint, { clickCount: 3 })
+      ),
+      'unsupported'
     );
   });
 
@@ -281,8 +350,10 @@ describe('interaction planner word/block click (task 5.3)', () => {
     const point = clientOnCluster(frame, 0, item.clusters[0]!);
 
     expect(
-      planInteraction(plannerContext(frame), { ...clickIntent(frame, point, { clickCount: 2 }), frameId: { value: frame.id.value - 1 } })
-        .effects[0],
+      planInteraction(plannerContext(frame), {
+        ...clickIntent(frame, point, { clickCount: 2 }),
+        frameId: { value: frame.id.value - 1 },
+      }).effects[0]
     ).toMatchObject({ kind: 'reject', code: 'staleFrame' });
 
     const pending: InteractionFrame = {
@@ -291,12 +362,15 @@ describe('interaction planner word/block click (task 5.3)', () => {
     };
     expectRejectOnly(
       planInteraction(plannerContext(pending), clickIntent(pending, point, { clickCount: 3 })),
-      'pendingLayout',
+      'pendingLayout'
     );
 
     expectRejectOnly(
-      planInteraction(plannerContext(frame, { hostMetrics: undefined }), clickIntent(frame, point, { clickCount: 2 })),
-      'invalidTarget',
+      planInteraction(
+        plannerContext(frame, { hostMetrics: undefined }),
+        clickIntent(frame, point, { clickCount: 2 })
+      ),
+      'invalidTarget'
     );
 
     const gapFrame = stackedFrame(2, 24);
@@ -306,9 +380,9 @@ describe('interaction planner word/block click (task 5.3)', () => {
     expectRejectOnly(
       planInteraction(
         plannerContext(gapFrame, { hostMetrics: IDENTITY_HOST_METRICS }),
-        clickIntent(gapFrame, gapClient.value, { clickCount: 2 }),
+        clickIntent(gapFrame, gapClient.value, { clickCount: 2 })
       ),
-      'invalidTarget',
+      'invalidTarget'
     );
   });
 
@@ -317,7 +391,10 @@ describe('interaction planner word/block click (task 5.3)', () => {
     const item = firstFrame.display[0]!.items.find((i) => i.kind === 'text');
     if (item?.kind !== 'text') throw new Error('text');
     const point = clientOnCluster(firstFrame, 0, item.clusters[2] ?? item.clusters[0]!);
-    const firstPlan = planInteraction(plannerContext(firstFrame), clickIntent(firstFrame, point, { clickCount: 2 }));
+    const firstPlan = planInteraction(
+      plannerContext(firstFrame),
+      clickIntent(firstFrame, point, { clickCount: 2 })
+    );
 
     const store = new InteractionFrameStore();
     const relayout = store.publishLayout({
@@ -337,12 +414,16 @@ describe('interaction planner word/block click (task 5.3)', () => {
     const relayoutItem = relayout.display[0]!.items.find((i) => i.kind === 'text');
     if (relayoutItem?.kind !== 'text') throw new Error('relayout text');
     const relayoutPoint = clientOnCluster(relayout, 0, relayoutItem.clusters[0]!, 0.1);
-    const secondPlan = planInteraction(plannerContext(relayout), clickIntent(relayout, relayoutPoint, { clickCount: 2 }));
+    const secondPlan = planInteraction(
+      plannerContext(relayout),
+      clickIntent(relayout, relayoutPoint, { clickCount: 2 })
+    );
 
     expect(firstPlan.effects).not.toEqual(secondPlan.effects);
-    expect(planInteraction(plannerContext(firstFrame), clickIntent(firstFrame, point, { clickCount: 2 })).effects).toEqual(
-      firstPlan.effects,
-    );
+    expect(
+      planInteraction(plannerContext(firstFrame), clickIntent(firstFrame, point, { clickCount: 2 }))
+        .effects
+    ).toEqual(firstPlan.effects);
   });
 
   test('double-click selection endpoints align with caret geometry projection', () => {
@@ -351,7 +432,7 @@ describe('interaction planner word/block click (task 5.3)', () => {
     if (item?.kind !== 'text') throw new Error('text');
     const plan = planInteraction(
       plannerContext(frame),
-      clickIntent(frame, clientOnCluster(frame, 0, item.clusters[1]!, 0.5), { clickCount: 2 }),
+      clickIntent(frame, clientOnCluster(frame, 0, item.clusters[1]!, 0.5), { clickCount: 2 })
     );
     const sel = syncSelection(plan);
     expect(deriveCaretGeometry(frame, sel.head)).not.toBeNull();
@@ -383,8 +464,8 @@ describe('interaction planner word/block click (task 5.3)', () => {
       const sel = syncSelection(
         planInteraction(
           plannerContext(frame),
-          clickIntent(frame, pointInWhitespaceBox(frame, ws), { clickCount: 2 }),
-        ),
+          clickIntent(frame, pointInWhitespaceBox(frame, ws), { clickCount: 2 })
+        )
       );
       expect(sel.anchor.graphemeOffset).toBe(2);
       expect(sel.head.graphemeOffset).toBe(3);
@@ -437,8 +518,12 @@ describe('interaction planner word/block click (task 5.3)', () => {
       const boundaryCluster = clusterCovering(item, 3);
       const leftPoint = clientOnCluster(frame, 0, boundaryCluster, 0.05);
       const rightPoint = clientOnCluster(frame, 0, boundaryCluster, 0.95);
-      const left = syncSelection(planInteraction(plannerContext(frame), clickIntent(frame, leftPoint, { clickCount: 2 })));
-      const right = syncSelection(planInteraction(plannerContext(frame), clickIntent(frame, rightPoint, { clickCount: 2 })));
+      const left = syncSelection(
+        planInteraction(plannerContext(frame), clickIntent(frame, leftPoint, { clickCount: 2 }))
+      );
+      const right = syncSelection(
+        planInteraction(plannerContext(frame), clickIntent(frame, rightPoint, { clickCount: 2 }))
+      );
       expect(left.anchor.graphemeOffset).toBe(0);
       expect(left.head.graphemeOffset).toBe(3);
       expect(right.anchor.graphemeOffset).toBe(3);
@@ -448,25 +533,38 @@ describe('interaction planner word/block click (task 5.3)', () => {
     test('end-of-paragraph trailing hit selects preceding word segment', () => {
       const frame = publishFrame(modelWith(['tail']));
       const block = frame.semanticIndex.stories[0]!.blocks[0]!;
-      const trailing = frame.semanticIndex.ownershipRegions.find((r) => r.kind === 'trailing' && r.box);
+      const trailing = frame.semanticIndex.ownershipRegions.find(
+        (r) => r.kind === 'trailing' && r.box
+      );
       if (!trailing?.box) throw new Error('trailing');
       const point = clientPointForStackedText(
         frame,
         trailing.pageIndex ?? 0,
         { x: trailing.box.x + trailing.box.width - 1, y: trailing.box.y + 2 },
-        METRICS,
+        METRICS
       );
-      const sel = syncSelection(planInteraction(plannerContext(frame), clickIntent(frame, point, { clickCount: 2 })));
+      const sel = syncSelection(
+        planInteraction(plannerContext(frame), clickIntent(frame, point, { clickCount: 2 }))
+      );
       expect(sel.anchor.graphemeOffset).toBe(0);
       expect(sel.head.graphemeOffset).toBe(block.graphemeCount);
     });
 
     test('empty paragraph double-click remains collapsed 0..0', () => {
       const frame = publishFrame(modelWith(['']));
-      const region = frame.semanticIndex.ownershipRegions.find((r) => r.kind === 'paragraph' && r.box);
+      const region = frame.semanticIndex.ownershipRegions.find(
+        (r) => r.kind === 'paragraph' && r.box
+      );
       if (!region?.box) throw new Error('empty');
-      const point = clientPointForStackedText(frame, region.pageIndex ?? 0, { x: region.box.x + 2, y: region.box.y + 2 }, METRICS);
-      const sel = syncSelection(planInteraction(plannerContext(frame), clickIntent(frame, point, { clickCount: 2 })));
+      const point = clientPointForStackedText(
+        frame,
+        region.pageIndex ?? 0,
+        { x: region.box.x + 2, y: region.box.y + 2 },
+        METRICS
+      );
+      const sel = syncSelection(
+        planInteraction(plannerContext(frame), clickIntent(frame, point, { clickCount: 2 }))
+      );
       expect(sel.anchor.graphemeOffset).toBe(0);
       expect(sel.head.graphemeOffset).toBe(0);
     });

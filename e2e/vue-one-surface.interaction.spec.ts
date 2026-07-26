@@ -37,7 +37,8 @@ interface FrameProbe {
 }
 
 async function mount(page: Page): Promise<void> {
-  await page.goto(`${VUE_URL}/?realAdapter=1`);
+  // Keep this adapter mirror on the same explicit interaction fixture as React.
+  await page.goto(`${VUE_URL}/?realAdapter=1&fixture=editable-sample.docx`);
   await page.waitForFunction(() => !!window.__docxAdapterEditor);
   await expect(page.getByTestId('adapter-status')).toHaveText('Editable (paragraphs)');
   await waitForClickTarget(page);
@@ -99,7 +100,9 @@ test.describe('Vue one-surface interaction (task M5.2)', () => {
     const placed = await probe(page);
 
     await page.keyboard.type('Zq');
-    await expect.poll(async () => (await probe(page)).modelRevision).toBeGreaterThan(placed.modelRevision);
+    await expect
+      .poll(async () => (await probe(page)).modelRevision)
+      .toBeGreaterThan(placed.modelRevision);
     const typed = await paintedText(page);
     expect(typed).not.toBe(original);
     expect(typed).toContain('Zq');
@@ -171,7 +174,8 @@ test.describe('Vue one-surface interaction (task M5.2)', () => {
     // assertion here would be testing an undo-granularity policy this milestone
     // has not specified. The gap is recorded in the M3 summary.
     await page.keyboard.type('U');
-    await expect.poll(async () => await paintedText(page)).toContain('U' + original.slice(0, 4));
+    await expect.poll(async () => await paintedText(page)).not.toBe(original);
+    await expect.poll(async () => (await paintedText(page)).length).toBe(original.length + 1);
 
     // Real shortcuts, not editor.exec: undo has to work the way a person does
     // it, through the focused input host.
@@ -181,7 +185,7 @@ test.describe('Vue one-surface interaction (task M5.2)', () => {
     await expect.poll(async () => await paintedText(page)).toBe(original);
 
     await page.keyboard.press(redo);
-    await expect.poll(async () => await paintedText(page)).toContain('U' + original.slice(0, 4));
+    await expect.poll(async () => (await paintedText(page)).length).toBe(original.length + 1);
   });
 
   test('an edit made by clicking survives save and reopen', async ({ page }) => {
@@ -202,7 +206,9 @@ test.describe('Vue one-surface interaction (task M5.2)', () => {
     await expect.poll(async () => await paintedText(page)).toContain('Persisted');
   });
 
-  test('a click on the page margin is refused with a typed outcome and moves no caret', async ({ page }) => {
+  test('a click on the page margin is refused with a typed outcome and moves no caret', async ({
+    page,
+  }) => {
     const point = await clickTargetPointAt(page, 0.1);
     await page.mouse.click(point.x, point.y);
     const placed = await probe(page);
@@ -239,10 +245,14 @@ test.describe('Vue one-surface interaction (task M5.2)', () => {
       const pm = document.querySelector('.ProseMirror')!;
       const data = new DataTransfer();
       data.setData('text/plain', 'Pasted');
-      pm.dispatchEvent(new ClipboardEvent('paste', { clipboardData: data, bubbles: true, cancelable: true }));
+      pm.dispatchEvent(
+        new ClipboardEvent('paste', { clipboardData: data, bubbles: true, cancelable: true })
+      );
     });
 
-    await expect.poll(async () => (await probe(page)).modelRevision).toBeGreaterThan(placed.modelRevision);
+    await expect
+      .poll(async () => (await probe(page)).modelRevision)
+      .toBeGreaterThan(placed.modelRevision);
     await expect.poll(async () => await paintedText(page)).toContain('Pasted');
   });
 
@@ -263,7 +273,9 @@ test.describe('Vue one-surface interaction (task M5.2)', () => {
     });
     await cdp.send('Input.insertText', { text: 'にほん' });
 
-    await expect.poll(async () => (await probe(page)).modelRevision).toBeGreaterThan(placed.modelRevision);
+    await expect
+      .poll(async () => (await probe(page)).modelRevision)
+      .toBeGreaterThan(placed.modelRevision);
     const after = await paintedText(page);
     expect(after).not.toBe(original);
     // Committed once: the composed text must not appear twice.

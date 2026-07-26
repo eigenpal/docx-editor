@@ -2,10 +2,7 @@ import { describe, expect, test } from 'bun:test';
 import { GlobalRegistrator } from '@happy-dom/global-registrator';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import type {
-  InteractionFrame,
-  SemanticTarget,
-} from '@docx-editor.dev/core-contract/interaction';
+import type { InteractionFrame, SemanticTarget } from '@docx-editor.dev/core-contract/interaction';
 import * as engineEditor from '../src/index.ts';
 
 if (!GlobalRegistrator.isRegistered) GlobalRegistrator.register();
@@ -183,29 +180,7 @@ describe('rendered text geometry port', () => {
     }
   });
 
-  test('React and Vue stamp identical semantic run ranges for DOM realization', () => {
-    const react = readFileSync(
-      join(import.meta.dir, '..', '..', 'react', 'src', 'paintDisplay.tsx'),
-      'utf8'
-    );
-    const vue = readFileSync(
-      join(import.meta.dir, '..', '..', 'vue', 'src', 'paintDisplay.ts'),
-      'utf8'
-    );
-    for (const attribute of [
-      'data-docx-story-id',
-      'data-docx-block-id',
-      'data-docx-utf16-from',
-      'data-docx-utf16-to',
-      'data-docx-grapheme-from',
-      'data-docx-grapheme-to',
-    ]) {
-      expect(react).toContain(attribute);
-      expect(vue).toContain(attribute);
-    }
-  });
-
-  test('both adapters commit DOM geometry and expose the port to the editor host', () => {
+  test('both adapters paint overlays directly from the published interaction frame', () => {
     const react = readFileSync(
       join(import.meta.dir, '..', '..', 'react', 'src', 'components', 'DocxEditor.tsx'),
       'utf8'
@@ -215,12 +190,12 @@ describe('rendered text geometry port', () => {
       'utf8'
     );
     for (const source of [react, vue]) {
-      expect(source).toContain('createDomRenderedTextGeometryPort');
-      expect(source).toContain('commitFrame');
-      expect(source).toContain('getRenderedTextGeometry');
       expect(source).toContain('overlaysForFrame');
+      expect(source).not.toContain('createDomRenderedTextGeometryPort');
+      expect(source).not.toContain('commitFrame');
+      expect(source).not.toContain('getRenderedTextGeometry');
     }
-    expect(react).toContain('useLayoutEffect');
-    expect(vue).toContain('nextTick');
+    expect(react).toContain('setOverlays(overlaysForFrame(frame))');
+    expect(vue).toContain('overlays.value = overlaysForFrame(frame)');
   });
 });

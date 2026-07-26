@@ -1,8 +1,8 @@
 import { h, type VNode } from 'vue';
 import type { DisplayItem, DisplayPage } from '@docx-editor.dev/core-contract/geometry';
 import type { FrameOverlays, GlyphClickTarget, OverlayBox } from '@docx-editor.dev/engine-editor';
+import type { InstalledDisplayFonts } from '@docx-editor.dev/engine-editor';
 import {
-  runStyle,
   colorToCss,
   borderSegLine,
   cssMatrix,
@@ -21,6 +21,7 @@ import {
  */
 export function paintDisplay(
   pages: readonly DisplayPage[],
+  installedFonts: InstalledDisplayFonts,
   overlays?: FrameOverlays,
   clickTarget?: GlyphClickTarget | null
 ): VNode[] {
@@ -45,6 +46,7 @@ export function paintDisplay(
             paintItem(
               item,
               i,
+              installedFonts,
               clickTarget?.pageIndex === page.index && clickTarget.itemIndex === i
                 ? clickTarget
                 : null
@@ -105,12 +107,16 @@ function paintOverlayLayer(pageIndex: number, overlays: FrameOverlays): VNode {
 function paintItem(
   item: DisplayItem,
   key: number,
+  installedFonts: InstalledDisplayFonts,
   clickTarget: GlyphClickTarget | null = null
 ): VNode[] {
   switch (item.kind) {
     case 'text':
       return item.runs.map((run, r) => {
-        const s = runStyle(run);
+        void installedFonts;
+        const fixedToPx = 4 / (3 * run.shaping.fixedPointScale);
+        const baseline = run.verticalMetrics.baseline - run.box.y;
+        const color = colorToCss(run.color) ?? 'currentColor';
         return h(
           'div',
           {
@@ -122,16 +128,55 @@ function paintItem(
               position: 'absolute',
               left: `${run.box.x}px`,
               top: `${run.box.y}px`,
-              fontFamily: s.fontFamily,
-              fontSize: `${s.fontSizePx}px`,
-              fontWeight: s.fontWeight,
-              fontStyle: s.fontStyle,
-              color: s.color,
-              textDecoration: s.textDecoration,
-              whiteSpace: 'pre',
+              width: `${run.box.width}px`,
+              height: `${run.box.height}px`,
             },
           },
-          run.text
+          [
+            h(
+              'svg',
+              {
+                'aria-hidden': 'true',
+                focusable: 'false',
+                style: {
+                  position: 'absolute',
+                  inset: 0,
+                  width: `${run.box.width}px`,
+                  height: `${run.box.height}px`,
+                  overflow: 'visible',
+                  pointerEvents: 'none',
+                },
+              },
+              run.glyphs.map((glyph, glyphIndex) => {
+                const scale = run.fontSizePx / glyph.outline.unitsPerEm;
+                const x = (glyph.originX + glyph.offsetX) * fixedToPx;
+                const y = baseline - (glyph.originY + glyph.offsetY) * fixedToPx;
+                return h('path', {
+                  key: `${glyph.id}.${glyphIndex}`,
+                  d: glyph.outline.path,
+                  fill: color,
+                  transform: `translate(${x} ${y}) scale(${scale} ${-scale})`,
+                });
+              })
+            ),
+            h(
+              'span',
+              {
+                style: {
+                  position: 'absolute',
+                  width: '1px',
+                  height: '1px',
+                  margin: '-1px',
+                  padding: 0,
+                  overflow: 'hidden',
+                  clipPath: 'inset(50%)',
+                  whiteSpace: 'nowrap',
+                  pointerEvents: 'none',
+                },
+              },
+              run.text
+            ),
+          ]
         );
       });
     case 'image':

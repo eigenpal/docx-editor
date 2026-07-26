@@ -13,7 +13,12 @@ import {
   IDENTITY_HOST_METRICS,
 } from '../src/coordinate-mapper.ts';
 import { hitTestPointer } from '../src/interaction-geometry.ts';
-import { clientPointForStackedText, publishFrame, stackedFrame, modelWith } from './interaction-test-helpers.ts';
+import {
+  clientPointForStackedText,
+  publishFrame,
+  stackedFrame,
+  modelWith,
+} from './interaction-test-helpers.ts';
 
 const SEED = 0x359a0d; // recorded seed for deterministic adversarial probes
 function mulberry32(seed: number) {
@@ -92,12 +97,19 @@ describe(`interaction geometry adversarial (seed=${SEED})`, () => {
   test('stale frame publication/read interleaving rejects superseded identity', () => {
     const frame = publishFrame(modelWith(['stale']));
     const staleId = frame.id;
-    const superseded = hitTestPointer(frame, { x: 0, y: 0 }, IDENTITY_HOST_METRICS, { frameId: { value: staleId.value - 1 } });
+    const superseded = hitTestPointer(frame, { x: 0, y: 0 }, IDENTITY_HOST_METRICS, {
+      frameId: { value: staleId.value - 1 },
+    });
     expect(superseded.ok).toBe(false);
     expect(superseded.ok ? null : superseded.code).toBe('staleFrame');
     const item = frame.display[0]!.items.find((i) => i.kind === 'text');
     if (item?.kind !== 'text') throw new Error('text');
-    const point = clientPointForStackedText(frame, 0, { x: item.box.x + 2, y: item.box.y + 2 }, IDENTITY_HOST_METRICS);
+    const point = clientPointForStackedText(
+      frame,
+      0,
+      { x: item.box.x + 2, y: item.box.y + 2 },
+      IDENTITY_HOST_METRICS
+    );
     const current = hitTestPointer(frame, point, IDENTITY_HOST_METRICS, { frameId: staleId });
     expect(current.ok).toBe(true);
   });
@@ -113,13 +125,18 @@ describe(`interaction geometry adversarial (seed=${SEED})`, () => {
       frame,
       0,
       { x: tieX, y: left.box.y + left.box.height / 2 },
-      IDENTITY_HOST_METRICS,
+      IDENTITY_HOST_METRICS
     );
     const first = hitTestPointer(frame, point, IDENTITY_HOST_METRICS);
     const second = hitTestPointer(frame, point, IDENTITY_HOST_METRICS);
     expect(first.ok).toBe(true);
     expect(second.ok).toBe(true);
-    if (!first.ok || !second.ok || first.value.target.kind !== 'text' || second.value.target.kind !== 'text') {
+    if (
+      !first.ok ||
+      !second.ok ||
+      first.value.target.kind !== 'text' ||
+      second.value.target.kind !== 'text'
+    ) {
       throw new Error('hits');
     }
     expect(first.value.target.graphemeOffset).toBe(2);

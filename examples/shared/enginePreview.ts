@@ -5,8 +5,12 @@
 // editing or saving. It imports ONLY the production engine — no ProseMirror, no legacy
 // core implementation, no spike.
 import { parseDocx, type PackageModel } from '@docx-editor.dev/engine-core';
-import { layoutBody, HelveticaMetrics, type Page } from '@docx-editor.dev/engine-layout';
-import { renderToDom, renderPageElement } from '@docx-editor.dev/engine-output';
+import { layoutBody, type LayoutShapingOptions, type Page } from '@docx-editor.dev/engine-layout';
+import {
+  renderToDom,
+  renderPageElement,
+  type InstalledFontMapping,
+} from '@docx-editor.dev/engine-output';
 
 export interface PreviewResult {
   /** Whether the file parsed and rendered. */
@@ -21,6 +25,21 @@ export interface PreviewOptions {
   readonly pageWidth?: number; // twips; default US Letter 8.5in
   readonly pageHeight?: number; // twips; default 11in
   readonly margin?: number; // twips; default 1in
+  /** Task 7 adapter boundary: callers must inject validated font bytes and a shaper. */
+  readonly shaping?: LayoutShapingOptions;
+  /** Exact installed CSS aliases for the same fonts selected by `shaping`. */
+  readonly installedFonts?: InstalledFontMapping;
+}
+
+export class PreviewLayoutConfigurationError extends Error {
+  readonly code = 'layoutShapingRequired';
+
+  constructor() {
+    super(
+      'DOCX preview requires explicit font-resource, text-shaper, and installed-font snapshots'
+    );
+    this.name = 'PreviewLayoutConfigurationError';
+  }
 }
 
 /** US Letter page defaults, in twips. */
@@ -35,16 +54,18 @@ export function renderModelPreview(
   model: PackageModel,
   container: HTMLElement,
   options: PreviewOptions = {},
-  doc: Document = container.ownerDocument ?? document,
+  doc: Document = container.ownerDocument ?? document
 ): PreviewResult {
   while (container.firstChild) container.removeChild(container.firstChild);
+  if (!options.shaping) throw new PreviewLayoutConfigurationError();
+  if (!options.installedFonts) throw new PreviewLayoutConfigurationError();
   const layout = layoutBody(model, {
     pageWidth: options.pageWidth ?? DEFAULTS.pageWidth,
     pageHeight: options.pageHeight ?? DEFAULTS.pageHeight,
     margin: options.margin ?? DEFAULTS.margin,
-    metrics: new HelveticaMetrics(),
+    shaping: options.shaping,
   });
-  renderToDom(layout, container, doc);
+  renderToDom(layout, container, options.installedFonts, doc);
   return { ok: true, pageCount: layout.pages.length };
 }
 
@@ -74,23 +95,25 @@ export interface PagePainter {
 export function createPagePainter(
   container: HTMLElement,
   doc: Document = container.ownerDocument ?? document,
-  options: PreviewOptions = {},
+  options: PreviewOptions = {}
 ): PagePainter {
   let prints: string[] = [];
   return {
     paint(model: PackageModel): PreviewResult {
+      if (!options.shaping) throw new PreviewLayoutConfigurationError();
+      if (!options.installedFonts) throw new PreviewLayoutConfigurationError();
       const layout = layoutBody(model, {
         pageWidth: options.pageWidth ?? DEFAULTS.pageWidth,
         pageHeight: options.pageHeight ?? DEFAULTS.pageHeight,
         margin: options.margin ?? DEFAULTS.margin,
-        metrics: new HelveticaMetrics(),
+        shaping: options.shaping,
       });
       const pages = layout.pages;
       for (let i = 0; i < pages.length; i += 1) {
         const fp = pageFingerprint(pages[i]);
         const existing = container.children[i] as HTMLElement | undefined;
         if (existing && prints[i] === fp) continue; // page unchanged — keep its DOM
-        const el = renderPageElement(pages[i], doc);
+        const el = renderPageElement(pages[i], options.installedFonts, doc);
         if (existing) container.replaceChild(el, existing);
         else container.appendChild(el);
         prints[i] = fp;
@@ -112,7 +135,7 @@ export function renderDocxPreview(
   bytes: Uint8Array,
   container: HTMLElement,
   options: PreviewOptions = {},
-  doc: Document = container.ownerDocument ?? document,
+  doc: Document = container.ownerDocument ?? document
 ): PreviewResult {
   while (container.firstChild) container.removeChild(container.firstChild);
 

@@ -44,12 +44,117 @@ export interface DocPoint {
  * caps, effects, direction, …) so the contract can carry more without a
  * breaking change. Adapters read what they understand and ignore the rest.
  */
+export interface GlyphFontRequest {
+  readonly family: string;
+  readonly weight: number;
+  readonly style: 'normal' | 'italic';
+}
+
+export interface GlyphFontSubstitution {
+  readonly requested: GlyphFontRequest;
+  readonly resolved: GlyphFontRequest;
+}
+
+/** Serializable identity and resolution provenance for one exact font face. */
+export interface GlyphFont {
+  readonly id: string;
+  readonly identity: string;
+  readonly family: string;
+  readonly request: GlyphFontRequest;
+  readonly hash: string;
+  readonly faceIndex: number;
+  readonly byteLength: number;
+  readonly substitution: GlyphFontSubstitution | null;
+}
+
+/** One glyph positioned by the shaping producer, in the run's fixed-point units. */
+export interface PositionedGlyph {
+  readonly id: number;
+  readonly cluster: number;
+  readonly originX: number;
+  readonly originY: number;
+  readonly advanceX: number;
+  readonly advanceY: number;
+  readonly offsetX: number;
+  readonly offsetY: number;
+  readonly outline: {
+    readonly path: string;
+    readonly unitsPerEm: number;
+  };
+}
+
+/** Logical text and visual glyph ranges for one shaped cluster. */
+export interface GlyphCluster {
+  readonly utf16From: number;
+  readonly utf16To: number;
+  readonly graphemeFrom: number;
+  readonly graphemeTo: number;
+  readonly glyphFrom: number;
+  readonly glyphTo: number;
+  readonly advance: number;
+  readonly caretEdges: readonly number[];
+  readonly fontSpan: number;
+}
+
+export interface GlyphFontSpan {
+  readonly glyphFrom: number;
+  readonly glyphTo: number;
+  readonly font: GlyphFont;
+  readonly fallbackIndex: number | null;
+}
+
+export interface GlyphRunShapingEnvironment {
+  readonly font: GlyphFont;
+  readonly variationAxes: readonly (readonly [string, number])[];
+  readonly shapingLibrary: {
+    readonly name: string;
+    readonly version: string;
+  };
+  readonly unicodeDataVersion: string;
+  readonly normalization: 'none' | 'NFC' | 'NFD' | 'NFKC' | 'NFKD';
+  readonly script: string;
+  readonly language: string;
+  readonly direction: 'ltr' | 'rtl';
+  readonly features: readonly (readonly [string, number])[];
+  readonly fallbackOrder: readonly GlyphFont[];
+  readonly fixedPointScale: number;
+  readonly roundingMode: 'halfAwayFromZero' | 'halfToEven' | 'towardZero';
+}
+
+/** Non-model inputs and producer identity captured for this shaped run. */
+export interface GlyphRunProducer {
+  readonly resourceEpoch: number;
+  readonly configEpoch: number;
+  readonly extensionFingerprint: string;
+  readonly shapingHash: string;
+  readonly producerVersion: number;
+}
+
+export interface GlyphRunVerticalMetrics {
+  readonly ascent: number;
+  readonly descent: number;
+  readonly lineGap: number;
+  readonly baseline: number;
+}
+
 export interface GlyphRun {
   readonly text: string;
   readonly box: Rect;
+  readonly font: GlyphFont;
   readonly fontFamily: string;
+  readonly fontSizeHalfPoints: number;
   readonly fontSizePx: number;
+  readonly fontWeight: number;
+  readonly fontStyle: 'normal' | 'italic';
   readonly color: ColorValue;
+  readonly direction: 'ltr' | 'rtl';
+  readonly bidiLevel: number;
+  readonly glyphs: readonly PositionedGlyph[];
+  readonly clusters: readonly GlyphCluster[];
+  readonly fontSpans: readonly GlyphFontSpan[];
+  readonly verticalMetrics: GlyphRunVerticalMetrics;
+  readonly shaping: GlyphRunShapingEnvironment;
+  readonly producer: GlyphRunProducer;
   readonly bold?: boolean;
   readonly italic?: boolean;
   readonly underline?: boolean;

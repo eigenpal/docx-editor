@@ -6,7 +6,7 @@
 // second run must not report run 0 — so these pin it against runs of known lengths.
 
 import { describe, expect, test } from 'bun:test';
-import { createEditor } from '../src/index.ts';
+import { createTestEditor as createEditor } from './create-test-editor.ts';
 import type { Editor, EditorHost } from '@docx-editor.dev/core-contract/editor';
 import { writeDocx, createEmptyModel, bodyStoryId } from '@docx-editor.dev/engine-core';
 import { modelWith } from './interaction-test-helpers.ts';
@@ -25,7 +25,10 @@ function modelWithFormattedRuns(parts: readonly string[]): PackageModel {
   const first = story.blocks[0] as ParagraphRecord;
   const paragraph: ParagraphRecord = {
     ...first,
-    runs: parts.map((text, i) => ({ text, props: i % 2 === 0 ? { bold: true } : { italic: true } })),
+    runs: parts.map((text, i) => ({
+      text,
+      props: i % 2 === 0 ? { bold: true } : { italic: true },
+    })),
   };
   return {
     ...base,

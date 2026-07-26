@@ -67,6 +67,84 @@ export interface DocumentHandle {
  */
 export type DocumentSource = ArrayBuffer | Uint8Array | DocumentHandle;
 
+/** A concrete font face requested by authored document content. */
+export interface FontFaceRequest {
+  readonly family: string;
+  readonly weight: number;
+  readonly style: 'normal' | 'italic';
+}
+
+/** Immutable, byte-backed font face supplied to layout and browser paint. */
+export interface FontSource {
+  readonly request: FontFaceRequest;
+  readonly id: string;
+  readonly bytes: Uint8Array;
+  readonly hash: string;
+  readonly faceIndex: number;
+  readonly availability?: 'available' | 'forbidden';
+}
+
+/** An explicit authored-font substitution. No implicit platform fallback is performed. */
+export interface FontSourceSubstitution {
+  readonly from: FontFaceRequest;
+  readonly to: FontFaceRequest;
+}
+
+/**
+ * Public font source configuration sampled when an adapter mounts. It must be immutable for that
+ * editor lifetime; remount the adapter to replace bytes or substitutions atomically.
+ */
+export interface FontConfiguration {
+  readonly epoch: number;
+  readonly maxFontBytes: number;
+  readonly sources: readonly FontSource[];
+  readonly substitutions?: readonly FontSourceSubstitution[];
+  readonly defaultFont: {
+    readonly family: string;
+    readonly sizeHalfPoints: number;
+  };
+  readonly language?: string;
+}
+
+export type EditorFontErrorCode =
+  | 'initializationFailed'
+  | 'missing'
+  | 'forbidden'
+  | 'overLimit'
+  | 'malformed'
+  | 'hashMismatch'
+  | 'metadataMismatch'
+  | 'fontFaceLoadFailed'
+  | 'unsupportedFaceIndex'
+  | 'missingFont'
+  | 'hashInvalid'
+  | 'fontMismatch'
+  | 'unsupportedFace'
+  | 'loadFailed';
+
+/** Typed adapter error reported both through `onFontError` and accessible alert UI. */
+export class EditorFontError extends Error {
+  readonly name: string = 'EditorFontError';
+  readonly code: EditorFontErrorCode;
+  readonly request?: FontFaceRequest;
+  readonly diagnostic?: string;
+
+  constructor(
+    code: EditorFontErrorCode,
+    message: string,
+    details: {
+      readonly request?: FontFaceRequest;
+      readonly diagnostic?: string;
+      readonly cause?: unknown;
+    } = {}
+  ) {
+    super(message, { cause: details.cause });
+    this.code = code;
+    this.request = details.request;
+    this.diagnostic = details.diagnostic;
+  }
+}
+
 /**
  * The payload of the `change` event / `onChange`. It carries revision + identity
  * deltas, NOT serialized bytes: serializing a whole DOCX on every keystroke would
@@ -403,6 +481,8 @@ export interface Editor {
   getAccessibilityObservation(): AccessibilityObservation;
   /** PM-free observation of the hidden input-host clip shell when mounted. */
   getInputHostObservation(): InputHostObservation | null;
+  /** Current host origin, scroll, and zoom used to map published IR geometry to client space. */
+  getInteractionHostMetrics(): InteractionHostMetrics | null;
   /** Caret rectangle in client coordinates when host metrics and caret geometry exist. */
   getCaretClientRect(): Rect | null;
 

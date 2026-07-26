@@ -154,11 +154,15 @@ function nearestClusterEdge(
   let bestOffset = clusters[0]!.graphemeFrom;
   let bestAffinity = clusters[0]!.affinity;
   for (const cluster of clusters) {
+    const logicalFromX =
+      cluster.direction === 'rtl' ? cluster.box.x + cluster.box.width : cluster.box.x;
+    const logicalToX =
+      cluster.direction === 'rtl' ? cluster.box.x : cluster.box.x + cluster.box.width;
     const edges = [
-      { offset: cluster.graphemeFrom, x: cluster.box.x, affinity: cluster.affinity },
+      { offset: cluster.graphemeFrom, x: logicalFromX, affinity: cluster.affinity },
       {
         offset: cluster.graphemeTo,
-        x: cluster.box.x + cluster.box.width,
+        x: logicalToX,
         affinity: caretAffinity(cluster.graphemeTo, paragraphGraphemeCount),
       },
     ];
@@ -230,8 +234,9 @@ function whitespaceEdgeInCluster(
   cluster: ShapedCluster
 ): Pick<Extract<SemanticTarget, { kind: 'text' }>, 'graphemeOffset' | 'affinity'> {
   const ratio = cluster.box.width > 0 ? (local.x - cluster.box.x) / cluster.box.width : 0;
+  const beforeLogicalMidpoint = cluster.direction === 'rtl' ? ratio >= 0.5 : ratio < 0.5;
   return {
-    graphemeOffset: ratio < 0.5 ? cluster.graphemeFrom : cluster.graphemeTo,
+    graphemeOffset: beforeLogicalMidpoint ? cluster.graphemeFrom : cluster.graphemeTo,
     affinity: 'downstream',
   };
 }
@@ -625,8 +630,12 @@ function caretBoxFromClusters(
     if (target.graphemeOffset < cluster.graphemeFrom || target.graphemeOffset > cluster.graphemeTo)
       continue;
     const atEnd = target.graphemeOffset >= cluster.graphemeTo;
+    const logicalFromX =
+      cluster.direction === 'rtl' ? cluster.box.x + cluster.box.width : cluster.box.x;
+    const logicalToX =
+      cluster.direction === 'rtl' ? cluster.box.x : cluster.box.x + cluster.box.width;
     return {
-      x: atEnd ? cluster.box.x + cluster.box.width : cluster.box.x,
+      x: atEnd ? logicalToX : logicalFromX,
       y: cluster.box.y,
       width: 1,
       height: cluster.box.height,

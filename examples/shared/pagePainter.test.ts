@@ -10,7 +10,13 @@ import {
   setParagraphRuns,
   type PackageModel,
 } from '@docx-editor.dev/engine-core';
+import { createDeterministicLayoutShaping } from '@docx-editor.dev/engine-layout';
 import { createPagePainter } from './enginePreview.ts';
+
+const options = {
+  shaping: createDeterministicLayoutShaping(),
+  installedFonts: { aliasFor: () => 'DocxFont_page_painter_test' },
+};
 
 // Minimal DOM stand-in: the painter + renderPageElement only use createElement / style /
 // setAttribute / textContent / appendChild / replaceChild / removeChild / children / lastChild.
@@ -59,7 +65,7 @@ describe('createPagePainter: incremental page patching', () => {
   test('an edit on the last page reuses every unchanged page element', () => {
     const { model, lastId } = manyParagraphs(120);
     const container = new El('div');
-    const painter = createPagePainter(container, mockDoc, {});
+    const painter = createPagePainter(container, mockDoc, options);
 
     const first = painter.paint(model);
     expect(first.pageCount).toBeGreaterThan(1); // genuinely multi-page
@@ -82,7 +88,7 @@ describe('createPagePainter: incremental page patching', () => {
   test('a no-op repaint reuses ALL page elements', () => {
     const { model } = manyParagraphs(80);
     const container = new El('div');
-    const painter = createPagePainter(container, mockDoc, {});
+    const painter = createPagePainter(container, mockDoc, options);
     painter.paint(model);
     const pageEls = [...container.children];
     painter.paint(model); // identical model
@@ -93,7 +99,7 @@ describe('createPagePainter: incremental page patching', () => {
     const big = manyParagraphs(120).model;
     const small = manyParagraphs(8).model;
     const container = new El('div');
-    const painter = createPagePainter(container, mockDoc, {});
+    const painter = createPagePainter(container, mockDoc, options);
 
     const before = painter.paint(big).pageCount;
     const after = painter.paint(small); // same painter, fewer pages

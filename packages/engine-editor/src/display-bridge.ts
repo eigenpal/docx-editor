@@ -4,7 +4,6 @@
 import type {
   DisplayPage,
   DisplayItem as ContractItem,
-  GlyphRun,
   BorderSeg,
 } from '@docx-editor.dev/core-contract/geometry';
 import type {
@@ -14,15 +13,11 @@ import type {
   SemanticPositionIndex,
   ShapedCluster,
 } from '@docx-editor.dev/core-contract/interaction';
-import type { ColorValue, Rect, ViewScope } from '@docx-editor.dev/core-contract/editor';
+import type { Rect, ViewScope } from '@docx-editor.dev/core-contract/editor';
 import type { PositionedInteractionMeta } from '@docx-editor.dev/core-contract/interaction';
 import type { PackageModel } from '@docx-editor.dev/engine-core';
 import type { Page, TextItem, RectItem } from '@docx-editor.dev/engine-layout';
-import {
-  HelveticaMetrics,
-  semanticHorizontalBoundaries,
-  type MetricsPort,
-} from '@docx-editor.dev/engine-layout';
+import { segmentGraphemes } from '@docx-editor.dev/engine-layout';
 import {
   buildSemanticIndex,
   buildTraversalLinksForModel,
@@ -46,9 +41,9 @@ import {
   recordFromTraversalMap,
   type NavigationGeometry,
 } from './navigation-geometry.ts';
+import { publishGlyphRun, shapedTextItemFingerprint } from './glyph-run-publication.ts';
 
 const px = twipsToPx;
-const BLACK: ColorValue = { kind: 'hex', value: '000000' };
 const BODY: ViewScope = { kind: 'body' };
 
 const boxOf = (it: { x: number; y: number; width: number; height: number }): Rect => ({
@@ -225,7 +220,7 @@ function enrichOwnershipRegions(
 }
 
 export interface DisplayBridgeResult {
-  readonly display: DisplayPage[];
+  readonly display: readonly DisplayPage[];
   readonly semanticIndex: SemanticPositionIndex;
   readonly navigationGeometry: NavigationGeometry;
 }
@@ -467,31 +462,10 @@ export class DisplayBridgeCache {
  * ~16 ms per layout over 106,000 of them, which is a sixth of the budget the cache exists
  * to save; this is O(items), so 1,383.
  */
-/**
- * Stable per-instance id for a metrics port, so a memo can key on WHICH port answered.
- *
- * Ports have no identity of their own and the editor constructs a fresh `HelveticaMetrics`
- * per layout, so keying on the object alone would never hit. Identity is assigned lazily in
- * a WeakMap and reused for the lifetime of the port.
- */
-const metricsIds = new WeakMap<object, number>();
-let nextMetricsId = 1;
-
-function metricsKey(metrics: MetricsPort): number {
-  const existing = metricsIds.get(metrics as object);
-  if (existing !== undefined) return existing;
-  const id = nextMetricsId;
-  nextMetricsId += 1;
-  metricsIds.set(metrics as object, id);
-  return id;
-}
-
 function paragraphPaintDigests(pages: readonly Page[]): Map<string, number> {
   const digests = new Map<string, number>();
-  // Scaled before the xor: `hash ^ value` applies ToInt32, so 100.4 and 100.6 would hash
-  // identically. Both shipped metrics ports return integer twips, so this is unreachable
-  // today and becomes reachable the moment a shaping port with fractional advances lands —
-  // silently, which is the reason to close it now rather than when it bites.
+  // Scaled before the xor: `hash ^ value` applies ToInt32, so fractional values
+  // would otherwise collide before mixing.
   const mix = (hash: number, value: number) => Math.imul(hash ^ Math.round(value * 64), 0x01000193);
   for (const page of pages) {
     for (const item of page.items) {
@@ -502,6 +476,10 @@ function paragraphPaintDigests(pages: readonly Page[]): Map<string, number> {
       hash = mix(hash, item.y);
       hash = mix(hash, item.width);
       hash = mix(hash, item.height);
+      hash = mix(hash, item.ascent);
+      hash = mix(hash, item.descent);
+      hash = mix(hash, item.lineGap);
+      hash = mix(hash, item.baseline);
       hash = mix(hash, item.anchor.offset);
       hash = mix(hash, item.text.length);
       for (let i = 0; i < item.text.length; i += 1) hash = mix(hash, item.text.charCodeAt(i));
@@ -544,6 +522,14 @@ function clusterCacheKey(
     '\u001F' +
     String(edgeDigest) +
     '\u001F' +
+    it.line.lineId +
+    '\u001F' +
+    it.direction +
+    '\u001F' +
+    String(it.bidiLevel) +
+    '\u001F' +
+    shapedTextItemFingerprint(it) +
+    '\u001F' +
     it.text
   );
 }
@@ -560,15 +546,7 @@ function textItem(
   edgeDigest = 0
 ): ContractItem {
   const box = boxOf(it);
-  const run: GlyphRun = {
-    text: it.text,
-    box,
-    fontFamily: 'Helvetica',
-    fontSizePx: px(it.height) * 0.9,
-    color: BLACK,
-    bold: it.bold,
-    italic: it.italic,
-  };
+  const run = publishGlyphRun(it, box);
   const fullText = paragraphTextById(model, it.anchor.paragraphId);
   const utf16From = it.anchor.offset;
   const utf16To = utf16From + it.text.length;
@@ -588,7 +566,10 @@ function textItem(
       semantic,
       box,
       it.text,
-      paragraphGraphemeCount
+      paragraphGraphemeCount,
+      it.line.lineId,
+      it.direction,
+      it.bidiLevel
     );
   const clusters = cache
     ? cache.clustersFor(
@@ -610,17 +591,19 @@ function textItem(
     docFrom: legacy.docFrom,
     docTo: legacy.docTo,
     blockId: legacy.blockId,
-    interaction: interactionMeta(pageIndex, zOrder, role),
+    interaction: interactionMeta(pageIndex, zOrder, role, {
+      writingDirection: it.direction,
+    }),
   };
 }
 
-function borderSegments(box: Rect): BorderSeg[] {
+function borderSegments(box: Rect, color: string): BorderSeg[] {
   const { x, y, width: w, height: h } = box;
   const edge = (from: { x: number; y: number }, to: { x: number; y: number }): BorderSeg => ({
     from,
     to,
     widthPx: 1,
-    color: BLACK,
+    color: { kind: 'hex', value: color },
     style: 'single',
   });
   return [
@@ -635,7 +618,9 @@ function rectItems(it: RectItem): ContractItem[] {
   const box = boxOf(it);
   const out: ContractItem[] = [];
   if (it.fill) out.push({ kind: 'fill', box, color: { kind: 'hex', value: it.fill } });
-  if (it.stroke) out.push({ kind: 'tableBorder', segments: borderSegments(box) });
+  if (typeof it.stroke === 'string') {
+    out.push({ kind: 'tableBorder', segments: borderSegments(box, it.stroke) });
+  }
   return out;
 }
 
@@ -653,13 +638,17 @@ export interface BridgeInvalidation {
   readonly deleted?: readonly string[];
 }
 
+export interface DisplayBridgeOptions {
+  readonly cache?: DisplayBridgeCache;
+  readonly invalidation?: BridgeInvalidation;
+}
+
 export function toDisplayPages(
   model: PackageModel,
   pages: readonly Page[],
-  metrics: MetricsPort = new HelveticaMetrics(),
-  cache?: DisplayBridgeCache,
-  invalidation?: BridgeInvalidation
+  options: DisplayBridgeOptions = {}
 ): DisplayBridgeResult {
+  const { cache, invalidation } = options;
   cache?.rotate();
   if (cache && invalidation) {
     cache.invalidateBlocks([
@@ -716,26 +705,43 @@ export function toDisplayPages(
     return block?.readOnly ? 'selectableText' : 'editableText';
   });
   const semanticHorizontalBoundariesByBlockId: Record<string, readonly number[]> = {};
+  const shapedUtf16OffsetsByBlockId = new Map<string, Set<number>>();
+  for (const page of pages) {
+    for (const item of page.items) {
+      if (item.type !== 'caretEdge' || !item.horizontalNavigable) continue;
+      let offsets = shapedUtf16OffsetsByBlockId.get(item.paragraphId);
+      if (!offsets) {
+        offsets = new Set<number>();
+        shapedUtf16OffsetsByBlockId.set(item.paragraphId, offsets);
+      }
+      offsets.add(item.utf16Offset);
+    }
+  }
   for (const block of enrichedIndex.stories[0]?.blocks ?? []) {
     if (block.readOnly) continue;
     const text = paragraphTextById(model, block.identity.blockId, storyId);
-    // Depends on the text, the METRICS PORT and the installed GRAPHEME BOUNDARY.
-    //
-    // `prefixProvableUpTo` puts both of those in its own key and carries a comment
-    // recording that review previously caught a stale answer from omitting them; this memo
-    // keyed on block id and text alone, and review reproduced the same class of staleness
-    // here — warm the cache, swap to a per-code-unit boundary, and `'abéc 👍'` kept the
-    // grouping boundary's 7 offsets where a cold build gives 8. Every hit promotes into the
-    // current generation, so it never self-heals.
-    const build = () => semanticHorizontalBoundaries(metrics, text);
+    const shapedUtf16Offsets = [
+      ...(shapedUtf16OffsetsByBlockId.get(block.identity.blockId) ?? []),
+    ].sort((left, right) => left - right);
+    const build = () => {
+      const segments = segmentGraphemes(text);
+      const graphemeOffsetByUtf16 = new Map(
+        segments.map((segment, graphemeOffset) => [segment.utf16From, graphemeOffset])
+      );
+      graphemeOffsetByUtf16.set(text.length, segments.length);
+      return shapedUtf16Offsets
+        .map((utf16Offset) => graphemeOffsetByUtf16.get(utf16Offset))
+        .filter((offset): offset is number => offset !== undefined)
+        .sort((left, right) => left - right);
+    };
     semanticHorizontalBoundariesByBlockId[block.identity.blockId] = cache
       ? cache.memo(
           'hb\u001F' +
-            String(metricsKey(metrics)) +
-            '\u001F' +
             String(graphemeBoundaryEpoch()) +
             '\u001F' +
             block.identity.blockId +
+            '\u001F' +
+            shapedUtf16Offsets.join(',') +
             '\u001F' +
             text,
           build,
@@ -759,7 +765,11 @@ export function toDisplayPages(
     semanticHorizontalBoundariesByBlockId,
     paintFragmentConflicts: conflicts,
   });
-  return { display, semanticIndex: enrichedIndex, navigationGeometry };
+  return {
+    display,
+    semanticIndex: enrichedIndex,
+    navigationGeometry,
+  };
 }
 
 // ─── Overlay geometry for adapters (interactive-paginated-editing M2.2) ──────

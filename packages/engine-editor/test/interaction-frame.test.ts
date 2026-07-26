@@ -16,9 +16,18 @@ import {
   type PublishSelectionInput,
 } from '../src/interaction-frame.ts';
 import type { DisplayPage } from '@docx-editor.dev/core-contract/geometry';
-import type { InteractionFrameId, SemanticPositionIndex } from '@docx-editor.dev/core-contract/interaction';
+import type {
+  InteractionFrameId,
+  SemanticPositionIndex,
+} from '@docx-editor.dev/core-contract/interaction';
 import { buildSemanticIndex } from '../src/semantic-index.ts';
-import { createEmptyModel, bodyStoryId, DocumentStore, ORIGIN_IDS, type ParagraphRecord } from '@docx-editor.dev/engine-core';
+import {
+  createEmptyModel,
+  bodyStoryId,
+  DocumentStore,
+  ORIGIN_IDS,
+  type ParagraphRecord,
+} from '@docx-editor.dev/engine-core';
 
 const HUMAN = ORIGIN_IDS.mutationHuman;
 
@@ -74,7 +83,7 @@ function layoutInput(
   modelRevision: number,
   over: Partial<PublishLayoutInput> = {},
   display: readonly DisplayPage[] = [PAGE],
-  semanticIndex: SemanticPositionIndex = emptySemanticIndex('story-1'),
+  semanticIndex: SemanticPositionIndex = emptySemanticIndex('story-1')
 ): PublishLayoutInput {
   return {
     modelRevision,
@@ -104,7 +113,7 @@ function textTarget() {
 
 function syntheticSelectionInput(
   layout: ReturnType<InteractionFrameStore['publishLayout']>,
-  modelRevision = layout.revisions.modelRevision,
+  modelRevision = layout.revisions.modelRevision
 ): PublishSelectionInput {
   const target = textTarget();
   const frameId: InteractionFrameId = layout.id;
@@ -170,7 +179,11 @@ describe('InteractionFrameStore — immutable coherent publication', () => {
     expect(Object.isFrozen(frame.display[0]!.items[0]!.box)).toBe(true);
     const run = RICH_PAGE.items[0]!.kind === 'text' ? RICH_PAGE.items[0]!.runs[0]! : null;
     expect(run).not.toBeNull();
-    expect(Object.isFrozen(frame.display[0]!.items[0]!.kind === 'text' ? frame.display[0]!.items[0]!.runs : [])).toBe(true);
+    expect(
+      Object.isFrozen(
+        frame.display[0]!.items[0]!.kind === 'text' ? frame.display[0]!.items[0]!.runs : []
+      )
+    ).toBe(true);
     expect(Object.isFrozen(frame.caret)).toBe(true);
     expect(Object.isFrozen(frame.caret!.rect)).toBe(true);
     expect(Object.isFrozen(frame.selectionGeometry)).toBe(true);
@@ -250,7 +263,11 @@ describe('InteractionFrameStore — immutable coherent publication', () => {
     const during = store.getFrame()!;
     expect(during.id).toEqual(first.id);
     expect(during.display).toBe(first.display);
-    expect(during.completeness).toEqual({ kind: 'pending', awaiting: 'layout', targetModelRevision: 2 });
+    expect(during.completeness).toEqual({
+      kind: 'pending',
+      awaiting: 'layout',
+      targetModelRevision: 2,
+    });
     expect(during.revisions.modelRevision).toBe(1);
   });
 

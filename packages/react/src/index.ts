@@ -12,7 +12,17 @@
 export const VERSION = '0.0.2';
 
 export { DocxEditor } from './components/DocxEditor';
-export type { DocxEditorProps, DocxEditorRef, EditorMode } from './types';
+export { EditorFontError } from './types';
+export type {
+  DocxEditorProps,
+  DocxEditorRef,
+  EditorMode,
+  EditorFontErrorCode,
+  FontConfiguration,
+  FontFaceRequest,
+  FontSource,
+  FontSourceSubstitution,
+} from './types';
 
 // Re-export the contract types a consumer needs to drive the editor.
 export type {

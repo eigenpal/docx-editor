@@ -30,7 +30,10 @@ class FakeElement implements BridgeElement {
     const set = this.listeners.get(type) ?? new Set<Listener>();
     set.add(listener);
     this.listeners.set(type, set);
-    this.captureFlags.set(listener, (options as { capture?: boolean } | undefined)?.capture === true);
+    this.captureFlags.set(
+      listener,
+      (options as { capture?: boolean } | undefined)?.capture === true
+    );
   }
 
   removeEventListener(type: string, listener: Listener, options?: unknown): void {
@@ -76,7 +79,7 @@ function okResult(): InteractionDispatchResult {
 }
 
 function fakePort(
-  overrides: Partial<BridgeEditorPort> = {},
+  overrides: Partial<BridgeEditorPort> = {}
 ): BridgeEditorPort & { readonly intents: InteractionIntent[] } {
   const intents: InteractionIntent[] = [];
   return {
@@ -90,7 +93,9 @@ function fakePort(
   } as BridgeEditorPort & { readonly intents: InteractionIntent[] };
 }
 
-function pointerEvent(overrides: Partial<BridgePointerEvent> = {}): BridgePointerEvent & { defaultPrevented: boolean } {
+function pointerEvent(
+  overrides: Partial<BridgePointerEvent> = {}
+): BridgePointerEvent & { defaultPrevented: boolean } {
   let defaultPrevented = false;
   return {
     clientX: 100,
@@ -227,7 +232,9 @@ describe('adapter event bridge wiring (task M2.1)', () => {
 
     for (const intent of port.intents) {
       expect(() => JSON.parse(JSON.stringify(intent))).not.toThrow();
-      expect(JSON.parse(JSON.stringify(intent))).toEqual(intent as unknown as Record<string, unknown>);
+      expect(JSON.parse(JSON.stringify(intent))).toEqual(
+        intent as unknown as Record<string, unknown>
+      );
     }
   });
 
@@ -248,7 +255,11 @@ describe('adapter event bridge wiring (task M2.1)', () => {
     const arrow = keyEvent('ArrowDown', { shiftKey: true });
     element.emit('keydown', arrow);
     expect(port.intents).toHaveLength(1);
-    expect(port.intents[0]).toMatchObject({ kind: 'geometryKeyboard', key: 'ArrowDown', shiftKey: true });
+    expect(port.intents[0]).toMatchObject({
+      kind: 'geometryKeyboard',
+      key: 'ArrowDown',
+      shiftKey: true,
+    });
     expect(arrow.defaultPrevented).toBe(true);
 
     const letter = keyEvent('a');
@@ -362,6 +373,22 @@ describe('drag versus click disambiguation (task M3.1)', () => {
     expect(port.intents.some((i) => i.kind === 'click')).toBe(true);
   });
 
+  test('a trailing click reuses the unrounded pointerup point', () => {
+    const element = new FakeElement();
+    const port = fakePort();
+    attachAdapterEventBridge(element, port);
+
+    element.emit('pointerdown', pointerEvent({ clientX: 574.64, clientY: 313.3 }));
+    element.emit('pointerup', pointerEvent({ clientX: 574.64, clientY: 313.3, buttons: 0 }));
+    element.emit('click', pointerEvent({ clientX: 574, clientY: 313 }));
+
+    const click = port.intents.find((intent) => intent.kind === 'click');
+    expect(click?.kind === 'click' ? click.clientPoint : null).toEqual({
+      x: 574.64,
+      y: 313.3,
+    });
+  });
+
   test('a shaky press within slop is a click, not a drag', () => {
     const element = new FakeElement();
     const port = fakePort();
@@ -401,8 +428,14 @@ describe('real pointermove button semantics (task M3.1)', () => {
 
     // Chrome reports button: -1 on pointermove ("no button changed"). Treating
     // that as a non-primary button drops every move in a drag.
-    element.emit('pointerdown', pointerEvent({ clientX: 100, clientY: 200, button: 0, buttons: 1 }));
-    element.emit('pointermove', pointerEvent({ clientX: 140, clientY: 200, button: -1, buttons: 1 }));
+    element.emit(
+      'pointerdown',
+      pointerEvent({ clientX: 100, clientY: 200, button: 0, buttons: 1 })
+    );
+    element.emit(
+      'pointermove',
+      pointerEvent({ clientX: 140, clientY: 200, button: -1, buttons: 1 })
+    );
     element.emit('pointerup', pointerEvent({ clientX: 140, clientY: 200, button: 0, buttons: 0 }));
 
     expect(port.intents.map((i) => i.kind)).toEqual(['pointerDown', 'pointerMove', 'pointerUp']);
@@ -421,8 +454,14 @@ describe('real pointermove button semantics (task M3.1)', () => {
     const element = new FakeElement();
     const port = fakePort();
     attachAdapterEventBridge(element, port);
-    element.emit('pointerdown', pointerEvent({ clientX: 100, clientY: 200, button: 0, buttons: 1 }));
-    element.emit('pointermove', pointerEvent({ clientX: 140, clientY: 200, button: -1, buttons: 1 }));
+    element.emit(
+      'pointerdown',
+      pointerEvent({ clientX: 100, clientY: 200, button: 0, buttons: 1 })
+    );
+    element.emit(
+      'pointermove',
+      pointerEvent({ clientX: 140, clientY: 200, button: -1, buttons: 1 })
+    );
     element.emit('pointerup', pointerEvent({ clientX: 140, clientY: 200, button: 0, buttons: 0 }));
     element.emit('click', pointerEvent({ clientX: 140, clientY: 200, button: 0, buttons: 0 }));
     expect(port.intents.some((i) => i.kind === 'click')).toBe(false);
@@ -445,7 +484,12 @@ describe('geometry keys are claimed before ProseMirror sees them (independent re
     const element = new FakeElement();
     const port = fakePort({
       dispatchInteraction: () => ({
-        outcome: { ok: false, code: 'unsupported', reason: 'crosses a read-only boundary', frameId: FRAME_ID },
+        outcome: {
+          ok: false,
+          code: 'unsupported',
+          reason: 'crosses a read-only boundary',
+          frameId: FRAME_ID,
+        },
         hostEffects: [],
       }),
     });

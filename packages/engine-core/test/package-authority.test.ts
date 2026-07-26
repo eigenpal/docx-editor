@@ -41,9 +41,15 @@ function collectSources(root: string): string[] {
   return out;
 }
 
+function stripComments(source: string): string {
+  return source.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, '');
+}
+
 describe('package authority (task 0.5)', () => {
   test('the EditorHost contract is PM-free', () => {
-    const editor = readFileSync(join(PACKAGES_DIR, 'core', 'src', 'editor.ts'), 'utf8');
+    const editor = stripComments(
+      readFileSync(join(PACKAGES_DIR, 'core', 'src', 'editor.ts'), 'utf8')
+    );
     // No import from a prosemirror module.
     expect(/from\s*['"]prosemirror[^'"]*['"]/.test(editor)).toBe(false);
     // No ProseMirror view/state types surfaced by the host contract.
@@ -67,7 +73,8 @@ describe('package authority (task 0.5)', () => {
   test('no public package exports a DocxEditorEngine authority object', () => {
     // A `DocxEditorEngine` (shared React/Vue orchestration, memory: engine-unification)
     // may exist internally but must never be a public, authoritative export.
-    const exportRe = /export\s+(?:abstract\s+)?(?:class|interface|const|function|type)\s+DocxEditorEngine\b/;
+    const exportRe =
+      /export\s+(?:abstract\s+)?(?:class|interface|const|function|type)\s+DocxEditorEngine\b/;
     const reExportRe = /export\s*\{[^}]*\bDocxEditorEngine\b[^}]*\}/;
     for (const dir of PUBLIC_SRC_DIRS) {
       // Only the package entry points constitute the public surface.

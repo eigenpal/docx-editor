@@ -15,9 +15,11 @@ import {
   deleteParagraph,
   type PackageModel,
   type ParagraphRecord,
+  MAX_RUN_SIZE_HALF_POINTS,
 } from '../model/index.ts';
 import { DEPENDENCY_KEY_IDS } from '../registry/frozen-ids.ts';
 import type { DocOp, OpEffect } from './contracts.ts';
+import { isValidXmlText } from '../package/sinks.ts';
 
 export type DocOpValidation =
   | { readonly ok: true }
@@ -25,6 +27,74 @@ export type DocOpValidation =
 
 const isStr = (v: unknown): v is string => typeof v === 'string' && v.length > 0;
 const isInt = (v: unknown): v is number => typeof v === 'number' && Number.isInteger(v) && v >= 0;
+const RUN_PROP_KEYS = new Set([
+  'styleId',
+  'bold',
+  'italic',
+  'underline',
+  'fonts',
+  'sizeHalfPoints',
+  'color',
+]);
+const FONT_KEYS = new Set([
+  'ascii',
+  'hAnsi',
+  'eastAsia',
+  'cs',
+  'asciiTheme',
+  'hAnsiTheme',
+  'eastAsiaTheme',
+  'csTheme',
+]);
+const THEME_FONT_VALUES = new Set([
+  'majorAscii',
+  'majorHAnsi',
+  'majorEastAsia',
+  'majorBidi',
+  'minorAscii',
+  'minorHAnsi',
+  'minorEastAsia',
+  'minorBidi',
+]);
+
+function isRunProps(value: unknown): boolean {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) return false;
+  const props = value as Record<string, unknown>;
+  if (Object.keys(props).some((key) => !RUN_PROP_KEYS.has(key))) return false;
+  if (props.styleId !== undefined && (!isStr(props.styleId) || !isValidXmlText(props.styleId)))
+    return false;
+  for (const key of ['bold', 'italic', 'underline'])
+    if (props[key] !== undefined && typeof props[key] !== 'boolean') return false;
+  if (props.sizeHalfPoints !== undefined) {
+    const size = props.sizeHalfPoints;
+    if (
+      typeof size !== 'number' ||
+      !Number.isFinite(size) ||
+      !Number.isInteger(size) ||
+      size < 0 ||
+      size > MAX_RUN_SIZE_HALF_POINTS
+    )
+      return false;
+  }
+  if (
+    props.color !== undefined &&
+    (typeof props.color !== 'string' || !/^(?:auto|[0-9A-Fa-f]{6})$/.test(props.color))
+  )
+    return false;
+  if (props.fonts !== undefined) {
+    if (typeof props.fonts !== 'object' || props.fonts === null || Array.isArray(props.fonts))
+      return false;
+    const fonts = props.fonts as Record<string, unknown>;
+    if (Object.keys(fonts).length === 0) return false;
+    if (Object.keys(fonts).some((key) => !FONT_KEYS.has(key))) return false;
+    for (const [key, font] of Object.entries(fonts)) {
+      if (!isStr(font) || !isValidXmlText(font)) return false;
+      if (key.endsWith('Theme') && !THEME_FONT_VALUES.has(font)) return false;
+    }
+  }
+  return true;
+}
+
 /** Every run must be an object with a string `text` (props, if present, an object) — so a
  *  malformed run can never reach normalization/serialization and throw or coerce silently. */
 const isRuns = (v: unknown): boolean =>
@@ -33,7 +103,7 @@ const isRuns = (v: unknown): boolean =>
     if (typeof r !== 'object' || r === null) return false;
     const rec = r as { text?: unknown; props?: unknown };
     if (typeof rec.text !== 'string') return false;
-    return rec.props === undefined || (typeof rec.props === 'object' && rec.props !== null);
+    return rec.props === undefined || isRunProps(rec.props);
   });
 
 /** Schema-validate a DocOp's shape before any mutation (task 4.4 entry point). */
@@ -46,7 +116,9 @@ export function validateDocOp(op: DocOp): DocOpValidation {
         ? { ok: true }
         : { ok: false, reason: 'insertParagraph.fields' };
     case 'insertText':
-      return isStr(op.paragraphId) && typeof op.text === 'string'
+      return isStr(op.paragraphId) &&
+        typeof op.text === 'string' &&
+        (op.props === undefined || isRunProps(op.props))
         ? { ok: true }
         : { ok: false, reason: 'insertText.fields' };
     case 'splitParagraph':

@@ -2,7 +2,8 @@ import { GlobalRegistrator } from '@happy-dom/global-registrator';
 if (!GlobalRegistrator.isRegistered) GlobalRegistrator.register();
 
 import { describe, expect, test } from 'bun:test';
-import { createEditor, createEditorDriver } from '../src/index.ts';
+import { createEditorDriver } from '../src/index.ts';
+import { createTestEditor as createEditor } from './create-test-editor.ts';
 import type { EditorHost } from '@docx-editor.dev/core-contract/editor';
 import { IDENTITY_HOST_METRICS } from '../src/coordinate-mapper.ts';
 import { frameMembersCoherent } from '../src/interaction-frame.ts';
@@ -23,15 +24,71 @@ function hostWithBody(body: HTMLElement, scroll: HTMLElement): EditorHost {
 }
 
 describe('layout overlay reconciliation (task 4.8)', () => {
+  test('input-host and public caret placement ignore conflicting rendered geometry', () => {
+    const body = document.createElement('div');
+    const scroll = document.createElement('div');
+    scroll.getBoundingClientRect = () =>
+      ({
+        x: 0,
+        y: 0,
+        width: 640,
+        height: 480,
+        top: 0,
+        left: 0,
+        right: 640,
+        bottom: 480,
+        toJSON: () => ({}),
+      }) as DOMRect;
+    document.body.append(scroll);
+    scroll.append(body);
+    const conflictingRect = { x: 999, y: 888, width: 7, height: 6 };
+    const host: EditorHost = {
+      ...hostWithBody(body, scroll),
+      getRenderedTextGeometry: () => ({
+        caretRect: () => conflictingRect,
+        selectionRects: () => [],
+        targetAtPoint: () => null,
+      }),
+    };
+    const editor = createEditor({ host, document: createEditableParagraphFixture() });
+    const driver = createEditorDriver(editor);
+
+    expect(driver.authorizeCaret(0, 2).ok).toBe(true);
+    const frameCaret = editor.getInteractionFrame().caret;
+    expect(frameCaret).not.toBeNull();
+    expect(driver.caretClientRect()).toEqual(frameCaret?.rect ?? null);
+    expect(driver.caretClientRect()).not.toEqual(conflictingRect);
+    expect(driver.inputHostObservation()?.clientRect).toMatchObject({
+      x: frameCaret!.rect.x,
+      y: frameCaret!.rect.y,
+    });
+
+    editor.destroy();
+    scroll.remove();
+  });
+
   test('relayout republishes PM selection/focus/caret overlay on the new coherent frame', () => {
     const body = document.createElement('div');
     const scroll = document.createElement('div');
     scroll.getBoundingClientRect = () =>
-      ({ x: 0, y: 0, width: 640, height: 480, top: 0, left: 0, right: 640, bottom: 480, toJSON: () => ({}) }) as DOMRect;
+      ({
+        x: 0,
+        y: 0,
+        width: 640,
+        height: 480,
+        top: 0,
+        left: 0,
+        right: 640,
+        bottom: 480,
+        toJSON: () => ({}),
+      }) as DOMRect;
     document.body.append(scroll);
     scroll.append(body);
 
-    const editor = createEditor({ host: hostWithBody(body, scroll), document: createEditableParagraphFixture() });
+    const editor = createEditor({
+      host: hostWithBody(body, scroll),
+      document: createEditableParagraphFixture(),
+    });
     const driver = createEditorDriver(editor);
     const layoutFrameBefore = editor.getInteractionFrame().id;
 
@@ -66,11 +123,24 @@ describe('layout overlay reconciliation (task 4.8)', () => {
     const body = document.createElement('div');
     const scroll = document.createElement('div');
     scroll.getBoundingClientRect = () =>
-      ({ x: 0, y: 0, width: 640, height: 480, top: 0, left: 0, right: 640, bottom: 480, toJSON: () => ({}) }) as DOMRect;
+      ({
+        x: 0,
+        y: 0,
+        width: 640,
+        height: 480,
+        top: 0,
+        left: 0,
+        right: 640,
+        bottom: 480,
+        toJSON: () => ({}),
+      }) as DOMRect;
     document.body.append(scroll);
     scroll.append(body);
 
-    const editor = createEditor({ host: hostWithBody(body, scroll), document: createEditableParagraphFixture() });
+    const editor = createEditor({
+      host: hostWithBody(body, scroll),
+      document: createEditableParagraphFixture(),
+    });
     const driver = createEditorDriver(editor);
     const endOffset = driver
       .accessibilityObservation()
@@ -79,7 +149,12 @@ describe('layout overlay reconciliation (task 4.8)', () => {
     expect(driver.authorizeCaret(0, endOffset).ok).toBe(true);
     const editable = body.querySelector('[contenteditable="true"]') as HTMLElement;
     editable.dispatchEvent(
-      new InputEvent('beforeinput', { inputType: 'insertText', data: 'z', bubbles: true, cancelable: true }),
+      new InputEvent('beforeinput', {
+        inputType: 'insertText',
+        data: 'z',
+        bubbles: true,
+        cancelable: true,
+      })
     );
 
     expect(driver.inputHostObservation()?.placementReason).toBe('applied');
@@ -102,20 +177,40 @@ describe('layout overlay reconciliation (task 4.8)', () => {
     const body = document.createElement('div');
     const scroll = document.createElement('div');
     scroll.getBoundingClientRect = () =>
-      ({ x: 0, y: 0, width: 640, height: 480, top: 0, left: 0, right: 640, bottom: 480, toJSON: () => ({}) }) as DOMRect;
+      ({
+        x: 0,
+        y: 0,
+        width: 640,
+        height: 480,
+        top: 0,
+        left: 0,
+        right: 640,
+        bottom: 480,
+        toJSON: () => ({}),
+      }) as DOMRect;
     document.body.append(scroll);
     scroll.append(body);
 
-    const editor = createEditor({ host: hostWithBody(body, scroll), document: createEditableParagraphFixture() });
+    const editor = createEditor({
+      host: hostWithBody(body, scroll),
+      document: createEditableParagraphFixture(),
+    });
     const driver = createEditorDriver(editor);
-    const text = driver.accessibilityObservation().entries.filter((e) => e.role === 'editableParagraph')[0]!.text;
+    const text = driver
+      .accessibilityObservation()
+      .entries.filter((e) => e.role === 'editableParagraph')[0]!.text;
     const interior = 2;
     expect(text.length).toBeGreaterThan(interior + 2);
 
     expect(driver.authorizeCaret(0, interior).ok).toBe(true);
     const editable = body.querySelector('[contenteditable="true"]') as HTMLElement;
     editable.dispatchEvent(
-      new InputEvent('beforeinput', { inputType: 'insertText', data: 'z', bubbles: true, cancelable: true }),
+      new InputEvent('beforeinput', {
+        inputType: 'insertText',
+        data: 'z',
+        bubbles: true,
+        cancelable: true,
+      })
     );
 
     const frame = editor.getInteractionFrame();

@@ -12,9 +12,14 @@ import {
 import { modelFromFixtureInput, paginateLayoutOptions } from './fixtures/geometry-fixture-build.ts';
 import { buildSemanticIndex } from '../../engine-editor/src/semantic-index.ts';
 import { toDisplayPages } from '../../engine-editor/src/display-bridge.ts';
-import { layoutBody, HelveticaMetrics } from '../src/index.ts';
+import { createDeterministicLayoutShaping, layoutBody } from '../src/index.ts';
 
-const LAYOUT_BASE = { pageWidth: 12240, pageHeight: 15840, margin: 1440, metrics: new HelveticaMetrics() };
+const LAYOUT_BASE = {
+  pageWidth: 12240,
+  pageHeight: 15840,
+  margin: 1440,
+  shaping: createDeterministicLayoutShaping(),
+};
 
 /** Every key allowed on fixture.expected must be executed by assertExpectedSemantics. */
 const EXECUTABLE_EXPECTED_KEYS = new Set<keyof GeometryFixtureExpectedSemantic>([
@@ -53,7 +58,9 @@ function assertExpectedSemantics(fixture: GeometryFixtureCase): void {
 
   for (const key of Object.keys(exp) as (keyof GeometryFixtureExpectedSemantic)[]) {
     if (!EXECUTABLE_EXPECTED_KEYS.has(key)) {
-      throw new Error(`geometry fixtures: ${fixture.id} expected.${key} is not executable in the fixture runner`);
+      throw new Error(
+        `geometry fixtures: ${fixture.id} expected.${key} is not executable in the fixture runner`
+      );
     }
   }
 
@@ -77,12 +84,14 @@ function assertExpectedSemantics(fixture: GeometryFixtureCase): void {
     expect(editableCaretStops(index).length > 0).toBe(exp.hasEditableCaretStops);
   }
   if (exp.paragraphOwnershipCount !== undefined) {
-    expect(index.ownershipRegions.filter((r) => r.kind === 'paragraph')).toHaveLength(exp.paragraphOwnershipCount);
+    expect(index.ownershipRegions.filter((r) => r.kind === 'paragraph')).toHaveLength(
+      exp.paragraphOwnershipCount
+    );
   }
   if (exp.whitespaceSubrangeCount !== undefined) {
-    expect(index.ownershipRegions.filter((r) => r.kind === 'lineWhitespace' && r.utf16From !== undefined)).toHaveLength(
-      exp.whitespaceSubrangeCount,
-    );
+    expect(
+      index.ownershipRegions.filter((r) => r.kind === 'lineWhitespace' && r.utf16From !== undefined)
+    ).toHaveLength(exp.whitespaceSubrangeCount);
   }
   if (exp.trailingGraphemeOffset !== undefined) {
     const block = index.stories[0]!.blocks[0]!;
@@ -90,14 +99,16 @@ function assertExpectedSemantics(fixture: GeometryFixtureCase): void {
       (s) =>
         s.target.kind === 'text' &&
         s.target.identity.blockId === block.identity.blockId &&
-        s.target.graphemeOffset === exp.trailingGraphemeOffset,
+        s.target.graphemeOffset === exp.trailingGraphemeOffset
     );
     expect(trailing?.target.affinity).toBe(exp.trailingAffinity ?? 'downstream');
   }
   if (exp.noInternalCaretStop) {
     for (const block of index.stories[0]!.blocks) {
       expect(
-        index.caretStops.filter((s) => s.target.kind === 'text' && s.target.identity.blockId === block.identity.blockId),
+        index.caretStops.filter(
+          (s) => s.target.kind === 'text' && s.target.identity.blockId === block.identity.blockId
+        )
       ).toHaveLength(block.graphemeCount + 1);
     }
   }
@@ -112,21 +123,31 @@ function assertExpectedSemantics(fixture: GeometryFixtureCase): void {
     for (const block of index.stories[0]!.blocks) {
       if (block.readOnly) {
         expect(
-          index.caretStops.some((s) => s.target.kind === 'text' && s.target.identity.blockId === block.identity.blockId),
+          index.caretStops.some(
+            (s) => s.target.kind === 'text' && s.target.identity.blockId === block.identity.blockId
+          )
         ).toBe(false);
       }
     }
   }
 
-  const needsBridge = exp.oneClusterPerGrapheme === true || exp.fullUtf16Span === true || exp.stableIdentityAcrossSplits === true;
+  const needsBridge =
+    exp.oneClusterPerGrapheme === true ||
+    exp.fullUtf16Span === true ||
+    exp.stableIdentityAcrossSplits === true;
   if (needsBridge) {
     const paginate = paginateLayoutOptions(fixture.input);
-    const layout = layoutBody(model, { ...LAYOUT_BASE, pageWidth: paginate?.narrowPageWidth ?? LAYOUT_BASE.pageWidth });
+    const layout = layoutBody(model, {
+      ...LAYOUT_BASE,
+      pageWidth: paginate?.narrowPageWidth ?? LAYOUT_BASE.pageWidth,
+    });
     const { display, semanticIndex } = toDisplayPages(model, layout.pages);
     const items = display
       .flatMap((p) => p.items)
       .filter((i) => i.kind === 'text')
-      .sort((a, b) => (a.kind === 'text' && b.kind === 'text' ? a.semantic.utf16From - b.semantic.utf16From : 0));
+      .sort((a, b) =>
+        a.kind === 'text' && b.kind === 'text' ? a.semantic.utf16From - b.semantic.utf16From : 0
+      );
 
     if (exp.oneClusterPerGrapheme || exp.fullUtf16Span) {
       const sourceText = paragraphTextFromInput(fixture);
@@ -168,7 +189,9 @@ describe('geometry fixture catalog', () => {
   test('every declared expected field key is executable by the fixture runner', () => {
     for (const fixture of GEOMETRY_FIXTURES) {
       if (!fixture.expected) continue;
-      for (const key of Object.keys(fixture.expected) as (keyof GeometryFixtureExpectedSemantic)[]) {
+      for (const key of Object.keys(
+        fixture.expected
+      ) as (keyof GeometryFixtureExpectedSemantic)[]) {
         expect(EXECUTABLE_EXPECTED_KEYS.has(key)).toBe(true);
       }
     }

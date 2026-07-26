@@ -14,5 +14,5 @@ export default defineConfig({
   // The editor contract is a private, declaration-only package; bundle it so
   // published JS carries no reference to a private path.
   noExternal: [/^@docx-editor\.dev\/core-contract(?:\/|$)/],
-  external: ['react', 'react-dom'],
+  external: ['react', 'react-dom', 'harfbuzzjs'],
 });

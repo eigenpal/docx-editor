@@ -2,16 +2,25 @@
 
 import { describe, expect, test } from 'bun:test';
 import type { EditorHost } from '@docx-editor.dev/core-contract/editor';
-import { createEditor } from '../src/create-editor.ts';
+import { createTestEditor as createEditor } from './create-test-editor.ts';
 import { createEditableFixtureWithTexts } from '../browser/fixtures.ts';
 import { modelWith, publishFrameBundle, selectionForBlock } from './interaction-test-helpers.ts';
 import { planKeyboardNavigation } from '../src/keyboard-navigation.ts';
 
 const METRICS = { clientOrigin: { x: 0, y: 0 }, scrollOffset: { x: 0, y: 0 }, zoom: 1 };
 
-function planArrowDown(bundle: ReturnType<typeof publishFrameBundle>, blockId: string, offset: number, words: string) {
+function planArrowDown(
+  bundle: ReturnType<typeof publishFrameBundle>,
+  blockId: string,
+  offset: number,
+  words: string
+) {
   const selection = selectionForBlock(bundle.frame, blockId, offset, offset);
-  const frame = { ...bundle.frame, selection, focus: { scope: { kind: 'body' as const }, focused: true } };
+  const frame = {
+    ...bundle.frame,
+    selection,
+    focus: { scope: { kind: 'body' as const }, focused: true },
+  };
   return planKeyboardNavigation({
     frame,
     navigation: bundle.navigation,
@@ -88,8 +97,12 @@ describe('two-editor vertical navigation (task 5.5 review)', () => {
     });
     expect(down1.outcome.ok).toBe(true);
     expect(down2.outcome.ok).toBe(true);
-    expect(editor1.getAccessibilityObservation().selection?.head.graphemeOffset).toBe(expectedOffset1);
-    expect(editor2.getAccessibilityObservation().selection?.head.graphemeOffset).toBe(expectedOffset2);
+    expect(editor1.getAccessibilityObservation().selection?.head.graphemeOffset).toBe(
+      expectedOffset1
+    );
+    expect(editor2.getAccessibilityObservation().selection?.head.graphemeOffset).toBe(
+      expectedOffset2
+    );
     expect(editor1.getCaretGeometry()).not.toBeNull();
     expect(editor2.getCaretGeometry()).not.toBeNull();
     expect(editor1.getInteractionFrame().selection).not.toBeNull();

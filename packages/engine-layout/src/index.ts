@@ -14,6 +14,7 @@ export const ENGINE_LAYOUT_PACKAGE = '@docx-editor.dev/engine-layout' as const;
 export {
   type Anchor,
   type TextItem,
+  type TextGlyphCluster,
   type RectItem,
   type CaretEdgeItem,
   type VisualLineIdentity,
@@ -21,23 +22,96 @@ export {
   type Page,
   type LayoutResult,
 } from './display-item.ts';
-export { type MetricsPort, DeterministicMetrics, HelveticaMetrics } from './metrics.ts';
 export {
-  type ShapingCapability,
-  PER_GRAPHEME_SHAPING,
-  ASCII_LATIN_SHAPING,
-  UNSUPPORTED_SHAPING,
-  type LigatureInteriorCaret,
-  type CharacterAdvanceProvable,
-} from './shaping.ts';
+  type LayoutShapingOptions,
+  type DeterministicLayoutShapingOptions,
+  createDeterministicLayoutShaping,
+} from './metrics.ts';
+export {
+  FontResolutionError,
+  HARD_MAX_AGGREGATE_FONT_BYTES,
+  HARD_MAX_FONT_BYTES,
+  HARD_MAX_FONT_SOURCES,
+  createFontResourceSnapshot,
+  fontRequestKey,
+  sha256FontBytes,
+  boundedStructuralFontValidator,
+  type FontRequest,
+  type FontSubstitution,
+  type ResolvedFont,
+  type FontResolutionErrorCode,
+  type FontResourceDefinition,
+  type DeclaredFontSubstitution,
+  type FontValidationResult,
+  type FontByteValidator,
+  type FontResourceSnapshot,
+  type FontResourceSnapshotOptions,
+  type FontResourceInstrumentation,
+} from './font-resource.ts';
+export {
+  fixedPoint,
+  createShapingEnvironment,
+  createShapedRun,
+  shapedRunComparatorInputs,
+  shapingEnvironmentFingerprintInputs,
+  shapingEnvironmentFingerprint,
+  type FixedPoint,
+  type TextDirection,
+  type FixedPointRoundingMode,
+  type NormalizationPolicy,
+  type VersionedShapingLibrary,
+  type ShapingEnvironmentInput,
+  type ShapingEnvironment,
+  type ShapeInput,
+  type ShapedGlyph,
+  type GlyphOutline,
+  type ShapedCluster,
+  type ShapedVerticalMetrics,
+  type ShapedFontSpan,
+  type ShapedRun,
+  type ShapedRunComparatorInputs,
+  type TextShaper,
+  type ShapingEnvironmentFingerprintInputs,
+  type FontFingerprintInputs,
+} from './shaped-run.ts';
+export {
+  HARFBUZZ_SHAPING_LIBRARY,
+  HarfBuzzShapingError,
+  initializeHarfBuzz,
+  isHarfBuzzInitialized,
+  createHarfBuzzTextShaper,
+  harfBuzzFontValidator,
+  roundFontUnitToFixedPoint,
+  type HarfBuzzShapingErrorCode,
+  type HarfBuzzFaceCacheEvent,
+  type HarfBuzzOutlineCacheEvent,
+  type HarfBuzzShapeCacheEvent,
+  type HarfBuzzTextShaper,
+  type HarfBuzzTextShaperInstrumentation,
+  type HarfBuzzTextShaperOptions,
+} from './harfbuzz-shaper.ts';
+export {
+  UnsupportedScriptError,
+  itemizeScriptFontSlots,
+  type FontSlot,
+  type ScriptItem,
+} from './script-itemization.ts';
+export type { BidiEmbeddingLevels } from './bidi.ts';
 export { layoutParagraphInBox, type ParagraphLayoutSink } from './paragraph-layout.ts';
 export {
+  shapedHorizontalBoundaries,
   isWholeGraphemeHorizontalBoundary,
   isGeometryTrustedCaretOffset,
   isCumulativeGeometryTrustedFromLineOrigin,
   semanticHorizontalBoundaries,
 } from './horizontal-boundary.ts';
-export { type LayoutOptions, layoutBody, hitTest } from './layout.ts';
+export {
+  LayoutNormalizationError,
+  LayoutOperationRestartError,
+  type LayoutOptions,
+  layoutBody,
+  hitTest,
+} from './layout.ts';
 export {
   type GraphemeBoundary,
   type GraphemeSegment,
@@ -91,8 +165,13 @@ export {
 } from './dependency-graph.ts';
 export {
   type OperationSnapshot,
+  type OperationSnapshotField,
+  type OperationSnapshotGuard,
+  type ResourceDependencyProvenance,
   type CacheProvenance,
   type CacheMiss,
   type CacheLookup,
   ResolvedCache,
+  captureOperationSnapshot,
+  guardOperationSnapshot,
 } from './resolved-cache.ts';

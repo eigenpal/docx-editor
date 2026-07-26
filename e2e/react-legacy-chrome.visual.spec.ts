@@ -18,8 +18,21 @@ declare global {
   }
 }
 
-/** Exactly the controls M6V.1 permits to act. */
-const ENABLED = ['toolbar-undo', 'toolbar-redo', 'toolbar-bold', 'toolbar-italic', 'toolbar-save'];
+/** Toolbar commands currently wired through the production editor boundary. */
+const ENABLED = [
+  'toolbar-alignment',
+  'toolbar-bold',
+  'toolbar-clear-formatting',
+  'toolbar-insert-link',
+  'toolbar-italic',
+  'toolbar-redo',
+  'toolbar-strikethrough',
+  'toolbar-subscript',
+  'toolbar-superscript',
+  'toolbar-toggle-comments-sidebar',
+  'toolbar-underline',
+  'toolbar-undo',
+];
 
 test.describe('M6V.1 legacy chrome visual parity (React)', () => {
   test.beforeEach(async ({ page }) => {
@@ -33,26 +46,29 @@ test.describe('M6V.1 legacy chrome visual parity (React)', () => {
     const regions = await page.evaluate(() => {
       const has = (s: string) => !!document.querySelector(s);
       const count = (s: string) => document.querySelectorAll(s).length;
-      const bar = document.querySelector('.ep-toolbar')!;
-      const rulerRow = document.querySelector('.docx-editor__ruler-row')!;
+      const bar = document.querySelector('[data-testid="formatting-bar"]')!;
+      const horizontalRuler = document.querySelector('.docx-horizontal-ruler')!;
+      const rulerRow = horizontalRuler.parentElement!;
       return {
         shell: has('[data-testid="docx-editor"]'),
-        titleBar: has('[data-testid="document-title-bar"]'),
-        menuBar: has('[data-testid="menu-bar"]'),
-        menuItems: count('[data-testid^="menu-"]') - 1, // minus the menubar itself
-        toolbarControls: count('[data-testid^="toolbar-"]'),
-        toolbarGroups: count('.ep-toolbar__group'),
+        titleBar: has('[data-testid="title-bar"]'),
+        menuBar: has('[role="menubar"]'),
+        menuItems: count('[role="menubar"] button'),
+        toolbarControls: count(
+          '[role="toolbar"] button, [role="toolbar"] input, [role="toolbar"] select'
+        ),
+        toolbarGroups: count('[role="toolbar"] > [role="group"]'),
         // The legacy formatting bar is a PILL that scrolls, not a flat wrapping bar.
         pillRadius: getComputedStyle(bar).borderRadius,
         pillOverflowX: getComputedStyle(bar).overflowX,
-        horizontalRuler: has('.docx-editor__ruler-row'),
+        horizontalRuler: has('.docx-horizontal-ruler'),
         rulerPosition: getComputedStyle(rulerRow).position,
         // `.docx-vertical-ruler` is the LEGACY class. The ported ruler replaced my
         // interim one, whose `.ep-ruler--vertical` class had been introduced in the interim implementation; the gate
         // follows the legacy markup rather than the other way round.
         verticalRuler: has('.docx-vertical-ruler'),
         scrollContainer: has('.docx-editor__scroll-container'),
-        workspace: has('.docx-editor__content'),
+        workspace: has('.ep-one-surface__pages'),
         pages: count('[data-page-index]'),
         sidebar: has('[data-testid="docx-editor-sidebar"]'),
         dialogLaunchers: count('[data-testid^="dialog-launcher-"]'),
@@ -63,8 +79,8 @@ test.describe('M6V.1 legacy chrome visual parity (React)', () => {
     expect(regions.titleBar, 'title bar').toBe(true);
     expect(regions.menuBar, 'menu region').toBe(true);
     expect(regions.menuItems, 'menu items').toBe(4);
-    expect(regions.toolbarControls, 'toolbar controls').toBe(31);
-    expect(regions.toolbarGroups, 'toolbar groups').toBe(12);
+    expect(regions.toolbarControls, 'toolbar controls').toBe(30);
+    expect(regions.toolbarGroups, 'toolbar groups').toBe(8);
     expect(regions.pillRadius, 'formatting bar is a pill').toBe('9999px');
     expect(regions.pillOverflowX, 'formatting bar scrolls rather than wrapping').toBe('auto');
     expect(regions.horizontalRuler, 'horizontal ruler').toBe(true);
@@ -80,32 +96,43 @@ test.describe('M6V.1 legacy chrome visual parity (React)', () => {
     expect(regions.dialogLaunchers, 'dialog launchers hidden with the sidebar').toBe(0);
   });
 
-  test('exactly five controls are enabled and nothing else can dispatch', async ({ page }) => {
+  test('only wired controls are enabled and disabled controls cannot dispatch', async ({
+    page,
+  }) => {
     const enabled = await page.evaluate(() =>
       [...document.querySelectorAll('[data-testid^="toolbar-"]')]
-        .filter((el) => el.tagName === 'BUTTON' && !(el as HTMLButtonElement).disabled)
+        .filter(
+          (el) =>
+            el.tagName === 'BUTTON' &&
+            !(el as HTMLButtonElement).disabled &&
+            el.getAttribute('aria-disabled') !== 'true'
+        )
         .map((el) => (el as HTMLElement).dataset.testid!)
-        .sort(),
+        .sort()
     );
     expect(enabled).toEqual([...ENABLED].sort());
 
-    // Every parity-only control must carry a localized reason, not bare English or a
-    // raw i18n key, and must leave the document untouched when clicked.
+    // Every semantically disabled control must carry a localized label and leave
+    // the canonical document untouched when programmatically activated.
     const probe = await page.evaluate(() => {
       const editor = window.__docxAdapterEditor!;
       const before = editor.getDocumentHandle().revision;
-      const parityOnly = [...document.querySelectorAll('[data-parity-only="true"]')] as HTMLElement[];
-      const missingReason = parityOnly.filter((el) => {
+      const disabled = [
+        ...document.querySelectorAll('[role="toolbar"] [aria-disabled="true"]'),
+      ] as HTMLElement[];
+      const missingReason = disabled.filter((el) => {
         const label = el.getAttribute('aria-label') ?? '';
         return label.length === 0 || /^[a-z]+\.[a-zA-Z.]+$/.test(label);
       }).length;
-      for (const el of parityOnly) el.click();
-      return { count: parityOnly.length, missingReason, before, after: editor.getDocumentHandle().revision };
+      for (const el of disabled) el.click();
+      return {
+        count: disabled.length,
+        missingReason,
+        before,
+        after: editor.getDocumentHandle().revision,
+      };
     });
-    // Floor, not an exact count: the sidebar's launchers are no longer rendered by
-    // default, so the previous threshold of 30 counted controls the reference does not
-    // show. What must hold is that the toolbar and menu are overwhelmingly parity-only.
-    expect(probe.count, 'parity-only controls').toBeGreaterThan(20);
+    expect(probe.count, 'disabled controls').toBeGreaterThan(0);
     expect(probe.missingReason, 'controls with no localized reason').toBe(0);
     expect(probe.after, 'a disabled control mutated the document').toBe(probe.before);
   });

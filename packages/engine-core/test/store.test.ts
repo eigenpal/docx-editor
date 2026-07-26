@@ -13,8 +13,16 @@ import {
   type DocOp,
   type ModelChange,
 } from '../src/store/index.ts';
-import { createEmptyModel, bodyStoryId, paragraphText, type ParagraphRecord } from '../src/model/index.ts';
+import {
+  createEmptyModel,
+  bodyStoryId,
+  paragraphText,
+  type PackageModel,
+  type ParagraphRecord,
+} from '../src/model/index.ts';
 import { ORIGIN_IDS } from '../src/registry/frozen-ids.ts';
+import { parseDocx } from '../src/package/docx/read.ts';
+import { writeDocx } from '../src/package/docx/write.ts';
 
 const HUMAN = ORIGIN_IDS.mutationHuman;
 
@@ -53,6 +61,113 @@ describe('4.2 synchronous transactions', () => {
     expect(r.revision).toBe(1);
     expect(seen).toHaveLength(1);
     expect(paragraphText(store.currentModel, p1)).toBe('Hi');
+  });
+
+  test('store construction and apply detach nested run-font inputs from caller mutation', () => {
+    const base = createEmptyModel();
+    const storyId = bodyStoryId(base);
+    const baseStory = base.stories.get(storyId)!;
+    const paragraph = baseStory.blocks[0] as ParagraphRecord;
+    const initialFonts = { ascii: 'Initial' };
+    const initial: PackageModel = {
+      ...base,
+      stories: new Map([
+        [
+          storyId,
+          {
+            ...baseStory,
+            blocks: [
+              {
+                ...paragraph,
+                runs: [{ text: 'initial', props: { fonts: initialFonts } }],
+              },
+            ],
+          },
+        ],
+      ]),
+    };
+    const store = new DocumentStore(initial);
+    initialFonts.ascii = 'Mutated after construction';
+    expect(
+      (store.currentModel.stories.get(storyId)!.blocks[0] as ParagraphRecord).runs[0].props?.fonts
+        ?.ascii
+    ).toBe('Initial');
+    const appliedFonts = { ascii: 'Applied' };
+    const result = store.transact(HUMAN, (ctx) =>
+      ctx.apply({
+        op: 'setParagraphRuns',
+        paragraphId: paragraph.id,
+        runs: [{ text: 'applied', props: { fonts: appliedFonts } }],
+      })
+    );
+    expect(result.ok).toBe(true);
+    appliedFonts.ascii = 'Mutated after apply';
+    const stored = store.currentModel.stories.get(storyId)!.blocks[0] as ParagraphRecord;
+    expect(stored.runs[0].props?.fonts?.ascii).toBe('Applied');
+  });
+
+  test('currentModel and publishDerived detach and freeze every new formatting reference', () => {
+    const base = createEmptyModel();
+    const storyId = bodyStoryId(base);
+    const paragraph = base.stories.get(storyId)!.blocks[0] as ParagraphRecord;
+    const styleFonts = { ascii: 'Style Initial' };
+    const defaultFonts = { hAnsi: 'Default Initial' };
+    const themeFonts = { majorLatin: 'Theme Initial' };
+    const initial: PackageModel = {
+      ...base,
+      styles: [
+        ...base.styles,
+        {
+          id: 'Custom',
+          name: 'Custom',
+          type: 'paragraph',
+          runProps: { fonts: styleFonts, color: '112233' },
+        },
+      ],
+      docDefaults: { runProps: { fonts: defaultFonts, sizeHalfPoints: 24 } },
+      themeFonts,
+    };
+    const store = new DocumentStore(initial);
+    styleFonts.ascii = 'Style Mutated';
+    defaultFonts.hAnsi = 'Default Mutated';
+    themeFonts.majorLatin = 'Theme Mutated';
+    expect(store.currentModel.styles.at(-1)?.runProps?.fonts?.ascii).toBe('Style Initial');
+    expect(store.currentModel.docDefaults?.runProps?.fonts?.hAnsi).toBe('Default Initial');
+    expect(store.currentModel.themeFonts?.majorLatin).toBe('Theme Initial');
+    expect(Object.isFrozen(store.currentModel.styles.at(-1)?.runProps?.fonts)).toBe(true);
+    expect(Object.isFrozen(store.currentModel.styles.at(-1)?.runProps)).toBe(true);
+    expect(Object.isFrozen(store.currentModel.docDefaults?.runProps?.fonts)).toBe(true);
+    expect(Object.isFrozen(store.currentModel.themeFonts)).toBe(true);
+
+    const derivedFonts = { eastAsia: 'Derived Initial' };
+    const derivedTheme = { minorLatin: 'Derived Theme' };
+    const derivedStory = store.currentModel.stories.get(storyId)!;
+    const derived: PackageModel = {
+      ...store.currentModel,
+      stories: new Map([
+        [
+          storyId,
+          {
+            ...derivedStory,
+            blocks: [
+              {
+                ...paragraph,
+                runs: [{ text: 'derived', props: { fonts: derivedFonts, color: '445566' } }],
+              },
+            ],
+          },
+        ],
+      ]),
+      themeFonts: derivedTheme,
+    };
+    store.publishDerived(derived, HUMAN);
+    derivedFonts.eastAsia = 'Derived Mutated';
+    derivedTheme.minorLatin = 'Derived Theme Mutated';
+    const published = store.currentModel.stories.get(storyId)!.blocks[0] as ParagraphRecord;
+    expect(published.runs[0].props?.fonts?.eastAsia).toBe('Derived Initial');
+    expect(store.currentModel.themeFonts?.minorLatin).toBe('Derived Theme');
+    expect(Object.isFrozen(published.runs[0].props?.fonts)).toBe(true);
+    expect(Object.isFrozen(published.runs[0].props)).toBe(true);
   });
 
   test('callback throw rolls back with no notification', () => {
@@ -96,6 +211,57 @@ describe('4.2 synchronous transactions', () => {
     const { store } = newStore();
     const r = store.transact(HUMAN, (c) => c.apply({ op: 'insertText', paragraphId: '', text: 'x' }));
     expect(r).toMatchObject({ ok: false, failure: { kind: 'validation' } });
+  });
+
+  test.each([
+    { fonts: { ascii: '' } },
+    { fonts: { ascii: 42 } },
+    { fonts: { unknownSlot: 'Face' } },
+    { fonts: { asciiTheme: 'notAThemeToken' } },
+    { color: 'red' },
+    { color: '#112233' },
+    { sizeHalfPoints: Number.NaN },
+    { sizeHalfPoints: Number.POSITIVE_INFINITY },
+    { sizeHalfPoints: 3277 },
+    { sizeHalfPoints: 12.5 },
+  ])('rejects invalid run formatting before commit: %o', (props) => {
+    const { store, p1 } = newStore();
+    const result = store.transact(HUMAN, (ctx) =>
+      ctx.apply({
+        op: 'setParagraphRuns',
+        paragraphId: p1,
+        runs: [{ text: 'x', props }],
+      } as unknown as DocOp)
+    );
+    expect(result.ok).toBe(false);
+    expect(store.currentRevision).toBe(0);
+  });
+
+  test('accepted DocOp formatting commits, serializes, and reopens unchanged', () => {
+    const { store, p1 } = newStore();
+    const props = {
+      fonts: {
+        ascii: 'Accepted Face',
+        hAnsiTheme: 'minorHAnsi' as const,
+        csTheme: 'majorBidi' as const,
+      },
+      color: 'A1B2C3',
+      sizeHalfPoints: 3276,
+    };
+    const result = store.transact(HUMAN, (ctx) =>
+      ctx.apply({
+        op: 'setParagraphRuns',
+        paragraphId: p1,
+        runs: [{ text: 'accepted', props }],
+      })
+    );
+    expect(result.ok).toBe(true);
+    const reopened = parseDocx(writeDocx(store.currentModel));
+    expect(reopened.ok).toBe(true);
+    if (!reopened.ok) return;
+    const paragraph = reopened.model.stories.get(bodyStoryId(reopened.model))!
+      .blocks[0] as ParagraphRecord;
+    expect(paragraph.runs[0].props).toEqual(props);
   });
 
   test('6.9: a projection or awareness origin cannot perform a canonical write (never enters history)', () => {

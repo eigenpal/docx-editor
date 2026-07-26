@@ -2,7 +2,7 @@ import { GlobalRegistrator } from '@happy-dom/global-registrator';
 if (!GlobalRegistrator.isRegistered) GlobalRegistrator.register();
 
 import { describe, expect, test } from 'bun:test';
-import { createEditor } from '../src/create-editor.ts';
+import { createTestEditor as createEditor } from './create-test-editor.ts';
 import type { EditorHost } from '@docx-editor.dev/core-contract/editor';
 import { createEmptyModel, writeDocx } from '@docx-editor.dev/engine-core';
 import { PAINTED_PAGES_ASSISTIVE_MARKER } from '@docx-editor.dev/engine-binding';
@@ -28,7 +28,11 @@ describe('editor accessibility projection integration', () => {
     scroll.append(pages, body);
     document.body.append(scroll);
 
-    const editor = createEditor({ host: hostWith(body, pages, scroll), document: writeDocx(createEmptyModel()), accessibleName: 'Etiqueta' });
+    const editor = createEditor({
+      host: hostWith(body, pages, scroll),
+      document: writeDocx(createEmptyModel()),
+      accessibleName: 'Etiqueta',
+    });
     editor.relayout();
     expect(pages.getAttribute('aria-hidden')).toBe('true');
     expect(body.querySelector('[data-docx-input-host-mount]')?.hasAttribute('role')).toBe(false);
@@ -49,7 +53,10 @@ describe('editor accessibility projection integration', () => {
     document.body.append(scroll);
 
     const editor = createEditor({
-      host: { ...hostWith(document.createElement('div'), pages, scroll), getBodyHostEl: () => null },
+      host: {
+        ...hostWith(document.createElement('div'), pages, scroll),
+        getBodyHostEl: () => null,
+      },
       document: writeDocx(createEmptyModel()),
     });
     editor.relayout();

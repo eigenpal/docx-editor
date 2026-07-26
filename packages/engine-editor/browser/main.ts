@@ -2,8 +2,13 @@
 
 import { createEditor } from '../src/create-editor.ts';
 import type { Editor } from '@docx-editor.dev/core-contract/editor';
-import type { AccessibilityObservation, SemanticSelection, SemanticTarget } from '@docx-editor.dev/core-contract/interaction';
+import type {
+  AccessibilityObservation,
+  SemanticSelection,
+  SemanticTarget,
+} from '@docx-editor.dev/core-contract/interaction';
 import { PAINTED_PAGES_ASSISTIVE_MARKER } from '@docx-editor.dev/engine-binding';
+import { createDeterministicLayoutShaping } from '@docx-editor.dev/engine-layout';
 import { paintDisplayPages } from './paint-display.ts';
 import {
   LOCALIZED_ACCESSIBLE_NAME,
@@ -13,7 +18,11 @@ import {
   createMixedReadOnlyFixture,
 } from './fixtures.ts';
 
-export type HarnessScenario = 'editable-named' | 'editable-unnamed' | 'read-only-mixed' | 'view-mode';
+export type HarnessScenario =
+  | 'editable-named'
+  | 'editable-unnamed'
+  | 'read-only-mixed'
+  | 'view-mode';
 
 export interface HarnessMountOptions {
   readonly scenario: HarnessScenario;
@@ -30,7 +39,11 @@ export interface HarnessDriver {
   mount(options: HarnessMountOptions): void;
   destroy(): void;
   relayout(options?: { sync?: boolean }): void;
-  setSelection(blockIndex: number, anchorOffset: number, headOffset?: number): { ok: boolean; code?: string; reason?: string };
+  setSelection(
+    blockIndex: number,
+    anchorOffset: number,
+    headOffset?: number
+  ): { ok: boolean; code?: string; reason?: string };
   focus(): { ok: boolean; code?: string; reason?: string };
   blur(): void;
   swapPagesContainer(): void;
@@ -64,7 +77,7 @@ function scrollHost(scroll: HTMLElement): void {
 function createHarnessDriver(
   scrollEl: HTMLElement,
   bodyEl: HTMLElement,
-  pagesEl: HTMLElement,
+  pagesEl: HTMLElement
 ): HarnessDriver {
   let editor: Editor | null = null;
   let pagesRef: HTMLElement = pagesEl;
@@ -84,7 +97,9 @@ function createHarnessDriver(
       cb();
       return () => {};
     },
-    onDisplay: (pages: Parameters<NonNullable<Parameters<typeof createEditor>[0]['host']['onDisplay']>>[0]) => {
+    onDisplay: (
+      pages: Parameters<NonNullable<Parameters<typeof createEditor>[0]['host']['onDisplay']>>[0]
+    ) => {
       paintDisplayPages(pagesRef, pages);
     },
   };
@@ -106,7 +121,11 @@ function createHarnessDriver(
       }));
   }
 
-  function textTarget(blockIndex: number, graphemeOffset: number, affinity: 'upstream' | 'downstream'): SemanticTarget {
+  function textTarget(
+    blockIndex: number,
+    graphemeOffset: number,
+    affinity: 'upstream' | 'downstream'
+  ): SemanticTarget {
     const entry = paragraphEntries()[blockIndex];
     if (!entry) throw new Error(`paragraph index ${blockIndex} is out of range`);
     return {
@@ -118,10 +137,18 @@ function createHarnessDriver(
     };
   }
 
-  function semanticSelection(blockIndex: number, anchorOffset: number, headOffset: number): SemanticSelection {
+  function semanticSelection(
+    blockIndex: number,
+    anchorOffset: number,
+    headOffset: number
+  ): SemanticSelection {
     const frameId = requireEditor().getInteractionFrame().id;
     const anchor = textTarget(blockIndex, anchorOffset, 'upstream');
-    const head = textTarget(blockIndex, headOffset, headOffset >= anchorOffset ? 'downstream' : 'upstream');
+    const head = textTarget(
+      blockIndex,
+      headOffset,
+      headOffset >= anchorOffset ? 'downstream' : 'upstream'
+    );
     return { frameId, scope: { kind: 'body' }, anchor, head };
   }
 
@@ -134,6 +161,10 @@ function createHarnessDriver(
     const common = {
       host,
       accessibilityAtomLabels: LOCALIZED_ATOM_LABELS,
+      // This harness verifies accessibility ownership, not font fidelity. It still
+      // supplies an explicit immutable shaping snapshot required by production
+      // createEditor, while the paired fidelity gate owns real HarfBuzz/font bytes.
+      layoutShaping: createDeterministicLayoutShaping(),
     };
 
     switch (options.scenario) {
@@ -184,11 +215,19 @@ function createHarnessDriver(
     setSelection(blockIndex, anchorOffset, headOffset = anchorOffset) {
       const selection = semanticSelection(blockIndex, anchorOffset, headOffset);
       const result = requireEditor().exec({ type: 'setSelection', range: selection });
-      return { ok: result.ok, code: result.ok ? undefined : result.code, reason: result.ok ? undefined : result.reason };
+      return {
+        ok: result.ok,
+        code: result.ok ? undefined : result.code,
+        reason: result.ok ? undefined : result.reason,
+      };
     },
     focus() {
       const outcome = requireEditor().focus();
-      return { ok: outcome.ok, code: outcome.ok ? undefined : outcome.code, reason: outcome.ok ? undefined : outcome.reason };
+      return {
+        ok: outcome.ok,
+        code: outcome.ok ? undefined : outcome.code,
+        reason: outcome.ok ? undefined : outcome.reason,
+      };
     },
     blur() {
       const mount = bodyEl.querySelector('[data-docx-input-host-mount]');
@@ -232,12 +271,13 @@ function createHarnessDriver(
     },
     countEditableOwners() {
       return bodyEl.querySelectorAll(
-        '[data-docx-input-host-mount][contenteditable="true"], [data-docx-input-host-mount] [contenteditable="true"]',
+        '[data-docx-input-host-mount][contenteditable="true"], [data-docx-input-host-mount] [contenteditable="true"]'
       ).length;
     },
     countLandmarkDocuments() {
       return (
-        bodyEl.querySelectorAll('[role="document"]').length + pagesRef.querySelectorAll('[role="document"]').length
+        bodyEl.querySelectorAll('[role="document"]').length +
+        pagesRef.querySelectorAll('[role="document"]').length
       );
     },
     pagesAssistiveMarker() {

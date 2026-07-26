@@ -599,3 +599,4 @@ export function paragraphGraphemeCountById(model: PackageModel, paragraphId: str
 }
 
 export const twipsToPx = (twips: number): number => twips / 15;
+export const halfPointsToPx = (halfPoints: number): number => twipsToPx(halfPoints * 10);

@@ -24,8 +24,8 @@ import {
 import {
   relatedStoryParts,
   parseStoryParagraphs,
-  parseStyles,
-  parseDocDefaults,
+  parseStylesAndDefaults,
+  parseThemeFonts,
   parseNumbering,
 } from '../wml-parts.ts';
 import {
@@ -170,16 +170,12 @@ export function parseDocx(bytes: Uint8Array, options: ParseOptions = {}): ParseR
         // least one run carries an rPr, so nothing is misattributed.
         const rPr = extractParagraphRunRPrCapsules(slice);
         if (rPr && rPr.length === block.runs.length && rPr.some((c) => c !== null)) {
-          // A run with an rPr capsule carries NO modeled props — the capsule holds the full rPr
-          // (incl. b/i). Dropping props keeps the run's identity consistent with the projection
-          // (which emits only the opaque mark) so split/join alignment holds.
+          // The capsule retains exact source bytes while modeled props retain the authored
+          // semantic values needed by style resolution. Serialization gives the capsule
+          // precedence, so retaining both does not materialize or rewrite resolved values.
           block = {
             ...block,
-            runs: block.runs.map((r, i) =>
-              rPr[i]
-                ? { text: r.text, ...(r.id !== undefined ? { id: r.id } : {}), rPrCapsule: rPr[i]! }
-                : r
-            ),
+            runs: block.runs.map((r, i) => (rPr[i] ? { ...r, rPrCapsule: rPr[i]! } : r)),
           };
         }
       }
@@ -241,8 +237,13 @@ export function parseDocx(bytes: Uint8Array, options: ParseOptions = {}): ParseR
     stories.set(sid, { id: sid, kind: spec.kind, blocks });
   }
 
-  const styles = parseStyles(zip.entries);
-  const docDefaults = parseDocDefaults(zip.entries);
+  const stylesResult = parseStylesAndDefaults(zip.entries);
+  if (!stylesResult.ok) return { ok: false, reason: 'xml-error', detail: stylesResult.detail };
+  const styles = stylesResult.styles;
+  const docDefaults = stylesResult.docDefaults;
+  const themeResult = parseThemeFonts(zip.entries);
+  if (!themeResult.ok) return { ok: false, reason: 'xml-error', detail: themeResult.detail };
+  const themeFonts = themeResult.fonts;
   const numbering = parseNumbering(zip.entries);
   // Baseline hash of every NON-BODY story, so the preserved export (which re-emits related-story
   // parts verbatim) can fail closed if one was edited rather than silently discard the edit.
@@ -261,6 +262,7 @@ export function parseDocx(bytes: Uint8Array, options: ParseOptions = {}): ParseR
     stories,
     styles: styles.length > 0 ? styles : base.styles,
     ...(docDefaults ? { docDefaults } : {}),
+    ...(themeFonts ? { themeFonts } : {}),
     numbering,
     identity: alloc.state(),
     ...(finalPreservation ? { preservation: finalPreservation } : {}),
@@ -282,14 +284,15 @@ type XmlElement = Extract<XmlNode, { type: 'element' }>;
 //   - w:pPr: only w:pStyle / w:numPr (any other prop — w:jc, w:spacing, a paragraph-mark w:rPr — is dropped);
 //   - w:r: only a w:rPr + w:t children (a w:tab/w:br is re-emitted as a literal char, and
 //     w:delText/w:drawing/w:object/w:fldChar/w:instrText/w:sym/... are dropped entirely);
-//   - w:rPr: only a w:rStyle or a bare (presence) w:b / w:i (w:u, w:color, an explicit-false toggle drift).
+//   - w:rPr: the flat path remains conservative and requires preservation for richer
+//     properties because it does not capture unknown children/attributes or lexical form.
 const FLAT_MODELED_PPR = new Set(['w:pStyle', 'w:numPr']);
 function runRPrDropsProps(rPr: XmlElement): boolean {
   for (const c of rPr.children) {
     if (!el(c)) continue;
     if (c.name === 'w:rStyle') continue;
     if ((c.name === 'w:b' || c.name === 'w:i') && Object.keys(c.attributes).length === 0) continue; // bare presence toggle
-    return true; // w:u, w:color, an explicit-false b/i (has w:val), or anything else = dropped/changed
+    return true; // richer/attributed rPr requires the preservation-aware path
   }
   return false;
 }

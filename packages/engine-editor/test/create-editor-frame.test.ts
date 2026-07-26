@@ -1,10 +1,11 @@
 // createEditor interaction-frame integration (interactive-paginated-editing 2.2–2.4).
 
 import { describe, expect, test } from 'bun:test';
-import { createEditor } from '../src/index.ts';
+import { createTestEditor as createEditor } from './create-test-editor.ts';
 import type { EditorHost } from '@docx-editor.dev/core-contract/editor';
 import type { InteractionHostMetrics } from '@docx-editor.dev/core-contract/interaction';
 import { createEmptyModel, writeDocx } from '@docx-editor.dev/engine-core';
+import { createDeterministicLayoutShaping } from '@docx-editor.dev/engine-layout';
 import { contentToClient } from '../src/coordinate-mapper.ts';
 import { frameMembersCoherent } from '../src/interaction-frame.ts';
 import { modelWith, publishFrameBundle, selectionForBlock } from './interaction-test-helpers.ts';
@@ -73,6 +74,47 @@ describe('createEditor interaction frame', () => {
     editor.destroy();
   });
 
+  test('publishes resource and configuration epochs from the immutable layout operation', () => {
+    const base = createDeterministicLayoutShaping();
+    const layoutShaping = {
+      ...base,
+      fonts: {
+        epoch: 17,
+        resolve: base.fonts.resolve,
+      },
+      operation: {
+        ...base.operation,
+        resourceEpoch: 17,
+        configEpoch: 23,
+        shapingHash: 'shape:fixture-provenance',
+      },
+    };
+    const editor = createEditor({
+      host: makeSyncHost(),
+      document: docxWithText(),
+      layoutShaping,
+    });
+    const frame = editor.getInteractionFrame();
+    expect(frame.revisions).toMatchObject({
+      resourceEpoch: 17,
+      configurationEpoch: 23,
+      shapingProvenance: {
+        extensionFingerprint: 'test:none',
+        shapingHash: expect.any(String),
+        producerVersion: expect.any(Number),
+      },
+    });
+    expect(frame.display[0]?.items[0]?.kind).toBe('text');
+    if (frame.display[0]?.items[0]?.kind === 'text') {
+      expect(frame.display[0].items[0].runs[0]?.producer).toMatchObject({
+        resourceEpoch: 17,
+        configEpoch: 23,
+        shapingHash: expect.any(String),
+      });
+    }
+    editor.destroy();
+  });
+
   test('loaded interaction frame carries model-derived semantic blocks coherent with display', () => {
     const editor = createEditor({ host: makeSyncHost(), document: docxBytes() });
     const frame = editor.getInteractionFrame();
@@ -80,7 +122,9 @@ describe('createEditor interaction frame', () => {
     expect(frame.semanticIndex.ownershipRegions.some((r) => r.kind === 'paragraph')).toBe(true);
     const painted = frame.display.flatMap((p) => p.items).filter((i) => i.kind === 'text');
     if (painted[0]?.kind === 'text') {
-      const blockIds = new Set(frame.semanticIndex.stories[0]!.blocks.map((b) => b.identity.blockId));
+      const blockIds = new Set(
+        frame.semanticIndex.stories[0]!.blocks.map((b) => b.identity.blockId)
+      );
       expect(blockIds.has(painted[0].semantic.identity.blockId)).toBe(true);
     }
     expect(frameMembersCoherent(frame)).toBe(true);

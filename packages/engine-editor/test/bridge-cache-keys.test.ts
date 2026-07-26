@@ -12,11 +12,14 @@
 
 import { afterEach, describe, expect, test } from 'bun:test';
 import {
+  FontResolutionError,
+  createFontResourceSnapshot,
+  createDeterministicLayoutShaping,
+  harfBuzzFontValidator,
   layoutBody,
-  HelveticaMetrics,
-  DeterministicMetrics,
   setGraphemeBoundary,
   resetGraphemeBoundary,
+  type LayoutShapingOptions,
 } from '@docx-editor.dev/engine-layout';
 import {
   createEmptyModel,
@@ -28,6 +31,7 @@ import {
 } from '@docx-editor.dev/engine-core';
 import { DisplayBridgeCache, toDisplayPages } from '../src/display-bridge.ts';
 import { LAYOUT } from './interaction-test-helpers.ts';
+import { createHarfBuzzLayoutOptions } from '../../engine-layout/test/fixtures/layout-shaping.ts';
 
 const HUMAN = ORIGIN_IDS.mutationHuman;
 
@@ -40,7 +44,9 @@ function modelOf(texts: readonly string[]): PackageModel {
   const storyId = bodyStoryId(model);
   const store = new DocumentStore(model);
   const first = (model.stories.get(storyId)!.blocks[0] as ParagraphRecord).id;
-  store.transact(HUMAN, (c) => c.apply({ op: 'insertText', paragraphId: first, text: texts[0] ?? '' }));
+  store.transact(HUMAN, (c) =>
+    c.apply({ op: 'insertText', paragraphId: first, text: texts[0] ?? '' })
+  );
   for (let i = 1; i < texts.length; i += 1) {
     const r = store.transact(HUMAN, (c) => c.apply({ op: 'appendParagraph', storyId }));
     const pid = r.ok ? r.modelChange.created[0]! : first;
@@ -49,14 +55,81 @@ function modelOf(texts: readonly string[]): PackageModel {
   return store.currentModel;
 }
 
-const bridge = (model: PackageModel, metrics: HelveticaMetrics | DeterministicMetrics, cache?: DisplayBridgeCache) =>
-  toDisplayPages(model, layoutBody(model, { ...LAYOUT, metrics }).pages, metrics, cache);
+function mixedFaceModel(): PackageModel {
+  const model = createEmptyModel();
+  const storyId = bodyStoryId(model);
+  const store = new DocumentStore(model);
+  const first = (model.stories.get(storyId)!.blocks[0] as ParagraphRecord).id;
+  store.transact(HUMAN, (commands) =>
+    commands.apply({
+      op: 'setParagraphRuns',
+      paragraphId: first,
+      runs: [{ text: 'regular face' }],
+    })
+  );
+  const appended = store.transact(HUMAN, (commands) =>
+    commands.apply({ op: 'appendParagraph', storyId })
+  );
+  const second = appended.ok ? appended.modelChange.created[0]! : first;
+  store.transact(HUMAN, (commands) =>
+    commands.apply({
+      op: 'setParagraphRuns',
+      paragraphId: second,
+      runs: [{ text: 'bold face', props: { bold: true } }],
+    })
+  );
+  return store.currentModel;
+}
+
+function harfBuzzShapingAtEpoch(
+  epoch: number,
+  options: { changeRegularBytes?: boolean } = {}
+): LayoutShapingOptions {
+  const base = createHarfBuzzLayoutOptions().shaping;
+  const regularRequest = { family: 'DejaVu Sans', weight: 400, style: 'normal' as const };
+  const boldRequest = { family: 'DejaVu Sans', weight: 700, style: 'normal' as const };
+  const regular = base.fonts.resolve(regularRequest);
+  const bold = base.fonts.resolve(boldRequest);
+  if (regular instanceof FontResolutionError || bold instanceof FontResolutionError) {
+    throw new Error('expected fixture fonts');
+  }
+  const regularSource = options.changeRegularBytes ? bold : regular;
+  const fonts = createFontResourceSnapshot({
+    epoch,
+    maxFontBytes: 2_000_000,
+    resources: [
+      {
+        request: regularRequest,
+        id: options.changeRegularBytes ? 'dejavu-sans-regular-changed' : regular.id,
+        bytes: regularSource.bytes,
+        hash: regularSource.hash,
+        faceIndex: regularSource.faceIndex,
+      },
+      {
+        request: boldRequest,
+        id: bold.id,
+        bytes: bold.bytes,
+        hash: bold.hash,
+        faceIndex: bold.faceIndex,
+      },
+    ],
+    validateFont: harfBuzzFontValidator,
+  });
+  return {
+    ...base,
+    fonts,
+    operation: { ...base.operation, resourceEpoch: epoch },
+  };
+}
+
+const bridge = (model: PackageModel, shaping: LayoutShapingOptions, cache?: DisplayBridgeCache) =>
+  toDisplayPages(model, layoutBody(model, { ...LAYOUT, shaping }).pages, { cache });
 
 const clusterShape = (r: ReturnType<typeof bridge>) =>
   JSON.stringify(
     r.display.flatMap((p) =>
-      p.items.filter((i) => i.kind === 'text').map((i) => (i.kind === 'text' ? i.clusters : [])),
-    ),
+      p.items.filter((i) => i.kind === 'text').map((i) => (i.kind === 'text' ? i.clusters : []))
+    )
   );
 
 const boundaryShape = (r: ReturnType<typeof bridge>) =>
@@ -71,8 +144,10 @@ const boundaryShape = (r: ReturnType<typeof bridge>) =>
  */
 const perCodeUnit = {
   segment(text: string) {
-    const out: { segment: string; index: number }[] = [];
-    for (let i = 0; i < text.length; i += 1) out.push({ segment: text.charAt(i), index: i });
+    const out: { index: number; text: string; utf16From: number; utf16To: number }[] = [];
+    for (let i = 0; i < text.length; i += 1) {
+      out.push({ index: i, text: text.charAt(i), utf16From: i, utf16To: i + 1 });
+    }
     return out;
   },
 };
@@ -96,41 +171,79 @@ describe('bridge cache keys cover each input individually', () => {
     // and the cluster key did not, so 'abéc 👍' served merged graphemes from cache and a
     // click landed on the wrong offset.
     const model = modelOf(['abéc 👍 more text here']);
-    const metrics = new HelveticaMetrics();
+    const shaping = createDeterministicLayoutShaping();
     const cache = new DisplayBridgeCache();
-    bridge(model, metrics, cache); // warm under the default boundary
+    bridge(model, shaping, cache); // warm under the default boundary
 
     setGraphemeBoundary(perCodeUnit as never);
-    expect(clusterShape(bridge(model, metrics, cache))).toBe(clusterShape(bridge(model, metrics)));
+    expect(clusterShape(bridge(model, shaping, cache))).toBe(clusterShape(bridge(model, shaping)));
   });
 
   test('HORIZONTAL BOUNDARY memo key covers the grapheme boundary', () => {
     const model = modelOf(['abéc 👍 more text here']);
-    const metrics = new HelveticaMetrics();
+    const shaping = createDeterministicLayoutShaping();
     const cache = new DisplayBridgeCache();
-    bridge(model, metrics, cache);
+    bridge(model, shaping, cache);
 
     setGraphemeBoundary(perCodeUnit as never);
-    expect(boundaryShape(bridge(model, metrics, cache))).toBe(boundaryShape(bridge(model, metrics)));
+    expect(boundaryShape(bridge(model, shaping, cache))).toBe(
+      boundaryShape(bridge(model, shaping))
+    );
   });
 
-  test('HORIZONTAL BOUNDARY memo key covers the metrics port', () => {
-    // NOT PINNED BY THIS TEST, and review showed it IS pinnable — I was wrong to record it
-    // as impossible. The two SHIPPED ports agree about
-    // `isWholeGraphemeHorizontalBoundary`, so neither discriminates. A port with
-    // `ligatures: 'opaque'` and a `ligatureInteriorCaret` does: on 'fi' Helvetica gives
-    // [0,1,2] and an opaque port gives [0,2], so warming under one and answering with the
-    // other returns a stale table when `metricsKey(metrics)` is deleted. The pattern already
-    // exists at `engine-editor/test/ligature-shaping.test.ts`. Writing that fixture is the
-    // remaining work; this test only shows the two shipped ports AGREE.
-    const model = modelOf(['alpha beta gamma delta']);
+  test('HORIZONTAL BOUNDARY memo key covers shaped cluster changes', () => {
+    const model = modelOf(['fi']);
     const cache = new DisplayBridgeCache();
-    const helvetica = new HelveticaMetrics();
-    const deterministic = new DeterministicMetrics();
-    bridge(model, helvetica, cache);
-    expect(boundaryShape(bridge(model, deterministic, cache))).toBe(
-      boundaryShape(bridge(model, deterministic)),
+    const deterministic = createDeterministicLayoutShaping();
+    const harfBuzz = createHarfBuzzLayoutOptions().shaping;
+    bridge(model, deterministic, cache);
+    expect(boundaryShape(bridge(model, harfBuzz, cache))).toBe(
+      boundaryShape(bridge(model, harfBuzz))
     );
+  });
+
+  test('CLUSTER key covers the complete shaping environment when geometry is unchanged', () => {
+    const model = modelOf(['iiii']);
+    const options = createHarfBuzzLayoutOptions();
+    const changed: LayoutShapingOptions = {
+      ...options.shaping,
+      environment: {
+        ...options.shaping.environment,
+        features: { ...options.shaping.environment.features, kern: 0 },
+      },
+    };
+    const coldBefore = bridge(model, options.shaping);
+    const coldAfter = bridge(model, changed);
+    const boxes = (result: ReturnType<typeof bridge>) =>
+      result.display.flatMap((page) =>
+        page.items
+          .filter((item) => item.kind === 'text')
+          .map((item) => (item.kind === 'text' ? item.box : null))
+      );
+    expect(boxes(coldAfter)).toEqual(boxes(coldBefore));
+
+    const cache = new DisplayBridgeCache();
+    bridge(model, options.shaping, cache);
+    bridge(model, changed, cache);
+    expect(cache.built).toBeGreaterThan(0);
+    expect(clusterShape(bridge(model, changed, cache))).toBe(clusterShape(coldAfter));
+  });
+
+  test('resource epoch restart reuses identical fonts and rebuilds only changed font dependents', () => {
+    const model = mixedFaceModel();
+    const cache = new DisplayBridgeCache();
+    const initial = harfBuzzShapingAtEpoch(1);
+    const identicalRestart = harfBuzzShapingAtEpoch(2);
+    const changedRegular = harfBuzzShapingAtEpoch(3, { changeRegularBytes: true });
+
+    bridge(model, initial, cache);
+    bridge(model, identicalRestart, cache);
+    expect(cache.built).toBe(0);
+    expect(cache.reused).toBe(2);
+
+    bridge(model, changedRegular, cache);
+    expect(cache.built).toBe(1);
+    expect(cache.reused).toBe(1);
   });
 
   test('published navigation traversal links are DEEPLY frozen', () => {
@@ -138,7 +251,7 @@ describe('bridge cache keys cover each input individually', () => {
     // bails on an already-frozen container — so one mutable object per block reached a
     // published frame. Review counted 140 on the 24-page fixture.
     const model = modelOf(['one', 'two', 'three']);
-    const result = bridge(model, new HelveticaMetrics(), new DisplayBridgeCache());
+    const result = bridge(model, createDeterministicLayoutShaping(), new DisplayBridgeCache());
     const links = result.navigationGeometry.traversalByBlockId;
     expect(Object.isFrozen(links)).toBe(true);
     const values = Object.values(links);

@@ -5,9 +5,9 @@
 // layout handler instead of editing layoutBody. All arithmetic stays integer/fixed-point, so
 // fingerprints are unchanged.
 
-import { type Block, registeredBlockKinds } from '@docx-editor.dev/engine-core';
+import { type Block, type PackageModel, registeredBlockKinds } from '@docx-editor.dev/engine-core';
 import type { DisplayItem } from './display-item.ts';
-import type { MetricsPort } from './metrics.ts';
+import type { LayoutShapingOptions } from './metrics.ts';
 import { type DependencyKey, keyId } from './dependency-graph.ts';
 
 /** The minimal builder a layout handler pushes into (the PageBuilder implements it). */
@@ -19,15 +19,16 @@ export interface LayoutBuilder {
 
 /** The mutable layout cursor + shared context a block-layout handler advances. */
 export interface BlockLayoutContext {
+  readonly model: PackageModel;
   readonly margin: number;
   readonly contentRight: number;
   readonly contentBottom: number;
-  readonly metrics: MetricsPort;
+  readonly shaping: LayoutShapingOptions;
   readonly builder: LayoutBuilder;
   x: number;
   y: number;
   /** Advance to the next line, breaking the page when it would overflow the content box. */
-  newLine(): void;
+  newLine(height: number): void;
   /** Lay out a nested block list through the SAME registry (a container capability recurses here). */
   layoutBlocks(blocks: readonly Block[]): void;
 }

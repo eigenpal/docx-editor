@@ -184,6 +184,7 @@ export function attachAdapterEventBridge(
   // in client pixels from the press, with a small slop so a shaky click still
   // counts as a click.
   let pressPoint: { x: number; y: number } | null = null;
+  let releasePoint: { x: number; y: number } | null = null;
   let pointerDragged = false;
 
   function on(type: string, listener: (event: any) => void, capture = false): void {
@@ -201,31 +202,41 @@ export function attachAdapterEventBridge(
     on(domType, (event: BridgePointerEvent) => {
       const frameId = port.getInteractionFrameId();
       if (!frameId) return;
+      let clientPoint = { x: event.clientX, y: event.clientY };
       // pointercancel carries no button state worth filtering; every other
       // pointer phase must be a primary-button gesture.
       if (domType !== 'pointercancel' && !isPrimaryPointer(event)) return;
 
       if (domType === 'pointerdown') {
         pressPoint = { x: event.clientX, y: event.clientY };
+        releasePoint = null;
         pointerDragged = false;
       } else if (domType === 'pointermove' && pressPoint) {
         if (movedBeyondSlop(pressPoint, event)) pointerDragged = true;
+      } else if (domType === 'pointerup') {
+        releasePoint = { x: event.clientX, y: event.clientY };
       } else if (domType === 'pointercancel') {
         // A cancelled gesture must clear drag state too. Leaving it set made the
         // NEXT genuine click get swallowed as "concluding a drag".
         pressPoint = null;
+        releasePoint = null;
         pointerDragged = false;
       } else if (domType === 'click') {
         const concludedDrag = pointerDragged;
+        if (releasePoint) clientPoint = releasePoint;
         pressPoint = null;
+        releasePoint = null;
         pointerDragged = false;
         if (concludedDrag) return;
       }
 
+      // Chromium may round MouseEvent.clientX/Y for the trailing `click` even
+      // when the preceding PointerEvent retained subpixel coordinates. Reuse
+      // pointerup so one physical press cannot resolve to two caret boundaries.
       dispatch({
         kind: intentKind,
         frameId,
-        clientPoint: { x: event.clientX, y: event.clientY },
+        clientPoint,
         ...(event.pointerId === undefined ? {} : { pointerId: event.pointerId }),
         ...(domType === 'click' ? { clickCount: normalizeClickCount(event.detail) } : {}),
         ...modifiersOf(event),

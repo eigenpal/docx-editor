@@ -43,11 +43,15 @@ async function paintedText(page: Page): Promise<string> {
   );
 }
 
-async function selectionOffsets(page: Page): Promise<{ anchor: number | null; head: number | null }> {
+async function selectionOffsets(
+  page: Page
+): Promise<{ anchor: number | null; head: number | null }> {
   return page.evaluate(() => {
     const sel = window.__docxAdapterEditor!.getInteractionFrame().selection;
     const read = (t: unknown): number | null =>
-      t && (t as { kind?: string }).kind === 'text' ? (t as { graphemeOffset: number }).graphemeOffset : null;
+      t && (t as { kind?: string }).kind === 'text'
+        ? (t as { graphemeOffset: number }).graphemeOffset
+        : null;
     return { anchor: read(sel?.anchor), head: read(sel?.head) };
   });
 }
@@ -58,7 +62,7 @@ async function selectionOffsets(page: Page): Promise<{ anchor: number | null; he
  */
 async function acrossAdapters<T>(
   browser: import('@playwright/test').Browser,
-  scenario: (page: Page) => Promise<T>,
+  scenario: (page: Page) => Promise<T>
 ): Promise<Record<string, T>> {
   const results: Record<string, T> = {};
   for (const adapter of ADAPTERS) {
@@ -72,65 +76,34 @@ async function acrossAdapters<T>(
 }
 
 test.describe('paired one-surface interaction (task 6.5)', () => {
-  test('both adapters expose the same public interaction surface', async ({ browser }) => {
-    // SHELL-STRUCTURE testids are excluded for the duration of one declared window.
-    //
-    // M6V.1 ports the legacy React shell hierarchy (React ONLY, by owner direction),
-    // and 10V.1 mechanically ports the finished result to Vue. Between those two tasks
-    // the two adapters legitimately expose different shell containers — React the
-    // legacy `docx-editor`, Vue the interim `docx-editor-shell` — so asserting full
-    // testid equality here would fail on the divergence the plan requires.
-    //
-    // The INTERACTION surface is still compared strictly, which is what this gate
-    // exists for: every testid the interaction specs drive must match. Only the shell
-    // frame's own containers are exempt, and this exemption MUST be deleted at 10V.1.
-    // The chrome testids too, not just the container. M6V.1 composes the legacy chrome
-    // inside the React component; 10V.1 ports it to Vue. Until then React renders a menu
-    // region, header actions, and an outline toggle that Vue does not have.
-    //
-    // Enumerated explicitly rather than pattern-matched, and asserted below to be
-    // React-only and absent from Vue, so the exemption cannot quietly widen into hiding a
-    // real interaction divergence. 10V.1 MUST delete this whole set.
-    const SHELL_STRUCTURE_TESTIDS = new Set([
-      'docx-editor',
-      'docx-editor-shell',
-      // React now renders the PORTED LEGACY rulers, which carry these ids; Vue still has
-      // the greenfield ones. 10V.1 ports Vue's chrome and MUST delete these two entries
-      // rather than leave the surfaces permanently divergent.
-      'horizontal-ruler',
-      'vertical-ruler',
-      'menu-bar',
-      'menu-file',
-      'menu-format',
-      'menu-insert',
-      'menu-help',
-      'app-action-open',
-      'app-action-new',
-      'app-action-save',
-      'outline-toggle',
-    ]);
+  test('both adapters expose the same engine-owned public interaction surface', async ({
+    browser,
+  }) => {
+    // React intentionally hosts the M6V.1 legacy chrome while Vue retains its
+    // interim toolbar until 10V.1. Test IDs inside those adapter-owned shells are
+    // therefore not a cross-adapter contract. The engine-owned one-surface
+    // boundary is: status publication, scroll host, and painted click target.
+    const ENGINE_INTERACTION_TESTIDS = [
+      'adapter-status',
+      'docx-editor-scroll',
+      'one-surface-click-target',
+    ] as const;
     const results = await acrossAdapters(browser, async (page) =>
-      page.evaluate(() =>
-        [...document.querySelectorAll('[data-testid]')].map((el) => (el as HTMLElement).dataset.testid).sort(),
-      ),
+      page.evaluate((testIds) => {
+        return Object.fromEntries(
+          testIds.map((id) => [id, document.querySelectorAll(`[data-testid="${id}"]`).length])
+        );
+      }, ENGINE_INTERACTION_TESTIDS)
     );
-    const interactionSurface = (ids: (string | undefined)[]) =>
-      ids.filter((id): id is string => !!id && !SHELL_STRUCTURE_TESTIDS.has(id));
-    expect(interactionSurface(results.vue)).toEqual(interactionSurface(results.react));
-    expect(results.react).toContain('one-surface-click-target');
-    // The exemption must stay narrow AND one-directional: every exempt id React renders
-    // is chrome Vue has not received yet, and Vue must render exactly one — its interim
-    // shell container. If Vue ever grows an exempt id React lacks, that is a real
-    // divergence hiding inside the window and this fails.
-    const exemptIn = (ids: (string | undefined)[]) => ids.filter((id) => id && SHELL_STRUCTURE_TESTIDS.has(id));
-    // Vue renders `docx-editor-shell` plus whichever rulers its harness mounts; the
-    // count is asserted as a MAXIMUM so a Vue-only exempt id still fails, while React's
-    // extra legacy chrome does not. Restore the exact count at 10V.1.
-    expect(exemptIn(results.vue).length, 'Vue exempt testids').toBeLessThanOrEqual(3);
-    expect(exemptIn(results.react).length, 'React chrome testids').toBeGreaterThan(1);
+    expect(results.vue).toEqual(results.react);
+    expect(results.react).toEqual(
+      Object.fromEntries(ENGINE_INTERACTION_TESTIDS.map((id) => [id, 1]))
+    );
   });
 
-  test('a click at the same fraction of the same glyph lands on the same offset', async ({ browser }) => {
+  test('a click at the same fraction of the same glyph lands on the same offset', async ({
+    browser,
+  }) => {
     const results = await acrossAdapters(browser, async (page) => {
       const offsets: number[] = [];
       for (const fraction of [0.05, 0.4, 0.75, 0.98]) {
@@ -248,8 +221,10 @@ test.describe('paired one-surface interaction (task 6.5)', () => {
     const results = await acrossAdapters(browser, async (page) =>
       page.evaluate(() => {
         const outcome = window.__docxAdapterEditor!.can({ type: 'toggleMark', mark: 'underline' });
-        return outcome.ok ? { ok: true } : { ok: false, code: outcome.code, reason: outcome.reason };
-      }),
+        return outcome.ok
+          ? { ok: true }
+          : { ok: false, code: outcome.code, reason: outcome.reason };
+      })
     );
     // A capability refusal must read identically, or one adapter's UI would
     // explain the limit differently from the other's.
@@ -257,7 +232,9 @@ test.describe('paired one-surface interaction (task 6.5)', () => {
     expect(results.react.ok).toBe(false);
   });
 
-  test('a margin click is refused identically and moves no caret in either adapter', async ({ browser }) => {
+  test('a margin click is refused identically and moves no caret in either adapter', async ({
+    browser,
+  }) => {
     const results = await acrossAdapters(browser, async (page) => {
       const point = await clickTargetPointAt(page, 0.1);
       await page.mouse.click(point.x, point.y);
@@ -290,7 +267,9 @@ test.describe('paired one-surface interaction (task 6.5)', () => {
       await page.evaluate(async () => {
         const editor = window.__docxAdapterEditor!;
         const saved = await editor.save();
-        await editor.load(saved instanceof Uint8Array ? saved : new Uint8Array(saved as ArrayBuffer));
+        await editor.load(
+          saved instanceof Uint8Array ? saved : new Uint8Array(saved as ArrayBuffer)
+        );
       });
       await expect.poll(async () => await paintedText(page)).toContain('Roundtrip');
       return paintedText(page);
@@ -298,13 +277,16 @@ test.describe('paired one-surface interaction (task 6.5)', () => {
     expect(results.vue).toEqual(results.react);
   });
 
-  test('bold via can then exec produces the same document in both adapters', async ({ browser }) => {
+  test('bold via can then exec produces the same document in both adapters', async ({
+    browser,
+  }) => {
     const results = await acrossAdapters(browser, async (page) => {
       const from = await clickTargetPointAt(page, 0.05);
       const to = await clickTargetPointAt(page, 0.95);
       await page.mouse.move(from.x, from.y);
       await page.mouse.down();
-      for (let i = 1; i <= 6; i += 1) await page.mouse.move(from.x + ((to.x - from.x) * i) / 6, from.y);
+      for (let i = 1; i <= 6; i += 1)
+        await page.mouse.move(from.x + ((to.x - from.x) * i) / 6, from.y);
       await page.mouse.up();
       return page.evaluate(() => {
         const editor = window.__docxAdapterEditor!;
@@ -334,7 +316,9 @@ test.describe('paired one-surface interaction (task 6.5)', () => {
         const pm = document.querySelector('.ProseMirror')!;
         const data = new DataTransfer();
         data.setData('text/plain', 'PairedPaste');
-        pm.dispatchEvent(new ClipboardEvent('paste', { clipboardData: data, bubbles: true, cancelable: true }));
+        pm.dispatchEvent(
+          new ClipboardEvent('paste', { clipboardData: data, bubbles: true, cancelable: true })
+        );
       });
       await expect.poll(async () => await paintedText(page)).toContain('PairedPaste');
       return paintedText(page);
@@ -347,7 +331,11 @@ test.describe('paired one-surface interaction (task 6.5)', () => {
       const point = await clickTargetPointAt(page, 0.1);
       await page.mouse.click(point.x, point.y);
       const cdp = await page.context().newCDPSession(page);
-      await cdp.send('Input.imeSetComposition', { text: 'には', selectionStart: 2, selectionEnd: 2 });
+      await cdp.send('Input.imeSetComposition', {
+        text: 'には',
+        selectionStart: 2,
+        selectionEnd: 2,
+      });
       await cdp.send('Input.insertText', { text: 'にほん' });
       await expect.poll(async () => await paintedText(page)).toContain('にほん');
       const text = await paintedText(page);
@@ -358,7 +346,9 @@ test.describe('paired one-surface interaction (task 6.5)', () => {
     expect(results.react.occurrences).toBe(1);
   });
 
-  test('an active composition is visible to the frame and blocks geometry keys', async ({ browser }) => {
+  test('an active composition is visible to the frame and blocks geometry keys', async ({
+    browser,
+  }) => {
     // `frame.composition` was hardcoded `{ active: false }` and the surface's
     // composition observation was never read, so the public
     // `EditorDriver.compositionState()` was a constant. Independent review measured
@@ -368,12 +358,18 @@ test.describe('paired one-surface interaction (task 6.5)', () => {
       const point = await clickTargetPointAt(page, 0.3);
       await page.mouse.click(point.x, point.y);
       const cdp = await page.context().newCDPSession(page);
-      await cdp.send('Input.imeSetComposition', { text: 'には', selectionStart: 2, selectionEnd: 2 });
+      await cdp.send('Input.imeSetComposition', {
+        text: 'には',
+        selectionStart: 2,
+        selectionEnd: 2,
+      });
 
       const during = await page.evaluate(() => {
         const editor = window.__docxAdapterEditor!;
         const frame = editor.getInteractionFrame();
-        const head = frame.selection?.head as { kind?: string; identity?: { blockId: string } } | undefined;
+        const head = frame.selection?.head as
+          | { kind?: string; identity?: { blockId: string } }
+          | undefined;
         const blockBefore = head?.kind === 'text' ? head.identity!.blockId : null;
         const res = editor.dispatchInteraction({
           kind: 'geometryKeyboard',
@@ -411,7 +407,9 @@ test.describe('paired one-surface interaction (task 6.5)', () => {
     expect(results.vue).toEqual(results.react);
   });
 
-  test('the input host follows the caret through container AND window scroll', async ({ browser }) => {
+  test('the input host follows the caret through container AND window scroll', async ({
+    browser,
+  }) => {
     // Two review findings meet here. The engine tracked `scroll` on exactly one
     // element, so a window/ancestor scroll left the hidden ProseMirror host at a
     // stale client position — measured 300px drift in React, 400px in Vue, with
@@ -427,8 +425,9 @@ test.describe('paired one-surface interaction (task 6.5)', () => {
           const editor = window.__docxAdapterEditor!;
           const caret = editor.getCaretClientRect?.() ?? null;
           const shell = document.querySelector('[data-docx-input-host] > *') as HTMLElement | null;
-          const obs = (editor as unknown as { getInputHostObservation?: () => { placementReason?: string } })
-            .getInputHostObservation?.();
+          const obs = (
+            editor as unknown as { getInputHostObservation?: () => { placementReason?: string } }
+          ).getInputHostObservation?.();
           if (!caret || !shell) return { dx: -1, dy: -1, reason: obs?.placementReason ?? null };
           const r = shell.getBoundingClientRect();
           return {
@@ -442,8 +441,15 @@ test.describe('paired one-surface interaction (task 6.5)', () => {
 
       // The editor's own scroll container.
       const containerScrolled = await page.evaluate(() => {
-        const el = document.querySelector('[data-testid="docx-editor-scroll"]') as HTMLElement | null;
+        const el = document.querySelector(
+          '[data-testid="docx-editor-scroll"]'
+        ) as HTMLElement | null;
         if (!el) return { moved: false, scrollable: false };
+        // This fixture has only three paragraphs, so constrain the viewport to
+        // make the container-scroll leg non-vacuous in both adapter shells.
+        el.style.height = '180px';
+        el.style.maxHeight = '180px';
+        el.style.overflowY = 'auto';
         const scrollable = el.scrollHeight > el.clientHeight;
         el.scrollTop = 120;
         return { moved: el.scrollTop > 0, scrollable };

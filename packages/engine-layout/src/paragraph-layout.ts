@@ -1,539 +1,762 @@
-// Paragraph-wide tokenization, wrapping, and caret measurement (task 5.5).
-// Run boundaries affect paint slices only — never line breaks, lineId, or caret edges.
-
-import type { ParagraphRecord, RunRecord } from '@docx-editor.dev/engine-core';
-import type { MetricsPort } from './metrics.ts';
-import type { CaretEdgeItem, DisplayItem, TextItem, VisualLineIdentity } from './display-item.ts';
-import { LineTracker } from './line-tracker.ts';
-import { segmentGraphemes, utf16OffsetToGrapheme } from './grapheme.ts';
 import {
-  isCumulativeGeometryTrustedFromLineOrigin,
-  isWholeGraphemeHorizontalBoundary,
-} from './horizontal-boundary.ts';
-import { capsuleToggle } from './capsule-run-style.ts';
+  createStyleResolver,
+  type PackageModel,
+  type ParagraphRecord,
+  type RunProps,
+} from '@docx-editor.dev/engine-core';
+import { FontResolutionError, type FontRequest, type ResolvedFont } from './font-resource.ts';
+import type { CaretEdgeItem, DisplayItem, TextItem, VisualLineIdentity } from './display-item.ts';
+import { segmentGraphemes, utf16OffsetToGrapheme } from './grapheme.ts';
+import { LineTracker } from './line-tracker.ts';
+import {
+  createShapingEnvironment,
+  shapingEnvironmentFingerprint,
+  shapingEnvironmentFingerprintInputs,
+  type ShapeInput,
+  type ShapedRun,
+  type TextDirection,
+} from './shaped-run.ts';
+import type { LayoutShapingOptions } from './metrics.ts';
+import { bidiAlgorithm, type BidiEmbeddingLevels } from './bidi.ts';
+import { itemizeScriptFontSlots, type FontSlot } from './script-itemization.ts';
 
 export interface ParagraphLayoutSink {
   push(item: DisplayItem): void;
   currentPageIndex(): number;
 }
 
-type FlowToken = {
-  readonly kind: 'word' | 'whitespace';
-  readonly utf16From: number;
-  readonly utf16To: number;
+interface ResolvedSpan {
+  readonly from: number;
+  readonly to: number;
   readonly text: string;
-};
-
-/** One visual line's worth of positioned text, before it is split at style boundaries. */
-type PlacedLine = {
-  readonly utf16From: number;
-  readonly utf16To: number;
-  readonly x: number;
-  readonly y: number;
-  readonly line: VisualLineIdentity;
-};
-
-/** `w:tab` parses to U+0009; see `emitPaintSlices` for why it ends a paint run. */
-const TAB = '\t';
-
-function paragraphFullText(p: ParagraphRecord): string {
-  return p.runs.map((r) => r.text).join('');
+  readonly props: RunProps;
+  readonly request: FontRequest;
+  readonly font: ResolvedFont;
+  readonly direction: TextDirection;
+  readonly bidiLevel: number;
+  readonly script: string;
 }
 
-function tokenizeParagraph(fullText: string): FlowToken[] {
-  const tokens: FlowToken[] = [];
-  const parts = fullText.split(/(\s+)/);
+interface ShapedSlice {
+  readonly from: number;
+  readonly to: number;
+  readonly span: ResolvedSpan;
+  readonly run: ShapedRun;
+  readonly input: ShapeInput;
+  readonly width: number;
+  readonly height: number;
+}
+
+const DEFAULT_TEXT_COLOR = '000000';
+
+const shapingFingerprint = (
+  input: ShapeInput,
+  run: ShapedRun,
+  color: string,
+  producer: LayoutShapingOptions['operation']
+): string => {
+  return JSON.stringify([
+    input.fontSizeHalfPoints,
+    input.bidiLevel,
+    color,
+    shapingEnvironmentFingerprint(input.environment),
+    run.fontSpans.map((span) => ({
+      glyphStart: span.glyphStart,
+      glyphEnd: span.glyphEnd,
+      fallbackIndex: span.fallbackIndex,
+      font: {
+        identity: span.font.identity,
+        id: span.font.id,
+        family: span.font.family,
+        request: span.font.request,
+        hash: span.font.hash,
+        faceIndex: span.font.faceIndex,
+        byteLength: span.font.byteLength,
+        substitution: span.font.substitution,
+      },
+    })),
+    producer.configEpoch,
+    producer.extensionFingerprint,
+    producer.shapingHash,
+    producer.producerVersion,
+  ]);
+};
+
+const glyphClusters = (text: string, run: ShapedRun) => {
+  const segments = segmentGraphemes(text);
+  const graphemeAtUtf16 = new Int32Array(text.length + 1);
+  segments.forEach((segment, index) => {
+    for (let offset = segment.utf16From; offset < segment.utf16To; offset += 1) {
+      graphemeAtUtf16[offset] = index;
+    }
+  });
+  graphemeAtUtf16[text.length] = segments.length;
+  return Object.freeze(
+    run.clusters.map((cluster) =>
+      Object.freeze({
+        utf16From: cluster.textStart,
+        utf16To: cluster.textEnd,
+        graphemeFrom: graphemeAtUtf16[cluster.textStart]!,
+        graphemeTo: graphemeAtUtf16[cluster.textEnd]!,
+        glyphFrom: cluster.glyphStart,
+        glyphTo: cluster.glyphEnd,
+        advance: cluster.advance,
+        caretEdges: cluster.caretEdges,
+        fontSpan: cluster.fontSpan,
+      })
+    )
+  );
+};
+
+interface Atom {
+  readonly from: number;
+  readonly to: number;
+  readonly width: number;
+  readonly whitespace: boolean;
+}
+
+const paragraphText = (paragraph: ParagraphRecord): string =>
+  paragraph.runs.map((run) => run.text).join('');
+
+const familyFor = (props: RunProps, slot: FontSlot, fallback: string): string => {
+  if (slot === 'cs') return props.fonts?.cs ?? props.fonts?.hAnsi ?? props.fonts?.ascii ?? fallback;
+  if (slot === 'eastAsia')
+    return props.fonts?.eastAsia ?? props.fonts?.hAnsi ?? props.fonts?.ascii ?? fallback;
+  if (slot === 'hAnsi') return props.fonts?.hAnsi ?? props.fonts?.ascii ?? fallback;
+  return props.fonts?.ascii ?? props.fonts?.hAnsi ?? fallback;
+};
+
+const spanKey = (span: Omit<ResolvedSpan, 'from' | 'to' | 'text' | 'font'>): string =>
+  JSON.stringify([
+    span.request.family,
+    span.request.weight,
+    span.request.style,
+    span.props.sizeHalfPoints,
+    span.props.color,
+    span.direction,
+    span.bidiLevel,
+    span.script,
+  ]);
+
+function resolveSpans(
+  model: PackageModel,
+  paragraph: ParagraphRecord,
+  shaping: LayoutShapingOptions,
+  embedding: BidiEmbeddingLevels
+): readonly ResolvedSpan[] {
+  const resolver = createStyleResolver(model);
+  const spans: ResolvedSpan[] = [];
+  const text = paragraphText(paragraph);
+  const scriptItems = itemizeScriptFontSlots(text, 0, embedding);
   let offset = 0;
-  for (const part of parts) {
-    if (part.length === 0) continue;
-    tokens.push({
-      kind: /^\s+$/.test(part) ? 'whitespace' : 'word',
-      utf16From: offset,
-      utf16To: offset + part.length,
-      text: part,
+  let scriptIndex = 0;
+  for (const run of paragraph.runs) {
+    if (run.text.length === 0) continue;
+    const runFrom = offset;
+    const runTo = runFrom + run.text.length;
+    const resolvedProps = resolver.runProps(paragraph, run);
+    const props: RunProps = Object.freeze({
+      ...resolvedProps,
+      sizeHalfPoints: resolvedProps.sizeHalfPoints ?? shaping.defaultFont.sizeHalfPoints,
+      color: resolvedProps.color ?? DEFAULT_TEXT_COLOR,
+      bold: resolvedProps.bold === true,
+      italic: resolvedProps.italic === true,
     });
-    offset += part.length;
+    while (scriptIndex < scriptItems.length && scriptItems[scriptIndex]!.to <= runFrom) {
+      scriptIndex += 1;
+    }
+    for (let index = scriptIndex; index < scriptItems.length; index += 1) {
+      const item = scriptItems[index]!;
+      if (item.from >= runTo) break;
+      const from = Math.max(runFrom, item.from);
+      const to = Math.min(runTo, item.to);
+      if (to <= from) continue;
+      const { bidiLevel, direction, script } = item;
+      const segmentText = text.slice(from, to);
+      const request: FontRequest = {
+        family: familyFor(props, item.slot, shaping.defaultFont.family),
+        weight: props.bold === true ? 700 : 400,
+        style: props.italic === true ? 'italic' : 'normal',
+      };
+      const unresolved = {
+        props,
+        request,
+        direction,
+        bidiLevel,
+        script,
+      };
+      const previous = spans.at(-1);
+      if (previous && previous.to === from && spanKey(previous) === spanKey(unresolved)) {
+        spans[spans.length - 1] = {
+          ...previous,
+          to,
+          text: previous.text + segmentText,
+        };
+      } else {
+        const font = shaping.fonts.resolve(request);
+        if (font instanceof FontResolutionError) throw font;
+        spans.push({
+          from,
+          to,
+          text: segmentText,
+          props,
+          request,
+          font,
+          direction,
+          bidiLevel,
+          script,
+        });
+      }
+    }
+    while (scriptIndex < scriptItems.length && scriptItems[scriptIndex]!.to <= runTo) {
+      scriptIndex += 1;
+    }
+    offset += run.text.length;
   }
-  return tokens;
+  return spans;
 }
 
-/**
- * Resolved bold/italic per RunRecord, memoized.
- *
- * `runStyleAt` is called once per UTF-16 code unit during layout, and a
- * preserved run's `rPrCapsule` is verbatim file bytes with no size bound.
- * Resolving the capsule inside that loop made layout cost `chars x capsuleBytes`,
- * and the zip limits admit a ~32 MB capsule inside a ~160 KB .docx. A WeakMap
- * keyed on the run makes it once per run instead.
- *
- * The property that matters is that the capsule cost is now CONSTANT in paragraph
- * length, not that it is small. Measured at this commit with an ~8 MB capsule, the
- * added cost is flat across a 20x range of text: 300 chars +402 ms, 1,200 chars
- * +406 ms, 6,000 chars +402 ms. An 8 MB capsule still costs ~400 ms once, which is
- * a real but bounded cost paid per distinct run.
- *
- * Earlier revisions of this comment and of `layout-cost.test.ts` carried pre-fix
- * figures that cannot both be true (144,956 ms at 2 MB versus 990 ms at 8 MB —
- * four times the data for 1/146th the time). Neither is reproducible now and
- * neither is relied on; the numbers above were measured directly.
- */
-const runStyleCache = new WeakMap<RunRecord, { bold: boolean; italic: boolean }>();
+const shapeInput = (
+  span: ResolvedSpan,
+  text: string,
+  shaping: LayoutShapingOptions
+): ShapeInput => ({
+  text,
+  fontSizeHalfPoints: span.props.sizeHalfPoints ?? shaping.defaultFont.sizeHalfPoints,
+  bidiLevel: span.bidiLevel,
+  environment: createShapingEnvironment({
+    ...shaping.environment,
+    font: span.font,
+    direction: span.direction,
+    script: span.script,
+    fallbackOrder: [],
+  }),
+});
 
-function resolveRunStyle(run: RunRecord): { bold: boolean; italic: boolean } {
-  const cached = runStyleCache.get(run);
-  if (cached) return cached;
-  // A preserved run carries its formatting verbatim in rPrCapsule rather than in
-  // props, so reading props alone paints every reopened run unstyled.
-  const resolved = {
-    bold: run.props?.bold === true || capsuleToggle(run.rPrCapsule, 'w:b'),
-    italic: run.props?.italic === true || capsuleToggle(run.rPrCapsule, 'w:i'),
+const runWidth = (run: ShapedRun): number =>
+  run.glyphs.reduce((width, glyph) => width + glyph.advanceX, 0);
+
+const runHeight = (run: ShapedRun): number =>
+  run.metrics.ascent + run.metrics.descent + run.metrics.lineGap;
+
+export function defaultShapedLineHeight(shaping: LayoutShapingOptions): number {
+  const request: FontRequest = {
+    family: shaping.defaultFont.family,
+    weight: 400,
+    style: 'normal',
   };
-  runStyleCache.set(run, resolved);
-  return resolved;
+  const font = shaping.fonts.resolve(request);
+  if (font instanceof FontResolutionError) throw font;
+  const span: ResolvedSpan = {
+    from: 0,
+    to: 1,
+    text: ' ',
+    props: {},
+    request,
+    font,
+    direction: 'ltr',
+    bidiLevel: 0,
+    script: 'Latn',
+  };
+  return Math.max(1, runHeight(shaping.shaper.shape(shapeInput(span, ' ', shaping))));
 }
 
-/**
- * Per-paragraph run start offsets, so locating the run covering a UTF-16 offset
- * is a binary search rather than a walk from run 0.
- *
- * `runStyleAt` and `charAt` are each called once per code unit, and both used to
- * scan `p.runs` from the beginning, making layout O(chars x runs) on top of the
- * segmentation amplifier. Keyed on the paragraph record, which is immutable.
- */
-const runIndexCache = new WeakMap<ParagraphRecord, { starts: Int32Array }>();
+function shapeSlice(
+  span: ResolvedSpan,
+  from: number,
+  to: number,
+  shaping: LayoutShapingOptions
+): ShapedSlice {
+  const text = span.text.slice(from - span.from, to - span.from);
+  const input = shapeInput(span, text, shaping);
+  const run = shaping.shaper.shape(input);
+  return {
+    from,
+    to,
+    span,
+    run,
+    input,
+    width: runWidth(run),
+    height: runHeight(run),
+  };
+}
 
-function runStartsOf(p: ParagraphRecord): Int32Array {
-  const cached = runIndexCache.get(p);
-  if (cached) return cached.starts;
-  const starts = new Int32Array(p.runs.length + 1);
-  let cursor = 0;
-  for (let i = 0; i < p.runs.length; i += 1) {
-    starts[i] = cursor;
-    cursor += p.runs[i]!.text.length;
+function shapeRange(
+  spans: readonly ResolvedSpan[],
+  from: number,
+  to: number,
+  shaping: LayoutShapingOptions
+): readonly ShapedSlice[] {
+  const slices: ShapedSlice[] = [];
+  for (const span of spans) {
+    const sliceFrom = Math.max(from, span.from);
+    const sliceTo = Math.min(to, span.to);
+    if (sliceTo > sliceFrom) slices.push(shapeSlice(span, sliceFrom, sliceTo, shaping));
   }
-  starts[p.runs.length] = cursor;
-  runIndexCache.set(p, { starts });
-  return starts;
+  return slices;
 }
 
-/** Index of the run covering `utf16Offset`, or -1 when past the end. */
-function runIndexAt(p: ParagraphRecord, utf16Offset: number): number {
-  const starts = runStartsOf(p);
-  // `Number.isInteger` first: `NaN < 0` and `NaN >= total` are BOTH false, so a
-  // non-finite offset fell through this guard and returned run 0. With an empty
-  // `p.runs` that made `runStyleAt` dereference `p.runs[0]`, throwing where the
-  // pre-fix linear scan had returned a neutral style. Not reachable from a current
-  // call site (every offset is a derived integer), fixed as defence in depth.
-  if (!Number.isInteger(utf16Offset)) return -1;
-  if (utf16Offset < 0 || utf16Offset >= starts[p.runs.length]!) return -1;
-  let lo = 0;
-  let hi = p.runs.length - 1;
-  while (lo < hi) {
-    const mid = (lo + hi + 1) >> 1;
-    if (starts[mid]! <= utf16Offset) lo = mid;
-    else hi = mid - 1;
+function splitTabsForPaint(
+  slices: readonly ShapedSlice[],
+  shaping: LayoutShapingOptions
+): readonly ShapedSlice[] {
+  const out: ShapedSlice[] = [];
+  for (const slice of slices) {
+    let start = 0;
+    while (start < slice.run.text.length) {
+      const tab = slice.run.text[start] === '\t';
+      let end = start + 1;
+      while (end < slice.run.text.length && (slice.run.text[end] === '\t') === tab) end += 1;
+      out.push(shapeSlice(slice.span, slice.from + start, slice.from + end, shaping));
+      start = end;
+    }
   }
-  return lo;
+  return out;
 }
 
-function runStyleAt(p: ParagraphRecord, utf16Offset: number): { bold: boolean; italic: boolean } {
-  const i = runIndexAt(p, utf16Offset);
-  if (i === -1) return { bold: false, italic: false };
-  return resolveRunStyle(p.runs[i]!);
-}
-
-function charAt(p: ParagraphRecord, utf16Offset: number): string {
-  const i = runIndexAt(p, utf16Offset);
-  if (i !== -1) {
-    const run = p.runs[i]!;
-    return run.text[utf16Offset - runStartsOf(p)[i]!] ?? ' ';
-  }
-  return ' ';
-}
-
-function advanceRangeWidth(
-  metrics: MetricsPort,
-  p: ParagraphRecord,
+function visualOrder(
+  slices: readonly ShapedSlice[],
+  text: string,
+  embedding: BidiEmbeddingLevels,
   from: number,
   to: number
-): number {
-  let width = 0;
-  for (let i = from; i < to; i += 1) {
-    const style = runStyleAt(p, i);
-    width += metrics.advance(charAt(p, i), style.bold, style.italic);
+): readonly ShapedSlice[] {
+  if (slices.length < 2 || to <= from) return slices;
+  const logicalAtVisual = Array.from({ length: to - from }, (_, index) => from + index);
+  for (const [flipFrom, flipTo] of bidiAlgorithm.getReorderSegments(
+    text,
+    embedding,
+    from,
+    to - 1
+  )) {
+    const localFrom = Math.max(0, flipFrom - from);
+    const localTo = Math.min(logicalAtVisual.length - 1, flipTo - from);
+    if (localTo < localFrom) continue;
+    const reversed = logicalAtVisual.slice(localFrom, localTo + 1).reverse();
+    logicalAtVisual.splice(localFrom, reversed.length, ...reversed);
   }
-  return width;
+  const visualPosition = new Map<number, number>();
+  logicalAtVisual.forEach((logical, visual) => visualPosition.set(logical, visual));
+  const firstVisualPosition = (slice: ShapedSlice): number => {
+    let first = Number.POSITIVE_INFINITY;
+    for (let logical = slice.from; logical < slice.to; logical += 1) {
+      const visual = visualPosition.get(logical);
+      if (visual !== undefined && visual < first) first = visual;
+    }
+    return first;
+  };
+  return [...slices].sort((left, right) => {
+    return firstVisualPosition(left) - firstVisualPosition(right);
+  });
 }
 
-/**
- * UTF-16 offset of a grapheme boundary, read from the paragraph's already-computed
- * segments.
- *
- * Takes the segments rather than re-deriving them: this is called once per caret
- * edge, i.e. once per character, and re-entering `segmentGraphemes` here is what
- * made layout quadratic once the memo holding the paragraph text was evicted.
- *
- * Reads `utf16From`, not `index`. It previously returned `index` — the grapheme
- * index — into a field named `utf16Offset`. The two coincide for ASCII, so the
- * whole test corpus agreed; they diverge for any astral or combining text, which
- * published a wrong UTF-16 offset on every caret edge of such a paragraph.
- */
-function utf16AtGraphemeBoundary(
-  segments: readonly { readonly utf16From: number }[],
-  fullTextLength: number,
-  graphemeOffset: number
-): number {
-  if (graphemeOffset >= segments.length) return fullTextLength;
-  return segments[graphemeOffset]?.utf16From ?? fullTextLength;
+function legalBoundaries(text: string, slices: readonly ShapedSlice[]): readonly number[] {
+  const grapheme = new Set<number>([0, text.length]);
+  for (const segment of segmentGraphemes(text)) {
+    grapheme.add(segment.utf16From);
+    grapheme.add(segment.utf16To);
+  }
+  const cluster = new Set<number>([0, text.length]);
+  for (const slice of slices) {
+    for (const shapedCluster of slice.run.clusters) {
+      cluster.add(slice.from + shapedCluster.textStart);
+      cluster.add(slice.from + shapedCluster.textEnd);
+    }
+  }
+  return [...grapheme].filter((offset) => cluster.has(offset)).sort((left, right) => left - right);
 }
 
-function caretEdgeNavigable(
-  metrics: MetricsPort,
-  fullText: string,
-  lineStartGraphemeOffset: number,
-  graphemeOffset: number
-): boolean {
-  return isCumulativeGeometryTrustedFromLineOrigin(
-    metrics,
-    fullText,
-    lineStartGraphemeOffset,
-    graphemeOffset
-  );
+function atomsFor(
+  text: string,
+  slices: readonly ShapedSlice[],
+  boundaries: readonly number[]
+): readonly Atom[] {
+  const widths = new Array<number>(Math.max(0, boundaries.length - 1)).fill(0);
+  let atomIndex = 0;
+  for (const slice of slices) {
+    const clusters = [...slice.run.clusters].sort(
+      (left, right) => left.textStart - right.textStart
+    );
+    for (const cluster of clusters) {
+      const clusterFrom = slice.from + cluster.textStart;
+      const clusterTo = slice.from + cluster.textEnd;
+      while (atomIndex < widths.length && boundaries[atomIndex + 1]! <= clusterFrom) {
+        atomIndex += 1;
+      }
+      if (
+        atomIndex < widths.length &&
+        boundaries[atomIndex]! <= clusterFrom &&
+        boundaries[atomIndex + 1]! >= clusterTo
+      ) {
+        widths[atomIndex] += cluster.advance;
+      }
+    }
+  }
+  const atoms: Atom[] = [];
+  for (let index = 1; index < boundaries.length; index += 1) {
+    const from = boundaries[index - 1]!;
+    const to = boundaries[index]!;
+    atoms.push({
+      from,
+      to,
+      width: widths[index - 1]!,
+      whitespace: /^\s/u.test(text.slice(from, to)),
+    });
+  }
+  return atoms;
 }
 
-function pushCaretEdge(
+function lineRanges(
+  atoms: readonly Atom[],
+  spans: readonly ResolvedSpan[],
+  shaping: LayoutShapingOptions,
+  availableWidth: number,
+  degenerateBox: boolean
+): readonly (readonly [number, number])[] {
+  if (atoms.length === 0) return [[0, 0]];
+  const ranges: (readonly [number, number])[] = [];
+  let atomStart = 0;
+  while (atomStart < atoms.length) {
+    let width = 0;
+    let atomEnd = atomStart;
+    let preferredEnd = -1;
+    while (atomEnd < atoms.length) {
+      const next = atoms[atomEnd]!;
+      if (availableWidth > 0 && width + next.width > availableWidth && atomEnd > atomStart) {
+        if (next.whitespace) {
+          width += next.width;
+          atomEnd += 1;
+          preferredEnd = atomEnd;
+        }
+        break;
+      }
+      width += next.width;
+      atomEnd += 1;
+      if (next.whitespace) preferredEnd = atomEnd;
+    }
+    const usedPreferredBreak = atomEnd < atoms.length && preferredEnd > atomStart;
+    if (usedPreferredBreak) atomEnd = preferredEnd;
+    if (degenerateBox && preferredEnd === -1) {
+      while (atomEnd < atoms.length) {
+        const next = atoms[atomEnd]!;
+        atomEnd += 1;
+        if (next.whitespace) break;
+      }
+    }
+    if (atomEnd === atomStart) atomEnd += 1;
+
+    const from = atoms[atomStart]!.from;
+    let to = atoms[atomEnd - 1]!.to;
+    let reshaped = shapeRange(spans, from, to, shaping);
+    let reshapedWidth = reshaped.reduce((sum, slice) => sum + slice.width, 0);
+    while (
+      !degenerateBox &&
+      availableWidth > 0 &&
+      reshapedWidth > availableWidth &&
+      atomEnd - atomStart > 1 &&
+      !atoms[atomEnd - 1]!.whitespace
+    ) {
+      atomEnd -= 1;
+      to = atoms[atomEnd - 1]!.to;
+      reshaped = shapeRange(spans, from, to, shaping);
+      reshapedWidth = reshaped.reduce((sum, slice) => sum + slice.width, 0);
+    }
+    if (!degenerateBox && availableWidth > 0) {
+      for (let candidateEnd = atomEnd + 1; candidateEnd <= atoms.length; candidateEnd += 1) {
+        if (
+          usedPreferredBreak &&
+          candidateEnd < atoms.length &&
+          !atoms[candidateEnd - 1]!.whitespace
+        ) {
+          continue;
+        }
+        const candidateTo = atoms[candidateEnd - 1]!.to;
+        const candidateWidth = shapeRange(spans, from, candidateTo, shaping).reduce(
+          (sum, slice) => sum + slice.width,
+          0
+        );
+        if (candidateWidth > availableWidth) break;
+        atomEnd = candidateEnd;
+        to = candidateTo;
+      }
+    }
+    ranges.push([from, to]);
+    atomStart = atomEnd;
+  }
+  return ranges;
+}
+
+function clusterEdges(slice: ShapedSlice): readonly { offset: number; x: number }[] {
+  const edges = new Map<number, number>();
+  if (slice.run.direction === 'ltr') {
+    let x = 0;
+    edges.set(slice.from, 0);
+    for (const cluster of slice.run.clusters) {
+      x += cluster.advance;
+      edges.set(slice.from + cluster.textEnd, x);
+    }
+  } else {
+    let x = 0;
+    edges.set(slice.to, 0);
+    for (const cluster of slice.run.clusters) {
+      x += cluster.advance;
+      edges.set(slice.from + cluster.textStart, x);
+    }
+  }
+  return [...edges].map(([offset, x]) => ({ offset, x }));
+}
+
+function pushCaret(
   sink: ParagraphLayoutSink,
-  paragraphId: string,
-  segments: readonly { readonly utf16From: number }[],
-  fullTextLength: number,
-  graphemeOffset: number,
+  paragraph: ParagraphRecord,
+  fullText: string,
+  utf16Offset: number,
   x: number,
   y: number,
   height: number,
+  metrics: { readonly ascent: number; readonly descent: number; readonly lineGap: number },
   line: VisualLineIdentity,
-  navigable: boolean,
-  horizontalNavigable: boolean
+  affinity: 'upstream' | 'downstream' = utf16Offset === 0 ? 'downstream' : 'upstream'
 ): void {
   sink.push({
     type: 'caretEdge',
     x,
     y,
     height,
-    paragraphId,
-    graphemeOffset,
-    utf16Offset: utf16AtGraphemeBoundary(segments, fullTextLength, graphemeOffset),
-    affinity: graphemeOffset === 0 ? 'downstream' : 'upstream',
+    ascent: metrics.ascent,
+    descent: metrics.descent,
+    lineGap: metrics.lineGap,
+    baseline: y + metrics.ascent,
+    paragraphId: paragraph.id,
+    graphemeOffset: utf16OffsetToGrapheme(fullText, utf16Offset),
+    utf16Offset,
+    affinity,
     line,
-    navigable,
-    horizontalNavigable,
-    shaping: navigable ? 'per-grapheme-advance' : 'unsupported',
+    navigable: true,
+    horizontalNavigable: true,
+    shaping: 'cluster-advance',
   } satisfies CaretEdgeItem);
 }
 
-/** Lay out one paragraph: measure/wrap as one sequence; runs slice paint output only. */
 export function layoutParagraphInBox(
-  p: ParagraphRecord,
+  model: PackageModel,
+  paragraph: ParagraphRecord,
   cursor: { x: number; y: number },
   contentLeft: number,
   contentRight: number,
-  metrics: MetricsPort,
+  shaping: LayoutShapingOptions,
   sink: ParagraphLayoutSink,
-  newLine: () => void,
+  newLine: (height: number) => void,
   options: { trailingNewLine?: boolean } = {}
-): { x: number; y: number } {
-  const fullText = paragraphFullText(p);
-  // Segment the paragraph ONCE and keep the result for the whole layout. Every
-  // per-character probe below reads from this array; none re-enters segmentation.
-  const paragraphSegments = segmentGraphemes(fullText);
-  const paragraphGraphemeCount = paragraphSegments.length;
-  const tracker = new LineTracker(p.id);
-  const tokens = tokenizeParagraph(fullText);
-  let lineStartGraphemeOffset = 0;
-  // Paint runs are clipped to VISUAL LINES, not to words.
-  //
-  // This used to emit one paint slice per word token and nothing at all for whitespace
-  // tokens, so element count scaled with word count and painted text contained no spaces.
-  // A line's text is contiguous in UTF-16 — wrapping only ever happens BETWEEN tokens —
-  // so accumulating `[lineStartUtf16, wrapPoint)` and flushing once per line both collapses
-  // the element count to (lines x style changes) and carries whitespace along as real text.
-  //
-  // Wrapping is unchanged: `tokens` still decides where lines break, and the flush happens
-  // BEFORE `tracker.wrap()`/`newLine()` so the emitted item carries the line identity, y and
-  // page index of the line it belongs to rather than the one about to start.
-  let lineStartUtf16 = 0;
-  let lineStartX = cursor.x;
-  // A paragraph with no VISIBLE glyph still owns its whole line.
-  //
-  // The line-area placeholder used to be emitted whenever nothing was painted, which
-  // before grouping included a whitespace-only paragraph — whitespace painted nothing.
-  // Grouping paints those spaces, so keying the placeholder on "nothing painted" silently
-  // dropped it, and with it the full-width box that `enrichOwnershipRegions` unions into
-  // paragraph and trailing ownership. Independent review measured the consequence on
-  // `'   '`: clicking anywhere past the first ~12 px of a blank spacer line stopped
-  // placing a caret at all, where it used to place one everywhere on the line.
-  //
-  // Keyed on "no visible glyph" instead, so an empty AND a whitespace-only paragraph both
-  // keep it. It is pushed BEFORE the line's painted text so it takes a lower paint order:
-  // the measured whitespace clusters win where they exist and the placeholder answers the
-  // rest of the line. It carries no runs, so it is invisible to paint and to the wrapping
-  // signature, and it deliberately does NOT re-emit a caret edge — the duplicate offset-0
-  // edge that used to produce was what stopped a whitespace-only paragraph deriving a
-  // whitespace box at all.
-  const hasVisibleGlyph = /\S/u.test(fullText);
-  if (!hasVisibleGlyph) {
+): { x: number; y: number; lineHeight: number } {
+  const fullText = paragraphText(paragraph);
+  const embedding = bidiAlgorithm.getEmbeddingLevels(fullText);
+  const spans = resolveSpans(model, paragraph, shaping, embedding);
+  const tracker = new LineTracker(paragraph.id);
+
+  const defaultSpan =
+    spans[0] ??
+    (() => {
+      const request: FontRequest = {
+        family: shaping.defaultFont.family,
+        weight: 400,
+        style: 'normal',
+      };
+      const font = shaping.fonts.resolve(request);
+      if (font instanceof FontResolutionError) throw font;
+      return {
+        from: 0,
+        to: 0,
+        text: '',
+        props: {},
+        request,
+        font,
+        direction: 'ltr' as const,
+        bidiLevel: 0,
+        script: 'Latn',
+      };
+    })();
+  const defaultHeight = defaultShapedLineHeight(shaping);
+
+  if (fullText.length === 0) {
+    const emptyInput = shapeInput(defaultSpan, '', shaping);
+    const emptyRun = shaping.shaper.shape(emptyInput);
+    const line = tracker.identity(sink.currentPageIndex());
     sink.push({
       type: 'text',
       x: contentLeft,
       y: cursor.y,
       width: Math.max(1, contentRight - contentLeft),
-      height: metrics.lineHeight,
+      height: defaultHeight,
+      ascent: emptyRun.metrics.ascent,
+      descent: emptyRun.metrics.descent,
+      lineGap: emptyRun.metrics.lineGap,
+      baseline: cursor.y + emptyRun.metrics.ascent,
       text: '',
       bold: false,
       italic: false,
-      anchor: { paragraphId: p.id, offset: 0 },
-      line: tracker.identity(sink.currentPageIndex()),
+      direction: 'ltr',
+      bidiLevel: 0,
+      fontSizeHalfPoints: emptyInput.fontSizeHalfPoints,
+      color: defaultSpan.props.color ?? DEFAULT_TEXT_COLOR,
+      shapingEnvironment: shapingEnvironmentFingerprintInputs(emptyInput.environment),
+      shapingFingerprint: shapingFingerprint(
+        emptyInput,
+        emptyRun,
+        defaultSpan.props.color ?? DEFAULT_TEXT_COLOR,
+        shaping.operation
+      ),
+      producer: shaping.operation,
+      shapedRun: emptyRun,
+      glyphClusters: glyphClusters('', emptyRun),
+      anchor: { paragraphId: paragraph.id, offset: 0 },
+      line,
     });
-  }
-  // Highest grapheme offset an edge was emitted for on the CURRENT line. Reset at
-  // each wrap, because a wrap deliberately emits an edge at the same offset on the
-  // new line — that pair is how the two sides of a soft break are addressable.
-  // Within a line it prevents a straddling cluster being emitted twice.
-  let lastEdgeGrapheme = -1;
-
-  const pushEdge = (graphemeOffset: number) => {
-    lastEdgeGrapheme = Math.max(lastEdgeGrapheme, graphemeOffset);
-    pushCaretEdge(
+    pushCaret(
       sink,
-      p.id,
-      paragraphSegments,
-      fullText.length,
-      graphemeOffset,
+      paragraph,
+      fullText,
+      0,
       cursor.x,
       cursor.y,
-      metrics.lineHeight,
-      tracker.identity(sink.currentPageIndex()),
-      caretEdgeNavigable(metrics, fullText, lineStartGraphemeOffset, graphemeOffset),
-      isWholeGraphemeHorizontalBoundary(metrics, fullText, graphemeOffset)
+      defaultHeight,
+      emptyRun.metrics,
+      line
     );
-  };
+    if (options.trailingNewLine !== false) newLine(defaultHeight);
+    return { x: cursor.x, y: cursor.y, lineHeight: defaultHeight };
+  }
 
-  /** Flush `[lineStartUtf16, utf16To)` as this line's paint runs, split at style changes. */
-  const emitLine = (utf16To: number) => {
-    if (utf16To <= lineStartUtf16) return;
-    emitPaintSlices(p, fullText, metrics, sink, {
-      utf16From: lineStartUtf16,
-      utf16To,
-      x: lineStartX,
+  if (!/\S/u.test(fullText)) {
+    const emptyInput = shapeInput(defaultSpan, '', shaping);
+    const emptyRun = shaping.shaper.shape(emptyInput);
+    sink.push({
+      type: 'text',
+      x: contentLeft,
       y: cursor.y,
+      width: Math.max(1, contentRight - contentLeft),
+      height: defaultHeight,
+      ascent: emptyRun.metrics.ascent,
+      descent: emptyRun.metrics.descent,
+      lineGap: emptyRun.metrics.lineGap,
+      baseline: cursor.y + emptyRun.metrics.ascent,
+      text: '',
+      bold: false,
+      italic: false,
+      direction: 'ltr',
+      bidiLevel: 0,
+      fontSizeHalfPoints: emptyInput.fontSizeHalfPoints,
+      color: defaultSpan.props.color ?? DEFAULT_TEXT_COLOR,
+      shapingEnvironment: shapingEnvironmentFingerprintInputs(emptyInput.environment),
+      shapingFingerprint: shapingFingerprint(
+        emptyInput,
+        emptyRun,
+        defaultSpan.props.color ?? DEFAULT_TEXT_COLOR,
+        shaping.operation
+      ),
+      producer: shaping.operation,
+      shapedRun: emptyRun,
+      glyphClusters: glyphClusters('', emptyRun),
+      anchor: { paragraphId: paragraph.id, offset: 0 },
       line: tracker.identity(sink.currentPageIndex()),
     });
-  };
+  }
 
-  pushEdge(0);
+  const completeSlices = shapeRange(spans, 0, fullText.length, shaping);
+  const boundaries = legalBoundaries(fullText, completeSlices);
+  const boundarySet = new Set(boundaries);
+  const atoms = atomsFor(fullText, completeSlices, boundaries);
+  const ranges = lineRanges(
+    atoms,
+    spans,
+    shaping,
+    Math.max(1, contentRight - contentLeft),
+    contentRight <= contentLeft
+  );
 
-  for (const token of tokens) {
-    if (token.kind === 'whitespace') {
-      for (let i = token.utf16From; i < token.utf16To; i += 1) {
-        const g = utf16OffsetToGrapheme(fullText, i);
-        if (g > lastEdgeGrapheme) pushEdge(g);
-        const style = runStyleAt(p, i);
-        cursor.x += metrics.advance(charAt(p, i), style.bold, style.italic);
-      }
-      // Clamped for the same straddle reason as the word branch below: when a
-      // cluster begins in this whitespace token and continues into the next word,
-      // `token.utf16To` maps back to THIS cluster and would emit a duplicate edge.
-      const trailing = utf16OffsetToGrapheme(fullText, token.utf16To);
-      if (trailing > lastEdgeGrapheme) pushEdge(trailing);
-      continue;
-    }
-
-    const width = advanceRangeWidth(metrics, p, token.utf16From, token.utf16To);
-    if (cursor.x + width > contentRight && cursor.x > contentLeft) {
-      // Flush the finished line before the tracker and cursor move to the next one.
-      emitLine(token.utf16From);
-      lineStartGraphemeOffset = utf16OffsetToGrapheme(fullText, token.utf16From);
+  let lastLineHeight = defaultHeight;
+  for (let lineIndex = 0; lineIndex < ranges.length; lineIndex += 1) {
+    const [from, to] = ranges[lineIndex]!;
+    if (lineIndex > 0) {
       tracker.wrap(sink.currentPageIndex());
-      newLine();
-      lineStartUtf16 = token.utf16From;
-      lineStartX = cursor.x;
-      lastEdgeGrapheme = -1; // a new line re-addresses the wrap offset
-      pushEdge(lineStartGraphemeOffset);
+      newLine(lastLineHeight);
+      cursor.x = contentLeft;
     }
-
-    // Walk the PARAGRAPH's own segments inside this token's range rather than
-    // segmenting `token.text` — segmenting the token is what evicted the memo
-    // holding the paragraph text and made layout quadratic.
-    //
-    // A grapheme cluster CAN straddle a token boundary. An earlier version of this
-    // loop asserted the opposite ("whitespace is always a grapheme boundary"),
-    // which is false: `space + U+0301` is a single cluster and `/(\s+)/` splits
-    // inside it. The cluster then began in the whitespace token, whose branch had
-    // already advanced the space, and this loop restarted at `seg.utf16From` — the
-    // space again — double-counting one advance. Independent review measured the
-    // result as a changed line count (6 lines to 7 on a 300-character paragraph
-    // with 24 such sequences), i.e. different wrapping and pagination, reachable
-    // from any .docx carrying an orphaned combining mark after whitespace.
-    //
-    // `advanceFromUtf16` is therefore clamped to code units this token actually
-    // owns, and an edge already emitted for a straddling cluster is not re-emitted.
-    let g = utf16OffsetToGrapheme(fullText, token.utf16From);
-    while (g < paragraphGraphemeCount && paragraphSegments[g]!.utf16From < token.utf16To) {
-      const seg = paragraphSegments[g]!;
-      if (g > lastEdgeGrapheme) pushEdge(g);
-      // BOTH bounds are clamped to code units this token owns.
-      //
-      // The first version clamped only the lower bound, which fixed a cluster that
-      // starts in a whitespace token and continues into a word, and left the mirror
-      // case open: a cluster that starts in a WORD token and ends in the following
-      // whitespace still ran to `seg.utf16To`, past `token.utf16To`, and the
-      // whitespace branch then advanced those same code units again. Round-5 review
-      // measured `ab<U+0600> cd` at 708 against a ground-truth 648 — one whole space
-      // advance — and 10 lines versus 7 for the control at pageWidth 4780. Reachable
-      // with any GCB=Prepend code point before whitespace (U+0600-0605, U+06DD,
-      // U+070F, U+0890, U+0891, U+08E2, U+0D4E, U+110BD, U+110CD), all confirmed to
-      // cluster forward across every Unicode space separator.
-      const advanceFromUtf16 = Math.max(seg.utf16From, token.utf16From);
-      const advanceToUtf16 = Math.min(seg.utf16To, token.utf16To);
-
-      // EMERGENCY BREAK inside an over-long word.
-      //
-      // The wrap test above is `cursor.x + width > contentRight && cursor.x > contentLeft`.
-      // For a token wider than the whole content box that second clause is false the moment
-      // the token starts a line, so it never fired again and the word ran straight off the
-      // right edge of the page — visible on any pasted URL, hash, or unspaced run.
-      //
-      // Word breaks such a word at the last grapheme that fits and continues on the next
-      // line. Breaking here, per grapheme, rather than in `tokenizeParagraph`, is what keeps
-      // the decision dependent on where the word actually STARTS: the same word breaks at a
-      // different character depending on how much of the line was already used.
-      //
-      // Guarded on `cursor.x > contentLeft` so a single grapheme wider than the content box
-      // still paints rather than looping forever on an empty line.
-      let graphemeWidth = 0;
-      for (let utf16 = advanceFromUtf16; utf16 < advanceToUtf16; utf16 += 1) {
-        const style = runStyleAt(p, utf16);
-        graphemeWidth += metrics.advance(charAt(p, utf16), style.bold, style.italic);
+    const line = tracker.identity(sink.currentPageIndex());
+    const slices = visualOrder(
+      splitTabsForPaint(shapeRange(spans, from, to, shaping), shaping),
+      fullText,
+      embedding,
+      from,
+      to
+    );
+    const lineAscent = Math.max(...slices.map((slice) => slice.run.metrics.ascent));
+    const lineDescent = Math.max(...slices.map((slice) => slice.run.metrics.descent));
+    const lineGap = Math.max(...slices.map((slice) => slice.run.metrics.lineGap));
+    const lineHeight = Math.max(defaultHeight, lineAscent + lineDescent + lineGap);
+    const baseline = cursor.y + lineAscent;
+    lastLineHeight = lineHeight;
+    let x = cursor.x;
+    const emittedEdges = new Set<string>();
+    for (const slice of slices) {
+      const style = slice.span.props;
+      const item: TextItem = {
+        type: 'text',
+        x,
+        y: cursor.y,
+        width: slice.width,
+        height: lineHeight,
+        ascent: slice.run.metrics.ascent,
+        descent: slice.run.metrics.descent,
+        lineGap: slice.run.metrics.lineGap,
+        baseline,
+        text: slice.run.text,
+        bold: style.bold === true,
+        italic: style.italic === true,
+        direction: slice.run.direction,
+        bidiLevel: slice.run.bidiLevel,
+        fontSizeHalfPoints: slice.input.fontSizeHalfPoints,
+        color: style.color ?? DEFAULT_TEXT_COLOR,
+        shapingEnvironment: shapingEnvironmentFingerprintInputs(slice.input.environment),
+        shapingFingerprint: shapingFingerprint(
+          slice.input,
+          slice.run,
+          style.color ?? DEFAULT_TEXT_COLOR,
+          shaping.operation
+        ),
+        producer: shaping.operation,
+        shapedRun: slice.run,
+        glyphClusters: glyphClusters(slice.run.text, slice.run),
+        anchor: { paragraphId: paragraph.id, offset: slice.from },
+        line,
+      };
+      sink.push(item);
+      for (const edge of clusterEdges(slice)) {
+        if (!boundarySet.has(edge.offset)) continue;
+        const affinity =
+          edge.offset === 0 || (edge.offset === slice.from && slice.from !== from)
+            ? 'downstream'
+            : 'upstream';
+        const edgeKey = `${edge.offset}:${x + edge.x}`;
+        if (emittedEdges.has(edgeKey)) continue;
+        emittedEdges.add(edgeKey);
+        pushCaret(
+          sink,
+          paragraph,
+          fullText,
+          edge.offset,
+          x + edge.x,
+          cursor.y,
+          lineHeight,
+          { ascent: lineAscent, descent: lineDescent, lineGap },
+          line,
+          affinity
+        );
       }
-      // `contentRight > contentLeft` guards a DEGENERATE content box. A page narrower than
-      // its own margins puts the right edge left of the left edge, so every grapheme
-      // "overflows" and this would break after each one. Existing fixtures do exactly that
-      // (pageWidth 2800 with margin 1440), and three tests caught it immediately.
-      if (
-        contentRight > contentLeft &&
-        cursor.x + graphemeWidth > contentRight &&
-        cursor.x > contentLeft
-      ) {
-        emitLine(advanceFromUtf16);
-        lineStartGraphemeOffset = g;
-        tracker.wrap(sink.currentPageIndex());
-        newLine();
-        lineStartUtf16 = advanceFromUtf16;
-        lineStartX = cursor.x;
-        lastEdgeGrapheme = -1;
-        pushEdge(lineStartGraphemeOffset);
-      }
-
-      for (let utf16 = advanceFromUtf16; utf16 < advanceToUtf16; utf16 += 1) {
-        const style = runStyleAt(p, utf16);
-        cursor.x += metrics.advance(charAt(p, utf16), style.bold, style.italic);
-      }
-      g += 1;
+      x += slice.width;
     }
-    const trailingEdge = utf16OffsetToGrapheme(fullText, token.utf16To);
-    if (trailingEdge > lastEdgeGrapheme) pushEdge(trailingEdge);
+    cursor.x = x;
   }
-
-  emitLine(fullText.length);
-
-  pushEdge(paragraphGraphemeCount);
-  if (options.trailingNewLine !== false) newLine();
-  return { x: cursor.x, y: cursor.y };
-}
-
-/**
- * Split one positioned visual line at run boundaries into paint-only TextItems.
- *
- * Grouping happens here and only here: consecutive code units whose RESOLVED paint
- * properties are equal become one item. A style change ends an item, so adjacent runs
- * can neither merge nor inherit each other's formatting.
- *
- * A TAB also ends an item, and that is a paint-correctness rule rather than a style one.
- * `w:tab` parses to U+0009, and layout gives it a FIXED advance like any other character.
- * Every paint backend sets `white-space: pre` and none sets `tab-size`, so once grouping
- * put a tab inside painted text the browser advanced to its own 8-column tab stop and
- * every glyph after the tab rendered somewhere layout never measured — independent review
- * measured `'ab\tcd'` painting `cd` 32 px into the span against a measured 24 px, with the
- * error compounding per tab and reaching any tab-separated line or TOC leader.
- *
- * Splitting there fixes it without weakening grouping or dropping the tab: each piece is
- * absolutely positioned at its own measured `x`, so CSS expansion inside the tab's own
- * piece cannot move the piece after it. The tab stays real text in its own item, tabs are
- * rare, and no other line pays for this.
- *
- * Takes `fullText` rather than rebuilding it: this runs once per line, and
- * `paragraphFullText` joins every run, so rebuilding it here cost O(chars) per
- * line — a second quadratic term independent of segmentation.
- */
-function emitPaintSlices(
-  p: ParagraphRecord,
-  fullText: string,
-  metrics: MetricsPort,
-  sink: ParagraphLayoutSink,
-  slice: PlacedLine
-): void {
-  let cursor = slice.utf16From;
-  // Accumulated, not recomputed.
-  //
-  // This was `advanceRangeWidth(metrics, p, slice.utf16From, cursor)` — a fresh
-  // measurement of the whole slice prefix for EVERY style segment inside it, i.e.
-  // k^2*m/2 `metrics.advance` calls for k segments of m characters. Independent
-  // security review measured a 4,039-byte .docx — one whitespace-free paragraph
-  // with runs alternating bold every 23 characters — freezing `createEditor()`
-  // for 45.2 s on open with zero clicks, at 736,460,001 `advance()` calls and a
-  // measured growth exponent of 2.05 over four doublings. It re-runs per
-  // keystroke, and a whitespace-free token is not exotic: CJK text has no
-  // whitespace, so an entire CJK paragraph is one token.
-  //
-  // The prefix is exactly the sum of the segment widths already emitted, so
-  // carrying it forward is both cheaper and simpler.
-  //
-  // This is the FOURTH iteration on this defect class, and the reason the earlier
-  // three missed it is worth recording: each guard instrumented whatever the
-  // previous fix had addressed. `layout-cost.test.ts` counts segmented characters,
-  // which for this shape is exactly 1.0x linear, while `advance()` runs 4,003x per
-  // character. A guard that counts the wrong quantity reads as coverage. The
-  // companion test now counts `metrics.advance` calls.
-  let prefixWidth = 0;
-  while (cursor < slice.utf16To) {
-    const style = runStyleAt(p, cursor);
-    const startsOnTab = charAt(p, cursor) === TAB;
-    let runEnd = slice.utf16To;
-    for (let pos = cursor + 1; pos < slice.utf16To; pos += 1) {
-      const next = runStyleAt(p, pos);
-      if (
-        next.bold !== style.bold ||
-        next.italic !== style.italic ||
-        (charAt(p, pos) === TAB) !== startsOnTab
-      ) {
-        runEnd = pos;
-        break;
-      }
-    }
-    const partWidth = advanceRangeWidth(metrics, p, cursor, runEnd);
-    const item: TextItem = {
-      type: 'text',
-      x: slice.x + prefixWidth,
-      y: slice.y,
-      width: partWidth,
-      height: metrics.lineHeight,
-      text: fullText.slice(cursor, runEnd),
-      bold: style.bold,
-      italic: style.italic,
-      anchor: { paragraphId: p.id, offset: cursor },
-      line: slice.line,
-    };
-    sink.push(item);
-    prefixWidth += partWidth;
-    cursor = runEnd;
-  }
+  if (options.trailingNewLine !== false) newLine(lastLineHeight);
+  return { x: cursor.x, y: cursor.y, lineHeight: lastLineHeight };
 }

@@ -15,7 +15,8 @@ import { GlobalRegistrator } from '@happy-dom/global-registrator';
 if (!GlobalRegistrator.isRegistered) GlobalRegistrator.register();
 
 import { describe, expect, test } from 'bun:test';
-import { createEditor, createEditorDriver } from '../src/index.ts';
+import { createEditorDriver } from '../src/index.ts';
+import { createTestEditor as createEditor } from './create-test-editor.ts';
 import type { EditorHost } from '@docx-editor.dev/core-contract/editor';
 import { IDENTITY_HOST_METRICS } from '../src/coordinate-mapper.ts';
 import { createEditableParagraphFixture } from '../browser/fixtures.ts';
@@ -24,7 +25,17 @@ function mountEditor() {
   const body = document.createElement('div');
   const scroll = document.createElement('div');
   scroll.getBoundingClientRect = () =>
-    ({ x: 0, y: 0, width: 640, height: 480, top: 0, left: 0, right: 640, bottom: 480, toJSON: () => ({}) }) as DOMRect;
+    ({
+      x: 0,
+      y: 0,
+      width: 640,
+      height: 480,
+      top: 0,
+      left: 0,
+      right: 640,
+      bottom: 480,
+      toJSON: () => ({}),
+    }) as DOMRect;
   document.body.append(scroll);
   scroll.append(body);
   const host: EditorHost = {
@@ -94,7 +105,12 @@ describe('focus lifecycle', () => {
     const editable = body.querySelector('[contenteditable="true"]') as HTMLElement;
     const type = (data: string): void => {
       editable.dispatchEvent(
-        new InputEvent('beforeinput', { inputType: 'insertText', data, bubbles: true, cancelable: true }),
+        new InputEvent('beforeinput', {
+          inputType: 'insertText',
+          data,
+          bubbles: true,
+          cancelable: true,
+        })
       );
     };
 
@@ -135,7 +151,12 @@ describe('focus lifecycle', () => {
     const editable = body.querySelector('[contenteditable="true"]') as HTMLElement;
     const before = driver.accessibilityObservation().entries[0]?.text ?? '';
     editable.dispatchEvent(
-      new InputEvent('beforeinput', { inputType: 'insertText', data: 'K', bubbles: true, cancelable: true }),
+      new InputEvent('beforeinput', {
+        inputType: 'insertText',
+        data: 'K',
+        bubbles: true,
+        cancelable: true,
+      })
     );
     const after = driver.accessibilityObservation().entries[0]?.text ?? '';
     expect(after).not.toBe(before);

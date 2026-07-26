@@ -4,7 +4,12 @@
 // counterpart is DocxEditable.vue — the two MUST stay behavior-identical.
 
 import React, { useEffect, useRef, useState } from 'react';
-import { mountDocxEditor, type EditorDriver } from './mountDocxEditor.ts';
+import {
+  DocxEditableLifecycle,
+  defaultDocxEditableDependencies,
+  type DemoDocxEditableLifecycle,
+} from './docxEditableLifecycle.ts';
+import type { EditorDriver } from './mountDocxEditor.ts';
 
 declare global {
   interface Window {
@@ -20,32 +25,45 @@ export function DocxEditable({ fixtureUrl }: DocxEditableProps): React.ReactElem
   const host = useRef<HTMLDivElement>(null);
   const [status, setStatus] = useState<string>('Loading…');
   const [reopened, setReopened] = useState<string | null>(null);
+  const lifecycleRef = useRef<DemoDocxEditableLifecycle | null>(null);
+  if (!lifecycleRef.current) {
+    lifecycleRef.current = new DocxEditableLifecycle(
+      {
+        getHost: () => host.current,
+        publishDriver: (driver) => {
+          window.__docxEditorDriver = driver;
+        },
+        clearDriver: (driver) => {
+          if (window.__docxEditorDriver === driver) delete window.__docxEditorDriver;
+        },
+        setStatus,
+        resetReopened: () => setReopened(null),
+      },
+      defaultDocxEditableDependencies
+    );
+  }
 
   useEffect(() => {
-    let mounted: ReturnType<typeof mountDocxEditor> | null = null;
-    let cancelled = false;
-    void (async () => {
-      try {
-        const bytes = new Uint8Array(await (await fetch(fixtureUrl)).arrayBuffer());
-        if (cancelled || !host.current) return;
-        host.current.replaceChildren();
-        mounted = mountDocxEditor(host.current, bytes);
-        window.__docxEditorDriver = mounted.driver;
-        setStatus(mounted.driver.editable ? 'Editable (paragraphs)' : 'Read-only (contains tables/SDTs)');
-      } catch (e) {
-        if (!cancelled) setStatus(`Could not open this file (${(e as Error).message}).`);
-      }
-    })();
+    const lifecycle = lifecycleRef.current!;
+    void lifecycle.load(fixtureUrl);
     return () => {
-      cancelled = true;
-      mounted?.destroy();
-      if (window.__docxEditorDriver === mounted?.driver) delete window.__docxEditorDriver;
+      lifecycle.dispose();
     };
   }, [fixtureUrl]);
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', minHeight: 0 }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '8px 12px', font: '13px system-ui, sans-serif', color: '#333', borderBottom: '1px solid #e0e0e0' }}>
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: 12,
+          padding: '8px 12px',
+          font: '13px system-ui, sans-serif',
+          color: '#333',
+          borderBottom: '1px solid #e0e0e0',
+        }}
+      >
         <span data-testid="editor-status">{status}</span>
         <button
           type="button"
@@ -61,7 +79,11 @@ export function DocxEditable({ fixtureUrl }: DocxEditableProps): React.ReactElem
           </span>
         )}
       </div>
-      <div ref={host} data-testid="editor-host" style={{ flex: 1, minHeight: 0, overflow: 'auto', padding: '16px', outline: 'none' }} />
+      <div
+        ref={host}
+        data-testid="editor-host"
+        style={{ flex: 1, minHeight: 0, overflow: 'auto', padding: '16px', outline: 'none' }}
+      />
     </div>
   );
 }

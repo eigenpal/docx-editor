@@ -16,6 +16,34 @@ describe('trust boundary rejections', () => {
   test('enforces a size bound', () => {
     expect(readXml('<x/>', { maxBytes: 2 })).toMatchObject({ ok: false, reason: 'too-large' });
   });
+  test('enforces an element-count bound', () => {
+    expect(readXml('<x><a/><b/></x>', { maxBytes: 100, maxElements: 3 }).ok).toBe(true);
+    expect(readXml('<x><a/><b/></x>', { maxBytes: 100, maxElements: 2 })).toMatchObject({
+      ok: false,
+      reason: 'too-many-elements',
+    });
+  });
+  test('counts elements before parser allocation and before full XML validation', () => {
+    expect(
+      readXml('<x><a/><b/><unclosed', { maxBytes: 100, maxElements: 2 })
+    ).toMatchObject({ ok: false, reason: 'too-many-elements' });
+  });
+  test('rejects NaN and non-finite configured limits', () => {
+    expect(readXml('<x/>', { maxBytes: Number.NaN })).toMatchObject({
+      ok: false,
+      reason: 'invalid-limits',
+    });
+    expect(readXml('<x/>', { maxBytes: Number.POSITIVE_INFINITY })).toMatchObject({
+      ok: false,
+      reason: 'invalid-limits',
+    });
+    expect(
+      readXml('<x/>', { maxBytes: 100, maxElements: Number.NaN })
+    ).toMatchObject({ ok: false, reason: 'invalid-limits' });
+    expect(
+      readXml('<x/>', { maxBytes: 100, maxElements: Number.NEGATIVE_INFINITY })
+    ).toMatchObject({ ok: false, reason: 'invalid-limits' });
+  });
 });
 
 describe('fidelity preservation', () => {
@@ -34,6 +62,7 @@ describe('fidelity preservation', () => {
     const t = findElement(r.nodes, 'w:t')!;
     // Zero-padded / boolean-looking attribute values stay strings, verbatim.
     expect(t.attributes).toEqual({ 'w:space': 'preserve', n: '007', b: 'true' });
+    expect(Object.getPrototypeOf(t.attributes)).toBeNull();
     expect(textContent(t)).toBe('0042'); // not coerced to number 42
   });
 

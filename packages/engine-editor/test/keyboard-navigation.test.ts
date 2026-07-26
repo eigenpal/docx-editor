@@ -4,23 +4,24 @@ import { GlobalRegistrator } from '@happy-dom/global-registrator';
 if (!GlobalRegistrator.isRegistered) GlobalRegistrator.register();
 
 import { describe, expect, test } from 'bun:test';
-import type { InteractionFrame, InteractionHostMetrics, SemanticSelection } from '@docx-editor.dev/core-contract/interaction';
+import type {
+  InteractionFrame,
+  InteractionHostMetrics,
+  SemanticSelection,
+} from '@docx-editor.dev/core-contract/interaction';
 import { layoutBody } from '@docx-editor.dev/engine-layout';
 import { toDisplayPages } from '../src/display-bridge.ts';
 import { InteractionFrameStore } from '../src/interaction-frame.ts';
 import { deriveCaretGeometry, deriveSelectionGeometry } from '../src/interaction-geometry.ts';
 import { buildLineCatalog, caretContentX, pageRelativeY } from '../src/line-catalog.ts';
-import {
-  planKeyboardNavigation,
-  selectionCollapsed,
-} from '../src/keyboard-navigation.ts';
+import { planKeyboardNavigation, selectionCollapsed } from '../src/keyboard-navigation.ts';
 import { horizontalTransitionStopsForBlock } from '../src/navigation-stops.ts';
 import { commitNavigationSessionAfterExecution } from '../src/navigation-session.ts';
 import { planInteraction } from '../src/interaction-planner.ts';
 import { executeInteractionPlan } from '../src/interaction-executor.ts';
 import type { NavigationGeometry } from '../src/navigation-geometry.ts';
 import { emptyNavigationGeometry } from '../src/navigation-geometry.ts';
-import { createEditor } from '../src/create-editor.ts';
+import { createTestEditor as createEditor } from './create-test-editor.ts';
 import type { EditorHost } from '@docx-editor.dev/core-contract/editor';
 import { createEditableParagraphFixture } from '../browser/fixtures.ts';
 import {
@@ -59,7 +60,7 @@ function frameWithSelection(
   texts: string[],
   headOffset: number,
   anchorOffset = headOffset,
-  layout: Parameters<typeof layoutBody>[1] = LAYOUT,
+  layout: Parameters<typeof layoutBody>[1] = LAYOUT
 ): FrameBundle {
   const model = modelWith(texts);
   const layoutResult = layoutBody(model, layout);
@@ -99,7 +100,7 @@ function frameWithSelection(
 function multiBlockFrame(
   texts: readonly string[],
   blockIndex: number,
-  offset: number,
+  offset: number
 ): FrameBundle {
   const model = modelWith([...texts]);
   const layoutResult = layoutBody(model, LAYOUT);
@@ -135,7 +136,10 @@ function multiBlockFrame(
   return { frame, navigation: store.getNavigationGeometry(frame.id) };
 }
 
-function frameBundleFromPublish(model: Parameters<typeof publishFrame>[0], options?: Parameters<typeof publishFrame>[1]): FrameBundle {
+function frameBundleFromPublish(
+  model: Parameters<typeof publishFrame>[0],
+  options?: Parameters<typeof publishFrame>[1]
+): FrameBundle {
   const layout = layoutBody(model, options?.layout ?? LAYOUT);
   const bridged = toDisplayPages(model, layout.pages);
   const store = new InteractionFrameStore();
@@ -171,7 +175,7 @@ function plan(
   key: string,
   shiftKey = false,
   session: import('../src/navigation-session.ts').NavigationSession | null = null,
-  texts: string[] = [''],
+  texts: string[] = ['']
 ) {
   const textByBlock = new Map<string, string>();
   const blocks = bundle.frame.semanticIndex.stories[0]?.blocks ?? [];
@@ -188,7 +192,6 @@ function plan(
     paragraphText: (identity) => textByBlock.get(identity.blockId) ?? texts[0] ?? '',
   });
 }
-
 
 describe('keyboard navigation (task 5.5)', () => {
   test('horizontal grapheme navigation skips surrogate/combining internal stops', () => {
@@ -208,7 +211,7 @@ describe('keyboard navigation (task 5.5)', () => {
         seedFrame.navigation,
         storyId,
         block.identity.blockId,
-        block.graphemeCount,
+        block.graphemeCount
       ).map((s) => s.graphemeOffset);
       let currentFrame = seedFrame;
       for (let i = 1; i < stops.length; i += 1) {
@@ -228,15 +231,22 @@ describe('keyboard navigation (task 5.5)', () => {
     const forward = plan(twoPara, 'ArrowRight');
     const sync = forward.plan.effects.find((e) => e.kind === 'syncSelection');
     if (sync?.kind !== 'syncSelection') throw new Error('sync');
-    expect(sync.selection.head.identity.blockId).toBe(twoPara.frame.semanticIndex.stories[0]!.blocks[1]!.identity.blockId);
+    expect(sync.selection.head.identity.blockId).toBe(
+      twoPara.frame.semanticIndex.stories[0]!.blocks[1]!.identity.blockId
+    );
     expect(sync.selection.head.graphemeOffset).toBe(0);
 
-    const tableBundle = frameBundleFromPublish(modelWithParagraphTableParagraph('before', 'cell', 'after'));
+    const tableBundle = frameBundleFromPublish(
+      modelWithParagraphTableParagraph('before', 'cell', 'after')
+    );
     const beforeBlock = tableBundle.frame.semanticIndex.stories[0]!.blocks[0]!;
     const atEnd = selectionForBlock(tableBundle.frame, beforeBlock.identity.blockId, 6, 6);
     const withSel = withSelection(
-      { ...tableBundle, frame: { ...tableBundle.frame, focus: { scope: { kind: 'body' }, focused: true } } },
-      atEnd,
+      {
+        ...tableBundle,
+        frame: { ...tableBundle.frame, focus: { scope: { kind: 'body' }, focused: true } },
+      },
+      atEnd
     );
     const blocked = plan(withSel, 'ArrowRight');
     expect(blocked.plan.effects[0]).toMatchObject({ kind: 'reject', code: 'unsupported' });
@@ -307,7 +317,8 @@ describe('keyboard navigation (task 5.5)', () => {
     const words = Array.from({ length: 80 }, (_, i) => `word${i}`).join(' ');
     const bundle = frameWithSelection([words], 120, 120, { ...LAYOUT, pageHeight: 4000 });
     expect(bundle.frame.display.length).toBeGreaterThan(1);
-    const caretPage = deriveCaretGeometry(bundle.frame, bundle.frame.selection!.head)?.pageIndex ?? 0;
+    const caretPage =
+      deriveCaretGeometry(bundle.frame, bundle.frame.selection!.head)?.pageIndex ?? 0;
     const seedX = caretContentX(bundle.frame, bundle.frame.selection!.head, bundle.navigation);
     const down = plan(bundle, 'PageDown');
     const downSync = down.plan.effects.find((e) => e.kind === 'syncSelection');
@@ -315,16 +326,36 @@ describe('keyboard navigation (task 5.5)', () => {
     expect(down.navigation.nextSessionOnSuccess?.visualAdvanceX).toBe(seedX);
     const nextCaret = deriveCaretGeometry(bundle.frame, downSync.selection.head);
     expect(nextCaret?.pageIndex).toBe(caretPage + 1);
-    const seedRelativeY = pageRelativeY(bundle.frame, caretPage, deriveCaretGeometry(bundle.frame, bundle.frame.selection!.head)!.rect.y + deriveCaretGeometry(bundle.frame, bundle.frame.selection!.head)!.rect.height / 2);
-    const destRelativeY = pageRelativeY(bundle.frame, nextCaret!.pageIndex, nextCaret!.rect.y + nextCaret!.rect.height / 2);
+    const seedRelativeY = pageRelativeY(
+      bundle.frame,
+      caretPage,
+      deriveCaretGeometry(bundle.frame, bundle.frame.selection!.head)!.rect.y +
+        deriveCaretGeometry(bundle.frame, bundle.frame.selection!.head)!.rect.height / 2
+    );
+    const destRelativeY = pageRelativeY(
+      bundle.frame,
+      nextCaret!.pageIndex,
+      nextCaret!.rect.y + nextCaret!.rect.height / 2
+    );
     expect(destRelativeY).toBeCloseTo(seedRelativeY!, 5);
 
     const stacked = frameBundleFromPublish(modelWith(['only']), { layout: LAYOUT });
     const top = withSelection(
-      { ...stacked, frame: { ...stacked.frame, focus: { scope: { kind: 'body' }, focused: true } } },
-      selectionForBlock(stacked.frame, stacked.frame.semanticIndex.stories[0]!.blocks[0]!.identity.blockId, 0, 0),
+      {
+        ...stacked,
+        frame: { ...stacked.frame, focus: { scope: { kind: 'body' }, focused: true } },
+      },
+      selectionForBlock(
+        stacked.frame,
+        stacked.frame.semanticIndex.stories[0]!.blocks[0]!.identity.blockId,
+        0,
+        0
+      )
     );
-    expect(plan(top, 'PageUp').plan.effects[0]).toMatchObject({ kind: 'reject', code: 'invalidTarget' });
+    expect(plan(top, 'PageUp').plan.effects[0]).toMatchObject({
+      kind: 'reject',
+      code: 'invalidTarget',
+    });
   });
 
   test('empty, trailing, and whitespace ownership lines remain navigable', () => {
@@ -361,7 +392,10 @@ describe('keyboard navigation (task 5.5)', () => {
       },
     };
     const mixedSel = withSelection(mixed, mixed.frame.selection!);
-    expect(plan(mixedSel, 'ArrowLeft').plan.effects[0]).toMatchObject({ kind: 'reject', code: 'unsupported' });
+    expect(plan(mixedSel, 'ArrowLeft').plan.effects[0]).toMatchObject({
+      kind: 'reject',
+      code: 'unsupported',
+    });
   });
 
   test('rejection leaves selection/session unchanged through executor commit path', () => {
@@ -369,7 +403,12 @@ describe('keyboard navigation (task 5.5)', () => {
     const bad = plan(bundle, 'PageUp');
     const execution = executeInteractionPlan(
       {
-        syncSemanticSelection: () => ({ ok: false, code: 'invalidTarget', reason: 'test', frameId: bundle.frame.id }),
+        syncSemanticSelection: () => ({
+          ok: false,
+          code: 'invalidTarget',
+          reason: 'test',
+          frameId: bundle.frame.id,
+        }),
         focus: () => ({ ok: true, value: undefined, frameId: bundle.frame.id }),
         blur: () => {},
         execCommand: () => ({ ok: false, code: 'unsupported', reason: 'no' }),
@@ -377,10 +416,12 @@ describe('keyboard navigation (task 5.5)', () => {
         publishSelectionOverlay: () => {},
         currentFrameId: () => bundle.frame.id,
       },
-      bad.plan,
+      bad.plan
     );
     expect(execution.outcome.ok).toBe(false);
-    expect(commitNavigationSessionAfterExecution(bad.navigation, execution).session).toEqual(bad.navigation.priorSession);
+    expect(commitNavigationSessionAfterExecution(bad.navigation, execution).session).toEqual(
+      bad.navigation.priorSession
+    );
   });
 
   test('strong Hebrew and Arabic content rejects keyboard navigation fail-closed', () => {
@@ -411,14 +452,23 @@ describe('keyboard navigation (task 5.5)', () => {
               return {
                 ...item,
                 interaction: { ...item.interaction, writingDirection: 'rtl' as const },
-                clusters: item.clusters.map((cluster) => ({ ...cluster, direction: 'rtl' as const })),
+                clusters: item.clusters.map((cluster) => ({
+                  ...cluster,
+                  direction: 'rtl' as const,
+                })),
               };
             }),
           },
         ],
       },
     };
-    const result = plan(withSelection(rtlUniform, rtlUniform.frame.selection!), 'ArrowLeft', false, null, [text]);
+    const result = plan(
+      withSelection(rtlUniform, rtlUniform.frame.selection!),
+      'ArrowLeft',
+      false,
+      null,
+      [text]
+    );
     expect(result.plan.effects[0]).toMatchObject({ kind: 'reject', code: 'unsupported' });
     expect(result.plan.effects.some((e) => e.kind === 'syncSelection')).toBe(false);
   });
@@ -448,14 +498,25 @@ describe('keyboard navigation (task 5.5)', () => {
       resolveParagraphText: (identity: { blockId: string }) => 'abc',
       navigationGeometry: bundle.navigation,
     };
-    const intent = { kind: 'geometryKeyboard' as const, frameId: bundle.frame.id, key: 'ArrowRight' };
+    const intent = {
+      kind: 'geometryKeyboard' as const,
+      frameId: bundle.frame.id,
+      key: 'ArrowRight',
+    };
     expect(
-      planInteraction(base, { ...intent, frameId: { value: bundle.frame.id.value - 1 } }).effects[0],
+      planInteraction(base, { ...intent, frameId: { value: bundle.frame.id.value - 1 } }).effects[0]
     ).toMatchObject({ code: 'staleFrame' });
 
-    const pending = { ...bundle.frame, completeness: { kind: 'pending' as const, targetModelRevision: 1 } };
-    expect(planInteraction({ ...base, frame: pending }, intent).effects[0]).toMatchObject({ code: 'pendingLayout' });
-    expect(planInteraction({ ...base, readOnly: true, editable: false }, intent).effects[0]).toMatchObject({
+    const pending = {
+      ...bundle.frame,
+      completeness: { kind: 'pending' as const, targetModelRevision: 1 },
+    };
+    expect(planInteraction({ ...base, frame: pending }, intent).effects[0]).toMatchObject({
+      code: 'pendingLayout',
+    });
+    expect(
+      planInteraction({ ...base, readOnly: true, editable: false }, intent).effects[0]
+    ).toMatchObject({
       code: 'readOnly',
     });
     expect(planInteraction({ ...base, hostMetrics: undefined }, intent).effects[0]).toMatchObject({
@@ -466,12 +527,42 @@ describe('keyboard navigation (task 5.5)', () => {
   test('malformed keyboard modifiers reject unsupported', () => {
     const bundle = frameWithSelection(['abc'], 1);
     for (const intent of [
-      { kind: 'geometryKeyboard' as const, frameId: bundle.frame.id, key: 'ArrowRight', ctrlKey: true },
-      { kind: 'geometryKeyboard' as const, frameId: bundle.frame.id, key: 'ArrowRight', metaKey: true },
-      { kind: 'geometryKeyboard' as const, frameId: bundle.frame.id, key: 'ArrowRight', altKey: true },
-      { kind: 'geometryKeyboard' as const, frameId: bundle.frame.id, key: 'ArrowRight', shiftKey: 'true' as unknown as boolean },
-      { kind: 'geometryKeyboard' as const, frameId: bundle.frame.id, key: 'ArrowRight', ctrlKey: 1 as unknown as boolean },
-      { kind: 'geometryKeyboard' as const, frameId: bundle.frame.id, key: 'ArrowRight', altKey: null as unknown as boolean },
+      {
+        kind: 'geometryKeyboard' as const,
+        frameId: bundle.frame.id,
+        key: 'ArrowRight',
+        ctrlKey: true,
+      },
+      {
+        kind: 'geometryKeyboard' as const,
+        frameId: bundle.frame.id,
+        key: 'ArrowRight',
+        metaKey: true,
+      },
+      {
+        kind: 'geometryKeyboard' as const,
+        frameId: bundle.frame.id,
+        key: 'ArrowRight',
+        altKey: true,
+      },
+      {
+        kind: 'geometryKeyboard' as const,
+        frameId: bundle.frame.id,
+        key: 'ArrowRight',
+        shiftKey: 'true' as unknown as boolean,
+      },
+      {
+        kind: 'geometryKeyboard' as const,
+        frameId: bundle.frame.id,
+        key: 'ArrowRight',
+        ctrlKey: 1 as unknown as boolean,
+      },
+      {
+        kind: 'geometryKeyboard' as const,
+        frameId: bundle.frame.id,
+        key: 'ArrowRight',
+        altKey: null as unknown as boolean,
+      },
     ]) {
       const planned = planInteraction(
         {
@@ -486,7 +577,7 @@ describe('keyboard navigation (task 5.5)', () => {
           resolveParagraphText: (identity: { blockId: string }) => identity.blockId,
           navigationGeometry: bundle.navigation,
         },
-        intent,
+        intent
       );
       expect(planned.effects[0]).toMatchObject({ kind: 'reject', code: 'unsupported' });
       expect(planned.effects.some((e) => e.kind === 'syncSelection')).toBe(false);
@@ -521,7 +612,11 @@ describe('keyboard navigation (task 5.5)', () => {
   test('createEditor binding failure leaves selection unchanged', () => {
     const body = document.createElement('div');
     document.body.append(body);
-    const editor = createEditor({ host: hostWith(body), document: createEditableParagraphFixture(), accessibleName: 'E' });
+    const editor = createEditor({
+      host: hostWith(body),
+      document: createEditableParagraphFixture(),
+      accessibleName: 'E',
+    });
     const frame = editor.getInteractionFrame();
     const blockId = editor.getAccessibilityObservation().entries[0]!.identity.blockId;
     editor.dispatchInteraction({
@@ -576,8 +671,16 @@ describe('keyboard navigation (task 5.5)', () => {
     const body2 = document.createElement('div');
     document.body.append(body1, body2);
     const narrowDoc = createEditableParagraphFixture();
-    const editor1 = createEditor({ host: hostWith(body1), document: narrowDoc, accessibleName: 'A' });
-    const editor2 = createEditor({ host: hostWith(body2), document: createEditableParagraphFixture(), accessibleName: 'B' });
+    const editor1 = createEditor({
+      host: hostWith(body1),
+      document: narrowDoc,
+      accessibleName: 'A',
+    });
+    const editor2 = createEditor({
+      host: hostWith(body2),
+      document: createEditableParagraphFixture(),
+      accessibleName: 'B',
+    });
     const frame1 = editor1.getInteractionFrame();
     const block1 = editor1.getAccessibilityObservation().entries[0]!.identity.blockId;
     editor1.dispatchInteraction({

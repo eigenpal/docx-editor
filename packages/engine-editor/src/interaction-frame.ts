@@ -66,6 +66,7 @@ export interface PublishLayoutInput {
   readonly modelRevision: number;
   readonly resourceEpoch: number;
   readonly configurationEpoch: number;
+  readonly shapingProvenance?: NonNullable<InteractionRevisions['shapingProvenance']>;
   readonly display: readonly DisplayPage[];
   readonly semanticIndex: SemanticPositionIndex;
   readonly navigationGeometry?: NavigationGeometry;
@@ -213,6 +214,11 @@ export function emptyInteractionFrame(): InteractionFrame {
     layoutRevision: 0,
     resourceEpoch: 0,
     configurationEpoch: 0,
+    shapingProvenance: deepFreezeValue({
+      extensionFingerprint: 'empty',
+      shapingHash: 'empty',
+      producerVersion: 0,
+    }),
   });
   return deepFreezeFrame({
     id,
@@ -423,6 +429,13 @@ export class InteractionFrameStore {
       layoutRevision: this.layoutRevision,
       resourceEpoch: input.resourceEpoch,
       configurationEpoch: input.configurationEpoch,
+      shapingProvenance: deepFreezeValue(
+        input.shapingProvenance ?? {
+          extensionFingerprint: 'unspecified',
+          shapingHash: 'unspecified',
+          producerVersion: 0,
+        }
+      ),
     };
     const frame = this.buildFrame(
       id,

@@ -31,8 +31,17 @@ export function modelToDoc(model: PackageModel, readOnlyBlockIds?: ReadonlySet<s
   );
 }
 
-/** Read a paragraph node's inline content back into authored runs. */
-export function paragraphNodeToRuns(node: PMNode): RunRecord[] {
+/** Read a paragraph node's inline content back into authored runs.
+ *
+ * Opaque rPr marks carry the exact XML bytes, but ProseMirror does not carry the parallel
+ * semantic `props` projection used by style resolution/layout. When canonical runs are supplied,
+ * restore those props by exact capsule identity. The capsule comes only from this projection's
+ * registry and is revalidated below, so this cannot attach formatting from attacker-controlled DOM.
+ */
+export function paragraphNodeToRuns(
+  node: PMNode,
+  canonicalRuns: readonly RunRecord[] = []
+): RunRecord[] {
   const runs: RunRecord[] = [];
   node.forEach((child) => {
     if (!child.isText || !child.text) return;
@@ -49,8 +58,14 @@ export function paragraphNodeToRuns(node: PMNode): RunRecord[] {
     }
     // An ownership-scoped rPr capsule wins: it already holds the full rPr, so the modeled b/i marks
     // (if any co-exist) are not separately serialized.
-    if (rPrCapsule !== undefined) runs.push({ text: child.text, rPrCapsule });
-    else
+    if (rPrCapsule !== undefined) {
+      const canonical = canonicalRuns.find((run) => run.rPrCapsule === rPrCapsule);
+      runs.push({
+        text: child.text,
+        ...(canonical?.props ? { props: canonical.props } : {}),
+        rPrCapsule,
+      });
+    } else
       runs.push(Object.keys(props).length > 0 ? { text: child.text, props } : { text: child.text });
   });
   return runs;

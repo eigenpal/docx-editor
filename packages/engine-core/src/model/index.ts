@@ -1,5 +1,7 @@
 // Canonical authored package model (document-engine task 2.9).
 export {
+  MAX_RUN_SIZE_HALF_POINTS,
+  type RunFonts,
   type RunProps,
   type RunRecord,
   type ParagraphProps,
@@ -29,6 +31,7 @@ export {
   type Story,
   type StyleRecord,
   type DocDefaults,
+  type ThemeFonts,
   type NumberingRecord,
   type PartRecord,
   type IdentityState,
@@ -45,6 +48,9 @@ export {
   validatePreservation,
 } from './serialize.ts';
 export {
+  cloneRunRecord,
+  detachFormattingReferences,
+  detachModelRunFonts,
   appendParagraph,
   insertParagraph,
   insertTextIntoParagraph,

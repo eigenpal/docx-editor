@@ -16,6 +16,8 @@ import {
   type NumberingRecord,
   type DocDefaults,
   type RunProps,
+  type ThemeFonts,
+  REL_TYPES,
 } from '../model/index.ts';
 
 /** Collect every `Relationship` element from a rels part's tree. */
@@ -74,14 +76,40 @@ export function parseStoryParagraphs(
   return collectParagraphElements(root).map((p) => paragraphFromElement(p, alloc));
 }
 
-/** Parse word/styles.xml into authored style records (task 2.7). */
-export function parseStyles(entries: ReadonlyMap<string, Uint8Array>): StyleRecord[] {
-  const part = entries.get('/word/styles.xml');
-  if (!part) return [];
-  const sx = readXml(strFromU8(part));
-  if (!sx.ok) return [];
-  const root = findElement(sx.nodes, 'w:styles');
-  if (!root) return [];
+const WML_NAMESPACES = new Set([
+  'http://schemas.openxmlformats.org/wordprocessingml/2006/main',
+  'http://purl.oclc.org/ooxml/wordprocessingml/main',
+]);
+const STYLES_XML_MAX_BYTES = 8 * 1024 * 1024;
+const STYLES_XML_MAX_ELEMENTS = 100_000;
+
+function normalizeWmlNode(node: XmlNode, inherited: ReadonlyMap<string, string>): XmlNode {
+  if (!el(node)) return node;
+  const bindings = new Map(inherited);
+  for (const [name, value] of Object.entries(node.attributes)) {
+    if (name === 'xmlns') bindings.set('', value);
+    else if (name.startsWith('xmlns:')) bindings.set(name.slice(6), value);
+  }
+  const normalizeName = (name: string, isAttribute: boolean): string => {
+    const colon = name.indexOf(':');
+    if (colon < 0)
+      return !isAttribute && WML_NAMESPACES.has(bindings.get('') ?? '') ? `w:${name}` : name;
+    const prefix = name.slice(0, colon);
+    const local = name.slice(colon + 1);
+    return WML_NAMESPACES.has(bindings.get(prefix) ?? '') ? `w:${local}` : name;
+  };
+  const attributes = Object.create(null) as Record<string, string>;
+  for (const [name, value] of Object.entries(node.attributes))
+    attributes[normalizeName(name, true)] = value;
+  return {
+    type: 'element',
+    name: normalizeName(node.name, false),
+    attributes,
+    children: node.children.map((child) => normalizeWmlNode(child, bindings)),
+  };
+}
+
+function stylesFromRoot(root: Extract<XmlNode, { type: 'element' }>): StyleRecord[] {
   const out: StyleRecord[] = [];
   for (const style of childElements(root, 'w:style') as Extract<XmlNode, { type: 'element' }>[]) {
     const id = style.attributes['w:styleId'];
@@ -107,24 +135,187 @@ export function parseStyles(entries: ReadonlyMap<string, Uint8Array>): StyleReco
   return out;
 }
 
-/** Parse word/styles.xml's w:docDefaults into document-wide default formatting — the
- *  lowest layer of style resolution. Resolution-only; never authored onto content. */
-export function parseDocDefaults(
-  entries: ReadonlyMap<string, Uint8Array>
-): DocDefaults | undefined {
-  const part = entries.get('/word/styles.xml');
-  if (!part) return undefined;
-  const sx = readXml(strFromU8(part));
-  if (!sx.ok) return undefined;
-  const root = findElement(sx.nodes, 'w:styles');
-  if (!root) return undefined;
+function defaultsFromRoot(root: Extract<XmlNode, { type: 'element' }>): DocDefaults | undefined {
   const docDefaults = childElements(root, 'w:docDefaults')[0];
   if (!docDefaults) return undefined;
   const rPrDefault = childElements(docDefaults, 'w:rPrDefault')[0];
   const rPr = rPrDefault ? childElements(rPrDefault, 'w:rPr')[0] : undefined;
   const runProps: RunProps | undefined = rPr ? parseRPr(rPr) : undefined;
-  if (!runProps || Object.keys(runProps).length === 0) return undefined;
-  return { runProps };
+  return runProps && Object.keys(runProps).length > 0 ? { runProps } : undefined;
+}
+
+export type StylesParseResult =
+  | {
+      readonly ok: true;
+      readonly styles: StyleRecord[];
+      readonly docDefaults?: DocDefaults;
+    }
+  | { readonly ok: false; readonly detail: string };
+
+/** Parse styles/defaults once through a bounded, namespace-aware trust boundary. */
+export function parseStylesAndDefaults(
+  entries: ReadonlyMap<string, Uint8Array>
+): StylesParseResult {
+  const part = entries.get('/word/styles.xml');
+  if (!part) return { ok: true, styles: [] };
+  if (part.byteLength > STYLES_XML_MAX_BYTES)
+    return { ok: false, detail: 'styles part exceeds byte ceiling' };
+  const sx = readXml(strFromU8(part), {
+    maxBytes: STYLES_XML_MAX_BYTES,
+    maxElements: STYLES_XML_MAX_ELEMENTS,
+  });
+  if (!sx.ok) return { ok: false, detail: `invalid styles XML: ${sx.reason}` };
+  const roots = sx.nodes.filter(el);
+  if (roots.length !== 1)
+    return { ok: false, detail: 'styles XML must have exactly one root element' };
+  const root = normalizeWmlNode(roots[0], new Map());
+  if (!el(root) || root.name !== 'w:styles')
+    return { ok: false, detail: 'styles XML root is not WordprocessingML styles' };
+  const docDefaults = defaultsFromRoot(root);
+  return {
+    ok: true,
+    styles: stylesFromRoot(root),
+    ...(docDefaults ? { docDefaults } : {}),
+  };
+}
+
+/** Parse the document theme's major/minor Latin, East Asian, and complex-script
+ * font families. Theme part discovery follows the main document relationship and
+ * never resolves or fetches an external target. */
+export type ThemeFontsParseResult =
+  | { readonly ok: true; readonly fonts?: ThemeFonts }
+  | { readonly ok: false; readonly detail: string };
+
+const DRAWINGML_NAMESPACES = new Set([
+  'http://schemas.openxmlformats.org/drawingml/2006/main',
+  'http://purl.oclc.org/ooxml/drawingml/main',
+]);
+const THEME_XML_MAX_BYTES = 1024 * 1024;
+const THEME_XML_MAX_ELEMENTS = 10_000;
+
+type XmlElement = Extract<XmlNode, { type: 'element' }>;
+
+function buildNamespaceIndex(root: XmlElement): WeakMap<XmlElement, string | undefined> {
+  const index = new WeakMap<XmlElement, string | undefined>();
+  const walk = (current: XmlElement, inherited: ReadonlyMap<string, string>): void => {
+    const bindings = new Map(inherited);
+    for (const [name, value] of Object.entries(current.attributes)) {
+      if (name === 'xmlns') bindings.set('', value);
+      else if (name.startsWith('xmlns:')) bindings.set(name.slice(6), value);
+    }
+    const colon = current.name.indexOf(':');
+    const prefix = colon < 0 ? '' : current.name.slice(0, colon);
+    index.set(current, bindings.get(prefix));
+    for (const child of current.children) if (el(child)) walk(child, bindings);
+  };
+  walk(root, new Map());
+  return index;
+}
+
+function elementLocalName(node: XmlElement): string {
+  const colon = node.name.indexOf(':');
+  return colon < 0 ? node.name : node.name.slice(colon + 1);
+}
+
+function namespaceDescendants(
+  node: XmlElement,
+  index: WeakMap<XmlElement, string | undefined>,
+  localName: string
+): XmlElement[] {
+  const out: XmlElement[] = [];
+  const walk = (current: XmlElement): void => {
+    if (
+      DRAWINGML_NAMESPACES.has(index.get(current) ?? '') &&
+      elementLocalName(current) === localName
+    )
+      out.push(current);
+    for (const child of current.children) if (el(child)) walk(child);
+  };
+  walk(node);
+  return out;
+}
+
+function directNamespaceChildren(
+  node: XmlElement,
+  index: WeakMap<XmlElement, string | undefined>,
+  localName: string
+): XmlElement[] {
+  return node.children.filter(
+    (child): child is XmlElement =>
+      el(child) &&
+      DRAWINGML_NAMESPACES.has(index.get(child) ?? '') &&
+      elementLocalName(child) === localName
+  );
+}
+
+export function parseThemeFonts(entries: ReadonlyMap<string, Uint8Array>): ThemeFontsParseResult {
+  const relsPart = entries.get('/word/_rels/document.xml.rels');
+  if (!relsPart) return { ok: true };
+  const rx = readXml(strFromU8(relsPart));
+  if (!rx.ok) return { ok: false, detail: `invalid document relationships: ${rx.reason}` };
+  const relationships = allRelationships(rx.nodes).filter((rel) => {
+    const type = rel.attributes.Type;
+    return type === REL_TYPES.theme || type === REL_TYPES.themeStrict;
+  });
+  if (relationships.length === 0) return { ok: true };
+  if (relationships.length !== 1)
+    return { ok: false, detail: 'document has duplicate theme relationships' };
+  const relationship = relationships[0];
+  const targetMode = relationship.attributes.TargetMode;
+  if (targetMode === 'External') return { ok: true };
+  if (targetMode !== undefined)
+    return { ok: false, detail: `invalid theme TargetMode: ${targetMode}` };
+  const target = relationship.attributes.Target;
+  if (!target) return { ok: false, detail: 'internal theme relationship has no target' };
+  const resolved = resolveInternalTarget('/word/document.xml', target);
+  if (!resolved.ok)
+    return { ok: false, detail: `invalid internal theme target: ${resolved.reason}` };
+  const partName = resolved.partName;
+  const part = entries.get(partName);
+  if (!part) return { ok: false, detail: `missing internal theme part: ${partName}` };
+  if (part.byteLength > THEME_XML_MAX_BYTES)
+    return { ok: false, detail: 'theme part exceeds byte ceiling' };
+  const tx = readXml(strFromU8(part), {
+    maxBytes: THEME_XML_MAX_BYTES,
+    maxElements: THEME_XML_MAX_ELEMENTS,
+  });
+  if (!tx.ok) return { ok: false, detail: `invalid theme XML: ${tx.reason}` };
+  const roots = tx.nodes.filter(el);
+  if (roots.length !== 1) return { ok: false, detail: 'theme XML must have one root element' };
+  const namespaceIndex = buildNamespaceIndex(roots[0]);
+  const schemes = namespaceDescendants(roots[0], namespaceIndex, 'fontScheme');
+  if (schemes.length !== 1)
+    return { ok: false, detail: 'theme XML must have exactly one fontScheme' };
+  const scheme = schemes[0];
+  const majors = directNamespaceChildren(scheme, namespaceIndex, 'majorFont');
+  const minors = directNamespaceChildren(scheme, namespaceIndex, 'minorFont');
+  if (majors.length !== 1 || minors.length !== 1)
+    return { ok: false, detail: 'theme fontScheme must have one majorFont and one minorFont' };
+  const typeface = (group: XmlElement, childName: string): string | undefined => {
+    const children = directNamespaceChildren(group, namespaceIndex, childName);
+    if (children.length > 1) throw new Error(`duplicate theme ${childName}`);
+    return children[0]?.attributes.typeface || undefined;
+  };
+  let fonts: ThemeFonts;
+  try {
+    const majorLatin = typeface(majors[0], 'latin');
+    const minorLatin = typeface(minors[0], 'latin');
+    const majorEastAsia = typeface(majors[0], 'ea');
+    const minorEastAsia = typeface(minors[0], 'ea');
+    const majorComplexScript = typeface(majors[0], 'cs');
+    const minorComplexScript = typeface(minors[0], 'cs');
+    fonts = {
+      ...(majorLatin !== undefined ? { majorLatin } : {}),
+      ...(minorLatin !== undefined ? { minorLatin } : {}),
+      ...(majorEastAsia !== undefined ? { majorEastAsia } : {}),
+      ...(minorEastAsia !== undefined ? { minorEastAsia } : {}),
+      ...(majorComplexScript !== undefined ? { majorComplexScript } : {}),
+      ...(minorComplexScript !== undefined ? { minorComplexScript } : {}),
+    };
+  } catch (error) {
+    return { ok: false, detail: error instanceof Error ? error.message : 'invalid theme fonts' };
+  }
+  return Object.keys(fonts).length > 0 ? { ok: true, fonts } : { ok: true };
 }
 
 /** Parse word/numbering.xml into authored numbering records (task 2.7). */

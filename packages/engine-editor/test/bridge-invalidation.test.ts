@@ -10,7 +10,7 @@
 // still produces output identical to a cold build.
 
 import { describe, expect, test } from 'bun:test';
-import { layoutBody, HelveticaMetrics } from '@docx-editor.dev/engine-layout';
+import { layoutBody } from '@docx-editor.dev/engine-layout';
 import {
   createEmptyModel,
   bodyStoryId,
@@ -19,18 +19,23 @@ import {
   type PackageModel,
   type ParagraphRecord,
 } from '@docx-editor.dev/engine-core';
-import { DisplayBridgeCache, toDisplayPages, type BridgeInvalidation } from '../src/display-bridge.ts';
+import {
+  DisplayBridgeCache,
+  toDisplayPages,
+  type BridgeInvalidation,
+} from '../src/display-bridge.ts';
 import { LAYOUT, modelWithTableCell } from './interaction-test-helpers.ts';
+import { createHarfBuzzLayoutOptions } from '../../engine-layout/test/fixtures/layout-shaping.ts';
 
 const HUMAN = ORIGIN_IDS.mutationHuman;
-const metrics = new HelveticaMetrics();
-
 function storeWith(texts: readonly string[]) {
   const model = createEmptyModel();
   const storyId = bodyStoryId(model);
   const store = new DocumentStore(model);
   const first = (model.stories.get(storyId)!.blocks[0] as ParagraphRecord).id;
-  store.transact(HUMAN, (c) => c.apply({ op: 'insertText', paragraphId: first, text: texts[0] ?? '' }));
+  store.transact(HUMAN, (c) =>
+    c.apply({ op: 'insertText', paragraphId: first, text: texts[0] ?? '' })
+  );
   const ids = [first];
   for (let i = 1; i < texts.length; i += 1) {
     const r = store.transact(HUMAN, (c) => c.apply({ op: 'appendParagraph', storyId }));
@@ -41,19 +46,57 @@ function storeWith(texts: readonly string[]) {
   return { store, ids, storyId };
 }
 
-const bridge = (model: PackageModel, cache?: DisplayBridgeCache, invalidation?: BridgeInvalidation) =>
-  toDisplayPages(model, layoutBody(model, { ...LAYOUT, metrics }).pages, metrics, cache, invalidation);
+const bridge = (
+  model: PackageModel,
+  cache?: DisplayBridgeCache,
+  invalidation?: BridgeInvalidation
+) => toDisplayPages(model, layoutBody(model, LAYOUT).pages, { cache, invalidation });
 
 const shape = (r: ReturnType<typeof bridge>) =>
   JSON.stringify({
     items: r.display.map((p) =>
-      p.items.filter((i) => i.kind === 'text').map((i) => (i.kind === 'text' ? { s: i.semantic, c: i.clusters, b: i.box } : null)),
+      p.items
+        .filter((i) => i.kind === 'text')
+        .map((i) => (i.kind === 'text' ? { s: i.semantic, c: i.clusters, b: i.box } : null))
     ),
-    nav: r.navigationGeometry.visualLines.map((l) => ({ id: l.identity, edges: l.edges, box: l.lineBox })),
+    nav: r.navigationGeometry.visualLines.map((l) => ({
+      id: l.identity,
+      edges: l.edges,
+      box: l.lineBox,
+    })),
     stops: r.semanticIndex.caretStops.length,
   });
 
 describe('bridge consumes dirty block ids', () => {
+  test('a font face swap invalidates its dependent while unchanged font dependencies remain reusable', () => {
+    const { store, ids } = storeWith(['unchanged paragraph', 'face swap']);
+    const options = createHarfBuzzLayoutOptions();
+    const cache = new DisplayBridgeCache();
+    const publish = () =>
+      toDisplayPages(store.currentModel, layoutBody(store.currentModel, options).pages, { cache });
+    const before = publish();
+    const beforeRuns = before.display
+      .flatMap((page) => page.items)
+      .flatMap((item) => (item.kind === 'text' ? item.runs : []));
+
+    store.transact(HUMAN, (commands) =>
+      commands.apply({
+        op: 'setParagraphRuns',
+        paragraphId: ids[1]!,
+        runs: [{ text: 'face swap', props: { bold: true } }],
+      })
+    );
+    const after = publish();
+    const afterRuns = after.display
+      .flatMap((page) => page.items)
+      .flatMap((item) => (item.kind === 'text' ? item.runs : []));
+
+    expect(beforeRuns[0]!.font.hash).toBe(afterRuns[0]!.font.hash);
+    expect(beforeRuns[1]!.font.hash).not.toBe(afterRuns[1]!.font.hash);
+    expect(cache.reused).toBeGreaterThan(0);
+    expect(cache.built).toBeGreaterThan(0);
+  });
+
   test('naming a block as changed evicts its cached chunks', () => {
     const { store, ids } = storeWith(['alpha beta', 'gamma delta']);
     const cache = new DisplayBridgeCache();
@@ -88,7 +131,7 @@ describe('bridge consumes dirty block ids', () => {
     const cache = new DisplayBridgeCache();
     bridge(store.currentModel, cache);
     store.transact(HUMAN, (c) =>
-      c.apply({ op: 'insertText', paragraphId: ids[0]!, offset: 0, text: 'ZZZ ' }),
+      c.apply({ op: 'insertText', paragraphId: ids[0]!, offset: 0, text: 'ZZZ ' })
     );
     const lying = bridge(store.currentModel, cache, { created: [], changed: [], deleted: [] });
     expect(shape(lying)).toBe(shape(bridge(store.currentModel)));
@@ -102,7 +145,7 @@ describe('bridge consumes dirty block ids', () => {
     const cache = new DisplayBridgeCache();
     bridge(store.currentModel, cache);
     store.transact(HUMAN, (c) =>
-      c.apply({ op: 'insertText', paragraphId: ids[0]!, offset: 0, text: 'w '.repeat(400) }),
+      c.apply({ op: 'insertText', paragraphId: ids[0]!, offset: 0, text: 'w '.repeat(400) })
     );
     const moved = bridge(store.currentModel, cache, { changed: [ids[0]!] });
     expect(shape(moved)).toBe(shape(bridge(store.currentModel)));

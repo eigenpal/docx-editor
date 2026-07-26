@@ -14,7 +14,7 @@ import {
   hasLayoutMetadata,
 } from '../src/block-layout.ts';
 import { keyId } from '../src/dependency-graph.ts';
-import { DeterministicMetrics } from '../src/metrics.ts';
+import { createDeterministicLayoutShaping } from '../src/metrics.ts';
 import {
   createEmptyModel,
   bodyStoryId,
@@ -26,12 +26,20 @@ import {
 } from '@docx-editor.dev/engine-core';
 
 function opts(): LayoutOptions {
-  return { pageWidth: 12240, pageHeight: 15840, margin: 1440, metrics: new DeterministicMetrics() };
+  return {
+    pageWidth: 12240,
+    pageHeight: 15840,
+    margin: 1440,
+    shaping: createDeterministicLayoutShaping(),
+  };
 }
 function modelWith(blocks: Block[]): PackageModel {
   const base = createEmptyModel();
   const sid = bodyStoryId(base);
-  return { ...base, stories: new Map(base.stories).set(sid, { ...base.stories.get(sid)!, blocks }) };
+  return {
+    ...base,
+    stories: new Map(base.stories).set(sid, { ...base.stories.get(sid)!, blocks }),
+  };
 }
 
 describe('layout dispatches blocks through the registry', () => {
@@ -42,12 +50,19 @@ describe('layout dispatches blocks through the registry', () => {
     // One paint run per visual line per style, not one per word: "hello world" is a
     // single unstyled line, so it paints as one item WITH its space.
     expect(texts.map((t) => (t as { text: string }).text)).toEqual(['hello world']);
-    expect(texts.every((t) => (t as { anchor: { paragraphId: string } }).anchor.paragraphId === 'p')).toBe(true);
+    expect(
+      texts.every((t) => (t as { anchor: { paragraphId: string } }).anchor.paragraphId === 'p')
+    ).toBe(true);
   });
 
   test('a transparent SDT lays out its nested blocks in place (recurses through the registry)', () => {
     const model = modelWith([
-      { kind: 'sdt', id: 's', props: {}, blocks: [{ kind: 'paragraph', id: 'inner', runs: [{ text: 'nested' }] }] },
+      {
+        kind: 'sdt',
+        id: 's',
+        props: {},
+        blocks: [{ kind: 'paragraph', id: 'inner', runs: [{ text: 'nested' }] }],
+      },
     ]);
     const layout = layoutBody(model, opts());
     const texts = layout.pages.flatMap((pg) => pg.items).filter((i) => i.type === 'text');
@@ -55,7 +70,9 @@ describe('layout dispatches blocks through the registry', () => {
   });
 
   test('registering a duplicate handler for a kind is rejected', () => {
-    expect(() => registerBlockLayout('paragraph', () => {})).toThrow(/duplicate block layout handler/);
+    expect(() => registerBlockLayout('paragraph', () => {})).toThrow(
+      /duplicate block layout handler/
+    );
   });
 
   test('an unregistered block kind fails closed rather than being silently skipped', () => {
@@ -89,16 +106,32 @@ describe('layout metadata lanes: resolution dependencies + semantic roles + hit 
       rows: [
         {
           id: 'r',
-          cells: [{ id: 'c', blocks: [{ kind: 'paragraph', id: 'cp', runs: [{ text: 'x' }], props: { styleId: 'Cell' } }] }],
+          cells: [
+            {
+              id: 'c',
+              blocks: [
+                { kind: 'paragraph', id: 'cp', runs: [{ text: 'x' }], props: { styleId: 'Cell' } },
+              ],
+            },
+          ],
         },
       ],
     } as unknown as Block;
     // A table style is a StyleRecord identity -> 'style:TableGrid', not 'table:...'; nested paragraph
     // style is composed so a cached table invalidates when a cell paragraph's style changes.
-    expect(blockDependencies(t).map(keyId).sort()).toEqual(['style:Cell', 'style:TableGrid', 'style:docDefaults']);
+    expect(blockDependencies(t).map(keyId).sort()).toEqual([
+      'style:Cell',
+      'style:TableGrid',
+      'style:docDefaults',
+    ]);
     expect(blockSemanticRole('table')).toBe('table');
     // A transparent SDT reads nothing itself but composes nested block deps.
-    const s: Block = { kind: 'sdt', id: 's', props: {}, blocks: [{ kind: 'paragraph', id: 'sp', runs: [{ text: 'y' }], props: { numId: '9' } }] };
+    const s: Block = {
+      kind: 'sdt',
+      id: 's',
+      props: {},
+      blocks: [{ kind: 'paragraph', id: 'sp', runs: [{ text: 'y' }], props: { numId: '9' } }],
+    };
     expect(blockDependencies(s).map(keyId).sort()).toEqual(['numbering:9', 'style:docDefaults']);
     expect(blockSemanticRole('sdt')).toBe('group');
   });
@@ -127,7 +160,10 @@ describe('layout lane feature-completeness (comprehensive 3.9)', () => {
     try {
       // A core kind (editable or read-only) that contributes no flow-layout handler would fail
       // closed only mid-render; the lane check surfaces the gap before a document is laid out.
-      registerCoreBlockCapability({ kind: 'callout' as Block['kind'], editPolicy: { topLevelEditable: false } });
+      registerCoreBlockCapability({
+        kind: 'callout' as Block['kind'],
+        editPolicy: { topLevelEditable: false },
+      });
       expect(() => assertLayoutLaneComplete()).toThrow(/layout lane incomplete[\s\S]*callout/);
     } finally {
       restoreBlockRegistryForTest(snap);
@@ -141,12 +177,17 @@ describe('layout lane feature-completeness (comprehensive 3.9)', () => {
     try {
       // A late core kind with no layout handler bumps blockRegistryVersion, so the NEXT layoutBody
       // re-validates (not skipped by a one-shot latch) and rejects — even for a paragraph-only doc.
-      registerCoreBlockCapability({ kind: 'callout' as Block['kind'], editPolicy: { topLevelEditable: false } });
+      registerCoreBlockCapability({
+        kind: 'callout' as Block['kind'],
+        editPolicy: { topLevelEditable: false },
+      });
       const paraOnly = modelWith([{ kind: 'paragraph', id: 'p2', runs: [{ text: 'y' }] }]);
       expect(() => layoutBody(paraOnly, opts())).toThrow(/layout lane incomplete[\s\S]*callout/);
     } finally {
       restoreBlockRegistryForTest(snap);
     }
-    expect(() => layoutBody(modelWith([{ kind: 'paragraph', id: 'p3', runs: [{ text: 'z' }] }]), opts())).not.toThrow();
+    expect(() =>
+      layoutBody(modelWith([{ kind: 'paragraph', id: 'p3', runs: [{ text: 'z' }] }]), opts())
+    ).not.toThrow();
   });
 });

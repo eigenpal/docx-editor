@@ -36,8 +36,8 @@ describe('a11y harness spawned lifecycle', () => {
         },
         async () => {
           throw new Error('task should not run');
-        },
-      ),
+        }
+      )
     ).rejects.toThrow('harness server did not start');
 
     expect(stops).toEqual([fakeHandle]);
@@ -208,7 +208,7 @@ describe('a11y harness spawned lifecycle', () => {
           await sleep(timeoutMs);
           throw new Error(`harness server still reachable after stop: ${url}`);
         },
-      }),
+      })
     ).rejects.toThrow('harness server still reachable after stop: http://127.0.0.1:5997/');
   });
 });

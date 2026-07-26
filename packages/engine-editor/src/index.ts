@@ -11,7 +11,11 @@
 export const ENGINE_EDITOR_PACKAGE = '@docx-editor.dev/engine-editor' as const;
 
 export { semanticChunkStats } from './semantic-index.ts';
-export { createEditor } from './create-editor.ts';
+export {
+  EditorLayoutConfigurationError,
+  createEditor,
+  type EngineEditorConfig,
+} from './create-editor.ts';
 export {
   toDisplayPages,
   overlaysForFrame,
@@ -30,6 +34,21 @@ export {
   type BorderLine,
 } from './paint-style.ts';
 export {
+  BrowserFontPaintError,
+  installDisplayFonts,
+  installLayoutFonts,
+  type BrowserFontPaintErrorCode,
+  type BrowserFontFace,
+  type BrowserFontSet,
+  type BrowserFontFaceFactory,
+  type InstalledDisplayFonts,
+} from './browser-font-registry.ts';
+export {
+  createLayoutShaping,
+  disposeLayoutShaping,
+  toEditorFontError,
+} from './font-configuration.ts';
+export {
   type EditorDriver,
   type DisplaySnapshot,
   createEditorDriver,
@@ -37,6 +56,7 @@ export {
   displayText,
 } from './driver.ts';
 export { measureInteractionHostMetrics } from './host-metrics.ts';
+export { PaintEpochGate } from './paint-epoch-gate.ts';
 export {
   createDomRenderedTextGeometryPort,
   semanticRangeForRun,

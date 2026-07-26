@@ -16,7 +16,6 @@ async function fetchGitHubStars(): Promise<number | null> {
   return null;
 }
 
-
 /**
  * Serve the canonical comprehensive fixture from ONE byte source (task M6D.1).
  *
@@ -31,27 +30,41 @@ async function fetchGitHubStars(): Promise<number | null> {
  * rather than depending on a dev-only route.
  */
 function canonicalFixturePlugin(): Plugin {
-  const url = '/comprehensive-word-element-test.docx';
-  const source = path.join(monorepoRoot, 'e2e/fixtures/comprehensive-word-element-test.docx');
+  const fixtures = new Map([
+    [
+      '/comprehensive-word-element-test.docx',
+      path.join(monorepoRoot, 'e2e/fixtures/comprehensive-word-element-test.docx'),
+    ],
+    [
+      '/harfbuzz-text-fidelity.docx',
+      path.join(monorepoRoot, 'e2e/fixtures/harfbuzz-text-fidelity.docx'),
+    ],
+  ]);
   return {
     name: 'docx-editor-canonical-fixture',
     configureServer(server) {
       server.middlewares.use((req, res, next) => {
-        if (!req.url || req.url.split('?')[0] !== url) return next();
+        const source = req.url ? fixtures.get(req.url.split('?')[0]!) : undefined;
+        if (!source) return next();
         readFile(source)
           .then((bytes) => {
-            res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document');
+            res.setHeader(
+              'Content-Type',
+              'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+            );
             res.end(bytes);
           })
           .catch(next);
       });
     },
     async generateBundle() {
-      this.emitFile({
-        type: 'asset',
-        fileName: 'comprehensive-word-element-test.docx',
-        source: await readFile(source),
-      });
+      for (const [url, source] of fixtures) {
+        this.emitFile({
+          type: 'asset',
+          fileName: url.slice(1),
+          source: await readFile(source),
+        });
+      }
     },
   };
 }
@@ -73,7 +86,13 @@ export default defineConfig(async () => {
     root: __dirname,
     resolve: {
       alias: usePublished
-        ? [{ find: '@', replacement: path.join(monorepoRoot, 'packages/react/src') }]
+        ? [
+            {
+              find: /^@docx-editor\.dev\/react$/,
+              replacement: path.join(monorepoRoot, 'packages/react/dist/index.mjs'),
+            },
+            { find: '@', replacement: path.join(monorepoRoot, 'packages/react/src') },
+          ]
         : [
             // Resolve package imports to source for live development
             // Order matters: more-specific prefixes before less-specific ones

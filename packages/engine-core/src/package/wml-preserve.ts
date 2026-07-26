@@ -82,11 +82,7 @@ function reparseBlockWithCapsule(sliceText: string, alloc: IdentityAllocator): B
     if (rPr && rPr.length === block.runs.length && rPr.some((c) => c !== null)) {
       block = {
         ...block,
-        runs: block.runs.map((r, i) =>
-          rPr[i]
-            ? { text: r.text, ...(r.id !== undefined ? { id: r.id } : {}), rPrCapsule: rPr[i]! }
-            : r
-        ),
+        runs: block.runs.map((r, i) => (rPr[i] ? { ...r, rPrCapsule: rPr[i]! } : r)),
       };
     }
   }

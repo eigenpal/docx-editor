@@ -14,7 +14,9 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@docx-editor.dev/engine-core": "workspace:*"
+    "@docx-editor.dev/engine-core": "workspace:*",
+    "bidi-js": "1.0.3",
+    "harfbuzzjs": "1.4.0"
   },
   "devDependencies": {
     "typescript": "^5.3.3"

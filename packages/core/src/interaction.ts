@@ -40,6 +40,12 @@ export interface InteractionRevisions {
   readonly resourceEpoch: number;
   /** Editor configuration epoch (zoom, locale, mode, …). */
   readonly configurationEpoch: number;
+  /** Exact non-model shaping producer inputs captured for this layout publication. */
+  readonly shapingProvenance?: {
+    readonly extensionFingerprint: string;
+    readonly shapingHash: string;
+    readonly producerVersion: number;
+  };
 }
 
 /** Bidi/grapheme affinity for a text caret or hit target. */
@@ -77,6 +83,7 @@ export interface ShapedCluster {
   readonly box: Rect;
   readonly logicalOrder: number;
   readonly direction: 'ltr' | 'rtl';
+  readonly bidiLevel: number;
   readonly affinity: InteractionAffinity;
 }
 

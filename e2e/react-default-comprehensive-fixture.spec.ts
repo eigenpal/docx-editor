@@ -40,17 +40,55 @@ test.describe('M6D.1 default comprehensive fixture (React)', () => {
     await page.goto('http://localhost:5273/');
     await page.waitForFunction(() => !!window.__docxAdapterEditor);
 
-    const state = await page.evaluate(() => ({
-      pages: document.querySelectorAll('[data-page-index]').length,
-      text: [...document.querySelectorAll('[data-page-index] .ep-one-surface__content > div')]
-        .map((el) => el.textContent ?? '')
-        .join(' '),
-    }));
+    const state = await page.evaluate(() => {
+      const frame = window.__docxAdapterEditor!.getInteractionFrame();
+      const pageLines = frame.display.map((displayPage) => {
+        const lines = new Map<number, string>();
+        for (const item of displayPage.items) {
+          if (item.kind !== 'text') continue;
+          lines.set(
+            item.box.y,
+            (lines.get(item.box.y) ?? '') + item.runs.map((run) => run.text).join('')
+          );
+        }
+        return [...lines.values()];
+      });
+      return {
+        pages: document.querySelectorAll('[data-page-index]').length,
+        text: [...document.querySelectorAll('[data-page-index] .ep-one-surface__content > div')]
+          .map((el) => el.textContent ?? '')
+          .join(' '),
+        fontHashes: [
+          ...new Set(
+            frame.display.flatMap((displayPage) =>
+              displayPage.items.flatMap((item) =>
+                item.kind === 'text' ? item.runs.map((run) => run.font.hash) : []
+              )
+            )
+          ),
+        ].sort(),
+        frontier: {
+          page9Last: pageLines[8]?.at(-1),
+          page10First: pageLines[9]?.at(0),
+        },
+      };
+    });
 
-    // Nine pages is the fixture's real pagination; asserting the count catches a
-    // silent truncation that "it renders" would not.
-    expect(state.pages).toBe(9);
-    expect(state.text).toContain('COMPREHENSIVE WORD ELEMENT TEST DOCUMENT');
+    // Licensed DejaVu 2.37 shaping moves the reviewed page-9/page-10 frontier below.
+    // The hashes pin the exact regular/bold bytes, so this cannot silently bless a
+    // browser fallback or a different font's pagination.
+    expect(state.pages).toBe(10);
+    expect({ fontHashes: state.fontHashes, frontier: state.frontier }).toEqual({
+      fontHashes: [
+        'sha256:7da195a74c55bef988d0d48f9508bd5d849425c1770dba5d7bfc6ce9ed848954',
+        'sha256:e6476c1b80502924294eed40894c5b18e06c181444ca953e5334262df9c27724',
+      ],
+      frontier: {
+        page9Last: '27Column BreaksExplicit column break in multi-col',
+        page10First: '#Element CategoryDetails',
+      },
+    });
+    expect(state.text.replace(/\s+/g, ' ')).toContain('COMPREHENSIVE WORD ELEMENT TEST DOCUMENT');
   });
 
   test('an explicit ?fixture= override still wins', async ({ page }) => {

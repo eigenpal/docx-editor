@@ -319,7 +319,12 @@ export function ToolbarButton({
       data-active={active ? 'true' : undefined}
       onMouseDown={handleMouseDown}
       onClick={disabled ? undefined : onClick}
-      disabled={disabled}
+      // Native disabled controls receive no mouse event in Chromium, so their
+      // preventDefault handler cannot preserve the editor's focus/caret.
+      // Keep the control semantically disabled and out of tab order while
+      // allowing pointer-down cancellation at the toolbar boundary.
+      aria-disabled={disabled || undefined}
+      tabIndex={disabled ? -1 : undefined}
       aria-pressed={active ? true : false}
       aria-label={ariaLabel || title}
       data-testid={testId ? `toolbar-${testId}` : undefined}

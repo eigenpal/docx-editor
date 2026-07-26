@@ -9,7 +9,7 @@
 // because a cache that changes output is worse than no cache, and only then the reuse.
 
 import { describe, expect, test } from 'bun:test';
-import { layoutBody, HelveticaMetrics } from '@docx-editor.dev/engine-layout';
+import { layoutBody } from '@docx-editor.dev/engine-layout';
 import {
   createEmptyModel,
   bodyStoryId,
@@ -28,7 +28,9 @@ function storeWith(texts: readonly string[]) {
   const storyId = bodyStoryId(model);
   const store = new DocumentStore(model);
   const first = (model.stories.get(storyId)!.blocks[0] as ParagraphRecord).id;
-  store.transact(HUMAN, (c) => c.apply({ op: 'insertText', paragraphId: first, text: texts[0] ?? '' }));
+  store.transact(HUMAN, (c) =>
+    c.apply({ op: 'insertText', paragraphId: first, text: texts[0] ?? '' })
+  );
   const ids = [first];
   for (let i = 1; i < texts.length; i += 1) {
     const r = store.transact(HUMAN, (c) => c.apply({ op: 'appendParagraph', storyId }));
@@ -40,8 +42,7 @@ function storeWith(texts: readonly string[]) {
 }
 
 const bridge = (model: PackageModel, cache?: DisplayBridgeCache) => {
-  const metrics = new HelveticaMetrics();
-  return toDisplayPages(model, layoutBody(model, { ...LAYOUT, metrics }).pages, metrics, cache);
+  return toDisplayPages(model, layoutBody(model, LAYOUT).pages, { cache });
 };
 
 /** EVERY field navigation geometry publishes. Nothing is stripped or excused. */
@@ -75,7 +76,7 @@ describe('visual line reuse is invisible', () => {
     for (const texts of TEXTS) {
       const { store } = storeWith(texts);
       expect(navShape(bridge(store.currentModel, new DisplayBridgeCache()))).toBe(
-        navShape(bridge(store.currentModel)),
+        navShape(bridge(store.currentModel))
       );
     }
   });
@@ -86,9 +87,11 @@ describe('visual line reuse is invisible', () => {
       const cache = new DisplayBridgeCache();
       bridge(store.currentModel, cache); // warm
       store.transact(HUMAN, (c) =>
-        c.apply({ op: 'insertText', paragraphId: ids[0]!, offset: 0, text: 'Z' }),
+        c.apply({ op: 'insertText', paragraphId: ids[0]!, offset: 0, text: 'Z' })
       );
-      expect(navShape(bridge(store.currentModel, cache))).toBe(navShape(bridge(store.currentModel)));
+      expect(navShape(bridge(store.currentModel, cache))).toBe(
+        navShape(bridge(store.currentModel))
+      );
     }
   });
 
@@ -99,13 +102,13 @@ describe('visual line reuse is invisible', () => {
     const cache = new DisplayBridgeCache();
     const before = bridge(store.currentModel, cache);
     const beforeOrder = before.navigationGeometry.visualLines.find(
-      (l) => l.identity.blockId === ids[1]!,
+      (l) => l.identity.blockId === ids[1]!
     )!.lineOrder;
 
     store.transact(HUMAN, (c) => c.apply({ op: 'insertParagraph', storyId, index: 0, runs: [] }));
     const after = bridge(store.currentModel, cache);
     const afterOrder = after.navigationGeometry.visualLines.find(
-      (l) => l.identity.blockId === ids[1]!,
+      (l) => l.identity.blockId === ids[1]!
     )!.lineOrder;
 
     expect(afterOrder).toBeGreaterThan(beforeOrder);
@@ -117,7 +120,7 @@ describe('visual line reuse is invisible', () => {
     const cache = new DisplayBridgeCache();
     bridge(store.currentModel, cache);
     store.transact(HUMAN, (c) =>
-      c.apply({ op: 'insertText', paragraphId: ids[2]!, offset: 0, text: 'q' }),
+      c.apply({ op: 'insertText', paragraphId: ids[2]!, offset: 0, text: 'q' })
     );
     const after = bridge(store.currentModel, cache);
     // Equality FIRST: a reuse count means nothing on its own.
@@ -134,16 +137,15 @@ describe('visual line reuse is invisible', () => {
     const cache = new DisplayBridgeCache();
     const before = bridge(store.currentModel, cache);
     const beforeY = before.navigationGeometry.visualLines.find(
-      (l) => l.identity.blockId === ids[1]!,
+      (l) => l.identity.blockId === ids[1]!
     )!.edges[0]!.pageLocalY;
 
     store.transact(HUMAN, (c) =>
-      c.apply({ op: 'insertText', paragraphId: ids[0]!, offset: 0, text: 'w '.repeat(400) }),
+      c.apply({ op: 'insertText', paragraphId: ids[0]!, offset: 0, text: 'w '.repeat(400) })
     );
     const after = bridge(store.currentModel, cache);
-    const movedY = after.navigationGeometry.visualLines.find(
-      (l) => l.identity.blockId === ids[1]!,
-    )!.edges[0]!.pageLocalY;
+    const movedY = after.navigationGeometry.visualLines.find((l) => l.identity.blockId === ids[1]!)!
+      .edges[0]!.pageLocalY;
     expect(movedY).not.toBe(beforeY);
     expect(navShape(after)).toBe(navShape(bridge(store.currentModel)));
   });
@@ -161,7 +163,7 @@ describe('visual line reuse is invisible', () => {
         op: 'setParagraphRuns',
         paragraphId: ids[0]!,
         runs: [{ text: 'first ' }, { text: 'para', props: { bold: true } }],
-      }),
+      })
     );
     const cached = bridge(store.currentModel, cache);
     // FULL equality, every published field, nothing stripped.
@@ -183,7 +185,7 @@ describe('visual line reuse is invisible', () => {
         op: 'setParagraphRuns',
         paragraphId: ids[0]!,
         runs: [{ text: 'first ' }, { text: 'para', props: { bold: true } }],
-      }),
+      })
     );
     expect(navShape(bridge(store.currentModel, cache))).toBe(navShape(bridge(store.currentModel)));
   });
@@ -195,7 +197,7 @@ describe('visual line reuse is invisible', () => {
     const cache = new DisplayBridgeCache();
     bridge(store.currentModel, cache);
     store.transact(HUMAN, (c) =>
-      c.apply({ op: 'insertText', paragraphId: ids[2]!, offset: 0, text: 'q' }),
+      c.apply({ op: 'insertText', paragraphId: ids[2]!, offset: 0, text: 'q' })
     );
     const after = bridge(store.currentModel, cache);
     expect(navShape(after)).toBe(navShape(bridge(store.currentModel)));

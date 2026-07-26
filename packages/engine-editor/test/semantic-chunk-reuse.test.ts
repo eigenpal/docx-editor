@@ -24,7 +24,9 @@ function storeWith(texts: readonly string[]) {
   const storyId = bodyStoryId(model);
   const store = new DocumentStore(model);
   const first = (model.stories.get(storyId)!.blocks[0] as ParagraphRecord).id;
-  store.transact(HUMAN, (c) => c.apply({ op: 'insertText', paragraphId: first, text: texts[0] ?? '' }));
+  store.transact(HUMAN, (c) =>
+    c.apply({ op: 'insertText', paragraphId: first, text: texts[0] ?? '' })
+  );
   const ids = [first];
   for (let i = 1; i < texts.length; i += 1) {
     const r = store.transact(HUMAN, (c) => c.apply({ op: 'appendParagraph', storyId }));
@@ -49,7 +51,9 @@ describe('semantic index reuses per-block chunks', () => {
     const { store, ids } = storeWith(['alpha beta gamma', 'delta epsilon', 'zeta eta theta']);
     const before = buildSemanticIndex(store.currentModel);
 
-    store.transact(HUMAN, (c) => c.apply({ op: 'insertText', paragraphId: ids[1]!, offset: 0, text: 'x' }));
+    store.transact(HUMAN, (c) =>
+      c.apply({ op: 'insertText', paragraphId: ids[1]!, offset: 0, text: 'x' })
+    );
     const after = buildSemanticIndex(store.currentModel);
 
     for (const id of [ids[0]!, ids[2]!]) {
@@ -76,11 +80,15 @@ describe('semantic index reuses per-block chunks', () => {
     // it while still reusing its caret stops and segments.
     const { store, ids, storyId } = storeWith(['first', 'second']);
     const before = buildSemanticIndex(store.currentModel);
-    expect(before.stories[0]!.blocks.find((b) => b.identity.blockId === ids[1]!)!.orderIndex).toBe(1);
+    expect(before.stories[0]!.blocks.find((b) => b.identity.blockId === ids[1]!)!.orderIndex).toBe(
+      1
+    );
 
     store.transact(HUMAN, (c) => c.apply({ op: 'insertParagraph', storyId, index: 0, runs: [] }));
     const after = buildSemanticIndex(store.currentModel);
-    expect(after.stories[0]!.blocks.find((b) => b.identity.blockId === ids[1]!)!.orderIndex).toBe(2);
+    expect(after.stories[0]!.blocks.find((b) => b.identity.blockId === ids[1]!)!.orderIndex).toBe(
+      2
+    );
     expect(segmentsFor(after, ids[1]!)).toBe(segmentsFor(before, ids[1]!));
   });
 
@@ -103,20 +111,20 @@ describe('semantic index reuses per-block chunks', () => {
     const { store, ids } = storeWith(['alpha  beta']);
     const before = buildSemanticIndex(store.currentModel);
     const beforeRegions = regionsFor(before, ids[0]!).filter((r) => r.kind === 'lineWhitespace');
-    expect(beforeRegions.map((r) => ({ graphemeFrom: r.graphemeFrom, graphemeTo: r.graphemeTo }))).toEqual(
-      whitespaceRanges(textOf(store.currentModel, ids[0]!)),
-    );
+    expect(
+      beforeRegions.map((r) => ({ graphemeFrom: r.graphemeFrom, graphemeTo: r.graphemeTo }))
+    ).toEqual(whitespaceRanges(textOf(store.currentModel, ids[0]!)));
 
     store.transact(HUMAN, (c) =>
-      c.apply({ op: 'insertText', paragraphId: ids[0]!, offset: 0, text: 'zz ' }),
+      c.apply({ op: 'insertText', paragraphId: ids[0]!, offset: 0, text: 'zz ' })
     );
     const after = buildSemanticIndex(store.currentModel);
     const afterRegions = regionsFor(after, ids[0]!).filter((r) => r.kind === 'lineWhitespace');
     // Rebuilt, not served from the cache...
     expect(afterRegions[0]).not.toBe(beforeRegions[0]);
     // ...and correct for the NEW text.
-    expect(afterRegions.map((r) => ({ graphemeFrom: r.graphemeFrom, graphemeTo: r.graphemeTo }))).toEqual(
-      whitespaceRanges(textOf(store.currentModel, ids[0]!)),
-    );
+    expect(
+      afterRegions.map((r) => ({ graphemeFrom: r.graphemeFrom, graphemeTo: r.graphemeTo }))
+    ).toEqual(whitespaceRanges(textOf(store.currentModel, ids[0]!)));
   });
 });

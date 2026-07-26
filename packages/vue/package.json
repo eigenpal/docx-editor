@@ -1,11 +1,26 @@
 {
   "name": "@docx-editor.dev/vue",
   "version": "0.0.1",
-  "description": "Vue 3 DOCX editor adapter for the @docx-editor.dev editor contract.",
-  "type": "module",
+  "author": {
+    "name": "Jedr Blaszyk",
+    "email": "jedr@eigenpal.com",
+    "url": "https://github.com/jedrazb"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/eigenpal/docx-editor.git",
+    "directory": "packages/vue"
+  },
   "main": "./dist/index.cjs",
   "module": "./dist/index.js",
-  "types": "./dist/index.d.ts",
+  "devDependencies": {
+    "@docx-editor.dev/core-contract": "workspace:*",
+    "@docx-editor.dev/engine-editor": "workspace:*",
+    "vite-plugin-dts": "^5.0.0"
+  },
+  "peerDependencies": {
+    "vue": "^3.3.0"
+  },
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
@@ -13,18 +28,11 @@
       "require": "./dist/index.cjs"
     }
   },
+  "description": "Vue 3 DOCX editor adapter for the @docx-editor.dev editor contract.",
   "files": [
     "dist"
   ],
-  "scripts": {
-    "build": "vite build && node ../../scripts/inject-package-doc.mjs --package @docx-editor.dev/vue",
-    "typecheck": "tsc --noEmit",
-    "api:extract": "node ../../scripts/api-extractor.mjs --package @docx-editor.dev/vue --local",
-    "api:check": "node ../../scripts/api-extractor.mjs --package @docx-editor.dev/vue"
-  },
-  "peerDependencies": {
-    "vue": "^3.3.0"
-  },
+  "homepage": "https://docx-editor.dev/",
   "keywords": [
     "docx",
     "editor",
@@ -32,24 +40,19 @@
     "word",
     "document"
   ],
-  "author": {
-    "name": "Jedr Blaszyk",
-    "email": "jedr@eigenpal.com",
-    "url": "https://github.com/jedrazb"
-  },
   "license": "Apache-2.0",
-  "homepage": "https://docx-editor.dev/",
-  "repository": {
-    "type": "git",
-    "url": "https://github.com/eigenpal/docx-editor.git",
-    "directory": "packages/vue"
-  },
   "publishConfig": {
     "access": "public"
   },
-  "devDependencies": {
-    "@docx-editor.dev/core-contract": "workspace:*",
-    "@docx-editor.dev/engine-editor": "workspace:*",
-    "vite-plugin-dts": "^5.0.0"
+  "scripts": {
+    "build": "vite build && node ../../scripts/inject-package-doc.mjs --package @docx-editor.dev/vue",
+    "typecheck": "tsc --noEmit",
+    "api:extract": "node ../../scripts/api-extractor.mjs --package @docx-editor.dev/vue --local",
+    "api:check": "node ../../scripts/api-extractor.mjs --package @docx-editor.dev/vue"
+  },
+  "type": "module",
+  "types": "./dist/index.d.ts",
+  "dependencies": {
+    "harfbuzzjs": "1.4.0"
   }
 }

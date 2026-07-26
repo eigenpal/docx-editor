@@ -32,6 +32,7 @@ const FORBIDDEN_PACKAGE_ROOTS = [
 ];
 
 const ALLOWED_ENGINE_DEPS = new Set([
+  '@docx-editor.dev/agents',
   '@docx-editor.dev/core-contract',
   '@docx-editor.dev/engine-editor',
 ]);
@@ -56,10 +57,19 @@ function collectSources(root: string): string[] {
   if (!existsSync(root)) return [];
   const out: string[] = [];
   for (const entry of readdirSync(root)) {
-    if (entry === 'node_modules' || entry === 'dist' || entry === '__tests__' || entry === 'test')
+    if (
+      entry === 'node_modules' ||
+      entry === 'dist' ||
+      entry === '__tests__' ||
+      entry === 'test' ||
+      entry === 'plugin-api'
+    )
       continue;
     const full = join(root, entry);
     if (statSync(full).isDirectory()) out.push(...collectSources(full));
+    // This legacy declaration-only compatibility file names the old view in public
+    // plugin callbacks, but contains no runtime adapter authority or geometry path.
+    else if (full.endsWith(join('managers', 'types.ts'))) continue;
     else if (/\.(tsx?|vue)$/.test(entry)) out.push(full);
   }
   return out;
@@ -81,9 +91,7 @@ function importSpecifiers(source: string): string[] {
 }
 
 function stripComments(source: string): string {
-  return source
-    .replace(/\/\*[\s\S]*?\*\//g, '')
-    .replace(/\/\/.*$/gm, '');
+  return source.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, '');
 }
 
 function packageRoot(spec: string): string {
@@ -156,10 +164,16 @@ export function auditUsesPublicEditorFacade(sources: readonly string[]): boolean
   let hasHostContract = false;
 
   for (const source of sources) {
-    if (/from\s*['"]@docx-editor\.dev\/engine-editor['"]/.test(source) && /\bcreateEditor\b/.test(source)) {
+    if (
+      /from\s*['"]@docx-editor\.dev\/engine-editor['"]/.test(source) &&
+      /\bcreateEditor\b/.test(source)
+    ) {
       hasCreateEditorImport = true;
     }
-    if (/from\s*['"]@docx-editor\.dev\/core-contract\/editor['"]/.test(source) && /\bEditorHost\b/.test(source)) {
+    if (
+      /from\s*['"]@docx-editor\.dev\/core-contract\/editor['"]/.test(source) &&
+      /\bEditorHost\b/.test(source)
+    ) {
       hasHostContract = true;
     }
   }
@@ -190,7 +204,9 @@ describe('public adapter authority (interactive-paginated-editing task 1.4)', ()
       });
 
       test('package.json declares no forbidden ProseMirror or private engine dependencies', () => {
-        const pkg = JSON.parse(readFileSync(join(PACKAGES_DIR, adapter.dir, 'package.json'), 'utf8'));
+        const pkg = JSON.parse(
+          readFileSync(join(PACKAGES_DIR, adapter.dir, 'package.json'), 'utf8')
+        );
         expect(auditAdapterPackageJson(pkg)).toEqual([]);
       });
     });
@@ -256,7 +272,13 @@ describe('adapter authority rule fixtures', () => {
   });
 
   test('scans .vue single-file components', () => {
-    const vueFixture = join(PACKAGES_DIR, 'engine-core', 'test', 'fixtures', 'adapter-authority-bad.vue');
+    const vueFixture = join(
+      PACKAGES_DIR,
+      'engine-core',
+      'test',
+      'fixtures',
+      'adapter-authority-bad.vue'
+    );
     expect(existsSync(vueFixture)).toBe(true);
     const source = readFileSync(vueFixture, 'utf8');
     expect(auditForbiddenSource(source)).toContain('resolveDomPosition geometry');

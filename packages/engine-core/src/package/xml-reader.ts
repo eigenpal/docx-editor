@@ -3,9 +3,9 @@
 // declarations, and external-entity references before parsing (fast-xml-parser
 // can otherwise process DOCTYPE/entities), disables entity expansion and value
 // coercion, and preserves significant child order, attributes, whitespace, and
-// raw lexical values. Output is an ordered, null-prototype-friendly tree.
+// raw lexical values. Output is ordered and every attribute record has a null prototype.
 
-import { XMLParser } from 'fast-xml-parser';
+import { XMLParser, XMLValidator } from 'fast-xml-parser';
 
 export type XmlNode =
   | {
@@ -21,9 +21,13 @@ export type XmlRejection =
   | 'dtd-forbidden'
   | 'entity-forbidden'
   | 'too-deep'
+  | 'too-many-elements'
+  | 'invalid-limits'
   | 'parse-error';
 
 const MAX_DEPTH = 256; // recursion-depth ceiling at the trust boundary
+export const XML_HARD_MAX_BYTES = 64 * 1024 * 1024;
+export const XML_HARD_MAX_ELEMENTS = 1_000_000;
 
 /**
  * Decode ONLY the five predefined XML entities and numeric character references.
@@ -56,6 +60,7 @@ function decodeXmlEntities(s: string): string {
 }
 
 class DepthError extends Error {}
+class ElementCountError extends Error {}
 
 export type XmlResult =
   | { readonly ok: true; readonly nodes: readonly XmlNode[] }
@@ -66,8 +71,58 @@ const ENTITY_DECL_RE = /<!ENTITY/i;
 // A reference to any entity other than the five predefined XML ones.
 const CUSTOM_ENTITY_REF_RE = /&(?!(amp|lt|gt|quot|apos);)[A-Za-z_][\w.-]*;/;
 
+function validLimit(value: number): boolean {
+  return Number.isFinite(value) && Number.isInteger(value) && value >= 0;
+}
+
+/** Count lexical start tags before XMLParser allocates its object tree. Comments,
+ * CDATA, processing instructions, and closing tags are skipped quote-aware. */
+function preflightElementCount(xml: string, maxElements: number): XmlRejection | undefined {
+  let count = 0;
+  for (let i = 0; i < xml.length; i += 1) {
+    if (xml[i] !== '<') continue;
+    if (xml.startsWith('<!--', i)) {
+      const end = xml.indexOf('-->', i + 4);
+      if (end < 0) return 'parse-error';
+      i = end + 2;
+      continue;
+    }
+    if (xml.startsWith('<![CDATA[', i)) {
+      const end = xml.indexOf(']]>', i + 9);
+      if (end < 0) return 'parse-error';
+      i = end + 2;
+      continue;
+    }
+    if (xml.startsWith('<?', i)) {
+      const end = xml.indexOf('?>', i + 2);
+      if (end < 0) return 'parse-error';
+      i = end + 1;
+      continue;
+    }
+    const next = xml[i + 1];
+    if (next === '/' || next === '!') continue;
+    count += 1;
+    if (count > maxElements) return 'too-many-elements';
+    let quote: '"' | "'" | undefined;
+    let closed = false;
+    for (i += 1; i < xml.length; i += 1) {
+      const c = xml[i];
+      if (quote) {
+        if (c === quote) quote = undefined;
+      } else if (c === '"' || c === "'") quote = c;
+      else if (c === '>') {
+        closed = true;
+        break;
+      }
+    }
+    if (!closed) return 'parse-error';
+  }
+  return undefined;
+}
+
 export interface XmlLimits {
   readonly maxBytes: number;
+  readonly maxElements?: number;
 }
 
 const parser = new XMLParser({
@@ -86,12 +141,22 @@ const parser = new XMLParser({
 /** Read XML into an ordered tree, refusing DTDs/entities and bounding size. */
 export function readXml(
   xml: string,
-  limits: XmlLimits = { maxBytes: 64 * 1024 * 1024 }
+  limits: XmlLimits = { maxBytes: XML_HARD_MAX_BYTES }
 ): XmlResult {
-  if (xml.length > limits.maxBytes) return { ok: false, reason: 'too-large' };
+  if (
+    !validLimit(limits.maxBytes) ||
+    (limits.maxElements !== undefined && !validLimit(limits.maxElements))
+  )
+    return { ok: false, reason: 'invalid-limits' };
+  const maxBytes = Math.min(limits.maxBytes, XML_HARD_MAX_BYTES);
+  const maxElements = Math.min(limits.maxElements ?? XML_HARD_MAX_ELEMENTS, XML_HARD_MAX_ELEMENTS);
+  if (xml.length > maxBytes) return { ok: false, reason: 'too-large' };
   if (DOCTYPE_RE.test(xml)) return { ok: false, reason: 'dtd-forbidden' };
   if (ENTITY_DECL_RE.test(xml)) return { ok: false, reason: 'entity-forbidden' };
   if (CUSTOM_ENTITY_REF_RE.test(xml)) return { ok: false, reason: 'entity-forbidden' };
+  const preflight = preflightElementCount(xml, maxElements);
+  if (preflight) return { ok: false, reason: preflight };
+  if (XMLValidator.validate(xml) !== true) return { ok: false, reason: 'parse-error' };
 
   let raw: unknown;
   try {
@@ -100,16 +165,31 @@ export function readXml(
     return { ok: false, reason: 'parse-error' };
   }
   try {
-    return { ok: true, nodes: convert(raw as FxpNode[], 0) };
+    return {
+      ok: true,
+      nodes: convert(raw as FxpNode[], 0, { count: 0, maxElements }),
+    };
   } catch (e) {
-    return { ok: false, reason: e instanceof DepthError ? 'too-deep' : 'parse-error' };
+    return {
+      ok: false,
+      reason:
+        e instanceof DepthError
+          ? 'too-deep'
+          : e instanceof ElementCountError
+            ? 'too-many-elements'
+            : 'parse-error',
+    };
   }
 }
 
 // fast-xml-parser preserveOrder node: { [tag]: children[], ':@'?: {"@_a": v} } | { '#text': v }.
 type FxpNode = Record<string, unknown>;
 
-function convert(items: FxpNode[], depth: number): XmlNode[] {
+function convert(
+  items: FxpNode[],
+  depth: number,
+  budget: { count: number; maxElements: number }
+): XmlNode[] {
   if (depth > MAX_DEPTH) throw new DepthError();
   const out: XmlNode[] = [];
   for (const item of items) {
@@ -120,14 +200,16 @@ function convert(items: FxpNode[], depth: number): XmlNode[] {
     const attrs = (item[':@'] as Record<string, unknown> | undefined) ?? {};
     const tagKey = Object.keys(item).find((k) => k !== ':@');
     if (!tagKey) continue;
-    const attributes: Record<string, string> = {};
+    budget.count += 1;
+    if (budget.count > budget.maxElements) throw new ElementCountError();
+    const attributes = Object.create(null) as Record<string, string>;
     for (const [k, v] of Object.entries(attrs))
       attributes[k.replace(/^@_/, '')] = decodeXmlEntities(String(v));
     out.push({
       type: 'element',
       name: tagKey,
       attributes,
-      children: convert((item[tagKey] as FxpNode[]) ?? [], depth + 1),
+      children: convert((item[tagKey] as FxpNode[]) ?? [], depth + 1, budget),
     });
   }
   return out;

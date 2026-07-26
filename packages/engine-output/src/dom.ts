@@ -18,8 +18,16 @@ function px(twips: number): number {
   return twips / TWIPS_PER_PX;
 }
 
+export interface InstalledFontMapping {
+  aliasFor(font: TextItem['shapingEnvironment']['font']): string;
+}
+
 /** Build a positioned page element from a layout page (no HTML-from-string). */
-export function renderPageElement(page: Page, doc: Document): HTMLElement {
+export function renderPageElement(
+  page: Page,
+  fonts: InstalledFontMapping,
+  doc: Document = document
+): HTMLElement {
   const el = doc.createElement('div');
   el.setAttribute('class', 'doc-page');
   el.style.position = 'relative';
@@ -35,7 +43,21 @@ export function renderPageElement(page: Page, doc: Document): HTMLElement {
   for (const layer of orderedLayers(page.items)) {
     for (const item of page.items) {
       if (item.type === 'caretEdge') continue;
-      if (displayItemLayer(item.type) === layer) el.appendChild(renderDisplayItem(item, doc));
+      if (displayItemLayer(item.type) === layer) {
+        el.appendChild(
+          renderDisplayItem(item, doc, {
+            fontAlias: (font) => {
+              const alias = fonts.aliasFor(font);
+              if (!/^[A-Za-z_][A-Za-z0-9_-]*$/.test(alias)) {
+                throw new TypeError(
+                  `Installed font mapping returned an invalid CSS alias for ${font.identity}`
+                );
+              }
+              return alias;
+            },
+          })
+        );
+      }
     }
   }
   return el;
@@ -43,7 +65,16 @@ export function renderPageElement(page: Page, doc: Document): HTMLElement {
 
 // Register the built-in display-item renderers with their paint layers (rects behind text).
 registerDisplayItemRenderer('rect', (item, doc) => renderRectItem(item as RectItem, doc), 0);
-registerDisplayItemRenderer('text', (item, doc) => renderTextItem(item as TextItem, doc), 1);
+registerDisplayItemRenderer(
+  'text',
+  (item, doc, context) => {
+    if (!context) throw new TypeError('DOM text output requires an installed-font mapping');
+    const text = item as TextItem;
+    context.fontAlias(text.shapingEnvironment.font);
+    return renderTextItem(text, doc);
+  },
+  1
+);
 
 function renderRectItem(item: RectItem, doc: Document): HTMLElement {
   const div = doc.createElement('div');
@@ -60,23 +91,62 @@ function renderRectItem(item: RectItem, doc: Document): HTMLElement {
 }
 
 function renderTextItem(item: TextItem, doc: Document): HTMLElement {
+  const wrapper = doc.createElement('div');
+  wrapper.style.position = 'absolute';
+  wrapper.style.left = `${px(item.x)}px`;
+  wrapper.style.top = `${px(item.y)}px`;
+  wrapper.style.width = `${px(item.width)}px`;
+  wrapper.style.height = `${px(item.height)}px`;
+
+  const svg = doc.createElementNS('http://www.w3.org/2000/svg', 'svg');
+  svg.setAttribute('aria-hidden', 'true');
+  svg.setAttribute('focusable', 'false');
+  svg.setAttribute('data-para', item.anchor.paragraphId);
+  svg.style.position = 'absolute';
+  svg.style.left = '0';
+  svg.style.top = '0';
+  svg.style.width = `${px(item.width)}px`;
+  svg.style.height = `${px(item.height)}px`;
+  svg.style.overflow = 'visible';
+  svg.style.pointerEvents = 'none';
+  for (const glyph of item.shapedRun.glyphs) {
+    const path = doc.createElementNS('http://www.w3.org/2000/svg', 'path');
+    const scale = (item.fontSizeHalfPoints * 2) / 3 / glyph.outline.unitsPerEm;
+    path.setAttribute('d', glyph.outline.path);
+    path.setAttribute(
+      'transform',
+      `translate(${px(glyph.originX + glyph.offsetX)} ${px(
+        item.baseline - item.y - glyph.originY - glyph.offsetY
+      )}) scale(${scale} ${-scale})`
+    );
+    path.setAttribute(
+      'fill',
+      item.color.toLowerCase() === 'auto'
+        ? 'currentColor'
+        : /^[0-9a-fA-F]{6}$/.test(item.color)
+          ? `#${item.color}`
+          : 'currentColor'
+    );
+    svg.appendChild(path);
+  }
+
   const span = doc.createElement('span');
   span.style.position = 'absolute';
-  span.style.left = `${px(item.x)}px`;
-  span.style.top = `${px(item.y)}px`;
-  span.style.fontSize = `${px(item.height * 0.9)}px`;
-  span.style.fontFamily = 'Helvetica, Arial, sans-serif';
-  span.style.fontVariantLigatures = 'none';
-  span.style.fontFeatureSettings = '"liga" 0, "clig" 0, "dlig" 0';
-  span.style.lineHeight = '1';
-  span.style.whiteSpace = 'pre';
-  if (item.bold) span.style.fontWeight = 'bold';
-  if (item.italic) span.style.fontStyle = 'italic';
+  span.style.width = '1px';
+  span.style.height = '1px';
+  span.style.margin = '-1px';
+  span.style.padding = '0';
+  span.style.overflow = 'hidden';
+  span.style.clipPath = 'inset(50%)';
+  span.style.whiteSpace = 'nowrap';
+  span.style.pointerEvents = 'none';
   // Anchor metadata for hit-testing / navigation (data-* attributes, safe).
   span.setAttribute('data-para', item.anchor.paragraphId);
   span.setAttribute('data-offset', String(item.anchor.offset));
   span.textContent = item.text; // SAFE: textContent, never innerHTML
-  return span;
+  wrapper.appendChild(svg);
+  wrapper.appendChild(span);
+  return wrapper;
 }
 
 /**
@@ -106,11 +176,12 @@ export function markOneSurfaceClickTarget(pageEl: HTMLElement): HTMLElement | nu
 export function renderToDom(
   layout: LayoutResult,
   container: HTMLElement,
+  fonts: InstalledFontMapping,
   doc: Document = document
 ): HTMLElement[] {
   const pages: HTMLElement[] = [];
   for (const page of layout.pages) {
-    const el = renderPageElement(page, doc);
+    const el = renderPageElement(page, fonts, doc);
     container.appendChild(el);
     pages.push(el);
   }

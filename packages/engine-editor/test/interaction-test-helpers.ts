@@ -9,22 +9,37 @@ import {
   type ParagraphRecord,
   type TableRecord,
 } from '@docx-editor.dev/engine-core';
-import { layoutBody, HelveticaMetrics } from '@docx-editor.dev/engine-layout';
-import type { InteractionFrame, InteractionHostMetrics, SemanticSelection } from '@docx-editor.dev/core-contract/interaction';
+import { createDeterministicLayoutShaping, layoutBody } from '@docx-editor.dev/engine-layout';
+import type {
+  InteractionFrame,
+  InteractionHostMetrics,
+  SemanticSelection,
+} from '@docx-editor.dev/core-contract/interaction';
 import type { Point } from '@docx-editor.dev/core-contract/types';
 import { toDisplayPages } from '../src/display-bridge.ts';
-import { InteractionFrameStore, buildStackedPageGeometry, DEFAULT_PAGE_GAP_PX } from '../src/interaction-frame.ts';
+import {
+  InteractionFrameStore,
+  buildStackedPageGeometry,
+  DEFAULT_PAGE_GAP_PX,
+} from '../src/interaction-frame.ts';
 import { contentToClient, IDENTITY_HOST_METRICS } from '../src/coordinate-mapper.ts';
 
 export const HUMAN = ORIGIN_IDS.mutationHuman;
-export const LAYOUT = { pageWidth: 12240, pageHeight: 15840, margin: 1440, metrics: new HelveticaMetrics() };
+export const LAYOUT = {
+  pageWidth: 12240,
+  pageHeight: 15840,
+  margin: 1440,
+  shaping: createDeterministicLayoutShaping(),
+};
 
 export function modelWith(texts: string[]): PackageModel {
   const model = createEmptyModel();
   const storyId = bodyStoryId(model);
   const store = new DocumentStore(model);
   const first = (model.stories.get(storyId)!.blocks[0] as ParagraphRecord).id;
-  store.transact(HUMAN, (c) => c.apply({ op: 'insertText', paragraphId: first, text: texts[0] ?? '' }));
+  store.transact(HUMAN, (c) =>
+    c.apply({ op: 'insertText', paragraphId: first, text: texts[0] ?? '' })
+  );
   for (let i = 1; i < texts.length; i += 1) {
     const r = store.transact(HUMAN, (c) => c.apply({ op: 'appendParagraph', storyId }));
     const pid = r.ok ? r.modelChange.created[0]! : first;
@@ -36,7 +51,7 @@ export function modelWith(texts: string[]): PackageModel {
 export function modelWithParagraphTableParagraph(
   beforeText: string,
   cellText: string,
-  afterText: string,
+  afterText: string
 ): PackageModel {
   const base = createEmptyModel();
   const storyId = bodyStoryId(base);
@@ -45,18 +60,28 @@ export function modelWithParagraphTableParagraph(
   const table: TableRecord = {
     kind: 'table',
     id: 'tbl-body',
-    rows: [{ id: 'row-1', cells: [{ id: 'cell-1', blocks: [{ kind: 'paragraph', id: 'p-cell', runs: [{ text: cellText }] }] }] }],
+    rows: [
+      {
+        id: 'row-1',
+        cells: [
+          {
+            id: 'cell-1',
+            blocks: [{ kind: 'paragraph', id: 'p-cell', runs: [{ text: cellText }] }],
+          },
+        ],
+      },
+    ],
   };
-  const afterParagraph: ParagraphRecord = { kind: 'paragraph', id: 'p-after', runs: [{ text: afterText }] };
+  const afterParagraph: ParagraphRecord = {
+    kind: 'paragraph',
+    id: 'p-after',
+    runs: [{ text: afterText }],
+  };
   return {
     ...base,
     stories: new Map(base.stories).set(storyId, {
       ...story,
-      blocks: [
-        { ...first, runs: [{ text: beforeText }] },
-        table,
-        afterParagraph,
-      ],
+      blocks: [{ ...first, runs: [{ text: beforeText }] }, table, afterParagraph],
     }),
   };
 }
@@ -72,9 +97,11 @@ export function frameWithoutBlock(frame: InteractionFrame, blockId: string): Int
       ...frame.semanticIndex,
       stories,
       caretStops: frame.semanticIndex.caretStops.filter(
-        (stop) => stop.target.kind !== 'text' || stop.target.identity.blockId !== blockId,
+        (stop) => stop.target.kind !== 'text' || stop.target.identity.blockId !== blockId
       ),
-      ownershipRegions: frame.semanticIndex.ownershipRegions.filter((region) => region.identity.blockId !== blockId),
+      ownershipRegions: frame.semanticIndex.ownershipRegions.filter(
+        (region) => region.identity.blockId !== blockId
+      ),
     },
   };
 }
@@ -86,7 +113,17 @@ export function modelWithTableCell(cellText: string): PackageModel {
   const table: TableRecord = {
     kind: 'table',
     id: 'tbl-1',
-    rows: [{ id: 'row-1', cells: [{ id: 'cell-1', blocks: [{ kind: 'paragraph', id: 'p-cell', runs: [{ text: cellText }] }] }] }],
+    rows: [
+      {
+        id: 'row-1',
+        cells: [
+          {
+            id: 'cell-1',
+            blocks: [{ kind: 'paragraph', id: 'p-cell', runs: [{ text: cellText }] }],
+          },
+        ],
+      },
+    ],
   };
   return {
     ...base,
@@ -104,25 +141,28 @@ export function modelWithRunSplit(parts: readonly string[]): PackageModel {
       op: 'setParagraphRuns',
       paragraphId: first,
       runs: parts.map((text) => ({ text })),
-    }),
+    })
   );
   return store.currentModel;
 }
 
 export function publishFrame(
   model = modelWith(['hello']),
-  options: { pageGapPx?: number; layout?: Parameters<typeof layoutBody>[1] } = {},
+  options: { pageGapPx?: number; layout?: Parameters<typeof layoutBody>[1] } = {}
 ): InteractionFrame {
   return publishFrameBundle(model, options).frame;
 }
 
 export function publishFrameBundle(
   model = modelWith(['hello']),
-  options: { pageGapPx?: number; layout?: Parameters<typeof layoutBody>[1] } = {},
-): { frame: InteractionFrame; navigation: import('../src/navigation-geometry.ts').NavigationGeometry; store: InteractionFrameStore } {
+  options: { pageGapPx?: number; layout?: Parameters<typeof layoutBody>[1] } = {}
+): {
+  frame: InteractionFrame;
+  navigation: import('../src/navigation-geometry.ts').NavigationGeometry;
+  store: InteractionFrameStore;
+} {
   const layout = layoutBody(model, options.layout ?? LAYOUT);
-  const layoutMetrics = options.layout?.metrics ?? LAYOUT.metrics;
-  const bridged = toDisplayPages(model, layout.pages, layoutMetrics);
+  const bridged = toDisplayPages(model, layout.pages);
   const store = new InteractionFrameStore();
   const frame = store.publishLayout({
     modelRevision: 1,
@@ -142,7 +182,12 @@ export function publishFrameBundle(
   return { frame, navigation: store.getNavigationGeometry(frame.id), store };
 }
 
-export function stackedFrame(pageCount: number, pageGapPx = 24, pageHeight = 1056, pageWidth = 816): InteractionFrame {
+export function stackedFrame(
+  pageCount: number,
+  pageGapPx = 24,
+  pageHeight = 1056,
+  pageWidth = 816
+): InteractionFrame {
   const display = Array.from({ length: pageCount }, (_, index) => ({
     index,
     box: { x: 0, y: 0, width: pageWidth, height: pageHeight },
@@ -170,7 +215,7 @@ export function clientPointForStackedText(
   frame: InteractionFrame,
   pageIndex: number,
   pageLocal: Point,
-  metrics: InteractionHostMetrics = IDENTITY_HOST_METRICS,
+  metrics: InteractionHostMetrics = IDENTITY_HOST_METRICS
 ): Point {
   const stacked = frame.pageGeometry.find((p) => p.index === pageIndex)?.box;
   if (!stacked) throw new Error('missing stacked page');
@@ -184,7 +229,7 @@ export function selectionForBlock(
   frame: InteractionFrame,
   blockId: string,
   anchorOffset: number,
-  headOffset: number,
+  headOffset: number
 ): SemanticSelection {
   const block = frame.semanticIndex.stories[0]!.blocks.find((b) => b.identity.blockId === blockId)!;
   const target = (graphemeOffset: number) => ({

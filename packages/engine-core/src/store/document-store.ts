@@ -4,7 +4,7 @@
 // ProseMirror, DOM, transport, or CRDT type — a server mutates it identically to
 // a browser. `transact` is the only mutation entry; batches are all-or-nothing.
 
-import { type PackageModel } from '../model/index.ts';
+import { detachFormattingReferences, type PackageModel } from '../model/index.ts';
 import { NON_CANONICAL_ORIGINS } from '../registry/frozen-ids.ts';
 import { normalize } from './normalize.ts';
 import { buildModelChange } from './model-change.ts';
@@ -111,7 +111,7 @@ export class DocumentStore {
       clock?: () => number;
     } = {}
   ) {
-    this.model = initial;
+    this.model = detachFormattingReferences(initial);
     this.revision = opts.revision ?? 0;
     this.commitCounter = opts.commitCounter ?? 0;
     this.audit = opts.audit;
@@ -256,14 +256,15 @@ export class DocumentStore {
     this.revision += 1;
     this.commitCounter += 1;
     const commitId = `commit-${this.commitCounter}`;
-    const normalized = normalize(model);
+    const normalizedModel = normalize(model);
+    const normalized = detachFormattingReferences(normalizedModel);
     const modelChange = buildModelChange(
       fromRevision,
       this.revision,
       commitId,
       origin,
       [],
-      normalized !== model
+      normalizedModel !== model
     );
     this.model = normalized;
     // Same suspension guard as publish(): a remote-derived commit while replicated
@@ -426,7 +427,8 @@ export class DocumentStore {
     effects: readonly OpEffect[],
     ops: readonly DocOp[]
   ): { commitId: string; revision: number; modelChange: ModelChange } {
-    const normalized = normalize(working);
+    const normalizedModel = normalize(working);
+    const normalized = detachFormattingReferences(normalizedModel);
     const before = this.model;
     const fromRevision = this.revision;
     this.revision += 1;
@@ -438,7 +440,7 @@ export class DocumentStore {
       commitId,
       origin,
       effects,
-      normalized !== working
+      normalizedModel !== working
     );
     this.model = normalized;
     // While history is suspended (replicated), do NOT accumulate undoable commits —

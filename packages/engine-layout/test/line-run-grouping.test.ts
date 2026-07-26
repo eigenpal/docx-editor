@@ -9,15 +9,30 @@
 // coordinates.
 
 import { describe, expect, test } from 'bun:test';
-import { createEmptyModel, bodyStoryId, DocumentStore, ORIGIN_IDS } from '@docx-editor.dev/engine-core';
+import {
+  createEmptyModel,
+  bodyStoryId,
+  DocumentStore,
+  ORIGIN_IDS,
+} from '@docx-editor.dev/engine-core';
 import { layoutBody } from '../src/layout.ts';
-import { HelveticaMetrics } from '../src/metrics.ts';
+import { createDeterministicLayoutShaping } from '../src/metrics.ts';
 import type { ParagraphRecord, RunProps } from '@docx-editor.dev/engine-core';
 import type { TextItem } from '../src/display-item.ts';
 
-const WIDE = { pageWidth: 12240, pageHeight: 15840, margin: 1440, metrics: new HelveticaMetrics() };
+const WIDE = {
+  pageWidth: 12240,
+  pageHeight: 15840,
+  margin: 1440,
+  shaping: createDeterministicLayoutShaping(),
+};
 // Narrow enough that a sentence wraps several times.
-const NARROW = { pageWidth: 2800, pageHeight: 15840, margin: 1440, metrics: new HelveticaMetrics() };
+const NARROW = {
+  pageWidth: 2800,
+  pageHeight: 15840,
+  margin: 1440,
+  shaping: createDeterministicLayoutShaping(),
+};
 const HUMAN = ORIGIN_IDS.mutationHuman;
 
 function layoutRuns(runs: readonly { text: string; props?: RunProps }[], layout = WIDE) {
@@ -30,7 +45,7 @@ function layoutRuns(runs: readonly { text: string; props?: RunProps }[], layout 
       op: 'setParagraphRuns',
       paragraphId: first,
       runs: runs.map((r) => (r.props ? { text: r.text, props: r.props } : { text: r.text })),
-    }),
+    })
   );
   return layoutBody(store.currentModel, layout);
 }
@@ -47,7 +62,10 @@ function linesOf(items: TextItem[]): string[] {
     byLine.set(item.line.lineId, bucket);
   }
   return [...byLine.values()].map((bucket) =>
-    bucket.sort((a, b) => a.x - b.x).map((i) => i.text).join(''),
+    bucket
+      .sort((a, b) => a.x - b.x)
+      .map((i) => i.text)
+      .join('')
   );
 }
 
@@ -83,7 +101,8 @@ describe('paint runs are clipped to visual lines, not to words', () => {
     expect(items.every((i) => i.bold)).toBe(true); // every piece kept the formatting
     // One item per line: no line carries two pieces of the same style.
     const perLine = new Map<string, number>();
-    for (const item of items) perLine.set(item.line.lineId, (perLine.get(item.line.lineId) ?? 0) + 1);
+    for (const item of items)
+      perLine.set(item.line.lineId, (perLine.get(item.line.lineId) ?? 0) + 1);
     expect([...perLine.values()].every((n) => n === 1)).toBe(true);
   });
 
@@ -93,7 +112,7 @@ describe('paint runs are clipped to visual lines, not to words', () => {
         { text: 'plain ' },
         { text: 'bold', props: { bold: true } },
         { text: ' plain again' },
-      ]),
+      ])
     );
     expect(items).toHaveLength(3);
     expect(items.map((i) => i.text)).toEqual(['plain ', 'bold', ' plain again']);
@@ -104,11 +123,7 @@ describe('paint runs are clipped to visual lines, not to words', () => {
     // "un|break|able" is one word authored as three runs. It must stay on one line and
     // paint as three items, not wrap between them.
     const items = textItems(
-      layoutRuns([
-        { text: 'un' },
-        { text: 'break', props: { italic: true } },
-        { text: 'able' },
-      ]),
+      layoutRuns([{ text: 'un' }, { text: 'break', props: { italic: true } }, { text: 'able' }])
     );
     expect(items.map((i) => i.text)).toEqual(['un', 'break', 'able']);
     expect(new Set(items.map((i) => i.line.lineId)).size).toBe(1);
@@ -117,7 +132,7 @@ describe('paint runs are clipped to visual lines, not to words', () => {
   test('items are laid out left to right with no overlap and no gap', () => {
     // Contiguous x is what makes native selection across a line gap-free.
     const items = textItems(
-      layoutRuns([{ text: 'alpha ' }, { text: 'beta', props: { bold: true } }, { text: ' gamma' }]),
+      layoutRuns([{ text: 'alpha ' }, { text: 'beta', props: { bold: true } }, { text: ' gamma' }])
     );
     const sorted = [...items].sort((a, b) => a.x - b.x);
     for (let i = 1; i < sorted.length; i += 1) {
@@ -138,7 +153,7 @@ describe('paint runs are clipped to visual lines, not to words', () => {
     // Semantic provenance must survive grouping: an item's anchor is where its text
     // starts in the paragraph, so hit testing and selection stay addressable.
     const items = textItems(
-      layoutRuns([{ text: 'alpha ' }, { text: 'beta', props: { bold: true } }]),
+      layoutRuns([{ text: 'alpha ' }, { text: 'beta', props: { bold: true } }])
     );
     const sorted = [...items].sort((a, b) => a.x - b.x);
     let expected = 0;
@@ -211,7 +226,12 @@ describe('grouping regressions found by review', () => {
 // line, so it never fired again and the word overflowed the right margin — visible on any
 // pasted URL, hash, or unspaced run. Word breaks at the last grapheme that fits.
 describe('over-long words break instead of overflowing', () => {
-  const WIDE_BOX = { pageWidth: 12240, pageHeight: 15840, margin: 1440, metrics: new HelveticaMetrics() };
+  const WIDE_BOX = {
+    pageWidth: 12240,
+    pageHeight: 15840,
+    margin: 1440,
+    shaping: createDeterministicLayoutShaping(),
+  };
   const contentLeft = WIDE_BOX.margin;
   const contentRight = WIDE_BOX.pageWidth - WIDE_BOX.margin;
 
@@ -233,7 +253,10 @@ describe('over-long words break instead of overflowing', () => {
     const alone = textItems(layoutRuns([{ text: long }], WIDE_BOX));
     const afterPrefix = textItems(layoutRuns([{ text: `prefix ${long}` }], WIDE_BOX));
     // Starting further right means fewer characters fit on the first line.
-    const firstAlone = alone.filter((i) => i.y === alone[0]!.y).map((i) => i.text).join('');
+    const firstAlone = alone
+      .filter((i) => i.y === alone[0]!.y)
+      .map((i) => i.text)
+      .join('');
     const firstAfter = afterPrefix
       .filter((i) => i.y === afterPrefix[0]!.y)
       .map((i) => i.text)

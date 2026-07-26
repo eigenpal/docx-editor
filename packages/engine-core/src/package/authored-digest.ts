@@ -76,6 +76,7 @@ export function authoredStateProjection(model: PackageModel): unknown {
     styles: model.styles.map(canonicalStyle),
     numbering: model.numbering,
     docDefaults: canonicalDocDefaults(model.docDefaults) ?? null,
+    themeFonts: model.themeFonts ?? null,
   };
 }
 

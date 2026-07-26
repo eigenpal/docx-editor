@@ -58,7 +58,12 @@ import {
   observeAccessibility,
 } from '@docx-editor.dev/engine-binding';
 import { createEmptyModel, bodyStoryId } from '@docx-editor.dev/engine-core';
-import { layoutBody, HelveticaMetrics } from '@docx-editor.dev/engine-layout';
+import {
+  captureOperationSnapshot,
+  layoutBody,
+  type LayoutShapingOptions,
+  type OperationSnapshot,
+} from '@docx-editor.dev/engine-layout';
 import type { PackageModel } from '@docx-editor.dev/engine-core';
 import { DisplayBridgeCache, toDisplayPages, type BridgeInvalidation } from './display-bridge.ts';
 import { InteractionFrameStore, emptyInteractionFrame } from './interaction-frame.ts';
@@ -98,6 +103,13 @@ const LAYOUT = { pageWidth: 12240, pageHeight: 15840, margin: 1440 } as const;
 // byte clone — edits in either editor are visible in the other. Weak, so a handle + its session are
 // collectable once no caller holds the handle.
 const handleSessions = new WeakMap<DocumentHandle, DocxEditorSession>();
+const layoutShapingByEditor = new WeakMap<Editor, LayoutShapingOptions>();
+
+export function layoutShapingForEditor(editor: Editor): LayoutShapingOptions {
+  const shaping = layoutShapingByEditor.get(editor);
+  if (!shaping) throw new Error('editor has no layout shaping snapshot');
+  return shaping;
+}
 
 const isArrayBuffer = (v: unknown): v is ArrayBuffer =>
   v instanceof ArrayBuffer || Object.prototype.toString.call(v) === '[object ArrayBuffer]';
@@ -147,7 +159,24 @@ function queryDefault(type: string): unknown {
 }
 
 /** Construct the production editor. `config.document` (DOCX bytes or a handle) is loaded now. */
-export function createEditor(config: EditorConfig): Editor {
+export interface EngineEditorConfig extends EditorConfig {
+  /**
+   * Required by the production layout pipeline. Optional only for source compatibility until
+   * adapter-owned font resource injection lands in document-engine Task 7.
+   */
+  readonly layoutShaping?: LayoutShapingOptions;
+}
+
+export class EditorLayoutConfigurationError extends Error {
+  readonly code = 'layoutShapingRequired';
+
+  constructor() {
+    super('Editor load requires an explicit font-resource and text-shaper snapshot');
+    this.name = 'EditorLayoutConfigurationError';
+  }
+}
+
+export function createEditor(config: EngineEditorConfig): Editor {
   // Destructure ONCE so no long-lived closure retains `config` (and thus config.document bytes).
   const host = config.host;
   const readOnly = config.mode === 'view';
@@ -155,6 +184,11 @@ export function createEditor(config: EditorConfig): Editor {
   // number. A host reads it back through `getZoom()` rather than holding its own copy.
   let zoom = config.zoom ?? 1;
   const accessibleNamePolicy = resolveAccessibilityNamePolicy(config.accessibleName);
+  if (!config.layoutShaping) throw new EditorLayoutConfigurationError();
+  const layoutShaping: LayoutShapingOptions = Object.freeze({
+    ...config.layoutShaping,
+    operation: captureOperationSnapshot(config.layoutShaping.operation),
+  });
 
   type Handlers = { [E in keyof EditorEvents]: Set<EditorEvents[E]> };
   const handlers: Handlers = {
@@ -176,8 +210,6 @@ export function createEditor(config: EditorConfig): Editor {
   let mountedBodyEl: HTMLElement | null = null; // the element `surface` is bound to (host may swap it)
   let markedPagesContainer: HTMLElement | null = null;
   const frames = new InteractionFrameStore();
-  let resourceEpoch = 0;
-  const configurationEpoch = 0;
   let handle: DocumentHandle | null = null;
   // True when this editor adopted ANOTHER editor's store via a handle. Such an editor renders and
   // reads the shared store but does NOT mount its own edit surface: two independent PM surfaces on
@@ -203,12 +235,18 @@ export function createEditor(config: EditorConfig): Editor {
   function layoutInput(
     display: readonly DisplayPage[],
     semanticIndex: SemanticPositionIndex,
-    navigationGeometry: NavigationGeometry
+    navigationGeometry: NavigationGeometry,
+    operation: OperationSnapshot
   ) {
     return {
       modelRevision: session!.revision(),
-      resourceEpoch,
-      configurationEpoch,
+      resourceEpoch: operation.resourceEpoch,
+      configurationEpoch: operation.configEpoch,
+      shapingProvenance: {
+        extensionFingerprint: operation.extensionFingerprint,
+        shapingHash: operation.shapingHash,
+        producerVersion: operation.producerVersion,
+      },
       display,
       semanticIndex,
       navigationGeometry,
@@ -239,11 +277,6 @@ export function createEditor(config: EditorConfig): Editor {
 
   function caretClientRect(frame = currentFrame()): Rect | null {
     if (!frame.caret) return null;
-    const target = frame.selection?.head;
-    if (target) {
-      const realized = host.getRenderedTextGeometry?.()?.caretRect(target, frame.id);
-      if (realized) return realized;
-    }
     const metrics = host.getInteractionHostMetrics?.();
     if (!metrics) return null;
     const origin = contentToClient({ x: frame.caret.rect.x, y: frame.caret.rect.y }, metrics);
@@ -251,8 +284,8 @@ export function createEditor(config: EditorConfig): Editor {
     return {
       x: origin.value.x,
       y: origin.value.y,
-      width: frame.caret.rect.width,
-      height: frame.caret.rect.height,
+      width: frame.caret.rect.width * metrics.zoom,
+      height: frame.caret.rect.height * metrics.zoom,
     };
   }
 
@@ -447,19 +480,6 @@ export function createEditor(config: EditorConfig): Editor {
   // One per editor: unchanged painted slices reuse their frozen clusters across layouts.
   const bridgeCache = new DisplayBridgeCache();
   /**
-   * ONE metrics port for the editor's lifetime, not one per layout.
-   *
-   * The port is immutable, so a fresh instance per layout bought nothing and cost
-   * everything: the horizontal-boundary memo keys on the port instance (it has to — the
-   * table is a function of the metrics, and review caught stale output across a port swap),
-   * so a new instance every layout meant a new key every layout and a 0% hit rate. Review
-   * measured 21 of 21 boundary tables reused with a shared port and 0 of 21 with a fresh
-   * one, worth 19.4 ms of bridge and 16.5 ms of total per keystroke — the whole of the
-   * memo, silently undone.
-   */
-  const metrics = new HelveticaMetrics();
-
-  /**
    * Block ids created, changed or deleted since the last publication.
    *
    * This is the `ModelChange` dirty set, derived from `DocumentStore`'s own structural
@@ -536,15 +556,17 @@ export function createEditor(config: EditorConfig): Editor {
   function completeLayoutPublication(token: number, pendingTarget?: number): void {
     if (destroyed || token !== layoutToken || !session) return;
     const model = session.currentModel();
-    const layout = layoutBody(model, { ...LAYOUT, metrics });
-    const bridged = toDisplayPages(
-      model,
-      layout.pages,
-      metrics,
-      bridgeCache,
-      takeInvalidation(model)
+    const layout = layoutBody(model, { ...LAYOUT, shaping: layoutShaping });
+    const bridged = toDisplayPages(model, layout.pages, {
+      cache: bridgeCache,
+      invalidation: takeInvalidation(model),
+    });
+    const input = layoutInput(
+      bridged.display,
+      bridged.semanticIndex,
+      bridged.navigationGeometry,
+      layout.operation
     );
-    const input = layoutInput(bridged.display, bridged.semanticIndex, bridged.navigationGeometry);
     const frame =
       pendingTarget !== undefined
         ? (frames.tryCompletePendingLayout(input) ?? null)
@@ -1536,6 +1558,7 @@ export function createEditor(config: EditorConfig): Editor {
         paintedPagesAssistiveRole: state.paintedPagesAssistiveRole,
       };
     },
+    getInteractionHostMetrics: () => host.getInteractionHostMetrics?.() ?? null,
     getCaretClientRect: (): Rect | null => caretClientRect(),
     getPageGeometry: () => currentFrame().pageGeometry,
     getScrollGeometry: () => currentFrame().scrollGeometry,
@@ -1615,5 +1638,6 @@ export function createEditor(config: EditorConfig): Editor {
       return () => handlers[event].delete(handler);
     },
   };
+  layoutShapingByEditor.set(editor, layoutShaping);
   return editor;
 }

@@ -23,6 +23,7 @@
 import type { ReactNode, RefObject } from 'react';
 import type { DisplayPage } from '@docx-editor.dev/core-contract/geometry';
 import type { FrameOverlays, GlyphClickTarget } from '@docx-editor.dev/engine-editor';
+import type { InstalledDisplayFonts } from '@docx-editor.dev/engine-editor';
 import { paintDisplay } from '../../paintDisplay';
 
 export interface DocxEditorPagedAreaProps {
@@ -31,6 +32,10 @@ export interface DocxEditorPagedAreaProps {
   /** Caret and selection geometry for the current frame. */
   overlays: FrameOverlays;
   clickTarget: GlyphClickTarget | null;
+  /** Exact FontFace aliases loaded from the shaping snapshot for these pages. */
+  installedFonts: InstalledDisplayFonts | null;
+  /** Visible typed font installation failure. */
+  fontError?: string | null;
   /** Display scale. Engine-owned (`Editor.getZoom`), applied from the stack's top-left. */
   zoom: number;
   /** Set when this element is the scroll container — i.e. when no chrome is rendered. */
@@ -59,6 +64,8 @@ export function DocxEditorPagedArea({
   pages,
   overlays,
   clickTarget,
+  installedFonts,
+  fontError,
   zoom,
   scrollRef,
   pagesRef,
@@ -83,8 +90,13 @@ export function DocxEditorPagedArea({
         className="ep-one-surface__pages"
         style={{ transform: `scale(${zoom})`, transformOrigin: 'top left' }}
       >
-        {paintDisplay(pages, overlays, clickTarget)}
+        {installedFonts ? paintDisplay(pages, installedFonts, overlays, clickTarget) : null}
       </div>
+      {fontError ? (
+        <div role="alert" data-testid="docx-editor-font-error">
+          {fontError}
+        </div>
+      ) : null}
       <div
         ref={bodyRef}
         className="ep-one-surface__input-host"

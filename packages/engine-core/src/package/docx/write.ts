@@ -5,10 +5,12 @@
 // FROM THE MODEL, failing closed on anything it cannot faithfully serialize.
 
 import { writeZip, strToU8 } from '../zip.ts';
-import { blockXml } from '../wml-serialize.ts';
+import { blockXml, runPropsChildrenXml } from '../wml-serialize.ts';
 import { W_NS } from '../wml-parse.ts';
 import { escapeXmlChecked } from '../sinks.ts';
 import { DOC_PART, emitPreservedPart, hashStoryContent } from '../wml-preserve.ts';
+import { parseThemeFonts } from '../wml-parts.ts';
+import { canonicalize } from '../../comparators/index.ts';
 import {
   buildRelationshipSet,
   resolveRelationship,
@@ -22,7 +24,6 @@ import {
 import {
   bodyStoryId,
   validatePreservation,
-  canonicalRunProps,
   canonicalParagraphProps,
   canonicalStyle,
   canonicalDocDefaults,
@@ -33,8 +34,8 @@ import {
   type ParagraphRecord,
   type StyleRecord,
   type NumberingRecord,
-  type RunProps,
   type DocDefaults,
+  type ThemeFonts,
 } from '../../model/index.ts';
 
 const XML_DECL = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>`;
@@ -42,6 +43,7 @@ const CT_NS = 'http://schemas.openxmlformats.org/package/2006/content-types';
 const REL_NS = 'http://schemas.openxmlformats.org/package/2006/relationships';
 
 const MAIN_PART = '/word/document.xml';
+const DRAWINGML_NS = 'http://schemas.openxmlformats.org/drawingml/2006/main';
 
 /** Validate (fail-closed) then XML-escape an authored value bound for an owned attribute/text node. */
 const xmlAttr = escapeXmlChecked;
@@ -114,12 +116,9 @@ function relsPathFor(ownerPart: string): string {
   return `${dir}/_rels/${name}.rels`;
 }
 
-function rPrXml(p: RunProps): string {
-  let s = '';
-  if (p.bold !== undefined) s += p.bold ? '<w:b/>' : '<w:b w:val="0"/>';
-  if (p.italic !== undefined) s += p.italic ? '<w:i/>' : '<w:i w:val="0"/>';
-  if (p.underline !== undefined) s += p.underline ? '<w:u w:val="single"/>' : '<w:u w:val="none"/>';
-  return s ? `<w:rPr>${s}</w:rPr>` : '';
+function styleRPrXml(props: NonNullable<StyleRecord['runProps']>): string {
+  const children = runPropsChildrenXml(props, false);
+  return children ? `<w:rPr>${children}</w:rPr>` : '';
 }
 
 function stylesXml(styles: readonly StyleRecord[], docDefaults?: DocDefaults): string {
@@ -127,7 +126,7 @@ function stylesXml(styles: readonly StyleRecord[], docDefaults?: DocDefaults): s
   // (the lowest style-resolution layer) round-trips too, or a from-scratch model's defaults are lost.
   const dd = canonicalDocDefaults(docDefaults);
   const defaults = dd
-    ? `<w:docDefaults><w:rPrDefault>${rPrXml(dd.runProps!)}</w:rPrDefault></w:docDefaults>`
+    ? `<w:docDefaults><w:rPrDefault>${styleRPrXml(dd.runProps!)}</w:rPrDefault></w:docDefaults>`
     : '';
   const body = styles
     .map((raw) => {
@@ -140,7 +139,7 @@ function stylesXml(styles: readonly StyleRecord[], docDefaults?: DocDefaults): s
       const basedOn = st.basedOn
         ? `<w:basedOn w:val="${xmlAttr(st.basedOn, 'style basedOn')}"/>`
         : '';
-      const rPr = st.runProps ? rPrXml(st.runProps) : '';
+      const rPr = st.runProps ? styleRPrXml(st.runProps) : '';
       return (
         `<w:style w:type="${xmlAttr(st.type, 'style type')}" w:styleId="${xmlAttr(st.id, 'style id')}"${st.isDefault ? ' w:default="1"' : ''}>` +
         `${name}${basedOn}${rPr}</w:style>`
@@ -158,6 +157,135 @@ function numberingXml(nums: readonly NumberingRecord[]): string {
     )
     .join('');
   return `${XML_DECL}<w:numbering xmlns:w="${W_NS}">${body}</w:numbering>`;
+}
+
+function themeXml(fonts: ThemeFonts): string {
+  const face = (element: string, value: string | undefined, label: string): string =>
+    `<a:${element} typeface="${xmlAttr(value ?? '', `theme ${label} typeface`)}"/>`;
+  const colorScheme =
+    '<a:clrScheme name="Generated Colors">' +
+    '<a:dk1><a:sysClr val="windowText" lastClr="000000"/></a:dk1>' +
+    '<a:lt1><a:sysClr val="window" lastClr="FFFFFF"/></a:lt1>' +
+    '<a:dk2><a:srgbClr val="44546A"/></a:dk2>' +
+    '<a:lt2><a:srgbClr val="E7E6E6"/></a:lt2>' +
+    '<a:accent1><a:srgbClr val="4472C4"/></a:accent1>' +
+    '<a:accent2><a:srgbClr val="ED7D31"/></a:accent2>' +
+    '<a:accent3><a:srgbClr val="A5A5A5"/></a:accent3>' +
+    '<a:accent4><a:srgbClr val="FFC000"/></a:accent4>' +
+    '<a:accent5><a:srgbClr val="5B9BD5"/></a:accent5>' +
+    '<a:accent6><a:srgbClr val="70AD47"/></a:accent6>' +
+    '<a:hlink><a:srgbClr val="0563C1"/></a:hlink>' +
+    '<a:folHlink><a:srgbClr val="954F72"/></a:folHlink>' +
+    '</a:clrScheme>';
+  const formatScheme =
+    '<a:fmtScheme name="Generated Format">' +
+    '<a:fillStyleLst><a:solidFill/><a:solidFill/><a:solidFill/></a:fillStyleLst>' +
+    '<a:lnStyleLst><a:ln/><a:ln/><a:ln/></a:lnStyleLst>' +
+    '<a:effectStyleLst>' +
+    '<a:effectStyle><a:effectLst/></a:effectStyle>' +
+    '<a:effectStyle><a:effectLst/></a:effectStyle>' +
+    '<a:effectStyle><a:effectLst/></a:effectStyle>' +
+    '</a:effectStyleLst>' +
+    '<a:bgFillStyleLst><a:solidFill/><a:solidFill/><a:solidFill/></a:bgFillStyleLst>' +
+    '</a:fmtScheme>';
+  return (
+    `${XML_DECL}<a:theme xmlns:a="${DRAWINGML_NS}" name="Generated Theme">` +
+    `<a:themeElements>${colorScheme}<a:fontScheme name="Generated Fonts">` +
+    `<a:majorFont>${face('latin', fonts.majorLatin, 'major Latin')}` +
+    `${face('ea', fonts.majorEastAsia, 'major East Asia')}` +
+    `${face('cs', fonts.majorComplexScript, 'major complex script')}</a:majorFont>` +
+    `<a:minorFont>${face('latin', fonts.minorLatin, 'minor Latin')}` +
+    `${face('ea', fonts.minorEastAsia, 'minor East Asia')}` +
+    `${face('cs', fonts.minorComplexScript, 'minor complex script')}</a:minorFont>` +
+    `</a:fontScheme>${formatScheme}</a:themeElements></a:theme>`
+  );
+}
+
+function nextThemeRelationshipId(relationships: readonly RelationshipRecord[]): string {
+  const used = new Set(
+    relationships.filter((rel) => rel.ownerPart === MAIN_PART).map((rel) => rel.id)
+  );
+  let id = 'rIdTheme';
+  let suffix = 1;
+  while (used.has(id)) id = `rIdTheme${suffix++}`;
+  return id;
+}
+
+function prepareThemeExport(model: PackageModel): {
+  readonly model: PackageModel;
+  readonly themePartName?: string;
+} {
+  if (!model.themeFonts) return { model };
+  const themeRelationships = model.relationships.filter(
+    (rel) =>
+      rel.ownerPart === MAIN_PART &&
+      (rel.type === REL_TYPES.theme || rel.type === REL_TYPES.themeStrict)
+  );
+  if (themeRelationships.length > 1)
+    throw new Error('from-scratch themeFonts require exactly one theme relationship');
+  let relationship = themeRelationships[0];
+  if (!relationship) {
+    relationship = {
+      ownerPart: MAIN_PART,
+      id: nextThemeRelationshipId(model.relationships),
+      type: REL_TYPES.theme,
+      rawTarget: 'theme/theme1.xml',
+      targetMode: 'Internal',
+      order:
+        Math.max(
+          -1,
+          ...model.relationships
+            .filter((rel) => rel.ownerPart === MAIN_PART)
+            .map((rel) => rel.order)
+        ) + 1,
+    };
+  }
+  const resolved = resolveRelationship(relationship);
+  if (resolved.mode !== 'Internal' || !resolved.target.ok)
+    throw new Error('from-scratch themeFonts require a valid internal theme relationship');
+  const themePartName = resolved.target.partName;
+  const parts = new Map(model.parts);
+  if (!parts.has(themePartName)) parts.set(themePartName, { kind: 'xml', partName: themePartName });
+  const existingThemeOverride = model.contentTypes.overrides.find(
+    (record) => record.partName.toLowerCase() === themePartName.toLowerCase()
+  );
+  if (existingThemeOverride && existingThemeOverride.contentType !== CONTENT_TYPES.theme)
+    throw new Error('theme part has a conflicting content type');
+  const overrides = existingThemeOverride
+    ? model.contentTypes.overrides
+    : [
+        ...model.contentTypes.overrides,
+        {
+          partName: themePartName,
+          contentType: CONTENT_TYPES.theme,
+          order: Math.max(-1, ...model.contentTypes.overrides.map((record) => record.order)) + 1,
+        },
+      ];
+  return {
+    model: {
+      ...model,
+      relationships: relationship
+        ? model.relationships.includes(relationship)
+          ? model.relationships
+          : [...model.relationships, relationship]
+        : model.relationships,
+      contentTypes: { ...model.contentTypes, overrides },
+      parts,
+    },
+    themePartName,
+  };
+}
+
+function assertPreservedThemeUnchanged(
+  model: PackageModel,
+  preserved: ReadonlyMap<string, Uint8Array>
+): void {
+  const parsed = parseThemeFonts(preserved);
+  if (!parsed.ok) throw new Error(`cannot validate preserved theme bytes: ${parsed.detail}`);
+  if (canonicalize(model.themeFonts ?? null) !== canonicalize(parsed.fonts ?? null))
+    throw new Error(
+      'themeFonts changed from the preserved theme; theme part regeneration is not supported'
+    );
 }
 
 /** Fail closed if any related (non-body) story diverges from its parse-time baseline — the preserved
@@ -310,17 +438,6 @@ function assertFromScratchSerializable(model: PackageModel): void {
           throw new Error(
             'from-scratch export cannot carry a run rPr capsule (verbatim capsule injection risk; capsules come only from parse)'
           );
-        // Only the round-trippable run subset (styleId + bold/italic presence) is serialized; an
-        // explicit-false toggle or underline would not reparse to the same value, so fail closed.
-        const rp = canonicalRunProps(r.props);
-        if (rp?.underline !== undefined)
-          throw new Error(
-            'from-scratch export cannot emit run underline (not round-trippable via the presence-based parser)'
-          );
-        if (rp?.bold === false || rp?.italic === false)
-          throw new Error(
-            'from-scratch export cannot emit an explicit-false run toggle (parser is presence-based)'
-          );
       }
     }
   };
@@ -344,6 +461,7 @@ export function writeDocx(model: PackageModel): Uint8Array {
     // verbatim. An edit to a related (non-body) story would therefore be silently discarded, so fail
     // closed if any related story diverges from its parse-time baseline.
     assertRelatedStoriesUnchanged(model);
+    assertPreservedThemeUnchanged(model, preserved);
     const entries = new Map(preserved);
     entries.set(DOC_PART, strToU8(documentXml(model))); // patch only the main document part
     return writeZip(entries);
@@ -362,14 +480,16 @@ export function writeDocx(model: PackageModel): Uint8Array {
 
   // From-scratch: validate OPC invariants + fail closed on anything not faithfully serializable,
   // then build the whole package from the model.
-  assertFromScratchPackageValid(model);
-  assertFromScratchSerializable(model);
+  const prepared = prepareThemeExport(model);
+  const exportModel = prepared.model;
+  assertFromScratchPackageValid(exportModel);
+  assertFromScratchSerializable(exportModel);
   const entries = new Map<string, Uint8Array>();
-  entries.set('/[Content_Types].xml', strToU8(contentTypesXml(model.contentTypes)));
+  entries.set('/[Content_Types].xml', strToU8(contentTypesXml(exportModel.contentTypes)));
 
   // Relationships, grouped by owner part -> the owner's .rels part.
   const relsByOwner = new Map<string, RelationshipRecord[]>();
-  for (const r of model.relationships) {
+  for (const r of exportModel.relationships) {
     const list = relsByOwner.get(r.ownerPart) ?? [];
     list.push(r);
     relsByOwner.set(r.ownerPart, list);
@@ -380,18 +500,20 @@ export function writeDocx(model: PackageModel): Uint8Array {
   // EVERY declared XML part must be emitted with faithful content; a declared part we cannot
   // serialize (customXml, media, an unknown xml part) fails closed rather than leaving a dangling
   // content-type/relationship pointing at a missing part.
-  const bodyId = bodyStoryId(model);
-  for (const [partName, part] of model.parts) {
+  const bodyId = bodyStoryId(exportModel);
+  for (const [partName, part] of exportModel.parts) {
     if (part.kind === 'media') {
       throw new Error(
         `from-scratch export cannot serialize media part ${partName} (no authored bytes)`
       );
     }
-    if (partName === MAIN_PART) entries.set(partName, strToU8(documentXml(model)));
+    if (partName === MAIN_PART) entries.set(partName, strToU8(documentXml(exportModel)));
     else if (partName === '/word/styles.xml')
-      entries.set(partName, strToU8(stylesXml(model.styles, model.docDefaults)));
+      entries.set(partName, strToU8(stylesXml(exportModel.styles, exportModel.docDefaults)));
     else if (partName === '/word/numbering.xml')
-      entries.set(partName, strToU8(numberingXml(model.numbering)));
+      entries.set(partName, strToU8(numberingXml(exportModel.numbering)));
+    else if (partName === prepared.themePartName)
+      entries.set(partName, strToU8(themeXml(exportModel.themeFonts!)));
     else if (part.storyId && part.storyId !== bodyId) {
       // A related story (header/footer/note/comment) needs section references / item wrappers we do
       // not yet model — emitting the part alone would be inert or invalid, so fail closed.

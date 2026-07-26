@@ -151,7 +151,7 @@ function buildRealPaintSliceIndex(
         lineId: item.line.lineId,
         fragmentId: item.line.fragmentId,
         paintSliceAnchor: item.anchor.offset,
-        writingDirection: 'ltr' as const,
+        writingDirection: item.direction,
         writingMode: 'horizontal-tb' as const,
         role: roleForParagraph(item.anchor.paragraphId),
       });
@@ -453,7 +453,13 @@ export function buildVisualLines(
           String(item.y),
           String(item.width),
           String(item.height),
+          String(item.ascent),
+          String(item.descent),
+          String(item.lineGap),
+          String(item.baseline),
           String(item.anchor.offset),
+          item.direction,
+          String(item.bidiLevel),
           item.text
         );
       });

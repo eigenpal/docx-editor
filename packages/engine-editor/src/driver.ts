@@ -26,7 +26,7 @@ import type {
   AccessibilityObservation,
 } from '@docx-editor.dev/core-contract/interaction';
 import type { ExecResult, Point, Rect } from '@docx-editor.dev/core-contract/types';
-import { createEditor } from './create-editor.ts';
+import { createEditor, layoutShapingForEditor } from './create-editor.ts';
 
 /** The text a display page shows, in reading order. Layout emits one item per run-part (a maximal
  *  non-space chunk of a run), consuming inter-word spaces, so text is reconstructed from item BOX
@@ -98,6 +98,8 @@ export interface EditorDriver {
   modelRevision(): number;
   /** Hidden input-host clip shell observation (null when not mounted). */
   inputHostObservation(): InputHostObservation | null;
+  /** Host mapping used to convert published IR coordinates into client coordinates. */
+  interactionHostMetrics(): InteractionHostMetrics | null;
   /** Caret rectangle in client coordinates when host metrics and caret geometry exist. */
   caretClientRect(): Rect | null;
   focus(): InteractionOutcome<void>;
@@ -206,6 +208,7 @@ export function createEditorDriver(editor: Editor): EditorDriver {
     accessibilityObservation: () => editor.getAccessibilityObservation(),
     modelRevision: () => editor.getDocumentHandle().revision,
     inputHostObservation: () => editor.getInputHostObservation(),
+    interactionHostMetrics: () => editor.getInteractionHostMetrics(),
     caretClientRect: () => editor.getCaretClientRect(),
     focus: () => editor.focus(),
     setSelection: (range) => editor.exec({ type: 'setSelection', range }),
@@ -223,7 +226,11 @@ export function createEditorDriver(editor: Editor): EditorDriver {
     async saveAndReopenText(): Promise<string> {
       const bytes = await editor.save();
       const { host, getPages } = headlessHost();
-      const reopened = createEditor({ host, document: bytes });
+      const reopened = createEditor({
+        host,
+        document: bytes,
+        layoutShaping: layoutShapingForEditor(editor),
+      });
       try {
         return displayText(getPages());
       } finally {

@@ -14,7 +14,10 @@ import { overlaysForFrame } from '../src/display-bridge.ts';
 import type { InteractionFrame } from '@docx-editor.dev/core-contract/interaction';
 
 /** A frame carrying only what `overlaysForFrame` reads for selection rects. */
-function frameWithRects(rects: { x: number; y: number; width: number; height: number }[], pages = 1): InteractionFrame {
+function frameWithRects(
+  rects: { x: number; y: number; width: number; height: number }[],
+  pages = 1
+): InteractionFrame {
   return {
     focus: { scope: { kind: 'body' }, focused: true },
     caret: null,
@@ -40,7 +43,7 @@ describe('selection rect merging', () => {
         { x: 100, y: 200, width: 60, height: 16 },
         { x: 164, y: 200, width: 80, height: 16 },
         { x: 248, y: 200, width: 40, height: 16 },
-      ]),
+      ])
     );
     expect(merged).toHaveLength(1);
     expect(merged[0]!.rect.x).toBe(100);
@@ -54,7 +57,7 @@ describe('selection rect merging', () => {
       frameWithRects([
         { x: 100, y: 200, width: 50, height: 16 },
         { x: 154, y: 194, width: 50, height: 24 },
-      ]),
+      ])
     );
     expect(merged).toHaveLength(1);
     // The union keeps the taller run's extent.
@@ -67,7 +70,7 @@ describe('selection rect merging', () => {
       frameWithRects([
         { x: 100, y: 200, width: 60, height: 16 },
         { x: 100, y: 230, width: 60, height: 16 },
-      ]),
+      ])
     );
     expect(merged).toHaveLength(2);
   });
@@ -79,7 +82,7 @@ describe('selection rect merging', () => {
       frameWithRects([
         { x: 100, y: 200, width: 60, height: 16 },
         { x: 500, y: 200, width: 60, height: 16 },
-      ]),
+      ])
     );
     expect(merged).toHaveLength(2);
   });
@@ -97,7 +100,8 @@ describe('selection rect merging', () => {
       { x: 168, y: 200, width: 30, height: 16 },
     ];
     const merged = sel(frameWithRects(rects));
-    const covered = (x: number) => merged.some((b) => x >= b.rect.x && x <= b.rect.x + b.rect.width);
+    const covered = (x: number) =>
+      merged.some((b) => x >= b.rect.x && x <= b.rect.x + b.rect.width);
     for (const r of rects) {
       expect(covered(r.x), `left edge ${r.x} uncovered`).toBe(true);
       expect(covered(r.x + r.width), `right edge uncovered`).toBe(true);

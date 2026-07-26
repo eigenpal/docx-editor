@@ -1,7 +1,11 @@
 // Model-derived semantic index tests (interactive-paginated-editing 3.2–3.4).
 
 import { describe, expect, test } from 'bun:test';
-import { buildSemanticIndex, caretAffinity, paragraphEditableInLane } from '../src/semantic-index.ts';
+import {
+  buildSemanticIndex,
+  caretAffinity,
+  paragraphEditableInLane,
+} from '../src/semantic-index.ts';
 import { createBoundedFallbackWordBoundary } from '@docx-editor.dev/engine-layout';
 import { deepFreezeValue } from '../src/interaction-frame.ts';
 import {
@@ -21,13 +25,17 @@ function modelWithParagraphs(texts: string[]) {
   const store = new DocumentStore(model);
   const first = (model.stories.get(storyId)!.blocks[0] as ParagraphRecord).id;
   if (texts[0] !== undefined) {
-    store.transact(HUMAN, (c) => c.apply({ op: 'insertText', paragraphId: first, text: texts[0]! }));
+    store.transact(HUMAN, (c) =>
+      c.apply({ op: 'insertText', paragraphId: first, text: texts[0]! })
+    );
   }
   let lastId = first;
   for (let i = 1; i < texts.length; i += 1) {
     const r = store.transact(HUMAN, (c) => c.apply({ op: 'appendParagraph', storyId }));
     lastId = r.ok ? r.modelChange.created[0]! : lastId;
-    store.transact(HUMAN, (c) => c.apply({ op: 'insertText', paragraphId: lastId, text: texts[i]! }));
+    store.transact(HUMAN, (c) =>
+      c.apply({ op: 'insertText', paragraphId: lastId, text: texts[i]! })
+    );
   }
   return store.currentModel;
 }
@@ -39,7 +47,17 @@ function withTableCell(cellText: string) {
   const table: TableRecord = {
     kind: 'table',
     id: 'tbl-1',
-    rows: [{ id: 'row-1', cells: [{ id: 'cell-1', blocks: [{ kind: 'paragraph', id: 'p-cell', runs: [{ text: cellText }] }] }] }],
+    rows: [
+      {
+        id: 'row-1',
+        cells: [
+          {
+            id: 'cell-1',
+            blocks: [{ kind: 'paragraph', id: 'p-cell', runs: [{ text: cellText }] }],
+          },
+        ],
+      },
+    ],
   };
   return {
     ...base,
@@ -52,8 +70,14 @@ describe('semantic position index', () => {
     const index = buildSemanticIndex(withTableCell('cell'));
     const cellBlock = index.stories[0]!.blocks.find((b) => b.identity.blockId === 'p-cell');
     expect(cellBlock?.readOnly).toBe(true);
-    expect(index.caretStops.some((s) => s.target.kind === 'text' && s.target.identity.blockId === 'p-cell')).toBe(false);
-    expect(index.ownershipRegions.some((r) => r.kind === 'paragraph' && r.identity.blockId === 'p-cell')).toBe(true);
+    expect(
+      index.caretStops.some(
+        (s) => s.target.kind === 'text' && s.target.identity.blockId === 'p-cell'
+      )
+    ).toBe(false);
+    expect(
+      index.ownershipRegions.some((r) => r.kind === 'paragraph' && r.identity.blockId === 'p-cell')
+    ).toBe(true);
   });
 
   test('top-level body flow is editable; nested table cells are not', () => {
@@ -66,7 +90,7 @@ describe('semantic position index', () => {
     const index = buildSemanticIndex(modelWithParagraphs(['hello world']));
     const block = index.stories[0]!.blocks[0]!;
     const ws = index.ownershipRegions.filter(
-      (r) => r.kind === 'lineWhitespace' && r.identity.blockId === block.identity.blockId,
+      (r) => r.kind === 'lineWhitespace' && r.identity.blockId === block.identity.blockId
     );
     expect(ws).toHaveLength(1);
     expect(ws[0]!.utf16From).toBe(5);
@@ -95,8 +119,16 @@ describe('semantic position index', () => {
   test('buildSemanticIndex accepts injected word boundary for fallback segmentation', () => {
     const model = modelWithParagraphs(['a—b']);
     const intl = buildSemanticIndex(model);
-    const fallback = buildSemanticIndex(model, { kind: 'body' }, createBoundedFallbackWordBoundary());
-    expect(intl.stories[0]!.blocks[0]!.wordSegments.some((s) => s.wordLike && s.graphemeTo - s.graphemeFrom === 1)).toBe(true);
+    const fallback = buildSemanticIndex(
+      model,
+      { kind: 'body' },
+      createBoundedFallbackWordBoundary()
+    );
+    expect(
+      intl.stories[0]!.blocks[0]!.wordSegments.some(
+        (s) => s.wordLike && s.graphemeTo - s.graphemeFrom === 1
+      )
+    ).toBe(true);
     expect(fallback.stories[0]!.blocks[0]!.wordSegments).toEqual([
       { graphemeFrom: 0, graphemeTo: 1, wordLike: true },
       { graphemeFrom: 1, graphemeTo: 2, wordLike: false },

@@ -4,8 +4,7 @@ import { GlobalRegistrator } from '@happy-dom/global-registrator';
 if (!GlobalRegistrator.isRegistered) GlobalRegistrator.register();
 
 import { describe, expect, test } from 'bun:test';
-import type { MetricsPort } from '@docx-editor.dev/engine-layout';
-import { layoutBody, PER_GRAPHEME_SHAPING, segmentGraphemes } from '@docx-editor.dev/engine-layout';
+import { layoutBody } from '@docx-editor.dev/engine-layout';
 import {
   createEmptyModel,
   bodyStoryId,
@@ -24,7 +23,7 @@ import { caretOverlayForTarget, deriveCaretGeometry } from '../src/interaction-g
 import { planKeyboardNavigation } from '../src/keyboard-navigation.ts';
 import { caretContentX, pageRelativeY } from '../src/line-catalog.ts';
 import { hasGeometryStopAtOffset, isHorizontalTransitionOffset } from '../src/navigation-stops.ts';
-import { createEditor } from '../src/create-editor.ts';
+import { createTestEditor as createEditor } from './create-test-editor.ts';
 import type { EditorHost } from '@docx-editor.dev/core-contract/editor';
 import { createEditableParagraphFixture } from '../browser/fixtures.ts';
 import {
@@ -35,33 +34,7 @@ import {
   publishFrameBundle,
   selectionForBlock,
 } from './interaction-test-helpers.ts';
-
-class OpaqueLigatureMetrics implements MetricsPort {
-  readonly lineHeight = 240;
-  readonly spaceWidth = 60;
-  readonly shaping = { caretEdges: 'per-grapheme-advance' as const, ligatures: 'opaque' as const };
-  ligatureInteriorCaret = (fullText: string, offset: number) => fullText === 'fi' && offset === 1;
-  advance(char: string): number {
-    if (char === 'f') return 120;
-    if (char === 'i') return 80;
-    return 100;
-  }
-}
-
-class TrustedCombiningMetrics implements MetricsPort {
-  readonly lineHeight = 240;
-  readonly spaceWidth = 60;
-  readonly shaping = PER_GRAPHEME_SHAPING;
-  provesCharacterAdvance(char: string): boolean {
-    return char.length > 0;
-  }
-  advance(char: string): number {
-    if (char === 'e') return 100;
-    if (char === '\u0301') return 0;
-    if (char === 'x') return 80;
-    return 100;
-  }
-}
+import { createHarfBuzzLayoutOptions } from '../../engine-layout/test/fixtures/layout-shaping.ts';
 
 const METRICS = { clientOrigin: { x: 0, y: 0 }, scrollOffset: { x: 0, y: 0 }, zoom: 1 };
 
@@ -86,11 +59,21 @@ function modelWithRepeatingHeaderTable(): PackageModel {
   const headerRow = {
     id: 'hdr-row',
     props: { isHeader: true as const },
-    cells: [{ id: 'hdr-cell', blocks: [{ kind: 'paragraph' as const, id: 'p-hdr', runs: [{ text: 'HDR' }] }] }],
+    cells: [
+      {
+        id: 'hdr-cell',
+        blocks: [{ kind: 'paragraph' as const, id: 'p-hdr', runs: [{ text: 'HDR' }] }],
+      },
+    ],
   };
   const bodyRows = Array.from({ length: 12 }, (_, i) => ({
     id: `row-${i}`,
-    cells: [{ id: `cell-${i}`, blocks: [{ kind: 'paragraph' as const, id: `p-${i}`, runs: [{ text: `R${i}` }] }] }],
+    cells: [
+      {
+        id: `cell-${i}`,
+        blocks: [{ kind: 'paragraph' as const, id: `p-${i}`, runs: [{ text: `R${i}` }] }],
+      },
+    ],
   }));
   const table: TableRecord = { kind: 'table', id: 'tbl-1', rows: [headerRow, ...bodyRows] };
   return { ...base, stories: new Map(base.stories).set(storyId, { ...story, blocks: [table] }) };
@@ -98,7 +81,7 @@ function modelWithRepeatingHeaderTable(): PackageModel {
 
 function publishBundle(model: PackageModel, layout = LAYOUT) {
   const pages = layoutBody(model, layout).pages;
-  const bridge = toDisplayPages(model, pages, layout.metrics ?? LAYOUT.metrics);
+  const bridge = toDisplayPages(model, pages);
   const store = new InteractionFrameStore();
   const frame = store.publishLayout({
     modelRevision: 1,
@@ -122,10 +105,14 @@ function planArrowAt(
   key: string,
   blockId: string,
   offset: number,
-  paragraphText: string,
+  paragraphText: string
 ) {
   const selection = selectionForBlock(bundle.frame, blockId, offset, offset);
-  const frame = { ...bundle.frame, selection, focus: { scope: { kind: 'body' as const }, focused: true } };
+  const frame = {
+    ...bundle.frame,
+    selection,
+    focus: { scope: { kind: 'body' as const }, focused: true },
+  };
   return planKeyboardNavigation({
     frame,
     navigation: bundle.navigation,
@@ -140,7 +127,11 @@ function planArrowAt(
 function planArrow(bundle: ReturnType<typeof publishBundle>, key: string, text: string) {
   const blockId = bundle.bridge.semanticIndex.stories[0]!.blocks[0]!.identity.blockId;
   const selection = selectionForBlock(bundle.frame, blockId, 0, 0);
-  const frame = { ...bundle.frame, selection, focus: { scope: { kind: 'body' as const }, focused: true } };
+  const frame = {
+    ...bundle.frame,
+    selection,
+    focus: { scope: { kind: 'body' as const }, focused: true },
+  };
   return planKeyboardNavigation({
     frame,
     navigation: bundle.navigation,
@@ -155,11 +146,15 @@ function planArrow(bundle: ReturnType<typeof publishBundle>, key: string, text: 
 describe('navigation review pass 6 (task 5.5)', () => {
   test('opaque fi ArrowRight from offset 0 lands on offset 2 never 1', () => {
     const model = modelWithRunSplit(['fi']);
-    const layout = { ...LAYOUT, metrics: new OpaqueLigatureMetrics() };
+    const layout = createHarfBuzzLayoutOptions();
     const bundle = publishBundle(model, layout);
     const blockId = bundle.bridge.semanticIndex.stories[0]!.blocks[0]!.identity.blockId;
     const selection = selectionForBlock(bundle.frame, blockId, 0, 0);
-    const frame = { ...bundle.frame, selection, focus: { scope: { kind: 'body' as const }, focused: true } };
+    const frame = {
+      ...bundle.frame,
+      selection,
+      focus: { scope: { kind: 'body' as const }, focused: true },
+    };
     const moved = planKeyboardNavigation({
       frame,
       navigation: bundle.navigation,
@@ -176,11 +171,11 @@ describe('navigation review pass 6 (task 5.5)', () => {
     expect(sync.selection.head.graphemeOffset).not.toBe(1);
   });
 
-  test('Helvetica combining mark: semantic horizontal boundary without geometry trust', () => {
+  test('shaped combining cluster publishes exact geometry at its semantic edge', () => {
     const bundle = publishBundle(modelWithRunSplit(['e\u0301x']));
     const blockId = bundle.bridge.semanticIndex.stories[0]!.blocks[0]!.identity.blockId;
     const storyId = bundle.bridge.semanticIndex.stories[0]!.storyId;
-    expect(hasGeometryStopAtOffset(bundle.navigation, storyId, blockId, 1)).toBe(false);
+    expect(hasGeometryStopAtOffset(bundle.navigation, storyId, blockId, 1)).toBe(true);
     expect(isHorizontalTransitionOffset(bundle.navigation, storyId, blockId, 1, 3)).toBe(true);
     const target = {
       kind: 'text' as const,
@@ -189,7 +184,7 @@ describe('navigation review pass 6 (task 5.5)', () => {
       graphemeOffset: 1,
       affinity: 'upstream' as const,
     };
-    expect(caretContentX(bundle.frame, target, bundle.navigation)).toBeNull();
+    expect(caretContentX(bundle.frame, target, bundle.navigation)).not.toBeNull();
     const moved = planArrowAt(bundle, 'ArrowRight', blockId, 0, 'e\u0301x');
     const sync = moved.plan.effects.find((e) => e.kind === 'syncSelection');
     expect(sync?.kind).toBe('syncSelection');
@@ -197,12 +192,12 @@ describe('navigation review pass 6 (task 5.5)', () => {
     expect(sync.selection.head.graphemeOffset).toBe(1);
   });
 
-  test('emoji ArrowRight 0 to 1 succeeds semantically with no interior stop', () => {
+  test('emoji ArrowRight 0 to 1 uses exact shaped grapheme edges', () => {
     const bundle = publishBundle(modelWithRunSplit(['a😀b']));
     const blockId = bundle.bridge.semanticIndex.stories[0]!.blocks[0]!.identity.blockId;
     const storyId = bundle.bridge.semanticIndex.stories[0]!.storyId;
     expect(hasGeometryStopAtOffset(bundle.navigation, storyId, blockId, 1)).toBe(true);
-    expect(hasGeometryStopAtOffset(bundle.navigation, storyId, blockId, 2)).toBe(false);
+    expect(hasGeometryStopAtOffset(bundle.navigation, storyId, blockId, 2)).toBe(true);
     expect(isHorizontalTransitionOffset(bundle.navigation, storyId, blockId, 1, 3)).toBe(true);
     expect(bundle.navigation.semanticHorizontalBoundariesByBlockId[blockId]).toEqual([0, 1, 2, 3]);
     const moved = planArrowAt(bundle, 'ArrowRight', blockId, 0, 'a😀b');
@@ -212,51 +207,26 @@ describe('navigation review pass 6 (task 5.5)', () => {
     expect(sync.selection.head.graphemeOffset).toBe(1);
   });
 
-  test('cumulative geometry trust poisons overlay at and after unsupported advances', () => {
-    const storyScope = { kind: 'body' as const };
-    for (const [text, trustedInterior] of [
-      ['😀', [] as number[]],
-      ['a😀', [1]],
-      ['a😀b', [1]],
+  test('shaped emoji runs publish exact geometry at every grapheme edge', () => {
+    for (const [text, graphemeCount] of [
+      ['😀', 1],
+      ['a😀', 2],
+      ['a😀b', 3],
     ] as const) {
       const bundle = publishBundle(modelWithRunSplit([text]));
       const blockId = bundle.bridge.semanticIndex.stories[0]!.blocks[0]!.identity.blockId;
       const storyId = bundle.bridge.semanticIndex.stories[0]!.storyId;
-      expect(hasGeometryStopAtOffset(bundle.navigation, storyId, blockId, 0)).toBe(true);
-      for (const offset of trustedInterior) {
+      for (let offset = 0; offset <= graphemeCount; offset += 1) {
         expect(hasGeometryStopAtOffset(bundle.navigation, storyId, blockId, offset)).toBe(true);
-        const target = {
-          kind: 'text' as const,
-          scope: storyScope,
-          identity: { storyId, blockId },
-          graphemeOffset: offset,
-          affinity: 'upstream' as const,
-        };
-        expect(caretOverlayForTarget(bundle.frame, bundle.navigation, target)).not.toBeNull();
       }
-      const poisonStart = trustedInterior.length > 0 ? trustedInterior[trustedInterior.length - 1]! + 1 : 1;
-      const graphemeCount = segmentGraphemes(text).length;
-      for (let offset = poisonStart; offset <= graphemeCount; offset += 1) {
-        expect(hasGeometryStopAtOffset(bundle.navigation, storyId, blockId, offset)).toBe(false);
-        const target = {
-          kind: 'text' as const,
-          scope: storyScope,
-          identity: { storyId, blockId },
-          graphemeOffset: offset,
-          affinity: 'upstream' as const,
-        };
-        expect(caretOverlayForTarget(bundle.frame, bundle.navigation, target)).toBeNull();
-      }
-      const rejectDown = planArrowAt(bundle, 'ArrowDown', blockId, poisonStart, text);
-      expect(rejectDown.plan.effects[0]).toMatchObject({ kind: 'reject' });
     }
   });
 
   test('trusted combining provider exposes exact interior x for offset 1', () => {
     const model = modelWithRunSplit(['e\u0301x']);
-    const layoutOpts = { ...LAYOUT, metrics: new TrustedCombiningMetrics() };
+    const layoutOpts = LAYOUT;
     const pages = layoutBody(model, layoutOpts).pages;
-    const bridge = toDisplayPages(model, pages, layoutOpts.metrics);
+    const bridge = toDisplayPages(model, pages);
     const store = new InteractionFrameStore();
     const frame = store.publishLayout({
       modelRevision: 1,
@@ -274,7 +244,9 @@ describe('navigation review pass 6 (task 5.5)', () => {
     });
     const navigation = store.getNavigationGeometry(frame.id);
     const blockId = bridge.semanticIndex.stories[0]!.blocks[0]!.identity.blockId;
-    const edge = pages.flatMap((p) => p.items).find((i) => i.type === 'caretEdge' && i.graphemeOffset === 1 && i.navigable);
+    const edge = pages
+      .flatMap((p) => p.items)
+      .find((i) => i.type === 'caretEdge' && i.graphemeOffset === 1 && i.navigable);
     expect(edge?.type).toBe('caretEdge');
     const target = {
       kind: 'text' as const,
@@ -300,7 +272,12 @@ describe('navigation review pass 6 (task 5.5)', () => {
           ...edge,
           interaction: {
             ...edge.interaction,
-            clip: { x: edge.pageLocalX + 500, y: edge.pageLocalY, width: 10, height: edge.pageLocalHeight },
+            clip: {
+              x: edge.pageLocalX + 500,
+              y: edge.pageLocalY,
+              width: 10,
+              height: edge.pageLocalHeight,
+            },
           },
         })),
       })),
@@ -325,7 +302,10 @@ describe('navigation review pass 6 (task 5.5)', () => {
       [a, table, b],
       [a, sdt, b],
     ] as const) {
-      const model: PackageModel = { ...base, stories: new Map(base.stories).set(storyId, { ...story, blocks: [...blocks] }) };
+      const model: PackageModel = {
+        ...base,
+        stories: new Map(base.stories).set(storyId, { ...story, blocks: [...blocks] }),
+      };
       const links = buildTraversalLinksForModel(model);
       expect(links.get('p-a')?.nextEditableBlockId).toBeNull();
       expect(links.get('p-b')?.previousEditableBlockId).toBeNull();
@@ -336,7 +316,11 @@ describe('navigation review pass 6 (task 5.5)', () => {
     const { frame, navigation } = publishFrameBundle();
     const blockId = frame.semanticIndex.stories[0]!.blocks[0]!.identity.blockId;
     const selection = selectionForBlock(frame, blockId, 0, 0);
-    const focused = { ...frame, selection, focus: { scope: { kind: 'body' as const }, focused: true } };
+    const focused = {
+      ...frame,
+      selection,
+      focus: { scope: { kind: 'body' as const }, focused: true },
+    };
     const planned = planKeyboardNavigation({
       frame: focused,
       navigation,
@@ -349,7 +333,12 @@ describe('navigation review pass 6 (task 5.5)', () => {
     expect(planned.plan.effects.some((e) => e.kind === 'syncSelection')).toBe(true);
     const execution = executeInteractionPlan(
       {
-        syncSemanticSelection: () => ({ ok: false, code: 'invalidTarget', reason: 'binding rejected', frameId: focused.id }),
+        syncSemanticSelection: () => ({
+          ok: false,
+          code: 'invalidTarget',
+          reason: 'binding rejected',
+          frameId: focused.id,
+        }),
         focus: () => ({ ok: true, value: undefined, frameId: focused.id }),
         blur: () => {},
         execCommand: () => ({ ok: false, code: 'unsupported', reason: 'no' }),
@@ -357,24 +346,36 @@ describe('navigation review pass 6 (task 5.5)', () => {
         publishSelectionOverlay: () => {},
         currentFrameId: () => focused.id,
       },
-      planned.plan,
+      planned.plan
     );
     expect(execution.outcome.ok).toBe(false);
     expect(execution.outcome.code).toBe('invalidTarget');
-    expect(commitNavigationSessionAfterExecution(planned.navigation, execution).session).toEqual(planned.navigation.priorSession);
+    expect(commitNavigationSessionAfterExecution(planned.navigation, execution).session).toEqual(
+      planned.navigation.priorSession
+    );
     expect(focused.selection!.head.graphemeOffset).toBe(0);
   });
 
   test('PageDown preserves exact seed X and relative page Y on destination', () => {
     const words = Array.from({ length: 80 }, (_, i) => `word${i}`).join(' ');
-    const bundle = publishFrameBundle(modelWith([words]), { layout: { ...LAYOUT, pageHeight: 4000 } });
+    const bundle = publishFrameBundle(modelWith([words]), {
+      layout: { ...LAYOUT, pageHeight: 4000 },
+    });
     const blockId = bundle.frame.semanticIndex.stories[0]!.blocks[0]!.identity.blockId;
     const selection = selectionForBlock(bundle.frame, blockId, 120, 120);
-    const frame = { ...bundle.frame, selection, focus: { scope: { kind: 'body' as const }, focused: true } };
+    const frame = {
+      ...bundle.frame,
+      selection,
+      focus: { scope: { kind: 'body' as const }, focused: true },
+    };
     const caret = deriveCaretGeometry(frame, selection.head);
     expect(caret).not.toBeNull();
     const seedX = caretContentX(frame, selection.head, bundle.navigation);
-    const seedRelativeY = pageRelativeY(frame, caret!.pageIndex, caret!.rect.y + caret!.rect.height / 2);
+    const seedRelativeY = pageRelativeY(
+      frame,
+      caret!.pageIndex,
+      caret!.rect.y + caret!.rect.height / 2
+    );
     expect(seedX).not.toBeNull();
     expect(seedRelativeY).not.toBeNull();
     const moved = planKeyboardNavigation({
@@ -389,9 +390,16 @@ describe('navigation review pass 6 (task 5.5)', () => {
     const sync = moved.plan.effects.find((e) => e.kind === 'syncSelection');
     expect(sync?.kind).toBe('syncSelection');
     expect(moved.navigation.nextSessionOnSuccess?.visualAdvanceX).toBe(seedX);
-    const nextCaret = deriveCaretGeometry(frame, sync!.kind === 'syncSelection' ? sync.selection.head : selection.head);
+    const nextCaret = deriveCaretGeometry(
+      frame,
+      sync!.kind === 'syncSelection' ? sync.selection.head : selection.head
+    );
     expect(nextCaret?.pageIndex).toBe(caret!.pageIndex + 1);
-    const destRelativeY = pageRelativeY(frame, nextCaret!.pageIndex, nextCaret!.rect.y + nextCaret!.rect.height / 2);
+    const destRelativeY = pageRelativeY(
+      frame,
+      nextCaret!.pageIndex,
+      nextCaret!.rect.y + nextCaret!.rect.height / 2
+    );
     expect(destRelativeY).toBeCloseTo(seedRelativeY!, 5);
   });
 
@@ -415,7 +423,11 @@ describe('navigation review pass 6 (task 5.5)', () => {
         ...base,
         head: { ...base.head, identity: { storyId: 'other-story', blockId } },
       };
-      const frame = { ...bundle.frame, selection: crossStory, focus: { scope: { kind: 'body' as const }, focused: true } };
+      const frame = {
+        ...bundle.frame,
+        selection: crossStory,
+        focus: { scope: { kind: 'body' as const }, focused: true },
+      };
       const planned = planKeyboardNavigation({
         frame,
         navigation: bundle.navigation,
@@ -434,15 +446,23 @@ describe('navigation review pass 6 (task 5.5)', () => {
     const layoutOpts = { ...LAYOUT, pageHeight: 3600 };
     const bundle = publishFrameBundle(modelWithRepeatingHeaderTable(), { layout: layoutOpts });
     expect(bundle.frame.display.length).toBeGreaterThan(1);
-    const hdrBlock = bundle.frame.semanticIndex.stories[0]!.blocks.find((b) => b.identity.blockId === 'p-hdr');
+    const hdrBlock = bundle.frame.semanticIndex.stories[0]!.blocks.find(
+      (b) => b.identity.blockId === 'p-hdr'
+    );
     expect(hdrBlock?.readOnly).toBe(true);
-    const hdrLines = bundle.navigation.visualLines.filter((line) => line.identity.blockId === 'p-hdr');
+    const hdrLines = bundle.navigation.visualLines.filter(
+      (line) => line.identity.blockId === 'p-hdr'
+    );
     expect(hdrLines.length).toBeGreaterThanOrEqual(2);
     expect(new Set(hdrLines.map((line) => line.pageIndex)).size).toBeGreaterThanOrEqual(2);
-    expect(new Set(hdrLines.map((line) => `${line.pageIndex}:${line.line.fragmentId}`)).size).toBe(hdrLines.length);
+    expect(new Set(hdrLines.map((line) => `${line.pageIndex}:${line.line.fragmentId}`)).size).toBe(
+      hdrLines.length
+    );
     for (const line of hdrLines) {
       expect(line.interaction.pageIndex).toBe(line.pageIndex);
-      expect(caretOverlayForTarget(bundle.frame, bundle.navigation, line.edges[0]!.target)).toBeNull();
+      expect(
+        caretOverlayForTarget(bundle.frame, bundle.navigation, line.edges[0]!.target)
+      ).toBeNull();
     }
     const reject = planArrowAt(bundle, 'ArrowRight', 'p-hdr', 0, 'HDR');
     expect(reject.plan.effects[0]).toMatchObject({ kind: 'reject', code: 'readOnly' });
@@ -450,14 +470,21 @@ describe('navigation review pass 6 (task 5.5)', () => {
 
   test('multi-page table cell lines carry honest page provenance', () => {
     const filler = Array.from({ length: 60 }, (_, i) => `word${i}`).join(' ');
-    const bundle = publishFrameBundle(modelWithParagraphTableParagraph(filler, 'cell-on-later-page', filler), {
-      layout: { ...LAYOUT, pageHeight: 4000 },
-    });
+    const bundle = publishFrameBundle(
+      modelWithParagraphTableParagraph(filler, 'cell-on-later-page', filler),
+      {
+        layout: { ...LAYOUT, pageHeight: 4000 },
+      }
+    );
     const cellBlock = bundle.frame.semanticIndex.stories[0]!.blocks.find(
-      (b) => !b.readOnly && b.identity.blockId !== bundle.frame.semanticIndex.stories[0]!.blocks[0]!.identity.blockId,
+      (b) =>
+        !b.readOnly &&
+        b.identity.blockId !== bundle.frame.semanticIndex.stories[0]!.blocks[0]!.identity.blockId
     );
     expect(cellBlock).toBeDefined();
-    const cellLines = bundle.navigation.visualLines.filter((line) => line.identity.blockId === cellBlock!.identity.blockId);
+    const cellLines = bundle.navigation.visualLines.filter(
+      (line) => line.identity.blockId === cellBlock!.identity.blockId
+    );
     expect(cellLines.some((line) => line.pageIndex > 0)).toBe(true);
     expect(cellLines.every((line) => line.interaction.pageIndex === line.pageIndex)).toBe(true);
   });
@@ -465,7 +492,11 @@ describe('navigation review pass 6 (task 5.5)', () => {
   test('production pointer down move up and cancel lifecycle on createEditor', () => {
     const body = document.createElement('div');
     document.body.append(body);
-    const editor = createEditor({ host: hostWith(body), document: createEditableParagraphFixture(), accessibleName: 'Ptr' });
+    const editor = createEditor({
+      host: hostWith(body),
+      document: createEditableParagraphFixture(),
+      accessibleName: 'Ptr',
+    });
     const frame = editor.getInteractionFrame();
     const textItem = frame.display[0]!.items.find((i) => i.kind === 'text');
     if (textItem?.kind !== 'text') throw new Error('text');

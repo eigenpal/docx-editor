@@ -1,7 +1,12 @@
 // Toolbar can-before-exec wiring (interactive-paginated-editing M4.0).
 
 import { describe, expect, test } from 'bun:test';
-import type { CanResult, Editor, EditorCommand, ExecResult } from '@docx-editor.dev/core-contract/editor';
+import type {
+  CanResult,
+  Editor,
+  EditorCommand,
+  ExecResult,
+} from '@docx-editor.dev/core-contract/editor';
 import {
   runSave,
   runToolbarCommand,
@@ -18,7 +23,7 @@ interface Calls {
 
 function fakeEditor(
   canResult: (command: EditorCommand) => CanResult,
-  execResult: ExecResult = { ok: true, changed: true },
+  execResult: ExecResult = { ok: true, changed: true }
 ): { editor: Editor; calls: Calls } {
   const calls: Calls = { can: [], exec: [], saves: 0 };
   const editor = {
@@ -112,7 +117,7 @@ describe('toolbar command wiring (task M4.0)', () => {
     const { editor } = fakeEditor((command) =>
       command.type === 'toggleMark' && command.mark === 'underline'
         ? { ok: false, code: 'unsupported', reason: 'w:u carries a style' }
-        : { ok: true },
+        : { ok: true }
     );
     const states = toolbarCommandStates(editor, ['bold', 'underline', 'undo']);
     expect(states.map((s) => s.enabled)).toEqual([true, false, true]);

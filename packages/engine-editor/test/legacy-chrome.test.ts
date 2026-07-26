@@ -37,12 +37,16 @@ describe('legacy chrome descriptor', () => {
 
   test('only undo, redo, bold, italic may be commands, and only save may save', () => {
     const commands = LEGACY_CHROME_GROUPS.flatMap((g) =>
-      g.controls.filter((c) => c.state.kind === 'command').map((c) => (c.state as { command: string }).command),
+      g.controls
+        .filter((c) => c.state.kind === 'command')
+        .map((c) => (c.state as { command: string }).command)
     );
     // Exactly the four M6V.1 permits — no more, and none missing.
     expect([...commands].sort()).toEqual(['bold', 'italic', 'redo', 'undo']);
 
-    const saves = LEGACY_CHROME_GROUPS.flatMap((g) => g.controls.filter((c) => c.state.kind === 'save'));
+    const saves = LEGACY_CHROME_GROUPS.flatMap((g) =>
+      g.controls.filter((c) => c.state.kind === 'save')
+    );
     expect(saves).toHaveLength(1);
   });
 
@@ -50,7 +54,9 @@ describe('legacy chrome descriptor', () => {
     // Underline is the trap: it looks like bold and italic, but `RunProps.underline`
     // is a boolean while `w:u` carries a style, so enabling it would either throw on
     // save or silently downgrade a double underline. It must be visible and inert.
-    const underline = LEGACY_CHROME_GROUPS.flatMap((g) => g.controls).find((c) => c.id === 'underline');
+    const underline = LEGACY_CHROME_GROUPS.flatMap((g) => g.controls).find(
+      (c) => c.id === 'underline'
+    );
     expect(underline).toBeDefined();
     expect(underline!.state.kind).toBe('parityOnly');
   });

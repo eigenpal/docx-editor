@@ -4,7 +4,17 @@ import type {
   DocumentHandle,
   DocumentSource,
   Editor,
+  EditorFontError,
+  FontConfiguration,
   TextMatch,
+} from '@docx-editor.dev/core-contract/editor';
+export { EditorFontError } from '@docx-editor.dev/core-contract/editor';
+export type {
+  EditorFontErrorCode,
+  FontConfiguration,
+  FontFaceRequest,
+  FontSource,
+  FontSourceSubstitution,
 } from '@docx-editor.dev/core-contract/editor';
 
 export type EditorMode = 'edit' | 'view';
@@ -15,6 +25,11 @@ export type EditorMode = 'edit' | 'view';
  * imports ProseMirror or OOXML feature logic.
  */
 export interface DocxEditorProps {
+  /**
+   * Immutable byte-backed font sources sampled at mount. Remount to replace this
+   * configuration atomically.
+   */
+  fonts: FontConfiguration;
   /**
    * Title-bar slots, as the legacy editor took them.
    *
@@ -59,6 +74,8 @@ export interface DocxEditorProps {
   className?: string;
   /** Fired after the underlying `Editor` is created. */
   onReady?: (editor: Editor) => void;
+  /** Fired with the same typed font failure shown by the accessible alert UI. */
+  onFontError?: (error: EditorFontError) => void;
   /** Fired when the document changes (revision + identity deltas, not bytes). */
   onChange?: (change: DocumentChange) => void;
 }

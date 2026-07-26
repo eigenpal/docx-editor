@@ -122,8 +122,8 @@ function readTagName(s: string, at: number): string | null {
   return j > at ? s.slice(at, j) : null;
 }
 
-/** The verbatim leading `<w:rPr>…</w:rPr>` bytes of a run — an ownership-scoped capsule for the run
- *  properties the model does not represent (fonts, size, color, underline styles, language, …). */
+/** The verbatim leading `<w:rPr>…</w:rPr>` bytes of a run. This ownership-scoped
+ *  capsule retains exact lexical forms and properties outside the semantic model. */
 export type RunPropertiesCapsule = string;
 
 /** Extract the leading `<w:rPr>` capsule of a single `<w:r …>…</w:r>` run slice, byte-exact — the

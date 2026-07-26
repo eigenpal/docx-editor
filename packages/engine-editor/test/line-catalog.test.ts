@@ -6,7 +6,12 @@ import { layoutBody } from '@docx-editor.dev/engine-layout';
 import { toDisplayPages } from '../src/display-bridge.ts';
 import { InteractionFrameStore } from '../src/interaction-frame.ts';
 import { deriveCaretGeometry } from '../src/interaction-geometry.ts';
-import { buildLineCatalog, lineForTarget, stopsForBlock, type LineCaretStop } from '../src/line-catalog.ts';
+import {
+  buildLineCatalog,
+  lineForTarget,
+  stopsForBlock,
+  type LineCaretStop,
+} from '../src/line-catalog.ts';
 import type { NavigationGeometry } from '../src/navigation-geometry.ts';
 import { freezeNavigationGeometry } from '../src/navigation-geometry.ts';
 import { LAYOUT, modelWith, selectionForBlock } from './interaction-test-helpers.ts';
@@ -27,7 +32,11 @@ function modelWithBlockIds(texts: string[], ids: string[]) {
   };
 }
 
-function frameWithSelection(texts: string[], offset: number, layout = LAYOUT): { frame: InteractionFrame; navigation: NavigationGeometry } {
+function frameWithSelection(
+  texts: string[],
+  offset: number,
+  layout = LAYOUT
+): { frame: InteractionFrame; navigation: NavigationGeometry } {
   const model = modelWith(texts);
   const layoutResult = layoutBody(model, layout);
   const bridged = toDisplayPages(model, layoutResult.pages);
@@ -75,7 +84,9 @@ describe('line catalog (task 5.5)', () => {
       expect(stops.some((stop) => stop.target.graphemeOffset === offset)).toBe(true);
     }
     const double = frameWithSelection(['ab  cd'], 2);
-    const whitespace = double.frame.semanticIndex.ownershipRegions.find((r) => r.kind === 'lineWhitespace');
+    const whitespace = double.frame.semanticIndex.ownershipRegions.find(
+      (r) => r.kind === 'lineWhitespace'
+    );
     expect(whitespace).toBeDefined();
     const doubleStops = buildLineCatalog(double.frame, double.navigation);
     expect(doubleStops.ok).toBe(true);
@@ -83,7 +94,7 @@ describe('line catalog (task 5.5)', () => {
     expect(
       doubleStops.lines
         .flatMap((line) => line.stops)
-        .some((stop) => stop.target.graphemeOffset === whitespace!.graphemeFrom),
+        .some((stop) => stop.target.graphemeOffset === whitespace!.graphemeFrom)
     ).toBe(true);
   });
 
@@ -161,7 +172,9 @@ describe('line catalog (task 5.5)', () => {
     expect(catalog.ok).toBe(true);
     if (!catalog.ok) throw new Error('catalog');
     const blocks = frame.semanticIndex.stories[0]!.blocks;
-    const blockLines = blocks.map((block) => stopsForBlock(catalog.lines, block.identity.storyId, block.identity.blockId));
+    const blockLines = blocks.map((block) =>
+      stopsForBlock(catalog.lines, block.identity.storyId, block.identity.blockId)
+    );
     expect(blockLines[0]!.length).toBeGreaterThan(0);
     expect(blockLines[1]!.length).toBeGreaterThan(0);
     expect(new Set(catalog.lines.map((line) => line.blockId)).size).toBe(2);
@@ -192,7 +205,12 @@ describe('line catalog (task 5.5)', () => {
           ...edge,
           interaction: {
             ...edge.interaction,
-            clip: { x: edge.pageLocalX + 500, y: edge.pageLocalY, width: 10, height: edge.pageLocalHeight },
+            clip: {
+              x: edge.pageLocalX + 500,
+              y: edge.pageLocalY,
+              width: 10,
+              height: edge.pageLocalHeight,
+            },
           },
         })),
       })),

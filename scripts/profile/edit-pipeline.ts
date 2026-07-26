@@ -25,8 +25,11 @@ import {
   type PackageModel,
   type ParagraphRecord,
 } from '@docx-editor.dev/engine-core';
-import { layoutBody, HelveticaMetrics } from '@docx-editor.dev/engine-layout';
-import { DisplayBridgeCache, toDisplayPages } from '../../packages/engine-editor/src/display-bridge.ts';
+import { createDeterministicLayoutShaping, layoutBody } from '@docx-editor.dev/engine-layout';
+import {
+  DisplayBridgeCache,
+  toDisplayPages,
+} from '../../packages/engine-editor/src/display-bridge.ts';
 import { semanticChunkStats } from '../../packages/engine-editor/src/semantic-index.ts';
 import { InteractionFrameStore } from '../../packages/engine-editor/src/interaction-frame.ts';
 
@@ -34,7 +37,8 @@ const LAYOUT = { pageWidth: 12240, pageHeight: 15840, margin: 1440 };
 const HUMAN = ORIGIN_IDS.mutationHuman;
 
 const round1 = (value: number) => Math.round(value * 10) / 10;
-const median = (values: number[]) => [...values].sort((a, b) => a - b)[Math.floor(values.length / 2)]!;
+const median = (values: number[]) =>
+  [...values].sort((a, b) => a - b)[Math.floor(values.length / 2)]!;
 
 function firstParagraphId(model: PackageModel): string {
   for (const story of model.stories.values()) {
@@ -53,6 +57,39 @@ function countParagraphs(model: PackageModel): number {
   return total;
 }
 
+function declaredFontFamilies(model: PackageModel): readonly string[] {
+  const families = new Set<string>();
+  const seen = new Set<object>();
+  const visit = (value: unknown, key?: string): void => {
+    if (typeof value === 'string') {
+      if (
+        key === 'ascii' ||
+        key === 'hAnsi' ||
+        key === 'eastAsia' ||
+        key === 'cs' ||
+        key?.startsWith('major') ||
+        key?.startsWith('minor')
+      ) {
+        families.add(value);
+      }
+      return;
+    }
+    if (!value || typeof value !== 'object' || seen.has(value)) return;
+    seen.add(value);
+    if (value instanceof Map) {
+      for (const entry of value.values()) visit(entry);
+      return;
+    }
+    if (Array.isArray(value)) {
+      for (const entry of value) visit(entry);
+      return;
+    }
+    for (const [entryKey, entry] of Object.entries(value)) visit(entry, entryKey);
+  };
+  visit(model);
+  return [...families].sort();
+}
+
 const fixture = process.argv[2];
 if (!fixture) {
   console.error('usage: bun scripts/profile/edit-pipeline.ts <fixture.docx> [samples]');
@@ -60,7 +97,9 @@ if (!fixture) {
 }
 const samples = Number(process.argv[3] ?? 9);
 
-const parsed = parseDocx(new Uint8Array(await Bun.file(fixture).arrayBuffer()), { preserveAll: true });
+const parsed = parseDocx(new Uint8Array(await Bun.file(fixture).arrayBuffer()), {
+  preserveAll: true,
+});
 if (!parsed.ok) throw new Error(`parse failed: ${parsed.reason}`);
 
 const store = new DocumentStore(parsed.model);
@@ -68,13 +107,21 @@ const paragraphId = firstParagraphId(parsed.model);
 const cache = new DisplayBridgeCache();
 const frames = new InteractionFrameStore();
 
-const stage = { store: [] as number[], layout: [] as number[], bridge: [] as number[], publish: [] as number[], total: [] as number[] };
+const stage = {
+  store: [] as number[],
+  layout: [] as number[],
+  bridge: [] as number[],
+  publish: [] as number[],
+  total: [] as number[],
+};
 let counts: Record<string, unknown> = {};
 
-// ONE port for the whole run, matching the editor. A fresh port per layout gives the
-// horizontal-boundary memo a new key every layout and a 0% hit rate, so a profiler that
-// constructs one per iteration measures a configuration production does not have.
-const metrics = new HelveticaMetrics();
+// This profiler measures pipeline scaling rather than font fidelity. It therefore uses one
+// contract-level deterministic font/shaper snapshot for the whole run; production previews must
+// inject validated real font bytes.
+const shaping = createDeterministicLayoutShaping({
+  families: declaredFontFamilies(parsed.model),
+});
 
 for (let i = 0; i < samples; i += 1) {
   const t0 = performance.now();
@@ -85,9 +132,9 @@ for (let i = 0; i < samples; i += 1) {
   if (!applied.ok) throw new Error('insertText refused');
   const model = store.currentModel;
 
-  const layout = layoutBody(model, { ...LAYOUT, metrics });
+  const layout = layoutBody(model, { ...LAYOUT, shaping });
   const t2 = performance.now();
-  const bridged = toDisplayPages(model, layout.pages, metrics, cache);
+  const bridged = toDisplayPages(model, layout.pages, { cache });
   const t3 = performance.now();
   frames.publishLayout({
     modelRevision: store.revision,
@@ -130,7 +177,10 @@ for (let i = 0; i < samples; i += 1) {
       displayItems: items,
       glyphRuns,
       clusters,
-      navigationEdges: bridged.navigationGeometry.visualLines.reduce((n, l) => n + l.edges.length, 0),
+      navigationEdges: bridged.navigationGeometry.visualLines.reduce(
+        (n, l) => n + l.edges.length,
+        0
+      ),
       visualLines: bridged.navigationGeometry.visualLines.length,
       caretStops: bridged.semanticIndex.caretStops.length,
       ownershipRegions: bridged.semanticIndex.ownershipRegions.length,
@@ -138,14 +188,18 @@ for (let i = 0; i < samples; i += 1) {
       reuse: {
         paintedSlices: { reused: cache.reused, rebuilt: cache.built },
         paragraphLineSets: { reused: cache.linesReused, rebuilt: cache.linesBuilt },
-        semanticBlockChunks: { reused: semanticChunkStats.reused, rebuilt: semanticChunkStats.rebuilt },
+        semanticBlockChunks: {
+          reused: semanticChunkStats.reused,
+          rebuilt: semanticChunkStats.rebuilt,
+        },
       },
     };
   }
 }
 
 const total = median(stage.total);
-const parts = median(stage.store) + median(stage.layout) + median(stage.bridge) + median(stage.publish);
+const parts =
+  median(stage.store) + median(stage.layout) + median(stage.bridge) + median(stage.publish);
 
 console.log(
   JSON.stringify(

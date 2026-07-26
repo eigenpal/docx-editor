@@ -164,7 +164,7 @@ function firstDivergence(nodes: readonly PMNode[], blocks: readonly Block[]): nu
  *  split/join is NOT mistaken for an untouched neighbour (a read-only atom is content-fixed). */
 function sameContent(node: PMNode, block: Block): boolean {
   if (!isParagraph(node) || block.kind !== 'paragraph') return true; // role-driven, not a hardcoded name
-  return runsEqual(block.runs, paragraphNodeToRuns(node));
+  return runsEqual(block.runs, paragraphNodeToRuns(node, block.runs));
 }
 
 /** Whether nodes[0..count) correspond 1:1 to blocks[0..count) by identity AND content — used
@@ -325,7 +325,7 @@ export class EditorBinding {
         // narrow to ParagraphRecord and fail closed if a future editable kind is not paragraph-shaped.
         if (block.kind !== 'paragraph')
           throw new BindingRejection('editable block kind has no run reverse-mapping');
-        const runs = paragraphNodeToRuns(node);
+        const runs = paragraphNodeToRuns(node, block.runs);
         if (!runsEqual(block.runs, runs)) {
           // Overwriting a paragraph whose runs carry metadata the projection drops (id/styleId/
           // underline/explicit-off) would silently lose it — refuse rather than corrupt.
@@ -368,8 +368,8 @@ export class EditorBinding {
     }
     // A clean split only reorders X's OWN runs at a boundary — the concatenated head+tail runs
     // (text AND formatting) must equal X's runs. If not, this is not a split (it may be a paste).
-    const headRuns = paragraphNodeToRuns(head);
-    const tailRuns = paragraphNodeToRuns(tail);
+    const headRuns = paragraphNodeToRuns(head, blockRuns(x));
+    const tailRuns = paragraphNodeToRuns(tail, blockRuns(x));
     if (!runsEqual([...headRuns, ...tailRuns], blockRuns(x))) return null;
     // The offset is a UTF-16 code-unit index (matching the store's slice). If it falls BETWEEN
     // a surrogate pair, each half keeps a lone surrogate that becomes U+FFFD on UTF-8 save —
@@ -444,7 +444,11 @@ export class EditorBinding {
       throw new BindingRejection('paste would split an astral character (surrogate) — refused');
     }
     const ops: DocOp[] = [
-      { op: 'setParagraphRuns', paragraphId: block.id, runs: paragraphNodeToRuns(target) },
+      {
+        op: 'setParagraphRuns',
+        paragraphId: block.id,
+        runs: paragraphNodeToRuns(target, block.runs),
+      },
     ];
     for (let j = 0; j < k; j += 1) {
       ops.push({
@@ -478,7 +482,12 @@ export class EditorBinding {
     ) {
       throw new BindingRejection('unsupported paragraph deletion');
     }
-    if (!runsEqual(paragraphNodeToRuns(survivor), [...blockRuns(x), ...blockRuns(y)])) {
+    if (
+      !runsEqual(paragraphNodeToRuns(survivor, [...blockRuns(x), ...blockRuns(y)]), [
+        ...blockRuns(x),
+        ...blockRuns(y),
+      ])
+    ) {
       throw new BindingRejection('join combined with an edit is not supported');
     }
     // A join DELETES Y. Every other lane validates the block it touches against the

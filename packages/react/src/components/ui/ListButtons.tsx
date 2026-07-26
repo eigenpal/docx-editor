@@ -182,7 +182,11 @@ export function ListButton({
       onClick={disabled ? undefined : onClick}
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
-      disabled={disabled}
+      // Native disabled buttons suppress mousedown, defeating the focus-preserving
+      // handler above and dropping the editor caret. Preserve disabled semantics
+      // with ARIA while keeping pointer cancellation observable.
+      aria-disabled={disabled || undefined}
+      tabIndex={disabled ? -1 : undefined}
       title={title}
       aria-label={title}
       aria-pressed={active}

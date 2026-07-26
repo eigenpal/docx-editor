@@ -2,7 +2,7 @@ import { GlobalRegistrator } from '@happy-dom/global-registrator';
 if (!GlobalRegistrator.isRegistered) GlobalRegistrator.register();
 
 import { describe, expect, test } from 'bun:test';
-import { createEditor } from '../src/create-editor.ts';
+import { createTestEditor as createEditor } from './create-test-editor.ts';
 import type { EditorHost } from '@docx-editor.dev/core-contract/editor';
 import { createEditableParagraphFixture } from '../browser/fixtures.ts';
 import type { SemanticSelection } from '@docx-editor.dev/core-contract/interaction';
@@ -30,7 +30,9 @@ describe('createEditor setSelection command', () => {
       accessibleName: 'Etiqueta',
     });
 
-    const entries = editor.getAccessibilityObservation().entries.filter((entry) => entry.role === 'editableParagraph');
+    const entries = editor
+      .getAccessibilityObservation()
+      .entries.filter((entry) => entry.role === 'editableParagraph');
     const blockId = entries[0]!.identity.blockId;
     const storyId = entries[0]!.identity.storyId;
     const frameId = editor.getInteractionFrame().id;
@@ -86,10 +88,16 @@ describe('createEditor setSelection refuses read-only blocks', () => {
   test('a caret cannot be placed in a locked paragraph', async () => {
     const { readFileSync } = await import('node:fs');
     const path = await import('node:path');
-    const fixture = path.resolve(import.meta.dir, '../../../e2e/fixtures/comprehensive-word-element-test.docx');
+    const fixture = path.resolve(
+      import.meta.dir,
+      '../../../e2e/fixtures/comprehensive-word-element-test.docx'
+    );
     const body = document.createElement('div');
     document.body.append(body);
-    const editor = createEditor({ host: hostWith(body), document: new Uint8Array(readFileSync(fixture)) });
+    const editor = createEditor({
+      host: hostWith(body),
+      document: new Uint8Array(readFileSync(fixture)),
+    });
 
     const entries = editor.getAccessibilityObservation().entries;
     const locked = entries.find((e) => e.role === 'unsupportedStructure');
@@ -101,8 +109,20 @@ describe('createEditor setSelection refuses read-only blocks', () => {
     const at = (identity: { storyId: string; blockId: string }): SemanticSelection => ({
       frameId: editor.getInteractionFrame().id,
       scope: { kind: 'body' },
-      anchor: { kind: 'text', scope: { kind: 'body' }, identity, graphemeOffset: 0, affinity: 'downstream' },
-      head: { kind: 'text', scope: { kind: 'body' }, identity, graphemeOffset: 0, affinity: 'downstream' },
+      anchor: {
+        kind: 'text',
+        scope: { kind: 'body' },
+        identity,
+        graphemeOffset: 0,
+        affinity: 'downstream',
+      },
+      head: {
+        kind: 'text',
+        scope: { kind: 'body' },
+        identity,
+        graphemeOffset: 0,
+        affinity: 'downstream',
+      },
     });
 
     const refused = editor.exec({ type: 'setSelection', range: at(locked!.identity) });
@@ -110,7 +130,8 @@ describe('createEditor setSelection refuses read-only blocks', () => {
     expect(refused.ok === false && refused.code).toBe('locked');
     // The canonical selection did not move into it.
     const head = editor.getInteractionFrame().selection?.head;
-    if (head && head.kind === 'text') expect(head.identity.blockId).not.toBe(locked!.identity.blockId);
+    if (head && head.kind === 'text')
+      expect(head.identity.blockId).not.toBe(locked!.identity.blockId);
 
     // The control: the same call on an editable paragraph succeeds, so the refusal above
     // is about the POLICY and not about this document refusing every selection.
@@ -128,10 +149,16 @@ describe('getSelectionFormatting derives from canonical state', () => {
   test('reports the font and size the document actually carries', async () => {
     const { readFileSync } = await import('node:fs');
     const path = await import('node:path');
-    const fixture = path.resolve(import.meta.dir, '../../../e2e/fixtures/comprehensive-word-element-test.docx');
+    const fixture = path.resolve(
+      import.meta.dir,
+      '../../../e2e/fixtures/comprehensive-word-element-test.docx'
+    );
     const body = document.createElement('div');
     document.body.append(body);
-    const editor = createEditor({ host: hostWith(body), document: new Uint8Array(readFileSync(fixture)) });
+    const editor = createEditor({
+      host: hostWith(body),
+      document: new Uint8Array(readFileSync(fixture)),
+    });
 
     // A freshly opened document already carries a caret, so the derivation has something
     // to read immediately — my assumption that it would be null was wrong.
@@ -145,8 +172,20 @@ describe('getSelectionFormatting derives from canonical state', () => {
       range: {
         frameId: editor.getInteractionFrame().id,
         scope: { kind: 'body' },
-        anchor: { kind: 'text', scope: { kind: 'body' }, identity: entry!.identity, graphemeOffset: 1, affinity: 'downstream' },
-        head: { kind: 'text', scope: { kind: 'body' }, identity: entry!.identity, graphemeOffset: 1, affinity: 'downstream' },
+        anchor: {
+          kind: 'text',
+          scope: { kind: 'body' },
+          identity: entry!.identity,
+          graphemeOffset: 1,
+          affinity: 'downstream',
+        },
+        head: {
+          kind: 'text',
+          scope: { kind: 'body' },
+          identity: entry!.identity,
+          graphemeOffset: 1,
+          affinity: 'downstream',
+        },
       } as never,
     });
 
@@ -167,18 +206,28 @@ describe('getDocumentFonts derives the real inventory', () => {
   test('reports the families the fixture actually carries', async () => {
     const { readFileSync } = await import('node:fs');
     const path = await import('node:path');
-    const fixture = path.resolve(import.meta.dir, '../../../e2e/fixtures/comprehensive-word-element-test.docx');
+    const fixture = path.resolve(
+      import.meta.dir,
+      '../../../e2e/fixtures/comprehensive-word-element-test.docx'
+    );
     const body = document.createElement('div');
     document.body.append(body);
-    const editor = createEditor({ host: hostWith(body), document: new Uint8Array(readFileSync(fixture)) });
+    const editor = createEditor({
+      host: hostWith(body),
+      document: new Uint8Array(readFileSync(fixture)),
+    });
 
     const fonts = editor.getDocumentFonts();
     expect(fonts.length, 'no fonts derived from a document that names five').toBeGreaterThan(1);
     // De-duplicated: a family used by many runs appears once.
     expect(new Set(fonts).size).toBe(fonts.length);
     // The fixture's "Font Variations" section lists these; at least one must come through.
-    expect(fonts.some((f) => ['Arial', 'Times New Roman', 'Courier New', 'Georgia', 'Verdana'].includes(f)),
-      `derived: ${JSON.stringify(fonts)}`).toBe(true);
+    expect(
+      fonts.some((f) =>
+        ['Arial', 'Times New Roman', 'Courier New', 'Georgia', 'Verdana'].includes(f)
+      ),
+      `derived: ${JSON.stringify(fonts)}`
+    ).toBe(true);
 
     editor.destroy();
     body.remove();
@@ -190,10 +239,16 @@ describe('getDocumentStyles derives the real style table', () => {
   test('reports paragraph styles the fixture defines, and only paragraph styles', async () => {
     const { readFileSync } = await import('node:fs');
     const path = await import('node:path');
-    const fixture = path.resolve(import.meta.dir, '../../../e2e/fixtures/comprehensive-word-element-test.docx');
+    const fixture = path.resolve(
+      import.meta.dir,
+      '../../../e2e/fixtures/comprehensive-word-element-test.docx'
+    );
     const body = document.createElement('div');
     document.body.append(body);
-    const editor = createEditor({ host: hostWith(body), document: new Uint8Array(readFileSync(fixture)) });
+    const editor = createEditor({
+      host: hostWith(body),
+      document: new Uint8Array(readFileSync(fixture)),
+    });
 
     const styles = editor.getDocumentStyles();
     expect(styles.length, 'no styles derived from a document with headings').toBeGreaterThan(1);
@@ -203,8 +258,10 @@ describe('getDocumentStyles derives the real style table', () => {
     // Every row is renderable — no blank names.
     expect(styles.every((s) => s.name.length > 0 && s.styleId.length > 0)).toBe(true);
     // A document with H1-H5 must surface at least one heading style.
-    expect(styles.some((s) => /heading/i.test(s.styleId) || /heading/i.test(s.name)),
-      `derived: ${JSON.stringify(styles.slice(0, 8))}`).toBe(true);
+    expect(
+      styles.some((s) => /heading/i.test(s.styleId) || /heading/i.test(s.name)),
+      `derived: ${JSON.stringify(styles.slice(0, 8))}`
+    ).toBe(true);
 
     editor.destroy();
     body.remove();
@@ -217,10 +274,16 @@ describe('getOutline derives real headings', () => {
   test('reports the fixture headings in document order with correct levels', async () => {
     const { readFileSync } = await import('node:fs');
     const path = await import('node:path');
-    const fixture = path.resolve(import.meta.dir, '../../../e2e/fixtures/comprehensive-word-element-test.docx');
+    const fixture = path.resolve(
+      import.meta.dir,
+      '../../../e2e/fixtures/comprehensive-word-element-test.docx'
+    );
     const body = document.createElement('div');
     document.body.append(body);
-    const editor = createEditor({ host: hostWith(body), document: new Uint8Array(readFileSync(fixture)) });
+    const editor = createEditor({
+      host: hostWith(body),
+      document: new Uint8Array(readFileSync(fixture)),
+    });
 
     const outline = editor.getOutline();
     expect(outline.length, 'no headings from a document with H1-H5').toBeGreaterThan(2);
@@ -230,8 +293,10 @@ describe('getOutline derives real headings', () => {
     expect(outline.every((h) => h.level >= 0 && h.level <= 8)).toBe(true);
     // The fixture has H1 through H5, so more than one distinct level must appear —
     // a flat outline would mean the level derivation is not working.
-    expect(new Set(outline.map((h) => h.level)).size,
-      `levels: ${JSON.stringify(outline.slice(0, 6))}`).toBeGreaterThan(1);
+    expect(
+      new Set(outline.map((h) => h.level)).size,
+      `levels: ${JSON.stringify(outline.slice(0, 6))}`
+    ).toBeGreaterThan(1);
 
     editor.destroy();
     body.remove();
@@ -243,10 +308,16 @@ describe('findMatches searches the canonical model', () => {
   test('finds real occurrences and honours case and whole-word', async () => {
     const { readFileSync } = await import('node:fs');
     const path = await import('node:path');
-    const fixture = path.resolve(import.meta.dir, '../../../e2e/fixtures/comprehensive-word-element-test.docx');
+    const fixture = path.resolve(
+      import.meta.dir,
+      '../../../e2e/fixtures/comprehensive-word-element-test.docx'
+    );
     const body = document.createElement('div');
     document.body.append(body);
-    const editor = createEditor({ host: hostWith(body), document: new Uint8Array(readFileSync(fixture)) });
+    const editor = createEditor({
+      host: hostWith(body),
+      document: new Uint8Array(readFileSync(fixture)),
+    });
 
     // An empty query matches nothing, rather than every position.
     expect(editor.findMatches('')).toEqual([]);

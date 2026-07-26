@@ -1,0 +1,367 @@
+import { describe, expect, test } from 'bun:test';
+import {
+  FontResolutionError,
+  ResolvedCache,
+  boundedStructuralFontValidator,
+  createFontResourceSnapshot,
+  fixedPoint,
+  fontRequestKey,
+  shapingEnvironmentFingerprint,
+  sha256FontBytes,
+  type CacheProvenance,
+  type FontRequest,
+  type OperationSnapshot,
+  type ShapeInput,
+  type ShapedRun,
+  type ShapingEnvironment,
+  type TextShaper,
+} from '../src/index.ts';
+
+const regular: FontRequest = { family: 'Document Sans', weight: 400, style: 'normal' };
+const italic: FontRequest = { family: 'Document Sans', weight: 400, style: 'italic' };
+const replacement: FontRequest = { family: 'Bundled Sans', weight: 400, style: 'normal' };
+const sfntBytes = () => new Uint8Array([0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]);
+const ttcBytes = () =>
+  new Uint8Array([
+    0x74, 0x74, 0x63, 0x66, 0, 1, 0, 0, 0, 0, 0, 2, 0, 0, 0, 20, 0, 0, 0, 32, 0, 1, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+  ]);
+
+const source = (request: FontRequest = regular, bytes = sfntBytes()) => ({
+  request,
+  id: `${request.family}-${request.weight}-${request.style}`,
+  bytes,
+  hash: sha256FontBytes(bytes),
+  faceIndex: 0,
+});
+
+const resolvedFont = (definition = source()) => {
+  const snapshot = createFontResourceSnapshot({
+    epoch: 1,
+    maxFontBytes: 1024,
+    resources: [definition],
+    validateFont: boundedStructuralFontValidator,
+  });
+  const result = snapshot.resolve(definition.request);
+  if (result instanceof FontResolutionError) throw result;
+  return result;
+};
+
+describe('font resource contracts', () => {
+  test('rejects requested font ceilings above the engine hard maximum', () => {
+    expect(() =>
+      createFontResourceSnapshot({
+        epoch: 1,
+        maxFontBytes: Number.MAX_SAFE_INTEGER,
+        resources: [],
+        validateFont: boundedStructuralFontValidator,
+      })
+    ).toThrow(RangeError);
+  });
+
+  test('authoritatively rejects hard source-count and aggregate ceilings before work', () => {
+    const definition = source();
+    const aggregateBytes = new Uint8Array(1024 * 1024);
+    const aggregateDefinition = source(regular, aggregateBytes);
+    for (const resources of [
+      Array.from({ length: 257 }, () => definition),
+      Array.from({ length: 129 }, () => aggregateDefinition),
+    ]) {
+      const counters = { copies: 0, hashes: 0, validations: 0 };
+      expect(() =>
+        createFontResourceSnapshot({
+          epoch: 1,
+          maxFontBytes: 2 * 1024 * 1024,
+          resources,
+          validateFont: () => {
+            counters.validations += 1;
+            return { valid: true };
+          },
+          instrumentation: {
+            onOwnedByteCopy: () => (counters.copies += 1),
+            onHash: () => (counters.hashes += 1),
+          },
+        })
+      ).toThrow(RangeError);
+      expect(counters).toEqual({ copies: 0, hashes: 0, validations: 0 });
+    }
+  });
+
+  test('resolved identity includes the explicit byte hash and face index', () => {
+    const first = resolvedFont();
+    const collection = ttcBytes();
+    const otherFace = resolvedFont({
+      ...source(),
+      bytes: collection,
+      hash: sha256FontBytes(collection),
+      faceIndex: 1,
+    });
+    const changed = sfntBytes();
+    changed[11] = 1;
+    const otherBytes = resolvedFont({
+      ...source(),
+      bytes: changed,
+      hash: sha256FontBytes(changed),
+    });
+
+    expect(first.byteLength).toBe(12);
+    expect(first.identity).toBe(`${first.hash}#0`);
+    expect(otherFace.identity).not.toBe(first.identity);
+    expect(otherBytes.identity).not.toBe(first.identity);
+  });
+
+  test('request matching includes family, numeric weight, and style', () => {
+    const snapshot = createFontResourceSnapshot({
+      epoch: 1,
+      maxFontBytes: 64,
+      resources: [source()],
+      validateFont: boundedStructuralFontValidator,
+    });
+
+    expect(snapshot.resolve(regular)).not.toBeInstanceOf(FontResolutionError);
+    for (const request of [
+      { ...regular, family: 'document sans' },
+      { ...regular, weight: 700 },
+      italic,
+    ]) {
+      const result = snapshot.resolve(request);
+      expect(result).toBeInstanceOf(FontResolutionError);
+      expect(result).toMatchObject({ code: 'missing', request });
+    }
+    expect(fontRequestKey(regular)).not.toBe(fontRequestKey(italic));
+  });
+
+  test('uses only an exact declared substitution and records its provenance', () => {
+    const snapshot = createFontResourceSnapshot({
+      epoch: 4,
+      maxFontBytes: 64,
+      resources: [source(replacement)],
+      substitutions: [{ from: regular, to: replacement }],
+      validateFont: boundedStructuralFontValidator,
+    });
+
+    const result = snapshot.resolve(regular);
+    expect(result).not.toBeInstanceOf(FontResolutionError);
+    if (result instanceof FontResolutionError) throw result;
+    expect(result.substitution).toEqual({ requested: regular, resolved: replacement });
+    expect(result.family).toBe(replacement.family);
+  });
+
+  test('rejects over-limit resources before font validation', () => {
+    let validationCalls = 0;
+    const snapshot = createFontResourceSnapshot({
+      epoch: 1,
+      maxFontBytes: 3,
+      resources: [source()],
+      validateFont: () => {
+        validationCalls += 1;
+        return { valid: true };
+      },
+    });
+
+    expect(snapshot.resolve(regular)).toMatchObject({
+      code: 'overLimit',
+      limit: 3,
+      actual: 12,
+    });
+    expect(validationCalls).toBe(0);
+  });
+
+  test('keeps malformed-font parsing behind an injected validation boundary', () => {
+    const snapshot = createFontResourceSnapshot({
+      epoch: 1,
+      maxFontBytes: 64,
+      resources: [source()],
+      validateFont: () => ({ valid: false, diagnostic: 'invalid sfnt directory' }),
+    });
+
+    expect(snapshot.resolve(regular)).toMatchObject({
+      code: 'malformed',
+      diagnostic: 'invalid sfnt directory',
+    });
+  });
+
+  test('returns typed missing and forbidden errors without a fetch capability', () => {
+    const snapshot = createFontResourceSnapshot({
+      epoch: 1,
+      maxFontBytes: 64,
+      resources: [{ ...source(), availability: 'forbidden' }],
+      validateFont: boundedStructuralFontValidator,
+    });
+
+    const forbidden = snapshot.resolve(regular);
+    const missing = snapshot.resolve(italic);
+    expect(forbidden).toBeInstanceOf(FontResolutionError);
+    expect(forbidden).toMatchObject({ code: 'forbidden', request: regular });
+    expect(missing).toBeInstanceOf(FontResolutionError);
+    expect(missing).toMatchObject({ code: 'missing', request: italic });
+    expect(Object.keys(snapshot).sort()).toEqual(['epoch', 'resolve']);
+  });
+
+  test('owns immutable byte copies on input and output', () => {
+    const supplied = sfntBytes();
+    const expected = supplied.slice();
+    const snapshot = createFontResourceSnapshot({
+      epoch: 1,
+      maxFontBytes: 64,
+      resources: [source(regular, supplied)],
+      validateFont: boundedStructuralFontValidator,
+    });
+    supplied[0] = 99;
+
+    const result = snapshot.resolve(regular);
+    if (result instanceof FontResolutionError) throw result;
+    const exposed = result.bytes;
+    expect(exposed).toEqual(expected);
+    exposed[1] = 88;
+    expect(result.bytes).toEqual(expected);
+    expect(Object.isFrozen(result)).toBe(true);
+    expect(Object.isFrozen(result.request)).toBe(true);
+  });
+
+  test('copies and validates each admitted face once regardless of repeated resolution', () => {
+    const events: string[] = [];
+    const snapshot = createFontResourceSnapshot({
+      epoch: 1,
+      maxFontBytes: 64,
+      resources: [source()],
+      validateFont: (bytes, faceIndex) => {
+        events.push(`validate:${bytes.byteLength}:${faceIndex}`);
+        return boundedStructuralFontValidator(bytes, faceIndex);
+      },
+      instrumentation: {
+        onOwnedByteCopy: () => events.push('copy'),
+        onTableScan: () => events.push('scan'),
+      },
+    });
+    const first = snapshot.resolve(regular);
+    const second = snapshot.resolve(regular);
+    expect(first).toBe(second);
+    expect(events).toEqual(['copy', 'scan', 'validate:12:0']);
+  });
+
+  test('resource epochs preserve cache entries whose exact font dependency is unchanged', () => {
+    const first = createFontResourceSnapshot({
+      epoch: 7,
+      maxFontBytes: 64,
+      resources: [source()],
+      validateFont: boundedStructuralFontValidator,
+    });
+    const next = createFontResourceSnapshot({
+      epoch: 8,
+      maxFontBytes: 64,
+      resources: [source()],
+      validateFont: boundedStructuralFontValidator,
+    });
+    const environment = (resourceEpoch: number): OperationSnapshot => ({
+      resourceEpoch,
+      configEpoch: 2,
+      extensionFingerprint: 'extensions',
+      shapingHash: 'shape',
+      producerVersion: 1,
+    });
+    const provenance: CacheProvenance = {
+      revision: 11,
+      dependencyFingerprint: `font:Document Sans=${source().hash}`,
+      inputFingerprint: 'text',
+      resourceDependencies: [{ key: 'font:Document Sans', fingerprint: source().hash }],
+      ...environment(first.epoch),
+    };
+    const cache = new ResolvedCache<string>();
+    cache.set('run', 'shaped', provenance);
+
+    const { resourceEpoch: _resourceEpoch, ...other } = provenance;
+    expect(cache.get('run', { ...other, resourceEpoch: next.epoch }).hit).toBe(true);
+  });
+});
+
+describe('shaping contracts', () => {
+  const font = resolvedFont();
+  const environment: ShapingEnvironment = {
+    font,
+    variationAxes: { wght: 400 },
+    shapingLibrary: { name: 'contract-shaper', version: '1' },
+    unicodeDataVersion: '15.1',
+    normalization: 'none',
+    script: 'Latn',
+    language: 'en',
+    direction: 'ltr',
+    features: { kern: 1, liga: 1 },
+    fallbackOrder: [font],
+    fixedPointScale: 64,
+    roundingMode: 'halfAwayFromZero',
+  };
+
+  test('fingerprint inputs are deterministic and include every shaping variable', () => {
+    const reordered: ShapingEnvironment = {
+      ...environment,
+      variationAxes: { wght: 400 },
+      features: { liga: 1, kern: 1 },
+    };
+    expect(shapingEnvironmentFingerprint(reordered)).toBe(
+      shapingEnvironmentFingerprint(environment)
+    );
+    expect(shapingEnvironmentFingerprint({ ...environment, language: 'pl' })).not.toBe(
+      shapingEnvironmentFingerprint(environment)
+    );
+    expect(shapingEnvironmentFingerprint({ ...environment, fixedPointScale: 1024 })).not.toBe(
+      shapingEnvironmentFingerprint(environment)
+    );
+    const changed = sfntBytes();
+    changed[11] = 1;
+    const fallbackWithOtherBytes = resolvedFont({
+      ...source(),
+      bytes: changed,
+      hash: sha256FontBytes(changed),
+    });
+    expect(
+      shapingEnvironmentFingerprint({
+        ...environment,
+        fallbackOrder: [fallbackWithOtherBytes],
+      })
+    ).not.toBe(shapingEnvironmentFingerprint(environment));
+  });
+
+  test('shape input and output expose fixed-point cluster, glyph, and vertical metrics contracts', () => {
+    const input: ShapeInput = { text: 'fi', fontSizeHalfPoints: 24, bidiLevel: 0, environment };
+    const expected: ShapedRun = {
+      text: 'fi',
+      direction: 'ltr',
+      bidiLevel: 0,
+      glyphs: [
+        {
+          id: 42,
+          cluster: 0,
+          advanceX: fixedPoint(70),
+          advanceY: fixedPoint(0),
+          offsetX: fixedPoint(0),
+          offsetY: fixedPoint(0),
+        },
+      ],
+      clusters: [
+        {
+          textStart: 0,
+          textEnd: 2,
+          glyphStart: 0,
+          glyphEnd: 1,
+          advance: fixedPoint(70),
+          caretEdges: [fixedPoint(0), fixedPoint(35), fixedPoint(70)],
+          fontSpan: 0,
+        },
+      ],
+      fontSpans: [{ glyphStart: 0, glyphEnd: 1, font, fallbackIndex: null }],
+      metrics: { ascent: fixedPoint(48), descent: fixedPoint(12), lineGap: fixedPoint(4) },
+    };
+    const shaper: TextShaper = { shape: (received) => ({ ...expected, text: received.text }) };
+
+    expect(shaper.shape(input)).toEqual(expected);
+    for (const value of [
+      expected.glyphs[0]!.advanceX,
+      expected.clusters[0]!.advance,
+      expected.metrics.ascent,
+    ]) {
+      expect(Number.isInteger(value)).toBe(true);
+    }
+    expect(() => fixedPoint(1.5)).toThrow(/safe integer/);
+  });
+});

@@ -9,6 +9,7 @@ import {
   type PartRecord,
   type StyleRecord,
   type DocDefaults,
+  type ThemeFonts,
   type NumberingRecord,
   type IdentityState,
   type BlockRange,
@@ -23,6 +24,7 @@ export interface SerializedModel {
   readonly stories: readonly Story[];
   readonly styles: readonly StyleRecord[];
   readonly docDefaults?: DocDefaults;
+  readonly themeFonts?: ThemeFonts;
   readonly numbering: readonly NumberingRecord[];
   readonly parts: readonly PartRecord[];
   readonly identity: IdentityState;
@@ -48,6 +50,7 @@ export function encodeModel(model: PackageModel): SerializedModel {
     stories: [...model.stories.values()],
     styles: model.styles,
     ...(model.docDefaults ? { docDefaults: model.docDefaults } : {}),
+    ...(model.themeFonts ? { themeFonts: model.themeFonts } : {}),
     numbering: model.numbering,
     parts: [...model.parts.values()],
     identity: model.identity,
@@ -93,6 +96,7 @@ export function decodeModel(s: SerializedModel): PackageModel {
     stories: new Map(s.stories.map((story) => [story.id, story])),
     styles: s.styles,
     ...(s.docDefaults ? { docDefaults: s.docDefaults } : {}),
+    ...(s.themeFonts ? { themeFonts: s.themeFonts } : {}),
     numbering: s.numbering,
     parts: new Map(s.parts.map((part) => [part.partName, part])),
     identity: s.identity,

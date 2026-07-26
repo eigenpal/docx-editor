@@ -21,7 +21,8 @@ import { GlobalRegistrator } from '@happy-dom/global-registrator';
 if (!GlobalRegistrator.isRegistered) GlobalRegistrator.register();
 
 import { describe, expect, test } from 'bun:test';
-import { createEditor, createEditorDriver } from '../src/index.ts';
+import { createEditorDriver } from '../src/index.ts';
+import { createTestEditor as createEditor } from './create-test-editor.ts';
 import type { EditorHost } from '@docx-editor.dev/core-contract/editor';
 import { IDENTITY_HOST_METRICS } from '../src/coordinate-mapper.ts';
 import { createEditableParagraphFixture } from '../browser/fixtures.ts';
@@ -31,7 +32,17 @@ function mountEditor() {
   const body = document.createElement('div');
   const scroll = document.createElement('div');
   scroll.getBoundingClientRect = () =>
-    ({ x: 0, y: 0, width: 640, height: 480, top: 0, left: 0, right: 640, bottom: 480, toJSON: () => ({}) }) as DOMRect;
+    ({
+      x: 0,
+      y: 0,
+      width: 640,
+      height: 480,
+      top: 0,
+      left: 0,
+      right: 640,
+      bottom: 480,
+      toJSON: () => ({}),
+    }) as DOMRect;
   document.body.append(scroll);
   scroll.append(body);
   const host: EditorHost = {
@@ -73,7 +84,9 @@ function endpointsAreCanonical(editor: ReturnType<typeof mountEditor>['editor'])
     checked += 1;
     const expected = caretAffinity(endpoint.graphemeOffset, graphemeCount);
     if (endpoint.affinity !== expected) {
-      offenders.push(`${name}@${endpoint.graphemeOffset} is ${endpoint.affinity}, canonical is ${expected}`);
+      offenders.push(
+        `${name}@${endpoint.graphemeOffset} is ${endpoint.affinity}, canonical is ${expected}`
+      );
     }
   }
   return { checked, offenders };
@@ -105,7 +118,12 @@ describe('published selections carry canonical affinity', () => {
     const result = editor.dispatchInteraction({
       kind: 'semanticSelection',
       frameId: frame.id,
-      selection: { frameId: frame.id, scope: frame.selection!.scope, anchor: nonCanonical, head: nonCanonical },
+      selection: {
+        frameId: frame.id,
+        scope: frame.selection!.scope,
+        anchor: nonCanonical,
+        head: nonCanonical,
+      },
     } as never);
     expect(result.outcome.ok).toBe(true);
 
@@ -123,14 +141,21 @@ describe('published selections carry canonical affinity', () => {
 
   test('an interior caret from a commit publishes the canonical affinity and paints', () => {
     const { editor, driver, body, scroll } = mountEditor();
-    const text = driver.accessibilityObservation().entries.filter((e) => e.role === 'editableParagraph')[0]!.text;
+    const text = driver
+      .accessibilityObservation()
+      .entries.filter((e) => e.role === 'editableParagraph')[0]!.text;
     expect(text.length).toBeGreaterThan(4);
 
     // Offset 2 is interior, where the surface's hardcoded affinity is WRONG.
     expect(driver.authorizeCaret(0, 2).ok).toBe(true);
     const editable = body.querySelector('[contenteditable="true"]') as HTMLElement;
     editable.dispatchEvent(
-      new InputEvent('beforeinput', { inputType: 'insertText', data: 'z', bubbles: true, cancelable: true }),
+      new InputEvent('beforeinput', {
+        inputType: 'insertText',
+        data: 'z',
+        bubbles: true,
+        cancelable: true,
+      })
     );
 
     const { checked, offenders } = endpointsAreCanonical(editor);
@@ -146,7 +171,9 @@ describe('published selections carry canonical affinity', () => {
 
   test('every published endpoint stays canonical across a range of offsets', () => {
     const { editor, driver, scroll } = mountEditor();
-    const text = driver.accessibilityObservation().entries.filter((e) => e.role === 'editableParagraph')[0]!.text;
+    const text = driver
+      .accessibilityObservation()
+      .entries.filter((e) => e.role === 'editableParagraph')[0]!.text;
     let totalChecked = 0;
     for (let offset = 0; offset <= text.length; offset += 1) {
       if (!driver.authorizeCaret(0, offset).ok) continue;

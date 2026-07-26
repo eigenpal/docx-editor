@@ -27,7 +27,7 @@ function publishedRole(frame: InteractionFrame, target: Extract<SemanticTarget, 
       s.target.kind === 'text' &&
       s.target.identity.blockId === target.identity.blockId &&
       s.target.graphemeOffset === target.graphemeOffset &&
-      s.target.affinity === target.affinity,
+      s.target.affinity === target.affinity
   )?.role;
 }
 
@@ -39,19 +39,22 @@ describe('published caret stops are a regular per-block range', () => {
       const frame = publishFrame(modelWith([text]));
       const block = frame.semanticIndex.stories[0]!.blocks[0]!;
       const published = frame.semanticIndex.caretStops.filter(
-        (s) => s.target.kind === 'text' && s.target.identity.blockId === block.identity.blockId,
+        (s) => s.target.kind === 'text' && s.target.identity.blockId === block.identity.blockId
       );
       // The rule: one stop per offset in [0, graphemeCount], role editableText.
       expect(published).toHaveLength(block.graphemeCount + 1);
       expect(published.every((s) => s.role === 'editableText')).toBe(true);
-      const offsets = published.map((s) => (s.target as Extract<SemanticTarget, { kind: 'text' }>).graphemeOffset);
+      const offsets = published.map(
+        (s) => (s.target as Extract<SemanticTarget, { kind: 'text' }>).graphemeOffset
+      );
       expect(offsets).toEqual(Array.from({ length: block.graphemeCount + 1 }, (_, i) => i));
       // And nothing outside the range.
       for (const outside of [-1, block.graphemeCount + 1, block.graphemeCount + 7]) {
         expect(
           published.some(
-            (s) => (s.target as Extract<SemanticTarget, { kind: 'text' }>).graphemeOffset === outside,
-          ),
+            (s) =>
+              (s.target as Extract<SemanticTarget, { kind: 'text' }>).graphemeOffset === outside
+          )
         ).toBe(false);
       }
     }
@@ -60,7 +63,7 @@ describe('published caret stops are a regular per-block range', () => {
   test('a read-only block publishes no caret stops at all', () => {
     const index = buildSemanticIndex(modelWithTableCell('a b'), { kind: 'body' });
     const cellStops = index.caretStops.filter(
-      (s) => s.target.kind === 'text' && s.target.identity.blockId === 'p-cell',
+      (s) => s.target.kind === 'text' && s.target.identity.blockId === 'p-cell'
     );
     expect(cellStops).toHaveLength(0);
   });
@@ -77,7 +80,7 @@ describe('published caret stops are a regular per-block range', () => {
     const hit = hitTestPointer(
       frame,
       { x: page.box.x + cluster.box.x + 1, y: page.box.y + cluster.box.y + cluster.box.height / 2 },
-      { clientOrigin: { x: 0, y: 0 }, scrollOffset: { x: 0, y: 0 }, zoom: 1 },
+      { clientOrigin: { x: 0, y: 0 }, scrollOffset: { x: 0, y: 0 }, zoom: 1 }
     );
     expect(hit.ok).toBe(true);
     if (!hit.ok) throw new Error('hit');

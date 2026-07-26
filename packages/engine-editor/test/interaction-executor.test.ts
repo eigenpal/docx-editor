@@ -2,11 +2,14 @@ import { GlobalRegistrator } from '@happy-dom/global-registrator';
 if (!GlobalRegistrator.isRegistered) GlobalRegistrator.register();
 
 import { describe, expect, test } from 'bun:test';
-import { createEditor } from '../src/create-editor.ts';
+import { createTestEditor as createEditor } from './create-test-editor.ts';
 import type { Editor, EditorHost } from '@docx-editor.dev/core-contract/editor';
 import type { InteractionFrame } from '@docx-editor.dev/core-contract/interaction';
 import { createEditableParagraphFixture } from '../browser/fixtures.ts';
-import { executeInteractionPlan, type InteractionExecutionContext } from '../src/interaction-executor.ts';
+import {
+  executeInteractionPlan,
+  type InteractionExecutionContext,
+} from '../src/interaction-executor.ts';
 import { planInteraction } from '../src/interaction-planner.ts';
 import { publishFrame, selectionForBlock } from './interaction-test-helpers.ts';
 import { IDENTITY_HOST_METRICS } from '../src/coordinate-mapper.ts';
@@ -49,7 +52,7 @@ function editorInteractionSnapshot(editor: Editor) {
 
 function mockExecutionContext(
   frame: ReturnType<typeof publishFrame>,
-  overrides: Partial<InteractionExecutionContext> = {},
+  overrides: Partial<InteractionExecutionContext> = {}
 ): InteractionExecutionContext {
   return {
     syncSemanticSelection: () => ({ ok: true, value: undefined, frameId: frame.id }),
@@ -77,7 +80,7 @@ describe('interaction executor (task 5.1)', () => {
     const selection = selectionForBlock(frame, blockId, 0, 2);
     const plan = planInteraction(
       { frame, editable: true, readOnly: false, hostMetrics: IDENTITY_HOST_METRICS },
-      { kind: 'semanticSelection', frameId: frame.id, selection },
+      { kind: 'semanticSelection', frameId: frame.id, selection }
     );
 
     const calls: string[] = [];
@@ -114,7 +117,10 @@ describe('interaction executor (task 5.1)', () => {
     }
     expect(calls).toEqual(['sync', 'focus', 'overlay']);
     expect(result.hostEffects).toEqual([]);
-    expect(editor.getInteractionFrame().selection?.head).toMatchObject({ kind: 'text', graphemeOffset: 2 });
+    expect(editor.getInteractionFrame().selection?.head).toMatchObject({
+      kind: 'text',
+      graphemeOffset: 2,
+    });
 
     editor.destroy();
     body.remove();
@@ -148,10 +154,19 @@ describe('interaction executor (task 5.1)', () => {
         frameId: frame.id,
         effects: [
           { kind: 'reject', code: 'unsupported', reason: 'blocked', frameId: frame.id },
-          { kind: 'syncSelection', frameId: frame.id, selection: selectionForBlock(frame, frame.semanticIndex.stories[0]!.blocks[0]!.identity.blockId, 0, 0) },
+          {
+            kind: 'syncSelection',
+            frameId: frame.id,
+            selection: selectionForBlock(
+              frame,
+              frame.semanticIndex.stories[0]!.blocks[0]!.identity.blockId,
+              0,
+              0
+            ),
+          },
           { kind: 'focus', frameId: frame.id },
         ],
-      },
+      }
     );
     expect(result.outcome.ok).toBe(false);
     if (!result.outcome.ok) expect(result.outcome.code).toBe('unsupported');
@@ -161,7 +176,12 @@ describe('interaction executor (task 5.1)', () => {
 
   test('syncSelection failure prevents focus, overlay, and host effects', () => {
     const frame = publishFrame();
-    const selection = selectionForBlock(frame, frame.semanticIndex.stories[0]!.blocks[0]!.identity.blockId, 0, 1);
+    const selection = selectionForBlock(
+      frame,
+      frame.semanticIndex.stories[0]!.blocks[0]!.identity.blockId,
+      0,
+      1
+    );
     const calls: string[] = [];
     const result = executeInteractionPlan(
       mockExecutionContext(frame, {
@@ -181,7 +201,7 @@ describe('interaction executor (task 5.1)', () => {
           { kind: 'syncSelection', frameId: frame.id, selection },
           { kind: 'focus', frameId: frame.id },
         ],
-      },
+      }
     );
     expect(result.outcome.ok).toBe(false);
     if (!result.outcome.ok) expect(result.outcome.code).toBe('invalidTarget');
@@ -191,7 +211,12 @@ describe('interaction executor (task 5.1)', () => {
 
   test('focus failure after successful sync skips overlay and returns focus failure without host effects', () => {
     const frame = publishFrame();
-    const selection = selectionForBlock(frame, frame.semanticIndex.stories[0]!.blocks[0]!.identity.blockId, 0, 1);
+    const selection = selectionForBlock(
+      frame,
+      frame.semanticIndex.stories[0]!.blocks[0]!.identity.blockId,
+      0,
+      1
+    );
     const calls: string[] = [];
     const result = executeInteractionPlan(
       mockExecutionContext(frame, {
@@ -211,7 +236,7 @@ describe('interaction executor (task 5.1)', () => {
           { kind: 'syncSelection', frameId: frame.id, selection },
           { kind: 'focus', frameId: frame.id },
         ],
-      },
+      }
     );
     expect(result.outcome.ok).toBe(false);
     if (!result.outcome.ok) {
@@ -224,16 +249,13 @@ describe('interaction executor (task 5.1)', () => {
 
   test('returns host effects without executing them', () => {
     const frame = publishFrame();
-    const result = executeInteractionPlan(
-      mockExecutionContext(frame),
-      {
-        frameId: frame.id,
-        effects: [
-          { kind: 'capturePointer', pointerId: 3 },
-          { kind: 'scroll', delta: { x: 0, y: 4 } },
-        ],
-      },
-    );
+    const result = executeInteractionPlan(mockExecutionContext(frame), {
+      frameId: frame.id,
+      effects: [
+        { kind: 'capturePointer', pointerId: 3 },
+        { kind: 'scroll', delta: { x: 0, y: 4 } },
+      ],
+    });
     expect(result.outcome.ok).toBe(true);
     expect(result.hostEffects).toEqual([
       { kind: 'capturePointer', pointerId: 3 },
@@ -259,10 +281,15 @@ describe('interaction executor (task 5.1)', () => {
       {
         frameId: frame.id,
         effects: [
-          { kind: 'reject', code: 'invalidTarget', reason: 'terminal drag cleanup', frameId: frame.id },
+          {
+            kind: 'reject',
+            code: 'invalidTarget',
+            reason: 'terminal drag cleanup',
+            frameId: frame.id,
+          },
           { kind: 'releasePointer', pointerId: 5 },
         ],
-      },
+      }
     );
     expect(result.outcome.ok).toBe(false);
     if (!result.outcome.ok) expect(result.outcome.code).toBe('invalidTarget');

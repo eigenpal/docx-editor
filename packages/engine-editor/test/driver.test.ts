@@ -5,7 +5,8 @@ import { GlobalRegistrator } from '@happy-dom/global-registrator';
 if (!GlobalRegistrator.isRegistered) GlobalRegistrator.register();
 
 import { describe, expect, test } from 'bun:test';
-import { createEditor, createEditorDriver, displayText } from '../src/index.ts';
+import { createEditorDriver, displayText } from '../src/index.ts';
+import { createTestEditor as createEditor } from './create-test-editor.ts';
 import type { EditorHost } from '@docx-editor.dev/core-contract/editor';
 import type { DisplayPage } from '@docx-editor.dev/core-contract/geometry';
 import type { InteractionHostMetrics } from '@docx-editor.dev/core-contract/interaction';
@@ -58,7 +59,10 @@ describe('EditorDriver over the production editor', () => {
   test('deferred command/query degrade through the driver too', () => {
     const editor = createEditor({ host: nullHost(), document: docxBytes() });
     const driver = createEditorDriver(editor);
-    expect(driver.exec({ type: 'toggleMark', mark: 'bold' })).toMatchObject({ ok: false, code: 'unsupported' });
+    expect(driver.exec({ type: 'toggleMark', mark: 'bold' })).toMatchObject({
+      ok: false,
+      code: 'unsupported',
+    });
     expect(Array.isArray(driver.query({ type: 'paragraphs' }))).toBe(true);
     expect(driver.selection()).toBeNull();
     driver.dispose();
@@ -103,7 +107,13 @@ describe('EditorDriver over the production editor', () => {
 
   test('pageText reconstructs spacing from box geometry (tight word, gap = space, line = newline)', async () => {
     const { pageText } = await import('../src/driver.ts');
-    const run = (t: string) => ({ text: t, box: { x: 0, y: 0, width: 0, height: 0 }, fontFamily: 'A', fontSizePx: 5, color: { kind: 'auto' as const } });
+    const run = (t: string) => ({
+      text: t,
+      box: { x: 0, y: 0, width: 0, height: 0 },
+      fontFamily: 'A',
+      fontSizePx: 5,
+      color: { kind: 'auto' as const },
+    });
     const t = (x: number, y: number, width: number, text: string) => ({
       kind: 'text' as const,
       box: { x, y, width, height: 10 },
@@ -124,7 +134,29 @@ describe('EditorDriver over the production editor', () => {
 
   test('displayText joins page text with newlines', () => {
     const pages: DisplayPage[] = [
-      { index: 0, box: { x: 0, y: 0, width: 10, height: 10 }, items: [{ kind: 'text', box: { x: 0, y: 0, width: 5, height: 5 }, runs: [{ text: 'hi', box: { x: 0, y: 0, width: 5, height: 5 }, fontFamily: 'A', fontSizePx: 5, color: { kind: 'auto' } }], docFrom: 0, docTo: 2, blockId: 0, scope: { kind: 'body' } }] },
+      {
+        index: 0,
+        box: { x: 0, y: 0, width: 10, height: 10 },
+        items: [
+          {
+            kind: 'text',
+            box: { x: 0, y: 0, width: 5, height: 5 },
+            runs: [
+              {
+                text: 'hi',
+                box: { x: 0, y: 0, width: 5, height: 5 },
+                fontFamily: 'A',
+                fontSizePx: 5,
+                color: { kind: 'auto' },
+              },
+            ],
+            docFrom: 0,
+            docTo: 2,
+            blockId: 0,
+            scope: { kind: 'body' },
+          },
+        ],
+      },
       { index: 1, box: { x: 0, y: 0, width: 10, height: 10 }, items: [] },
     ];
     expect(displayText(pages)).toBe('hi\n');
@@ -134,16 +166,27 @@ describe('EditorDriver over the production editor', () => {
     const body = document.createElement('div');
     const scroll = document.createElement('div');
     scroll.getBoundingClientRect = () =>
-      ({ x: 0, y: 0, width: 640, height: 480, top: 0, left: 0, right: 640, bottom: 480, toJSON: () => ({}) }) as DOMRect;
+      ({
+        x: 0,
+        y: 0,
+        width: 640,
+        height: 480,
+        top: 0,
+        left: 0,
+        right: 640,
+        bottom: 480,
+        toJSON: () => ({}),
+      }) as DOMRect;
     document.body.append(scroll);
     scroll.append(body);
+    const zoomedMetrics = { ...IDENTITY_HOST_METRICS, zoom: 1.25 };
 
     const host: EditorHost = {
       getBodyHostEl: () => body,
       getHfHostEl: () => null,
       getPagesContainer: () => null,
       getScrollContainer: () => scroll,
-      getInteractionHostMetrics: () => IDENTITY_HOST_METRICS,
+      getInteractionHostMetrics: () => zoomedMetrics,
       scheduleFrame: (cb) => {
         cb();
         return () => {};
@@ -152,6 +195,8 @@ describe('EditorDriver over the production editor', () => {
 
     const editor = createEditor({ host, document: createEditableParagraphFixture() });
     const driver = createEditorDriver(editor);
+
+    expect(driver.interactionHostMetrics()).toEqual(zoomedMetrics);
 
     const auth = driver.authorizeCaret(0, 0);
     expect(auth.ok).toBe(true);
@@ -168,6 +213,8 @@ describe('EditorDriver over the production editor', () => {
 
     const caretClient = driver.caretClientRect();
     expect(caretClient).not.toBeNull();
+    expect(caretClient?.width).toBe(editor.getInteractionFrame().caret!.rect.width * 1.25);
+    expect(caretClient?.height).toBe(editor.getInteractionFrame().caret!.rect.height * 1.25);
     if (hostObs && caretClient) {
       expect(Math.abs(hostObs.clientRect.x - caretClient.x)).toBeLessThan(2);
       expect(Math.abs(hostObs.clientRect.y - caretClient.y)).toBeLessThan(2);

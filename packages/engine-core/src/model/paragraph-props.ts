@@ -4,7 +4,13 @@
 // `{}`, `{styleId: ''}`, and `{ilvl: NaN}` all canonicalize to the same absence the parser produces
 // on reopen — closing the round-trip asymmetry a truthiness-only check leaves open.
 
-import type { ParagraphProps, RunProps, StyleRecord, DocDefaults } from './authored-model.ts';
+import {
+  MAX_RUN_SIZE_HALF_POINTS,
+  type ParagraphProps,
+  type RunProps,
+  type StyleRecord,
+  type DocDefaults,
+} from './authored-model.ts';
 
 /** Return the canonical form of paragraph props, or undefined when nothing meaningful remains.
  *  Empty-string ids are dropped; ilvl is kept only when a finite integer. */
@@ -24,31 +30,59 @@ export function canonicalParagraphProps(
  *  never breaks run-merge / hash symmetry. Boolean formatting flags are kept as authored. */
 export function canonicalRunProps(props: RunProps | undefined): RunProps | undefined {
   if (!props) return undefined;
-  const out: { styleId?: string; bold?: boolean; italic?: boolean; underline?: boolean } = {};
+  const out: {
+    styleId?: string;
+    fonts?: NonNullable<RunProps['fonts']>;
+    sizeHalfPoints?: number;
+    color?: string;
+    bold?: boolean;
+    italic?: boolean;
+    underline?: boolean;
+  } = {};
   if (props.styleId) out.styleId = props.styleId; // non-empty only
+  if (props.fonts) {
+    const fonts: Record<string, string> = {};
+    for (const key of [
+      'ascii',
+      'hAnsi',
+      'eastAsia',
+      'cs',
+      'asciiTheme',
+      'hAnsiTheme',
+      'eastAsiaTheme',
+      'csTheme',
+    ] as const) {
+      const value = props.fonts[key];
+      if (value !== undefined) fonts[key] = value;
+    }
+    if (Object.keys(fonts).length > 0) out.fonts = fonts;
+  }
+  if (
+    props.sizeHalfPoints !== undefined &&
+    Number.isSafeInteger(props.sizeHalfPoints) &&
+    props.sizeHalfPoints >= 0 &&
+    props.sizeHalfPoints <= MAX_RUN_SIZE_HALF_POINTS
+  )
+    out.sizeHalfPoints = props.sizeHalfPoints;
+  if (props.color !== undefined) out.color = props.color;
   if (props.bold !== undefined) out.bold = props.bold;
   if (props.italic !== undefined) out.italic = props.italic;
   if (props.underline !== undefined) out.underline = props.underline;
   return Object.keys(out).length > 0 ? out : undefined;
 }
 
-/** The run-property subset that survives inside a w:style / w:docDefaults w:rPr: only the bold/italic/
- *  underline toggles round-trip there (rPrXml emits and parseRPr reads exactly these). A run styleId
- *  (w:rStyle) is a character-style LINK, meaningless as a style default and neither emitted nor parsed
- *  in that context, so it is dropped — otherwise it would drift out of the model on reopen. */
+/** Canonical style/default run properties. A run styleId is a character-style
+ * link, meaningless inside style defaults, so it is the only run property dropped. */
 function canonicalStyleRunProps(props: RunProps | undefined): RunProps | undefined {
   const rp = canonicalRunProps(props);
   if (!rp) return undefined;
-  const out: { bold?: boolean; italic?: boolean; underline?: boolean } = {};
-  if (rp.bold !== undefined) out.bold = rp.bold;
-  if (rp.italic !== undefined) out.italic = rp.italic;
-  if (rp.underline !== undefined) out.underline = rp.underline;
+  const { styleId: _styleId, ...out } = rp;
   return Object.keys(out).length > 0 ? out : undefined;
 }
 
 /** Canonical form of a style record, matching what the serializer emits and the parser reads back:
- *  isDefault only when true, basedOn only when non-empty, runProps reduced to the toggles that
- *  round-trip in a style context. (id/name/type are required and passed through.) */
+ *  isDefault only when true, basedOn only when non-empty, and runProps without a
+ *  character-style link. (id/name/type are required and passed through.) */
 export function canonicalStyle(s: StyleRecord): StyleRecord {
   const rp = canonicalStyleRunProps(s.runProps);
   return {

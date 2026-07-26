@@ -8,7 +8,13 @@ import {
   resolveWordRangeAtHit,
   wordSelectionFromHit,
 } from '../src/word-selection.ts';
-import { createEmptyModel, bodyStoryId, DocumentStore, ORIGIN_IDS, type ParagraphRecord } from '@docx-editor.dev/engine-core';
+import {
+  createEmptyModel,
+  bodyStoryId,
+  DocumentStore,
+  ORIGIN_IDS,
+  type ParagraphRecord,
+} from '@docx-editor.dev/engine-core';
 
 const HUMAN = ORIGIN_IDS.mutationHuman;
 const SCOPE = { kind: 'body' as const };
@@ -19,13 +25,17 @@ function modelWithParagraphs(texts: string[]) {
   const store = new DocumentStore(model);
   const first = (model.stories.get(storyId)!.blocks[0] as ParagraphRecord).id;
   if (texts[0] !== undefined) {
-    store.transact(HUMAN, (c) => c.apply({ op: 'insertText', paragraphId: first, text: texts[0]! }));
+    store.transact(HUMAN, (c) =>
+      c.apply({ op: 'insertText', paragraphId: first, text: texts[0]! })
+    );
   }
   let lastId = first;
   for (let i = 1; i < texts.length; i += 1) {
     const r = store.transact(HUMAN, (c) => c.apply({ op: 'appendParagraph', storyId }));
     lastId = r.ok ? r.modelChange.created[0]! : lastId;
-    store.transact(HUMAN, (c) => c.apply({ op: 'insertText', paragraphId: lastId, text: texts[i]! }));
+    store.transact(HUMAN, (c) =>
+      c.apply({ op: 'insertText', paragraphId: lastId, text: texts[i]! })
+    );
   }
   return store.currentModel;
 }
@@ -40,7 +50,7 @@ function modelWithRunSplit(parts: readonly string[]) {
       op: 'setParagraphRuns',
       paragraphId: first,
       runs: parts.map((text) => ({ text })),
-    }),
+    })
   );
   return store.currentModel;
 }
@@ -49,7 +59,7 @@ function textHit(
   storyId: string,
   blockId: string,
   graphemeOffset: number,
-  affinity: 'upstream' | 'downstream' = 'upstream',
+  affinity: 'upstream' | 'downstream' = 'upstream'
 ) {
   return {
     kind: 'text' as const,
@@ -67,17 +77,34 @@ describe('word selection resolution (task 5.3)', () => {
     const block = index.stories[0]!.blocks[0]!;
     const boundary = 4;
 
-    const upstream = resolveWordRangeAtHit(block.wordSegments, boundary, 'upstream', block.graphemeCount);
-    const downstream = resolveWordRangeAtHit(block.wordSegments, boundary, 'downstream', block.graphemeCount);
+    const upstream = resolveWordRangeAtHit(
+      block.wordSegments,
+      boundary,
+      'upstream',
+      block.graphemeCount
+    );
+    const downstream = resolveWordRangeAtHit(
+      block.wordSegments,
+      boundary,
+      'downstream',
+      block.graphemeCount
+    );
     expect(upstream).toEqual({ graphemeFrom: 3, graphemeTo: 4 });
     expect(downstream).toEqual({ graphemeFrom: 4, graphemeTo: 7 });
-    expect(endpointsOnGraphemeBoundaries(block.graphemeCount, upstream.graphemeFrom, upstream.graphemeTo)).toBe(true);
+    expect(
+      endpointsOnGraphemeBoundaries(block.graphemeCount, upstream.graphemeFrom, upstream.graphemeTo)
+    ).toBe(true);
   });
 
   test('end-of-paragraph hits choose the preceding word segment', () => {
     const model = modelWithParagraphs(['tail']);
     const block = buildSemanticIndex(model).stories[0]!.blocks[0]!;
-    const end = resolveWordRangeAtHit(block.wordSegments, block.graphemeCount, 'downstream', block.graphemeCount);
+    const end = resolveWordRangeAtHit(
+      block.wordSegments,
+      block.graphemeCount,
+      'downstream',
+      block.graphemeCount
+    );
     expect(end).toEqual({ graphemeFrom: 0, graphemeTo: block.graphemeCount });
   });
 

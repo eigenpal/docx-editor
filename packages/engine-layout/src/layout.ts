@@ -8,6 +8,7 @@ import {
   bodyStoryId,
   blockRegistryVersion,
   blockNestedBlocks,
+  fingerprint,
   type PackageModel,
   type Block,
   type ParagraphRecord,
@@ -39,20 +40,97 @@ function flattenSdt(blocks: readonly Block[]): (ParagraphRecord | TableRecord)[]
   }
   return out;
 }
-import type { MetricsPort } from './metrics.ts';
+import type { LayoutShapingOptions } from './metrics.ts';
 import type { DisplayItem, Page, LayoutResult, TextItem, RectItem } from './display-item.ts';
-import { layoutParagraphInBox, type ParagraphLayoutSink } from './paragraph-layout.ts';
+import {
+  defaultShapedLineHeight,
+  layoutParagraphInBox,
+  type ParagraphLayoutSink,
+} from './paragraph-layout.ts';
+import {
+  captureOperationSnapshot,
+  guardOperationSnapshot,
+  type OperationSnapshot,
+  type OperationSnapshotField,
+} from './resolved-cache.ts';
+import {
+  shapingEnvironmentFingerprint,
+  type ShapeInput,
+  type ShapedRun,
+  type TextShaper,
+} from './shaped-run.ts';
 
 // Layout coordinates are in twips (the page and metrics are twips), and OOXML grid
 // widths are already twips — so column widths are used directly, never rescaled.
 const CELL_PAD = 60; // ~4px of cell padding, in twips
+const LAYOUT_SHAPING_PRODUCER_VERSION = 1;
 
 export interface LayoutOptions {
   readonly pageWidth: number;
   readonly pageHeight: number;
   readonly margin: number;
-  readonly metrics: MetricsPort;
+  readonly shaping: LayoutShapingOptions;
 }
+
+export class LayoutOperationRestartError extends Error {
+  readonly code = 'operationDrift';
+  readonly changed: readonly OperationSnapshotField[];
+
+  constructor(changed: readonly OperationSnapshotField[]) {
+    super(`Layout operation changed during derivation: ${changed.join(', ')}`);
+    this.name = 'LayoutOperationRestartError';
+    this.changed = Object.freeze([...changed]);
+  }
+}
+
+export class LayoutNormalizationError extends Error {
+  readonly code = 'unsupportedNormalization';
+
+  constructor(readonly normalization: LayoutShapingOptions['environment']['normalization']) {
+    super(`Layout requires authored offset maps before using ${normalization} normalization`);
+    this.name = 'LayoutNormalizationError';
+  }
+}
+
+const assertOperationCurrent = (
+  captured: OperationSnapshot,
+  shaping: LayoutShapingOptions
+): void => {
+  const guard = guardOperationSnapshot(captured, shaping.operation);
+  const changed = new Set<OperationSnapshotField>(guard.status === 'restart' ? guard.changed : []);
+  if (captured.resourceEpoch !== shaping.fonts.epoch) changed.add('resourceEpoch');
+  if (changed.size > 0) throw new LayoutOperationRestartError([...changed]);
+};
+
+const actualShapingConfigurationHash = (shaping: LayoutShapingOptions): string =>
+  fingerprint('paginationFingerprint', {
+    producerVersion: LAYOUT_SHAPING_PRODUCER_VERSION,
+    defaultFont: shaping.defaultFont,
+    environment: shaping.environment,
+    ligatureCaretPolicy: shaping.ligatureCaretPolicy,
+  });
+
+const auditedShaping = (
+  shaping: LayoutShapingOptions,
+  environmentFingerprints: Set<string>
+): LayoutShapingOptions => {
+  const source: TextShaper = shaping.shaper;
+  return {
+    ...shaping,
+    shaper: {
+      shape(input: ShapeInput): ShapedRun {
+        environmentFingerprints.add(
+          JSON.stringify([
+            input.fontSizeHalfPoints,
+            input.bidiLevel,
+            shapingEnvironmentFingerprint(input.environment),
+          ])
+        );
+        return source.shape(input);
+      },
+    },
+  };
+};
 
 class PageBuilder {
   private readonly pages: Page[] = [];
@@ -108,7 +186,26 @@ export function layoutBody(model: PackageModel, opts: LayoutOptions): LayoutResu
     assertLayoutLaneComplete();
     layoutLaneVerifiedAtVersion = registryVersion;
   }
-  const { pageWidth, pageHeight, margin, metrics } = opts;
+  const { pageWidth, pageHeight, margin, shaping } = opts;
+  if (shaping.environment.normalization !== 'none') {
+    throw new LayoutNormalizationError(shaping.environment.normalization);
+  }
+  const operation = captureOperationSnapshot(shaping.operation);
+  assertOperationCurrent(operation, shaping);
+  const actualConfiguration = actualShapingConfigurationHash(shaping);
+  const environmentFingerprints = new Set<string>();
+  const operationShaping = auditedShaping(
+    {
+      ...shaping,
+      operation: captureOperationSnapshot({
+        ...operation,
+        shapingHash: actualConfiguration,
+        producerVersion: LAYOUT_SHAPING_PRODUCER_VERSION,
+      }),
+    },
+    environmentFingerprints
+  );
+  const defaultLineHeight = defaultShapedLineHeight(operationShaping);
   const contentRight = pageWidth - margin;
   const contentBottom = pageHeight - margin;
   const builder = new PageBuilder(pageWidth, pageHeight, margin);
@@ -116,17 +213,18 @@ export function layoutBody(model: PackageModel, opts: LayoutOptions): LayoutResu
   // The shared mutable layout context: each block kind's registered handler advances the cursor and
   // pushes items through it; a container kind recurses via ctx.layoutBlocks. No block.kind switch.
   const ctx: BlockLayoutContext = {
+    model,
     margin,
     contentRight,
     contentBottom,
-    metrics,
+    shaping: operationShaping,
     builder,
     x: margin,
     y: margin,
-    newLine() {
-      this.y += metrics.lineHeight;
+    newLine(height) {
+      this.y += height;
       this.x = margin;
-      if (this.y + metrics.lineHeight > contentBottom) {
+      if (this.y + defaultLineHeight > contentBottom) {
         builder.break();
         this.y = margin;
       }
@@ -138,8 +236,20 @@ export function layoutBody(model: PackageModel, opts: LayoutOptions): LayoutResu
 
   const story = model.stories.get(bodyStoryId(model))!;
   ctx.layoutBlocks(story.blocks);
+  assertOperationCurrent(operation, shaping);
+  if (actualConfiguration !== actualShapingConfigurationHash(shaping)) {
+    throw new LayoutOperationRestartError(['shapingHash']);
+  }
+  const derivedOperation = captureOperationSnapshot({
+    ...operation,
+    shapingHash: fingerprint('paginationFingerprint', {
+      producerVersion: LAYOUT_SHAPING_PRODUCER_VERSION,
+      environments: [...environmentFingerprints].sort(),
+    }),
+    producerVersion: LAYOUT_SHAPING_PRODUCER_VERSION,
+  });
 
-  return { pages: builder.finish(), status: 'converged' };
+  return { pages: builder.finish(), status: 'converged', operation: derivedOperation };
 }
 
 // Register the built-in block-layout handlers (comprehensive 3.7). A block-level SDT (content
@@ -154,7 +264,8 @@ registerBuiltInBlockLayout('table', (block, ctx) => {
       margin: ctx.margin,
       contentRight: ctx.contentRight,
       contentBottom: ctx.contentBottom,
-      metrics: ctx.metrics,
+      model: ctx.model,
+      shaping: ctx.shaping,
       builder: ctx.builder,
     },
     ctx.y
@@ -165,14 +276,15 @@ registerBuiltInBlockLayout('table', (block, ctx) => {
 registerBuiltInBlockLayout('paragraph', (block, ctx) => {
   const cursor = { x: ctx.x, y: ctx.y };
   const next = layoutParagraphInBox(
+    ctx.model,
     block as ParagraphRecord,
     cursor,
     ctx.margin,
     ctx.contentRight,
-    ctx.metrics,
+    ctx.shaping,
     ctx.builder,
-    () => {
-      ctx.newLine();
+    (height) => {
+      ctx.newLine(height);
       cursor.x = ctx.x;
       cursor.y = ctx.y;
     }
@@ -221,10 +333,11 @@ registerBuiltInBlockDependencies('sdt', (block) => {
 registerBuiltInBlockSemanticRole('sdt', 'group');
 
 interface TableCtx {
+  readonly model: PackageModel;
   readonly margin: number;
   readonly contentRight: number;
   readonly contentBottom: number;
-  readonly metrics: MetricsPort;
+  readonly shaping: LayoutShapingOptions;
   readonly builder: LayoutBuilder;
 }
 
@@ -235,7 +348,8 @@ interface TableCtx {
  * Returns the y just below the table.
  */
 function layoutTable(table: TableRecord, ctx: TableCtx, startY: number): number {
-  const { margin, contentRight, contentBottom, metrics, builder } = ctx;
+  const { model, margin, contentRight, contentBottom, shaping, builder } = ctx;
+  const lineHeight = defaultShapedLineHeight(shaping);
   const cols = columnWidths(table, contentRight - margin);
   const push = (it: DisplayItem): void => builder.push(it);
   // Leading rows flagged w:tblHeader repeat atop each page the table continues onto.
@@ -247,14 +361,15 @@ function layoutTable(table: TableRecord, ctx: TableCtx, startY: number): number 
   let y = startY;
   for (const row of table.rows) {
     const isHeader = row.props?.isHeader === true;
-    if (y + metrics.lineHeight + 2 * CELL_PAD > contentBottom && y > margin) {
+    if (y + lineHeight + 2 * CELL_PAD > contentBottom && y > margin) {
       builder.break();
       y = margin;
       // Re-emit the header rows before a continuing body row (not before a header itself).
       if (!isHeader)
-        for (const hr of headerRows) y = emitRow(hr, cols, margin, y, metrics, push, builder);
+        for (const hr of headerRows)
+          y = emitRow(hr, cols, margin, y, model, shaping, push, builder);
     }
-    y = emitRow(row, cols, margin, y, metrics, push, builder);
+    y = emitRow(row, cols, margin, y, model, shaping, push, builder);
   }
   return y;
 }
@@ -266,13 +381,14 @@ function emitTable(
   left: number,
   right: number,
   top: number,
-  metrics: MetricsPort,
+  model: PackageModel,
+  shaping: LayoutShapingOptions,
   push: (it: DisplayItem) => void,
   builder: LayoutBuilder
 ): number {
   const cols = columnWidths(table, right - left);
   let y = top;
-  for (const row of table.rows) y = emitRow(row, cols, left, y, metrics, push, builder);
+  for (const row of table.rows) y = emitRow(row, cols, left, y, model, shaping, push, builder);
   return y;
 }
 
@@ -284,13 +400,14 @@ function emitRow(
   cols: readonly number[],
   left: number,
   rowTop: number,
-  metrics: MetricsPort,
+  model: PackageModel,
+  shaping: LayoutShapingOptions,
   push: (it: DisplayItem) => void,
   builder: LayoutBuilder
 ): number {
   const total = cols.reduce((a, b) => a + b, 0);
   const cellData: { rect: RectItem; items: DisplayItem[] }[] = [];
-  let rowBottom = rowTop + metrics.lineHeight + 2 * CELL_PAD; // min row height
+  let rowBottom = rowTop + defaultShapedLineHeight(shaping) + 2 * CELL_PAD;
   let colCursor = 0;
   for (const cell of row.cells) {
     const span = Math.max(1, cell.props?.gridSpan ?? 1);
@@ -309,7 +426,8 @@ function emitRow(
         cellX + CELL_PAD,
         cellX + cellW - CELL_PAD,
         rowTop + CELL_PAD,
-        metrics,
+        model,
+        shaping,
         builder,
         (it) => items.push(it)
       );
@@ -323,7 +441,7 @@ function emitRow(
         y: rowTop,
         width: cellW,
         height: 0,
-        stroke: true,
+        stroke: '000000',
         ...(fill ? { fill } : {}),
       },
       items,
@@ -405,41 +523,46 @@ function flowCell(
   left: number,
   right: number,
   top: number,
-  metrics: MetricsPort,
+  model: PackageModel,
+  shaping: LayoutShapingOptions,
   builder: LayoutBuilder,
   push: (it: DisplayItem) => void
 ): number {
   const cursor = { x: left, y: top };
+  const defaultLineHeight = defaultShapedLineHeight(shaping);
+  let lastLineHeight = defaultLineHeight;
   let started = false;
   const sink: ParagraphLayoutSink = { push, currentPageIndex: () => builder.currentPageIndex() };
   for (const block of flattenSdt(cell.blocks)) {
     if (block.kind === 'table') {
-      if (started) cursor.y += metrics.lineHeight;
-      cursor.y = emitTable(block, left, right, cursor.y, metrics, push, builder);
+      if (started) cursor.y += lastLineHeight;
+      cursor.y = emitTable(block, left, right, cursor.y, model, shaping, push, builder);
       started = true;
       cursor.x = left;
       continue;
     }
     if (started) {
-      cursor.y += metrics.lineHeight;
+      cursor.y += lastLineHeight;
       cursor.x = left;
     }
     started = true;
     layoutParagraphInBox(
+      model,
       block,
       cursor,
       left,
       right,
-      metrics,
+      shaping,
       sink,
-      () => {
-        cursor.y += metrics.lineHeight;
+      (height) => {
+        lastLineHeight = height;
+        cursor.y += height;
         cursor.x = left;
       },
       { trailingNewLine: false }
     );
   }
-  return cursor.y + metrics.lineHeight;
+  return cursor.y + lastLineHeight;
 }
 
 /**
@@ -451,24 +574,38 @@ export function hitTest(
   result: LayoutResult,
   pageIndex: number,
   px: number,
-  py: number,
-  metrics: MetricsPort
+  py: number
 ): TextItem['anchor'] | undefined {
   const page = result.pages[pageIndex];
   if (!page) return undefined;
   for (const item of page.items) {
     if (item.type !== 'text') continue;
     if (px >= item.x && px < item.x + item.width && py >= item.y && py < item.y + item.height) {
-      // Refine to a character offset within the run by cumulative advance.
-      let cursor = item.x;
-      let i = 0;
-      for (const ch of item.text) {
-        const w = metrics.advance(ch, item.bold, item.italic);
-        if (px < cursor + w / 2) break;
-        cursor += w;
-        i += 1;
+      const edges = page.items
+        .filter(
+          (candidate): candidate is Extract<DisplayItem, { type: 'caretEdge' }> =>
+            candidate.type === 'caretEdge' &&
+            candidate.paragraphId === item.anchor.paragraphId &&
+            candidate.line.lineId === item.line.lineId &&
+            candidate.utf16Offset >= item.anchor.offset &&
+            candidate.utf16Offset <= item.anchor.offset + item.text.length
+        )
+        .sort((left, right) => left.x - right.x);
+      for (let index = 0; index < edges.length - 1; index += 1) {
+        const left = edges[index]!;
+        const right = edges[index + 1]!;
+        if (px < (left.x + right.x) / 2) {
+          return { paragraphId: item.anchor.paragraphId, offset: left.utf16Offset };
+        }
       }
-      return { paragraphId: item.anchor.paragraphId, offset: item.anchor.offset + i };
+      const trailing = edges.at(-1);
+      if (trailing) {
+        return { paragraphId: item.anchor.paragraphId, offset: trailing.utf16Offset };
+      }
+      return {
+        paragraphId: item.anchor.paragraphId,
+        offset: item.anchor.offset + item.text.length,
+      };
     }
   }
   return undefined;

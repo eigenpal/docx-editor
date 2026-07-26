@@ -32,7 +32,6 @@ export interface InteractionPlannerContext {
   readonly editable: boolean;
   readonly readOnly: boolean;
   readonly hostMetrics?: InteractionHostMetrics;
-  readonly realizedTextTarget?: Extract<SemanticTarget, { kind: 'text' }> | null;
   readonly modelRevision?: number;
   readonly activeScope?: ViewScope;
   readonly navigationSession?: NavigationSession | null;
@@ -402,49 +401,21 @@ function planClick(
     return attachNavigation({ frameId, effects: [clickRejection] }, nav);
   }
 
-  let textTarget = context.realizedTextTarget ?? null;
-  if (!textTarget) {
-    const hit = hitTestPointer(context.frame, intent.clientPoint, context.hostMetrics, {
-      frameId: intent.frameId,
-    });
-    if (!hit.ok) {
-      if (
-        hit.code === 'invalidTarget' &&
-        pointerOnPageBackground(context.frame, intent.clientPoint, context.hostMetrics)
-      ) {
-        return attachNavigation(
-          {
-            frameId,
-            effects: [
-              rejectEffect(
-                'invalidTarget',
-                'pointer is on page background or a page margin, which owns no caret position',
-                frameId
-              ),
-            ],
-          },
-          nav
-        );
-      }
-      return attachNavigation(
-        { frameId, effects: [rejectEffect(hit.code, hit.reason, hit.frameId ?? frameId)] },
-        nav
-      );
-    }
-    if (hit.value.role === 'selectableText') {
-      return attachNavigation(
-        { frameId, effects: [rejectEffect('readOnly', 'hit target is read-only text', frameId)] },
-        nav
-      );
-    }
-    if (hit.value.role !== 'editableText') {
+  const hit = hitTestPointer(context.frame, intent.clientPoint, context.hostMetrics, {
+    frameId: intent.frameId,
+  });
+  if (!hit.ok) {
+    if (
+      hit.code === 'invalidTarget' &&
+      pointerOnPageBackground(context.frame, intent.clientPoint, context.hostMetrics)
+    ) {
       return attachNavigation(
         {
           frameId,
           effects: [
             rejectEffect(
-              'unsupported',
-              `hit target role ${hit.value.role} is not supported for click selection (task 5.6+)`,
+              'invalidTarget',
+              'pointer is on page background or a page margin, which owns no caret position',
               frameId
             ),
           ],
@@ -452,23 +423,48 @@ function planClick(
         nav
       );
     }
-    if (hit.value.target.kind !== 'text') {
-      return attachNavigation(
-        {
-          frameId,
-          effects: [
-            rejectEffect(
-              'unsupported',
-              'only editable text targets may create a caret or range',
-              frameId
-            ),
-          ],
-        },
-        nav
-      );
-    }
-    textTarget = hit.value.target;
+    return attachNavigation(
+      { frameId, effects: [rejectEffect(hit.code, hit.reason, hit.frameId ?? frameId)] },
+      nav
+    );
   }
+  if (hit.value.role === 'selectableText') {
+    return attachNavigation(
+      { frameId, effects: [rejectEffect('readOnly', 'hit target is read-only text', frameId)] },
+      nav
+    );
+  }
+  if (hit.value.role !== 'editableText') {
+    return attachNavigation(
+      {
+        frameId,
+        effects: [
+          rejectEffect(
+            'unsupported',
+            `hit target role ${hit.value.role} is not supported for click selection (task 5.6+)`,
+            frameId
+          ),
+        ],
+      },
+      nav
+    );
+  }
+  if (hit.value.target.kind !== 'text') {
+    return attachNavigation(
+      {
+        frameId,
+        effects: [
+          rejectEffect(
+            'unsupported',
+            'only editable text targets may create a caret or range',
+            frameId
+          ),
+        ],
+      },
+      nav
+    );
+  }
+  const textTarget = hit.value.target;
 
   const clickCount = intent.clickCount ?? 1;
 
@@ -543,11 +539,7 @@ function planClick(
     );
   }
 
-  const selectionOutcome = selectionFromEditableTextHit(
-    context.frame,
-    textTarget,
-    intent.shiftKey
-  );
+  const selectionOutcome = selectionFromEditableTextHit(context.frame, textTarget, intent.shiftKey);
   if (!selectionOutcome.ok) {
     return attachNavigation({ frameId, effects: [selectionOutcome.effect] }, nav);
   }

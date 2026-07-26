@@ -2,24 +2,52 @@
 // Mirrors adapter paint semantics without React — presentation-only painted output.
 
 import type { DisplayItem, DisplayPage } from '@docx-editor.dev/core-contract/geometry';
-import { runStyle, colorToCss, borderSegLine } from '../src/paint-style.ts';
+import { colorToCss, borderSegLine } from '../src/paint-style.ts';
 
 function paintTextItem(doc: Document, item: Extract<DisplayItem, { kind: 'text' }>): HTMLElement[] {
   return item.runs.map((run) => {
-    const s = runStyle(run);
     const el = doc.createElement('div');
     el.setAttribute('data-painted-text', 'true');
     el.style.position = 'absolute';
     el.style.left = `${run.box.x}px`;
     el.style.top = `${run.box.y}px`;
-    el.style.fontFamily = s.fontFamily;
-    el.style.fontSize = `${s.fontSizePx}px`;
-    el.style.fontWeight = s.fontWeight;
-    el.style.fontStyle = s.fontStyle;
-    el.style.color = s.color;
-    el.style.textDecoration = s.textDecoration;
-    el.style.whiteSpace = 'pre';
-    el.textContent = run.text;
+    el.style.width = `${run.box.width}px`;
+    el.style.height = `${run.box.height}px`;
+    const fixedToPx = 4 / (3 * run.shaping.fixedPointScale);
+    const baseline = run.verticalMetrics.baseline - run.box.y;
+    const svg = doc.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    svg.setAttribute('aria-hidden', 'true');
+    svg.setAttribute('focusable', 'false');
+    svg.style.position = 'absolute';
+    svg.style.inset = '0';
+    svg.style.width = `${run.box.width}px`;
+    svg.style.height = `${run.box.height}px`;
+    svg.style.overflow = 'visible';
+    svg.style.pointerEvents = 'none';
+    for (const glyph of run.glyphs) {
+      const path = doc.createElementNS('http://www.w3.org/2000/svg', 'path');
+      const scale = run.fontSizePx / glyph.outline.unitsPerEm;
+      path.setAttribute('d', glyph.outline.path);
+      path.setAttribute('fill', colorToCss(run.color) ?? 'currentColor');
+      path.setAttribute(
+        'transform',
+        `translate(${(glyph.originX + glyph.offsetX) * fixedToPx} ${
+          baseline - (glyph.originY + glyph.offsetY) * fixedToPx
+        }) scale(${scale} ${-scale})`
+      );
+      svg.append(path);
+    }
+    const semantic = doc.createElement('span');
+    semantic.style.position = 'absolute';
+    semantic.style.width = '1px';
+    semantic.style.height = '1px';
+    semantic.style.margin = '-1px';
+    semantic.style.overflow = 'hidden';
+    semantic.style.clipPath = 'inset(50%)';
+    semantic.style.whiteSpace = 'nowrap';
+    semantic.style.pointerEvents = 'none';
+    semantic.textContent = run.text;
+    el.append(svg, semantic);
     return el;
   });
 }
