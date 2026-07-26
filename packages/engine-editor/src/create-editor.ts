@@ -59,7 +59,7 @@ import {
 } from '@docx-editor.dev/engine-binding';
 import { createEmptyModel, bodyStoryId } from '@docx-editor.dev/engine-core';
 import { layoutBody, HelveticaMetrics } from '@docx-editor.dev/engine-layout';
-import { toDisplayPages } from './display-bridge.ts';
+import { DisplayBridgeCache, toDisplayPages } from './display-bridge.ts';
 import { InteractionFrameStore, emptyInteractionFrame } from './interaction-frame.ts';
 import type { NavigationGeometry } from './navigation-geometry.ts';
 import {
@@ -438,6 +438,9 @@ export function createEditor(config: EditorConfig): Editor {
     markedPagesContainer = null;
   }
 
+  // One per editor: unchanged painted slices reuse their frozen clusters across layouts.
+  const bridgeCache = new DisplayBridgeCache();
+
   function emitLayoutFrame(frame: InteractionFrame): void {
     host.onDisplay?.(frame.display);
     host.onTotalPages?.(frame.display.length);
@@ -450,7 +453,7 @@ export function createEditor(config: EditorConfig): Editor {
     if (destroyed || token !== layoutToken || !session) return;
     const metrics = new HelveticaMetrics();
     const layout = layoutBody(session.currentModel(), { ...LAYOUT, metrics });
-    const bridged = toDisplayPages(session.currentModel(), layout.pages, metrics);
+    const bridged = toDisplayPages(session.currentModel(), layout.pages, metrics, bridgeCache);
     const input = layoutInput(bridged.display, bridged.semanticIndex, bridged.navigationGeometry);
     const frame =
       pendingTarget !== undefined

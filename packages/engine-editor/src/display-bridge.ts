@@ -12,6 +12,7 @@ import type {
   InteractionFrame,
   BlockSemanticRecord,
   SemanticPositionIndex,
+  ShapedCluster,
 } from '@docx-editor.dev/core-contract/interaction';
 import type { ColorValue, Rect, ViewScope } from '@docx-editor.dev/core-contract/editor';
 import type { PositionedInteractionMeta } from '@docx-editor.dev/core-contract/interaction';
@@ -32,6 +33,7 @@ import {
   twipsToPx,
 } from './semantic-index.ts';
 import { clustersFromLayoutCaretEdges } from './layout-clusters.ts';
+import { deepFreezeValue } from './interaction-frame.ts';
 import {
   buildVisualLines,
   collectFragmentMetaFromLayout,
@@ -252,6 +254,82 @@ function blockRecordById(
   return byId.get(blockId);
 }
 
+/**
+ * Reuse of already-built, already-frozen shaped clusters across layouts.
+ *
+ * Clusters are the bulk of a published frame: 105,664 of them on the 24-page styled
+ * fixture, against 1,383 display items. They are rebuilt from scratch on every keystroke
+ * and then walked again by the publication freeze, and together that is most of a 421 ms
+ * keystroke — even though a one-character edit changes the geometry of at most a few lines.
+ *
+ * A cluster array is a pure function of the painted slice that produced it: the paragraph,
+ * the slice's UTF-16 span, its box, and its text. Fingerprint those and an unchanged slice
+ * returns the SAME frozen array it returned last time. That is worth twice over: the
+ * clusters are not rebuilt, and `deepFreezeValue` short-circuits on the frozen array during
+ * publication instead of descending into it.
+ *
+ * Fingerprinting is cheap because it is per ITEM, not per cluster — 1,383 short strings,
+ * not 105,664 objects.
+ *
+ * TWO generations, rotated per layout, because a frame is published per keystroke and the
+ * hit rate we care about is "same as the immediately preceding layout". Retaining more
+ * would grow unboundedly for no additional hits; retaining one would miss every time,
+ * because the current generation is empty when a layout begins.
+ *
+ * The cache is owned by the caller (one per editor) rather than module state, so two
+ * editors cannot evict each other and a test that omits it simply gets no reuse.
+ */
+export class DisplayBridgeCache {
+  private previous = new Map<string, readonly ShapedCluster[]>();
+  private current = new Map<string, readonly ShapedCluster[]>();
+  /** Reuse counters for the profiler; not load-bearing. */
+  reused = 0;
+  built = 0;
+
+  /** Start a new layout generation. */
+  rotate(): void {
+    this.previous = this.current;
+    this.current = new Map();
+    this.reused = 0;
+    this.built = 0;
+  }
+
+  clustersFor(key: string, build: () => ShapedCluster[]): readonly ShapedCluster[] {
+    const hit = this.current.get(key) ?? this.previous.get(key);
+    if (hit) {
+      this.reused += 1;
+      // Promote so the next rotation keeps it reachable.
+      this.current.set(key, hit);
+      return hit;
+    }
+    // Frozen HERE, at construction, so publication's freeze walk stops at this array on
+    // every later reuse.
+    const built = deepFreezeValue(build());
+    this.built += 1;
+    this.current.set(key, built);
+    return built;
+  }
+}
+
+/** Identity of a painted slice for cluster reuse: everything its clusters depend on. */
+function clusterCacheKey(paragraphId: string, it: TextItem, box: Rect): string {
+  return (
+    paragraphId +
+    '\u001F' +
+    String(it.anchor.offset) +
+    '\u001F' +
+    String(box.x) +
+    '\u001F' +
+    String(box.y) +
+    '\u001F' +
+    String(box.width) +
+    '\u001F' +
+    String(box.height) +
+    '\u001F' +
+    it.text
+  );
+}
+
 function textItem(
   model: PackageModel,
   storyId: string,
@@ -259,7 +337,8 @@ function textItem(
   pages: readonly Page[],
   it: TextItem,
   pageIndex: number,
-  zOrder: number
+  zOrder: number,
+  cache?: DisplayBridgeCache
 ): ContractItem {
   const box = boxOf(it);
   const run: GlyphRun = {
@@ -283,14 +362,18 @@ function textItem(
     utf16From,
     utf16To
   );
-  const clusters = clustersFromLayoutCaretEdges(
-    pages,
-    it.anchor.paragraphId,
-    semantic,
-    box,
-    it.text,
-    paragraphGraphemeCount
-  );
+  const buildClusters = () =>
+    clustersFromLayoutCaretEdges(
+      pages,
+      it.anchor.paragraphId,
+      semantic,
+      box,
+      it.text,
+      paragraphGraphemeCount
+    );
+  const clusters = cache
+    ? cache.clustersFor(clusterCacheKey(it.anchor.paragraphId, it, box), buildClusters)
+    : buildClusters();
   const legacy = deprecatedFlatDocOffset(semanticIndex, it.anchor.paragraphId, utf16From, utf16To);
   const block = blockRecordById(semanticIndex, it.anchor.paragraphId);
   const role = block?.readOnly ? 'selectableText' : 'editableText';
@@ -337,8 +420,10 @@ function rectItems(it: RectItem): ContractItem[] {
 export function toDisplayPages(
   model: PackageModel,
   pages: readonly Page[],
-  metrics: MetricsPort = new HelveticaMetrics()
+  metrics: MetricsPort = new HelveticaMetrics(),
+  cache?: DisplayBridgeCache
 ): DisplayBridgeResult {
+  cache?.rotate();
   const semanticIndex = buildSemanticIndex(model, BODY);
   const storyId = semanticIndex.stories[0]!.storyId;
 
@@ -354,7 +439,7 @@ export function toDisplayPages(
     items: page.items.flatMap((it, zOrder) => {
       switch (it.type) {
         case 'text':
-          return [textItem(model, storyId, semanticIndex, pages, it, page.index, zOrder)];
+          return [textItem(model, storyId, semanticIndex, pages, it, page.index, zOrder, cache)];
         case 'caretEdge':
           return [];
         case 'rect':
