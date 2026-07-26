@@ -800,3 +800,73 @@ Two cautions for whoever does it, both from reading the code rather than from a 
 Not attempted here. `buildVisualLines` carries a long history of correctness fixes and I did
 not have the budget left to change it and verify it properly; a half-verified change to it
 would be worse than the 1.44x already banked.
+
+## Incremental phase, round 3 — the 4x gate is MET
+
+### Two more clone-then-freeze sites, and the last per-grapheme rebuild
+
+**`freezeNavigationGeometry` was cloning.** The same defect already fixed in `freezeDisplay`
+and `freezeSemanticIndex`, missed because navigation geometry is frozen INSIDE the bridge
+rather than at publication — which made publication measure 0 ms for it and hid the cost one
+stage upstream, in a line of the stage table had been interpreted as "everything else". It rebuilt a
+fresh object per visual line, its identity, line id, box and interaction meta, then per caret
+edge plus that edge's `interaction`, `target` and `target.identity`: on this fixture 106,539
+edges, roughly 400,000 allocations per layout, discarded as soon as the copy was frozen.
+
+**Per-block horizontal boundary tables** walked every grapheme of every paragraph on every
+layout to answer a question that depends only on text and metrics. Memoized.
+
+**Per-paragraph visual lines.** The last per-grapheme graph rebuilt every layout.
+`buildVisualLines` now produces `PreOrderVisualLine` chunks per paragraph and reuses them.
+Three things made it safe:
+
+- `lineOrder` and `fragmentOrder` are running counters assigned after a GLOBAL sort, so they
+  are stamped after reuse, never cached — structurally the same rule as excluding
+  `orderIndex` from a semantic block chunk, and pinned by a test that inserts a paragraph
+  ahead of a reused one and asserts renumbering.
+- The key is built from PAINTED ITEMS (1,383 document-wide), not from edges (106,539): a
+  paragraph's edges are emitted by the same layout walk that positions its slices, so
+  identical text, geometry, page and role imply identical edges. A key derived from what it
+  avoids would defeat the purpose.
+- `paintFragmentConflicts` is a document-global input consulted per edge, so the cache is
+  bypassed entirely whenever that list is non-empty.
+
+The reuse is pinned as INVISIBLE before it is pinned as reuse: `visual-line-cache.test.ts`
+compares full cached navigation geometry against an uncached build across four text corpora
+(plain, empty/whitespace/tab, long-wrapping, and CJK/RTL/emoji/combining), cold and warm,
+before and after an edit, and after a paragraph moves.
+
+### Final measurement — same machine, 9 samples, three repeats
+
+| Stage | Start | Final |
+| --- | --- | --- |
+| Store apply | 0.4 ms | 0.3 ms |
+| `layoutBody` | 26.6 ms | ~26 ms |
+| Bridge | 235.8 ms | **47.5 / 49.8 / 49.7 ms** |
+| Publication | 258.9 ms | **41.9 / 44.7 / 41.7 ms** |
+| **Total** | **519.8 ms** | **113.1 / 119.5 / 114.5 ms** |
+
+Median **114.5 ms**, against 519.8 ms measured here and the 541.8 ms the goal cites.
+**4.54x on the measured baseline, 4.73x on the cited one. The 4x gate (<= 135.45 ms) is met.**
+
+### Reuse counts on a one-character edit
+
+| Chunk kind | Reused | Rebuilt |
+| --- | --- | --- |
+| Painted slices (clusters) | 1,382 | 1 |
+| Paragraph visual-line sets | 139 | 1 |
+| Semantic block chunks | 137 | 3 |
+
+The three rebuilt semantic chunks are what `DocumentStore` structural sharing actually
+produces for a one-character edit — 137 of 140 paragraph records keep object identity — so
+the chunk cache is tracking the store exactly rather than approximating it.
+
+### Still open
+
+- `freezeDisplay` and `freezeSemanticIndex` are now dead: `deepFreezeFrame` already covers
+  both, and review confirmed replacing them with the identity leaves the suite green.
+- The flat `caretStops`/`ownershipRegions` arrays are still concatenated eagerly per layout.
+  Cheap now that every element is frozen and the walk short-circuits, but still O(document).
+- `/\S/u` does not treat U+200B-class zero-width characters as invisible, so a paragraph of
+  them gets no full-width placeholder.
+- A false `custom`-variant justification remains in a comment in `interaction-frame.ts`.

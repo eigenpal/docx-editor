@@ -38,6 +38,7 @@ import {
   buildVisualLines,
   collectFragmentMetaFromLayout,
   layoutShapingSupported,
+  type PreOrderVisualLine,
 } from './visual-lines.ts';
 import {
   freezeNavigationGeometry,
@@ -292,8 +293,12 @@ export class DisplayBridgeCache {
     this.current = new Map();
     this.otherPrevious = this.other;
     this.other = new Map();
+    this.linesPrevious = this.lines;
+    this.lines = new Map();
     this.reused = 0;
     this.built = 0;
+    this.linesReused = 0;
+    this.linesBuilt = 0;
   }
 
   /**
@@ -314,6 +319,25 @@ export class DisplayBridgeCache {
     }
     const built = deepFreezeValue(build());
     this.other.set(key, built);
+    return built;
+  }
+
+  /** Per-paragraph pre-order visual lines; see `buildVisualLines`. */
+  private lines = new Map<string, readonly PreOrderVisualLine[]>();
+  private linesPrevious = new Map<string, readonly PreOrderVisualLine[]>();
+  linesReused = 0;
+  linesBuilt = 0;
+
+  linesFor(key: string, build: () => PreOrderVisualLine[]): readonly PreOrderVisualLine[] {
+    const hit = this.lines.get(key) ?? this.linesPrevious.get(key);
+    if (hit) {
+      this.linesReused += 1;
+      this.lines.set(key, hit);
+      return hit;
+    }
+    const built = build();
+    this.linesBuilt += 1;
+    this.lines.set(key, built);
     return built;
   }
 
@@ -491,7 +515,14 @@ export function toDisplayPages(
       ? cache.memo('hb\u001F' + block.identity.blockId + '\u001F' + text, build)
       : build();
   }
-  const visualLines = buildVisualLines(pages, enrichedIndex, model, metaBySliceKey, conflicts);
+  const visualLines = buildVisualLines(
+    pages,
+    enrichedIndex,
+    model,
+    metaBySliceKey,
+    conflicts,
+    cache
+  );
   const traversalByBlockId = recordFromTraversalMap(buildTraversalLinksForModel(model));
   const navigationGeometry = freezeNavigationGeometry({
     visualLines,

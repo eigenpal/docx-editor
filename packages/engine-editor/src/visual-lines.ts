@@ -348,12 +348,35 @@ function resolveEdgePaintSlice(
 }
 
 /** Build visual line records grouped by layout lineId + fragmentId only. */
+/**
+ * Pre-order visual line: everything about a line EXCEPT its position in the document.
+ *
+ * `lineOrder` and `fragmentOrder` are running counters assigned after a global sort, so
+ * they change when any earlier paragraph gains or loses a line while everything else about
+ * this line stays valid. They are therefore stamped after reuse, exactly as `orderIndex` is
+ * for a semantic block chunk.
+ */
+export interface PreOrderVisualLine {
+  readonly blockId: string;
+  readonly pageIndex: number;
+  readonly line: VisualLineIdentity;
+  readonly interaction: FragmentInteractionMeta;
+  readonly lineBox: { x: number; y: number; width: number; height: number };
+  readonly edges: readonly VisualCaretEdge[];
+}
+
+/** Reuse of a paragraph's pre-order lines across layouts, two generations. */
+export interface VisualLineCache {
+  linesFor(key: string, build: () => PreOrderVisualLine[]): readonly PreOrderVisualLine[];
+}
+
 export function buildVisualLines(
   pages: readonly Page[],
   semanticIndex: SemanticPositionIndex,
   model: PackageModel,
   metaBySliceKey: Readonly<Record<string, FragmentInteractionMeta>>,
-  paintFragmentConflicts: readonly string[]
+  paintFragmentConflicts: readonly string[],
+  cache?: VisualLineCache
 ): VisualLineRecord[] {
   void metaBySliceKey;
   const story = semanticIndex.stories[0];
@@ -366,16 +389,65 @@ export function buildVisualLines(
     edges: Map<string, VisualCaretEdge>;
   };
 
-  const buckets = new Map<string, Bucket>();
   const conflictSet = new Set(paintFragmentConflicts);
   const roleForParagraph = (paragraphId: string) => roleForBlock(semanticIndex, paragraphId);
   const sliceIndex = buildNavigationPaintSliceIndex(pages, roleForParagraph);
 
+  /**
+   * Reuse key for one paragraph's lines.
+   *
+   * A paragraph's caret edges are emitted by the same layout walk that positions its
+   * painted slices, so if every painted slice of the paragraph is identical in text and
+   * geometry — and it is on the same page, at the same role — the edges between them are
+   * identical too. Built from PAINTED ITEMS (1,383 document-wide) rather than from edges
+   * (106,539), which is the whole point: the key must be cheaper than what it avoids.
+   *
+   * Read-only state is included because it becomes each edge's `role`.
+   */
+  const keyByParagraph = new Map<string, string>();
+  if (cache && conflictSet.size === 0) {
+    const parts = new Map<string, string[]>();
+    for (const page of pages) {
+      for (const item of page.items) {
+        if (item.type !== 'text') continue;
+        const id = item.anchor.paragraphId;
+        let bucket = parts.get(id);
+        if (!bucket) {
+          bucket = [id, roleForParagraph(id)];
+          parts.set(id, bucket);
+        }
+        bucket.push(
+          String(page.index),
+          String(item.x),
+          String(item.y),
+          String(item.width),
+          String(item.height),
+          String(item.anchor.offset),
+          item.text
+        );
+      }
+    }
+    for (const [id, bucket] of parts) keyByParagraph.set(id, bucket.join('\u001F'));
+  }
+
+  /** Caret-edge items grouped by paragraph, so a paragraph can be built or skipped whole. */
+  const edgesByParagraph = new Map<string, { page: Page; item: CaretEdgeItem }[]>();
   for (const page of pages) {
     for (const item of page.items) {
       if (item.type !== 'caretEdge') continue;
       const edgeItem = item as CaretEdgeItem;
       if (!edgeItem.navigable) continue;
+      const list = edgesByParagraph.get(edgeItem.paragraphId);
+      if (list) list.push({ page, item: edgeItem });
+      else edgesByParagraph.set(edgeItem.paragraphId, [{ page, item: edgeItem }]);
+    }
+  }
+
+  const buildParagraphLines = (
+    entries: readonly { page: Page; item: CaretEdgeItem }[]
+  ): PreOrderVisualLine[] => {
+    const buckets = new Map<string, Bucket>();
+    for (const { page, item: edgeItem } of entries) {
       const fragKey = fragmentMetaKey(page.index, edgeItem.line);
       if (conflictSet.has(fragKey)) continue;
 
@@ -429,16 +501,55 @@ export function buildVisualLines(
       };
       bucket.edges.set(edgeKey(edge), edge);
     }
+
+    const out: PreOrderVisualLine[] = [];
+    for (const bucket of buckets.values()) {
+      const edges = [...bucket.edges.values()].sort(
+        (left, right) =>
+          left.pageLocalX - right.pageLocalX ||
+          left.target.graphemeOffset - right.target.graphemeOffset
+      );
+      const first = edges[0];
+      if (!first) continue;
+      let minX = Infinity;
+      let maxX = -Infinity;
+      let minY = Infinity;
+      let maxH = 0;
+      for (const edge of edges) {
+        if (edge.pageLocalX < minX) minX = edge.pageLocalX;
+        if (edge.pageLocalX > maxX) maxX = edge.pageLocalX;
+        if (edge.pageLocalY < minY) minY = edge.pageLocalY;
+        if (edge.pageLocalHeight > maxH) maxH = edge.pageLocalHeight;
+      }
+      out.push({
+        blockId: first.target.identity.blockId,
+        pageIndex: bucket.pageIndex,
+        line: bucket.line,
+        interaction: bucket.interaction,
+        lineBox: { x: minX, y: minY, width: Math.max(1, maxX - minX), height: maxH },
+        edges,
+      });
+    }
+    // Frozen at construction so the publication freeze walk stops here on every reuse.
+    return deepFreezeVisualLines(out);
+  };
+
+  const preOrder: PreOrderVisualLine[] = [];
+  for (const [paragraphId, entries] of edgesByParagraph) {
+    const key = keyByParagraph.get(paragraphId);
+    const lines =
+      cache && key !== undefined
+        ? cache.linesFor(key, () => buildParagraphLines(entries))
+        : buildParagraphLines(entries);
+    preOrder.push(...lines);
   }
 
   const blockOrder = new Map(
     story.blocks.map((block) => [block.identity.blockId, block.orderIndex])
   );
 
-  const sorted = [...buckets.values()].sort((a, b) => {
-    const blockA = [...a.edges.values()][0]?.target.identity.blockId ?? '';
-    const blockB = [...b.edges.values()][0]?.target.identity.blockId ?? '';
-    const orderDiff = (blockOrder.get(blockA) ?? 0) - (blockOrder.get(blockB) ?? 0);
+  const sorted = preOrder.sort((a, b) => {
+    const orderDiff = (blockOrder.get(a.blockId) ?? 0) - (blockOrder.get(b.blockId) ?? 0);
     if (orderDiff !== 0) return orderDiff;
     if (a.line.lineIndex !== b.line.lineIndex) return a.line.lineIndex - b.line.lineIndex;
     if (a.line.fragmentIndex !== b.line.fragmentIndex)
@@ -451,42 +562,47 @@ export function buildVisualLines(
   let fragmentOrder = 0;
   let lastFragmentKey = '';
 
-  return sorted.map((bucket) => {
-    const lineKey = `${[...bucket.edges.values()][0]?.target.identity.blockId ?? ''}:${bucket.line.lineId}`;
+  return sorted.map((entry) => {
+    const lineKey = `${entry.blockId}:${entry.line.lineId}`;
     if (lineKey !== lastLineKey) {
       lineOrder += 1;
       lastLineKey = lineKey;
     }
-    const fragmentKey = `${lineKey}:${bucket.line.fragmentId}`;
+    const fragmentKey = `${lineKey}:${entry.line.fragmentId}`;
     if (fragmentKey !== lastFragmentKey) {
       fragmentOrder += 1;
       lastFragmentKey = fragmentKey;
     }
-    const blockId = [...bucket.edges.values()][0]?.target.identity.blockId ?? '';
-    const edges = [...bucket.edges.values()].sort(
-      (left, right) =>
-        left.pageLocalX - right.pageLocalX ||
-        left.target.graphemeOffset - right.target.graphemeOffset
-    );
-    const xs = edges.map((edge) => edge.pageLocalX);
-    const ys = edges.map((edge) => edge.pageLocalY);
-    const heights = edges.map((edge) => edge.pageLocalHeight);
-    const minX = Math.min(...xs);
-    const maxX = Math.max(...xs);
-    const minY = Math.min(...ys);
-    const maxH = Math.max(...heights);
     return {
       scope: story.scope,
-      identity: { storyId: story.storyId, blockId },
-      pageIndex: bucket.pageIndex,
-      line: bucket.line,
+      identity: { storyId: story.storyId, blockId: entry.blockId },
+      pageIndex: entry.pageIndex,
+      line: entry.line,
       lineOrder,
       fragmentOrder,
-      interaction: bucket.interaction,
-      lineBox: { x: minX, y: minY, width: Math.max(1, maxX - minX), height: maxH },
-      edges,
+      interaction: entry.interaction,
+      lineBox: entry.lineBox,
+      edges: entry.edges,
     };
   });
+}
+
+/** Recursive freeze, local so this module does not depend on the frame store. */
+function deepFreezeVisualLines(lines: PreOrderVisualLine[]): PreOrderVisualLine[] {
+  const freeze = (value: unknown): void => {
+    if (value === null || typeof value !== 'object') return;
+    if (Object.isFrozen(value)) return;
+    if (Array.isArray(value)) {
+      for (const item of value) freeze(item);
+      Object.freeze(value);
+      return;
+    }
+    const record = value as Record<string, unknown>;
+    for (const k of Object.keys(record)) freeze(record[k]);
+    Object.freeze(value);
+  };
+  freeze(lines);
+  return lines;
 }
 
 export function collectFragmentMetaFromLayout(
