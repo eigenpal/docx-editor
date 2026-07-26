@@ -546,3 +546,100 @@ measured x and expansion inside the tab's own piece cannot move the piece after 
 Review independently corroborated the wrapping invariant on 13 text shapes x 4 page widths
 with zero signature or page-count differences, and confirmed no new quadratic in
 `emitPaintSlices` and no leak in the coverage `WeakMap`.
+
+## Incremental phase — profiler, and where the edit cost actually is
+
+### Step 1: profiler boundaries, verified
+
+Every stage is measured on one wall clock in a single pass, so the parts sum to the total
+by construction. The earlier sub-profile is NOT usable as a breakdown: it timed
+`deepFreezeValue(structuredClone(x))` per chunk outside publication, which is neither what
+publication does nor additive with it, and its three numbers sum to more than the stage
+they were meant to explain. Superseded by the table below.
+
+`large-styled-text.docx`, 24 pages, 7 samples, median, at `checkpoint-609fca41`:
+
+| Stage | Median | Share |
+| --- | --- | --- |
+| Store apply (`DocOp` -> model) | 0.4 ms | 0.1% |
+| `layoutBody` | 26.6 ms | 5.1% |
+| `toDisplayPages` (bridge) | 235.8 ms | 45.4% |
+| `publishLayout` (frame publication) | 258.9 ms | 49.8% |
+| **Total** | **519.8 ms** | parts sum to 521.7 |
+
+`sample.docx`, 10 pages: 83.8 ms total, same shape (bridge 49%, publish 44%, layout 8%,
+store 0.5%).
+
+The store is free and layout is nearly free. 95% of a keystroke is rebuilding and freezing
+derived state.
+
+### What the frame actually contains
+
+| | Count |
+| --- | --- |
+| Display items | 1,383 |
+| Glyph runs | 1,381 |
+| Shaped clusters | **105,664** |
+| Navigation caret edges | **106,539** |
+| Caret stops | **106,913** |
+| Ownership regions | 11,391 |
+
+Run grouping cut the paint list by 88%, but the per-grapheme structures were untouched and
+are ~100x larger than the paint list. Every keystroke builds and then freezes roughly
+320,000 objects for the whole document, regardless of what changed.
+
+### Step 2: publication no longer clones
+
+`freezeDisplay` and `freezeSemanticIndex` rebuilt the entire graph — a fresh object per
+page, item, cluster, glyph run, box, block, caret stop and ownership region — and froze the
+copy. The bridge already returns objects it constructed on that call and nobody else holds
+a mutable reference, so the clone allocated a second 320,000-object graph to throw the
+first away. Freezing in place:
+
+| | Before | After |
+| --- | --- | --- |
+| `publishLayout` | 258.9 ms | **190.3 ms** |
+| Total downstream edit | 519.8 ms | **421.1 ms** |
+
+It also unblocks reuse: `deepFreezeValue` short-circuits on an already-frozen value, so once
+producers hand over frozen chunks the walk stops at the first frozen node. `freezeNavigationGeometry`
+already does this and publication measures 0 ms for navigation geometry — the mechanism is
+proven, it just needs producers to adopt it.
+
+### Two indexing attempts, one kept and one measured away
+
+`blockRecord` was a linear `find` over every block, called several times per interaction.
+Indexed per semantic index: kept.
+
+`caretStops` was scanned linearly by both its consumers. Indexing it is a NET LOSS and was
+reverted, measured on the large fixture:
+
+| Approach | First derive per frame | 200 warm derives |
+| --- | --- | --- |
+| Linear scan (`checkpoint-609fca41`) | 0.84 ms | 190.7 ms |
+| Full key map | 52.65 ms | 48.8 ms |
+| Per-block summary pass | 10.8 ms | 50.8 ms |
+
+A frame is published on every keystroke and typically one or two caret stops are queried
+per frame, so neither build amortises. Blocks are few and queried often; caret stops are
+many and queried rarely. Recorded because the shape of this result is the argument for step
+4: the answer is not to index 106,913 objects faster, it is not to create them.
+
+### Status against the gate — NOT met
+
+Downstream edit time is **519.8 ms -> 421.1 ms, 1.23x**. The gate is 4x (<= 130 ms).
+
+The remaining 421 ms is bridge (216 ms) plus publication (190 ms), and both are dominated
+by the same 320,000 objects. Nothing further moves without step 4 — replacing per-grapheme
+clusters, navigation edges and caret stops with one compact per-line representation the
+three consumers reference. That is a `@public` change to `SemanticPositionIndex` and
+`DisplayItem`, touching the bridge, navigation geometry, hit testing, keyboard navigation
+and their tests, and it needs `api:extract` plus an OpenSpec delta.
+
+Step 3 (feeding `ModelChange` dirty ids into `toDisplayPages`) is worth doing but is second:
+with 320,000 objects still rebuilt for changed blocks and frozen for all of them, reuse
+alone will not reach 4x. Compact first, then reuse.
+
+`packages/engine-editor/test/caret-stop-derivation.test.ts` pins the regularity that makes
+the compaction safe: exactly one stop per offset in `[0, graphemeCount]`, all
+`editableText`, and none at all for a read-only block.
