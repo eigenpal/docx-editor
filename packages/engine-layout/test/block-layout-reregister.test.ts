@@ -19,6 +19,42 @@ const SOURCE = readFileSync(
 );
 const INDEX = readFileSync(fileURLToPath(new URL('../src/index.ts', import.meta.url)), 'utf8');
 
+/** Names of every exported registrar, derived from the source rather than hardcoded. */
+function registrarNames(source: string): string[] {
+  return [...source.matchAll(/export (?:function|const) (register\w+)\s*[<(=]/g)].map((m) => m[1]!);
+}
+
+/**
+ * A registrar's OWN parameter list and body, anchored on its declaration.
+ *
+ * BOTH ends have to be anchored, and review caught each in turn. Slicing to the first
+ * `): void` was unanchored at the END, so a registrar returning anything else ran into the
+ * next function. Starting from `SOURCE.indexOf(name)` is unanchored at the START: the bare
+ * name also appears in prose, and this file already carries `{@link registerBlockLayout}`
+ * mentions, so a section comment naming a new registrar begins the slice in the comment and
+ * ends it inside a DIFFERENT function's body — which throws, so a non-throwing public
+ * registrar passed.
+ */
+function declarationOf(source: string, name: string): { signature: string; body: string } {
+  const at = source.search(new RegExp(`export (?:function|const) ${name}\\s*[<(=]`));
+  if (at === -1) throw new Error(`no declaration for ${name}`);
+  const open = source.indexOf('(', at);
+  let depth = 0;
+  let close = open;
+  for (; close < source.length; close += 1) {
+    if (source[close] === '(') depth += 1;
+    else if (source[close] === ')') {
+      depth -= 1;
+      if (depth === 0) break;
+    }
+  }
+  const end = source.indexOf('\n}', close);
+  return {
+    signature: source.slice(open, close),
+    body: source.slice(close, end === -1 ? undefined : end),
+  };
+}
+
 const suffix = String(process.pid);
 
 describe('public registrars reject duplicate ownership, unconditionally', () => {
@@ -45,20 +81,13 @@ describe('public registrars reject duplicate ownership, unconditionally', () => 
     // not claim one kind" held only by convention: any caller could pass it. Review flagged
     // that, worst for dependencies — a replaced layout handler breaks visibly, a replaced
     // dependency extractor breaks resolved-cache invalidation and reads like a caching bug.
-    for (const name of ['registerBlockLayout', 'registerBlockDependencies', 'registerBlockSemanticRole']) {
-      const at = SOURCE.indexOf(`export function ${name}(`);
-      expect(at).toBeGreaterThan(-1);
-      const open = SOURCE.indexOf('(', at);
-      let depth = 0;
-      let close = open;
-      for (; close < SOURCE.length; close += 1) {
-        if (SOURCE[close] === '(') depth += 1;
-        else if (SOURCE[close] === ')') {
-          depth -= 1;
-          if (depth === 0) break;
-        }
-      }
-      expect(SOURCE.slice(open, close)).not.toMatch(/replace/);
+    // DERIVED, not hardcoded. Listing the three known registrars meant a FOURTH could restore
+    // the public `replace` flag and never be inspected — the exact defect the parent commit
+    // removed, re-introducible on a new registry with the suite green.
+    const publicNames = registrarNames(SOURCE).filter((n) => !n.startsWith('registerBuiltIn'));
+    expect(publicNames.length).toBeGreaterThanOrEqual(3);
+    for (const name of publicNames) {
+      expect(declarationOf(SOURCE, name).signature).not.toMatch(/replace/);
     }
   });
 });
@@ -94,18 +123,18 @@ describe('built-in registrars allow re-registration but are not public', () => {
     // function's own parameter list via paren matching: an earlier version sliced to the
     // first `): void`, which is unanchored, so a registrar returning anything else ran the
     // slice into the next function and the guard passed.
-    const names = [
-      ...SOURCE.matchAll(/export (?:function|const) (register\w+)\s*[<(=]/g),
-    ].map((m) => m[1]!);
+    const names = registrarNames(SOURCE);
     expect(names.length).toBeGreaterThanOrEqual(6);
     for (const name of names) {
       if (name.startsWith('registerBuiltIn')) {
         expect(INDEX).not.toContain(name);
         continue;
       }
-      const at = SOURCE.indexOf(name);
-      const body = SOURCE.slice(at, SOURCE.indexOf('\n}', at));
+      const { signature, body } = declarationOf(SOURCE, name);
+      // A throw ALONE is not enough: a `replace`-gated throw satisfies the grep while still
+      // handing out the opt-out. Both halves are required.
       expect(body).toMatch(/throw new Error/);
+      expect(signature).not.toMatch(/replace/);
     }
   });
 });

@@ -85,12 +85,12 @@ export function layoutBlock(block: Block, ctx: BlockLayoutContext): void {
 export type BlockDependencies = (block: Block) => readonly DependencyKey[];
 const dependencyRegistry = new Map<string, BlockDependencies>();
 /**
- * `replace` for the same reason as {@link registerBlockLayout}: these run at module scope, so
- * a dev server's hot reload re-ran them and threw, killing the reload.
+ * Duplicate ownership is rejected. Re-registration for this package's built-ins lives in
+ * {@link registerBuiltInBlockDependencies}.
  *
- * This is the SECOND registry with that shape and it was missed when the first was fixed —
- * the reload cascade simply moved from `duplicate block layout handler` to `duplicate block
- * dependency declaration`. Any further registry added here needs the same treatment.
+ * This was the SECOND registry with the throwing shape and it was missed when the first was
+ * fixed — the hot-reload cascade simply moved from `duplicate block layout handler` to
+ * `duplicate block dependency declaration`. Any further registry needs the same pair.
  */
 export function registerBlockDependencies(kind: string, fn: BlockDependencies): void {
   if (dependencyRegistry.has(kind))
