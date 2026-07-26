@@ -870,3 +870,46 @@ the chunk cache is tracking the store exactly rather than approximating it.
 - `/\S/u` does not treat U+200B-class zero-width characters as invisible, so a paragraph of
   them gets no full-width placeholder.
 - A false `custom`-variant justification remains in a comment in `interaction-frame.ts`.
+
+## Two further optimisations attempted, measured, and REVERTED
+
+Both targeted the same thing: publication still spends ~34 ms walking the flat
+`caretStops` (106,915) and `ownershipRegions` (11,391) arrays purely to confirm each
+element is already frozen. Elements come out of frozen chunks; only the concatenated
+arrays are new per layout. Sub-profile of the remaining ~43 ms publication:
+
+| Part | Median |
+| --- | --- |
+| Freeze display | 6.4 ms |
+| **Freeze semantic index** | **34.0 ms** |
+| Freeze navigation geometry | 0.0 ms (already frozen at construction) |
+| Rest of publication | 0.1 ms |
+
+**Attempt 1 — freeze the flat arrays at the array level.** `deepFreezeValue` short-circuits
+on an already-frozen value before descending, so `Object.freeze(caretStops)` should have
+turned 106,915 per-element calls into one check. It made things WORSE: total downstream edit
+went 115 -> 133 ms. Freezing a six-figure array is O(n) in V8 and pushes it toward
+dictionary mode, so the cost is paid at construction instead of at freeze, plus slower reads
+afterwards. Reverted.
+
+**Attempt 2 — a lazy, non-enumerable `caretStops` view.** `deepFreezeValue` iterates
+`Object.keys`, so a non-enumerable property is never visited and never materialised, and
+materialising is only a `flatMap` pointer copy because the stops are chunk-owned. Two tests
+correctly rejected it: `published semanticIndex is deeply frozen and rejects mutation` and
+`deep-frozen semanticIndex rejects mutation`. A lazily materialised array is not frozen, and
+weakening published-frame immutability to save 34 ms is not a trade worth making. Freezing
+it on first read only moves the O(n) freeze, and the array IS read every keystroke, because
+`roleForTarget` and `caretRectForTextTarget` consult it during the selection reconciliation
+that follows every layout. Reverted.
+
+**What would actually pay.** The lazy view is still the right shape, but it only pays once
+those two consumers stop reading the flat array and query the per-block chunk instead. That
+is now cheap in a way it was not when measured earlier: the chunk table is a `Map` keyed by
+block, so a role lookup is O(1) with no per-frame index build — the thing that made the
+earlier `caretStops` indexing attempts net losses. Sequence: migrate the two consumers to
+chunk queries, then make the flat array lazy and non-enumerable, keeping it frozen on
+materialisation for any external reader. Expected ceiling is publication ~43 -> ~9 ms and
+total ~115 -> ~80 ms, i.e. about 6.5x overall, but it is unverified and should be measured
+rather than assumed.
+
+Layout itself (~25 ms) is untouched by any of this work and is now the second-largest stage.
