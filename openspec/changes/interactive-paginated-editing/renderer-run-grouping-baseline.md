@@ -311,3 +311,50 @@ relationship to a paint box. The double-click and planner tests are the real gat
 2. Re-point the two index-based layout tests to semantic identity (already proven).
 3. Re-run `engine-editor` in full: the seven failures above are the gate.
 4. Only then measure, and compare against the size table above using the same harness.
+
+## Large fixture — COMPLETED run, at commit `checkpoint-21935f84`
+
+```json
+{
+  "size": { "pages": 24, "textItems": 11242, "glyphRuns": 11240,
+            "textElements": 11240, "totalNodes": 11312, "contentLayers": 24 },
+  "invariants": {
+    "pages": 24, "wrappingLines": 1247, "visibleTextChars": 96891,
+    "visibleTextHash":           "596abccf4760c2d055d10d83262a809c0c59e893635fb3b5609ea07787f64e1c",
+    "visibleTextNormalisedHash": "56f6a1573df441ae876ad0fd9b11a2536750a150788d1488c606636cd98260e0",
+    "wrappingSignatureHash":     "25c26d6b22af26f8e06cd63eca5b9319b2ca282e07339eca7562ef6c7f76fb68"
+  },
+  "reactCommits": { "selectionOnly": { "commits": 1, "totalDurationMs": 58.8 } },
+  "domIdentity": { "pageShells": 24, "contentLayers": 24, "sampledTextElements": 72,
+                   "allPreserved": true, "mutations": { "added": 0, "removed": 0 } }
+}
+```
+
+Dispatch medians, 5 repetitions each: load 1,089.9 ms · selection 175.7 ms
+(`[152.9, 164.7, 175.7, 182.4, 292.4]`) · one-character edit 1,220.9 ms
+(`[1196, 1216.4, 1220.9, 1244.5, 1255.8]`, `editReachedModel: true`) · scroll 0.1 ms
+(`[0, 0.1, 0.1, 0.2, 1.9]`).
+
+### A CORRECTION to the section above
+
+While this run was in progress, the "Large styled-text fixture — re-measured" section
+recorded "a single character insertion takes TENS OF SECONDS" and "a single scroll step
+takes 15-30 s". Those were INFERRED by polling the store revision and `scrollTop` from
+outside while the benchmark held the main thread. The completed run measures the edit at
+**1.22 s** and scroll dispatch at **0.1 ms**.
+
+The polling was seeing the harness's own 1,000 ms hidden-tab frame fallback between
+repetitions, not the operations — the same rAF-suspension defect already found once in
+this work, reached a second time by a different route. Treat the earlier paragraph as
+retracted; these are the measured numbers.
+
+What the corrected figures actually say:
+
+- **Editing is the expensive path**: 1.22 s per character at 24 pages against 260 ms at
+  10 pages — about 5x the cost for 2.4x the pages, so superlinear in document size.
+- **Scrolling does not repaint**: 0.1 ms dispatch.
+- **Selection-only stays ONE React commit**: 58.8 ms here, 35.1 ms on the comprehensive
+  fixture — growing with element count, but modestly.
+
+So requirement 4 remains worth doing, but the evidence points at the EDIT path — layout
+plus display republication on every keystroke — as the dominant cost, not page repaint.
