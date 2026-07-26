@@ -116,3 +116,49 @@ describe('bridge consumes dirty block ids', () => {
     expect(cache.evicted).toBe(0);
   });
 });
+
+// Two defects independent review found in the first version of this feature. Neither had a
+// test, and one of them made the feature inert for the chunk that matters most.
+describe('eviction reaches every cache and does not retain keys forever', () => {
+  test('a deleted paragraph releases its VISUAL LINE set, not only clusters', () => {
+    // `linesFor` was called without a blockId, so visual-line keys went untracked and could
+    // never be evicted. The line set holds all of that paragraph's caret edges — the bulk of
+    // the retained graph — so it was the one thing a delete could not release.
+    const { store, ids } = storeWith(['alpha beta gamma', 'delta epsilon zeta']);
+    const cache = new DisplayBridgeCache();
+    bridge(store.currentModel, cache);
+    expect(cache.linesBuilt).toBeGreaterThan(0);
+
+    // Name it deleted WITHOUT changing the model, so the only thing that can drop the line
+    // set is the eviction itself — a real delete would remove it from layout anyway, which
+    // would pass whether or not the cache released anything.
+    const beforeReused = cache.linesReused;
+    bridge(store.currentModel, cache, { deleted: [ids[1]!] });
+    expect(cache.evicted).toBe(1);
+    // Its line set was rebuilt rather than served, which is only possible if the key was
+    // tracked and evicted.
+    expect(cache.linesBuilt).toBeGreaterThan(0);
+    expect(cache.linesReused).toBeLessThan(beforeReused + 2);
+    expect(shape(bridge(store.currentModel, cache, {}))).toBe(shape(bridge(store.currentModel)));
+  });
+
+  test('the key index is rotated, so eviction still reaches the previous layout', () => {
+    // Clearing the index in `rotate()` was the first attempt and broke eviction outright:
+    // `rotate()` runs before `invalidateBlocks`, so the keys a dirty id needs are the
+    // PREVIOUS layout's. Rotating keeps exactly the two generations the value maps keep.
+    const { store, ids } = storeWith(['alpha beta', 'gamma delta']);
+    const cache = new DisplayBridgeCache();
+    bridge(store.currentModel, cache);
+    // Second layout rotates; the ids named here were tracked in the FIRST.
+    bridge(store.currentModel, cache, { changed: [ids[0]!] });
+    expect(cache.evicted).toBe(1);
+  });
+
+  test('naming a block that was never cached does not count as an eviction', () => {
+    const { store } = storeWith(['alpha beta']);
+    const cache = new DisplayBridgeCache();
+    bridge(store.currentModel, cache);
+    bridge(store.currentModel, cache, { deleted: ['never-existed'] });
+    expect(cache.evicted).toBe(0);
+  });
+});

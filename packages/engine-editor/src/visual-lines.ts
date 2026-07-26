@@ -367,7 +367,17 @@ export interface PreOrderVisualLine {
 
 /** Reuse of a paragraph's pre-order lines across layouts, two generations. */
 export interface VisualLineCache {
-  linesFor(key: string, build: () => PreOrderVisualLine[]): readonly PreOrderVisualLine[];
+  /**
+   * `blockId` lets the cache evict this entry by id. Omitting it was a real gap: visual-line
+   * keys went untracked, so the paragraph line set — the chunk holding all of that
+   * paragraph's caret edges, and the bulk of the retained graph — was the one thing a
+   * deleted block could never release.
+   */
+  linesFor(
+    key: string,
+    build: () => PreOrderVisualLine[],
+    blockId?: string
+  ): readonly PreOrderVisualLine[];
 }
 
 export function buildVisualLines(
@@ -408,8 +418,22 @@ export function buildVisualLines(
   if (cache && conflictSet.size === 0) {
     const parts = new Map<string, string[]>();
     for (const page of pages) {
-      page.items.forEach((item, zOrder) => {
+      // TEXT-ONLY index, matching `buildRealPaintSliceIndex`, which is where the published
+      // `FragmentInteractionMeta.zOrder` actually comes from.
+      //
+      // This keyed on the index over ALL page items — caret edges included — which is a
+      // different enumeration from the one it was supposed to cover, so keying on it could
+      // not prevent a stale published zOrder and review reproduced 24 divergences over 3,200
+      // edit steps (a line publishing zOrder 8 from cache where a cold build gives 9). It
+      // also churned the key far more than necessary: the correct counter took line-set
+      // reuse from 131/140 back to 139/140 and total edit time from 125.3 ms to 120.0 ms.
+      // So the "reuse drops, that is the intended trade" note on the previous commit was
+      // wrong twice over — it was not a trade, and it bought nothing.
+      let paintIndex = 0;
+      page.items.forEach((item) => {
         if (item.type !== 'text') return;
+        const zOrder = paintIndex;
+        paintIndex += 1;
         const id = item.anchor.paragraphId;
         let bucket = parts.get(id);
         if (!bucket) {
@@ -546,7 +570,7 @@ export function buildVisualLines(
     const key = keyByParagraph.get(paragraphId);
     const lines =
       cache && key !== undefined
-        ? cache.linesFor(key, () => buildParagraphLines(entries))
+        ? cache.linesFor(key, () => buildParagraphLines(entries), paragraphId)
         : buildParagraphLines(entries);
     preOrder.push(...lines);
   }

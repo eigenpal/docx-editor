@@ -170,6 +170,38 @@ describe('visual line reuse is invisible', () => {
     expect(cache.linesBuilt).toBeGreaterThan(0);
   });
 
+  test('a stacking shift is keyed on the PAINT index, matching published zOrder', () => {
+    // The key used the index over ALL page items, caret edges included, while published
+    // `zOrder` comes from a text-only counter — two different enumerations, so keying on one
+    // could not cover the other. Review reproduced 24 divergences over 3,200 edit steps.
+    // Splitting an earlier paragraph shifts the paint index for everything after it.
+    const { store, ids } = storeWith(['first para', 'second para', 'third para']);
+    const cache = new DisplayBridgeCache();
+    bridge(store.currentModel, cache);
+    store.transact(HUMAN, (c) =>
+      c.apply({
+        op: 'setParagraphRuns',
+        paragraphId: ids[0]!,
+        runs: [{ text: 'first ' }, { text: 'para', props: { bold: true } }],
+      }),
+    );
+    expect(navShape(bridge(store.currentModel, cache))).toBe(navShape(bridge(store.currentModel)));
+  });
+
+  test('an edit that does not shift stacking keeps FULL line-set reuse', () => {
+    // Keying on the wrong counter also churned the key far more than necessary: line-set
+    // reuse was 131/140 on a plain edit where it should be 139/140.
+    const { store, ids } = storeWith(['alpha beta', 'gamma delta', 'epsilon zeta', 'eta']);
+    const cache = new DisplayBridgeCache();
+    bridge(store.currentModel, cache);
+    store.transact(HUMAN, (c) =>
+      c.apply({ op: 'insertText', paragraphId: ids[2]!, offset: 0, text: 'q' }),
+    );
+    const after = bridge(store.currentModel, cache);
+    expect(navShape(after)).toBe(navShape(bridge(store.currentModel)));
+    expect(cache.linesBuilt).toBe(1);
+  });
+
   test('reused lines and their edges are frozen', () => {
     const { store } = storeWith(['alpha beta gamma']);
     const result = bridge(store.currentModel, new DisplayBridgeCache());

@@ -296,6 +296,20 @@ export class DisplayBridgeCache {
     this.other = new Map();
     this.linesPrevious = this.lines;
     this.lines = new Map();
+    // ROTATED with the generations it indexes, not cleared.
+    //
+    // It only ever grew: a block that MOVES gets a new fingerprint, hence a new key, on every
+    // layout, and is precisely the block the id diff reports as CLEAN, so nothing pruned it.
+    // Review measured ~28 KB of dead key strings retained per reflowing keystroke on a
+    // 41-paragraph document, linear, for the editor's lifetime.
+    //
+    // Clearing it outright was the first attempt and broke eviction: `rotate()` runs before
+    // `invalidateBlocks`, so the keys a dirty id needs to delete are the PREVIOUS layout's
+    // and had already been thrown away. Two tests caught it. Rotating keeps exactly the two
+    // generations the value maps keep, so eviction still reaches them and nothing older is
+    // retained.
+    this.keysByBlockPrevious = this.keysByBlock;
+    this.keysByBlock = new Map();
     this.evicted = 0;
     this.reused = 0;
     this.built = 0;
@@ -358,11 +372,21 @@ export class DisplayBridgeCache {
    * more layouts pass.
    */
   private keysByBlock = new Map<string, Set<string>>();
+  private keysByBlockPrevious = new Map<string, Set<string>>();
 
   private trackKey(blockId: string, key: string): void {
     const existing = this.keysByBlock.get(blockId);
     if (existing) existing.add(key);
     else this.keysByBlock.set(blockId, new Set([key]));
+  }
+
+  /** Keys tracked for a block across BOTH live generations. */
+  private trackedKeys(blockId: string): Iterable<string> {
+    const current = this.keysByBlock.get(blockId);
+    const previous = this.keysByBlockPrevious.get(blockId);
+    if (!previous) return current ?? [];
+    if (!current) return previous;
+    return new Set([...current, ...previous]);
   }
 
   /**
@@ -377,9 +401,10 @@ export class DisplayBridgeCache {
    */
   invalidateBlocks(blockIds: Iterable<string>): void {
     for (const blockId of blockIds) {
-      const keys = this.keysByBlock.get(blockId);
-      if (!keys) continue;
+      const keys = this.trackedKeys(blockId);
+      let matched = false;
       for (const key of keys) {
+        matched = true;
         this.current.delete(key);
         this.previous.delete(key);
         this.lines.delete(key);
@@ -388,7 +413,8 @@ export class DisplayBridgeCache {
         this.otherPrevious.delete(key);
       }
       this.keysByBlock.delete(blockId);
-      this.evicted += 1;
+      this.keysByBlockPrevious.delete(blockId);
+      if (matched) this.evicted += 1;
     }
   }
 
