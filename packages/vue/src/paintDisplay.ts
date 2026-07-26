@@ -88,6 +88,11 @@ function paintOverlayLayer(pageIndex: number, overlays: FrameOverlays): VNode {
     ...(caret
       ? [
           h('div', {
+            // Keyed on position so the vnode is replaced when the caret moves and the blink
+            // restarts from its ON phase. See the React counterpart for why: a free-running
+            // cycle that is invisible for half its period makes a click landing in the OFF
+            // half look like a missing caret.
+            key: `caret.${caret.pageIndex}.${caret.rect.x}.${caret.rect.y}`,
             'data-testid': 'one-surface-caret',
             class: `ep-one-surface__caret${caret.writingDirection === 'rtl' ? ' ep-one-surface__caret--rtl' : ''}`,
             style: overlayStyle(caret),

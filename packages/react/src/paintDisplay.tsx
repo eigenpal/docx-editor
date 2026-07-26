@@ -120,6 +120,12 @@ function paintOverlayLayer(
       ))}
       {caret ? (
         <div
+          // KEYED ON POSITION so the element remounts when the caret moves, which restarts
+          // the blink from its ON phase. The animation is a free-running 1.06s cycle that is
+          // invisible for half of it, so without this a click landing in the OFF half shows
+          // nothing for up to ~0.5s and reads as "the caret is broken". Word, and the
+          // reference deployment, show the caret immediately on every click.
+          key={`caret.${caret.pageIndex}.${caret.rect.x}.${caret.rect.y}`}
           data-testid="one-surface-caret"
           className={`ep-one-surface__caret${caret.writingDirection === 'rtl' ? ' ep-one-surface__caret--rtl' : ''}`}
           style={overlayStyle(caret)}
