@@ -1071,3 +1071,75 @@ the absolute baseline remains soft. Independent review measured the pre-change t
 Every timing taken while a review agent was running is contaminated — the same command
 reported 126 ms idle and 135-154 ms under load. Only idle numbers are quoted in the tables
 above, and the reuse COUNTS are load-independent.
+
+## Round 6 — review follow-ups, and what is genuinely pinned
+
+The re-review of the corrected HEAD confirmed the High fix holds (0 divergences over 5,000
+differential steps across 10 seeds, against 10/10 divergence on the pre-fix commit) and that
+the key's central assumption survives attack (7,456 paragraph observations, ~2,570 genuine
+key repeats, 0 violations). It also found one new High of my own making and several gaps.
+
+**HIGH, fixed — `metricsKey` disabled the boundary memo completely.** `create-editor`
+constructed a fresh `HelveticaMetrics` inside every layout. The port is immutable so that
+bought nothing, and because the memo keys on the port instance — it must, the table is a
+function of the metrics — a new instance per layout meant a new key per layout and a 0% hit
+rate. Review measured 21/21 boundary tables reused with a shared port, 0/21 with a fresh one.
+One metrics port per editor now.
+
+**Fixed — the cluster key omitted the grapheme-boundary epoch** that its sibling memo had
+just gained. Review reproduced merged graphemes served from cache after a boundary swap, so a
+click resolved to the wrong offset.
+
+**Fixed — the paint digest truncated fractional geometry.** `hash ^ value` applies ToInt32,
+so 100.4 and 100.6 hashed identically. Unreachable with the shipped integer-twip ports and
+reachable the moment a shaping port with fractional advances lands, silently. Scaled by 64
+before the mix.
+
+### Attribution correction
+
+"Correctness costs about 12 ms" was wrong. Measured by review, the cluster-key fix costs
+**~3 ms of total**; the other ~16 ms was the metrics regression above. Two of my performance
+claims in a row have now been wrong in the same direction, both caught by measurement rather
+than by reasoning.
+
+### What the tests actually pin, measured by mutation
+
+| Mutation | Result |
+| --- | --- |
+| cluster key: drop boundary epoch | CAUGHT |
+| hb key: drop boundary epoch | CAUGHT |
+| traversal: revert to shallow freeze | CAUGHT |
+| cluster key: drop paint digest | survives — masked by the grapheme count |
+| cluster key: drop grapheme count | survives — masked by the paint digest |
+| cluster key: drop BOTH | CAUGHT — this is the original High |
+| hb key: drop metrics port | survives — no discriminating fixture found |
+
+Recorded in the test file itself, so a later reader knows which components are proven and
+which are defence without a proof. The digest and the count are mutually redundant on every
+input I could construct; only their conjunction is pinned. The metrics port stays because
+`prefixProvableUpTo` keys on it for exactly this reason and review measured a stale answer
+there, but I could not build a fixture where the two shipped ports disagree.
+
+A first version of these tests passed while the component under test was deleted, because the
+stub boundary used `[...text]` — code POINTS, which agree with grapheme segmentation on the
+fixture. Iterating code UNITS makes the boundary genuinely different and the mutations fail.
+
+### Measurement at this HEAD
+
+15 samples, three runs, idle machine: bridge **52.6 / 55.8 / 52.7 ms**, publication
+**44.1 / 44.6 / 44.3 ms**, total **124.2 / 129.0 / 123.6 ms**.
+
+Against review's same-machine baseline of 508.2 ms that is **4.09x**; against the cited
+541.8 ms, **4.29x**. Both thresholds (127.05 ms and 135.45 ms) are cleared, and unlike the
+previous round the margin is no longer inside the noise band.
+
+### Not done, and not claimed
+
+- The alternating A/B still is not runnable: the pre-change commit has no `DisplayBridgeCache`
+  for a shared harness to construct. The ratio rests on same-machine sequential runs.
+- Step 3 as literally specified — `toDisplayPages` consuming `ModelChange` dirty ids — is NOT
+  implemented. Reuse is driven by content and geometry fingerprints plus `ParagraphRecord`
+  identity, which is what the store's structural sharing already provides. It reaches the
+  gate, but it is a different mechanism from the one the plan names.
+- A fourth review would exceed the three-reviewer limit, so this round's fixes are verified
+  by mutation and differential testing rather than by another independent pass.

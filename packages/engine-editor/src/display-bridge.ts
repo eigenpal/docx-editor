@@ -404,7 +404,11 @@ function metricsKey(metrics: MetricsPort): number {
 
 function paragraphPaintDigests(pages: readonly Page[]): Map<string, number> {
   const digests = new Map<string, number>();
-  const mix = (hash: number, value: number) => Math.imul(hash ^ value, 0x01000193);
+  // Scaled before the xor: `hash ^ value` applies ToInt32, so 100.4 and 100.6 would hash
+  // identically. Both shipped metrics ports return integer twips, so this is unreachable
+  // today and becomes reachable the moment a shaping port with fractional advances lands —
+  // silently, which is the reason to close it now rather than when it bites.
+  const mix = (hash: number, value: number) => Math.imul(hash ^ Math.round(value * 64), 0x01000193);
   for (const page of pages) {
     for (const item of page.items) {
       if (item.type !== 'text') continue;
@@ -432,6 +436,12 @@ function clusterCacheKey(
   edgeDigest: number
 ): string {
   return (
+    // `clustersFromLayoutCaretEdges` calls `segmentGraphemes`, so a boundary swap changes
+    // cluster spans. The sibling horizontal-boundary memo already keys on this; review
+    // found the asymmetry and reproduced it — 'abéc 👍' served merged graphemes from cache
+    // after `setGraphemeBoundary(perCodeUnit)`, so a click resolved to the wrong offset.
+    String(graphemeBoundaryEpoch()) +
+    '\u001F' +
     paragraphId +
     '\u001F' +
     String(it.anchor.offset) +
