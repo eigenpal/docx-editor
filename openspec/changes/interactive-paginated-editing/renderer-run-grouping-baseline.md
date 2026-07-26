@@ -643,3 +643,40 @@ alone will not reach 4x. Compact first, then reuse.
 `packages/engine-editor/test/caret-stop-derivation.test.ts` pins the regularity that makes
 the compaction safe: exactly one stop per offset in `[0, graphemeCount]`, all
 `editableText`, and none at all for a read-only block.
+
+## Known-failing tests — explicitly baselined, NOT a clean gate
+
+Nine distinct failures are present and are treated as a recorded baseline rather than as a
+passing gate. Captured at `checkpoint-5cbfeb61` with `bun test` from the repository root:
+
+```
+(fail) (unnamed)
+(fail) a11y harness vite workspace exports (task 5.3) > verify-a11y-harness-vite-exports probes fresh and cached dev graphs
+(fail) package authority (task 0.5) > the EditorHost contract is PM-free
+(fail) package test migration inventory > engine-neutral retained runtime import closures avoid retired coupling signals
+(fail) package test migration inventory > retired sources are absent and retained sources remain on disk
+(fail) public adapter authority (interactive-paginated-editing task 1.4) > @docx-editor.dev/react > does not implement document geometry or bypass Editor/EditorHost in source
+(fail) public adapter authority (interactive-paginated-editing task 1.4) > @docx-editor.dev/react > does not import ProseMirror or private geometry packages from source
+(fail) public adapter authority (interactive-paginated-editing task 1.4) > @docx-editor.dev/react > package.json declares no forbidden ProseMirror or private engine dependencies
+(fail) surviving test boundary guard > surviving tests and checks avoid retired core subpaths and workspace aliases
+```
+
+Reported errors behind them: `vite export regression failed (1)`, `harness child exited
+before ready (signal)`, `Playwright Test did not expect test.describe() to be called here`,
+and `Failed to register. Happy DOM has already been globally registered.`
+
+**Provenance is weaker than it should be, and that is stated rather than glossed.** They
+belong to the React port (adapter-authority guards over `packages/react/src`, the retired
+subpath guard, the test-migration inventory) and to the a11y/Playwright/happy-dom harness,
+none of which the renderer work touches. But this has NOT been proven by a clean run at the
+pre-work commit: a detached worktree at `checkpoint-609fca41` resolves `@docx-editor.dev/*` through the
+shared `node_modules`, which symlinks back to the working tree's `packages/`, so its engine
+sources are the CURRENT ones and the run is not an independent control. A first attempt at
+that comparison ran both halves inside the same worktree and produced a vacuous "identical"
+result; it is discarded rather than reported.
+
+An honest control needs an isolated `bun install`, which is blocked by the pre-existing
+`@docx-editor.dev/core@^0.0.1` `minimumReleaseAge` failure recorded in the document-engine
+project notes. Until that is resolved, the correct claim is: **this set is unchanged in
+membership across every commit in this phase, and no failure in it names a file this phase
+edits** — not that it is proven pre-existing.
