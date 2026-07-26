@@ -86,7 +86,7 @@ const perCodeUnit = {
 //   cluster key: drop paint digest      survives  (masked by the grapheme count)
 //   cluster key: drop grapheme count    survives  (masked by the paint digest)
 //   cluster key: drop BOTH              CAUGHT    (the original High)
-//   hb key:      drop metrics port      survives  (no discriminating fixture found)
+//   hb key:      drop metrics port      survives HERE, but IS pinnable — see note below
 //
 // The digest and the count are mutually redundant on every input I could construct, so
 // only their conjunction is pinned. That is worth knowing before deleting either.
@@ -115,12 +115,14 @@ describe('bridge cache keys cover each input individually', () => {
   });
 
   test('HORIZONTAL BOUNDARY memo key covers the metrics port', () => {
-    // NOT PINNED, and said so rather than implied. Deleting `metricsKey(metrics)` from the
-    // key leaves this green: I could not build a fixture where the two shipped ports
-    // disagree about `isWholeGraphemeHorizontalBoundary`, which is what the table records.
-    // The component stays because `prefixProvableUpTo` keys on the port for exactly this
-    // reason and review measured a stale answer there — but this test currently only shows
-    // the two ports AGREE, not that the key discriminates.
+    // NOT PINNED BY THIS TEST, and review showed it IS pinnable — I was wrong to record it
+    // as impossible. The two SHIPPED ports agree about
+    // `isWholeGraphemeHorizontalBoundary`, so neither discriminates. A port with
+    // `ligatures: 'opaque'` and a `ligatureInteriorCaret` does: on 'fi' Helvetica gives
+    // [0,1,2] and an opaque port gives [0,2], so warming under one and answering with the
+    // other returns a stale table when `metricsKey(metrics)` is deleted. The pattern already
+    // exists at `engine-editor/test/ligature-shaping.test.ts`. Writing that fixture is the
+    // remaining work; this test only shows the two shipped ports AGREE.
     const model = modelOf(['alpha beta gamma delta']);
     const cache = new DisplayBridgeCache();
     const helvetica = new HelveticaMetrics();

@@ -37,8 +37,31 @@ function consumedTokens(source: string): Map<string, boolean> {
   return out;
 }
 
+/**
+ * The stylesheet up to the first dark-mode block.
+ *
+ * NOT a general "default theme" slice, and the difference matters. Review pointed out that
+ * the whole-file check below cannot catch the original defect — `--doc-caret` declared only
+ * inside `.ep-root.dark` — and suggested applying this slice to it. That does not work on
+ * this stylesheet: plenty of ordinary default-theme declarations sit AFTER the dark block
+ * (`--doc-page-gap: 24px` at ~1387, `--doc-page-bg`), so the slice reports them missing.
+ * Verified by trying it: two false positives immediately.
+ *
+ * Catching the class properly needs scope-aware parsing — resolving which declarations are
+ * reachable without a dark selector — not a positional cut. Until then the general check
+ * stays whole-file (it catches a token that is declared NOWHERE, which is a real class) and
+ * the dark-only class is covered per token, explicitly, below. That is a narrower guarantee
+ * than the file header implies, so it is stated here rather than left to be discovered.
+ */
+const DARK_BLOCK = /\.ep-root\.dark|\[data-theme=['"]dark['"]\]|prefers-color-scheme:\s*dark/;
+
+function defaultThemeSource(source: string): string {
+  const darkAt = source.search(DARK_BLOCK);
+  return darkAt === -1 ? source : source.slice(0, darkAt);
+}
+
 describe('editor stylesheet custom properties', () => {
-  test('every consumed --doc-* token is declared, or always has a fallback', () => {
+  test('every consumed --doc-* token is declared somewhere, or always has a fallback', () => {
     const declared = declaredTokens(withoutComments);
     const consumed = consumedTokens(withoutComments);
     const missing = [...consumed.entries()]
