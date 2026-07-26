@@ -764,3 +764,39 @@ The flat arrays are also still concatenated eagerly. That is cheaper than it sou
 allocation and a pointer copy, against constructing the objects — and the freeze walk over
 them short-circuits per element now that chunks are frozen. But it is still an O(document)
 traversal per keystroke, and a lazy per-block view is what removes it.
+
+### Where the remaining bridge time is — measured, not guessed
+
+After chunk reuse, `toDisplayPages` (~192 ms) splits as:
+
+| Sub-stage | Median |
+| --- | --- |
+| `buildSemanticIndex` | **3.1 ms** (was ~14 ms before chunk reuse) |
+| `buildVisualLines` | **51.0 ms** |
+| Everything else in the bridge | **124.5 ms** |
+
+Chunk reuse did what it was supposed to: the semantic index is now near-free. Navigation
+geometry is not, and it accounts for both remaining items — `buildVisualLines` constructs
+all **106,539** caret edges, and the bulk of "everything else" is
+`freezeNavigationGeometry` walking those same new edges. Nothing else in the bridge is
+close: painted items are 1,383 with their clusters already reused.
+
+**So the next step is per-visual-line navigation chunks, and it is the last big one.**
+A line's edges are a pure function of its paragraph and its geometry, so the key that
+already works for clusters works here: paragraph record identity plus the geometry
+fingerprint of that paragraph's painted items. If all of a paragraph's text items are
+byte-identical in geometry and text, the caret edges between them are identical too.
+
+Two cautions for whoever does it, both from reading the code rather than from a failure:
+
+- `buildVisualLines` buckets edges by LINE across the whole document in one pass and sorts
+  globally by block order. Per-paragraph caching has to preserve that ordering, which means
+  caching `VisualLineRecord[]` per paragraph and re-sorting, not caching the sorted result.
+- `paintFragmentConflicts` is a document-global input consulted per edge. A cached
+  paragraph must be invalidated when its fragments enter or leave that set; the safe first
+  cut is to bypass the cache entirely whenever the conflict list is non-empty, which is the
+  degenerate path anyway.
+
+Not attempted here. `buildVisualLines` carries a long history of correctness fixes and I did
+not have the budget left to change it and verify it properly; a half-verified change to it
+would be worse than the 1.44x already banked.
