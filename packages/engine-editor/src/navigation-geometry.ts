@@ -123,5 +123,11 @@ export function traversalLinksForBlock(
 export function recordFromTraversalMap(
   map: ReadonlyMap<string, BlockTraversalLinks>
 ): Readonly<Record<string, BlockTraversalLinks>> {
-  return Object.freeze(Object.fromEntries(map));
+  // Deep, not shallow. A shallow `Object.freeze` makes `deepFreezeValue` bail at its
+  // `isFrozen` short-circuit, leaving one mutable `{previousEditableBlockId,
+  // nextEditableBlockId}` per block reachable from a published frame — 140 of them on the
+  // 24-page fixture, found by review counting unfrozen nodes.
+  const record = Object.fromEntries(map);
+  for (const value of Object.values(record)) Object.freeze(value);
+  return Object.freeze(record);
 }

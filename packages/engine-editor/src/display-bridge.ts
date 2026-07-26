@@ -32,6 +32,7 @@ import {
   semanticTextSpan,
   twipsToPx,
 } from './semantic-index.ts';
+import { graphemeBoundaryEpoch } from '@docx-editor.dev/engine-layout';
 import { clustersFromLayoutCaretEdges } from './layout-clusters.ts';
 import { deepFreezeValue } from './interaction-frame.ts';
 import {
@@ -358,8 +359,78 @@ export class DisplayBridgeCache {
   }
 }
 
+/**
+ * Per-paragraph digest of everything OUTSIDE a painted slice that its clusters depend on.
+ *
+ * `clustersFromLayoutCaretEdges` does not read only the slice. It reads the paragraph's
+ * whole caret-edge index — which offsets are `horizontalNavigable`, and the minimum x per
+ * offset — and the paragraph's grapheme count, which becomes each cluster's `affinity`.
+ * All of that can change while a painted slice stays byte-identical.
+ *
+ * Independent review reproduced the consequence: with a bold trailing space at a wrap, an
+ * ordinary 30-character insertion elsewhere gave that slice one cluster from cache and zero
+ * from a fresh build, because offset 61 gained an edge at the next line's left margin and
+ * `edgeIndexFor` takes the minimum x, so `right <= left` and the cluster is correctly
+ * dropped. A click at x=520.5 then resolved to grapheme 60 with the cache and 0 without —
+ * the same click on the same document answered differently depending on edit history. A
+ * 500-step differential diverged in 8 of 10 seeds.
+ *
+ * The digest is over the paragraph's PAINTED ITEMS, not its caret edges. A paragraph's
+ * edges are emitted by the same layout walk that positions its slices, so identical text,
+ * geometry and page across ALL of a paragraph's slices imply an identical edge index — the
+ * same argument the visual-line cache rests on, which review validated over a 3,200-step
+ * differential with zero divergence. Hashing the edges directly was tried first and costs
+ * ~16 ms per layout over 106,000 of them, which is a sixth of the budget the cache exists
+ * to save; this is O(items), so 1,383.
+ */
+/**
+ * Stable per-instance id for a metrics port, so a memo can key on WHICH port answered.
+ *
+ * Ports have no identity of their own and the editor constructs a fresh `HelveticaMetrics`
+ * per layout, so keying on the object alone would never hit. Identity is assigned lazily in
+ * a WeakMap and reused for the lifetime of the port.
+ */
+const metricsIds = new WeakMap<object, number>();
+let nextMetricsId = 1;
+
+function metricsKey(metrics: MetricsPort): number {
+  const existing = metricsIds.get(metrics as object);
+  if (existing !== undefined) return existing;
+  const id = nextMetricsId;
+  nextMetricsId += 1;
+  metricsIds.set(metrics as object, id);
+  return id;
+}
+
+function paragraphPaintDigests(pages: readonly Page[]): Map<string, number> {
+  const digests = new Map<string, number>();
+  const mix = (hash: number, value: number) => Math.imul(hash ^ value, 0x01000193);
+  for (const page of pages) {
+    for (const item of page.items) {
+      if (item.type !== 'text') continue;
+      let hash = digests.get(item.anchor.paragraphId) ?? 0x811c9dc5;
+      hash = mix(hash, page.index);
+      hash = mix(hash, item.x);
+      hash = mix(hash, item.y);
+      hash = mix(hash, item.width);
+      hash = mix(hash, item.height);
+      hash = mix(hash, item.anchor.offset);
+      hash = mix(hash, item.text.length);
+      for (let i = 0; i < item.text.length; i += 1) hash = mix(hash, item.text.charCodeAt(i));
+      digests.set(item.anchor.paragraphId, hash | 0);
+    }
+  }
+  return digests;
+}
+
 /** Identity of a painted slice for cluster reuse: everything its clusters depend on. */
-function clusterCacheKey(paragraphId: string, it: TextItem, box: Rect): string {
+function clusterCacheKey(
+  paragraphId: string,
+  it: TextItem,
+  box: Rect,
+  paragraphGraphemeCount: number,
+  edgeDigest: number
+): string {
   return (
     paragraphId +
     '\u001F' +
@@ -373,6 +444,12 @@ function clusterCacheKey(paragraphId: string, it: TextItem, box: Rect): string {
     '\u001F' +
     String(box.height) +
     '\u001F' +
+    // Becomes every cluster's `affinity`, and changes when text elsewhere in the paragraph
+    // does even though this slice is untouched.
+    String(paragraphGraphemeCount) +
+    '\u001F' +
+    String(edgeDigest) +
+    '\u001F' +
     it.text
   );
 }
@@ -385,7 +462,8 @@ function textItem(
   it: TextItem,
   pageIndex: number,
   zOrder: number,
-  cache?: DisplayBridgeCache
+  cache?: DisplayBridgeCache,
+  edgeDigest = 0
 ): ContractItem {
   const box = boxOf(it);
   const run: GlyphRun = {
@@ -419,7 +497,10 @@ function textItem(
       paragraphGraphemeCount
     );
   const clusters = cache
-    ? cache.clustersFor(clusterCacheKey(it.anchor.paragraphId, it, box), buildClusters)
+    ? cache.clustersFor(
+        clusterCacheKey(it.anchor.paragraphId, it, box, paragraphGraphemeCount, edgeDigest),
+        buildClusters
+      )
     : buildClusters();
   const legacy = deprecatedFlatDocOffset(semanticIndex, it.anchor.paragraphId, utf16From, utf16To);
   const block = blockRecordById(semanticIndex, it.anchor.paragraphId);
@@ -471,6 +552,7 @@ export function toDisplayPages(
   cache?: DisplayBridgeCache
 ): DisplayBridgeResult {
   cache?.rotate();
+  const edgeDigests = cache ? paragraphPaintDigests(pages) : new Map<string, number>();
   const semanticIndex = buildSemanticIndex(model, BODY);
   const storyId = semanticIndex.stories[0]!.storyId;
 
@@ -486,7 +568,19 @@ export function toDisplayPages(
     items: page.items.flatMap((it, zOrder) => {
       switch (it.type) {
         case 'text':
-          return [textItem(model, storyId, semanticIndex, pages, it, page.index, zOrder, cache)];
+          return [
+            textItem(
+              model,
+              storyId,
+              semanticIndex,
+              pages,
+              it,
+              page.index,
+              zOrder,
+              cache,
+              edgeDigests.get(it.anchor.paragraphId) ?? 0
+            ),
+          ];
         case 'caretEdge':
           return [];
         case 'rect':
@@ -509,10 +603,27 @@ export function toDisplayPages(
   for (const block of enrichedIndex.stories[0]?.blocks ?? []) {
     if (block.readOnly) continue;
     const text = paragraphTextById(model, block.identity.blockId, storyId);
-    // Depends only on the text and the metrics, so an untouched paragraph reuses its table.
+    // Depends on the text, the METRICS PORT and the installed GRAPHEME BOUNDARY.
+    //
+    // `prefixProvableUpTo` puts both of those in its own key and carries a comment
+    // recording that review previously caught a stale answer from omitting them; this memo
+    // keyed on block id and text alone, and review reproduced the same class of staleness
+    // here — warm the cache, swap to a per-code-unit boundary, and `'abéc 👍'` kept the
+    // grouping boundary's 7 offsets where a cold build gives 8. Every hit promotes into the
+    // current generation, so it never self-heals.
     const build = () => semanticHorizontalBoundaries(metrics, text);
     semanticHorizontalBoundariesByBlockId[block.identity.blockId] = cache
-      ? cache.memo('hb\u001F' + block.identity.blockId + '\u001F' + text, build)
+      ? cache.memo(
+          'hb\u001F' +
+            String(metricsKey(metrics)) +
+            '\u001F' +
+            String(graphemeBoundaryEpoch()) +
+            '\u001F' +
+            block.identity.blockId +
+            '\u001F' +
+            text,
+          build
+        )
       : build();
   }
   const visualLines = buildVisualLines(

@@ -112,12 +112,60 @@ describe('display bridge reuses frozen clusters for unchanged slices', () => {
     for (const cluster of moved.clusters) expect(cluster.box.y).toBe(moved.box.y);
   });
 
-  test('without a cache the bridge is unchanged and builds every slice', () => {
-    const { store } = storeWith(['alpha beta', 'gamma delta']);
-    const withCache = bridge(store.currentModel, new DisplayBridgeCache());
-    const without = bridge(store.currentModel);
-    const a = [...clustersByBlock(withCache).keys()].sort();
-    const b = [...clustersByBlock(without).keys()].sort();
-    expect(a).toEqual(b);
+  test('cached and uncached clusters are identical in CONTENT, not just in key set', () => {
+    // The previous version of this test compared only the key set, so it would have passed
+    // with every cluster wrong — and it did: review found the cache key omitted the
+    // paragraph's caret-edge index and grapheme count, and a 500-step differential diverged
+    // in 8 of 10 seeds with missing clusters, extra clusters and wrong widths.
+    const shape = (r: ReturnType<typeof bridge>) =>
+      JSON.stringify(
+        r.display.map((page) =>
+          page.items
+            .filter((i) => i.kind === 'text')
+            .map((i) => (i.kind === 'text' ? { s: i.semantic, c: i.clusters, b: i.box } : null)),
+        ),
+      );
+    const { store, ids } = storeWith(['alpha beta', 'gamma delta']);
+    expect(shape(bridge(store.currentModel, new DisplayBridgeCache()))).toBe(
+      shape(bridge(store.currentModel)),
+    );
+
+    // And after edits, against a warm cache — the shape review actually broke.
+    const cache = new DisplayBridgeCache();
+    bridge(store.currentModel, cache);
+    for (const text of ['x'.repeat(30), 'y', ' ', 'zz ']) {
+      store.transact(HUMAN, (c) =>
+        c.apply({ op: 'insertText', paragraphId: ids[0]!, offset: 0, text }),
+      );
+      expect(shape(bridge(store.currentModel, cache))).toBe(shape(bridge(store.currentModel)));
+    }
+  });
+
+  test('a trailing styled space at a wrap stays consistent across edits', () => {
+    // The exact reproduction review reported: a bold trailing space whose cluster is
+    // correctly dropped once the wrap offset gains an edge at the next line's left margin.
+    const model = createEmptyModel();
+    const storyId = bodyStoryId(model);
+    const store = new DocumentStore(model);
+    const first = (model.stories.get(storyId)!.blocks[0] as ParagraphRecord).id;
+    store.transact(HUMAN, (c) =>
+      c.apply({
+        op: 'setParagraphRuns',
+        paragraphId: first,
+        runs: [{ text: 'wrap '.repeat(12) }, { text: ' ', props: { bold: true } }],
+      }),
+    );
+    const shape = (r: ReturnType<typeof bridge>) =>
+      JSON.stringify(
+        r.display.flatMap((p) =>
+          p.items.filter((i) => i.kind === 'text').map((i) => (i.kind === 'text' ? i.clusters : [])),
+        ),
+      );
+    const cache = new DisplayBridgeCache();
+    bridge(store.currentModel, cache);
+    store.transact(HUMAN, (c) =>
+      c.apply({ op: 'insertText', paragraphId: first, offset: 0, text: 'x'.repeat(30) }),
+    );
+    expect(shape(bridge(store.currentModel, cache))).toBe(shape(bridge(store.currentModel)));
   });
 });

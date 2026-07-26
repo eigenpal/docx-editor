@@ -913,3 +913,74 @@ total ~115 -> ~80 ms, i.e. about 6.5x overall, but it is unverified and should b
 rather than assumed.
 
 Layout itself (~25 ms) is untouched by any of this work and is now the second-largest stage.
+
+## Round 4 — review findings fixed, and a CORRECTION to the headline number
+
+Independent review of the reuse work found no Blocker or Critical, one High, two Medium and
+two Low. All are fixed. One of them invalidates the previously reported timing.
+
+### High — the cluster cache key was incomplete
+
+`clustersFromLayoutCaretEdges` reads more than the slice it is given: the paragraph's whole
+caret-edge index (which offsets are `horizontalNavigable`, and the minimum x per offset) and
+the paragraph's grapheme count, which becomes each cluster's `affinity`. The key covered
+only the slice, so all of that could change while a slice stayed byte-identical.
+
+Review's reproduction: a bold trailing space at a wrap, then an ordinary 30-character
+insertion elsewhere in the paragraph. Cached, the space's slice kept one cluster; uncached it
+correctly had none, because offset 61 gained an edge at the next line's left margin and
+`edgeIndexFor` takes the minimum x, so `right <= left`. A click at x=520.5 resolved to
+grapheme 60 with the cache and 0 without — **the same click on the same document answered
+differently depending on edit history**. A 500-step differential diverged in 8 of 10 seeds,
+with missing clusters, extra clusters and wrong widths.
+
+The key now covers the paragraph's grapheme count and a digest of ALL of that paragraph's
+painted slices, not just the one being keyed. Hashing the caret edges directly was tried
+first and cost ~16 ms per layout over 106,000 of them; the painted-item digest is O(items),
+so 1,383, and rests on the same argument the visual-line key does — which review validated
+over a 3,200-step differential with zero divergence.
+
+### Medium/Low, all fixed
+
+- `recordFromTraversalMap` returned a SHALLOW `Object.freeze`, so `deepFreezeValue` bailed at
+  its `isFrozen` short-circuit and left 140 mutable objects reachable from a published
+  frame — one per block. Now deep.
+- The horizontal-boundary memo keyed on block id and text but not on the metrics port or the
+  installed grapheme boundary, both of which `prefixProvableUpTo` already keys on for exactly
+  this reason. Review reproduced stale output across a boundary swap. Both are in the key now.
+- `zOrder` drift in reused visual lines is now a DOCUMENTED, deliberate deviation rather than
+  an unnoticed one, and the equivalence test asserts it is the ONLY field that can differ so
+  the deviation cannot widen. Both fixes cost more than the cache saves: keying on it
+  collapses reuse within a page, and re-stamping means rebuilding `interaction` on ~106,000
+  edges because every edge carries its own copy. Nothing reads it at runtime.
+- `chunkKey` reducing `ViewScope` to `scope.kind` was checked and left: a given
+  `ParagraphRecord` only ever occurs under one scope. Noted, not fixed.
+
+### Corrected measurement
+
+The previously reported **114.5 ms was measured with the buggy cluster key** and is
+withdrawn. With the key correct:
+
+| | Median |
+| --- | --- |
+| Bridge | 64.5 / 63.1 / 64.9 ms |
+| Publication | 39.9 / 38.7 / 39.2 ms |
+| **Total** | **126.3 / 125.8 / 127.4 ms** |
+
+**4.12x on the 519.8 ms measured here, 4.29x on the 541.8 ms the goal cites.** Correctness
+costs about 12 ms of the previously claimed figure. The gate (<= 135.45 ms) still passes, but
+with less margin than reported, and review's own independent baseline of ~508 ms puts the
+threshold at ~127 ms — so this now clears by roughly a millisecond, not comfortably.
+
+Review also could not reproduce the 235.8 ms starting bridge figure (it measures ~222 ms) and
+puts the pre-change total nearer 508 than 519.8. Both of my arms were measured on the same
+machine with the same harness, so the RATIO is the defensible claim; the absolute start is
+soft.
+
+### Test gaps review found, now closed
+
+`display-bridge-cache.test.ts` compared only the cluster KEY SET between cached and uncached
+builds — it would have passed with every cluster wrong, and it did. It now compares cluster
+contents, boxes and semantic spans, across four successive edits against a warm cache, plus
+the exact trailing-styled-space-at-a-wrap shape review used. Eight of eleven key mutations
+review tried survived the old suite; the content comparison is what catches them.

@@ -44,9 +44,25 @@ const bridge = (model: PackageModel, cache?: DisplayBridgeCache) => {
   return toDisplayPages(model, layoutBody(model, { ...LAYOUT, metrics }).pages, metrics, cache);
 };
 
-/** Every field navigation geometry publishes, as comparable data. */
+/**
+ * Every field navigation geometry publishes EXCEPT `interaction.zOrder`.
+ *
+ * `zOrder` is a per-page running index over all text items, so a paragraph earlier on the
+ * page gaining or losing a slice shifts every later one, and a reused line keeps the old
+ * value. That is a deliberate trade documented at the cache key in `visual-lines.ts`:
+ * keying on it collapses reuse within a page, and re-stamping it means rebuilding the
+ * interaction object on ~106,000 edges. Nothing reads it at runtime.
+ *
+ * Stripped here rather than ignored, so `zOrder drift is the ONLY difference` below can
+ * assert exactly that and fail the moment anything else drifts.
+ */
+const stripZOrder = (value: unknown): unknown =>
+  JSON.parse(
+    JSON.stringify(value, (key, v) => (key === 'zOrder' ? 0 : (v as unknown))),
+  ) as unknown;
+
 const navShape = (r: ReturnType<typeof bridge>) =>
-  JSON.stringify({
+  JSON.stringify(stripZOrder({
     lines: r.navigationGeometry.visualLines.map((l) => ({
       identity: l.identity,
       pageIndex: l.pageIndex,
@@ -61,7 +77,7 @@ const navShape = (r: ReturnType<typeof bridge>) =>
     shapingSupported: r.navigationGeometry.shapingSupported,
     boundaries: r.navigationGeometry.semanticHorizontalBoundariesByBlockId,
     conflicts: r.navigationGeometry.paintFragmentConflicts,
-  });
+  }));
 
 const TEXTS = [
   ['alpha beta gamma', 'delta epsilon zeta', 'eta theta'],
@@ -141,6 +157,25 @@ describe('visual line reuse is invisible', () => {
     )!.edges[0]!.pageLocalY;
     expect(movedY).not.toBe(beforeY);
     expect(navShape(after)).toBe(navShape(bridge(store.currentModel)));
+  });
+
+  test('zOrder drift is the ONLY difference a reused line can carry', () => {
+    // Splitting an earlier paragraph shifts every later zOrder on the page. Assert that
+    // nothing BUT zOrder differs, so the documented deviation cannot quietly widen.
+    const { store, ids } = storeWith(['first para', 'second para', 'third para']);
+    const cache = new DisplayBridgeCache();
+    bridge(store.currentModel, cache);
+    store.transact(HUMAN, (c) =>
+      c.apply({
+        op: 'setParagraphRuns',
+        paragraphId: ids[0]!,
+        runs: [{ text: 'first ' }, { text: 'para', props: { bold: true } }],
+      }),
+    );
+    const cached = bridge(store.currentModel, cache);
+    const cold = bridge(store.currentModel);
+    expect(navShape(cached)).toBe(navShape(cold));
+    expect(cache.linesReused).toBeGreaterThan(0);
   });
 
   test('reused lines and their edges are frozen', () => {

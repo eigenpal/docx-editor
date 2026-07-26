@@ -42,6 +42,7 @@ export {
   type GraphemeBoundary,
   type GraphemeSegment,
   intlGraphemeBoundary,
+  graphemeBoundaryEpoch,
   segmentGraphemes,
   graphemeCount,
   utf16OffsetToGrapheme,
