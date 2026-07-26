@@ -214,7 +214,14 @@ async function main() {
   // entry with its own creation time, so without this the archive differs on every run
   // and the "fixture hash" the baseline records would be meaningless.
   const date = new Date(Date.UTC(2020, 0, 1, 0, 0, 0));
-  const add = (name, content) => zip.file(name, content, { date });
+  // `createFolders: false` is load-bearing, not tidiness. JSZip implicitly creates
+  // DIRECTORY entries for `word/` and `word/_rels/`, and those implicit entries do NOT
+  // receive the `date` option — they are stamped `new Date()`. The four real parts were
+  // correctly fixed at 2020-01-01 while the three folder entries carried wall-clock, so
+  // the archive differed between runs and the recorded hash was a snapshot of one
+  // machine at one minute. A `cmp` of two back-to-back runs MISSED it, because DOS
+  // timestamps are 2-second granular and both runs landed in the same minute.
+  const add = (name, content) => zip.file(name, content, { date, createFolders: false });
   add('[Content_Types].xml', CONTENT_TYPES_XML);
   add('_rels/.rels', RELS_XML);
   add('word/_rels/document.xml.rels', DOCUMENT_RELS_XML);
@@ -227,6 +234,25 @@ async function main() {
   });
 
   const out = path.join(__dirname, '..', 'examples', 'vite', 'public', 'large-styled-text.docx');
+
+  // `--check` regenerates in memory and byte-compares against the committed file rather
+  // than writing. The reproducibility claim is only worth making if something enforces
+  // it: the first version of this script claimed byte-identical regeneration and was
+  // wrong for a week, because the only verification was two runs a few seconds apart.
+  if (process.argv.includes('--check')) {
+    const committed = fs.readFileSync(out);
+    if (Buffer.compare(committed, bytes) === 0) {
+      console.log(`fixture matches (${bytes.length} bytes)`);
+      return;
+    }
+    console.error(
+      `FIXTURE DRIFT: ${out} does not match a fresh generation.\n` +
+        `  committed: ${committed.length} bytes\n  generated: ${bytes.length} bytes\n` +
+        'Run this script without --check to regenerate, and update the recorded hash.'
+    );
+    process.exit(1);
+  }
+
   fs.writeFileSync(out, bytes);
   console.log(`wrote ${out} (${bytes.length} bytes)`);
 }
