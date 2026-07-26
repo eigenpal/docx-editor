@@ -14,7 +14,7 @@ import type {
   SemanticSelection,
   SemanticPositionIndex,
 } from '@docx-editor.dev/core-contract/interaction';
-import type { DisplayPage, GlyphRun } from '@docx-editor.dev/core-contract/geometry';
+import type { DisplayPage } from '@docx-editor.dev/core-contract/geometry';
 import type { Rect } from '@docx-editor.dev/core-contract/types';
 import type { NavigationGeometry } from './navigation-geometry.ts';
 import { NavigationSidecarStore } from './navigation-sidecar-store.ts';
@@ -123,67 +123,29 @@ function scrollGeometryFromDisplay(
   return buildStackedPageGeometry(display, pageGapPx).scrollGeometry;
 }
 
+/**
+ * Freeze the published display list IN PLACE. No clone.
+ *
+ * This used to rebuild the entire list — a fresh object for every page, item, cluster,
+ * glyph run and box — and then freeze the copy. The copy was pure waste: `toDisplayPages`
+ * already returns objects it constructed on this call and nobody else holds a mutable
+ * reference to them, so the clone allocated a second graph only to throw the first away.
+ * On the 24-page styled fixture that graph is ~105,000 clusters, and publication was
+ * measured at 258.9 ms of a 519.8 ms keystroke — half the cost of typing one character.
+ *
+ * `deepFreezeValue` short-circuits on an already-frozen value, so once producers hand over
+ * frozen chunks this walk stops at the first frozen node and unchanged geometry costs
+ * nothing. Freezing in place is what makes that possible: a clone would defeat it by
+ * producing a fresh unfrozen graph every time.
+ *
+ * The kind-by-kind spread it replaced was also not doing what it looked like it was doing.
+ * It enumerated `text`/`image`/`fill`/`tableBorder`/`decoration` and fell through to a
+ * `{ ...item, box }` default, which is wrong for `custom` (no guaranteed `box`) and would
+ * silently drop nothing but also freeze nothing new. A plain recursive freeze covers every
+ * variant, including ones the union grows later.
+ */
 function freezeDisplay(display: readonly DisplayPage[]): readonly DisplayPage[] {
-  return deepFreezeValue(
-    display.map((page) =>
-      deepFreezeValue({
-        ...page,
-        box: deepFreezeValue({ ...page.box }),
-        items: deepFreezeValue(
-          page.items.map((item) => {
-            if (item.kind === 'text') {
-              return deepFreezeValue({
-                ...item,
-                box: deepFreezeValue({ ...item.box }),
-                semantic: deepFreezeValue({
-                  ...item.semantic,
-                  identity: deepFreezeValue({ ...item.semantic.identity }),
-                }),
-                clusters: deepFreezeValue(
-                  item.clusters.map((cluster) =>
-                    deepFreezeValue({ ...cluster, box: deepFreezeValue({ ...cluster.box }) })
-                  )
-                ),
-                runs: deepFreezeValue(
-                  item.runs.map((run: GlyphRun) =>
-                    deepFreezeValue({ ...run, box: deepFreezeValue({ ...run.box }) })
-                  )
-                ),
-              });
-            }
-            if (item.kind === 'image') {
-              return deepFreezeValue({
-                ...item,
-                box: deepFreezeValue({ ...item.box }),
-                semantic: deepFreezeValue({ ...item.semantic }),
-              });
-            }
-            if (item.kind === 'fill') {
-              return deepFreezeValue({ ...item, box: deepFreezeValue({ ...item.box }) });
-            }
-            if (item.kind === 'tableBorder') {
-              return deepFreezeValue({
-                ...item,
-                segments: deepFreezeValue(
-                  item.segments.map((seg) =>
-                    deepFreezeValue({
-                      ...seg,
-                      from: deepFreezeValue({ ...seg.from }),
-                      to: deepFreezeValue({ ...seg.to }),
-                    })
-                  )
-                ),
-              });
-            }
-            if (item.kind === 'decoration') {
-              return deepFreezeValue({ ...item, box: deepFreezeValue({ ...item.box }) });
-            }
-            return deepFreezeValue({ ...item, box: deepFreezeValue({ ...item.box }) });
-          })
-        ),
-      })
-    )
-  );
+  return deepFreezeValue(display);
 }
 
 function tagGeometry<T extends { frameId: InteractionFrameId }>(
@@ -230,45 +192,9 @@ function freezeSelectionGeometry(
   });
 }
 
+/** Freeze the published semantic index IN PLACE — same reasoning as {@link freezeDisplay}. */
 function freezeSemanticIndex(index: SemanticPositionIndex): SemanticPositionIndex {
-  return deepFreezeValue({
-    ...index,
-    stories: deepFreezeValue(
-      index.stories.map((story) =>
-        deepFreezeValue({
-          ...story,
-          blocks: deepFreezeValue(
-            story.blocks.map((block) =>
-              deepFreezeValue({ ...block, identity: deepFreezeValue({ ...block.identity }) })
-            )
-          ),
-        })
-      )
-    ),
-    caretStops: deepFreezeValue(
-      index.caretStops.map((stop) =>
-        deepFreezeValue({
-          ...stop,
-          target:
-            stop.target.kind === 'text'
-              ? deepFreezeValue({
-                  ...stop.target,
-                  identity: deepFreezeValue({ ...stop.target.identity }),
-                })
-              : deepFreezeValue({ ...stop.target }),
-        })
-      )
-    ),
-    ownershipRegions: deepFreezeValue(
-      index.ownershipRegions.map((region) =>
-        deepFreezeValue({
-          ...region,
-          identity: deepFreezeValue({ ...region.identity }),
-          ...(region.box ? { box: deepFreezeValue({ ...region.box }) } : {}),
-        })
-      )
-    ),
-  });
+  return deepFreezeValue(index);
 }
 
 export function emptySemanticIndex(storyId = ''): SemanticPositionIndex {
