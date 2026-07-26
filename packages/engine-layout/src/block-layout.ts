@@ -39,11 +39,8 @@ const registry = new Map<string, BlockLayout>();
 /**
  * Register the flow-layout handler for a block kind. Duplicate ownership is rejected.
  *
- * `replace` exists for the BUILT-IN registrations, which run at module scope. Any module
- * re-evaluation — which is what a dev server's hot reload does — re-ran them and threw,
- * killing the reload and cascading into "Failed to reload" for every importer. Two DIFFERENT
- * capabilities claiming one kind is still an error, which is what the guard is for; a module
- * re-registering its own kind is not.
+ * This function takes no opt-out. Re-registration for this package's built-ins lives in
+ * {@link registerBuiltInBlockLayout}, which the package index does not export.
  */
 export function registerBlockLayout(kind: string, fn: BlockLayout): void {
   if (registry.has(kind)) throw new Error(`duplicate block layout handler for kind '${kind}'`);

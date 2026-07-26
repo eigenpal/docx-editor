@@ -19,9 +19,29 @@ const SOURCE = readFileSync(
 );
 const INDEX = readFileSync(fileURLToPath(new URL('../src/index.ts', import.meta.url)), 'utf8');
 
-/** Names of every exported registrar, derived from the source rather than hardcoded. */
+/**
+ * Names of every exported registrar, derived from the source rather than hardcoded.
+ *
+ * The character class includes `:` because a type-annotated const reads
+ * `export const registerX: Registrar = (…) =>`. Without it that declaration matched nothing,
+ * so it entered NEITHER list — signature never inspected, body never required to throw — and
+ * the count assertions still passed because the three known registrars were untouched. Review
+ * found it: the worst of the remaining shapes precisely because it failed silently instead of
+ * loudly.
+ *
+ * TWO shapes are still not covered, and are accepted rather than overlooked:
+ *
+ *  - `replace` declared in a NAMED type (`options: PainterOptions = {}`) rather than inline.
+ *    A textual guard cannot follow a type reference. Accepted: the shape that actually
+ *    regressed twice was inline, and a reviewer sees `PainterOptions` in the diff.
+ *  - A registrar in a DIFFERENT file that the index re-exports. `SOURCE` is this file only.
+ *    Closing it means deriving the list from the index's export surface, since the index is
+ *    what defines "public" — worth doing when a second registration module appears.
+ */
 function registrarNames(source: string): string[] {
-  return [...source.matchAll(/export (?:function|const) (register\w+)\s*[<(=]/g)].map((m) => m[1]!);
+  return [...source.matchAll(/export (?:function|const) (register\w+)\s*[<(=:]/g)].map(
+    (m) => m[1]!
+  );
 }
 
 /**
@@ -39,6 +59,11 @@ function declarationOf(source: string, name: string): { signature: string; body:
   const at = source.search(new RegExp(`export (?:function|const) ${name}\\s*[<(=]`));
   if (at === -1) throw new Error(`no declaration for ${name}`);
   const open = source.indexOf('(', at);
+  // Guarded: a declaration matched via `<`, `=` or `:` with no `(` after it left `open` at
+  // -1, and the loop below then scanned from index 0 and returned a slice of an unrelated
+  // part of the file. Unreachable with any plausible declaration, and it is the last
+  // asymmetry in a function that exists to be anchored at both ends.
+  if (open === -1) throw new Error(`no parameter list for ${name}`);
   let depth = 0;
   let close = open;
   for (; close < source.length; close += 1) {
