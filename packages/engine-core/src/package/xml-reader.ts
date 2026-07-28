@@ -6,6 +6,7 @@
 // raw lexical values. Output is ordered and every attribute record has a null prototype.
 
 import { XMLParser, XMLValidator } from 'fast-xml-parser';
+import { isValidXmlText } from './sinks.ts';
 
 export type XmlNode =
   | {
@@ -38,25 +39,49 @@ export const XML_HARD_MAX_ELEMENTS = 1_000_000;
  * double-escapes it.
  */
 function decodeXmlEntities(s: string): string {
-  if (s.indexOf('&') < 0) return s;
-  return s.replace(/&(#x[0-9a-fA-F]+|#[0-9]+|amp|lt|gt|quot|apos);/g, (m, e: string) => {
-    switch (e) {
-      case 'amp':
-        return '&';
-      case 'lt':
-        return '<';
-      case 'gt':
-        return '>';
-      case 'quot':
-        return '"';
-      case 'apos':
-        return "'";
-      default: {
-        const code = e[1] === 'x' ? parseInt(e.slice(2), 16) : parseInt(e.slice(1), 10);
-        return code >= 0 && code <= 0x10ffff ? String.fromCodePoint(code) : m;
-      }
-    }
-  });
+  const decoded =
+    s.indexOf('&') < 0
+      ? s
+      : s.replace(
+          /&(#x[0-9a-fA-F]+|#[0-9]+|amp|lt|gt|quot|apos);/g,
+          (_match, e: string) => {
+            switch (e) {
+              case 'amp':
+                return '&';
+              case 'lt':
+                return '<';
+              case 'gt':
+                return '>';
+              case 'quot':
+                return '"';
+              case 'apos':
+                return "'";
+              default: {
+                const code =
+                  e[1] === 'x' ? parseInt(e.slice(2), 16) : parseInt(e.slice(1), 10);
+                if (
+                  !Number.isSafeInteger(code) ||
+                  !(
+                    code === 0x9 ||
+                    code === 0xa ||
+                    code === 0xd ||
+                    (code >= 0x20 && code <= 0xd7ff) ||
+                    (code >= 0xe000 && code <= 0xfffd) ||
+                    (code >= 0x10000 && code <= 0x10ffff)
+                  )
+                )
+                  throw new Error('numeric reference is not a valid XML 1.0 scalar');
+                return String.fromCodePoint(code);
+              }
+            }
+          }
+        );
+  return validateXmlText(decoded);
+}
+
+function validateXmlText(value: string): string {
+  if (!isValidXmlText(value)) throw new Error('value is not valid XML 1.0 text');
+  return value;
 }
 
 class DepthError extends Error {}
@@ -66,13 +91,63 @@ export type XmlResult =
   | { readonly ok: true; readonly nodes: readonly XmlNode[] }
   | { readonly ok: false; readonly reason: XmlRejection };
 
-const DOCTYPE_RE = /<!DOCTYPE/i;
-const ENTITY_DECL_RE = /<!ENTITY/i;
-// A reference to any entity other than the five predefined XML ones.
-const CUSTOM_ENTITY_REF_RE = /&(?!(amp|lt|gt|quot|apos);)[A-Za-z_][\w.-]*;/;
+const CUSTOM_ENTITY_REF_AT_RE = /^&(?!(amp|lt|gt|quot|apos);)[A-Za-z_][\w.-]*;/;
 
 function validLimit(value: number): boolean {
   return Number.isFinite(value) && Number.isInteger(value) && value >= 0;
+}
+
+/** Reject active declarations/references while treating CDATA, comments, and PIs as literal. */
+function preflightForbiddenXml(xml: string): XmlRejection | undefined {
+  for (let i = 0; i < xml.length; i += 1) {
+    if (xml.startsWith('<![CDATA[', i)) {
+      const end = xml.indexOf(']]>', i + 9);
+      if (end < 0) return 'parse-error';
+      i = end + 2;
+      continue;
+    }
+    if (xml.startsWith('<!--', i)) {
+      const end = xml.indexOf('-->', i + 4);
+      if (end < 0) return 'parse-error';
+      i = end + 2;
+      continue;
+    }
+    if (xml.startsWith('<?', i)) {
+      const end = xml.indexOf('?>', i + 2);
+      if (end < 0) return 'parse-error';
+      i = end + 1;
+      continue;
+    }
+    const declaration = xml.slice(i, i + 10).toUpperCase();
+    if (declaration.startsWith('<!DOCTYPE')) return 'dtd-forbidden';
+    if (declaration.startsWith('<!ENTITY')) return 'entity-forbidden';
+    if (xml[i] === '&' && CUSTOM_ENTITY_REF_AT_RE.test(xml.slice(i)))
+      return 'entity-forbidden';
+  }
+  return undefined;
+}
+
+/** Return once the UTF-8 encoding exceeds the limit, without allocating encoded bytes. */
+function exceedsUtf8Bytes(value: string, limit: number): boolean {
+  let bytes = 0;
+  for (let i = 0; i < value.length; i += 1) {
+    const unit = value.charCodeAt(i);
+    if (unit <= 0x7f) bytes += 1;
+    else if (unit <= 0x7ff) bytes += 2;
+    else if (unit >= 0xd800 && unit <= 0xdbff) {
+      const next = value.charCodeAt(i + 1);
+      if (next >= 0xdc00 && next <= 0xdfff) {
+        bytes += 4;
+        i += 1;
+      } else {
+        bytes += 3;
+      }
+    } else {
+      bytes += 3;
+    }
+    if (bytes > limit) return true;
+  }
+  return false;
 }
 
 /** Count lexical start tags before XMLParser allocates its object tree. Comments,
@@ -120,6 +195,60 @@ function preflightElementCount(xml: string, maxElements: number): XmlRejection |
   return undefined;
 }
 
+/** Reject excessive lexical nesting before XMLParser allocates its object tree. */
+function preflightDepth(xml: string): XmlRejection | undefined {
+  let depth = 0;
+  for (let i = 0; i < xml.length; i += 1) {
+    if (xml[i] !== '<') continue;
+    if (xml.startsWith('<!--', i)) {
+      const end = xml.indexOf('-->', i + 4);
+      if (end < 0) return 'parse-error';
+      i = end + 2;
+      continue;
+    }
+    if (xml.startsWith('<![CDATA[', i)) {
+      const end = xml.indexOf(']]>', i + 9);
+      if (end < 0) return 'parse-error';
+      i = end + 2;
+      continue;
+    }
+    if (xml.startsWith('<?', i)) {
+      const end = xml.indexOf('?>', i + 2);
+      if (end < 0) return 'parse-error';
+      i = end + 1;
+      continue;
+    }
+    if (xml.startsWith('</', i)) {
+      depth = Math.max(0, depth - 1);
+      const end = xml.indexOf('>', i + 2);
+      if (end < 0) return 'parse-error';
+      i = end;
+      continue;
+    }
+    if (xml.startsWith('<!', i)) continue;
+    let quote: '"' | "'" | undefined;
+    let end = -1;
+    for (let j = i + 1; j < xml.length; j += 1) {
+      const c = xml[j];
+      if (quote) {
+        if (c === quote) quote = undefined;
+      } else if (c === '"' || c === "'") quote = c;
+      else if (c === '>') {
+        end = j;
+        break;
+      }
+    }
+    if (end < 0) return 'parse-error';
+    const selfClosing = xml.slice(i + 1, end).trimEnd().endsWith('/');
+    if (!selfClosing) {
+      depth += 1;
+      if (depth > MAX_DEPTH + 1) return 'too-deep';
+    }
+    i = end;
+  }
+  return undefined;
+}
+
 export interface XmlLimits {
   readonly maxBytes: number;
   readonly maxElements?: number;
@@ -134,6 +263,7 @@ const parser = new XMLParser({
   parseAttributeValue: false, // never coerce attributes
   processEntities: false, // no entity expansion (billion laughs)
   htmlEntities: false,
+  cdataPropName: '#cdata', // distinguish literal CDATA from entity-bearing text
   ignoreDeclaration: true,
   ignorePiTags: true,
 });
@@ -150,12 +280,13 @@ export function readXml(
     return { ok: false, reason: 'invalid-limits' };
   const maxBytes = Math.min(limits.maxBytes, XML_HARD_MAX_BYTES);
   const maxElements = Math.min(limits.maxElements ?? XML_HARD_MAX_ELEMENTS, XML_HARD_MAX_ELEMENTS);
-  if (xml.length > maxBytes) return { ok: false, reason: 'too-large' };
-  if (DOCTYPE_RE.test(xml)) return { ok: false, reason: 'dtd-forbidden' };
-  if (ENTITY_DECL_RE.test(xml)) return { ok: false, reason: 'entity-forbidden' };
-  if (CUSTOM_ENTITY_REF_RE.test(xml)) return { ok: false, reason: 'entity-forbidden' };
+  if (exceedsUtf8Bytes(xml, maxBytes)) return { ok: false, reason: 'too-large' };
+  const forbidden = preflightForbiddenXml(xml);
+  if (forbidden) return { ok: false, reason: forbidden };
   const preflight = preflightElementCount(xml, maxElements);
   if (preflight) return { ok: false, reason: preflight };
+  const depthPreflight = preflightDepth(xml);
+  if (depthPreflight) return { ok: false, reason: depthPreflight };
   if (XMLValidator.validate(xml) !== true) return { ok: false, reason: 'parse-error' };
 
   let raw: unknown;
@@ -182,8 +313,20 @@ export function readXml(
   }
 }
 
-// fast-xml-parser preserveOrder node: { [tag]: children[], ':@'?: {"@_a": v} } | { '#text': v }.
+// fast-xml-parser preserveOrder node: { [tag]: children[], ':@'?: {"@_a": v} } |
+// { '#text': v } | { '#cdata': [{ '#text': raw }] }.
 type FxpNode = Record<string, unknown>;
+
+function cdataText(value: unknown): string {
+  if (!Array.isArray(value)) return String(value ?? '');
+  return value
+    .map((entry) =>
+      entry !== null && typeof entry === 'object' && '#text' in entry
+        ? String((entry as Record<string, unknown>)['#text'])
+        : ''
+    )
+    .join('');
+}
 
 function convert(
   items: FxpNode[],
@@ -195,6 +338,10 @@ function convert(
   for (const item of items) {
     if ('#text' in item) {
       out.push({ type: 'text', value: decodeXmlEntities(String(item['#text'])) });
+      continue;
+    }
+    if ('#cdata' in item) {
+      out.push({ type: 'text', value: validateXmlText(cdataText(item['#cdata'])) });
       continue;
     }
     const attrs = (item[':@'] as Record<string, unknown> | undefined) ?? {};

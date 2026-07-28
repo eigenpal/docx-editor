@@ -44,6 +44,57 @@ describe('trust boundary rejections', () => {
       readXml('<x/>', { maxBytes: 100, maxElements: Number.NEGATIVE_INFINITY })
     ).toMatchObject({ ok: false, reason: 'invalid-limits' });
   });
+
+  test('rejects decoded numeric references forbidden by XML 1.0', () => {
+    for (const reference of [
+      '&#0;',
+      '&#1;',
+      '&#x8;',
+      '&#xB;',
+      '&#xC;',
+      '&#xD800;',
+      '&#xFFFE;',
+      '&#xFFFF;',
+      '&#x110000;',
+      '&#999999999999999999999999;',
+    ]) {
+      expect(readXml(`<x>${reference}</x>`)).toMatchObject({
+        ok: false,
+        reason: 'parse-error',
+      });
+      expect(readXml(`<x a="${reference}"/>`)).toMatchObject({
+        ok: false,
+        reason: 'parse-error',
+      });
+    }
+  });
+
+  test('rejects literal XML 1.0-invalid characters in every value context', () => {
+    for (const invalid of ['\u0000', '\uFFFE', '\uFFFF', '\uD800', '\uDC00']) {
+      expect(readXml(`<x>${invalid}</x>`)).toMatchObject({
+        ok: false,
+        reason: 'parse-error',
+      });
+      expect(readXml(`<x a="${invalid}"/>`)).toMatchObject({
+        ok: false,
+        reason: 'parse-error',
+      });
+      expect(readXml(`<x><![CDATA[${invalid}]]></x>`)).toMatchObject({
+        ok: false,
+        reason: 'parse-error',
+      });
+    }
+  });
+
+  test('measures maxBytes as UTF-8 bytes rather than UTF-16 code units', () => {
+    const xml = '<x>é</x>';
+    expect(xml.length).toBe(8);
+    expect(readXml(xml, { maxBytes: 8 })).toMatchObject({
+      ok: false,
+      reason: 'too-large',
+    });
+    expect(readXml(xml, { maxBytes: 9 }).ok).toBe(true);
+  });
 });
 
 describe('fidelity preservation', () => {
@@ -82,5 +133,25 @@ describe('fidelity preservation', () => {
     const paras = childElements(body, 'w:p');
     expect(paras).toHaveLength(1);
     expect(textContent(paras[0])).toBe('Hello world');
+  });
+
+  test('preserves valid supplementary numeric references', () => {
+    const result = readXml('<x>&#x1F600;</x>');
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(textContent(findElement(result.nodes, 'x')!)).toBe('😀');
+  });
+
+  test('treats numeric-reference spelling inside CDATA as literal text', () => {
+    const result = readXml('<x><![CDATA[&#0; &lol; <!DOCTYPE x>]]></x>');
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(textContent(findElement(result.nodes, 'x')!)).toBe(
+      '&#0; &lol; <!DOCTYPE x>'
+    );
+    expect(readXml('<x>&#0;</x>')).toMatchObject({
+      ok: false,
+      reason: 'parse-error',
+    });
   });
 });
