@@ -7,7 +7,7 @@
 
 ## 2. Canonical Typed OOXML Tree
 
-- [ ] 2.1 Define stable identities and the ordered typed/generic OOXML node union with namespace, attribute, mixed-child, and text invariants.
+- [x] 2.1 Define stable identities and the ordered typed/generic OOXML node union with namespace, attribute, mixed-child, and text invariants.
 - [ ] 2.2 Implement bounded OPC/XML loading into the single canonical tree with adversarial limit, path, entity, and external-target tests.
 - [ ] 2.3 Implement revision-proven paragraph, story, relationship, and style indexes derived only from the canonical tree.
 - [ ] 2.4 Add atomic tree-edit primitives and invariant checks used exclusively by `DocumentStore` transactions.
