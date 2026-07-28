@@ -3,6 +3,7 @@
 import { describe, expect, test } from 'bun:test';
 import { EditorState, TextSelection } from 'prosemirror-state';
 import { docSchema, captureSelection, resolveSelection, EditorBinding } from '../src/index.ts';
+import { captureSelectionRange, resolveSelectionRange } from '../src/selection.ts';
 import { DocumentStore, createEmptyModel, bodyStoryId, ORIGIN_IDS, type ParagraphRecord } from '@docx-editor.dev/engine-core';
 
 const HUMAN = ORIGIN_IDS.mutationHuman;
@@ -52,5 +53,21 @@ describe('capture + resolve', () => {
     // p2 is gone; affinity 'before' collapses to the surviving p1, not onto p2's text.
     expect(newDoc.resolve(sel.from).node(1).attrs.semId).toBe(p1);
     expect(sel.empty).toBe(true);
+  });
+
+  test('a reverse selection preserves anchor and head direction through capture and resolve', () => {
+    const { binding } = twoParagraphStore();
+    const doc = binding.projectDoc();
+    const state = EditorState.create({
+      schema: docSchema,
+      doc,
+      selection: TextSelection.create(doc, 5, 2),
+    });
+
+    const captured = captureSelectionRange(state);
+    const resolved = resolveSelectionRange(captured, doc);
+
+    expect(captured.anchor.offset).toBeGreaterThan(captured.head.offset);
+    expect(resolved.anchor).toBeGreaterThan(resolved.head);
   });
 });

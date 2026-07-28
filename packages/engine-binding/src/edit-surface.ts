@@ -1102,7 +1102,6 @@ export function mountEditSurface(
       const toggle = toggleMark(markType);
       if (dryRun) return { ok: true, changed: toggle(view.state) };
       const changed = toggle(view.state, view.dispatch);
-      if (changed) notifyModelChanged();
       return { ok: true, changed };
     },
     getAccessibilityObservation: (request) =>

@@ -274,6 +274,36 @@ describe('edit surface semantic sync', () => {
     parent.remove();
   });
 
+  test('toggle mark increments one revision and notifies onModelChanged once', () => {
+    const { session, p1 } = editableSession('a');
+    let modelChangeCalls = 0;
+    const parent = document.createElement('div');
+    document.body.append(parent);
+    const surface = mountEditSurface(parent, session, {
+      onModelChanged: () => (modelChangeCalls += 1),
+    });
+    const storyId = bodyStoryId(session.currentModel());
+    const revisionBefore = session.revision();
+    const selection: SemanticSelection = {
+      frameId: { value: 1 },
+      scope: { kind: 'body' },
+      anchor: textTarget(storyId, p1, 0),
+      head: textTarget(storyId, p1, 1),
+    };
+    expect(surface.syncSemanticSelection({ frameId: { value: 1 }, selection }).ok).toBe(true);
+    expect(surface.focus({ frameId: { value: 1 } }).ok).toBe(true);
+
+    expect(surface.runEditCommand({ kind: 'toggleMark', mark: 'bold' })).toEqual({
+      ok: true,
+      changed: true,
+    });
+
+    expect(session.revision()).toBe(revisionBefore + 1);
+    expect(modelChangeCalls).toBe(1);
+    surface.destroy();
+    parent.remove();
+  });
+
   test('focus without current frame identity is rejected', () => {
     const { session, p1 } = editableSession('hi');
     const parent = document.createElement('div');

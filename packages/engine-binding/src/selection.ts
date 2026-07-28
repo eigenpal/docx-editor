@@ -6,7 +6,7 @@
 // boundary and NEVER lands on unrelated content.
 
 import { EditorState, TextSelection, NodeSelection } from 'prosemirror-state';
-import { Node as PMNode } from 'prosemirror-model';
+import { Node as PMNode, type ResolvedPos } from 'prosemirror-model';
 
 export interface SelectionAnchor {
   readonly paragraphId: string | null;
@@ -17,6 +17,15 @@ export interface SelectionAnchor {
 export interface SelectionRangeAnchors {
   readonly anchor: SelectionAnchor;
   readonly head: SelectionAnchor;
+}
+
+function anchorFromResolvedPos($pos: ResolvedPos): SelectionAnchor {
+  const paragraph = $pos.depth >= 1 ? $pos.node(1) : $pos.parent;
+  return {
+    paragraphId: (paragraph?.attrs?.semId as string | null) ?? null,
+    offset: $pos.parentOffset,
+    affinity: 'after',
+  };
 }
 
 /** Capture the caret/anchor of a PM selection as a semantic anchor. */
@@ -32,20 +41,9 @@ export function captureSelection(state: EditorState): SelectionAnchor {
 
 /** Capture anchor and head of the current PM selection. */
 export function captureSelectionRange(state: EditorState): SelectionRangeAnchors {
-  const { $from, $to } = state.selection;
-  const anchorPara = $from.depth >= 1 ? $from.node(1) : $from.parent;
-  const headPara = $to.depth >= 1 ? $to.node(1) : $to.parent;
   return {
-    anchor: {
-      paragraphId: (anchorPara?.attrs?.semId as string | null) ?? null,
-      offset: $from.parentOffset,
-      affinity: 'after',
-    },
-    head: {
-      paragraphId: (headPara?.attrs?.semId as string | null) ?? null,
-      offset: $to.parentOffset,
-      affinity: 'after',
-    },
+    anchor: anchorFromResolvedPos(state.selection.$anchor),
+    head: anchorFromResolvedPos(state.selection.$head),
   };
 }
 
@@ -92,9 +90,9 @@ export function resolveSelection(anchor: SelectionAnchor, newDoc: PMNode): TextS
 
 /** Resolve a semantic anchor/head pair to a ProseMirror TextSelection. */
 export function resolveSelectionRange(range: SelectionRangeAnchors, newDoc: PMNode): TextSelection {
-  const from = resolveSelection(range.anchor, newDoc).from;
-  const to = resolveSelection(range.head, newDoc).to;
-  return TextSelection.create(newDoc, Math.min(from, to), Math.max(from, to));
+  const anchor = resolveSelection(range.anchor, newDoc).from;
+  const head = resolveSelection(range.head, newDoc).from;
+  return TextSelection.create(newDoc, anchor, head);
 }
 
 /** Resolve an atomic object id to a node selection when the block embed is present. */
