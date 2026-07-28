@@ -2,10 +2,6 @@
 /**
  * Edit-pipeline profiler: stage timings AND exact dirty/reused chunk counts.
  *
- * Committed rather than kept as a scratch script, because the numbers in
- * `openspec/changes/interactive-paginated-editing/renderer-run-grouping-baseline.md` are
- * only checkable if the thing that produced them is checkable.
- *
  * Two properties the earlier scratch versions of this got wrong and this does not:
  *
  *  - Stage boundaries are NON-OVERLAPPING and measured on one clock in a single pass, so the

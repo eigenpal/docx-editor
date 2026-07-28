@@ -4,9 +4,10 @@
 public API that `@docx-editor.dev/core` must satisfy. The published package is
 installed from npm.
 
-The nested `spike/` directory temporarily holds the completed disposable engine
-POC. It is excluded from this package's exports and TypeScript project and must
-not be imported by production modules.
+The nested `spike/` directory holds completed disposable historical evidence.
+It is excluded from this package's exports and TypeScript project and must not
+be imported by production modules. Archived spike proposals are not production
+authority.
 
 It is deliberately named `@docx-editor.dev/core-contract`, not
 `@docx-editor.dev/core`. Sharing the name would make the workspace resolve every
@@ -76,5 +77,7 @@ shared state, which breaks multiple editors on one page. Callers use
 
 The adapters do not compile against this contract yet. Adding this package does
 not by itself make the repository typecheck; this bare declaration package is
-migration inventory, not the target API authority. Replacement and adapter work
-is tracked in `openspec/changes/document-engine/tasks.md`.
+migration inventory, not the target API authority. Current paragraph-engine and
+adapter work is governed by
+`openspec/changes/typed-ooxml-paragraph-editor/tasks.md`; superseded active
+proposals have been removed.

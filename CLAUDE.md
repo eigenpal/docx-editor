@@ -6,104 +6,58 @@ layout.
 
 ## Repo topology
 
-This repo is **contracts + adapters**, not the engine implementation.
+This repo contains contracts, production engine packages, and adapters.
 
-- `packages/core` is `@docx-editor.dev/core-contract`: declarations only,
-  `"private": true`, never published. Six entries (`.`, `./editor`,
-  `./geometry`, `./plugin`, `./mcp`, `./types`). See
-  `openspec/changes/document-engine/`. Its nested `spike/` directory temporarily
-  holds disposable POC evidence and is excluded from exports and the core
-  TypeScript project; production modules must not import it.
-- The **real engine is being implemented in-tree** as production workspace
-  packages under `packages/engine-*` (document-engine task 1.4). The semantic
-  core is `@docx-editor.dev/engine-core` (PM/DOM/Yjs/transport/PDF-free); the
-  peripheral packages are `engine-binding` (PM), `engine-sync` (Yjs),
-  `engine-layout`, `engine-output` (DOM/PDF), `engine-server`, and
-  `engine-clients`. Responsibilities and the enforced dependency DAG are in
-  `docs/architecture/production-engine-packages.md`. The semantic core becomes
-  the published `@docx-editor.dev/core` at the section 7/14 migration; until then
-  adapters keep resolving today's `@docx-editor.dev/core` alias. Production
-  modules MUST NOT import `packages/core/spike/**`. There is still no
-  `painter-model`, `flow-model`, or `pagination-model` directory; the
-  architecture below is the target being built.
-- Adapters: `packages/react`, `packages/vue`, `packages/nuxt`. Plus
-  `packages/agents` (headless/agent bridge) and `packages/i18n` (strings).
-- Published packages: `@docx-editor.dev/{react,vue,nuxt,agents,i18n}` and the
-  npm `core`. The in-repo `core-contract` is private.
+- `packages/core` is the private `@docx-editor.dev/core-contract`; production
+  modules must not import `packages/core/spike/**`.
+- `packages/engine-*` contains the in-tree engine. Package responsibilities and
+  dependency rules live in `docs/architecture/production-engine-packages.md`.
+- Adapters live in `packages/react`, `packages/vue`, and `packages/nuxt`.
+  `packages/agents` and `packages/i18n` provide the agent bridge and strings.
 
-The next-generation engine is being designed greenfield. **The evidence source
-is the completed disposable POC in `openspec/changes/engine-core-spike/`; the
-production design and conformance source of truth is
-`openspec/changes/document-engine/`, including
-`spike-architecture-decision.md`, not this file.** This file is the operational
-contract for working in the repo.
+The sole active production authority is
+`openspec/changes/typed-ooxml-paragraph-editor/`. Superseded active proposals
+are not requirements or task-sequencing authority.
 
-Future `EditorHost` contracts MUST NOT expose ProseMirror types or view access;
-all such mapping belongs to `EditorBinding`.
+## Current engine work
 
-## Engine architecture (target)
+The active slice is paragraph load, edit, layout, interaction, save, and reopen:
 
-Defined by the production authority above and informed by the completed spike
-evidence; do not restate their detail here. The five-milestone
-`engine-core-spike` KISS browser POC is complete and its accepted decisions are
-consolidated in the production ADR. Production work proceeds only through
-`document-engine` task sequencing and MUST reimplement accepted contracts
-without importing spike modules. Package, store, binding, layout, output,
-security, and performance acceptance remain gated by `document-engine`
-conformance. `document-engine` owns the lossless package model,
-semantic store, editor binding, layout/output, `DocxEditor.*` object model,
-extension/runtime ports, addressable sync, server/language bindings, durable
-annotations, and performance/conformance contracts.
+`bounded OPC/XML parse -> typed + generic ordered OOXML tree -> DocumentStore ->
+derived indexes -> { EditorBinding -> ProseMirror · semantic layout -> safe DOM
++ semantic interaction } -> normalized OOXML save`
 
-The pipeline, one line: `bounded OPC/XML parse -> capability parse ->
-DocumentStore(model) -> { ProseMirror projection · layout: measure -> paginate ->
-resolve -> emit -> DisplayItem[] -> RenderBackend }`.
-
-Load-bearing rules the changes commit to:
-
-- **Model-canonical, one source of truth.** `store.model` is always current and
-  canonical authored OPC/OOXML package state; `store.apply(op)` is the only
-  mutation path. Resolved caches retain revision provenance and reuse only by
-  unchanged dependency/input fingerprints and operation environment. ProseMirror
-  and the display list are projections; CRDT details stay behind the
-  `ReplicatedStoreBackend`.
-- **ProseMirror is the editing engine but never canonical.** It processes
-  keystrokes and produces transactions; `EditorBinding` maps each transaction to
-  `DocOp`s applied to the store, and maps an inbound `ModelChange` back into the
-  `EditorState`. Layout reads `store.model`, never the `EditorView` or DOM. A
-  server agent mutates the same store with no view at all.
-- **Four distinct contracts.** `DocOp` is the semantic mutation vocabulary,
-  `ModelChange` is the committed notification, replication updates are opaque
-  backend bytes, and snapshots are full encoded state.
-- **`DocxEditor.*` is the only public object-model namespace.** It exposes
-  familiar Office JavaScript-style `run`/`RequestContext`/`load`/`sync` semantics
-  as a lazy facade over the authored model in browser, worker, and server
-  runtimes.
-- **One positioned IR, many backends.** DOM, PDF, print, and hit-test all consume
-  `DisplayItem[]`; no backend re-derives geometry or interprets CSS.
+- The ordered OOXML tree is canonical. `store.apply(op)` is the only mutation
+  path; indexes and caches are revision-tagged projections.
+- `EditorBinding` maps ProseMirror transactions to `DocOp`s. Save and layout
+  never read ProseMirror or DOM geometry.
+- Layout owns page, paragraph-fragment, line, style-span, caret, selection, and
+  hit-test data. DOM output only paints those records.
+- Prove the slice in a private React harness first. Add paired React/Vue
+  production hosts only after the engine behavior stabilizes.
+- Tables, drawings, page furniture, notes, fields, collaboration, export,
+  server bindings, and the public object-model expansion remain deferred.
 
 ## Verify
 
 ```bash
 bun run typecheck
-bun test                  # Package and unit tests
-bun run test:spike
-bun run typecheck:spike
-bun run check:parity      # export + editor-contract + docs-surface + parity-contract + adapter-css
-bun run api:check         # API Extractor snapshot drift
+bun test
+bun run check:parity
+bun run api:check
 bun run i18n:validate
+openspec validate typed-ooxml-paragraph-editor --strict
 ```
 
-- Browser E2E returns only after the public `EditorDriver` boundary exists.
+- Compare `bun test` with the non-clean baseline recorded in the active change.
 - `bun run format` before pushing.
 
 ## React/Vue parity
 
-Layout, measurement, and paint behavior MUST land in both adapters in the same
-PR. The Vue counterpart of the React host is
-`packages/vue/src/composables/useDocxEditor.ts`. Platform-agnostic logic belongs
-in `core`, called by both adapters, not duplicated. Adapter-only glue
-(React hook ergonomics, Vue composition API, demo apps) may diverge.
+Use the private React harness to stabilize the active slice. Production
+integration must then land through thin React and Vue hosts with paired
+behavior. Keep platform-neutral logic in the engine packages; adapter-only glue
+may diverge.
 
 `scripts/parity/parity.contract.json` enumerates paired
 `DocxEditorProps`/`DocxEditorRef` members; CI runs `bun run
@@ -113,9 +67,9 @@ run api:extract`, add it to the right contract bucket (`paired`,
 
 **UI styling is single-source-of-truth.** All editor chrome CSS + color tokens
 live in the core stylesheet; both adapters only `@import` it (enforced by `bun
-run check:adapter-css-thin`). Never hardcode hex/rgba in components — use the
+run check:adapter-css-thin`). Never hardcode hex/rgba in components; use the
 `--doc-*` tokens or shadcn token utilities. The document canvas (rendered output)
-is intentionally NOT themed — it stays Word-faithful.
+is not themed and stays Word-faithful.
 
 ## Public API surface
 
@@ -132,14 +86,15 @@ return type, or core's internal types leak into the API Extractor snapshot.
 **Treat every value from a DOCX, pasted HTML, or embedded part as
 attacker-controlled.** A `.docx` is a zip of XML an attacker fully controls: font
 names, hyperlink targets, shape attrs, image rels, run text. Sanitize at the
-**bounded parse/trust boundary** (the parser-neutral XML read plus registered
-capability parsing, and PM `parseDOM` where applicable), not at render time, so
+**bounded parse/trust boundary** (the parser-neutral XML read plus typed/generic
+tree construction, and PM `parseDOM` where applicable), not at render time, so
 every downstream runtime sink receives a sanitized projection. The authoritative
-contract is `document-engine/specs/lossless-package-model/`.
+contract is
+`openspec/changes/typed-ooxml-paragraph-editor/specs/typed-ooxml-canonical-tree/`.
 
 When you add/touch anything that **parses or renders unknown files** (parsers,
-capability parse/serialize, IR emit / painter, PM `toDOM`/`parseDOM`, clipboard,
-print), audit these before merging:
+typed/generic tree construction or serialization, DOM output, PM
+`toDOM`/`parseDOM`, clipboard, print), audit these before merging:
 
 - **No HTML-from-strings.** Never build DOM from file-derived values via
   `innerHTML`/`outerHTML`/`insertAdjacentHTML`/`document.write`. Build with

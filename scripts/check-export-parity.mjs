@@ -4,10 +4,10 @@
  *   1. `package.json` `exports` subpaths (STRICT)
  *   2. Named exports from `src/index.ts` (STRICT after Vue un-stub readiness;
  *      documented framework-native divergences stay in the opt-out file)
- * Drift opt-out: backticked specifiers in
- *   openspec/changes/vue-editor-robust-implementation/notes/intentional-export-divergence.md
+ * Drift opt-outs: backticked specifiers in the archived historical notes below.
  *
- * Spec: openspec/changes/vue-editor-robust-implementation/specs/vue-react-parity/spec.md
+ * Historical spec:
+ *   openspec/changes/archive/2026-07-22-vue-editor-robust-implementation/specs/vue-react-parity/spec.md
  */
 
 import { readFileSync, existsSync } from 'node:fs';
@@ -21,15 +21,8 @@ const REACT_PKG = resolve(ROOT, 'packages/react/package.json');
 const VUE_PKG = resolve(ROOT, 'packages/vue/package.json');
 const REACT_INDEX = resolve(ROOT, 'packages/react/src/index.ts');
 const VUE_INDEX = resolve(ROOT, 'packages/vue/src/index.ts');
-// Divergence opt-out notes. MULTIPLE paths, because the original single path pointed
-// at a change that has since been archived — so `existsSync` was false and the gate
-// silently allowed nothing while still reporting "0 documented divergences". An
-// independent architecture review flagged it as a dead escape hatch. Every path that
-// exists is read; a missing one is simply skipped.
 const OPT_OUT_PATHS = [
-  'openspec/changes/interactive-paginated-editing/notes/intentional-export-divergence.md',
-  'openspec/changes/vue-editor-robust-implementation/notes/intentional-export-divergence.md',
-  'openspec/changes/archive/2026-07-22-vue-editor-robust-implementation/notes/intentional-export-divergence.md',
+  'openspec/changes/typed-ooxml-paragraph-editor/notes/intentional-export-divergence.md',
 ].map((p) => resolve(ROOT, p));
 
 const STRICT_NAMED_EXPORTS = true;
@@ -103,7 +96,7 @@ let failed = false;
 if (failed) {
   console.error(
     'Resolution: add the missing surface to the lagging adapter, or document the intentional divergence in\n' +
-      '  openspec/changes/interactive-paginated-editing/notes/intentional-export-divergence.md'
+      '  openspec/changes/typed-ooxml-paragraph-editor/notes/intentional-export-divergence.md'
   );
   process.exit(1);
 }
