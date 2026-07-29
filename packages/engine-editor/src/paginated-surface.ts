@@ -16,6 +16,8 @@ import { openTreeSession, type TreeDocxSession } from '@docx-editor.dev/engine-b
 import {
   createFixedMeasurer,
   createLayoutScheduler,
+  createLayoutSession,
+  createParagraphLayoutCache,
   geometryOfSection,
   readSectionProperties,
   documentOrder,
@@ -37,6 +39,13 @@ import { applySelectionToDom, selectionsEqual, semanticSelectionFromDom } from '
 
 export interface PaginatedSurfaceOptions {
   readonly measurer?: TextMeasurer;
+  /**
+   * Identifies the measurer for cache invalidation.
+   *
+   * Fonts resolve asynchronously, so a host that swaps its measurer must change this or the
+   * cached pre-font layout is served for the rest of the session.
+   */
+  readonly producer?: string;
   /** Points to CSS pixels. */
   readonly scale?: number;
   readonly onChange?: (state: PaginatedSurfaceState) => void;
@@ -115,6 +124,14 @@ export interface PaginatedSurface {
    * What a ruler is made of, and what pagination is measured against.
    */
   sectionProperties(): SectionProperties;
+  /** The layout session, so a host or a test can see how much work a pass actually did. */
+  layoutSession(): {
+    readonly stats: {
+      readonly placed: number;
+      readonly total: number;
+      readonly reusedPages: number;
+    };
+  };
   /** The selected text, for copy and cut. */
   selectedText(): string;
   /** Remove the selection, if any. Returns whether anything was deleted. */
@@ -154,6 +171,14 @@ export function mountPaginatedSurface(
   const session = opened.session;
   const measurer = options.measurer ?? createFixedMeasurer();
   const scale = options.scale ?? 96 / 72;
+  // The incremental machinery, actually wired. Without these the surface re-measured and
+  // re-placed the entire document on every keystroke, which the caches and the session were
+  // built to avoid.
+  const layoutCache = createParagraphLayoutCache<never>();
+  const layoutSession = createLayoutSession();
+  // Identifies WHO measured. A cache keyed on content alone would serve the pre-font layout
+  // for the rest of the session once fonts resolve, so the measurer's identity is folded in.
+  const producer = options.producer ?? (options.measurer ? 'host-measurer' : 'fixed-measurer');
   const document = container.ownerDocument;
 
   const pagesLayer = document.createElement('div');
@@ -204,6 +229,9 @@ export function mountPaginatedSurface(
     return layoutSemanticDocument(session.part(), session.revision(), {
       measurer,
       geometry: geometry(),
+      cache: layoutCache,
+      session: layoutSession,
+      producer,
     });
   }
 
@@ -224,6 +252,9 @@ export function mountPaginatedSurface(
       layoutSemanticDocument(session.part(), scope.revision, {
         measurer,
         geometry: geometry(),
+        cache: layoutCache,
+        session: layoutSession,
+        producer,
       }),
     currentRevision: () => session.revision(),
     publish: (layout) => {
@@ -701,6 +732,8 @@ export function mountPaginatedSurface(
       setSelection(collapsedAt(start));
       return true;
     },
+
+    layoutSession: () => layoutSession,
 
     undo: () => restoreSelection(session.undo()),
     redo: () => restoreSelection(session.redo()),

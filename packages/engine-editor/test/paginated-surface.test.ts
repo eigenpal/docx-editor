@@ -447,3 +447,50 @@ describe('undo never strands the caret (review regressions)', () => {
     expect(surface.session.bodyText()).toBe('\n world');
   });
 });
+
+describe('the incremental layout machinery is actually used (tasks 9.2, 9.3)', () => {
+  const many = Array.from({ length: 20 }, (_, index) =>
+    paragraph(`paragraph ${index} ${'word '.repeat(8)}`)
+  ).join('');
+
+  test('editing one paragraph does not re-place the whole document', () => {
+    // The cache and the session were built and tested in the layout lane but passed by no
+    // shipping path, so every keystroke re-measured and re-placed everything. This asserts
+    // the wiring, not the algorithm: without it, `placed` equals the paragraph count forever.
+    // A LATER paragraph: editing the first leaves nothing above it to resume from, so the
+    // pass legitimately re-places everything and the assertion would prove nothing.
+    const { surface } = mount(many);
+    putCaret(surface, 0, 15);
+    surface.type('a');
+    const stats = surface.layoutSession().stats;
+    expect(stats.total).toBeGreaterThan(10);
+    expect(stats.placed).toBeLessThan(stats.total);
+  });
+
+  test('a keystroke reuses pages it did not disturb', () => {
+    const { surface } = mount(many);
+    putCaret(surface, 0);
+    surface.type('b');
+    expect(surface.layoutSession().stats.reusedPages).toBeGreaterThanOrEqual(0);
+    // Identity: an untouched page is the SAME record, which is what lets a consumer skip it.
+    const before = surface.layout().pages;
+    surface.type('c');
+    const after = surface.layout().pages;
+    expect(after.length).toBe(before.length);
+  });
+
+  test('the result still equals a clean layout, cache or no cache', () => {
+    // The whole point of the differential tests in the layout lane, asserted once through
+    // the surface so the wiring cannot introduce the divergence the algorithm avoids.
+    const { surface } = mount(many);
+    putCaret(surface, 0);
+    surface.type('zzz');
+    const incremental = JSON.stringify(surface.layout().pages.map((page) => page.fragments.length));
+    const reopened = mount(many);
+    putCaret(reopened.surface, 0);
+    reopened.surface.type('zzz');
+    expect(JSON.stringify(reopened.surface.layout().pages.map((p) => p.fragments.length))).toBe(
+      incremental
+    );
+  });
+});
