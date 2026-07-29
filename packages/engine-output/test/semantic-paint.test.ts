@@ -134,3 +134,31 @@ describe('the painter is a non-authoritative consumer', () => {
     expect(page.style.width).toBe('1224px'); // 612pt at scale 2
   });
 });
+
+describe('each run is its own box, so a mixed-size line highlights stepped', () => {
+  test('spans are inline-block, aligned on the baseline', () => {
+    // The browser draws a selection band to the box it finds. A plain inline shares the
+    // line box with everything else on the line, so a line mixing 8pt and 36pt highlighted
+    // as one slab as tall as the largest run. An inline-block gives every run a box of its
+    // own size — the band steps with the text, which is how Word draws it — and character
+    // granularity is unaffected, so a word can still be selected part-way through.
+    const span = paint('<w:p><w:r><w:t>hello</w:t></w:r></w:p>').querySelector<HTMLElement>(
+      '.docx-line span'
+    )!;
+    expect(span.style.display).toBe('inline-block');
+    expect(span.style.verticalAlign).toBe('baseline');
+  });
+
+  test('runs of different sizes keep different font sizes on one line', () => {
+    const container = paint(
+      '<w:p><w:r><w:rPr><w:sz w:val="16"/></w:rPr><w:t>8pt</w:t></w:r>' +
+        '<w:r><w:rPr><w:sz w:val="72"/></w:rPr><w:t>36pt</w:t></w:r></w:p>'
+    );
+    const spans = [...container.querySelectorAll<HTMLElement>('.docx-line span')];
+    expect(spans).toHaveLength(2);
+    expect(spans[0]!.style.fontSize).toBe('8px'); // 16 half-points at scale 1
+    expect(spans[1]!.style.fontSize).toBe('36px');
+    // One line, not two: layout put them together and the painter must not re-flow them.
+    expect(container.querySelectorAll('.docx-line')).toHaveLength(1);
+  });
+});

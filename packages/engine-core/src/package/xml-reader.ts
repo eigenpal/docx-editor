@@ -42,40 +42,36 @@ function decodeXmlEntities(s: string): string {
   const decoded =
     s.indexOf('&') < 0
       ? s
-      : s.replace(
-          /&(#x[0-9a-fA-F]+|#[0-9]+|amp|lt|gt|quot|apos);/g,
-          (_match, e: string) => {
-            switch (e) {
-              case 'amp':
-                return '&';
-              case 'lt':
-                return '<';
-              case 'gt':
-                return '>';
-              case 'quot':
-                return '"';
-              case 'apos':
-                return "'";
-              default: {
-                const code =
-                  e[1] === 'x' ? parseInt(e.slice(2), 16) : parseInt(e.slice(1), 10);
-                if (
-                  !Number.isSafeInteger(code) ||
-                  !(
-                    code === 0x9 ||
-                    code === 0xa ||
-                    code === 0xd ||
-                    (code >= 0x20 && code <= 0xd7ff) ||
-                    (code >= 0xe000 && code <= 0xfffd) ||
-                    (code >= 0x10000 && code <= 0x10ffff)
-                  )
+      : s.replace(/&(#x[0-9a-fA-F]+|#[0-9]+|amp|lt|gt|quot|apos);/g, (_match, e: string) => {
+          switch (e) {
+            case 'amp':
+              return '&';
+            case 'lt':
+              return '<';
+            case 'gt':
+              return '>';
+            case 'quot':
+              return '"';
+            case 'apos':
+              return "'";
+            default: {
+              const code = e[1] === 'x' ? parseInt(e.slice(2), 16) : parseInt(e.slice(1), 10);
+              if (
+                !Number.isSafeInteger(code) ||
+                !(
+                  code === 0x9 ||
+                  code === 0xa ||
+                  code === 0xd ||
+                  (code >= 0x20 && code <= 0xd7ff) ||
+                  (code >= 0xe000 && code <= 0xfffd) ||
+                  (code >= 0x10000 && code <= 0x10ffff)
                 )
-                  throw new Error('numeric reference is not a valid XML 1.0 scalar');
-                return String.fromCodePoint(code);
-              }
+              )
+                throw new Error('numeric reference is not a valid XML 1.0 scalar');
+              return String.fromCodePoint(code);
             }
           }
-        );
+        });
   return validateXmlText(decoded);
 }
 
@@ -121,8 +117,7 @@ function preflightForbiddenXml(xml: string): XmlRejection | undefined {
     const declaration = xml.slice(i, i + 10).toUpperCase();
     if (declaration.startsWith('<!DOCTYPE')) return 'dtd-forbidden';
     if (declaration.startsWith('<!ENTITY')) return 'entity-forbidden';
-    if (xml[i] === '&' && CUSTOM_ENTITY_REF_AT_RE.test(xml.slice(i)))
-      return 'entity-forbidden';
+    if (xml[i] === '&' && CUSTOM_ENTITY_REF_AT_RE.test(xml.slice(i))) return 'entity-forbidden';
   }
   return undefined;
 }
@@ -239,7 +234,10 @@ function preflightDepth(xml: string): XmlRejection | undefined {
       }
     }
     if (end < 0) return 'parse-error';
-    const selfClosing = xml.slice(i + 1, end).trimEnd().endsWith('/');
+    const selfClosing = xml
+      .slice(i + 1, end)
+      .trimEnd()
+      .endsWith('/');
     if (!selfClosing) {
       depth += 1;
       if (depth > MAX_DEPTH + 1) return 'too-deep';

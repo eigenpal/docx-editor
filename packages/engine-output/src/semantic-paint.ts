@@ -111,7 +111,6 @@ function applyRunStyle(element: HTMLElement, style: ResolvedRunStyle, scale: num
     // element occupies — so the stretched glyphs, and the selection band drawn over them,
     // spilled across the following run. The reserved advance is given explicitly (layout
     // already scaled it) and the transform fills it.
-    css.display = 'inline-block';
     css.transformOrigin = 'left';
     css.transform = `scaleX(${style.horizontalScalePercent / 100})`;
   }
@@ -147,6 +146,14 @@ function positioned(
 
 function paintSpan(document: Document, span: StyleSpanRecord, scale: number): HTMLElement {
   const element = document.createElement('span');
+  // Each run is its OWN box, aligned on the baseline.
+  //
+  // The browser draws a selection band to the box it finds, and a plain inline shares the
+  // line box with everything else on the line — so a line mixing 8pt and 36pt highlighted
+  // as one slab as tall as the largest run. An inline-block gives every run a box of its
+  // own size, which is how Word draws it: the band steps with the text.
+  element.style.display = 'inline-block';
+  element.style.verticalAlign = 'baseline';
   element.dataset.paragraphId = span.range.paragraphId;
   element.dataset.start = String(span.range.start);
   element.dataset.end = String(span.range.end);

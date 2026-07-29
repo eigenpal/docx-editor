@@ -1,11 +1,6 @@
 import { isValidNCName } from './qname.ts';
 import { escapeXmlChecked, isValidXmlText } from './sinks.ts';
-import {
-  readXml,
-  type XmlLimits,
-  type XmlNode,
-  type XmlRejection,
-} from './xml-reader.ts';
+import { readXml, type XmlLimits, type XmlNode, type XmlRejection } from './xml-reader.ts';
 
 export const WML_NAMESPACE_URI =
   'http://schemas.openxmlformats.org/wordprocessingml/2006/main' as const;
@@ -56,9 +51,7 @@ export type OoxmlAttribute =
   | OoxmlWmlValAttribute
   | OoxmlGenericExtensionAttribute;
 
-export type OoxmlKnownNodeAttribute =
-  | OoxmlXmlSpaceAttribute
-  | OoxmlGenericExtensionAttribute;
+export type OoxmlKnownNodeAttribute = OoxmlXmlSpaceAttribute | OoxmlGenericExtensionAttribute;
 
 interface OoxmlElementBase<
   Children extends readonly OoxmlNode[] = readonly OoxmlNode[],
@@ -75,95 +68,88 @@ interface OoxmlElementBase<
   readonly children: Children;
 }
 
-export interface OoxmlDocumentNode
-  extends OoxmlElementBase<
-    readonly (OoxmlBodyNode | OoxmlGenericElementNode)[],
-    readonly OoxmlKnownNodeAttribute[]
-  > {
+export interface OoxmlDocumentNode extends OoxmlElementBase<
+  readonly (OoxmlBodyNode | OoxmlGenericElementNode)[],
+  readonly OoxmlKnownNodeAttribute[]
+> {
   readonly kind: 'document';
   readonly namespaceUri: typeof WML_NAMESPACE_URI;
   readonly localName: 'document';
 }
 
-export interface OoxmlBodyNode
-  extends OoxmlElementBase<
-    readonly (OoxmlParagraphNode | OoxmlGenericElementNode)[],
-    readonly OoxmlKnownNodeAttribute[]
-  > {
+export interface OoxmlBodyNode extends OoxmlElementBase<
+  readonly (OoxmlParagraphNode | OoxmlGenericElementNode)[],
+  readonly OoxmlKnownNodeAttribute[]
+> {
   readonly kind: 'body';
   readonly namespaceUri: typeof WML_NAMESPACE_URI;
   readonly localName: 'body';
 }
 
-export interface OoxmlParagraphNode
-  extends OoxmlElementBase<
-    readonly (
-      | OoxmlParagraphPropertiesNode
-      | OoxmlRunNode
-      | OoxmlGenericElementNode
-    )[],
-    readonly OoxmlKnownNodeAttribute[]
-  > {
+export interface OoxmlParagraphNode extends OoxmlElementBase<
+  readonly (OoxmlParagraphPropertiesNode | OoxmlRunNode | OoxmlGenericElementNode)[],
+  readonly OoxmlKnownNodeAttribute[]
+> {
   readonly kind: 'paragraph';
   readonly namespaceUri: typeof WML_NAMESPACE_URI;
   readonly localName: 'p';
 }
 
-export interface OoxmlRunNode
-  extends OoxmlElementBase<
-    readonly (
-      | OoxmlRunPropertiesNode
-      | OoxmlTextElementNode
-      | OoxmlTabNode
-      | OoxmlHardBreakNode
-      | OoxmlGenericElementNode
-    )[],
-    readonly OoxmlKnownNodeAttribute[]
-  > {
+export interface OoxmlRunNode extends OoxmlElementBase<
+  readonly (
+    | OoxmlRunPropertiesNode
+    | OoxmlTextElementNode
+    | OoxmlTabNode
+    | OoxmlHardBreakNode
+    | OoxmlGenericElementNode
+  )[],
+  readonly OoxmlKnownNodeAttribute[]
+> {
   readonly kind: 'run';
   readonly namespaceUri: typeof WML_NAMESPACE_URI;
   readonly localName: 'r';
 }
 
-export interface OoxmlRunPropertiesNode
-  extends OoxmlElementBase<
-    readonly OoxmlGenericElementNode[],
-    readonly OoxmlKnownNodeAttribute[]
-  > {
+export interface OoxmlRunPropertiesNode extends OoxmlElementBase<
+  readonly OoxmlGenericElementNode[],
+  readonly OoxmlKnownNodeAttribute[]
+> {
   readonly kind: 'runProperties';
   readonly namespaceUri: typeof WML_NAMESPACE_URI;
   readonly localName: 'rPr';
 }
 
-export interface OoxmlTextElementNode
-  extends OoxmlElementBase<
-    readonly OoxmlTextNode[],
-    readonly OoxmlKnownNodeAttribute[]
-  > {
+export interface OoxmlTextElementNode extends OoxmlElementBase<
+  readonly OoxmlTextNode[],
+  readonly OoxmlKnownNodeAttribute[]
+> {
   readonly kind: 'text';
   readonly namespaceUri: typeof WML_NAMESPACE_URI;
   readonly localName: 't';
 }
 
-export interface OoxmlParagraphPropertiesNode
-  extends OoxmlElementBase<
-    readonly (OoxmlRunPropertiesNode | OoxmlGenericElementNode)[],
-    readonly OoxmlKnownNodeAttribute[]
-  > {
+export interface OoxmlParagraphPropertiesNode extends OoxmlElementBase<
+  readonly (OoxmlRunPropertiesNode | OoxmlGenericElementNode)[],
+  readonly OoxmlKnownNodeAttribute[]
+> {
   readonly kind: 'paragraphProperties';
   readonly namespaceUri: typeof WML_NAMESPACE_URI;
   readonly localName: 'pPr';
 }
 
-export interface OoxmlTabNode
-  extends OoxmlElementBase<readonly [], readonly OoxmlKnownNodeAttribute[]> {
+export interface OoxmlTabNode extends OoxmlElementBase<
+  readonly [],
+  readonly OoxmlKnownNodeAttribute[]
+> {
   readonly kind: 'tab';
   readonly namespaceUri: typeof WML_NAMESPACE_URI;
   readonly localName: 'tab';
 }
 
-export interface OoxmlHardBreakNode
-  extends OoxmlElementBase<readonly [], readonly OoxmlKnownNodeAttribute[]> {
+export interface OoxmlHardBreakNode extends OoxmlElementBase<
+  readonly [],
+  readonly OoxmlKnownNodeAttribute[]
+> {
   readonly kind: 'hardBreak';
   readonly namespaceUri: typeof WML_NAMESPACE_URI;
   readonly localName: 'br';
@@ -291,8 +277,7 @@ function splitQName(name: string): ExpandedName {
   if (name.indexOf(':', colon + 1) >= 0) throw new TreeReadError('invalid-name');
   const prefix = name.slice(0, colon);
   const localName = name.slice(colon + 1);
-  if (!isValidNCName(prefix) || !isValidNCName(localName))
-    throw new TreeReadError('invalid-name');
+  if (!isValidNCName(prefix) || !isValidNCName(localName)) throw new TreeReadError('invalid-name');
   return { prefix, localName };
 }
 
@@ -375,10 +360,7 @@ function resolveAttributes(
     if (seen.has(key)) throw new TreeReadError('duplicate-expanded-attribute');
     seen.add(key);
     if (namespaceUri === XML_NAMESPACE_URI && name.localName === 'space') {
-      if (
-        name.prefix === 'xml' &&
-        (value === 'default' || value === 'preserve')
-      ) {
+      if (name.prefix === 'xml' && (value === 'default' || value === 'preserve')) {
         attributes.push({
           kind: 'xmlSpace',
           namespaceUri: XML_NAMESPACE_URI,
@@ -424,7 +406,7 @@ function resolvedQNameToken(
 ): readonly [string, string] {
   const name = splitQName(token);
   const namespaceUri =
-    name.prefix === undefined ? bindings.get('') ?? '' : bindings.get(name.prefix);
+    name.prefix === undefined ? (bindings.get('') ?? '') : bindings.get(name.prefix);
   if (namespaceUri === undefined) throw new TreeReadError('undeclared-prefix');
   return [namespaceUri, name.localName];
 }
@@ -454,8 +436,7 @@ function canonicalQNameAttributeValue(
 ): string {
   if (
     (attribute.namespaceUri === MC_NAMESPACE_URI &&
-      (attribute.localName === 'Ignorable' ||
-        attribute.localName === 'MustUnderstand')) ||
+      (attribute.localName === 'Ignorable' || attribute.localName === 'MustUnderstand')) ||
     (ownerNamespaceUri === MC_NAMESPACE_URI &&
       ownerLocalName === 'Choice' &&
       attribute.namespaceUri === '' &&
@@ -488,12 +469,7 @@ function validateQNameAttributeValues(
   ownerLocalName: string
 ): void {
   for (const attribute of attributes)
-    canonicalQNameAttributeValue(
-      attribute,
-      bindings,
-      ownerNamespaceUri,
-      ownerLocalName
-    );
+    canonicalQNameAttributeValue(attribute, bindings, ownerNamespaceUri, ownerLocalName);
 }
 
 function resolvedXmlSpace(
@@ -501,8 +477,7 @@ function resolvedXmlSpace(
   inheritedPreserve: boolean
 ): boolean {
   const value = attributes.find(
-    (attribute) =>
-      attribute.namespaceUri === XML_NAMESPACE_URI && attribute.localName === 'space'
+    (attribute) => attribute.namespaceUri === XML_NAMESPACE_URI && attribute.localName === 'space'
   )?.value;
   return value === 'preserve' ? true : value === 'default' ? false : inheritedPreserve;
 }
@@ -548,17 +523,13 @@ function validKnownKind(kind: KnownKind, children: readonly OoxmlNode[]): boolea
         children.filter((child) => child.kind === 'body').length === 1
       );
     case 'body':
-      return children.every(
-        (child) => child.kind === 'paragraph' || child.kind === 'generic'
-      );
+      return children.every((child) => child.kind === 'paragraph' || child.kind === 'generic');
     case 'paragraph': {
       const properties = children.findIndex((child) => child.kind === 'paragraphProperties');
       return (
         children.every(
           (child) =>
-            child.kind === 'paragraphProperties' ||
-            child.kind === 'run' ||
-            child.kind === 'generic'
+            child.kind === 'paragraphProperties' || child.kind === 'run' || child.kind === 'generic'
         ) &&
         (properties < 0 || properties === 0) &&
         children.filter((child) => child.kind === 'paragraphProperties').length <= 1
@@ -584,9 +555,7 @@ function validKnownKind(kind: KnownKind, children: readonly OoxmlNode[]): boolea
     case 'paragraphProperties': {
       const runProperties = children.findIndex((child) => child.kind === 'runProperties');
       return (
-        children.every(
-          (child) => child.kind === 'runProperties' || child.kind === 'generic'
-        ) &&
+        children.every((child) => child.kind === 'runProperties' || child.kind === 'generic') &&
         children.filter((child) => child.kind === 'runProperties').length <= 1 &&
         (runProperties < 0 || runProperties === children.length - 1)
       );
@@ -634,13 +603,7 @@ function convertElement(
         kind: 'textValue',
         value: child.value,
       };
-    return convertElement(
-      child,
-      declarations.bindings,
-      partName,
-      childPath,
-      preserve
-    );
+    return convertElement(child, declarations.bindings, partName, childPath, preserve);
   });
   const kind =
     candidateKind !== 'generic' &&
@@ -733,8 +696,7 @@ function collectNamespacesAndAliases(
     uris.add(binding.namespaceUri);
     aliasUris.set(binding.prefix, uris);
   }
-  for (const child of node.children)
-    collectNamespacesAndAliases(child, namespaceUris, aliasUris);
+  for (const child of node.children) collectNamespacesAndAliases(child, namespaceUris, aliasUris);
 }
 
 function controlledPrefixMap(root: OoxmlElement): ReadonlyMap<string, string> {
@@ -786,9 +748,7 @@ function controlledQualifiedName(
   if (namespaceUri === '') return localName;
   const prefix = prefixes.get(namespaceUri);
   if (!prefix)
-    throw new Error(
-      `no controlled prefix for namespace ${JSON.stringify(namespaceUri)}`
-    );
+    throw new Error(`no controlled prefix for namespace ${JSON.stringify(namespaceUri)}`);
   if (!attribute && prefix === '') return localName;
   return `${prefix}:${localName}`;
 }
@@ -820,8 +780,7 @@ function controlledQNameValue(
 ): string {
   const prefixList =
     (attribute.namespaceUri === MC_NAMESPACE_URI &&
-      (attribute.localName === 'Ignorable' ||
-        attribute.localName === 'MustUnderstand')) ||
+      (attribute.localName === 'Ignorable' || attribute.localName === 'MustUnderstand')) ||
     (owner.namespaceUri === MC_NAMESPACE_URI &&
       owner.localName === 'Choice' &&
       attribute.namespaceUri === '' &&
@@ -868,9 +827,7 @@ function serializeNode(
   const declarations = [...node.namespaceBindings]
     .sort((left, right) => {
       const prefixOrder = left.prefix.localeCompare(right.prefix);
-      return prefixOrder !== 0
-        ? prefixOrder
-        : left.namespaceUri.localeCompare(right.namespaceUri);
+      return prefixOrder !== 0 ? prefixOrder : left.namespaceUri.localeCompare(right.namespaceUri);
     })
     .map((binding) => {
       if (
@@ -882,30 +839,18 @@ function serializeNode(
       assertSerializableNamespace(binding.namespaceUri);
       seenDeclarationPrefixes.add(binding.prefix);
       const declaredByControlledRoot =
-        rootDeclarations !== '' &&
-        bindings.get(binding.prefix) === binding.namespaceUri;
+        rootDeclarations !== '' && bindings.get(binding.prefix) === binding.namespaceUri;
       bindings.set(binding.prefix, binding.namespaceUri);
       if (declaredByControlledRoot) return '';
-      const declarationName =
-        binding.prefix === '' ? 'xmlns' : `xmlns:${binding.prefix}`;
+      const declarationName = binding.prefix === '' ? 'xmlns' : `xmlns:${binding.prefix}`;
       return ` ${declarationName}="${escapeXmlChecked(binding.namespaceUri, declarationName)}"`;
     })
     .join('');
-  validateQNameAttributeValues(
-    node.attributes,
-    bindings,
-    node.namespaceUri,
-    node.localName
-  );
+  validateQNameAttributeValues(node.attributes, bindings, node.namespaceUri, node.localName);
   const ownSpace = xmlSpaceValue(node);
   const preserve =
     ownSpace === 'preserve' ? true : ownSpace === 'default' ? false : inheritedPreserve;
-  const name = controlledQualifiedName(
-    node.namespaceUri,
-    node.localName,
-    prefixes,
-    false
-  );
+  const name = controlledQualifiedName(node.namespaceUri, node.localName, prefixes, false);
   const attributes = sortedAttributes(node.attributes)
     .map((attribute) => {
       const attributeName = controlledQualifiedName(
@@ -945,13 +890,7 @@ export function serializeOoxmlPart(part: OoxmlPart): string {
       return ` xmlns:${prefix}="${escapeXmlChecked(namespaceUri, `namespace ${prefix}`)}"`;
     })
     .join('');
-  return serializeNode(
-    part.root,
-    prefixes,
-    rootBindings,
-    false,
-    declarations
-  );
+  return serializeNode(part.root, prefixes, rootBindings, false, declarations);
 }
 
 type FingerprintValue =
@@ -966,15 +905,11 @@ type FingerprintValue =
 
 function xmlSpaceValue(node: OoxmlElement): string | undefined {
   return node.attributes.find(
-    (attribute) =>
-      attribute.namespaceUri === XML_NAMESPACE_URI && attribute.localName === 'space'
+    (attribute) => attribute.namespaceUri === XML_NAMESPACE_URI && attribute.localName === 'space'
   )?.value;
 }
 
-function significantChildren(
-  node: OoxmlElement,
-  preserve: boolean
-): readonly OoxmlNode[] {
+function significantChildren(node: OoxmlElement, preserve: boolean): readonly OoxmlNode[] {
   const hasElementChild = node.children.some((child) => child.kind !== 'textValue');
   const hasNonWhitespaceText = node.children.some(
     (child) => child.kind === 'textValue' && !/^\s*$/.test(child.value)
@@ -997,21 +932,16 @@ function fingerprintNode(
 ): FingerprintValue {
   if (node.kind === 'textValue') return ['text', node.value];
   const bindings = new Map(inheritedBindings);
-  for (const binding of node.namespaceBindings)
-    bindings.set(binding.prefix, binding.namespaceUri);
+  for (const binding of node.namespaceBindings) bindings.set(binding.prefix, binding.namespaceUri);
   const ownSpace = xmlSpaceValue(node);
-  const preserve = ownSpace === 'preserve' ? true : ownSpace === 'default' ? false : inheritedPreserve;
+  const preserve =
+    ownSpace === 'preserve' ? true : ownSpace === 'default' ? false : inheritedPreserve;
   const attributes = sortedAttributes(node.attributes).map(
     (attribute) =>
       [
         attribute.namespaceUri,
         attribute.localName,
-        canonicalQNameAttributeValue(
-          attribute,
-          bindings,
-          node.namespaceUri,
-          node.localName
-        ),
+        canonicalQNameAttributeValue(attribute, bindings, node.namespaceUri, node.localName),
       ] as const
   );
   const children = significantChildren(node, preserve).map((child) =>
@@ -1066,10 +996,8 @@ function knownAttributesAreValid(attributes: readonly OoxmlAttribute[]): boolean
         (attribute.value === 'default' || attribute.value === 'preserve')
       );
     return !(
-      (attribute.namespaceUri === XML_NAMESPACE_URI &&
-        attribute.localName === 'space') ||
-      (attribute.namespaceUri === WML_NAMESPACE_URI &&
-        attribute.localName === 'val')
+      (attribute.namespaceUri === XML_NAMESPACE_URI && attribute.localName === 'space') ||
+      (attribute.namespaceUri === WML_NAMESPACE_URI && attribute.localName === 'val')
     );
   });
 }
@@ -1082,11 +1010,7 @@ function knownAttributesAreValid(attributes: readonly OoxmlAttribute[]): boolean
 export function validateOoxmlPart(part: OoxmlPart): OoxmlInvariantResult {
   const issues: OoxmlInvariantIssue[] = [];
   const ids = new Set<string>();
-  const report = (
-    code: OoxmlInvariantIssueCode,
-    path: string,
-    nodeId?: string
-  ): void => {
+  const report = (code: OoxmlInvariantIssueCode, path: string, nodeId?: string): void => {
     issues.push({ code, path, ...(nodeId === undefined ? {} : { nodeId }) });
   };
   const walk = (
@@ -1094,8 +1018,7 @@ export function validateOoxmlPart(part: OoxmlPart): OoxmlInvariantResult {
     inheritedBindings: ReadonlyMap<string, string>,
     path: string
   ): void => {
-    if (typeof node.id !== 'string' || node.id.length === 0)
-      report('invalid-id', path, node.id);
+    if (typeof node.id !== 'string' || node.id.length === 0) report('invalid-id', path, node.id);
     else if (ids.has(node.id)) report('duplicate-id', path, node.id);
     else ids.add(node.id);
 
@@ -1133,10 +1056,7 @@ export function validateOoxmlPart(part: OoxmlPart): OoxmlInvariantResult {
     const expandedAttributes = new Set<string>();
     for (const attribute of node.attributes) {
       if (!isValidNCName(attribute.localName)) report('invalid-name', path, node.id);
-      if (
-        !isValidXmlText(attribute.namespaceUri) ||
-        attribute.namespaceUri === XMLNS_NAMESPACE_URI
-      )
+      if (!isValidXmlText(attribute.namespaceUri) || attribute.namespaceUri === XMLNS_NAMESPACE_URI)
         report('invalid-namespace', path, node.id);
       if (!isValidXmlText(attribute.value)) report('invalid-xml-value', path, node.id);
       const attributePrefixValid =
@@ -1146,18 +1066,12 @@ export function validateOoxmlPart(part: OoxmlPart): OoxmlInvariantResult {
             bindings.get(attribute.prefix) === attribute.namespaceUri;
       if (!attributePrefixValid) report('invalid-qname', path, node.id);
       const key = expandedKey(attribute.namespaceUri, attribute.localName);
-      if (expandedAttributes.has(key))
-        report('duplicate-expanded-attribute', path, node.id);
+      if (expandedAttributes.has(key)) report('duplicate-expanded-attribute', path, node.id);
       expandedAttributes.add(key);
     }
 
     try {
-      validateQNameAttributeValues(
-        node.attributes,
-        bindings,
-        node.namespaceUri,
-        node.localName
-      );
+      validateQNameAttributeValues(node.attributes, bindings, node.namespaceUri, node.localName);
     } catch {
       report('invalid-qname', path, node.id);
     }
@@ -1173,9 +1087,7 @@ export function validateOoxmlPart(part: OoxmlPart): OoxmlInvariantResult {
         report('known-node-invariant', path, node.id);
     }
 
-    node.children.forEach((child, index) =>
-      walk(child, bindings, `${path}.children[${index}]`)
-    );
+    node.children.forEach((child, index) => walk(child, bindings, `${path}.children[${index}]`));
   };
 
   walk(
@@ -1186,7 +1098,5 @@ export function validateOoxmlPart(part: OoxmlPart): OoxmlInvariantResult {
     ]),
     'root'
   );
-  return issues.length === 0
-    ? { ok: true }
-    : { ok: false, issues: Object.freeze(issues) };
+  return issues.length === 0 ? { ok: true } : { ok: false, issues: Object.freeze(issues) };
 }
