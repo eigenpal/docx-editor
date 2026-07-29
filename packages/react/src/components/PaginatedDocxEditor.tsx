@@ -20,6 +20,7 @@ import {
   type PaginatedSurface,
   type PaginatedSurfaceState,
   type NavigationCommand,
+  type SurfaceFormatting,
   type TextMeasurer,
 } from '@docx-editor.dev/engine-editor';
 
@@ -52,6 +53,10 @@ export interface PaginatedDocxEditorHandle {
   selectAll(): void;
   navigate(command: NavigationCommand, extend?: boolean): void;
   toggleRunProperty(localName: string, attributes?: Record<string, string>): void;
+  setRunProperty(localName: string, attributes?: Record<string, string>): void;
+  setParagraphProperty(localName: string, attributes?: Record<string, string>): void;
+  /** Formatting at the selection, for a toolbar to reflect. */
+  formatting(): SurfaceFormatting | null;
   /** Serialize the current document. */
   save(): Uint8Array | null;
 }
@@ -116,6 +121,11 @@ export function PaginatedDocxEditor({
         surfaceRef.current?.navigate(command, extend),
       toggleRunProperty: (localName: string, attributes?: Record<string, string>) =>
         surfaceRef.current?.toggleRunProperty(localName, attributes),
+      setRunProperty: (localName: string, attributes?: Record<string, string>) =>
+        surfaceRef.current?.setRunProperty(localName, attributes),
+      setParagraphProperty: (localName: string, attributes?: Record<string, string>) =>
+        surfaceRef.current?.setParagraphProperty(localName, attributes),
+      formatting: () => surfaceRef.current?.formatting() ?? null,
       save: () => surfaceRef.current?.session.save() ?? null,
     }),
     []
@@ -124,6 +134,9 @@ export function PaginatedDocxEditor({
   return (
     <div
       ref={containerRef}
+      // Centred by margin rather than by a flex parent: the pages are absolutely positioned,
+      // so the container's own width is what has to be centred.
+      style={{ margin: '24px auto' }}
       className={className ?? 'docx-paginated-surface'}
       data-revision={state?.revision ?? 0}
       data-page-count={state?.pageCount ?? 0}

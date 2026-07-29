@@ -20,6 +20,7 @@ import {
   type PaginatedSurface,
   type PaginatedSurfaceState,
   type NavigationCommand,
+  type SurfaceFormatting,
   type TextMeasurer,
 } from '@docx-editor.dev/engine-editor';
 
@@ -32,6 +33,9 @@ export interface PaginatedDocxEditorExpose {
   selectAll(): void;
   navigate(command: NavigationCommand, extend?: boolean): void;
   toggleRunProperty(localName: string, attributes?: Record<string, string>): void;
+  setRunProperty(localName: string, attributes?: Record<string, string>): void;
+  setParagraphProperty(localName: string, attributes?: Record<string, string>): void;
+  formatting(): SurfaceFormatting | null;
   save(): Uint8Array | null;
 }
 
@@ -99,6 +103,11 @@ export const PaginatedDocxEditor = defineComponent({
       navigate: (command, extend) => surface.value?.navigate(command, extend),
       toggleRunProperty: (localName, attributes) =>
         surface.value?.toggleRunProperty(localName, attributes),
+      setRunProperty: (localName, attributes) =>
+        surface.value?.setRunProperty(localName, attributes),
+      setParagraphProperty: (localName, attributes) =>
+        surface.value?.setParagraphProperty(localName, attributes),
+      formatting: () => surface.value?.formatting() ?? null,
       save: () => surface.value?.session.save() ?? null,
     };
     expose(api);

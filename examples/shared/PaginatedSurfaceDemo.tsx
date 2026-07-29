@@ -6,7 +6,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import type { PaginatedSurfaceState, TextMeasurer } from '@docx-editor.dev/engine-editor';
-import { PaginatedDocxEditor, type PaginatedDocxEditorHandle } from '@docx-editor.dev/react';
+import { PaginatedDocxEditorShell } from '@docx-editor.dev/react';
 import { createExactMeasurer } from './exactMeasurer.ts';
 
 /** Layout units (points) to CSS pixels, at 96 dpi. */
@@ -49,7 +49,7 @@ export function PaginatedSurfaceDemo({ fixtureUrl }: { fixtureUrl: string }) {
   }, [state]);
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'auto' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', overflow: 'hidden' }}>
       <div
         style={{
           display: 'flex',
@@ -94,15 +94,13 @@ export function PaginatedSurfaceDemo({ fixtureUrl }: { fixtureUrl: string }) {
       </div>
 
       <div
-        style={{ padding: 24, display: 'flex', justifyContent: 'center' }}
         data-testid="paginated-mount"
         // The measured face is applied here so runs naming no font inherit exactly what the
         // shaper measured; see `exactMeasurer`.
-        {...(fontFamily ? { style: { padding: 24, display: 'flex', justifyContent: 'center', fontFamily } } : {})}
+        style={{ flex: 1, minHeight: 0, ...(fontFamily ? { fontFamily } : {}) }}
       >
         {source && measurer ? (
-          <PaginatedDocxEditor
-            ref={editorRef}
+          <PaginatedDocxEditorShell
             source={source}
             scale={SCALE}
             measurer={measurer}

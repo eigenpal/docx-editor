@@ -13,6 +13,8 @@ export const VERSION = '0.0.2';
 
 export { DocxEditor } from './components/DocxEditor';
 export { PaginatedDocxEditor } from './components/PaginatedDocxEditor';
+export { PaginatedDocxEditorShell } from './components/PaginatedDocxEditorShell';
+export type { PaginatedDocxEditorShellProps } from './components/PaginatedDocxEditorShell';
 export type {
   PaginatedDocxEditorHandle,
   PaginatedDocxEditorProps,

@@ -39,6 +39,29 @@ export interface PaginatedSurfaceOptions {
   readonly onChange?: (state: PaginatedSurfaceState) => void;
 }
 
+/**
+ * What the selection is currently formatted as.
+ *
+ * A value is present only when EVERY span in the selection agrees on it: a selection running
+ * from 11pt into 14pt has no font size, and a toolbar should show a blank rather than pick
+ * one of the two and imply the whole selection is that.
+ */
+export interface SurfaceFormatting {
+  readonly bold: boolean;
+  readonly italic: boolean;
+  readonly underline: boolean;
+  readonly strikethrough: boolean;
+  readonly superscript: boolean;
+  readonly subscript: boolean;
+  readonly fontFamily: string | null;
+  /** Half-points, the unit OOXML stores and the picker expects. */
+  readonly fontSizeHalfPoints: number | null;
+  readonly color: string | null;
+  readonly highlight: string | null;
+  readonly alignment: 'left' | 'center' | 'right' | 'both' | null;
+  readonly styleId: string | null;
+}
+
 export interface PaginatedSurfaceState {
   readonly revision: number;
   readonly pageCount: number;
@@ -72,6 +95,17 @@ export interface PaginatedSurface {
   setSelection(next: SemanticSelection): void;
   /** Toggle a run property over the selection, e.g. `b`, `i`, `u`. */
   toggleRunProperty(localName: string, attributes?: Record<string, string>): void;
+  /**
+   * SET a run property over the selection, rather than toggling it.
+   *
+   * Font family, size and colour are values, not switches: picking Arial twice must leave
+   * the text in Arial, which a toggle would not.
+   */
+  setRunProperty(localName: string, attributes?: Record<string, string>): void;
+  /** Set a property on every paragraph the selection touches — alignment, style, spacing. */
+  setParagraphProperty(localName: string, attributes?: Record<string, string>): void;
+  /** Formatting as it stands at the selection, for a toolbar to reflect. */
+  formatting(): SurfaceFormatting;
   /** The selected text, for copy and cut. */
   selectedText(): string;
   /** Remove the selection, if any. Returns whether anything was deleted. */
@@ -497,6 +531,76 @@ export function mountPaginatedSurface(
       });
     },
 
+    setRunProperty(localName, attributes) {
+      const { from, to } = orderedRange();
+      if (from.paragraphId !== to.paragraphId || from.offset === to.offset) return;
+      commit(() =>
+        session.applyTreeOps(
+          [
+            {
+              op: 'setRunProperties',
+              paragraphId: from.paragraphId,
+              start: from.offset,
+              end: to.offset,
+              properties: [{ localName, ...(attributes ? { attributes } : {}) }],
+            },
+          ],
+          selectionMark()
+        )
+      );
+    },
+
+    setParagraphProperty(localName, attributes) {
+      const { from, to } = orderedRange();
+      const order = documentOrder(currentLayout);
+      const firstIndex = order.indexOf(from.paragraphId);
+      const lastIndex = order.indexOf(to.paragraphId);
+      if (firstIndex === -1 || lastIndex === -1) return;
+      // EVERY paragraph the selection touches, not just the one the caret is in: selecting
+      // three paragraphs and pressing centre must centre three paragraphs.
+      const ops = order.slice(firstIndex, lastIndex + 1).map((paragraphId) => ({
+        op: 'setParagraphProperties' as const,
+        paragraphId,
+        properties: [{ localName, ...(attributes ? { attributes } : {}) }],
+      }));
+      if (ops.length === 0) return;
+      commit(() => session.applyTreeOps(ops, selectionMark()));
+    },
+
+    formatting() {
+      const spans = spansInSelection(currentLayout, selection);
+      const styles = spans.map((span) => span.style);
+      // Agreement across the WHOLE selection, or nothing. `every` over an empty list is
+      // true, so an empty selection reports the caret paragraph's alignment and no run
+      // properties — which is what a toolbar should show with nothing selected.
+      const agreed = <T>(pick: (style: (typeof styles)[number]) => T): T | null => {
+        if (styles.length === 0) return null;
+        const first = pick(styles[0]!);
+        return styles.every((style) => pick(style) === first) ? first : null;
+      };
+      const properties = paragraphPropertiesOf(selection.head.paragraphId);
+      const jc = properties.find((property) => property.localName === 'jc')?.attributes?.val;
+      const style = properties.find((property) => property.localName === 'pStyle')?.attributes?.val;
+      return {
+        bold: styles.length > 0 && styles.every((entry) => entry.bold),
+        italic: styles.length > 0 && styles.every((entry) => entry.italic),
+        underline: styles.length > 0 && styles.every((entry) => entry.underline !== null),
+        strikethrough: styles.length > 0 && styles.every((entry) => entry.strike),
+        superscript: styles.length > 0 && styles.every((e) => e.verticalAlign === 'superscript'),
+        subscript: styles.length > 0 && styles.every((e) => e.verticalAlign === 'subscript'),
+        fontFamily: agreed((entry) => entry.fontFamily),
+        fontSizeHalfPoints: (() => {
+          const points = agreed((entry) => entry.fontSizePt);
+          return points === null ? null : Math.round(points * 2);
+        })(),
+        color: agreed((entry) => entry.color),
+        highlight: agreed((entry) => entry.highlight),
+        alignment:
+          jc === 'center' || jc === 'right' || jc === 'both' ? jc : jc === 'end' ? 'right' : 'left',
+        styleId: style ?? null,
+      } satisfies SurfaceFormatting;
+    },
+
     toggleRunProperty(localName, attributes) {
       const { from, to } = orderedRange();
       // A collapsed caret has no range to format. Stored marks — formatting that applies to
@@ -629,6 +733,18 @@ export function mountPaginatedSurface(
       }
     };
     return spans.every(flagOf);
+  }
+
+  /** A paragraph's own properties, read back from the layout records. */
+  function paragraphPropertiesOf(
+    paragraphId: string
+  ): readonly { localName: string; attributes?: Record<string, string> }[] {
+    for (const page of currentLayout.pages) {
+      for (const fragment of page.fragments) {
+        if (fragment.paragraphId === paragraphId) return fragment.props;
+      }
+    }
+    return [];
   }
 
   function collapsedAt(position: SemanticPosition): SemanticSelection {

@@ -109,6 +109,7 @@ export {
   type PaginatedSurface,
   type PaginatedSurfaceOptions,
   type PaginatedSurfaceState,
+  type SurfaceFormatting,
 } from './paginated-surface.ts';
 // The types an adapter needs to CALL the surface, re-exported from the composition root.
 // Adapters may depend on this package and not on the layout lane, so a host reaching into
