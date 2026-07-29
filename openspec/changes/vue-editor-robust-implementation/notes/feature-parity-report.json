@@ -1,0 +1,7446 @@
+{
+  "generatedAt": "2026-07-29T14:39:00.789Z",
+  "reactRoot": "packages/react/src",
+  "vueRoot": "packages/vue/src",
+  "summary": {
+    "present-in-both": 5,
+    "react-only": 131,
+    "vue-only": 2,
+    "signature-divergence": 5
+  },
+  "components": [
+    {
+      "name": "AddCommentCard",
+      "react": {
+        "componentName": "AddCommentCard",
+        "filePath": "packages/react/src/components/sidebar/AddCommentCard.tsx",
+        "isCoreReexport": false,
+        "props": [
+          {
+            "name": "onSubmit",
+            "required": false,
+            "type": "(text: string) => void"
+          },
+          {
+            "name": "onCancel",
+            "required": false,
+            "type": "() => void"
+          }
+        ],
+        "emits": [
+          "onCancel",
+          "onSubmit"
+        ],
+        "commands": [],
+        "shortcuts": [],
+        "sidebarKinds": [],
+        "pluginHooks": []
+      },
+      "status": "react-only"
+    },
+    {
+      "name": "agentApi",
+      "react": {
+        "componentName": "agentApi",
+        "filePath": "packages/react/src/lib/agentApi.ts",
+        "isCoreReexport": false,
+        "props": [],
+        "emits": [],
+        "commands": [],
+        "shortcuts": [],
+        "sidebarKinds": [],
+        "pluginHooks": []
+      },
+      "status": "react-only"
+    },
+    {
+      "name": "AgentPanelToggle",
+      "react": {
+        "componentName": "AgentPanelToggle",
+        "filePath": "packages/react/src/components/DocxEditor/AgentPanelToggle.tsx",
+        "isCoreReexport": false,
+        "props": [],
+        "emits": [],
+        "commands": [],
+        "shortcuts": [],
+        "sidebarKinds": [],
+        "pluginHooks": []
+      },
+      "status": "react-only"
+    },
+    {
+      "name": "AlignmentButtons",
+      "react": {
+        "componentName": "AlignmentButtons",
+        "filePath": "packages/react/src/components/ui/AlignmentButtons.tsx",
+        "isCoreReexport": false,
+        "props": [
+          {
+            "name": "value",
+            "required": false,
+            "type": "ParagraphAlignment"
+          },
+          {
+            "name": "onChange",
+            "required": false,
+            "type": "(alignment: ParagraphAlignment) => void"
+          },
+          {
+            "name": "disabled",
+            "required": false,
+            "type": "boolean"
+          },
+          {
+            "name": "className",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "style",
+            "required": false,
+            "type": "CSSProperties"
+          },
+          {
+            "name": "showLabels",
+            "required": false,
+            "type": "boolean"
+          },
+          {
+            "name": "compact",
+            "required": false,
+            "type": "boolean"
+          },
+          {
+            "name": "active",
+            "required": false,
+            "type": "boolean"
+          },
+          {
+            "name": "disabled",
+            "required": false,
+            "type": "boolean"
+          },
+          {
+            "name": "title",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "onClick",
+            "required": false,
+            "type": "() => void"
+          },
+          {
+            "name": "children",
+            "required": true,
+            "type": "ReactNode"
+          },
+          {
+            "name": "className",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "style",
+            "required": false,
+            "type": "CSSProperties"
+          },
+          {
+            "name": "value",
+            "required": true,
+            "type": "'left',"
+          },
+          {
+            "name": "label",
+            "required": true,
+            "type": "'Align Left',"
+          },
+          {
+            "name": "labelKey",
+            "required": true,
+            "type": "'alignment.alignLeft',"
+          },
+          {
+            "name": "shortcutKey",
+            "required": true,
+            "type": "'alignment.alignLeftShortcut',"
+          },
+          {
+            "name": "icon",
+            "required": true,
+            "type": "<MaterialSymbol name=\"format_align_left\" size={ICON_SIZE} />,"
+          },
+          {
+            "name": "iconName",
+            "required": true,
+            "type": "'format_align_left',"
+          },
+          {
+            "name": "shortcut",
+            "required": true,
+            "type": "'Ctrl+L',"
+          },
+          {
+            "name": "value",
+            "required": true,
+            "type": "'center',"
+          },
+          {
+            "name": "label",
+            "required": true,
+            "type": "'Center',"
+          },
+          {
+            "name": "labelKey",
+            "required": true,
+            "type": "'alignment.center',"
+          },
+          {
+            "name": "shortcutKey",
+            "required": true,
+            "type": "'alignment.centerShortcut',"
+          },
+          {
+            "name": "icon",
+            "required": true,
+            "type": "<MaterialSymbol name=\"format_align_center\" size={ICON_SIZE} />,"
+          },
+          {
+            "name": "iconName",
+            "required": true,
+            "type": "'format_align_center',"
+          },
+          {
+            "name": "shortcut",
+            "required": true,
+            "type": "'Ctrl+E',"
+          },
+          {
+            "name": "value",
+            "required": true,
+            "type": "'right',"
+          },
+          {
+            "name": "label",
+            "required": true,
+            "type": "'Align Right',"
+          },
+          {
+            "name": "labelKey",
+            "required": true,
+            "type": "'alignment.alignRight',"
+          },
+          {
+            "name": "shortcutKey",
+            "required": true,
+            "type": "'alignment.alignRightShortcut',"
+          },
+          {
+            "name": "icon",
+            "required": true,
+            "type": "<MaterialSymbol name=\"format_align_right\" size={ICON_SIZE} />,"
+          },
+          {
+            "name": "iconName",
+            "required": true,
+            "type": "'format_align_right',"
+          },
+          {
+            "name": "shortcut",
+            "required": true,
+            "type": "'Ctrl+R',"
+          },
+          {
+            "name": "value",
+            "required": true,
+            "type": "'both',"
+          },
+          {
+            "name": "label",
+            "required": true,
+            "type": "'Justify',"
+          },
+          {
+            "name": "labelKey",
+            "required": true,
+            "type": "'alignment.justify',"
+          },
+          {
+            "name": "shortcutKey",
+            "required": true,
+            "type": "'alignment.justifyShortcut',"
+          },
+          {
+            "name": "icon",
+            "required": true,
+            "type": "<MaterialSymbol name=\"format_align_justify\" size={ICON_SIZE} />,"
+          },
+          {
+            "name": "iconName",
+            "required": true,
+            "type": "'format_align_justify',"
+          },
+          {
+            "name": "shortcut",
+            "required": true,
+            "type": "'Ctrl+J',"
+          }
+        ],
+        "emits": [
+          "onChange",
+          "onClick"
+        ],
+        "commands": [],
+        "shortcuts": [
+          "'Ctrl+E'",
+          "'Ctrl+J'",
+          "'Ctrl+L'",
+          "'Ctrl+R'"
+        ],
+        "sidebarKinds": [],
+        "pluginHooks": []
+      },
+      "status": "react-only"
+    },
+    {
+      "name": "Button",
+      "react": {
+        "componentName": "Button",
+        "filePath": "packages/react/src/components/ui/Button.tsx",
+        "isCoreReexport": false,
+        "props": [
+          {
+            "name": "asChild",
+            "required": false,
+            "type": "boolean"
+          }
+        ],
+        "emits": [],
+        "commands": [],
+        "shortcuts": [],
+        "sidebarKinds": [],
+        "pluginHooks": []
+      },
+      "status": "react-only"
+    },
+    {
+      "name": "cardStyles",
+      "react": {
+        "componentName": "cardStyles",
+        "filePath": "packages/react/src/lib/cardStyles.ts",
+        "isCoreReexport": false,
+        "props": [],
+        "emits": [],
+        "commands": [],
+        "shortcuts": [],
+        "sidebarKinds": [],
+        "pluginHooks": []
+      },
+      "status": "react-only"
+    },
+    {
+      "name": "cardUtils",
+      "react": {
+        "componentName": "cardUtils",
+        "filePath": "packages/react/src/components/sidebar/cardUtils.ts",
+        "isCoreReexport": false,
+        "props": [],
+        "emits": [],
+        "commands": [],
+        "shortcuts": [],
+        "sidebarKinds": [],
+        "pluginHooks": []
+      },
+      "status": "react-only"
+    },
+    {
+      "name": "colorMode",
+      "react": {
+        "componentName": "colorMode",
+        "filePath": "packages/react/src/lib/colorMode.ts",
+        "isCoreReexport": false,
+        "props": [],
+        "emits": [],
+        "commands": [],
+        "shortcuts": [],
+        "sidebarKinds": [],
+        "pluginHooks": []
+      },
+      "status": "react-only"
+    },
+    {
+      "name": "ColorPicker",
+      "react": {
+        "componentName": "ColorPicker",
+        "filePath": "packages/react/src/components/ui/ColorPicker.tsx",
+        "isCoreReexport": false,
+        "props": [
+          {
+            "name": "mode",
+            "required": true,
+            "type": "ColorPickerMode"
+          },
+          {
+            "name": "value",
+            "required": false,
+            "type": "ColorValue | string"
+          },
+          {
+            "name": "onChange",
+            "required": false,
+            "type": "(color: ColorValue | string) => void"
+          },
+          {
+            "name": "theme",
+            "required": false,
+            "type": "Theme | null"
+          },
+          {
+            "name": "disabled",
+            "required": false,
+            "type": "boolean"
+          },
+          {
+            "name": "className",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "style",
+            "required": false,
+            "type": "CSSProperties"
+          },
+          {
+            "name": "title",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "icon",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "autoLabel",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "splitButton",
+            "required": false,
+            "type": "boolean"
+          },
+          {
+            "name": "defaultColor",
+            "required": false,
+            "type": "ColorValue | string"
+          }
+        ],
+        "emits": [
+          "onChange"
+        ],
+        "commands": [],
+        "shortcuts": [],
+        "sidebarKinds": [],
+        "pluginHooks": []
+      },
+      "status": "react-only"
+    },
+    {
+      "name": "colorResolver",
+      "react": {
+        "componentName": "colorResolver",
+        "filePath": "packages/react/src/lib/colorResolver.ts",
+        "isCoreReexport": false,
+        "props": [],
+        "emits": [],
+        "commands": [],
+        "shortcuts": [],
+        "sidebarKinds": [],
+        "pluginHooks": []
+      },
+      "status": "react-only"
+    },
+    {
+      "name": "CommentCard",
+      "react": {
+        "componentName": "CommentCard",
+        "filePath": "packages/react/src/components/sidebar/CommentCard.tsx",
+        "isCoreReexport": false,
+        "props": [
+          {
+            "name": "comment",
+            "required": true,
+            "type": "Comment"
+          },
+          {
+            "name": "replies",
+            "required": true,
+            "type": "Comment[]"
+          },
+          {
+            "name": "onReply",
+            "required": false,
+            "type": "(commentId: number, text: string) => void"
+          },
+          {
+            "name": "onResolve",
+            "required": false,
+            "type": "(commentId: number) => void"
+          },
+          {
+            "name": "onUnresolve",
+            "required": false,
+            "type": "(commentId: number) => void"
+          },
+          {
+            "name": "onDelete",
+            "required": false,
+            "type": "(commentId: number) => void"
+          }
+        ],
+        "emits": [
+          "onDelete",
+          "onReply",
+          "onResolve",
+          "onUnresolve"
+        ],
+        "commands": [],
+        "shortcuts": [],
+        "sidebarKinds": [],
+        "pluginHooks": []
+      },
+      "status": "react-only"
+    },
+    {
+      "name": "commentFactories",
+      "react": {
+        "componentName": "commentFactories",
+        "filePath": "packages/react/src/components/DocxEditor/commentFactories.ts",
+        "isCoreReexport": false,
+        "props": [],
+        "emits": [],
+        "commands": [],
+        "shortcuts": [],
+        "sidebarKinds": [],
+        "pluginHooks": []
+      },
+      "status": "react-only"
+    },
+    {
+      "name": "CommentMarginMarkers",
+      "react": {
+        "componentName": "CommentMarginMarkers",
+        "filePath": "packages/react/src/components/CommentMarginMarkers.tsx",
+        "isCoreReexport": false,
+        "props": [
+          {
+            "name": "comments",
+            "required": true,
+            "type": "Comment[]"
+          },
+          {
+            "name": "anchorPositions",
+            "required": true,
+            "type": "Map<string, number>"
+          },
+          {
+            "name": "zoom",
+            "required": true,
+            "type": "number"
+          },
+          {
+            "name": "pageWidth",
+            "required": true,
+            "type": "number"
+          },
+          {
+            "name": "sidebarOpen",
+            "required": true,
+            "type": "boolean"
+          },
+          {
+            "name": "resolvedCommentIds",
+            "required": true,
+            "type": "Set<number>"
+          },
+          {
+            "name": "onMarkerClick",
+            "required": true,
+            "type": "(commentId: number) => void"
+          }
+        ],
+        "emits": [
+          "onMarkerClick"
+        ],
+        "commands": [],
+        "shortcuts": [],
+        "sidebarKinds": [],
+        "pluginHooks": []
+      },
+      "status": "react-only"
+    },
+    {
+      "name": "comments",
+      "react": {
+        "componentName": "comments",
+        "filePath": "packages/react/src/lib/comments.ts",
+        "isCoreReexport": false,
+        "props": [],
+        "emits": [],
+        "commands": [],
+        "shortcuts": [],
+        "sidebarKinds": [],
+        "pluginHooks": []
+      },
+      "status": "react-only"
+    },
+    {
+      "name": "CommentsSidebarToggle",
+      "react": {
+        "componentName": "CommentsSidebarToggle",
+        "filePath": "packages/react/src/components/DocxEditor/CommentsSidebarToggle.tsx",
+        "isCoreReexport": false,
+        "props": [],
+        "emits": [],
+        "commands": [],
+        "shortcuts": [],
+        "sidebarKinds": [],
+        "pluginHooks": []
+      },
+      "status": "react-only"
+    },
+    {
+      "name": "constants",
+      "react": {
+        "componentName": "constants",
+        "filePath": "packages/react/src/components/sidebar/constants.ts",
+        "isCoreReexport": false,
+        "props": [],
+        "emits": [],
+        "commands": [],
+        "shortcuts": [],
+        "sidebarKinds": [],
+        "pluginHooks": []
+      },
+      "status": "react-only"
+    },
+    {
+      "name": "ContextMenu",
+      "react": {
+        "componentName": "ContextMenu",
+        "filePath": "packages/react/src/components/ContextMenu.tsx",
+        "isCoreReexport": false,
+        "props": [
+          {
+            "name": "isOpen",
+            "required": true,
+            "type": "boolean"
+          },
+          {
+            "name": "position",
+            "required": true,
+            "type": "{ x: number"
+          }
+        ],
+        "emits": [],
+        "commands": [],
+        "shortcuts": [
+          "'Ctrl+Shift+G'",
+          "'Ctrl+Shift+R'",
+          "'Ctrl+Shift+S'",
+          "'Ctrl+Shift+T'"
+        ],
+        "sidebarKinds": [],
+        "pluginHooks": []
+      },
+      "status": "react-only"
+    },
+    {
+      "name": "core-types",
+      "react": {
+        "componentName": "core-types",
+        "filePath": "packages/react/src/plugin-api/core-types.ts",
+        "isCoreReexport": false,
+        "props": [],
+        "emits": [],
+        "commands": [],
+        "shortcuts": [],
+        "sidebarKinds": [],
+        "pluginHooks": []
+      },
+      "status": "react-only"
+    },
+    {
+      "name": "data",
+      "react": {
+        "componentName": "data",
+        "filePath": "packages/react/src/components/dialogs/KeyboardShortcutsDialog/data.ts",
+        "isCoreReexport": false,
+        "props": [],
+        "emits": [],
+        "commands": [],
+        "shortcuts": [
+          "'Ctrl++'",
+          "'Ctrl+-'",
+          "'Ctrl+0'",
+          "'Ctrl+A'",
+          "'Ctrl+Arrow'",
+          "'Ctrl+B'",
+          "'Ctrl+C'",
+          "'Ctrl+E'",
+          "'Ctrl+End'",
+          "'Ctrl+F'",
+          "'Ctrl+H'",
+          "'Ctrl+Home'",
+          "'Ctrl+I'",
+          "'Ctrl+J'",
+          "'Ctrl+L'",
+          "'Ctrl+P'",
+          "'Ctrl+R'",
+          "'Ctrl+S'",
+          "'Ctrl+Shift+Arrow'",
+          "'Ctrl+Shift+V'",
+          "'Ctrl+Shift+X'",
+          "'Ctrl+Shift+Z'",
+          "'Ctrl+U'",
+          "'Ctrl+V'",
+          "'Ctrl+X'",
+          "'Ctrl+Y'",
+          "'Ctrl+Z'"
+        ],
+        "sidebarKinds": [],
+        "pluginHooks": []
+      },
+      "status": "react-only"
+    },
+    {
+      "name": "DocumentOutline",
+      "react": {
+        "componentName": "DocumentOutline",
+        "filePath": "packages/react/src/components/DocumentOutline.tsx",
+        "isCoreReexport": false,
+        "props": [
+          {
+            "name": "headings",
+            "required": true,
+            "type": "HeadingInfo[]"
+          },
+          {
+            "name": "onHeadingClick",
+            "required": true,
+            "type": "(pmPos: number) => void"
+          },
+          {
+            "name": "onClose",
+            "required": true,
+            "type": "() => void"
+          },
+          {
+            "name": "topOffset",
+            "required": false,
+            "type": "number"
+          },
+          {
+            "name": "scrollLeft",
+            "required": false,
+            "type": "number"
+          },
+          {
+            "name": "leftOffset",
+            "required": false,
+            "type": "number"
+          },
+          {
+            "name": "position",
+            "required": true,
+            "type": "'absolute',"
+          },
+          {
+            "name": "top",
+            "required": true,
+            "type": "topOffset,"
+          },
+          {
+            "name": "left",
+            "required": true,
+            "type": "leftOffset - scrollLeft,"
+          },
+          {
+            "name": "bottom",
+            "required": true,
+            "type": "0,"
+          },
+          {
+            "name": "width",
+            "required": true,
+            "type": "OUTLINE_WIDTH,"
+          },
+          {
+            "name": "paddingTop",
+            "required": true,
+            "type": "OUTLINE_TOP_PADDING,"
+          },
+          {
+            "name": "display",
+            "required": true,
+            "type": "'flex',"
+          },
+          {
+            "name": "flexDirection",
+            "required": true,
+            "type": "'column',"
+          },
+          {
+            "name": "overflow",
+            "required": true,
+            "type": "'hidden',"
+          },
+          {
+            "name": "fontFamily",
+            "required": true,
+            "type": "\"'Google Sans', Roboto, Arial, sans-serif\","
+          },
+          {
+            "name": "zIndex",
+            "required": true,
+            "type": "40,"
+          },
+          {
+            "name": "transform",
+            "required": true,
+            "type": "open ? 'translateX(0)' : `translateX(-${leftOffset + OUTLINE_WIDTH}px)`,"
+          },
+          {
+            "name": "transition",
+            "required": true,
+            "type": "'transform 0.15s ease-out',"
+          }
+        ],
+        "emits": [
+          "onClose",
+          "onHeadingClick"
+        ],
+        "commands": [],
+        "shortcuts": [],
+        "sidebarKinds": [],
+        "pluginHooks": []
+      },
+      "status": "react-only"
+    },
+    {
+      "name": "DocxEditor",
+      "react": {
+        "componentName": "DocxEditor",
+        "filePath": "packages/react/src/components/DocxEditor.tsx",
+        "isCoreReexport": false,
+        "props": [],
+        "emits": [],
+        "commands": [],
+        "shortcuts": [],
+        "sidebarKinds": [
+          "hex"
+        ],
+        "pluginHooks": []
+      },
+      "vue": {
+        "componentName": "DocxEditor",
+        "filePath": "packages/vue/src/DocxEditor.ts",
+        "isCoreReexport": false,
+        "props": [],
+        "emits": [],
+        "commands": [],
+        "shortcuts": [],
+        "sidebarKinds": [],
+        "pluginHooks": []
+      },
+      "divergence": {
+        "propsAddedInReact": [],
+        "propsAddedInVue": [],
+        "emitsAddedInReact": [],
+        "emitsAddedInVue": []
+      },
+      "status": "present-in-both"
+    },
+    {
+      "name": "DocxEditorDialogs",
+      "react": {
+        "componentName": "DocxEditorDialogs",
+        "filePath": "packages/react/src/components/DocxEditor/DocxEditorDialogs.tsx",
+        "isCoreReexport": false,
+        "props": [],
+        "emits": [],
+        "commands": [],
+        "shortcuts": [],
+        "sidebarKinds": [],
+        "pluginHooks": []
+      },
+      "status": "react-only"
+    },
+    {
+      "name": "DocxEditorOverlays",
+      "react": {
+        "componentName": "DocxEditorOverlays",
+        "filePath": "packages/react/src/components/DocxEditor/DocxEditorOverlays.tsx",
+        "isCoreReexport": false,
+        "props": [],
+        "emits": [],
+        "commands": [],
+        "shortcuts": [],
+        "sidebarKinds": [],
+        "pluginHooks": []
+      },
+      "status": "react-only"
+    },
+    {
+      "name": "DocxEditorPagedArea",
+      "react": {
+        "componentName": "DocxEditorPagedArea",
+        "filePath": "packages/react/src/components/DocxEditor/DocxEditorPagedArea.tsx",
+        "isCoreReexport": false,
+        "props": [
+          {
+            "name": "pages",
+            "required": true,
+            "type": "readonly DisplayPage[]"
+          },
+          {
+            "name": "overlays",
+            "required": true,
+            "type": "FrameOverlays"
+          },
+          {
+            "name": "clickTarget",
+            "required": true,
+            "type": "GlyphClickTarget | null"
+          },
+          {
+            "name": "installedFonts",
+            "required": true,
+            "type": "InstalledDisplayFonts | null"
+          },
+          {
+            "name": "fontError",
+            "required": false,
+            "type": "string | null"
+          },
+          {
+            "name": "zoom",
+            "required": true,
+            "type": "number"
+          },
+          {
+            "name": "scrollRef",
+            "required": true,
+            "type": "RefObject<HTMLDivElement | null> | null"
+          },
+          {
+            "name": "pagesRef",
+            "required": true,
+            "type": "RefObject<HTMLDivElement | null>"
+          },
+          {
+            "name": "bodyRef",
+            "required": true,
+            "type": "RefObject<HTMLDivElement | null>"
+          },
+          {
+            "name": "visibleProjection",
+            "required": false,
+            "type": "boolean"
+          },
+          {
+            "name": "hosted",
+            "required": true,
+            "type": "boolean"
+          },
+          {
+            "name": "className",
+            "required": false,
+            "type": "string | undefined"
+          },
+          {
+            "name": "overlayChildren",
+            "required": false,
+            "type": "ReactNode"
+          },
+          {
+            "name": "onPagesDoubleClick",
+            "required": false,
+            "type": "(point: { x: number"
+          }
+        ],
+        "emits": [
+          "onPagesDoubleClick"
+        ],
+        "commands": [],
+        "shortcuts": [],
+        "sidebarKinds": [],
+        "pluginHooks": []
+      },
+      "status": "react-only"
+    },
+    {
+      "name": "DocxEditorShell",
+      "react": {
+        "componentName": "DocxEditorShell",
+        "filePath": "packages/react/src/components/DocxEditor/DocxEditorShell.tsx",
+        "isCoreReexport": false,
+        "props": [
+          {
+            "name": "sectionProps",
+            "required": true,
+            "type": "SectionProperties | undefined"
+          },
+          {
+            "name": "zoom",
+            "required": true,
+            "type": "number"
+          },
+          {
+            "name": "unit",
+            "required": true,
+            "type": "'inch' | 'cm'"
+          },
+          {
+            "name": "editable",
+            "required": true,
+            "type": "boolean"
+          },
+          {
+            "name": "onLeftMarginChange",
+            "required": true,
+            "type": "(marginTwips: number) => void"
+          },
+          {
+            "name": "onRightMarginChange",
+            "required": true,
+            "type": "(marginTwips: number) => void"
+          },
+          {
+            "name": "indentLeft",
+            "required": true,
+            "type": "number"
+          },
+          {
+            "name": "indentRight",
+            "required": true,
+            "type": "number"
+          },
+          {
+            "name": "onIndentLeftChange",
+            "required": true,
+            "type": "(twips: number) => void"
+          },
+          {
+            "name": "onIndentRightChange",
+            "required": true,
+            "type": "(twips: number) => void"
+          },
+          {
+            "name": "firstLineIndent",
+            "required": true,
+            "type": "number"
+          },
+          {
+            "name": "hangingIndent",
+            "required": true,
+            "type": "boolean"
+          },
+          {
+            "name": "onFirstLineIndentChange",
+            "required": true,
+            "type": "(twips: number) => void"
+          },
+          {
+            "name": "tabMarks",
+            "required": true,
+            "type": "TabMark[] | null"
+          },
+          {
+            "name": "onTabMarkRemove",
+            "required": true,
+            "type": "(positionTwips: number) => void"
+          },
+          {
+            "name": "sectionProps",
+            "required": true,
+            "type": "SectionProperties | undefined"
+          },
+          {
+            "name": "zoom",
+            "required": true,
+            "type": "number"
+          },
+          {
+            "name": "unit",
+            "required": true,
+            "type": "'inch' | 'cm'"
+          },
+          {
+            "name": "editable",
+            "required": true,
+            "type": "boolean"
+          },
+          {
+            "name": "onTopMarginChange",
+            "required": true,
+            "type": "(marginTwips: number) => void"
+          },
+          {
+            "name": "onBottomMarginChange",
+            "required": true,
+            "type": "(marginTwips: number) => void"
+          },
+          {
+            "name": "headings",
+            "required": true,
+            "type": "HeadingInfo[]"
+          },
+          {
+            "name": "onHeadingClick",
+            "required": true,
+            "type": "(pmPos: number) => void"
+          },
+          {
+            "name": "onClose",
+            "required": true,
+            "type": "() => void"
+          },
+          {
+            "name": "topOffset",
+            "required": true,
+            "type": "number"
+          },
+          {
+            "name": "scrollLeft",
+            "required": true,
+            "type": "number"
+          },
+          {
+            "name": "i18n",
+            "required": true,
+            "type": "React.ComponentProps<typeof LocaleProvider>['i18n']"
+          },
+          {
+            "name": "isDark",
+            "required": false,
+            "type": "boolean"
+          },
+          {
+            "name": "onEditorError",
+            "required": true,
+            "type": "(error: Error) => void"
+          },
+          {
+            "name": "containerRef",
+            "required": true,
+            "type": "React.Ref<HTMLDivElement>"
+          },
+          {
+            "name": "scrollContainerRef",
+            "required": true,
+            "type": "React.Ref<HTMLDivElement>"
+          },
+          {
+            "name": "editorContentRef",
+            "required": true,
+            "type": "React.Ref<HTMLDivElement>"
+          },
+          {
+            "name": "className",
+            "required": true,
+            "type": "string | undefined"
+          },
+          {
+            "name": "containerStyle",
+            "required": true,
+            "type": "CSSProperties"
+          },
+          {
+            "name": "mainContentStyle",
+            "required": true,
+            "type": "CSSProperties"
+          },
+          {
+            "name": "editorContainerStyle",
+            "required": true,
+            "type": "CSSProperties"
+          },
+          {
+            "name": "showRuler",
+            "required": true,
+            "type": "boolean"
+          },
+          {
+            "name": "readOnlyProp",
+            "required": true,
+            "type": "boolean | undefined"
+          },
+          {
+            "name": "showOutline",
+            "required": true,
+            "type": "boolean"
+          },
+          {
+            "name": "showOutlineButton",
+            "required": true,
+            "type": "boolean"
+          },
+          {
+            "name": "sidebarOpen",
+            "required": true,
+            "type": "boolean"
+          },
+          {
+            "name": "minLayoutWidth",
+            "required": true,
+            "type": "number"
+          },
+          {
+            "name": "toolbarHeight",
+            "required": true,
+            "type": "number"
+          },
+          {
+            "name": "editorScrollLeft",
+            "required": true,
+            "type": "number"
+          },
+          {
+            "name": "expandedSidebarItem",
+            "required": true,
+            "type": "string | null"
+          },
+          {
+            "name": "trackedChanges",
+            "required": true,
+            "type": "TrackedChangesResult['entries']"
+          },
+          {
+            "name": "onScrollContainerMouseDown",
+            "required": true,
+            "type": "(e: React.MouseEvent) => void"
+          },
+          {
+            "name": "onEditorBgMouseDown",
+            "required": true,
+            "type": "(e: React.MouseEvent) => void"
+          },
+          {
+            "name": "onEditorContextMenu",
+            "required": true,
+            "type": "(e: React.MouseEvent) => void"
+          },
+          {
+            "name": "horizontalRulerProps",
+            "required": true,
+            "type": "HorizontalRulerProps"
+          },
+          {
+            "name": "verticalRulerProps",
+            "required": true,
+            "type": "VerticalRulerProps"
+          },
+          {
+            "name": "outlineProps",
+            "required": true,
+            "type": "OutlineProps"
+          },
+          {
+            "name": "onToggleOutline",
+            "required": true,
+            "type": "() => void"
+          },
+          {
+            "name": "scrollPageInfo",
+            "required": true,
+            "type": "ScrollPageInfo"
+          },
+          {
+            "name": "agentPanel",
+            "required": true,
+            "type": "AgentPanelOptions | undefined"
+          },
+          {
+            "name": "agentPanelOpen",
+            "required": true,
+            "type": "boolean"
+          },
+          {
+            "name": "onAgentPanelClose",
+            "required": true,
+            "type": "() => void"
+          },
+          {
+            "name": "toolbar",
+            "required": true,
+            "type": "ReactNode"
+          },
+          {
+            "name": "pagedArea",
+            "required": true,
+            "type": "ReactNode"
+          },
+          {
+            "name": "overlays",
+            "required": true,
+            "type": "ReactNode"
+          },
+          {
+            "name": "dialogs",
+            "required": true,
+            "type": "ReactNode"
+          },
+          {
+            "name": "fileInputs",
+            "required": true,
+            "type": "ReactNode"
+          }
+        ],
+        "emits": [
+          "onAgentPanelClose",
+          "onBottomMarginChange",
+          "onClose",
+          "onEditorBgMouseDown",
+          "onEditorContextMenu",
+          "onEditorError",
+          "onFirstLineIndentChange",
+          "onHeadingClick",
+          "onIndentLeftChange",
+          "onIndentRightChange",
+          "onLeftMarginChange",
+          "onRightMarginChange",
+          "onScrollContainerMouseDown",
+          "onTabMarkRemove",
+          "onToggleOutline",
+          "onTopMarginChange"
+        ],
+        "commands": [],
+        "shortcuts": [],
+        "sidebarKinds": [],
+        "pluginHooks": []
+      },
+      "vue": {
+        "componentName": "DocxEditorShell",
+        "filePath": "packages/vue/src/DocxEditorShell.ts",
+        "isCoreReexport": false,
+        "props": [
+          {
+            "name": "name",
+            "required": true,
+            "type": "'DocxEditorShell',"
+          }
+        ],
+        "emits": [],
+        "commands": [],
+        "shortcuts": [],
+        "sidebarKinds": [],
+        "pluginHooks": []
+      },
+      "divergence": {
+        "propsAddedInReact": [
+          {
+            "name": "sectionProps",
+            "required": true,
+            "type": "SectionProperties | undefined"
+          },
+          {
+            "name": "zoom",
+            "required": true,
+            "type": "number"
+          },
+          {
+            "name": "unit",
+            "required": true,
+            "type": "'inch' | 'cm'"
+          },
+          {
+            "name": "editable",
+            "required": true,
+            "type": "boolean"
+          },
+          {
+            "name": "onLeftMarginChange",
+            "required": true,
+            "type": "(marginTwips: number) => void"
+          },
+          {
+            "name": "onRightMarginChange",
+            "required": true,
+            "type": "(marginTwips: number) => void"
+          },
+          {
+            "name": "indentLeft",
+            "required": true,
+            "type": "number"
+          },
+          {
+            "name": "indentRight",
+            "required": true,
+            "type": "number"
+          },
+          {
+            "name": "onIndentLeftChange",
+            "required": true,
+            "type": "(twips: number) => void"
+          },
+          {
+            "name": "onIndentRightChange",
+            "required": true,
+            "type": "(twips: number) => void"
+          },
+          {
+            "name": "firstLineIndent",
+            "required": true,
+            "type": "number"
+          },
+          {
+            "name": "hangingIndent",
+            "required": true,
+            "type": "boolean"
+          },
+          {
+            "name": "onFirstLineIndentChange",
+            "required": true,
+            "type": "(twips: number) => void"
+          },
+          {
+            "name": "tabMarks",
+            "required": true,
+            "type": "TabMark[] | null"
+          },
+          {
+            "name": "onTabMarkRemove",
+            "required": true,
+            "type": "(positionTwips: number) => void"
+          },
+          {
+            "name": "sectionProps",
+            "required": true,
+            "type": "SectionProperties | undefined"
+          },
+          {
+            "name": "zoom",
+            "required": true,
+            "type": "number"
+          },
+          {
+            "name": "unit",
+            "required": true,
+            "type": "'inch' | 'cm'"
+          },
+          {
+            "name": "editable",
+            "required": true,
+            "type": "boolean"
+          },
+          {
+            "name": "onTopMarginChange",
+            "required": true,
+            "type": "(marginTwips: number) => void"
+          },
+          {
+            "name": "onBottomMarginChange",
+            "required": true,
+            "type": "(marginTwips: number) => void"
+          },
+          {
+            "name": "headings",
+            "required": true,
+            "type": "HeadingInfo[]"
+          },
+          {
+            "name": "onHeadingClick",
+            "required": true,
+            "type": "(pmPos: number) => void"
+          },
+          {
+            "name": "onClose",
+            "required": true,
+            "type": "() => void"
+          },
+          {
+            "name": "topOffset",
+            "required": true,
+            "type": "number"
+          },
+          {
+            "name": "scrollLeft",
+            "required": true,
+            "type": "number"
+          },
+          {
+            "name": "i18n",
+            "required": true,
+            "type": "React.ComponentProps<typeof LocaleProvider>['i18n']"
+          },
+          {
+            "name": "isDark",
+            "required": false,
+            "type": "boolean"
+          },
+          {
+            "name": "onEditorError",
+            "required": true,
+            "type": "(error: Error) => void"
+          },
+          {
+            "name": "containerRef",
+            "required": true,
+            "type": "React.Ref<HTMLDivElement>"
+          },
+          {
+            "name": "scrollContainerRef",
+            "required": true,
+            "type": "React.Ref<HTMLDivElement>"
+          },
+          {
+            "name": "editorContentRef",
+            "required": true,
+            "type": "React.Ref<HTMLDivElement>"
+          },
+          {
+            "name": "className",
+            "required": true,
+            "type": "string | undefined"
+          },
+          {
+            "name": "containerStyle",
+            "required": true,
+            "type": "CSSProperties"
+          },
+          {
+            "name": "mainContentStyle",
+            "required": true,
+            "type": "CSSProperties"
+          },
+          {
+            "name": "editorContainerStyle",
+            "required": true,
+            "type": "CSSProperties"
+          },
+          {
+            "name": "showRuler",
+            "required": true,
+            "type": "boolean"
+          },
+          {
+            "name": "readOnlyProp",
+            "required": true,
+            "type": "boolean | undefined"
+          },
+          {
+            "name": "showOutline",
+            "required": true,
+            "type": "boolean"
+          },
+          {
+            "name": "showOutlineButton",
+            "required": true,
+            "type": "boolean"
+          },
+          {
+            "name": "sidebarOpen",
+            "required": true,
+            "type": "boolean"
+          },
+          {
+            "name": "minLayoutWidth",
+            "required": true,
+            "type": "number"
+          },
+          {
+            "name": "toolbarHeight",
+            "required": true,
+            "type": "number"
+          },
+          {
+            "name": "editorScrollLeft",
+            "required": true,
+            "type": "number"
+          },
+          {
+            "name": "expandedSidebarItem",
+            "required": true,
+            "type": "string | null"
+          },
+          {
+            "name": "trackedChanges",
+            "required": true,
+            "type": "TrackedChangesResult['entries']"
+          },
+          {
+            "name": "onScrollContainerMouseDown",
+            "required": true,
+            "type": "(e: React.MouseEvent) => void"
+          },
+          {
+            "name": "onEditorBgMouseDown",
+            "required": true,
+            "type": "(e: React.MouseEvent) => void"
+          },
+          {
+            "name": "onEditorContextMenu",
+            "required": true,
+            "type": "(e: React.MouseEvent) => void"
+          },
+          {
+            "name": "horizontalRulerProps",
+            "required": true,
+            "type": "HorizontalRulerProps"
+          },
+          {
+            "name": "verticalRulerProps",
+            "required": true,
+            "type": "VerticalRulerProps"
+          },
+          {
+            "name": "outlineProps",
+            "required": true,
+            "type": "OutlineProps"
+          },
+          {
+            "name": "onToggleOutline",
+            "required": true,
+            "type": "() => void"
+          },
+          {
+            "name": "scrollPageInfo",
+            "required": true,
+            "type": "ScrollPageInfo"
+          },
+          {
+            "name": "agentPanel",
+            "required": true,
+            "type": "AgentPanelOptions | undefined"
+          },
+          {
+            "name": "agentPanelOpen",
+            "required": true,
+            "type": "boolean"
+          },
+          {
+            "name": "onAgentPanelClose",
+            "required": true,
+            "type": "() => void"
+          },
+          {
+            "name": "toolbar",
+            "required": true,
+            "type": "ReactNode"
+          },
+          {
+            "name": "pagedArea",
+            "required": true,
+            "type": "ReactNode"
+          },
+          {
+            "name": "overlays",
+            "required": true,
+            "type": "ReactNode"
+          },
+          {
+            "name": "dialogs",
+            "required": true,
+            "type": "ReactNode"
+          },
+          {
+            "name": "fileInputs",
+            "required": true,
+            "type": "ReactNode"
+          }
+        ],
+        "propsAddedInVue": [
+          {
+            "name": "name",
+            "required": true,
+            "type": "'DocxEditorShell',"
+          }
+        ],
+        "emitsAddedInReact": [
+          "agent-panel-close",
+          "bottom-margin-change",
+          "close",
+          "editor-bg-mouse-down",
+          "editor-context-menu",
+          "editor-error",
+          "first-line-indent-change",
+          "heading-click",
+          "indent-left-change",
+          "indent-right-change",
+          "left-margin-change",
+          "right-margin-change",
+          "scroll-container-mouse-down",
+          "tab-mark-remove",
+          "toggle-outline",
+          "top-margin-change"
+        ],
+        "emitsAddedInVue": []
+      },
+      "status": "signature-divergence"
+    },
+    {
+      "name": "DocxEditorSidebar",
+      "vue": {
+        "componentName": "DocxEditorSidebar",
+        "filePath": "packages/vue/src/DocxEditorSidebar.ts",
+        "isCoreReexport": false,
+        "props": [
+          {
+            "name": "name",
+            "required": true,
+            "type": "'DocxEditorSidebar',"
+          },
+          {
+            "name": "props",
+            "required": true,
+            "type": "{"
+          },
+          {
+            "name": "editor",
+            "required": true,
+            "type": "{ type: Object as PropType<Editor | null>, default: null },"
+          },
+          {
+            "name": "open",
+            "required": true,
+            "type": "{ type: Boolean, default: false },"
+          },
+          {
+            "name": "panels",
+            "required": true,
+            "type": "{ type: Array as PropType<readonly SidebarPanel[]>, default: () => [] },"
+          },
+          {
+            "name": "emits",
+            "required": true,
+            "type": "{ close: () => true },"
+          }
+        ],
+        "emits": [],
+        "commands": [],
+        "shortcuts": [],
+        "sidebarKinds": [],
+        "pluginHooks": []
+      },
+      "status": "vue-only"
+    },
+    {
+      "name": "DocxEditorTitleBar",
+      "vue": {
+        "componentName": "DocxEditorTitleBar",
+        "filePath": "packages/vue/src/DocxEditorTitleBar.ts",
+        "isCoreReexport": false,
+        "props": [
+          {
+            "name": "name",
+            "required": true,
+            "type": "'DocxEditorTitleBar',"
+          },
+          {
+            "name": "props",
+            "required": true,
+            "type": "{"
+          },
+          {
+            "name": "title",
+            "required": true,
+            "type": "{ type: String, required: true },"
+          },
+          {
+            "name": "readOnly",
+            "required": true,
+            "type": "{ type: Boolean, default: false },"
+          },
+          {
+            "name": "emits",
+            "required": true,
+            "type": "{ 'update:title': (_value: string) => true },"
+          }
+        ],
+        "emits": [],
+        "commands": [],
+        "shortcuts": [],
+        "sidebarKinds": [],
+        "pluginHooks": []
+      },
+      "status": "vue-only"
+    },
+    {
+      "name": "DocxEditorToolbar",
+      "react": {
+        "componentName": "DocxEditorToolbar",
+        "filePath": "packages/react/src/components/DocxEditor/DocxEditorToolbar.tsx",
+        "isCoreReexport": false,
+        "props": [],
+        "emits": [],
+        "commands": [],
+        "shortcuts": [],
+        "sidebarKinds": [],
+        "pluginHooks": []
+      },
+      "vue": {
+        "componentName": "DocxEditorToolbar",
+        "filePath": "packages/vue/src/DocxEditorToolbar.ts",
+        "isCoreReexport": false,
+        "props": [
+          {
+            "name": "viewBox",
+            "required": true,
+            "type": "'0 -960 960 960',"
+          },
+          {
+            "name": "width",
+            "required": true,
+            "type": "'18',"
+          },
+          {
+            "name": "height",
+            "required": true,
+            "type": "'18',"
+          },
+          {
+            "name": "focusable",
+            "required": true,
+            "type": "'false',"
+          }
+        ],
+        "emits": [],
+        "commands": [],
+        "shortcuts": [],
+        "sidebarKinds": [],
+        "pluginHooks": []
+      },
+      "divergence": {
+        "propsAddedInReact": [],
+        "propsAddedInVue": [
+          {
+            "name": "viewBox",
+            "required": true,
+            "type": "'0 -960 960 960',"
+          },
+          {
+            "name": "width",
+            "required": true,
+            "type": "'18',"
+          },
+          {
+            "name": "height",
+            "required": true,
+            "type": "'18',"
+          },
+          {
+            "name": "focusable",
+            "required": true,
+            "type": "'false',"
+          }
+        ],
+        "emitsAddedInReact": [],
+        "emitsAddedInVue": []
+      },
+      "status": "signature-divergence"
+    },
+    {
+      "name": "editing-modes",
+      "react": {
+        "componentName": "editing-modes",
+        "filePath": "packages/react/src/components/DocxEditor/internals/editing-modes.ts",
+        "isCoreReexport": false,
+        "props": [],
+        "emits": [],
+        "commands": [],
+        "shortcuts": [],
+        "sidebarKinds": [],
+        "pluginHooks": []
+      },
+      "status": "react-only"
+    },
+    {
+      "name": "EditingModeDropdown",
+      "react": {
+        "componentName": "EditingModeDropdown",
+        "filePath": "packages/react/src/components/DocxEditor/EditingModeDropdown.tsx",
+        "isCoreReexport": false,
+        "props": [],
+        "emits": [],
+        "commands": [],
+        "shortcuts": [],
+        "sidebarKinds": [],
+        "pluginHooks": []
+      },
+      "status": "react-only"
+    },
+    {
+      "name": "EditorToolbar",
+      "react": {
+        "componentName": "EditorToolbar",
+        "filePath": "packages/react/src/components/EditorToolbar.tsx",
+        "isCoreReexport": false,
+        "props": [],
+        "emits": [],
+        "commands": [],
+        "shortcuts": [],
+        "sidebarKinds": [],
+        "pluginHooks": []
+      },
+      "status": "react-only"
+    },
+    {
+      "name": "EditorToolbarContext",
+      "react": {
+        "componentName": "EditorToolbarContext",
+        "filePath": "packages/react/src/components/EditorToolbarContext.tsx",
+        "isCoreReexport": false,
+        "props": [],
+        "emits": [],
+        "commands": [],
+        "shortcuts": [],
+        "sidebarKinds": [],
+        "pluginHooks": []
+      },
+      "status": "react-only"
+    },
+    {
+      "name": "ErrorBoundary",
+      "react": {
+        "componentName": "ErrorBoundary",
+        "filePath": "packages/react/src/components/ErrorBoundary.tsx",
+        "isCoreReexport": false,
+        "props": [
+          {
+            "name": "children",
+            "required": true,
+            "type": "ReactNode"
+          },
+          {
+            "name": "fallback",
+            "required": false,
+            "type": "ReactNode | ((error: Error, reset: () => void) => ReactNode)"
+          },
+          {
+            "name": "onError",
+            "required": false,
+            "type": "(error: Error, errorInfo: ErrorInfo) => void"
+          },
+          {
+            "name": "showDetails",
+            "required": false,
+            "type": "boolean"
+          },
+          {
+            "name": "hasError",
+            "required": true,
+            "type": "boolean"
+          },
+          {
+            "name": "error",
+            "required": true,
+            "type": "Error | null"
+          },
+          {
+            "name": "errorInfo",
+            "required": true,
+            "type": "ErrorInfo | null"
+          }
+        ],
+        "emits": [
+          "onError"
+        ],
+        "commands": [],
+        "shortcuts": [],
+        "sidebarKinds": [],
+        "pluginHooks": []
+      },
+      "status": "react-only"
+    },
+    {
+      "name": "ErrorManager",
+      "react": {
+        "componentName": "ErrorManager",
+        "filePath": "packages/react/src/managers/ErrorManager.ts",
+        "isCoreReexport": false,
+        "props": [],
+        "emits": [],
+        "commands": [],
+        "shortcuts": [],
+        "sidebarKinds": [],
+        "pluginHooks": []
+      },
+      "status": "react-only"
+    },
+    {
+      "name": "findReplace",
+      "react": {
+        "componentName": "findReplace",
+        "filePath": "packages/react/src/lib/findReplace.ts",
+        "isCoreReexport": false,
+        "props": [],
+        "emits": [],
+        "commands": [],
+        "shortcuts": [],
+        "sidebarKinds": [],
+        "pluginHooks": []
+      },
+      "status": "react-only"
+    },
+    {
+      "name": "FindReplaceDialog",
+      "react": {
+        "componentName": "FindReplaceDialog",
+        "filePath": "packages/react/src/components/dialogs/FindReplaceDialog.tsx",
+        "isCoreReexport": false,
+        "props": [
+          {
+            "name": "isOpen",
+            "required": true,
+            "type": "boolean"
+          },
+          {
+            "name": "onClose",
+            "required": true,
+            "type": "() => void"
+          },
+          {
+            "name": "onFind",
+            "required": true,
+            "type": "(searchText: string, options: FindOptions) => FindResult | null"
+          },
+          {
+            "name": "onFindNext",
+            "required": true,
+            "type": "() => FindMatch | null"
+          },
+          {
+            "name": "onFindPrevious",
+            "required": true,
+            "type": "() => FindMatch | null"
+          },
+          {
+            "name": "onReplace",
+            "required": true,
+            "type": "(replaceText: string) => boolean"
+          },
+          {
+            "name": "onReplaceAll",
+            "required": true,
+            "type": "(searchText: string, replaceText: string, options: FindOptions) => number"
+          },
+          {
+            "name": "onHighlightMatches",
+            "required": false,
+            "type": "(matches: FindMatch[]) => void"
+          },
+          {
+            "name": "onClearHighlights",
+            "required": false,
+            "type": "() => void"
+          },
+          {
+            "name": "initialSearchText",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "replaceMode",
+            "required": false,
+            "type": "boolean"
+          },
+          {
+            "name": "currentResult",
+            "required": false,
+            "type": "FindResult | null"
+          },
+          {
+            "name": "className",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "style",
+            "required": false,
+            "type": "CSSProperties"
+          },
+          {
+            "name": "position",
+            "required": true,
+            "type": "'fixed',"
+          },
+          {
+            "name": "top",
+            "required": true,
+            "type": "0,"
+          },
+          {
+            "name": "left",
+            "required": true,
+            "type": "0,"
+          },
+          {
+            "name": "right",
+            "required": true,
+            "type": "0,"
+          },
+          {
+            "name": "bottom",
+            "required": true,
+            "type": "0,"
+          },
+          {
+            "name": "backgroundColor",
+            "required": true,
+            "type": "'transparent',"
+          },
+          {
+            "name": "display",
+            "required": true,
+            "type": "'flex',"
+          },
+          {
+            "name": "alignItems",
+            "required": true,
+            "type": "'flex-start',"
+          },
+          {
+            "name": "justifyContent",
+            "required": true,
+            "type": "'flex-end',"
+          },
+          {
+            "name": "zIndex",
+            "required": true,
+            "type": "10000,"
+          },
+          {
+            "name": "pointerEvents",
+            "required": true,
+            "type": "'none',"
+          }
+        ],
+        "emits": [
+          "onClearHighlights",
+          "onClose",
+          "onFind",
+          "onFindNext",
+          "onFindPrevious",
+          "onHighlightMatches",
+          "onReplace",
+          "onReplaceAll"
+        ],
+        "commands": [],
+        "shortcuts": [],
+        "sidebarKinds": [],
+        "pluginHooks": []
+      },
+      "status": "react-only"
+    },
+    {
+      "name": "findReplaceUtils",
+      "react": {
+        "componentName": "findReplaceUtils",
+        "filePath": "packages/react/src/components/dialogs/findReplaceUtils.ts",
+        "isCoreReexport": false,
+        "props": [],
+        "emits": [],
+        "commands": [],
+        "shortcuts": [],
+        "sidebarKinds": [],
+        "pluginHooks": []
+      },
+      "status": "react-only"
+    },
+    {
+      "name": "fontOptions",
+      "react": {
+        "componentName": "fontOptions",
+        "filePath": "packages/react/src/lib/fontOptions.ts",
+        "isCoreReexport": false,
+        "props": [],
+        "emits": [],
+        "commands": [],
+        "shortcuts": [],
+        "sidebarKinds": [],
+        "pluginHooks": []
+      },
+      "status": "react-only"
+    },
+    {
+      "name": "FontPicker",
+      "react": {
+        "componentName": "FontPicker",
+        "filePath": "packages/react/src/components/ui/FontPicker.tsx",
+        "isCoreReexport": false,
+        "props": [
+          {
+            "name": "value",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "onChange",
+            "required": false,
+            "type": "(fontFamily: string) => void"
+          },
+          {
+            "name": "fonts",
+            "required": false,
+            "type": "FontOption[]"
+          },
+          {
+            "name": "documentFonts",
+            "required": false,
+            "type": "readonly FontOption[]"
+          },
+          {
+            "name": "disabled",
+            "required": false,
+            "type": "boolean"
+          },
+          {
+            "name": "className",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "placeholder",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "width",
+            "required": false,
+            "type": "number | string"
+          },
+          {
+            "name": "showPreview",
+            "required": false,
+            "type": "boolean"
+          },
+          {
+            "name": "serif",
+            "required": true,
+            "type": "[],"
+          },
+          {
+            "name": "monospace",
+            "required": true,
+            "type": "[],"
+          },
+          {
+            "name": "other",
+            "required": true,
+            "type": "[],"
+          }
+        ],
+        "emits": [
+          "onChange"
+        ],
+        "commands": [],
+        "shortcuts": [],
+        "sidebarKinds": [],
+        "pluginHooks": []
+      },
+      "status": "react-only"
+    },
+    {
+      "name": "fontPickerValue",
+      "react": {
+        "componentName": "fontPickerValue",
+        "filePath": "packages/react/src/components/ui/fontPickerValue.ts",
+        "isCoreReexport": false,
+        "props": [],
+        "emits": [],
+        "commands": [],
+        "shortcuts": [],
+        "sidebarKinds": [],
+        "pluginHooks": []
+      },
+      "status": "react-only"
+    },
+    {
+      "name": "FontSizePicker",
+      "react": {
+        "componentName": "FontSizePicker",
+        "filePath": "packages/react/src/components/ui/FontSizePicker.tsx",
+        "isCoreReexport": false,
+        "props": [
+          {
+            "name": "value",
+            "required": false,
+            "type": "number"
+          },
+          {
+            "name": "onChange",
+            "required": false,
+            "type": "(size: number) => void"
+          },
+          {
+            "name": "sizes",
+            "required": false,
+            "type": "number[]"
+          },
+          {
+            "name": "disabled",
+            "required": false,
+            "type": "boolean"
+          },
+          {
+            "name": "className",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "placeholder",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "width",
+            "required": false,
+            "type": "number | string"
+          },
+          {
+            "name": "minSize",
+            "required": false,
+            "type": "number"
+          },
+          {
+            "name": "maxSize",
+            "required": false,
+            "type": "number"
+          },
+          {
+            "name": "dropdownStyle",
+            "required": true,
+            "type": "fixedDropdownStyle,"
+          },
+          {
+            "name": "isOpen",
+            "required": true,
+            "type": "isDropdownOpen,"
+          },
+          {
+            "name": "onClose",
+            "required": true,
+            "type": "onCloseDropdown,"
+          }
+        ],
+        "emits": [
+          "onChange",
+          "onClose"
+        ],
+        "commands": [],
+        "shortcuts": [],
+        "sidebarKinds": [],
+        "pluginHooks": []
+      },
+      "status": "react-only"
+    },
+    {
+      "name": "FootnotePropertiesDialog",
+      "react": {
+        "componentName": "FootnotePropertiesDialog",
+        "filePath": "packages/react/src/components/dialogs/FootnotePropertiesDialog.tsx",
+        "isCoreReexport": false,
+        "props": [
+          {
+            "name": "isOpen",
+            "required": true,
+            "type": "boolean"
+          },
+          {
+            "name": "onClose",
+            "required": true,
+            "type": "() => void"
+          },
+          {
+            "name": "onApply",
+            "required": true,
+            "type": "(footnoteProps: FootnoteProperties, endnoteProps: EndnoteProperties) => void"
+          },
+          {
+            "name": "footnotePr",
+            "required": false,
+            "type": "FootnoteProperties"
+          },
+          {
+            "name": "endnotePr",
+            "required": false,
+            "type": "EndnoteProperties"
+          },
+          {
+            "name": "position",
+            "required": true,
+            "type": "'fixed',"
+          },
+          {
+            "name": "top",
+            "required": true,
+            "type": "0,"
+          },
+          {
+            "name": "left",
+            "required": true,
+            "type": "0,"
+          },
+          {
+            "name": "right",
+            "required": true,
+            "type": "0,"
+          },
+          {
+            "name": "bottom",
+            "required": true,
+            "type": "0,"
+          },
+          {
+            "name": "backgroundColor",
+            "required": true,
+            "type": "'var(--doc-overlay)',"
+          },
+          {
+            "name": "display",
+            "required": true,
+            "type": "'flex',"
+          },
+          {
+            "name": "alignItems",
+            "required": true,
+            "type": "'center',"
+          },
+          {
+            "name": "justifyContent",
+            "required": true,
+            "type": "'center',"
+          },
+          {
+            "name": "zIndex",
+            "required": true,
+            "type": "10000,"
+          }
+        ],
+        "emits": [
+          "onApply",
+          "onClose"
+        ],
+        "commands": [],
+        "shortcuts": [],
+        "sidebarKinds": [],
+        "pluginHooks": []
+      },
+      "status": "react-only"
+    },
+    {
+      "name": "highlightColors",
+      "react": {
+        "componentName": "highlightColors",
+        "filePath": "packages/react/src/lib/highlightColors.ts",
+        "isCoreReexport": false,
+        "props": [],
+        "emits": [],
+        "commands": [],
+        "shortcuts": [],
+        "sidebarKinds": [],
+        "pluginHooks": []
+      },
+      "status": "react-only"
+    },
+    {
+      "name": "HorizontalRuler",
+      "react": {
+        "componentName": "HorizontalRuler",
+        "filePath": "packages/react/src/components/ui/HorizontalRuler.tsx",
+        "isCoreReexport": false,
+        "props": [
+          {
+            "name": "sectionProps",
+            "required": false,
+            "type": "SectionProperties | null"
+          },
+          {
+            "name": "zoom",
+            "required": false,
+            "type": "number"
+          },
+          {
+            "name": "editable",
+            "required": false,
+            "type": "boolean"
+          },
+          {
+            "name": "onLeftMarginChange",
+            "required": false,
+            "type": "(marginTwips: number) => void"
+          },
+          {
+            "name": "onRightMarginChange",
+            "required": false,
+            "type": "(marginTwips: number) => void"
+          },
+          {
+            "name": "onFirstLineIndentChange",
+            "required": false,
+            "type": "(indentTwips: number) => void"
+          },
+          {
+            "name": "showFirstLineIndent",
+            "required": false,
+            "type": "boolean"
+          },
+          {
+            "name": "firstLineIndent",
+            "required": false,
+            "type": "number"
+          },
+          {
+            "name": "hangingIndent",
+            "required": false,
+            "type": "boolean"
+          },
+          {
+            "name": "indentLeft",
+            "required": false,
+            "type": "number"
+          },
+          {
+            "name": "indentRight",
+            "required": false,
+            "type": "number"
+          },
+          {
+            "name": "onIndentLeftChange",
+            "required": false,
+            "type": "(indentTwips: number) => void"
+          },
+          {
+            "name": "onIndentRightChange",
+            "required": false,
+            "type": "(indentTwips: number) => void"
+          },
+          {
+            "name": "unit",
+            "required": false,
+            "type": "'inch' | 'cm'"
+          },
+          {
+            "name": "className",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "style",
+            "required": false,
+            "type": "CSSProperties"
+          },
+          {
+            "name": "tabMarks",
+            "required": false,
+            "type": "TabMark[] | null"
+          },
+          {
+            "name": "onTabMarkRemove",
+            "required": false,
+            "type": "(positionTwips: number) => void"
+          }
+        ],
+        "emits": [
+          "onFirstLineIndentChange",
+          "onIndentLeftChange",
+          "onIndentRightChange",
+          "onLeftMarginChange",
+          "onRightMarginChange",
+          "onTabMarkRemove"
+        ],
+        "commands": [],
+        "shortcuts": [],
+        "sidebarKinds": [],
+        "pluginHooks": []
+      },
+      "vue": {
+        "componentName": "HorizontalRuler",
+        "filePath": "packages/vue/src/HorizontalRuler.ts",
+        "isCoreReexport": false,
+        "props": [
+          {
+            "name": "name",
+            "required": true,
+            "type": "'HorizontalRuler',"
+          },
+          {
+            "name": "props",
+            "required": true,
+            "type": "{"
+          },
+          {
+            "name": "editor",
+            "required": true,
+            "type": "{ type: Object as PropType<Editor | null>, default: null },"
+          },
+          {
+            "name": "zoom",
+            "required": true,
+            "type": "{ type: Number, default: 1 },"
+          },
+          {
+            "name": "unit",
+            "required": true,
+            "type": "{ type: String as PropType<RulerUnit>, default: 'inch' },"
+          }
+        ],
+        "emits": [],
+        "commands": [],
+        "shortcuts": [],
+        "sidebarKinds": [],
+        "pluginHooks": []
+      },
+      "divergence": {
+        "propsAddedInReact": [
+          {
+            "name": "sectionProps",
+            "required": false,
+            "type": "SectionProperties | null"
+          },
+          {
+            "name": "editable",
+            "required": false,
+            "type": "boolean"
+          },
+          {
+            "name": "onLeftMarginChange",
+            "required": false,
+            "type": "(marginTwips: number) => void"
+          },
+          {
+            "name": "onRightMarginChange",
+            "required": false,
+            "type": "(marginTwips: number) => void"
+          },
+          {
+            "name": "onFirstLineIndentChange",
+            "required": false,
+            "type": "(indentTwips: number) => void"
+          },
+          {
+            "name": "showFirstLineIndent",
+            "required": false,
+            "type": "boolean"
+          },
+          {
+            "name": "firstLineIndent",
+            "required": false,
+            "type": "number"
+          },
+          {
+            "name": "hangingIndent",
+            "required": false,
+            "type": "boolean"
+          },
+          {
+            "name": "indentLeft",
+            "required": false,
+            "type": "number"
+          },
+          {
+            "name": "indentRight",
+            "required": false,
+            "type": "number"
+          },
+          {
+            "name": "onIndentLeftChange",
+            "required": false,
+            "type": "(indentTwips: number) => void"
+          },
+          {
+            "name": "onIndentRightChange",
+            "required": false,
+            "type": "(indentTwips: number) => void"
+          },
+          {
+            "name": "className",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "style",
+            "required": false,
+            "type": "CSSProperties"
+          },
+          {
+            "name": "tabMarks",
+            "required": false,
+            "type": "TabMark[] | null"
+          },
+          {
+            "name": "onTabMarkRemove",
+            "required": false,
+            "type": "(positionTwips: number) => void"
+          }
+        ],
+        "propsAddedInVue": [
+          {
+            "name": "name",
+            "required": true,
+            "type": "'HorizontalRuler',"
+          },
+          {
+            "name": "props",
+            "required": true,
+            "type": "{"
+          },
+          {
+            "name": "editor",
+            "required": true,
+            "type": "{ type: Object as PropType<Editor | null>, default: null },"
+          }
+        ],
+        "emitsAddedInReact": [
+          "first-line-indent-change",
+          "indent-left-change",
+          "indent-right-change",
+          "left-margin-change",
+          "right-margin-change",
+          "tab-mark-remove"
+        ],
+        "emitsAddedInVue": []
+      },
+      "status": "signature-divergence"
+    },
+    {
+      "name": "HyperlinkDialog",
+      "react": {
+        "componentName": "HyperlinkDialog",
+        "filePath": "packages/react/src/components/dialogs/HyperlinkDialog.tsx",
+        "isCoreReexport": false,
+        "props": [
+          {
+            "name": "isOpen",
+            "required": true,
+            "type": "boolean"
+          },
+          {
+            "name": "onClose",
+            "required": true,
+            "type": "() => void"
+          },
+          {
+            "name": "onSubmit",
+            "required": true,
+            "type": "(data: HyperlinkData) => void"
+          },
+          {
+            "name": "onRemove",
+            "required": false,
+            "type": "() => void"
+          },
+          {
+            "name": "initialData",
+            "required": false,
+            "type": "HyperlinkData"
+          },
+          {
+            "name": "selectedText",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "isEditing",
+            "required": false,
+            "type": "boolean"
+          },
+          {
+            "name": "bookmarks",
+            "required": false,
+            "type": "BookmarkOption[]"
+          },
+          {
+            "name": "className",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "style",
+            "required": false,
+            "type": "CSSProperties"
+          },
+          {
+            "name": "position",
+            "required": true,
+            "type": "'fixed',"
+          },
+          {
+            "name": "top",
+            "required": true,
+            "type": "0,"
+          },
+          {
+            "name": "left",
+            "required": true,
+            "type": "0,"
+          },
+          {
+            "name": "right",
+            "required": true,
+            "type": "0,"
+          },
+          {
+            "name": "bottom",
+            "required": true,
+            "type": "0,"
+          },
+          {
+            "name": "backgroundColor",
+            "required": true,
+            "type": "'var(--doc-overlay)',"
+          },
+          {
+            "name": "display",
+            "required": true,
+            "type": "'flex',"
+          },
+          {
+            "name": "alignItems",
+            "required": true,
+            "type": "'center',"
+          },
+          {
+            "name": "justifyContent",
+            "required": true,
+            "type": "'center',"
+          },
+          {
+            "name": "zIndex",
+            "required": true,
+            "type": "10000,"
+          }
+        ],
+        "emits": [
+          "onClose",
+          "onRemove",
+          "onSubmit"
+        ],
+        "commands": [],
+        "shortcuts": [],
+        "sidebarKinds": [],
+        "pluginHooks": []
+      },
+      "status": "react-only"
+    },
+    {
+      "name": "HyperlinkPopup",
+      "react": {
+        "componentName": "HyperlinkPopup",
+        "filePath": "packages/react/src/components/ui/HyperlinkPopup.tsx",
+        "isCoreReexport": false,
+        "props": [
+          {
+            "name": "data",
+            "required": true,
+            "type": "HyperlinkPopupData | null"
+          },
+          {
+            "name": "onNavigate",
+            "required": true,
+            "type": "(href: string) => void"
+          },
+          {
+            "name": "onCopy",
+            "required": true,
+            "type": "(href: string) => void"
+          },
+          {
+            "name": "onEdit",
+            "required": true,
+            "type": "(displayText: string, href: string) => void"
+          },
+          {
+            "name": "onRemove",
+            "required": true,
+            "type": "() => void"
+          },
+          {
+            "name": "onClose",
+            "required": true,
+            "type": "() => void"
+          },
+          {
+            "name": "readOnly",
+            "required": false,
+            "type": "boolean"
+          },
+          {
+            "name": "position",
+            "required": true,
+            "type": "'absolute',"
+          },
+          {
+            "name": "zIndex",
+            "required": true,
+            "type": "10000,"
+          },
+          {
+            "name": "background",
+            "required": true,
+            "type": "'var(--doc-surface)',"
+          },
+          {
+            "name": "borderRadius",
+            "required": true,
+            "type": "'8px',"
+          },
+          {
+            "name": "boxShadow",
+            "required": true,
+            "type": "'0 1px 3px var(--doc-shadow), 0 4px 12px var(--doc-shadow-subtle)',"
+          },
+          {
+            "name": "border",
+            "required": true,
+            "type": "'1px solid var(--doc-border-light)',"
+          },
+          {
+            "name": "fontFamily",
+            "required": true,
+            "type": "'-apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, sans-serif',"
+          },
+          {
+            "name": "fontSize",
+            "required": true,
+            "type": "'14px',"
+          }
+        ],
+        "emits": [
+          "onClose",
+          "onCopy",
+          "onEdit",
+          "onNavigate",
+          "onRemove"
+        ],
+        "commands": [],
+        "shortcuts": [],
+        "sidebarKinds": [],
+        "pluginHooks": []
+      },
+      "status": "react-only"
+    },
+    {
+      "name": "IconGridDropdown",
+      "react": {
+        "componentName": "IconGridDropdown",
+        "filePath": "packages/react/src/components/ui/IconGridDropdown.tsx",
+        "isCoreReexport": false,
+        "props": [],
+        "emits": [],
+        "commands": [],
+        "shortcuts": [],
+        "sidebarKinds": [],
+        "pluginHooks": []
+      },
+      "status": "react-only"
+    },
+    {
+      "name": "Icons",
+      "react": {
+        "componentName": "Icons",
+        "filePath": "packages/react/src/components/ui/Icons.tsx",
+        "isCoreReexport": false,
+        "props": [
+          {
+            "name": "size",
+            "required": false,
+            "type": "number"
+          },
+          {
+            "name": "className",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "style",
+            "required": false,
+            "type": "CSSProperties"
+          }
+        ],
+        "emits": [],
+        "commands": [],
+        "shortcuts": [],
+        "sidebarKinds": [],
+        "pluginHooks": []
+      },
+      "status": "react-only"
+    },
+    {
+      "name": "ImageContextMenu",
+      "react": {
+        "componentName": "ImageContextMenu",
+        "filePath": "packages/react/src/components/ImageContextMenu.tsx",
+        "isCoreReexport": false,
+        "props": [
+          {
+            "name": "isOpen",
+            "required": true,
+            "type": "boolean"
+          },
+          {
+            "name": "position",
+            "required": true,
+            "type": "{ x: number"
+          }
+        ],
+        "emits": [],
+        "commands": [],
+        "shortcuts": [],
+        "sidebarKinds": [],
+        "pluginHooks": []
+      },
+      "status": "react-only"
+    },
+    {
+      "name": "imageLayout",
+      "react": {
+        "componentName": "imageLayout",
+        "filePath": "packages/react/src/lib/imageLayout.ts",
+        "isCoreReexport": false,
+        "props": [],
+        "emits": [],
+        "commands": [],
+        "shortcuts": [],
+        "sidebarKinds": [],
+        "pluginHooks": []
+      },
+      "status": "react-only"
+    },
+    {
+      "name": "ImagePositionDialog",
+      "react": {
+        "componentName": "ImagePositionDialog",
+        "filePath": "packages/react/src/components/dialogs/ImagePositionDialog.tsx",
+        "isCoreReexport": false,
+        "props": [
+          {
+            "name": "isOpen",
+            "required": true,
+            "type": "boolean"
+          },
+          {
+            "name": "onClose",
+            "required": true,
+            "type": "() => void"
+          },
+          {
+            "name": "onApply",
+            "required": true,
+            "type": "(data: ImagePositionData) => void"
+          },
+          {
+            "name": "currentData",
+            "required": false,
+            "type": "ImagePositionData"
+          },
+          {
+            "name": "position",
+            "required": true,
+            "type": "'fixed',"
+          },
+          {
+            "name": "top",
+            "required": true,
+            "type": "0,"
+          },
+          {
+            "name": "left",
+            "required": true,
+            "type": "0,"
+          },
+          {
+            "name": "right",
+            "required": true,
+            "type": "0,"
+          },
+          {
+            "name": "bottom",
+            "required": true,
+            "type": "0,"
+          },
+          {
+            "name": "backgroundColor",
+            "required": true,
+            "type": "'var(--doc-overlay)',"
+          },
+          {
+            "name": "display",
+            "required": true,
+            "type": "'flex',"
+          },
+          {
+            "name": "alignItems",
+            "required": true,
+            "type": "'center',"
+          },
+          {
+            "name": "justifyContent",
+            "required": true,
+            "type": "'center',"
+          },
+          {
+            "name": "zIndex",
+            "required": true,
+            "type": "10000,"
+          }
+        ],
+        "emits": [
+          "onApply",
+          "onClose"
+        ],
+        "commands": [],
+        "shortcuts": [],
+        "sidebarKinds": [],
+        "pluginHooks": []
+      },
+      "status": "react-only"
+    },
+    {
+      "name": "ImagePropertiesDialog",
+      "react": {
+        "componentName": "ImagePropertiesDialog",
+        "filePath": "packages/react/src/components/dialogs/ImagePropertiesDialog.tsx",
+        "isCoreReexport": false,
+        "props": [
+          {
+            "name": "isOpen",
+            "required": true,
+            "type": "boolean"
+          },
+          {
+            "name": "onClose",
+            "required": true,
+            "type": "() => void"
+          },
+          {
+            "name": "onApply",
+            "required": true,
+            "type": "(data: ImagePropertiesData) => void"
+          },
+          {
+            "name": "currentData",
+            "required": false,
+            "type": "ImagePropertiesData"
+          },
+          {
+            "name": "position",
+            "required": true,
+            "type": "'fixed',"
+          },
+          {
+            "name": "top",
+            "required": true,
+            "type": "0,"
+          },
+          {
+            "name": "left",
+            "required": true,
+            "type": "0,"
+          },
+          {
+            "name": "right",
+            "required": true,
+            "type": "0,"
+          },
+          {
+            "name": "bottom",
+            "required": true,
+            "type": "0,"
+          },
+          {
+            "name": "backgroundColor",
+            "required": true,
+            "type": "'var(--doc-overlay)',"
+          },
+          {
+            "name": "display",
+            "required": true,
+            "type": "'flex',"
+          },
+          {
+            "name": "alignItems",
+            "required": true,
+            "type": "'center',"
+          },
+          {
+            "name": "justifyContent",
+            "required": true,
+            "type": "'center',"
+          },
+          {
+            "name": "zIndex",
+            "required": true,
+            "type": "10000,"
+          }
+        ],
+        "emits": [
+          "onApply",
+          "onClose"
+        ],
+        "commands": [],
+        "shortcuts": [],
+        "sidebarKinds": [],
+        "pluginHooks": []
+      },
+      "status": "react-only"
+    },
+    {
+      "name": "ImageTransformDropdown",
+      "react": {
+        "componentName": "ImageTransformDropdown",
+        "filePath": "packages/react/src/components/ui/ImageTransformDropdown.tsx",
+        "isCoreReexport": false,
+        "props": [
+          {
+            "name": "onTransform",
+            "required": true,
+            "type": "(action: TransformAction) => void"
+          },
+          {
+            "name": "disabled",
+            "required": false,
+            "type": "boolean"
+          },
+          {
+            "name": "label",
+            "required": true,
+            "type": "t(opt.labelKey),"
+          }
+        ],
+        "emits": [
+          "onTransform"
+        ],
+        "commands": [],
+        "shortcuts": [],
+        "sidebarKinds": [],
+        "pluginHooks": []
+      },
+      "status": "react-only"
+    },
+    {
+      "name": "ImageWrapDropdown",
+      "react": {
+        "componentName": "ImageWrapDropdown",
+        "filePath": "packages/react/src/components/ui/ImageWrapDropdown.tsx",
+        "isCoreReexport": false,
+        "props": [
+          {
+            "name": "imageContext",
+            "required": true,
+            "type": "{"
+          },
+          {
+            "name": "wrapType",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "displayMode",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "cssFloat",
+            "required": true,
+            "type": "string | null"
+          }
+        ],
+        "emits": [],
+        "commands": [],
+        "shortcuts": [],
+        "sidebarKinds": [],
+        "pluginHooks": []
+      },
+      "status": "react-only"
+    },
+    {
+      "name": "index",
+      "react": {
+        "componentName": "index",
+        "filePath": "packages/react/src/index.ts",
+        "isCoreReexport": false,
+        "props": [],
+        "emits": [],
+        "commands": [],
+        "shortcuts": [],
+        "sidebarKinds": [],
+        "pluginHooks": []
+      },
+      "vue": {
+        "componentName": "index",
+        "filePath": "packages/vue/src/index.ts",
+        "isCoreReexport": false,
+        "props": [],
+        "emits": [],
+        "commands": [],
+        "shortcuts": [],
+        "sidebarKinds": [],
+        "pluginHooks": []
+      },
+      "divergence": {
+        "propsAddedInReact": [],
+        "propsAddedInVue": [],
+        "emitsAddedInReact": [],
+        "emitsAddedInVue": []
+      },
+      "status": "present-in-both"
+    },
+    {
+      "name": "InsertImageDialog",
+      "react": {
+        "componentName": "InsertImageDialog",
+        "filePath": "packages/react/src/components/dialogs/InsertImageDialog.tsx",
+        "isCoreReexport": false,
+        "props": [
+          {
+            "name": "isOpen",
+            "required": true,
+            "type": "boolean"
+          },
+          {
+            "name": "onClose",
+            "required": true,
+            "type": "() => void"
+          },
+          {
+            "name": "onInsert",
+            "required": true,
+            "type": "(data: ImageData) => void"
+          },
+          {
+            "name": "maxWidth",
+            "required": false,
+            "type": "number"
+          },
+          {
+            "name": "maxHeight",
+            "required": false,
+            "type": "number"
+          },
+          {
+            "name": "accept",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "className",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "style",
+            "required": false,
+            "type": "CSSProperties"
+          },
+          {
+            "name": "position",
+            "required": true,
+            "type": "'fixed',"
+          },
+          {
+            "name": "top",
+            "required": true,
+            "type": "0,"
+          },
+          {
+            "name": "left",
+            "required": true,
+            "type": "0,"
+          },
+          {
+            "name": "right",
+            "required": true,
+            "type": "0,"
+          },
+          {
+            "name": "bottom",
+            "required": true,
+            "type": "0,"
+          },
+          {
+            "name": "backgroundColor",
+            "required": true,
+            "type": "'var(--doc-overlay)',"
+          },
+          {
+            "name": "display",
+            "required": true,
+            "type": "'flex',"
+          },
+          {
+            "name": "alignItems",
+            "required": true,
+            "type": "'center',"
+          },
+          {
+            "name": "justifyContent",
+            "required": true,
+            "type": "'center',"
+          },
+          {
+            "name": "zIndex",
+            "required": true,
+            "type": "10000,"
+          }
+        ],
+        "emits": [
+          "onClose",
+          "onInsert"
+        ],
+        "commands": [],
+        "shortcuts": [],
+        "sidebarKinds": [],
+        "pluginHooks": []
+      },
+      "status": "react-only"
+    },
+    {
+      "name": "InsertSymbolDialog",
+      "react": {
+        "componentName": "InsertSymbolDialog",
+        "filePath": "packages/react/src/components/dialogs/InsertSymbolDialog.tsx",
+        "isCoreReexport": false,
+        "props": [
+          {
+            "name": "isOpen",
+            "required": true,
+            "type": "boolean"
+          },
+          {
+            "name": "onClose",
+            "required": true,
+            "type": "() => void"
+          },
+          {
+            "name": "onInsert",
+            "required": true,
+            "type": "(symbol: string) => void"
+          },
+          {
+            "name": "recentSymbols",
+            "required": false,
+            "type": "string[]"
+          },
+          {
+            "name": "className",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "style",
+            "required": false,
+            "type": "CSSProperties"
+          },
+          {
+            "name": "position",
+            "required": true,
+            "type": "'fixed',"
+          },
+          {
+            "name": "top",
+            "required": true,
+            "type": "0,"
+          },
+          {
+            "name": "left",
+            "required": true,
+            "type": "0,"
+          },
+          {
+            "name": "right",
+            "required": true,
+            "type": "0,"
+          },
+          {
+            "name": "bottom",
+            "required": true,
+            "type": "0,"
+          },
+          {
+            "name": "backgroundColor",
+            "required": true,
+            "type": "'var(--doc-overlay)',"
+          },
+          {
+            "name": "display",
+            "required": true,
+            "type": "'flex',"
+          },
+          {
+            "name": "alignItems",
+            "required": true,
+            "type": "'center',"
+          },
+          {
+            "name": "justifyContent",
+            "required": true,
+            "type": "'center',"
+          },
+          {
+            "name": "zIndex",
+            "required": true,
+            "type": "10000,"
+          }
+        ],
+        "emits": [
+          "onClose",
+          "onInsert"
+        ],
+        "commands": [],
+        "shortcuts": [],
+        "sidebarKinds": [],
+        "pluginHooks": []
+      },
+      "status": "react-only"
+    },
+    {
+      "name": "InsertTableDialog",
+      "react": {
+        "componentName": "InsertTableDialog",
+        "filePath": "packages/react/src/components/dialogs/InsertTableDialog.tsx",
+        "isCoreReexport": false,
+        "props": [
+          {
+            "name": "isOpen",
+            "required": true,
+            "type": "boolean"
+          },
+          {
+            "name": "onClose",
+            "required": true,
+            "type": "() => void"
+          },
+          {
+            "name": "onInsert",
+            "required": true,
+            "type": "(config: TableConfig) => void"
+          },
+          {
+            "name": "maxGridRows",
+            "required": false,
+            "type": "number"
+          },
+          {
+            "name": "maxGridColumns",
+            "required": false,
+            "type": "number"
+          },
+          {
+            "name": "maxRows",
+            "required": false,
+            "type": "number"
+          },
+          {
+            "name": "maxColumns",
+            "required": false,
+            "type": "number"
+          },
+          {
+            "name": "className",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "style",
+            "required": false,
+            "type": "CSSProperties"
+          },
+          {
+            "name": "position",
+            "required": true,
+            "type": "'fixed',"
+          },
+          {
+            "name": "top",
+            "required": true,
+            "type": "0,"
+          },
+          {
+            "name": "left",
+            "required": true,
+            "type": "0,"
+          },
+          {
+            "name": "right",
+            "required": true,
+            "type": "0,"
+          },
+          {
+            "name": "bottom",
+            "required": true,
+            "type": "0,"
+          },
+          {
+            "name": "backgroundColor",
+            "required": true,
+            "type": "'var(--doc-overlay)',"
+          },
+          {
+            "name": "display",
+            "required": true,
+            "type": "'flex',"
+          },
+          {
+            "name": "alignItems",
+            "required": true,
+            "type": "'center',"
+          },
+          {
+            "name": "justifyContent",
+            "required": true,
+            "type": "'center',"
+          },
+          {
+            "name": "zIndex",
+            "required": true,
+            "type": "10000,"
+          }
+        ],
+        "emits": [
+          "onClose",
+          "onInsert"
+        ],
+        "commands": [],
+        "shortcuts": [],
+        "sidebarKinds": [],
+        "pluginHooks": []
+      },
+      "status": "react-only"
+    },
+    {
+      "name": "KeyboardShortcutsDialog",
+      "react": {
+        "componentName": "KeyboardShortcutsDialog",
+        "filePath": "packages/react/src/components/dialogs/KeyboardShortcutsDialog.tsx",
+        "isCoreReexport": false,
+        "props": [
+          {
+            "name": "isOpen",
+            "required": true,
+            "type": "boolean"
+          },
+          {
+            "name": "onClose",
+            "required": true,
+            "type": "() => void"
+          },
+          {
+            "name": "customShortcuts",
+            "required": false,
+            "type": "KeyboardShortcut[]"
+          },
+          {
+            "name": "showSearch",
+            "required": false,
+            "type": "boolean"
+          },
+          {
+            "name": "className",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "enabled",
+            "required": false,
+            "type": "boolean"
+          },
+          {
+            "name": "openShortcut",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "isOpen",
+            "required": true,
+            "type": "boolean"
+          },
+          {
+            "name": "open",
+            "required": true,
+            "type": "() => void"
+          },
+          {
+            "name": "close",
+            "required": true,
+            "type": "() => void"
+          },
+          {
+            "name": "toggle",
+            "required": true,
+            "type": "() => void"
+          },
+          {
+            "name": "handleKeyDown",
+            "required": true,
+            "type": "(event: KeyboardEvent) => void"
+          }
+        ],
+        "emits": [
+          "onClose"
+        ],
+        "commands": [],
+        "shortcuts": [
+          "'Ctrl+C'"
+        ],
+        "sidebarKinds": [],
+        "pluginHooks": []
+      },
+      "status": "react-only"
+    },
+    {
+      "name": "retired-core-compat",
+      "react": {
+        "componentName": "retired-core-compat",
+        "filePath": "packages/react/src/retired-core-compat.ts",
+        "isCoreReexport": false,
+        "props": [],
+        "emits": [],
+        "commands": [],
+        "shortcuts": [],
+        "sidebarKinds": [],
+        "pluginHooks": []
+      },
+      "status": "react-only"
+    },
+    {
+      "name": "LineSpacingPicker",
+      "react": {
+        "componentName": "LineSpacingPicker",
+        "filePath": "packages/react/src/components/ui/LineSpacingPicker.tsx",
+        "isCoreReexport": false,
+        "props": [
+          {
+            "name": "value",
+            "required": false,
+            "type": "number"
+          },
+          {
+            "name": "onChange",
+            "required": false,
+            "type": "(twipsValue: number) => void"
+          },
+          {
+            "name": "options",
+            "required": false,
+            "type": "LineSpacingOption[]"
+          },
+          {
+            "name": "disabled",
+            "required": false,
+            "type": "boolean"
+          },
+          {
+            "name": "className",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "width",
+            "required": false,
+            "type": "number | string"
+          }
+        ],
+        "emits": [
+          "onChange"
+        ],
+        "commands": [],
+        "shortcuts": [],
+        "sidebarKinds": [],
+        "pluginHooks": []
+      },
+      "status": "react-only"
+    },
+    {
+      "name": "ListButtons",
+      "react": {
+        "componentName": "ListButtons",
+        "filePath": "packages/react/src/components/ui/ListButtons.tsx",
+        "isCoreReexport": false,
+        "props": [
+          {
+            "name": "listState",
+            "required": false,
+            "type": "ListState"
+          },
+          {
+            "name": "onBulletList",
+            "required": false,
+            "type": "() => void"
+          },
+          {
+            "name": "onNumberedList",
+            "required": false,
+            "type": "() => void"
+          },
+          {
+            "name": "onIndent",
+            "required": false,
+            "type": "() => void"
+          },
+          {
+            "name": "onOutdent",
+            "required": false,
+            "type": "() => void"
+          },
+          {
+            "name": "disabled",
+            "required": false,
+            "type": "boolean"
+          },
+          {
+            "name": "className",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "style",
+            "required": false,
+            "type": "CSSProperties"
+          },
+          {
+            "name": "showIndentButtons",
+            "required": false,
+            "type": "boolean"
+          },
+          {
+            "name": "compact",
+            "required": false,
+            "type": "boolean"
+          },
+          {
+            "name": "hasIndent",
+            "required": false,
+            "type": "boolean"
+          },
+          {
+            "name": "active",
+            "required": false,
+            "type": "boolean"
+          },
+          {
+            "name": "disabled",
+            "required": false,
+            "type": "boolean"
+          },
+          {
+            "name": "title",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "onClick",
+            "required": false,
+            "type": "() => void"
+          },
+          {
+            "name": "children",
+            "required": true,
+            "type": "ReactNode"
+          },
+          {
+            "name": "className",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "style",
+            "required": false,
+            "type": "CSSProperties"
+          },
+          {
+            "name": "display",
+            "required": true,
+            "type": "'inline-flex',"
+          },
+          {
+            "name": "alignItems",
+            "required": true,
+            "type": "'center',"
+          },
+          {
+            "name": "gap",
+            "required": true,
+            "type": "'4px',"
+          }
+        ],
+        "emits": [
+          "onBulletList",
+          "onClick",
+          "onIndent",
+          "onNumberedList",
+          "onOutdent"
+        ],
+        "commands": [],
+        "shortcuts": [],
+        "sidebarKinds": [],
+        "pluginHooks": []
+      },
+      "status": "react-only"
+    },
+    {
+      "name": "listState",
+      "react": {
+        "componentName": "listState",
+        "filePath": "packages/react/src/lib/listState.ts",
+        "isCoreReexport": false,
+        "props": [],
+        "emits": [],
+        "commands": [],
+        "shortcuts": [],
+        "sidebarKinds": [],
+        "pluginHooks": []
+      },
+      "status": "react-only"
+    },
+    {
+      "name": "LocaleContext",
+      "react": {
+        "componentName": "LocaleContext",
+        "filePath": "packages/react/src/i18n/LocaleContext.tsx",
+        "isCoreReexport": false,
+        "props": [
+          {
+            "name": "i18n",
+            "required": false,
+            "type": "Translations"
+          },
+          {
+            "name": "children",
+            "required": true,
+            "type": "ReactNode"
+          }
+        ],
+        "emits": [],
+        "commands": [],
+        "shortcuts": [],
+        "sidebarKinds": [],
+        "pluginHooks": []
+      },
+      "status": "react-only"
+    },
+    {
+      "name": "LocalizedAgentPanel",
+      "react": {
+        "componentName": "LocalizedAgentPanel",
+        "filePath": "packages/react/src/components/DocxEditor/LocalizedAgentPanel.tsx",
+        "isCoreReexport": false,
+        "props": [],
+        "emits": [],
+        "commands": [],
+        "shortcuts": [],
+        "sidebarKinds": [],
+        "pluginHooks": []
+      },
+      "status": "react-only"
+    },
+    {
+      "name": "MaterialSymbol",
+      "react": {
+        "componentName": "MaterialSymbol",
+        "filePath": "packages/react/src/components/ui/MaterialSymbol.tsx",
+        "isCoreReexport": false,
+        "props": [],
+        "emits": [],
+        "commands": [],
+        "shortcuts": [],
+        "sidebarKinds": [],
+        "pluginHooks": []
+      },
+      "status": "react-only"
+    },
+    {
+      "name": "MenuDropdown",
+      "react": {
+        "componentName": "MenuDropdown",
+        "filePath": "packages/react/src/components/ui/MenuDropdown.tsx",
+        "isCoreReexport": false,
+        "props": [
+          {
+            "name": "label",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "items",
+            "required": true,
+            "type": "MenuEntry[]"
+          },
+          {
+            "name": "disabled",
+            "required": false,
+            "type": "boolean"
+          },
+          {
+            "name": "showChevron",
+            "required": false,
+            "type": "boolean"
+          },
+          {
+            "name": "display",
+            "required": true,
+            "type": "'flex',"
+          },
+          {
+            "name": "alignItems",
+            "required": true,
+            "type": "'center',"
+          },
+          {
+            "name": "gap",
+            "required": true,
+            "type": "2,"
+          },
+          {
+            "name": "padding",
+            "required": true,
+            "type": "'2px 8px',"
+          },
+          {
+            "name": "border",
+            "required": true,
+            "type": "'none',"
+          },
+          {
+            "name": "background",
+            "required": true,
+            "type": "'transparent',"
+          },
+          {
+            "name": "borderRadius",
+            "required": true,
+            "type": "4,"
+          },
+          {
+            "name": "cursor",
+            "required": true,
+            "type": "'pointer',"
+          },
+          {
+            "name": "fontSize",
+            "required": true,
+            "type": "13,"
+          },
+          {
+            "name": "fontWeight",
+            "required": true,
+            "type": "400,"
+          },
+          {
+            "name": "color",
+            "required": true,
+            "type": "'var(--doc-text)',"
+          },
+          {
+            "name": "whiteSpace",
+            "required": true,
+            "type": "'nowrap',"
+          },
+          {
+            "name": "height",
+            "required": true,
+            "type": "28,"
+          },
+          {
+            "name": "lineHeight",
+            "required": true,
+            "type": "'28px',"
+          }
+        ],
+        "emits": [],
+        "commands": [],
+        "shortcuts": [],
+        "sidebarKinds": [],
+        "pluginHooks": []
+      },
+      "status": "react-only"
+    },
+    {
+      "name": "normalizeFontFamilies",
+      "react": {
+        "componentName": "normalizeFontFamilies",
+        "filePath": "packages/react/src/components/ui/normalizeFontFamilies.ts",
+        "isCoreReexport": false,
+        "props": [],
+        "emits": [],
+        "commands": [],
+        "shortcuts": [],
+        "sidebarKinds": [],
+        "pluginHooks": []
+      },
+      "status": "react-only"
+    },
+    {
+      "name": "operations",
+      "react": {
+        "componentName": "operations",
+        "filePath": "packages/react/src/components/ui/TableToolbar/operations.ts",
+        "isCoreReexport": false,
+        "props": [],
+        "emits": [],
+        "commands": [],
+        "shortcuts": [],
+        "sidebarKinds": [],
+        "pluginHooks": []
+      },
+      "status": "react-only"
+    },
+    {
+      "name": "OutlineToggleButton",
+      "react": {
+        "componentName": "OutlineToggleButton",
+        "filePath": "packages/react/src/components/DocxEditor/OutlineToggleButton.tsx",
+        "isCoreReexport": false,
+        "props": [],
+        "emits": [],
+        "commands": [],
+        "shortcuts": [],
+        "sidebarKinds": [],
+        "pluginHooks": []
+      },
+      "status": "react-only"
+    },
+    {
+      "name": "PageIndicator",
+      "react": {
+        "componentName": "PageIndicator",
+        "filePath": "packages/react/src/components/DocxEditor/PageIndicator.tsx",
+        "isCoreReexport": false,
+        "props": [],
+        "emits": [],
+        "commands": [],
+        "shortcuts": [],
+        "sidebarKinds": [],
+        "pluginHooks": []
+      },
+      "vue": {
+        "componentName": "PageIndicator",
+        "filePath": "packages/vue/src/PageIndicator.ts",
+        "isCoreReexport": false,
+        "props": [
+          {
+            "name": "name",
+            "required": true,
+            "type": "'PageIndicator',"
+          },
+          {
+            "name": "props",
+            "required": true,
+            "type": "{"
+          },
+          {
+            "name": "editor",
+            "required": true,
+            "type": "{ type: Object as PropType<Editor | null>, default: null },"
+          },
+          {
+            "name": "visible",
+            "required": true,
+            "type": "{ type: Boolean, default: true },"
+          }
+        ],
+        "emits": [],
+        "commands": [],
+        "shortcuts": [],
+        "sidebarKinds": [],
+        "pluginHooks": []
+      },
+      "divergence": {
+        "propsAddedInReact": [],
+        "propsAddedInVue": [
+          {
+            "name": "name",
+            "required": true,
+            "type": "'PageIndicator',"
+          },
+          {
+            "name": "props",
+            "required": true,
+            "type": "{"
+          },
+          {
+            "name": "editor",
+            "required": true,
+            "type": "{ type: Object as PropType<Editor | null>, default: null },"
+          },
+          {
+            "name": "visible",
+            "required": true,
+            "type": "{ type: Boolean, default: true },"
+          }
+        ],
+        "emitsAddedInReact": [],
+        "emitsAddedInVue": []
+      },
+      "status": "signature-divergence"
+    },
+    {
+      "name": "PageSetupDialog",
+      "react": {
+        "componentName": "PageSetupDialog",
+        "filePath": "packages/react/src/components/dialogs/PageSetupDialog.tsx",
+        "isCoreReexport": false,
+        "props": [
+          {
+            "name": "isOpen",
+            "required": true,
+            "type": "boolean"
+          },
+          {
+            "name": "onClose",
+            "required": true,
+            "type": "() => void"
+          },
+          {
+            "name": "onApply",
+            "required": true,
+            "type": "(props: Partial<SectionProperties>) => void"
+          },
+          {
+            "name": "currentProps",
+            "required": false,
+            "type": "SectionProperties"
+          },
+          {
+            "name": "position",
+            "required": true,
+            "type": "'fixed',"
+          },
+          {
+            "name": "top",
+            "required": true,
+            "type": "0,"
+          },
+          {
+            "name": "left",
+            "required": true,
+            "type": "0,"
+          },
+          {
+            "name": "right",
+            "required": true,
+            "type": "0,"
+          },
+          {
+            "name": "bottom",
+            "required": true,
+            "type": "0,"
+          },
+          {
+            "name": "backgroundColor",
+            "required": true,
+            "type": "'var(--doc-overlay)',"
+          },
+          {
+            "name": "display",
+            "required": true,
+            "type": "'flex',"
+          },
+          {
+            "name": "alignItems",
+            "required": true,
+            "type": "'center',"
+          },
+          {
+            "name": "justifyContent",
+            "required": true,
+            "type": "'center',"
+          },
+          {
+            "name": "zIndex",
+            "required": true,
+            "type": "10000,"
+          }
+        ],
+        "emits": [
+          "onApply",
+          "onClose"
+        ],
+        "commands": [],
+        "shortcuts": [],
+        "sidebarKinds": [],
+        "pluginHooks": []
+      },
+      "status": "react-only"
+    },
+    {
+      "name": "PaginatedDocxEditor",
+      "react": {
+        "componentName": "PaginatedDocxEditor",
+        "filePath": "packages/react/src/components/PaginatedDocxEditor.tsx",
+        "isCoreReexport": false,
+        "props": [],
+        "emits": [],
+        "commands": [],
+        "shortcuts": [],
+        "sidebarKinds": [],
+        "pluginHooks": []
+      },
+      "vue": {
+        "componentName": "PaginatedDocxEditor",
+        "filePath": "packages/vue/src/components/PaginatedDocxEditor.ts",
+        "isCoreReexport": false,
+        "props": [],
+        "emits": [],
+        "commands": [],
+        "shortcuts": [],
+        "sidebarKinds": [],
+        "pluginHooks": []
+      },
+      "divergence": {
+        "propsAddedInReact": [],
+        "propsAddedInVue": [],
+        "emitsAddedInReact": [],
+        "emitsAddedInVue": []
+      },
+      "status": "present-in-both"
+    },
+    {
+      "name": "PaginatedDocxEditorShell",
+      "react": {
+        "componentName": "PaginatedDocxEditorShell",
+        "filePath": "packages/react/src/components/PaginatedDocxEditorShell.tsx",
+        "isCoreReexport": false,
+        "props": [],
+        "emits": [],
+        "commands": [],
+        "shortcuts": [],
+        "sidebarKinds": [],
+        "pluginHooks": []
+      },
+      "status": "react-only"
+    },
+    {
+      "name": "paintDisplay",
+      "react": {
+        "componentName": "paintDisplay",
+        "filePath": "packages/react/src/paintDisplay.tsx",
+        "isCoreReexport": false,
+        "props": [],
+        "emits": [],
+        "commands": [],
+        "shortcuts": [],
+        "sidebarKinds": [],
+        "pluginHooks": []
+      },
+      "vue": {
+        "componentName": "paintDisplay",
+        "filePath": "packages/vue/src/paintDisplay.ts",
+        "isCoreReexport": false,
+        "props": [],
+        "emits": [],
+        "commands": [],
+        "shortcuts": [],
+        "sidebarKinds": [],
+        "pluginHooks": []
+      },
+      "divergence": {
+        "propsAddedInReact": [],
+        "propsAddedInVue": [],
+        "emitsAddedInReact": [],
+        "emitsAddedInVue": []
+      },
+      "status": "present-in-both"
+    },
+    {
+      "name": "PasteSpecialDialog",
+      "react": {
+        "componentName": "PasteSpecialDialog",
+        "filePath": "packages/react/src/components/dialogs/PasteSpecialDialog.tsx",
+        "isCoreReexport": false,
+        "props": [
+          {
+            "name": "isOpen",
+            "required": true,
+            "type": "boolean"
+          },
+          {
+            "name": "onClose",
+            "required": true,
+            "type": "() => void"
+          },
+          {
+            "name": "onPaste",
+            "required": true,
+            "type": "(content: ParsedClipboardContent, asPlainText: boolean) => void"
+          },
+          {
+            "name": "position",
+            "required": false,
+            "type": "{ x: number"
+          }
+        ],
+        "emits": [
+          "onClose",
+          "onPaste"
+        ],
+        "commands": [],
+        "shortcuts": [],
+        "sidebarKinds": [],
+        "pluginHooks": []
+      },
+      "status": "react-only"
+    },
+    {
+      "name": "ReplyInput",
+      "react": {
+        "componentName": "ReplyInput",
+        "filePath": "packages/react/src/components/sidebar/ReplyInput.tsx",
+        "isCoreReexport": false,
+        "props": [
+          {
+            "name": "onSubmit",
+            "required": true,
+            "type": "(text: string) => void"
+          }
+        ],
+        "emits": [
+          "onSubmit"
+        ],
+        "commands": [],
+        "shortcuts": [],
+        "sidebarKinds": [],
+        "pluginHooks": []
+      },
+      "status": "react-only"
+    },
+    {
+      "name": "ReplyThread",
+      "react": {
+        "componentName": "ReplyThread",
+        "filePath": "packages/react/src/components/sidebar/ReplyThread.tsx",
+        "isCoreReexport": false,
+        "props": [
+          {
+            "name": "replies",
+            "required": true,
+            "type": "Comment[]"
+          },
+          {
+            "name": "isExpanded",
+            "required": true,
+            "type": "boolean"
+          }
+        ],
+        "emits": [],
+        "commands": [],
+        "shortcuts": [],
+        "sidebarKinds": [],
+        "pluginHooks": []
+      },
+      "status": "react-only"
+    },
+    {
+      "name": "reportIssue",
+      "react": {
+        "componentName": "reportIssue",
+        "filePath": "packages/react/src/lib/reportIssue.ts",
+        "isCoreReexport": false,
+        "props": [],
+        "emits": [],
+        "commands": [],
+        "shortcuts": [],
+        "sidebarKinds": [],
+        "pluginHooks": []
+      },
+      "status": "react-only"
+    },
+    {
+      "name": "ResolvedCommentMarker",
+      "react": {
+        "componentName": "ResolvedCommentMarker",
+        "filePath": "packages/react/src/components/sidebar/ResolvedCommentMarker.tsx",
+        "isCoreReexport": false,
+        "props": [
+          {
+            "name": "comment",
+            "required": true,
+            "type": "Comment"
+          },
+          {
+            "name": "display",
+            "required": true,
+            "type": "'inline-flex',"
+          },
+          {
+            "name": "alignItems",
+            "required": true,
+            "type": "'center',"
+          },
+          {
+            "name": "cursor",
+            "required": true,
+            "type": "'pointer',"
+          },
+          {
+            "name": "color",
+            "required": true,
+            "type": "'var(--doc-text-muted)',"
+          },
+          {
+            "name": "padding",
+            "required": true,
+            "type": "2,"
+          }
+        ],
+        "emits": [],
+        "commands": [],
+        "shortcuts": [],
+        "sidebarKinds": [],
+        "pluginHooks": []
+      },
+      "status": "react-only"
+    },
+    {
+      "name": "resolveItemPositions",
+      "react": {
+        "componentName": "resolveItemPositions",
+        "filePath": "packages/react/src/plugin-api/resolveItemPositions.ts",
+        "isCoreReexport": false,
+        "props": [],
+        "emits": [],
+        "commands": [],
+        "shortcuts": [],
+        "sidebarKinds": [],
+        "pluginHooks": []
+      },
+      "status": "react-only"
+    },
+    {
+      "name": "ResponsiveToolbar",
+      "react": {
+        "componentName": "ResponsiveToolbar",
+        "filePath": "packages/react/src/components/ui/ResponsiveToolbar.tsx",
+        "isCoreReexport": false,
+        "props": [
+          {
+            "name": "items",
+            "required": true,
+            "type": "ToolbarItem[]"
+          },
+          {
+            "name": "overflowItems",
+            "required": false,
+            "type": "ToolbarItem[]"
+          },
+          {
+            "name": "alwaysShowOverflow",
+            "required": false,
+            "type": "boolean"
+          },
+          {
+            "name": "renderOverflowButton",
+            "required": false,
+            "type": "(itemCount: number, isOpen: boolean, onClick: () => void) => ReactNode"
+          },
+          {
+            "name": "renderOverflowMenu",
+            "required": false,
+            "type": "(items: ToolbarItem[], onClose: () => void) => ReactNode"
+          },
+          {
+            "name": "itemGap",
+            "required": false,
+            "type": "number"
+          },
+          {
+            "name": "padding",
+            "required": false,
+            "type": "number | string"
+          },
+          {
+            "name": "overflowButtonWidth",
+            "required": false,
+            "type": "number"
+          },
+          {
+            "name": "className",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "style",
+            "required": false,
+            "type": "CSSProperties"
+          },
+          {
+            "name": "height",
+            "required": false,
+            "type": "number | string"
+          },
+          {
+            "name": "backgroundColor",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "borderBottom",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "containerRef",
+            "required": true,
+            "type": "React.RefObject<HTMLElement | null>"
+          },
+          {
+            "name": "items",
+            "required": true,
+            "type": "ToolbarItem[]"
+          },
+          {
+            "name": "itemGap",
+            "required": false,
+            "type": "number"
+          },
+          {
+            "name": "overflowButtonWidth",
+            "required": false,
+            "type": "number"
+          },
+          {
+            "name": "visibleItems",
+            "required": true,
+            "type": "ToolbarItem[]"
+          },
+          {
+            "name": "overflowItems",
+            "required": true,
+            "type": "ToolbarItem[]"
+          },
+          {
+            "name": "hasOverflow",
+            "required": true,
+            "type": "boolean"
+          },
+          {
+            "name": "recalculate",
+            "required": true,
+            "type": "() => void"
+          },
+          {
+            "name": "options",
+            "required": true,
+            "type": "UseResponsiveToolbarOptions"
+          }
+        ],
+        "emits": [],
+        "commands": [],
+        "shortcuts": [],
+        "sidebarKinds": [],
+        "pluginHooks": []
+      },
+      "status": "react-only"
+    },
+    {
+      "name": "rulerTicks",
+      "react": {
+        "componentName": "rulerTicks",
+        "filePath": "packages/react/src/rulerTicks.ts",
+        "isCoreReexport": false,
+        "props": [],
+        "emits": [],
+        "commands": [],
+        "shortcuts": [],
+        "sidebarKinds": [],
+        "pluginHooks": []
+      },
+      "status": "react-only"
+    },
+    {
+      "name": "sanitizeHref",
+      "react": {
+        "componentName": "sanitizeHref",
+        "filePath": "packages/react/src/lib/sanitizeHref.ts",
+        "isCoreReexport": false,
+        "props": [],
+        "emits": [],
+        "commands": [],
+        "shortcuts": [],
+        "sidebarKinds": [],
+        "pluginHooks": []
+      },
+      "status": "react-only"
+    },
+    {
+      "name": "Select",
+      "react": {
+        "componentName": "Select",
+        "filePath": "packages/react/src/components/ui/Select.tsx",
+        "isCoreReexport": false,
+        "props": [],
+        "emits": [],
+        "commands": [],
+        "shortcuts": [],
+        "sidebarKinds": [],
+        "pluginHooks": []
+      },
+      "status": "react-only"
+    },
+    {
+      "name": "ShortcutItem",
+      "react": {
+        "componentName": "ShortcutItem",
+        "filePath": "packages/react/src/components/dialogs/KeyboardShortcutsDialog/ShortcutItem.tsx",
+        "isCoreReexport": false,
+        "props": [
+          {
+            "name": "shortcut",
+            "required": true,
+            "type": "KeyboardShortcut"
+          },
+          {
+            "name": "translatedName",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "translatedDescription",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "emits": [],
+        "commands": [],
+        "shortcuts": [],
+        "sidebarKinds": [],
+        "pluginHooks": []
+      },
+      "status": "react-only"
+    },
+    {
+      "name": "sidebarConstants",
+      "react": {
+        "componentName": "sidebarConstants",
+        "filePath": "packages/react/src/lib/sidebarConstants.ts",
+        "isCoreReexport": false,
+        "props": [],
+        "emits": [],
+        "commands": [],
+        "shortcuts": [],
+        "sidebarKinds": [],
+        "pluginHooks": []
+      },
+      "status": "react-only"
+    },
+    {
+      "name": "SplitCellDialog",
+      "react": {
+        "componentName": "SplitCellDialog",
+        "filePath": "packages/react/src/components/dialogs/SplitCellDialog.tsx",
+        "isCoreReexport": false,
+        "props": [
+          {
+            "name": "isOpen",
+            "required": true,
+            "type": "boolean"
+          },
+          {
+            "name": "onClose",
+            "required": true,
+            "type": "() => void"
+          },
+          {
+            "name": "onApply",
+            "required": true,
+            "type": "(rows: number, cols: number) => void"
+          },
+          {
+            "name": "initialRows",
+            "required": false,
+            "type": "number"
+          },
+          {
+            "name": "initialCols",
+            "required": false,
+            "type": "number"
+          },
+          {
+            "name": "minRows",
+            "required": false,
+            "type": "number"
+          },
+          {
+            "name": "minCols",
+            "required": false,
+            "type": "number"
+          },
+          {
+            "name": "position",
+            "required": true,
+            "type": "'fixed',"
+          },
+          {
+            "name": "top",
+            "required": true,
+            "type": "0,"
+          },
+          {
+            "name": "left",
+            "required": true,
+            "type": "0,"
+          },
+          {
+            "name": "right",
+            "required": true,
+            "type": "0,"
+          },
+          {
+            "name": "bottom",
+            "required": true,
+            "type": "0,"
+          },
+          {
+            "name": "backgroundColor",
+            "required": true,
+            "type": "'var(--doc-overlay)',"
+          },
+          {
+            "name": "display",
+            "required": true,
+            "type": "'flex',"
+          },
+          {
+            "name": "alignItems",
+            "required": true,
+            "type": "'center',"
+          },
+          {
+            "name": "justifyContent",
+            "required": true,
+            "type": "'center',"
+          },
+          {
+            "name": "zIndex",
+            "required": true,
+            "type": "10000,"
+          }
+        ],
+        "emits": [
+          "onApply",
+          "onClose"
+        ],
+        "commands": [],
+        "shortcuts": [],
+        "sidebarKinds": [],
+        "pluginHooks": []
+      },
+      "status": "react-only"
+    },
+    {
+      "name": "StylePicker",
+      "react": {
+        "componentName": "StylePicker",
+        "filePath": "packages/react/src/components/ui/StylePicker.tsx",
+        "isCoreReexport": false,
+        "props": [
+          {
+            "name": "value",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "onChange",
+            "required": false,
+            "type": "(styleId: string) => void"
+          },
+          {
+            "name": "styles",
+            "required": false,
+            "type": "Style[]"
+          },
+          {
+            "name": "theme",
+            "required": false,
+            "type": "Theme | null"
+          },
+          {
+            "name": "disabled",
+            "required": false,
+            "type": "boolean"
+          },
+          {
+            "name": "className",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "width",
+            "required": false,
+            "type": "number | string"
+          },
+          {
+            "name": "styleId",
+            "required": true,
+            "type": "'Normal',"
+          },
+          {
+            "name": "name",
+            "required": true,
+            "type": "'Normal text',"
+          },
+          {
+            "name": "nameKey",
+            "required": true,
+            "type": "'styles.normalText',"
+          },
+          {
+            "name": "type",
+            "required": true,
+            "type": "'paragraph',"
+          },
+          {
+            "name": "isDefault",
+            "required": true,
+            "type": "true,"
+          },
+          {
+            "name": "priority",
+            "required": true,
+            "type": "0,"
+          },
+          {
+            "name": "qFormat",
+            "required": true,
+            "type": "true,"
+          },
+          {
+            "name": "fontSize",
+            "required": true,
+            "type": "22, // 11pt"
+          },
+          {
+            "name": "styleId",
+            "required": true,
+            "type": "'Title',"
+          },
+          {
+            "name": "name",
+            "required": true,
+            "type": "'Title',"
+          },
+          {
+            "name": "nameKey",
+            "required": true,
+            "type": "'styles.title',"
+          },
+          {
+            "name": "type",
+            "required": true,
+            "type": "'paragraph',"
+          },
+          {
+            "name": "priority",
+            "required": true,
+            "type": "1,"
+          },
+          {
+            "name": "qFormat",
+            "required": true,
+            "type": "true,"
+          },
+          {
+            "name": "fontSize",
+            "required": true,
+            "type": "52, // 26pt"
+          },
+          {
+            "name": "bold",
+            "required": true,
+            "type": "true,"
+          },
+          {
+            "name": "styleId",
+            "required": true,
+            "type": "'Subtitle',"
+          },
+          {
+            "name": "name",
+            "required": true,
+            "type": "'Subtitle',"
+          },
+          {
+            "name": "nameKey",
+            "required": true,
+            "type": "'styles.subtitle',"
+          },
+          {
+            "name": "type",
+            "required": true,
+            "type": "'paragraph',"
+          },
+          {
+            "name": "priority",
+            "required": true,
+            "type": "2,"
+          },
+          {
+            "name": "qFormat",
+            "required": true,
+            "type": "true,"
+          },
+          {
+            "name": "fontSize",
+            "required": true,
+            "type": "30, // 15pt"
+          },
+          {
+            "name": "color",
+            "required": true,
+            "type": "'666666', // Gray"
+          },
+          {
+            "name": "styleId",
+            "required": true,
+            "type": "'Heading1',"
+          },
+          {
+            "name": "name",
+            "required": true,
+            "type": "'Heading 1',"
+          },
+          {
+            "name": "nameKey",
+            "required": true,
+            "type": "'styles.heading1',"
+          },
+          {
+            "name": "type",
+            "required": true,
+            "type": "'paragraph',"
+          },
+          {
+            "name": "priority",
+            "required": true,
+            "type": "3,"
+          },
+          {
+            "name": "qFormat",
+            "required": true,
+            "type": "true,"
+          },
+          {
+            "name": "fontSize",
+            "required": true,
+            "type": "40, // 20pt"
+          },
+          {
+            "name": "bold",
+            "required": true,
+            "type": "true,"
+          },
+          {
+            "name": "styleId",
+            "required": true,
+            "type": "'Heading2',"
+          },
+          {
+            "name": "name",
+            "required": true,
+            "type": "'Heading 2',"
+          },
+          {
+            "name": "nameKey",
+            "required": true,
+            "type": "'styles.heading2',"
+          },
+          {
+            "name": "type",
+            "required": true,
+            "type": "'paragraph',"
+          },
+          {
+            "name": "priority",
+            "required": true,
+            "type": "4,"
+          },
+          {
+            "name": "qFormat",
+            "required": true,
+            "type": "true,"
+          },
+          {
+            "name": "fontSize",
+            "required": true,
+            "type": "32, // 16pt"
+          },
+          {
+            "name": "bold",
+            "required": true,
+            "type": "true,"
+          },
+          {
+            "name": "styleId",
+            "required": true,
+            "type": "'Heading3',"
+          },
+          {
+            "name": "name",
+            "required": true,
+            "type": "'Heading 3',"
+          },
+          {
+            "name": "nameKey",
+            "required": true,
+            "type": "'styles.heading3',"
+          },
+          {
+            "name": "type",
+            "required": true,
+            "type": "'paragraph',"
+          },
+          {
+            "name": "priority",
+            "required": true,
+            "type": "5,"
+          },
+          {
+            "name": "qFormat",
+            "required": true,
+            "type": "true,"
+          },
+          {
+            "name": "fontSize",
+            "required": true,
+            "type": "28, // 14pt"
+          },
+          {
+            "name": "bold",
+            "required": true,
+            "type": "true,"
+          },
+          {
+            "name": "type",
+            "required": true,
+            "type": "'paragraph' as StyleType,"
+          },
+          {
+            "name": "nameKey",
+            "required": true,
+            "type": "DEFAULT_STYLES.find((d) => d.styleId === o.styleId)?.nameKey,"
+          }
+        ],
+        "emits": [
+          "onChange"
+        ],
+        "commands": [],
+        "shortcuts": [],
+        "sidebarKinds": [],
+        "pluginHooks": []
+      },
+      "status": "react-only"
+    },
+    {
+      "name": "stylePreview",
+      "react": {
+        "componentName": "stylePreview",
+        "filePath": "packages/react/src/lib/stylePreview.ts",
+        "isCoreReexport": false,
+        "props": [
+          {
+            "name": "fontSize",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "lineHeight",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "fontWeight",
+            "required": false,
+            "type": "'bold'"
+          },
+          {
+            "name": "fontStyle",
+            "required": false,
+            "type": "'italic'"
+          },
+          {
+            "name": "color",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "styleId",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "name",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "priority",
+            "required": true,
+            "type": "number"
+          },
+          {
+            "name": "fontSize",
+            "required": false,
+            "type": "number"
+          },
+          {
+            "name": "bold",
+            "required": false,
+            "type": "boolean"
+          },
+          {
+            "name": "italic",
+            "required": false,
+            "type": "boolean"
+          },
+          {
+            "name": "color",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "Title",
+            "required": true,
+            "type": "26,"
+          },
+          {
+            "name": "Subtitle",
+            "required": true,
+            "type": "18,"
+          },
+          {
+            "name": "Heading1",
+            "required": true,
+            "type": "24,"
+          },
+          {
+            "name": "Heading2",
+            "required": true,
+            "type": "18,"
+          },
+          {
+            "name": "Heading3",
+            "required": true,
+            "type": "16,"
+          },
+          {
+            "name": "Heading4",
+            "required": true,
+            "type": "14,"
+          },
+          {
+            "name": "Heading5",
+            "required": true,
+            "type": "13,"
+          },
+          {
+            "name": "Heading6",
+            "required": true,
+            "type": "13,"
+          },
+          {
+            "name": "Normal",
+            "required": true,
+            "type": "14,"
+          }
+        ],
+        "emits": [],
+        "commands": [],
+        "shortcuts": [],
+        "sidebarKinds": [],
+        "pluginHooks": []
+      },
+      "status": "react-only"
+    },
+    {
+      "name": "Subscribable",
+      "react": {
+        "componentName": "Subscribable",
+        "filePath": "packages/react/src/managers/Subscribable.ts",
+        "isCoreReexport": false,
+        "props": [],
+        "emits": [],
+        "commands": [],
+        "shortcuts": [],
+        "sidebarKinds": [],
+        "pluginHooks": []
+      },
+      "status": "react-only"
+    },
+    {
+      "name": "TableBorderColorPicker",
+      "react": {
+        "componentName": "TableBorderColorPicker",
+        "filePath": "packages/react/src/components/ui/TableBorderColorPicker.tsx",
+        "isCoreReexport": false,
+        "props": [
+          {
+            "name": "onAction",
+            "required": true,
+            "type": "(action: TableAction) => void"
+          },
+          {
+            "name": "disabled",
+            "required": false,
+            "type": "boolean"
+          },
+          {
+            "name": "theme",
+            "required": false,
+            "type": "Theme | null"
+          },
+          {
+            "name": "value",
+            "required": false,
+            "type": "string"
+          }
+        ],
+        "emits": [
+          "onAction"
+        ],
+        "commands": [],
+        "shortcuts": [],
+        "sidebarKinds": [],
+        "pluginHooks": []
+      },
+      "status": "react-only"
+    },
+    {
+      "name": "TableBorderPicker",
+      "react": {
+        "componentName": "TableBorderPicker",
+        "filePath": "packages/react/src/components/ui/TableBorderPicker.tsx",
+        "isCoreReexport": false,
+        "props": [
+          {
+            "name": "onAction",
+            "required": true,
+            "type": "(action: TableAction) => void"
+          },
+          {
+            "name": "disabled",
+            "required": false,
+            "type": "boolean"
+          },
+          {
+            "name": "onClose",
+            "required": true,
+            "type": "close,"
+          }
+        ],
+        "emits": [
+          "onAction",
+          "onClose"
+        ],
+        "commands": [],
+        "shortcuts": [],
+        "sidebarKinds": [],
+        "pluginHooks": []
+      },
+      "status": "react-only"
+    },
+    {
+      "name": "TableBorderWidthPicker",
+      "react": {
+        "componentName": "TableBorderWidthPicker",
+        "filePath": "packages/react/src/components/ui/TableBorderWidthPicker.tsx",
+        "isCoreReexport": false,
+        "props": [
+          {
+            "name": "onAction",
+            "required": true,
+            "type": "(action: TableAction) => void"
+          },
+          {
+            "name": "disabled",
+            "required": false,
+            "type": "boolean"
+          },
+          {
+            "name": "onClose",
+            "required": true,
+            "type": "close,"
+          }
+        ],
+        "emits": [
+          "onAction",
+          "onClose"
+        ],
+        "commands": [],
+        "shortcuts": [],
+        "sidebarKinds": [],
+        "pluginHooks": []
+      },
+      "status": "react-only"
+    },
+    {
+      "name": "TableCellFillPicker",
+      "react": {
+        "componentName": "TableCellFillPicker",
+        "filePath": "packages/react/src/components/ui/TableCellFillPicker.tsx",
+        "isCoreReexport": false,
+        "props": [
+          {
+            "name": "onAction",
+            "required": true,
+            "type": "(action: TableAction) => void"
+          },
+          {
+            "name": "disabled",
+            "required": false,
+            "type": "boolean"
+          },
+          {
+            "name": "theme",
+            "required": false,
+            "type": "Theme | null"
+          },
+          {
+            "name": "value",
+            "required": false,
+            "type": "string"
+          }
+        ],
+        "emits": [
+          "onAction"
+        ],
+        "commands": [],
+        "shortcuts": [],
+        "sidebarKinds": [],
+        "pluginHooks": []
+      },
+      "status": "react-only"
+    },
+    {
+      "name": "TableGridInline",
+      "react": {
+        "componentName": "TableGridInline",
+        "filePath": "packages/react/src/components/ui/TableGridInline.tsx",
+        "isCoreReexport": false,
+        "props": [
+          {
+            "name": "onInsert",
+            "required": true,
+            "type": "(rows: number, columns: number) => void"
+          },
+          {
+            "name": "gridRows",
+            "required": false,
+            "type": "number"
+          },
+          {
+            "name": "gridColumns",
+            "required": false,
+            "type": "number"
+          },
+          {
+            "name": "width",
+            "required": true,
+            "type": "CELL_SIZE,"
+          },
+          {
+            "name": "height",
+            "required": true,
+            "type": "CELL_SIZE,"
+          },
+          {
+            "name": "backgroundColor",
+            "required": true,
+            "type": "'var(--doc-surface)',"
+          },
+          {
+            "name": "border",
+            "required": true,
+            "type": "'1px solid var(--doc-border)',"
+          },
+          {
+            "name": "borderRadius",
+            "required": true,
+            "type": "2,"
+          },
+          {
+            "name": "transition",
+            "required": true,
+            "type": "'background-color 0.1s, border-color 0.1s',"
+          },
+          {
+            "name": "cursor",
+            "required": true,
+            "type": "'pointer',"
+          }
+        ],
+        "emits": [
+          "onInsert"
+        ],
+        "commands": [],
+        "shortcuts": [],
+        "sidebarKinds": [],
+        "pluginHooks": []
+      },
+      "status": "react-only"
+    },
+    {
+      "name": "TableGridPicker",
+      "react": {
+        "componentName": "TableGridPicker",
+        "filePath": "packages/react/src/components/ui/TableGridPicker.tsx",
+        "isCoreReexport": false,
+        "props": [
+          {
+            "name": "onInsert",
+            "required": true,
+            "type": "(rows: number, columns: number) => void"
+          },
+          {
+            "name": "disabled",
+            "required": false,
+            "type": "boolean"
+          },
+          {
+            "name": "gridRows",
+            "required": false,
+            "type": "number"
+          },
+          {
+            "name": "gridColumns",
+            "required": false,
+            "type": "number"
+          },
+          {
+            "name": "className",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "tooltip",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "backgroundColor",
+            "required": true,
+            "type": "'var(--doc-surface)',"
+          },
+          {
+            "name": "border",
+            "required": true,
+            "type": "'1px solid var(--doc-border)',"
+          },
+          {
+            "name": "borderRadius",
+            "required": true,
+            "type": "6,"
+          },
+          {
+            "name": "boxShadow",
+            "required": true,
+            "type": "'0 4px 16px var(--doc-shadow)',"
+          },
+          {
+            "name": "padding",
+            "required": true,
+            "type": "8,"
+          }
+        ],
+        "emits": [
+          "onInsert"
+        ],
+        "commands": [],
+        "shortcuts": [],
+        "sidebarKinds": [],
+        "pluginHooks": []
+      },
+      "status": "react-only"
+    },
+    {
+      "name": "TableMoreDropdown",
+      "react": {
+        "componentName": "TableMoreDropdown",
+        "filePath": "packages/react/src/components/ui/TableMoreDropdown.tsx",
+        "isCoreReexport": false,
+        "props": [
+          {
+            "name": "onAction",
+            "required": true,
+            "type": "(action: TableAction) => void"
+          },
+          {
+            "name": "disabled",
+            "required": false,
+            "type": "boolean"
+          },
+          {
+            "name": "tableContext",
+            "required": false,
+            "type": "{"
+          },
+          {
+            "name": "isInTable",
+            "required": true,
+            "type": "boolean"
+          },
+          {
+            "name": "rowCount",
+            "required": false,
+            "type": "number"
+          },
+          {
+            "name": "columnCount",
+            "required": false,
+            "type": "number"
+          },
+          {
+            "name": "canSplitCell",
+            "required": false,
+            "type": "boolean"
+          },
+          {
+            "name": "hasMultiCellSelection",
+            "required": false,
+            "type": "boolean"
+          },
+          {
+            "name": "table",
+            "required": false,
+            "type": "{ attrs?: { justification?: string }"
+          }
+        ],
+        "emits": [
+          "onAction"
+        ],
+        "commands": [],
+        "shortcuts": [],
+        "sidebarKinds": [],
+        "pluginHooks": []
+      },
+      "status": "react-only"
+    },
+    {
+      "name": "TablePropertiesDialog",
+      "react": {
+        "componentName": "TablePropertiesDialog",
+        "filePath": "packages/react/src/components/dialogs/TablePropertiesDialog.tsx",
+        "isCoreReexport": false,
+        "props": [
+          {
+            "name": "isOpen",
+            "required": true,
+            "type": "boolean"
+          },
+          {
+            "name": "onClose",
+            "required": true,
+            "type": "() => void"
+          },
+          {
+            "name": "onApply",
+            "required": true,
+            "type": "(props: TableProperties) => void"
+          },
+          {
+            "name": "currentProps",
+            "required": false,
+            "type": "{"
+          },
+          {
+            "name": "width",
+            "required": false,
+            "type": "number"
+          },
+          {
+            "name": "widthType",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "justification",
+            "required": false,
+            "type": "string"
+          }
+        ],
+        "emits": [
+          "onApply",
+          "onClose"
+        ],
+        "commands": [],
+        "shortcuts": [],
+        "sidebarKinds": [],
+        "pluginHooks": []
+      },
+      "status": "react-only"
+    },
+    {
+      "name": "TableToolbar",
+      "react": {
+        "componentName": "TableToolbar",
+        "filePath": "packages/react/src/components/ui/TableToolbar.tsx",
+        "isCoreReexport": false,
+        "props": [
+          {
+            "name": "context",
+            "required": true,
+            "type": "TableContext | null"
+          },
+          {
+            "name": "onAction",
+            "required": false,
+            "type": "(action: TableAction, context: TableContext) => void"
+          },
+          {
+            "name": "disabled",
+            "required": false,
+            "type": "boolean"
+          },
+          {
+            "name": "className",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "style",
+            "required": false,
+            "type": "CSSProperties"
+          },
+          {
+            "name": "showLabels",
+            "required": false,
+            "type": "boolean"
+          },
+          {
+            "name": "compact",
+            "required": false,
+            "type": "boolean"
+          },
+          {
+            "name": "position",
+            "required": false,
+            "type": "'top' | 'floating'"
+          },
+          {
+            "name": "children",
+            "required": false,
+            "type": "ReactNode"
+          },
+          {
+            "name": "action",
+            "required": true,
+            "type": "TableAction"
+          },
+          {
+            "name": "label",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "icon",
+            "required": true,
+            "type": "ReactNode"
+          },
+          {
+            "name": "disabled",
+            "required": false,
+            "type": "boolean"
+          },
+          {
+            "name": "onClick",
+            "required": false,
+            "type": "() => void"
+          },
+          {
+            "name": "showLabel",
+            "required": false,
+            "type": "boolean"
+          },
+          {
+            "name": "compact",
+            "required": false,
+            "type": "boolean"
+          },
+          {
+            "name": "shortcut",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "container",
+            "required": true,
+            "type": "{"
+          },
+          {
+            "name": "display",
+            "required": true,
+            "type": "'flex',"
+          },
+          {
+            "name": "alignItems",
+            "required": true,
+            "type": "'center',"
+          },
+          {
+            "name": "gap",
+            "required": true,
+            "type": "'4px',"
+          },
+          {
+            "name": "padding",
+            "required": true,
+            "type": "'4px 8px',"
+          },
+          {
+            "name": "backgroundColor",
+            "required": true,
+            "type": "'var(--doc-bg-subtle)',"
+          },
+          {
+            "name": "borderRadius",
+            "required": true,
+            "type": "'4px',"
+          },
+          {
+            "name": "border",
+            "required": true,
+            "type": "'1px solid var(--doc-border)',"
+          },
+          {
+            "name": "fontSize",
+            "required": true,
+            "type": "'12px',"
+          },
+          {
+            "name": "containerCompact",
+            "required": true,
+            "type": "{"
+          },
+          {
+            "name": "padding",
+            "required": true,
+            "type": "'2px 4px',"
+          },
+          {
+            "name": "gap",
+            "required": true,
+            "type": "'2px',"
+          },
+          {
+            "name": "containerFloating",
+            "required": true,
+            "type": "{"
+          },
+          {
+            "name": "position",
+            "required": true,
+            "type": "'absolute',"
+          },
+          {
+            "name": "zIndex",
+            "required": true,
+            "type": "1000,"
+          },
+          {
+            "name": "boxShadow",
+            "required": true,
+            "type": "'0 2px 8px var(--doc-shadow)',"
+          },
+          {
+            "name": "group",
+            "required": true,
+            "type": "{"
+          },
+          {
+            "name": "display",
+            "required": true,
+            "type": "'flex',"
+          },
+          {
+            "name": "alignItems",
+            "required": true,
+            "type": "'center',"
+          },
+          {
+            "name": "gap",
+            "required": true,
+            "type": "'2px',"
+          },
+          {
+            "name": "separator",
+            "required": true,
+            "type": "{"
+          },
+          {
+            "name": "width",
+            "required": true,
+            "type": "'1px',"
+          },
+          {
+            "name": "height",
+            "required": true,
+            "type": "'20px',"
+          },
+          {
+            "name": "backgroundColor",
+            "required": true,
+            "type": "'var(--doc-border-dark)',"
+          },
+          {
+            "name": "margin",
+            "required": true,
+            "type": "'0 4px',"
+          },
+          {
+            "name": "button",
+            "required": true,
+            "type": "{"
+          },
+          {
+            "name": "display",
+            "required": true,
+            "type": "'flex',"
+          },
+          {
+            "name": "alignItems",
+            "required": true,
+            "type": "'center',"
+          },
+          {
+            "name": "justifyContent",
+            "required": true,
+            "type": "'center',"
+          },
+          {
+            "name": "gap",
+            "required": true,
+            "type": "'4px',"
+          },
+          {
+            "name": "padding",
+            "required": true,
+            "type": "'4px 8px',"
+          },
+          {
+            "name": "border",
+            "required": true,
+            "type": "'none',"
+          },
+          {
+            "name": "borderRadius",
+            "required": true,
+            "type": "'3px',"
+          },
+          {
+            "name": "backgroundColor",
+            "required": true,
+            "type": "'transparent',"
+          },
+          {
+            "name": "color",
+            "required": true,
+            "type": "'var(--doc-text)',"
+          },
+          {
+            "name": "cursor",
+            "required": true,
+            "type": "'pointer',"
+          },
+          {
+            "name": "fontSize",
+            "required": true,
+            "type": "'12px',"
+          },
+          {
+            "name": "lineHeight",
+            "required": true,
+            "type": "'1',"
+          },
+          {
+            "name": "transition",
+            "required": true,
+            "type": "'background-color 0.15s, color 0.15s',"
+          },
+          {
+            "name": "buttonCompact",
+            "required": true,
+            "type": "{"
+          },
+          {
+            "name": "padding",
+            "required": true,
+            "type": "'3px 5px',"
+          },
+          {
+            "name": "buttonHover",
+            "required": true,
+            "type": "{"
+          },
+          {
+            "name": "backgroundColor",
+            "required": true,
+            "type": "'var(--doc-border)',"
+          },
+          {
+            "name": "buttonDisabled",
+            "required": true,
+            "type": "{"
+          },
+          {
+            "name": "color",
+            "required": true,
+            "type": "'var(--doc-text-subtle)',"
+          },
+          {
+            "name": "cursor",
+            "required": true,
+            "type": "'not-allowed',"
+          },
+          {
+            "name": "buttonDelete",
+            "required": true,
+            "type": "{"
+          },
+          {
+            "name": "color",
+            "required": true,
+            "type": "'var(--doc-error)',"
+          },
+          {
+            "name": "label",
+            "required": true,
+            "type": "{"
+          },
+          {
+            "name": "fontSize",
+            "required": true,
+            "type": "'11px',"
+          },
+          {
+            "name": "fontWeight",
+            "required": true,
+            "type": "500,"
+          },
+          {
+            "name": "color",
+            "required": true,
+            "type": "'var(--doc-text-muted)',"
+          },
+          {
+            "name": "marginRight",
+            "required": true,
+            "type": "'8px',"
+          },
+          {
+            "name": "whiteSpace",
+            "required": true,
+            "type": "'nowrap',"
+          },
+          {
+            "name": "hidden",
+            "required": true,
+            "type": "{"
+          },
+          {
+            "name": "display",
+            "required": true,
+            "type": "'none',"
+          }
+        ],
+        "emits": [
+          "onAction",
+          "onClick"
+        ],
+        "commands": [],
+        "shortcuts": [],
+        "sidebarKinds": [],
+        "pluginHooks": []
+      },
+      "status": "react-only"
+    },
+    {
+      "name": "TextContextMenu",
+      "react": {
+        "componentName": "TextContextMenu",
+        "filePath": "packages/react/src/components/TextContextMenu.tsx",
+        "isCoreReexport": false,
+        "props": [
+          {
+            "name": "isOpen",
+            "required": true,
+            "type": "boolean"
+          },
+          {
+            "name": "position",
+            "required": true,
+            "type": "{ x: number"
+          }
+        ],
+        "emits": [],
+        "commands": [],
+        "shortcuts": [
+          "'Ctrl+A'",
+          "'Ctrl+C'",
+          "'Ctrl+Shift+V'",
+          "'Ctrl+V'",
+          "'Ctrl+X'"
+        ],
+        "sidebarKinds": [],
+        "pluginHooks": []
+      },
+      "status": "react-only"
+    },
+    {
+      "name": "TitleBar",
+      "react": {
+        "componentName": "TitleBar",
+        "filePath": "packages/react/src/components/TitleBar.tsx",
+        "isCoreReexport": false,
+        "props": [
+          {
+            "name": "children",
+            "required": true,
+            "type": "ReactNode"
+          },
+          {
+            "name": "value",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "onChange",
+            "required": false,
+            "type": "(value: string) => void"
+          },
+          {
+            "name": "placeholder",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "editable",
+            "required": false,
+            "type": "boolean"
+          },
+          {
+            "name": "children",
+            "required": true,
+            "type": "ReactNode"
+          }
+        ],
+        "emits": [
+          "onChange"
+        ],
+        "commands": [],
+        "shortcuts": [],
+        "sidebarKinds": [],
+        "pluginHooks": []
+      },
+      "status": "react-only"
+    },
+    {
+      "name": "Toolbar",
+      "react": {
+        "componentName": "Toolbar",
+        "filePath": "packages/react/src/components/Toolbar.tsx",
+        "isCoreReexport": false,
+        "props": [
+          {
+            "name": "currentFormatting",
+            "required": false,
+            "type": "SelectionFormatting"
+          },
+          {
+            "name": "onFormat",
+            "required": false,
+            "type": "(action: FormattingAction) => void"
+          },
+          {
+            "name": "onUndo",
+            "required": false,
+            "type": "() => void"
+          },
+          {
+            "name": "onRedo",
+            "required": false,
+            "type": "() => void"
+          },
+          {
+            "name": "canUndo",
+            "required": false,
+            "type": "boolean"
+          },
+          {
+            "name": "canRedo",
+            "required": false,
+            "type": "boolean"
+          },
+          {
+            "name": "disabled",
+            "required": false,
+            "type": "boolean"
+          },
+          {
+            "name": "className",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "style",
+            "required": false,
+            "type": "CSSProperties"
+          },
+          {
+            "name": "enableShortcuts",
+            "required": false,
+            "type": "boolean"
+          },
+          {
+            "name": "editorRef",
+            "required": false,
+            "type": "React.RefObject<HTMLElement>"
+          },
+          {
+            "name": "children",
+            "required": false,
+            "type": "ReactNode"
+          },
+          {
+            "name": "inline",
+            "required": false,
+            "type": "boolean"
+          },
+          {
+            "name": "showFontPicker",
+            "required": false,
+            "type": "boolean"
+          },
+          {
+            "name": "fontFamilies",
+            "required": false,
+            "type": "ReadonlyArray<string | FontOption>"
+          },
+          {
+            "name": "documentFonts",
+            "required": false,
+            "type": "readonly FontOption[]"
+          },
+          {
+            "name": "showFontSizePicker",
+            "required": false,
+            "type": "boolean"
+          },
+          {
+            "name": "showTextColorPicker",
+            "required": false,
+            "type": "boolean"
+          },
+          {
+            "name": "showHighlightColorPicker",
+            "required": false,
+            "type": "boolean"
+          },
+          {
+            "name": "showAlignmentButtons",
+            "required": false,
+            "type": "boolean"
+          },
+          {
+            "name": "showListButtons",
+            "required": false,
+            "type": "boolean"
+          },
+          {
+            "name": "showLineSpacingPicker",
+            "required": false,
+            "type": "boolean"
+          },
+          {
+            "name": "showStylePicker",
+            "required": false,
+            "type": "boolean"
+          },
+          {
+            "name": "documentStyles",
+            "required": false,
+            "type": "Style[]"
+          },
+          {
+            "name": "theme",
+            "required": false,
+            "type": "Theme | null"
+          },
+          {
+            "name": "onPrint",
+            "required": false,
+            "type": "() => void"
+          },
+          {
+            "name": "onOpen",
+            "required": false,
+            "type": "() => void"
+          },
+          {
+            "name": "onSave",
+            "required": false,
+            "type": "() => void"
+          },
+          {
+            "name": "showZoomControl",
+            "required": false,
+            "type": "boolean"
+          },
+          {
+            "name": "zoom",
+            "required": false,
+            "type": "number"
+          },
+          {
+            "name": "onZoomChange",
+            "required": false,
+            "type": "(zoom: number) => void"
+          },
+          {
+            "name": "onRefocusEditor",
+            "required": false,
+            "type": "() => void"
+          },
+          {
+            "name": "onInsertTable",
+            "required": false,
+            "type": "(rows: number, columns: number) => void"
+          },
+          {
+            "name": "showTableInsert",
+            "required": false,
+            "type": "boolean"
+          },
+          {
+            "name": "showHelpMenu",
+            "required": false,
+            "type": "boolean"
+          },
+          {
+            "name": "onInsertImage",
+            "required": false,
+            "type": "() => void"
+          },
+          {
+            "name": "onInsertPageBreak",
+            "required": false,
+            "type": "() => void"
+          },
+          {
+            "name": "onInsertSectionBreakNextPage",
+            "required": false,
+            "type": "() => void"
+          },
+          {
+            "name": "onInsertSectionBreakContinuous",
+            "required": false,
+            "type": "() => void"
+          },
+          {
+            "name": "onInsertTOC",
+            "required": false,
+            "type": "() => void"
+          },
+          {
+            "name": "onInsertShape",
+            "required": false,
+            "type": "(data: {"
+          },
+          {
+            "name": "shapeType",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "width",
+            "required": true,
+            "type": "number"
+          },
+          {
+            "name": "height",
+            "required": true,
+            "type": "number"
+          },
+          {
+            "name": "fillColor",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "fillType",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "outlineWidth",
+            "required": false,
+            "type": "number"
+          },
+          {
+            "name": "outlineColor",
+            "required": false,
+            "type": "string"
+          }
+        ],
+        "emits": [
+          "onFormat",
+          "onInsertImage",
+          "onInsertPageBreak",
+          "onInsertSectionBreakContinuous",
+          "onInsertSectionBreakNextPage",
+          "onInsertShape",
+          "onInsertTOC",
+          "onInsertTable",
+          "onOpen",
+          "onPrint",
+          "onRedo",
+          "onRefocusEditor",
+          "onSave",
+          "onUndo",
+          "onZoomChange"
+        ],
+        "commands": [],
+        "shortcuts": [],
+        "sidebarKinds": [],
+        "pluginHooks": []
+      },
+      "status": "react-only"
+    },
+    {
+      "name": "toolbarUtils",
+      "react": {
+        "componentName": "toolbarUtils",
+        "filePath": "packages/react/src/components/toolbarUtils.ts",
+        "isCoreReexport": false,
+        "props": [],
+        "emits": [],
+        "commands": [],
+        "shortcuts": [],
+        "sidebarKinds": [],
+        "pluginHooks": []
+      },
+      "status": "react-only"
+    },
+    {
+      "name": "Tooltip",
+      "react": {
+        "componentName": "Tooltip",
+        "filePath": "packages/react/src/components/ui/Tooltip.tsx",
+        "isCoreReexport": false,
+        "props": [
+          {
+            "name": "content",
+            "required": true,
+            "type": "React.ReactNode"
+          },
+          {
+            "name": "children",
+            "required": true,
+            "type": "React.ReactElement"
+          },
+          {
+            "name": "side",
+            "required": false,
+            "type": "'top' | 'bottom' | 'left' | 'right'"
+          },
+          {
+            "name": "delayMs",
+            "required": false,
+            "type": "number"
+          }
+        ],
+        "emits": [],
+        "commands": [],
+        "shortcuts": [],
+        "sidebarKinds": [],
+        "pluginHooks": []
+      },
+      "status": "react-only"
+    },
+    {
+      "name": "TrackedChangeCard",
+      "react": {
+        "componentName": "TrackedChangeCard",
+        "filePath": "packages/react/src/components/sidebar/TrackedChangeCard.tsx",
+        "isCoreReexport": false,
+        "props": [
+          {
+            "name": "change",
+            "required": true,
+            "type": "TrackedChangeEntry"
+          },
+          {
+            "name": "replies",
+            "required": true,
+            "type": "Comment[]"
+          },
+          {
+            "name": "onAccept",
+            "required": false,
+            "type": "(from: number, to: number) => void"
+          },
+          {
+            "name": "onReject",
+            "required": false,
+            "type": "(from: number, to: number) => void"
+          },
+          {
+            "name": "onAcceptById",
+            "required": false,
+            "type": "(revisionId: number) => void"
+          },
+          {
+            "name": "onRejectById",
+            "required": false,
+            "type": "(revisionId: number) => void"
+          },
+          {
+            "name": "onReply",
+            "required": false,
+            "type": "(revisionId: number, text: string) => void"
+          }
+        ],
+        "emits": [
+          "onAccept",
+          "onAcceptById",
+          "onReject",
+          "onRejectById",
+          "onReply"
+        ],
+        "commands": [],
+        "shortcuts": [],
+        "sidebarKinds": [],
+        "pluginHooks": []
+      },
+      "status": "react-only"
+    },
+    {
+      "name": "types",
+      "react": {
+        "componentName": "types",
+        "filePath": "packages/react/src/plugin-api/types.ts",
+        "isCoreReexport": false,
+        "props": [],
+        "emits": [],
+        "commands": [],
+        "shortcuts": [],
+        "sidebarKinds": [],
+        "pluginHooks": [
+          "getSidebarItems"
+        ]
+      },
+      "status": "react-only"
+    },
+    {
+      "name": "useActiveEditor",
+      "react": {
+        "componentName": "useActiveEditor",
+        "filePath": "packages/react/src/components/DocxEditor/hooks/useActiveEditor.ts",
+        "isCoreReexport": false,
+        "props": [],
+        "emits": [],
+        "commands": [],
+        "shortcuts": [],
+        "sidebarKinds": [
+          "body"
+        ],
+        "pluginHooks": []
+      },
+      "status": "react-only"
+    },
+    {
+      "name": "useAspectLockedSize",
+      "react": {
+        "componentName": "useAspectLockedSize",
+        "filePath": "packages/react/src/hooks/useAspectLockedSize.ts",
+        "isCoreReexport": false,
+        "props": [],
+        "emits": [],
+        "commands": [],
+        "shortcuts": [],
+        "sidebarKinds": [],
+        "pluginHooks": []
+      },
+      "status": "react-only"
+    },
+    {
+      "name": "useCommentLifecycle",
+      "react": {
+        "componentName": "useCommentLifecycle",
+        "filePath": "packages/react/src/components/DocxEditor/hooks/useCommentLifecycle.ts",
+        "isCoreReexport": false,
+        "props": [],
+        "emits": [],
+        "commands": [],
+        "shortcuts": [],
+        "sidebarKinds": [],
+        "pluginHooks": []
+      },
+      "status": "react-only"
+    },
+    {
+      "name": "useCommentManagement",
+      "react": {
+        "componentName": "useCommentManagement",
+        "filePath": "packages/react/src/components/DocxEditor/hooks/useCommentManagement.ts",
+        "isCoreReexport": false,
+        "props": [],
+        "emits": [],
+        "commands": [],
+        "shortcuts": [],
+        "sidebarKinds": [],
+        "pluginHooks": []
+      },
+      "status": "react-only"
+    },
+    {
+      "name": "useCommentSidebarItems",
+      "react": {
+        "componentName": "useCommentSidebarItems",
+        "filePath": "packages/react/src/hooks/useCommentSidebarItems.tsx",
+        "isCoreReexport": false,
+        "props": [
+          {
+            "name": "comments",
+            "required": true,
+            "type": "Comment[]"
+          },
+          {
+            "name": "trackedChanges",
+            "required": true,
+            "type": "TrackedChangeEntry[]"
+          },
+          {
+            "name": "callbacks",
+            "required": true,
+            "type": "CommentCallbacks"
+          },
+          {
+            "name": "showResolved",
+            "required": false,
+            "type": "boolean"
+          },
+          {
+            "name": "isAddingComment",
+            "required": false,
+            "type": "boolean"
+          },
+          {
+            "name": "addCommentYPosition",
+            "required": false,
+            "type": "number | null"
+          }
+        ],
+        "emits": [],
+        "commands": [],
+        "shortcuts": [],
+        "sidebarKinds": [],
+        "pluginHooks": []
+      },
+      "status": "react-only"
+    },
+    {
+      "name": "useContextMenus",
+      "react": {
+        "componentName": "useContextMenus",
+        "filePath": "packages/react/src/components/DocxEditor/hooks/useContextMenus.ts",
+        "isCoreReexport": false,
+        "props": [],
+        "emits": [],
+        "commands": [],
+        "shortcuts": [
+          "`Ctrl+Shift+V`"
+        ],
+        "sidebarKinds": [],
+        "pluginHooks": []
+      },
+      "status": "react-only"
+    },
+    {
+      "name": "useControllableBoolean",
+      "react": {
+        "componentName": "useControllableBoolean",
+        "filePath": "packages/react/src/components/DocxEditor/hooks/useControllableBoolean.ts",
+        "isCoreReexport": false,
+        "props": [],
+        "emits": [],
+        "commands": [],
+        "shortcuts": [],
+        "sidebarKinds": [],
+        "pluginHooks": []
+      },
+      "status": "react-only"
+    },
+    {
+      "name": "useDocumentLoader",
+      "react": {
+        "componentName": "useDocumentLoader",
+        "filePath": "packages/react/src/components/DocxEditor/hooks/useDocumentLoader.ts",
+        "isCoreReexport": false,
+        "props": [],
+        "emits": [],
+        "commands": [],
+        "shortcuts": [],
+        "sidebarKinds": [],
+        "pluginHooks": []
+      },
+      "status": "react-only"
+    },
+    {
+      "name": "useDocxEditorRefApi",
+      "react": {
+        "componentName": "useDocxEditorRefApi",
+        "filePath": "packages/react/src/components/DocxEditor/hooks/useDocxEditorRefApi.ts",
+        "isCoreReexport": false,
+        "props": [],
+        "emits": [],
+        "commands": [],
+        "shortcuts": [],
+        "sidebarKinds": [],
+        "pluginHooks": []
+      },
+      "status": "react-only"
+    },
+    {
+      "name": "useEditorSnapshot",
+      "react": {
+        "componentName": "useEditorSnapshot",
+        "filePath": "packages/react/src/useEditorSnapshot.ts",
+        "isCoreReexport": false,
+        "props": [],
+        "emits": [],
+        "commands": [],
+        "shortcuts": [],
+        "sidebarKinds": [],
+        "pluginHooks": []
+      },
+      "vue": {
+        "componentName": "useEditorSnapshot",
+        "filePath": "packages/vue/src/useEditorSnapshot.ts",
+        "isCoreReexport": false,
+        "props": [],
+        "emits": [],
+        "commands": [],
+        "shortcuts": [],
+        "sidebarKinds": [],
+        "pluginHooks": []
+      },
+      "divergence": {
+        "propsAddedInReact": [],
+        "propsAddedInVue": [],
+        "emitsAddedInReact": [],
+        "emitsAddedInVue": []
+      },
+      "status": "present-in-both"
+    },
+    {
+      "name": "useFileIO",
+      "react": {
+        "componentName": "useFileIO",
+        "filePath": "packages/react/src/components/DocxEditor/hooks/useFileIO.ts",
+        "isCoreReexport": false,
+        "props": [],
+        "emits": [],
+        "commands": [],
+        "shortcuts": [],
+        "sidebarKinds": [],
+        "pluginHooks": []
+      },
+      "status": "react-only"
+    },
+    {
+      "name": "useFindReplace",
+      "react": {
+        "componentName": "useFindReplace",
+        "filePath": "packages/react/src/hooks/useFindReplace.ts",
+        "isCoreReexport": false,
+        "props": [],
+        "emits": [],
+        "commands": [],
+        "shortcuts": [],
+        "sidebarKinds": [],
+        "pluginHooks": []
+      },
+      "status": "react-only"
+    },
+    {
+      "name": "useFindReplaceBridge",
+      "react": {
+        "componentName": "useFindReplaceBridge",
+        "filePath": "packages/react/src/components/DocxEditor/hooks/useFindReplaceBridge.ts",
+        "isCoreReexport": false,
+        "props": [],
+        "emits": [],
+        "commands": [],
+        "shortcuts": [],
+        "sidebarKinds": [],
+        "pluginHooks": []
+      },
+      "status": "react-only"
+    },
+    {
+      "name": "useFixedDropdown",
+      "react": {
+        "componentName": "useFixedDropdown",
+        "filePath": "packages/react/src/hooks/useFixedDropdown.ts",
+        "isCoreReexport": false,
+        "props": [],
+        "emits": [],
+        "commands": [],
+        "shortcuts": [],
+        "sidebarKinds": [],
+        "pluginHooks": []
+      },
+      "status": "react-only"
+    },
+    {
+      "name": "useFloatingCommentBtn",
+      "react": {
+        "componentName": "useFloatingCommentBtn",
+        "filePath": "packages/react/src/components/DocxEditor/hooks/useFloatingCommentBtn.ts",
+        "isCoreReexport": false,
+        "props": [],
+        "emits": [],
+        "commands": [],
+        "shortcuts": [],
+        "sidebarKinds": [],
+        "pluginHooks": []
+      },
+      "status": "react-only"
+    },
+    {
+      "name": "useFormattingActions",
+      "react": {
+        "componentName": "useFormattingActions",
+        "filePath": "packages/react/src/components/DocxEditor/hooks/useFormattingActions.ts",
+        "isCoreReexport": false,
+        "props": [],
+        "emits": [],
+        "commands": [],
+        "shortcuts": [],
+        "sidebarKinds": [
+          "auto",
+          "bullet",
+          "hex",
+          "ordered",
+          "page",
+          "section",
+          "theme"
+        ],
+        "pluginHooks": []
+      },
+      "status": "react-only"
+    },
+    {
+      "name": "useHeaderFooterEditing",
+      "react": {
+        "componentName": "useHeaderFooterEditing",
+        "filePath": "packages/react/src/components/DocxEditor/hooks/useHeaderFooterEditing.ts",
+        "isCoreReexport": false,
+        "props": [],
+        "emits": [],
+        "commands": [],
+        "shortcuts": [],
+        "sidebarKinds": [],
+        "pluginHooks": []
+      },
+      "status": "react-only"
+    },
+    {
+      "name": "useHyperlinkActions",
+      "react": {
+        "componentName": "useHyperlinkActions",
+        "filePath": "packages/react/src/components/DocxEditor/hooks/useHyperlinkActions.ts",
+        "isCoreReexport": false,
+        "props": [],
+        "emits": [],
+        "commands": [],
+        "shortcuts": [],
+        "sidebarKinds": [],
+        "pluginHooks": []
+      },
+      "status": "react-only"
+    },
+    {
+      "name": "useImageActions",
+      "react": {
+        "componentName": "useImageActions",
+        "filePath": "packages/react/src/components/DocxEditor/hooks/useImageActions.ts",
+        "isCoreReexport": false,
+        "props": [],
+        "emits": [],
+        "commands": [],
+        "shortcuts": [],
+        "sidebarKinds": [
+          "hex"
+        ],
+        "pluginHooks": []
+      },
+      "status": "react-only"
+    },
+    {
+      "name": "useKeyboardShortcuts",
+      "react": {
+        "componentName": "useKeyboardShortcuts",
+        "filePath": "packages/react/src/components/DocxEditor/hooks/useKeyboardShortcuts.ts",
+        "isCoreReexport": false,
+        "props": [],
+        "emits": [],
+        "commands": [],
+        "shortcuts": [],
+        "sidebarKinds": [],
+        "pluginHooks": []
+      },
+      "status": "react-only"
+    },
+    {
+      "name": "useOutlineSidebar",
+      "react": {
+        "componentName": "useOutlineSidebar",
+        "filePath": "packages/react/src/components/DocxEditor/hooks/useOutlineSidebar.ts",
+        "isCoreReexport": false,
+        "props": [],
+        "emits": [],
+        "commands": [],
+        "shortcuts": [],
+        "sidebarKinds": [],
+        "pluginHooks": []
+      },
+      "status": "react-only"
+    },
+    {
+      "name": "usePageSetupControls",
+      "react": {
+        "componentName": "usePageSetupControls",
+        "filePath": "packages/react/src/components/DocxEditor/hooks/usePageSetupControls.ts",
+        "isCoreReexport": false,
+        "props": [],
+        "emits": [],
+        "commands": [],
+        "shortcuts": [],
+        "sidebarKinds": [],
+        "pluginHooks": []
+      },
+      "status": "react-only"
+    },
+    {
+      "name": "useResetEditorState",
+      "react": {
+        "componentName": "useResetEditorState",
+        "filePath": "packages/react/src/components/DocxEditor/hooks/useResetEditorState.ts",
+        "isCoreReexport": false,
+        "props": [],
+        "emits": [],
+        "commands": [],
+        "shortcuts": [],
+        "sidebarKinds": [],
+        "pluginHooks": []
+      },
+      "status": "react-only"
+    },
+    {
+      "name": "useScrollPageInfo",
+      "react": {
+        "componentName": "useScrollPageInfo",
+        "filePath": "packages/react/src/components/DocxEditor/hooks/useScrollPageInfo.ts",
+        "isCoreReexport": false,
+        "props": [],
+        "emits": [],
+        "commands": [],
+        "shortcuts": [],
+        "sidebarKinds": [],
+        "pluginHooks": []
+      },
+      "status": "react-only"
+    },
+    {
+      "name": "useSelectionTracker",
+      "react": {
+        "componentName": "useSelectionTracker",
+        "filePath": "packages/react/src/components/DocxEditor/hooks/useSelectionTracker.ts",
+        "isCoreReexport": false,
+        "props": [],
+        "emits": [],
+        "commands": [],
+        "shortcuts": [],
+        "sidebarKinds": [],
+        "pluginHooks": []
+      },
+      "status": "react-only"
+    },
+    {
+      "name": "useTableDialogs",
+      "react": {
+        "componentName": "useTableDialogs",
+        "filePath": "packages/react/src/components/DocxEditor/hooks/useTableDialogs.ts",
+        "isCoreReexport": false,
+        "props": [],
+        "emits": [],
+        "commands": [],
+        "shortcuts": [],
+        "sidebarKinds": [
+          "auto",
+          "hex"
+        ],
+        "pluginHooks": []
+      },
+      "status": "react-only"
+    },
+    {
+      "name": "useTableOfContentsActions",
+      "react": {
+        "componentName": "useTableOfContentsActions",
+        "filePath": "packages/react/src/components/DocxEditor/hooks/useTableOfContentsActions.ts",
+        "isCoreReexport": false,
+        "props": [],
+        "emits": [],
+        "commands": [],
+        "shortcuts": [],
+        "sidebarKinds": [],
+        "pluginHooks": []
+      },
+      "status": "react-only"
+    },
+    {
+      "name": "useWatermarkControls",
+      "react": {
+        "componentName": "useWatermarkControls",
+        "filePath": "packages/react/src/components/DocxEditor/hooks/useWatermarkControls.ts",
+        "isCoreReexport": false,
+        "props": [],
+        "emits": [],
+        "commands": [],
+        "shortcuts": [],
+        "sidebarKinds": [],
+        "pluginHooks": []
+      },
+      "status": "react-only"
+    },
+    {
+      "name": "utils",
+      "react": {
+        "componentName": "utils",
+        "filePath": "packages/react/src/lib/utils.ts",
+        "isCoreReexport": false,
+        "props": [],
+        "emits": [],
+        "commands": [],
+        "shortcuts": [],
+        "sidebarKinds": [],
+        "pluginHooks": []
+      },
+      "status": "react-only"
+    },
+    {
+      "name": "VerticalRuler",
+      "react": {
+        "componentName": "VerticalRuler",
+        "filePath": "packages/react/src/components/ui/VerticalRuler.tsx",
+        "isCoreReexport": false,
+        "props": [
+          {
+            "name": "sectionProps",
+            "required": false,
+            "type": "SectionProperties | null"
+          },
+          {
+            "name": "zoom",
+            "required": false,
+            "type": "number"
+          },
+          {
+            "name": "editable",
+            "required": false,
+            "type": "boolean"
+          },
+          {
+            "name": "onTopMarginChange",
+            "required": false,
+            "type": "(marginTwips: number) => void"
+          },
+          {
+            "name": "onBottomMarginChange",
+            "required": false,
+            "type": "(marginTwips: number) => void"
+          },
+          {
+            "name": "unit",
+            "required": false,
+            "type": "'inch' | 'cm'"
+          },
+          {
+            "name": "className",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "style",
+            "required": false,
+            "type": "CSSProperties"
+          }
+        ],
+        "emits": [
+          "onBottomMarginChange",
+          "onTopMarginChange"
+        ],
+        "commands": [],
+        "shortcuts": [],
+        "sidebarKinds": [],
+        "pluginHooks": []
+      },
+      "vue": {
+        "componentName": "VerticalRuler",
+        "filePath": "packages/vue/src/VerticalRuler.ts",
+        "isCoreReexport": false,
+        "props": [
+          {
+            "name": "name",
+            "required": true,
+            "type": "'VerticalRuler',"
+          },
+          {
+            "name": "props",
+            "required": true,
+            "type": "{"
+          },
+          {
+            "name": "editor",
+            "required": true,
+            "type": "{ type: Object as PropType<Editor | null>, default: null },"
+          },
+          {
+            "name": "zoom",
+            "required": true,
+            "type": "{ type: Number, default: 1 },"
+          },
+          {
+            "name": "unit",
+            "required": true,
+            "type": "{ type: String as PropType<RulerUnit>, default: 'inch' },"
+          }
+        ],
+        "emits": [],
+        "commands": [],
+        "shortcuts": [],
+        "sidebarKinds": [],
+        "pluginHooks": []
+      },
+      "divergence": {
+        "propsAddedInReact": [
+          {
+            "name": "sectionProps",
+            "required": false,
+            "type": "SectionProperties | null"
+          },
+          {
+            "name": "editable",
+            "required": false,
+            "type": "boolean"
+          },
+          {
+            "name": "onTopMarginChange",
+            "required": false,
+            "type": "(marginTwips: number) => void"
+          },
+          {
+            "name": "onBottomMarginChange",
+            "required": false,
+            "type": "(marginTwips: number) => void"
+          },
+          {
+            "name": "className",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "style",
+            "required": false,
+            "type": "CSSProperties"
+          }
+        ],
+        "propsAddedInVue": [
+          {
+            "name": "name",
+            "required": true,
+            "type": "'VerticalRuler',"
+          },
+          {
+            "name": "props",
+            "required": true,
+            "type": "{"
+          },
+          {
+            "name": "editor",
+            "required": true,
+            "type": "{ type: Object as PropType<Editor | null>, default: null },"
+          }
+        ],
+        "emitsAddedInReact": [
+          "bottom-margin-change",
+          "top-margin-change"
+        ],
+        "emitsAddedInVue": []
+      },
+      "status": "signature-divergence"
+    },
+    {
+      "name": "watermark",
+      "react": {
+        "componentName": "watermark",
+        "filePath": "packages/react/src/lib/watermark.ts",
+        "isCoreReexport": false,
+        "props": [],
+        "emits": [],
+        "commands": [],
+        "shortcuts": [],
+        "sidebarKinds": [
+          "picture",
+          "text"
+        ],
+        "pluginHooks": []
+      },
+      "status": "react-only"
+    },
+    {
+      "name": "WatermarkDialog",
+      "react": {
+        "componentName": "WatermarkDialog",
+        "filePath": "packages/react/src/components/dialogs/WatermarkDialog.tsx",
+        "isCoreReexport": false,
+        "props": [
+          {
+            "name": "isOpen",
+            "required": true,
+            "type": "boolean"
+          },
+          {
+            "name": "onClose",
+            "required": true,
+            "type": "() => void"
+          },
+          {
+            "name": "onApply",
+            "required": true,
+            "type": "(watermark: Watermark | null) => void"
+          },
+          {
+            "name": "current",
+            "required": false,
+            "type": "Watermark"
+          },
+          {
+            "name": "presets",
+            "required": false,
+            "type": "readonly string[]"
+          },
+          {
+            "name": "position",
+            "required": true,
+            "type": "'fixed',"
+          },
+          {
+            "name": "top",
+            "required": true,
+            "type": "0,"
+          },
+          {
+            "name": "left",
+            "required": true,
+            "type": "0,"
+          },
+          {
+            "name": "right",
+            "required": true,
+            "type": "0,"
+          },
+          {
+            "name": "bottom",
+            "required": true,
+            "type": "0,"
+          },
+          {
+            "name": "backgroundColor",
+            "required": true,
+            "type": "'var(--doc-overlay)',"
+          },
+          {
+            "name": "display",
+            "required": true,
+            "type": "'flex',"
+          },
+          {
+            "name": "alignItems",
+            "required": true,
+            "type": "'center',"
+          },
+          {
+            "name": "justifyContent",
+            "required": true,
+            "type": "'center',"
+          },
+          {
+            "name": "zIndex",
+            "required": true,
+            "type": "10000,"
+          }
+        ],
+        "emits": [
+          "onApply",
+          "onClose"
+        ],
+        "commands": [],
+        "shortcuts": [],
+        "sidebarKinds": [
+          "picture",
+          "text"
+        ],
+        "pluginHooks": []
+      },
+      "status": "react-only"
+    },
+    {
+      "name": "wrapTypes",
+      "react": {
+        "componentName": "wrapTypes",
+        "filePath": "packages/react/src/lib/wrapTypes.ts",
+        "isCoreReexport": false,
+        "props": [],
+        "emits": [],
+        "commands": [],
+        "shortcuts": [],
+        "sidebarKinds": [],
+        "pluginHooks": []
+      },
+      "status": "react-only"
+    },
+    {
+      "name": "zIndex",
+      "react": {
+        "componentName": "zIndex",
+        "filePath": "packages/react/src/styles/zIndex.ts",
+        "isCoreReexport": false,
+        "props": [],
+        "emits": [],
+        "commands": [],
+        "shortcuts": [],
+        "sidebarKinds": [],
+        "pluginHooks": []
+      },
+      "status": "react-only"
+    },
+    {
+      "name": "ZoomControl",
+      "react": {
+        "componentName": "ZoomControl",
+        "filePath": "packages/react/src/components/ui/ZoomControl.tsx",
+        "isCoreReexport": false,
+        "props": [
+          {
+            "name": "value",
+            "required": false,
+            "type": "number"
+          },
+          {
+            "name": "onChange",
+            "required": false,
+            "type": "(zoom: number) => void"
+          },
+          {
+            "name": "levels",
+            "required": false,
+            "type": "ZoomLevel[]"
+          },
+          {
+            "name": "disabled",
+            "required": false,
+            "type": "boolean"
+          },
+          {
+            "name": "className",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "compact",
+            "required": false,
+            "type": "boolean"
+          }
+        ],
+        "emits": [
+          "onChange"
+        ],
+        "commands": [],
+        "shortcuts": [],
+        "sidebarKinds": [],
+        "pluginHooks": []
+      },
+      "status": "react-only"
+    }
+  ],
+  "commands": {
+    "both": [],
+    "reactOnly": [],
+    "vueOnly": []
+  },
+  "shortcuts": {
+    "both": [],
+    "reactOnly": [
+      "'Ctrl++'",
+      "'Ctrl+-'",
+      "'Ctrl+0'",
+      "'Ctrl+A'",
+      "'Ctrl+Arrow'",
+      "'Ctrl+B'",
+      "'Ctrl+C'",
+      "'Ctrl+E'",
+      "'Ctrl+End'",
+      "'Ctrl+F'",
+      "'Ctrl+H'",
+      "'Ctrl+Home'",
+      "'Ctrl+I'",
+      "'Ctrl+J'",
+      "'Ctrl+L'",
+      "'Ctrl+P'",
+      "'Ctrl+R'",
+      "'Ctrl+S'",
+      "'Ctrl+Shift+Arrow'",
+      "'Ctrl+Shift+G'",
+      "'Ctrl+Shift+R'",
+      "'Ctrl+Shift+S'",
+      "'Ctrl+Shift+T'",
+      "'Ctrl+Shift+V'",
+      "'Ctrl+Shift+X'",
+      "'Ctrl+Shift+Z'",
+      "'Ctrl+U'",
+      "'Ctrl+V'",
+      "'Ctrl+X'",
+      "'Ctrl+Y'",
+      "'Ctrl+Z'",
+      "`Ctrl+Shift+V`"
+    ],
+    "vueOnly": []
+  },
+  "sidebarKinds": {
+    "both": [],
+    "reactOnly": [
+      "auto",
+      "body",
+      "bullet",
+      "hex",
+      "ordered",
+      "page",
+      "picture",
+      "section",
+      "text",
+      "theme"
+    ],
+    "vueOnly": []
+  },
+  "pluginHooks": {
+    "both": [],
+    "reactOnly": [
+      "getSidebarItems"
+    ],
+    "vueOnly": []
+  }
+}

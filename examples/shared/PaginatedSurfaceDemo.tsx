@@ -8,6 +8,9 @@ import { useEffect, useRef, useState } from 'react';
 import type { PaginatedSurfaceState, TextMeasurer } from '@docx-editor.dev/engine-editor';
 import { PaginatedDocxEditorShell } from '@docx-editor.dev/react';
 import { createExactMeasurer } from './exactMeasurer.ts';
+import { BrandLogo } from './BrandLogo';
+import { AdapterSwitcher } from './AdapterSwitcher';
+import { ExampleSwitcher } from './ExampleSwitcher';
 
 /** Layout units (points) to CSS pixels, at 96 dpi. */
 const SCALE = 96 / 72;
@@ -64,6 +67,15 @@ export function PaginatedSurfaceDemo({ fixtureUrl }: { fixtureUrl: string }) {
             measurer={measurer}
             onStateChange={setState}
             onSave={(bytes) => setSaved(`${bytes.length} bytes saved`)}
+            // The demo owns the title-bar slots, exactly as the adapter harness does: brand
+            // lockup and the adapter/example switchers on the left, document actions right.
+            renderTitleBarLeft={() => (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <BrandLogo />
+                <AdapterSwitcher current="react" />
+                <ExampleSwitcher current="Vite" />
+              </div>
+            )}
             onError={(reason, detail) =>
               setStatus(`Rejected: ${reason}${detail ? ` (${detail})` : ''}`)
             }

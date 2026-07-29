@@ -9,7 +9,7 @@
 // engine cannot yet express is refused rather than approximated, because a toolbar button
 // that silently does nothing is worse than one that is visibly unavailable.
 
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useRef, useState, type ReactNode } from 'react';
 import type {
   PaginatedSurfaceState,
   SectionProperties,
@@ -31,6 +31,15 @@ export interface PaginatedDocxEditorShellProps {
   readonly onError?: (reason: string, detail?: string) => void;
   /** Called with the serialized document when File ▸ Save is used. */
   readonly onSave?: (bytes: Uint8Array) => void;
+  /**
+   * Title-bar slots, owned by the HOST.
+   *
+   * Brand lockup, adapter and example switchers on the left; document actions on the right.
+   * They belong to whoever embeds the editor — a demo's switchers are not editor chrome, and
+   * baking them in would ship them to every consumer.
+   */
+  readonly renderTitleBarLeft?: () => ReactNode;
+  readonly renderTitleBarRight?: () => ReactNode;
   readonly className?: string;
 }
 
@@ -66,6 +75,8 @@ export function PaginatedDocxEditorShell({
   onStateChange,
   onError,
   onSave,
+  renderTitleBarLeft,
+  renderTitleBarRight,
   className,
 }: PaginatedDocxEditorShellProps) {
   const editorRef = useRef<PaginatedDocxEditorHandle>(null);
@@ -217,7 +228,11 @@ export function PaginatedDocxEditorShell({
         }}
       >
         <EditorToolbar.TitleBar>
+          {renderTitleBarLeft && <EditorToolbar.Logo>{renderTitleBarLeft()}</EditorToolbar.Logo>}
           <EditorToolbar.DocumentName value={documentName ?? 'Document'} editable={false} />
+          {renderTitleBarRight && (
+            <EditorToolbar.TitleBarRight>{renderTitleBarRight()}</EditorToolbar.TitleBarRight>
+          )}
           <EditorToolbar.MenuBar />
         </EditorToolbar.TitleBar>
         <EditorToolbar.Toolbar />
