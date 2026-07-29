@@ -53,6 +53,8 @@
   "type": "module",
   "types": "./dist/index.d.ts",
   "dependencies": {
-    "harfbuzzjs": "1.4.0"
+    "harfbuzzjs": "1.4.0",
+    "@docx-editor.dev/engine-editor": "workspace:*",
+    "@docx-editor.dev/engine-layout": "workspace:*"
   }
 }

@@ -12,6 +12,11 @@
 export const VERSION = '0.0.2';
 
 export { DocxEditor } from './components/DocxEditor';
+export { PaginatedDocxEditor } from './components/PaginatedDocxEditor';
+export type {
+  PaginatedDocxEditorHandle,
+  PaginatedDocxEditorProps,
+} from './components/PaginatedDocxEditor';
 export { EditorFontError } from './types';
 export type {
   DocxEditorProps,
