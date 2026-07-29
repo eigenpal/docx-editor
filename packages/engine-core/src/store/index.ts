@@ -83,3 +83,18 @@ export {
   rejectRevision,
   pendingRevisions,
 } from './comments-revisions.ts';
+export {
+  ACCEPTED_PARAGRAPH_PROPERTIES,
+  ACCEPTED_RUN_PROPERTIES,
+  applyTreeOp,
+  paragraphTextOf,
+  validateTreeOp,
+  TREE_DOC_OP_KINDS,
+  type ImpactClass,
+  type OoxmlProperty,
+  type TreeDocOp,
+  type TreeDocOpKind,
+  type TreeOpEffect,
+  type TreeOpRejection,
+  type TreeOpResult,
+} from './tree-ops.ts';
