@@ -4,7 +4,7 @@
 // parity including central id allocation is the coordinator's job, task 5.3.)
 
 import { describe, expect, test } from 'bun:test';
-import { LocalBackend, YjsBackend } from '../src/index.ts';
+import { LocalBackend, YjsBackend } from '../index.ts';
 import { createEmptyModel, encodeModel, fingerprint, ORIGIN_IDS } from '@docx-editor.dev/engine-core';
 
 const HUMAN = ORIGIN_IDS.mutationHuman;

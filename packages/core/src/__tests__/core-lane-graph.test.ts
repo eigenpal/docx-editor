@@ -142,12 +142,22 @@ describe('a browser bundle cannot reach the server (task 10.1)', () => {
     }
   });
 
-  test('no browser-reachable package depends on a forbidden runtime today', () => {
-    // Checked against real manifests, so the list is a live constraint rather than a wish.
+  test('an UNMOVED browser-reachable package depends on no forbidden runtime', () => {
+    // Only expressible for a lane that still owns a manifest. Once lanes share one, this
+    // check cannot distinguish yjs arriving with the sync lane from yjs reaching the editor —
+    // and the sync lane legitimately brings it. The real guarantee lives in the import-graph
+    // walk (browser-bundle-graph.test.ts), which follows what a bundler follows.
+    // A lane whose manifest is the SHARED core manifest cannot be checked this way either,
+    // even if it has not moved: the contracts lane still owns `packages/core`, and every
+    // moved lane's dependencies land in exactly that file.
+    const shared = Object.keys(CORE_LANES).some((lane) => laneHasMoved(lane as LaneName));
+    let checked = 0;
     for (const lane of BROWSER_REACHABLE) {
       if (laneHasMoved(lane)) continue;
+      if (shared && CORE_LANES[lane].package === '@docx-editor.dev/core-contract') continue;
       const manifest = manifestOf(lane);
       if (!manifest) continue;
+      checked += 1;
       const dependencies = Object.keys((manifest.dependencies as Record<string, string>) ?? {});
       for (const forbidden of BROWSER_FORBIDDEN_DEPENDENCIES) {
         expect({ lane, forbidden, present: dependencies.includes(forbidden) }).toEqual({
@@ -157,6 +167,25 @@ describe('a browser bundle cannot reach the server (task 10.1)', () => {
         });
       }
     }
+    // Recorded, not asserted: as section 10 proceeds this reaches zero, and a check that
+    // examines nothing must say so rather than read as a pass.
+    if (checked === 0) {
+      expect(
+        BROWSER_REACHABLE.every(
+          (lane) => laneHasMoved(lane) || CORE_LANES[lane].package === '@docx-editor.dev/core-contract'
+        )
+      ).toBe(true);
+    }
+  });
+
+  test('the core manifest DOES carry other lanes\' runtimes, which is why the graph check exists', () => {
+    // Makes the weakening above visible instead of implicit. yjs and pdf-lib are in the core
+    // manifest because the sync and output lanes moved there, and a browser import must still
+    // not reach them — that is the import-graph walk's job, not this file's.
+    const core = manifestOf('contracts') ?? {};
+    const dependencies = Object.keys((core.dependencies as Record<string, string>) ?? {});
+    const carried = BROWSER_FORBIDDEN_DEPENDENCIES.filter((name) => dependencies.includes(name));
+    expect(carried.length > 0).toBe(true);
   });
 
   test('the guard is not vacuous: the server lane really does depend on the sync lane', () => {

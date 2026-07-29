@@ -297,6 +297,7 @@
         "prosemirror-model": "^1.25.4",
         "prosemirror-state": "^1.4.4",
         "prosemirror-view": "^1.41.8",
+        "yjs": "^13.6.0",
       },
       "devDependencies": {
         "typescript": "^5.3.3",
@@ -318,7 +319,7 @@
       "name": "@docx-editor.dev/engine-clients",
       "version": "0.0.0",
       "dependencies": {
-        "@docx-editor.dev/engine-core": "workspace:*",
+        "@docx-editor.dev/core-contract": "workspace:*",
       },
       "devDependencies": {
         "typescript": "^5.3.3",
@@ -376,10 +377,7 @@
       "name": "@docx-editor.dev/engine-server",
       "version": "0.0.0",
       "dependencies": {
-        "@docx-editor.dev/engine-core": "workspace:*",
-        "@docx-editor.dev/engine-layout": "workspace:*",
-        "@docx-editor.dev/engine-output": "workspace:*",
-        "@docx-editor.dev/engine-sync": "workspace:*",
+        "@docx-editor.dev/core-contract": "workspace:*",
       },
       "devDependencies": {
         "typescript": "^5.3.3",
@@ -389,8 +387,7 @@
       "name": "@docx-editor.dev/engine-sync",
       "version": "0.0.0",
       "dependencies": {
-        "@docx-editor.dev/engine-core": "workspace:*",
-        "yjs": "^13.6.0",
+        "@docx-editor.dev/core-contract": "workspace:*",
       },
       "devDependencies": {
         "typescript": "^5.3.3",

@@ -1,19 +1,6 @@
-// @docx-editor.dev/engine-clients
+// Compatibility alias for the clients lane (task 10.3).
 //
-// Generated language clients (TypeScript, Python, ...): schema bindings only over the RPC/command schemas. No model, normalization, layout, or serialization logic.
-//
-// Production placement is fixed by document-engine task 1.4. Responsibilities and
-// dependency rules: docs/architecture/production-engine-packages.md. This is a
-// greenfield skeleton; capability implementation lands in the sections that own it.
-//
-// ADR-S9: production modules MUST NOT import from packages/core/spike/**.
-
-/** Stable package identity used by the import-graph / package-authority checks. */
-export const ENGINE_CLIENTS_PACKAGE = '@docx-editor.dev/engine-clients' as const;
-
-export {
-  type ClientTransport,
-  type ClientMethod,
-  makeGeneratedClient,
-  DocxClient,
-} from './client.ts';
+// The implementation moved to `packages/core/src/clients`. This package stays behind only
+// so importers still naming `@docx-editor.dev/engine-clients` keep resolving while task 10.5
+// migrates them to the subpath; task 10.6 deletes it. Nothing new belongs here.
+export * from '@docx-editor.dev/core-contract/clients';

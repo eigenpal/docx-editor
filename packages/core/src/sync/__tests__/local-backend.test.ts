@@ -2,7 +2,7 @@
 // consuming @docx-editor.dev/engine-core across the package boundary.
 
 import { describe, expect, test } from 'bun:test';
-import { LocalBackend } from '../src/index.ts';
+import { LocalBackend } from '../index.ts';
 import {
   createEmptyModel,
   bodyStoryId,

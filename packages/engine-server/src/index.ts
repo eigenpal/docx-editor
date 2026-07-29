@@ -1,24 +1,6 @@
-// @docx-editor.dev/engine-server
+// Compatibility alias for the server lane (task 10.3).
 //
-// Server hosting: addressable-sync hub, versioned RPC, headless parse/edit/layout/save/export, tenant isolation, and streaming. Owns transport.
-//
-// Production placement is fixed by document-engine task 1.4. Responsibilities and
-// dependency rules: docs/architecture/production-engine-packages.md. This is a
-// greenfield skeleton; capability implementation lands in the sections that own it.
-//
-// ADR-S9: production modules MUST NOT import from packages/core/spike/**.
-
-/** Stable package identity used by the import-graph / package-authority checks. */
-export const ENGINE_SERVER_PACKAGE = '@docx-editor.dev/engine-server' as const;
-
-export {
-  RPC_PROTOCOL_VERSION,
-  COMMAND_SCHEMA_VERSION,
-  DEFAULT_TENANT,
-  type RpcRequest,
-  type RpcResponse,
-  type RpcCallOptions,
-  RpcTransportError,
-  RpcServer,
-  RpcClient,
-} from './rpc.ts';
+// The implementation moved to `packages/core/src/server`. This package stays behind only
+// so importers still naming `@docx-editor.dev/engine-server` keep resolving while task 10.5
+// migrates them to the subpath; task 10.6 deletes it. Nothing new belongs here.
+export * from '@docx-editor.dev/core-contract/server';

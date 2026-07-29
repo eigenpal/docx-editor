@@ -1,7 +1,7 @@
 // Awareness + viewer role tests (document-engine task 10.6).
 
 import { describe, expect, test } from 'bun:test';
-import { PresenceRegistry, canSubmitUpdate, canExport, YjsBackend, type Presence } from '../src/index.ts';
+import { PresenceRegistry, canSubmitUpdate, canExport, YjsBackend, type Presence } from '../index.ts';
 import { createEmptyModel, encodeModel } from '@docx-editor.dev/engine-core';
 
 describe('read-only viewer role', () => {

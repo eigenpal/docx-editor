@@ -3,7 +3,7 @@
 // state and results equivalent to the direct path.
 
 import { describe, expect, test } from 'bun:test';
-import { DocxClient, makeGeneratedClient, type ClientTransport } from '../src/index.ts';
+import { DocxClient, makeGeneratedClient, type ClientTransport } from '../index.ts';
 import { RpcServer, RpcClient } from '@docx-editor.dev/engine-server';
 import { DocxEditor, paragraphText, bodyStoryId, type DocumentStore } from '@docx-editor.dev/engine-core';
 

@@ -4,7 +4,7 @@
 // deterministic semantic-id repair.
 
 import { describe, expect, test } from 'bun:test';
-import { YjsBackend } from '../src/index.ts';
+import { YjsBackend } from '../index.ts';
 import { createEmptyModel, encodeModel, fingerprint, type ParagraphRecord } from '@docx-editor.dev/engine-core';
 
 const BODY = 'st-1';

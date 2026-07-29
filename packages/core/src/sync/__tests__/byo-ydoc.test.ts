@@ -6,7 +6,7 @@
 
 import { describe, expect, test } from 'bun:test';
 import * as Y from 'yjs';
-import { YjsBackend } from '../src/index.ts';
+import { YjsBackend } from '../index.ts';
 import { createEmptyModel, encodeModel, fingerprint, type ParagraphRecord } from '@docx-editor.dev/engine-core';
 
 const BODY = 'st-1';

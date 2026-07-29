@@ -3,7 +3,7 @@
 // tenant/schema-bound idempotency.
 
 import { describe, expect, test } from 'bun:test';
-import { RpcServer, RpcClient, RpcTransportError, RPC_PROTOCOL_VERSION, COMMAND_SCHEMA_VERSION, DEFAULT_TENANT } from '../src/index.ts';
+import { RpcServer, RpcClient, RpcTransportError, RPC_PROTOCOL_VERSION, COMMAND_SCHEMA_VERSION, DEFAULT_TENANT } from '../index.ts';
 import { DocxEditor, bodyStoryId, paragraphText, type DocumentStore, type ParagraphRecord } from '@docx-editor.dev/engine-core';
 
 function bodyText(store: DocumentStore): string {

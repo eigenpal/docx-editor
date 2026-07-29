@@ -94,7 +94,9 @@ export const CORE_LANES: Readonly<Record<LaneName, Lane>> = Object.freeze({
   },
   sync: {
     directory: 'src/sync',
-    package: '@docx-editor.dev/engine-sync',
+    // MOVED (task 10.4); alias kept per task 10.5, removed by task 10.6.
+    package: null,
+    alias: '@docx-editor.dev/engine-sync',
     mayImport: ['store'],
     environment: 'neutral',
     subpath: './sync',
@@ -119,14 +121,18 @@ export const CORE_LANES: Readonly<Record<LaneName, Lane>> = Object.freeze({
   },
   server: {
     directory: 'src/server',
-    package: '@docx-editor.dev/engine-server',
+    // MOVED (task 10.4); alias kept per task 10.5, removed by task 10.6.
+    package: null,
+    alias: '@docx-editor.dev/engine-server',
     mayImport: ['store', 'sync', 'layout', 'output'],
     environment: 'node',
     subpath: './server',
   },
   clients: {
     directory: 'src/clients',
-    package: '@docx-editor.dev/engine-clients',
+    // MOVED (task 10.4); alias kept per task 10.5, removed by task 10.6.
+    package: null,
+    alias: '@docx-editor.dev/engine-clients',
     mayImport: ['store'],
     environment: 'neutral',
     subpath: './clients',

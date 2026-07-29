@@ -24,6 +24,9 @@
     "src/store/__tests__",
     "src/layout/__tests__",
     "src/output/__tests__",
-    "src/binding/__tests__"
+    "src/binding/__tests__",
+    "src/sync/__tests__",
+    "src/server/__tests__",
+    "src/clients/__tests__"
   ]
 }

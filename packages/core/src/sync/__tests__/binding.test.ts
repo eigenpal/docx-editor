@@ -4,7 +4,7 @@
 // are suppressed by Yjs transaction origin; and the store stays the sole authority.
 
 import { describe, expect, test } from 'bun:test';
-import { YjsBackend, YjsBinding } from '../src/index.ts';
+import { YjsBackend, YjsBinding } from '../index.ts';
 import {
   DocumentStore,
   createEmptyModel,

@@ -3,7 +3,7 @@
 // allocator, and rejects an unsupported schema before building any state.
 
 import { describe, expect, test } from 'bun:test';
-import { LocalBackend, SNAPSHOT_SCHEMA_VERSION } from '../src/index.ts';
+import { LocalBackend, SNAPSHOT_SCHEMA_VERSION } from '../index.ts';
 import {
   createEmptyModel,
   bodyStoryId,
