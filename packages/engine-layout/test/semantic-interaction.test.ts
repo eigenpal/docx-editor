@@ -245,3 +245,47 @@ describe('composition anchor', () => {
     expect(compositionAnchor(narrow, at(P0, 3))!.position).toEqual(at(P0, 3));
   });
 });
+
+describe('hit testing needs the PAGE, because caret stops are page-relative', () => {
+  // Line 3 of page 1 and line 3 of page 4 sit at the same y, so a hit test given only a
+  // point can match either. Without the page, a click near the top of the first page landed
+  // thousands of characters into the document. The surface used to guard this; the contract
+  // it guards belongs here, with the function that has it.
+  const SMALL: PageGeometry = {
+    width: 200,
+    height: 60,
+    margin: { top: 5, right: 5, bottom: 5, left: 5 },
+  };
+  const many = Array.from({ length: 30 }, (_, index) => paragraph(`para ${index}`)).join('');
+  const layout = lay(load(many), SMALL);
+
+  test('the fixture really does span several pages, or the test proves nothing', () => {
+    expect(layout.pages.length).toBeGreaterThan(3);
+  });
+
+  test('a point on page 0 resolves on page 0 when the page is given', () => {
+    const hit = hitTestSemantic(layout, { x: 0, y: 2, pageIndex: 0 });
+    expect(hit).not.toBeNull();
+    expect(hit!.pageIndex).toBe(0);
+  });
+
+  test('the SAME point resolves on a later page when that page is given', () => {
+    // Identical coordinates, different answer — which is the whole reason the page index is
+    // part of the query rather than derived from y.
+    const last = layout.pages.length - 1;
+    const hit = hitTestSemantic(layout, { x: 0, y: 2, pageIndex: last });
+    expect(hit).not.toBeNull();
+    expect(hit!.pageIndex).toBe(last);
+  });
+
+  test('the two answers are different positions, not the same one twice', () => {
+    const first = hitTestSemantic(layout, { x: 0, y: 2, pageIndex: 0 })!;
+    const later = hitTestSemantic(layout, { x: 0, y: 2, pageIndex: layout.pages.length - 1 })!;
+    expect(later.position.paragraphId).not.toBe(first.position.paragraphId);
+  });
+
+  test('an out-of-range page falls back to the whole document rather than answering nothing', () => {
+    // A click has to put the caret somewhere; refusing would make it do nothing at all.
+    expect(hitTestSemantic(layout, { x: 0, y: 2, pageIndex: 999 })).not.toBeNull();
+  });
+});

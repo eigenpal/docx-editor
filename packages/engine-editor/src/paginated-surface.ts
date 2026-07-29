@@ -17,7 +17,6 @@ import {
   createFixedMeasurer,
   createLayoutScheduler,
   documentOrder,
-  hitTestSemantic,
   layoutSemanticDocument,
   moveCaret,
   paragraphTextFromLayout,
@@ -54,7 +53,6 @@ export interface PaginatedSurface {
   layout(): SemanticLayout;
   state(): PaginatedSurfaceState;
   /** Move the caret to a point in surface coordinates. */
-  clickAt(point: { x: number; y: number }, extend?: boolean): void;
   type(text: string): void;
   deleteBackward(): void;
   /** Delete forward — the Delete key, and `deleteContentForward` from an IME. */
@@ -119,12 +117,6 @@ export function mountPaginatedSurface(
   pagesLayer.className = 'docx-pages';
   pagesLayer.style.position = 'relative';
 
-  const overlay = document.createElement('div');
-  overlay.className = 'docx-overlay';
-  overlay.style.position = 'absolute';
-  overlay.style.inset = '0';
-  overlay.style.pointerEvents = 'none';
-
   // THE PAINTED PAGES ARE THE EDITABLE SURFACE.
   //
   // An offscreen input host cannot coexist with a selection on the page: a document has one
@@ -143,7 +135,7 @@ export function mountPaginatedSurface(
   pagesLayer.style.outline = 'none';
 
   container.style.position = 'relative';
-  container.replaceChildren(pagesLayer, overlay);
+  container.replaceChildren(pagesLayer);
 
   const firstParagraph = session.paragraphIds()[0] ?? '';
   let selection: SemanticSelection = {
@@ -221,7 +213,7 @@ export function mountPaginatedSurface(
     pagesLayer.style.height = `${height * scale}px`;
     container.style.width = `${width * scale}px`;
     container.style.height = `${height * scale}px`;
-    renderOverlay();
+    syncDomSelection();
     options.onChange?.(currentState());
   }
 
@@ -270,41 +262,6 @@ export function mountPaginatedSurface(
     return pagesLayer.contains(anchor);
   }
 
-  function renderOverlay(): void {
-    syncDomSelection();
-    overlay.replaceChildren();
-  }
-
-  /**
-   * Where a page's CONTENT origin sits in surface coordinates.
-   *
-   * Line and span boxes are content-relative, and the painter nests them inside a content
-   * div offset by the margins — so the overlay has to apply the same offset on BOTH axes or
-   * the caret drifts off the page. It was drawn outside the sheet entirely when only the
-   * vertical offset was applied.
-   */
-  /**
-   * The page a surface-space y lands on.
-   *
-   * Clamped rather than nullable: a click in the gap between two sheets, or past the last
-   * one, still has to put the caret somewhere, and the nearest page is the answer the user
-   * means.
-   */
-  function pageAt(y: number): number {
-    const pages = currentLayout.pages;
-    for (let index = 0; index < pages.length; index += 1) {
-      const page = pages[index]!;
-      if (y < page.box.y + page.box.height) return index;
-    }
-    return Math.max(0, pages.length - 1);
-  }
-
-  function pageOrigin(pageIndex: number): { x: number; y: number } {
-    const page = currentLayout.pages[pageIndex];
-    if (!page) return { x: 0, y: 0 };
-    return { x: page.contentBox.x, y: page.contentBox.y };
-  }
-
   function commit(run: () => ReturnType<TreeDocxSession['applyPmDoc']> | boolean): void {
     // Ops go through the session, so the tree stays the only state. A refusal is surfaced
     // rather than silently dropped: the view is repainted from what the model actually
@@ -323,7 +280,7 @@ export function mountPaginatedSurface(
   function setSelection(next: SemanticSelection, keepDesiredX = false): void {
     selection = next;
     if (!keepDesiredX) desiredX = null;
-    renderOverlay();
+    syncDomSelection();
     options.onChange?.(currentState());
   }
 
@@ -337,24 +294,6 @@ export function mountPaginatedSurface(
       return currentLayout;
     },
     state: currentState,
-
-    clickAt(point, extend = false) {
-      // Which PAGE was clicked has to be resolved first and passed on. Caret stops are
-      // page-relative, so page 1 line 3 and page 4 line 3 sit at the same y — hit testing
-      // without the page index matched whichever the tie-break happened to reach, and a
-      // click near the top of the first page could put the caret in the last paragraph of
-      // the document.
-      const pageIndex = pageAt(point.y / scale);
-      const origin = pageOrigin(pageIndex);
-      const hit = hitTestSemantic(currentLayout, {
-        x: point.x / scale - origin.x,
-        y: point.y / scale - origin.y,
-        pageIndex,
-      });
-      if (!hit) return;
-      setSelection({ anchor: extend ? selection.anchor : hit.position, head: hit.position });
-      pagesLayer.focus({ preventScroll: true });
-    },
 
     type(text) {
       // Insert at the selection's START, not at its head. Deleting a selection removes the

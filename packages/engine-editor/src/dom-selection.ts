@@ -155,7 +155,7 @@ export function semanticSelectionFromDom(
  * for its OWN selection. Without writing the position back, pressing Right would move the
  * model and leave the visible caret where it was.
  */
-export function domPointFromPosition(
+function domPointFromPosition(
   root: Element,
   position: SemanticPosition
 ): { node: Node; offset: number } | null {

@@ -34,10 +34,22 @@ function bytes(): Uint8Array {
   return new Uint8Array(readFileSync(FIXTURE));
 }
 
-/** `clickAt` takes SURFACE coordinates; Letter margins put content at 72pt on both axes. */
-const MARGIN = 72;
-const clickText = (surface: PaginatedSurface, x: number, y: number) =>
-  surface.clickAt({ x: MARGIN + x, y: MARGIN + y });
+
+/**
+ * Put the caret at a model position in the first paragraph.
+ *
+ * Addresses the MODEL, not the screen. Positioning by coordinates went through the surface's
+ * own hit test, which no production path uses any more — the browser resolves pointer
+ * positions over the painted text. `hitTestSemantic` keeps its own tests in `engine-layout`,
+ * where the page-relative contract that makes it tricky actually lives.
+ */
+function putCaret(surface: PaginatedSurface, offset: number, paragraphIndex = 0): void {
+  const paragraphId = surface.session.paragraphIds()[paragraphIndex]!;
+  surface.setSelection({
+    anchor: { paragraphId, offset },
+    head: { paragraphId, offset },
+  });
+}
 
 function mount(source: Uint8Array = bytes()): PaginatedSurface {
   const result = mountPaginatedSurface(document.createElement('div'), source, { scale: 1 });
@@ -120,7 +132,7 @@ describe('load, edit, format, save and reopen (task 8.3)', () => {
   test('an edit commits and survives save and reopen', () => {
     const surface = mount();
     const first = surface.session.paragraphIds()[0]!;
-    clickText(surface, 0, 0);
+    putCaret(surface, 0);
     expect(surface.state().selection.head.paragraphId).toBe(first);
     surface.type('EDITED ');
     expect(surface.session.bodyText()).toContain('EDITED ');
@@ -153,7 +165,7 @@ describe('load, edit, format, save and reopen (task 8.3)', () => {
 
   test('semantic caret and selection answer from the layout records', () => {
     const surface = mount();
-    clickText(surface, 0, 0);
+    putCaret(surface, 0);
     surface.navigate('right');
     surface.navigate('right');
     expect(surface.state().selection.head.offset).toBe(2);
@@ -218,33 +230,10 @@ describe('load, edit, format, save and reopen (task 8.3)', () => {
     for (const name of ACCEPTED_PARAGRAPH_PROPERTIES) expect(present.has(name)).toBe(true);
   });
 
-  test('a click near the top of page one cannot land on a later page', () => {
-    // Caret stops are PAGE-relative, so line 3 of page 1 and line 3 of page 4 share a y.
-    // Hit testing without a page index matched whichever the tie-break reached first, and a
-    // click on the first line put the caret thousands of characters into the document.
-    const surface = mount();
-    const first = surface.session.paragraphIds()[0]!;
-    clickText(surface, 4, 2);
-    expect(surface.state().selection.head.paragraphId).toBe(first);
-    expect(surface.state().selection.head.offset).toBeLessThan(20);
-  });
-
-  test('a click on a LATER page lands on that page, not the first', () => {
-    const surface = mount();
-    const layout = surface.layout();
-    expect(layout.pages.length).toBeGreaterThan(1);
-    const second = layout.pages[1]!;
-    // A few points into the second sheet's content area, in surface coordinates.
-    surface.clickAt({ x: second.contentBox.x + 4, y: second.contentBox.y + 2 });
-    const caret = caretAt(surface.layout(), surface.state().selection.head);
-    expect(caret).not.toBeNull();
-    expect(caret!.pageIndex).toBe(1);
-  });
-
   test('undo and redo walk the canonical store after painted editing', () => {
     const surface = mount();
     const original = surface.session.bodyText();
-    clickText(surface, 0, 0);
+    putCaret(surface, 0);
     surface.type('Z');
     expect(surface.session.bodyText()).not.toBe(original);
     surface.session.undo();

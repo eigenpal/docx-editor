@@ -31,16 +31,22 @@ function docx(body: string): Uint8Array {
 
 const paragraph = (text: string) => `<w:p><w:r><w:t>${text}</w:t></w:r></w:p>`;
 
+
 /**
- * The content origin, in surface coordinates.
+ * Put the caret at a model position in the first paragraph.
  *
- * `clickAt` takes SURFACE coordinates, so a test aiming at the third character has to
- * account for the page margin the same way a real pointer event does. Letter geometry with
- * one-inch margins at scale 1 puts content at 72pt on both axes.
+ * Addresses the MODEL, not the screen. Positioning by coordinates went through the surface's
+ * own hit test, which no production path uses any more — the browser resolves pointer
+ * positions over the painted text. `hitTestSemantic` keeps its own tests in `engine-layout`,
+ * where the page-relative contract that makes it tricky actually lives.
  */
-const MARGIN = 72;
-const clickText = (surface: PaginatedSurface, x: number, y: number, extend = false) =>
-  surface.clickAt({ x: MARGIN + x, y: MARGIN + y }, extend);
+function putCaret(surface: PaginatedSurface, offset: number, paragraphIndex = 0): void {
+  const paragraphId = surface.session.paragraphIds()[paragraphIndex]!;
+  surface.setSelection({
+    anchor: { paragraphId, offset },
+    head: { paragraphId, offset },
+  });
+}
 
 function mount(body: string): { surface: PaginatedSurface; container: HTMLElement } {
   const container = document.createElement('div');
@@ -76,7 +82,7 @@ describe('painted pages, semantic interaction', () => {
     span.textContent = 'tampered';
     expect(surface.session.bodyText()).toBe('hello');
     // The next commit repaints from layout records, discarding the tampering.
-    clickText(surface, 0, 5);
+    putCaret(surface, 0);
     surface.type('!');
     expect(container.querySelector('[data-start]')!.textContent).not.toBe('tampered');
     expect(surface.session.bodyText()).toBe('!hello');
@@ -86,7 +92,7 @@ describe('painted pages, semantic interaction', () => {
     // The caret and the highlight are the browser's, so they follow real glyph shapes
     // instead of a hand-drawn band. That only works if model moves reach the DOM.
     const { surface, container } = mount(paragraph('hello world'));
-    clickText(surface, 0, 5);
+    putCaret(surface, 0);
     surface.navigate('right');
     surface.navigate('right');
     const domSelection = container.ownerDocument.getSelection()!;
@@ -97,13 +103,13 @@ describe('painted pages, semantic interaction', () => {
   test('clicking moves the caret to the hit position', () => {
     const { surface } = mount(paragraph('abcdef'));
     // 6pt per character at scale 1; x=18 is the boundary after three characters.
-    clickText(surface, 18, 5);
+    putCaret(surface, 3);
     expect(surface.state().selection.head.offset).toBe(3);
   });
 
   test('typing commits through the session and repaints', () => {
     const { surface, container } = mount(paragraph('hello'));
-    clickText(surface, 0, 5);
+    putCaret(surface, 0);
     surface.type('X');
     expect(surface.session.bodyText()).toBe('Xhello');
     expect(surface.state().revision).toBe(1);
@@ -112,7 +118,7 @@ describe('painted pages, semantic interaction', () => {
 
   test('typing replaces a selection', () => {
     const { surface } = mount(paragraph('hello'));
-    clickText(surface, 0, 5);
+    putCaret(surface, 0);
     surface.navigate('right', true);
     surface.navigate('right', true);
     surface.type('Y');
@@ -121,14 +127,14 @@ describe('painted pages, semantic interaction', () => {
 
   test('backspace deletes the character before the caret', () => {
     const { surface } = mount(paragraph('hello'));
-    clickText(surface, 30, 5);
+    putCaret(surface, 5);
     surface.deleteBackward();
     expect(surface.session.bodyText()).toBe('hell');
   });
 
   test('Enter splits and the caret lands in the new paragraph', () => {
     const { surface } = mount(paragraph('hello'));
-    clickText(surface, 18, 5);
+    putCaret(surface, 3);
     surface.splitParagraph();
     expect(surface.session.paragraphIds()).toHaveLength(2);
     expect(surface.session.bodyText()).toBe('hel\nlo');
@@ -139,7 +145,7 @@ describe('painted pages, semantic interaction', () => {
 
   test('navigation moves the caret without touching the document', () => {
     const { surface } = mount(paragraph('hello') + paragraph('world'));
-    clickText(surface, 0, 5);
+    putCaret(surface, 0);
     surface.navigate('documentEnd');
     expect(surface.state().selection.head.paragraphId).toBe(surface.session.paragraphIds()[1]);
     expect(surface.state().revision).toBe(0); // navigation is not an edit
@@ -147,7 +153,7 @@ describe('painted pages, semantic interaction', () => {
 
   test('extending a selection reaches the browser selection as a real range', () => {
     const { surface, container } = mount(paragraph('hello world'));
-    clickText(surface, 0, 5);
+    putCaret(surface, 0);
     surface.navigate('lineEnd', true);
     const state = surface.state().selection;
     expect(state.head.offset).toBeGreaterThan(state.anchor.offset);
@@ -157,7 +163,7 @@ describe('painted pages, semantic interaction', () => {
 
   test('save round-trips through the tree after painted editing', () => {
     const { surface } = mount(paragraph('hello'));
-    clickText(surface, 30, 5);
+    putCaret(surface, 5);
     surface.type('!');
     const bytes = surface.session.save();
     const reopened = mountPaginatedSurface(document.createElement('div'), bytes, { scale: 1 });
@@ -179,7 +185,7 @@ describe('painted pages, semantic interaction', () => {
       '<w:p><w:r><w:t>a</w:t></w:r><w:r><w:drawing><x/></w:drawing></w:r>' +
         '<w:r><w:t>b</w:t></w:r></w:p>'
     );
-    clickText(surface, 0, 5);
+    putCaret(surface, 0);
     surface.type('Z');
     const reopened = mountPaginatedSurface(
       document.createElement('div'),
@@ -194,7 +200,7 @@ describe('painted pages, semantic interaction', () => {
 describe('relayout is driven by the store\'s own account of a commit (task 9.1)', () => {
   test('the painted layout always carries the revision the session is at', () => {
     const { surface } = mount(`<w:p><w:r><w:t>hello</w:t></w:r></w:p>`);
-    clickText(surface, 0, 0);
+    putCaret(surface, 0);
     surface.type('a');
     expect(surface.layout().revision).toBe(surface.session.revision());
     surface.type('b');
@@ -213,7 +219,7 @@ describe('relayout is driven by the store\'s own account of a commit (task 9.1)'
 
   test('a commit replaces the layout, and undo replaces it back', () => {
     const { surface } = mount(`<w:p><w:r><w:t>hello</w:t></w:r></w:p>`);
-    clickText(surface, 0, 0);
+    putCaret(surface, 0);
     const before = surface.layout();
     surface.type('a');
     const after = surface.layout();
@@ -227,7 +233,7 @@ describe('relayout is driven by the store\'s own account of a commit (task 9.1)'
 
   test('a structural edit relays out and the new paragraph is painted', () => {
     const { surface, container } = mount(`<w:p><w:r><w:t>hello</w:t></w:r></w:p>`);
-    clickText(surface, 0, 0);
+    putCaret(surface, 0);
     surface.navigate('lineEnd');
     surface.splitParagraph();
     expect(surface.session.paragraphIds().length).toBe(2);
@@ -240,7 +246,7 @@ describe('relayout is driven by the store\'s own account of a commit (task 9.1)'
 describe('undo restores the caret the edit was made at (task 9.1 follow-through)', () => {
   test('undoing a typed character puts the caret back where it was typed', () => {
     const { surface } = mount(`<w:p><w:r><w:t>hello world</w:t></w:r></w:p>`);
-    clickText(surface, 0, 0);
+    putCaret(surface, 0);
     surface.navigate('right');
     surface.navigate('right');
     surface.navigate('right');
@@ -257,7 +263,7 @@ describe('undo restores the caret the edit was made at (task 9.1 follow-through)
 
   test('undoing a split puts the caret back at the split point', () => {
     const { surface } = mount(`<w:p><w:r><w:t>hello world</w:t></w:r></w:p>`);
-    clickText(surface, 0, 0);
+    putCaret(surface, 0);
     for (let step = 0; step < 5; step += 1) surface.navigate('right');
     surface.splitParagraph();
     expect(surface.session.paragraphIds().length).toBe(2);
@@ -271,7 +277,7 @@ describe('undo restores the caret the edit was made at (task 9.1 follow-through)
 
   test('undo with an empty history leaves the caret alone', () => {
     const { surface } = mount(`<w:p><w:r><w:t>hello</w:t></w:r></w:p>`);
-    clickText(surface, 0, 0);
+    putCaret(surface, 0);
     surface.navigate('right');
     surface.undo();
     expect(surface.state().selection.head.offset).toBe(1);
@@ -286,7 +292,7 @@ describe('the keymap covers what an editor is expected to do', () => {
     // where a user presses Backspace to merge.
     const { surface } = mount(twoParagraphs);
     const [first, second] = surface.session.paragraphIds();
-    surface.clickAt({ x: MARGIN, y: MARGIN });
+    putCaret(surface, 0);
     surface.navigate('documentEnd');
     surface.navigate('lineStart');
     expect(surface.state().selection.head.paragraphId).toBe(second!);
@@ -299,7 +305,7 @@ describe('the keymap covers what an editor is expected to do', () => {
 
   test('Delete at the end of a paragraph pulls the next one up', () => {
     const { surface } = mount(twoParagraphs);
-    surface.clickAt({ x: MARGIN, y: MARGIN });
+    putCaret(surface, 0);
     surface.navigate('lineEnd');
     surface.deleteForward();
     expect(surface.session.bodyText()).toBe('hello worldsecond line');
@@ -307,7 +313,7 @@ describe('the keymap covers what an editor is expected to do', () => {
 
   test('Delete inside a paragraph removes the character after the caret', () => {
     const { surface } = mount(paragraph('hello'));
-    surface.clickAt({ x: MARGIN, y: MARGIN });
+    putCaret(surface, 0);
     surface.deleteForward();
     expect(surface.session.bodyText()).toBe('ello');
   });
@@ -335,7 +341,7 @@ describe('the keymap covers what an editor is expected to do', () => {
 
   test('word-wise motion walks words rather than characters', () => {
     const { surface } = mount(paragraph('alpha beta gamma'));
-    surface.clickAt({ x: MARGIN, y: MARGIN });
+    putCaret(surface, 0);
     surface.navigate('wordRight');
     expect(surface.state().selection.head.offset).toBe(5);
     surface.navigate('wordRight');
@@ -346,7 +352,7 @@ describe('the keymap covers what an editor is expected to do', () => {
 
   test('a tab is a w:tab element, not a literal tab character in the run', () => {
     const { surface } = mount(paragraph('ab'));
-    surface.clickAt({ x: MARGIN, y: MARGIN });
+    putCaret(surface, 0);
     surface.insertTab();
     expect(surface.session.bodyText()).toBe('\tab');
     const xml = JSON.stringify(surface.session.part());
@@ -355,7 +361,7 @@ describe('the keymap covers what an editor is expected to do', () => {
 
   test('a line break stays inside the paragraph', () => {
     const { surface } = mount(paragraph('ab'));
-    surface.clickAt({ x: MARGIN, y: MARGIN });
+    putCaret(surface, 0);
     surface.insertLineBreak();
     expect(surface.session.paragraphIds().length).toBe(1);
     expect(surface.session.bodyText()).toContain('\n');
@@ -378,7 +384,7 @@ describe('the keymap covers what an editor is expected to do', () => {
 
   test('a collapsed caret is not formatted, because there is no range to format', () => {
     const { surface } = mount(paragraph('hello'));
-    surface.clickAt({ x: MARGIN, y: MARGIN });
+    putCaret(surface, 0);
     const before = surface.session.revision();
     surface.toggleRunProperty('b');
     expect(surface.session.revision()).toBe(before);
