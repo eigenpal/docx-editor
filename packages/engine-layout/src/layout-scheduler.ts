@@ -153,7 +153,7 @@ export function createLayoutScheduler(options: LayoutSchedulerOptions): LayoutSc
    * cancellation point: a commit landing mid-run abandons it on the next slice instead of
    * paying for a layout of a revision nobody will see.
    */
-  function runToCompletion(scope: LayoutScope): SemanticLayout {
+  function runToCompletion(scope: LayoutScope): SemanticLayout | null {
     const slicer = options.runCooperatively;
     if (!slicer) return run(scope);
     const cooperative = slicer(scope);
@@ -162,10 +162,32 @@ export function createLayoutScheduler(options: LayoutSchedulerOptions): LayoutSc
       for (;;) {
         const result = cooperative.step();
         if (result) return result;
+        // BETWEEN SLICES is the only place cancellation can happen. Without this the loop
+        // ran to completion and the finished layout was thrown away as stale — slicing
+        // bought nothing, because nobody ever asked whether the work was still wanted.
+        if (currentRevision() !== scope.revision) {
+          cooperative.cancel();
+          cancelledRuns += 1;
+          return null;
+        }
+        // Cancelled from underneath, by a re-entrant flush or a teardown. Stepping a
+        // cancelled run again would never terminate.
+        if (inFlight !== cooperative) return null;
       }
     } finally {
       if (inFlight === cooperative) inFlight = null;
     }
+  }
+
+  /** Fold an abandoned scope back into the pending batch, so nothing it covered is lost. */
+  function carryForward(scope: LayoutScope): void {
+    const next = ensure(currentRevision());
+    next.impact = widen(next.impact, scope.impact);
+    next.structural = next.structural || scope.structural;
+    for (const id of scope.paragraphIds) next.paragraphIds.add(id);
+    for (const id of scope.created) next.created.add(id);
+    for (const id of scope.deleted) next.deleted.add(id);
+    for (const key of scope.dependencyKeys) next.dependencyKeys.add(key);
   }
 
   const freeze = (state: ReturnType<typeof emptyScope>): LayoutScope => ({
@@ -211,18 +233,20 @@ export function createLayoutScheduler(options: LayoutSchedulerOptions): LayoutSc
     accumulator = null;
     const scope = freeze(state);
     const layout = runToCompletion(scope);
+    if (!layout) {
+      // Abandoned mid-flight. The scope is carried into a retry rather than dropped, so the
+      // newer revision still gets laid out.
+      staleDiscards += 1;
+      carryForward(scope);
+      arm();
+      return false;
+    }
     // Checked AFTER the work, against the model as it is NOW: a commit landing while layout
     // ran is exactly the case this exists for. Re-arm rather than publish, so the newer
     // revision gets its own pass instead of inheriting a result computed before it.
     if (layout.revision !== currentRevision()) {
       staleDiscards += 1;
-      const next = ensure(currentRevision());
-      next.impact = widen(next.impact, scope.impact);
-      next.structural = next.structural || scope.structural;
-      for (const id of scope.paragraphIds) next.paragraphIds.add(id);
-      for (const id of scope.created) next.created.add(id);
-      for (const id of scope.deleted) next.deleted.add(id);
-      for (const key of scope.dependencyKeys) next.dependencyKeys.add(key);
+      carryForward(scope);
       arm();
       return false;
     }

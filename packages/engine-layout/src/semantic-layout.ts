@@ -216,6 +216,10 @@ function fragmentSignature(fragment: ParagraphFragmentRecord): string {
     fragment.id,
     fragment.box,
     fragment.range,
+    // `props` is a PUBLISHED field. A paragraph-property change layout does not read moves
+    // no geometry, so without this the freshly built fragment converged against the old one
+    // and was discarded — leaving a painter or style consumer reading the pre-edit value.
+    fragment.props,
     fragment.lines.map((line) => [line.id, line.box, line.baseline, line.spans]),
   ]);
   signatures.set(fragment, signature);
@@ -357,7 +361,10 @@ export function layoutSemanticDocument(
   const geometry = options.geometry ?? DEFAULT_PAGE_GEOMETRY;
   const measurer = options.measurer;
   const cache = options.cache;
-  const producer = options.producer ?? 'default';
+  // Defaults to a constant deliberately NAMED for the risk: fonts resolve asynchronously, so
+  // a caller that swaps the measurer without changing this is served the pre-font layout for
+  // the rest of the session.
+  const producer = options.producer ?? 'unversioned-measurer';
 
   const contentWidth = geometry.width - geometry.margin.left - geometry.margin.right;
   const contentHeight = geometry.height - geometry.margin.top - geometry.margin.bottom;
@@ -448,7 +455,7 @@ export function layoutSemanticDocument(
   // document still agrees with, so the pages completed by then are carried over by
   // REFERENCE — unchanged pages keep their identity, which is what lets a consumer skip
   // repainting them (task 9.4).
-  if (resumable && firstChanged > 0 && firstChanged <= session.checkpoints.length - 1) {
+  if (resumable && firstChanged > 0 && firstChanged < session.checkpoints.length) {
     const checkpoint = session.checkpoints[firstChanged]!;
     pages.push(...previous!.pages.slice(0, checkpoint.pageCount));
     pageFragments = [...checkpoint.pageFragments];
@@ -636,7 +643,16 @@ export function layoutSemanticDocument(
         id: `line-${lineCounter}`,
         range: { paragraphId, start: pendingLine.start, end: pendingLine.end },
         spans: alignSpans(
-          pendingLine.spans.map((span) => ({ ...span, box: { ...span.box, y: cursorY } })),
+          // The paragraph id is rewritten at PLACEMENT, exactly as `box.y` is. A cached
+          // break is keyed by content, so two paragraphs holding the same text share one
+          // entry — and the spans in it carry whichever paragraph happened to produce them.
+          // Two identical list items were enough to make the second one's spans claim the
+          // first one's id.
+          pendingLine.spans.map((span) => ({
+            ...span,
+            range: { ...span.range, paragraphId },
+            box: { ...span.box, y: cursorY },
+          })),
           measurer,
           indent.left,
           available,
@@ -651,6 +667,19 @@ export function layoutSemanticDocument(
       cursorY += pendingLine.height;
     }
     flushFragment();
+  }
+
+  // A TERMINAL checkpoint, describing the flow after the last paragraph. Without it,
+  // appending a paragraph gives `firstChanged === paragraphCount` — "resume after the end" —
+  // for which nothing was stored, so the most ordinary edit there is, typing at the bottom of
+  // a document and pressing Enter, re-placed everything.
+  if (!converged) {
+    checkpoints[prepared.length] = {
+      pageCount: pages.length,
+      pageFragments: [...pageFragments],
+      cursorY,
+      lineCounter,
+    };
   }
 
   if (!converged && (pageFragments.length > 0 || pages.length === 0)) flushPage();

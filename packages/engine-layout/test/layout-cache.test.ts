@@ -188,3 +188,61 @@ describe('the cache is bounded and self-pruning (task 9.2)', () => {
     expect(cache.stats.size).toBeLessThanOrEqual(4);
   });
 });
+
+describe('the key covers what actually changes a break (review regressions)', () => {
+  const keyOfBody = (body: string): string => {
+    const part = load(body);
+    const container = part.root.children.find((child) => child.kind === 'body')!;
+    const paragraph = container.children.find((child) => child.kind === 'paragraph')!;
+    return paragraphLayoutKey({ paragraph, properties: [], width: 100, producer: 'p' });
+  };
+
+  test('a RUN property VALUE change is a different key', () => {
+    // `attributes` is an array of records, not a record. Serializing it with Object.entries
+    // dropped every value and kept only the count, so 11pt and 22pt keyed identically and
+    // the 22pt paragraph was served the 11pt breaks.
+    const small = keyOfBody('<w:p><w:r><w:rPr><w:sz w:val="22"/></w:rPr><w:t>hi</w:t></w:r></w:p>');
+    const large = keyOfBody('<w:p><w:r><w:rPr><w:sz w:val="44"/></w:rPr><w:t>hi</w:t></w:r></w:p>');
+    expect(small).not.toBe(large);
+  });
+
+  test('a font family change is a different key', () => {
+    const a = keyOfBody('<w:p><w:r><w:rPr><w:rFonts w:ascii="Arial"/></w:rPr><w:t>hi</w:t></w:r></w:p>');
+    const b = keyOfBody('<w:p><w:r><w:rPr><w:rFonts w:ascii="Georgia"/></w:rPr><w:t>hi</w:t></w:r></w:p>');
+    expect(a).not.toBe(b);
+  });
+
+  test('an explicit-off toggle is a different key from an explicit-on one', () => {
+    const on = keyOfBody('<w:p><w:r><w:rPr><w:caps w:val="1"/></w:rPr><w:t>hi</w:t></w:r></w:p>');
+    const off = keyOfBody('<w:p><w:r><w:rPr><w:caps w:val="0"/></w:rPr><w:t>hi</w:t></w:r></w:p>');
+    expect(on).not.toBe(off);
+  });
+
+  test('the same paragraph at a different NODE ID is a different key', () => {
+    // Node ids are structural paths, so inserting a table above a paragraph renumbers it
+    // while nothing about its content changes. Reusing the records would publish fragment
+    // and span ranges naming a paragraph that no longer exists at that id.
+    const alone = keyOfBody('<w:p><w:r><w:t>hello world</w:t></w:r></w:p>');
+    const shifted = keyOfBody('<w:tbl><w:tr/></w:tbl><w:p><w:r><w:t>hello world</w:t></w:r></w:p>');
+    expect(alone).not.toBe(shifted);
+  });
+});
+
+describe('cached breaks are re-tagged for the paragraph that uses them (review regression)', () => {
+  test('two identical paragraphs each get spans naming THEMSELVES', () => {
+    // A cached break is keyed by content, so identical paragraphs share one entry — and the
+    // spans in it carry whichever paragraph produced them unless placement re-tags.
+    const cache = createParagraphLayoutCache<never>();
+    const body = `${paragraph('same text here')}${paragraph('same text here')}`;
+    const layout = lay(load(body), 1, cache);
+    const fragments = layout.pages.flatMap((page) => page.fragments);
+    expect(fragments.length).toBe(2);
+    for (const fragment of fragments) {
+      for (const line of fragment.lines) {
+        for (const span of line.spans) {
+          expect(span.range.paragraphId).toBe(fragment.paragraphId);
+        }
+      }
+    }
+  });
+});

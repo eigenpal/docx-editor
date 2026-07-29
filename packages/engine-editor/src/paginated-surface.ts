@@ -22,6 +22,7 @@ import {
   moveCaret,
   paragraphTextFromLayout,
   spansInSelection,
+  wordBoundary,
   type LayoutScope,
   type NavigationCommand,
   type SemanticLayout,
@@ -58,6 +59,10 @@ export interface PaginatedSurface {
   deleteBackward(): void;
   /** Delete forward — the Delete key, and `deleteContentForward` from an IME. */
   deleteForward(): void;
+  /** Delete to the previous word boundary — Alt/Ctrl+Backspace. */
+  deleteWordBackward(): void;
+  /** Delete to the next word boundary — Alt/Ctrl+Delete. */
+  deleteWordForward(): void;
   splitParagraph(): void;
   /** A tab character as a `w:tab` element, not a literal tab in the run text. */
   insertTab(): void;
@@ -198,7 +203,14 @@ export function mountPaginatedSurface(
   }
 
   function render(): void {
-    paintSemanticLayout(pagesLayer, currentLayout, { scale });
+    paintSemanticLayout(pagesLayer, currentLayout, {
+      scale,
+      // NOT aria-hidden. That default is right when the painted pages are a picture beside
+      // an editable projection — but here they ARE the projection: focus and the selection
+      // live inside them. Hiding them would leave a role="textbox" whose entire content is
+      // invisible to assistive technology, with the caret in a hidden subtree.
+      ariaHidden: false,
+    });
     // The pages are absolutely positioned, so the layer has no intrinsic size and the
     // surface would collapse to zero — pages then escape whatever centres or scrolls it.
     // Size it from the records, which is the only place the extent is known.
@@ -222,14 +234,40 @@ export function mountPaginatedSurface(
    * Layout still decides where the text is; this only says which characters are selected.
    */
   function syncDomSelection(): void {
-    // Guarded: writing the selection fires `selectionchange`, which would read it straight
-    // back and, mid-drag, fight the user for the range.
+    // Only when this surface owns the selection. `render` runs on mount and on every commit
+    // — including one from another editor sharing the store — and writing unconditionally
+    // yanked the caret out of whatever the user was actually typing in.
+    if (!ownsSelection()) return;
     applyingSelection = true;
-    try {
-      applySelectionToDom(pagesLayer, selection, document.getSelection());
-    } finally {
+    applySelectionToDom(pagesLayer, selection, document.getSelection());
+    // Cleared on a LATER task, because `selectionchange` is queued rather than dispatched
+    // synchronously. Clearing it here would defeat the guard in every real browser while
+    // still appearing to work under a synchronous test DOM.
+    queueMicrotask(() => {
       applyingSelection = false;
-    }
+    });
+  }
+
+  /**
+   * Whether writing the selection would take it from someone else.
+   *
+   * True when focus or the selection is already inside these pages, and also when NOTHING
+   * holds a selection — writing one then takes it from nobody. What this refuses is the case
+   * that matters: a caret living in another element, which a repaint here would otherwise
+   * yank away with no focus change and no interaction.
+   */
+  function ownsSelection(): boolean {
+    const active = document.activeElement;
+    if (active && pagesLayer.contains(active)) return true;
+    const domSelection = document.getSelection();
+    if (!domSelection || domSelection.rangeCount === 0) return true;
+    const anchor = domSelection.anchorNode;
+    if (!anchor) return true;
+    // A selection anchored in a subtree that has been removed from the document belongs to
+    // nobody — a surface that was torn down, or a re-rendered host. Refusing to write over
+    // it would leave this surface unable to show its own caret.
+    if (!anchor.isConnected) return true;
+    return pagesLayer.contains(anchor);
   }
 
   function renderOverlay(): void {
@@ -412,6 +450,39 @@ export function mountPaginatedSurface(
       );
     },
 
+    deleteWordBackward() {
+      if (surface.deleteSelection()) return;
+      const head = selection.head;
+      const target = wordBoundary(textOf(head.paragraphId), head.offset, -1);
+      if (target === head.offset) {
+        surface.deleteBackward();
+        return;
+      }
+      commit(() =>
+        session.applyTreeOps(
+          [{ op: 'deleteText', paragraphId: head.paragraphId, start: target, end: head.offset }],
+          selectionMark()
+        )
+      );
+      setSelection(collapsedAt({ ...head, offset: target }));
+    },
+
+    deleteWordForward() {
+      if (surface.deleteSelection()) return;
+      const head = selection.head;
+      const target = wordBoundary(textOf(head.paragraphId), head.offset, 1);
+      if (target === head.offset) {
+        surface.deleteForward();
+        return;
+      }
+      commit(() =>
+        session.applyTreeOps(
+          [{ op: 'deleteText', paragraphId: head.paragraphId, start: head.offset, end: target }],
+          selectionMark()
+        )
+      );
+    },
+
     deleteForward() {
       if (surface.deleteSelection()) return;
       const position = selection.head;
@@ -554,6 +625,8 @@ export function mountPaginatedSurface(
       pagesLayer.removeEventListener('copy', onCopy as EventListener);
       pagesLayer.removeEventListener('cut', onCut as EventListener);
       pagesLayer.removeEventListener('paste', onPaste as EventListener);
+      pagesLayer.removeEventListener('compositionstart', onCompositionStart);
+      pagesLayer.removeEventListener('compositionend', onCompositionEnd);
       // Drop pending layout work and stop listening BEFORE the DOM goes, or a commit from
       // another editor sharing this store would paint into a detached container.
       scheduler.cancel();
@@ -703,6 +776,17 @@ export function mountPaginatedSurface(
   // surface ends up feeling worse than a textarea. Layout still owns geometry: what comes
   // back from the DOM is which CHARACTERS were gestured over, never where they are.
   let applyingSelection = false;
+  /**
+   * Whether an IME is composing.
+   *
+   * `beforeinput` for `insertCompositionText` is NOT cancelable — `preventDefault` is a
+   * no-op — so composed text unavoidably lands in the painted DOM. The surface therefore
+   * stops repainting for the duration (a repaint mid-composition destroys the IME's own
+   * anchor and aborts or duplicates the session) and reconciles once when it ends.
+   */
+  let composing = false;
+  /** The paragraph the composition started in, so the right one is reconciled. */
+  let composingParagraph: string | null = null;
 
   /** Mirror the native selection into the model. Ignores selections outside painted text. */
   const adoptDomSelection = (): void => {
@@ -712,10 +796,91 @@ export function mountPaginatedSurface(
   };
 
   const onSelectionChange = (): void => {
-    // Ignore the echo of our own write, and anything happening outside the pages.
+    // Ignore the echo of our own write, and anything happening outside the pages. The flag
+    // is cleared on a later task rather than synchronously: browsers QUEUE `selectionchange`
+    // rather than firing it from `setBaseAndExtent`, so clearing it in a `finally` would
+    // leave it false by the time the echo arrives — and every programmatic selection would
+    // be read straight back, fighting the user mid-drag.
     if (applyingSelection) return;
+    if (composing) return;
     adoptDomSelection();
   };
+
+  const onCompositionStart = (): void => {
+    composing = true;
+    composingParagraph = selection.head.paragraphId;
+    session.beginComposition();
+  };
+
+  const onCompositionEnd = (): void => {
+    composing = false;
+    const paragraphId = composingParagraph ?? selection.head.paragraphId;
+    composingParagraph = null;
+    // The composed text is in the DOM and nowhere else. Read it back, diff it against what
+    // the model holds for that paragraph, and commit the difference — the only route by
+    // which an IME edit can reach the tree, since it could not be intercepted.
+    reconcileParagraphFromDom(paragraphId);
+    session.endComposition();
+    flushLayout();
+    render();
+  };
+
+  /**
+   * Commit whatever the browser wrote into a paragraph that the surface could not intercept.
+   *
+   * Deliberately narrow: one paragraph, expressed as a single replace of the differing
+   * middle. Anything wider would be guessing at what changed.
+   */
+  function reconcileParagraphFromDom(paragraphId: string): void {
+    const painted = paintedTextOf(paragraphId);
+    if (painted === null) return;
+    const modelText = textOf(paragraphId);
+    if (painted === modelText) return;
+
+    let prefix = 0;
+    while (
+      prefix < painted.length &&
+      prefix < modelText.length &&
+      painted[prefix] === modelText[prefix]
+    ) {
+      prefix += 1;
+    }
+    let suffix = 0;
+    while (
+      suffix < painted.length - prefix &&
+      suffix < modelText.length - prefix &&
+      painted[painted.length - 1 - suffix] === modelText[modelText.length - 1 - suffix]
+    ) {
+      suffix += 1;
+    }
+    const inserted = painted.slice(prefix, painted.length - suffix);
+    const ops: Parameters<TreeDocxSession['applyTreeOps']>[0][number][] = [];
+    if (modelText.length - suffix > prefix) {
+      ops.push({ op: 'deleteText', paragraphId, start: prefix, end: modelText.length - suffix });
+    }
+    if (inserted.length > 0) {
+      ops.push({ op: 'insertText', paragraphId, offset: prefix, text: inserted });
+    }
+    if (ops.length === 0) return;
+    commit(() => session.applyTreeOps(ops, selectionMark()));
+    setSelection(collapsedAt({ paragraphId, offset: prefix + inserted.length }));
+  }
+
+  /** The text the browser currently shows for a paragraph, across all its painted lines. */
+  function paintedTextOf(paragraphId: string): string | null {
+    const spans = pagesLayer.querySelectorAll('[data-paragraph-id][data-start]');
+    const pieces: { start: number; text: string }[] = [];
+    for (const span of spans) {
+      const element = span as HTMLElement;
+      if (element.dataset.paragraphId !== paragraphId) continue;
+      const start = Number(element.dataset.start);
+      if (!Number.isInteger(start)) continue;
+      pieces.push({ start, text: element.textContent ?? '' });
+    }
+    if (pieces.length === 0) return null;
+    pieces.sort((a, b) => a.start - b.start);
+    return pieces.map((piece) => piece.text).join('');
+  }
 
   const NAVIGATION: Record<string, NavigationCommand> = {
     ArrowLeft: 'left',
@@ -848,36 +1013,76 @@ export function mountPaginatedSurface(
     }
   }
 
+  /** Plain text from an input event's data transfer, if it carries any. */
+  function dataTransferText(event: InputEvent): string | null {
+    const data = event.dataTransfer;
+    if (!data) return null;
+    // `text/plain` ONLY. `text/html` from a drag is markup from anywhere on the machine.
+    const text = data.getData('text/plain');
+    return text.length > 0 ? text : null;
+  }
+
   const onBeforeInput = (event: InputEvent): void => {
+    // PREVENTED FIRST, dispatched second.
+    //
+    // The pages are editable, so anything this handler does not recognise is a mutation the
+    // browser performs on the painted DOM: Format-menu bold, emacs kill-line, transpose,
+    // yank, insert-list, drop. The model never sees it, and worse, every span after it keeps
+    // a `data-start` that no longer matches its text — so the NEXT keystroke commits at the
+    // wrong offset. An unknown input type must be dropped, never passed through.
+    event.preventDefault();
+
+    if (composing) {
+      // The IME owns the DOM until it finishes; reconciliation happens at composition end.
+      return;
+    }
+
     if (event.inputType === 'insertText' && event.data != null) {
       surface.type(event.data);
-      event.preventDefault();
       return;
     }
-    if (event.inputType === 'insertFromPaste' || event.inputType === 'insertReplacementText') {
-      // The paste handler already ran and did the work; this only stops the browser from
-      // also writing the text into the input host.
-      event.preventDefault();
+    if (event.inputType === 'insertFromPaste') {
+      // The paste handler already ran and did the work.
       return;
     }
-    if (event.inputType === 'deleteContentBackward' || event.inputType === 'deleteWordBackward') {
+    if (event.inputType === 'insertReplacementText') {
+      // Autocorrect, dictation and smart substitutions arrive this way — NOT from a paste.
+      // The replacement text is on the event; applying it is how a correction survives
+      // instead of being silently dropped.
+      const replacement = event.data ?? dataTransferText(event);
+      if (replacement) surface.type(replacement);
+      return;
+    }
+    if (event.inputType === 'deleteContentBackward') {
       surface.deleteBackward();
-      event.preventDefault();
       return;
     }
-    if (event.inputType === 'deleteContentForward' || event.inputType === 'deleteWordForward') {
+    if (event.inputType === 'deleteWordBackward') {
+      surface.deleteWordBackward();
+      return;
+    }
+    if (event.inputType === 'deleteContentForward') {
       surface.deleteForward();
-      event.preventDefault();
+      return;
+    }
+    if (event.inputType === 'deleteWordForward') {
+      surface.deleteWordForward();
       return;
     }
     if (event.inputType === 'insertLineBreak') {
       surface.insertLineBreak();
-      event.preventDefault();
+      return;
+    }
+    if (event.inputType === 'insertFromDrop' || event.inputType === 'insertFromPasteAsQuotation') {
+      // Plain text only, like paste: dropped content carries `text/html` from anywhere on the
+      // machine, and parsing it here would be exactly the HTML-from-a-string sink the file
+      // path is bounded to avoid.
+      const dropped = dataTransferText(event);
+      if (dropped) insertPlainText(dropped);
       return;
     }
     if (event.inputType === 'insertParagraph') {
       surface.splitParagraph();
-      event.preventDefault();
     }
   };
 
@@ -889,6 +1094,8 @@ export function mountPaginatedSurface(
   pagesLayer.addEventListener('copy', onCopy as EventListener);
   pagesLayer.addEventListener('cut', onCut as EventListener);
   pagesLayer.addEventListener('paste', onPaste as EventListener);
+  pagesLayer.addEventListener('compositionstart', onCompositionStart);
+  pagesLayer.addEventListener('compositionend', onCompositionEnd);
 
   render();
   return { ok: true, surface };

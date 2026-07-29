@@ -24,13 +24,18 @@ interface SpanIdentity {
   readonly start: number;
 }
 
+/** Node ids are `part#path`, and the part name comes from the document. */
+const PARAGRAPH_ID = /^[^\s]{1,512}$/;
+
 function identityOf(element: Element): SpanIdentity | null {
   const paragraphId = (element as HTMLElement).dataset?.paragraphId;
   const rawStart = (element as HTMLElement).dataset?.start;
   if (!paragraphId || rawStart === undefined) return null;
-  // File-derived ids reach the DOM as data attributes, so the value coming back is parsed
-  // and range-checked rather than trusted to be the number that was written.
+  // BOTH values are re-validated. They round-trip through the DOM, where anything on the
+  // page could have rewritten them, and the id then flows into a tree op as the paragraph to
+  // mutate. `__proto__` as an id is refused here rather than relied on being refused later.
   if (!/^\d{1,9}$/.test(rawStart)) return null;
+  if (!PARAGRAPH_ID.test(paragraphId) || paragraphId === '__proto__') return null;
   return { paragraphId, start: Number(rawStart) };
 }
 
@@ -46,15 +51,31 @@ function spanFor(node: Node): { element: Element; identity: SpanIdentity } | nul
 }
 
 /**
- * The first painted span at or after a container/offset that is not itself a span.
+ * Resolve an endpoint expressed as a child index into a model position.
  *
- * A selection endpoint can land on a line or fragment element rather than on text — clicking
- * in the empty space to the right of a short line does exactly that. The endpoint then means
- * "between these children", so the neighbouring span is the honest answer.
+ * A selection endpoint can land on a line or fragment element rather than on text —
+ * triple-clicking a paragraph, or dragging past the end of a line, does exactly that. The
+ * offset is then a CHILD INDEX, not a character offset.
+ *
+ * An index equal to the child count means "after the last child", which is the END of that
+ * child's text. Clamping to the last child and then reading offset zero — as this did — came
+ * back short by the whole final run of the line, so a triple-click selected everything but
+ * the last word.
  */
-function spanNearContainer(container: Element, offset: number): Node | null {
+function positionFromChildIndex(container: Element, index: number): SemanticPosition | null {
   const children = [...container.childNodes];
-  return children[Math.min(offset, children.length - 1)] ?? null;
+  if (children.length === 0) return null;
+  if (index >= children.length) {
+    const last = spanFor(children[children.length - 1]!);
+    if (!last) return null;
+    return {
+      paragraphId: last.identity.paragraphId,
+      offset: last.identity.start + (last.element.textContent?.length ?? 0),
+    };
+  }
+  const found = spanFor(children[Math.max(0, index)]!);
+  if (!found) return null;
+  return { paragraphId: found.identity.paragraphId, offset: found.identity.start };
 }
 
 /**
@@ -70,19 +91,29 @@ export function positionFromDomPoint(
 ): SemanticPosition | null {
   if (!root.contains(node)) return null;
 
-  let target: Node | null = node;
-  let within = offset;
-  if (node.nodeType === Node.ELEMENT_NODE && !identityOf(node as Element)) {
-    const near = spanNearContainer(node as Element, offset);
-    if (!near) return null;
-    target = near;
-    // The endpoint addressed a child boundary, not a character, so the offset does not
-    // carry over: start at the beginning of whatever span that boundary points at.
-    within = 0;
+  // An ELEMENT endpoint carries a child index, never a character offset — including when the
+  // element is a painted span. Runs are inline-blocks, so a shift-click or a drag across one
+  // is exactly when a browser reports the span itself as the endpoint; reading that index as
+  // a character offset silently moved the selection to near the start of the run.
+  if (node.nodeType === Node.ELEMENT_NODE) {
+    const element = node as Element;
+    const identity = identityOf(element);
+    if (identity) {
+      const length = element.textContent?.length ?? 0;
+      return {
+        paragraphId: identity.paragraphId,
+        offset: identity.start + (offset > 0 ? length : 0),
+      };
+    }
+    const resolved = positionFromChildIndex(element, offset);
+    if (resolved) return resolved;
+    // An EMPTY line still has a caret position: the paragraph it belongs to, at its start.
+    return emptyLinePosition(element);
   }
 
-  const found = target ? spanFor(target) : null;
+  const found = spanFor(node);
   if (!found) return null;
+  const within = offset;
 
   // Clamp to the span's own text: a browser may report an offset past the end for an
   // endpoint that sits at a boundary between elements.
@@ -130,6 +161,7 @@ export function domPointFromPosition(
 ): { node: Node; offset: number } | null {
   const spans = root.querySelectorAll('[data-paragraph-id][data-start]');
   let fallback: { node: Node; offset: number } | null = null;
+  let emptyLine: Element | null = null;
   for (const span of spans) {
     const identity = identityOf(span);
     if (!identity || identity.paragraphId !== position.paragraphId) continue;
@@ -146,7 +178,31 @@ export function domPointFromPosition(
       fallback = point;
     }
   }
-  return fallback;
+  if (fallback) return fallback;
+
+  // An EMPTY paragraph paints a line with no spans, so there is no text node to point at —
+  // yet it still has exactly one caret position. Without this the caret vanished after every
+  // Enter, and Select All drew no highlight at all on a document ending in a blank
+  // paragraph, which is nearly every document Word writes.
+  emptyLine = lineOfParagraph(root, position.paragraphId);
+  return emptyLine ? { node: emptyLine, offset: 0 } : null;
+}
+
+/** The painted line belonging to a paragraph, whether or not it holds any runs. */
+function lineOfParagraph(root: Element, paragraphId: string): Element | null {
+  for (const line of root.querySelectorAll('[data-paragraph-id]')) {
+    if ((line as HTMLElement).dataset?.paragraphId !== paragraphId) continue;
+    if ((line as HTMLElement).dataset?.start !== undefined) continue;
+    return line;
+  }
+  return null;
+}
+
+/** The caret position for an empty painted line: the start of the paragraph it belongs to. */
+function emptyLinePosition(element: Element): SemanticPosition | null {
+  const paragraphId = (element as HTMLElement).dataset?.paragraphId;
+  if (!paragraphId || !PARAGRAPH_ID.test(paragraphId) || paragraphId === '__proto__') return null;
+  return { paragraphId, offset: 0 };
 }
 
 /**

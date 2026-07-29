@@ -38,44 +38,51 @@ const HEX = /^[0-9A-Fa-f]{6}$/;
 const FONT_NAME = /^[\w \-.+]{1,64}$/;
 
 /** ST_Underline to the nearest CSS decoration style. */
-const UNDERLINE_STYLE: Record<string, string> = {
-  single: 'solid',
-  words: 'solid',
-  thick: 'solid',
-  double: 'double',
-  dotted: 'dotted',
-  dottedHeavy: 'dotted',
-  dash: 'dashed',
-  dashedHeavy: 'dashed',
-  dashLong: 'dashed',
-  dashLongHeavy: 'dashed',
-  dotDash: 'dashed',
-  dashDotHeavy: 'dashed',
-  dotDotDash: 'dashed',
-  dashDotDotHeavy: 'dashed',
-  wave: 'wavy',
-  wavyHeavy: 'wavy',
-  wavyDouble: 'wavy',
-};
+// MAPS, not object literals. These are indexed by a value that came out of a document, so
+// an object literal would answer `constructor` and `__proto__` with something inherited —
+// `?? 'solid'` never fires for `constructor`, because a function is not nullish.
+const UNDERLINE_STYLE = new Map<string, string>(
+  Object.entries({
+    single: 'solid',
+    words: 'solid',
+    thick: 'solid',
+    double: 'double',
+    dotted: 'dotted',
+    dottedHeavy: 'dotted',
+    dash: 'dashed',
+    dashedHeavy: 'dashed',
+    dashLong: 'dashed',
+    dashLongHeavy: 'dashed',
+    dotDash: 'dashed',
+    dashDotHeavy: 'dashed',
+    dotDotDash: 'dashed',
+    dashDotDotHeavy: 'dashed',
+    wave: 'wavy',
+    wavyHeavy: 'wavy',
+    wavyDouble: 'wavy',
+  })
+);
 
-const HIGHLIGHT: Record<string, string> = {
-  black: '#000000',
-  blue: '#0000ff',
-  cyan: '#00ffff',
-  darkBlue: '#000080',
-  darkCyan: '#008080',
-  darkGray: '#808080',
-  darkGreen: '#008000',
-  darkMagenta: '#800080',
-  darkRed: '#800000',
-  darkYellow: '#808000',
-  green: '#00ff00',
-  lightGray: '#c0c0c0',
-  magenta: '#ff00ff',
-  red: '#ff0000',
-  yellow: '#ffff00',
-  white: '#ffffff',
-};
+const HIGHLIGHT = new Map<string, string>(
+  Object.entries({
+    black: '#000000',
+    blue: '#0000ff',
+    cyan: '#00ffff',
+    darkBlue: '#000080',
+    darkCyan: '#008080',
+    darkGray: '#808080',
+    darkGreen: '#008000',
+    darkMagenta: '#800080',
+    darkRed: '#800000',
+    darkYellow: '#808000',
+    green: '#00ff00',
+    lightGray: '#c0c0c0',
+    magenta: '#ff00ff',
+    red: '#ff0000',
+    yellow: '#ffff00',
+    white: '#ffffff',
+  })
+);
 
 /** Apply a resolved run style to an element, value by validated value. */
 function applyRunStyle(element: HTMLElement, style: ResolvedRunStyle, scale: number): void {
@@ -93,9 +100,8 @@ function applyRunStyle(element: HTMLElement, style: ResolvedRunStyle, scale: num
     css.fontFamily = `"${style.fontFamily}"`;
   }
   if (style.color && HEX.test(style.color)) css.color = `#${style.color}`;
-  if (style.highlight && HIGHLIGHT[style.highlight]) {
-    css.backgroundColor = HIGHLIGHT[style.highlight]!;
-  }
+  const highlight = style.highlight ? HIGHLIGHT.get(style.highlight) : undefined;
+  if (highlight) css.backgroundColor = highlight;
   if (style.caps) css.textTransform = 'uppercase';
   if (style.smallCaps) css.fontVariant = 'small-caps';
   // Super/subscript shift with a RELATIVE offset, not `vertical-align`. Vertical alignment
@@ -129,7 +135,7 @@ function applyRunStyle(element: HTMLElement, style: ResolvedRunStyle, scale: num
   if (decorations.length > 0) {
     css.textDecorationLine = decorations.join(' ');
     if (style.underline) {
-      css.textDecorationStyle = UNDERLINE_STYLE[style.underline.variant] ?? 'solid';
+      css.textDecorationStyle = UNDERLINE_STYLE.get(style.underline.variant) ?? 'solid';
       if (style.underline.color && HEX.test(style.underline.color)) {
         css.textDecorationColor = `#${style.underline.color}`;
       }

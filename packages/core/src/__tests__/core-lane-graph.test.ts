@@ -16,7 +16,7 @@ import {
   laneTopologicalOrder,
   reachableLanes,
   type LaneName,
-} from './core-lane-graph.ts';
+} from './core-lane-graph';
 
 const PACKAGES = join(dirname(fileURLToPath(import.meta.url)), '..', '..', '..');
 
