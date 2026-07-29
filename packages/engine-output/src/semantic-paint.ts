@@ -189,19 +189,18 @@ function paintLine(document: Document, line: LineRecord, scale: number): HTMLEle
   const left = line.spans[0]?.box.x ?? line.box.x;
   element.style.left = `${left * scale}px`;
   element.style.height = `${line.box.height * scale}px`;
-  // Every inline box on the line is exactly the line box, so the selection bands TILE:
-  // no gap between lines, no overlap.
+  // Each run keeps its OWN box, which is how a mixed-size line should highlight: an 8pt
+  // run gets an 8pt band and a 36pt run a 36pt one, stepped, the way Word draws it.
+  // Forcing the line's height onto every run instead paints one uniform slab.
   //
-  // `normal` cannot do that. It sizes each box from the font, and the font's natural box
-  // is not the line height layout published — Chrome folds the line gap into `normal`,
-  // and layout does not — so bands came out either short of the next line or bleeding into
-  // it, depending on the face. Deriving the line height from the font instead only moves
-  // the disagreement around, because the browser and the measurer never resolve it
-  // identically for every face.
+  // This only tiles because layout's line height is now the font's own ascent + descent +
+  // line gap — the same quantity the browser resolves `normal` to. While the line height
+  // came from a multiplier the two disagreed, and the bands either fell short of the next
+  // line or lapped it.
   //
   // Set explicitly rather than inherited, so a host page's own line-height cannot change
   // how the document renders.
-  element.style.lineHeight = `${line.box.height * scale}px`;
+  element.style.lineHeight = 'normal';
   element.style.whiteSpace = 'pre';
   // A raised superscript or a tall glyph draws outside the line box rather than being
   // clipped at it; the box governs spacing and the selection band, not what is visible.

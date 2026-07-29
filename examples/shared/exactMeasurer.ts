@@ -31,6 +31,28 @@ import { createCanvasMeasurer } from './canvasMeasurer.ts';
 /** The face the harness measures and paints with. */
 export const EXACT_FONT_FAMILY = 'DejaVu Sans';
 
+/**
+ * Families the harness ALIASES onto the demo face.
+ *
+ * The painter applies whatever family a run names, so a run asking for Times New Roman is
+ * painted in the real Times while the shaper measured the demo face — advances disagree and
+ * the run overruns the line reserved for it. Registering the demo bytes under these names
+ * makes CSS resolve exactly what was measured.
+ *
+ * This is a HARNESS device, not font coverage: it proves metric agreement. Real coverage
+ * means metric-compatible substitutes per family (Carlito for Calibri, Caladea for
+ * Cambria), which is the remaining half of task 7.7.
+ */
+const ALIASED_FAMILIES = [
+  'Arial',
+  'Calibri',
+  'Cambria',
+  'Courier New',
+  'Georgia',
+  'Times New Roman',
+  'Verdana',
+] as const;
+
 const REGULAR: FontRequest = { family: EXACT_FONT_FAMILY, weight: 400, style: 'normal' };
 const BOLD: FontRequest = { family: EXACT_FONT_FAMILY, weight: 700, style: 'normal' };
 
@@ -41,10 +63,10 @@ async function fetchBytes(url: URL): Promise<Uint8Array> {
 }
 
 /** Register a face with the browser from the very bytes the shaper was given. */
-async function paintWith(bytes: Uint8Array, weight: number): Promise<void> {
-  // A copy, because `FontFace` takes ownership of the buffer it is handed and the shaper
-  // still needs its own.
-  const face = new FontFace(EXACT_FONT_FAMILY, bytes.slice().buffer as ArrayBuffer, {
+async function paintWith(bytes: Uint8Array, weight: number, family: string): Promise<void> {
+  // A copy per registration, because `FontFace` takes ownership of the buffer it is handed
+  // and the shaper still needs its own.
+  const face = new FontFace(family, bytes.slice().buffer as ArrayBuffer, {
     weight: String(weight),
     style: 'normal',
   });
@@ -65,7 +87,12 @@ export async function createExactMeasurer(scale: number): Promise<ExactMeasurer>
       fetchBytes(new URL('./fonts/DejaVuSans.ttf', import.meta.url)),
       fetchBytes(new URL('./fonts/DejaVuSans-Bold.ttf', import.meta.url)),
     ]);
-    await Promise.all([paintWith(regular, 400), paintWith(bold, 700)]);
+    await Promise.all(
+      [EXACT_FONT_FAMILY, ...ALIASED_FAMILIES].flatMap((family) => [
+        paintWith(regular, 400, family),
+        paintWith(bold, 700, family),
+      ])
+    );
 
     const snapshot = createFontResourceSnapshot({
       epoch: 1,

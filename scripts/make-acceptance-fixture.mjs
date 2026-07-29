@@ -95,6 +95,40 @@ const body = [
       '<ext:futureParagraphChild xmlns:ext="urn:test:ext">tail</ext:futureParagraphChild>'
   ),
 
+  // MIXED FAMILIES AND MIXED SIZES ON ONE LINE.
+  //
+  // The case that exposes every disagreement between measurement and painting at once: a
+  // line is only as tall as its tallest run, runs of different faces have different
+  // ascents, and the browser draws the selection band per run. If line height, advance or
+  // baseline is off anywhere, this is where it shows.
+  para('<w:pStyle w:val="Heading2"/>', run('<w:b/><w:sz w:val="28"/>', text('1.3 Font Variations'))),
+  para(
+    '',
+    [
+      ['Arial', 'Arial'],
+      ['Times New Roman', 'Times New Roman'],
+      ['Courier New', 'Courier New'],
+      ['Georgia', 'Georgia'],
+      ['Verdana', 'Verdana'],
+    ]
+      .map(([family, label], index) =>
+        (index > 0 ? run('', text(' | ')) : '') +
+        run(`<w:rFonts w:ascii="${family}" w:hAnsi="${family}"/>`, text(label))
+      )
+      .join('')
+  ),
+  ...[0, 1].map(() =>
+    para(
+      '',
+      [8, 11, 14, 18, 24, 36]
+        .map((points, index) =>
+          (index > 0 ? run('', text(' | ')) : '') +
+          run(`<w:sz w:val="${points * 2}"/>`, text(`${points}pt`))
+        )
+        .join('')
+    )
+  ),
+
   // Long enough that one paragraph crosses a page boundary.
   para(
     '',
@@ -127,9 +161,15 @@ const bytes = zipSync({
   ),
 });
 
-const out = new URL('../e2e/fixtures/paragraph-acceptance.docx', import.meta.url);
-writeFileSync(out, bytes);
+// BOTH copies, always. The harness serves the one under `public/`, and a hand-made copy
+// silently drifted from the generated one — the demo kept rendering a fixture the tests had
+// already moved past.
+const outputs = [
+  new URL('../e2e/fixtures/paragraph-acceptance.docx', import.meta.url),
+  new URL('../examples/vite/public/paragraph-acceptance.docx', import.meta.url),
+];
+for (const out of outputs) writeFileSync(out, bytes);
 console.log(
-  `wrote ${out.pathname} (${bytes.length} bytes, ` +
+  `wrote ${outputs.length} copies (${bytes.length} bytes, ` +
     `${RUN_PROPERTIES.length} run properties, ${PARAGRAPH_PROPERTIES.length} paragraph properties)`
 );
