@@ -17,6 +17,8 @@ export { PaginatedDocxEditorShell } from './components/PaginatedDocxEditorShell'
 export type { PaginatedDocxEditorShellProps } from './components/PaginatedDocxEditorShell';
 export type {
   PaginatedDocxEditorHandle,
+  // The Vue name for the same contract, exported so the two adapters pair by name.
+  PaginatedDocxEditorHandle as PaginatedDocxEditorExpose,
   PaginatedDocxEditorProps,
 } from './components/PaginatedDocxEditor';
 export { EditorFontError } from './types';

@@ -41,6 +41,23 @@ export interface PaginatedDocxEditorExpose {
   save(): Uint8Array | null;
 }
 
+/**
+ * The React name for the same contract.
+ *
+ * Vue calls it an "expose" and React a "handle"; they are the same member list, and exporting
+ * both names is what lets the export-parity gate see them as paired rather than as one
+ * adapter lagging the other.
+ */
+export type PaginatedDocxEditorHandle = PaginatedDocxEditorExpose;
+
+/** Props the component accepts, named to pair with the React host. */
+export interface PaginatedDocxEditorProps {
+  readonly source: Uint8Array;
+  readonly scale?: number;
+  readonly measurer?: TextMeasurer;
+  readonly className?: string;
+}
+
 export const PaginatedDocxEditor = defineComponent({
   name: 'PaginatedDocxEditor',
   props: {

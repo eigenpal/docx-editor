@@ -13,7 +13,11 @@ export const VERSION = '0.0.2';
 
 export { default as DocxEditor } from './DocxEditor';
 export { PaginatedDocxEditor } from './components/PaginatedDocxEditor';
-export type { PaginatedDocxEditorExpose } from './components/PaginatedDocxEditor';
+export type {
+  PaginatedDocxEditorExpose,
+  PaginatedDocxEditorHandle,
+  PaginatedDocxEditorProps,
+} from './components/PaginatedDocxEditor';
 export { EditorFontError } from './types';
 export type {
   DocxEditorProps,

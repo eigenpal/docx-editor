@@ -116,6 +116,13 @@ one gate that still fails.
   never reaches `check:public-docs-surface` at all. Recording it as the accepted docs-surface
   failure laundered a fresh gate failure under an old one, which is the exact thing this
   section exists to prevent. The Vue shell and the export-parity entries are task 11.3 work.
-  The docs-surface failure below is still real and still deferred — the published docs describe the retired adapter surface the
+  The docs-surface failure below is still real and still deferred.
+- `bun run check:export-parity`: **now passes.** The paginated hosts export the same names
+  from both adapters, and the one genuine gap — no Vue counterpart to the React shell — is
+  recorded in `notes/intentional-export-divergence.md` with the reason rather than silenced.
+- `bun run check:parity-contract`: fails with 16 issues, all of them LEGACY `DocxEditorRef`
+  members (`getZoom`, `print`, `proposeChange`, `replyToComment`, `scrollToPage`, …). None
+  are from this change; the contract was last updated before it began. Recorded so the next
+  reader does not attribute it here, and so it is not mistaken for the docs-surface failure — the published docs describe the retired adapter surface the
   greenfield migration removed. Task 11.4 forbids updating those claims before paired
   acceptance, so this stays failing and reported rather than silenced.
