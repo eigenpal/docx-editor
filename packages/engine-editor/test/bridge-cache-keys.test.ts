@@ -31,7 +31,7 @@ import {
 } from '@docx-editor.dev/engine-core';
 import { DisplayBridgeCache, toDisplayPages } from '../src/display-bridge.ts';
 import { LAYOUT } from './interaction-test-helpers.ts';
-import { createHarfBuzzLayoutOptions } from '../../engine-layout/test/fixtures/layout-shaping.ts';
+import { createHarfBuzzLayoutOptions } from '../../core/src/layout/__tests__/fixtures/layout-shaping.ts';
 
 const HUMAN = ORIGIN_IDS.mutationHuman;
 

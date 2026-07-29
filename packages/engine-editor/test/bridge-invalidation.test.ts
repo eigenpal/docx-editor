@@ -25,7 +25,7 @@ import {
   type BridgeInvalidation,
 } from '../src/display-bridge.ts';
 import { LAYOUT, modelWithTableCell } from './interaction-test-helpers.ts';
-import { createHarfBuzzLayoutOptions } from '../../engine-layout/test/fixtures/layout-shaping.ts';
+import { createHarfBuzzLayoutOptions } from '../../core/src/layout/__tests__/fixtures/layout-shaping.ts';
 
 const HUMAN = ORIGIN_IDS.mutationHuman;
 function storeWith(texts: readonly string[]) {

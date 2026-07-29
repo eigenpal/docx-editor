@@ -327,8 +327,29 @@ export async function probeHarnessSemanticIndexTransform({
     throw new Error(`engine-layout transform failed (${layoutResponse.status}): ${await layoutResponse.text()}`);
   }
   const layoutBody = await layoutResponse.text();
-  if (!layoutBody.includes(probe)) {
+  // Task 10.3 moved the layout lane into the core package, leaving `engine-layout` as a
+  // pure re-export alias. So the symbol is no longer IN this module; what this module must
+  // prove is that the alias resolves to workspace source rather than a prebundled copy.
+  // The symbol itself is then checked where it now lives.
+  // Vite rewrites bare specifiers to resolved paths, so match the lane's location rather
+  // than the specifier the source was written with.
+  const aliased =
+    layoutBody.includes('@docx-editor.dev/core-contract/layout') ||
+    layoutBody.includes('core/src/layout');
+  if (!aliased && !layoutBody.includes(probe)) {
     throw new Error(`engine-layout transform missing export ${probe}`);
+  }
+  if (aliased) {
+    // The node_modules entries are symlinks named by PACKAGE, and the core package's name
+    // is `core-contract` even though its directory is `core`.
+    const laneUrl = `${baseUrl}@fs/${join(layoutRoot, '../core-contract/src/layout/index.ts')}`;
+    const laneResponse = await fetch(laneUrl);
+    if (!laneResponse.ok) {
+      throw new Error(`layout lane transform failed (${laneResponse.status}): ${await laneResponse.text()}`);
+    }
+    if (!(await laneResponse.text()).includes(probe)) {
+      throw new Error(`layout lane transform missing export ${probe}`);
+    }
   }
   if (layoutBody.includes('node_modules/.vite/deps/@docx-editor__dev_engine-layout')) {
     throw new Error('engine-layout imports stale prebundled self-reference');

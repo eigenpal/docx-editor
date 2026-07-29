@@ -13,13 +13,25 @@ import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { CORE_LANES, laneSourceRoot, sourceRootOf } from '../../__tests__/core-lane-graph.ts';
 import { existingLanePath, laneRelativePath, PACKAGES_ROOT } from './lane-paths.ts';
+import { laneHasMoved, type LaneName } from '../../__tests__/core-lane-graph.ts';
+
+/**
+ * A lane that has not moved yet, chosen at run time.
+ *
+ * Naming one made this file fail the moment that lane moved — which is a test breaking on
+ * the change it is supposed to survive. Section 10 moves every lane eventually, so the
+ * example has to be looked up rather than written down.
+ */
+const UNMOVED: LaneName | undefined = (
+  ['contracts', 'sync', 'server', 'clients', 'binding', 'output', 'editor'] as LaneName[]
+).find((lane) => !laneHasMoved(lane));
 
 describe('lane path resolution survives a lane moving', () => {
   test('an unmoved lane keeps its current location', () => {
-    expect(laneRelativePath('engine-layout/src')).toBe('engine-layout/src');
-    expect(laneRelativePath('engine-layout/src/semantic-layout.ts')).toBe(
-      'engine-layout/src/semantic-layout.ts'
-    );
+    if (!UNMOVED) return; // Every lane has moved: this case no longer exists to test.
+    const root = laneSourceRoot(UNMOVED);
+    expect(laneRelativePath(root)).toBe(root);
+    expect(laneRelativePath(`${root}/index.ts`)).toBe(`${root}/index.ts`);
   });
 
   test('the store lane, which HAS moved, redirects both root and nested file', () => {
@@ -37,11 +49,13 @@ describe('lane path resolution survives a lane moving', () => {
     // moment a `package` field flips to null — not a restatement of it.
     // `sourceRootOf` is the rule `laneSourceRoot` and `laneRelativePath` both run on, called
     // here with a lane record whose `package` is null — the state the migration creates.
-    expect(sourceRootOf({ ...CORE_LANES.layout, package: null })).toBe('core/src/layout');
     expect(sourceRootOf({ ...CORE_LANES.store, package: null })).toBe('core/src/store');
+    expect(sourceRootOf({ ...CORE_LANES.editor, package: null })).toBe('core/src/editor');
     // Same function, unmoved: the two branches are not separate implementations.
-    expect(sourceRootOf(CORE_LANES.layout)).toBe('engine-layout/src');
-    expect(laneSourceRoot('layout')).toBe('engine-layout/src');
+    if (UNMOVED) {
+      expect(sourceRootOf(CORE_LANES[UNMOVED])).toBe(laneSourceRoot(UNMOVED));
+      expect(sourceRootOf(CORE_LANES[UNMOVED]).startsWith('core/src/')).toBe(false);
+    }
   });
 
   test('a path outside every lane is returned untouched', () => {

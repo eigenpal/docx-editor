@@ -287,8 +287,10 @@
       "name": "@docx-editor.dev/core-contract",
       "version": "0.0.1",
       "dependencies": {
+        "bidi-js": "1.0.3",
         "fast-xml-parser": "^4.5.0",
         "fflate": "^0.8.2",
+        "harfbuzzjs": "1.4.0",
       },
       "devDependencies": {
         "typescript": "^5.3.3",
@@ -354,9 +356,7 @@
       "name": "@docx-editor.dev/engine-layout",
       "version": "0.0.0",
       "dependencies": {
-        "@docx-editor.dev/engine-core": "workspace:*",
-        "bidi-js": "1.0.3",
-        "harfbuzzjs": "1.4.0",
+        "@docx-editor.dev/core-contract": "workspace:*",
       },
       "devDependencies": {
         "typescript": "^5.3.3",

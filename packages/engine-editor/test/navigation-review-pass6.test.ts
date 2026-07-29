@@ -34,7 +34,7 @@ import {
   publishFrameBundle,
   selectionForBlock,
 } from './interaction-test-helpers.ts';
-import { createHarfBuzzLayoutOptions } from '../../engine-layout/test/fixtures/layout-shaping.ts';
+import { createHarfBuzzLayoutOptions } from '../../core/src/layout/__tests__/fixtures/layout-shaping.ts';
 
 const METRICS = { clientOrigin: { x: 0, y: 0 }, scrollOffset: { x: 0, y: 0 }, zoom: 1 };
 

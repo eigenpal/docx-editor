@@ -22,7 +22,7 @@ import {
   layoutBody,
   type Page,
 } from '@docx-editor.dev/engine-layout';
-import { createHarfBuzzLayoutOptions } from '../../engine-layout/test/fixtures/layout-shaping.ts';
+import { createHarfBuzzLayoutOptions } from '../../core/src/layout/__tests__/fixtures/layout-shaping.ts';
 import {
   createEmptyModel,
   bodyStoryId,

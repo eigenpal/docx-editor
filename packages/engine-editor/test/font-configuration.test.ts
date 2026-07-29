@@ -3,7 +3,7 @@ import { EditorFontError, type FontConfiguration } from '@docx-editor.dev/core-c
 import { sha256FontBytes } from '@docx-editor.dev/engine-layout';
 import { createLayoutShaping } from '../src/font-configuration.ts';
 
-const fontUrl = new URL('../../engine-layout/test/fixtures/fonts/DejaVuSans.ttf', import.meta.url);
+const fontUrl = new URL('../../core/src/layout/__tests__/fixtures/fonts/DejaVuSans.ttf', import.meta.url);
 
 test('adapts the public byte-backed font configuration after async HarfBuzz initialization', async () => {
   const bytes = new Uint8Array(await Bun.file(fontUrl).arrayBuffer());

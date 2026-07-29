@@ -22,7 +22,7 @@ import {
   modelWithParagraphTableParagraph,
   selectionForBlock,
 } from './interaction-test-helpers.ts';
-import { createHarfBuzzLayoutOptions } from '../../engine-layout/test/fixtures/layout-shaping.ts';
+import { createHarfBuzzLayoutOptions } from '../../core/src/layout/__tests__/fixtures/layout-shaping.ts';
 
 function bridged(model: PackageModel, layout = LAYOUT) {
   const pages = layoutBody(model, layout).pages;

@@ -7,7 +7,7 @@ import {
   ORIGIN_IDS,
   type ParagraphRecord,
 } from '@docx-editor.dev/engine-core';
-import { createHarfBuzzLayoutOptions } from '../../engine-layout/test/fixtures/layout-shaping.ts';
+import { createHarfBuzzLayoutOptions } from '../../core/src/layout/__tests__/fixtures/layout-shaping.ts';
 import { toDisplayPages } from '../src/display-bridge.ts';
 
 function layoutWith(text: string) {

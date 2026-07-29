@@ -20,6 +20,7 @@
     "src"
   ],
   "exclude": [
-    "src/store/__tests__"
+    "src/store/__tests__",
+    "src/layout/__tests__"
   ]
 }
