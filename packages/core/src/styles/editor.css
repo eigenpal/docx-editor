@@ -158,6 +158,15 @@
    * A literal, not a themed token: the canvas is deliberately not themed, and dark mode
    * overrides it to the grey Word uses. */
   --doc-page-bg: #ffffff;
+  /* The colour a sheet is PAINTED. In the legacy lane the page is lightness-inverted, so
+     `--doc-page-bg` is a pre-filter value and this is what it lands on; the paginated lane
+     inverts only the content, so it paints this directly. Declared rather than written at
+     the use site, or the print override below cannot reach it. */
+  --doc-page-bg-rendered: #ffffff;
+  /* Declared, not just defaulted in a `var()` fallback — the third silent-var bug in this
+     file was one more unnamed token. Stays #000 in both themes so the content inversion
+     lands on near-white. */
+  --doc-page-text: #000000;
 
   /* Caret on the document canvas.
    *
@@ -277,6 +286,7 @@
     * canvas Word uses; text stays #000 (→ near-white). Images are inverted back
     * to normal by the counter-filter below. */
   --doc-page-bg: #cccccc;
+  --doc-page-bg-rendered: #333333;
   /* --doc-page-text stays #000000 (light fallback) so it inverts to white. */
 
   /* Caret on the dark canvas. The selection overlay sits OUTSIDE the inverted
@@ -301,6 +311,11 @@
   /* Replace the painter's drop shadow (the filter would turn it into a weird
     * light glow) with a 1px ring. Pre-invert dark → post-invert a subtle light
     * border, matching Word's framed dark page. */
+}
+/* The ring replaces the page frame's drop shadow, so it belongs to the FRAME. Applied to
+   the content box as well it outlined the text area — a box Word never draws — while the
+   real page edge lost its separation from the workspace. */
+.ep-root.dark .layout-page {
   box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.18) !important;
 }
 .ep-root.dark .layout-page img,
@@ -321,6 +336,15 @@
 @media print {
   .ep-root.dark {
     --doc-page-bg: #ffffff;
+    /* The colour a sheet is PAINTED. In the legacy lane the page is lightness-inverted, so
+     `--doc-page-bg` is a pre-filter value and this is what it lands on; the paginated lane
+     inverts only the content, so it paints this directly. Declared rather than written at
+     the use site, or the print override below cannot reach it. */
+    --doc-page-bg-rendered: #ffffff;
+    /* Declared, not just defaulted in a `var()` fallback — the third silent-var bug in this
+     file was one more unnamed token. Stays #000 in both themes so the content inversion
+     lands on near-white. */
+    --doc-page-text: #000000;
   }
   .ep-root.dark .layout-page,
   .ep-root.dark .layout-page img,
@@ -2253,15 +2277,33 @@
   outline: none;
 }
 .ep-root.dark .docx-paginated-surface .docx-page {
-  /* The sheet is not inverted, so in dark mode it carries the canvas colour directly rather
-     than the light value the inversion would otherwise have produced. */
-  background: #333333;
+  background: var(--doc-page-bg-rendered);
+}
+/* Paper is always white, whatever the screen theme. Without resetting the CONTENT
+   inversion here, printing in dark mode left near-white text on paper the printer drops to
+   white — blank pages. `print-color-adjust` stops the sheet colour being dropped too. */
+@media print {
+  .ep-root.dark .docx-page-content,
+  .ep-root.dark .docx-page-content img,
+  .ep-root.dark .docx-page-content svg,
+  .ep-root.dark .docx-page-content canvas,
+  .ep-root.dark .docx-page-content video,
+  .ep-root.dark .docx-page-content [data-no-color-invert] {
+    filter: none !important;
+  }
+  .docx-paginated-surface .docx-page {
+    background: #ffffff !important;
+    color: #000000 !important;
+    box-shadow: none !important;
+    print-color-adjust: exact;
+    -webkit-print-color-adjust: exact;
+  }
 }
 .docx-paginated-surface .docx-page {
   /* The TOKEN, not a literal. Dark mode sets `--doc-page-bg` to #ccc precisely so the
      page inversion lands on Word's grey canvas; a hardcoded #fff inverts to pure black
      and takes the text down to unreadable with it. */
-  background: var(--doc-page-bg, #fff);
+  background: var(--doc-page-bg-rendered, #fff);
   /* The page states its OWN text colour rather than inheriting the chrome's: a light chrome
      colour carried into the inverted content turned every run dark grey on grey. The token
      stays #000 in both themes precisely so the inversion lands on near-white. */

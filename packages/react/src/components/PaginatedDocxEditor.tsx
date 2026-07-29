@@ -125,7 +125,11 @@ export function PaginatedDocxEditor({
       result.surface.destroy();
       surfaceRef.current = null;
     };
-  }, [source, scale, measurer]);
+    // `scale` is deliberately NOT a dependency: it is a paint parameter, and remounting on it
+    // reopened the document from the original bytes — changing zoom threw away every edit,
+    // the caret and the undo history.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [source, measurer]);
 
   useImperativeHandle(
     ref,
@@ -159,7 +163,11 @@ export function PaginatedDocxEditor({
         margin: '24px auto',
         ...(documentFontFamily ? { fontFamily: documentFontFamily } : {}),
       }}
-      className={className ?? 'docx-paginated-surface'}
+      // MERGED, not replaced. Every rule that gives the sheet its paper colour is scoped to
+      // `docx-paginated-surface`, while the content inversion keys off a class the painter
+      // always emits — so a host passing a className used to leave inverted near-white text
+      // floating on the workspace with no visible page.
+      className={className ? `docx-paginated-surface ${className}` : 'docx-paginated-surface'}
       data-revision={state?.revision ?? 0}
       data-page-count={state?.pageCount ?? 0}
     />

@@ -217,8 +217,14 @@ export function mountPaginatedSurface(
    * either property.
    */
   const scheduler = createLayoutScheduler({
+    // The DOCUMENT's geometry, exactly as the first paint uses. Omitting it meant the first
+    // paint honoured A4 and the first committed edit silently repaginated onto Letter — every
+    // layout after the first comes through here rather than through `layoutOnce`.
     run: (scope: LayoutScope) =>
-      layoutSemanticDocument(session.part(), scope.revision, { measurer }),
+      layoutSemanticDocument(session.part(), scope.revision, {
+        measurer,
+        geometry: geometry(),
+      }),
     currentRevision: () => session.revision(),
     publish: (layout) => {
       currentLayout = layout;
@@ -416,11 +422,15 @@ export function mountPaginatedSurface(
     },
 
     splitParagraph() {
-      const position = selection.head;
+      // Enter REPLACES a selection, like every other insertion, and splits at its START —
+      // splitting at the head left the selected text in place and cut the paragraph at
+      // whichever end the user happened to drag to.
+      const position = orderedStart();
       const before = session.paragraphIds();
       commit(() =>
         session.applyTreeOps(
           [
+            ...deleteSelectionOps(),
             {
               op: 'splitParagraph',
               paragraphId: position.paragraphId,
@@ -565,7 +575,10 @@ export function mountPaginatedSurface(
               paragraphId: from.paragraphId,
               start: from.offset,
               end: to.offset,
-              properties: [{ localName, ...(attributes ? { attributes } : {}) }],
+              properties: mergedProperties(selectionRunProperties(), {
+                localName,
+                ...(attributes ? { attributes } : {}),
+              }),
             },
           ],
           selectionMark()
@@ -584,7 +597,10 @@ export function mountPaginatedSurface(
       const ops = order.slice(firstIndex, lastIndex + 1).map((paragraphId) => ({
         op: 'setParagraphProperties' as const,
         paragraphId,
-        properties: [{ localName, ...(attributes ? { attributes } : {}) }],
+        properties: mergedProperties(paragraphPropertiesOf(paragraphId), {
+          localName,
+          ...(attributes ? { attributes } : {}),
+        }),
       }));
       if (ops.length === 0) return;
       commit(() => session.applyTreeOps(ops, selectionMark()));
@@ -644,11 +660,14 @@ export function mountPaginatedSurface(
               // Toggling OFF sends an explicit `val="0"` rather than dropping the element:
               // the property may be inherited from a style, and removing the local override
               // would let the inherited value come back.
-              properties: [
+              properties: mergedProperties(
+                selectionRunProperties(),
                 active
-                  ? { localName, attributes: { val: '0' } }
-                  : { localName, ...(attributes ? { attributes } : {}) },
-              ],
+                  ? // `w:u` is a closed enumeration, not a boolean: its off value is `none`,
+                    // and `val="0"` is an attribute value Word rejects outright.
+                    { localName, attributes: { val: localName === 'u' ? 'none' : '0' } }
+                  : { localName, ...(attributes ? { attributes } : {}) }
+              ),
             },
           ],
           selectionMark()
@@ -714,7 +733,11 @@ export function mountPaginatedSurface(
   ): void {
     flushLayout();
     if (!mark) {
-      render();
+      // No recorded mark — a cross-paragraph edit records none, because a mark addresses one
+      // paragraph. The caret must still be CLAMPED to the tree undo just restored: leaving it
+      // pointed past the end of a shortened paragraph, or at a paragraph the undo removed,
+      // and every later keystroke was refused. Select All, type, undo froze the editor.
+      setSelection(clampedToDocument(selection));
       return;
     }
     setSelection({
@@ -760,6 +783,30 @@ export function mountPaginatedSurface(
     return spans.every(flagOf);
   }
 
+  /**
+   * Merge one property into a set, replacing any entry with the same name.
+   *
+   * `setRunProperties` and `setParagraphProperties` REPLACE the whole container, so sending
+   * one property alone deleted every other: pressing Bold stripped a run's font, size and
+   * colour, and pressing Centre stripped a paragraph's style, numbering and indents.
+   */
+  function mergedProperties(
+    existing: readonly { localName: string; attributes?: Record<string, string> }[],
+    incoming: { localName: string; attributes?: Record<string, string> }
+  ): { localName: string; attributes?: Record<string, string> }[] {
+    const kept = existing.filter((entry) => entry.localName !== incoming.localName);
+    return [...kept, incoming];
+  }
+
+  /** The run properties in force across the selection, taken from its first span. */
+  function selectionRunProperties(): readonly {
+    localName: string;
+    attributes?: Record<string, string>;
+  }[] {
+    const spans = spansInSelection(currentLayout, selection);
+    return spans[0]?.props ?? [];
+  }
+
   /** A paragraph's own properties, read back from the layout records. */
   function paragraphPropertiesOf(
     paragraphId: string
@@ -770,6 +817,20 @@ export function mountPaginatedSurface(
       }
     }
     return [];
+  }
+
+  /** A selection guaranteed to address content that exists at the current revision. */
+  function clampedToDocument(next: SemanticSelection): SemanticSelection {
+    const ids = session.paragraphIds();
+    const fallback = ids[0];
+    const clampPosition = (position: SemanticPosition): SemanticPosition => {
+      const paragraphId = ids.includes(position.paragraphId)
+        ? position.paragraphId
+        : (fallback ?? position.paragraphId);
+      const length = textOf(paragraphId).length;
+      return { paragraphId, offset: Math.max(0, Math.min(position.offset, length)) };
+    };
+    return { anchor: clampPosition(next.anchor), head: clampPosition(next.head) };
   }
 
   function collapsedAt(position: SemanticPosition): SemanticSelection {

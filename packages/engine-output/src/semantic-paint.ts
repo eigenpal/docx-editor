@@ -35,7 +35,11 @@ export interface PaintOptions {
 }
 
 const HEX = /^[0-9A-Fa-f]{6}$/;
-const FONT_NAME = /^[\w \-.+]{1,64}$/;
+// Unicode-aware: `\w` is ASCII-only, so every CJK family name — 游ゴシック, 맑은 고딕 — failed
+// validation and the run silently fell back to the inherited face, losing the typeface of an
+// entire document. Quote, backslash, semicolon, comma and control characters stay excluded,
+// which is what keeps the quoted CSS string unbreakable.
+const FONT_NAME = /^[\p{L}\p{N}\p{M} \-.+_]{1,64}$/u;
 
 /** ST_Underline to the nearest CSS decoration style. */
 // MAPS, not object literals. These are indexed by a value that came out of a document, so
@@ -275,11 +279,10 @@ function paintPage(
   materialize: boolean
 ): HTMLElement {
   const element = positioned(document, 'div', page.box, options.scale);
-  // BOTH names. `layout-page` is what the chrome stylesheet targets — dark mode's page
-  // inversion, print's white-paper override — and emitting only our own name meant none of
-  // it applied, so dark mode left a glaring white sheet in a dark editor.
-  // The sheet itself is NOT inverted in dark mode — only the content it holds is, so the
-  // paper keeps the canvas colour its token names.
+  // Deliberately NOT `layout-page`: that class carries the legacy lane's whole-frame
+  // inversion, which would flip the paper itself. The sheet keeps the canvas colour its
+  // token names and only `.docx-page-content` below is inverted, so the theme and print
+  // rules name that class instead.
   element.className = 'docx-page';
   element.dataset.pageIndex = String(page.index);
   if (options.ariaHidden) {

@@ -171,14 +171,29 @@ export function PaginatedDocxEditorShell({
       case 'fontFamily':
         return editor.setRunProperty('rFonts', { ascii: action.value, hAnsi: action.value });
       case 'fontSize':
-        // The picker speaks half-points, which is what `w:sz` stores.
-        return editor.setRunProperty('sz', { val: String(action.value) });
+        // The picker speaks POINTS; `w:sz` stores half-points. Passing it through wrote half
+        // the requested size, and the picker then redisplayed that.
+        return editor.setRunProperty('sz', { val: String(Math.round(action.value * 2)) });
       case 'textColor': {
-        const hex = hexOf(typeof action.value === 'string' ? action.value : '');
+        // The picker emits a ColorValue OBJECT for text, not a string — reading it as a
+        // string made every colour pick a silent no-op.
+        const value = action.value;
+        const raw =
+          typeof value === 'string'
+            ? value
+            : value && typeof value === 'object' && 'rgb' in value
+              ? String((value as { rgb?: string }).rgb ?? '')
+              : '';
+        const hex = hexOf(raw);
         return hex ? editor.setRunProperty('color', { val: hex }) : undefined;
       }
       case 'highlightColor': {
-        const name = HIGHLIGHT_BY_HEX.get(action.value.toLowerCase());
+        // The picker emits a BARE uppercase hex ("FFFF00"), not "#ffff00", so every lookup
+        // missed. `none` clears the highlight and is a legal ST_HighlightColor.
+        const raw = action.value.trim().toLowerCase();
+        if (raw === 'none' || raw === '')
+          return editor.setRunProperty('highlight', { val: 'none' });
+        const name = HIGHLIGHT_BY_HEX.get(raw.startsWith('#') ? raw : `#${raw}`);
         // `w:highlight` takes a NAME from a fixed list, not a hex. An unmapped colour is
         // refused rather than written as something Word would drop on open.
         return name ? editor.setRunProperty('highlight', { val: name }) : undefined;
@@ -186,8 +201,10 @@ export function PaginatedDocxEditorShell({
       case 'alignment':
         return editor.setParagraphProperty('jc', { val: String(action.value) });
       case 'lineSpacing':
+        // The picker already speaks TWIPS (240 = single). Multiplying again turned "1.5
+        // lines" into 360 lines.
         return editor.setParagraphProperty('spacing', {
-          line: String(Math.round(action.value * 240)),
+          line: String(Math.round(action.value)),
           lineRule: 'auto',
         });
       case 'applyStyle':
@@ -226,9 +243,16 @@ export function PaginatedDocxEditorShell({
 
   return (
     <div
-      className={`${className ?? 'ep-root docx-editor docx-paginated-shell'}${
-        colorMode === 'dark' ? ' dark' : ''
-      }`}
+      // `ep-root` is never dropped: the whole dark palette is scoped to `.ep-root.dark`, so
+      // a host className that replaced it left the element carrying `dark` while every token
+      // silently resolved light.
+      className={[
+        'ep-root docx-editor docx-paginated-shell',
+        colorMode === 'dark' ? 'dark' : '',
+        className ?? '',
+      ]
+        .filter(Boolean)
+        .join(' ')}
       // The root PAINTS its background rather than leaving it transparent. The dark tokens
       // resolved correctly without this, but nothing drew them — so the page inverted while
       // the chrome around it stayed whatever the host body happened to be.

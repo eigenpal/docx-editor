@@ -47,7 +47,7 @@ export const PaginatedDocxEditor = defineComponent({
     source: { type: Object as PropType<Uint8Array>, required: true },
     scale: { type: Number, default: undefined },
     measurer: { type: Object as PropType<TextMeasurer>, default: undefined },
-    className: { type: String, default: 'docx-paginated-surface' },
+    className: { type: String, default: '' },
   },
   emits: {
     stateChange: (state: PaginatedSurfaceState) => Boolean(state),
@@ -96,7 +96,9 @@ export const PaginatedDocxEditor = defineComponent({
     // React effect, and it runs at the same point in the lifecycle.
     onMounted(mount);
     // Re-open only when the document or how it is measured actually changes.
-    watch(() => [props.source, props.scale, props.measurer] as const, mount, { flush: 'post' });
+    // NOT `props.scale`: it is a paint parameter, and remounting on it reopened the document
+    // from the original bytes, discarding every edit along with the caret and undo history.
+    watch(() => [props.source, props.measurer] as const, mount, { flush: 'post' });
 
     onBeforeUnmount(teardown);
 
@@ -122,7 +124,11 @@ export const PaginatedDocxEditor = defineComponent({
     return () =>
       h('div', {
         ref: container,
-        class: props.className,
+        // Merged, not replaced — see the React host: the structural class carries the
+        // theming, so a host-supplied one must add to it rather than take its place.
+        class: props.className
+          ? `docx-paginated-surface ${props.className}`
+          : 'docx-paginated-surface',
         'data-revision': state.value?.revision ?? 0,
         'data-page-count': state.value?.pageCount ?? 0,
       });

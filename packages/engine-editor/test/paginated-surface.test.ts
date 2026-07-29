@@ -400,3 +400,50 @@ describe('the keymap covers what an editor is expected to do', () => {
     expect(surface.selectedText()).toBe('ne\ntwo\nth');
   });
 });
+
+describe('undo never strands the caret (review regressions)', () => {
+  test('select all, type, undo leaves the editor still editable', () => {
+    // A cross-paragraph edit records no selection mark, because a mark addresses ONE
+    // paragraph. Leaving the caret alone left it past the end of the restored paragraph and
+    // every later keystroke was refused — Ctrl+A, type, Ctrl+Z froze the editor.
+    const { surface } = mount(`${paragraph('hi')}${paragraph('second line')}`);
+    surface.selectAll();
+    surface.type('fresh');
+    surface.undo();
+
+    const head = surface.state().selection.head;
+    expect(surface.session.paragraphIds()).toContain(head.paragraphId);
+    surface.type('X');
+    expect(surface.session.bodyText()).toContain('X');
+    expect(surface.state().lastRejection).toBeNull();
+  });
+
+  test('undoing a split does not leave the caret on the removed paragraph', () => {
+    const { surface } = mount(`${paragraph('hello world')}${paragraph('next')}`);
+    const [first, second] = surface.session.paragraphIds();
+    surface.setSelection({
+      anchor: { paragraphId: first!, offset: 2 },
+      head: { paragraphId: second!, offset: 3 },
+    });
+    surface.splitParagraph();
+    surface.undo();
+
+    const head = surface.state().selection.head;
+    expect(surface.session.paragraphIds()).toContain(head.paragraphId);
+    surface.type('Y');
+    expect(surface.state().lastRejection).toBeNull();
+  });
+
+  test('Enter over a selection replaces it and splits at its start', () => {
+    const { surface } = mount(paragraph('hello world'));
+    const id = surface.session.paragraphIds()[0]!;
+    surface.setSelection({
+      anchor: { paragraphId: id, offset: 0 },
+      head: { paragraphId: id, offset: 5 },
+    });
+    surface.splitParagraph();
+    // Word replaces the selection; leaving it in place and cutting at the head put the
+    // selected text on the wrong side of the break.
+    expect(surface.session.bodyText()).toBe('\n world');
+  });
+});

@@ -86,9 +86,9 @@ Optimization over a layout that is already correct and accepted, so every task h
 clean full layout of the same revision to be differentially tested against.
 
 - [x] 9.1 Propagate authoritative `ModelChange` dirty identities, structural effects, dependency keys, and impact class through stale-safe layout scheduling.
-- [x] 9.2 Wire paragraph shaping and line-layout caches to stable content, dependency, width, resource, shaping, and producer fingerprints across revisions.
-- [x] 9.3 Retain the previous complete layout, capture safe flow checkpoints, resume before the first affected block, and reuse a suffix only after exact state convergence with conservative full-layout fallback.
-- [x] 9.4 Preserve unchanged page and `DisplayItem` identity and materialize detailed output only for the viewport, bounded overscan, and logical caret/selection pages.
+- [ ] 9.2 Wire paragraph shaping and line-layout caches to stable content, dependency, width, resource, shaping, and producer fingerprints across revisions. — The cache is built and differentially tested, but NO production path passes it: `paginated-surface.ts` calls `layoutSemanticDocument` without `cache`, so every keystroke is still a full remeasure.
+- [ ] 9.3 Retain the previous complete layout, capture safe flow checkpoints, resume before the first affected block, and reuse a suffix only after exact state convergence with conservative full-layout fallback. — The session is built and differentially tested, but no production path passes it, so no shipping surface resumes yet.
+- [ ] 9.4 Preserve unchanged page and `DisplayItem` identity and materialize detailed output only for the viewport, bounded overscan, and logical caret/selection pages. — `pagesToMaterialize` exists and is tested; nothing calls it, so every page is still materialized.
 - [x] 9.5 Run unavoidable global layout as cancellable revision-tagged cooperative work and atomically publish only the latest complete result.
 - [x] 9.6 Add full-vs-incremental differential tests plus structural work counters proving bounded relayout, publication, and mounted-page work without wall-clock assertions.
 - [ ] 9.7 Prove through the private harness that repeated paragraph edits retain unaffected page identity, bound mounted page content to the viewport window, and never publish stale layout revisions.
@@ -100,7 +100,7 @@ shipped package shape, and running it earlier makes every engine task above pay 
 churn twice — once while lanes move and again as new code is written against a layout that
 is still moving.
 
-- [x] 10.1 Define the guarded internal lane DAG, TypeScript project boundaries, conditional subpath exports, and browser/server bundle-graph checks under `packages/core`.
+- [ ] 10.1 Define the guarded internal lane DAG, TypeScript project boundaries, conditional subpath exports, and browser/server bundle-graph checks under `packages/core`. — PARTIAL: the lane DAG and its guard exist and are checked against real manifests. The TypeScript project boundaries, the conditional subpath exports (the DAG declares subpaths that `packages/core/package.json` does not yet expose), and the browser/server bundle-graph check do NOT exist.
 - [ ] 10.2 Consolidate the core contract and semantic store lanes under `packages/core/src/contracts` and `packages/core/src/store`, establishing `@docx-editor.dev/core` as the implementation package.
 - [ ] 10.3 Consolidate binding, layout, output, and browser editor composition under guarded `packages/core/src/{binding,layout,output,editor}` lanes without widening their allowed dependencies.
 - [ ] 10.4 Consolidate sync, server, and generated client source under guarded `packages/core/src/{sync,server,clients}` lanes with environment-specific entry points.
@@ -117,7 +117,7 @@ is still moving.
 
 ## 12. Verification and Completion
 
-- [x] 12.1 Run focused canonical-tree, store, binding, layout, incremental-layout, virtualization, interaction, serializer, package-graph, bundle-graph, and adapter test suites.
+- [ ] 12.1 Run focused canonical-tree, store, binding, layout, incremental-layout, virtualization, interaction, serializer, package-graph, bundle-graph, and adapter test suites. — Run, except the "bundle-graph" suite the task names, which does not exist.
 - [x] 12.2 Run `bun run typecheck` and compare `bun test` with the recorded baseline without hiding infrastructure failures.
 - [x] 12.3 Run parity, API, and i18n checks independently even when the aggregate test command fails.
 - [x] 12.4 Run `openspec validate typed-ooxml-paragraph-editor --strict` and confirm this remains the only active change.

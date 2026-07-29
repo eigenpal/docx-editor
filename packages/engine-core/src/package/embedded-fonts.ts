@@ -30,12 +30,16 @@ export interface EmbeddedFont {
   readonly partName: string;
 }
 
-const EMBED_ELEMENTS: Readonly<Record<string, FontStyleKey>> = Object.freeze({
-  embedRegular: 'regular',
-  embedBold: 'bold',
-  embedItalic: 'italic',
-  embedBoldItalic: 'boldItalic',
-});
+// A MAP, not an object literal. The key is an element name out of a document, and an object
+// literal answers `toString` and `constructor` with something inherited and truthy — so
+// `<w:toString .../>` produced a font whose `style` was a native function while the type said
+// otherwise. `Object.freeze` does not close that; not having a prototype does.
+const EMBED_ELEMENTS = new Map<string, FontStyleKey>([
+  ['embedRegular', 'regular'],
+  ['embedBold', 'bold'],
+  ['embedItalic', 'italic'],
+  ['embedBoldItalic', 'boldItalic'],
+]);
 
 /** The obfuscation covers exactly the first 32 bytes. */
 const OBFUSCATED_PREFIX = 32;
@@ -120,6 +124,8 @@ export function readEmbeddedFonts(
   const maxFonts = options.maxFonts ?? 64;
 
   const found: EmbeddedFont[] = [];
+  /** Deobfuscated bytes per part, so one part is never copied twice. */
+  const byTarget = new Map<string, Uint8Array>();
   const walk = (node: OoxmlNode): void => {
     if (found.length >= maxFonts) return;
     if (localNameOf(node) === 'font') {
@@ -127,7 +133,7 @@ export function readEmbeddedFonts(
       if (family && family.length <= 128) {
         for (const child of children(node)) {
           if (found.length >= maxFonts) return;
-          const style = EMBED_ELEMENTS[localNameOf(child)];
+          const style = EMBED_ELEMENTS.get(localNameOf(child));
           if (!style) continue;
           const relationshipId = attribute(child, 'id');
           const fontKey = attribute(child, 'fontKey');
@@ -137,8 +143,17 @@ export function readEmbeddedFonts(
           const bytes = pkg.partBytes.get(target);
           // A font part large enough to matter is a font part large enough to be a bomb.
           if (!bytes || bytes.length === 0 || bytes.length > maxFontBytes) continue;
+          // Deobfuscation COPIES the whole part, so many `w:font` entries pointing at one
+          // part multiplied its bytes by the font count — 64 entries over a 16 MB part
+          // retained a gigabyte off a single zip entry.
+          const already = byTarget.get(target);
+          if (already) {
+            found.push({ family, style, bytes: already, partName: target });
+            continue;
+          }
           const deobfuscated = deobfuscateFont(bytes, fontKey);
           if (!deobfuscated) continue;
+          byTarget.set(target, deobfuscated);
           found.push({ family, style, bytes: deobfuscated, partName: target });
         }
       }

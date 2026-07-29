@@ -109,7 +109,13 @@ one gate that still fails.
   printed reason.
 - `bun run i18n:validate`: passed, 726 keys in sync across every locale.
 - `openspec validate typed-ooxml-paragraph-editor --strict`: valid.
-- `bun run check:parity`: **still fails**, inside `check:public-docs-surface`, for exactly the
-  reason recorded above — the published docs describe the retired adapter surface the
+- `bun run check:parity`: **fails, and NOT only for the reason recorded above.** It now stops
+  at the FIRST step, `check:export-parity`, on named-export drift introduced by the paginated
+  hosts (`PaginatedDocxEditorShell`, `PaginatedDocxEditorHandle`, `PaginatedDocxEditorProps`,
+  `PaginatedDocxEditorShellProps` React-only; `PaginatedDocxEditorExpose` Vue-only) — so it
+  never reaches `check:public-docs-surface` at all. Recording it as the accepted docs-surface
+  failure laundered a fresh gate failure under an old one, which is the exact thing this
+  section exists to prevent. The Vue shell and the export-parity entries are task 11.3 work.
+  The docs-surface failure below is still real and still deferred — the published docs describe the retired adapter surface the
   greenfield migration removed. Task 11.4 forbids updating those claims before paired
   acceptance, so this stays failing and reported rather than silenced.
