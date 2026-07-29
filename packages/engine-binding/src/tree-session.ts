@@ -42,6 +42,14 @@ export interface TreeDocxSession {
   projectDoc(): PMNode;
   /** Re-project incrementally from the last committed change, reusing untouched paragraphs. */
   reconcile(previousDoc: PMNode): PMNode;
+  /**
+   * Whether the last commit changed the BLOCK SEQUENCE (a split, join, insert or delete).
+   *
+   * A host needs this to decide whether the view must be re-projected at all: after a pure
+   * text edit the view already holds what the model holds, and re-projecting anyway both
+   * wastes work and races the next keystroke.
+   */
+  lastCommitWasStructural(): boolean;
   /** Map an edited doc to tree ops and commit them as ONE transaction. */
   applyPmDoc(doc: PMNode): TreeApplyResult;
   /** Body text, paragraphs joined by newlines, read from the CANONICAL tree. */
@@ -106,6 +114,12 @@ export function openTreeSession(bytes: Uint8Array): OpenTreeSessionResult {
       projectDoc: () => treeToDoc(store.part),
 
       reconcile: (previousDoc) => reconcileDoc(previousDoc, store.part, lastChange),
+
+      lastCommitWasStructural: () =>
+        lastChange !== null &&
+        (lastChange.created.length > 0 ||
+          lastChange.deleted.length > 0 ||
+          lastChange.splitJoin.length > 0),
 
       applyPmDoc(doc) {
         const mapped = docToTreeOps(store.part, doc);

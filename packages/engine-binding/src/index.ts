@@ -97,3 +97,9 @@ export {
   type TreeDocxSession,
   type TreeSessionRejection,
 } from './tree-session.ts';
+export {
+  mountTreeSurface,
+  type TreeSurface,
+  type TreeSurfaceOptions,
+  type TreeSurfaceState,
+} from './tree-surface.ts';

@@ -376,89 +376,98 @@ export function docToTreeOps(part: OoxmlPart, doc: PMNode): MapResult {
     return { ok: true, ops };
   }
 
-  if (delta === 1) return mapSplit(part, treeParagraphs, docParagraphs);
-  if (delta === -1) return mapJoin(part, treeParagraphs, docParagraphs);
+  if (delta === 1) return mapSplit(treeParagraphs, docParagraphs);
+  if (delta === -1) return mapJoin(treeParagraphs, docParagraphs);
   return { ok: false, reason: 'paragraph-count-unexplained', detail: String(delta) };
 }
 
-/** Exactly one paragraph divided in two, with everything else untouched. */
+/**
+ * Exactly one paragraph divided in two, with everything else untouched.
+ *
+ * Every index is tried as the candidate split point rather than scanning for the first
+ * divergence. An END split — Enter at the end of a paragraph, the most common one — leaves
+ * the head IDENTICAL to the source paragraph, so a first-divergence scan walks straight
+ * past it, runs off the end of the tree paragraphs, and refuses a perfectly clean split.
+ */
 function mapSplit(
-  part: OoxmlPart,
   treeParagraphs: readonly OoxmlNode[],
   docParagraphs: readonly PMNode[]
 ): MapResult {
-  let index = 0;
-  while (
-    index < treeParagraphs.length &&
-    docParagraphs[index]?.attrs.nodeId === treeParagraphs[index]!.id &&
-    textOf(tokensOfNode(docParagraphs[index]!)) ===
-      textOf(tokensOfParagraph(treeParagraphs[index]!))
-  ) {
-    index += 1;
-  }
-  const source = treeParagraphs[index];
-  const head = docParagraphs[index];
-  const tail = docParagraphs[index + 1];
-  if (!source || !head || !tail) return { ok: false, reason: 'split-not-clean' };
-  if (head.attrs.nodeId !== source.id) return { ok: false, reason: 'split-not-clean' };
-  // ProseMirror's splitBlock copies the source attrs onto the tail, so the tail carries
-  // either the source id or none. Any OTHER id would be forging an existing identity.
-  const tailId = tail.attrs.nodeId;
-  if (tailId !== null && tailId !== source.id) return { ok: false, reason: 'split-not-clean' };
+  for (let index = 0; index < treeParagraphs.length; index += 1) {
+    const source = treeParagraphs[index]!;
+    const head = docParagraphs[index];
+    const tail = docParagraphs[index + 1];
+    if (!head || !tail) continue;
+    if (head.attrs.nodeId !== source.id) continue;
+    // ProseMirror's splitBlock copies the source attrs onto the tail, so the tail carries
+    // either the source id or none. Any OTHER id would be forging an existing identity.
+    const tailId = tail.attrs.nodeId;
+    if (tailId !== null && tailId !== source.id) continue;
 
-  const sourceText = textOf(tokensOfParagraph(source));
-  if (textOf(tokensOfNode(head)) + textOf(tokensOfNode(tail)) !== sourceText) {
-    return { ok: false, reason: 'split-not-clean' };
+    const headText = textOf(tokensOfNode(head));
+    if (headText + textOf(tokensOfNode(tail)) !== textOf(tokensOfParagraph(source))) continue;
+    if (!alignsBefore(treeParagraphs, docParagraphs, index)) continue;
+    // Everything after the split must be untouched, or a structural change is riding along
+    // with an edit and the two cannot be told apart afterwards.
+    if (!alignsAfter(treeParagraphs, docParagraphs, index + 1, index + 2)) continue;
+
+    return {
+      ok: true,
+      ops: [{ op: 'splitParagraph', paragraphId: source.id, offset: headText.length }],
+    };
   }
-  // Every paragraph after the split must be untouched, or a structural change is riding
-  // along with an edit and the two cannot be told apart afterwards.
-  for (let i = index + 1; i < treeParagraphs.length; i += 1) {
-    const node = docParagraphs[i + 1];
-    const paragraph = treeParagraphs[i]!;
-    if (!node || node.attrs.nodeId !== paragraph.id)
-      return { ok: false, reason: 'split-not-clean' };
-    if (textOf(tokensOfNode(node)) !== textOf(tokensOfParagraph(paragraph))) {
-      return { ok: false, reason: 'split-not-clean' };
-    }
-  }
-  void part;
-  return {
-    ok: true,
-    ops: [
-      { op: 'splitParagraph', paragraphId: source.id, offset: textOf(tokensOfNode(head)).length },
-    ],
-  };
+  return { ok: false, reason: 'split-not-clean' };
 }
 
 /** Exactly two adjacent paragraphs merged, with everything else untouched. */
 function mapJoin(
-  part: OoxmlPart,
   treeParagraphs: readonly OoxmlNode[],
   docParagraphs: readonly PMNode[]
 ): MapResult {
-  let index = 0;
-  while (
-    index < docParagraphs.length &&
-    docParagraphs[index]?.attrs.nodeId === treeParagraphs[index]!.id &&
-    textOf(tokensOfNode(docParagraphs[index]!)) ===
-      textOf(tokensOfParagraph(treeParagraphs[index]!))
-  ) {
-    index += 1;
+  for (let index = 0; index + 1 < treeParagraphs.length; index += 1) {
+    const first = treeParagraphs[index]!;
+    const second = treeParagraphs[index + 1]!;
+    const survivor = docParagraphs[index];
+    if (!survivor || survivor.attrs.nodeId !== first.id) continue;
+    const expected = textOf(tokensOfParagraph(first)) + textOf(tokensOfParagraph(second));
+    if (textOf(tokensOfNode(survivor)) !== expected) continue;
+    if (!alignsBefore(treeParagraphs, docParagraphs, index)) continue;
+    if (!alignsAfter(treeParagraphs, docParagraphs, index + 2, index + 1)) continue;
+
+    return { ok: true, ops: [{ op: 'joinParagraphs', firstId: first.id, secondId: second.id }] };
   }
-  const first = treeParagraphs[index];
-  const second = treeParagraphs[index + 1];
-  const survivor = docParagraphs[index];
-  if (!first || !second || !survivor) return { ok: false, reason: 'join-not-clean' };
-  if (survivor.attrs.nodeId !== first.id) return { ok: false, reason: 'join-not-clean' };
-  const expected = textOf(tokensOfParagraph(first)) + textOf(tokensOfParagraph(second));
-  if (textOf(tokensOfNode(survivor)) !== expected) return { ok: false, reason: 'join-not-clean' };
-  for (let i = index + 2; i < treeParagraphs.length; i += 1) {
-    const node = docParagraphs[i - 1];
+  return { ok: false, reason: 'join-not-clean' };
+}
+
+/** Whether doc paragraphs [0, count) match tree paragraphs [0, count) in identity and text. */
+function alignsBefore(
+  treeParagraphs: readonly OoxmlNode[],
+  docParagraphs: readonly PMNode[],
+  count: number
+): boolean {
+  for (let i = 0; i < count; i += 1) {
+    const node = docParagraphs[i];
     const paragraph = treeParagraphs[i]!;
-    if (!node || node.attrs.nodeId !== paragraph.id) return { ok: false, reason: 'join-not-clean' };
+    if (!node || node.attrs.nodeId !== paragraph.id) return false;
+    if (textOf(tokensOfNode(node)) !== textOf(tokensOfParagraph(paragraph))) return false;
   }
-  void part;
-  return { ok: true, ops: [{ op: 'joinParagraphs', firstId: first.id, secondId: second.id }] };
+  return true;
+}
+
+/** Whether the tree tail from `treeFrom` matches the doc tail from `docFrom`. */
+function alignsAfter(
+  treeParagraphs: readonly OoxmlNode[],
+  docParagraphs: readonly PMNode[],
+  treeFrom: number,
+  docFrom: number
+): boolean {
+  for (let offset = 0; treeFrom + offset < treeParagraphs.length; offset += 1) {
+    const paragraph = treeParagraphs[treeFrom + offset]!;
+    const node = docParagraphs[docFrom + offset];
+    if (!node || node.attrs.nodeId !== paragraph.id) return false;
+    if (textOf(tokensOfNode(node)) !== textOf(tokensOfParagraph(paragraph))) return false;
+  }
+  return true;
 }
 
 /** Whether a tree node id is still present, for reconciliation checks. */

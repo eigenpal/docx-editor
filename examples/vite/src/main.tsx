@@ -11,6 +11,10 @@ const params = new URLSearchParams(location.search);
 const enginePreview = params.get('preview') === 'engine';
 const editMode = params.get('edit') === '1';
 const browserFirst = params.get('browserFirst') === '1';
+// `?treeFirst=1` mounts the CANONICAL TREE stack (bounded OPC read -> typed/generic tree ->
+// TreeDocumentStore -> tree binding). It shares no code with the PackageModel path, so it is
+// the surface that proves the replacement works before it becomes the default.
+const treeFirst = params.get('treeFirst') === '1';
 // `?realAdapter=1` mounts the PRODUCTION @docx-editor.dev/react DocxEditor with DOCX bytes and
 // exposes the stable EditorDriver on window (comprehensive 4.4/4.8), so a browser test drives the
 // real published package entry rather than the engine mount directly.
@@ -19,7 +23,7 @@ const browserFirst = params.get('browserFirst') === '1';
 // keep resolving, but it is no longer required. The museum surfaces stay
 // reachable only by their explicit opt-in parameters below.
 const legacyMuseum = params.get('museum') === '1';
-const realAdapter = !enginePreview && !editMode && !legacyMuseum;
+const realAdapter = !enginePreview && !editMode && !legacyMuseum && !treeFirst;
 const zoomParam = params.get('zoom');
 const initialZoom = zoomParam && Number.isFinite(Number(zoomParam)) && Number(zoomParam) > 0 ? Number(zoomParam) : 1;
 const base = import.meta.env.BASE_URL;
@@ -52,7 +56,10 @@ if (container) {
     // and `?museum=1` is the legacy museum, both reference-only. The bare `/`
     // default IS the one-surface editor (task 6.6 landed); anything that is not
     // an explicit opt-out falls through to it.
-    if (realAdapter) {
+    if (treeFirst) {
+      const { TreeSurfaceDemo } = await import('../../shared/TreeSurfaceDemo.tsx');
+      view = <TreeSurfaceDemo fixtureUrl={`${base}${fixtureName}`} />;
+    } else if (realAdapter) {
       const { DocxAdapterHarness } = await import('../../shared/DocxAdapterHarness.tsx');
       view = <DocxAdapterHarness fixtureUrl={`${base}${fixtureName}`} initialZoom={initialZoom} />;
     } else if (editMode) {

@@ -453,3 +453,65 @@ describe('incremental reconciliation with a projection-only origin (task 6.4)', 
     expect(docToTreeOps(store.part, reconciled)).toEqual({ ok: true, ops: [] });
   });
 });
+
+describe('split and join at every position (regression: end-of-paragraph Enter)', () => {
+  const threeParagraphs = () =>
+    load(
+      '<w:p><w:r><w:t>one</w:t></w:r></w:p>' +
+        '<w:p><w:r><w:t>two</w:t></w:r></w:p>' +
+        '<w:p><w:r><w:t>three</w:t></w:r></w:p>'
+    );
+
+  const paragraph = (nodeId: string | null, text: string) =>
+    treeSchema.node('paragraph', { nodeId, props: [] }, text ? [treeSchema.text(text)] : []);
+
+  test('Enter at the END of a paragraph splits, leaving an empty tail', () => {
+    // The head is IDENTICAL to the source here, so a first-divergence scan walks past the
+    // split point and refuses it. This is the most common Enter there is.
+    const part = threeParagraphs();
+    const ids = bodyParagraphs(part).map((p) => p.id);
+    for (const [index, id] of ids.entries()) {
+      const docs = ids.map((other, i) =>
+        paragraph(other, ['one', 'two', 'three'][i]!)
+      );
+      docs.splice(index + 1, 0, paragraph(null, ''));
+      const mapped = docToTreeOps(part, treeSchema.node('doc', null, docs));
+      if (!mapped.ok) throw new Error(`${index}: ${mapped.reason}`);
+      expect(mapped.ops).toEqual([
+        { op: 'splitParagraph', paragraphId: id, offset: ['one', 'two', 'three'][index]!.length },
+      ]);
+    }
+  });
+
+  test('Enter at the START of a paragraph splits at offset 0', () => {
+    const part = threeParagraphs();
+    const ids = bodyParagraphs(part).map((p) => p.id);
+    const docs = [
+      paragraph(ids[0]!, 'one'),
+      paragraph(ids[1]!, ''),
+      paragraph(null, 'two'),
+      paragraph(ids[2]!, 'three'),
+    ];
+    const mapped = docToTreeOps(part, treeSchema.node('doc', null, docs));
+    if (!mapped.ok) throw new Error(mapped.reason);
+    expect(mapped.ops).toEqual([{ op: 'splitParagraph', paragraphId: ids[1]!, offset: 0 }]);
+  });
+
+  test('a join is found at every adjacent pair', () => {
+    const part = threeParagraphs();
+    const ids = bodyParagraphs(part).map((p) => p.id);
+    const texts = ['one', 'two', 'three'];
+    for (let index = 0; index + 1 < ids.length; index += 1) {
+      const docs: ReturnType<typeof paragraph>[] = [];
+      for (let i = 0; i < ids.length; i += 1) {
+        if (i === index) docs.push(paragraph(ids[i]!, texts[i]! + texts[i + 1]!));
+        else if (i !== index + 1) docs.push(paragraph(ids[i]!, texts[i]!));
+      }
+      const mapped = docToTreeOps(part, treeSchema.node('doc', null, docs));
+      if (!mapped.ok) throw new Error(`${index}: ${mapped.reason}`);
+      expect(mapped.ops).toEqual([
+        { op: 'joinParagraphs', firstId: ids[index]!, secondId: ids[index + 1]! },
+      ]);
+    }
+  });
+});
