@@ -147,3 +147,40 @@ export {
   isEvaluableField,
   scrubExport,
 } from './sinks.ts';
+export {
+  readOoxmlPackage,
+  DEFAULT_OOXML_PACKAGE_LIMITS,
+  type OoxmlPackage,
+  type OoxmlPackageLimits,
+  type OoxmlPackageRejection,
+  type OoxmlPackageResult,
+  type OoxmlExternalTarget,
+} from './ooxml-package.ts';
+export {
+  applyEdits,
+  collectNodeIds,
+  createNodeIdAllocator,
+  findNode,
+  hasNode,
+  insertChildren,
+  removeNode,
+  replaceChildren,
+  replaceNode,
+  type OoxmlEditResult,
+} from './ooxml-edit.ts';
+export {
+  deriveOoxmlIndexes,
+  type OoxmlIndexes,
+  type ParagraphIndexEntry,
+  type StoryIndexEntry,
+  type StyleIndexEntry,
+} from './ooxml-indexes.ts';
+export {
+  digestPart,
+  diffSemanticDigests,
+  semanticDigest,
+  type DigestDifference,
+  type ParagraphDigest,
+  type SemanticDigest,
+  type StoryDigest,
+} from './ooxml-digest.ts';
