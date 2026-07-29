@@ -606,6 +606,8 @@ export function assessBodyEditability(model: PackageModel): BodyEditabilityAsses
   const patchableBlockIds = new Set<string>();
   const regions: ReadOnlyDiagnostic[] = [];
   const ranges: { start: number; end: number }[] = [];
+  /** Blocks the ENGINE minted after the parse — they own no original bytes. */
+  const generated: { id: string; kind: string; qname: string | undefined }[] = [];
 
   // Classify EVERY block. The body-wide predicate returned at the first failure, which
   // is exactly what made one table immutabilize a whole document.
@@ -624,7 +626,28 @@ export function assessBodyEditability(model: PackageModel): BodyEditabilityAsses
       continue;
     }
     const r = pres.blockRanges.get(b.id);
-    if (!r || r.partName !== DOC_PART) {
+    if (!r) {
+      // No range AT ALL means the ENGINE created this block through a committed DocOp —
+      // a paragraph split, join, or insert. The preservation reader captures a range for
+      // every block it reads and fails closed when the span scan and the parsed tree
+      // disagree, so nothing that came from the FILE arrives here rangeless. Such a block
+      // owns no original bytes: the serializer regenerates it from the model inside the
+      // block region, which is the same path that just emitted it.
+      //
+      // Classifying it read-only made the paragraph you had just created by pressing
+      // Enter immediately immutable — the very next keystroke was refused — and dropped
+      // `structuralMutationAllowed` to false for the WHOLE document, so no further split
+      // or join worked either. Measured in Chrome on `editable-sample.docx`.
+      //
+      // It also cannot open a contiguity gap, because it contributes no range. The one
+      // rangeless block that is NOT engine-created is the synthetic paragraph the reader
+      // adds for a body with no blocks at all; that document has no range to anchor a
+      // regenerated region to, and the `ranges.length` guard below keeps it read-only.
+      generated.push({ id: b.id, kind: b.kind, qname });
+      patchableBlockIds.add(b.id);
+      continue;
+    }
+    if (r.partName !== DOC_PART) {
       region({
         code: 'no-source-range',
         message: `block '${b.id}' (${qname ?? b.kind}) has no captured source range in ${DOC_PART}`,
@@ -648,6 +671,24 @@ export function assessBodyEditability(model: PackageModel): BodyEditabilityAsses
     }
     patchableBlockIds.add(b.id);
     ranges.push({ start: r.start, end: r.end });
+  }
+
+  // A generated block is only re-emittable inside a REGENERATED block region, and that
+  // region is anchored to the first and last captured range. With no captured range at
+  // all there is nothing to anchor to, so those blocks stay read-only.
+  if (ranges.length === 0) {
+    for (const g of generated) {
+      patchableBlockIds.delete(g.id);
+      regions.push({
+        code: 'no-source-range',
+        message: `block '${g.id}' (${g.qname ?? g.kind}) has no captured source range in ${DOC_PART}`,
+        blockId: g.id,
+        blockKind: g.kind,
+        qname: g.qname,
+        missingLane: 'source-range',
+        story,
+      });
+    }
   }
 
   // Contiguity gates STRUCTURAL mutation only. Unowned bytes between siblings would be
