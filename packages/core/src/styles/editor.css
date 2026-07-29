@@ -303,6 +303,13 @@
 /* The paginated lane paints its content into `.docx-page-content`; inverting the page
    FRAME as well would flip the paper itself, so the sheet keeps its own token background
    and only the content it holds is lightness-inverted. */
+/* The selection is drawn INSIDE the inverted subtree, so the colour written here is what
+   the filter receives, not what the user sees. A normal blue came out orange; this is the
+   pre-image that inverts back to the accent blue. The comment further up claiming the
+   selection overlay sits outside the inverted page is true of the legacy lane only. */
+.ep-root.dark .docx-page-content ::selection {
+  background-color: rgba(177, 98, 0, 0.32);
+}
 .ep-root.dark .docx-page-content {
   /* contrast(0.92) softens the pure black/white extremes a plain invert
     * produces, landing on Word's gentler off-white text / dark-grey fills

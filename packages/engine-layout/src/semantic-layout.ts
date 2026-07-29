@@ -571,7 +571,21 @@ export function layoutSemanticDocument(
 
     for (const piece of pieces) {
       if (piece.text === '\n') {
-        // A hard break ends the line without ending the paragraph.
+        // A hard break ends the line without ending the paragraph — and it OCCUPIES a model
+        // offset. Emitting no span for it meant the text reconstructed from the records was
+        // shorter than the model: Select All stopped short and left residue, a copied break
+        // came back as a space, and Delete before a trailing break merged the next paragraph
+        // instead of removing the break. A zero-width span keeps the two in step.
+        const breakMetrics = measurer.lineMetrics(piece.style);
+        line.spans.push({
+          range: { paragraphId, start: piece.start, end: piece.end },
+          text: '\n',
+          props: piece.props,
+          style: piece.style,
+          box: { x: indent.left + line.width, y: 0, width: 0, height: breakMetrics.height },
+        });
+        line.height = Math.max(line.height, breakMetrics.height);
+        line.baseline = Math.max(line.baseline, breakMetrics.baseline);
         line.end = piece.end;
         closeLine();
         continue;

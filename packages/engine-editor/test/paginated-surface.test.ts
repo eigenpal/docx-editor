@@ -555,3 +555,27 @@ describe('only the pages on screen are built (task 9.4)', () => {
     scroller.remove();
   });
 });
+
+describe('a hard break occupies a model offset in layout too', () => {
+  const withBreak = '<w:p><w:r><w:t>ab</w:t><w:br/><w:t>cd</w:t></w:r></w:p>';
+
+  test('select all covers the break, so typing over it leaves no residue', () => {
+    // Layout emitted no span for a break, so the text rebuilt from the records was shorter
+    // than the model and Select All stopped short of the end.
+    const { surface } = mount(withBreak);
+    surface.selectAll();
+    surface.type('Q');
+    expect(surface.session.bodyText()).toBe('Q');
+  });
+
+  test('copied text keeps the break instead of turning it into a space', () => {
+    const { surface } = mount(withBreak);
+    surface.selectAll();
+    expect(surface.selectedText()).toContain('\n');
+  });
+
+  test('a trailing break still paints, rather than costing a line', () => {
+    const { surface } = mount('<w:p><w:r><w:t>ab</w:t><w:br/></w:r></w:p>');
+    expect(surface.session.bodyText()).toBe('ab\n');
+  });
+});
