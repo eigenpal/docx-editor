@@ -134,26 +134,8 @@ function positioned(
   return element;
 }
 
-function paintSpan(
-  document: Document,
-  span: StyleSpanRecord,
-  line: LineRecord,
-  scale: number
-): HTMLElement {
+function paintSpan(document: Document, span: StyleSpanRecord, scale: number): HTMLElement {
   const element = document.createElement('span');
-  element.style.position = 'absolute';
-  element.style.left = `${span.box.x * scale}px`;
-  // The span occupies EXACTLY the advance layout reserved for it. Left to its natural
-  // width it overflows by a pixel or two — measurement and rasterisation never agree
-  // perfectly — and since the browser draws the selection highlight per box, neighbouring
-  // words' highlights overlapped into darker bands down every selected line.
-  element.style.width = `${span.box.width * scale}px`;
-  element.style.height = `${span.box.height * scale}px`;
-  // Positioned on the BASELINE published by layout, not by letting the browser decide where
-  // the text sits inside the box. That is the difference between painting a record and
-  // asking the DOM to lay out again.
-  element.style.top = `${(line.baseline - span.box.height * 0.8) * scale}px`;
-  element.style.whiteSpace = 'pre';
   element.dataset.paragraphId = span.range.paragraphId;
   element.dataset.start = String(span.range.start);
   element.dataset.end = String(span.range.end);
@@ -162,13 +144,57 @@ function paintSpan(
   return element;
 }
 
+/**
+ * A line is ONE inline flow, not a row of absolutely positioned words.
+ *
+ * Layout decides what goes on the line, where the line sits, and where the page breaks —
+ * the decisions that make output match Word. Placing glyphs WITHIN the line is left to the
+ * browser, which is going to rasterise them its own way regardless.
+ *
+ * Positioning each word independently meant the browser drew the selection highlight once
+ * per word, so a selected line came out as a row of separate blocks with seams between
+ * them instead of one continuous band. It also put every word at a measured x that
+ * disagreed with the rendered advance by a fraction of a pixel, and made `vertical-align`
+ * inert — superscript had nothing to align against.
+ *
+ * `white-space: pre` keeps the browser from re-wrapping a line layout already decided, so
+ * a line that measured slightly wide overflows by a hair rather than becoming two lines.
+ */
 function paintLine(document: Document, line: LineRecord, scale: number): HTMLElement {
-  const element = positioned(document, 'div', line.box, scale);
+  const element = document.createElement('div');
   element.className = 'docx-line';
   element.dataset.lineId = line.id;
   element.dataset.paragraphId = line.range.paragraphId;
-  for (const span of line.spans) element.append(paintSpan(document, span, line, scale));
+  element.style.position = 'absolute';
+  element.style.top = `${line.box.y * scale}px`;
+  // Alignment is already baked into the span boxes, so the first span's x IS the line's
+  // left edge — centred and right-aligned lines start where layout put them.
+  const left = line.spans[0]?.box.x ?? line.box.x;
+  element.style.left = `${left * scale}px`;
+  element.style.height = `${line.box.height * scale}px`;
+  element.style.lineHeight = `${line.box.height * scale}px`;
+  element.style.whiteSpace = 'pre';
+
+  // Justified lines carry their slack in the gaps BETWEEN spans. Inline flow has no gaps,
+  // so the same slack is reapplied as word spacing rather than being silently dropped.
+  const gap = interSpanGap(line);
+  if (gap > 0) element.style.wordSpacing = `${gap * scale}px`;
+
+  for (const span of line.spans) element.append(paintSpan(document, span, scale));
   return element;
+}
+
+/** The extra space layout put between spans, beyond their own advances. */
+function interSpanGap(line: LineRecord): number {
+  if (line.spans.length < 2) return 0;
+  let total = 0;
+  for (let index = 1; index < line.spans.length; index += 1) {
+    const previous = line.spans[index - 1]!;
+    total += line.spans[index]!.box.x - (previous.box.x + previous.box.width);
+  }
+  const average = total / (line.spans.length - 1);
+  // Sub-pixel noise from measurement is not justification; only a real gap counts.
+  return average > 0.25 ? average : 0;
 }
 
 function paintFragment(
@@ -184,7 +210,6 @@ function paintFragment(
     const painted = paintLine(document, line, scale);
     // Line boxes are page-relative; inside a fragment they are drawn relative to it.
     painted.style.top = `${(line.box.y - fragment.box.y) * scale}px`;
-    painted.style.left = '0px';
     element.append(painted);
   }
   return element;

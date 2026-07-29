@@ -38,14 +38,35 @@ describe('the painter is a non-authoritative consumer', () => {
     expect(paint('<w:p><w:r><w:t>x</w:t></w:r></w:p>').dataset.revision).toBe('7');
   });
 
-  test('positions come from the records, not from the browser', () => {
-    const container = paint(
-      '<w:p><w:r><w:t>abc</w:t></w:r><w:r><w:t>de</w:t></w:r></w:p>'
-    );
+  test('LINE positions come from the records, not from the browser', () => {
+    // Where the boundary sits: layout decides what is on a line and where the line goes;
+    // the browser places glyphs within it. So a line carries published coordinates and its
+    // spans carry none — positioning each word independently is what broke the selection
+    // highlight into one block per word and left `vertical-align` with nothing to align to.
+    const container = paint('<w:p><w:r><w:t>abc</w:t></w:r><w:r><w:t>de</w:t></w:r></w:p>');
+    const line = container.querySelector<HTMLElement>('.docx-line')!;
+    expect(line.style.position).toBe('absolute');
+    expect(line.style.left).toBe('0px');
+    expect(line.style.top).toBe('0px');
+    // A line never re-wraps: layout already decided where it ends.
+    expect(line.style.whiteSpace).toBe('pre');
     const spans = [...container.querySelectorAll<HTMLElement>('.docx-line span')];
-    // 3 characters at 6pt, scale 1 — exactly the number layout published.
-    expect(spans[0]!.style.left).toBe('0px');
-    expect(spans[1]!.style.left).toBe('18px');
+    expect(spans).toHaveLength(2);
+    for (const span of spans) expect(span.style.left).toBe('');
+  });
+
+  test('a line is as tall as the record says, so lines cannot drift apart', () => {
+    const container = paint(`<w:p><w:r><w:t>${'word '.repeat(60)}</w:t></w:r></w:p>`);
+    const lines = [...container.querySelectorAll<HTMLElement>('.docx-line')];
+    expect(lines.length).toBeGreaterThan(1);
+    for (const line of lines) {
+      expect(line.style.height).toBe('14px'); // the fixed measurer's line height at scale 1
+      expect(line.style.lineHeight).toBe('14px');
+    }
+    // Consecutive lines sit exactly one line height apart.
+    expect(Number.parseFloat(lines[1]!.style.top)).toBe(
+      Number.parseFloat(lines[0]!.style.top) + 14
+    );
   });
 
   test('every span carries its model range, so the DOM maps back without a lookup', () => {
@@ -104,8 +125,8 @@ describe('the painter is a non-authoritative consumer', () => {
   test('scale multiplies published geometry without changing it', () => {
     const container = document.createElement('div');
     paintSemanticLayout(container, layoutOf('<w:p><w:r><w:t>abc</w:t></w:r></w:p>'), { scale: 2 });
-    const spans = [...container.querySelectorAll<HTMLElement>('.docx-line span')];
-    expect(spans[0]!.style.left).toBe('0px');
+    const line = container.querySelector<HTMLElement>('.docx-line')!;
+    expect(line.style.height).toBe('28px'); // 14pt at scale 2
     const page = container.querySelector<HTMLElement>('.docx-page')!;
     expect(page.style.width).toBe('1224px'); // 612pt at scale 2
   });
