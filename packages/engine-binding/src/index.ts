@@ -79,3 +79,12 @@ export {
   type AccessibilityObservationRequest,
   type ObserveAccessibilityInput,
 } from './accessibility-projection.ts';
+export { treeSchema, runPropsOf, type ParagraphAttrs } from './tree-schema.ts';
+export {
+  bodyParagraphs,
+  docToTreeOps,
+  partHasNode,
+  treeToDoc,
+  type MapResult,
+  type TreeBindingRejection,
+} from './tree-binding.ts';

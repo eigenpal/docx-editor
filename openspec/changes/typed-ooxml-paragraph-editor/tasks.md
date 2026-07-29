@@ -52,9 +52,9 @@ survives, then derive indexes and the second oracle from it.
 
 ## 6. ProseMirror Binding
 
-- [ ] 6.1 Project inline text, authored whitespace, tab, hard break, and the complete accepted run/paragraph property boundary into a minimal ProseMirror schema.
-- [ ] 6.2 Map insertion, deletion, split/join, content-token, and every accepted run/paragraph property transaction step into typed `DocOp`s.
-- [ ] 6.3 Reject unsupported transactions without canonical effects and reconcile the view to committed state.
+- [x] 6.1 Project inline text, authored whitespace, tab, hard break, and the complete accepted run/paragraph property boundary into a minimal ProseMirror schema.
+- [x] 6.2 Map insertion, deletion, split/join, content-token, and every accepted run/paragraph property transaction step into typed `DocOp`s.
+- [x] 6.3 Reject unsupported transactions without canonical effects and reconcile the view to committed state.
 - [ ] 6.4 Reconcile `ModelChange`s incrementally with a projection-only origin and loop-prevention tests.
 - [x] 6.5 Add architecture guards preventing ProseMirror types or view access in store, layout, output, and public host contracts.
 - [x] 6.6 Add guards proving save, layout, and semantic history do not read the ProseMirror document or history plugin.
