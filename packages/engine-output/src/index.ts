@@ -14,3 +14,4 @@ export const ENGINE_OUTPUT_PACKAGE = '@docx-editor.dev/engine-output' as const;
 export { renderPdf, inspectPdf } from './pdf.ts';
 export { extractReadingOrder } from './semantic.ts';
 export { renderToDom, renderPageElement, type InstalledFontMapping } from './dom.ts';
+export { paintSemanticLayout, type PaintOptions } from './semantic-paint.ts';
