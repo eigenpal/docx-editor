@@ -159,6 +159,13 @@ export {
   type OoxmlExternalTarget,
 } from './ooxml-package.ts';
 export {
+  deobfuscateFont,
+  readEmbeddedFonts,
+  type EmbeddedFont,
+  type FontStyleKey,
+  type ReadEmbeddedFontsOptions,
+} from './embedded-fonts.ts';
+export {
   applyEdits,
   collectNodeIds,
   createNodeIdAllocator,
