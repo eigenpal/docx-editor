@@ -3,12 +3,12 @@
 // item kind fails closed. This proves the built-ins render and the layer order is preserved.
 
 import { describe, expect, test } from 'bun:test';
-import { renderPageElement } from '../src/dom.ts';
+import { renderPageElement } from '../dom.ts';
 import {
   registerDisplayItemRenderer,
   renderDisplayItem,
   displayItemLayer,
-} from '../src/output-capabilities.ts';
+} from '../output-capabilities.ts';
 import type { Page, DisplayItem } from '@docx-editor.dev/engine-layout';
 
 // Minimal DOM stand-in (renderPageElement only uses createElement/style/setAttribute/textContent/

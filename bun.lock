@@ -291,6 +291,7 @@
         "fast-xml-parser": "^4.5.0",
         "fflate": "^0.8.2",
         "harfbuzzjs": "1.4.0",
+        "pdf-lib": "^1.17.1",
       },
       "devDependencies": {
         "typescript": "^5.3.3",
@@ -366,9 +367,7 @@
       "name": "@docx-editor.dev/engine-output",
       "version": "0.0.0",
       "dependencies": {
-        "@docx-editor.dev/engine-core": "workspace:*",
-        "@docx-editor.dev/engine-layout": "workspace:*",
-        "pdf-lib": "^1.17.1",
+        "@docx-editor.dev/core-contract": "workspace:*",
       },
       "devDependencies": {
         "typescript": "^5.3.3",

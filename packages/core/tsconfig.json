@@ -21,6 +21,7 @@
   ],
   "exclude": [
     "src/store/__tests__",
-    "src/layout/__tests__"
+    "src/layout/__tests__",
+    "src/output/__tests__"
   ]
 }

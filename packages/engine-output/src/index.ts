@@ -1,17 +1,6 @@
-// @docx-editor.dev/engine-output
+// Compatibility alias for the output lane (task 10.3).
 //
-// Outputs: DOM paint, print, native PDF, accessibility projection, and hit-testing. Consumes DisplayItem[] only; never rederives geometry or interprets CSS.
-//
-// Production placement is fixed by document-engine task 1.4. Responsibilities and
-// dependency rules: docs/architecture/production-engine-packages.md. This is a
-// greenfield skeleton; capability implementation lands in the sections that own it.
-//
-// ADR-S9: production modules MUST NOT import from packages/core/spike/**.
-
-/** Stable package identity used by the import-graph / package-authority checks. */
-export const ENGINE_OUTPUT_PACKAGE = '@docx-editor.dev/engine-output' as const;
-
-export { renderPdf, inspectPdf } from './pdf.ts';
-export { extractReadingOrder } from './semantic.ts';
-export { renderToDom, renderPageElement, type InstalledFontMapping } from './dom.ts';
-export { paintSemanticLayout, type PaintOptions } from './semantic-paint.ts';
+// The implementation moved to `packages/core/src/output`. This package stays behind only
+// so importers still naming `@docx-editor.dev/engine-output` keep resolving while task 10.5
+// migrates them to the subpath; task 10.6 deletes it. Nothing new belongs here.
+export * from '@docx-editor.dev/core-contract/output';

@@ -6,7 +6,7 @@ if (!GlobalRegistrator.isRegistered) GlobalRegistrator.register();
 import { describe, expect, test } from 'bun:test';
 import { readOoxmlPart } from '@docx-editor.dev/engine-core';
 import { createFixedMeasurer, layoutSemanticDocument } from '@docx-editor.dev/engine-layout';
-import { paintSemanticLayout } from '../src/semantic-paint.ts';
+import { paintSemanticLayout } from '../semantic-paint.ts';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 

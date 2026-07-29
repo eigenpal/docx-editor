@@ -5,7 +5,7 @@
 
 import { describe, expect, test } from 'bun:test';
 import { readFileSync } from 'node:fs';
-import { renderToDom } from '../src/index.ts';
+import { renderToDom } from '../index.ts';
 import {
   createDeterministicLayoutShaping,
   layoutBody,
@@ -51,7 +51,7 @@ function opts(over: Partial<LayoutOptions> = {}): LayoutOptions {
   };
 }
 function withTables() {
-  const r = parseDocx(readFileSync(`${import.meta.dir}/../../../e2e/fixtures/with-tables.docx`));
+  const r = parseDocx(readFileSync(`${import.meta.dir}/../../../../../e2e/fixtures/with-tables.docx`));
   if (!r.ok) throw new Error(`parse failed: ${r.reason}`);
   return r.model;
 }

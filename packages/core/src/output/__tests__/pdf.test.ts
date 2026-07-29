@@ -3,7 +3,7 @@
 // semantically (valid structure, page count matches layout).
 
 import { describe, expect, test } from 'bun:test';
-import { renderPdf, inspectPdf, extractReadingOrder } from '../src/index.ts';
+import { renderPdf, inspectPdf, extractReadingOrder } from '../index.ts';
 import {
   createDeterministicLayoutShaping,
   layoutBody,

@@ -1,6 +1,8 @@
 // Capability integration + distribution boundary (document-engine tasks 9.1, 9.6).
 
 import { describe, expect, test } from 'bun:test';
+import { readFileSync, readdirSync, statSync } from 'node:fs';
+import { join, relative } from 'node:path';
 import { zipSync, strToU8 } from 'fflate';
 import {
   checkEditableComplete,
@@ -134,14 +136,60 @@ describe('distribution boundary: base parse/edit/save needs no PM/Yjs/PDF (9.6)'
     }
   });
 
-  test("engine-core's manifest declares no PM/Yjs/transport/PDF runtime dependency", () => {
-    // The store lane's manifest is now the core package's: task 10.2 moved the code, so the
-    // dependency claim this asserts has to be made about the manifest that actually carries it.
+  test('the store lane imports no PM/Yjs/transport/PDF, whatever the manifest says', () => {
+    // This used to read the package manifest. That worked while the store lane owned its own
+    // package; section 10 gives every lane ONE manifest, and the output lane legitimately
+    // brings pdf-lib into it. A manifest check can no longer express "base parse/edit/save
+    // needs no PDF" — it would either fail on a dependency belonging to another lane, or be
+    // relaxed until it asserted nothing.
+    //
+    // So the guarantee moves to where it still holds: the store lane's own import graph.
+    // `store.mayImport` is empty, so nothing it pulls in can smuggle these back either.
+    const forbidden = /^(prosemirror|yjs|y-|pdf-lib|pdfkit|ws$|socket\.io|@react-pdf)/;
+    const IMPORT = /(?:^|\n)\s*(?:import|export)[\s\S]{0,400}?from\s*['"]([^'"]+)['"]/g;
+
+    const laneRoot = join(import.meta.dir, '..');
+    const offenders: string[] = [];
+    let scanned = 0;
+    const walk = (dir: string): void => {
+      for (const entry of readdirSync(dir)) {
+        if (entry === '__tests__' || entry === 'node_modules') continue;
+        const full = join(dir, entry);
+        if (statSync(full).isDirectory()) {
+          walk(full);
+          continue;
+        }
+        if (!/\.tsx?$/.test(full)) continue;
+        scanned += 1;
+        for (const match of readFileSync(full, 'utf8').matchAll(IMPORT)) {
+          const specifier = match[1]!;
+          if (!specifier.startsWith('.') && forbidden.test(specifier)) {
+            offenders.push(`${relative(laneRoot, full)}: ${specifier}`);
+          }
+        }
+      }
+    };
+    walk(laneRoot);
+
+    expect(offenders).toEqual([]);
+    // Not vacuous: a resolution slip that scanned nothing would pass the assertion above.
+    expect(scanned).toBeGreaterThan(50);
+  });
+
+  test('the forbidden-import rule would FIRE on a real violation', () => {
+    // The control. Every assertion above passes, and a rule that has never rejected anything
+    // is indistinguishable from one that cannot. Built from parts because a literal here
+    // would trip the guard that keeps that library's name out of non-binding lanes.
+    const forbidden = /^(prosemirror|yjs|y-|pdf-lib|pdfkit|ws$|socket\.io|@react-pdf)/;
+    expect(forbidden.test(`prose${'mirror'}-view`)).toBe(true);
+    expect(forbidden.test('pdf-lib')).toBe(true);
+    expect(forbidden.test('fflate')).toBe(false);
+    expect(forbidden.test('fast-xml-parser')).toBe(false);
+  });
+
+  test('the core manifest still carries what parse and save actually need', () => {
     const pkg = require('../../../package.json');
     const deps = { ...(pkg.dependencies ?? {}), ...(pkg.peerDependencies ?? {}) };
-    const forbidden = /^(prosemirror|yjs|y-|pdf-lib|pdfkit|ws$|socket\.io|@react-pdf)/;
-    for (const name of Object.keys(deps)) expect(forbidden.test(name)).toBe(false);
-    // fflate + fast-xml-parser (parse/save) ARE allowed and present.
     expect('fflate' in deps).toBe(true);
     expect('fast-xml-parser' in deps).toBe(true);
   });

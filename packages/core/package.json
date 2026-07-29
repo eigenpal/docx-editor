@@ -49,6 +49,11 @@
       "types": "./src/layout/index.ts",
       "import": "./src/layout/index.ts",
       "default": "./src/layout/index.ts"
+    },
+    "./output": {
+      "types": "./src/output/index.ts",
+      "import": "./src/output/index.ts",
+      "default": "./src/output/index.ts"
     }
   },
   "scripts": {
@@ -62,6 +67,7 @@
     "bidi-js": "1.0.3",
     "fast-xml-parser": "^4.5.0",
     "fflate": "^0.8.2",
-    "harfbuzzjs": "1.4.0"
+    "harfbuzzjs": "1.4.0",
+    "pdf-lib": "^1.17.1"
   }
 }

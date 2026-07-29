@@ -3,20 +3,19 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "description": "Outputs: DOM paint, print, native PDF, accessibility projection, and hit-testing. Consumes DisplayItem[] only; never rederives geometry or interprets CSS.",
+  "description": "Compatibility alias for the output lane, which now lives in packages/core/src/output (task 10.3). Kept only until every importer moves to the @docx-editor.dev/core-contract/output subpath (task 10.5); removed by task 10.6.",
   "exports": {
     ".": {
       "types": "./src/index.ts",
-      "import": "./src/index.ts"
+      "import": "./src/index.ts",
+      "default": "./src/index.ts"
     }
   },
   "scripts": {
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@docx-editor.dev/engine-core": "workspace:*",
-    "@docx-editor.dev/engine-layout": "workspace:*",
-    "pdf-lib": "^1.17.1"
+    "@docx-editor.dev/core-contract": "workspace:*"
   },
   "devDependencies": {
     "typescript": "^5.3.3"

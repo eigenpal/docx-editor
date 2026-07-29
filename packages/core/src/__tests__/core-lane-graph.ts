@@ -108,7 +108,9 @@ export const CORE_LANES: Readonly<Record<LaneName, Lane>> = Object.freeze({
   },
   output: {
     directory: 'src/output',
-    package: '@docx-editor.dev/engine-output',
+    // MOVED (task 10.3); alias kept per task 10.5, removed by task 10.6.
+    package: null,
+    alias: '@docx-editor.dev/engine-output',
     mayImport: ['store', 'layout'],
     environment: 'browser',
     subpath: './output',
