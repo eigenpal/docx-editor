@@ -41,7 +41,10 @@ const WORKSPACE: ReadonlyMap<string, string> = new Map(
       const subpath = CORE_LANES[lane].subpath;
       const CORE = '@docx-editor.dev/core-contract';
       const specifier = !subpath || subpath === '.' ? CORE : `${CORE}/${subpath.slice(2)}`;
-      return [[specifier, root] as const];
+      const alias = CORE_LANES[lane].alias;
+      // Both names reach the same source while the alias lives, which is what keeps this
+      // walk honest across the migration rather than blind to unmigrated importers.
+      return alias ? [[specifier, root] as const, [alias, root] as const] : [[specifier, root] as const];
     })
 );
 

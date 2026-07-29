@@ -286,6 +286,10 @@
     "packages/core": {
       "name": "@docx-editor.dev/core-contract",
       "version": "0.0.1",
+      "dependencies": {
+        "fast-xml-parser": "^4.5.0",
+        "fflate": "^0.8.2",
+      },
       "devDependencies": {
         "typescript": "^5.3.3",
       },
@@ -322,8 +326,7 @@
       "name": "@docx-editor.dev/engine-core",
       "version": "0.0.0",
       "dependencies": {
-        "fast-xml-parser": "^4.5.0",
-        "fflate": "^0.8.2",
+        "@docx-editor.dev/core-contract": "workspace:*",
       },
       "devDependencies": {
         "typescript": "^5.3.3",
@@ -434,6 +437,7 @@
       "version": "0.0.1",
       "dependencies": {
         "@docx-editor.dev/agents": "workspace:*",
+        "@docx-editor.dev/engine-editor": "workspace:*",
         "@radix-ui/react-select": "^2.3.3",
         "class-variance-authority": "^0.7.1",
         "clsx": "^2.1.1",
@@ -456,7 +460,8 @@
       "name": "@docx-editor.dev/vue",
       "version": "0.0.1",
       "dependencies": {
-        "harfbuzzjs": "^1.4.0",
+        "@docx-editor.dev/engine-editor": "workspace:*",
+        "harfbuzzjs": "1.4.0",
       },
       "devDependencies": {
         "@docx-editor.dev/core-contract": "workspace:*",

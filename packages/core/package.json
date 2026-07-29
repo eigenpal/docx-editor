@@ -39,6 +39,11 @@
       "types": "./src/types-barrel.ts",
       "import": "./src/types-barrel.ts",
       "default": "./src/types-barrel.ts"
+    },
+    "./store": {
+      "types": "./src/store/index.ts",
+      "import": "./src/store/index.ts",
+      "default": "./src/store/index.ts"
     }
   },
   "scripts": {
@@ -47,5 +52,9 @@
   "devDependencies": {
     "typescript": "^5.3.3"
   },
-  "license": "Apache-2.0"
+  "license": "Apache-2.0",
+  "dependencies": {
+    "fast-xml-parser": "^4.5.0",
+    "fflate": "^0.8.2"
+  }
 }

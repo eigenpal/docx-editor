@@ -1,0 +1,190 @@
+// Structural editing under selective preservation (queue item 6 foundation): a paragraph
+// split / join / insert / delete regenerates the block region from the model while the
+// trailing w:sectPr, the shell, and every other part (styles.xml) stay verbatim. Fails
+// closed when the body is not all fully-captured paragraphs (a table can't be regenerated).
+
+import { describe, expect, test } from 'bun:test';
+import { zipSync, strToU8, unzipSync, strFromU8 } from 'fflate';
+import { parseDocx, writeDocx, DocumentStore, bodyStoryId, ORIGIN_IDS } from '../index.ts';
+import type { ParagraphRecord } from '../index.ts';
+import { sliceIsFullyCapturedParagraph, DOC_PART, hashPreservableBlock } from '../package/wml-preserve.ts';
+import { setParagraphRuns } from '../model/index.ts';
+import type { PackageModel } from '../index.ts';
+
+const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
+function docx(bodyInner: string, extra: Record<string, string> = {}): Uint8Array {
+  return zipSync({
+    '[Content_Types].xml': strToU8(
+      '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">' +
+        '<Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/></Types>',
+    ),
+    'word/document.xml': strToU8(`<w:document xmlns:w="${W}"><w:body>${bodyInner}</w:body></w:document>`),
+    ...Object.fromEntries(Object.entries(extra).map(([k, v]) => [k, strToU8(v)])),
+  });
+}
+const SECT = '<w:sectPr><w:pgSz w:w="12240" w:h="15840"/></w:sectPr>';
+const STYLES = { 'word/styles.xml': `<w:styles xmlns:w="${W}"><w:style w:type="paragraph" w:styleId="A"><w:name w:val="A"/></w:style></w:styles>` };
+
+function openPreserved(bytes: Uint8Array) {
+  const r = parseDocx(bytes, { preserveAll: true });
+  if (!r.ok) throw new Error(`parse failed: ${r.reason} ${r.detail ?? ''}`);
+  return new DocumentStore(r.model);
+}
+const bodyParas = (store: DocumentStore) =>
+  store.currentModel.stories
+    .get(bodyStoryId(store.currentModel))!
+    .blocks.filter((b): b is ParagraphRecord => b.kind === 'paragraph');
+const savedDocXml = (store: DocumentStore) => strFromU8(unzipSync(writeDocx(store.currentModel))['word/document.xml']);
+
+describe('sliceIsFullyCapturedParagraph: a range must be EXACTLY one lone paragraph', () => {
+  test('accepts a clean lone paragraph', () => {
+    expect(sliceIsFullyCapturedParagraph('<w:p><w:r><w:t>hi</w:t></w:r></w:p>')).toBe(true);
+  });
+  test('rejects a range that swallows a following sibling (bookmark / SDT / stray text)', () => {
+    // A restored/tampered range whose end reaches past </w:p> into the next sibling would be
+    // deleted wholesale on regeneration — must fail closed even though the first element parses.
+    expect(sliceIsFullyCapturedParagraph('<w:p><w:r><w:t>a</w:t></w:r></w:p><w:bookmarkStart w:id="0" w:name="m"/>')).toBe(false);
+    expect(sliceIsFullyCapturedParagraph('<w:p><w:r><w:t>a</w:t></w:r></w:p><w:p><w:r><w:t>b</w:t></w:r></w:p>')).toBe(false);
+    expect(sliceIsFullyCapturedParagraph('<w:p><w:r><w:t>a</w:t></w:r></w:p>trailing')).toBe(false);
+  });
+  test('rejects a comment/PI-bearing paragraph (readXml would drop it)', () => {
+    expect(sliceIsFullyCapturedParagraph('<w:p><!--k--><w:r><w:t>a</w:t></w:r></w:p>')).toBe(false);
+  });
+  test('rejects LEADING raw text before the paragraph (readXml would drop it)', () => {
+    expect(sliceIsFullyCapturedParagraph('KEEP<w:p><w:r><w:t>a</w:t></w:r></w:p>')).toBe(false);
+  });
+  test('accepts a self-closed empty paragraph <w:p/>', () => {
+    expect(sliceIsFullyCapturedParagraph('<w:p/>')).toBe(true);
+  });
+  test('rejects xml:space="default" (regen would rewrite it to "preserve")', () => {
+    expect(sliceIsFullyCapturedParagraph('<w:p><w:r><w:t xml:space="default"> a </w:t></w:r></w:p>')).toBe(false);
+    expect(sliceIsFullyCapturedParagraph('<w:p><w:r><w:t xml:space="preserve"> a </w:t></w:r></w:p>')).toBe(true);
+  });
+  test('rejects a run with two w:rPr (parser reads only the first; the second is dropped)', () => {
+    expect(sliceIsFullyCapturedParagraph('<w:p><w:r><w:rPr><w:b/></w:rPr><w:rPr><w:i/></w:rPr><w:t>a</w:t></w:r></w:p>')).toBe(
+      false,
+    );
+  });
+});
+
+describe('3.10 preservation baseline hashing normalizes before comparing', () => {
+  test('an untouched two-run paragraph re-emits VERBATIM after an edit normalizes the model', () => {
+    // Paragraph A has two adjacent plain runs; B is edited. Editing B normalizes EVERY block in
+    // the model (merging A's two runs to one). A must still survive byte-faithfully, with both
+    // runs — not regenerated to a single merged run.
+    const A = '<w:p><w:r><w:t>foo</w:t></w:r><w:r><w:t>bar</w:t></w:r></w:p>';
+    const B = '<w:p><w:r><w:t>editme</w:t></w:r></w:p>';
+    const store = openPreserved(docx(A + B + SECT));
+    const bId = bodyParas(store)[1].id;
+    store.transact(ORIGIN_IDS.mutationHuman, (c) => c.apply({ op: 'setParagraphRuns', paragraphId: bId, runs: [{ text: 'EDITED' }] }));
+
+    const xml = savedDocXml(store);
+    expect(xml).toContain('EDITED'); // B's edit landed
+    // A is untouched — its authored two-run segmentation is preserved verbatim.
+    expect(xml).toContain('<w:r><w:t>foo</w:t></w:r><w:r><w:t>bar</w:t></w:r>');
+    expect(xml).not.toContain('foobar'); // NOT merged/regenerated
+  });
+
+  test('EXACT source-hash integrity rejects a tampered-but-normalization-equivalent slice', () => {
+    // A ('foo'+'bar') and B; parse, then TAMPER the preserved source so A's slice becomes
+    // 'fo'+'obar' (same length, normalizes to the same 'foobar') while keeping the ranges +
+    // baseline (semantic) hash. Editing B then saving must FAIL the integrity check, because the
+    // exact source-hash no longer matches — the normalized baseline hash alone could not detect it.
+    const A = '<w:p><w:r><w:t>foo</w:t></w:r><w:r><w:t>bar</w:t></w:r></w:p>';
+    const B = '<w:p><w:r><w:t>editme</w:t></w:r></w:p>';
+    const parsed = parseDocx(docx(A + B + SECT), { preserveAll: true });
+    if (!parsed.ok) throw new Error('parse failed');
+    const model = parsed.model;
+    const original = model.preservation!.originalParts.get(DOC_PART)!;
+    const tampered = original.replace(
+      '<w:t>foo</w:t></w:r><w:r><w:t>bar</w:t>',
+      '<w:t>fo</w:t></w:r><w:r><w:t>obar</w:t>',
+    );
+    expect(tampered).not.toBe(original);
+    expect(tampered.length).toBe(original.length); // ranges stay valid
+    const parts = new Map(model.preservation!.originalParts).set(DOC_PART, tampered);
+    const bId = model.stories.get(bodyStoryId(model))!.blocks[1].id;
+    const edited: PackageModel = {
+      ...setParagraphRuns(model, bId, [{ text: 'EDITED' }]),
+      preservation: { ...model.preservation!, originalParts: parts },
+    };
+    expect(() => writeDocx(edited)).toThrow(/tampered or drifted|source hash/i);
+  });
+
+  test('integrity rejects a tampered baselineHash even when the source bytes are unchanged', () => {
+    // Parse [A='AA', B]; edit A to 'BB' in the model; then TAMPER A's baselineHash to the EDITED
+    // block's hash so edit-detection would think A is unchanged and emit the stale source 'AA'.
+    // The source bytes are untouched (sourceHash valid), so ONLY the baselineHash-vs-reparsed check
+    // catches it — save must throw, not silently drop the edit.
+    const A = '<w:p><w:r><w:t>AA</w:t></w:r></w:p>';
+    const B = '<w:p><w:r><w:t>bb</w:t></w:r></w:p>';
+    const parsed = parseDocx(docx(A + B + SECT), { preserveAll: true });
+    if (!parsed.ok) throw new Error('parse failed');
+    const aId = parsed.model.stories.get(bodyStoryId(parsed.model))!.blocks[0].id;
+    const editedModel = setParagraphRuns(parsed.model, aId, [{ text: 'BB' }]);
+    const editedA = editedModel.stories.get(bodyStoryId(editedModel))!.blocks[0];
+    const ranges = new Map(editedModel.preservation!.blockRanges);
+    ranges.set(aId, { ...ranges.get(aId)!, baselineHash: hashPreservableBlock(editedA) }); // forged
+    const tampered: PackageModel = {
+      ...editedModel,
+      preservation: { ...editedModel.preservation!, blockRanges: ranges },
+    };
+    expect(() => writeDocx(tampered)).toThrow(/tampered or drifted|baseline/i);
+  });
+});
+
+describe('structural editing regenerates the block region, keeps sectPr + parts verbatim', () => {
+  test('splitParagraph: one paragraph becomes two; sectPr and styles.xml survive', () => {
+    const store = openPreserved(docx('<w:p><w:r><w:t>helloworld</w:t></w:r></w:p>' + SECT, STYLES));
+    const id = bodyParas(store)[0].id;
+    store.transact(ORIGIN_IDS.mutationHuman, (c) => c.apply({ op: 'splitParagraph', paragraphId: id, offset: 5 }));
+    expect(bodyParas(store)).toHaveLength(2);
+
+    const xml = savedDocXml(store);
+    expect(xml).toContain('<w:sectPr>'); // trailing section properties preserved
+    expect((xml.match(/<w:p>/g) ?? []).length).toBe(2); // two paragraphs now
+    expect(unzipSync(writeDocx(store.currentModel))['word/styles.xml']).toBeDefined();
+
+    const re = parseDocx(writeDocx(store.currentModel));
+    if (!re.ok) throw new Error('reopen failed');
+    const reParas = re.model.stories.get(bodyStoryId(re.model))!.blocks;
+    expect(reParas.map((b) => b.kind)).toEqual(['paragraph', 'paragraph']);
+    expect((reParas[0] as ParagraphRecord).runs.map((r) => r.text).join('')).toBe('hello');
+    expect((reParas[1] as ParagraphRecord).runs.map((r) => r.text).join('')).toBe('world');
+  });
+
+  test('appendParagraph (ordered insertion at end): the new paragraph is saved, sectPr kept', () => {
+    const store = openPreserved(docx('<w:p><w:r><w:t>one</w:t></w:r></w:p>' + SECT));
+    store.applyEdits(
+      [
+        { op: 'appendParagraph', storyId: bodyStoryId(store.currentModel), symbolicId: '$new' },
+        { op: 'setParagraphRuns', paragraphId: '$new', runs: [{ text: 'two' }] },
+      ],
+      ORIGIN_IDS.mutationHuman,
+    );
+    expect(bodyParas(store)).toHaveLength(2);
+    const xml = savedDocXml(store);
+    expect(xml).toContain('two');
+    expect(xml).toContain('<w:sectPr>');
+  });
+
+  test('deleteParagraph: removed paragraph is gone on save; sectPr kept', () => {
+    const store = openPreserved(docx('<w:p><w:r><w:t>keep</w:t></w:r></w:p><w:p><w:r><w:t>drop</w:t></w:r></w:p>' + SECT));
+    const dropId = bodyParas(store)[1].id;
+    store.transact(ORIGIN_IDS.mutationHuman, (c) => c.apply({ op: 'deleteParagraph', paragraphId: dropId }));
+    const xml = savedDocXml(store);
+    expect(xml).toContain('keep');
+    expect(xml).not.toContain('drop');
+    expect(xml).toContain('<w:sectPr>');
+  });
+
+  test('a structural edit fails closed when the body has a non-regenerable block (table)', () => {
+    const store = openPreserved(
+      docx('<w:p><w:r><w:t>a</w:t></w:r></w:p><w:tbl><w:tr><w:tc><w:p><w:r><w:t>c</w:t></w:r></w:p></w:tc></w:tr></w:tbl>'),
+    );
+    // Delete the paragraph -> structural change; the remaining table cannot be regenerated.
+    const pId = store.currentModel.stories.get(bodyStoryId(store.currentModel))!.blocks.find((b) => b.kind === 'paragraph')!.id;
+    store.transact(ORIGIN_IDS.mutationHuman, (c) => c.apply({ op: 'deleteParagraph', paragraphId: pId }));
+    expect(() => writeDocx(store.currentModel)).toThrow(/fail closed/);
+  });
+});

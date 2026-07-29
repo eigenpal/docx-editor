@@ -36,6 +36,14 @@ export interface Lane {
    * exactly that cascade.
    */
   readonly package: string | null;
+  /**
+   * The package name that still resolves to this lane while a compatibility alias exists.
+   *
+   * Task 10.5 permits an alias only while a lane is in flight, so this is deliberately
+   * temporary: it exists so the bundle-graph walk keeps following importers that have not
+   * been migrated yet, and task 10.6 deletes it along with the shim package.
+   */
+  readonly alias?: string;
   /** Lanes this one may import. Anything else is a violation. */
   readonly mayImport: readonly LaneName[];
   /**
@@ -66,10 +74,14 @@ export const CORE_LANES: Readonly<Record<LaneName, Lane>> = Object.freeze({
   },
   store: {
     directory: 'src/store',
-    package: '@docx-editor.dev/engine-core',
+    // MOVED (task 10.2). `packages/engine-core` remains as the compatibility alias task 10.5
+    // allows while a lane is in flight; task 10.6 removes it once every importer has been
+    // migrated to the subpath.
+    package: null,
+    alias: '@docx-editor.dev/engine-core',
     mayImport: [],
     environment: 'neutral',
-    subpath: '.',
+    subpath: './store',
   },
   binding: {
     directory: 'src/binding',

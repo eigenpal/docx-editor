@@ -102,7 +102,13 @@ describe('the DAG matches the packages that hold the code today (task 10.1)', ()
       const manifest = manifestOf(lane);
       if (!manifest) continue;
       const actual = workspaceDependencies(manifest)
-        .map((name) => laneNames.find((candidate) => CORE_LANES[candidate].package === name))
+        // `package ?? alias`: a moved lane is still depended on under its old package name
+        // until the compatibility alias is removed, and that edge is a real one.
+        .map((name) =>
+          laneNames.find(
+            (candidate) => (CORE_LANES[candidate].package ?? CORE_LANES[candidate].alias) === name
+          )
+        )
         .filter((name): name is LaneName => name !== undefined)
         .sort();
       const declared = [...CORE_LANES[lane].mayImport].sort();
@@ -161,12 +167,21 @@ describe('a browser bundle cannot reach the server (task 10.1)', () => {
 });
 
 describe('every lane has somewhere to be imported from (task 10.1)', () => {
-  test('the store lane is the package root, and the rest are subpaths', () => {
-    expect(CORE_LANES.store.subpath).toBe('.');
+  test('every lane is importable at its own subpath', () => {
+    // The store lane was the package root while it lived in `engine-core`. Now that it sits
+    // inside the core package alongside `contracts`, the root belongs to the package itself
+    // and every lane — store included — is reached by subpath.
     for (const lane of laneNames) {
-      const subpath = CORE_LANES[lane].subpath;
-      if (lane === 'store') continue;
-      expect({ lane, subpath }).toEqual({ lane, subpath: `./${lane}` });
+      expect({ lane, subpath: CORE_LANES[lane].subpath }).toEqual({ lane, subpath: `./${lane}` });
+    }
+  });
+
+  test('a moved lane keeps a compatibility alias, and an unmoved one has none', () => {
+    // The alias is what task 10.5 permits while a lane is in flight; task 10.6 deletes it.
+    // Asserting BOTH directions so the field cannot quietly become permanent decoration.
+    for (const lane of laneNames) {
+      const hasAlias = CORE_LANES[lane].alias !== undefined;
+      expect({ lane, hasAlias }).toEqual({ lane, hasAlias: laneHasMoved(lane) });
     }
   });
 
