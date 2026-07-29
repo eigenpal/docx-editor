@@ -303,6 +303,17 @@
 /* The paginated lane paints its content into `.docx-page-content`; inverting the page
    FRAME as well would flip the paper itself, so the sheet keeps its own token background
    and only the content it holds is lightness-inverted. */
+/* Highlights are COUNTER-INVERTED, like images.
+   `invert(1) hue-rotate(180deg)` preserves hue for most colours but not on the yellow/blue
+   axis: yellow inverts to blue, and the hue-rotate matrix drives the blue channel negative
+   where it clamps to zero, landing on a dark olive that reads as a redaction bar. Word keeps
+   a highlight its authored colour, so the run is inverted back — the same treatment media
+   already gets, for the same reason. */
+.ep-root.dark .docx-page-content [data-highlight],
+.ep-root.dark .layout-page [data-highlight] {
+  filter: invert(1) hue-rotate(180deg);
+}
+
 /* The selection is drawn INSIDE the inverted subtree, so the colour written here is what
    the filter receives, not what the user sees. A normal blue came out orange; this is the
    pre-image that inverts back to the accent blue. The comment further up claiming the

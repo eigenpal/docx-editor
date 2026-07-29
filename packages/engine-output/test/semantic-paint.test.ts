@@ -192,3 +192,31 @@ describe('only the pages worth building are built (task 9.4)', () => {
     }
   });
 });
+
+describe('a highlighted run is marked so dark mode can spare it', () => {
+  test('the highlight name is stamped on the run', () => {
+    // Dark mode lightness-inverts the page content, and that turns yellow into a dark olive
+    // bar — Word keeps a highlight its authored colour, so the run has to be identifiable
+    // for the stylesheet to counter-invert it.
+    const span = paint(
+      '<w:p><w:r><w:rPr><w:highlight w:val="yellow"/></w:rPr><w:t>hi</w:t></w:r></w:p>'
+    ).querySelector<HTMLElement>('.docx-line span')!;
+    expect(span.dataset.highlight).toBe('yellow');
+    expect(span.style.backgroundColor).not.toBe('');
+  });
+
+  test('an unhighlighted run carries no marker, so the rule cannot over-reach', () => {
+    const span = paint('<w:p><w:r><w:t>plain</w:t></w:r></w:p>').querySelector<HTMLElement>(
+      '.docx-line span'
+    )!;
+    expect(span.dataset.highlight).toBeUndefined();
+  });
+
+  test('an unknown highlight name is neither painted nor marked', () => {
+    const span = paint(
+      '<w:p><w:r><w:rPr><w:highlight w:val="constructor"/></w:rPr><w:t>hi</w:t></w:r></w:p>'
+    ).querySelector<HTMLElement>('.docx-line span')!;
+    expect(span.dataset.highlight).toBeUndefined();
+    expect(span.style.backgroundColor).toBe('');
+  });
+});

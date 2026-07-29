@@ -105,7 +105,12 @@ function applyRunStyle(element: HTMLElement, style: ResolvedRunStyle, scale: num
   }
   if (style.color && HEX.test(style.color)) css.color = `#${style.color}`;
   const highlight = style.highlight ? HIGHLIGHT.get(style.highlight) : undefined;
-  if (highlight) css.backgroundColor = highlight;
+  if (highlight) {
+    css.backgroundColor = highlight;
+    // Marked so dark mode can counter-invert it: a highlight keeps its authored colour in
+    // Word, and the lightness inversion turns yellow into a near-black bar.
+    element.dataset.highlight = style.highlight ?? '';
+  }
   if (style.caps) css.textTransform = 'uppercase';
   if (style.smallCaps) css.fontVariant = 'small-caps';
   // Super/subscript shift with a RELATIVE offset, not `vertical-align`. Vertical alignment
