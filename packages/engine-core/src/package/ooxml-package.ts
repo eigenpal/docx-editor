@@ -18,6 +18,8 @@
 
 import {
   readZip,
+  writeZip,
+  strToU8,
   strFromU8,
   type ZipLimits,
   type ZipRejection,
@@ -36,7 +38,12 @@ import {
   type DefaultRecord,
   type OverrideRecord,
 } from './content-types.ts';
-import { readOoxmlPart, type OoxmlPart, type OoxmlReadRejection } from './ooxml-tree.ts';
+import {
+  readOoxmlPart,
+  serializeOoxmlPart,
+  type OoxmlPart,
+  type OoxmlReadRejection,
+} from './ooxml-tree.ts';
 
 const CONTENT_TYPES_PART = '/[Content_Types].xml';
 const OFFICE_DOCUMENT_REL_TYPE =
@@ -103,19 +110,40 @@ function isElement(node: XmlNode): node is Extract<XmlNode, { type: 'element' }>
   return node.type === 'element';
 }
 
-/** Every element with `name` anywhere under `nodes`, so a rels/types root wrapped in
- *  unexpected structure still yields its records instead of silently reading as empty. */
+/**
+ * Every element whose LOCAL name is `localName`, anywhere under `nodes`.
+ *
+ * Matching the local name rather than the authored QName is what makes this survive a
+ * round trip: the canonical tree emits controlled prefixes, so a `<Relationship>` written
+ * under a default namespace can legitimately reopen as `<ns0:Relationship>`. Comparing the
+ * whole QName made the reader see zero relationships and reject its own output as having
+ * no main document. Descending into children as well keeps a rels or types root wrapped in
+ * unexpected structure from silently reading as empty.
+ */
 function collectElements(
   nodes: readonly XmlNode[],
-  name: string,
+  localName: string,
   out: Extract<XmlNode, { type: 'element' }>[] = []
 ): Extract<XmlNode, { type: 'element' }>[] {
   for (const node of nodes) {
     if (!isElement(node)) continue;
-    if (node.name === name) out.push(node);
-    collectElements(node.children, name, out);
+    const colon = node.name.indexOf(':');
+    if ((colon === -1 ? node.name : node.name.slice(colon + 1)) === localName) out.push(node);
+    collectElements(node.children, localName, out);
   }
   return out;
+}
+
+/** An attribute value by LOCAL name, for the same prefix-independence reason. */
+function attributeByLocalName(
+  element: Extract<XmlNode, { type: 'element' }>,
+  localName: string
+): string | undefined {
+  for (const [name, value] of Object.entries(element.attributes)) {
+    const colon = name.indexOf(':');
+    if ((colon === -1 ? name : name.slice(colon + 1)) === localName) return value;
+  }
+  return undefined;
 }
 
 /**
@@ -137,14 +165,14 @@ function readContentTypes(xml: string, limits?: XmlLimits): ContentTypeIndex | n
   const overrides: OverrideRecord[] = [];
   let order = 0;
   for (const element of collectElements(parsed.nodes, 'Default')) {
-    const extension = element.attributes['Extension'];
-    const contentType = element.attributes['ContentType'];
+    const extension = attributeByLocalName(element, 'Extension');
+    const contentType = attributeByLocalName(element, 'ContentType');
     if (extension === undefined || contentType === undefined) return null;
     defaults.push({ extension, contentType, order: order++ });
   }
   for (const element of collectElements(parsed.nodes, 'Override')) {
-    const partName = element.attributes['PartName'];
-    const contentType = element.attributes['ContentType'];
+    const partName = attributeByLocalName(element, 'PartName');
+    const contentType = attributeByLocalName(element, 'ContentType');
     if (partName === undefined || contentType === undefined) return null;
     overrides.push({ partName, contentType, order: order++ });
   }
@@ -195,9 +223,9 @@ export function readOoxmlPackage(
       if (records.length >= maxRelationships) {
         return { ok: false, reason: 'too-many-relationships' };
       }
-      const id = element.attributes['Id'];
-      const type = element.attributes['Type'];
-      const rawTarget = element.attributes['Target'];
+      const id = attributeByLocalName(element, 'Id');
+      const type = attributeByLocalName(element, 'Type');
+      const rawTarget = attributeByLocalName(element, 'Target');
       if (id === undefined || type === undefined || rawTarget === undefined) {
         return {
           ok: false,
@@ -210,7 +238,8 @@ export function readOoxmlPackage(
         id,
         type,
         rawTarget,
-        targetMode: element.attributes['TargetMode'] === 'External' ? 'External' : 'Internal',
+        targetMode:
+          attributeByLocalName(element, 'TargetMode') === 'External' ? 'External' : 'Internal',
         order: order++,
       });
     }
@@ -297,4 +326,33 @@ export function readOoxmlPackage(
       mainDocumentPart,
     }),
   };
+}
+
+/**
+ * Serialize a canonical package back to DOCX bytes.
+ *
+ * Starts from the ORIGINAL entry bytes and overwrites only the parts held as trees. A part
+ * the loader did not model — media, fonts, an XML part outside the modeled set — passes
+ * through untouched, so round-tripping a document cannot lose a part the engine never
+ * claimed to understand.
+ *
+ * The modeled parts are re-emitted NORMALIZED from the tree rather than patched as text.
+ * That is the whole point of the canonical tree: correctness is judged by the two D9
+ * oracles (the namespace-aware fingerprint and the save/reopen semantic digest), not by
+ * byte equality, so a different-but-equivalent spelling is not a defect.
+ *
+ * `writeZip` re-validates every part name, so a name that became unsafe between load and
+ * save cannot be smuggled into the archive.
+ */
+export function writeOoxmlPackage(pkg: OoxmlPackage): Uint8Array {
+  const entries = new Map<string, Uint8Array>(pkg.partBytes);
+  for (const [name, part] of pkg.parts) {
+    entries.set(name, strToU8(serializeOoxmlPart(part)));
+  }
+  return writeZip(entries);
+}
+
+/** Replace one part's tree, returning a new package. Pure, like the tree edits themselves. */
+export function withPart(pkg: OoxmlPackage, part: OoxmlPart): OoxmlPackage {
+  return Object.freeze({ ...pkg, parts: new Map([...pkg.parts, [part.name, part]]) });
 }

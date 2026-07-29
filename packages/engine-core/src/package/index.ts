@@ -149,6 +149,8 @@ export {
 } from './sinks.ts';
 export {
   readOoxmlPackage,
+  writeOoxmlPackage,
+  withPart,
   DEFAULT_OOXML_PACKAGE_LIMITS,
   type OoxmlPackage,
   type OoxmlPackageLimits,

@@ -234,3 +234,59 @@ describe('bounded OPC loading into canonical trees (task 4.4)', () => {
     });
   });
 });
+
+describe('package writer (cutover step 2)', () => {
+  test('an unedited package round-trips through both D9 oracles', async () => {
+    const { canonicalOoxmlFingerprint } = await import('../src/package/ooxml-tree.ts');
+    const { semanticDigest, diffSemanticDigests } = await import('../src/package/ooxml-digest.ts');
+    const { writeOoxmlPackage } = await import('../src/package/ooxml-package.ts');
+
+    const original = readOoxmlPackage(build());
+    if (!original.ok) throw new Error(original.reason);
+    const reopened = readOoxmlPackage(writeOoxmlPackage(original.package));
+    if (!reopened.ok) throw new Error(`${reopened.reason}: ${reopened.detail ?? ''}`);
+
+    const before = original.package.parts.get('/word/document.xml')!;
+    const after = reopened.package.parts.get('/word/document.xml')!;
+    expect(canonicalOoxmlFingerprint(after)).toBe(canonicalOoxmlFingerprint(before));
+    expect(diffSemanticDigests(semanticDigest([before]), semanticDigest([after]))).toEqual([]);
+  });
+
+  test('a part the loader never modeled passes through untouched', async () => {
+    const { writeOoxmlPackage } = await import('../src/package/ooxml-package.ts');
+    const png = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 7, 7, 7]);
+    const original = readOoxmlPackage(build({ 'word/media/image1.png': png }));
+    if (!original.ok) throw new Error(original.reason);
+    const reopened = readOoxmlPackage(writeOoxmlPackage(original.package));
+    if (!reopened.ok) throw new Error(reopened.reason);
+    // Byte-for-byte: the engine claims nothing about this part, so it must not touch it.
+    expect(reopened.package.partBytes.get('/word/media/image1.png')).toEqual(png);
+  });
+
+  test('an edited tree is what gets written', async () => {
+    const { withPart, writeOoxmlPackage } = await import('../src/package/ooxml-package.ts');
+    const { applyTreeOp } = await import('../src/store/tree-ops.ts');
+    const { deriveOoxmlIndexes } = await import('../src/package/ooxml-indexes.ts');
+
+    const original = readOoxmlPackage(build());
+    if (!original.ok) throw new Error(original.reason);
+    const part = original.package.parts.get('/word/document.xml')!;
+    const paragraphId = deriveOoxmlIndexes(original.package, 0).stories.get('/word/document.xml')!
+      .paragraphs[0]!.nodeId;
+
+    const edited = applyTreeOp(part, {
+      op: 'insertText',
+      paragraphId,
+      offset: 5,
+      text: ' EDITED',
+    });
+    if (!edited.ok) throw new Error(edited.reason);
+
+    const bytes = writeOoxmlPackage(withPart(original.package, edited.part));
+    const reopened = readOoxmlPackage(bytes);
+    if (!reopened.ok) throw new Error(reopened.reason);
+    const text = deriveOoxmlIndexes(reopened.package, 0).stories.get('/word/document.xml')!
+      .paragraphs[0]!.text;
+    expect(text).toBe('hello EDITED');
+  });
+});
