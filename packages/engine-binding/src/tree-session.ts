@@ -20,6 +20,8 @@ import {
   writeOoxmlPackage,
   type OoxmlPackage,
   type OoxmlPackageRejection,
+  type OoxmlPart,
+  type TreeDocOp,
   type TreeModelChange,
 } from '@docx-editor.dev/engine-core';
 import { bodyParagraphs, docToTreeOps, reconcileDoc, treeToDoc } from './tree-binding.ts';
@@ -38,6 +40,16 @@ export interface TreeDocxSession {
   readonly editable: boolean;
   /** Canonical node ids of the body paragraphs, in order. */
   paragraphIds(): string[];
+  /** The current canonical part — what layout reads. Never mutated by the caller. */
+  part(): OoxmlPart;
+  /**
+   * Commit typed tree ops directly, as ONE transaction.
+   *
+   * The paginated surface has no ProseMirror doc to diff, so it addresses the model the way
+   * the ops already do — by node id and offset — rather than round-tripping an edit through
+   * a projection just to have it diffed back out.
+   */
+  applyTreeOps(ops: readonly TreeDocOp[]): TreeApplyResult;
   /** Project the current revision into a ProseMirror doc. */
   projectDoc(): PMNode;
   /** Re-project incrementally from the last committed change, reusing untouched paragraphs. */
@@ -110,6 +122,19 @@ export function openTreeSession(bytes: Uint8Array): OpenTreeSessionResult {
       editable: bodyParagraphs(store.part).length > 0,
 
       paragraphIds: () => bodyParagraphs(store.part).map((paragraph) => paragraph.id),
+
+      part: () => store.part,
+
+      applyTreeOps(ops) {
+        if (ops.length === 0) return { committed: false, rejected: false, opCount: 0 };
+        const result = store.transact((ctx) => {
+          for (const op of ops) ctx.apply(op);
+        });
+        if (!result.ok) {
+          return { committed: false, rejected: true, opCount: ops.length, reason: result.reason };
+        }
+        return { committed: true, rejected: false, opCount: ops.length };
+      },
 
       projectDoc: () => treeToDoc(store.part),
 

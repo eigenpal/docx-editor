@@ -103,3 +103,10 @@ export {
   type LegacyChromeCommandId,
   type LegacyChromeGroup,
 } from './legacy-chrome.ts';
+export {
+  mountPaginatedSurface,
+  type OpenPaginatedResult,
+  type PaginatedSurface,
+  type PaginatedSurfaceOptions,
+  type PaginatedSurfaceState,
+} from './paginated-surface.ts';
