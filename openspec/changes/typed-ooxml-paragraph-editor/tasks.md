@@ -56,8 +56,8 @@ survives, then derive indexes and the second oracle from it.
 - [ ] 6.2 Map insertion, deletion, split/join, content-token, and every accepted run/paragraph property transaction step into typed `DocOp`s.
 - [ ] 6.3 Reject unsupported transactions without canonical effects and reconcile the view to committed state.
 - [ ] 6.4 Reconcile `ModelChange`s incrementally with a projection-only origin and loop-prevention tests.
-- [ ] 6.5 Add architecture guards preventing ProseMirror types or view access in store, layout, output, and public host contracts.
-- [ ] 6.6 Add guards proving save, layout, and semantic history do not read the ProseMirror document or history plugin.
+- [x] 6.5 Add architecture guards preventing ProseMirror types or view access in store, layout, output, and public host contracts.
+- [x] 6.6 Add guards proving save, layout, and semantic history do not read the ProseMirror document or history plugin.
 - [ ] 6.7 Retire the second preservation model once the canonical tree is authoritative: remove `rPrCapsule` bytes, `preservation.blockRanges` source ranges, and the fully-captured-slice editability rule, so unknown content survives as generic nodes rather than verbatim bytes and no paragraph is locked read-only for carrying them.
 
 ## 7. Semantic Paragraph Layout and Interaction
