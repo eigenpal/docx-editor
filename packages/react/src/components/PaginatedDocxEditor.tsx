@@ -9,17 +9,19 @@
 // and painted with is a packaging decision, and baking one in would make the adapter the
 // place fidelity is decided.
 //
-// NOTE ON THE IMPORT PATH: the engine is imported from its workspace packages today and
-// becomes `@docx-editor.dev/core/editor` when task 10.5 migrates the namespace. That rename
-// is blocked on the published `@docx-editor.dev/core` the examples still resolve.
+// The engine is reached through its COMPOSITION ROOT only. An adapter that imported the
+// layout lane for a parameter type would be reaching past the boundary for a name, which is
+// how a boundary starts leaking. The import path becomes `@docx-editor.dev/core/editor` when
+// task 10.5 migrates the namespace.
 
 import { useEffect, useImperativeHandle, useRef, useState, type Ref } from 'react';
 import {
   mountPaginatedSurface,
   type PaginatedSurface,
   type PaginatedSurfaceState,
+  type NavigationCommand,
+  type TextMeasurer,
 } from '@docx-editor.dev/engine-editor';
-import type { NavigationCommand, TextMeasurer } from '@docx-editor.dev/engine-layout';
 
 export interface PaginatedDocxEditorProps {
   /** The document to open. Replacing it remounts the surface. */

@@ -19,8 +19,9 @@ import {
   mountPaginatedSurface,
   type PaginatedSurface,
   type PaginatedSurfaceState,
+  type NavigationCommand,
+  type TextMeasurer,
 } from '@docx-editor.dev/engine-editor';
-import type { NavigationCommand, TextMeasurer } from '@docx-editor.dev/engine-layout';
 
 /** The imperative surface a template ref exposes, paired with the React handle. */
 export interface PaginatedDocxEditorExpose {
