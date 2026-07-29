@@ -1,6 +1,6 @@
 import { useCallback, useMemo, useState } from 'react';
-import type { Editor } from '@docx-editor.dev/core-contract/editor';
-import type { SemanticTarget } from '@docx-editor.dev/core-contract/interaction';
+import type { Editor } from '@docx-editor.dev/core-contract/contracts/editor';
+import type { SemanticTarget } from '@docx-editor.dev/core-contract/contracts/interaction';
 import type { ImageLayoutTarget, TableContextInfo } from '../../../legacy-core-compat';
 import type { WrapType } from '../../../lib/wrapTypes';
 import { en as defaultLocale } from '@docx-editor.dev/i18n';

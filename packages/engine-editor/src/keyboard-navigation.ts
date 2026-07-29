@@ -7,7 +7,7 @@ import type {
   InteractionPlan,
   SemanticSelection,
   SemanticTarget,
-} from '@docx-editor.dev/core-contract/interaction';
+} from '@docx-editor.dev/core-contract/contracts/interaction';
 import {
   scopesEqual,
   validateKeyboardBidiTrust,

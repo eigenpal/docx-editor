@@ -8,7 +8,7 @@ import type {
   InteractionFrame,
   InteractionHostMetrics,
   SemanticSelection,
-} from '@docx-editor.dev/core-contract/interaction';
+} from '@docx-editor.dev/core-contract/contracts/interaction';
 import { layoutBody } from '@docx-editor.dev/engine-layout';
 import { toDisplayPages } from '../src/display-bridge.ts';
 import { InteractionFrameStore } from '../src/interaction-frame.ts';
@@ -22,7 +22,7 @@ import { executeInteractionPlan } from '../src/interaction-executor.ts';
 import type { NavigationGeometry } from '../src/navigation-geometry.ts';
 import { emptyNavigationGeometry } from '../src/navigation-geometry.ts';
 import { createTestEditor as createEditor } from './create-test-editor.ts';
-import type { EditorHost } from '@docx-editor.dev/core-contract/editor';
+import type { EditorHost } from '@docx-editor.dev/core-contract/contracts/editor';
 import { createEditableParagraphFixture } from '../browser/fixtures.ts';
 import {
   LAYOUT,

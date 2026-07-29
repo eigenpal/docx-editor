@@ -3,7 +3,7 @@
 import type {
   InputObservation,
   InputRejectionObservation,
-} from '@docx-editor.dev/core-contract/interaction';
+} from '@docx-editor.dev/core-contract/contracts/interaction';
 import type { Schema } from 'prosemirror-model';
 import { Slice } from 'prosemirror-model';
 import { sanitizeHref } from '@docx-editor.dev/engine-core';

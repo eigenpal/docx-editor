@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import type { Editor } from '@docx-editor.dev/core-contract/editor';
+import type { Editor } from '@docx-editor.dev/core-contract/contracts/editor';
 import type { HeadingInfo } from '../../../legacy-core-compat';
 
 /**

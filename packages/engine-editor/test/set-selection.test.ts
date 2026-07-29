@@ -3,9 +3,9 @@ if (!GlobalRegistrator.isRegistered) GlobalRegistrator.register();
 
 import { describe, expect, test } from 'bun:test';
 import { createTestEditor as createEditor } from './create-test-editor.ts';
-import type { EditorHost } from '@docx-editor.dev/core-contract/editor';
+import type { EditorHost } from '@docx-editor.dev/core-contract/contracts/editor';
 import { createEditableParagraphFixture } from '../browser/fixtures.ts';
-import type { SemanticSelection } from '@docx-editor.dev/core-contract/interaction';
+import type { SemanticSelection } from '@docx-editor.dev/core-contract/contracts/interaction';
 
 function hostWith(body: HTMLElement): EditorHost {
   return {

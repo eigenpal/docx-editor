@@ -6,7 +6,7 @@ import type {
   SectionProperties,
   Watermark,
 } from '../../legacy-core-compat';
-import type { Editor } from '@docx-editor.dev/core-contract/editor';
+import type { Editor } from '@docx-editor.dev/core-contract/contracts/editor';
 import type { useFindReplace } from '../../hooks/useFindReplace';
 import type { useHyperlinkDialog, HyperlinkData } from '../dialogs/HyperlinkDialog';
 import type { FindMatch, FindOptions, FindResult } from '../dialogs/FindReplaceDialog';

@@ -18,7 +18,7 @@
  * rather than pretending, so a host can tell "not supported yet" from "did nothing".
  */
 import { useImperativeHandle } from 'react';
-import type { DocumentSource, Editor } from '@docx-editor.dev/core-contract/editor';
+import type { DocumentSource, Editor } from '@docx-editor.dev/core-contract/contracts/editor';
 import type { DocxEditorRef } from '../../../types';
 
 export function useDocxEditorRefApi({

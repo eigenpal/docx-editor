@@ -1,6 +1,6 @@
 // Trusted navigable caret stops from layout-published navigation geometry (task 5.5).
 
-import type { SemanticTarget } from '@docx-editor.dev/core-contract/interaction';
+import type { SemanticTarget } from '@docx-editor.dev/core-contract/contracts/interaction';
 import { caretAffinity } from './semantic-index.ts';
 import type { CaretStopProvenance, NavigationGeometry } from './navigation-geometry.ts';
 

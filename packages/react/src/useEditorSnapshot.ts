@@ -8,7 +8,7 @@
 // load.
 
 import { useEffect, useState } from 'react';
-import type { Editor } from '@docx-editor.dev/core-contract/editor';
+import type { Editor } from '@docx-editor.dev/core-contract/contracts/editor';
 
 /**
  * Re-render the caller whenever the editor commits a change, moves the

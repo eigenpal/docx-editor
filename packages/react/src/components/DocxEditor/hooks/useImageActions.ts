@@ -16,7 +16,7 @@
  * the buttons and dialogs are present and do nothing rather than being absent.
  */
 import { useCallback, useState } from 'react';
-import type { Editor } from '@docx-editor.dev/core-contract/editor';
+import type { Editor } from '@docx-editor.dev/core-contract/contracts/editor';
 import type { ImageLayoutTarget } from '../../../legacy-core-compat';
 import type { ImagePositionData } from '../../dialogs/ImagePositionDialog';
 import type { ImagePropertiesData } from '../../dialogs/ImagePropertiesDialog';

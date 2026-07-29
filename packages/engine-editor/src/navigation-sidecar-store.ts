@@ -1,6 +1,6 @@
 // Immutable navigation sidecar store (task 5.5).
 
-import type { InteractionFrameId } from '@docx-editor.dev/core-contract/interaction';
+import type { InteractionFrameId } from '@docx-editor.dev/core-contract/contracts/interaction';
 import type { NavigationGeometry } from './navigation-geometry.ts';
 import { emptyNavigationGeometry, freezeNavigationGeometry } from './navigation-geometry.ts';
 

@@ -1,12 +1,12 @@
 // Production createEditor browser harness for Chromium accessibility-tree falsification (task 4.7).
 
 import { createEditor } from '../src/create-editor.ts';
-import type { Editor } from '@docx-editor.dev/core-contract/editor';
+import type { Editor } from '@docx-editor.dev/core-contract/contracts/editor';
 import type {
   AccessibilityObservation,
   SemanticSelection,
   SemanticTarget,
-} from '@docx-editor.dev/core-contract/interaction';
+} from '@docx-editor.dev/core-contract/contracts/interaction';
 import { PAINTED_PAGES_ASSISTIVE_MARKER } from '@docx-editor.dev/engine-binding';
 import { createDeterministicLayoutShaping } from '@docx-editor.dev/engine-layout';
 import { paintDisplayPages } from './paint-display.ts';

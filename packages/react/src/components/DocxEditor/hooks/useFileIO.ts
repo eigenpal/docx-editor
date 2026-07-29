@@ -21,7 +21,7 @@
  *    dropping the file.
  */
 import { useCallback, useRef } from 'react';
-import type { Editor } from '@docx-editor.dev/core-contract/editor';
+import type { Editor } from '@docx-editor.dev/core-contract/contracts/editor';
 
 export function useFileIO({
   editorRef,

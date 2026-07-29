@@ -16,7 +16,7 @@
  * legacy's own (`core/utils/sanitizeHref`), ported alongside.
  */
 import { useCallback, useState } from 'react';
-import type { Editor } from '@docx-editor.dev/core-contract/editor';
+import type { Editor } from '@docx-editor.dev/core-contract/contracts/editor';
 import type { HyperlinkData, useHyperlinkDialog } from '../../dialogs/HyperlinkDialog';
 import type { HyperlinkPopupData } from '../../ui/HyperlinkPopup';
 import { sanitizeHref } from '../../../lib/sanitizeHref';

@@ -19,7 +19,7 @@ import type {
   InteractionOutcome,
   InputObservation,
   AccessibilityObservation,
-} from '@docx-editor.dev/core-contract/interaction';
+} from '@docx-editor.dev/core-contract/contracts/interaction';
 import {
   captureSelection,
   captureSelectionRange,
@@ -47,7 +47,7 @@ import {
   type CompositionCancelOutcome,
   type CompositionSnapshot,
 } from './composition.ts';
-import type { CompositionObservation } from '@docx-editor.dev/core-contract/interaction';
+import type { CompositionObservation } from '@docx-editor.dev/core-contract/contracts/interaction';
 import { paragraphText } from '@docx-editor.dev/engine-core';
 import {
   observeAccessibilityFromSession,

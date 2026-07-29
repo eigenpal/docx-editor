@@ -18,7 +18,7 @@ import {
   wordSegmentsToGraphemeRecords,
   type WordBoundary,
 } from '@docx-editor.dev/engine-layout';
-import type { ViewScope } from '@docx-editor.dev/core-contract/editor';
+import type { ViewScope } from '@docx-editor.dev/core-contract/contracts/editor';
 import type {
   BlockSemanticRecord,
   CaretStop,
@@ -31,7 +31,7 @@ import type {
   SemanticTarget,
   SemanticTextSpan,
   StorySemanticIndex,
-} from '@docx-editor.dev/core-contract/interaction';
+} from '@docx-editor.dev/core-contract/contracts/interaction';
 import type { BlockTraversalLinks } from './navigation-geometry.ts';
 
 /** Traversal context for capability-owned editability in the body-paragraph lane. */

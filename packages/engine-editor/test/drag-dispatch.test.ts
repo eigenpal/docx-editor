@@ -1,7 +1,7 @@
 // Drag session transactional commit (interactive-paginated-editing 5.4).
 
 import { describe, expect, test } from 'bun:test';
-import type { InteractionDispatchResult } from '@docx-editor.dev/core-contract/interaction';
+import type { InteractionDispatchResult } from '@docx-editor.dev/core-contract/contracts/interaction';
 import { commitDragSessionAfterExecution } from '../src/drag-dispatch.ts';
 import type { DragInteractionPlan, PointerDragSession } from '../src/drag-session.ts';
 

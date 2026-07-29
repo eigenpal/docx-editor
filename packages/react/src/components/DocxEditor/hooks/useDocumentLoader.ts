@@ -18,7 +18,7 @@
  * loaded again: doing so discards the editor's undo history and selection on mount.
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
-import type { DocumentSource, Editor } from '@docx-editor.dev/core-contract/editor';
+import type { DocumentSource, Editor } from '@docx-editor.dev/core-contract/contracts/editor';
 import type { FontOption } from '../../ui/FontPicker';
 
 export function useDocumentLoader({

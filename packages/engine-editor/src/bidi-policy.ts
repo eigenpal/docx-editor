@@ -1,12 +1,12 @@
 // Bidi trust policy for keyboard navigation (interactive-paginated-editing 5.5).
 
-import type { ViewScope } from '@docx-editor.dev/core-contract/editor';
+import type { ViewScope } from '@docx-editor.dev/core-contract/contracts/editor';
 import type {
   InteractionFrame,
   SemanticIdentity,
   SemanticSelection,
   SemanticTarget,
-} from '@docx-editor.dev/core-contract/interaction';
+} from '@docx-editor.dev/core-contract/contracts/interaction';
 
 /** Strong RTL scripts — keyboard navigation rejects all content containing these (fail closed). */
 const STRONG_RTL =

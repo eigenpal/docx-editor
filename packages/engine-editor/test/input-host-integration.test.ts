@@ -3,7 +3,7 @@ if (!GlobalRegistrator.isRegistered) GlobalRegistrator.register();
 
 import { describe, expect, test } from 'bun:test';
 import { createTestEditor as createEditor } from './create-test-editor.ts';
-import type { EditorHost } from '@docx-editor.dev/core-contract/editor';
+import type { EditorHost } from '@docx-editor.dev/core-contract/contracts/editor';
 import {
   createEmptyModel,
   writeDocx,

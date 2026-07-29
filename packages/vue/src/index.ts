@@ -38,9 +38,9 @@ export type {
   EditorQuery,
   EditorSnapshot,
   EditorScope,
-} from '@docx-editor.dev/core-contract/editor';
-export type { DisplayPage, DisplayItem, DocPoint } from '@docx-editor.dev/core-contract/geometry';
-export type { DocxDocument } from '@docx-editor.dev/core-contract/types';
+} from '@docx-editor.dev/core-contract/contracts/editor';
+export type { DisplayPage, DisplayItem, DocPoint } from '@docx-editor.dev/core-contract/contracts/geometry';
+export type { DocxDocument } from '@docx-editor.dev/core-contract/contracts/types';
 export { default as DocxEditorShell, type DocxEditorShellProps } from './DocxEditorShell';
 export { default as DocxEditorTitleBar, type DocxEditorTitleBarProps } from './DocxEditorTitleBar';
 export { default as DocxEditorToolbar, type DocxEditorToolbarProps } from './DocxEditorToolbar';

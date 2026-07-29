@@ -61,7 +61,7 @@ export {
   type InputHostPlacementRequest,
   type InputHostViewport,
 } from './input-host.ts';
-export type { InputHostPlacementReason } from '@docx-editor.dev/core-contract/interaction';
+export type { InputHostPlacementReason } from '@docx-editor.dev/core-contract/contracts/interaction';
 export {
   PAINTED_PAGES_ASSISTIVE_MARKER,
   applyAccessibleNamePolicy,

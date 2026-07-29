@@ -1,6 +1,6 @@
 // Internal interaction plan executor (interactive-paginated-editing 5.1).
 
-import type { EditorCommand } from '@docx-editor.dev/core-contract/editor';
+import type { EditorCommand } from '@docx-editor.dev/core-contract/contracts/editor';
 import type {
   InteractionDispatchResult,
   InteractionFrameId,
@@ -8,8 +8,8 @@ import type {
   InteractionOutcome,
   InteractionPlan,
   SemanticSelection,
-} from '@docx-editor.dev/core-contract/interaction';
-import type { ExecResult } from '@docx-editor.dev/core-contract/types';
+} from '@docx-editor.dev/core-contract/contracts/interaction';
+import type { ExecResult } from '@docx-editor.dev/core-contract/contracts/types';
 
 export interface InteractionExecutionContext {
   syncSemanticSelection(request: {

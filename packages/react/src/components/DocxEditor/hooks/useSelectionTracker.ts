@@ -18,7 +18,7 @@
  * ruler the paragraph has no indent, which is a claim the engine cannot make.
  */
 import { useCallback } from 'react';
-import type { Editor } from '@docx-editor.dev/core-contract/editor';
+import type { Editor } from '@docx-editor.dev/core-contract/contracts/editor';
 import type { TableContextInfo } from '../../../legacy-core-compat';
 import type { SelectionFormatting } from '../../Toolbar';
 

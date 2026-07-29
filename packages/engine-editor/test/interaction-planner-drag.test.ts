@@ -4,7 +4,7 @@ import { describe, expect, test } from 'bun:test';
 import type {
   InteractionFrame,
   InteractionHostMetrics,
-} from '@docx-editor.dev/core-contract/interaction';
+} from '@docx-editor.dev/core-contract/contracts/interaction';
 import { deriveSelectionGeometry, hitTestPointer } from '../src/interaction-geometry.ts';
 import { InteractionFrameStore } from '../src/interaction-frame.ts';
 import { layoutBody } from '@docx-editor.dev/engine-layout';

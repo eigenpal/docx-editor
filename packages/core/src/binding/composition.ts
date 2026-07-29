@@ -1,6 +1,6 @@
 // PM-free composition anchor, overlay derivation, and remote-invalidation helpers (interactive-paginated 4.4).
 
-import type { CompositionObservation } from '@docx-editor.dev/core-contract/interaction';
+import type { CompositionObservation } from '@docx-editor.dev/core-contract/contracts/interaction';
 import type { SelectionAnchor } from './selection.ts';
 
 export type CompositionCancelCode = 'remoteInvalidation' | 'capabilityBoundary' | 'cancelled';

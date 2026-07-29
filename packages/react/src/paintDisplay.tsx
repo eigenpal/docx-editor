@@ -1,5 +1,5 @@
 import type { CSSProperties, ReactElement } from 'react';
-import type { DisplayItem, DisplayPage } from '@docx-editor.dev/core-contract/geometry';
+import type { DisplayItem, DisplayPage } from '@docx-editor.dev/core-contract/contracts/geometry';
 import type { FrameOverlays, GlyphClickTarget, OverlayBox } from '@docx-editor.dev/engine-editor';
 import type { InstalledDisplayFonts } from '@docx-editor.dev/engine-editor';
 import {

@@ -3,7 +3,7 @@ import type {
   InteractionFrame,
   InteractionHostMetrics,
   SemanticSelection,
-} from '@docx-editor.dev/core-contract/interaction';
+} from '@docx-editor.dev/core-contract/contracts/interaction';
 import {
   clientPointForStackedText,
   modelWithTableCell,

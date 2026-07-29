@@ -10,7 +10,7 @@
 // legacy reference; this spec guards that no region silently disappears.
 
 import { expect, test } from '@playwright/test';
-import type { Editor } from '@docx-editor.dev/core-contract/editor';
+import type { Editor } from '@docx-editor.dev/core-contract/contracts/editor';
 
 declare global {
   interface Window {

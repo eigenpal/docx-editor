@@ -3,7 +3,7 @@
 
 import { describe, expect, test } from 'bun:test';
 import { colorToCss, runStyle, borderSegLine } from '../src/paint-style.ts';
-import type { GlyphRun, BorderSeg } from '@docx-editor.dev/core-contract/geometry';
+import type { GlyphRun, BorderSeg } from '@docx-editor.dev/core-contract/contracts/geometry';
 
 describe('colorToCss', () => {
   test("hex is '#'-prefixed (a bare 'RRGGBB' is not valid CSS)", () => {

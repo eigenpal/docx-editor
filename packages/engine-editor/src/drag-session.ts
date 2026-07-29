@@ -10,8 +10,8 @@ import type {
   PointerInteractionIntent,
   SemanticSelection,
   SemanticTarget,
-} from '@docx-editor.dev/core-contract/interaction';
-import type { ViewScope } from '@docx-editor.dev/core-contract/editor';
+} from '@docx-editor.dev/core-contract/contracts/interaction';
+import type { ViewScope } from '@docx-editor.dev/core-contract/contracts/editor';
 import { hitTestPointer } from './interaction-geometry.ts';
 import {
   navigationSessionPlanForIntent,

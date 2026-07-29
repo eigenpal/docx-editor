@@ -4,7 +4,7 @@
 import type {
   InteractionDispatchResult,
   InteractionHostEffect,
-} from '@docx-editor.dev/core-contract/interaction';
+} from '@docx-editor.dev/core-contract/contracts/interaction';
 import type { DragInteractionPlan, PointerDragSession } from './drag-session.ts';
 
 /** Commits or reverts drag session state based on executed plan outcome. */

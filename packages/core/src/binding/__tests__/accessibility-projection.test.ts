@@ -28,7 +28,7 @@ import {
   ORIGIN_IDS,
   type ParagraphRecord,
 } from '@docx-editor.dev/engine-core';
-import type { SemanticSelection } from '@docx-editor.dev/core-contract/interaction';
+import type { SemanticSelection } from '@docx-editor.dev/core-contract/contracts/interaction';
 
 const HUMAN = ORIGIN_IDS.mutationHuman;
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';

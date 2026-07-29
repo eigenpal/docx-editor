@@ -14,18 +14,18 @@ import {
   type EditorCommand,
   type EditorHost,
   type EditorSnapshot,
-} from '../editor';
-import { type DisplayPage } from '../geometry';
+} from '../contracts/editor';
+import { type DisplayPage } from '../contracts/geometry';
 import {
   type InteractionFrame,
   type InteractionFrameId,
   type SelectionGeometryOptions,
   type SemanticHitTarget,
   type SemanticTarget,
-} from '../interaction';
-import { type McpContext, type McpToolDefinition } from '../mcp';
-import { type Extension, type PluginContext, type RenderedPage } from '../plugin';
-import type { DocAnchor, DocxDocument } from '../types';
+} from '../contracts/interaction';
+import { type McpContext, type McpToolDefinition } from '../contracts/mcp';
+import { type Extension, type PluginContext, type RenderedPage } from '../contracts/plugin';
+import type { DocAnchor, DocxDocument } from '../contracts/types';
 
 // A no-arg command must be constructible. `Record<string, never>` made this
 // impossible: the `type` discriminant collided with the index signature.

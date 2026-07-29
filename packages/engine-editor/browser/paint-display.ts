@@ -1,7 +1,7 @@
 // Imperative DisplayPage[] painter for the production-editor accessibility harness.
 // Mirrors adapter paint semantics without React — presentation-only painted output.
 
-import type { DisplayItem, DisplayPage } from '@docx-editor.dev/core-contract/geometry';
+import type { DisplayItem, DisplayPage } from '@docx-editor.dev/core-contract/contracts/geometry';
 import { colorToCss, borderSegLine } from '../src/paint-style.ts';
 
 function paintTextItem(doc: Document, item: Extract<DisplayItem, { kind: 'text' }>): HTMLElement[] {

@@ -20,7 +20,7 @@ import {
   paragraphText,
   type ParagraphRecord,
 } from '@docx-editor.dev/engine-core';
-import type { SemanticSelection } from '@docx-editor.dev/core-contract/interaction';
+import type { SemanticSelection } from '@docx-editor.dev/core-contract/contracts/interaction';
 import { zipSync, strToU8 } from 'fflate';
 import { flushCompositionFrames } from './composition-dom.ts';
 import { authorizeFocus, dispatchBeforeInput, dispatchModKey, dispatchHistoryUndo, pmDom } from './input-dom-helpers.ts';

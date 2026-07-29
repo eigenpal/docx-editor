@@ -7,7 +7,7 @@ import type {
   InteractionOutcome,
   SemanticSelection,
   SemanticTarget,
-} from '@docx-editor.dev/core-contract/interaction';
+} from '@docx-editor.dev/core-contract/contracts/interaction';
 import type { DocxEditorSession } from './session.ts';
 import { graphemeOffsetToUtf16 } from './grapheme.ts';
 import { paragraphOwnership, topLevelBlockKind } from './semantic-ownership.ts';

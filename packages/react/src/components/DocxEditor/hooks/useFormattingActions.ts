@@ -25,8 +25,8 @@
  * does nothing rather than something unintended.
  */
 import { useCallback } from 'react';
-import type { Editor } from '@docx-editor.dev/core-contract/editor';
-import type { ColorValue } from '@docx-editor.dev/core-contract/types';
+import type { Editor } from '@docx-editor.dev/core-contract/contracts/editor';
+import type { ColorValue } from '@docx-editor.dev/core-contract/contracts/types';
 import type { FormattingAction } from '../../Toolbar';
 import type { useHyperlinkDialog } from '../../dialogs/HyperlinkDialog';
 

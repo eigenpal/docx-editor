@@ -1,5 +1,5 @@
 import type { CSSProperties, ReactNode } from 'react';
-import type { Editor } from '@docx-editor.dev/core-contract/editor';
+import type { Editor } from '@docx-editor.dev/core-contract/contracts/editor';
 import type { Theme, Document } from '../../legacy-core-compat';
 import { EditorToolbar } from '../EditorToolbar';
 import { ToolbarSeparator, type SelectionFormatting, type FormattingAction } from '../Toolbar';

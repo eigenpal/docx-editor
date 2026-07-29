@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import type { Editor } from '@docx-editor.dev/core-contract/editor';
+import type { Editor } from '@docx-editor.dev/core-contract/contracts/editor';
 import type { useFindReplace } from '../../../hooks/useFindReplace';
 import type { useHyperlinkDialog } from '../../dialogs/HyperlinkDialog';
 

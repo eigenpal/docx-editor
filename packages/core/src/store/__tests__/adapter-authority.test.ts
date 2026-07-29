@@ -172,7 +172,7 @@ export function auditUsesPublicEditorFacade(sources: readonly string[]): boolean
       hasCreateEditorImport = true;
     }
     if (
-      /from\s*['"]@docx-editor\.dev\/core-contract\/editor['"]/.test(source) &&
+      /from\s*['"]@docx-editor\.dev\/core-contract\/contracts\/editor['"]/.test(source) &&
       /\bEditorHost\b/.test(source)
     ) {
       hasHostContract = true;
@@ -267,7 +267,7 @@ describe('adapter authority rule fixtures', () => {
     expect(
       auditUsesPublicEditorFacade([
         "import { createEditor } from '@docx-editor.dev/engine-editor';",
-        "import type { EditorHost } from '@docx-editor.dev/core-contract/editor';",
+        "import type { EditorHost } from '@docx-editor.dev/core-contract/contracts/editor';",
       ])
     ).toBe(true);
   });

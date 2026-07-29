@@ -4,7 +4,7 @@ import { describe, expect, test } from 'bun:test';
 import type {
   InteractionFrame,
   InteractionHostMetrics,
-} from '@docx-editor.dev/core-contract/interaction';
+} from '@docx-editor.dev/core-contract/contracts/interaction';
 import { toDisplayPages } from '../src/display-bridge.ts';
 import { caretOverlayForTarget } from '../src/interaction-geometry.ts';
 import { freezeNavigationGeometry } from '../src/navigation-geometry.ts';

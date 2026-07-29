@@ -7,7 +7,7 @@
 
 import { describe, expect, test } from 'bun:test';
 import { createTestEditor as createEditor } from './create-test-editor.ts';
-import type { Editor, EditorHost } from '@docx-editor.dev/core-contract/editor';
+import type { Editor, EditorHost } from '@docx-editor.dev/core-contract/contracts/editor';
 import { writeDocx, createEmptyModel, bodyStoryId } from '@docx-editor.dev/engine-core';
 import { modelWith } from './interaction-test-helpers.ts';
 import type { PackageModel, ParagraphRecord } from '@docx-editor.dev/engine-core';

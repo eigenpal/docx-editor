@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
-import { EditorFontError } from '@docx-editor.dev/core-contract/editor';
-import type { DisplayPage, GlyphFont } from '@docx-editor.dev/core-contract/geometry';
+import { EditorFontError } from '@docx-editor.dev/core-contract/contracts/editor';
+import type { DisplayPage, GlyphFont } from '@docx-editor.dev/core-contract/contracts/geometry';
 import {
   createFontResourceSnapshot,
   sha256FontBytes,

@@ -48,7 +48,7 @@ function stripComments(source: string): string {
 describe('package authority (task 0.5)', () => {
   test('the EditorHost contract is PM-free', () => {
     const editor = stripComments(
-      readFileSync(existingLanePath('core/src/editor.ts'), 'utf8')
+      readFileSync(existingLanePath('core/src/contracts/editor.ts'), 'utf8')
     );
     // No import from a prosemirror module.
     expect(/from\s*['"]prosemirror[^'"]*['"]/.test(editor)).toBe(false);

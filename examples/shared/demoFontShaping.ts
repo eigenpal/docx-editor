@@ -3,7 +3,7 @@ import type {
   FontConfiguration,
   FontFaceRequest,
   FontSourceSubstitution,
-} from '@docx-editor.dev/core-contract/editor';
+} from '@docx-editor.dev/core-contract/contracts/editor';
 
 const FALLBACK_FAMILY = 'DejaVu Sans';
 const AUTHORED_DEMO_FAMILIES = Object.freeze([

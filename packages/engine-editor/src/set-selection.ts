@@ -5,14 +5,14 @@ import type {
   EditorPosition,
   EditorSelection,
   ViewScope,
-} from '@docx-editor.dev/core-contract/editor';
+} from '@docx-editor.dev/core-contract/contracts/editor';
 import type {
   InteractionFrameId,
   SemanticSelection,
   SemanticTarget,
-} from '@docx-editor.dev/core-contract/interaction';
-import type { ExecErrorCode, ExecResult } from '@docx-editor.dev/core-contract/types';
-import type { InteractionOutcomeCode } from '@docx-editor.dev/core-contract/interaction';
+} from '@docx-editor.dev/core-contract/contracts/interaction';
+import type { ExecErrorCode, ExecResult } from '@docx-editor.dev/core-contract/contracts/types';
+import type { InteractionOutcomeCode } from '@docx-editor.dev/core-contract/contracts/interaction';
 
 function isSemanticTarget(value: unknown): value is SemanticTarget {
   return typeof value === 'object' && value !== null && 'kind' in value;

@@ -6,8 +6,8 @@
 import type {
   InteractionFrameId,
   InputHostPlacementReason,
-} from '@docx-editor.dev/core-contract/interaction';
-import type { Rect } from '@docx-editor.dev/core-contract/types';
+} from '@docx-editor.dev/core-contract/contracts/interaction';
+import type { Rect } from '@docx-editor.dev/core-contract/contracts/types';
 import {
   applyAccessibleNamePolicy,
   resolveAccessibilityNamePolicy,

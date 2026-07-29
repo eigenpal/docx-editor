@@ -2,7 +2,7 @@ import { describe, expect, test } from 'bun:test';
 import { GlobalRegistrator } from '@happy-dom/global-registrator';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import type { InteractionFrame, SemanticTarget } from '@docx-editor.dev/core-contract/interaction';
+import type { InteractionFrame, SemanticTarget } from '@docx-editor.dev/core-contract/contracts/interaction';
 import * as engineEditor from '../src/index.ts';
 
 if (!GlobalRegistrator.isRegistered) GlobalRegistrator.register();

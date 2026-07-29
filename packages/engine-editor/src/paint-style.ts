@@ -3,7 +3,7 @@
 // its own elements but reads styling decisions from here — colors, run typography, border-segment
 // boxes — so a paint fix lands in one place for both.
 
-import type { ColorValue, GlyphRun, BorderSeg } from '@docx-editor.dev/core-contract/geometry';
+import type { ColorValue, GlyphRun, BorderSeg } from '@docx-editor.dev/core-contract/contracts/geometry';
 
 /** A ColorValue as a CSS color string, or undefined (inherit) for auto / theme slots the adapter
  *  cannot resolve. Hex values are '#'-prefixed — a bare 'RRGGBB' is NOT a valid CSS color. */

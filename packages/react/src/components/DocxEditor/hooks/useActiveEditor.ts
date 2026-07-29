@@ -16,7 +16,7 @@
  * `focusActiveEditor: () => editorRef.current?.focus()` at each call site.
  */
 import { useCallback } from 'react';
-import type { Editor, ViewScope } from '@docx-editor.dev/core-contract/editor';
+import type { Editor, ViewScope } from '@docx-editor.dev/core-contract/contracts/editor';
 
 export function useActiveEditor({
   hfEditPosition,

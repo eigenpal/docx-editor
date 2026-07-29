@@ -1,6 +1,6 @@
 // Pure PM-free interaction planner (interactive-paginated-editing 5.1–5.2).
 
-import type { ViewScope } from '@docx-editor.dev/core-contract/editor';
+import type { ViewScope } from '@docx-editor.dev/core-contract/contracts/editor';
 import type {
   InteractionEffect,
   InteractionFrame,
@@ -12,8 +12,8 @@ import type {
   SemanticSelection,
   SemanticTarget,
   WordSegmentRecord,
-} from '@docx-editor.dev/core-contract/interaction';
-import type { Point } from '@docx-editor.dev/core-contract/types';
+} from '@docx-editor.dev/core-contract/contracts/interaction';
+import type { Point } from '@docx-editor.dev/core-contract/contracts/types';
 import type { NavigationGeometry } from './navigation-geometry.ts';
 import { emptyNavigationGeometry } from './navigation-geometry.ts';
 import type { ParagraphTextResolver } from './bidi-policy.ts';

@@ -1,6 +1,6 @@
 import { expect, test, type Browser, type Page } from '@playwright/test';
 import { strFromU8, unzipSync } from 'fflate';
-import type { Editor } from '@docx-editor.dev/core-contract/editor';
+import type { Editor } from '@docx-editor.dev/core-contract/contracts/editor';
 import { bodyStoryId, parseDocx } from '@docx-editor.dev/engine-core';
 import {
   FIDELITY_DOCUMENT_XML,

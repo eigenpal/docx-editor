@@ -3,7 +3,7 @@
 import type {
   BlockSemanticRecord,
   SemanticPositionIndex,
-} from '@docx-editor.dev/core-contract/interaction';
+} from '@docx-editor.dev/core-contract/contracts/interaction';
 import type { PackageModel } from '@docx-editor.dev/engine-core';
 import type {
   CaretEdgeItem,

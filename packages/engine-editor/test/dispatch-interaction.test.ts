@@ -3,8 +3,8 @@ if (!GlobalRegistrator.isRegistered) GlobalRegistrator.register();
 
 import { describe, expect, test } from 'bun:test';
 import { createTestEditor as createEditor } from './create-test-editor.ts';
-import type { Editor, EditorHost } from '@docx-editor.dev/core-contract/editor';
-import type { InteractionFrame } from '@docx-editor.dev/core-contract/interaction';
+import type { Editor, EditorHost } from '@docx-editor.dev/core-contract/contracts/editor';
+import type { InteractionFrame } from '@docx-editor.dev/core-contract/contracts/interaction';
 import { createEditableParagraphFixture } from '../browser/fixtures.ts';
 import {
   clientPointForStackedText,

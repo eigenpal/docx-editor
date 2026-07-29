@@ -4,9 +4,9 @@ import type {
   RenderedTextGeometryPort,
   SemanticSelection,
   SemanticTarget,
-} from '@docx-editor.dev/core-contract/interaction';
-import type { DisplayItem } from '@docx-editor.dev/core-contract/geometry';
-import type { Point, Rect } from '@docx-editor.dev/core-contract/types';
+} from '@docx-editor.dev/core-contract/contracts/interaction';
+import type { DisplayItem } from '@docx-editor.dev/core-contract/contracts/geometry';
+import type { Point, Rect } from '@docx-editor.dev/core-contract/contracts/types';
 import {
   overlaysForFrame as engineOverlaysForFrame,
   type FrameOverlays,

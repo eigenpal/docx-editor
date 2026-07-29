@@ -10,40 +10,45 @@
       "import": "./src/index.ts",
       "default": "./src/index.ts"
     },
-    "./editor": {
-      "types": "./src/editor.ts",
-      "import": "./src/editor.ts",
-      "default": "./src/editor.ts"
+    "./binding": {
+      "types": "./src/binding/index.ts",
+      "import": "./src/binding/index.ts",
+      "default": "./src/binding/index.ts"
     },
-    "./geometry": {
-      "types": "./src/geometry.ts",
-      "import": "./src/geometry.ts",
-      "default": "./src/geometry.ts"
+    "./clients": {
+      "types": "./src/clients/index.ts",
+      "import": "./src/clients/index.ts",
+      "default": "./src/clients/index.ts"
     },
-    "./interaction": {
-      "types": "./src/interaction.ts",
-      "import": "./src/interaction.ts",
-      "default": "./src/interaction.ts"
+    "./contracts/editor": {
+      "types": "./src/contracts/editor.ts",
+      "import": "./src/contracts/editor.ts",
+      "default": "./src/contracts/editor.ts"
     },
-    "./plugin": {
-      "types": "./src/plugin.ts",
-      "import": "./src/plugin.ts",
-      "default": "./src/plugin.ts"
+    "./contracts/geometry": {
+      "types": "./src/contracts/geometry.ts",
+      "import": "./src/contracts/geometry.ts",
+      "default": "./src/contracts/geometry.ts"
     },
-    "./mcp": {
-      "types": "./src/mcp.ts",
-      "import": "./src/mcp.ts",
-      "default": "./src/mcp.ts"
+    "./contracts/interaction": {
+      "types": "./src/contracts/interaction.ts",
+      "import": "./src/contracts/interaction.ts",
+      "default": "./src/contracts/interaction.ts"
     },
-    "./types": {
-      "types": "./src/types-barrel.ts",
-      "import": "./src/types-barrel.ts",
-      "default": "./src/types-barrel.ts"
+    "./contracts/mcp": {
+      "types": "./src/contracts/mcp.ts",
+      "import": "./src/contracts/mcp.ts",
+      "default": "./src/contracts/mcp.ts"
     },
-    "./store": {
-      "types": "./src/store/index.ts",
-      "import": "./src/store/index.ts",
-      "default": "./src/store/index.ts"
+    "./contracts/plugin": {
+      "types": "./src/contracts/plugin.ts",
+      "import": "./src/contracts/plugin.ts",
+      "default": "./src/contracts/plugin.ts"
+    },
+    "./contracts/types": {
+      "types": "./src/contracts/types-barrel.ts",
+      "import": "./src/contracts/types-barrel.ts",
+      "default": "./src/contracts/types-barrel.ts"
     },
     "./layout": {
       "types": "./src/layout/index.ts",
@@ -55,25 +60,20 @@
       "import": "./src/output/index.ts",
       "default": "./src/output/index.ts"
     },
-    "./binding": {
-      "types": "./src/binding/index.ts",
-      "import": "./src/binding/index.ts",
-      "default": "./src/binding/index.ts"
-    },
-    "./sync": {
-      "types": "./src/sync/index.ts",
-      "import": "./src/sync/index.ts",
-      "default": "./src/sync/index.ts"
-    },
     "./server": {
       "types": "./src/server/index.ts",
       "import": "./src/server/index.ts",
       "default": "./src/server/index.ts"
     },
-    "./clients": {
-      "types": "./src/clients/index.ts",
-      "import": "./src/clients/index.ts",
-      "default": "./src/clients/index.ts"
+    "./store": {
+      "types": "./src/store/index.ts",
+      "import": "./src/store/index.ts",
+      "default": "./src/store/index.ts"
+    },
+    "./sync": {
+      "types": "./src/sync/index.ts",
+      "import": "./src/sync/index.ts",
+      "default": "./src/sync/index.ts"
     }
   },
   "scripts": {

@@ -18,7 +18,7 @@
  * conversion the page indicator does.
  */
 import { useCallback, useEffect, useRef } from 'react';
-import type { Editor } from '@docx-editor.dev/core-contract/editor';
+import type { Editor } from '@docx-editor.dev/core-contract/contracts/editor';
 
 export function useFloatingCommentBtn({
   editorRef,

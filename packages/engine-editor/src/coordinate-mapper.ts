@@ -5,8 +5,8 @@ import type {
   AffineTransform,
   InteractionFrame,
   InteractionHostMetrics,
-} from '@docx-editor.dev/core-contract/interaction';
-import type { Point, Rect } from '@docx-editor.dev/core-contract/types';
+} from '@docx-editor.dev/core-contract/contracts/interaction';
+import type { Point, Rect } from '@docx-editor.dev/core-contract/contracts/types';
 
 export type CoordinateRejectCode =
   | 'nonFinite'

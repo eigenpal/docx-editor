@@ -8,7 +8,7 @@ import {
   type ParagraphRecord,
   type SdtRecord,
 } from '@docx-editor.dev/engine-core';
-import type { ViewScope } from '@docx-editor.dev/core-contract/editor';
+import type { ViewScope } from '@docx-editor.dev/core-contract/contracts/editor';
 import type {
   AccessibilityEntry,
   AccessibilityEntryRole,
@@ -19,7 +19,7 @@ import type {
   FocusObservation,
   InteractionFrameId,
   SemanticTarget,
-} from '@docx-editor.dev/core-contract/interaction';
+} from '@docx-editor.dev/core-contract/contracts/interaction';
 import { NodeSelection as NodeSelectionCtor } from 'prosemirror-state';
 import type { EditorView } from 'prosemirror-view';
 import type { DocxEditorSession } from './session.ts';

@@ -13,7 +13,7 @@
 // — and those are asserted separately: PM must NOT be able to pre-empt an engine refusal.
 
 import { expect, test, type Page } from '@playwright/test';
-import type { Editor } from '@docx-editor.dev/core-contract/editor';
+import type { Editor } from '@docx-editor.dev/core-contract/contracts/editor';
 import { authorizeCaret, paragraphText, selectionIdentity } from './realAdapterGateHelpers.ts';
 
 /**

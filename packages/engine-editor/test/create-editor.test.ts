@@ -8,8 +8,8 @@ if (!GlobalRegistrator.isRegistered) GlobalRegistrator.register();
 
 import { describe, expect, test } from 'bun:test';
 import { createTestEditor as createEditor } from './create-test-editor.ts';
-import type { EditorHost } from '@docx-editor.dev/core-contract/editor';
-import type { DisplayPage } from '@docx-editor.dev/core-contract/geometry';
+import type { EditorHost } from '@docx-editor.dev/core-contract/contracts/editor';
+import type { DisplayPage } from '@docx-editor.dev/core-contract/contracts/geometry';
 import { createEmptyModel, writeDocx } from '@docx-editor.dev/engine-core';
 
 // A minimal, real DOCX: the empty authored model serialized to bytes.

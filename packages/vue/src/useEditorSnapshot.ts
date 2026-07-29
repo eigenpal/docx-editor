@@ -7,7 +7,7 @@
 // selection moves, and the rulers keep the first document's page size.
 
 import { onBeforeUnmount, ref, watch, type Ref } from 'vue';
-import type { Editor } from '@docx-editor.dev/core-contract/editor';
+import type { Editor } from '@docx-editor.dev/core-contract/contracts/editor';
 
 /**
  * A counter that increments whenever the editor commits a change, moves the

@@ -5,16 +5,16 @@ import type {
   DisplayPage,
   DisplayItem as ContractItem,
   BorderSeg,
-} from '@docx-editor.dev/core-contract/geometry';
+} from '@docx-editor.dev/core-contract/contracts/geometry';
 import type {
   AffineTransform,
   InteractionFrame,
   BlockSemanticRecord,
   SemanticPositionIndex,
   ShapedCluster,
-} from '@docx-editor.dev/core-contract/interaction';
-import type { Rect, ViewScope } from '@docx-editor.dev/core-contract/editor';
-import type { PositionedInteractionMeta } from '@docx-editor.dev/core-contract/interaction';
+} from '@docx-editor.dev/core-contract/contracts/interaction';
+import type { Rect, ViewScope } from '@docx-editor.dev/core-contract/contracts/editor';
+import type { PositionedInteractionMeta } from '@docx-editor.dev/core-contract/contracts/interaction';
 import type { PackageModel } from '@docx-editor.dev/engine-core';
 import type { Page, TextItem, RectItem } from '@docx-editor.dev/engine-layout';
 import { segmentGraphemes } from '@docx-editor.dev/engine-layout';

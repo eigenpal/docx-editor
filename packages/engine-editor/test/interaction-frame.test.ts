@@ -15,11 +15,11 @@ import {
   type PublishLayoutInput,
   type PublishSelectionInput,
 } from '../src/interaction-frame.ts';
-import type { DisplayPage } from '@docx-editor.dev/core-contract/geometry';
+import type { DisplayPage } from '@docx-editor.dev/core-contract/contracts/geometry';
 import type {
   InteractionFrameId,
   SemanticPositionIndex,
-} from '@docx-editor.dev/core-contract/interaction';
+} from '@docx-editor.dev/core-contract/contracts/interaction';
 import { buildSemanticIndex } from '../src/semantic-index.ts';
 import {
   createEmptyModel,

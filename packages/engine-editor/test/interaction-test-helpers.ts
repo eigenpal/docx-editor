@@ -14,8 +14,8 @@ import type {
   InteractionFrame,
   InteractionHostMetrics,
   SemanticSelection,
-} from '@docx-editor.dev/core-contract/interaction';
-import type { Point } from '@docx-editor.dev/core-contract/types';
+} from '@docx-editor.dev/core-contract/contracts/interaction';
+import type { Point } from '@docx-editor.dev/core-contract/contracts/types';
 import { toDisplayPages } from '../src/display-bridge.ts';
 import {
   InteractionFrameStore,

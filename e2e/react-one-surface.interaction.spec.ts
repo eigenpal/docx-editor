@@ -7,7 +7,7 @@
 // there, which is the whole point of this milestone.
 
 import { expect, test, type Page } from '@playwright/test';
-import type { Editor } from '@docx-editor.dev/core-contract/editor';
+import type { Editor } from '@docx-editor.dev/core-contract/contracts/editor';
 import {
   clickTargetCenter,
   clickTargetPointAt,

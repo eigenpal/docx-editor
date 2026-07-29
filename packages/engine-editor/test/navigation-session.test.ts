@@ -1,7 +1,7 @@
 // Navigation session commit and reset tests (interactive-paginated-editing 5.5).
 
 import { describe, expect, test } from 'bun:test';
-import type { InteractionFrame } from '@docx-editor.dev/core-contract/interaction';
+import type { InteractionFrame } from '@docx-editor.dev/core-contract/contracts/interaction';
 import { layoutBody } from '@docx-editor.dev/engine-layout';
 import { toDisplayPages } from '../src/display-bridge.ts';
 import { InteractionFrameStore } from '../src/interaction-frame.ts';

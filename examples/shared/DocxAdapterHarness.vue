@@ -16,7 +16,7 @@ import {
   PageIndicator,
 } from '@docx-editor.dev/vue';
 import { createEditorDriver, type EditorDriver } from '../../packages/engine-editor/src/index.ts';
-import type { FontConfiguration } from '@docx-editor.dev/core-contract/editor';
+import type { FontConfiguration } from '@docx-editor.dev/core-contract/contracts/editor';
 import en from '../../packages/i18n/en.json';
 import { loadDemoFontConfiguration } from './demoFontShaping';
 

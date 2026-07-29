@@ -18,8 +18,8 @@
  * is invented on the way back, because the read is a stub.
  */
 import { useCallback, useState } from 'react';
-import type { Editor } from '@docx-editor.dev/core-contract/editor';
-import type { Watermark as ContractWatermark } from '@docx-editor.dev/core-contract/types';
+import type { Editor } from '@docx-editor.dev/core-contract/contracts/editor';
+import type { Watermark as ContractWatermark } from '@docx-editor.dev/core-contract/contracts/types';
 import type { Watermark } from '../../../lib/watermark';
 
 export function useWatermarkControls({

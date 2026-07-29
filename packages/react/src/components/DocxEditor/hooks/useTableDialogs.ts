@@ -16,8 +16,8 @@
  * rather than something approximate.
  */
 import { useCallback, useState } from 'react';
-import type { Editor } from '@docx-editor.dev/core-contract/editor';
-import type { ColorValue } from '@docx-editor.dev/core-contract/types';
+import type { Editor } from '@docx-editor.dev/core-contract/contracts/editor';
+import type { ColorValue } from '@docx-editor.dev/core-contract/contracts/types';
 import type { TableAction } from '../../ui/TableToolbar';
 
 interface SplitCellDialogState {

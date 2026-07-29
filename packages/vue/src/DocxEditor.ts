@@ -15,8 +15,8 @@ import type {
   DocumentSource,
   DocumentChange,
   FontConfiguration,
-} from '@docx-editor.dev/core-contract/editor';
-import type { InteractionIntent } from '@docx-editor.dev/core-contract/interaction';
+} from '@docx-editor.dev/core-contract/contracts/editor';
+import type { InteractionIntent } from '@docx-editor.dev/core-contract/contracts/interaction';
 import {
   attachAdapterEventBridge,
   createLayoutShaping,
@@ -33,7 +33,7 @@ import {
   type GlyphClickTarget,
   type InstalledDisplayFonts,
 } from '@docx-editor.dev/engine-editor';
-import type { DisplayPage } from '@docx-editor.dev/core-contract/geometry';
+import type { DisplayPage } from '@docx-editor.dev/core-contract/contracts/geometry';
 import { paintDisplay } from './paintDisplay';
 import type { EditorMode } from './types';
 

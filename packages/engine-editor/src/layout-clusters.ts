@@ -1,7 +1,7 @@
 // Measured display clusters derived from layout-published caret edges (task 5.5).
 
-import type { SemanticTextSpan, ShapedCluster } from '@docx-editor.dev/core-contract/interaction';
-import type { Rect } from '@docx-editor.dev/core-contract/types';
+import type { SemanticTextSpan, ShapedCluster } from '@docx-editor.dev/core-contract/contracts/interaction';
+import type { Rect } from '@docx-editor.dev/core-contract/contracts/types';
 import type { Page } from '@docx-editor.dev/engine-layout';
 import { segmentGraphemes } from '@docx-editor.dev/engine-layout';
 import { twipsToPx } from './semantic-index.ts';

@@ -2,7 +2,7 @@
 // Adapters call this from EditorHost.getInteractionHostMetrics — they MUST NOT derive document
 // geometry from painted DOM; only read scroll container client box, scroll offsets, and zoom.
 
-import type { InteractionHostMetrics } from '@docx-editor.dev/core-contract/interaction';
+import type { InteractionHostMetrics } from '@docx-editor.dev/core-contract/contracts/interaction';
 
 /**
  * Measure host metrics from the element that hosts the painted page stack, plus

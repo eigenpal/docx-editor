@@ -14,7 +14,7 @@ import type {
   Editor,
   EditorCommand,
   ExecResult,
-} from '@docx-editor.dev/core-contract/editor';
+} from '@docx-editor.dev/core-contract/contracts/editor';
 
 /**
  * The controls this toolbar exposes.

@@ -5,7 +5,7 @@ import type {
   InteractionFrame,
   InteractionHostMetrics,
   SemanticSelection,
-} from '@docx-editor.dev/core-contract/interaction';
+} from '@docx-editor.dev/core-contract/contracts/interaction';
 import { contentToClient, IDENTITY_HOST_METRICS } from '../src/coordinate-mapper.ts';
 import { deriveCaretGeometry, hitTestPointer } from '../src/interaction-geometry.ts';
 import { InteractionFrameStore } from '../src/interaction-frame.ts';

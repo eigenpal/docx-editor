@@ -1,6 +1,6 @@
 // Frame-bound hit testing, caret, and selection geometry (interactive-paginated-editing 3.5–3.8).
 
-import type { DisplayItem } from '@docx-editor.dev/core-contract/geometry';
+import type { DisplayItem } from '@docx-editor.dev/core-contract/contracts/geometry';
 import type {
   CaretGeometry,
   InteractionFrame,
@@ -18,8 +18,8 @@ import type {
   SemanticSelection,
   SemanticTarget,
   ShapedCluster,
-} from '@docx-editor.dev/core-contract/interaction';
-import type { Point, Rect } from '@docx-editor.dev/core-contract/types';
+} from '@docx-editor.dev/core-contract/contracts/interaction';
+import type { Point, Rect } from '@docx-editor.dev/core-contract/contracts/types';
 import type { NavigationGeometry } from './navigation-geometry.ts';
 import { caretAffinity } from './semantic-index.ts';
 import {

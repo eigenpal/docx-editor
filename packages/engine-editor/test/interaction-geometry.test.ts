@@ -8,7 +8,7 @@ import {
   deriveSelectionGeometry,
   hitTestPointer,
 } from '../src/interaction-geometry.ts';
-import type { InteractionFrame } from '@docx-editor.dev/core-contract/interaction';
+import type { InteractionFrame } from '@docx-editor.dev/core-contract/contracts/interaction';
 import {
   LAYOUT,
   clientPointForStackedText,

@@ -13,9 +13,9 @@ import type {
   CompositionObservation,
   SemanticSelection,
   SemanticPositionIndex,
-} from '@docx-editor.dev/core-contract/interaction';
-import type { DisplayPage } from '@docx-editor.dev/core-contract/geometry';
-import type { Rect } from '@docx-editor.dev/core-contract/types';
+} from '@docx-editor.dev/core-contract/contracts/interaction';
+import type { DisplayPage } from '@docx-editor.dev/core-contract/contracts/geometry';
+import type { Rect } from '@docx-editor.dev/core-contract/contracts/types';
 import type { NavigationGeometry } from './navigation-geometry.ts';
 import { NavigationSidecarStore } from './navigation-sidecar-store.ts';
 import { emptyNavigationGeometry } from './navigation-geometry.ts';

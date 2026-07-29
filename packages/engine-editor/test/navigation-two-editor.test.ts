@@ -1,7 +1,7 @@
 // Two-editor production vertical navigation (task 5.5 review).
 
 import { describe, expect, test } from 'bun:test';
-import type { EditorHost } from '@docx-editor.dev/core-contract/editor';
+import type { EditorHost } from '@docx-editor.dev/core-contract/contracts/editor';
 import { createTestEditor as createEditor } from './create-test-editor.ts';
 import { createEditableFixtureWithTexts } from '../browser/fixtures.ts';
 import { modelWith, publishFrameBundle, selectionForBlock } from './interaction-test-helpers.ts';

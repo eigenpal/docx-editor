@@ -14,7 +14,7 @@
 // gate broke because the two adapters no longer opened the same document. A gate must
 // control its own input.
 import { expect, test, type Page } from '@playwright/test';
-import type { Editor } from '@docx-editor.dev/core-contract/editor';
+import type { Editor } from '@docx-editor.dev/core-contract/contracts/editor';
 import { clickTargetPointAt, waitForClickTarget } from './oneSurfaceHelpers.ts';
 
 const ADAPTERS = [

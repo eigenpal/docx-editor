@@ -1,12 +1,12 @@
 // Private keyboard-navigation session (interactive-paginated-editing 5.5).
 
-import type { ViewScope } from '@docx-editor.dev/core-contract/editor';
+import type { ViewScope } from '@docx-editor.dev/core-contract/contracts/editor';
 import type {
   InteractionAffinity,
   InteractionDispatchResult,
   InteractionFrame,
   SemanticSelection,
-} from '@docx-editor.dev/core-contract/interaction';
+} from '@docx-editor.dev/core-contract/contracts/interaction';
 import { scopesEqual } from './bidi-policy.ts';
 
 /** Ephemeral visual-advance state; not selection authority and not publicly exposed. */

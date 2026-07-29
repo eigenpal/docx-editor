@@ -4,7 +4,7 @@
  * CONTRACT ONLY.
  */
 
-import type { ContentControlSummary, DocEdits, DocQueries, DocQueryResults } from './index';
+import type { ContentControlSummary, DocEdits, DocQueries, DocQueryResults } from '../index';
 import type { DisplayPage } from './geometry';
 import type {
   AccessibilityObservation,

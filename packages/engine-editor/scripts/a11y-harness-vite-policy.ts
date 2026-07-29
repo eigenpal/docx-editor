@@ -2,10 +2,10 @@
 
 /** Mutable workspace @docx-editor.dev packages — always resolve as source, never prebundle. */
 export const A11Y_HARNESS_WORKSPACE_PACKAGES = [
-  '@docx-editor.dev/core-contract/editor',
-  '@docx-editor.dev/core-contract/interaction',
-  '@docx-editor.dev/core-contract/geometry',
-  '@docx-editor.dev/core-contract/types',
+  '@docx-editor.dev/core-contract/contracts/editor',
+  '@docx-editor.dev/core-contract/contracts/interaction',
+  '@docx-editor.dev/core-contract/contracts/geometry',
+  '@docx-editor.dev/core-contract/contracts/types',
   '@docx-editor.dev/engine-binding',
   '@docx-editor.dev/engine-core',
   '@docx-editor.dev/engine-layout',

@@ -1,4 +1,4 @@
-import type { GlyphFont, GlyphRun } from '@docx-editor.dev/core-contract/geometry';
+import type { GlyphFont, GlyphRun } from '@docx-editor.dev/core-contract/contracts/geometry';
 import type { TextItem } from '@docx-editor.dev/engine-layout';
 import { halfPointsToPx, twipsToPx } from './semantic-index.ts';
 

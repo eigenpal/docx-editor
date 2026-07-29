@@ -24,7 +24,7 @@ import { planKeyboardNavigation } from '../src/keyboard-navigation.ts';
 import { caretContentX, pageRelativeY } from '../src/line-catalog.ts';
 import { hasGeometryStopAtOffset, isHorizontalTransitionOffset } from '../src/navigation-stops.ts';
 import { createTestEditor as createEditor } from './create-test-editor.ts';
-import type { EditorHost } from '@docx-editor.dev/core-contract/editor';
+import type { EditorHost } from '@docx-editor.dev/core-contract/contracts/editor';
 import { createEditableParagraphFixture } from '../browser/fixtures.ts';
 import {
   LAYOUT,

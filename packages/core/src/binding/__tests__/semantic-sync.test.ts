@@ -21,7 +21,7 @@ import {
   type PackageModel,
   type TableRecord,
 } from '@docx-editor.dev/engine-core';
-import type { SemanticSelection } from '@docx-editor.dev/core-contract/interaction';
+import type { SemanticSelection } from '@docx-editor.dev/core-contract/contracts/interaction';
 import { expectGraphemeParity } from './grapheme-parity.ts';
 import { graphemeOffsetToUtf16 as layoutGraphemeOffsetToUtf16 } from '@docx-editor.dev/engine-layout';
 

@@ -5,7 +5,7 @@ import type {
   InteractionDispatchResult,
   InteractionFrameId,
   InteractionIntent,
-} from '@docx-editor.dev/core-contract/interaction';
+} from '@docx-editor.dev/core-contract/contracts/interaction';
 import {
   attachAdapterEventBridge,
   keyboardIntentKind,

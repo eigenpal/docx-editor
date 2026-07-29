@@ -3,7 +3,7 @@ import {
   type EditorFontErrorCode,
   type FontConfiguration,
   type FontFaceRequest,
-} from '@docx-editor.dev/core-contract/editor';
+} from '@docx-editor.dev/core-contract/contracts/editor';
 import {
   HARFBUZZ_SHAPING_LIBRARY,
   HARD_MAX_AGGREGATE_FONT_BYTES,

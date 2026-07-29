@@ -23,7 +23,7 @@ if (!GlobalRegistrator.isRegistered) GlobalRegistrator.register();
 import { describe, expect, test } from 'bun:test';
 import { createEditorDriver } from '../src/index.ts';
 import { createTestEditor as createEditor } from './create-test-editor.ts';
-import type { EditorHost } from '@docx-editor.dev/core-contract/editor';
+import type { EditorHost } from '@docx-editor.dev/core-contract/contracts/editor';
 import { IDENTITY_HOST_METRICS } from '../src/coordinate-mapper.ts';
 import { createEditableParagraphFixture } from '../browser/fixtures.ts';
 import { caretAffinity } from '../src/semantic-index.ts';

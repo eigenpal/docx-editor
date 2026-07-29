@@ -4,7 +4,7 @@ import type {
   InteractionAffinity,
   SemanticTarget,
   WordSegmentRecord,
-} from '@docx-editor.dev/core-contract/interaction';
+} from '@docx-editor.dev/core-contract/contracts/interaction';
 
 /** Resolve the word segment range for a text hit using affinity at segment boundaries. */
 export function resolveWordRangeAtHit(

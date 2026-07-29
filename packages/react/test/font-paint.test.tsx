@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test';
-import type { DisplayPage, GlyphFont, GlyphRun } from '@docx-editor.dev/core-contract/geometry';
+import type { DisplayPage, GlyphFont, GlyphRun } from '@docx-editor.dev/core-contract/contracts/geometry';
 import type { InstalledDisplayFonts } from '@docx-editor.dev/engine-editor';
 import { paintDisplay } from '../src/paintDisplay.tsx';
 

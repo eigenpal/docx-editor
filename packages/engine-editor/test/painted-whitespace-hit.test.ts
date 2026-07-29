@@ -19,8 +19,8 @@ import type {
   InteractionFrame,
   InteractionHostMetrics,
   SemanticTarget,
-} from '@docx-editor.dev/core-contract/interaction';
-import type { DisplayItem, DisplayPage } from '@docx-editor.dev/core-contract/geometry';
+} from '@docx-editor.dev/core-contract/contracts/interaction';
+import type { DisplayItem, DisplayPage } from '@docx-editor.dev/core-contract/contracts/geometry';
 import { layoutBody } from '@docx-editor.dev/engine-layout';
 import { toDisplayPages } from '../src/display-bridge.ts';
 import { InteractionFrameStore, DEFAULT_PAGE_GAP_PX } from '../src/interaction-frame.ts';

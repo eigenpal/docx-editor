@@ -18,7 +18,7 @@ import type {
   InteractionDispatchResult,
   InteractionFrameId,
   InteractionIntent,
-} from '@docx-editor.dev/core-contract/interaction';
+} from '@docx-editor.dev/core-contract/contracts/interaction';
 
 /** The subset of an element the bridge needs; satisfied by HTMLElement. */
 export interface BridgeElement {

@@ -9,8 +9,8 @@ import type {
   EditorCommand,
   EditorQueries,
   EditorQueryResults,
-} from '@docx-editor.dev/core-contract/editor';
-import type { DisplayPage, DocRange } from '@docx-editor.dev/core-contract/geometry';
+} from '@docx-editor.dev/core-contract/contracts/editor';
+import type { DisplayPage, DocRange } from '@docx-editor.dev/core-contract/contracts/geometry';
 import type {
   CaretGeometry,
   CompositionObservation,
@@ -24,8 +24,8 @@ import type {
   SemanticHitTarget,
   SemanticSelection,
   AccessibilityObservation,
-} from '@docx-editor.dev/core-contract/interaction';
-import type { ExecResult, Point, Rect } from '@docx-editor.dev/core-contract/types';
+} from '@docx-editor.dev/core-contract/contracts/interaction';
+import type { ExecResult, Point, Rect } from '@docx-editor.dev/core-contract/contracts/types';
 import { createEditor, layoutShapingForEditor } from './create-editor.ts';
 
 /** The text a display page shows, in reading order. Layout emits one item per run-part (a maximal

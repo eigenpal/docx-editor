@@ -12,7 +12,7 @@
 // that per-grapheme caret stops can be replaced with a per-block range.
 
 import { describe, expect, test } from 'bun:test';
-import type { InteractionFrame, SemanticTarget } from '@docx-editor.dev/core-contract/interaction';
+import type { InteractionFrame, SemanticTarget } from '@docx-editor.dev/core-contract/contracts/interaction';
 import { hitTestPointer } from '../src/interaction-geometry.ts';
 import { buildSemanticIndex } from '../src/semantic-index.ts';
 import { publishFrame, modelWith, modelWithTableCell } from './interaction-test-helpers.ts';

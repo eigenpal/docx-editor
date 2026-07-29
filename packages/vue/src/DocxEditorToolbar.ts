@@ -14,7 +14,7 @@
 // handler was supplied, and it hardcoded English labels.
 
 import { defineComponent, h, type PropType, type VNode } from 'vue';
-import type { Editor } from '@docx-editor.dev/core-contract/editor';
+import type { Editor } from '@docx-editor.dev/core-contract/contracts/editor';
 import {
   LEGACY_CHROME_GROUPS,
   LEGACY_CHROME_UNAVAILABLE_KEY,

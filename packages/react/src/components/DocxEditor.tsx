@@ -8,8 +8,8 @@ import {
   useState,
 } from 'react';
 import type { CSSProperties } from 'react';
-import type { Editor, EditorFontError, EditorHost } from '@docx-editor.dev/core-contract/editor';
-import type { InteractionIntent } from '@docx-editor.dev/core-contract/interaction';
+import type { Editor, EditorFontError, EditorHost } from '@docx-editor.dev/core-contract/contracts/editor';
+import type { InteractionIntent } from '@docx-editor.dev/core-contract/contracts/interaction';
 import {
   attachAdapterEventBridge,
   createLayoutShaping,
@@ -26,7 +26,7 @@ import {
   type GlyphClickTarget,
   type InstalledDisplayFonts,
 } from '@docx-editor.dev/engine-editor';
-import type { DisplayPage } from '@docx-editor.dev/core-contract/geometry';
+import type { DisplayPage } from '@docx-editor.dev/core-contract/contracts/geometry';
 // The title bar is composed by DocxEditorToolbar (via EditorToolbar's compound parts),
 // which is where legacy assembles it — this file no longer composes it separately.
 import { DocxEditorPagedArea } from './DocxEditor/DocxEditorPagedArea';

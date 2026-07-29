@@ -1,14 +1,14 @@
 // Private navigation geometry for keyboard navigation (task 5.5).
 // Not part of the public core-contract surface — keyed by interaction frame identity.
 
-import type { ViewScope } from '@docx-editor.dev/core-contract/editor';
+import type { ViewScope } from '@docx-editor.dev/core-contract/contracts/editor';
 import type {
   InteractionRole,
   SemanticIdentity,
   SemanticTarget,
   PositionedInteractionMeta,
-} from '@docx-editor.dev/core-contract/interaction';
-import type { Rect } from '@docx-editor.dev/core-contract/types';
+} from '@docx-editor.dev/core-contract/contracts/interaction';
+import type { Rect } from '@docx-editor.dev/core-contract/contracts/types';
 import { deepFreezeValue } from './interaction-frame.ts';
 
 /** Layout-published stable identity for one visual line fragment. */

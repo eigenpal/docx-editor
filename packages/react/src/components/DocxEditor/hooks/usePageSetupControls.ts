@@ -16,7 +16,7 @@
  * than a ruler that appears to work while the document does not change.
  */
 import { useCallback, useMemo, useState } from 'react';
-import type { Editor } from '@docx-editor.dev/core-contract/editor';
+import type { Editor } from '@docx-editor.dev/core-contract/contracts/editor';
 import type { SectionProperties } from '../../../legacy-core-compat';
 
 export function usePageSetupControls({

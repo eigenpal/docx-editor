@@ -7,15 +7,15 @@ import type {
   EditorFontError,
   FontConfiguration,
   TextMatch,
-} from '@docx-editor.dev/core-contract/editor';
-export { EditorFontError } from '@docx-editor.dev/core-contract/editor';
+} from '@docx-editor.dev/core-contract/contracts/editor';
+export { EditorFontError } from '@docx-editor.dev/core-contract/contracts/editor';
 export type {
   EditorFontErrorCode,
   FontConfiguration,
   FontFaceRequest,
   FontSource,
   FontSourceSubstitution,
-} from '@docx-editor.dev/core-contract/editor';
+} from '@docx-editor.dev/core-contract/contracts/editor';
 
 export type EditorMode = 'edit' | 'view';
 

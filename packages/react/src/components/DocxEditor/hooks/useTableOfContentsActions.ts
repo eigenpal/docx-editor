@@ -14,7 +14,7 @@
  * first refresh too.
  */
 import { useCallback, useEffect, useRef } from 'react';
-import type { Editor } from '@docx-editor.dev/core-contract/editor';
+import type { Editor } from '@docx-editor.dev/core-contract/contracts/editor';
 
 export function useTableOfContentsActions({
   editorRef,

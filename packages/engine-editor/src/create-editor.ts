@@ -22,9 +22,9 @@ import type {
   DocumentSource,
   DocumentHandle,
   TextMatch,
-} from '@docx-editor.dev/core-contract/editor';
-import type { DisplayPage } from '@docx-editor.dev/core-contract/geometry';
-import type { Point, Rect, Unsubscribe, ExecResult } from '@docx-editor.dev/core-contract/types';
+} from '@docx-editor.dev/core-contract/contracts/editor';
+import type { DisplayPage } from '@docx-editor.dev/core-contract/contracts/geometry';
+import type { Point, Rect, Unsubscribe, ExecResult } from '@docx-editor.dev/core-contract/contracts/types';
 import type {
   CaretGeometry,
   HitTestOptions,
@@ -44,7 +44,7 @@ import type {
   InputHostObservation,
   FocusObservation,
   CompositionObservation,
-} from '@docx-editor.dev/core-contract/interaction';
+} from '@docx-editor.dev/core-contract/contracts/interaction';
 import {
   openDocxSession,
   mountEditSurface,

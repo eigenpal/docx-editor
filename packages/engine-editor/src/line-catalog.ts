@@ -5,8 +5,8 @@ import type {
   InteractionFrame,
   InteractionRole,
   SemanticTarget,
-} from '@docx-editor.dev/core-contract/interaction';
-import type { Point } from '@docx-editor.dev/core-contract/types';
+} from '@docx-editor.dev/core-contract/contracts/interaction';
+import type { Point } from '@docx-editor.dev/core-contract/contracts/types';
 import { scopesEqual } from './bidi-policy.ts';
 import { pageLocalToContent, pageStackBox } from './coordinate-mapper.ts';
 import { caretOverlayForTarget } from './interaction-geometry.ts';

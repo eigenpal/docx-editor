@@ -45,7 +45,7 @@ import { createEditorDriver, type EditorDriver } from '../../packages/engine-edi
 import { RawProseMirrorReference } from './RawProseMirrorReference';
 import en from '../../packages/i18n/en.json';
 import { loadDemoFontConfiguration } from './demoFontShaping';
-import type { FontConfiguration } from '@docx-editor.dev/core-contract/editor';
+import type { FontConfiguration } from '@docx-editor.dev/core-contract/contracts/editor';
 
 /**
  * Resolve an i18n key against `packages/i18n/en.json`, imported directly.

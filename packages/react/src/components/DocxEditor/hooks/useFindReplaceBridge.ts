@@ -17,7 +17,7 @@
  *    to cope. That ordering belongs with whoever owns the offsets, which is the engine.
  */
 import { useCallback, useRef } from 'react';
-import type { Editor, TextMatch } from '@docx-editor.dev/core-contract/editor';
+import type { Editor, TextMatch } from '@docx-editor.dev/core-contract/contracts/editor';
 import type { FindMatch, FindOptions, FindResult } from '../../dialogs/findReplaceUtils';
 
 export function useFindReplaceBridge({ editorRef }: { editorRef: React.RefObject<Editor | null> }) {

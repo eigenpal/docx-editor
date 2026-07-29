@@ -11,7 +11,7 @@
 
 import { describe, expect, test } from 'bun:test';
 import { overlaysForFrame } from '../src/display-bridge.ts';
-import type { InteractionFrame } from '@docx-editor.dev/core-contract/interaction';
+import type { InteractionFrame } from '@docx-editor.dev/core-contract/contracts/interaction';
 
 /** A frame carrying only what `overlaysForFrame` reads for selection rects. */
 function frameWithRects(

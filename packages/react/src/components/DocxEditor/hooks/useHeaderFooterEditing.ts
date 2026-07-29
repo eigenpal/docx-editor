@@ -18,7 +18,7 @@
  * capability plus the three commands lights it up without touching this file.
  */
 import { useCallback } from 'react';
-import type { Editor } from '@docx-editor.dev/core-contract/editor';
+import type { Editor } from '@docx-editor.dev/core-contract/contracts/editor';
 
 export function useHeaderFooterEditing({
   editorRef,
