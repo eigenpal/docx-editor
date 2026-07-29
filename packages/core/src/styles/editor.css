@@ -2206,3 +2206,33 @@
   top: auto;
   border-top: 1px solid var(--doc-shadow-subtle);
 }
+
+/* Canonical-tree projection: content the editor preserves but cannot edit yet.
+ *
+ * Shown as a visible chip rather than an empty span. An invisible placeholder reads as
+ * "your picture is gone" when in fact it is in the tree and will be saved; a visible one
+ * says what it is and that it is intact. Non-editable, so a caret cannot enter it. */
+.docx-unknown-inline {
+  display: inline-block;
+  vertical-align: text-bottom;
+  min-width: 2.4em;
+  height: 1.15em;
+  margin: 0 0.15em;
+  border: 1px dashed var(--doc-border, #b4b8bf);
+  border-radius: 3px;
+  background: repeating-linear-gradient(
+    45deg,
+    color-mix(in srgb, var(--doc-border, #b4b8bf) 22%, transparent) 0 4px,
+    transparent 4px 8px
+  );
+  cursor: default;
+  user-select: none;
+}
+
+/* A tab renders as whitespace that can still be seen while selecting. */
+.docx-tab {
+  display: inline-block;
+  min-width: 2em;
+  white-space: pre;
+  color: var(--doc-text-muted, #8a8f98);
+}

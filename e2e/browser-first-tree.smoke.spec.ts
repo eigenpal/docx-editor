@@ -151,3 +151,58 @@ test('undo and redo run on the canonical store', async ({ page }) => {
   await page.getByRole('button', { name: 'Redo' }).click();
   expect(await paragraphCount(page)).toBe(4);
 });
+
+test('a formatted document renders as itself, not as plain text', async ({ page }) => {
+  // The defect this guards: the projection carried every property and painted none, so a
+  // document full of bold, underline and colour rendered flat. Invisible to any test that
+  // only inspects the model.
+  await page.goto('http://localhost:5273/?treeFirst=1&fixture=formatting-showcase.docx', {
+    waitUntil: 'domcontentloaded',
+  });
+  await page.waitForFunction(() => !!window.__docxTreeSession);
+
+  const styleOf = (text: string, property: string) =>
+    page.evaluate(
+      ([needle, prop]) => {
+        const spans = [...document.querySelectorAll('[data-testid="tree-mount"] span[data-run-props]')];
+        const match = spans.find((span) => span.textContent?.includes(needle!));
+        return match ? getComputedStyle(match).getPropertyValue(prop!) : null;
+      },
+      [text, property] as const
+    );
+
+  expect(await styleOf('bold, ', 'font-weight')).toBe('700');
+  expect(await styleOf('italic, ', 'font-style')).toBe('italic');
+  expect(await styleOf('double, ', 'text-decoration-style')).toBe('double');
+  expect(await styleOf('wavy red, ', 'text-decoration-style')).toBe('wavy');
+  expect(await styleOf('wavy red, ', 'text-decoration-color')).toBe('rgb(192, 0, 0)');
+  expect(await styleOf('strike, ', 'text-decoration-line')).toContain('line-through');
+  expect(await styleOf('highlighted', 'background-color')).toBe('rgb(255, 255, 0)');
+  expect(await styleOf('small caps, ', 'font-variant-caps')).toBe('small-caps');
+  expect(await styleOf('red and larger', 'color')).toBe('rgb(192, 0, 0)');
+  expect(await styleOf('a monospace run', 'font-family')).toContain('Courier New');
+
+  // Paragraph properties paint too.
+  const centred = await page.evaluate(() => {
+    const paragraphs = [...document.querySelectorAll('[data-testid="tree-mount"] p')];
+    const heading = paragraphs.find((p) => p.textContent?.includes('Formatting you can see'));
+    return heading ? getComputedStyle(heading).textAlign : null;
+  });
+  expect(centred).toBe('center');
+});
+
+test('preserved-but-uneditable content is VISIBLE, not an empty gap', async ({ page }) => {
+  await page.goto('http://localhost:5273/?treeFirst=1&fixture=formatting-showcase.docx', {
+    waitUntil: 'domcontentloaded',
+  });
+  await page.waitForFunction(() => !!window.__docxTreeSession);
+
+  const placeholder = page.locator('[data-testid="tree-mount"] [data-token="unknown"]').first();
+  await expect(placeholder).toBeVisible();
+  // It occupies real space, so the user can see something is there.
+  const box = await placeholder.boundingBox();
+  expect(box!.width).toBeGreaterThan(8);
+  expect(box!.height).toBeGreaterThan(4);
+  // And it says what it is rather than leaving the user to guess.
+  await expect(placeholder).toHaveAttribute('title', /Picture.*preserved/);
+});

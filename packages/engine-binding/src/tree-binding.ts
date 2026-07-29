@@ -38,7 +38,7 @@ type Token =
   | { readonly kind: 'text'; readonly text: string; readonly props: readonly OoxmlProperty[] }
   | { readonly kind: 'tab' }
   | { readonly kind: 'hardBreak' }
-  | { readonly kind: 'unknown'; readonly nodeId: string };
+  | { readonly kind: 'unknown'; readonly nodeId: string; readonly label: string };
 
 function propsEqual(a: readonly OoxmlProperty[], b: readonly OoxmlProperty[]): boolean {
   return JSON.stringify(normalizeProps(a)) === JSON.stringify(normalizeProps(b));
@@ -73,6 +73,27 @@ function propertiesOf(container: OoxmlNode | undefined): OoxmlProperty[] {
   return props;
 }
 
+/**
+ * A human label for content the editor cannot model, from the element's own name.
+ *
+ * Shown in the placeholder's tooltip. A drawing should read as a picture rather than as an
+ * anonymous gap, because the user needs to know it is still there.
+ */
+function unknownLabel(node: OoxmlNode): string {
+  if (node.kind === 'textValue') return '';
+  const friendly: Record<string, string> = {
+    drawing: 'Picture',
+    pict: 'Picture',
+    object: 'Embedded object',
+    fldSimple: 'Field',
+    hyperlink: 'Hyperlink',
+    sdt: 'Content control',
+    tbl: 'Table',
+  };
+  const name = friendly[node.localName] ?? node.localName;
+  return `${name} — preserved, not editable yet`;
+}
+
 /** Flatten a tree paragraph into projected tokens. */
 function tokensOfParagraph(paragraph: OoxmlNode): Token[] {
   if (paragraph.kind === 'textValue') return [];
@@ -81,7 +102,7 @@ function tokensOfParagraph(paragraph: OoxmlNode): Token[] {
     if (child.kind === 'paragraphProperties') continue;
     if (child.kind !== 'run') {
       // Paragraph-level unknown content keeps a position in the inline sequence.
-      tokens.push({ kind: 'unknown', nodeId: child.id });
+      tokens.push({ kind: 'unknown', nodeId: child.id, label: unknownLabel(child) });
       continue;
     }
     const rPr = child.children.find((grand) => grand.kind === 'runProperties');
@@ -104,7 +125,7 @@ function tokensOfParagraph(paragraph: OoxmlNode): Token[] {
         if (text.length > 0) tokens.push({ kind: 'text', text, props });
         continue;
       }
-      tokens.push({ kind: 'unknown', nodeId: grand.id });
+      tokens.push({ kind: 'unknown', nodeId: grand.id, label: unknownLabel(grand) });
     }
   }
   return tokens;
@@ -146,7 +167,10 @@ export function treeToDoc(part: OoxmlPart): PMNode {
         case 'hardBreak':
           return treeSchema.node('hardBreak');
         default:
-          return treeSchema.node('unknownInline', { nodeId: token.nodeId, label: '' });
+          return treeSchema.node('unknownInline', {
+            nodeId: token.nodeId,
+            label: token.label,
+          });
       }
     });
     return treeSchema.node('paragraph', { nodeId: paragraph.id, props: propertiesOf(pPr) }, inline);
@@ -169,7 +193,11 @@ function tokensOfNode(node: PMNode): Token[] {
     if (child.type.name === 'tab') tokens.push({ kind: 'tab' });
     else if (child.type.name === 'hardBreak') tokens.push({ kind: 'hardBreak' });
     else if (child.type.name === 'unknownInline') {
-      tokens.push({ kind: 'unknown', nodeId: String(child.attrs.nodeId ?? '') });
+      tokens.push({
+        kind: 'unknown',
+        nodeId: String(child.attrs.nodeId ?? ''),
+        label: String(child.attrs.label ?? ''),
+      });
     }
   });
   return tokens;

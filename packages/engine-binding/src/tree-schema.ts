@@ -14,6 +14,7 @@
 
 import { Schema, type Node as PMNode } from 'prosemirror-model';
 import type { OoxmlProperty } from '@docx-editor.dev/engine-core';
+import { paragraphPropsToCss, runPropsToCss } from './tree-styles.ts';
 
 /** Attributes carried by a projected paragraph. */
 export interface ParagraphAttrs {
@@ -31,7 +32,17 @@ export const treeSchema = new Schema({
       content: 'inline*',
       group: 'block',
       attrs: { nodeId: { default: null }, props: { default: [] } },
-      toDOM: (node) => ['p', { 'data-node-id': String(node.attrs.nodeId ?? '') }, 0],
+      toDOM: (node) => {
+        const style = paragraphPropsToCss((node.attrs.props as OoxmlProperty[]) ?? []);
+        return [
+          'p',
+          {
+            'data-node-id': String(node.attrs.nodeId ?? ''),
+            ...(style ? { style } : {}),
+          },
+          0,
+        ];
+      },
       parseDOM: [
         {
           tag: 'p',
@@ -77,6 +88,9 @@ export const treeSchema = new Schema({
       selectable: false,
       draggable: false,
       attrs: { nodeId: { default: null }, label: { default: '' } },
+      // Rendered as a VISIBLE placeholder rather than an empty span. Content the editor
+      // cannot model still occupies space in the document, and showing nothing tells the
+      // user their picture was lost — it is not, it is in the tree and it will be saved.
       toDOM: (node) => [
         'span',
         {
@@ -84,6 +98,9 @@ export const treeSchema = new Schema({
           'data-node-id': String(node.attrs.nodeId ?? ''),
           contenteditable: 'false',
           class: 'docx-unknown-inline',
+          title: String(
+            node.attrs.label || 'Content this editor cannot edit yet. It is preserved.'
+          ),
         },
       ],
       parseDOM: [
@@ -112,7 +129,18 @@ export const treeSchema = new Schema({
       attrs: { props: { default: [] } },
       // Two different property sets must not nest into one another.
       excludes: 'runProps',
-      toDOM: (mark) => ['span', { 'data-run-props': serializeProps(mark.attrs.props) }, 0],
+      // The style is what makes the document LOOK like itself. Without it the projection
+      // carried the properties and painted none of them, so a formatted document rendered
+      // as plain text — the same defect the legacy preservation capsule had.
+      toDOM: (mark) => {
+        const props = (mark.attrs.props as OoxmlProperty[]) ?? [];
+        const style = runPropsToCss(props);
+        return [
+          'span',
+          { 'data-run-props': serializeProps(props), ...(style ? { style } : {}) },
+          0,
+        ];
+      },
       parseDOM: [
         {
           tag: 'span[data-run-props]',
