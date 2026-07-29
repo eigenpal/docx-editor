@@ -195,6 +195,7 @@ export {
   layoutSemanticDocument,
   type SemanticLayoutOptions,
 } from './semantic-layout.ts';
+export { createShapedMeasurer, type ShapedMeasurerOptions } from './shaped-measurer.ts';
 export {
   createLayoutScheduler,
   type LayoutScheduler,
