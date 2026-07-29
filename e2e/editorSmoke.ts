@@ -3,7 +3,7 @@
 // target or EditorDriver; the hidden ProseMirror input host is never geometry authority.
 
 import { test, expect, type Page } from '@playwright/test';
-import type { EditorDriver } from '../packages/engine-editor/src/index.ts';
+import type { EditorDriver } from '../packages/core/src/editor/index.ts';
 
 declare global {
   interface Window {

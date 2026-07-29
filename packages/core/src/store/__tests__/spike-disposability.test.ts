@@ -9,7 +9,16 @@ import { describe, expect, test } from 'bun:test';
 import { readFileSync, readdirSync, existsSync, statSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { PACKAGE_RULES } from './package-graph.ts';
+import { CORE_LANES, laneSourceRoot, type LaneName } from '../../__tests__/core-lane-graph.ts';
+
+/**
+ * The production engine lanes, read from the DAG.
+ *
+ * This used to iterate the `engine-*` package table, which task 10.6 deleted along with the
+ * packages. The rule is unchanged — production engine source must not touch the spike — only
+ * the way the source is located.
+ */
+const LANE_NAMES = Object.keys(CORE_LANES) as LaneName[];
 import { PACKAGES_ROOT } from './lane-paths.ts';
 
 const PACKAGES_DIR = PACKAGES_ROOT;
@@ -43,13 +52,21 @@ function importSpecifiers(source: string): string[] {
   return specs;
 }
 
-const ENGINE_NAMES = PACKAGE_RULES.map((r) => r.name);
+const ENGINE_NAMES = [
+  '@docx-editor.dev/core-contract',
+  ...LANE_NAMES.map((lane) => {
+    const subpath = CORE_LANES[lane].subpath;
+    return subpath && subpath !== '.'
+      ? `@docx-editor.dev/core-contract/${subpath.slice(2)}`
+      : '@docx-editor.dev/core-contract';
+  }),
+];
 const spikeRe = /(^|\/)spike(\/|$)|packages\/core\/spike/;
 
 describe('spike disposability milestone gate (task 1.6)', () => {
   test('no production engine package imports spike modules', () => {
-    for (const rule of PACKAGE_RULES) {
-      for (const file of collectSources(join(PACKAGES_DIR, rule.dir, 'src'))) {
+    for (const lane of LANE_NAMES) {
+      for (const file of collectSources(join(PACKAGES_DIR, laneSourceRoot(lane)))) {
         for (const spec of importSpecifiers(readFileSync(file, 'utf8'))) {
           expect(spikeRe.test(spec)).toBe(false);
         }

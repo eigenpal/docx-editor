@@ -1,7 +1,7 @@
 import {
   createLayoutShaping,
   disposeLayoutShaping,
-} from '../../packages/engine-editor/src/index.ts';
+} from '../../packages/core/src/editor/index.ts';
 import { loadDemoFontConfiguration } from './demoFontShaping.ts';
 import { mountDocxEditor, type EditorDriver, type MountedEditor } from './mountDocxEditor.ts';
 

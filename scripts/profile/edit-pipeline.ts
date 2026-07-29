@@ -25,9 +25,9 @@ import { createDeterministicLayoutShaping, layoutBody } from '@docx-editor.dev/c
 import {
   DisplayBridgeCache,
   toDisplayPages,
-} from '../../packages/engine-editor/src/display-bridge.ts';
-import { semanticChunkStats } from '../../packages/engine-editor/src/semantic-index.ts';
-import { InteractionFrameStore } from '../../packages/engine-editor/src/interaction-frame.ts';
+} from '../../packages/core/src/editor/display-bridge.ts';
+import { semanticChunkStats } from '../../packages/core/src/editor/semantic-index.ts';
+import { InteractionFrameStore } from '../../packages/core/src/editor/interaction-frame.ts';
 
 const LAYOUT = { pageWidth: 12240, pageHeight: 15840, margin: 1440 };
 const HUMAN = ORIGIN_IDS.mutationHuman;

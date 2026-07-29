@@ -2,7 +2,7 @@ import { expect, test } from 'bun:test';
 import { readFileSync } from 'node:fs';
 import { parseDocx } from '@docx-editor.dev/core-contract/store';
 import { FontResolutionError, layoutBody, sha256FontBytes } from '@docx-editor.dev/core-contract/layout';
-import { createLayoutShaping } from '../../packages/engine-editor/src/index.ts';
+import { createLayoutShaping } from '../../packages/core/src/editor/index.ts';
 import { createDemoFontConfiguration } from './demoFontShaping.ts';
 
 const regular = new Uint8Array(readFileSync(new URL('./fonts/DejaVuSans.ttf', import.meta.url)));

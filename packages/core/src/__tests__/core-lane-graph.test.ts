@@ -238,3 +238,32 @@ describe('every lane has somewhere to be imported from (task 10.1)', () => {
     }
   });
 });
+
+describe('the per-lane environment boundary is NOT structurally enforced yet', () => {
+  // This replaces the per-package tsconfig checks that task 1.4's topology guard used to make
+  // (deleted with the `engine-*` packages in task 10.6). Those checks asserted that a neutral
+  // package's tsconfig omitted the DOM lib, so a DOM call in the store or layout lane would
+  // not compile. One tsconfig now covers every lane, and the browser lanes genuinely need
+  // `DOM` and `DOM.Iterable` — so that structural guarantee is GONE, not merely relocated.
+  //
+  // Recorded as a failing-open fact rather than dropped: what still protects the neutral lanes
+  // is the static DOM-usage scan in layout-authority, which is weaker (it matches known DOM
+  // identifiers rather than making the code fail to compile). Restoring the strong form is
+  // task 10.1's remaining "TypeScript project boundaries" deliverable.
+  const tsconfigPath = join(PACKAGES, 'core', 'tsconfig.json');
+
+  test('the single core tsconfig does include the DOM lib', () => {
+    const tsconfig = JSON.parse(readFileSync(tsconfigPath, 'utf8'));
+    const lib: string[] = tsconfig.compilerOptions?.lib ?? [];
+    expect(lib.some((entry) => /dom/i.test(entry))).toBe(true);
+  });
+
+  test('so at least one NEUTRAL lane is compiled against the DOM it must not use', () => {
+    // The precise cost of the collapse. If this ever reports zero, either every neutral lane
+    // gained its own project (the fix) or the DAG stopped calling them neutral (a regression).
+    const neutralInCore = (Object.keys(CORE_LANES) as LaneName[]).filter(
+      (lane) => CORE_LANES[lane].environment === 'neutral' && laneHasMoved(lane)
+    );
+    expect(neutralInCore.length).toBeGreaterThan(0);
+  });
+});

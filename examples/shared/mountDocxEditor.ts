@@ -13,7 +13,7 @@ import {
   type BrowserFontFaceFactory,
   type BrowserFontSet,
   type InstalledDisplayFonts,
-} from '../../packages/engine-editor/src/index.ts';
+} from '../../packages/core/src/editor/index.ts';
 import { renderDocxPreview, createPagePainter } from './enginePreview.ts';
 
 /** Engine-neutral test/automation boundary — identical shape in both adapters. */

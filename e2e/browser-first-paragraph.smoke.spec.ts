@@ -6,7 +6,7 @@
 // never from the DOM, so a projection that looks right but committed nothing fails.
 
 import { expect, test, type Page } from '@playwright/test';
-import type { EditorDriver } from '../packages/engine-editor/src/driver.ts';
+import type { EditorDriver } from '../packages/core/src/editor/driver.ts';
 
 declare global {
   interface Window {

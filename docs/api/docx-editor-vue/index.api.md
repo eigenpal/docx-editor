@@ -7,25 +7,43 @@
 import { ComponentOptionsMixin } from 'vue';
 import { ComponentProvideOptions } from 'vue';
 import { DefineComponent } from 'vue';
+import { DisplayItem } from '../../core/src/geometry.ts';
+import { DisplayPage } from '../../core/src/geometry.ts';
+import { DocPoint } from '../../core/src/geometry.ts';
+import { DocumentChange } from '../../core/src/editor.ts';
+import { DocumentSource } from '../../core/src/editor.ts';
+import { DocxDocument } from '../../core/src/types.ts';
+import { Editor } from '../../core/src/editor.ts';
+import { EditorCommand } from '../../core/src/editor.ts';
+import { EditorFontError } from '../../core/src/editor.ts';
+import { EditorFontErrorCode } from '../../core/src/editor.ts';
+import { EditorHost } from '../../core/src/editor.ts';
+import { EditorQuery } from '../../core/src/editor.ts';
+import { EditorScope } from '../../core/src/editor.ts';
+import { EditorSnapshot } from '../../core/src/editor.ts';
 import { ExtractPropTypes } from 'vue';
-import { generateRulerTicks } from '@docx-editor.dev/engine-editor';
+import { FontConfiguration } from '../../core/src/editor.ts';
+import { FontFaceRequest } from '../../core/src/editor.ts';
+import { FontSource } from '../../core/src/editor.ts';
+import { FontSourceSubstitution } from '../../core/src/editor.ts';
+import { generateRulerTicks } from '@docx-editor.dev/core-contract/editor';
 import { PropType } from 'vue';
 import { PublicProps } from 'vue';
-import { PX_PER_CM } from '@docx-editor.dev/engine-editor';
-import { PX_PER_INCH } from '@docx-editor.dev/engine-editor';
+import { PX_PER_CM } from '@docx-editor.dev/core-contract/editor';
+import { PX_PER_INCH } from '@docx-editor.dev/core-contract/editor';
 import { Ref } from 'vue';
 import { RendererElement } from 'vue';
 import { RendererNode } from 'vue';
-import { rulerPageBox } from '@docx-editor.dev/engine-editor';
-import { RulerTick } from '@docx-editor.dev/engine-editor';
-import { RulerUnit } from '@docx-editor.dev/engine-editor';
-import { runSave } from '@docx-editor.dev/engine-editor';
-import { runToolbarCommand } from '@docx-editor.dev/engine-editor';
-import { toolbarCommand } from '@docx-editor.dev/engine-editor';
-import { ToolbarCommandId } from '@docx-editor.dev/engine-editor';
-import { ToolbarCommandState } from '@docx-editor.dev/engine-editor';
-import { toolbarCommandState } from '@docx-editor.dev/engine-editor';
-import { toolbarCommandStates } from '@docx-editor.dev/engine-editor';
+import { rulerPageBox } from '@docx-editor.dev/core-contract/editor';
+import { RulerTick } from '@docx-editor.dev/core-contract/editor';
+import { RulerUnit } from '@docx-editor.dev/core-contract/editor';
+import { runSave } from '@docx-editor.dev/core-contract/editor';
+import { runToolbarCommand } from '@docx-editor.dev/core-contract/editor';
+import { toolbarCommand } from '@docx-editor.dev/core-contract/editor';
+import { ToolbarCommandId } from '@docx-editor.dev/core-contract/editor';
+import { ToolbarCommandState } from '@docx-editor.dev/core-contract/editor';
+import { toolbarCommandState } from '@docx-editor.dev/core-contract/editor';
+import { toolbarCommandStates } from '@docx-editor.dev/core-contract/editor';
 import { VNode } from 'vue';
 
 // @public
@@ -34,94 +52,13 @@ export const DEFERRED_DIALOGS: readonly ["findReplace", "hyperlink", "insertImag
 // @public (undocumented)
 export type DeferredDialogId = (typeof DEFERRED_DIALOGS)[number];
 
-// @public
-export type DisplayItem =
-| {
-    readonly kind: 'text';
-    readonly box: Rect;
-    readonly runs: readonly GlyphRun[];
-    readonly semantic: SemanticTextSpan;
-    readonly clusters: readonly ShapedCluster[];
-    readonly scope: ViewScope;
-    readonly docFrom?: number;
-    readonly docTo?: number;
-    readonly blockId?: number;
-    readonly synthetic?: boolean;
-    readonly interaction?: PositionedInteractionMeta;
-}
-| {
-    readonly kind: 'image';
-    readonly box: Rect;
-    readonly src: ImageRef;
-    readonly semantic: SemanticAtomicSpan;
-    readonly scope: ViewScope;
-    readonly docFrom?: number;
-    readonly docTo?: number;
-    readonly synthetic?: boolean;
-    readonly interaction?: PositionedInteractionMeta;
-}
-| {
-    readonly kind: 'fill';
-    readonly box: Rect;
-    readonly color: ColorValue;
-    readonly interaction?: PositionedInteractionMeta;
-}
-| {
-    readonly kind: 'tableBorder';
-    readonly segments: readonly BorderSeg[];
-    readonly cut?: 'top' | 'bottom';
-}
-| {
-    readonly kind: 'decoration';
-    readonly box: Rect;
-    readonly role: string;
-    readonly refId: string;
-    readonly detail?: Readonly<Record<string, unknown>>;
-    readonly interaction?: PositionedInteractionMeta;
-}
-/**
-* Escape hatch for anything not yet modelled as a first-class variant. Lets
-* the engine ship new positioned content before the contract names it;
-* adapters that don't recognise `name` skip it.
-*/
-| {
-    readonly kind: 'custom';
-    readonly name: string;
-    readonly box: Rect;
-    readonly detail?: unknown;
-    readonly interaction?: PositionedInteractionMeta;
-};
+export { DisplayItem }
 
-// @public
-export interface DisplayPage {
-    // (undocumented)
-    readonly box: Rect;
-    readonly contentBox: Rect;
-    readonly index: number;
-    // (undocumented)
-    readonly items: readonly DisplayItem[];
-}
+export { DisplayPage }
 
-// @public @deprecated (undocumented)
-export interface DocPoint {
-    readonly docPos: number;
-    // (undocumented)
-    readonly scope: ViewScope;
-}
+export { DocPoint }
 
-// @public
-export interface DocxDocument {
-    // (undocumented)
-    readonly body: DocumentBody;
-    // (undocumented)
-    readonly comments: readonly DocComment[];
-    // (undocumented)
-    readonly revisions: readonly Revision[];
-    // (undocumented)
-    readonly styles: StyleDefinitions;
-    // (undocumented)
-    readonly theme?: Theme;
-}
+export { DocxDocument }
 
 // @public
 export const DocxEditor: DefineComponent<ExtractPropTypes<    {
@@ -365,292 +302,32 @@ export interface DocxEditorToolbarProps {
     readonly t: Translate;
 }
 
-// @public (undocumented)
-export interface Editor {
-    can(command: EditorCommand, options?: { scope?: EditorScope }): CanResult;
-    // (undocumented)
-    destroy(): void;
-    dispatchInteraction(
-    intent: InteractionIntent,
-    options?: { hostMetrics?: InteractionHostMetrics }
-    ): InteractionDispatchResult;
-    // (undocumented)
-    exec(command: EditorCommand, options?: { scope?: EditorScope }): ExecResult;
-    findMatches(
-    query: string,
-    options?: { readonly matchCase?: boolean; readonly wholeWord?: boolean }
-    ): readonly TextMatch[];
-    // (undocumented)
-    focus(scope?: EditorScope): InteractionOutcome<void>;
-    getAccessibilityObservation(): AccessibilityObservation;
-    // (undocumented)
-    getActiveScope(): ViewScope;
-    getCaretClientRect(): Rect | null;
-    getCaretGeometry(pos?: EditorPosition): CaretGeometry | null;
-    getCaretRect(pos?: EditorPosition): Rect | null;
-    getComments(): readonly {
-        readonly id: string;
-        readonly text: string;
-        readonly resolved: boolean;
-    }[];
-    // (undocumented)
-    getCurrentPage(mode?: 'viewport' | 'caret'): number;
-    getDisplay(): readonly DisplayPage[];
-    getDocumentFonts(): readonly string[];
-    getDocumentHandle(): DocumentHandle;
-    getDocumentStyles(): readonly {
-        readonly styleId: string;
-        readonly name: string;
-        readonly type: string;
-    }[];
-    getHeaderFooterState(): {
-        readonly editing: 'header' | 'footer' | null;
-        readonly sectionIndex: number;
-    } | null;
-    getInputHostObservation(): InputHostObservation | null;
-    getInteractionFrame(): InteractionFrame;
-    getInteractionHostMetrics(): InteractionHostMetrics | null;
-    getOutline(): readonly {
-        readonly text: string;
-        readonly level: number;
-        readonly blockId: string;
-    }[];
-    getPageGeometry(): readonly { index: number; box: Rect; contentBox: Rect }[];
-    getPageSetup(): {
-        readonly pageWidthTwips: number;
-        readonly pageHeightTwips: number;
-        readonly orientation: 'portrait' | 'landscape';
-        readonly marginsTwips: {
-            readonly top: number;
-            readonly right: number;
-            readonly bottom: number;
-            readonly left: number;
-        };
-    } | null;
-    getScrollGeometry(): ScrollGeometry;
-    getSelectedImage(): {
-        readonly id: string;
-        readonly widthEmu: number;
-        readonly heightEmu: number;
-    } | null;
-    getSelectedTable(): {
-        readonly blockId: string;
-        readonly rowCount: number;
-        readonly columnCount: number;
-        readonly cell: { readonly row: number; readonly column: number } | null;
-    } | null;
-    getSelectionFormatting(): {
-        readonly fontFamily?: string;
-        readonly fontSizeHalfPoints?: number;
-        readonly styleId?: string;
-        readonly alignment?: string;
-        readonly bold?: boolean;
-        readonly italic?: boolean;
-        readonly underline?: boolean;
-    } | null;
-    getSelectionGeometry(
-    range?: EditorSelection,
-    options?: SelectionGeometryOptions
-    ): SelectionGeometry | null;
-    getSelectionRects(range?: EditorSelection, options?: SelectionGeometryOptions): readonly Rect[];
-    // (undocumented)
-    getTotalPages(): number;
-    getTrackedChanges(): readonly {
-        readonly id: string;
-        readonly kind: string;
-        readonly author?: string;
-    }[];
-    getWatermark(): { readonly kind: 'text' | 'image'; readonly text?: string } | null;
-    // (undocumented)
-    getZoom(): number;
-    hitTest(point: Point, options?: HitTestOptions): SemanticHitTarget | null;
-    isActive(command: EditorCommand, options?: { scope?: EditorScope }): boolean;
-    load(document: DocumentSource): void;
-    // (undocumented)
-    on<E extends keyof EditorEvents>(event: E, handler: EditorEvents[E]): Unsubscribe;
-    // (undocumented)
-    query<K extends keyof EditorQueries>(
-    query: { type: K } & EditorQueries[K],
-    options?: { scope?: EditorScope }
-    ): EditorQueryResults[K];
-    relayout(options?: { sync?: boolean }): void;
-    resolvePointer(point: Point, options?: HitTestOptions): InteractionOutcome<SemanticHitTarget>;
-    save(): Promise<ArrayBuffer>;
-    // (undocumented)
-    scrollToBlock(blockId: string): boolean;
-    scrollToPage(pageNumber: number): boolean;
-    selectMatch(match: TextMatch): ExecResult;
-    // (undocumented)
-    setActiveScope(scope: ViewScope): void;
-    setZoom(zoom: number): ExecResult;
-    // (undocumented)
-    snapshot(options?: { scope?: EditorScope }): EditorSnapshot;
-}
+export { Editor }
 
-// @public (undocumented)
-export type EditorCommand = {
-    [K in keyof EditorCommands]: { type: K } & EditorCommands[K];
-}[keyof EditorCommands];
+export { EditorCommand }
 
-// @public
-export class EditorFontError extends Error {
-    constructor(
-    code: EditorFontErrorCode,
-    message: string,
-    details: {
-        readonly request?: FontFaceRequest;
-        readonly diagnostic?: string;
-        readonly cause?: unknown;
-    } = {}
-    ) {
-        super(message, { cause: details.cause });
-        this.code = code;
-        this.request = details.request;
-        this.diagnostic = details.diagnostic;
-    }
-    // (undocumented)
-    readonly code: EditorFontErrorCode;
-    // (undocumented)
-    readonly diagnostic?: string;
-    // (undocumented)
-    readonly name: string = 'EditorFontError';
-    // (undocumented)
-    readonly request?: FontFaceRequest;
-}
+export { EditorFontError }
 
-// @public (undocumented)
-export type EditorFontErrorCode =
-| 'initializationFailed'
-| 'missing'
-| 'forbidden'
-| 'overLimit'
-| 'malformed'
-| 'hashMismatch'
-| 'metadataMismatch'
-| 'fontFaceLoadFailed'
-| 'unsupportedFaceIndex'
-| 'missingFont'
-| 'hashInvalid'
-| 'fontMismatch'
-| 'unsupportedFace'
-| 'loadFailed';
+export { EditorFontErrorCode }
 
-// @public
-export interface EditorHost {
-    afterCommit?(callback: () => void): void;
-    // (undocumented)
-    getBodyHostEl(): HTMLElement | null;
-    // (undocumented)
-    getHfHostEl(rId: string): HTMLElement | null;
-    getInteractionHostMetrics?(): InteractionHostMetrics | null;
-    // (undocumented)
-    getPagesContainer(): HTMLElement | null;
-    getRenderedTextGeometry?(): RenderedTextGeometryPort | null;
-    getScrollContainer(): HTMLElement | null;
-    onDisplay?(pages: readonly DisplayPage[]): void;
-    // (undocumented)
-    onScrollRestore?(pending: PendingScrollRestore): void;
-    // (undocumented)
-    onSelectionChange?(snapshot: EditorSnapshot): void;
-    // (undocumented)
-    onTotalPages?(total: number): void;
-    scheduleFrame(callback: () => void): () => void;
-}
+export { EditorHost }
 
 // @public (undocumented)
 export type EditorMode = 'edit' | 'view';
 
-// @public (undocumented)
-export type EditorQuery = {
-    [K in keyof EditorQueries]: { type: K } & EditorQueries[K];
-}[keyof EditorQueries];
+export { EditorQuery }
 
-// @public
-export type EditorScope =
-| { kind: 'body' }
-| { kind: 'headerFooter'; rId: string }
-/** A footnote/endnote region, addressed by note id. */
-| { kind: 'note'; id: string }
-/** A text box or floating frame with its own content, addressed by id. */
-| { kind: 'frame'; id: string }
-/** Read-only aggregate across every view. Valid for queries, not for writes. */
-| { kind: 'all' };
+export { EditorScope }
 
-// @public
-export interface EditorSnapshot {
-    readonly editable: boolean;
-    // (undocumented)
-    readonly formatting: RunFormatting | null;
-    // (undocumented)
-    readonly image: ImageContext | null;
-    // (undocumented)
-    readonly isLoading: boolean;
-    // (undocumented)
-    readonly page: { readonly current: number; readonly total: number };
-    // (undocumented)
-    readonly parseError: string | null;
-    // (undocumented)
-    readonly scope: EditorScope;
-    // (undocumented)
-    readonly selection: DocRange | null;
-    // (undocumented)
-    readonly table: TableContext | null;
-    // (undocumented)
-    readonly zoom: number;
-}
+export { EditorSnapshot }
 
-// @public
-export interface FontConfiguration {
-    // (undocumented)
-    readonly defaultFont: {
-        readonly family: string;
-        readonly sizeHalfPoints: number;
-    };
-    // (undocumented)
-    readonly epoch: number;
-    // (undocumented)
-    readonly language?: string;
-    // (undocumented)
-    readonly maxFontBytes: number;
-    // (undocumented)
-    readonly sources: readonly FontSource[];
-    // (undocumented)
-    readonly substitutions?: readonly FontSourceSubstitution[];
-}
+export { FontConfiguration }
 
-// @public
-export interface FontFaceRequest {
-    // (undocumented)
-    readonly family: string;
-    // (undocumented)
-    readonly style: 'normal' | 'italic';
-    // (undocumented)
-    readonly weight: number;
-}
+export { FontFaceRequest }
 
-// @public
-export interface FontSource {
-    // (undocumented)
-    readonly availability?: 'available' | 'forbidden';
-    // (undocumented)
-    readonly bytes: Uint8Array;
-    // (undocumented)
-    readonly faceIndex: number;
-    // (undocumented)
-    readonly hash: string;
-    // (undocumented)
-    readonly id: string;
-    // (undocumented)
-    readonly request: FontFaceRequest;
-}
+export { FontSource }
 
-// @public
-export interface FontSourceSubstitution {
-    // (undocumented)
-    readonly from: FontFaceRequest;
-    // (undocumented)
-    readonly to: FontFaceRequest;
-}
+export { FontSourceSubstitution }
 
 export { generateRulerTicks }
 

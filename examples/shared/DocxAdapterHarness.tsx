@@ -41,7 +41,7 @@ const onEditorRender: React.ProfilerOnRenderCallback = (_id, _phase, actualDurat
   p.totalDurationMs += actualDuration;
 };
 import { DocxEditor } from '@docx-editor.dev/react';
-import { createEditorDriver, type EditorDriver } from '../../packages/engine-editor/src/index.ts';
+import { createEditorDriver, type EditorDriver } from '../../packages/core/src/editor/index.ts';
 import { RawProseMirrorReference } from './RawProseMirrorReference';
 import en from '../../packages/i18n/en.json';
 import { loadDemoFontConfiguration } from './demoFontShaping';

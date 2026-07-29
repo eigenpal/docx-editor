@@ -63,7 +63,10 @@ function paintItem(doc: Document, item: DisplayItem): HTMLElement[] {
       el.style.top = `${item.box.y}px`;
       el.style.width = `${item.box.width}px`;
       el.style.height = `${item.box.height}px`;
-      el.style.backgroundColor = colorToCss(item.color);
+      // `colorToCss` returns undefined for an unset colour; leaving the property alone is the
+      // correct paint, and assigning the string "undefined" would not be.
+      const background = colorToCss(item.color);
+      if (background !== undefined) el.style.backgroundColor = background;
       return [el];
     }
     case 'tableBorder':

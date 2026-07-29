@@ -5,15 +5,15 @@
 ```ts
 
 import { CSSProperties } from 'react';
-import { generateRulerTicks } from '@docx-editor.dev/engine-editor';
-import { PX_PER_CM } from '@docx-editor.dev/engine-editor';
-import { PX_PER_INCH } from '@docx-editor.dev/engine-editor';
+import { generateRulerTicks } from '@docx-editor.dev/core-contract/editor';
+import { PX_PER_CM } from '@docx-editor.dev/core-contract/editor';
+import { PX_PER_INCH } from '@docx-editor.dev/core-contract/editor';
 import * as React$1 from 'react';
 import React__default from 'react';
 import { ReactNode } from 'react';
-import { rulerPageBox } from '@docx-editor.dev/engine-editor';
-import { RulerTick } from '@docx-editor.dev/engine-editor';
-import { RulerUnit } from '@docx-editor.dev/engine-editor';
+import { rulerPageBox } from '@docx-editor.dev/core-contract/editor';
+import { RulerTick } from '@docx-editor.dev/core-contract/editor';
+import { RulerUnit } from '@docx-editor.dev/core-contract/editor';
 import { Translations } from '@docx-editor.dev/i18n';
 
 // @public
