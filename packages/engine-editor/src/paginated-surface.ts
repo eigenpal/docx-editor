@@ -401,7 +401,14 @@ export function mountPaginatedSurface(
             ...deleteSelectionOps(),
             { op: 'insertText', paragraphId: start.paragraphId, offset: start.offset, text },
           ],
-          selectionMark()
+          selectionMark(),
+          // Where the caret ENDS, so redo puts it back there rather than leaving it
+          // addressing the tree the undo discarded.
+          {
+            paragraphId: start.paragraphId,
+            start: start.offset + text.length,
+            end: start.offset + text.length,
+          }
         )
       );
       setSelection(

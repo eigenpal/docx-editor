@@ -51,7 +51,11 @@ export interface TreeDocxSession {
    * the ops already do — by node id and offset — rather than round-tripping an edit through
    * a projection just to have it diffed back out.
    */
-  applyTreeOps(ops: readonly TreeDocOp[], selectionBefore?: SelectionMark | null): TreeApplyResult;
+  applyTreeOps(
+    ops: readonly TreeDocOp[],
+    selectionBefore?: SelectionMark | null,
+    selectionAfter?: SelectionMark | null
+  ): TreeApplyResult;
   /** Project the current revision into a ProseMirror doc. */
   projectDoc(): PMNode;
   /** Re-project incrementally from the last committed change, reusing untouched paragraphs. */
@@ -135,12 +139,16 @@ export function openTreeSession(bytes: Uint8Array): OpenTreeSessionResult {
 
       part: () => store.part,
 
-      applyTreeOps(ops, selectionBefore) {
+      applyTreeOps(ops, selectionBefore, selectionAfter) {
         if (ops.length === 0) return { committed: false, rejected: false, opCount: 0 };
         const result = store.transact((ctx) => {
           // Recorded BEFORE the ops run, so undo restores where the caret was when the user
           // made the edit rather than where it ended up afterwards.
           if (selectionBefore !== undefined) ctx.selectionBefore(selectionBefore);
+          // And where it ends up, so REDO has somewhere to put it. No caller supplied this,
+          // so `selectionForRedo` was always null and redo left the caret addressing the
+          // tree the undo had discarded — offsets past the end of a paragraph it re-shortened.
+          if (selectionAfter !== undefined) ctx.selectionAfter(selectionAfter);
           for (const op of ops) ctx.apply(op);
         });
         if (!result.ok) {

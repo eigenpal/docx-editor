@@ -494,3 +494,31 @@ describe('the incremental layout machinery is actually used (tasks 9.2, 9.3)', (
     );
   });
 });
+
+describe('redo restores the caret it left, not the one undo restored', () => {
+  test('undo then redo leaves the editor editable', () => {
+    // `selectionAfter` was never recorded by any caller, so redo restored nothing and left
+    // the caret addressing the tree undo had discarded — offsets past the end of a paragraph
+    // it had just re-shortened, after which every keystroke was refused.
+    const { surface } = mount(paragraph('hello world'));
+    const id = surface.session.paragraphIds()[0]!;
+    surface.setSelection({
+      anchor: { paragraphId: id, offset: 0 },
+      head: { paragraphId: id, offset: 11 },
+    });
+    surface.type('Z');
+    expect(surface.session.bodyText()).toBe('Z');
+
+    surface.undo();
+    expect(surface.session.bodyText()).toBe('hello world');
+    surface.redo();
+    expect(surface.session.bodyText()).toBe('Z');
+
+    // The caret must be inside the redone document, not at offset 11 of a 1-character one.
+    const head = surface.state().selection.head;
+    expect(head.offset).toBeLessThanOrEqual(surface.session.bodyText().length);
+    surface.type('!');
+    expect(surface.state().lastRejection).toBeNull();
+    expect(surface.session.bodyText()).toContain('!');
+  });
+});
