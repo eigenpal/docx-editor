@@ -52,6 +52,8 @@ export interface InputHostAssistiveState {
 export interface InputHostControllerOptions {
   readonly viewport?: InputHostViewport;
   readonly accessibleName?: string;
+  /** Private browser-feedback checkpoint: expose the ProseMirror projection directly. */
+  readonly visibleProjection?: boolean;
 }
 
 export interface InputHostController {
@@ -133,11 +135,36 @@ function applyPmMountStyles(mount: HTMLElement): void {
   mount.style.removeProperty('display');
 }
 
+function applyVisibleProjectionStyles(
+  root: HTMLElement,
+  shell: HTMLElement,
+  mount: HTMLElement
+): void {
+  root.style.setProperty('position', 'static');
+  root.style.setProperty('width', '100%');
+  root.style.setProperty('min-height', '100%');
+  root.style.setProperty('overflow', 'visible');
+  root.style.setProperty('pointer-events', 'auto');
+  shell.style.setProperty('position', 'static');
+  shell.style.setProperty('width', '100%');
+  shell.style.setProperty('min-height', '100%');
+  shell.style.setProperty('overflow', 'visible');
+  shell.style.setProperty('opacity', '1');
+  shell.style.setProperty('pointer-events', 'auto');
+  shell.style.removeProperty('clip-path');
+  mount.style.setProperty('position', 'static');
+  mount.style.setProperty('width', '100%');
+  mount.style.setProperty('min-height', '100%');
+  mount.style.setProperty('outline', 'none');
+  mount.style.setProperty('pointer-events', 'auto');
+}
+
 export function createInputHostController(
   doc: Document,
   options: InputHostControllerOptions = {}
 ): InputHostController {
   const defaultViewport = options.viewport ?? DEFAULT_VIEWPORT;
+  const visibleProjection = options.visibleProjection === true;
   const root = doc.createElement('div');
   root.setAttribute('data-docx-input-host', 'true');
   root.setAttribute('data-assistive-policy', 'sole-semantic-projection');
@@ -154,15 +181,18 @@ export function createInputHostController(
   clipShell.append(pmMount);
   root.append(clipShell);
 
-  applyRootShellStyles(root);
-  applyPmMountStyles(pmMount);
+  if (visibleProjection) applyVisibleProjectionStyles(root, clipShell, pmMount);
+  else {
+    applyRootShellStyles(root);
+    applyPmMountStyles(pmMount);
+  }
 
   let destroyed = false;
   let lastPlacement: InputHostPlacement = {
     clientRect: clampRectToViewport(boundedRect(FALLBACK_CLIENT_RECT), defaultViewport),
     reason: 'fallback',
   };
-  applyClipShellStyles(clipShell, lastPlacement.clientRect);
+  if (!visibleProjection) applyClipShellStyles(clipShell, lastPlacement.clientRect);
 
   const controller: InputHostController = {
     root,
@@ -203,7 +233,7 @@ export function createInputHostController(
         rect = clampRectToViewport(rect, viewport);
       }
 
-      applyClipShellStyles(clipShell, rect);
+      if (!visibleProjection) applyClipShellStyles(clipShell, rect);
       lastPlacement = { clientRect: rect, reason, frameId: request.frameId };
       return lastPlacement;
     },

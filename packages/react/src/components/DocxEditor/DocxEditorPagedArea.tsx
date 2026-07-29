@@ -42,6 +42,8 @@ export interface DocxEditorPagedAreaProps {
   scrollRef: RefObject<HTMLDivElement | null> | null;
   pagesRef: RefObject<HTMLDivElement | null>;
   bodyRef: RefObject<HTMLDivElement | null>;
+  /** Private feedback checkpoint: render the PM projection instead of painted pages. */
+  visibleProjection?: boolean;
   /** True when rendered inside the shell, which owns scrolling. */
   hosted: boolean;
   className?: string | undefined;
@@ -70,6 +72,7 @@ export function DocxEditorPagedArea({
   scrollRef,
   pagesRef,
   bodyRef,
+  visibleProjection = false,
   hosted,
   className,
   overlayChildren,
@@ -90,24 +93,35 @@ export function DocxEditorPagedArea({
         className="ep-one-surface__pages"
         style={{ transform: `scale(${zoom})`, transformOrigin: 'top left' }}
       >
-        {installedFonts ? paintDisplay(pages, installedFonts, overlays, clickTarget) : null}
+        {visibleProjection ? (
+          <div
+            className="ep-one-surface__page ep-browser-first__page"
+            data-testid="browser-first-page"
+          >
+            <div ref={bodyRef} className="ep-one-surface__input-host ep-browser-first__mount" />
+          </div>
+        ) : installedFonts ? (
+          paintDisplay(pages, installedFonts, overlays, clickTarget)
+        ) : null}
       </div>
       {fontError ? (
         <div role="alert" data-testid="docx-editor-font-error">
           {fontError}
         </div>
       ) : null}
-      <div
-        ref={bodyRef}
-        className="ep-one-surface__input-host"
-        style={{
-          position: 'fixed',
-          width: 0,
-          height: 0,
-          overflow: 'visible',
-          pointerEvents: 'none',
-        }}
-      />
+      {!visibleProjection ? (
+        <div
+          ref={bodyRef}
+          className="ep-one-surface__input-host"
+          style={{
+            position: 'fixed',
+            width: 0,
+            height: 0,
+            overflow: 'visible',
+            pointerEvents: 'none',
+          }}
+        />
+      ) : null}
       {overlayChildren}
     </div>
   );

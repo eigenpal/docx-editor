@@ -10,6 +10,7 @@ import { PreviewBanner } from '../../shared/PreviewBanner';
 const params = new URLSearchParams(location.search);
 const enginePreview = params.get('preview') === 'engine';
 const editMode = params.get('edit') === '1';
+const browserFirst = params.get('browserFirst') === '1';
 // `?realAdapter=1` mounts the PRODUCTION @docx-editor.dev/react DocxEditor with DOCX bytes and
 // exposes the stable EditorDriver on window (comprehensive 4.4/4.8), so a browser test drives the
 // real published package entry rather than the engine mount directly.
@@ -30,7 +31,11 @@ const fixtureParam = params.get('fixture') ?? '';
 // `e2e/fixtures/` by a vite plugin, so the demo and the e2e suite read the SAME bytes
 // and a second copy cannot drift. `?fixture=` still overrides it.
 const COMPREHENSIVE_FIXTURE = 'comprehensive-word-element-test.docx';
-const defaultFixture = editMode || realAdapter ? COMPREHENSIVE_FIXTURE : 'with-tables.docx';
+const defaultFixture = browserFirst
+  ? 'editable-sample.docx'
+  : editMode || realAdapter
+    ? COMPREHENSIVE_FIXTURE
+    : 'with-tables.docx';
 const fixtureName = /^[\w.-]+\.docx$/.test(fixtureParam) ? fixtureParam : defaultFixture;
 
 const container = document.getElementById('app');

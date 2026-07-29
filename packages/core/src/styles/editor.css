@@ -1530,6 +1530,35 @@
   color: transparent;
 }
 
+/* Private browser-feedback checkpoint: one page-like sheet with the real
+ * ProseMirror contenteditable. It is deliberately not a pagination claim. */
+.ep-browser-first__page {
+  box-sizing: border-box;
+  width: 816px;
+  min-height: 1056px;
+  padding: 96px;
+  overflow: visible;
+  cursor: text;
+}
+
+.ep-browser-first__mount,
+.ep-browser-first__mount * {
+  color: var(--doc-caret);
+}
+
+.ep-browser-first__mount .ProseMirror {
+  min-height: 864px;
+  outline: none;
+  font-size: 11pt;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  overflow-wrap: break-word;
+}
+
+.ep-browser-first__mount .ProseMirror p {
+  margin: 0 0 0.75em;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .ep-one-surface__caret {
     animation: none;
@@ -2003,10 +2032,8 @@
   gap: 8px;
 }
 
-/* VERBATIM from the legacy demo's `styles.button` in
- * examples/vite/src/App.tsx. The hand-rolled
- * version used `color: var(--doc-text-subtle)` and no font-weight, which rendered the
- * header actions washed out next to the reference's solid 500-weight labels. */
+/* Header actions use solid 500-weight labels; muted text and normal weight make
+ * these controls look disabled beside the document title. */
 .docx-editor__app-action {
   padding: 6px 12px;
   border: 1px solid var(--doc-border);
@@ -2079,10 +2106,7 @@
   white-space: nowrap;
 }
 
-/* VERBATIM from the legacy demo's theme toggle in
- * examples/vite/src/App.tsx: a 26px round button
- * per option, not a padded pill. The hand-rolled `padding: 3px 10px; border-radius: 6px`
- * produced a wider, squarer control than the reference. */
+/* Theme options are 26px round icon buttons rather than padded text pills. */
 .docx-editor__theme-option {
   display: inline-flex;
   align-items: center;

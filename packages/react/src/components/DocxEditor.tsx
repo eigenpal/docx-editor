@@ -170,6 +170,9 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
       renderTitleBarRight,
       colorMode = 'light',
     } = props;
+    const browserFirstCheckpoint =
+      typeof globalThis.location !== 'undefined' &&
+      new URLSearchParams(globalThis.location.search).get('browserFirst') === '1';
 
     const bodyRef = useRef<HTMLDivElement | null>(null);
     const pagesRef = useRef<HTMLDivElement | null>(null);
@@ -503,6 +506,7 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
               author: p.author,
               mode: p.mode,
               layoutShaping,
+              privateVisibleProjection: browserFirstCheckpoint,
             });
           } catch (error) {
             shapingRef.current = null;
@@ -528,6 +532,10 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
             disposeLayoutShaping(layoutShaping);
           };
           syncFromFrame();
+          if (browserFirstCheckpoint && !readyPublishedRef.current) {
+            readyPublishedRef.current = true;
+            propsRef.current.onReady?.(editor);
+          }
         })
         .catch((error: unknown) => {
           if (cancelled) return;
@@ -542,7 +550,7 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
         shapingRef.current = null;
         readyPublishedRef.current = false;
       };
-    }, [host, syncFromFrame]);
+    }, [browserFirstCheckpoint, host, syncFromFrame]);
 
     // A display frame is not publishable until every exact layout-selected face
     // has loaded. Keep the previous lease alive while the replacement loads so
@@ -597,6 +605,7 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
     // the shared controller. The bridge owns normalization for both adapters;
     // its disposer must run on unmount or listeners outlive the editor.
     useLayoutEffect(() => {
+      if (browserFirstCheckpoint) return undefined;
       if (!installedFonts) return undefined;
       const surface = scrollRef.current;
       if (!surface) return undefined;
@@ -636,7 +645,7 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
         if (detachBridgeRef.current === detach) detachBridgeRef.current = null;
         detach();
       };
-    }, [installedFonts, syncFromFrame]);
+    }, [browserFirstCheckpoint, installedFonts, syncFromFrame]);
 
     // The imperative handle, ported. This file used to build a seven-method version
     // inline; the hook builds legacy's shape.
@@ -787,10 +796,12 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
         scrollRef={chromeOn ? null : scrollRef}
         pagesRef={pagesRef}
         bodyRef={bodyRef}
+        visibleProjection={browserFirstCheckpoint}
         hosted={chromeOn}
         className={className}
         onPagesDoubleClick={handlePagesDoubleClick}
         overlayChildren={
+          !browserFirstCheckpoint &&
           floatingCommentBtn != null && (
             <button
               type="button"

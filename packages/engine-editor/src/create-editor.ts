@@ -165,6 +165,8 @@ export interface EngineEditorConfig extends EditorConfig {
    * adapter-owned font resource injection lands in document-engine Task 7.
    */
   readonly layoutShaping?: LayoutShapingOptions;
+  /** Private React feedback checkpoint; not part of the public editor contract. */
+  readonly privateVisibleProjection?: boolean;
 }
 
 export class EditorLayoutConfigurationError extends Error {
@@ -625,6 +627,7 @@ export function createEditor(config: EngineEditorConfig): Editor {
       accessibleName: config.accessibleName,
       accessibilityAtomLabels: config.accessibilityAtomLabels,
       readOnlyProjection: readOnly || !session.editable,
+      visibleProjection: config.privateVisibleProjection === true,
     });
     mountedBodyEl = bodyEl;
     updateInputHostFromFrame();
@@ -1163,16 +1166,11 @@ export function createEditor(config: EngineEditorConfig): Editor {
      * verbatim `<w:rPr>`, and `w:rFonts w:ascii` is where the family lives. Walking the
      * body's runs yields the real inventory in document order, de-duplicated.
      *
-     * DELIBERATE SUBSET of the legacy definition, which is
-     * `utils/fontExtractor.ts:extractFonts` in the earlier editor implementation. That one scans SIX
-     * sources: the theme, `styles.xml`, document content, headers, footers, and the font
-     * table. This scans body run capsules only, because the rest need parts the
-     * greenfield model does not surface here yet.
-     *
-     * It cannot be ported directly — it takes a legacy `DocxPackage`, the model this
-     * engine replaced. Widening it means surfacing the styles/theme/font-table parts and
-     * reading those, in that order; the legacy file is the specification for what to
-     * cover.
+     * DELIBERATE SUBSET: a complete inventory scans six sources: the theme,
+     * `styles.xml`, document content, headers, footers, and the font table. This
+     * implementation scans body run capsules only because the current canonical model
+     * does not surface the other parts here yet. Widening it requires exposing those
+     * parts and reading them in that order.
      *
      * Returns `[]` for a document whose runs carry no explicit font. True, not a
      * placeholder — those fonts come from styles and the theme, which this does not yet
@@ -1275,7 +1273,12 @@ export function createEditor(config: EngineEditorConfig): Editor {
         block as {
           runs: readonly {
             text: string;
-            props?: { bold?: boolean; italic?: boolean; underline?: boolean; styleId?: string };
+            props?: {
+              bold?: boolean;
+              italic?: boolean;
+              underline?: { val: string; color?: string };
+              styleId?: string;
+            };
             rPrCapsule?: string;
           }[];
         }
@@ -1303,7 +1306,12 @@ export function createEditor(config: EngineEditorConfig): Editor {
         // may inherit it from its style, which this does not resolve.
         ...(run.props?.bold !== undefined ? { bold: run.props.bold } : {}),
         ...(run.props?.italic !== undefined ? { italic: run.props.italic } : {}),
-        ...(run.props?.underline !== undefined ? { underline: run.props.underline } : {}),
+        // The public contract reports underline as a BOOLEAN (a toolbar button is on or
+        // off); the authored variant and colour stay in the model. `val: 'none'` is an
+        // authored off, so it reports false rather than "underlined with variant none".
+        ...(run.props?.underline !== undefined
+          ? { underline: run.props.underline.val !== 'none' }
+          : {}),
       };
     },
 
