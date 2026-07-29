@@ -89,3 +89,11 @@ export {
   type MapResult,
   type TreeBindingRejection,
 } from './tree-binding.ts';
+export {
+  openTreeSession,
+  PROJECTION_ORIGIN,
+  type OpenTreeSessionResult,
+  type TreeApplyResult,
+  type TreeDocxSession,
+  type TreeSessionRejection,
+} from './tree-session.ts';
