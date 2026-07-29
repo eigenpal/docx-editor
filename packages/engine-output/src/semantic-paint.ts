@@ -160,6 +160,7 @@ function positioned(
 
 function paintSpan(document: Document, span: StyleSpanRecord, scale: number): HTMLElement {
   const element = document.createElement('span');
+  element.className = 'layout-run layout-run-text';
   // Each run is its OWN box, aligned on the baseline.
   //
   // The browser draws a selection band to the box it finds, and a plain inline shares the
@@ -200,7 +201,7 @@ function paintSpan(document: Document, span: StyleSpanRecord, scale: number): HT
  */
 function paintLine(document: Document, line: LineRecord, scale: number): HTMLElement {
   const element = document.createElement('div');
-  element.className = 'docx-line';
+  element.className = 'docx-line layout-line';
   element.dataset.lineId = line.id;
   element.dataset.paragraphId = line.range.paragraphId;
   element.style.position = 'absolute';
@@ -255,7 +256,7 @@ function paintFragment(
   scale: number
 ): HTMLElement {
   const element = positioned(document, 'div', fragment.box, scale);
-  element.className = 'docx-paragraph-fragment';
+  element.className = 'docx-paragraph-fragment layout-paragraph';
   element.dataset.paragraphId = fragment.paragraphId;
   element.dataset.fragmentIndex = String(fragment.fragmentIndex);
   for (const line of fragment.lines) {
@@ -274,6 +275,11 @@ function paintPage(
   materialize: boolean
 ): HTMLElement {
   const element = positioned(document, 'div', page.box, options.scale);
+  // BOTH names. `layout-page` is what the chrome stylesheet targets — dark mode's page
+  // inversion, print's white-paper override — and emitting only our own name meant none of
+  // it applied, so dark mode left a glaring white sheet in a dark editor.
+  // The sheet itself is NOT inverted in dark mode — only the content it holds is, so the
+  // paper keeps the canvas colour its token names.
   element.className = 'docx-page';
   element.dataset.pageIndex = String(page.index);
   if (options.ariaHidden) {

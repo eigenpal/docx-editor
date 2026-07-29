@@ -229,7 +229,17 @@ export function PaginatedDocxEditorShell({
       className={`${className ?? 'ep-root docx-editor docx-paginated-shell'}${
         colorMode === 'dark' ? ' dark' : ''
       }`}
-      style={{ display: 'flex', flexDirection: 'column', height: '100%', minHeight: 0 }}
+      // The root PAINTS its background rather than leaving it transparent. The dark tokens
+      // resolved correctly without this, but nothing drew them — so the page inverted while
+      // the chrome around it stayed whatever the host body happened to be.
+      style={{
+        display: 'flex',
+        flexDirection: 'column',
+        height: '100%',
+        minHeight: 0,
+        background: 'var(--doc-bg)',
+        color: 'var(--doc-text)',
+      }}
       data-testid="paginated-shell"
     >
       {/* The SAME chrome the full editor composes — title bar, document name, menu bar and
@@ -268,7 +278,7 @@ export function PaginatedDocxEditorShell({
       </EditorToolbar>
       <div
         className="docx-editor__scroll-container"
-        style={{ flex: 1, minHeight: 0, overflow: 'auto' }}
+        style={{ flex: 1, minHeight: 0, overflow: 'auto', background: 'var(--doc-bg)' }}
       >
         {contractSection ? (
           <div style={{ display: 'flex', justifyContent: 'center', padding: '4px 0' }}>

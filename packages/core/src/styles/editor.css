@@ -289,7 +289,11 @@
   * invert(1) hue-rotate(180deg) flips lightness but preserves hue for ALL
   * authored colors, so nothing is unreadable. Media is double-inverted back so
   * photos/logos render normally. */
-.ep-root.dark .layout-page {
+.ep-root.dark .layout-page,
+/* The paginated lane paints its content into `.docx-page-content`; inverting the page
+   FRAME as well would flip the paper itself, so the sheet keeps its own token background
+   and only the content it holds is lightness-inverted. */
+.ep-root.dark .docx-page-content {
   /* contrast(0.92) softens the pure black/white extremes a plain invert
     * produces, landing on Word's gentler off-white text / dark-grey fills
     * rather than #fff on #000. */
@@ -303,7 +307,12 @@
 .ep-root.dark .layout-page svg,
 .ep-root.dark .layout-page canvas,
 .ep-root.dark .layout-page video,
-.ep-root.dark .layout-page [data-no-color-invert] {
+.ep-root.dark .layout-page [data-no-color-invert],
+.ep-root.dark .docx-page-content img,
+.ep-root.dark .docx-page-content svg,
+.ep-root.dark .docx-page-content canvas,
+.ep-root.dark .docx-page-content video,
+.ep-root.dark .docx-page-content [data-no-color-invert] {
   filter: invert(1) hue-rotate(180deg);
 }
 
@@ -2243,8 +2252,20 @@
   position: relative;
   outline: none;
 }
+.ep-root.dark .docx-paginated-surface .docx-page {
+  /* The sheet is not inverted, so in dark mode it carries the canvas colour directly rather
+     than the light value the inversion would otherwise have produced. */
+  background: #333333;
+}
 .docx-paginated-surface .docx-page {
-  background: #fff;
+  /* The TOKEN, not a literal. Dark mode sets `--doc-page-bg` to #ccc precisely so the
+     page inversion lands on Word's grey canvas; a hardcoded #fff inverts to pure black
+     and takes the text down to unreadable with it. */
+  background: var(--doc-page-bg, #fff);
+  /* The page states its OWN text colour rather than inheriting the chrome's: a light chrome
+     colour carried into the inverted content turned every run dark grey on grey. The token
+     stays #000 in both themes precisely so the inversion lands on near-white. */
+  color: var(--doc-page-text, #000000);
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.2);
   /* Painted text stays selectable so the BROWSER can run drag, double-click-for-a-word and
      triple-click-for-a-paragraph; the surface reads the result back as model positions. */
