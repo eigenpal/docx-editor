@@ -51,6 +51,10 @@ export interface PaginatedDocxEditorShellProps {
   readonly ref?: Ref<PaginatedDocxEditorHandle>;
   /** Applies the editor's own dark palette; the document canvas stays Word-faithful. */
   readonly colorMode?: 'light' | 'dark';
+  /** Reported when the zoom control changes, so the host can re-scale the surface. */
+  readonly onZoomChange?: (zoom: number) => void;
+  /** The face the document is painted in; never applied to the chrome. */
+  readonly documentFontFamily?: string;
   readonly className?: string;
 }
 
@@ -90,6 +94,8 @@ export function PaginatedDocxEditorShell({
   renderTitleBarRight,
   ref,
   colorMode,
+  onZoomChange,
+  documentFontFamily,
   className,
 }: PaginatedDocxEditorShellProps) {
   const editorRef = useRef<PaginatedDocxEditorHandle>(null);
@@ -237,6 +243,11 @@ export function PaginatedDocxEditorShell({
         onRedo={() => editorRef.current?.redo()}
         canUndo={state?.canUndo ?? false}
         canRedo={state?.canRedo ?? false}
+        // Zoom re-scales the SURFACE, which means a fresh layout at the new scale rather
+        // than a CSS transform over the old one: the pages are painted from records, so
+        // scaling the painted output would blur the glyphs and put the caret off the text.
+        zoom={zoom}
+        onZoomChange={onZoomChange}
         // The File menu appears when there is something for it to do. Save is the one file
         // action this surface can honour today; print and page setup belong to lanes that
         // are not built, and offering them would be offering nothing.
@@ -267,6 +278,7 @@ export function PaginatedDocxEditorShell({
         <PaginatedDocxEditor
           ref={editorRef}
           source={source}
+          {...(documentFontFamily ? { documentFontFamily } : {})}
           {...(scale === undefined ? {} : { scale })}
           {...(measurer ? { measurer } : {})}
           onStateChange={refresh}

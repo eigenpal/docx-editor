@@ -26,6 +26,7 @@ export function PaginatedSurfaceDemo({ fixtureUrl }: { fixtureUrl: string }) {
   const [measurer, setMeasurer] = useState<TextMeasurer | null>(null);
   const [fontFamily, setFontFamily] = useState<string | null>(null);
   const [colorMode, setColorMode] = useState<'light' | 'dark'>('light');
+  const [zoom, setZoom] = useState(1);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   /** Serialize and hand the bytes to the browser as a download. */
@@ -72,19 +73,17 @@ export function PaginatedSurfaceDemo({ fixtureUrl }: { fixtureUrl: string }) {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', overflow: 'hidden' }}>
-      <div
-        data-testid="paginated-mount"
-        // The measured face is applied here so runs naming no font inherit exactly what the
-        // shaper measured; see `exactMeasurer`.
-        style={{ flex: 1, minHeight: 0, ...(fontFamily ? { fontFamily } : {}) }}
-      >
+      <div data-testid="paginated-mount" style={{ flex: 1, minHeight: 0 }}>
         {source && measurer ? (
           <PaginatedDocxEditorShell
             ref={editorRef}
             colorMode={colorMode}
             source={source}
             documentName="Sample Document"
-            scale={SCALE}
+            // The measured face goes to the DOCUMENT, not to the chrome around it.
+            {...(fontFamily ? { documentFontFamily: fontFamily } : {})}
+            scale={SCALE * zoom}
+            onZoomChange={setZoom}
             measurer={measurer}
             onStateChange={setState}
             onSave={(bytes) => setSaved(`${bytes.length} bytes saved`)}

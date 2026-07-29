@@ -37,6 +37,15 @@ export interface PaginatedDocxEditorProps {
   /** Called once if the document cannot be opened, with the engine's typed reason. */
   readonly onError?: (reason: string, detail?: string) => void;
   readonly className?: string;
+  /**
+   * The face runs naming no font are painted in.
+   *
+   * Applied to the DOCUMENT container only. Setting it on an ancestor leaks the document's
+   * face into the surrounding chrome — a measured text face is chosen to match what the
+   * shaper measured, and it renders the toolbar and the brand lockup heavier than the UI
+   * font they were designed in.
+   */
+  readonly documentFontFamily?: string;
   readonly ref?: Ref<PaginatedDocxEditorHandle>;
 }
 
@@ -71,6 +80,7 @@ export function PaginatedDocxEditor({
   onStateChange,
   onError,
   className,
+  documentFontFamily,
   ref,
 }: PaginatedDocxEditorProps) {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -145,7 +155,10 @@ export function PaginatedDocxEditor({
       ref={containerRef}
       // Centred by margin rather than by a flex parent: the pages are absolutely positioned,
       // so the container's own width is what has to be centred.
-      style={{ margin: '24px auto' }}
+      style={{
+        margin: '24px auto',
+        ...(documentFontFamily ? { fontFamily: documentFontFamily } : {}),
+      }}
       className={className ?? 'docx-paginated-surface'}
       data-revision={state?.revision ?? 0}
       data-page-count={state?.pageCount ?? 0}
