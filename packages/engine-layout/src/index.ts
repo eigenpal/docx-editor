@@ -204,3 +204,19 @@ export {
   type ResolvedUnderline,
   type VerticalAlign,
 } from './run-style.ts';
+export {
+  caretAt,
+  caretStops,
+  compositionAnchor,
+  // `hitTest` is already taken by the legacy painted-geometry lane; this one answers in
+  // MODEL coordinates, so it is named for what it returns rather than shadowing that.
+  hitTestSemantic,
+  moveCaret,
+  selectionRects,
+  spansInSelection,
+  type CaretGeometry,
+  type NavigationCommand,
+  type SelectionRect,
+  type SemanticPosition,
+  type SemanticSelection,
+} from './semantic-interaction.ts';

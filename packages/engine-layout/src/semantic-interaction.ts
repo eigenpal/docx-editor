@@ -1,0 +1,360 @@
+// Semantic caret stops, hit regions, selection and keyboard navigation (task 7.4).
+//
+// Everything here is derived from the layout records and nothing else. No DOM ranges, no
+// element rectangles, no remeasurement — which is what makes interaction answerable
+// headlessly and identical between adapters.
+//
+// A position is always (paragraph node id, UTF-16 offset). The same address the tree ops
+// take, so a click, a caret and an edit all speak one coordinate system: a hit test can be
+// handed straight to `insertText` without a translation step that could disagree.
+
+import type { LineRecord, SemanticLayout, StyleSpanRecord } from './semantic-records.ts';
+import { linesOf } from './semantic-records.ts';
+
+/** A caret position in the model. */
+export interface SemanticPosition {
+  readonly paragraphId: string;
+  readonly offset: number;
+}
+
+/** A caret position with the geometry that renders it. */
+export interface CaretGeometry {
+  readonly position: SemanticPosition;
+  /** Page-relative, in the same coordinate space as the line boxes. */
+  readonly x: number;
+  readonly y: number;
+  readonly height: number;
+  readonly lineId: string;
+  readonly pageIndex: number;
+}
+
+export interface SemanticSelection {
+  readonly anchor: SemanticPosition;
+  readonly head: SemanticPosition;
+}
+
+export interface SelectionRect {
+  readonly pageIndex: number;
+  readonly x: number;
+  readonly y: number;
+  readonly width: number;
+  readonly height: number;
+}
+
+/** The x offset of `offset` within a line, by walking its spans. */
+function xWithinLine(line: LineRecord, offset: number): number {
+  let x = line.box.x;
+  for (const span of line.spans) {
+    if (offset <= span.range.start) return span.box.x;
+    if (offset >= span.range.end) {
+      x = span.box.x + span.box.width;
+      continue;
+    }
+    // Inside this span: interpolate by character. A proportional shaper would supply real
+    // per-glyph advances; with a uniform advance this is exact, and it stays honest about
+    // being an interpolation rather than pretending to per-glyph precision.
+    const fraction = (offset - span.range.start) / Math.max(1, span.range.end - span.range.start);
+    return span.box.x + span.box.width * fraction;
+  }
+  return x;
+}
+
+/**
+ * Every caret stop in the document, in reading order.
+ *
+ * One per character boundary on every line, plus the line end. Derived rather than stored,
+ * so a stop can never survive the content it described.
+ */
+export function caretStops(layout: SemanticLayout): CaretGeometry[] {
+  const stops: CaretGeometry[] = [];
+  for (const page of layout.pages) {
+    for (const fragment of page.fragments) {
+      for (const line of fragment.lines) {
+        for (let offset = line.range.start; offset <= line.range.end; offset += 1) {
+          // A continuation line's first stop is the same model position as the previous
+          // line's last, so it is emitted once — by the line that starts there.
+          if (offset === line.range.start && offset > fragment.range.start && stops.length > 0) {
+            const previous = stops[stops.length - 1]!;
+            if (
+              previous.position.paragraphId === line.range.paragraphId &&
+              previous.position.offset === offset
+            ) {
+              continue;
+            }
+          }
+          stops.push({
+            position: { paragraphId: line.range.paragraphId, offset },
+            x: xWithinLine(line, offset),
+            y: line.box.y,
+            height: line.box.height,
+            lineId: line.id,
+            pageIndex: page.index,
+          });
+        }
+      }
+    }
+  }
+  return stops;
+}
+
+/** Geometry for one model position, or null when it is not laid out. */
+export function caretAt(layout: SemanticLayout, position: SemanticPosition): CaretGeometry | null {
+  for (const page of layout.pages) {
+    for (const fragment of page.fragments) {
+      for (const line of fragment.lines) {
+        if (line.range.paragraphId !== position.paragraphId) continue;
+        if (position.offset < line.range.start || position.offset > line.range.end) continue;
+        return {
+          position,
+          x: xWithinLine(line, position.offset),
+          y: line.box.y,
+          height: line.box.height,
+          lineId: line.id,
+          pageIndex: page.index,
+        };
+      }
+    }
+  }
+  return null;
+}
+
+/**
+ * The caret position nearest a point.
+ *
+ * Never returns null for a point inside the document: a click in the margin, past the end of
+ * a line, or below the last line still has an obvious intended caret, and refusing to answer
+ * would make those clicks do nothing.
+ */
+export function hitTestSemantic(
+  layout: SemanticLayout,
+  point: { readonly x: number; readonly y: number; readonly pageIndex?: number }
+): CaretGeometry | null {
+  const stops = caretStops(layout);
+  if (stops.length === 0) return null;
+
+  const candidates =
+    point.pageIndex === undefined
+      ? stops
+      : stops.filter((stop) => stop.pageIndex === point.pageIndex);
+  const pool = candidates.length > 0 ? candidates : stops;
+
+  // Prefer the line whose vertical band contains the point; otherwise the nearest band.
+  let bestLineDistance = Number.POSITIVE_INFINITY;
+  for (const stop of pool) {
+    const distance =
+      point.y < stop.y
+        ? stop.y - point.y
+        : point.y > stop.y + stop.height
+          ? point.y - (stop.y + stop.height)
+          : 0;
+    if (distance < bestLineDistance) bestLineDistance = distance;
+  }
+  const onBestLine = pool.filter((stop) => {
+    const distance =
+      point.y < stop.y
+        ? stop.y - point.y
+        : point.y > stop.y + stop.height
+          ? point.y - (stop.y + stop.height)
+          : 0;
+    return distance === bestLineDistance;
+  });
+
+  let best = onBestLine[0]!;
+  let bestDistance = Math.abs(best.x - point.x);
+  for (const stop of onBestLine) {
+    const distance = Math.abs(stop.x - point.x);
+    if (distance < bestDistance) {
+      best = stop;
+      bestDistance = distance;
+    }
+  }
+  return best;
+}
+
+/** The rectangles covering a selection, one per line it spans. */
+export function selectionRects(
+  layout: SemanticLayout,
+  selection: SemanticSelection
+): SelectionRect[] {
+  const ordered = orderPositions(layout, selection);
+  if (!ordered) return [];
+  const rects: SelectionRect[] = [];
+  for (const page of layout.pages) {
+    for (const fragment of page.fragments) {
+      for (const line of fragment.lines) {
+        const overlap = lineOverlap(layout, line, ordered.from, ordered.to);
+        if (!overlap) continue;
+        const startX = xWithinLine(line, overlap.start);
+        const endX = xWithinLine(line, overlap.end);
+        rects.push({
+          pageIndex: page.index,
+          x: Math.min(startX, endX),
+          y: line.box.y,
+          width: Math.abs(endX - startX),
+          height: line.box.height,
+        });
+      }
+    }
+  }
+  return rects;
+}
+
+/** The part of `line` covered by a selection, in the line's own offsets. */
+function lineOverlap(
+  layout: SemanticLayout,
+  line: LineRecord,
+  from: SemanticPosition,
+  to: SemanticPosition
+): { start: number; end: number } | null {
+  const order = documentOrder(layout);
+  const lineParagraph = order.indexOf(line.range.paragraphId);
+  const fromParagraph = order.indexOf(from.paragraphId);
+  const toParagraph = order.indexOf(to.paragraphId);
+  if (lineParagraph < fromParagraph || lineParagraph > toParagraph) return null;
+
+  const start =
+    lineParagraph === fromParagraph ? Math.max(line.range.start, from.offset) : line.range.start;
+  const end = lineParagraph === toParagraph ? Math.min(line.range.end, to.offset) : line.range.end;
+  return end > start ? { start, end } : null;
+}
+
+/** Paragraph ids in document order, deduplicated across fragments. */
+function documentOrder(layout: SemanticLayout): string[] {
+  const seen: string[] = [];
+  for (const page of layout.pages) {
+    for (const fragment of page.fragments) {
+      if (!seen.includes(fragment.paragraphId)) seen.push(fragment.paragraphId);
+    }
+  }
+  return seen;
+}
+
+/** A selection's endpoints in document order. */
+function orderPositions(
+  layout: SemanticLayout,
+  selection: SemanticSelection
+): { from: SemanticPosition; to: SemanticPosition } | null {
+  const order = documentOrder(layout);
+  const anchorIndex = order.indexOf(selection.anchor.paragraphId);
+  const headIndex = order.indexOf(selection.head.paragraphId);
+  if (anchorIndex === -1 || headIndex === -1) return null;
+  if (
+    anchorIndex < headIndex ||
+    (anchorIndex === headIndex && selection.anchor.offset <= selection.head.offset)
+  ) {
+    return { from: selection.anchor, to: selection.head };
+  }
+  return { from: selection.head, to: selection.anchor };
+}
+
+export type NavigationCommand =
+  | 'left'
+  | 'right'
+  | 'up'
+  | 'down'
+  | 'lineStart'
+  | 'lineEnd'
+  | 'documentStart'
+  | 'documentEnd';
+
+/**
+ * Move a caret.
+ *
+ * Vertical movement keeps a DESIRED X so a caret travelling through short lines returns to
+ * its original column rather than collapsing to the end of the shortest one. The caller
+ * threads that value; passing null starts a fresh vertical run from the current position.
+ */
+export function moveCaret(
+  layout: SemanticLayout,
+  position: SemanticPosition,
+  command: NavigationCommand,
+  desiredX: number | null = null
+): { position: SemanticPosition; desiredX: number | null } | null {
+  const stops = caretStops(layout);
+  if (stops.length === 0) return null;
+  const index = stops.findIndex(
+    (stop) =>
+      stop.position.paragraphId === position.paragraphId && stop.position.offset === position.offset
+  );
+  if (index === -1) return null;
+  const current = stops[index]!;
+
+  switch (command) {
+    case 'left': {
+      const next = stops[Math.max(0, index - 1)]!;
+      return { position: next.position, desiredX: null };
+    }
+    case 'right': {
+      const next = stops[Math.min(stops.length - 1, index + 1)]!;
+      return { position: next.position, desiredX: null };
+    }
+    case 'lineStart': {
+      const line = stops.filter((stop) => stop.lineId === current.lineId);
+      return { position: line[0]!.position, desiredX: null };
+    }
+    case 'lineEnd': {
+      const line = stops.filter((stop) => stop.lineId === current.lineId);
+      return { position: line[line.length - 1]!.position, desiredX: null };
+    }
+    case 'documentStart':
+      return { position: stops[0]!.position, desiredX: null };
+    case 'documentEnd':
+      return { position: stops[stops.length - 1]!.position, desiredX: null };
+    case 'up':
+    case 'down': {
+      const targetX = desiredX ?? current.x;
+      const lineIds: string[] = [];
+      for (const stop of stops) {
+        if (!lineIds.includes(stop.lineId)) lineIds.push(stop.lineId);
+      }
+      const lineIndex = lineIds.indexOf(current.lineId);
+      const nextLineIndex = command === 'up' ? lineIndex - 1 : lineIndex + 1;
+      if (nextLineIndex < 0 || nextLineIndex >= lineIds.length) {
+        // Already at the first or last line: go to its start or end, which is what every
+        // editor does rather than refusing the key.
+        const edge = command === 'up' ? stops[0]! : stops[stops.length - 1]!;
+        return { position: edge.position, desiredX: targetX };
+      }
+      const target = stops.filter((stop) => stop.lineId === lineIds[nextLineIndex]);
+      let best = target[0]!;
+      for (const stop of target) {
+        if (Math.abs(stop.x - targetX) < Math.abs(best.x - targetX)) best = stop;
+      }
+      return { position: best.position, desiredX: targetX };
+    }
+    default:
+      return null;
+  }
+}
+
+/**
+ * The anchor an IME composition is attached to.
+ *
+ * Composition needs a position that survives the intermediate transactions it produces, so
+ * it is expressed in model coordinates and re-resolved against each new layout rather than
+ * cached as geometry.
+ */
+export function compositionAnchor(
+  layout: SemanticLayout,
+  position: SemanticPosition
+): CaretGeometry | null {
+  return caretAt(layout, position);
+}
+
+/** The style spans a selection touches, for reporting active formatting. */
+export function spansInSelection(
+  layout: SemanticLayout,
+  selection: SemanticSelection
+): StyleSpanRecord[] {
+  const ordered = orderPositions(layout, selection);
+  if (!ordered) return [];
+  const spans: StyleSpanRecord[] = [];
+  for (const line of linesOf(layout)) {
+    const overlap = lineOverlap(layout, line, ordered.from, ordered.to);
+    if (!overlap) continue;
+    for (const span of line.spans) {
+      if (span.range.end > overlap.start && span.range.start < overlap.end) spans.push(span);
+    }
+  }
+  return spans;
+}
