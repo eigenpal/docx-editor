@@ -239,31 +239,55 @@ describe('every lane has somewhere to be imported from (task 10.1)', () => {
   });
 });
 
-describe('the per-lane environment boundary is NOT structurally enforced yet', () => {
-  // This replaces the per-package tsconfig checks that task 1.4's topology guard used to make
-  // (deleted with the `engine-*` packages in task 10.6). Those checks asserted that a neutral
-  // package's tsconfig omitted the DOM lib, so a DOM call in the store or layout lane would
-  // not compile. One tsconfig now covers every lane, and the browser lanes genuinely need
-  // `DOM` and `DOM.Iterable` — so that structural guarantee is GONE, not merely relocated.
+describe('the per-lane environment boundary is structurally enforced (task 10.1)', () => {
+  // Restored. Section 10 collapsed eight packages into one, and the shared tsconfig must
+  // include DOM for the browser lanes — which meant a `document` reference in the store or
+  // layout lane compiled fine, where each neutral package's own config had made it an error.
   //
-  // Recorded as a failing-open fact rather than dropped: what still protects the neutral lanes
-  // is the static DOM-usage scan in layout-authority, which is weaker (it matches known DOM
-  // identifiers rather than making the code fail to compile). Restoring the strong form is
-  // task 10.1's remaining "TypeScript project boundaries" deliverable.
-  const tsconfigPath = join(PACKAGES, 'core', 'tsconfig.json');
+  // Each runtime-neutral lane now carries its own project with a DOM-free `lib`, compiled by
+  // `bun run check:lane-boundaries`. These tests assert the projects EXIST and say what they
+  // must; the script is what proves they compile.
+  //
+  // `contracts` is excluded on purpose: it is declaration-only and its public API names
+  // HTMLElement for host-element accessors, which is a type reference, not a runtime need.
+  const NEUTRAL_WITH_PROJECT = ['store', 'layout', 'sync', 'clients'] as const;
 
-  test('the single core tsconfig does include the DOM lib', () => {
-    const tsconfig = JSON.parse(readFileSync(tsconfigPath, 'utf8'));
-    const lib: string[] = tsconfig.compilerOptions?.lib ?? [];
+  test('every runtime-neutral lane in core has its own DOM-free project', () => {
+    for (const lane of NEUTRAL_WITH_PROJECT) {
+      const path = join(PACKAGES, 'core', 'src', lane, 'tsconfig.json');
+      expect({ lane, exists: existsSync(path) }).toEqual({ lane, exists: true });
+      const lib: string[] = JSON.parse(readFileSync(path, 'utf8')).compilerOptions?.lib ?? [];
+      expect({ lane, hasDom: lib.some((entry) => /dom/i.test(entry)) }).toEqual({
+        lane,
+        hasDom: false,
+      });
+    }
+  });
+
+  test('the shared config still carries DOM, which is why the per-lane projects are needed', () => {
+    // If this ever goes false the per-lane projects are redundant; if it stays true and a
+    // project goes missing, that lane silently regains the DOM.
+    const lib: string[] =
+      JSON.parse(readFileSync(join(PACKAGES, 'core', 'tsconfig.json'), 'utf8')).compilerOptions
+        ?.lib ?? [];
     expect(lib.some((entry) => /dom/i.test(entry))).toBe(true);
   });
 
-  test('so at least one NEUTRAL lane is compiled against the DOM it must not use', () => {
-    // The precise cost of the collapse. If this ever reports zero, either every neutral lane
-    // gained its own project (the fix) or the DAG stopped calling them neutral (a regression).
-    const neutralInCore = (Object.keys(CORE_LANES) as LaneName[]).filter(
-      (lane) => CORE_LANES[lane].environment === 'neutral' && laneHasMoved(lane)
+  test('no neutral lane is left without a project', () => {
+    // The list above is hand-written; this is what catches a lane the DAG calls neutral that
+    // nobody added a project for. `contracts` is the one documented exception.
+    const neutral = (Object.keys(CORE_LANES) as LaneName[]).filter(
+      (lane) =>
+        CORE_LANES[lane].environment === 'neutral' &&
+        laneHasMoved(lane) &&
+        lane !== 'contracts'
     );
-    expect(neutralInCore.length).toBeGreaterThan(0);
+    expect([...neutral].sort()).toEqual([...NEUTRAL_WITH_PROJECT].sort());
+  });
+
+  test('the boundary check is wired into the repo scripts', () => {
+    // A guard nothing runs is not a guard.
+    const root = JSON.parse(readFileSync(join(PACKAGES, '..', 'package.json'), 'utf8'));
+    expect(typeof root.scripts?.['check:lane-boundaries']).toBe('string');
   });
 });
