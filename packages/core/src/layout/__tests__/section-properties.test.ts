@@ -5,7 +5,7 @@
 // and a document claiming a page a mile tall must not be able to make the engine try.
 
 import { describe, expect, test } from 'bun:test';
-import { readOoxmlPart, type OoxmlPart } from '@docx-editor.dev/engine-core';
+import { readOoxmlPart, type OoxmlPart } from '@docx-editor.dev/core-contract/store';
 import {
   DEFAULT_SECTION_PROPERTIES,
   geometryOfSection,

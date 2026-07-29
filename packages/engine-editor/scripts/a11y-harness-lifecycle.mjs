@@ -323,13 +323,21 @@ export async function probeHarnessSemanticIndexTransform({
   if (semanticBody.includes('node_modules/.vite/deps/@docx-editor__dev_engine-layout')) {
     throw new Error('semantic-index imports stale prebundled engine-layout');
   }
-  if (!semanticBody.includes('@docx-editor.dev/engine-layout')) {
-    throw new Error('semantic-index does not import workspace engine-layout source');
+  // Vite rewrites bare specifiers to resolved paths, so accept either the specifier as
+  // written or the lane's location on disk. What must NOT appear is a prebundled copy,
+  // which the check above already rejects.
+  if (
+    !semanticBody.includes('@docx-editor.dev/core-contract/layout') &&
+    !semanticBody.includes('core/src/layout')
+  ) {
+    throw new Error('semantic-index does not import workspace layout lane source');
   }
 
+  // A FILESYSTEM path, not a specifier: the layout lane lives inside the core package, so
+  // the node_modules entry to resolve is the package, and the lane is a directory within it.
   const layoutRoot =
-    layoutPackageRoot ?? join(packageRoot, 'node_modules/@docx-editor.dev/engine-layout');
-  const layoutIndexUrl = `${baseUrl}@fs/${join(layoutRoot, 'src/index.ts')}`;
+    layoutPackageRoot ?? join(packageRoot, 'node_modules/@docx-editor.dev/core-contract');
+  const layoutIndexUrl = `${baseUrl}@fs/${join(layoutRoot, 'src/layout/index.ts')}`;
   const layoutResponse = await fetch(layoutIndexUrl);
   if (!layoutResponse.ok) {
     throw new Error(`engine-layout transform failed (${layoutResponse.status}): ${await layoutResponse.text()}`);
@@ -350,7 +358,7 @@ export async function probeHarnessSemanticIndexTransform({
   if (aliased) {
     // The node_modules entries are symlinks named by PACKAGE, and the core package's name
     // is `core-contract` even though its directory is `core`.
-    const laneUrl = `${baseUrl}@fs/${join(layoutRoot, '../core-contract/src/layout/index.ts')}`;
+    const laneUrl = `${baseUrl}@fs/${join(layoutRoot, 'src/layout/index.ts')}`;
     const laneResponse = await fetch(laneUrl);
     if (!laneResponse.ok) {
       throw new Error(`layout lane transform failed (${laneResponse.status}): ${await laneResponse.text()}`);

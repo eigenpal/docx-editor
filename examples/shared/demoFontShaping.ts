@@ -1,4 +1,4 @@
-import { sha256FontBytes } from '@docx-editor.dev/engine-layout';
+import { sha256FontBytes } from '@docx-editor.dev/core-contract/layout';
 import type {
   FontConfiguration,
   FontFaceRequest,

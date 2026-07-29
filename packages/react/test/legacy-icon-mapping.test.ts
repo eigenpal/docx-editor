@@ -9,7 +9,7 @@
 
 import { describe, expect, test } from 'bun:test';
 import iconPaths from '../../vue/src/components/ui/icon-paths.json';
-import { LEGACY_CHROME_GROUPS } from '@docx-editor.dev/engine-editor';
+import { LEGACY_CHROME_GROUPS } from '@docx-editor.dev/core-contract/editor';
 
 /**
  * control id → MATERIAL SYMBOL name.

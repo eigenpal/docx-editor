@@ -6,7 +6,7 @@ import type {
 } from '@docx-editor.dev/core-contract/contracts/interaction';
 import type { Schema } from 'prosemirror-model';
 import { Slice } from 'prosemirror-model';
-import { sanitizeHref } from '@docx-editor.dev/engine-core';
+import { sanitizeHref } from '@docx-editor.dev/core-contract/store';
 
 export const INPUT_POLICY_LIMITS = {
   maxPlainTextChars: 256_000,

@@ -5,7 +5,7 @@
 // the adapter untested in a browser.
 
 import { useEffect, useRef, useState } from 'react';
-import type { PaginatedSurfaceState, TextMeasurer } from '@docx-editor.dev/engine-editor';
+import type { PaginatedSurfaceState, TextMeasurer } from '@docx-editor.dev/core-contract/editor';
 import { PaginatedDocxEditorShell } from '@docx-editor.dev/react';
 import { createExactMeasurer } from './exactMeasurer.ts';
 import { BrandLogo } from './BrandLogo';

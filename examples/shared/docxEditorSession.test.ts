@@ -6,8 +6,8 @@
 
 import { describe, expect, test } from 'bun:test';
 import { zipSync, strToU8, unzipSync, strFromU8 } from 'fflate';
-import { docSchema } from '@docx-editor.dev/engine-binding';
-import { compareZipContainers } from '@docx-editor.dev/engine-core';
+import { docSchema } from '@docx-editor.dev/core-contract/binding';
+import { compareZipContainers } from '@docx-editor.dev/core-contract/store';
 import { openDocxSession } from './docxEditorSession.ts';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';

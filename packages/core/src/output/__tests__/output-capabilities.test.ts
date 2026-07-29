@@ -9,7 +9,7 @@ import {
   renderDisplayItem,
   displayItemLayer,
 } from '../output-capabilities.ts';
-import type { Page, DisplayItem } from '@docx-editor.dev/engine-layout';
+import type { Page, DisplayItem } from '@docx-editor.dev/core-contract/layout';
 
 // Minimal DOM stand-in (renderPageElement only uses createElement/style/setAttribute/textContent/
 // appendChild). children preserve insertion order so we can assert paint order.

@@ -22,8 +22,8 @@
  */
 import type { ReactNode, RefObject } from 'react';
 import type { DisplayPage } from '@docx-editor.dev/core-contract/contracts/geometry';
-import type { FrameOverlays, GlyphClickTarget } from '@docx-editor.dev/engine-editor';
-import type { InstalledDisplayFonts } from '@docx-editor.dev/engine-editor';
+import type { FrameOverlays, GlyphClickTarget } from '@docx-editor.dev/core-contract/editor';
+import type { InstalledDisplayFonts } from '@docx-editor.dev/core-contract/editor';
 import { paintDisplay } from '../../paintDisplay';
 
 export interface DocxEditorPagedAreaProps {

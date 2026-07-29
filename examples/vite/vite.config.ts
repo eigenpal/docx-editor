@@ -101,7 +101,7 @@ export default defineConfig(async () => {
               replacement: path.join(monorepoRoot, 'packages/react/src/index.ts'),
             },
             {
-              find: '@docx-editor.dev/engine-editor',
+              find: '@docx-editor.dev/core-contract/editor',
               replacement: path.join(monorepoRoot, 'packages/engine-editor/src/index.ts'),
             },
             {

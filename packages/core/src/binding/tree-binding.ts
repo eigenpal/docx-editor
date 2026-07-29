@@ -17,7 +17,7 @@ import {
   type OoxmlPart,
   type OoxmlProperty,
   type TreeDocOp,
-} from '@docx-editor.dev/engine-core';
+} from '@docx-editor.dev/core-contract/store';
 import { runPropsOf, treeSchema } from './tree-schema.ts';
 
 export type TreeBindingRejection =

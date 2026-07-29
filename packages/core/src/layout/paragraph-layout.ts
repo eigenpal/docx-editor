@@ -3,7 +3,7 @@ import {
   type PackageModel,
   type ParagraphRecord,
   type RunProps,
-} from '@docx-editor.dev/engine-core';
+} from '@docx-editor.dev/core-contract/store';
 import { FontResolutionError, type FontRequest, type ResolvedFont } from './font-resource.ts';
 import type { CaretEdgeItem, DisplayItem, TextItem, VisualLineIdentity } from './display-item.ts';
 import { segmentGraphemes, utf16OffsetToGrapheme } from './grapheme.ts';

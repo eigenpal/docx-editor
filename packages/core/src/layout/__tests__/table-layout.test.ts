@@ -6,7 +6,7 @@ import { describe, expect, test } from 'bun:test';
 import { readFileSync } from 'node:fs';
 import { zipSync, strToU8 } from 'fflate';
 import { layoutBody, createDeterministicLayoutShaping, type LayoutOptions } from '../index.ts';
-import { parseDocx, bodyStoryId, type TableRecord } from '@docx-editor.dev/engine-core';
+import { parseDocx, bodyStoryId, type TableRecord } from '@docx-editor.dev/core-contract/store';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 function docxOf(inner: string): Uint8Array {

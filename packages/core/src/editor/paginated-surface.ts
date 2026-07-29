@@ -12,7 +12,7 @@
 // a small offscreen input host, which is what gives the browser somewhere to put focus, the
 // IME and autofill without letting it own the document.
 
-import { openTreeSession, type TreeDocxSession } from '@docx-editor.dev/engine-binding';
+import { openTreeSession, type TreeDocxSession } from '@docx-editor.dev/core-contract/binding';
 import {
   createFixedMeasurer,
   createLayoutScheduler,
@@ -35,8 +35,8 @@ import {
   type SemanticPosition,
   type SemanticSelection,
   type TextMeasurer,
-} from '@docx-editor.dev/engine-layout';
-import { paintSemanticLayout } from '@docx-editor.dev/engine-output';
+} from '@docx-editor.dev/core-contract/layout';
+import { paintSemanticLayout } from '@docx-editor.dev/core-contract/output';
 import { applySelectionToDom, selectionsEqual, semanticSelectionFromDom } from './dom-selection.ts';
 
 export interface PaginatedSurfaceOptions {

@@ -7,7 +7,7 @@ import type {
 } from '@docx-editor.dev/core-contract/contracts/interaction';
 import { deriveSelectionGeometry, hitTestPointer } from '../interaction-geometry.ts';
 import { InteractionFrameStore } from '../interaction-frame.ts';
-import { layoutBody } from '@docx-editor.dev/engine-layout';
+import { layoutBody } from '@docx-editor.dev/core-contract/layout';
 import { toDisplayPages } from '../display-bridge.ts';
 import {
   LAYOUT,

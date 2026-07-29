@@ -25,7 +25,7 @@ import {
   type SelectionMark,
   type TreeDocOp,
   type TreeModelChange,
-} from '@docx-editor.dev/engine-core';
+} from '@docx-editor.dev/core-contract/store';
 import { bodyParagraphs, docToTreeOps, reconcileDoc, treeToDoc } from './tree-binding.ts';
 import type { TreeBindingRejection } from './tree-binding.ts';
 

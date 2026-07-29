@@ -93,12 +93,22 @@
     "fast-xml-parser": "^4.5.0",
     "fflate": "^0.8.2",
     "harfbuzzjs": "1.4.0",
-    "pdf-lib": "^1.17.1",
     "prosemirror-commands": "^1.7.1",
     "prosemirror-keymap": "^1.2.3",
     "prosemirror-model": "^1.25.4",
     "prosemirror-state": "^1.4.4",
-    "prosemirror-view": "^1.41.8",
+    "prosemirror-view": "^1.41.8"
+  },
+  "peerDependencies": {
+    "pdf-lib": "^1.17.1",
     "yjs": "^13.6.0"
+  },
+  "peerDependenciesMeta": {
+    "pdf-lib": {
+      "optional": true
+    },
+    "yjs": {
+      "optional": true
+    }
   }
 }

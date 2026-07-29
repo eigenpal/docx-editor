@@ -6,7 +6,7 @@ import {
   caretAffinity,
   paragraphEditableInLane,
 } from '../semantic-index.ts';
-import { createBoundedFallbackWordBoundary } from '@docx-editor.dev/engine-layout';
+import { createBoundedFallbackWordBoundary } from '@docx-editor.dev/core-contract/layout';
 import { deepFreezeValue } from '../interaction-frame.ts';
 import {
   createEmptyModel,
@@ -15,7 +15,7 @@ import {
   ORIGIN_IDS,
   type ParagraphRecord,
   type TableRecord,
-} from '@docx-editor.dev/engine-core';
+} from '@docx-editor.dev/core-contract/store';
 
 const HUMAN = ORIGIN_IDS.mutationHuman;
 

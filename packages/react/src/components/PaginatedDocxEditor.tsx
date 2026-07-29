@@ -23,7 +23,7 @@ import {
   type SectionProperties,
   type SurfaceFormatting,
   type TextMeasurer,
-} from '@docx-editor.dev/engine-editor';
+} from '@docx-editor.dev/core-contract/editor';
 
 export interface PaginatedDocxEditorProps {
   /** The document to open. Replacing it remounts the surface. */

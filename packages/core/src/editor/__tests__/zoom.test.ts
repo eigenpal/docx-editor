@@ -8,7 +8,7 @@
 import { describe, expect, test } from 'bun:test';
 import { createTestEditor as createEditor } from './create-test-editor.ts';
 import type { Editor, EditorHost } from '@docx-editor.dev/core-contract/contracts/editor';
-import { createEmptyModel, writeDocx } from '@docx-editor.dev/engine-core';
+import { createEmptyModel, writeDocx } from '@docx-editor.dev/core-contract/store';
 
 function host(): EditorHost {
   return {

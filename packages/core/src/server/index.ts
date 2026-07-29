@@ -9,7 +9,7 @@
 // ADR-S9: production modules MUST NOT import from packages/core/spike/**.
 
 /** Stable package identity used by the import-graph / package-authority checks. */
-export const ENGINE_SERVER_PACKAGE = '@docx-editor.dev/engine-server' as const;
+export const ENGINE_SERVER_PACKAGE = '@docx-editor.dev/core-contract/server' as const;
 
 export {
   RPC_PROTOCOL_VERSION,

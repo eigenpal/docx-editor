@@ -11,7 +11,7 @@
 // Twips throughout, because that is what the file stores — a twentieth of a point. Converting
 // early would round twice, once here and once into layout units.
 
-import type { OoxmlNode, OoxmlPart } from '@docx-editor.dev/engine-core';
+import type { OoxmlNode, OoxmlPart } from '@docx-editor.dev/core-contract/store';
 import { DEFAULT_PAGE_GEOMETRY, type PageGeometry } from './semantic-records.ts';
 
 export interface SectionMargins {

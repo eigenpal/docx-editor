@@ -22,7 +22,7 @@ import {
   ORIGIN_IDS,
   fingerprint,
   type ParagraphRecord,
-} from '@docx-editor.dev/engine-core';
+} from '@docx-editor.dev/core-contract/store';
 import { createHarfBuzzLayoutOptions } from './fixtures/layout-shaping.ts';
 import { shapedRunComparatorInputs } from '../shaped-run.ts';
 

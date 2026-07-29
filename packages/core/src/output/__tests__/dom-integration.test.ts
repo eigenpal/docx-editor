@@ -10,8 +10,8 @@ import {
   createDeterministicLayoutShaping,
   layoutBody,
   type LayoutOptions,
-} from '@docx-editor.dev/engine-layout';
-import { parseDocx } from '@docx-editor.dev/engine-core';
+} from '@docx-editor.dev/core-contract/layout';
+import { parseDocx } from '@docx-editor.dev/core-contract/store';
 
 // Minimal DOM stand-in: renderToDom only uses createElement/style/setAttribute/
 // appendChild/textContent.

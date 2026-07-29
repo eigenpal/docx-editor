@@ -20,7 +20,7 @@
 import { describe, expect, test } from 'bun:test';
 import { layoutBody } from '../layout.ts';
 import { createDeterministicLayoutShaping } from '../metrics.ts';
-import { createEmptyModel, bodyStoryId, type ParagraphRecord } from '@docx-editor.dev/engine-core';
+import { createEmptyModel, bodyStoryId, type ParagraphRecord } from '@docx-editor.dev/core-contract/store';
 
 const LAYOUT = {
   pageWidth: 12240,

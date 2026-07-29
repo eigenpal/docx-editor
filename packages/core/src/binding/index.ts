@@ -1,7 +1,7 @@
 // @docx-editor.dev/engine-binding
 
 /** Stable package identity used by the import-graph / package-authority checks. */
-export const ENGINE_BINDING_PACKAGE = '@docx-editor.dev/engine-binding' as const;
+export const ENGINE_BINDING_PACKAGE = '@docx-editor.dev/core-contract/binding' as const;
 
 export { docSchema } from './schema.ts';
 export {

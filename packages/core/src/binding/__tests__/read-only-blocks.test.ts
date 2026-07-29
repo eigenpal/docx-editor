@@ -8,7 +8,7 @@
 import { describe, expect, test } from 'bun:test';
 import { zipSync, strToU8, unzipSync, strFromU8 } from 'fflate';
 import { docSchema, modelToDoc, EditorBinding } from '../index.ts';
-import { DocumentStore, parseDocx, writeDocx, bodyStoryId } from '@docx-editor.dev/engine-core';
+import { DocumentStore, parseDocx, writeDocx, bodyStoryId } from '@docx-editor.dev/core-contract/store';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 function docx(bodyInner: string): Uint8Array {

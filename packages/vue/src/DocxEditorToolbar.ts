@@ -21,7 +21,7 @@ import {
   runToolbarCommand,
   toolbarCommandState,
   type LegacyChromeControl,
-} from '@docx-editor.dev/engine-editor';
+} from '@docx-editor.dev/core-contract/editor';
 import { useEditorSnapshot } from './useEditorSnapshot';
 
 /**

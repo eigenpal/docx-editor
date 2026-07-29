@@ -8,7 +8,7 @@ import {
   type PackageModel,
   type ParagraphRecord,
   type TableRecord,
-} from '@docx-editor.dev/engine-core';
+} from '@docx-editor.dev/core-contract/store';
 import type { GeometryFixtureInput } from './geometry-fixtures.ts';
 
 const HUMAN = ORIGIN_IDS.mutationHuman;

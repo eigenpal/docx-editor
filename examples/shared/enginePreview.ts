@@ -4,13 +4,13 @@
 // framework duplicates any layout/paint logic. It is strictly read-only: there is no
 // editing or saving. It imports ONLY the production engine — no ProseMirror, no legacy
 // core implementation, no spike.
-import { parseDocx, type PackageModel } from '@docx-editor.dev/engine-core';
-import { layoutBody, type LayoutShapingOptions, type Page } from '@docx-editor.dev/engine-layout';
+import { parseDocx, type PackageModel } from '@docx-editor.dev/core-contract/store';
+import { layoutBody, type LayoutShapingOptions, type Page } from '@docx-editor.dev/core-contract/layout';
 import {
   renderToDom,
   renderPageElement,
   type InstalledFontMapping,
-} from '@docx-editor.dev/engine-output';
+} from '@docx-editor.dev/core-contract/output';
 
 export interface PreviewResult {
   /** Whether the file parsed and rendered. */

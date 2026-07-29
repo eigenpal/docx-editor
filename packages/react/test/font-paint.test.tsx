@@ -1,6 +1,6 @@
 import { expect, test } from 'bun:test';
 import type { DisplayPage, GlyphFont, GlyphRun } from '@docx-editor.dev/core-contract/contracts/geometry';
-import type { InstalledDisplayFonts } from '@docx-editor.dev/engine-editor';
+import type { InstalledDisplayFonts } from '@docx-editor.dev/core-contract/editor';
 import { paintDisplay } from '../src/paintDisplay.tsx';
 
 const font = {

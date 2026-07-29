@@ -5,7 +5,7 @@ import {
   createFontResourceSnapshot,
   sha256FontBytes,
   type FontRequest,
-} from '@docx-editor.dev/engine-layout';
+} from '@docx-editor.dev/core-contract/layout';
 import {
   BrowserFontPaintError,
   installDisplayFonts,

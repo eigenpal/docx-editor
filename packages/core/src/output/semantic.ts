@@ -3,7 +3,7 @@
 // layout emitted; this feeds accessible DOM, tagged-PDF ActualText, and text
 // extraction comparators. Pure — no backend, no geometry re-derivation.
 
-import type { DisplayItem, LayoutResult } from '@docx-editor.dev/engine-layout';
+import type { DisplayItem, LayoutResult } from '@docx-editor.dev/core-contract/layout';
 import { assertNeverDisplayItem } from './output-capabilities.ts';
 
 /** The reading-order text an item contributes (empty for non-text). Exhaustive over DisplayItem, so a

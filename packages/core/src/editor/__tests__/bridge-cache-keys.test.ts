@@ -20,7 +20,7 @@ import {
   setGraphemeBoundary,
   resetGraphemeBoundary,
   type LayoutShapingOptions,
-} from '@docx-editor.dev/engine-layout';
+} from '@docx-editor.dev/core-contract/layout';
 import {
   createEmptyModel,
   bodyStoryId,
@@ -28,7 +28,7 @@ import {
   ORIGIN_IDS,
   type PackageModel,
   type ParagraphRecord,
-} from '@docx-editor.dev/engine-core';
+} from '@docx-editor.dev/core-contract/store';
 import { DisplayBridgeCache, toDisplayPages } from '../display-bridge.ts';
 import { LAYOUT } from './interaction-test-helpers.ts';
 import { createHarfBuzzLayoutOptions } from '../../layout/__tests__/fixtures/layout-shaping.ts';

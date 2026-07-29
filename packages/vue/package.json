@@ -15,7 +15,6 @@
   "module": "./dist/index.js",
   "devDependencies": {
     "@docx-editor.dev/core-contract": "workspace:*",
-    "@docx-editor.dev/engine-editor": "workspace:*",
     "vite-plugin-dts": "^5.0.0"
   },
   "peerDependencies": {
@@ -53,7 +52,7 @@
   "type": "module",
   "types": "./dist/index.d.ts",
   "dependencies": {
-    "harfbuzzjs": "1.4.0",
-    "@docx-editor.dev/engine-editor": "workspace:*"
+    "@docx-editor.dev/core-contract": "workspace:*",
+    "harfbuzzjs": "1.4.0"
   }
 }

@@ -12,7 +12,7 @@ import {
   ORIGIN_IDS,
   type DocumentStore as Store,
   type ParagraphRecord,
-} from '@docx-editor.dev/engine-core';
+} from '@docx-editor.dev/core-contract/store';
 
 const P1 = 'p-1';
 

@@ -1,12 +1,12 @@
 import { describe, expect, test } from 'bun:test';
-import { layoutBody } from '@docx-editor.dev/engine-layout';
+import { layoutBody } from '@docx-editor.dev/core-contract/layout';
 import {
   createEmptyModel,
   bodyStoryId,
   DocumentStore,
   ORIGIN_IDS,
   type ParagraphRecord,
-} from '@docx-editor.dev/engine-core';
+} from '@docx-editor.dev/core-contract/store';
 import { createHarfBuzzLayoutOptions } from '../../layout/__tests__/fixtures/layout-shaping.ts';
 import { toDisplayPages } from '../display-bridge.ts';
 

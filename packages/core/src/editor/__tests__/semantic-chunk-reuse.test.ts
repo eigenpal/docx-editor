@@ -14,7 +14,7 @@ import {
   ORIGIN_IDS,
   type PackageModel,
   type ParagraphRecord,
-} from '@docx-editor.dev/engine-core';
+} from '@docx-editor.dev/core-contract/store';
 import { buildSemanticIndex } from '../semantic-index.ts';
 
 const HUMAN = ORIGIN_IDS.mutationHuman;

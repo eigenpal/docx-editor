@@ -99,9 +99,12 @@ function reachFrom(entry: string): Reach {
         if (resolved) queue.push(resolved);
         continue;
       }
-      const workspace = [...WORKSPACE.keys()].find(
-        (name) => specifier === name || specifier.startsWith(`${name}/`)
-      );
+      // LONGEST first. Every lane subpath now begins with the core package's own name, so a
+      // shortest-match walk resolved `.../core-contract/store` to the contracts lane and the
+      // graph collapsed to one node.
+      const workspace = [...WORKSPACE.keys()]
+        .sort((a, b) => b.length - a.length)
+        .find((name) => specifier === name || specifier.startsWith(`${name}/`));
       if (workspace) {
         packages.add(workspace);
         // `root` is already the lane's SOURCE root, moved or not, so no 'src' segment here.

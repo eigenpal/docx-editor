@@ -27,7 +27,7 @@ import {
   parseDocx,
   ORIGIN_IDS,
   type ParagraphRecord,
-} from '@docx-editor.dev/engine-core';
+} from '@docx-editor.dev/core-contract/store';
 import type { SemanticSelection } from '@docx-editor.dev/core-contract/contracts/interaction';
 
 const HUMAN = ORIGIN_IDS.mutationHuman;

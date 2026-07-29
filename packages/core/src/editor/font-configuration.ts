@@ -15,7 +15,7 @@ import {
   harfBuzzFontValidator,
   initializeHarfBuzz,
   type LayoutShapingOptions,
-} from '@docx-editor.dev/engine-layout';
+} from '@docx-editor.dev/core-contract/layout';
 
 const FEATURES = Object.freeze({ kern: 1, liga: 1 });
 

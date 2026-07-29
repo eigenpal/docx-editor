@@ -9,7 +9,7 @@ import {
   type ParagraphRecord,
   type SdtRecord,
   type TableRecord,
-} from '@docx-editor.dev/engine-core';
+} from '@docx-editor.dev/core-contract/store';
 
 export interface ParagraphTraversalContext {
   readonly inTopLevelBodyFlow: boolean;

@@ -4,7 +4,7 @@
 // innerHTML/HTML-from-string (security contract). Fixed-point layout units (twips,
 // 1/1440in) convert to CSS px (96/in).
 
-import type { LayoutResult, Page, TextItem, RectItem } from '@docx-editor.dev/engine-layout';
+import type { LayoutResult, Page, TextItem, RectItem } from '@docx-editor.dev/core-contract/layout';
 import {
   registerDisplayItemRenderer,
   renderDisplayItem,

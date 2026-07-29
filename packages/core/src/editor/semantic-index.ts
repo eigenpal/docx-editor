@@ -9,7 +9,7 @@ import {
   type ParagraphRecord,
   type TableRecord,
   type SdtRecord,
-} from '@docx-editor.dev/engine-core';
+} from '@docx-editor.dev/core-contract/store';
 import {
   graphemeCount,
   segmentWords,
@@ -17,7 +17,7 @@ import {
   utf16OffsetToGrapheme,
   wordSegmentsToGraphemeRecords,
   type WordBoundary,
-} from '@docx-editor.dev/engine-layout';
+} from '@docx-editor.dev/core-contract/layout';
 import type { ViewScope } from '@docx-editor.dev/core-contract/contracts/editor';
 import type {
   BlockSemanticRecord,

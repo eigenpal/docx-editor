@@ -10,7 +10,7 @@ import { createTestEditor as createEditor } from './create-test-editor.ts';
 import type { EditorHost } from '@docx-editor.dev/core-contract/contracts/editor';
 import type { DisplayPage } from '@docx-editor.dev/core-contract/contracts/geometry';
 import type { InteractionHostMetrics } from '@docx-editor.dev/core-contract/contracts/interaction';
-import { createEmptyModel, writeDocx } from '@docx-editor.dev/engine-core';
+import { createEmptyModel, writeDocx } from '@docx-editor.dev/core-contract/store';
 import { contentToClient } from '../coordinate-mapper.ts';
 import { createEditableParagraphFixture } from '../../../../engine-editor/browser/fixtures.ts';
 import { IDENTITY_HOST_METRICS } from '../coordinate-mapper.ts';

@@ -14,7 +14,7 @@ import { deriveCaretGeometry, hitTestPointer } from '../interaction-geometry.ts'
 import { deepFreezeValue } from '../interaction-frame.ts';
 import { buildSemanticIndex } from '../semantic-index.ts';
 import { planInteraction } from '../interaction-planner.ts';
-import { layoutBody } from '@docx-editor.dev/engine-layout';
+import { layoutBody } from '@docx-editor.dev/core-contract/layout';
 import {
   clientPointForStackedText,
   modelWith,

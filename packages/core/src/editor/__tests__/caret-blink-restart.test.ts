@@ -17,7 +17,7 @@ import { fileURLToPath } from 'node:url';
 const read = (rel: string) => readFileSync(fileURLToPath(new URL(rel, import.meta.url)), 'utf8');
 
 const REACT = read('../../../../react/src/paintDisplay.tsx');
-const VUE = read('../../vue/src/paintDisplay.ts');
+const VUE = read('../../../../vue/src/paintDisplay.ts');
 const CSS = read('../../styles/editor.css');
 
 describe('caret blink restarts when the caret moves', () => {

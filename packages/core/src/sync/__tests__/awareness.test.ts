@@ -2,7 +2,7 @@
 
 import { describe, expect, test } from 'bun:test';
 import { PresenceRegistry, canSubmitUpdate, canExport, YjsBackend, type Presence } from '../index.ts';
-import { createEmptyModel, encodeModel } from '@docx-editor.dev/engine-core';
+import { createEmptyModel, encodeModel } from '@docx-editor.dev/core-contract/store';
 
 describe('read-only viewer role', () => {
   test('viewers cannot submit updates or export; editors can', () => {

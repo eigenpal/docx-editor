@@ -9,7 +9,7 @@
 // ADR-S9: production modules MUST NOT import from packages/core/spike/**.
 
 /** Stable package identity used by the import-graph / package-authority checks. */
-export const ENGINE_OUTPUT_PACKAGE = '@docx-editor.dev/engine-output' as const;
+export const ENGINE_OUTPUT_PACKAGE = '@docx-editor.dev/core-contract/output' as const;
 
 export { renderPdf, inspectPdf } from './pdf.ts';
 export { extractReadingOrder } from './semantic.ts';

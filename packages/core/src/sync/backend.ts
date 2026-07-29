@@ -5,7 +5,7 @@
 // backend to canonical state via the store's own publishDerived — a backend never
 // mutates canonical state directly.
 
-import type { ReplicationUpdate, Snapshot, SerializedModel } from '@docx-editor.dev/engine-core';
+import type { ReplicationUpdate, Snapshot, SerializedModel } from '@docx-editor.dev/core-contract/store';
 
 export interface ReplicatedStoreBackend {
   readonly documentId: string;

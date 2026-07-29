@@ -5,7 +5,7 @@
 
 import { describe, expect, test } from 'bun:test';
 import { LocalBackend, YjsBackend } from '../index.ts';
-import { createEmptyModel, encodeModel, fingerprint, ORIGIN_IDS } from '@docx-editor.dev/engine-core';
+import { createEmptyModel, encodeModel, fingerprint, ORIGIN_IDS } from '@docx-editor.dev/core-contract/store';
 
 const HUMAN = ORIGIN_IDS.mutationHuman;
 const P1 = 'p-1';

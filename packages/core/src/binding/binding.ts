@@ -22,7 +22,7 @@ import {
   type Block,
   type RunRecord,
   type ParagraphRecord,
-} from '@docx-editor.dev/engine-core';
+} from '@docx-editor.dev/core-contract/store';
 import { docSchema } from './schema.ts';
 import { modelToDoc, paragraphNodeToRuns } from './projection.ts';
 import {

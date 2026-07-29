@@ -28,8 +28,8 @@
 // stated at the test, not by a linearity claim it would fail.
 
 import { describe, expect, test } from 'bun:test';
-import { createDeterministicLayoutShaping, layoutBody } from '@docx-editor.dev/engine-layout';
-import { createEmptyModel, bodyStoryId, type ParagraphRecord } from '@docx-editor.dev/engine-core';
+import { createDeterministicLayoutShaping, layoutBody } from '@docx-editor.dev/core-contract/layout';
+import { createEmptyModel, bodyStoryId, type ParagraphRecord } from '@docx-editor.dev/core-contract/store';
 import { toDisplayPages } from '../display-bridge.ts';
 
 const LAYOUT = {
@@ -63,6 +63,10 @@ function timePublish(paragraphs: number): number {
 }
 
 describe('display publication cost', () => {
+  // 60s, not bun's default 15s. This test really does publish 8,000 paragraphs, so under a
+  // full parallel suite the DEFAULT TIMEOUT was deciding the outcome instead of the
+  // assertions — it failed intermittently while passing in isolation. The guard itself is the
+  // ratio and absolute bounds below; those still fail fast on a genuine regression.
   test('publishing an ordinary multi-page document is not quadratic in paragraph count', () => {
     // 4x the paragraphs must not cost ~16x. Measured after indexing the four terms:
     // 500 -> 133 ms, 1,000 -> 234 ms, 2,000 -> 488 ms, 4,000 -> 1,205 ms,
@@ -87,7 +91,7 @@ describe('display publication cost', () => {
     // The shape review measured at 120.7 s. An absolute assertion is defensible HERE
     // because the pre-fix number was four orders of magnitude away, not 2x.
     expect(timePublish(4000)).toBeLessThan(8000);
-  });
+  }, 60_000);
 
   test('cost does not depend on how the SAME text is split into paragraphs', () => {
     // The axis the first version of this file missed, and review named it: all three

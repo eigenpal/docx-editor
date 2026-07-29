@@ -6,9 +6,9 @@ import {
   bodyStoryId,
   DocumentStore,
   ORIGIN_IDS,
-} from '@docx-editor.dev/engine-core';
+} from '@docx-editor.dev/core-contract/store';
 import { layoutBody } from '../layout.ts';
-import type { ParagraphRecord } from '@docx-editor.dev/engine-core';
+import type { ParagraphRecord } from '@docx-editor.dev/core-contract/store';
 import type { CaretEdgeItem, TextItem } from '../display-item.ts';
 import { createDeterministicLayoutShaping, type LayoutOptions } from '../index.ts';
 import { createHarfBuzzLayoutOptions } from './fixtures/layout-shaping.ts';

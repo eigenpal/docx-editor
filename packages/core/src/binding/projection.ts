@@ -12,7 +12,7 @@ import {
   type PackageModel,
   type RunRecord,
   type RunUnderline,
-} from '@docx-editor.dev/engine-core';
+} from '@docx-editor.dev/core-contract/store';
 import { docSchema } from './schema.ts';
 import { projectBlock } from './binding-capabilities.ts';
 

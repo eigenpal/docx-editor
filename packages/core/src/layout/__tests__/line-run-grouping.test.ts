@@ -14,10 +14,10 @@ import {
   bodyStoryId,
   DocumentStore,
   ORIGIN_IDS,
-} from '@docx-editor.dev/engine-core';
+} from '@docx-editor.dev/core-contract/store';
 import { layoutBody } from '../layout.ts';
 import { createDeterministicLayoutShaping } from '../metrics.ts';
-import type { ParagraphRecord, RunProps } from '@docx-editor.dev/engine-core';
+import type { ParagraphRecord, RunProps } from '@docx-editor.dev/core-contract/store';
 import type { TextItem } from '../display-item.ts';
 
 const WIDE = {

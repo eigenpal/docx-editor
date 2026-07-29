@@ -4,7 +4,7 @@ import { GlobalRegistrator } from '@happy-dom/global-registrator';
 if (!GlobalRegistrator.isRegistered) GlobalRegistrator.register();
 
 import { describe, expect, test } from 'bun:test';
-import { layoutBody } from '@docx-editor.dev/engine-layout';
+import { layoutBody } from '@docx-editor.dev/core-contract/layout';
 import {
   createEmptyModel,
   bodyStoryId,
@@ -12,7 +12,7 @@ import {
   type ParagraphRecord,
   type TableRecord,
   type SdtRecord,
-} from '@docx-editor.dev/engine-core';
+} from '@docx-editor.dev/core-contract/store';
 import { toDisplayPages } from '../display-bridge.ts';
 import { freezeNavigationGeometry } from '../navigation-geometry.ts';
 import { buildTraversalLinksForModel } from '../semantic-index.ts';

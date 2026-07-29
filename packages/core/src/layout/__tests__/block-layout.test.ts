@@ -23,7 +23,7 @@ import {
   restoreBlockRegistryForTest,
   type Block,
   type PackageModel,
-} from '@docx-editor.dev/engine-core';
+} from '@docx-editor.dev/core-contract/store';
 
 function opts(): LayoutOptions {
   return {

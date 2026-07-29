@@ -11,7 +11,7 @@
 // ADR-S9: production modules MUST NOT import from packages/core/spike/**.
 
 /** Stable package identity used by the import-graph / package-authority checks. */
-export const ENGINE_SYNC_PACKAGE = '@docx-editor.dev/engine-sync' as const;
+export const ENGINE_SYNC_PACKAGE = '@docx-editor.dev/core-contract/sync' as const;
 
 export type { ReplicatedStoreBackend } from './backend.ts';
 export { LocalBackend, SNAPSHOT_SCHEMA_VERSION, NORMALIZATION_VERSION } from './local-backend.ts';

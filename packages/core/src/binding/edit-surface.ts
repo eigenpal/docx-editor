@@ -48,7 +48,7 @@ import {
   type CompositionSnapshot,
 } from './composition.ts';
 import type { CompositionObservation } from '@docx-editor.dev/core-contract/contracts/interaction';
-import { paragraphText } from '@docx-editor.dev/engine-core';
+import { paragraphText } from '@docx-editor.dev/core-contract/store';
 import {
   observeAccessibilityFromSession,
   captureAccessibilityState,

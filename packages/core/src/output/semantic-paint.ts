@@ -17,7 +17,7 @@ import type {
   ResolvedRunStyle,
   SemanticLayout,
   StyleSpanRecord,
-} from '@docx-editor.dev/engine-layout';
+} from '@docx-editor.dev/core-contract/layout';
 
 export interface PaintOptions {
   /** Points to CSS pixels. 96/72 renders a point as a CSS point at 100% zoom. */

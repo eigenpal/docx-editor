@@ -6,7 +6,7 @@
 // points (1/72in). Full PDF/UA-1 tagging is a follow-up behind this generator.
 
 import { PDFDocument, StandardFonts, type PDFFont } from 'pdf-lib';
-import type { LayoutResult } from '@docx-editor.dev/engine-layout';
+import type { LayoutResult } from '@docx-editor.dev/core-contract/layout';
 import { assertNeverDisplayItem } from './output-capabilities.ts';
 
 const TWIPS_PER_POINT = 20; // 1440 twips/in ÷ 72 pt/in

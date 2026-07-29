@@ -9,8 +9,8 @@ import {
   insertParagraph,
   setParagraphRuns,
   type PackageModel,
-} from '@docx-editor.dev/engine-core';
-import { createDeterministicLayoutShaping } from '@docx-editor.dev/engine-layout';
+} from '@docx-editor.dev/core-contract/store';
+import { createDeterministicLayoutShaping } from '@docx-editor.dev/core-contract/layout';
 import { createPagePainter } from './enginePreview.ts';
 
 const options = {

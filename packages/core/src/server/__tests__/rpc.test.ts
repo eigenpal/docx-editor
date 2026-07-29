@@ -4,7 +4,7 @@
 
 import { describe, expect, test } from 'bun:test';
 import { RpcServer, RpcClient, RpcTransportError, RPC_PROTOCOL_VERSION, COMMAND_SCHEMA_VERSION, DEFAULT_TENANT } from '../index.ts';
-import { DocxEditor, bodyStoryId, paragraphText, type DocumentStore, type ParagraphRecord } from '@docx-editor.dev/engine-core';
+import { DocxEditor, bodyStoryId, paragraphText, type DocumentStore, type ParagraphRecord } from '@docx-editor.dev/core-contract/store';
 
 function bodyText(store: DocumentStore): string {
   return store.currentModel.stories

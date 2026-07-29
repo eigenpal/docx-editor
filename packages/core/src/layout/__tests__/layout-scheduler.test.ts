@@ -1,7 +1,7 @@
 // Stale-safe layout scheduling driven by authoritative model changes (task 9.1).
 
 import { describe, expect, test } from 'bun:test';
-import type { TreeModelChange } from '@docx-editor.dev/engine-core';
+import type { TreeModelChange } from '@docx-editor.dev/core-contract/store';
 import { createLayoutScheduler, type LayoutScope } from '../layout-scheduler.ts';
 import type { SemanticLayout } from '../semantic-records.ts';
 

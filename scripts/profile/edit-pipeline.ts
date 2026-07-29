@@ -20,8 +20,8 @@ import {
   ORIGIN_IDS,
   type PackageModel,
   type ParagraphRecord,
-} from '@docx-editor.dev/engine-core';
-import { createDeterministicLayoutShaping, layoutBody } from '@docx-editor.dev/engine-layout';
+} from '@docx-editor.dev/core-contract/store';
+import { createDeterministicLayoutShaping, layoutBody } from '@docx-editor.dev/core-contract/layout';
 import {
   DisplayBridgeCache,
   toDisplayPages,

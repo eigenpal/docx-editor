@@ -4,7 +4,7 @@
 // That is what makes interaction testable headlessly and identical between adapters.
 
 import { describe, expect, test } from 'bun:test';
-import { readOoxmlPart, type OoxmlPart } from '@docx-editor.dev/engine-core';
+import { readOoxmlPart, type OoxmlPart } from '@docx-editor.dev/core-contract/store';
 import { createFixedMeasurer, layoutSemanticDocument } from '../semantic-layout.ts';
 import { type PageGeometry } from '../semantic-records.ts';
 import {

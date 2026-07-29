@@ -9,7 +9,7 @@
 // paragraph id. That is what makes a cross-page paragraph one paragraph for selection and
 // two boxes for pagination.
 
-import type { OoxmlNode, OoxmlPart, OoxmlProperty } from '@docx-editor.dev/engine-core';
+import type { OoxmlNode, OoxmlPart, OoxmlProperty } from '@docx-editor.dev/core-contract/store';
 import { paragraphLayoutKey, type ParagraphLayoutCache } from './layout-cache.ts';
 import {
   DEFAULT_RUN_STYLE,

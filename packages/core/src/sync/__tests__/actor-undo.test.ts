@@ -5,7 +5,7 @@
 
 import { describe, expect, test } from 'bun:test';
 import { YjsBackend } from '../index.ts';
-import { createEmptyModel, type ParagraphRecord } from '@docx-editor.dev/engine-core';
+import { createEmptyModel, type ParagraphRecord } from '@docx-editor.dev/core-contract/store';
 
 const BODY = 'st-1';
 const P1 = 'p-1';

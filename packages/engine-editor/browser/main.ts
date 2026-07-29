@@ -7,8 +7,8 @@ import type {
   SemanticSelection,
   SemanticTarget,
 } from '@docx-editor.dev/core-contract/contracts/interaction';
-import { PAINTED_PAGES_ASSISTIVE_MARKER } from '@docx-editor.dev/engine-binding';
-import { createDeterministicLayoutShaping } from '@docx-editor.dev/engine-layout';
+import { PAINTED_PAGES_ASSISTIVE_MARKER } from '@docx-editor.dev/core-contract/binding';
+import { createDeterministicLayoutShaping } from '@docx-editor.dev/core-contract/layout';
 import { paintDisplayPages } from './paint-display.ts';
 import {
   LOCALIZED_ACCESSIBLE_NAME,

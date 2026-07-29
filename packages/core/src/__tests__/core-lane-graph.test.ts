@@ -178,14 +178,32 @@ describe('a browser bundle cannot reach the server (task 10.1)', () => {
     }
   });
 
-  test('the core manifest DOES carry other lanes\' runtimes, which is why the graph check exists', () => {
-    // Makes the weakening above visible instead of implicit. yjs and pdf-lib are in the core
-    // manifest because the sync and output lanes moved there, and a browser import must still
-    // not reach them — that is the import-graph walk's job, not this file's.
+  test("heavy lane runtimes are OPTIONAL peers, not dependencies", () => {
+    // pdf-lib (output) and yjs (sync) are real runtimes of real lanes, but a consumer that
+    // only parses and paints a document needs neither. As plain dependencies they were
+    // installed by everyone; as optional peers they are installed only by consumers that use
+    // those lanes. This is about INSTALL weight — it says nothing about what a bundle pulls
+    // in, which is the import-graph walk's job, because a manifest cannot stop an import.
     const core = manifestOf('contracts') ?? {};
     const dependencies = Object.keys((core.dependencies as Record<string, string>) ?? {});
-    const carried = BROWSER_FORBIDDEN_DEPENDENCIES.filter((name) => dependencies.includes(name));
-    expect(carried.length > 0).toBe(true);
+    const peers = (core.peerDependencies as Record<string, string>) ?? {};
+    const meta = (core.peerDependenciesMeta as Record<string, { optional?: boolean }>) ?? {};
+
+    for (const heavy of ['pdf-lib', 'yjs']) {
+      expect({ heavy, inDependencies: dependencies.includes(heavy) }).toEqual({
+        heavy,
+        inDependencies: false,
+      });
+      expect({ heavy, declared: heavy in peers, optional: meta[heavy]?.optional === true }).toEqual({
+        heavy,
+        declared: true,
+        optional: true,
+      });
+    }
+
+    // What everyone genuinely needs stays a hard dependency.
+    expect(dependencies).toContain('fflate');
+    expect(dependencies).toContain('harfbuzzjs');
   });
 
   test('the guard is not vacuous: the server lane really does depend on the sync lane', () => {

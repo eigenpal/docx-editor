@@ -9,7 +9,7 @@ import {
   ORIGIN_IDS,
   writeDocx,
   type ParagraphRecord,
-} from '@docx-editor.dev/engine-core';
+} from '@docx-editor.dev/core-contract/store';
 
 const HUMAN = ORIGIN_IDS.mutationHuman;
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';

@@ -1,13 +1,13 @@
 import type { CSSProperties, ReactElement } from 'react';
 import type { DisplayItem, DisplayPage } from '@docx-editor.dev/core-contract/contracts/geometry';
-import type { FrameOverlays, GlyphClickTarget, OverlayBox } from '@docx-editor.dev/engine-editor';
-import type { InstalledDisplayFonts } from '@docx-editor.dev/engine-editor';
+import type { FrameOverlays, GlyphClickTarget, OverlayBox } from '@docx-editor.dev/core-contract/editor';
+import type { InstalledDisplayFonts } from '@docx-editor.dev/core-contract/editor';
 import {
   colorToCss,
   borderSegLine,
   cssMatrix,
   ONE_SURFACE_CLICK_TARGET,
-} from '@docx-editor.dev/engine-editor';
+} from '@docx-editor.dev/core-contract/editor';
 
 /**
  * An overlay element that deliberately opts out of pointer transparency —

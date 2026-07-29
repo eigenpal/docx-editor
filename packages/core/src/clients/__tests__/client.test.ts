@@ -4,8 +4,8 @@
 
 import { describe, expect, test } from 'bun:test';
 import { DocxClient, makeGeneratedClient, type ClientTransport } from '../index.ts';
-import { RpcServer, RpcClient } from '@docx-editor.dev/engine-server';
-import { DocxEditor, paragraphText, bodyStoryId, type DocumentStore } from '@docx-editor.dev/engine-core';
+import { RpcServer, RpcClient } from '@docx-editor.dev/core-contract/server';
+import { DocxEditor, paragraphText, bodyStoryId, type DocumentStore } from '@docx-editor.dev/core-contract/store';
 
 function rpcTransport(server: RpcServer, docId: string): ClientTransport {
   const rpc = new RpcClient(server);

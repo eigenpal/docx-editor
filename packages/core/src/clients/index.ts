@@ -9,7 +9,7 @@
 // ADR-S9: production modules MUST NOT import from packages/core/spike/**.
 
 /** Stable package identity used by the import-graph / package-authority checks. */
-export const ENGINE_CLIENTS_PACKAGE = '@docx-editor.dev/engine-clients' as const;
+export const ENGINE_CLIENTS_PACKAGE = '@docx-editor.dev/core-contract/clients' as const;
 
 export {
   type ClientTransport,

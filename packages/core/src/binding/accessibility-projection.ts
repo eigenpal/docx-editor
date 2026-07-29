@@ -7,7 +7,7 @@ import {
   type PackageModel,
   type ParagraphRecord,
   type SdtRecord,
-} from '@docx-editor.dev/engine-core';
+} from '@docx-editor.dev/core-contract/store';
 import type { ViewScope } from '@docx-editor.dev/core-contract/contracts/editor';
 import type {
   AccessibilityEntry,

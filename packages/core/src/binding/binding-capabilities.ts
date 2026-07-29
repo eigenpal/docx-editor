@@ -7,7 +7,7 @@
 // instead of editing modelToDoc. The PM doc is a PROJECTION — never canonical state.
 
 import { Schema, type NodeSpec, type MarkSpec, Node as PMNode } from 'prosemirror-model';
-import { type Block, registeredBlockKinds, isTopLevelEditable } from '@docx-editor.dev/engine-core';
+import { type Block, registeredBlockKinds, isTopLevelEditable } from '@docx-editor.dev/core-contract/store';
 
 /** Project one authored block into a ProseMirror node (given the composed schema). */
 export type BlockProjector = (block: Block, schema: Schema) => PMNode;

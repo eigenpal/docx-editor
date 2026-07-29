@@ -10,7 +10,7 @@ import { describe, expect, test } from 'bun:test';
 import { createTestEditor as createEditor } from './create-test-editor.ts';
 import type { EditorHost } from '@docx-editor.dev/core-contract/contracts/editor';
 import type { DisplayPage } from '@docx-editor.dev/core-contract/contracts/geometry';
-import { createEmptyModel, writeDocx } from '@docx-editor.dev/engine-core';
+import { createEmptyModel, writeDocx } from '@docx-editor.dev/core-contract/store';
 
 // A minimal, real DOCX: the empty authored model serialized to bytes.
 const docxBytes = (): Uint8Array => writeDocx(createEmptyModel());

@@ -1,7 +1,7 @@
 // Shared Playwright helpers for production-adapter input-host gate (interactive-paginated 4.8).
 
 import { expect, type Page } from '@playwright/test';
-import type { EditorDriver } from '@docx-editor.dev/engine-editor';
+import type { EditorDriver } from '@docx-editor.dev/core-contract/editor';
 
 export function countSubstring(haystack: string, needle: string): number {
   if (!needle) return 0;

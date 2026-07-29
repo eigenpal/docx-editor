@@ -2,7 +2,7 @@
 
 import { describe, expect, test } from 'bun:test';
 import type { InteractionFrame } from '@docx-editor.dev/core-contract/contracts/interaction';
-import { layoutBody } from '@docx-editor.dev/engine-layout';
+import { layoutBody } from '@docx-editor.dev/core-contract/layout';
 import { toDisplayPages } from '../display-bridge.ts';
 import { InteractionFrameStore } from '../interaction-frame.ts';
 import { deriveCaretGeometry } from '../interaction-geometry.ts';

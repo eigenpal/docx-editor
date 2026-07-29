@@ -9,7 +9,7 @@ import type {
   InteractionHostMetrics,
   SemanticSelection,
 } from '@docx-editor.dev/core-contract/contracts/interaction';
-import { layoutBody } from '@docx-editor.dev/engine-layout';
+import { layoutBody } from '@docx-editor.dev/core-contract/layout';
 import { toDisplayPages } from '../display-bridge.ts';
 import { InteractionFrameStore } from '../interaction-frame.ts';
 import { deriveCaretGeometry, deriveSelectionGeometry } from '../interaction-geometry.ts';

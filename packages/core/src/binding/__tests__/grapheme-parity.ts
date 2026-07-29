@@ -1,5 +1,5 @@
 import { graphemeOffsetToUtf16 } from '../grapheme.ts';
-import { graphemeOffsetToUtf16 as layoutGraphemeOffsetToUtf16 } from '@docx-editor.dev/engine-layout';
+import { graphemeOffsetToUtf16 as layoutGraphemeOffsetToUtf16 } from '@docx-editor.dev/core-contract/layout';
 import { GRAPHEME_PARITY_VECTORS } from './grapheme-parity-vectors.ts';
 
 /** Prove binding grapheme offsets match engine-layout segmentation contract. */

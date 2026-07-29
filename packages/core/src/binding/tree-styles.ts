@@ -10,7 +10,7 @@
 // declaration from a validated token or produces nothing, so a crafted attribute cannot
 // close the declaration and start its own.
 
-import type { OoxmlProperty } from '@docx-editor.dev/engine-core';
+import type { OoxmlProperty } from '@docx-editor.dev/core-contract/store';
 
 /** `w:val` of a property, or undefined. */
 function val(property: OoxmlProperty): string | undefined {

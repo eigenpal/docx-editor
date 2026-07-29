@@ -6,8 +6,8 @@
 // through the engine preview (real geometry, nothing flattened). Exposes an engine-neutral
 // EditorDriver for browser smoke tests.
 
-import { openDocxSession, mountEditSurface } from '@docx-editor.dev/engine-binding';
-import { layoutBody, type LayoutShapingOptions } from '@docx-editor.dev/engine-layout';
+import { openDocxSession, mountEditSurface } from '@docx-editor.dev/core-contract/binding';
+import { layoutBody, type LayoutShapingOptions } from '@docx-editor.dev/core-contract/layout';
 import {
   installLayoutFonts,
   type BrowserFontFaceFactory,

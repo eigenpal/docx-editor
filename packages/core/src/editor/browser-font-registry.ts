@@ -1,6 +1,6 @@
 import type { DisplayPage, GlyphFont } from '@docx-editor.dev/core-contract/contracts/geometry';
 import { EditorFontError } from '@docx-editor.dev/core-contract/contracts/editor';
-import type { FontResourceSnapshot, Page, ResolvedFont } from '@docx-editor.dev/engine-layout';
+import type { FontResourceSnapshot, Page, ResolvedFont } from '@docx-editor.dev/core-contract/layout';
 
 export type BrowserFontPaintErrorCode =
   | 'missingFont'

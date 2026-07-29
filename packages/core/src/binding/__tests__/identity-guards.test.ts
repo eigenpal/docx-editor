@@ -14,7 +14,7 @@ import {
   ORIGIN_IDS,
   createEmptyModel,
   type ParagraphRecord,
-} from '@docx-editor.dev/engine-core';
+} from '@docx-editor.dev/core-contract/store';
 import type { Node as PMNode } from 'prosemirror-model';
 
 const HUMAN = ORIGIN_IDS.mutationHuman;

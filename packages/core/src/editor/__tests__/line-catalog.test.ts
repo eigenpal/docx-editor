@@ -2,7 +2,7 @@
 
 import { describe, expect, test } from 'bun:test';
 import type { InteractionFrame } from '@docx-editor.dev/core-contract/contracts/interaction';
-import { layoutBody } from '@docx-editor.dev/engine-layout';
+import { layoutBody } from '@docx-editor.dev/core-contract/layout';
 import { toDisplayPages } from '../display-bridge.ts';
 import { InteractionFrameStore } from '../interaction-frame.ts';
 import { deriveCaretGeometry } from '../interaction-geometry.ts';
@@ -15,7 +15,7 @@ import {
 import type { NavigationGeometry } from '../navigation-geometry.ts';
 import { freezeNavigationGeometry } from '../navigation-geometry.ts';
 import { LAYOUT, modelWith, selectionForBlock } from './interaction-test-helpers.ts';
-import { createEmptyModel, bodyStoryId } from '@docx-editor.dev/engine-core';
+import { createEmptyModel, bodyStoryId } from '@docx-editor.dev/core-contract/store';
 
 function modelWithBlockIds(texts: string[], ids: string[]) {
   const base = createEmptyModel();

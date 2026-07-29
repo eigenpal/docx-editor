@@ -16,7 +16,7 @@ import {
   type PackageModel,
   type ParagraphRecord,
   type ReadOnlyDiagnostic,
-} from '@docx-editor.dev/engine-core';
+} from '@docx-editor.dev/core-contract/store';
 import { EditorBinding, runIsProjectable } from './binding.ts';
 
 export interface ApplyResult {

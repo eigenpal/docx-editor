@@ -11,9 +11,9 @@ import {
   DocumentStore,
   ORIGIN_IDS,
   type ParagraphRecord,
-} from '@docx-editor.dev/engine-core';
+} from '@docx-editor.dev/core-contract/store';
 import { IDENTITY_HOST_METRICS } from '../coordinate-mapper.ts';
-import { INPUT_HOST_MIN_WIDTH_PX, INPUT_HOST_MIN_HEIGHT_PX } from '@docx-editor.dev/engine-binding';
+import { INPUT_HOST_MIN_WIDTH_PX, INPUT_HOST_MIN_HEIGHT_PX } from '@docx-editor.dev/core-contract/binding';
 
 const HUMAN = ORIGIN_IDS.mutationHuman;
 

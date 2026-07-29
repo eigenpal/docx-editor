@@ -13,7 +13,7 @@ import {
   type ParagraphRecord,
   type RunRecord,
   type UnderlineVariant,
-} from '@docx-editor.dev/engine-core';
+} from '@docx-editor.dev/core-contract/store';
 import {
   registerBindingNode,
   registerBindingMark,

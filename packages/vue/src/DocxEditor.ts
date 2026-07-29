@@ -32,7 +32,7 @@ import {
   type FrameOverlays,
   type GlyphClickTarget,
   type InstalledDisplayFonts,
-} from '@docx-editor.dev/engine-editor';
+} from '@docx-editor.dev/core-contract/editor';
 import type { DisplayPage } from '@docx-editor.dev/core-contract/contracts/geometry';
 import { paintDisplay } from './paintDisplay';
 import type { EditorMode } from './types';

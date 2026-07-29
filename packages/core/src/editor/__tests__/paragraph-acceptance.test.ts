@@ -21,8 +21,8 @@ import {
   diffSemanticDigests,
   readOoxmlPackage,
   semanticDigest,
-} from '@docx-editor.dev/engine-core';
-import { caretAt, fragmentsOfParagraph, linesOf } from '@docx-editor.dev/engine-layout';
+} from '@docx-editor.dev/core-contract/store';
+import { caretAt, fragmentsOfParagraph, linesOf } from '@docx-editor.dev/core-contract/layout';
 import { mountPaginatedSurface, type PaginatedSurface } from '../paginated-surface.ts';
 
 const FIXTURE = join(

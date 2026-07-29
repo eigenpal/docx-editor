@@ -5,7 +5,7 @@
 
 import { describe, expect, test } from 'bun:test';
 import { zipSync, strToU8 } from 'fflate';
-import { assessBodyEditability, parseDocx } from '@docx-editor.dev/engine-core';
+import { assessBodyEditability, parseDocx } from '@docx-editor.dev/core-contract/store';
 import { openTreeSession, type TreeDocxSession } from '../tree-session.ts';
 import { treeSchema } from '../tree-schema.ts';
 

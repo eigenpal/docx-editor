@@ -5,7 +5,7 @@
 // from, a generated-client call is equivalent to the direct/API/MCP/RPC paths.
 // (This is the TypeScript binding; the Python `docx_editor` package mirrors it.)
 
-import { DocxEditor } from '@docx-editor.dev/engine-core';
+import { DocxEditor } from '@docx-editor.dev/core-contract/store';
 
 /** The wire transport a client speaks over (RPC, in-process, ...). */
 export interface ClientTransport {

@@ -25,7 +25,7 @@ import {
   type FontRequest,
   type ResolvedFont,
   type TextMeasurer,
-} from '@docx-editor.dev/engine-layout';
+} from '@docx-editor.dev/core-contract/layout';
 import { createCanvasMeasurer } from './canvasMeasurer.ts';
 import { resolveFontFamily, type FontOrigin } from './fontAvailability.ts';
 import { requestRemoteFont } from './remoteFonts.ts';

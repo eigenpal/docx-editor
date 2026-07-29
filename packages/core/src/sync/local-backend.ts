@@ -16,7 +16,7 @@ import {
   type SerializedModel,
   type Snapshot,
   type ReplicationUpdate,
-} from '@docx-editor.dev/engine-core';
+} from '@docx-editor.dev/core-contract/store';
 import type { ReplicatedStoreBackend } from './backend.ts';
 
 /** Snapshot payload schema + normalization versions (task 5.6). */

@@ -5,7 +5,7 @@
 // layout handler instead of editing layoutBody. All arithmetic stays integer/fixed-point, so
 // fingerprints are unchanged.
 
-import { type Block, type PackageModel, registeredBlockKinds } from '@docx-editor.dev/engine-core';
+import { type Block, type PackageModel, registeredBlockKinds } from '@docx-editor.dev/core-contract/store';
 import type { DisplayItem } from './display-item.ts';
 import type { LayoutShapingOptions } from './metrics.ts';
 import { type DependencyKey, keyId } from './dependency-graph.ts';

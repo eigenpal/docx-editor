@@ -4,12 +4,12 @@ import type {
   BlockSemanticRecord,
   SemanticPositionIndex,
 } from '@docx-editor.dev/core-contract/contracts/interaction';
-import type { PackageModel } from '@docx-editor.dev/engine-core';
+import type { PackageModel } from '@docx-editor.dev/core-contract/store';
 import type {
   CaretEdgeItem,
   Page,
   VisualLineIdentity as LayoutLineIdentity,
-} from '@docx-editor.dev/engine-layout';
+} from '@docx-editor.dev/core-contract/layout';
 import {
   caretAffinity,
   paragraphGraphemeCountById,

@@ -20,10 +20,10 @@ import {
   type ParagraphRecord,
   type PackageModel,
   type TableRecord,
-} from '@docx-editor.dev/engine-core';
+} from '@docx-editor.dev/core-contract/store';
 import type { SemanticSelection } from '@docx-editor.dev/core-contract/contracts/interaction';
 import { expectGraphemeParity } from './grapheme-parity.ts';
-import { graphemeOffsetToUtf16 as layoutGraphemeOffsetToUtf16 } from '@docx-editor.dev/engine-layout';
+import { graphemeOffsetToUtf16 as layoutGraphemeOffsetToUtf16 } from '@docx-editor.dev/core-contract/layout';
 
 const HUMAN = ORIGIN_IDS.mutationHuman;
 

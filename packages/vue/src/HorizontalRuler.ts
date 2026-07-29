@@ -7,7 +7,7 @@
 
 import { computed, defineComponent, h, type PropType } from 'vue';
 import type { Editor } from '@docx-editor.dev/core-contract/contracts/editor';
-import { generateRulerTicks, rulerPageBox, type RulerUnit } from '@docx-editor.dev/engine-editor';
+import { generateRulerTicks, rulerPageBox, type RulerUnit } from '@docx-editor.dev/core-contract/editor';
 import { useEditorSnapshot } from './useEditorSnapshot';
 
 export interface HorizontalRulerProps {

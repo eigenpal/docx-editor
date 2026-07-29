@@ -21,7 +21,7 @@ import type {
   SemanticTarget,
 } from '@docx-editor.dev/core-contract/contracts/interaction';
 import type { DisplayItem, DisplayPage } from '@docx-editor.dev/core-contract/contracts/geometry';
-import { layoutBody } from '@docx-editor.dev/engine-layout';
+import { layoutBody } from '@docx-editor.dev/core-contract/layout';
 import { toDisplayPages } from '../display-bridge.ts';
 import { InteractionFrameStore, DEFAULT_PAGE_GAP_PX } from '../interaction-frame.ts';
 import {

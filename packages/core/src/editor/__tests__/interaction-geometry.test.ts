@@ -1,7 +1,7 @@
 // Hit testing, caret, and selection geometry tests (interactive-paginated-editing 3.6–3.9).
 
 import { describe, expect, test } from 'bun:test';
-import { bodyStoryId } from '@docx-editor.dev/engine-core';
+import { bodyStoryId } from '@docx-editor.dev/core-contract/store';
 import { contentToClient } from '../coordinate-mapper.ts';
 import {
   deriveCaretGeometry,

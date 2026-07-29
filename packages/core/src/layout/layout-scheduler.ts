@@ -24,7 +24,7 @@
 // is task 9.3, and the caches it consults are 9.2; both sit behind `run`, which is handed a
 // scope this module computed and is free to ignore it and lay out everything.
 
-import type { ImpactClass, TreeModelChange } from '@docx-editor.dev/engine-core';
+import type { ImpactClass, TreeModelChange } from '@docx-editor.dev/core-contract/store';
 import type { SemanticLayout } from './semantic-records.ts';
 
 /**

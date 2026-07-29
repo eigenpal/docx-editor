@@ -17,7 +17,7 @@
 // (selection/IME/relative-position, fine-grained text CRDT, cross-story repair) is
 // deferred — this is the thin baseline.
 
-import { DocumentStore, ORIGIN_IDS } from '@docx-editor.dev/engine-core';
+import { DocumentStore, ORIGIN_IDS } from '@docx-editor.dev/core-contract/store';
 import { YjsBackend, assertYjsCompatibleModel } from './yjs-backend.ts';
 
 export class YjsBinding {

@@ -8,14 +8,14 @@ import {
   createDeterministicLayoutShaping,
   layoutBody,
   type LayoutOptions,
-} from '@docx-editor.dev/engine-layout';
+} from '@docx-editor.dev/core-contract/layout';
 import {
   createEmptyModel,
   bodyStoryId,
   DocumentStore,
   ORIGIN_IDS,
   type ParagraphRecord,
-} from '@docx-editor.dev/engine-core';
+} from '@docx-editor.dev/core-contract/store';
 
 const HUMAN = ORIGIN_IDS.mutationHuman;
 

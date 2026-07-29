@@ -15,9 +15,9 @@ import type {
 } from '@docx-editor.dev/core-contract/contracts/interaction';
 import type { Rect, ViewScope } from '@docx-editor.dev/core-contract/contracts/editor';
 import type { PositionedInteractionMeta } from '@docx-editor.dev/core-contract/contracts/interaction';
-import type { PackageModel } from '@docx-editor.dev/engine-core';
-import type { Page, TextItem, RectItem } from '@docx-editor.dev/engine-layout';
-import { segmentGraphemes } from '@docx-editor.dev/engine-layout';
+import type { PackageModel } from '@docx-editor.dev/core-contract/store';
+import type { Page, TextItem, RectItem } from '@docx-editor.dev/core-contract/layout';
+import { segmentGraphemes } from '@docx-editor.dev/core-contract/layout';
 import {
   buildSemanticIndex,
   buildTraversalLinksForModel,
@@ -27,7 +27,7 @@ import {
   semanticTextSpan,
   twipsToPx,
 } from './semantic-index.ts';
-import { graphemeBoundaryEpoch } from '@docx-editor.dev/engine-layout';
+import { graphemeBoundaryEpoch } from '@docx-editor.dev/core-contract/layout';
 import { clustersFromLayoutCaretEdges } from './layout-clusters.ts';
 import { deepFreezeValue } from './interaction-frame.ts';
 import {

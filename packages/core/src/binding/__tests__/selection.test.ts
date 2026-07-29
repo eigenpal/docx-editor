@@ -4,7 +4,7 @@ import { describe, expect, test } from 'bun:test';
 import { EditorState, TextSelection } from 'prosemirror-state';
 import { docSchema, captureSelection, resolveSelection, EditorBinding } from '../index.ts';
 import { captureSelectionRange, resolveSelectionRange } from '../selection.ts';
-import { DocumentStore, createEmptyModel, bodyStoryId, ORIGIN_IDS, type ParagraphRecord } from '@docx-editor.dev/engine-core';
+import { DocumentStore, createEmptyModel, bodyStoryId, ORIGIN_IDS, type ParagraphRecord } from '@docx-editor.dev/core-contract/store';
 
 const HUMAN = ORIGIN_IDS.mutationHuman;
 

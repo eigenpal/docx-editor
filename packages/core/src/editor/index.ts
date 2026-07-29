@@ -8,7 +8,7 @@
 // ADR-S9: production modules MUST NOT import from packages/core/spike/**.
 
 /** Stable package identity used by the import-graph / package-authority checks. */
-export const ENGINE_EDITOR_PACKAGE = '@docx-editor.dev/engine-editor' as const;
+export const ENGINE_EDITOR_PACKAGE = '@docx-editor.dev/core-contract/editor' as const;
 
 export { semanticChunkStats } from './semantic-index.ts';
 export {
@@ -120,4 +120,4 @@ export type {
   SemanticPosition,
   SemanticSelection,
   TextMeasurer,
-} from '@docx-editor.dev/engine-layout';
+} from '@docx-editor.dev/core-contract/layout';

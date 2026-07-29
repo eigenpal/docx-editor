@@ -7,8 +7,8 @@ import {
   type PackageModel,
   type ParagraphRecord,
   type SdtRecord,
-} from '@docx-editor.dev/engine-core';
-import { layoutBody } from '@docx-editor.dev/engine-layout';
+} from '@docx-editor.dev/core-contract/store';
+import { layoutBody } from '@docx-editor.dev/core-contract/layout';
 import { toDisplayPages } from '../display-bridge.ts';
 import { buildTraversalLinksForModel } from '../semantic-index.ts';
 import { buildLineCatalog, caretContentX, destinationOverlayVisible } from '../line-catalog.ts';

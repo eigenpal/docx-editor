@@ -13,7 +13,7 @@
 // Measurement is a PORT. This package is DOM-free by construction, and a layout that could
 // only run in a browser could not be tested deterministically or run headless.
 
-import type { OoxmlProperty } from '@docx-editor.dev/engine-core';
+import type { OoxmlProperty } from '@docx-editor.dev/core-contract/store';
 import type { ResolvedRunStyle } from './run-style.ts';
 
 /** A half-open UTF-16 range inside one paragraph, addressed by its canonical node id. */

@@ -20,7 +20,7 @@ import {
   type SerializedModel,
   type Snapshot,
   type ReplicationUpdate,
-} from '@docx-editor.dev/engine-core';
+} from '@docx-editor.dev/core-contract/store';
 import type { ReplicatedStoreBackend } from './backend.ts';
 
 /** Pinned Yjs schema version (task 5.2); bumped only via a reviewed migration. */

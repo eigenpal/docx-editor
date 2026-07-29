@@ -6,7 +6,7 @@ if (!GlobalRegistrator.isRegistered) GlobalRegistrator.register();
 import { describe, expect, test } from 'bun:test';
 import { createTestEditor as createEditor } from './create-test-editor.ts';
 import type { EditorHost } from '@docx-editor.dev/core-contract/contracts/editor';
-import { createEmptyModel, writeDocx } from '@docx-editor.dev/engine-core';
+import { createEmptyModel, writeDocx } from '@docx-editor.dev/core-contract/store';
 import { frameMembersCoherent } from '../interaction-frame.ts';
 import { createEditableFixtureWithTexts } from '../../../../engine-editor/browser/fixtures.ts';
 import { modelWith, selectionForBlock } from './interaction-test-helpers.ts';

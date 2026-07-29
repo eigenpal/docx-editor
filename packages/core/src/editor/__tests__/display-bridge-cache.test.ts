@@ -6,7 +6,7 @@
 // slice whose geometry or text actually changed does NOT.
 
 import { describe, expect, test } from 'bun:test';
-import { layoutBody } from '@docx-editor.dev/engine-layout';
+import { layoutBody } from '@docx-editor.dev/core-contract/layout';
 import {
   createEmptyModel,
   bodyStoryId,
@@ -14,7 +14,7 @@ import {
   ORIGIN_IDS,
   type PackageModel,
   type ParagraphRecord,
-} from '@docx-editor.dev/engine-core';
+} from '@docx-editor.dev/core-contract/store';
 import { DisplayBridgeCache, toDisplayPages } from '../display-bridge.ts';
 import { LAYOUT } from './interaction-test-helpers.ts';
 

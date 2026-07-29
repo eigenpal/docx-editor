@@ -8,7 +8,7 @@
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { describe, expect, test } from 'bun:test';
-import { parseDocx } from '@docx-editor.dev/engine-core';
+import { parseDocx } from '@docx-editor.dev/core-contract/store';
 import { openDocxSession } from '../session.ts';
 
 const FIXTURE = path.resolve(import.meta.dir, '../../../../../e2e/fixtures/comprehensive-word-element-test.docx');
@@ -205,7 +205,7 @@ describe('assistive coverage of read-only blocks', () => {
     const { DOMSerializer } = await import('prosemirror-model');
     const { applyAtomAccessibilityLabels } = await import('../accessibility-projection.ts');
 
-    const { bodyStoryId } = await import('@docx-editor.dev/engine-core');
+    const { bodyStoryId } = await import('@docx-editor.dev/core-contract/store');
     const model = parseDocx(bytes()).model;
     // What the DOCUMENT says: every body paragraph's text, from the canonical model.
     const wanted = (model.stories.get(bodyStoryId(model))?.blocks ?? [])
@@ -249,7 +249,7 @@ describe('assistive coverage of read-only blocks', () => {
 describe('accessibility entries reflect per-block editability', () => {
   test('a locked paragraph is reported unsupportedStructure, not editableParagraph', async () => {
     const { buildAccessibilityEntries } = await import('../accessibility-projection.ts');
-    const { bodyStoryId } = await import('@docx-editor.dev/engine-core');
+    const { bodyStoryId } = await import('@docx-editor.dev/core-contract/store');
     const session = openDocxSession(bytes());
     expect(session.mode).toBe('partial');
     const locked = session.readOnlyBlockIds;

@@ -9,7 +9,7 @@
 // concurrency. Full Connect/gRPC framing + generated language clients extend this;
 // the semantics are identical.
 
-import { DocxEditor, stableHash, type DocumentStore } from '@docx-editor.dev/engine-core';
+import { DocxEditor, stableHash, type DocumentStore } from '@docx-editor.dev/core-contract/store';
 
 export const RPC_PROTOCOL_VERSION = 1;
 /** Version of the command/query schema bundle the idempotency binding is scoped to. */

@@ -16,7 +16,7 @@ import {
   type TableRowRecord,
   type TableCellRecord,
   type SdtRecord,
-} from '@docx-editor.dev/engine-core';
+} from '@docx-editor.dev/core-contract/store';
 import {
   registerBuiltInBlockLayout,
   layoutBlock,

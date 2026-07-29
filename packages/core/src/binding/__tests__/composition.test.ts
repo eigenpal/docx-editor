@@ -19,7 +19,7 @@ import {
   ORIGIN_IDS,
   paragraphText,
   type ParagraphRecord,
-} from '@docx-editor.dev/engine-core';
+} from '@docx-editor.dev/core-contract/store';
 import type { SemanticSelection } from '@docx-editor.dev/core-contract/contracts/interaction';
 import { zipSync, strToU8 } from 'fflate';
 import { flushCompositionFrames } from './composition-dom.ts';

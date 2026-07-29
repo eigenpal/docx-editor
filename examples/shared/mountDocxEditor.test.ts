@@ -1,8 +1,8 @@
 import { afterAll, beforeAll, expect, test } from 'bun:test';
 import { GlobalRegistrator } from '@happy-dom/global-registrator';
 import { strToU8, zipSync } from 'fflate';
-import { createDeterministicLayoutShaping } from '@docx-editor.dev/engine-layout';
-import type { BrowserFontFace, BrowserFontSet } from '@docx-editor.dev/engine-editor';
+import { createDeterministicLayoutShaping } from '@docx-editor.dev/core-contract/layout';
+import type { BrowserFontFace, BrowserFontSet } from '@docx-editor.dev/core-contract/editor';
 import { createEditableParagraphFixture } from '../../packages/engine-editor/browser/fixtures.ts';
 import { mountDocxEditor } from './mountDocxEditor.ts';
 

@@ -1,7 +1,7 @@
 // PM-free semantic target/selection resolution for ProseMirror sync (interactive-paginated-editing 4.2).
 // Editability is derived from canonical model traversal — caller roles are ignored.
 
-import { bodyStoryId } from '@docx-editor.dev/engine-core';
+import { bodyStoryId } from '@docx-editor.dev/core-contract/store';
 import type {
   InteractionFrameId,
   InteractionOutcome,

@@ -56,15 +56,15 @@ import {
   clearPaintedPagesPresentationOnly,
   resolveAccessibilityNamePolicy,
   observeAccessibility,
-} from '@docx-editor.dev/engine-binding';
-import { createEmptyModel, bodyStoryId } from '@docx-editor.dev/engine-core';
+} from '@docx-editor.dev/core-contract/binding';
+import { createEmptyModel, bodyStoryId } from '@docx-editor.dev/core-contract/store';
 import {
   captureOperationSnapshot,
   layoutBody,
   type LayoutShapingOptions,
   type OperationSnapshot,
-} from '@docx-editor.dev/engine-layout';
-import type { PackageModel } from '@docx-editor.dev/engine-core';
+} from '@docx-editor.dev/core-contract/layout';
+import type { PackageModel } from '@docx-editor.dev/core-contract/store';
 import { DisplayBridgeCache, toDisplayPages, type BridgeInvalidation } from './display-bridge.ts';
 import { InteractionFrameStore, emptyInteractionFrame } from './interaction-frame.ts';
 import type { NavigationGeometry } from './navigation-geometry.ts';

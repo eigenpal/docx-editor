@@ -7,7 +7,7 @@ import {
   DocumentStore,
   ORIGIN_IDS,
   type ParagraphRecord,
-} from '@docx-editor.dev/engine-core';
+} from '@docx-editor.dev/core-contract/store';
 import { createDeterministicLayoutShaping, layoutBody, type CaretEdgeItem } from '../index.ts';
 
 const LAYOUT = {

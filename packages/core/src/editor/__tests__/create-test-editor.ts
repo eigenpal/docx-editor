@@ -1,4 +1,4 @@
-import { createDeterministicLayoutShaping } from '@docx-editor.dev/engine-layout';
+import { createDeterministicLayoutShaping } from '@docx-editor.dev/core-contract/layout';
 import {
   createEditor as createProductionEditor,
   type EngineEditorConfig,

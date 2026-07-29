@@ -7,7 +7,7 @@
 // (PDF, semantic/a11y) instead use `assertNeverDisplayItem` for compile-time-exhaustive per-kind
 // handling — a new kind fails their build rather than being silently dropped.
 
-import type { DisplayItem } from '@docx-editor.dev/engine-layout';
+import type { DisplayItem } from '@docx-editor.dev/core-contract/layout';
 
 export interface DisplayItemRendererContext {
   readonly fontAlias: (

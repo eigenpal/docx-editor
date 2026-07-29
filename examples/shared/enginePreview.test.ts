@@ -4,8 +4,8 @@
 
 import { describe, expect, test } from 'bun:test';
 import { readFileSync } from 'node:fs';
-import { parseDocx } from '@docx-editor.dev/engine-core';
-import { createDeterministicLayoutShaping } from '@docx-editor.dev/engine-layout';
+import { parseDocx } from '@docx-editor.dev/core-contract/store';
+import { createDeterministicLayoutShaping } from '@docx-editor.dev/core-contract/layout';
 import { renderDocxPreview, renderModelPreview } from './enginePreview.ts';
 
 const options = {

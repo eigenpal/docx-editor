@@ -15,7 +15,7 @@ import {
   resetGraphemeBoundary,
   setGraphemeBoundary,
 } from '../grapheme.ts';
-import { createEmptyModel, bodyStoryId, type ParagraphRecord } from '@docx-editor.dev/engine-core';
+import { createEmptyModel, bodyStoryId, type ParagraphRecord } from '@docx-editor.dev/core-contract/store';
 
 const LAYOUT = {
   pageWidth: 12240,

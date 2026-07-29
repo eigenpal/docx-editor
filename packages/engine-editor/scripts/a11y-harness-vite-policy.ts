@@ -6,10 +6,10 @@ export const A11Y_HARNESS_WORKSPACE_PACKAGES = [
   '@docx-editor.dev/core-contract/contracts/interaction',
   '@docx-editor.dev/core-contract/contracts/geometry',
   '@docx-editor.dev/core-contract/contracts/types',
-  '@docx-editor.dev/engine-binding',
-  '@docx-editor.dev/engine-core',
-  '@docx-editor.dev/engine-layout',
-  '@docx-editor.dev/engine-output',
+  '@docx-editor.dev/core-contract/binding',
+  '@docx-editor.dev/core-contract/store',
+  '@docx-editor.dev/core-contract/layout',
+  '@docx-editor.dev/core-contract/output',
 ] as const;
 
 /** Stable third-party deps safe to prebundle for faster cold starts. */

@@ -20,7 +20,7 @@ import {
   restoreBlockRegistryForTest,
   type Block,
   type PackageModel,
-} from '@docx-editor.dev/engine-core';
+} from '@docx-editor.dev/core-contract/store';
 
 describe('composed schema + per-kind projection', () => {
   test('the composed schema has exactly the registered nodes and marks', () => {

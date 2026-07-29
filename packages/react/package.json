@@ -34,8 +34,7 @@
     }
   },
   "devDependencies": {
-    "@docx-editor.dev/core-contract": "workspace:*",
-    "@docx-editor.dev/engine-editor": "workspace:*"
+    "@docx-editor.dev/core-contract": "workspace:*"
   },
   "keywords": [
     "docx",
@@ -61,10 +60,10 @@
   },
   "dependencies": {
     "@docx-editor.dev/agents": "workspace:*",
+    "@docx-editor.dev/core-contract": "workspace:*",
     "@radix-ui/react-select": "^2.3.3",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
-    "harfbuzzjs": "1.4.0",
-    "@docx-editor.dev/engine-editor": "workspace:*"
+    "harfbuzzjs": "1.4.0"
   }
 }

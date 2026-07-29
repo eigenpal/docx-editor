@@ -21,7 +21,7 @@ import {
   createDeterministicLayoutShaping,
   layoutBody,
   type Page,
-} from '@docx-editor.dev/engine-layout';
+} from '@docx-editor.dev/core-contract/layout';
 import { createHarfBuzzLayoutOptions } from '../../layout/__tests__/fixtures/layout-shaping.ts';
 import {
   createEmptyModel,
@@ -29,7 +29,7 @@ import {
   DocumentStore,
   ORIGIN_IDS,
   type ParagraphRecord,
-} from '@docx-editor.dev/engine-core';
+} from '@docx-editor.dev/core-contract/store';
 
 const HUMAN = ORIGIN_IDS.mutationHuman;
 const LAYOUT = {
