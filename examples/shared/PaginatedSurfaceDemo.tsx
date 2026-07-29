@@ -13,6 +13,9 @@ import {
 } from '@docx-editor.dev/engine-editor';
 import { createCanvasMeasurer, DEFAULT_FONT_STACK } from './canvasMeasurer.ts';
 
+/** Layout units (points) to CSS pixels, at 96 dpi. */
+const SCALE = 96 / 72;
+
 declare global {
   interface Window {
     __docxPaginated?: PaginatedSurface;
@@ -39,7 +42,11 @@ export function PaginatedSurfaceDemo({ fixtureUrl }: { fixtureUrl: string }) {
       mountRef.current.style.fontFamily = DEFAULT_FONT_STACK;
       const result = mountPaginatedSurface(mountRef.current, bytes, {
         onChange: setState,
-        measurer: createCanvasMeasurer(),
+        scale: SCALE,
+        // The measurer is given the SAME scale the painter uses, so it measures at the
+        // pixel size the glyphs are rasterised at rather than at a layout size that
+        // rounds differently.
+        measurer: createCanvasMeasurer(SCALE),
       });
       if (!result.ok) {
         setStatus(`Rejected: ${result.reason}${result.detail ? ` (${result.detail})` : ''}`);

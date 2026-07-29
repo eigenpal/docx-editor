@@ -107,9 +107,10 @@ function applyRunStyle(element: HTMLElement, style: ResolvedRunStyle, scale: num
     css.letterSpacing = `${style.characterSpacingPt * scale}px`;
   }
   if (style.horizontalScalePercent !== 100) {
-    // `w:w` stretches glyphs horizontally. Layout already widened the advance for it, so
-    // without this the painted text would be narrower than the box reserved for it and the
-    // caret would sit past the last glyph.
+    // `w:w` stretches glyphs horizontally, and a transform does not change the space the
+    // element occupies — so the stretched glyphs, and the selection band drawn over them,
+    // spilled across the following run. The reserved advance is given explicitly (layout
+    // already scaled it) and the transform fills it.
     css.display = 'inline-block';
     css.transformOrigin = 'left';
     css.transform = `scaleX(${style.horizontalScalePercent / 100})`;
@@ -150,6 +151,12 @@ function paintSpan(document: Document, span: StyleSpanRecord, scale: number): HT
   element.dataset.start = String(span.range.start);
   element.dataset.end = String(span.range.end);
   applyRunStyle(element, span.style, scale);
+  if (span.style.horizontalScalePercent !== 100) {
+    // The transform stretches the glyphs but reserves nothing, so the element is given the
+    // advance layout already scaled. Without it the stretched run painted over its
+    // neighbour and their selection bands overlapped.
+    element.style.width = `${span.box.width * scale}px`;
+  }
   element.textContent = span.text; // SAFE: textContent, never innerHTML
   return element;
 }
