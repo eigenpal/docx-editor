@@ -74,6 +74,11 @@
       "types": "./src/sync/index.ts",
       "import": "./src/sync/index.ts",
       "default": "./src/sync/index.ts"
+    },
+    "./editor": {
+      "types": "./src/editor/index.ts",
+      "import": "./src/editor/index.ts",
+      "default": "./src/editor/index.ts"
     }
   },
   "scripts": {

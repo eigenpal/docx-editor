@@ -340,10 +340,6 @@
       "version": "0.0.0",
       "dependencies": {
         "@docx-editor.dev/core-contract": "workspace:*",
-        "@docx-editor.dev/engine-binding": "workspace:*",
-        "@docx-editor.dev/engine-core": "workspace:*",
-        "@docx-editor.dev/engine-layout": "workspace:*",
-        "@docx-editor.dev/engine-output": "workspace:*",
       },
       "devDependencies": {
         "@happy-dom/global-registrator": "^20.8.3",

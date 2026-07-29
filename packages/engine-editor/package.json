@@ -3,11 +3,12 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "description": "Browser editor composition root: the production createEditor. Composes the PM-free engine-binding edit surface, engine-layout pagination, and engine-output display into the PM-free Editor/EditorHost contract. Becomes @docx-editor.dev/core/editor at the section 7/14 migration.",
+  "description": "Compatibility alias for the editor lane, which now lives in packages/core/src/editor (task 10.3). Kept only until every importer moves to the @docx-editor.dev/core-contract/editor subpath (task 10.5); removed by task 10.6.",
   "exports": {
     ".": {
       "types": "./src/index.ts",
-      "import": "./src/index.ts"
+      "import": "./src/index.ts",
+      "default": "./src/index.ts"
     }
   },
   "scripts": {
@@ -19,11 +20,7 @@
     "verify:a11y-tree": "bun run test:e2e:a11y-tree && bun run test:lighthouse:a11y-harness"
   },
   "dependencies": {
-    "@docx-editor.dev/core-contract": "workspace:*",
-    "@docx-editor.dev/engine-core": "workspace:*",
-    "@docx-editor.dev/engine-binding": "workspace:*",
-    "@docx-editor.dev/engine-layout": "workspace:*",
-    "@docx-editor.dev/engine-output": "workspace:*"
+    "@docx-editor.dev/core-contract": "workspace:*"
   },
   "devDependencies": {
     "@happy-dom/global-registrator": "^20.8.3",

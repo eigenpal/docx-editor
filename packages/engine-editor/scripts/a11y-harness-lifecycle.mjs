@@ -4,6 +4,7 @@
 
 import { spawn } from 'node:child_process';
 import { join } from 'node:path';
+import { existsSync } from 'node:fs';
 
 const DEFAULT_PORT = Number(process.env.A11Y_HARNESS_PORT ?? 5299);
 const DEFAULT_RELEASE_WAIT_MS = Number(process.env.A11Y_HARNESS_RELEASE_MS ?? 10_000);
@@ -303,7 +304,14 @@ export async function probeHarnessSemanticIndexTransform({
   probe,
   layoutPackageRoot,
 }) {
-  const semanticIndexUrl = `${baseUrl}@fs/${join(packageRoot, 'src/semantic-index.ts')}`;
+  // The editor lane moved to `packages/core/src/editor` (task 10.3); only the browser
+  // harness still lives under this package. Prefer the lane, fall back to the old location
+  // so the probe keeps working either side of the move.
+  const laneSemanticIndex = join(packageRoot, '../core/src/editor/semantic-index.ts');
+  const semanticIndexPath = existsSync(laneSemanticIndex)
+    ? laneSemanticIndex
+    : join(packageRoot, 'src/semantic-index.ts');
+  const semanticIndexUrl = `${baseUrl}@fs/${semanticIndexPath}`;
   const semanticResponse = await fetch(semanticIndexUrl);
   if (!semanticResponse.ok) {
     throw new Error(`semantic-index transform failed (${semanticResponse.status}): ${await semanticResponse.text()}`);

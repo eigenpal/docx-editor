@@ -66,6 +66,8 @@ export interface Lane {
  */
 export const CORE_LANES: Readonly<Record<LaneName, Lane>> = Object.freeze({
   contracts: {
+    // Relocated by the contract half of task 10.2; still owns the core package itself, so
+    // it has no alias and never "moves" in the sense the other lanes do.
     directory: 'src/contracts',
     package: '@docx-editor.dev/core-contract',
     mayImport: [],
@@ -139,7 +141,9 @@ export const CORE_LANES: Readonly<Record<LaneName, Lane>> = Object.freeze({
   },
   editor: {
     directory: 'src/editor',
-    package: '@docx-editor.dev/engine-editor',
+    // MOVED (task 10.3); alias kept per task 10.5, removed by task 10.6.
+    package: null,
+    alias: '@docx-editor.dev/engine-editor',
     mayImport: ['contracts', 'store', 'binding', 'layout', 'output'],
     environment: 'browser',
     subpath: './editor',

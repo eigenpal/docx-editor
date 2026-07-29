@@ -1,6 +1,6 @@
 // Production createEditor browser harness for Chromium accessibility-tree falsification (task 4.7).
 
-import { createEditor } from '../src/create-editor.ts';
+import { createEditor } from '../../core/src/editor/create-editor.ts';
 import type { Editor } from '@docx-editor.dev/core-contract/contracts/editor';
 import type {
   AccessibilityObservation,

@@ -10,8 +10,8 @@ import {
   type GeometryFixtureExpectedSemantic,
 } from './fixtures/geometry-fixtures.ts';
 import { modelFromFixtureInput, paginateLayoutOptions } from './fixtures/geometry-fixture-build.ts';
-import { buildSemanticIndex } from '../../../../engine-editor/src/semantic-index.ts';
-import { toDisplayPages } from '../../../../engine-editor/src/display-bridge.ts';
+import { buildSemanticIndex } from '../../editor/semantic-index.ts';
+import { toDisplayPages } from '../../editor/display-bridge.ts';
 import { createDeterministicLayoutShaping, layoutBody } from '../index.ts';
 
 const LAYOUT_BASE = {

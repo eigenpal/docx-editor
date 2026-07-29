@@ -27,6 +27,7 @@
     "src/binding/__tests__",
     "src/sync/__tests__",
     "src/server/__tests__",
-    "src/clients/__tests__"
+    "src/clients/__tests__",
+    "src/editor/__tests__"
   ]
 }

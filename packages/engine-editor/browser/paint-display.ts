@@ -2,7 +2,7 @@
 // Mirrors adapter paint semantics without React — presentation-only painted output.
 
 import type { DisplayItem, DisplayPage } from '@docx-editor.dev/core-contract/contracts/geometry';
-import { colorToCss, borderSegLine } from '../src/paint-style.ts';
+import { colorToCss, borderSegLine } from '../../core/src/editor/paint-style.ts';
 
 function paintTextItem(doc: Document, item: Extract<DisplayItem, { kind: 'text' }>): HTMLElement[] {
   return item.runs.map((run) => {
