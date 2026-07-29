@@ -196,6 +196,12 @@ export {
   type SemanticLayoutOptions,
 } from './semantic-layout.ts';
 export {
+  createLayoutScheduler,
+  type LayoutScheduler,
+  type LayoutSchedulerOptions,
+  type LayoutScope,
+} from './layout-scheduler.ts';
+export {
   DEFAULT_RUN_STYLE,
   displayText,
   resolveRunStyle,

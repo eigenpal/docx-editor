@@ -84,7 +84,7 @@ section 9, so first paginated pixels are not gated on a performance rebuild.
 Optimization over a layout that is already correct and accepted, so every task here has a
 clean full layout of the same revision to be differentially tested against.
 
-- [ ] 9.1 Propagate authoritative `ModelChange` dirty identities, structural effects, dependency keys, and impact class through stale-safe layout scheduling.
+- [x] 9.1 Propagate authoritative `ModelChange` dirty identities, structural effects, dependency keys, and impact class through stale-safe layout scheduling.
 - [ ] 9.2 Wire paragraph shaping and line-layout caches to stable content, dependency, width, resource, shaping, and producer fingerprints across revisions.
 - [ ] 9.3 Retain the previous complete layout, capture safe flow checkpoints, resume before the first affected block, and reuse a suffix only after exact state convergence with conservative full-layout fallback.
 - [ ] 9.4 Preserve unchanged page and `DisplayItem` identity and materialize detailed output only for the viewport, bounded overscan, and logical caret/selection pages.

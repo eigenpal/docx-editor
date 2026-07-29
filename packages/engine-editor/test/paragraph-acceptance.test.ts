@@ -22,7 +22,7 @@ import {
   readOoxmlPackage,
   semanticDigest,
 } from '@docx-editor.dev/engine-core';
-import { fragmentsOfParagraph, linesOf } from '@docx-editor.dev/engine-layout';
+import { caretAt, fragmentsOfParagraph, linesOf } from '@docx-editor.dev/engine-layout';
 import { mountPaginatedSurface, type PaginatedSurface } from '../src/paginated-surface.ts';
 
 const FIXTURE = join(
@@ -216,6 +216,29 @@ describe('load, edit, format, save and reopen (task 8.3)', () => {
     const present = propertyNames(surface.session.save());
     for (const name of ACCEPTED_RUN_PROPERTIES) expect(present.has(name)).toBe(true);
     for (const name of ACCEPTED_PARAGRAPH_PROPERTIES) expect(present.has(name)).toBe(true);
+  });
+
+  test('a click near the top of page one cannot land on a later page', () => {
+    // Caret stops are PAGE-relative, so line 3 of page 1 and line 3 of page 4 share a y.
+    // Hit testing without a page index matched whichever the tie-break reached first, and a
+    // click on the first line put the caret thousands of characters into the document.
+    const surface = mount();
+    const first = surface.session.paragraphIds()[0]!;
+    clickText(surface, 4, 2);
+    expect(surface.state().selection.head.paragraphId).toBe(first);
+    expect(surface.state().selection.head.offset).toBeLessThan(20);
+  });
+
+  test('a click on a LATER page lands on that page, not the first', () => {
+    const surface = mount();
+    const layout = surface.layout();
+    expect(layout.pages.length).toBeGreaterThan(1);
+    const second = layout.pages[1]!;
+    // A few points into the second sheet's content area, in surface coordinates.
+    surface.clickAt({ x: second.contentBox.x + 4, y: second.contentBox.y + 2 });
+    const caret = caretAt(surface.layout(), surface.state().selection.head);
+    expect(caret).not.toBeNull();
+    expect(caret!.pageIndex).toBe(1);
   });
 
   test('undo and redo walk the canonical store after painted editing', () => {

@@ -16,10 +16,12 @@ import { openTreeSession, type TreeDocxSession } from '@docx-editor.dev/engine-b
 import {
   caretAt,
   createFixedMeasurer,
+  createLayoutScheduler,
   hitTestSemantic,
   layoutSemanticDocument,
   moveCaret,
   selectionRects,
+  type LayoutScope,
   type NavigationCommand,
   type SemanticLayout,
   type SemanticPosition,
@@ -54,6 +56,9 @@ export interface PaginatedSurface {
   deleteBackward(): void;
   splitParagraph(): void;
   navigate(command: NavigationCommand, extend?: boolean): void;
+  /** Reverse the last history entry and put the caret back where it was made. */
+  undo(): void;
+  redo(): void;
   focus(): void;
   destroy(): void;
 }
@@ -121,11 +126,44 @@ export function mountPaginatedSurface(
     head: { paragraphId: firstParagraph, offset: 0 },
   };
   let lastRejection: string | null = null;
-  let currentLayout = relayout();
+  let currentLayout = layoutOnce();
   let desiredX: number | null = null;
 
-  function relayout(): SemanticLayout {
+  function layoutOnce(): SemanticLayout {
     return layoutSemanticDocument(session.part(), session.revision(), { measurer });
+  }
+
+  /**
+   * Relayout goes through the SCHEDULER, not straight to `layoutSemanticDocument`.
+   *
+   * That is what carries the store's own account of a commit — dirty ids, split/join,
+   * dependency keys, impact class — into layout, and what refuses to publish a layout whose
+   * revision the model has already left behind. Running synchronously here keeps a keystroke
+   * painted in the same turn; an async host swaps in its own `schedule` without changing
+   * either property.
+   */
+  const scheduler = createLayoutScheduler({
+    run: (scope: LayoutScope) =>
+      layoutSemanticDocument(session.part(), scope.revision, { measurer }),
+    currentRevision: () => session.revision(),
+    publish: (layout) => {
+      currentLayout = layout;
+      // Repaint from HERE, so a commit that never went through this surface — undo, or
+      // another editor sharing the store — still reaches the screen. Otherwise the painted
+      // pages keep showing a revision the model has already left.
+      render();
+    },
+  });
+
+  // Every committed transaction, whatever produced it — this surface, undo, or another
+  // editor sharing the store — reaches layout the same way.
+  const unsubscribe = session.subscribe((modelChange) => scheduler.notify(modelChange));
+
+  /** Publish any pending layout. Returns whether it did, so callers can avoid a double paint. */
+  function flushLayout(): boolean {
+    // Nothing pending means nothing committed since the last pass, so the layout in hand is
+    // already current and re-running it would be pure waste.
+    return scheduler.pending() ? scheduler.flush() : false;
   }
 
   function currentState(): PaginatedSurfaceState {
@@ -196,6 +234,22 @@ export function mountPaginatedSurface(
    * the caret drifts off the page. It was drawn outside the sheet entirely when only the
    * vertical offset was applied.
    */
+  /**
+   * The page a surface-space y lands on.
+   *
+   * Clamped rather than nullable: a click in the gap between two sheets, or past the last
+   * one, still has to put the caret somewhere, and the nearest page is the answer the user
+   * means.
+   */
+  function pageAt(y: number): number {
+    const pages = currentLayout.pages;
+    for (let index = 0; index < pages.length; index += 1) {
+      const page = pages[index]!;
+      if (y < page.box.y + page.box.height) return index;
+    }
+    return Math.max(0, pages.length - 1);
+  }
+
   function pageOrigin(pageIndex: number): { x: number; y: number } {
     const page = currentLayout.pages[pageIndex];
     if (!page) return { x: 0, y: 0 };
@@ -212,8 +266,9 @@ export function mountPaginatedSurface(
     } else {
       lastRejection = null;
     }
-    currentLayout = relayout();
-    render();
+    // A committed edit repaints through the scheduler's publish; a REFUSED one commits
+    // nothing, so the surface still has to refresh the state it just changed.
+    if (!flushLayout()) render();
   }
 
   function setSelection(next: SemanticSelection, keepDesiredX = false): void {
@@ -225,15 +280,27 @@ export function mountPaginatedSurface(
 
   const surface: PaginatedSurface = {
     session,
-    layout: () => currentLayout,
+    // Flushes first: a commit made straight on the session — undo, or another editor
+    // sharing the store — must not leave a caller reading geometry for a revision the model
+    // has left behind. Nothing pending makes this a plain read.
+    layout: () => {
+      flushLayout();
+      return currentLayout;
+    },
     state: currentState,
 
     clickAt(point, extend = false) {
-      // Surface coordinates back to CONTENT coordinates, the space the records use.
-      const origin = pageOrigin(0);
+      // Which PAGE was clicked has to be resolved first and passed on. Caret stops are
+      // page-relative, so page 1 line 3 and page 4 line 3 sit at the same y — hit testing
+      // without the page index matched whichever the tie-break happened to reach, and a
+      // click near the top of the first page could put the caret in the last paragraph of
+      // the document.
+      const pageIndex = pageAt(point.y / scale);
+      const origin = pageOrigin(pageIndex);
       const hit = hitTestSemantic(currentLayout, {
         x: point.x / scale - origin.x,
         y: point.y / scale - origin.y,
+        pageIndex,
       });
       if (!hit) return;
       setSelection({ anchor: extend ? selection.anchor : hit.position, head: hit.position });
@@ -247,10 +314,13 @@ export function mountPaginatedSurface(
       // was typing.
       const start = orderedStart();
       commit(() =>
-        session.applyTreeOps([
-          ...deleteSelectionOps(),
-          { op: 'insertText', paragraphId: start.paragraphId, offset: start.offset, text },
-        ])
+        session.applyTreeOps(
+          [
+            ...deleteSelectionOps(),
+            { op: 'insertText', paragraphId: start.paragraphId, offset: start.offset, text },
+          ],
+          selectionMark()
+        )
       );
       setSelection(
         collapsedAt({ paragraphId: start.paragraphId, offset: start.offset + text.length })
@@ -261,21 +331,24 @@ export function mountPaginatedSurface(
       const ops = deleteSelectionOps();
       if (ops.length > 0) {
         const start = orderedStart();
-        commit(() => session.applyTreeOps(ops));
+        commit(() => session.applyTreeOps(ops, selectionMark()));
         setSelection(collapsedAt(start));
         return;
       }
       const position = selection.head;
       if (position.offset === 0) return; // joining paragraphs is the split/join lane
       commit(() =>
-        session.applyTreeOps([
-          {
-            op: 'deleteText',
-            paragraphId: position.paragraphId,
-            start: position.offset - 1,
-            end: position.offset,
-          },
-        ])
+        session.applyTreeOps(
+          [
+            {
+              op: 'deleteText',
+              paragraphId: position.paragraphId,
+              start: position.offset - 1,
+              end: position.offset,
+            },
+          ],
+          selectionMark()
+        )
       );
       setSelection(collapsedAt({ ...position, offset: position.offset - 1 }));
     },
@@ -284,13 +357,16 @@ export function mountPaginatedSurface(
       const position = selection.head;
       const before = session.paragraphIds();
       commit(() =>
-        session.applyTreeOps([
-          {
-            op: 'splitParagraph',
-            paragraphId: position.paragraphId,
-            offset: position.offset,
-          },
-        ])
+        session.applyTreeOps(
+          [
+            {
+              op: 'splitParagraph',
+              paragraphId: position.paragraphId,
+              offset: position.offset,
+            },
+          ],
+          selectionMark()
+        )
       );
       // The tail is the id the store minted that was not there before.
       const after = session.paragraphIds();
@@ -308,14 +384,53 @@ export function mountPaginatedSurface(
       );
     },
 
+    undo: () => restoreSelection(session.undo()),
+    redo: () => restoreSelection(session.redo()),
     focus: () => inputHost.focus(),
     destroy() {
       container.removeEventListener('pointerdown', onPointerDown);
       inputHost.removeEventListener('keydown', onKeyDown);
       inputHost.removeEventListener('beforeinput', onBeforeInput as EventListener);
+      // Drop pending layout work and stop listening BEFORE the DOM goes, or a commit from
+      // another editor sharing this store would paint into a detached container.
+      scheduler.cancel();
+      unsubscribe();
       container.replaceChildren();
     },
   };
+
+  /**
+   * Put the caret back where a reversed history entry left it.
+   *
+   * `null` means nothing moved — either the stack was empty or the entry recorded no
+   * selection — so the caret stays where the user left it rather than jumping to the top.
+   */
+  function restoreSelection(
+    mark: { paragraphId: string; start: number; end: number } | null
+  ): void {
+    flushLayout();
+    if (!mark) {
+      render();
+      return;
+    }
+    setSelection({
+      anchor: { paragraphId: mark.paragraphId, offset: mark.start },
+      head: { paragraphId: mark.paragraphId, offset: mark.end },
+    });
+  }
+
+  /**
+   * The current selection as a history mark, or null when it spans paragraphs.
+   *
+   * A mark addresses ONE paragraph, and a cross-paragraph selection has no honest single-id
+   * form; recording the head's paragraph would put the caret somewhere the user never had it.
+   */
+  function selectionMark(): { paragraphId: string; start: number; end: number } | null {
+    if (selection.anchor.paragraphId !== selection.head.paragraphId) return null;
+    const start = Math.min(selection.anchor.offset, selection.head.offset);
+    const end = Math.max(selection.anchor.offset, selection.head.offset);
+    return { paragraphId: selection.head.paragraphId, start, end };
+  }
 
   function collapsedAt(position: SemanticPosition): SemanticSelection {
     return { anchor: position, head: position };
@@ -379,10 +494,12 @@ export function mountPaginatedSurface(
       return;
     }
     if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'z') {
-      if (event.shiftKey) session.redo();
-      else session.undo();
-      currentLayout = relayout();
-      render();
+      // Undo and redo publish a model change like any other commit, so the scheduler
+      // repaints. What the scheduler cannot supply is WHERE the caret belongs: offsets in
+      // the reverted tree do not correspond to offsets in the one that replaced it, so the
+      // entry's own selection is restored.
+      if (event.shiftKey) surface.redo();
+      else surface.undo();
       event.preventDefault();
     }
   };

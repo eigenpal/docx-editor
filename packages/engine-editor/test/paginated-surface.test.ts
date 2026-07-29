@@ -164,3 +164,90 @@ describe('painted pages, semantic interaction', () => {
     expect(reopened.surface.session.bodyText()).toBe('Zab');
   });
 });
+
+describe('relayout is driven by the store\'s own account of a commit (task 9.1)', () => {
+  test('the painted layout always carries the revision the session is at', () => {
+    const { surface } = mount(`<w:p><w:r><w:t>hello</w:t></w:r></w:p>`);
+    clickText(surface, 0, 0);
+    surface.type('a');
+    expect(surface.layout().revision).toBe(surface.session.revision());
+    surface.type('b');
+    expect(surface.layout().revision).toBe(surface.session.revision());
+  });
+
+  test('reading the layout without an intervening commit does not lay out again', () => {
+    // Identity, not equality: nothing committed, so the records in hand are already current
+    // and recomputing them would be pure waste on every caret move and repaint.
+    const { surface } = mount(`<w:p><w:r><w:t>hello</w:t></w:r></w:p>`);
+    const first = surface.layout();
+    expect(surface.layout()).toBe(first);
+    surface.navigate('right');
+    expect(surface.layout()).toBe(first);
+  });
+
+  test('a commit replaces the layout, and undo replaces it back', () => {
+    const { surface } = mount(`<w:p><w:r><w:t>hello</w:t></w:r></w:p>`);
+    clickText(surface, 0, 0);
+    const before = surface.layout();
+    surface.type('a');
+    const after = surface.layout();
+    expect(after).not.toBe(before);
+    expect(after.revision).toBeGreaterThan(before.revision);
+    // Undo is a commit like any other, so it reaches layout by the same route.
+    surface.session.undo();
+    expect(surface.layout()).not.toBe(after);
+    expect(surface.session.bodyText()).toBe('hello');
+  });
+
+  test('a structural edit relays out and the new paragraph is painted', () => {
+    const { surface, container } = mount(`<w:p><w:r><w:t>hello</w:t></w:r></w:p>`);
+    clickText(surface, 0, 0);
+    surface.navigate('lineEnd');
+    surface.splitParagraph();
+    expect(surface.session.paragraphIds().length).toBe(2);
+    // Painted, not merely modeled: a split that never reached layout would leave one
+    // fragment on screen while the model held two.
+    expect(container.querySelectorAll('.docx-paragraph-fragment').length).toBe(2);
+  });
+});
+
+describe('undo restores the caret the edit was made at (task 9.1 follow-through)', () => {
+  test('undoing a typed character puts the caret back where it was typed', () => {
+    const { surface } = mount(`<w:p><w:r><w:t>hello world</w:t></w:r></w:p>`);
+    clickText(surface, 0, 0);
+    surface.navigate('right');
+    surface.navigate('right');
+    surface.navigate('right');
+    expect(surface.state().selection.head.offset).toBe(3);
+    surface.type('X');
+    expect(surface.state().selection.head.offset).toBe(4);
+
+    surface.undo();
+    expect(surface.session.bodyText()).toBe('hello world');
+    // Not offset 4, which is past where the character now is, and not 0: the caret returns
+    // to where the user was typing.
+    expect(surface.state().selection.head.offset).toBe(3);
+  });
+
+  test('undoing a split puts the caret back at the split point', () => {
+    const { surface } = mount(`<w:p><w:r><w:t>hello world</w:t></w:r></w:p>`);
+    clickText(surface, 0, 0);
+    for (let step = 0; step < 5; step += 1) surface.navigate('right');
+    surface.splitParagraph();
+    expect(surface.session.paragraphIds().length).toBe(2);
+
+    surface.undo();
+    expect(surface.session.paragraphIds().length).toBe(1);
+    const head = surface.state().selection.head;
+    expect(head.paragraphId).toBe(surface.session.paragraphIds()[0]!);
+    expect(head.offset).toBe(5);
+  });
+
+  test('undo with an empty history leaves the caret alone', () => {
+    const { surface } = mount(`<w:p><w:r><w:t>hello</w:t></w:r></w:p>`);
+    clickText(surface, 0, 0);
+    surface.navigate('right');
+    surface.undo();
+    expect(surface.state().selection.head.offset).toBe(1);
+  });
+});

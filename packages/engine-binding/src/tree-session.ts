@@ -22,6 +22,7 @@ import {
   type OoxmlPackage,
   type OoxmlPackageRejection,
   type OoxmlPart,
+  type SelectionMark,
   type TreeDocOp,
   type TreeModelChange,
 } from '@docx-editor.dev/engine-core';
@@ -50,7 +51,7 @@ export interface TreeDocxSession {
    * the ops already do — by node id and offset — rather than round-tripping an edit through
    * a projection just to have it diffed back out.
    */
-  applyTreeOps(ops: readonly TreeDocOp[]): TreeApplyResult;
+  applyTreeOps(ops: readonly TreeDocOp[], selectionBefore?: SelectionMark | null): TreeApplyResult;
   /** Project the current revision into a ProseMirror doc. */
   projectDoc(): PMNode;
   /** Re-project incrementally from the last committed change, reusing untouched paragraphs. */
@@ -70,8 +71,16 @@ export interface TreeDocxSession {
   revision(): number;
   canUndo(): boolean;
   canRedo(): boolean;
-  undo(): boolean;
-  redo(): boolean;
+  /**
+   * Undo the last entry, returning the selection to restore.
+   *
+   * The selection is part of the entry, not something a host can recompute: after undoing a
+   * split the caret belongs where the user was typing, and offsets in the reverted tree do
+   * not correspond to offsets in the one that replaced it. `null` means nothing was undone
+   * or the entry recorded no selection.
+   */
+  undo(): SelectionMark | null;
+  redo(): SelectionMark | null;
   beginComposition(): void;
   endComposition(): void;
   subscribe(onChange: (change: TreeModelChange) => void): () => void;
@@ -126,9 +135,12 @@ export function openTreeSession(bytes: Uint8Array): OpenTreeSessionResult {
 
       part: () => store.part,
 
-      applyTreeOps(ops) {
+      applyTreeOps(ops, selectionBefore) {
         if (ops.length === 0) return { committed: false, rejected: false, opCount: 0 };
         const result = store.transact((ctx) => {
+          // Recorded BEFORE the ops run, so undo restores where the caret was when the user
+          // made the edit rather than where it ended up afterwards.
+          if (selectionBefore !== undefined) ctx.selectionBefore(selectionBefore);
           for (const op of ops) ctx.apply(op);
         });
         if (!result.ok) {
@@ -172,8 +184,14 @@ export function openTreeSession(bytes: Uint8Array): OpenTreeSessionResult {
       revision: () => store.revision,
       canUndo: () => store.canUndo,
       canRedo: () => store.canRedo,
-      undo: () => store.undo() !== null,
-      redo: () => store.redo() !== null,
+      undo: () => {
+        const selection = store.selectionForUndo();
+        return store.undo() === null ? null : selection;
+      },
+      redo: () => {
+        const selection = store.selectionForRedo();
+        return store.redo() === null ? null : selection;
+      },
       beginComposition: () => store.beginComposition(),
       endComposition: () => store.endComposition(),
 

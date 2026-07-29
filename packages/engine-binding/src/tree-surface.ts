@@ -102,9 +102,9 @@ export function mountTreeSurface(
           // pressing End left the caret where the click put it and Enter split mid-word.
           Home: selectTextblockStart,
           End: selectTextblockEnd,
-          'Mod-z': undoRedo(() => session.undo()),
-          'Mod-y': undoRedo(() => session.redo()),
-          'Shift-Mod-z': undoRedo(() => session.redo()),
+          'Mod-z': undoRedo(() => session.undo() !== null),
+          'Mod-y': undoRedo(() => session.redo() !== null),
+          'Shift-Mod-z': undoRedo(() => session.redo() !== null),
           'Mod-b': (state, dispatch) => toggleRunProp(state, dispatch, 'b'),
           'Mod-i': (state, dispatch) => toggleRunProp(state, dispatch, 'i'),
           'Mod-u': (state, dispatch) => toggleRunProp(state, dispatch, 'u', { val: 'single' }),
@@ -299,8 +299,8 @@ export function mountTreeSurface(
   return {
     view,
     state: currentState,
-    undo: () => undoRedo(() => session.undo())(),
-    redo: () => undoRedo(() => session.redo())(),
+    undo: () => undoRedo(() => session.undo() !== null)(),
+    redo: () => undoRedo(() => session.redo() !== null)(),
     toggleRunProperty(localName, attributes) {
       toggleRunProp(view.state, view.dispatch.bind(view) as never, localName, attributes);
     },
