@@ -162,3 +162,33 @@ describe('each run is its own box, so a mixed-size line highlights stepped', () 
     expect(container.querySelectorAll('.docx-line')).toHaveLength(1);
   });
 });
+
+describe('only the pages worth building are built (task 9.4)', () => {
+  const long = `<w:p><w:r><w:t>${'word '.repeat(3000)}</w:t></w:r></w:p>`;
+
+  test('a page left out keeps its size and place but holds no content', () => {
+    // Height and page count are unchanged, so scrolling to a page reveals it instead of
+    // reflowing everything underneath it.
+    const container = document.createElement('div');
+    const layout = layoutOf(long);
+    expect(layout.pages.length).toBeGreaterThan(2);
+    paintSemanticLayout(container, layout, { scale: 1, materialize: new Set([0]) });
+
+    const pages = [...container.querySelectorAll<HTMLElement>('.docx-page')];
+    expect(pages).toHaveLength(layout.pages.length);
+    expect(pages[0]!.dataset.materialized).toBe('true');
+    expect(pages[1]!.dataset.materialized).toBe('false');
+    expect(pages[1]!.style.height).toBe(pages[0]!.style.height);
+    expect(pages[1]!.querySelectorAll('.docx-line')).toHaveLength(0);
+    expect(pages[0]!.querySelectorAll('.docx-line').length).toBeGreaterThan(0);
+  });
+
+  test('omitting the option builds everything, so the default cannot silently drop content', () => {
+    const container = document.createElement('div');
+    const layout = layoutOf(long);
+    paintSemanticLayout(container, layout, { scale: 1 });
+    for (const page of container.querySelectorAll<HTMLElement>('.docx-page')) {
+      expect(page.dataset.materialized).toBe('true');
+    }
+  });
+});

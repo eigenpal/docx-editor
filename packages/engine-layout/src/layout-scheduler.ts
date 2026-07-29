@@ -77,6 +77,26 @@ export interface LayoutSchedulerOptions {
    * the queue by hand, and a server has neither.
    */
   readonly schedule?: (run: () => void) => () => void;
+  /**
+   * Run a layout in slices instead of in one call (task 9.5).
+   *
+   * Optional: without it `run` is used and completes in one turn, which is right for a
+   * document small enough that slicing costs more than it saves.
+   */
+  readonly runCooperatively?: (scope: LayoutScope) => CooperativeRun;
+}
+
+export interface CooperativeRun {
+  /**
+   * Advance the work. Returns the finished layout, or null to be called again.
+   *
+   * Split so a global relayout does not hold the main thread for the whole document: the
+   * scheduler yields between slices and a newer revision can cancel the run mid-flight
+   * rather than the user waiting for work whose result is already stale.
+   */
+  step(): SemanticLayout | null;
+  /** Abandon the run. Nothing partial is ever published. */
+  cancel(): void;
 }
 
 export interface LayoutScheduler {
@@ -92,6 +112,8 @@ export interface LayoutScheduler {
   cancel(): void;
   /** How many layouts were discarded for being stale. Diagnostics, and a test hook. */
   readonly staleDiscards: number;
+  /** How many cooperative runs were abandoned because a newer revision arrived. */
+  readonly cancelledRuns: number;
 }
 
 /** An empty accumulator: the narrowest scope, which every commit then widens. */
@@ -119,7 +141,32 @@ export function createLayoutScheduler(options: LayoutSchedulerOptions): LayoutSc
   const { run, currentRevision, publish, schedule } = options;
   let accumulator: ReturnType<typeof emptyScope> | null = null;
   let cancelScheduled: (() => void) | null = null;
+  let inFlight: CooperativeRun | null = null;
   let staleDiscards = 0;
+  let cancelledRuns = 0;
+
+  /**
+   * Drive a run to completion, cooperatively when the host supplies a slicer.
+   *
+   * `flush` is synchronous by contract — a caller that asks for a layout now gets one — so
+   * the slices are driven here rather than across turns. What slicing buys even so is a
+   * cancellation point: a commit landing mid-run abandons it on the next slice instead of
+   * paying for a layout of a revision nobody will see.
+   */
+  function runToCompletion(scope: LayoutScope): SemanticLayout {
+    const slicer = options.runCooperatively;
+    if (!slicer) return run(scope);
+    const cooperative = slicer(scope);
+    inFlight = cooperative;
+    try {
+      for (;;) {
+        const result = cooperative.step();
+        if (result) return result;
+      }
+    } finally {
+      if (inFlight === cooperative) inFlight = null;
+    }
+  }
 
   const freeze = (state: ReturnType<typeof emptyScope>): LayoutScope => ({
     impact: state.impact,
@@ -152,11 +199,18 @@ export function createLayoutScheduler(options: LayoutSchedulerOptions): LayoutSc
       cancelScheduled();
       cancelScheduled = null;
     }
+    // A slice in flight is abandoned, not awaited: its result describes a revision that has
+    // already been superseded, and finishing it would only delay the one that has not.
+    if (inFlight) {
+      inFlight.cancel();
+      inFlight = null;
+      cancelledRuns += 1;
+    }
     const state = accumulator;
     if (!state) return false;
     accumulator = null;
     const scope = freeze(state);
-    const layout = run(scope);
+    const layout = runToCompletion(scope);
     // Checked AFTER the work, against the model as it is NOW: a commit landing while layout
     // ran is exactly the case this exists for. Re-arm rather than publish, so the newer
     // revision gets its own pass instead of inheriting a result computed before it.
@@ -223,11 +277,17 @@ export function createLayoutScheduler(options: LayoutSchedulerOptions): LayoutSc
     cancel() {
       cancelScheduled?.();
       cancelScheduled = null;
+      inFlight?.cancel();
+      inFlight = null;
       accumulator = null;
     },
 
     get staleDiscards() {
       return staleDiscards;
+    },
+
+    get cancelledRuns() {
+      return cancelledRuns;
     },
   };
 }

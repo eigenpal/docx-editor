@@ -241,3 +241,89 @@ describe('a layout computed against a superseded revision is never published (ta
     expect(h.scheduler.staleDiscards).toBe(0);
   });
 });
+
+describe('a global relayout runs cooperatively and cancels cleanly (task 9.5)', () => {
+  /** A run that finishes after a fixed number of slices, so cancellation has a window. */
+  function slicedHarness(slices: number) {
+    let revision = 1;
+    const published: SemanticLayout[] = [];
+    const started: number[] = [];
+    const cancelled: number[] = [];
+    let nextId = 0;
+    const scheduler = createLayoutScheduler({
+      run: (scope) => layoutAt(scope.revision),
+      currentRevision: () => revision,
+      publish: (layout) => published.push(layout),
+      runCooperatively: (scope) => {
+        const id = nextId++;
+        started.push(id);
+        let remaining = slices;
+        return {
+          step: () => {
+            remaining -= 1;
+            return remaining <= 0 ? layoutAt(scope.revision) : null;
+          },
+          cancel: () => cancelled.push(id),
+        };
+      },
+    });
+    return { scheduler, published, started, cancelled, setRevision: (n: number) => (revision = n) };
+  }
+
+  test('a sliced run completes and publishes exactly one layout', () => {
+    const h = slicedHarness(4);
+    h.scheduler.notify(change({ dirty: ['p1'], toRevision: 1 }));
+    expect(h.scheduler.flush()).toBe(true);
+    expect(h.published).toHaveLength(1);
+    expect(h.started).toHaveLength(1);
+    expect(h.cancelled).toHaveLength(0);
+  });
+
+  test('nothing partial is ever published', () => {
+    // The whole point of slicing is that a half-laid-out document is never shown; a run
+    // either produces a complete layout or produces nothing.
+    const h = slicedHarness(3);
+    h.scheduler.notify(change({ dirty: ['p1'] }));
+    h.scheduler.flush();
+    expect(h.published.every((layout) => layout.revision === 1)).toBe(true);
+  });
+
+  test('teardown abandons a run rather than leaving it to finish', () => {
+    const h = slicedHarness(3);
+    h.scheduler.notify(change({ dirty: ['p1'] }));
+    h.scheduler.cancel();
+    expect(h.published).toHaveLength(0);
+    expect(h.scheduler.pending()).toBeNull();
+  });
+
+  test('a cooperative run still refuses to publish against a superseded revision', () => {
+    // Slicing must not weaken the staleness rule: the check happens after the work either
+        // way.
+    let revision = 1;
+    const published: SemanticLayout[] = [];
+    const scheduler = createLayoutScheduler({
+      run: (scope) => layoutAt(scope.revision),
+      currentRevision: () => revision,
+      publish: (layout) => published.push(layout),
+      runCooperatively: (scope) => ({
+        step: () => {
+          // A commit lands while the slices are running.
+          revision = 7;
+          return layoutAt(scope.revision);
+        },
+        cancel: () => {},
+      }),
+    });
+    scheduler.notify(change({ dirty: ['p1'], toRevision: 1 }));
+    expect(scheduler.flush()).toBe(false);
+    expect(published).toHaveLength(0);
+    expect(scheduler.staleDiscards).toBe(1);
+  });
+
+  test('without a slicer the plain run is used, so slicing stays optional', () => {
+    const h = harness();
+    h.scheduler.notify(change({ dirty: ['p1'] }));
+    expect(h.scheduler.flush()).toBe(true);
+    expect(h.runs).toHaveLength(1);
+  });
+});

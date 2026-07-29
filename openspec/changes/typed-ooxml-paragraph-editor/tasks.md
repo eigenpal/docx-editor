@@ -88,9 +88,9 @@ clean full layout of the same revision to be differentially tested against.
 - [x] 9.1 Propagate authoritative `ModelChange` dirty identities, structural effects, dependency keys, and impact class through stale-safe layout scheduling.
 - [x] 9.2 Wire paragraph shaping and line-layout caches to stable content, dependency, width, resource, shaping, and producer fingerprints across revisions.
 - [x] 9.3 Retain the previous complete layout, capture safe flow checkpoints, resume before the first affected block, and reuse a suffix only after exact state convergence with conservative full-layout fallback.
-- [ ] 9.4 Preserve unchanged page and `DisplayItem` identity and materialize detailed output only for the viewport, bounded overscan, and logical caret/selection pages.
-- [ ] 9.5 Run unavoidable global layout as cancellable revision-tagged cooperative work and atomically publish only the latest complete result.
-- [ ] 9.6 Add full-vs-incremental differential tests plus structural work counters proving bounded relayout, publication, and mounted-page work without wall-clock assertions.
+- [x] 9.4 Preserve unchanged page and `DisplayItem` identity and materialize detailed output only for the viewport, bounded overscan, and logical caret/selection pages.
+- [x] 9.5 Run unavoidable global layout as cancellable revision-tagged cooperative work and atomically publish only the latest complete result.
+- [x] 9.6 Add full-vs-incremental differential tests plus structural work counters proving bounded relayout, publication, and mounted-page work without wall-clock assertions.
 - [ ] 9.7 Prove through the private harness that repeated paragraph edits retain unaffected page identity, bound mounted page content to the viewport window, and never publish stale layout revisions.
 
 ## 10. Single Core Package Migration

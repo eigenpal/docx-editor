@@ -24,6 +24,14 @@ export interface PaintOptions {
   readonly scale?: number;
   /** Marks painted pages as presentational, so assistive tech reads the editable projection. */
   readonly ariaHidden?: boolean;
+  /**
+   * Page indices to build in detail (task 9.4).
+   *
+   * Omitted means all of them. A page left out keeps its size and position but no content,
+   * so the document's height and page count are unchanged and scrolling to it reveals it
+   * instead of reflowing everything underneath.
+   */
+  readonly materialize?: ReadonlySet<number>;
 }
 
 const HEX = /^[0-9A-Fa-f]{6}$/;
@@ -256,7 +264,8 @@ function paintFragment(
 function paintPage(
   document: Document,
   page: PageRecord,
-  options: Required<PaintOptions>
+  options: { readonly scale: number; readonly ariaHidden: boolean },
+  materialize: boolean
 ): HTMLElement {
   const element = positioned(document, 'div', page.box, options.scale);
   element.className = 'docx-page';
@@ -267,6 +276,12 @@ function paintPage(
     element.setAttribute('aria-hidden', 'true');
     element.setAttribute('role', 'presentation');
   }
+  // A page outside the viewport keeps its SIZE and its place, and nothing else. Scroll
+  // position and page count stay exactly as they would be with everything built, so
+  // scrolling to a page reveals it rather than reflowing the document underneath.
+  element.dataset.materialized = String(materialize);
+  if (!materialize) return element;
+
   const content = document.createElement('div');
   content.className = 'docx-page-content';
   content.style.position = 'absolute';
@@ -292,12 +307,14 @@ export function paintSemanticLayout(
   layout: SemanticLayout,
   options: PaintOptions = {}
 ): void {
-  const resolved: Required<PaintOptions> = {
+  const resolved = {
     scale: options.scale ?? 96 / 72,
     ariaHidden: options.ariaHidden ?? true,
   };
   const document = container.ownerDocument;
-  const pages = layout.pages.map((page) => paintPage(document, page, resolved));
+  const pages = layout.pages.map((page) =>
+    paintPage(document, page, resolved, options.materialize?.has(page.index) ?? true)
+  );
   container.dataset.revision = String(layout.revision);
   container.replaceChildren(...pages);
 }

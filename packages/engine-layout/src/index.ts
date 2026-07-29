@@ -199,6 +199,7 @@ export {
   type SemanticLayoutOptions,
 } from './semantic-layout.ts';
 export { createShapedMeasurer, type ShapedMeasurerOptions } from './shaped-measurer.ts';
+export { pagesToMaterialize, type MaterializationInput, type ViewportWindow } from './viewport.ts';
 export {
   createParagraphLayoutCache,
   paragraphLayoutKey,
