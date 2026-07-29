@@ -23,6 +23,7 @@ import { deriveOoxmlIndexes } from '../src/package/ooxml-indexes.ts';
 import { paragraphTextOf } from '../src/store/tree-ops.ts';
 import { TreeDocumentStore } from '../src/store/tree-store.ts';
 import { zipSync, strToU8 } from 'fflate';
+import { existingLanePath } from './lane-paths.ts';
 
 const PACKAGES = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
 
@@ -90,7 +91,7 @@ describe('the canonical tree lane keeps ONE model (task 6.7)', () => {
   test('no tree-lane module names a preservation capsule or a source range', () => {
     const offenders: string[] = [];
     for (const relativePath of TREE_LANE) {
-      const file = join(PACKAGES, relativePath);
+      const file = existingLanePath(relativePath);
       // A missing entry would silently shrink the corpus, so it is an offence too.
       if (!existsSync(file)) {
         offenders.push(`${relativePath}: not found`);
@@ -108,7 +109,7 @@ describe('the canonical tree lane keeps ONE model (task 6.7)', () => {
     // its expectation — should go with it.
     const legacy = ['engine-core/src/package/wml-preserve.ts', 'engine-core/src/package/docx/read.ts'];
     for (const relativePath of legacy) {
-      const code = stripComments(readFileSync(join(PACKAGES, relativePath), 'utf8'));
+      const code = stripComments(readFileSync(existingLanePath(relativePath), 'utf8'));
       expect({ [relativePath]: SECOND_MODEL.test(code) }).toEqual({ [relativePath]: true });
     }
   });

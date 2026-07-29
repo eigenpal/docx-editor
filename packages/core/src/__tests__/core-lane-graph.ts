@@ -27,7 +27,14 @@ export type LaneEnvironment = 'neutral' | 'browser' | 'node';
 export interface Lane {
   /** Where the lane lives after the migration. */
   readonly directory: string;
-  /** The workspace package holding it today, so the rule is checkable before the move. */
+  /**
+   * The workspace package holding it TODAY, or null once it has moved into `packages/core`.
+   *
+   * The migration flips this per lane, one entry at a time, and every check reads it rather
+   * than a literal path — so moving a lane's files updates one line here instead of breaking
+   * each guard that happened to name the old location. A first attempt at the move failed on
+   * exactly that cascade.
+   */
   readonly package: string | null;
   /** Lanes this one may import. Anything else is a violation. */
   readonly mayImport: readonly LaneName[];
@@ -140,6 +147,34 @@ export const BROWSER_FORBIDDEN_DEPENDENCIES: readonly string[] = [
   'node:net',
   'node:http',
 ];
+
+/** Whether a lane has been moved into the core package yet. */
+export function laneHasMoved(name: LaneName): boolean {
+  return CORE_LANES[name].package === null;
+}
+
+/**
+ * Where a lane's source lives right now, relative to `packages/`.
+ *
+ * The single place that knows whether a lane has moved. A guard that resolves through this
+ * keeps working across the migration; one that hard-codes `engine-core/src` does not.
+ */
+export function laneSourceRoot(name: LaneName): string {
+  return sourceRootOf(CORE_LANES[name]);
+}
+
+/**
+ * The same rule as a pure function of a lane record.
+ *
+ * Split out so the moved case is reachable in a test: `CORE_LANES` is frozen and every lane
+ * in it is unmoved, so a test that could only call `laneSourceRoot` would be asserting on the
+ * one branch that is not the interesting one.
+ */
+export function sourceRootOf(lane: Lane): string {
+  if (lane.package === null) return `core/${lane.directory}`;
+  const directory = lane.package.replace('@docx-editor.dev/', '');
+  return `${directory === 'core-contract' ? 'core' : directory}/src`;
+}
 
 /** Every lane, in an order where a lane's dependencies come first. */
 export function laneTopologicalOrder(): LaneName[] {

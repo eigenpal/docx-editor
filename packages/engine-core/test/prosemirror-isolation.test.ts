@@ -16,6 +16,7 @@ import { describe, expect, test } from 'bun:test';
 import { readFileSync, readdirSync, existsSync, statSync } from 'node:fs';
 import { dirname, join, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { existingLanePath } from './lane-paths.ts';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const PACKAGES = join(HERE, '..', '..');
@@ -94,7 +95,7 @@ describe('ProseMirror stays inside the binding (tasks 6.5, 6.6)', () => {
   for (const root of PM_FREE_ROOTS) {
     test(`${root.label} references no ProseMirror type or view`, () => {
       const offenders: string[] = [];
-      for (const file of collectSources(join(PACKAGES, root.dir))) {
+      for (const file of collectSources(existingLanePath(root.dir))) {
         const found = violations(readFileSync(file, 'utf8'));
         if (found.length > 0) {
           offenders.push(`${relative(REPO, file)}: ${[...new Set(found)].join(', ')}`);
@@ -112,7 +113,7 @@ describe('ProseMirror stays inside the binding (tasks 6.5, 6.6)', () => {
       'engine-core/src/package/docx/write.ts',
     ];
     for (const relativePath of savePath) {
-      const file = join(PACKAGES, relativePath);
+      const file = existingLanePath(relativePath);
       if (!existsSync(file)) continue;
       expect({ [relativePath]: violations(readFileSync(file, 'utf8')) }).toEqual({
         [relativePath]: [],
@@ -121,7 +122,7 @@ describe('ProseMirror stays inside the binding (tasks 6.5, 6.6)', () => {
   });
 
   test('semantic history reads the canonical tree, never the PM history plugin', () => {
-    const file = join(PACKAGES, 'engine-core/src/store/tree-store.ts');
+    const file = existingLanePath('engine-core/src/store/tree-store.ts');
     expect(violations(readFileSync(file, 'utf8'))).toEqual([]);
     // Positive statement of the same fact: entries are canonical parts and revisions.
     const source = readFileSync(file, 'utf8');
@@ -140,14 +141,14 @@ describe('ProseMirror stays inside the binding (tasks 6.5, 6.6)', () => {
     expect(violations('// ProseMirror is deliberately absent here\nconst x = 1;')).toEqual([]);
 
     let scanned = 0;
-    for (const root of PM_FREE_ROOTS) scanned += collectSources(join(PACKAGES, root.dir)).length;
+    for (const root of PM_FREE_ROOTS) scanned += collectSources(existingLanePath(root.dir)).length;
     expect(scanned).toBeGreaterThan(50);
   });
 
   test('the binding IS allowed to own ProseMirror, so the guard is not vacuous', () => {
     // If engine-binding were also clean, the whole suite would pass for the wrong reason:
     // ProseMirror having been removed entirely rather than confined.
-    const bindingFiles = collectSources(join(PACKAGES, 'engine-binding/src'));
+    const bindingFiles = collectSources(existingLanePath('engine-binding/src'));
     const owning = bindingFiles.filter((file) => violations(readFileSync(file, 'utf8')).length > 0);
     expect(owning.length).toBeGreaterThan(0);
   });

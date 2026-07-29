@@ -9,6 +9,7 @@ import { describe, expect, test } from 'bun:test';
 import { readFileSync, readdirSync, existsSync, statSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { existingLanePath } from './lane-paths.ts';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const PACKAGES_DIR = join(HERE, '..', '..');
@@ -48,7 +49,7 @@ function stripComments(source: string): string {
 describe('package authority (task 0.5)', () => {
   test('the EditorHost contract is PM-free', () => {
     const editor = stripComments(
-      readFileSync(join(PACKAGES_DIR, 'core', 'src', 'editor.ts'), 'utf8')
+      readFileSync(existingLanePath('core/src/editor.ts'), 'utf8')
     );
     // No import from a prosemirror module.
     expect(/from\s*['"]prosemirror[^'"]*['"]/.test(editor)).toBe(false);
@@ -60,7 +61,7 @@ describe('package authority (task 0.5)', () => {
   test('DocxEditor is the only exported object-model namespace', () => {
     const namespaceRe = /export\s+namespace\s+([A-Za-z_$][\w$]*)/g;
     for (const dir of PUBLIC_SRC_DIRS) {
-      for (const file of collectSources(join(PACKAGES_DIR, dir))) {
+      for (const file of collectSources(existingLanePath(dir))) {
         const source = readFileSync(file, 'utf8');
         let m: RegExpExecArray | null;
         while ((m = namespaceRe.exec(source)) !== null) {
@@ -79,7 +80,7 @@ describe('package authority (task 0.5)', () => {
     for (const dir of PUBLIC_SRC_DIRS) {
       // Only the package entry points constitute the public surface.
       for (const entry of ['index.ts', 'index.tsx', 'editor.ts']) {
-        const file = join(PACKAGES_DIR, dir, entry);
+        const file = join(existingLanePath(dir), entry);
         if (!existsSync(file)) continue;
         const source = readFileSync(file, 'utf8');
         expect(exportRe.test(source)).toBe(false);

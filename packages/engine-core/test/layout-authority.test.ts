@@ -12,6 +12,7 @@ import { describe, expect, test } from 'bun:test';
 import { readFileSync, readdirSync, existsSync, statSync } from 'node:fs';
 import { dirname, join, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { existingLanePath } from './lane-paths.ts';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const PACKAGES = join(HERE, '..', '..');
@@ -63,7 +64,7 @@ function findAll(source: string, patterns: readonly { pattern: RegExp; why: stri
 
 describe('semantic layout is the only geometry authority (task 7.6)', () => {
   test('the semantic painter never measures anything back', () => {
-    const file = join(PACKAGES, 'engine-output/src/semantic-paint.ts');
+    const file = existingLanePath('engine-output/src/semantic-paint.ts');
     const offenders = findAll(readFileSync(file, 'utf8'), REMEASUREMENT);
     expect(offenders).toEqual([]);
   });
@@ -78,7 +79,7 @@ describe('semantic layout is the only geometry authority (task 7.6)', () => {
       'engine-layout/src/run-style.ts',
     ];
     for (const relativePath of files) {
-      const code = stripComments(readFileSync(join(PACKAGES, relativePath), 'utf8'));
+      const code = stripComments(readFileSync(existingLanePath(relativePath), 'utf8'));
       expect({ [relativePath]: /\bdocument\s*\.|window\s*\.|\bHTMLElement\b/.test(code) }).toEqual({
         [relativePath]: false,
       });
@@ -88,7 +89,7 @@ describe('semantic layout is the only geometry authority (task 7.6)', () => {
 
   test('no output module builds DOM from an HTML string', () => {
     const offenders: string[] = [];
-    for (const file of collectSources(join(PACKAGES, 'engine-output/src'))) {
+    for (const file of collectSources(existingLanePath('engine-output/src'))) {
       const code = stripComments(readFileSync(file, 'utf8'));
       for (const pattern of HTML_FROM_STRING) {
         if (pattern.test(code)) offenders.push(`${relative(REPO, file)}: ${pattern.source}`);
@@ -102,7 +103,7 @@ describe('semantic layout is the only geometry authority (task 7.6)', () => {
     // accident; `engine-core` has no DOM lib, but a bare `document.` would still compile in
     // a file that declared its own.
     const offenders: string[] = [];
-    for (const file of collectSources(join(PACKAGES, 'engine-core/src'))) {
+    for (const file of collectSources(existingLanePath('engine-core/src'))) {
       const code = stripComments(readFileSync(file, 'utf8'));
       if (/\bdocument\s*\.\s*(createElement|querySelector|body)\b/.test(code)) {
         offenders.push(relative(REPO, file));
@@ -124,7 +125,7 @@ describe('semantic layout is the only geometry authority (task 7.6)', () => {
       []
     );
     // And the corpus is real.
-    expect(collectSources(join(PACKAGES, 'engine-output/src')).length).toBeGreaterThan(3);
+    expect(collectSources(existingLanePath('engine-output/src')).length).toBeGreaterThan(3);
   });
 
   test('the ADAPTER lane may still measure, so the guard is not vacuous', () => {
@@ -132,8 +133,8 @@ describe('semantic layout is the only geometry authority (task 7.6)', () => {
     // were clean too, these tests would pass because measurement had been removed
     // everywhere rather than confined to where it belongs.
     const adapters = [
-      ...collectSources(join(PACKAGES, 'react/src')),
-      ...collectSources(join(PACKAGES, 'engine-editor/src')),
+      ...collectSources(existingLanePath('react/src')),
+      ...collectSources(existingLanePath('engine-editor/src')),
     ];
     const measuring = adapters.filter(
       (file) => findAll(readFileSync(file, 'utf8'), REMEASUREMENT).length > 0
