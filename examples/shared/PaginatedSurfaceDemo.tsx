@@ -11,6 +11,8 @@ import { createExactMeasurer } from './exactMeasurer.ts';
 import { BrandLogo } from './BrandLogo';
 import { AdapterSwitcher } from './AdapterSwitcher';
 import { ExampleSwitcher } from './ExampleSwitcher';
+import { ThemeToggle } from './ThemeToggle';
+import { DEMO_BUTTON, DEMO_PRIMARY_BUTTON, DEMO_SECONDARY_BUTTON } from './demoButtons';
 
 /** Layout units (points) to CSS pixels, at 96 dpi. */
 const SCALE = 96 / 72;
@@ -23,6 +25,23 @@ export function PaginatedSurfaceDemo({ fixtureUrl }: { fixtureUrl: string }) {
   const [source, setSource] = useState<Uint8Array | null>(null);
   const [measurer, setMeasurer] = useState<TextMeasurer | null>(null);
   const [fontFamily, setFontFamily] = useState<string | null>(null);
+  const [colorMode, setColorMode] = useState<'light' | 'dark'>('light');
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+
+  /** Serialize and hand the bytes to the browser as a download. */
+  const download = (bytes: Uint8Array, name = 'document.docx'): void => {
+    const blob = new Blob([bytes as unknown as BlobPart], {
+      type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement('a');
+    anchor.href = url;
+    anchor.download = name;
+    anchor.click();
+    // Revoked immediately: the click has already handed the blob to the download, and
+    // holding the URL keeps the whole document alive in memory.
+    URL.revokeObjectURL(url);
+  };
 
   // Mounted through the PACKAGED React host rather than the engine mount, so the demo
   // exercises the adapter a consumer actually installs. Calling the engine directly proved
@@ -61,6 +80,8 @@ export function PaginatedSurfaceDemo({ fixtureUrl }: { fixtureUrl: string }) {
       >
         {source && measurer ? (
           <PaginatedDocxEditorShell
+            ref={editorRef}
+            colorMode={colorMode}
             source={source}
             documentName="Sample Document"
             scale={SCALE}
@@ -69,6 +90,42 @@ export function PaginatedSurfaceDemo({ fixtureUrl }: { fixtureUrl: string }) {
             onSave={(bytes) => setSaved(`${bytes.length} bytes saved`)}
             // The demo owns the title-bar slots, exactly as the adapter harness does: brand
             // lockup and the adapter/example switchers on the left, document actions right.
+            renderTitleBarRight={() => (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <ThemeToggle value={colorMode} onChange={setColorMode} />
+                <button
+                  type="button"
+                  style={DEMO_PRIMARY_BUTTON}
+                  onClick={() => fileInputRef.current?.click()}
+                >
+                  Open DOCX
+                </button>
+                <button
+                  type="button"
+                  style={DEMO_SECONDARY_BUTTON}
+                  onClick={() => {
+                    // A new document is the fixture reopened: the surface has no
+                    // document-creation lane yet, and inventing one here would put the
+                    // shape of an empty document in the demo instead of the engine.
+                    void fetch(fixtureUrl)
+                      .then((response) => response.arrayBuffer())
+                      .then((buffer) => setSource(new Uint8Array(buffer)));
+                  }}
+                >
+                  New
+                </button>
+                <button
+                  type="button"
+                  style={DEMO_BUTTON}
+                  onClick={() => {
+                    const bytes = editorRef.current?.save();
+                    if (bytes) download(bytes);
+                  }}
+                >
+                  Save
+                </button>
+              </div>
+            )}
             renderTitleBarLeft={() => (
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                 <BrandLogo />
@@ -82,6 +139,25 @@ export function PaginatedSurfaceDemo({ fixtureUrl }: { fixtureUrl: string }) {
           />
         ) : null}
       </div>
+
+      {/* Opening a document is a FILE READ, so it goes through an input the user drives —
+          the surface is never handed a URL to fetch on its own. */}
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept=".docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+        style={{ display: 'none' }}
+        onChange={(event) => {
+          const file = event.target.files?.[0];
+          if (!file) return;
+          void file.arrayBuffer().then((buffer) => {
+            setSaved(null);
+            setSource(new Uint8Array(buffer));
+          });
+          // Cleared so choosing the SAME file twice fires a change event the second time.
+          event.target.value = '';
+        }}
+      />
 
       {/* A DEV INDICATOR, not chrome: pinned out of the way so the editor above it is the
           editor a user would see, while the revision and caret stay one glance away. */}

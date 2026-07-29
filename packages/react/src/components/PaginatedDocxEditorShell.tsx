@@ -9,7 +9,14 @@
 // engine cannot yet express is refused rather than approximated, because a toolbar button
 // that silently does nothing is worse than one that is visibly unavailable.
 
-import { useCallback, useRef, useState, type ReactNode } from 'react';
+import {
+  useCallback,
+  useImperativeHandle,
+  useRef,
+  useState,
+  type ReactNode,
+  type Ref,
+} from 'react';
 import type {
   PaginatedSurfaceState,
   SectionProperties,
@@ -40,6 +47,10 @@ export interface PaginatedDocxEditorShellProps {
    */
   readonly renderTitleBarLeft?: () => ReactNode;
   readonly renderTitleBarRight?: () => ReactNode;
+  /** Commands, forwarded from the editor the shell hosts. */
+  readonly ref?: Ref<PaginatedDocxEditorHandle>;
+  /** Applies the editor's own dark palette; the document canvas stays Word-faithful. */
+  readonly colorMode?: 'light' | 'dark';
   readonly className?: string;
 }
 
@@ -77,6 +88,8 @@ export function PaginatedDocxEditorShell({
   onSave,
   renderTitleBarLeft,
   renderTitleBarRight,
+  ref,
+  colorMode,
   className,
 }: PaginatedDocxEditorShellProps) {
   const editorRef = useRef<PaginatedDocxEditorHandle>(null);
@@ -181,6 +194,9 @@ export function PaginatedDocxEditorShell({
   // The chrome skeleton: a fixed toolbar above a scroll container holding the pages. The
   // full shell adds rulers, the outline panel and the sidebar, all of which need section
   // properties — page size and margins — that this surface does not publish yet.
+  // Forwarded rather than re-implemented: the shell adds chrome, not commands.
+  useImperativeHandle(ref, () => editorRef.current as PaginatedDocxEditorHandle, []);
+
   const zoom = scale === undefined ? 1 : scale / (96 / 72);
   // The engine's section carries more than the ruler's contract does — header, footer and
   // gutter offsets — so it is narrowed rather than the ruler being widened to know about
@@ -204,7 +220,9 @@ export function PaginatedDocxEditorShell({
 
   return (
     <div
-      className={className ?? 'ep-root docx-editor docx-paginated-shell'}
+      className={`${className ?? 'ep-root docx-editor docx-paginated-shell'}${
+        colorMode === 'dark' ? ' dark' : ''
+      }`}
       style={{ display: 'flex', flexDirection: 'column', height: '100%', minHeight: 0 }}
       data-testid="paginated-shell"
     >

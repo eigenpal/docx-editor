@@ -86,3 +86,4 @@ examples/vue/public/DC_Template_Descricao_Cargo_Controlado_Enterprise.docx
 .gstack/
 .pr-checklist.json
 tmp-preview/
+openspec/changes/*/notes/feature-parity-report.json
