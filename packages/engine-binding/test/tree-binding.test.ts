@@ -3,8 +3,8 @@
 import { describe, expect, test } from 'bun:test';
 import { readOoxmlPart, TreeDocumentStore, type OoxmlPart } from '@docx-editor.dev/engine-core';
 import { treeSchema } from '../src/tree-schema.ts';
-import { bodyParagraphs, docToTreeOps, treeToDoc } from '../src/tree-binding.ts';
-import { paragraphTextOf } from '@docx-editor.dev/engine-core';
+import { bodyParagraphs, docToTreeOps, reconcileDoc, treeToDoc } from '../src/tree-binding.ts';
+import { paragraphTextOf, ORIGIN_IDS } from '@docx-editor.dev/engine-core';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 const A = 'http://schemas.openxmlformats.org/drawingml/2006/main';
@@ -357,5 +357,99 @@ describe('unsupported transactions are refused without canonical effects (task 6
     const mapped = docToTreeOps(part, doc);
     expect(mapped.ok).toBe(false);
     expect('ops' in mapped).toBe(false);
+  });
+});
+
+describe('incremental reconciliation with a projection-only origin (task 6.4)', () => {
+  const source =
+    '<w:p><w:r><w:t>one</w:t></w:r></w:p>' +
+    '<w:p><w:r><w:t>two</w:t></w:r></w:p>' +
+    '<w:p><w:r><w:t>three</w:t></w:r></w:p>';
+
+  test('a text edit reuses every untouched paragraph node by reference', () => {
+    const part = load(source);
+    const before = treeToDoc(part);
+    const store = new TreeDocumentStore(part);
+    const target = bodyParagraphs(part)[1]!.id;
+    const result = store.transact((ctx) =>
+      ctx.apply({ op: 'insertText', paragraphId: target, offset: 3, text: '!' })
+    );
+    if (!result.ok || !result.change) throw new Error('expected a change');
+
+    const after = reconcileDoc(before, store.part, result.change);
+
+    // Untouched paragraphs are the SAME objects, so ProseMirror redraws neither.
+    expect(after.child(0)).toBe(before.child(0));
+    expect(after.child(2)).toBe(before.child(2));
+    // The dirty one is rebuilt and carries the edit.
+    expect(after.child(1)).not.toBe(before.child(1));
+    expect(after.child(1).textContent).toBe('two!');
+  });
+
+  test('a reconciled doc maps to ZERO ops, so reconciliation cannot loop', () => {
+    const part = load(source);
+    const store = new TreeDocumentStore(part);
+    const target = bodyParagraphs(part)[0]!.id;
+    const result = store.transact((ctx) =>
+      ctx.apply({ op: 'insertText', paragraphId: target, offset: 0, text: 'X' })
+    );
+    if (!result.ok || !result.change) throw new Error('expected a change');
+
+    const reconciled = reconcileDoc(treeToDoc(part), store.part, result.change);
+    const mapped = docToTreeOps(store.part, reconciled);
+    if (!mapped.ok) throw new Error(mapped.reason);
+    // The loop this prevents: reconcile -> map -> commit -> reconcile -> ...
+    expect(mapped.ops).toEqual([]);
+  });
+
+  test('a structural change falls back to a full projection', () => {
+    const part = load(source);
+    const before = treeToDoc(part);
+    const store = new TreeDocumentStore(part);
+    const target = bodyParagraphs(part)[0]!.id;
+    const result = store.transact((ctx) =>
+      ctx.apply({ op: 'splitParagraph', paragraphId: target, offset: 1 })
+    );
+    if (!result.ok || !result.change) throw new Error('expected a change');
+
+    const after = reconcileDoc(before, store.part, result.change);
+    expect(after.childCount).toBe(4);
+    expect(docToTreeOps(store.part, after)).toEqual({ ok: true, ops: [] });
+  });
+
+  test('no change evidence means a full projection, never a partial patch', () => {
+    const part = load(source);
+    const before = treeToDoc(part);
+    const store = new TreeDocumentStore(part);
+    store.transact((ctx) =>
+      ctx.apply({ op: 'insertText', paragraphId: bodyParagraphs(part)[2]!.id, offset: 0, text: 'Z' })
+    );
+    const after = reconcileDoc(before, store.part, null);
+    expect(after.child(2).textContent).toBe('Zthree');
+  });
+
+  test('reconciliation runs on a projection origin and records no history entry', () => {
+    const part = load(source);
+    const store = new TreeDocumentStore(part);
+    const target = bodyParagraphs(part)[1]!.id;
+    store.transact(
+      (ctx) => ctx.apply({ op: 'insertText', paragraphId: target, offset: 0, text: 'R' }),
+      { origin: ORIGIN_IDS.projection }
+    );
+    expect(store.revision).toBe(1);
+    // Reconciling the view with the model is not a user intent (task 5.6).
+    expect(store.historyDepth).toBe(0);
+    expect(docToTreeOps(store.part, treeToDoc(store.part))).toEqual({ ok: true, ops: [] });
+  });
+
+  test('undo reconciles back to a doc that also maps to zero ops', () => {
+    const part = load(source);
+    const store = new TreeDocumentStore(part);
+    const target = bodyParagraphs(part)[0]!.id;
+    store.transact((ctx) => ctx.apply({ op: 'insertText', paragraphId: target, offset: 0, text: 'A' }));
+    store.undo();
+    const reconciled = treeToDoc(store.part);
+    expect(reconciled.child(0).textContent).toBe('one');
+    expect(docToTreeOps(store.part, reconciled)).toEqual({ ok: true, ops: [] });
   });
 });

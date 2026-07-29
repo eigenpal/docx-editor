@@ -84,6 +84,7 @@ export {
   bodyParagraphs,
   docToTreeOps,
   partHasNode,
+  reconcileDoc,
   treeToDoc,
   type MapResult,
   type TreeBindingRejection,

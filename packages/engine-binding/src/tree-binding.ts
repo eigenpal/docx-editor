@@ -465,3 +465,50 @@ function mapJoin(
 export function partHasNode(part: OoxmlPart, nodeId: string): boolean {
   return findNode(part, nodeId) !== null;
 }
+
+/**
+ * Rebuild a projected doc from a new tree revision, reusing untouched paragraphs (task 6.4).
+ *
+ * A full reprojection is always CORRECT, so this only ever narrows the work: paragraphs the
+ * change did not name are carried over by reference, which lets ProseMirror keep their node
+ * identity and redraw nothing. When the change is structural — a paragraph created, deleted,
+ * split or joined — positions shift in ways a per-paragraph patch cannot express, so it
+ * falls back to a full projection rather than guessing.
+ *
+ * Passing `null` means "no evidence available", which also takes the full path. Reconciling
+ * on partial evidence is how a projection silently diverges from the model.
+ */
+export function reconcileDoc(
+  previousDoc: PMNode,
+  part: OoxmlPart,
+  change: {
+    readonly dirty: readonly string[];
+    readonly created: readonly string[];
+    readonly deleted: readonly string[];
+    readonly splitJoin: readonly unknown[];
+  } | null
+): PMNode {
+  if (!change) return treeToDoc(part);
+  if (change.created.length > 0 || change.deleted.length > 0 || change.splitJoin.length > 0) {
+    return treeToDoc(part);
+  }
+
+  const previous = new Map<string, PMNode>();
+  previousDoc.forEach((node) => {
+    const nodeId = node.attrs.nodeId;
+    if (typeof nodeId === 'string') previous.set(nodeId, node);
+  });
+
+  const dirty = new Set(change.dirty);
+  const paragraphs = bodyParagraphs(part);
+  // A paragraph count mismatch means the evidence did not describe the whole change.
+  if (paragraphs.length !== previousDoc.childCount) return treeToDoc(part);
+
+  const projected = treeToDoc(part);
+  const next: PMNode[] = [];
+  for (const [index, paragraph] of paragraphs.entries()) {
+    const reusable = previous.get(paragraph.id);
+    next.push(reusable && !dirty.has(paragraph.id) ? reusable : projected.child(index));
+  }
+  return treeSchema.node('doc', null, next);
+}
