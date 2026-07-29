@@ -47,6 +47,61 @@ export interface SemanticLayoutOptions {
    * content changes; without this the cache would serve the pre-font layout forever.
    */
   readonly producer?: string;
+  /**
+   * Incremental placement across revisions (task 9.3).
+   *
+   * Holds the previous complete layout and a flow checkpoint per paragraph, so a pass can
+   * resume just before the first affected paragraph instead of re-placing the document from
+   * the top, and can stop early when the flow reconverges with the previous run.
+   */
+  readonly session?: LayoutSession;
+}
+
+/** The flow state as it stood immediately before one paragraph was placed. */
+interface FlowCheckpoint {
+  /** Completed pages at this point. The prefix of the previous layout that still stands. */
+  readonly pageCount: number;
+  /** Fragments already on the page being built. */
+  readonly pageFragments: readonly ParagraphFragmentRecord[];
+  readonly cursorY: number;
+  readonly lineCounter: number;
+}
+
+export interface LayoutSessionStats {
+  /** Paragraphs placed by the last pass, against the number in the document. */
+  readonly placed: number;
+  readonly total: number;
+  /** Pages carried over from the previous layout without being rebuilt. */
+  readonly reusedPages: number;
+  /** Passes that could not resume and laid the document out from the top. */
+  readonly fullPasses: number;
+}
+
+export interface LayoutSession {
+  /** @internal Mutable across passes; a caller only creates one and passes it back. */
+  previous: SemanticLayout | null;
+  checkpoints: FlowCheckpoint[];
+  keys: string[];
+  /** Geometry and producer of the previous pass; a change to either forces a full pass. */
+  context: string;
+  stats: LayoutSessionStats;
+}
+
+/**
+ * A layout session, retained across revisions by the caller.
+ *
+ * Separate from the paragraph cache because it holds a different thing: the cache stores
+ * how a paragraph BREAKS, this stores where the flow WAS. One survives reflow, the other
+ * is invalidated by it.
+ */
+export function createLayoutSession(): LayoutSession {
+  return {
+    previous: null,
+    checkpoints: [],
+    keys: [],
+    context: '',
+    stats: { placed: 0, total: 0, reusedPages: 0, fullPasses: 0 },
+  };
 }
 
 /** One measurable piece of a paragraph: text carrying one property set. */
@@ -127,6 +182,46 @@ interface PendingLine {
  * layout that produced it — freezing means a future change to the placement path cannot
  * quietly corrupt every subsequent reuse.
  */
+/**
+ * Are two pending-fragment lists the same CONTENT?
+ *
+ * Structural, not by identity: a paragraph re-placed by this pass produces a new object even
+ * when it lands exactly where it did before, and comparing references would refuse to
+ * converge on precisely the edits that leave the flow undisturbed — the common case.
+ *
+ * The page the tail begins with embeds these fragments, so reusing that page is only sound
+ * if what is pending here matches what was pending there.
+ */
+function sameFragments(
+  a: readonly ParagraphFragmentRecord[],
+  b: readonly ParagraphFragmentRecord[]
+): boolean {
+  if (a.length !== b.length) return false;
+  for (let index = 0; index < a.length; index += 1) {
+    const left = a[index]!;
+    const right = b[index]!;
+    if (left === right) continue;
+    if (fragmentSignature(left) !== fragmentSignature(right)) return false;
+  }
+  return true;
+}
+
+const signatures = new WeakMap<ParagraphFragmentRecord, string>();
+
+/** Cached per record, so a fragment is serialized once however often convergence is tested. */
+function fragmentSignature(fragment: ParagraphFragmentRecord): string {
+  const cached = signatures.get(fragment);
+  if (cached !== undefined) return cached;
+  const signature = JSON.stringify([
+    fragment.id,
+    fragment.box,
+    fragment.range,
+    fragment.lines.map((line) => [line.id, line.box, line.baseline, line.spans]),
+  ]);
+  signatures.set(fragment, signature);
+  return signature;
+}
+
 function frozenLine(line: PendingLine): PendingLine {
   return Object.freeze({
     spans: line.spans.map((span) =>
@@ -263,16 +358,106 @@ export function layoutSemanticDocument(
   const measurer = options.measurer;
   const cache = options.cache;
   const producer = options.producer ?? 'default';
-  // Keys touched by THIS layout. Anything else the cache holds belongs to a paragraph that
-  // has been edited away or reflowed, and is dropped at the end rather than lingering.
-  const usedKeys = new Set<string>();
+
   const contentWidth = geometry.width - geometry.margin.left - geometry.margin.right;
   const contentHeight = geometry.height - geometry.margin.top - geometry.margin.bottom;
+
+  const session = options.session;
+  const context = `${producer}|${geometry.width}x${geometry.height}|${geometry.margin.top},${geometry.margin.right},${geometry.margin.bottom},${geometry.margin.left}`;
+
+  // Prepass: everything needed to KEY a paragraph, before any of them is placed. Resuming
+  // means knowing where the first change is, and that cannot be discovered while walking.
+  const bodies = bodyParagraphs(part);
+  const prepared = bodies.map((paragraph) => {
+    const props = propertiesOf(
+      paragraph.kind === 'textValue'
+        ? undefined
+        : paragraph.children.find((child) => child.kind === 'paragraphProperties')
+    );
+    const indent = paragraphIndent(props);
+    const available = Math.max(1, contentWidth - indent.left - indent.right);
+    return {
+      paragraph,
+      props,
+      indent,
+      available,
+      alignment: paragraphAlignment(props),
+      key: paragraphLayoutKey({ paragraph, properties: props, width: available, producer }),
+    };
+  });
+
+  const keys = prepared.map((entry) => entry.key);
+  const previous = session?.previous ?? null;
+  // A geometry or producer change invalidates every checkpoint, because it moves every
+  // break; resuming from one would place new content against a stale flow.
+  const resumable = previous !== null && session !== undefined && session.context === context;
+
+  /** The first paragraph whose layout inputs differ from the previous pass. */
+  let firstChanged = 0;
+  if (resumable) {
+    const limit = Math.min(keys.length, session.keys.length);
+    while (firstChanged < limit && keys[firstChanged] === session.keys[firstChanged]) {
+      firstChanged += 1;
+    }
+  }
+
+  /**
+   * How many trailing paragraphs are unchanged.
+   *
+   * Where the flow may reconverge: everything after an edit can only be reused verbatim if
+   * it is the same content AND lands in the same place, and this bounds the first half of
+   * that question.
+   */
+  let commonSuffix = 0;
+  if (resumable) {
+    const maxSuffix = Math.min(keys.length, session.keys.length) - firstChanged;
+    while (
+      commonSuffix < maxSuffix &&
+      keys[keys.length - 1 - commonSuffix] === session.keys[session.keys.length - 1 - commonSuffix]
+    ) {
+      commonSuffix += 1;
+    }
+  }
+
+  // NOTHING CHANGED. Every key matches and the document is the same length, so the previous
+  // layout still describes it exactly — re-placing it would allocate a second set of
+  // identical records and destroy the identity a consumer uses to skip repainting.
+  if (resumable && firstChanged === prepared.length && prepared.length === session.keys.length) {
+    const unchanged: SemanticLayout = { revision, pages: previous!.pages };
+    session.previous = unchanged;
+    session.stats = {
+      placed: 0,
+      total: prepared.length,
+      reusedPages: previous!.pages.length,
+      fullPasses: session.stats.fullPasses,
+    };
+    cache?.retain(new Set(keys));
+    return unchanged;
+  }
 
   const pages: PageRecord[] = [];
   let pageFragments: ParagraphFragmentRecord[] = [];
   let cursorY = 0;
   let lineCounter = 0;
+  const checkpoints: FlowCheckpoint[] = [];
+  let startIndex = 0;
+  let placed = 0;
+  let reusedPages = 0;
+
+  // RESUME. The checkpoint before the first changed paragraph describes a flow the new
+  // document still agrees with, so the pages completed by then are carried over by
+  // REFERENCE — unchanged pages keep their identity, which is what lets a consumer skip
+  // repainting them (task 9.4).
+  if (resumable && firstChanged > 0 && firstChanged <= session.checkpoints.length - 1) {
+    const checkpoint = session.checkpoints[firstChanged]!;
+    pages.push(...previous!.pages.slice(0, checkpoint.pageCount));
+    pageFragments = [...checkpoint.pageFragments];
+    cursorY = checkpoint.cursorY;
+    lineCounter = checkpoint.lineCounter;
+    startIndex = firstChanged;
+    reusedPages = pages.length;
+    checkpoints.push(...session.checkpoints.slice(0, firstChanged));
+  }
 
   const pageBox = (index: number): LayoutBox => ({
     x: 0,
@@ -300,25 +485,60 @@ export function layoutSemanticDocument(
     cursorY = 0;
   };
 
-  for (const paragraph of bodyParagraphs(part)) {
+  let converged = false;
+  let convergedAt = prepared.length;
+  for (let index = startIndex; index < prepared.length; index += 1) {
+    const { paragraph, props, indent, alignment, available } = prepared[index]!;
     const paragraphId = paragraph.id;
-    const props = propertiesOf(
-      paragraph.kind === 'textValue'
-        ? undefined
-        : paragraph.children.find((child) => child.kind === 'paragraphProperties')
-    );
-    const indent = paragraphIndent(props);
-    const alignment = paragraphAlignment(props);
-    const available = Math.max(1, contentWidth - indent.left - indent.right);
+
+    // The flow as it stands BEFORE this paragraph: what a later pass resumes from.
+    checkpoints[index] = {
+      pageCount: pages.length,
+      pageFragments: [...pageFragments],
+      cursorY,
+      lineCounter,
+    };
+
+    // CONVERGENCE. Once inside the unchanged tail, if the flow returns to exactly the state
+    // the previous pass was in at this same paragraph, everything after lays out identically
+    // and the rest of the previous layout is appended verbatim.
+    //
+    // Tested at EVERY paragraph of the unchanged tail, not just its first: an edit puts the
+    // flow out of step for the rest of the page it lands on, and the state only comes back
+    // into line once the page it disturbed has been completed.
+    //
+    // The fragments still pending must MATCH, because the first reused page contains them —
+    // structurally, since a paragraph re-placed by this pass is a new object even when it
+    // lands exactly where it did before.
+    //
+    // Exact means exact: one page fewer, one point of cursor, or one line id out of step and
+    // every id downstream would differ from a clean pass.
+    if (resumable && commonSuffix > 0 && index >= prepared.length - commonSuffix) {
+      const mark = session.checkpoints[index + (session.keys.length - prepared.length)];
+      if (
+        mark &&
+        mark.cursorY === cursorY &&
+        mark.lineCounter === lineCounter &&
+        mark.pageCount === pages.length &&
+        sameFragments(mark.pageFragments, pageFragments)
+      ) {
+        const tail = previous!.pages.slice(mark.pageCount);
+        pages.push(...tail);
+        reusedPages += tail.length;
+        converged = true;
+        convergedAt = index;
+        break;
+      }
+    }
+
+    placed += 1;
 
     if (breaksBefore(props) && (pageFragments.length > 0 || pages.length === 0)) {
       flushPage();
     }
 
-    const cacheKey = cache
-      ? paragraphLayoutKey({ paragraph, properties: props, width: available, producer })
-      : null;
-    if (cacheKey !== null) usedKeys.add(cacheKey);
+    const cacheKey = cache ? prepared[index]!.key : null;
+
     const cached = cacheKey !== null ? cache!.get(cacheKey) : undefined;
 
     const pieces = cached ? [] : piecesOf(paragraph);
@@ -433,12 +653,37 @@ export function layoutSemanticDocument(
     flushFragment();
   }
 
-  if (pageFragments.length > 0 || pages.length === 0) flushPage();
+  if (!converged && (pageFragments.length > 0 || pages.length === 0)) flushPage();
   // Entries for paragraphs this pass never asked for are gone from the document, or their
   // context changed; holding them would let the cache grow with the session rather than
   // with the document.
-  cache?.retain(usedKeys);
-  return { revision, pages };
+  // Retain by the keys of every paragraph in the DOCUMENT, not just those this pass
+  // re-placed: a resumed pass never visits the prefix, and evicting its entries would make
+  // the next full pass measure the whole document again.
+  cache?.retain(new Set(keys));
+  const layout: SemanticLayout = { revision, pages };
+  if (session) {
+    session.previous = layout;
+    // A converged pass stops early, so the tail's checkpoints were never recomputed; the
+    // previous pass's remain valid precisely because the flow matched.
+    // A converged pass stops early, so the tail's checkpoints were never recomputed. The
+    // previous pass's remain valid precisely because the flow matched at the join.
+    session.checkpoints = converged
+      ? [
+          ...checkpoints.slice(0, convergedAt),
+          ...session.checkpoints.slice(convergedAt + (session.keys.length - prepared.length)),
+        ]
+      : checkpoints;
+    session.keys = keys;
+    session.context = context;
+    session.stats = {
+      placed,
+      total: prepared.length,
+      reusedPages,
+      fullPasses: session.stats.fullPasses + (startIndex === 0 ? 1 : 0),
+    };
+  }
+  return layout;
 }
 
 /**

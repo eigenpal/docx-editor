@@ -192,7 +192,10 @@ export {
 } from './semantic-records.ts';
 export {
   createFixedMeasurer,
+  createLayoutSession,
   layoutSemanticDocument,
+  type LayoutSession,
+  type LayoutSessionStats,
   type SemanticLayoutOptions,
 } from './semantic-layout.ts';
 export { createShapedMeasurer, type ShapedMeasurerOptions } from './shaped-measurer.ts';
