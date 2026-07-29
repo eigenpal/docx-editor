@@ -1,11 +1,15 @@
 import { GlobalRegistrator } from '@happy-dom/global-registrator';
-import { afterAll, beforeAll } from 'bun:test';
 
-// Register happy-dom for this file and unregister after, matching the rest of
-// the suite. A load-time register that never unregisters leaks the global
-// registration across files and collides with other files' setup.
-beforeAll(() => GlobalRegistrator.register());
-afterAll(() => GlobalRegistrator.unregister());
+// ONE guarded registration for the whole process, which is what every other DOM test file
+// in this repo does. bun runs all test files in a single process, so `register()` is a
+// process-global: an unguarded `beforeAll(register)` threw "Happy DOM has already been
+// globally registered" whenever any of the seventeen engine-editor test files had loaded
+// first, and the matching `afterAll(unregister)` tore the DOM out from under every file
+// that had already registered and still needed it. Both were recorded as baseline
+// failures. Registering once, idempotently, and never unregistering is the pattern that
+// actually holds across a shared process.
+if (!GlobalRegistrator.isRegistered) GlobalRegistrator.register();
+
 import { afterEach, describe, expect, mock, test } from 'bun:test';
 import { act, cleanup, renderHook } from '@testing-library/react';
 import { useControllableBoolean } from './useControllableBoolean';

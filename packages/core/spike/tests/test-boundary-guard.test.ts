@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { readFileSync, readdirSync, statSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
 import { dirname, join, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -14,10 +14,14 @@ const guardedCheckScripts = [
   'scripts/parity-prepublish.mjs',
 ];
 
+// `packages/vue/src/__tests__` was removed with the Vue tests it held; the package's tests
+// now live in `packages/vue/test`, which is guarded here in its place. A root that simply
+// vanished used to crash the scan with ENOENT, which is a recorded baseline failure and
+// also hid the guard entirely rather than reporting a gap.
 const guardedPackageTestRoots = [
   'packages/agents/src/__tests__',
   'packages/core/src/__tests__',
-  'packages/vue/src/__tests__',
+  'packages/vue/test',
 ];
 
 const retiredCoreImportMatchers: Array<[RegExp, string]> = [
@@ -108,6 +112,14 @@ describe('surviving test boundary guard', () => {
     expect(firstImportViolation('@docx-editor.dev/core/api')).toContain('retired core runtime entry');
     expect(firstImportViolation('@/legacy-core-shim')).toContain('workspace alias import');
     expect(firstImportViolation('@docx-editor.dev/react')).toBeNull();
+  });
+
+  // A guarded root that no longer exists must FAIL rather than be skipped: silently
+  // scanning nothing is how a boundary guard stops guarding without anyone noticing.
+  test('every guarded package test root exists', () => {
+    for (const root of guardedPackageTestRoots) {
+      expect(existsSync(join(repoRoot, root))).toBe(true);
+    }
   });
 
   test('surviving tests and checks avoid retired core subpaths and workspace aliases', () => {

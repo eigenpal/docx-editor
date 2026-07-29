@@ -76,6 +76,8 @@ type PackageInventory = {
     implementationOnly: PackageInventoryGroup[];
   };
   engineNeutralRetained: PackageInventoryGroup[];
+  /** Inventoried as engine-neutral, then deleted with the adapter code they covered. */
+  engineNeutralRetired: PackageInventoryGroup[];
 };
 
 function loadJson<T>(fileName: string): T {
@@ -143,8 +145,13 @@ function localRuntimeImportClosure(source: string, maxModules = 128): string[] {
 }
 
 function assertDestination(destination: InventoryDestination): void {
+  // `document-engine` stays accepted because existing inventory entries were written
+  // against it; `typed-ooxml-paragraph-editor` is the change that superseded it and is the
+  // only active one, so new entries name that instead.
   expect(
-    destination.change === 'engine-core-spike' || destination.change === 'document-engine'
+    destination.change === 'engine-core-spike' ||
+      destination.change === 'document-engine' ||
+      destination.change === 'typed-ooxml-paragraph-editor'
   ).toBe(true);
   expect(destination.area).toMatch(/^[a-z0-9-]+(?:\/[a-z0-9-]+)+$/);
 }
@@ -231,16 +238,26 @@ describe('package test migration inventory', () => {
     ...inventory.legacyCoreCoupled.durableBehavior,
     ...inventory.legacyCoreCoupled.implementationOnly,
   ];
-  const allGroups = [...legacyGroups, ...inventory.engineNeutralRetained];
+  const allGroups = [
+    ...legacyGroups,
+    ...inventory.engineNeutralRetained,
+    ...inventory.engineNeutralRetired,
+  ];
 
   test('covers every classified package test without overlap', () => {
     const legacyPaths = flattenSources(legacyGroups);
+    const retiredPaths = flattenSources(inventory.engineNeutralRetired);
     const retainedPaths = flattenSources(inventory.engineNeutralRetained);
-    const paths = [...legacyPaths, ...retainedPaths];
+    const paths = [...legacyPaths, ...retainedPaths, ...retiredPaths];
     const unique = new Set(paths);
     expect(unique.size).toBe(paths.length);
     expect(legacyPaths).toHaveLength(31);
-    expect(retainedPaths).toHaveLength(10);
+    // Five of the ten originally-retained files were deleted with the adapter code they
+    // covered during the greenfield migration. They moved to `engineNeutralRetired` rather
+    // than being dropped from the inventory, so the total still reconciles and a FURTHER
+    // unexplained disappearance still fails this guard.
+    expect(retainedPaths).toHaveLength(5);
+    expect(retiredPaths).toHaveLength(5);
     expect(paths).toHaveLength(41);
     expect(paths.every((p) => p.startsWith('packages/'))).toBe(true);
     expect(retainedPaths.filter((p) => p.startsWith('packages/agents/'))).toEqual([
@@ -264,6 +281,13 @@ describe('package test migration inventory', () => {
     for (const group of inventory.legacyCoreCoupled.implementationOnly) {
       expect(group.status).toBe('implementation-only-tombstone');
       expect(group.intent.kind).toBe('implementation-only');
+      assertDestination(group.destination);
+      assertFixtureRefsExist(group.retainedFixtureRefs);
+    }
+
+    for (const group of inventory.engineNeutralRetired) {
+      expect(group.status).toBe('engine-neutral-retired');
+      expect(group.coupling.category).toBe('engine-neutral');
       assertDestination(group.destination);
       assertFixtureRefsExist(group.retainedFixtureRefs);
     }
@@ -310,6 +334,11 @@ describe('package test migration inventory', () => {
 
   test('legacy sources are absent and retained sources remain on disk', () => {
     for (const source of flattenSources(legacyGroups)) {
+      expect(existsSync(join(repoRoot, source))).toBe(false);
+    }
+    // A retired file must be GONE. If one comes back, the inventory is describing a repo
+    // that no longer matches, which is the drift this guard exists to catch.
+    for (const source of flattenSources(inventory.engineNeutralRetired)) {
       expect(existsSync(join(repoRoot, source))).toBe(false);
     }
     for (const source of flattenSources(inventory.engineNeutralRetained)) {

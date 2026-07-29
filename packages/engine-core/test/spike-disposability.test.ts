@@ -78,11 +78,20 @@ describe('spike disposability milestone gate (task 1.6)', () => {
     expect(include.some((i) => /spike/.test(i))).toBe(false);
   });
 
-  test('the spike-to-production decision record is Accepted', () => {
-    const adr = readFileSync(
-      join(REPO, 'openspec', 'changes', 'document-engine', 'spike-architecture-decision.md'),
-      'utf8',
+  // REPLACES an assertion that `openspec/changes/document-engine/spike-architecture-decision.md`
+  // was still marked Accepted. That change was removed as superseded by this proposal's own
+  // task 1.1, so the guard read a deleted file and had been failing ever since — it was one of
+  // the recorded baseline failures, and it could never pass again as written.
+  //
+  // The invariant it existed to protect is that the spike is disposable evidence authorised by
+  // a live decision, not by a document nobody maintains. That authority is now the single
+  // active change, so the guard checks THAT: a second active change, or a rename of this one,
+  // means the spike's disposability is no longer covered by anything and must be re-decided.
+  test('spike disposability is covered by exactly one active change', () => {
+    const changesDir = join(REPO, 'openspec', 'changes');
+    const active = readdirSync(changesDir).filter(
+      (entry) => entry !== 'archive' && statSync(join(changesDir, entry)).isDirectory(),
     );
-    expect(/\*\*Status:\*\*\s*Accepted/.test(adr)).toBe(true);
+    expect(active).toEqual(['typed-ooxml-paragraph-editor']);
   });
 });

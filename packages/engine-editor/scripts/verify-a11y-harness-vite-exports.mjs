@@ -17,7 +17,14 @@ import {
 const packageRoot = join(dirname(fileURLToPath(import.meta.url)), '..');
 const cacheDir = join(packageRoot, 'node_modules/.vite');
 const depsDir = join(cacheDir, 'deps');
-const port = Number(process.env.A11Y_HARNESS_PORT ?? 5299);
+// An EPHEMERAL port by default. This probe used to pin 5299, and a single interrupted run
+// left its detached vite child holding that port — after which every later run failed to
+// bind, timed out at the test's 180s budget, and the timeout killed the probe before its
+// teardown ran, leaking yet another holder. That is why this was a permanent baseline
+// failure: it poisoned itself. With a free-port bind there is nothing to collide with, and
+// the run takes about a second. `A11Y_HARNESS_PORT` still pins it when a fixed port is
+// wanted (Playwright's webServer does that separately).
+const port = Number(process.env.A11Y_HARNESS_PORT ?? 0);
 const startupTimeoutMs = Number(process.env.A11Y_HARNESS_STARTUP_MS ?? 60_000);
 
 async function loadPolicy() {

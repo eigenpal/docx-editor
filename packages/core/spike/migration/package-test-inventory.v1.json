@@ -43,7 +43,9 @@
           "change": "typed-ooxml-paragraph-editor",
           "area": "server-bindings/mcp-bridge-conformance"
         },
-        "retainedFixtureRefs": ["e2e/fixtures/with-tables.docx"],
+        "retainedFixtureRefs": [
+          "e2e/fixtures/with-tables.docx"
+        ],
         "sources": [
           "packages/agents/src/__tests__/bridge.test.ts",
           "packages/agents/src/__tests__/reviewerBridge.test.ts",
@@ -115,7 +117,9 @@
           "area": "server-bindings/shared-tool-runtime-schema-conformance"
         },
         "retainedFixtureRefs": [],
-        "sources": ["packages/agents/src/__tests__/tools.test.ts"]
+        "sources": [
+          "packages/agents/src/__tests__/tools.test.ts"
+        ]
       }
     ],
     "implementationOnly": [
@@ -177,7 +181,9 @@
           "area": "adapter-runtime/utility-surface-audit"
         },
         "retainedFixtureRefs": [],
-        "sources": ["packages/react/src/components/ui/normalizeFontFamilies.test.ts"]
+        "sources": [
+          "packages/react/src/components/ui/normalizeFontFamilies.test.ts"
+        ]
       }
     ]
   },
@@ -201,11 +207,6 @@
         "packages/core/src/__tests__/consumer.test-d.ts",
         "packages/react/src/components/DocxEditor/hooks/useControllableBoolean.test.tsx",
         "packages/react/src/components/dialogs/dataUrlToBlob.test.ts",
-        "packages/react/src/components/ui/fontPickerValue.test.ts",
-        "packages/vue/src/__tests__/component-props-conformance.test-d.ts",
-        "packages/vue/src/components/ui/fontPickerValue.test.ts",
-        "packages/vue/src/composables/imageOverlayRect.test.ts",
-        "packages/vue/src/composables/useControllableBoolean.test.ts",
         "packages/i18n/src/plural-redos.test.ts"
       ]
     },
@@ -224,7 +225,34 @@
         "area": "server-bindings/mcp-transport-contract"
       },
       "retainedFixtureRefs": [],
-      "sources": ["packages/agents/src/__tests__/mcp-protocol.test.ts"]
+      "sources": [
+        "packages/agents/src/__tests__/mcp-protocol.test.ts"
+      ]
+    }
+  ],
+  "engineNeutralRetired": [
+    {
+      "status": "engine-neutral-retired",
+      "coupling": {
+        "category": "engine-neutral",
+        "reason": "Engine-neutral when inventoried, but deleted with the adapter code they covered during the greenfield engine migration. Recorded here rather than dropped so the guard can still tell an intentional removal from silent drift."
+      },
+      "intent": {
+        "kind": "observable",
+        "summary": "Adapter utility and declaration-contract behavior whose subject no longer exists; re-add coverage with the replacement adapter surface, not by restoring these files."
+      },
+      "destination": {
+        "change": "typed-ooxml-paragraph-editor",
+        "area": "adapter-runtime/utility-regressions"
+      },
+      "retainedFixtureRefs": [],
+      "sources": [
+        "packages/react/src/components/ui/fontPickerValue.test.ts",
+        "packages/vue/src/__tests__/component-props-conformance.test-d.ts",
+        "packages/vue/src/components/ui/fontPickerValue.test.ts",
+        "packages/vue/src/composables/imageOverlayRect.test.ts",
+        "packages/vue/src/composables/useControllableBoolean.test.ts"
+      ]
     }
   ]
 }

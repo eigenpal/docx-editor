@@ -64,7 +64,12 @@ function resolveHarnessBaseUrl(handle) {
 
 export function spawnHarnessDevServer({ cwd, port = DEFAULT_PORT }) {
   const viteCli = join(cwd, 'node_modules/vite/bin/vite.js');
-  const child = spawn(process.execPath, [viteCli, '--port', String(port), '--strictPort', '--host', '127.0.0.1'], {
+  // `--strictPort` only when a SPECIFIC port was asked for. Port 0 means "any free port",
+  // which strict mode would contradict; the ready URL is read back from vite's log either
+  // way, so an ephemeral port costs nothing and cannot collide.
+  const portArgs =
+    port === 0 ? ['--port', '0'] : ['--port', String(port), '--strictPort'];
+  const child = spawn(process.execPath, [viteCli, ...portArgs, '--host', '127.0.0.1'], {
     cwd,
     stdio: ['ignore', 'pipe', 'pipe'],
     env: { ...process.env, A11Y_HARNESS_PORT: String(port) },
@@ -105,7 +110,17 @@ function waitForHarnessReadyFromLogs(child, fallbackUrl) {
 
     const onExit = (code) => {
       cleanup();
-      reject(new Error(`harness child exited before ready (${code ?? 'signal'})`));
+      // Include what the child actually printed. Without it this failure read only as
+      // "exited before ready (signal)", which is true of every startup failure and points
+      // at nothing — the real cause here was an orphaned harness server from an earlier
+      // crashed run still holding the port, and vite had said exactly that on stderr.
+      const output = log.trim();
+      reject(
+        new Error(
+          `harness child exited before ready (${code ?? 'signal'})` +
+            (output ? `\n${output}` : '\n(child produced no output)')
+        )
+      );
     };
 
     const cleanup = () => {

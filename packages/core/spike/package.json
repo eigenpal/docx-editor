@@ -6,7 +6,7 @@
   "type": "module",
   "scripts": {
     "test": "bun test tests",
-    "test:e2e": "playwright test e2e/poc-finish-line.spec.ts --timeout=30000 --workers=1",
+    "test:e2e": "playwright test e2e/poc-finish-line.pwtest.ts --timeout=30000 --workers=1",
     "typecheck": "tsc --noEmit",
     "dev:poc": "vite",
     "build:poc": "vite build",

@@ -7,7 +7,11 @@ const baseUrl = process.env.PLAYWRIGHT_BASE_URL ?? `http://127.0.0.1:${port}`;
 
 export default defineConfig({
   testDir: './e2e',
-  testMatch: '**/accessibility-tree.spec.ts',
+  // `.pwtest.ts`, not `.spec.ts`: `bun test` claims `*.spec.*` and `*.test.*`, so a
+  // Playwright file under `packages/` was being loaded by the unit-test runner too. Two
+  // such files in one bun process trip Playwright's own "Requiring @playwright/test
+  // second time" guard, which is one of the recorded baseline failures.
+  testMatch: '**/accessibility-tree.pwtest.ts',
   fullyParallel: false,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 1 : 0,

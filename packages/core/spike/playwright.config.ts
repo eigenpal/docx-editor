@@ -5,7 +5,7 @@ const pocBaseUrl = process.env.PLAYWRIGHT_BASE_URL ?? `http://localhost:${pocPor
 
 export default defineConfig({
   testDir: './e2e',
-  testMatch: '**/*.spec.ts',
+  testMatch: '**/*.pwtest.ts', // see engine-editor/playwright.config.ts: bun test claims *.spec.*
   fullyParallel: false,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 1 : 0,

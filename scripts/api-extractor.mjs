@@ -13,6 +13,7 @@
 // other workspace script does.
 
 import path from 'node:path';
+import { existsSync, readdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { runApiExtractor } from './lib/api-extractor-runner.mjs';
 import { PACKAGES, packageByName, buildHintFor, reportDirFor } from './lib/packages.mjs';
@@ -49,6 +50,21 @@ if (pkgArg && !targets[0]) {
 }
 
 for (const pkg of targets) {
+  if (pkg.disconnected) {
+    // A disconnected package is skipped LOUDLY, never silently. And if it turns out to
+    // have a build after all, the exemption has outlived its reason and must be removed
+    // rather than quietly keeping the package out of the API gate forever.
+    const distDir = path.join(repoRoot, pkg.root, 'dist');
+    if (existsSync(distDir) && readdirSync(distDir).some((f) => f.endsWith('.d.ts'))) {
+      console.error(
+        `${pkg.name} is marked disconnected but has built .d.ts files. ` +
+          `Remove the 'disconnected' flag in scripts/lib/packages.mjs so its API surface is checked again.`
+      );
+      process.exit(1);
+    }
+    console.warn(`SKIPPED ${pkg.name}: ${pkg.disconnected}`);
+    continue;
+  }
   runApiExtractor({
     packageRoot: path.join(repoRoot, pkg.root),
     reportDir: reportDirFor(pkg, repoRoot),
