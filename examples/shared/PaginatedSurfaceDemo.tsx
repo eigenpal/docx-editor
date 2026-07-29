@@ -11,7 +11,8 @@ import {
   type PaginatedSurface,
   type PaginatedSurfaceState,
 } from '@docx-editor.dev/engine-editor';
-import { createCanvasMeasurer, DEFAULT_FONT_STACK } from './canvasMeasurer.ts';
+import { DEFAULT_FONT_STACK } from './canvasMeasurer.ts';
+import { createExactMeasurer } from './exactMeasurer.ts';
 
 /** Layout units (points) to CSS pixels, at 96 dpi. */
 const SCALE = 96 / 72;
@@ -36,17 +37,16 @@ export function PaginatedSurfaceDemo({ fixtureUrl }: { fixtureUrl: string }) {
       const response = await fetch(fixtureUrl);
       const bytes = new Uint8Array(await response.arrayBuffer());
       if (cancelled || !mountRef.current) return;
-      // A real measurer, injected by the HOST. Layout stays DOM-free; the browser supplies
-      // the font metrics it alone knows.
-      // Paint with the very stack the measurer measures; see DEFAULT_FONT_STACK.
-      mountRef.current.style.fontFamily = DEFAULT_FONT_STACK;
+      // A real measurer, injected by the HOST: layout stays DOM-free and reads the font's
+      // own tables. Paint with the very face it measured, or agreement is lost at the
+      // renderer instead of at the measurer.
+      const exact = await createExactMeasurer(SCALE);
+      if (cancelled || !mountRef.current) return;
+      mountRef.current.style.fontFamily = exact.fontFamily ?? DEFAULT_FONT_STACK;
       const result = mountPaginatedSurface(mountRef.current, bytes, {
         onChange: setState,
         scale: SCALE,
-        // The measurer is given the SAME scale the painter uses, so it measures at the
-        // pixel size the glyphs are rasterised at rather than at a layout size that
-        // rounds differently.
-        measurer: createCanvasMeasurer(SCALE),
+        measurer: exact.measurer,
       });
       if (!result.ok) {
         setStatus(`Rejected: ${result.reason}${result.detail ? ` (${result.detail})` : ''}`);
