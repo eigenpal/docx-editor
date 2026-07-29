@@ -98,3 +98,15 @@ export {
   type TreeOpRejection,
   type TreeOpResult,
 } from './tree-ops.ts';
+export {
+  TreeDocumentStore,
+  type SelectionMark,
+  // The legacy store already exports `TransactionContext` and `TransactOptions`; the tree
+  // store's are a different shape, so they are re-exported under `Tree*` names rather than
+  // shadowing names callers already bind to the old store during the cutover.
+  type TransactionContext as TreeTransactionContext,
+  type TransactOptions as TreeTransactOptions,
+  type TransactResult as TreeTransactResult,
+  type TreeDocumentStoreOptions,
+  type TreeModelChange,
+} from './tree-store.ts';

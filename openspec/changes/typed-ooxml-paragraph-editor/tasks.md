@@ -44,11 +44,11 @@ survives, then derive indexes and the second oracle from it.
 ## 5. Paragraph Semantic Operations
 
 - [x] 5.1 Define paragraph text, authored whitespace, tab, hard-break, split/join, and the complete D8 run/paragraph property `DocOp`s over stable node identities and UTF-16 positions.
-- [ ] 5.2 Implement validation, staging, normalization, atomic publication, and revision-tagged `ModelChange` evidence, including dependency keys and text-local, paragraph-local, flow-structural, or global impact.
+- [x] 5.2 Implement validation, staging, normalization, atomic publication, and revision-tagged `ModelChange` evidence, including dependency keys and text-local, paragraph-local, flow-structural, or global impact.
 - [x] 5.3 Add rejection tests proving invalid or stale operations leave tree, revision, indexes, and notifications unchanged.
-- [ ] 5.4 Implement one semantic history entry per accepted PM transaction and per toolbar/command invocation, with atomic multi-`DocOp` commit.
-- [ ] 5.5 Group all accepted transactions from IME `compositionstart` through `compositionend` into one semantic history entry.
-- [ ] 5.6 Prove projection reconciliation creates no history entry and consecutive ordinary typing transactions may remain separate without time-based PM grouping.
+- [x] 5.4 Implement one semantic history entry per accepted PM transaction and per toolbar/command invocation, with atomic multi-`DocOp` commit.
+- [x] 5.5 Group all accepted transactions from IME `compositionstart` through `compositionend` into one semantic history entry.
+- [x] 5.6 Prove projection reconciliation creates no history entry and consecutive ordinary typing transactions may remain separate without time-based PM grouping.
 
 ## 6. ProseMirror Binding
 
