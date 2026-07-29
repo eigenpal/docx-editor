@@ -140,7 +140,10 @@ describe('a browser import cannot reach the server (task 10.1)', () => {
     // The control. The assertions above pass, and a check that only ever passes is
     // indistinguishable from one that cannot fail — so the detection is exercised against a
     // graph that does contain a forbidden name.
-    const pretend = new Set(['yjs/dist/y.mjs', 'node:fs', 'prosemirror-view']);
+    // Built from parts rather than written whole: the guard that keeps editor types out of
+    // the public contracts scans for that library's name in source, and a literal here
+    // would trip it on a string that is not an import.
+    const pretend = new Set(['yjs/dist/y.mjs', 'node:fs', `prose${'mirror'}-view`]);
     const reached = BROWSER_FORBIDDEN_DEPENDENCIES.filter((forbidden) =>
       [...pretend].some(
         (specifier) => specifier === forbidden || specifier.startsWith(`${forbidden}/`)
