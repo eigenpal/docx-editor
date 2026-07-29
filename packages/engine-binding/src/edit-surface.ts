@@ -138,14 +138,14 @@ export type EditSurfaceCommandResult =
 /**
  * Marks the toolbar may toggle.
  *
- * `underline` is deliberately absent. `RunProps.underline` is a boolean, but
- * `w:u` carries a style (single / double / wave / …), so the serializer rejects
- * a modeled underline rather than silently downgrading a double underline to a
- * single one on save. Wiring a toggle for it would either throw on save or lose
- * the author's formatting, so `can()` reports that reason and the toolbar
- * disables the control.
+ * `underline` was deliberately absent while `RunProps.underline` was a boolean: `w:u`
+ * carries a variant (single / double / wave / …), so a toggle would have downgraded a
+ * double underline to a single one on save, and `can()` reported that as the reason the
+ * control was disabled. The model now carries the variant and colour, the mark carries
+ * them through the projection, and the serializer re-emits the authored value — so the
+ * command is honest, and the keymap and the toolbar give the same answer.
  */
-const TOGGLEABLE_MARKS = new Set(['bold', 'italic']);
+const TOGGLEABLE_MARKS = new Set(['bold', 'italic', 'underline']);
 /**
  * `beforeinput` types ProseMirror and the browser own, not this bridge (M6K.1).
  *
@@ -202,6 +202,8 @@ export interface MountEditSurfaceOptions {
   accessibilityAtomLabels?: Readonly<Record<string, string>>;
   /** When true, mount a read-only semantic projection (contenteditable false, no input authorization). */
   readOnlyProjection?: boolean;
+  /** Private browser-feedback checkpoint: show and interact with the PM projection directly. */
+  visibleProjection?: boolean;
   inputHost?: InputHostControllerOptions;
   /** Test-only hook to observe PM-free selection and drive native composition DOM events. */
   testHooks?: {
@@ -251,6 +253,7 @@ export function mountEditSurface(
   options: MountEditSurfaceOptions = {}
 ): EditSurface {
   const readOnlyProjection = options.readOnlyProjection ?? !session.editable;
+  const visibleProjection = options.visibleProjection === true;
   const interactionAuthorized = !readOnlyProjection && session.editable;
   const onModelChanged = options.onModelChanged ?? (() => {});
   const onCompositionChange = options.onCompositionChange ?? (() => {});
@@ -261,6 +264,7 @@ export function mountEditSurface(
   const inputHost = createInputHostController(doc, {
     ...options.inputHost,
     accessibleName: options.accessibleName,
+    visibleProjection,
   });
   mountParent.append(inputHost.root);
 
@@ -364,10 +368,39 @@ export function mountEditSurface(
     return true;
   }
 
+  function selectAllText(
+    state: EditorState,
+    dispatch: NonNullable<Parameters<typeof selectTextblockStart>[1]> | undefined
+  ): boolean {
+    let from: number | undefined;
+    let to: number | undefined;
+    state.doc.descendants((node, pos) => {
+      if (!node.isTextblock) return;
+      from ??= pos + 1;
+      to = pos + 1 + node.content.size;
+    });
+    if (from === undefined || to === undefined) return false;
+    dispatch?.(state.tr.setSelection(TextSelection.create(state.doc, from, to)).scrollIntoView());
+    return true;
+  }
+
   const plugins = interactionAuthorized
     ? [
         keymap({
           ...baseKeymap,
+          'Mod-a': selectAllText,
+          'Mod-b': (state, dispatch) => {
+            const mark = state.schema.marks.bold;
+            return mark ? toggleMark(mark)(state, dispatch) : false;
+          },
+          'Mod-i': (state, dispatch) => {
+            const mark = state.schema.marks.italic;
+            return mark ? toggleMark(mark)(state, dispatch) : false;
+          },
+          'Mod-u': (state, dispatch) => {
+            const mark = state.schema.marks.underline;
+            return mark ? toggleMark(mark)(state, dispatch) : false;
+          },
           'Mod-z': () => doUndo(),
           'Mod-y': () => doRedo(),
           'Shift-Mod-z': () => doRedo(),
@@ -423,7 +456,7 @@ export function mountEditSurface(
     if (destroyed) {
       return rejectUnauthorizedInput('input rejected because the edit surface was destroyed');
     }
-    if (layoutPending) {
+    if (layoutPending && !visibleProjection) {
       return rejectUnauthorizedInput(
         'input rejected because layout for the current interaction frame is pending'
       );
@@ -443,6 +476,49 @@ export function mountEditSurface(
       reason: 'layout for the current interaction frame is not yet published',
       frameId,
     };
+  }
+
+  /**
+   * Adopt the browser's live DOM selection before an intercepted edit reads it.
+   *
+   * ProseMirror learns about a pointer- or browser-made selection ASYNCHRONOUSLY, from
+   * the document's `selectionchange` task. The `beforeinput` interception below runs
+   * SYNCHRONOUSLY inside the input event and reads `view.state.selection`, so a
+   * keystroke that arrives before that task has run edits at the PREVIOUS insertion
+   * point: click into paragraph 3, type, and the character lands wherever the caret was
+   * before the click. Measured in Chrome — the DOM selection was correct at
+   * `beforeinput` time while ProseMirror still held the stale one.
+   *
+   * ProseMirror's own `keydown` calls `domObserver.forceFlush()`, but that only runs a
+   * flush that was ALREADY scheduled — with no `selectionchange` task yet there is
+   * nothing scheduled and it is a no-op, so `End`, `Home`, `Mod-A` and the arrow keys
+   * raced the same way and split or extended from the previous paragraph. `posAtDOM` is
+   * the public equivalent of the flush.
+   *
+   * Scoped to the visible projection, where browser-native selection is the interaction
+   * authority (D11). In the clipped input host the semantic layer owns selection and
+   * must not be overridden by the projection's DOM.
+   */
+  function adoptDomSelection(view: EditorView): void {
+    if (!visibleProjection || imeComposing || reconciling) return;
+    const domSelection = view.dom.ownerDocument.getSelection();
+    const anchorNode = domSelection?.anchorNode;
+    const focusNode = domSelection?.focusNode;
+    if (!domSelection || !anchorNode || !focusNode) return;
+    if (!view.dom.contains(anchorNode) || !view.dom.contains(focusNode)) return;
+    let selection: TextSelection;
+    try {
+      const anchor = view.posAtDOM(anchorNode, domSelection.anchorOffset);
+      const head = view.posAtDOM(focusNode, domSelection.focusOffset);
+      const current = view.state.selection;
+      if (current.anchor === anchor && current.head === head) return;
+      selection = TextSelection.create(view.state.doc, anchor, head);
+    } catch {
+      // A DOM position with no stable model position (mid-reconciliation, or a node
+      // ProseMirror does not describe) leaves the committed selection in place.
+      return;
+    }
+    view.dispatch(view.state.tr.setSelection(selection).setMeta('addToHistory', false));
   }
 
   function deleteBackward(view: EditorView) {
@@ -539,6 +615,28 @@ export function mountEditSurface(
       return false;
     },
     handleDOMEvents: {
+      focus() {
+        if (visibleProjection && interactionAuthorized) {
+          semanticSelectionEverApplied = true;
+          inputAuthorized = true;
+          lastInputRejection = null;
+        }
+        return false;
+      },
+      mousedown() {
+        if (visibleProjection && interactionAuthorized) {
+          semanticSelectionEverApplied = true;
+          inputAuthorized = true;
+          lastInputRejection = null;
+        }
+        return false;
+      },
+      // Runs BEFORE ProseMirror's own keydown (and therefore before the keymap), so
+      // every command below reads the caret the user can actually see.
+      keydown(keydownView) {
+        adoptDomSelection(keydownView);
+        return false;
+      },
       drop(_view, event) {
         const authRejection = requireInputAuthorized();
         if (authRejection) {
@@ -560,6 +658,9 @@ export function mountEditSurface(
           return true;
         }
         if (imeComposing || isCompositionOwnedBeforeInput(inputEvent.inputType)) return false;
+
+        // Every branch below reads `view.state.selection`; adopt the DOM's first.
+        adoptDomSelection(_view);
 
         const inputType = inputEvent.inputType;
         if (inputType === 'insertText' && inputEvent.data != null) {
@@ -944,6 +1045,21 @@ export function mountEditSurface(
     focus(options) {
       inputAuthorized = false;
       const frameId = options?.sync?.frameId ?? options?.frameId;
+      if (visibleProjection) {
+        if (!frameId) {
+          return {
+            ok: false,
+            code: 'invalidTarget',
+            reason: 'focus requires current interaction frame identity',
+          };
+        }
+        view.focus();
+        if (interactionAuthorized) {
+          semanticSelectionEverApplied = true;
+          inputAuthorized = true;
+        }
+        return { ok: true, value: undefined, frameId };
+      }
       if (layoutPending && frameId) return pendingLayoutOutcome(frameId);
       if (options?.sync) {
         const synced = applySemanticSelection(options.sync);
@@ -1029,7 +1145,9 @@ export function mountEditSurface(
     syncSemanticSelection: applySemanticSelection,
     updateInputHostPlacement(request) {
       const placement = inputHost.updatePlacement(request);
-      if (placement.reason === 'pendingLayout') {
+      if (visibleProjection) {
+        layoutPending = false;
+      } else if (placement.reason === 'pendingLayout') {
         layoutPending = true;
         clearInputState();
       } else if (placement.reason === 'applied') {
@@ -1078,15 +1196,6 @@ export function mountEditSurface(
         if (command.kind === 'undo') doUndo();
         else doRedo();
         return { ok: true, changed: undoDepth !== before };
-      }
-      if (command.mark === 'underline') {
-        return {
-          ok: false,
-          code: 'unsupported',
-          reason:
-            'underline is not modeled as a toggle: w:u carries a style (single/double/wave), so a ' +
-            'boolean would downgrade the author formatting on save',
-        };
       }
       if (!TOGGLEABLE_MARKS.has(command.mark)) {
         return { ok: false, code: 'unsupported', reason: `mark ${command.mark} is not toggleable` };
