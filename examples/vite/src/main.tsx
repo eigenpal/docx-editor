@@ -15,10 +15,27 @@ const browserFirst = params.get('browserFirst') === '1';
 // TreeDocumentStore -> tree binding). It shares no code with the PackageModel path, so it is
 // the surface that proves the replacement works before it becomes the default.
 const treeFirst = params.get('treeFirst') === '1';
-// `?paginated=1` mounts the ENGINE-OWNED PAGINATED SURFACE: painted pages from semantic
-// layout records, with caret and hit testing answered from those records rather than from
-// a contenteditable. This is the surface that replaces the browser-first checkpoint.
-const paginated = params.get('paginated') === '1';
+// The PAGINATED SURFACE is the default: painted pages from semantic layout records over the
+// canonical tree, mounted through the packaged React host. `?paginated=1` still resolves so
+// existing bookmarks and gates keep working.
+//
+// It is paragraph-only today. Tables, images, headers and footers, shapes and fields are
+// deferred lanes, so a document using them shows its text and not yet its furniture — which
+// is the trade this change accepts deliberately, rather than keeping a faster-looking legacy
+// path that cannot be made Word-faithful.
+const paginated = params.get('paginated') === '1' || isDefaultSurface(params);
+
+/** True when no explicit surface was asked for. */
+function isDefaultSurface(search: URLSearchParams): boolean {
+  return (
+    search.get('preview') !== 'engine' &&
+    search.get('edit') !== '1' &&
+    search.get('museum') !== '1' &&
+    search.get('treeFirst') !== '1' &&
+    search.get('realAdapter') !== '1' &&
+    search.get('browserFirst') !== '1'
+  );
+}
 // `?realAdapter=1` mounts the PRODUCTION @docx-editor.dev/react DocxEditor with DOCX bytes and
 // exposes the stable EditorDriver on window (comprehensive 4.4/4.8), so a browser test drives the
 // real published package entry rather than the engine mount directly.
@@ -27,6 +44,7 @@ const paginated = params.get('paginated') === '1';
 // keep resolving, but it is no longer required. The museum surfaces stay
 // reachable only by their explicit opt-in parameters below.
 const legacyMuseum = params.get('museum') === '1';
+// The legacy adapter is now opt-in: `?realAdapter=1` or `?museum=1`.
 const realAdapter = !enginePreview && !editMode && !legacyMuseum && !treeFirst && !paginated;
 const zoomParam = params.get('zoom');
 const initialZoom = zoomParam && Number.isFinite(Number(zoomParam)) && Number(zoomParam) > 0 ? Number(zoomParam) : 1;
