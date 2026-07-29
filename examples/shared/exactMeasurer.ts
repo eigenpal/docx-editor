@@ -27,6 +27,8 @@ import {
   type TextMeasurer,
 } from '@docx-editor.dev/engine-layout';
 import { createCanvasMeasurer } from './canvasMeasurer.ts';
+import { resolveFontFamily, type FontOrigin } from './fontAvailability.ts';
+import { requestRemoteFont } from './remoteFonts.ts';
 
 /** The face the harness measures and paints with. */
 export const EXACT_FONT_FAMILY = 'DejaVu Sans';
@@ -74,13 +76,37 @@ async function paintWith(bytes: Uint8Array, weight: number, family: string): Pro
   document.fonts.add(face);
 }
 
+/**
+ * Where each family the document names ended up coming from.
+ *
+ * Reported rather than hidden, because "we painted Calibri" and "we painted something that
+ * is not Calibri" are different claims and only one of them is fidelity.
+ */
+export type FontOriginReport = ReadonlyMap<string, FontOrigin>;
+
 export interface ExactMeasurer {
   readonly measurer: TextMeasurer;
   /** The CSS family to paint with, or null when the exact face is unavailable. */
   readonly fontFamily: string | null;
+  /** Resolve one family through the chain, recording where it came from. */
+  readonly resolve: (family: string) => FontOrigin;
+  readonly origins: FontOriginReport;
 }
 
-export async function createExactMeasurer(scale: number): Promise<ExactMeasurer> {
+export interface ExactMeasurerOptions {
+  /**
+   * Allow fetching families the machine lacks from a third-party provider.
+   *
+   * Off unless the host says otherwise: a family name comes out of the document, so the
+   * request itself discloses something about it.
+   */
+  readonly allowRemoteFonts?: boolean;
+}
+
+export async function createExactMeasurer(
+  scale: number,
+  options: ExactMeasurerOptions = {}
+): Promise<ExactMeasurer> {
   try {
     await initializeHarfBuzz();
     const [regular, bold] = await Promise.all([
@@ -109,6 +135,23 @@ export async function createExactMeasurer(scale: number): Promise<ExactMeasurer>
       return result instanceof FontResolutionError ? null : result;
     };
 
+    // The chain, in order: what the document embeds, then what the machine has, then a
+    // provider if the host allowed one, then an honest fallback.
+    const embeddedFamilies = new Set<string>([EXACT_FONT_FAMILY, ...ALIASED_FAMILIES]);
+    const origins = new Map<string, FontOrigin>();
+    const requested = new Set<string>();
+    const resolve = (family: string): FontOrigin => {
+      const known = origins.get(family);
+      if (known) return known;
+      const resolution = resolveFontFamily(family, {
+        embedded: embeddedFamilies,
+        fetchRemote: (name) =>
+          requestRemoteFont(name, { enabled: options.allowRemoteFonts === true, requested }),
+      });
+      origins.set(family, resolution.origin);
+      return resolution.origin;
+    };
+
     return {
       measurer: createShapedMeasurer({
         shaper: createHarfBuzzTextShaper(),
@@ -120,9 +163,18 @@ export async function createExactMeasurer(scale: number): Promise<ExactMeasurer>
         unicodeDataVersion: '15.1',
       }),
       fontFamily: EXACT_FONT_FAMILY,
+      resolve,
+      origins,
     };
   } catch {
     // No exact face: measure the browser's own metrics instead, and let CSS pick the family.
-    return { measurer: createCanvasMeasurer(scale), fontFamily: null };
+    // No exact face: measure the browser's own metrics, and report every family as a
+    // fallback rather than implying a match.
+    return {
+      measurer: createCanvasMeasurer(scale),
+      fontFamily: null,
+      resolve: () => 'fallback',
+      origins: new Map(),
+    };
   }
 }
