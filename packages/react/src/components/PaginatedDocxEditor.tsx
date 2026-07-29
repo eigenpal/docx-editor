@@ -20,6 +20,7 @@ import {
   type PaginatedSurface,
   type PaginatedSurfaceState,
   type NavigationCommand,
+  type SectionProperties,
   type SurfaceFormatting,
   type TextMeasurer,
 } from '@docx-editor.dev/engine-editor';
@@ -57,6 +58,8 @@ export interface PaginatedDocxEditorHandle {
   setParagraphProperty(localName: string, attributes?: Record<string, string>): void;
   /** Formatting at the selection, for a toolbar to reflect. */
   formatting(): SurfaceFormatting | null;
+  /** The section the document declares — what a ruler is made of. */
+  sectionProperties(): SectionProperties | null;
   /** Serialize the current document. */
   save(): Uint8Array | null;
 }
@@ -102,7 +105,12 @@ export function PaginatedDocxEditor({
     }
 
     surfaceRef.current = result.surface;
-    setState(result.surface.state());
+    const initial = result.surface.state();
+    setState(initial);
+    // The INITIAL state is reported too. A host that only hears about changes cannot draw
+    // anything derived from the document until the user edits it — the ruler stayed missing
+    // until the first keystroke.
+    onStateChangeRef.current?.(initial);
     return () => {
       result.surface.destroy();
       surfaceRef.current = null;
@@ -126,6 +134,7 @@ export function PaginatedDocxEditor({
       setParagraphProperty: (localName: string, attributes?: Record<string, string>) =>
         surfaceRef.current?.setParagraphProperty(localName, attributes),
       formatting: () => surfaceRef.current?.formatting() ?? null,
+      sectionProperties: () => surfaceRef.current?.sectionProperties() ?? null,
       save: () => surfaceRef.current?.session.save() ?? null,
     }),
     []

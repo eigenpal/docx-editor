@@ -10,16 +10,27 @@
 // that silently does nothing is worse than one that is visibly unavailable.
 
 import { useCallback, useRef, useState } from 'react';
-import type { PaginatedSurfaceState, TextMeasurer } from '@docx-editor.dev/engine-editor';
-import { Toolbar, type FormattingAction, type SelectionFormatting } from './Toolbar';
+import type {
+  PaginatedSurfaceState,
+  SectionProperties,
+  TextMeasurer,
+} from '@docx-editor.dev/engine-editor';
+import type { FormattingAction, SelectionFormatting } from './Toolbar';
+import { EditorToolbar } from './EditorToolbar';
+import { HorizontalRuler } from './ui/HorizontalRuler';
+import type { SectionProperties as ContractSectionProperties } from '../legacy-core-compat';
 import { PaginatedDocxEditor, type PaginatedDocxEditorHandle } from './PaginatedDocxEditor';
 
 export interface PaginatedDocxEditorShellProps {
   readonly source: Uint8Array;
+  /** Shown in the title bar. */
+  readonly documentName?: string;
   readonly scale?: number;
   readonly measurer?: TextMeasurer;
   readonly onStateChange?: (state: PaginatedSurfaceState) => void;
   readonly onError?: (reason: string, detail?: string) => void;
+  /** Called with the serialized document when File ▸ Save is used. */
+  readonly onSave?: (bytes: Uint8Array) => void;
   readonly className?: string;
 }
 
@@ -51,13 +62,16 @@ export function PaginatedDocxEditorShell({
   source,
   scale,
   measurer,
+  documentName,
   onStateChange,
   onError,
+  onSave,
   className,
 }: PaginatedDocxEditorShellProps) {
   const editorRef = useRef<PaginatedDocxEditorHandle>(null);
   const [state, setState] = useState<PaginatedSurfaceState | null>(null);
   const [formatting, setFormatting] = useState<SelectionFormatting>({});
+  const [section, setSection] = useState<SectionProperties | null>(null);
 
   const refresh = useCallback(
     (next: PaginatedSurfaceState) => {
@@ -81,6 +95,9 @@ export function PaginatedDocxEditorShell({
           ...(current.highlight ? { highlight: current.highlight } : {}),
         });
       }
+      // Section properties come from the TREE, so an edit can change them — a page-size
+      // change has to move the ruler, not just the pagination.
+      setSection(editorRef.current?.sectionProperties() ?? null);
       onStateChange?.(next);
     },
     [onStateChange]
@@ -153,24 +170,67 @@ export function PaginatedDocxEditorShell({
   // The chrome skeleton: a fixed toolbar above a scroll container holding the pages. The
   // full shell adds rulers, the outline panel and the sidebar, all of which need section
   // properties — page size and margins — that this surface does not publish yet.
+  const zoom = scale === undefined ? 1 : scale / (96 / 72);
+  // The engine's section carries more than the ruler's contract does — header, footer and
+  // gutter offsets — so it is narrowed rather than the ruler being widened to know about
+  // page furniture it does not draw.
+  const contractSection: ContractSectionProperties | null = section
+    ? {
+        pageWidth: section.pageSize.widthTwips,
+        pageHeight: section.pageSize.heightTwips,
+        orientation: section.landscape ? 'landscape' : 'portrait',
+        marginTop: section.margins.topTwips,
+        marginBottom: section.margins.bottomTwips,
+        marginLeft: section.margins.leftTwips,
+        marginRight: section.margins.rightTwips,
+        headerDistance: section.margins.headerTwips,
+        footerDistance: section.margins.footerTwips,
+        gutter: section.margins.gutterTwips,
+        columnCount: section.columns.count,
+        columnSpace: section.columns.gapTwips,
+      }
+    : null;
+
   return (
     <div
       className={className ?? 'ep-root docx-editor docx-paginated-shell'}
       style={{ display: 'flex', flexDirection: 'column', height: '100%', minHeight: 0 }}
       data-testid="paginated-shell"
     >
-      <Toolbar
+      {/* The SAME chrome the full editor composes — title bar, document name, menu bar and
+          the formatting rail — rather than a lookalike built beside it. `EditorToolbar` is
+          the provider those parts read their state and commands from, so the composition is
+          the composition, not a copy of its appearance. */}
+      <EditorToolbar
         currentFormatting={formatting}
         onFormat={onFormat}
         onUndo={() => editorRef.current?.undo()}
         onRedo={() => editorRef.current?.redo()}
         canUndo={state?.canUndo ?? false}
         canRedo={state?.canRedo ?? false}
-      />
+        // The File menu appears when there is something for it to do. Save is the one file
+        // action this surface can honour today; print and page setup belong to lanes that
+        // are not built, and offering them would be offering nothing.
+        onSave={() => {
+          const bytes = editorRef.current?.save();
+          if (bytes) onSave?.(bytes);
+        }}
+      >
+        <EditorToolbar.TitleBar>
+          <EditorToolbar.DocumentName value={documentName ?? 'Document'} editable={false} />
+          <EditorToolbar.MenuBar />
+        </EditorToolbar.TitleBar>
+        <EditorToolbar.Toolbar />
+      </EditorToolbar>
       <div
         className="docx-editor__scroll-container"
         style={{ flex: 1, minHeight: 0, overflow: 'auto' }}
       >
+        {contractSection ? (
+          <div style={{ display: 'flex', justifyContent: 'center', padding: '4px 0' }}>
+            <HorizontalRuler sectionProps={contractSection} zoom={zoom} />
+          </div>
+        ) : null}
         <PaginatedDocxEditor
           ref={editorRef}
           source={source}

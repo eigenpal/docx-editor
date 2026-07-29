@@ -45,54 +45,11 @@ export function PaginatedSurfaceDemo({ fixtureUrl }: { fixtureUrl: string }) {
 
   useEffect(() => {
     if (!state) return;
-    setStatus(`Paginated — ${state.pageCount} pages (semantic layout)`);
+    setStatus(`${state.pageCount} pages`);
   }, [state]);
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', overflow: 'hidden' }}>
-      <div
-        style={{
-          display: 'flex',
-          gap: 12,
-          alignItems: 'center',
-          padding: '8px 16px',
-          borderBottom: '1px solid var(--doc-border)',
-          fontSize: 13,
-          flexWrap: 'wrap',
-          position: 'sticky',
-          top: 0,
-          background: 'var(--doc-surface, #fff)',
-          zIndex: 2,
-        }}
-      >
-        <strong data-testid="paginated-status">{status}</strong>
-        <span data-testid="paginated-revision">rev {state?.revision ?? 0}</span>
-        <span data-testid="paginated-caret">
-          caret {state ? `${state.selection.head.offset}` : '-'}
-        </span>
-        <button type="button" onClick={() => editorRef.current?.undo()}>
-          Undo
-        </button>
-        <button type="button" onClick={() => editorRef.current?.redo()}>
-          Redo
-        </button>
-        <button
-          type="button"
-          onClick={() => {
-            const bytes = editorRef.current?.save();
-            if (bytes) setSaved(`${bytes.length} bytes saved and reopened OK`);
-          }}
-        >
-          Save
-        </button>
-        {state?.lastRejection ? (
-          <span data-testid="paginated-rejection" style={{ color: '#b00' }}>
-            refused: {state.lastRejection}
-          </span>
-        ) : null}
-        {saved ? <span data-testid="paginated-saved">{saved}</span> : null}
-      </div>
-
       <div
         data-testid="paginated-mount"
         // The measured face is applied here so runs naming no font inherit exactly what the
@@ -102,14 +59,51 @@ export function PaginatedSurfaceDemo({ fixtureUrl }: { fixtureUrl: string }) {
         {source && measurer ? (
           <PaginatedDocxEditorShell
             source={source}
+            documentName="Sample Document"
             scale={SCALE}
             measurer={measurer}
             onStateChange={setState}
+            onSave={(bytes) => setSaved(`${bytes.length} bytes saved`)}
             onError={(reason, detail) =>
               setStatus(`Rejected: ${reason}${detail ? ` (${detail})` : ''}`)
             }
           />
         ) : null}
+      </div>
+
+      {/* A DEV INDICATOR, not chrome: pinned out of the way so the editor above it is the
+          editor a user would see, while the revision and caret stay one glance away. */}
+      <div
+        data-testid="paginated-status"
+        style={{
+          position: 'fixed',
+          left: 12,
+          bottom: 12,
+          zIndex: 50,
+          display: 'flex',
+          gap: 10,
+          alignItems: 'center',
+          padding: '6px 10px',
+          borderRadius: 999,
+          fontSize: 11,
+          fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
+          color: '#fff',
+          background: 'rgba(24,24,27,0.85)',
+          boxShadow: '0 2px 8px rgba(0,0,0,0.25)',
+          pointerEvents: 'none',
+        }}
+      >
+        <span>{status}</span>
+        <span data-testid="paginated-revision">rev {state?.revision ?? 0}</span>
+        <span data-testid="paginated-caret">
+          caret {state ? state.selection.head.offset : '-'}
+        </span>
+        {state?.lastRejection ? (
+          <span data-testid="paginated-rejection" style={{ color: '#fca5a5' }}>
+            refused: {state.lastRejection}
+          </span>
+        ) : null}
+        {saved ? <span data-testid="paginated-saved">{saved}</span> : null}
       </div>
     </div>
   );

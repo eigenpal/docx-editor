@@ -115,6 +115,7 @@ export {
 // Adapters may depend on this package and not on the layout lane, so a host reaching into
 // `engine-layout` for a parameter type would be reaching past the boundary for a name.
 export type {
+  SectionProperties,
   NavigationCommand,
   SemanticPosition,
   SemanticSelection,

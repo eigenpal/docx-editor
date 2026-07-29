@@ -16,6 +16,8 @@ import { openTreeSession, type TreeDocxSession } from '@docx-editor.dev/engine-b
 import {
   createFixedMeasurer,
   createLayoutScheduler,
+  geometryOfSection,
+  readSectionProperties,
   documentOrder,
   layoutSemanticDocument,
   moveCaret,
@@ -23,6 +25,7 @@ import {
   spansInSelection,
   wordBoundary,
   type LayoutScope,
+  type SectionProperties,
   type NavigationCommand,
   type SemanticLayout,
   type SemanticPosition,
@@ -106,6 +109,12 @@ export interface PaginatedSurface {
   setParagraphProperty(localName: string, attributes?: Record<string, string>): void;
   /** Formatting as it stands at the selection, for a toolbar to reflect. */
   formatting(): SurfaceFormatting;
+  /**
+   * The section the document declares: page size, margins, columns, orientation.
+   *
+   * What a ruler is made of, and what pagination is measured against.
+   */
+  sectionProperties(): SectionProperties;
   /** The selected text, for copy and cut. */
   selectedText(): string;
   /** Remove the selection, if any. Returns whether anything was deleted. */
@@ -180,8 +189,22 @@ export function mountPaginatedSurface(
   let currentLayout = layoutOnce();
   let desiredX: number | null = null;
 
+  /**
+   * The page the DOCUMENT asks for, not a constant.
+   *
+   * Read once per pass rather than cached: a section property is part of the tree, so an
+   * edit can change it, and paginating an A4 document onto Letter puts every page break in
+   * the wrong place before anything is painted.
+   */
+  function geometry(): ReturnType<typeof geometryOfSection> {
+    return geometryOfSection(readSectionProperties(session.part()));
+  }
+
   function layoutOnce(): SemanticLayout {
-    return layoutSemanticDocument(session.part(), session.revision(), { measurer });
+    return layoutSemanticDocument(session.part(), session.revision(), {
+      measurer,
+      geometry: geometry(),
+    });
   }
 
   /**
@@ -566,6 +589,8 @@ export function mountPaginatedSurface(
       if (ops.length === 0) return;
       commit(() => session.applyTreeOps(ops, selectionMark()));
     },
+
+    sectionProperties: () => readSectionProperties(session.part()),
 
     formatting() {
       const spans = spansInSelection(currentLayout, selection);

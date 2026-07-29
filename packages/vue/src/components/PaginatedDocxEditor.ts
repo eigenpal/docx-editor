@@ -20,6 +20,7 @@ import {
   type PaginatedSurface,
   type PaginatedSurfaceState,
   type NavigationCommand,
+  type SectionProperties,
   type SurfaceFormatting,
   type TextMeasurer,
 } from '@docx-editor.dev/engine-editor';
@@ -36,6 +37,7 @@ export interface PaginatedDocxEditorExpose {
   setRunProperty(localName: string, attributes?: Record<string, string>): void;
   setParagraphProperty(localName: string, attributes?: Record<string, string>): void;
   formatting(): SurfaceFormatting | null;
+  sectionProperties(): SectionProperties | null;
   save(): Uint8Array | null;
 }
 
@@ -81,7 +83,11 @@ export const PaginatedDocxEditor = defineComponent({
         return;
       }
       surface.value = result.surface;
-      state.value = result.surface.state();
+      const initial = result.surface.state();
+      state.value = initial;
+      // The initial state is emitted too, so a host can draw what it derives from the
+      // document before the first edit — the React host does the same.
+      emit('stateChange', initial);
     };
 
     // `onMounted` for the FIRST mount, not an immediate watcher: the element does not exist
@@ -108,6 +114,7 @@ export const PaginatedDocxEditor = defineComponent({
       setParagraphProperty: (localName, attributes) =>
         surface.value?.setParagraphProperty(localName, attributes),
       formatting: () => surface.value?.formatting() ?? null,
+      sectionProperties: () => surface.value?.sectionProperties() ?? null,
       save: () => surface.value?.session.save() ?? null,
     };
     expose(api);
