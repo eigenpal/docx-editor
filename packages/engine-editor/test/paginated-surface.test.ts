@@ -57,18 +57,41 @@ describe('painted pages, semantic interaction', () => {
     expect(surface.layout().revision).toBe(0);
   });
 
-  test('the document is NOT held in a contenteditable', () => {
+  test('the painted pages are the editable surface, and the only one', () => {
+    // The pages hold focus so the browser has ONE place for selection, caret, highlight,
+    // keystrokes and IME. An offscreen host cannot coexist with a selection on the page:
+    // focusing it destroys the page's selection, and a focused editable with no selection
+    // inside it stops firing `beforeinput` at all.
     const { container } = mount(paragraph('hello'));
-    // Only the tiny offscreen input host is editable; the painted text is not.
     const editable = [...container.querySelectorAll('[contenteditable="true"]')];
     expect(editable).toHaveLength(1);
-    expect(editable[0]!.className).toBe('docx-input-host');
-    expect(editable[0]!.textContent).toBe('');
+    expect(editable[0]!.className).toBe('docx-pages');
   });
 
-  test('a caret is rendered from the layout records', () => {
-    const { container } = mount(paragraph('hello'));
-    expect(container.querySelectorAll('.docx-caret')).toHaveLength(1);
+  test('the DOM is still a picture: a direct edit to it does not become the document', () => {
+    // Editable for INPUT, never authoritative. This is the property the old
+    // no-contenteditable assertion was protecting, and it has to survive the change.
+    const { surface, container } = mount(paragraph('hello'));
+    const span = container.querySelector('[data-start]')!;
+    span.textContent = 'tampered';
+    expect(surface.session.bodyText()).toBe('hello');
+    // The next commit repaints from layout records, discarding the tampering.
+    clickText(surface, 0, 5);
+    surface.type('!');
+    expect(container.querySelector('[data-start]')!.textContent).not.toBe('tampered');
+    expect(surface.session.bodyText()).toBe('!hello');
+  });
+
+  test('the model selection is mirrored into the browser selection', () => {
+    // The caret and the highlight are the browser's, so they follow real glyph shapes
+    // instead of a hand-drawn band. That only works if model moves reach the DOM.
+    const { surface, container } = mount(paragraph('hello world'));
+    clickText(surface, 0, 5);
+    surface.navigate('right');
+    surface.navigate('right');
+    const domSelection = container.ownerDocument.getSelection()!;
+    expect(domSelection.rangeCount).toBeGreaterThan(0);
+    expect(container.contains(domSelection.anchorNode!)).toBe(true);
   });
 
   test('clicking moves the caret to the hit position', () => {
@@ -122,11 +145,14 @@ describe('painted pages, semantic interaction', () => {
     expect(surface.state().revision).toBe(0); // navigation is not an edit
   });
 
-  test('a selection paints rectangles', () => {
+  test('extending a selection reaches the browser selection as a real range', () => {
     const { surface, container } = mount(paragraph('hello world'));
     clickText(surface, 0, 5);
     surface.navigate('lineEnd', true);
-    expect(container.querySelectorAll('.docx-selection-rect').length).toBeGreaterThan(0);
+    const state = surface.state().selection;
+    expect(state.head.offset).toBeGreaterThan(state.anchor.offset);
+    const domSelection = container.ownerDocument.getSelection()!;
+    expect(domSelection.isCollapsed).toBe(false);
   });
 
   test('save round-trips through the tree after painted editing', () => {
@@ -249,5 +275,122 @@ describe('undo restores the caret the edit was made at (task 9.1 follow-through)
     surface.navigate('right');
     surface.undo();
     expect(surface.state().selection.head.offset).toBe(1);
+  });
+});
+
+describe('the keymap covers what an editor is expected to do', () => {
+  const twoParagraphs = `${paragraph('hello world')}${paragraph('second line')}`;
+
+  test('Backspace at the start of a paragraph joins it to the previous one', () => {
+    // Refusing here made the key look broken: a caret at the paragraph start is exactly
+    // where a user presses Backspace to merge.
+    const { surface } = mount(twoParagraphs);
+    const [first, second] = surface.session.paragraphIds();
+    surface.clickAt({ x: MARGIN, y: MARGIN });
+    surface.navigate('documentEnd');
+    surface.navigate('lineStart');
+    expect(surface.state().selection.head.paragraphId).toBe(second!);
+    surface.deleteBackward();
+    expect(surface.session.paragraphIds()).toEqual([first!]);
+    expect(surface.session.bodyText()).toBe('hello worldsecond line');
+    // The caret lands at the seam, not at the start of the merged paragraph.
+    expect(surface.state().selection.head.offset).toBe('hello world'.length);
+  });
+
+  test('Delete at the end of a paragraph pulls the next one up', () => {
+    const { surface } = mount(twoParagraphs);
+    surface.clickAt({ x: MARGIN, y: MARGIN });
+    surface.navigate('lineEnd');
+    surface.deleteForward();
+    expect(surface.session.bodyText()).toBe('hello worldsecond line');
+  });
+
+  test('Delete inside a paragraph removes the character after the caret', () => {
+    const { surface } = mount(paragraph('hello'));
+    surface.clickAt({ x: MARGIN, y: MARGIN });
+    surface.deleteForward();
+    expect(surface.session.bodyText()).toBe('ello');
+  });
+
+  test('select all covers the whole document, and typing replaces it', () => {
+    const { surface } = mount(twoParagraphs);
+    surface.selectAll();
+    expect(surface.selectedText()).toBe('hello world\nsecond line');
+    surface.type('fresh');
+    expect(surface.session.bodyText()).toBe('fresh');
+    expect(surface.session.paragraphIds().length).toBe(1);
+  });
+
+  test('deleting a selection that spans paragraphs joins what is left', () => {
+    const { surface } = mount(`${paragraph('one two')}${paragraph('three four')}`);
+    const [first, second] = surface.session.paragraphIds();
+    surface.setSelection({
+      anchor: { paragraphId: first!, offset: 4 },
+      head: { paragraphId: second!, offset: 6 },
+    });
+    expect(surface.deleteSelection()).toBe(true);
+    expect(surface.session.bodyText()).toBe('one four');
+    expect(surface.session.paragraphIds().length).toBe(1);
+  });
+
+  test('word-wise motion walks words rather than characters', () => {
+    const { surface } = mount(paragraph('alpha beta gamma'));
+    surface.clickAt({ x: MARGIN, y: MARGIN });
+    surface.navigate('wordRight');
+    expect(surface.state().selection.head.offset).toBe(5);
+    surface.navigate('wordRight');
+    expect(surface.state().selection.head.offset).toBe(10);
+    surface.navigate('wordLeft');
+    expect(surface.state().selection.head.offset).toBe(6);
+  });
+
+  test('a tab is a w:tab element, not a literal tab character in the run', () => {
+    const { surface } = mount(paragraph('ab'));
+    surface.clickAt({ x: MARGIN, y: MARGIN });
+    surface.insertTab();
+    expect(surface.session.bodyText()).toBe('\tab');
+    const xml = JSON.stringify(surface.session.part());
+    expect(xml).toContain('"tab"');
+  });
+
+  test('a line break stays inside the paragraph', () => {
+    const { surface } = mount(paragraph('ab'));
+    surface.clickAt({ x: MARGIN, y: MARGIN });
+    surface.insertLineBreak();
+    expect(surface.session.paragraphIds().length).toBe(1);
+    expect(surface.session.bodyText()).toContain('\n');
+  });
+
+  test('toggling bold twice writes an explicit off rather than dropping the property', () => {
+    // The property may be inherited from a style, so removing the local override would let
+    // the inherited value come back instead of turning bold off.
+    const { surface } = mount(paragraph('hello'));
+    const id = surface.session.paragraphIds()[0]!;
+    surface.setSelection({
+      anchor: { paragraphId: id, offset: 0 },
+      head: { paragraphId: id, offset: 5 },
+    });
+    surface.toggleRunProperty('b');
+    expect(JSON.stringify(surface.session.part())).toContain('"b"');
+    surface.toggleRunProperty('b');
+    expect(JSON.stringify(surface.session.part())).toContain('"0"');
+  });
+
+  test('a collapsed caret is not formatted, because there is no range to format', () => {
+    const { surface } = mount(paragraph('hello'));
+    surface.clickAt({ x: MARGIN, y: MARGIN });
+    const before = surface.session.revision();
+    surface.toggleRunProperty('b');
+    expect(surface.session.revision()).toBe(before);
+  });
+
+  test('selected text across paragraphs is newline separated', () => {
+    const { surface } = mount(`${paragraph('one')}${paragraph('two')}${paragraph('three')}`);
+    const ids = surface.session.paragraphIds();
+    surface.setSelection({
+      anchor: { paragraphId: ids[0]!, offset: 1 },
+      head: { paragraphId: ids[2]!, offset: 2 },
+    });
+    expect(surface.selectedText()).toBe('ne\ntwo\nth');
   });
 });

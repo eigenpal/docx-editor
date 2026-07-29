@@ -143,6 +143,12 @@ function paintSpan(
   const element = document.createElement('span');
   element.style.position = 'absolute';
   element.style.left = `${span.box.x * scale}px`;
+  // The span occupies EXACTLY the advance layout reserved for it. Left to its natural
+  // width it overflows by a pixel or two — measurement and rasterisation never agree
+  // perfectly — and since the browser draws the selection highlight per box, neighbouring
+  // words' highlights overlapped into darker bands down every selected line.
+  element.style.width = `${span.box.width * scale}px`;
+  element.style.height = `${span.box.height * scale}px`;
   // Positioned on the BASELINE published by layout, not by letting the browser decide where
   // the text sits inside the box. That is the difference between painting a record and
   // asking the DOM to lay out again.

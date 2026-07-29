@@ -2251,27 +2251,8 @@
   user-select: text;
   -webkit-user-select: text;
 }
-/* The native highlight is suppressed because the overlay paints selection from layout
-   records. Showing both would draw the same range twice, in two slightly different shapes,
-   since the browser's rectangles come from the DOM rather than from the records. */
-.docx-paginated-surface .docx-page ::selection {
-  background: transparent;
-}
-.docx-paginated-surface .docx-selection-rect {
-  background: color-mix(in srgb, var(--doc-accent, #2b6cb0) 28%, transparent);
-  pointer-events: none;
-}
-.docx-paginated-surface .docx-caret {
-  background: var(--doc-caret, #202124);
-  animation: docx-caret-blink 1.1s steps(1) infinite;
-}
-@keyframes docx-caret-blink {
-  50% {
-    opacity: 0;
-  }
-}
-@media (prefers-reduced-motion: reduce) {
-  .docx-paginated-surface .docx-caret {
-    animation: none;
-  }
+/* The caret and the highlight are the BROWSER's, so they follow real glyph shapes and
+   per-line metrics instead of the uniform band a hand-drawn rectangle produces. */
+.docx-paginated-surface .docx-pages {
+  outline: none;
 }

@@ -214,12 +214,15 @@ export {
   caretAt,
   caretStops,
   compositionAnchor,
+  documentOrder,
   // `hitTest` is already taken by the legacy painted-geometry lane; this one answers in
   // MODEL coordinates, so it is named for what it returns rather than shadowing that.
   hitTestSemantic,
   moveCaret,
+  paragraphTextFromLayout,
   selectionRects,
   spansInSelection,
+  wordBoundary,
   type CaretGeometry,
   type NavigationCommand,
   type SelectionRect,

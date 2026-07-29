@@ -219,7 +219,7 @@ function lineOverlap(
 }
 
 /** Paragraph ids in document order, deduplicated across fragments. */
-function documentOrder(layout: SemanticLayout): string[] {
+export function documentOrder(layout: SemanticLayout): string[] {
   const seen: string[] = [];
   for (const page of layout.pages) {
     for (const fragment of page.fragments) {
@@ -252,10 +252,71 @@ export type NavigationCommand =
   | 'right'
   | 'up'
   | 'down'
+  | 'wordLeft'
+  | 'wordRight'
   | 'lineStart'
   | 'lineEnd'
   | 'documentStart'
   | 'documentEnd';
+
+/**
+ * The text of one paragraph, read back from the layout records.
+ *
+ * Word boundaries need characters, and the records carry them: every span holds the text it
+ * was laid out from, keyed by the source range it covers. Reading them back keeps word
+ * motion in the interaction lane instead of making it a second consumer of the model.
+ */
+export function paragraphTextFromLayout(layout: SemanticLayout, paragraphId: string): string {
+  const pieces: { start: number; text: string }[] = [];
+  const seen = new Set<string>();
+  for (const line of linesOf(layout)) {
+    if (line.range.paragraphId !== paragraphId) continue;
+    for (const span of line.spans) {
+      // A paragraph that crosses a page produces fragments over the SAME source ranges, so
+      // spans can repeat; keyed by range, they contribute once.
+      const key = `${span.range.start}:${span.range.end}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      pieces.push({ start: span.range.start, text: span.text });
+    }
+  }
+  pieces.sort((a, b) => a.start - b.start);
+  let text = '';
+  for (const piece of pieces) {
+    // Gaps mean content layout does not render as text (an unknown inline); pad so offsets
+    // stay aligned with the model rather than silently shifting every later word.
+    if (piece.start > text.length) text += ' '.repeat(piece.start - text.length);
+    text = text.slice(0, piece.start) + piece.text;
+  }
+  return text;
+}
+
+/** Word characters for motion purposes: letters, digits and the marks that join them. */
+const WORD_CHARACTER = /[\p{L}\p{N}_'\u2019]/u;
+
+/**
+ * The next word boundary from `offset`, in `direction`.
+ *
+ * Word-LEFT skips any whitespace immediately behind the caret and then the word behind that,
+ * which is what every editor does and what makes repeated presses walk words rather than
+ * alternate between a word and the space before it. Word-RIGHT stops at the END of the
+ * current word, then skips the following whitespace on the next press.
+ */
+export function wordBoundary(text: string, offset: number, direction: -1 | 1): number {
+  const isWord = (index: number): boolean => {
+    const character = text[index];
+    return character !== undefined && WORD_CHARACTER.test(character);
+  };
+  let index = Math.max(0, Math.min(offset, text.length));
+  if (direction === -1) {
+    while (index > 0 && !isWord(index - 1)) index -= 1;
+    while (index > 0 && isWord(index - 1)) index -= 1;
+    return index;
+  }
+  while (index < text.length && !isWord(index)) index += 1;
+  while (index < text.length && isWord(index)) index += 1;
+  return index;
+}
 
 /**
  * Move a caret.
@@ -295,6 +356,20 @@ export function moveCaret(
     case 'lineEnd': {
       const line = stops.filter((stop) => stop.lineId === current.lineId);
       return { position: line[line.length - 1]!.position, desiredX: null };
+    }
+    case 'wordLeft':
+    case 'wordRight': {
+      const text = paragraphTextFromLayout(layout, position.paragraphId);
+      const direction = command === 'wordLeft' ? -1 : 1;
+      const target = wordBoundary(text, position.offset, direction);
+      // Already at the paragraph edge: step into the neighbouring paragraph the way a plain
+      // arrow would, so the key is never a dead press at a boundary.
+      if (target === position.offset) {
+        const next =
+          stops[direction === -1 ? Math.max(0, index - 1) : Math.min(stops.length - 1, index + 1)]!;
+        return { position: next.position, desiredX: null };
+      }
+      return { position: { paragraphId: position.paragraphId, offset: target }, desiredX: null };
     }
     case 'documentStart':
       return { position: stops[0]!.position, desiredX: null };

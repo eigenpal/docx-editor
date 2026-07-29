@@ -116,6 +116,68 @@ export function semanticSelectionFromDom(
   return { anchor, head };
 }
 
+/**
+ * The DOM point for a model position.
+ *
+ * The inverse of `positionFromDomPoint`, and just as necessary: arrow keys, undo and
+ * programmatic selection move the MODEL, and the browser only draws a caret and a highlight
+ * for its OWN selection. Without writing the position back, pressing Right would move the
+ * model and leave the visible caret where it was.
+ */
+export function domPointFromPosition(
+  root: Element,
+  position: SemanticPosition
+): { node: Node; offset: number } | null {
+  const spans = root.querySelectorAll('[data-paragraph-id][data-start]');
+  let fallback: { node: Node; offset: number } | null = null;
+  for (const span of spans) {
+    const identity = identityOf(span);
+    if (!identity || identity.paragraphId !== position.paragraphId) continue;
+    const text = span.firstChild;
+    const length = span.textContent?.length ?? 0;
+    const end = identity.start + length;
+    if (!text) continue;
+    if (position.offset >= identity.start && position.offset <= end) {
+      // A position on a boundary belongs to the span that STARTS there, so a caret between
+      // two words sits before the second rather than after the first. The first match wins
+      // for the interior; the boundary case keeps looking so the later span is preferred.
+      const point = { node: text, offset: position.offset - identity.start };
+      if (position.offset < end) return point;
+      fallback = point;
+    }
+  }
+  return fallback;
+}
+
+/**
+ * Write a model selection into the browser's own selection.
+ *
+ * Returns false when either endpoint is not painted — a position inside a page that is not
+ * currently rendered, once virtualization lands.
+ */
+export function applySelectionToDom(
+  root: Element,
+  selection: SemanticSelection,
+  domSelection: Selection | null
+): boolean {
+  if (!domSelection) return false;
+  const anchor = domPointFromPosition(root, selection.anchor);
+  const head = domPointFromPosition(root, selection.head);
+  if (!anchor || !head) return false;
+  const current = semanticSelectionFromDom(root, domSelection);
+  // Already correct: re-setting it would collapse an in-progress drag and fight the user.
+  if (current && selectionsEqual(current, selection)) return true;
+  try {
+    // `setBaseAndExtent` keeps the anchor/head ORDER, which is what shift-arrow extends
+    // from; collapsing and extending would lose the direction.
+    domSelection.setBaseAndExtent(anchor.node, anchor.offset, head.node, head.offset);
+    return true;
+  } catch {
+    // A detached or replaced node between paint and sync: the next paint re-syncs.
+    return false;
+  }
+}
+
 /** Whether two selections address the same range, so a no-op event can be ignored. */
 export function selectionsEqual(a: SemanticSelection, b: SemanticSelection): boolean {
   return (
