@@ -10,7 +10,7 @@
 //
 // Run: node scripts/check-feature-parity.mjs
 // Output: structured Markdown report on stdout, JSON to
-//   openspec/changes/vue-editor-robust-implementation/notes/feature-parity-report.json
+//   openspec/changes/typed-ooxml-paragraph-editor/notes/feature-parity-report.json
 
 import fs from 'node:fs';
 import path from 'node:path';
@@ -21,11 +21,11 @@ const REACT_ROOT = path.join(ROOT, 'packages/react/src');
 const VUE_ROOT = path.join(ROOT, 'packages/vue/src');
 const REPORT_PATH = path.join(
   ROOT,
-  'openspec/changes/vue-editor-robust-implementation/notes/feature-parity-report.json'
+  'openspec/changes/typed-ooxml-paragraph-editor/notes/feature-parity-report.json'
 );
 const RENDER_PATH_DIVERGENCE = path.join(
   ROOT,
-  'openspec/changes/vue-editor-robust-implementation/notes/intentional-render-path-divergence.md'
+  'openspec/changes/typed-ooxml-paragraph-editor/notes/intentional-render-path-divergence.md'
 );
 
 // Files whose React-only-ness is documented as intentional in the
