@@ -22,7 +22,9 @@ import {
   readSectionProperties,
   documentOrder,
   layoutSemanticDocument,
+  caretAt,
   moveCaret,
+  pagesToMaterialize,
   paragraphTextFromLayout,
   spansInSelection,
   wordBoundary,
@@ -270,6 +272,34 @@ export function mountPaginatedSurface(
   // editor sharing the store — reaches layout the same way.
   const unsubscribe = session.subscribe((modelChange) => scheduler.notify(modelChange));
 
+  /**
+   * The pages worth building in detail.
+   *
+   * The viewport is read from the nearest scrolling ancestor. Without one — print, export, a
+   * test — this returns every page, which is the safe reading: a wrong guess silently drops
+   * content rather than merely slowing something down.
+   */
+  function visiblePages(): ReadonlySet<number> | undefined {
+    const scroller = container.closest('.docx-editor__scroll-container') as HTMLElement | null;
+    if (!scroller || scroller.clientHeight === 0) return undefined;
+    const pinned: number[] = [];
+    for (const position of [selection.anchor, selection.head]) {
+      const caret = caretAt(currentLayout, position);
+      if (caret) pinned.push(caret.pageIndex);
+    }
+    return pagesToMaterialize({
+      layout: currentLayout,
+      // Surface coordinates back to layout units: the records are in points and the scroll
+      // offset is in CSS pixels.
+      viewport: {
+        top: (scroller.scrollTop - container.offsetTop) / scale,
+        height: scroller.clientHeight / scale,
+      },
+      overscanPages: 1,
+      pinnedPages: pinned,
+    });
+  }
+
   /** Publish any pending layout. Returns whether it did, so callers can avoid a double paint. */
   function flushLayout(): boolean {
     // Nothing pending means nothing committed since the last pass, so the layout in hand is
@@ -291,6 +321,11 @@ export function mountPaginatedSurface(
   function render(): void {
     paintSemanticLayout(pagesLayer, currentLayout, {
       scale,
+      // Only what is on screen, plus a band either side and the pages the caret and the
+      // selection touch. A five-hundred-page document has five hundred pages of records and
+      // a screen holds two; building them all is the difference between opening and hanging.
+      materialize: visiblePages(),
+
       // NOT aria-hidden. That default is right when the painted pages are a picture beside
       // an editable projection — but here they ARE the projection: focus and the selection
       // live inside them. Hiding them would leave a role="textbox" whose entire content is

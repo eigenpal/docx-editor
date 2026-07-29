@@ -522,3 +522,36 @@ describe('redo restores the caret it left, not the one undo restored', () => {
     expect(surface.session.bodyText()).toContain('!');
   });
 });
+
+describe('only the pages on screen are built (task 9.4)', () => {
+  const long = `<w:p><w:r><w:t>${'word '.repeat(4000)}</w:t></w:r></w:p>`;
+
+  test('with no scrolling ancestor every page is built, which is the safe reading', () => {
+    // A wrong guess here silently drops content from print or export, so the absence of a
+    // viewport must mean "build everything", never "build nothing".
+    const { surface, container } = mount(long);
+    expect(surface.layout().pages.length).toBeGreaterThan(2);
+    for (const page of container.querySelectorAll<HTMLElement>('.docx-page')) {
+      expect(page.dataset.materialized).toBe('true');
+    }
+  });
+
+  test('inside a scroll container, far pages keep their size but hold no content', () => {
+    const { surface, container } = mount(long);
+    const scroller = document.createElement('div');
+    scroller.className = 'docx-editor__scroll-container';
+    document.body.append(scroller);
+    scroller.append(container);
+    // happy-dom reports zero layout, so the viewport is supplied directly.
+    Object.defineProperty(scroller, 'clientHeight', { value: 800, configurable: true });
+    surface.type('x');
+
+    const pages = [...container.querySelectorAll<HTMLElement>('.docx-page')];
+    const built = pages.filter((page) => page.dataset.materialized === 'true');
+    expect(pages.length).toBeGreaterThan(2);
+    expect(built.length).toBeLessThan(pages.length);
+    // Page count and heights are unchanged, so scrolling reveals rather than reflows.
+    for (const page of pages) expect(page.style.height).toBe(pages[0]!.style.height);
+    scroller.remove();
+  });
+});
