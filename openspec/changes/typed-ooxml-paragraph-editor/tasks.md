@@ -12,7 +12,7 @@
 - [x] 2.3 Implement repository-specified Word-like ProseMirror keymaps for Enter, Backspace, Delete, Mod-B/I/U, select-all, and stored marks. — `Mod-U` needed the underline run property modeled first (variant + colour, part of 6.1/6.2); see `notes/browser-first-checkpoint.md`.
 - [x] 2.4 Prove browser-native click, drag, arrow, Shift-arrow, and select-all selection plus writing, selected-text replacement, run-boundary deletion, paragraph split, and paragraph join.
 - [x] 2.5 Prove the demo loads and saves/reopens a simple paragraph DOCX through `EditorBinding → DocOp → DocumentStore` with one browser smoke test.
-- [ ] 2.6 Stop and ask the user for hands-on feedback; record and resolve blocking interaction findings before comprehensive matrices or semantic pagination. — Evidence, the two defects found and fixed by driving the browser, and the open findings are in `notes/browser-first-checkpoint.md`; awaiting hands-on feedback.
+- [x] 2.6 Stop and ask the user for hands-on feedback; record and resolve blocking interaction findings before comprehensive matrices or semantic pagination. — Feedback was given hands-on against the paginated surface; the four blocking interaction findings and the selection-rendering defects behind them are recorded, resolved and verified in `notes/browser-first-checkpoint.md`, along with what was deliberately left out and the one residual left open.
 
 ## 3. Gate and Baseline Infrastructure Repair
 
@@ -100,7 +100,7 @@ shipped package shape, and running it earlier makes every engine task above pay 
 churn twice — once while lanes move and again as new code is written against a layout that
 is still moving.
 
-- [ ] 10.1 Define the guarded internal lane DAG, TypeScript project boundaries, conditional subpath exports, and browser/server bundle-graph checks under `packages/core`.
+- [x] 10.1 Define the guarded internal lane DAG, TypeScript project boundaries, conditional subpath exports, and browser/server bundle-graph checks under `packages/core`.
 - [ ] 10.2 Consolidate the core contract and semantic store lanes under `packages/core/src/contracts` and `packages/core/src/store`, establishing `@docx-editor.dev/core` as the implementation package.
 - [ ] 10.3 Consolidate binding, layout, output, and browser editor composition under guarded `packages/core/src/{binding,layout,output,editor}` lanes without widening their allowed dependencies.
 - [ ] 10.4 Consolidate sync, server, and generated client source under guarded `packages/core/src/{sync,server,clients}` lanes with environment-specific entry points.
@@ -117,7 +117,7 @@ is still moving.
 
 ## 12. Verification and Completion
 
-- [ ] 12.1 Run focused canonical-tree, store, binding, layout, incremental-layout, virtualization, interaction, serializer, package-graph, bundle-graph, and adapter test suites.
-- [ ] 12.2 Run `bun run typecheck` and compare `bun test` with the recorded baseline without hiding infrastructure failures.
-- [ ] 12.3 Run parity, API, and i18n checks independently even when the aggregate test command fails.
-- [ ] 12.4 Run `openspec validate typed-ooxml-paragraph-editor --strict` and confirm this remains the only active change.
+- [x] 12.1 Run focused canonical-tree, store, binding, layout, incremental-layout, virtualization, interaction, serializer, package-graph, bundle-graph, and adapter test suites.
+- [x] 12.2 Run `bun run typecheck` and compare `bun test` with the recorded baseline without hiding infrastructure failures.
+- [x] 12.3 Run parity, API, and i18n checks independently even when the aggregate test command fails.
+- [x] 12.4 Run `openspec validate typed-ooxml-paragraph-editor --strict` and confirm this remains the only active change.

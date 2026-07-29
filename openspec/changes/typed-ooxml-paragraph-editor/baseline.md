@@ -94,3 +94,22 @@ The parity, API, and i18n commands had been chained after `bun test` and therefo
 ## Baseline policy
 
 Implementation may not claim completion by treating these failures as expected success. Each verification run must distinguish pre-existing failures from new regressions, and the infrastructure failures must be repaired or explicitly blocked before the production acceptance gate can pass.
+
+## Verification pass after section 9 (tasks 12.1–12.4)
+
+Run at the completion of the incremental-layout section. Reported as measured, including the
+one gate that still fails.
+
+- `bun test`: **2666 pass, 0 fail** across 248 files. The baseline above recorded 2265 pass;
+  the growth is this change's own tests, and the failure count has stayed at zero.
+- Focused suites (task 12.1), each run on its own: `engine-core` 701, `engine-binding` 253,
+  `engine-layout` 350, `engine-output` 27, `engine-editor` 608 — all passing.
+- `bun run typecheck`: passed.
+- `bun run api:check`: passed, 0 errors. `@docx-editor.dev/agents` remains skipped with its
+  printed reason.
+- `bun run i18n:validate`: passed, 726 keys in sync across every locale.
+- `openspec validate typed-ooxml-paragraph-editor --strict`: valid.
+- `bun run check:parity`: **still fails**, inside `check:public-docs-surface`, for exactly the
+  reason recorded above — the published docs describe the retired adapter surface the
+  greenfield migration removed. Task 11.4 forbids updating those claims before paired
+  acceptance, so this stays failing and reported rather than silenced.

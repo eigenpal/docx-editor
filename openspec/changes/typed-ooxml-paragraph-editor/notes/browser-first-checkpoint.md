@@ -160,3 +160,53 @@ U buttons drive the real commands and reflect live selection state.
 - `openspec validate typed-ooxml-paragraph-editor --strict`: valid.
 - `e2e/react-one-surface.interaction.spec.ts` and `react-real-adapter.smoke.spec.ts`:
   13 passed, so the editability-policy change did not disturb the painted surface.
+
+## Hands-on feedback on the paginated surface, and what it changed (task 2.6)
+
+The checkpoint was reviewed by driving the paginated surface directly. Every finding below
+was reported from use, not from a test, and each is recorded with what it turned out to be —
+several were defects with the same root cause wearing different clothes.
+
+**Blocking, all resolved.**
+
+1. *"Typing mid-word doesn't work"* and *"backspace doesn't work"*. The offscreen input host
+   cannot coexist with a selection on the page: a document has one selection, so focusing the
+   host destroyed the page's, and a focused contenteditable holding no selection stops firing
+   `beforeinput` altogether. Resolved by making the painted pages the editable surface.
+
+2. *"The caret is misplaced."* Caret stops are page-relative, so line 3 of page 1 and line 3
+   of page 4 share a `y`. Hit testing without a page index matched whichever the tie-break
+   reached, and a click near the top of page 1 put the caret ~7,900 characters into the
+   document. Resolved by resolving the page first and passing it to the hit test.
+
+3. *"Keyboard navigation and shortcuts don't work."* Accurate: only arrows, Home/End,
+   Backspace, Enter and Undo were bound. The paginated lane has no ProseMirror by design, so
+   the keymap has to live in the surface. Filled in: word-wise motion, Delete, Tab,
+   Shift+Enter, select all, Cmd/Ctrl+B/I/U, copy, cut, plain-text paste, Backspace joining a
+   paragraph to the previous one, and deleting a selection that spans paragraphs.
+
+4. *"Human interaction is very limited"* — no drag, no double-click, no triple-click. Painted
+   surfaces only have the interactions they implement by hand. Resolved by letting the
+   browser own the gesture and mapping its result back through the source ranges the painter
+   already stamps on every span.
+
+**Selection rendering — one root cause, four symptoms.** Wide word gaps, then collapsed gaps,
+then overlapping highlight bands, then bands too tall. All the same thing: text was being
+positioned and sized from measurements that disagreed with what the browser rasterises.
+Resolved in three steps, each verified in the browser:
+
+- each line became ONE inline flow, so the browser places glyphs within a line and there is
+  nothing left to disagree with;
+- each run became its own box, so a mixed-size line highlights stepped, per run, the way Word
+  draws it rather than as one slab;
+- measurement moved onto the font's own tables (task 7.7), so layout's line height is the
+  quantity the browser resolves `normal` to, and lines tile with no gap and no overlap.
+
+**Deliberately not done.** Rich (HTML) paste. Pasted markup is attacker-controlled and
+belongs behind the same bounded parse the file path uses, not wired straight into a sink.
+Plain-text paste ships; rich paste is a separate lane.
+
+**Still open, and recorded rather than hidden.** A residual worst-case 1.43px between a run's
+box and its line, uniform across plain text: HarfBuzz's font extents and what the browser
+resolves `normal` to differ slightly for the same face. It is invisible in use now that lines
+tile, and closing it to zero is the baked-metrics half of task 7.7.
