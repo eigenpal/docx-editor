@@ -71,6 +71,7 @@ section 9, so first paginated pixels are not gated on a performance rebuild.
 - [x] 7.4 Derive semantic caret stops, hit regions, selections, keyboard navigation, and composition anchors from layout records.
 - [x] 7.5 Render native paragraph DOM safely as a non-authoritative consumer without remeasurement or geometry derivation.
 - [x] 7.6 Add dependency guards keeping canonical model input and semantic layout authority separate from DOM output.
+- [ ] 7.7 Make line metrics EXACT rather than measured-and-approximated. Word derives single spacing from the font's `hhea` ascent + descent + line gap; a browser measurement cannot report the line gap, so any host-side measurer is a fraction out and every run either overflows its line or leaves a gap under it. Bake per-family `hhea` metrics in em units, resolve them by the family a run actually names, and ship metric-compatible substitutes for the families a browser cannot see (Calibri, Cambria) so the painted advances match the measured ones. Prove it by asserting a fixture's line breaks and page count against recorded Word output, not against the engine's own measurer.
 
 ## 8. Paginated Private React Acceptance
 
