@@ -65,7 +65,7 @@ survives, then derive indexes and the second oracle from it.
 Correctness only. The incremental, cached, virtualized publication architecture is
 section 9, so first paginated pixels are not gated on a performance rebuild.
 
-- [ ] 7.1 Define revision-tagged page, paragraph-fragment, line, and style-span records with stable source ranges.
+- [x] 7.1 Define revision-tagged page, paragraph-fragment, line, and style-span records with stable source ranges.
 - [ ] 7.2 Resolve font family, half-point size, color, bold, italic, underline variant/color, strike/double-strike, highlight, vertical alignment/baseline, caps/small-caps, character spacing, horizontal scaling, and kerning into style spans and line measurement.
 - [ ] 7.3 Resolve paragraph style, alignment, spacing, line spacing/rule, left/right/first-line/hanging indents, tabs, numbering identity/level, keep-next, keep-lines, widow control, page-break-before, and shading into paragraph fragments and pagination.
 - [ ] 7.4 Derive semantic caret stops, hit regions, selections, keyboard navigation, and composition anchors from layout records.

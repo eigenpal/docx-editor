@@ -175,3 +175,23 @@ export {
   captureOperationSnapshot,
   guardOperationSnapshot,
 } from './resolved-cache.ts';
+export {
+  DEFAULT_PAGE_GEOMETRY,
+  fragmentsOfParagraph,
+  lineAtPosition,
+  linesOf,
+  type LayoutBox,
+  type LineRecord,
+  type PageGeometry,
+  type PageRecord,
+  type ParagraphFragmentRecord,
+  type SemanticLayout,
+  type SourceRange,
+  type StyleSpanRecord,
+  type TextMeasurer,
+} from './semantic-records.ts';
+export {
+  createFixedMeasurer,
+  layoutSemanticDocument,
+  type SemanticLayoutOptions,
+} from './semantic-layout.ts';
