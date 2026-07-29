@@ -34,7 +34,61 @@ export interface RunProps {
   readonly color?: string;
   readonly bold?: boolean; // explicit true/false is authored; undefined = omitted
   readonly italic?: boolean;
-  readonly underline?: boolean;
+  /** An authored `w:u`. Absent = omitted; `{ val: 'none' }` is an authored OFF. */
+  readonly underline?: RunUnderline;
+}
+
+/**
+ * An authored `w:u`: its `ST_Underline` variant and optional colour.
+ *
+ * Modeled as a record rather than a boolean because `w:u` carries a variant
+ * (single / double / wave / …). A boolean could only round-trip as
+ * `w:val="single"`, so toggling underline on a double-underlined run would
+ * silently downgrade the author's formatting on save — which is why the toolbar
+ * used to refuse the command outright.
+ */
+export interface RunUnderline {
+  /** A validated `ST_Underline` value. `'none'` is an authored OFF, not an absence. */
+  readonly val: UnderlineVariant;
+  /** Raw authored `w:color` (RRGGBB or `auto`), when the underline carries one. */
+  readonly color?: string;
+}
+
+/** The `ST_Underline` enumeration (ECMA-376 Part 1, `wml.xsd`). */
+export const UNDERLINE_VARIANTS = [
+  'single',
+  'words',
+  'double',
+  'thick',
+  'dotted',
+  'dottedHeavy',
+  'dash',
+  'dashedHeavy',
+  'dashLong',
+  'dashLongHeavy',
+  'dotDash',
+  'dashDotHeavy',
+  'dotDotDash',
+  'dashDotDotHeavy',
+  'wave',
+  'wavyHeavy',
+  'wavyDouble',
+  'none',
+] as const;
+
+export type UnderlineVariant = (typeof UNDERLINE_VARIANTS)[number];
+
+const UNDERLINE_VARIANT_SET: ReadonlySet<string> = new Set(UNDERLINE_VARIANTS);
+
+/** Whether a file-derived string is a schema-valid `ST_Underline` value. */
+export function isUnderlineVariant(value: unknown): value is UnderlineVariant {
+  return typeof value === 'string' && UNDERLINE_VARIANT_SET.has(value);
+}
+
+/** Whether a file-derived string is an `ST_HexColor` the model may carry (`auto` or RRGGBB).
+ *  Anything else stays out of the model and survives only through the rPr capsule. */
+export function isUnderlineColor(value: unknown): value is string {
+  return typeof value === 'string' && /^(?:auto|[0-9A-Fa-f]{6})$/.test(value);
 }
 
 export interface RunRecord {

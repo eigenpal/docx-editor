@@ -16,6 +16,8 @@ import {
   type PackageModel,
   type ParagraphRecord,
   MAX_RUN_SIZE_HALF_POINTS,
+  isUnderlineColor,
+  isUnderlineVariant,
 } from '../model/index.ts';
 import { DEPENDENCY_KEY_IDS } from '../registry/frozen-ids.ts';
 import type { DocOp, OpEffect } from './contracts.ts';
@@ -63,8 +65,19 @@ function isRunProps(value: unknown): boolean {
   if (Object.keys(props).some((key) => !RUN_PROP_KEYS.has(key))) return false;
   if (props.styleId !== undefined && (!isStr(props.styleId) || !isValidXmlText(props.styleId)))
     return false;
-  for (const key of ['bold', 'italic', 'underline'])
+  for (const key of ['bold', 'italic'])
     if (props[key] !== undefined && typeof props[key] !== 'boolean') return false;
+  // Underline is a record, not a toggle: `val` must be an ST_Underline value and `color`,
+  // when present, an ST_HexColor. Both are written straight into `w:u` on save, so an
+  // unvalidated value here would be XML-attribute injection from a DocOp.
+  if (props.underline !== undefined) {
+    const u = props.underline;
+    if (typeof u !== 'object' || u === null || Array.isArray(u)) return false;
+    const underline = u as Record<string, unknown>;
+    if (Object.keys(underline).some((key) => key !== 'val' && key !== 'color')) return false;
+    if (!isUnderlineVariant(underline.val)) return false;
+    if (underline.color !== undefined && !isUnderlineColor(underline.color)) return false;
+  }
   if (props.sizeHalfPoints !== undefined) {
     const size = props.sizeHalfPoints;
     if (

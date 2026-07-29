@@ -257,25 +257,26 @@ describe('read-only atoms are matched by kind, not just id', () => {
 });
 
 describe('unprojectable run metadata is never overwritten', () => {
-  function underlineBinding() {
+  /** Explicit-OFF underline: mark ABSENCE means "omitted", so authored-false cannot round-trip.
+   *  (Underline PRESENCE does project, as a mark — see the underline suite below.) */
+  function underlineOffBinding() {
     const model = createEmptyModel();
     const store = new DocumentStore(model);
     const id = model.stories.get(bodyStoryId(model))!.blocks[0].id;
-    // A run whose underline the ProseMirror projection cannot represent.
-    store.transact(HUMAN, (c) => c.apply({ op: 'setParagraphRuns', paragraphId: id, runs: [{ text: 'AB', props: { underline: true } }] }));
+    store.transact(HUMAN, (c) => c.apply({ op: 'setParagraphRuns', paragraphId: id, runs: [{ text: 'AB', props: { underline: { val: 'none' } } }] }));
     return { store, binding: new EditorBinding(store), id };
   }
 
-  test('editing a paragraph whose run has underline fails closed (would drop it)', () => {
-    const { store, binding, id } = underlineBinding();
+  test('editing a paragraph whose run has explicit-off underline fails closed (would drop it)', () => {
+    const { store, binding, id } = underlineOffBinding();
     const doc = docSchema.node('doc', null, [docSchema.node('paragraph', { semId: id }, [docSchema.text('ABX')])]);
     const res = binding.commitFromDoc(doc);
     expect(res.rejected).toBe(true);
     expect(store.currentRevision).toBe(1); // only the seeding transact
   });
 
-  test('a mid-paragraph paste into an underlined paragraph fails closed', () => {
-    const { store, binding, id } = underlineBinding();
+  test('a mid-paragraph paste into an explicit-off-underline paragraph fails closed', () => {
+    const { store, binding, id } = underlineOffBinding();
     const doc = docSchema.node('doc', null, [
       docSchema.node('paragraph', { semId: id }, [docSchema.text('AX')]),
       docSchema.node('paragraph', { semId: null }, [docSchema.text('YB')]),

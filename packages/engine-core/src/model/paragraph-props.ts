@@ -6,8 +6,11 @@
 
 import {
   MAX_RUN_SIZE_HALF_POINTS,
+  isUnderlineColor,
+  isUnderlineVariant,
   type ParagraphProps,
   type RunProps,
+  type RunUnderline,
   type StyleRecord,
   type DocDefaults,
 } from './authored-model.ts';
@@ -37,7 +40,7 @@ export function canonicalRunProps(props: RunProps | undefined): RunProps | undef
     color?: string;
     bold?: boolean;
     italic?: boolean;
-    underline?: boolean;
+    underline?: RunUnderline;
   } = {};
   if (props.styleId) out.styleId = props.styleId; // non-empty only
   if (props.fonts) {
@@ -67,7 +70,13 @@ export function canonicalRunProps(props: RunProps | undefined): RunProps | undef
   if (props.color !== undefined) out.color = props.color;
   if (props.bold !== undefined) out.bold = props.bold;
   if (props.italic !== undefined) out.italic = props.italic;
-  if (props.underline !== undefined) out.underline = props.underline;
+  // Rebuilt field-by-field, like `fonts` above, so an underline carrying extra keys can
+  // never reach the hash or the serializer through a canonicalized record.
+  if (props.underline !== undefined && isUnderlineVariant(props.underline.val)) {
+    out.underline = isUnderlineColor(props.underline.color)
+      ? { val: props.underline.val, color: props.underline.color }
+      : { val: props.underline.val };
+  }
   return Object.keys(out).length > 0 ? out : undefined;
 }
 

@@ -3,7 +3,7 @@
 // and loop prevention (6.9). Runs headless — no EditorView, no DOM.
 
 import { describe, expect, test } from 'bun:test';
-import { strToU8, zipSync } from 'fflate';
+import { strFromU8, strToU8, unzipSync, zipSync } from 'fflate';
 import { EditorBinding, docSchema, paragraphNodeToRuns } from '../src/index.ts';
 import {
   DocumentStore,
@@ -11,6 +11,8 @@ import {
   bodyStoryId,
   paragraphText,
   parseDocx,
+  writeDocx,
+  assessBodyEditability,
   ORIGIN_IDS,
   type ParagraphRecord,
 } from '@docx-editor.dev/engine-core';
@@ -283,5 +285,228 @@ describe('reverse reconciliation + loop prevention (6.5, 6.9)', () => {
   test('paragraphNodeToRuns drops empty text nodes', () => {
     const node = docSchema.node('paragraph', { semId: 'x' }, [docSchema.text('a')]);
     expect(paragraphNodeToRuns(node)).toEqual([{ text: 'a' }]);
+  });
+});
+
+describe('underline projects as a mark (tasks 6.1/6.2)', () => {
+  function underlined() {
+    const model = createEmptyModel();
+    const store = new DocumentStore(model);
+    const id = model.stories.get(bodyStoryId(model))!.blocks[0].id;
+    store.transact(HUMAN, (c) =>
+      c.apply({
+        op: 'setParagraphRuns',
+        paragraphId: id,
+        runs: [{ text: 'plain' }, { text: 'under', props: { underline: { val: 'single' } } }],
+      })
+    );
+    return { store, binding: new EditorBinding(store), id };
+  }
+
+  test('an underlined run projects with the underline mark', () => {
+    const { binding } = underlined();
+    const paragraph = binding.projectDoc().child(0);
+    expect(paragraph.child(0).marks.map((m) => m.type.name)).toEqual([]);
+    expect(paragraph.child(1).marks.map((m) => m.type.name)).toEqual(['underline']);
+  });
+
+  test('the underline mark maps back to props.underline', () => {
+    const node = docSchema.node('paragraph', { semId: 'x' }, [
+      docSchema.text('u', [docSchema.marks.underline.create()]),
+    ]);
+    expect(paragraphNodeToRuns(node)).toEqual([
+      { text: 'u', props: { underline: { val: 'single' } } },
+    ]);
+  });
+
+  test('reprojecting an underlined paragraph maps to ZERO ops', () => {
+    const { binding } = underlined();
+    expect(binding.mapDocToOps(binding.reconcileDoc())).toEqual([]);
+  });
+
+  test('an underlined paragraph is editable, and the underline survives the edit', () => {
+    const { store, binding, id } = underlined();
+    const edited = docSchema.node('doc', null, [
+      docSchema.node('paragraph', { semId: id }, [
+        docSchema.text('plain'),
+        docSchema.text('underX', [docSchema.marks.underline.create()]),
+      ]),
+    ]);
+    const res = binding.commitFromDoc(edited);
+    expect(res.rejected).toBeFalsy();
+    expect(res.result?.ok).toBe(true);
+    const runs = (
+      store.currentModel.stories.get(bodyStoryId(store.currentModel))!.blocks[0] as ParagraphRecord
+    ).runs;
+    expect(runs).toEqual([
+      { text: 'plain' },
+      { text: 'underX', props: { underline: { val: 'single' } } },
+    ]);
+  });
+
+  test('toggling underline OFF removes it from the canonical run', () => {
+    const { store, binding, id } = underlined();
+    const edited = docSchema.node('doc', null, [
+      docSchema.node('paragraph', { semId: id }, [docSchema.text('plainunder')]),
+    ]);
+    expect(binding.commitFromDoc(edited).result?.ok).toBe(true);
+    const runs = (
+      store.currentModel.stories.get(bodyStoryId(store.currentModel))!.blocks[0] as ParagraphRecord
+    ).runs;
+    expect(runs).toEqual([{ text: 'plainunder' }]);
+  });
+  test('an underlined edit round-trips to w:u and reopens editable', () => {
+    const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
+    const bytes = zipSync({
+      '[Content_Types].xml': strToU8(
+        '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/></Types>'
+      ),
+      'word/document.xml': strToU8(
+        `<w:document xmlns:w="${W}"><w:body><w:p><w:r><w:t>plain</w:t></w:r></w:p></w:body></w:document>`
+      ),
+    });
+    const parsed = parseDocx(bytes, { preserveAll: true });
+    if (!parsed.ok) throw new Error(parsed.reason);
+    const store = new DocumentStore(parsed.model);
+    const binding = new EditorBinding(store);
+    const id = parsed.model.stories.get(bodyStoryId(parsed.model))!.blocks[0].id;
+
+    const edited = docSchema.node('doc', null, [
+      docSchema.node('paragraph', { semId: id }, [
+        docSchema.text('plain', [docSchema.marks.underline.create()]),
+      ]),
+    ]);
+    expect(binding.commitFromDoc(edited).result?.ok).toBe(true);
+
+    const document = strFromU8(unzipSync(writeDocx(store.currentModel))['word/document.xml']);
+    expect(document).toContain('<w:u w:val="single"/>');
+
+    // And the saved bytes reopen as a modeled underline that is still editable, not as a
+    // locked paragraph — the condition that used to make any underline read-only.
+    const reopened = parseDocx(writeDocx(store.currentModel), { preserveAll: true });
+    if (!reopened.ok) throw new Error(reopened.reason);
+    const runs = (
+      reopened.model.stories.get(bodyStoryId(reopened.model))!.blocks[0] as ParagraphRecord
+    ).runs;
+    expect(runs[0]!.props?.underline).toEqual({ val: 'single' });
+    expect(assessBodyEditability(reopened.model).mode).toBe('full');
+  });
+  test('an authored variant and colour survive projection and re-serialization', () => {
+    const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
+    const bytes = zipSync({
+      '[Content_Types].xml': strToU8(
+        '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/></Types>'
+      ),
+      'word/document.xml': strToU8(
+        `<w:document xmlns:w="${W}"><w:body><w:p>` +
+          '<w:r><w:rPr><w:u w:val="double" w:color="FF0000"/></w:rPr><w:t>wavy</w:t></w:r>' +
+          '</w:p></w:body></w:document>'
+      ),
+    });
+    const parsed = parseDocx(bytes, { preserveAll: true });
+    if (!parsed.ok) throw new Error(parsed.reason);
+    const paragraph = parsed.model.stories.get(bodyStoryId(parsed.model))!
+      .blocks[0] as ParagraphRecord;
+    expect(paragraph.runs[0]!.props?.underline).toEqual({ val: 'double', color: 'FF0000' });
+
+    // The run carries an rPr capsule too, so it projects through the capsule and its exact
+    // bytes are what a TEXT edit re-emits.
+    const store = new DocumentStore(parsed.model);
+    const binding = new EditorBinding(store);
+    const state = binding.createState();
+    expect(binding.commitFromDoc(state.tr.insertText('X', 1).doc).result?.ok).toBe(true);
+    expect(
+      strFromU8(unzipSync(writeDocx(store.currentModel))['word/document.xml'])
+    ).toContain('<w:u w:val="double" w:color="FF0000"/>');
+  });
+
+  test('a variant-carrying mark re-serializes its own variant, not a downgraded single', () => {
+    const model = createEmptyModel();
+    const store = new DocumentStore(model);
+    const id = model.stories.get(bodyStoryId(model))!.blocks[0].id;
+    const binding = new EditorBinding(store);
+    const doc = docSchema.node('doc', null, [
+      docSchema.node('paragraph', { semId: id }, [
+        docSchema.text('w', [docSchema.marks.underline.create({ val: 'wave', color: '00FF00' })]),
+      ]),
+    ]);
+    expect(binding.commitFromDoc(doc).result?.ok).toBe(true);
+    const runs = (
+      store.currentModel.stories.get(bodyStoryId(store.currentModel))!.blocks[0] as ParagraphRecord
+    ).runs;
+    expect(runs).toEqual([{ text: 'w', props: { underline: { val: 'wave', color: '00FF00' } } }]);
+  });
+
+  test('a forged variant or colour falls back instead of reaching w:u', () => {
+    const model = createEmptyModel();
+    const store = new DocumentStore(model);
+    const id = model.stories.get(bodyStoryId(model))!.blocks[0].id;
+    const binding = new EditorBinding(store);
+    const doc = docSchema.node('doc', null, [
+      docSchema.node('paragraph', { semId: id }, [
+        docSchema.text('x', [
+          docSchema.marks.underline.create({ val: 'single"/><w:object', color: 'red;' }),
+        ]),
+      ]),
+    ]);
+    expect(binding.commitFromDoc(doc).result?.ok).toBe(true);
+    const runs = (
+      store.currentModel.stories.get(bodyStoryId(store.currentModel))!.blocks[0] as ParagraphRecord
+    ).runs;
+    expect(runs).toEqual([{ text: 'x', props: { underline: { val: 'single' } } }]);
+  });
+  test('a capsule run still DISPLAYS its modeled formatting', () => {
+    const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
+    const bytes = zipSync({
+      '[Content_Types].xml': strToU8(
+        '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/></Types>'
+      ),
+      'word/document.xml': strToU8(
+        `<w:document xmlns:w="${W}"><w:body><w:p>` +
+          '<w:r><w:rPr><w:b/><w:i/><w:u w:val="wave" w:color="0070C0"/></w:rPr><w:t>fancy</w:t></w:r>' +
+          '</w:p></w:body></w:document>'
+      ),
+    });
+    const parsed = parseDocx(bytes, { preserveAll: true });
+    if (!parsed.ok) throw new Error(parsed.reason);
+    const binding = new EditorBinding(new DocumentStore(parsed.model));
+    const text = binding.projectDoc().child(0).child(0);
+
+    // The capsule is still the ONE mark (it keeps serialization authority)...
+    expect(text.marks.map((m) => m.type.name)).toEqual(['rawRunProps']);
+    // ...but it now carries the display flags, so the run does not render as plain text.
+    // Every parsed run with formatting carries a capsule, so without these the whole
+    // document showed unformatted.
+    const [mark] = text.marks;
+    expect(mark!.attrs.bold).toBe(true);
+    expect(mark!.attrs.italic).toBe(true);
+    expect(mark!.attrs.u).toEqual({ val: 'wave', color: '0070C0' });
+  });
+
+  test('the capsule display flags never reach the reverse mapping', () => {
+    const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
+    const bytes = zipSync({
+      '[Content_Types].xml': strToU8(
+        '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/></Types>'
+      ),
+      'word/document.xml': strToU8(
+        `<w:document xmlns:w="${W}"><w:body><w:p>` +
+          '<w:r><w:rPr><w:u w:val="double"/></w:rPr><w:t>keep</w:t></w:r>' +
+          '</w:p></w:body></w:document>'
+      ),
+    });
+    const parsed = parseDocx(bytes, { preserveAll: true });
+    if (!parsed.ok) throw new Error(parsed.reason);
+    const store = new DocumentStore(parsed.model);
+    const binding = new EditorBinding(store);
+
+    // Editing the TEXT of a capsule run re-emits the capsule verbatim: the authored
+    // `double` must not be downgraded to the `single` a modeled toggle would write.
+    expect(binding.commitFromDoc(binding.createState().tr.insertText('X', 1).doc).result?.ok).toBe(
+      true
+    );
+    expect(
+      strFromU8(unzipSync(writeDocx(store.currentModel))['word/document.xml'])
+    ).toContain('<w:u w:val="double"/>');
   });
 });

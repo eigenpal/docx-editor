@@ -15,6 +15,9 @@ import {
   type ParagraphProps,
   type RunRecord,
   type RunProps,
+  type RunUnderline,
+  isUnderlineVariant,
+  isUnderlineColor,
   type TableRecord,
   type SdtRecord,
   type SdtProps,
@@ -129,8 +132,8 @@ function toggleProp(rPr: Extract<XmlNode, { type: 'element' }>, name: string): b
 
 /** Read authored fonts, half-point size, color, and toggles from a w:rPr element.
  *  Shared by run, style, and docDefaults parsing. Every field is present only when
- *  the rPr sets it (absent => omitted/inherit). Underline: w:u @w:val="none" => off,
- *  any other value or bare presence => on. */
+ *  the rPr sets it (absent => omitted/inherit). Underline keeps its ST_Underline variant
+ *  and optional colour; `w:val="none"` is an authored OFF, and a bare `w:u` means single. */
 export function parseRPr(rPr: Extract<XmlNode, { type: 'element' }>): RunProps {
   const props: {
     fonts?: {
@@ -147,7 +150,7 @@ export function parseRPr(rPr: Extract<XmlNode, { type: 'element' }>): RunProps {
     color?: string;
     bold?: boolean;
     italic?: boolean;
-    underline?: boolean;
+    underline?: RunUnderline;
   } = {};
   const rFonts = childElements(rPr, 'w:rFonts')[0];
   if (rFonts) {
@@ -180,7 +183,19 @@ export function parseRPr(rPr: Extract<XmlNode, { type: 'element' }>): RunProps {
   const i = toggleProp(rPr, 'w:i');
   if (i !== undefined) props.italic = i;
   const u = childElements(rPr, 'w:u')[0];
-  if (u) props.underline = u.attributes['w:val'] !== 'none';
+  if (u) {
+    // `w:val` defaults to `single` when the element is present without one (ECMA-376). An
+    // unrecognized value is file-derived and must not travel into the model: the element's
+    // exact bytes still round-trip through the rPr capsule, and the run stays unprojectable
+    // rather than being re-emitted as an attacker-chosen attribute value.
+    const raw = u.attributes['w:val'] ?? 'single';
+    if (isUnderlineVariant(raw)) {
+      const underlineColor = u.attributes['w:color'];
+      props.underline = isUnderlineColor(underlineColor)
+        ? { val: raw, color: underlineColor }
+        : { val: raw };
+    }
+  }
   return props;
 }
 

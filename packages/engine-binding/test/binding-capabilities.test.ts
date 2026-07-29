@@ -25,7 +25,7 @@ import {
 describe('composed schema + per-kind projection', () => {
   test('the composed schema has exactly the registered nodes and marks', () => {
     expect(Object.keys(docSchema.nodes).sort()).toEqual(['blockEmbed', 'doc', 'paragraph', 'text']);
-    expect(Object.keys(docSchema.marks).sort()).toEqual(['bold', 'italic', 'rawRunProps']);
+    expect(Object.keys(docSchema.marks).sort()).toEqual(['bold', 'italic', 'rawRunProps', 'underline']);
     expect(docSchema.topNodeType.name).toBe('doc'); // doc registered first stays the top node
   });
 

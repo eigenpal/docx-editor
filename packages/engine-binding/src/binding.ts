@@ -55,15 +55,20 @@ function blockRuns(block: Block): readonly RunRecord[] {
 }
 
 /** Whether a run round-trips LOSSLESSLY through the ProseMirror projection, which represents
- *  only the PRESENCE of bold/italic. A run carrying a stable id, a styleId, underline, or an
- *  explicit-off bold/italic would lose that metadata if its paragraph were re-set from a
+ *  only the PRESENCE of bold/italic/underline. A run carrying a stable id, a styleId, or an
+ *  explicit-off bold/italic/underline would lose that metadata if its paragraph were re-set from a
  *  projected (PM-derived) run list — so such a paragraph must never be overwritten by an edit. */
 export function runIsProjectable(run: RunRecord): boolean {
   if (run.id !== undefined) return false;
   const p = run.props;
   if (!p) return true;
-  if (p.styleId !== undefined || p.underline !== undefined) return false;
-  return p.bold !== false && p.italic !== false; // explicit-off is not representable
+  if (p.styleId !== undefined) return false;
+  // Underline projects as a mark carrying its VARIANT and colour, so an authored `w:u`
+  // round-trips. Only an authored OFF (`val: 'none'`) stays unrepresentable — mark ABSENCE
+  // means omitted, not authored-false, exactly as for bold and italic. Refusing every
+  // underline had locked whole paragraphs read-only for a property the model, the DocOp
+  // validator, and the serializer all already carried.
+  return p.bold !== false && p.italic !== false && p.underline?.val !== 'none';
 }
 
 /** Whether every run of a paragraph block round-trips losslessly through projection. */

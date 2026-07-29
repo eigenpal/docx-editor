@@ -6,7 +6,14 @@
 // editing this schema. The PM doc is a PROJECTION target, never canonical state.
 
 import { Node as PMNode, type Schema } from 'prosemirror-model';
-import type { Block, ParagraphRecord, RunRecord } from '@docx-editor.dev/engine-core';
+import {
+  isUnderlineColor,
+  isUnderlineVariant,
+  type Block,
+  type ParagraphRecord,
+  type RunRecord,
+  type UnderlineVariant,
+} from '@docx-editor.dev/engine-core';
 import {
   registerBindingNode,
   registerBindingMark,
@@ -90,6 +97,65 @@ registerBindingMark('italic', {
   toDOM: () => ['em', 0],
   parseDOM: [{ tag: 'em' }, { tag: 'i' }],
 });
+// Underline carries its ST_Underline VARIANT and colour, not just presence (D8). A boolean
+// mark could only ever re-emit `w:val="single"`, so toggling underline anywhere in a
+// double-underlined run would silently downgrade the author's formatting on save — which is
+// exactly why the toolbar command used to refuse outright. With the variant on the mark, a
+// round trip through the projection reproduces the authored `w:u`.
+//
+// `val` and `color` reach the DOM only as data attributes and a `text-decoration-*` pair, and
+// both are validated at the parse boundary and by the DocOp validator (`isUnderlineVariant` /
+// `isUnderlineColor`), so no file-derived string is interpolated unchecked into CSS.
+registerBindingMark('underline', {
+  attrs: { val: { default: 'single' }, color: { default: null } },
+  excludes: 'rawRunProps',
+  toDOM: (mark) => {
+    const val = isUnderlineVariant(mark.attrs.val) ? mark.attrs.val : 'single';
+    const color = isUnderlineColor(mark.attrs.color) ? mark.attrs.color : null;
+    const style = `text-decoration-line:underline;text-decoration-style:${UNDERLINE_CSS_STYLE[val]}${
+      color && color !== 'auto' ? `;text-decoration-color:#${color}` : ''
+    }`;
+    return ['u', { 'data-u-val': val, ...(color ? { 'data-u-color': color } : {}), style }, 0];
+  },
+  parseDOM: [
+    {
+      tag: 'u',
+      getAttrs: (dom: HTMLElement | string) => {
+        if (typeof dom === 'string') return null;
+        const val = dom.getAttribute('data-u-val');
+        const color = dom.getAttribute('data-u-color');
+        return {
+          val: isUnderlineVariant(val) ? val : 'single',
+          color: isUnderlineColor(color) ? color : null,
+        };
+      },
+    },
+  ],
+});
+
+/** How each ST_Underline variant paints as a CSS `text-decoration-style`. CSS has four styles
+ *  where OOXML has eighteen, so the heavy/long/word-only distinctions collapse; the authored
+ *  value is what round-trips, this only decides what the projection looks like. */
+const UNDERLINE_CSS_STYLE: Record<UnderlineVariant, string> = {
+  single: 'solid',
+  words: 'solid',
+  double: 'double',
+  thick: 'solid',
+  dotted: 'dotted',
+  dottedHeavy: 'dotted',
+  dash: 'dashed',
+  dashedHeavy: 'dashed',
+  dashLong: 'dashed',
+  dashLongHeavy: 'dashed',
+  dotDash: 'dashed',
+  dashDotHeavy: 'dashed',
+  dotDotDash: 'dashed',
+  dashDotDotHeavy: 'dashed',
+  wave: 'wavy',
+  wavyHeavy: 'wavy',
+  wavyDouble: 'wavy',
+  none: 'solid',
+};
 // An OPAQUE run-properties capsule mark: it carries the verbatim <w:rPr> bytes of a run whose
 // formatting the model does not represent, so editing the run's TEXT preserves its rPr. Two runs
 // with different capsules carry different `rpr` attrs and stay separate; identical capsules merge
@@ -172,12 +238,58 @@ export function resolveCapsuleRef(ref: string): string | undefined {
   return capsuleById.get(ref);
 }
 
+/**
+ * The inline style that makes a capsule run LOOK like its modeled formatting.
+ *
+ * Every value is re-checked here rather than trusted from the attrs: a mark's attrs
+ * survive a clipboard round trip through the DOM, and this builds a CSS string, which
+ * CLAUDE.md requires be escaped or constrained at the boundary. Booleans and an
+ * allowlisted variant/colour cannot carry a `;` or a `url(...)`, so the result is a
+ * closed set of literals rather than interpolated file data.
+ */
+function capsuleDisplayStyle(attrs: Record<string, unknown>): string {
+  const declarations: string[] = [];
+  if (attrs.bold === true) declarations.push('font-weight:bold');
+  if (attrs.italic === true) declarations.push('font-style:italic');
+  const u = attrs.u as { val?: unknown; color?: unknown } | null;
+  if (u && isUnderlineVariant(u.val) && u.val !== 'none') {
+    declarations.push('text-decoration-line:underline');
+    declarations.push(`text-decoration-style:${UNDERLINE_CSS_STYLE[u.val]}`);
+    if (isUnderlineColor(u.color) && u.color !== 'auto') {
+      declarations.push(`text-decoration-color:#${u.color}`);
+    }
+  }
+  return declarations.join(';');
+}
+
 registerBindingMark('rawRunProps', {
-  attrs: { rpr: {} },
+  // `rpr` is the capsule's serialization authority. The rest are DISPLAY ONLY, derived from
+  // the canonical run's already-validated `props` at projection time.
+  //
+  // Without them the capsule rendered an inert `<span>`, so EVERY run parsed from a real
+  // document — which is every run with any formatting, since parsing captures its `w:rPr`
+  // byte-exact — displayed as plain text. Measured on an underline fixture: ten authored
+  // `w:u` variants, zero underlines on screen. Bold and italic were equally invisible.
+  //
+  // They cannot simply be projected as the bold/italic/underline MARKS instead: those
+  // exclude `rawRunProps`, deliberately, so that toggling one on a capsule run drops the
+  // capsule and materializes the user's edit. Carrying the display on the capsule keeps
+  // both properties — the run looks right, and an actual toggle still wins.
+  attrs: { rpr: {}, bold: { default: false }, italic: { default: false }, u: { default: null } },
   // Self-exclusion (a run has ONE rPr), and bold/italic exclude it (above) so the opaque capsule and
   // the modeled marks never coexist.
   excludes: 'rawRunProps',
-  toDOM: (mark) => ['span', { 'data-raw-rpr-ref': capsuleRef(String(mark.attrs.rpr)) }, 0],
+  toDOM: (mark) => {
+    const style = capsuleDisplayStyle(mark.attrs);
+    return [
+      'span',
+      {
+        'data-raw-rpr-ref': capsuleRef(String(mark.attrs.rpr)),
+        ...(style ? { style } : {}),
+      },
+      0,
+    ];
+  },
   // Resolves ONLY through the registry above. An unrecognized ref returns false, so the
   // mark is dropped and the text parses plain — the old behavior, for anything that did
   // not come from this document's own projection.
@@ -203,11 +315,28 @@ function runToText(run: RunRecord, schema: Schema): PMNode {
   // A run carrying an ownership-scoped rPr capsule projects with the opaque rawRunProps mark (which
   // already holds the full rPr, incl. b/i) instead of the modeled bold/italic marks.
   if (run.rPrCapsule) {
-    return schema.text(run.text, [schema.marks.rawRunProps.create({ rpr: run.rPrCapsule })]);
+    const underline = run.props?.underline;
+    return schema.text(run.text, [
+      schema.marks.rawRunProps.create({
+        rpr: run.rPrCapsule,
+        bold: run.props?.bold === true,
+        italic: run.props?.italic === true,
+        // Display only — the capsule's own bytes are still what serializes.
+        u: underline && underline.val !== 'none' ? { ...underline } : null,
+      }),
+    ]);
   }
   const marks = [];
   if (run.props?.bold) marks.push(schema.marks.bold.create());
   if (run.props?.italic) marks.push(schema.marks.italic.create());
+  // `none` is an authored OFF, and mark ABSENCE already means "no underline" — projecting a
+  // mark for it would read back as an authored single underline.
+  const underline = run.props?.underline;
+  if (underline && underline.val !== 'none') {
+    marks.push(
+      schema.marks.underline.create({ val: underline.val, color: underline.color ?? null })
+    );
+  }
   return schema.text(run.text, marks);
 }
 registerBlockProjector('paragraph', (block, schema) => {

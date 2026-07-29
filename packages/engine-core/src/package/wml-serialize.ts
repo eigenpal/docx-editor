@@ -65,11 +65,17 @@ export function runPropsChildrenXml(props: RunProps, includeStyle = true): strin
   const color =
     p.color !== undefined ? `<w:color w:val="${escapeXmlChecked(p.color, 'run color')}"/>` : '';
   const size = p.sizeHalfPoints !== undefined ? `<w:sz w:val="${p.sizeHalfPoints}"/>` : '';
+  // `val` is a validated ST_Underline value and `color` a validated ST_HexColor, both
+  // constrained at the parse boundary and by the DocOp validator, so neither can carry
+  // attacker markup. Escaped anyway — every authored string written into XML goes through
+  // the same checked escape, so this cannot become the one place that forgot.
   const underline =
     p.underline !== undefined
-      ? p.underline
-        ? '<w:u w:val="single"/>'
-        : '<w:u w:val="none"/>'
+      ? `<w:u w:val="${escapeXmlChecked(p.underline.val, 'run underline')}"${
+          p.underline.color !== undefined
+            ? ` w:color="${escapeXmlChecked(p.underline.color, 'run underline color')}"`
+            : ''
+        }/>`
       : '';
   return `${style}${rFonts}${bold}${italic}${color}${size}${underline}`;
 }

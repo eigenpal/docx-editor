@@ -7,8 +7,11 @@ import { Node as PMNode } from 'prosemirror-model';
 import {
   bodyStoryId,
   isRunPropertiesCapsule,
+  isUnderlineColor,
+  isUnderlineVariant,
   type PackageModel,
   type RunRecord,
+  type RunUnderline,
 } from '@docx-editor.dev/engine-core';
 import { docSchema } from './schema.ts';
 import { projectBlock } from './binding-capabilities.ts';
@@ -45,7 +48,7 @@ export function paragraphNodeToRuns(
   const runs: RunRecord[] = [];
   node.forEach((child) => {
     if (!child.isText || !child.text) return;
-    const props: { bold?: true; italic?: true } = {};
+    const props: { bold?: true; italic?: true; underline?: RunUnderline } = {};
     let rPrCapsule: string | undefined;
     for (const m of child.marks) {
       // Validate the capsule at this PM->model trust boundary too: only a well-formed single w:rPr
@@ -55,6 +58,13 @@ export function paragraphNodeToRuns(
         rPrCapsule = String(m.attrs.rpr);
       if (m.type.name === 'bold') props.bold = true;
       if (m.type.name === 'italic') props.italic = true;
+      // Re-validate at this PM->model boundary: mark attrs travel through the DOM on a
+      // clipboard round trip, so an unrecognized variant or colour falls back to a plain
+      // single underline rather than reaching `w:u` as an authored attribute value.
+      if (m.type.name === 'underline') {
+        const val = isUnderlineVariant(m.attrs.val) ? m.attrs.val : 'single';
+        props.underline = isUnderlineColor(m.attrs.color) ? { val, color: m.attrs.color } : { val };
+      }
     }
     // An ownership-scoped rPr capsule wins: it already holds the full rPr, so the modeled b/i marks
     // (if any co-exist) are not separately serialized.
