@@ -66,8 +66,8 @@ Correctness only. The incremental, cached, virtualized publication architecture 
 section 9, so first paginated pixels are not gated on a performance rebuild.
 
 - [x] 7.1 Define revision-tagged page, paragraph-fragment, line, and style-span records with stable source ranges.
-- [ ] 7.2 Resolve font family, half-point size, color, bold, italic, underline variant/color, strike/double-strike, highlight, vertical alignment/baseline, caps/small-caps, character spacing, horizontal scaling, and kerning into style spans and line measurement.
-- [ ] 7.3 Resolve paragraph style, alignment, spacing, line spacing/rule, left/right/first-line/hanging indents, tabs, numbering identity/level, keep-next, keep-lines, widow control, page-break-before, and shading into paragraph fragments and pagination.
+- [x] 7.2 Resolve font family, half-point size, color, bold, italic, underline variant/color, strike/double-strike, highlight, vertical alignment/baseline, caps/small-caps, character spacing, horizontal scaling, and kerning into style spans and line measurement.
+- [x] 7.3 Resolve paragraph style, alignment, spacing, line spacing/rule, left/right/first-line/hanging indents, tabs, numbering identity/level, keep-next, keep-lines, widow control, page-break-before, and shading into paragraph fragments and pagination.
 - [ ] 7.4 Derive semantic caret stops, hit regions, selections, keyboard navigation, and composition anchors from layout records.
 - [ ] 7.5 Render native paragraph DOM safely as a non-authoritative consumer without remeasurement or geometry derivation.
 - [ ] 7.6 Add dependency guards keeping canonical model input and semantic layout authority separate from DOM output.

@@ -196,3 +196,58 @@ describe('layout is deterministic', () => {
     expect(JSON.stringify(lay(part))).toBe(JSON.stringify(lay(part)));
   });
 });
+
+describe('resolved style reaches measurement and the spans (task 7.2)', () => {
+  test('a span carries the resolved style, not just the raw properties', () => {
+    const part = load(
+      '<w:p><w:r><w:rPr><w:b/><w:sz w:val="44"/><w:color w:val="C00000"/></w:rPr>' +
+        '<w:t>styled</w:t></w:r></w:p>'
+    );
+    const [line] = linesOf(lay(part));
+    const span = line!.spans[0]!;
+    expect(span.style.bold).toBe(true);
+    expect(span.style.fontSizePt).toBe(22);
+    expect(span.style.color).toBe('C00000');
+    // The authored properties are retained alongside as evidence.
+    expect(span.props).toHaveLength(3);
+  });
+
+  test('character spacing widens the line', () => {
+    const plain = lay(load('<w:p><w:r><w:t>abcde</w:t></w:r></w:p>'));
+    const spaced = lay(
+      load('<w:p><w:r><w:rPr><w:spacing w:val="40"/></w:rPr><w:t>abcde</w:t></w:r></w:p>')
+    );
+    const width = (l: ReturnType<typeof linesOf>) =>
+      l[0]!.spans.reduce((sum, span) => sum + span.box.width, 0);
+    // 40 twips is 2pt per character across five characters.
+    expect(width(linesOf(spaced))).toBeCloseTo(width(linesOf(plain)) + 10, 5);
+  });
+
+  test('horizontal scaling widens the line proportionally', () => {
+    const plain = lay(load('<w:p><w:r><w:t>abcde</w:t></w:r></w:p>'));
+    const scaled = lay(
+      load('<w:p><w:r><w:rPr><w:w w:val="200"/></w:rPr><w:t>abcde</w:t></w:r></w:p>')
+    );
+    const width = (l: ReturnType<typeof linesOf>) =>
+      l[0]!.spans.reduce((sum, span) => sum + span.box.width, 0);
+    expect(width(linesOf(scaled))).toBeCloseTo(width(linesOf(plain)) * 2, 5);
+  });
+
+  test('caps text is measured as DRAWN, not as authored', () => {
+    // Uppercasing changes nothing about width under a fixed measurer, but it must be the
+    // drawn string that is measured — a proportional shaper would size them differently.
+    const part = load('<w:p><w:r><w:rPr><w:caps/></w:rPr><w:t>abc</w:t></w:r></w:p>');
+    const [line] = linesOf(lay(part));
+    expect(line!.spans[0]!.style.caps).toBe(true);
+    // The span keeps the SOURCE text, so a copy reproduces what the document holds.
+    expect(line!.spans[0]!.text).toBe('abc');
+  });
+
+  test('superscript occupies less line height than baseline text', () => {
+    const baseline = lay(load('<w:p><w:r><w:t>x</w:t></w:r></w:p>'));
+    const superscript = lay(
+      load('<w:p><w:r><w:rPr><w:vertAlign w:val="superscript"/></w:rPr><w:t>x</w:t></w:r></w:p>')
+    );
+    expect(linesOf(superscript)[0]!.box.height).toBeLessThan(linesOf(baseline)[0]!.box.height);
+  });
+});

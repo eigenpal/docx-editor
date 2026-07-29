@@ -14,6 +14,7 @@
 // only run in a browser could not be tested deterministically or run headless.
 
 import type { OoxmlProperty } from '@docx-editor.dev/engine-core';
+import type { ResolvedRunStyle } from './run-style.ts';
 
 /** A half-open UTF-16 range inside one paragraph, addressed by its canonical node id. */
 export interface SourceRange {
@@ -33,7 +34,16 @@ export interface LayoutBox {
 export interface StyleSpanRecord {
   readonly range: SourceRange;
   readonly text: string;
+  /** The run's authored properties, retained as evidence. */
   readonly props: readonly OoxmlProperty[];
+  /**
+   * The same properties RESOLVED — one unit system, defaults applied.
+   *
+   * Carried on the span so the measurer, the span and the painter all read one resolution
+   * rather than each deriving its own. Two derivations that disagree by a fraction of a
+   * point put the caret where no glyph is.
+   */
+  readonly style: ResolvedRunStyle;
   readonly box: LayoutBox;
 }
 
@@ -106,10 +116,10 @@ export const DEFAULT_PAGE_GEOMETRY: PageGeometry = Object.freeze({
  * Layout never reads the DOM, so this is the only way width and height enter it.
  */
 export interface TextMeasurer {
-  /** Advance width of `text` under `props`. */
-  measure(text: string, props: readonly OoxmlProperty[]): number;
-  /** Line height and baseline for a run of `props`. */
-  lineMetrics(props: readonly OoxmlProperty[]): { height: number; baseline: number };
+  /** Advance width of `text` in the resolved style. */
+  measure(text: string, style: ResolvedRunStyle): number;
+  /** Line height and baseline for the resolved style. */
+  lineMetrics(style: ResolvedRunStyle): { height: number; baseline: number };
 }
 
 /** Every line in a layout, in reading order — the order caret navigation walks. */

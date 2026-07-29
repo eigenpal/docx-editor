@@ -195,3 +195,12 @@ export {
   layoutSemanticDocument,
   type SemanticLayoutOptions,
 } from './semantic-layout.ts';
+export {
+  DEFAULT_RUN_STYLE,
+  displayText,
+  resolveRunStyle,
+  runStylesEqual,
+  type ResolvedRunStyle,
+  type ResolvedUnderline,
+  type VerticalAlign,
+} from './run-style.ts';

@@ -11,6 +11,12 @@
 
 import type { OoxmlNode, OoxmlPart, OoxmlProperty } from '@docx-editor.dev/engine-core';
 import {
+  DEFAULT_RUN_STYLE,
+  displayText,
+  resolveRunStyle,
+  type ResolvedRunStyle,
+} from './run-style.ts';
+import {
   DEFAULT_PAGE_GEOMETRY,
   type LayoutBox,
   type LineRecord,
@@ -31,6 +37,8 @@ export interface SemanticLayoutOptions {
 interface Piece {
   readonly text: string;
   readonly props: readonly OoxmlProperty[];
+  /** Resolved once here, so nothing downstream re-derives it. */
+  readonly style: ResolvedRunStyle;
   readonly start: number;
   readonly end: number;
 }
@@ -59,6 +67,7 @@ function piecesOf(paragraph: OoxmlNode): Piece[] {
   for (const child of paragraph.children) {
     if (child.kind !== 'run') continue;
     const props = propertiesOf(child.children.find((grand) => grand.kind === 'runProperties'));
+    const style = resolveRunStyle(props);
     for (const grand of child.children) {
       if (grand.kind === 'runProperties') continue;
       let text = '';
@@ -69,7 +78,7 @@ function piecesOf(paragraph: OoxmlNode): Piece[] {
       // Unknown content has no text projection, so it occupies no offset — the same rule
       // the ops and the binding use, which is what keeps their offsets in agreement.
       if (text.length === 0) continue;
-      pieces.push({ text, props, start: offset, end: offset + text.length });
+      pieces.push({ text, props, style, start: offset, end: offset + text.length });
       offset += text.length;
     }
   }
@@ -199,7 +208,7 @@ export function layoutSemanticDocument(
     let line: PendingLine = { spans: [], start: 0, end: 0, width: 0, height: 0, baseline: 0 };
 
     const closeLine = (): void => {
-      const metrics = measurer.lineMetrics([]);
+      const metrics = measurer.lineMetrics(DEFAULT_RUN_STYLE);
       if (line.height === 0) {
         line.height = metrics.height;
         line.baseline = metrics.baseline;
@@ -222,18 +231,21 @@ export function layoutSemanticDocument(
         closeLine();
         continue;
       }
-      const metrics = measurer.lineMetrics(piece.props);
+      const metrics = measurer.lineMetrics(piece.style);
       let consumed = 0;
       for (const boundary of wordBoundaries(piece.text)) {
         const candidate = piece.text.slice(consumed, boundary);
         if (candidate.length === 0) continue;
-        const width = measurer.measure(candidate, piece.props);
+        // Measured as DRAWN: `w:caps` changes the glyphs, so measuring the source text
+        // would size the line for characters the reader never sees.
+        const width = measurer.measure(displayText(candidate, piece.style), piece.style);
         if (line.width + width > available && line.spans.length > 0) closeLine();
         const spanStart = piece.start + consumed;
         line.spans.push({
           range: { paragraphId, start: spanStart, end: piece.start + boundary },
           text: candidate,
           props: piece.props,
+          style: piece.style,
           box: { x: indent.left + line.width, y: 0, width, height: metrics.height },
         });
         line.width += width;
@@ -310,18 +322,21 @@ export function layoutSemanticDocument(
  * layout behaviour can be asserted without a font stack deciding the answer.
  */
 export function createFixedMeasurer(charWidth = 6, lineHeight = 14): TextMeasurer {
-  const scale = (props: readonly OoxmlProperty[]): number => {
-    for (const property of props) {
-      if (property.localName !== 'sz') continue;
-      const raw = property.attributes?.val;
-      if (raw && /^\d+$/.test(raw)) return Number(raw) / 2 / 11; // 11pt is the baseline size
-    }
-    return 1;
-  };
+  // 11pt is the size the base width and height describe; everything else scales from it.
+  const scale = (style: ResolvedRunStyle): number => style.fontSizePt / 11;
   return {
-    measure: (text, props) => text.length * charWidth * scale(props),
-    lineMetrics: (props) => {
-      const height = lineHeight * scale(props);
+    measure: (text, style) => {
+      // Advance, then horizontal scaling, then character spacing — the order Word applies
+      // them, and the order that makes `w:spacing` an absolute per-character addition
+      // rather than something the scale multiplies.
+      const advance = text.length * charWidth * scale(style);
+      const scaled = advance * (style.horizontalScalePercent / 100);
+      return scaled + text.length * style.characterSpacingPt;
+    },
+    lineMetrics: (style) => {
+      // Super/subscript draw smaller, so they need less line height than their nominal size.
+      const shrink = style.verticalAlign === 'baseline' ? 1 : 0.75;
+      const height = lineHeight * scale(style) * shrink;
       return { height, baseline: height * 0.8 };
     },
   };
