@@ -15,20 +15,34 @@ import { describe, expect, test } from 'bun:test';
 import { existsSync, readFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { BROWSER_FORBIDDEN_DEPENDENCIES, CORE_LANES, type LaneName } from './core-lane-graph';
+import {
+  BROWSER_FORBIDDEN_DEPENDENCIES,
+  CORE_LANES,
+  laneHasMoved,
+  laneSourceRoot,
+  type LaneName,
+} from './core-lane-graph';
 
 const PACKAGES = join(dirname(fileURLToPath(import.meta.url)), '..', '..', '..');
 
-/** Workspace package name to its source root. */
+/**
+ * Importable specifier to the source root it resolves to.
+ *
+ * Built from the lane DAG rather than from directory names, so a lane that moves into
+ * `packages/core` is still followed — as its subpath (`@docx-editor.dev/core-contract/store`)
+ * instead of its old package name. Resolving by hand here would make this walk silently stop
+ * at the first moved lane, and a walk that reaches nothing cannot fail.
+ */
 const WORKSPACE: ReadonlyMap<string, string> = new Map(
   (Object.keys(CORE_LANES) as LaneName[])
-    .map((lane) => {
-      const name = CORE_LANES[lane].package;
-      if (!name) return null;
-      const directory = name.replace('@docx-editor.dev/', '');
-      return [name, join(PACKAGES, directory === 'core-contract' ? 'core' : directory)] as const;
+    .flatMap((lane) => {
+      const root = join(PACKAGES, laneSourceRoot(lane));
+      if (!laneHasMoved(lane)) return [[CORE_LANES[lane].package!, root] as const];
+      const subpath = CORE_LANES[lane].subpath;
+      const CORE = '@docx-editor.dev/core-contract';
+      const specifier = !subpath || subpath === '.' ? CORE : `${CORE}/${subpath.slice(2)}`;
+      return [[specifier, root] as const];
     })
-    .filter((entry): entry is readonly [string, string] => entry !== null)
 );
 
 const IMPORT = /(?:^|\n)\s*(?:import|export)[\s\S]{0,400}?from\s*['"]([^'"]+)['"]/g;
@@ -87,8 +101,8 @@ function reachFrom(entry: string): Reach {
       );
       if (workspace) {
         packages.add(workspace);
-        const root = WORKSPACE.get(workspace)!;
-        const entryFile = resolveFile(join(root, 'src', 'index'));
+        // `root` is already the lane's SOURCE root, moved or not, so no 'src' segment here.
+        const entryFile = resolveFile(join(WORKSPACE.get(workspace)!, 'index'));
         if (entryFile) queue.push(entryFile);
         continue;
       }
@@ -98,15 +112,17 @@ function reachFrom(entry: string): Reach {
   return { packages, external };
 }
 
-const editorEntry = join(PACKAGES, 'engine-editor', 'src', 'index.ts');
+const editorEntry = join(PACKAGES, laneSourceRoot('editor'), 'index.ts');
 
 describe('a browser import cannot reach the server (task 10.1)', () => {
   const reach = reachFrom(editorEntry);
 
   test('the walk is not vacuous: it reaches the packages the editor really uses', () => {
     // If resolution silently failed, every assertion below would pass over an empty graph.
-    expect(reach.packages.has('@docx-editor.dev/engine-core')).toBe(true);
-    expect(reach.packages.has('@docx-editor.dev/engine-layout')).toBe(true);
+    const reaches = (lane: LaneName): boolean =>
+      [...reach.packages].some((n) => WORKSPACE.get(n) === join(PACKAGES, laneSourceRoot(lane)));
+    expect(reaches('store')).toBe(true);
+    expect(reaches('layout')).toBe(true);
     expect(reach.external.size).toBeGreaterThan(0);
   });
 
@@ -115,8 +131,8 @@ describe('a browser import cannot reach the server (task 10.1)', () => {
     // `export *` is enough to ship a transport stack to every consumer while every
     // package.json still looks correct.
     for (const lane of ['sync', 'server', 'clients'] as LaneName[]) {
-      const name = CORE_LANES[lane].package!;
-      expect({ lane, reached: reach.packages.has(name) }).toEqual({ lane, reached: false });
+      const reached = [...reach.packages].some((name) => WORKSPACE.get(name) === join(PACKAGES, laneSourceRoot(lane)));
+      expect({ lane, reached }).toEqual({ lane, reached: false });
     }
   });
 
@@ -157,8 +173,10 @@ describe('a browser import cannot reach the server (task 10.1)', () => {
     // Recorded, not asserted away: `engine-server` lists `engine-sync` in package.json and
     // imports nothing from it, so the lane DAG's manifest check passes on an edge the code
     // does not have. Harmless today; it means the DAG describes intent there, not reality.
-    const serverEntry = join(PACKAGES, 'engine-server', 'src', 'index.ts');
+    const serverEntry = join(PACKAGES, laneSourceRoot('server'), 'index.ts');
     if (!existsSync(serverEntry)) return;
-    expect(reachFrom(serverEntry).packages.has('@docx-editor.dev/engine-sync')).toBe(false);
+    const syncRoot = join(PACKAGES, laneSourceRoot('sync'));
+    const reached = [...reachFrom(serverEntry).packages].some((n) => WORKSPACE.get(n) === syncRoot);
+    expect(reached).toBe(false);
   });
 });
