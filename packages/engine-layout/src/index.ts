@@ -197,6 +197,14 @@ export {
 } from './semantic-layout.ts';
 export { createShapedMeasurer, type ShapedMeasurerOptions } from './shaped-measurer.ts';
 export {
+  createParagraphLayoutCache,
+  paragraphLayoutKey,
+  type LayoutCacheStats,
+  type ParagraphKeyInputs,
+  type ParagraphLayoutCache,
+  type ParagraphLayoutCacheOptions,
+} from './layout-cache.ts';
+export {
   createLayoutScheduler,
   type LayoutScheduler,
   type LayoutSchedulerOptions,

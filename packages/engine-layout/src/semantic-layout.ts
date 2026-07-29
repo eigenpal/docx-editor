@@ -10,6 +10,7 @@
 // two boxes for pagination.
 
 import type { OoxmlNode, OoxmlPart, OoxmlProperty } from '@docx-editor.dev/engine-core';
+import { paragraphLayoutKey, type ParagraphLayoutCache } from './layout-cache.ts';
 import {
   DEFAULT_RUN_STYLE,
   displayText,
@@ -31,6 +32,21 @@ import {
 export interface SemanticLayoutOptions {
   readonly geometry?: PageGeometry;
   readonly measurer: TextMeasurer;
+  /**
+   * Reuse of measured-and-broken paragraphs across revisions (task 9.2).
+   *
+   * Only the BREAK is cached. Placement — y, fragments, page cuts — is always redone, so
+   * an edit high in the document still repaginates everything below it while paragraphs
+   * nobody touched are never measured again.
+   */
+  readonly cache?: ParagraphLayoutCache<readonly PendingLine[]>;
+  /**
+   * Who produced the measurements, folded into every cache key.
+   *
+   * A font arriving after first paint changes every advance in the document while no
+   * content changes; without this the cache would serve the pre-font layout forever.
+   */
+  readonly producer?: string;
 }
 
 /** One measurable piece of a paragraph: text carrying one property set. */
@@ -102,6 +118,26 @@ interface PendingLine {
   width: number;
   height: number;
   baseline: number;
+}
+
+/**
+ * A cached line, safe to hand back on every later hit.
+ *
+ * Placement copies span boxes rather than mutating them, but a cache entry outlives the
+ * layout that produced it — freezing means a future change to the placement path cannot
+ * quietly corrupt every subsequent reuse.
+ */
+function frozenLine(line: PendingLine): PendingLine {
+  return Object.freeze({
+    spans: line.spans.map((span) =>
+      Object.freeze({ ...span, box: Object.freeze({ ...span.box }) })
+    ),
+    start: line.start,
+    end: line.end,
+    width: line.width,
+    height: line.height,
+    baseline: line.baseline,
+  }) as PendingLine;
 }
 
 function paragraphIndent(props: readonly OoxmlProperty[]): { left: number; right: number } {
@@ -225,6 +261,11 @@ export function layoutSemanticDocument(
 ): SemanticLayout {
   const geometry = options.geometry ?? DEFAULT_PAGE_GEOMETRY;
   const measurer = options.measurer;
+  const cache = options.cache;
+  const producer = options.producer ?? 'default';
+  // Keys touched by THIS layout. Anything else the cache holds belongs to a paragraph that
+  // has been edited away or reflowed, and is dropped at the end rather than lingering.
+  const usedKeys = new Set<string>();
   const contentWidth = geometry.width - geometry.margin.left - geometry.margin.right;
   const contentHeight = geometry.height - geometry.margin.top - geometry.margin.bottom;
 
@@ -274,8 +315,14 @@ export function layoutSemanticDocument(
       flushPage();
     }
 
-    const pieces = piecesOf(paragraph);
-    const lines: PendingLine[] = [];
+    const cacheKey = cache
+      ? paragraphLayoutKey({ paragraph, properties: props, width: available, producer })
+      : null;
+    if (cacheKey !== null) usedKeys.add(cacheKey);
+    const cached = cacheKey !== null ? cache!.get(cacheKey) : undefined;
+
+    const pieces = cached ? [] : piecesOf(paragraph);
+    const lines: PendingLine[] = cached ? [...cached] : [];
     let line: PendingLine = { spans: [], start: 0, end: 0, width: 0, height: 0, baseline: 0 };
 
     const closeLine = (): void => {
@@ -327,7 +374,8 @@ export function layoutSemanticDocument(
       }
     }
     // An empty paragraph still occupies one line, or it would have no caret target.
-    if (line.spans.length > 0 || lines.length === 0) closeLine();
+    if (!cached && (line.spans.length > 0 || lines.length === 0)) closeLine();
+    if (cacheKey !== null && !cached) cache!.set(cacheKey, lines.map(frozenLine));
 
     // Place the lines, fragmenting at page boundaries.
     let fragmentIndex = 0;
@@ -386,6 +434,10 @@ export function layoutSemanticDocument(
   }
 
   if (pageFragments.length > 0 || pages.length === 0) flushPage();
+  // Entries for paragraphs this pass never asked for are gone from the document, or their
+  // context changed; holding them would let the cache grow with the session rather than
+  // with the document.
+  cache?.retain(usedKeys);
   return { revision, pages };
 }
 
