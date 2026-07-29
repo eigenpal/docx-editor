@@ -81,7 +81,8 @@
     "verify:a11y-tree": "cd packages/engine-editor && bun run verify:a11y-tree",
     "test:e2e:react-legacy-chrome-visual": "playwright test --config e2e/editor-smoke.config.ts e2e/react-legacy-chrome.visual.spec.ts",
     "test:e2e:react-default-fixture": "playwright test --config e2e/editor-smoke.config.ts e2e/react-default-comprehensive-fixture.spec.ts",
-    "test:e2e:react-pm-command-parity": "playwright test --config e2e/editor-smoke.config.ts e2e/react-prosemirror-command-parity.spec.ts"
+    "test:e2e:react-pm-command-parity": "playwright test --config e2e/editor-smoke.config.ts e2e/react-prosemirror-command-parity.spec.ts",
+    "test:e2e:browser-first-paragraph": "playwright test --config e2e/editor-smoke.config.ts e2e/browser-first-paragraph.smoke.spec.ts"
   },
   "devDependencies": {
     "@changesets/changelog-github": "^0.7.0",

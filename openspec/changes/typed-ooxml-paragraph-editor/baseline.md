@@ -1,5 +1,70 @@
 # Baseline evidence
 
+## Current baseline (re-recorded after section 3, task 3.3)
+
+Recorded after the gate infrastructure repair. This supersedes the original capture below,
+which is retained because this change's tasks were written against it.
+
+- `bun test`: **2265 pass, 0 fail, 0 errors.** Run twice back to back with identical
+  results, which is itself part of the evidence: the previous failure set included a probe
+  that leaked a server and poisoned the following run.
+- `bun run typecheck`: passed.
+- `bun run api:check`: passed. `@docx-editor.dev/agents` is skipped with a printed reason
+  (it cannot build against the current engine), and the runner fails if that package ever
+  gains a `dist`, so the exemption cannot outlive its cause.
+- `bun run i18n:validate`: passed.
+- `bunx playwright test --config browser-first.config.ts` from `e2e/`: 8 passed.
+- `openspec validate typed-ooxml-paragraph-editor --strict`: valid.
+
+### Known failing, and why
+
+- `bun run check:parity` fails inside `check:public-docs-surface`. The published docs still
+  describe the retired adapter surface (`renderAsync`, `DocxEditorHandle`, the toolbar
+  exports, the whole React plugin API) that the greenfield migration removed. This is not
+  infrastructure drift; it is the public support claim section 11 exists to reconcile, and
+  task 11.4 forbids updating those claims before paired acceptance. It must not be silenced
+  before then.
+- `packages/agents` does not build: `src/bridge.ts` imports `@docx-editor.dev/core/headless`,
+  removed in the greenfield migration. The package's own `typecheck` already skips for the
+  same reason.
+
+### What made the previous baseline unreadable
+
+Each was a permanent red that hid real regressions, and none was a product defect:
+
+1. **Duplicate Happy DOM registration.** One test file used an unguarded
+   `beforeAll(register)` plus `afterAll(unregister)` while seventeen others used a guarded
+   one-time register. bun runs all files in one process, so the unguarded call threw
+   whenever another file loaded first, and the unregister tore the DOM out from under files
+   that still needed it.
+2. **Duplicate Playwright loading.** `bun test` claims `*.spec.*`, so two Playwright e2e
+   files under `packages/` were loaded by the unit runner, tripping Playwright's own
+   "Requiring @playwright/test second time" guard. They now use a `.pwtest.ts` suffix bun
+   does not claim.
+3. **A deleted decision record.** A guard asserted
+   `openspec/changes/document-engine/spike-architecture-decision.md` was still `Accepted`,
+   but this change's task 1.1 removed that change. It read a missing file and could never
+   pass again. Replaced by the invariant it protected: exactly one active change.
+4. **Stale migration inventories.** Five of ten "engine-neutral retained" test files were
+   deleted with the adapter code they covered. They are now recorded as
+   `engineNeutralRetired` with a reason, so the counts reconcile and a further unexplained
+   disappearance still fails. A guarded test root that had been deleted is repointed, and a
+   new assertion fails if any guarded root goes missing rather than silently scanning
+   nothing.
+5. **A self-poisoning probe.** The a11y harness export probe pinned port 5299. One
+   interrupted run left its detached vite child holding the port; every later run then
+   failed to bind, hit the 180s test budget, and the timeout killed the probe before its
+   teardown ran, leaking another holder. It now binds an ephemeral port and finishes in
+   about a second. Verified by starting a decoy server on 5299 and confirming the probe
+   still passes.
+
+Rebinding the frozen-artifact oracle hash was required after editing the package test
+inventory, which is that mechanism working as designed.
+
+---
+
+## Original baseline (superseded, retained as the record the tasks were written against)
+
 Recorded: 2026-07-28 before implementation of this change.
 
 Repository HEAD at capture: `checkpoint-ca39632fd5aa12e23d729b91fc35d1c7c781696f`.

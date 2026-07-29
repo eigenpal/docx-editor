@@ -1,7 +1,7 @@
 # Temporary React/Vue export divergence
 
-These existing adapter exports remain exempt until task 7.3 completes the paired
-production surface. Task 7.3 must remove each exemption or move the shared export
+These existing adapter exports remain exempt until task 11.3 completes the paired
+production surface. Task 9.3 must remove each exemption or move the shared export
 to both adapters.
 
 ## React-only

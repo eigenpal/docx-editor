@@ -1,7 +1,18 @@
 ## ADDED Requirements
 
+### Requirement: Browser-first paragraph feedback checkpoint
+Before comprehensive semantic pagination or paired-adapter conformance, the existing React `DocxEditor` SHALL expose a private visible ProseMirror `contenteditable` paragraph demo. The checkpoint SHALL support browser-native click, drag, arrow, Shift-arrow, and select-all selection; writing and selected-text replacement; Backspace and Delete across run boundaries; Enter paragraph split; Backspace paragraph join; repository-specified Word-like formatting and editing keymaps; and normalized save/reopen through `EditorBinding → DocOp → DocumentStore`.
+
+#### Scenario: User evaluates paragraph interaction
+- **WHEN** the browser-first React demo passes one focused browser smoke flow
+- **THEN** implementation pauses for hands-on user feedback before comprehensive property matrices or semantic paginated output proceed
+
+#### Scenario: Demo interaction remains non-canonical
+- **WHEN** visible ProseMirror handles native browser selection and key input
+- **THEN** `DocumentStore` remains authored authority and save reads the committed store rather than ProseMirror
+
 ### Requirement: Private React vertical-slice acceptance
-The system SHALL first prove paragraph load, edit, formatting, layout, pagination, semantic interaction, normalized save, and reopen through a private React acceptance harness that creates no public support claim.
+Before production parity, the system SHALL prove paragraph load, edit, formatting, layout, pagination, semantic interaction, normalized save, and reopen through a private React acceptance harness that creates no public support claim.
 
 #### Scenario: Private paragraph fixture passes
 - **WHEN** the private React harness edits and formats a paragraph spanning page fragments and saves it

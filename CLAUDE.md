@@ -49,6 +49,8 @@ bun run i18n:validate
 openspec validate typed-ooxml-paragraph-editor --strict
 ```
 
+- Local commits may use `git commit --no-verify`. Run relevant scoped checks
+  first and report any bypassed failing gate instead of describing it as passing.
 - Compare `bun test` with the non-clean baseline recorded in the active change.
 - `bun run format` before pushing.
 

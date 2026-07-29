@@ -14,6 +14,14 @@
 - **WHEN** a user inserts text into a projected paragraph
 - **THEN** the binding commits the corresponding semantic operation before reconciling the view from its `ModelChange`
 
+#### Scenario: Native deletion commits
+- **WHEN** a user presses Backspace or Delete at a caret or over a browser-native selection
+- **THEN** the binding commits precise semantic deletion operations, including supported run-boundary deletion and paragraph join
+
+#### Scenario: Word-like keymap command commits
+- **WHEN** a repository-specified ProseMirror keymap handles Enter, Backspace, Delete, Mod-B/I/U, or select-all
+- **THEN** the command uses the current projection and commits authored effects only through typed `DocOp`s
+
 #### Scenario: Unsupported transaction is rejected
 - **WHEN** a transaction contains a step with no supported semantic mapping
 - **THEN** no canonical mutation occurs and the projection is restored to committed state with a diagnostic result
@@ -26,7 +34,7 @@ Canonical-to-ProseMirror reconciliation SHALL use a distinct projection origin t
 - **THEN** the view reconciles once without a feedback mutation or duplicate history entry
 
 ### Requirement: Canonical semantic history
-Undo and redo SHALL operate through semantic store history and committed revisions. Each accepted user intent SHALL create one semantic history entry: one supported ProseMirror transaction, one complete IME composition, or one toolbar/command invocation. Projection reconciliation SHALL create no entry. The ProseMirror history plugin, old PM-owned history path, and time-based PM grouping MUST NOT be canonical authority.
+Undo and redo SHALL operate through semantic store history and committed revisions. Each accepted user intent SHALL create one semantic history entry: one supported ProseMirror transaction, one complete IME composition, or one toolbar/command invocation. Projection reconciliation SHALL create no entry. The ProseMirror history plugin and time-based PM grouping MUST NOT be canonical authority.
 
 #### Scenario: Undo paragraph edit
 - **WHEN** the user undoes a committed paragraph insertion
