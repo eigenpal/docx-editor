@@ -1,6 +1,6 @@
 // Shared DOM input helpers for binding integration tests (interactive-paginated 4.5).
 
-import type { EditSurface } from '../src/index.ts';
+import type { EditSurface } from '../index.ts';
 import type { SemanticSelection } from '@docx-editor.dev/core-contract/interaction';
 
 /** Monospace 16px pre layout used by mockPmLayout for PM posAtCoords during drag/drop. */

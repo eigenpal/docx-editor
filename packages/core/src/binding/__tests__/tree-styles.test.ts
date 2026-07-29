@@ -5,7 +5,7 @@
 // invisible to any test that only checks the model.
 
 import { describe, expect, test } from 'bun:test';
-import { paragraphPropsToCss, runPropsToCss } from '../src/tree-styles.ts';
+import { paragraphPropsToCss, runPropsToCss } from '../tree-styles.ts';
 
 const css = (localName: string, attributes?: Record<string, string>) =>
   runPropsToCss([attributes ? { localName, attributes } : { localName }]);

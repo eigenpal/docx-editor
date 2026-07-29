@@ -7,7 +7,7 @@ import {
   clampRectToViewport,
   INPUT_HOST_MIN_WIDTH_PX,
   INPUT_HOST_MIN_HEIGHT_PX,
-} from '../src/input-host.ts';
+} from '../input-host.ts';
 
 const VIEWPORT = { x: 0, y: 0, width: 400, height: 300 };
 

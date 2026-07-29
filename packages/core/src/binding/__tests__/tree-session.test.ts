@@ -6,8 +6,8 @@
 import { describe, expect, test } from 'bun:test';
 import { zipSync, strToU8 } from 'fflate';
 import { assessBodyEditability, parseDocx } from '@docx-editor.dev/engine-core';
-import { openTreeSession, type TreeDocxSession } from '../src/tree-session.ts';
-import { treeSchema } from '../src/tree-schema.ts';
+import { openTreeSession, type TreeDocxSession } from '../tree-session.ts';
+import { treeSchema } from '../tree-schema.ts';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 const A = 'http://schemas.openxmlformats.org/drawingml/2006/main';

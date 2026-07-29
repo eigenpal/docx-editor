@@ -49,6 +49,20 @@ export function laneRelativePath(path: string): string {
   return normalized;
 }
 
+/**
+ * Directory names that are themselves lanes inside `packages/core/src`.
+ *
+ * Scanning the contracts lane means scanning `core/src`, which now CONTAINS every moved lane
+ * as a subdirectory — so a guard walking it would attribute the binding lane's ProseMirror
+ * imports to the contracts lane. A collector skips these to stay inside one lane.
+ */
+export const NESTED_LANE_DIRECTORIES: ReadonlySet<string> = new Set(
+  (Object.keys(CORE_LANES) as LaneName[])
+    .filter((lane) => CORE_LANES[lane].directory.startsWith('src/'))
+    .map((lane) => CORE_LANES[lane].directory.slice('src/'.length))
+    .filter((name) => name.length > 0)
+);
+
 /** An absolute path to a lane-relative file or directory, wherever its lane lives now. */
 export function lanePath(path: string): string {
   return join(PACKAGES_ROOT, laneRelativePath(path));

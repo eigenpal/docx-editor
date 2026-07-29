@@ -1,6 +1,10 @@
 [test]
 # Run Bun's package/unit tests from the workspace packages directory.
 root = "./packages"
+# Register happy-dom before any test module: modules that capture `document` at module
+# scope are evaluated once per process, so per-file registration made the result depend on
+# file ordering.
+preload = ["./scripts/test/preload-dom.ts"]
 
 [install]
 # Supply-chain defense: require packages to be at least 7 days old before

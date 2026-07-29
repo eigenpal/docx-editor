@@ -6,7 +6,7 @@ import {
   applyCompositionOverlay,
   observeComposition,
   type CompositionSnapshot,
-} from '../src/composition.ts';
+} from '../composition.ts';
 
 function snapshot(overrides: Partial<CompositionSnapshot> & Pick<CompositionSnapshot, 'paragraphText'>): CompositionSnapshot {
   return {

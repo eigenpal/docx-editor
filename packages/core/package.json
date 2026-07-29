@@ -54,6 +54,11 @@
       "types": "./src/output/index.ts",
       "import": "./src/output/index.ts",
       "default": "./src/output/index.ts"
+    },
+    "./binding": {
+      "types": "./src/binding/index.ts",
+      "import": "./src/binding/index.ts",
+      "default": "./src/binding/index.ts"
     }
   },
   "scripts": {
@@ -68,6 +73,11 @@
     "fast-xml-parser": "^4.5.0",
     "fflate": "^0.8.2",
     "harfbuzzjs": "1.4.0",
-    "pdf-lib": "^1.17.1"
+    "pdf-lib": "^1.17.1",
+    "prosemirror-commands": "^1.7.1",
+    "prosemirror-keymap": "^1.2.3",
+    "prosemirror-model": "^1.25.4",
+    "prosemirror-state": "^1.4.4",
+    "prosemirror-view": "^1.41.8"
   }
 }

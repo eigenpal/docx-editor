@@ -1,4 +1,4 @@
-import { graphemeOffsetToUtf16 } from '../src/grapheme.ts';
+import { graphemeOffsetToUtf16 } from '../grapheme.ts';
 import { graphemeOffsetToUtf16 as layoutGraphemeOffsetToUtf16 } from '@docx-editor.dev/engine-layout';
 import { GRAPHEME_PARITY_VECTORS } from './grapheme-parity-vectors.ts';
 

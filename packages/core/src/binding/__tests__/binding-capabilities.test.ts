@@ -3,14 +3,14 @@
 // (paragraph editable; every other kind a read-only atom) — modelToDoc has no block.kind switch.
 
 import { describe, expect, test } from 'bun:test';
-import { docSchema, modelToDoc, EditorBinding, nodeRole, hasBlockProjector, assertBindingLaneComplete } from '../src/index.ts';
+import { docSchema, modelToDoc, EditorBinding, nodeRole, hasBlockProjector, assertBindingLaneComplete } from '../index.ts';
 import {
   projectBlock,
   registerBlockProjector,
   isBindingEditableKind,
   snapshotBindingRegistryForTest,
   restoreBindingRegistryForTest,
-} from '../src/binding-capabilities.ts';
+} from '../binding-capabilities.ts';
 import {
   createEmptyModel,
   bodyStoryId,
@@ -214,7 +214,7 @@ test('a capsule survives a DOM round-trip through the schema', async () => {
 // it — and `isRunPropertiesCapsule` only checks "lone balanced w:rPr", so the payload
 // could carry w:object/OLE into the victim's package. Both legs are covered here.
 test('a capsule ref cannot be guessed, and does not survive the document that minted it', async () => {
-  const { releaseCapsuleRefs, resolveCapsuleRef } = await import('../src/schema.ts');
+  const { releaseCapsuleRefs, resolveCapsuleRef } = await import('../schema.ts');
   const rpr = '<w:rPr><w:rFonts w:ascii="PWNED"/></w:rPr>';
   const dom = docSchema.marks.rawRunProps.spec.toDOM!(
     docSchema.marks.rawRunProps.create({ rpr }),

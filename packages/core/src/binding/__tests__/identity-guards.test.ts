@@ -6,7 +6,7 @@
 
 import { describe, expect, test } from 'bun:test';
 import { zipSync, strToU8 } from 'fflate';
-import { docSchema, EditorBinding, paragraphNodeToRuns } from '../src/index.ts';
+import { docSchema, EditorBinding, paragraphNodeToRuns } from '../index.ts';
 import {
   DocumentStore,
   parseDocx,

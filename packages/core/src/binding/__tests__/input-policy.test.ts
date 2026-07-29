@@ -4,7 +4,7 @@ import './dom-setup.ts';
 
 import { describe, expect, test } from 'bun:test';
 import { Slice, Fragment } from 'prosemirror-model';
-import { docSchema } from '../src/schema.ts';
+import { docSchema } from '../schema.ts';
 import {
   INPUT_POLICY_LIMITS,
   boundClipboardHtml,
@@ -17,7 +17,7 @@ import {
   rejectClipboardDataTransfer,
   rejectDropDataTransfer,
   validatePastedSlice,
-} from '../src/input-policy.ts';
+} from '../input-policy.ts';
 
 describe('input policy bounds', () => {
   test('rejects oversized plain text before parsing', () => {

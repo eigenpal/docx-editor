@@ -4,7 +4,7 @@
 
 import { describe, expect, test } from 'bun:test';
 import { strFromU8, strToU8, unzipSync, zipSync } from 'fflate';
-import { EditorBinding, docSchema, paragraphNodeToRuns } from '../src/index.ts';
+import { EditorBinding, docSchema, paragraphNodeToRuns } from '../index.ts';
 import {
   DocumentStore,
   createEmptyModel,

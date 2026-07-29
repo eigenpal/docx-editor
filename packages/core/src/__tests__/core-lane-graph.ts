@@ -85,7 +85,9 @@ export const CORE_LANES: Readonly<Record<LaneName, Lane>> = Object.freeze({
   },
   binding: {
     directory: 'src/binding',
-    package: '@docx-editor.dev/engine-binding',
+    // MOVED (task 10.3); alias kept per task 10.5, removed by task 10.6.
+    package: null,
+    alias: '@docx-editor.dev/engine-binding',
     mayImport: ['contracts', 'store'],
     environment: 'browser',
     subpath: './binding',

@@ -8,7 +8,7 @@ import {
   mountEditSurface,
   openDocxSession,
   EditorBinding,
-} from '../src/index.ts';
+} from '../index.ts';
 import {
   applyAccessibleNamePolicy,
   applyAtomAccessibilityLabels,
@@ -17,7 +17,7 @@ import {
   freezeAccessibilityObservation,
   PAINTED_PAGES_ASSISTIVE_MARKER,
   ATOM_EMBED_SELECTOR,
-} from '../src/accessibility-projection.ts';
+} from '../accessibility-projection.ts';
 import { authorizeFocus, dispatchBeforeInput, pmDom } from './input-dom-helpers.ts';
 import {
   DocumentStore,

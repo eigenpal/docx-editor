@@ -2,8 +2,8 @@
 
 import { describe, expect, test } from 'bun:test';
 import { readOoxmlPart, TreeDocumentStore, type OoxmlPart } from '@docx-editor.dev/engine-core';
-import { treeSchema } from '../src/tree-schema.ts';
-import { bodyParagraphs, docToTreeOps, reconcileDoc, treeToDoc } from '../src/tree-binding.ts';
+import { treeSchema } from '../tree-schema.ts';
+import { bodyParagraphs, docToTreeOps, reconcileDoc, treeToDoc } from '../tree-binding.ts';
 import { paragraphTextOf, ORIGIN_IDS } from '@docx-editor.dev/engine-core';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';

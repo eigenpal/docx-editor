@@ -7,9 +7,9 @@ import {
   openDocxSession,
   mountEditSurface,
   EditorBinding,
-} from '../src/index.ts';
-import { resolveSemanticTarget, resolveSemanticSelection } from '../src/semantic-sync.ts';
-import { resolveSelection } from '../src/selection.ts';
+} from '../index.ts';
+import { resolveSemanticTarget, resolveSemanticSelection } from '../semantic-sync.ts';
+import { resolveSelection } from '../selection.ts';
 import { authorizeFocus, dispatchBeforeInput, dispatchHistoryUndo, dispatchPaste, pmDom, semanticMount } from './input-dom-helpers.ts';
 import {
   DocumentStore,

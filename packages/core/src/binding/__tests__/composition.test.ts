@@ -8,8 +8,8 @@ import {
   EditorBinding,
   type EditSurface,
   type PmSelectionSnapshot,
-} from '../src/index.ts';
-import { resolveSelection } from '../src/selection.ts';
+} from '../index.ts';
+import { resolveSelection } from '../selection.ts';
 import {
   DocumentStore,
   createEmptyModel,

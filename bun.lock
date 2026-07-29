@@ -292,6 +292,11 @@
         "fflate": "^0.8.2",
         "harfbuzzjs": "1.4.0",
         "pdf-lib": "^1.17.1",
+        "prosemirror-commands": "^1.7.1",
+        "prosemirror-keymap": "^1.2.3",
+        "prosemirror-model": "^1.25.4",
+        "prosemirror-state": "^1.4.4",
+        "prosemirror-view": "^1.41.8",
       },
       "devDependencies": {
         "typescript": "^5.3.3",
@@ -302,12 +307,6 @@
       "version": "0.0.0",
       "dependencies": {
         "@docx-editor.dev/core-contract": "workspace:*",
-        "@docx-editor.dev/engine-core": "workspace:*",
-        "prosemirror-commands": "^1.7.1",
-        "prosemirror-keymap": "^1.2.3",
-        "prosemirror-model": "^1.25.4",
-        "prosemirror-state": "^1.4.4",
-        "prosemirror-view": "^1.41.8",
       },
       "devDependencies": {
         "@docx-editor.dev/engine-layout": "workspace:*",

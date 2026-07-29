@@ -8,8 +8,8 @@
 // Written as one file driving both, rather than two files that happen to look alike: a
 // paired test that lives in one package drifts the moment someone edits only that package.
 
-import { GlobalRegistrator } from '@happy-dom/global-registrator';
-if (!GlobalRegistrator.isRegistered) GlobalRegistrator.register();
+// MUST be first: registration happens on import, before Vue's runtime-dom is evaluated.
+import './dom-setup.ts';
 
 import { describe, expect, test } from 'bun:test';
 import { createElement, type Ref } from 'react';

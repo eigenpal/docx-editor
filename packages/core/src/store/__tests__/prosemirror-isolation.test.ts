@@ -16,7 +16,7 @@ import { describe, expect, test } from 'bun:test';
 import { readFileSync, readdirSync, existsSync, statSync } from 'node:fs';
 import { dirname, join, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { existingLanePath, PACKAGES_ROOT } from './lane-paths.ts';
+import { existingLanePath, NESTED_LANE_DIRECTORIES, PACKAGES_ROOT } from './lane-paths.ts';
 
 const PACKAGES = PACKAGES_ROOT;
 const REPO = join(PACKAGES, '..');
@@ -58,7 +58,7 @@ const PM_TOKENS: readonly { readonly pattern: RegExp; readonly why: string }[] =
   { pattern: /\bdocView\b/, why: 'ProseMirror document view' },
 ];
 
-function collectSources(root: string): string[] {
+function collectSources(root: string, depth = 0): string[] {
   if (!existsSync(root)) return [];
   const out: string[] = [];
   for (const entry of readdirSync(root)) {
@@ -68,7 +68,10 @@ function collectSources(root: string): string[] {
     if (entry === 'node_modules' || entry === 'dist' || entry === 'spike') continue;
     if (entry === '__tests__' || entry === 'test' || entry === 'tests') continue;
     const full = join(root, entry);
-    if (statSync(full).isDirectory()) out.push(...collectSources(full));
+    // Do not cross into a nested lane: `core/src` holds every moved lane as a subdirectory,
+    // so without this the contracts lane inherits the others' imports.
+    if (depth === 0 && NESTED_LANE_DIRECTORIES.has(entry) && !root.endsWith(`/${entry}`)) continue;
+    if (statSync(full).isDirectory()) out.push(...collectSources(full, depth + 1));
     else if (/\.tsx?$/.test(full)) out.push(full);
   }
   return out;

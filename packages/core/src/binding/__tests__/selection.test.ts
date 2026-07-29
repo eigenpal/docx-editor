@@ -2,8 +2,8 @@
 
 import { describe, expect, test } from 'bun:test';
 import { EditorState, TextSelection } from 'prosemirror-state';
-import { docSchema, captureSelection, resolveSelection, EditorBinding } from '../src/index.ts';
-import { captureSelectionRange, resolveSelectionRange } from '../src/selection.ts';
+import { docSchema, captureSelection, resolveSelection, EditorBinding } from '../index.ts';
+import { captureSelectionRange, resolveSelectionRange } from '../selection.ts';
 import { DocumentStore, createEmptyModel, bodyStoryId, ORIGIN_IDS, type ParagraphRecord } from '@docx-editor.dev/engine-core';
 
 const HUMAN = ORIGIN_IDS.mutationHuman;

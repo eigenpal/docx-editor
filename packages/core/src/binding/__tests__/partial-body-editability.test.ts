@@ -9,9 +9,9 @@ import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { describe, expect, test } from 'bun:test';
 import { parseDocx } from '@docx-editor.dev/engine-core';
-import { openDocxSession } from '../src/session.ts';
+import { openDocxSession } from '../session.ts';
 
-const FIXTURE = path.resolve(import.meta.dir, '../../../e2e/fixtures/comprehensive-word-element-test.docx');
+const FIXTURE = path.resolve(import.meta.dir, '../../../../../e2e/fixtures/comprehensive-word-element-test.docx');
 const bytes = () => new Uint8Array(readFileSync(FIXTURE));
 
 /** Replace the text of the first editable paragraph, leaving every other node identical. */
@@ -154,7 +154,7 @@ describe('partial body editability', () => {
     // The control: the SAME structural edit commits in a `full`-mode document. Without
     // this, "rejected" could just mean "splits never work", which would make the
     // assertion above true for the wrong reason.
-    const fullPath = path.resolve(import.meta.dir, '../../../e2e/fixtures/editable-sample.docx');
+    const fullPath = path.resolve(import.meta.dir, '../../../../../e2e/fixtures/editable-sample.docx');
     const full = openDocxSession(new Uint8Array(readFileSync(fullPath)));
     expect(full.mode).toBe('full');
     const fullDoc = full.projectDoc();
@@ -203,7 +203,7 @@ describe('assistive coverage of read-only blocks', () => {
   test('every body paragraph is reachable in the accessibility projection', async () => {
     await import('./dom-setup.ts');
     const { DOMSerializer } = await import('prosemirror-model');
-    const { applyAtomAccessibilityLabels } = await import('../src/accessibility-projection.ts');
+    const { applyAtomAccessibilityLabels } = await import('../accessibility-projection.ts');
 
     const { bodyStoryId } = await import('@docx-editor.dev/engine-core');
     const model = parseDocx(bytes()).model;
@@ -248,7 +248,7 @@ describe('assistive coverage of read-only blocks', () => {
 // on exactly this role to decide what they may address.
 describe('accessibility entries reflect per-block editability', () => {
   test('a locked paragraph is reported unsupportedStructure, not editableParagraph', async () => {
-    const { buildAccessibilityEntries } = await import('../src/accessibility-projection.ts');
+    const { buildAccessibilityEntries } = await import('../accessibility-projection.ts');
     const { bodyStoryId } = await import('@docx-editor.dev/engine-core');
     const session = openDocxSession(bytes());
     expect(session.mode).toBe('partial');
