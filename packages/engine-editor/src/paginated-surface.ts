@@ -29,6 +29,7 @@ import {
   type TextMeasurer,
 } from '@docx-editor.dev/engine-layout';
 import { paintSemanticLayout } from '@docx-editor.dev/engine-output';
+import { selectionsEqual, semanticSelectionFromDom } from './dom-selection.ts';
 
 export interface PaginatedSurfaceOptions {
   readonly measurer?: TextMeasurer;
@@ -389,6 +390,8 @@ export function mountPaginatedSurface(
     focus: () => inputHost.focus(),
     destroy() {
       container.removeEventListener('pointerdown', onPointerDown);
+      document.removeEventListener('pointerup', onPointerUp);
+      document.removeEventListener('selectionchange', onSelectionChange);
       inputHost.removeEventListener('keydown', onKeyDown);
       inputHost.removeEventListener('beforeinput', onBeforeInput as EventListener);
       // Drop pending layout work and stop listening BEFORE the DOM goes, or a commit from
@@ -454,10 +457,45 @@ export function mountPaginatedSurface(
 
   // Event wiring lives HERE rather than in each host, so React, Vue and a plain page get
   // identical behaviour instead of three hand-written keymaps that drift.
+  //
+  // SELECTION GESTURES ARE THE BROWSER'S. Drag, double-click for a word, triple-click for a
+  // paragraph, shift-click to extend, and selecting across a page boundary all come free
+  // because the painted spans are real text. Re-implementing them from records is how a
+  // surface ends up feeling worse than a textarea. Layout still owns geometry: what comes
+  // back from the DOM is which CHARACTERS were gestured over, never where they are.
+  let pointerSelecting = false;
+
+  /** Mirror the native selection into the model. Ignores selections outside painted text. */
+  const adoptDomSelection = (): void => {
+    const next = semanticSelectionFromDom(pagesLayer, document.getSelection());
+    if (!next || selectionsEqual(next, selection)) return;
+    setSelection(next);
+  };
+
+  const onSelectionChange = (): void => {
+    // Only while the user is actually gesturing. Otherwise the collapse that happens when
+    // focus returns to the input host would immediately overwrite the selection just made.
+    if (pointerSelecting) adoptDomSelection();
+  };
+
   const onPointerDown = (event: PointerEvent): void => {
-    const rect = container.getBoundingClientRect();
-    surface.clickAt({ x: event.clientX - rect.left, y: event.clientY - rect.top }, event.shiftKey);
-    event.preventDefault();
+    // NOT prevented: the browser needs the mousedown to begin its own selection. Everything
+    // downstream — pointermove, double-click, triple-click — follows from letting it.
+    if (event.button !== 0) return;
+    pointerSelecting = true;
+  };
+
+  const onPointerUp = (): void => {
+    if (!pointerSelecting) return;
+    adoptDomSelection();
+    pointerSelecting = false;
+    // Focus has to go back to the input host for keystrokes and IME, and focusing it
+    // collapses the native selection — which is fine, because the model now holds the range
+    // and the overlay paints it from layout records.
+    const domSelection = document.getSelection();
+    inputHost.focus({ preventScroll: true });
+    domSelection?.removeAllRanges();
+    renderOverlay();
   };
 
   const NAVIGATION: Record<string, NavigationCommand> = {
@@ -522,6 +560,10 @@ export function mountPaginatedSurface(
   };
 
   container.addEventListener('pointerdown', onPointerDown);
+  // On the DOCUMENT, so a drag that ends outside the pages still completes rather than
+  // leaving the surface stuck mid-selection.
+  document.addEventListener('pointerup', onPointerUp);
+  document.addEventListener('selectionchange', onSelectionChange);
   inputHost.addEventListener('keydown', onKeyDown);
   inputHost.addEventListener('beforeinput', onBeforeInput as EventListener);
 

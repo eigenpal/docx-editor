@@ -2246,6 +2246,16 @@
 .docx-paginated-surface .docx-page {
   background: #fff;
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.2);
+  /* Painted text stays selectable so the BROWSER can run drag, double-click-for-a-word and
+     triple-click-for-a-paragraph; the surface reads the result back as model positions. */
+  user-select: text;
+  -webkit-user-select: text;
+}
+/* The native highlight is suppressed because the overlay paints selection from layout
+   records. Showing both would draw the same range twice, in two slightly different shapes,
+   since the browser's rectangles come from the DOM rather than from the records. */
+.docx-paginated-surface .docx-page ::selection {
+  background: transparent;
 }
 .docx-paginated-surface .docx-selection-rect {
   background: color-mix(in srgb, var(--doc-accent, #2b6cb0) 28%, transparent);
