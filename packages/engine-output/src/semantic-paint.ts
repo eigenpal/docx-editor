@@ -72,7 +72,11 @@ const HIGHLIGHT: Record<string, string> = {
 /** Apply a resolved run style to an element, value by validated value. */
 function applyRunStyle(element: HTMLElement, style: ResolvedRunStyle, scale: number): void {
   const css = element.style;
-  css.fontSize = `${style.fontSizePt * scale}px`;
+  // Super/subscript draw at three quarters — the same reduction the measurer applies, so
+  // the painted glyphs match the advance layout reserved. Painting them full size while
+  // measuring them small made every line containing one slightly too wide.
+  const sizeFactor = style.verticalAlign === 'baseline' ? 1 : 0.75;
+  css.fontSize = `${style.fontSizePt * sizeFactor * scale}px`;
   if (style.bold) css.fontWeight = 'bold';
   if (style.italic) css.fontStyle = 'italic';
   // Re-validated here even though the resolver already checked: this is the sink, and a
@@ -86,12 +90,18 @@ function applyRunStyle(element: HTMLElement, style: ResolvedRunStyle, scale: num
   }
   if (style.caps) css.textTransform = 'uppercase';
   if (style.smallCaps) css.fontVariant = 'small-caps';
+  // Super/subscript shift with a RELATIVE offset, not `vertical-align`. Vertical alignment
+  // grows the line box to contain the raised glyph, which pushes a line's selection band
+  // past the line layout published and over its neighbour. A relative offset moves the
+  // glyph without touching the box, so the band still tiles.
+  let shiftPt = style.baselineShiftPt;
   if (style.verticalAlign !== 'baseline') {
-    css.verticalAlign = style.verticalAlign === 'superscript' ? 'super' : 'sub';
+    shiftPt +=
+      style.verticalAlign === 'superscript' ? style.fontSizePt * 0.33 : -style.fontSizePt * 0.16;
   }
-  if (style.baselineShiftPt !== 0) {
+  if (shiftPt !== 0) {
     css.position = 'relative';
-    css.top = `${-style.baselineShiftPt * scale}px`;
+    css.top = `${-shiftPt * scale}px`;
   }
   if (style.characterSpacingPt !== 0) {
     css.letterSpacing = `${style.characterSpacingPt * scale}px`;
@@ -172,14 +182,23 @@ function paintLine(document: Document, line: LineRecord, scale: number): HTMLEle
   const left = line.spans[0]?.box.x ?? line.box.x;
   element.style.left = `${left * scale}px`;
   element.style.height = `${line.box.height * scale}px`;
-  // NOT the published line height. `line-height` sets every inline box on the line, and the
-  // browser draws the selection highlight to the inline box — so forcing the line's height
-  // onto an 8pt run made its highlight as tall as a 36pt one, and adjacent lines' bands ran
-  // together. Left natural, each run's highlight hugs its own size, which is what a
-  // mixed-size line should look like. Set explicitly rather than inherited so a host page's
-  // own line-height cannot change how the document renders.
-  element.style.lineHeight = 'normal';
+  // Every inline box on the line is exactly the line box, so the selection bands TILE:
+  // no gap between lines, no overlap.
+  //
+  // `normal` cannot do that. It sizes each box from the font, and the font's natural box
+  // is not the line height layout published — Chrome folds the line gap into `normal`,
+  // and layout does not — so bands came out either short of the next line or bleeding into
+  // it, depending on the face. Deriving the line height from the font instead only moves
+  // the disagreement around, because the browser and the measurer never resolve it
+  // identically for every face.
+  //
+  // Set explicitly rather than inherited, so a host page's own line-height cannot change
+  // how the document renders.
+  element.style.lineHeight = `${line.box.height * scale}px`;
   element.style.whiteSpace = 'pre';
+  // A raised superscript or a tall glyph draws outside the line box rather than being
+  // clipped at it; the box governs spacing and the selection band, not what is visible.
+  element.style.overflow = 'visible';
 
   // Justified lines carry their slack in the gaps BETWEEN spans. Inline flow has no gaps,
   // so the same slack is reapplied as word spacing rather than being silently dropped.

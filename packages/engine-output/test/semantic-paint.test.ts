@@ -61,10 +61,8 @@ describe('the painter is a non-authoritative consumer', () => {
     expect(lines.length).toBeGreaterThan(1);
     for (const line of lines) {
       expect(line.style.height).toBe('14px'); // the fixed measurer's line height at scale 1
-      // Deliberately NOT the line height: that would set every inline box on the line, and
-      // the selection highlight follows the inline box, so a small run would be highlighted
-      // as tall as the largest one on the line.
-      expect(line.style.lineHeight).toBe('normal');
+      // Equal to the line box, so selection bands TILE: no gap between lines, no overlap.
+      expect(line.style.lineHeight).toBe('14px');
     }
     // Consecutive lines sit exactly one line height apart.
     expect(Number.parseFloat(lines[1]!.style.top)).toBe(
@@ -130,6 +128,7 @@ describe('the painter is a non-authoritative consumer', () => {
     paintSemanticLayout(container, layoutOf('<w:p><w:r><w:t>abc</w:t></w:r></w:p>'), { scale: 2 });
     const line = container.querySelector<HTMLElement>('.docx-line')!;
     expect(line.style.height).toBe('28px'); // 14pt at scale 2
+    expect(line.style.lineHeight).toBe('28px');
     const page = container.querySelector<HTMLElement>('.docx-page')!;
     expect(page.style.width).toBe('1224px'); // 612pt at scale 2
   });
