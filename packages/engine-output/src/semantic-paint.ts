@@ -172,7 +172,13 @@ function paintLine(document: Document, line: LineRecord, scale: number): HTMLEle
   const left = line.spans[0]?.box.x ?? line.box.x;
   element.style.left = `${left * scale}px`;
   element.style.height = `${line.box.height * scale}px`;
-  element.style.lineHeight = `${line.box.height * scale}px`;
+  // NOT the published line height. `line-height` sets every inline box on the line, and the
+  // browser draws the selection highlight to the inline box — so forcing the line's height
+  // onto an 8pt run made its highlight as tall as a 36pt one, and adjacent lines' bands ran
+  // together. Left natural, each run's highlight hugs its own size, which is what a
+  // mixed-size line should look like. Set explicitly rather than inherited so a host page's
+  // own line-height cannot change how the document renders.
+  element.style.lineHeight = 'normal';
   element.style.whiteSpace = 'pre';
 
   // Justified lines carry their slack in the gaps BETWEEN spans. Inline flow has no gaps,
