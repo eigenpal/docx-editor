@@ -109,6 +109,8 @@ export function mountPaginatedSurface(
   inputHost.style.height = '1px';
   inputHost.style.opacity = '0';
   inputHost.style.outline = 'none';
+  inputHost.style.left = '0px';
+  inputHost.style.top = '0px';
 
   container.style.position = 'relative';
   container.replaceChildren(pagesLayer, overlay, inputHost);
@@ -139,6 +141,16 @@ export function mountPaginatedSurface(
 
   function render(): void {
     paintSemanticLayout(pagesLayer, currentLayout, { scale });
+    // The pages are absolutely positioned, so the layer has no intrinsic size and the
+    // surface would collapse to zero — pages then escape whatever centres or scrolls it.
+    // Size it from the records, which is the only place the extent is known.
+    const last = currentLayout.pages[currentLayout.pages.length - 1];
+    const width = Math.max(0, ...currentLayout.pages.map((page) => page.box.x + page.box.width));
+    const height = last ? last.box.y + last.box.height : 0;
+    pagesLayer.style.width = `${width * scale}px`;
+    pagesLayer.style.height = `${height * scale}px`;
+    container.style.width = `${width * scale}px`;
+    container.style.height = `${height * scale}px`;
     renderOverlay();
     options.onChange?.(currentState());
   }
@@ -149,19 +161,26 @@ export function mountPaginatedSurface(
       const element = document.createElement('div');
       element.className = 'docx-selection-rect';
       element.style.position = 'absolute';
-      element.style.left = `${rect.x * scale}px`;
-      element.style.top = `${(rect.y + pageOffset(rect.pageIndex)) * scale}px`;
+      const origin = pageOrigin(rect.pageIndex);
+      element.style.left = `${(rect.x + origin.x) * scale}px`;
+      element.style.top = `${(rect.y + origin.y) * scale}px`;
       element.style.width = `${rect.width * scale}px`;
       element.style.height = `${rect.height * scale}px`;
       children.push(element);
     }
     const caret = caretAt(currentLayout, selection.head);
     if (caret) {
+      // Keep the offscreen input host ON the caret. It is where focus lives, so if it sat
+      // at the end of the container instead, focusing would scroll the document to the
+      // bottom — and the browser would put the IME candidate window there too.
+      const origin = pageOrigin(caret.pageIndex);
+      inputHost.style.left = `${(caret.x + origin.x) * scale}px`;
+      inputHost.style.top = `${(caret.y + origin.y) * scale}px`;
       const element = document.createElement('div');
       element.className = 'docx-caret';
       element.style.position = 'absolute';
-      element.style.left = `${caret.x * scale}px`;
-      element.style.top = `${(caret.y + pageOffset(caret.pageIndex)) * scale}px`;
+      element.style.left = `${(caret.x + origin.x) * scale}px`;
+      element.style.top = `${(caret.y + origin.y) * scale}px`;
       element.style.height = `${caret.height * scale}px`;
       element.style.width = '2px';
       children.push(element);
@@ -169,11 +188,18 @@ export function mountPaginatedSurface(
     overlay.replaceChildren(...children);
   }
 
-  /** Page-relative geometry to surface coordinates. */
-  function pageOffset(pageIndex: number): number {
+  /**
+   * Where a page's CONTENT origin sits in surface coordinates.
+   *
+   * Line and span boxes are content-relative, and the painter nests them inside a content
+   * div offset by the margins — so the overlay has to apply the same offset on BOTH axes or
+   * the caret drifts off the page. It was drawn outside the sheet entirely when only the
+   * vertical offset was applied.
+   */
+  function pageOrigin(pageIndex: number): { x: number; y: number } {
     const page = currentLayout.pages[pageIndex];
-    if (!page) return 0;
-    return page.box.y + (page.contentBox.y - page.box.y);
+    if (!page) return { x: 0, y: 0 };
+    return { x: page.contentBox.x, y: page.contentBox.y };
   }
 
   function commit(run: () => ReturnType<TreeDocxSession['applyPmDoc']> | boolean): void {
@@ -203,9 +229,11 @@ export function mountPaginatedSurface(
     state: currentState,
 
     clickAt(point, extend = false) {
+      // Surface coordinates back to CONTENT coordinates, the space the records use.
+      const origin = pageOrigin(0);
       const hit = hitTestSemantic(currentLayout, {
-        x: point.x / scale,
-        y: point.y / scale - pageOffset(0),
+        x: point.x / scale - origin.x,
+        y: point.y / scale - origin.y,
       });
       if (!hit) return;
       setSelection({ anchor: extend ? selection.anchor : hit.position, head: hit.position });
@@ -281,7 +309,12 @@ export function mountPaginatedSurface(
     },
 
     focus: () => inputHost.focus(),
-    destroy: () => container.replaceChildren(),
+    destroy() {
+      container.removeEventListener('pointerdown', onPointerDown);
+      inputHost.removeEventListener('keydown', onKeyDown);
+      inputHost.removeEventListener('beforeinput', onBeforeInput as EventListener);
+      container.replaceChildren();
+    },
   };
 
   function collapsedAt(position: SemanticPosition): SemanticSelection {
@@ -303,6 +336,77 @@ export function mountPaginatedSurface(
     if (start === end) return [];
     return [{ op: 'deleteText', paragraphId: anchor.paragraphId, start, end }];
   }
+
+  // Event wiring lives HERE rather than in each host, so React, Vue and a plain page get
+  // identical behaviour instead of three hand-written keymaps that drift.
+  const onPointerDown = (event: PointerEvent): void => {
+    const rect = container.getBoundingClientRect();
+    surface.clickAt({ x: event.clientX - rect.left, y: event.clientY - rect.top }, event.shiftKey);
+    event.preventDefault();
+  };
+
+  const NAVIGATION: Record<string, NavigationCommand> = {
+    ArrowLeft: 'left',
+    ArrowRight: 'right',
+    ArrowUp: 'up',
+    ArrowDown: 'down',
+    Home: 'lineStart',
+    End: 'lineEnd',
+  };
+
+  const onKeyDown = (event: KeyboardEvent): void => {
+    const command = NAVIGATION[event.key];
+    if (command) {
+      // Ctrl/Cmd+Home and End address the document rather than the line.
+      const scoped =
+        (event.metaKey || event.ctrlKey) && (event.key === 'Home' || event.key === 'End')
+          ? event.key === 'Home'
+            ? 'documentStart'
+            : 'documentEnd'
+          : command;
+      surface.navigate(scoped, event.shiftKey);
+      event.preventDefault();
+      return;
+    }
+    if (event.key === 'Backspace') {
+      surface.deleteBackward();
+      event.preventDefault();
+      return;
+    }
+    if (event.key === 'Enter') {
+      surface.splitParagraph();
+      event.preventDefault();
+      return;
+    }
+    if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'z') {
+      if (event.shiftKey) session.redo();
+      else session.undo();
+      currentLayout = relayout();
+      render();
+      event.preventDefault();
+    }
+  };
+
+  const onBeforeInput = (event: InputEvent): void => {
+    if (event.inputType === 'insertText' && event.data != null) {
+      surface.type(event.data);
+      event.preventDefault();
+      return;
+    }
+    if (event.inputType === 'deleteContentBackward') {
+      surface.deleteBackward();
+      event.preventDefault();
+      return;
+    }
+    if (event.inputType === 'insertParagraph') {
+      surface.splitParagraph();
+      event.preventDefault();
+    }
+  };
+
+  container.addEventListener('pointerdown', onPointerDown);
+  inputHost.addEventListener('keydown', onKeyDown);
+  inputHost.addEventListener('beforeinput', onBeforeInput as EventListener);
 
   render();
   return { ok: true, surface };

@@ -77,7 +77,7 @@ section 9, so first paginated pixels are not gated on a performance rebuild.
 - [x] 8.1 Replace the approved visible ProseMirror checkpoint with the engine-owned paginated paragraph surface without changing public support manifests.
 - [x] 8.2 Add a fixture covering known/unknown ordered OOXML, every D8 run/paragraph property, inline text, authored whitespace, tab, hard break, edits, and cross-page fragments.
 - [x] 8.3 Prove load, edit, format, semantic caret/selection, normalized save, namespace-aware fingerprint, semantic digest, and reopen through the private harness.
-- [ ] 8.4 Record browser evidence and keep the slice private until all paired gates pass.
+- [x] 8.4 Record browser evidence and keep the slice private until all paired gates pass.
 
 ## 9. Incremental Layout, Caching, and Virtualization
 

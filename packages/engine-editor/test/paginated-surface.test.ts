@@ -31,6 +31,17 @@ function docx(body: string): Uint8Array {
 
 const paragraph = (text: string) => `<w:p><w:r><w:t>${text}</w:t></w:r></w:p>`;
 
+/**
+ * The content origin, in surface coordinates.
+ *
+ * `clickAt` takes SURFACE coordinates, so a test aiming at the third character has to
+ * account for the page margin the same way a real pointer event does. Letter geometry with
+ * one-inch margins at scale 1 puts content at 72pt on both axes.
+ */
+const MARGIN = 72;
+const clickText = (surface: PaginatedSurface, x: number, y: number, extend = false) =>
+  surface.clickAt({ x: MARGIN + x, y: MARGIN + y }, extend);
+
 function mount(body: string): { surface: PaginatedSurface; container: HTMLElement } {
   const container = document.createElement('div');
   const result = mountPaginatedSurface(container, docx(body), { scale: 1 });
@@ -63,13 +74,13 @@ describe('painted pages, semantic interaction', () => {
   test('clicking moves the caret to the hit position', () => {
     const { surface } = mount(paragraph('abcdef'));
     // 6pt per character at scale 1; x=18 is the boundary after three characters.
-    surface.clickAt({ x: 18, y: 5 });
+    clickText(surface, 18, 5);
     expect(surface.state().selection.head.offset).toBe(3);
   });
 
   test('typing commits through the session and repaints', () => {
     const { surface, container } = mount(paragraph('hello'));
-    surface.clickAt({ x: 0, y: 5 });
+    clickText(surface, 0, 5);
     surface.type('X');
     expect(surface.session.bodyText()).toBe('Xhello');
     expect(surface.state().revision).toBe(1);
@@ -78,7 +89,7 @@ describe('painted pages, semantic interaction', () => {
 
   test('typing replaces a selection', () => {
     const { surface } = mount(paragraph('hello'));
-    surface.clickAt({ x: 0, y: 5 });
+    clickText(surface, 0, 5);
     surface.navigate('right', true);
     surface.navigate('right', true);
     surface.type('Y');
@@ -87,14 +98,14 @@ describe('painted pages, semantic interaction', () => {
 
   test('backspace deletes the character before the caret', () => {
     const { surface } = mount(paragraph('hello'));
-    surface.clickAt({ x: 30, y: 5 });
+    clickText(surface, 30, 5);
     surface.deleteBackward();
     expect(surface.session.bodyText()).toBe('hell');
   });
 
   test('Enter splits and the caret lands in the new paragraph', () => {
     const { surface } = mount(paragraph('hello'));
-    surface.clickAt({ x: 18, y: 5 });
+    clickText(surface, 18, 5);
     surface.splitParagraph();
     expect(surface.session.paragraphIds()).toHaveLength(2);
     expect(surface.session.bodyText()).toBe('hel\nlo');
@@ -105,7 +116,7 @@ describe('painted pages, semantic interaction', () => {
 
   test('navigation moves the caret without touching the document', () => {
     const { surface } = mount(paragraph('hello') + paragraph('world'));
-    surface.clickAt({ x: 0, y: 5 });
+    clickText(surface, 0, 5);
     surface.navigate('documentEnd');
     expect(surface.state().selection.head.paragraphId).toBe(surface.session.paragraphIds()[1]);
     expect(surface.state().revision).toBe(0); // navigation is not an edit
@@ -113,14 +124,14 @@ describe('painted pages, semantic interaction', () => {
 
   test('a selection paints rectangles', () => {
     const { surface, container } = mount(paragraph('hello world'));
-    surface.clickAt({ x: 0, y: 5 });
+    clickText(surface, 0, 5);
     surface.navigate('lineEnd', true);
     expect(container.querySelectorAll('.docx-selection-rect').length).toBeGreaterThan(0);
   });
 
   test('save round-trips through the tree after painted editing', () => {
     const { surface } = mount(paragraph('hello'));
-    surface.clickAt({ x: 30, y: 5 });
+    clickText(surface, 30, 5);
     surface.type('!');
     const bytes = surface.session.save();
     const reopened = mountPaginatedSurface(document.createElement('div'), bytes, { scale: 1 });
@@ -142,7 +153,7 @@ describe('painted pages, semantic interaction', () => {
       '<w:p><w:r><w:t>a</w:t></w:r><w:r><w:drawing><x/></w:drawing></w:r>' +
         '<w:r><w:t>b</w:t></w:r></w:p>'
     );
-    surface.clickAt({ x: 0, y: 5 });
+    clickText(surface, 0, 5);
     surface.type('Z');
     const reopened = mountPaginatedSurface(
       document.createElement('div'),

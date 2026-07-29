@@ -96,6 +96,14 @@ function applyRunStyle(element: HTMLElement, style: ResolvedRunStyle, scale: num
   if (style.characterSpacingPt !== 0) {
     css.letterSpacing = `${style.characterSpacingPt * scale}px`;
   }
+  if (style.horizontalScalePercent !== 100) {
+    // `w:w` stretches glyphs horizontally. Layout already widened the advance for it, so
+    // without this the painted text would be narrower than the box reserved for it and the
+    // caret would sit past the last glyph.
+    css.display = 'inline-block';
+    css.transformOrigin = 'left';
+    css.transform = `scaleX(${style.horizontalScalePercent / 100})`;
+  }
 
   const decorations: string[] = [];
   if (style.underline) decorations.push('underline');

@@ -15,6 +15,10 @@ const browserFirst = params.get('browserFirst') === '1';
 // TreeDocumentStore -> tree binding). It shares no code with the PackageModel path, so it is
 // the surface that proves the replacement works before it becomes the default.
 const treeFirst = params.get('treeFirst') === '1';
+// `?paginated=1` mounts the ENGINE-OWNED PAGINATED SURFACE: painted pages from semantic
+// layout records, with caret and hit testing answered from those records rather than from
+// a contenteditable. This is the surface that replaces the browser-first checkpoint.
+const paginated = params.get('paginated') === '1';
 // `?realAdapter=1` mounts the PRODUCTION @docx-editor.dev/react DocxEditor with DOCX bytes and
 // exposes the stable EditorDriver on window (comprehensive 4.4/4.8), so a browser test drives the
 // real published package entry rather than the engine mount directly.
@@ -23,7 +27,7 @@ const treeFirst = params.get('treeFirst') === '1';
 // keep resolving, but it is no longer required. The museum surfaces stay
 // reachable only by their explicit opt-in parameters below.
 const legacyMuseum = params.get('museum') === '1';
-const realAdapter = !enginePreview && !editMode && !legacyMuseum && !treeFirst;
+const realAdapter = !enginePreview && !editMode && !legacyMuseum && !treeFirst && !paginated;
 const zoomParam = params.get('zoom');
 const initialZoom = zoomParam && Number.isFinite(Number(zoomParam)) && Number(zoomParam) > 0 ? Number(zoomParam) : 1;
 const base = import.meta.env.BASE_URL;
@@ -56,7 +60,10 @@ if (container) {
     // and `?museum=1` is the legacy museum, both reference-only. The bare `/`
     // default IS the one-surface editor (task 6.6 landed); anything that is not
     // an explicit opt-out falls through to it.
-    if (treeFirst) {
+    if (paginated) {
+      const { PaginatedSurfaceDemo } = await import('../../shared/PaginatedSurfaceDemo.tsx');
+      view = <PaginatedSurfaceDemo fixtureUrl={`${base}${fixtureName}`} />;
+    } else if (treeFirst) {
       const { TreeSurfaceDemo } = await import('../../shared/TreeSurfaceDemo.tsx');
       view = <TreeSurfaceDemo fixtureUrl={`${base}${fixtureName}`} />;
     } else if (realAdapter) {

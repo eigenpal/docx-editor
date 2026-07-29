@@ -117,6 +117,76 @@ function paragraphIndent(props: readonly OoxmlProperty[]): { left: number; right
   return { left, right };
 }
 
+/** Horizontal alignment of a paragraph (`w:jc`, ECMA-376 §17.3.1.13). */
+type Alignment = 'left' | 'center' | 'right' | 'both';
+
+function paragraphAlignment(props: readonly OoxmlProperty[]): Alignment {
+  let alignment: Alignment = 'left';
+  for (const property of props) {
+    if (property.localName !== 'jc') continue;
+    switch (property.attributes?.val) {
+      // `start`/`end` are the direction-relative spellings; this lane is left-to-right only,
+      // so they resolve to left/right rather than being ignored as unknown.
+      case 'center':
+        alignment = 'center';
+        break;
+      case 'right':
+      case 'end':
+        alignment = 'right';
+        break;
+      case 'both':
+      case 'distribute':
+        alignment = 'both';
+        break;
+      default:
+        alignment = 'left';
+    }
+  }
+  return alignment;
+}
+
+/**
+ * Shift a line's spans to satisfy the paragraph alignment.
+ *
+ * Layout is the only geometry authority, so alignment has to move the published span boxes
+ * rather than being left to CSS: the painter positions each span absolutely, and hit testing
+ * and the caret read the same boxes. Delegating this to `text-align` would put the caret
+ * where no glyph is.
+ */
+function alignSpans(
+  spans: readonly StyleSpanRecord[],
+  measurer: TextMeasurer,
+  indentLeft: number,
+  available: number,
+  alignment: Alignment,
+  isLastLine: boolean
+): readonly StyleSpanRecord[] {
+  if (spans.length === 0 || alignment === 'left') return spans;
+
+  // Trailing whitespace hangs into the margin rather than pushing the text off-centre, which
+  // is what Word does and what stops a line ending in a space from looking misaligned.
+  const last = spans[spans.length - 1]!;
+  const visible = last.text.replace(/\s+$/, '');
+  const trailing =
+    visible === last.text ? 0 : last.box.width - measurer.measure(visible, last.style);
+  const used = last.box.x - indentLeft + last.box.width - trailing;
+  const slack = available - used;
+  if (slack <= 0) return spans;
+
+  // The last line of a justified paragraph is set flush left, never stretched.
+  if (alignment === 'both') {
+    const gaps = spans.length - 1;
+    if (isLastLine || gaps <= 0) return spans;
+    const step = slack / gaps;
+    return spans.map((span, index) =>
+      index === 0 ? span : { ...span, box: { ...span.box, x: span.box.x + step * index } }
+    );
+  }
+
+  const offset = alignment === 'center' ? slack / 2 : slack;
+  return spans.map((span) => ({ ...span, box: { ...span.box, x: span.box.x + offset } }));
+}
+
 /** Whether a paragraph must start a new page (`w:pageBreakBefore`). */
 function breaksBefore(props: readonly OoxmlProperty[]): boolean {
   return props.some(
@@ -197,6 +267,7 @@ export function layoutSemanticDocument(
         : paragraph.children.find((child) => child.kind === 'paragraphProperties')
     );
     const indent = paragraphIndent(props);
+    const alignment = paragraphAlignment(props);
     const available = Math.max(1, contentWidth - indent.left - indent.right);
 
     if (breaksBefore(props) && (pageFragments.length > 0 || pages.length === 0)) {
@@ -285,7 +356,7 @@ export function layoutSemanticDocument(
       pending = [];
     };
 
-    for (const pendingLine of lines) {
+    for (const [lineIndex, pendingLine] of lines.entries()) {
       if (
         cursorY + pendingLine.height > contentHeight &&
         (pending.length > 0 || pageFragments.length > 0)
@@ -296,10 +367,14 @@ export function layoutSemanticDocument(
       const record: LineRecord = {
         id: `line-${lineCounter}`,
         range: { paragraphId, start: pendingLine.start, end: pendingLine.end },
-        spans: pendingLine.spans.map((span) => ({
-          ...span,
-          box: { ...span.box, y: cursorY },
-        })),
+        spans: alignSpans(
+          pendingLine.spans.map((span) => ({ ...span, box: { ...span.box, y: cursorY } })),
+          measurer,
+          indent.left,
+          available,
+          alignment,
+          lineIndex === lines.length - 1
+        ),
         box: { x: indent.left, y: cursorY, width: available, height: pendingLine.height },
         baseline: pendingLine.baseline,
       };

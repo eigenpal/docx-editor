@@ -2236,3 +2236,32 @@
   white-space: pre;
   color: var(--doc-text-muted, #8a8f98);
 }
+
+/* The engine-owned paginated surface: painted pages plus a semantic caret and selection.
+ * Geometry comes entirely from the layout records; these rules only supply appearance. */
+.docx-paginated-surface {
+  position: relative;
+  outline: none;
+}
+.docx-paginated-surface .docx-page {
+  background: #fff;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.2);
+}
+.docx-paginated-surface .docx-selection-rect {
+  background: color-mix(in srgb, var(--doc-accent, #2b6cb0) 28%, transparent);
+  pointer-events: none;
+}
+.docx-paginated-surface .docx-caret {
+  background: var(--doc-caret, #202124);
+  animation: docx-caret-blink 1.1s steps(1) infinite;
+}
+@keyframes docx-caret-blink {
+  50% {
+    opacity: 0;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .docx-paginated-surface .docx-caret {
+    animation: none;
+  }
+}

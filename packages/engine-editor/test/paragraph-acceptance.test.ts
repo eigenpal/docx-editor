@@ -34,6 +34,11 @@ function bytes(): Uint8Array {
   return new Uint8Array(readFileSync(FIXTURE));
 }
 
+/** `clickAt` takes SURFACE coordinates; Letter margins put content at 72pt on both axes. */
+const MARGIN = 72;
+const clickText = (surface: PaginatedSurface, x: number, y: number) =>
+  surface.clickAt({ x: MARGIN + x, y: MARGIN + y });
+
 function mount(source: Uint8Array = bytes()): PaginatedSurface {
   const result = mountPaginatedSurface(document.createElement('div'), source, { scale: 1 });
   if (!result.ok) throw new Error(`${result.reason}: ${result.detail ?? ''}`);
@@ -115,7 +120,7 @@ describe('load, edit, format, save and reopen (task 8.3)', () => {
   test('an edit commits and survives save and reopen', () => {
     const surface = mount();
     const first = surface.session.paragraphIds()[0]!;
-    surface.clickAt({ x: 0, y: 0 });
+    clickText(surface, 0, 0);
     expect(surface.state().selection.head.paragraphId).toBe(first);
     surface.type('EDITED ');
     expect(surface.session.bodyText()).toContain('EDITED ');
@@ -148,7 +153,7 @@ describe('load, edit, format, save and reopen (task 8.3)', () => {
 
   test('semantic caret and selection answer from the layout records', () => {
     const surface = mount();
-    surface.clickAt({ x: 0, y: 0 });
+    clickText(surface, 0, 0);
     surface.navigate('right');
     surface.navigate('right');
     expect(surface.state().selection.head.offset).toBe(2);
@@ -216,7 +221,7 @@ describe('load, edit, format, save and reopen (task 8.3)', () => {
   test('undo and redo walk the canonical store after painted editing', () => {
     const surface = mount();
     const original = surface.session.bodyText();
-    surface.clickAt({ x: 0, y: 0 });
+    clickText(surface, 0, 0);
     surface.type('Z');
     expect(surface.session.bodyText()).not.toBe(original);
     surface.session.undo();

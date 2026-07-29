@@ -251,3 +251,68 @@ describe('resolved style reaches measurement and the spans (task 7.2)', () => {
     expect(linesOf(superscript)[0]!.box.height).toBeLessThan(linesOf(baseline)[0]!.box.height);
   });
 });
+
+describe('paragraph alignment moves the published span boxes (w:jc)', () => {
+  // Alignment has to be geometry, not CSS: the painter draws the boxes layout publishes and
+  // hit testing reads the same ones, so `text-align` would put the caret where no glyph is.
+  const geometry: PageGeometry = {
+    width: 200,
+    height: 400,
+    margin: { top: 10, right: 10, bottom: 10, left: 10 },
+  };
+  const available = geometry.width - 20;
+  const firstSpan = (jc: string) =>
+    linesOf(lay(load(paragraph('ab cd', jc ? `<w:jc w:val="${jc}"/>` : '')), geometry))[0]!;
+
+  test('left alignment leaves spans at the indent', () => {
+    expect(firstSpan('left').spans[0]!.box.x).toBe(0);
+  });
+
+  test('right alignment pushes the line flush to the right edge', () => {
+    const line = firstSpan('right');
+    const last = line.spans[line.spans.length - 1]!;
+    // Trailing whitespace hangs past the edge, so the visible text ends exactly at it.
+    expect(last.box.x + last.box.width).toBeCloseTo(available, 5);
+    expect(line.spans[0]!.box.x).toBeGreaterThan(0);
+  });
+
+  test('centre alignment leaves equal slack on both sides', () => {
+    const line = firstSpan('center');
+    const last = line.spans[line.spans.length - 1]!;
+    const leading = line.spans[0]!.box.x;
+    const trailing = available - (last.box.x + last.box.width);
+    expect(leading).toBeCloseTo(trailing, 5);
+  });
+
+  test('`start` and `end` resolve as left and right', () => {
+    expect(firstSpan('start').spans[0]!.box.x).toBe(0);
+    expect(firstSpan('end').spans[0]!.box.x).toBeGreaterThan(0);
+  });
+
+  test('an unknown w:jc value falls back to left rather than throwing', () => {
+    expect(firstSpan('someFutureValue').spans[0]!.box.x).toBe(0);
+  });
+
+  test('the LAST line of a justified paragraph is never stretched', () => {
+    // Two lines: the first is justified, the second is set flush left like Word does.
+    const words = Array.from({ length: 14 }, (_, index) => `w${index}`).join(' ');
+    const body = paragraph(words, '<w:jc w:val="both"/>');
+    const lines = linesOf(lay(load(body), geometry));
+    expect(lines.length).toBeGreaterThan(1);
+    const last = lines[lines.length - 1]!;
+    expect(last.spans[0]!.box.x).toBe(0);
+    // Justified earlier lines gain space between words, so a later span sits past where the
+    // unjustified cumulative advance would have put it.
+    const first = lines[0]!;
+    const secondSpan = first.spans[1]!;
+    expect(secondSpan.box.x).toBeGreaterThan(first.spans[0]!.box.width);
+  });
+
+  test('alignment composes with indentation instead of replacing it', () => {
+    const body = paragraph('ab cd', '<w:jc w:val="right"/><w:ind w:left="200"/>');
+    const line = linesOf(lay(load(body), geometry))[0]!;
+    const last = line.spans[line.spans.length - 1]!;
+    // 200 twips = 10pt of indent; the right edge is measured from it, not from the margin.
+    expect(last.box.x + last.box.width).toBeCloseTo(10 + (available - 10), 5);
+  });
+});
