@@ -1,5 +1,5 @@
 import type { CSSProperties, ReactNode } from 'react';
-import type { SectionProperties, TabMark, TrackedChangesResult } from '../../legacy-core-compat';
+import type { SectionProperties, TabMark, TrackedChangesResult } from '../../core-compat';
 import { LocaleProvider } from '../../i18n';
 import { cn } from '../../lib/utils';
 import { ErrorBoundary, ErrorProvider } from '../ErrorBoundary';
@@ -15,7 +15,7 @@ import { PageIndicator } from './PageIndicator';
 import { LocalizedAgentPanel } from './LocalizedAgentPanel';
 import { SIDEBAR_DOCUMENT_SHIFT } from '../sidebar/constants';
 import { Z_INDEX } from '../../styles/zIndex';
-import type { HeadingInfo } from '../../legacy-core-compat';
+import type { HeadingInfo } from '../../core-compat';
 import type { AgentPanelOptions } from './types';
 
 interface ScrollPageInfo {

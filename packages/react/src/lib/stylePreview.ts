@@ -10,7 +10,7 @@
  * @packageDocumentation
  * @public
  */
-import type { Style } from '../legacy-core-compat';
+import type { Style } from '../core-compat';
 
 /**
  * Inline preview style for a paragraph-style dropdown item.

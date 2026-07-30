@@ -18,14 +18,14 @@ import {
 import { cn } from '../../lib/utils';
 import { useTranslation } from '../../i18n';
 import { getPrimaryFontFamily } from './fontPickerValue';
-import { excludeFontsByName } from '../../legacy-core-compat';
+import { excludeFontsByName } from '../../core-compat';
 
 // ============================================================================
 // TYPES
 // ============================================================================
 
-export type { FontOption } from '../../legacy-core-compat';
-import type { FontOption } from '../../legacy-core-compat';
+export type { FontOption } from '../../core-compat';
+import type { FontOption } from '../../core-compat';
 
 export interface FontPickerProps {
   value?: string;

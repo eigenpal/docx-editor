@@ -13,8 +13,8 @@
 import React, { useCallback, useEffect, useRef } from 'react';
 import { useTranslation } from '../i18n';
 import type { CSSProperties, ReactNode } from 'react';
-import type { ColorValue, ParagraphAlignment, Style, Theme } from '../legacy-core-compat';
-import { resolveColorToHex } from '../legacy-core-compat';
+import type { ColorValue, ParagraphAlignment, Style, Theme } from '../core-compat';
+import { resolveColorToHex } from '../core-compat';
 import { Button } from './ui/Button';
 import { Tooltip } from './ui/Tooltip';
 import { FontPicker } from './ui/FontPicker';

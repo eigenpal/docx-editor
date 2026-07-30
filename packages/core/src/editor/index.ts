@@ -34,15 +34,15 @@ export {
 } from './toolbar-commands.ts';
 
 export {
-  LEGACY_CHROME_GROUPS,
-  LEGACY_CHROME_MENUS,
-  LEGACY_CHROME_UNAVAILABLE_KEY,
-  legacyChromeControlCount,
-  type LegacyChromeControl,
-  type LegacyChromeControlState,
-  type LegacyChromeCommandId,
-  type LegacyChromeGroup,
-} from './legacy-chrome.ts';
+  CHROME_GROUPS,
+  CHROME_MENUS,
+  CHROME_UNAVAILABLE_KEY,
+  chromeControlCount,
+  type ChromeControl,
+  type ChromeControlState,
+  type ChromeCommandId,
+  type ChromeGroup,
+} from './chrome-controls.ts';
 export {
   mountPaginatedSurface,
   type OpenPaginatedResult,

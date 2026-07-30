@@ -34,13 +34,9 @@ export interface DocxEditorProps {
    */
   fonts: FontConfiguration;
   /**
-   * Title-bar slots, as the legacy editor took them.
-   *
-   * The demo owns what goes here — brand lockup, adapter/example switchers, theme
-   * toggle, Open/New/Save — and passes them in (see `App.tsx:835-865` in the legacy
-   * repo). the interim implementation had those regions inside this component instead, which is why
-   * they kept drifting from the product: `AdapterSwitcher` and `ExampleSwitcher` already
-   * existed in `examples/shared` and those regions had drifted from the product.
+   * Title-bar slots. The host owns what goes here — brand lockup, switchers, theme
+   * toggle, Open/New/Save controls — and passes them in; the editor renders them
+   * verbatim on either side of the document title.
    */
   readonly renderTitleBarLeft?: () => ReactNode;
   readonly renderTitleBarRight?: () => ReactNode;
@@ -50,15 +46,12 @@ export interface DocxEditorProps {
    */
   readonly colorMode?: 'light' | 'dark' | 'system';
   /**
-   * Resolves i18n keys for the legacy chrome (task M6V.1).
+   * Resolves i18n keys for the editor chrome.
    *
-   * Supplying it renders the full application chrome — title, menu region, toolbar,
-   * rulers, page indicator, and sidebar — around the painted surface. Omitting it
-   * renders the bare surface, which is what every existing consumer gets today.
-   *
-   * Required for chrome rather than defaulted, because `packages/i18n/en.json` is the
-   * repo's single source of truth for user-facing strings and the adapter must ship no
-   * English of its own.
+   * Supplying it renders the chrome around the painted surface; omitting it renders
+   * the bare surface. Required for chrome rather than defaulted, because the i18n
+   * catalogue is the single source of truth for user-facing strings and the adapter
+   * ships no English of its own.
    */
   t?: (key: string) => string;
   /** Document title shown in the chrome's title bar. */
@@ -84,15 +77,15 @@ export interface DocxEditorProps {
 }
 
 /**
- * The imperative handle: the greenfield seven-member shape, identical on both adapters
- * (enforced by `bun run check:parity-contract`). Every member forwards to the `Editor`
- * facade and is safe to call before the editor has mounted — mutations no-op, reads
- * return the honest empty answer (`null`, a `notFound` refusal, a loading snapshot) —
- * so a host can hold the ref from first render without guarding it.
+ * The imperative handle, identical on both adapters (enforced by
+ * `bun run check:parity-contract`). Every member forwards to the `Editor` facade and is
+ * safe to call before the editor has mounted — mutations no-op, reads return the honest
+ * empty answer (`null`, a `notFound` refusal, a loading snapshot) — so a host can hold
+ * the ref from first render without guarding it.
  *
- * Everything the legacy handle carried beyond these (zoom, paging, print, find,
- * comments, tracked changes) is reachable through the facade via `getEditor`; the ref
- * itself no longer mirrors capabilities the contract already names.
+ * The ref deliberately stays small: everything else (zoom, paging, formatting queries,
+ * document state) is reachable through the full facade via `getEditor`, so the ref never
+ * mirrors capabilities the `Editor` contract already names.
  */
 export interface DocxEditorRef {
   /** Load a document: DOCX bytes or an existing handle. No-op before mount. */

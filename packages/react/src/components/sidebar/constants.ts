@@ -1,4 +1,4 @@
-// Sidebar geometry, re-exported from the ported module. Legacy took these from core;
+// Sidebar geometry, re-exported from the ported module. Kept in the adapter;
 // the greenfield core owns no sidebar constants, so the values live in `lib/`.
 export {
   SIDEBAR_WIDTH,

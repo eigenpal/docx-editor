@@ -16,7 +16,7 @@ import React, {
 } from 'react';
 import type { ReactNode, ErrorInfo, CSSProperties } from 'react';
 // `ErrorManager` is UI-facing error plumbing, not engine state — the greenfield core
-// has none, so the legacy implementation is ported into the adapter beside the component
+// has none, so the implementation lives in the adapter beside the component
 // that uses it (see `../managers/ErrorManager`), unchanged.
 import { ErrorManager } from '../managers/ErrorManager';
 import type { ErrorSeverity, ErrorNotification } from '../managers/types';

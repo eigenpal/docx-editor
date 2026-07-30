@@ -12,8 +12,8 @@
 
 import React, { useState, useRef, useCallback, useEffect } from 'react';
 import type { CSSProperties } from 'react';
-import type { SectionProperties, TabMark } from '../../legacy-core-compat';
-import { twipsToPixels, pixelsToTwips, formatPx } from '../../legacy-core-compat';
+import type { SectionProperties, TabMark } from '../../core-compat';
+import { twipsToPixels, pixelsToTwips, formatPx } from '../../core-compat';
 import { useTranslation } from '../../i18n';
 
 // ============================================================================

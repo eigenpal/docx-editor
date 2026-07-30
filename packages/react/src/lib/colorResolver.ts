@@ -19,7 +19,7 @@
  * - Value is in hex (00-FF), converted to 0-1 for calculation
  */
 
-import type { ColorValue, Theme, ThemeColorSlot, ThemeColorScheme } from '../legacy-core-compat';
+import type { ColorValue, Theme, ThemeColorSlot, ThemeColorScheme } from '../core-compat';
 
 /**
  * Default theme colors (Office 2016 default theme)

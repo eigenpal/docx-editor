@@ -10,7 +10,7 @@
 
 import React, { useState, useCallback } from 'react';
 import type { CSSProperties, ReactNode } from 'react';
-import type { NumberFormat } from '../../legacy-core-compat';
+import type { NumberFormat } from '../../core-compat';
 import { MaterialSymbol } from './MaterialSymbol';
 import { useTranslation } from '../../i18n';
 
@@ -19,8 +19,8 @@ import { useTranslation } from '../../i18n';
 // ============================================================================
 
 // List-state types live in core; re-exported here for backwards compat.
-export type { ListType, ListState } from '../../legacy-core-compat';
-import type { ListState } from '../../legacy-core-compat';
+export type { ListType, ListState } from '../../core-compat';
+import type { ListState } from '../../core-compat';
 
 /**
  * Props for the ListButtons component
@@ -309,7 +309,7 @@ export {
   getNextIndentLevel,
   getPreviousIndentLevel,
   toggleListType,
-} from '../../legacy-core-compat';
+} from '../../core-compat';
 
 /**
  * Get CSS for list indent

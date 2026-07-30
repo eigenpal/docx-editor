@@ -1,9 +1,8 @@
-// The tree-lane `Editor` facade (phase 3, part 1 of the legacy-lane retirement).
+// The `Editor` facade over the paginated surface.
 //
 // `createDocxEditor` implements the FULL `Editor` contract over the paginated surface —
-// the tree session, semantic layout and painted pages — with no ProseMirror, no
-// `PackageModel`, and no legacy display bridge. It is the shape the adapters will move to
-// when `createEditor` retires.
+// the document session, semantic layout and painted pages. This is the composition root
+// the framework adapters mount.
 //
 // DELIBERATE PLACEHOLDER SHAPE — the `isActive` precedent, applied to a whole facade.
 //
@@ -67,11 +66,9 @@ import { mountPaginatedSurface, type PaginatedSurface } from './paginated-surfac
 // ---------------------------------------------------------------------------------------
 // Empty interaction frame.
 //
-// The tree lane does not build interaction frames — the paginated surface owns caret,
+// The engine does not publish interaction frames — the paginated surface owns caret,
 // selection and hit-test geometry directly. The facade still exposes the frame-shaped
-// members of the `Editor` contract, so it answers with one immutable empty frame. This
-// was the only part of the legacy `interaction-frame.ts` module the tree lane consumed;
-// it moved here when the legacy editor lane was deleted.
+// members of the `Editor` contract, so it answers with one immutable empty frame.
 // ---------------------------------------------------------------------------------------
 
 /** Recursively freeze plain objects and arrays (idempotent). */
@@ -99,7 +96,7 @@ function emptySemanticIndex(storyId = ''): SemanticPositionIndex {
 
 let emptyFrameSingleton: InteractionFrame | null = null;
 
-/** The single immutable frame published before (and instead of) any legacy-lane layout. */
+/** The single immutable frame every frame-shaped contract member answers with. */
 function emptyInteractionFrame(): InteractionFrame {
   if (emptyFrameSingleton) return emptyFrameSingleton;
   emptyFrameSingleton = deepFreezeValue({
@@ -680,7 +677,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
 
     getZoom: () => zoom,
     setZoom(next: number): ExecResult {
-      // Refused rather than clamped, mirroring the legacy facade: a caller that asked for
+      // Refused rather than clamped: a caller that asked for
       // 0 or NaN has a bug, and silently substituting 1 hides it.
       if (!Number.isFinite(next) || next < 0.1 || next > 5) {
         return {

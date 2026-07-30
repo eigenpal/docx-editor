@@ -6,14 +6,14 @@
  * `@docx-editor.dev/react`.
  */
 
-import type { Table, TableCell, TableRow } from '../../../legacy-core-compat';
+import type { Table, TableCell, TableRow } from '../../../core-compat';
 import {
   type CellAnchor,
   computeSplitLayout,
   computeSplitDialogDefaults,
   redistributeColumnWidths,
   buildAnchorMaps,
-} from '../../../legacy-core-compat';
+} from '../../../core-compat';
 import type { TableAction, TableContext, TableSelection, TableSplitConfig } from '../TableToolbar';
 
 // ============================================================================

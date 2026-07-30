@@ -6,8 +6,8 @@
  */
 
 import { useCallback } from 'react';
-import type { ColorValue } from '../../legacy-core-compat';
-import type { Theme } from '../../legacy-core-compat';
+import type { ColorValue } from '../../core-compat';
+import type { Theme } from '../../core-compat';
 import type { TableAction } from './TableToolbar';
 import { ColorPicker } from './ColorPicker';
 import { useTranslation } from '../../i18n';

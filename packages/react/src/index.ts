@@ -49,7 +49,6 @@ export type {
 } from '@docx-editor.dev/core-contract/contracts/geometry';
 export type { DocxDocument } from '@docx-editor.dev/core-contract/contracts/types';
 export { DocxEditorShell } from './components/DocxEditor/DocxEditorShell';
-// The legacy components replace the interim ones that used to be exported here.
 export { Toolbar, ToolbarButton, ToolbarGroup, type ToolbarProps } from './components/Toolbar';
 export { TitleBar, MenuBar, DocumentName, Logo, TitleBarRight } from './components/TitleBar';
 export { PageIndicator } from './components/DocxEditor/PageIndicator';

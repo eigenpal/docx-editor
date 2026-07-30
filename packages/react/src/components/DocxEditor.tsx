@@ -7,7 +7,7 @@ import { useDocxEditorRefApi } from './DocxEditor/hooks/useDocxEditorRefApi';
 import type { DocxEditorProps, DocxEditorRef } from '../types';
 
 /**
- * React host for the tree-lane editor (phase 3 of the legacy-lane retirement).
+ * React host for the docx editor.
  *
  * THIN, mirroring `PaginatedDocxEditor`: the host owns a container element, the facade's
  * lifetime, and prop-to-facade forwarding — nothing else. `createDocxEditor` implements
@@ -15,18 +15,17 @@ import type { DocxEditorProps, DocxEditorRef } from '../types';
  * own pages into the container and owns caret, selection, and hit testing internally, so
  * the adapter measures nothing, paints nothing, and derives no geometry.
  *
- * The legacy chrome forest under `./DocxEditor/` is written against the legacy display
- * pipeline — a host-DOM contract, engine-published display lists, interaction frames and
- * paint gates — none of which the tree lane publishes (the surface paints itself, and
- * the geometry cluster returns the typed empty frame). Rendering that chrome against
- * honest-empty stubs would show dead controls positioned on empty geometry, so a
- * `t`-supplied host gets the title bar (slots, editable name, save) above the surface.
- * chrome re-integration: phase 4 follow-up.
+ * Chrome is deliberately minimal for now: the full application chrome (toolbar, rulers,
+ * sidebars) reads engine-published display and geometry state the facade answers with
+ * typed empty values today, and rendering controls against empty state would show dead
+ * chrome positioned on nothing. So a `t`-supplied host gets the title bar (slots,
+ * editable name, save) above the surface; the rest of the chrome follows as the facade's
+ * derivations land.
  */
 
 /**
- * Legacy chrome geometry, kept from the previous host: the column that fills the host
- * box, and a scroll container that is the flex child allowed to shrink
+ * Chrome geometry: the column that fills the host box, and a scroll container that is
+ * the flex child allowed to shrink
  * (`minHeight/minWidth: 0`) — without that the page stack stops scrolling and the
  * window scrolls instead.
  */

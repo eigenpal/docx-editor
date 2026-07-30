@@ -11,7 +11,7 @@ import { createDocxEditor } from '@docx-editor.dev/core-contract/editor';
 import type { DocxEditorRef, EditorMode } from './types';
 
 /**
- * Vue host for the tree-lane editor (phase 3 of the legacy-lane retirement).
+ * Vue host for the docx editor.
  *
  * The PAIR of the React host, and deliberately the same shape: a container element, the
  * facade's lifetime, and prop-to-facade forwarding — nothing else. `createDocxEditor`
@@ -21,7 +21,7 @@ import type { DocxEditorRef, EditorMode } from './types';
  * Only the lifecycle glue differs from React, because that is the part the frameworks
  * genuinely disagree about.
  *
- * chrome re-integration: phase 4 follow-up (task 10V.1 ports the React title bar/chrome).
+ * Chrome beyond the title bar follows as the facade's derivations land (task 10V.1).
  */
 
 /**

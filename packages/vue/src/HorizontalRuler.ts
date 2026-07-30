@@ -1,7 +1,7 @@
 // Display-only horizontal ruler (interactive-paginated-editing M5.1).
 //
 // The Vue counterpart of React's `HorizontalRuler.tsx`, sharing the engine's
-// tick geometry so the two adapters cannot drift. Display-only: the legacy
+// tick geometry so the two adapters cannot drift. Display-only: the original
 // margin, indent, and tab drag handles have no greenfield contract to write
 // through, so they are omitted rather than rendered inert.
 

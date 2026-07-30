@@ -9,7 +9,7 @@
 
 import React, { useState, useCallback } from 'react';
 import type { CSSProperties, ReactNode } from 'react';
-import type { ParagraphAlignment } from '../../legacy-core-compat';
+import type { ParagraphAlignment } from '../../core-compat';
 import { MaterialSymbol } from './MaterialSymbol';
 import { Button } from './Button';
 import { Tooltip } from './Tooltip';

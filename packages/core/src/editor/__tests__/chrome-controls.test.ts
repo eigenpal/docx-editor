@@ -8,11 +8,11 @@
 
 import { describe, expect, test } from 'bun:test';
 import {
-  LEGACY_CHROME_GROUPS,
-  LEGACY_CHROME_MENUS,
-  LEGACY_CHROME_UNAVAILABLE_KEY,
-  legacyChromeControlCount,
-} from '../legacy-chrome.ts';
+  CHROME_GROUPS,
+  CHROME_MENUS,
+  CHROME_UNAVAILABLE_KEY,
+  chromeControlCount,
+} from '../chrome-controls.ts';
 
 /** The ten legacy toolbar groups, from Toolbar.tsx at ref 9bb06c38, plus file/save. */
 const EXPECTED_GROUPS = [
@@ -32,11 +32,11 @@ const EXPECTED_GROUPS = [
 
 describe('legacy chrome descriptor', () => {
   test('carries every legacy toolbar group, in legacy order', () => {
-    expect(LEGACY_CHROME_GROUPS.map((g) => g.id)).toEqual(EXPECTED_GROUPS);
+    expect(CHROME_GROUPS.map((g) => g.id)).toEqual(EXPECTED_GROUPS);
   });
 
   test('only undo, redo, bold, italic may be commands, and only save may save', () => {
-    const commands = LEGACY_CHROME_GROUPS.flatMap((g) =>
+    const commands = CHROME_GROUPS.flatMap((g) =>
       g.controls
         .filter((c) => c.state.kind === 'command')
         .map((c) => (c.state as { command: string }).command)
@@ -44,7 +44,7 @@ describe('legacy chrome descriptor', () => {
     // Exactly the four M6V.1 permits — no more, and none missing.
     expect([...commands].sort()).toEqual(['bold', 'italic', 'redo', 'undo']);
 
-    const saves = LEGACY_CHROME_GROUPS.flatMap((g) =>
+    const saves = CHROME_GROUPS.flatMap((g) =>
       g.controls.filter((c) => c.state.kind === 'save')
     );
     expect(saves).toHaveLength(1);
@@ -54,7 +54,7 @@ describe('legacy chrome descriptor', () => {
     // Underline is the trap: it looks like bold and italic, but `RunProps.underline`
     // is a boolean while `w:u` carries a style, so enabling it would either throw on
     // save or silently downgrade a double underline. It must be visible and inert.
-    const underline = LEGACY_CHROME_GROUPS.flatMap((g) => g.controls).find(
+    const underline = CHROME_GROUPS.flatMap((g) => g.controls).find(
       (c) => c.id === 'underline'
     );
     expect(underline).toBeDefined();
@@ -62,7 +62,7 @@ describe('legacy chrome descriptor', () => {
   });
 
   test('every control has a label key and no control hardcodes English', () => {
-    for (const group of LEGACY_CHROME_GROUPS) {
+    for (const group of CHROME_GROUPS) {
       expect(group.labelKey).toMatch(/^[a-z][a-zA-Z]*\./);
       for (const c of group.controls) {
         expect(c.labelKey, `${c.id} labelKey`).toMatch(/^[a-z][a-zA-Z]*\./);
@@ -71,16 +71,16 @@ describe('legacy chrome descriptor', () => {
         if (c.valueKey) expect(c.valueKey).not.toContain(' ');
       }
     }
-    expect(LEGACY_CHROME_UNAVAILABLE_KEY).toBe('formattingBar.unavailableInPreview');
+    expect(CHROME_UNAVAILABLE_KEY).toBe('formattingBar.unavailableInPreview');
   });
 
   test('control ids are unique, so a testid cannot collide', () => {
-    const ids = LEGACY_CHROME_GROUPS.flatMap((g) => g.controls.map((c) => c.id));
+    const ids = CHROME_GROUPS.flatMap((g) => g.controls.map((c) => c.id));
     expect(new Set(ids).size).toBe(ids.length);
   });
 
   test('icon controls carry at least one path, pickers carry none', () => {
-    for (const c of LEGACY_CHROME_GROUPS.flatMap((g) => g.controls)) {
+    for (const c of CHROME_GROUPS.flatMap((g) => g.controls)) {
       if (c.paths === null) {
         // A picker must say what value it displays, or it renders as an empty box.
         expect(c.valueKey, `${c.id} needs a valueKey`).toBeDefined();
@@ -97,10 +97,10 @@ describe('legacy chrome descriptor', () => {
   });
 
   test('the count is stable, so a dropped control fails rather than passing quietly', () => {
-    expect(legacyChromeControlCount()).toBe(31);
+    expect(chromeControlCount()).toBe(31);
   });
 
   test('the menu region carries the legacy menus', () => {
-    expect(LEGACY_CHROME_MENUS.map((m) => m.id)).toEqual(['file', 'format', 'insert', 'help']);
+    expect(CHROME_MENUS.map((m) => m.id)).toEqual(['file', 'format', 'insert', 'help']);
   });
 });

@@ -13,7 +13,7 @@
 
 import React from 'react';
 import type { CSSProperties, ReactNode } from 'react';
-import type { Table } from '../../legacy-core-compat';
+import type { Table } from '../../core-compat';
 import { MaterialSymbol } from './MaterialSymbol';
 import { useTranslation } from '../../i18n';
 

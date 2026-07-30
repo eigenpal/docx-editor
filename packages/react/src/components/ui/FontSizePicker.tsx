@@ -47,7 +47,7 @@ const DEFAULT_MAX_SIZE = 400;
 
 // Re-export the canonical half-point conversions from core so the
 // React FontSizePicker keeps its existing import surface.
-export { halfPointsToPoints, pointsToHalfPoints } from '../../legacy-core-compat';
+export { halfPointsToPoints, pointsToHalfPoints } from '../../core-compat';
 
 /**
  * Find the next size in the preset list (going up)

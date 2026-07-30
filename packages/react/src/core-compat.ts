@@ -1,11 +1,10 @@
-// Legacy React compatibility layer (GOAL-legacy-react-port.md).
+// Compatibility layer for the shared chrome controls.
 //
-// Adapter controls consume compatibility types and helpers through this boundary.
-// paths (`@docx-editor.dev/core/types/document`, `/utils/fontOptions`, …), which do not
-// exist in the greenfield package. Rather than rewrite the controls — the whole point of
-// the port is that they are copied verbatim — this module supplies exactly the symbols
-// they name, so only their IMPORT PATHS change.
-// Shared adapter presentation and compatibility behavior.
+// The chrome controls were shared verbatim and import document types and helpers this
+// package does not define elsewhere; this module supplies exactly the symbols they name,
+// so only their import paths change.
+//
+// Type definitions here are copies, not re-derivations. Helpers that
 // need engine data are honest stubs: they return the empty answer and say what deriving
 // them requires. A stub must never guess.
 //
@@ -98,10 +97,10 @@ export interface FontOption {
   fontFamily: string;
   category?: 'sans-serif' | 'serif' | 'monospace' | 'other';
 }
-/** Compatibility contract for the shared adapter surface. */
+/** Shared: `types/styles.ts`. */
 export type StyleType = 'paragraph' | 'character' | 'numbering' | 'table';
 
-/** Minimal shapes the ported controls read. Widened as real engine types land. */
+/** Minimal shapes the shared controls read. Widened as real engine types land. */
 /** Compatibility contract for the shared adapter surface.
  *  `type` is REQUIRED there; the interim version made it optional and StylePicker
  *  failed against it. */
@@ -118,7 +117,7 @@ export interface Style {
   next?: string;
   /** Linked style (paragraph/character pair) */
   link?: string;
-  /** Run properties the ported `stylePreview` reads to build its preview CSS. */
+  /** Run properties the shared `stylePreview` reads to build its preview CSS. */
   rPr?: TextFormatting;
   /** Whether the style is surfaced in the styles gallery (`w:qFormat`). */
   qFormat?: boolean;
@@ -127,7 +126,7 @@ export interface Style {
   uiPriority?: number;
   [key: string]: unknown;
 }
-/** The theme fields the ported colour resolver reads. */
+/** The theme fields the shared colour resolver reads. */
 export interface Theme {
   colorScheme?: ThemeColorScheme;
   [key: string]: unknown;
@@ -176,7 +175,7 @@ export interface ColorValue {
 }
 
 /** Compatibility contract for the shared adapter surface. */
-/** Compatibility contract for the shared adapter surface. */
+/** Compatibility note — the interim version used 'ordered' where the shared contract uses 'numbered'. */
 export type ListType = 'bullet' | 'numbered' | 'none';
 export interface ListState {
   type: ListType;
@@ -188,10 +187,10 @@ export interface ListState {
 /**
  * STUB — and verified unportable, not merely unchecked.
  *
- * The real `excludeFontsByName` lives in the legacy core's `utils/documentPickerFonts.ts`,
- * which imports `fontExtractor`, `fontResolver` and `fontLoader` and walks a legacy
+ * The full `excludeFontsByName` helper depends on document picker state,
+ * which imports `fontExtractor`, `fontResolver` and `fontLoader` and walks a
  * `Document` tree — `DocxPackage`, `Paragraph`, `Run`. That is precisely the model the
- * greenfield replaced, so the chain cannot come across; I tried and reverted it.
+ * greenfield replaced, so the chain cannot come across; the attempted integration was reverted.
  *
  * The capability it needs is `Editor.getDocumentFonts()`, already declared on the public
  * contract. Until that derives a real inventory this returns the input unchanged, rather
@@ -204,25 +203,26 @@ export function excludeFontsByName<T extends { name: string }>(
   return fonts ? [...fonts] : [];
 }
 
-// --- Helpers the ported controls call -------------------------------------------------
-// Shared adapter presentation and compatibility behavior.
+// --- Helpers the shared controls call -------------------------------------------------
+//
+// Real arithmetic is shared verbatim. Anything needing engine state it does
 // not have yet is a stub returning the empty answer, per the port goal.
 
-/** Copied verbatim from the legacy core's `utils/units.ts`. */
+/** Shared unit conversion contract. */
 export function halfPointsToPoints(halfPoints: number): number {
   return halfPoints / 2;
 }
 
-/** Copied verbatim from the legacy core's `utils/units.ts`. */
+/** Shared unit conversion contract. */
 export function pointsToHalfPoints(points: number): number {
   return Math.round(points * 2);
 }
 
 // `getStylePreviewProps`, `resolveParagraphStyleOptions` and `ResolvedStyleOption` are
-// NOT declared here — they come from the ported `./lib/stylePreview`, re-exported below.
+// NOT declared here — they come from the shared `./lib/stylePreview`, re-exported below.
 //
 // The interim stubs for them used to live at this spot, and a local declaration SHADOWS a
-// `export *`, so the ported implementations were being silently ignored: the style picker
+// `export *`, so the shared implementations were being silently ignored: the style picker
 // still got `{}` from a preview function that had been real for several commits. Nothing
 // failed loudly, which is why it survived — the same class of defect as the icon swap
 // that reported success while leaving nine controls hand-drawn.
@@ -530,7 +530,7 @@ export interface ParagraphFormatting {
 // --- Table shapes and helpers ---------------------------------------------------------
 //
 // The engine models tables but does not expose an editing surface for them, and this
-// change explicitly must not claim table editing. These are the shapes the ported table
+// change explicitly must not claim table editing. These are the shapes the shared table
 // controls name, with STUB helpers: they compute nothing and return empty, so the table
 // toolbar renders inert rather than appearing to work.
 
@@ -645,15 +645,15 @@ export interface TableSplitConfig {
   minRows: number;
 }
 
-/** Compatibility contract for the shared adapter surface.
+/** Shared: the Word highlight names, used to map a hex back to a
  *  named highlight. The map itself is empty until the engine exposes highlight state. */
 export const HIGHLIGHT_COLORS: Readonly<Record<string, string>> = {};
 export function mapHexToHighlightName(_hex?: string | null): string | undefined {
   return undefined;
 }
 
-/** Compatibility contract for the shared adapter surface.
- *  `FontOption[]`. Kept here so the ported controls resolve it from one place. */
+/** Shared from `ui/normalizeFontFamilies`: widens a mixed prop into
+ *  `FontOption[]`. Kept here so the shared controls resolve it from one place. */
 export function normalizeFontFamilies(
   fonts?: readonly (string | FontOption)[] | null
 ): FontOption[] | undefined {
@@ -663,9 +663,9 @@ export function normalizeFontFamilies(
 
 // --- Opaque siblings ------------------------------------------------------------------
 //
-// `TextFormatting` and `ParagraphFormatting` are copied verbatim above and reference these
-// sibling types. The ported controls only pass such values through, so they are declared
-// opaque here rather than dragging the legacy core's whole type graph across. Each gets a
+// `TextFormatting` and `ParagraphFormatting` are defined above and reference these
+// sibling types. The shared controls only pass such values through, so they are declared
+// opaque here rather than dragging the broader type graph across. Each gets a
 // real shape when the corresponding capability lands.
 export type UnderlineStyle = string;
 export type TextEffect = string;
@@ -677,7 +677,7 @@ export interface ShadingProperties {
 export interface BorderSpec {
   [key: string]: unknown;
 }
-/** Compatibility contract for the shared adapter surface. */
+/** Compatibility note — the ruler keys tab marks by position. */
 export interface TabMark {
   /** Position in twips from left margin */
   position: number;
@@ -803,7 +803,7 @@ export interface TableCellPropertyChange {
   [key: string]: unknown;
 }
 
-// Named by the shared table interfaces. Opaque: the ported table controls carry these
+// Named by the shared table interfaces. Opaque: the shared table controls carry these
 // values between engine calls without reading their contents.
 export interface BlockContent {
   [key: string]: unknown;
@@ -818,7 +818,7 @@ export interface TableStructuralChangeInfo {
   [key: string]: unknown;
 }
 
-// Siblings named by the copied table formatting types.
+// Siblings named by the shared table formatting types.
 export interface CellMargins {
   top?: TableMeasurement;
   bottom?: TableMeasurement;
@@ -1012,9 +1012,9 @@ export interface SectionProperties {
 }
 
 /** STUB — tracked changes are not modelled by the engine, so the shell always receives
- *  an empty result and renders no tracked-change chrome. Shape follows the legacy
+ *  an empty result and renders no tracked-change chrome. Shape matches the shared contract
  *  `extractTrackedChanges` result. */
-/** Compatibility contract for the shared adapter surface. */
+/** Compatibility note — the shell reads `type` and `insertionRevisionId`. */
 export interface TrackedChangeEntry {
   /**
    * Revision shape. Inline shapes (`insertion`, `deletion`, `replacement`)
@@ -1120,7 +1120,7 @@ export interface TrackedChangesResult {
 
 // --- Unit conversion ------------------------------------------------------------------
 //
-// COPIED verbatim from the legacy core's `utils/units.ts`. The rulers convert twips to
+// Shared unit conversion contract. The rulers convert twips to
 // pixels on every tick, and an approximated constant here would misplace every mark on
 // the scale.
 
@@ -1154,7 +1154,7 @@ export function formatPx(px: number): string {
   return `${roundPixels(px)}px`;
 }
 
-// Shared adapter presentation and compatibility behavior.
+// Siblings named by the shared SectionProperties, all exposed through this boundary
 // types — the rulers read page size, orientation and margins through them.
 export interface Column {
   /** Column width in twips */
@@ -1205,9 +1205,9 @@ export type NoteNumberRestart = 'continuous' | 'eachSect' | 'eachPage';
 export type TabJustify = 'left' | 'center' | 'right' | 'decimal' | 'bar' | 'clear' | 'num';
 export type TabLeader = 'none' | 'dot' | 'hyphen' | 'underscore' | 'heavy' | 'middleDot';
 
-// --- Colour resolution: PORTED, not stubbed --------------------------------------------
+// --- Colour resolution: SHARED, not stubbed --------------------------------------------
 //
-// `utils/colorResolver.ts` from the legacy core is a pure function over theme data — its
+// The color resolver is a pure function over theme data — its
 // only import is type-only — so it is used directly rather than being stubbed. That
 // restores real theme tint/shade matrices in the colour picker, real highlight mapping,
 // and real hex resolution, none of which needed engine state after all.
@@ -1224,17 +1224,17 @@ export {
   resolveHighlightToCss,
 } from './lib/colorResolver';
 
-// --- List state: PORTED, not stubbed ---------------------------------------------------
+// --- List state: SHARED, not stubbed ---------------------------------------------------
 //
-// `utils/listState.ts` from the legacy core has NO imports at all — 58 lines of pure
+// The list-state module has no runtime imports — 58 lines of pure
 // predicates and constructors — so it is used directly. The interim stubs answered "not a list"
 // unconditionally; these answer correctly for whatever state the caller holds.
 export * from './lib/listState';
 
-// --- Ported pure modules ----------------------------------------------------------------
+// --- Shared pure modules ----------------------------------------------------------------
 //
-// These were stubbed until an audit against the legacy source showed each is pure — five
-// of the six have NO imports at all. Re-exported here so the ported controls resolve the
+// These were stubbed until a module-boundary audit showed each is pure — five
+// of the six have NO imports at all. Re-exported here so the shared controls resolve the
 // real implementations through the same module path they already import from.
 //
 // Order matters: a local declaration shadows a star-export, so nothing above may declare
@@ -1246,11 +1246,11 @@ export * from './lib/colorResolver';
 
 // --- Clipboard and watermark ------------------------------------------------------------
 //
-// Named by the ported PasteSpecialDialog and WatermarkDialog. Both are STUBS: the engine
+// Named by the shared PasteSpecialDialog and WatermarkDialog. Both are STUBS: the engine
 // exposes neither a clipboard read nor a watermark model, and `Editor.getWatermark()` is
 // the capability the latter waits on.
 //
-// The dialogs are ported anyway rather than skipped — that is the point of the stub
+// The dialogs are shared anyway rather than skipped — that is the point of the stub
 // pattern. They render, and they light up when the capabilities derive.
 
 /** Compatibility shape — the interim one used html/text/rtf and the dialog reads runs,
@@ -1272,13 +1272,13 @@ export async function readFromClipboard(_event?: unknown): Promise<ParsedClipboa
   return null;
 }
 
-// Watermark types, presets and display sizing come from the ported module: it has no
+// Watermark types, presets and display sizing come from the shared module: it has no
 // imports, so the real `pictureWatermarkDisplayEmu` and `DEFAULT_WATERMARK_PRESETS` are
-// available rather than the empty versions I first wrote.
+// available rather than the empty interim versions.
 export * from './lib/watermark';
 
 // --- Sidebar shapes ---------------------------------------------------------------------
-// Shared adapter presentation and compatibility behavior.
+// Shared; the sidebar cards read these fields directly.
 export interface Comment {
   /** Comment ID (matches commentRangeStart/End) */
   id: number;
@@ -1353,7 +1353,7 @@ export interface Paragraph {
   sectionProperties?: SectionProperties;
 }
 // Siblings named by the shared Paragraph. Opaque: the sidebar cards carry paragraph
-// values through without inspecting these fields, and pulling the whole legacy content
+// values through without inspecting these fields, and pulling the broader content
 // model across for them would import the document tree this engine replaced.
 export interface ParagraphContent {
   type: string;
@@ -1372,10 +1372,10 @@ export interface TrackedChangeInfo {
 }
 
 // --- Toolbar-facing document + table context -----------------------------------------
-// Compatibility shapes, narrowed to the fields the ported chrome reads.
+// Compatibility shapes, narrowed to the fields the shared chrome reads.
 
 /**
- * The legacy document wrapper. The ported toolbar reads exactly two paths off it —
+ * The document wrapper. The shared toolbar reads exactly two paths off it —
  * `package.styles.styles` and `package.theme` — so those are what this declares. The
  * greenfield engine publishes both through capabilities (`getDocumentStyles`, and the
  * theme is not exposed yet), which is why nothing constructs one of these today.
@@ -1414,8 +1414,8 @@ export interface TableContextInfo {
 // --- Image layout ---------------------------------------------------------------------
 // Compatibility shapes. `ImageAttrs` was the ProseMirror image node's attribute record and
 // `ImageLayoutTarget` the argument of its wrap-type command; both are named here so the
-// ported image menu keeps its legacy signatures without this adapter naming ProseMirror.
-// Only the fields the ported menu and layout module read are declared.
+// shared image menu keeps its existing signatures without this adapter naming ProseMirror.
+// Only the fields the shared menu and layout module read are declared.
 
 export interface ImageAttrs {
   cssFloat?: 'left' | 'right' | 'none';

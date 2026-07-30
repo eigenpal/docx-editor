@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import type { Table } from '../src/legacy-core-compat';
+import type { Table } from '../src/core-compat';
 import { splitTableCell } from '../src/components/ui/TableToolbar/operations';
 
 describe('splitTableCell', () => {

@@ -1,13 +1,13 @@
 import { useState, useCallback, useMemo, useEffect } from 'react';
 import type { CSSProperties } from 'react';
-import type { ColorValue, Theme, ThemeColorScheme } from '../../legacy-core-compat';
+import type { ColorValue, Theme, ThemeColorScheme } from '../../core-compat';
 import {
   generateThemeTintShadeMatrix,
   resolveColor,
   resolveColorToHex,
   resolveHighlightColor,
-} from '../../legacy-core-compat';
-import type { ThemeMatrixCell } from '../../legacy-core-compat';
+} from '../../core-compat';
+import type { ThemeMatrixCell } from '../../core-compat';
 import { useFixedDropdown } from '../../hooks/useFixedDropdown';
 import { MaterialSymbol } from './MaterialSymbol';
 import { useTranslation } from '../../i18n';

@@ -1,4 +1,4 @@
-// Toolbar (interactive-paginated-editing M5.1, extended to full legacy parity at M6V.1).
+// Toolbar (interactive-paginated-editing M5.1, extended to full chrome parity at M6V.1).
 //
 // The Vue counterpart of React's `DocxEditorToolbar.tsx`, sharing the engine's
 // can-before-exec wiring so the two toolbars cannot drift on when a control is
@@ -7,7 +7,7 @@
 // `Editor.save()` directly. A control the engine cannot honour renders disabled
 // with the engine's own reason as its tooltip.
 //
-// Groups, ordering, icons, and i18n keys come from `LEGACY_CHROME_GROUPS` in
+// Groups, ordering, icons, and i18n keys come from `CHROME_GROUPS` in
 // engine-editor — the same data React renders, so the two cannot diverge on the
 // chrome itself either. Two divergences this file previously carried are fixed
 // here: it defaulted `showSave` to true where React rendered save only when a
@@ -16,11 +16,11 @@
 import { defineComponent, h, type PropType, type VNode } from 'vue';
 import type { Editor } from '@docx-editor.dev/core-contract/contracts/editor';
 import {
-  LEGACY_CHROME_GROUPS,
-  LEGACY_CHROME_UNAVAILABLE_KEY,
+  CHROME_GROUPS,
+  CHROME_UNAVAILABLE_KEY,
   runToolbarCommand,
   toolbarCommandState,
-  type LegacyChromeControl,
+  type ChromeControl,
 } from '@docx-editor.dev/core-contract/editor';
 import { useEditorSnapshot } from './useEditorSnapshot';
 
@@ -55,13 +55,13 @@ function icon(paths: readonly string[]): VNode {
 
 function control(
   editor: Editor | null,
-  c: LegacyChromeControl,
+  c: ChromeControl,
   t: Translate,
   onSave: (() => void) | undefined
 ): VNode {
   const label = t(c.labelKey);
 
-  // A picker renders as a disabled combobox, matching its legacy shape.
+  // A picker renders as a disabled combobox, matching its original shape.
   if (c.paths === null) {
     return h(
       'span',
@@ -77,13 +77,13 @@ function control(
       [
         h('span', { class: 'ep-toolbar__picker-value' }, c.valueKey ? t(c.valueKey) : ''),
         h('span', { class: 'ep-toolbar__picker-caret', 'aria-hidden': 'true' }, '▾'),
-        h('span', { class: 'ep-sr-only' }, `${label} — ${t(LEGACY_CHROME_UNAVAILABLE_KEY)}`),
+        h('span', { class: 'ep-sr-only' }, `${label} — ${t(CHROME_UNAVAILABLE_KEY)}`),
       ]
     );
   }
 
   if (c.state.kind === 'parityOnly') {
-    const reason = `${label} — ${t(LEGACY_CHROME_UNAVAILABLE_KEY)}`;
+    const reason = `${label} — ${t(CHROME_UNAVAILABLE_KEY)}`;
     return h(
       'button',
       {
@@ -185,7 +185,7 @@ export default defineComponent({
           // is dead code, and `pointer-events: none` just moves the blur here.
           onMousedown: (event: MouseEvent) => event.preventDefault(),
         },
-        LEGACY_CHROME_GROUPS.map((group, index) =>
+        CHROME_GROUPS.map((group, index) =>
           h('div', { key: group.id, class: 'ep-toolbar__group-wrap' }, [
             ...(index > 0 ? [h('div', { class: 'ep-toolbar__separator', role: 'separator' })] : []),
             h(

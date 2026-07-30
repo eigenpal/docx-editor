@@ -19,9 +19,9 @@
 // visual regression that no assertion would catch.
 
 /** Which toolbar controls are actually wired to an engine command. */
-export type LegacyChromeControlState =
+export type ChromeControlState =
   /** Enabled when `Editor.can(command)` succeeds; runs `Editor.exec(command)`. */
-  | { readonly kind: 'command'; readonly command: LegacyChromeCommandId }
+  | { readonly kind: 'command'; readonly command: ChromeCommandId }
   /** `Editor.save()` — not a command. */
   | { readonly kind: 'save' }
   /**
@@ -35,7 +35,7 @@ export type LegacyChromeControlState =
   | { readonly kind: 'parityOnly' };
 
 /** The commands M6V.1 permits to be enabled. */
-export type LegacyChromeCommandId = 'undo' | 'redo' | 'bold' | 'italic';
+export type ChromeCommandId = 'undo' | 'redo' | 'bold' | 'italic';
 
 /**
  * The SHAPE a control renders as (task M6V.1).
@@ -53,12 +53,12 @@ export type LegacyChromeCommandId = 'undo' | 'redo' | 'bold' | 'italic';
  *  and can never exercise. */
 import { GENERATED_ICON_PATHS } from './generated-icon-paths.ts';
 
-export type LegacyChromeShape = 'icon' | 'stepper' | 'dropdown' | 'colorSplit';
+export type ChromeControlShape = 'icon' | 'stepper' | 'dropdown' | 'colorSplit';
 
-export interface LegacyChromeControl {
+export interface ChromeControl {
   readonly id: string;
   /** How it renders. Defaults to `icon`. */
-  readonly shape?: LegacyChromeShape;
+  readonly shape?: ChromeControlShape;
   /** Displayed value for a stepper or dropdown (an i18n key, or a literal for numbers). */
   readonly valueText?: string;
   /** Swatch colour for a `colorSplit` control. */
@@ -69,16 +69,16 @@ export interface LegacyChromeControl {
   readonly paths: readonly string[] | null;
   /** For pickers: the i18n key of the placeholder value shown. */
   readonly valueKey?: string;
-  readonly state: LegacyChromeControlState;
+  readonly state: ChromeControlState;
 }
 
-export interface LegacyChromeGroup {
+export interface ChromeGroup {
   readonly id: string;
   readonly labelKey: string;
-  readonly controls: readonly LegacyChromeControl[];
+  readonly controls: readonly ChromeControl[];
 }
 
-export const LEGACY_CHROME_GROUPS: readonly LegacyChromeGroup[] = [
+export const CHROME_GROUPS: readonly ChromeGroup[] = [
   {
     id: 'history',
     labelKey: 'formattingBar.groups.history',
@@ -359,7 +359,7 @@ export const LEGACY_CHROME_GROUPS: readonly LegacyChromeGroup[] = [
 ];
 
 /** The menu region the legacy chrome shows above the toolbar. Parity-only. */
-export const LEGACY_CHROME_MENUS: readonly { readonly id: string; readonly labelKey: string }[] = [
+export const CHROME_MENUS: readonly { readonly id: string; readonly labelKey: string }[] = [
   { id: 'file', labelKey: 'toolbar.file' },
   { id: 'format', labelKey: 'toolbar.format' },
   { id: 'insert', labelKey: 'toolbar.insert' },
@@ -367,9 +367,9 @@ export const LEGACY_CHROME_MENUS: readonly { readonly id: string; readonly label
 ];
 
 /** Total controls, so a parity test can assert none were dropped. */
-export function legacyChromeControlCount(): number {
-  return LEGACY_CHROME_GROUPS.reduce((n, g) => n + g.controls.length, 0);
+export function chromeControlCount(): number {
+  return CHROME_GROUPS.reduce((n, g) => n + g.controls.length, 0);
 }
 
 /** i18n key for the tooltip on a control that exists only for visual parity. */
-export const LEGACY_CHROME_UNAVAILABLE_KEY = 'formattingBar.unavailableInPreview';
+export const CHROME_UNAVAILABLE_KEY = 'formattingBar.unavailableInPreview';

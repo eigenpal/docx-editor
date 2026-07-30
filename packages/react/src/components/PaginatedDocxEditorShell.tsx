@@ -25,7 +25,7 @@ import type {
 import type { FormattingAction, SelectionFormatting } from './Toolbar';
 import { EditorToolbar } from './EditorToolbar';
 import { HorizontalRuler } from './ui/HorizontalRuler';
-import type { SectionProperties as ContractSectionProperties } from '../legacy-core-compat';
+import type { SectionProperties as ContractSectionProperties } from '../core-compat';
 import { PaginatedDocxEditor, type PaginatedDocxEditorHandle } from './PaginatedDocxEditor';
 
 export interface PaginatedDocxEditorShellProps {

@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import type { HeadingInfo } from '../legacy-core-compat';
+import type { HeadingInfo } from '../core-compat';
 import { MaterialSymbol } from './ui/Icons';
 import { useTranslation } from '../i18n';
 

@@ -43,11 +43,11 @@ export interface DocxEditorProps {
 }
 
 /**
- * The exposed instance handle: the greenfield seven-member shape, identical on both
- * adapters (enforced by `bun run check:parity-contract`). Every member forwards to the
- * `Editor` facade and is safe to call before the editor has mounted — mutations no-op,
- * reads return the honest empty answer (`null`, a `notFound` refusal, a loading
- * snapshot) — so a host can hold the template ref from first render without guarding it.
+ * The exposed instance handle, identical on both adapters (enforced by
+ * `bun run check:parity-contract`). Every member forwards to the `Editor` facade and is
+ * safe to call before the editor has mounted — mutations no-op, reads return the honest
+ * empty answer (`null`, a `notFound` refusal, a loading snapshot) — so a host can hold
+ * the template ref from first render without guarding it.
  */
 export interface DocxEditorRef {
   /** Load a document: DOCX bytes or an existing handle. No-op before mount. */

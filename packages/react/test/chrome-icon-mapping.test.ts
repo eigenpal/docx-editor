@@ -4,12 +4,12 @@
 // that render as plausible-but-wrong glyphs, which no screenshot review reliably catches.
 // The fix is to name icons and resolve them through the registry ported verbatim from the
 // legacy adapter. This test pins the id → name mapping against the registry's actual
-// exports, so the swap in `legacy-chrome.ts` is mechanical and a typo fails here rather
+// exports, so the swap in `chrome-controls.ts` is mechanical and a typo fails here rather
 // than rendering an empty box.
 
 import { describe, expect, test } from 'bun:test';
 import iconPaths from '../../vue/src/components/ui/icon-paths.json';
-import { LEGACY_CHROME_GROUPS } from '@docx-editor.dev/core-contract/editor';
+import { CHROME_GROUPS } from '@docx-editor.dev/core-contract/editor';
 
 /**
  * control id → MATERIAL SYMBOL name.
@@ -61,14 +61,14 @@ describe('legacy icon mapping (M6V.4)', () => {
   });
 
   test('every icon-bearing control has a mapping, so none is left hand-drawn', () => {
-    const unmapped = LEGACY_CHROME_GROUPS.flatMap((g) => g.controls)
+    const unmapped = CHROME_GROUPS.flatMap((g) => g.controls)
       .filter((c) => c.paths !== null && !ICON_FOR_CONTROL[c.id])
       .map((c) => c.id);
     expect(unmapped, 'controls still without a registry icon').toEqual([]);
   });
 
   test('the mapping names no control that does not exist', () => {
-    const ids = new Set(LEGACY_CHROME_GROUPS.flatMap((g) => g.controls).map((c) => c.id));
+    const ids = new Set(CHROME_GROUPS.flatMap((g) => g.controls).map((c) => c.id));
     expect(Object.keys(ICON_FOR_CONTROL).filter((id) => !ids.has(id))).toEqual([]);
   });
 });

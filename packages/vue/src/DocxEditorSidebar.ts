@@ -1,8 +1,8 @@
 // Sidebar and dialog presentation (interactive-paginated-editing M5.1).
 //
 // The Vue counterpart of React's `DocxEditorSidebar.tsx`. Same reduction: the
-// legacy sidebar hosted comments, tracked changes, and an outline, and the
-// legacy dialog set covered find/replace, hyperlinks, images, tables, symbols,
+// original sidebar hosted comments, tracked changes, and an outline, and the
+// original dialog set covered find/replace, hyperlinks, images, tables, symbols,
 // and footnotes. Every one needs a query or mutation contract this change does
 // not own, so unsupported controls are hidden, never faked.
 

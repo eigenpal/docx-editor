@@ -1,7 +1,7 @@
 // Display-only horizontal ruler (interactive-paginated-editing M5.1).
 //
 // The Vue counterpart of React's `VerticalRuler.tsx`, sharing the engine's
-// tick geometry so the two adapters cannot drift. Display-only: the legacy
+// tick geometry so the two adapters cannot drift. Display-only: the original
 // margin, indent, and tab drag handles have no greenfield contract to write
 // through, so they are omitted rather than rendered inert.
 
@@ -14,7 +14,7 @@ import {
 } from '@docx-editor.dev/core-contract/editor';
 import { useEditorSnapshot } from './useEditorSnapshot';
 
-/** Matches React's `RULER_WIDTH` and the legacy gutter. */
+/** Matches React's `RULER_WIDTH` gutter. */
 export const RULER_WIDTH = 20;
 
 export interface VerticalRulerProps {

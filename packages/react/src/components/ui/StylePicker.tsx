@@ -8,8 +8,8 @@
 import * as React from 'react';
 import { Select, SelectContent, SelectItem, SelectTrigger } from './Select';
 import { cn } from '../../lib/utils';
-import type { Style, StyleType, Theme } from '../../legacy-core-compat';
-import { getStylePreviewProps, resolveParagraphStyleOptions } from '../../legacy-core-compat';
+import type { Style, StyleType, Theme } from '../../core-compat';
+import { getStylePreviewProps, resolveParagraphStyleOptions } from '../../core-compat';
 import { useTranslation } from '../../i18n';
 import type { TranslationKey } from '../../i18n';
 
