@@ -24,6 +24,28 @@ export { useEditorState } from './editor/useEditorState';
 export { useEditorCommand, type EditorCommandState } from './editor/useEditorCommand';
 export { useEditorEvent } from './editor/useEditorEvent';
 
+// The compound toolbar (also reachable as `DocxEditor.Toolbar`): default set with
+// in-place slot overrides, generic Button, and the font-family compound + hook. The
+// concrete part components live on the namespace statics; the index exports the
+// namespace, the hook, and the part prop types (the existing `Toolbar`/`ToolbarButton`
+// exports below keep their names, so the new parts are not re-exported bare).
+export {
+  DocxEditorToolbar,
+  useFontFamily,
+  type DocxEditorToolbarNamespace,
+  type DocxEditorToolbarProps,
+  type FontFamilyItemProps,
+  type FontFamilyNamespace,
+  type FontFamilyPartProps,
+  type FontFamilyProps,
+  type ToolbarButtonProps,
+  type ToolbarPartComponent,
+  type ToolbarPartProps,
+  type ToolbarSeparatorProps,
+  type ToolbarTranslate,
+  type UseFontFamilyResult,
+} from './editor/toolbar';
+
 // The shared engine helpers both adapters expose, so the two package surfaces
 // match (enforced by `bun run check:export-parity`).
 export {

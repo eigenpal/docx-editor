@@ -51,13 +51,34 @@ exemptions go when it lands.
 - `CHROME_GROUPS` — core chrome registry re-exported for hook-built toolbars; Vue
   re-exports it when its composable layer lands.
 
+The compound toolbar (default set with in-place slot overrides, generic Button part,
+FontFamily compound + hook) landed React-first on the composition layer above. Vue's
+`DocxEditorToolbar` (the registry-driven toolbar) is the twin surface — `DocxEditorToolbar`
+and `DocxEditorToolbarProps` are therefore exported by BOTH adapters and no longer appear
+below, but the Vue component is not compound yet; aligning it is a future task, and these
+part/prop exports go with it.
+
+- `DocxEditorToolbarNamespace` — the React namespace type (statics `.Button`,
+  `.Separator`, the named parts, `.FontFamily`).
+- `ToolbarButtonProps` — the generic slot-driven Button part's props.
+- `ToolbarPartComponent` — a named part (Bold, Undo, ...): component plus its static
+  `docxSlot` marker.
+- `ToolbarPartProps` — props of the named parts (slot pinned).
+- `ToolbarSeparatorProps`
+- `ToolbarTranslate` — the toolbar's optional i18n resolver type.
+- `useFontFamily` — the font-picker behavior hook (value / options / setValue /
+  isEnabled) over `Editor.getDocumentFonts` + `commandForSlotValue`.
+- `UseFontFamilyResult`
+- `FontFamilyProps` — the compound FontFamily root's props.
+- `FontFamilyPartProps` — shared Trigger/Content sub-part props.
+- `FontFamilyItemProps`
+- `FontFamilyNamespace` — FontFamily with `.Trigger`/`.Content`/`.Item` statics.
+
 ## Vue-only
 
 - `DocxEditorShellProps`
 - `DocxEditorTitleBar`
 - `DocxEditorTitleBarProps`
-- `DocxEditorToolbar`
-- `DocxEditorToolbarProps`
 - `PageIndicatorProps`
 - `DocxEditorSidebar`
 - `DocxEditorSidebarProps`

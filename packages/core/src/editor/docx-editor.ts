@@ -9,12 +9,14 @@
 // The contract itself blesses honest-empty stubs: a control that shows nothing is better
 // than one that shows a guess. This facade follows that rule everywhere:
 //
-// - REAL: load/save, the exec subset below (marks, alignment, indent, line break,
-//   undo/redo, semantic setSelection, selection-addressed insert/delete text), selection
-//   formatting, `isActive` for marks and alignment, page setup, page counts, the cached
-//   snapshot (with canUndo/canRedo), change/selectionChange/error events, focus, destroy,
-//   attach/detach, `query` for `selectedText` and `selectionFormatting`.
-// - HONEST EMPTY: styles, fonts, outline, comments, tracked changes, find, image/table
+// - REAL: load/save, the exec subset below (marks, mark attributes via `setMarkAttr`,
+//   alignment, indent, line break, undo/redo, semantic setSelection, selection-addressed
+//   insert/delete text), selection formatting, `isActive` for marks and alignment, page
+//   setup, page counts, the cached snapshot (with canUndo/canRedo),
+//   change/selectionChange/error events, focus, destroy, attach/detach, `query` for
+//   `selectedText` and `selectionFormatting`, and the document catalogs
+//   (`getDocumentFonts`/`getDocumentStyles`, derived from the canonical trees).
+// - HONEST EMPTY: outline, comments, tracked changes, find, image/table
 //   context, watermark, header/footer state, and the entire geometry/interaction cluster
 //   (`getInteractionFrame`, `hitTest`, `dispatchInteraction`, …) — the paginated surface
 //   owns caret, selection and hit testing INTERNALLY through the browser's own selection,
@@ -69,6 +71,7 @@ import {
 import {
   MARKS,
   classifyCommand,
+  resolveMarkAttr,
   deepFreezeValue,
   editorError,
   emptyInteractionFrame,
@@ -324,7 +327,10 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
     }
     const support = classifyCommand(command);
     if (!support.supported) {
-      return { ok: false, refusal: { ok: false, code: 'unsupported', reason: support.reason } };
+      return {
+        ok: false,
+        refusal: { ok: false, code: support.code ?? 'unsupported', reason: support.reason },
+      };
     }
     if (!surface) {
       return {
@@ -510,6 +516,14 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
           mounted.toggleRunProperty(mark.localName, mark.attributes);
           break;
         }
+        case 'setMarkAttr': {
+          // The gate already ran `resolveMarkAttr` through `classifyCommand`; resolving
+          // again here keeps exec's write derived from the command, not from trust.
+          const resolved = resolveMarkAttr(command);
+          if (!resolved.ok) return { ok: false, code: resolved.code, reason: resolved.reason };
+          mounted.setRunProperty(resolved.localName, resolved.attributes);
+          break;
+        }
         case 'setAlignment':
           // The contract says `justify`; `w:jc` spells it `both`.
           mounted.setParagraphProperty('jc', {
@@ -590,8 +604,9 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
       }
     },
 
-    getDocumentStyles: () => [],
-    getDocumentFonts: () => [],
+    // Real derivations from the canonical trees (session-memoized), no longer stubs.
+    getDocumentStyles: () => surface?.session.documentStyles() ?? [],
+    getDocumentFonts: () => surface?.session.documentFonts() ?? [],
     getOutline: () => [],
     getComments: () => [],
 

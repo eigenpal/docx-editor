@@ -967,6 +967,19 @@ export function toolbarCommandState(editor: Editor | null, id: ChromeSlotId): To
     const // (undocumented)
     command = commandForSlot(id);
     if (!command) {
+        // A value-typed slot has no fixed command, but it still has an honest enabled
+        // state: whether a well-formed value would be honoured right now. `active` stays
+        // false — "the selection is Arial" is a VALUE for the picker to show, not a
+        // pressed state.
+        const // (undocumented)
+        probe = VALUE_SLOT_PROBES[id];
+        if (probe !== undefined) {
+            const // (undocumented)
+            canApply: CanResult = editor.can(commandForSlotValue(id, probe)!);
+            return canApply.ok
+            ? { id, enabled: true, disabledReason: null, active: false }
+            : { id, enabled: false, disabledReason: canApply.reason, active: false };
+        }
         return { id, enabled: false, disabledReason: 'not wired to an editor command', active: false };
     }
     const // (undocumented)

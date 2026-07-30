@@ -89,6 +89,8 @@ export interface DocxEditorNamespace extends ForwardRefExoticComponent<DocxEdito
     // (undocumented)
     readonly Root: typeof DocxEditorRoot;
     // (undocumented)
+    readonly Toolbar: typeof DocxEditorToolbar;
+    // (undocumented)
     readonly Viewport: typeof DocxEditorViewport;
 }
 
@@ -196,6 +198,50 @@ export function DocxEditorShell(input: {
 }): React$1.JSX.Element;
 
 // @public
+export const DocxEditorToolbar: DocxEditorToolbarNamespace;
+
+// @public
+export interface DocxEditorToolbarNamespace {
+    // (undocumented)
+    (props: DocxEditorToolbarProps): ReactNode;
+    // (undocumented)
+    readonly AlignCenter: ToolbarPartComponent;
+    // (undocumented)
+    readonly AlignJustify: ToolbarPartComponent;
+    // (undocumented)
+    readonly AlignLeft: ToolbarPartComponent;
+    // (undocumented)
+    readonly AlignRight: ToolbarPartComponent;
+    // (undocumented)
+    readonly Bold: ToolbarPartComponent;
+    // (undocumented)
+    readonly Button: typeof ToolbarButton$1;
+    // (undocumented)
+    readonly FontFamily: typeof FontFamily;
+    // (undocumented)
+    readonly Italic: ToolbarPartComponent;
+    // (undocumented)
+    readonly Redo: ToolbarPartComponent;
+    // (undocumented)
+    readonly Separator: typeof ToolbarSeparator;
+    // (undocumented)
+    readonly Strike: ToolbarPartComponent;
+    // (undocumented)
+    readonly Underline: ToolbarPartComponent;
+    // (undocumented)
+    readonly Undo: ToolbarPartComponent;
+}
+
+// @public
+export interface DocxEditorToolbarProps {
+    // (undocumented)
+    children?: ReactNode;
+    className?: string;
+    preset?: boolean;
+    t?: ToolbarTranslate;
+}
+
+// @public
 export function DocxEditorViewport(input: DocxEditorViewportProps): React$1.JSX.Element;
 
 // @public
@@ -237,6 +283,40 @@ export { EditorSnapshot }
 export { FontConfiguration }
 
 export { FontFaceRequest }
+
+// @public
+export interface FontFamilyItemProps extends FontFamilyPartProps {
+    value: string;
+}
+
+// @public
+export interface FontFamilyNamespace {
+    // (undocumented)
+    (props: FontFamilyProps): ReactNode;
+    // (undocumented)
+    readonly Content: typeof FontFamilyContent;
+    // (undocumented)
+    readonly docxSlot: 'font.family';
+    // (undocumented)
+    readonly Item: typeof FontFamilyItem;
+    // (undocumented)
+    readonly Trigger: typeof FontFamilyTrigger;
+}
+
+// @public
+export interface FontFamilyPartProps {
+    // (undocumented)
+    asChild?: boolean;
+    // (undocumented)
+    children?: ReactNode;
+    // (undocumented)
+    className?: string;
+}
+
+// @public
+export interface FontFamilyProps extends FontFamilyPartProps {
+    hidden?: boolean;
+}
 
 export { FontSource }
 
@@ -397,7 +477,19 @@ export function TitleBarRight(input: TitleBarRightProps): React__default.JSX.Ele
 export function Toolbar(explicitProps: ToolbarProps): React__default.JSX.Element;
 
 // @public
-export function ToolbarButton(input: ToolbarButtonProps): React__default.JSX.Element;
+export function ToolbarButton(input: ToolbarButtonProps_2): React__default.JSX.Element;
+
+// @public
+export interface ToolbarButtonProps {
+    asChild?: boolean;
+    // (undocumented)
+    children?: ReactNode;
+    // (undocumented)
+    className?: string;
+    hidden?: boolean;
+    icon?: ReactNode;
+    slot: ChromeSlotId;
+}
 
 export { ToolbarCommandState }
 
@@ -405,6 +497,17 @@ export { toolbarCommandState }
 
 // @public
 export function ToolbarGroup(input: ToolbarGroupProps): React__default.JSX.Element;
+
+// @public (undocumented)
+export interface ToolbarPartComponent {
+    // (undocumented)
+    (props: ToolbarPartProps): ReturnType<typeof ToolbarButton$1>;
+    // (undocumented)
+    readonly docxSlot: ChromeSlotId;
+}
+
+// @public
+export type ToolbarPartProps = Omit<ToolbarButtonProps, 'slot'>;
 
 // @public
 export interface ToolbarProps {
@@ -480,6 +583,15 @@ export interface ToolbarProps {
 }
 
 // @public
+export interface ToolbarSeparatorProps {
+    // (undocumented)
+    className?: string;
+}
+
+// @public
+export type ToolbarTranslate = (key: string) => string;
+
+// @public
 export function useDocxEditor(): DocxEditorInstance | null;
 
 // @public
@@ -493,6 +605,17 @@ export function useEditorSnapshot(editor: Editor | null): number;
 
 // @public
 export function useEditorState<T>(selector: (snapshot: EditorSnapshot) => T, isEqual?: (a: T, b: T) => boolean): T;
+
+// @public
+export function useFontFamily(): UseFontFamilyResult;
+
+// @public
+export interface UseFontFamilyResult {
+    readonly isEnabled: boolean;
+    readonly options: readonly string[];
+    readonly setValue: (family: string) => void;
+    readonly value: string | null;
+}
 
 // @public
 export const VERSION = "0.0.2";

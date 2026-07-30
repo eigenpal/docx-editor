@@ -7,6 +7,7 @@ import { DocxEditorContent } from '../editor/DocxEditorContent';
 import { DocxEditorRoot } from '../editor/DocxEditorRoot';
 import { DocxEditorViewport } from '../editor/DocxEditorViewport';
 import { useDocxEditorRefApi } from './DocxEditor/hooks/useDocxEditorRefApi';
+import { DocxEditorToolbar } from '../editor/toolbar';
 import type { DocxEditorProps, DocxEditorRef } from '../types';
 
 /**
@@ -207,10 +208,12 @@ export interface DocxEditorNamespace extends ForwardRefExoticComponent<
   readonly Root: typeof DocxEditorRoot;
   readonly Viewport: typeof DocxEditorViewport;
   readonly Content: typeof DocxEditorContent;
+  readonly Toolbar: typeof DocxEditorToolbar;
 }
 
 export const DocxEditor: DocxEditorNamespace = Object.assign(DocxEditorImpl, {
   Root: DocxEditorRoot,
   Viewport: DocxEditorViewport,
   Content: DocxEditorContent,
+  Toolbar: DocxEditorToolbar,
 });

@@ -451,3 +451,85 @@ describe('createDocxEditor', () => {
     });
   });
 });
+
+describe('setMarkAttr (value-typed run formatting)', () => {
+  test('fontFamily writes the rFonts spelling the engine reads back (ascii + hAnsi)', () => {
+    const { editor } = mount(p('hello'));
+    editor.surface!.selectAll();
+    expect(
+      editor.exec({ type: 'setMarkAttr', mark: 'fontFamily', attr: 'family', value: 'Georgia' })
+    ).toEqual({ ok: true, changed: true });
+    expect(editor.snapshot().formatting?.fontFamily).toBe('Georgia');
+    expect(editor.getSelectionFormatting()?.fontFamily).toBe('Georgia');
+  });
+
+  test('fontSize takes half-points and formatting reports both vocabularies', () => {
+    const { editor } = mount(p('hello'));
+    editor.surface!.selectAll();
+    expect(editor.exec({ type: 'setMarkAttr', mark: 'fontSize', attr: 'val', value: 28 })).toEqual({
+      ok: true,
+      changed: true,
+    });
+    expect(editor.snapshot().formatting?.fontSizePt).toBe(14);
+    expect(editor.getSelectionFormatting()?.fontSizeHalfPoints).toBe(28);
+  });
+
+  test('color and highlight apply and read back from the selection', () => {
+    const { editor } = mount(p('hello'));
+    editor.surface!.selectAll();
+    expect(
+      editor.exec({ type: 'setMarkAttr', mark: 'color', attr: 'val', value: 'FF0000' })
+    ).toEqual({ ok: true, changed: true });
+    expect(editor.snapshot().formatting?.color).toEqual({ kind: 'hex', value: 'FF0000' });
+    expect(
+      editor.exec({ type: 'setMarkAttr', mark: 'highlight', attr: 'val', value: 'yellow' })
+    ).toEqual({ ok: true, changed: true });
+    expect(editor.snapshot().formatting?.highlight).toBe('yellow');
+  });
+
+  test('invalid values are refused as invalidArgs before touching the document', () => {
+    const { editor } = mount(p('hello'));
+    editor.surface!.selectAll();
+    const before = editor.surface!.session.revision();
+    const badColor = editor.exec({ type: 'setMarkAttr', mark: 'color', attr: 'val', value: 'red' });
+    expect(badColor.ok).toBe(false);
+    if (!badColor.ok) expect(badColor.code).toBe('invalidArgs');
+    const badHighlight = editor.exec({
+      type: 'setMarkAttr',
+      mark: 'highlight',
+      attr: 'val',
+      value: 'chartreuse',
+    });
+    expect(badHighlight.ok).toBe(false);
+    if (!badHighlight.ok) expect(badHighlight.code).toBe('invalidArgs');
+    for (const value of [1, 3277, 11.5, '22']) {
+      const bad = editor.exec({ type: 'setMarkAttr', mark: 'fontSize', attr: 'val', value });
+      expect(bad.ok).toBe(false);
+      if (!bad.ok) expect(bad.code).toBe('invalidArgs');
+    }
+    const badFamily = editor.exec({
+      type: 'setMarkAttr',
+      mark: 'fontFamily',
+      attr: 'family',
+      value: 'x'.repeat(500),
+    });
+    expect(badFamily.ok).toBe(false);
+    if (!badFamily.ok) expect(badFamily.code).toBe('invalidArgs');
+    expect(editor.surface!.session.revision()).toBe(before);
+  });
+
+  test('an unknown mark is refused as unsupported, and can() agrees with exec()', () => {
+    const { editor } = mount(p('hello'));
+    editor.surface!.selectAll();
+    const refusal = editor.exec({ type: 'setMarkAttr', mark: 'kerning', attr: 'val', value: 1 });
+    expect(refusal.ok).toBe(false);
+    if (!refusal.ok) expect(refusal.code).toBe('unsupported');
+    const canAnswer = editor.can({ type: 'setMarkAttr', mark: 'kerning', attr: 'val', value: 1 });
+    expect(canAnswer.ok).toBe(false);
+    if (!canAnswer.ok) expect(canAnswer.code).toBe('unsupported');
+    // And a valid command passes `can` without executing anything.
+    expect(
+      editor.can({ type: 'setMarkAttr', mark: 'fontFamily', attr: 'family', value: 'Arial' }).ok
+    ).toBe(true);
+  });
+});

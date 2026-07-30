@@ -57,6 +57,42 @@ export function commandForSlot(slotId: ChromeSlotId): EditorCommand | null {
   return SLOT_COMMANDS[slotId] ?? null;
 }
 
+/** The `setMarkAttr` mark behind each value-typed slot. */
+const VALUE_SLOT_MARKS: Partial<Record<ChromeSlotId, { mark: string; attr: string }>> = {
+  'font.family': { mark: 'fontFamily', attr: 'family' },
+  'font.size': { mark: 'fontSize', attr: 'val' },
+  'font.color': { mark: 'color', attr: 'val' },
+  'text.highlight': { mark: 'highlight', attr: 'val' },
+};
+
+/**
+ * Known-valid probe values, so `toolbarCommandState` can ask `Editor.can` about a
+ * value-typed slot without having a value yet. The probe never executes: it only
+ * answers "would a well-formed value be honoured right now" — which is the editable
+ * gate, exactly what enables the picker.
+ */
+const VALUE_SLOT_PROBES: Partial<Record<ChromeSlotId, unknown>> = {
+  'font.family': 'Arial',
+  'font.size': 22,
+  'font.color': '000000',
+  'text.highlight': 'yellow',
+};
+
+/**
+ * The engine command for a VALUE-TYPED slot (`font.family`, `font.size`,
+ * `font.color`, `text.highlight`) carrying the picked value, or `null` for a slot
+ * that does not take a value. The value is validated by the engine's own
+ * `setMarkAttr` gate (`can` refuses a malformed one with `invalidArgs`), so a host
+ * can pass user input through unmodified.
+ *
+ * @public
+ */
+export function commandForSlotValue(slotId: ChromeSlotId, value: unknown): EditorCommand | null {
+  const entry = VALUE_SLOT_MARKS[slotId];
+  if (!entry) return null;
+  return { type: 'setMarkAttr', mark: entry.mark, attr: entry.attr, value };
+}
+
 /**
  * Whether one control is enabled, and the engine's reason when it is not.
  *
@@ -81,6 +117,17 @@ export function toolbarCommandState(editor: Editor | null, id: ChromeSlotId): To
   if (!editor) return { id, enabled: false, disabledReason: 'editor is not ready', active: false };
   const command = commandForSlot(id);
   if (!command) {
+    // A value-typed slot has no fixed command, but it still has an honest enabled
+    // state: whether a well-formed value would be honoured right now. `active` stays
+    // false — "the selection is Arial" is a VALUE for the picker to show, not a
+    // pressed state.
+    const probe = VALUE_SLOT_PROBES[id];
+    if (probe !== undefined) {
+      const canApply: CanResult = editor.can(commandForSlotValue(id, probe)!);
+      return canApply.ok
+        ? { id, enabled: true, disabledReason: null, active: false }
+        : { id, enabled: false, disabledReason: canApply.reason, active: false };
+    }
     return { id, enabled: false, disabledReason: 'not wired to an editor command', active: false };
   }
   const result: CanResult = editor.can(command);

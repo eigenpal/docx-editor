@@ -86,7 +86,117 @@ export const MARKS: Readonly<
 
 export type CommandSupport =
   | { readonly supported: true; readonly mutating: boolean }
-  | { readonly supported: false; readonly reason: string };
+  | {
+      readonly supported: false;
+      readonly reason: string;
+      /** Refusal code for the gate: `invalidArgs` for a malformed value on a supported
+       *  command, `unsupported` (the default) for a command outside the wired subset. */
+      readonly code?: 'unsupported' | 'invalidArgs';
+    };
+
+/**
+ * `ST_HighlightColor` names accepted by `setMarkAttr` for the `highlight` mark — the
+ * same closed enumeration the paint lane maps to swatches (semantic-paint.ts's
+ * `HIGHLIGHT` map). A Set, not an object literal, because the value is caller input:
+ * membership must not answer `constructor` or `__proto__` from the prototype chain.
+ */
+export const HIGHLIGHT_NAMES: ReadonlySet<string> = new Set([
+  'black',
+  'blue',
+  'cyan',
+  'darkBlue',
+  'darkCyan',
+  'darkGray',
+  'darkGreen',
+  'darkMagenta',
+  'darkRed',
+  'darkYellow',
+  'green',
+  'lightGray',
+  'magenta',
+  'red',
+  'yellow',
+  'white',
+]);
+
+/** The shape the CSS sink enforces on family names (semantic-paint.ts's `FONT_NAME`);
+ *  applying it at the command boundary keeps an invalid name out of the tree entirely. */
+const FONT_FAMILY_VALUE = /^[\p{L}\p{N}\p{M} \-.+_]{1,64}$/u;
+
+const HEX_COLOR_VALUE = /^[0-9A-Fa-f]{6}$/;
+
+export type ResolvedMarkAttr =
+  | {
+      readonly ok: true;
+      readonly localName: string;
+      readonly attributes: Record<string, string>;
+    }
+  | {
+      readonly ok: false;
+      readonly code: 'unsupported' | 'invalidArgs';
+      readonly reason: string;
+    };
+
+/**
+ * Resolve a `setMarkAttr` command to the run property it writes, refusing invalid
+ * values with a typed reason. One resolver serves `classifyCommand` and `exec`, so the
+ * dry run can never disagree with the real one about what is accepted.
+ *
+ * Spellings are the ones the ENGINE READS back (`resolveRunStyle`): `w:rFonts` is read
+ * as `ascii ?? hAnsi`, so a family write sets both; `w:sz` is half-points; `w:color`
+ * and `w:highlight` are `val`-carrying elements.
+ */
+export function resolveMarkAttr(command: { mark: string; value: unknown }): ResolvedMarkAttr {
+  const { mark, value } = command;
+  switch (mark) {
+    case 'fontFamily': {
+      if (typeof value !== 'string' || !FONT_FAMILY_VALUE.test(value)) {
+        return {
+          ok: false,
+          code: 'invalidArgs',
+          reason: 'fontFamily requires a family name of 1-64 letters, digits, or [ -.+_]',
+        };
+      }
+      return { ok: true, localName: 'rFonts', attributes: { ascii: value, hAnsi: value } };
+    }
+    case 'fontSize': {
+      if (typeof value !== 'number' || !Number.isInteger(value) || value < 2 || value > 3276) {
+        return {
+          ok: false,
+          code: 'invalidArgs',
+          reason: 'fontSize requires an integer half-point value between 2 and 3276',
+        };
+      }
+      return { ok: true, localName: 'sz', attributes: { val: String(value) } };
+    }
+    case 'color': {
+      if (typeof value !== 'string' || !HEX_COLOR_VALUE.test(value)) {
+        return {
+          ok: false,
+          code: 'invalidArgs',
+          reason: 'color requires a six-digit hex value like FF0000',
+        };
+      }
+      return { ok: true, localName: 'color', attributes: { val: value } };
+    }
+    case 'highlight': {
+      if (typeof value !== 'string' || !HIGHLIGHT_NAMES.has(value)) {
+        return {
+          ok: false,
+          code: 'invalidArgs',
+          reason: 'highlight requires an ST_HighlightColor name (yellow, cyan, ...)',
+        };
+      }
+      return { ok: true, localName: 'highlight', attributes: { val: value } };
+    }
+    default:
+      return {
+        ok: false,
+        code: 'unsupported',
+        reason: `mark '${mark}' is not supported by setMarkAttr`,
+      };
+  }
+}
 
 function isSurfacePosition(value: unknown): value is SurfaceSelection['anchor'] {
   return (
@@ -149,6 +259,12 @@ export function classifyCommand(command: EditorCommand): CommandSupport {
       return MARKS[command.mark]
         ? { supported: true, mutating: true }
         : { supported: false, reason: `mark '${command.mark}' is not supported` };
+    case 'setMarkAttr': {
+      const resolved = resolveMarkAttr(command);
+      return resolved.ok
+        ? { supported: true, mutating: true }
+        : { supported: false, reason: resolved.reason, code: resolved.code };
+    }
     case 'setAlignment':
       return { supported: true, mutating: true };
     case 'setIndent':

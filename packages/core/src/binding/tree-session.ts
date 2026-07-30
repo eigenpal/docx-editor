@@ -17,10 +17,12 @@ import {
   TreeDocumentStore,
   readOoxmlPackage,
   resolveHeaderFooterParts,
+  resolveRelationship,
   withPart,
   writeOoxmlPackage,
   paragraphTextOf,
   type HeaderFooterParts,
+  type OoxmlElement,
   type OoxmlPackage,
   type OoxmlPackageRejection,
   type OoxmlPart,
@@ -28,6 +30,11 @@ import {
   type TreeDocOp,
   type TreeModelChange,
 } from '@docx-editor.dev/core-contract/store';
+import {
+  collectDocumentFonts,
+  collectDocumentStyles,
+  type DocumentStyleEntry,
+} from './document-catalog.ts';
 import {
   allParagraphs,
   bodyParagraphs,
@@ -105,7 +112,21 @@ export interface TreeDocxSession {
    * host may key derived layout by part object identity.
    */
   headerFooterParts(): HeaderFooterParts;
+  /**
+   * Font family names the document uses, from every `w:rFonts` in the CURRENT main
+   * part plus the styles and header/footer parts — validated, deduplicated, sorted.
+   * Memoized per main-part revision (the other parts are immutable in-session).
+   */
+  documentFonts(): readonly string[];
+  /**
+   * The `w:style` definitions of the styles part, validated and projected for a style
+   * picker. Memoized once: the styles part is immutable for the session's lifetime.
+   * A document without a styles part answers `[]`.
+   */
+  documentStyles(): readonly DocumentStyleEntry[];
 }
+
+export type { DocumentStyleEntry } from './document-catalog.ts';
 
 export type TreeSessionRejection = OoxmlPackageRejection | 'no-main-document-tree';
 
@@ -142,6 +163,35 @@ export function openTreeSession(bytes: Uint8Array): OpenTreeSessionResult {
   });
 
   const currentPackage = (): OoxmlPackage => withPart(pkg, store.part);
+
+  // The styles part, resolved once through the main part's `styles` relationship (the
+  // same resolution discipline `resolveHeaderFooterParts` uses), with the conventional
+  // part name as a fallback for packages whose rels part is absent or degenerate.
+  // Styles editing is a later slice, so the part is immutable in-session.
+  const STYLES_REL_TYPE =
+    'http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles';
+  let stylesRootResolved = false;
+  let stylesRoot: OoxmlElement | null = null;
+  const resolveStylesRoot = (): OoxmlElement | null => {
+    if (stylesRootResolved) return stylesRoot;
+    stylesRootResolved = true;
+    const record = (pkg.relationships.get(pkg.mainDocumentPart) ?? []).find(
+      (rel) => rel.type === STYLES_REL_TYPE
+    );
+    let part: OoxmlPart | undefined;
+    if (record) {
+      const resolved = resolveRelationship(record);
+      if (resolved.mode === 'Internal' && resolved.target.ok) {
+        part = pkg.parts.get(resolved.target.partName);
+      }
+    }
+    part ??= pkg.parts.get('/word/styles.xml');
+    stylesRoot = part?.root ?? null;
+    return stylesRoot;
+  };
+
+  let fontsCache: { readonly revision: number; readonly fonts: readonly string[] } | null = null;
+  let stylesCache: readonly DocumentStyleEntry[] | null = null;
 
   return {
     ok: true,
@@ -236,6 +286,25 @@ export function openTreeSession(bytes: Uint8Array): OpenTreeSessionResult {
         // later slice, and callers key layout off part object identity.
         headerFooter ??= resolveHeaderFooterParts(pkg);
         return headerFooter;
+      },
+
+      documentFonts() {
+        // Keyed on the store revision: an edit can add or remove a run-level
+        // `w:rFonts`, but the styles and header/footer parts cannot change in-session.
+        if (fontsCache && fontsCache.revision === store.revision) return fontsCache.fonts;
+        headerFooter ??= resolveHeaderFooterParts(pkg);
+        const roots: OoxmlElement[] = [store.part.root];
+        const styles = resolveStylesRoot();
+        if (styles) roots.push(styles);
+        for (const part of headerFooter.headers.values()) roots.push(part.root);
+        for (const part of headerFooter.footers.values()) roots.push(part.root);
+        fontsCache = { revision: store.revision, fonts: collectDocumentFonts(roots) };
+        return fontsCache.fonts;
+      },
+
+      documentStyles() {
+        stylesCache ??= collectDocumentStyles(resolveStylesRoot());
+        return stylesCache;
       },
     },
   };

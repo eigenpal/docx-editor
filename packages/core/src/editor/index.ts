@@ -25,6 +25,7 @@ export {
 } from './ruler-ticks.ts';
 export {
   commandForSlot,
+  commandForSlotValue,
   runSave,
   runToolbarCommand,
   toolbarCommandState,

@@ -11,6 +11,7 @@ import type {
 } from '@docx-editor.dev/core-contract/contracts/editor';
 import {
   commandForSlot,
+  commandForSlotValue,
   runSave,
   runToolbarCommand,
   toolbarCommandState,
@@ -94,7 +95,8 @@ describe('toolbar command wiring (task M4.0)', () => {
 
   test('an unwired slot is disabled without ever calling the editor', () => {
     const { editor, calls } = fakeEditor(ALLOW);
-    const state = toolbarCommandState(editor, 'text.highlight');
+    // `text.highlight` graduated to a value-typed slot; `text.link` stays unwired.
+    const state = toolbarCommandState(editor, 'text.link');
     expect(state.enabled).toBe(false);
     expect(state.disabledReason).toBe('not wired to an editor command');
     expect(calls.can).toEqual([]);
@@ -166,5 +168,58 @@ describe('toolbar command wiring (task M4.0)', () => {
     const states = toolbarCommandStates(editor, ['text.bold', 'text.underline', 'history.undo']);
     expect(states.map((s) => s.enabled)).toEqual([true, false, true]);
     expect(states[1]!.disabledReason).toBe('w:u carries a style');
+  });
+});
+
+describe('value-typed slots (commandForSlotValue)', () => {
+  test('resolves the four value slots to setMarkAttr commands carrying the value', () => {
+    expect(commandForSlotValue('font.family', 'Georgia')).toEqual({
+      type: 'setMarkAttr',
+      mark: 'fontFamily',
+      attr: 'family',
+      value: 'Georgia',
+    });
+    expect(commandForSlotValue('font.size', 28)).toEqual({
+      type: 'setMarkAttr',
+      mark: 'fontSize',
+      attr: 'val',
+      value: 28,
+    });
+    expect(commandForSlotValue('font.color', 'FF0000')).toEqual({
+      type: 'setMarkAttr',
+      mark: 'color',
+      attr: 'val',
+      value: 'FF0000',
+    });
+    expect(commandForSlotValue('text.highlight', 'yellow')).toEqual({
+      type: 'setMarkAttr',
+      mark: 'highlight',
+      attr: 'val',
+      value: 'yellow',
+    });
+    // A slot that does not take a value has no value command.
+    expect(commandForSlotValue('text.bold', true)).toBeNull();
+    expect(commandForSlotValue('image.insert', 'x')).toBeNull();
+  });
+
+  test('toolbarCommandState answers enabled-when-editable and never active for value slots', () => {
+    const { editor, calls } = fakeEditor(ALLOW);
+    const state = toolbarCommandState(editor, 'font.family');
+    expect(state).toEqual({
+      id: 'font.family',
+      enabled: true,
+      disabledReason: null,
+      active: false,
+    });
+    // The probe asked `can` with a well-formed setMarkAttr, not a bare slot command.
+    expect(calls.can[0]).toMatchObject({ type: 'setMarkAttr', mark: 'fontFamily' });
+
+    const denied = fakeEditor(DENY('the document is read-only'));
+    expect(toolbarCommandState(denied.editor, 'font.size')).toEqual({
+      id: 'font.size',
+      enabled: false,
+      disabledReason: 'the document is read-only',
+      active: false,
+    });
   });
 });
