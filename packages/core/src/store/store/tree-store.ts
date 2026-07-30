@@ -179,6 +179,7 @@ export class TreeDocumentStore {
         for (const id of result.effect.deleted) deleted.add(id);
         for (const key of result.effect.dependencyKeys) dependencyKeys.add(key);
         if (result.effect.split) splitJoin.push({ split: result.effect.split });
+        for (const split of result.effect.splits ?? []) splitJoin.push({ split });
         if (result.effect.join) splitJoin.push({ join: result.effect.join });
         if (IMPACT_RANK[result.effect.impact] > IMPACT_RANK[impact]) impact = result.effect.impact;
         return true;

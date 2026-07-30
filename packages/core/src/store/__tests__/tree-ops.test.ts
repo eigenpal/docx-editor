@@ -67,11 +67,17 @@ describe('text operations over UTF-16 offsets (task 5.1)', () => {
   test('insertText at the start and at the end', () => {
     const part = load(SIMPLE);
     const [id] = paragraphIds(part);
-    expect(paragraphTextOf(apply(part, { op: 'insertText', paragraphId: id!, offset: 0, text: '>' }), id!)).toBe(
-      '>Hello world'
-    );
     expect(
-      paragraphTextOf(apply(part, { op: 'insertText', paragraphId: id!, offset: 11, text: '!' }), id!)
+      paragraphTextOf(
+        apply(part, { op: 'insertText', paragraphId: id!, offset: 0, text: '>' }),
+        id!
+      )
+    ).toBe('>Hello world');
+    expect(
+      paragraphTextOf(
+        apply(part, { op: 'insertText', paragraphId: id!, offset: 11, text: '!' }),
+        id!
+      )
     ).toBe('Hello world!');
   });
 
@@ -432,8 +438,97 @@ describe('rejections leave everything unchanged (task 5.3)', () => {
       walk(part.root);
       return found!;
     })();
-    const result = applyTreeOp(part, { op: 'insertText', paragraphId: runId, offset: 0, text: 'x' });
+    const result = applyTreeOp(part, {
+      op: 'insertText',
+      paragraphId: runId,
+      offset: 0,
+      text: 'x',
+    });
     expect(result.ok).toBe(false);
     if (!result.ok) expect(result.reason).toBe('not-a-paragraph');
+  });
+});
+
+describe('splitParagraphMany equals the sequence of single splits it stands for', () => {
+  // The op exists so a paste rebuilds the body once instead of once per line; its whole
+  // contract is equivalence with the single splits it replaces, so that is what is tested:
+  // same paragraph texts, same serialized XML shape, one op against many.
+  const bodies = [
+    {
+      name: 'one plain run',
+      body: '<w:p><w:r><w:t>alpha bravo charlie delta echo</w:t></w:r></w:p>',
+    },
+    {
+      name: 'formatted runs',
+      body: '<w:p><w:pPr><w:jc w:val="center"/></w:pPr><w:r><w:rPr><w:b/></w:rPr><w:t>Bold text</w:t></w:r><w:r><w:t> and plain tail</w:t></w:r></w:p>',
+    },
+    {
+      name: 'tabs and breaks',
+      body: '<w:p><w:r><w:t>ab</w:t><w:tab/><w:t>cd</w:t><w:br/><w:t>ef</w:t></w:r></w:p>',
+    },
+  ];
+  const offsetSets = [[1], [2, 4], [1, 2, 3], [0, 5]];
+
+  for (const { name, body } of bodies) {
+    for (const offsets of offsetSets) {
+      test(`${name}, offsets [${offsets.join(', ')}]`, () => {
+        const part = load(body);
+        const [id] = paragraphIds(part);
+        const length = paragraphTextOf(part, id!)!.length;
+        const usable = offsets.filter((offset) => offset <= length);
+        if (usable.length === 0) return;
+
+        const many = applyTreeOp(part, {
+          op: 'splitParagraphMany',
+          paragraphId: id!,
+          offsets: usable,
+        });
+        expect(many.ok).toBe(true);
+        if (!many.ok) return;
+
+        let sequential = part;
+        for (let index = usable.length - 1; index >= 0; index -= 1) {
+          const step = applyTreeOp(sequential, {
+            op: 'splitParagraph',
+            paragraphId: id!,
+            offset: usable[index]!,
+          });
+          expect(step.ok).toBe(true);
+          if (!step.ok) return;
+          sequential = step.part;
+        }
+
+        const textsOf = (candidate: OoxmlPart) =>
+          paragraphIds(candidate).map((paragraphId) => paragraphTextOf(candidate, paragraphId));
+        expect(textsOf(many.part)).toEqual(textsOf(sequential));
+        // Ids differ between the two routes; the SERIALIZED document must not.
+        expect(serializeOoxmlPart(many.part)).toBe(serializeOoxmlPart(sequential));
+        // The effect reports every minted tail, so layout knows where the flow moved.
+        expect(many.effect.created).toHaveLength(usable.length);
+        expect(many.effect.splits).toHaveLength(usable.length);
+      });
+    }
+  }
+
+  test('unsorted or repeated offsets are refused before any tree work', () => {
+    const part = load(SIMPLE);
+    const [id] = paragraphIds(part);
+    for (const offsets of [[4, 2], [3, 3], []]) {
+      const result = applyTreeOp(part, { op: 'splitParagraphMany', paragraphId: id!, offsets });
+      expect(result.ok).toBe(false);
+      if (!result.ok) expect(result.reason).toBe('invalid-range');
+    }
+  });
+
+  test('an out-of-range offset is refused', () => {
+    const part = load(SIMPLE);
+    const [id] = paragraphIds(part);
+    const result = applyTreeOp(part, {
+      op: 'splitParagraphMany',
+      paragraphId: id!,
+      offsets: [2, 999],
+    });
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.reason).toBe('offset-out-of-range');
   });
 });

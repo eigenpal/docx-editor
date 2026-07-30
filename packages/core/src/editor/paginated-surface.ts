@@ -1360,17 +1360,16 @@ export function mountPaginatedSurface(
     // not a paragraph break in OOXML — it is a stray control character.
     const lines = text.replace(/\r\n?/g, '\n').split('\n');
 
-    // ONE COMMIT, whatever the clipboard holds.
+    // ONE COMMIT, TWO OPS, whatever the clipboard holds.
     //
     // A newline in pasted plain text is a paragraph boundary — a new `w:p`, never a
     // character in run text. Committing once per line laid out and repainted the whole
     // document per pasted paragraph, so a four-page paste cost two hundred layouts of a
     // growing document: quadratic in document size, and the reason paste lagged long
     // before typing did. The whole paste is one op list instead: the joined text lands in
-    // the caret's paragraph with a single insert, and that paragraph is then split at each
-    // newline offset FROM THE LAST BOUNDARY BACKWARDS. Splitting from the end keeps every
-    // earlier offset valid in the original paragraph, so no op ever has to address a tail
-    // `w:p` whose id the store has not minted yet.
+    // the caret's paragraph with a single insert, and one `splitParagraphMany` cuts that
+    // paragraph at every newline offset in a single pass — one rebuild of the body's child
+    // sequence, however many paragraphs the clipboard carried.
     const start = orderedStart();
     const joined = lines.join('');
     const ops: TreeDocOp[] = [...deleteSelectionOps()];
@@ -1388,12 +1387,8 @@ export function mountPaginatedSurface(
       consumed += lines[index]!.length;
       boundaries.push(start.offset + consumed);
     }
-    for (let index = boundaries.length - 1; index >= 0; index -= 1) {
-      ops.push({
-        op: 'splitParagraph',
-        paragraphId: start.paragraphId,
-        offset: boundaries[index]!,
-      });
+    if (boundaries.length > 0) {
+      ops.push({ op: 'splitParagraphMany', paragraphId: start.paragraphId, offsets: boundaries });
     }
     if (ops.length === 0) return;
 

@@ -98,7 +98,13 @@ function randomOp(part: OoxmlPart, random: () => number): TreeDocOp | null {
       end: Math.min(length, start + 1 + Math.floor(random() * 3)),
     };
   }
-  if (roll < 0.6) return { op: 'splitParagraph', paragraphId, offset };
+  if (roll < 0.55) return { op: 'splitParagraph', paragraphId, offset };
+  if (roll < 0.6) {
+    if (length < 3) return null;
+    const first = 1 + Math.floor(random() * (length - 2));
+    const second = first + 1 + Math.floor(random() * (length - first - 1));
+    return { op: 'splitParagraphMany', paragraphId, offsets: [first, second] };
+  }
   if (roll < 0.7) {
     const index = ids.indexOf(paragraphId);
     const second = ids[index + 1];

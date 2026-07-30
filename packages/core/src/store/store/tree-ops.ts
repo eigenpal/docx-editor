@@ -109,6 +109,21 @@ export type TreeDocOp =
   | { readonly op: 'insertTab'; readonly paragraphId: string; readonly offset: number }
   | { readonly op: 'insertHardBreak'; readonly paragraphId: string; readonly offset: number }
   | { readonly op: 'splitParagraph'; readonly paragraphId: string; readonly offset: number }
+  | {
+      /**
+       * Split one `w:p` at MANY offsets in a single op.
+       *
+       * Equivalent to applying `splitParagraph` at each offset from the last to the first,
+       * but the paragraph's content is cut in one pass and the parent's child sequence is
+       * rebuilt once. A plain-text paste is a paragraph mark per line: as individual ops,
+       * a large paste rebuilt the body — and re-sliced the pasted text — once per line,
+       * which is quadratic in paste size.
+       */
+      readonly op: 'splitParagraphMany';
+      readonly paragraphId: string;
+      /** Strictly ascending UTF-16 offsets; each produces one paragraph boundary. */
+      readonly offsets: readonly number[];
+    }
   | { readonly op: 'joinParagraphs'; readonly firstId: string; readonly secondId: string }
   | {
       readonly op: 'setRunProperties';
@@ -131,6 +146,7 @@ export const TREE_DOC_OP_KINDS = [
   'insertTab',
   'insertHardBreak',
   'splitParagraph',
+  'splitParagraphMany',
   'joinParagraphs',
   'setRunProperties',
   'setParagraphProperties',
@@ -156,6 +172,8 @@ export interface TreeOpEffect {
   readonly created: readonly string[];
   readonly deleted: readonly string[];
   readonly split?: { readonly from: string; readonly tail: string };
+  /** One entry per boundary of a many-way split, in document order. */
+  readonly splits?: readonly { readonly from: string; readonly tail: string }[];
   readonly join?: { readonly kept: string; readonly removed: string };
   readonly dependencyKeys: readonly string[];
   readonly impact: ImpactClass;
@@ -288,6 +306,21 @@ export function validateTreeOp(part: OoxmlPart, op: TreeDocOp): TreeOpRejection 
         return 'offset-out-of-range';
       }
       if (splitsSurrogate(paragraph, op.offset)) return 'splits-surrogate-pair';
+      return null;
+    }
+    case 'splitParagraphMany': {
+      if (!Array.isArray(op.offsets) || op.offsets.length === 0) return 'invalid-range';
+      let previous = -1;
+      for (const offset of op.offsets) {
+        if (!Number.isInteger(offset) || offset < 0 || offset > length) {
+          return 'offset-out-of-range';
+        }
+        // Strictly ascending: unordered or repeated offsets have no single sequential
+        // reading, and an op with two readings is an op that cannot be replayed.
+        if (offset <= previous) return 'invalid-range';
+        previous = offset;
+        if (splitsSurrogate(paragraph, offset)) return 'splits-surrogate-pair';
+      }
       return null;
     }
     case 'deleteText': {
@@ -435,6 +468,8 @@ export function applyTreeOp(part: OoxmlPart, op: TreeDocOp, options?: EditOption
       return applyDeleteText(part, paragraph, op.start, op.end, options);
     case 'splitParagraph':
       return applySplit(part, paragraph, op.offset, options);
+    case 'splitParagraphMany':
+      return applySplitMany(part, paragraph, op.offsets, options);
     case 'setRunProperties':
       return applySetRunProperties(part, paragraph, op.start, op.end, op.properties, options);
     case 'setParagraphProperties': {
@@ -708,6 +743,145 @@ function applySplit(
   }) as OoxmlNode;
   const siblings = parent.children.flatMap((child) =>
     child.id === paragraph.id ? [headParagraph, tailParagraph] : [child]
+  );
+  return fromEdit(replaceChildren(part, parent.id, siblings, options), effect);
+}
+
+/** The resulting paragraph a source offset belongs to: how many boundaries lie at or before it. */
+function pieceIndexOf(offsets: readonly number[], position: number): number {
+  // Binary search — a whole-document paste can carry thousands of boundaries, and every
+  // segment asks. Content sitting exactly ON a boundary opens that boundary's tail, which
+  // is what the equivalent sequence of single splits does.
+  let low = 0;
+  let high = offsets.length;
+  while (low < high) {
+    const mid = (low + high) >> 1;
+    if (offsets[mid]! <= position) low = mid + 1;
+    else high = mid;
+  }
+  return low;
+}
+
+/**
+ * Split a `w:p` at every offset in one pass.
+ *
+ * Semantically the sequence of single splits from the last offset to the first, produced
+ * without the intermediates: each character of the paragraph's content is visited once,
+ * and the parent's child sequence is rebuilt once. Runs and text values wholly inside one
+ * resulting paragraph keep their identity, exactly as an untouched run survives a single
+ * split; only content straddling a boundary is rebuilt. `w:pPr` and `w:rPr` are duplicated
+ * onto every tail with fresh identities, so direct formatting survives the break the way
+ * Word carries it across a paragraph mark.
+ */
+function applySplitMany(
+  part: OoxmlPart,
+  paragraph: OoxmlParagraphNode,
+  offsets: readonly number[],
+  options?: EditOptions
+): TreeOpResult {
+  const nextId = createNodeIdAllocator(part);
+  const segments = segmentsOf(paragraph);
+  const pPr = paragraph.children.find((child) => child.kind === 'paragraphProperties');
+  const pieceCount = offsets.length + 1;
+  const pieces: OoxmlNode[][] = Array.from({ length: pieceCount }, () => []);
+
+  for (const child of paragraph.children) {
+    if (child.kind === 'paragraphProperties') continue;
+    if (child.kind !== 'run') {
+      // Unknown paragraph-level content stays with the HEAD: it has no offset, so moving it
+      // would be an invented decision. Matches the single-split rule.
+      pieces[0]!.push(child);
+      continue;
+    }
+    const runSegments = segments.filter((segment) => segment.runId === child.id);
+    const runStart = runSegments[0]?.start ?? Number.POSITIVE_INFINITY;
+    const runEnd = runSegments[runSegments.length - 1]?.end ?? runStart;
+    const startPiece = pieceIndexOf(offsets, runStart);
+    const endPiece = runEnd > runStart ? pieceIndexOf(offsets, runEnd - 1) : startPiece;
+    if (startPiece === endPiece) {
+      // Wholly inside one resulting paragraph: the run survives with its identity.
+      pieces[startPiece]!.push(child);
+      continue;
+    }
+
+    // The run straddles at least one boundary: divide its content children, keeping
+    // `w:rPr` on every produced piece so formatting survives each break.
+    const rPr = child.children.find((grand) => grand.kind === 'runProperties');
+    const contentByPiece: OoxmlNode[][] = Array.from({ length: pieceCount }, () => []);
+    for (const grand of child.children) {
+      if (grand.kind === 'runProperties') continue;
+      const segment = runSegments.find((candidate) => contains(grand, candidate.node.id));
+      if (!segment) {
+        contentByPiece[startPiece]!.push(grand);
+        continue;
+      }
+      if (segment.node.kind !== 'textValue') {
+        contentByPiece[pieceIndexOf(offsets, segment.start)]!.push(grand);
+        continue;
+      }
+      const from = segment.start;
+      const until = segment.end;
+      let sliceStart = from;
+      let piece = pieceIndexOf(offsets, from);
+      let cut = false;
+      for (const boundary of offsets) {
+        if (boundary <= from) continue;
+        if (boundary >= until) break;
+        contentByPiece[piece]!.push(
+          textElement(nextId, segment.node.value.slice(sliceStart - from, boundary - from))
+        );
+        sliceStart = boundary;
+        piece += 1;
+        cut = true;
+      }
+      if (!cut) {
+        // No boundary inside this value: it moves whole, identity intact.
+        contentByPiece[piece]!.push(grand);
+        continue;
+      }
+      contentByPiece[piece]!.push(textElement(nextId, segment.node.value.slice(sliceStart - from)));
+    }
+    let keptOriginalRpr = false;
+    for (let piece = 0; piece < pieceCount; piece += 1) {
+      const content = contentByPiece[piece]!;
+      if (content.length === 0) continue;
+      const pieceRpr = rPr ? (keptOriginalRpr ? cloneWithNewIds(rPr, nextId) : rPr) : null;
+      keptOriginalRpr = true;
+      pieces[piece]!.push(runElement(nextId, pieceRpr ? [pieceRpr, ...content] : content));
+    }
+  }
+
+  const tailParagraphs: OoxmlNode[] = [];
+  for (let piece = 1; piece < pieceCount; piece += 1) {
+    tailParagraphs.push({
+      id: nextId(),
+      kind: 'paragraph',
+      namespaceUri: WML_NAMESPACE_URI,
+      localName: 'p',
+      prefix: 'w',
+      namespaceBindings: [],
+      attributes: [],
+      children: pPr ? [cloneWithNewIds(pPr, nextId), ...pieces[piece]!] : pieces[piece]!,
+    } as unknown as OoxmlNode);
+  }
+
+  const effect: TreeOpEffect = {
+    dirty: [paragraph.id],
+    created: tailParagraphs.map((tail) => tail.id),
+    deleted: [],
+    splits: tailParagraphs.map((tail) => ({ from: paragraph.id, tail: tail.id })),
+    dependencyKeys: TEXT_DEPS,
+    impact: 'flow-structural',
+  };
+
+  const parent = parentOf(part, paragraph.id);
+  if (!parent) return { ok: false, reason: 'tree-invariant', detail: 'paragraph has no parent' };
+  const headParagraph = Object.freeze({
+    ...paragraph,
+    children: pPr ? [pPr, ...pieces[0]!] : pieces[0]!,
+  }) as OoxmlNode;
+  const siblings = parent.children.flatMap((child) =>
+    child.id === paragraph.id ? [headParagraph, ...tailParagraphs] : [child]
   );
   return fromEdit(replaceChildren(part, parent.id, siblings, options), effect);
 }
