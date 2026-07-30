@@ -78,12 +78,64 @@ export interface OoxmlDocumentNode extends OoxmlElementBase<
 }
 
 export interface OoxmlBodyNode extends OoxmlElementBase<
-  readonly (OoxmlParagraphNode | OoxmlGenericElementNode)[],
+  readonly (OoxmlParagraphNode | OoxmlTableNode | OoxmlGenericElementNode)[],
   readonly OoxmlKnownNodeAttribute[]
 > {
   readonly kind: 'body';
   readonly namespaceUri: typeof WML_NAMESPACE_URI;
   readonly localName: 'body';
+}
+
+export interface OoxmlTableNode extends OoxmlElementBase<
+  readonly (
+    | OoxmlTablePropertiesNode
+    | OoxmlTableGridNode
+    | OoxmlTableRowNode
+    | OoxmlGenericElementNode
+  )[],
+  readonly OoxmlKnownNodeAttribute[]
+> {
+  readonly kind: 'table';
+  readonly namespaceUri: typeof WML_NAMESPACE_URI;
+  readonly localName: 'tbl';
+}
+
+export interface OoxmlTableRowNode extends OoxmlElementBase<
+  readonly (OoxmlTableCellNode | OoxmlGenericElementNode)[],
+  readonly OoxmlKnownNodeAttribute[]
+> {
+  readonly kind: 'tableRow';
+  readonly namespaceUri: typeof WML_NAMESPACE_URI;
+  readonly localName: 'tr';
+}
+
+export interface OoxmlTableCellNode extends OoxmlElementBase<
+  readonly (OoxmlParagraphNode | OoxmlTableNode | OoxmlGenericElementNode)[],
+  readonly OoxmlKnownNodeAttribute[]
+> {
+  readonly kind: 'tableCell';
+  readonly namespaceUri: typeof WML_NAMESPACE_URI;
+  readonly localName: 'tc';
+}
+
+/** Grid children (`w:gridCol`) stay generic: they are property leaves, not structure. */
+export interface OoxmlTableGridNode extends OoxmlElementBase<
+  readonly OoxmlGenericElementNode[],
+  readonly OoxmlKnownNodeAttribute[]
+> {
+  readonly kind: 'tableGrid';
+  readonly namespaceUri: typeof WML_NAMESPACE_URI;
+  readonly localName: 'tblGrid';
+}
+
+/** Property children stay generic, mirroring `runProperties`. */
+export interface OoxmlTablePropertiesNode extends OoxmlElementBase<
+  readonly OoxmlGenericElementNode[],
+  readonly OoxmlKnownNodeAttribute[]
+> {
+  readonly kind: 'tableProperties';
+  readonly namespaceUri: typeof WML_NAMESPACE_URI;
+  readonly localName: 'tblPr';
 }
 
 export interface OoxmlParagraphNode extends OoxmlElementBase<
@@ -175,6 +227,11 @@ export type OoxmlElement =
   | OoxmlParagraphPropertiesNode
   | OoxmlTabNode
   | OoxmlHardBreakNode
+  | OoxmlTableNode
+  | OoxmlTableRowNode
+  | OoxmlTableCellNode
+  | OoxmlTableGridNode
+  | OoxmlTablePropertiesNode
   | OoxmlGenericElementNode;
 
 export type OoxmlNode = OoxmlElement | OoxmlTextNode;
@@ -255,6 +312,11 @@ const KNOWN_WML_ELEMENTS: Readonly<Record<string, KnownKind>> = {
   pPr: 'paragraphProperties',
   tab: 'tab',
   br: 'hardBreak',
+  tbl: 'table',
+  tr: 'tableRow',
+  tc: 'tableCell',
+  tblGrid: 'tableGrid',
+  tblPr: 'tableProperties',
 };
 
 class TreeReadError extends Error {
@@ -523,7 +585,10 @@ function validKnownKind(kind: KnownKind, children: readonly OoxmlNode[]): boolea
         children.filter((child) => child.kind === 'body').length === 1
       );
     case 'body':
-      return children.every((child) => child.kind === 'paragraph' || child.kind === 'generic');
+      return children.every(
+        (child) =>
+          child.kind === 'paragraph' || child.kind === 'table' || child.kind === 'generic'
+      );
     case 'paragraph': {
       const properties = children.findIndex((child) => child.kind === 'paragraphProperties');
       return (
@@ -565,6 +630,30 @@ function validKnownKind(kind: KnownKind, children: readonly OoxmlNode[]): boolea
     case 'tab':
     case 'hardBreak':
       return children.length === 0;
+    // Table arms are deliberately permissive (no ordering constraints): demotion to
+    // generic on any violation is the safe fallback, and generic round-trips losslessly.
+    case 'table':
+      return (
+        children.every(
+          (child) =>
+            child.kind === 'tableRow' ||
+            child.kind === 'tableProperties' ||
+            child.kind === 'tableGrid' ||
+            child.kind === 'generic'
+        ) &&
+        children.filter((child) => child.kind === 'tableProperties').length <= 1 &&
+        children.filter((child) => child.kind === 'tableGrid').length <= 1
+      );
+    case 'tableRow':
+      return children.every((child) => child.kind === 'tableCell' || child.kind === 'generic');
+    case 'tableCell':
+      return children.every(
+        (child) =>
+          child.kind === 'paragraph' || child.kind === 'table' || child.kind === 'generic'
+      );
+    case 'tableGrid':
+    case 'tableProperties':
+      return children.every((child) => child.kind === 'generic');
   }
 }
 
@@ -983,6 +1072,11 @@ const KNOWN_ELEMENT_NAMES: Readonly<
   paragraphProperties: [WML_NAMESPACE_URI, 'pPr'],
   tab: [WML_NAMESPACE_URI, 'tab'],
   hardBreak: [WML_NAMESPACE_URI, 'br'],
+  table: [WML_NAMESPACE_URI, 'tbl'],
+  tableRow: [WML_NAMESPACE_URI, 'tr'],
+  tableCell: [WML_NAMESPACE_URI, 'tc'],
+  tableGrid: [WML_NAMESPACE_URI, 'tblGrid'],
+  tableProperties: [WML_NAMESPACE_URI, 'tblPr'],
 };
 
 function knownAttributesAreValid(attributes: readonly OoxmlAttribute[]): boolean {

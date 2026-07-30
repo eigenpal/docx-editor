@@ -126,3 +126,16 @@ one gate that still fails.
   reader does not attribute it here, and so it is not mistaken for the docs-surface failure — the published docs describe the retired adapter surface the
   greenfield migration removed. Task 11.4 forbids updating those claims before paired
   acceptance, so this stays failing and reported rather than silenced.
+
+## Baseline re-record before the retired-lane retirement (task 6.7 / 11.x work)
+
+Run on 2026-07-30 at the start of the "retire the second preservation model" slice,
+12 commits after the section-9 record (HEAD `checkpoint-d0755cc6`):
+
+- `bun test`: **2767 pass, 0 fail, 0 skip** across 253 files. Growth from 2666 is the
+  perf-work tests landed since; failure count stays zero.
+- `bun run typecheck`: passed (all workspaces; `@docx-editor.dev/agents` skipped with its
+  printed reason, as before).
+
+Every phase gate of the retirement slice diffs against this record. Skip count is watched
+explicitly: fixture-gated suites go silently missing rather than failing when a path breaks.
