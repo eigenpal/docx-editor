@@ -11,7 +11,29 @@
 
 export const VERSION = '0.0.2';
 
-export { DocxEditor } from './components/DocxEditor';
+export { DocxEditor, type DocxEditorNamespace } from './components/DocxEditor';
+
+// Provider-first composition layer: the primitives behind `DocxEditor` (also reachable
+// as `DocxEditor.Root` / `.Viewport` / `.Content`) and the hooks a custom chrome is
+// built from.
+export { DocxEditorRoot, type DocxEditorRootProps } from './editor/DocxEditorRoot';
+export { DocxEditorViewport, type DocxEditorViewportProps } from './editor/DocxEditorViewport';
+export { DocxEditorContent, type DocxEditorContentProps } from './editor/DocxEditorContent';
+export { useDocxEditor } from './editor/context';
+export { useEditorState } from './editor/useEditorState';
+export { useEditorCommand, type EditorCommandState } from './editor/useEditorCommand';
+export { useEditorEvent } from './editor/useEditorEvent';
+
+// The shared engine helpers both adapters expose, so the two package surfaces
+// match (enforced by `bun run check:export-parity`).
+export {
+  CHROME_GROUPS,
+  commandForSlot,
+  runToolbarCommand,
+  toolbarCommandState,
+  type ChromeSlotId,
+  type ToolbarCommandState,
+} from '@docx-editor.dev/core-contract/editor';
 export { PaginatedDocxEditor } from './components/PaginatedDocxEditor';
 export { PaginatedDocxEditorShell } from './components/PaginatedDocxEditorShell';
 export type { PaginatedDocxEditorShellProps } from './components/PaginatedDocxEditorShell';

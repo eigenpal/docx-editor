@@ -235,9 +235,16 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
         // The mount-time render reports before `surface` is assigned; nothing observable
         // has changed at that point, so it is not a selection change.
         if (!surface) return;
+        // A publish can change layout-derived state without moving the selection —
+        // toggling bold moves formatting agreement, not the caret. Worse, a `change`
+        // handler may have read `snapshot()` MID-COMMIT (the session notifies before the
+        // layout publishes) and cached a derivation against the layout this publish just
+        // replaced. Either way the cache is stale: bump unconditionally. A value-equal
+        // re-derivation returns the previous snapshot reference, so a no-op publish costs
+        // one comparison, never a spurious re-render.
+        bump();
         if (selectionsMatch(state.selection, lastSelection)) return;
         lastSelection = state.selection;
-        bump();
         emitSelectionChange();
       },
     });

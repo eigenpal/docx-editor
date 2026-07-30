@@ -362,6 +362,21 @@ describe('createDocxEditor', () => {
     expect(editor.isActive({ type: 'toggleMark', mark: 'bold' })).toBe(false);
   });
 
+  test('a change handler reading snapshot() mid-commit cannot poison the cache', () => {
+    // The session notifies BEFORE the layout publishes, so a handler that reads
+    // `snapshot()` inside `change` derives formatting from the pre-commit layout. The
+    // publish must invalidate that cached derivation even though the selection did not
+    // move, or the stale answer would be served for the rest of the version.
+    const { editor } = mount(p('hello'));
+    editor.surface!.selectAll();
+    editor.on('change', () => {
+      editor.snapshot(); // the poisoning read
+    });
+    editor.exec({ type: 'toggleMark', mark: 'bold' });
+    expect(editor.snapshot().formatting?.bold).toBe(true);
+    expect(editor.isActive({ type: 'toggleMark', mark: 'bold' })).toBe(true);
+  });
+
   test('isActive maps justify to OOXML both for setAlignment', () => {
     const { editor } = mount(p('hello'));
     editor.surface!.selectAll();

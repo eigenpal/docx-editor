@@ -4,7 +4,10 @@
 
 ```ts
 
+import { CHROME_GROUPS } from '@docx-editor.dev/core-contract/editor';
+import { ChromeSlotId } from '@docx-editor.dev/core-contract/editor';
 import { ColorValue } from '@docx-editor.dev/core-contract/contracts/editor';
+import { commandForSlot } from '@docx-editor.dev/core-contract/editor';
 import { CSSProperties } from 'react';
 import { DisplayItem } from '@docx-editor.dev/core-contract/contracts/geometry';
 import { DisplayPage } from '@docx-editor.dev/core-contract/contracts/geometry';
@@ -13,8 +16,10 @@ import { DocumentChange } from '@docx-editor.dev/core-contract/contracts/editor'
 import { DocumentHandle } from '@docx-editor.dev/core-contract/contracts/editor';
 import { DocumentSource } from '@docx-editor.dev/core-contract/contracts/editor';
 import { DocxDocument } from '@docx-editor.dev/core-contract/contracts/types';
+import { DocxEditorInstance } from '@docx-editor.dev/core-contract/editor';
 import { Editor } from '@docx-editor.dev/core-contract/contracts/editor';
 import { EditorCommand } from '@docx-editor.dev/core-contract/contracts/editor';
+import { EditorEvents } from '@docx-editor.dev/core-contract/contracts/editor';
 import { EditorFontError } from '@docx-editor.dev/core-contract/contracts/editor';
 import { EditorFontErrorCode } from '@docx-editor.dev/core-contract/contracts/editor';
 import { EditorHost } from '@docx-editor.dev/core-contract/contracts/editor';
@@ -26,6 +31,7 @@ import { FontConfiguration } from '@docx-editor.dev/core-contract/contracts/edit
 import { FontFaceRequest } from '@docx-editor.dev/core-contract/contracts/editor';
 import { FontSource } from '@docx-editor.dev/core-contract/contracts/editor';
 import { FontSourceSubstitution } from '@docx-editor.dev/core-contract/contracts/editor';
+import { ForwardRefExoticComponent } from 'react';
 import { generateRulerTicks } from '@docx-editor.dev/core-contract/editor';
 import { NavigationCommand } from '@docx-editor.dev/core-contract/editor';
 import { PaginatedSurfaceState } from '@docx-editor.dev/core-contract/editor';
@@ -35,14 +41,24 @@ import * as React$1 from 'react';
 import React__default from 'react';
 import { ReactNode } from 'react';
 import { Ref } from 'react';
+import { RefAttributes } from 'react';
 import { rulerPageBox } from '@docx-editor.dev/core-contract/editor';
 import { RulerTick } from '@docx-editor.dev/core-contract/editor';
 import { RulerUnit } from '@docx-editor.dev/core-contract/editor';
+import { runToolbarCommand } from '@docx-editor.dev/core-contract/editor';
 import { SectionProperties } from '@docx-editor.dev/core-contract/editor';
 import { SurfaceFormatting } from '@docx-editor.dev/core-contract/editor';
 import { TextMeasurer } from '@docx-editor.dev/core-contract/editor';
 import { Theme } from '@docx-editor.dev/core-contract/contracts/editor';
+import { ToolbarCommandState } from '@docx-editor.dev/core-contract/editor';
+import { toolbarCommandState } from '@docx-editor.dev/core-contract/editor';
 import { Translations } from '@docx-editor.dev/i18n';
+
+export { CHROME_GROUPS }
+
+export { ChromeSlotId }
+
+export { commandForSlot }
 
 export { DisplayItem }
 
@@ -56,7 +72,25 @@ export function DocumentName(input: DocumentNameProps): React__default.JSX.Eleme
 export { DocxDocument }
 
 // @public (undocumented)
-export const DocxEditor: React$1.ForwardRefExoticComponent<DocxEditorProps & React$1.RefAttributes<DocxEditorRef>>;
+export const DocxEditor: DocxEditorNamespace;
+
+// @public
+export function DocxEditorContent(input: DocxEditorContentProps): React$1.JSX.Element;
+
+// @public
+export interface DocxEditorContentProps {
+    className?: string;
+}
+
+// @public
+export interface DocxEditorNamespace extends ForwardRefExoticComponent<DocxEditorProps & RefAttributes<DocxEditorRef>> {
+    // (undocumented)
+    readonly Content: typeof DocxEditorContent;
+    // (undocumented)
+    readonly Root: typeof DocxEditorRoot;
+    // (undocumented)
+    readonly Viewport: typeof DocxEditorViewport;
+}
 
 // @public
 export interface DocxEditorProps {
@@ -101,6 +135,27 @@ export interface DocxEditorRef {
 }
 
 // @public
+export function DocxEditorRoot(props: DocxEditorRootProps): React$1.JSX.Element;
+
+// @public
+export interface DocxEditorRootProps {
+    // (undocumented)
+    author?: string;
+    // (undocumented)
+    children?: ReactNode;
+    document?: DocumentSource;
+    fonts?: FontConfiguration;
+    // (undocumented)
+    locale?: string;
+    mode?: 'edit' | 'view';
+    onChange?: (change: DocumentChange) => void;
+    onFontError?: (error: EditorFontError) => void;
+    onReady?: (editor: Editor) => void;
+    // (undocumented)
+    zoom?: number;
+}
+
+// @public
 export function DocxEditorShell(input: {
     i18n: React.ComponentProps<typeof LocaleProvider>['i18n'];
     isDark?: boolean;
@@ -140,9 +195,29 @@ export function DocxEditorShell(input: {
     fileInputs: ReactNode;
 }): React$1.JSX.Element;
 
+// @public
+export function DocxEditorViewport(input: DocxEditorViewportProps): React$1.JSX.Element;
+
+// @public
+export interface DocxEditorViewportProps {
+    // (undocumented)
+    children?: ReactNode;
+    className?: string;
+    // (undocumented)
+    style?: CSSProperties;
+}
+
 export { Editor }
 
 export { EditorCommand }
+
+// @public
+export interface EditorCommandState {
+    readonly disabledReason: string | null;
+    readonly execute: () => void;
+    readonly isActive: boolean;
+    readonly isEnabled: boolean;
+}
 
 export { EditorFontError }
 
@@ -310,6 +385,8 @@ export { RulerTick }
 
 export { RulerUnit }
 
+export { runToolbarCommand }
+
 // @public
 export function TitleBar(input: TitleBarProps): React__default.JSX.Element;
 
@@ -321,6 +398,10 @@ export function Toolbar(explicitProps: ToolbarProps): React__default.JSX.Element
 
 // @public
 export function ToolbarButton(input: ToolbarButtonProps): React__default.JSX.Element;
+
+export { ToolbarCommandState }
+
+export { toolbarCommandState }
 
 // @public
 export function ToolbarGroup(input: ToolbarGroupProps): React__default.JSX.Element;
@@ -399,7 +480,19 @@ export interface ToolbarProps {
 }
 
 // @public
+export function useDocxEditor(): DocxEditorInstance | null;
+
+// @public
+export function useEditorCommand(slotId: ChromeSlotId): EditorCommandState;
+
+// @public
+export function useEditorEvent<E extends keyof EditorEvents>(event: E, handler: EditorEvents[E]): void;
+
+// @public
 export function useEditorSnapshot(editor: Editor | null): number;
+
+// @public
+export function useEditorState<T>(selector: (snapshot: EditorSnapshot) => T, isEqual?: (a: T, b: T) => boolean): T;
 
 // @public
 export const VERSION = "0.0.2";

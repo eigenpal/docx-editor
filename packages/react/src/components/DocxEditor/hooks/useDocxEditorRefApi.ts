@@ -13,24 +13,16 @@
  */
 import { useImperativeHandle } from 'react';
 import type { Editor, EditorSnapshot } from '@docx-editor.dev/core-contract/contracts/editor';
+import { LOADING_SNAPSHOT } from '../../../editor/loading-snapshot';
 import type { DocxEditorRef } from '../../../types';
 
 /**
  * What `snapshot()` reports before an editor exists: loading, not editable, nothing
- * selected — never invented state.
+ * selected — never invented state. The SAME frozen constant `useEditorState` serves
+ * pre-mount and on the server, so the ref and the hooks can never disagree about the
+ * loading shape.
  */
-export const PRE_MOUNT_SNAPSHOT: EditorSnapshot = {
-  scope: { kind: 'body' },
-  isLoading: true,
-  parseError: null,
-  editable: false,
-  zoom: 1,
-  selection: null,
-  formatting: null,
-  table: null,
-  image: null,
-  page: { current: 0, total: 0 },
-};
+export const PRE_MOUNT_SNAPSHOT: EditorSnapshot = LOADING_SNAPSHOT;
 
 export function useDocxEditorRefApi({
   ref,
