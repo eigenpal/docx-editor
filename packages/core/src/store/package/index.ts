@@ -172,9 +172,11 @@ export {
   findNode,
   hasNode,
   insertChildren,
+  parentNodeOf,
   removeNode,
   replaceChildren,
   replaceNode,
+  type EditOptions,
   type OoxmlEditResult,
 } from './ooxml-edit.ts';
 export {

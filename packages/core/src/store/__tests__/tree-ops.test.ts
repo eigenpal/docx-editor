@@ -467,7 +467,9 @@ describe('splitParagraphMany equals the sequence of single splits it stands for'
       body: '<w:p><w:r><w:t>ab</w:t><w:tab/><w:t>cd</w:t><w:br/><w:t>ef</w:t></w:r></w:p>',
     },
   ];
-  const offsetSets = [[1], [2, 4], [1, 2, 3], [0, 5]];
+  // Repeated offsets are legal and mean a blank line: two boundaries at one position put
+  // an empty paragraph between them, which is what a paste containing "\n\n" carries.
+  const offsetSets = [[1], [2, 4], [1, 2, 3], [0, 5], [3, 3], [2, 2, 2]];
 
   for (const { name, body } of bodies) {
     for (const offsets of offsetSets) {
@@ -510,10 +512,10 @@ describe('splitParagraphMany equals the sequence of single splits it stands for'
     }
   }
 
-  test('unsorted or repeated offsets are refused before any tree work', () => {
+  test('unsorted or empty offset lists are refused before any tree work', () => {
     const part = load(SIMPLE);
     const [id] = paragraphIds(part);
-    for (const offsets of [[4, 2], [3, 3], []]) {
+    for (const offsets of [[4, 2], []]) {
       const result = applyTreeOp(part, { op: 'splitParagraphMany', paragraphId: id!, offsets });
       expect(result.ok).toBe(false);
       if (!result.ok) expect(result.reason).toBe('invalid-range');

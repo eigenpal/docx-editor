@@ -13,7 +13,7 @@
 // IME and autofill without letting it own the document.
 
 import { openTreeSession, type TreeDocxSession } from '@docx-editor.dev/core-contract/binding';
-import type { TreeDocOp } from '@docx-editor.dev/core-contract/store';
+import { parentNodeOf, type TreeDocOp } from '@docx-editor.dev/core-contract/store';
 import {
   createFixedMeasurer,
   createLayoutScheduler,
@@ -1114,9 +1114,37 @@ export function mountPaginatedSurface(
     if (to.offset > 0) {
       ops.push({ op: 'deleteText', paragraphId: to.paragraphId, start: 0, end: to.offset });
     }
-    // Then collapse the emptied paragraphs into the first one.
+    // Then collapse the emptied paragraphs — but only WITHIN runs of consecutive sibling
+    // `w:p` elements. A join across a table (or any block this lane does not own) is not a
+    // paragraph edit: the store rightly refuses it, and one refused join vetoes the whole
+    // atomic transaction — Select All + Delete on any document containing a table deleted
+    // nothing at all. Text still clears everywhere; each block boundary keeps one empty
+    // paragraph beside it, which is the honest paragraph-lane reading of the gesture.
+    const part = session.part();
+    const positionsByParent = new Map<string, Map<string, number>>();
+    const consecutiveSiblings = (before: string, after: string): boolean => {
+      const parent = parentNodeOf(part, after);
+      if (!parent || parentNodeOf(part, before) !== parent) return false;
+      let positions = positionsByParent.get(parent.id);
+      if (!positions) {
+        positions = new Map<string, number>();
+        for (const [at, child] of parent.children.entries()) positions.set(child.id, at);
+        positionsByParent.set(parent.id, positions);
+      }
+      return positions.get(after) === (positions.get(before) ?? Number.NaN) + 1;
+    };
+    let groupHead = from.paragraphId;
+    let previous = from.paragraphId;
     for (let index = firstIndex + 1; index <= lastIndex; index += 1) {
-      ops.push({ op: 'joinParagraphs', firstId: from.paragraphId, secondId: order[index]! });
+      const id = order[index]!;
+      if (consecutiveSiblings(previous, id)) {
+        ops.push({ op: 'joinParagraphs', firstId: groupHead, secondId: id });
+      } else {
+        // Something that is not a selected paragraph sits between: start a new join group
+        // on ITS far side rather than joining across it.
+        groupHead = id;
+      }
+      previous = id;
     }
     return ops;
   }

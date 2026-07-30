@@ -121,7 +121,10 @@ export type TreeDocOp =
        */
       readonly op: 'splitParagraphMany';
       readonly paragraphId: string;
-      /** Strictly ascending UTF-16 offsets; each produces one paragraph boundary. */
+      /**
+       * Non-decreasing UTF-16 offsets; each produces one paragraph boundary. A repeated
+       * offset produces an empty paragraph between the two boundaries — a blank line.
+       */
       readonly offsets: readonly number[];
     }
   | { readonly op: 'joinParagraphs'; readonly firstId: string; readonly secondId: string }
@@ -315,9 +318,10 @@ export function validateTreeOp(part: OoxmlPart, op: TreeDocOp): TreeOpRejection 
         if (!Number.isInteger(offset) || offset < 0 || offset > length) {
           return 'offset-out-of-range';
         }
-        // Strictly ascending: unordered or repeated offsets have no single sequential
-        // reading, and an op with two readings is an op that cannot be replayed.
-        if (offset <= previous) return 'invalid-range';
+        // Non-decreasing: unordered offsets have no single sequential reading, but a
+        // REPEATED offset does — it is how an empty paragraph is expressed, and a paste
+        // with a blank line carries exactly that.
+        if (offset < previous) return 'invalid-range';
         previous = offset;
         if (splitsSurrogate(paragraph, offset)) return 'splits-surrogate-pair';
       }
@@ -827,9 +831,12 @@ function applySplitMany(
       for (const boundary of offsets) {
         if (boundary <= from) continue;
         if (boundary >= until) break;
-        contentByPiece[piece]!.push(
-          textElement(nextId, segment.node.value.slice(sliceStart - from, boundary - from))
-        );
+        // A REPEATED boundary yields an empty slice: the piece between two equal offsets
+        // is an empty paragraph, and an empty `w:t` inside it would serialize markup the
+        // equivalent single splits never produce — so the piece advances and nothing is
+        // emitted, exactly as a split at a paragraph edge emits no text.
+        const slice = segment.node.value.slice(sliceStart - from, boundary - from);
+        if (slice.length > 0) contentByPiece[piece]!.push(textElement(nextId, slice));
         sliceStart = boundary;
         piece += 1;
         cut = true;
@@ -839,7 +846,8 @@ function applySplitMany(
         contentByPiece[piece]!.push(grand);
         continue;
       }
-      contentByPiece[piece]!.push(textElement(nextId, segment.node.value.slice(sliceStart - from)));
+      const lastSlice = segment.node.value.slice(sliceStart - from);
+      if (lastSlice.length > 0) contentByPiece[piece]!.push(textElement(nextId, lastSlice));
     }
     let keptOriginalRpr = false;
     for (let piece = 0; piece < pieceCount; piece += 1) {

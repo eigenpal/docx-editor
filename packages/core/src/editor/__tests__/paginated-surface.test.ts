@@ -568,6 +568,39 @@ describe('paste is one commit, whatever the clipboard holds', () => {
     paste(container, 'a\r\nb\rc');
     expect(surface.session.bodyText()).toBe('a\nb\nc');
   });
+
+  test('Select All + Delete clears a document that contains a table', () => {
+    // The join chain used to run across every selected paragraph; a join across a table is
+    // rightly refused by the store, and that one refusal vetoed the whole atomic delete —
+    // clearing a document with a table in it deleted nothing. Joins now stay within runs
+    // of consecutive sibling paragraphs; the table itself is not this lane's to remove.
+    const body =
+      paragraph('before table') +
+      '<w:tbl><w:tr><w:tc><w:p><w:r><w:t>cell</w:t></w:r></w:p></w:tc></w:tr></w:tbl>' +
+      paragraph('after table') +
+      paragraph('last line');
+    const { surface } = mount(body);
+    surface.selectAll();
+    surface.deleteSelection();
+    expect(surface.state().lastRejection).toBeNull();
+    expect(surface.state().revision).toBe(1);
+    // Every selected paragraph's text is gone; the run after the table joined into one.
+    expect(surface.session.bodyText()).not.toContain('before table');
+    expect(surface.session.bodyText()).not.toContain('after table');
+    expect(surface.session.bodyText()).not.toContain('last line');
+  });
+
+  test('blank lines paste as empty paragraphs, not a refusal', () => {
+    // A blank line is two consecutive paragraph marks — a repeated split offset. Requiring
+    // strictly ascending offsets refused the whole paste of any text containing "\n\n",
+    // which is most text anyone copies from anywhere.
+    const { surface, container } = mount(paragraph('seed'));
+    putCaret(surface, 4);
+    paste(container, 'one\n\ntwo\n\n\nthree');
+    expect(surface.state().lastRejection).toBeNull();
+    expect(surface.session.bodyText()).toBe('seedone\n\ntwo\n\n\nthree');
+    expect(surface.state().revision).toBe(1);
+  });
 });
 
 describe('redo restores the caret it left, not the one undo restored', () => {
