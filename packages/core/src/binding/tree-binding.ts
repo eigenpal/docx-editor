@@ -148,6 +148,44 @@ export function bodyParagraphs(part: OoxmlPart): OoxmlNode[] {
   return paragraphs;
 }
 
+/**
+ * EVERY editable paragraph of a part, in reading order — body paragraphs AND paragraphs
+ * inside table cells (descending through nested tables).
+ *
+ * Deliberately separate from `bodyParagraphs`: the PM projection (`treeToDoc`/
+ * `docToTreeOps`) stays a body-level lane, while the paginated surface addresses cell
+ * paragraphs directly by node id — selection clamping, Enter's minted-tail diff and
+ * select-all all need the full set.
+ */
+export function allParagraphs(part: OoxmlPart): OoxmlNode[] {
+  const paragraphs: OoxmlNode[] = [];
+  const walkBlocks = (children: readonly OoxmlNode[]): void => {
+    for (const child of children) {
+      if (child.kind === 'paragraph') {
+        paragraphs.push(child);
+      } else if (child.kind === 'table') {
+        for (const row of child.children) {
+          if (row.kind !== 'tableRow') continue;
+          for (const cell of row.children) {
+            if (cell.kind !== 'tableCell') continue;
+            walkBlocks(cell.children);
+          }
+        }
+      }
+    }
+  };
+  const walk = (node: OoxmlNode): void => {
+    if (node.kind === 'textValue') return;
+    if (node.kind === 'body') {
+      walkBlocks(node.children);
+      return;
+    }
+    for (const child of node.children) walk(child);
+  };
+  walk(part.root);
+  return paragraphs;
+}
+
 /** Project one tree revision into a ProseMirror doc (task 6.1). */
 export function treeToDoc(part: OoxmlPart): PMNode {
   const paragraphs = bodyParagraphs(part).map((paragraph) => {

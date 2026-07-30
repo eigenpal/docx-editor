@@ -26,7 +26,13 @@ import {
   type TreeDocOp,
   type TreeModelChange,
 } from '@docx-editor.dev/core-contract/store';
-import { bodyParagraphs, docToTreeOps, reconcileDoc, treeToDoc } from './tree-binding.ts';
+import {
+  allParagraphs,
+  bodyParagraphs,
+  docToTreeOps,
+  reconcileDoc,
+  treeToDoc,
+} from './tree-binding.ts';
 import type { TreeBindingRejection } from './tree-binding.ts';
 
 export interface TreeApplyResult {
@@ -130,12 +136,15 @@ export function openTreeSession(bytes: Uint8Array): OpenTreeSessionResult {
   return {
     ok: true,
     session: {
-      // A body with paragraphs is editable. There is no per-block gate, because the
-      // conditions the legacy gate tested — captured source range, fully-captured slice,
-      // projectable runs — are all properties of the byte-range model, not of the document.
-      editable: bodyParagraphs(store.part).length > 0,
+      // A document with paragraphs — body-level OR inside table cells — is editable. There
+      // is no per-block gate, because the conditions the legacy gate tested — captured
+      // source range, fully-captured slice, projectable runs — are all properties of the
+      // byte-range model, not of the document.
+      editable: allParagraphs(store.part).length > 0,
 
-      paragraphIds: () => bodyParagraphs(store.part).map((paragraph) => paragraph.id),
+      // The full editable set, cell paragraphs included: selection clamping, Enter's
+      // minted-tail diff and select-all in the paginated surface address these by node id.
+      paragraphIds: () => allParagraphs(store.part).map((paragraph) => paragraph.id),
 
       part: () => store.part,
 

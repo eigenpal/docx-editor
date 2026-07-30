@@ -17,6 +17,7 @@ import type {
   ResolvedRunStyle,
   SemanticLayout,
   StyleSpanRecord,
+  TableFragmentRecord,
 } from '@docx-editor.dev/core-contract/layout';
 
 export interface PaintOptions {
@@ -270,9 +271,63 @@ function paintFragment(
   element.dataset.fragmentIndex = String(fragment.fragmentIndex);
   for (const line of fragment.lines) {
     const painted = paintLine(document, line, scale);
-    // Line boxes are page-relative; inside a fragment they are drawn relative to it.
+    // Line boxes are page-relative; inside a fragment they are drawn relative to it —
+    // BOTH axes. The fragment box already carries the x origin (indent, or a table cell's
+    // content edge), so an absolute left here would count that origin twice.
     painted.style.top = `${(line.box.y - fragment.box.y) * scale}px`;
+    const left = line.spans[0]?.box.x ?? line.box.x;
+    painted.style.left = `${(left - fragment.box.x) * scale}px`;
     element.append(painted);
+  }
+  return element;
+}
+
+/**
+ * One painted table fragment: positioned row and cell boxes, a 1px black border and the
+ * validated shading per cell (the legacy rect's `stroke: '000000'`/`fill`), and the cell's
+ * blocks recursing into the ordinary painters — which is what gives cell text the same
+ * `data-paragraph-id`/`data-start` attributes as body text, so selection and the caret
+ * work inside cells with no extra wiring.
+ */
+function paintTableFragment(
+  document: Document,
+  fragment: TableFragmentRecord,
+  scale: number
+): HTMLElement {
+  const element = positioned(document, 'div', fragment.box, scale);
+  element.className = 'docx-table-fragment layout-table';
+  element.dataset.tableId = fragment.tableId;
+  element.dataset.fragmentIndex = String(fragment.fragmentIndex);
+  for (const row of fragment.rows) {
+    const rowElement = positioned(document, 'div', row.box, scale);
+    rowElement.className = 'docx-table-row';
+    rowElement.dataset.rowId = row.id;
+    if (row.isHeaderRepeat) rowElement.dataset.headerRepeat = 'true';
+    rowElement.style.left = `${(row.box.x - fragment.box.x) * scale}px`;
+    rowElement.style.top = `${(row.box.y - fragment.box.y) * scale}px`;
+    for (const cell of row.cells) {
+      const cellElement = positioned(document, 'div', cell.box, scale);
+      cellElement.className = 'docx-table-cell';
+      cellElement.style.left = `${(cell.box.x - row.box.x) * scale}px`;
+      cellElement.style.top = `${(cell.box.y - row.box.y) * scale}px`;
+      cellElement.style.boxSizing = 'border-box';
+      cellElement.style.border = '1px solid #000000';
+      // Re-validated at the sink, like every other file-derived style value here.
+      if (cell.shading && HEX.test(cell.shading)) {
+        cellElement.style.backgroundColor = `#${cell.shading}`;
+      }
+      for (const block of cell.blocks) {
+        const painted =
+          block.kind === 'table'
+            ? paintTableFragment(document, block, scale)
+            : paintFragment(document, block, scale);
+        painted.style.left = `${(block.box.x - cell.box.x) * scale}px`;
+        painted.style.top = `${(block.box.y - cell.box.y) * scale}px`;
+        cellElement.append(painted);
+      }
+      rowElement.append(cellElement);
+    }
+    element.append(rowElement);
   }
   return element;
 }
@@ -310,11 +365,11 @@ function paintPage(
   content.style.width = `${page.contentBox.width * options.scale}px`;
   content.style.height = `${page.contentBox.height * options.scale}px`;
   for (const fragment of page.fragments) {
-    // Table paint lands with the table layout arm; until then only paragraph
-    // fragments reach a page record.
-    if (fragment.kind === 'paragraph') {
-      content.append(paintFragment(document, fragment, options.scale));
-    }
+    content.append(
+      fragment.kind === 'table'
+        ? paintTableFragment(document, fragment, options.scale)
+        : paintFragment(document, fragment, options.scale)
+    );
   }
   element.append(content);
   return element;
