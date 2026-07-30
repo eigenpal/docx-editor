@@ -179,6 +179,17 @@ export interface PaginatedSurface {
   destroy(): void;
 }
 
+/**
+ * Paragraph properties by paragraph id, one map per published layout.
+ *
+ * Weakly keyed on the layout because a layout is immutable: a new revision is a new
+ * object, and superseded revisions release their index with the records.
+ */
+const fragmentPropsByLayout = new WeakMap<
+  SemanticLayout,
+  Map<string, readonly { localName: string; attributes?: Record<string, string> }[]>
+>();
+
 export type OpenPaginatedResult =
   | { readonly ok: true; readonly surface: PaginatedSurface }
   | { readonly ok: false; readonly reason: string; readonly detail?: string };
@@ -1006,12 +1017,19 @@ export function mountPaginatedSurface(
   function paragraphPropertiesOf(
     paragraphId: string
   ): readonly { localName: string; attributes?: Record<string, string> }[] {
-    for (const page of currentLayout.pages) {
-      for (const fragment of page.fragments) {
-        if (fragment.paragraphId === paragraphId) return fragment.props;
+    // Indexed per layout: the host reads formatting after every commit, and scanning all
+    // pages for one paragraph's `w:pPr` projection made that read O(document).
+    let index = fragmentPropsByLayout.get(currentLayout);
+    if (!index) {
+      index = new Map();
+      for (const page of currentLayout.pages) {
+        for (const fragment of page.fragments) {
+          if (!index.has(fragment.paragraphId)) index.set(fragment.paragraphId, fragment.props);
+        }
       }
+      fragmentPropsByLayout.set(currentLayout, index);
     }
-    return [];
+    return index.get(paragraphId) ?? [];
   }
 
   /** A selection guaranteed to address content that exists at the current revision. */

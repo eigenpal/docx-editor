@@ -317,10 +317,35 @@ function paintPage(
 }
 
 /**
- * Paint a whole layout into a container, replacing whatever it held.
+ * One painted page, retained so an unchanged page never has to be rebuilt.
  *
- * The container is cleared with `replaceChildren`, not by assigning `innerHTML`, so no
- * file-derived string is ever parsed as markup.
+ * Incremental layout keeps the RECORD of an untouched page identical across revisions —
+ * same object, by design — so record identity is a complete reuse test: same record, same
+ * materialization, same paint parameters means the element in hand is already exactly what
+ * this pass would build. Rebuilding every sheet per commit made the browser restyle the
+ * whole document on each keystroke, which at several hundred pages cost more than layout
+ * and paint together.
+ */
+interface RetainedPage {
+  readonly record: PageRecord;
+  readonly materialized: boolean;
+  readonly element: HTMLElement;
+}
+
+interface RetainedPaint {
+  /** Paint parameters folded into reuse: a zoom or a11y change rebuilds every page. */
+  readonly parameters: string;
+  readonly pages: readonly RetainedPage[];
+}
+
+const retainedPaints = new WeakMap<HTMLElement, RetainedPaint>();
+
+/**
+ * Paint a whole layout into a container, reusing the pages that did not change.
+ *
+ * The DOM is built with `createElement` and `textContent` only — no file-derived string is
+ * ever parsed as markup — and stray children (nothing this module painted) are removed, so
+ * the container's content is always exactly the painted pages.
  */
 export function paintSemanticLayout(
   container: HTMLElement,
@@ -332,9 +357,44 @@ export function paintSemanticLayout(
     ariaHidden: options.ariaHidden ?? true,
   };
   const document = container.ownerDocument;
-  const pages = layout.pages.map((page) =>
-    paintPage(document, page, resolved, options.materialize?.has(page.index) ?? true)
-  );
+  const parameters = `${resolved.scale}|${resolved.ariaHidden}`;
+  const previous = retainedPaints.get(container);
+  const reusable =
+    previous && previous.parameters === parameters
+      ? new Map(previous.pages.map((entry) => [entry.record, entry]))
+      : null;
+
+  const pages: RetainedPage[] = layout.pages.map((page) => {
+    const materialized = options.materialize?.has(page.index) ?? true;
+    const kept = reusable?.get(page);
+    if (kept && kept.materialized === materialized) return kept;
+    return {
+      record: page,
+      materialized,
+      element: paintPage(document, page, resolved, materialized),
+    };
+  });
+  retainedPaints.set(container, { parameters, pages });
   container.dataset.revision = String(layout.revision);
-  container.replaceChildren(...pages);
+
+  // Keyed reconcile instead of `replaceChildren`: retained elements stay where they are —
+  // keeping the browser's style and layout for them, and the DOM selection anchored inside
+  // them — while changed pages are placed in order and anything else is dropped.
+  const kept = new Set<HTMLElement>(pages.map((entry) => entry.element));
+  let cursor = container.firstChild;
+  for (const entry of pages) {
+    if (entry.element === cursor) {
+      cursor = cursor.nextSibling;
+      continue;
+    }
+    container.insertBefore(entry.element, cursor);
+  }
+  let child = container.firstChild;
+  while (child) {
+    const next = child.nextSibling;
+    // A membership test, not an `instanceof`: it treats a node from any realm — and any
+    // non-element node — the same way, and everything this pass did not paint goes.
+    if (!kept.has(child as HTMLElement)) (child as ChildNode).remove();
+    child = next;
+  }
 }

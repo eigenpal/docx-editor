@@ -630,6 +630,28 @@ describe('only the pages on screen are built (task 9.4)', () => {
     scroller.remove();
   });
 
+  test('a keystroke keeps the DOM of pages it did not disturb', () => {
+    // Layout keeps the record of an untouched page identical across revisions, and the
+    // painter keys reuse on that identity — so a keystroke must not rebuild every sheet.
+    // Rebuilding them all made the browser restyle the whole document per keystroke.
+    // MANY paragraphs, so an edit near the end leaves the leading pages' records — and
+    // therefore their elements — untouched; a single paragraph spanning every page would
+    // legitimately rebuild them all.
+    const paragraphs = Array.from({ length: 60 }, (_, i) =>
+      paragraph(`paragraph ${i} ${'word '.repeat(20)}`)
+    ).join('');
+    const { surface, container } = mount(paragraphs);
+    const ids = surface.session.paragraphIds();
+    putCaret(surface, 0, ids.length - 1);
+    surface.type('a');
+    expect(surface.layout().pages.length).toBeGreaterThan(2);
+    const firstBefore = container.querySelector<HTMLElement>('.docx-page[data-page-index="0"]')!;
+    surface.type('b');
+    const firstAfter = container.querySelector<HTMLElement>('.docx-page[data-page-index="0"]')!;
+    // Same element object, not an equal-looking rebuild.
+    expect(firstAfter).toBe(firstBefore);
+  });
+
   test('scrolling reveals BUILT pages, not shells', async () => {
     // Materialization is decided at paint time, and paint used to happen only on a commit —
     // scrolling a long document showed blank sheets until the next keystroke.
