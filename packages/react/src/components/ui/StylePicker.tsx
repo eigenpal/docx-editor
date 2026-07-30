@@ -8,8 +8,9 @@
 import * as React from 'react';
 import { Select, SelectContent, SelectItem, SelectTrigger } from './Select';
 import { cn } from '../../lib/utils';
-import type { Style, StyleType, Theme } from '../../core-compat';
-import { getStylePreviewProps, resolveParagraphStyleOptions } from '../../core-compat';
+import type { Theme } from '@docx-editor.dev/core-contract/contracts/editor';
+import type { DocumentStyleSummary } from '../../lib/stylePreview';
+import { getStylePreviewProps, resolveParagraphStyleOptions } from '../../lib/stylePreview';
 import { useTranslation } from '../../i18n';
 import type { TranslationKey } from '../../i18n';
 
@@ -21,7 +22,8 @@ export interface StyleOption {
   styleId: string;
   name: string;
   nameKey?: TranslationKey;
-  type: StyleType;
+  /** Style type as the engine reports it (`paragraph`, `character`, …). */
+  type: string;
   isDefault?: boolean;
   qFormat?: boolean;
   priority?: number;
@@ -38,7 +40,8 @@ export interface StyleOption {
 export interface StylePickerProps {
   value?: string;
   onChange?: (styleId: string) => void;
-  styles?: Style[];
+  /** The engine's document-style summaries (`Editor.getDocumentStyles()`). */
+  styles?: readonly DocumentStyleSummary[];
   theme?: Theme | null;
   disabled?: boolean;
   className?: string;
@@ -133,7 +136,7 @@ export function StylePicker({
     if (resolved.length === 0) return DEFAULT_STYLES;
     return resolved.map((o) => ({
       ...o,
-      type: 'paragraph' as StyleType,
+      type: 'paragraph',
       nameKey: DEFAULT_STYLES.find((d) => d.styleId === o.styleId)?.nameKey,
     }));
   }, [styles]);

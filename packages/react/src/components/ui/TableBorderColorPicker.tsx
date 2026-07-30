@@ -6,10 +6,10 @@
  */
 
 import { useCallback } from 'react';
-import type { ColorValue } from '../../core-compat';
-import type { Theme } from '../../core-compat';
+import type { ColorValue, Theme } from '@docx-editor.dev/core-contract/contracts/editor';
 import type { TableAction } from './TableToolbar';
 import { ColorPicker } from './ColorPicker';
+import { resolveColorToHex } from '../../lib/colorResolver';
 import { useTranslation } from '../../i18n';
 
 export interface TableBorderColorPickerProps {
@@ -31,13 +31,14 @@ export function TableBorderColorPicker({
     (color: ColorValue | string) => {
       if (typeof color === 'string') {
         onAction({ type: 'borderColor', color: color.replace(/^#/, '') });
-      } else if (color.rgb) {
-        onAction({ type: 'borderColor', color: color.rgb.replace(/^#/, '') });
-      } else if (color.auto) {
-        onAction({ type: 'borderColor', color: '000000' });
+        return;
       }
+      // `auto` means the default border color; hex/theme values resolve to
+      // the concrete hex the action vocabulary carries.
+      const hex = color.kind === 'auto' ? '000000' : resolveColorToHex(color, theme);
+      if (hex) onAction({ type: 'borderColor', color: hex });
     },
-    [onAction]
+    [onAction, theme]
   );
 
   return (

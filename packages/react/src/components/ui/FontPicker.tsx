@@ -18,14 +18,13 @@ import {
 import { cn } from '../../lib/utils';
 import { useTranslation } from '../../i18n';
 import { getPrimaryFontFamily } from './fontPickerValue';
-import { excludeFontsByName } from '../../core-compat';
 
 // ============================================================================
 // TYPES
 // ============================================================================
 
-export type { FontOption } from '../../core-compat';
-import type { FontOption } from '../../core-compat';
+export type { FontOption } from '../../lib/fontOptions';
+import type { FontOption } from '../../lib/fontOptions';
 
 export interface FontPickerProps {
   value?: string;
@@ -84,14 +83,11 @@ export function FontPicker({
 
   // Document fonts shown above the built-in list, minus any the built-in list
   // already covers (case-insensitive) so a font never appears twice.
-  const docFonts = React.useMemo(
-    () =>
-      excludeFontsByName(
-        documentFonts,
-        fonts.map((f) => f.name)
-      ),
-    [documentFonts, fonts]
-  );
+  const docFonts = React.useMemo(() => {
+    if (!documentFonts) return [];
+    const taken = new Set(fonts.map((f) => f.name.toLowerCase()));
+    return documentFonts.filter((f) => !taken.has(f.name.toLowerCase()));
+  }, [documentFonts, fonts]);
 
   // Lookups (display + change) span both the document group and the main list.
   const lookupFonts = React.useMemo(() => [...docFonts, ...fonts], [docFonts, fonts]);

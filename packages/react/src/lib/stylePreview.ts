@@ -10,7 +10,14 @@
  * @packageDocumentation
  * @public
  */
-import type { Style } from '../core-compat';
+import type { Editor } from '@docx-editor.dev/core-contract/contracts/editor';
+
+/**
+ * One entry of `Editor.getDocumentStyles()` — the engine's document-style
+ * summary the picker consumes. Derived from the contract, not re-declared.
+ * @public
+ */
+export type DocumentStyleSummary = ReturnType<Editor['getDocumentStyles']>[number];
 
 /**
  * Inline preview style for a paragraph-style dropdown item.
@@ -92,24 +99,22 @@ export function getStylePreviewProps(input: {
 }
 
 /**
- * Filter the document's styles to the visible paragraph styles, extract their
- * visual fields, and sort by UI priority — the list a toolbar style picker
- * shows. Returns `[]` when there are no styles (adapters fall back to presets).
+ * Filter the engine's document-style summaries to the paragraph styles and
+ * shape them for the picker, in document order. The contract summary carries
+ * no visibility or run-formatting fields, so every option shares the default
+ * priority and the preview falls back to the well-known per-style sizes.
+ * Returns `[]` when there are no styles (adapters fall back to presets).
  * @public
  */
-export function resolveParagraphStyleOptions(styles: Style[] | undefined): ResolvedStyleOption[] {
+export function resolveParagraphStyleOptions(
+  styles: readonly DocumentStyleSummary[] | undefined
+): ResolvedStyleOption[] {
   if (!styles || styles.length === 0) return [];
   return styles
     .filter((s) => s.type === 'paragraph')
-    .filter((s) => (s.qFormat ? true : !(s.hidden || s.semiHidden)))
     .map((s) => ({
       styleId: s.styleId,
       name: s.name || s.styleId,
-      priority: s.uiPriority ?? 99,
-      fontSize: s.rPr?.fontSize,
-      bold: s.rPr?.bold,
-      italic: s.rPr?.italic,
-      color: s.rPr?.color?.rgb,
-    }))
-    .sort((a, b) => a.priority - b.priority);
+      priority: 99,
+    }));
 }

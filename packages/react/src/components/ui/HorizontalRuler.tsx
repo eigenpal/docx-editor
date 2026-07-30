@@ -12,16 +12,31 @@
 
 import React, { useState, useRef, useCallback, useEffect } from 'react';
 import type { CSSProperties } from 'react';
-import type { SectionProperties, TabMark } from '../../core-compat';
-import { twipsToPixels, pixelsToTwips, formatPx } from '../../core-compat';
+import type { Editor } from '@docx-editor.dev/core-contract/contracts/editor';
+import { twipsToPixels, pixelsToTwips, formatPx } from '../../lib/units';
 import { useTranslation } from '../../i18n';
 
 // ============================================================================
 // TYPES
 // ============================================================================
 
+/**
+ * Section page setup as the engine reports it (`Editor.getPageSetup()`) —
+ * page size, orientation, and margins, in twips. Derived from the contract.
+ */
+export type RulerPageSetup = NonNullable<ReturnType<Editor['getPageSetup']>>;
+
+/**
+ * A tab stop the ruler paints. `position` is twips from the left margin edge —
+ * the same value the `removeTabMark` command takes as `positionTwips`.
+ */
+export interface RulerTabStop {
+  position: number;
+  alignment: 'left' | 'center' | 'right' | 'decimal' | 'bar';
+}
+
 export interface HorizontalRulerProps {
-  sectionProps?: SectionProperties | null;
+  pageSetup?: RulerPageSetup | null;
   zoom?: number;
   editable?: boolean;
   onLeftMarginChange?: (marginTwips: number) => void;
@@ -37,7 +52,7 @@ export interface HorizontalRulerProps {
   unit?: 'inch' | 'cm';
   className?: string;
   style?: CSSProperties;
-  tabMarks?: TabMark[] | null;
+  tabMarks?: RulerTabStop[] | null;
   onTabMarkRemove?: (positionTwips: number) => void;
 }
 
@@ -78,7 +93,7 @@ function formatValueForTooltip(twips: number, unit: 'inch' | 'cm'): string {
 // ============================================================================
 
 export function HorizontalRuler({
-  sectionProps,
+  pageSetup,
   zoom = 1,
   editable = false,
   onLeftMarginChange,
@@ -105,9 +120,9 @@ export function HorizontalRuler({
   const rulerRef = useRef<HTMLDivElement>(null);
 
   // Page dimensions
-  const pageWidthTwips = sectionProps?.pageWidth ?? DEFAULT_PAGE_WIDTH_TWIPS;
-  const leftMarginTwips = sectionProps?.marginLeft ?? DEFAULT_MARGIN_TWIPS;
-  const rightMarginTwips = sectionProps?.marginRight ?? DEFAULT_MARGIN_TWIPS;
+  const pageWidthTwips = pageSetup?.pageWidthTwips ?? DEFAULT_PAGE_WIDTH_TWIPS;
+  const leftMarginTwips = pageSetup?.marginsTwips.left ?? DEFAULT_MARGIN_TWIPS;
+  const rightMarginTwips = pageSetup?.marginsTwips.right ?? DEFAULT_MARGIN_TWIPS;
   const contentTwips = pageWidthTwips - leftMarginTwips - rightMarginTwips;
 
   // Pixel conversions
@@ -496,7 +511,7 @@ function DragTooltip({
 }
 
 interface TabMarkerProps {
-  tabMark: TabMark;
+  tabMark: RulerTabStop;
   positionPx: number;
   onDoubleClick: () => void;
 }
@@ -594,12 +609,12 @@ export function positionToMargin(
 }
 
 export function getRulerDimensions(
-  sectionProps?: SectionProperties | null,
+  pageSetup?: RulerPageSetup | null,
   zoom: number = 1
 ): { width: number; leftMargin: number; rightMargin: number; contentWidth: number } {
-  const pw = sectionProps?.pageWidth ?? DEFAULT_PAGE_WIDTH_TWIPS;
-  const lm = sectionProps?.marginLeft ?? DEFAULT_MARGIN_TWIPS;
-  const rm = sectionProps?.marginRight ?? DEFAULT_MARGIN_TWIPS;
+  const pw = pageSetup?.pageWidthTwips ?? DEFAULT_PAGE_WIDTH_TWIPS;
+  const lm = pageSetup?.marginsTwips.left ?? DEFAULT_MARGIN_TWIPS;
+  const rm = pageSetup?.marginsTwips.right ?? DEFAULT_MARGIN_TWIPS;
   const width = twipsToPixels(pw) * zoom;
   const leftMargin = twipsToPixels(lm) * zoom;
   const rightMargin = twipsToPixels(rm) * zoom;

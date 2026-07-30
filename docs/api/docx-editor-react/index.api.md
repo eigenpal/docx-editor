@@ -4,6 +4,7 @@
 
 ```ts
 
+import { ColorValue } from '@docx-editor.dev/core-contract/contracts/editor';
 import { CSSProperties } from 'react';
 import { DisplayItem } from '@docx-editor.dev/core-contract/contracts/geometry';
 import { DisplayPage } from '@docx-editor.dev/core-contract/contracts/geometry';
@@ -37,9 +38,10 @@ import { Ref } from 'react';
 import { rulerPageBox } from '@docx-editor.dev/core-contract/editor';
 import { RulerTick } from '@docx-editor.dev/core-contract/editor';
 import { RulerUnit } from '@docx-editor.dev/core-contract/editor';
-import { SectionProperties as SectionProperties_2 } from '@docx-editor.dev/core-contract/editor';
+import { SectionProperties } from '@docx-editor.dev/core-contract/editor';
 import { SurfaceFormatting } from '@docx-editor.dev/core-contract/editor';
 import { TextMeasurer } from '@docx-editor.dev/core-contract/editor';
+import { Theme } from '@docx-editor.dev/core-contract/contracts/editor';
 import { Translations } from '@docx-editor.dev/i18n';
 
 export { DisplayItem }
@@ -119,11 +121,11 @@ export function DocxEditorShell(input: {
     toolbarHeight: number;
     editorScrollLeft: number;
     expandedSidebarItem: string | null;
-    trackedChanges: TrackedChangesResult['entries'];
+    trackedChanges: readonly TrackedChangeSummary[];
     onScrollContainerMouseDown: (e: React.MouseEvent) => void;
     onEditorBgMouseDown: (e: React.MouseEvent) => void;
     onEditorContextMenu: (e: React.MouseEvent) => void;
-    horizontalRulerProps: HorizontalRulerProps$1;
+    horizontalRulerProps: HorizontalRulerProps_2;
     verticalRulerProps: VerticalRulerProps$1;
     outlineProps: OutlineProps;
     onToggleOutline: () => void;
@@ -170,7 +172,7 @@ export { generateRulerTicks }
 // @public (undocumented)
 export function HorizontalRuler(input: HorizontalRulerProps): React__default.ReactElement;
 
-// @public
+// @public (undocumented)
 export interface HorizontalRulerProps {
     // (undocumented)
     className?: string;
@@ -197,13 +199,13 @@ export interface HorizontalRulerProps {
     // (undocumented)
     onTabMarkRemove?: (positionTwips: number) => void;
     // (undocumented)
-    sectionProps?: SectionProperties | null;
+    pageSetup?: RulerPageSetup | null;
     // (undocumented)
     showFirstLineIndent?: boolean;
     // (undocumented)
     style?: CSSProperties;
     // (undocumented)
-    tabMarks?: TabMark[] | null;
+    tabMarks?: RulerTabStop[] | null;
     // (undocumented)
     unit?: 'inch' | 'cm';
     // (undocumented)
@@ -236,7 +238,7 @@ interface PaginatedDocxEditorHandle {
     // (undocumented)
     redo(): void;
     save(): Uint8Array | null;
-    sectionProperties(): SectionProperties_2 | null;
+    sectionProperties(): SectionProperties | null;
     // (undocumented)
     selectAll(): void;
     // (undocumented)
@@ -332,7 +334,7 @@ export interface ToolbarProps {
     currentFormatting?: SelectionFormatting;
     disabled?: boolean;
     documentFonts?: readonly FontOption[];
-    documentStyles?: Style[];
+    documentStyles?: readonly DocumentStyleSummary[];
     editorRef?: React__default.RefObject<HTMLElement>;
     enableShortcuts?: boolean;
     fontFamilies?: ReadonlyArray<string | FontOption>;
@@ -411,7 +413,7 @@ export interface VerticalRulerProps {
     editable?: boolean;
     onBottomMarginChange?: (marginTwips: number) => void;
     onTopMarginChange?: (marginTwips: number) => void;
-    sectionProps?: SectionProperties | null;
+    pageSetup?: RulerPageSetup | null;
     style?: CSSProperties;
     unit?: 'inch' | 'cm';
     zoom?: number;
