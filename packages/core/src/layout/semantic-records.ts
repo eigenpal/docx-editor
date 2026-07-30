@@ -124,6 +124,22 @@ export interface TableCellFragmentRecord {
 /** A top-level (or cell-level) block fragment, discriminated by `kind`. */
 export type BlockFragmentRecord = ParagraphFragmentRecord | TableFragmentRecord;
 
+/**
+ * One header or footer story as it sits on one page.
+ *
+ * `box` is absolute (sheet coordinates) and sized to the story's FLOW height — never to
+ * any anchored-object extent, which is the rule that keeps a decorated header's hit area
+ * from covering the body. `fragments` are story-relative (origin at the box's top-left)
+ * and SHARED between the pages that show the same variant.
+ */
+export interface HeaderFooterStoryRecord {
+  readonly kind: 'header' | 'footer';
+  readonly variant: 'default' | 'first' | 'even';
+  readonly partName: string;
+  readonly box: LayoutBox;
+  readonly fragments: readonly BlockFragmentRecord[];
+}
+
 export interface PageRecord {
   readonly id: string;
   readonly index: number;
@@ -132,6 +148,9 @@ export interface PageRecord {
   /** The area inside the margins that content flows into. */
   readonly contentBox: LayoutBox;
   readonly fragments: readonly BlockFragmentRecord[];
+  /** Page furniture for this page's variant, absent when the document declares none. */
+  readonly header?: HeaderFooterStoryRecord;
+  readonly footer?: HeaderFooterStoryRecord;
 }
 
 export interface SemanticLayout {
@@ -150,6 +169,10 @@ export interface PageGeometry {
     readonly bottom: number;
     readonly left: number;
   };
+  /** `w:pgMar/@header` — sheet edge to header top, in points. Defaults to 36 (720 twips). */
+  readonly headerDistance?: number;
+  /** `w:pgMar/@footer` — sheet edge to footer bottom, in points. Defaults to 36. */
+  readonly footerDistance?: number;
 }
 
 /** US Letter with one-inch margins, in points. */

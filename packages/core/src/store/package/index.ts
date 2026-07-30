@@ -159,6 +159,11 @@ export {
   type OoxmlExternalTarget,
 } from './ooxml-package.ts';
 export {
+  resolveHeaderFooterParts,
+  type HeaderFooterParts,
+  type HeaderFooterVariant,
+} from './hf-references.ts';
+export {
   deobfuscateFont,
   readEmbeddedFonts,
   type EmbeddedFont,

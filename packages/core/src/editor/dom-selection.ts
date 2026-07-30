@@ -91,6 +91,14 @@ export function positionFromDomPoint(
 ): SemanticPosition | null {
   if (!root.contains(node)) return null;
 
+  // Header/footer furniture is painted, not editable (phase 2): its spans carry the same
+  // data attributes as body spans but name paragraphs of ANOTHER part, which the session
+  // cannot address. Refuse explicitly rather than letting clamping snap the caret to the
+  // first body paragraph.
+  const nearestElement =
+    node.nodeType === Node.ELEMENT_NODE ? (node as Element) : node.parentElement;
+  if (nearestElement?.closest('[data-docx-hf]')) return null;
+
   // An ELEMENT endpoint carries a child index, never a character offset — including when the
   // element is a painted span. Runs are inline-blocks, so a shift-click or a drag across one
   // is exactly when a browser reports the span itself as the endpoint; reading that index as

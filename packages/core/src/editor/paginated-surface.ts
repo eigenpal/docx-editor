@@ -13,7 +13,7 @@
 // IME and autofill without letting it own the document.
 
 import { openTreeSession, type TreeDocxSession } from '@docx-editor.dev/core-contract/binding';
-import { parentNodeOf, type TreeDocOp } from '@docx-editor.dev/core-contract/store';
+import { parentNodeOf, type OoxmlPart, type TreeDocOp } from '@docx-editor.dev/core-contract/store';
 import {
   createFixedMeasurer,
   createLayoutScheduler,
@@ -22,6 +22,7 @@ import {
   geometryOfSection,
   readSectionProperties,
   documentOrder,
+  layoutHeaderFooterStory,
   layoutSemanticDocument,
   caretAt,
   moveCaret,
@@ -30,7 +31,9 @@ import {
   paragraphTextFromLayout,
   spansInSelection,
   wordBoundary,
+  type HeaderFooterVariantName,
   type LayoutScope,
+  type PageFurniture,
   type SectionProperties,
   type NavigationCommand,
   type SemanticLayout,
@@ -268,6 +271,17 @@ export function mountPaginatedSurface(
   let lastPaintMs = 0;
   let lastSelectionMs = 0;
 
+  /**
+   * Header/footer stories, laid out once per part (phase 2, read-only).
+   *
+   * Keyed by part object identity plus width and producer: HF parts are immutable for the
+   * session's lifetime, but a section-width edit or a late-arriving font re-measures them.
+   */
+  const hfStoryMemo = new WeakMap<
+    object,
+    { width: number; producer: string; story: ReturnType<typeof layoutHeaderFooterStory> }
+  >();
+
   let currentLayout = layoutOnce();
   let desiredX: number | null = null;
 
@@ -282,6 +296,34 @@ export function mountPaginatedSurface(
     return geometryOfSection(readSectionProperties(session.part()));
   }
 
+  function furniture(): PageFurniture | undefined {
+    const parts = session.headerFooterParts();
+    if (parts.headers.size === 0 && parts.footers.size === 0) return undefined;
+    const currentGeometry = geometry();
+    const width =
+      currentGeometry.width - currentGeometry.margin.left - currentGeometry.margin.right;
+    const storyOf = (part: OoxmlPart): ReturnType<typeof layoutHeaderFooterStory> => {
+      const memo = hfStoryMemo.get(part);
+      if (memo && memo.width === width && memo.producer === producer) return memo.story;
+      const story = layoutHeaderFooterStory(part, width, measurer, producer, layoutCache);
+      hfStoryMemo.set(part, { width, producer, story });
+      return story;
+    };
+    const mapStories = (
+      source: ReadonlyMap<HeaderFooterVariantName, OoxmlPart>
+    ): ReadonlyMap<HeaderFooterVariantName, ReturnType<typeof layoutHeaderFooterStory>> => {
+      const laid = new Map<HeaderFooterVariantName, ReturnType<typeof layoutHeaderFooterStory>>();
+      for (const [variant, part] of source) laid.set(variant, storyOf(part));
+      return laid;
+    };
+    return {
+      titlePage: readSectionProperties(session.part()).titlePage,
+      evenAndOddHeaders: parts.evenAndOddHeaders,
+      headers: mapStories(parts.headers),
+      footers: mapStories(parts.footers),
+    };
+  }
+
   function layoutOnce(): SemanticLayout {
     const began = now();
     const layout = layoutSemanticDocument(session.part(), session.revision(), {
@@ -290,6 +332,7 @@ export function mountPaginatedSurface(
       cache: layoutCache,
       session: layoutSession,
       producer,
+      furniture: furniture(),
     });
     lastLayoutMs = now() - began;
     return layout;
@@ -316,6 +359,7 @@ export function mountPaginatedSurface(
         cache: layoutCache,
         session: layoutSession,
         producer,
+        furniture: furniture(),
       });
       lastLayoutMs = now() - began;
       return layout;

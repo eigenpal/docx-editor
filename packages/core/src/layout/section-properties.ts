@@ -177,5 +177,11 @@ export function geometryOfSection(section: SectionProperties): PageGeometry {
   // A page whose margins exceed it has no content area at all, and paginating into a
   // zero-height column never terminates. Fall back rather than hang.
   if (width - left - right <= 0 || height - top - bottom <= 0) return DEFAULT_PAGE_GEOMETRY;
-  return { width, height, margin: { top, right, bottom, left } };
+  return {
+    width,
+    height,
+    margin: { top, right, bottom, left },
+    headerDistance: Math.max(0, section.margins.headerTwips) / TWIPS_PER_POINT,
+    footerDistance: Math.max(0, section.margins.footerTwips) / TWIPS_PER_POINT,
+  };
 }

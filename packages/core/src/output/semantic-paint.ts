@@ -372,6 +372,32 @@ function paintPage(
     );
   }
   element.append(content);
+
+  // Page furniture (phase 2, read-only): painted inside the sheet but OUTSIDE the content
+  // box, inert to editing. `data-docx-hf` is what dom-selection uses to refuse mapping a
+  // browser caret inside the furniture back to a model position.
+  for (const story of [page.header, page.footer]) {
+    if (!story) continue;
+    const container = document.createElement('div');
+    container.className = 'docx-hf';
+    container.dataset.docxHf = story.kind;
+    container.setAttribute('contenteditable', 'false');
+    container.style.position = 'absolute';
+    container.style.left = `${(story.box.x - page.box.x) * options.scale}px`;
+    container.style.top = `${(story.box.y - page.box.y) * options.scale}px`;
+    container.style.width = `${story.box.width * options.scale}px`;
+    container.style.height = `${story.box.height * options.scale}px`;
+    // The box IS the flow height; anything drawn beyond it must not extend the hit area.
+    container.style.overflow = 'hidden';
+    for (const fragment of story.fragments) {
+      container.append(
+        fragment.kind === 'table'
+          ? paintTableFragment(document, fragment, options.scale)
+          : paintFragment(document, fragment, options.scale)
+      );
+    }
+    element.append(container);
+  }
   return element;
 }
 

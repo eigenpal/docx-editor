@@ -182,6 +182,7 @@ export {
   linesOf,
   paragraphFragmentsOf,
   type BlockFragmentRecord,
+  type HeaderFooterStoryRecord,
   type LayoutBox,
   type LineRecord,
   type PageGeometry,
@@ -199,10 +200,17 @@ export {
   createFixedMeasurer,
   createLayoutSession,
   layoutSemanticDocument,
+  type HeaderFooterVariantName,
   type LayoutSession,
   type LayoutSessionStats,
+  type PageFurniture,
   type SemanticLayoutOptions,
 } from './semantic-layout.ts';
+export {
+  layoutHeaderFooterStory,
+  type HeaderFooterStoryLayout,
+} from './hf-layout.ts';
+export { storyBlocks } from './story-roots.ts';
 export { createShapedMeasurer, type ShapedMeasurerOptions } from './shaped-measurer.ts';
 export {
   DEFAULT_SECTION_PROPERTIES,

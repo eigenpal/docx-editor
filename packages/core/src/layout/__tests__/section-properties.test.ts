@@ -113,6 +113,8 @@ describe('section properties become the geometry layout paginates against', () =
       width: 612,
       height: 792,
       margin: { top: 72, right: 72, bottom: 72, left: 72 },
+      headerDistance: 36,
+      footerDistance: 36,
     });
   });
 

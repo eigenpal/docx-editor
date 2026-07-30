@@ -28,9 +28,12 @@ import {
 import { DEFAULT_RUN_STYLE, type ResolvedRunStyle } from './run-style.ts';
 import { CELL_PAD, readTableStructure } from './semantic-table.ts';
 import { layoutRowFragment, type TableFlowDeps } from './semantic-table-layout.ts';
+import { storyBlocks } from './story-roots.ts';
+import type { HeaderFooterStoryLayout } from './hf-layout.ts';
 import {
   DEFAULT_PAGE_GEOMETRY,
   type BlockFragmentRecord,
+  type HeaderFooterStoryRecord,
   type LayoutBox,
   type LineRecord,
   type PageGeometry,
@@ -39,6 +42,22 @@ import {
   type TableRowFragmentRecord,
   type TextMeasurer,
 } from './semantic-records.ts';
+
+/** Which header/footer variant a page shows (ECMA-376 §17.10.5). */
+export type HeaderFooterVariantName = 'default' | 'first' | 'even';
+
+/**
+ * Pre-laid page furniture, supplied by the host (phase 2).
+ *
+ * Stories are laid out ONCE per variant (`layoutHeaderFooterStory`) and attached per page
+ * here; the body pass only selects the variant and computes the push-down.
+ */
+export interface PageFurniture {
+  readonly titlePage: boolean;
+  readonly evenAndOddHeaders: boolean;
+  readonly headers: ReadonlyMap<HeaderFooterVariantName, HeaderFooterStoryLayout>;
+  readonly footers: ReadonlyMap<HeaderFooterVariantName, HeaderFooterStoryLayout>;
+}
 
 export interface SemanticLayoutOptions {
   readonly geometry?: PageGeometry;
@@ -66,6 +85,8 @@ export interface SemanticLayoutOptions {
    * the top, and can stop early when the flow reconverges with the previous run.
    */
   readonly session?: LayoutSession;
+  /** Header/footer stories to attach per page; absent means no furniture. */
+  readonly furniture?: PageFurniture;
 }
 
 /** The flow state as it stood immediately before one block was placed. */
@@ -182,22 +203,6 @@ function breaksBefore(props: readonly OoxmlProperty[]): boolean {
   );
 }
 
-/** Body blocks — paragraphs AND tables — of a part, in document order. */
-function bodyBlocks(part: OoxmlPart): OoxmlElement[] {
-  const blocks: OoxmlElement[] = [];
-  const walk = (node: OoxmlNode): void => {
-    if (node.kind === 'textValue') return;
-    if (node.kind === 'body') {
-      for (const child of node.children) {
-        if (child.kind === 'paragraph' || child.kind === 'table') blocks.push(child);
-      }
-      return;
-    }
-    for (const child of node.children) walk(child);
-  };
-  walk(part.root);
-  return blocks;
-}
 
 /**
  * Lay a part out into pages, fragments, lines and spans.
@@ -244,10 +249,39 @@ export function layoutSemanticDocument(
   const producer = options.producer ?? 'unversioned-measurer';
 
   const contentWidth = geometry.width - geometry.margin.left - geometry.margin.right;
-  const contentHeight = geometry.height - geometry.margin.top - geometry.margin.bottom;
+
+  // PAGE FURNITURE. A header taller than the top-margin remainder pushes the content area
+  // down (Word's behaviour), computed as the worst case over the variants in use so the
+  // content column is one height for every page. Capped at 40% of the sheet per edge: a
+  // hostile header of five hundred paragraphs must not shrink the content area to nothing,
+  // because pagination into a zero-height column never terminates.
+  const furniture = options.furniture;
+  const headerDistance = geometry.headerDistance ?? 36;
+  const footerDistance = geometry.footerDistance ?? 36;
+  const maxFlow = (stories: ReadonlyMap<string, HeaderFooterStoryLayout> | undefined): number => {
+    let max = 0;
+    for (const story of stories?.values() ?? []) max = Math.max(max, story.flowHeight);
+    return max;
+  };
+  const furnitureCap = geometry.height * 0.4;
+  const effectiveTop = Math.min(
+    furnitureCap,
+    Math.max(geometry.margin.top, furniture ? headerDistance + maxFlow(furniture.headers) : 0)
+  );
+  const effectiveBottom = Math.min(
+    furnitureCap,
+    Math.max(geometry.margin.bottom, furniture ? footerDistance + maxFlow(furniture.footers) : 0)
+  );
+  const contentHeight = geometry.height - effectiveTop - effectiveBottom;
 
   const session = options.session;
-  const context = `${producer}|${geometry.width}x${geometry.height}|${geometry.margin.top},${geometry.margin.right},${geometry.margin.bottom},${geometry.margin.left}`;
+  const furnitureContext = furniture
+    ? `|hf:${headerDistance},${footerDistance},${furniture.titlePage ? 1 : 0}${furniture.evenAndOddHeaders ? 1 : 0};` +
+      [...furniture.headers].map(([variant, story]) => `h${variant}=${story.flowHeight}`).join(',') +
+      ';' +
+      [...furniture.footers].map(([variant, story]) => `f${variant}=${story.flowHeight}`).join(',')
+    : '';
+  const context = `${producer}|${geometry.width}x${geometry.height}|${geometry.margin.top},${geometry.margin.right},${geometry.margin.bottom},${geometry.margin.left}${furnitureContext}`;
 
   // Prepass: everything needed to KEY a paragraph, before any of them is placed. Resuming
   // means knowing where the first change is, and that cannot be discovered while walking.
@@ -257,7 +291,7 @@ export function layoutSemanticDocument(
   // and the producer. Recomputing the key — a serialization of the paragraph's subtree —
   // for every paragraph on every pass made the prepass, not placement, the cost of an
   // incremental layout: a one-character edit re-keyed the entire document.
-  const bodies = bodyBlocks(part);
+  const bodies = storyBlocks(part);
   const prepared = bodies.map((block): PreparedBlock => {
     const memo = preparedBlocks.get(block);
     if (memo && memo.contentWidth === contentWidth && memo.producer === producer) {
@@ -376,20 +410,55 @@ export function layoutSemanticDocument(
     height: geometry.height,
   });
 
+  /** The variant page `index` shows: title page first, then even/odd when declared. */
+  const variantFor = (index: number): HeaderFooterVariantName =>
+    furniture?.titlePage && index === 0
+      ? 'first'
+      : furniture?.evenAndOddHeaders && (index + 1) % 2 === 0
+        ? 'even'
+        : 'default';
+
+  const furnitureFor = (
+    kind: 'header' | 'footer',
+    index: number,
+    box: LayoutBox
+  ): HeaderFooterStoryRecord | undefined => {
+    if (!furniture) return undefined;
+    const variant = variantFor(index);
+    const story = (kind === 'header' ? furniture.headers : furniture.footers).get(variant);
+    // An absent variant shows nothing — Word falls back to blank, not to `default`.
+    if (!story) return undefined;
+    const y =
+      kind === 'header'
+        ? box.y + headerDistance
+        : box.y + geometry.height - footerDistance - story.flowHeight;
+    return {
+      kind,
+      variant,
+      partName: story.partName,
+      box: { x: box.x + geometry.margin.left, y, width: contentWidth, height: story.flowHeight },
+      fragments: story.fragments,
+    };
+  };
+
   const flushPage = (): void => {
     const index = pages.length;
     const box = pageBox(index);
+    const header = furnitureFor('header', index, box);
+    const footer = furnitureFor('footer', index, box);
     pages.push({
       id: `page-${index}`,
       index,
       box,
       contentBox: {
         x: box.x + geometry.margin.left,
-        y: box.y + geometry.margin.top,
+        y: box.y + effectiveTop,
         width: contentWidth,
         height: contentHeight,
       },
       fragments: pageFragments,
+      ...(header ? { header } : {}),
+      ...(footer ? { footer } : {}),
     });
     pageFragments = [];
     cursorY = 0;

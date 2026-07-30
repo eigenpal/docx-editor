@@ -158,8 +158,9 @@ export function bodyParagraphs(part: OoxmlPart): OoxmlNode[] {
  * select-all all need the full set.
  */
 export function allParagraphs(part: OoxmlPart): OoxmlNode[] {
+  const MAX_SDT_NESTING = 32;
   const paragraphs: OoxmlNode[] = [];
-  const walkBlocks = (children: readonly OoxmlNode[]): void => {
+  const walkBlocks = (children: readonly OoxmlNode[], sdtDepth = 0): void => {
     for (const child of children) {
       if (child.kind === 'paragraph') {
         paragraphs.push(child);
@@ -168,7 +169,19 @@ export function allParagraphs(part: OoxmlPart): OoxmlNode[] {
           if (row.kind !== 'tableRow') continue;
           for (const cell of row.children) {
             if (cell.kind !== 'tableCell') continue;
-            walkBlocks(cell.children);
+            walkBlocks(cell.children, sdtDepth);
+          }
+        }
+      } else if (
+        child.kind === 'generic' &&
+        child.localName === 'sdt' &&
+        sdtDepth < MAX_SDT_NESTING
+      ) {
+        // Block SDT content flattens transparently, matching the layout's story walk —
+        // the paragraphs inside a content control are editable plain paragraphs.
+        for (const inner of child.children) {
+          if (inner.kind !== 'textValue' && inner.localName === 'sdtContent') {
+            walkBlocks(inner.children, sdtDepth + 1);
           }
         }
       }

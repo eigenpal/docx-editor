@@ -16,9 +16,11 @@ import {
   ORIGIN_IDS,
   TreeDocumentStore,
   readOoxmlPackage,
+  resolveHeaderFooterParts,
   withPart,
   writeOoxmlPackage,
   paragraphTextOf,
+  type HeaderFooterParts,
   type OoxmlPackage,
   type OoxmlPackageRejection,
   type OoxmlPart,
@@ -96,6 +98,13 @@ export interface TreeDocxSession {
   subscribe(onChange: (change: TreeModelChange) => void): () => void;
   /** Serialize the whole package back to DOCX bytes. */
   save(): Uint8Array;
+  /**
+   * The resolved header/footer parts of the section, by variant (phase 2, read-only).
+   *
+   * Immutable for the session's lifetime: header/footer EDITING is a later slice, so a
+   * host may key derived layout by part object identity.
+   */
+  headerFooterParts(): HeaderFooterParts;
 }
 
 export type TreeSessionRejection = OoxmlPackageRejection | 'no-main-document-tree';
@@ -126,6 +135,7 @@ export function openTreeSession(bytes: Uint8Array): OpenTreeSessionResult {
   if (!main) return { ok: false, reason: 'no-main-document-tree', detail: pkg.mainDocumentPart };
 
   const store = new TreeDocumentStore(main);
+  let headerFooter: HeaderFooterParts | null = null;
   let lastChange: TreeModelChange | null = null;
   store.subscribe((change) => {
     lastChange = change;
@@ -219,6 +229,13 @@ export function openTreeSession(bytes: Uint8Array): OpenTreeSessionResult {
       save() {
         pkg = currentPackage();
         return writeOoxmlPackage(pkg);
+      },
+
+      headerFooterParts() {
+        // Resolved once: references and parts are immutable while HF editing stays a
+        // later slice, and callers key layout off part object identity.
+        headerFooter ??= resolveHeaderFooterParts(pkg);
+        return headerFooter;
       },
     },
   };

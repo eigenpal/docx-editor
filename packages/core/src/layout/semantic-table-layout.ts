@@ -145,10 +145,11 @@ function placeCellParagraph(
 }
 
 /**
- * Flow a cell's blocks within [left, right] from `top`; returns the fragments and the
- * bottom y. No pagination inside a cell — blocks stack.
+ * Flow blocks within [left, right] from `top`; returns the fragments and the bottom y.
+ * No pagination — blocks stack. Used for table cells and for header/footer stories,
+ * which is exactly what makes a header break like a cell: same breaker, same records.
  */
-function flowCellBlocks(
+export function flowBlocksInBox(
   blocks: readonly OoxmlElement[],
   left: number,
   right: number,
@@ -213,7 +214,7 @@ export function layoutRowFragment(
     // A vMerge continuation emits NO content, so text is never duplicated; the box is
     // still drawn. Full vertical-span rect height remains a separate refinement.
     if (!cell.vMergeContinue) {
-      const flow = flowCellBlocks(
+      const flow = flowBlocksInBox(
         cell.blocks,
         cellX + CELL_PAD,
         cellX + cellW - CELL_PAD,
