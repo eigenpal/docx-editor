@@ -206,10 +206,10 @@ function lineOverlap(
   from: SemanticPosition,
   to: SemanticPosition
 ): { start: number; end: number } | null {
-  const order = documentOrder(layout);
-  const lineParagraph = order.indexOf(line.range.paragraphId);
-  const fromParagraph = order.indexOf(from.paragraphId);
-  const toParagraph = order.indexOf(to.paragraphId);
+  const index = documentOrderIndex(layout);
+  const lineParagraph = index.get(line.range.paragraphId) ?? -1;
+  const fromParagraph = index.get(from.paragraphId) ?? -1;
+  const toParagraph = index.get(to.paragraphId) ?? -1;
   if (lineParagraph < fromParagraph || lineParagraph > toParagraph) return null;
 
   const start =
@@ -218,15 +218,40 @@ function lineOverlap(
   return end > start ? { start, end } : null;
 }
 
+// Memoized PER LAYOUT, which is sound because a published layout is immutable: a new
+// revision is a new object. Without this every selection walk recomputed the order — and
+// `lineOverlap` runs once per line, so `spansInSelection` on a large document recomputed a
+// full-document scan thousands of times per keystroke. The toolbar reading formatting on
+// every commit is what turned that into seconds.
+const documentOrderCache = new WeakMap<SemanticLayout, string[]>();
+const documentOrderIndexCache = new WeakMap<SemanticLayout, Map<string, number>>();
+
 /** Paragraph ids in document order, deduplicated across fragments. */
 export function documentOrder(layout: SemanticLayout): string[] {
-  const seen: string[] = [];
+  const cached = documentOrderCache.get(layout);
+  if (cached) return cached;
+  const seen = new Set<string>();
+  const order: string[] = [];
   for (const page of layout.pages) {
     for (const fragment of page.fragments) {
-      if (!seen.includes(fragment.paragraphId)) seen.push(fragment.paragraphId);
+      if (!seen.has(fragment.paragraphId)) {
+        seen.add(fragment.paragraphId);
+        order.push(fragment.paragraphId);
+      }
     }
   }
-  return seen;
+  documentOrderCache.set(layout, order);
+  return order;
+}
+
+/** Document-order position by paragraph id, for O(1) ordering checks. */
+function documentOrderIndex(layout: SemanticLayout): Map<string, number> {
+  const cached = documentOrderIndexCache.get(layout);
+  if (cached) return cached;
+  const index = new Map<string, number>();
+  for (const [position, id] of documentOrder(layout).entries()) index.set(id, position);
+  documentOrderIndexCache.set(layout, index);
+  return index;
 }
 
 /** A selection's endpoints in document order. */
