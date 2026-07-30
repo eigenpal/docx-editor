@@ -9,7 +9,6 @@
 // handed straight to `insertText` without a translation step that could disagree.
 
 import type { LineRecord, SemanticLayout, StyleSpanRecord } from './semantic-records.ts';
-import { linesOf } from './semantic-records.ts';
 
 /** A caret position in the model. */
 export interface SemanticPosition {
@@ -39,6 +38,40 @@ export interface SelectionRect {
   readonly y: number;
   readonly width: number;
   readonly height: number;
+}
+
+/**
+ * Lines grouped by the paragraph they render, with the page each sits on.
+ *
+ * Memoized PER LAYOUT — a published layout is immutable, so the grouping is computed once
+ * per revision instead of once per read. The reads this serves — caret geometry, span
+ * lookup for a selection, text reconstruction — are all "the lines of ONE paragraph", and
+ * answering them by scanning every line of every page made each one O(document); the
+ * toolbar asks after every commit, so the scans multiplied per keystroke.
+ */
+interface PlacedLine {
+  readonly line: LineRecord;
+  readonly pageIndex: number;
+}
+
+const paragraphLinesCache = new WeakMap<SemanticLayout, Map<string, PlacedLine[]>>();
+
+function paragraphLinesIndex(layout: SemanticLayout): Map<string, PlacedLine[]> {
+  const cached = paragraphLinesCache.get(layout);
+  if (cached) return cached;
+  const index = new Map<string, PlacedLine[]>();
+  for (const page of layout.pages) {
+    for (const fragment of page.fragments) {
+      for (const line of fragment.lines) {
+        const entry = index.get(line.range.paragraphId);
+        const placed = { line, pageIndex: page.index };
+        if (entry) entry.push(placed);
+        else index.set(line.range.paragraphId, [placed]);
+      }
+    }
+  }
+  paragraphLinesCache.set(layout, index);
+  return index;
 }
 
 /** The x offset of `offset` within a line, by walking its spans. */
@@ -99,21 +132,16 @@ export function caretStops(layout: SemanticLayout): CaretGeometry[] {
 
 /** Geometry for one model position, or null when it is not laid out. */
 export function caretAt(layout: SemanticLayout, position: SemanticPosition): CaretGeometry | null {
-  for (const page of layout.pages) {
-    for (const fragment of page.fragments) {
-      for (const line of fragment.lines) {
-        if (line.range.paragraphId !== position.paragraphId) continue;
-        if (position.offset < line.range.start || position.offset > line.range.end) continue;
-        return {
-          position,
-          x: xWithinLine(line, position.offset),
-          y: line.box.y,
-          height: line.box.height,
-          lineId: line.id,
-          pageIndex: page.index,
-        };
-      }
-    }
+  for (const { line, pageIndex } of paragraphLinesIndex(layout).get(position.paragraphId) ?? []) {
+    if (position.offset < line.range.start || position.offset > line.range.end) continue;
+    return {
+      position,
+      x: xWithinLine(line, position.offset),
+      y: line.box.y,
+      height: line.box.height,
+      lineId: line.id,
+      pageIndex,
+    };
   }
   return null;
 }
@@ -294,8 +322,7 @@ export type NavigationCommand =
 export function paragraphTextFromLayout(layout: SemanticLayout, paragraphId: string): string {
   const pieces: { start: number; text: string }[] = [];
   const seen = new Set<string>();
-  for (const line of linesOf(layout)) {
-    if (line.range.paragraphId !== paragraphId) continue;
+  for (const { line } of paragraphLinesIndex(layout).get(paragraphId) ?? []) {
     for (const span of line.spans) {
       // A paragraph that crosses a page produces fragments over the SAME source ranges, so
       // spans can repeat; keyed by range, they contribute once.
@@ -449,11 +476,22 @@ export function spansInSelection(
   const ordered = orderPositions(layout, selection);
   if (!ordered) return [];
   const spans: StyleSpanRecord[] = [];
-  for (const line of linesOf(layout)) {
-    const overlap = lineOverlap(layout, line, ordered.from, ordered.to);
-    if (!overlap) continue;
-    for (const span of line.spans) {
-      if (span.range.end > overlap.start && span.range.start < overlap.end) spans.push(span);
+  // Only the paragraphs the selection touches. A collapsed caret reads ONE paragraph's
+  // lines; iterating every line of the document made the toolbar's formatting read scale
+  // with document length instead of selection length.
+  const order = documentOrder(layout);
+  const index = documentOrderIndex(layout);
+  const lines = paragraphLinesIndex(layout);
+  const first = index.get(ordered.from.paragraphId) ?? -1;
+  const last = index.get(ordered.to.paragraphId) ?? -1;
+  if (first === -1 || last === -1) return [];
+  for (let at = first; at <= last; at += 1) {
+    for (const { line } of lines.get(order[at]!) ?? []) {
+      const overlap = lineOverlap(layout, line, ordered.from, ordered.to);
+      if (!overlap) continue;
+      for (const span of line.spans) {
+        if (span.range.end > overlap.start && span.range.start < overlap.end) spans.push(span);
+      }
     }
   }
   return spans;

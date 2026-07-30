@@ -353,6 +353,22 @@ function bodyParagraphs(part: OoxmlPart): OoxmlNode[] {
  * Deterministic: same tree plus same measurer produces byte-identical records, which is what
  * makes the incremental engine of section 9 differentially testable against a clean run.
  */
+/** Prepass results by paragraph node, valid while the width and producer both hold. */
+interface PreparedParagraphMemo {
+  readonly contentWidth: number;
+  readonly producer: string;
+  readonly entry: {
+    readonly paragraph: OoxmlNode;
+    readonly props: OoxmlProperty[];
+    readonly indent: { left: number; right: number };
+    readonly available: number;
+    readonly alignment: ReturnType<typeof paragraphAlignment>;
+    readonly key: string;
+  };
+}
+
+const preparedParagraphs = new WeakMap<OoxmlNode, PreparedParagraphMemo>();
+
 export function layoutSemanticDocument(
   part: OoxmlPart,
   revision: number,
@@ -374,8 +390,18 @@ export function layoutSemanticDocument(
 
   // Prepass: everything needed to KEY a paragraph, before any of them is placed. Resuming
   // means knowing where the first change is, and that cannot be discovered while walking.
+  //
+  // Memoized on NODE IDENTITY: a paragraph the commit did not touch is the same object, and
+  // its properties, indents and key derive from nothing but the node, the available width
+  // and the producer. Recomputing the key — a serialization of the paragraph's subtree —
+  // for every paragraph on every pass made the prepass, not placement, the cost of an
+  // incremental layout: a one-character edit re-keyed the entire document.
   const bodies = bodyParagraphs(part);
   const prepared = bodies.map((paragraph) => {
+    const memo = preparedParagraphs.get(paragraph);
+    if (memo && memo.contentWidth === contentWidth && memo.producer === producer) {
+      return memo.entry;
+    }
     const props = propertiesOf(
       paragraph.kind === 'textValue'
         ? undefined
@@ -383,7 +409,7 @@ export function layoutSemanticDocument(
     );
     const indent = paragraphIndent(props);
     const available = Math.max(1, contentWidth - indent.left - indent.right);
-    return {
+    const entry = {
       paragraph,
       props,
       indent,
@@ -391,6 +417,8 @@ export function layoutSemanticDocument(
       alignment: paragraphAlignment(props),
       key: paragraphLayoutKey({ paragraph, properties: props, width: available, producer }),
     };
+    preparedParagraphs.set(paragraph, { contentWidth, producer, entry });
+    return entry;
   });
 
   const keys = prepared.map((entry) => entry.key);
