@@ -13,6 +13,7 @@
 // IME and autofill without letting it own the document.
 
 import { openTreeSession, type TreeDocxSession } from '@docx-editor.dev/core-contract/binding';
+import type { TreeDocOp } from '@docx-editor.dev/core-contract/store';
 import {
   createFixedMeasurer,
   createLayoutScheduler,
@@ -76,6 +77,36 @@ export interface SurfaceFormatting {
   readonly styleId: string | null;
 }
 
+/**
+ * Where the last pass spent its time, and how much work it actually did.
+ *
+ * The durations are the surface's own three phases — layout, paint, selection sync — timed
+ * separately because they fail separately: a full relayout, a full repaint and a forced
+ * reflow each have a different fix. The counters come free from machinery that already
+ * exists: the layout session says how much was re-placed versus reused, and the scheduler
+ * says how often work was thrown away as stale. `placed` equal to `total` on every
+ * keystroke is the one-glance sign that incremental layout is not engaging.
+ */
+export interface PaginatedSurfacePerf {
+  /** Time the last layout pass took, in milliseconds. */
+  readonly layoutMs: number;
+  /** Time the last paint took — building and swapping the page DOM. */
+  readonly paintMs: number;
+  /** Time the last selection sync took — writing the model selection into the browser. */
+  readonly selectionMs: number;
+  /** Paragraphs the last pass re-placed, against the number in the document. */
+  readonly placed: number;
+  readonly total: number;
+  /** Pages carried over from the previous layout without being rebuilt. */
+  readonly reusedPages: number;
+  /** Passes that could not resume and laid the document out from the top. */
+  readonly fullPasses: number;
+  /** Layouts discarded because the model had already moved on. */
+  readonly staleDiscards: number;
+  /** Cooperative runs abandoned mid-flight for a newer revision. */
+  readonly cancelledRuns: number;
+}
+
 export interface PaginatedSurfaceState {
   readonly revision: number;
   readonly pageCount: number;
@@ -83,6 +114,8 @@ export interface PaginatedSurfaceState {
   readonly canUndo: boolean;
   readonly canRedo: boolean;
   readonly lastRejection: string | null;
+  /** Timing and reuse counters for the last pass. Diagnostics, not document state. */
+  readonly perf: PaginatedSurfacePerf;
 }
 
 export interface PaginatedSurface {
@@ -213,6 +246,16 @@ export function mountPaginatedSurface(
     head: { paragraphId: firstParagraph, offset: 0 },
   };
   let lastRejection: string | null = null;
+
+  // Phase timers, one slot per phase rather than a log: the state reports the LAST pass,
+  // and a host that wants history samples `onChange`. `performance.now()` where the host
+  // has one — monotonic, sub-millisecond — and wall clock where it does not (a bare test
+  // runtime), which is fine for numbers only ever read by a human.
+  const now = (): number => globalThis.performance?.now() ?? Date.now();
+  let lastLayoutMs = 0;
+  let lastPaintMs = 0;
+  let lastSelectionMs = 0;
+
   let currentLayout = layoutOnce();
   let desiredX: number | null = null;
 
@@ -228,13 +271,16 @@ export function mountPaginatedSurface(
   }
 
   function layoutOnce(): SemanticLayout {
-    return layoutSemanticDocument(session.part(), session.revision(), {
+    const began = now();
+    const layout = layoutSemanticDocument(session.part(), session.revision(), {
       measurer,
       geometry: geometry(),
       cache: layoutCache,
       session: layoutSession,
       producer,
     });
+    lastLayoutMs = now() - began;
+    return layout;
   }
 
   /**
@@ -250,14 +296,18 @@ export function mountPaginatedSurface(
     // The DOCUMENT's geometry, exactly as the first paint uses. Omitting it meant the first
     // paint honoured A4 and the first committed edit silently repaginated onto Letter — every
     // layout after the first comes through here rather than through `layoutOnce`.
-    run: (scope: LayoutScope) =>
-      layoutSemanticDocument(session.part(), scope.revision, {
+    run: (scope: LayoutScope) => {
+      const began = now();
+      const layout = layoutSemanticDocument(session.part(), scope.revision, {
         measurer,
         geometry: geometry(),
         cache: layoutCache,
         session: layoutSession,
         producer,
-      }),
+      });
+      lastLayoutMs = now() - began;
+      return layout;
+    },
     currentRevision: () => session.revision(),
     publish: (layout) => {
       currentLayout = layout;
@@ -315,16 +365,39 @@ export function mountPaginatedSurface(
       canUndo: session.canUndo(),
       canRedo: session.canRedo(),
       lastRejection,
+      perf: {
+        layoutMs: lastLayoutMs,
+        paintMs: lastPaintMs,
+        selectionMs: lastSelectionMs,
+        placed: layoutSession.stats.placed,
+        total: layoutSession.stats.total,
+        reusedPages: layoutSession.stats.reusedPages,
+        fullPasses: layoutSession.stats.fullPasses,
+        staleDiscards: scheduler.staleDiscards,
+        cancelledRuns: scheduler.cancelledRuns,
+      },
     };
   }
 
-  function render(): void {
+  /** The set the current paint was built with, so a scroll can tell whether it must repaint. */
+  let materializedSet: ReadonlySet<number> | undefined;
+
+  function equalPageSets(a: ReadonlySet<number> | undefined, b: typeof a): boolean {
+    if (a === b) return true;
+    if (!a || !b || a.size !== b.size) return false;
+    for (const index of a) if (!b.has(index)) return false;
+    return true;
+  }
+
+  function render(notifyChange = true): void {
+    const paintBegan = now();
+    materializedSet = visiblePages();
     paintSemanticLayout(pagesLayer, currentLayout, {
       scale,
       // Only what is on screen, plus a band either side and the pages the caret and the
       // selection touch. A five-hundred-page document has five hundred pages of records and
       // a screen holds two; building them all is the difference between opening and hanging.
-      materialize: visiblePages(),
+      materialize: materializedSet,
 
       // NOT aria-hidden. That default is right when the painted pages are a picture beside
       // an editable projection — but here they ARE the projection: focus and the selection
@@ -342,8 +415,25 @@ export function mountPaginatedSurface(
     pagesLayer.style.height = `${height * scale}px`;
     container.style.width = `${width * scale}px`;
     container.style.height = `${height * scale}px`;
+    // Sizing included: the style writes above invalidate layout, and the selection sync
+    // right after is what forces the browser to resolve it. Splitting the timer here would
+    // book the paint's own cost to the selection phase.
+    lastPaintMs = now() - paintBegan;
     syncDomSelection();
-    options.onChange?.(currentState());
+    if (notifyChange) options.onChange?.(currentState());
+  }
+
+  /**
+   * Follow the viewport: scrolling must reveal BUILT pages, not shells.
+   *
+   * Materialization is decided at paint time, and without this it was only ever decided on a
+   * COMMIT — scrolling a long document showed blank sheets until the next keystroke. A
+   * scroll repaints only when the set of pages worth building actually changed, and it does
+   * not report a state change: nothing about the document, selection or revision moved.
+   */
+  function rematerialize(): void {
+    if (equalPageSets(visiblePages(), materializedSet)) return;
+    render(false);
   }
 
   /**
@@ -360,7 +450,9 @@ export function mountPaginatedSurface(
     // yanked the caret out of whatever the user was actually typing in.
     if (!ownsSelection()) return;
     applyingSelection = true;
+    const began = now();
     applySelectionToDom(pagesLayer, selection, document.getSelection());
+    lastSelectionMs = now() - began;
     // Cleared on a LATER task, because `selectionchange` is queued rather than dispatched
     // synchronously. Clearing it here would defeat the guard in every real browser while
     // still appearing to work under a synchronous test DOM.
@@ -391,7 +483,10 @@ export function mountPaginatedSurface(
     return pagesLayer.contains(anchor);
   }
 
-  function commit(run: () => ReturnType<TreeDocxSession['applyPmDoc']> | boolean): void {
+  function commit(
+    run: () => ReturnType<TreeDocxSession['applyPmDoc']> | boolean,
+    selectionAfter?: () => SemanticSelection | null
+  ): void {
     // Ops go through the session, so the tree stays the only state. A refusal is surfaced
     // rather than silently dropped: the view is repainted from what the model actually
     // holds, so the user never keeps looking at an edit that will not be saved.
@@ -400,6 +495,19 @@ export function mountPaginatedSurface(
       lastRejection = String(result.reason ?? 'rejected');
     } else {
       lastRejection = null;
+      // The post-edit selection is installed BEFORE the paint, so the single render below
+      // paints the new pages, mirrors the new caret into the DOM and reports one state
+      // change. Committing first and calling `setSelection` afterwards wrote the superseded
+      // caret into the fresh DOM, wrote the browser selection twice, and reported every
+      // edit twice — the second-largest cost of a keystroke after layout, because a host
+      // re-derives toolbar formatting from each report. Supplied as a THUNK evaluated after
+      // the ops: a caret landing in a `w:p` the commit minted cannot be computed before the
+      // commit runs.
+      const next = selectionAfter?.();
+      if (next) {
+        selection = next;
+        desiredX = null;
+      }
     }
     // A committed edit repaints through the scheduler's publish; a REFUSED one commits
     // nothing, so the surface still has to refresh the state it just changed.
@@ -430,24 +538,23 @@ export function mountPaginatedSurface(
       // puts the text where the removed characters used to be rather than where the user
       // was typing.
       const start = orderedStart();
-      commit(() =>
-        session.applyTreeOps(
-          [
-            ...deleteSelectionOps(),
-            { op: 'insertText', paragraphId: start.paragraphId, offset: start.offset, text },
-          ],
-          selectionMark(),
-          // Where the caret ENDS, so redo puts it back there rather than leaving it
-          // addressing the tree the undo discarded.
-          {
-            paragraphId: start.paragraphId,
-            start: start.offset + text.length,
-            end: start.offset + text.length,
-          }
-        )
-      );
-      setSelection(
-        collapsedAt({ paragraphId: start.paragraphId, offset: start.offset + text.length })
+      commit(
+        () =>
+          session.applyTreeOps(
+            [
+              ...deleteSelectionOps(),
+              { op: 'insertText', paragraphId: start.paragraphId, offset: start.offset, text },
+            ],
+            selectionMark(),
+            // Where the caret ENDS, so redo puts it back there rather than leaving it
+            // addressing the tree the undo discarded.
+            {
+              paragraphId: start.paragraphId,
+              start: start.offset + text.length,
+              end: start.offset + text.length,
+            }
+          ),
+        () => collapsedAt({ paragraphId: start.paragraphId, offset: start.offset + text.length })
       );
     },
 
@@ -455,8 +562,10 @@ export function mountPaginatedSurface(
       const ops = deleteSelectionOps();
       if (ops.length > 0) {
         const start = orderedStart();
-        commit(() => session.applyTreeOps(ops, selectionMark()));
-        setSelection(collapsedAt(start));
+        commit(
+          () => session.applyTreeOps(ops, selectionMark()),
+          () => collapsedAt(start)
+        );
         return;
       }
       const position = selection.head;
@@ -469,29 +578,31 @@ export function mountPaginatedSurface(
         const previous = order[index - 1];
         if (!previous) return;
         const joinAt = textOf(previous).length;
-        commit(() =>
-          session.applyTreeOps(
-            [{ op: 'joinParagraphs', firstId: previous, secondId: position.paragraphId }],
-            selectionMark()
-          )
+        commit(
+          () =>
+            session.applyTreeOps(
+              [{ op: 'joinParagraphs', firstId: previous, secondId: position.paragraphId }],
+              selectionMark()
+            ),
+          () => collapsedAt({ paragraphId: previous, offset: joinAt })
         );
-        setSelection(collapsedAt({ paragraphId: previous, offset: joinAt }));
         return;
       }
-      commit(() =>
-        session.applyTreeOps(
-          [
-            {
-              op: 'deleteText',
-              paragraphId: position.paragraphId,
-              start: position.offset - 1,
-              end: position.offset,
-            },
-          ],
-          selectionMark()
-        )
+      commit(
+        () =>
+          session.applyTreeOps(
+            [
+              {
+                op: 'deleteText',
+                paragraphId: position.paragraphId,
+                start: position.offset - 1,
+                end: position.offset,
+              },
+            ],
+            selectionMark()
+          ),
+        () => collapsedAt({ ...position, offset: position.offset - 1 })
       );
-      setSelection(collapsedAt({ ...position, offset: position.offset - 1 }));
     },
 
     splitParagraph() {
@@ -499,24 +610,26 @@ export function mountPaginatedSurface(
       // splitting at the head left the selected text in place and cut the paragraph at
       // whichever end the user happened to drag to.
       const position = orderedStart();
-      const before = session.paragraphIds();
-      commit(() =>
-        session.applyTreeOps(
-          [
-            ...deleteSelectionOps(),
-            {
-              op: 'splitParagraph',
-              paragraphId: position.paragraphId,
-              offset: position.offset,
-            },
-          ],
-          selectionMark()
-        )
+      const before = new Set(session.paragraphIds());
+      commit(
+        () =>
+          session.applyTreeOps(
+            [
+              ...deleteSelectionOps(),
+              {
+                op: 'splitParagraph',
+                paragraphId: position.paragraphId,
+                offset: position.offset,
+              },
+            ],
+            selectionMark()
+          ),
+        () => {
+          // The tail is the id the store minted that was not there before.
+          const tail = session.paragraphIds().find((id) => !before.has(id));
+          return tail ? collapsedAt({ paragraphId: tail, offset: 0 }) : null;
+        }
       );
-      // The tail is the id the store minted that was not there before.
-      const after = session.paragraphIds();
-      const tail = after.find((id) => !before.includes(id));
-      if (tail) setSelection(collapsedAt({ paragraphId: tail, offset: 0 }));
     },
 
     navigate(command, extend = false) {
@@ -537,13 +650,14 @@ export function mountPaginatedSurface(
         surface.deleteBackward();
         return;
       }
-      commit(() =>
-        session.applyTreeOps(
-          [{ op: 'deleteText', paragraphId: head.paragraphId, start: target, end: head.offset }],
-          selectionMark()
-        )
+      commit(
+        () =>
+          session.applyTreeOps(
+            [{ op: 'deleteText', paragraphId: head.paragraphId, start: target, end: head.offset }],
+            selectionMark()
+          ),
+        () => collapsedAt({ ...head, offset: target })
       );
-      setSelection(collapsedAt({ ...head, offset: target }));
     },
 
     deleteWordForward() {
@@ -587,41 +701,44 @@ export function mountPaginatedSurface(
       const order = documentOrder(currentLayout);
       const next = order[order.indexOf(position.paragraphId) + 1];
       if (!next) return;
-      commit(() =>
-        session.applyTreeOps(
-          [{ op: 'joinParagraphs', firstId: position.paragraphId, secondId: next }],
-          selectionMark()
-        )
+      commit(
+        () =>
+          session.applyTreeOps(
+            [{ op: 'joinParagraphs', firstId: position.paragraphId, secondId: next }],
+            selectionMark()
+          ),
+        () => collapsedAt(position)
       );
-      setSelection(collapsedAt(position));
     },
 
     insertTab() {
       const start = orderedStart();
-      commit(() =>
-        session.applyTreeOps(
-          [
-            ...deleteSelectionOps(),
-            { op: 'insertTab', paragraphId: start.paragraphId, offset: start.offset },
-          ],
-          selectionMark()
-        )
+      commit(
+        () =>
+          session.applyTreeOps(
+            [
+              ...deleteSelectionOps(),
+              { op: 'insertTab', paragraphId: start.paragraphId, offset: start.offset },
+            ],
+            selectionMark()
+          ),
+        () => collapsedAt({ ...start, offset: start.offset + 1 })
       );
-      setSelection(collapsedAt({ ...start, offset: start.offset + 1 }));
     },
 
     insertLineBreak() {
       const start = orderedStart();
-      commit(() =>
-        session.applyTreeOps(
-          [
-            ...deleteSelectionOps(),
-            { op: 'insertHardBreak', paragraphId: start.paragraphId, offset: start.offset },
-          ],
-          selectionMark()
-        )
+      commit(
+        () =>
+          session.applyTreeOps(
+            [
+              ...deleteSelectionOps(),
+              { op: 'insertHardBreak', paragraphId: start.paragraphId, offset: start.offset },
+            ],
+            selectionMark()
+          ),
+        () => collapsedAt({ ...start, offset: start.offset + 1 })
       );
-      setSelection(collapsedAt({ ...start, offset: start.offset + 1 }));
     },
 
     setSelection: (next) => setSelection(next),
@@ -770,8 +887,10 @@ export function mountPaginatedSurface(
       const ops = deleteSelectionOps();
       if (ops.length === 0) return false;
       const start = orderedStart();
-      commit(() => session.applyTreeOps(ops, selectionMark()));
-      setSelection(collapsedAt(start));
+      commit(
+        () => session.applyTreeOps(ops, selectionMark()),
+        () => collapsedAt(start)
+      );
       return true;
     },
 
@@ -789,6 +908,7 @@ export function mountPaginatedSurface(
       pagesLayer.removeEventListener('paste', onPaste as EventListener);
       pagesLayer.removeEventListener('compositionstart', onCompositionStart);
       pagesLayer.removeEventListener('compositionend', onCompositionEnd);
+      scroller?.removeEventListener('scroll', onScroll);
       // Drop pending layout work and stop listening BEFORE the DOM goes, or a commit from
       // another editor sharing this store would paint into a detached container.
       scheduler.cancel();
@@ -1221,12 +1341,63 @@ export function mountPaginatedSurface(
     // Normalized first: a Windows clipboard carries CRLF, and a literal CR in run text is
     // not a paragraph break in OOXML — it is a stray control character.
     const lines = text.replace(/\r\n?/g, '\n').split('\n');
-    surface.deleteSelection();
-    for (let index = 0; index < lines.length; index += 1) {
-      if (index > 0) surface.splitParagraph();
-      const line = lines[index]!;
-      if (line.length > 0) surface.type(line);
+
+    // ONE COMMIT, whatever the clipboard holds.
+    //
+    // A newline in pasted plain text is a paragraph boundary — a new `w:p`, never a
+    // character in run text. Committing once per line laid out and repainted the whole
+    // document per pasted paragraph, so a four-page paste cost two hundred layouts of a
+    // growing document: quadratic in document size, and the reason paste lagged long
+    // before typing did. The whole paste is one op list instead: the joined text lands in
+    // the caret's paragraph with a single insert, and that paragraph is then split at each
+    // newline offset FROM THE LAST BOUNDARY BACKWARDS. Splitting from the end keeps every
+    // earlier offset valid in the original paragraph, so no op ever has to address a tail
+    // `w:p` whose id the store has not minted yet.
+    const start = orderedStart();
+    const joined = lines.join('');
+    const ops: TreeDocOp[] = [...deleteSelectionOps()];
+    if (joined.length > 0) {
+      ops.push({
+        op: 'insertText',
+        paragraphId: start.paragraphId,
+        offset: start.offset,
+        text: joined,
+      });
     }
+    const boundaries: number[] = [];
+    let consumed = 0;
+    for (let index = 0; index < lines.length - 1; index += 1) {
+      consumed += lines[index]!.length;
+      boundaries.push(start.offset + consumed);
+    }
+    for (let index = boundaries.length - 1; index >= 0; index -= 1) {
+      ops.push({
+        op: 'splitParagraph',
+        paragraphId: start.paragraphId,
+        offset: boundaries[index]!,
+      });
+    }
+    if (ops.length === 0) return;
+
+    const before = new Set(session.paragraphIds());
+    const lastLine = lines[lines.length - 1]!;
+    commit(
+      () => session.applyTreeOps(ops, selectionMark()),
+      () => {
+        if (boundaries.length === 0) {
+          return collapsedAt({
+            paragraphId: start.paragraphId,
+            offset: start.offset + lastLine.length,
+          });
+        }
+        // The caret lands at the end of the pasted text: in the LAST minted paragraph, right
+        // after the final line. `paragraphIds` is in document order, so the last unfamiliar
+        // id is the tail that carries the final line and whatever followed the caret.
+        const minted = session.paragraphIds().filter((id) => !before.has(id));
+        const landing = minted[minted.length - 1];
+        return landing ? collapsedAt({ paragraphId: landing, offset: lastLine.length }) : null;
+      }
+    );
   }
 
   /** Plain text from an input event's data transfer, if it carries any. */
@@ -1312,6 +1483,24 @@ export function mountPaginatedSurface(
   pagesLayer.addEventListener('paste', onPaste as EventListener);
   pagesLayer.addEventListener('compositionstart', onCompositionStart);
   pagesLayer.addEventListener('compositionend', onCompositionEnd);
+
+  // Attached at mount, when the host's chrome — including the scroll container — already
+  // exists. Coalesced to a frame: a wheel fires far more scroll events than there are
+  // frames, and each repaint costs the same whether one event asked for it or twenty.
+  const scroller = container.closest('.docx-editor__scroll-container');
+  let scrollScheduled = false;
+  const onScroll = (): void => {
+    if (scrollScheduled) return;
+    scrollScheduled = true;
+    const raf = container.ownerDocument.defaultView?.requestAnimationFrame;
+    const run = (): void => {
+      scrollScheduled = false;
+      rematerialize();
+    };
+    if (raf) raf(run);
+    else queueMicrotask(run);
+  };
+  scroller?.addEventListener('scroll', onScroll, { passive: true });
 
   render();
   return { ok: true, surface };

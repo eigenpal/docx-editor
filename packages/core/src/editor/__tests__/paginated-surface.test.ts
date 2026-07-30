@@ -31,7 +31,6 @@ function docx(body: string): Uint8Array {
 
 const paragraph = (text: string) => `<w:p><w:r><w:t>${text}</w:t></w:r></w:p>`;
 
-
 /**
  * Put the caret at a model position in the first paragraph.
  *
@@ -197,7 +196,7 @@ describe('painted pages, semantic interaction', () => {
   });
 });
 
-describe('relayout is driven by the store\'s own account of a commit (task 9.1)', () => {
+describe("relayout is driven by the store's own account of a commit (task 9.1)", () => {
   test('the painted layout always carries the revision the session is at', () => {
     const { surface } = mount(`<w:p><w:r><w:t>hello</w:t></w:r></w:p>`);
     putCaret(surface, 0);
@@ -495,6 +494,82 @@ describe('the incremental layout machinery is actually used (tasks 9.2, 9.3)', (
   });
 });
 
+describe('paste is one commit, whatever the clipboard holds', () => {
+  function paste(container: HTMLElement, text: string): void {
+    const layer = container.querySelector('.docx-pages') as HTMLElement;
+    const data = new DataTransfer();
+    data.setData('text/plain', text);
+    layer.dispatchEvent(
+      new ClipboardEvent('paste', { clipboardData: data, bubbles: true, cancelable: true })
+    );
+  }
+
+  test('a multi-line paste bumps the revision exactly once', () => {
+    // Committing per line laid out and repainted a growing document once per pasted
+    // paragraph — quadratic, and the reason paste lagged long before typing did. One
+    // revision for the whole paste is the observable form of "one commit, one layout".
+    const { surface, container } = mount(paragraph('hello'));
+    putCaret(surface, 5);
+    paste(container, 'one\ntwo\nthree\nfour');
+    expect(surface.state().revision).toBe(1);
+    expect(surface.session.bodyText()).toBe('helloone\ntwo\nthree\nfour');
+  });
+
+  test('one undo reverses the whole paste', () => {
+    // The flip side of one commit: undo after paste must not peel off one line at a time.
+    const { surface, container } = mount(paragraph('hello'));
+    putCaret(surface, 5);
+    paste(container, 'one\ntwo\nthree');
+    surface.undo();
+    expect(surface.session.bodyText()).toBe('hello');
+  });
+
+  test('pasting into the middle keeps the suffix attached to the last line', () => {
+    const { surface, container } = mount(paragraph('headtail'));
+    putCaret(surface, 4);
+    paste(container, 'A\nB');
+    expect(surface.session.bodyText()).toBe('headA\nBtail');
+  });
+
+  test('the caret lands at the end of the pasted text', () => {
+    const { surface, container } = mount(paragraph('headtail'));
+    putCaret(surface, 4);
+    paste(container, 'A\nBB');
+    const head = surface.state().selection.head;
+    // In the paragraph holding 'BBtail', right after the pasted 'BB'.
+    expect(head.offset).toBe(2);
+    expect(surface.session.paragraphIds().indexOf(head.paragraphId)).toBe(1);
+  });
+
+  test('a paste replaces the selection', () => {
+    const { surface, container } = mount(paragraph('hello world'));
+    const paragraphId = surface.session.paragraphIds()[0]!;
+    surface.setSelection({
+      anchor: { paragraphId, offset: 0 },
+      head: { paragraphId, offset: 5 },
+    });
+    paste(container, 'goodbye');
+    expect(surface.session.bodyText()).toBe('goodbye world');
+    expect(surface.state().revision).toBe(1);
+  });
+
+  test('a trailing newline splits, leaving the suffix in its own paragraph', () => {
+    const { surface, container } = mount(paragraph('headtail'));
+    putCaret(surface, 4);
+    paste(container, 'A\n');
+    expect(surface.session.bodyText()).toBe('headA\ntail');
+    // Caret at the START of the suffix paragraph: the last pasted line is empty.
+    expect(surface.state().selection.head.offset).toBe(0);
+  });
+
+  test('CRLF and lone CR both mean a paragraph break, never a control character', () => {
+    const { surface, container } = mount(paragraph(''));
+    putCaret(surface, 0);
+    paste(container, 'a\r\nb\rc');
+    expect(surface.session.bodyText()).toBe('a\nb\nc');
+  });
+});
+
 describe('redo restores the caret it left, not the one undo restored', () => {
   test('undo then redo leaves the editor editable', () => {
     // `selectionAfter` was never recorded by any caller, so redo restored nothing and left
@@ -552,6 +627,37 @@ describe('only the pages on screen are built (task 9.4)', () => {
     expect(built.length).toBeLessThan(pages.length);
     // Page count and heights are unchanged, so scrolling reveals rather than reflows.
     for (const page of pages) expect(page.style.height).toBe(pages[0]!.style.height);
+    scroller.remove();
+  });
+
+  test('scrolling reveals BUILT pages, not shells', async () => {
+    // Materialization is decided at paint time, and paint used to happen only on a commit —
+    // scrolling a long document showed blank sheets until the next keystroke.
+    const scroller = document.createElement('div');
+    scroller.className = 'docx-editor__scroll-container';
+    document.body.append(scroller);
+    const host = document.createElement('div');
+    scroller.append(host);
+    Object.defineProperty(scroller, 'clientHeight', { value: 800, configurable: true });
+    const result = mountPaginatedSurface(host, docx(long), { scale: 1 });
+    if (!result.ok) throw new Error(result.reason);
+    const surface = result.surface;
+    surface.type('x');
+
+    const lastIndex = surface.layout().pages.length - 1;
+    const farPage = (): HTMLElement =>
+      host.querySelector<HTMLElement>(`.docx-page[data-page-index="${lastIndex}"]`)!;
+    expect(farPage().dataset.materialized).toBe('false');
+
+    // Jump the viewport to the last page and let the frame-coalesced repaint run.
+    const last = surface.layout().pages[lastIndex]!;
+    scroller.scrollTop = last.box.y;
+    scroller.dispatchEvent(new Event('scroll'));
+    await new Promise((resolve) => setTimeout(resolve, 50));
+
+    expect(farPage().dataset.materialized).toBe('true');
+    expect(host.querySelectorAll('.docx-page').length).toBe(lastIndex + 1);
+    surface.destroy();
     scroller.remove();
   });
 });
