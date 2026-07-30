@@ -224,6 +224,8 @@ export function FontFamilyRoot({ hidden, asChild, className, children }: FontFam
   if (hidden) return null;
   const shared = {
     className: `docx-toolbar__font-family${className ? ` ${className}` : ''}`,
+    // Stable slot identity, matching the other parts' `data-slot` markers.
+    'data-slot': 'font.family',
     // The positioning context for the absolute Content.
     style: { position: 'relative' as const, display: 'inline-block' as const },
   };

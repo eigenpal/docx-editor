@@ -11,6 +11,8 @@ export {
   type ToolbarPartComponent,
   type ToolbarPartProps,
   type ToolbarSeparatorProps,
+  type ToolbarSlotPartComponent,
+  type ToolbarSlotPartProps,
 } from './parts';
 export {
   useFontFamily,

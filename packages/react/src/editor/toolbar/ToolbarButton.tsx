@@ -88,6 +88,9 @@ export function ToolbarButton(props: ToolbarButtonProps) {
     onClick: () => execute(),
     onMouseDown: guardToolbarMousedown,
     disabled: !isEnabled,
+    // Stable slot identity for hosts, tests, and e2e — control ids alone collide
+    // (`image.insert` / `table.insert`), so the full slot id is the marker.
+    'data-slot': slot,
     className: `docx-toolbar__button${className ? ` ${className}` : ''}`,
     // Presence attributes: present (empty string) when on, absent when off.
     ...(isActive ? { 'data-active': '' } : {}),

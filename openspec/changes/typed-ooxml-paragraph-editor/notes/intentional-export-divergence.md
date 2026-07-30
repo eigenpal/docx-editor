@@ -64,6 +64,9 @@ part/prop exports go with it.
 - `ToolbarPartComponent` — a named part (Bold, Undo, ...): component plus its static
   `docxSlot` marker.
 - `ToolbarPartProps` — props of the named parts (slot pinned).
+- `ToolbarSlotPartComponent` — a non-button part (picker, stepper, colour split, save)
+  pinned to one slot; carries the same `docxSlot` marker.
+- `ToolbarSlotPartProps` — props of the non-button parts (`className`, `hidden`).
 - `ToolbarSeparatorProps`
 - `ToolbarTranslate` — the toolbar's optional i18n resolver type.
 - `useFontFamily` — the font-picker behavior hook (value / options / setValue /

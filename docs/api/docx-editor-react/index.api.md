@@ -215,21 +215,61 @@ export interface DocxEditorToolbarNamespace {
     // (undocumented)
     readonly Bold: ToolbarPartComponent;
     // (undocumented)
+    readonly BulletList: ToolbarPartComponent;
+    // (undocumented)
     readonly Button: typeof ToolbarButton$1;
+    // (undocumented)
+    readonly ClearFormatting: ToolbarPartComponent;
+    // (undocumented)
+    readonly Comments: ToolbarPartComponent;
+    // (undocumented)
+    readonly EditingMode: ToolbarSlotPartComponent;
+    // (undocumented)
+    readonly FontColor: ToolbarSlotPartComponent;
     // (undocumented)
     readonly FontFamily: typeof FontFamily;
     // (undocumented)
+    readonly FontSize: ToolbarSlotPartComponent;
+    // (undocumented)
+    readonly Highlight: ToolbarSlotPartComponent;
+    // (undocumented)
+    readonly ImageInsert: ToolbarPartComponent;
+    // (undocumented)
+    readonly ImageProperties: ToolbarPartComponent;
+    // (undocumented)
+    readonly Indent: ToolbarPartComponent;
+    // (undocumented)
     readonly Italic: ToolbarPartComponent;
     // (undocumented)
+    readonly LineSpacing: ToolbarPartComponent;
+    // (undocumented)
+    readonly Link: ToolbarPartComponent;
+    // (undocumented)
+    readonly NumberedList: ToolbarPartComponent;
+    // (undocumented)
+    readonly Outdent: ToolbarPartComponent;
+    // (undocumented)
     readonly Redo: ToolbarPartComponent;
+    // (undocumented)
+    readonly Save: ToolbarSlotPartComponent;
     // (undocumented)
     readonly Separator: typeof ToolbarSeparator;
     // (undocumented)
     readonly Strike: ToolbarPartComponent;
     // (undocumented)
+    readonly StylePicker: ToolbarSlotPartComponent;
+    // (undocumented)
+    readonly Subscript: ToolbarPartComponent;
+    // (undocumented)
+    readonly Superscript: ToolbarPartComponent;
+    // (undocumented)
+    readonly TableInsert: ToolbarPartComponent;
+    // (undocumented)
     readonly Underline: ToolbarPartComponent;
     // (undocumented)
     readonly Undo: ToolbarPartComponent;
+    // (undocumented)
+    readonly Zoom: ToolbarSlotPartComponent;
 }
 
 // @public
@@ -237,6 +277,7 @@ export interface DocxEditorToolbarProps {
     // (undocumented)
     children?: ReactNode;
     className?: string;
+    onSave?: () => void;
     preset?: boolean;
     t?: ToolbarTranslate;
 }
@@ -586,6 +627,21 @@ export interface ToolbarProps {
 export interface ToolbarSeparatorProps {
     // (undocumented)
     className?: string;
+}
+
+// @public
+export interface ToolbarSlotPartComponent {
+    // (undocumented)
+    (props: ToolbarSlotPartProps): ReturnType<typeof ToolbarButton$1>;
+    // (undocumented)
+    readonly docxSlot: ChromeSlotId;
+}
+
+// @public
+export interface ToolbarSlotPartProps {
+    // (undocumented)
+    className?: string;
+    hidden?: boolean;
 }
 
 // @public

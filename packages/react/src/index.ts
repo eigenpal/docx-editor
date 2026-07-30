@@ -42,6 +42,8 @@ export {
   type ToolbarPartComponent,
   type ToolbarPartProps,
   type ToolbarSeparatorProps,
+  type ToolbarSlotPartComponent,
+  type ToolbarSlotPartProps,
   type ToolbarTranslate,
   type UseFontFamilyResult,
 } from './editor/toolbar';

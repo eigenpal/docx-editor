@@ -11,9 +11,14 @@ export type ToolbarTranslate = (key: string) => string;
 
 export interface ToolbarContextValue {
   readonly t: ToolbarTranslate | undefined;
+  /** Host save handler for the `file.save` part; absent renders the part disabled. */
+  readonly onSave: (() => void) | undefined;
 }
 
-export const ToolbarContext = createContext<ToolbarContextValue>({ t: undefined });
+export const ToolbarContext = createContext<ToolbarContextValue>({
+  t: undefined,
+  onSave: undefined,
+});
 
 /** The label for an i18n key: the host's translation, or the key itself. */
 export function useToolbarLabel(): (key: string) => string {

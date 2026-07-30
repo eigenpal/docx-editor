@@ -1,11 +1,14 @@
-// The compound toolbar (default set + in-place overrides + font-family compound).
+// The compound toolbar (full-registry default + in-place overrides + the shaped parts).
 //
 // Against the REAL engine, like editor-composition.test.tsx: a mounted document,
-// painted pages, committed ops. What these pin down: the default arrangement and its
-// order; that a part child REPLACES its slot in place (and `hidden` removes it);
-// `preset={false}` verbatim rendering; live Bold state through a click; asChild prop
-// merging; that FontFamily's options come from the DOCUMENT'S fonts and selecting one
-// applies it; and the caret-preserving mousedown contract.
+// painted pages, committed ops. What these pin down: the default arrangement IS the
+// whole chrome registry in registry order (derived from CHROME_GROUPS here too, so a
+// registry change updates the expectation); that a part child REPLACES its slot in
+// place (and `hidden` removes it); `preset={false}` verbatim rendering; live Bold
+// state through a click; asChild prop merging; the wired font-size stepper, zoom
+// stepper, and colour split buttons; the parity-only pickers rendering disabled; that
+// FontFamily's options come from the DOCUMENT'S fonts and selecting one applies it;
+// and the caret-preserving mousedown contract.
 
 // MUST be first: happy-dom registration happens on import.
 import './dom-setup.ts';
@@ -16,7 +19,11 @@ import { afterEach, describe, expect, test } from 'bun:test';
 import type { ReactNode } from 'react';
 import { act, cleanup, render } from '@testing-library/react';
 import { zipSync, strToU8 } from 'fflate';
-import type { DocxEditorInstance } from '@docx-editor.dev/core-contract/editor';
+import {
+  CHROME_GROUPS,
+  chromeSlotId,
+  type DocxEditorInstance,
+} from '@docx-editor.dev/core-contract/editor';
 import { DocxEditor } from '../src/components/DocxEditor.tsx';
 import { DocxEditorRoot } from '../src/editor/DocxEditorRoot.tsx';
 import { DocxEditorViewport } from '../src/editor/DocxEditorViewport.tsx';
@@ -55,20 +62,15 @@ const FONTED_SOURCE = docx(
     '</w:p>'
 );
 
-/** The default arrangement's aria-labels (raw i18n keys — no `t` in these tests). */
-const DEFAULT_LABELS = [
-  'formattingBar.undoShortcut',
-  'formattingBar.redoShortcut',
-  'formattingBar.boldShortcut',
-  'formattingBar.italicShortcut',
-  'formattingBar.underlineShortcut',
-  'formattingBar.strikethrough',
-  'alignment.alignLeft',
-  'alignment.center',
-  'alignment.alignRight',
-  'alignment.justify',
-  'font.selectAriaLabel',
-];
+/**
+ * The expected default arrangement, DERIVED from the registry exactly as the toolbar
+ * derives it: every control of every group in registry order, a separator between
+ * groups. Identities are the parts' `data-slot` markers.
+ */
+const EXPECTED_ARRANGEMENT: readonly string[] = CHROME_GROUPS.flatMap((group, index) => [
+  ...(index > 0 ? ['separator'] : []),
+  ...group.controls.map((control) => chromeSlotId(group, control) as string),
+]);
 
 function mountToolbar(
   toolbar: ReactNode,
@@ -99,7 +101,7 @@ function toolbarElement(view: ReturnType<typeof render>): HTMLElement {
 function childIdentities(toolbar: HTMLElement): string[] {
   return [...toolbar.children].map((child) => {
     if (child.getAttribute('role') === 'separator') return 'separator';
-    return child.getAttribute('aria-label') ?? child.className;
+    return child.getAttribute('data-slot') ?? child.getAttribute('aria-label') ?? child.className;
   });
 }
 
@@ -108,29 +110,24 @@ afterEach(() => {
 });
 
 describe('the default arrangement', () => {
-  test('renders the full default set in order, separators included', () => {
+  test('renders the WHOLE chrome registry in registry order, separators between groups', () => {
     const { view } = mountToolbar(<DocxEditorToolbar />);
     const toolbar = toolbarElement(view);
-    expect(childIdentities(toolbar)).toEqual([
-      'formattingBar.undoShortcut',
-      'formattingBar.redoShortcut',
-      'separator',
-      'formattingBar.boldShortcut',
-      'formattingBar.italicShortcut',
-      'formattingBar.underlineShortcut',
-      'formattingBar.strikethrough',
-      'separator',
-      'alignment.alignLeft',
-      'alignment.center',
-      'alignment.alignRight',
-      'alignment.justify',
-      'separator',
-      'docx-toolbar__font-family',
-    ]);
-    // Every part is present exactly once, as a real control.
-    for (const label of DEFAULT_LABELS.slice(0, -1)) {
-      expect(view.container.querySelectorAll(`[aria-label="${label}"]`).length).toBe(1);
+    // The arrangement is derived from CHROME_GROUPS on both sides of this assertion:
+    // 12 groups / 31 controls today, and a registry change updates both in lockstep.
+    expect(childIdentities(toolbar)).toEqual([...EXPECTED_ARRANGEMENT]);
+    // Every slot is present exactly once.
+    for (const slot of EXPECTED_ARRANGEMENT) {
+      if (slot === 'separator') continue;
+      expect(view.container.querySelectorAll(`[data-slot="${slot}"]`).length).toBe(1);
     }
+    // Wired controls are live buttons; the labels come from the registry keys.
+    expect(
+      view.container.querySelector('[aria-label="formattingBar.boldShortcut"]')
+    ).not.toBeNull();
+    expect(
+      view.container.querySelector('[aria-label="formattingBar.undoShortcut"]')
+    ).not.toBeNull();
   });
 
   test('a part child overrides its slot IN PLACE; non-part children append', () => {
@@ -141,29 +138,14 @@ describe('the default arrangement', () => {
       </DocxEditorToolbar>
     );
     const toolbar = toolbarElement(view);
-    // Same arrangement (plus the appended extra), with Bold still fourth.
+    // Same full arrangement (plus the appended extra), with Bold still in its place.
     const identities = childIdentities(toolbar);
-    expect(identities.slice(0, 14)).toEqual([
-      'formattingBar.undoShortcut',
-      'formattingBar.redoShortcut',
-      'separator',
-      'formattingBar.boldShortcut',
-      'formattingBar.italicShortcut',
-      'formattingBar.underlineShortcut',
-      'formattingBar.strikethrough',
-      'separator',
-      'alignment.alignLeft',
-      'alignment.center',
-      'alignment.alignRight',
-      'alignment.justify',
-      'separator',
-      'docx-toolbar__font-family',
-    ]);
-    expect(toolbar.children.length).toBe(15);
+    expect(identities.slice(0, EXPECTED_ARRANGEMENT.length)).toEqual([...EXPECTED_ARRANGEMENT]);
+    expect(toolbar.children.length).toBe(EXPECTED_ARRANGEMENT.length + 1);
     // The Bold in the arrangement IS the override (its className landed).
     const bold = view.container.querySelector('[aria-label="formattingBar.boldShortcut"]')!;
     expect(bold.className).toContain('custom-bold');
-    expect(toolbar.children[3]).toBe(bold);
+    expect(toolbar.children[EXPECTED_ARRANGEMENT.indexOf('text.bold')]).toBe(bold);
     // The non-part child appended after the default set.
     expect(toolbar.lastElementChild).toBe(view.getByTestId('extra'));
   });
@@ -176,7 +158,7 @@ describe('the default arrangement', () => {
     );
     const toolbar = toolbarElement(view);
     expect(view.container.querySelector('[aria-label="formattingBar.strikethrough"]')).toBeNull();
-    expect(toolbar.children.length).toBe(13);
+    expect(toolbar.children.length).toBe(EXPECTED_ARRANGEMENT.length - 1);
     // Neighbours unaffected: underline still present, alignment group intact.
     expect(
       view.container.querySelector('[aria-label="formattingBar.underlineShortcut"]')
@@ -192,11 +174,7 @@ describe('the default arrangement', () => {
       </DocxEditorToolbar>
     );
     const toolbar = toolbarElement(view);
-    expect(childIdentities(toolbar)).toEqual([
-      'formattingBar.boldShortcut',
-      'separator',
-      'formattingBar.undoShortcut',
-    ]);
+    expect(childIdentities(toolbar)).toEqual(['text.bold', 'separator', 'history.undo']);
   });
 });
 
@@ -260,6 +238,144 @@ describe('live button state', () => {
     });
     expect(child.hasAttribute('data-active')).toBe(true);
     expect(editor().snapshot().formatting?.bold).toBe(true);
+  });
+});
+
+/** A run with an explicit 12pt size (`w:sz` is half-points), for the stepper tests. */
+const SIZED_SOURCE = docx(
+  '<w:p><w:r><w:rPr><w:sz w:val="24"/></w:rPr><w:t>sized text</w:t></w:r></w:p>'
+);
+
+describe('the shaped parts', () => {
+  test('the font-size stepper shows the selection size and a step applies through the engine', async () => {
+    const { view, editor } = mountToolbar(<DocxEditorToolbar />, SIZED_SOURCE);
+    await act(async () => {
+      editor().surface!.selectAll();
+    });
+    const stepper = view.container.querySelector('[data-slot="font.size"]')!;
+    const value = stepper.querySelector('.docx-toolbar__stepper-value')!;
+    expect(value.textContent).toBe('12');
+    const increase = stepper.querySelector(
+      '[aria-label="fontSize.increase"]'
+    ) as HTMLButtonElement;
+    expect(increase.disabled).toBe(false);
+    await act(async () => {
+      increase.click();
+    });
+    // 24 half-points stepped to 26 → 13pt, read back from the engine's snapshot.
+    expect(editor().snapshot().formatting?.fontSizePt).toBe(13);
+    expect(value.textContent).toBe('13');
+    const decrease = stepper.querySelector(
+      '[aria-label="fontSize.decrease"]'
+    ) as HTMLButtonElement;
+    await act(async () => {
+      decrease.click();
+    });
+    expect(editor().snapshot().formatting?.fontSizePt).toBe(12);
+  });
+
+  test('the zoom stepper drives Editor.setZoom and reads the snapshot back', async () => {
+    const { view, editor } = mountToolbar(<DocxEditorToolbar />);
+    const stepper = view.container.querySelector('[data-slot="zoom.level"]')!;
+    const value = stepper.querySelector('.docx-toolbar__stepper-value')!;
+    expect(value.textContent).toBe('100%');
+    const zoomIn = stepper.querySelector('[aria-label="zoom.zoomIn"]') as HTMLButtonElement;
+    await act(async () => {
+      zoomIn.click();
+    });
+    expect(editor().snapshot().zoom).toBe(1.1);
+    expect(value.textContent).toBe('110%');
+    const zoomOut = stepper.querySelector('[aria-label="zoom.zoomOut"]') as HTMLButtonElement;
+    await act(async () => {
+      zoomOut.click();
+    });
+    expect(editor().snapshot().zoom).toBe(1);
+  });
+
+  test('the font-colour split applies its seed from the main half and a swatch pick from the grid', async () => {
+    const { view, editor } = mountToolbar(<DocxEditorToolbar />);
+    await act(async () => {
+      editor().surface!.selectAll();
+    });
+    const split = view.container.querySelector('[data-slot="font.color"]')!;
+    const main = split.querySelector('.docx-toolbar__colorsplit-main') as HTMLButtonElement;
+    expect(main.disabled).toBe(false);
+    await act(async () => {
+      main.click();
+    });
+    // The seed is the registry swatch.
+    expect(editor().snapshot().formatting?.color).toEqual({ kind: 'hex', value: 'D93025' });
+
+    const caret = split.querySelector('.docx-toolbar__colorsplit-caret') as HTMLButtonElement;
+    await act(async () => {
+      caret.click();
+    });
+    const swatch = split.querySelector('[data-value="000000"]') as HTMLButtonElement;
+    expect(swatch).not.toBeNull();
+    await act(async () => {
+      swatch.click();
+    });
+    expect(editor().snapshot().formatting?.color).toEqual({ kind: 'hex', value: '000000' });
+    // A pick closes the popup.
+    expect(split.querySelector('.docx-toolbar__swatch-popup')).toBeNull();
+  });
+
+  test('the highlight split applies yellow by default and an ST_HighlightColor name from the grid', async () => {
+    const { view, editor } = mountToolbar(<DocxEditorToolbar />);
+    await act(async () => {
+      editor().surface!.selectAll();
+    });
+    const split = view.container.querySelector('[data-slot="text.highlight"]')!;
+    const main = split.querySelector('.docx-toolbar__colorsplit-main') as HTMLButtonElement;
+    await act(async () => {
+      main.click();
+    });
+    expect(editor().snapshot().formatting?.highlight).toBe('yellow');
+
+    const caret = split.querySelector('.docx-toolbar__colorsplit-caret') as HTMLButtonElement;
+    await act(async () => {
+      caret.click();
+    });
+    const swatch = split.querySelector('[data-value="cyan"]') as HTMLButtonElement;
+    await act(async () => {
+      swatch.click();
+    });
+    expect(editor().snapshot().formatting?.highlight).toBe('cyan');
+  });
+
+  test('a parity-only dropdown renders as a DISABLED combobox-lookalike, never a control', () => {
+    const { view } = mountToolbar(<DocxEditorToolbar />);
+    for (const slot of ['styles.style', 'review.editingMode']) {
+      const picker = view.container.querySelector(`[data-slot="${slot}"]`)!;
+      expect(picker.tagName).toBe('SPAN');
+      expect(picker.getAttribute('aria-disabled')).toBe('true');
+      expect(picker.className).toContain('docx-toolbar__picker');
+      // No interactive element inside: nothing to click, nothing faked.
+      expect(picker.querySelector('button')).toBeNull();
+    }
+    // The registry placeholder value shows (raw keys — no `t` here).
+    expect(
+      view.container.querySelector('[data-slot="styles.style"] .docx-toolbar__picker-value')!
+        .textContent
+    ).toBe('styles.normalText');
+  });
+
+  test('save renders disabled without an onSave handler and live with one', async () => {
+    const onSaveCalls: number[] = [];
+    const { view } = mountToolbar(<DocxEditorToolbar onSave={() => onSaveCalls.push(1)} />);
+    const save = view.container.querySelector('[data-slot="file.save"]') as HTMLButtonElement;
+    expect(save.disabled).toBe(false);
+    await act(async () => {
+      save.click();
+    });
+    expect(onSaveCalls.length).toBe(1);
+
+    cleanup();
+    const { view: bare } = mountToolbar(<DocxEditorToolbar />);
+    const disabledSave = bare.container.querySelector(
+      '[data-slot="file.save"]'
+    ) as HTMLButtonElement;
+    expect(disabledSave.disabled).toBe(true);
   });
 });
 
@@ -358,5 +474,15 @@ describe('namespace statics', () => {
     expect(typeof DocxEditorToolbar.FontFamily.Trigger).toBe('function');
     expect(typeof DocxEditorToolbar.FontFamily.Content).toBe('function');
     expect(typeof DocxEditorToolbar.FontFamily.Item).toBe('function');
+    // The shaped parts carry their slot statics too.
+    expect(DocxEditorToolbar.FontSize.docxSlot).toBe('font.size');
+    expect(DocxEditorToolbar.FontColor.docxSlot).toBe('font.color');
+    expect(DocxEditorToolbar.Highlight.docxSlot).toBe('text.highlight');
+    expect(DocxEditorToolbar.Zoom.docxSlot).toBe('zoom.level');
+    expect(DocxEditorToolbar.StylePicker.docxSlot).toBe('styles.style');
+    expect(DocxEditorToolbar.EditingMode.docxSlot).toBe('review.editingMode');
+    expect(DocxEditorToolbar.Save.docxSlot).toBe('file.save');
+    expect(DocxEditorToolbar.BulletList.docxSlot).toBe('list.bullet');
+    expect(DocxEditorToolbar.TableInsert.docxSlot).toBe('table.insert');
   });
 });

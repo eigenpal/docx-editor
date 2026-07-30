@@ -192,7 +192,10 @@
       "lightBlue2": "Jasnoniebieski 2",
       "lightMagenta": "Jasna magenta",
       "brightGreen": "Jasnozielony",
-      "violet": "Fioletowy"
+      "violet": "Fioletowy",
+      "darkCyan": null,
+      "darkMagenta": null,
+      "lightGray": null
     }
   },
   "dialogs": {
