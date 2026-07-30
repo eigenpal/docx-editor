@@ -1,100 +1,36 @@
-import {
-  forwardRef,
-  useCallback,
-  useEffect,
-  useLayoutEffect,
-  useMemo,
-  useRef,
-  useState,
-} from 'react';
+import { forwardRef, useEffect, useRef, useState } from 'react';
 import type { CSSProperties } from 'react';
-import type { Editor, EditorFontError, EditorHost } from '@docx-editor.dev/core-contract/contracts/editor';
-import type { InteractionIntent } from '@docx-editor.dev/core-contract/contracts/interaction';
-import {
-  attachAdapterEventBridge,
-  createLayoutShaping,
-  createEditor,
-  disposeLayoutShaping,
-  firstEditableGlyphTarget,
-  installDisplayFonts,
-  measureInteractionHostMetrics,
-  overlaysForFrame,
-  PaintEpochGate,
-  toEditorFontError,
-  type BrowserFontSet,
-  type FrameOverlays,
-  type GlyphClickTarget,
-  type InstalledDisplayFonts,
-} from '@docx-editor.dev/core-contract/editor';
-import type { DisplayPage } from '@docx-editor.dev/core-contract/contracts/geometry';
-// The title bar is composed by DocxEditorToolbar (via EditorToolbar's compound parts),
-// which is where legacy assembles it — this file no longer composes it separately.
-import { DocxEditorPagedArea } from './DocxEditor/DocxEditorPagedArea';
-import { DocxEditorToolbar } from './DocxEditor/DocxEditorToolbar';
-import { DocxEditorOverlays } from './DocxEditor/DocxEditorOverlays';
-import { useContextMenus } from './DocxEditor/hooks/useContextMenus';
-import { useFormattingActions } from './DocxEditor/hooks/useFormattingActions';
-import { useFileIO } from './DocxEditor/hooks/useFileIO';
-import { useTableDialogs, type BorderSpec } from './DocxEditor/hooks/useTableDialogs';
-import { useHyperlinkActions } from './DocxEditor/hooks/useHyperlinkActions';
-import { useWatermarkControls } from './DocxEditor/hooks/useWatermarkControls';
-import { usePageSetupControls } from './DocxEditor/hooks/usePageSetupControls';
-import { useActiveEditor } from './DocxEditor/hooks/useActiveEditor';
-import { useTableOfContentsActions } from './DocxEditor/hooks/useTableOfContentsActions';
-import { useFloatingCommentBtn } from './DocxEditor/hooks/useFloatingCommentBtn';
-import { useDocumentLoader } from './DocxEditor/hooks/useDocumentLoader';
-import { useCommentManagement } from './DocxEditor/hooks/useCommentManagement';
-import { useCommentLifecycle } from './DocxEditor/hooks/useCommentLifecycle';
-import { useImageActions } from './DocxEditor/hooks/useImageActions';
-import { useFindReplaceBridge } from './DocxEditor/hooks/useFindReplaceBridge';
-import { useHeaderFooterEditing } from './DocxEditor/hooks/useHeaderFooterEditing';
-import { useDocxEditorRefApi } from './DocxEditor/hooks/useDocxEditorRefApi';
-import { MaterialSymbol } from './ui/Icons';
-import {
-  useSelectionTracker,
-  type SelectionStateDelta,
-} from './DocxEditor/hooks/useSelectionTracker';
-import { useKeyboardShortcuts } from './DocxEditor/hooks/useKeyboardShortcuts';
-import { useFindReplace } from '../hooks/useFindReplace';
-import { DocxEditorDialogs } from './DocxEditor/DocxEditorDialogs';
-import { useHyperlinkDialog } from './dialogs/HyperlinkDialog';
-import { OUTLINE_RESERVED_SPACE, OUTLINE_BUTTON_RESERVED_SPACE } from './DocumentOutline';
-import { SIDEBAR_DOCUMENT_SHIFT } from './sidebar/constants';
-import { RULER_WIDTH } from './ui/VerticalRuler';
+import type { Editor } from '@docx-editor.dev/core-contract/contracts/editor';
+import { createTreeEditor } from '@docx-editor.dev/core-contract/editor';
 import { prefersColorSchemeDark, resolveIsDark, subscribeSystemDark } from '../lib/colorMode';
-import type { EditorMode } from './DocxEditor/internals/editing-modes';
-import { useOutlineSidebar } from './DocxEditor/hooks/useOutlineSidebar';
-import { useScrollPageInfo } from './DocxEditor/hooks/useScrollPageInfo';
-import { EditorToolbarContext } from './EditorToolbarContext';
-import { DocxEditorShell } from './DocxEditor/DocxEditorShell';
-import type { SectionProperties } from '../legacy-core-compat';
-import { pixelsToTwips } from '../legacy-core-compat';
+import { useDocxEditorRefApi } from './DocxEditor/hooks/useDocxEditorRefApi';
 import type { DocxEditorProps, DocxEditorRef } from '../types';
 
 /**
- * React host for the DOCX editor. It supplies an `EditorHost` (DOM handles,
- * frame scheduling, a display sink), constructs the `Editor` through
- * `createEditor`, and paints the positioned `DisplayPage[]` the engine emits.
- * All editing, querying, and geometry go through the `Editor` facade.
+ * React host for the tree-lane editor (phase 3 of the legacy-lane retirement).
  *
- * Direct editing (interactive-paginated-editing 6.2): real pointer and keyboard
- * events on the painted pages are forwarded to the shared interaction
- * controller by `attachAdapterEventBridge`. The adapter normalizes nothing and
- * measures nothing — it reports scroll and zoom through
- * `measureInteractionHostMetrics`, hands raw client coordinates to the engine,
- * and paints back the caret and selection geometry the engine returns.
+ * THIN, mirroring `PaginatedDocxEditor`: the host owns a container element, the facade's
+ * lifetime, and prop-to-facade forwarding — nothing else. `createTreeEditor` implements
+ * the full `Editor` contract over the engine-owned paginated surface, which paints its
+ * own pages into the container and owns caret, selection, and hit testing internally, so
+ * the adapter measures nothing, paints nothing, and derives no geometry.
+ *
+ * The legacy chrome forest under `./DocxEditor/` is written against the legacy display
+ * pipeline — a host-DOM contract, engine-published display lists, interaction frames and
+ * paint gates — none of which the tree lane publishes (the surface paints itself, and
+ * the geometry cluster returns the typed empty frame). Rendering that chrome against
+ * honest-empty stubs would show dead controls positioned on empty geometry, so a
+ * `t`-supplied host gets the title bar (slots, editable name, save) above the surface.
+ * chrome re-integration: phase 4 follow-up.
  */
 
 /**
- * Legacy chrome geometry, ported verbatim from `DocxEditor.tsx` and
- * `DocxEditorShell.tsx` at 9bb06c38 (task M6V.1).
- *
- * These were inline style objects in the legacy code, not CSS classes, and the values
- * are load-bearing: the scroll container must be the flex child that shrinks
- * (`minHeight/minWidth: 0`) or the page stops scrolling, and `overflowAnchor: none`
- * stops the browser fighting the engine over scroll position during relayout.
+ * Legacy chrome geometry, kept from the previous host: the column that fills the host
+ * box, and a scroll container that is the flex child allowed to shrink
+ * (`minHeight/minWidth: 0`) — without that the page stack stops scrolling and the
+ * window scrolls instead.
  */
-const LEGACY_CONTAINER_STYLE: CSSProperties = {
+const CONTAINER_STYLE: CSSProperties = {
   display: 'flex',
   flexDirection: 'column',
   height: '100%',
@@ -102,991 +38,165 @@ const LEGACY_CONTAINER_STYLE: CSSProperties = {
   backgroundColor: 'var(--doc-bg)',
 };
 
-const LEGACY_MAIN_CONTENT_STYLE: CSSProperties = {
-  display: 'flex',
-  flex: 1,
-  minHeight: 0, // Allow flex item to shrink below content size
-  minWidth: 0, // Allow flex item to shrink below content width on narrow viewports
-  flexDirection: 'row',
-};
-
-const LEGACY_EDITOR_CONTAINER_STYLE: CSSProperties = {
+const SCROLL_AREA_STYLE: CSSProperties = {
   flex: 1,
   minHeight: 0,
-  minWidth: 0, // Allow flex item to shrink below content width on narrow viewports
-  overflow: 'auto', // Sole scroll container — the page stack sizes to content
-  position: 'relative',
+  minWidth: 0,
   overflowAnchor: 'none',
 };
 
-/**
- * Section geometry for the legacy rulers, derived from what the engine publishes.
- *
- * The legacy rulers take a `SectionProperties` record because legacy read section data
- * straight from the document model. The greenfield engine publishes the same geometry
- * through `Editor.getPageGeometry()` — page box plus the `contentBox` the layout actually
- * used — so the record is BUILT from that rather than the adapter reaching into a model
- * it does not own. Margins are uniform on all four sides in the engine today; that is
- * what is reported, and nothing here invents a per-side value.
- *
- * Returns `undefined` before layout publishes, so the rulers render their bare scale
- * rather than one positioned against guessed geometry.
- */
-function sectionPropsFromGeometry(editor: Editor | null): SectionProperties | undefined {
-  const page = editor?.getPageGeometry()[0];
-  if (!page) return undefined;
-  const left = Math.round(pixelsToTwips(page.contentBox.x - page.box.x));
-  const top = Math.round(pixelsToTwips(page.contentBox.y - page.box.y));
-  const right = Math.round(
-    pixelsToTwips(page.box.width - (page.contentBox.x - page.box.x) - page.contentBox.width)
-  );
-  const bottom = Math.round(
-    pixelsToTwips(page.box.height - (page.contentBox.y - page.box.y) - page.contentBox.height)
-  );
-  // FLAT margin fields, which is what `SectionProperties` declares and what the rulers
-  // read. This used to build a nested `margins` object behind an `as` cast — the cast
-  // compiled, the rulers got `marginLeft: undefined`, and their margin zones never
-  // rendered against real geometry.
-  return {
-    pageWidth: Math.round(pixelsToTwips(page.box.width)),
-    pageHeight: Math.round(pixelsToTwips(page.box.height)),
-    marginLeft: left,
-    marginRight: right,
-    marginTop: top,
-    marginBottom: bottom,
-  };
-}
+const TITLE_BAR_STYLE: CSSProperties = {
+  display: 'flex',
+  alignItems: 'center',
+  gap: 8,
+  padding: '6px 12px',
+  borderBottom: '1px solid var(--doc-border)',
+  backgroundColor: 'var(--doc-surface)',
+  color: 'var(--doc-text)',
+};
+
+const TITLE_INPUT_STYLE: CSSProperties = {
+  flex: 1,
+  minWidth: 0,
+  font: 'inherit',
+  color: 'inherit',
+  backgroundColor: 'transparent',
+  border: '1px solid transparent',
+  borderRadius: 4,
+  padding: '2px 6px',
+};
 
 export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
   function DocxEditor(props, ref) {
     const {
       document: doc,
+      fonts,
       className,
       t,
       title,
       onTitleChange,
-      onSave,
       renderTitleBarLeft,
       renderTitleBarRight,
       colorMode = 'light',
     } = props;
-    const browserFirstCheckpoint =
-      typeof globalThis.location !== 'undefined' &&
-      new URLSearchParams(globalThis.location.search).get('browserFirst') === '1';
 
-    const bodyRef = useRef<HTMLDivElement | null>(null);
-    const pagesRef = useRef<HTMLDivElement | null>(null);
-    const scrollRef = useRef<HTMLDivElement | null>(null);
+    const containerRef = useRef<HTMLDivElement | null>(null);
     const editorRef = useRef<Editor | null>(null);
-    const shapingRef = useRef<Awaited<ReturnType<typeof createLayoutShaping>> | null>(null);
-    const fontLeaseRef = useRef<InstalledDisplayFonts | null>(null);
-    const detachBridgeRef = useRef<(() => void) | null>(null);
-    const paintGateRef = useRef(new PaintEpochGate());
-    const committedPaintEpochRef = useRef(0);
-    const readyPublishedRef = useRef(false);
-    const [pendingPages, setPendingPages] = useState<{
-      readonly epoch: number;
-      readonly pages: readonly DisplayPage[];
-    } | null>(null);
-    const [pages, setPages] = useState<readonly DisplayPage[]>([]);
-    const [installedFonts, setInstalledFonts] = useState<InstalledDisplayFonts | null>(null);
-    const [fontError, setFontError] = useState<EditorFontError | null>(null);
-    const [overlays, setOverlays] = useState<FrameOverlays>({ caret: null, selection: [] });
-    const [clickTarget, setClickTarget] = useState<GlyphClickTarget | null>(null);
 
     // Latest props/callbacks, read inside effects without retriggering them.
     const propsRef = useRef(props);
     propsRef.current = props;
 
-    const {
-      showOutline,
-      setShowOutline,
-      outlineHeadings,
-      setHeadingInfos,
-      toolbarHeight,
-      toolbarRefCallback,
-      editorScrollLeft,
-    } = useOutlineSidebar({
-      showOutlineProp: false,
-      editorRef,
-      scrollContainerRef: scrollRef,
-      isLoading: pages.length === 0,
-    });
+    // Create the facade once per document/fonts identity. `mode`, `locale`, `author`,
+    // and the initial `zoom` are sampled at mount (as the prop docs say); later zoom
+    // changes flow through `setZoom` below rather than a teardown, so undo history and
+    // the caret survive parent re-renders.
+    useEffect(() => {
+      const container = containerRef.current;
+      if (!container) return undefined;
+      const p = propsRef.current;
+      const editor = createTreeEditor({
+        container,
+        ...(p.document !== undefined ? { document: p.document } : {}),
+        ...(p.fonts ? { fonts: p.fonts } : {}),
+        ...(p.author !== undefined ? { author: p.author } : {}),
+        ...(p.locale !== undefined ? { locale: p.locale } : {}),
+        ...(p.mode !== undefined ? { mode: p.mode } : {}),
+        ...(p.zoom !== undefined ? { zoom: p.zoom } : {}),
+        onFontError: (error) => propsRef.current.onFontError?.(error),
+      });
+      editorRef.current = editor;
+      const offChange = editor.on('change', (change) => propsRef.current.onChange?.(change));
+      propsRef.current.onReady?.(editor);
+      return () => {
+        offChange();
+        editor.destroy();
+        editorRef.current = null;
+      };
+    }, [doc, fonts]);
 
-    // Find/replace and hyperlink dialog state, both ported hooks, driven by the ported
-    // keyboard shortcuts below (Cmd+F / Cmd+H / Cmd+K, plus Cmd+O and table delete).
-    const findReplace = useFindReplace();
-    const hyperlinkDialog = useHyperlinkDialog();
-    useKeyboardShortcuts({
-      editorRef,
-      disableFindReplaceShortcuts: false,
-      showFileOpen: false,
-      findReplace,
-      hyperlinkDialog,
-    });
+    // Zoom is a facade parameter, not a remount: the stored factor applies from the
+    // next mount the facade performs (see `TreeEditor.setZoom`), and tearing the
+    // editor down for a zoom change would discard the user's edits and undo history.
+    const propZoom = props.zoom;
+    useEffect(() => {
+      if (propZoom !== undefined) editorRef.current?.setZoom(propZoom);
+    }, [propZoom]);
 
-    // Find and replace, ported. This file used to carry the derivation and the stepping
-    // inline; the bridge owns both, and replace joins the contract for it.
-    const {
-      findResultRef,
-      handleFind,
-      handleFindNext,
-      handleFindPrevious,
-      handleReplace,
-      handleReplaceAll,
-    } = useFindReplaceBridge({ editorRef });
+    // The seven-member imperative handle, each member forwarding to the facade.
+    useDocxEditorRefApi({ ref, editorRef });
 
-    // The image menu's own state hook, ported.
-    // Document lifecycle, ported: load on prop change (skipping the value createEditor
-    // already loaded) and publish the font inventory the pickers read. This replaces the
-    // inline reload effect and the inline `getDocumentFonts` call this file carried.
-    const { documentFonts } = useDocumentLoader({ editorRef, document: doc });
-
-    // Table-of-contents updates, ported — including legacy's deferred second pass, which
-    // exists because refreshing a TOC changes page numbers, which repaginates, which
-    // changes the numbers the TOC should show.
-    const { runTableOfContentsUpdate, handleTableOfContentsInserted } = useTableOfContentsActions({
-      editorRef,
-    });
-
-    // Header/footer editing, ported. `getHeaderFooterState` is a stub returning null, so
-    // a double-click on the header band is refused and nothing opens — the workflow is
-    // wired so that capability plus its three commands light it up with no change here.
-    const [hfEditPosition, setHfEditPosition] = useState<'header' | 'footer' | null>(null);
-    const [hfEditIsFirstPage, setHfEditIsFirstPage] = useState(false);
-    const { handleHeaderFooterDoubleClick, handleBodyClick } = useHeaderFooterEditing({
-      editorRef,
-      hfEditPosition,
-      setHfEditPosition,
-      hfEditIsFirstPage,
-      setHfEditIsFirstPage,
-    });
-
-    // A double-click on the pages: ask the ENGINE what is under the point rather than
-    // deriving it here. A hit that resolves to a header or footer scope opens that
-    // region; anything else is an ordinary double-click the interaction bridge handles.
-    const handlePagesDoubleClick = useCallback(
-      (point: { x: number; y: number }) => {
-        const hit = editorRef.current?.hitTest(point);
-        const scope = hit?.target?.scope;
-        if (scope?.kind !== 'headerFooter') return;
-        // The engine names the region by relationship id; which of header or footer it
-        // is comes from the state capability, and that is a stub returning null — so
-        // nothing opens today and nothing is guessed from the pointer's height.
-        const state = editorRef.current?.getHeaderFooterState();
-        if (state?.editing) handleHeaderFooterDoubleClick(state.editing);
-      },
-      [editorRef, handleHeaderFooterDoubleClick]
-    );
-
-    // Active-editor routing, ported. Every call site below used to repeat
-    // `() => editorRef.current?.focus()`; the rule lives in one place again.
-    const { focusActiveEditor, undoActiveEditor, redoActiveEditor } = useActiveEditor({
-      hfEditPosition,
-      editorRef,
-    });
-
-    // Page setup and the ruler drag handlers, ported. The rulers were wired to no-ops,
-    // so dragging a margin did nothing at all; they now reach `setPageSetup`, which the
-    // engine refuses, so a drag snaps back instead of silently pretending.
-    const {
-      showPageSetup,
-      setShowPageSetup,
-      handleOpenPageSetup,
-      handleLeftMarginChange,
-      handleRightMarginChange,
-      handleTopMarginChange,
-      handleBottomMarginChange,
-      handlePageSetupApply,
-      handleIndentLeftChange,
-      handleIndentRightChange,
-      handleFirstLineIndentChange,
-      handleTabMarkRemove,
-    } = usePageSetupControls({ readOnly: false, editorRef });
-
-    // Hyperlink and watermark actions, ported. Both dialogs were opening onto no-op
-    // handlers; they now reach the contract's commands.
-    const { handleHyperlinkSubmit, handleHyperlinkRemove } = useHyperlinkActions({
-      editorRef,
-      focusActiveEditor,
-      hyperlinkDialog,
-    });
-    const {
-      showWatermark,
-      setShowWatermark,
-      handleOpenWatermark,
-      currentWatermark,
-      handleWatermarkApply,
-    } = useWatermarkControls({ readOnly: false, editorRef });
-
-    // Table toolbar actions and their dialogs, ported. The border spec is the shared
-    // record legacy threads through the toolbar: a border colour or width picked from a
-    // dropdown lands here and the NEXT border action uses it.
-    const borderSpecRef = useRef<BorderSpec>({
-      style: 'single',
-      size: 4,
-      color: { kind: 'hex', value: '000000' },
-    });
-    const {
-      tablePropsOpen,
-      setTablePropsOpen,
-      splitCellDialogState,
-      openSplitCellDialog,
-      handleTableAction,
-      handleSplitCellDialogClose,
-      handleSplitCellDialogApply,
-    } = useTableDialogs({ editorRef, borderSpecRef });
-
-    // File in and out, ported. Save serializes the canonical package through the engine;
-    // open loads bytes into it. The hidden inputs go in the shell's `fileInputs` slot,
-    // which this file had left empty.
-    const {
-      imageInputRef,
-      docxInputRef,
-      handleSave,
-      handleDirectPrint,
-      handleDownloadDocument,
-      handleOpenDocument,
-      handleDocxFileChange,
-      handleInsertImageClick,
-      handleImageFileChange,
-    } = useFileIO({
-      editorRef,
-      documentName: title,
-      onDocumentNameChange: onTitleChange,
-    });
-
-    // Toolbar actions, ported. Bold and italic apply for real (`toggleMark` is wired in
-    // the engine); everything else returns an unsupported result, so the button does
-    // nothing rather than something unintended.
-    const {
-      handleFormat,
-      handleInsertTable,
-      handleInsertPageBreak,
-      handleInsertSectionBreakNextPage,
-      handleInsertSectionBreakContinuous,
-      handleInsertTOC,
-    } = useFormattingActions({
-      editorRef,
-      focusActiveEditor,
-      hyperlinkDialog,
-      onTableOfContentsInserted: handleTableOfContentsInserted,
-    });
-
-    // The ported context-menu hook. It owns the text menu's state, the item list, the
-    // image menu, and the action dispatcher — all of which this file previously passed as
-    // empty placeholders.
-    const {
-      contextMenu,
-      imageContextMenu,
-      handleEditorContextMenu,
-      handleContextMenuClose,
-      handleImageWrapApply,
-      imageContextMenuTextActions,
-      contextMenuItems,
-      handleContextMenuAction,
-    } = useContextMenus({
-      editorRef,
-      focusActiveEditor,
-      openSplitCellDialog,
-      onUpdateTableOfContents: runTableOfContentsUpdate,
-      i18n: undefined,
-      onAddComment: () => {},
-    });
-
-    // Colour mode, resolved as legacy resolves it: 'system' subscribes to the OS setting
-    // and re-syncs immediately, correcting a stale seed if it changed while the mode was
-    // pinned. Only `.dark` on the chrome root moves; the canvas is untouched.
+    // Chrome colour mode, resolved as the previous host resolved it: 'system'
+    // subscribes to the OS setting. Only the chrome root's `.dark` class moves — the
+    // document canvas stays Word-faithful.
     const [systemDark, setSystemDark] = useState(prefersColorSchemeDark);
     useEffect(() => {
-      if (colorMode !== 'system') return;
+      if (colorMode !== 'system') return undefined;
       return subscribeSystemDark(setSystemDark);
     }, [colorMode]);
     const isDark = resolveIsDark(colorMode, systemDark);
 
-    // Chrome state the ported toolbar owns the controls for. The comments sidebar has
-    // nothing to show while `getComments` is a stub, but the toggle is wired rather than
-    // absent — a missing control reads as "unsupported forever".
-    const [editingMode, setEditingMode] = useState<EditorMode>('editing');
-    const [showCommentsSidebar, setShowCommentsSidebar] = useState(false);
-    const [expandedSidebarItem, setExpandedSidebarItem] = useState<string | null>(null);
-
-    // Toolbar state for the current selection, from the ported tracker. This block used
-    // to be an inline derivation in this file; the hook owns it now, and the delta it
-    // emits is legacy's shape.
-    const [selectionDelta, setSelectionDelta] = useState<SelectionStateDelta>({});
-    const { handleSelectionChange } = useSelectionTracker({
-      editorRef,
-      applySelectionDelta: setSelectionDelta,
-    });
-    const selectionFormatting = selectionDelta.selectionFormatting ?? {};
-    // The editor is constructed once, so its `selectionChange` subscriber closes over the
-    // first handler identity. A ref keeps that subscriber calling the CURRENT one.
-    const handleSelectionChangeRef = useRef(handleSelectionChange);
-    handleSelectionChangeRef.current = handleSelectionChange;
-    // Assigned below, once `useFloatingCommentBtn` has run — the editor's subscriber is
-    // created once and reads whatever is current at fire time.
-    const recomputeFloatingCommentBtnRef = useRef<() => void>(() => {});
-
-    // Collect headings on open, as legacy did — it walked the editing engine's
-    // document tree; here the engine derives the outline from the authored model.
-    const handleToggleOutline = useCallback(() => {
-      setShowOutline((prev) => {
-        if (!prev) {
-          const headings = editorRef.current?.getOutline() ?? [];
-          setHeadingInfos(headings.map((h, i) => ({ text: h.text, level: h.level, pmPos: i })));
-        }
-        return !prev;
-      });
-    }, [setShowOutline, setHeadingInfos]);
-
-    // Re-read the published frame and repaint the overlay layer. Runs after
-    // every display and selection change so the caret cannot lag the model.
-    const syncFromFrame = useCallback(() => {
-      const editor = editorRef.current;
-      if (!editor) return;
-      const frame = editor.getInteractionFrame();
-      setOverlays(overlaysForFrame(frame));
-      setClickTarget(firstEditableGlyphTarget(frame));
-    }, []);
-
-    const host = useMemo<EditorHost>(
-      () => ({
-        getBodyHostEl: () => bodyRef.current,
-        getHfHostEl: () => null,
-        getPagesContainer: () => pagesRef.current,
-        getScrollContainer: () => scrollRef.current,
-        // Measured from the PAGES stack, not the scroll container. The engine
-        // publishes page boxes starting at content (0, 0), so the client origin
-        // it needs is the origin of that stack — which already accounts for
-        // scroll position and for the stack being centered in a wider viewport.
-        // Measuring the scroll container instead shifts every hit test by the
-        // centering offset and lands clicks outside page geometry.
-        getInteractionHostMetrics: () => {
-          const pagesEl = pagesRef.current;
-          if (!pagesEl) return null;
-          return measureInteractionHostMetrics(pagesEl, propsRef.current.zoom ?? 1);
-        },
-        scheduleFrame: (cb) => {
-          const id = requestAnimationFrame(cb);
-          return () => cancelAnimationFrame(id);
-        },
-        onDisplay: (next) => {
-          paintGateRef.current.detach();
-          detachBridgeRef.current?.();
-          detachBridgeRef.current = null;
-          const epoch = paintGateRef.current.beginFrame();
-          setPendingPages({ epoch, pages: next });
-        },
-      }),
-      []
-    );
-
-    // Create the editor once. `document`/`zoom`/`locale` seed the initial
-    // config; later document changes flow through `load` below, not a
-    // teardown, so undo/selection/scroll survive parent re-renders.
-    useEffect(() => {
-      const p = propsRef.current;
-      let cancelled = false;
-      let disposeEditor: (() => void) | null = null;
-      void createLayoutShaping(p.fonts)
-        .then((layoutShaping) => {
-          if (cancelled) {
-            disposeLayoutShaping(layoutShaping);
-            return;
-          }
-          shapingRef.current = layoutShaping;
-          let editor: Editor;
-          try {
-            editor = createEditor({
-              host,
-              document: p.document,
-              zoom: p.zoom,
-              locale: p.locale,
-              author: p.author,
-              mode: p.mode,
-              layoutShaping,
-              privateVisibleProjection: browserFirstCheckpoint,
-            });
-          } catch (error) {
-            shapingRef.current = null;
-            disposeLayoutShaping(layoutShaping);
-            throw error;
-          }
-          editorRef.current = editor;
-          const offChange = editor.on('change', (c) => {
-            propsRef.current.onChange?.(c);
-            syncFromFrame();
-          });
-          const offSelection = editor.on('selectionChange', () => {
-            syncFromFrame();
-            handleSelectionChangeRef.current();
-            recomputeFloatingCommentBtnRef.current();
-          });
-          const offDisplay = editor.on('display', () => syncFromFrame());
-          disposeEditor = () => {
-            offChange();
-            offSelection();
-            offDisplay();
-            editor.destroy();
-            disposeLayoutShaping(layoutShaping);
-          };
-          syncFromFrame();
-          if (browserFirstCheckpoint && !readyPublishedRef.current) {
-            readyPublishedRef.current = true;
-            propsRef.current.onReady?.(editor);
-          }
-        })
-        .catch((error: unknown) => {
-          if (cancelled) return;
-          const typed = toEditorFontError(error);
-          setFontError(typed);
-          propsRef.current.onFontError?.(typed);
-        });
-      return () => {
-        cancelled = true;
-        disposeEditor?.();
-        editorRef.current = null;
-        shapingRef.current = null;
-        readyPublishedRef.current = false;
-      };
-    }, [browserFirstCheckpoint, host, syncFromFrame]);
-
-    // A display frame is not publishable until every exact layout-selected face
-    // has loaded. Keep the previous lease alive while the replacement loads so
-    // another editor or an overlapping frame cannot lose a shared registration.
-    useEffect(() => {
-      if (pendingPages === null) return undefined;
-      let cancelled = false;
-      setPages([]);
-      setInstalledFonts(null);
-      setFontError(null);
-      const shaping = shapingRef.current;
-      if (!shaping) return undefined;
-      const ownerDocument = pagesRef.current?.ownerDocument ?? globalThis.document;
-      void installDisplayFonts(
-        pendingPages.pages,
-        shaping.fonts,
-        ownerDocument.fonts as unknown as BrowserFontSet
-      )
-        .then((lease) => {
-          if (cancelled || !paintGateRef.current.isCurrent(pendingPages.epoch)) {
-            lease.release();
-            return;
-          }
-          fontLeaseRef.current?.release();
-          fontLeaseRef.current = lease;
-          committedPaintEpochRef.current = pendingPages.epoch;
-          setInstalledFonts(lease);
-          setPages(pendingPages.pages);
-        })
-        .catch((error: unknown) => {
-          if (cancelled || !paintGateRef.current.isCurrent(pendingPages.epoch)) return;
-          fontLeaseRef.current?.release();
-          fontLeaseRef.current = null;
-          const typed = toEditorFontError(error);
-          setFontError(typed);
-          propsRef.current.onFontError?.(typed);
-        });
-      return () => {
-        cancelled = true;
-      };
-    }, [pendingPages]);
-
-    useEffect(
-      () => () => {
-        fontLeaseRef.current?.release();
-        fontLeaseRef.current = null;
-      },
-      []
-    );
-
-    // Forward real pointer, keyboard, and focus events on the painted pages to
-    // the shared controller. The bridge owns normalization for both adapters;
-    // its disposer must run on unmount or listeners outlive the editor.
-    useLayoutEffect(() => {
-      if (browserFirstCheckpoint) return undefined;
-      if (!installedFonts) return undefined;
-      const surface = scrollRef.current;
-      if (!surface) return undefined;
-      if (!paintGateRef.current.commitPaint(committedPaintEpochRef.current)) return undefined;
-      const detach = attachAdapterEventBridge(surface, {
-        getInteractionFrameId: () => editorRef.current?.getInteractionFrame().id ?? null,
-        dispatchInteraction: (intent: InteractionIntent) => {
-          if (!paintGateRef.current.interactionReady) {
-            return {
-              outcome: {
-                ok: false,
-                code: 'staleFrame',
-                reason: 'The matching font-backed display frame has not committed',
-              },
-              hostEffects: [],
-            };
-          }
-          const editor = editorRef.current!;
-          const result = editor.dispatchInteraction(intent);
-          // A pointer press makes the editor ACTIVE, not just placed. Without this the
-          // caret landed where the reader clicked but focus stayed on `document.body`, so
-          // every keystroke — typing, and the toolbar's toggles, which apply at the
-          // selection — went nowhere. Legacy did the same thing in its pointer handler
-          // (`focusActiveEditor`); the engine exposes it as `focus()`.
-          if (intent.kind === 'pointerDown') editor.focus();
-          syncFromFrame();
-          return result;
-        },
-      });
-      detachBridgeRef.current = detach;
-      if (!readyPublishedRef.current && editorRef.current) {
-        readyPublishedRef.current = true;
-        propsRef.current.onReady?.(editorRef.current);
-      }
-      return () => {
-        paintGateRef.current.detach();
-        if (detachBridgeRef.current === detach) detachBridgeRef.current = null;
-        detach();
-      };
-    }, [browserFirstCheckpoint, installedFonts, syncFromFrame]);
-
-    // The imperative handle, ported. This file used to build a seven-method version
-    // inline; the hook builds legacy's shape.
-    useDocxEditorRefApi({
-      ref,
-      editorRef,
-      focusActiveEditor,
-      runTableOfContentsUpdate,
-      handleSave,
-      handleDirectPrint,
-    });
-
-    // Zoom scales the whole page stack from its top-left. The ENGINE owns the factor
-    // (`getZoom`/`setZoom`), so the paint transform, the host metrics hit testing divides
-    // by, and the toolbar's percentage are one number rather than three that can drift.
-    // `props.zoom` seeds it and is honoured on change, so an existing controlled host
-    // keeps working; the toolbar drives it through `setZoom` after that.
-    // The tick exists to re-render after a zoom change; the engine holds the value, so
-    // there is nothing else to store.
-    const [, setZoomTick] = useState(0);
-    const zoomFactor = editorRef.current?.getZoom() ?? props.zoom ?? 1;
-    const applyZoom = useCallback((next: number) => {
-      if (editorRef.current?.setZoom(next).ok) setZoomTick((n) => n + 1);
-    }, []);
-    const propZoom = props.zoom;
-    useEffect(() => {
-      if (propZoom !== undefined) applyZoom(propZoom);
-    }, [propZoom, applyZoom]);
-
-    // Horizontal space the layout must reserve, computed exactly as legacy computes it.
-    // Passing 0 (what this file did) meant the centered page never cleared the outline
-    // panel or made room for the comments sidebar, so the page sat centred while the
-    // reference shifted it left.
-    //
-    // Legacy read the widest page width off the document's section properties; the engine
-    // publishes the laid-out page box, so the widest PAINTED page is what is measured —
-    // same quantity, taken from what layout actually produced.
-    const outlineLeftAllowance =
-      (showOutline ? OUTLINE_RESERVED_SPACE : OUTLINE_BUTTON_RESERVED_SPACE) +
-      // The outline toggle/panel inset past the vertical ruler when it's shown,
-      // so the page must clear that extra width too.
-      RULER_WIDTH;
-    const maxPageWidthPx = Math.round(
-      Math.max(0, ...(editorRef.current?.getPageGeometry() ?? []).map((p) => p.box.width))
-    );
-    // Legacy reserves the sidebar's width when there is something to show in it
-    // (`sidebarOpen = allSidebarItems.length > 0`), not when the toggle is on. Same rule
-    // here, asked of the engine. Both capabilities are stubs returning [], so the space
-    // is not reserved today and the page stays centred — and the moment the engine can
-    // answer, the layout shifts with no change here.
-    //
-    // The CARDS are a separate question: `useCommentSidebarItems` is ported and ready,
-    // but the engine's comment shape carries no author, date or paragraph content, so
-    // there is nothing to build a card from yet. See the `getComments` stub.
-    const sidebarItemCount =
-      (editorRef.current?.getComments().length ?? 0) +
-      (editorRef.current?.getTrackedChanges().length ?? 0);
-    const sidebarOpen = sidebarItemCount > 0;
-    const minLayoutWidth =
-      2 * outlineLeftAllowance + maxPageWidthPx + (sidebarOpen ? SIDEBAR_DOCUMENT_SHIFT * 2 : 0);
-
-    // Image actions and the footnote dialog, ported. Five handlers here were no-ops.
-    const {
-      imagePositionOpen,
-      setImagePositionOpen,
-      imagePropsOpen,
-      setImagePropsOpen,
-      footnotePropsOpen,
-      setFootnotePropsOpen,
-      handleImageWrapType,
-      handleImageTransform,
-      handleApplyImagePosition,
-      handleOpenImageProperties,
-      handleApplyImageProperties,
-      handleApplyFootnoteProperties,
-    } = useImageActions({ editorRef });
-
-    // Comment state, ported. The controlled/uncontrolled split is legacy's: a host that
-    // passes `comments` owns the array, and every mutation goes out through
-    // `onCommentsChange` instead of touching internal state.
-    const {
-      setComments,
-      isAddingCommentRef,
-      setAddCommentYPosition,
-      floatingCommentBtn,
-      setFloatingCommentBtn,
-    } = useCommentManagement({
-      commentsProp: undefined,
-      onCommentDelete: undefined,
-      onCommentsChange: undefined,
-    });
-
-    // Comment bookkeeping that runs off document load, ported: thread comments under the
-    // tracked change they overlap, and auto-open the sidebar once if the document arrives
-    // with revisions. Both feed on capabilities that are stubs, so neither fires yet —
-    // the latch and the threading map are wired so they will when those land.
-    const trackedChangesLoadedRef = useRef(false);
-    const commentToRevision = useMemo(() => new Map<number, number>(), []);
-    useCommentLifecycle({
-      commentToRevision,
-      setComments,
-      isLoading: pages.length === 0,
-      trackedChangesCount: editorRef.current?.getTrackedChanges().length ?? 0,
-      setShowCommentsSidebar,
-      trackedChangesLoadedRef,
-    });
-
-    // The floating "Add comment" button beside a selection, ported. It is positioned
-    // from the engine's selection geometry and page box.
-    const { recomputeFloatingCommentBtn } = useFloatingCommentBtn({
-      editorRef,
-      scrollContainerRef: scrollRef,
-      pagesContainerRef: pagesRef,
-      isAddingCommentRef,
-      setFloatingCommentBtn,
-      readOnly: false,
-      isLoading: pages.length === 0,
-      zoom: zoomFactor,
-    });
-    recomputeFloatingCommentBtnRef.current = recomputeFloatingCommentBtn;
-
-    // The floating page pill: current page, total, and the fade-out after scrolling
-    // stops — all from the legacy hook, reading the engine instead of a layout object.
-    const { scrollPageInfo } = useScrollPageInfo({
-      scrollContainerRef: scrollRef,
-      editorRef,
-      zoom: zoomFactor,
-    });
-
-    // The painted surface.
-    //
-    // WHICH ELEMENT SCROLLS depends on whether chrome is rendered. Bare, this viewport
-    // is the scroll container, as it has always been. Inside the shell, the shell's
-    // `.docx-editor__scroll-container` is the sole scroller — that is legacy's structure,
-    // and it is what the page indicator, the outline panel's horizontal tracking and the
-    // sticky ruler are all written against. Two nested `overflow: auto` boxes meant
-    // neither was bounded: every ancestor grew to the full document height and the WINDOW
-    // scrolled, which is why the indicator never left page 1.
     const chromeOn = Boolean(t);
-    const surface = (
-      <DocxEditorPagedArea
-        pages={pages}
-        overlays={overlays}
-        clickTarget={clickTarget}
-        installedFonts={installedFonts}
-        fontError={fontError?.message ?? null}
-        zoom={zoomFactor}
-        scrollRef={chromeOn ? null : scrollRef}
-        pagesRef={pagesRef}
-        bodyRef={bodyRef}
-        visibleProjection={browserFirstCheckpoint}
-        hosted={chromeOn}
-        className={className}
-        onPagesDoubleClick={handlePagesDoubleClick}
-        overlayChildren={
-          !browserFirstCheckpoint &&
-          floatingCommentBtn != null && (
-            <button
-              type="button"
-              title="Add comment"
-              onMouseDown={(e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                // Legacy marked the range with a pending comment mark here before
-                // opening the sidebar. The engine has no comment vocabulary, so this
-                // opens the sidebar and records where the card should sit; the mark
-                // lands when `getComments` and its command counterpart do.
-                setAddCommentYPosition(floatingCommentBtn.top);
-                setShowCommentsSidebar(true);
-                isAddingCommentRef.current = true;
-                setFloatingCommentBtn(null);
-              }}
-              style={{
-                position: 'absolute',
-                top: floatingCommentBtn.top,
-                left: floatingCommentBtn.left,
-                transform: 'translate(-50%, -50%)',
-                zIndex: 50,
-                width: 28,
-                height: 28,
-                borderRadius: 6,
-                border: '1px solid var(--doc-focus-ring)',
-                backgroundColor: 'var(--doc-surface)',
-                color: 'var(--doc-primary)',
-                cursor: 'pointer',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                boxShadow: '0 1px 3px var(--doc-shadow)',
-                transition: 'background-color 0.15s ease, box-shadow 0.15s ease',
-              }}
-            >
-              <MaterialSymbol name="add_comment" size={16} />
-            </button>
-          )
-        }
-      />
+
+    // The painted document. `ep-root` scopes every --doc-* token; the viewport is the
+    // sole scroll container; `docx-paginated-surface` carries the engine surface's
+    // paper styling. The facade mounts its pages inside the inner element and owns
+    // that subtree.
+    const viewport = (
+      <div
+        data-testid="docx-editor-scroll"
+        className={`ep-root ep-one-surface ep-one-surface__viewport${
+          chromeOn && isDark ? ' dark' : ''
+        }${!chromeOn && className ? ` ${className}` : ''}`}
+        style={chromeOn ? SCROLL_AREA_STYLE : undefined}
+      >
+        <div ref={containerRef} className="docx-paginated-surface" style={{ margin: '24px auto' }} />
+      </div>
     );
 
-    // Chrome is composed HERE, in the production component (task M6V.1) — not in a
-    // second shell under `examples/`, which is how the demo and the published
-    // component drift apart.
-    //
-    // Opt-in through `t`: the adapter ships no English of its own, so a host that has
-    // not supplied a translator gets the bare surface it gets today rather than a
-    // toolbar labelled with raw i18n keys. Every existing consumer and every existing
-    // selector is therefore unaffected.
-    if (!t) return surface;
+    if (!t) return viewport;
 
     return (
-      <EditorToolbarContext.Provider
-        value={{
-          onUndo: undoActiveEditor,
-          onRedo: redoActiveEditor,
-          onSave,
-        }}
+      <div
+        className={`ep-root${isDark ? ' dark' : ''}${className ? ` ${className}` : ''}`}
+        style={CONTAINER_STYLE}
       >
-        {/* The legacy DocxEditorShell, which was ported and sitting unused while this
-            file duplicated its layout — a rule-3 violation an independent audit caught.
-            It owns the scroll container, ruler placement, outline button position and
-            page-indicator anchoring, all of which had been reimplemented with authored
-            values. Slots take what this component already had.
-
-            Ruler callbacks are no-ops: this change owns no section-geometry contract, so
-            the rulers stay display-only (M4.4). Indents and tab marks are absent from the
-            engine, so they report zero/none rather than a guess. */}
-        <DocxEditorShell
-          i18n={undefined as never}
-          onEditorError={() => {}}
-          containerRef={null}
-          scrollContainerRef={scrollRef}
-          editorContentRef={null}
-          className={className}
-          isDark={isDark}
-          containerStyle={LEGACY_CONTAINER_STYLE}
-          mainContentStyle={LEGACY_MAIN_CONTENT_STYLE}
-          editorContainerStyle={LEGACY_EDITOR_CONTAINER_STYLE}
-          showRuler
-          readOnlyProp={false}
-          showOutline={showOutline}
-          showOutlineButton
-          sidebarOpen={sidebarOpen}
-          minLayoutWidth={minLayoutWidth}
-          toolbarHeight={toolbarHeight}
-          editorScrollLeft={editorScrollLeft}
-          expandedSidebarItem={expandedSidebarItem}
-          trackedChanges={[]}
-          onScrollContainerMouseDown={() => {}}
-          onEditorBgMouseDown={handleBodyClick}
-          onEditorContextMenu={handleEditorContextMenu}
-          horizontalRulerProps={{
-            sectionProps: sectionPropsFromGeometry(editorRef.current),
-            zoom: zoomFactor,
-            unit: 'inch',
-            editable: true,
-            onLeftMarginChange: handleLeftMarginChange,
-            onRightMarginChange: handleRightMarginChange,
-            // Paragraph indents and tab stops have no capability behind them yet, so the
-            // ruler shows none rather than a guessed zero-indent it would then draw.
-            indentLeft: 0,
-            indentRight: 0,
-            onIndentLeftChange: handleIndentLeftChange,
-            onIndentRightChange: handleIndentRightChange,
-            firstLineIndent: 0,
-            hangingIndent: false,
-            onFirstLineIndentChange: handleFirstLineIndentChange,
-            tabMarks: null,
-            onTabMarkRemove: handleTabMarkRemove,
-          }}
-          verticalRulerProps={{
-            sectionProps: sectionPropsFromGeometry(editorRef.current),
-            zoom: zoomFactor,
-            unit: 'inch',
-            editable: true,
-            onTopMarginChange: handleTopMarginChange,
-            onBottomMarginChange: handleBottomMarginChange,
-          }}
-          outlineProps={{
-            headings: outlineHeadings,
-            onHeadingClick: () => {},
-            onClose: () => setShowOutline(false),
-            topOffset: toolbarHeight,
-            scrollLeft: editorScrollLeft,
-          }}
-          onToggleOutline={handleToggleOutline}
-          scrollPageInfo={scrollPageInfo}
-          agentPanel={undefined}
-          agentPanelOpen={false}
-          onAgentPanelClose={() => {}}
-          toolbar={
-            /* The legacy DocxEditorToolbar, not the composition had been inlined here. It
-               owns the measuring wrapper, the title-bar row, the comments/mode/agent
-               controls and the toolbar band — all of which had been partly rebuilt.
-
-               Engine-backed props: `document` is the legacy-shaped projection the ported
-               toolbar reads styles off (it takes `document?.package.styles?.styles`), and
-               `editor` answers canUndo/canRedo. Everything the engine cannot answer yet
-               is passed as the honest empty value, not a guess: no table or image
-               context, no theme, no watermark or page-setup dialogs. */
-            <DocxEditorToolbar
-              toolbarRefCallback={toolbarRefCallback}
-              agentPanelOpen={false}
-              setAgentPanelOpen={() => {}}
-              document={{
-                package: {
-                  styles: {
-                    styles: (editorRef.current?.getDocumentStyles() ?? []).map((st) => ({
-                      styleId: st.styleId,
-                      name: st.name,
-                      type: 'paragraph' as const,
-                    })),
-                  },
-                },
+        <div style={TITLE_BAR_STYLE}>
+          {renderTitleBarLeft?.()}
+          {onTitleChange ? (
+            <input
+              aria-label={t('titleBar.documentNameAriaLabel')}
+              value={title ?? ''}
+              placeholder={t('titleBar.untitled')}
+              onChange={(event) => onTitleChange(event.target.value)}
+              style={TITLE_INPUT_STYLE}
+            />
+          ) : (
+            <span style={{ flex: 1, minWidth: 0, padding: '2px 6px' }}>
+              {title ?? t('titleBar.untitled')}
+            </span>
+          )}
+          {props.onSave ? (
+            <button
+              type="button"
+              onClick={() => propsRef.current.onSave?.()}
+              style={{
+                font: 'inherit',
+                color: 'inherit',
+                backgroundColor: 'var(--doc-bg-input)',
+                border: '1px solid var(--doc-border-input)',
+                borderRadius: 4,
+                padding: '2px 10px',
+                cursor: 'pointer',
               }}
-              theme={null}
-              editor={editorRef.current}
-              selectionFormatting={selectionFormatting}
-              tableContext={null}
-              imageContext={null}
-              readOnly={false}
-              editingMode={editingMode}
-              setEditingMode={setEditingMode}
-              setShowCommentsSidebar={setShowCommentsSidebar}
-              setExpandedSidebarItem={setExpandedSidebarItem}
-              showCommentsSidebar={showCommentsSidebar}
-              agentPanel={undefined}
-              renderLogo={renderTitleBarLeft}
-              documentName={title ?? ''}
-              onDocumentNameChange={onTitleChange}
-              documentNameEditable={true}
-              renderTitleBarRight={renderTitleBarRight}
-              toolbarExtra={null}
-              fontFamilies={undefined}
-              documentFonts={documentFonts}
-              zoom={zoomFactor}
-              showZoomControl
-              onFormat={handleFormat}
-              onUndo={undoActiveEditor}
-              onRedo={redoActiveEditor}
-              onPrint={handleDirectPrint}
-              showFileOpen
-              showHelpMenu
-              onOpen={handleOpenDocument}
-              onSave={() => (onSave ? onSave() : handleDownloadDocument())}
-              onZoomChange={applyZoom}
-              onRefocusEditor={focusActiveEditor}
-              onInsertTable={handleInsertTable}
-              onInsertImage={handleInsertImageClick}
-              onInsertPageBreak={handleInsertPageBreak}
-              onInsertSectionBreakNextPage={handleInsertSectionBreakNextPage}
-              onInsertSectionBreakContinuous={handleInsertSectionBreakContinuous}
-              onInsertTOC={handleInsertTOC}
-              onImageWrapType={handleImageWrapType}
-              onImageTransform={handleImageTransform}
-              onOpenImageProperties={handleOpenImageProperties}
-              onPageSetup={handleOpenPageSetup}
-              onWatermark={handleOpenWatermark}
-              onTableAction={handleTableAction}
-            />
-          }
-          pagedArea={surface}
-          overlays={
-            /* The ported overlay block, driven by the ported `useContextMenus`. Clipboard
-               and selection-addressed edits run through the contract; table entries appear
-               only when the engine says the caret is in a table, which is a stub today, so
-               they stay out of the menu rather than appearing and doing nothing. */
-            <DocxEditorOverlays
-              contextMenu={contextMenu}
-              contextMenuItems={contextMenuItems}
-              onContextMenuAction={handleContextMenuAction}
-              onContextMenuClose={handleContextMenuClose}
-              imageContextMenu={imageContextMenu}
-              onImageWrapApply={handleImageWrapApply}
-              imageContextMenuTextActions={imageContextMenuTextActions}
-              onOpenImageProperties={handleOpenImageProperties}
-              readOnly={false}
-            />
-          }
-          dialogs={
-            /* The ported dialog block. Find/replace runs against the engine's
-               `findMatches`; the rest open and close but apply nothing, because the
-               commands behind them are refused by the engine today — each of those
-               handlers is a named capability on the contract, not a missing dialog. */
-            <DocxEditorDialogs
-              findReplace={findReplace}
-              findResultRef={findResultRef}
-              onFind={handleFind}
-              onFindNext={handleFindNext}
-              onFindPrevious={handleFindPrevious}
-              onReplace={handleReplace}
-              onReplaceAll={handleReplaceAll}
-              hyperlinkDialog={hyperlinkDialog}
-              onHyperlinkSubmit={handleHyperlinkSubmit}
-              onHyperlinkRemove={handleHyperlinkRemove}
-              tablePropsOpen={tablePropsOpen}
-              onTablePropsClose={() => setTablePropsOpen(false)}
-              editor={editorRef.current}
-              splitCellDialogState={splitCellDialogState}
-              onSplitCellDialogClose={handleSplitCellDialogClose}
-              onSplitCellDialogApply={handleSplitCellDialogApply}
-              imagePositionOpen={imagePositionOpen}
-              onImagePositionClose={() => setImagePositionOpen(false)}
-              onApplyImagePosition={handleApplyImagePosition}
-              imagePropsOpen={imagePropsOpen}
-              onImagePropsClose={() => setImagePropsOpen(false)}
-              onApplyImageProperties={handleApplyImageProperties}
-              pmImageContext={null}
-              showPageSetup={showPageSetup}
-              onPageSetupClose={() => setShowPageSetup(false)}
-              onPageSetupApply={handlePageSetupApply}
-              showWatermark={showWatermark}
-              onWatermarkClose={() => setShowWatermark(false)}
-              onWatermarkApply={handleWatermarkApply}
-              currentWatermark={currentWatermark}
-              document={null}
-              footnotePropsOpen={footnotePropsOpen}
-              onFootnotePropsClose={() => setFootnotePropsOpen(false)}
-              onApplyFootnoteProperties={handleApplyFootnoteProperties}
-            />
-          }
-          fileInputs={
-            /* Hidden pickers behind File ▸ Open and Insert ▸ Image, as legacy has them. */
-            <>
-              <input
-                ref={docxInputRef}
-                type="file"
-                accept=".docx"
-                style={{ display: 'none' }}
-                onChange={handleDocxFileChange}
-              />
-              <input
-                ref={imageInputRef}
-                type="file"
-                accept="image/*"
-                style={{ display: 'none' }}
-                onChange={handleImageFileChange}
-              />
-            </>
-          }
-        />
-      </EditorToolbarContext.Provider>
+            >
+              {t('common.save')}
+            </button>
+          ) : null}
+          {renderTitleBarRight?.()}
+        </div>
+        {viewport}
+      </div>
     );
   }
 );

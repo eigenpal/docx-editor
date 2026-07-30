@@ -180,7 +180,12 @@ describe('rendered text geometry port', () => {
     }
   });
 
-  test('both adapters paint overlays directly from the published interaction frame', () => {
+  test('neither adapter derives rendered-text geometry (the tree surface owns overlays)', () => {
+    // Phase 3 of the legacy-lane retirement: the adapters no longer paint caret or
+    // selection overlays at all — `createTreeEditor`'s surface owns caret, selection,
+    // and hit testing internally through the browser's own selection. What must stay
+    // true is the original rule this test existed for: no adapter touches the DOM
+    // geometry port or hand-derives overlay rectangles.
     const react = readFileSync(
       join(import.meta.dir, '..', '..', '..', '..', 'react', 'src', 'components', 'DocxEditor.tsx'),
       'utf8'
@@ -190,12 +195,11 @@ describe('rendered text geometry port', () => {
       'utf8'
     );
     for (const source of [react, vue]) {
-      expect(source).toContain('overlaysForFrame');
       expect(source).not.toContain('createDomRenderedTextGeometryPort');
       expect(source).not.toContain('commitFrame');
       expect(source).not.toContain('getRenderedTextGeometry');
+      expect(source).not.toContain('overlaysForFrame');
+      expect(source).toContain('createTreeEditor');
     }
-    expect(react).toContain('setOverlays(overlaysForFrame(frame))');
-    expect(vue).toContain('overlays.value = overlaysForFrame(frame)');
   });
 });

@@ -1,6 +1,6 @@
 // Adapter authority checks (interactive-paginated-editing task 1.4). Proves React and
 // Vue remain thin hosts: no ProseMirror imports, no document-geometry derivation, and
-// no bypass of the public Editor/createEditor + EditorHost facade.
+// no bypass of the public Editor facade (`createTreeEditor` from the composition root).
 
 import { describe, expect, test } from 'bun:test';
 import { readFileSync, readdirSync, existsSync, statSync } from 'node:fs';
@@ -169,29 +169,27 @@ export function auditAdapterPackageJson(pkg: {
   return violations;
 }
 
-/** True when at least one source file uses the public editor facade entrypoints. */
+/**
+ * True when at least one source file constructs the editor through the composition
+ * root facade.
+ *
+ * Phase 3 of the legacy-lane retirement moved both adapters from `createEditor` +
+ * `EditorHost` (adapter-supplied DOM handles and a display sink) to `createTreeEditor`,
+ * whose surface paints its own pages and owns interaction internally — so the host-DOM
+ * contract requirement is gone with the pipeline that needed it.
+ */
 export function auditUsesPublicEditorFacade(sources: readonly string[]): boolean {
-  let hasCreateEditorImport = false;
-  let hasHostContract = false;
-
   for (const source of sources) {
     if (
       // Task 10.5 migrated adapters off the `engine-editor` alias onto the lane's subpath.
       // Both are accepted while the alias exists; task 10.6 drops the alias form.
       /from\s*['"]@docx-editor\.dev\/(?:engine-editor|core-contract\/editor)['"]/.test(source) &&
-      /\bcreateEditor\b/.test(source)
+      /\bcreateTreeEditor\b/.test(source)
     ) {
-      hasCreateEditorImport = true;
-    }
-    if (
-      /from\s*['"]@docx-editor\.dev\/core-contract\/contracts\/editor['"]/.test(source) &&
-      /\bEditorHost\b/.test(source)
-    ) {
-      hasHostContract = true;
+      return true;
     }
   }
-
-  return hasCreateEditorImport && hasHostContract;
+  return false;
 }
 
 describe('public adapter authority (interactive-paginated-editing task 1.4)', () => {
@@ -212,7 +210,7 @@ describe('public adapter authority (interactive-paginated-editing task 1.4)', ()
         }
       });
 
-      test('uses the public createEditor + EditorHost facade', () => {
+      test('uses the public createTreeEditor facade', () => {
         expect(auditUsesPublicEditorFacade(sources)).toBe(true);
       });
 
@@ -276,10 +274,17 @@ describe('adapter authority rule fixtures', () => {
 
   test('detects missing public editor facade wiring', () => {
     expect(auditUsesPublicEditorFacade(['const x = 1;'])).toBe(false);
+    // The legacy pair no longer satisfies the audit: the retired pipeline's constructor
+    // must not read as composition-root wiring.
     expect(
       auditUsesPublicEditorFacade([
         "import { createEditor } from '@docx-editor.dev/core-contract/editor';",
         "import type { EditorHost } from '@docx-editor.dev/core-contract/contracts/editor';",
+      ])
+    ).toBe(false);
+    expect(
+      auditUsesPublicEditorFacade([
+        "import { createTreeEditor } from '@docx-editor.dev/core-contract/editor';",
       ])
     ).toBe(true);
   });

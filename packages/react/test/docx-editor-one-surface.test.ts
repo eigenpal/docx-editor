@@ -1,96 +1,84 @@
-// React one-surface wiring contract (interactive-paginated-editing 6.2).
+// React tree-lane wiring contract (legacy-lane retirement, phase 3).
 //
-// These assert the wiring rules that keep the adapter honest without a DOM: the
-// adapter must route real events through the shared bridge, must not implement
-// geometry, and must not reach around the public Editor facade. The browser
-// proof that a click actually places a caret is M3.1/M3.2 — this file is the
-// static half that a headless run can enforce on every commit.
+// `DocxEditor` is a THIN host over `createTreeEditor`: it owns a container element, the
+// facade's lifetime, and prop-to-facade forwarding — nothing else. These assertions are
+// the static half a headless run can enforce on every commit: the adapter must reach the
+// engine through the composition root, program against the `Editor` contract alone, and
+// derive no geometry of its own. The predecessor of this file pinned the legacy display
+// pipeline (adapter event bridge, display lists, paint gates); the tree lane's surface
+// owns interaction and painting internally, so those rules are replaced, not dropped.
 
 import { describe, expect, test } from 'bun:test';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 const SRC = join(import.meta.dir, '..', 'src');
-// `components/DocxEditor.tsx`, matching the legacy React package layout that this
-// adapter is being ported onto (see GOAL-legacy-react-port.md).
 const editorSource = readFileSync(join(SRC, 'components', 'DocxEditor.tsx'), 'utf8');
-const paintSource = readFileSync(join(SRC, 'paintDisplay.tsx'), 'utf8');
-// The paged area is its own component, at the path the legacy layout uses. It holds the
-// surface markup this file used to find in `DocxEditor.tsx`; the assertions moved with
-// it rather than being dropped.
-const pagedAreaSource = readFileSync(
-  join(SRC, 'components', 'DocxEditor', 'DocxEditorPagedArea.tsx'),
-  'utf8'
-);
 
-describe('React one-surface wiring (task 6.2)', () => {
-  test('pointer and keyboard input route through the shared adapter bridge', () => {
-    expect(editorSource).toContain('attachAdapterEventBridge');
-    // The adapter must not hand-roll listeners for input the bridge owns —
-    // that is exactly how React and Vue drift apart.
-    // `onClick=` is NOT forbidden: the ported legacy components take click handlers for
-    // their buttons (the outline toggle, header actions), and legacy's own DocxEditor
-    // passes them. What must not appear is pointer/keyboard handling for the painted
-    // surface, which is what the bridge owns and what actually drifts between adapters.
+describe('React tree-lane wiring (phase 3)', () => {
+  test('the editor is created through the composition root facade', () => {
+    expect(editorSource).toContain('createTreeEditor');
+    expect(editorSource).toContain("from '@docx-editor.dev/core-contract/editor'");
+    // The legacy engine constructor and its display pipeline must be gone.
+    for (const forbidden of [
+      'createEditor(',
+      'attachAdapterEventBridge',
+      'installDisplayFonts',
+      'PaintEpochGate',
+      'EditorHost',
+    ]) {
+      expect(editorSource).not.toContain(forbidden);
+    }
+  });
+
+  test('the adapter programs against the Editor contract, never the surface escape hatch', () => {
+    // `TreeEditor.surface` exists for harnesses and tests; a production adapter that
+    // reaches through it is depending on internals the contract does not name.
+    expect(editorSource).not.toContain('.surface');
+  });
+
+  test('no adapter-side geometry derivation', () => {
+    for (const forbidden of [
+      'getBoundingClientRect',
+      'getClientRects',
+      'elementFromPoint',
+      'caretRangeFromPoint',
+    ]) {
+      expect(editorSource).not.toContain(forbidden);
+    }
+  });
+
+  test('no hand-rolled listeners for input the surface owns', () => {
+    // The paginated surface owns pointer, keyboard, caret, and selection internally.
     for (const forbidden of ['onPointerDown=', 'onPointerMove=', 'onPointerUp=', 'onKeyDown=']) {
       expect(editorSource).not.toContain(forbidden);
     }
   });
 
-  test('the bridge is given the public editor port, not engine internals', () => {
-    expect(editorSource).toContain('dispatchInteraction');
-    expect(editorSource).toContain('getInteractionFrame');
-  });
-
-  test('overlays and click target come from engine helpers, never adapter math', () => {
-    expect(editorSource).toContain('overlaysForFrame');
-    expect(editorSource).toContain('firstEditableGlyphTarget');
-    // No adapter-side geometry derivation.
-    for (const forbidden of ['getBoundingClientRect', 'getClientRects', 'elementFromPoint', 'caretRangeFromPoint']) {
-      expect(editorSource).not.toContain(forbidden);
-      expect(paintSource).not.toContain(forbidden);
-      expect(pagedAreaSource).not.toContain(forbidden);
-    }
-  });
-
-  test('host metrics come from the shared measurement helper', () => {
-    expect(editorSource).toContain('measureInteractionHostMetrics');
-  });
-
   test('the adapter never imports ProseMirror or a private engine package', () => {
     for (const forbidden of ['prosemirror', 'engine-binding', 'engine-layout', 'engine-core']) {
       expect(editorSource.toLowerCase()).not.toContain(forbidden);
-      expect(pagedAreaSource.toLowerCase()).not.toContain(forbidden);
     }
   });
 
-  test('the surface uses the shared one-surface CSS classes, not inline forks', () => {
-    expect(pagedAreaSource).toContain('ep-one-surface');
-    expect(pagedAreaSource).toContain('ep-one-surface__pages');
-    expect(pagedAreaSource).toContain('ep-one-surface__input-host');
-    // The page wrapper is `layout-page` with the legacy data attributes, matching the
-    // markup the legacy painter emitted so anything keyed on the page element still
-    // resolves. The layers INSIDE it stay one-surface classes — those are the greenfield
-    // painter's own, and they position the stack the engine's hit testing assumes.
-    expect(paintSource).toContain('layout-page');
-    expect(paintSource).toContain('data-page-number');
-    expect(paintSource).toContain('ep-one-surface__content');
-    expect(paintSource).toContain('ep-one-surface__content');
-    expect(paintSource).toContain('ep-one-surface__overlay');
+  test('the facade is destroyed on cleanup', () => {
+    expect(editorSource).toContain('editor.destroy()');
   });
 
-  test('the frame lifecycle repaints overlays on selection change', () => {
-    expect(editorSource).toContain("'selectionChange'");
+  test('the container carries the shared style-scope and surface classes', () => {
+    // ep-root scopes every --doc-* token; docx-paginated-surface carries the engine
+    // surface's paper styling. Without either, pages paint unstyled.
+    expect(editorSource).toContain('ep-root');
+    expect(editorSource).toContain('docx-paginated-surface');
   });
 
-  test('the event bridge is detached on unmount', () => {
-    // attachAdapterEventBridge returns a disposer; an adapter that drops it
-    // leaks listeners onto a destroyed editor.
-    expect(editorSource).toMatch(/detach|dispose/i);
+  test('zoom flows through setZoom, never a remount', () => {
+    // Remounting on zoom reopens the document from bytes and discards every edit,
+    // the caret, and the undo history.
+    expect(editorSource).toContain('setZoom');
   });
 
-  test('zoom is reported to the engine rather than corrected in paint', () => {
-    expect(editorSource).toContain('measureInteractionHostMetrics');
-    expect(paintSource).not.toContain('zoom');
+  test('document changes are forwarded from the facade change event', () => {
+    expect(editorSource).toContain("on('change'");
   });
 });

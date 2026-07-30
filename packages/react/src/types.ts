@@ -4,9 +4,12 @@ import type {
   DocumentHandle,
   DocumentSource,
   Editor,
+  EditorCommand,
   EditorFontError,
+  EditorScope,
+  EditorSnapshot,
+  ExecResult,
   FontConfiguration,
-  TextMatch,
 } from '@docx-editor.dev/core-contract/contracts/editor';
 export { EditorFontError } from '@docx-editor.dev/core-contract/contracts/editor';
 export type {
@@ -80,46 +83,29 @@ export interface DocxEditorProps {
   onChange?: (change: DocumentChange) => void;
 }
 
-/** Imperative handle. Advanced callers reach the full facade via `getEditor`. */
 /**
- * The imperative handle, in legacy's shape so a host that held a ref keeps calling what
- * it called. Three of legacy's methods are deliberately absent — `getAgent`,
- * `getDocument` and `getEditorRef` — because they exposed the legacy document tree and a
- * ProseMirror view; `getDocumentHandle` and `getEditor` replace them.
+ * The imperative handle: the greenfield seven-member shape, identical on both adapters
+ * (enforced by `bun run check:parity-contract`). Every member forwards to the `Editor`
+ * facade and is safe to call before the editor has mounted — mutations no-op, reads
+ * return the honest empty answer (`null`, a `notFound` refusal, a loading snapshot) —
+ * so a host can hold the ref from first render without guarding it.
  *
- * Methods whose capability is still a stub return the honest empty answer (`false`,
- * `null`, `0`) rather than pretending, so a caller can tell "not supported yet" from
- * "did nothing".
+ * Everything the legacy handle carried beyond these (zoom, paging, print, find,
+ * comments, tracked changes) is reachable through the facade via `getEditor`; the ref
+ * itself no longer mirrors capabilities the contract already names.
  */
 export interface DocxEditorRef {
+  /** Load a document: DOCX bytes or an existing handle. No-op before mount. */
   load(document: DocumentSource): void;
-  loadDocumentBuffer(buffer: DocumentSource): Promise<void>;
+  /** Serialize the current document; `null` when no editor is mounted. */
   save(): Promise<ArrayBuffer | null>;
+  /** Identity and revision of the loaded document; `null` before mount. */
   getDocumentHandle(): DocumentHandle | null;
+  /** The full `Editor` facade for advanced callers; `null` before mount. */
   getEditor(): Editor | null;
-
   focus(): void;
-  getZoom(): number;
-  setZoom(zoom: number): void;
-  getCurrentPage(): number;
-  getTotalPages(): number;
-  scrollToPage(pageNumber: number): boolean;
-  scrollToParaId(paraId: string): boolean;
-  print(): void;
-
-  updateTableOfContents(): boolean;
-  findInDocument(
-    query: string,
-    options?: { caseSensitive?: boolean; limit?: number }
-  ): readonly TextMatch[];
-
-  addComment(options: { paraId: string; text: string; author: string }): number | null;
-  replyToComment(commentId: number, text: string, author: string): number | null;
-  resolveComment(commentId: number): boolean;
-  proposeChange(options: {
-    paraId: string;
-    search: string;
-    replaceWith: string;
-    author: string;
-  }): number | null;
+  /** Run a typed command through the facade; refused with `notFound` before mount. */
+  exec(command: EditorCommand, options?: { scope?: EditorScope }): ExecResult;
+  /** The current read model; a loading, non-editable snapshot before mount. */
+  snapshot(options?: { scope?: EditorScope }): EditorSnapshot;
 }

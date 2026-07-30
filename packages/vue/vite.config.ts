@@ -2,6 +2,7 @@ import { defineConfig } from 'vite';
 import vue from '@vitejs/plugin-vue';
 import dts from 'vite-plugin-dts';
 import { resolve } from 'path';
+import { existsSync } from 'node:fs';
 
 // Library build for @docx-editor.dev/vue. The adapter is a thin renderer over
 // the private, declaration-only editor contract, which is bundled so the
@@ -11,8 +12,15 @@ export default defineConfig({
   resolve: {
     alias: [
       {
+        // Core lanes are a mix of flat files (`contracts/editor.ts`) and directory
+        // entries (`editor/index.ts`, `layout/index.ts`, ...). Mapping every subpath to
+        // `$1.ts` broke the library build the moment a lane became a directory, so the
+        // resolver tries the flat file first and falls back to the directory index.
         find: /^@docx-editor\.dev\/core-contract\/(.+)$/,
-        replacement: resolve(__dirname, '../core/src/$1.ts'),
+        replacement: `${resolve(__dirname, '../core/src')}/$1`,
+        customResolver(source: string) {
+          return existsSync(`${source}.ts`) ? `${source}.ts` : resolve(source, 'index.ts');
+        },
       },
       {
         find: '@docx-editor.dev/core-contract',

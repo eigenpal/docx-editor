@@ -5,103 +5,53 @@
 ```ts
 
 import { CSSProperties } from 'react';
+import { DisplayItem } from '@docx-editor.dev/core-contract/contracts/geometry';
+import { DisplayPage } from '@docx-editor.dev/core-contract/contracts/geometry';
+import { DocPoint } from '@docx-editor.dev/core-contract/contracts/geometry';
+import { DocumentChange } from '@docx-editor.dev/core-contract/contracts/editor';
+import { DocumentHandle } from '@docx-editor.dev/core-contract/contracts/editor';
+import { DocumentSource } from '@docx-editor.dev/core-contract/contracts/editor';
+import { DocxDocument } from '@docx-editor.dev/core-contract/contracts/types';
+import { Editor } from '@docx-editor.dev/core-contract/contracts/editor';
+import { EditorCommand } from '@docx-editor.dev/core-contract/contracts/editor';
+import { EditorFontError } from '@docx-editor.dev/core-contract/contracts/editor';
+import { EditorFontErrorCode } from '@docx-editor.dev/core-contract/contracts/editor';
+import { EditorHost } from '@docx-editor.dev/core-contract/contracts/editor';
+import { EditorQuery } from '@docx-editor.dev/core-contract/contracts/editor';
+import { EditorScope } from '@docx-editor.dev/core-contract/contracts/editor';
+import { EditorSnapshot } from '@docx-editor.dev/core-contract/contracts/editor';
+import { ExecResult } from '@docx-editor.dev/core-contract/contracts/editor';
+import { FontConfiguration } from '@docx-editor.dev/core-contract/contracts/editor';
+import { FontFaceRequest } from '@docx-editor.dev/core-contract/contracts/editor';
+import { FontSource } from '@docx-editor.dev/core-contract/contracts/editor';
+import { FontSourceSubstitution } from '@docx-editor.dev/core-contract/contracts/editor';
 import { generateRulerTicks } from '@docx-editor.dev/core-contract/editor';
+import { NavigationCommand } from '@docx-editor.dev/core-contract/editor';
+import { PaginatedSurfaceState } from '@docx-editor.dev/core-contract/editor';
 import { PX_PER_CM } from '@docx-editor.dev/core-contract/editor';
 import { PX_PER_INCH } from '@docx-editor.dev/core-contract/editor';
 import * as React$1 from 'react';
 import React__default from 'react';
 import { ReactNode } from 'react';
+import { Ref } from 'react';
 import { rulerPageBox } from '@docx-editor.dev/core-contract/editor';
 import { RulerTick } from '@docx-editor.dev/core-contract/editor';
 import { RulerUnit } from '@docx-editor.dev/core-contract/editor';
+import { SectionProperties as SectionProperties_2 } from '@docx-editor.dev/core-contract/editor';
+import { SurfaceFormatting } from '@docx-editor.dev/core-contract/editor';
+import { TextMeasurer } from '@docx-editor.dev/core-contract/editor';
 import { Translations } from '@docx-editor.dev/i18n';
 
-// @public
-export type DisplayItem = {
-    readonly kind: 'text';
-    readonly box: Rect;
-    readonly runs: readonly GlyphRun[];
-    readonly semantic: SemanticTextSpan;
-    readonly clusters: readonly ShapedCluster[];
-    readonly scope: ViewScope;
-    readonly docFrom?: number;
-    readonly docTo?: number;
-    readonly blockId?: number;
-    readonly synthetic?: boolean;
-    readonly interaction?: PositionedInteractionMeta;
-} | {
-    readonly kind: 'image';
-    readonly box: Rect;
-    readonly src: ImageRef;
-    readonly semantic: SemanticAtomicSpan;
-    readonly scope: ViewScope;
-    readonly docFrom?: number;
-    readonly docTo?: number;
-    readonly synthetic?: boolean;
-    readonly interaction?: PositionedInteractionMeta;
-} | {
-    readonly kind: 'fill';
-    readonly box: Rect;
-    readonly color: ColorValue$1;
-    readonly interaction?: PositionedInteractionMeta;
-} | {
-    readonly kind: 'tableBorder';
-    readonly segments: readonly BorderSeg[];
-    readonly cut?: 'top' | 'bottom';
-} | {
-    readonly kind: 'decoration';
-    readonly box: Rect;
-    readonly role: string;
-    readonly refId: string;
-    readonly detail?: Readonly<Record<string, unknown>>;
-    readonly interaction?: PositionedInteractionMeta;
-}
-/**
-* Escape hatch for anything not yet modelled as a first-class variant. Lets
-* the engine ship new positioned content before the contract names it;
-* adapters that don't recognise `name` skip it.
-*/
-| {
-    readonly kind: 'custom';
-    readonly name: string;
-    readonly box: Rect;
-    readonly detail?: unknown;
-    readonly interaction?: PositionedInteractionMeta;
-};
+export { DisplayItem }
 
-// @public
-export interface DisplayPage {
-    // (undocumented)
-    readonly box: Rect;
-    readonly contentBox: Rect;
-    readonly index: number;
-    // (undocumented)
-    readonly items: readonly DisplayItem[];
-}
+export { DisplayPage }
 
-// @public @deprecated (undocumented)
-export interface DocPoint {
-    readonly docPos: number;
-    // (undocumented)
-    readonly scope: ViewScope;
-}
+export { DocPoint }
 
 // @public (undocumented)
 export function DocumentName(input: DocumentNameProps): React__default.JSX.Element;
 
-// @public
-export interface DocxDocument {
-    // (undocumented)
-    readonly body: DocumentBody;
-    // (undocumented)
-    readonly comments: readonly DocComment[];
-    // (undocumented)
-    readonly revisions: readonly Revision[];
-    // (undocumented)
-    readonly styles: StyleDefinitions;
-    // (undocumented)
-    readonly theme?: Theme$1;
-}
+export { DocxDocument }
 
 // @public (undocumented)
 export const DocxEditor: React$1.ForwardRefExoticComponent<DocxEditorProps & React$1.RefAttributes<DocxEditorRef>>;
@@ -134,56 +84,18 @@ export interface DocxEditorProps {
 
 // @public
 export interface DocxEditorRef {
-    // (undocumented)
-    addComment(options: {
-        paraId: string;
-        text: string;
-        author: string;
-    }): number | null;
-    // (undocumented)
-    findInDocument(query: string, options?: {
-        caseSensitive?: boolean;
-        limit?: number;
-    }): readonly TextMatch[];
+    exec(command: EditorCommand, options?: {
+        scope?: EditorScope;
+    }): ExecResult;
     // (undocumented)
     focus(): void;
-    // (undocumented)
-    getCurrentPage(): number;
-    // (undocumented)
     getDocumentHandle(): DocumentHandle | null;
-    // (undocumented)
     getEditor(): Editor | null;
-    // (undocumented)
-    getTotalPages(): number;
-    // (undocumented)
-    getZoom(): number;
-    // (undocumented)
     load(document: DocumentSource): void;
-    // (undocumented)
-    loadDocumentBuffer(buffer: DocumentSource): Promise<void>;
-    // (undocumented)
-    print(): void;
-    // (undocumented)
-    proposeChange(options: {
-        paraId: string;
-        search: string;
-        replaceWith: string;
-        author: string;
-    }): number | null;
-    // (undocumented)
-    replyToComment(commentId: number, text: string, author: string): number | null;
-    // (undocumented)
-    resolveComment(commentId: number): boolean;
-    // (undocumented)
     save(): Promise<ArrayBuffer | null>;
-    // (undocumented)
-    scrollToPage(pageNumber: number): boolean;
-    // (undocumented)
-    scrollToParaId(paraId: string): boolean;
-    // (undocumented)
-    setZoom(zoom: number): void;
-    // (undocumented)
-    updateTableOfContents(): boolean;
+    snapshot(options?: {
+        scope?: EditorScope;
+    }): EditorSnapshot;
 }
 
 // @public
@@ -226,304 +138,32 @@ export function DocxEditorShell(input: {
     fileInputs: ReactNode;
 }): React$1.JSX.Element;
 
-// @public (undocumented)
-export interface Editor {
-    can(command: EditorCommand, options?: {
-        scope?: EditorScope;
-    }): CanResult;
-    // (undocumented)
-    destroy(): void;
-    dispatchInteraction(intent: InteractionIntent, options?: {
-        hostMetrics?: InteractionHostMetrics;
-    }): InteractionDispatchResult;
-    // (undocumented)
-    exec(command: EditorCommand, options?: {
-        scope?: EditorScope;
-    }): ExecResult;
-    findMatches(query: string, options?: {
-        readonly matchCase?: boolean;
-        readonly wholeWord?: boolean;
-    }): readonly TextMatch[];
-    // (undocumented)
-    focus(scope?: EditorScope): InteractionOutcome<void>;
-    getAccessibilityObservation(): AccessibilityObservation;
-    // (undocumented)
-    getActiveScope(): ViewScope;
-    getCaretClientRect(): Rect | null;
-    getCaretGeometry(pos?: EditorPosition): CaretGeometry | null;
-    getCaretRect(pos?: EditorPosition): Rect | null;
-    getComments(): readonly {
-        readonly id: string;
-        readonly text: string;
-        readonly resolved: boolean;
-    }[];
-    // (undocumented)
-    getCurrentPage(mode?: 'viewport' | 'caret'): number;
-    getDisplay(): readonly DisplayPage[];
-    getDocumentFonts(): readonly string[];
-    getDocumentHandle(): DocumentHandle;
-    getDocumentStyles(): readonly {
-        readonly styleId: string;
-        readonly name: string;
-        readonly type: string;
-    }[];
-    getHeaderFooterState(): {
-        readonly editing: 'header' | 'footer' | null;
-        readonly sectionIndex: number;
-    } | null;
-    getInputHostObservation(): InputHostObservation | null;
-    getInteractionFrame(): InteractionFrame;
-    getInteractionHostMetrics(): InteractionHostMetrics | null;
-    getOutline(): readonly {
-        readonly text: string;
-        readonly level: number;
-        readonly blockId: string;
-    }[];
-    getPageGeometry(): readonly {
-        index: number;
-        box: Rect;
-        contentBox: Rect;
-    }[];
-    getPageSetup(): {
-        readonly pageWidthTwips: number;
-        readonly pageHeightTwips: number;
-        readonly orientation: 'portrait' | 'landscape';
-        readonly marginsTwips: {
-            readonly top: number;
-            readonly right: number;
-            readonly bottom: number;
-            readonly left: number;
-        };
-    } | null;
-    getScrollGeometry(): ScrollGeometry;
-    getSelectedImage(): {
-        readonly id: string;
-        readonly widthEmu: number;
-        readonly heightEmu: number;
-    } | null;
-    getSelectedTable(): {
-        readonly blockId: string;
-        readonly rowCount: number;
-        readonly columnCount: number;
-        readonly cell: {
-            readonly row: number;
-            readonly column: number;
-        } | null;
-    } | null;
-    getSelectionFormatting(): {
-        readonly fontFamily?: string;
-        readonly fontSizeHalfPoints?: number;
-        readonly styleId?: string;
-        readonly alignment?: string;
-        readonly bold?: boolean;
-        readonly italic?: boolean;
-        readonly underline?: boolean;
-    } | null;
-    getSelectionGeometry(range?: EditorSelection, options?: SelectionGeometryOptions): SelectionGeometry | null;
-    getSelectionRects(range?: EditorSelection, options?: SelectionGeometryOptions): readonly Rect[];
-    // (undocumented)
-    getTotalPages(): number;
-    getTrackedChanges(): readonly {
-        readonly id: string;
-        readonly kind: string;
-        readonly author?: string;
-    }[];
-    getWatermark(): {
-        readonly kind: 'text' | 'image';
-        readonly text?: string;
-    } | null;
-    // (undocumented)
-    getZoom(): number;
-    hitTest(point: Point, options?: HitTestOptions): SemanticHitTarget | null;
-    isActive(command: EditorCommand, options?: {
-        scope?: EditorScope;
-    }): boolean;
-    load(document: DocumentSource): void;
-    // (undocumented)
-    on<E extends keyof EditorEvents>(event: E, handler: EditorEvents[E]): Unsubscribe;
-    // (undocumented)
-    query<K extends keyof EditorQueries>(query: {
-        type: K;
-    } & EditorQueries[K], options?: {
-        scope?: EditorScope;
-    }): EditorQueryResults[K];
-    relayout(options?: {
-        sync?: boolean;
-    }): void;
-    resolvePointer(point: Point, options?: HitTestOptions): InteractionOutcome<SemanticHitTarget>;
-    save(): Promise<ArrayBuffer>;
-    // (undocumented)
-    scrollToBlock(blockId: string): boolean;
-    scrollToPage(pageNumber: number): boolean;
-    selectMatch(match: TextMatch): ExecResult;
-    // (undocumented)
-    setActiveScope(scope: ViewScope): void;
-    setZoom(zoom: number): ExecResult;
-    // (undocumented)
-    snapshot(options?: {
-        scope?: EditorScope;
-    }): EditorSnapshot;
-}
+export { Editor }
 
-// @public (undocumented)
-export type EditorCommand = {
-    [K in keyof EditorCommands]: {
-        type: K;
-    } & EditorCommands[K];
-}[keyof EditorCommands];
+export { EditorCommand }
 
-// @public
-export class EditorFontError extends Error {
-    constructor(code: EditorFontErrorCode, message: string, details?: {
-        readonly request?: FontFaceRequest;
-        readonly diagnostic?: string;
-        readonly cause?: unknown;
-    });
-    // (undocumented)
-    readonly code: EditorFontErrorCode;
-    // (undocumented)
-    readonly diagnostic?: string;
-    // (undocumented)
-    readonly name: string;
-    // (undocumented)
-    readonly request?: FontFaceRequest;
-}
+export { EditorFontError }
 
-// @public (undocumented)
-export type EditorFontErrorCode = 'initializationFailed' | 'missing' | 'forbidden' | 'overLimit' | 'malformed' | 'hashMismatch' | 'metadataMismatch' | 'fontFaceLoadFailed' | 'unsupportedFaceIndex' | 'missingFont' | 'hashInvalid' | 'fontMismatch' | 'unsupportedFace' | 'loadFailed';
+export { EditorFontErrorCode }
 
-// @public
-export interface EditorHost {
-    afterCommit?(callback: () => void): void;
-    // (undocumented)
-    getBodyHostEl(): HTMLElement | null;
-    // (undocumented)
-    getHfHostEl(rId: string): HTMLElement | null;
-    getInteractionHostMetrics?(): InteractionHostMetrics | null;
-    // (undocumented)
-    getPagesContainer(): HTMLElement | null;
-    getRenderedTextGeometry?(): RenderedTextGeometryPort | null;
-    getScrollContainer(): HTMLElement | null;
-    onDisplay?(pages: readonly DisplayPage[]): void;
-    // (undocumented)
-    onScrollRestore?(pending: PendingScrollRestore): void;
-    // (undocumented)
-    onSelectionChange?(snapshot: EditorSnapshot): void;
-    // (undocumented)
-    onTotalPages?(total: number): void;
-    scheduleFrame(callback: () => void): () => void;
-}
+export { EditorHost }
 
 // @public (undocumented)
 export type EditorMode = 'edit' | 'view';
 
-// @public (undocumented)
-export type EditorQuery = {
-    [K in keyof EditorQueries]: {
-        type: K;
-    } & EditorQueries[K];
-}[keyof EditorQueries];
+export { EditorQuery }
 
-// @public
-export type EditorScope = {
-    kind: 'body';
-} | {
-    kind: 'headerFooter';
-    rId: string;
-}
-/** A footnote/endnote region, addressed by note id. */
-| {
-    kind: 'note';
-    id: string;
-}
-/** A text box or floating frame with its own content, addressed by id. */
-| {
-    kind: 'frame';
-    id: string;
-}
-/** Read-only aggregate across every view. Valid for queries, not for writes. */
-| {
-    kind: 'all';
-};
+export { EditorScope }
 
-// @public
-export interface EditorSnapshot {
-    readonly editable: boolean;
-    // (undocumented)
-    readonly formatting: RunFormatting | null;
-    // (undocumented)
-    readonly image: ImageContext | null;
-    // (undocumented)
-    readonly isLoading: boolean;
-    // (undocumented)
-    readonly page: {
-        readonly current: number;
-        readonly total: number;
-    };
-    // (undocumented)
-    readonly parseError: string | null;
-    // (undocumented)
-    readonly scope: EditorScope;
-    // (undocumented)
-    readonly selection: DocRange | null;
-    // (undocumented)
-    readonly table: TableContext | null;
-    // (undocumented)
-    readonly zoom: number;
-}
+export { EditorSnapshot }
 
-// @public
-export interface FontConfiguration {
-    // (undocumented)
-    readonly defaultFont: {
-        readonly family: string;
-        readonly sizeHalfPoints: number;
-    };
-    // (undocumented)
-    readonly epoch: number;
-    // (undocumented)
-    readonly language?: string;
-    // (undocumented)
-    readonly maxFontBytes: number;
-    // (undocumented)
-    readonly sources: readonly FontSource[];
-    // (undocumented)
-    readonly substitutions?: readonly FontSourceSubstitution[];
-}
+export { FontConfiguration }
 
-// @public
-export interface FontFaceRequest {
-    // (undocumented)
-    readonly family: string;
-    // (undocumented)
-    readonly style: 'normal' | 'italic';
-    // (undocumented)
-    readonly weight: number;
-}
+export { FontFaceRequest }
 
-// @public
-export interface FontSource {
-    // (undocumented)
-    readonly availability?: 'available' | 'forbidden';
-    // (undocumented)
-    readonly bytes: Uint8Array;
-    // (undocumented)
-    readonly faceIndex: number;
-    // (undocumented)
-    readonly hash: string;
-    // (undocumented)
-    readonly id: string;
-    // (undocumented)
-    readonly request: FontFaceRequest;
-}
+export { FontSource }
 
-// @public
-export interface FontSourceSubstitution {
-    // (undocumented)
-    readonly from: FontFaceRequest;
-    // (undocumented)
-    readonly to: FontFaceRequest;
-}
+export { FontSourceSubstitution }
 
 export { generateRulerTicks }
 
@@ -582,6 +222,78 @@ export function PageIndicator(input: {
     totalPages: number;
     visible: boolean;
 }): React$1.JSX.Element;
+
+// @public (undocumented)
+export function PaginatedDocxEditor(input: PaginatedDocxEditorProps): React$1.JSX.Element;
+
+// @public
+interface PaginatedDocxEditorHandle {
+    // (undocumented)
+    focus(): void;
+    formatting(): SurfaceFormatting | null;
+    // (undocumented)
+    navigate(command: NavigationCommand, extend?: boolean): void;
+    // (undocumented)
+    redo(): void;
+    save(): Uint8Array | null;
+    sectionProperties(): SectionProperties_2 | null;
+    // (undocumented)
+    selectAll(): void;
+    // (undocumented)
+    setParagraphProperty(localName: string, attributes?: Record<string, string>): void;
+    // (undocumented)
+    setRunProperty(localName: string, attributes?: Record<string, string>): void;
+    // (undocumented)
+    toggleRunProperty(localName: string, attributes?: Record<string, string>): void;
+    // (undocumented)
+    type(text: string): void;
+    // (undocumented)
+    undo(): void;
+}
+export { PaginatedDocxEditorHandle as PaginatedDocxEditorExpose }
+export { PaginatedDocxEditorHandle }
+
+// @public (undocumented)
+export interface PaginatedDocxEditorProps {
+    // (undocumented)
+    readonly className?: string;
+    readonly documentFontFamily?: string;
+    readonly measurer?: TextMeasurer;
+    readonly onError?: (reason: string, detail?: string) => void;
+    readonly onStateChange?: (state: PaginatedSurfaceState) => void;
+    // (undocumented)
+    readonly ref?: Ref<PaginatedDocxEditorHandle>;
+    readonly scale?: number;
+    readonly source: Uint8Array;
+}
+
+// @public (undocumented)
+export function PaginatedDocxEditorShell(input: PaginatedDocxEditorShellProps): React$1.JSX.Element;
+
+// @public (undocumented)
+export interface PaginatedDocxEditorShellProps {
+    // (undocumented)
+    readonly className?: string;
+    readonly colorMode?: 'light' | 'dark';
+    readonly documentFontFamily?: string;
+    readonly documentName?: string;
+    // (undocumented)
+    readonly measurer?: TextMeasurer;
+    // (undocumented)
+    readonly onError?: (reason: string, detail?: string) => void;
+    readonly onSave?: (bytes: Uint8Array) => void;
+    // (undocumented)
+    readonly onStateChange?: (state: PaginatedSurfaceState) => void;
+    readonly onZoomChange?: (zoom: number) => void;
+    readonly ref?: Ref<PaginatedDocxEditorHandle>;
+    readonly renderTitleBarLeft?: () => ReactNode;
+    // (undocumented)
+    readonly renderTitleBarRight?: () => ReactNode;
+    // (undocumented)
+    readonly scale?: number;
+    // (undocumented)
+    readonly source: Uint8Array;
+}
 
 export { PX_PER_CM }
 
