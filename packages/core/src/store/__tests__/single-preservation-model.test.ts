@@ -1,31 +1,26 @@
-// The tree lane carries ONE model (task 6.7).
+// The engine carries ONE model (task 6.7, tightened by the phase-4 deletion sweep).
 //
 // The design rejects "a semantic paragraph model plus raw-XML preservation capsules" because
 // two representations need ownership arbitration, and edits, ordering and save then diverge.
 // The canonical tree keeps unknown content as generic nodes in source order instead.
 //
 // Nothing in an import graph expresses that: a capsule is a `string` field, so a lane could
-// grow one back without any dependency changing. This checks the lane's source for the
-// second model's vocabulary, and — because a guard that only ever passes is worthless —
-// asserts the legacy lane still has it, so the check is scanning a corpus where those terms
-// genuinely appear.
-//
-// The legacy `PackageModel` path still backs `create-editor`'s display lane, which renders
-// tables, SDTs and page furniture the paragraph slice does not reach yet. Retiring it is
-// task 11.1's cutover, not something this guard can assert away.
+// grow one back without any dependency changing. The legacy byte-capsule lane is deleted, so
+// the scan is no longer an allowlist over tree-lane modules — it is ALL of
+// `packages/core/src`, and any module that names the second model's vocabulary fails.
 
 import { describe, expect, test } from 'bun:test';
-import { readFileSync, existsSync } from 'node:fs';
-import { dirname, join } from 'node:path';
+import { readFileSync, readdirSync, statSync } from 'node:fs';
+import { dirname, join, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { readOoxmlPackage } from '../package/ooxml-package.ts';
 import { deriveOoxmlIndexes } from '../package/ooxml-indexes.ts';
 import { paragraphTextOf } from '../store/tree-ops.ts';
 import { TreeDocumentStore } from '../store/tree-store.ts';
+import { openTreeSession } from '../../binding/tree-session.ts';
 import { zipSync, strToU8 } from 'fflate';
-import { existingLanePath, PACKAGES_ROOT } from './lane-paths.ts';
 
-const PACKAGES = PACKAGES_ROOT;
+const CORE_SRC = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
 
 /** The second model's vocabulary: verbatim bytes and the source ranges that address them. */
 const SECOND_MODEL = /\brPrCapsule\b|\bpPrCapsule\b|\bpAttrsCapsule\b|\bblockRanges\b/;
@@ -35,33 +30,61 @@ function stripComments(source: string): string {
   return source.replace(/\/\*[\s\S]*?\*\//g, ' ').replace(/(^|[^:])\/\/[^\n]*/g, '$1 ');
 }
 
-/** Every module that is part of the canonical-tree lane, load through paint. */
-const TREE_LANE = [
-  'engine-core/src/package/ooxml-package.ts',
-  'engine-core/src/package/ooxml-tree.ts',
-  'engine-core/src/package/ooxml-edit.ts',
-  'engine-core/src/package/ooxml-indexes.ts',
-  'engine-core/src/package/ooxml-digest.ts',
-  'engine-core/src/package/xml-reader.ts',
-  'engine-core/src/store/tree-ops.ts',
-  'engine-core/src/store/tree-store.ts',
-  'engine-binding/src/tree-schema.ts',
-  'engine-binding/src/tree-binding.ts',
-  'engine-binding/src/tree-styles.ts',
-  'engine-binding/src/tree-session.ts',
-  'engine-binding/src/tree-surface.ts',
-  'engine-layout/src/semantic-records.ts',
-  'engine-layout/src/semantic-layout.ts',
-  'engine-layout/src/semantic-interaction.ts',
-  'engine-layout/src/run-style.ts',
-  'engine-output/src/semantic-paint.ts',
-  'engine-editor/src/paginated-surface.ts',
-];
+/** Every .ts source under packages/core/src, tests excluded (tests may quote the vocabulary). */
+function collectCoreSources(dir: string, out: string[] = []): string[] {
+  for (const entry of readdirSync(dir)) {
+    if (entry === '__tests__' || entry === 'node_modules') continue;
+    const path = join(dir, entry);
+    if (statSync(path).isDirectory()) {
+      collectCoreSources(path, out);
+    } else if (entry.endsWith('.ts')) {
+      out.push(path);
+    }
+  }
+  return out;
+}
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 const CT = 'http://schemas.openxmlformats.org/package/2006/content-types';
 const REL = 'http://schemas.openxmlformats.org/package/2006/relationships';
-const OD = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument';
+const R = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships';
+const OD = `${R}/officeDocument`;
+
+/** A minimal well-formed DOCX around the given document.xml body, plus extra parts. */
+function buildDocx(
+  bodyInner: string,
+  options: {
+    readonly overrides?: string;
+    readonly rels?: string;
+    readonly extraParts?: Record<string, string>;
+    readonly documentAttrs?: string;
+  } = {}
+): Uint8Array {
+  const entries: Record<string, Uint8Array> = {
+    '[Content_Types].xml': strToU8(
+      `<Types xmlns="${CT}">` +
+        '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>' +
+        '<Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>' +
+        (options.overrides ?? '') +
+        '</Types>'
+    ),
+    '_rels/.rels': strToU8(
+      `<Relationships xmlns="${REL}"><Relationship Id="rId1" Type="${OD}" Target="word/document.xml"/></Relationships>`
+    ),
+    'word/document.xml': strToU8(
+      `<w:document xmlns:w="${W}"${options.documentAttrs ?? ''}><w:body>${bodyInner}</w:body></w:document>`
+    ),
+  };
+  if (options.rels) {
+    entries['word/_rels/document.xml.rels'] = strToU8(
+      `<Relationships xmlns="${REL}">${options.rels}</Relationships>`
+    );
+  }
+  for (const [name, xml] of Object.entries(options.extraParts ?? {})) {
+    entries[name] = strToU8(xml);
+  }
+  return zipSync(entries);
+}
 
 /** A paragraph whose formatting and content include elements the typed model does not know. */
 function unknownContentDocx(): Uint8Array {
@@ -73,45 +96,21 @@ function unknownContentDocx(): Uint8Array {
     '<w:r><w:drawing><wp:inline xmlns:wp="urn:test:wp"><wp:extent cx="1" cy="1"/></wp:inline></w:drawing></w:r>' +
     '<ext:futureParagraphChild xmlns:ext="urn:test:ext">tail</ext:futureParagraphChild>' +
     '</w:p>';
-  return zipSync({
-    '[Content_Types].xml': strToU8(
-      `<Types xmlns="${CT}">` +
-        '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>' +
-        '<Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>' +
-        '</Types>'
-    ),
-    '_rels/.rels': strToU8(
-      `<Relationships xmlns="${REL}"><Relationship Id="rId1" Type="${OD}" Target="word/document.xml"/></Relationships>`
-    ),
-    'word/document.xml': strToU8(`<w:document xmlns:w="${W}"><w:body>${body}</w:body></w:document>`),
-  });
+  return buildDocx(body);
 }
 
-describe('the canonical tree lane keeps ONE model (task 6.7)', () => {
-  test('no tree-lane module names a preservation capsule or a source range', () => {
+describe('the engine keeps ONE model (task 6.7)', () => {
+  test('no module under packages/core/src names a preservation capsule or a source range', () => {
+    const sources = collectCoreSources(CORE_SRC);
+    // A scan over nothing proves nothing: the corpus must really be the engine.
+    expect(sources.length).toBeGreaterThan(50);
     const offenders: string[] = [];
-    for (const relativePath of TREE_LANE) {
-      const file = existingLanePath(relativePath);
-      // A missing entry would silently shrink the corpus, so it is an offence too.
-      if (!existsSync(file)) {
-        offenders.push(`${relativePath}: not found`);
-        continue;
-      }
+    for (const file of sources) {
       if (SECOND_MODEL.test(stripComments(readFileSync(file, 'utf8')))) {
-        offenders.push(relativePath);
+        offenders.push(relative(CORE_SRC, file));
       }
     }
     expect(offenders).toEqual([]);
-  });
-
-  test('the guard is not vacuous: the legacy lane still uses the second model', () => {
-    // If this ever fails, the byte-capsule model is gone repo-wide and this file — not just
-    // its expectation — should go with it.
-    const legacy = ['engine-core/src/package/wml-preserve.ts', 'engine-core/src/package/docx/read.ts'];
-    for (const relativePath of legacy) {
-      const code = stripComments(readFileSync(existingLanePath(relativePath), 'utf8'));
-      expect({ [relativePath]: SECOND_MODEL.test(code) }).toEqual({ [relativePath]: true });
-    }
   });
 
   test('the regex matches the fields it is meant to and not a lookalike', () => {
@@ -150,5 +149,54 @@ describe('unknown content does not lock a paragraph read-only (task 6.7)', () =>
     expect(xml).toContain('futureRunProp');
     expect(xml).toContain('futureParagraphChild');
     expect(xml).toContain('urn:test:wp');
+  });
+});
+
+describe('the one model reaches beyond plain body paragraphs (phase-4 sweep)', () => {
+  test('a table document opens editable and an insertText into a cell paragraph commits', () => {
+    const body =
+      '<w:p><w:r><w:t>before</w:t></w:r></w:p>' +
+      '<w:tbl><w:tblPr/><w:tblGrid><w:gridCol w:w="2400"/></w:tblGrid>' +
+      '<w:tr><w:tc><w:tcPr/><w:p><w:r><w:t>cell</w:t></w:r></w:p></w:tc></w:tr>' +
+      '</w:tbl>';
+    const opened = openTreeSession(buildDocx(body));
+    expect(opened.ok).toBe(true);
+    if (!opened.ok) return;
+    const session = opened.session;
+    expect(session.editable).toBe(true);
+
+    // The LAST paragraph id is the cell's: body paragraph first, cell paragraph after it
+    // in document order. Assert on its text to be sure the op landed inside the table.
+    const ids = session.paragraphIds();
+    expect(ids.length).toBe(2);
+    const cellParagraphId = ids[1]!;
+    expect(paragraphTextOf(session.part(), cellParagraphId)).toBe('cell');
+
+    const result = session.applyTreeOps([
+      { op: 'insertText', paragraphId: cellParagraphId, offset: 0, text: 'X' },
+    ]);
+    expect(result.committed).toBe(true);
+    expect(result.rejected).toBe(false);
+    expect(paragraphTextOf(session.part(), cellParagraphId)).toBe('Xcell');
+  });
+
+  test('a document with a default header opens and resolves the header part', () => {
+    const headerXml = `<w:hdr xmlns:w="${W}"><w:p><w:r><w:t>HEADER</w:t></w:r></w:p></w:hdr>`;
+    const bytes = buildDocx(
+      '<w:p><w:r><w:t>body</w:t></w:r></w:p>' +
+        '<w:sectPr><w:headerReference w:type="default" r:id="rId7"/></w:sectPr>',
+      {
+        documentAttrs: ` xmlns:r="${R}"`,
+        overrides:
+          '<Override PartName="/word/header1.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.header+xml"/>',
+        rels: `<Relationship Id="rId7" Type="${R}/header" Target="header1.xml"/>`,
+        extraParts: { 'word/header1.xml': headerXml },
+      }
+    );
+    const opened = openTreeSession(bytes);
+    expect(opened.ok).toBe(true);
+    if (!opened.ok) return;
+    const header = opened.session.headerFooterParts().headers.get('default');
+    expect(header).toBeDefined();
   });
 });

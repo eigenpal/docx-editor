@@ -42,7 +42,9 @@ describe('the visible band, plus what must be ready around it (task 9.4)', () =>
   });
 
   test('overscan is clamped at the ends rather than producing invalid indices', () => {
-    expect(sorted(pagesToMaterialize({ layout, viewport: { top: 0, height: 50 }, overscanPages: 3 }))).toEqual([0, 1, 2, 3]);
+    expect(
+      sorted(pagesToMaterialize({ layout, viewport: { top: 0, height: 50 }, overscanPages: 3 }))
+    ).toEqual([0, 1, 2, 3]);
     expect(
       sorted(pagesToMaterialize({ layout, viewport: { top: 950, height: 50 }, overscanPages: 3 }))
     ).toEqual([6, 7, 8, 9]);
@@ -50,7 +52,9 @@ describe('the visible band, plus what must be ready around it (task 9.4)', () =>
 
   test('a page touching the very edge of the viewport counts as visible', () => {
     // Off by one here means the top of the screen is blank whenever a boundary lands there.
-    expect(pagesToMaterialize({ layout, viewport: { top: 300, height: 10 }, overscanPages: 0 }).has(3)).toBe(true);
+    expect(
+      pagesToMaterialize({ layout, viewport: { top: 300, height: 10 }, overscanPages: 0 }).has(3)
+    ).toBe(true);
   });
 
   test('pinned pages are materialized wherever they are', () => {

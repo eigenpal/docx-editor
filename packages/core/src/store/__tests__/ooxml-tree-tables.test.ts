@@ -115,9 +115,7 @@ describe('malformed table shapes demote to generic and still round-trip', () => 
   });
 
   test('two w:tblPr children demote the table', () => {
-    const part = loadPart(
-      doc(`<w:tbl><w:tblPr/><w:tblPr/><w:tr>${CELL}</w:tr></w:tbl>`)
-    );
+    const part = loadPart(doc(`<w:tbl><w:tblPr/><w:tblPr/><w:tr>${CELL}</w:tr></w:tbl>`));
     expect(collectByKind(part.root, 'table')).toHaveLength(0);
     expect(collectByKind(part.root, 'tableProperties')).toHaveLength(2);
     const reopened = loadPart(serializeOoxmlPart(part));
@@ -182,9 +180,7 @@ describe('cell paragraphs are editable through the ordinary op layer', () => {
     if (!reopened.ok) throw new Error(reopened.reason);
     const after = reopened.package.parts.get(pkg.mainDocumentPart)!;
     expect(canonicalOoxmlFingerprint(after)).toBe(canonicalOoxmlFingerprint(result.part));
-    expect(
-      diffSemanticDigests(semanticDigest([result.part]), semanticDigest([after]))
-    ).toEqual([]);
+    expect(diffSemanticDigests(semanticDigest([result.part]), semanticDigest([after]))).toEqual([]);
     // Structural ids are stable across save/reopen, so the same id reads the edited text.
     expect(paragraphTextOf(after, target.id)).toBe(`Z${before}`);
   });

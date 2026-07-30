@@ -80,7 +80,9 @@ describe('bounded OPC loading into canonical trees (task 4.4)', () => {
         rels.push(`<Relationship Id="rId${i}" Type="${IMAGE_REL}" Target="media/i${i}.png"/>`);
       }
       const result = readOoxmlPackage(
-        build({ '_rels/.rels': `<Relationships xmlns="${REL_NS}">${rels.join('')}</Relationships>` }),
+        build({
+          '_rels/.rels': `<Relationships xmlns="${REL_NS}">${rels.join('')}</Relationships>`,
+        }),
         { maxRelationships: 5 }
       );
       expect(result.ok).toBe(false);

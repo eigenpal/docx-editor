@@ -139,3 +139,19 @@ Run on 2026-07-30 at the start of the "retire the second preservation model" sli
 
 Every phase gate of the retirement slice diffs against this record. Skip count is watched
 explicitly: fixture-gated suites go silently missing rather than failing when a path breaks.
+
+## After the retired-lane deletion (task 6.7 / 11.1-11.2)
+
+The sweep removed 400+ files: the PackageModel byte-capsule engine, its layout/display
+lanes, the retired binding cluster, and the sync/server/clients lanes built on the deleted
+model, together with their test suites.
+
+- `bun test`: **1531 pass, 0 fail** across 123 files. The drop from 2827 is the deleted
+  retired suites, accounted file-by-file in the sweep record — not silent skips; skip
+  count stays zero.
+- `bun run typecheck`, `check:lane-boundaries` (now store+layout), `api:check`,
+  `check:export-parity`, `check:editor-contract`, `check:parity-contract`,
+  `check:adapter-css-thin`, `i18n:validate`: all pass.
+- `check:public-docs-surface`: still deliberately red per task 11.4's owner note.
+- Capsule vocabulary (`rPrCapsule`/`pPrCapsule`/`pAttrsCapsule`/`blockRanges`): zero
+  references in `packages/core/src` outside the guard test's own scan.

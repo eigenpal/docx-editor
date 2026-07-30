@@ -12,22 +12,6 @@
 export const ENGINE_LAYOUT_PACKAGE = '@docx-editor.dev/core-contract/layout' as const;
 
 export {
-  type Anchor,
-  type TextItem,
-  type TextGlyphCluster,
-  type RectItem,
-  type CaretEdgeItem,
-  type VisualLineIdentity,
-  type DisplayItem,
-  type Page,
-  type LayoutResult,
-} from './display-item.ts';
-export {
-  type LayoutShapingOptions,
-  type DeterministicLayoutShapingOptions,
-  createDeterministicLayoutShaping,
-} from './metrics.ts';
-export {
   FontResolutionError,
   HARD_MAX_AGGREGATE_FONT_BYTES,
   HARD_MAX_FONT_BYTES,
@@ -97,7 +81,6 @@ export {
   type ScriptItem,
 } from './script-itemization.ts';
 export type { BidiEmbeddingLevels } from './bidi.ts';
-export { layoutParagraphInBox, type ParagraphLayoutSink } from './paragraph-layout.ts';
 export {
   shapedHorizontalBoundaries,
   isWholeGraphemeHorizontalBoundary,
@@ -105,13 +88,6 @@ export {
   isCumulativeGeometryTrustedFromLineOrigin,
   semanticHorizontalBoundaries,
 } from './horizontal-boundary.ts';
-export {
-  LayoutNormalizationError,
-  LayoutOperationRestartError,
-  type LayoutOptions,
-  layoutBody,
-  hitTest,
-} from './layout.ts';
 export {
   type GraphemeBoundary,
   type GraphemeSegment,
@@ -141,28 +117,6 @@ export {
   isIntlWordSegmenterAvailable,
   WORD_SEGMENTER_LOCALE,
 } from './word-segment.ts';
-export {
-  type LayoutBuilder,
-  type BlockLayoutContext,
-  type BlockLayout,
-  type BlockDependencies,
-  registerBlockLayout,
-  layoutBlock,
-  hasBlockLayout,
-  assertLayoutLaneComplete,
-  registerBlockDependencies,
-  blockDependencies,
-  registerBlockSemanticRole,
-  blockSemanticRole,
-  hitOwner,
-  hasLayoutMetadata,
-} from './block-layout.ts';
-export {
-  type DependencyKind,
-  type DependencyKey,
-  keyId,
-  DependencyGraph,
-} from './dependency-graph.ts';
 export {
   type OperationSnapshot,
   type OperationSnapshotField,
@@ -206,12 +160,13 @@ export {
   type PageFurniture,
   type SemanticLayoutOptions,
 } from './semantic-layout.ts';
-export {
-  layoutHeaderFooterStory,
-  type HeaderFooterStoryLayout,
-} from './hf-layout.ts';
+export { layoutHeaderFooterStory, type HeaderFooterStoryLayout } from './hf-layout.ts';
 export { storyBlocks } from './story-roots.ts';
-export { createShapedMeasurer, type ShapedMeasurerOptions } from './shaped-measurer.ts';
+export {
+  createShapedMeasurer,
+  type LayoutShapingOptions,
+  type ShapedMeasurerOptions,
+} from './shaped-measurer.ts';
 export {
   DEFAULT_SECTION_PROPERTIES,
   geometryOfSection,

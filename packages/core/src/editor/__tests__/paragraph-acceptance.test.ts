@@ -34,7 +34,6 @@ function bytes(): Uint8Array {
   return new Uint8Array(readFileSync(FIXTURE));
 }
 
-
 /**
  * Put the caret at a model position in the first paragraph.
  *
@@ -62,7 +61,11 @@ function propertyNames(source: Uint8Array): Set<string> {
   const read = readOoxmlPackage(source);
   if (!read.ok) throw new Error(read.reason);
   const names = new Set<string>();
-  const walk = (node: { kind: string; localName?: string; children?: readonly unknown[] }): void => {
+  const walk = (node: {
+    kind: string;
+    localName?: string;
+    children?: readonly unknown[];
+  }): void => {
     if (node.kind === 'textValue') return;
     if (node.kind === 'runProperties' || node.kind === 'paragraphProperties') {
       for (const child of (node.children ?? []) as { localName?: string }[]) {
@@ -177,9 +180,7 @@ describe('load, edit, format, save and reopen (task 8.3)', () => {
   test('BOTH D9 oracles pass across save and reopen', () => {
     const surface = mount();
     const first = surface.session.paragraphIds()[0]!;
-    surface.session.applyTreeOps([
-      { op: 'insertText', paragraphId: first, offset: 0, text: 'X' },
-    ]);
+    surface.session.applyTreeOps([{ op: 'insertText', paragraphId: first, offset: 0, text: 'X' }]);
 
     const saved = surface.session.save();
     const before = surface.session.part();

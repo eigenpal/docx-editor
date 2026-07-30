@@ -16,12 +16,26 @@ import {
 
 describe('sanitizeHref', () => {
   test('allows the scheme allowlist and relative URLs', () => {
-    for (const ok of ['https://x.com/a', 'http://x', 'mailto:a@b.com', 'tel:+15551234', 'ftp://h/f', '/rel/path', 'page.html']) {
+    for (const ok of [
+      'https://x.com/a',
+      'http://x',
+      'mailto:a@b.com',
+      'tel:+15551234',
+      'ftp://h/f',
+      '/rel/path',
+      'page.html',
+    ]) {
       expect(sanitizeHref(ok).ok).toBe(true);
     }
   });
   test('renders dangerous schemes inert, including tab/newline-smuggled ones', () => {
-    for (const bad of ['javascript:alert(1)', 'data:text/html,<x>', 'vbscript:msgbox', 'file:///etc/passwd', 'JaVaScRiPt:x']) {
+    for (const bad of [
+      'javascript:alert(1)',
+      'data:text/html,<x>',
+      'vbscript:msgbox',
+      'file:///etc/passwd',
+      'JaVaScRiPt:x',
+    ]) {
       expect(sanitizeHref(bad)).toEqual({ ok: false, inert: true });
     }
     // Embedded control chars must not let "java\nscript:" through.
@@ -32,7 +46,9 @@ describe('sanitizeHref', () => {
 
 describe('string escaping', () => {
   test('escapeXml neutralizes markup metacharacters', () => {
-    expect(escapeXml(`<a href="x" & 'y'>`)).toBe('&lt;a href=&quot;x&quot; &amp; &apos;y&apos;&gt;');
+    expect(escapeXml(`<a href="x" & 'y'>`)).toBe(
+      '&lt;a href=&quot;x&quot; &amp; &apos;y&apos;&gt;'
+    );
   });
   test('escapeCssString prevents string breakout', () => {
     const out = escapeCssString('Arial"; } body { background: url(evil)');

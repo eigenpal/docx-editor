@@ -108,9 +108,7 @@ function columnWidthsPt(
       return bounded.map((col) => {
         const raw = attributeValue(col, 'w');
         const twips = raw !== undefined ? Number(raw) : NaN;
-        return Number.isFinite(twips) && twips > 0
-          ? twips / 20
-          : contentWidthPt / bounded.length;
+        return Number.isFinite(twips) && twips > 0 ? twips / 20 : contentWidthPt / bounded.length;
       });
     }
   }

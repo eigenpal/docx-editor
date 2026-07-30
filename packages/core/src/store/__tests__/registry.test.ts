@@ -103,7 +103,9 @@ describe('dependencies and conflicts', () => {
     }
   });
   test('missing dependency fails', () => {
-    expect(() => resolve([bundle('a.pkg', { dependencies: ['missing.pkg'] })])).toThrow(RegistryError);
+    expect(() => resolve([bundle('a.pkg', { dependencies: ['missing.pkg'] })])).toThrow(
+      RegistryError
+    );
   });
   test('declared conflict between enabled bundles fails', () => {
     const a = bundle('a.pkg', { conflicts: ['b.pkg'] });
@@ -165,7 +167,11 @@ describe('replacement precedence', () => {
 
   test('two replacers under single policy are ambiguous', () => {
     const e = catchErr(() =>
-      resolve([target({ kind: 'single' }), replacer('r1.pkg', '^1.0.0'), replacer('r2.pkg', '^1.0.0')]),
+      resolve([
+        target({ kind: 'single' }),
+        replacer('r1.pkg', '^1.0.0'),
+        replacer('r2.pkg', '^1.0.0'),
+      ])
     );
     expect(e.code).toBe('ambiguous-replacement');
   });
@@ -188,7 +194,7 @@ describe('replacement precedence', () => {
         target({ kind: 'priority' }),
         replacer('r1.pkg', '^1.0.0', 7),
         replacer('r2.pkg', '^1.0.0', 7),
-      ]),
+      ])
     );
     expect(e.code).toBe('ambiguous-replacement');
   });

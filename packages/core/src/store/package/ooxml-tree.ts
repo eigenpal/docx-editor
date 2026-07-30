@@ -586,8 +586,7 @@ function validKnownKind(kind: KnownKind, children: readonly OoxmlNode[]): boolea
       );
     case 'body':
       return children.every(
-        (child) =>
-          child.kind === 'paragraph' || child.kind === 'table' || child.kind === 'generic'
+        (child) => child.kind === 'paragraph' || child.kind === 'table' || child.kind === 'generic'
       );
     case 'paragraph': {
       const properties = children.findIndex((child) => child.kind === 'paragraphProperties');
@@ -648,8 +647,7 @@ function validKnownKind(kind: KnownKind, children: readonly OoxmlNode[]): boolea
       return children.every((child) => child.kind === 'tableCell' || child.kind === 'generic');
     case 'tableCell':
       return children.every(
-        (child) =>
-          child.kind === 'paragraph' || child.kind === 'table' || child.kind === 'generic'
+        (child) => child.kind === 'paragraph' || child.kind === 'table' || child.kind === 'generic'
       );
     case 'tableGrid':
     case 'tableProperties':

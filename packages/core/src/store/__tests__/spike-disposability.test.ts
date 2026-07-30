@@ -76,7 +76,7 @@ describe('spike disposability milestone gate (task 1.6)', () => {
 
   test('spike does not import any production engine package (independence)', () => {
     for (const file of collectSources(join(SPIKE_DIR, 'src')).concat(
-      collectSources(join(SPIKE_DIR, 'tests')),
+      collectSources(join(SPIKE_DIR, 'tests'))
     )) {
       for (const spec of importSpecifiers(readFileSync(file, 'utf8'))) {
         const root = spec.startsWith('@') ? spec.split('/').slice(0, 2).join('/') : spec;
@@ -107,7 +107,7 @@ describe('spike disposability milestone gate (task 1.6)', () => {
   test('spike disposability is covered by exactly one active change', () => {
     const changesDir = join(REPO, 'openspec', 'changes');
     const active = readdirSync(changesDir).filter(
-      (entry) => entry !== 'archive' && statSync(join(changesDir, entry)).isDirectory(),
+      (entry) => entry !== 'archive' && statSync(join(changesDir, entry)).isDirectory()
     );
     expect(active).toEqual(['typed-ooxml-paragraph-editor']);
   });

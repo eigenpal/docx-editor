@@ -71,7 +71,13 @@ describe('mode guards', () => {
     expect(compareArtifacts('rasterCheckpoint', 100, 102, { epsilon: 1 }).equal).toBe(false);
   });
   test('artifacts required to match exactly declare no tolerance', () => {
-    for (const name of ['shapedRun', 'paginationFingerprint', 'semanticTree', 'hitTest', 'anchor'] as const) {
+    for (const name of [
+      'shapedRun',
+      'paginationFingerprint',
+      'semanticTree',
+      'hitTest',
+      'anchor',
+    ] as const) {
       expect(COMPARATORS[name].mode).toBe('exact');
     }
   });

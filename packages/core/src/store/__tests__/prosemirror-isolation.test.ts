@@ -33,9 +33,6 @@ const PM_FREE_ROOTS: readonly { readonly label: string; readonly dir: string }[]
   { label: 'store + save + semantic history', dir: 'engine-core/src' },
   { label: 'layout', dir: 'engine-layout/src' },
   { label: 'output', dir: 'engine-output/src' },
-  { label: 'server', dir: 'engine-server/src' },
-  { label: 'clients', dir: 'engine-clients/src' },
-  { label: 'sync', dir: 'engine-sync/src' },
   // The browser editor facade is the composition root the adapters bind to, so it is a
   // public host contract in practice even though it is not the contract package.
   { label: 'editor facade', dir: 'engine-editor/src' },
@@ -113,10 +110,11 @@ describe('ProseMirror stays inside the binding (tasks 6.5, 6.6)', () => {
 
   test('the save path reads the canonical tree, never a ProseMirror document', () => {
     // Task 6.6, stated as the files that actually produce output bytes.
+    // The legacy byte-capsule save path (wml-serialize.ts, docx/write.ts) was deleted with
+    // the legacy store; the tree serializer and the package writer are the whole save path.
     const savePath = [
       'engine-core/src/package/ooxml-tree.ts',
-      'engine-core/src/package/wml-serialize.ts',
-      'engine-core/src/package/docx/write.ts',
+      'engine-core/src/package/ooxml-package.ts',
     ];
     for (const relativePath of savePath) {
       const file = existingLanePath(relativePath);

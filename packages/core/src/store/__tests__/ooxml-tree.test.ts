@@ -23,8 +23,7 @@ const invariantApi = engineCore as typeof engineCore & {
 
 const metadata = {
   name: '/word/document.xml',
-  contentType:
-    'application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml',
+  contentType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml',
 };
 
 function parse(xml: string): OoxmlPart {
@@ -100,12 +99,12 @@ describe('canonical typed OOXML tree', () => {
     const inner = scope.children[0] as OoxmlElement;
     const last = part.root.children[2] as OoxmlElement;
 
-    expect([part.root.namespaceUri, first.namespaceUri, scope.namespaceUri, inner.namespaceUri]).toEqual([
-      'urn:outer',
-      'urn:one',
-      'urn:inner',
-      'urn:inner',
-    ]);
+    expect([
+      part.root.namespaceUri,
+      first.namespaceUri,
+      scope.namespaceUri,
+      inner.namespaceUri,
+    ]).toEqual(['urn:outer', 'urn:one', 'urn:inner', 'urn:inner']);
     expect(inner.attributes[0]).toMatchObject({
       namespaceUri: 'urn:two',
       localName: 'flag',
@@ -317,21 +316,13 @@ describe('reviewed namespace, identity, and typing invariants', () => {
     );
 
     expect(collectIds(alternate.root)).toEqual(collectIds(compact.root));
-    expect(collectIds(parse(serializeOoxmlPart(alternate)).root)).toEqual(
-      collectIds(compact.root)
-    );
+    expect(collectIds(parse(serializeOoxmlPart(alternate)).root)).toEqual(collectIds(compact.root));
   });
 
   test('classifies known names with invalid first-slice children as generic', () => {
-    const invalidTab = parse(
-      `<w:tab xmlns:w="${WML_NAMESPACE_URI}"><w:t>x</w:t></w:tab>`
-    );
-    const invalidText = parse(
-      `<w:t xmlns:w="${WML_NAMESPACE_URI}"><w:br/></w:t>`
-    );
-    const invalidDocument = parse(
-      `<w:document xmlns:w="${WML_NAMESPACE_URI}"><w:p/></w:document>`
-    );
+    const invalidTab = parse(`<w:tab xmlns:w="${WML_NAMESPACE_URI}"><w:t>x</w:t></w:tab>`);
+    const invalidText = parse(`<w:t xmlns:w="${WML_NAMESPACE_URI}"><w:br/></w:t>`);
+    const invalidDocument = parse(`<w:document xmlns:w="${WML_NAMESPACE_URI}"><w:p/></w:document>`);
 
     expect(invalidTab.root.kind).toBe('generic');
     expect(invalidText.root.kind).toBe('generic');
@@ -400,10 +391,7 @@ describe('round-two canonical namespace and typing behavior', () => {
     expect(saved).toContain('mc:MustUnderstand="ns1"');
     expect(saved).toContain('xmlns:a="urn:feature"');
     expect(
-      readOoxmlPart(
-        `<r xmlns:mc="${MC_NAMESPACE_URI}" mc:MustUnderstand="missing"/>`,
-        metadata
-      )
+      readOoxmlPart(`<r xmlns:mc="${MC_NAMESPACE_URI}" mc:MustUnderstand="missing"/>`, metadata)
     ).toMatchObject({ ok: false, reason: 'undeclared-prefix' });
   });
 
@@ -415,9 +403,7 @@ describe('round-two canonical namespace and typing behavior', () => {
       const duplicated = parse(
         `<r xmlns:mc="${MC_NAMESPACE_URI}" xmlns:a="urn:feature" mc:${localName}="a a"/>`
       );
-      expect(canonicalOoxmlFingerprint(duplicated)).toBe(
-        canonicalOoxmlFingerprint(single)
-      );
+      expect(canonicalOoxmlFingerprint(duplicated)).toBe(canonicalOoxmlFingerprint(single));
       expect(serializeOoxmlPart(duplicated)).toBe(serializeOoxmlPart(single));
     }
 
@@ -427,9 +413,7 @@ describe('round-two canonical namespace and typing behavior', () => {
     const duplicateChoice = parse(
       `<mc:Choice xmlns:mc="${MC_NAMESPACE_URI}" xmlns:a="urn:feature" Requires="a a"/>`
     );
-    expect(canonicalOoxmlFingerprint(duplicateChoice)).toBe(
-      canonicalOoxmlFingerprint(choice)
-    );
+    expect(canonicalOoxmlFingerprint(duplicateChoice)).toBe(canonicalOoxmlFingerprint(choice));
     expect(serializeOoxmlPart(duplicateChoice)).toBe(serializeOoxmlPart(choice));
   });
 
@@ -450,10 +434,7 @@ describe('round-two canonical namespace and typing behavior', () => {
 
   test('rejects undeclared tokens in all explicitly known QName attributes', () => {
     expect(
-      readOoxmlPart(
-        `<mc:Choice xmlns:mc="${MC_NAMESPACE_URI}" Requires="missing"/>`,
-        metadata
-      )
+      readOoxmlPart(`<mc:Choice xmlns:mc="${MC_NAMESPACE_URI}" Requires="missing"/>`, metadata)
     ).toMatchObject({ ok: false, reason: 'undeclared-prefix' });
     expect(
       readOoxmlPart(
@@ -510,22 +491,15 @@ describe('round-two canonical namespace and typing behavior', () => {
       'genericExtension',
     ]);
 
-    const property = parse(
-      `<w:b xmlns:w="${WML_NAMESPACE_URI}" w:val="true"/>`
-    );
+    const property = parse(`<w:b xmlns:w="${WML_NAMESPACE_URI}" w:val="true"/>`);
     expect(property.root.attributes[0]).toMatchObject({
       kind: 'wmlVal',
       value: 'true',
     });
     expect(
-      readOoxmlPart(
-        `<w:t xmlns:w="${WML_NAMESPACE_URI}" xml:space="sometimes">x</w:t>`,
-        metadata
-      )
+      readOoxmlPart(`<w:t xmlns:w="${WML_NAMESPACE_URI}" xml:space="sometimes">x</w:t>`, metadata)
     ).toMatchObject({ ok: true });
-    const invalid = parse(
-      `<w:t xmlns:w="${WML_NAMESPACE_URI}" xml:space="sometimes">x</w:t>`
-    );
+    const invalid = parse(`<w:t xmlns:w="${WML_NAMESPACE_URI}" xml:space="sometimes">x</w:t>`);
     expect(invalid.root.kind).toBe('generic');
   });
 });
@@ -545,9 +519,7 @@ describe('normalized OOXML serialization and canonical oracle', () => {
 
     expect(canonicalOoxmlFingerprint(left)).toBe(canonicalOoxmlFingerprint(right));
     expect(ooxmlTreesEqual(left, right)).toBe(true);
-    expect(serializeOoxmlPart(left)).toContain(
-      'plain="&quot;&lt;&amp;" ns1:a="1" ns1:z="2"'
-    );
+    expect(serializeOoxmlPart(left)).toContain('plain="&quot;&lt;&amp;" ns1:a="1" ns1:z="2"');
     expect(serializeOoxmlPart(left)).toContain('safe &amp; sound');
     expect(serializeOoxmlPart(left)).toContain(`xmlns:a="${WML_NAMESPACE_URI}"`);
     expect(serializeOoxmlPart(right)).toContain('xmlns:q="urn:extension"');

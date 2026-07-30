@@ -1,10 +1,12 @@
 // @docx-editor.dev/engine-core
 //
-// Semantic core: bounded OPC/OOXML trust boundary, canonical authored package model, DocumentStore, DocOp/ModelChange contracts, opaque anchors, history, and the DocxEditor.* dispatch/registry. PM-free, DOM-free, Yjs-free, transport-neutral, PDF-free. Becomes the published @docx-editor.dev/core at the section 7/14 migration.
+// Semantic core: bounded OPC/OOXML trust boundary, the canonical ordered OOXML tree,
+// TreeDocumentStore, and TreeDocOp contracts. PM-free, DOM-free, Yjs-free,
+// transport-neutral, PDF-free. Becomes the published @docx-editor.dev/core at the
+// section 7/14 migration.
 //
 // Production placement is fixed by document-engine task 1.4. Responsibilities and
-// dependency rules: docs/architecture/production-engine-packages.md. This is a
-// greenfield skeleton; capability implementation lands in the sections that own it.
+// dependency rules: docs/architecture/production-engine-packages.md.
 //
 // ADR-S9: production modules MUST NOT import from packages/core/spike/**.
 
@@ -23,39 +25,9 @@ export * from './comparators/index.ts';
 // Shared conformance fixture format + replay harness (task 1.5).
 export * from './conformance/index.ts';
 
-// Bounded package trust boundary: OPC names, content types, relationships (2.2, 2.6).
+// Bounded package trust boundary: OPC names, content types, relationships, the ordered
+// OOXML tree, and the tree-lane package read/write (2.2, 2.6, tree lane).
 export * from './package/index.ts';
 
-// Canonical authored package model + create-from-scratch (task 2.9).
-export * from './model/index.ts';
-
-// Semantic document store: contracts, DocOps, transactions, ModelChange (section 4).
+// Semantic document store: TreeDocumentStore + TreeDocOps over the canonical tree.
 export * from './store/index.ts';
-
-// Style resolution: derived effective formatting (section 6). Never mutates authored state.
-export {
-  createStyleResolver,
-  resolveRunProps,
-  type StyleResolver,
-} from './resolve/style-resolver.ts';
-
-// Shared utilities used by peripheral packages (opaque byte encoding).
-export { utf8ToHex, hexToUtf8 } from './util/hex.ts';
-
-// The DocxEditor.* public object model — the only public object-model namespace (section 7).
-export { DocxEditor } from './docx-editor/index.ts';
-
-// Base capability registration + completeness (section 9).
-export {
-  type PipelineRole,
-  type EditableCapability,
-  type CompletenessResult,
-  REQUIRED_EDITABLE_ROLES,
-  checkEditableComplete,
-  PARAGRAPH_CAPABILITY,
-  BASE_BUNDLE,
-  buildBaseRegistry,
-  assertCoreBlockRegistryComplete,
-  resolveCoreRegistry,
-  resetCoreRegistryCache,
-} from './capabilities/index.ts';

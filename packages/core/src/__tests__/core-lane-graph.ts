@@ -11,16 +11,7 @@
 // environment it is allowed to assume. A lane that acquires a new dependency has to declare
 // it here, in a diff a reviewer sees.
 
-export type LaneName =
-  | 'contracts'
-  | 'store'
-  | 'binding'
-  | 'sync'
-  | 'layout'
-  | 'output'
-  | 'server'
-  | 'clients'
-  | 'editor';
+export type LaneName = 'contracts' | 'store' | 'binding' | 'layout' | 'output' | 'editor';
 
 export type LaneEnvironment = 'neutral' | 'browser' | 'node';
 
@@ -94,15 +85,9 @@ export const CORE_LANES: Readonly<Record<LaneName, Lane>> = Object.freeze({
     environment: 'browser',
     subpath: './binding',
   },
-  sync: {
-    directory: 'src/sync',
-    // MOVED (task 10.4); alias kept per task 10.5, removed by task 10.6.
-    package: null,
-    alias: '@docx-editor.dev/engine-sync',
-    mayImport: ['store'],
-    environment: 'neutral',
-    subpath: './sync',
-  },
+  // The sync, server, and clients lanes were deleted with the legacy PackageModel store
+  // (legacy-lane retirement, phase 4): they were built entirely on DocumentStore/DocOps
+  // and the deferred collaboration/server-binding slices own any future replacements.
   layout: {
     directory: 'src/layout',
     // MOVED (task 10.3); alias kept per task 10.5, removed by task 10.6.
@@ -120,24 +105,6 @@ export const CORE_LANES: Readonly<Record<LaneName, Lane>> = Object.freeze({
     mayImport: ['store', 'layout'],
     environment: 'browser',
     subpath: './output',
-  },
-  server: {
-    directory: 'src/server',
-    // MOVED (task 10.4); alias kept per task 10.5, removed by task 10.6.
-    package: null,
-    alias: '@docx-editor.dev/engine-server',
-    mayImport: ['store', 'sync', 'layout', 'output'],
-    environment: 'node',
-    subpath: './server',
-  },
-  clients: {
-    directory: 'src/clients',
-    // MOVED (task 10.4); alias kept per task 10.5, removed by task 10.6.
-    package: null,
-    alias: '@docx-editor.dev/engine-clients',
-    mayImport: ['store'],
-    environment: 'neutral',
-    subpath: './clients',
   },
   editor: {
     directory: 'src/editor',

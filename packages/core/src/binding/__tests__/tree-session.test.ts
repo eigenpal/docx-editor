@@ -5,7 +5,6 @@
 
 import { describe, expect, test } from 'bun:test';
 import { zipSync, strToU8 } from 'fflate';
-import { assessBodyEditability, parseDocx } from '@docx-editor.dev/core-contract/store';
 import { openTreeSession, type TreeDocxSession } from '../tree-session.ts';
 import { treeSchema } from '../tree-schema.ts';
 
@@ -73,25 +72,15 @@ function retype(session: TreeDocxSession, index: number, text: string) {
       if (child.isText) return; // drop the remaining text; `text` carries the new content
       inline.push(child as never);
     });
-    paragraphs.push(
-      treeSchema.node('paragraph', paragraph.attrs, inline as never)
-    );
+    paragraphs.push(treeSchema.node('paragraph', paragraph.attrs, inline as never));
   });
   return session.applyPmDoc(treeSchema.node('doc', null, paragraphs));
 }
 
 describe('a clipart document is editable on the tree (cutover step 2b)', () => {
-  test('the LEGACY path refuses it, which is the behaviour being replaced', () => {
-    const parsed = parseDocx(docx(CLIPART_BODY), { preserveAll: true });
-    if (!parsed.ok) throw new Error(parsed.reason);
-    const assessment = assessBodyEditability(parsed.model);
-    // One drawing makes the whole document partial and freezes structural editing
-    // everywhere, and the paragraph holding it is not patchable at all.
-    expect(assessment.mode).toBe('partial');
-    expect(assessment.structuralMutationAllowed).toBe(false);
-    expect(assessment.regions.some((region) => region.code === 'unmodeled-content')).toBe(true);
-  });
-
+  // The legacy `assessBodyEditability` comparison test was deleted with the legacy parser
+  // (phase-4 sweep): a drawing used to freeze structural editing on the byte-range model;
+  // the tree session below is the behaviour that replaced it.
   test('the TREE session opens the same document editable', () => {
     const session = open(docx(CLIPART_BODY));
     expect(session.editable).toBe(true);

@@ -16,7 +16,12 @@ describe('dangerous part-name keys fail closed', () => {
 
   test('writeZip fails closed on such a part and does not pollute Object.prototype', () => {
     expect(() =>
-      writeZip(new Map([['/word/document.xml', new Uint8Array([1])], ['/__proto__', new Uint8Array([9])]])),
+      writeZip(
+        new Map([
+          ['/word/document.xml', new Uint8Array([1])],
+          ['/__proto__', new Uint8Array([9])],
+        ])
+      )
     ).toThrow(/unsafe part name/);
     expect(({} as Record<string, unknown>).polluted).toBeUndefined();
   });

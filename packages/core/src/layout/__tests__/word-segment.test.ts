@@ -14,7 +14,10 @@ import {
 } from '../word-segment.ts';
 import { graphemeCount, segmentGraphemes } from '../grapheme.ts';
 
-function graphemeEndpoints(text: string, records: ReturnType<typeof wordSegmentsToGraphemeRecords>) {
+function graphemeEndpoints(
+  text: string,
+  records: ReturnType<typeof wordSegmentsToGraphemeRecords>
+) {
   const count = graphemeCount(text);
   const boundaries = new Set<number>();
   for (let g = 0; g <= count; g += 1) boundaries.add(g);
@@ -22,7 +25,7 @@ function graphemeEndpoints(text: string, records: ReturnType<typeof wordSegments
     (seg) =>
       boundaries.has(seg.graphemeFrom) &&
       boundaries.has(seg.graphemeTo) &&
-      seg.graphemeFrom < seg.graphemeTo,
+      seg.graphemeFrom < seg.graphemeTo
   );
 }
 
@@ -38,7 +41,9 @@ describe('Intl.Segmenter word boundary (task 5.3)', () => {
 
   test('segmentWords accepts an explicit boundary without global mutation', () => {
     const custom = { segment: () => [{ utf16From: 0, utf16To: 2, wordLike: true }] as const };
-    expect(segmentWords('anything', custom)).toEqual([{ utf16From: 0, utf16To: 2, wordLike: true }]);
+    expect(segmentWords('anything', custom)).toEqual([
+      { utf16From: 0, utf16To: 2, wordLike: true },
+    ]);
     expect(segmentWords('anything', createIntlWordBoundary()).length).toBeGreaterThan(0);
   });
 
@@ -117,7 +122,9 @@ describe('Intl.Segmenter word boundary (task 5.3)', () => {
   test('RTL Arabic and Hebrew emit word-like segments without splitting graphemes', () => {
     for (const text of ['שלום', 'مرحبا']) {
       const records = recordsFor(text);
-      expect(records).toEqual([{ graphemeFrom: 0, graphemeTo: graphemeCount(text), wordLike: true }]);
+      expect(records).toEqual([
+        { graphemeFrom: 0, graphemeTo: graphemeCount(text), wordLike: true },
+      ]);
       expect(graphemeEndpoints(text, records)).toBe(true);
     }
   });

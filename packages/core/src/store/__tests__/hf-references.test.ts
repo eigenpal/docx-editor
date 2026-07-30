@@ -154,7 +154,9 @@ describe('fidelity with header parts', () => {
     const pkg = load(packed());
     const main = pkg.parts.get(pkg.mainDocumentPart)!;
     const headerBefore = canonicalOoxmlFingerprint(pkg.parts.get('/word/header1.xml')!);
-    const paragraphId = JSON.stringify(main).match(/"(\/word\/document\.xml#[0-9.]+)","kind":"paragraph"/)?.[1];
+    const paragraphId = JSON.stringify(main).match(
+      /"(\/word\/document\.xml#[0-9.]+)","kind":"paragraph"/
+    )?.[1];
     if (!paragraphId) throw new Error('no paragraph id found');
     const edited = applyTreeOp(main, { op: 'insertText', paragraphId, offset: 0, text: 'Z' });
     if (!edited.ok) throw new Error(edited.reason);

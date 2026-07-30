@@ -9,11 +9,7 @@ import { readOoxmlPart, type OoxmlPart } from '../../store/package/ooxml-tree.ts
 import { applyTreeOp } from '../../store/store/tree-ops.ts';
 import { createParagraphLayoutCache } from '../layout-cache.ts';
 import type { PendingLine } from '../paragraph-flow.ts';
-import {
-  caretStops,
-  documentOrder,
-  paragraphTextFromLayout,
-} from '../semantic-interaction.ts';
+import { caretStops, documentOrder, paragraphTextFromLayout } from '../semantic-interaction.ts';
 import {
   createFixedMeasurer,
   createLayoutSession,
@@ -83,7 +79,9 @@ describe('semantic table layout', () => {
   });
 
   test('cells in a row share the row height and sit inside the row box', () => {
-    const part = loadPart(`<w:tbl>${tr(tc(p('short')) + tc(p('a much longer cell text that wraps across several lines of the narrow column')))}</w:tbl>`);
+    const part = loadPart(
+      `<w:tbl>${tr(tc(p('short')) + tc(p('a much longer cell text that wraps across several lines of the narrow column')))}</w:tbl>`
+    );
     const result = layout(part);
     const [table] = allTableFragments(result);
     const row = table!.rows[0]!;
@@ -126,8 +124,9 @@ describe('semantic table layout', () => {
       if (fragments.length === 0) continue;
       const first = fragments[0]!.rows[0]!;
       expect(first.isHeaderRepeat).toBe(true);
-      const text = first.cells[0]!.blocks
-        .flatMap((block) => (block.kind === 'paragraph' ? block.lines : []))
+      const text = first.cells[0]!.blocks.flatMap((block) =>
+        block.kind === 'paragraph' ? block.lines : []
+      )
         .flatMap((line) => line.spans)
         .map((span) => span.text)
         .join('');
@@ -137,9 +136,7 @@ describe('semantic table layout', () => {
     // Interaction sees each cell paragraph exactly once despite the repeats.
     const order = documentOrder(result);
     expect(new Set(order).size).toBe(order.length);
-    const headParagraphs = order.filter(
-      (id) => paragraphTextFromLayout(result, id) === 'HEAD'
-    );
+    const headParagraphs = order.filter((id) => paragraphTextFromLayout(result, id) === 'HEAD');
     expect(headParagraphs).toHaveLength(1);
     const stops = caretStops(result);
     const seen = new Set<string>();
@@ -240,7 +237,9 @@ describe('incremental layout with tables', () => {
     );
 
   function editCellParagraph(part: OoxmlPart, needle: string, text: string): OoxmlPart {
-    const findParagraph = (node: import('../../store/package/ooxml-tree.ts').OoxmlNode): string | null => {
+    const findParagraph = (
+      node: import('../../store/package/ooxml-tree.ts').OoxmlNode
+    ): string | null => {
       if (node.kind === 'textValue') return null;
       if (node.kind === 'paragraph' && JSON.stringify(node).includes(`"${needle}"`)) return node.id;
       for (const child of node.children) {
@@ -283,9 +282,7 @@ describe('incremental layout with tables', () => {
     const session = createLayoutSession();
     // Push the trailing paragraph onto its own page so the table's page can be reused.
     const filler = Array.from({ length: 50 }, (_, i) => p(`filler ${i}`)).join('');
-    const part = loadPart(
-      `<w:tbl>${tr(tc(p('A1')))}</w:tbl>` + filler + p('tail')
-    );
+    const part = loadPart(`<w:tbl>${tr(tc(p('A1')))}</w:tbl>` + filler + p('tail'));
     const first = layoutSemanticDocument(part, 0, { measurer, session });
     expect(first.pages.length).toBeGreaterThan(1);
 

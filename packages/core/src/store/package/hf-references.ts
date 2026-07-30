@@ -80,10 +80,7 @@ export function resolveHeaderFooterParts(pkg: OoxmlPackage): HeaderFooterParts {
   if (!sectPr) return EMPTY;
 
   const relationships = pkg.relationships.get(pkg.mainDocumentPart) ?? [];
-  const partForReference = (
-    relId: string | undefined,
-    typeUri: string
-  ): OoxmlPart | undefined => {
+  const partForReference = (relId: string | undefined, typeUri: string): OoxmlPart | undefined => {
     if (!relId) return undefined;
     const record = relationships.find((rel) => rel.id === relId && rel.type === typeUri);
     if (!record) return undefined;

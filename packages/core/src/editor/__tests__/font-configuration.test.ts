@@ -1,5 +1,8 @@
 import { expect, test } from 'bun:test';
-import { EditorFontError, type FontConfiguration } from '@docx-editor.dev/core-contract/contracts/editor';
+import {
+  EditorFontError,
+  type FontConfiguration,
+} from '@docx-editor.dev/core-contract/contracts/editor';
 import { sha256FontBytes } from '@docx-editor.dev/core-contract/layout';
 import { createLayoutShaping } from '../font-configuration.ts';
 

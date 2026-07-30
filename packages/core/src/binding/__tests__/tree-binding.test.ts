@@ -1,7 +1,11 @@
 // Canonical tree <-> ProseMirror binding (tasks 6.1, 6.2, 6.3).
 
 import { describe, expect, test } from 'bun:test';
-import { readOoxmlPart, TreeDocumentStore, type OoxmlPart } from '@docx-editor.dev/core-contract/store';
+import {
+  readOoxmlPart,
+  TreeDocumentStore,
+  type OoxmlPart,
+} from '@docx-editor.dev/core-contract/store';
 import { treeSchema } from '../tree-schema.ts';
 import { bodyParagraphs, docToTreeOps, reconcileDoc, treeToDoc } from '../tree-binding.ts';
 import { paragraphTextOf, ORIGIN_IDS } from '@docx-editor.dev/core-contract/store';
@@ -66,9 +70,7 @@ describe('projection (task 6.1)', () => {
   });
 
   test('paragraph properties project on the paragraph node', () => {
-    const part = load(
-      '<w:p><w:pPr><w:jc w:val="center"/></w:pPr><w:r><w:t>x</w:t></w:r></w:p>'
-    );
+    const part = load('<w:p><w:pPr><w:jc w:val="center"/></w:pPr><w:r><w:t>x</w:t></w:r></w:p>');
     expect(treeToDoc(part).child(0).attrs.props).toEqual([
       { localName: 'jc', attributes: { val: 'center' } },
     ]);
@@ -99,13 +101,13 @@ describe('reverse mapping (task 6.2)', () => {
     const part = load(SIMPLE);
     const id = bodyParagraphs(part)[0]!.id;
     const doc = treeSchema.node('doc', null, [
-      treeSchema.node('paragraph', { nodeId: id, props: [] }, [treeSchema.text('Hello brave world')]),
+      treeSchema.node('paragraph', { nodeId: id, props: [] }, [
+        treeSchema.text('Hello brave world'),
+      ]),
     ]);
     const mapped = docToTreeOps(part, doc);
     if (!mapped.ok) throw new Error(mapped.reason);
-    expect(mapped.ops).toEqual([
-      { op: 'insertText', paragraphId: id, offset: 6, text: 'brave ' },
-    ]);
+    expect(mapped.ops).toEqual([{ op: 'insertText', paragraphId: id, offset: 6, text: 'brave ' }]);
     expect(paragraphTextOf(commit(part, doc), id)).toBe('Hello brave world');
   });
 
@@ -160,7 +162,9 @@ describe('reverse mapping (task 6.2)', () => {
     const id = bodyParagraphs(part)[0]!.id;
     const doc = treeSchema.node('doc', null, [
       treeSchema.node('paragraph', { nodeId: id, props: [] }, [
-        treeSchema.text('Hello', [treeSchema.marks.runProps.create({ props: [{ localName: 'b' }] })]),
+        treeSchema.text('Hello', [
+          treeSchema.marks.runProps.create({ props: [{ localName: 'b' }] }),
+        ]),
         treeSchema.text(' world'),
       ]),
     ]);
@@ -193,9 +197,7 @@ describe('reverse mapping (task 6.2)', () => {
   });
 
   test('property ORDER inside a run is not a change', () => {
-    const part = load(
-      '<w:p><w:r><w:rPr><w:b/><w:i/></w:rPr><w:t>styled</w:t></w:r></w:p>'
-    );
+    const part = load('<w:p><w:r><w:rPr><w:b/><w:i/></w:rPr><w:t>styled</w:t></w:r></w:p>');
     const id = bodyParagraphs(part)[0]!.id;
     const doc = treeSchema.node('doc', null, [
       treeSchema.node('paragraph', { nodeId: id, props: [] }, [
@@ -258,9 +260,7 @@ describe('reverse mapping (task 6.2)', () => {
 });
 
 describe('unsupported transactions are refused without canonical effects (task 6.3)', () => {
-  const part = load(
-    '<w:p><w:r><w:t>one</w:t></w:r></w:p><w:p><w:r><w:t>two</w:t></w:r></w:p>'
-  );
+  const part = load('<w:p><w:r><w:t>one</w:t></w:r></w:p><w:p><w:r><w:t>two</w:t></w:r></w:p>');
   const [a, b] = bodyParagraphs(part);
   const paragraph = (nodeId: string | null, text: string) =>
     treeSchema.node('paragraph', { nodeId, props: [] }, text ? [treeSchema.text(text)] : []);
@@ -295,7 +295,7 @@ describe('unsupported transactions are refused without canonical effects (task 6
     if (!mapped.ok) expect(mapped.reason).toBe('split-not-clean');
   });
 
-  test("a split whose halves do not concatenate to the source is refused", () => {
+  test('a split whose halves do not concatenate to the source is refused', () => {
     const doc = treeSchema.node('doc', null, [
       paragraph(a!.id, 'o'),
       paragraph(null, 'XX'),
@@ -422,7 +422,12 @@ describe('incremental reconciliation with a projection-only origin (task 6.4)', 
     const before = treeToDoc(part);
     const store = new TreeDocumentStore(part);
     store.transact((ctx) =>
-      ctx.apply({ op: 'insertText', paragraphId: bodyParagraphs(part)[2]!.id, offset: 0, text: 'Z' })
+      ctx.apply({
+        op: 'insertText',
+        paragraphId: bodyParagraphs(part)[2]!.id,
+        offset: 0,
+        text: 'Z',
+      })
     );
     const after = reconcileDoc(before, store.part, null);
     expect(after.child(2).textContent).toBe('Zthree');
@@ -446,7 +451,9 @@ describe('incremental reconciliation with a projection-only origin (task 6.4)', 
     const part = load(source);
     const store = new TreeDocumentStore(part);
     const target = bodyParagraphs(part)[0]!.id;
-    store.transact((ctx) => ctx.apply({ op: 'insertText', paragraphId: target, offset: 0, text: 'A' }));
+    store.transact((ctx) =>
+      ctx.apply({ op: 'insertText', paragraphId: target, offset: 0, text: 'A' })
+    );
     store.undo();
     const reconciled = treeToDoc(store.part);
     expect(reconciled.child(0).textContent).toBe('one');
@@ -471,9 +478,7 @@ describe('split and join at every position (regression: end-of-paragraph Enter)'
     const part = threeParagraphs();
     const ids = bodyParagraphs(part).map((p) => p.id);
     for (const [index, id] of ids.entries()) {
-      const docs = ids.map((other, i) =>
-        paragraph(other, ['one', 'two', 'three'][i]!)
-      );
+      const docs = ids.map((other, i) => paragraph(other, ['one', 'two', 'three'][i]!));
       docs.splice(index + 1, 0, paragraph(null, ''));
       const mapped = docToTreeOps(part, treeSchema.node('doc', null, docs));
       if (!mapped.ok) throw new Error(`${index}: ${mapped.reason}`);

@@ -46,11 +46,7 @@ export function storyBlocks(part: OoxmlPart): OoxmlElement[] {
         blocks.push(child);
         continue;
       }
-      if (
-        child.kind === 'generic' &&
-        child.localName === 'sdt' &&
-        depth < MAX_SDT_NESTING
-      ) {
+      if (child.kind === 'generic' && child.localName === 'sdt' && depth < MAX_SDT_NESTING) {
         for (const inner of child.children) {
           if (inner.kind !== 'textValue' && inner.localName === 'sdtContent') {
             collect(inner.children, depth + 1);

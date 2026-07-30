@@ -135,13 +135,8 @@ describe('a browser bundle cannot reach the server (task 10.1)', () => {
     expect([...reachable].sort()).toEqual([...BROWSER_REACHABLE].sort());
   });
 
-  test('sync, server and clients are NOT browser-reachable from the editor', () => {
-    const reachable = reachableLanes('editor');
-    for (const lane of ['sync', 'server', 'clients'] as LaneName[]) {
-      expect({ lane, reachable: reachable.has(lane) }).toEqual({ lane, reachable: false });
-    }
-  });
-
+  // The sync, server and clients lanes were deleted with the legacy PackageModel store
+  // (phase-4 sweep), so "not browser-reachable" holds by non-existence.
   test('an UNMOVED browser-reachable package depends on no forbidden runtime', () => {
     // Only expressible for a lane that still owns a manifest. Once lanes share one, this
     // check cannot distinguish yjs arriving with the sync lane from yjs reaching the editor —
@@ -172,13 +167,14 @@ describe('a browser bundle cannot reach the server (task 10.1)', () => {
     if (checked === 0) {
       expect(
         BROWSER_REACHABLE.every(
-          (lane) => laneHasMoved(lane) || CORE_LANES[lane].package === '@docx-editor.dev/core-contract'
+          (lane) =>
+            laneHasMoved(lane) || CORE_LANES[lane].package === '@docx-editor.dev/core-contract'
         )
       ).toBe(true);
     }
   });
 
-  test("heavy lane runtimes are OPTIONAL peers, not dependencies", () => {
+  test('heavy lane runtimes are OPTIONAL peers, not dependencies', () => {
     // pdf-lib (output) and yjs (sync) are real runtimes of real lanes, but a consumer that
     // only parses and paints a document needs neither. As plain dependencies they were
     // installed by everyone; as optional peers they are installed only by consumers that use
@@ -194,11 +190,13 @@ describe('a browser bundle cannot reach the server (task 10.1)', () => {
         heavy,
         inDependencies: false,
       });
-      expect({ heavy, declared: heavy in peers, optional: meta[heavy]?.optional === true }).toEqual({
-        heavy,
-        declared: true,
-        optional: true,
-      });
+      expect({ heavy, declared: heavy in peers, optional: meta[heavy]?.optional === true }).toEqual(
+        {
+          heavy,
+          declared: true,
+          optional: true,
+        }
+      );
     }
 
     // What everyone genuinely needs stays a hard dependency.
@@ -206,10 +204,11 @@ describe('a browser bundle cannot reach the server (task 10.1)', () => {
     expect(dependencies).toContain('harfbuzzjs');
   });
 
-  test('the guard is not vacuous: the server lane really does depend on the sync lane', () => {
+  test('the guard is not vacuous: the editor lane really does close over its dependencies', () => {
     // If the graph were empty every reachability assertion above would pass trivially.
-    expect(reachableLanes('server').has('sync')).toBe(true);
     expect(reachableLanes('editor').has('store')).toBe(true);
+    expect(reachableLanes('editor').has('layout')).toBe(true);
+    expect(reachableLanes('output').has('layout')).toBe(true);
   });
 });
 
@@ -250,7 +249,7 @@ describe('the per-lane environment boundary is structurally enforced (task 10.1)
   //
   // `contracts` is excluded on purpose: it is declaration-only and its public API names
   // HTMLElement for host-element accessors, which is a type reference, not a runtime need.
-  const NEUTRAL_WITH_PROJECT = ['store', 'layout', 'sync', 'clients'] as const;
+  const NEUTRAL_WITH_PROJECT = ['store', 'layout'] as const;
 
   test('every runtime-neutral lane in core has its own DOM-free project', () => {
     for (const lane of NEUTRAL_WITH_PROJECT) {
@@ -278,9 +277,7 @@ describe('the per-lane environment boundary is structurally enforced (task 10.1)
     // nobody added a project for. `contracts` is the one documented exception.
     const neutral = (Object.keys(CORE_LANES) as LaneName[]).filter(
       (lane) =>
-        CORE_LANES[lane].environment === 'neutral' &&
-        laneHasMoved(lane) &&
-        lane !== 'contracts'
+        CORE_LANES[lane].environment === 'neutral' && laneHasMoved(lane) && lane !== 'contracts'
     );
     expect([...neutral].sort()).toEqual([...NEUTRAL_WITH_PROJECT].sort());
   });

@@ -298,7 +298,7 @@ describe('a global relayout runs cooperatively and cancels cleanly (task 9.5)', 
 
   test('a cooperative run still refuses to publish against a superseded revision', () => {
     // Slicing must not weaken the staleness rule: the check happens after the work either
-        // way.
+    // way.
     let revision = 1;
     const published: SemanticLayout[] = [];
     const scheduler = createLayoutScheduler({

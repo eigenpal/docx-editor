@@ -203,7 +203,6 @@ function breaksBefore(props: readonly OoxmlProperty[]): boolean {
   );
 }
 
-
 /**
  * Lay a part out into pages, fragments, lines and spans.
  *
@@ -277,7 +276,9 @@ export function layoutSemanticDocument(
   const session = options.session;
   const furnitureContext = furniture
     ? `|hf:${headerDistance},${footerDistance},${furniture.titlePage ? 1 : 0}${furniture.evenAndOddHeaders ? 1 : 0};` +
-      [...furniture.headers].map(([variant, story]) => `h${variant}=${story.flowHeight}`).join(',') +
+      [...furniture.headers]
+        .map(([variant, story]) => `h${variant}=${story.flowHeight}`)
+        .join(',') +
       ';' +
       [...furniture.footers].map(([variant, story]) => `f${variant}=${story.flowHeight}`).join(',')
     : '';
@@ -323,7 +324,12 @@ export function layoutSemanticDocument(
         indent,
         available,
         alignment: paragraphAlignment(props),
-        key: paragraphLayoutKey({ paragraph: block, properties: props, width: available, producer }),
+        key: paragraphLayoutKey({
+          paragraph: block,
+          properties: props,
+          width: available,
+          producer,
+        }),
       };
     }
     preparedBlocks.set(block, { contentWidth, producer, entry });

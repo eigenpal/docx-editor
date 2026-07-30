@@ -31,7 +31,13 @@ const spikeFixture: ConformanceFixture = {
       expect: {
         outcome: 'applied',
         committedRevision: 1,
-        modelChange: { fromRevision: 0, toRevision: 1, origin: ORIGIN_IDS.mutationHuman, dirty: ['p1'], dependencyKeys: [] },
+        modelChange: {
+          fromRevision: 0,
+          toRevision: 1,
+          origin: ORIGIN_IDS.mutationHuman,
+          dirty: ['p1'],
+          dependencyKeys: [],
+        },
         authoredStateHash: hashAuthored(S1),
       },
     },
@@ -50,7 +56,14 @@ const spikeFixture: ConformanceFixture = {
     },
   ],
   snapshots: [
-    { kind: 'snapshot', protocolVersion: 1, schemaVersion: 1, documentId: 'doc-spike', byteLength: 2, bytesHex: 'abcd' },
+    {
+      kind: 'snapshot',
+      protocolVersion: 1,
+      schemaVersion: 1,
+      documentId: 'doc-spike',
+      byteLength: 2,
+      bytesHex: 'abcd',
+    },
   ],
 };
 
@@ -68,7 +81,11 @@ class SpikeReplayStore implements ReplayStore {
     const op = step.ops[0] as { at: string };
     if (op.at === 'missing') return { outcome: 'validation' };
     this.revision += 1;
-    return { outcome: 'applied', committedRevision: this.revision, authoredState: this.states[this.idx++] };
+    return {
+      outcome: 'applied',
+      committedRevision: this.revision,
+      authoredState: this.states[this.idx++],
+    };
   }
 }
 
@@ -90,7 +107,9 @@ describe('fixture validation', () => {
   test('failed step with a committed revision is rejected', () => {
     const bad: ConformanceFixture = {
       ...spikeFixture,
-      steps: [{ ...spikeFixture.steps[2], expect: { outcome: 'validation', committedRevision: 3 } }],
+      steps: [
+        { ...spikeFixture.steps[2], expect: { outcome: 'validation', committedRevision: 3 } },
+      ],
     };
     expect(validateFixture(bad).valid).toBe(false);
   });

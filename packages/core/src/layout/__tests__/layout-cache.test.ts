@@ -98,7 +98,12 @@ describe('a cached layout is identical to a full one (task 9.2)', () => {
     const cache = createParagraphLayoutCache<never>();
     const original = load(MANY);
     geometryOf(original, 1, cache);
-    const grown = load(MANY.replace(paragraph('paragraph 0 ' + 'word '.repeat(12)), paragraph(`paragraph 0 ${'word '.repeat(120)}`)));
+    const grown = load(
+      MANY.replace(
+        paragraph('paragraph 0 ' + 'word '.repeat(12)),
+        paragraph(`paragraph 0 ${'word '.repeat(120)}`)
+      )
+    );
     const warm = geometryOf(grown, 2, cache);
     expect(warm).toBe(geometryOf(grown, 2));
     expect(warm).not.toBe(geometryOf(original, 3));
@@ -124,7 +129,10 @@ describe('the cache key covers every input that can change a break (task 9.2)', 
 
   test('paragraph properties are part of the key, since they decide the indents', () => {
     expect(
-      paragraphLayoutKey({ ...base, properties: [{ localName: 'ind', attributes: { left: '720' } }] })
+      paragraphLayoutKey({
+        ...base,
+        properties: [{ localName: 'ind', attributes: { left: '720' } }],
+      })
     ).not.toBe(paragraphLayoutKey(base));
   });
 
@@ -207,8 +215,12 @@ describe('the key covers what actually changes a break (review regressions)', ()
   });
 
   test('a font family change is a different key', () => {
-    const a = keyOfBody('<w:p><w:r><w:rPr><w:rFonts w:ascii="Arial"/></w:rPr><w:t>hi</w:t></w:r></w:p>');
-    const b = keyOfBody('<w:p><w:r><w:rPr><w:rFonts w:ascii="Georgia"/></w:rPr><w:t>hi</w:t></w:r></w:p>');
+    const a = keyOfBody(
+      '<w:p><w:r><w:rPr><w:rFonts w:ascii="Arial"/></w:rPr><w:t>hi</w:t></w:r></w:p>'
+    );
+    const b = keyOfBody(
+      '<w:p><w:r><w:rPr><w:rFonts w:ascii="Georgia"/></w:rPr><w:t>hi</w:t></w:r></w:p>'
+    );
     expect(a).not.toBe(b);
   });
 

@@ -19,8 +19,14 @@ function reason(r: ReturnType<typeof normalizePartName>): NameRejection | 'ok' {
 
 describe('normalizePartName', () => {
   test('canonicalizes with and without leading slash', () => {
-    expect(normalizePartName('word/document.xml')).toEqual({ ok: true, partName: '/word/document.xml' });
-    expect(normalizePartName('/word/document.xml')).toEqual({ ok: true, partName: '/word/document.xml' });
+    expect(normalizePartName('word/document.xml')).toEqual({
+      ok: true,
+      partName: '/word/document.xml',
+    });
+    expect(normalizePartName('/word/document.xml')).toEqual({
+      ok: true,
+      partName: '/word/document.xml',
+    });
   });
   test('rejects the traversal/encoding/drive attack surface', () => {
     expect(reason(normalizePartName('word\\styles.xml'))).toBe('backslash');

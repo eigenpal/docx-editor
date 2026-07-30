@@ -96,42 +96,6 @@ export {
   readZip,
   writeZip,
 } from './zip.ts';
-export {
-  type DocxParseRejection,
-  type ParseResult,
-  type ParseOptions,
-  parseDocx,
-  isPlainEditableDocx,
-  isModelBodyPatchable,
-  assessBodyEditability,
-  diagnoseBodyPatchability,
-  type ReadOnlyDiagnostic,
-  type BodyPatchability,
-  type BodyEditabilityAssessment,
-} from './docx/read.ts';
-export { isRunPropertiesCapsule } from './preservation-capsule.ts';
-export { writeDocx, documentXml } from './docx/write.ts';
-// Authored-state digest (3.7): semantic-content fingerprint, volatile id/preservation/revision
-// bookkeeping excluded — equal across a complete-export save+reopen iff authored content is equal.
-export { authoredStateDigest, authoredStateProjection } from './authored-digest.ts';
-// Package-level fidelity comparators (3.6): exact uncompressed XML-part range comparator +
-// semantic ZIP-container comparator (permits recompression ephemera, flags unowned changes).
-export {
-  compareXmlPartRanges,
-  reassembleXmlPartRanges,
-  compareZipContainers,
-  type OwnedRange,
-  type XmlPartRangeResult,
-  type ZipContainerResult,
-} from './package-comparator.ts';
-// Feature-lane contract: register a new top-level block kind's element parser without editing a
-// central switch. The parse registry now lives in the unified block-capability module (model),
-// re-exported here for the package-facing feature-lane API.
-export {
-  type BlockElementParser,
-  registerBlockElementParser,
-  blockElementParser,
-} from '../model/index.ts';
 export { isValidNCName, isValidQName, assertValidQName, PrefixAllocator } from './qname.ts';
 export {
   type HrefProjection,

@@ -29,7 +29,9 @@ describe('safe records', () => {
     expect(isDangerousKey('__proto__')).toBe(true);
     // A real own "__proto__" key only arises via JSON.parse / bracket assignment
     // (an object literal sets the prototype instead), so use JSON.parse here.
-    expect(() => toSafeRecord(JSON.parse('{"__proto__":{"polluted":true}}'))).toThrow(DangerousKeyError);
+    expect(() => toSafeRecord(JSON.parse('{"__proto__":{"polluted":true}}'))).toThrow(
+      DangerousKeyError
+    );
     expect(() => toSafeRecord({ a: { constructor: {} } })).toThrow(/a/);
     expect(() => toSafeRecord({ nested: { prototype: 1 } })).toThrow(DangerousKeyError);
   });

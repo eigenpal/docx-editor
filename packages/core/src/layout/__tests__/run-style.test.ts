@@ -1,12 +1,7 @@
 // The accepted run property boundary, resolved for layout (task 7.2).
 
 import { describe, expect, test } from 'bun:test';
-import {
-  DEFAULT_RUN_STYLE,
-  displayText,
-  resolveRunStyle,
-  runStylesEqual,
-} from '../run-style.ts';
+import { DEFAULT_RUN_STYLE, displayText, resolveRunStyle, runStylesEqual } from '../run-style.ts';
 
 const resolve = (localName: string, attributes?: Record<string, string>) =>
   resolveRunStyle([attributes ? { localName, attributes } : { localName }]);
@@ -110,8 +105,8 @@ describe('style equality drives span merging', () => {
   });
 
   test('a differing underline variant is not equal', () => {
-    expect(
-      runStylesEqual(resolve('u', { val: 'single' }), resolve('u', { val: 'double' }))
-    ).toBe(false);
+    expect(runStylesEqual(resolve('u', { val: 'single' }), resolve('u', { val: 'double' }))).toBe(
+      false
+    );
   });
 });

@@ -1,7 +1,6 @@
-// Playwright config for the paired editing-vertical smoke tests (queue item 3). Starts
-// both demo dev servers on dedicated ports and drives the engine-neutral EditorDriver
-// (window.__docxEditorDriver) in each adapter. The two specs assert IDENTICAL behavior,
-// so the checkpoint fails if only one adapter works.
+// Playwright config for the editing-vertical smoke tests. Starts both demo dev servers
+// on dedicated ports. The legacy one-surface/real-adapter specs were deleted with the
+// legacy editor lane; the surviving specs drive the tree-lane surfaces.
 
 import { defineConfig, devices } from '@playwright/test';
 
@@ -10,7 +9,7 @@ const VUE_PORT = 5274;
 
 export default defineConfig({
   testDir: '.',
-  testMatch: ['**/*.smoke.spec.ts', '**/*.gate.spec.ts', '**/*.interaction.spec.ts', '**/*.visual.spec.ts', '**/react-default-comprehensive-fixture.spec.ts', '**/react-prosemirror-command-parity.spec.ts'],
+  testMatch: ['**/*.smoke.spec.ts', '**/*.gate.spec.ts', '**/*.interaction.spec.ts', '**/*.visual.spec.ts'],
   fullyParallel: false,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 1 : 0,

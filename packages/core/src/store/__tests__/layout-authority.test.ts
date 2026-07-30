@@ -126,11 +126,12 @@ describe('semantic layout is the only geometry authority (task 7.6)', () => {
       'layout read back from the DOM',
     ]);
     // A comment naming the call is not a violation.
-    expect(findAll('// never call getBoundingClientRect here\nconst x = 1;', REMEASUREMENT)).toEqual(
-      []
-    );
-    // And the corpus is real.
-    expect(collectSources(existingLanePath('engine-output/src')).length).toBeGreaterThan(3);
+    expect(
+      findAll('// never call getBoundingClientRect here\nconst x = 1;', REMEASUREMENT)
+    ).toEqual([]);
+    // And the corpus is real. The output lane shrank to the semantic painter + barrel when
+    // the legacy DOM/PDF/reading-order backends were deleted (phase-4 sweep).
+    expect(collectSources(existingLanePath('engine-output/src')).length).toBeGreaterThan(1);
   });
 
   test('the ADAPTER lane may still measure, so the guard is not vacuous', () => {

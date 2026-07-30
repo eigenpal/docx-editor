@@ -193,9 +193,7 @@ describe('generic unknown nodes survive supported edits (task 4.6)', () => {
     expect(drawingAfter).toBe(drawingBefore);
     expect(unknownAfter).toBe(unknownBefore);
     expect(futureAfter).toBe(futureBefore);
-    expect(canonicalOoxmlFingerprint(drawingAfter)).toBe(
-      canonicalOoxmlFingerprint(drawingBefore)
-    );
+    expect(canonicalOoxmlFingerprint(drawingAfter)).toBe(canonicalOoxmlFingerprint(drawingBefore));
 
     // And the edit actually happened.
     expect(serializeOoxmlPart(edited.part)).toContain('BEFORE ');

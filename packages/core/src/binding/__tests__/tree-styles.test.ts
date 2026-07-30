@@ -24,9 +24,7 @@ describe('run properties paint', () => {
     expect(css('u', { val: 'double' })).toContain('text-decoration-style:double');
     expect(css('u', { val: 'wave' })).toContain('text-decoration-style:wavy');
     expect(css('u', { val: 'dotted' })).toContain('text-decoration-style:dotted');
-    expect(css('u', { val: 'single', color: 'C00000' })).toContain(
-      'text-decoration-color:#C00000'
-    );
+    expect(css('u', { val: 'single', color: 'C00000' })).toContain('text-decoration-color:#C00000');
     // `none` is an authored off and must paint nothing.
     expect(css('u', { val: 'none' })).toBe('');
   });
@@ -81,9 +79,9 @@ describe('paragraph properties paint', () => {
   });
 
   test('a hanging indent is a negative first-line indent', () => {
-    expect(
-      paragraphPropsToCss([{ localName: 'ind', attributes: { hanging: '360' } }])
-    ).toContain('text-indent:-18pt');
+    expect(paragraphPropsToCss([{ localName: 'ind', attributes: { hanging: '360' } }])).toContain(
+      'text-indent:-18pt'
+    );
   });
 
   test('spacing before/after and auto line spacing', () => {
@@ -104,7 +102,9 @@ describe('paragraph properties paint', () => {
   });
 
   test('a property layout owns is not painted inline', () => {
-    expect(paragraphPropsToCss([{ localName: 'pStyle', attributes: { val: 'Heading1' } }])).toBe('');
+    expect(paragraphPropsToCss([{ localName: 'pStyle', attributes: { val: 'Heading1' } }])).toBe(
+      ''
+    );
     expect(paragraphPropsToCss([{ localName: 'numPr' }])).toBe('');
   });
 });

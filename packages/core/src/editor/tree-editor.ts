@@ -48,6 +48,10 @@ import type {
   Unsubscribe,
   ViewScope,
 } from '@docx-editor.dev/core-contract/contracts/editor';
+import type {
+  InteractionFrame,
+  SemanticPositionIndex,
+} from '@docx-editor.dev/core-contract/contracts/interaction';
 import {
   FontResolutionError,
   HARFBUZZ_SHAPING_LIBRARY,
@@ -58,8 +62,73 @@ import {
   type TextMeasurer,
 } from '@docx-editor.dev/core-contract/layout';
 import { createLayoutShaping, toEditorFontError } from './font-configuration.ts';
-import { emptyInteractionFrame } from './interaction-frame.ts';
 import { mountPaginatedSurface, type PaginatedSurface } from './paginated-surface.ts';
+
+// ---------------------------------------------------------------------------------------
+// Empty interaction frame.
+//
+// The tree lane does not build interaction frames — the paginated surface owns caret,
+// selection and hit-test geometry directly. The facade still exposes the frame-shaped
+// members of the `Editor` contract, so it answers with one immutable empty frame. This
+// was the only part of the legacy `interaction-frame.ts` module the tree lane consumed;
+// it moved here when the legacy editor lane was deleted.
+// ---------------------------------------------------------------------------------------
+
+/** Recursively freeze plain objects and arrays (idempotent). */
+function deepFreezeValue<T>(value: T): T {
+  if (value === null || typeof value !== 'object') return value;
+  if (Object.isFrozen(value)) return value;
+  if (Array.isArray(value)) {
+    for (const item of value) deepFreezeValue(item);
+    return Object.freeze(value);
+  }
+  const record = value as Record<string, unknown>;
+  for (const key of Object.keys(record)) deepFreezeValue(record[key]);
+  return Object.freeze(value);
+}
+
+const DEFAULT_PAGE_GAP_PX = 24;
+
+function emptySemanticIndex(storyId = ''): SemanticPositionIndex {
+  return {
+    stories: [{ storyId, scope: { kind: 'body' }, blocks: [] }],
+    caretStops: [],
+    ownershipRegions: [],
+  };
+}
+
+let emptyFrameSingleton: InteractionFrame | null = null;
+
+/** The single immutable frame published before (and instead of) any legacy-lane layout. */
+function emptyInteractionFrame(): InteractionFrame {
+  if (emptyFrameSingleton) return emptyFrameSingleton;
+  emptyFrameSingleton = deepFreezeValue({
+    id: { value: 0 },
+    revisions: {
+      modelRevision: 0,
+      layoutRevision: 0,
+      resourceEpoch: 0,
+      configurationEpoch: 0,
+      shapingProvenance: {
+        extensionFingerprint: 'empty',
+        shapingHash: 'empty',
+        producerVersion: 0,
+      },
+    },
+    completeness: { kind: 'complete' as const },
+    display: [],
+    semanticIndex: emptySemanticIndex(),
+    pageGeometry: [],
+    scrollGeometry: { contentHeight: 0, pageTops: [], pageGapPx: DEFAULT_PAGE_GAP_PX },
+    selection: null,
+    caret: null,
+    selectionGeometry: null,
+    focus: { scope: null, focused: false },
+    composition: { active: false, scope: null },
+    currentPage: { viewport: 0, caret: 0 },
+  }) as InteractionFrame;
+  return emptyFrameSingleton;
+}
 
 export interface TreeEditorConfig {
   /** The element the paginated surface mounts into. The surface owns this subtree. */
@@ -91,14 +160,13 @@ export interface TreeEditor extends Editor {
 }
 
 /** Run-property spellings for the marks the surface can toggle, named as OOXML names them. */
-const MARKS: Readonly<
-  Record<string, { localName: string; attributes?: Record<string, string> }>
-> = {
-  bold: { localName: 'b' },
-  italic: { localName: 'i' },
-  underline: { localName: 'u', attributes: { val: 'single' } },
-  strike: { localName: 'strike' },
-};
+const MARKS: Readonly<Record<string, { localName: string; attributes?: Record<string, string> }>> =
+  {
+    bold: { localName: 'b' },
+    italic: { localName: 'i' },
+    underline: { localName: 'u', attributes: { val: 'single' } },
+    strike: { localName: 'strike' },
+  };
 
 type CommandSupport =
   | { readonly supported: true; readonly mutating: boolean }
@@ -150,7 +218,10 @@ export function createTreeEditor(config: TreeEditorConfig): TreeEditor {
   const container = config.container;
   const mode = config.mode ?? 'edit';
   let zoom =
-    config.zoom !== undefined && Number.isFinite(config.zoom) && config.zoom >= 0.1 && config.zoom <= 5
+    config.zoom !== undefined &&
+    Number.isFinite(config.zoom) &&
+    config.zoom >= 0.1 &&
+    config.zoom <= 5
       ? config.zoom
       : 1;
 

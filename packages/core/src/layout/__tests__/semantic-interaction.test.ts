@@ -61,9 +61,9 @@ describe('caret stops', () => {
 
   test('every paragraph contributes stops, in document order', () => {
     const stops = caretStops(lay(load(paragraph('ab') + paragraph('cd'))));
-    expect(stops.map((stop) => `${stop.position.paragraphId.slice(-5)}:${stop.position.offset}`)).toEqual(
-      ['0.0.0:0', '0.0.0:1', '0.0.0:2', '0.0.1:0', '0.0.1:1', '0.0.1:2']
-    );
+    expect(
+      stops.map((stop) => `${stop.position.paragraphId.slice(-5)}:${stop.position.offset}`)
+    ).toEqual(['0.0.0:0', '0.0.0:1', '0.0.0:2', '0.0.1:0', '0.0.1:1', '0.0.1:2']);
   });
 
   test('a wrapped line does not duplicate the boundary position', () => {
@@ -158,8 +158,7 @@ describe('selection geometry', () => {
 
   test('the spans a selection touches are reported, for active formatting', () => {
     const part = load(
-      '<w:p><w:r><w:t>plain</w:t></w:r>' +
-        '<w:r><w:rPr><w:b/></w:rPr><w:t>bold</w:t></w:r></w:p>'
+      '<w:p><w:r><w:t>plain</w:t></w:r>' + '<w:r><w:rPr><w:b/></w:rPr><w:t>bold</w:t></w:r></w:p>'
     );
     const layout = lay(part);
     const spans = spansInSelection(layout, { anchor: at(P0, 6), head: at(P0, 8) });

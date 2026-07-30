@@ -217,7 +217,10 @@ describe('save/reopen semantic digest (task 4.8)', () => {
     const stripped = replaceChildren(part, drawing.id, []);
     if (!stripped.ok) throw new Error(JSON.stringify(stripped.issues));
 
-    const differences = diffSemanticDigests(semanticDigest([part]), semanticDigest([stripped.part]));
+    const differences = diffSemanticDigests(
+      semanticDigest([part]),
+      semanticDigest([stripped.part])
+    );
     expect(differences.length).toBeGreaterThan(0);
     expect(differences[0]!.path).toContain('genericStructure');
   });
@@ -227,7 +230,10 @@ describe('save/reopen semantic digest (task 4.8)', () => {
     const target = textElementFor(part, 'before ');
     const stripped = replaceChildren(part, target.id, []);
     if (!stripped.ok) throw new Error(JSON.stringify(stripped.issues));
-    const differences = diffSemanticDigests(semanticDigest([part]), semanticDigest([stripped.part]));
+    const differences = diffSemanticDigests(
+      semanticDigest([part]),
+      semanticDigest([stripped.part])
+    );
     expect(differences.some((d) => d.path.endsWith('.p[1].text'))).toBe(true);
   });
 

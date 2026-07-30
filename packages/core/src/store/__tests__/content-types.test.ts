@@ -17,7 +17,7 @@ import {
 
 const records = (
   defaults: [string, string][],
-  overrides: [string, string][] = [],
+  overrides: [string, string][] = []
 ): ContentTypeRecords => ({
   defaults: defaults.map(([extension, contentType], order) => ({ extension, contentType, order })),
   overrides: overrides.map(([partName, contentType], order) => ({ partName, contentType, order })),
@@ -28,8 +28,13 @@ describe('content-type index', () => {
     const r = buildContentTypeIndex(
       records(
         [['xml', 'application/xml']],
-        [['/word/document.xml', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml']],
-      ),
+        [
+          [
+            '/word/document.xml',
+            'application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml',
+          ],
+        ]
+      )
     );
     expect(r.ok).toBe(true);
     if (!r.ok) return;
@@ -54,18 +59,37 @@ describe('content-type index', () => {
   });
 
   test('conflicting Defaults on one extension fail closed', () => {
-    const r = buildContentTypeIndex(records([['xml', 'application/xml'], ['XML', 'text/xml']]));
-    expect(r).toMatchObject({ ok: false, error: { code: 'conflicting-default', extension: 'xml' } });
+    const r = buildContentTypeIndex(
+      records([
+        ['xml', 'application/xml'],
+        ['XML', 'text/xml'],
+      ])
+    );
+    expect(r).toMatchObject({
+      ok: false,
+      error: { code: 'conflicting-default', extension: 'xml' },
+    });
   });
 
   test('identical duplicate Defaults are preserved (no error)', () => {
-    const r = buildContentTypeIndex(records([['xml', 'application/xml'], ['xml', 'application/xml']]));
+    const r = buildContentTypeIndex(
+      records([
+        ['xml', 'application/xml'],
+        ['xml', 'application/xml'],
+      ])
+    );
     expect(r.ok).toBe(true);
   });
 
   test('duplicate Override part names with different MIME fail closed', () => {
     const r = buildContentTypeIndex(
-      records([], [['/word/document.xml', 'application/xml'], ['/Word/Document.xml', 'text/xml']]),
+      records(
+        [],
+        [
+          ['/word/document.xml', 'application/xml'],
+          ['/Word/Document.xml', 'text/xml'],
+        ]
+      )
     );
     expect(r).toMatchObject({ ok: false, error: { code: 'duplicate-override' } });
   });
@@ -78,7 +102,9 @@ describe('content-type index', () => {
 
   test('record count enforces N (ok) and N+1 (fail)', () => {
     const many = (n: number): ContentTypeRecords =>
-      records(Array.from({ length: n }, (_, i) => [`e${i}`, 'application/xml'] as [string, string]));
+      records(
+        Array.from({ length: n }, (_, i) => [`e${i}`, 'application/xml'] as [string, string])
+      );
     expect(buildContentTypeIndex(many(3), 3).ok).toBe(true); // N
     expect(buildContentTypeIndex(many(4), 3)).toMatchObject({
       ok: false,
@@ -88,7 +114,12 @@ describe('content-type index', () => {
 });
 
 describe('relationship records', () => {
-  const rel = (id: string, rawTarget: string, targetMode: 'Internal' | 'External', order: number): RelationshipRecord => ({
+  const rel = (
+    id: string,
+    rawTarget: string,
+    targetMode: 'Internal' | 'External',
+    order: number
+  ): RelationshipRecord => ({
     ownerPart: '/word/document.xml',
     id,
     type: 'http://example/type',
@@ -98,10 +129,16 @@ describe('relationship records', () => {
   });
 
   test('groups by owner in order and rejects duplicate ids', () => {
-    const ok = buildRelationshipSet([rel('rId2', 'media/i.png', 'Internal', 1), rel('rId1', 'styles.xml', 'Internal', 0)]);
+    const ok = buildRelationshipSet([
+      rel('rId2', 'media/i.png', 'Internal', 1),
+      rel('rId1', 'styles.xml', 'Internal', 0),
+    ]);
     expect(ok.ok).toBe(true);
-    if (ok.ok) expect(ok.byOwner.get('/word/document.xml')!.map((r) => r.id)).toEqual(['rId1', 'rId2']);
-    expect(buildRelationshipSet([rel('rId1', 'a', 'Internal', 0), rel('rId1', 'b', 'Internal', 1)])).toMatchObject({
+    if (ok.ok)
+      expect(ok.byOwner.get('/word/document.xml')!.map((r) => r.id)).toEqual(['rId1', 'rId2']);
+    expect(
+      buildRelationshipSet([rel('rId1', 'a', 'Internal', 0), rel('rId1', 'b', 'Internal', 1)])
+    ).toMatchObject({
       ok: false,
       error: { code: 'duplicate-id' },
     });
@@ -110,7 +147,8 @@ describe('relationship records', () => {
   test('internal resolves owner-relative; external retains raw and never resolves', () => {
     const internal = resolveRelationship(rel('rId1', 'media/i.png', 'Internal', 0));
     expect(internal).toMatchObject({ mode: 'Internal', raw: 'media/i.png' });
-    if (internal.mode === 'Internal') expect(internal.target).toEqual({ ok: true, partName: '/word/media/i.png' });
+    if (internal.mode === 'Internal')
+      expect(internal.target).toEqual({ ok: true, partName: '/word/media/i.png' });
 
     const external = resolveRelationship(rel('rId2', 'https://example.com/x', 'External', 1));
     expect(external).toMatchObject({ mode: 'External', raw: 'https://example.com/x' });

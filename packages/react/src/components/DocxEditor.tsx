@@ -150,7 +150,11 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
         }${!chromeOn && className ? ` ${className}` : ''}`}
         style={chromeOn ? SCROLL_AREA_STYLE : undefined}
       >
-        <div ref={containerRef} className="docx-paginated-surface" style={{ margin: '24px auto' }} />
+        <div
+          ref={containerRef}
+          className="docx-paginated-surface"
+          style={{ margin: '24px auto' }}
+        />
       </div>
     );
 

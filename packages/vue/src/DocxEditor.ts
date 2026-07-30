@@ -1,12 +1,4 @@
-import {
-  defineComponent,
-  h,
-  onBeforeUnmount,
-  onMounted,
-  ref,
-  watch,
-  type PropType,
-} from 'vue';
+import { defineComponent, h, onBeforeUnmount, onMounted, ref, watch, type PropType } from 'vue';
 import type {
   DocumentChange,
   DocumentSource,

@@ -7,7 +7,10 @@ import { readXml, findElement, childElements, textContent } from '../package/xml
 describe('trust boundary rejections', () => {
   test('refuses DTDs, entity declarations, and custom entity refs', () => {
     expect(readXml('<!DOCTYPE x><x/>')).toMatchObject({ ok: false, reason: 'dtd-forbidden' });
-    expect(readXml('<!ENTITY lol "z"><x/>')).toMatchObject({ ok: false, reason: 'entity-forbidden' });
+    expect(readXml('<!ENTITY lol "z"><x/>')).toMatchObject({
+      ok: false,
+      reason: 'entity-forbidden',
+    });
     // Billion-laughs style reference to a custom entity.
     expect(readXml('<x>&lol;</x>')).toMatchObject({ ok: false, reason: 'entity-forbidden' });
     // The five predefined entities are allowed.
@@ -24,9 +27,10 @@ describe('trust boundary rejections', () => {
     });
   });
   test('counts elements before parser allocation and before full XML validation', () => {
-    expect(
-      readXml('<x><a/><b/><unclosed', { maxBytes: 100, maxElements: 2 })
-    ).toMatchObject({ ok: false, reason: 'too-many-elements' });
+    expect(readXml('<x><a/><b/><unclosed', { maxBytes: 100, maxElements: 2 })).toMatchObject({
+      ok: false,
+      reason: 'too-many-elements',
+    });
   });
   test('rejects NaN and non-finite configured limits', () => {
     expect(readXml('<x/>', { maxBytes: Number.NaN })).toMatchObject({
@@ -37,12 +41,13 @@ describe('trust boundary rejections', () => {
       ok: false,
       reason: 'invalid-limits',
     });
-    expect(
-      readXml('<x/>', { maxBytes: 100, maxElements: Number.NaN })
-    ).toMatchObject({ ok: false, reason: 'invalid-limits' });
-    expect(
-      readXml('<x/>', { maxBytes: 100, maxElements: Number.NEGATIVE_INFINITY })
-    ).toMatchObject({ ok: false, reason: 'invalid-limits' });
+    expect(readXml('<x/>', { maxBytes: 100, maxElements: Number.NaN })).toMatchObject({
+      ok: false,
+      reason: 'invalid-limits',
+    });
+    expect(readXml('<x/>', { maxBytes: 100, maxElements: Number.NEGATIVE_INFINITY })).toMatchObject(
+      { ok: false, reason: 'invalid-limits' }
+    );
   });
 
   test('rejects decoded numeric references forbidden by XML 1.0', () => {
@@ -103,7 +108,9 @@ describe('fidelity preservation', () => {
     expect(r.ok).toBe(true);
     if (!r.ok) return;
     const p = findElement(r.nodes, 'p')!;
-    expect(p.children.filter((c) => c.type === 'element').map((c) => (c as { name: string }).name)).toEqual(['a', 'b', 'a']);
+    expect(
+      p.children.filter((c) => c.type === 'element').map((c) => (c as { name: string }).name)
+    ).toEqual(['a', 'b', 'a']);
   });
 
   test('preserves attributes and raw lexical values without coercion', () => {
@@ -125,7 +132,8 @@ describe('fidelity preservation', () => {
   });
 
   test('reads a wordprocessing paragraph structure', () => {
-    const xml = '<w:body><w:p><w:r><w:t>Hello</w:t></w:r><w:r><w:t> world</w:t></w:r></w:p></w:body>';
+    const xml =
+      '<w:body><w:p><w:r><w:t>Hello</w:t></w:r><w:r><w:t> world</w:t></w:r></w:p></w:body>';
     const r = readXml(xml);
     expect(r.ok).toBe(true);
     if (!r.ok) return;
@@ -146,9 +154,7 @@ describe('fidelity preservation', () => {
     const result = readXml('<x><![CDATA[&#0; &lol; <!DOCTYPE x>]]></x>');
     expect(result.ok).toBe(true);
     if (!result.ok) return;
-    expect(textContent(findElement(result.nodes, 'x')!)).toBe(
-      '&#0; &lol; <!DOCTYPE x>'
-    );
+    expect(textContent(findElement(result.nodes, 'x')!)).toBe('&#0; &lol; <!DOCTYPE x>');
     expect(readXml('<x>&#0;</x>')).toMatchObject({
       ok: false,
       reason: 'parse-error',

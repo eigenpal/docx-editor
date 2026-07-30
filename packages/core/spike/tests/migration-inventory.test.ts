@@ -252,12 +252,14 @@ describe('package test migration inventory', () => {
     const unique = new Set(paths);
     expect(unique.size).toBe(paths.length);
     expect(legacyPaths).toHaveLength(31);
-    // Five of the ten originally-retained files were deleted with the adapter code they
-    // covered during the greenfield migration. They moved to `engineNeutralRetired` rather
-    // than being dropped from the inventory, so the total still reconciles and a FURTHER
-    // unexplained disappearance still fails this guard.
-    expect(retainedPaths).toHaveLength(5);
-    expect(retiredPaths).toHaveLength(5);
+    // Seven of the ten originally-retained files were deleted with the adapter code they
+    // covered during the greenfield migration (five in the migration itself, two more —
+    // useControllableBoolean and dataUrlToBlob — in the phase-4 legacy-lane deletion
+    // sweep). They moved to `engineNeutralRetired` rather than being dropped from the
+    // inventory, so the total still reconciles and a FURTHER unexplained disappearance
+    // still fails this guard.
+    expect(retainedPaths).toHaveLength(3);
+    expect(retiredPaths).toHaveLength(7);
     expect(paths).toHaveLength(41);
     expect(paths.every((p) => p.startsWith('packages/'))).toBe(true);
     expect(retainedPaths.filter((p) => p.startsWith('packages/agents/'))).toEqual([

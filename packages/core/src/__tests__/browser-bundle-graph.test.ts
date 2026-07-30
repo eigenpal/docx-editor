@@ -34,18 +34,19 @@ const PACKAGES = join(dirname(fileURLToPath(import.meta.url)), '..', '..', '..')
  * at the first moved lane, and a walk that reaches nothing cannot fail.
  */
 const WORKSPACE: ReadonlyMap<string, string> = new Map(
-  (Object.keys(CORE_LANES) as LaneName[])
-    .flatMap((lane) => {
-      const root = join(PACKAGES, laneSourceRoot(lane));
-      if (!laneHasMoved(lane)) return [[CORE_LANES[lane].package!, root] as const];
-      const subpath = CORE_LANES[lane].subpath;
-      const CORE = '@docx-editor.dev/core-contract';
-      const specifier = !subpath || subpath === '.' ? CORE : `${CORE}/${subpath.slice(2)}`;
-      const alias = CORE_LANES[lane].alias;
-      // Both names reach the same source while the alias lives, which is what keeps this
-      // walk honest across the migration rather than blind to unmigrated importers.
-      return alias ? [[specifier, root] as const, [alias, root] as const] : [[specifier, root] as const];
-    })
+  (Object.keys(CORE_LANES) as LaneName[]).flatMap((lane) => {
+    const root = join(PACKAGES, laneSourceRoot(lane));
+    if (!laneHasMoved(lane)) return [[CORE_LANES[lane].package!, root] as const];
+    const subpath = CORE_LANES[lane].subpath;
+    const CORE = '@docx-editor.dev/core-contract';
+    const specifier = !subpath || subpath === '.' ? CORE : `${CORE}/${subpath.slice(2)}`;
+    const alias = CORE_LANES[lane].alias;
+    // Both names reach the same source while the alias lives, which is what keeps this
+    // walk honest across the migration rather than blind to unmigrated importers.
+    return alias
+      ? [[specifier, root] as const, [alias, root] as const]
+      : [[specifier, root] as const];
+  })
 );
 
 const IMPORT = /(?:^|\n)\s*(?:import|export)[\s\S]{0,400}?from\s*['"]([^'"]+)['"]/g;
@@ -132,16 +133,9 @@ describe('a browser import cannot reach the server (task 10.1)', () => {
     expect(reach.external.size).toBeGreaterThan(0);
   });
 
-  test('it does not reach the server, sync or clients lanes', () => {
-    // Not a declared-dependency check: a bundler follows imports through barrels, and one
-    // `export *` is enough to ship a transport stack to every consumer while every
-    // package.json still looks correct.
-    for (const lane of ['sync', 'server', 'clients'] as LaneName[]) {
-      const reached = [...reach.packages].some((name) => WORKSPACE.get(name) === join(PACKAGES, laneSourceRoot(lane)));
-      expect({ lane, reached }).toEqual({ lane, reached: false });
-    }
-  });
-
+  // The sync, server and clients lanes were deleted with the legacy store (phase-4 sweep),
+  // so "the editor must not reach them" holds by non-existence; the forbidden-runtime and
+  // Node-builtin checks below carry the browser-safety constraint from here on.
   test('it does not reach a forbidden runtime', () => {
     const reached = BROWSER_FORBIDDEN_DEPENDENCIES.filter((forbidden) =>
       [...reach.external].some(
@@ -173,16 +167,5 @@ describe('a browser import cannot reach the server (task 10.1)', () => {
     );
     expect(reached).toContain('yjs');
     expect([...pretend].filter((s) => s.startsWith('node:'))).toEqual(['node:fs']);
-  });
-
-  test('the server lane declares a dependency on sync that its source never imports', () => {
-    // Recorded, not asserted away: `engine-server` lists `engine-sync` in package.json and
-    // imports nothing from it, so the lane DAG's manifest check passes on an edge the code
-    // does not have. Harmless today; it means the DAG describes intent there, not reality.
-    const serverEntry = join(PACKAGES, laneSourceRoot('server'), 'index.ts');
-    if (!existsSync(serverEntry)) return;
-    const syncRoot = join(PACKAGES, laneSourceRoot('sync'));
-    const reached = [...reachFrom(serverEntry).packages].some((n) => WORKSPACE.get(n) === syncRoot);
-    expect(reached).toBe(false);
   });
 });

@@ -94,7 +94,12 @@ describe('an incremental pass equals a clean one (tasks 9.3, 9.6)', () => {
   test('inserting a paragraph matches a full pass', () => {
     const session = createLayoutSession();
     lay(load(DOCUMENT), 1, session);
-    const inserted = load(DOCUMENT.replace(paragraph('paragraph 5 word word word word word word '), paragraph('paragraph 5 word word word word word word ') + paragraph('inserted')));
+    const inserted = load(
+      DOCUMENT.replace(
+        paragraph('paragraph 5 word word word word word word '),
+        paragraph('paragraph 5 word word word word word word ') + paragraph('inserted')
+      )
+    );
     expect(shapeOf(lay(inserted, 2, session))).toBe(shapeOf(lay(inserted, 2)));
   });
 
@@ -187,7 +192,12 @@ describe('the cache and the session compose (tasks 9.2, 9.3)', () => {
   test('together they still produce exactly what a clean pass produces', () => {
     const session = createLayoutSession();
     const cache = createParagraphLayoutCache<never>();
-    layoutSemanticDocument(load(DOCUMENT), 1, { measurer, geometry: GEOMETRY, cache: cache as never, session });
+    layoutSemanticDocument(load(DOCUMENT), 1, {
+      measurer,
+      geometry: GEOMETRY,
+      cache: cache as never,
+      session,
+    });
     const edited = load(DOCUMENT.replace('paragraph 9 ', 'paragraph nine, longer than before '));
     const incremental = layoutSemanticDocument(edited, 2, {
       measurer,

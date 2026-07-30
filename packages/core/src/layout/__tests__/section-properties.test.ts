@@ -6,11 +6,7 @@
 
 import { describe, expect, test } from 'bun:test';
 import { readOoxmlPart, type OoxmlPart } from '@docx-editor.dev/core-contract/store';
-import {
-  DEFAULT_SECTION_PROPERTIES,
-  geometryOfSection,
-  readSectionProperties,
-} from '../index.ts';
+import { DEFAULT_SECTION_PROPERTIES, geometryOfSection, readSectionProperties } from '../index.ts';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 

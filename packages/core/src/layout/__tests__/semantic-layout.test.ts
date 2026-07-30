@@ -2,10 +2,7 @@
 
 import { describe, expect, test } from 'bun:test';
 import { readOoxmlPart, type OoxmlPart } from '@docx-editor.dev/core-contract/store';
-import {
-  createFixedMeasurer,
-  layoutSemanticDocument,
-} from '../semantic-layout.ts';
+import { createFixedMeasurer, layoutSemanticDocument } from '../semantic-layout.ts';
 import {
   fragmentsOfParagraph,
   lineAtPosition,
@@ -56,8 +53,7 @@ describe('layout records carry revision and stable source ranges (task 7.1)', ()
 
   test('style spans cover the line text in order, with their own ranges', () => {
     const part = load(
-      '<w:p><w:r><w:t>plain </w:t></w:r>' +
-        '<w:r><w:rPr><w:b/></w:rPr><w:t>bold</w:t></w:r></w:p>'
+      '<w:p><w:r><w:t>plain </w:t></w:r>' + '<w:r><w:rPr><w:b/></w:rPr><w:t>bold</w:t></w:r></w:p>'
     );
     const [line] = linesOf(lay(part));
     expect(line!.spans.map((span) => span.text)).toEqual(['plain ', 'bold']);
@@ -83,9 +79,7 @@ describe('layout records carry revision and stable source ranges (task 7.1)', ()
   });
 
   test('spans are positioned left to right within the line', () => {
-    const part = load(
-      '<w:p><w:r><w:t>abc</w:t></w:r><w:r><w:t>de</w:t></w:r></w:p>'
-    );
+    const part = load('<w:p><w:r><w:t>abc</w:t></w:r><w:r><w:t>de</w:t></w:r></w:p>');
     const [line] = linesOf(lay(part));
     expect(line!.spans[0]!.box.x).toBe(0);
     expect(line!.spans[1]!.box.x).toBe(18); // 3 characters at 6pt
@@ -131,9 +125,7 @@ describe('line breaking and pagination (task 7.3)', () => {
   });
 
   test('a paragraph crossing a page keeps ONE identity across two fragments', () => {
-    const long = paragraph(
-      Array.from({ length: 40 }, (_, index) => `word${index}`).join(' ')
-    );
+    const long = paragraph(Array.from({ length: 40 }, (_, index) => `word${index}`).join(' '));
     const layout = lay(load(long), SMALL);
     const id = '/word/document.xml#0.0.0';
     const fragments = fragmentsOfParagraph(layout, id);
@@ -148,9 +140,7 @@ describe('line breaking and pagination (task 7.3)', () => {
   });
 
   test('pageBreakBefore starts a new page', () => {
-    const part = load(
-      paragraph('first') + paragraph('second', '<w:pageBreakBefore/>')
-    );
+    const part = load(paragraph('first') + paragraph('second', '<w:pageBreakBefore/>'));
     const layout = lay(part, { ...SMALL, height: 1000 });
     expect(layout.pages).toHaveLength(2);
     expect(layout.pages[0]!.fragments[0]!.lines[0]!.spans[0]!.text).toBe('first');
@@ -170,9 +160,7 @@ describe('line breaking and pagination (task 7.3)', () => {
 
   test('a larger font makes taller lines', () => {
     const small = lay(load(paragraph('x')));
-    const large = lay(
-      load('<w:p><w:r><w:rPr><w:sz w:val="44"/></w:rPr><w:t>x</w:t></w:r></w:p>')
-    );
+    const large = lay(load('<w:p><w:r><w:rPr><w:sz w:val="44"/></w:rPr><w:t>x</w:t></w:r></w:p>'));
     expect(linesOf(large)[0]!.box.height).toBeGreaterThan(linesOf(small)[0]!.box.height);
   });
 

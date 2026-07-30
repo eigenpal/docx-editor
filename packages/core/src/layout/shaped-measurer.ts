@@ -16,15 +16,45 @@
 // substitutable: shaped advance, then horizontal scaling, then character spacing as an
 // absolute per-character addition the scaling does not multiply.
 
-import type { ResolvedFont } from './font-resource.ts';
+import type { FontResourceSnapshot, ResolvedFont } from './font-resource.ts';
 import type { TextMeasurer } from './semantic-records.ts';
 import type { ResolvedRunStyle } from './run-style.ts';
+import type { OperationSnapshot } from './resolved-cache.ts';
 import {
   createShapingEnvironment,
+  type FixedPointRoundingMode,
+  type NormalizationPolicy,
   type ShapedRun,
   type TextShaper,
   type VersionedShapingLibrary,
 } from './shaped-run.ts';
+
+/**
+ * A fully resolved shaping bundle: fonts, shaper, and the environment they were admitted
+ * under. Produced by the editor lane's font configuration (`createLayoutShaping`) and
+ * consumed to build shaped measurers. Lived in the legacy `metrics.ts` until the legacy
+ * layout lane was deleted; the type is the surviving contract between the two lanes.
+ */
+export interface LayoutShapingOptions {
+  readonly fonts: FontResourceSnapshot;
+  readonly shaper: TextShaper;
+  readonly defaultFont: {
+    readonly family: string;
+    readonly sizeHalfPoints: number;
+  };
+  readonly environment: {
+    readonly variationAxes: Readonly<Record<string, number>>;
+    readonly shapingLibrary: VersionedShapingLibrary;
+    readonly unicodeDataVersion: string;
+    readonly normalization: NormalizationPolicy;
+    readonly language: string;
+    readonly features: Readonly<Record<string, number>>;
+    readonly fixedPointScale: number;
+    readonly roundingMode: FixedPointRoundingMode;
+  };
+  readonly ligatureCaretPolicy: 'cluster-edges-only';
+  readonly operation: OperationSnapshot;
+}
 
 export interface ShapedMeasurerOptions {
   readonly shaper: TextShaper;

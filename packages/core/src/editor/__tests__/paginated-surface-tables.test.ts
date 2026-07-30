@@ -67,9 +67,7 @@ describe('tables on the paginated surface', () => {
     const { container } = mount(BODY);
     const cells = container.querySelectorAll('.docx-table-cell');
     expect(cells.length).toBe(4);
-    const shaded = [...cells].filter(
-      (cell) => (cell as HTMLElement).style.backgroundColor !== ''
-    );
+    const shaded = [...cells].filter((cell) => (cell as HTMLElement).style.backgroundColor !== '');
     expect(shaded.length).toBe(1);
     // Cell spans carry the same addressing attributes as body spans.
     const cellSpans = container.querySelectorAll(
@@ -114,9 +112,7 @@ describe('tables on the paginated surface', () => {
     putCaret(surface, a1, 0);
     surface.deleteBackward();
     expect(paragraphTextOf(surface.session.part(), a1)).toBe('A1');
-    expect(paragraphTextOf(surface.session.part(), paragraphIdOf(surface, 'intro'))).toBe(
-      'intro'
-    );
+    expect(paragraphTextOf(surface.session.part(), paragraphIdOf(surface, 'intro'))).toBe('intro');
   });
 
   test('select all reaches cell text', () => {

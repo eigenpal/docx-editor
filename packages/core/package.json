@@ -15,11 +15,6 @@
       "import": "./src/binding/index.ts",
       "default": "./src/binding/index.ts"
     },
-    "./clients": {
-      "types": "./src/clients/index.ts",
-      "import": "./src/clients/index.ts",
-      "default": "./src/clients/index.ts"
-    },
     "./contracts/editor": {
       "types": "./src/contracts/editor.ts",
       "import": "./src/contracts/editor.ts",
@@ -60,20 +55,10 @@
       "import": "./src/output/index.ts",
       "default": "./src/output/index.ts"
     },
-    "./server": {
-      "types": "./src/server/index.ts",
-      "import": "./src/server/index.ts",
-      "default": "./src/server/index.ts"
-    },
     "./store": {
       "types": "./src/store/index.ts",
       "import": "./src/store/index.ts",
       "default": "./src/store/index.ts"
-    },
-    "./sync": {
-      "types": "./src/sync/index.ts",
-      "import": "./src/sync/index.ts",
-      "default": "./src/sync/index.ts"
     },
     "./editor": {
       "types": "./src/editor/index.ts",

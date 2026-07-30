@@ -21,11 +21,8 @@ const PUBLIC_SRC_DIRS = [
   'vue/src',
   'engine-core/src',
   'engine-binding/src',
-  'engine-sync/src',
   'engine-layout/src',
   'engine-output/src',
-  'engine-server/src',
-  'engine-clients/src',
 ];
 
 function collectSources(root: string): string[] {

@@ -1,16 +1,10 @@
-// Layout resolution dependency graph + revision-provenance cache (document-engine 8.2/8.3). Proves
-// the closure expands transitively, the cache reuses across revisions ONLY on unchanged fingerprints
+// Layout revision-provenance cache (document-engine 8.3). Proves
+// the cache reuses across revisions ONLY on unchanged fingerprints
 // + epochs (never on revision equality), an epoch bump invalidates without a model edit, and the
 // instrumentation never reuses an entry whose dependency changed.
 
 import { describe, expect, test } from 'bun:test';
-import {
-  DependencyGraph,
-  keyId,
-  ResolvedCache,
-  type CacheProvenance,
-  type OperationSnapshot,
-} from '../index.ts';
+import { ResolvedCache, type CacheProvenance, type OperationSnapshot } from '../index.ts';
 
 const SNAP: OperationSnapshot = {
   resourceEpoch: 1,
@@ -19,42 +13,6 @@ const SNAP: OperationSnapshot = {
   shapingHash: 'shape-1',
   producerVersion: 1,
 };
-
-describe('DependencyGraph (8.2)', () => {
-  test('closure expands transitively and is deterministic', () => {
-    const g = new DependencyGraph();
-    g.addDependency('para:p1', { kind: 'style', id: 'Body' });
-    g.addDependency('style:Body', { kind: 'style', id: 'Normal' }); // style inheritance
-    g.addDependency('style:Normal', { kind: 'font', id: 'Calibri' });
-    const closure = g.closure('para:p1').map(keyId);
-    expect(closure.sort()).toEqual(['font:Calibri', 'style:Body', 'style:Normal']);
-  });
-
-  test('a cyclic dependency terminates', () => {
-    const g = new DependencyGraph();
-    g.addDependency('style:A', { kind: 'style', id: 'B' });
-    g.addDependency('style:B', { kind: 'style', id: 'A' });
-    expect(g.closure('style:A').map(keyId).sort()).toEqual(['style:A', 'style:B']);
-  });
-
-  test('fingerprint changes when a transitive dependency value changes, and distinguishes absent', () => {
-    const g = new DependencyGraph();
-    g.addDependency('para:p1', { kind: 'style', id: 'Body' });
-    g.addDependency('style:Body', { kind: 'font', id: 'Calibri' });
-    const v1 = new Map([
-      ['style:Body', 'h1'],
-      ['font:Calibri', 'f1'],
-    ]);
-    const v2 = new Map([
-      ['style:Body', 'h1'],
-      ['font:Calibri', 'f2'],
-    ]); // font changed
-    expect(g.fingerprint('para:p1', v1)).not.toBe(g.fingerprint('para:p1', v2));
-    // Absent value is distinct from any present value.
-    const vAbsent = new Map([['style:Body', 'h1']]);
-    expect(g.fingerprint('para:p1', vAbsent)).not.toBe(g.fingerprint('para:p1', v1));
-  });
-});
 
 describe('ResolvedCache (8.3)', () => {
   const prov = (over: Partial<CacheProvenance> = {}): CacheProvenance => ({
@@ -113,12 +71,14 @@ describe('ResolvedCache (8.3)', () => {
   test('instrumentation never reuses an entry whose dependency changed (8.2 guarantee)', () => {
     // Model a consumer: it computes a dependency fingerprint from the graph, caches by it, then a
     // dependency value changes → the fingerprint changes → the next get MUST miss.
-    const g = new DependencyGraph();
-    g.addDependency('para:p1', { kind: 'style', id: 'Body' });
+    // The legacy DependencyGraph was deleted with the legacy layout lane; a plain
+    // deterministic fingerprint over the dependency values models the same consumer.
+    const fingerprintOf = (values: ReadonlyMap<string, string>): string =>
+      JSON.stringify([...values.entries()].sort());
     const c = new ResolvedCache<number>();
     let computes = 0;
     const resolve = (values: ReadonlyMap<string, string>, revision: number): number => {
-      const dep = g.fingerprint('para:p1', values);
+      const dep = fingerprintOf(values);
       const hit = c.get('para:p1', {
         dependencyFingerprint: dep,
         inputFingerprint: 'in',
