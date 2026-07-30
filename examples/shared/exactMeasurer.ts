@@ -124,13 +124,19 @@ export async function createExactMeasurer(
       epoch: 1,
       maxFontBytes: 4_000_000,
       resources: [
-        { request: REGULAR, id: 'demo-400', bytes: regular, hash: sha256FontBytes(regular), faceIndex: 0 },
+        {
+          request: REGULAR,
+          id: 'demo-400',
+          bytes: regular,
+          hash: sha256FontBytes(regular),
+          faceIndex: 0,
+        },
         { request: BOLD, id: 'demo-700', bytes: bold, hash: sha256FontBytes(bold), faceIndex: 0 },
       ],
       validateFont: harfBuzzFontValidator,
     });
 
-    const resolve = (request: FontRequest): ResolvedFont | null => {
+    const resolveRequest = (request: FontRequest): ResolvedFont | null => {
       const result = snapshot.resolve(request);
       return result instanceof FontResolutionError ? null : result;
     };
@@ -157,7 +163,7 @@ export async function createExactMeasurer(
         shaper: createHarfBuzzTextShaper(),
         // Weight is the only axis the demo carries two faces for; italic is synthesised by
         // the browser, so measuring the upright face is what actually gets painted.
-        resolveFont: (style) => resolve(style.bold ? BOLD : REGULAR),
+        resolveFont: (style) => resolveRequest(style.bold ? BOLD : REGULAR),
         fallback: createFixedMeasurer(),
         shapingLibrary: HARFBUZZ_SHAPING_LIBRARY,
         unicodeDataVersion: '15.1',

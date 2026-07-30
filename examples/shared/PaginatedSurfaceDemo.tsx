@@ -68,7 +68,19 @@ export function PaginatedSurfaceDemo({ fixtureUrl }: { fixtureUrl: string }) {
 
   useEffect(() => {
     if (!state) return;
-    setStatus(`${state.pageCount} pages`);
+    // The phase split, not just the total: layout, paint and selection sync fail
+    // separately and are fixed separately. `placed/total` is the one-glance sign of
+    // whether incremental layout engaged — placed equal to total on a keystroke means a
+    // full re-place, and `reused` counts the pages that were carried over untouched.
+    const { perf } = state;
+    const ms = (value: number) => `${value < 10 ? value.toFixed(1) : Math.round(value)}ms`;
+    setStatus(
+      `${state.pageCount} pages` +
+        ` · layout ${ms(perf.layoutMs)} (placed ${perf.placed}/${perf.total}, reused ${perf.reusedPages})` +
+        ` · paint ${ms(perf.paintMs)}` +
+        ` · sel ${ms(perf.selectionMs)}` +
+        (perf.staleDiscards > 0 ? ` · stale ${perf.staleDiscards}` : '')
+    );
   }, [state]);
 
   return (
@@ -182,9 +194,7 @@ export function PaginatedSurfaceDemo({ fixtureUrl }: { fixtureUrl: string }) {
       >
         <span>{status}</span>
         <span data-testid="paginated-revision">rev {state?.revision ?? 0}</span>
-        <span data-testid="paginated-caret">
-          caret {state ? state.selection.head.offset : '-'}
-        </span>
+        <span data-testid="paginated-caret">caret {state ? state.selection.head.offset : '-'}</span>
         {state?.lastRejection ? (
           <span data-testid="paginated-rejection" style={{ color: '#fca5a5' }}>
             refused: {state.lastRejection}

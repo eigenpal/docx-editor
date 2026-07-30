@@ -104,6 +104,18 @@ export default defineConfig(async () => {
               find: '@docx-editor.dev/core-contract/editor',
               replacement: path.join(monorepoRoot, 'packages/core/src/editor/index.ts'),
             },
+            // The remaining core-contract lane subpaths, one rule: files under
+            // `examples/shared/` sit outside this package's node_modules, so bare
+            // specifiers there only resolve through these aliases. `editor` and the
+            // `contracts/*` single-file entries are matched above / by the capture.
+            {
+              find: /^@docx-editor\.dev\/core-contract\/(binding|layout|output|store|sync|clients|server)$/,
+              replacement: path.join(monorepoRoot, 'packages/core/src/$1/index.ts'),
+            },
+            {
+              find: /^@docx-editor\.dev\/core-contract\/contracts\/(.+)$/,
+              replacement: path.join(monorepoRoot, 'packages/core/src/contracts/$1.ts'),
+            },
             {
               find: '@docx-editor.dev/i18n',
               replacement: path.join(monorepoRoot, 'packages/i18n/src/index.ts'),
