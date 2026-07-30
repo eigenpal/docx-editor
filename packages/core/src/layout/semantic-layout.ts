@@ -9,23 +9,34 @@
 // paragraph id. That is what makes a cross-page paragraph one paragraph for selection and
 // two boxes for pagination.
 
-import type { OoxmlNode, OoxmlPart, OoxmlProperty } from '@docx-editor.dev/core-contract/store';
+import type {
+  OoxmlElement,
+  OoxmlNode,
+  OoxmlPart,
+  OoxmlProperty,
+} from '@docx-editor.dev/core-contract/store';
 import { paragraphLayoutKey, type ParagraphLayoutCache } from './layout-cache.ts';
 import {
-  DEFAULT_RUN_STYLE,
-  displayText,
-  resolveRunStyle,
-  type ResolvedRunStyle,
-} from './run-style.ts';
+  alignSpans,
+  breakParagraph,
+  paragraphAlignment,
+  paragraphIndent,
+  propertiesOf,
+  type Alignment,
+  type PendingLine,
+} from './paragraph-flow.ts';
+import { DEFAULT_RUN_STYLE, type ResolvedRunStyle } from './run-style.ts';
+import { CELL_PAD, readTableStructure } from './semantic-table.ts';
+import { layoutRowFragment, type TableFlowDeps } from './semantic-table-layout.ts';
 import {
   DEFAULT_PAGE_GEOMETRY,
+  type BlockFragmentRecord,
   type LayoutBox,
   type LineRecord,
   type PageGeometry,
   type PageRecord,
-  type ParagraphFragmentRecord,
   type SemanticLayout,
-  type StyleSpanRecord,
+  type TableRowFragmentRecord,
   type TextMeasurer,
 } from './semantic-records.ts';
 
@@ -57,12 +68,12 @@ export interface SemanticLayoutOptions {
   readonly session?: LayoutSession;
 }
 
-/** The flow state as it stood immediately before one paragraph was placed. */
+/** The flow state as it stood immediately before one block was placed. */
 interface FlowCheckpoint {
   /** Completed pages at this point. The prefix of the previous layout that still stands. */
   readonly pageCount: number;
   /** Fragments already on the page being built. */
-  readonly pageFragments: readonly ParagraphFragmentRecord[];
+  readonly pageFragments: readonly BlockFragmentRecord[];
   readonly cursorY: number;
   readonly lineCounter: number;
 }
@@ -104,84 +115,6 @@ export function createLayoutSession(): LayoutSession {
   };
 }
 
-/** One measurable piece of a paragraph: text carrying one property set. */
-interface Piece {
-  readonly text: string;
-  readonly props: readonly OoxmlProperty[];
-  /** Resolved once here, so nothing downstream re-derives it. */
-  readonly style: ResolvedRunStyle;
-  readonly start: number;
-  readonly end: number;
-}
-
-function propertiesOf(container: OoxmlNode | undefined): OoxmlProperty[] {
-  if (!container || container.kind === 'textValue') return [];
-  const props: OoxmlProperty[] = [];
-  for (const child of container.children) {
-    if (child.kind === 'textValue') continue;
-    const attributes: Record<string, string> = {};
-    for (const attribute of child.attributes) attributes[attribute.localName] = attribute.value;
-    props.push(
-      Object.keys(attributes).length > 0
-        ? { localName: child.localName, attributes }
-        : { localName: child.localName }
-    );
-  }
-  return props;
-}
-
-/** Flatten a paragraph into measurable pieces with UTF-16 source offsets. */
-function piecesOf(paragraph: OoxmlNode): Piece[] {
-  if (paragraph.kind === 'textValue') return [];
-  const pieces: Piece[] = [];
-  let offset = 0;
-  for (const child of paragraph.children) {
-    if (child.kind !== 'run') continue;
-    const props = propertiesOf(child.children.find((grand) => grand.kind === 'runProperties'));
-    const style = resolveRunStyle(props);
-    for (const grand of child.children) {
-      if (grand.kind === 'runProperties') continue;
-      let text = '';
-      if (grand.kind === 'text') {
-        for (const value of grand.children) if (value.kind === 'textValue') text += value.value;
-      } else if (grand.kind === 'tab') text = '\t';
-      else if (grand.kind === 'hardBreak') text = '\n';
-      // Unknown content has no text projection, so it occupies no offset — the same rule
-      // the ops and the binding use, which is what keeps their offsets in agreement.
-      if (text.length === 0) continue;
-      pieces.push({ text, props, style, start: offset, end: offset + text.length });
-      offset += text.length;
-    }
-  }
-  return pieces;
-}
-
-/** Break points inside a piece: after each run of whitespace, so words stay whole. */
-function wordBoundaries(text: string): number[] {
-  const boundaries: number[] = [];
-  for (let index = 0; index < text.length; index += 1) {
-    if (text[index] === ' ' || text[index] === '\t') boundaries.push(index + 1);
-  }
-  if (boundaries[boundaries.length - 1] !== text.length) boundaries.push(text.length);
-  return boundaries;
-}
-
-interface PendingLine {
-  readonly spans: StyleSpanRecord[];
-  readonly start: number;
-  end: number;
-  width: number;
-  height: number;
-  baseline: number;
-}
-
-/**
- * A cached line, safe to hand back on every later hit.
- *
- * Placement copies span boxes rather than mutating them, but a cache entry outlives the
- * layout that produced it — freezing means a future change to the placement path cannot
- * quietly corrupt every subsequent reuse.
- */
 /**
  * Are two pending-fragment lists the same CONTENT?
  *
@@ -193,8 +126,8 @@ interface PendingLine {
  * if what is pending here matches what was pending there.
  */
 function sameFragments(
-  a: readonly ParagraphFragmentRecord[],
-  b: readonly ParagraphFragmentRecord[]
+  a: readonly BlockFragmentRecord[],
+  b: readonly BlockFragmentRecord[]
 ): boolean {
   if (a.length !== b.length) return false;
   for (let index = 0; index < a.length; index += 1) {
@@ -206,120 +139,37 @@ function sameFragments(
   return true;
 }
 
-const signatures = new WeakMap<ParagraphFragmentRecord, string>();
+const signatures = new WeakMap<BlockFragmentRecord, string>();
 
 /** Cached per record, so a fragment is serialized once however often convergence is tested. */
-function fragmentSignature(fragment: ParagraphFragmentRecord): string {
+function fragmentSignature(fragment: BlockFragmentRecord): string {
   const cached = signatures.get(fragment);
   if (cached !== undefined) return cached;
-  const signature = JSON.stringify([
-    fragment.id,
-    fragment.box,
-    fragment.range,
-    // `props` is a PUBLISHED field. A paragraph-property change layout does not read moves
-    // no geometry, so without this the freshly built fragment converged against the old one
-    // and was discarded — leaving a painter or style consumer reading the pre-edit value.
-    fragment.props,
-    fragment.lines.map((line) => [line.id, line.box, line.baseline, line.spans]),
-  ]);
+  // Every PUBLISHED field participates. A field left out converges a freshly built
+  // fragment against a stale one and discards the new value — the exact bug the `props`
+  // note below records for paragraph properties.
+  const signature =
+    fragment.kind === 'table'
+      ? JSON.stringify([
+          fragment.id,
+          fragment.tableId,
+          fragment.fragmentIndex,
+          fragment.box,
+          fragment.rows,
+        ])
+      : JSON.stringify([
+          fragment.id,
+          fragment.box,
+          fragment.range,
+          // `props` is a PUBLISHED field. A paragraph-property change layout does not read
+          // moves no geometry, so without this the freshly built fragment converged against
+          // the old one and was discarded — leaving a painter or style consumer reading the
+          // pre-edit value.
+          fragment.props,
+          fragment.lines.map((line) => [line.id, line.box, line.baseline, line.spans]),
+        ]);
   signatures.set(fragment, signature);
   return signature;
-}
-
-function frozenLine(line: PendingLine): PendingLine {
-  return Object.freeze({
-    spans: line.spans.map((span) =>
-      Object.freeze({ ...span, box: Object.freeze({ ...span.box }) })
-    ),
-    start: line.start,
-    end: line.end,
-    width: line.width,
-    height: line.height,
-    baseline: line.baseline,
-  }) as PendingLine;
-}
-
-function paragraphIndent(props: readonly OoxmlProperty[]): { left: number; right: number } {
-  let left = 0;
-  let right = 0;
-  for (const property of props) {
-    if (property.localName !== 'ind') continue;
-    const rawLeft = property.attributes?.left ?? property.attributes?.start;
-    const rawRight = property.attributes?.right ?? property.attributes?.end;
-    if (rawLeft && /^-?\d+$/.test(rawLeft)) left = Number(rawLeft) / 20;
-    if (rawRight && /^-?\d+$/.test(rawRight)) right = Number(rawRight) / 20;
-  }
-  return { left, right };
-}
-
-/** Horizontal alignment of a paragraph (`w:jc`, ECMA-376 §17.3.1.13). */
-type Alignment = 'left' | 'center' | 'right' | 'both';
-
-function paragraphAlignment(props: readonly OoxmlProperty[]): Alignment {
-  let alignment: Alignment = 'left';
-  for (const property of props) {
-    if (property.localName !== 'jc') continue;
-    switch (property.attributes?.val) {
-      // `start`/`end` are the direction-relative spellings; this lane is left-to-right only,
-      // so they resolve to left/right rather than being ignored as unknown.
-      case 'center':
-        alignment = 'center';
-        break;
-      case 'right':
-      case 'end':
-        alignment = 'right';
-        break;
-      case 'both':
-      case 'distribute':
-        alignment = 'both';
-        break;
-      default:
-        alignment = 'left';
-    }
-  }
-  return alignment;
-}
-
-/**
- * Shift a line's spans to satisfy the paragraph alignment.
- *
- * Layout is the only geometry authority, so alignment has to move the published span boxes
- * rather than being left to CSS: the painter positions each span absolutely, and hit testing
- * and the caret read the same boxes. Delegating this to `text-align` would put the caret
- * where no glyph is.
- */
-function alignSpans(
-  spans: readonly StyleSpanRecord[],
-  measurer: TextMeasurer,
-  indentLeft: number,
-  available: number,
-  alignment: Alignment,
-  isLastLine: boolean
-): readonly StyleSpanRecord[] {
-  if (spans.length === 0 || alignment === 'left') return spans;
-
-  // Trailing whitespace hangs into the margin rather than pushing the text off-centre, which
-  // is what Word does and what stops a line ending in a space from looking misaligned.
-  const last = spans[spans.length - 1]!;
-  const visible = last.text.replace(/\s+$/, '');
-  const trailing =
-    visible === last.text ? 0 : last.box.width - measurer.measure(visible, last.style);
-  const used = last.box.x - indentLeft + last.box.width - trailing;
-  const slack = available - used;
-  if (slack <= 0) return spans;
-
-  // The last line of a justified paragraph is set flush left, never stretched.
-  if (alignment === 'both') {
-    const gaps = spans.length - 1;
-    if (isLastLine || gaps <= 0) return spans;
-    const step = slack / gaps;
-    return spans.map((span, index) =>
-      index === 0 ? span : { ...span, box: { ...span.box, x: span.box.x + step * index } }
-    );
-  }
-
-  const offset = alignment === 'center' ? slack / 2 : slack;
-  return spans.map((span) => ({ ...span, box: { ...span.box, x: span.box.x + offset } }));
 }
 
 /** Whether a paragraph must start a new page (`w:pageBreakBefore`). */
@@ -332,19 +182,21 @@ function breaksBefore(props: readonly OoxmlProperty[]): boolean {
   );
 }
 
-/** Body paragraphs of a part, in document order. */
-function bodyParagraphs(part: OoxmlPart): OoxmlNode[] {
-  const paragraphs: OoxmlNode[] = [];
+/** Body blocks — paragraphs AND tables — of a part, in document order. */
+function bodyBlocks(part: OoxmlPart): OoxmlElement[] {
+  const blocks: OoxmlElement[] = [];
   const walk = (node: OoxmlNode): void => {
     if (node.kind === 'textValue') return;
     if (node.kind === 'body') {
-      for (const child of node.children) if (child.kind === 'paragraph') paragraphs.push(child);
+      for (const child of node.children) {
+        if (child.kind === 'paragraph' || child.kind === 'table') blocks.push(child);
+      }
       return;
     }
     for (const child of node.children) walk(child);
   };
   walk(part.root);
-  return paragraphs;
+  return blocks;
 }
 
 /**
@@ -353,21 +205,30 @@ function bodyParagraphs(part: OoxmlPart): OoxmlNode[] {
  * Deterministic: same tree plus same measurer produces byte-identical records, which is what
  * makes the incremental engine of section 9 differentially testable against a clean run.
  */
-/** Prepass results by paragraph node, valid while the width and producer both hold. */
-interface PreparedParagraphMemo {
+/** Prepass results by block node, valid while the width and producer both hold. */
+type PreparedBlock =
+  | {
+      readonly kind: 'paragraph';
+      readonly paragraph: OoxmlElement;
+      readonly props: OoxmlProperty[];
+      readonly indent: { left: number; right: number };
+      readonly available: number;
+      readonly alignment: Alignment;
+      readonly key: string;
+    }
+  | {
+      readonly kind: 'table';
+      readonly table: OoxmlElement;
+      readonly key: string;
+    };
+
+interface PreparedBlockMemo {
   readonly contentWidth: number;
   readonly producer: string;
-  readonly entry: {
-    readonly paragraph: OoxmlNode;
-    readonly props: OoxmlProperty[];
-    readonly indent: { left: number; right: number };
-    readonly available: number;
-    readonly alignment: ReturnType<typeof paragraphAlignment>;
-    readonly key: string;
-  };
+  readonly entry: PreparedBlock;
 }
 
-const preparedParagraphs = new WeakMap<OoxmlNode, PreparedParagraphMemo>();
+const preparedBlocks = new WeakMap<OoxmlNode, PreparedBlockMemo>();
 
 export function layoutSemanticDocument(
   part: OoxmlPart,
@@ -396,28 +257,42 @@ export function layoutSemanticDocument(
   // and the producer. Recomputing the key — a serialization of the paragraph's subtree —
   // for every paragraph on every pass made the prepass, not placement, the cost of an
   // incremental layout: a one-character edit re-keyed the entire document.
-  const bodies = bodyParagraphs(part);
-  const prepared = bodies.map((paragraph) => {
-    const memo = preparedParagraphs.get(paragraph);
+  const bodies = bodyBlocks(part);
+  const prepared = bodies.map((block): PreparedBlock => {
+    const memo = preparedBlocks.get(block);
     if (memo && memo.contentWidth === contentWidth && memo.producer === producer) {
       return memo.entry;
     }
-    const props = propertiesOf(
-      paragraph.kind === 'textValue'
-        ? undefined
-        : paragraph.children.find((child) => child.kind === 'paragraphProperties')
-    );
-    const indent = paragraphIndent(props);
-    const available = Math.max(1, contentWidth - indent.left - indent.right);
-    const entry = {
-      paragraph,
-      props,
-      indent,
-      available,
-      alignment: paragraphAlignment(props),
-      key: paragraphLayoutKey({ paragraph, properties: props, width: available, producer }),
-    };
-    preparedParagraphs.set(paragraph, { contentWidth, producer, entry });
+    let entry: PreparedBlock;
+    if (block.kind === 'table') {
+      // `nodeToken` hashes the whole subtree, so one key covers every cell edit.
+      entry = {
+        kind: 'table',
+        table: block,
+        key: paragraphLayoutKey({
+          paragraph: block,
+          properties: [],
+          width: contentWidth,
+          producer,
+        }),
+      };
+    } else {
+      const props = propertiesOf(
+        block.children.find((child) => child.kind === 'paragraphProperties')
+      );
+      const indent = paragraphIndent(props);
+      const available = Math.max(1, contentWidth - indent.left - indent.right);
+      entry = {
+        kind: 'paragraph',
+        paragraph: block,
+        props,
+        indent,
+        available,
+        alignment: paragraphAlignment(props),
+        key: paragraphLayoutKey({ paragraph: block, properties: props, width: available, producer }),
+      };
+    }
+    preparedBlocks.set(block, { contentWidth, producer, entry });
     return entry;
   });
 
@@ -471,7 +346,7 @@ export function layoutSemanticDocument(
   }
 
   const pages: PageRecord[] = [];
-  let pageFragments: ParagraphFragmentRecord[] = [];
+  let pageFragments: BlockFragmentRecord[] = [];
   let cursorY = 0;
   let lineCounter = 0;
   const checkpoints: FlowCheckpoint[] = [];
@@ -520,13 +395,93 @@ export function layoutSemanticDocument(
     cursorY = 0;
   };
 
+  // Table layout shares the flow's line counter and paragraph cache.
+  const tableDeps: TableFlowDeps = {
+    measurer,
+    cache,
+    producer,
+    nextLineId: () => `line-${lineCounter++}`,
+  };
+
+  /**
+   * Lay out one top-level table with bounded whole-row pagination.
+   * A row that would not fit forces a page break first (a single row never splits, v1);
+   * leading `w:tblHeader` rows re-emit atop each continuation page before a body row.
+   */
+  const layoutTableInFlow = (table: OoxmlElement): void => {
+    const structure = readTableStructure(table, contentWidth, 0);
+    if (!structure || structure.rows.length === 0) return;
+    const lineHeight = measurer.lineMetrics(DEFAULT_RUN_STYLE).height;
+    const headerRows = [];
+    for (const row of structure.rows) {
+      if (row.isHeader) headerRows.push(row);
+      else break;
+    }
+    let fragmentIndex = 0;
+    let fragmentTop = cursorY;
+    let rows: TableRowFragmentRecord[] = [];
+    const closeTableFragment = (): void => {
+      if (rows.length === 0) return;
+      const last = rows[rows.length - 1]!;
+      pageFragments.push({
+        kind: 'table',
+        id: `${table.id}#f${fragmentIndex}`,
+        tableId: table.id,
+        fragmentIndex,
+        rows,
+        box: {
+          x: 0,
+          y: fragmentTop,
+          width: contentWidth,
+          height: last.box.y + last.box.height - fragmentTop,
+        },
+      });
+      fragmentIndex += 1;
+      rows = [];
+    };
+    for (const row of structure.rows) {
+      if (cursorY + lineHeight + 2 * CELL_PAD > contentHeight && cursorY > 0) {
+        closeTableFragment();
+        flushPage();
+        fragmentTop = 0;
+        // Re-emit the header rows before a continuing body row (not before a header itself).
+        if (!row.isHeader) {
+          for (const headerRow of headerRows) {
+            const placed = layoutRowFragment(
+              headerRow,
+              structure.columnWidthsPt,
+              0,
+              cursorY,
+              true,
+              0,
+              tableDeps
+            );
+            rows.push(placed.record);
+            cursorY = placed.bottom;
+          }
+        }
+      }
+      const placed = layoutRowFragment(
+        row,
+        structure.columnWidthsPt,
+        0,
+        cursorY,
+        false,
+        0,
+        tableDeps
+      );
+      rows.push(placed.record);
+      cursorY = placed.bottom;
+    }
+    closeTableFragment();
+  };
+
   let converged = false;
   let convergedAt = prepared.length;
   for (let index = startIndex; index < prepared.length; index += 1) {
-    const { paragraph, props, indent, alignment, available } = prepared[index]!;
-    const paragraphId = paragraph.id;
+    const entry = prepared[index]!;
 
-    // The flow as it stands BEFORE this paragraph: what a later pass resumes from.
+    // The flow as it stands BEFORE this block: what a later pass resumes from.
     checkpoints[index] = {
       pageCount: pages.length,
       pageFragments: [...pageFragments],
@@ -568,83 +523,27 @@ export function layoutSemanticDocument(
 
     placed += 1;
 
+    if (entry.kind === 'table') {
+      layoutTableInFlow(entry.table);
+      continue;
+    }
+
+    const { paragraph, props, indent, alignment, available } = entry;
+    const paragraphId = paragraph.id;
+
     if (breaksBefore(props) && (pageFragments.length > 0 || pages.length === 0)) {
       flushPage();
     }
 
-    const cacheKey = cache ? prepared[index]!.key : null;
-
-    const cached = cacheKey !== null ? cache!.get(cacheKey) : undefined;
-
-    const pieces = cached ? [] : piecesOf(paragraph);
-    const lines: PendingLine[] = cached ? [...cached] : [];
-    let line: PendingLine = { spans: [], start: 0, end: 0, width: 0, height: 0, baseline: 0 };
-
-    const closeLine = (): void => {
-      const metrics = measurer.lineMetrics(DEFAULT_RUN_STYLE);
-      if (line.height === 0) {
-        line.height = metrics.height;
-        line.baseline = metrics.baseline;
-      }
-      lines.push(line);
-      line = {
-        spans: [],
-        start: line.end,
-        end: line.end,
-        width: 0,
-        height: 0,
-        baseline: 0,
-      };
-    };
-
-    for (const piece of pieces) {
-      if (piece.text === '\n') {
-        // A hard break ends the line without ending the paragraph — and it OCCUPIES a model
-        // offset. Emitting no span for it meant the text reconstructed from the records was
-        // shorter than the model: Select All stopped short and left residue, a copied break
-        // came back as a space, and Delete before a trailing break merged the next paragraph
-        // instead of removing the break. A zero-width span keeps the two in step.
-        const breakMetrics = measurer.lineMetrics(piece.style);
-        line.spans.push({
-          range: { paragraphId, start: piece.start, end: piece.end },
-          text: '\n',
-          props: piece.props,
-          style: piece.style,
-          box: { x: indent.left + line.width, y: 0, width: 0, height: breakMetrics.height },
-        });
-        line.height = Math.max(line.height, breakMetrics.height);
-        line.baseline = Math.max(line.baseline, breakMetrics.baseline);
-        line.end = piece.end;
-        closeLine();
-        continue;
-      }
-      const metrics = measurer.lineMetrics(piece.style);
-      let consumed = 0;
-      for (const boundary of wordBoundaries(piece.text)) {
-        const candidate = piece.text.slice(consumed, boundary);
-        if (candidate.length === 0) continue;
-        // Measured as DRAWN: `w:caps` changes the glyphs, so measuring the source text
-        // would size the line for characters the reader never sees.
-        const width = measurer.measure(displayText(candidate, piece.style), piece.style);
-        if (line.width + width > available && line.spans.length > 0) closeLine();
-        const spanStart = piece.start + consumed;
-        line.spans.push({
-          range: { paragraphId, start: spanStart, end: piece.start + boundary },
-          text: candidate,
-          props: piece.props,
-          style: piece.style,
-          box: { x: indent.left + line.width, y: 0, width, height: metrics.height },
-        });
-        line.width += width;
-        line.height = Math.max(line.height, metrics.height);
-        line.baseline = Math.max(line.baseline, metrics.baseline);
-        line.end = piece.start + boundary;
-        consumed = boundary;
-      }
-    }
-    // An empty paragraph still occupies one line, or it would have no caret target.
-    if (!cached && (line.spans.length > 0 || lines.length === 0)) closeLine();
-    if (cacheKey !== null && !cached) cache!.set(cacheKey, lines.map(frozenLine));
+    const lines = breakParagraph(
+      paragraph,
+      paragraphId,
+      indent.left,
+      available,
+      measurer,
+      cache,
+      cache ? entry.key : null
+    );
 
     // Place the lines, fragmenting at page boundaries.
     let fragmentIndex = 0;
