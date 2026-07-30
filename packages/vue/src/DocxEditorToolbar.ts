@@ -18,9 +18,11 @@ import type { Editor } from '@docx-editor.dev/core-contract/contracts/editor';
 import {
   CHROME_GROUPS,
   CHROME_UNAVAILABLE_KEY,
+  chromeSlotId,
   runToolbarCommand,
   toolbarCommandState,
   type ChromeControl,
+  type ChromeSlotId,
 } from '@docx-editor.dev/core-contract/editor';
 import { useEditorSnapshot } from './useEditorSnapshot';
 
@@ -55,6 +57,7 @@ function icon(paths: readonly string[]): VNode {
 
 function control(
   editor: Editor | null,
+  slotId: ChromeSlotId,
   c: ChromeControl,
   t: Translate,
   onSave: (() => void) | undefined
@@ -62,13 +65,16 @@ function control(
   const label = t(c.labelKey);
 
   // A picker renders as a disabled combobox, matching its original shape.
+  // Test ids are keyed on the SLOT id (`toolbar-text.bold`): control ids are only
+  // unique within their group (`image.insert` / `table.insert`), so a bare control
+  // id would collide.
   if (c.paths === null) {
     return h(
       'span',
       {
         key: c.id,
         class: 'ep-toolbar__picker',
-        'data-testid': `toolbar-${c.id}`,
+        'data-testid': `toolbar-${slotId}`,
         'aria-disabled': 'true',
         // A picker is a <span>, so it does not take focus itself, but a mousedown
         // still blurs the editor. Same reasoning as the disabled buttons above.
@@ -90,7 +96,7 @@ function control(
         key: c.id,
         type: 'button',
         class: 'ep-toolbar__button',
-        'data-testid': `toolbar-${c.id}`,
+        'data-testid': `toolbar-${slotId}`,
         'data-parity-only': 'true',
         disabled: true,
         title: reason,
@@ -113,7 +119,7 @@ function control(
         key: c.id,
         type: 'button',
         class: 'ep-toolbar__button',
-        'data-testid': `toolbar-${c.id}`,
+        'data-testid': `toolbar-${slotId}`,
         disabled: !editor || !onSave,
         title: label,
         'aria-label': label,
@@ -124,29 +130,25 @@ function control(
     );
   }
 
-  const commandId = c.state.command;
-  const state = toolbarCommandState(editor, commandId);
-  // No active/pressed state.
-  //
-  // A toolbar should show whether bold is currently ON, and the repo's own guidance
-  // says controls must reflect live editor state rather than being static. It is
-  // omitted here because `CanResult` is `{ ok } | { ok, code, reason }` — the public
-  // contract can answer "may this run?" but not "is it currently applied?".
-  // Surfacing it needs a new public query, and M6V.1 is explicitly a visual-shell
-  // gate that must not widen the feature surface. Tracked as a known gap.
+  // The command comes from the SLOT id through `commandForSlot` inside the shared
+  // helpers — one command table for both adapters. `active` is `Editor.isActive`,
+  // derived in the engine for marks/alignment, surfaced as `aria-pressed` so the
+  // control reflects live editor state.
+  const state = toolbarCommandState(editor, slotId);
   return h(
     'button',
     {
       key: c.id,
       type: 'button',
       class: 'ep-toolbar__button',
-      'data-testid': `toolbar-${c.id}`,
+      'data-testid': `toolbar-${slotId}`,
       disabled: !state.enabled,
+      'aria-pressed': state.active ? 'true' : 'false',
       // The engine's own words, never an adapter paraphrase.
       title: state.disabledReason ?? label,
       'aria-label': label,
       onMousedown: (event: MouseEvent) => event.preventDefault(), // keep focus on the editor
-      onClick: () => runToolbarCommand(editor, commandId),
+      onClick: () => runToolbarCommand(editor, slotId),
     },
     [icon(c.paths)]
   );
@@ -196,7 +198,9 @@ export default defineComponent({
                 'aria-label': props.t(group.labelKey),
                 'data-group': group.id,
               },
-              group.controls.map((c) => control(props.editor, c, props.t, props.onSave))
+              group.controls.map((c) =>
+                control(props.editor, chromeSlotId(group, c), c, props.t, props.onSave)
+              )
             ),
           ])
         )

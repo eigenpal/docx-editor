@@ -62,12 +62,12 @@ export { useEditorSnapshot } from './useEditorSnapshot';
 // The shared engine helpers both adapters expose, so the two package surfaces
 // match (enforced by `bun run check:export-parity`).
 export {
+  commandForSlot,
   runSave,
   runToolbarCommand,
-  toolbarCommand,
   toolbarCommandState,
   toolbarCommandStates,
-  type ToolbarCommandId,
+  type ChromeSlotId,
   type ToolbarCommandState,
   generateRulerTicks,
   rulerPageBox,

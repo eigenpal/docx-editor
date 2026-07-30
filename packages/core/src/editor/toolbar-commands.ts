@@ -8,6 +8,13 @@
 // whether the button is enabled and whether the click is allowed to run. A
 // control the engine cannot honour is disabled with the engine's own reason,
 // rather than looking live and failing silently when pressed.
+//
+// ONE COMMAND VOCABULARY. Controls are addressed by their `ChromeSlotId`
+// (`text.bold`, `history.undo`) — the same public slot taxonomy the chrome
+// registry defines — and `commandForSlot` is the single table mapping a slot to
+// its engine command. This replaces the two overlapping vocabularies that used
+// to live here and in chrome-controls.ts (`ToolbarCommandId` and
+// `ChromeCommandId`), which had already drifted on whether underline existed.
 
 import type {
   CanResult,
@@ -15,29 +22,39 @@ import type {
   EditorCommand,
   ExecResult,
 } from '@docx-editor.dev/core-contract/contracts/editor';
+import type { ChromeSlotId } from './chrome-controls.ts';
 
 /**
- * The controls this toolbar exposes.
+ * The one slot → engine-command table.
  *
- * @public
+ * A slot absent here is NOT WIRED YET: `commandForSlot` answers `null`, and
+ * `toolbarCommandState` reports it disabled with that reason. Wiring a control is
+ * adding one row — both adapters light up together. Save is deliberately absent:
+ * `Editor.save()` is not a command (see `runSave`), and the chrome registry marks
+ * the save control `kind: 'save'`.
  */
-export type ToolbarCommandId = 'bold' | 'italic' | 'underline' | 'undo' | 'redo';
-
-const COMMANDS: Record<ToolbarCommandId, EditorCommand> = {
-  bold: { type: 'toggleMark', mark: 'bold' },
-  italic: { type: 'toggleMark', mark: 'italic' },
-  underline: { type: 'toggleMark', mark: 'underline' },
-  undo: { type: 'undo' },
-  redo: { type: 'redo' },
+const SLOT_COMMANDS: Partial<Record<ChromeSlotId, EditorCommand>> = {
+  'history.undo': { type: 'undo' },
+  'history.redo': { type: 'redo' },
+  'text.bold': { type: 'toggleMark', mark: 'bold' },
+  'text.italic': { type: 'toggleMark', mark: 'italic' },
+  'text.underline': { type: 'toggleMark', mark: 'underline' },
+  'text.strike': { type: 'toggleMark', mark: 'strike' },
+  'alignment.left': { type: 'setAlignment', align: 'left' },
+  'alignment.center': { type: 'setAlignment', align: 'center' },
+  'alignment.right': { type: 'setAlignment', align: 'right' },
+  'alignment.justify': { type: 'setAlignment', align: 'justify' },
 };
 
 /**
- * The public editor command behind one control.
+ * The public editor command behind one chrome slot, or `null` when the slot is
+ * not wired to a command yet (parity-only chrome, or save — which is not a
+ * command). The single source of command truth for both adapters.
  *
  * @public
  */
-export function toolbarCommand(id: ToolbarCommandId): EditorCommand {
-  return COMMANDS[id];
+export function commandForSlot(slotId: ChromeSlotId): EditorCommand | null {
+  return SLOT_COMMANDS[slotId] ?? null;
 }
 
 /**
@@ -46,13 +63,12 @@ export function toolbarCommand(id: ToolbarCommandId): EditorCommand {
  * @public
  */
 export interface ToolbarCommandState {
-  readonly id: ToolbarCommandId;
+  readonly id: ChromeSlotId;
   readonly enabled: boolean;
   /** The engine's reason when disabled — surfaced as a tooltip, never invented. */
   readonly disabledReason: string | null;
-  /** Whether the command is currently APPLIED at the selection, from `Editor.isActive`.
-   *  A placeholder in the engine today (always `false`), so the wiring exists in both
-   *  adapters before the derivation does. */
+  /** Whether the command is currently APPLIED at the selection, from `Editor.isActive` —
+   *  derived in the engine for marks and alignment, honest-false elsewhere. */
   readonly active: boolean;
 }
 
@@ -61,16 +77,17 @@ export interface ToolbarCommandState {
  *
  * @public
  */
-export function toolbarCommandState(
-  editor: Editor | null,
-  id: ToolbarCommandId
-): ToolbarCommandState {
+export function toolbarCommandState(editor: Editor | null, id: ChromeSlotId): ToolbarCommandState {
   if (!editor) return { id, enabled: false, disabledReason: 'editor is not ready', active: false };
-  const result: CanResult = editor.can(COMMANDS[id]);
+  const command = commandForSlot(id);
+  if (!command) {
+    return { id, enabled: false, disabledReason: 'not wired to an editor command', active: false };
+  }
+  const result: CanResult = editor.can(command);
   // Optional call: `isActive` is newer than this helper's callers, and a host or test
   // double built against the earlier contract must not crash the toolbar. Absent means
-  // "not active", which is the same honest default the engine placeholder returns.
-  const active = editor.isActive?.(COMMANDS[id]) ?? false;
+  // "not active", which is the same honest default an underived command returns.
+  const active = editor.isActive?.(command) ?? false;
   return result.ok
     ? { id, enabled: true, disabledReason: null, active }
     : { id, enabled: false, disabledReason: result.reason, active };
@@ -83,7 +100,7 @@ export function toolbarCommandState(
  */
 export function toolbarCommandStates(
   editor: Editor | null,
-  ids: readonly ToolbarCommandId[]
+  ids: readonly ChromeSlotId[]
 ): readonly ToolbarCommandState[] {
   return ids.map((id) => toolbarCommandState(editor, id));
 }
@@ -95,11 +112,15 @@ export function toolbarCommandStates(
  *
  * @public
  */
-export function runToolbarCommand(editor: Editor | null, id: ToolbarCommandId): ExecResult {
+export function runToolbarCommand(editor: Editor | null, id: ChromeSlotId): ExecResult {
   if (!editor) return { ok: false, code: 'unsupported', reason: 'editor is not ready' };
-  const allowed = editor.can(COMMANDS[id]);
+  const command = commandForSlot(id);
+  if (!command) {
+    return { ok: false, code: 'unsupported', reason: 'not wired to an editor command' };
+  }
+  const allowed = editor.can(command);
   if (!allowed.ok) return { ok: false, code: allowed.code, reason: allowed.reason };
-  return editor.exec(COMMANDS[id]);
+  return editor.exec(command);
 }
 
 /**

@@ -37,8 +37,9 @@ to both adapters.
 - `DeferredDialogId`
 - `runSave`
 - `runToolbarCommand`
-- `toolbarCommand`
+- `commandForSlot` — replaced `toolbarCommand` when the command vocabulary unified on
+  `ChromeSlotId`
 - `toolbarCommandState`
 - `toolbarCommandStates`
-- `ToolbarCommandId`
+- `ChromeSlotId` — replaced `ToolbarCommandId` (same unification)
 - `ToolbarCommandState`

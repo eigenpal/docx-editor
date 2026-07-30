@@ -16,6 +16,45 @@ import { RendererNode } from 'vue';
 import { VNode } from 'vue';
 
 // @public
+export type ChromeSlotId =
+| 'history.undo'
+| 'history.redo'
+| 'zoom.level'
+| 'styles.style'
+| 'font.family'
+| 'font.size'
+| 'font.color'
+| 'text.bold'
+| 'text.italic'
+| 'text.underline'
+| 'text.strike'
+| 'text.highlight'
+| 'text.link'
+| 'text.clear'
+| 'script.super'
+| 'script.sub'
+| 'alignment.left'
+| 'alignment.center'
+| 'alignment.right'
+| 'alignment.justify'
+| 'alignment.lineSpacing'
+| 'list.bullet'
+| 'list.numbered'
+| 'list.outdent'
+| 'list.indent'
+| 'image.insert'
+| 'image.properties'
+| 'table.insert'
+| 'review.comments'
+| 'review.editingMode'
+| 'file.save';
+
+// @public
+export function commandForSlot(slotId: ChromeSlotId): EditorCommand | null {
+    return SLOT_COMMANDS[slotId] ?? null;
+}
+
+// @public
 export const DEFERRED_DIALOGS: readonly ["findReplace", "hyperlink", "insertImage", "insertTable", "insertSymbol", "imageProperties", "footnoteProperties"];
 
 // @public (undocumented)
@@ -254,8 +293,8 @@ default: () => never[];
 }>> & Readonly<{
 onClose?: (() => any) | undefined;
 }>, {
-open: boolean;
 editor: Editor | null;
+open: boolean;
 panels: readonly SidebarPanel[];
 }, {}, {}, {}, string, ComponentProvideOptions, true, {}, any>;
 
@@ -563,6 +602,9 @@ export type EditorScope =
 
 // @public
 export interface EditorSnapshot {
+    // (undocumented)
+    readonly canRedo?: boolean;
+    readonly canUndo?: boolean;
     readonly editable: boolean;
     // (undocumented)
     readonly formatting: RunFormatting | null;
@@ -802,8 +844,8 @@ default: string;
 onError?: ((reason: string, _detail?: string | undefined) => any) | undefined;
 onStateChange?: ((state: PaginatedSurfaceState) => any) | undefined;
 }>, {
-scale: number;
 measurer: TextMeasurer;
+scale: number;
 className: string;
 }, {}, {}, {}, string, ComponentProvideOptions, true, {}, any>;
 
@@ -886,12 +928,17 @@ export function runSave(editor: Editor | null): Promise<ArrayBuffer> {
 }
 
 // @public
-export function runToolbarCommand(editor: Editor | null, id: ToolbarCommandId): ExecResult {
+export function runToolbarCommand(editor: Editor | null, id: ChromeSlotId): ExecResult {
     if (!editor) return { ok: false, code: 'unsupported', reason: 'editor is not ready' };
     const // (undocumented)
-    allowed = editor.can(COMMANDS[id]);
+    command = commandForSlot(id);
+    if (!command) {
+        return { ok: false, code: 'unsupported', reason: 'not wired to an editor command' };
+    }
+    const // (undocumented)
+    allowed = editor.can(command);
     if (!allowed.ok) return { ok: false, code: allowed.code, reason: allowed.reason };
-    return editor.exec(COMMANDS[id]);
+    return editor.exec(command);
 }
 
 // @public
@@ -905,36 +952,30 @@ export interface SidebarPanel {
 }
 
 // @public
-export function toolbarCommand(id: ToolbarCommandId): EditorCommand {
-    return COMMANDS[id];
-}
-
-// @public
-export type ToolbarCommandId = 'bold' | 'italic' | 'underline' | 'undo' | 'redo';
-
-// @public
 export interface ToolbarCommandState {
     readonly active: boolean;
     readonly disabledReason: string | null;
     // (undocumented)
     readonly enabled: boolean;
     // (undocumented)
-    readonly id: ToolbarCommandId;
+    readonly id: ChromeSlotId;
 }
 
 // @public
-export function toolbarCommandState(
-editor: Editor | null,
-id: ToolbarCommandId
-): ToolbarCommandState {
+export function toolbarCommandState(editor: Editor | null, id: ChromeSlotId): ToolbarCommandState {
     if (!editor) return { id, enabled: false, disabledReason: 'editor is not ready', active: false };
     const // (undocumented)
-    result: CanResult = editor.can(COMMANDS[id]);
+    command = commandForSlot(id);
+    if (!command) {
+        return { id, enabled: false, disabledReason: 'not wired to an editor command', active: false };
+    }
+    const // (undocumented)
+    result: CanResult = editor.can(command);
     // Optional call: `isActive` is newer than this helper's callers, and a host or test
     // double built against the earlier contract must not crash the toolbar. Absent means
-    // "not active", which is the same honest default the engine placeholder returns.
+    // "not active", which is the same honest default an underived command returns.
     const // (undocumented)
-    active = editor.isActive?.(COMMANDS[id]) ?? false;
+    active = editor.isActive?.(command) ?? false;
     return result.ok
     ? { id, enabled: true, disabledReason: null, active }
     : { id, enabled: false, disabledReason: result.reason, active };
@@ -943,7 +984,7 @@ id: ToolbarCommandId
 // @public
 export function toolbarCommandStates(
 editor: Editor | null,
-ids: readonly ToolbarCommandId[]
+ids: readonly ChromeSlotId[]
 ): readonly ToolbarCommandState[] {
     return ids.map((id) => toolbarCommandState(editor, id));
 }

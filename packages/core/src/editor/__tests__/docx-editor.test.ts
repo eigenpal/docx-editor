@@ -270,6 +270,161 @@ describe('createDocxEditor', () => {
     expect(frame.selection).toBeNull();
   });
 
+  // ── State tick + cached snapshot identity ──────────────────────────────────────────
+
+  test('snapshot() is cached: same reference until state moves, new after an edit', () => {
+    const { editor } = mount(p('hello'));
+    const first = editor.snapshot();
+    expect(editor.snapshot()).toBe(first);
+    expect(Object.isFrozen(first)).toBe(true);
+    expect(Object.isFrozen(first.page)).toBe(true);
+
+    editor.exec({ type: 'insertText', text: 'X' });
+    const second = editor.snapshot();
+    expect(second).not.toBe(first);
+    // Sub-object reuse: the page did not change, so its reference survives re-derivation.
+    expect(second.page).toBe(first.page);
+    expect(editor.snapshot()).toBe(second);
+  });
+
+  test('formatting sub-object changes reference only when its value changes', () => {
+    const { editor } = mount(p('hello'));
+    editor.surface!.selectAll();
+    const before = editor.snapshot();
+    editor.exec({ type: 'toggleMark', mark: 'bold' });
+    const after = editor.snapshot();
+    expect(after).not.toBe(before);
+    expect(after.formatting?.bold).toBe(true);
+    expect(after.formatting).not.toBe(before.formatting);
+    expect(after.page).toBe(before.page);
+  });
+
+  test('stateVersion bumps on commits, zoom, and load', () => {
+    const { editor } = mount(p('hello'));
+    const start = editor.stateVersion();
+    editor.exec({ type: 'insertText', text: 'X' });
+    const afterEdit = editor.stateVersion();
+    expect(afterEdit).toBeGreaterThan(start);
+    editor.setZoom(2);
+    const afterZoom = editor.stateVersion();
+    expect(afterZoom).toBeGreaterThan(afterEdit);
+    editor.load(docx(p('reloaded')));
+    expect(editor.stateVersion()).toBeGreaterThan(afterZoom);
+  });
+
+  test('load() success emits change (with the revision) and selectionChange', () => {
+    const container = document.createElement('div');
+    const editor = createDocxEditor({ container });
+    const revisions: number[] = [];
+    const snapshots: unknown[] = [];
+    editor.on('change', (change) => revisions.push(change.revision));
+    editor.on('selectionChange', (snapshot) => snapshots.push(snapshot));
+    editor.load(docx(p('arrived')));
+    expect(revisions).toHaveLength(1);
+    expect(revisions[0]).toBe(editor.getDocumentHandle().revision);
+    expect(snapshots.length).toBeGreaterThan(0);
+  });
+
+  test('setZoom emits selectionChange with the fresh cached snapshot', () => {
+    const { editor } = mount(p('hello'));
+    let received: ReturnType<typeof editor.snapshot> | null = null;
+    editor.on('selectionChange', (snapshot) => {
+      received = snapshot;
+    });
+    expect(editor.setZoom(1.5)).toEqual({ ok: true, changed: true });
+    expect(received).not.toBeNull();
+    expect(received!.zoom).toBe(1.5);
+    // The emitted snapshot IS the cached one — no second derivation for readers.
+    expect(editor.snapshot()).toBe(received!);
+  });
+
+  test('snapshot carries canUndo/canRedo derived from the session history', () => {
+    const { editor } = mount(p('hello'));
+    expect(editor.snapshot().canUndo).toBe(false);
+    expect(editor.snapshot().canRedo).toBe(false);
+    editor.exec({ type: 'insertText', text: 'X' });
+    expect(editor.snapshot().canUndo).toBe(true);
+    expect(editor.snapshot().canRedo).toBe(false);
+    editor.exec({ type: 'undo' });
+    expect(editor.snapshot().canRedo).toBe(true);
+  });
+
+  // ── isActive derivation (marks + alignment) ────────────────────────────────────────
+
+  test('isActive lights for toggleMark after bolding the selection', () => {
+    const { editor } = mount(p('hello'));
+    editor.surface!.selectAll();
+    expect(editor.isActive({ type: 'toggleMark', mark: 'bold' })).toBe(false);
+    editor.exec({ type: 'toggleMark', mark: 'bold' });
+    expect(editor.isActive({ type: 'toggleMark', mark: 'bold' })).toBe(true);
+    expect(editor.isActive({ type: 'toggleMark', mark: 'italic' })).toBe(false);
+    editor.exec({ type: 'toggleMark', mark: 'bold' });
+    expect(editor.isActive({ type: 'toggleMark', mark: 'bold' })).toBe(false);
+  });
+
+  test('isActive maps justify to OOXML both for setAlignment', () => {
+    const { editor } = mount(p('hello'));
+    editor.surface!.selectAll();
+    expect(editor.isActive({ type: 'setAlignment', align: 'left' })).toBe(true);
+    editor.exec({ type: 'setAlignment', align: 'justify' });
+    expect(editor.isActive({ type: 'setAlignment', align: 'justify' })).toBe(true);
+    expect(editor.isActive({ type: 'setAlignment', align: 'center' })).toBe(false);
+  });
+
+  test('snapshot formatting carries the full derivable shape', () => {
+    const { editor } = mount(p('hello'));
+    editor.surface!.selectAll();
+    editor.exec({ type: 'setAlignment', align: 'center' });
+    const formatting = editor.snapshot().formatting;
+    expect(formatting?.alignment).toBe('center');
+    expect(formatting?.superscript).toBe(false);
+    expect(formatting?.subscript).toBe(false);
+    // getSelectionFormatting reads the SAME derivation.
+    expect(editor.getSelectionFormatting()?.alignment).toBe('center');
+  });
+
+  // ── attach / detach ────────────────────────────────────────────────────────────────
+
+  test('created without a container, attach() mounts the pending document', () => {
+    const editor = createDocxEditor({ document: docx(p('hello')) });
+    expect(editor.surface).toBeNull();
+    const container = document.createElement('div');
+    editor.attach(container);
+    expect(editor.surface).not.toBeNull();
+    expect(container.textContent).toContain('hello');
+  });
+
+  test('detach() stashes the CURRENT content; a later attach restores it', () => {
+    const editor = createDocxEditor({ document: docx(p('hello')) });
+    const first = document.createElement('div');
+    editor.attach(first);
+    editor.exec({ type: 'insertText', text: 'X' });
+    expect(editor.surface!.session.bodyText()).toBe('Xhello');
+
+    const beforeDetach = editor.stateVersion();
+    editor.detach();
+    expect(editor.surface).toBeNull();
+    expect(first.childNodes.length).toBe(0);
+    expect(editor.stateVersion()).toBeGreaterThan(beforeDetach);
+
+    const second = document.createElement('div');
+    editor.attach(second);
+    // The edit survives; the undo stack does not (a mount from bytes is a new session).
+    expect(second.textContent).toContain('Xhello');
+    expect(editor.snapshot().canUndo).toBe(false);
+  });
+
+  test('attach after destroy is a refused no-op with a typed error', () => {
+    const editor = createDocxEditor({ document: docx(p('hello')) });
+    editor.destroy();
+    const errors: { code?: string }[] = [];
+    editor.on('error', (error) => errors.push(error));
+    editor.attach(document.createElement('div'));
+    expect(editor.surface).toBeNull();
+    expect(errors).toHaveLength(1);
+    expect(errors[0]!.code).toBe('destroyed');
+  });
+
   test('destroy() detaches the surface and empties the container', () => {
     const { editor, container } = mount(p('hello'));
     editor.destroy();
