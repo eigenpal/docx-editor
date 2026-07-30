@@ -15,7 +15,7 @@
 // structurally shared: an entry retains the previous part by reference rather than cloning
 // it, so undo is a pointer swap and history costs nothing per entry.
 
-import { validateOoxmlPart, type OoxmlPart } from '../package/ooxml-tree.ts';
+import { validateOoxmlPartDelta, type OoxmlPart } from '../package/ooxml-tree.ts';
 import { ORIGIN_IDS } from '../registry/frozen-ids.ts';
 import { applyTreeOp, type ImpactClass, type TreeDocOp, type TreeOpRejection } from './tree-ops.ts';
 
@@ -201,11 +201,14 @@ export class TreeDocumentStore {
     }
     if (applied === 0) return { ok: true, change: null };
 
-    // The commit boundary is where fail-closed lives now: the SAME invariant validation the
-    // primitives used to run each, applied once to the final tree. An invalid result
+    // The commit boundary is where fail-closed lives now: the SAME invariant rules the
+    // primitives used to run each, applied once to the final tree. Validated as a DELTA
+    // against the tree this transaction started from — that tree was validated when it was
+    // published, and structural sharing means everything the ops did not touch is object-
+    // identical to it, so only the changed subtrees need walking. An invalid result
     // abandons the whole transaction — no revision, no history entry, no notification —
     // exactly as a per-op rejection would have, so nothing invalid is ever published.
-    const validation = validateOoxmlPart(working);
+    const validation = validateOoxmlPartDelta(before, working);
     if (!validation.ok) {
       return {
         ok: false,

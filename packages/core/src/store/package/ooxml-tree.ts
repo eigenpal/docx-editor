@@ -1008,6 +1008,31 @@ function knownAttributesAreValid(attributes: readonly OoxmlAttribute[]): boolean
  * replacement chooses explicitly whether to retain or allocate identity.
  */
 export function validateOoxmlPart(part: OoxmlPart): OoxmlInvariantResult {
+  return runValidation(part, null);
+}
+
+/**
+ * Validate only what an edit could have changed, against a previously validated tree.
+ *
+ * Structural sharing makes an edited tree mostly object-identical to its predecessor. A
+ * subtree that is the SAME OBJECT, reached under the SAME inherited namespace context, was
+ * already proven valid when `previous` was — re-walking it proves nothing, and re-walking
+ * the whole document per commit made validation the single largest cost of a keystroke on
+ * a long document. Context equality is tracked by binding-array identity down the rebuilt
+ * spine, so a node that alters its namespace declarations forfeits pruning for its whole
+ * subtree.
+ *
+ * Two deliberate narrowings against the full walk, both bounded elsewhere:
+ * DUPLICATE IDS across a changed and an unchanged subtree are not observed here — id
+ * uniqueness for edits rests on the allocator, which mints against the whole part, and
+ * `previous` itself was validated in full. NOTHING else is narrowed: every visited node
+ * runs the identical rules.
+ */
+export function validateOoxmlPartDelta(previous: OoxmlPart, part: OoxmlPart): OoxmlInvariantResult {
+  return runValidation(part, previous);
+}
+
+function runValidation(part: OoxmlPart, previous: OoxmlPart | null): OoxmlInvariantResult {
   const issues: OoxmlInvariantIssue[] = [];
   const ids = new Set<string>();
   const report = (code: OoxmlInvariantIssueCode, path: string, nodeId?: string): void => {
@@ -1016,8 +1041,14 @@ export function validateOoxmlPart(part: OoxmlPart): OoxmlInvariantResult {
   const walk = (
     node: OoxmlNode,
     inheritedBindings: ReadonlyMap<string, string>,
-    path: string
+    path: string,
+    priorNode: OoxmlNode | undefined,
+    priorContext: boolean
   ): void => {
+    // The prune: this very object was validated as part of `previous`, under an inherited
+    // context proven identical — nothing in the subtree can have changed.
+    if (priorContext && priorNode === node) return;
+
     if (typeof node.id !== 'string' || node.id.length === 0) report('invalid-id', path, node.id);
     else if (ids.has(node.id)) report('duplicate-id', path, node.id);
     else ids.add(node.id);
@@ -1087,7 +1118,31 @@ export function validateOoxmlPart(part: OoxmlPart): OoxmlInvariantResult {
         report('known-node-invariant', path, node.id);
     }
 
-    node.children.forEach((child, index) => walk(child, bindings, `${path}.children[${index}]`));
+    // Children may prune only when THIS node's paired predecessor declares the very same
+    // binding array (reference identity — the spine rebuild spreads it through), so the
+    // inherited context every child sees is provably what its predecessor saw.
+    const childContext =
+      priorContext &&
+      priorNode !== undefined &&
+      priorNode.kind !== 'textValue' &&
+      priorNode.namespaceBindings === node.namespaceBindings;
+    let priorChildren: ReadonlyMap<string, OoxmlNode> | null = null;
+    if (childContext) {
+      const paired = new Map<string, OoxmlNode>();
+      for (const child of (priorNode as OoxmlElement).children) {
+        if (!paired.has(child.id)) paired.set(child.id, child);
+      }
+      priorChildren = paired;
+    }
+    node.children.forEach((child, index) =>
+      walk(
+        child,
+        bindings,
+        `${path}.children[${index}]`,
+        priorChildren?.get(child.id),
+        childContext
+      )
+    );
   };
 
   walk(
@@ -1096,7 +1151,9 @@ export function validateOoxmlPart(part: OoxmlPart): OoxmlInvariantResult {
       ['xml', XML_NAMESPACE_URI],
       ['xmlns', XMLNS_NAMESPACE_URI],
     ]),
-    'root'
+    'root',
+    previous?.root,
+    previous !== null
   );
   return issues.length === 0 ? { ok: true } : { ok: false, issues: Object.freeze(issues) };
 }

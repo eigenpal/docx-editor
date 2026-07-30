@@ -57,7 +57,24 @@ export interface EditOptions {
  */
 interface PartIndex {
   readonly nodes: Map<string, OoxmlNode>;
-  readonly parents: Map<string, OoxmlNode>;
+  /**
+   * Child id to PARENT ID — the id, not the object. A rebuilt ancestor keeps its id, so
+   * the thousands of untouched siblings under it keep valid parent entries with no work
+   * at all; storing the parent object meant every rebuild of a wide element (the body,
+   * on every paragraph edit) had to rewrite one entry per child.
+   */
+  readonly parents: Map<string, string>;
+  /**
+   * The next minted-id counter known to be past every allocation so far.
+   *
+   * Carried on the index — which the diff patch hands from tree state to tree state — so
+   * each allocator resumes where the last one stopped. Restarting at zero made every mint
+   * probe the whole run of previously minted ids: in a document built by editing, that was
+   * millions of taken-id checks per paste. Monotone, so freed counters are never reused,
+   * which no correctness property depends on. A rebuilt index starts at zero again and
+   * pays one skip-forward walk on its first allocation.
+   */
+  mintFrontier: number;
 }
 
 const partIndexes = new WeakMap<OoxmlElement, PartIndex>();
@@ -66,17 +83,17 @@ function nodeIndexFor(root: OoxmlElement): PartIndex {
   const cached = partIndexes.get(root);
   if (cached) return cached;
   const nodes = new Map<string, OoxmlNode>();
-  const parents = new Map<string, OoxmlNode>();
-  const walk = (node: OoxmlNode, parent: OoxmlNode | null): void => {
+  const parents = new Map<string, string>();
+  const walk = (node: OoxmlNode, parentId: string | null): void => {
     if (!nodes.has(node.id)) {
       nodes.set(node.id, node);
-      if (parent) parents.set(node.id, parent);
+      if (parentId !== null) parents.set(node.id, parentId);
     }
     if (node.kind === 'textValue') return;
-    for (const child of node.children) walk(child, node);
+    for (const child of node.children) walk(child, node.id);
   };
   walk(root, null);
-  const index: PartIndex = { nodes, parents };
+  const index: PartIndex = { nodes, parents, mintFrontier: 0 };
   partIndexes.set(root, index);
   return index;
 }
@@ -100,7 +117,7 @@ export function collectNodeIds(part: OoxmlPart): Set<string> {
 export function createNodeIdAllocator(part: OoxmlPart): () => string {
   const index = nodeIndexFor(part.root);
   const minted = new Set<string>();
-  let counter = 0;
+  let counter = index.mintFrontier;
   return () => {
     let id = `${part.name}#new:${counter}`;
     while (index.nodes.has(id) || minted.has(id)) {
@@ -109,6 +126,9 @@ export function createNodeIdAllocator(part: OoxmlPart): () => string {
     }
     minted.add(id);
     counter += 1;
+    // Published back, so the next allocator — this op's successor in the same transaction,
+    // or the next transaction entirely — starts past everything ever taken.
+    index.mintFrontier = counter;
     return id;
   };
 }
@@ -124,7 +144,8 @@ function pathToNode(root: OoxmlNode, nodeId: string): OoxmlNode[] | null {
   const path: OoxmlNode[] = [target];
   let current: OoxmlNode | undefined = target;
   while (current && current !== root) {
-    current = index.parents.get(current.id);
+    const parentId = index.parents.get(current.id);
+    current = parentId === undefined ? undefined : index.nodes.get(parentId);
     if (current) path.push(current);
   }
   if (current !== root) return null;
@@ -146,7 +167,8 @@ export function findNode(part: OoxmlPart, nodeId: string): OoxmlNode | null {
 export function parentNodeOf(part: OoxmlPart, nodeId: string): OoxmlElement | null {
   const index = nodeIndexFor(part.root);
   if (!index.nodes.has(nodeId)) return null;
-  const parent = index.parents.get(nodeId);
+  const parentId = index.parents.get(nodeId);
+  const parent = parentId === undefined ? undefined : index.nodes.get(parentId);
   return parent && parent.kind !== 'textValue' ? (parent as OoxmlElement) : null;
 }
 
@@ -193,45 +215,74 @@ function removeIndexedSubtree(index: PartIndex, node: OoxmlNode): void {
   for (const child of node.children) removeIndexedSubtree(index, child);
 }
 
-function addIndexedSubtree(index: PartIndex, node: OoxmlNode, parent: OoxmlNode): void {
+function addIndexedSubtree(index: PartIndex, node: OoxmlNode, parentId: string): void {
   index.nodes.set(node.id, node);
-  index.parents.set(node.id, parent);
+  index.parents.set(node.id, parentId);
   if (node.kind === 'textValue') return;
-  for (const child of node.children) addIndexedSubtree(index, child, node);
+  for (const child of node.children) addIndexedSubtree(index, child, node.id);
 }
 
 function diffPatch(
   index: PartIndex,
   oldNode: OoxmlNode,
   newNode: OoxmlNode,
-  newParent: OoxmlNode | null
+  newParentId: string | null
 ): void {
   if (oldNode === newNode) {
-    // Identical subtree: every interior parent pointer targets nodes INSIDE the shared
-    // subtree and is already right; only the link to the rebuilt parent above changed.
-    if (newParent) index.parents.set(newNode.id, newParent);
+    // Identical subtree: every entry inside it is already right. Even its own parent EDGE
+    // usually is — the parent kept its id through the rebuild — so only a genuine move to a
+    // differently-identified parent writes anything.
+    if (newParentId !== null && index.parents.get(newNode.id) !== newParentId) {
+      index.parents.set(newNode.id, newParentId);
+    }
     return;
   }
   if (oldNode.id !== newNode.id) {
     removeIndexedSubtree(index, oldNode);
-    if (newParent) addIndexedSubtree(index, newNode, newParent);
+    if (newParentId !== null) addIndexedSubtree(index, newNode, newParentId);
     return;
   }
   index.nodes.set(newNode.id, newNode);
-  if (newParent) index.parents.set(newNode.id, newParent);
+  if (newParentId !== null && index.parents.get(newNode.id) !== newParentId) {
+    index.parents.set(newNode.id, newParentId);
+  }
   const oldChildren = oldNode.kind === 'textValue' ? [] : oldNode.children;
   const newChildren = newNode.kind === 'textValue' ? [] : newNode.children;
+
+  // Trim the identical prefix and suffix by OBJECT identity before pairing anything. An
+  // edit to a wide element replaces one child among thousands — the body loses or gains a
+  // paragraph — and an identical child under the same parent id needs no entry touched at
+  // all. Pairing maps are then built only over the changed window, so a rebuild costs the
+  // window plus pointer comparisons, not one map operation per sibling.
+  const shorter = Math.min(oldChildren.length, newChildren.length);
+  let first = 0;
+  while (first < shorter && oldChildren[first] === newChildren[first]) first += 1;
+  let oldPast = oldChildren.length;
+  let newPast = newChildren.length;
+  while (
+    oldPast > first &&
+    newPast > first &&
+    oldChildren[oldPast - 1] === newChildren[newPast - 1]
+  ) {
+    oldPast -= 1;
+    newPast -= 1;
+  }
+
   const oldById = new Map<string, OoxmlNode>();
-  for (const child of oldChildren) if (!oldById.has(child.id)) oldById.set(child.id, child);
+  for (let at = first; at < oldPast; at += 1) {
+    const child = oldChildren[at]!;
+    if (!oldById.has(child.id)) oldById.set(child.id, child);
+  }
   const kept = new Set<string>();
-  for (const child of newChildren) kept.add(child.id);
+  for (let at = first; at < newPast; at += 1) kept.add(newChildren[at]!.id);
   // REMOVALS FIRST: a node moved between siblings appears in both a removed child's old
   // position and a new child's subtree, and deleting after adding would strip it.
   for (const [id, child] of oldById) if (!kept.has(id)) removeIndexedSubtree(index, child);
-  for (const child of newChildren) {
+  for (let at = first; at < newPast; at += 1) {
+    const child = newChildren[at]!;
     const previous = oldById.get(child.id);
-    if (previous) diffPatch(index, previous, child, newNode);
-    else addIndexedSubtree(index, child, newNode);
+    if (previous) diffPatch(index, previous, child, newNode.id);
+    else addIndexedSubtree(index, child, newNode.id);
   }
 }
 
