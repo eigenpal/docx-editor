@@ -26,6 +26,7 @@ import {
   caretAt,
   moveCaret,
   pagesToMaterialize,
+  paragraphFragmentsOf,
   paragraphTextFromLayout,
   spansInSelection,
   wordBoundary,
@@ -1023,7 +1024,7 @@ export function mountPaginatedSurface(
     if (!index) {
       index = new Map();
       for (const page of currentLayout.pages) {
-        for (const fragment of page.fragments) {
+        for (const fragment of paragraphFragmentsOf(page)) {
           if (!index.has(fragment.paragraphId)) index.set(fragment.paragraphId, fragment.props);
         }
       }

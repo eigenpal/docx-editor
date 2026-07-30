@@ -310,7 +310,11 @@ function paintPage(
   content.style.width = `${page.contentBox.width * options.scale}px`;
   content.style.height = `${page.contentBox.height * options.scale}px`;
   for (const fragment of page.fragments) {
-    content.append(paintFragment(document, fragment, options.scale));
+    // Table paint lands with the table layout arm; until then only paragraph
+    // fragments reach a page record.
+    if (fragment.kind === 'paragraph') {
+      content.append(paintFragment(document, fragment, options.scale));
+    }
   }
   element.append(content);
   return element;

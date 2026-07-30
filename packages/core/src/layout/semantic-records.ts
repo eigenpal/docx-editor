@@ -64,6 +64,7 @@ export interface LineRecord {
  * pagination treats it as two boxes.
  */
 export interface ParagraphFragmentRecord {
+  readonly kind: 'paragraph';
   readonly id: string;
   readonly paragraphId: string;
   /** 0 for the first fragment of the paragraph, 1 for its continuation, and so on. */
@@ -74,6 +75,55 @@ export interface ParagraphFragmentRecord {
   readonly box: LayoutBox;
 }
 
+/**
+ * The part of one table that sits on one page.
+ *
+ * A table that crosses a page boundary produces one fragment per page it spans, which is
+ * what lets it checkpoint like a paragraph: the flow loop places whole fragments, and
+ * resuming after a table needs no knowledge of its interior.
+ */
+export interface TableFragmentRecord {
+  readonly kind: 'table';
+  readonly id: string;
+  /** Canonical node id of the `w:tbl`. */
+  readonly tableId: string;
+  /** 0 for the first page the table touches, 1 for its continuation, and so on. */
+  readonly fragmentIndex: number;
+  readonly rows: readonly TableRowFragmentRecord[];
+  readonly box: LayoutBox;
+}
+
+export interface TableRowFragmentRecord {
+  /** Canonical node id of the `w:tr`. */
+  readonly id: string;
+  /**
+   * True for a `w:tblHeader` row RE-EMITTED at the top of a continuation page. Painted,
+   * but excluded from interaction walks so each caret stop exists exactly once.
+   */
+  readonly isHeaderRepeat: boolean;
+  readonly cells: readonly TableCellFragmentRecord[];
+  readonly box: LayoutBox;
+}
+
+export interface TableCellFragmentRecord {
+  /** Canonical node id of the `w:tc`. */
+  readonly id: string;
+  /** First grid column this cell occupies. */
+  readonly gridColumn: number;
+  /** Grid columns spanned, already clamped at read time. */
+  readonly gridSpan: number;
+  /** A vertical-merge continuation paints its box but holds no blocks. */
+  readonly vMergeContinue: boolean;
+  /** Validated 6-hex cell shading fill, absent for none/auto. */
+  readonly shading?: string;
+  /** Nested blocks in reading order; recursion carries nested tables. */
+  readonly blocks: readonly BlockFragmentRecord[];
+  readonly box: LayoutBox;
+}
+
+/** A top-level (or cell-level) block fragment, discriminated by `kind`. */
+export type BlockFragmentRecord = ParagraphFragmentRecord | TableFragmentRecord;
+
 export interface PageRecord {
   readonly id: string;
   readonly index: number;
@@ -81,7 +131,7 @@ export interface PageRecord {
   readonly box: LayoutBox;
   /** The area inside the margins that content flows into. */
   readonly contentBox: LayoutBox;
-  readonly fragments: readonly ParagraphFragmentRecord[];
+  readonly fragments: readonly BlockFragmentRecord[];
 }
 
 export interface SemanticLayout {
@@ -122,11 +172,38 @@ export interface TextMeasurer {
   lineMetrics(style: ResolvedRunStyle): { height: number; baseline: number };
 }
 
+/**
+ * Depth-first paragraph fragments of one page, in reading order.
+ *
+ * Table interiors flatten through rows and cells; header-repeat rows are skipped unless
+ * asked for, so interaction sees each caret stop exactly once while paint sees everything.
+ */
+export function paragraphFragmentsOf(
+  page: PageRecord,
+  includeHeaderRepeats = false
+): ParagraphFragmentRecord[] {
+  const found: ParagraphFragmentRecord[] = [];
+  const visitBlocks = (blocks: readonly BlockFragmentRecord[]): void => {
+    for (const block of blocks) {
+      if (block.kind === 'paragraph') {
+        found.push(block);
+        continue;
+      }
+      for (const row of block.rows) {
+        if (row.isHeaderRepeat && !includeHeaderRepeats) continue;
+        for (const cell of row.cells) visitBlocks(cell.blocks);
+      }
+    }
+  };
+  visitBlocks(page.fragments);
+  return found;
+}
+
 /** Every line in a layout, in reading order — the order caret navigation walks. */
 export function linesOf(layout: SemanticLayout): LineRecord[] {
   const lines: LineRecord[] = [];
   for (const page of layout.pages) {
-    for (const fragment of page.fragments) lines.push(...fragment.lines);
+    for (const fragment of paragraphFragmentsOf(page)) lines.push(...fragment.lines);
   }
   return lines;
 }
@@ -138,7 +215,7 @@ export function fragmentsOfParagraph(
 ): ParagraphFragmentRecord[] {
   const fragments: ParagraphFragmentRecord[] = [];
   for (const page of layout.pages) {
-    for (const fragment of page.fragments) {
+    for (const fragment of paragraphFragmentsOf(page)) {
       if (fragment.paragraphId === paragraphId) fragments.push(fragment);
     }
   }

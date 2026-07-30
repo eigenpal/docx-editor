@@ -9,6 +9,7 @@
 // handed straight to `insertText` without a translation step that could disagree.
 
 import type { LineRecord, SemanticLayout, StyleSpanRecord } from './semantic-records.ts';
+import { paragraphFragmentsOf } from './semantic-records.ts';
 
 /** A caret position in the model. */
 export interface SemanticPosition {
@@ -61,7 +62,7 @@ function paragraphLinesIndex(layout: SemanticLayout): Map<string, PlacedLine[]> 
   if (cached) return cached;
   const index = new Map<string, PlacedLine[]>();
   for (const page of layout.pages) {
-    for (const fragment of page.fragments) {
+    for (const fragment of paragraphFragmentsOf(page)) {
       for (const line of fragment.lines) {
         const entry = index.get(line.range.paragraphId);
         const placed = { line, pageIndex: page.index };
@@ -101,7 +102,7 @@ function xWithinLine(line: LineRecord, offset: number): number {
 export function caretStops(layout: SemanticLayout): CaretGeometry[] {
   const stops: CaretGeometry[] = [];
   for (const page of layout.pages) {
-    for (const fragment of page.fragments) {
+    for (const fragment of paragraphFragmentsOf(page)) {
       for (const line of fragment.lines) {
         for (let offset = line.range.start; offset <= line.range.end; offset += 1) {
           // A continuation line's first stop is the same model position as the previous
@@ -208,7 +209,7 @@ export function selectionRects(
   if (!ordered) return [];
   const rects: SelectionRect[] = [];
   for (const page of layout.pages) {
-    for (const fragment of page.fragments) {
+    for (const fragment of paragraphFragmentsOf(page)) {
       for (const line of fragment.lines) {
         const overlap = lineOverlap(layout, line, ordered.from, ordered.to);
         if (!overlap) continue;
@@ -261,7 +262,7 @@ export function documentOrder(layout: SemanticLayout): string[] {
   const seen = new Set<string>();
   const order: string[] = [];
   for (const page of layout.pages) {
-    for (const fragment of page.fragments) {
+    for (const fragment of paragraphFragmentsOf(page)) {
       if (!seen.has(fragment.paragraphId)) {
         seen.add(fragment.paragraphId);
         order.push(fragment.paragraphId);

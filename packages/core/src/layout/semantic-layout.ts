@@ -656,6 +656,7 @@ export function layoutSemanticDocument(
       const top = pending[0]!.box.y;
       const height = pending.reduce((sum, record) => sum + record.box.height, 0);
       pageFragments.push({
+        kind: 'paragraph',
         id: `${paragraphId}#f${fragmentIndex}`,
         paragraphId,
         fragmentIndex,

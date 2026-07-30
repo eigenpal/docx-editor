@@ -180,6 +180,8 @@ export {
   fragmentsOfParagraph,
   lineAtPosition,
   linesOf,
+  paragraphFragmentsOf,
+  type BlockFragmentRecord,
   type LayoutBox,
   type LineRecord,
   type PageGeometry,
@@ -188,6 +190,9 @@ export {
   type SemanticLayout,
   type SourceRange,
   type StyleSpanRecord,
+  type TableCellFragmentRecord,
+  type TableFragmentRecord,
+  type TableRowFragmentRecord,
   type TextMeasurer,
 } from './semantic-records.ts';
 export {
