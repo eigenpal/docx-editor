@@ -15,7 +15,7 @@
 // structurally shared: an entry retains the previous part by reference rather than cloning
 // it, so undo is a pointer swap and history costs nothing per entry.
 
-import type { OoxmlPart } from '../package/ooxml-tree.ts';
+import { validateOoxmlPart, type OoxmlPart } from '../package/ooxml-tree.ts';
 import { ORIGIN_IDS } from '../registry/frozen-ids.ts';
 import { applyTreeOp, type ImpactClass, type TreeDocOp, type TreeOpRejection } from './tree-ops.ts';
 
@@ -163,7 +163,11 @@ export class TreeDocumentStore {
     build({
       apply: (op) => {
         if (failure) return false;
-        const result = applyTreeOp(working, op);
+        // Validation of the whole part is DEFERRED to the commit below: per-op it made a
+        // many-op transaction quadratic in document size, and nothing between here and the
+        // commit can observe the intermediate parts. Op-level input validation still runs
+        // inside `applyTreeOp` before any tree work.
+        const result = applyTreeOp(working, op, { deferValidation: true });
         if (!result.ok) {
           failure = { reason: result.reason, ...(result.detail ? { detail: result.detail } : {}) };
           return false;
@@ -196,6 +200,19 @@ export class TreeDocumentStore {
       };
     }
     if (applied === 0) return { ok: true, change: null };
+
+    // The commit boundary is where fail-closed lives now: the SAME invariant validation the
+    // primitives used to run each, applied once to the final tree. An invalid result
+    // abandons the whole transaction — no revision, no history entry, no notification —
+    // exactly as a per-op rejection would have, so nothing invalid is ever published.
+    const validation = validateOoxmlPart(working);
+    if (!validation.ok) {
+      return {
+        ok: false,
+        reason: 'tree-invariant',
+        detail: JSON.stringify(validation.issues),
+      };
+    }
 
     // A PROJECTION-origin commit reconciles the view with state the store already holds.
     // It publishes a revision so consumers can re-derive, but it is not a user intent, so

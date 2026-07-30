@@ -20,9 +20,11 @@ import {
   createNodeIdAllocator,
   findNode,
   insertChildren,
+  parentNodeOf,
   removeNode,
   replaceChildren,
   replaceNode,
+  type EditOptions,
   type OoxmlEditResult,
 } from '../package/ooxml-edit.ts';
 import { isValidXmlText } from '../package/sinks.ts';
@@ -389,29 +391,52 @@ function fromEdit(result: OoxmlEditResult, effect: TreeOpEffect): TreeOpResult {
  *
  * Validation runs first and returns before any tree work, so a rejected op is a true no-op:
  * the caller keeps the part it passed in, unchanged and still frozen.
+ *
+ * `options.deferValidation` passes through to the edit primitives: a transaction applying
+ * many ops re-validates the whole part once at its commit boundary rather than after every
+ * primitive, which is the difference between a paste that is linear and one that is
+ * quadratic in document size.
  */
-export function applyTreeOp(part: OoxmlPart, op: TreeDocOp): TreeOpResult {
+export function applyTreeOp(part: OoxmlPart, op: TreeDocOp, options?: EditOptions): TreeOpResult {
   const rejection = validateTreeOp(part, op);
   if (rejection) return { ok: false, reason: rejection };
 
-  if (op.op === 'joinParagraphs') return applyJoin(part, op.firstId, op.secondId);
+  if (op.op === 'joinParagraphs') return applyJoin(part, op.firstId, op.secondId, options);
 
   const paragraph = findNode(part, op.paragraphId) as OoxmlParagraphNode;
   const nextId = createNodeIdAllocator(part);
 
   switch (op.op) {
     case 'insertText':
-      return applyInsertContent(part, paragraph, op.offset, [(mint) => textElement(mint, op.text)]);
+      return applyInsertContent(
+        part,
+        paragraph,
+        op.offset,
+        [(mint) => textElement(mint, op.text)],
+        options
+      );
     case 'insertTab':
-      return applyInsertContent(part, paragraph, op.offset, [(mint) => simpleElement(mint, 'tab')]);
+      return applyInsertContent(
+        part,
+        paragraph,
+        op.offset,
+        [(mint) => simpleElement(mint, 'tab')],
+        options
+      );
     case 'insertHardBreak':
-      return applyInsertContent(part, paragraph, op.offset, [(mint) => simpleElement(mint, 'br')]);
+      return applyInsertContent(
+        part,
+        paragraph,
+        op.offset,
+        [(mint) => simpleElement(mint, 'br')],
+        options
+      );
     case 'deleteText':
-      return applyDeleteText(part, paragraph, op.start, op.end);
+      return applyDeleteText(part, paragraph, op.start, op.end, options);
     case 'splitParagraph':
-      return applySplit(part, paragraph, op.offset);
+      return applySplit(part, paragraph, op.offset, options);
     case 'setRunProperties':
-      return applySetRunProperties(part, paragraph, op.start, op.end, op.properties);
+      return applySetRunProperties(part, paragraph, op.start, op.end, op.properties, options);
     case 'setParagraphProperties': {
       const existing = paragraph.children.find((child) => child.kind === 'paragraphProperties');
       const children = op.properties.map((property) => propertyElement(property, nextId()));
@@ -425,9 +450,11 @@ export function applyTreeOp(part: OoxmlPart, op: TreeDocOp): TreeOpResult {
       if (op.properties.length === 0) {
         // Clearing properties removes the container entirely rather than leaving an empty
         // `w:pPr`, so a cleared paragraph digests identically to one that never had any.
-        return existing ? fromEdit(removeNode(part, existing.id), effect) : ok(part, effect);
+        return existing
+          ? fromEdit(removeNode(part, existing.id, options), effect)
+          : ok(part, effect);
       }
-      if (existing) return fromEdit(replaceChildren(part, existing.id, children), effect);
+      if (existing) return fromEdit(replaceChildren(part, existing.id, children, options), effect);
       const pPr = {
         id: nextId(),
         kind: 'paragraphProperties',
@@ -439,7 +466,7 @@ export function applyTreeOp(part: OoxmlPart, op: TreeDocOp): TreeOpResult {
         children,
       } as unknown as OoxmlNode;
       // `w:pPr` must be the paragraph's FIRST child per the schema.
-      return fromEdit(insertChildren(part, paragraph.id, 0, [pPr]), effect);
+      return fromEdit(insertChildren(part, paragraph.id, 0, [pPr], options), effect);
     }
     default:
       return { ok: false, reason: 'unknown-op' };
@@ -451,7 +478,8 @@ function applyInsertContent(
   part: OoxmlPart,
   paragraph: OoxmlParagraphNode,
   offset: number,
-  builders: readonly ((mint: () => string) => OoxmlNode)[]
+  builders: readonly ((mint: () => string) => OoxmlNode)[],
+  options?: EditOptions
 ): TreeOpResult {
   const nextId = createNodeIdAllocator(part);
   const nodes = builders.map((build) => build(nextId));
@@ -479,7 +507,7 @@ function applyInsertContent(
     const rebuilt = run.children.flatMap((child) =>
       child.id === textNode.id ? [head, ...nodes, tail] : [child]
     );
-    return fromEdit(replaceChildren(part, run.id, rebuilt), effect);
+    return fromEdit(replaceChildren(part, run.id, rebuilt, options), effect);
   }
 
   // At a boundary: append to the run holding the offset, or to the last run.
@@ -488,15 +516,23 @@ function applyInsertContent(
     const run = findNode(part, boundary.runId);
     if (!run || run.kind !== 'run') return { ok: false, reason: 'tree-invariant' };
     const index = run.children.findIndex((child) => contains(child, boundary.node.id));
-    return fromEdit(insertChildren(part, run.id, Math.max(0, index), nodes), effect);
+    return fromEdit(insertChildren(part, run.id, Math.max(0, index), nodes, options), effect);
   }
 
   const runs = paragraph.children.filter((child) => child.kind === 'run');
   const last = runs[runs.length - 1];
-  if (last) return fromEdit(insertChildren(part, last.id, last.children.length, nodes), effect);
+  if (last) {
+    return fromEdit(insertChildren(part, last.id, last.children.length, nodes, options), effect);
+  }
   // An empty paragraph: the content needs a run to live in.
   return fromEdit(
-    insertChildren(part, paragraph.id, paragraph.children.length, [runElement(nextId, nodes)]),
+    insertChildren(
+      part,
+      paragraph.id,
+      paragraph.children.length,
+      [runElement(nextId, nodes)],
+      options
+    ),
     effect
   );
 }
@@ -525,7 +561,8 @@ function applyDeleteText(
   part: OoxmlPart,
   paragraph: OoxmlParagraphNode,
   start: number,
-  end: number
+  end: number,
+  options?: EditOptions
 ): TreeOpResult {
   const segments = segmentsOf(paragraph);
   const effect: TreeOpEffect = {
@@ -542,7 +579,7 @@ function applyDeleteText(
   for (const segment of [...segments].reverse()) {
     if (segment.end <= start || segment.start >= end) continue;
     if (segment.node.kind !== 'textValue') {
-      const removed = removeNode(current, segment.node.id);
+      const removed = removeNode(current, segment.node.id, options);
       if (!removed.ok) return fromEdit(removed, effect);
       current = removed.part;
       continue;
@@ -554,8 +591,8 @@ function applyDeleteText(
     if (!owner) return { ok: false, reason: 'tree-invariant', detail: 'orphan text value' };
     const edited =
       value.length === 0
-        ? removeNode(current, owner.id)
-        : replaceNode(current, owner.id, textElement(nextId, value));
+        ? removeNode(current, owner.id, options)
+        : replaceNode(current, owner.id, textElement(nextId, value), options);
     if (!edited.ok) return fromEdit(edited, effect);
     current = edited.part;
   }
@@ -570,7 +607,7 @@ function applyDeleteText(
       // the run's own property container.
       const hasContent = child.children.some((grand) => grand.kind !== 'runProperties');
       if (hasContent) continue;
-      const removed = removeNode(current, child.id);
+      const removed = removeNode(current, child.id, options);
       if (!removed.ok) return fromEdit(removed, effect);
       current = removed.part;
     }
@@ -578,7 +615,12 @@ function applyDeleteText(
   return ok(current, effect);
 }
 
-function applySplit(part: OoxmlPart, paragraph: OoxmlParagraphNode, offset: number): TreeOpResult {
+function applySplit(
+  part: OoxmlPart,
+  paragraph: OoxmlParagraphNode,
+  offset: number,
+  options?: EditOptions
+): TreeOpResult {
   const nextId = createNodeIdAllocator(part);
   const segments = segmentsOf(paragraph);
   const headChildren: OoxmlNode[] = [];
@@ -653,12 +695,21 @@ function applySplit(part: OoxmlPart, paragraph: OoxmlParagraphNode, offset: numb
     impact: 'flow-structural',
   };
 
-  const head = replaceChildren(part, paragraph.id, pPr ? [pPr, ...headChildren] : headChildren);
-  if (!head.ok) return fromEdit(head, effect);
-  const parent = parentOf(head.part, paragraph.id);
+  // A single edit against the parent's child sequence. Expressed as "replace the head
+  // `w:p`'s children, then insert the tail `w:p`", every split produced two intermediate
+  // trees — and two node-index states — and a plain-text paste performs one split per
+  // paragraph mark. Substituting [head, tail] for the original `w:p` yields the identical
+  // tree in one rebuild.
+  const parent = parentOf(part, paragraph.id);
   if (!parent) return { ok: false, reason: 'tree-invariant', detail: 'paragraph has no parent' };
-  const index = parent.children.findIndex((child) => child.id === paragraph.id);
-  return fromEdit(insertChildren(head.part, parent.id, index + 1, [tailParagraph]), effect);
+  const headParagraph = Object.freeze({
+    ...paragraph,
+    children: pPr ? [pPr, ...headChildren] : headChildren,
+  }) as OoxmlNode;
+  const siblings = parent.children.flatMap((child) =>
+    child.id === paragraph.id ? [headParagraph, tailParagraph] : [child]
+  );
+  return fromEdit(replaceChildren(part, parent.id, siblings, options), effect);
 }
 
 /** A deep copy with freshly minted identities, for content duplicated by a split. */
@@ -672,19 +723,17 @@ function cloneWithNewIds(node: OoxmlNode, nextId: () => string): OoxmlNode {
 }
 
 function parentOf(part: OoxmlPart, nodeId: string): OoxmlElement | null {
-  const walk = (node: OoxmlNode): OoxmlElement | null => {
-    if (node.kind === 'textValue') return null;
-    if (node.children.some((child) => child.id === nodeId)) return node;
-    for (const child of node.children) {
-      const found = walk(child);
-      if (found) return found;
-    }
-    return null;
-  };
-  return walk(part.root);
+  // Served from the part's node index rather than a fresh full-tree walk: split and join
+  // ask for a parent on every op, and the walk made each one O(document).
+  return parentNodeOf(part, nodeId);
 }
 
-function applyJoin(part: OoxmlPart, firstId: string, secondId: string): TreeOpResult {
+function applyJoin(
+  part: OoxmlPart,
+  firstId: string,
+  secondId: string,
+  options?: EditOptions
+): TreeOpResult {
   const second = findNode(part, secondId) as OoxmlParagraphNode;
   const parent = parentOf(part, firstId);
   const secondParent = parentOf(part, secondId);
@@ -708,16 +757,20 @@ function applyJoin(part: OoxmlPart, firstId: string, secondId: string): TreeOpRe
   // matches Word: joining into a paragraph adopts that paragraph's formatting.
   const moved = second.children.filter((child) => child.kind !== 'paragraphProperties');
 
-  // Remove the source paragraph BEFORE re-parenting its children. Doing it the other way
-  // round puts those nodes under two parents at once, and the invariant check inside the
-  // first edit rejects the duplicate ids before the second edit can clean them up.
-  const removed = removeNode(part, secondId);
-  if (!removed.ok) return fromEdit(removed, effect);
-  const survivor = findNode(removed.part, firstId);
-  if (!survivor || survivor.kind !== 'paragraph') {
-    return { ok: false, reason: 'tree-invariant', detail: 'survivor missing after removal' };
+  // A single edit against the shared parent: the surviving `w:p` receives the second
+  // paragraph's content children, and the second `w:p` leaves the child sequence, in the
+  // same rebuild. Expressed as remove-then-reparent the join produced two intermediate
+  // trees per op; a single rebuild has no intermediate state at all, so the moved runs are
+  // never under two parents at any point.
+  const first = parent.children.find((child) => child.id === firstId);
+  if (!first || first.kind !== 'paragraph') {
+    return { ok: false, reason: 'tree-invariant', detail: 'survivor missing' };
   }
-  return fromEdit(replaceChildren(removed.part, firstId, [...survivor.children, ...moved]), effect);
+  const merged = Object.freeze({ ...first, children: [...first.children, ...moved] }) as OoxmlNode;
+  const siblings = parent.children.flatMap((child) =>
+    child.id === firstId ? [merged] : child.id === secondId ? [] : [child]
+  );
+  return fromEdit(replaceChildren(part, parent.id, siblings, options), effect);
 }
 
 function applySetRunProperties(
@@ -725,7 +778,8 @@ function applySetRunProperties(
   paragraph: OoxmlParagraphNode,
   start: number,
   end: number,
-  properties: readonly OoxmlProperty[]
+  properties: readonly OoxmlProperty[],
+  options?: EditOptions
 ): TreeOpResult {
   const effect: TreeOpEffect = {
     dirty: [paragraph.id],
@@ -738,7 +792,7 @@ function applySetRunProperties(
   let current = part;
   for (const boundary of [end, start]) {
     const target = findNode(current, paragraph.id) as OoxmlParagraphNode;
-    const split = splitRunsAt(current, target, boundary);
+    const split = splitRunsAt(current, target, boundary, options);
     if (!split.ok) return split;
     current = split.part;
   }
@@ -758,7 +812,7 @@ function applySetRunProperties(
     const content = run.children.filter((child) => child.kind !== 'runProperties');
     if (properties.length === 0) {
       if (!existing) continue;
-      const cleared = replaceChildren(current, run.id, content);
+      const cleared = replaceChildren(current, run.id, content, options);
       if (!cleared.ok) return fromEdit(cleared, effect);
       current = cleared.part;
       continue;
@@ -774,7 +828,7 @@ function applySetRunProperties(
       children: properties.map((property) => propertyElement(property, nextId())),
     } as unknown as OoxmlNode;
     // `w:rPr` must lead the run's children.
-    const updated = replaceChildren(current, run.id, [rPr, ...content]);
+    const updated = replaceChildren(current, run.id, [rPr, ...content], options);
     if (!updated.ok) return fromEdit(updated, effect);
     current = updated.part;
   }
@@ -785,7 +839,8 @@ function applySetRunProperties(
 function splitRunsAt(
   part: OoxmlPart,
   paragraph: OoxmlParagraphNode,
-  offset: number
+  offset: number,
+  options?: EditOptions
 ): { ok: true; part: OoxmlPart } | { ok: false; reason: TreeOpRejection; detail?: string } {
   const segments = segmentsOf(paragraph);
   const straddling = segments.find(
@@ -825,7 +880,7 @@ function splitRunsAt(
   const rebuilt = parent.children.flatMap((child) =>
     child.id === run.id ? [head, tail] : [child]
   );
-  const replaced = replaceChildren(part, parent.id, rebuilt);
+  const replaced = replaceChildren(part, parent.id, rebuilt, options);
   if (!replaced.ok)
     return { ok: false, reason: 'tree-invariant', detail: JSON.stringify(replaced.issues) };
   return { ok: true, part: replaced.part };
