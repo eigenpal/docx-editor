@@ -1,6 +1,6 @@
 // Adapter authority checks (interactive-paginated-editing task 1.4). Proves React and
 // Vue remain thin hosts: no ProseMirror imports, no document-geometry derivation, and
-// no bypass of the public Editor facade (`createTreeEditor` from the composition root).
+// no bypass of the public Editor facade (`createDocxEditor` from the composition root).
 
 import { describe, expect, test } from 'bun:test';
 import { readFileSync, readdirSync, existsSync, statSync } from 'node:fs';
@@ -174,7 +174,7 @@ export function auditAdapterPackageJson(pkg: {
  * root facade.
  *
  * Phase 3 of the legacy-lane retirement moved both adapters from `createEditor` +
- * `EditorHost` (adapter-supplied DOM handles and a display sink) to `createTreeEditor`,
+ * `EditorHost` (adapter-supplied DOM handles and a display sink) to `createDocxEditor`,
  * whose surface paints its own pages and owns interaction internally — so the host-DOM
  * contract requirement is gone with the pipeline that needed it.
  */
@@ -184,7 +184,7 @@ export function auditUsesPublicEditorFacade(sources: readonly string[]): boolean
       // Task 10.5 migrated adapters off the `engine-editor` alias onto the lane's subpath.
       // Both are accepted while the alias exists; task 10.6 drops the alias form.
       /from\s*['"]@docx-editor\.dev\/(?:engine-editor|core-contract\/editor)['"]/.test(source) &&
-      /\bcreateTreeEditor\b/.test(source)
+      /\bcreateDocxEditor\b/.test(source)
     ) {
       return true;
     }
@@ -210,7 +210,7 @@ describe('public adapter authority (interactive-paginated-editing task 1.4)', ()
         }
       });
 
-      test('uses the public createTreeEditor facade', () => {
+      test('uses the public createDocxEditor facade', () => {
         expect(auditUsesPublicEditorFacade(sources)).toBe(true);
       });
 
@@ -284,7 +284,7 @@ describe('adapter authority rule fixtures', () => {
     ).toBe(false);
     expect(
       auditUsesPublicEditorFacade([
-        "import { createTreeEditor } from '@docx-editor.dev/core-contract/editor';",
+        "import { createDocxEditor } from '@docx-editor.dev/core-contract/editor';",
       ])
     ).toBe(true);
   });

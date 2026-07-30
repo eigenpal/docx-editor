@@ -1,6 +1,6 @@
 // The tree-lane `Editor` facade (phase 3, part 1 of the legacy-lane retirement).
 //
-// `createTreeEditor` implements the FULL `Editor` contract over the paginated surface —
+// `createDocxEditor` implements the FULL `Editor` contract over the paginated surface —
 // the tree session, semantic layout and painted pages — with no ProseMirror, no
 // `PackageModel`, and no legacy display bridge. It is the shape the adapters will move to
 // when `createEditor` retires.
@@ -130,7 +130,7 @@ function emptyInteractionFrame(): InteractionFrame {
   return emptyFrameSingleton;
 }
 
-export interface TreeEditorConfig {
+export interface DocxEditorConfig {
   /** The element the paginated surface mounts into. The surface owns this subtree. */
   container: HTMLElement;
   /**
@@ -155,7 +155,7 @@ export interface TreeEditorConfig {
  * capabilities the contract does not carry yet (select-all, node-id addressed selection).
  * Production adapters must program against `Editor` alone.
  */
-export interface TreeEditor extends Editor {
+export interface DocxEditorInstance extends Editor {
   readonly surface: PaginatedSurface | null;
 }
 
@@ -214,7 +214,7 @@ function selectionsMatch(a: SurfaceSelection | null, b: SurfaceSelection | null)
   );
 }
 
-export function createTreeEditor(config: TreeEditorConfig): TreeEditor {
+export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
   const container = config.container;
   const mode = config.mode ?? 'edit';
   let zoom =
@@ -485,7 +485,7 @@ export function createTreeEditor(config: TreeEditorConfig): TreeEditor {
     }
   }
 
-  const editor: TreeEditor = {
+  const editor: DocxEditorInstance = {
     get surface() {
       return surface;
     },

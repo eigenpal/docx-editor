@@ -7,14 +7,14 @@ import type {
   EditorSnapshot,
   FontConfiguration,
 } from '@docx-editor.dev/core-contract/contracts/editor';
-import { createTreeEditor } from '@docx-editor.dev/core-contract/editor';
+import { createDocxEditor } from '@docx-editor.dev/core-contract/editor';
 import type { DocxEditorRef, EditorMode } from './types';
 
 /**
  * Vue host for the tree-lane editor (phase 3 of the legacy-lane retirement).
  *
  * The PAIR of the React host, and deliberately the same shape: a container element, the
- * facade's lifetime, and prop-to-facade forwarding — nothing else. `createTreeEditor`
+ * facade's lifetime, and prop-to-facade forwarding — nothing else. `createDocxEditor`
  * implements the full `Editor` contract over the engine-owned paginated surface, which
  * paints its own pages into the container and owns caret, selection, and hit testing
  * internally, so the adapter measures nothing, paints nothing, and derives no geometry.
@@ -82,7 +82,7 @@ export default defineComponent({
       teardown();
       const element = container.value;
       if (!element) return;
-      const created = createTreeEditor({
+      const created = createDocxEditor({
         container: element,
         ...(props.document !== undefined ? { document: props.document } : {}),
         fonts: props.fonts,

@@ -16,7 +16,7 @@ const reactEditorSource = readFileSync(join(REACT_SRC, 'components', 'DocxEditor
 
 describe('Vue tree-lane wiring (phase 3)', () => {
   test('the editor is created through the composition root facade', () => {
-    expect(editorSource).toContain('createTreeEditor');
+    expect(editorSource).toContain('createDocxEditor');
     expect(editorSource).toContain("from '@docx-editor.dev/core-contract/editor'");
     for (const forbidden of [
       'createEditor(',

@@ -1,7 +1,7 @@
 import { forwardRef, useEffect, useRef, useState } from 'react';
 import type { CSSProperties } from 'react';
 import type { Editor } from '@docx-editor.dev/core-contract/contracts/editor';
-import { createTreeEditor } from '@docx-editor.dev/core-contract/editor';
+import { createDocxEditor } from '@docx-editor.dev/core-contract/editor';
 import { prefersColorSchemeDark, resolveIsDark, subscribeSystemDark } from '../lib/colorMode';
 import { useDocxEditorRefApi } from './DocxEditor/hooks/useDocxEditorRefApi';
 import type { DocxEditorProps, DocxEditorRef } from '../types';
@@ -10,7 +10,7 @@ import type { DocxEditorProps, DocxEditorRef } from '../types';
  * React host for the tree-lane editor (phase 3 of the legacy-lane retirement).
  *
  * THIN, mirroring `PaginatedDocxEditor`: the host owns a container element, the facade's
- * lifetime, and prop-to-facade forwarding — nothing else. `createTreeEditor` implements
+ * lifetime, and prop-to-facade forwarding — nothing else. `createDocxEditor` implements
  * the full `Editor` contract over the engine-owned paginated surface, which paints its
  * own pages into the container and owns caret, selection, and hit testing internally, so
  * the adapter measures nothing, paints nothing, and derives no geometry.
@@ -95,7 +95,7 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
       const container = containerRef.current;
       if (!container) return undefined;
       const p = propsRef.current;
-      const editor = createTreeEditor({
+      const editor = createDocxEditor({
         container,
         ...(p.document !== undefined ? { document: p.document } : {}),
         ...(p.fonts ? { fonts: p.fonts } : {}),
@@ -116,7 +116,7 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
     }, [doc, fonts]);
 
     // Zoom is a facade parameter, not a remount: the stored factor applies from the
-    // next mount the facade performs (see `TreeEditor.setZoom`), and tearing the
+    // next mount the facade performs (see `DocxEditorInstance.setZoom`), and tearing the
     // editor down for a zoom change would discard the user's edits and undo history.
     const propZoom = props.zoom;
     useEffect(() => {

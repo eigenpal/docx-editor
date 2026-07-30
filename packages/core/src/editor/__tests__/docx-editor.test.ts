@@ -10,7 +10,7 @@ if (!GlobalRegistrator.isRegistered) GlobalRegistrator.register();
 import { describe, expect, test } from 'bun:test';
 import { zipSync, strToU8 } from 'fflate';
 import { readOoxmlPackage } from '../../store/package/ooxml-package.ts';
-import { createTreeEditor, type TreeEditor } from '../tree-editor.ts';
+import { createDocxEditor, type DocxEditorInstance } from '../docx-editor.ts';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 const CT = 'http://schemas.openxmlformats.org/package/2006/content-types';
@@ -37,9 +37,9 @@ const p = (text: string) => `<w:p><w:r><w:t>${text}</w:t></w:r></w:p>`;
 function mount(
   body: string,
   options: { mode?: 'edit' | 'view'; zoom?: number } = {}
-): { editor: TreeEditor; container: HTMLElement } {
+): { editor: DocxEditorInstance; container: HTMLElement } {
   const container = document.createElement('div');
-  const editor = createTreeEditor({
+  const editor = createDocxEditor({
     container,
     document: docx(body),
     ...options,
@@ -48,7 +48,7 @@ function mount(
   return { editor, container };
 }
 
-describe('createTreeEditor', () => {
+describe('createDocxEditor', () => {
   test('mounting paints pages into the container', () => {
     const { editor, container } = mount(p('hello world'));
     expect(container.querySelector('.docx-pages')).not.toBeNull();
@@ -189,7 +189,7 @@ describe('createTreeEditor', () => {
 
   test('unparsable bytes surface as an error event and snapshot parseError', () => {
     const container = document.createElement('div');
-    const editor = createTreeEditor({ container });
+    const editor = createDocxEditor({ container });
     const errors: Error[] = [];
     editor.on('error', (error) => errors.push(error));
     editor.load(strToU8('not a zip'));

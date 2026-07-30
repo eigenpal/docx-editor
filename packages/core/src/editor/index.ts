@@ -51,7 +51,7 @@ export {
   type PaginatedSurfaceState,
   type SurfaceFormatting,
 } from './paginated-surface.ts';
-export { createTreeEditor, type TreeEditor, type TreeEditorConfig } from './tree-editor.ts';
+export { createDocxEditor, type DocxEditorInstance, type DocxEditorConfig } from './docx-editor.ts';
 // The types an adapter needs to CALL the surface, re-exported from the composition root.
 // Adapters may depend on this package and not on the layout lane, so a host reaching into
 // `engine-layout` for a parameter type would be reaching past the boundary for a name.

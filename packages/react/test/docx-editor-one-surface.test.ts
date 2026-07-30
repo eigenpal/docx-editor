@@ -1,6 +1,6 @@
 // React tree-lane wiring contract (legacy-lane retirement, phase 3).
 //
-// `DocxEditor` is a THIN host over `createTreeEditor`: it owns a container element, the
+// `DocxEditor` is a THIN host over `createDocxEditor`: it owns a container element, the
 // facade's lifetime, and prop-to-facade forwarding — nothing else. These assertions are
 // the static half a headless run can enforce on every commit: the adapter must reach the
 // engine through the composition root, program against the `Editor` contract alone, and
@@ -17,7 +17,7 @@ const editorSource = readFileSync(join(SRC, 'components', 'DocxEditor.tsx'), 'ut
 
 describe('React tree-lane wiring (phase 3)', () => {
   test('the editor is created through the composition root facade', () => {
-    expect(editorSource).toContain('createTreeEditor');
+    expect(editorSource).toContain('createDocxEditor');
     expect(editorSource).toContain("from '@docx-editor.dev/core-contract/editor'");
     // The legacy engine constructor and its display pipeline must be gone.
     for (const forbidden of [
@@ -32,7 +32,7 @@ describe('React tree-lane wiring (phase 3)', () => {
   });
 
   test('the adapter programs against the Editor contract, never the surface escape hatch', () => {
-    // `TreeEditor.surface` exists for harnesses and tests; a production adapter that
+    // `DocxEditorInstance.surface` exists for harnesses and tests; a production adapter that
     // reaches through it is depending on internals the contract does not name.
     expect(editorSource).not.toContain('.surface');
   });
