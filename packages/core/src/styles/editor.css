@@ -2504,8 +2504,10 @@
   cursor: default;
 }
 
-/* ── The shared dropdown card: white card, 8px radius,
- * soft shadow, 4px padding, group headings, hover rows, ✓ on the selected row. */
+/* ── The shared dropdown card: white surface
+ * card, 8px radius, soft layered shadow, a 4px inner viewport, small gray
+ * semibold group headings, roomy hover rows, and the ✓ on the selected row's
+ * right edge — selection is the checkmark, never a heavy background slab. */
 .docx-toolbar__menu {
   background: var(--doc-surface);
   border: 1px solid var(--doc-border);
@@ -2520,16 +2522,18 @@
   align-items: center;
   gap: 8px;
   width: 100%;
-  min-width: 96px;
+  min-width: 112px;
   text-align: left;
-  padding: 6px 8px;
+  padding: 7px 10px;
   border: none;
   border-radius: 4px;
   background: transparent;
   color: var(--doc-text);
   font-size: 13px;
+  line-height: 18px;
   white-space: nowrap;
   cursor: pointer;
+  transition: background-color 0.1s ease;
 }
 
 .docx-toolbar__menu-item:hover:not(:disabled) {
@@ -2543,7 +2547,7 @@
 
 /* Group heading: small gray semibold. */
 .docx-toolbar__menu-label {
-  padding: 6px 8px 4px;
+  padding: 8px 10px 4px;
   font-size: 11px;
   font-weight: 600;
   color: var(--doc-text-muted);
@@ -2559,7 +2563,7 @@
 /* The selected row's ✓, pushed to the right edge. */
 .docx-toolbar__menu-check {
   margin-left: auto;
-  padding-left: 12px;
+  padding-left: 16px;
   font-size: 12px;
   color: var(--doc-text);
 }
@@ -2573,16 +2577,20 @@
   align-items: center;
   width: 100%;
   text-align: left;
-  padding: 6px 8px;
+  padding: 7px 10px;
   border: none;
   border-radius: 4px;
   background: transparent;
   color: var(--doc-text);
   font-size: 13px;
+  line-height: 18px;
   white-space: nowrap;
   cursor: pointer;
+  transition: background-color 0.1s ease;
 }
 
+/* The current font gets the right-edge ✓ only — no filled slab; hover stays
+ * the ordinary subtle wash. */
 .docx-toolbar__font-family-item:hover {
   background: var(--doc-bg-hover);
 }

@@ -11,13 +11,14 @@
 // The library toolbar's styling comes from the CORE stylesheet (`docx-toolbar`
 // family); this demo styles only its own header and menus.
 
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import type { MouseEvent as ReactMouseEvent, ReactNode } from 'react';
 import { zipSync, strToU8 } from 'fflate';
 import {
   DocxEditor,
   useDocxEditor,
   useEditorCommand,
+  useEditorEvent,
   useEditorState,
   useFontFamily,
   type ChromeSlotId,
@@ -236,12 +237,11 @@ function StatusChip() {
 // Toolbar customization: the in-place FontFamily override with typeface previews
 // ─────────────────────────────────────────────────────────────────────────────
 
-const PANGRAM = 'Sphinx of black quartz, judge my vow.';
-
 /**
- * Custom items for the FontFamily popup: each document font rendered in its own
- * typeface with a pangram preview line. Options come from `useFontFamily()`, i.e.
- * from the DOCUMENT's font catalog — the list follows edits.
+ * Custom items for the FontFamily popup: each document font as a single-line row
+ * rendered in its own typeface, reference-picker style (the selected row gets the
+ * library's right-aligned check). Options come from `useFontFamily()`, i.e. from
+ * the DOCUMENT's font catalog — the list follows edits.
  */
 function FontPreviewItems() {
   const { options } = useFontFamily();
@@ -255,12 +255,117 @@ function FontPreviewItems() {
           <span className="demo-font-item__name" style={{ fontFamily: family }}>
             {family}
           </span>
-          <span className="demo-font-item__preview" style={{ fontFamily: family }}>
-            {PANGRAM}
-          </span>
         </DocxEditor.Toolbar.FontFamily.Item>
       ))}
     </>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Perf HUD: the surface's own pass timings, bottom-left, chip-collapsed
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** `4.2ms` under ten, whole milliseconds above — small numbers are where tenths matter. */
+const ms = (value: number) => `${value < 10 ? value.toFixed(1) : Math.round(value)}ms`;
+
+/** The last pass's readout, pre-formatted; `key` makes value equality one compare. */
+interface PerfReading {
+  key: string;
+  layout: string;
+  paintSel: string;
+  stale: string | null;
+  rev: string;
+}
+
+/**
+ * The surface perf readout: layout / paint / selection
+ * timings with the reuse counters, straight off the surface's own `state().perf`.
+ * `editor.surface` is the DocxEditorInstance escape hatch — fine for a demo HUD.
+ *
+ * `perf` is deliberately NOT part of the facade snapshot (it moves on every pass and
+ * would break the snapshot identity contract), so the snapshot pattern can never see
+ * it — the HUD reads the surface on its OWN clock instead: a re-read after commits
+ * and selection moves (`useEditorEvent`), plus a light poll while expanded to catch
+ * paint-only passes (scroll rematerialization) that fire no facade event at all.
+ * The value-equality guard means re-renders track changed numbers, not the clock,
+ * and the collapsed chip neither polls nor re-renders. Collapsed it is a small
+ * circular document chip on the outline toggle's disc recipe.
+ */
+function PerfHud() {
+  const editor = useDocxEditor();
+  const [open, setOpen] = useState(false);
+  const openRef = useRef(open);
+  openRef.current = open;
+  const [reading, setReading] = useState<PerfReading | null>(null);
+
+  const refresh = useCallback(() => {
+    if (!openRef.current) return;
+    const state = editor?.surface?.state();
+    if (!state) return;
+    const { perf } = state;
+    const key = [
+      perf.layoutMs,
+      perf.paintMs,
+      perf.selectionMs,
+      perf.placed,
+      perf.total,
+      perf.reusedPages,
+      perf.staleDiscards,
+      state.revision,
+    ].join('|');
+    setReading((previous) =>
+      previous?.key === key
+        ? previous
+        : {
+            key,
+            layout: `layout ${ms(perf.layoutMs)} (placed ${perf.placed}/${perf.total}, reused ${perf.reusedPages})`,
+            paintSel: `paint ${ms(perf.paintMs)} · sel ${ms(perf.selectionMs)}`,
+            stale: perf.staleDiscards > 0 ? `stale ${perf.staleDiscards}` : null,
+            rev: `rev ${state.revision}`,
+          }
+    );
+  }, [editor]);
+
+  // Commits and selection moves re-read right away; the pass they announce may still
+  // be in flight, and the poll below picks up its numbers when it lands.
+  useEditorEvent('change', refresh);
+  useEditorEvent('selectionChange', refresh);
+
+  useEffect(() => {
+    if (!open) return undefined;
+    refresh();
+    const id = window.setInterval(refresh, 500);
+    return () => window.clearInterval(id);
+  }, [open, refresh]);
+
+  if (!editor) return null;
+  return (
+    <div className="demo-perf-hud" data-testid="composed-perf">
+      {open && reading ? (
+        <div className="demo-perf-hud__panel" role="status">
+          <div className="demo-perf-hud__row">{reading.layout}</div>
+          <div className="demo-perf-hud__row">{reading.paintSel}</div>
+          {reading.stale ? <div className="demo-perf-hud__row">{reading.stale}</div> : null}
+          <div className="demo-perf-hud__row demo-perf-hud__row--muted">{reading.rev}</div>
+        </div>
+      ) : null}
+      <button
+        type="button"
+        className="docx-outline-toggle demo-perf-hud__chip"
+        aria-label={open ? 'Hide performance metrics' : 'Show performance metrics'}
+        title={open ? 'Hide performance metrics' : 'Show performance metrics'}
+        aria-expanded={open}
+        onMouseDown={keepCaret}
+        onClick={() => setOpen((current) => !current)}
+      >
+        <svg viewBox="0 -960 960 960" width={18} height={18} aria-hidden="true">
+          <path
+            d="M320-240h320v-80H320v80Zm0-160h320v-80H320v80ZM240-80q-33 0-56.5-23.5T160-160v-640q0-33 23.5-56.5T240-880h320l240 240v480q0 33-23.5 56.5T720-80H240Zm280-520v-200H240v640h480v-440H520ZM240-800v200-200 640-640Z"
+            fill="currentColor"
+          />
+        </svg>
+      </button>
+    </div>
   );
 }
 
@@ -273,14 +378,11 @@ function EditorChrome({
   onTitleChange,
   colorMode,
   onColorModeChange,
-  outlineOpen,
 }: {
   title: string;
   onTitleChange: (next: string) => void;
   colorMode: 'light' | 'dark';
   onColorModeChange: (next: 'light' | 'dark') => void;
-  /** The ruler re-centers over the page column when the outline takes width. */
-  outlineOpen: boolean;
 }) {
   const editor = useDocxEditor();
   const fileInputRef = useRef<HTMLInputElement | null>(null);
@@ -299,10 +401,10 @@ function EditorChrome({
   };
 
   return (
-    // ONE chrome surface: header, toolbar and ruler row share the same
-    // `--doc-surface` background, and the seam (border + shadow) sits BELOW the
-    // ruler row — the gray workspace begins only underneath it. The ruler
-    // belongs to the header surface, not to the document workspace.
+    // The chrome surface is header + toolbar ONLY: its seam (border + shadow)
+    // closes directly under the toolbar pill. The horizontal-ruler row renders
+    // BELOW the seam, on the gray workspace background — the chrome spec
+    // treats the ruler as workspace furniture, not header surface.
     <div className="demo-chrome">
       <header className="demo-header">
         <div className="demo-header__left">
@@ -387,7 +489,7 @@ function EditorChrome({
 
       {/* The LIBRARY toolbar: the FULL chrome registry by default. One slot is
           customized IN PLACE to show override semantics: FontFamily renders each
-          document-derived family in its own typeface with a pangram preview. Save is
+          document-derived family in its own typeface. Save is
           live because the toolbar was given an onSave handler. */}
       <DocxEditor.Toolbar t={translate} className="demo-toolbar" onSave={saveDocument}>
         <DocxEditor.Toolbar.FontFamily>
@@ -397,19 +499,25 @@ function EditorChrome({
           </DocxEditor.Toolbar.FontFamily.Content>
         </DocxEditor.Toolbar.FontFamily>
       </DocxEditor.Toolbar>
+    </div>
+  );
+}
 
-      {/* The context-fed horizontal ruler: bottom row of the chrome surface,
-          centered over the page column. When the outline panel takes real width
-          the row gains matching left padding so the ruler stays centered over
-          the (shifted) page, with the same 0.2s ease the panel uses. Read-only —
-          the engine has no margin commands yet, so nothing here pretends to
-          drag. */}
-      <div
-        className={`demo-ruler-row${outlineOpen ? ' demo-ruler-row--outline' : ''}`}
-        aria-hidden="true"
-      >
-        <DocxEditor.HorizontalRuler />
-      </div>
+/**
+ * The context-fed horizontal ruler: the first workspace row, sitting on the gray
+ * `--doc-bg` BELOW the chrome seam, centered over the page column. When the
+ * outline panel is open the row gains matching left padding so the ruler stays
+ * centered over the (shifted) page, with the same 0.2s ease the panel uses.
+ * Read-only — the engine has no margin commands yet, so nothing here pretends
+ * to drag.
+ */
+function RulerRow({ outlineOpen }: { outlineOpen: boolean }) {
+  return (
+    <div
+      className={`demo-ruler-row${outlineOpen ? ' demo-ruler-row--outline' : ''}`}
+      aria-hidden="true"
+    >
+      <DocxEditor.HorizontalRuler />
     </div>
   );
 }
@@ -454,13 +562,15 @@ export function ComposedEditorDemo({ fixtureUrl }: { fixtureUrl: string }) {
             onTitleChange={setTitle}
             colorMode={colorMode}
             onColorModeChange={setColorMode}
-            outlineOpen={showOutline}
           />
-          {/* Panels RESHAPE the layout instead of overlaying it: the outline is a
-              real flex column whose width animates open/closed, so the page column
-              (and the ruler above, via the matching padding shift) compresses left.
-              A future comments rail mounts symmetrically after the viewport with
-              the same width mechanism, plus a mirrored ruler-row padding. */}
+          <RulerRow outlineOpen={showOutline} />
+          {/* The viewport stays FULL-WIDTH so the vertical ruler (an absolute
+              child of the scroll container, pinned at left: 0) never moves. The
+              outline is an absolutely positioned overlay panel inset past the
+              vertical ruler's ticks; opening it shifts the page column right via
+              a padding on the viewport (and the ruler row above, via the
+              matching padding), both on the same 0.2s ease. A future comments
+              rail overlays symmetrically on the right with a mirrored padding. */}
           <div className="demo-main">
             <aside
               className={`demo-outline${showOutline ? '' : ' demo-outline--closed'}`}
@@ -485,7 +595,9 @@ export function ComposedEditorDemo({ fixtureUrl }: { fixtureUrl: string }) {
                 </svg>
               </button>
             )}
-            <DocxEditor.Viewport className="demo-viewport">
+            <DocxEditor.Viewport
+              className={`demo-viewport${showOutline ? ' demo-viewport--outline' : ''}`}
+            >
               {/* The vertical ruler rides INSIDE the scroll container as an
                   absolutely positioned child, so it scrolls with the document and
                   its top offset lines up with the first page's top edge. */}
@@ -494,6 +606,8 @@ export function ComposedEditorDemo({ fixtureUrl }: { fixtureUrl: string }) {
               </div>
               <DocxEditor.Content />
             </DocxEditor.Viewport>
+            {/* Floating diagnostics chrome, above the overlay panels. */}
+            <PerfHud />
           </div>
         </DocxEditor.Root>
       ) : (
