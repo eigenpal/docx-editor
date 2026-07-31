@@ -344,6 +344,21 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
         refusal: { ok: false, code: 'locked', reason: 'the document is read-only' },
       };
     }
+    // History commands are gated on the HISTORY, not just the mode: `can` drives the
+    // toolbar's enabled state, and an undo button that stays live over an empty stack
+    // silently no-ops — Word greys it out.
+    if (command.type === 'undo' && !surface.session.canUndo()) {
+      return {
+        ok: false,
+        refusal: { ok: false, code: 'unsupported', reason: 'nothing to undo' },
+      };
+    }
+    if (command.type === 'redo' && !surface.session.canRedo()) {
+      return {
+        ok: false,
+        refusal: { ok: false, code: 'unsupported', reason: 'nothing to redo' },
+      };
+    }
     return { ok: true };
   }
 
@@ -607,6 +622,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
     // Real derivations from the canonical trees (session-memoized), no longer stubs.
     getDocumentStyles: () => surface?.session.documentStyles() ?? [],
     getDocumentFonts: () => surface?.session.documentFonts() ?? [],
+    getDocumentThemeColors: () => surface?.session.documentThemeColors() ?? [],
     getOutline: () => surface?.session.documentOutline() ?? [],
     getComments: () => [],
 

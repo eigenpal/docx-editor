@@ -198,17 +198,28 @@ function domPointFromPosition(
 
 /** The painted line belonging to a paragraph, whether or not it holds any runs. */
 function lineOfParagraph(root: Element, paragraphId: string): Element | null {
+  let fragment: Element | null = null;
   for (const line of root.querySelectorAll('[data-paragraph-id]')) {
     if ((line as HTMLElement).dataset?.paragraphId !== paragraphId) continue;
     if ((line as HTMLElement).dataset?.start !== undefined) continue;
-    return line;
+    // The paragraph FRAGMENT carries the same identity as its line. The line is the caret
+    // target: the fragment's in-flow content box is empty (its children are absolutely
+    // positioned), which browsers refuse as a caret position and canonicalize away from.
+    if ((line as HTMLElement).dataset?.lineId !== undefined) return line;
+    fragment ??= line;
   }
-  return null;
+  return fragment;
 }
 
 /** The caret position for an empty painted line: the start of the paragraph it belongs to. */
 function emptyLinePosition(element: Element): SemanticPosition | null {
-  const paragraphId = (element as HTMLElement).dataset?.paragraphId;
+  // Resolved via `closest`, not the element's own dataset: the endpoint may be the caret
+  // anchor <br> INSIDE the line rather than the line itself.
+  const line = element.closest('[data-paragraph-id]') as HTMLElement | null;
+  // A span hit (`data-start`) is not an empty line — refusing keeps a future inline
+  // element from silently snapping the caret to the paragraph start.
+  if (!line || line.dataset.start !== undefined) return null;
+  const paragraphId = line.dataset.paragraphId;
   if (!paragraphId || !PARAGRAPH_ID.test(paragraphId) || paragraphId === '__proto__') return null;
   return { paragraphId, offset: 0 };
 }

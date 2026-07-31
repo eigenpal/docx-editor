@@ -476,10 +476,15 @@ export function spansInSelection(
 ): StyleSpanRecord[] {
   const ordered = orderPositions(layout, selection);
   if (!ordered) return [];
+  if (
+    ordered.from.paragraphId === ordered.to.paragraphId &&
+    ordered.from.offset === ordered.to.offset
+  ) {
+    return caretSpan(layout, ordered.from);
+  }
   const spans: StyleSpanRecord[] = [];
-  // Only the paragraphs the selection touches. A collapsed caret reads ONE paragraph's
-  // lines; iterating every line of the document made the toolbar's formatting read scale
-  // with document length instead of selection length.
+  // Only the paragraphs the selection touches; iterating every line of the document made
+  // the toolbar's formatting read scale with document length instead of selection length.
   const order = documentOrder(layout);
   const index = documentOrderIndex(layout);
   const lines = paragraphLinesIndex(layout);
@@ -496,4 +501,20 @@ export function spansInSelection(
     }
   }
   return spans;
+}
+
+/**
+ * The span a collapsed caret reports formatting from: the character to its LEFT (Word's
+ * rule — typing continues what came before), falling back to the character to its right
+ * at a paragraph start.
+ */
+function caretSpan(layout: SemanticLayout, position: SemanticPosition): StyleSpanRecord[] {
+  let rightward: StyleSpanRecord | null = null;
+  for (const { line } of paragraphLinesIndex(layout).get(position.paragraphId) ?? []) {
+    for (const span of line.spans) {
+      if (span.range.start < position.offset && position.offset <= span.range.end) return [span];
+      if (rightward === null && span.range.start === position.offset) rightward = span;
+    }
+  }
+  return rightward ? [rightward] : [];
 }

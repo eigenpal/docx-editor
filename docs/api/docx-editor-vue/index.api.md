@@ -427,6 +427,7 @@ export interface Editor {
         readonly name: string;
         readonly type: string;
     }[];
+    getDocumentThemeColors(): readonly { readonly slot: string; readonly hex: string }[];
     getHeaderFooterState(): {
         readonly editing: 'header' | 'footer' | null;
         readonly sectionIndex: number;

@@ -165,6 +165,35 @@ describe('selection geometry', () => {
     expect(spans).toHaveLength(1);
     expect(spans[0]!.style.bold).toBe(true);
   });
+
+  test('a caret reads the span of the character to its left', () => {
+    const part = load(
+      '<w:p><w:r><w:t>plain</w:t></w:r>' + '<w:r><w:rPr><w:b/></w:rPr><w:t>bold</w:t></w:r></w:p>'
+    );
+    const layout = lay(part);
+    const spans = spansInSelection(layout, { anchor: at(P0, 7), head: at(P0, 7) });
+    expect(spans).toHaveLength(1);
+    expect(spans[0]!.style.bold).toBe(true);
+  });
+
+  test('a caret on a span boundary sides with the left span', () => {
+    const part = load(
+      '<w:p><w:r><w:t>plain</w:t></w:r>' + '<w:r><w:rPr><w:b/></w:rPr><w:t>bold</w:t></w:r></w:p>'
+    );
+    const layout = lay(part);
+    // Offset 5 is the boundary: "plain" ends there, "bold" starts there.
+    const spans = spansInSelection(layout, { anchor: at(P0, 5), head: at(P0, 5) });
+    expect(spans).toHaveLength(1);
+    expect(spans[0]!.style.bold).toBe(false);
+  });
+
+  test('a caret at paragraph start reads the span to its right', () => {
+    const part = load('<w:p><w:r><w:rPr><w:b/></w:rPr><w:t>bold</w:t></w:r></w:p>');
+    const layout = lay(part);
+    const spans = spansInSelection(layout, { anchor: at(P0, 0), head: at(P0, 0) });
+    expect(spans).toHaveLength(1);
+    expect(spans[0]!.style.bold).toBe(true);
+  });
 });
 
 describe('keyboard navigation', () => {

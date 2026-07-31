@@ -244,6 +244,15 @@ function paintLine(document: Document, line: LineRecord, scale: number): HTMLEle
   if (gap > 0) element.style.wordSpacing = `${gap * scale}px`;
 
   for (const span of line.spans) element.append(paintSpan(document, span, scale));
+  // A span-less line (empty paragraph) has no inline content, and a browser will not
+  // draw a caret at a position with no inline box to measure. The <br> is the anchor;
+  // sizing it to the line keeps the caret the paragraph's font height, not the div's
+  // default.
+  if (line.spans.length === 0) {
+    const anchor = document.createElement('br');
+    anchor.style.lineHeight = `${line.box.height * scale}px`;
+    element.append(anchor);
+  }
   return element;
 }
 

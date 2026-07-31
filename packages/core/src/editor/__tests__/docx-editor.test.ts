@@ -17,17 +17,23 @@ const CT = 'http://schemas.openxmlformats.org/package/2006/content-types';
 const REL = 'http://schemas.openxmlformats.org/package/2006/relationships';
 const OD = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument';
 
-function docx(body: string): Uint8Array {
+function docx(body: string, extraParts: Record<string, string> = {}): Uint8Array {
+  const overrides = Object.keys(extraParts)
+    .map((name) => `<Override PartName="/${name}" ContentType="application/xml"/>`)
+    .join('');
   return zipSync({
     '[Content_Types].xml': strToU8(
       `<Types xmlns="${CT}"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>` +
-        '<Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/></Types>'
+        `<Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>${overrides}</Types>`
     ),
     '_rels/.rels': strToU8(
       `<Relationships xmlns="${REL}"><Relationship Id="rId1" Type="${OD}" Target="word/document.xml"/></Relationships>`
     ),
     'word/document.xml': strToU8(
       `<w:document xmlns:w="${W}"><w:body>${body}</w:body></w:document>`
+    ),
+    ...Object.fromEntries(
+      Object.entries(extraParts).map(([name, xml]) => [name, strToU8(xml)] as const)
     ),
   });
 }
@@ -67,6 +73,41 @@ describe('createDocxEditor', () => {
     expect(editor.query({ type: 'selectionFormatting' })?.bold).toBe(true);
   });
 
+  test('a collapsed caret reports the formatting of the run beside it', () => {
+    const { editor } = mount(
+      '<w:p><w:r><w:t>plain</w:t></w:r><w:r><w:rPr><w:b/></w:rPr><w:t>bold</w:t></w:r></w:p>'
+    );
+    const pid = '/word/document.xml#0.0.0';
+    const caret = (offset: number) => ({
+      anchor: { paragraphId: pid, offset },
+      head: { paragraphId: pid, offset },
+    });
+    editor.exec({ type: 'setSelection', range: caret(7) });
+    expect(editor.getSelectionFormatting()?.bold).toBe(true);
+    expect(editor.isActive({ type: 'toggleMark', mark: 'bold' })).toBe(true);
+    editor.exec({ type: 'setSelection', range: caret(2) });
+    expect(editor.getSelectionFormatting()?.bold).toBe(false);
+    expect(editor.isActive({ type: 'toggleMark', mark: 'bold' })).toBe(false);
+  });
+
+  test('every toggleMark toggles OFF again, not just bold', () => {
+    // A mark missing from `isRunPropertyActive` reads as never-active, so its toggle
+    // re-applies forever instead of clearing — every toggleable mark must round-trip.
+    const { editor } = mount(p('hello'));
+    editor.surface!.selectAll();
+    for (const [mark, read] of [
+      ['bold', 'bold'],
+      ['italic', 'italic'],
+      ['underline', 'underline'],
+      ['strike', 'strike'],
+    ] as const) {
+      editor.exec({ type: 'toggleMark', mark });
+      expect(editor.snapshot().formatting?.[read]).toBe(true);
+      editor.exec({ type: 'toggleMark', mark });
+      expect(editor.snapshot().formatting?.[read]).toBe(false);
+    }
+  });
+
   test('setAlignment writes w:jc and formatting reports it', () => {
     const { editor } = mount(p('hello'));
     editor.surface!.selectAll();
@@ -88,9 +129,25 @@ describe('createDocxEditor', () => {
     expect(editor.surface!.session.bodyText()).toBe('ab');
     expect(editor.exec({ type: 'redo' })).toEqual({ ok: true, changed: true });
     expect(editor.surface!.session.bodyText()).toBe('Xab');
-    // An undo with nothing left to undo commits nothing and says so.
+    // An empty history REFUSES rather than silently no-opping: `can` drives the
+    // toolbar, and Word greys out undo/redo when there is nothing left.
     editor.exec({ type: 'undo' });
-    expect(editor.exec({ type: 'undo' })).toEqual({ ok: true, changed: false });
+    expect(editor.can({ type: 'undo' }).ok).toBe(false);
+    const spent = editor.exec({ type: 'undo' });
+    expect(spent.ok).toBe(false);
+    if (!spent.ok) expect(spent.reason).toBe('nothing to undo');
+  });
+
+  test('undo/redo enablement follows the history', () => {
+    const { editor } = mount(p('ab'));
+    expect(editor.can({ type: 'undo' }).ok).toBe(false);
+    expect(editor.can({ type: 'redo' }).ok).toBe(false);
+    editor.exec({ type: 'insertText', text: 'X' });
+    expect(editor.can({ type: 'undo' }).ok).toBe(true);
+    expect(editor.can({ type: 'redo' }).ok).toBe(false);
+    editor.exec({ type: 'undo' });
+    expect(editor.can({ type: 'undo' }).ok).toBe(false);
+    expect(editor.can({ type: 'redo' }).ok).toBe(true);
   });
 
   test('save() round-trips: the bytes reopen and the edit survives', async () => {
@@ -485,6 +542,65 @@ describe('setMarkAttr (value-typed run formatting)', () => {
       editor.exec({ type: 'setMarkAttr', mark: 'highlight', attr: 'val', value: 'yellow' })
     ).toEqual({ ok: true, changed: true });
     expect(editor.snapshot().formatting?.highlight).toBe('yellow');
+  });
+
+  test("color 'auto' and highlight 'none' clear rather than being refused", () => {
+    const { editor } = mount(p('hello'));
+    editor.surface!.selectAll();
+    editor.exec({ type: 'setMarkAttr', mark: 'color', attr: 'val', value: 'FF0000' });
+    editor.exec({ type: 'setMarkAttr', mark: 'highlight', attr: 'val', value: 'yellow' });
+    expect(editor.exec({ type: 'setMarkAttr', mark: 'color', attr: 'val', value: 'auto' })).toEqual(
+      { ok: true, changed: true }
+    );
+    expect(
+      editor.exec({ type: 'setMarkAttr', mark: 'highlight', attr: 'val', value: 'none' })
+    ).toEqual({ ok: true, changed: true });
+    // The read lane reports both as "no value" — which is what Automatic/No Color mean.
+    expect(editor.snapshot().formatting?.color).toBeUndefined();
+    expect(editor.snapshot().formatting?.highlight ?? null).toBeNull();
+  });
+
+  test('a document without a theme part answers no theme colours', () => {
+    const { editor } = mount(p('hello'));
+    expect(editor.getDocumentThemeColors()).toEqual([]);
+  });
+
+  test('font boxes show the EFFECTIVE font: style chain, docDefaults, theme fonts', () => {
+    const A = 'http://schemas.openxmlformats.org/drawingml/2006/main';
+    const styles =
+      `<w:styles xmlns:w="${W}">` +
+      '<w:docDefaults><w:rPrDefault><w:rPr>' +
+      '<w:rFonts w:asciiTheme="minorHAnsi"/><w:sz w:val="22"/>' +
+      '</w:rPr></w:rPrDefault></w:docDefaults>' +
+      '<w:style w:type="paragraph" w:styleId="Title"><w:rPr>' +
+      '<w:rFonts w:ascii="Georgia"/><w:sz w:val="52"/></w:rPr></w:style>' +
+      '</w:styles>';
+    const theme =
+      `<a:theme xmlns:a="${A}"><a:themeElements><a:fontScheme name="Office">` +
+      '<a:majorFont><a:latin typeface="Calibri Light"/></a:majorFont>' +
+      '<a:minorFont><a:latin typeface="Calibri"/></a:minorFont>' +
+      '</a:fontScheme></a:themeElements></a:theme>';
+    const container = document.createElement('div');
+    const editor = createDocxEditor({
+      container,
+      document: docx(
+        '<w:p><w:pPr><w:pStyle w:val="Title"/></w:pPr><w:r><w:t>Heading</w:t></w:r></w:p>' +
+          p('body text'),
+        { 'word/styles.xml': styles, 'word/theme/theme1.xml': theme }
+      ),
+    });
+    const caret = (paragraphId: string, offset: number) => ({
+      anchor: { paragraphId, offset },
+      head: { paragraphId, offset },
+    });
+    // Caret in the styled heading: the style's own rPr wins.
+    editor.exec({ type: 'setSelection', range: caret('/word/document.xml#0.0.0', 3) });
+    expect(editor.snapshot().formatting?.fontFamily).toBe('Georgia');
+    expect(editor.snapshot().formatting?.fontSizePt).toBe(26);
+    // Caret in unstyled body text: docDefaults, with the theme font resolved.
+    editor.exec({ type: 'setSelection', range: caret('/word/document.xml#0.0.1', 3) });
+    expect(editor.snapshot().formatting?.fontFamily).toBe('Calibri');
+    expect(editor.snapshot().formatting?.fontSizePt).toBe(11);
   });
 
   test('invalid values are refused as invalidArgs before touching the document', () => {
