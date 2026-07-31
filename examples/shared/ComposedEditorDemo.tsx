@@ -251,17 +251,32 @@ function FontPreviewItems() {
 const ms = (value: number) => `${value < 10 ? value.toFixed(1) : Math.round(value)}ms`;
 
 /** The last pass's readout, pre-formatted; `key` makes value equality one compare. */
+interface PerfRow {
+  readonly id: string;
+  readonly label: string;
+  readonly value: string;
+  /** Plain-language explanation of what the metric tracks, shown as the row tooltip. */
+  readonly tip: string;
+  readonly muted?: boolean;
+}
+
 interface PerfReading {
   key: string;
-  layout: string;
-  paintSel: string;
-  /** Browser-side: commit to presented frame (style/layout/composite after the DOM swap). */
-  frame: string | null;
-  /** Browser-side: keystroke-to-paint via the Event Timing API (duration + input delay). */
-  input: string | null;
-  stale: string | null;
-  rev: string;
+  rows: readonly PerfRow[];
 }
+
+const PERF_TIPS = {
+  layout:
+    'Engine time placing paragraphs into pages for the last pass. placed N/M = paragraphs re-laid-out vs. total in the document; reused = pages carried over untouched from the previous layout.',
+  paint: 'Engine time building and swapping the page DOM for the pages the pass changed.',
+  selection: 'Engine time writing the model selection (caret/highlight) back into the browser.',
+  frame:
+    "Browser time from the commit to the frame it actually presented — the browser's own style, layout and composite after the DOM swap. Measured with a double requestAnimationFrame stamp.",
+  input:
+    'Keystroke to next paint, from the Event Timing API. delay = how long the event sat queued before its handler ran. The browser only reports events over 16ms, so quiet typing may not update this.',
+  stale: 'Layout passes discarded because the document changed again before they could publish.',
+  rev: 'Document revision — the number of committed transactions this session.',
+} as const;
 
 /**
  * The surface perf readout: layout / paint / selection
@@ -310,21 +325,51 @@ function PerfHud() {
       frameMs?.toFixed(1) ?? '',
       input ? `${input.durationMs.toFixed(0)}/${input.delayMs.toFixed(1)}` : '',
     ].join('|');
-    setReading((previous) =>
-      previous?.key === key
-        ? previous
-        : {
-            key,
-            layout: `layout ${ms(perf.layoutMs)} (placed ${perf.placed}/${perf.total}, reused ${perf.reusedPages})`,
-            paintSel: `paint ${ms(perf.paintMs)} · sel ${ms(perf.selectionMs)}`,
-            frame: frameMs === null ? null : `dom frame ${ms(frameMs)}`,
-            input: input
-              ? `input ${ms(input.durationMs)} (delay ${ms(input.delayMs)})`
-              : null,
-            stale: perf.staleDiscards > 0 ? `stale ${perf.staleDiscards}` : null,
-            rev: `rev ${state.revision}`,
-          }
-    );
+    setReading((previous) => {
+      if (previous?.key === key) return previous;
+      const rows: PerfRow[] = [
+        {
+          id: 'layout',
+          label: 'layout',
+          value: `${ms(perf.layoutMs)} (placed ${perf.placed}/${perf.total}, reused ${perf.reusedPages})`,
+          tip: PERF_TIPS.layout,
+        },
+        { id: 'paint', label: 'paint', value: ms(perf.paintMs), tip: PERF_TIPS.paint },
+        {
+          id: 'selection',
+          label: 'selection',
+          value: ms(perf.selectionMs),
+          tip: PERF_TIPS.selection,
+        },
+      ];
+      if (frameMs !== null) {
+        rows.push({ id: 'frame', label: 'dom frame', value: ms(frameMs), tip: PERF_TIPS.frame });
+      }
+      if (input) {
+        rows.push({
+          id: 'input',
+          label: 'input',
+          value: `${ms(input.durationMs)} (delay ${ms(input.delayMs)})`,
+          tip: PERF_TIPS.input,
+        });
+      }
+      if (perf.staleDiscards > 0) {
+        rows.push({
+          id: 'stale',
+          label: 'stale',
+          value: String(perf.staleDiscards),
+          tip: PERF_TIPS.stale,
+        });
+      }
+      rows.push({
+        id: 'rev',
+        label: 'rev',
+        value: String(state.revision),
+        tip: PERF_TIPS.rev,
+        muted: true,
+      });
+      return { key, rows };
+    });
   }, [editor]);
 
   // Commit -> presented frame: stamped at the change event, resolved after two animation
@@ -385,20 +430,28 @@ function PerfHud() {
 
   if (!editor) return null;
   return (
-    <div className="demo-perf-hud" data-testid="composed-perf">
+    <div
+      className="absolute bottom-3 left-3 z-50 flex flex-col items-start gap-2"
+      data-testid="composed-perf"
+    >
       {open && reading ? (
-        <div className="demo-perf-hud__panel" role="status">
-          <div className="demo-perf-hud__row">{reading.layout}</div>
-          <div className="demo-perf-hud__row">{reading.paintSel}</div>
-          {reading.frame ? <div className="demo-perf-hud__row">{reading.frame}</div> : null}
-          {reading.input ? <div className="demo-perf-hud__row">{reading.input}</div> : null}
-          {reading.stale ? <div className="demo-perf-hud__row">{reading.stale}</div> : null}
-          <div className="demo-perf-hud__row demo-perf-hud__row--muted">{reading.rev}</div>
-        </div>
+        <dl
+          className="m-0 whitespace-nowrap rounded-lg border border-[var(--doc-border)] bg-[var(--doc-surface)] px-3 py-2 text-[11.5px] leading-[18px] text-[var(--doc-text)] shadow-[var(--doc-shadow-lg)] [font-variant-numeric:tabular-nums]"
+          role="status"
+        >
+          {reading.rows.map((row) => (
+            <div key={row.id} className="flex cursor-help items-baseline gap-2.5" title={row.tip}>
+              <dt className="w-16 flex-none text-[var(--doc-text-muted)]">{row.label}</dt>
+              <dd className={`m-0${row.muted ? ' text-[var(--doc-text-muted)]' : ''}`}>
+                {row.value}
+              </dd>
+            </div>
+          ))}
+        </dl>
       ) : null}
       <button
         type="button"
-        className="docx-outline-toggle demo-perf-hud__chip"
+        className="docx-outline-toggle"
         aria-label={open ? 'Hide performance metrics' : 'Show performance metrics'}
         title={open ? 'Hide performance metrics' : 'Show performance metrics'}
         aria-expanded={open}
