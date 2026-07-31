@@ -16,19 +16,24 @@ Or from this directory: `bun run dev`.
 
 ## Files
 
-| File                               | What it does                                                       |
-| ---------------------------------- | ------------------------------------------------------------------ |
-| `src/main.tsx`                     | React root; mounts the one editor                                   |
-| `../shared/ComposedEditorDemo.tsx` | The editor: composition API, custom header, library toolbar         |
-| `src/test-harness/`                | Playwright-only tree-binding harness (`?treeFirst=1`), not a surface |
-| `index.html`                       | Loads the Material Symbols font for toolbar icons                   |
-| `vite.config.ts`                   | Aliases `@docx-editor.dev/*` to workspace source in dev             |
+| File                        | What it does                                                    |
+| --------------------------- | --------------------------------------------------------------- |
+| `src/main.tsx`              | React root; mounts the one editor                                 |
+| `src/ComposedEditorDemo.tsx`| The editor: composition API, custom header, library toolbar       |
+| `src/ThemeToggle.tsx`       | Light/dark switch used by the demo header                         |
+| `src/demoButtons.ts`        | Inline button styles for the demo header                          |
+| `src/styles.css`            | Demo-only chrome styles (the library ships its own)               |
+| `src/test-harness/`         | Playwright-only tree-binding harness (`?treeFirst=1`), not a surface |
+| `index.html`                | Loads the Material Symbols font for toolbar icons                 |
+| `vite.config.ts`            | Aliases `@docx-editor.dev/*` to workspace source in dev           |
 
-`?fixture=<name>.docx` swaps the loaded document for any `.docx` in `public/`.
+The default document is served from `e2e/fixtures/` by a vite plugin, so the demo and
+the e2e suite read the same bytes. `?fixture=<name>.docx` loads any `.docx` in `public/`
+instead.
 
 ## Minimal integration
 
-A working editor is one component:
+A working editor is one component. Chrome and English labels are the default:
 
 ```tsx
 import { useRef } from 'react';
@@ -42,12 +47,7 @@ function Editor({ file }: { file: ArrayBuffer }) {
     if (buffer) await fetch('/api/documents/1', { method: 'PUT', body: buffer });
   };
 
-  return (
-    <>
-      <button onClick={handleSave}>Save</button>
-      <DocxEditor ref={editorRef} document={file} />
-    </>
-  );
+  return <DocxEditor ref={editorRef} document={file} onSave={handleSave} />;
 }
 ```
 
@@ -55,19 +55,19 @@ function Editor({ file }: { file: ArrayBuffer }) {
 `DocumentHandle`. `fonts` is optional: omit it and the engine resolves faces
 from the document's own embedded fonts.
 
-That mounts the bare document surface, editable and saveable, with no chrome.
-Pass `t` to get the packaged chrome (title bar + full toolbar):
+Chrome labels default to the bundled English catalogue. To show another language,
+pass `t` — any function from an i18n key to display text. The keys are the ones in
+`packages/i18n/en.json`, and `@docx-editor.dev/i18n` ships the translated
+catalogues plus a `createT` helper:
 
 ```tsx
-import { createT, en } from '@docx-editor.dev/i18n';
+import { createT, de } from '@docx-editor.dev/i18n';
 
-const t = createT(en);
-
-<DocxEditor ref={editorRef} document={file} t={t} onSave={handleSave} />;
+<DocxEditor ref={editorRef} document={file} t={createT(de, 'de')} />;
 ```
 
-Chrome is gated on `t` because every label is an i18n key. The adapter ships no
-English of its own, so `en` is an explicit import rather than a bundled default.
+`chrome={false}` renders the painted document alone, for hosts supplying their own
+frame.
 
 ## Building your own chrome
 

@@ -104,10 +104,11 @@ export default defineConfig(async () => {
               find: '@docx-editor.dev/core-contract/editor',
               replacement: path.join(monorepoRoot, 'packages/core/src/editor/index.ts'),
             },
-            // The remaining core-contract lane subpaths, one rule: files under
-            // `examples/shared/` sit outside this package's node_modules, so bare
-            // specifiers there only resolve through these aliases. `editor` and the
-            // `contracts/*` single-file entries are matched above / by the capture.
+            // The remaining core-contract lane subpaths, one rule. `@docx-editor.dev/react`
+            // above resolves to package SOURCE, so the whole `packages/react/src` graph is
+            // compiled here and its own bare specifiers resolve through these aliases too.
+            // `editor` and the `contracts/*` single-file entries are matched above / by the
+            // capture.
             {
               find: /^@docx-editor\.dev\/core-contract\/(binding|layout|output|store|sync|clients|server)$/,
               replacement: path.join(monorepoRoot, 'packages/core/src/$1/index.ts'),
@@ -120,19 +121,6 @@ export default defineConfig(async () => {
               find: '@docx-editor.dev/i18n',
               replacement: path.join(monorepoRoot, 'packages/i18n/src/index.ts'),
             },
-            {
-              find: '@docx-editor.dev/agents/react',
-              replacement: path.join(monorepoRoot, 'packages/agents/src/react.ts'),
-            },
-            {
-              find: '@docx-editor.dev/agents/server',
-              replacement: path.join(monorepoRoot, 'packages/agents/src/server.ts'),
-            },
-            {
-              find: /^@docx-editor\.dev\/agents$/,
-              replacement: path.join(monorepoRoot, 'packages/agents/src/index.ts'),
-            },
-            { find: '@', replacement: path.join(monorepoRoot, 'packages/react/src') },
           ],
     },
     css: {

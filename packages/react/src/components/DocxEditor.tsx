@@ -1,4 +1,4 @@
-import { forwardRef, useEffect, useRef, useState } from 'react';
+import { forwardRef, useCallback, useEffect, useRef, useState } from 'react';
 import type { CSSProperties, ForwardRefExoticComponent, RefAttributes } from 'react';
 import type { Editor } from '@docx-editor.dev/core-contract/contracts/editor';
 import { prefersColorSchemeDark, resolveIsDark, subscribeSystemDark } from '../lib/colorMode';
@@ -10,27 +10,33 @@ import { useDocxEditorRefApi } from './DocxEditor/hooks/useDocxEditorRefApi';
 import { DocxEditorToolbar } from '../editor/toolbar';
 import { DocxEditorHorizontalRuler, DocxEditorVerticalRuler } from '../editor/DocxEditorRulers';
 import { DocxEditorDocumentOutline } from '../editor/DocxEditorOutline';
+import { useTranslation } from '../i18n';
+import type { TranslationKey } from '../i18n';
 import type { DocxEditorProps, DocxEditorRef } from '../types';
 
 /**
- * React host for the docx editor.
+ * React host for the docx editor: the batteries-included entry point.
  *
- * SUGAR over the composition primitives, not a parallel implementation:
- * `DocxEditor.Root` owns the facade's lifetime, `DocxEditor.Viewport` is the scroll
- * container, `DocxEditor.Content` is the mount point the engine paints pages into.
- * This component composes exactly those three (plus the optional `t`-gated title bar
- * and the imperative ref bridge), so a host that outgrows the packaged chrome drops
- * down to the same primitives without behavior change.
+ * `<DocxEditor document={bytes} />` is a complete editor — chrome, English labels, and a
+ * painted editable document — with no further configuration. Everything below is about
+ * what you can change, not what you must supply.
  *
- * CHROME IS OPT-IN VIA `t`. Every chrome label is an i18n key resolved through the host's
- * `t`; the adapter ships no English of its own, so without `t` there is nothing honest to
- * render and the component paints the bare document surface. That is a complete editor —
- * `<DocxEditor document={bytes} />` mounts, edits, and saves through the ref — and it is
- * the shape a host that brings its own chrome wants.
+ * SUGAR OVER THE PRIMITIVES, not a parallel implementation. `DocxEditor.Root` owns the
+ * facade's lifetime, `DocxEditor.Viewport` is the scroll container, `DocxEditor.Content`
+ * is the mount point the engine paints pages into. This component composes exactly those
+ * three plus the title bar, the toolbar, and the imperative ref bridge, so a host that
+ * outgrows the packaged chrome drops to those same primitives with no behavior change.
  *
- * With `t`, the packaged chrome renders: the title bar (slots, editable name, save) and
- * the full `DocxEditor.Toolbar` above the painted document. Hosts that outgrow it drop to
- * the same primitives (`Root` / `Viewport` / `Content` + the hooks) with no behavior change.
+ * LABELS default to the bundled English catalogue: `useTranslation()` reads
+ * `LocaleContext`, whose default value is `en`. Strings still come from
+ * `packages/i18n/en.json` rather than literals in components — the default only decides
+ * who resolves the key. Pass `t` to resolve them yourself.
+ *
+ * That is deliberately the opposite default from the bare `DocxEditor.Toolbar` primitive,
+ * which shows the raw key when given no `t`. A primitive stays neutral; the one-line
+ * entry point should just work.
+ *
+ * `chrome={false}` renders the painted surface alone, for hosts that bring their own.
  */
 
 /**
@@ -94,6 +100,7 @@ const DocxEditorImpl = forwardRef<DocxEditorRef, DocxEditorProps>(function DocxE
     fonts,
     className,
     t,
+    chrome = true,
     title,
     onTitleChange,
     renderTitleBarLeft,
@@ -119,7 +126,21 @@ const DocxEditorImpl = forwardRef<DocxEditorRef, DocxEditorProps>(function DocxE
   }, [colorMode]);
   const isDark = resolveIsDark(colorMode, systemDark);
 
-  const chromeOn = Boolean(t);
+  // Label resolution, in precedence order: the host's `t`, else the active
+  // `LocaleContext` catalogue (bundled English unless a provider swapped it).
+  //
+  // The fallback is a `useCallback` rather than an inline arrow because the toolbar
+  // memoizes its context value on `t`'s identity. A fresh closure per render would miss
+  // that memo and re-render all two dozen toolbar slots on every host render — which is
+  // the common case, since a host holding `title` in state re-renders on every keystroke
+  // in the title input. `catalogT` is already stable per catalogue and language.
+  //
+  // The cast bridges the two signatures: `TFunction` is keyed by the `TranslationKey`
+  // union derived from `en.json`, while the prop takes a plain `string` so a host can
+  // supply any resolver. Every key this component passes is a real catalogue key.
+  const { t: catalogT } = useTranslation();
+  const fallbackT = useCallback((key: string) => catalogT(key as TranslationKey), [catalogT]);
+  const translate = t ?? fallbackT;
 
   // The painted document: the primitive Viewport (scroll container, load-bearing
   // classes) around the primitive Content (the engine's mount point). Chrome-off
@@ -127,14 +148,14 @@ const DocxEditorImpl = forwardRef<DocxEditorRef, DocxEditorProps>(function DocxE
   // the viewport with `dark` and put the className on the chrome wrapper below.
   const viewport = (
     <DocxEditorViewport
-      className={chromeOn ? (isDark ? 'dark' : undefined) : className}
-      style={chromeOn ? SCROLL_AREA_STYLE : undefined}
+      className={chrome ? (isDark ? 'dark' : undefined) : className}
+      style={chrome ? SCROLL_AREA_STYLE : undefined}
     >
       <DocxEditorContent />
     </DocxEditorViewport>
   );
 
-  const tree = t ? (
+  const tree = chrome ? (
     <div
       className={`ep-root${isDark ? ' dark' : ''}${className ? ` ${className}` : ''}`}
       style={CONTAINER_STYLE}
@@ -143,15 +164,15 @@ const DocxEditorImpl = forwardRef<DocxEditorRef, DocxEditorProps>(function DocxE
         {renderTitleBarLeft?.()}
         {onTitleChange ? (
           <input
-            aria-label={t('titleBar.documentNameAriaLabel')}
+            aria-label={translate('titleBar.documentNameAriaLabel')}
             value={title ?? ''}
-            placeholder={t('titleBar.untitled')}
+            placeholder={translate('titleBar.untitled')}
             onChange={(event) => onTitleChange(event.target.value)}
             style={TITLE_INPUT_STYLE}
           />
         ) : (
           <span style={{ flex: 1, minWidth: 0, padding: '2px 6px' }}>
-            {title ?? t('titleBar.untitled')}
+            {title ?? translate('titleBar.untitled')}
           </span>
         )}
         {onSave ? (
@@ -168,14 +189,15 @@ const DocxEditorImpl = forwardRef<DocxEditorRef, DocxEditorProps>(function DocxE
               cursor: 'pointer',
             }}
           >
-            {t('common.save')}
+            {translate('common.save')}
           </button>
         ) : null}
         {renderTitleBarRight?.()}
       </div>
-      {/* The full chrome registry, default arrangement. `onSave` is forwarded so the
-          toolbar's save control is live for the same hosts whose title bar shows one. */}
-      <DocxEditorToolbar t={t} {...(onSave ? { onSave } : {})} />
+      {/* Save is deliberately absent here: the registry marks the `file` group contextual,
+          so `defaultChromeGroups()` filters it out and only explicit composition mounts it.
+          The title bar above carries the save control instead. */}
+      <DocxEditorToolbar t={translate} />
       {viewport}
     </div>
   ) : (

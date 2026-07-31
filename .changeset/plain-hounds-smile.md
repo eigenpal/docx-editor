@@ -2,4 +2,4 @@
 '@docx-editor.dev/react': minor
 ---
 
-`fonts` is now optional on `DocxEditor`, so `<DocxEditor ref={ref} document={bytes} />` is a complete mount. Supplying `t` now renders the full toolbar alongside the title bar instead of the title bar alone.
+`<DocxEditor ref={ref} document={bytes} />` is now a complete editor on its own: `fonts` is optional, the toolbar renders alongside the title bar, and chrome labels default to the bundled English catalogue instead of requiring a `t` resolver. Pass `chrome={false}` for the painted document alone.

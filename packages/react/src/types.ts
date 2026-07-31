@@ -32,10 +32,11 @@ export interface DocxEditorProps {
    * Immutable byte-backed font sources sampled at mount. Remount to replace this
    * configuration atomically.
    *
-   * Optional: omitting it lets the engine resolve faces from the document's own embedded
-   * fonts, so `<DocxEditor document={bytes} />` is a complete mount. Supply it to inject
-   * host-provided faces or substitutions. Matches `DocxEditorRoot`, which this component
-   * forwards to.
+   * Optional, but it decides layout FIDELITY. With it, the engine shapes text through
+   * HarfBuzz and measures line and page breaks from real font metrics. Without it, layout
+   * runs on a fixed monospace approximation: glyphs still paint in their true faces, so the
+   * page looks right, but wrap points and pagination are estimated rather than
+   * Word-accurate. Omit it to mount in one line; supply it when breaks must match Word.
    */
   fonts?: FontConfiguration;
   /**
@@ -53,12 +54,19 @@ export interface DocxEditorProps {
   /**
    * Resolves i18n keys for the editor chrome.
    *
-   * Supplying it renders the chrome around the painted surface; omitting it renders
-   * the bare surface. Required for chrome rather than defaulted, because the i18n
-   * catalogue is the single source of truth for user-facing strings and the adapter
-   * ships no English of its own.
+   * Defaults to the bundled English catalogue, so the chrome is legible with no setup.
+   * Strings still come from `packages/i18n/en.json` rather than literals in components;
+   * this only chooses who resolves the key. For another language, pass
+   * `createT(locale)` from `@docx-editor.dev/i18n`.
    */
   t?: (key: string) => string;
+  /**
+   * Renders the packaged chrome — title bar and toolbar — around the document.
+   * Default `true`. Set `false` for the painted surface alone when the host supplies
+   * its own chrome; the composition primitives (`Root` / `Viewport` / `Content`) are
+   * the better starting point if you are replacing more than the frame.
+   */
+  chrome?: boolean;
   /** Document title shown in the chrome's title bar. */
   title?: string;
   /** Called when the title is edited. Omitting it makes the title read-only. */

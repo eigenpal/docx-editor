@@ -1,12 +1,10 @@
 // PLAYWRIGHT HARNESS for the canonical tree stack. NOT a demo surface.
 //
-// The demo mounts exactly one editor (`ComposedEditorDemo`). This file exists only so
-// `e2e/browser-first-tree.smoke.spec.ts` can drive the tree binding directly, reachable at
-// `?treeFirst=1` and unlinked from the demo UI. It loads a fixture through
-// `openTreeSession` — bounded OPC read into typed/generic trees, `TreeDocumentStore`, the
-// tree binding — and mounts the minimal editable surface over it. Nothing here touches
-// `PackageModel`, `openDocxSession`, or the byte-range preservation snapshot, which is the
-// point: it exercises the tree stack in isolation from the editor the demo shows.
+// Exists only so `e2e/browser-first-tree.smoke.spec.ts` can drive the tree binding directly:
+// it loads a fixture through `openTreeSession` (bounded OPC read into typed/generic trees,
+// `TreeDocumentStore`, the tree binding) and mounts the minimal editable surface over it.
+// Nothing here touches `PackageModel`, `openDocxSession`, or the byte-range preservation
+// snapshot — that isolation is the point.
 //
 // Deliberately unstyled beyond a page-like sheet. It makes no pagination or layout claim.
 
