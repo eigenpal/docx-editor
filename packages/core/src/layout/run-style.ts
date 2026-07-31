@@ -11,6 +11,7 @@
 // which is what the D8 boundary covers.
 
 import type { OoxmlProperty } from '@docx-editor.dev/core-contract/store';
+import { resolveOoxmlShadingFill } from './ooxml-shading.ts';
 
 export type VerticalAlign = 'baseline' | 'superscript' | 'subscript';
 
@@ -34,6 +35,13 @@ export interface ResolvedRunStyle {
   readonly doubleStrike: boolean;
   /** An `ST_HighlightColor` name, or null. */
   readonly highlight: string | null;
+  /**
+   * Character shading fill (`w:rPr/w:shd`), validated RRGGBB, or null.
+   *
+   * Paint applies this as the glyph-box background; a recognised highlight overrides it.
+   * Measurement ignores shading.
+   */
+  readonly shading: string | null;
   readonly verticalAlign: VerticalAlign;
   /** `w:position`, in points. Positive raises the baseline. */
   readonly baselineShiftPt: number;
@@ -58,6 +66,7 @@ export const DEFAULT_RUN_STYLE: ResolvedRunStyle = Object.freeze({
   strike: false,
   doubleStrike: false,
   highlight: null,
+  shading: null,
   verticalAlign: 'baseline',
   baselineShiftPt: 0,
   caps: false,
@@ -142,6 +151,12 @@ export function resolveRunStyle(props: readonly OoxmlProperty[]): ResolvedRunSty
         style.highlight = value && value !== 'none' ? value : null;
         break;
       }
+      case 'shd': {
+        // Strict hex fill only; theme/pattern rendering is deferred. Paint lets highlight
+        // override this colour when both are present.
+        style.shading = resolveOoxmlShadingFill(property.attributes) ?? null;
+        break;
+      }
       case 'vertAlign': {
         const value = property.attributes?.val;
         if (value === 'superscript' || value === 'subscript') style.verticalAlign = value;
@@ -206,6 +221,7 @@ export function runStylesEqual(a: ResolvedRunStyle, b: ResolvedRunStyle): boolea
     a.strike === b.strike &&
     a.doubleStrike === b.doubleStrike &&
     a.highlight === b.highlight &&
+    a.shading === b.shading &&
     a.verticalAlign === b.verticalAlign &&
     a.baselineShiftPt === b.baselineShiftPt &&
     a.caps === b.caps &&

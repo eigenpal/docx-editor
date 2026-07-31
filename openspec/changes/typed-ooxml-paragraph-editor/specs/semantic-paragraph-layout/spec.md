@@ -15,11 +15,23 @@ Every line and style span SHALL retain stable story/paragraph identity and canon
 - **THEN** its style spans cover the line's source text in order without gaps or overlaps
 
 ### Requirement: Accepted paragraph layout boundary
-Semantic layout SHALL resolve and represent the D8 run and paragraph property boundary, including authored whitespace, tabs, and hard breaks. Hyperlinks, fields, comments, tracked changes, images, tables, content controls, headers/footers, and notes SHALL remain outside this layout acceptance.
+Semantic layout SHALL resolve and represent the D8 run and paragraph property boundary, including authored whitespace, tabs, line hard breaks, and typed `w:br w:type="page"` page breaks; `w:spacing` before/after with collapsed adjacent spacing; and `w:pBdr/w:bottom` only. Section-aware pagination SHALL honour per-section page size and margins, default/`nextPage` section breaks, `titlePage`, and per-section read-only header/footer furniture inheritance. Hyperlinks, fields, comments, tracked changes, images, tables, content controls, header/footer editing, notes, non-bottom paragraph borders, `continuous`/`evenPage`/`oddPage` section semantics, and multi-column flow SHALL remain outside this layout acceptance.
 
 #### Scenario: Accepted properties affect layout and spans
-- **WHEN** accepted run properties, paragraph spacing/indents/tabs/numbering, or pagination controls occur in the paragraph fixture
+- **WHEN** accepted run properties, paragraph spacing/indents/tabs/numbering, pagination controls, `w:spacing` before/after, `w:pBdr/w:bottom`, inline page breaks, or per-section geometry occur in the paragraph fixture
 - **THEN** page, fragment, line, and style-span output reflects each property with stable source ranges
+
+#### Scenario: Inline page break splits a paragraph across pages
+- **WHEN** a paragraph contains `w:br w:type="page"` between inline content
+- **THEN** layout places content before the break on the current page and content after the break on the next page while preserving one paragraph identity
+
+#### Scenario: Paragraph spacing and bottom border affect fragment boxes
+- **WHEN** adjacent paragraphs declare `w:spacing` before/after and/or a paragraph declares `w:pBdr/w:bottom`
+- **THEN** fragment vertical placement applies collapsed before/after spacing and reserves bottom-border extent without claiming support for other border edges
+
+#### Scenario: Multi-section document paginates per section
+- **WHEN** a body story contains multiple sections ended by paragraph-level or body `w:sectPr` with distinct geometry and read-only header/footer references
+- **THEN** layout paginates each section against its own page size/margins, starts non-continuous sections on a new page, and attaches the correct per-section furniture including `titlePage` inheritance
 
 #### Scenario: Deferred content is encountered
 - **WHEN** paragraph traversal encounters a deferred element

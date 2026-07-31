@@ -122,6 +122,18 @@ describe('text operations over UTF-16 offsets (task 5.1)', () => {
     expect(serializeOoxmlPart(broken)).toContain('<w:br/>');
   });
 
+  test('insertPageBreak writes w:br w:type="page" and survives save/reopen', () => {
+    const part = load('<w:p><w:r><w:t>ab</w:t></w:r></w:p>');
+    const [id] = paragraphIds(part);
+    const withBreak = apply(part, { op: 'insertPageBreak', paragraphId: id!, offset: 1 });
+    expect(paragraphTextOf(withBreak, id!)).toBe('a\fb');
+    const saved = serializeOoxmlPart(withBreak);
+    expect(saved).toContain('<w:br w:type="page"/>');
+    const reopened = load(saved);
+    const [reopenedId] = paragraphIds(reopened);
+    expect(paragraphTextOf(reopened, reopenedId!)).toBe('a\fb');
+  });
+
   test('an edit next to unknown content leaves the unknown node untouched', () => {
     const part = load(WITH_UNKNOWN);
     const [id] = paragraphIds(part);

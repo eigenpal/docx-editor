@@ -19,11 +19,11 @@ Before production parity, the system SHALL prove paragraph load, edit, formattin
 - **THEN** semantic assertions, rendered output, canonical tree fingerprint, and reopened semantic digest agree at the committed revision
 
 ### Requirement: Fixed paragraph property boundary
-The paragraph acceptance fixture SHALL cover run font family, half-point size, color, bold, italic, underline variant/color, strike/double-strike, highlight, vertical alignment/baseline, caps/small-caps, character spacing, horizontal scaling, and kerning. It SHALL cover paragraph style, alignment, spacing, line spacing/rule, left/right/first-line/hanging indents, tabs, numbering identity/level, keep-next, keep-lines, widow control, page-break-before, and shading. Inline text, authored whitespace, tab, and hard break SHALL be editable content.
+The paragraph acceptance fixture SHALL cover run font family, half-point size, color, bold, italic, underline variant/color, strike/double-strike, highlight, vertical alignment/baseline, caps/small-caps, character spacing, horizontal scaling, and kerning. It SHALL cover paragraph style, alignment, spacing (including `w:spacing` before/after), line spacing/rule, left/right/first-line/hanging indents, tabs, numbering identity/level, keep-next, keep-lines, widow control, page-break-before, shading, and `w:pBdr/w:bottom` only. Inline text, authored whitespace, tab, line hard break, and typed `w:br w:type="page"` page-break content SHALL be editable with normalized save/reopen. Section-aware pagination fixtures SHALL exercise per-section geometry/margins, default/`nextPage` breaks, `titlePage`, and per-section read-only header/footer inheritance. Non-bottom `w:pBdr` edges, `continuous`/`evenPage`/`oddPage` section semantics, multi-column flow, section insertion UI, and product command wiring remain deferred and SHALL NOT upgrade public support claims until paired acceptance passes.
 
 #### Scenario: Complete accepted property fixture
 - **WHEN** the private React and paired adapter fixtures exercise the paragraph slice
-- **THEN** every accepted run property, paragraph property, and content token has load, semantic model, layout, edit, normalized save, and reopen assertions
+- **THEN** every accepted run property, paragraph property, inline page-break token, section-pagination case, and content token has load, semantic model, layout, edit where applicable, normalized save, and reopen assertions
 
 #### Scenario: Deferred inline feature is present
 - **WHEN** a paragraph also contains a hyperlink, field, comment, tracked change, image, table, content control, header/footer reference, or note reference

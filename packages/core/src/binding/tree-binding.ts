@@ -13,6 +13,8 @@
 import { Node as PMNode } from 'prosemirror-model';
 import {
   findNode,
+  isPageBreakNode,
+  PAGE_BREAK_CHAR,
   type OoxmlNode,
   type OoxmlPart,
   type OoxmlProperty,
@@ -38,6 +40,7 @@ type Token =
   | { readonly kind: 'text'; readonly text: string; readonly props: readonly OoxmlProperty[] }
   | { readonly kind: 'tab' }
   | { readonly kind: 'hardBreak' }
+  | { readonly kind: 'pageBreak' }
   | { readonly kind: 'unknown'; readonly nodeId: string; readonly label: string };
 
 function propsEqual(a: readonly OoxmlProperty[], b: readonly OoxmlProperty[]): boolean {
@@ -114,7 +117,7 @@ function tokensOfParagraph(paragraph: OoxmlNode): Token[] {
         continue;
       }
       if (grand.kind === 'hardBreak') {
-        tokens.push({ kind: 'hardBreak' });
+        tokens.push(isPageBreakNode(grand) ? { kind: 'pageBreak' } : { kind: 'hardBreak' });
         continue;
       }
       if (grand.kind === 'text') {
@@ -217,6 +220,8 @@ export function treeToDoc(part: OoxmlPart): PMNode {
           return treeSchema.node('tab');
         case 'hardBreak':
           return treeSchema.node('hardBreak');
+        case 'pageBreak':
+          return treeSchema.node('pageBreak');
         default:
           return treeSchema.node('unknownInline', {
             nodeId: token.nodeId,
@@ -243,6 +248,7 @@ function tokensOfNode(node: PMNode): Token[] {
     }
     if (child.type.name === 'tab') tokens.push({ kind: 'tab' });
     else if (child.type.name === 'hardBreak') tokens.push({ kind: 'hardBreak' });
+    else if (child.type.name === 'pageBreak') tokens.push({ kind: 'pageBreak' });
     else if (child.type.name === 'unknownInline') {
       tokens.push({
         kind: 'unknown',
@@ -261,6 +267,7 @@ function textOf(tokens: readonly Token[]): string {
     if (token.kind === 'text') text += token.text;
     else if (token.kind === 'tab') text += '\t';
     else if (token.kind === 'hardBreak') text += '\n';
+    else if (token.kind === 'pageBreak') text += PAGE_BREAK_CHAR;
     // An unknown token occupies no text offset: it is not addressable content.
   }
   return text;
@@ -277,7 +284,8 @@ function unknownPositions(tokens: readonly Token[]): string[] {
   let offset = 0;
   for (const token of tokens) {
     if (token.kind === 'text') offset += token.text.length;
-    else if (token.kind === 'tab' || token.kind === 'hardBreak') offset += 1;
+    else if (token.kind === 'tab' || token.kind === 'hardBreak' || token.kind === 'pageBreak')
+      offset += 1;
     else positions.push(`${token.nodeId}@${offset}`);
   }
   return positions;
@@ -307,7 +315,7 @@ function propsByOffset(tokens: readonly Token[]): (readonly OoxmlProperty[])[] {
   for (const token of tokens) {
     if (token.kind === 'text') {
       for (let i = 0; i < token.text.length; i += 1) at.push(token.props);
-    } else if (token.kind === 'tab' || token.kind === 'hardBreak') {
+    } else if (token.kind === 'tab' || token.kind === 'hardBreak' || token.kind === 'pageBreak') {
       // A tab or break carries its run's properties too, but the projection does not model
       // them, so it inherits whatever the surrounding text has rather than claiming none.
       at.push(at[at.length - 1] ?? []);
@@ -366,6 +374,10 @@ function paragraphOps(
         } else if (character === '\n') {
           flush();
           ops.push({ op: 'insertHardBreak', paragraphId, offset: cursor });
+          cursor += 1;
+        } else if (character === PAGE_BREAK_CHAR) {
+          flush();
+          ops.push({ op: 'insertPageBreak', paragraphId, offset: cursor });
           cursor += 1;
         } else buffer += character;
       }

@@ -11,6 +11,7 @@
 // by JavaScript engine.
 
 import type { OoxmlElement, OoxmlNode } from '@docx-editor.dev/core-contract/store';
+import { shadingFillFromElement } from './ooxml-shading.ts';
 
 /** Far above anything Word authors (its UI caps at 63) while keeping allocation bounded. */
 export const MAX_TABLE_COLUMNS = 1024;
@@ -76,9 +77,7 @@ function readVMergeContinue(cellProperties: OoxmlElement | undefined): boolean {
 }
 
 function readShading(cellProperties: OoxmlElement | undefined): string | undefined {
-  const shd = cellProperties && childNamed(cellProperties, 'shd');
-  const fill = shd && attributeValue(shd, 'fill');
-  return fill && fill !== 'auto' && /^[0-9a-fA-F]{6}$/.test(fill) ? fill : undefined;
+  return shadingFillFromElement(cellProperties && childNamed(cellProperties, 'shd'));
 }
 
 function readFlag(container: OoxmlElement | undefined, localName: string): boolean {

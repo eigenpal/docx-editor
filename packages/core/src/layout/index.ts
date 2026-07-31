@@ -141,7 +141,10 @@ export {
   type LineRecord,
   type PageGeometry,
   type PageRecord,
+  type ParagraphBottomBorderRecord,
+  type ParagraphBorderEdge,
   type ParagraphFragmentRecord,
+  type ParagraphSpacing,
   type SemanticLayout,
   type SourceRange,
   type StyleSpanRecord,
@@ -151,7 +154,38 @@ export {
   type TextMeasurer,
 } from './semantic-records.ts';
 export {
-  createFixedMeasurer,
+  MAX_BORDER_SPACE_PT,
+  MAX_BORDER_WIDTH_PT,
+  MAX_PARAGRAPH_SPACING_PT,
+  bottomBorderExtentPt,
+  collapsedSpaceBefore,
+  paragraphBorders,
+  paragraphSpacing,
+  type ParagraphBorders,
+} from './paragraph-style.ts';
+export {
+  paragraphShading,
+  resolveOoxmlShadingFill,
+  resolveStrictHexFill,
+  shadingFillFromElement,
+} from './ooxml-shading.ts';
+export {
+  DEFAULT_TAB_INTERVAL_PT,
+  DEFAULT_TAB_INTERVAL_TWIPS,
+  EMPTY_TAB_STOPS,
+  MAX_TAB_POSITION_TWIPS,
+  MAX_TAB_STOPS,
+  cascadedTabStops,
+  nextTabDestination,
+  paragraphTabStops,
+  tabAdvanceWidth,
+  tabStopsFingerprint,
+  type ResolvedTabStops,
+  type TabAlignment,
+  type TabDestination,
+  type TabStop,
+} from './paragraph-tabs.ts';
+export {
   createLayoutSession,
   layoutSemanticDocument,
   type HeaderFooterVariantName,
@@ -160,7 +194,29 @@ export {
   type PageFurniture,
   type SemanticLayoutOptions,
 } from './semantic-layout.ts';
+export { createFixedMeasurer } from './fixed-measurer.ts';
+export {
+  DEFAULT_CANVAS_FONT_STACK,
+  isCanvasMeasurementAvailable,
+  resolveDefaultSurfaceMeasurer,
+  tryCreateCanvasMeasurer,
+  type CanvasMeasurerOptions,
+  type ResolvedSurfaceMeasurer,
+} from './canvas-measurer.ts';
 export { layoutHeaderFooterStory, type HeaderFooterStoryLayout } from './hf-layout.ts';
+export {
+  MAX_FIELD_INSTRUCTION_CHARS,
+  MAX_FIELD_NESTING,
+  allowlistedPageField,
+  fieldPageContextToken,
+  finalizePageFieldProjection,
+  normalizeFieldInstruction,
+  piecesOfParagraph,
+  projectPageFieldValue,
+  type AllowlistedPageField,
+  type FieldAwarePiece,
+  type FieldPageContext,
+} from './field-projection.ts';
 export { storyBlocks } from './story-roots.ts';
 export {
   createShapedMeasurer,
@@ -169,8 +225,13 @@ export {
 } from './shaped-measurer.ts';
 export {
   DEFAULT_SECTION_PROPERTIES,
+  enumerateDocumentSections,
   geometryOfSection,
+  parseSectionProperties,
+  paragraphSectionNode,
   readSectionProperties,
+  type DocumentSection,
+  type SectionBreakType,
   type SectionMargins,
   type SectionProperties,
 } from './section-properties.ts';
@@ -198,6 +259,20 @@ export {
   type ResolvedUnderline,
   type VerticalAlign,
 } from './run-style.ts';
+export {
+  MAX_STYLE_BASED_ON_DEPTH,
+  MAX_STYLE_DEFINITIONS,
+  buildStyleCascadeTable,
+  cascadeParagraphFormatting,
+  cascadeRunProperties,
+  cascadedBottomBorder,
+  isValidStyleId,
+  resolveParagraphLayoutInputs,
+  type CascadedParagraphFormatting,
+  type ParagraphLayoutInputs,
+  type StyleCascadeTable,
+  type StyleDefinition,
+} from './style-cascade.ts';
 export {
   caretAt,
   caretStops,

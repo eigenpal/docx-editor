@@ -315,14 +315,24 @@ export function readXml(
 // { '#text': v } | { '#cdata': [{ '#text': raw }] }.
 type FxpNode = Record<string, unknown>;
 
+/** Fail closed on non-string parser values — `String({})` is "[object Object]". */
+export function requireXmlStringScalar(value: unknown, what: string): string {
+  if (typeof value !== 'string') throw new Error(`non-scalar ${what}`);
+  return value;
+}
+
 function cdataText(value: unknown): string {
-  if (!Array.isArray(value)) return String(value ?? '');
+  if (typeof value === 'string') return value;
+  if (!Array.isArray(value)) throw new Error('non-scalar cdata');
   return value
-    .map((entry) =>
-      entry !== null && typeof entry === 'object' && '#text' in entry
-        ? String((entry as Record<string, unknown>)['#text'])
-        : ''
-    )
+    .map((entry) => {
+      if (entry !== null && typeof entry === 'object' && '#text' in entry)
+        return requireXmlStringScalar(
+          (entry as Record<string, unknown>)['#text'],
+          'cdata'
+        );
+      throw new Error('non-scalar cdata');
+    })
     .join('');
 }
 
@@ -335,7 +345,10 @@ function convert(
   const out: XmlNode[] = [];
   for (const item of items) {
     if ('#text' in item) {
-      out.push({ type: 'text', value: decodeXmlEntities(String(item['#text'])) });
+      out.push({
+        type: 'text',
+        value: decodeXmlEntities(requireXmlStringScalar(item['#text'], 'text')),
+      });
       continue;
     }
     if ('#cdata' in item) {
@@ -348,8 +361,14 @@ function convert(
     budget.count += 1;
     if (budget.count > budget.maxElements) throw new ElementCountError();
     const attributes = Object.create(null) as Record<string, string>;
-    for (const [k, v] of Object.entries(attrs))
-      attributes[k.replace(/^@_/, '')] = decodeXmlEntities(String(v));
+    for (const [k, v] of Object.entries(attrs)) {
+      // Fail closed on non-scalars: `String({})` is "[object Object]", which would
+      // silently corrupt authored attribute values (e.g. w:fldSimple/@w:instr) and
+      // then round-trip as if that garbage were source text.
+      attributes[k.replace(/^@_/, '')] = decodeXmlEntities(
+        requireXmlStringScalar(v, 'attribute')
+      );
+    }
     out.push({
       type: 'element',
       name: tagKey,

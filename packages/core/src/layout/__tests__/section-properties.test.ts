@@ -6,7 +6,7 @@
 
 import { describe, expect, test } from 'bun:test';
 import { readOoxmlPart, type OoxmlPart } from '@docx-editor.dev/core-contract/store';
-import { DEFAULT_SECTION_PROPERTIES, geometryOfSection, readSectionProperties } from '../index.ts';
+import { DEFAULT_SECTION_PROPERTIES, enumerateDocumentSections, geometryOfSection, readSectionProperties } from '../index.ts';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 
@@ -135,5 +135,35 @@ describe('section properties become the geometry layout paginates against', () =
       },
     });
     expect(geometry.width).toBe(612);
+  });
+});
+
+describe('multi-section documents enumerate every sectPr', () => {
+  test('a paragraph-level sectPr ends the preceding section; absent type is nextPage', () => {
+    const part = load(
+      '<w:p><w:r><w:t>cover</w:t></w:r></w:p>' +
+        '<w:p><w:pPr><w:sectPr>' +
+        '<w:pgMar w:top="2880" w:right="1440" w:bottom="1440" w:left="1440"/>' +
+        '</w:sectPr></w:pPr></w:p>' +
+        '<w:p><w:r><w:t>body</w:t></w:r></w:p>' +
+        '<w:sectPr><w:pgMar w:top="1440" w:right="1440" w:bottom="1440" w:left="1440"/></w:sectPr>'
+    );
+    const sections = enumerateDocumentSections(part);
+    expect(sections).toHaveLength(2);
+    expect(sections[0]!.properties.breakType).toBe('nextPage');
+    expect(sections[0]!.properties.margins.topTwips).toBe(2880);
+    expect(sections[0]!.blockEndExclusive - sections[0]!.blockStart).toBe(2);
+    expect(sections[1]!.properties.margins.topTwips).toBe(1440);
+    expect(sections[1]!.properties.breakType).toBe('nextPage');
+  });
+
+  test('an explicit continuous type is preserved', () => {
+    const part = load(
+      '<w:p><w:pPr><w:sectPr><w:type w:val="continuous"/></w:sectPr></w:pPr></w:p>' +
+        '<w:sectPr><w:type w:val="nextPage"/></w:sectPr>'
+    );
+    const sections = enumerateDocumentSections(part);
+    expect(sections[0]!.properties.breakType).toBe('continuous');
+    expect(sections[1]!.properties.breakType).toBe('nextPage');
   });
 });

@@ -135,10 +135,13 @@ Every unsupported WordprocessingML lane is recorded in tasks with its current pa
 The private React fixture and paired production acceptance cover:
 
 - run font family, half-point size, color, bold, italic, underline variant and color, strike and double-strike, highlight, vertical alignment/baseline, caps and small-caps, character spacing, horizontal scaling, and kerning;
-- paragraph style, alignment, spacing, line spacing and rule, left/right/first-line/hanging indents, tabs, numbering identity and level, keep-next, keep-lines, widow control, page-break-before, and shading;
-- inline text, authored whitespace, tab, and hard break content.
+- paragraph style, alignment, spacing (including `w:spacing` before/after with collapsed adjacent spacing), line spacing and rule, left/right/first-line/hanging indents, tabs, numbering identity and level, keep-next, keep-lines, widow control, page-break-before, shading, and `w:pBdr/w:bottom` only;
+- inline text, authored whitespace, tab, line hard break, and typed `w:br w:type="page"` page-break content with layout and normalized save/reopen;
+- section-aware pagination for load/layout: per-section page size and margins, default/`nextPage` section breaks, `titlePage` and per-section read-only header/footer inheritance.
 
-Hyperlinks, fields, comments, tracked changes, images, tables, content controls, headers/footers, and footnotes/endnotes are deferred. Generic preservation of those elements does not make them part of paragraph acceptance.
+Still deferred within and around this slice: non-bottom `w:pBdr` edges (`top`, `left`, `right`, `between`, `bar`); `continuous`/`evenPage`/`oddPage` section semantics; multi-column flow; section insertion or break-type editing UI; and product command wiring plus paired adapter acceptance where those gates apply. Core engine support for the accepted items above does not by itself upgrade public support claims.
+
+Hyperlinks, fields, comments, tracked changes, images, tables, content controls, headers/footers editing, and footnotes/endnotes are deferred. Generic preservation of those elements does not make them part of paragraph acceptance.
 
 Alternative rejected: an open-ended “common formatting” boundary. It cannot produce deterministic fixtures, typed-node coverage, or reviewable support claims.
 

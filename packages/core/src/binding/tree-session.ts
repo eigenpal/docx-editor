@@ -17,6 +17,7 @@ import {
   TreeDocumentStore,
   readOoxmlPackage,
   resolveHeaderFooterParts,
+  resolveHeaderFooterPartsBySection,
   resolveRelationship,
   withPart,
   writeOoxmlPackage,
@@ -109,10 +110,18 @@ export interface TreeDocxSession {
   /**
    * The resolved header/footer parts of the section, by variant (phase 2, read-only).
    *
+   * Returns the FINAL section's effective parts after OOXML inheritance. Prefer
+   * `headerFooterPartsBySection` for multi-section pagination.
+   *
    * Immutable for the session's lifetime: header/footer EDITING is a later slice, so a
    * host may key derived layout by part object identity.
    */
   headerFooterParts(): HeaderFooterParts;
+  /**
+   * Per-section header/footer parts after OOXML inheritance, index-aligned with
+   * `enumerateDocumentSections`.
+   */
+  headerFooterPartsBySection(): readonly HeaderFooterParts[];
   /**
    * Font family names the document uses, from every `w:rFonts` in the CURRENT main
    * part plus the styles and header/footer parts — validated, deduplicated, sorted.
@@ -125,6 +134,12 @@ export interface TreeDocxSession {
    * A document without a styles part answers `[]`.
    */
   documentStyles(): readonly DocumentStyleEntry[];
+  /**
+   * Root of the styles part tree, for layout's style cascade. Memoized once; `null` when
+   * the package has no styles part. Styles editing is a later slice, so this is immutable
+   * for the session.
+   */
+  stylesRoot(): OoxmlElement | null;
   /**
    * The heading outline of the BODY story, in document order: paragraphs whose
    * `w:pStyle` resolves to a heading through the styles part (built-in `heading N`
@@ -166,7 +181,7 @@ export function openTreeSession(bytes: Uint8Array): OpenTreeSessionResult {
   if (!main) return { ok: false, reason: 'no-main-document-tree', detail: pkg.mainDocumentPart };
 
   const store = new TreeDocumentStore(main);
-  let headerFooter: HeaderFooterParts | null = null;
+  let headerFooterBySection: readonly HeaderFooterParts[] | null = null;
   let lastChange: TreeModelChange | null = null;
   store.subscribe((change) => {
     lastChange = change;
@@ -296,22 +311,36 @@ export function openTreeSession(bytes: Uint8Array): OpenTreeSessionResult {
       },
 
       headerFooterParts() {
-        // Resolved once: references and parts are immutable while HF editing stays a
-        // later slice, and callers key layout off part object identity.
-        headerFooter ??= resolveHeaderFooterParts(pkg);
-        return headerFooter;
+        headerFooterBySection ??= resolveHeaderFooterPartsBySection(pkg);
+        return headerFooterBySection[headerFooterBySection.length - 1] ?? resolveHeaderFooterParts(pkg);
+      },
+
+      headerFooterPartsBySection() {
+        headerFooterBySection ??= resolveHeaderFooterPartsBySection(pkg);
+        return headerFooterBySection;
       },
 
       documentFonts() {
         // Keyed on the store revision: an edit can add or remove a run-level
         // `w:rFonts`, but the styles and header/footer parts cannot change in-session.
         if (fontsCache && fontsCache.revision === store.revision) return fontsCache.fonts;
-        headerFooter ??= resolveHeaderFooterParts(pkg);
+        headerFooterBySection ??= resolveHeaderFooterPartsBySection(pkg);
         const roots: OoxmlElement[] = [store.part.root];
         const styles = resolveStylesRoot();
         if (styles) roots.push(styles);
-        for (const part of headerFooter.headers.values()) roots.push(part.root);
-        for (const part of headerFooter.footers.values()) roots.push(part.root);
+        const seen = new Set<OoxmlPart>();
+        for (const section of headerFooterBySection) {
+          for (const part of section.headers.values()) {
+            if (seen.has(part)) continue;
+            seen.add(part);
+            roots.push(part.root);
+          }
+          for (const part of section.footers.values()) {
+            if (seen.has(part)) continue;
+            seen.add(part);
+            roots.push(part.root);
+          }
+        }
         fontsCache = { revision: store.revision, fonts: collectDocumentFonts(roots) };
         return fontsCache.fonts;
       },
@@ -320,6 +349,8 @@ export function openTreeSession(bytes: Uint8Array): OpenTreeSessionResult {
         stylesCache ??= collectDocumentStyles(resolveStylesRoot());
         return stylesCache;
       },
+
+      stylesRoot: () => resolveStylesRoot(),
 
       documentOutline() {
         // Keyed on the store revision, like the fonts: typing inside a heading or

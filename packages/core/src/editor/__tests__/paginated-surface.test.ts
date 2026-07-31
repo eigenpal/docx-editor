@@ -8,6 +8,14 @@ if (!GlobalRegistrator.isRegistered) GlobalRegistrator.register();
 import { describe, expect, test } from 'bun:test';
 import { zipSync, strToU8 } from 'fflate';
 import { mountPaginatedSurface, type PaginatedSurface } from '../paginated-surface.ts';
+import { surfaceExtent } from '../surface-pages.ts';
+import {
+  createFixedMeasurer,
+  layoutSemanticDocument,
+  linesOf,
+  tryCreateCanvasMeasurer,
+} from '@docx-editor.dev/core-contract/layout';
+import { readOoxmlPackage } from '@docx-editor.dev/core-contract/store';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 const CT = 'http://schemas.openxmlformats.org/package/2006/content-types';
@@ -740,3 +748,232 @@ describe('a hard break occupies a model offset in layout too', () => {
     expect(surface.session.bodyText()).toBe('ab\n');
   });
 });
+
+describe('mixed-width page centering', () => {
+  const portraitWidth = 612;
+  const landscapeWidth = 792;
+
+  function mixedOrientationBody(): string {
+    const portraitFill = paragraph(`portrait ${'word '.repeat(4000)}`);
+    const landscapeFill = paragraph(`landscape ${'word '.repeat(2000)}`);
+    return (
+      portraitFill +
+      '<w:p><w:pPr><w:sectPr>' +
+      '<w:pgSz w:w="12240" w:h="15840"/>' +
+      '<w:type w:val="nextPage"/>' +
+      '</w:sectPr></w:pPr></w:p>' +
+      landscapeFill +
+      '<w:sectPr><w:pgSz w:w="15840" w:h="12240" w:orient="landscape"/></w:sectPr>'
+    );
+  }
+
+  function pageWidths(surface: PaginatedSurface): number[] {
+    return surface.layout().pages.map((page) => page.box.width);
+  }
+
+  function firstLandscapeIndex(surface: PaginatedSurface): number {
+    return surface.layout().pages.findIndex((page) => page.box.width === landscapeWidth);
+  }
+
+  test('surfaceExtent sizes from materialized pages when virtualized', () => {
+    const bytes = docx(mixedOrientationBody());
+    const opened = openLayout(bytes);
+    const layout = opened.layout;
+    const portraitPages = layout.pages.filter((page) => page.box.width === portraitWidth);
+    const landscapePages = layout.pages.filter((page) => page.box.width === landscapeWidth);
+    expect(portraitPages.length).toBeGreaterThan(0);
+    expect(landscapePages.length).toBeGreaterThan(0);
+
+    const portraitOnly = new Set(portraitPages.map((page) => page.index));
+    expect(surfaceExtent(layout, portraitOnly).width).toBe(portraitWidth);
+
+    const landscapeOnly = new Set(landscapePages.map((page) => page.index));
+    expect(surfaceExtent(layout, landscapeOnly).width).toBe(landscapeWidth);
+
+    expect(surfaceExtent(layout, undefined).width).toBe(landscapeWidth);
+  });
+
+  test('surfaceExtent centres narrower pages inside a mixed materialized band', () => {
+    const bytes = docx(mixedOrientationBody());
+    const opened = openLayout(bytes);
+    const layout = opened.layout;
+    const portraitPage = layout.pages.find((page) => page.box.width === portraitWidth)!;
+    const landscapePage = layout.pages.find((page) => page.box.width === landscapeWidth)!;
+    const mixed = new Set([portraitPage.index, landscapePage.index]);
+    const extent = surfaceExtent(layout, mixed);
+    expect(extent.width).toBe(landscapeWidth);
+    expect(extent.pageOffsetX.get(portraitPage.index)).toBe((landscapeWidth - portraitWidth) / 2);
+    expect(extent.pageOffsetX.get(landscapePage.index)).toBe(0);
+  });
+
+  test('virtualized portrait pages size from visible pages, not distant landscape', () => {
+    const scroller = document.createElement('div');
+    scroller.className = 'docx-editor__scroll-container';
+    document.body.append(scroller);
+    const host = document.createElement('div');
+    scroller.append(host);
+    Object.defineProperty(scroller, 'clientHeight', { value: 800, configurable: true });
+    const result = mountPaginatedSurface(host, docx(mixedOrientationBody()), { scale: 1 });
+    if (!result.ok) throw new Error(result.reason);
+    const surface = result.surface;
+    surface.type('x');
+
+    scroller.scrollTop = 0;
+    expect(host.style.width).toBe(`${portraitWidth}px`);
+    expect(pageWidths(surface).some((width) => width === landscapeWidth)).toBe(true);
+
+    surface.destroy();
+    scroller.remove();
+  });
+
+  test('scrolling into landscape recomputes the surface width', async () => {
+    const scroller = document.createElement('div');
+    scroller.className = 'docx-editor__scroll-container';
+    document.body.append(scroller);
+    const host = document.createElement('div');
+    scroller.append(host);
+    Object.defineProperty(scroller, 'clientHeight', { value: 800, configurable: true });
+    const result = mountPaginatedSurface(host, docx(mixedOrientationBody()), { scale: 1 });
+    if (!result.ok) throw new Error(result.reason);
+    const surface = result.surface;
+    surface.type('x');
+
+    const landscapeIndex = firstLandscapeIndex(surface);
+    expect(landscapeIndex).toBeGreaterThan(0);
+    const landscapePage = surface.layout().pages[landscapeIndex]!;
+    scroller.scrollTop = landscapePage.box.y;
+    scroller.dispatchEvent(new Event('scroll'));
+    await new Promise((resolve) => setTimeout(resolve, 50));
+
+    expect(host.style.width).toBe(`${landscapeWidth}px`);
+    surface.destroy();
+    scroller.remove();
+  });
+
+  test('mixed portrait and landscape pages centre narrower sheets', async () => {
+    const scroller = document.createElement('div');
+    scroller.className = 'docx-editor__scroll-container';
+    document.body.append(scroller);
+    const host = document.createElement('div');
+    scroller.append(host);
+    Object.defineProperty(scroller, 'clientHeight', { value: 1200, configurable: true });
+    const result = mountPaginatedSurface(host, docx(mixedOrientationBody()), { scale: 1 });
+    if (!result.ok) throw new Error(result.reason);
+    const surface = result.surface;
+    surface.type('x');
+
+    const landscapeIndex = firstLandscapeIndex(surface);
+    const portraitIndex = landscapeIndex - 1;
+    expect(portraitIndex).toBeGreaterThanOrEqual(0);
+    const portraitPage = surface.layout().pages[portraitIndex]!;
+    const landscapePage = surface.layout().pages[landscapeIndex]!;
+    expect(portraitPage.box.width).toBe(portraitWidth);
+    expect(landscapePage.box.width).toBe(landscapeWidth);
+
+    scroller.scrollTop = portraitPage.box.y;
+    scroller.dispatchEvent(new Event('scroll'));
+    await new Promise((resolve) => setTimeout(resolve, 50));
+
+    const portraitEl = host.querySelector<HTMLElement>(
+      `[data-page-index="${portraitIndex}"]`
+    )!;
+    expect(portraitEl.style.left).toBe(`${(landscapeWidth - portraitWidth) / 2}px`);
+    const landscapeEl = host.querySelector<HTMLElement>(
+      `[data-page-index="${landscapeIndex}"]`
+    )!;
+    expect(landscapeEl.style.left).toBe('0px');
+
+    surface.destroy();
+    scroller.remove();
+  });
+});
+
+describe('default browser measurer for cover-title centering', () => {
+  /**
+   * Controllable advances from the px size in `font` — avoids host-font pixel brittleness
+   * while still proving the surface selected the canvas path and fed it into layout.
+   */
+  function mockContext(): CanvasRenderingContext2D {
+    let currentFont = '';
+    return {
+      get font() {
+        return currentFont;
+      },
+      set font(value: string) {
+        currentFont = value;
+      },
+      measureText(text: string) {
+        const match = /(\d+(?:\.\d+)?)px/.exec(currentFont);
+        const sizePx = match ? Number(match[1]) : 11;
+        // Wider than the fixed 6pt grid — mirrors real Arial Bold vs createFixedMeasurer.
+        return {
+          width: text.length * sizePx * 0.7,
+          fontBoundingBoxAscent: sizePx * 0.8,
+        };
+      },
+    } as CanvasRenderingContext2D;
+  }
+
+  const coverTitle =
+    `<w:p><w:pPr><w:jc w:val="center"/></w:pPr>` +
+    `<w:r><w:rPr><w:rFonts w:ascii="Arial" w:hAnsi="Arial"/><w:b/><w:sz w:val="52"/></w:rPr>` +
+    `<w:t>Cover Title</w:t></w:r></w:p>`;
+
+  const usedWidth = (line: { spans: readonly { box: { x: number; width: number } }[] }) => {
+    const first = line.spans[0]!;
+    const last = line.spans[line.spans.length - 1]!;
+    return last.box.x + last.box.width - first.box.x;
+  };
+
+  test('mount selects the canvas measurer when getContext works', () => {
+    const previous = HTMLCanvasElement.prototype.getContext;
+    HTMLCanvasElement.prototype.getContext = (() => mockContext()) as typeof previous;
+    try {
+      // Without a host measurer the surface must pick canvas over the fixed grid.
+      expect(tryCreateCanvasMeasurer({ ownerDocument: document })).not.toBeNull();
+      const container = document.createElement('div');
+      const result = mountPaginatedSurface(container, docx(coverTitle), { scale: 1 });
+      if (!result.ok) throw new Error(result.reason);
+      const { surface } = result;
+      const line = linesOf(surface.layout())[0]!;
+      const first = line.spans[0]!;
+      const available = surface.layout().pages[0]!.box.width - 144; // 72pt margins each side
+      // Canvas mock: 26pt * 0.7 * len across word spans. Fixed is 6 * (26/11) * len ≈ 156.
+      const expectedWidth = 'Cover Title'.length * 26 * 0.7;
+      expect(usedWidth(line)).toBeCloseTo(expectedWidth, 5);
+      expect(first.box.x).toBeCloseTo((available - expectedWidth) / 2, 5);
+      expect(usedWidth(line)).toBeGreaterThan(
+        createFixedMeasurer().measure('Cover Title', first.style)
+      );
+      // Geometry is authoritative — the painter must not be asked to centre via CSS.
+      const painted = container.querySelector<HTMLElement>('.docx-line')!;
+      expect(painted.style.textAlign).toBe('');
+      surface.destroy();
+    } finally {
+      HTMLCanvasElement.prototype.getContext = previous;
+    }
+  });
+
+  test('happy-dom without canvas keeps the deterministic fixed default', () => {
+    const { surface } = mount(coverTitle);
+    const line = linesOf(surface.layout())[0]!;
+    const style = line.spans[0]!.style;
+    expect(usedWidth(line)).toBeCloseTo(
+      createFixedMeasurer().measure('Cover ', style) +
+        createFixedMeasurer().measure('Title', style),
+      5
+    );
+    surface.destroy();
+  });
+});
+
+function openLayout(bytes: Uint8Array): {
+  readonly layout: ReturnType<typeof layoutSemanticDocument>;
+} {
+  const loaded = readOoxmlPackage(bytes);
+  if (!loaded.ok) throw new Error(loaded.reason);
+  const part = loaded.package.parts.get(loaded.package.mainDocumentPart)!;
+  return {
+    layout: layoutSemanticDocument(part, 0, { measurer: createFixedMeasurer() }),
+  };
+}

@@ -111,6 +111,9 @@ function applyRunStyle(element: HTMLElement, style: ResolvedRunStyle, scale: num
     // Marked so dark mode can counter-invert it: a highlight keeps its authored colour in
     // Word, and the lightness inversion turns yellow into a near-black bar.
     element.dataset.highlight = style.highlight ?? '';
+  } else if (style.shading && HEX.test(style.shading)) {
+    // Highlight overrides character shading; only paint `w:shd` when no recognised highlight.
+    css.backgroundColor = `#${style.shading}`;
   }
   if (style.caps) css.textTransform = 'uppercase';
   if (style.smallCaps) css.fontVariant = 'small-caps';
@@ -183,11 +186,17 @@ function paintSpan(document: Document, span: StyleSpanRecord, scale: number): HT
   element.dataset.start = String(span.range.start);
   element.dataset.end = String(span.range.end);
   applyRunStyle(element, span.style, scale);
-  if (span.style.horizontalScalePercent !== 100) {
-    // The transform stretches the glyphs but reserves nothing, so the element is given the
-    // advance layout already scaled. Without it the stretched run painted over its
-    // neighbour and their selection bands overlapped.
+  // Layout owns advances that the browser cannot reconstruct: horizontal scaling (transform
+  // does not reserve space) and OOXML tab stops (`\t` would otherwise paint as a narrow
+  // native tab). Both must take the published box width so following runs start where
+  // breakParagraph placed them — body, cells, and headers/footers share this painter.
+  if (span.style.horizontalScalePercent !== 100 || span.text === '\t') {
     element.style.width = `${span.box.width * scale}px`;
+  }
+  if (span.text === '\t') {
+    // Keep the model character for range mapping, but clip any native tab ink that would
+    // spill past the reserved advance.
+    element.style.overflow = 'hidden';
   }
   element.textContent = span.text; // SAFE: textContent, never innerHTML
   return element;
@@ -269,6 +278,11 @@ function paintFragment(
   element.className = 'docx-paragraph-fragment layout-paragraph';
   element.dataset.paragraphId = fragment.paragraphId;
   element.dataset.fragmentIndex = String(fragment.fragmentIndex);
+  // Fragment box is already indent-aware (`x`/`width` = content between left/right indent).
+  // Re-validate at the sink like every other file-derived colour.
+  if (fragment.shading && HEX.test(fragment.shading)) {
+    element.style.backgroundColor = `#${fragment.shading}`;
+  }
   for (const line of fragment.lines) {
     const painted = paintLine(document, line, scale);
     // Line boxes are page-relative; inside a fragment they are drawn relative to it —
@@ -279,7 +293,58 @@ function paintFragment(
     painted.style.left = `${(left - fragment.box.x) * scale}px`;
     element.append(painted);
   }
+  if (fragment.bottomBorder) {
+    element.append(paintBottomBorder(document, fragment, scale));
+  }
   return element;
+}
+
+/**
+ * Paint the bottom paragraph rule from layout geometry.
+ *
+ * Height, colour and position come from the record — never from computed style or
+ * getBoundingClientRect. Colour is re-validated at the sink like every other file-derived
+ * style value.
+ */
+function paintBottomBorder(
+  document: Document,
+  fragment: ParagraphFragmentRecord,
+  scale: number
+): HTMLElement {
+  const border = fragment.bottomBorder!;
+  const rule = positioned(document, 'div', border.box, scale);
+  rule.className = 'docx-paragraph-border docx-paragraph-border-bottom';
+  rule.setAttribute('aria-hidden', 'true');
+  rule.style.left = `${(border.box.x - fragment.box.x) * scale}px`;
+  rule.style.top = `${(border.box.y - fragment.box.y) * scale}px`;
+  // Height already set by `positioned` from the published box; colour is the only extra.
+  const color = border.edge.color && HEX.test(border.edge.color) ? border.edge.color : '000000';
+  rule.style.backgroundColor = `#${color}`;
+  // `val` selects a CSS approximation; unknown styles fall back to a solid rule so a
+  // recognised thickness is never silently dropped.
+  switch (border.edge.val) {
+    case 'dashed':
+    case 'dashSmallGap':
+      rule.style.backgroundImage = `linear-gradient(to right, #${color} 60%, transparent 60%)`;
+      rule.style.backgroundSize = `${Math.max(4, 4 * scale)}px 100%`;
+      break;
+    case 'dotted':
+      rule.style.backgroundImage = `linear-gradient(to right, #${color} 35%, transparent 35%)`;
+      rule.style.backgroundSize = `${Math.max(3, 3 * scale)}px 100%`;
+      break;
+    case 'double': {
+      // Two hairlines inside the published box height — still layout-owned geometry.
+      const half = Math.max(1, (border.box.height * scale) / 3);
+      rule.style.backgroundColor = 'transparent';
+      rule.style.borderTop = `${half}px solid #${color}`;
+      rule.style.borderBottom = `${half}px solid #${color}`;
+      rule.style.boxSizing = 'border-box';
+      break;
+    }
+    default:
+      break;
+  }
+  return rule;
 }
 
 /**
@@ -387,7 +452,6 @@ function paintPage(
     container.style.top = `${(story.box.y - page.box.y) * options.scale}px`;
     container.style.width = `${story.box.width * options.scale}px`;
     container.style.height = `${story.box.height * options.scale}px`;
-    // The box IS the flow height; anything drawn beyond it must not extend the hit area.
     container.style.overflow = 'hidden';
     for (const fragment of story.fragments) {
       container.append(

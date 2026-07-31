@@ -10,6 +10,7 @@ const CT_NS = 'http://schemas.openxmlformats.org/package/2006/content-types';
 const REL_NS = 'http://schemas.openxmlformats.org/package/2006/relationships';
 const OFFICE_DOC =
   'http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument';
+const R = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships';
 const IMAGE_REL = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/image';
 
 const CONTENT_TYPES =
@@ -290,5 +291,118 @@ describe('package writer (cutover step 2)', () => {
     const text = deriveOoxmlIndexes(reopened.package, 0).stories.get('/word/document.xml')!
       .paragraphs[0]!.text;
     expect(text).toBe('hello EDITED');
+  });
+
+  test('media bytes and image relationships survive a nearby body edit', async () => {
+    const { canonicalOoxmlFingerprint } = await import('../package/ooxml-tree.ts');
+    const { withPart, writeOoxmlPackage } = await import('../package/ooxml-package.ts');
+    const { applyTreeOp } = await import('../store/tree-ops.ts');
+    const { deriveOoxmlIndexes } = await import('../package/ooxml-indexes.ts');
+
+    const png = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x01, 0x02]);
+    const A = 'http://schemas.openxmlformats.org/drawingml/2006/main';
+    const WP = 'http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing';
+    const drawing =
+      `<w:p>` +
+      '<w:r><w:t>before </w:t></w:r>' +
+      `<w:r><w:drawing><wp:inline xmlns:wp="${WP}">` +
+      `<wp:extent cx="914400" cy="914400"/>` +
+      `<a:graphic xmlns:a="${A}"><a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/picture">` +
+      `<pic:pic xmlns:pic="http://schemas.openxmlformats.org/drawingml/2006/picture">` +
+      `<pic:blipFill><a:blip r:embed="rId2" xmlns:r="${R}"/></pic:blipFill>` +
+      '</pic:pic></a:graphicData></a:graphic></wp:inline></w:drawing></w:r>' +
+      '<w:r><w:t>after</w:t></w:r>' +
+      '</w:p>';
+    const types =
+      CONTENT_TYPES.replace(
+        '</Types>',
+        '<Override PartName="/word/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.styles+xml"/></Types>'
+      );
+    const docRels =
+      `<Relationships xmlns="${REL_NS}">` +
+      `<Relationship Id="rId2" Type="${IMAGE_REL}" Target="media/image1.png"/>` +
+      '</Relationships>';
+    const document =
+      `<w:document xmlns:w="${W}" xmlns:r="${R}"><w:body>${drawing}</w:body></w:document>`;
+
+    const original = readOoxmlPackage(
+      build({
+        '[Content_Types].xml': types,
+        'word/_rels/document.xml.rels': docRels,
+        'word/document.xml': document,
+        'word/media/image1.png': png,
+      })
+    );
+    if (!original.ok) throw new Error(original.reason);
+    expect(original.package.partBytes.get('/word/media/image1.png')).toEqual(png);
+    expect([...(original.package.relationships.get('/word/document.xml') ?? [])].map((r) => r.id)).toEqual([
+      'rId2',
+    ]);
+
+    const part = original.package.parts.get('/word/document.xml')!;
+    const paragraphId = deriveOoxmlIndexes(original.package, 0).stories.get('/word/document.xml')!
+      .paragraphs[0]!.nodeId;
+    const edited = applyTreeOp(part, {
+      op: 'insertText',
+      paragraphId,
+      offset: 0,
+      text: 'X',
+    });
+    if (!edited.ok) throw new Error(edited.reason);
+
+    const reopened = readOoxmlPackage(writeOoxmlPackage(withPart(original.package, edited.part)));
+    if (!reopened.ok) throw new Error(reopened.reason);
+    expect(reopened.package.partBytes.get('/word/media/image1.png')).toEqual(png);
+    expect([...(reopened.package.relationships.get('/word/document.xml') ?? [])].map((r) => r.id)).toEqual([
+      'rId2',
+    ]);
+    const relsXml = new TextDecoder().decode(
+      reopened.package.partBytes.get('/word/_rels/document.xml.rels')!
+    );
+    expect(relsXml).toContain('Target="media/image1.png"');
+    expect(relsXml).toContain(`xmlns="${REL_NS}"`);
+    expect(relsXml).not.toMatch(/<ns\d+:Relationships/);
+    const drawingJson = JSON.stringify(reopened.package.parts.get('/word/document.xml'));
+    expect(drawingJson).toContain('"localName":"embed"');
+    expect(drawingJson).toContain('"value":"rId2"');
+    expect(
+      deriveOoxmlIndexes(reopened.package, 0).stories.get('/word/document.xml')!.paragraphs[0]!.text
+    ).toContain('Xbefore');
+    expect(canonicalOoxmlFingerprint(reopened.package.parts.get('/word/document.xml')!)).toBe(
+      canonicalOoxmlFingerprint(edited.part)
+    );
+  });
+
+  test('mc:Ignorable and AlternateContent survive package save/reopen', async () => {
+    const { canonicalOoxmlFingerprint, serializeOoxmlPart } = await import('../package/ooxml-tree.ts');
+    const { writeOoxmlPackage } = await import('../package/ooxml-package.ts');
+
+    const MC = 'http://schemas.openxmlformats.org/markup-compatibility/2006';
+    const document =
+      `<w:document xmlns:w="${W}" xmlns:mc="${MC}" xmlns:w14="urn:word14" mc:Ignorable="w14">` +
+      '<w:body><w:p><w:r>' +
+      `<mc:AlternateContent>` +
+      `<mc:Choice Requires="w14"><w14:widget/></mc:Choice>` +
+      `<mc:Fallback><w:t>fallback</w:t></mc:Fallback>` +
+      `</mc:AlternateContent>` +
+      '</w:r></w:p></w:body></w:document>';
+
+    const original = readOoxmlPackage(build({ 'word/document.xml': document }));
+    if (!original.ok) throw new Error(original.reason);
+    const main = original.package.parts.get('/word/document.xml')!;
+    const fingerprintBefore = canonicalOoxmlFingerprint(main);
+
+    const reopened = readOoxmlPackage(writeOoxmlPackage(original.package));
+    if (!reopened.ok) throw new Error(reopened.reason);
+    const reopenedMain = reopened.package.parts.get('/word/document.xml')!;
+    expect(canonicalOoxmlFingerprint(reopenedMain)).toBe(fingerprintBefore);
+
+    const savedXml = serializeOoxmlPart(reopenedMain);
+    expect(savedXml).toContain('mc:Ignorable');
+    expect(savedXml).toContain('mc:AlternateContent');
+    expect(savedXml).toContain('mc:Choice');
+    expect(savedXml).toContain('mc:Fallback');
+    expect(savedXml).toContain('widget');
+    expect(savedXml).toContain('fallback');
   });
 });

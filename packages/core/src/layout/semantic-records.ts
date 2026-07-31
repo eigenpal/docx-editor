@@ -14,7 +14,10 @@
 // only run in a browser could not be tested deterministically or run headless.
 
 import type { OoxmlProperty } from '@docx-editor.dev/core-contract/store';
+import type { ParagraphBorderEdge, ParagraphSpacing } from './paragraph-style.ts';
 import type { ResolvedRunStyle } from './run-style.ts';
+
+export type { ParagraphBorderEdge, ParagraphSpacing } from './paragraph-style.ts';
 
 /** A half-open UTF-16 range inside one paragraph, addressed by its canonical node id. */
 export interface SourceRange {
@@ -28,6 +31,17 @@ export interface LayoutBox {
   readonly y: number;
   readonly width: number;
   readonly height: number;
+}
+
+/**
+ * A bottom paragraph border as layout published it.
+ *
+ * `box` is the rule's geometry in the same coordinate space as the fragment (page-content
+ * relative). Paint positions from this box and MUST NOT remeasure the border.
+ */
+export interface ParagraphBottomBorderRecord {
+  readonly edge: ParagraphBorderEdge;
+  readonly box: LayoutBox;
 }
 
 /** A run of text on one line sharing identical resolved formatting. */
@@ -71,6 +85,21 @@ export interface ParagraphFragmentRecord {
   readonly fragmentIndex: number;
   readonly range: SourceRange;
   readonly props: readonly OoxmlProperty[];
+  /**
+   * Before/after spacing applied to THIS fragment, in points.
+   *
+   * Continuations carry `before: 0`; only the final fragment carries `after`. The numbers
+   * already reflect Word's adjacent-collapse against the previous paragraph's after.
+   */
+  readonly spacing: ParagraphSpacing;
+  /** Bottom rule on the final fragment when `w:pBdr/w:bottom` resolves; absent otherwise. */
+  readonly bottomBorder?: ParagraphBottomBorderRecord;
+  /**
+   * Validated 6-hex paragraph shading fill (`w:pPr/w:shd`), absent for none/auto.
+   *
+   * Paint fills the fragment box (indent-aware content width). Measurement ignores it.
+   */
+  readonly shading?: string;
   readonly lines: readonly LineRecord[];
   readonly box: LayoutBox;
 }
@@ -129,8 +158,9 @@ export type BlockFragmentRecord = ParagraphFragmentRecord | TableFragmentRecord;
  *
  * `box` is absolute (sheet coordinates) and sized to the story's FLOW height — never to
  * any anchored-object extent, which is the rule that keeps a decorated header's hit area
- * from covering the body. `fragments` are story-relative (origin at the box's top-left)
- * and SHARED between the pages that show the same variant.
+ * from covering the body. `fragments` are story-relative (origin at the box's top-left).
+ * Baseline furniture may be shared across pages of the same variant; after page-field
+ * finalize, PAGE/NUMPAGES projections are per page (or per distinct field values).
  */
 export interface HeaderFooterStoryRecord {
   readonly kind: 'header' | 'footer';
@@ -138,6 +168,14 @@ export interface HeaderFooterStoryRecord {
   readonly partName: string;
   readonly box: LayoutBox;
   readonly fragments: readonly BlockFragmentRecord[];
+  /**
+   * Transient projector used between furniture attach and document-level page-field
+   * finalize. Absent on published layout records after finalize.
+   */
+  readonly pageFieldProjector?: (context: {
+    readonly pageNumber: number;
+    readonly pageCount: number;
+  }) => HeaderFooterStoryRecord;
 }
 
 export interface PageRecord {

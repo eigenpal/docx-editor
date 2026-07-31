@@ -15,21 +15,36 @@ import type {
   OoxmlPart,
   OoxmlProperty,
 } from '@docx-editor.dev/core-contract/store';
+import { finalizePageFieldProjection } from './field-projection.ts';
 import { paragraphLayoutKey, type ParagraphLayoutCache } from './layout-cache.ts';
 import {
   alignSpans,
   breakParagraph,
-  paragraphAlignment,
-  paragraphIndent,
-  propertiesOf,
   type Alignment,
   type PendingLine,
 } from './paragraph-flow.ts';
-import { DEFAULT_RUN_STYLE, type ResolvedRunStyle } from './run-style.ts';
+import {
+  bottomBorderExtentPt,
+  collapsedSpaceBefore,
+  type ParagraphBorderEdge,
+  type ParagraphSpacing,
+} from './paragraph-style.ts';
+import { DEFAULT_RUN_STYLE, resolveRunStyle } from './run-style.ts';
+import type { ResolvedTabStops } from './paragraph-tabs.ts';
+import {
+  resolveParagraphLayoutInputs,
+  type StyleCascadeTable,
+} from './style-cascade.ts';
 import { CELL_PAD, readTableStructure } from './semantic-table.ts';
 import { layoutRowFragment, type TableFlowDeps } from './semantic-table-layout.ts';
 import { storyBlocks } from './story-roots.ts';
-import type { HeaderFooterStoryLayout } from './hf-layout.ts';
+import { remapPage, type HeaderFooterStoryLayout } from './hf-layout.ts';
+import {
+  DEFAULT_SECTION_PROPERTIES,
+  enumerateDocumentSections,
+  geometryOfSection,
+  type DocumentSection,
+} from './section-properties.ts';
 import {
   DEFAULT_PAGE_GEOMETRY,
   type BlockFragmentRecord,
@@ -38,6 +53,7 @@ import {
   type LineRecord,
   type PageGeometry,
   type PageRecord,
+  type ParagraphBottomBorderRecord,
   type SemanticLayout,
   type TableRowFragmentRecord,
   type TextMeasurer,
@@ -49,8 +65,9 @@ export type HeaderFooterVariantName = 'default' | 'first' | 'even';
 /**
  * Pre-laid page furniture, supplied by the host (phase 2).
  *
- * Stories are laid out ONCE per variant (`layoutHeaderFooterStory`) and attached per page
- * here; the body pass only selects the variant and computes the push-down.
+ * Baseline stories are laid out once per variant (`layoutHeaderFooterStory`) for furniture
+ * height. Allowlisted PAGE/NUMPAGES fields are projected per page after the document page
+ * count is known, via {@link HeaderFooterStoryLayout.withPageContext}.
  */
 export interface PageFurniture {
   readonly titlePage: boolean;
@@ -87,6 +104,19 @@ export interface SemanticLayoutOptions {
   readonly session?: LayoutSession;
   /** Header/footer stories to attach per page; absent means no furniture. */
   readonly furniture?: PageFurniture;
+  /**
+   * Per-section furniture, index-aligned with `enumerateDocumentSections`.
+   *
+   * When present, multi-section layout attaches each section's own headers/footers (after
+   * OOXML inheritance). `furniture` remains the single-section / last-section fallback.
+   */
+  readonly sectionFurniture?: readonly (PageFurniture | undefined)[];
+  /**
+   * Styles-part cascade table (docDefaults + `w:style` last-wins). Absent keeps direct
+   * formatting only — the pre-cascade behaviour, used by unit tests that never open a
+   * package.
+   */
+  readonly styleCascade?: StyleCascadeTable;
 }
 
 /** The flow state as it stood immediately before one block was placed. */
@@ -97,6 +127,8 @@ interface FlowCheckpoint {
   readonly pageFragments: readonly BlockFragmentRecord[];
   readonly cursorY: number;
   readonly lineCounter: number;
+  /** Trailing paragraph spacing participating in adjacent-spacing collapse. */
+  readonly previousSpaceAfter: number;
 }
 
 export interface LayoutSessionStats {
@@ -187,6 +219,9 @@ function fragmentSignature(fragment: BlockFragmentRecord): string {
           // the old one and was discarded — leaving a painter or style consumer reading the
           // pre-edit value.
           fragment.props,
+          fragment.spacing,
+          fragment.bottomBorder,
+          fragment.shading,
           fragment.lines.map((line) => [line.id, line.box, line.baseline, line.spans]),
         ]);
   signatures.set(fragment, signature);
@@ -203,12 +238,6 @@ function breaksBefore(props: readonly OoxmlProperty[]): boolean {
   );
 }
 
-/**
- * Lay a part out into pages, fragments, lines and spans.
- *
- * Deterministic: same tree plus same measurer produces byte-identical records, which is what
- * makes the incremental engine of section 9 differentially testable against a clean run.
- */
 /** Prepass results by block node, valid while the width and producer both hold. */
 type PreparedBlock =
   | {
@@ -218,13 +247,14 @@ type PreparedBlock =
       readonly indent: { left: number; right: number };
       readonly available: number;
       readonly alignment: Alignment;
+      readonly spacing: ParagraphSpacing;
+      readonly bottomBorder: ParagraphBorderEdge | undefined;
+      readonly shading: string | undefined;
+      readonly inheritedRunProperties: readonly OoxmlProperty[];
+      readonly tabStops: ResolvedTabStops;
       readonly key: string;
     }
-  | {
-      readonly kind: 'table';
-      readonly table: OoxmlElement;
-      readonly key: string;
-    };
+  | { readonly kind: 'table'; readonly table: OoxmlElement; readonly key: string };
 
 interface PreparedBlockMemo {
   readonly contentWidth: number;
@@ -234,18 +264,137 @@ interface PreparedBlockMemo {
 
 const preparedBlocks = new WeakMap<OoxmlNode, PreparedBlockMemo>();
 
+function furnitureForSection(
+  options: SemanticLayoutOptions,
+  sectionIndex: number,
+  sectionCount: number
+): PageFurniture | undefined {
+  if (options.sectionFurniture) return options.sectionFurniture[sectionIndex];
+  if (sectionIndex === sectionCount - 1) return options.furniture;
+  return undefined;
+}
+
+/**
+ * Lay a multi-section part out section by section.
+ *
+ * `w:type` on a section (default `nextPage`) controls whether that section starts on a new
+ * sheet relative to the previous one. Continuous sections keep flowing on the current sheet
+ * only when the previous section left no open page — after a normal flush they still start
+ * cleanly. Odd/even page types currently behave like nextPage (blank-page skipping deferred).
+ */
+function layoutMultiSectionDocument(
+  blocks: readonly OoxmlElement[],
+  sections: readonly DocumentSection[],
+  revision: number,
+  options: SemanticLayoutOptions
+): SemanticLayout {
+  const pages: PageRecord[] = [];
+  let sheetY = 0;
+  let lineCounter = 0;
+  // Multi-section invalidates the single-geometry incremental session: section boundaries
+  // change content width and furniture, so a checkpoint from another geometry is not sound.
+  const { session: _session, ...rest } = options;
+  void _session;
+
+  for (let sectionIndex = 0; sectionIndex < sections.length; sectionIndex += 1) {
+    const section = sections[sectionIndex]!;
+    const slice = blocks.slice(section.blockStart, section.blockEndExclusive);
+    const geometry = geometryOfSection(section.properties);
+    const furniture = furnitureForSection(options, sectionIndex, sections.length);
+
+    // Start this section on a new page unless it is continuous and we somehow still have an
+    // open sheet — each section call flushes its own pages, so nextPage/odd/even simply means
+    // "do not share a sheet with the previous section", which is already the case.
+    void section.properties.breakType;
+
+    if (slice.length === 0) {
+      // An empty section still produces a blank page when it breaks to a new page, matching
+      // Word's empty-section behaviour for nextPage. Continuous empty sections add nothing.
+      if (
+        sectionIndex > 0 &&
+        section.properties.breakType !== 'continuous' &&
+        pages.length > 0
+      ) {
+        // Nothing to place; the previous section already ended on its own last page.
+      }
+      continue;
+    }
+
+    const laid = layoutBlocksWithGeometry(slice, revision, {
+      ...rest,
+      geometry,
+      furniture,
+      lineCounterStart: lineCounter,
+    });
+    lineCounter = laid.lineCounter;
+
+    for (const page of laid.pages) {
+      const remapped = remapPage(page, pages.length, sheetY);
+      pages.push(remapped);
+      sheetY = remapped.box.y + remapped.box.height + 24;
+    }
+  }
+
+  if (pages.length === 0) {
+    // Degenerate: every section empty. Emit one blank page from the first section's geometry.
+    const geometry = geometryOfSection(sections[0]?.properties ?? DEFAULT_SECTION_PROPERTIES);
+    const laid = layoutBlocksWithGeometry([], revision, { ...rest, geometry });
+    return finalizePageFieldProjection({ revision, pages: laid.pages });
+  }
+
+  return finalizePageFieldProjection({ revision, pages });
+}
+
 export function layoutSemanticDocument(
   part: OoxmlPart,
   revision: number,
   options: SemanticLayoutOptions
 ): SemanticLayout {
-  const geometry = options.geometry ?? DEFAULT_PAGE_GEOMETRY;
+  const sections = enumerateDocumentSections(part);
+  const blocks = storyBlocks(part);
+
+  if (sections.length > 1) {
+    return layoutMultiSectionDocument(blocks, sections, revision, options);
+  }
+
+  const section = sections[0];
+  const geometry =
+    options.geometry ??
+    (section ? geometryOfSection(section.properties) : DEFAULT_PAGE_GEOMETRY);
+  const furniture = furnitureForSection(options, 0, sections.length) ?? options.furniture;
+  const laid = layoutBlocksWithGeometry(blocks, revision, { ...options, geometry, furniture });
+  const finalized = finalizePageFieldProjection(laid.layout);
+  // layoutBlocksWithGeometry stores the pre-projection layout on the session; replace it so
+  // incremental reuse keeps projected PAGE/NUMPAGES furniture.
+  if (options.session) options.session.previous = finalized;
+  return finalized;
+}
+
+interface BlockLayoutResult {
+  readonly layout: SemanticLayout;
+  readonly pages: readonly PageRecord[];
+  readonly lineCounter: number;
+}
+
+function layoutBlocksWithGeometry(
+  bodies: readonly OoxmlElement[],
+  revision: number,
+  options: SemanticLayoutOptions & {
+    readonly geometry: PageGeometry;
+    readonly lineCounterStart?: number;
+  }
+): BlockLayoutResult {
+  const geometry = options.geometry;
   const measurer = options.measurer;
   const cache = options.cache;
   // Defaults to a constant deliberately NAMED for the risk: fonts resolve asynchronously, so
   // a caller that swaps the measurer without changing this is served the pre-font layout for
-  // the rest of the session.
-  const producer = options.producer ?? 'unversioned-measurer';
+  // the rest of the session. The style-cascade token is folded in so a different styles part
+  // cannot reuse breaks measured under another inheritance table.
+  const styleCascade = options.styleCascade;
+  const producer =
+    (options.producer ?? 'unversioned-measurer') +
+    (styleCascade ? `|sc:${styleCascade.cacheToken}` : '');
 
   const contentWidth = geometry.width - geometry.margin.left - geometry.margin.right;
 
@@ -292,7 +441,6 @@ export function layoutSemanticDocument(
   // and the producer. Recomputing the key — a serialization of the paragraph's subtree —
   // for every paragraph on every pass made the prepass, not placement, the cost of an
   // incremental layout: a one-character edit re-keyed the entire document.
-  const bodies = storyBlocks(part);
   const prepared = bodies.map((block): PreparedBlock => {
     const memo = preparedBlocks.get(block);
     if (memo && memo.contentWidth === contentWidth && memo.producer === producer) {
@@ -312,21 +460,38 @@ export function layoutSemanticDocument(
         }),
       };
     } else {
-      const props = propertiesOf(
-        block.children.find((child) => child.kind === 'paragraphProperties')
-      );
-      const indent = paragraphIndent(props);
-      const available = Math.max(1, contentWidth - indent.left - indent.right);
+      const preparedParagraph = resolveParagraphLayoutInputs(block, contentWidth, styleCascade);
+      const {
+        props,
+        indent,
+        available,
+        alignment,
+        spacing,
+        bottomBorder,
+        shading,
+        inheritedRunProperties,
+        tabStops,
+        tabStopsCacheToken,
+      } = preparedParagraph;
       entry = {
         kind: 'paragraph',
         paragraph: block,
         props,
         indent,
         available,
-        alignment: paragraphAlignment(props),
+        alignment,
+        spacing,
+        bottomBorder,
+        shading,
+        inheritedRunProperties,
+        tabStops,
         key: paragraphLayoutKey({
           paragraph: block,
-          properties: props,
+          properties: [
+            ...props,
+            ...inheritedRunProperties,
+            { localName: 'tabStops', attributes: { token: tabStopsCacheToken } },
+          ],
           width: available,
           producer,
         }),
@@ -382,13 +547,18 @@ export function layoutSemanticDocument(
       fullPasses: session.stats.fullPasses,
     };
     cache?.retain(new Set(keys));
-    return unchanged;
+    return {
+      layout: unchanged,
+      pages: unchanged.pages,
+      lineCounter: options.lineCounterStart ?? 0,
+    };
   }
 
   const pages: PageRecord[] = [];
   let pageFragments: BlockFragmentRecord[] = [];
   let cursorY = 0;
-  let lineCounter = 0;
+  let lineCounter = options.lineCounterStart ?? 0;
+  let previousSpaceAfter = 0;
   const checkpoints: FlowCheckpoint[] = [];
   let startIndex = 0;
   let placed = 0;
@@ -404,6 +574,7 @@ export function layoutSemanticDocument(
     pageFragments = [...checkpoint.pageFragments];
     cursorY = checkpoint.cursorY;
     lineCounter = checkpoint.lineCounter;
+    previousSpaceAfter = checkpoint.previousSpaceAfter;
     startIndex = firstChanged;
     reusedPages = pages.length;
     checkpoints.push(...session.checkpoints.slice(0, firstChanged));
@@ -434,16 +605,29 @@ export function layoutSemanticDocument(
     const story = (kind === 'header' ? furniture.headers : furniture.footers).get(variant);
     // An absent variant shows nothing — Word falls back to blank, not to `default`.
     if (!story) return undefined;
-    const y =
-      kind === 'header'
-        ? box.y + headerDistance
-        : box.y + geometry.height - footerDistance - story.flowHeight;
+    const place = (laid: HeaderFooterStoryLayout): HeaderFooterStoryRecord => {
+      const y =
+        kind === 'header'
+          ? box.y + headerDistance
+          : box.y + geometry.height - footerDistance - laid.flowHeight;
+      return {
+        kind,
+        variant,
+        partName: laid.partName,
+        box: {
+          x: box.x + geometry.margin.left,
+          y,
+          width: contentWidth,
+          height: laid.flowHeight,
+        },
+        fragments: laid.fragments,
+      };
+    };
+    // Baseline attach for height; document-level finalize re-projects PAGE/NUMPAGES once
+    // the total page count is known (digit widths affect right-tab geometry).
     return {
-      kind,
-      variant,
-      partName: story.partName,
-      box: { x: box.x + geometry.margin.left, y, width: contentWidth, height: story.flowHeight },
-      fragments: story.fragments,
+      ...place(story),
+      pageFieldProjector: (context) => place(story.withPageContext(context)),
     };
   };
 
@@ -476,6 +660,7 @@ export function layoutSemanticDocument(
     cache,
     producer,
     nextLineId: () => `line-${lineCounter++}`,
+    styleCascade,
   };
 
   /**
@@ -562,6 +747,7 @@ export function layoutSemanticDocument(
       pageFragments: [...pageFragments],
       cursorY,
       lineCounter,
+      previousSpaceAfter,
     };
 
     // CONVERGENCE. Once inside the unchanged tail, if the flow returns to exactly the state
@@ -584,6 +770,7 @@ export function layoutSemanticDocument(
         mark &&
         mark.cursorY === cursorY &&
         mark.lineCounter === lineCounter &&
+        mark.previousSpaceAfter === previousSpaceAfter &&
         mark.pageCount === pages.length &&
         sameFragments(mark.pageFragments, pageFragments)
       ) {
@@ -599,15 +786,29 @@ export function layoutSemanticDocument(
     placed += 1;
 
     if (entry.kind === 'table') {
+      previousSpaceAfter = 0;
       layoutTableInFlow(entry.table);
       continue;
     }
 
-    const { paragraph, props, indent, alignment, available } = entry;
+    const {
+      paragraph,
+      props,
+      indent,
+      alignment,
+      available,
+      spacing,
+      bottomBorder,
+      shading,
+      inheritedRunProperties,
+      tabStops,
+    } = entry;
     const paragraphId = paragraph.id;
+    const borderExtent = bottomBorderExtentPt(bottomBorder);
 
     if (breaksBefore(props) && (pageFragments.length > 0 || pages.length === 0)) {
       flushPage();
+      previousSpaceAfter = 0;
     }
 
     const lines = breakParagraph(
@@ -617,18 +818,61 @@ export function layoutSemanticDocument(
       available,
       measurer,
       cache,
-      cache ? entry.key : null
+      cache ? entry.key : null,
+      inheritedRunProperties,
+      tabStops
     );
+
+    // Keep before-spacing with the paragraph. If its first line and one-line tail do not
+    // fit, start the paragraph on a fresh page instead of stranding an empty gap.
+    {
+      const lead = collapsedSpaceBefore(spacing.before, previousSpaceAfter);
+      const emptyStyle =
+        inheritedRunProperties.length === 0
+          ? DEFAULT_RUN_STYLE
+          : resolveRunStyle(inheritedRunProperties);
+      const firstHeight = lines[0]?.height ?? measurer.lineMetrics(emptyStyle).height;
+      const firstTail = lines.length <= 1 ? borderExtent + spacing.after : 0;
+      if (cursorY + lead + firstHeight + firstTail > contentHeight && cursorY > 0) {
+        flushPage();
+        previousSpaceAfter = 0;
+      }
+    }
+
+    // Word collapses adjacent paragraph spacing to the larger of previous-after/current-before.
+    const appliedBefore = collapsedSpaceBefore(spacing.before, previousSpaceAfter);
+    if (appliedBefore > 0) cursorY += appliedBefore;
 
     // Place the lines, fragmenting at page boundaries.
     let fragmentIndex = 0;
     let pending: LineRecord[] = [];
     let fragmentStart = lines[0]?.start ?? 0;
+    let fragmentBefore = appliedBefore;
+    let endedWithPageBreak = false;
+    previousSpaceAfter = 0;
 
-    const flushFragment = (): void => {
+    const flushFragment = (isLast: boolean): void => {
       if (pending.length === 0) return;
-      const top = pending[0]!.box.y;
-      const height = pending.reduce((sum, record) => sum + record.box.height, 0);
+      const top = pending[0]!.box.y - fragmentBefore;
+      const linesBottom = pending[pending.length - 1]!.box.y + pending[pending.length - 1]!.box.height;
+      const appliedAfter = isLast ? spacing.after : 0;
+      let bottomBorderRecord: ParagraphBottomBorderRecord | undefined;
+      let contentBottom = linesBottom;
+      if (isLast && bottomBorder) {
+        const ruleY = linesBottom + bottomBorder.spacePt;
+        bottomBorderRecord = {
+          edge: bottomBorder,
+          box: {
+            x: indent.left,
+            y: ruleY,
+            width: available,
+            height: bottomBorder.widthPt,
+          },
+        };
+        contentBottom = ruleY + bottomBorder.widthPt;
+      }
+      if (isLast) cursorY = Math.max(cursorY, contentBottom + appliedAfter);
+      const height = Math.max(contentBottom + appliedAfter - top, 0);
       pageFragments.push({
         kind: 'paragraph',
         id: `${paragraphId}#f${fragmentIndex}`,
@@ -640,21 +884,28 @@ export function layoutSemanticDocument(
           end: pending[pending.length - 1]!.range.end,
         },
         props,
+        spacing: { before: fragmentBefore, after: appliedAfter },
+        ...(bottomBorderRecord ? { bottomBorder: bottomBorderRecord } : {}),
+        ...(shading === undefined ? {} : { shading }),
         lines: pending,
         box: { x: indent.left, y: top, width: available, height },
       });
       fragmentIndex += 1;
       fragmentStart = pending[pending.length - 1]!.range.end;
       pending = [];
+      fragmentBefore = 0;
     };
 
     for (const [lineIndex, pendingLine] of lines.entries()) {
+      const isLastLine = lineIndex === lines.length - 1;
+      const tail = isLastLine ? borderExtent + spacing.after : 0;
       if (
-        cursorY + pendingLine.height > contentHeight &&
-        (pending.length > 0 || pageFragments.length > 0)
+        cursorY + pendingLine.height + tail > contentHeight &&
+        (pending.length > 0 || pageFragments.length > 0 || pages.length > 0)
       ) {
-        flushFragment();
+        flushFragment(false);
         flushPage();
+        fragmentBefore = 0;
       }
       const record: LineRecord = {
         id: `line-${lineCounter}`,
@@ -674,7 +925,7 @@ export function layoutSemanticDocument(
           indent.left,
           available,
           alignment,
-          lineIndex === lines.length - 1
+          isLastLine
         ),
         box: { x: indent.left, y: cursorY, width: available, height: pendingLine.height },
         baseline: pendingLine.baseline,
@@ -682,8 +933,15 @@ export function layoutSemanticDocument(
       lineCounter += 1;
       pending.push(record);
       cursorY += pendingLine.height;
+      if (pendingLine.pageBreakAfter) {
+        flushFragment(isLastLine);
+        flushPage();
+        fragmentBefore = 0;
+        endedWithPageBreak = true;
+      }
     }
-    flushFragment();
+    flushFragment(true);
+    previousSpaceAfter = endedWithPageBreak ? 0 : spacing.after;
   }
 
   // A TERMINAL checkpoint, describing the flow after the last paragraph. Without it,
@@ -696,6 +954,7 @@ export function layoutSemanticDocument(
       pageFragments: [...pageFragments],
       cursorY,
       lineCounter,
+      previousSpaceAfter,
     };
   }
 
@@ -729,33 +988,7 @@ export function layoutSemanticDocument(
       fullPasses: session.stats.fullPasses + (startIndex === 0 ? 1 : 0),
     };
   }
-  return layout;
+  return { layout, pages, lineCounter };
 }
 
-/**
- * A deterministic measurer for tests and headless use.
- *
- * Monospace by construction: every character is the same width and every line the same
- * height, scaled by `w:sz` when present. Real shaping is the HarfBuzz path; this exists so
- * layout behaviour can be asserted without a font stack deciding the answer.
- */
-export function createFixedMeasurer(charWidth = 6, lineHeight = 14): TextMeasurer {
-  // 11pt is the size the base width and height describe; everything else scales from it.
-  const scale = (style: ResolvedRunStyle): number => style.fontSizePt / 11;
-  return {
-    measure: (text, style) => {
-      // Advance, then horizontal scaling, then character spacing — the order Word applies
-      // them, and the order that makes `w:spacing` an absolute per-character addition
-      // rather than something the scale multiplies.
-      const advance = text.length * charWidth * scale(style);
-      const scaled = advance * (style.horizontalScalePercent / 100);
-      return scaled + text.length * style.characterSpacingPt;
-    },
-    lineMetrics: (style) => {
-      // Super/subscript draw smaller, so they need less line height than their nominal size.
-      const shrink = style.verticalAlign === 'baseline' ? 1 : 0.75;
-      const height = lineHeight * scale(style) * shrink;
-      return { height, baseline: height * 0.8 };
-    },
-  };
-}
+export { createFixedMeasurer } from './fixed-measurer.ts';

@@ -133,6 +133,29 @@ describe('the painter is a non-authoritative consumer', () => {
     const page = container.querySelector<HTMLElement>('.docx-page')!;
     expect(page.style.width).toBe('1224px'); // 612pt at scale 2
   });
+
+  test('a tab span reserves layout box width, not the browser native tab advance', () => {
+    // Regression: inline-block + textContent `\t` otherwise collapses to a narrow native
+    // tab (~one character), so right/center stops never reach the painted surface even
+    // when breakParagraph published the correct advance.
+    const body =
+      `<w:p><w:pPr><w:tabs><w:tab w:val="right" w:pos="2400"/></w:tabs></w:pPr>` +
+      `<w:r><w:t>L</w:t><w:tab/><w:t>ABCD</w:t></w:r></w:p>`;
+    const layout = layoutOf(body);
+    const tabRecord = layout.pages[0]!.fragments
+      .flatMap((fragment) => (fragment.kind === 'paragraph' ? fragment.lines : []))
+      .flatMap((line) => line.spans)
+      .find((span) => span.text === '\t')!;
+    expect(tabRecord.box.width).toBeGreaterThan(6);
+
+    const container = document.createElement('div');
+    paintSemanticLayout(container, layout, { scale: 1 });
+    const tabEl = [...container.querySelectorAll<HTMLElement>('.layout-run-text')].find(
+      (el) => el.textContent === '\t'
+    )!;
+    expect(tabEl.style.width).toBe(`${tabRecord.box.width}px`);
+    expect(tabEl.style.overflow).toBe('hidden');
+  });
 });
 
 describe('each run is its own box, so a mixed-size line highlights stepped', () => {
@@ -218,5 +241,77 @@ describe('a highlighted run is marked so dark mode can spare it', () => {
     ).querySelector<HTMLElement>('.docx-line span')!;
     expect(span.dataset.highlight).toBeUndefined();
     expect(span.style.backgroundColor).toBe('');
+  });
+});
+
+describe('paragraph and character shading paint from validated fills', () => {
+  test('fixture-equivalent paragraph and run fills paint on fragment and glyph box', () => {
+    const body =
+      `<w:p><w:pPr><w:shd w:val="clear" w:fill="F0F4F8"/></w:pPr>` +
+      `<w:r><w:rPr><w:shd w:val="clear" w:fill="FFEEAA"/></w:rPr><w:t>hi</w:t></w:r></w:p>`;
+    const container = paint(body);
+    const fragment = container.querySelector<HTMLElement>('.docx-paragraph-fragment')!;
+    const span = container.querySelector<HTMLElement>('.docx-line span')!;
+    expect(fragment.style.backgroundColor.toLowerCase()).toBe('#f0f4f8');
+    expect(span.style.backgroundColor.toLowerCase()).toBe('#ffeeaa');
+  });
+
+  test('highlight overrides character shading', () => {
+    const span = paint(
+      '<w:p><w:r><w:rPr><w:shd w:val="clear" w:fill="FFEEAA"/>' +
+        '<w:highlight w:val="yellow"/></w:rPr><w:t>hi</w:t></w:r></w:p>'
+    ).querySelector<HTMLElement>('.docx-line span')!;
+    expect(span.dataset.highlight).toBe('yellow');
+    expect(span.style.backgroundColor.toLowerCase()).toBe('#ffff00');
+  });
+
+  test('hostile paragraph and run fills are refused at the sink', () => {
+    const container = paint(
+      '<w:p><w:pPr><w:shd w:val="clear" w:fill="url(evil)"/></w:pPr>' +
+        '<w:r><w:rPr><w:shd w:val="clear" w:fill="javascript:alert(1)"/></w:rPr>' +
+        '<w:t>x</w:t></w:r></w:p>'
+    );
+    const fragment = container.querySelector<HTMLElement>('.docx-paragraph-fragment')!;
+    const span = container.querySelector<HTMLElement>('.docx-line span')!;
+    expect(fragment.style.backgroundColor).toBe('');
+    expect(span.style.backgroundColor).toBe('');
+    expect(fragment.style.backgroundImage).toBe('');
+    expect(span.style.backgroundImage).toBe('');
+  });
+});
+
+describe('paragraph bottom borders paint from layout geometry', () => {
+  test('empty bordered paragraph paints a rule at the published box', () => {
+    const body =
+      '<w:p><w:pPr><w:spacing w:before="100" w:after="120"/>' +
+      '<w:pBdr><w:bottom w:val="single" w:sz="16" w:space="2" w:color="FF0000"/></w:pBdr>' +
+      '</w:pPr></w:p>';
+    const layout = layoutOf(body);
+    const fragment = layout.pages[0]!.fragments[0]!;
+    expect(fragment.kind).toBe('paragraph');
+    if (fragment.kind !== 'paragraph') return;
+    expect(fragment.bottomBorder).toBeDefined();
+
+    const container = paint(body);
+    const rule = container.querySelector<HTMLElement>('.docx-paragraph-border-bottom')!;
+    expect(rule).not.toBeNull();
+    expect(rule.style.backgroundColor.toLowerCase()).toBe('#ff0000');
+    // Geometry comes from the record, relative to the fragment — not from the DOM.
+    expect(rule.style.height).toBe(`${fragment.bottomBorder!.box.height}px`);
+    expect(Number.parseFloat(rule.style.top)).toBe(
+      fragment.bottomBorder!.box.y - fragment.box.y
+    );
+    expect(rule.style.width).toBe(`${fragment.bottomBorder!.box.width}px`);
+  });
+
+  test('a hostile border colour is refused at the sink', () => {
+    const container = paint(
+      '<w:p><w:pPr><w:pBdr><w:bottom w:val="single" w:sz="8" w:color="javascript:alert(1)"/>' +
+        '</w:pBdr></w:pPr><w:r><w:t>x</w:t></w:r></w:p>'
+    );
+    const rule = container.querySelector<HTMLElement>('.docx-paragraph-border-bottom');
+    // Invalid colour falls back to black — never a javascript: or url() value.
+    expect(rule?.style.backgroundColor.toLowerCase()).toBe('#000000');
+    expect(rule?.style.backgroundImage).toBe('');
   });
 });

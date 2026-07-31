@@ -51,7 +51,86 @@ function collectNamespacesAndAliases(
   for (const child of node.children) collectNamespacesAndAliases(child, namespaceUris, aliasUris);
 }
 
-function controlledPrefixMap(root: OoxmlElement): ReadonlyMap<string, string> {
+function isMcPrefixListAttribute(attribute: OoxmlAttribute, owner: OoxmlElement): boolean {
+  return (
+    (attribute.namespaceUri === MC_NAMESPACE_URI &&
+      (attribute.localName === 'Ignorable' || attribute.localName === 'MustUnderstand')) ||
+    (owner.namespaceUri === MC_NAMESPACE_URI &&
+      owner.localName === 'Choice' &&
+      attribute.namespaceUri === '' &&
+      attribute.localName === 'Requires')
+  );
+}
+
+function isQNameValuedAttribute(attribute: OoxmlAttribute): boolean {
+  return (
+    (attribute.namespaceUri === MC_NAMESPACE_URI &&
+      MC_QNAME_LIST_ATTRIBUTES.has(attribute.localName)) ||
+    (attribute.namespaceUri === XSI_NAMESPACE_URI && attribute.localName === 'type')
+  );
+}
+
+/** Namespaces that must have a non-empty controlled prefix (attrs + MC/XSI QName values). */
+function collectNonEmptyPrefixUris(
+  node: OoxmlNode,
+  inheritedBindings: ReadonlyMap<string, string>,
+  uris: Set<string>
+): void {
+  if (node.kind === 'textValue') return;
+  const bindings = new Map(inheritedBindings);
+  for (const binding of node.namespaceBindings) bindings.set(binding.prefix, binding.namespaceUri);
+  for (const attribute of node.attributes) {
+    if (attribute.namespaceUri !== '') uris.add(attribute.namespaceUri);
+    if (typeof attribute.value !== 'string') continue;
+    try {
+      if (isMcPrefixListAttribute(attribute, node)) {
+        for (const namespaceUri of resolvedPrefixNamespaceSet(attribute.value, bindings))
+          uris.add(namespaceUri);
+      } else if (isQNameValuedAttribute(attribute)) {
+        for (const token of attribute.value.trim().split(/\s+/).filter(Boolean)) {
+          const [namespaceUri] = resolvedQNameToken(token, bindings);
+          if (namespaceUri !== '') uris.add(namespaceUri);
+        }
+      }
+    } catch {
+      // Undeclared / invalid tokens fail closed later during validate/serialize.
+    }
+  }
+  for (const child of node.children) collectNonEmptyPrefixUris(child, bindings, uris);
+}
+
+interface ControlledPrefixes {
+  /** Element-name prefixes; may map a root-default URI to `''`. */
+  readonly byUri: ReadonlyMap<string, string>;
+  /**
+   * Non-empty aliases for URIs whose element prefix is `''` but that also name
+   * attributes or appear in MC/XSI QName / prefix-list attribute values.
+   */
+  readonly attributeAliases: ReadonlyMap<string, string>;
+}
+
+/** Prefer a uniquely authored non-empty prefix for a URI (stable: sorted NCName). */
+function preferredAuthoredPrefix(
+  namespaceUri: string,
+  aliasUris: ReadonlyMap<string, ReadonlySet<string>>,
+  used: ReadonlySet<string>
+): string | undefined {
+  const candidates: string[] = [];
+  for (const [prefix, uris] of aliasUris) {
+    if (
+      prefix !== '' &&
+      isValidNCName(prefix) &&
+      !used.has(prefix) &&
+      uris.size === 1 &&
+      uris.has(namespaceUri)
+    )
+      candidates.push(prefix);
+  }
+  candidates.sort();
+  return candidates[0];
+}
+
+function controlledPrefixMap(root: OoxmlElement): ControlledPrefixes {
   const namespaceUris = new Set<string>();
   const aliasUris = new Map<string, Set<string>>();
   collectNamespacesAndAliases(root, namespaceUris, aliasUris);
@@ -68,40 +147,100 @@ function controlledPrefixMap(root: OoxmlElement): ReadonlyMap<string, string> {
       [...(aliasUris.get(prefix) ?? [])].some((uri) => uri !== namespaceUri)
     ) {
       suffix += 1;
-      prefix = `${preferred}${suffix}`;
+      // Empty preferred means "default xmlns"; collide into nsN rather than "0"/"1".
+      prefix = preferred === '' ? `ns${suffix}` : `${preferred}${suffix}`;
     }
     byUri.set(namespaceUri, prefix);
     used.add(prefix);
     namespaceUris.delete(namespaceUri);
   };
+  // OPC relationship parts (and other default-xmlns roots) must re-emit the unprefixed
+  // default form. Descendant `xmlns=""` / other default rebinds must NOT bump the root
+  // URI to `nsN` — that yields the Word Online–corrupt dual `xmlns` + `nsN:Relationships`.
+  const rootDefault =
+    root.namespaceUri !== '' &&
+    root.namespaceBindings.some(
+      (binding) => binding.prefix === '' && binding.namespaceUri === root.namespaceUri
+    );
+  if (rootDefault) {
+    byUri.set(root.namespaceUri, '');
+    used.add('');
+    namespaceUris.delete(root.namespaceUri);
+  }
   if (namespaceUris.has(WML_NAMESPACE_URI)) allocate(WML_NAMESPACE_URI, 'w');
   if (namespaceUris.has(MC_NAMESPACE_URI)) allocate(MC_NAMESPACE_URI, 'mc');
   if (namespaceUris.has(XSI_NAMESPACE_URI)) allocate(XSI_NAMESPACE_URI, 'xsi');
   let generated = 0;
   for (const namespaceUri of [...namespaceUris].sort()) {
-    let preferred: string;
-    do {
-      generated += 1;
-      preferred = `ns${generated}`;
-    } while (used.has(preferred));
+    const authored = preferredAuthoredPrefix(namespaceUri, aliasUris, used);
+    let preferred = authored;
+    if (preferred === undefined) {
+      do {
+        generated += 1;
+        preferred = `ns${generated}`;
+      } while (used.has(preferred));
+    }
     allocate(namespaceUri, preferred);
   }
-  return byUri;
+
+  const needsNonEmpty = new Set<string>();
+  collectNonEmptyPrefixUris(
+    root,
+    new Map([
+      ['xml', XML_NAMESPACE_URI],
+      ['xmlns', XMLNS_NAMESPACE_URI],
+    ]),
+    needsNonEmpty
+  );
+  const attributeAliases = new Map<string, string>();
+  for (const namespaceUri of [...needsNonEmpty].sort()) {
+    if (byUri.get(namespaceUri) !== '') continue;
+    let preferred = preferredAuthoredPrefix(namespaceUri, aliasUris, used);
+    if (preferred === undefined) {
+      do {
+        generated += 1;
+        preferred = `ns${generated}`;
+      } while (used.has(preferred));
+    }
+    attributeAliases.set(namespaceUri, preferred);
+    used.add(preferred);
+  }
+  return { byUri, attributeAliases };
+}
+
+function prefixForAttributeOrQName(
+  namespaceUri: string,
+  prefixes: ControlledPrefixes
+): string {
+  const alias = prefixes.attributeAliases.get(namespaceUri);
+  if (alias !== undefined) return alias;
+  const prefix = prefixes.byUri.get(namespaceUri);
+  if (prefix === undefined)
+    throw new Error(`no controlled prefix for namespace ${JSON.stringify(namespaceUri)}`);
+  if (prefix === '')
+    throw new Error(
+      `namespace ${JSON.stringify(namespaceUri)} requires a non-empty controlled prefix`
+    );
+  return prefix;
 }
 
 function controlledQualifiedName(
   namespaceUri: string,
   localName: string,
-  prefixes: ReadonlyMap<string, string>,
+  prefixes: ControlledPrefixes,
   attribute: boolean
 ): string {
   assertSerializableName(localName);
   assertSerializableNamespace(namespaceUri);
   if (namespaceUri === '') return localName;
-  const prefix = prefixes.get(namespaceUri);
-  if (!prefix)
+  if (attribute) {
+    const prefix = prefixForAttributeOrQName(namespaceUri, prefixes);
+    return `${prefix}:${localName}`;
+  }
+  const prefix = prefixes.byUri.get(namespaceUri);
+  if (prefix === undefined)
     throw new Error(`no controlled prefix for namespace ${JSON.stringify(namespaceUri)}`);
-  if (!attribute && prefix === '') return localName;
+  if (prefix === '') return localName;
   return `${prefix}:${localName}`;
 }
 
@@ -128,47 +267,57 @@ function controlledQNameValue(
   attribute: OoxmlAttribute,
   owner: OoxmlElement,
   bindings: ReadonlyMap<string, string>,
-  prefixes: ReadonlyMap<string, string>
+  prefixes: ControlledPrefixes
 ): string {
-  const prefixList =
-    (attribute.namespaceUri === MC_NAMESPACE_URI &&
-      (attribute.localName === 'Ignorable' || attribute.localName === 'MustUnderstand')) ||
-    (owner.namespaceUri === MC_NAMESPACE_URI &&
-      owner.localName === 'Choice' &&
-      attribute.namespaceUri === '' &&
-      attribute.localName === 'Requires');
-  if (prefixList) {
-    return resolvedPrefixNamespaceSet(attribute.value, bindings)
-      .map((namespaceUri) => {
-        const controlledPrefix = prefixes.get(namespaceUri);
-        if (!controlledPrefix)
-          throw new Error(`no controlled prefix for QName namespace ${namespaceUri}`);
-        return controlledPrefix;
-      })
+  const rawValue: unknown = attribute.value;
+  if (typeof rawValue !== 'string')
+    throw new Error(
+      `attribute {${attribute.namespaceUri}}${attribute.localName} value must be a string scalar`
+    );
+  if (isMcPrefixListAttribute(attribute, owner)) {
+    return resolvedPrefixNamespaceSet(rawValue, bindings)
+      .map((namespaceUri) => prefixForAttributeOrQName(namespaceUri, prefixes))
       .sort()
       .join(' ');
   }
-  const qnameList =
-    attribute.namespaceUri === MC_NAMESPACE_URI &&
-    MC_QNAME_LIST_ATTRIBUTES.has(attribute.localName);
-  const qnameScalar =
-    attribute.namespaceUri === XSI_NAMESPACE_URI && attribute.localName === 'type';
-  if (!qnameList && !qnameScalar) return attribute.value;
-  return attribute.value
+  if (!isQNameValuedAttribute(attribute)) return rawValue;
+  return rawValue
     .trim()
     .split(/\s+/)
     .filter(Boolean)
     .map((token) => {
       const [namespaceUri, localName] = resolvedQNameToken(token, bindings);
-      return controlledQualifiedName(namespaceUri, localName, prefixes, false);
+      assertSerializableName(localName);
+      assertSerializableNamespace(namespaceUri);
+      if (namespaceUri === '') return localName;
+      const prefix = prefixForAttributeOrQName(namespaceUri, prefixes);
+      return `${prefix}:${localName}`;
     })
     .sort()
     .join(' ');
 }
 
+function controlledRootDeclares(
+  binding: { readonly prefix: string; readonly namespaceUri: string },
+  rootBindings: ReadonlyMap<string, string>,
+  prefixes: ControlledPrefixes
+): boolean {
+  if (rootBindings.get(binding.prefix) === binding.namespaceUri) return true;
+  // One stable binding per URI on the root: controlled element prefix (possibly
+  // '') plus an optional non-empty attribute/QName alias are emitted in
+  // rootDeclarations. Extra authored aliases for the same URI
+  // (`xmlns:w14` + `xmlns:ns13`) are save-introduced bloat and must be dropped.
+  if (
+    prefixes.byUri.has(binding.namespaceUri) ||
+    prefixes.attributeAliases.has(binding.namespaceUri)
+  )
+    return true;
+  return false;
+}
+
 function serializeNode(
   node: OoxmlNode,
-  prefixes: ReadonlyMap<string, string>,
+  prefixes: ControlledPrefixes,
   inheritedBindings: ReadonlyMap<string, string>,
   inheritedPreserve: boolean,
   rootDeclarations: string
@@ -191,7 +340,7 @@ function serializeNode(
       assertSerializableNamespace(binding.namespaceUri);
       seenDeclarationPrefixes.add(binding.prefix);
       const declaredByControlledRoot =
-        rootDeclarations !== '' && bindings.get(binding.prefix) === binding.namespaceUri;
+        rootDeclarations !== '' && controlledRootDeclares(binding, bindings, prefixes);
       bindings.set(binding.prefix, binding.namespaceUri);
       if (declaredByControlledRoot) return '';
       const declarationName = binding.prefix === '' ? 'xmlns' : `xmlns:${binding.prefix}`;
@@ -223,6 +372,11 @@ function serializeNode(
     .join('')}</${name}>`;
 }
 
+function formatNamespaceDeclaration(namespaceUri: string, prefix: string): string {
+  if (prefix === '') return ` xmlns="${escapeXmlChecked(namespaceUri, 'xmlns')}"`;
+  return ` xmlns:${prefix}="${escapeXmlChecked(namespaceUri, `namespace ${prefix}`)}"`;
+}
+
 /**
  * Serialize normalized XML from a canonical part using repository-controlled
  * prefixes and validated, escaped names and values. This does not yet replace
@@ -234,12 +388,18 @@ export function serializeOoxmlPart(part: OoxmlPart): string {
     ['xml', XML_NAMESPACE_URI],
     ['xmlns', XMLNS_NAMESPACE_URI],
   ]);
-  const declarations = [...prefixes.entries()]
-    .filter(([namespaceUri]) => namespaceUri !== XML_NAMESPACE_URI)
-    .sort((left, right) => left[1].localeCompare(right[1]))
-    .map(([namespaceUri, prefix]) => {
+  const declarationEntries: { namespaceUri: string; prefix: string }[] = [];
+  for (const [namespaceUri, prefix] of prefixes.byUri) {
+    if (namespaceUri === XML_NAMESPACE_URI) continue;
+    declarationEntries.push({ namespaceUri, prefix });
+  }
+  for (const [namespaceUri, prefix] of prefixes.attributeAliases)
+    declarationEntries.push({ namespaceUri, prefix });
+  const declarations = declarationEntries
+    .sort((left, right) => left.prefix.localeCompare(right.prefix))
+    .map(({ namespaceUri, prefix }) => {
       rootBindings.set(prefix, namespaceUri);
-      return ` xmlns:${prefix}="${escapeXmlChecked(namespaceUri, `namespace ${prefix}`)}"`;
+      return formatNamespaceDeclaration(namespaceUri, prefix);
     })
     .join('');
   return serializeNode(part.root, prefixes, rootBindings, false, declarations);

@@ -9,6 +9,7 @@
 // The revision tag is carried, not computed here: `DocumentStore` owns revisions, and an
 // index that invented its own would let a stale projection claim to be current.
 
+import { hardBreakText } from './hard-break.ts';
 import type { OoxmlElement, OoxmlNode, OoxmlPart } from './ooxml-tree.ts';
 import { WML_NAMESPACE_URI } from './ooxml-tree.ts';
 import type { OoxmlPackage } from './ooxml-package.ts';
@@ -79,7 +80,7 @@ function attr(element: OoxmlElement, localName: string): string | null {
 function runText(node: OoxmlNode): string {
   if (node.kind === 'textValue') return node.value;
   if (node.kind === 'tab') return '\t';
-  if (node.kind === 'hardBreak') return '\n';
+  if (node.kind === 'hardBreak') return hardBreakText(node);
   if (node.kind === 'generic') return '';
   if (node.kind === 'runProperties' || node.kind === 'paragraphProperties') return '';
   let text = '';

@@ -5,8 +5,23 @@
 // position-independent — span x offsets are relative to the paragraph origin — which is
 // what lets one cached break serve the same content at any x (body or any cell).
 
-import type { OoxmlNode, OoxmlProperty } from '@docx-editor.dev/core-contract/store';
+import {
+  PAGE_BREAK_CHAR,
+  type OoxmlNode,
+  type OoxmlProperty,
+} from '@docx-editor.dev/core-contract/store';
+import {
+  piecesOfParagraph,
+  propertiesOfRunContainer,
+  type FieldPageContext,
+} from './field-projection.ts';
 import type { ParagraphLayoutCache } from './layout-cache.ts';
+import {
+  EMPTY_TAB_STOPS,
+  nextTabDestination,
+  tabAdvanceWidth,
+  type ResolvedTabStops,
+} from './paragraph-tabs.ts';
 import {
   DEFAULT_RUN_STYLE,
   displayText,
@@ -23,58 +38,70 @@ interface Piece {
   readonly style: ResolvedRunStyle;
   readonly start: number;
   readonly end: number;
+  /** Live PAGE/NUMPAGES projection — model range stays zero-width. */
+  readonly projected?: boolean;
 }
 
 export function propertiesOf(container: OoxmlNode | undefined): OoxmlProperty[] {
-  if (!container || container.kind === 'textValue') return [];
-  const props: OoxmlProperty[] = [];
-  for (const child of container.children) {
-    if (child.kind === 'textValue') continue;
-    const attributes: Record<string, string> = {};
-    for (const attribute of child.attributes) attributes[attribute.localName] = attribute.value;
-    props.push(
-      Object.keys(attributes).length > 0
-        ? { localName: child.localName, attributes }
-        : { localName: child.localName }
-    );
-  }
-  return props;
+  return propertiesOfRunContainer(container);
 }
 
-/** Flatten a paragraph into measurable pieces with UTF-16 source offsets. */
-function piecesOf(paragraph: OoxmlNode): Piece[] {
-  if (paragraph.kind === 'textValue') return [];
-  const pieces: Piece[] = [];
-  let offset = 0;
-  for (const child of paragraph.children) {
-    if (child.kind !== 'run') continue;
-    const props = propertiesOf(child.children.find((grand) => grand.kind === 'runProperties'));
-    const style = resolveRunStyle(props);
-    for (const grand of child.children) {
-      if (grand.kind === 'runProperties') continue;
-      let text = '';
-      if (grand.kind === 'text') {
-        for (const value of grand.children) if (value.kind === 'textValue') text += value.value;
-      } else if (grand.kind === 'tab') text = '\t';
-      else if (grand.kind === 'hardBreak') text = '\n';
-      // Unknown content has no text projection, so it occupies no offset — the same rule
-      // the ops and the binding use, which is what keeps their offsets in agreement.
-      if (text.length === 0) continue;
-      pieces.push({ text, props, style, start: offset, end: offset + text.length });
-      offset += text.length;
-    }
-  }
-  return pieces;
-}
-
-/** Break points inside a piece: after each run of whitespace, so words stay whole. */
+/**
+ * Break points inside a piece: after each run of spaces (words stay whole), and with each
+ * tab as its own atom so tab-stop geometry can size `\t` independently of neighbouring text.
+ */
 function wordBoundaries(text: string): number[] {
   const boundaries: number[] = [];
   for (let index = 0; index < text.length; index += 1) {
-    if (text[index] === ' ' || text[index] === '\t') boundaries.push(index + 1);
+    const ch = text[index]!;
+    if (ch === '\t') {
+      if (index > 0 && boundaries[boundaries.length - 1] !== index) boundaries.push(index);
+      boundaries.push(index + 1);
+    } else if (ch === ' ') {
+      boundaries.push(index + 1);
+    }
   }
   if (boundaries[boundaries.length - 1] !== text.length) boundaries.push(text.length);
   return boundaries;
+}
+
+/**
+ * Measure text following a tab until the next tab or hard break, across mixed-style pieces.
+ * Also reports the advance to the first decimal point for decimal-aligned stops.
+ */
+function measureFollowingTabSegment(
+  pieces: readonly Piece[],
+  pieceIndex: number,
+  offsetInPiece: number,
+  measurer: TextMeasurer
+): { width: number; decimalOffset: number } {
+  let width = 0;
+  let decimalOffset = 0;
+  let sawDecimal = false;
+  for (let index = pieceIndex; index < pieces.length; index += 1) {
+    const piece = pieces[index]!;
+    const from = index === pieceIndex ? offsetInPiece : 0;
+    for (let cursor = from; cursor < piece.text.length; ) {
+      const ch = piece.text[cursor]!;
+      if (ch === '\t' || ch === '\n' || ch === PAGE_BREAK_CHAR) {
+        return { width, decimalOffset: sawDecimal ? decimalOffset : width };
+      }
+      // Walk one code unit; surrogate pairs measure as two units under the fixed measurer
+      // contract (UTF-16), matching how source offsets are counted elsewhere.
+      const next = cursor + 1;
+      const glyph = piece.text.slice(cursor, next);
+      const advance = measurer.measure(displayText(glyph, piece.style), piece.style);
+      if (!sawDecimal && ch === '.') {
+        sawDecimal = true;
+        // Decimal point itself sits ON the stop — offset is the advance before it.
+      } else if (!sawDecimal) {
+        decimalOffset += advance;
+      }
+      width += advance;
+      cursor = next;
+    }
+  }
+  return { width, decimalOffset: sawDecimal ? decimalOffset : width };
 }
 
 export interface PendingLine {
@@ -84,6 +111,8 @@ export interface PendingLine {
   width: number;
   height: number;
   baseline: number;
+  /** When true, layout must start a new page after this line is placed. */
+  pageBreakAfter?: boolean;
 }
 
 /**
@@ -103,6 +132,7 @@ export function frozenLine(line: PendingLine): PendingLine {
     width: line.width,
     height: line.height,
     baseline: line.baseline,
+    ...(line.pageBreakAfter ? { pageBreakAfter: true } : {}),
   }) as PendingLine;
 }
 
@@ -207,17 +237,25 @@ export function breakParagraph(
   available: number,
   measurer: TextMeasurer,
   cache: ParagraphLayoutCache<readonly PendingLine[]> | undefined,
-  cacheKey: string | null
+  cacheKey: string | null,
+  inheritedRunProperties: readonly OoxmlProperty[] = [],
+  tabStops: ResolvedTabStops = EMPTY_TAB_STOPS,
+  pageContext?: FieldPageContext
 ): readonly PendingLine[] {
   const cached = cacheKey !== null && cache ? cache.get(cacheKey) : undefined;
   if (cached) return cached;
 
-  const pieces = piecesOf(paragraph);
+  const pieces = piecesOfParagraph(paragraph, inheritedRunProperties, pageContext);
+  const emptyStyle =
+    inheritedRunProperties.length === 0
+      ? DEFAULT_RUN_STYLE
+      : resolveRunStyle(inheritedRunProperties);
+  const rightEdge = indentLeft + available;
   const lines: PendingLine[] = [];
   let line: PendingLine = { spans: [], start: 0, end: 0, width: 0, height: 0, baseline: 0 };
 
   const closeLine = (): void => {
-    const metrics = measurer.lineMetrics(DEFAULT_RUN_STYLE);
+    const metrics = measurer.lineMetrics(emptyStyle);
     if (line.height === 0) {
       line.height = metrics.height;
       line.baseline = metrics.baseline;
@@ -233,7 +271,24 @@ export function breakParagraph(
     };
   };
 
-  for (const piece of pieces) {
+  for (let pieceIndex = 0; pieceIndex < pieces.length; pieceIndex += 1) {
+    const piece = pieces[pieceIndex]!;
+    if (piece.text === PAGE_BREAK_CHAR) {
+      const breakMetrics = measurer.lineMetrics(piece.style);
+      line.spans.push({
+        range: { paragraphId, start: piece.start, end: piece.end },
+        text: PAGE_BREAK_CHAR,
+        props: piece.props,
+        style: piece.style,
+        box: { x: indentLeft + line.width, y: 0, width: 0, height: breakMetrics.height },
+      });
+      line.height = Math.max(line.height, breakMetrics.height);
+      line.baseline = Math.max(line.baseline, breakMetrics.baseline);
+      line.end = piece.end;
+      closeLine();
+      lines[lines.length - 1]!.pageBreakAfter = true;
+      continue;
+    }
     if (piece.text === '\n') {
       // A hard break ends the line without ending the paragraph — and it OCCUPIES a model
       // offset. Emitting no span for it meant the text reconstructed from the records was
@@ -259,13 +314,47 @@ export function breakParagraph(
     for (const boundary of wordBoundaries(piece.text)) {
       const candidate = piece.text.slice(consumed, boundary);
       if (candidate.length === 0) continue;
+      // Projected PAGE/NUMPAGES digits keep a zero-width model range so surrounding source
+      // offsets stay aligned with binding / paragraphTextOf.
+      const spanRange = piece.projected
+        ? { paragraphId, start: piece.start, end: piece.end }
+        : { paragraphId, start: piece.start + consumed, end: piece.start + boundary };
+
+      if (candidate === '\t') {
+        // A tab that cannot advance on this line wraps first, then reapplies — matching
+        // Word's "tab past the right margin starts a new line" behaviour.
+        if (line.spans.length > 0 && line.width >= available) closeLine();
+        const currentX = indentLeft + line.width;
+        const segment = measureFollowingTabSegment(pieces, pieceIndex, boundary, measurer);
+        const destination = nextTabDestination(tabStops, currentX, rightEdge);
+        const width = tabAdvanceWidth(
+          destination.alignment,
+          currentX,
+          destination.positionPt,
+          segment.width,
+          segment.decimalOffset
+        );
+        line.spans.push({
+          range: spanRange,
+          text: '\t',
+          props: piece.props,
+          style: piece.style,
+          box: { x: currentX, y: 0, width, height: metrics.height },
+        });
+        line.width += width;
+        line.height = Math.max(line.height, metrics.height);
+        line.baseline = Math.max(line.baseline, metrics.baseline);
+        line.end = piece.projected ? piece.end : piece.start + boundary;
+        consumed = boundary;
+        continue;
+      }
+
       // Measured as DRAWN: `w:caps` changes the glyphs, so measuring the source text
       // would size the line for characters the reader never sees.
       const width = measurer.measure(displayText(candidate, piece.style), piece.style);
       if (line.width + width > available && line.spans.length > 0) closeLine();
-      const spanStart = piece.start + consumed;
       line.spans.push({
-        range: { paragraphId, start: spanStart, end: piece.start + boundary },
+        range: spanRange,
         text: candidate,
         props: piece.props,
         style: piece.style,
@@ -274,7 +363,7 @@ export function breakParagraph(
       line.width += width;
       line.height = Math.max(line.height, metrics.height);
       line.baseline = Math.max(line.baseline, metrics.baseline);
-      line.end = piece.start + boundary;
+      line.end = piece.projected ? piece.end : piece.start + boundary;
       consumed = boundary;
     }
   }

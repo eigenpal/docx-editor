@@ -124,6 +124,8 @@ export {
 } from './ooxml-package.ts';
 export {
   resolveHeaderFooterParts,
+  resolveHeaderFooterPartsBySection,
+  collectSectionPropertyNodes,
   type HeaderFooterParts,
   type HeaderFooterVariant,
 } from './hf-references.ts';
@@ -148,6 +150,14 @@ export {
   type EditOptions,
   type OoxmlEditResult,
 } from './ooxml-edit.ts';
+export {
+  PAGE_BREAK_CHAR,
+  hardBreakAttributes,
+  hardBreakKind,
+  hardBreakText,
+  isPageBreakNode,
+  type HardBreakKind,
+} from './hard-break.ts';
 export {
   deriveOoxmlIndexes,
   type OoxmlIndexes,

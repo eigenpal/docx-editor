@@ -11,6 +11,7 @@
 // deliberately ignores lexical detail, because byte equality is the alternative D9 rejects:
 // it rejects harmless normalization while failing to say what was lost.
 
+import { hardBreakText } from './hard-break.ts';
 import { canonicalOoxmlFingerprint, WML_NAMESPACE_URI } from './ooxml-tree.ts';
 import type {
   OoxmlElement,
@@ -76,7 +77,7 @@ function propertyTokens(
 function textOf(node: OoxmlNode): string {
   if (node.kind === 'textValue') return node.value;
   if (node.kind === 'tab') return '\t';
-  if (node.kind === 'hardBreak') return '\n';
+  if (node.kind === 'hardBreak') return hardBreakText(node);
   if (node.kind === 'runProperties' || node.kind === 'paragraphProperties') return '';
   if (node.kind === 'generic') return '';
   let text = '';
@@ -139,19 +140,20 @@ function digestParagraph(paragraph: OoxmlParagraphNode, ordinal: number): Paragr
   };
 }
 
-function findBody(root: OoxmlElement): OoxmlElement | null {
+function storyRootOf(root: OoxmlElement): OoxmlElement | null {
+  if (root.localName === 'hdr' || root.localName === 'ftr') return root;
   if (root.kind === 'body') return root;
   for (const child of root.children) {
     if (child.kind === 'textValue') continue;
-    const found = findBody(child);
+    const found = storyRootOf(child);
     if (found) return found;
   }
   return null;
 }
 
-/** Digest one part's story, or null when the part holds no body. */
+/** Digest one part's story, or null when the part holds no flowable root. */
 export function digestPart(part: OoxmlPart): StoryDigest | null {
-  const body = findBody(part.root);
+  const body = storyRootOf(part.root);
   if (!body) return null;
   const paragraphs: ParagraphDigest[] = [];
   for (const child of body.children) {

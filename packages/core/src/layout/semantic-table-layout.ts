@@ -15,16 +15,19 @@
 // `breakParagraph`, so they hit the same cache with keys at the cell's content width.
 
 import type { OoxmlElement } from '@docx-editor.dev/core-contract/store';
+import type { FieldPageContext } from './field-projection.ts';
 import { paragraphLayoutKey, type ParagraphLayoutCache } from './layout-cache.ts';
 import {
   alignSpans,
   breakParagraph,
-  paragraphAlignment,
-  paragraphIndent,
-  propertiesOf,
   type PendingLine,
 } from './paragraph-flow.ts';
+import { collapsedSpaceBefore } from './paragraph-style.ts';
 import { DEFAULT_RUN_STYLE } from './run-style.ts';
+import {
+  resolveParagraphLayoutInputs,
+  type StyleCascadeTable,
+} from './style-cascade.ts';
 import {
   CELL_PAD,
   MAX_TABLE_NESTING,
@@ -35,6 +38,7 @@ import {
 import type {
   BlockFragmentRecord,
   LineRecord,
+  ParagraphBottomBorderRecord,
   ParagraphFragmentRecord,
   TableCellFragmentRecord,
   TableFragmentRecord,
@@ -48,6 +52,9 @@ export interface TableFlowDeps {
   readonly producer: string;
   /** Line ids continue the document-wide counter, so records stay deterministic. */
   readonly nextLineId: () => string;
+  readonly styleCascade?: StyleCascadeTable;
+  /** When set (header/footer page projection), PAGE/NUMPAGES resolve against this context. */
+  readonly pageContext?: FieldPageContext;
 }
 
 function sumCols(cols: readonly number[], from: number, to: number): number {
@@ -68,18 +75,33 @@ function placeCellParagraph(
   originX: number,
   cellContentWidth: number,
   top: number,
-  deps: TableFlowDeps
-): { readonly fragment: ParagraphFragmentRecord; readonly bottom: number } {
+  deps: TableFlowDeps,
+  previousSpaceAfter: number
+): {
+  readonly fragment: ParagraphFragmentRecord;
+  readonly bottom: number;
+  readonly spaceAfter: number;
+} {
   const paragraphId = paragraph.id;
-  const props = propertiesOf(
-    paragraph.children.find((child) => child.kind === 'paragraphProperties')
-  );
-  const indent = paragraphIndent(props);
-  const available = Math.max(1, cellContentWidth - indent.left - indent.right);
-  const alignment = paragraphAlignment(props);
+  const {
+    props,
+    indent,
+    available,
+    alignment,
+    spacing,
+    bottomBorder,
+    shading,
+    inheritedRunProperties,
+    tabStops,
+    tabStopsCacheToken,
+  } = resolveParagraphLayoutInputs(paragraph, cellContentWidth, deps.styleCascade);
   const key = paragraphLayoutKey({
     paragraph,
-    properties: props,
+    properties: [
+      ...props,
+      ...inheritedRunProperties,
+      { localName: 'tabStops', attributes: { token: tabStopsCacheToken } },
+    ],
     width: available,
     producer: deps.producer,
   });
@@ -90,11 +112,15 @@ function placeCellParagraph(
     available,
     deps.measurer,
     deps.cache,
-    deps.cache ? key : null
+    deps.cache ? key : null,
+    inheritedRunProperties,
+    tabStops,
+    deps.pageContext
   );
 
+  const appliedBefore = collapsedSpaceBefore(spacing.before, previousSpaceAfter);
   const records: LineRecord[] = [];
-  let y = top;
+  let y = top + appliedBefore;
   for (const [lineIndex, pendingLine] of lines.entries()) {
     records.push({
       id: deps.nextLineId(),
@@ -125,6 +151,24 @@ function placeCellParagraph(
     y += pendingLine.height;
   }
 
+  const linesBottom = y;
+  let bottomBorderRecord: ParagraphBottomBorderRecord | undefined;
+  let contentBottom = linesBottom;
+  if (bottomBorder) {
+    const ruleY = linesBottom + bottomBorder.spacePt;
+    bottomBorderRecord = {
+      edge: bottomBorder,
+      box: {
+        x: originX + indent.left,
+        y: ruleY,
+        width: available,
+        height: bottomBorder.widthPt,
+      },
+    };
+    contentBottom = ruleY + bottomBorder.widthPt;
+  }
+  const bottom = contentBottom + spacing.after;
+
   return {
     fragment: {
       kind: 'paragraph',
@@ -137,10 +181,19 @@ function placeCellParagraph(
         end: lines[lines.length - 1]?.end ?? 0,
       },
       props,
+      spacing: { before: appliedBefore, after: spacing.after },
+      ...(bottomBorderRecord ? { bottomBorder: bottomBorderRecord } : {}),
+      ...(shading === undefined ? {} : { shading }),
       lines: records,
-      box: { x: originX + indent.left, y: top, width: available, height: y - top },
+      box: {
+        x: originX + indent.left,
+        y: top,
+        width: available,
+        height: bottom - top,
+      },
     },
-    bottom: y,
+    bottom,
+    spaceAfter: spacing.after,
   };
 }
 
@@ -159,8 +212,10 @@ export function flowBlocksInBox(
 ): { readonly blocks: BlockFragmentRecord[]; readonly bottom: number } {
   const fragments: BlockFragmentRecord[] = [];
   let y = top;
+  let previousSpaceAfter = 0;
   for (const block of blocks) {
     if (block.kind === 'table') {
+      previousSpaceAfter = 0;
       const nested = emitNestedTable(block, left, right, y, depth + 1, deps);
       if (nested) {
         fragments.push(nested.fragment);
@@ -169,9 +224,17 @@ export function flowBlocksInBox(
       continue;
     }
     if (block.kind !== 'paragraph') continue;
-    const placed = placeCellParagraph(block, left, Math.max(1, right - left), y, deps);
+    const placed = placeCellParagraph(
+      block,
+      left,
+      Math.max(1, right - left),
+      y,
+      deps,
+      previousSpaceAfter
+    );
     fragments.push(placed.fragment);
     y = placed.bottom;
+    previousSpaceAfter = placed.spaceAfter;
   }
   return { blocks: fragments, bottom: y };
 }

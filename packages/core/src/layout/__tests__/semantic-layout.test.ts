@@ -147,6 +147,40 @@ describe('line breaking and pagination (task 7.3)', () => {
     expect(layout.pages[1]!.fragments[0]!.lines[0]!.spans[0]!.text).toBe('second');
   });
 
+  test('w:br w:type="page" forces a page break inside one paragraph', () => {
+    const part = load(
+      '<w:p><w:r><w:t>before</w:t><w:br w:type="page"/><w:t>after</w:t></w:r></w:p>'
+    );
+    const layout = lay(part, { ...SMALL, height: 1000 });
+    expect(layout.pages).toHaveLength(2);
+    const paragraphId = '/word/document.xml#0.0.0';
+    const fragments = fragmentsOfParagraph(layout, paragraphId);
+    expect(fragments).toHaveLength(2);
+    expect(fragments[0]!.lines.map((line) => line.spans.map((s) => s.text).join('')).join('')).toBe(
+      'before\f'
+    );
+    expect(fragments[1]!.lines.map((line) => line.spans.map((s) => s.text).join('')).join('')).toBe(
+      'after'
+    );
+  });
+
+  test('a page break in an otherwise empty paragraph pushes following content to the next page', () => {
+    const part = load(
+      '<w:p><w:r><w:br w:type="page"/></w:r></w:p>' + paragraph('after')
+    );
+    const layout = lay(part, { ...SMALL, height: 1000 });
+    expect(layout.pages).toHaveLength(2);
+    expect(layout.pages[0]!.fragments[0]!.lines[0]!.spans[0]!.text).toBe('\f');
+    expect(layout.pages[1]!.fragments[0]!.lines[0]!.spans[0]!.text).toBe('after');
+  });
+
+  test('an ordinary w:br remains a line break', () => {
+    const part = load('<w:p><w:r><w:t>a</w:t><w:br/><w:t>b</w:t></w:r></w:p>');
+    const layout = lay(part, { ...SMALL, height: 1000 });
+    expect(layout.pages).toHaveLength(1);
+    expect(linesOf(layout)).toHaveLength(2);
+  });
+
   test('a left indent narrows the line and offsets it', () => {
     const part = load(paragraph('indented', '<w:ind w:left="720"/>')); // 720 twips = 36pt
     const [fragment] = layout(part).pages[0]!.fragments;

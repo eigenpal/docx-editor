@@ -7,6 +7,7 @@
 import { describe, expect, test } from 'bun:test';
 import { zipSync, strToU8 } from 'fflate';
 import { canonicalOoxmlFingerprint } from '../package/ooxml-tree.ts';
+import { diffSemanticDigests, semanticDigest } from '../package/ooxml-digest.ts';
 import { readOoxmlPackage, withPart, writeOoxmlPackage } from '../package/ooxml-package.ts';
 import { resolveHeaderFooterParts } from '../package/hf-references.ts';
 import { applyTreeOp } from '../store/tree-ops.ts';
@@ -128,6 +129,7 @@ describe('header/footer reference resolution', () => {
     const resolved = resolveHeaderFooterParts(load(build()));
     expect(resolved.headers.size).toBe(0);
     expect(resolved.footers.size).toBe(0);
+    expect(resolved.titlePage).toBe(false);
   });
 });
 
@@ -140,7 +142,7 @@ describe('fidelity with header parts', () => {
       overrides: HEADER_OVERRIDE,
     });
 
-  test('the package round-trips both oracles with its header part intact', () => {
+  test('the package round-trips the canonical fingerprint with its header part intact', () => {
     const pkg = load(packed());
     const reopened = load(writeOoxmlPackage(pkg));
     for (const [name, before] of pkg.parts) {
@@ -148,6 +150,31 @@ describe('fidelity with header parts', () => {
         canonicalOoxmlFingerprint(before)
       );
     }
+  });
+
+  test('header and footer parts survive save/reopen semantic digest', () => {
+    const bytes = build({
+      references:
+        '<w:headerReference w:type="default" r:id="rId7"/>' +
+        '<w:footerReference w:type="default" r:id="rId8"/>',
+      rels:
+        `<Relationship Id="rId7" Type="${R}/header" Target="header1.xml"/>` +
+        `<Relationship Id="rId8" Type="${R}/footer" Target="footer1.xml"/>`,
+      headerParts: { 'word/header1.xml': HEADER_XML, 'word/footer1.xml': FOOTER_XML },
+      overrides: HEADER_OVERRIDE + FOOTER_OVERRIDE,
+    });
+    const pkg = load(bytes);
+    const header = pkg.parts.get('/word/header1.xml')!;
+    const footer = pkg.parts.get('/word/footer1.xml')!;
+    const beforeDigest = semanticDigest([header, footer]);
+    const reopened = load(writeOoxmlPackage(pkg));
+    const reopenedHeader = reopened.parts.get('/word/header1.xml')!;
+    const reopenedFooter = reopened.parts.get('/word/footer1.xml')!;
+    expect(
+      diffSemanticDigests(beforeDigest, semanticDigest([reopenedHeader, reopenedFooter]))
+    ).toEqual([]);
+    expect(canonicalOoxmlFingerprint(reopenedHeader)).toBe(canonicalOoxmlFingerprint(header));
+    expect(canonicalOoxmlFingerprint(reopenedFooter)).toBe(canonicalOoxmlFingerprint(footer));
   });
 
   test('editing the body leaves the header part fingerprint-identical', () => {

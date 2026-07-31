@@ -5,6 +5,7 @@
 // tree-op-validate.ts so a rejected op is a true no-op. The op vocabulary and the segment
 // model live in tree-op-validate.ts; both are re-exported via tree-ops.ts.
 
+import { hardBreakAttributes, hardBreakText } from '../package/hard-break.ts';
 import {
   WML_NAMESPACE_URI,
   type OoxmlElement,
@@ -70,7 +71,11 @@ function textElement(nextId: () => string, text: string): OoxmlNode {
   } as unknown as OoxmlNode;
 }
 
-function simpleElement(nextId: () => string, localName: 'tab' | 'br'): OoxmlNode {
+function simpleElement(
+  nextId: () => string,
+  localName: 'tab' | 'br',
+  breakKind: 'line' | 'page' = 'line'
+): OoxmlNode {
   return {
     id: nextId(),
     kind: localName === 'tab' ? 'tab' : 'hardBreak',
@@ -78,7 +83,7 @@ function simpleElement(nextId: () => string, localName: 'tab' | 'br'): OoxmlNode
     localName,
     prefix: 'w',
     namespaceBindings: [],
-    attributes: [],
+    attributes: localName === 'br' ? [...hardBreakAttributes(breakKind)] : [],
     children: [],
   } as unknown as OoxmlNode;
 }
@@ -151,7 +156,15 @@ export function applyTreeOp(part: OoxmlPart, op: TreeDocOp, options?: EditOption
         part,
         paragraph,
         op.offset,
-        [(mint) => simpleElement(mint, 'br')],
+        [(mint) => simpleElement(mint, 'br', 'line')],
+        options
+      );
+    case 'insertPageBreak':
+      return applyInsertContent(
+        part,
+        paragraph,
+        op.offset,
+        [(mint) => simpleElement(mint, 'br', 'page')],
         options
       );
     case 'deleteText':
@@ -762,7 +775,7 @@ export function paragraphTextOf(part: OoxmlPart, paragraphId: string): string | 
   for (const segment of segmentsOf(paragraph)) {
     if (segment.node.kind === 'textValue') text += segment.node.value;
     else if (segment.node.kind === 'tab') text += '\t';
-    else text += '\n';
+    else if (segment.node.kind === 'hardBreak') text += hardBreakText(segment.node);
   }
   return text;
 }

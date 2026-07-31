@@ -281,12 +281,13 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
   }
 
   // Fonts resolve asynchronously (HarfBuzz init + validation), and the surface samples its
-  // measurer at mount. So the document opens on the fixed measurer immediately, and when the
-  // shaped measurer arrives the surface is remounted FROM THE CURRENT TREE — `session.save()`
-  // — so every edit made before fonts resolved survives. What does not survive is the undo
-  // stack and the caret, the honest cost of a full remount; a rescale-in-place path on the
-  // surface would remove it. In the not-yet-attached case there is nothing to remount: the
-  // measurer is simply picked up by the next mount.
+  // measurer at mount. So the document opens on the default surface measurer immediately
+  // (canvas when available, otherwise fixed), and when the shaped measurer arrives the
+  // surface is remounted FROM THE CURRENT TREE — `session.save()` — so every edit made
+  // before fonts resolved survives. What does not survive is the undo stack and the caret,
+  // the honest cost of a full remount; a rescale-in-place path on the surface would remove
+  // it. In the not-yet-attached case there is nothing to remount: the measurer is simply
+  // picked up by the next mount.
   if (config.fonts) {
     const fonts = config.fonts;
     void createLayoutShaping(fonts)

@@ -20,11 +20,12 @@
 import { openTreeSession, type TreeDocxSession } from '@docx-editor.dev/core-contract/binding';
 import type { TreeDocOp } from '@docx-editor.dev/core-contract/store';
 import {
-  createFixedMeasurer,
   createLayoutScheduler,
   createLayoutSession,
   createParagraphLayoutCache,
+  buildStyleCascadeTable,
   readSectionProperties,
+  resolveDefaultSurfaceMeasurer,
   documentOrder,
   layoutSemanticDocument,
   moveCaret,
@@ -65,7 +66,14 @@ import {
   paintedTextOf,
   paragraphReplacePlan,
 } from './surface-input.ts';
-import { createFurnitureSource, equalPageSets, visiblePageSet } from './surface-pages.ts';
+import {
+  createFurnitureSource,
+  equalPageSets,
+  equalSurfaceExtents,
+  surfaceExtent,
+  visiblePageSet,
+  type SurfaceExtent,
+} from './surface-pages.ts';
 
 export type {
   OpenPaginatedResult,
@@ -97,8 +105,14 @@ export function mountPaginatedSurface(
     };
   }
   const session = opened.session;
-  const measurer = options.measurer ?? createFixedMeasurer();
   const scale = options.scale ?? 96 / 72;
+  // Default measurement: canvas when the browser can supply a 2d context (so painted Arial
+  // Bold 26pt is measured as Arial Bold 26pt), otherwise the deterministic fixed measurer
+  // for SSR/tests/happy-dom. A host- or shaping-supplied measurer always wins.
+  const defaults = options.measurer
+    ? null
+    : resolveDefaultSurfaceMeasurer(scale, { ownerDocument: container.ownerDocument });
+  const measurer = options.measurer ?? defaults!.measurer;
   // The incremental machinery, actually wired. Without these the surface re-measured and
   // re-placed the entire document on every keystroke, which the caches and the session were
   // built to avoid.
@@ -106,7 +120,9 @@ export function mountPaginatedSurface(
   const layoutSession = createLayoutSession();
   // Identifies WHO measured. A cache keyed on content alone would serve the pre-font layout
   // for the rest of the session once fonts resolve, so the measurer's identity is folded in.
-  const producer = options.producer ?? (options.measurer ? 'host-measurer' : 'fixed-measurer');
+  const producer =
+    options.producer ??
+    (options.measurer ? 'host-measurer' : (defaults?.producer ?? 'fixed-measurer'));
   const document = container.ownerDocument;
 
   const pagesLayer = document.createElement('div');
@@ -150,12 +166,15 @@ export function mountPaginatedSurface(
   let lastSelectionMs = 0;
 
   // The document's declared geometry plus header/footer stories, laid out per part and
-  // memoized in the source itself.
+  // memoized in the source itself. Styles are immutable in-session, so the cascade table
+  // is built once and shared by body layout and header/footer stories.
+  const styleCascade = buildStyleCascadeTable(session.stylesRoot());
   const furnitureSource = createFurnitureSource({
     session,
     measurer,
     producer,
     cache: layoutCache,
+    styleCascade,
   });
 
   let currentLayout = layoutOnce();
@@ -165,10 +184,11 @@ export function mountPaginatedSurface(
     const began = now();
     const layout = layoutSemanticDocument(session.part(), session.revision(), {
       measurer,
-      geometry: furnitureSource.geometry(),
       cache: layoutCache,
       session: layoutSession,
       producer,
+      styleCascade,
+      sectionFurniture: furnitureSource.sectionFurniture(),
       furniture: furnitureSource.furniture(),
     });
     lastLayoutMs = now() - began;
@@ -192,10 +212,11 @@ export function mountPaginatedSurface(
       const began = now();
       const layout = layoutSemanticDocument(session.part(), scope.revision, {
         measurer,
-        geometry: furnitureSource.geometry(),
         cache: layoutCache,
         session: layoutSession,
         producer,
+        styleCascade,
+        sectionFurniture: furnitureSource.sectionFurniture(),
         furniture: furnitureSource.furniture(),
       });
       lastLayoutMs = now() - began;
@@ -251,6 +272,19 @@ export function mountPaginatedSurface(
 
   /** The set the current paint was built with, so a scroll can tell whether it must repaint. */
   let materializedSet: ReadonlySet<number> | undefined;
+  /** Sizing the last paint used, so scroll can re-centre when the visible width band moves. */
+  let materializedExtent: SurfaceExtent | undefined;
+
+  function applyPageOffsets(extent: SurfaceExtent): void {
+    for (const page of currentLayout.pages) {
+      const element = pagesLayer.querySelector<HTMLElement>(
+        `[data-page-index="${page.index}"]`
+      );
+      if (!element) continue;
+      const offsetX = extent.pageOffsetX.get(page.index) ?? 0;
+      element.style.left = `${(page.box.x + offsetX) * scale}px`;
+    }
+  }
 
   function render(notifyChange = true): void {
     const paintBegan = now();
@@ -271,13 +305,12 @@ export function mountPaginatedSurface(
     // The pages are absolutely positioned, so the layer has no intrinsic size and the
     // surface would collapse to zero — pages then escape whatever centres or scrolls it.
     // Size it from the records, which is the only place the extent is known.
-    const last = currentLayout.pages[currentLayout.pages.length - 1];
-    const width = Math.max(0, ...currentLayout.pages.map((page) => page.box.x + page.box.width));
-    const height = last ? last.box.y + last.box.height : 0;
-    pagesLayer.style.width = `${width * scale}px`;
-    pagesLayer.style.height = `${height * scale}px`;
-    container.style.width = `${width * scale}px`;
-    container.style.height = `${height * scale}px`;
+    materializedExtent = surfaceExtent(currentLayout, materializedSet);
+    applyPageOffsets(materializedExtent);
+    pagesLayer.style.width = `${materializedExtent.width * scale}px`;
+    pagesLayer.style.height = `${materializedExtent.height * scale}px`;
+    container.style.width = `${materializedExtent.width * scale}px`;
+    container.style.height = `${materializedExtent.height * scale}px`;
     // Sizing included: the style writes above invalidate layout, and the selection sync
     // right after is what forces the browser to resolve it. Splitting the timer here would
     // book the paint's own cost to the selection phase.
@@ -295,7 +328,15 @@ export function mountPaginatedSurface(
    * not report a state change: nothing about the document, selection or revision moved.
    */
   function rematerialize(): void {
-    if (equalPageSets(visiblePages(), materializedSet)) return;
+    const nextSet = visiblePages();
+    const nextExtent = surfaceExtent(currentLayout, nextSet);
+    if (
+      materializedExtent &&
+      equalPageSets(nextSet, materializedSet) &&
+      equalSurfaceExtents(nextExtent, materializedExtent)
+    ) {
+      return;
+    }
     render(false);
   }
 

@@ -10,8 +10,13 @@
 //
 // Twips throughout, because that is what the file stores — a twentieth of a point. Converting
 // early would round twice, once here and once into layout units.
+//
+// Multi-section documents: a paragraph-level `w:pPr/w:sectPr` ends the section that contains
+// that paragraph; the body-level `w:sectPr` ends the final section (ECMA-376 §17.6). Absent
+// `w:type` defaults to `nextPage`.
 
-import type { OoxmlNode, OoxmlPart } from '@docx-editor.dev/core-contract/store';
+import type { OoxmlElement, OoxmlNode, OoxmlPart } from '@docx-editor.dev/core-contract/store';
+import { storyBlocks } from './story-roots.ts';
 import { DEFAULT_PAGE_GEOMETRY, type PageGeometry } from './semantic-records.ts';
 
 export interface SectionMargins {
@@ -24,12 +29,31 @@ export interface SectionMargins {
   readonly gutterTwips: number;
 }
 
+/** How this section is placed relative to the previous one (ECMA-376 `CT_SectType`). */
+export type SectionBreakType = 'nextPage' | 'continuous' | 'evenPage' | 'oddPage';
+
 export interface SectionProperties {
   readonly pageSize: { readonly widthTwips: number; readonly heightTwips: number };
   readonly margins: SectionMargins;
   readonly columns: { readonly count: number; readonly gapTwips: number };
   readonly landscape: boolean;
   readonly titlePage: boolean;
+  /** Absent `w:type` defaults to `nextPage`. */
+  readonly breakType: SectionBreakType;
+  /** The raw `w:sectPr` node this section was read from, when present. */
+  readonly sectPr?: OoxmlElement;
+}
+
+/**
+ * One section of the body story: contiguous top-level blocks plus the properties that end it.
+ *
+ * `blockStart` / `blockEndExclusive` index into `storyBlocks(part)`.
+ */
+export interface DocumentSection {
+  readonly index: number;
+  readonly properties: SectionProperties;
+  readonly blockStart: number;
+  readonly blockEndExclusive: number;
 }
 
 const TWIPS_PER_POINT = 20;
@@ -49,6 +73,7 @@ export const DEFAULT_SECTION_PROPERTIES: SectionProperties = Object.freeze({
   columns: Object.freeze({ count: 1, gapTwips: 720 }),
   landscape: false,
   titlePage: false,
+  breakType: 'nextPage',
 });
 
 /**
@@ -91,29 +116,16 @@ const childNamed = (node: OoxmlNode, localName: string): OoxmlNode | undefined =
   return undefined;
 };
 
-/** The body-level `w:sectPr`, which is the last child of `w:body`. */
-function bodySectionNode(part: OoxmlPart): OoxmlNode | undefined {
-  const find = (node: OoxmlNode): OoxmlNode | undefined => {
-    if (node.kind === 'textValue') return undefined;
-    if (node.kind === 'body') return childNamed(node, 'sectPr');
-    for (const child of node.children ?? []) {
-      const found = find(child);
-      if (found) return found;
-    }
-    return undefined;
-  };
-  return find(part.root);
+function breakTypeOf(sectPr: OoxmlNode | undefined): SectionBreakType {
+  const type = sectPr ? childNamed(sectPr, 'type') : undefined;
+  const value = type ? attribute(type, 'val') : undefined;
+  if (value === 'continuous' || value === 'evenPage' || value === 'oddPage') return value;
+  // Absent or unknown → nextPage (ECMA-376 §17.6.22).
+  return 'nextPage';
 }
 
-/**
- * The section properties a part declares, or Word's defaults where it says nothing.
- *
- * Only the BODY-level section today. A document with mid-body section breaks has several,
- * and honouring them is the per-section lane; taking the first would be worse than taking
- * the last, because the body-level one is the one that governs the document as a whole.
- */
-export function readSectionProperties(part: OoxmlPart): SectionProperties {
-  const sectPr = bodySectionNode(part);
+/** Parse one `w:sectPr` into geometry/break properties. */
+export function parseSectionProperties(sectPr: OoxmlNode | undefined): SectionProperties {
   if (!sectPr) return DEFAULT_SECTION_PROPERTIES;
 
   const pgSz = childNamed(sectPr, 'pgSz');
@@ -157,7 +169,93 @@ export function readSectionProperties(part: OoxmlPart): SectionProperties {
     },
     landscape: orientation === 'landscape',
     titlePage: childNamed(sectPr, 'titlePg') !== undefined,
+    breakType: breakTypeOf(sectPr),
+    ...(sectPr.kind !== 'textValue' ? { sectPr: sectPr as OoxmlElement } : {}),
   };
+}
+
+/** The body-level `w:sectPr`, which is the last child of `w:body`. */
+function bodySectionNode(part: OoxmlPart): OoxmlNode | undefined {
+  const find = (node: OoxmlNode): OoxmlNode | undefined => {
+    if (node.kind === 'textValue') return undefined;
+    if (node.kind === 'body') return childNamed(node, 'sectPr');
+    for (const child of node.children ?? []) {
+      const found = find(child);
+      if (found) return found;
+    }
+    return undefined;
+  };
+  return find(part.root);
+}
+
+/** `w:sectPr` nested under a paragraph's `w:pPr`, if present. */
+export function paragraphSectionNode(paragraph: OoxmlElement): OoxmlElement | undefined {
+  const pPr = paragraph.children.find((child) => child.kind === 'paragraphProperties');
+  if (!pPr) return undefined;
+  const sectPr = childNamed(pPr, 'sectPr');
+  return sectPr && sectPr.kind !== 'textValue' ? (sectPr as OoxmlElement) : undefined;
+}
+
+/**
+ * The section properties a part declares, or Word's defaults where it says nothing.
+ *
+ * Returns the FINAL section (body-level `w:sectPr`, else the last paragraph-level one).
+ * Multi-section geometry belongs to `enumerateDocumentSections`; chrome that needs "the
+ * document's page" still reads the last section, which is what Word's body-level sectPr is.
+ */
+export function readSectionProperties(part: OoxmlPart): SectionProperties {
+  const sections = enumerateDocumentSections(part);
+  return sections[sections.length - 1]?.properties ?? DEFAULT_SECTION_PROPERTIES;
+}
+
+/**
+ * Split the body story into sections.
+ *
+ * A paragraph carrying `w:pPr/w:sectPr` ends the current section (that paragraph is IN the
+ * section being ended). The body-level `w:sectPr` ends the final section. A document with
+ * neither yields one section of Word defaults covering every block.
+ */
+export function enumerateDocumentSections(part: OoxmlPart): DocumentSection[] {
+  const blocks = storyBlocks(part);
+  const sections: DocumentSection[] = [];
+  let blockStart = 0;
+
+  for (let index = 0; index < blocks.length; index += 1) {
+    const block = blocks[index]!;
+    if (block.kind !== 'paragraph') continue;
+    const sectPr = paragraphSectionNode(block);
+    if (!sectPr) continue;
+    sections.push({
+      index: sections.length,
+      properties: parseSectionProperties(sectPr),
+      blockStart,
+      blockEndExclusive: index + 1,
+    });
+    blockStart = index + 1;
+  }
+
+  const bodySectPr = bodySectionNode(part);
+  // Final section: remaining blocks governed by the body-level `w:sectPr`. When every block
+  // already closed a paragraph-level section, still honour a trailing body-level `sectPr` as
+  // an empty final section (common in multi-section packages). A document with neither yields
+  // one default section covering every block.
+  if (blockStart < blocks.length || sections.length === 0) {
+    sections.push({
+      index: sections.length,
+      properties: parseSectionProperties(bodySectPr),
+      blockStart,
+      blockEndExclusive: blocks.length,
+    });
+  } else if (bodySectPr) {
+    sections.push({
+      index: sections.length,
+      properties: parseSectionProperties(bodySectPr),
+      blockStart,
+      blockEndExclusive: blocks.length,
+    });
+  }
+
+  return sections;
 }
 
 /**

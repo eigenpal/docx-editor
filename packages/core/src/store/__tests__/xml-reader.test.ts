@@ -2,7 +2,13 @@
 // order/attribute/whitespace preservation, and no value coercion.
 
 import { describe, expect, test } from 'bun:test';
-import { readXml, findElement, childElements, textContent } from '../package/xml-reader.ts';
+import {
+  readXml,
+  findElement,
+  childElements,
+  textContent,
+  requireXmlStringScalar,
+} from '../package/xml-reader.ts';
 
 describe('trust boundary rejections', () => {
   test('refuses DTDs, entity declarations, and custom entity refs', () => {
@@ -159,5 +165,14 @@ describe('fidelity preservation', () => {
       ok: false,
       reason: 'parse-error',
     });
+  });
+
+  test('requireXmlStringScalar fails closed on non-string text/CDATA/attribute values', () => {
+    expect(requireXmlStringScalar('ok', 'text')).toBe('ok');
+    expect(() => requireXmlStringScalar({} as unknown, 'text')).toThrow(/non-scalar text/);
+    expect(() => requireXmlStringScalar(42 as unknown, 'cdata')).toThrow(/non-scalar cdata/);
+    expect(() => requireXmlStringScalar(['x'] as unknown, 'attribute')).toThrow(
+      /non-scalar attribute/
+    );
   });
 });

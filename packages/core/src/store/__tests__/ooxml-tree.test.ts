@@ -88,6 +88,35 @@ describe('canonical typed OOXML tree', () => {
     expect(Object.isFrozen(paragraph.children)).toBe(true);
   });
 
+  test('preserves w:br w:type="page" as a typed hardBreak with attributes', () => {
+    const part = parse(
+      `<w:document xmlns:w="${WML_NAMESPACE_URI}"><w:body>` +
+        '<w:p><w:r><w:t>before</w:t><w:br w:type="page"/><w:t>after</w:t></w:r></w:p>' +
+        '<w:p><w:r><w:br w:type="page"/></w:r></w:p>' +
+        '<w:p><w:r><w:t>tail</w:t></w:r></w:p>' +
+        '</w:body></w:document>'
+    );
+    const body = part.root.children[0] as OoxmlElement;
+    const firstParagraph = body.children[0] as OoxmlElement;
+    const firstRun = firstParagraph.children.find((child) => child.kind === 'run') as OoxmlElement;
+    const pageBreak = firstRun.children.find((child) => child.kind === 'hardBreak') as OoxmlElement;
+    expect(pageBreak.kind).toBe('hardBreak');
+    expect(pageBreak.attributes).toEqual([
+      {
+        kind: 'genericExtension',
+        namespaceUri: WML_NAMESPACE_URI,
+        localName: 'type',
+        prefix: 'w',
+        value: 'page',
+      },
+    ]);
+
+    const saved = serializeOoxmlPart(part);
+    expect(saved).toContain('<w:br w:type="page"/>');
+    const reopened = parse(saved);
+    expect(canonicalOoxmlFingerprint(reopened)).toBe(canonicalOoxmlFingerprint(part));
+  });
+
   test('resolves inherited, default, and rebound namespace prefixes', () => {
     const part = parse(
       '<root xmlns="urn:outer" xmlns:a="urn:one">' +
@@ -255,8 +284,9 @@ describe('reviewed namespace, identity, and typing invariants', () => {
 
     const saved = serializeOoxmlPart(part);
     expect(saved).toContain('xmlns:w14="urn:word14"');
-    expect(saved).toContain('mc:Ignorable="ns1"');
-    expect(saved).toContain('xsi:type="ns1:Widget"');
+    expect(saved).not.toMatch(/xmlns:ns\d+="urn:word14"/);
+    expect(saved).toContain('mc:Ignorable="w14"');
+    expect(saved).toContain('xsi:type="w14:Widget"');
 
     const reopened = parse(saved);
     expect(canonicalOoxmlFingerprint(reopened)).toBe(canonicalOoxmlFingerprint(part));
@@ -285,7 +315,7 @@ describe('reviewed namespace, identity, and typing invariants', () => {
     );
 
     const saved = serializeOoxmlPart(part);
-    expect(saved).toContain('xmlns:a="urn:outer"');
+    expect(saved).toMatch(/xmlns:ns\d+="urn:outer"/);
     expect(saved).toContain('<scope xmlns:a="urn:inner">');
     expect(saved).not.toContain('<a:');
     expect(saved).toMatch(/xsi:type="ns\d+:Inner"/);
@@ -333,7 +363,7 @@ describe('reviewed namespace, identity, and typing invariants', () => {
 describe('round-two canonical namespace and typing behavior', () => {
   const MC_NAMESPACE_URI = 'http://schemas.openxmlformats.org/markup-compatibility/2006';
 
-  test('uses controlled prefixes for names while retaining authored aliases', () => {
+  test('uses one stable binding per URI, preferring authored prefixes', () => {
     const part = parse(
       `<a:document xmlns:a="${WML_NAMESPACE_URI}" xmlns:e="urn:extension">` +
         '<a:body><a:p e:flag="yes"><e:item/></a:p></a:body></a:document>'
@@ -341,14 +371,16 @@ describe('round-two canonical namespace and typing behavior', () => {
 
     const saved = serializeOoxmlPart(part);
     expect(saved).toContain('<w:document');
-    expect(saved).toContain('<ns1:item');
-    expect(saved).toContain('ns1:flag="yes"');
-    expect(saved).toContain(`xmlns:a="${WML_NAMESPACE_URI}"`);
+    expect(saved).toContain('<e:item');
+    expect(saved).toContain('e:flag="yes"');
+    expect(saved).toContain(`xmlns:w="${WML_NAMESPACE_URI}"`);
     expect(saved).toContain('xmlns:e="urn:extension"');
+    expect(saved).not.toContain(`xmlns:a="${WML_NAMESPACE_URI}"`);
     expect(saved).not.toContain('<a:document');
+    expect(saved).not.toMatch(/xmlns:ns\d+="urn:extension"/);
   });
 
-  test('rewrites known QName values to controlled prefixes and preserves aliases', () => {
+  test('rewrites known QName values to the single controlled prefix per URI', () => {
     const part = parse(
       `<w:document xmlns:w="${WML_NAMESPACE_URI}" xmlns:m="${MC_NAMESPACE_URI}" ` +
         'xmlns:x="urn:feature" xmlns:i="http://www.w3.org/2001/XMLSchema-instance" ' +
@@ -356,10 +388,12 @@ describe('round-two canonical namespace and typing behavior', () => {
     );
 
     const saved = serializeOoxmlPart(part);
-    expect(saved).toContain('mc:Ignorable="ns1"');
-    expect(saved).toContain('xsi:type="ns1:Kind"');
+    expect(saved).toContain('mc:Ignorable="x"');
+    expect(saved).toContain('xsi:type="x:Kind"');
     expect(saved).toContain('xmlns:x="urn:feature"');
-    expect(saved).toContain(`xmlns:m="${MC_NAMESPACE_URI}"`);
+    expect(saved).toContain(`xmlns:mc="${MC_NAMESPACE_URI}"`);
+    expect(saved).not.toContain(`xmlns:m="${MC_NAMESPACE_URI}"`);
+    expect(saved).not.toMatch(/xmlns:ns\d+="urn:feature"/);
     expect(ooxmlTreesEqual(part, parse(saved))).toBe(true);
   });
 
@@ -374,8 +408,9 @@ describe('round-two canonical namespace and typing behavior', () => {
     expect(ooxmlTreesEqual(left, right)).toBe(true);
     const saved = serializeOoxmlPart(left);
     expect(saved).toContain('<mc:Choice');
-    expect(saved).toContain('Requires="ns1"');
+    expect(saved).toContain('Requires="a"');
     expect(saved).toContain('xmlns:a="urn:feature"');
+    expect(saved).not.toMatch(/xmlns:ns\d+="urn:feature"/);
   });
 
   test('canonicalizes mc MustUnderstand prefix lists', () => {
@@ -388,8 +423,9 @@ describe('round-two canonical namespace and typing behavior', () => {
 
     expect(ooxmlTreesEqual(left, right)).toBe(true);
     const saved = serializeOoxmlPart(left);
-    expect(saved).toContain('mc:MustUnderstand="ns1"');
+    expect(saved).toContain('mc:MustUnderstand="a"');
     expect(saved).toContain('xmlns:a="urn:feature"');
+    expect(saved).not.toMatch(/xmlns:ns\d+="urn:feature"/);
     expect(
       readOoxmlPart(`<r xmlns:mc="${MC_NAMESPACE_URI}" mc:MustUnderstand="missing"/>`, metadata)
     ).toMatchObject({ ok: false, reason: 'undeclared-prefix' });
@@ -425,7 +461,7 @@ describe('round-two canonical namespace and typing behavior', () => {
     );
 
     const saved = serializeOoxmlPart(part);
-    expect(saved).toContain('xmlns:a="urn:outer"');
+    expect(saved).toMatch(/xmlns:ns\d+="urn:outer"/);
     expect(saved).toContain('<scope xmlns:a="urn:inner"');
     expect(saved).not.toContain('<a:');
     expect(saved).toMatch(/xsi:type="ns\d+:Inner"/);
@@ -519,10 +555,13 @@ describe('normalized OOXML serialization and canonical oracle', () => {
 
     expect(canonicalOoxmlFingerprint(left)).toBe(canonicalOoxmlFingerprint(right));
     expect(ooxmlTreesEqual(left, right)).toBe(true);
-    expect(serializeOoxmlPart(left)).toContain('plain="&quot;&lt;&amp;" ns1:a="1" ns1:z="2"');
+    expect(serializeOoxmlPart(left)).toContain('plain="&quot;&lt;&amp;" e:a="1" e:z="2"');
     expect(serializeOoxmlPart(left)).toContain('safe &amp; sound');
-    expect(serializeOoxmlPart(left)).toContain(`xmlns:a="${WML_NAMESPACE_URI}"`);
+    expect(serializeOoxmlPart(left)).toContain(`xmlns:w="${WML_NAMESPACE_URI}"`);
+    expect(serializeOoxmlPart(left)).toContain('xmlns:e="urn:extension"');
+    expect(serializeOoxmlPart(left)).not.toContain(`xmlns:a="${WML_NAMESPACE_URI}"`);
     expect(serializeOoxmlPart(right)).toContain('xmlns:q="urn:extension"');
+    expect(serializeOoxmlPart(right)).not.toMatch(/xmlns:ns\d+="urn:extension"/);
   });
 
   test('preserves significant text including xml:space whitespace', () => {
@@ -595,5 +634,23 @@ describe('normalized OOXML serialization and canonical oracle', () => {
     expect(() => serializeOoxmlPart(badName)).toThrow('invalid local name');
     expect(() => serializeOoxmlPart(duplicateAttribute)).toThrow('duplicate expanded attribute');
     expect(() => serializeOoxmlPart(invalidValue)).toThrow('XML 1.0');
+  });
+
+  test('root-default URI referenced by MC/XSI values keeps a non-empty controlled alias', () => {
+    const MC = 'http://schemas.openxmlformats.org/markup-compatibility/2006';
+    const XSI = 'http://www.w3.org/2001/XMLSchema-instance';
+    const part = parse(
+      `<r xmlns="urn:feature" xmlns:f="urn:feature" xmlns:mc="${MC}" xmlns:xsi="${XSI}" ` +
+        'mc:Ignorable="f" mc:MustUnderstand="f" mc:ProcessContent="f:widget" ' +
+        'mc:PreserveElements="f:keep" mc:PreserveAttributes="f:flag" xsi:type="f:Kind"/>'
+    );
+    const saved = serializeOoxmlPart(part);
+    expect(saved.startsWith('<r xmlns="urn:feature"')).toBe(true);
+    expect(saved).not.toMatch(/<ns\d+:r\b/);
+    expect(saved).toMatch(/mc:Ignorable="f"/);
+    expect(saved).not.toContain('mc:Ignorable=""');
+    expect(saved).toContain('mc:ProcessContent="f:widget"');
+    expect(saved).toContain('xsi:type="f:Kind"');
+    expect(ooxmlTreesEqual(part, parse(saved))).toBe(true);
   });
 });

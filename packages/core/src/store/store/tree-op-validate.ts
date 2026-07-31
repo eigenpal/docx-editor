@@ -88,6 +88,7 @@ export type TreeDocOp =
     }
   | { readonly op: 'insertTab'; readonly paragraphId: string; readonly offset: number }
   | { readonly op: 'insertHardBreak'; readonly paragraphId: string; readonly offset: number }
+  | { readonly op: 'insertPageBreak'; readonly paragraphId: string; readonly offset: number }
   | { readonly op: 'splitParagraph'; readonly paragraphId: string; readonly offset: number }
   | {
       /**
@@ -128,6 +129,7 @@ export const TREE_DOC_OP_KINDS = [
   'deleteText',
   'insertTab',
   'insertHardBreak',
+  'insertPageBreak',
   'splitParagraph',
   'splitParagraphMany',
   'joinParagraphs',
@@ -277,7 +279,8 @@ export function validateTreeOp(part: OoxmlPart, op: TreeDocOp): TreeOpRejection 
       return null;
     }
     case 'insertTab':
-    case 'insertHardBreak': {
+    case 'insertHardBreak':
+    case 'insertPageBreak': {
       if (!Number.isInteger(op.offset) || op.offset < 0 || op.offset > length) {
         return 'offset-out-of-range';
       }

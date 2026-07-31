@@ -50,6 +50,13 @@ describe('every D8 run property resolves', () => {
     expect(resolve('highlight', { val: 'none' }).highlight).toBeNull();
   });
 
+  test('character shading is a strict hex fill', () => {
+    expect(resolve('shd', { val: 'clear', fill: 'FFEEAA' }).shading).toBe('FFEEAA');
+    expect(resolve('shd', { val: 'clear', fill: 'auto' }).shading).toBeNull();
+    expect(resolve('shd', { val: 'nil', fill: 'FFEEAA' }).shading).toBeNull();
+    expect(resolve('shd', { val: 'clear', fill: 'url(x)' }).shading).toBeNull();
+  });
+
   test('vertical alignment and baseline shift', () => {
     expect(resolve('vertAlign', { val: 'superscript' }).verticalAlign).toBe('superscript');
     expect(resolve('vertAlign', { val: 'subscript' }).verticalAlign).toBe('subscript');

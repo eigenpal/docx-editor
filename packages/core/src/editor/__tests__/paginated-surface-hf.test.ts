@@ -8,9 +8,16 @@ import { GlobalRegistrator } from '@happy-dom/global-registrator';
 if (!GlobalRegistrator.isRegistered) GlobalRegistrator.register();
 
 import { describe, expect, test } from 'bun:test';
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { zipSync, strToU8 } from 'fflate';
 import { positionFromDomPoint } from '../dom-selection.ts';
 import { mountPaginatedSurface, type PaginatedSurface } from '../paginated-surface.ts';
+
+const COMPREHENSIVE_FIXTURE = resolve(
+  import.meta.dir,
+  '../../../../../e2e/fixtures/comprehensive-word-element-test.docx'
+);
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 const R = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships';
@@ -167,5 +174,73 @@ describe('headers and footers, read-only', () => {
   test('a document without furniture renders none', () => {
     const { container } = mount(docx({}));
     expect(container.querySelector('[data-docx-hf]')).toBeNull();
+  });
+
+  test('comprehensive fixture: HF right tabs reach the authored stop on the surface', () => {
+    // Live-equivalent path: package → session → furniture layout → paint. Layout already
+    // resolved the 9026-twip right stop; paint must reserve that advance or CONFIDENTIAL /
+    // the page field trail sit next to a native ~1ch tab (~13 CSS px at 96dpi).
+    const scale = 96 / 72;
+    const container = document.createElement('div');
+    const result = mountPaginatedSurface(
+      container,
+      new Uint8Array(readFileSync(COMPREHENSIVE_FIXTURE)),
+      { scale }
+    );
+    if (!result.ok) throw new Error(`${result.reason}: ${result.detail ?? ''}`);
+    const { surface } = result;
+
+    const page = surface.layout().pages[1];
+    expect(page?.header).toBeDefined();
+    expect(page?.footer).toBeDefined();
+    const stopPt = 9026 / 20;
+    const stopCss = stopPt * scale;
+
+    const assertStory = (
+      story: NonNullable<typeof page>['header'],
+      paintedRoot: Element | null,
+      rightText: RegExp
+    ): void => {
+      expect(story).toBeDefined();
+      expect(paintedRoot).not.toBeNull();
+      expect(story!.box.width * scale).toBeCloseTo(624, 5); // 468pt content at 96dpi
+
+      const spans = story!.fragments.flatMap((fragment) =>
+        fragment.kind === 'paragraph' ? fragment.lines.flatMap((line) => line.spans) : []
+      );
+      const tabIndex = spans.findIndex((span) => span.text === '\t');
+      expect(tabIndex).toBeGreaterThanOrEqual(0);
+      const tab = spans[tabIndex]!;
+      expect(tab.box.width).toBeGreaterThan(50);
+
+      let endX = tab.box.x + tab.box.width;
+      for (let index = tabIndex + 1; index < spans.length; index += 1) {
+        const span = spans[index]!;
+        if (span.text === '\t') break;
+        endX = span.box.x + span.box.width;
+      }
+      expect(endX).toBeCloseTo(stopPt, 5);
+      expect(endX / story!.box.width).toBeGreaterThan(0.9);
+
+      const tabEl = [...paintedRoot!.querySelectorAll<HTMLElement>('.layout-run-text')].find(
+        (el) => el.textContent === '\t'
+      )!;
+      expect(Number.parseFloat(tabEl.style.width)).toBeCloseTo(tab.box.width * scale, 4);
+      expect(Number.parseFloat(tabEl.style.width)).toBeGreaterThan(50 * scale);
+      expect(paintedRoot!.textContent ?? '').toMatch(rightText);
+      // Right-aligned trail ends at the stop in CSS px (live: ~602px inside a 624px header).
+      expect(endX * scale).toBeCloseTo(stopCss, 5);
+    };
+
+    const pages = [...container.querySelectorAll('.docx-page')];
+    // Page index 1 is the first body sheet with header1/footer1 (cover is index 0).
+    const sheet = pages[1]!;
+    assertStory(page!.header, sheet.querySelector('[data-docx-hf="header"]'), /CONFIDENTIAL/i);
+    const pageCount = surface.layout().pages.length;
+    assertStory(
+      page!.footer,
+      sheet.querySelector('[data-docx-hf="footer"]'),
+      new RegExp(`Page 2 of ${pageCount}`)
+    );
   });
 });
