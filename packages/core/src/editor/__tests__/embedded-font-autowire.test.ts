@@ -14,7 +14,7 @@
 import { GlobalRegistrator } from '@happy-dom/global-registrator';
 if (!GlobalRegistrator.isRegistered) GlobalRegistrator.register();
 
-import { describe, expect, test } from 'bun:test';
+import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import { readFileSync } from 'node:fs';
 import { zipSync, strToU8 } from 'fflate';
 import type { EditorFontError } from '../../contracts/editor.ts';
@@ -358,5 +358,102 @@ describe('embedded fonts auto-wire into shaped measurement', () => {
     await new Promise((resolve) => setTimeout(resolve, 150));
     expect(editor.fontMeasurement()).toEqual({ measurer: 'fixed', resolving: false });
     editor.destroy();
+  });
+});
+
+// Paint-side registration (embedded-font-paint-registration): admitted embedded faces
+// land on `document.fonts` so painted glyphs use the measured bytes, and leave it when
+// the document is replaced or the editor destroyed. Happy-dom ships neither
+// `document.fonts` nor `FontFace` (which is what keeps every test ABOVE this block a
+// registration no-op), so the environment is stubbed per test here.
+describe('admitted embedded faces register on document.fonts', () => {
+  class StubFontFace {
+    constructor(
+      readonly family: string,
+      readonly bytes: ArrayBuffer,
+      readonly descriptors: { readonly weight: string; readonly style: string }
+    ) {}
+    load(): Promise<unknown> {
+      return Promise.resolve(this);
+    }
+  }
+  class StubFontFaceSet {
+    readonly faces = new Set<StubFontFace>();
+    add(face: StubFontFace): void {
+      this.faces.add(face);
+    }
+    delete(face: StubFontFace): boolean {
+      return this.faces.delete(face);
+    }
+  }
+
+  let fontSet: StubFontFaceSet;
+  beforeEach(() => {
+    fontSet = new StubFontFaceSet();
+    (document as unknown as { fonts: StubFontFaceSet }).fonts = fontSet;
+    (globalThis as unknown as { FontFace: typeof StubFontFace }).FontFace = StubFontFace;
+  });
+  afterEach(() => {
+    delete (document as unknown as { fonts?: StubFontFaceSet }).fonts;
+    delete (globalThis as unknown as { FontFace?: typeof StubFontFace }).FontFace;
+  });
+
+  const registeredFamilies = () => [...fontSet.faces].map((face) => face.family).sort();
+
+  test('embedded faces register under their (quoted) family with canonical descriptors', async () => {
+    const container = document.createElement('div');
+    const editor = createDocxEditor({
+      container,
+      document: docxWithEmbeds(p('paint me'), EMBED_BOTH),
+    });
+    await fontsSettled(editor);
+    expect(editor.fontMeasurement().measurer).toBe('shaped');
+    expect(registeredFamilies()).toEqual(['"DejaVu Sans"', '"DejaVu Sans"']);
+    expect(
+      [...fontSet.faces]
+        .map((face) => `${face.descriptors.weight}/${face.descriptors.style}`)
+        .sort()
+    ).toEqual(['400/normal', '700/normal']);
+    editor.destroy();
+  });
+
+  test('a validator-rejected face never reaches the FontFaceSet', async () => {
+    const container = document.createElement('div');
+    const editor = createDocxEditor({
+      container,
+      document: docxWithEmbeds(p('partial'), [
+        { family: 'DejaVu Sans', slot: 'embedRegular', bytes: regularBytes },
+        { family: 'Broken Face', slot: 'embedRegular', bytes: new Uint8Array(4096).fill(0x42) },
+      ]),
+      onFontError: () => {},
+    });
+    await fontsSettled(editor);
+    expect(registeredFamilies()).toEqual(['"DejaVu Sans"']);
+    editor.destroy();
+  });
+
+  test('loading a new document removes the previous document’s faces', async () => {
+    const container = document.createElement('div');
+    const editor = createDocxEditor({
+      container,
+      document: docxWithEmbeds(p('first'), EMBED_BOTH),
+    });
+    await fontsSettled(editor);
+    expect(fontSet.faces.size).toBe(2);
+    editor.load(docxWithEmbeds(p('second, no embeds'), []));
+    expect(fontSet.faces.size).toBe(0);
+    editor.destroy();
+  });
+
+  test('destroy removes every face the editor registered', async () => {
+    const container = document.createElement('div');
+    const editor = createDocxEditor({
+      container,
+      document: docxWithEmbeds(p('bye'), EMBED_BOTH),
+    });
+    await fontsSettled(editor);
+    expect(fontSet.faces.size).toBe(2);
+    editor.destroy();
+    expect(fontSet.faces.size).toBe(0);
   });
 });

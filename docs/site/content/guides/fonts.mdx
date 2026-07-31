@@ -14,9 +14,11 @@ combine.
 ## The three font sources
 
 **1. Fonts embedded in the document — automatic.** A `.docx` can carry the faces it was
-written in. When it does, the editor extracts them on load and measures with them. No
-configuration, no assets, no network: a document that brings its own fonts is
-Word-accurate out of the box.
+written in. When it does, the editor extracts them on load, measures with them, and
+registers them with the browser (`document.fonts`) so the rendered pages paint with the
+same glyphs — registration is removed again when the document is replaced or the editor
+is destroyed. No configuration, no assets, no network: a document that brings its own
+fonts is Word-accurate out of the box, in metrics and in pixels.
 
 **2. Metric-compatible substitutes — one call.** Most documents use Word's default
 fonts (Calibri, Cambria, Times New Roman, Arial, Courier New), which are proprietary
