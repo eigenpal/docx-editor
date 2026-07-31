@@ -10,6 +10,7 @@ import type {
   EditorCommand,
   EditorError,
   EditorSnapshot,
+  PageSetup,
   RunFormatting,
 } from '@docx-editor.dev/core-contract/contracts/editor';
 import type {
@@ -298,6 +299,54 @@ export function classifyCommand(command: EditorCommand): CommandSupport {
             supported: false,
             reason: 'DocTarget addressing is not supported; deletion removes the selection',
           };
+    case 'setPageSetup': {
+      const dims = [command.pageWidth, command.pageHeight];
+      const margins = [
+        command.marginTop,
+        command.marginRight,
+        command.marginBottom,
+        command.marginLeft,
+      ];
+      if (
+        dims.every((value) => value === undefined) &&
+        margins.every((value) => value === undefined) &&
+        command.orientation === undefined
+      ) {
+        return { supported: false, reason: 'setPageSetup requires at least one field' };
+      }
+      // The same bounds the op layer enforces, refused here so `can` answers honestly
+      // BEFORE a dialog submits.
+      for (const value of dims) {
+        if (value !== undefined && (!Number.isInteger(value) || value < 1 || value > 63360)) {
+          return {
+            supported: false,
+            code: 'invalidArgs',
+            reason: 'page dimensions must be integer twips between 1 and 63360',
+          };
+        }
+      }
+      for (const value of margins) {
+        if (value !== undefined && (!Number.isInteger(value) || value < 0 || value > 31680)) {
+          return {
+            supported: false,
+            code: 'invalidArgs',
+            reason: 'margins must be integer twips between 0 and 31680',
+          };
+        }
+      }
+      if (
+        command.orientation !== undefined &&
+        command.orientation !== 'portrait' &&
+        command.orientation !== 'landscape'
+      ) {
+        return {
+          supported: false,
+          code: 'invalidArgs',
+          reason: "orientation must be 'portrait' or 'landscape'",
+        };
+      }
+      return { supported: true, mutating: true };
+    }
     case 'undo':
     case 'redo':
       return { supported: true, mutating: true };
@@ -360,6 +409,21 @@ export function pageEqual(a: EditorSnapshot['page'], b: EditorSnapshot['page']):
   return a.current === b.current && a.total === b.total;
 }
 
+/** Value equality for the snapshot's `pageSetup` sub-object. */
+export function pageSetupEqual(a: PageSetup | null, b: PageSetup | null): boolean {
+  if (a === b) return true;
+  if (!a || !b) return false;
+  return (
+    a.pageWidthTwips === b.pageWidthTwips &&
+    a.pageHeightTwips === b.pageHeightTwips &&
+    a.orientation === b.orientation &&
+    a.marginsTwips.top === b.marginsTwips.top &&
+    a.marginsTwips.right === b.marginsTwips.right &&
+    a.marginsTwips.bottom === b.marginsTwips.bottom &&
+    a.marginsTwips.left === b.marginsTwips.left
+  );
+}
+
 /**
  * Whether two snapshots are value-equal AFTER sub-object reuse — i.e. every field can be
  * compared by reference or primitive. When true, the previous snapshot object itself is
@@ -378,6 +442,7 @@ export function snapshotsEqual(a: EditorSnapshot, b: EditorSnapshot): boolean {
     a.image === b.image &&
     a.page === b.page &&
     a.canUndo === b.canUndo &&
-    a.canRedo === b.canRedo
+    a.canRedo === b.canRedo &&
+    a.pageSetup === b.pageSetup
   );
 }

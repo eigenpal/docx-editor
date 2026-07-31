@@ -53,6 +53,7 @@ import type {
   EditorSnapshot,
   ExecResult,
   FontConfiguration,
+  PageSetup,
   RunFormatting,
   TextMatch,
   Unsubscribe,
@@ -82,6 +83,7 @@ import {
   isSurfaceSelection,
   normalizeSource,
   pageEqual,
+  pageSetupEqual,
   selectionsMatch,
   snapshotsEqual,
 } from './docx-editor-support.ts';
@@ -614,6 +616,26 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
     };
   }
 
+  /**
+   * THE page-setup derivation — `getPageSetup()` and `snapshot().pageSetup` both read
+   * this shape, so the dialog and the rulers can never disagree about the section.
+   */
+  function pageSetupOf(): PageSetup | null {
+    if (!surface) return null;
+    const section = surface.sectionProperties();
+    return {
+      pageWidthTwips: section.pageSize.widthTwips,
+      pageHeightTwips: section.pageSize.heightTwips,
+      orientation: section.landscape ? ('landscape' as const) : ('portrait' as const),
+      marginsTwips: {
+        top: section.margins.topTwips,
+        right: section.margins.rightTwips,
+        bottom: section.margins.bottomTwips,
+        left: section.margins.leftTwips,
+      },
+    };
+  }
+
   function totalPages(): number {
     return surface ? surface.state().pageCount : 0;
   }
@@ -643,6 +665,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
       page: { current: currentPage(), total: totalPages() },
       canUndo: state?.canUndo ?? false,
       canRedo: state?.canRedo ?? false,
+      pageSetup: pageSetupOf(),
     };
   }
 
@@ -661,7 +684,10 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
         ? previous.formatting
         : fresh.formatting;
       const page = pageEqual(fresh.page, previous.page) ? previous.page : fresh.page;
-      next = { ...fresh, formatting, page };
+      const pageSetup = pageSetupEqual(fresh.pageSetup ?? null, previous.pageSetup ?? null)
+        ? previous.pageSetup
+        : fresh.pageSetup;
+      next = { ...fresh, formatting, page, pageSetup };
       if (snapshotsEqual(next, previous)) next = previous;
     }
     cachedSnapshot = deepFreezeValue(next);
@@ -785,6 +811,35 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
           mounted.setParagraphProperty('ind', attributes);
           break;
         }
+        case 'setPageSetup': {
+          // Orientation NORMALIZATION lives here, not in the op: Word stores landscape as
+          // swapped dimensions plus the attribute, so a command asking for landscape must
+          // end with width > height whether the caller sent dimensions or not. The op
+          // below records only literal values.
+          let width = command.pageWidth;
+          let height = command.pageHeight;
+          if (command.orientation !== undefined) {
+            const section = mounted.sectionProperties();
+            const w = command.pageWidth ?? section.pageSize.widthTwips;
+            const h = command.pageHeight ?? section.pageSize.heightTwips;
+            const long = Math.max(w, h);
+            const short = Math.min(w, h);
+            width = command.orientation === 'landscape' ? long : short;
+            height = command.orientation === 'landscape' ? short : long;
+          }
+          mounted.setSectionProperties({
+            ...(width !== undefined ? { pageWidthTwips: width } : {}),
+            ...(height !== undefined ? { pageHeightTwips: height } : {}),
+            ...(command.orientation !== undefined ? { orientation: command.orientation } : {}),
+            ...(command.marginTop !== undefined ? { marginTopTwips: command.marginTop } : {}),
+            ...(command.marginRight !== undefined ? { marginRightTwips: command.marginRight } : {}),
+            ...(command.marginBottom !== undefined
+              ? { marginBottomTwips: command.marginBottom }
+              : {}),
+            ...(command.marginLeft !== undefined ? { marginLeftTwips: command.marginLeft } : {}),
+          });
+          break;
+        }
         case 'insertBreak':
           mounted.insertLineBreak();
           break;
@@ -885,21 +940,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
     getSelectedImage: () => null,
     getSelectedTable: () => null,
 
-    getPageSetup() {
-      if (!surface) return null;
-      const section = surface.sectionProperties();
-      return {
-        pageWidthTwips: section.pageSize.widthTwips,
-        pageHeightTwips: section.pageSize.heightTwips,
-        orientation: section.landscape ? ('landscape' as const) : ('portrait' as const),
-        marginsTwips: {
-          top: section.margins.topTwips,
-          right: section.margins.rightTwips,
-          bottom: section.margins.bottomTwips,
-          left: section.margins.leftTwips,
-        },
-      };
-    },
+    getPageSetup: () => pageSetupOf(),
 
     getWatermark: () => null,
     getHeaderFooterState: () => null,

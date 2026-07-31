@@ -17,9 +17,14 @@ portrait.
 
 1. **One new `TreeDocOp`: `setSectionProperties`.** Fields, all optional (at
    least one required): `pageWidthTwips`, `pageHeightTwips`, `orientation`,
-   `marginTopTwips/RightTwips/BottomTwips/LeftTwips`. It addresses the
-   body-level `w:sectPr` (created as the body's last child if missing) — no
-   paragraph id, unlike every existing op. Validation mirrors the read-side
+   `marginTopTwips/RightTwips/BottomTwips/LeftTwips`. It applies to EVERY
+   `w:sectPr` in the part — mid-body sections included — because the dialog
+   and the ruler mean "this document" (Word's "Apply to: Whole document").
+   Updating only the body-level section left a multi-section file saying
+   "portrait, …, landscape", which Word renders as mixed orientation (found
+   live on the demo document, which carries five sections). A document with
+   no section at all gets a body-level one minted as the body's last child.
+   No paragraph id, unlike every existing op. Validation mirrors the read-side
    clamps (`section-properties.ts`): page dims integer 1..63360, margins
    integer 0..31680 (the write path refuses negative margins even though the
    reader tolerates them), orientation a closed enum, and the merged result
@@ -72,7 +77,11 @@ portrait.
 
 ## Out of scope
 
-Per-section (mid-body `sectPr`) editing, paper-size `w:code` maintenance
+Per-section LAYOUT (rendering a document's own mixed orientations — the demo
+doc's landscape section renders portrait today because layout paginates the
+whole flow against the body-level section; that is the deferred per-section
+lane), per-section-targeted editing ("Apply to: this section"), paper-size
+`w:code` maintenance
 beyond dropping it when dimensions change, header/footer distance UI, gutter
 UI, indent drag on rulers (needs the stored-selection indent lane).
 

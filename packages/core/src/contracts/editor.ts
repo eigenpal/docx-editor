@@ -377,17 +377,7 @@ export interface Editor {
   } | null;
 
   /** Section page setup — size, orientation and margins — for the page-setup dialog. */
-  getPageSetup(): {
-    readonly pageWidthTwips: number;
-    readonly pageHeightTwips: number;
-    readonly orientation: 'portrait' | 'landscape';
-    readonly marginsTwips: {
-      readonly top: number;
-      readonly right: number;
-      readonly bottom: number;
-      readonly left: number;
-    };
-  } | null;
+  getPageSetup(): PageSetup | null;
 
   /** The document watermark, for the watermark dialog. */
   getWatermark(): { readonly kind: 'text' | 'image'; readonly text?: string } | null;
@@ -765,6 +755,22 @@ export interface HyperlinkInfo {
  * rendering. Named `EditorSnapshot` rather than `EditorState` so it never
  * collides with an editing engine's own state type.
  */
+/**
+ * Section page setup — size, orientation and margins, in twips — as `getPageSetup()`
+ * and `snapshot().pageSetup` report it and the `setPageSetup` command writes it.
+ */
+export interface PageSetup {
+  readonly pageWidthTwips: number;
+  readonly pageHeightTwips: number;
+  readonly orientation: 'portrait' | 'landscape';
+  readonly marginsTwips: {
+    readonly top: number;
+    readonly right: number;
+    readonly bottom: number;
+    readonly left: number;
+  };
+}
+
 export interface EditorSnapshot {
   readonly scope: EditorScope;
   readonly isLoading: boolean;
@@ -785,6 +791,12 @@ export interface EditorSnapshot {
    */
   readonly canUndo?: boolean;
   readonly canRedo?: boolean;
+  /**
+   * The section's page setup, reference-stable across ticks that did not change it.
+   * Optional and additive like `canUndo`: absent means the implementation has not
+   * derived it, `null` means no document is loaded.
+   */
+  readonly pageSetup?: PageSetup | null;
 }
 
 export interface ImageContext {

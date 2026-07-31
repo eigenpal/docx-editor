@@ -41,6 +41,8 @@ export interface HorizontalRulerProps {
   editable?: boolean;
   onLeftMarginChange?: (marginTwips: number) => void;
   onRightMarginChange?: (marginTwips: number) => void;
+  /** Fires when a margin drag is released — the moment to commit what the drag previewed. */
+  onMarginDragEnd?: () => void;
   onFirstLineIndentChange?: (indentTwips: number) => void;
   showFirstLineIndent?: boolean;
   firstLineIndent?: number;
@@ -98,6 +100,7 @@ export function HorizontalRuler({
   editable = false,
   onLeftMarginChange,
   onRightMarginChange,
+  onMarginDragEnd,
   onFirstLineIndentChange,
   showFirstLineIndent = false,
   firstLineIndent = 0,
@@ -211,10 +214,11 @@ export function HorizontalRuler({
   );
 
   const handleDragEnd = useCallback(() => {
+    if (dragging === 'leftMargin' || dragging === 'rightMargin') onMarginDragEnd?.();
     setDragging(null);
     setDragValue(null);
     setDragPositionPx(null);
-  }, []);
+  }, [dragging, onMarginDragEnd]);
 
   useEffect(() => {
     if (dragging) {

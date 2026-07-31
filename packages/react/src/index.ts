@@ -32,9 +32,14 @@ export {
   DocxEditorDocumentOutline,
   type DocxEditorDocumentOutlineProps,
 } from './editor/DocxEditorOutline';
+export {
+  DocxEditorPageSetupDialog,
+  type DocxEditorPageSetupDialogProps,
+} from './editor/DocxEditorPageSetup';
 export { useEditorState } from './editor/useEditorState';
 export { useEditorCommand, type EditorCommandState } from './editor/useEditorCommand';
 export { useEditorEvent } from './editor/useEditorEvent';
+export { usePageSetup, type PageSetupUpdate, type UsePageSetupReturn } from './editor/usePageSetup';
 
 // The compound toolbar (also reachable as `DocxEditor.Toolbar`): default set with
 // in-place slot overrides, generic Button, and the font-family compound + hook. The

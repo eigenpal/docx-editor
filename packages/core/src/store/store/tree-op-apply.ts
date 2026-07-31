@@ -25,7 +25,12 @@ import {
 } from '../package/ooxml-edit.ts';
 import { DEPENDENCY_KEY_IDS } from '../registry/frozen-ids.ts';
 import {
+  allSectionNodes,
+  bodyNodeOf,
   isParagraph,
+  metricsOfSection,
+  sectionAttribute,
+  sectionChild,
   segmentsOf,
   validateTreeOp,
   type OoxmlProperty,
@@ -125,6 +130,7 @@ export function applyTreeOp(part: OoxmlPart, op: TreeDocOp, options?: EditOption
   if (rejection) return { ok: false, reason: rejection };
 
   if (op.op === 'joinParagraphs') return applyJoin(part, op.firstId, op.secondId, options);
+  if (op.op === 'setSectionProperties') return applySetSectionProperties(part, op, options);
 
   const paragraph = findNode(part, op.paragraphId) as OoxmlParagraphNode;
   const nextId = createNodeIdAllocator(part);
@@ -594,6 +600,217 @@ function parentOf(part: OoxmlPart, nodeId: string): OoxmlElement | null {
   // Served from the part's node index rather than a fresh full-tree walk: split and join
   // ask for a parent on every op, and the walk made each one O(document).
   return parentNodeOf(part, nodeId);
+}
+
+type SetSectionPropertiesOp = Extract<TreeDocOp, { op: 'setSectionProperties' }>;
+
+function wmlAttribute(localName: string, value: string) {
+  return {
+    kind: 'genericExtension' as const,
+    namespaceUri: WML_NAMESPACE_URI,
+    localName,
+    prefix: 'w',
+    value,
+  };
+}
+
+function sectionElement(
+  id: string,
+  localName: string,
+  attributes: readonly unknown[],
+  children: readonly OoxmlNode[]
+): OoxmlNode {
+  return {
+    id,
+    kind: 'generic',
+    namespaceUri: WML_NAMESPACE_URI,
+    localName,
+    prefix: 'w',
+    namespaceBindings: [],
+    attributes,
+    children,
+  } as unknown as OoxmlNode;
+}
+
+const attributesOf = (node: OoxmlNode | null): readonly { localName: string; value: string }[] =>
+  node && node.kind !== 'textValue' && 'attributes' in node
+    ? (node.attributes as readonly { localName: string; value: string }[])
+    : [];
+
+const childrenOf = (node: OoxmlNode | null): readonly OoxmlNode[] =>
+  node && node.kind !== 'textValue' ? (node.children ?? []) : [];
+
+/**
+ * Merge the op's fields into EVERY `w:sectPr` in the part — the mid-body ones and the
+ * body-level one — minting a body-level section when the document never declared any.
+ *
+ * Whole-document on purpose: the page-setup dialog and the ruler drags mean "this
+ * document", exactly Word's "Apply to: Whole document". Updating only the body-level
+ * section left a multi-section document saying "portrait, …, landscape", which Word
+ * renders as one landscape page among portrait ones.
+ *
+ * Per section the merge is surgical: only the attributes the op carries are rewritten.
+ * Everything else — `header`/`footer`/`gutter` distances, unknown `pgSz` attributes,
+ * `cols`, `titlePg`, header/footer references — keeps its authored bytes and its node
+ * identity, so a margin drag cannot degrade fidelity anywhere it did not touch. The one
+ * deliberate drop is the `pgSz` paper `code` when the dimensions change: a stale paper
+ * code contradicts the new size, and Word rewrites it on its own next save.
+ */
+function applySetSectionProperties(
+  part: OoxmlPart,
+  op: SetSectionPropertiesOp,
+  options?: EditOptions
+): TreeOpResult {
+  const body = bodyNodeOf(part);
+  if (!body) return { ok: false, reason: 'tree-invariant', detail: 'part has no body' };
+
+  const touchesSize =
+    op.pageWidthTwips !== undefined ||
+    op.pageHeightTwips !== undefined ||
+    op.orientation !== undefined;
+  const touchesMargins =
+    op.marginTopTwips !== undefined ||
+    op.marginRightTwips !== undefined ||
+    op.marginBottomTwips !== undefined ||
+    op.marginLeftTwips !== undefined;
+
+  const effect: TreeOpEffect = {
+    dirty: [],
+    created: [],
+    deleted: [],
+    dependencyKeys: TEXT_DEPS,
+    impact: 'flow-structural',
+  };
+
+  const sections = allSectionNodes(part);
+
+  if (sections.length === 0) {
+    const nextId = createNodeIdAllocator(part);
+    const children = mergedSectionChildren(null, op, touchesSize, touchesMargins, nextId);
+    const minted = sectionElement(nextId(), 'sectPr', [], children);
+    // The body-level section is the body's LAST child per the schema.
+    return fromEdit(insertChildren(part, body.id, body.children.length, [minted], options), effect);
+  }
+
+  let current = part;
+  for (const section of sections) {
+    const live = findNode(current, section.id);
+    if (!live || live.kind === 'textValue') continue;
+    const nextId = createNodeIdAllocator(current);
+    const children = mergedSectionChildren(live, op, touchesSize, touchesMargins, nextId);
+    const replaced = replaceChildren(current, live.id, children, options);
+    if (!replaced.ok) return fromEdit(replaced, effect);
+    current = replaced.part;
+  }
+  return ok(current, effect);
+}
+
+/** One section's rebuilt child list with the op's pgSz/pgMar fields merged in. */
+function mergedSectionChildren(
+  sectPr: OoxmlNode | null,
+  op: SetSectionPropertiesOp,
+  touchesSize: boolean,
+  touchesMargins: boolean,
+  nextId: () => string
+): OoxmlNode[] {
+  const current = metricsOfSection(sectPr);
+
+  const existingPgSz = sectionChild(sectPr, 'pgSz');
+  let nextPgSz: OoxmlNode | null = null;
+  if (touchesSize) {
+    const width = op.pageWidthTwips ?? current.widthTwips;
+    const height = op.pageHeightTwips ?? current.heightTwips;
+    const dimensionsChanged = width !== current.widthTwips || height !== current.heightTwips;
+    const orient =
+      op.orientation !== undefined
+        ? op.orientation === 'landscape'
+          ? 'landscape'
+          : undefined // Word's portrait is the ABSENCE of the attribute.
+        : sectionAttribute(existingPgSz, 'orient');
+    const dropped = new Set(['w', 'h', 'orient', ...(dimensionsChanged ? ['code'] : [])]);
+    const kept = attributesOf(existingPgSz).filter((entry) => !dropped.has(entry.localName));
+    nextPgSz = sectionElement(
+      existingPgSz?.id ?? nextId(),
+      'pgSz',
+      [
+        wmlAttribute('w', String(width)),
+        wmlAttribute('h', String(height)),
+        ...(orient ? [wmlAttribute('orient', orient)] : []),
+        ...kept,
+      ],
+      childrenOf(existingPgSz)
+    );
+  }
+
+  const existingPgMar = sectionChild(sectPr, 'pgMar');
+  let nextPgMar: OoxmlNode | null = null;
+  if (touchesMargins) {
+    const sides: readonly [string, number | undefined, number][] = [
+      ['top', op.marginTopTwips, current.topTwips],
+      ['right', op.marginRightTwips, current.rightTwips],
+      ['bottom', op.marginBottomTwips, current.bottomTwips],
+      ['left', op.marginLeftTwips, current.leftTwips],
+    ];
+    if (existingPgMar) {
+      const written = new Set(
+        sides.filter(([, value]) => value !== undefined).map(([name]) => name)
+      );
+      const kept = attributesOf(existingPgMar).filter((entry) => !written.has(entry.localName));
+      nextPgMar = sectionElement(
+        existingPgMar.id,
+        'pgMar',
+        [
+          ...sides
+            .filter(([, value]) => value !== undefined)
+            .map(([name, value]) => wmlAttribute(name, String(value))),
+          ...kept,
+        ],
+        childrenOf(existingPgMar)
+      );
+    } else {
+      // Minting `w:pgMar` writes the full attribute set the schema requires, with the
+      // effective values for everything the op did not say — explicit defaults are the
+      // same document the implicit ones were.
+      nextPgMar = sectionElement(
+        nextId(),
+        'pgMar',
+        [
+          ...sides.map(([name, value, fallback]) => wmlAttribute(name, String(value ?? fallback))),
+          wmlAttribute('header', String(current.headerTwips)),
+          wmlAttribute('footer', String(current.footerTwips)),
+          wmlAttribute('gutter', String(current.gutterTwips)),
+        ],
+        []
+      );
+    }
+  }
+
+  let children = [...childrenOf(sectPr)];
+  if (nextPgSz) {
+    if (existingPgSz) {
+      children = children.map((child) => (child.id === existingPgSz.id ? nextPgSz : child));
+    } else {
+      // `w:pgSz` precedes `w:pgMar` and `w:cols` in the schema's sequence.
+      const before = children.findIndex(
+        (child) =>
+          child.kind !== 'textValue' &&
+          'localName' in child &&
+          (child.localName === 'pgMar' || child.localName === 'cols')
+      );
+      children.splice(before === -1 ? children.length : before, 0, nextPgSz);
+    }
+  }
+  if (nextPgMar) {
+    if (existingPgMar) {
+      children = children.map((child) => (child.id === existingPgMar.id ? nextPgMar : child));
+    } else {
+      const afterPgSz = children.findIndex(
+        (child) => child.kind !== 'textValue' && 'localName' in child && child.localName === 'pgSz'
+      );
+      children.splice(afterPgSz === -1 ? children.length : afterPgSz + 1, 0, nextPgMar);
+    }
+  }
+  return children;
 }
 
 function applyJoin(

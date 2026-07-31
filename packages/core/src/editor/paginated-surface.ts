@@ -661,6 +661,19 @@ export function mountPaginatedSurface(
 
     sectionProperties: () => readSectionProperties(session.part()),
 
+    setSectionProperties(update) {
+      let committed = false;
+      commit(() => {
+        const result = session.applyTreeOps(
+          [{ op: 'setSectionProperties', ...update }],
+          selectionMark()
+        );
+        committed = result.committed;
+        return result;
+      });
+      return committed;
+    },
+
     formatting: () =>
       formattingAt(currentLayout, selection, (paragraphId, runProperties) =>
         session.effectiveRunDefaults(paragraphId, runProperties)

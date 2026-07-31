@@ -492,17 +492,7 @@ export interface Editor {
         readonly blockId: string;
     }[];
     getPageGeometry(): readonly { index: number; box: Rect; contentBox: Rect }[];
-    getPageSetup(): {
-        readonly pageWidthTwips: number;
-        readonly pageHeightTwips: number;
-        readonly orientation: 'portrait' | 'landscape';
-        readonly marginsTwips: {
-            readonly top: number;
-            readonly right: number;
-            readonly bottom: number;
-            readonly left: number;
-        };
-    } | null;
+    getPageSetup(): PageSetup | null;
     getScrollGeometry(): ScrollGeometry;
     getSelectedImage(): {
         readonly id: string;
@@ -652,7 +642,7 @@ export type EditorScope =
 /** Read-only aggregate across every view. Valid for queries, not for writes. */
 | { kind: 'all' };
 
-// @public
+// @public (undocumented)
 export interface EditorSnapshot {
     // (undocumented)
     readonly canRedo?: boolean;
@@ -666,6 +656,7 @@ export interface EditorSnapshot {
     readonly isLoading: boolean;
     // (undocumented)
     readonly page: { readonly current: number; readonly total: number };
+    readonly pageSetup?: PageSetup | null;
     // (undocumented)
     readonly parseError: string | null;
     // (undocumented)

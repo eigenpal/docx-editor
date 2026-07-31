@@ -155,7 +155,10 @@ export function readSectionProperties(part: OoxmlPart): SectionProperties {
       count: cols ? Math.max(1, Math.min(12, Number(attribute(cols, 'num') ?? '1') || 1)) : 1,
       gapTwips: cols ? twips(attribute(cols, 'space'), 720, 31680) : defaults.columns.gapTwips,
     },
-    landscape: orientation === 'landscape',
+    // Render-truthful: Word writes swapped dimensions AND the attribute, but a file may
+    // carry only one. Width exceeding height IS a landscape page whatever the attribute
+    // says, because layout paginates against the dimensions.
+    landscape: orientation === 'landscape' || width > height,
     titlePage: childNamed(sectPr, 'titlePg') !== undefined,
   };
 }

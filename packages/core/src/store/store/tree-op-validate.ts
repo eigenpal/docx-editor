@@ -119,6 +119,25 @@ export type TreeDocOp =
       readonly op: 'setParagraphProperties';
       readonly paragraphId: string;
       readonly properties: readonly OoxmlProperty[];
+    }
+  | {
+      /**
+       * Set page-setup fields — page size, orientation, margins — on EVERY `w:sectPr`
+       * in the part: Word's "Apply to: Whole document". The one op not addressed by
+       * paragraph id; a document with no section gets a body-level one minted as the
+       * body's last child. Omitted fields are left exactly as authored per section;
+       * `orientation` writes or removes the `w:orient` attribute only — dimension
+       * swapping is the COMMAND layer's business, so the op stays a literal record of
+       * what changed.
+       */
+      readonly op: 'setSectionProperties';
+      readonly pageWidthTwips?: number;
+      readonly pageHeightTwips?: number;
+      readonly orientation?: 'portrait' | 'landscape';
+      readonly marginTopTwips?: number;
+      readonly marginRightTwips?: number;
+      readonly marginBottomTwips?: number;
+      readonly marginLeftTwips?: number;
     };
 
 export type TreeDocOpKind = TreeDocOp['op'];
@@ -133,6 +152,7 @@ export const TREE_DOC_OP_KINDS = [
   'joinParagraphs',
   'setRunProperties',
   'setParagraphProperties',
+  'setSectionProperties',
 ] as const satisfies readonly TreeDocOpKind[];
 
 // Compile-time exhaustiveness, matching the legacy `DOC_OP_KINDS` guard: a new op must be
@@ -189,6 +209,136 @@ export interface Segment {
 
 export function isParagraph(node: OoxmlNode | null): node is OoxmlParagraphNode {
   return node !== null && node.kind === 'paragraph';
+}
+
+// ---------------------------------------------------------------------------------------
+// Section addressing (setSectionProperties).
+//
+// The store may not import the layout package (the dependency points the other way), so
+// the few section reads validation needs — current dimensions and margins, to refuse a
+// write that leaves no content area — are derived here with the same clamps the layout
+// reader applies. Fields an op does not touch fall back to what the document effectively
+// uses today, which is exactly what the merged write will leave in place.
+// ---------------------------------------------------------------------------------------
+
+/** The `w:body` element of a part, or null when the root holds none. */
+export function bodyNodeOf(
+  part: OoxmlPart
+): (OoxmlNode & { children: readonly OoxmlNode[] }) | null {
+  const walk = (node: OoxmlNode): (OoxmlNode & { children: readonly OoxmlNode[] }) | null => {
+    if (node.kind === 'textValue') return null;
+    if (node.kind === 'body') return node;
+    for (const child of node.children ?? []) {
+      const found = walk(child);
+      if (found) return found;
+    }
+    return null;
+  };
+  return walk(part.root);
+}
+
+/** The body-level `w:sectPr` (a generic node), or null. */
+export function bodySectionOf(part: OoxmlPart): OoxmlNode | null {
+  const body = bodyNodeOf(part);
+  if (!body) return null;
+  for (const child of body.children) {
+    if (child.kind !== 'textValue' && 'localName' in child && child.localName === 'sectPr') {
+      return child;
+    }
+  }
+  return null;
+}
+
+/**
+ * EVERY `w:sectPr` in the part, in document order: the mid-body ones (inside a
+ * paragraph's `w:pPr`, ending a section) and the body-level one last.
+ *
+ * A page-setup write is "apply to whole document" — Word's dialog default — so it must
+ * reach all of them. Updating only the body-level section leaves a multi-section
+ * document saying "portrait, portrait, …, landscape", which any per-section consumer
+ * (Word itself) then renders as a mixed-orientation document.
+ */
+export function allSectionNodes(part: OoxmlPart): OoxmlNode[] {
+  const found: OoxmlNode[] = [];
+  const walk = (node: OoxmlNode): void => {
+    if (node.kind === 'textValue') return;
+    if ('localName' in node && node.localName === 'sectPr') {
+      found.push(node);
+      return;
+    }
+    for (const child of node.children ?? []) walk(child);
+  };
+  walk(part.root);
+  return found;
+}
+
+/** A `w:`-namespace attribute value by local name, off any element node. */
+export function sectionAttribute(node: OoxmlNode | null, name: string): string | undefined {
+  if (!node || node.kind === 'textValue' || !('attributes' in node)) return undefined;
+  for (const entry of node.attributes ?? []) {
+    if (entry.localName === name) return entry.value;
+  }
+  return undefined;
+}
+
+/** A named child element of a section container. */
+export function sectionChild(node: OoxmlNode | null, localName: string): OoxmlNode | null {
+  if (!node || node.kind === 'textValue') return null;
+  for (const child of node.children ?? []) {
+    if (child.kind !== 'textValue' && 'localName' in child && child.localName === localName) {
+      return child;
+    }
+  }
+  return null;
+}
+
+export interface SectionMetrics {
+  readonly widthTwips: number;
+  readonly heightTwips: number;
+  readonly topTwips: number;
+  readonly rightTwips: number;
+  readonly bottomTwips: number;
+  readonly leftTwips: number;
+  readonly headerTwips: number;
+  readonly footerTwips: number;
+  readonly gutterTwips: number;
+}
+
+const clampedTwips = (raw: string | undefined, fallback: number, max: number): number => {
+  if (raw === undefined || !/^-?\d{1,7}$/.test(raw)) return fallback;
+  const value = Number(raw);
+  if (!Number.isFinite(value) || value <= 0 || value > max) return fallback;
+  return value;
+};
+
+const clampedMargin = (raw: string | undefined, fallback: number): number => {
+  if (raw === undefined || !/^-?\d{1,7}$/.test(raw)) return fallback;
+  const value = Number(raw);
+  if (!Number.isFinite(value) || Math.abs(value) > 31680) return fallback;
+  return value;
+};
+
+/** What the document EFFECTIVELY uses today — declared values under the read-side clamps,
+ *  Word's defaults where it says nothing. */
+export function currentSectionMetrics(part: OoxmlPart): SectionMetrics {
+  return metricsOfSection(bodySectionOf(part));
+}
+
+/** The effective metrics of ONE section node (null reads as Word's defaults). */
+export function metricsOfSection(sectPr: OoxmlNode | null): SectionMetrics {
+  const pgSz = sectionChild(sectPr, 'pgSz');
+  const pgMar = sectionChild(sectPr, 'pgMar');
+  return {
+    widthTwips: clampedTwips(sectionAttribute(pgSz, 'w'), 12240, 63360),
+    heightTwips: clampedTwips(sectionAttribute(pgSz, 'h'), 15840, 63360),
+    topTwips: clampedMargin(sectionAttribute(pgMar, 'top'), 1440),
+    rightTwips: clampedMargin(sectionAttribute(pgMar, 'right'), 1440),
+    bottomTwips: clampedMargin(sectionAttribute(pgMar, 'bottom'), 1440),
+    leftTwips: clampedMargin(sectionAttribute(pgMar, 'left'), 1440),
+    headerTwips: clampedMargin(sectionAttribute(pgMar, 'header'), 720),
+    footerTwips: clampedMargin(sectionAttribute(pgMar, 'footer'), 720),
+    gutterTwips: clampedMargin(sectionAttribute(pgMar, 'gutter'), 0),
+  };
 }
 
 /** Flatten a paragraph into UTF-16 addressable segments, in document order. */
@@ -253,6 +403,60 @@ function validateProperties(
 /** Structural validation, run before any tree work so a rejection changes nothing. */
 export function validateTreeOp(part: OoxmlPart, op: TreeDocOp): TreeOpRejection | null {
   if (!TREE_DOC_OP_KINDS.includes(op.op)) return 'unknown-op';
+
+  if (op.op === 'setSectionProperties') {
+    const dims = [op.pageWidthTwips, op.pageHeightTwips];
+    const margins = [
+      op.marginTopTwips,
+      op.marginRightTwips,
+      op.marginBottomTwips,
+      op.marginLeftTwips,
+    ];
+    if (
+      dims.every((value) => value === undefined) &&
+      margins.every((value) => value === undefined) &&
+      op.orientation === undefined
+    ) {
+      return 'invalid-property-value';
+    }
+    for (const value of dims) {
+      // The same bound the read side clamps to: a page dimension is a pagination loop
+      // bound, so the write path must not admit what the read path would refuse.
+      if (value !== undefined && (!Number.isInteger(value) || value < 1 || value > 63360)) {
+        return 'invalid-property-value';
+      }
+    }
+    for (const value of margins) {
+      // Stricter than the read side, which tolerates authored negative margins: the write
+      // path is a dialog or a ruler drag, and neither means "bleed into the margin".
+      if (value !== undefined && (!Number.isInteger(value) || value < 0 || value > 31680)) {
+        return 'invalid-property-value';
+      }
+    }
+    if (
+      op.orientation !== undefined &&
+      op.orientation !== 'portrait' &&
+      op.orientation !== 'landscape'
+    ) {
+      return 'invalid-property-value';
+    }
+    if (!bodyNodeOf(part)) return 'tree-invariant';
+    // The merged result must keep a positive content area. The read side falls back to
+    // default geometry when margins swallow the page; a WRITE that would trip that
+    // fallback is refused instead, so the user sees a rejection rather than a document
+    // that silently snaps to Letter.
+    const current = currentSectionMetrics(part);
+    const width = op.pageWidthTwips ?? current.widthTwips;
+    const height = op.pageHeightTwips ?? current.heightTwips;
+    const top = op.marginTopTwips ?? current.topTwips;
+    const right = op.marginRightTwips ?? current.rightTwips;
+    const bottom = op.marginBottomTwips ?? current.bottomTwips;
+    const left = op.marginLeftTwips ?? current.leftTwips;
+    if (width - left - current.gutterTwips - right <= 0 || height - top - bottom <= 0) {
+      return 'invalid-property-value';
+    }
+    return null;
+  }
 
   if (op.op === 'joinParagraphs') {
     const first = findNode(part, op.firstId);

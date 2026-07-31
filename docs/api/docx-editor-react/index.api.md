@@ -20,6 +20,7 @@ import { DocxDocument } from '@docx-editor.dev/core-contract/contracts/types';
 import { DocxEditorInstance } from '@docx-editor.dev/core-contract/editor';
 import { Editor } from '@docx-editor.dev/core-contract/contracts/editor';
 import { EditorCommand } from '@docx-editor.dev/core-contract/contracts/editor';
+import { EditorCommands } from '@docx-editor.dev/core-contract/contracts/editor';
 import { EditorEvents } from '@docx-editor.dev/core-contract/contracts/editor';
 import { EditorFontError } from '@docx-editor.dev/core-contract/contracts/editor';
 import { EditorFontErrorCode } from '@docx-editor.dev/core-contract/contracts/editor';
@@ -43,6 +44,7 @@ import { loadFonts } from '@docx-editor.dev/core-contract/editor';
 import { LoadFontsRequest } from '@docx-editor.dev/core-contract/editor';
 import { LoadFontsResult } from '@docx-editor.dev/core-contract/editor';
 import { NavigationCommand } from '@docx-editor.dev/core-contract/editor';
+import { PageSetup } from '@docx-editor.dev/core-contract/contracts/editor';
 import { PaginatedSurfaceState } from '@docx-editor.dev/core-contract/editor';
 import { PX_PER_CM } from '@docx-editor.dev/core-contract/editor';
 import { PX_PER_INCH } from '@docx-editor.dev/core-contract/editor';
@@ -114,6 +116,7 @@ export interface DocxEditorNamespace extends ForwardRefExoticComponent<DocxEdito
     readonly Content: typeof DocxEditorContent;
     readonly DocumentOutline: typeof DocxEditorDocumentOutline;
     readonly HorizontalRuler: typeof DocxEditorHorizontalRuler;
+    readonly PageSetupDialog: typeof DocxEditorPageSetupDialog;
     // (undocumented)
     readonly Root: typeof DocxEditorRoot;
     // (undocumented)
@@ -121,6 +124,17 @@ export interface DocxEditorNamespace extends ForwardRefExoticComponent<DocxEdito
     readonly VerticalRuler: typeof DocxEditorVerticalRuler;
     // (undocumented)
     readonly Viewport: typeof DocxEditorViewport;
+}
+
+// @public
+export function DocxEditorPageSetupDialog(input: DocxEditorPageSetupDialogProps): ReactElement | null;
+
+// @public
+export interface DocxEditorPageSetupDialogProps {
+    // (undocumented)
+    className?: string;
+    onClose: () => void;
+    open: boolean;
 }
 
 // @public
@@ -444,6 +458,7 @@ export interface HorizontalRulerProps {
     onIndentRightChange?: (indentTwips: number) => void;
     // (undocumented)
     onLeftMarginChange?: (marginTwips: number) => void;
+    onMarginDragEnd?: () => void;
     // (undocumented)
     onRightMarginChange?: (marginTwips: number) => void;
     // (undocumented)
@@ -480,6 +495,9 @@ export function PageIndicator(input: {
     totalPages: number;
     visible: boolean;
 }): React$1.JSX.Element;
+
+// @public
+export type PageSetupUpdate = EditorCommands['setPageSetup'];
 
 // @public (undocumented)
 export function PaginatedDocxEditor(input: PaginatedDocxEditorProps): React$1.JSX.Element;
@@ -742,6 +760,16 @@ export interface UseFontFamilyResult {
 }
 
 // @public
+export function usePageSetup(): UsePageSetupReturn;
+
+// @public
+export interface UsePageSetupReturn {
+    readonly apply: (update: PageSetupUpdate) => boolean;
+    readonly isEnabled: boolean;
+    readonly pageSetup: PageSetup | null;
+}
+
+// @public
 export const VERSION = "0.0.2";
 
 // @public (undocumented)
@@ -752,6 +780,7 @@ export interface VerticalRulerProps {
     className?: string;
     editable?: boolean;
     onBottomMarginChange?: (marginTwips: number) => void;
+    onMarginDragEnd?: () => void;
     onTopMarginChange?: (marginTwips: number) => void;
     pageSetup?: RulerPageSetup | null;
     style?: CSSProperties;

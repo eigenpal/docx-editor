@@ -507,6 +507,7 @@ function EditorChrome({
 }) {
   const editor = useDocxEditor();
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const [showPageSetup, setShowPageSetup] = useState(false);
 
   const openFile = (file: File) => {
     void file.arrayBuffer().then((buffer) => {
@@ -553,6 +554,9 @@ function EditorChrome({
               </MenuItem>
               <MenuItem onSelect={saveDocument} disabled={!editor}>
                 Save as .docx
+              </MenuItem>
+              <MenuItem onSelect={() => setShowPageSetup(true)} disabled={!editor}>
+                Page setup&hellip;
               </MenuItem>
             </DemoMenu>
             <FormatMenu />
@@ -619,6 +623,9 @@ function EditorChrome({
           </DocxEditor.Toolbar.FontFamily.Content>
         </DocxEditor.Toolbar.FontFamily>
       </DocxEditor.Toolbar>
+
+      {/* File > Page setup: the library dialog, applied as one undo step. */}
+      <DocxEditor.PageSetupDialog open={showPageSetup} onClose={() => setShowPageSetup(false)} />
     </div>
   );
 }

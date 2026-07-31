@@ -2,11 +2,12 @@
 // .DocumentOutline.
 //
 // Against the REAL engine, like toolbar-composition.test.tsx. What these pin down: the
-// ruler parts read `Editor.getPageSetup()` through the provider (page geometry in the
-// painted widths) and are READ-ONLY (no drag handles — the engine has no margin/indent
-// commands); the outline part lists `Editor.getOutline()`'s headings and a click moves
-// the CARET to the heading paragraph through the facade's semantic setSelection; and
-// the parts are reachable as namespace statics.
+// ruler parts read the page setup through the provider (page geometry in the painted
+// widths) and MARGIN DRAGS commit one undoable `setPageSetup` step on release (indent
+// handles stay absent — the indent-drag lane is not wired); the outline part lists
+// `Editor.getOutline()`'s headings and a click moves the CARET to the heading paragraph
+// through the facade's semantic setSelection; and the parts are reachable as namespace
+// statics.
 
 // MUST be first: happy-dom registration happens on import.
 import './dom-setup.ts';
@@ -15,7 +16,7 @@ import './dom-setup.ts';
 
 import { afterEach, describe, expect, test } from 'bun:test';
 import type { ReactNode } from 'react';
-import { act, cleanup, render } from '@testing-library/react';
+import { act, cleanup, fireEvent, render } from '@testing-library/react';
 import { zipSync, strToU8 } from 'fflate';
 import type { DocxEditorInstance } from '@docx-editor.dev/core-contract/editor';
 import { DocxEditor } from '../src/components/DocxEditor.tsx';
@@ -113,8 +114,51 @@ describe('the context-fed ruler parts', () => {
     const ruler = view.container.querySelector('.docx-horizontal-ruler') as HTMLElement;
     expect(ruler).not.toBeNull();
     expect(ruler.style.width).toBe('816px');
-    // READ-ONLY: no indent drag handles, no margin-drag cursor affordance faked.
+    // Indent drag handles stay absent: the indent-drag lane is not wired.
     expect(view.container.querySelectorAll('.docx-ruler-indent').length).toBe(0);
+  });
+
+  test('dragging the left margin zone commits ONE setPageSetup step on release', async () => {
+    const { view, editor } = mountWith(<DocxEditorHorizontalRuler />, PLAIN_SOURCE);
+    const ruler = view.container.querySelector('.docx-horizontal-ruler') as HTMLElement;
+    // The left margin zone is the ruler's first child (the gray band).
+    const leftZone = ruler.firstElementChild as HTMLElement;
+    const before = editor().getDocumentHandle().revision;
+    await act(async () => {
+      fireEvent.mouseDown(leftZone, { clientX: 96 });
+    });
+    await act(async () => {
+      // happy-dom reports a zero rect, so clientX IS the ruler-local x: 48px → 720 twips.
+      fireEvent.mouseMove(document, { clientX: 64 });
+      fireEvent.mouseMove(document, { clientX: 48 });
+    });
+    // Nothing commits while the drag previews.
+    expect(editor().getDocumentHandle().revision).toBe(before);
+    await act(async () => {
+      fireEvent.mouseUp(document);
+    });
+    expect(editor().getPageSetup()!.marginsTwips.left).toBe(720);
+    // One transaction: a single undo restores the original margin.
+    await act(async () => {
+      editor().exec({ type: 'undo' });
+    });
+    expect(editor().getPageSetup()!.marginsTwips.left).toBe(1440);
+  });
+
+  test('dragging the top margin marker on the vertical ruler commits on release', async () => {
+    const { view, editor } = mountWith(<DocxEditorVerticalRuler />, PLAIN_SOURCE);
+    const marker = view.container.querySelector('.docx-ruler-marker-topMargin') as HTMLElement;
+    expect(marker).not.toBeNull();
+    await act(async () => {
+      fireEvent.mouseDown(marker, { clientY: 96 });
+    });
+    await act(async () => {
+      fireEvent.mouseMove(document, { clientY: 48 });
+    });
+    await act(async () => {
+      fireEvent.mouseUp(document);
+    });
+    expect(editor().getPageSetup()!.marginsTwips.top).toBe(720);
   });
 
   test('VerticalRuler paints the page height from Editor.getPageSetup()', () => {
