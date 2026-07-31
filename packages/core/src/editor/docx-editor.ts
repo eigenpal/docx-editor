@@ -88,10 +88,6 @@ import {
 import { createLayoutShaping, toEditorFontError } from './font-configuration.ts';
 import { composeFontConfiguration, type FontConfigurationFragment } from './font-composition.ts';
 import { embeddedFontSources } from './embedded-font-sources.ts';
-import {
-  registerEmbeddedFontFaces,
-  type EmbeddedFontFaceRegistration,
-} from './embedded-font-faces.ts';
 import { mountPaginatedSurface, type PaginatedSurface } from './paginated-surface.ts';
 
 export interface DocxEditorConfig {
@@ -209,16 +205,6 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
   /** The measurer built per LOAD from `config.fonts` plus the document's embedded faces. */
   let shapedMeasurer: TextMeasurer | undefined;
   let shapedProducer: string | undefined;
-  /**
-   * The document's admitted embedded faces, registered on `document.fonts` so painted
-   * glyphs use the bytes layout measured with. Owned per load: replaced documents and
-   * `destroy()` remove exactly the faces this editor added.
-   */
-  let embeddedFaceRegistration: EmbeddedFontFaceRegistration | null = null;
-  function disposeEmbeddedFaces(): void {
-    embeddedFaceRegistration?.dispose();
-    embeddedFaceRegistration = null;
-  }
   /**
    * Which DOCUMENT the shaped measurer belongs to. Embedded faces are a property of the
    * loaded file, so `loadSeq` bumps per `load()` (and per constructor document) and every
@@ -352,7 +338,6 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
     loadSeq += 1;
     shapedMeasurer = undefined;
     shapedProducer = undefined;
-    disposeEmbeddedFaces();
     // A superseded in-flight resolution belongs to the PREVIOUS sequence; its stale
     // guard will refuse to touch state, so the flag must reset here or a load that
     // starts no font work of its own reports `resolving: true` forever.
@@ -449,26 +434,12 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
       // Per-face degradation, reported: an embedded face the validator refused still
       // resolves — to a typed error. Probing here (map lookups, no shaping work) is what
       // turns a silent fixed-measurer fallback into a diagnosable one.
-      const admittedEmbedded: (typeof fromDocument.sources)[number][] = [];
       for (const source of fromDocument.sources) {
         const resolved = shaping.fonts.resolve(source.request);
         if (resolved instanceof FontResolutionError) {
           reportFontError(toEditorFontError(resolved));
-        } else {
-          admittedEmbedded.push(source);
         }
       }
-      // Paint-side twin, BEFORE the shaped remount so the first shaped paint already
-      // renders with the embedded glyphs. Best-effort and admitted-faces-only; a stale
-      // sequence disposes instead of leaking faces into `document.fonts`.
-      const registration = await registerEmbeddedFontFaces(admittedEmbedded);
-      if (destroyed || seq !== loadSeq) {
-        registration.dispose();
-        if (seq === loadSeq) fontsResolving = false;
-        return;
-      }
-      disposeEmbeddedFaces();
-      embeddedFaceRegistration = registration;
       shapedMeasurer = createShapedMeasurer({
         shaper: shaping.shaper,
         resolveFont: (style) => {
@@ -983,7 +954,6 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
 
     destroy() {
       destroyed = true;
-      disposeEmbeddedFaces();
       teardownSurface();
       container = null;
       pendingBytes = null;

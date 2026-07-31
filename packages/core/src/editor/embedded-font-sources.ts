@@ -65,6 +65,11 @@ export function embeddedFontSources(
   const sources: FontSource[] = [];
   const dropped: DroppedEmbeddedFont[] = [];
   let remaining = budgets.aggregateBudget;
+  // A file may name the SAME face twice (two `w:font` elements of one family, each with
+  // the same style slot). Composition keeps the first per request key, so emitting the
+  // rest would produce sources that never reach validation while still looking admitted
+  // to a caller that iterates this list. First-wins here, once, matching composition.
+  const seen = new Set<string>();
   for (const font of embedded) {
     const mapped = STYLE_REQUESTS[font.style];
     const request: FontFaceRequest = Object.freeze({
@@ -78,7 +83,9 @@ export function embeddedFontSources(
       dropped.push({ request, partName: font.partName, reason: 'malformed' });
       continue;
     }
-    if (budgets.shadowedRequests?.has(fontRequestKey(request))) continue;
+    const key = fontRequestKey(request);
+    if (budgets.shadowedRequests?.has(key) || seen.has(key)) continue;
+    seen.add(key);
     if (font.bytes.byteLength > budgets.maxFontBytes || font.bytes.byteLength > remaining) {
       dropped.push({ request, partName: font.partName, reason: 'overLimit' });
       continue;

@@ -14,13 +14,14 @@
 import { GlobalRegistrator } from '@happy-dom/global-registrator';
 if (!GlobalRegistrator.isRegistered) GlobalRegistrator.register();
 
-import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
+import { describe, expect, test } from 'bun:test';
 import { readFileSync } from 'node:fs';
 import { zipSync, strToU8 } from 'fflate';
 import type { EditorFontError } from '../../contracts/editor.ts';
 import { sha256FontBytes } from '../../layout/index.ts';
 import { deobfuscateFont } from '../../store/package/embedded-fonts.ts';
 import { createDocxEditor, type DocxEditorInstance } from '../docx-editor.ts';
+import { embeddedFontSources } from '../embedded-font-sources.ts';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 const R = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships';
@@ -361,99 +362,52 @@ describe('embedded fonts auto-wire into shaped measurement', () => {
   });
 });
 
-// Paint-side registration (embedded-font-paint-registration): admitted embedded faces
-// land on `document.fonts` so painted glyphs use the measured bytes, and leave it when
-// the document is replaced or the editor destroyed. Happy-dom ships neither
-// `document.fonts` nor `FontFace` (which is what keeps every test ABOVE this block a
-// registration no-op), so the environment is stubbed per test here.
-describe('admitted embedded faces register on document.fonts', () => {
-  class StubFontFace {
-    constructor(
-      readonly family: string,
-      readonly bytes: ArrayBuffer,
-      readonly descriptors: { readonly weight: string; readonly style: string }
-    ) {}
-    load(): Promise<unknown> {
-      return Promise.resolve(this);
-    }
-  }
-  class StubFontFaceSet {
-    readonly faces = new Set<StubFontFace>();
-    add(face: StubFontFace): void {
-      this.faces.add(face);
-    }
-    delete(face: StubFontFace): boolean {
-      return this.faces.delete(face);
-    }
-  }
-
-  let fontSet: StubFontFaceSet;
-  beforeEach(() => {
-    fontSet = new StubFontFaceSet();
-    (document as unknown as { fonts: StubFontFaceSet }).fonts = fontSet;
-    (globalThis as unknown as { FontFace: typeof StubFontFace }).FontFace = StubFontFace;
-  });
-  afterEach(() => {
-    delete (document as unknown as { fonts?: StubFontFaceSet }).fonts;
-    delete (globalThis as unknown as { FontFace?: typeof StubFontFace }).FontFace;
+// A file may declare the SAME face twice, each pointing at a different part. Composition
+// validates the first and drops the rest, so the mapper must not emit the duplicates
+// either: a caller iterating the mapper's output would otherwise treat bytes that never
+// reached the validator as admitted.
+describe('duplicate embedded face declarations collapse at the mapper', () => {
+  test('a second declaration of the same family and slot is dropped, first-wins', () => {
+    const duplicate = embeddedFontSources(
+      [
+        {
+          family: 'DejaVu Sans',
+          style: 'regular',
+          partName: '/word/fonts/font1.odttf',
+          bytes: regularBytes,
+        },
+        {
+          family: 'DejaVu Sans',
+          style: 'regular',
+          partName: '/word/fonts/font2.odttf',
+          bytes: new Uint8Array(2048).fill(0xde),
+        },
+      ],
+      { maxFontBytes: 1_000_000, aggregateBudget: 10_000_000 }
+    );
+    expect(duplicate.sources).toHaveLength(1);
+    expect(duplicate.sources[0]!.id).toBe('embedded:/word/fonts/font1.odttf#regular');
+    expect(duplicate.sources[0]!.hash).toBe(sha256FontBytes(regularBytes));
   });
 
-  const registeredFamilies = () => [...fontSet.faces].map((face) => face.family).sort();
-
-  test('embedded faces register under their (quoted) family with canonical descriptors', async () => {
-    const container = document.createElement('div');
-    const editor = createDocxEditor({
-      container,
-      document: docxWithEmbeds(p('paint me'), EMBED_BOTH),
-    });
-    await fontsSettled(editor);
-    expect(editor.fontMeasurement().measurer).toBe('shaped');
-    expect(registeredFamilies()).toEqual(['"DejaVu Sans"', '"DejaVu Sans"']);
-    expect(
-      [...fontSet.faces]
-        .map((face) => `${face.descriptors.weight}/${face.descriptors.style}`)
-        .sort()
-    ).toEqual(['400/normal', '700/normal']);
-    editor.destroy();
-  });
-
-  test('a validator-rejected face never reaches the FontFaceSet', async () => {
-    const container = document.createElement('div');
-    const editor = createDocxEditor({
-      container,
-      document: docxWithEmbeds(p('partial'), [
-        { family: 'DejaVu Sans', slot: 'embedRegular', bytes: regularBytes },
-        { family: 'Broken Face', slot: 'embedRegular', bytes: new Uint8Array(4096).fill(0x42) },
-      ]),
-      onFontError: () => {},
-    });
-    await fontsSettled(editor);
-    expect(registeredFamilies()).toEqual(['"DejaVu Sans"']);
-    editor.destroy();
-  });
-
-  test('loading a new document removes the previous document’s faces', async () => {
-    const container = document.createElement('div');
-    const editor = createDocxEditor({
-      container,
-      document: docxWithEmbeds(p('first'), EMBED_BOTH),
-    });
-    await fontsSettled(editor);
-    expect(fontSet.faces.size).toBe(2);
-    editor.load(docxWithEmbeds(p('second, no embeds'), []));
-    expect(fontSet.faces.size).toBe(0);
-    editor.destroy();
-  });
-
-  test('destroy removes every face the editor registered', async () => {
-    const container = document.createElement('div');
-    const editor = createDocxEditor({
-      container,
-      document: docxWithEmbeds(p('bye'), EMBED_BOTH),
-    });
-    await fontsSettled(editor);
-    expect(fontSet.faces.size).toBe(2);
-    editor.destroy();
-    expect(fontSet.faces.size).toBe(0);
+  test('the same family in a different slot is a distinct face and still admits', () => {
+    const both = embeddedFontSources(
+      [
+        {
+          family: 'DejaVu Sans',
+          style: 'regular',
+          partName: '/word/fonts/font1.odttf',
+          bytes: regularBytes,
+        },
+        {
+          family: 'DejaVu Sans',
+          style: 'bold',
+          partName: '/word/fonts/font2.odttf',
+          bytes: boldBytes,
+        },
+      ],
+      { maxFontBytes: 1_000_000, aggregateBudget: 10_000_000 }
+    );
+    expect(both.sources).toHaveLength(2);
   });
 });

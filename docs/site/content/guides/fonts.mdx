@@ -14,11 +14,9 @@ combine.
 ## The three font sources
 
 **1. Fonts embedded in the document — automatic.** A `.docx` can carry the faces it was
-written in. When it does, the editor extracts them on load, measures with them, and
-registers them with the browser (`document.fonts`) so the rendered pages paint with the
-same glyphs — registration is removed again when the document is replaced or the editor
-is destroyed. No configuration, no assets, no network: a document that brings its own
-fonts is Word-accurate out of the box, in metrics and in pixels.
+written in. When it does, the editor extracts them on load and measures with them. No
+configuration, no assets, no network: a document that brings its own fonts is
+Word-accurate out of the box.
 
 **2. Metric-compatible substitutes — one call.** Most documents use Word's default
 fonts (Calibri, Cambria, Times New Roman, Arial, Courier New), which are proprietary
@@ -70,6 +68,18 @@ const fonts = composeFontConfiguration(brand, await loadDefaultFonts());
 
 `loadFonts` never rejects for a single bad source: it returns the admitted sources plus
 a typed `failures` list, so the editor can open with partial coverage.
+
+You never have to compute a hash by hand. Pins are optional — omit `hash` for URLs on
+your own origin and `loadFonts` computes one for you. When you do want to pin a
+third-party URL, run it once without a pin and read the values back off the result:
+
+```ts
+const result = await loadFonts({ sources });
+console.log(result.sources.map((source) => `${source.id}: ${source.hash}`));
+```
+
+Paste those into your source list (or generate the list at build time, which is how
+`@docx-editor.dev/fonts` bakes the hashes for its own assets).
 
 ## How sources combine
 
