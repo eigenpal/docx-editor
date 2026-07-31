@@ -1,14 +1,19 @@
 // Browser/canvas-backed text measurement for the semantic layout lane.
 //
 // Layout itself stays DOM-free: this module is an optional adapter of the `TextMeasurer`
-// port. The editor composition root selects it when a 2d canvas context is available and
-// no host/shaping measurer was configured. SSR, tests under happy-dom (no real canvas),
-// and non-browser runtimes keep the deterministic fixed measurer.
+// port. The editor composition root creates a 2d canvas context (the only browser seam)
+// and injects it here. SSR, tests under happy-dom (no real canvas), and non-browser
+// runtimes keep the deterministic fixed measurer.
 //
 // Font shorthand construction mirrors `semantic-paint.ts` run-style semantics (family,
 // point size, bold, italic, super/subscript shrink) so measured advances agree with the
 // painted glyphs. Family names are file-derived: only the paint sink's allowlist is
 // interpolated into the CSS font shorthand — never an unsanitized string.
+//
+// Line metrics come from canvas `fontBoundingBox*` (ascent + descent) when the host
+// reports them, otherwise a bounded size×1.15 / 0.8 fallback. Paint consumes the
+// layout-published line height as an explicit pixel value — never CSS `line-height:
+// normal` — so this module must not mount a DOM probe or call `getBoundingClientRect`.
 
 import type { TextMeasurer } from './semantic-records.ts';
 import type { ResolvedRunStyle } from './run-style.ts';
@@ -23,6 +28,55 @@ import { createFixedMeasurer } from './fixed-measurer.ts';
  */
 export const DEFAULT_CANVAS_FONT_STACK = 'Calibri, Carlito, Helvetica, Arial, sans-serif';
 
+/** Default width-cache capacity before least-recently-used eviction. */
+export const DEFAULT_MAX_CANVAS_WIDTH_CACHE_ENTRIES = 4096;
+/** Default line-metrics cache capacity (one entry per distinct font shorthand). */
+export const DEFAULT_MAX_CANVAS_METRICS_CACHE_ENTRIES = 256;
+
+interface BoundedLruCache<K, V> {
+  get(key: K): V | undefined;
+  set(key: K, value: V): void;
+  readonly size: number;
+  readonly evictions: number;
+}
+
+/** Finite positive cache capacity: undefined → fallback; invalid explicit → 1; else floor. */
+function normalizeCacheCapacity(raw: number | undefined, fallback: number): number {
+  if (raw === undefined) return Math.max(1, Math.floor(fallback));
+  if (!(Number.isFinite(raw) && raw > 0)) return 1;
+  return Math.max(1, Math.floor(raw));
+}
+
+function createBoundedLruCache<K, V>(capacity: number): BoundedLruCache<K, V> {
+  const entries = new Map<K, V>();
+  let evictions = 0;
+  return {
+    get(key) {
+      const value = entries.get(key);
+      if (value === undefined) return undefined;
+      entries.delete(key);
+      entries.set(key, value);
+      return value;
+    },
+    set(key, value) {
+      if (entries.has(key)) entries.delete(key);
+      entries.set(key, value);
+      while (entries.size > capacity) {
+        const oldest = entries.keys().next();
+        if (oldest.done) break;
+        entries.delete(oldest.value);
+        evictions += 1;
+      }
+    },
+    get size() {
+      return entries.size;
+    },
+    get evictions() {
+      return evictions;
+    },
+  };
+}
+
 /**
  * The same shape `semantic-paint.ts` enforces at the CSS sink (`FONT_NAME`).
  *
@@ -30,6 +84,23 @@ export const DEFAULT_CANVAS_FONT_STACK = 'Calibri, Carlito, Helvetica, Arial, sa
  * the paint module re-validates at its own sink either way.
  */
 const FONT_NAME = /^[\p{L}\p{N}\p{M} \-.+_]{1,64}$/u;
+
+/**
+ * The canvas text-metrics surface the editor injects.
+ *
+ * Structural subset of `CanvasRenderingContext2D` — declared here so the layout lane stays
+ * off the DOM lib. Hosts pass a real 2d context; tests pass a controllable mock.
+ */
+export interface CanvasTextMetrics {
+  readonly width: number;
+  readonly fontBoundingBoxAscent?: number;
+  readonly fontBoundingBoxDescent?: number;
+}
+
+export interface CanvasTextContext {
+  font: string;
+  measureText(text: string): CanvasTextMetrics;
+}
 
 export interface CanvasMeasurerOptions {
   /**
@@ -42,14 +113,21 @@ export interface CanvasMeasurerOptions {
   readonly scale?: number;
   readonly fallbackFamily?: string;
   /**
-   * Test / host seam: supply a 2d context instead of creating a canvas.
+   * Injected 2d text context from the editor/browser seam.
    *
-   * `undefined` means "create one from `document`"; an explicit `null` or a failed
-   * `getContext` makes `tryCreateCanvasMeasurer` return null.
+   * `undefined` or `null` makes {@link tryCreateCanvasMeasurer} return null so the surface
+   * falls back to the fixed measurer. Layout never creates a canvas element itself.
    */
-  readonly context?: CanvasRenderingContext2D | null;
-  /** Document used for the optional line-height probe. Defaults to the global `document`. */
-  readonly ownerDocument?: Document | null;
+  readonly context?: CanvasTextContext | null;
+  /**
+   * Unique `(font, text)` width entries retained before LRU eviction.
+   *
+   * Long editing sessions measure many transient paragraph states; bounding this cache keeps
+   * memory predictable without changing layout output.
+   */
+  readonly maxWidthEntries?: number;
+  /** Distinct font-shorthand line metrics retained before LRU eviction. */
+  readonly maxMetricsEntries?: number;
 }
 
 export interface ResolvedSurfaceMeasurer {
@@ -58,84 +136,39 @@ export interface ResolvedSurfaceMeasurer {
   readonly producer: 'canvas-measurer' | 'fixed-measurer';
 }
 
-/** Whether this environment can build a canvas-backed measurer without an injected context. */
+/**
+ * Whether an injected canvas text context is usable for measurement.
+ *
+ * Availability is decided by the editor seam (which alone may create a canvas). Layout
+ * never probes `document` — a missing context is simply "unavailable".
+ */
 export function isCanvasMeasurementAvailable(
-  ownerDocument: Document | null | undefined = typeof document !== 'undefined' ? document : null
+  context: CanvasTextContext | null | undefined = null
 ): boolean {
-  if (!ownerDocument) return false;
-  try {
-    const canvas = ownerDocument.createElement('canvas');
-    return Boolean(canvas.getContext?.('2d'));
-  } catch {
-    return false;
-  }
+  return context != null && typeof context.measureText === 'function';
 }
 
 /**
- * Build a canvas-backed measurer, or `null` when no 2d context is available.
+ * Build a canvas-backed measurer, or `null` when no 2d context was injected.
  *
  * Prefer {@link resolveDefaultSurfaceMeasurer} at the editor surface: that keeps the
  * fixed fallback for SSR/tests in one place.
  */
-export function tryCreateCanvasMeasurer(
-  options: CanvasMeasurerOptions = {}
-): TextMeasurer | null {
+export function tryCreateCanvasMeasurer(options: CanvasMeasurerOptions = {}): TextMeasurer | null {
   const scale = options.scale ?? 1;
   if (!(scale > 0) || !Number.isFinite(scale)) return null;
   const fallbackFamily = options.fallbackFamily ?? DEFAULT_CANVAS_FONT_STACK;
+  const context = options.context ?? null;
+  if (!isCanvasMeasurementAvailable(context)) return null;
+  // Narrowed by the guard above.
+  const ctx = context!;
 
-  let context: CanvasRenderingContext2D | null;
-  if (options.context !== undefined) {
-    context = options.context;
-  } else {
-    const owner =
-      options.ownerDocument !== undefined
-        ? options.ownerDocument
-        : typeof document !== 'undefined'
-          ? document
-          : null;
-    if (!owner) return null;
-    try {
-      context = owner.createElement('canvas').getContext('2d');
-    } catch {
-      return null;
-    }
-  }
-  if (!context) return null;
-
-  const ownerDocument =
-    options.ownerDocument !== undefined
-      ? options.ownerDocument
-      : typeof document !== 'undefined'
-        ? document
-        : null;
-
-  const widthCache = new Map<string, number>();
-  const metricsCache = new Map<string, { height: number; baseline: number }>();
-
-  /**
-   * A hidden element used to read the browser's own `line-height: normal` box.
-   *
-   * Canvas cannot report the line gap (`fontBoundingBox` is ascent + descent only), so a
-   * DOM probe is the only way to match what paint's `line-height: normal` actually reserves.
-   * Created lazily and reused.
-   */
-  let probe: HTMLElement | null = null;
-  const lineProbe = (): HTMLElement | null => {
-    if (probe) return probe;
-    if (!ownerDocument?.body) return null;
-    probe = ownerDocument.createElement('span');
-    probe.textContent = 'Hxg';
-    probe.setAttribute('aria-hidden', 'true');
-    probe.style.position = 'absolute';
-    probe.style.visibility = 'hidden';
-    probe.style.top = '-9999px';
-    probe.style.left = '0';
-    probe.style.whiteSpace = 'pre';
-    probe.style.lineHeight = 'normal';
-    ownerDocument.body.append(probe);
-    return probe;
-  };
+  const widthCache = createBoundedLruCache<string, number>(
+    normalizeCacheCapacity(options.maxWidthEntries, DEFAULT_MAX_CANVAS_WIDTH_CACHE_ENTRIES)
+  );
+  const metricsCache = createBoundedLruCache<string, { height: number; baseline: number }>(
+    normalizeCacheCapacity(options.maxMetricsEntries, DEFAULT_MAX_CANVAS_METRICS_CACHE_ENTRIES)
+  );
 
   const fontOf = (style: ResolvedRunStyle): string => {
     // Re-validated at the sink: a font name is file-derived and this builds a CSS font
@@ -152,8 +185,7 @@ export function tryCreateCanvasMeasurer(
 
   /** Painted pixels back to layout units, then the properties layout applies itself. */
   const scaled = (width: number, text: string, style: ResolvedRunStyle): number =>
-    (width / scale) * (style.horizontalScalePercent / 100) +
-    text.length * style.characterSpacingPt;
+    (width / scale) * (style.horizontalScalePercent / 100) + text.length * style.characterSpacingPt;
 
   return {
     measure(text, style) {
@@ -162,8 +194,8 @@ export function tryCreateCanvasMeasurer(
       const key = `${font}\0${text}`;
       const cached = widthCache.get(key);
       if (cached !== undefined) return scaled(cached, text, style);
-      context.font = font;
-      const width = context.measureText(text).width;
+      ctx.font = font;
+      const width = ctx.measureText(text).width;
       widthCache.set(key, width);
       return scaled(width, text, style);
     },
@@ -172,17 +204,26 @@ export function tryCreateCanvasMeasurer(
       const font = fontOf(style);
       const cached = metricsCache.get(font);
       if (cached) return cached;
+
+      // Deterministic fallback: same 1.15 / 0.8 ratios the pre-canvas path used when the
+      // host could not report font bounding boxes.
       let height = size * 1.15;
       let baseline = size * 0.8;
-      const el = lineProbe();
-      if (el) {
-        el.style.font = font;
-        const rectHeight = el.getBoundingClientRect().height / scale;
-        if (rectHeight > 0) height = rectHeight;
+
+      ctx.font = font;
+      const metrics = ctx.measureText('Hxg');
+      const ascent = metrics.fontBoundingBoxAscent;
+      const descent = metrics.fontBoundingBoxDescent;
+      if (typeof ascent === 'number' && Number.isFinite(ascent) && ascent > 0) {
+        baseline = ascent / scale;
+        if (typeof descent === 'number' && Number.isFinite(descent) && descent >= 0) {
+          // Canvas reports the em box (ascent + descent), not the typographic line gap.
+          // Exact Word single-spacing needs the shaped measurer (hhea lineGap). This keeps
+          // the browser path aligned with painted glyph boxes without a DOM probe.
+          const box = (ascent + descent) / scale;
+          if (box > 0) height = box;
+        }
       }
-      context.font = font;
-      const ascent = context.measureText('Hxg').fontBoundingBoxAscent;
-      if (Number.isFinite(ascent) && ascent > 0) baseline = ascent / scale;
       if (!(height > 0)) height = size * 1.15;
       const result = { height, baseline };
       metricsCache.set(font, result);
@@ -192,10 +233,10 @@ export function tryCreateCanvasMeasurer(
 }
 
 /**
- * The surface's default measurer: canvas when a 2d context exists, otherwise fixed.
+ * The surface's default measurer: canvas when a 2d context was injected, otherwise fixed.
  *
  * Host-supplied and shaping measurers override this entirely — call only when the options
- * did not already name one.
+ * did not already name one. The editor seam is responsible for creating the canvas context.
  */
 export function resolveDefaultSurfaceMeasurer(
   scale = 1,

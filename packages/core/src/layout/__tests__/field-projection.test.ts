@@ -5,21 +5,26 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { zipSync, strToU8 } from 'fflate';
 import {
-  allowlistedPageField,
   createFixedMeasurer,
   enumerateDocumentSections,
   geometryOfSection,
-  layoutHeaderFooterStory,
   layoutSemanticDocument,
-  MAX_FIELD_INSTRUCTION_CHARS,
-  normalizeFieldInstruction,
-  piecesOfParagraph,
-  projectPageFieldValue,
   type PageFurniture,
 } from '../index.ts';
 import {
+  allowlistedPageField,
+  detectStoryPageFields,
+  MAX_FIELD_INSTRUCTION_CHARS,
+  MAX_STORY_FIELD_SCAN_NODES,
+  normalizeFieldInstruction,
+  piecesOfParagraph,
+  projectPageFieldValue,
+} from '../field-projection.ts';
+import { DEFAULT_MAX_HF_PAGE_CONTEXT_ENTRIES, layoutHeaderFooterStory } from '../hf-layout.ts';
+import {
   readOoxmlPackage,
   resolveHeaderFooterPartsBySection,
+  writeOoxmlPackage,
   type OoxmlPart,
 } from '@docx-editor.dev/core-contract/store';
 
@@ -55,7 +60,10 @@ function parsePart(xml: string): OoxmlPart {
   return loaded.package.parts.get(loaded.package.mainDocumentPart)!;
 }
 
-function footerDoc(footerBody: string, body = '<w:p><w:r><w:t>Hello</w:t></w:r></w:p>'): Uint8Array {
+function footerDoc(
+  footerBody: string,
+  body = '<w:p><w:r><w:t>Hello</w:t></w:r></w:p>'
+): Uint8Array {
   return zipSync({
     '[Content_Types].xml': strToU8(
       `<Types xmlns="${CT}">` +
@@ -79,11 +87,24 @@ function footerDoc(footerBody: string, body = '<w:p><w:r><w:t>Hello</w:t></w:r><
   });
 }
 
-function storyText(part: OoxmlPart, pageContext?: { pageNumber: number; pageCount: number }): string {
-  const story = layoutHeaderFooterStory(part, 400, measurer, 'test', undefined, undefined, pageContext);
+function storyText(
+  part: OoxmlPart,
+  pageContext?: { pageNumber: number; pageCount: number }
+): string {
+  const story = layoutHeaderFooterStory(
+    part,
+    400,
+    measurer,
+    'test',
+    undefined,
+    undefined,
+    pageContext
+  );
   return story.fragments
     .flatMap((fragment) =>
-      fragment.kind === 'paragraph' ? fragment.lines.flatMap((line) => line.spans.map((s) => s.text)) : []
+      fragment.kind === 'paragraph'
+        ? fragment.lines.flatMap((line) => line.spans.map((s) => s.text))
+        : []
     )
     .join('');
 }
@@ -179,9 +200,9 @@ describe('complex field piece projection', () => {
         `</w:p>`
     );
     const paragraph = part.root.children[0]!.children.find((c) => c.kind === 'paragraph')!;
-    expect(piecesOfParagraph(paragraph, [], { pageNumber: 1, pageCount: 9 }).map((p) => p.text)).toEqual([
-      '1999',
-    ]);
+    expect(
+      piecesOfParagraph(paragraph, [], { pageNumber: 1, pageCount: 9 }).map((p) => p.text)
+    ).toEqual(['1999']);
   });
 
   test('INCLUDETEXT stays inert even with a result', () => {
@@ -193,9 +214,9 @@ describe('complex field piece projection', () => {
         `</w:p>`
     );
     const paragraph = part.root.children[0]!.children.find((c) => c.kind === 'paragraph')!;
-    expect(piecesOfParagraph(paragraph, [], { pageNumber: 1, pageCount: 2 }).map((p) => p.text)).toEqual([
-      'cached',
-    ]);
+    expect(
+      piecesOfParagraph(paragraph, [], { pageNumber: 1, pageCount: 2 }).map((p) => p.text)
+    ).toEqual(['cached']);
   });
 
   test('allowlisted projection replaces stale cached PAGE result', () => {
@@ -206,9 +227,72 @@ describe('complex field piece projection', () => {
         `</w:p>`
     );
     const paragraph = part.root.children[0]!.children.find((c) => c.kind === 'paragraph')!;
-    expect(piecesOfParagraph(paragraph, [], { pageNumber: 7, pageCount: 10 }).map((p) => p.text)).toEqual([
-      '7',
-    ]);
+    expect(
+      piecesOfParagraph(paragraph, [], { pageNumber: 7, pageCount: 10 }).map((p) => p.text)
+    ).toEqual(['7']);
+  });
+
+  test('A99Z projects A7Z with canonical Z offset and bold result style', () => {
+    // Model text is A99Z; live PAGE replaces cached "99" with "7" while Z keeps offset 3.
+    const part = parsePart(
+      `<w:p>` +
+        `<w:r><w:t>A</w:t></w:r>` +
+        `<w:r><w:fldChar w:fldCharType="begin"/></w:r>` +
+        `<w:r><w:instrText>PAGE</w:instrText></w:r>` +
+        `<w:r><w:fldChar w:fldCharType="separate"/></w:r>` +
+        `<w:r><w:rPr><w:b/></w:rPr><w:t>99</w:t></w:r>` +
+        `<w:r><w:fldChar w:fldCharType="end"/></w:r>` +
+        `<w:r><w:t>Z</w:t></w:r>` +
+        `</w:p>`
+    );
+    const paragraph = part.root.children[0]!.children.find((c) => c.kind === 'paragraph')!;
+    const pieces = piecesOfParagraph(paragraph, [], { pageNumber: 7, pageCount: 10 });
+    expect(pieces.map((p) => p.text)).toEqual(['A', '7', 'Z']);
+    expect(pieces[0]).toMatchObject({ start: 0, end: 1 });
+    expect(pieces[0]!.projected).toBeUndefined();
+    expect(pieces[1]).toMatchObject({ start: 1, end: 3, projected: true });
+    expect(pieces[1]!.style.bold).toBe(true);
+    expect(pieces[2]).toMatchObject({ start: 3, end: 4 });
+  });
+
+  test('multi-run cached result uses the first measurable run style', () => {
+    const part = parsePart(
+      `<w:p>` +
+        `<w:r><w:fldChar w:fldCharType="begin"/></w:r>` +
+        `<w:r><w:instrText>PAGE</w:instrText></w:r>` +
+        `<w:r><w:fldChar w:fldCharType="separate"/></w:r>` +
+        `<w:r><w:rPr><w:b/></w:rPr><w:t>9</w:t></w:r>` +
+        `<w:r><w:rPr><w:i/></w:rPr><w:t>9</w:t></w:r>` +
+        `<w:r><w:fldChar w:fldCharType="end"/></w:r>` +
+        `<w:r><w:t>Z</w:t></w:r>` +
+        `</w:p>`
+    );
+    const paragraph = part.root.children[0]!.children.find((c) => c.kind === 'paragraph')!;
+    const pieces = piecesOfParagraph(paragraph, [], { pageNumber: 7, pageCount: 10 });
+    expect(pieces.map((p) => p.text)).toEqual(['7', 'Z']);
+    expect(pieces[0]).toMatchObject({ start: 0, end: 2, projected: true });
+    expect(pieces[0]!.style.bold).toBe(true);
+    expect(pieces[0]!.style.italic).toBe(false);
+    expect(pieces[1]).toMatchObject({ start: 2, end: 3 });
+  });
+
+  test('malformed field missing end does not project', () => {
+    const part = parsePart(
+      `<w:p>` +
+        `<w:r><w:t>A</w:t></w:r>` +
+        `<w:r><w:fldChar w:fldCharType="begin"/></w:r>` +
+        `<w:r><w:instrText>PAGE</w:instrText></w:r>` +
+        `<w:r><w:fldChar w:fldCharType="separate"/></w:r>` +
+        `<w:r><w:rPr><w:b/></w:rPr><w:t>99</w:t></w:r>` +
+        `<w:r><w:t>Z</w:t></w:r>` +
+        `</w:p>`
+    );
+    const paragraph = part.root.children[0]!.children.find((c) => c.kind === 'paragraph')!;
+    // Fail closed: no end → no live projection; buffered cached result stays visible.
+    const pieces = piecesOfParagraph(paragraph, [], { pageNumber: 7, pageCount: 10 });
+    expect(pieces.map((p) => p.text)).toEqual(['A', '99', 'Z']);
+    expect(pieces.every((p) => !p.projected)).toBe(true);
+    expect(pieces[2]).toMatchObject({ start: 3, end: 4 });
   });
 });
 
@@ -229,17 +313,22 @@ describe('header/footer page-context layout cache', () => {
     if (!loaded.ok) return;
     const footer = [...loaded.package.parts.values()].find((p) => p.name.includes('footer1'))!;
     const baseline = layoutHeaderFooterStory(footer, 300, measurer, 'test');
+    expect(baseline.pageFieldNeeds).toEqual({ hasPage: true, hasNumPages: true });
     expect(storyText(footer)).toBe('L\tPage  of ');
     const page2 = baseline.withPageContext({ pageNumber: 2, pageCount: 26 });
     const page10 = baseline.withPageContext({ pageNumber: 10, pageCount: 26 });
     expect(
       page2.fragments
-        .flatMap((f) => (f.kind === 'paragraph' ? f.lines.flatMap((l) => l.spans.map((s) => s.text)) : []))
+        .flatMap((f) =>
+          f.kind === 'paragraph' ? f.lines.flatMap((l) => l.spans.map((s) => s.text)) : []
+        )
         .join('')
     ).toBe('L\tPage 2 of 26');
     expect(
       page10.fragments
-        .flatMap((f) => (f.kind === 'paragraph' ? f.lines.flatMap((l) => l.spans.map((s) => s.text)) : []))
+        .flatMap((f) =>
+          f.kind === 'paragraph' ? f.lines.flatMap((l) => l.spans.map((s) => s.text)) : []
+        )
         .join('')
     ).toBe('L\tPage 10 of 26');
     // Distinct digit widths → distinct right-tab advances for the same stop.
@@ -252,13 +341,359 @@ describe('header/footer page-context layout cache', () => {
     expect(tabWidth(page2)).not.toBe(tabWidth(page10));
     expect(baseline.withPageContext({ pageNumber: 2, pageCount: 26 })).toBe(page2);
   });
+
+  test('field-free stories reuse the baseline layout identity', () => {
+    const bytes = footerDoc(`<w:p><w:r><w:t>Static footer</w:t></w:r></w:p>`);
+    const loaded = readOoxmlPackage(bytes);
+    expect(loaded.ok).toBe(true);
+    if (!loaded.ok) return;
+    const footer = [...loaded.package.parts.values()].find((p) => p.name.includes('footer1'))!;
+    const baseline = layoutHeaderFooterStory(footer, 300, measurer, 'test');
+    expect(baseline.pageFieldNeeds).toEqual({ hasPage: false, hasNumPages: false });
+    expect(baseline.withPageContext({ pageNumber: 1, pageCount: 9 })).toBe(baseline);
+    expect(baseline.withPageContext({ pageNumber: 9, pageCount: 9 })).toBe(baseline);
+  });
+
+  test('NUMPAGES-only stories reuse one layout per page count', () => {
+    const bytes = footerDoc(
+      `<w:p><w:r><w:t>of </w:t></w:r>` +
+        `<w:r><w:fldChar w:fldCharType="begin"/><w:instrText>NUMPAGES</w:instrText>` +
+        `<w:fldChar w:fldCharType="separate"/><w:fldChar w:fldCharType="end"/></w:r></w:p>`
+    );
+    const loaded = readOoxmlPackage(bytes);
+    expect(loaded.ok).toBe(true);
+    if (!loaded.ok) return;
+    const footer = [...loaded.package.parts.values()].find((p) => p.name.includes('footer1'))!;
+    const baseline = layoutHeaderFooterStory(footer, 300, measurer, 'test');
+    expect(baseline.pageFieldNeeds).toEqual({ hasPage: false, hasNumPages: true });
+    const page1 = baseline.withPageContext({ pageNumber: 1, pageCount: 12 });
+    const page7 = baseline.withPageContext({ pageNumber: 7, pageCount: 12 });
+    expect(page1).toBe(page7);
+    expect(
+      page1.fragments
+        .flatMap((f) =>
+          f.kind === 'paragraph' ? f.lines.flatMap((l) => l.spans.map((s) => s.text)) : []
+        )
+        .join('')
+    ).toBe('of 12');
+    const otherCount = baseline.withPageContext({ pageNumber: 1, pageCount: 13 });
+    expect(otherCount).not.toBe(page1);
+    expect(
+      otherCount.fragments
+        .flatMap((f) =>
+          f.kind === 'paragraph' ? f.lines.flatMap((l) => l.spans.map((s) => s.text)) : []
+        )
+        .join('')
+    ).toBe('of 13');
+  });
+
+  test('PAGE-dependent context cache stays bounded across many keys', () => {
+    const bytes = footerDoc(
+      `<w:p><w:r><w:fldChar w:fldCharType="begin"/><w:instrText>PAGE</w:instrText>` +
+        `<w:fldChar w:fldCharType="separate"/><w:fldChar w:fldCharType="end"/></w:r></w:p>`
+    );
+    const loaded = readOoxmlPackage(bytes);
+    expect(loaded.ok).toBe(true);
+    if (!loaded.ok) return;
+    const footer = [...loaded.package.parts.values()].find((p) => p.name.includes('footer1'))!;
+    const maxEntries = 4;
+    const baseline = layoutHeaderFooterStory(
+      footer,
+      300,
+      measurer,
+      'test',
+      undefined,
+      undefined,
+      undefined,
+      maxEntries
+    );
+    const first = baseline.withPageContext({ pageNumber: 1, pageCount: 100 });
+    for (let pageNumber = 2; pageNumber <= maxEntries + 3; pageNumber += 1) {
+      baseline.withPageContext({ pageNumber, pageCount: 100 });
+    }
+    // Baseline + maxEntries projected contexts; LRU evicts the oldest projected key.
+    expect(baseline.withPageContext({ pageNumber: 1, pageCount: 100 })).not.toBe(first);
+    const recent = baseline.withPageContext({ pageNumber: maxEntries + 3, pageCount: 100 });
+    expect(baseline.withPageContext({ pageNumber: maxEntries + 3, pageCount: 100 })).toBe(recent);
+    expect(maxEntries).toBeLessThan(DEFAULT_MAX_HF_PAGE_CONTEXT_ENTRIES);
+  });
+});
+
+describe('story page-field detection', () => {
+  test('detects PAGE and NUMPAGES complex fields and ignores fldSimple', () => {
+    const both = parsePart(
+      `<w:p>` +
+        `<w:r><w:fldChar w:fldCharType="begin"/><w:instrText>PAGE</w:instrText>` +
+        `<w:fldChar w:fldCharType="separate"/><w:fldChar w:fldCharType="end"/></w:r>` +
+        `<w:r><w:fldChar w:fldCharType="begin"/><w:instrText>NUMPAGES</w:instrText>` +
+        `<w:fldChar w:fldCharType="separate"/><w:fldChar w:fldCharType="end"/></w:r>` +
+        `</w:p>`
+    );
+    expect(detectStoryPageFields(both.root)).toEqual({ hasPage: true, hasNumPages: true });
+
+    const simpleOnly = parsePart(
+      `<w:p><w:fldSimple w:instr="PAGE"/><w:fldSimple w:instr="NUMPAGES"/></w:p>`
+    );
+    expect(detectStoryPageFields(simpleOnly.root)).toEqual({ hasPage: false, hasNumPages: false });
+
+    const hostile = parsePart(
+      `<w:p><w:r><w:fldChar w:fldCharType="begin"/><w:instrText>${'X'.repeat(MAX_FIELD_INSTRUCTION_CHARS + 1)}</w:instrText>` +
+        `<w:fldChar w:fldCharType="separate"/><w:fldChar w:fldCharType="end"/></w:r></w:p>`
+    );
+    expect(detectStoryPageFields(hostile.root)).toEqual({ hasPage: false, hasNumPages: false });
+    expect(MAX_STORY_FIELD_SCAN_NODES).toBeGreaterThan(0);
+  });
+
+  test('detects begin/instr/separate/result/end split across distinct runs', () => {
+    const pageOnly = parsePart(
+      `<w:p>` +
+        `<w:r><w:fldChar w:fldCharType="begin"/></w:r>` +
+        `<w:r><w:instrText>PAGE</w:instrText></w:r>` +
+        `<w:r><w:fldChar w:fldCharType="separate"/></w:r>` +
+        `<w:r><w:t>1</w:t></w:r>` +
+        `<w:r><w:fldChar w:fldCharType="end"/></w:r>` +
+        `</w:p>`
+    );
+    expect(detectStoryPageFields(pageOnly.root)).toEqual({ hasPage: true, hasNumPages: false });
+
+    const numOnly = parsePart(
+      `<w:p>` +
+        `<w:r><w:fldChar w:fldCharType="begin"/></w:r>` +
+        `<w:r><w:instrText>NUMPAGES</w:instrText></w:r>` +
+        `<w:r><w:fldChar w:fldCharType="separate"/></w:r>` +
+        `<w:r><w:t>99</w:t></w:r>` +
+        `<w:r><w:fldChar w:fldCharType="end"/></w:r>` +
+        `</w:p>`
+    );
+    expect(detectStoryPageFields(numOnly.root)).toEqual({ hasPage: false, hasNumPages: true });
+  });
+
+  test('detects instruction text split across runs', () => {
+    const part = parsePart(
+      `<w:p>` +
+        `<w:r><w:fldChar w:fldCharType="begin"/></w:r>` +
+        `<w:r><w:instrText>NU</w:instrText></w:r>` +
+        `<w:r><w:instrText>MPAGES</w:instrText></w:r>` +
+        `<w:r><w:fldChar w:fldCharType="separate"/></w:r>` +
+        `<w:r><w:fldChar w:fldCharType="end"/></w:r>` +
+        `</w:p>`
+    );
+    expect(detectStoryPageFields(part.root)).toEqual({ hasPage: false, hasNumPages: true });
+
+    const pageSplit = parsePart(
+      `<w:p>` +
+        `<w:r><w:fldChar w:fldCharType="begin"/></w:r>` +
+        `<w:r><w:instrText>PA</w:instrText></w:r>` +
+        `<w:r><w:instrText>GE</w:instrText></w:r>` +
+        `<w:r><w:fldChar w:fldCharType="separate"/></w:r>` +
+        `<w:r><w:fldChar w:fldCharType="end"/></w:r>` +
+        `</w:p>`
+    );
+    expect(detectStoryPageFields(pageSplit.root)).toEqual({ hasPage: true, hasNumPages: false });
+  });
+
+  test('detects mixed PAGE and NUMPAGES when each field is split across runs', () => {
+    const part = parsePart(
+      `<w:p>` +
+        `<w:r><w:t>Page </w:t></w:r>` +
+        `<w:r><w:fldChar w:fldCharType="begin"/></w:r>` +
+        `<w:r><w:instrText>PAGE</w:instrText></w:r>` +
+        `<w:r><w:fldChar w:fldCharType="separate"/></w:r>` +
+        `<w:r><w:t>1</w:t></w:r>` +
+        `<w:r><w:fldChar w:fldCharType="end"/></w:r>` +
+        `<w:r><w:t> of </w:t></w:r>` +
+        `<w:r><w:fldChar w:fldCharType="begin"/></w:r>` +
+        `<w:r><w:instrText>NUMPAGES</w:instrText></w:r>` +
+        `<w:r><w:fldChar w:fldCharType="separate"/></w:r>` +
+        `<w:r><w:t>26</w:t></w:r>` +
+        `<w:r><w:fldChar w:fldCharType="end"/></w:r>` +
+        `</w:p>`
+    );
+    expect(detectStoryPageFields(part.root)).toEqual({ hasPage: true, hasNumPages: true });
+  });
+
+  test('malformed cross-paragraph fields do not count', () => {
+    const part = parsePart(
+      `<w:p>` +
+        `<w:r><w:fldChar w:fldCharType="begin"/></w:r>` +
+        `<w:r><w:instrText>PAGE</w:instrText></w:r>` +
+        `</w:p>` +
+        `<w:p>` +
+        `<w:r><w:fldChar w:fldCharType="separate"/></w:r>` +
+        `<w:r><w:t>1</w:t></w:r>` +
+        `<w:r><w:fldChar w:fldCharType="end"/></w:r>` +
+        `</w:p>`
+    );
+    expect(detectStoryPageFields(part.root)).toEqual({ hasPage: false, hasNumPages: false });
+
+    const numCross = parsePart(
+      `<w:p><w:r><w:fldChar w:fldCharType="begin"/></w:r><w:r><w:instrText>NUMPAGES</w:instrText></w:r></w:p>` +
+        `<w:p><w:r><w:fldChar w:fldCharType="separate"/></w:r><w:r><w:fldChar w:fldCharType="end"/></w:r></w:p>`
+    );
+    expect(detectStoryPageFields(numCross.root)).toEqual({ hasPage: false, hasNumPages: false });
+  });
+
+  test('hostile oversize instructions split across runs stay undetected', () => {
+    const half = Math.ceil((MAX_FIELD_INSTRUCTION_CHARS + 1) / 2);
+    const part = parsePart(
+      `<w:p>` +
+        `<w:r><w:fldChar w:fldCharType="begin"/></w:r>` +
+        `<w:r><w:instrText>${'X'.repeat(half)}</w:instrText></w:r>` +
+        `<w:r><w:instrText>${'Y'.repeat(half)}</w:instrText></w:r>` +
+        `<w:r><w:fldChar w:fldCharType="separate"/></w:r>` +
+        `<w:r><w:fldChar w:fldCharType="end"/></w:r>` +
+        `</w:p>`
+    );
+    expect(detectStoryPageFields(part.root)).toEqual({ hasPage: false, hasNumPages: false });
+  });
+});
+
+describe('header/footer split-field projection and reuse', () => {
+  test('cross-run PAGE/NUMPAGES detection enables live projection and context reuse', () => {
+    const bytes = footerDoc(
+      `<w:p>` +
+        `<w:r><w:t>Page </w:t></w:r>` +
+        `<w:r><w:fldChar w:fldCharType="begin"/></w:r>` +
+        `<w:r><w:instrText>PAGE</w:instrText></w:r>` +
+        `<w:r><w:fldChar w:fldCharType="separate"/></w:r>` +
+        `<w:r><w:t>1</w:t></w:r>` +
+        `<w:r><w:fldChar w:fldCharType="end"/></w:r>` +
+        `<w:r><w:t> of </w:t></w:r>` +
+        `<w:r><w:fldChar w:fldCharType="begin"/></w:r>` +
+        `<w:r><w:instrText>NU</w:instrText></w:r>` +
+        `<w:r><w:instrText>MPAGES</w:instrText></w:r>` +
+        `<w:r><w:fldChar w:fldCharType="separate"/></w:r>` +
+        `<w:r><w:t>99</w:t></w:r>` +
+        `<w:r><w:fldChar w:fldCharType="end"/></w:r>` +
+        `</w:p>`
+    );
+    const loaded = readOoxmlPackage(bytes);
+    expect(loaded.ok).toBe(true);
+    if (!loaded.ok) return;
+    const footer = [...loaded.package.parts.values()].find((p) => p.name.includes('footer1'))!;
+    expect(detectStoryPageFields(footer.root)).toEqual({ hasPage: true, hasNumPages: true });
+
+    const baseline = layoutHeaderFooterStory(footer, 300, measurer, 'test');
+    expect(baseline.pageFieldNeeds).toEqual({ hasPage: true, hasNumPages: true });
+    // Without page context, cached result text stays (often stale).
+    expect(
+      baseline.fragments
+        .flatMap((f) =>
+          f.kind === 'paragraph' ? f.lines.flatMap((l) => l.spans.map((s) => s.text)) : []
+        )
+        .join('')
+    ).toBe('Page 1 of 99');
+
+    const page2 = baseline.withPageContext({ pageNumber: 2, pageCount: 26 });
+    const page2Again = baseline.withPageContext({ pageNumber: 2, pageCount: 26 });
+    expect(page2Again).toBe(page2);
+    expect(
+      page2.fragments
+        .flatMap((f) =>
+          f.kind === 'paragraph' ? f.lines.flatMap((l) => l.spans.map((s) => s.text)) : []
+        )
+        .join('')
+    ).toBe('Page 2 of 26');
+
+    const page7 = baseline.withPageContext({ pageNumber: 7, pageCount: 26 });
+    expect(page7).not.toBe(page2);
+    expect(
+      page7.fragments
+        .flatMap((f) =>
+          f.kind === 'paragraph' ? f.lines.flatMap((l) => l.spans.map((s) => s.text)) : []
+        )
+        .join('')
+    ).toBe('Page 7 of 26');
+  });
+
+  test('NUMPAGES-only split across runs reuses one layout per page count', () => {
+    const bytes = footerDoc(
+      `<w:p>` +
+        `<w:r><w:t>of </w:t></w:r>` +
+        `<w:r><w:fldChar w:fldCharType="begin"/></w:r>` +
+        `<w:r><w:instrText>NUM</w:instrText></w:r>` +
+        `<w:r><w:instrText>PAGES</w:instrText></w:r>` +
+        `<w:r><w:fldChar w:fldCharType="separate"/></w:r>` +
+        `<w:r><w:t>0</w:t></w:r>` +
+        `<w:r><w:fldChar w:fldCharType="end"/></w:r>` +
+        `</w:p>`
+    );
+    const loaded = readOoxmlPackage(bytes);
+    expect(loaded.ok).toBe(true);
+    if (!loaded.ok) return;
+    const footer = [...loaded.package.parts.values()].find((p) => p.name.includes('footer1'))!;
+    const baseline = layoutHeaderFooterStory(footer, 300, measurer, 'test');
+    expect(baseline.pageFieldNeeds).toEqual({ hasPage: false, hasNumPages: true });
+    const a = baseline.withPageContext({ pageNumber: 1, pageCount: 12 });
+    const b = baseline.withPageContext({ pageNumber: 9, pageCount: 12 });
+    expect(a).toBe(b);
+    expect(
+      a.fragments
+        .flatMap((f) =>
+          f.kind === 'paragraph' ? f.lines.flatMap((l) => l.spans.map((s) => s.text)) : []
+        )
+        .join('')
+    ).toBe('of 12');
+  });
+
+  test('document layout projects split-run footer fields per page', () => {
+    const body =
+      Array.from({ length: 5 }, (_, i) => `<w:p><w:r><w:t>line ${i}</w:t></w:r></w:p>`).join('') +
+      Array.from({ length: 20 }, () => `<w:p><w:r><w:t>${'x'.repeat(40)}</w:t></w:r></w:p>`).join(
+        ''
+      );
+    const bytes = footerDoc(
+      `<w:p>` +
+        `<w:r><w:t>Page </w:t></w:r>` +
+        `<w:r><w:fldChar w:fldCharType="begin"/></w:r>` +
+        `<w:r><w:instrText>PAGE</w:instrText></w:r>` +
+        `<w:r><w:fldChar w:fldCharType="separate"/></w:r>` +
+        `<w:r><w:t>1</w:t></w:r>` +
+        `<w:r><w:fldChar w:fldCharType="end"/></w:r>` +
+        `<w:r><w:t> of </w:t></w:r>` +
+        `<w:r><w:fldChar w:fldCharType="begin"/></w:r>` +
+        `<w:r><w:instrText>NUMPAGES</w:instrText></w:r>` +
+        `<w:r><w:fldChar w:fldCharType="separate"/></w:r>` +
+        `<w:r><w:t>1</w:t></w:r>` +
+        `<w:r><w:fldChar w:fldCharType="end"/></w:r>` +
+        `</w:p>`,
+      body
+    );
+    const loaded = readOoxmlPackage(bytes);
+    expect(loaded.ok).toBe(true);
+    if (!loaded.ok) return;
+    const part = loaded.package.parts.get(loaded.package.mainDocumentPart)!;
+    const layout = layoutSemanticDocument(part, 1, {
+      measurer,
+      producer: 'test',
+      geometry: {
+        width: 200,
+        height: 100,
+        margin: { top: 10, right: 10, bottom: 10, left: 10 },
+      },
+      sectionFurniture: furnitureFromPackage(loaded.package, part),
+    });
+    expect(layout.pages.length).toBeGreaterThan(1);
+    const pageCount = layout.pages.length;
+    for (const page of layout.pages) {
+      const text = page.footer?.fragments
+        .flatMap((f) =>
+          f.kind === 'paragraph' ? f.lines.flatMap((l) => l.spans.map((s) => s.text)) : []
+        )
+        .join('');
+      expect(text).toBe(`Page ${page.index + 1} of ${pageCount}`);
+      expect(page.footer?.pageFieldProjector).toBeUndefined();
+    }
+  });
 });
 
 describe('document layout page index and page count', () => {
   test('footer fields show physical page index and total pages', () => {
     const body =
       Array.from({ length: 5 }, (_, i) => `<w:p><w:r><w:t>line ${i}</w:t></w:r></w:p>`).join('') +
-      Array.from({ length: 20 }, () => `<w:p><w:r><w:t>${'x'.repeat(40)}</w:t></w:r></w:p>`).join('');
+      Array.from({ length: 20 }, () => `<w:p><w:r><w:t>${'x'.repeat(40)}</w:t></w:r></w:p>`).join(
+        ''
+      );
     const bytes = footerDoc(
       `<w:p><w:r><w:t>Page </w:t></w:r>` +
         `<w:r><w:fldChar w:fldCharType="begin"/><w:instrText>PAGE</w:instrText>` +
@@ -294,6 +729,192 @@ describe('document layout page index and page count', () => {
       expect(page.footer?.pageFieldProjector).toBeUndefined();
     }
   });
+
+  test('field-free furniture keeps baseline fragments and skips projectors', () => {
+    const body = Array.from(
+      { length: 25 },
+      () => `<w:p><w:r><w:t>${'x'.repeat(40)}</w:t></w:r></w:p>`
+    ).join('');
+    const bytes = footerDoc(`<w:p><w:r><w:t>Static</w:t></w:r></w:p>`, body);
+    const loaded = readOoxmlPackage(bytes);
+    expect(loaded.ok).toBe(true);
+    if (!loaded.ok) return;
+    const part = loaded.package.parts.get(loaded.package.mainDocumentPart)!;
+    const layout = layoutSemanticDocument(part, 1, {
+      measurer,
+      producer: 'test',
+      geometry: {
+        width: 200,
+        height: 100,
+        margin: { top: 10, right: 10, bottom: 10, left: 10 },
+      },
+      sectionFurniture: furnitureFromPackage(loaded.package, part),
+    });
+    expect(layout.pages.length).toBeGreaterThan(1);
+    const firstFragments = layout.pages[0]!.footer!.fragments;
+    for (const page of layout.pages) {
+      expect(page.footer?.pageFieldProjector).toBeUndefined();
+      expect(page.footer?.fragments).toBe(firstFragments);
+      const text = page.footer?.fragments
+        .flatMap((f) =>
+          f.kind === 'paragraph' ? f.lines.flatMap((l) => l.spans.map((s) => s.text)) : []
+        )
+        .join('');
+      expect(text).toBe('Static');
+    }
+  });
+});
+
+describe('inert body fldSimple (deferred)', () => {
+  test('fldSimple PAGE/NUMPAGES never project and emit no pieces even with page context', () => {
+    const part = parsePart(
+      `<w:p>` +
+        `<w:r><w:t>Page </w:t></w:r>` +
+        `<w:fldSimple w:instr="PAGE"/>` +
+        `<w:r><w:t> of </w:t></w:r>` +
+        `<w:fldSimple w:instr="NUMPAGES \\* MERGEFORMAT"/>` +
+        `</w:p>`
+    );
+    const paragraph = part.root.children[0]!.children.find((c) => c.kind === 'paragraph')!;
+    const pieces = piecesOfParagraph(paragraph, [], { pageNumber: 2, pageCount: 26 });
+    expect(pieces.map((p) => p.text)).toEqual(['Page ', ' of ']);
+    expect(pieces.every((p) => !p.projected)).toBe(true);
+    // Surrounding run text stays contiguous in the model range — fldSimple contributes nothing.
+    expect(pieces[0]).toMatchObject({ start: 0, end: 5 });
+    expect(pieces[1]).toMatchObject({ start: 5, end: 9 });
+  });
+
+  test('cached fldSimple result text does not advance offsets or create selectable spans', () => {
+    const part = parsePart(
+      `<w:p>` +
+        `<w:r><w:t>before</w:t></w:r>` +
+        `<w:fldSimple w:instr="DATE \\@ &quot;yyyy&quot;"><w:r><w:t>1999</w:t></w:r></w:fldSimple>` +
+        `<w:r><w:t>after</w:t></w:r>` +
+        `</w:p>`
+    );
+    const paragraph = part.root.children[0]!.children.find((c) => c.kind === 'paragraph')!;
+    const pieces = piecesOfParagraph(paragraph, [], { pageNumber: 1, pageCount: 9 });
+    expect(pieces.map((p) => p.text)).toEqual(['before', 'after']);
+    expect(pieces[0]).toMatchObject({ start: 0, end: 6 });
+    expect(pieces[1]).toMatchObject({ start: 6, end: 11 });
+    expect(pieces.some((p) => p.text.includes('1999'))).toBe(false);
+  });
+
+  test('hostile INCLUDETEXT fldSimple stays fully inert', () => {
+    const part = parsePart(
+      `<w:p>` +
+        `<w:r><w:t>A</w:t></w:r>` +
+        `<w:fldSimple w:instr="INCLUDETEXT &quot;http://evil.example/x&quot;">` +
+        `<w:r><w:t>cached</w:t></w:r></w:fldSimple>` +
+        `<w:r><w:t>B</w:t></w:r>` +
+        `</w:p>`
+    );
+    const paragraph = part.root.children[0]!.children.find((c) => c.kind === 'paragraph')!;
+    expect(
+      piecesOfParagraph(paragraph, [], { pageNumber: 1, pageCount: 2 }).map((p) => p.text)
+    ).toEqual(['A', 'B']);
+  });
+
+  test('body fldSimple survives save/reopen structurally while staying layout-inert', () => {
+    const body =
+      `<w:p>` +
+      `<w:r><w:t>Page </w:t></w:r>` +
+      `<w:fldSimple w:instr="PAGE"><w:r><w:t>1</w:t></w:r></w:fldSimple>` +
+      `<w:r><w:t> of </w:t></w:r>` +
+      `<w:fldSimple w:instr="NUMPAGES"><w:r><w:t>99</w:t></w:r></w:fldSimple>` +
+      `</w:p>`;
+    const loaded = readOoxmlPackage(
+      zipSync({
+        '[Content_Types].xml': strToU8(
+          `<Types xmlns="${CT}">` +
+            '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>' +
+            '<Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>' +
+            '</Types>'
+        ),
+        '_rels/.rels': strToU8(
+          `<Relationships xmlns="${REL}"><Relationship Id="rId1" Type="${R}/officeDocument" Target="word/document.xml"/></Relationships>`
+        ),
+        'word/document.xml': strToU8(
+          `<w:document xmlns:w="${W}"><w:body>${body}<w:sectPr/></w:body></w:document>`
+        ),
+      })
+    );
+    expect(loaded.ok).toBe(true);
+    if (!loaded.ok) return;
+
+    const collectInstr = (
+      root: import('@docx-editor.dev/core-contract/store').OoxmlNode
+    ): string[] => {
+      const found: string[] = [];
+      const visit = (node: import('@docx-editor.dev/core-contract/store').OoxmlNode): void => {
+        if (node.kind === 'textValue') return;
+        if (node.kind === 'generic' && node.localName === 'fldSimple' && node.namespaceUri === W) {
+          const instr = node.attributes.find((a) => a.localName === 'instr')?.value;
+          if (instr !== undefined) found.push(instr);
+        }
+        for (const child of node.children) visit(child);
+      };
+      visit(root);
+      return found;
+    };
+
+    const main = loaded.package.parts.get(loaded.package.mainDocumentPart)!;
+    expect(collectInstr(main.root)).toEqual(['PAGE', 'NUMPAGES']);
+
+    const reopened = readOoxmlPackage(writeOoxmlPackage(loaded.package));
+    expect(reopened.ok).toBe(true);
+    if (!reopened.ok) return;
+    const reopenedMain = reopened.package.parts.get(reopened.package.mainDocumentPart)!;
+    expect(collectInstr(reopenedMain.root)).toEqual(['PAGE', 'NUMPAGES']);
+
+    const paragraph = reopenedMain.root.children[0]!.children.find((c) => c.kind === 'paragraph')!;
+    expect(
+      piecesOfParagraph(paragraph, [], { pageNumber: 4, pageCount: 12 }).map((p) => p.text)
+    ).toEqual(['Page ', ' of ']);
+  });
+
+  test('footer complex PAGE/NUMPAGES still project while body fldSimple stays inert', () => {
+    const body =
+      `<w:p>` +
+      `<w:r><w:t>Body </w:t></w:r>` +
+      `<w:fldSimple w:instr="PAGE"><w:r><w:t>9</w:t></w:r></w:fldSimple>` +
+      `<w:r><w:t> end</w:t></w:r>` +
+      `</w:p>`;
+    const footer =
+      `<w:p><w:r><w:t>Page </w:t></w:r>` +
+      `<w:r><w:fldChar w:fldCharType="begin"/><w:instrText>PAGE</w:instrText>` +
+      `<w:fldChar w:fldCharType="separate"/><w:fldChar w:fldCharType="end"/></w:r>` +
+      `<w:r><w:t> of </w:t></w:r>` +
+      `<w:r><w:fldChar w:fldCharType="begin"/><w:instrText>NUMPAGES</w:instrText>` +
+      `<w:fldChar w:fldCharType="separate"/><w:fldChar w:fldCharType="end"/></w:r></w:p>`;
+    const bytes = footerDoc(footer, body);
+    const loaded = readOoxmlPackage(bytes);
+    expect(loaded.ok).toBe(true);
+    if (!loaded.ok) return;
+
+    const part = loaded.package.parts.get(loaded.package.mainDocumentPart)!;
+    const layout = layoutSemanticDocument(part, 1, {
+      measurer,
+      producer: 'test',
+      sectionFurniture: furnitureFromPackage(loaded.package, part),
+    });
+    expect(layout.pages.length).toBeGreaterThanOrEqual(1);
+    const page = layout.pages[0]!;
+    const footerText = page.footer?.fragments
+      .flatMap((f) =>
+        f.kind === 'paragraph' ? f.lines.flatMap((l) => l.spans.map((s) => s.text)) : []
+      )
+      .join('');
+    expect(footerText).toBe(`Page 1 of ${layout.pages.length}`);
+
+    const bodyText = page.fragments
+      .flatMap((f) =>
+        f.kind === 'paragraph' ? f.lines.flatMap((l) => l.spans.map((s) => s.text)) : []
+      )
+      .join('');
+    expect(bodyText).toBe('Body  end');
+    expect(bodyText).not.toContain('9');
+  });
 });
 
 describe('comprehensive fixture footer PAGE/NUMPAGES', () => {
@@ -313,8 +934,8 @@ describe('comprehensive fixture footer PAGE/NUMPAGES', () => {
     // Cover (index 0) has no HF; first body sheet with footer1 is index 1.
     const page = layout.pages[1]!;
     expect(page.footer).toBeDefined();
-    const text = page.footer!.fragments
-      .flatMap((f) =>
+    const text = page
+      .footer!.fragments.flatMap((f) =>
         f.kind === 'paragraph' ? f.lines.flatMap((l) => l.spans.map((s) => s.text)) : []
       )
       .join('');
@@ -347,8 +968,8 @@ describe('comprehensive fixture footer PAGE/NUMPAGES', () => {
       expect(
         page.box.y + page.box.height - (page.footer!.box.y + page.footer!.box.height)
       ).toBeCloseTo(bodyGeometry.footerDistance ?? 36, 5);
-      const text = page.footer!.fragments
-        .flatMap((f) =>
+      const text = page
+        .footer!.fragments.flatMap((f) =>
           f.kind === 'paragraph' ? f.lines.flatMap((l) => l.spans.map((s) => s.text)) : []
         )
         .join('');

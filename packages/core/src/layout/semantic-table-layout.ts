@@ -8,26 +8,26 @@
 //   - a vMerge continuation emits its box but no content, so text is never duplicated;
 //   - after all rows of a fragment are placed, vertical merges expand the restart box,
 //     vAlign shifts content, and collapsed borders resolve onto layout-owned edges;
-//   - a cell does not paginate (v1 parity): its blocks stack, and the enclosing row either
-//     fits the page or moves to the next one whole;
+//   - top-level table rows paginate with a real-height preflight: an unsplit row that does
+//     not fit moves to the next page; a row taller than a fresh page fragments at
+//     paragraph/line boundaries when splittable, or fails closed under w:cantSplit /
+//     unsupported nested cuts;
 //   - a NESTED table lays out with its own geometry inside the cell box, no pagination.
 //
 // All coordinates are points, relative to the page content box — exactly the space body
 // paragraph fragments already live in. Cell paragraph breaks go through the shared
 // `breakParagraph`, so they hit the same cache with keys at the cell's content width.
+/* eslint-disable max-lines -- bounded row-split pagination stays with cell flow and finalize */
 
 import type { OoxmlElement } from '@docx-editor.dev/core-contract/store';
 import type { FieldPageContext } from './field-projection.ts';
 import { paragraphLayoutKey, type ParagraphLayoutCache } from './layout-cache.ts';
-import {
-  alignSpans,
-  breakParagraph,
-  type PendingLine,
-} from './paragraph-flow.ts';
+import { alignSpans, breakParagraph, type PendingLine } from './paragraph-flow.ts';
 import { collapsedSpaceBefore } from './paragraph-style.ts';
 import { DEFAULT_RUN_STYLE } from './run-style.ts';
 import {
   resolveParagraphLayoutInputs,
+  cascadeRunProperties,
   type StyleCascadeTable,
 } from './style-cascade.ts';
 import { paragraphShadingBox } from './ooxml-shading.ts';
@@ -56,8 +56,50 @@ import {
   borderExtentPt,
   resolveTableCellBorderGrid,
   type BorderGridCell,
+  type BorderGridGeometry,
+  type CellBorderBox,
   type TableBorderBox,
+  type TableBorderOwnershipBudget,
 } from './table-borders.ts';
+import {
+  resolveVMergeSpans,
+  type TableVMergeResolveBudget,
+  type TableVMergeResolveWork,
+} from './table-vmerge.ts';
+
+export {
+  createTableBorderOwnershipBudget,
+  MAX_BORDER_OWNERSHIP_INTERVALS,
+} from './table-borders.ts';
+
+export {
+  createTableVMergeResolveBudget,
+  MAX_VMERGE_RESOLVE_CELLS,
+  resolveVMergeSpans,
+  type TableVMergeResolveBudget,
+  type TableVMergeResolveWork,
+} from './table-vmerge.ts';
+
+/** Soft ceiling on fragments emitted for one authored row (hostile / runaway splits). */
+export const MAX_TABLE_ROW_FRAGMENTS = 4096;
+
+export type TablePaginationErrorCode =
+  | 'table-row-overheight'
+  | 'table-row-split-unsupported'
+  | 'table-row-fragment-limit';
+
+/**
+ * Bounded table pagination failure. Prefer this over emitting a fragment that overflows
+ * the page content box.
+ */
+export class TablePaginationError extends Error {
+  readonly code: TablePaginationErrorCode;
+  constructor(code: TablePaginationErrorCode, message: string) {
+    super(message);
+    this.name = 'TablePaginationError';
+    this.code = code;
+  }
+}
 
 export interface TableFlowDeps {
   readonly measurer: TextMeasurer;
@@ -73,6 +115,36 @@ export interface TableFlowDeps {
    * stories that do not share the body counter stream.
    */
   readonly listItems?: ReadonlyMap<string, ResolvedListItem>;
+  /**
+   * Shared sparse ownership-interval budget for border finalize across nested tables in
+   * one layout pass. Created once per flow; omit only in isolated unit tests.
+   */
+  readonly borderOwnershipBudget?: TableBorderOwnershipBudget;
+  /**
+   * Shared cell-visit budget for vMerge span resolve across nested tables in one layout
+   * pass. Exhaustion fails soft (remaining restarts keep rowSpan 1).
+   */
+  readonly vMergeResolveBudget?: TableVMergeResolveBudget;
+}
+
+/**
+ * Per-cell progress through a row that may span pages. Indices are into the authored
+ * cell.blocks list and the paragraph's broken lines — never DOM geometry.
+ */
+export interface CellPlaceCursor {
+  readonly blockIndex: number;
+  readonly lineIndex: number;
+  readonly previousSpaceAfter: number;
+  readonly paragraphFragmentIndex: number;
+}
+
+export function initialCellCursors(row: SemanticTableRow): CellPlaceCursor[] {
+  return row.cells.map(() => ({
+    blockIndex: 0,
+    lineIndex: 0,
+    previousSpaceAfter: 0,
+    paragraphFragmentIndex: 0,
+  }));
 }
 
 function sumCols(cols: readonly number[], from: number, to: number): number {
@@ -139,6 +211,9 @@ function shiftBlocks(blocks: readonly BlockFragmentRecord[], dy: number): BlockF
  * The pending spans carry x offsets relative to the PARAGRAPH origin (that is what makes
  * the break cacheable across positions); placement shifts them by `originX` and stamps y,
  * exactly as body placement stamps `cursorY`.
+ *
+ * When `lineStart`/`maxBottom` are set, only lines that fit below `maxBottom` are placed and
+ * the remainder line index is returned so a later page can continue the same paragraph.
  */
 function placeCellParagraph(
   paragraph: OoxmlElement,
@@ -146,11 +221,23 @@ function placeCellParagraph(
   cellContentWidth: number,
   top: number,
   deps: TableFlowDeps,
-  previousSpaceAfter: number
+  previousSpaceAfter: number,
+  options?: {
+    readonly lineStart?: number;
+    readonly fragmentIndex?: number;
+    readonly maxBottom?: number;
+    /** When false, omit trailing paragraph spacing (more content follows on a later page). */
+    readonly includeAfter?: boolean;
+    /** When false, omit the bottom border (paragraph continues). */
+    readonly includeBottomBorder?: boolean;
+  }
 ): {
-  readonly fragment: ParagraphFragmentRecord;
+  readonly fragment: ParagraphFragmentRecord | null;
   readonly bottom: number;
   readonly spaceAfter: number;
+  readonly nextLineIndex: number;
+  readonly complete: boolean;
+  readonly fitted: boolean;
 } {
   const paragraphId = paragraph.id;
   const listItem = deps.listItems?.get(paragraphId);
@@ -165,12 +252,7 @@ function placeCellParagraph(
     inheritedRunProperties,
     tabStops,
     tabStopsCacheToken,
-  } = resolveParagraphLayoutInputs(
-    paragraph,
-    cellContentWidth,
-    deps.styleCascade,
-    listItem
-  );
+  } = resolveParagraphLayoutInputs(paragraph, cellContentWidth, deps.styleCascade, listItem);
   const key = paragraphLayoutKey({
     paragraph,
     properties: [
@@ -192,13 +274,37 @@ function placeCellParagraph(
     deps.cache ? key : null,
     inheritedRunProperties,
     tabStops,
-    deps.pageContext
+    deps.pageContext,
+    deps.styleCascade
+      ? (inherited, direct) => cascadeRunProperties(inherited, direct, deps.styleCascade)
+      : undefined
   );
 
-  const appliedBefore = collapsedSpaceBefore(spacing.before, previousSpaceAfter);
+  const lineStart = options?.lineStart ?? 0;
+  const fragmentIndex = options?.fragmentIndex ?? 0;
+  const maxBottom = options?.maxBottom ?? Number.POSITIVE_INFINITY;
+  const includeAfter = options?.includeAfter ?? true;
+  const includeBottomBorder = options?.includeBottomBorder ?? true;
+
+  const appliedBefore =
+    lineStart === 0 ? collapsedSpaceBefore(spacing.before, previousSpaceAfter) : 0;
   const records: LineRecord[] = [];
   let y = top + appliedBefore;
-  for (const [lineIndex, pendingLine] of lines.entries()) {
+  let nextLineIndex = lineStart;
+  let fitted = false;
+
+  for (let lineIndex = lineStart; lineIndex < lines.length; lineIndex += 1) {
+    const pendingLine = lines[lineIndex]!;
+    const isLastLine = lineIndex === lines.length - 1;
+    const borderExtra =
+      isLastLine && includeBottomBorder && bottomBorder
+        ? bottomBorder.spacePt + bottomBorder.widthPt
+        : 0;
+    const afterExtra = isLastLine && includeAfter ? spacing.after : 0;
+    const lineBottom = y + pendingLine.height + borderExtra + afterExtra;
+    if (lineBottom > maxBottom + 0.001) {
+      break;
+    }
     records.push({
       id: deps.nextLineId(),
       range: { paragraphId, start: pendingLine.start, end: pendingLine.end },
@@ -212,7 +318,7 @@ function placeCellParagraph(
         originX + indent.left,
         available,
         alignment,
-        lineIndex === lines.length - 1
+        isLastLine
       ),
       box: {
         x: originX + indent.left,
@@ -223,12 +329,26 @@ function placeCellParagraph(
       baseline: pendingLine.baseline,
     });
     y += pendingLine.height;
+    nextLineIndex = lineIndex + 1;
+    fitted = true;
   }
 
+  if (!fitted) {
+    return {
+      fragment: null,
+      bottom: top,
+      spaceAfter: previousSpaceAfter,
+      nextLineIndex: lineStart,
+      complete: false,
+      fitted: false,
+    };
+  }
+
+  const complete = nextLineIndex >= lines.length;
   const linesBottom = y;
   let bottomBorderRecord: ParagraphBottomBorderRecord | undefined;
   let contentBottom = linesBottom;
-  if (bottomBorder) {
+  if (complete && includeBottomBorder && bottomBorder) {
     const ruleY = linesBottom + bottomBorder.spacePt;
     bottomBorderRecord = {
       edge: bottomBorder,
@@ -241,30 +361,34 @@ function placeCellParagraph(
     };
     contentBottom = ruleY + bottomBorder.widthPt;
   }
-  const bottom = contentBottom + spacing.after;
+  const appliedAfter = complete && includeAfter ? spacing.after : 0;
+  const bottom = contentBottom + appliedAfter;
   const fragmentX = originX + indent.left;
   const shadingBox =
     shading === undefined ? undefined : paragraphShadingBox(records, fragmentX, available);
-  const marker = publishListMarker(
-    listItem,
-    deps.measurer,
-    records[0] ? { y: records[0].box.y, height: records[0].box.height } : undefined,
-    originX
-  );
+  const marker =
+    lineStart === 0
+      ? publishListMarker(
+          listItem,
+          deps.measurer,
+          records[0] ? { y: records[0].box.y, height: records[0].box.height } : undefined,
+          originX
+        )
+      : undefined;
 
   return {
     fragment: {
       kind: 'paragraph',
-      id: `${paragraphId}#f0`,
+      id: `${paragraphId}#f${fragmentIndex}`,
       paragraphId,
-      fragmentIndex: 0,
+      fragmentIndex,
       range: {
         paragraphId,
-        start: lines[0]?.start ?? 0,
-        end: lines[lines.length - 1]?.end ?? 0,
+        start: records[0]!.range.start,
+        end: records[records.length - 1]!.range.end,
       },
       props,
-      spacing: { before: appliedBefore, after: spacing.after },
+      spacing: { before: appliedBefore, after: appliedAfter },
       ...(bottomBorderRecord ? { bottomBorder: bottomBorderRecord } : {}),
       ...(shading === undefined ? {} : { shading }),
       ...(shadingBox === undefined ? {} : { shadingBox }),
@@ -278,7 +402,10 @@ function placeCellParagraph(
       },
     },
     bottom,
-    spaceAfter: spacing.after,
+    spaceAfter: appliedAfter,
+    nextLineIndex,
+    complete,
+    fitted: true,
   };
 }
 
@@ -295,36 +422,146 @@ export function flowBlocksInBox(
   depth: number,
   deps: TableFlowDeps
 ): { readonly blocks: BlockFragmentRecord[]; readonly bottom: number } {
+  const bounded = flowBlocksInBoxBounded(
+    blocks,
+    left,
+    right,
+    top,
+    Number.POSITIVE_INFINITY,
+    depth,
+    deps,
+    {
+      blockIndex: 0,
+      lineIndex: 0,
+      previousSpaceAfter: 0,
+      paragraphFragmentIndex: 0,
+    }
+  );
+  return { blocks: bounded.blocks, bottom: bounded.bottom };
+}
+
+function flowBlocksInBoxBounded(
+  blocks: readonly OoxmlElement[],
+  left: number,
+  right: number,
+  top: number,
+  maxBottom: number,
+  depth: number,
+  deps: TableFlowDeps,
+  cursor: CellPlaceCursor
+): {
+  readonly blocks: BlockFragmentRecord[];
+  readonly bottom: number;
+  readonly cursor: CellPlaceCursor;
+  readonly complete: boolean;
+  readonly fitted: boolean;
+  readonly nestedSplitBlocked: boolean;
+} {
   const fragments: BlockFragmentRecord[] = [];
   let y = top;
-  let previousSpaceAfter = 0;
-  for (const block of blocks) {
+  let previousSpaceAfter = cursor.previousSpaceAfter;
+  let blockIndex = cursor.blockIndex;
+  let lineIndex = cursor.lineIndex;
+  let paragraphFragmentIndex = cursor.paragraphFragmentIndex;
+  let fitted = false;
+  let nestedSplitBlocked = false;
+
+  while (blockIndex < blocks.length) {
+    const block = blocks[blockIndex]!;
     if (block.kind === 'table') {
-      previousSpaceAfter = 0;
-      const nested = emitNestedTable(block, left, right, y, depth + 1, deps);
-      if (nested) {
-        fragments.push(nested.fragment);
-        y = nested.bottom;
+      if (lineIndex !== 0) {
+        // Should not happen — tables are whole blocks.
+        lineIndex = 0;
       }
+      previousSpaceAfter = 0;
+      // Nested tables are atomic across row splits: place wholly or stop before them.
+      const nested = emitNestedTable(block, left, right, y, depth + 1, deps);
+      if (!nested) {
+        blockIndex += 1;
+        continue;
+      }
+      if (nested.bottom > maxBottom + 0.001) {
+        // Stop before the nested table. If nothing fitted yet on a fresh band, the caller
+        // treats this as an unsplittable overheight once page moves are exhausted.
+        nestedSplitBlocked = !fitted;
+        break;
+      }
+      fragments.push(nested.fragment);
+      y = nested.bottom;
+      fitted = true;
+      blockIndex += 1;
+      lineIndex = 0;
       continue;
     }
-    if (block.kind !== 'paragraph') continue;
+    if (block.kind !== 'paragraph') {
+      blockIndex += 1;
+      lineIndex = 0;
+      continue;
+    }
+
     const placed = placeCellParagraph(
       block,
       left,
       Math.max(1, right - left),
       y,
       deps,
-      previousSpaceAfter
+      previousSpaceAfter,
+      {
+        lineStart: lineIndex,
+        fragmentIndex: paragraphFragmentIndex,
+        maxBottom,
+        includeAfter: true,
+        includeBottomBorder: true,
+      }
     );
+    if (!placed.fitted || !placed.fragment) {
+      break;
+    }
     fragments.push(placed.fragment);
     y = placed.bottom;
-    previousSpaceAfter = placed.spaceAfter;
+    fitted = true;
+    if (placed.complete) {
+      previousSpaceAfter = placed.spaceAfter;
+      blockIndex += 1;
+      lineIndex = 0;
+      paragraphFragmentIndex = 0;
+    } else {
+      // Paragraph continues on the next page.
+      return {
+        blocks: fragments,
+        bottom: y,
+        cursor: {
+          blockIndex,
+          lineIndex: placed.nextLineIndex,
+          previousSpaceAfter: 0,
+          paragraphFragmentIndex: paragraphFragmentIndex + 1,
+        },
+        complete: false,
+        fitted: true,
+        nestedSplitBlocked: false,
+      };
+    }
   }
-  return { blocks: fragments, bottom: y };
+
+  return {
+    blocks: fragments,
+    bottom: y,
+    cursor: {
+      blockIndex,
+      lineIndex,
+      previousSpaceAfter,
+      paragraphFragmentIndex,
+    },
+    complete: blockIndex >= blocks.length,
+    fitted,
+    nestedSplitBlocked,
+  };
 }
 
-function contentInsets(margins: CellMarginsPt, borders: SemanticTableCell['borders']): {
+function contentInsets(
+  margins: CellMarginsPt,
+  borders: SemanticTableCell['borders']
+): {
   readonly top: number;
   readonly right: number;
   readonly bottom: number;
@@ -336,6 +573,35 @@ function contentInsets(margins: CellMarginsPt, borders: SemanticTableCell['borde
     right: margins.right + borderExtentPt(borders.right),
     bottom: margins.bottom + borderExtentPt(borders.bottom),
     left: margins.left + borderExtentPt(borders.left),
+  };
+}
+
+function suppressSplitBorders(
+  borders: CellBorderBox,
+  omitTop: boolean,
+  omitBottom: boolean
+): CellBorderBox {
+  return {
+    top: omitTop ? { state: 'none' } : borders.top,
+    left: borders.left,
+    bottom: omitBottom ? { state: 'none' } : borders.bottom,
+    right: borders.right,
+  };
+}
+
+/** Clone a structure row with top/bottom borders suppressed for mid-row page cuts. */
+export function rowWithSplitBorders(
+  row: SemanticTableRow,
+  omitTop: boolean,
+  omitBottom: boolean
+): SemanticTableRow {
+  if (!omitTop && !omitBottom) return row;
+  return {
+    ...row,
+    cells: row.cells.map((cell) => ({
+      ...cell,
+      borders: suppressSplitBorders(cell.borders, omitTop, omitBottom),
+    })),
   };
 }
 
@@ -354,6 +620,52 @@ export function layoutRowFragment(
   depth: number,
   deps: TableFlowDeps
 ): { readonly record: TableRowFragmentRecord; readonly bottom: number } {
+  const placed = layoutRowFragmentBounded(
+    row,
+    cols,
+    left,
+    rowTop,
+    Number.POSITIVE_INFINITY,
+    isHeaderRepeat,
+    false,
+    depth,
+    deps,
+    initialCellCursors(row)
+  );
+  return { record: placed.record, bottom: placed.bottom };
+}
+
+export interface LayoutRowBoundedResult {
+  readonly record: TableRowFragmentRecord;
+  readonly bottom: number;
+  /** Remaining cell cursors when the row did not finish; null when complete. */
+  readonly remainder: CellPlaceCursor[] | null;
+  /** True when at least one cell placed a line or nested block in this fragment. */
+  readonly fitted: boolean;
+  /**
+   * True when a nested table blocked a safe split (would need to cut through nested
+   * geometry). Callers must fail closed rather than overflow.
+   */
+  readonly nestedSplitBlocked: boolean;
+}
+
+/**
+ * Height-budgeted row layout for pagination. Content stays at or above `rowTop` and at or
+ * below `maxBottom`. Cells that cannot place anything leave empty boxes; callers decide
+ * whether to move the row, continue splitting, or fail closed.
+ */
+export function layoutRowFragmentBounded(
+  row: SemanticTableRow,
+  cols: readonly number[],
+  left: number,
+  rowTop: number,
+  maxBottom: number,
+  isHeaderRepeat: boolean,
+  isContinuation: boolean,
+  depth: number,
+  deps: TableFlowDeps,
+  cursors: readonly CellPlaceCursor[]
+): LayoutRowBoundedResult {
   const total = sumCols(cols, 0, cols.length);
   const defaultLineHeight = deps.measurer.lineMetrics(DEFAULT_RUN_STYLE).height;
 
@@ -366,37 +678,75 @@ export function layoutRowFragment(
     readonly contentTop: number;
     readonly contentBottom: number;
     readonly insets: { top: number; right: number; bottom: number; left: number };
+    readonly nextCursor: CellPlaceCursor;
+    readonly complete: boolean;
+    readonly fitted: boolean;
+    readonly nestedSplitBlocked: boolean;
   }
   const flowed: FlowedCell[] = [];
   let colCursor = 0;
-  let rowBottom = rowTop + defaultLineHeight + 2 * CELL_PAD;
+  let anyFitted = false;
+  let anyNestedBlocked = false;
+  // Minimum row band even for empty/vMerge-continue cells.
+  let rowBottom = Math.min(maxBottom, rowTop + defaultLineHeight + 2 * CELL_PAD);
 
-  for (const cell of row.cells) {
+  for (let cellIndex = 0; cellIndex < row.cells.length; cellIndex += 1) {
+    const cell = row.cells[cellIndex]!;
+    const cursor = cursors[cellIndex] ?? {
+      blockIndex: 0,
+      lineIndex: 0,
+      previousSpaceAfter: 0,
+      paragraphFragmentIndex: 0,
+    };
     const span = cell.gridSpan;
     const cellX = left + sumCols(cols, 0, colCursor);
     const cellW = sumCols(cols, colCursor, Math.min(colCursor + span, cols.length)) || total;
     const gridColumn = colCursor;
     colCursor += span;
     const insets = contentInsets(cell.margins, cell.borders);
-    const minBottom = rowTop + insets.top + defaultLineHeight + insets.bottom;
-    if (minBottom > rowBottom) rowBottom = minBottom;
+    const topInset = isContinuation ? borderExtentPt(cell.borders.top) : insets.top;
+    const contentTop = rowTop + topInset;
+    // Always reserve bottom inset so the fragment never paints into the margin/border band.
+    const contentMaxBottom = maxBottom - insets.bottom;
 
     let blocks: readonly BlockFragmentRecord[] = [];
-    const contentTop = rowTop + insets.top;
     let contentBottom = contentTop;
+    let nextCursor = cursor;
+    let complete = true;
+    let fitted = false;
+    let nestedSplitBlocked = false;
+
     if (!cell.vMergeContinue) {
-      const flow = flowBlocksInBox(
-        cell.blocks,
-        cellX + insets.left,
-        cellX + cellW - insets.right,
-        contentTop,
-        depth,
-        deps
-      );
-      blocks = flow.blocks;
-      contentBottom = flow.bottom;
-      if (flow.bottom + insets.bottom > rowBottom) rowBottom = flow.bottom + insets.bottom;
+      if (contentMaxBottom < contentTop + 0.001) {
+        complete = cursor.blockIndex >= cell.blocks.length;
+      } else {
+        const flow = flowBlocksInBoxBounded(
+          cell.blocks,
+          cellX + insets.left,
+          cellX + cellW - insets.right,
+          contentTop,
+          contentMaxBottom,
+          depth,
+          deps,
+          cursor
+        );
+        blocks = flow.blocks;
+        contentBottom = flow.bottom;
+        nextCursor = flow.cursor;
+        complete = flow.complete;
+        fitted = flow.fitted;
+        nestedSplitBlocked = flow.nestedSplitBlocked;
+        if (fitted) anyFitted = true;
+        if (nestedSplitBlocked) anyNestedBlocked = true;
+      }
     }
+
+    const cellBottom = Math.min(
+      maxBottom,
+      Math.max(contentBottom + insets.bottom, rowTop + topInset + defaultLineHeight + insets.bottom)
+    );
+    if (cellBottom > rowBottom) rowBottom = cellBottom;
+
     flowed.push({
       cell,
       x: cellX,
@@ -405,21 +755,40 @@ export function layoutRowFragment(
       blocks,
       contentTop,
       contentBottom,
-      insets,
+      insets: { ...insets, top: topInset },
+      nextCursor,
+      complete: cell.vMergeContinue ? true : complete,
+      fitted,
+      nestedSplitBlocked,
     });
   }
 
-  const rowHeight = rowBottom - rowTop;
+  // Coordinate fragment height: tallest placed content, never past maxBottom.
+  rowBottom = Math.min(maxBottom, Math.max(rowBottom, rowTop));
+  for (const entry of flowed) {
+    const needed = entry.fitted
+      ? entry.contentBottom + entry.insets.bottom
+      : rowTop + entry.insets.top + defaultLineHeight + entry.insets.bottom;
+    if (needed > rowBottom && needed <= maxBottom + 0.001) {
+      rowBottom = needed;
+    }
+  }
+  rowBottom = Math.min(maxBottom, rowBottom);
+  const rowHeight = Math.max(0, rowBottom - rowTop);
+
   const cells: TableCellFragmentRecord[] = flowed.map((entry) => {
-    // Per-row vAlign (before merge expansion). Merge post-pass re-applies over the full span.
     let blocks = entry.blocks;
-    if (!entry.cell.vMergeContinue && entry.cell.vAlign !== 'top' && blocks.length > 0) {
+    // vAlign only when the cell finished on this fragment (no more continuation).
+    if (
+      !entry.cell.vMergeContinue &&
+      entry.complete &&
+      entry.cell.vAlign !== 'top' &&
+      blocks.length > 0
+    ) {
       const contentHeight = entry.contentBottom - entry.contentTop;
-      const available =
-        rowHeight - entry.insets.top - entry.insets.bottom - contentHeight;
+      const available = rowHeight - entry.insets.top - entry.insets.bottom - contentHeight;
       if (available > 0) {
-        const dy =
-          entry.cell.vAlign === 'center' ? available / 2 : available; // bottom
+        const dy = entry.cell.vAlign === 'center' ? available / 2 : available;
         blocks = shiftBlocks(blocks, dy);
       }
     }
@@ -436,15 +805,42 @@ export function layoutRowFragment(
     };
   });
 
+  const remainderCursors = flowed.map((entry) => entry.nextCursor);
+  const complete = flowed.every((entry) => entry.complete);
+
   return {
     record: {
       id: row.id,
       isHeaderRepeat,
+      ...(isContinuation ? { isContinuation: true as const } : {}),
       cells,
       box: { x: left, y: rowTop, width: total, height: rowHeight },
     },
     bottom: rowBottom,
+    remainder: complete ? null : remainderCursors,
+    fitted: anyFitted || row.cells.every((cell) => cell.vMergeContinue),
+    nestedSplitBlocked: anyNestedBlocked,
   };
+}
+
+/**
+ * Measure the natural height of a full (unsplit) row without allocating line ids.
+ * Used for whole-row preflight before committing placement.
+ */
+export function measureRowHeight(
+  row: SemanticTableRow,
+  cols: readonly number[],
+  left: number,
+  depth: number,
+  deps: TableFlowDeps
+): number {
+  let lineCounter = 0;
+  const probeDeps: TableFlowDeps = {
+    ...deps,
+    nextLineId: () => `probe-${lineCounter++}`,
+  };
+  const placed = layoutRowFragment(row, cols, left, 0, false, depth, probeDeps);
+  return placed.record.box.height;
 }
 
 /**
@@ -454,7 +850,10 @@ export function layoutRowFragment(
 export function finalizeTableRows(
   rows: readonly TableRowFragmentRecord[],
   structure: SemanticTableStructure,
-  sourceRows: readonly SemanticTableRow[]
+  sourceRows: readonly SemanticTableRow[],
+  ownershipBudget?: TableBorderOwnershipBudget,
+  vMergeBudget?: TableVMergeResolveBudget,
+  vMergeWork?: TableVMergeResolveWork
 ): TableRowFragmentRecord[] {
   if (rows.length === 0) return [];
 
@@ -464,23 +863,8 @@ export function finalizeTableRows(
     for (const cell of row.cells) authoredById.set(cell.id, cell);
   }
 
-  // First pass: compute merge row spans per restart.
-  const mergeSpanById = new Map<string, number>();
-  for (let rowIndex = 0; rowIndex < rows.length; rowIndex += 1) {
-    const row = rows[rowIndex]!;
-    for (const cell of row.cells) {
-      if (cell.vMergeContinue) continue;
-      let span = 1;
-      for (let r = rowIndex + 1; r < rows.length; r += 1) {
-        const below = rows[r]!.cells.find(
-          (candidate) => candidate.gridColumn === cell.gridColumn && candidate.vMergeContinue
-        );
-        if (!below) break;
-        span += 1;
-      }
-      mergeSpanById.set(cell.id, span);
-    }
-  }
+  // One-pass column-keyed merge spans — O(cells), not O(rows × columns²).
+  const mergeSpanById = resolveVMergeSpans(rows, vMergeWork, vMergeBudget);
 
   // Expand restart heights and shift content for vAlign over the full span.
   const expanded: TableRowFragmentRecord[] = rows.map((row, rowIndex) => ({
@@ -507,17 +891,12 @@ export function finalizeTableRows(
           contentBottom = Math.max(contentBottom, block.box.y + block.box.height);
         }
         if (Number.isFinite(contentTop) && Number.isFinite(contentBottom)) {
-          const available =
-            height - insets.top - insets.bottom - (contentBottom - contentTop);
+          const available = height - insets.top - insets.bottom - (contentBottom - contentTop);
           // Reset any per-row shift by measuring from cell top + inset.
           const desiredTop =
             cell.box.y +
             insets.top +
-            (available > 0
-              ? authored.vAlign === 'center'
-                ? available / 2
-                : available
-              : 0);
+            (available > 0 ? (authored.vAlign === 'center' ? available / 2 : available) : 0);
           const dy = desiredTop - contentTop;
           if (Math.abs(dy) > 0.001) blocks = shiftBlocks(blocks, dy);
         }
@@ -553,7 +932,21 @@ export function finalizeTableRows(
 
   const columnCount = structure.columnWidthsPt.length;
   const tableBorders: TableBorderBox = structure.tableBorders;
-  const resolved = resolveTableCellBorderGrid(gridRows, tableBorders, columnCount);
+  const geometry: BorderGridGeometry = {
+    columnWidthsPt: structure.columnWidthsPt,
+    rowBands: expanded.map((row) => ({ y: row.box.y, height: row.box.height })),
+    cellBoxes: expanded.map((row) =>
+      row.cells.map((cell) => ({ width: cell.box.width, height: cell.box.height }))
+    ),
+  };
+  const resolved = resolveTableCellBorderGrid(
+    gridRows,
+    tableBorders,
+    columnCount,
+    geometry,
+    undefined,
+    ownershipBudget
+  );
 
   return expanded.map((row, rowIndex) => ({
     ...row,
@@ -590,7 +983,13 @@ function emitNestedTable(
     rawRows.push(placed.record);
     y = placed.bottom;
   }
-  const rows = finalizeTableRows(rawRows, structure, structure.rows);
+  const rows = finalizeTableRows(
+    rawRows,
+    structure,
+    structure.rows,
+    deps.borderOwnershipBudget,
+    deps.vMergeResolveBudget
+  );
   const width = sumCols(structure.columnWidthsPt, 0, structure.columnWidthsPt.length);
   // Bottom tracks flow cursor (row stack), not overflow from expanded vMerge boxes —
   // restart overflow is painted within the same vertical band already reserved by continue rows.
@@ -633,7 +1032,13 @@ export function layoutTableFragment(
     rawRows.push(placed.record);
     y = placed.bottom;
   }
-  const rows = finalizeTableRows(rawRows, structure, structure.rows);
+  const rows = finalizeTableRows(
+    rawRows,
+    structure,
+    structure.rows,
+    deps.borderOwnershipBudget,
+    deps.vMergeResolveBudget
+  );
   const width = sumCols(structure.columnWidthsPt, 0, structure.columnWidthsPt.length);
   return {
     fragment: {

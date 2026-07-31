@@ -22,6 +22,9 @@ export type { ParagraphBorderEdge, ParagraphSpacing } from './paragraph-style.ts
 export type {
   ResolvedCellBorders,
   ResolvedTableBorderEdge,
+  ResolvedTableBorderEdgeSegment,
+  TableBorderSideName,
+  TableBorderStrokeRecord,
   TableBorderStyle,
 } from './table-borders.ts';
 
@@ -162,6 +165,11 @@ export interface TableRowFragmentRecord {
    * but excluded from interaction walks so each caret stop exists exactly once.
    */
   readonly isHeaderRepeat: boolean;
+  /**
+   * True when this record continues a row that already emitted content on a prior page
+   * (cell content fragmented at a paragraph/line boundary). Same `id` as the lead fragment.
+   */
+  readonly isContinuation?: boolean;
   readonly cells: readonly TableCellFragmentRecord[];
   readonly box: LayoutBox;
 }
@@ -184,7 +192,13 @@ export interface TableCellFragmentRecord {
   readonly rowSpan?: number;
   /** Validated 6-hex cell shading fill, absent for none/auto. */
   readonly shading?: string;
-  /** Layout-owned resolved per-edge borders after collapsed conflict resolution. */
+  /**
+   * Layout-owned resolved borders after collapsed conflict resolution.
+   *
+   * Includes convenience per-side edges, per-grid-interval winners, and explicit compound
+   * stroke rectangles in cell-local points. Paint only scales and draws — it must not
+   * invent stroke/gap/corner geometry.
+   */
   readonly borders?: ResolvedCellBorders;
   /** Nested blocks in reading order; recursion carries nested tables. */
   readonly blocks: readonly BlockFragmentRecord[];
@@ -200,8 +214,9 @@ export type BlockFragmentRecord = ParagraphFragmentRecord | TableFragmentRecord;
  * `box` is absolute (sheet coordinates) and sized to the story's FLOW height — never to
  * any anchored-object extent, which is the rule that keeps a decorated header's hit area
  * from covering the body. `fragments` are story-relative (origin at the box's top-left).
- * Baseline furniture may be shared across pages of the same variant; after page-field
- * finalize, PAGE/NUMPAGES projections are per page (or per distinct field values).
+ * Baseline furniture may be shared across pages of the same variant when the story has no
+ * allowlisted PAGE/NUMPAGES fields; after page-field finalize, projections are per page
+ * (or per distinct field values for NUMPAGES-only stories).
  */
 export interface HeaderFooterStoryRecord {
   readonly kind: 'header' | 'footer';

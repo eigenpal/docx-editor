@@ -88,6 +88,7 @@ export {
   canonicalOoxmlFingerprint,
   ooxmlTreesEqual,
 } from './ooxml-tree.ts';
+export { readOnOffChild } from './ooxml-shared.ts';
 export {
   type ZipRejection,
   type ZipLimits,

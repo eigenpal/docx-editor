@@ -1,8 +1,8 @@
 // Per-story OOXML list counter state (ECMA-376 numbering).
 //
-// Counters are keyed by abstractNumId: multiple `w:num` that share one abstractNum share
-// sequence state. A `w:startOverride` on a num applies only the first time that numId is
-// encountered in the story walk.
+// Counters are keyed by numId: each `w:num` instance maintains an independent sequence even
+// when multiple nums share one abstractNum. A `w:startOverride` on a num applies only the
+// first time that numId is encountered in the story walk.
 
 import {
   resolveNumberingLevel,
@@ -12,7 +12,7 @@ import {
 import { expandLvlText } from './numbering-format.ts';
 
 export interface ListCounterAdvance {
-  /** Effective abstract numbering id owning the shared counters. */
+  /** Effective abstract numbering template for this num instance. */
   readonly abstractNumId: string;
   readonly numId: string;
   readonly ilvl: number;
@@ -33,36 +33,76 @@ export interface ListCounterState {
   advance(numId: string, ilvl: number): ListCounterAdvance | null;
 }
 
-function levelFormats(
-  index: NumberingIndex,
-  numId: string
-): { formats: string[]; starts: number[] } {
-  const formats: string[] = [];
+/** Effective first-emitted value per ilvl, honoring `w:startOverride` and level overrides. */
+function effectiveStartsForNum(index: NumberingIndex, numId: string): number[] {
+  const num = index.nums.get(numId);
   const starts: number[] = [];
   for (let ilvl = 0; ilvl <= 8; ilvl += 1) {
     const resolved = resolveNumberingLevel(index, numId, ilvl);
-    formats.push(resolved?.level.numFmt ?? 'decimal');
-    starts.push(resolved?.level.start ?? 1);
+    if (!resolved) {
+      starts.push(1);
+      continue;
+    }
+    const startOverride = num?.overrides.get(ilvl)?.startOverride;
+    starts.push(startOverride ?? resolved.level.start);
   }
-  return { formats, starts };
+  return starts;
+}
+
+function levelFormats(
+  index: NumberingIndex,
+  numId: string,
+  starts: readonly number[]
+): { formats: string[]; starts: number[] } {
+  const formats: string[] = [];
+  for (let ilvl = 0; ilvl <= 8; ilvl += 1) {
+    const resolved = resolveNumberingLevel(index, numId, ilvl);
+    formats.push(resolved?.level.numFmt ?? 'decimal');
+  }
+  return { formats, starts: [...starts] };
+}
+
+/**
+ * Highest ilvl whose use restarts level `targetIlvl`, per `w:lvlRestart` on that level.
+ *
+ * Returns null when the level never restarts (`lvlRestart` = 0 or trigger above target).
+ */
+function lvlRestartTriggerIlvl(targetIlvl: number, lvlRestart: number | undefined): number | null {
+  if (lvlRestart === 0) return null;
+  if (lvlRestart === undefined) return targetIlvl - 1;
+  const triggerIlvl = lvlRestart - 1;
+  if (triggerIlvl >= targetIlvl) return null;
+  return triggerIlvl;
 }
 
 /**
  * Create a fresh counter bag for one story (body, or one header/footer part).
  */
 export function createListCounterState(index: NumberingIndex): ListCounterState {
-  /** abstractNumId → counters[0..8], 0 meaning "not yet used at this level". */
-  const byAbstract = new Map<string, number[]>();
-  /** numIds that have already consumed their startOverride. */
-  const seenNumIds = new Set<string>();
+  /** numId → current counter values[0..8]. */
+  const byNumId = new Map<string, number[]>();
+  /** numId → whether each level has emitted at least once. */
+  const initializedByNumId = new Map<string, boolean[]>();
+  /** numId → authored effective starts[0..8]. */
+  const startsByNumId = new Map<string, number[]>();
 
-  const ensure = (abstractNumId: string): number[] => {
-    let counters = byAbstract.get(abstractNumId);
+  const ensure = (id: string): { counters: number[]; initialized: boolean[]; starts: number[] } => {
+    let counters = byNumId.get(id);
     if (!counters) {
       counters = [0, 0, 0, 0, 0, 0, 0, 0, 0];
-      byAbstract.set(abstractNumId, counters);
+      byNumId.set(id, counters);
     }
-    return counters;
+    let initialized = initializedByNumId.get(id);
+    if (!initialized) {
+      initialized = [false, false, false, false, false, false, false, false, false];
+      initializedByNumId.set(id, initialized);
+    }
+    let starts = startsByNumId.get(id);
+    if (!starts) {
+      starts = effectiveStartsForNum(index, id);
+      startsByNumId.set(id, starts);
+    }
+    return { counters, initialized, starts };
   };
 
   return {
@@ -72,49 +112,39 @@ export function createListCounterState(index: NumberingIndex): ListCounterState 
       const resolved = resolveNumberingLevel(index, numId, ilvl);
       if (!resolved) return null;
 
-      const { abstractNumId, level, startOverride } = resolved;
-      const counters = ensure(abstractNumId);
-      const { formats, starts } = levelFormats(index, numId);
+      const { abstractNumId, level } = resolved;
+      const { counters, initialized, starts } = ensure(numId);
+      const { formats } = levelFormats(index, numId, starts);
 
-      // First encounter of this numId applies startOverride (typically on ilvl 0).
-      if (!seenNumIds.has(numId)) {
-        seenNumIds.add(numId);
-        if (startOverride !== undefined) {
-          // Override seeds the overridden level; deeper levels reset on next use.
-          counters[ilvl] = 0;
-          // Store override as the value to use on first increment via starts path:
-          // we set the counter to startOverride - 1 so the increment lands on startOverride.
-          // But startOverride is on a specific override ilvl (often 0), not necessarily
-          // this paragraph's ilvl — apply to the override's level index from the num def.
-          const num = index.nums.get(numId);
-          if (num) {
-            for (const [overrideIlvl, override] of num.overrides) {
-              if (override.startOverride !== undefined) {
-                counters[overrideIlvl] = Math.max(0, override.startOverride - 1);
-              }
-            }
-          }
+      // Deeper levels restart per `w:lvlRestart` when this ilvl is used.
+      for (let deeper = ilvl + 1; deeper <= 8; deeper += 1) {
+        const deeperLevel = resolveNumberingLevel(index, numId, deeper);
+        if (!deeperLevel) continue;
+        const trigger = lvlRestartTriggerIlvl(deeper, deeperLevel.level.lvlRestart);
+        if (trigger !== null && ilvl <= trigger) {
+          initialized[deeper] = false;
         }
       }
 
-      // Increment this level.
-      if (counters[ilvl] === 0) {
-        counters[ilvl] = starts[ilvl] ?? level.start;
+      // Increment this level from its authored baseline.
+      const effectiveStart = starts[ilvl] ?? level.start;
+      if (!initialized[ilvl]) {
+        counters[ilvl] = effectiveStart;
+        initialized[ilvl] = true;
       } else {
         counters[ilvl] += 1;
       }
 
-      // Reset deeper levels to unused so the next visit restarts at their start.
-      for (let deeper = ilvl + 1; deeper <= 8; deeper += 1) {
-        counters[deeper] = 0;
-      }
-
       const snapshot = counters.slice() as number[];
+      const initializedSnapshot = initialized.slice();
       // For expansion, unused deeper levels should still substitute as their start (Word
-      // shows them when lvlText references them); unused shallower levels use 0→treat as start.
-      const expandCounters = snapshot.map((value, index) =>
-        value === 0 ? (starts[index] ?? 1) : value
-      );
+      // shows them when lvlText references them).
+      const expandCounters = snapshot.map((value, idx) => {
+        if (!initializedSnapshot[idx]) {
+          return starts[idx] ?? 1;
+        }
+        return value;
+      });
 
       const markerText = level.vanish
         ? ''

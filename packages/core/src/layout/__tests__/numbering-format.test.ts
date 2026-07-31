@@ -13,7 +13,9 @@ import {
 
 describe('numbering formatters', () => {
   test('decimal and decimalZero', () => {
+    expect(formatDecimal(0)).toBe('0');
     expect(formatDecimal(1)).toBe('1');
+    expect(formatDecimalZero(0)).toBe('00');
     expect(formatDecimalZero(1)).toBe('01');
     expect(formatDecimalZero(12)).toBe('12');
   });
@@ -44,9 +46,9 @@ describe('numbering formatters', () => {
 
 describe('lvlText expansion', () => {
   test('expands %1..%9 with per-level formats', () => {
-    expect(
-      expandLvlText('%1.%2)', [1, 2, 1], ['decimal', 'lowerLetter', 'lowerRoman'])
-    ).toBe('1.b)');
+    expect(expandLvlText('%1.%2)', [1, 2, 1], ['decimal', 'lowerLetter', 'lowerRoman'])).toBe(
+      '1.b)'
+    );
     expect(expandLvlText('%1.', [3], ['upperRoman'])).toBe('III.');
   });
 

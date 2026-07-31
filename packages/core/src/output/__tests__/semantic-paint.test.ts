@@ -4,8 +4,7 @@ import { GlobalRegistrator } from '@happy-dom/global-registrator';
 if (!GlobalRegistrator.isRegistered) GlobalRegistrator.register();
 
 import { describe, expect, test } from 'bun:test';
-import { readFileSync } from 'node:fs';
-import { readOoxmlPart, readOoxmlPackage } from '@docx-editor.dev/core-contract/store';
+import { readOoxmlPart } from '@docx-editor.dev/core-contract/store';
 import {
   buildNumberingIndex,
   createFixedMeasurer,
@@ -159,8 +158,9 @@ describe('the painter is a non-authoritative consumer', () => {
       `<w:p><w:pPr><w:tabs><w:tab w:val="right" w:pos="2400"/></w:tabs></w:pPr>` +
       `<w:r><w:t>L</w:t><w:tab/><w:t>ABCD</w:t></w:r></w:p>`;
     const layout = layoutOf(body);
-    const tabRecord = layout.pages[0]!.fragments
-      .flatMap((fragment) => (fragment.kind === 'paragraph' ? fragment.lines : []))
+    const tabRecord = layout.pages[0]!.fragments.flatMap((fragment) =>
+      fragment.kind === 'paragraph' ? fragment.lines : []
+    )
       .flatMap((line) => line.spans)
       .find((span) => span.text === '\t')!;
     expect(tabRecord.box.width).toBeGreaterThan(6);
@@ -402,7 +402,9 @@ describe('run underline and strike decorations (fixture variants + mixed)', () =
     paint(body).querySelector<HTMLElement>('.layout-run-text')!;
 
   test('single strike paints a solid line-through', () => {
-    const run = runOf('<w:p><w:r><w:rPr><w:strike/></w:rPr><w:t>strikethrough text</w:t></w:r></w:p>');
+    const run = runOf(
+      '<w:p><w:r><w:rPr><w:strike/></w:rPr><w:t>strikethrough text</w:t></w:r></w:p>'
+    );
     expect(run.style.textDecorationLine).toBe('line-through');
     expect(run.style.textDecorationStyle === '' || run.style.textDecorationStyle === 'solid').toBe(
       true
@@ -475,9 +477,9 @@ describe('run underline and strike decorations (fixture variants + mixed)', () =
     expect(underline.style.textDecorationStyle).toBe('wavy');
     expect(underline.style.textDecorationColor.toLowerCase()).toBe('#c00000');
     expect(strike.style.textDecorationLine).toBe('line-through');
-    expect(strike.style.textDecorationStyle === '' || strike.style.textDecorationStyle === 'solid').toBe(
-      true
-    );
+    expect(
+      strike.style.textDecorationStyle === '' || strike.style.textDecorationStyle === 'solid'
+    ).toBe(true);
     expect(strike.style.textDecorationStyle).not.toBe('wavy');
     expect(strike.style.textDecorationColor).toBe('');
     expect(run.textContent).toBe('mixed');
@@ -558,9 +560,7 @@ describe('paragraph bottom borders paint from layout geometry', () => {
     expect(rule.style.backgroundColor.toLowerCase()).toBe('#ff0000');
     // Geometry comes from the record, relative to the fragment — not from the DOM.
     expect(rule.style.height).toBe(`${fragment.bottomBorder!.box.height}px`);
-    expect(Number.parseFloat(rule.style.top)).toBe(
-      fragment.bottomBorder!.box.y - fragment.box.y
-    );
+    expect(Number.parseFloat(rule.style.top)).toBe(fragment.bottomBorder!.box.y - fragment.box.y);
     expect(rule.style.width).toBe(`${fragment.bottomBorder!.box.width}px`);
   });
 
@@ -602,298 +602,5 @@ describe('list marker paint', () => {
     const run = container.querySelector<HTMLElement>('.layout-run-text');
     expect(run?.textContent).toBe('Item');
     expect(run?.dataset.start).toBe('0');
-  });
-});
-
-describe('table cell border paint', () => {
-  const p = (text: string) => `<w:p><w:r><w:t>${text}</w:t></w:r></w:p>`;
-  const tc = (content: string, tcPr = '') => `<w:tc>${tcPr}${content}</w:tc>`;
-  const tr = (cells: string) => `<w:tr>${cells}</w:tr>`;
-
-  test('does not hardcode a black grid; paints resolved styles and skips continue cells', () => {
-    const body =
-      '<w:tbl>' +
-      '<w:tblPr><w:tblBorders>' +
-      '<w:top w:val="single" w:sz="4"/>' +
-      '<w:left w:val="single" w:sz="4"/>' +
-      '<w:bottom w:val="single" w:sz="4"/>' +
-      '<w:right w:val="single" w:sz="4"/>' +
-      '<w:insideH w:val="single" w:sz="4"/>' +
-      '<w:insideV w:val="single" w:sz="4"/>' +
-      '</w:tblBorders></w:tblPr>' +
-      tr(
-        tc(
-          p('A'),
-          '<w:tcPr><w:vMerge w:val="restart"/><w:tcBorders>' +
-            '<w:top w:val="double" w:color="2E75B6" w:sz="24"/>' +
-            '<w:left w:val="double" w:color="2E75B6" w:sz="24"/>' +
-            '<w:bottom w:val="single" w:color="999999" w:sz="1"/>' +
-            '<w:right w:val="dashed" w:color="CC3333" w:sz="8"/>' +
-            '</w:tcBorders></w:tcPr>'
-        ) +
-          tc(
-            p('B'),
-            '<w:tcPr><w:tcBorders>' +
-              '<w:top w:val="dotted" w:color="339933" w:sz="8"/>' +
-              '<w:left w:val="dashed" w:color="CC3333" w:sz="8"/>' +
-              '<w:bottom w:val="triple" w:color="9933CC" w:sz="24"/>' +
-              '<w:right w:val="dotted" w:color="339933" w:sz="8"/>' +
-              '</w:tcBorders></w:tcPr>'
-          )
-      ) +
-      tr(
-        tc(p('ghost'), '<w:tcPr><w:vMerge w:val="continue"/></w:tcPr>') +
-          tc(
-            p('C'),
-            '<w:tcPr><w:tcBorders>' +
-              '<w:top w:val="none"/>' +
-              '<w:left w:val="none"/>' +
-              '<w:bottom w:val="triple" w:color="9933CC" w:sz="24"/>' +
-              '<w:right w:val="dotted" w:color="339933" w:sz="8"/>' +
-              '</w:tcBorders></w:tcPr>'
-          )
-      ) +
-      '</w:tbl>';
-    const container = document.createElement('div');
-    paintSemanticLayout(container, layoutOf(body), { scale: 1 });
-    const cells = [...container.querySelectorAll<HTMLElement>('.docx-table-cell')];
-    expect(cells.length).toBe(4);
-    // No cell keeps the old hardcoded black shorthand.
-    for (const cell of cells) {
-      expect(cell.style.border).not.toBe('1px solid #000000');
-    }
-    const restart = cells[0]!;
-    expect(restart.style.borderTopStyle).toBe('none');
-    expect(restart.style.borderTopColor).toBe('#2E75B6');
-    expect(restart.querySelector('.docx-table-border-double')).not.toBeNull();
-    expect(restart.style.borderRightStyle).toBe('dashed');
-    expect(restart.style.borderRightColor).toBe('#CC3333');
-    expect(restart.dataset.rowSpan).toBe('2');
-
-    const continueCell = cells[2]!;
-    expect(continueCell.dataset.vMergeContinue).toBe('true');
-    expect(continueCell.style.borderTopStyle).toBe('none');
-    expect(continueCell.style.backgroundColor).toBe('transparent');
-    expect(continueCell.children.length).toBe(0);
-
-    const topRight = cells[1]!;
-    expect(topRight.style.borderTopStyle).toBe('dotted');
-    expect(topRight.style.borderTopColor).toBe('#339933');
-    // Triple uses an inert overlay.
-    const bottomRight = cells[3]!;
-    const triple = bottomRight.querySelector('.docx-table-border-triple');
-    expect(triple).not.toBeNull();
-    expect(triple!.getAttribute('aria-hidden')).toBe('true');
-    expect(triple!.getAttribute('contenteditable')).toBe('false');
-  });
-
-  test('hostile border color never reaches CSS', () => {
-    const body =
-      `<w:tbl>${tr(
-        tc(
-          p('x'),
-          '<w:tcPr><w:tcBorders><w:top w:val="single" w:color="url(x)" w:sz="8"/></w:tcBorders></w:tcPr>'
-        )
-      )}</w:tbl>`;
-    const container = document.createElement('div');
-    paintSemanticLayout(container, layoutOf(body), { scale: 1 });
-    const cell = container.querySelector<HTMLElement>('.docx-table-cell')!;
-    // Invalid color → paint defaults to black, never a raw URL.
-    expect(cell.style.borderTopColor).toBe('#000000');
-    expect(cell.style.borderTop).not.toContain('url');
-  });
-
-  function doubleCell(
-    borders: { top?: boolean; right?: boolean; bottom?: boolean; left?: boolean },
-    sz = '3',
-    scale = 1
-  ): HTMLElement {
-    const parts: string[] = [];
-    const color = '2E75B6';
-    for (const [side, on] of Object.entries(borders)) {
-      if (on) {
-        parts.push(`<w:${side} w:val="double" w:color="${color}" w:sz="${sz}"/>`);
-      }
-    }
-    const body = `<w:tbl>${tr(tc(p('x'), `<w:tcPr><w:tcBorders>${parts.join('')}</w:tcBorders></w:tcPr>`))}</w:tbl>`;
-    const container = document.createElement('div');
-    paintSemanticLayout(container, layoutOf(body), { scale });
-    return container.querySelector<HTMLElement>('.docx-table-cell')!;
-  }
-
-  function parsePx(value: string | undefined): number {
-    if (!value) return 0;
-    return Number.parseFloat(value) || 0;
-  }
-
-  function strokeFromBorder(value: string): number {
-    return parsePx(value.split(' ')[0]);
-  }
-
-  function assertDoubleOverlayGeometry(
-    overlay: HTMLElement,
-    side: 'top' | 'right' | 'bottom' | 'left'
-  ): { extent: number; stroke: number; gap: number } {
-    const horizontal = side === 'top' || side === 'bottom';
-    const extent = horizontal ? parsePx(overlay.style.height) : parsePx(overlay.style.width);
-    const strokeA = horizontal
-      ? strokeFromBorder(overlay.style.borderTop)
-      : strokeFromBorder(overlay.style.borderLeft);
-    const strokeB = horizontal
-      ? strokeFromBorder(overlay.style.borderBottom)
-      : strokeFromBorder(overlay.style.borderRight);
-    expect(strokeA).toBe(strokeB);
-    const gap = extent - 2 * strokeA;
-    expect(extent).toBeGreaterThanOrEqual(2 * strokeA + DOUBLE_BORDER_MIN_GAP_PX);
-    expect(gap).toBeGreaterThanOrEqual(DOUBLE_BORDER_MIN_GAP_PX);
-    return { extent, stroke: strokeA, gap };
-  }
-
-  const DOUBLE_BORDER_MIN_GAP_PX = 1;
-
-  function overlayFor(cell: HTMLElement, side: 'top' | 'right' | 'bottom' | 'left') {
-    const overlays = [...cell.querySelectorAll<HTMLElement>('.docx-table-border-double')];
-    return overlays.find((el) => {
-      if (side === 'top') {
-        return el.style.height !== '' && el.style.top !== '' && el.style.bottom === '';
-      }
-      if (side === 'bottom') {
-        return el.style.height !== '' && el.style.bottom !== '' && el.style.top === '';
-      }
-      if (side === 'left') {
-        return el.style.width !== '' && el.style.left !== '' && el.style.right === '';
-      }
-      return el.style.width !== '' && el.style.right !== '' && el.style.left === '';
-    });
-  }
-
-  test('double edges paint inert overlays with separated strokes at thin sz', () => {
-    const cell = doubleCell({ top: true, right: true, bottom: true, left: true }, '3');
-    for (const side of ['top', 'right', 'bottom', 'left'] as const) {
-      const styleKey = `border${side[0]!.toUpperCase()}${side.slice(1)}Style` as 'borderTopStyle';
-      expect(cell.style[styleKey]).toBe('none');
-      const overlay = overlayFor(cell, side)!;
-      expect(overlay).toBeDefined();
-      expect(overlay.getAttribute('aria-hidden')).toBe('true');
-      expect(overlay.getAttribute('contenteditable')).toBe('false');
-      expect(overlay.style.pointerEvents).toBe('none');
-      const { extent, stroke, gap } = assertDoubleOverlayGeometry(overlay, side);
-      expect(extent).toBe(3);
-      expect(stroke).toBe(1);
-      expect(gap).toBe(1);
-      // Centered on 1px authored band → extends outward, not into content.
-      if (side === 'top') expect(parsePx(overlay.style.top)).toBe(-1);
-      if (side === 'bottom') expect(parsePx(overlay.style.bottom)).toBe(-1);
-      if (side === 'left') expect(parsePx(overlay.style.left)).toBe(-1);
-      if (side === 'right') expect(parsePx(overlay.style.right)).toBe(-1);
-    }
-  });
-
-  test('double edges scale stroke thickness at thicker sz', () => {
-    const cell = doubleCell({ top: true, bottom: true }, '24', 1);
-    const top = overlayFor(cell, 'top')!;
-    const { extent, stroke, gap } = assertDoubleOverlayGeometry(top, 'top');
-    expect(extent).toBe(3);
-    expect(stroke).toBe(1);
-    expect(gap).toBe(1);
-    expect(parsePx(top.style.top)).toBe(0);
-  });
-
-  test('double overlays respect scale factor', () => {
-    const cell = doubleCell({ left: true }, '24', 2);
-    const left = overlayFor(cell, 'left')!;
-    const { extent, stroke, gap } = assertDoubleOverlayGeometry(left, 'left');
-    expect(extent).toBe(6);
-    expect(stroke).toBe(2);
-    expect(gap).toBe(2);
-    expect(parsePx(left.style.left)).toBe(0);
-  });
-
-  test('mixed double and dashed edges keep dashed on cell border', () => {
-    const body =
-      '<w:tbl>' +
-      tr(
-        tc(
-          p('x'),
-          '<w:tcPr><w:tcBorders>' +
-            '<w:top w:val="double" w:color="2E75B6" w:sz="3"/>' +
-            '<w:right w:val="dashed" w:color="CC3333" w:sz="8"/>' +
-            '</w:tcBorders></w:tcPr>'
-        )
-      ) +
-      '</w:tbl>';
-    const container = document.createElement('div');
-    paintSemanticLayout(container, layoutOf(body), { scale: 1 });
-    const cell = container.querySelector<HTMLElement>('.docx-table-cell')!;
-    expect(cell.style.borderTopStyle).toBe('none');
-    expect(cell.style.borderRightStyle).toBe('dashed');
-    expect(cell.style.borderRightColor).toBe('#CC3333');
-    expect(cell.querySelectorAll('.docx-table-border-double')).toHaveLength(1);
-    expect(cell.querySelector('.docx-table-border-triple')).toBeNull();
-  });
-
-  test('triple overlay regression after double refactor', () => {
-    const body =
-      '<w:tbl>' +
-      tr(
-        tc(
-          p('x'),
-          '<w:tcPr><w:tcBorders>' +
-            '<w:bottom w:val="triple" w:color="9933CC" w:sz="24"/>' +
-            '</w:tcBorders></w:tcPr>'
-        )
-      ) +
-      '</w:tbl>';
-    const container = document.createElement('div');
-    paintSemanticLayout(container, layoutOf(body), { scale: 1 });
-    const cell = container.querySelector<HTMLElement>('.docx-table-cell')!;
-    expect(cell.style.borderBottomStyle).toBe('none');
-    const triple = cell.querySelector<HTMLElement>('.docx-table-border-triple')!;
-    expect(triple).not.toBeNull();
-    expect(triple.getAttribute('aria-hidden')).toBe('true');
-    expect(triple.style.borderTop).toBe('3px solid #9933CC');
-    expect(triple.style.borderBottom).toBe('3px solid #9933CC');
-    expect(triple.style.height).toBe('15px');
-    expect(cell.querySelector('.docx-table-border-double')).toBeNull();
-  });
-
-  test('§5.3 comprehensive fixture double blue edges paint two-stroke overlays', () => {
-    const bytes = readFileSync(
-      `${import.meta.dir}/../../../../../e2e/fixtures/comprehensive-word-element-test.docx`
-    );
-    const result = readOoxmlPackage(bytes);
-    if (!result.ok) throw new Error(result.reason);
-    const part = result.package.parts.get(result.package.mainDocumentPart)!;
-    const layout = layoutSemanticDocument(part, 0, { measurer: createFixedMeasurer() });
-    const container = document.createElement('div');
-    paintSemanticLayout(container, layout, { scale: 1 });
-    const cells = [...container.querySelectorAll<HTMLElement>('.docx-table-cell')];
-    const doubleBlue = cells.find((cell) =>
-      cell.textContent?.includes('Double blue')
-    );
-    expect(doubleBlue).toBeDefined();
-    // TL cell: top, left, bottom are double blue; right is dashed red.
-    expect(doubleBlue!.style.borderTopStyle).toBe('none');
-    expect(doubleBlue!.style.borderLeftStyle).toBe('none');
-    expect(doubleBlue!.style.borderBottomStyle).toBe('none');
-    expect(doubleBlue!.style.borderRightStyle).toBe('dashed');
-    const doubles = doubleBlue!.querySelectorAll('.docx-table-border-double');
-    expect(doubles.length).toBe(3);
-    for (const overlay of doubles) {
-      expect(overlay.getAttribute('aria-hidden')).toBe('true');
-      expect(overlay.getAttribute('contenteditable')).toBe('false');
-      const el = overlay as HTMLElement;
-      const horizontal = el.style.height !== '';
-      const side = horizontal
-        ? el.style.top !== ''
-          ? 'top'
-          : 'bottom'
-        : el.style.left !== ''
-          ? 'left'
-          : 'right';
-      const { extent, stroke, gap } = assertDoubleOverlayGeometry(el, side);
-      expect(extent).toBeGreaterThanOrEqual(2 * stroke + gap);
-      expect(gap).toBeGreaterThanOrEqual(1);
-    }
   });
 });

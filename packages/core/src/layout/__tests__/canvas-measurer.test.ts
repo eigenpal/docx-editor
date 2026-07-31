@@ -10,6 +10,7 @@ import {
   linesOf,
   resolveDefaultSurfaceMeasurer,
   tryCreateCanvasMeasurer,
+  type CanvasTextContext,
   type PageGeometry,
   type ResolvedRunStyle,
 } from '../index.ts';
@@ -17,10 +18,10 @@ import {
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 
 function load(body: string) {
-  const result = readOoxmlPart(
-    `<w:document xmlns:w="${W}"><w:body>${body}</w:body></w:document>`,
-    { name: '/word/document.xml', contentType: 'app/xml' }
-  );
+  const result = readOoxmlPart(`<w:document xmlns:w="${W}"><w:body>${body}</w:body></w:document>`, {
+    name: '/word/document.xml',
+    contentType: 'app/xml',
+  });
   if (!result.ok) throw new Error(result.reason);
   return result.part;
 }
@@ -32,7 +33,7 @@ function load(body: string) {
  * Multiplier 0.7 is deliberately wider than the fixed measurer's 6pt*(size/11) grid at
  * typical sizes (the production bug: fixed underestimates real proportional faces ~20%).
  */
-function mockContext(fonts: string[] = []): CanvasRenderingContext2D {
+function mockContext(fonts: string[] = []): CanvasTextContext {
   let currentFont = '';
   return {
     get font() {
@@ -51,7 +52,26 @@ function mockContext(fonts: string[] = []): CanvasRenderingContext2D {
         fontBoundingBoxDescent: sizePx * 0.2,
       };
     },
-  } as CanvasRenderingContext2D;
+  };
+}
+
+/** Context that omits font bounding boxes — exercises the deterministic fallback. */
+function mockContextWithoutBox(fonts: string[] = []): CanvasTextContext {
+  let currentFont = '';
+  return {
+    get font() {
+      return currentFont;
+    },
+    set font(value: string) {
+      currentFont = value;
+      fonts.push(value);
+    },
+    measureText(text: string) {
+      const match = /(\d+(?:\.\d+)?)px/.exec(currentFont);
+      const sizePx = match ? Number(match[1]) : 11;
+      return { width: text.length * sizePx * 0.7 };
+    },
+  };
 }
 
 const style = (overrides: Partial<ResolvedRunStyle> = {}): ResolvedRunStyle => ({
@@ -60,9 +80,9 @@ const style = (overrides: Partial<ResolvedRunStyle> = {}): ResolvedRunStyle => (
 });
 
 describe('tryCreateCanvasMeasurer', () => {
-  test('returns null when no 2d context is available', () => {
+  test('returns null when no 2d context is injected', () => {
     expect(tryCreateCanvasMeasurer({ context: null })).toBeNull();
-    expect(tryCreateCanvasMeasurer({ ownerDocument: null })).toBeNull();
+    expect(tryCreateCanvasMeasurer({})).toBeNull();
   });
 
   test('measures at the painted size and converts back to layout points', () => {
@@ -100,6 +120,184 @@ describe('tryCreateCanvasMeasurer', () => {
     measurer.measure('X', style({ fontSizePt: 20, verticalAlign: 'superscript' }));
     expect(fonts.at(-1)).toContain('15px');
   });
+
+  test('line metrics use fontBoundingBox ascent + descent when reported', () => {
+    const measurer = tryCreateCanvasMeasurer({ context: mockContext(), scale: 1 })!;
+    const metrics = measurer.lineMetrics(style({ fontSizePt: 20 }));
+    // Mock: ascent 0.8*20 + descent 0.2*20 = 20; baseline = ascent.
+    expect(metrics.height).toBeCloseTo(20, 5);
+    expect(metrics.baseline).toBeCloseTo(16, 5);
+  });
+
+  test('line metrics fall back to size×1.15 / 0.8 when boxes are absent', () => {
+    const measurer = tryCreateCanvasMeasurer({
+      context: mockContextWithoutBox(),
+      scale: 1,
+    })!;
+    const metrics = measurer.lineMetrics(style({ fontSizePt: 20 }));
+    expect(metrics.height).toBeCloseTo(20 * 1.15, 5);
+    expect(metrics.baseline).toBeCloseTo(20 * 0.8, 5);
+  });
+
+  test('super/subscript shrinks line metrics with the painted size', () => {
+    const measurer = tryCreateCanvasMeasurer({ context: mockContext(), scale: 1 })!;
+    const baseline = measurer.lineMetrics(style({ fontSizePt: 20 }));
+    const raised = measurer.lineMetrics(style({ fontSizePt: 20, verticalAlign: 'superscript' }));
+    expect(raised.height).toBeCloseTo(baseline.height * 0.75, 5);
+    expect(raised.baseline).toBeCloseTo(baseline.baseline * 0.75, 5);
+  });
+
+  test('mixed sizes reserve the taller run height on a line', () => {
+    const measurer = tryCreateCanvasMeasurer({ context: mockContext(), scale: 1 })!;
+    const small = measurer.lineMetrics(style({ fontSizePt: 10 }));
+    const large = measurer.lineMetrics(style({ fontSizePt: 24 }));
+    expect(large.height).toBeGreaterThan(small.height);
+    expect(Math.max(small.height, large.height)).toBe(large.height);
+  });
+
+  test('scale converts painted-pixel boxes back to layout points', () => {
+    const measurer = tryCreateCanvasMeasurer({ context: mockContext(), scale: 2 })!;
+    const metrics = measurer.lineMetrics(style({ fontSizePt: 10 }));
+    // Painted at 20px; ascent 16 + descent 4 → 20px / scale 2 = 10 layout units.
+    expect(metrics.height).toBeCloseTo(10, 5);
+    expect(metrics.baseline).toBeCloseTo(8, 5);
+  });
+});
+
+describe('canvas measurer cache bounds', () => {
+  function countingContext(): CanvasTextContext & { measureCalls: string[] } {
+    const measureCalls: string[] = [];
+    const base = mockContext();
+    return {
+      ...base,
+      measureCalls,
+      measureText(text: string) {
+        measureCalls.push(text);
+        return base.measureText(text);
+      },
+    };
+  }
+
+  test('width cache re-measures evicted entries instead of growing without bound', () => {
+    const ctx = countingContext();
+    const measurer = tryCreateCanvasMeasurer({ context: ctx, maxWidthEntries: 2 })!;
+    const s = () => style({ fontSizePt: 11 });
+
+    measurer.measure('aaa', s);
+    measurer.measure('bbb', s);
+    measurer.measure('ccc', s); // evicts 'aaa'
+    const afterEviction = ctx.measureCalls.filter((text) => text === 'aaa').length;
+    measurer.measure('aaa', s); // must miss again
+
+    expect(afterEviction).toBe(1);
+    expect(ctx.measureCalls.filter((text) => text === 'aaa').length).toBe(2);
+  });
+
+  test('width cache hits skip canvas measurement', () => {
+    const ctx = countingContext();
+    const measurer = tryCreateCanvasMeasurer({ context: ctx, maxWidthEntries: 8 })!;
+    const s = () => style({ fontSizePt: 11 });
+
+    measurer.measure('repeat', s);
+    measurer.measure('repeat', s);
+    measurer.measure('repeat', s);
+
+    expect(ctx.measureCalls.filter((text) => text === 'repeat').length).toBe(1);
+  });
+
+  test('line-metrics cache evicts least-recent font shorthands at the configured limit', () => {
+    const ctx = countingContext();
+    const measurer = tryCreateCanvasMeasurer({ context: ctx, maxMetricsEntries: 2 })!;
+
+    measurer.lineMetrics(style({ fontSizePt: 10 }));
+    measurer.lineMetrics(style({ fontSizePt: 12 }));
+    measurer.lineMetrics(style({ fontSizePt: 14 })); // evicts 10pt
+    const afterEviction = ctx.measureCalls.filter((text) => text === 'Hxg').length;
+    measurer.lineMetrics(style({ fontSizePt: 10 })); // miss again
+
+    expect(afterEviction).toBe(3);
+    expect(ctx.measureCalls.filter((text) => text === 'Hxg').length).toBe(4);
+  });
+
+  function expectWidthCacheEvictsAtOne(maxWidthEntries: number, label: string): void {
+    const ctx = countingContext();
+    const measurer = tryCreateCanvasMeasurer({ context: ctx, maxWidthEntries })!;
+    const s = () => style({ fontSizePt: 11 });
+
+    measurer.measure('aaa', s);
+    measurer.measure('bbb', s); // capacity 1 → evicts 'aaa'
+    const afterEviction = ctx.measureCalls.filter((text) => text === 'aaa').length;
+    measurer.measure('aaa', s); // miss again
+
+    expect(afterEviction, label).toBe(1);
+    expect(ctx.measureCalls.filter((text) => text === 'aaa').length, label).toBe(2);
+  }
+
+  function expectMetricsCacheEvictsAtOne(maxMetricsEntries: number, label: string): void {
+    const ctx = countingContext();
+    const measurer = tryCreateCanvasMeasurer({ context: ctx, maxMetricsEntries })!;
+
+    measurer.lineMetrics(style({ fontSizePt: 10 }));
+    measurer.lineMetrics(style({ fontSizePt: 12 })); // capacity 1 → evicts 10pt
+    const afterEviction = ctx.measureCalls.filter((text) => text === 'Hxg').length;
+    measurer.lineMetrics(style({ fontSizePt: 10 })); // miss again
+
+    expect(afterEviction, label).toBe(2);
+    expect(ctx.measureCalls.filter((text) => text === 'Hxg').length, label).toBe(3);
+  }
+
+  test.each([
+    ['NaN', NaN],
+    ['Infinity', Infinity],
+    ['negative', -3],
+    ['zero', 0],
+  ] as const)(
+    'invalid width capacity (%s) normalizes to 1 and evicts',
+    (label, maxWidthEntries) => {
+      expectWidthCacheEvictsAtOne(maxWidthEntries, label);
+    }
+  );
+
+  test.each([
+    ['NaN', NaN],
+    ['Infinity', Infinity],
+    ['negative', -3],
+    ['zero', 0],
+  ] as const)(
+    'invalid metrics capacity (%s) normalizes to 1 and evicts',
+    (label, maxMetricsEntries) => {
+      expectMetricsCacheEvictsAtOne(maxMetricsEntries, label);
+    }
+  );
+
+  test('fractional width capacity floors and evicts at the floored limit', () => {
+    const ctx = countingContext();
+    const measurer = tryCreateCanvasMeasurer({ context: ctx, maxWidthEntries: 2.7 })!;
+    const s = () => style({ fontSizePt: 11 });
+
+    measurer.measure('aaa', s);
+    measurer.measure('bbb', s);
+    measurer.measure('ccc', s); // capacity 2 → evicts 'aaa'
+    const afterEviction = ctx.measureCalls.filter((text) => text === 'aaa').length;
+    measurer.measure('aaa', s);
+
+    expect(afterEviction).toBe(1);
+    expect(ctx.measureCalls.filter((text) => text === 'aaa').length).toBe(2);
+  });
+
+  test('fractional metrics capacity floors and evicts at the floored limit', () => {
+    const ctx = countingContext();
+    const measurer = tryCreateCanvasMeasurer({ context: ctx, maxMetricsEntries: 2.7 })!;
+
+    measurer.lineMetrics(style({ fontSizePt: 10 }));
+    measurer.lineMetrics(style({ fontSizePt: 12 }));
+    measurer.lineMetrics(style({ fontSizePt: 14 })); // capacity 2 → evicts 10pt
+    const afterEviction = ctx.measureCalls.filter((text) => text === 'Hxg').length;
+    measurer.lineMetrics(style({ fontSizePt: 10 }));
+
+    expect(afterEviction).toBe(3);
+    expect(ctx.measureCalls.filter((text) => text === 'Hxg').length).toBe(4);
+  });
 });
 
 describe('resolveDefaultSurfaceMeasurer', () => {
@@ -117,9 +315,11 @@ describe('resolveDefaultSurfaceMeasurer', () => {
     expect(resolved.measurer.measure('abc', style())).toBe(18);
   });
 
-  test('happy-dom (no real canvas) reports canvas measurement unavailable', () => {
-    // Mount tests under happy-dom keep the fixed default; this guards that assumption.
+  test('without an injected context, canvas measurement is unavailable', () => {
+    // Layout never probes the browser; happy-dom / SSR keep the fixed default.
     expect(isCanvasMeasurementAvailable()).toBe(false);
+    expect(isCanvasMeasurementAvailable(null)).toBe(false);
+    expect(isCanvasMeasurementAvailable(mockContext())).toBe(true);
   });
 });
 
@@ -159,8 +359,7 @@ describe('centered cover title uses measured width, not the fixed grid', () => {
       )
     ).toBe(true);
     // Layout splits on words; the line's used width is what centering reads.
-    const measured =
-      canvas.measure('Cover ', first.style) + canvas.measure('Title', last.style);
+    const measured = canvas.measure('Cover ', first.style) + canvas.measure('Title', last.style);
     expect(usedWidth(line)).toBeCloseTo(measured, 5);
     expect(first.box.x).toBeCloseTo((available - measured) / 2, 5);
     expect(available - (last.box.x + last.box.width)).toBeCloseTo(first.box.x, 5);

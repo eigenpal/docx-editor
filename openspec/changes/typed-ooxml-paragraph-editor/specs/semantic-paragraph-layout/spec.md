@@ -15,7 +15,7 @@ Every line and style span SHALL retain stable story/paragraph identity and canon
 - **THEN** its style spans cover the line's source text in order without gaps or overlaps
 
 ### Requirement: Accepted paragraph layout boundary
-Semantic layout SHALL resolve and represent the D8 run and paragraph property boundary, including authored whitespace, tabs, line hard breaks, and typed `w:br w:type="page"` page breaks; `w:spacing` before/after with collapsed adjacent spacing; and `w:pBdr/w:bottom` only. Section-aware pagination SHALL honour per-section page size and margins, default/`nextPage` section breaks, `titlePage`, and per-section read-only header/footer furniture inheritance. Hyperlinks, fields, comments, tracked changes, images, tables, content controls, header/footer editing, notes, non-bottom paragraph borders, `continuous`/`evenPage`/`oddPage` section semantics, and multi-column flow SHALL remain outside this layout acceptance.
+Semantic layout SHALL resolve and represent the D8 run and paragraph property boundary, including authored whitespace, tabs, line hard breaks, and typed `w:br w:type="page"` page breaks; `w:spacing` before/after with collapsed adjacent spacing; and `w:pBdr/w:bottom` only. Section-aware pagination SHALL honour per-section page size and margins, default/`nextPage` section breaks, `titlePage`, and per-section read-only header/footer furniture inheritance, including bounded allowlisted complex `PAGE`/`NUMPAGES` projection for page-furniture numbering. Hyperlinks, body fields (including inert generic `w:fldSimple`), comments, tracked changes, images, tables, content controls, header/footer editing, notes, non-bottom paragraph borders, `continuous`/`evenPage`/`oddPage` section semantics, and multi-column flow SHALL remain outside this layout acceptance.
 
 #### Scenario: Accepted properties affect layout and spans
 - **WHEN** accepted run properties, paragraph spacing/indents/tabs/numbering, pagination controls, `w:spacing` before/after, `w:pBdr/w:bottom`, inline page breaks, or per-section geometry occur in the paragraph fixture
@@ -32,6 +32,10 @@ Semantic layout SHALL resolve and represent the D8 run and paragraph property bo
 #### Scenario: Multi-section document paginates per section
 - **WHEN** a body story contains multiple sections ended by paragraph-level or body `w:sectPr` with distinct geometry and read-only header/footer references
 - **THEN** layout paginates each section against its own page size/margins, starts non-continuous sections on a new page, and attaches the correct per-section furniture including `titlePage` inheritance
+
+#### Scenario: Page-furniture PAGE and NUMPAGES project per sheet
+- **WHEN** a read-only header or footer story contains allowlisted complex `PAGE`/`NUMPAGES` field instructions
+- **THEN** layout projects the physical page index and document page count into that furniture without evaluating other field instructions or claiming body-field support
 
 #### Scenario: Deferred content is encountered
 - **WHEN** paragraph traversal encounters a deferred element

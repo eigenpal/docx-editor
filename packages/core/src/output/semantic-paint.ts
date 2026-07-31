@@ -15,7 +15,6 @@ import type {
   PageRecord,
   ParagraphFragmentRecord,
   ResolvedRunStyle,
-  ResolvedTableBorderEdge,
   SemanticLayout,
   StyleSpanRecord,
   TableCellFragmentRecord,
@@ -145,11 +144,7 @@ function applyTextDecoration(
   }
 }
 
-function applyStrikeDecoration(
-  css: CSSStyleDeclaration,
-  strike: StrikeKind,
-  scale: number
-): void {
+function applyStrikeDecoration(css: CSSStyleDeclaration, strike: StrikeKind, scale: number): void {
   if (strike === 'none') return;
   applyTextDecoration(css, 'line-through', strike === 'double' ? 'double' : 'solid', { scale });
 }
@@ -503,164 +498,7 @@ function paintBottomBorder(
   return rule;
 }
 
-type TableBorderSide = 'Top' | 'Right' | 'Bottom' | 'Left';
-
-/** Map a layout-owned table border style to a CSS border-style keyword. */
-function cssBorderStyle(style: ResolvedTableBorderEdge['style']): string {
-  switch (style) {
-    case 'dashed':
-      return 'dashed';
-    case 'dotted':
-      return 'dotted';
-    case 'double':
-    case 'triple':
-      // CSS `double` collapses below ~3px; multi-rule styles use inert overlays instead.
-      return 'solid';
-    case 'thick':
-    case 'single':
-    default:
-      return 'solid';
-  }
-}
-
-/** Selection-inert overlay shell for layout-owned multi-stroke table edges. */
-function createTableBorderOverlay(document: Document, className: string): HTMLDivElement {
-  const overlay = document.createElement('div');
-  overlay.className = className;
-  overlay.setAttribute('aria-hidden', 'true');
-  overlay.setAttribute('contenteditable', 'false');
-  overlay.style.position = 'absolute';
-  overlay.style.pointerEvents = 'none';
-  overlay.style.boxSizing = 'border-box';
-  return overlay;
-}
-
-/** Minimum visible stroke/gap in CSS px; subpixel only when authored extent supports it. */
-const DOUBLE_BORDER_MIN_STROKE_PX = 1;
-const DOUBLE_BORDER_MIN_GAP_PX = 1;
-
-interface DoubleBorderMetrics {
-  readonly strokePx: number;
-  readonly gapPx: number;
-  readonly extentPx: number;
-  /** Centers the overlay on the authored border band; negative extends outward. */
-  readonly insetPx: number;
-}
-
-/** Deterministic stroke / gap / extent for a double table edge at paint scale. */
-function computeDoubleBorderMetrics(widthPx: number): DoubleBorderMetrics {
-  const minExtent = 2 * DOUBLE_BORDER_MIN_STROKE_PX + DOUBLE_BORDER_MIN_GAP_PX;
-  if (widthPx >= minExtent) {
-    const unit = widthPx / 3;
-    if (unit >= DOUBLE_BORDER_MIN_STROKE_PX) {
-      return { strokePx: unit, gapPx: unit, extentPx: widthPx, insetPx: 0 };
-    }
-  }
-  const strokePx = DOUBLE_BORDER_MIN_STROKE_PX;
-  const gapPx = DOUBLE_BORDER_MIN_GAP_PX;
-  const extentPx = Math.max(widthPx, minExtent);
-  return { strokePx, gapPx, extentPx, insetPx: (widthPx - extentPx) / 2 };
-}
-
-function positionTableBorderOverlay(
-  overlay: HTMLElement,
-  side: TableBorderSide,
-  extentPx: number,
-  insetPx = 0
-): void {
-  const inset = `${insetPx}px`;
-  if (side === 'Bottom' || side === 'Top') {
-    overlay.style.left = '0';
-    overlay.style.right = '0';
-    overlay.style.height = `${extentPx}px`;
-    if (side === 'Bottom') overlay.style.bottom = inset;
-    else overlay.style.top = inset;
-    return;
-  }
-  overlay.style.top = '0';
-  overlay.style.bottom = '0';
-  overlay.style.width = `${extentPx}px`;
-  if (side === 'Right') overlay.style.right = inset;
-  else overlay.style.left = inset;
-}
-
-/**
- * Two explicit strokes separated by a real gap inside the overlay extent.
- * With `box-sizing: border-box`, border-top/bottom (or left/right) reserve the gap.
- */
-function paintDoubleTableBorderOverlay(
-  overlay: HTMLElement,
-  side: TableBorderSide,
-  color: string,
-  strokePx: number
-): void {
-  overlay.style.backgroundColor = 'transparent';
-  const stroke = `${strokePx}px solid #${color}`;
-  if (side === 'Top' || side === 'Bottom') {
-    overlay.style.borderTop = stroke;
-    overlay.style.borderBottom = stroke;
-  } else {
-    overlay.style.borderLeft = stroke;
-    overlay.style.borderRight = stroke;
-  }
-}
-
-/** Three explicit strokes; overlay may extend past the published extent (CSS has no triple). */
-function paintTripleTableBorderOverlay(
-  overlay: HTMLElement,
-  side: TableBorderSide,
-  color: string,
-  widthPx: number
-): void {
-  const gap = Math.max(1, widthPx);
-  const extentPx = widthPx * 3 + gap * 2;
-  positionTableBorderOverlay(overlay, side, extentPx);
-  if (side === 'Bottom' || side === 'Top') {
-    overlay.style.borderTop = `${widthPx}px solid #${color}`;
-    overlay.style.borderBottom = `${widthPx}px solid #${color}`;
-    overlay.style.backgroundImage = `linear-gradient(#${color}, #${color})`;
-    overlay.style.backgroundSize = `100% ${widthPx}px`;
-    overlay.style.backgroundPosition = 'center';
-    overlay.style.backgroundRepeat = 'no-repeat';
-  } else {
-    overlay.style.borderLeft = `${widthPx}px solid #${color}`;
-    overlay.style.borderRight = `${widthPx}px solid #${color}`;
-    overlay.style.backgroundImage = `linear-gradient(to right, #${color}, #${color})`;
-    overlay.style.backgroundSize = `${widthPx}px 100%`;
-    overlay.style.backgroundPosition = 'center';
-    overlay.style.backgroundRepeat = 'no-repeat';
-  }
-}
-
-function applyCellBorderEdge(
-  element: HTMLElement,
-  side: TableBorderSide,
-  edge: ResolvedTableBorderEdge | undefined,
-  scale: number,
-  document: Document
-): void {
-  if (!edge) return;
-  const color = edge.color && HEX.test(edge.color) ? edge.color : '000000';
-  const widthPx = Math.max(1, edge.widthPt * scale);
-  const cssStyle = cssBorderStyle(edge.style);
-  element.style[`border${side}Width` as 'borderTopWidth'] = `${widthPx}px`;
-  element.style[`border${side}Style` as 'borderTopStyle'] = cssStyle;
-  element.style[`border${side}Color` as 'borderTopColor'] = `#${color}`;
-
-  if (edge.style === 'double') {
-    const metrics = computeDoubleBorderMetrics(widthPx);
-    const overlay = createTableBorderOverlay(document, 'docx-table-border-double');
-    positionTableBorderOverlay(overlay, side, metrics.extentPx, metrics.insetPx);
-    paintDoubleTableBorderOverlay(overlay, side, color, metrics.strokePx);
-    element.style[`border${side}Style` as 'borderTopStyle'] = 'none';
-    element.append(overlay);
-  } else if (edge.style === 'triple') {
-    const overlay = createTableBorderOverlay(document, 'docx-table-border-triple');
-    paintTripleTableBorderOverlay(overlay, side, color, widthPx);
-    element.style[`border${side}Style` as 'borderTopStyle'] = 'none';
-    element.append(overlay);
-  }
-}
+import { applyCellBorders } from './semantic-paint-table-borders.ts';
 
 function paintTableCell(
   document: Document,
@@ -687,11 +525,7 @@ function paintTableCell(
   }
 
   cellElement.style.border = 'none';
-  const borders = cell.borders;
-  applyCellBorderEdge(cellElement, 'Top', borders?.top, scale, document);
-  applyCellBorderEdge(cellElement, 'Right', borders?.right, scale, document);
-  applyCellBorderEdge(cellElement, 'Bottom', borders?.bottom, scale, document);
-  applyCellBorderEdge(cellElement, 'Left', borders?.left, scale, document);
+  applyCellBorders(document, cellElement, cell.borders, scale);
 
   // Re-validated at the sink, like every other file-derived style value here.
   if (cell.shading && HEX.test(cell.shading)) {

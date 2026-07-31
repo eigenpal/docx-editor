@@ -9,7 +9,10 @@ import { zipSync, strToU8 } from 'fflate';
 import { canonicalOoxmlFingerprint } from '../package/ooxml-tree.ts';
 import { diffSemanticDigests, semanticDigest } from '../package/ooxml-digest.ts';
 import { readOoxmlPackage, withPart, writeOoxmlPackage } from '../package/ooxml-package.ts';
-import { resolveHeaderFooterParts } from '../package/hf-references.ts';
+import {
+  resolveHeaderFooterParts,
+  resolveHeaderFooterPartsBySection,
+} from '../package/hf-references.ts';
 import { applyTreeOp } from '../store/tree-ops.ts';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
@@ -24,6 +27,7 @@ interface BuildOptions {
   readonly rels?: string;
   readonly settings?: string;
   readonly overrides?: string;
+  readonly body?: string;
 }
 
 function build(options: BuildOptions = {}): Uint8Array {
@@ -40,8 +44,9 @@ function build(options: BuildOptions = {}): Uint8Array {
     ),
     'word/document.xml': strToU8(
       `<w:document xmlns:w="${W}" xmlns:r="${R}"><w:body>` +
-        '<w:p><w:r><w:t>body</w:t></w:r></w:p>' +
-        `<w:sectPr>${options.references ?? ''}</w:sectPr>` +
+        (options.body ??
+          '<w:p><w:r><w:t>body</w:t></w:r></w:p>' +
+            `<w:sectPr>${options.references ?? ''}</w:sectPr>`) +
         '</w:body></w:document>'
     ),
   };
@@ -71,6 +76,17 @@ function load(bytes: Uint8Array) {
   if (!result.ok) throw new Error(`package read failed: ${result.reason}`);
   return result.package;
 }
+
+function twoSectionBody(firstSectPr: string, secondSectPr: string): string {
+  return (
+    `<w:p><w:pPr><w:sectPr>${firstSectPr}</w:sectPr></w:pPr><w:r><w:t>one</w:t></w:r></w:p>` +
+    '<w:p><w:r><w:t>two</w:t></w:r></w:p>' +
+    `<w:sectPr>${secondSectPr}</w:sectPr>`
+  );
+}
+
+const DEFAULT_HEADER_REF = '<w:headerReference w:type="default" r:id="rId7"/>';
+const DEFAULT_RELS = `<Relationship Id="rId7" Type="${R}/header" Target="header1.xml"/>`;
 
 describe('header/footer reference resolution', () => {
   test('default header and footer resolve through the main part rels', () => {
@@ -130,6 +146,81 @@ describe('header/footer reference resolution', () => {
     expect(resolved.headers.size).toBe(0);
     expect(resolved.footers.size).toBe(0);
     expect(resolved.titlePage).toBe(false);
+  });
+});
+
+describe('titlePg on/off semantics', () => {
+  test.each([
+    ['omitted', '', false],
+    ['empty element', '<w:titlePg/>', true],
+    ['val=1', '<w:titlePg w:val="1"/>', true],
+    ['val=true', '<w:titlePg w:val="true"/>', true],
+    ['val=on', '<w:titlePg w:val="on"/>', true],
+    ['val=0', '<w:titlePg w:val="0"/>', false],
+    ['val=false', '<w:titlePg w:val="false"/>', false],
+    ['val=off', '<w:titlePg w:val="off"/>', false],
+  ] as const)('%s resolves titlePage=%s', (_label, titlePg, expected) => {
+    const resolved = resolveHeaderFooterParts(load(build({ references: titlePg })));
+    expect(resolved.titlePage).toBe(expected);
+  });
+
+  test('titlePg does not inherit across adjacent sections', () => {
+    const pkg = load(
+      build({
+        body: twoSectionBody('<w:titlePg/>', ''),
+        rels: DEFAULT_RELS,
+        headerParts: { 'word/header1.xml': HEADER_XML },
+        overrides: HEADER_OVERRIDE,
+      })
+    );
+    const bySection = resolveHeaderFooterPartsBySection(pkg);
+    expect(bySection).toHaveLength(2);
+    expect(bySection[0]!.titlePage).toBe(true);
+    expect(bySection[1]!.titlePage).toBe(false);
+  });
+
+  test('titlePg turns on independently in a later section', () => {
+    const pkg = load(
+      build({
+        body: twoSectionBody('', '<w:titlePg w:val="1"/>'),
+        rels: DEFAULT_RELS,
+        headerParts: { 'word/header1.xml': HEADER_XML },
+        overrides: HEADER_OVERRIDE,
+      })
+    );
+    const bySection = resolveHeaderFooterPartsBySection(pkg);
+    expect(bySection[0]!.titlePage).toBe(false);
+    expect(bySection[1]!.titlePage).toBe(true);
+  });
+
+  test('explicit titlePg off in a later section does not inherit from the prior section', () => {
+    const pkg = load(
+      build({
+        body: twoSectionBody('<w:titlePg/>', '<w:titlePg w:val="0"/>'),
+        rels: DEFAULT_RELS,
+        headerParts: { 'word/header1.xml': HEADER_XML },
+        overrides: HEADER_OVERRIDE,
+      })
+    );
+    const bySection = resolveHeaderFooterPartsBySection(pkg);
+    expect(bySection[0]!.titlePage).toBe(true);
+    expect(bySection[1]!.titlePage).toBe(false);
+  });
+
+  test('header references still inherit when titlePg is omitted in a later section', () => {
+    const pkg = load(
+      build({
+        body: twoSectionBody(`${DEFAULT_HEADER_REF}<w:titlePg/>`, '<w:titlePg w:val="false"/>'),
+        rels: DEFAULT_RELS,
+        headerParts: { 'word/header1.xml': HEADER_XML },
+        overrides: HEADER_OVERRIDE,
+      })
+    );
+    const bySection = resolveHeaderFooterPartsBySection(pkg);
+    expect(bySection[0]!.titlePage).toBe(true);
+    expect(bySection[0]!.headers.get('default')?.name).toBe('/word/header1.xml');
+    expect(bySection[1]!.titlePage).toBe(false);
+    expect(bySection[1]!.headers.get('default')?.name).toBe('/word/header1.xml');
   });
 });
 

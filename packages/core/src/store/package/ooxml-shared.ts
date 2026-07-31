@@ -200,3 +200,69 @@ export function validKnownKind(kind: KnownKind, children: readonly OoxmlNode[]):
       return children.every((child) => child.kind === 'generic');
   }
 }
+
+/** XML 1.0 whitespace — the set Word uses for `w:t` boundary semantics. */
+export function isXmlWhitespaceChar(char: string): boolean {
+  return char === ' ' || char === '\t' || char === '\r' || char === '\n';
+}
+
+/** True when a `w:t` text value must carry `xml:space="preserve"` on save. */
+export function wmlTextNeedsXmlSpacePreserve(text: string): boolean {
+  return (
+    text.length > 0 &&
+    (isXmlWhitespaceChar(text[0]!) || isXmlWhitespaceChar(text[text.length - 1]!))
+  );
+}
+
+/** Text content of a typed `w:t` element, or empty when absent or malformed. */
+export function wmlTextValueOf(node: OoxmlElement): string {
+  const child = node.children.find((candidate) => candidate.kind === 'textValue');
+  return child?.kind === 'textValue' ? child.value : '';
+}
+
+/**
+ * Canonical `w:t` attributes for normalized serialization and fingerprinting.
+ * Injects `xml:space="preserve"` when boundary whitespace requires it; drops a
+ * redundant or stale `xml:space` when the text no longer needs it. Other authored
+ * attributes (including generic extensions) are preserved verbatim.
+ */
+export function normalizedWmlTextAttributes(
+  attributes: readonly OoxmlAttribute[],
+  text: string
+): readonly OoxmlAttribute[] {
+  const withoutSpace = attributes.filter(
+    (attribute) =>
+      !(attribute.namespaceUri === XML_NAMESPACE_URI && attribute.localName === 'space')
+  );
+  if (!wmlTextNeedsXmlSpacePreserve(text)) return withoutSpace;
+  return [
+    ...withoutSpace,
+    {
+      kind: 'xmlSpace',
+      namespaceUri: XML_NAMESPACE_URI,
+      localName: 'space',
+      prefix: 'xml',
+      value: 'preserve',
+    },
+  ];
+}
+
+function ooxmlChildNamed(node: OoxmlNode, localName: string): OoxmlElement | undefined {
+  if (node.kind === 'textValue') return undefined;
+  for (const child of node.children) {
+    if (child.kind !== 'textValue' && child.localName === localName) return child;
+  }
+  return undefined;
+}
+
+function ooxmlAttributeValue(node: OoxmlElement, localName: string): string | undefined {
+  return node.attributes.find((attribute) => attribute.localName === localName)?.value;
+}
+
+/** OOXML on/off toggle: on only when present and `w:val` does not explicitly disable. */
+export function readOnOffChild(parent: OoxmlNode, localName: string): boolean {
+  const child = ooxmlChildNamed(parent, localName);
+  if (!child) return false;
+  const value = ooxmlAttributeValue(child, 'val');
+  return value === undefined || !(value === '0' || value === 'false' || value === 'off');
+}

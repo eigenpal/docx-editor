@@ -25,11 +25,11 @@ const ROMAN_TABLE: readonly { readonly value: number; readonly glyph: string }[]
   { value: 1, glyph: 'I' },
 ];
 
-/** Clamp a list counter into a safe positive integer Word can format. */
+/** Clamp a list counter into a safe non-negative integer Word can format. */
 export function clampListValue(value: number): number {
   if (!Number.isFinite(value)) return 1;
   const n = Math.trunc(value);
-  if (n < 1) return 1;
+  if (n < 0) return 1;
   // 3999 is the conventional roman ceiling; letters wrap past 26 via multi-letter form.
   if (n > 9999) return 9999;
   return n;
@@ -131,8 +131,7 @@ export function expandLvlText(
         const level = Number(digit) - 1;
         const fmt = formats[level] ?? 'decimal';
         const value = counters[level] ?? 1;
-        const piece =
-          fmt === 'bullet' ? '' : formatNumFmt(fmt, value);
+        const piece = fmt === 'bullet' ? '' : formatNumFmt(fmt, value);
         for (const glyph of piece) {
           if (out.length >= MAX_MARKER_TEXT_LENGTH) break;
           out += glyph;

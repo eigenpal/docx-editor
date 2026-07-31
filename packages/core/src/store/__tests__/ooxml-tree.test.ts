@@ -653,4 +653,76 @@ describe('normalized OOXML serialization and canonical oracle', () => {
     expect(saved).toContain('xsi:type="f:Kind"');
     expect(ooxmlTreesEqual(part, parse(saved))).toBe(true);
   });
+
+  test('injects xml:space preserve for boundary whitespace on w:t', () => {
+    const part = parse(
+      `<w:document xmlns:w="${WML_NAMESPACE_URI}"><w:body><w:p><w:r>` +
+        '<w:t> leading</w:t><w:t>trailing </w:t><w:t>\tnewline\n</w:t>' +
+        '</w:r></w:p></w:body></w:document>'
+    );
+    const saved = serializeOoxmlPart(part);
+    expect(saved).toContain('<w:t xml:space="preserve"> leading</w:t>');
+    expect(saved).toContain('<w:t xml:space="preserve">trailing </w:t>');
+    expect(saved).toContain('<w:t xml:space="preserve">\tnewline\n</w:t>');
+    const reopened = parse(saved);
+    expect(ooxmlTreesEqual(part, reopened)).toBe(true);
+  });
+
+  test('omits redundant xml:space preserve when boundary whitespace is gone', () => {
+    const part = parse(
+      `<w:document xmlns:w="${WML_NAMESPACE_URI}"><w:body><w:p><w:r>` +
+        '<w:t xml:space="preserve">word</w:t>' +
+        '</w:r></w:p></w:body></w:document>'
+    );
+    const saved = serializeOoxmlPart(part);
+    expect(saved).toContain('<w:t>word</w:t>');
+    expect(saved).not.toContain('xml:space');
+    const redundant = parse(
+      `<w:document xmlns:w="${WML_NAMESPACE_URI}"><w:body><w:p><w:r>` +
+        '<w:t xml:space="preserve">word</w:t>' +
+        '</w:r></w:p></w:body></w:document>'
+    );
+    expect(canonicalOoxmlFingerprint(part)).toBe(canonicalOoxmlFingerprint(redundant));
+  });
+
+  test('keeps generic authored attributes while normalizing xml:space on w:t', () => {
+    const part = parse(
+      `<w:document xmlns:w="${WML_NAMESPACE_URI}" xmlns:x="urn:extension"><w:body><w:p><w:r>` +
+        '<w:t xml:space="preserve" x:flag="yes"> edge </w:t>' +
+        '</w:r></w:p></w:body></w:document>'
+    );
+    const saved = serializeOoxmlPart(part);
+    expect(saved).toContain('x:flag="yes"');
+    expect(saved).toContain('<w:t xml:space="preserve" x:flag="yes"> edge </w:t>');
+    expect(ooxmlTreesEqual(part, parse(saved))).toBe(true);
+  });
+
+  test('escapes hostile text and still marks boundary whitespace for preserve', () => {
+    const part = parse(
+      `<w:document xmlns:w="${WML_NAMESPACE_URI}"><w:body><w:p><w:r>` +
+        '<w:t> &lt;script&gt;</w:t>' +
+        '</w:r></w:p></w:body></w:document>'
+    );
+    const saved = serializeOoxmlPart(part);
+    expect(saved).toContain('<w:t xml:space="preserve"> &lt;script&gt;</w:t>');
+    expect(saved).not.toContain('<script>');
+    const reopened = parse(saved);
+    const body = reopened.root.children[0] as OoxmlElement;
+    const paragraph = body.children[0] as OoxmlElement;
+    const run = paragraph.children[0] as OoxmlElement;
+    const text = run.children[0] as OoxmlElement;
+    expect((text.children[0] as { value: string }).value).toBe(' <script>');
+  });
+
+  test('whitespace-only w:t nodes always serialize with xml:space preserve', () => {
+    const part = parse(
+      `<w:document xmlns:w="${WML_NAMESPACE_URI}"><w:body><w:p><w:r>` +
+        '<w:t>  </w:t><w:t>\t</w:t>' +
+        '</w:r></w:p></w:body></w:document>'
+    );
+    const saved = serializeOoxmlPart(part);
+    expect(saved).toContain('<w:t xml:space="preserve">  </w:t>');
+    expect(saved).toContain('<w:t xml:space="preserve">\t</w:t>');
+    expect(ooxmlTreesEqual(part, parse(saved))).toBe(true);
+  });
 });

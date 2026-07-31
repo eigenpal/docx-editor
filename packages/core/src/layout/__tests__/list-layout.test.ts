@@ -20,14 +20,17 @@ const FIXTURE = resolve(
 
 const measurer = createFixedMeasurer(6, 14);
 
-function loadDoc(body: string, numbering: string): {
+function loadDoc(
+  body: string,
+  numbering: string
+): {
   part: OoxmlPart;
   numberingIndex: ReturnType<typeof buildNumberingIndex>;
 } {
-  const doc = readOoxmlPart(
-    `<w:document xmlns:w="${W}"><w:body>${body}</w:body></w:document>`,
-    { name: '/word/document.xml', contentType: 'app/xml' }
-  );
+  const doc = readOoxmlPart(`<w:document xmlns:w="${W}"><w:body>${body}</w:body></w:document>`, {
+    name: '/word/document.xml',
+    contentType: 'app/xml',
+  });
   if (!doc.ok) throw new Error(doc.reason);
   const num = readOoxmlPart(`<w:numbering xmlns:w="${W}">${numbering}</w:numbering>`, {
     name: '/word/numbering.xml',
@@ -92,8 +95,7 @@ describe('list layout markers and indents', () => {
   });
 
   test('continuation fragments do not repeat the marker', () => {
-    const long =
-      'word '.repeat(40).trim(); // wraps on a small page
+    const long = 'word '.repeat(40).trim(); // wraps on a small page
     const { part, numberingIndex } = loadDoc(p(long, '1'), NUM);
     const layout = layoutSemanticDocument(part, 1, {
       measurer,
@@ -110,6 +112,22 @@ describe('list layout markers and indents', () => {
     for (const fragment of fragments.slice(1)) {
       expect(fragment.marker).toBeUndefined();
     }
+  });
+
+  test('two numIds sharing one abstractNum keep independent decimal streams', () => {
+    const numbering = `
+      <w:abstractNum w:abstractNumId="9">
+        <w:lvl w:ilvl="0"><w:start w:val="1"/><w:numFmt w:val="decimal"/><w:lvlText w:val="%1."/>
+          <w:lvlJc w:val="left"/><w:pPr><w:ind w:left="720" w:hanging="360"/></w:pPr></w:lvl>
+      </w:abstractNum>
+      <w:num w:numId="10"><w:abstractNumId w:val="9"/></w:num>
+      <w:num w:numId="11"><w:abstractNumId w:val="9"/></w:num>
+    `;
+    const body = p('A', '10') + p('B', '10') + p('C', '11') + p('D', '11') + p('E', '10');
+    const { part, numberingIndex } = loadDoc(body, numbering);
+    const layout = layoutSemanticDocument(part, 1, { measurer, numberingIndex });
+    const markers = paragraphFragmentsOf(layout.pages[0]!).map((f) => f.marker?.text);
+    expect(markers).toEqual(['1.', '2.', '1.', '2.', '3.']);
   });
 });
 

@@ -3,11 +3,7 @@
 // Projection only — never mutation or serialization authority. Hostile values are dropped
 // or clamped; missing definitions resolve to "no list" rather than guessing.
 
-import type {
-  OoxmlElement,
-  OoxmlNode,
-  OoxmlProperty,
-} from '@docx-editor.dev/core-contract/store';
+import type { OoxmlElement, OoxmlNode, OoxmlProperty } from '@docx-editor.dev/core-contract/store';
 import { WML_NAMESPACE_URI } from '@docx-editor.dev/core-contract/store';
 import { propertiesOfRunContainer } from './field-projection.ts';
 
@@ -38,6 +34,11 @@ export interface NumberingLevel {
   readonly lvlJc: ListMarkerAlign;
   readonly suff: ListSuffix;
   readonly indent: NumberingLevelIndent;
+  /**
+   * `w:lvlRestart` one-based trigger level, or `0` when the level never restarts.
+   * Omitted in XML → restart when the previous level (or any earlier level) is used.
+   */
+  readonly lvlRestart?: number;
   /** Level `w:rPr` as flat properties (for marker face / vanish). */
   readonly runProperties: readonly OoxmlProperty[];
   /** True when level run props request vanish — marker must not paint. */
@@ -147,7 +148,7 @@ function parseLevel(lvl: OoxmlElement): NumberingLevel | null {
   let startVal = 1;
   if (startNode) {
     const parsed = integerAttr(attr(startNode, 'val'));
-    if (parsed !== null && parsed >= 0) startVal = Math.min(parsed, 9999) || 1;
+    if (parsed !== null && parsed >= 0) startVal = Math.min(parsed, 9999);
   }
 
   const numFmtNode = child(lvl, 'numFmt');
@@ -162,6 +163,13 @@ function parseLevel(lvl: OoxmlElement): NumberingLevel | null {
   const suffNode = child(lvl, 'suff');
   const suff = parseSuffix(suffNode ? attr(suffNode, 'val') : undefined);
 
+  const lvlRestartNode = child(lvl, 'lvlRestart');
+  let lvlRestart: number | undefined;
+  if (lvlRestartNode) {
+    const parsed = integerAttr(attr(lvlRestartNode, 'val'));
+    if (parsed !== null && parsed >= 0 && parsed <= 9) lvlRestart = parsed;
+  }
+
   const pPr = child(lvl, 'pPr');
   const rPr = child(lvl, 'rPr');
   const runProperties = rPr ? propertiesOfRunContainer(rPr) : [];
@@ -174,6 +182,7 @@ function parseLevel(lvl: OoxmlElement): NumberingLevel | null {
     lvlJc,
     suff,
     indent: parseIndent(pPr),
+    ...(lvlRestart !== undefined ? { lvlRestart } : {}),
     runProperties,
     vanish: toggleOn(runProperties, 'vanish'),
   };
@@ -201,10 +210,10 @@ function parseOverride(node: OoxmlElement): { ilvl: number; override: LevelOverr
   let startOverride: number | undefined;
   if (startNode) {
     const parsed = integerAttr(attr(startNode, 'val'));
-    if (parsed !== null && parsed >= 0) startOverride = Math.min(parsed, 9999) || 1;
+    if (parsed !== null && parsed >= 0) startOverride = Math.min(parsed, 9999);
   }
   const lvlNode = child(node, 'lvl');
-  const level = lvlNode ? parseLevel(lvlNode) ?? undefined : undefined;
+  const level = lvlNode ? (parseLevel(lvlNode) ?? undefined) : undefined;
   if (startOverride === undefined && level === undefined) {
     return { ilvl, override: {} };
   }
@@ -290,9 +299,7 @@ export function resolveNumberingLevel(
   return {
     abstractNumId: num.abstractNumId,
     level,
-    ...(override?.startOverride !== undefined
-      ? { startOverride: override.startOverride }
-      : {}),
+    ...(override?.startOverride !== undefined ? { startOverride: override.startOverride } : {}),
   };
 }
 

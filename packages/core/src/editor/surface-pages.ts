@@ -59,8 +59,8 @@ export function createFurnitureSource(env: {
    *
    * Keyed by part object identity plus width and producer: HF parts are immutable for the
    * session's lifetime, but a section-width edit or a late-arriving font re-measures them.
-   * PAGE/NUMPAGES projection is applied later per page via `withPageContext` during layout
-   * finalize — not paint-time substitution.
+   * PAGE/NUMPAGES projection is applied later only for stories that contain those fields,
+   * via `withPageContext` during layout finalize — not paint-time substitution.
    */
   const hfStoryMemo = new WeakMap<
     object,
@@ -94,7 +94,8 @@ export function createFurnitureSource(env: {
   ): PageFurniture | undefined {
     if (!parts) return undefined;
     if (parts.headers.size === 0 && parts.footers.size === 0) return undefined;
-    const width = sectionGeometry.width - sectionGeometry.margin.left - sectionGeometry.margin.right;
+    const width =
+      sectionGeometry.width - sectionGeometry.margin.left - sectionGeometry.margin.right;
     return {
       titlePage: parts.titlePage,
       evenAndOddHeaders: parts.evenAndOddHeaders,
@@ -201,11 +202,13 @@ export function surfaceExtent(
   const last = pages[pages.length - 1];
   const height = last ? last.box.y + last.box.height : 0;
 
-  const widthPages = materialize
-    ? pages.filter((page) => materialize.has(page.index))
-    : pages;
+  const widthPages = materialize ? pages.filter((page) => materialize.has(page.index)) : pages;
 
-  const width = Math.max(0, ...widthPages.map((page) => page.box.x + page.box.width));
+  let width = 0;
+  for (const page of widthPages) {
+    const right = page.box.x + page.box.width;
+    if (right > width) width = right;
+  }
 
   const widths = new Set(widthPages.map((page) => page.box.width));
   const pageOffsetX = new Map<number, number>();

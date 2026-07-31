@@ -18,6 +18,7 @@
 import type { OoxmlElement, OoxmlNode } from './ooxml-tree.ts';
 import type { OoxmlPackage } from './ooxml-package.ts';
 import type { OoxmlPart } from './ooxml-tree.ts';
+import { readOnOffChild } from './ooxml-shared.ts';
 import { resolveRelationship, type RelationshipRecord } from './relationships.ts';
 
 const HEADER_REL_TYPE =
@@ -38,7 +39,7 @@ export interface HeaderFooterParts {
   readonly footers: ReadonlyMap<HeaderFooterVariant, OoxmlPart>;
   /** `w:evenAndOddHeaders` in settings.xml — without it the `even` variant is ignored. */
   readonly evenAndOddHeaders: boolean;
-  /** Effective `w:titlePg` after section inheritance. */
+  /** Whether this section enables first-page header/footer furniture (`w:titlePg`). */
   readonly titlePage: boolean;
 }
 
@@ -169,7 +170,7 @@ function referencesFromSectPr(
   return {
     headers,
     footers,
-    titlePage: childNamed(sectPr, 'titlePg') !== undefined,
+    titlePage: readOnOffChild(sectPr, 'titlePg'),
   };
 }
 
@@ -216,13 +217,11 @@ export function resolveHeaderFooterPartsBySection(pkg: OoxmlPackage): readonly H
     const declared = sectPr
       ? referencesFromSectPr(sectPr, partForReference)
       : { headers: new Map(), footers: new Map(), titlePage: false };
-    // titlePg is presence-based: an explicit element sets it; omission inherits.
-    const titlePage = declared.titlePage ? true : (previous?.titlePage ?? false);
     const resolved: HeaderFooterParts = {
       headers: inheritMaps(previous?.headers, declared.headers),
       footers: inheritMaps(previous?.footers, declared.footers),
       evenAndOddHeaders,
-      titlePage,
+      titlePage: declared.titlePage,
     };
     result.push(resolved);
     previous = resolved;

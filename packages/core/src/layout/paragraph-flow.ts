@@ -14,6 +14,7 @@ import {
   piecesOfParagraph,
   propertiesOfRunContainer,
   type FieldPageContext,
+  type RunPropertyCascader,
 } from './field-projection.ts';
 import type { ParagraphLayoutCache } from './layout-cache.ts';
 import {
@@ -38,7 +39,7 @@ interface Piece {
   readonly style: ResolvedRunStyle;
   readonly start: number;
   readonly end: number;
-  /** Live PAGE/NUMPAGES projection — model range stays zero-width. */
+  /** Live PAGE/NUMPAGES projection — model range covers suppressed cached result (or zero-width if empty). */
   readonly projected?: boolean;
 }
 
@@ -240,12 +241,13 @@ export function breakParagraph(
   cacheKey: string | null,
   inheritedRunProperties: readonly OoxmlProperty[] = [],
   tabStops: ResolvedTabStops = EMPTY_TAB_STOPS,
-  pageContext?: FieldPageContext
+  pageContext?: FieldPageContext,
+  cascadeRuns?: RunPropertyCascader
 ): readonly PendingLine[] {
   const cached = cacheKey !== null && cache ? cache.get(cacheKey) : undefined;
   if (cached) return cached;
 
-  const pieces = piecesOfParagraph(paragraph, inheritedRunProperties, pageContext);
+  const pieces = piecesOfParagraph(paragraph, inheritedRunProperties, pageContext, cascadeRuns);
   const emptyStyle =
     inheritedRunProperties.length === 0
       ? DEFAULT_RUN_STYLE
@@ -314,8 +316,9 @@ export function breakParagraph(
     for (const boundary of wordBoundaries(piece.text)) {
       const candidate = piece.text.slice(consumed, boundary);
       if (candidate.length === 0) continue;
-      // Projected PAGE/NUMPAGES digits keep a zero-width model range so surrounding source
-      // offsets stay aligned with binding / paragraphTextOf.
+      // Projected PAGE/NUMPAGES digits publish the suppressed cached-result model range (or a
+      // zero-width insertion point when the cache was empty) so surrounding source offsets
+      // stay aligned with binding / paragraphTextOf.
       const spanRange = piece.projected
         ? { paragraphId, start: piece.start, end: piece.end }
         : { paragraphId, start: piece.start + consumed, end: piece.start + boundary };

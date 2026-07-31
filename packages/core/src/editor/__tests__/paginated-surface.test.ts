@@ -874,13 +874,9 @@ describe('mixed-width page centering', () => {
     scroller.dispatchEvent(new Event('scroll'));
     await new Promise((resolve) => setTimeout(resolve, 50));
 
-    const portraitEl = host.querySelector<HTMLElement>(
-      `[data-page-index="${portraitIndex}"]`
-    )!;
+    const portraitEl = host.querySelector<HTMLElement>(`[data-page-index="${portraitIndex}"]`)!;
     expect(portraitEl.style.left).toBe(`${(landscapeWidth - portraitWidth) / 2}px`);
-    const landscapeEl = host.querySelector<HTMLElement>(
-      `[data-page-index="${landscapeIndex}"]`
-    )!;
+    const landscapeEl = host.querySelector<HTMLElement>(`[data-page-index="${landscapeIndex}"]`)!;
     expect(landscapeEl.style.left).toBe('0px');
 
     surface.destroy();
@@ -930,7 +926,7 @@ describe('default browser measurer for cover-title centering', () => {
     HTMLCanvasElement.prototype.getContext = (() => mockContext()) as typeof previous;
     try {
       // Without a host measurer the surface must pick canvas over the fixed grid.
-      expect(tryCreateCanvasMeasurer({ ownerDocument: document })).not.toBeNull();
+      expect(tryCreateCanvasMeasurer({ context: mockContext() })).not.toBeNull();
       const container = document.createElement('div');
       const result = mountPaginatedSurface(container, docx(coverTitle), { scale: 1 });
       if (!result.ok) throw new Error(result.reason);

@@ -181,9 +181,7 @@ export function resolveStoryListItems(
   const counters = createListCounterState(index);
   for (const paragraph of walkStoryParagraphs(blocks)) {
     const pPr = paragraph.children.find((child) => child.kind === 'paragraphProperties');
-    const cascaded = styleCascade
-      ? cascadeParagraphFormatting(styleCascade, pPr)
-      : null;
+    const cascaded = styleCascade ? cascadeParagraphFormatting(styleCascade, pPr) : null;
     const nodes: readonly OoxmlNode[] = cascaded
       ? cascaded.paragraphPropertyNodes
       : pPr
@@ -199,7 +197,8 @@ export function resolveStoryListItems(
     const indent = mergeListIndent(advanced.level.indent, indentProps);
     const markerProps = cascadeRunProperties(
       cascaded?.runProperties ?? [],
-      advanced.level.runProperties
+      advanced.level.runProperties,
+      styleCascade
     );
     const markerStyle = resolveRunStyle(markerProps);
     const cacheToken = [
@@ -243,7 +242,10 @@ export function withResolvedListItems<
     readonly listItems?: ReadonlyMap<string, ResolvedListItem>;
     readonly styleCascade?: StyleCascadeTable;
   },
->(options: T, blocks: readonly OoxmlElement[]): T & {
+>(
+  options: T,
+  blocks: readonly OoxmlElement[]
+): T & {
   readonly numberingIndex: NumberingIndex;
   readonly listItems?: ReadonlyMap<string, ResolvedListItem>;
 } {
@@ -272,7 +274,7 @@ export function listMarkerBox(
   lineY: number,
   lineHeight: number
 ): { x: number; y: number; width: number; height: number } | null {
-  if (!item.markerText || item.indent.hanging <= 0 && markerWidth <= 0) {
+  if (!item.markerText || (item.indent.hanging <= 0 && markerWidth <= 0)) {
     if (!item.markerText) return null;
   }
   if (!item.markerText) return null;

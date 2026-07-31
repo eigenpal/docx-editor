@@ -15,7 +15,12 @@
 // that paragraph; the body-level `w:sectPr` ends the final section (ECMA-376 §17.6). Absent
 // `w:type` defaults to `nextPage`.
 
-import type { OoxmlElement, OoxmlNode, OoxmlPart } from '@docx-editor.dev/core-contract/store';
+import {
+  readOnOffChild,
+  type OoxmlElement,
+  type OoxmlNode,
+  type OoxmlPart,
+} from '@docx-editor.dev/core-contract/store';
 import { storyBlocks } from './story-roots.ts';
 import { DEFAULT_PAGE_GEOMETRY, type PageGeometry } from './semantic-records.ts';
 
@@ -168,7 +173,7 @@ export function parseSectionProperties(sectPr: OoxmlNode | undefined): SectionPr
       gapTwips: cols ? twips(attribute(cols, 'space'), 720, 31680) : defaults.columns.gapTwips,
     },
     landscape: orientation === 'landscape',
-    titlePage: childNamed(sectPr, 'titlePg') !== undefined,
+    titlePage: readOnOffChild(sectPr, 'titlePg'),
     breakType: breakTypeOf(sectPr),
     ...(sectPr.kind !== 'textValue' ? { sectPr: sectPr as OoxmlElement } : {}),
   };

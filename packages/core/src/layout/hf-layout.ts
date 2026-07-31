@@ -4,15 +4,25 @@
 // its height is whatever its blocks flow to. That flow height — never an anchored-object
 // extent — is what sizes the box on every page (the #856 rule).
 //
-// Baseline stories (no page context) are laid out once per variant for furniture height /
-// content-area push-down. Allowlisted PAGE/NUMPAGES fields need per-page (or per distinct
-// field-value) projection because digit widths affect right-tab alignment; callers obtain
-// those via {@link HeaderFooterStoryLayout.withPageContext}, which caches by context key.
+// Baseline stories are laid out once per variant for furniture height / content-area
+// push-down. Allowlisted PAGE/NUMPAGES fields need context-sensitive projection because
+// digit widths affect right-tab alignment. Callers obtain those via
+// {@link HeaderFooterStoryLayout.withPageContext}:
+//
+//   - no dynamic fields → identity reuse of the baseline
+//   - NUMPAGES only → one cached layout per page count
+//   - PAGE (with or without NUMPAGES) → bounded LRU over `(pageNumber, pageCount)`
+//
+// Scope stays furniture-only; body field projection remains deferred.
 
 import type { OoxmlPart } from '@docx-editor.dev/core-contract/store';
+import { stableHash } from '../store/comparators/canonical.ts';
+import { canonicalOoxmlFingerprint } from '../store/package/ooxml-tree.ts';
 import {
+  detectStoryPageFields,
   fieldPageContextToken,
   type FieldPageContext,
+  type StoryPageFieldNeeds,
 } from './field-projection.ts';
 import type { ParagraphLayoutCache } from './layout-cache.ts';
 import type { PendingLine } from './paragraph-flow.ts';
@@ -27,19 +37,78 @@ import type {
 import type { StyleCascadeTable } from './style-cascade.ts';
 import { storyBlocks } from './story-roots.ts';
 
+/**
+ * Distinct PAGE-dependent contexts retained before LRU eviction.
+ *
+ * Finalize stores projected furniture on each page record, so eviction cannot drop published
+ * geometry. The bound only prevents the per-story cache from retaining every historical
+ * `(pageNumber, pageCount)` pair across edits.
+ */
+export const DEFAULT_MAX_HF_PAGE_CONTEXT_ENTRIES = 128;
+
 export interface HeaderFooterStoryLayout {
   readonly partName: string;
+  /**
+   * Bounded identity of the story's canonical OOXML content.
+   *
+   * Furniture cache keys must not rely on {@link flowHeight} alone: equal-height A→B edits
+   * would otherwise reuse stale page furniture. Derived as a 16-hex FNV-1a over the part's
+   * canonical fingerprint — never DOM identity or unbounded raw serialization in the key.
+   * PAGE/NUMPAGES projection shares this key; page context is cached separately.
+   */
+  readonly contentKey: string;
   /** Story-relative fragments; origin at the story box's top-left. */
   readonly fragments: readonly BlockFragmentRecord[];
   /** The height the blocks actually flow to — what sizes the box on every page. */
   readonly flowHeight: number;
   /**
+   * Allowlisted complex PAGE / NUMPAGES presence detected for this story.
+   *
+   * Callers use this to skip attaching a page-field projector when the baseline is enough.
+   */
+  readonly pageFieldNeeds: StoryPageFieldNeeds;
+  /**
    * Re-layout this story under a page-field context.
    *
-   * Cached by distinct `(pageNumber, pageCount)` so pages that share field values reuse
-   * geometry. Returns `this` when `ctx` is absent-equivalent to the baseline layout.
+   * Field-free stories return `this`. NUMPAGES-only stories cache by page count. PAGE
+   * stories cache by `(pageNumber, pageCount)` with a bounded LRU.
    */
   readonly withPageContext: (ctx: FieldPageContext) => HeaderFooterStoryLayout;
+}
+
+/** Bounded digest of a header/footer part's canonical tree for furniture cache identity. */
+export function headerFooterContentKey(part: OoxmlPart): string {
+  return stableHash(canonicalOoxmlFingerprint(part));
+}
+
+function createBoundedContextCache(maxEntries: number): {
+  get(key: string): HeaderFooterStoryLayout | undefined;
+  set(key: string, value: HeaderFooterStoryLayout): void;
+  readonly size: number;
+} {
+  const capacity = Math.max(1, Math.floor(maxEntries));
+  const entries = new Map<string, HeaderFooterStoryLayout>();
+  return {
+    get(key) {
+      const value = entries.get(key);
+      if (value === undefined) return undefined;
+      entries.delete(key);
+      entries.set(key, value);
+      return value;
+    },
+    set(key, value) {
+      if (entries.has(key)) entries.delete(key);
+      entries.set(key, value);
+      while (entries.size > capacity) {
+        const oldest = entries.keys().next();
+        if (oldest.done) break;
+        entries.delete(oldest.value);
+      }
+    },
+    get size() {
+      return entries.size;
+    },
+  };
 }
 
 /**
@@ -49,7 +118,8 @@ export interface HeaderFooterStoryLayout {
  * convergence compares — never moves because a header changed.
  *
  * When `pageContext` is set, allowlisted PAGE/NUMPAGES instructions project live values;
- * otherwise those fields contribute only cached result text (often empty).
+ * otherwise those fields contribute only cached result text (often empty). Field-free
+ * stories ignore `pageContext` and share one baseline layout.
  */
 export function layoutHeaderFooterStory(
   part: OoxmlPart,
@@ -58,16 +128,27 @@ export function layoutHeaderFooterStory(
   producer: string,
   cache?: ParagraphLayoutCache<readonly PendingLine[]>,
   styleCascade?: StyleCascadeTable,
-  pageContext?: FieldPageContext
+  pageContext?: FieldPageContext,
+  maxPageContextEntries: number = DEFAULT_MAX_HF_PAGE_CONTEXT_ENTRIES
 ): HeaderFooterStoryLayout {
-  const contextCache = new Map<string, HeaderFooterStoryLayout>();
+  const needs = detectStoryPageFields(part.root);
+  const contextCache = createBoundedContextCache(maxPageContextEntries);
+  const blocks = storyBlocks(part);
+  // Content identity is of the authored part, not of a PAGE/NUMPAGES projection.
+  const contentKey = headerFooterContentKey(part);
+  let baseline: HeaderFooterStoryLayout | undefined;
 
   const layoutOnce = (ctx: FieldPageContext | undefined): HeaderFooterStoryLayout => {
-    const token = fieldPageContextToken(ctx);
-    const cached = contextCache.get(token);
-    if (cached) return cached;
+    const effectiveCtx = needs.hasPage || needs.hasNumPages ? ctx : undefined;
+    const token = fieldPageContextToken(effectiveCtx, needs);
 
-    const blocks = storyBlocks(part);
+    if (token === '') {
+      if (baseline) return baseline;
+    } else {
+      const cached = contextCache.get(token);
+      if (cached) return cached;
+    }
+
     let lineCounter = 0;
     const flow = flowBlocksInBox(blocks, 0, Math.max(1, contentWidth), 0, 0, {
       measurer,
@@ -75,16 +156,26 @@ export function layoutHeaderFooterStory(
       producer: producer + token,
       nextLineId: () => `hf-${part.name}-line-${lineCounter++}`,
       styleCascade,
-      pageContext: ctx,
+      pageContext: effectiveCtx,
     });
 
     const story: HeaderFooterStoryLayout = {
       partName: part.name,
+      contentKey,
       fragments: flow.blocks,
       flowHeight: flow.bottom,
-      withPageContext: (next) => layoutOnce(next),
+      pageFieldNeeds: needs,
+      withPageContext: (next) => {
+        if (!needs.hasPage && !needs.hasNumPages) return baseline ?? story;
+        return layoutOnce(next);
+      },
     };
-    contextCache.set(token, story);
+
+    if (token === '') {
+      baseline = story;
+    } else {
+      contextCache.set(token, story);
+    }
     return story;
   };
 

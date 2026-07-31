@@ -6,7 +6,12 @@
 
 import { describe, expect, test } from 'bun:test';
 import { readOoxmlPart, type OoxmlPart } from '@docx-editor.dev/core-contract/store';
-import { DEFAULT_SECTION_PROPERTIES, enumerateDocumentSections, geometryOfSection, readSectionProperties } from '../index.ts';
+import {
+  DEFAULT_SECTION_PROPERTIES,
+  enumerateDocumentSections,
+  geometryOfSection,
+  readSectionProperties,
+} from '../index.ts';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 
@@ -165,5 +170,69 @@ describe('multi-section documents enumerate every sectPr', () => {
     const sections = enumerateDocumentSections(part);
     expect(sections[0]!.properties.breakType).toBe('continuous');
     expect(sections[1]!.properties.breakType).toBe('nextPage');
+  });
+
+  test('a trailing body-level sectPr after every block closed is an empty final section', () => {
+    const part = load(
+      '<w:p><w:pPr><w:sectPr><w:pgSz w:w="12240" w:h="15840"/></w:sectPr></w:pPr>' +
+        '<w:r><w:t>only</w:t></w:r></w:p>' +
+        '<w:sectPr><w:pgSz w:w="15840" w:h="12240"/><w:type w:val="nextPage"/></w:sectPr>'
+    );
+    const sections = enumerateDocumentSections(part);
+    expect(sections).toHaveLength(2);
+    expect(sections[0]!.blockEndExclusive - sections[0]!.blockStart).toBe(1);
+    expect(sections[1]!.blockStart).toBe(sections[1]!.blockEndExclusive);
+    expect(sections[1]!.properties.breakType).toBe('nextPage');
+    expect(sections[1]!.properties.pageSize).toEqual({ widthTwips: 15840, heightTwips: 12240 });
+  });
+});
+
+describe('titlePg on/off semantics', () => {
+  test.each([
+    ['omitted', '', false],
+    ['empty element', '<w:titlePg/>', true],
+    ['val=1', '<w:titlePg w:val="1"/>', true],
+    ['val=true', '<w:titlePg w:val="true"/>', true],
+    ['val=on', '<w:titlePg w:val="on"/>', true],
+    ['val=0', '<w:titlePg w:val="0"/>', false],
+    ['val=false', '<w:titlePg w:val="false"/>', false],
+    ['val=off', '<w:titlePg w:val="off"/>', false],
+  ] as const)('%s resolves titlePage=%s', (_label, titlePg, expected) => {
+    const section = readSectionProperties(withSection(titlePg));
+    expect(section.titlePage).toBe(expected);
+  });
+
+  test('titlePg does not inherit across adjacent sections', () => {
+    const part = load(
+      '<w:p><w:pPr><w:sectPr><w:titlePg/></w:sectPr></w:pPr><w:r><w:t>one</w:t></w:r></w:p>' +
+        '<w:p><w:r><w:t>two</w:t></w:r></w:p>' +
+        '<w:sectPr/>'
+    );
+    const sections = enumerateDocumentSections(part);
+    expect(sections).toHaveLength(2);
+    expect(sections[0]!.properties.titlePage).toBe(true);
+    expect(sections[1]!.properties.titlePage).toBe(false);
+  });
+
+  test('titlePg turns on independently in a later section', () => {
+    const part = load(
+      '<w:p><w:pPr><w:sectPr/></w:pPr><w:r><w:t>one</w:t></w:r></w:p>' +
+        '<w:p><w:r><w:t>two</w:t></w:r></w:p>' +
+        '<w:sectPr><w:titlePg w:val="1"/></w:sectPr>'
+    );
+    const sections = enumerateDocumentSections(part);
+    expect(sections[0]!.properties.titlePage).toBe(false);
+    expect(sections[1]!.properties.titlePage).toBe(true);
+  });
+
+  test('explicit titlePg off in a later section does not inherit from the prior section', () => {
+    const part = load(
+      '<w:p><w:pPr><w:sectPr><w:titlePg/></w:sectPr></w:pPr><w:r><w:t>one</w:t></w:r></w:p>' +
+        '<w:p><w:r><w:t>two</w:t></w:r></w:p>' +
+        '<w:sectPr><w:titlePg w:val="0"/></w:sectPr>'
+    );
+    const sections = enumerateDocumentSections(part);
+    expect(sections[0]!.properties.titlePage).toBe(true);
+    expect(sections[1]!.properties.titlePage).toBe(false);
   });
 });

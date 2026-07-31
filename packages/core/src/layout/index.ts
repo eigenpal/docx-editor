@@ -226,7 +226,11 @@ export {
   formatUpperLetter,
   formatUpperRoman,
 } from './numbering-format.ts';
-export { createListCounterState, type ListCounterAdvance, type ListCounterState } from './list-counters.ts';
+export {
+  createListCounterState,
+  type ListCounterAdvance,
+  type ListCounterState,
+} from './list-counters.ts';
 export {
   listMarkerBox,
   mergeListIndent,
@@ -243,22 +247,11 @@ export {
   resolveDefaultSurfaceMeasurer,
   tryCreateCanvasMeasurer,
   type CanvasMeasurerOptions,
+  type CanvasTextContext,
+  type CanvasTextMetrics,
   type ResolvedSurfaceMeasurer,
 } from './canvas-measurer.ts';
-export { layoutHeaderFooterStory, type HeaderFooterStoryLayout } from './hf-layout.ts';
-export {
-  MAX_FIELD_INSTRUCTION_CHARS,
-  MAX_FIELD_NESTING,
-  allowlistedPageField,
-  fieldPageContextToken,
-  finalizePageFieldProjection,
-  normalizeFieldInstruction,
-  piecesOfParagraph,
-  projectPageFieldValue,
-  type AllowlistedPageField,
-  type FieldAwarePiece,
-  type FieldPageContext,
-} from './field-projection.ts';
+export { layoutHeaderFooterStory } from './hf-layout.ts';
 export { storyBlocks } from './story-roots.ts';
 export {
   createShapedMeasurer,
@@ -347,19 +340,32 @@ export {
   type SemanticTableStructure,
 } from './semantic-table.ts';
 export {
+  MAX_TABLE_ROW_FRAGMENTS,
+  TablePaginationError,
+  type TablePaginationErrorCode,
+} from './semantic-table-layout.ts';
+export {
   borderExtentPt,
   borderWeight,
+  COMPOUND_BORDER_MIN_GAP_PT,
+  COMPOUND_BORDER_MIN_STROKE_PT,
+  computeDoubleBorderMetricsPt,
   effectiveBorderSide,
+  MAX_TABLE_BORDER_STROKES,
   readBorderSide,
   readCellBorders,
   readTableBorders,
   resolveBorderConflict,
   resolveTableCellBorderGrid,
+  type BorderGridGeometry,
   type CellBorderBox,
+  type CompoundBorderMetrics,
   type ResolvedCellBorders,
   type ResolvedTableBorderEdge,
+  type ResolvedTableBorderEdgeSegment,
   type TableBorderBox,
   type TableBorderSide,
+  type TableBorderSideName,
+  type TableBorderStrokeRecord,
   type TableBorderStyle,
 } from './table-borders.ts';
-export { finalizeTableRows, layoutRowFragment } from './semantic-table-layout.ts';

@@ -37,6 +37,7 @@ import {
 } from '@docx-editor.dev/core-contract/layout';
 import { paintSemanticLayout } from '@docx-editor.dev/core-contract/output';
 import { applySelectionToDom, selectionsEqual, semanticSelectionFromDom } from './dom-selection.ts';
+import { tryCreateBrowserCanvasContext } from './browser-canvas-context.ts';
 import type {
   OpenPaginatedResult,
   PaginatedSurface,
@@ -106,20 +107,17 @@ export function mountPaginatedSurface(
   }
   const session = opened.session;
   const scale = options.scale ?? 96 / 72;
-  // Default measurement: canvas when the browser can supply a 2d context (so painted Arial
-  // Bold 26pt is measured as Arial Bold 26pt), otherwise the deterministic fixed measurer
-  // for SSR/tests/happy-dom. A host- or shaping-supplied measurer always wins.
+  // Editor seam creates the canvas; layout only consumes the injected context.
   const defaults = options.measurer
     ? null
-    : resolveDefaultSurfaceMeasurer(scale, { ownerDocument: container.ownerDocument });
+    : resolveDefaultSurfaceMeasurer(scale, {
+        context: tryCreateBrowserCanvasContext(container.ownerDocument),
+      });
   const measurer = options.measurer ?? defaults!.measurer;
-  // The incremental machinery, actually wired. Without these the surface re-measured and
-  // re-placed the entire document on every keystroke, which the caches and the session were
-  // built to avoid.
+  // Incremental layout machinery — without these every keystroke re-lays out the document.
   const layoutCache = createParagraphLayoutCache<never>();
   const layoutSession = createLayoutSession();
-  // Identifies WHO measured. A cache keyed on content alone would serve the pre-font layout
-  // for the rest of the session once fonts resolve, so the measurer's identity is folded in.
+  // Measurer identity folds into the cache key so a later font resolution cannot serve stale layout.
   const producer =
     options.producer ??
     (options.measurer ? 'host-measurer' : (defaults?.producer ?? 'fixed-measurer'));
@@ -278,9 +276,7 @@ export function mountPaginatedSurface(
 
   function applyPageOffsets(extent: SurfaceExtent): void {
     for (const page of currentLayout.pages) {
-      const element = pagesLayer.querySelector<HTMLElement>(
-        `[data-page-index="${page.index}"]`
-      );
+      const element = pagesLayer.querySelector<HTMLElement>(`[data-page-index="${page.index}"]`);
       if (!element) continue;
       const offsetX = extent.pageOffsetX.get(page.index) ?? 0;
       element.style.left = `${(page.box.x + offsetX) * scale}px`;

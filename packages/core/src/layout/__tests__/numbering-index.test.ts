@@ -43,6 +43,22 @@ describe('numbering index', () => {
     expect(level1?.level.suff).toBe('space');
   });
 
+  test('parses lvlRestart on levels', () => {
+    const result = readOoxmlPart(
+      `<w:numbering xmlns:w="${W}">
+        <w:abstractNum w:abstractNumId="1">
+          <w:lvl w:ilvl="2"><w:start w:val="1"/><w:numFmt w:val="lowerRoman"/><w:lvlText w:val="%3)"/>
+            <w:lvlRestart w:val="0"/><w:lvlJc w:val="left"/></w:lvl>
+        </w:abstractNum>
+        <w:num w:numId="1"><w:abstractNumId w:val="1"/></w:num>
+      </w:numbering>`,
+      { name: '/word/numbering.xml', contentType: 'app/xml' }
+    );
+    if (!result.ok) throw new Error(result.reason);
+    const index = buildNumberingIndex(result.part.root);
+    expect(resolveNumberingLevel(index, '1', 2)?.level.lvlRestart).toBe(0);
+  });
+
   test('comprehensive fixture exposes bullet and numbered abstracts', () => {
     const loaded = readOoxmlPackage(new Uint8Array(readFileSync(FIXTURE)));
     if (!loaded.ok) throw new Error(loaded.reason);
@@ -60,5 +76,61 @@ describe('numbering index', () => {
   test('hostile / missing definitions resolve null', () => {
     const index = buildNumberingIndex(null);
     expect(resolveNumberingLevel(index, '1', 0)).toBeNull();
+  });
+
+  test('preserves legal zero start on abstract level', () => {
+    const result = readOoxmlPart(
+      `<w:numbering xmlns:w="${W}">
+        <w:abstractNum w:abstractNumId="1">
+          <w:lvl w:ilvl="0"><w:start w:val="0"/><w:numFmt w:val="decimal"/><w:lvlText w:val="%1."/>
+            <w:lvlJc w:val="left"/></w:lvl>
+        </w:abstractNum>
+        <w:num w:numId="1"><w:abstractNumId w:val="1"/></w:num>
+      </w:numbering>`,
+      { name: '/word/numbering.xml', contentType: 'app/xml' }
+    );
+    if (!result.ok) throw new Error(result.reason);
+    const index = buildNumberingIndex(result.part.root);
+    expect(resolveNumberingLevel(index, '1', 0)?.level.start).toBe(0);
+  });
+
+  test('preserves legal zero startOverride', () => {
+    const result = readOoxmlPart(
+      `<w:numbering xmlns:w="${W}">
+        <w:abstractNum w:abstractNumId="1">
+          <w:lvl w:ilvl="0"><w:start w:val="1"/><w:numFmt w:val="decimal"/><w:lvlText w:val="%1."/>
+            <w:lvlJc w:val="left"/></w:lvl>
+        </w:abstractNum>
+        <w:num w:numId="1"><w:abstractNumId w:val="1"/>
+          <w:lvlOverride w:ilvl="0"><w:startOverride w:val="0"/></w:lvlOverride></w:num>
+      </w:numbering>`,
+      { name: '/word/numbering.xml', contentType: 'app/xml' }
+    );
+    if (!result.ok) throw new Error(result.reason);
+    const index = buildNumberingIndex(result.part.root);
+    expect(resolveNumberingLevel(index, '1', 0)?.startOverride).toBe(0);
+  });
+
+  test('rejects negative starts and clamps huge values', () => {
+    const result = readOoxmlPart(
+      `<w:numbering xmlns:w="${W}">
+        <w:abstractNum w:abstractNumId="1">
+          <w:lvl w:ilvl="0"><w:start w:val="-1"/><w:numFmt w:val="decimal"/><w:lvlText w:val="%1."/>
+            <w:lvlJc w:val="left"/></w:lvl>
+          <w:lvl w:ilvl="1"><w:start w:val="99999"/><w:numFmt w:val="decimal"/><w:lvlText w:val="%1."/>
+            <w:lvlJc w:val="left"/></w:lvl>
+        </w:abstractNum>
+        <w:num w:numId="1"><w:abstractNumId w:val="1"/>
+          <w:lvlOverride w:ilvl="0"><w:startOverride w:val="-5"/></w:lvlOverride>
+          <w:lvlOverride w:ilvl="1"><w:startOverride w:val="50000"/></w:lvlOverride></w:num>
+      </w:numbering>`,
+      { name: '/word/numbering.xml', contentType: 'app/xml' }
+    );
+    if (!result.ok) throw new Error(result.reason);
+    const index = buildNumberingIndex(result.part.root);
+    expect(resolveNumberingLevel(index, '1', 0)?.level.start).toBe(1);
+    expect(resolveNumberingLevel(index, '1', 1)?.level.start).toBe(9999);
+    expect(resolveNumberingLevel(index, '1', 0)?.startOverride).toBeUndefined();
+    expect(resolveNumberingLevel(index, '1', 1)?.startOverride).toBe(9999);
   });
 });

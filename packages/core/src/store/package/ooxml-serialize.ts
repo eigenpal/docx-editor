@@ -16,9 +16,11 @@ import {
   XSI_NAMESPACE_URI,
   canonicalQNameAttributeValue,
   expandedKey,
+  normalizedWmlTextAttributes,
   resolvedPrefixNamespaceSet,
   resolvedQNameToken,
   validateQNameAttributeValues,
+  wmlTextValueOf,
 } from './ooxml-shared.ts';
 import type { OoxmlAttribute, OoxmlElement, OoxmlNode, OoxmlPart } from './ooxml-tree.ts';
 
@@ -208,10 +210,7 @@ function controlledPrefixMap(root: OoxmlElement): ControlledPrefixes {
   return { byUri, attributeAliases };
 }
 
-function prefixForAttributeOrQName(
-  namespaceUri: string,
-  prefixes: ControlledPrefixes
-): string {
+function prefixForAttributeOrQName(namespaceUri: string, prefixes: ControlledPrefixes): string {
   const alias = prefixes.attributeAliases.get(namespaceUri);
   if (alias !== undefined) return alias;
   const prefix = prefixes.byUri.get(namespaceUri);
@@ -347,12 +346,16 @@ function serializeNode(
       return ` ${declarationName}="${escapeXmlChecked(binding.namespaceUri, declarationName)}"`;
     })
     .join('');
-  validateQNameAttributeValues(node.attributes, bindings, node.namespaceUri, node.localName);
-  const ownSpace = xmlSpaceValue(node);
+  const elementAttributes =
+    node.kind === 'text'
+      ? normalizedWmlTextAttributes(node.attributes, wmlTextValueOf(node))
+      : node.attributes;
+  validateQNameAttributeValues(elementAttributes, bindings, node.namespaceUri, node.localName);
+  const ownSpace = xmlSpaceValue(elementAttributes);
   const preserve =
     ownSpace === 'preserve' ? true : ownSpace === 'default' ? false : inheritedPreserve;
   const name = controlledQualifiedName(node.namespaceUri, node.localName, prefixes, false);
-  const attributes = sortedAttributes(node.attributes)
+  const attributes = sortedAttributes(elementAttributes)
     .map((attribute) => {
       const attributeName = controlledQualifiedName(
         attribute.namespaceUri,
@@ -415,8 +418,8 @@ type FingerprintValue =
       readonly FingerprintValue[],
     ];
 
-function xmlSpaceValue(node: OoxmlElement): string | undefined {
-  return node.attributes.find(
+function xmlSpaceValue(attributes: readonly OoxmlAttribute[]): string | undefined {
+  return attributes.find(
     (attribute) => attribute.namespaceUri === XML_NAMESPACE_URI && attribute.localName === 'space'
   )?.value;
 }
@@ -445,10 +448,14 @@ function fingerprintNode(
   if (node.kind === 'textValue') return ['text', node.value];
   const bindings = new Map(inheritedBindings);
   for (const binding of node.namespaceBindings) bindings.set(binding.prefix, binding.namespaceUri);
-  const ownSpace = xmlSpaceValue(node);
+  const elementAttributes =
+    node.kind === 'text'
+      ? normalizedWmlTextAttributes(node.attributes, wmlTextValueOf(node))
+      : node.attributes;
+  const ownSpace = xmlSpaceValue(elementAttributes);
   const preserve =
     ownSpace === 'preserve' ? true : ownSpace === 'default' ? false : inheritedPreserve;
-  const attributes = sortedAttributes(node.attributes).map(
+  const attributes = sortedAttributes(elementAttributes).map(
     (attribute) =>
       [
         attribute.namespaceUri,

@@ -1,15 +1,20 @@
 // Layout-side paragraph style cascade (styles.xml → semantic layout).
 //
-// The canonical tree keeps `w:pStyle` and direct `rPr`/`pPr` as authored. Layout is the
-// place that expands a style id into measurable run and paragraph properties: Word paints
-// headings from the styles part when runs carry no direct formatting.
+// The canonical tree keeps `w:pStyle` / `w:rStyle` and direct `rPr`/`pPr` as authored. Layout
+// is the place that expands a style id into measurable run and paragraph properties: Word
+// paints headings from the styles part when runs carry no direct formatting.
 //
 // Bounds everywhere: style ids are length/control validated, `basedOn` walks are depth- and
 // cycle-capped, duplicate style ids keep the LAST definition (Word), and property values are
 // still sanitised by `resolveRunStyle` / `paragraphSpacing` / `paragraphBorders` /
 // `paragraphShading`. This module never invents theme colours or fetches remote resources.
+//
+// `cacheToken` is a bounded FNV-1a fingerprint of the cascade table (computed once), not the
+// full styles material — layout embeds it in every paragraph key, so an unbounded string
+// would be quadratic in memory.
 
 import type { OoxmlElement, OoxmlNode, OoxmlProperty } from '@docx-editor.dev/core-contract/store';
+import { stableHash } from '../store/comparators/canonical.ts';
 import { isDangerousKey } from '../store/package/safe-record.ts';
 import {
   paragraphAlignment,
@@ -53,13 +58,17 @@ export interface StyleDefinition {
 
 export interface StyleCascadeTable {
   /**
-   * Stable fingerprint folded into layout cache producers so a different styles part cannot
-   * reuse breaks measured under another cascade.
+   * Bounded fingerprint folded into layout cache producers so a different styles part cannot
+   * reuse breaks measured under another cascade. Computed once per table (FNV-1a hex).
    */
   readonly cacheToken: string;
   readonly docDefaultsRun: readonly OoxmlProperty[];
   readonly docDefaultsParagraph: readonly OoxmlProperty[];
   readonly docDefaultsParagraphNode: OoxmlElement | undefined;
+  /** `w:style[@w:default='1'][@w:type='paragraph']` — last wins among defaults of that type. */
+  readonly defaultParagraphStyleId: string | null;
+  /** `w:style[@w:default='1'][@w:type='character']` — last wins among defaults of that type. */
+  readonly defaultCharacterStyleId: string | null;
   readonly styles: ReadonlyMap<string, StyleDefinition>;
 }
 
@@ -94,17 +103,16 @@ export function isValidStyleId(raw: string | undefined): raw is string {
   return true;
 }
 
-function propertiesToken(props: readonly OoxmlProperty[]): string {
-  return props
-    .map((property) => {
-      const attrs = property.attributes
-        ? Object.entries(property.attributes)
-            .map(([key, value]) => `${key}=${value}`)
-            .join(',')
-        : '';
-      return attrs ? `${property.localName}(${attrs})` : property.localName;
-    })
-    .join(';');
+function isDefaultFlag(raw: string | undefined): boolean {
+  return raw === '1' || raw === 'true';
+}
+
+function propertiesFingerprint(props: readonly OoxmlProperty[]): unknown {
+  return props.map((property) =>
+    property.attributes
+      ? { n: property.localName, a: property.attributes }
+      : { n: property.localName }
+  );
 }
 
 function findRunProperties(container: OoxmlElement | undefined): OoxmlElement | undefined {
@@ -145,7 +153,9 @@ function readDocDefaults(stylesRoot: OoxmlElement): {
   };
 }
 
-function readStyleDefinition(node: OoxmlElement): StyleDefinition | null {
+function readStyleDefinition(
+  node: OoxmlElement
+): (StyleDefinition & { isDefault: boolean }) | null {
   const styleId = attributeValue(node, 'styleId');
   if (!isValidStyleId(styleId)) return null;
   const type = attributeValue(node, 'type') ?? '';
@@ -160,6 +170,7 @@ function readStyleDefinition(node: OoxmlElement): StyleDefinition | null {
     styleId,
     type,
     basedOn,
+    isDefault: isDefaultFlag(attributeValue(node, 'default')),
     paragraphProperties: propertiesOf(paragraphPropertiesNode),
     runProperties: propertiesOf(runPropertiesNode),
     paragraphPropertiesNode,
@@ -171,20 +182,25 @@ function readStyleDefinition(node: OoxmlElement): StyleDefinition | null {
  *
  * Only direct `w:style` children of the root participate (bounded count). Duplicate
  * `styleId` values keep the last definition, matching Word's reader for this fixture class.
+ * Default paragraph/character style ids track `w:default="1"` with the same last-wins rule.
  */
 export function buildStyleCascadeTable(stylesRoot: OoxmlElement | null): StyleCascadeTable {
   const styles = new Map<string, StyleDefinition>();
   if (!stylesRoot) {
     return {
-      cacheToken: 'empty',
+      cacheToken: stableHash({ empty: true }),
       docDefaultsRun: [],
       docDefaultsParagraph: [],
       docDefaultsParagraphNode: undefined,
+      defaultParagraphStyleId: null,
+      defaultCharacterStyleId: null,
       styles,
     };
   }
 
   const defaults = readDocDefaults(stylesRoot);
+  let defaultParagraphStyleId: string | null = null;
+  let defaultCharacterStyleId: string | null = null;
   let counted = 0;
   for (const child of stylesRoot.children) {
     if (!isElement(child) || child.localName !== 'style') continue;
@@ -192,32 +208,51 @@ export function buildStyleCascadeTable(stylesRoot: OoxmlElement | null): StyleCa
     counted += 1;
     const definition = readStyleDefinition(child);
     if (!definition) continue;
+    const { isDefault, ...style } = definition;
     // Last duplicate wins.
-    styles.set(definition.styleId, definition);
+    styles.set(style.styleId, style);
+    if (style.type === 'paragraph') {
+      if (isDefault) defaultParagraphStyleId = style.styleId;
+      else if (defaultParagraphStyleId === style.styleId) defaultParagraphStyleId = null;
+    } else if (style.type === 'character') {
+      if (isDefault) defaultCharacterStyleId = style.styleId;
+      else if (defaultCharacterStyleId === style.styleId) defaultCharacterStyleId = null;
+    }
   }
 
-  const cacheToken = [
-    `dR:${propertiesToken(defaults.run)}`,
-    `dP:${propertiesToken(defaults.paragraph)}`,
-    ...[...styles.values()].map(
-      (style) =>
-        `${style.styleId}@${style.type}>${style.basedOn ?? ''}|p:${propertiesToken(style.paragraphProperties)}|r:${propertiesToken(style.runProperties)}`
-    ),
-  ].join('/');
+  // Canonical material hashed once — never embed the full styles dump in paragraph keys.
+  const cacheToken = stableHash({
+    dR: propertiesFingerprint(defaults.run),
+    dP: propertiesFingerprint(defaults.paragraph),
+    defP: defaultParagraphStyleId,
+    defC: defaultCharacterStyleId,
+    styles: [...styles.values()].map((style) => ({
+      id: style.styleId,
+      type: style.type,
+      basedOn: style.basedOn,
+      p: propertiesFingerprint(style.paragraphProperties),
+      r: propertiesFingerprint(style.runProperties),
+    })),
+  });
 
   return {
     cacheToken,
     docDefaultsRun: defaults.run,
     docDefaultsParagraph: defaults.paragraph,
     docDefaultsParagraphNode: defaults.paragraphNode,
+    defaultParagraphStyleId,
+    defaultCharacterStyleId,
     styles,
   };
 }
 
-function paragraphStyleId(directProps: readonly OoxmlProperty[]): string | null {
+function styleIdFromProps(
+  directProps: readonly OoxmlProperty[],
+  localName: 'pStyle' | 'rStyle'
+): string | null {
   let id: string | null = null;
   for (const property of directProps) {
-    if (property.localName !== 'pStyle') continue;
+    if (property.localName !== localName) continue;
     const value = property.attributes?.val;
     id = isValidStyleId(value) ? value : null;
   }
@@ -227,15 +262,16 @@ function paragraphStyleId(directProps: readonly OoxmlProperty[]): string | null 
 /**
  * Resolve the `basedOn` chain base-first, stopping on missing ids, cycles, or depth.
  *
- * The tip must be a paragraph style; character/table styles named by `w:pStyle` contribute
- * nothing (Word ignores them for paragraph inheritance).
+ * The tip must match `expectedType`; other types named by `w:pStyle` / `w:rStyle` contribute
+ * nothing (Word ignores them for that inheritance axis).
  */
-function paragraphStyleChain(
+function styleChain(
   table: StyleCascadeTable,
-  styleId: string
+  styleId: string,
+  expectedType: 'paragraph' | 'character'
 ): readonly StyleDefinition[] {
   const tip = table.styles.get(styleId);
-  if (!tip || tip.type !== 'paragraph') return [];
+  if (!tip || tip.type !== expectedType) return [];
 
   const tipFirst: StyleDefinition[] = [];
   const seen = new Set<string>();
@@ -258,6 +294,7 @@ function paragraphStyleChain(
  * Cascade paragraph + inherited run properties for one paragraph's direct `w:pPr`.
  *
  * Order: `docDefaults` → `basedOn` ancestors → paragraph style → direct formatting.
+ * When `w:pStyle` is absent, the document's default paragraph style (`w:default="1"`) is used.
  * Direct formatting is last so it overrides inherited values inside the existing resolvers.
  */
 export function cascadeParagraphFormatting(
@@ -265,8 +302,8 @@ export function cascadeParagraphFormatting(
   directPPr: OoxmlNode | undefined
 ): CascadedParagraphFormatting {
   const directProps = propertiesOf(directPPr);
-  const styleId = paragraphStyleId(directProps);
-  const chain = styleId ? paragraphStyleChain(table, styleId) : [];
+  const styleId = styleIdFromProps(directProps, 'pStyle') ?? table.defaultParagraphStyleId;
+  const chain = styleId ? styleChain(table, styleId, 'paragraph') : [];
 
   const paragraphProperties: OoxmlProperty[] = [
     ...table.docDefaultsParagraph,
@@ -317,14 +354,36 @@ export function cascadedBottomBorder(
   return edge;
 }
 
-/** Merge inherited paragraph-style run props with a run's direct `rPr` (direct last). */
+/**
+ * Merge inherited paragraph-style run props with a run's direct `rPr` (direct last).
+ *
+ * When a cascade table is supplied, also resolves `w:rStyle` character styles (basedOn chain,
+ * cycle/depth capped). Runs without an explicit `rStyle` pick up the default character style
+ * (`w:default="1"`). Precedence: inherited → character style chain → direct formatting.
+ */
 export function cascadeRunProperties(
   inheritedRunProperties: readonly OoxmlProperty[],
-  directRunProperties: readonly OoxmlProperty[]
+  directRunProperties: readonly OoxmlProperty[],
+  table?: StyleCascadeTable
 ): readonly OoxmlProperty[] {
-  if (inheritedRunProperties.length === 0) return directRunProperties;
-  if (directRunProperties.length === 0) return inheritedRunProperties;
-  return [...inheritedRunProperties, ...directRunProperties];
+  let characterProps: readonly OoxmlProperty[] = [];
+  if (table) {
+    const rStyleId = styleIdFromProps(directRunProperties, 'rStyle');
+    const characterStyleId = rStyleId ?? table.defaultCharacterStyleId;
+    if (characterStyleId) {
+      characterProps = styleChain(table, characterStyleId, 'character').flatMap(
+        (style) => style.runProperties
+      );
+    }
+  }
+
+  if (inheritedRunProperties.length === 0 && characterProps.length === 0) {
+    return directRunProperties;
+  }
+  if (directRunProperties.length === 0 && characterProps.length === 0) {
+    return inheritedRunProperties;
+  }
+  return [...inheritedRunProperties, ...characterProps, ...directRunProperties];
 }
 
 export interface ParagraphLayoutInputs {

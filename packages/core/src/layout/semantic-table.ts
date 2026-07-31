@@ -78,6 +78,11 @@ export interface SemanticTableRow {
   readonly id: string;
   /** `w:trPr/w:tblHeader` — the row repeats atop each page the table continues onto. */
   readonly isHeader: boolean;
+  /**
+   * `w:trPr/w:cantSplit` — the row must stay on one page. When it cannot fit a fresh page,
+   * layout fails closed rather than fragmenting or overflowing the content box.
+   */
+  readonly cantSplit: boolean;
   readonly cells: readonly SemanticTableCell[];
 }
 
@@ -149,9 +154,7 @@ function twipsSide(node: OoxmlElement | undefined): number | undefined {
  * Read `tblCellMar` / `tcMar`. Each omitted side stays undefined so callers can fall back
  * per-side (tcMar → tblCellMar → CELL_PAD).
  */
-function readMarginSides(
-  container: OoxmlElement | undefined
-): Partial<CellMarginsPt> {
+function readMarginSides(container: OoxmlElement | undefined): Partial<CellMarginsPt> {
   if (!container) return {};
   const top = twipsSide(childNamed(container, 'top'));
   const left = twipsSide(childNamed(container, 'left'));
@@ -270,7 +273,12 @@ export function readTableStructure(
         blocks,
       });
     }
-    rows.push({ id: rowNode.id, isHeader: readFlag(rowProperties, 'tblHeader'), cells });
+    rows.push({
+      id: rowNode.id,
+      isHeader: readFlag(rowProperties, 'tblHeader'),
+      cantSplit: readFlag(rowProperties, 'cantSplit'),
+      cells,
+    });
   }
 
   return {

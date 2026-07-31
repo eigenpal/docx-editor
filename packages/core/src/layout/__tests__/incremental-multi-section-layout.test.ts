@@ -1,0 +1,172 @@
+// Per-section incremental layout: identity reuse, invalidation, and structural work bounds.
+//
+// Multi-section used to discard the layout session and rebuild every sheet on each edit.
+// These tests lock the orchestrator's contract: unchanged sections keep page identity,
+// earlier-section repagination remaps later sheets, and incremental shape matches a clean
+// pass. Work is asserted with structural counters, never wall-clock timings.
+
+import { describe, expect, test } from 'bun:test';
+import { readOoxmlPart, type OoxmlPart } from '@docx-editor.dev/core-contract/store';
+import {
+  createFixedMeasurer,
+  createLayoutSession,
+  layoutSemanticDocument,
+  type LayoutSession,
+  type SemanticLayout,
+} from '../index.ts';
+
+const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
+
+function load(body: string): OoxmlPart {
+  const result = readOoxmlPart(`<w:document xmlns:w="${W}"><w:body>${body}</w:body></w:document>`, {
+    name: '/word/document.xml',
+    contentType: 'app/xml',
+  });
+  if (!result.ok) throw new Error(result.reason);
+  return result.part;
+}
+
+const measurer = createFixedMeasurer(6, 14);
+
+const paragraph = (text: string, pPr = '') =>
+  `<w:p>${pPr ? `<w:pPr>${pPr}</w:pPr>` : ''}<w:r><w:t>${text}</w:t></w:r></w:p>`;
+
+const sectPr = (extra = '') =>
+  `<w:pPr><w:sectPr>${extra}<w:pgSz w:w="6000" w:h="2400"/><w:pgMar w:top="200" w:right="200" w:bottom="200" w:left="200" w:header="100" w:footer="100"/></w:sectPr></w:pPr>`;
+
+/** Two sections, each long enough to span multiple pages under the tight geometry. */
+function twoSectionDocument(mutate?: (body: string) => string): string {
+  const section0 = Array.from({ length: 12 }, (_, index) =>
+    paragraph(`s0p${index} ${'word '.repeat(8)}`, index === 11 ? sectPr() : '')
+  ).join('');
+  const section1 = Array.from({ length: 12 }, (_, index) =>
+    paragraph(`s1p${index} ${'word '.repeat(8)}`)
+  ).join('');
+  const body =
+    section0 +
+    section1 +
+    `<w:sectPr><w:pgSz w:w="6000" w:h="2400"/><w:pgMar w:top="200" w:right="200" w:bottom="200" w:left="200" w:header="100" w:footer="100"/></w:sectPr>`;
+  return mutate ? mutate(body) : body;
+}
+
+const lay = (part: OoxmlPart, revision: number, session?: LayoutSession): SemanticLayout =>
+  layoutSemanticDocument(part, revision, {
+    measurer,
+    ...(session ? { session } : {}),
+  });
+
+const shapeOf = (layout: SemanticLayout): string =>
+  JSON.stringify(
+    layout.pages.map((page) => ({
+      index: page.index,
+      box: page.box,
+      fragments: page.fragments.map((fragment) => ({
+        id: fragment.id,
+        box: fragment.box,
+        lines:
+          fragment.kind === 'paragraph'
+            ? fragment.lines.map((line) => ({ id: line.id, box: line.box, spans: line.spans }))
+            : fragment.kind === 'table'
+              ? fragment.rows
+              : [],
+      })),
+    }))
+  );
+
+describe('multi-section incremental equals a clean pass', () => {
+  test('an unchanged multi-section document re-lays out to the identical shape', () => {
+    const session = createLayoutSession();
+    const part = load(twoSectionDocument());
+    const first = lay(part, 1, session);
+    expect(first.pages.length).toBeGreaterThan(2);
+    const second = lay(part, 2, session);
+    expect(shapeOf(second)).toBe(shapeOf(first));
+  });
+
+  test('an edit in section 1 matches a full pass', () => {
+    const session = createLayoutSession();
+    lay(load(twoSectionDocument()), 1, session);
+    const edited = load(twoSectionDocument((body) => body.replace('s1p3 ', 's1p3-rewritten ')));
+    expect(shapeOf(lay(edited, 2, session))).toBe(shapeOf(lay(edited, 2)));
+  });
+
+  test('an edit in section 0 that changes its page count matches a full pass', () => {
+    const session = createLayoutSession();
+    lay(load(twoSectionDocument()), 1, session);
+    const grown = load(
+      twoSectionDocument((body) => body.replace('s0p2 ', `s0p2 ${'more words '.repeat(40)}`))
+    );
+    expect(shapeOf(lay(grown, 2, session))).toBe(shapeOf(lay(grown, 2)));
+  });
+});
+
+describe('multi-section page identity and invalidation', () => {
+  test('unchanged document places nothing and reuses every remapped page', () => {
+    const session = createLayoutSession();
+    const part = load(twoSectionDocument());
+    const first = lay(part, 1, session);
+    expect(session.stats.placed).toBe(session.stats.total);
+    lay(part, 2, session);
+    expect(session.stats.placed).toBe(0);
+    expect(session.stats.reusedPages).toBe(first.pages.length);
+  });
+
+  test('edit in later section keeps earlier section page identity', () => {
+    const session = createLayoutSession();
+    const before = lay(load(twoSectionDocument()), 1, session);
+    expect(before.pages.length).toBeGreaterThan(2);
+    // Section 0 ends before s1 content; editing s1 must not rebuild section 0 sheets.
+    const after = lay(
+      load(twoSectionDocument((body) => body.replace('s1p10 ', 's1p10-changed '))),
+      2,
+      session
+    );
+    expect(after.pages[0]).toBe(before.pages[0]);
+    // At least the first section-0 page keeps identity; later s0 pages too when page count holds.
+    const s0PageCount = before.pages.findIndex((page, index) => {
+      if (index === 0) return false;
+      const text = page.fragments
+        .flatMap((fragment) =>
+          fragment.kind === 'paragraph'
+            ? fragment.lines.flatMap((line) => line.spans.map((span) => span.text))
+            : []
+        )
+        .join('');
+      return text.includes('s1p');
+    });
+    expect(s0PageCount).toBeGreaterThan(0);
+    for (let index = 0; index < s0PageCount; index += 1) {
+      expect(after.pages[index]).toBe(before.pages[index]);
+    }
+    expect(session.stats.placed).toBeLessThan(session.stats.total);
+    expect(session.stats.reusedPages).toBeGreaterThan(0);
+  });
+
+  test('earlier section repagination remaps later pages (new objects)', () => {
+    const session = createLayoutSession();
+    const before = lay(load(twoSectionDocument()), 1, session);
+    const grownBody = (body: string) => body.replace('s0p1 ', `s0p1 ${'extra '.repeat(50)}`);
+    const after = lay(load(twoSectionDocument(grownBody)), 2, session);
+    expect(shapeOf(after)).toBe(shapeOf(lay(load(twoSectionDocument(grownBody)), 3)));
+    // Page count moved: later sheets cannot keep prior identity even if their text is intact.
+    expect(after.pages.length).not.toBe(before.pages.length);
+    const lastBefore = before.pages[before.pages.length - 1]!;
+    const lastAfter = after.pages[after.pages.length - 1]!;
+    expect(lastAfter).not.toBe(lastBefore);
+  });
+
+  test('structure change (section count) resets child sessions without poisoning shape', () => {
+    const session = createLayoutSession();
+    lay(load(twoSectionDocument()), 1, session);
+    // Collapse to a single section: multi state must clear on the single-section path.
+    const single = Array.from({ length: 8 }, (_, index) =>
+      paragraph(`only ${index} ${'word '.repeat(6)}`)
+    ).join('');
+    const part = load(
+      `${single}<w:sectPr><w:pgSz w:w="6000" w:h="2400"/><w:pgMar w:top="200" w:right="200" w:bottom="200" w:left="200"/></w:sectPr>`
+    );
+    const incremental = lay(part, 2, session);
+    expect(shapeOf(incremental)).toBe(shapeOf(lay(part, 2)));
+    expect(session.multi).toBeNull();
+  });
+});
