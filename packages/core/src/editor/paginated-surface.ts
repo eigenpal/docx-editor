@@ -23,7 +23,6 @@ import {
   createLayoutScheduler,
   createLayoutSession,
   createParagraphLayoutCache,
-  buildStyleCascadeTable,
   readSectionProperties,
   resolveDefaultSurfaceMeasurer,
   documentOrder,
@@ -68,6 +67,7 @@ import {
 } from './surface-input.ts';
 import {
   createFurnitureSource,
+  createSurfaceStyleDeps,
   equalPageSets,
   equalSurfaceExtents,
   surfaceExtent,
@@ -165,10 +165,9 @@ export function mountPaginatedSurface(
   let lastPaintMs = 0;
   let lastSelectionMs = 0;
 
-  // The document's declared geometry plus header/footer stories, laid out per part and
-  // memoized in the source itself. Styles are immutable in-session, so the cascade table
-  // is built once and shared by body layout and header/footer stories.
-  const styleCascade = buildStyleCascadeTable(session.stylesRoot());
+  // Styles/numbering are immutable in-session; cascade + index are built once and shared
+  // by body layout and header/footer stories.
+  const { styleCascade, numberingIndex } = createSurfaceStyleDeps(session);
   const furnitureSource = createFurnitureSource({
     session,
     measurer,
@@ -188,6 +187,7 @@ export function mountPaginatedSurface(
       session: layoutSession,
       producer,
       styleCascade,
+      numberingIndex,
       sectionFurniture: furnitureSource.sectionFurniture(),
       furniture: furnitureSource.furniture(),
     });
@@ -216,6 +216,7 @@ export function mountPaginatedSurface(
         session: layoutSession,
         producer,
         styleCascade,
+        numberingIndex,
         sectionFurniture: furnitureSource.sectionFurniture(),
         furniture: furnitureSource.furniture(),
       });

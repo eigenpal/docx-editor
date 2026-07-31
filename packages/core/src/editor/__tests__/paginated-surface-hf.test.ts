@@ -234,13 +234,28 @@ describe('headers and footers, read-only', () => {
 
     const pages = [...container.querySelectorAll('.docx-page')];
     // Page index 1 is the first body sheet with header1/footer1 (cover is index 0).
+    const cover = pages[0]!;
     const sheet = pages[1]!;
-    assertStory(page!.header, sheet.querySelector('[data-docx-hf="header"]'), /CONFIDENTIAL/i);
-    const pageCount = surface.layout().pages.length;
-    assertStory(
-      page!.footer,
-      sheet.querySelector('[data-docx-hf="footer"]'),
-      new RegExp(`Page 2 of ${pageCount}`)
+    expect(cover.querySelector('[data-docx-hf]')).toBeNull();
+    expect(sheet.querySelector('[data-docx-hf="header"]')).not.toBeNull();
+    expect(sheet.querySelector('[data-docx-hf="footer"]')).not.toBeNull();
+    // Cover must not visually host body furniture: relative story Y is authored distance,
+    // never a negative full-page offset from failed multi-section remap + PAGE finalize.
+    const headerRel = page!.header!.box.y - page!.box.y;
+    const footerRel = page!.footer!.box.y - page!.box.y;
+    expect(headerRel).toBeGreaterThanOrEqual(0);
+    expect(headerRel).toBeCloseTo(35.4, 1);
+    expect(footerRel).toBeGreaterThan(0);
+    expect(page!.footer!.box.y + page!.footer!.box.height).toBeLessThanOrEqual(
+      page!.box.y + page!.box.height + 1e-6
     );
+    const paintedHeader = sheet.querySelector('[data-docx-hf="header"]') as HTMLElement;
+    const paintedFooter = sheet.querySelector('[data-docx-hf="footer"]') as HTMLElement;
+    expect(Number.parseFloat(paintedHeader.style.top)).toBeCloseTo(headerRel * scale, 1);
+    expect(Number.parseFloat(paintedFooter.style.top)).toBeCloseTo(footerRel * scale, 1);
+    expect(Number.parseFloat(paintedHeader.style.top)).toBeGreaterThanOrEqual(0);
+    assertStory(page!.header, paintedHeader, /CONFIDENTIAL/i);
+    const pageCount = surface.layout().pages.length;
+    assertStory(page!.footer, paintedFooter, new RegExp(`Page 2 of ${pageCount}`));
   });
 });

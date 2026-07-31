@@ -9,6 +9,7 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { zipSync, strToU8 } from 'fflate';
 import {
+  buildStyleCascadeTable,
   createFixedMeasurer,
   enumerateDocumentSections,
   geometryOfSection,
@@ -108,6 +109,116 @@ describe('section-aware pagination (cover + furniture)', () => {
     expect(pageText(layout, 1)).toMatch(/Table\s+of\s+Contents/i);
   });
 
+  test('multi-section stack: body furniture stays on its sheet after PAGE finalize', () => {
+    // Remap shifts page/content boxes onto the sheet stack; PAGE/NUMPAGES finalize must not
+    // re-place furniture at the section-local origin (that painted body HF onto the cover).
+    const bytes = new Uint8Array(readFileSync(FIXTURE));
+    const loaded = readOoxmlPackage(bytes);
+    expect(loaded.ok).toBe(true);
+    if (!loaded.ok) return;
+    const part = loaded.package.parts.get(loaded.package.mainDocumentPart)!;
+    const sections = enumerateDocumentSections(part);
+    const bodyGeometry = geometryOfSection(sections[1]!.properties);
+    const layout = layoutSemanticDocument(part, 1, {
+      measurer: createFixedMeasurer(6, 14),
+      sectionFurniture: furnitureFor(loaded.package, part),
+    });
+
+    const cover = layout.pages[0]!;
+    expect(cover.header).toBeUndefined();
+    expect(cover.footer).toBeUndefined();
+    expect(cover.box.y).toBe(0);
+
+    const assertFurnitureOnPage = (
+      page: (typeof layout.pages)[number],
+      expectedPageNumber: number
+    ): void => {
+      expect(page.header).toBeDefined();
+      expect(page.footer).toBeDefined();
+      const headerRel = page.header!.box.y - page.box.y;
+      const footerRel = page.footer!.box.y - page.box.y;
+      expect(headerRel).toBeCloseTo(bodyGeometry.headerDistance ?? 36, 5);
+      expect(headerRel).toBeGreaterThanOrEqual(0);
+      expect(page.header!.box.y + page.header!.box.height).toBeLessThanOrEqual(
+        page.box.y + page.box.height
+      );
+      expect(footerRel).toBeGreaterThan(0);
+      expect(page.footer!.box.y).toBeGreaterThanOrEqual(page.box.y);
+      expect(page.footer!.box.y + page.footer!.box.height).toBeLessThanOrEqual(
+        page.box.y + page.box.height + 1e-6
+      );
+      // Footer bottom sits at authored footerDistance from the sheet edge.
+      expect(page.box.y + page.box.height - (page.footer!.box.y + page.footer!.box.height)).toBeCloseTo(
+        bodyGeometry.footerDistance ?? 36,
+        5
+      );
+      const footerText = page.footer!.fragments
+        .flatMap((fragment) =>
+          fragment.kind === 'paragraph'
+            ? fragment.lines.flatMap((line) => line.spans.map((span) => span.text))
+            : []
+        )
+        .join('');
+      expect(footerText).toContain(`Page ${expectedPageNumber} of ${layout.pages.length}`);
+    };
+
+    // First body sheet (global index 1) and a later body sheet share remapped geometry.
+    assertFurnitureOnPage(layout.pages[1]!, 2);
+    assertFurnitureOnPage(layout.pages[2]!, 3);
+    expect(layout.pages[1]!.box.y).toBeGreaterThan(cover.box.y);
+    expect(layout.pages[2]!.box.y).toBeGreaterThan(layout.pages[1]!.box.y);
+  });
+
+  test('comprehensive fixture: TOC keeps Heading1 before; hard-break heading suppresses it', () => {
+    const bytes = new Uint8Array(readFileSync(FIXTURE));
+    const loaded = readOoxmlPackage(bytes);
+    expect(loaded.ok).toBe(true);
+    if (!loaded.ok) return;
+    const part = loaded.package.parts.get(loaded.package.mainDocumentPart)!;
+    const stylesPart = [...loaded.package.parts.values()].find(
+      (candidate) => candidate.root?.localName === 'styles'
+    );
+    expect(stylesPart).toBeDefined();
+    const styleCascade = buildStyleCascadeTable(stylesPart!.root);
+    const layout = layoutSemanticDocument(part, 1, {
+      measurer: createFixedMeasurer(6, 14),
+      sectionFurniture: furnitureFor(loaded.package, part),
+      styleCascade,
+    });
+
+    const tocPage = layout.pages[1]!;
+    const toc = tocPage.fragments.find((fragment) => fragment.kind === 'paragraph');
+    expect(toc?.kind).toBe('paragraph');
+    if (!toc || toc.kind !== 'paragraph') return;
+    expect(toc.lines[0]!.spans.map((span) => span.text).join('')).toMatch(/Table of Contents/i);
+    // First paragraph of the body section retains Heading1 before=360 twips (18pt).
+    expect(toc.spacing).toEqual({ before: 18, after: 10 });
+    expect(toc.lines[0]!.box.y).toBe(18);
+
+    const paragraphText = (
+      fragment: Extract<(typeof layout.pages)[number]['fragments'][number], { kind: 'paragraph' }>
+    ): string => fragment.lines.flatMap((line) => line.spans.map((span) => span.text)).join('');
+
+    const textFormattingPage = layout.pages.find((page) =>
+      page.fragments.some(
+        (fragment) =>
+          fragment.kind === 'paragraph' && /Text Formatting/.test(paragraphText(fragment))
+      )
+    );
+    expect(textFormattingPage).toBeDefined();
+    const heading = textFormattingPage!.fragments.find(
+      (fragment) => fragment.kind === 'paragraph'
+    );
+    expect(heading?.kind).toBe('paragraph');
+    if (!heading || heading.kind !== 'paragraph') return;
+    expect(paragraphText(heading)).toMatch(/Text Formatting/);
+    // Hard page break mid-section: Word Online suppresses the 18pt before.
+    expect(heading.spacing.before).toBe(0);
+    expect(heading.spacing.after).toBe(10);
+    expect(heading.box.y).toBe(0);
+    expect(heading.lines[0]!.box.y).toBe(0);
+  });
+
   test('minimal two-section package: cover has no furniture; body inherits nothing from cover', () => {
     const headerXml = `<w:hdr xmlns:w="${W}"><w:p><w:r><w:t>BODY HDR</w:t></w:r></w:p></w:hdr>`;
     const bytes = zipSync({
@@ -160,6 +271,11 @@ describe('section-aware pagination (cover + furniture)', () => {
     expect(pageText(layout, 0)).not.toContain('BODY');
     expect(layout.pages[1]!.header).toBeDefined();
     expect(pageText(layout, 1)).toContain('BODY');
+    // Stacked body sheet: furniture Y is remapped with the page, not left at section-local 0.
+    const body = layout.pages[1]!;
+    expect(body.box.y).toBeGreaterThan(0);
+    expect(body.header!.box.y - body.box.y).toBeCloseTo(36, 5);
+    expect(body.header!.box.y).toBeGreaterThan(body.box.y);
   });
 
   test('a later section with no refs inherits earlier furniture (ECMA-376 §17.10.1)', () => {

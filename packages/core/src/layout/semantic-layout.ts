@@ -24,8 +24,10 @@ import {
   type PendingLine,
 } from './paragraph-flow.ts';
 import {
+  appliedSpaceBefore,
   bottomBorderExtentPt,
   collapsedSpaceBefore,
+  paragraphBreaksBefore,
   type ParagraphBorderEdge,
   type ParagraphSpacing,
 } from './paragraph-style.ts';
@@ -35,8 +37,13 @@ import {
   resolveParagraphLayoutInputs,
   type StyleCascadeTable,
 } from './style-cascade.ts';
+import { paragraphShadingBox } from './ooxml-shading.ts';
 import { CELL_PAD, readTableStructure } from './semantic-table.ts';
-import { layoutRowFragment, type TableFlowDeps } from './semantic-table-layout.ts';
+import {
+  finalizeTableRows,
+  layoutRowFragment,
+  type TableFlowDeps,
+} from './semantic-table-layout.ts';
 import { storyBlocks } from './story-roots.ts';
 import { remapPage, type HeaderFooterStoryLayout } from './hf-layout.ts';
 import {
@@ -58,6 +65,10 @@ import {
   type TableRowFragmentRecord,
   type TextMeasurer,
 } from './semantic-records.ts';
+import type { NumberingIndex } from './numbering-index.ts';
+import { withResolvedListItems, type ResolvedListItem } from './list-resolve.ts';
+import { publishListMarker } from './list-marker.ts';
+import { sameFragments } from './semantic-fragment-signature.ts';
 
 /** Which header/footer variant a page shows (ECMA-376 §17.10.5). */
 export type HeaderFooterVariantName = 'default' | 'first' | 'even';
@@ -117,6 +128,18 @@ export interface SemanticLayoutOptions {
    * package.
    */
   readonly styleCascade?: StyleCascadeTable;
+  /**
+   * Projection of `/word/numbering.xml`. Absent keeps pre-list behaviour (no markers /
+   * level indents). The index is immutable for a session; list counter state is derived
+   * per layout pass from document order.
+   */
+  readonly numberingIndex?: NumberingIndex;
+  /**
+   * Optional precomputed list items for the body story. When absent and
+   * {@link numberingIndex} is set, layout walks the full body (including table cells)
+   * once so counters continue across section boundaries and table document order.
+   */
+  readonly listItems?: ReadonlyMap<string, ResolvedListItem>;
 }
 
 /** The flow state as it stood immediately before one block was placed. */
@@ -168,83 +191,13 @@ export function createLayoutSession(): LayoutSession {
   };
 }
 
-/**
- * Are two pending-fragment lists the same CONTENT?
- *
- * Structural, not by identity: a paragraph re-placed by this pass produces a new object even
- * when it lands exactly where it did before, and comparing references would refuse to
- * converge on precisely the edits that leave the flow undisturbed — the common case.
- *
- * The page the tail begins with embeds these fragments, so reusing that page is only sound
- * if what is pending here matches what was pending there.
- */
-function sameFragments(
-  a: readonly BlockFragmentRecord[],
-  b: readonly BlockFragmentRecord[]
-): boolean {
-  if (a.length !== b.length) return false;
-  for (let index = 0; index < a.length; index += 1) {
-    const left = a[index]!;
-    const right = b[index]!;
-    if (left === right) continue;
-    if (fragmentSignature(left) !== fragmentSignature(right)) return false;
-  }
-  return true;
-}
-
-const signatures = new WeakMap<BlockFragmentRecord, string>();
-
-/** Cached per record, so a fragment is serialized once however often convergence is tested. */
-function fragmentSignature(fragment: BlockFragmentRecord): string {
-  const cached = signatures.get(fragment);
-  if (cached !== undefined) return cached;
-  // Every PUBLISHED field participates. A field left out converges a freshly built
-  // fragment against a stale one and discards the new value — the exact bug the `props`
-  // note below records for paragraph properties.
-  const signature =
-    fragment.kind === 'table'
-      ? JSON.stringify([
-          fragment.id,
-          fragment.tableId,
-          fragment.fragmentIndex,
-          fragment.box,
-          fragment.rows,
-        ])
-      : JSON.stringify([
-          fragment.id,
-          fragment.box,
-          fragment.range,
-          // `props` is a PUBLISHED field. A paragraph-property change layout does not read
-          // moves no geometry, so without this the freshly built fragment converged against
-          // the old one and was discarded — leaving a painter or style consumer reading the
-          // pre-edit value.
-          fragment.props,
-          fragment.spacing,
-          fragment.bottomBorder,
-          fragment.shading,
-          fragment.lines.map((line) => [line.id, line.box, line.baseline, line.spans]),
-        ]);
-  signatures.set(fragment, signature);
-  return signature;
-}
-
-/** Whether a paragraph must start a new page (`w:pageBreakBefore`). */
-function breaksBefore(props: readonly OoxmlProperty[]): boolean {
-  return props.some(
-    (property) =>
-      property.localName === 'pageBreakBefore' &&
-      property.attributes?.val !== '0' &&
-      property.attributes?.val !== 'false'
-  );
-}
-
 /** Prepass results by block node, valid while the width and producer both hold. */
 type PreparedBlock =
   | {
       readonly kind: 'paragraph';
       readonly paragraph: OoxmlElement;
       readonly props: OoxmlProperty[];
-      readonly indent: { left: number; right: number };
+      readonly indent: { left: number; right: number; hanging: number; firstLine: number };
       readonly available: number;
       readonly alignment: Alignment;
       readonly spacing: ParagraphSpacing;
@@ -252,6 +205,7 @@ type PreparedBlock =
       readonly shading: string | undefined;
       readonly inheritedRunProperties: readonly OoxmlProperty[];
       readonly tabStops: ResolvedTabStops;
+      readonly listItem?: ResolvedListItem;
       readonly key: string;
     }
   | { readonly kind: 'table'; readonly table: OoxmlElement; readonly key: string };
@@ -352,17 +306,24 @@ export function layoutSemanticDocument(
 ): SemanticLayout {
   const sections = enumerateDocumentSections(part);
   const blocks = storyBlocks(part);
+  // Full-body list resolve so counters continue across sections and table cells.
+  const optionsWithLists = withResolvedListItems(options, blocks);
 
   if (sections.length > 1) {
-    return layoutMultiSectionDocument(blocks, sections, revision, options);
+    return layoutMultiSectionDocument(blocks, sections, revision, optionsWithLists);
   }
 
   const section = sections[0];
   const geometry =
     options.geometry ??
     (section ? geometryOfSection(section.properties) : DEFAULT_PAGE_GEOMETRY);
-  const furniture = furnitureForSection(options, 0, sections.length) ?? options.furniture;
-  const laid = layoutBlocksWithGeometry(blocks, revision, { ...options, geometry, furniture });
+  const furniture =
+    furnitureForSection(optionsWithLists, 0, sections.length) ?? optionsWithLists.furniture;
+  const laid = layoutBlocksWithGeometry(blocks, revision, {
+    ...optionsWithLists,
+    geometry,
+    furniture,
+  });
   const finalized = finalizePageFieldProjection(laid.layout);
   // layoutBlocksWithGeometry stores the pre-projection layout on the session; replace it so
   // incremental reuse keeps projected PAGE/NUMPAGES furniture.
@@ -392,9 +353,11 @@ function layoutBlocksWithGeometry(
   // the rest of the session. The style-cascade token is folded in so a different styles part
   // cannot reuse breaks measured under another inheritance table.
   const styleCascade = options.styleCascade;
+  const listItems = options.listItems;
   const producer =
     (options.producer ?? 'unversioned-measurer') +
-    (styleCascade ? `|sc:${styleCascade.cacheToken}` : '');
+    (styleCascade ? `|sc:${styleCascade.cacheToken}` : '') +
+    (listItems && listItems.size > 0 ? `|num:${listItems.size}` : '');
 
   const contentWidth = geometry.width - geometry.margin.left - geometry.margin.right;
 
@@ -460,7 +423,13 @@ function layoutBlocksWithGeometry(
         }),
       };
     } else {
-      const preparedParagraph = resolveParagraphLayoutInputs(block, contentWidth, styleCascade);
+      const listItem = listItems?.get(block.id);
+      const preparedParagraph = resolveParagraphLayoutInputs(
+        block,
+        contentWidth,
+        styleCascade,
+        listItem
+      );
       const {
         props,
         indent,
@@ -485,12 +454,16 @@ function layoutBlocksWithGeometry(
         shading,
         inheritedRunProperties,
         tabStops,
+        ...(listItem ? { listItem } : {}),
         key: paragraphLayoutKey({
           paragraph: block,
           properties: [
             ...props,
             ...inheritedRunProperties,
             { localName: 'tabStops', attributes: { token: tabStopsCacheToken } },
+            ...(listItem
+              ? [{ localName: 'list', attributes: { token: listItem.cacheToken } }]
+              : []),
           ],
           width: available,
           producer,
@@ -563,6 +536,7 @@ function layoutBlocksWithGeometry(
   let startIndex = 0;
   let placed = 0;
   let reusedPages = 0;
+  let firstParagraphOfSection = true;
 
   // RESUME. The checkpoint before the first changed paragraph describes a flow the new
   // document still agrees with, so the pages completed by then are carried over by
@@ -576,6 +550,7 @@ function layoutBlocksWithGeometry(
     lineCounter = checkpoint.lineCounter;
     previousSpaceAfter = checkpoint.previousSpaceAfter;
     startIndex = firstChanged;
+    firstParagraphOfSection = false;
     reusedPages = pages.length;
     checkpoints.push(...session.checkpoints.slice(0, firstChanged));
   }
@@ -654,13 +629,15 @@ function layoutBlocksWithGeometry(
     cursorY = 0;
   };
 
-  // Table layout shares the flow's line counter and paragraph cache.
+  // Table layout shares the flow's line counter, paragraph cache, and precomputed list
+  // items (counters already advanced in document order, including cell paragraphs).
   const tableDeps: TableFlowDeps = {
     measurer,
     cache,
     producer,
     nextLineId: () => `line-${lineCounter++}`,
     styleCascade,
+    listItems,
   };
 
   /**
@@ -672,6 +649,8 @@ function layoutBlocksWithGeometry(
     const structure = readTableStructure(table, contentWidth, 0);
     if (!structure || structure.rows.length === 0) return;
     const lineHeight = measurer.lineMetrics(DEFAULT_RUN_STYLE).height;
+    const minRowPad =
+      structure.defaultMargins.top + structure.defaultMargins.bottom || 2 * CELL_PAD;
     const headerRows = [];
     for (const row of structure.rows) {
       if (row.isHeader) headerRows.push(row);
@@ -680,15 +659,18 @@ function layoutBlocksWithGeometry(
     let fragmentIndex = 0;
     let fragmentTop = cursorY;
     let rows: TableRowFragmentRecord[] = [];
+    // Authored rows backing the open fragment (includes header repeats) for finalize.
+    let sourceRows: typeof structure.rows[number][] = [];
     const closeTableFragment = (): void => {
       if (rows.length === 0) return;
-      const last = rows[rows.length - 1]!;
+      const finalized = finalizeTableRows(rows, structure, sourceRows);
+      const last = finalized[finalized.length - 1]!;
       pageFragments.push({
         kind: 'table',
         id: `${table.id}#f${fragmentIndex}`,
         tableId: table.id,
         fragmentIndex,
-        rows,
+        rows: finalized,
         box: {
           x: 0,
           y: fragmentTop,
@@ -698,9 +680,10 @@ function layoutBlocksWithGeometry(
       });
       fragmentIndex += 1;
       rows = [];
+      sourceRows = [];
     };
     for (const row of structure.rows) {
-      if (cursorY + lineHeight + 2 * CELL_PAD > contentHeight && cursorY > 0) {
+      if (cursorY + lineHeight + minRowPad > contentHeight && cursorY > 0) {
         closeTableFragment();
         flushPage();
         fragmentTop = 0;
@@ -717,6 +700,7 @@ function layoutBlocksWithGeometry(
               tableDeps
             );
             rows.push(placed.record);
+            sourceRows.push(headerRow);
             cursorY = placed.bottom;
           }
         }
@@ -731,6 +715,7 @@ function layoutBlocksWithGeometry(
         tableDeps
       );
       rows.push(placed.record);
+      sourceRows.push(row);
       cursorY = placed.bottom;
     }
     closeTableFragment();
@@ -803,10 +788,13 @@ function layoutBlocksWithGeometry(
       inheritedRunProperties,
       tabStops,
     } = entry;
+    // Prefer the current-pass map so marker ordinals stay fresh even when the prepared
+    // block memo reuses indent/break inputs from an earlier revision.
+    const listItem = listItems?.get(paragraph.id) ?? entry.listItem;
     const paragraphId = paragraph.id;
     const borderExtent = bottomBorderExtentPt(bottomBorder);
 
-    if (breaksBefore(props) && (pageFragments.length > 0 || pages.length === 0)) {
+    if (paragraphBreaksBefore(props) && (pageFragments.length > 0 || pages.length === 0)) {
       flushPage();
       previousSpaceAfter = 0;
     }
@@ -823,8 +811,7 @@ function layoutBlocksWithGeometry(
       tabStops
     );
 
-    // Keep before-spacing with the paragraph. If its first line and one-line tail do not
-    // fit, start the paragraph on a fresh page instead of stranding an empty gap.
+    // Fit uses unsuppressed lead; top-of-page suppression applies after any flush below.
     {
       const lead = collapsedSpaceBefore(spacing.before, previousSpaceAfter);
       const emptyStyle =
@@ -839,9 +826,15 @@ function layoutBlocksWithGeometry(
       }
     }
 
-    // Word collapses adjacent paragraph spacing to the larger of previous-after/current-before.
-    const appliedBefore = collapsedSpaceBefore(spacing.before, previousSpaceAfter);
+    const atTopOfPage = cursorY === 0 && pageFragments.length === 0;
+    const appliedBefore = appliedSpaceBefore(
+      spacing.before,
+      previousSpaceAfter,
+      atTopOfPage,
+      firstParagraphOfSection
+    );
     if (appliedBefore > 0) cursorY += appliedBefore;
+    firstParagraphOfSection = false;
 
     // Place the lines, fragmenting at page boundaries.
     let fragmentIndex = 0;
@@ -873,6 +866,12 @@ function layoutBlocksWithGeometry(
       }
       if (isLast) cursorY = Math.max(cursorY, contentBottom + appliedAfter);
       const height = Math.max(contentBottom + appliedAfter - top, 0);
+      const marker =
+        fragmentIndex === 0
+          ? publishListMarker(listItem, measurer, pending[0]
+              ? { y: pending[0].box.y, height: pending[0].box.height }
+              : undefined)
+          : undefined;
       pageFragments.push({
         kind: 'paragraph',
         id: `${paragraphId}#f${fragmentIndex}`,
@@ -886,7 +885,10 @@ function layoutBlocksWithGeometry(
         props,
         spacing: { before: fragmentBefore, after: appliedAfter },
         ...(bottomBorderRecord ? { bottomBorder: bottomBorderRecord } : {}),
-        ...(shading === undefined ? {} : { shading }),
+        ...(shading === undefined
+          ? {}
+          : { shading, shadingBox: paragraphShadingBox(pending, indent.left, available)! }),
+        ...(marker ? { marker } : {}),
         lines: pending,
         box: { x: indent.left, y: top, width: available, height },
       });

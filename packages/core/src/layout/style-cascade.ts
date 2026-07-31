@@ -329,7 +329,7 @@ export function cascadeRunProperties(
 
 export interface ParagraphLayoutInputs {
   readonly props: OoxmlProperty[];
-  readonly indent: { left: number; right: number };
+  readonly indent: { left: number; right: number; hanging: number; firstLine: number };
   readonly available: number;
   readonly alignment: Alignment;
   readonly spacing: ParagraphSpacing;
@@ -344,22 +344,51 @@ export interface ParagraphLayoutInputs {
    * from flat property bags, so style-inherited stops must be named explicitly.
    */
   readonly tabStopsCacheToken: string;
+  /** Resolved list marker inputs when the paragraph participates in numbering. */
+  readonly listItem?: import('./list-resolve.ts').ResolvedListItem;
 }
 
 /**
  * Resolve every paragraph input semantic layout / table cells share: cascaded props when a
  * style table is present, otherwise direct formatting only.
+ *
+ * When `listItem` is provided, its merged level indent becomes the paragraph indent (list
+ * hanging / left from `numbering.xml`), which is what Word uses for fixture list paragraphs
+ * that author no direct `w:ind`.
  */
 export function resolveParagraphLayoutInputs(
   paragraph: OoxmlElement,
   contentWidth: number,
-  styleCascade: StyleCascadeTable | undefined
+  styleCascade: StyleCascadeTable | undefined,
+  listItem?: import('./list-resolve.ts').ResolvedListItem
 ): ParagraphLayoutInputs {
   const pPr = paragraph.children.find((child) => child.kind === 'paragraphProperties');
   const cascaded = styleCascade ? cascadeParagraphFormatting(styleCascade, pPr) : null;
   const props = cascaded ? [...cascaded.paragraphProperties] : propertiesOf(pPr);
   const inheritedRunProperties = cascaded?.runProperties ?? [];
-  const indent = paragraphIndent(props);
+  const baseIndent = paragraphIndent(props);
+  let hanging = 0;
+  let firstLine = 0;
+  if (listItem) {
+    hanging = listItem.indent.hanging;
+    firstLine = listItem.indent.firstLine;
+  } else {
+    for (const property of props) {
+      if (property.localName !== 'ind') continue;
+      const h = property.attributes?.hanging;
+      const f = property.attributes?.firstLine;
+      if (h && /^\d{1,9}$/.test(h)) hanging = Number(h) / 20;
+      if (f && /^-?\d{1,9}$/.test(f)) firstLine = Math.max(0, Number(f) / 20);
+    }
+  }
+  const indent = listItem
+    ? {
+        left: listItem.indent.left,
+        right: listItem.indent.right,
+        hanging,
+        firstLine,
+      }
+    : { left: baseIndent.left, right: baseIndent.right, hanging, firstLine };
   const tabStops = cascaded
     ? cascadedTabStops(cascaded.paragraphPropertyNodes)
     : paragraphTabStops(pPr);
@@ -376,5 +405,6 @@ export function resolveParagraphLayoutInputs(
     inheritedRunProperties,
     tabStops,
     tabStopsCacheToken: tabStopsFingerprint(tabStops),
+    ...(listItem ? { listItem } : {}),
   };
 }

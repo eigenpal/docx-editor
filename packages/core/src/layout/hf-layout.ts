@@ -96,15 +96,31 @@ export function layoutHeaderFooterStory(
  *
  * Each section lays out with its own origin; the orchestrator assigns global indices and
  * cumulative Y so sheets of different heights still stack without gaps or overlaps.
- * Spread retains a transient `pageFieldProjector` through remapping.
+ *
+ * Furniture boxes must move with the sheet. The attach-time `pageFieldProjector` closes over
+ * the section-local page box, so a bare shift of the current story box is not enough —
+ * document-level PAGE/NUMPAGES finalize would re-place at the pre-stack origin and paint
+ * would compute `(story.box.y - page.box.y)` as a negative full-page offset onto the prior
+ * sheet. Wrap the projector so projected furniture receives the same `dy`.
  */
 export function remapPage(page: PageRecord, globalIndex: number, sheetY: number): PageRecord {
   const dy = sheetY - page.box.y;
   const shiftBox = (box: LayoutBox): LayoutBox => ({ ...box, y: box.y + dy });
   const shiftFurniture = (
     story: HeaderFooterStoryRecord | undefined
-  ): HeaderFooterStoryRecord | undefined =>
-    story ? { ...story, box: shiftBox(story.box) } : undefined;
+  ): HeaderFooterStoryRecord | undefined => {
+    if (!story) return undefined;
+    const shifted: HeaderFooterStoryRecord = { ...story, box: shiftBox(story.box) };
+    if (!story.pageFieldProjector) return shifted;
+    const project = story.pageFieldProjector;
+    return {
+      ...shifted,
+      pageFieldProjector: (context) => {
+        const projected = project(context);
+        return { ...projected, box: shiftBox(projected.box) };
+      },
+    };
+  };
   const header = shiftFurniture(page.header);
   const footer = shiftFurniture(page.footer);
   return {

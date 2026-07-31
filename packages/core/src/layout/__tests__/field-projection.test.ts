@@ -321,4 +321,38 @@ describe('comprehensive fixture footer PAGE/NUMPAGES', () => {
     expect(text).toContain(`Page 2 of ${pageCount}`);
     expect(text).toMatch(/QA Automation Department/);
   });
+
+  test('cover stays bare; remapped body furniture keeps authored sheet-relative Y', () => {
+    const bytes = new Uint8Array(readFileSync(FIXTURE));
+    const loaded = readOoxmlPackage(bytes);
+    expect(loaded.ok).toBe(true);
+    if (!loaded.ok) return;
+    const part = loaded.package.parts.get(loaded.package.mainDocumentPart)!;
+    const sections = enumerateDocumentSections(part);
+    const bodyGeometry = geometryOfSection(sections[1]!.properties);
+    const layout = layoutSemanticDocument(part, 1, {
+      measurer,
+      producer: 'test',
+      sectionFurniture: furnitureFromPackage(loaded.package, part),
+    });
+
+    expect(layout.pages[0]!.header).toBeUndefined();
+    expect(layout.pages[0]!.footer).toBeUndefined();
+
+    for (let index = 1; index < Math.min(layout.pages.length, 4); index += 1) {
+      const page = layout.pages[index]!;
+      expect(page.header).toBeDefined();
+      expect(page.footer).toBeDefined();
+      expect(page.header!.box.y - page.box.y).toBeCloseTo(bodyGeometry.headerDistance ?? 36, 5);
+      expect(
+        page.box.y + page.box.height - (page.footer!.box.y + page.footer!.box.height)
+      ).toBeCloseTo(bodyGeometry.footerDistance ?? 36, 5);
+      const text = page.footer!.fragments
+        .flatMap((f) =>
+          f.kind === 'paragraph' ? f.lines.flatMap((l) => l.spans.map((s) => s.text)) : []
+        )
+        .join('');
+      expect(text).toContain(`Page ${index + 1} of ${layout.pages.length}`);
+    }
+  });
 });

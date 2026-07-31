@@ -162,14 +162,64 @@ describe('semantic table layout', () => {
     );
     const result = layout(part);
     const [table] = allTableFragments(result);
+    const restart = table!.rows[0]!.cells[0]!;
     const continueCell = table!.rows[1]!.cells[0]!;
     expect(continueCell.vMergeContinue).toBe(true);
+    expect(continueCell.paintInert).toBe(true);
     expect(continueCell.blocks).toHaveLength(0);
     expect(continueCell.box.height).toBe(table!.rows[1]!.box.height);
+    // Restart spans both row heights; no interior seam border on the restart bottom.
+    expect(restart.rowSpan).toBe(2);
+    expect(restart.box.height).toBe(
+      table!.rows[0]!.box.height + table!.rows[1]!.box.height
+    );
+    // Continue is paint-inert (no seam fill/borders); restart owns the outer bottom only.
+    expect(continueCell.borders).toEqual({});
     // The continuation's text never reaches the records.
     const order = documentOrder(result);
     const texts = order.map((id) => paragraphTextFromLayout(result, id));
     expect(texts).not.toContain('ghost');
+  });
+
+  test('authored tcMar insets content; omitted sides fall back to CELL_PAD', () => {
+    const part = loadPart(
+      '<w:tbl>' +
+        tr(
+          tc(
+            p('x'),
+            '<w:tcPr><w:tcMar>' +
+              '<w:top w:w="80" w:type="dxa"/>' +
+              '<w:left w:w="120" w:type="dxa"/>' +
+              '<w:bottom w:w="80" w:type="dxa"/>' +
+              '<w:right w:w="120" w:type="dxa"/>' +
+              '</w:tcMar></w:tcPr>'
+          )
+        ) +
+        '</w:tbl>'
+    );
+    const cell = allTableFragments(layout(part))[0]!.rows[0]!.cells[0]!;
+    const para = cell.blocks[0]!;
+    // left 6pt, top 4pt from tcMar (120/80 twips).
+    expect(para.box.x).toBe(cell.box.x + 6);
+    expect(para.box.y).toBe(cell.box.y + 4);
+  });
+
+  test('vAlign center shifts cell content within the row', () => {
+    const part = loadPart(
+      '<w:tbl>' +
+        tr(
+          tc(p('short'), '<w:tcPr><w:vAlign w:val="center"/></w:tcPr>') +
+            tc(p('a much longer cell text that wraps across several lines of the narrow column'))
+        ) +
+        '</w:tbl>'
+    );
+    const row = allTableFragments(layout(part))[0]!.rows[0]!;
+    const short = row.cells[0]!;
+    const tall = row.cells[1]!;
+    expect(row.box.height).toBe(tall.box.height);
+    const shortTop = short.blocks[0]!.box.y;
+    // Centered content sits below the top pad of a top-aligned cell.
+    expect(shortTop).toBeGreaterThan(short.box.y + 3);
   });
 
   test('column widths come from the grid when present', () => {

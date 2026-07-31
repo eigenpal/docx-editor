@@ -141,6 +141,11 @@ export interface TreeDocxSession {
    */
   stylesRoot(): OoxmlElement | null;
   /**
+   * Root of the numbering part tree (`w:numbering`), for list layout. Memoized once;
+   * `null` when the package has no numbering part. Numbering editing is a later slice.
+   */
+  numberingRoot(): OoxmlElement | null;
+  /**
    * The heading outline of the BODY story, in document order: paragraphs whose
    * `w:pStyle` resolves to a heading through the styles part (built-in `heading N`
    * name, or the style's own `w:outlineLvl` 0..8). Memoized per main-part revision —
@@ -189,12 +194,13 @@ export function openTreeSession(bytes: Uint8Array): OpenTreeSessionResult {
 
   const currentPackage = (): OoxmlPackage => withPart(pkg, store.part);
 
-  // The styles part, resolved once through the main part's `styles` relationship (the
-  // same resolution discipline `resolveHeaderFooterParts` uses), with the conventional
-  // part name as a fallback for packages whose rels part is absent or degenerate.
-  // Styles editing is a later slice, so the part is immutable in-session.
+  // The styles / numbering parts, resolved once through the main part's relationships
+  // (the same resolution discipline `resolveHeaderFooterParts` uses), with conventional
+  // part names as fallbacks. Both are immutable in-session (editing is a later slice).
   const STYLES_REL_TYPE =
     'http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles';
+  const NUMBERING_REL_TYPE =
+    'http://schemas.openxmlformats.org/officeDocument/2006/relationships/numbering';
   let stylesRootResolved = false;
   let stylesRoot: OoxmlElement | null = null;
   const resolveStylesRoot = (): OoxmlElement | null => {
@@ -213,6 +219,26 @@ export function openTreeSession(bytes: Uint8Array): OpenTreeSessionResult {
     part ??= pkg.parts.get('/word/styles.xml');
     stylesRoot = part?.root ?? null;
     return stylesRoot;
+  };
+
+  let numberingRootResolved = false;
+  let numberingRoot: OoxmlElement | null = null;
+  const resolveNumberingRoot = (): OoxmlElement | null => {
+    if (numberingRootResolved) return numberingRoot;
+    numberingRootResolved = true;
+    const record = (pkg.relationships.get(pkg.mainDocumentPart) ?? []).find(
+      (rel) => rel.type === NUMBERING_REL_TYPE
+    );
+    let part: OoxmlPart | undefined;
+    if (record) {
+      const resolved = resolveRelationship(record);
+      if (resolved.mode === 'Internal' && resolved.target.ok) {
+        part = pkg.parts.get(resolved.target.partName);
+      }
+    }
+    part ??= pkg.parts.get('/word/numbering.xml');
+    numberingRoot = part?.root ?? null;
+    return numberingRoot;
   };
 
   let fontsCache: { readonly revision: number; readonly fonts: readonly string[] } | null = null;
@@ -351,6 +377,8 @@ export function openTreeSession(bytes: Uint8Array): OpenTreeSessionResult {
       },
 
       stylesRoot: () => resolveStylesRoot(),
+
+      numberingRoot: () => resolveNumberingRoot(),
 
       documentOutline() {
         // Keyed on the store revision, like the fonts: typing inside a heading or

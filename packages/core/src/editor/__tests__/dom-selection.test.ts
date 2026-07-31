@@ -136,6 +136,23 @@ describe('a native selection becomes a semantic selection', () => {
     root.remove();
     elsewhere.remove();
   });
+
+  test('a caret inside a list marker is refused', () => {
+    const root = paintedLine(LINE);
+    const marker = document.createElement('span');
+    marker.dataset.docxMarker = '';
+    marker.textContent = '•';
+    root.append(marker);
+    document.body.append(root);
+    const range = document.createRange();
+    range.setStart(marker.firstChild!, 0);
+    range.collapse(true);
+    const selection = document.getSelection()!;
+    selection.removeAllRanges();
+    selection.addRange(range);
+    expect(semanticSelectionFromDom(root, selection)).toBeNull();
+    root.remove();
+  });
 });
 
 describe('selection equality', () => {

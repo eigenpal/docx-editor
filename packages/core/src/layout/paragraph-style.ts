@@ -6,6 +6,16 @@
 
 import type { OoxmlElement, OoxmlNode, OoxmlProperty } from '@docx-editor.dev/core-contract/store';
 
+/** Whether a paragraph must start a new page (`w:pageBreakBefore`). */
+export function paragraphBreaksBefore(props: readonly OoxmlProperty[]): boolean {
+  return props.some(
+    (property) =>
+      property.localName === 'pageBreakBefore' &&
+      property.attributes?.val !== '0' &&
+      property.attributes?.val !== 'false'
+  );
+}
+
 /**
  * Soft ceiling matching the spike's resolved-style limit (31_680 twips ≈ 22"). Beyond
  * that an attacker-authored spacing would push pagination into pathological page counts.
@@ -149,4 +159,22 @@ export function bottomBorderExtentPt(edge: ParagraphBorderEdge | undefined): num
  */
 export function collapsedSpaceBefore(before: number, previousAfter: number): number {
   return Math.max(before, previousAfter) - previousAfter;
+}
+
+/**
+ * Applied before-spacing for placement (Word 2013+ / compat mode 15).
+ *
+ * Adjacent before/after still collapse to the larger gap, but before is dropped entirely when
+ * the paragraph begins at the top of a page mid-section. The first paragraph of a document or
+ * section retains before. Callers publish this applied value on the fragment so shading, borders,
+ * selection, and paint share one geometry.
+ */
+export function appliedSpaceBefore(
+  before: number,
+  previousAfter: number,
+  atTopOfPage: boolean,
+  firstParagraphOfSection: boolean
+): number {
+  if (atTopOfPage && !firstParagraphOfSection) return 0;
+  return collapsedSpaceBefore(before, previousAfter);
 }

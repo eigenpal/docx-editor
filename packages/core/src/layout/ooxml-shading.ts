@@ -3,8 +3,13 @@
 // `w:shd/@w:fill` is attacker-controlled. Only a strict 6-hex RRGGBB leaves this boundary;
 // `auto`/`nil`, theme fills, CSS/URL payloads, and pattern rendering are rejected or deferred.
 // Measurement never reads shading — resolve and paint only.
+//
+// Paragraph shading geometry is the line/content band only: Word does not extend `w:pPr/w:shd`
+// into before/after spacing or bottom-border extent. Layout publishes that box; paint must not
+// invent it from the fragment outer box.
 
 import type { OoxmlElement, OoxmlProperty } from '@docx-editor.dev/core-contract/store';
+import type { LayoutBox } from './semantic-records.ts';
 
 const STRICT_HEX = /^[0-9A-Fa-f]{6}$/;
 
@@ -56,4 +61,26 @@ export function paragraphShading(props: readonly OoxmlProperty[]): string | unde
     fill = resolveOoxmlShadingFill(property.attributes);
   }
   return fill;
+}
+
+/**
+ * Page-content box for paragraph shading: union of this fragment's line boxes.
+ *
+ * Excludes collapsed before/after spacing and bottom-border extent so the painted band
+ * matches Word's content-area fill (character shading height on a single line).
+ */
+export function paragraphShadingBox(
+  lines: readonly { readonly box: LayoutBox }[],
+  x: number,
+  width: number
+): LayoutBox | undefined {
+  if (lines.length === 0) return undefined;
+  const top = lines[0]!.box.y;
+  const last = lines[lines.length - 1]!.box;
+  return {
+    x,
+    y: top,
+    width,
+    height: Math.max(last.y + last.height - top, 0),
+  };
 }

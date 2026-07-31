@@ -12,6 +12,14 @@
 
 import type { OoxmlElement, OoxmlNode } from '@docx-editor.dev/core-contract/store';
 import { shadingFillFromElement } from './ooxml-shading.ts';
+import {
+  EMPTY_CELL_BORDER_BOX,
+  EMPTY_TABLE_BORDER_BOX,
+  readCellBorders,
+  readTableBorders,
+  type CellBorderBox,
+  type TableBorderBox,
+} from './table-borders.ts';
 
 /** Far above anything Word authors (its UI caps at 63) while keeping allocation bounded. */
 export const MAX_TABLE_COLUMNS = 1024;
@@ -23,8 +31,30 @@ export const MAX_TABLE_COLUMNS = 1024;
  */
 export const MAX_TABLE_NESTING = 16;
 
-/** Cell padding in points (60 twips). */
+/**
+ * Fallback cell padding in points (60 twips) when neither `tblCellMar` nor `tcMar` authors
+ * a side. Matches the historical uniform `CELL_PAD` inset.
+ */
 export const CELL_PAD = 3;
+
+/** Soft ceiling on a single margin side (~22"). */
+const MAX_CELL_MARGIN_PT = 31_680 / 20;
+
+export type CellVerticalAlign = 'top' | 'center' | 'bottom';
+
+export interface CellMarginsPt {
+  readonly top: number;
+  readonly right: number;
+  readonly bottom: number;
+  readonly left: number;
+}
+
+export const DEFAULT_CELL_MARGINS: CellMarginsPt = {
+  top: CELL_PAD,
+  right: CELL_PAD,
+  bottom: CELL_PAD,
+  left: CELL_PAD,
+};
 
 export interface SemanticTableCell {
   readonly id: string;
@@ -32,6 +62,12 @@ export interface SemanticTableCell {
   readonly gridSpan: number;
   /** A vMerge cell that is not the restart continues the cell above: box, no content. */
   readonly vMergeContinue: boolean;
+  /** `w:vAlign` — defaults to top when omitted/unrecognised. */
+  readonly vAlign: CellVerticalAlign;
+  /** Resolved per-side margins (tcMar over tblCellMar over CELL_PAD). */
+  readonly margins: CellMarginsPt;
+  /** Three-state authored `tcBorders` (omitted / none / edge). */
+  readonly borders: CellBorderBox;
   /** Validated 6-hex shading fill, absent for none/auto. */
   readonly shading?: string;
   /** Block children in reading order: `paragraph` and `table` typed nodes only. */
@@ -48,6 +84,10 @@ export interface SemanticTableRow {
 export interface SemanticTableStructure {
   readonly columnWidthsPt: readonly number[];
   readonly rows: readonly SemanticTableRow[];
+  /** Table-level `tblBorders` (three-state, including insideH/insideV). */
+  readonly tableBorders: TableBorderBox;
+  /** Table-level `tblCellMar` defaults (per-side, CELL_PAD when a side is omitted). */
+  readonly defaultMargins: CellMarginsPt;
 }
 
 function childNamed(node: OoxmlElement, localName: string): OoxmlElement | undefined {
@@ -76,6 +116,14 @@ function readVMergeContinue(cellProperties: OoxmlElement | undefined): boolean {
   return attributeValue(vMerge, 'val') !== 'restart';
 }
 
+function readVAlign(cellProperties: OoxmlElement | undefined): CellVerticalAlign {
+  const node = cellProperties && childNamed(cellProperties, 'vAlign');
+  const value = node && attributeValue(node, 'val');
+  if (value === 'center') return 'center';
+  if (value === 'bottom') return 'bottom';
+  return 'top';
+}
+
 function readShading(cellProperties: OoxmlElement | undefined): string | undefined {
   return shadingFillFromElement(cellProperties && childNamed(cellProperties, 'shd'));
 }
@@ -85,6 +133,53 @@ function readFlag(container: OoxmlElement | undefined, localName: string): boole
   if (!flag) return false;
   const value = attributeValue(flag, 'val');
   return value !== '0' && value !== 'false';
+}
+
+function twipsSide(node: OoxmlElement | undefined): number | undefined {
+  if (!node) return undefined;
+  const raw = attributeValue(node, 'w');
+  if (raw === undefined || !/^\d{1,9}$/.test(raw)) return undefined;
+  const twips = Number(raw);
+  if (!Number.isFinite(twips) || twips < 0) return undefined;
+  const pt = twips / 20;
+  return pt > MAX_CELL_MARGIN_PT ? MAX_CELL_MARGIN_PT : pt;
+}
+
+/**
+ * Read `tblCellMar` / `tcMar`. Each omitted side stays undefined so callers can fall back
+ * per-side (tcMar → tblCellMar → CELL_PAD).
+ */
+function readMarginSides(
+  container: OoxmlElement | undefined
+): Partial<CellMarginsPt> {
+  if (!container) return {};
+  const top = twipsSide(childNamed(container, 'top'));
+  const left = twipsSide(childNamed(container, 'left'));
+  const bottom = twipsSide(childNamed(container, 'bottom'));
+  const right = twipsSide(childNamed(container, 'right'));
+  return {
+    ...(top === undefined ? {} : { top }),
+    ...(left === undefined ? {} : { left }),
+    ...(bottom === undefined ? {} : { bottom }),
+    ...(right === undefined ? {} : { right }),
+  };
+}
+
+function mergeMargins(
+  tableDefaults: CellMarginsPt,
+  cellOverride: Partial<CellMarginsPt>
+): CellMarginsPt {
+  return {
+    top: cellOverride.top ?? tableDefaults.top,
+    right: cellOverride.right ?? tableDefaults.right,
+    bottom: cellOverride.bottom ?? tableDefaults.bottom,
+    left: cellOverride.left ?? tableDefaults.left,
+  };
+}
+
+function readDefaultMargins(tblPr: OoxmlElement | undefined): CellMarginsPt {
+  const authored = readMarginSides(tblPr && childNamed(tblPr, 'tblCellMar'));
+  return mergeMargins(DEFAULT_CELL_MARGINS, authored);
 }
 
 /**
@@ -143,6 +238,10 @@ export function readTableStructure(
   if (depth >= MAX_TABLE_NESTING) return null;
   if (table.kind !== 'table') return null;
 
+  const tblPr = childNamed(table, 'tblPr');
+  const defaultMargins = readDefaultMargins(tblPr);
+  const tableBorders = tblPr ? readTableBorders(tblPr) : EMPTY_TABLE_BORDER_BOX;
+
   const rows: SemanticTableRow[] = [];
   for (const rowNode of table.children) {
     if (rowNode.kind !== 'tableRow') continue;
@@ -152,6 +251,10 @@ export function readTableStructure(
       if (cellNode.kind !== 'tableCell') continue;
       const cellProperties = childNamed(cellNode, 'tcPr');
       const shading = readShading(cellProperties);
+      const cellMargins = mergeMargins(
+        defaultMargins,
+        readMarginSides(cellProperties && childNamed(cellProperties, 'tcMar'))
+      );
       const blocks: OoxmlElement[] = [];
       for (const child of cellNode.children) {
         if (child.kind === 'paragraph' || child.kind === 'table') blocks.push(child);
@@ -160,6 +263,9 @@ export function readTableStructure(
         id: cellNode.id,
         gridSpan: readGridSpan(cellProperties),
         vMergeContinue: readVMergeContinue(cellProperties),
+        vAlign: readVAlign(cellProperties),
+        margins: cellMargins,
+        borders: cellProperties ? readCellBorders(cellProperties) : EMPTY_CELL_BORDER_BOX,
         ...(shading === undefined ? {} : { shading }),
         blocks,
       });
@@ -167,5 +273,10 @@ export function readTableStructure(
     rows.push({ id: rowNode.id, isHeader: readFlag(rowProperties, 'tblHeader'), cells });
   }
 
-  return { columnWidthsPt: columnWidthsPt(table, rows, contentWidthPt), rows };
+  return {
+    columnWidthsPt: columnWidthsPt(table, rows, contentWidthPt),
+    rows,
+    tableBorders,
+    defaultMargins,
+  };
 }

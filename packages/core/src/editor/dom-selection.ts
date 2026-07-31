@@ -98,6 +98,9 @@ export function positionFromDomPoint(
   const nearestElement =
     node.nodeType === Node.ELEMENT_NODE ? (node as Element) : node.parentElement;
   if (nearestElement?.closest('[data-docx-hf]')) return null;
+  // List markers are painted furniture, not model text — refuse rather than mapping into
+  // the adjacent run via a child-index fallback.
+  if (nearestElement?.closest('[data-docx-marker]')) return null;
 
   // An ELEMENT endpoint carries a child index, never a character offset — including when the
   // element is a painted span. Runs are inline-blocks, so a shift-click or a drag across one

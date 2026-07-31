@@ -16,8 +16,14 @@
 import type { OoxmlProperty } from '@docx-editor.dev/core-contract/store';
 import type { ParagraphBorderEdge, ParagraphSpacing } from './paragraph-style.ts';
 import type { ResolvedRunStyle } from './run-style.ts';
+import type { ResolvedCellBorders } from './table-borders.ts';
 
 export type { ParagraphBorderEdge, ParagraphSpacing } from './paragraph-style.ts';
+export type {
+  ResolvedCellBorders,
+  ResolvedTableBorderEdge,
+  TableBorderStyle,
+} from './table-borders.ts';
 
 /** A half-open UTF-16 range inside one paragraph, addressed by its canonical node id. */
 export interface SourceRange {
@@ -97,10 +103,36 @@ export interface ParagraphFragmentRecord {
   /**
    * Validated 6-hex paragraph shading fill (`w:pPr/w:shd`), absent for none/auto.
    *
-   * Paint fills the fragment box (indent-aware content width). Measurement ignores it.
+   * Paint fills {@link shadingBox} (line/content area only). Measurement ignores it.
    */
   readonly shading?: string;
+  /**
+   * Geometry of the paragraph shading band when {@link shading} is set.
+   *
+   * Covers the fragment's line boxes (indent-aware width) — not before/after spacing or
+   * bottom-border extent. Absent when there is no fill.
+   */
+  readonly shadingBox?: LayoutBox;
+  /**
+   * List marker painted in the hanging-indent slot of the FIRST fragment only.
+   *
+   * Not part of model text: no UTF-16 range, never contributes to caret/selection offsets,
+   * and must not be serialised back into the paragraph.
+   */
+  readonly marker?: ListMarkerRecord;
   readonly lines: readonly LineRecord[];
+  readonly box: LayoutBox;
+}
+
+/**
+ * A numbering marker as layout published it.
+ *
+ * Geometry is in the same coordinate space as the fragment (page-content or cell-content
+ * relative). Paint positions from this box and MUST NOT remeasure the marker.
+ */
+export interface ListMarkerRecord {
+  readonly text: string;
+  readonly style: ResolvedRunStyle;
   readonly box: LayoutBox;
 }
 
@@ -143,8 +175,17 @@ export interface TableCellFragmentRecord {
   readonly gridSpan: number;
   /** A vertical-merge continuation paints its box but holds no blocks. */
   readonly vMergeContinue: boolean;
+  /**
+   * When true, paint skips borders/fill/content for this cell (vMerge continue). Grid
+   * bookkeeping and the box remain so selection/geometry walks stay consistent.
+   */
+  readonly paintInert?: boolean;
+  /** Number of rows this restart cell visually spans (1 when not a vertical merge). */
+  readonly rowSpan?: number;
   /** Validated 6-hex cell shading fill, absent for none/auto. */
   readonly shading?: string;
+  /** Layout-owned resolved per-edge borders after collapsed conflict resolution. */
+  readonly borders?: ResolvedCellBorders;
   /** Nested blocks in reading order; recursion carries nested tables. */
   readonly blocks: readonly BlockFragmentRecord[];
   readonly box: LayoutBox;

@@ -9,6 +9,8 @@
 import type { TreeDocxSession } from '@docx-editor.dev/core-contract/binding';
 import type { OoxmlPart } from '@docx-editor.dev/core-contract/store';
 import {
+  buildNumberingIndex,
+  buildStyleCascadeTable,
   caretAt,
   enumerateDocumentSections,
   geometryOfSection,
@@ -16,9 +18,11 @@ import {
   pagesToMaterialize,
   readSectionProperties,
   type HeaderFooterVariantName,
+  type NumberingIndex,
   type PageFurniture,
   type SemanticLayout,
   type SemanticSelection,
+  type StyleCascadeTable,
   type TextMeasurer,
 } from '@docx-editor.dev/core-contract/layout';
 
@@ -113,6 +117,17 @@ export function createFurnitureSource(env: {
   }
 
   return { geometry, furniture, sectionFurniture };
+}
+
+/** Immutable-in-session style + numbering projections shared by body and furniture layout. */
+export function createSurfaceStyleDeps(session: TreeDocxSession): {
+  readonly styleCascade: StyleCascadeTable | undefined;
+  readonly numberingIndex: NumberingIndex;
+} {
+  return {
+    styleCascade: buildStyleCascadeTable(session.stylesRoot()),
+    numberingIndex: buildNumberingIndex(session.numberingRoot()),
+  };
 }
 
 /**

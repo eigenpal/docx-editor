@@ -4,6 +4,7 @@ import { describe, expect, test } from 'bun:test';
 import { readOoxmlPart, type OoxmlPart } from '@docx-editor.dev/core-contract/store';
 import {
   MAX_PARAGRAPH_SPACING_PT,
+  appliedSpaceBefore,
   collapsedSpaceBefore,
   paragraphBorders,
   paragraphSpacing,
@@ -65,6 +66,12 @@ describe('paragraphSpacing resolves w:spacing before/after', () => {
     expect(collapsedSpaceBefore(8, 10)).toBe(0);
     expect(collapsedSpaceBefore(10, 0)).toBe(10);
   });
+
+  test('appliedSpaceBefore suppresses mid-section top-of-page before', () => {
+    expect(appliedSpaceBefore(18, 0, true, false)).toBe(0);
+    expect(appliedSpaceBefore(18, 0, true, true)).toBe(18);
+    expect(appliedSpaceBefore(18, 10, false, false)).toBe(8);
+  });
 });
 
 describe('paragraphBorders resolves w:pBdr bottom', () => {
@@ -118,7 +125,7 @@ describe('layout accounts for spacing in pagination and fragment geometry', () =
     expect(second!.lines[0]!.box.y - first!.lines[0]!.box.y).toBe(14 + 12);
   });
 
-  test('explicit before is honoured on the first paragraph of a page', () => {
+  test('explicit before is honoured on the first paragraph of a document/section', () => {
     const layout = lay(load(paragraph('title', '<w:spacing w:before="200"/>')));
     const [fragment] = layout.pages[0]!.fragments;
     expect(fragment!.kind).toBe('paragraph');
@@ -212,6 +219,98 @@ describe('comprehensive fixture: bottom border rule and vertical spacing', () =>
     // propertiesOf does not flatten nested pBdr children — borders read the tree.
     expect(props.some((property) => property.localName === 'pBdr')).toBe(true);
     expect(paragraphBorders(pPr).bottom?.color).toBe('FF0000');
+  });
+});
+
+describe('Word 2013+ top-of-page space-before suppression', () => {
+  function firstParagraphOnPage(
+    layout: ReturnType<typeof lay>,
+    pageIndex: number
+  ): Extract<
+    NonNullable<ReturnType<typeof lay>['pages'][number]>['fragments'][number],
+    { kind: 'paragraph' }
+  > {
+    const fragment = layout.pages[pageIndex]!.fragments.find((entry) => entry.kind === 'paragraph');
+    expect(fragment?.kind).toBe('paragraph');
+    if (!fragment || fragment.kind !== 'paragraph') {
+      throw new Error(`expected paragraph on page ${pageIndex}`);
+    }
+    return fragment;
+  }
+
+  test('empty hard page-break paragraph suppresses before on the next page', () => {
+    const layout = lay(
+      load(
+        paragraph('before') +
+          '<w:p><w:r><w:br w:type="page"/></w:r></w:p>' +
+          paragraph('heading', '<w:spacing w:before="360"/>')
+      )
+    );
+    expect(layout.pages.length).toBeGreaterThanOrEqual(2);
+    const heading = firstParagraphOnPage(layout, 1);
+    expect(heading.lines[0]!.spans.map((span) => span.text).join('')).toBe('heading');
+    expect(heading.spacing.before).toBe(0);
+    expect(heading.box.y).toBe(0);
+    expect(heading.lines[0]!.box.y).toBe(0);
+  });
+
+  test('pageBreakBefore suppresses before at the top of the new page', () => {
+    const layout = lay(
+      load(
+        paragraph('first') +
+          paragraph('second', '<w:pageBreakBefore/><w:spacing w:before="200"/>')
+      )
+    );
+    expect(layout.pages.length).toBeGreaterThanOrEqual(2);
+    const second = firstParagraphOnPage(layout, 1);
+    expect(second.lines[0]!.spans.map((span) => span.text).join('')).toBe('second');
+    expect(second.spacing.before).toBe(0);
+    expect(second.lines[0]!.box.y).toBe(0);
+  });
+
+  test('natural pagination suppresses before when a paragraph moves to the next page', () => {
+    // Content height 80pt; first paragraph's after pushes the second onto page 2.
+    const layout = lay(
+      load(
+        paragraph('first', '<w:spacing w:after="1200"/>') +
+          paragraph('second', '<w:spacing w:before="200"/>')
+      ),
+      SMALL
+    );
+    expect(layout.pages.length).toBeGreaterThanOrEqual(2);
+    const second = firstParagraphOnPage(layout, 1);
+    expect(second.lines[0]!.spans.map((span) => span.text).join('')).toBe('second');
+    expect(second.spacing.before).toBe(0);
+    expect(second.lines[0]!.box.y).toBe(0);
+  });
+
+  test('first paragraph after a section break retains before spacing', () => {
+    const layout = lay(
+      load(
+        paragraph('cover') +
+          '<w:p><w:pPr><w:sectPr>' +
+          '<w:pgSz w:w="4000" w:h="4000"/>' +
+          '<w:pgMar w:top="200" w:right="200" w:bottom="200" w:left="200"/>' +
+          '</w:sectPr></w:pPr></w:p>' +
+          paragraph('body', '<w:spacing w:before="360"/>') +
+          '<w:sectPr>' +
+          '<w:pgSz w:w="4000" w:h="4000"/>' +
+          '<w:pgMar w:top="200" w:right="200" w:bottom="200" w:left="200"/>' +
+          '</w:sectPr>'
+      )
+    );
+    expect(layout.pages.length).toBeGreaterThanOrEqual(2);
+    const body = firstParagraphOnPage(layout, 1);
+    expect(body.lines[0]!.spans.map((span) => span.text).join('')).toBe('body');
+    expect(body.spacing.before).toBe(18);
+    expect(body.lines[0]!.box.y).toBe(18);
+  });
+
+  test('document-first paragraph retains explicit before', () => {
+    const layout = lay(load(paragraph('title', '<w:spacing w:before="360"/>')));
+    const title = firstParagraphOnPage(layout, 0);
+    expect(title.spacing.before).toBe(18);
+    expect(title.lines[0]!.box.y).toBe(18);
   });
 });
 

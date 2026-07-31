@@ -15,8 +15,10 @@ import type {
   PageRecord,
   ParagraphFragmentRecord,
   ResolvedRunStyle,
+  ResolvedTableBorderEdge,
   SemanticLayout,
   StyleSpanRecord,
+  TableCellFragmentRecord,
   TableFragmentRecord,
 } from '@docx-editor.dev/core-contract/layout';
 
@@ -89,8 +91,86 @@ const HIGHLIGHT = new Map<string, string>(
   })
 );
 
-/** Apply a resolved run style to an element, value by validated value. */
-function applyRunStyle(element: HTMLElement, style: ResolvedRunStyle, scale: number): void {
+type StrikeKind = 'none' | 'single' | 'double';
+
+interface UnderlineDecoration {
+  readonly cssStyle: string;
+  /** Validated RRGGBB, or null when the underline follows the text colour. */
+  readonly color: string | null;
+  readonly heavy: boolean;
+}
+
+/** `w:dstrike` wins when both strike toggles are present (Word's Font dialog exclusivity). */
+function strikeKindOf(style: ResolvedRunStyle): StrikeKind {
+  if (style.doubleStrike) return 'double';
+  if (style.strike) return 'single';
+  return 'none';
+}
+
+function underlineHeavy(variant: string): boolean {
+  return variant === 'thick' || variant.endsWith('Heavy');
+}
+
+function underlineDecorationOf(style: ResolvedRunStyle): UnderlineDecoration | null {
+  if (!style.underline) return null;
+  const color =
+    style.underline.color && HEX.test(style.underline.color) ? style.underline.color : null;
+  return {
+    cssStyle: UNDERLINE_STYLE.get(style.underline.variant) ?? 'solid',
+    color,
+    heavy: underlineHeavy(style.underline.variant),
+  };
+}
+
+/**
+ * Apply one CSS text-decoration family to an element.
+ *
+ * Underline and strike must never share a single `text-decoration-*` declaration when their
+ * style, colour or thickness differ — CSS applies those properties to every line on the
+ * element. Callers nest independent layers when both families are present.
+ */
+function applyTextDecoration(
+  css: CSSStyleDeclaration,
+  line: 'underline' | 'line-through',
+  decorationStyle: string,
+  options: { color?: string | null; heavy?: boolean; scale: number }
+): void {
+  css.textDecorationLine = line;
+  css.textDecorationStyle = decorationStyle;
+  if (options.color) css.textDecorationColor = `#${options.color}`;
+  if (options.heavy) {
+    // Word's thick / *Heavy underlines are roughly twice a single rule. Floor scales with
+    // paint zoom so a 200% surface does not keep a 100%-thin heavy line.
+    css.textDecorationThickness = `max(${2 * options.scale}px, 0.12em)`;
+  }
+}
+
+function applyStrikeDecoration(
+  css: CSSStyleDeclaration,
+  strike: StrikeKind,
+  scale: number
+): void {
+  if (strike === 'none') return;
+  applyTextDecoration(css, 'line-through', strike === 'double' ? 'double' : 'solid', { scale });
+}
+
+function applyUnderlineDecoration(
+  css: CSSStyleDeclaration,
+  underline: UnderlineDecoration,
+  scale: number
+): void {
+  applyTextDecoration(css, 'underline', underline.cssStyle, {
+    color: underline.color,
+    heavy: underline.heavy,
+    scale,
+  });
+}
+
+/**
+ * Face / box styles only — decorations are applied separately so underline and strike can
+ * live on independent nested layers without sharing style/colour/thickness.
+ */
+function applyRunFaceStyle(element: HTMLElement, style: ResolvedRunStyle, scale: number): void {
   const css = element.style;
   // Super/subscript draw at three quarters — the same reduction the measurer applies, so
   // the painted glyphs match the advance layout reserved. Painting them full size while
@@ -141,19 +221,43 @@ function applyRunStyle(element: HTMLElement, style: ResolvedRunStyle, scale: num
     css.transformOrigin = 'left';
     css.transform = `scaleX(${style.horizontalScalePercent / 100})`;
   }
+}
 
-  const decorations: string[] = [];
-  if (style.underline) decorations.push('underline');
-  if (style.strike || style.doubleStrike) decorations.push('line-through');
-  if (decorations.length > 0) {
-    css.textDecorationLine = decorations.join(' ');
-    if (style.underline) {
-      css.textDecorationStyle = UNDERLINE_STYLE.get(style.underline.variant) ?? 'solid';
-      if (style.underline.color && HEX.test(style.underline.color)) {
-        css.textDecorationColor = `#${style.underline.color}`;
-      }
-    }
+/**
+ * Mount glyph text under the correct decoration layer(s).
+ *
+ * The outer layout-run keeps geometry, model range, highlight and shading. When underline
+ * and strike both apply, nested inert spans each own one decoration family so CSS cannot
+ * leak `text-decoration-style` / colour / thickness across them.
+ */
+function mountRunText(
+  document: Document,
+  run: HTMLElement,
+  text: string,
+  style: ResolvedRunStyle,
+  scale: number
+): void {
+  const underline = underlineDecorationOf(style);
+  const strike = strikeKindOf(style);
+  let host: HTMLElement = run;
+
+  if (underline && strike !== 'none') {
+    const underlineLayer = document.createElement('span');
+    underlineLayer.dataset.docxDeco = 'underline';
+    applyUnderlineDecoration(underlineLayer.style, underline, scale);
+    const strikeLayer = document.createElement('span');
+    strikeLayer.dataset.docxDeco = 'strike';
+    applyStrikeDecoration(strikeLayer.style, strike, scale);
+    underlineLayer.append(strikeLayer);
+    run.append(underlineLayer);
+    host = strikeLayer;
+  } else if (underline) {
+    applyUnderlineDecoration(run.style, underline, scale);
+  } else if (strike !== 'none') {
+    applyStrikeDecoration(run.style, strike, scale);
   }
+
+  host.textContent = text; // SAFE: textContent, never innerHTML
 }
 
 function positioned(
@@ -185,7 +289,7 @@ function paintSpan(document: Document, span: StyleSpanRecord, scale: number): HT
   element.dataset.paragraphId = span.range.paragraphId;
   element.dataset.start = String(span.range.start);
   element.dataset.end = String(span.range.end);
-  applyRunStyle(element, span.style, scale);
+  applyRunFaceStyle(element, span.style, scale);
   // Layout owns advances that the browser cannot reconstruct: horizontal scaling (transform
   // does not reserve space) and OOXML tab stops (`\t` would otherwise paint as a narrow
   // native tab). Both must take the published box width so following runs start where
@@ -198,7 +302,7 @@ function paintSpan(document: Document, span: StyleSpanRecord, scale: number): HT
     // spill past the reserved advance.
     element.style.overflow = 'hidden';
   }
-  element.textContent = span.text; // SAFE: textContent, never innerHTML
+  mountRunText(document, element, span.text, span.style, scale);
   return element;
 }
 
@@ -234,14 +338,14 @@ function paintLine(document: Document, line: LineRecord, scale: number): HTMLEle
   // run gets an 8pt band and a 36pt run a 36pt one, stepped, the way Word draws it.
   // Forcing the line's height onto every run instead paints one uniform slab.
   //
-  // This only tiles because layout's line height is now the font's own ascent + descent +
-  // line gap — the same quantity the browser resolves `normal` to. While the line height
-  // came from a multiplier the two disagreed, and the bands either fell short of the next
-  // line or lapped it.
-  //
-  // Set explicitly rather than inherited, so a host page's own line-height cannot change
-  // how the document renders.
-  element.style.lineHeight = 'normal';
+  // Kill the anonymous line strut that inherits the host page's 16px font-size. That strut
+  // shoved baseline-aligned inline-block runs a couple of pixels down, so character shading
+  // / highlight backgrounds sat below the paragraph shading band (which uses line-box
+  // geometry). `font-size: 0` removes the strut; the published line height is applied as an
+  // explicit pixel line-height. Child runs keep their own font sizes and `vertical-align:
+  // baseline`, so mixed-size and superscript/subscript (relative offset) still work.
+  element.style.fontSize = '0';
+  element.style.lineHeight = `${line.box.height * scale}px`;
   element.style.whiteSpace = 'pre';
   // A raised superscript or a tall glyph draws outside the line box rather than being
   // clipped at it; the box governs spacing and the selection band, not what is visible.
@@ -278,10 +382,14 @@ function paintFragment(
   element.className = 'docx-paragraph-fragment layout-paragraph';
   element.dataset.paragraphId = fragment.paragraphId;
   element.dataset.fragmentIndex = String(fragment.fragmentIndex);
-  // Fragment box is already indent-aware (`x`/`width` = content between left/right indent).
-  // Re-validate at the sink like every other file-derived colour.
-  if (fragment.shading && HEX.test(fragment.shading)) {
-    element.style.backgroundColor = `#${fragment.shading}`;
+  // Fragment box remains the flow/hit region (includes before/after spacing). Paragraph
+  // shading paints from the published line-area box — never the outer fragment background.
+  if (fragment.shading && HEX.test(fragment.shading) && fragment.shadingBox) {
+    element.append(paintParagraphShading(document, fragment, scale));
+  }
+  // List markers are layout furniture inside the hanging indent — never model text.
+  if (fragment.marker) {
+    element.append(paintListMarker(document, fragment, scale));
   }
   for (const line of fragment.lines) {
     const painted = paintLine(document, line, scale);
@@ -297,6 +405,54 @@ function paintFragment(
     element.append(paintBottomBorder(document, fragment, scale));
   }
   return element;
+}
+
+/**
+ * Paint a list marker from layout-published geometry.
+ *
+ * Inert to editing/selection (`data-docx-marker`), same exclusion class as header/footer
+ * furniture. Text is `textContent` only; face styles come from the resolved marker style.
+ */
+function paintListMarker(
+  document: Document,
+  fragment: ParagraphFragmentRecord,
+  scale: number
+): HTMLElement {
+  const marker = fragment.marker!;
+  const element = positioned(document, 'span', marker.box, scale);
+  element.className = 'docx-list-marker';
+  element.dataset.docxMarker = '';
+  element.setAttribute('contenteditable', 'false');
+  element.setAttribute('aria-hidden', 'true');
+  element.style.left = `${(marker.box.x - fragment.box.x) * scale}px`;
+  element.style.top = `${(marker.box.y - fragment.box.y) * scale}px`;
+  element.style.display = 'block';
+  element.style.overflow = 'visible';
+  element.style.whiteSpace = 'pre';
+  applyRunFaceStyle(element, marker.style, scale);
+  mountRunText(document, element, marker.text, marker.style, scale);
+  return element;
+}
+
+/**
+ * Paint paragraph shading from layout-published geometry.
+ *
+ * Height/position come from `shadingBox` (line union) — not from fragment outer height or
+ * computed style. Colour is re-validated at the sink like every other file-derived fill.
+ */
+function paintParagraphShading(
+  document: Document,
+  fragment: ParagraphFragmentRecord,
+  scale: number
+): HTMLElement {
+  const box = fragment.shadingBox!;
+  const band = positioned(document, 'div', box, scale);
+  band.className = 'docx-paragraph-shading';
+  band.setAttribute('aria-hidden', 'true');
+  band.style.left = `${(box.x - fragment.box.x) * scale}px`;
+  band.style.top = `${(box.y - fragment.box.y) * scale}px`;
+  band.style.backgroundColor = `#${fragment.shading}`;
+  return band;
 }
 
 /**
@@ -347,12 +503,217 @@ function paintBottomBorder(
   return rule;
 }
 
+type TableBorderSide = 'Top' | 'Right' | 'Bottom' | 'Left';
+
+/** Map a layout-owned table border style to a CSS border-style keyword. */
+function cssBorderStyle(style: ResolvedTableBorderEdge['style']): string {
+  switch (style) {
+    case 'dashed':
+      return 'dashed';
+    case 'dotted':
+      return 'dotted';
+    case 'double':
+    case 'triple':
+      // CSS `double` collapses below ~3px; multi-rule styles use inert overlays instead.
+      return 'solid';
+    case 'thick':
+    case 'single':
+    default:
+      return 'solid';
+  }
+}
+
+/** Selection-inert overlay shell for layout-owned multi-stroke table edges. */
+function createTableBorderOverlay(document: Document, className: string): HTMLDivElement {
+  const overlay = document.createElement('div');
+  overlay.className = className;
+  overlay.setAttribute('aria-hidden', 'true');
+  overlay.setAttribute('contenteditable', 'false');
+  overlay.style.position = 'absolute';
+  overlay.style.pointerEvents = 'none';
+  overlay.style.boxSizing = 'border-box';
+  return overlay;
+}
+
+/** Minimum visible stroke/gap in CSS px; subpixel only when authored extent supports it. */
+const DOUBLE_BORDER_MIN_STROKE_PX = 1;
+const DOUBLE_BORDER_MIN_GAP_PX = 1;
+
+interface DoubleBorderMetrics {
+  readonly strokePx: number;
+  readonly gapPx: number;
+  readonly extentPx: number;
+  /** Centers the overlay on the authored border band; negative extends outward. */
+  readonly insetPx: number;
+}
+
+/** Deterministic stroke / gap / extent for a double table edge at paint scale. */
+function computeDoubleBorderMetrics(widthPx: number): DoubleBorderMetrics {
+  const minExtent = 2 * DOUBLE_BORDER_MIN_STROKE_PX + DOUBLE_BORDER_MIN_GAP_PX;
+  if (widthPx >= minExtent) {
+    const unit = widthPx / 3;
+    if (unit >= DOUBLE_BORDER_MIN_STROKE_PX) {
+      return { strokePx: unit, gapPx: unit, extentPx: widthPx, insetPx: 0 };
+    }
+  }
+  const strokePx = DOUBLE_BORDER_MIN_STROKE_PX;
+  const gapPx = DOUBLE_BORDER_MIN_GAP_PX;
+  const extentPx = Math.max(widthPx, minExtent);
+  return { strokePx, gapPx, extentPx, insetPx: (widthPx - extentPx) / 2 };
+}
+
+function positionTableBorderOverlay(
+  overlay: HTMLElement,
+  side: TableBorderSide,
+  extentPx: number,
+  insetPx = 0
+): void {
+  const inset = `${insetPx}px`;
+  if (side === 'Bottom' || side === 'Top') {
+    overlay.style.left = '0';
+    overlay.style.right = '0';
+    overlay.style.height = `${extentPx}px`;
+    if (side === 'Bottom') overlay.style.bottom = inset;
+    else overlay.style.top = inset;
+    return;
+  }
+  overlay.style.top = '0';
+  overlay.style.bottom = '0';
+  overlay.style.width = `${extentPx}px`;
+  if (side === 'Right') overlay.style.right = inset;
+  else overlay.style.left = inset;
+}
+
 /**
- * One painted table fragment: positioned row and cell boxes, a 1px black border and the
- * validated shading per cell (the legacy rect's `stroke: '000000'`/`fill`), and the cell's
- * blocks recursing into the ordinary painters — which is what gives cell text the same
- * `data-paragraph-id`/`data-start` attributes as body text, so selection and the caret
- * work inside cells with no extra wiring.
+ * Two explicit strokes separated by a real gap inside the overlay extent.
+ * With `box-sizing: border-box`, border-top/bottom (or left/right) reserve the gap.
+ */
+function paintDoubleTableBorderOverlay(
+  overlay: HTMLElement,
+  side: TableBorderSide,
+  color: string,
+  strokePx: number
+): void {
+  overlay.style.backgroundColor = 'transparent';
+  const stroke = `${strokePx}px solid #${color}`;
+  if (side === 'Top' || side === 'Bottom') {
+    overlay.style.borderTop = stroke;
+    overlay.style.borderBottom = stroke;
+  } else {
+    overlay.style.borderLeft = stroke;
+    overlay.style.borderRight = stroke;
+  }
+}
+
+/** Three explicit strokes; overlay may extend past the published extent (CSS has no triple). */
+function paintTripleTableBorderOverlay(
+  overlay: HTMLElement,
+  side: TableBorderSide,
+  color: string,
+  widthPx: number
+): void {
+  const gap = Math.max(1, widthPx);
+  const extentPx = widthPx * 3 + gap * 2;
+  positionTableBorderOverlay(overlay, side, extentPx);
+  if (side === 'Bottom' || side === 'Top') {
+    overlay.style.borderTop = `${widthPx}px solid #${color}`;
+    overlay.style.borderBottom = `${widthPx}px solid #${color}`;
+    overlay.style.backgroundImage = `linear-gradient(#${color}, #${color})`;
+    overlay.style.backgroundSize = `100% ${widthPx}px`;
+    overlay.style.backgroundPosition = 'center';
+    overlay.style.backgroundRepeat = 'no-repeat';
+  } else {
+    overlay.style.borderLeft = `${widthPx}px solid #${color}`;
+    overlay.style.borderRight = `${widthPx}px solid #${color}`;
+    overlay.style.backgroundImage = `linear-gradient(to right, #${color}, #${color})`;
+    overlay.style.backgroundSize = `${widthPx}px 100%`;
+    overlay.style.backgroundPosition = 'center';
+    overlay.style.backgroundRepeat = 'no-repeat';
+  }
+}
+
+function applyCellBorderEdge(
+  element: HTMLElement,
+  side: TableBorderSide,
+  edge: ResolvedTableBorderEdge | undefined,
+  scale: number,
+  document: Document
+): void {
+  if (!edge) return;
+  const color = edge.color && HEX.test(edge.color) ? edge.color : '000000';
+  const widthPx = Math.max(1, edge.widthPt * scale);
+  const cssStyle = cssBorderStyle(edge.style);
+  element.style[`border${side}Width` as 'borderTopWidth'] = `${widthPx}px`;
+  element.style[`border${side}Style` as 'borderTopStyle'] = cssStyle;
+  element.style[`border${side}Color` as 'borderTopColor'] = `#${color}`;
+
+  if (edge.style === 'double') {
+    const metrics = computeDoubleBorderMetrics(widthPx);
+    const overlay = createTableBorderOverlay(document, 'docx-table-border-double');
+    positionTableBorderOverlay(overlay, side, metrics.extentPx, metrics.insetPx);
+    paintDoubleTableBorderOverlay(overlay, side, color, metrics.strokePx);
+    element.style[`border${side}Style` as 'borderTopStyle'] = 'none';
+    element.append(overlay);
+  } else if (edge.style === 'triple') {
+    const overlay = createTableBorderOverlay(document, 'docx-table-border-triple');
+    paintTripleTableBorderOverlay(overlay, side, color, widthPx);
+    element.style[`border${side}Style` as 'borderTopStyle'] = 'none';
+    element.append(overlay);
+  }
+}
+
+function paintTableCell(
+  document: Document,
+  cell: TableCellFragmentRecord,
+  rowBox: { readonly x: number; readonly y: number },
+  scale: number
+): HTMLElement {
+  const cellElement = positioned(document, 'div', cell.box, scale);
+  cellElement.className = 'docx-table-cell';
+  cellElement.style.left = `${(cell.box.x - rowBox.x) * scale}px`;
+  cellElement.style.top = `${(cell.box.y - rowBox.y) * scale}px`;
+  cellElement.style.boxSizing = 'border-box';
+  cellElement.style.overflow = 'visible';
+  if (cell.rowSpan && cell.rowSpan > 1) {
+    cellElement.dataset.rowSpan = String(cell.rowSpan);
+  }
+
+  // Continuation cells stay in the tree for grid bookkeeping but paint nothing.
+  if (cell.paintInert || cell.vMergeContinue) {
+    cellElement.dataset.vMergeContinue = 'true';
+    cellElement.style.border = 'none';
+    cellElement.style.backgroundColor = 'transparent';
+    return cellElement;
+  }
+
+  cellElement.style.border = 'none';
+  const borders = cell.borders;
+  applyCellBorderEdge(cellElement, 'Top', borders?.top, scale, document);
+  applyCellBorderEdge(cellElement, 'Right', borders?.right, scale, document);
+  applyCellBorderEdge(cellElement, 'Bottom', borders?.bottom, scale, document);
+  applyCellBorderEdge(cellElement, 'Left', borders?.left, scale, document);
+
+  // Re-validated at the sink, like every other file-derived style value here.
+  if (cell.shading && HEX.test(cell.shading)) {
+    cellElement.style.backgroundColor = `#${cell.shading}`;
+  }
+  for (const block of cell.blocks) {
+    const painted =
+      block.kind === 'table'
+        ? paintTableFragment(document, block, scale)
+        : paintFragment(document, block, scale);
+    painted.style.left = `${(block.box.x - cell.box.x) * scale}px`;
+    painted.style.top = `${(block.box.y - cell.box.y) * scale}px`;
+    cellElement.append(painted);
+  }
+  return cellElement;
+}
+
+/**
+ * One painted table fragment: positioned row and cell boxes, layout-owned per-edge borders
+ * and validated shading, and the cell's blocks recursing into the ordinary painters —
+ * which is what gives cell text the same `data-paragraph-id`/`data-start` attributes as
+ * body text, so selection and the caret work inside cells with no extra wiring.
  */
 function paintTableFragment(
   document: Document,
@@ -363,6 +724,7 @@ function paintTableFragment(
   element.className = 'docx-table-fragment layout-table';
   element.dataset.tableId = fragment.tableId;
   element.dataset.fragmentIndex = String(fragment.fragmentIndex);
+  element.style.overflow = 'visible';
   for (const row of fragment.rows) {
     const rowElement = positioned(document, 'div', row.box, scale);
     rowElement.className = 'docx-table-row';
@@ -370,27 +732,9 @@ function paintTableFragment(
     if (row.isHeaderRepeat) rowElement.dataset.headerRepeat = 'true';
     rowElement.style.left = `${(row.box.x - fragment.box.x) * scale}px`;
     rowElement.style.top = `${(row.box.y - fragment.box.y) * scale}px`;
+    rowElement.style.overflow = 'visible';
     for (const cell of row.cells) {
-      const cellElement = positioned(document, 'div', cell.box, scale);
-      cellElement.className = 'docx-table-cell';
-      cellElement.style.left = `${(cell.box.x - row.box.x) * scale}px`;
-      cellElement.style.top = `${(cell.box.y - row.box.y) * scale}px`;
-      cellElement.style.boxSizing = 'border-box';
-      cellElement.style.border = '1px solid #000000';
-      // Re-validated at the sink, like every other file-derived style value here.
-      if (cell.shading && HEX.test(cell.shading)) {
-        cellElement.style.backgroundColor = `#${cell.shading}`;
-      }
-      for (const block of cell.blocks) {
-        const painted =
-          block.kind === 'table'
-            ? paintTableFragment(document, block, scale)
-            : paintFragment(document, block, scale);
-        painted.style.left = `${(block.box.x - cell.box.x) * scale}px`;
-        painted.style.top = `${(block.box.y - cell.box.y) * scale}px`;
-        cellElement.append(painted);
-      }
-      rowElement.append(cellElement);
+      rowElement.append(paintTableCell(document, cell, row.box, scale));
     }
     element.append(rowElement);
   }

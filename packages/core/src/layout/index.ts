@@ -141,6 +141,7 @@ export {
   type LineRecord,
   type PageGeometry,
   type PageRecord,
+  type ListMarkerRecord,
   type ParagraphBottomBorderRecord,
   type ParagraphBorderEdge,
   type ParagraphFragmentRecord,
@@ -157,14 +158,17 @@ export {
   MAX_BORDER_SPACE_PT,
   MAX_BORDER_WIDTH_PT,
   MAX_PARAGRAPH_SPACING_PT,
+  appliedSpaceBefore,
   bottomBorderExtentPt,
   collapsedSpaceBefore,
   paragraphBorders,
+  paragraphBreaksBefore,
   paragraphSpacing,
   type ParagraphBorders,
 } from './paragraph-style.ts';
 export {
   paragraphShading,
+  paragraphShadingBox,
   resolveOoxmlShadingFill,
   resolveStrictHexFill,
   shadingFillFromElement,
@@ -194,6 +198,44 @@ export {
   type PageFurniture,
   type SemanticLayoutOptions,
 } from './semantic-layout.ts';
+export {
+  EMPTY_NUMBERING_INDEX,
+  MAX_LVL_OVERRIDES,
+  MAX_NUMBERING_DEFINITIONS,
+  buildNumberingIndex,
+  resolveNumberingLevel,
+  type AbstractNumDefinition,
+  type LevelOverride,
+  type ListMarkerAlign,
+  type ListSuffix,
+  type NumDefinition,
+  type NumberingIndex,
+  type NumberingLevel,
+  type NumberingLevelIndent,
+} from './numbering-index.ts';
+export {
+  MAX_LVL_TEXT_LENGTH,
+  MAX_MARKER_TEXT_LENGTH,
+  clampListValue,
+  expandLvlText,
+  formatDecimal,
+  formatDecimalZero,
+  formatLowerLetter,
+  formatLowerRoman,
+  formatNumFmt,
+  formatUpperLetter,
+  formatUpperRoman,
+} from './numbering-format.ts';
+export { createListCounterState, type ListCounterAdvance, type ListCounterState } from './list-counters.ts';
+export {
+  listMarkerBox,
+  mergeListIndent,
+  readNumPr,
+  resolveStoryListItems,
+  walkStoryParagraphs,
+  withResolvedListItems,
+  type ResolvedListItem,
+} from './list-resolve.ts';
 export { createFixedMeasurer } from './fixed-measurer.ts';
 export {
   DEFAULT_CANVAS_FONT_STACK,
@@ -292,3 +334,32 @@ export {
   type SemanticPosition,
   type SemanticSelection,
 } from './semantic-interaction.ts';
+export {
+  CELL_PAD,
+  DEFAULT_CELL_MARGINS,
+  MAX_TABLE_COLUMNS,
+  MAX_TABLE_NESTING,
+  readTableStructure,
+  type CellMarginsPt,
+  type CellVerticalAlign,
+  type SemanticTableCell,
+  type SemanticTableRow,
+  type SemanticTableStructure,
+} from './semantic-table.ts';
+export {
+  borderExtentPt,
+  borderWeight,
+  effectiveBorderSide,
+  readBorderSide,
+  readCellBorders,
+  readTableBorders,
+  resolveBorderConflict,
+  resolveTableCellBorderGrid,
+  type CellBorderBox,
+  type ResolvedCellBorders,
+  type ResolvedTableBorderEdge,
+  type TableBorderBox,
+  type TableBorderSide,
+  type TableBorderStyle,
+} from './table-borders.ts';
+export { finalizeTableRows, layoutRowFragment } from './semantic-table-layout.ts';
