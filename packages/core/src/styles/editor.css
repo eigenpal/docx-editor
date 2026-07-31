@@ -2375,8 +2375,10 @@
   gap: 2px;
   min-height: 36px;
   padding: 4px 8px;
-  /* The pill's neutral fill (bg-muted, the #f1f3f4-family chrome). */
-  background: var(--doc-bg-hover);
+  /* The bar fill is the spec's `bg-muted` — hsl(210 40% 96.1%),
+   * a faint blue-gray, NOT the neutral #f1f3f4 hover gray. The --muted bridge var
+   * is defined in this sheet for light and dark, so this tracks dark mode too. */
+  background: hsl(var(--muted));
   border-radius: 9999px;
   color: var(--doc-text);
   font:

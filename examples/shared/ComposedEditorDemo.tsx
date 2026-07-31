@@ -452,7 +452,7 @@ export function ComposedEditorDemo({ fixtureUrl }: { fixtureUrl: string }) {
             ) : (
               <button
                 type="button"
-                className="demo-outline-toggle"
+                className="docx-outline-toggle demo-outline-toggle"
                 aria-label="Show document outline"
                 title="Show document outline"
                 onMouseDown={keepCaret}

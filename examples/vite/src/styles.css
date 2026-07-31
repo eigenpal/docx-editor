@@ -314,27 +314,13 @@
   overflow: hidden;
 }
 
-/* Collapsed state: a small round toggle in the left gutter, Google-Docs placement. */
+/* Collapsed state: the CORE `.docx-outline-toggle` owns the look (the
+   circular disc, token-driven, dark-mode-aware); the demo adds only placement. */
 .demo-outline-toggle {
   position: absolute;
   top: 24px;
   left: 12px;
   z-index: 40;
-  width: 36px;
-  height: 36px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border: none;
-  border-radius: 50%;
-  background: transparent;
-  color: var(--doc-text-muted);
-  cursor: pointer;
-}
-
-.demo-outline-toggle:hover {
-  background: var(--doc-bg-hover);
-  color: var(--doc-text);
 }
 
 .demo-viewport {
