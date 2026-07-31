@@ -36,6 +36,11 @@ const ALLOWED_ENGINE_DEPS = new Set([
   '@docx-editor.dev/agents',
   '@docx-editor.dev/core-contract',
   '@docx-editor.dev/core-contract/editor',
+  // A leaf string catalogue, not an engine lane: it carries no document model, geometry,
+  // or editing authority, and the chrome components an adapter ships resolve every label
+  // through it. The rule this list guards is "no engine internals in an adapter", which
+  // `i18n` cannot violate.
+  '@docx-editor.dev/i18n',
 ]);
 
 /** Source tokens that indicate geometry derivation or PM bypass (comments stripped). */

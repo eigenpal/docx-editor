@@ -24,9 +24,9 @@ import {
   type ChromeSlotId,
 } from '@docx-editor.dev/react';
 import { createT, en, type TranslationKey } from '@docx-editor.dev/i18n';
-import { BrandLogo } from './BrandLogo';
-import { AdapterSwitcher } from './AdapterSwitcher';
-import { ExampleSwitcher } from './ExampleSwitcher';
+import { BrandLogo } from '../../shared/BrandLogo';
+import { AdapterSwitcher } from '../../shared/AdapterSwitcher';
+import { ExampleSwitcher } from '../../shared/ExampleSwitcher';
 import { ThemeToggle } from './ThemeToggle';
 import { DEMO_BUTTON, DEMO_PRIMARY_BUTTON, DEMO_SECONDARY_BUTTON } from './demoButtons';
 

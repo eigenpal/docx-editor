@@ -31,8 +31,13 @@ export interface DocxEditorProps {
   /**
    * Immutable byte-backed font sources sampled at mount. Remount to replace this
    * configuration atomically.
+   *
+   * Optional: omitting it lets the engine resolve faces from the document's own embedded
+   * fonts, so `<DocxEditor document={bytes} />` is a complete mount. Supply it to inject
+   * host-provided faces or substitutions. Matches `DocxEditorRoot`, which this component
+   * forwards to.
    */
-  fonts: FontConfiguration;
+  fonts?: FontConfiguration;
   /**
    * Title-bar slots. The host owns what goes here — brand lockup, switchers, theme
    * toggle, Open/New/Save controls — and passes them in; the editor renders them

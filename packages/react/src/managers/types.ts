@@ -6,13 +6,16 @@
  * @public
  */
 
-import type { EditorView } from 'prosemirror-view';
-
 // The greenfield engine has no `Document` tree — canonical state is the engine's
 // `PackageModel`, reached through the `Editor` facade, and adapters never hold it. Only
 // the error-manager types below are used here, and none of them names `Document`, so it
 // is declared opaque rather than importing a model this package must not depend on.
 type Document = unknown;
+
+// Same treatment for `EditorView`: an adapter must not depend on ProseMirror (the rule
+// `adapter-authority.test.ts` enforces), and the only type below that names it is the
+// unused v1 plugin-lifecycle config. Opaque here rather than a forbidden import.
+type EditorView = unknown;
 
 // ============================================================================
 // EDITOR HANDLE

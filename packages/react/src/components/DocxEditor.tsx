@@ -22,13 +22,15 @@ import type { DocxEditorProps, DocxEditorRef } from '../types';
  * and the imperative ref bridge), so a host that outgrows the packaged chrome drops
  * down to the same primitives without behavior change.
  *
- * Chrome is deliberately minimal for now: the full application chrome (toolbar, rulers,
- * sidebars) reads engine-published display and geometry state the facade answers with
- * typed empty values today, and rendering controls against empty state would show dead
- * chrome positioned on nothing. So a `t`-supplied host gets the title bar (slots,
- * editable name, save) above the painted document; the rest of the chrome follows as
- * the facade's derivations land — or is built by the host from the hooks
- * (`useEditorState`, `useEditorCommand`) today.
+ * CHROME IS OPT-IN VIA `t`. Every chrome label is an i18n key resolved through the host's
+ * `t`; the adapter ships no English of its own, so without `t` there is nothing honest to
+ * render and the component paints the bare document surface. That is a complete editor —
+ * `<DocxEditor document={bytes} />` mounts, edits, and saves through the ref — and it is
+ * the shape a host that brings its own chrome wants.
+ *
+ * With `t`, the packaged chrome renders: the title bar (slots, editable name, save) and
+ * the full `DocxEditor.Toolbar` above the painted document. Hosts that outgrow it drop to
+ * the same primitives (`Root` / `Viewport` / `Content` + the hooks) with no behavior change.
  */
 
 /**
@@ -171,6 +173,9 @@ const DocxEditorImpl = forwardRef<DocxEditorRef, DocxEditorProps>(function DocxE
         ) : null}
         {renderTitleBarRight?.()}
       </div>
+      {/* The full chrome registry, default arrangement. `onSave` is forwarded so the
+          toolbar's save control is live for the same hosts whose title bar shows one. */}
+      <DocxEditorToolbar t={t} {...(onSave ? { onSave } : {})} />
       {viewport}
     </div>
   ) : (
