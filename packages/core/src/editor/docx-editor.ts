@@ -607,7 +607,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
     // Real derivations from the canonical trees (session-memoized), no longer stubs.
     getDocumentStyles: () => surface?.session.documentStyles() ?? [],
     getDocumentFonts: () => surface?.session.documentFonts() ?? [],
-    getOutline: () => [],
+    getOutline: () => surface?.session.documentOutline() ?? [],
     getComments: () => [],
 
     // Reads the SAME unified derivation as `snapshot().formatting` (one code path),

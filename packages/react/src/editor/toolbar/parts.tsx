@@ -16,10 +16,7 @@
 //   exactly like the Vue registry toolbar's picker, and deliberately does nothing.
 
 import { useContext } from 'react';
-import {
-  CHROME_UNAVAILABLE_KEY,
-  type ChromeSlotId,
-} from '@docx-editor.dev/core-contract/editor';
+import { CHROME_UNAVAILABLE_KEY, type ChromeSlotId } from '@docx-editor.dev/core-contract/editor';
 import { useDocxEditor } from '../context';
 import { ToolbarContext, useToolbarLabel } from './toolbar-context';
 import {
@@ -65,14 +62,13 @@ export const ToolbarItalic = definePart('text.italic');
 export const ToolbarUnderline = definePart('text.underline');
 export const ToolbarStrike = definePart('text.strike');
 export const ToolbarLink = definePart('text.link');
-export const ToolbarClearFormatting = definePart('text.clear');
+export const ToolbarClearFormatting = definePart('format.clear');
 export const ToolbarSuperscript = definePart('script.super');
 export const ToolbarSubscript = definePart('script.sub');
 export const ToolbarAlignLeft = definePart('alignment.left');
 export const ToolbarAlignCenter = definePart('alignment.center');
 export const ToolbarAlignRight = definePart('alignment.right');
 export const ToolbarAlignJustify = definePart('alignment.justify');
-export const ToolbarLineSpacing = definePart('alignment.lineSpacing');
 export const ToolbarBulletList = definePart('list.bullet');
 export const ToolbarNumberedList = definePart('list.numbered');
 export const ToolbarOutdent = definePart('list.outdent');
@@ -105,7 +101,10 @@ function definePicker(slot: ChromeSlotId): ToolbarSlotPartComponent {
         // container guard covers this too — belt and braces like the Vue picker.
         onMouseDown={guardToolbarMousedown}
       >
-        <span className="docx-toolbar__picker-value">{value}</span>
+        {/* Dropdown-shaped controls can carry a leading glyph (the line-spacing
+            icon, the editing-mode pencil) ahead of the value text. */}
+        {chromeIcon(control?.paths)}
+        {value ? <span className="docx-toolbar__picker-value">{value}</span> : null}
         <span className="docx-toolbar__picker-caret" aria-hidden="true">
           ▾
         </span>
@@ -118,6 +117,9 @@ function definePicker(slot: ChromeSlotId): ToolbarSlotPartComponent {
 
 export const ToolbarStylePicker = definePicker('styles.style');
 export const ToolbarEditingMode = definePicker('review.editingMode');
+// Line spacing is dropdown-SHAPED in the chrome spec (icon + caret), so its
+// parity-only rendering is the picker lookalike, not a bare icon button.
+export const ToolbarLineSpacing = definePicker('list.lineSpacing');
 
 /**
  * The save control. Save is not an engine command (`Editor.save()` returns bytes the

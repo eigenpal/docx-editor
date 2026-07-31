@@ -39,6 +39,7 @@ export {
   CHROME_UNAVAILABLE_KEY,
   chromeControlCount,
   chromeSlotId,
+  defaultChromeGroups,
   type ChromeControl,
   type ChromeControlId,
   type ChromeControlState,

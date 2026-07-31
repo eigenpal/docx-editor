@@ -35,6 +35,7 @@ import {
   collectDocumentStyles,
   type DocumentStyleEntry,
 } from './document-catalog.ts';
+import { collectDocumentOutline, type DocumentOutlineEntry } from './document-outline.ts';
 import {
   allParagraphs,
   bodyParagraphs,
@@ -124,9 +125,18 @@ export interface TreeDocxSession {
    * A document without a styles part answers `[]`.
    */
   documentStyles(): readonly DocumentStyleEntry[];
+  /**
+   * The heading outline of the BODY story, in document order: paragraphs whose
+   * `w:pStyle` resolves to a heading through the styles part (built-in `heading N`
+   * name, or the style's own `w:outlineLvl` 0..8). Memoized per main-part revision —
+   * an edit can retitle, add or remove a heading, but the styles part cannot change
+   * in-session.
+   */
+  documentOutline(): readonly DocumentOutlineEntry[];
 }
 
 export type { DocumentStyleEntry } from './document-catalog.ts';
+export type { DocumentOutlineEntry } from './document-outline.ts';
 
 export type TreeSessionRejection = OoxmlPackageRejection | 'no-main-document-tree';
 
@@ -192,6 +202,10 @@ export function openTreeSession(bytes: Uint8Array): OpenTreeSessionResult {
 
   let fontsCache: { readonly revision: number; readonly fonts: readonly string[] } | null = null;
   let stylesCache: readonly DocumentStyleEntry[] | null = null;
+  let outlineCache: {
+    readonly revision: number;
+    readonly outline: readonly DocumentOutlineEntry[];
+  } | null = null;
 
   return {
     ok: true,
@@ -305,6 +319,17 @@ export function openTreeSession(bytes: Uint8Array): OpenTreeSessionResult {
       documentStyles() {
         stylesCache ??= collectDocumentStyles(resolveStylesRoot());
         return stylesCache;
+      },
+
+      documentOutline() {
+        // Keyed on the store revision, like the fonts: typing inside a heading or
+        // splitting one changes the outline, but the styles part is immutable.
+        if (outlineCache && outlineCache.revision === store.revision) return outlineCache.outline;
+        outlineCache = {
+          revision: store.revision,
+          outline: collectDocumentOutline(store.part, resolveStylesRoot()),
+        };
+        return outlineCache.outline;
       },
     },
   };

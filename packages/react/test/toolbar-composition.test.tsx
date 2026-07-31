@@ -2,8 +2,9 @@
 //
 // Against the REAL engine, like editor-composition.test.tsx: a mounted document,
 // painted pages, committed ops. What these pin down: the default arrangement IS the
-// whole chrome registry in registry order (derived from CHROME_GROUPS here too, so a
-// registry change updates the expectation); that a part child REPLACES its slot in
+// registry's default bar in registry order (derived from `defaultChromeGroups` here
+// too, alignment merged, so a registry change updates the expectation); that a part
+// child REPLACES its slot in
 // place (and `hidden` removes it); `preset={false}` verbatim rendering; live Bold
 // state through a click; asChild prop merging; the wired font-size stepper, zoom
 // stepper, and colour split buttons; the parity-only pickers rendering disabled; that
@@ -20,8 +21,8 @@ import type { ReactNode } from 'react';
 import { act, cleanup, render } from '@testing-library/react';
 import { zipSync, strToU8 } from 'fflate';
 import {
-  CHROME_GROUPS,
   chromeSlotId,
+  defaultChromeGroups,
   type DocxEditorInstance,
 } from '@docx-editor.dev/core-contract/editor';
 import { DocxEditor } from '../src/components/DocxEditor.tsx';
@@ -64,12 +65,16 @@ const FONTED_SOURCE = docx(
 
 /**
  * The expected default arrangement, DERIVED from the registry exactly as the toolbar
- * derives it: every control of every group in registry order, a separator between
- * groups. Identities are the parts' `data-slot` markers.
+ * derives it: every NON-CONTEXTUAL group in registry order (the default bar,
+ * which ends at the editing-mode picker), a separator between groups, and the
+ * alignment group MERGED into the one dropdown keyed `'alignment'`.
+ * Identities are the parts' `data-slot` markers.
  */
-const EXPECTED_ARRANGEMENT: readonly string[] = CHROME_GROUPS.flatMap((group, index) => [
+const EXPECTED_ARRANGEMENT: readonly string[] = defaultChromeGroups().flatMap((group, index) => [
   ...(index > 0 ? ['separator'] : []),
-  ...group.controls.map((control) => chromeSlotId(group, control) as string),
+  ...(group.id === 'alignment'
+    ? ['alignment']
+    : group.controls.map((control) => chromeSlotId(group, control) as string)),
 ]);
 
 function mountToolbar(
@@ -113,8 +118,9 @@ describe('the default arrangement', () => {
   test('renders the WHOLE chrome registry in registry order, separators between groups', () => {
     const { view } = mountToolbar(<DocxEditorToolbar />);
     const toolbar = toolbarElement(view);
-    // The arrangement is derived from CHROME_GROUPS on both sides of this assertion:
-    // 12 groups / 31 controls today, and a registry change updates both in lockstep.
+    // The arrangement is derived from the registry on both sides of this assertion —
+    // the 10 non-contextual groups, alignment merged — so a registry change updates
+    // both in lockstep.
     expect(childIdentities(toolbar)).toEqual([...EXPECTED_ARRANGEMENT]);
     // Every slot is present exactly once.
     for (const slot of EXPECTED_ARRANGEMENT) {
@@ -255,19 +261,16 @@ describe('the shaped parts', () => {
     const stepper = view.container.querySelector('[data-slot="font.size"]')!;
     const value = stepper.querySelector('.docx-toolbar__stepper-value')!;
     expect(value.textContent).toBe('12');
-    const increase = stepper.querySelector(
-      '[aria-label="fontSize.increase"]'
-    ) as HTMLButtonElement;
+    const increase = stepper.querySelector('[aria-label="fontSize.increase"]') as HTMLButtonElement;
     expect(increase.disabled).toBe(false);
     await act(async () => {
       increase.click();
     });
-    // 24 half-points stepped to 26 → 13pt, read back from the engine's snapshot.
-    expect(editor().snapshot().formatting?.fontSizePt).toBe(13);
-    expect(value.textContent).toBe('13');
-    const decrease = stepper.querySelector(
-      '[aria-label="fontSize.decrease"]'
-    ) as HTMLButtonElement;
+    // The stepper walks the PRESET ladder (8..12, 14, 16, ...), not a fixed
+    // increment: 12pt steps to 14pt, read back from the engine's snapshot.
+    expect(editor().snapshot().formatting?.fontSizePt).toBe(14);
+    expect(value.textContent).toBe('14');
+    const decrease = stepper.querySelector('[aria-label="fontSize.decrease"]') as HTMLButtonElement;
     await act(async () => {
       decrease.click();
     });
@@ -278,13 +281,16 @@ describe('the shaped parts', () => {
     const { view, editor } = mountToolbar(<DocxEditorToolbar />);
     const stepper = view.container.querySelector('[data-slot="zoom.level"]')!;
     const value = stepper.querySelector('.docx-toolbar__stepper-value')!;
-    expect(value.textContent).toBe('100%');
+    // The middle is the "% ▾" menu button: the level plus the caret glyph.
+    expect(value.textContent).toBe('100%▾');
     const zoomIn = stepper.querySelector('[aria-label="zoom.zoomIn"]') as HTMLButtonElement;
     await act(async () => {
       zoomIn.click();
     });
-    expect(editor().snapshot().zoom).toBe(1.1);
-    expect(value.textContent).toBe('110%');
+    // The buttons walk the preset LEVELS (50/75/100/125/150/200), not a fixed
+    // step: 100% steps to 125%.
+    expect(editor().snapshot().zoom).toBe(1.25);
+    expect(value.textContent).toBe('125%▾');
     const zoomOut = stepper.querySelector('[aria-label="zoom.zoomOut"]') as HTMLButtonElement;
     await act(async () => {
       zoomOut.click();
@@ -297,14 +303,15 @@ describe('the shaped parts', () => {
     await act(async () => {
       editor().surface!.selectAll();
     });
-    const split = view.container.querySelector('[data-slot="font.color"]')!;
+    const split = view.container.querySelector('[data-slot="text.color"]')!;
     const main = split.querySelector('.docx-toolbar__colorsplit-main') as HTMLButtonElement;
     expect(main.disabled).toBe(false);
     await act(async () => {
       main.click();
     });
-    // The seed is the registry swatch.
-    expect(editor().snapshot().formatting?.color).toEqual({ kind: 'hex', value: 'D93025' });
+    // The seed is the registry swatch: the chrome spec's default red (the apply
+    // half starts at { rgb: 'FF0000' } before any pick).
+    expect(editor().snapshot().formatting?.color).toEqual({ kind: 'hex', value: 'FF0000' });
 
     const caret = split.querySelector('.docx-toolbar__colorsplit-caret') as HTMLButtonElement;
     await act(async () => {
@@ -360,18 +367,35 @@ describe('the shaped parts', () => {
     ).toBe('styles.normalText');
   });
 
-  test('save renders disabled without an onSave handler and live with one', async () => {
+  test('save is NOT in the default bar (contextual slot); composed, it needs onSave to be live', async () => {
+    // The registry's default bar ends at the editing-mode picker: save belongs in
+    // the host's File menu, so its slot is contextual and absent from the default
+    // arrangement.
     const onSaveCalls: number[] = [];
     const { view } = mountToolbar(<DocxEditorToolbar onSave={() => onSaveCalls.push(1)} />);
-    const save = view.container.querySelector('[data-slot="file.save"]') as HTMLButtonElement;
+    expect(view.container.querySelector('[data-slot="file.save"]')).toBeNull();
+    cleanup();
+
+    // Explicitly composed (appended after the default set), it is live with a handler…
+    const { view: composed } = mountToolbar(
+      <DocxEditorToolbar onSave={() => onSaveCalls.push(1)}>
+        <DocxEditorToolbar.Save />
+      </DocxEditorToolbar>
+    );
+    const save = composed.container.querySelector('[data-slot="file.save"]') as HTMLButtonElement;
     expect(save.disabled).toBe(false);
     await act(async () => {
       save.click();
     });
     expect(onSaveCalls.length).toBe(1);
-
     cleanup();
-    const { view: bare } = mountToolbar(<DocxEditorToolbar />);
+
+    // …and disabled without one: Editor.save() returns bytes the HOST must deliver.
+    const { view: bare } = mountToolbar(
+      <DocxEditorToolbar>
+        <DocxEditorToolbar.Save />
+      </DocxEditorToolbar>
+    );
     const disabledSave = bare.container.querySelector(
       '[data-slot="file.save"]'
     ) as HTMLButtonElement;
@@ -397,11 +421,17 @@ describe('the FontFamily compound', () => {
       trigger.click();
     });
     const listbox = view.container.querySelector('[role="listbox"]')!;
+    // The default menu is the GROUPED picker: classified families under small gray
+    // headings in the chrome spec's group order (serif before monospace), not one flat
+    // alphabetical list.
     const options = [...listbox.querySelectorAll('[role="option"]')];
-    expect(options.map((option) => option.textContent)).toEqual(['Courier New', 'Georgia']);
+    expect(options.map((option) => option.textContent)).toEqual(['Georgia', 'Courier New']);
+    expect(
+      [...listbox.querySelectorAll('.docx-toolbar__menu-label')].map((label) => label.textContent)
+    ).toEqual(['font.serif', 'font.monospace']);
 
     await act(async () => {
-      (options[1] as HTMLButtonElement).click();
+      (options[0] as HTMLButtonElement).click();
     });
     // Applied through can-before-exec, popup closed, trigger shows the new value.
     expect(editor().snapshot().formatting?.fontFamily).toBe('Georgia');
@@ -415,8 +445,10 @@ describe('the FontFamily compound', () => {
       trigger.click();
     });
     const reopened = [...view.container.querySelectorAll('[role="option"]')];
-    expect(reopened.map((option) => option.textContent)).toEqual(['Georgia']);
+    // The selected row carries the right-edge ✓ (part of its text content).
+    expect(reopened.map((option) => option.textContent)).toEqual(['Georgia✓']);
     expect(reopened[0]!.hasAttribute('data-selected')).toBe(true);
+    expect(reopened[0]!.querySelector('.docx-toolbar__menu-check')).not.toBeNull();
   });
 
   test('custom Item children render inside a composed FontFamily', async () => {
@@ -476,7 +508,7 @@ describe('namespace statics', () => {
     expect(typeof DocxEditorToolbar.FontFamily.Item).toBe('function');
     // The shaped parts carry their slot statics too.
     expect(DocxEditorToolbar.FontSize.docxSlot).toBe('font.size');
-    expect(DocxEditorToolbar.FontColor.docxSlot).toBe('font.color');
+    expect(DocxEditorToolbar.FontColor.docxSlot).toBe('text.color');
     expect(DocxEditorToolbar.Highlight.docxSlot).toBe('text.highlight');
     expect(DocxEditorToolbar.Zoom.docxSlot).toBe('zoom.level');
     expect(DocxEditorToolbar.StylePicker.docxSlot).toBe('styles.style');

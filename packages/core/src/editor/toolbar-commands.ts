@@ -61,7 +61,7 @@ export function commandForSlot(slotId: ChromeSlotId): EditorCommand | null {
 const VALUE_SLOT_MARKS: Partial<Record<ChromeSlotId, { mark: string; attr: string }>> = {
   'font.family': { mark: 'fontFamily', attr: 'family' },
   'font.size': { mark: 'fontSize', attr: 'val' },
-  'font.color': { mark: 'color', attr: 'val' },
+  'text.color': { mark: 'color', attr: 'val' },
   'text.highlight': { mark: 'highlight', attr: 'val' },
 };
 
@@ -74,13 +74,13 @@ const VALUE_SLOT_MARKS: Partial<Record<ChromeSlotId, { mark: string; attr: strin
 const VALUE_SLOT_PROBES: Partial<Record<ChromeSlotId, unknown>> = {
   'font.family': 'Arial',
   'font.size': 22,
-  'font.color': '000000',
+  'text.color': '000000',
   'text.highlight': 'yellow',
 };
 
 /**
  * The engine command for a VALUE-TYPED slot (`font.family`, `font.size`,
- * `font.color`, `text.highlight`) carrying the picked value, or `null` for a slot
+ * `text.color`, `text.highlight`) carrying the picked value, or `null` for a slot
  * that does not take a value. The value is validated by the engine's own
  * `setMarkAttr` gate (`can` refuses a malformed one with `invalidArgs`), so a host
  * can pass user input through unmodified.

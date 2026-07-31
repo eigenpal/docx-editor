@@ -32,15 +32,15 @@ const ICON_FOR_SLOT: Record<string, string> = {
   'text.strike': 'strikethrough_s',
   'script.super': 'superscript',
   'script.sub': 'subscript',
-  'font.color': 'format_color_text',
+  'text.color': 'format_color_text',
   'text.highlight': 'ink_highlighter',
   'text.link': 'link',
-  'text.clear': 'format_clear',
+  'format.clear': 'format_clear',
   'alignment.left': 'format_align_left',
   'alignment.center': 'format_align_center',
   'alignment.right': 'format_align_right',
   'alignment.justify': 'format_align_justify',
-  'alignment.lineSpacing': 'format_line_spacing',
+  'list.lineSpacing': 'format_line_spacing',
   'list.bullet': 'format_list_bulleted',
   'list.numbered': 'format_list_numbered',
   'list.outdent': 'format_indent_decrease',
@@ -49,6 +49,8 @@ const ICON_FOR_SLOT: Record<string, string> = {
   'image.properties': 'tune',
   'table.insert': 'table',
   'review.comments': 'comment',
+  // The "✎ Editing ▾" mode pill's leading pencil glyph.
+  'review.editingMode': 'edit_note',
   'file.save': 'file_download',
 };
 

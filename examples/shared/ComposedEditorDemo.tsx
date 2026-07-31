@@ -189,6 +189,19 @@ function FormatMenu() {
   );
 }
 
+function InsertMenu() {
+  // The chrome spec's menu row is File · Format · Insert · Help. Image and table
+  // insertion are UNWIRED engine slots (`image.insert` / `table.insert`), so the items
+  // bind through `useEditorCommand` and render disabled with the engine's own reason —
+  // present but disabled, never faked.
+  return (
+    <DemoMenu label="Insert">
+      <CommandMenuItem slot="image.insert">Image</CommandMenuItem>
+      <CommandMenuItem slot="table.insert">Table</CommandMenuItem>
+    </DemoMenu>
+  );
+}
+
 function HelpMenu() {
   return (
     <DemoMenu label="Help">
@@ -313,6 +326,7 @@ function EditorChrome({
               </MenuItem>
             </DemoMenu>
             <FormatMenu />
+            <InsertMenu />
             <HelpMenu />
           </nav>
         </div>
@@ -376,6 +390,13 @@ function EditorChrome({
           </DocxEditor.Toolbar.FontFamily.Content>
         </DocxEditor.Toolbar.FontFamily>
       </DocxEditor.Toolbar>
+
+      {/* The context-fed horizontal ruler, placed per the chrome spec: below the toolbar,
+          centered over the page column. Read-only — the engine has no margin
+          commands yet, so nothing here pretends to drag. */}
+      <div className="demo-ruler-row" aria-hidden="true">
+        <DocxEditor.HorizontalRuler />
+      </div>
     </>
   );
 }
@@ -389,6 +410,7 @@ export function ComposedEditorDemo({ fixtureUrl }: { fixtureUrl: string }) {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [colorMode, setColorMode] = useState<'light' | 'dark'>('light');
   const [title, setTitle] = useState('Sample Document');
+  const [showOutline, setShowOutline] = useState(true);
 
   useEffect(() => {
     let cancelled = false;
@@ -420,9 +442,34 @@ export function ComposedEditorDemo({ fixtureUrl }: { fixtureUrl: string }) {
             colorMode={colorMode}
             onColorModeChange={setColorMode}
           />
-          <DocxEditor.Viewport className="demo-viewport">
-            <DocxEditor.Content />
-          </DocxEditor.Viewport>
+          {/* The chrome spec's layout: the heading outline in a left sidebar beside
+              the scrolled page column, collapsible. */}
+          <div className="demo-main">
+            {showOutline ? (
+              <aside className="demo-outline">
+                <DocxEditor.DocumentOutline onClose={() => setShowOutline(false)} />
+              </aside>
+            ) : (
+              <button
+                type="button"
+                className="demo-outline-toggle"
+                aria-label="Show document outline"
+                title="Show document outline"
+                onMouseDown={keepCaret}
+                onClick={() => setShowOutline(true)}
+              >
+                <svg viewBox="0 -960 960 960" width={20} height={20} aria-hidden="true">
+                  <path
+                    d="M120-240v-80h240v80H120Zm0-200v-80h480v80H120Zm0-200v-80h720v80H120Z"
+                    fill="currentColor"
+                  />
+                </svg>
+              </button>
+            )}
+            <DocxEditor.Viewport className="demo-viewport">
+              <DocxEditor.Content />
+            </DocxEditor.Viewport>
+          </div>
         </DocxEditor.Root>
       ) : (
         <div className="demo-loading" data-testid="composed-loading">

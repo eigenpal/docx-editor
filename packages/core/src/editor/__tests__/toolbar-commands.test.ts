@@ -185,7 +185,7 @@ describe('value-typed slots (commandForSlotValue)', () => {
       attr: 'val',
       value: 28,
     });
-    expect(commandForSlotValue('font.color', 'FF0000')).toEqual({
+    expect(commandForSlotValue('text.color', 'FF0000')).toEqual({
       type: 'setMarkAttr',
       mark: 'color',
       attr: 'val',

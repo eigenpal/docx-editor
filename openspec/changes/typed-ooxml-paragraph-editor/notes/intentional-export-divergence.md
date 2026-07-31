@@ -41,6 +41,15 @@ exemptions go when it lands.
 - `DocxEditorContentProps`
 - `useDocxEditor` — React context read of the provided instance; Vue twin is an
   `inject`-based composable, future task.
+- `DocxEditorHorizontalRuler` — context-fed horizontal ruler part
+  (`DocxEditor.HorizontalRuler`) over the props-driven `HorizontalRuler`; Vue twin
+  lands with the composable layer.
+- `DocxEditorVerticalRuler` — context-fed vertical ruler part.
+- `DocxEditorRulerProps` — the ruler parts' props.
+- `DocxEditorDocumentOutline` — context-fed heading-outline part
+  (`DocxEditor.DocumentOutline`) over `Editor.getOutline()`; Vue twin lands with the
+  composable layer.
+- `DocxEditorDocumentOutlineProps` — the outline part's props.
 - `useEditorState` — `useSyncExternalStore` selector hook over the version-cached
   snapshot; Vue twin is a reactivity-based composable, future task.
 - `useEditorCommand` — chrome-slot command binding hook; Vue twin is a composable,
@@ -68,6 +77,9 @@ part/prop exports go with it.
   pinned to one slot; carries the same `docxSlot` marker.
 - `ToolbarSlotPartProps` — props of the non-button parts (`className`, `hidden`).
 - `ToolbarSeparatorProps`
+- `ToolbarAlignmentComponent` — the merged alignment dropdown part (the four
+  `alignment.*` slots behind one merged dropdown trigger); carries `docxSlot:
+  'alignment'`, the group-keyed marker.
 - `ToolbarTranslate` — the toolbar's optional i18n resolver type.
 - `useFontFamily` — the font-picker behavior hook (value / options / setValue /
   isEnabled) over `Editor.getDocumentFonts` + `commandForSlotValue`.

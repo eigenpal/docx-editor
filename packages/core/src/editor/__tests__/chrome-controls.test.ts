@@ -20,7 +20,14 @@ import {
 } from '../chrome-controls.ts';
 import { commandForSlot } from '../toolbar-commands.ts';
 
-/** The ten legacy toolbar groups, from Toolbar.tsx at ref 9bb06c38, plus file/save. */
+/**
+ * The toolbar groups in the chrome spec's bar order: history, zoom, styles, font,
+ * then the text group carrying colour and highlight (B I U S · A · pen · link),
+ * script, the merged-rendering alignment group, the list group carrying line
+ * spacing, standalone clear, and the trailing review controls — with the
+ * contextual image/table/file groups (not in the default bar) closing the
+ * registry.
+ */
 const EXPECTED_GROUPS = [
   'history',
   'zoom',
@@ -30,9 +37,10 @@ const EXPECTED_GROUPS = [
   'script',
   'alignment',
   'list',
+  'format',
+  'review',
   'image',
   'table',
-  'review',
   'file',
 ];
 
@@ -44,30 +52,30 @@ const EXPECTED_SLOTS: readonly ChromeSlotId[] = [
   'styles.style',
   'font.family',
   'font.size',
-  'font.color',
   'text.bold',
   'text.italic',
   'text.underline',
   'text.strike',
+  'text.color',
   'text.highlight',
   'text.link',
-  'text.clear',
   'script.super',
   'script.sub',
   'alignment.left',
   'alignment.center',
   'alignment.right',
   'alignment.justify',
-  'alignment.lineSpacing',
   'list.bullet',
   'list.numbered',
   'list.outdent',
   'list.indent',
+  'list.lineSpacing',
+  'format.clear',
+  'review.comments',
+  'review.editingMode',
   'image.insert',
   'image.properties',
   'table.insert',
-  'review.comments',
-  'review.editingMode',
   'file.save',
 ];
 

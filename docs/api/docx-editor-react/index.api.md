@@ -39,6 +39,7 @@ import { PX_PER_CM } from '@docx-editor.dev/core-contract/editor';
 import { PX_PER_INCH } from '@docx-editor.dev/core-contract/editor';
 import * as React$1 from 'react';
 import React__default from 'react';
+import { ReactElement } from 'react';
 import { ReactNode } from 'react';
 import { Ref } from 'react';
 import { RefAttributes } from 'react';
@@ -83,13 +84,29 @@ export interface DocxEditorContentProps {
 }
 
 // @public
+export function DocxEditorDocumentOutline(props: DocxEditorDocumentOutlineProps): ReactElement;
+
+// @public
+export interface DocxEditorDocumentOutlineProps {
+    leftOffset?: number;
+    onClose?: () => void;
+    topOffset?: number;
+}
+
+// @public
+export function DocxEditorHorizontalRuler(props: DocxEditorRulerProps): ReactElement;
+
+// @public
 export interface DocxEditorNamespace extends ForwardRefExoticComponent<DocxEditorProps & RefAttributes<DocxEditorRef>> {
     // (undocumented)
     readonly Content: typeof DocxEditorContent;
+    readonly DocumentOutline: typeof DocxEditorDocumentOutline;
+    readonly HorizontalRuler: typeof DocxEditorHorizontalRuler;
     // (undocumented)
     readonly Root: typeof DocxEditorRoot;
     // (undocumented)
     readonly Toolbar: typeof DocxEditorToolbar;
+    readonly VerticalRuler: typeof DocxEditorVerticalRuler;
     // (undocumented)
     readonly Viewport: typeof DocxEditorViewport;
 }
@@ -158,6 +175,15 @@ export interface DocxEditorRootProps {
 }
 
 // @public
+export interface DocxEditorRulerProps {
+    // (undocumented)
+    className?: string;
+    // (undocumented)
+    style?: CSSProperties;
+    unit?: 'inch' | 'cm';
+}
+
+// @public
 export function DocxEditorShell(input: {
     i18n: React.ComponentProps<typeof LocaleProvider>['i18n'];
     isDark?: boolean;
@@ -211,6 +237,8 @@ export interface DocxEditorToolbarNamespace {
     // (undocumented)
     readonly AlignLeft: ToolbarPartComponent;
     // (undocumented)
+    readonly Alignment: ToolbarAlignmentComponent;
+    // (undocumented)
     readonly AlignRight: ToolbarPartComponent;
     // (undocumented)
     readonly Bold: ToolbarPartComponent;
@@ -241,7 +269,7 @@ export interface DocxEditorToolbarNamespace {
     // (undocumented)
     readonly Italic: ToolbarPartComponent;
     // (undocumented)
-    readonly LineSpacing: ToolbarPartComponent;
+    readonly LineSpacing: ToolbarSlotPartComponent;
     // (undocumented)
     readonly Link: ToolbarPartComponent;
     // (undocumented)
@@ -281,6 +309,9 @@ export interface DocxEditorToolbarProps {
     preset?: boolean;
     t?: ToolbarTranslate;
 }
+
+// @public
+export function DocxEditorVerticalRuler(props: DocxEditorRulerProps): ReactElement;
 
 // @public
 export function DocxEditorViewport(input: DocxEditorViewportProps): React$1.JSX.Element;
@@ -516,6 +547,14 @@ export function TitleBarRight(input: TitleBarRightProps): React__default.JSX.Ele
 
 // @public
 export function Toolbar(explicitProps: ToolbarProps): React__default.JSX.Element;
+
+// @public
+export interface ToolbarAlignmentComponent {
+    // (undocumented)
+    (props: ToolbarSlotPartProps): ReturnType<typeof ToolbarAlignmentImpl>;
+    // (undocumented)
+    readonly docxSlot: 'alignment';
+}
 
 // @public
 export function ToolbarButton(input: ToolbarButtonProps_2): React__default.JSX.Element;

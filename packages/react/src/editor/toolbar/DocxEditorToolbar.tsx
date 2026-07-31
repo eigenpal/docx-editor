@@ -22,8 +22,8 @@
 import { Children, Fragment, isValidElement, useMemo } from 'react';
 import type { ReactElement, ReactNode } from 'react';
 import {
-  CHROME_GROUPS,
   chromeSlotId,
+  defaultChromeGroups,
   type ChromeSlotId,
 } from '@docx-editor.dev/core-contract/editor';
 import { ToolbarContext, type ToolbarTranslate } from './toolbar-context';
@@ -61,10 +61,17 @@ import {
 } from './parts';
 import { ToolbarFontSize, ToolbarZoom } from './steppers';
 import { ToolbarFontColor, ToolbarHighlight } from './ColorSplit';
+import { ToolbarAlignment, type ToolbarAlignmentComponent } from './Alignment';
 import { FontFamily, useFontFamily } from './FontFamily';
 
+/**
+ * A default-arrangement key: a chrome slot, or `'alignment'` for the MERGED
+ * alignment dropdown that stands in for the four `alignment.*` slots.
+ */
+type ArrangementKey = ChromeSlotId | 'alignment';
+
 /** The default arrangement, as slot entries with separators between groups. */
-type DefaultEntry = { kind: 'slot'; slot: ChromeSlotId; Part: PartLike } | { kind: 'separator' };
+type DefaultEntry = { kind: 'slot'; slot: ArrangementKey; Part: PartLike } | { kind: 'separator' };
 type PartLike = (props: { hidden?: boolean }) => ReactNode;
 
 /**
@@ -78,8 +85,9 @@ const SHAPED_PARTS: Partial<Record<ChromeSlotId, PartLike>> = {
   'styles.style': ToolbarStylePicker,
   'font.family': FontFamily,
   'font.size': ToolbarFontSize,
-  'font.color': ToolbarFontColor,
+  'text.color': ToolbarFontColor,
   'text.highlight': ToolbarHighlight,
+  'list.lineSpacing': ToolbarLineSpacing,
   'review.editingMode': ToolbarEditingMode,
   'file.save': ToolbarSave,
 };
@@ -95,25 +103,36 @@ function iconPart(slot: ChromeSlotId): PartLike {
   return part;
 }
 
-/** The whole registry, in registry order, separators between groups. */
-const DEFAULT_ARRANGEMENT: readonly DefaultEntry[] = CHROME_GROUPS.flatMap((group, index) => {
-  const entries: DefaultEntry[] = index > 0 ? [{ kind: 'separator' }] : [];
-  for (const control of group.controls) {
-    const slot = chromeSlotId(group, control);
-    entries.push({ kind: 'slot', slot, Part: SHAPED_PARTS[slot] ?? iconPart(slot) });
+/**
+ * The DEFAULT chrome, in registry order, separators between groups: every
+ * non-contextual registry group — the registry's default bar, which ends at the
+ * editing-mode picker (contextual slots stay available for composition) — with the
+ * alignment group merged into ONE dropdown under the `'alignment'` key.
+ */
+const DEFAULT_ARRANGEMENT: readonly DefaultEntry[] = defaultChromeGroups().flatMap(
+  (group, index) => {
+    const entries: DefaultEntry[] = index > 0 ? [{ kind: 'separator' }] : [];
+    if (group.id === 'alignment') {
+      entries.push({ kind: 'slot', slot: 'alignment', Part: ToolbarAlignment });
+      return entries;
+    }
+    for (const control of group.controls) {
+      const slot = chromeSlotId(group, control);
+      entries.push({ kind: 'slot', slot, Part: SHAPED_PARTS[slot] ?? iconPart(slot) });
+    }
+    return entries;
   }
-  return entries;
-});
+);
 
 /** The slot one child element drives, or null for a non-part child. */
-function slotOfChild(child: ReactNode): ChromeSlotId | null {
+function slotOfChild(child: ReactNode): ArrangementKey | null {
   if (!isValidElement(child)) return null;
   const type = child.type as { docxSlot?: unknown; docxToolbarPart?: unknown };
   if (typeof type !== 'function' && typeof type !== 'object') return null;
-  if (typeof type.docxSlot === 'string') return type.docxSlot as ChromeSlotId;
+  if (typeof type.docxSlot === 'string') return type.docxSlot as ArrangementKey;
   if (type.docxToolbarPart === true) {
     const slot = (child.props as { slot?: unknown }).slot;
-    if (typeof slot === 'string') return slot as ChromeSlotId;
+    if (typeof slot === 'string') return slot as ArrangementKey;
   }
   return null;
 }
@@ -147,7 +166,7 @@ function DocxEditorToolbarRoot(props: DocxEditorToolbarProps) {
     content = children;
   } else {
     const kids = Children.toArray(children);
-    const overrides = new Map<ChromeSlotId, ReactElement>();
+    const overrides = new Map<ArrangementKey, ReactElement>();
     const appended: ReactNode[] = [];
     for (const child of kids) {
       const slot = slotOfChild(child);
@@ -209,11 +228,12 @@ export interface DocxEditorToolbarNamespace {
   readonly ClearFormatting: ToolbarPartComponent;
   readonly Superscript: ToolbarPartComponent;
   readonly Subscript: ToolbarPartComponent;
+  readonly Alignment: ToolbarAlignmentComponent;
   readonly AlignLeft: ToolbarPartComponent;
   readonly AlignCenter: ToolbarPartComponent;
   readonly AlignRight: ToolbarPartComponent;
   readonly AlignJustify: ToolbarPartComponent;
-  readonly LineSpacing: ToolbarPartComponent;
+  readonly LineSpacing: ToolbarSlotPartComponent;
   readonly BulletList: ToolbarPartComponent;
   readonly NumberedList: ToolbarPartComponent;
   readonly Outdent: ToolbarPartComponent;
@@ -251,6 +271,7 @@ export const DocxEditorToolbar: DocxEditorToolbarNamespace = Object.assign(DocxE
   ClearFormatting: ToolbarClearFormatting,
   Superscript: ToolbarSuperscript,
   Subscript: ToolbarSubscript,
+  Alignment: ToolbarAlignment,
   AlignLeft: ToolbarAlignLeft,
   AlignCenter: ToolbarAlignCenter,
   AlignRight: ToolbarAlignRight,

@@ -186,14 +186,15 @@ function createColorSplit(config: ColorSplitConfig): ToolbarSlotPartComponent {
 const HIGHLIGHT_CSS = new Map(HIGHLIGHT_SWATCHES.map((swatch) => [swatch.value, swatch.css]));
 
 /**
- * The font-colour split button (`DocxEditorToolbar.FontColor`): wired to `font.color`.
- * The seed is the registry swatch.
+ * The font-colour split button (`DocxEditorToolbar.FontColor`): wired to `text.color`.
+ * The seed is the registry swatch (the chrome spec's default red: the apply
+ * half starts at `{ rgb: 'FF0000' }` before any pick).
  */
 export const ToolbarFontColor: ToolbarSlotPartComponent = createColorSplit({
-  slot: 'font.color',
+  slot: 'text.color',
   swatches: FONT_COLOR_SWATCHES,
-  // The registry's `swatch: '#d93025'`, as the hex value `w:color` takes.
-  defaultValue: 'D93025',
+  // The registry's `swatch: '#ff0000'`, as the hex value `w:color` takes.
+  defaultValue: 'FF0000',
   cssOf: (value) => `#${value}`,
 });
 

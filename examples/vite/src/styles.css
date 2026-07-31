@@ -286,6 +286,57 @@
 }
 
 /* The document viewport fills the rest of the app column */
+/* The context-fed horizontal ruler row: centered over the page column. The
+   ruler component sizes itself to the page width. */
+.demo-ruler-row {
+  display: flex;
+  justify-content: center;
+  padding: 2px 12px 0;
+  overflow: hidden;
+  flex: none;
+}
+
+/* Editor area: outline sidebar beside the scrolled page column. */
+.demo-main {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  align-items: stretch;
+  position: relative;
+}
+
+/* The outline panel positions absolutely inside its container, so the
+   sidebar is its positioning context. 240px panel + 12px anchor + 16px gap. */
+.demo-outline {
+  position: relative;
+  width: 268px;
+  flex: none;
+  overflow: hidden;
+}
+
+/* Collapsed state: a small round toggle in the left gutter, Google-Docs placement. */
+.demo-outline-toggle {
+  position: absolute;
+  top: 24px;
+  left: 12px;
+  z-index: 40;
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--doc-text-muted);
+  cursor: pointer;
+}
+
+.demo-outline-toggle:hover {
+  background: var(--doc-bg-hover);
+  color: var(--doc-text);
+}
+
 .demo-viewport {
   flex: 1;
   min-height: 0;

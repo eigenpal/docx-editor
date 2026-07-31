@@ -139,12 +139,41 @@ function FontFamilyTrigger({ asChild, className, children }: FontFamilyPartProps
 }
 FontFamilyTrigger.docxToolbarPart = true as const;
 
+/**
+ * The chrome spec's static font classification table, PRESENTATION DATA ONLY:
+ * lowercase font name → group heading. Document-derived fonts the table does
+ * not know fall into a plain trailing unlabelled group.
+ */
+const FONT_CATEGORY: ReadonlyMap<string, 'sansSerif' | 'serif' | 'monospace'> = new Map([
+  ['arial', 'sansSerif'],
+  ['calibri', 'sansSerif'],
+  ['helvetica', 'sansSerif'],
+  ['verdana', 'sansSerif'],
+  ['open sans', 'sansSerif'],
+  ['roboto', 'sansSerif'],
+  ['times new roman', 'serif'],
+  ['georgia', 'serif'],
+  ['cambria', 'serif'],
+  ['garamond', 'serif'],
+  ['courier new', 'monospace'],
+  ['consolas', 'monospace'],
+]);
+
+/** The group heading i18n keys, in the chrome spec's group order. */
+const FONT_GROUPS = [
+  { category: 'sansSerif', labelKey: 'font.sansSerif' },
+  { category: 'serif', labelKey: 'font.serif' },
+  { category: 'monospace', labelKey: 'font.monospace' },
+  { category: 'other', labelKey: null },
+] as const;
+
 function FontFamilyContent({ asChild, className, children }: FontFamilyPartProps) {
   const context = useFontFamilyContext();
+  const label = useToolbarLabel();
   if (!context || !context.open) return null;
   const shared = {
     role: 'listbox' as const,
-    className: `docx-toolbar__font-family-content${className ? ` ${className}` : ''}`,
+    className: `docx-toolbar__menu docx-toolbar__font-family-content${className ? ` ${className}` : ''}`,
     // Anchored under the trigger; colors come from the chrome tokens, never literals.
     style: {
       position: 'absolute' as const,
@@ -152,15 +181,35 @@ function FontFamilyContent({ asChild, className, children }: FontFamilyPartProps
       left: 0,
       zIndex: 30,
       minWidth: '100%',
-      maxHeight: 280,
+      maxHeight: 300,
       overflowY: 'auto' as const,
-      backgroundColor: 'var(--doc-surface)',
-      border: '1px solid var(--doc-border)',
-      color: 'var(--doc-text)',
     },
   };
-  const items =
-    children ?? context.options.map((option) => <FontFamilyItem key={option} value={option} />);
+  // The default menu is the grouped picker: small gray semibold headings for
+  // the classified families, a plain trailing group for the rest, ✓ on the current
+  // one (the Item renders it). Custom children replace the grouping wholesale.
+  let items: ReactNode;
+  if (children !== undefined) {
+    items = children;
+  } else {
+    const grouped = FONT_GROUPS.map((group) => ({
+      ...group,
+      fonts: context.options.filter(
+        (option) => (FONT_CATEGORY.get(option.toLowerCase()) ?? 'other') === group.category
+      ),
+    })).filter((group) => group.fonts.length > 0);
+    items = grouped.map((group, index) => (
+      <div key={group.category} role="group">
+        {index > 0 ? <div className="docx-toolbar__menu-separator" role="separator" /> : null}
+        {group.labelKey ? (
+          <div className="docx-toolbar__menu-label">{label(group.labelKey)}</div>
+        ) : null}
+        {group.fonts.map((option) => (
+          <FontFamilyItem key={option} value={option} />
+        ))}
+      </div>
+    ));
+  }
   if (asChild) return <Slot {...shared}>{items}</Slot>;
   return <div {...shared}>{items}</div>;
 }
@@ -187,6 +236,12 @@ function FontFamilyItem({ value, asChild, className, children }: FontFamilyItemP
   return (
     <button type="button" {...shared}>
       {display}
+      {/* The selected row's ✓, on the row's right edge. */}
+      {selected ? (
+        <span className="docx-toolbar__menu-check" aria-hidden="true">
+          ✓
+        </span>
+      ) : null}
     </button>
   );
 }

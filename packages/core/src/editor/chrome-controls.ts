@@ -91,6 +91,15 @@ export interface ChromeGroup<Id extends string = string, ControlId extends strin
   /** Stable group id. Public API; renames are breaking. */
   readonly id: Id;
   readonly labelKey: string;
+  /**
+   * Not part of the DEFAULT toolbar arrangement. The chrome spec shows these
+   * controls only in a context the engine does not model yet (an image or table
+   * selection), or not at all (save belongs in the host's File menu, never in the
+   * bar). Their slots stay public for composition — a host can still place
+   * `image.insert` or `file.save` explicitly — but the default chrome is the
+   * registry's default bar, which ends at the editing-mode picker.
+   */
+  readonly contextual?: true;
   readonly controls: readonly ChromeControl<ControlId>[];
 }
 
@@ -170,14 +179,6 @@ export const CHROME_GROUPS = [
         valueKey: 'fontSize.label',
         state: { kind: 'parityOnly' },
       },
-      {
-        id: 'color',
-        shape: 'colorSplit',
-        swatch: '#d93025',
-        labelKey: 'formattingBar.fontColor',
-        paths: GENERATED_ICON_PATHS['format_color_text'],
-        state: { kind: 'parityOnly' },
-      },
     ],
   },
   {
@@ -209,9 +210,21 @@ export const CHROME_GROUPS = [
         state: { kind: 'parityOnly' },
       },
       {
+        // The chrome spec renders font colour INSIDE the text-formatting group,
+        // right after strikethrough (B I U S, then text colour, highlight, link).
+        // The swatch is the default red the apply half is seeded with before any
+        // pick ({ rgb: 'FF0000' }).
+        id: 'color',
+        shape: 'colorSplit',
+        swatch: '#ff0000',
+        labelKey: 'formattingBar.fontColor',
+        paths: GENERATED_ICON_PATHS['format_color_text'],
+        state: { kind: 'parityOnly' },
+      },
+      {
         id: 'highlight',
         shape: 'colorSplit',
-        swatch: '#fff2a8',
+        swatch: '#ffff00',
         labelKey: 'formattingBar.highlightColor',
         paths: GENERATED_ICON_PATHS['ink_highlighter'],
         state: { kind: 'parityOnly' },
@@ -220,12 +233,6 @@ export const CHROME_GROUPS = [
         id: 'link',
         labelKey: 'formattingBar.insertLinkShortcut',
         paths: GENERATED_ICON_PATHS['link'],
-        state: { kind: 'parityOnly' },
-      },
-      {
-        id: 'clear',
-        labelKey: 'formattingBar.clearFormatting',
-        paths: GENERATED_ICON_PATHS['format_clear'],
         state: { kind: 'parityOnly' },
       },
     ],
@@ -249,12 +256,15 @@ export const CHROME_GROUPS = [
     ],
   },
   {
+    // The chrome spec renders this whole group as ONE dropdown (icon + caret
+    // opening a four-option panel), not four buttons. The four slots stay — a host
+    // composes `alignment.left` etc. individually — only the DEFAULT rendering
+    // merges them; adapters key the merge on this group's id.
     id: 'alignment',
     labelKey: 'formattingBar.groups.alignment',
     controls: [
       {
         id: 'left',
-        shape: 'dropdown',
         labelKey: 'alignment.alignLeft',
         paths: GENERATED_ICON_PATHS['format_align_left'],
         state: { kind: 'parityOnly' },
@@ -275,13 +285,6 @@ export const CHROME_GROUPS = [
         id: 'justify',
         labelKey: 'alignment.justify',
         paths: GENERATED_ICON_PATHS['format_align_justify'],
-        state: { kind: 'parityOnly' },
-      },
-      {
-        id: 'lineSpacing',
-        shape: 'dropdown',
-        labelKey: 'lineSpacing.label',
-        paths: GENERATED_ICON_PATHS['format_line_spacing'],
         state: { kind: 'parityOnly' },
       },
     ],
@@ -314,11 +317,57 @@ export const CHROME_GROUPS = [
         paths: GENERATED_ICON_PATHS['format_indent_increase'],
         state: { kind: 'parityOnly' },
       },
+      {
+        // The chrome spec groups line spacing WITH the list buttons, after
+        // indent — not with alignment.
+        id: 'lineSpacing',
+        shape: 'dropdown',
+        labelKey: 'lineSpacing.label',
+        paths: GENERATED_ICON_PATHS['format_line_spacing'],
+        state: { kind: 'parityOnly' },
+      },
+    ],
+  },
+  {
+    // The chrome spec puts clear-formatting as a standalone control between the list
+    // group and the trailing review controls, flanked by separators.
+    id: 'format',
+    labelKey: 'formattingBar.clearFormatting',
+    controls: [
+      {
+        id: 'clear',
+        labelKey: 'formattingBar.clearFormatting',
+        paths: GENERATED_ICON_PATHS['format_clear'],
+        state: { kind: 'parityOnly' },
+      },
+    ],
+  },
+  {
+    id: 'review',
+    labelKey: 'formattingBar.commentsAndChanges',
+    controls: [
+      {
+        id: 'comments',
+        shape: 'icon',
+        labelKey: 'formattingBar.commentsAndChanges',
+        paths: GENERATED_ICON_PATHS['comment'],
+        state: { kind: 'parityOnly' },
+      },
+      {
+        // The "✎ Editing ▾" mode pill: icon + current-mode label + caret.
+        id: 'editingMode',
+        shape: 'dropdown',
+        labelKey: 'editingMode.label',
+        valueKey: 'editingMode.editing',
+        paths: GENERATED_ICON_PATHS['edit_note'],
+        state: { kind: 'parityOnly' },
+      },
     ],
   },
   {
     id: 'image',
     labelKey: 'formattingBar.groups.image',
+    contextual: true,
     controls: [
       {
         id: 'insert',
@@ -337,6 +386,7 @@ export const CHROME_GROUPS = [
   {
     id: 'table',
     labelKey: 'formattingBar.groups.table',
+    contextual: true,
     controls: [
       {
         id: 'insert',
@@ -347,29 +397,9 @@ export const CHROME_GROUPS = [
     ],
   },
   {
-    id: 'review',
-    labelKey: 'formattingBar.commentsAndChanges',
-    controls: [
-      {
-        id: 'comments',
-        shape: 'icon',
-        labelKey: 'formattingBar.commentsAndChanges',
-        paths: GENERATED_ICON_PATHS['comment'],
-        state: { kind: 'parityOnly' },
-      },
-      {
-        id: 'editingMode',
-        shape: 'dropdown',
-        labelKey: 'editingMode.label',
-        valueKey: 'editingMode.editing',
-        paths: null,
-        state: { kind: 'parityOnly' },
-      },
-    ],
-  },
-  {
     id: 'file',
     labelKey: 'toolbar.file',
+    contextual: true,
     controls: [
       {
         id: 'save',
@@ -411,9 +441,10 @@ export type ChromeGroupId =
   | 'script'
   | 'alignment'
   | 'list'
+  | 'format'
+  | 'review'
   | 'image'
   | 'table'
-  | 'review'
   | 'file';
 
 /**
@@ -430,30 +461,30 @@ export type ChromeSlotId =
   | 'styles.style'
   | 'font.family'
   | 'font.size'
-  | 'font.color'
   | 'text.bold'
   | 'text.italic'
   | 'text.underline'
   | 'text.strike'
+  | 'text.color'
   | 'text.highlight'
   | 'text.link'
-  | 'text.clear'
   | 'script.super'
   | 'script.sub'
   | 'alignment.left'
   | 'alignment.center'
   | 'alignment.right'
   | 'alignment.justify'
-  | 'alignment.lineSpacing'
   | 'list.bullet'
   | 'list.numbered'
   | 'list.outdent'
   | 'list.indent'
+  | 'list.lineSpacing'
+  | 'format.clear'
+  | 'review.comments'
+  | 'review.editingMode'
   | 'image.insert'
   | 'image.properties'
   | 'table.insert'
-  | 'review.comments'
-  | 'review.editingMode'
   | 'file.save';
 
 /**
@@ -489,6 +520,21 @@ export function chromeSlotId(
   control: { readonly id: string }
 ): ChromeSlotId {
   return `${group.id}.${control.id}` as ChromeSlotId;
+}
+
+/**
+ * The groups of the DEFAULT toolbar arrangement, in bar order: every group that is
+ * not `contextual`. This is the registry's default bar — undo/redo through the
+ * editing-mode picker — and what both adapters render when the host composes
+ * nothing. Contextual slots (`image.*`, `table.insert`, `file.save`) remain
+ * available for explicit composition.
+ *
+ * @public
+ */
+export function defaultChromeGroups(): readonly ChromeGroup[] {
+  // Filtered through the ChromeGroup-typed view: the literal union's members omit
+  // the optional `contextual` key entirely, which TS treats as an unknown property.
+  return CHROME_GROUPS_CONFORMANCE.filter((group) => !group.contextual);
 }
 
 /** The menu region the legacy chrome shows above the toolbar. Parity-only. */

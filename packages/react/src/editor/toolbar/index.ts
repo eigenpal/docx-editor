@@ -22,4 +22,5 @@ export {
   type FontFamilyProps,
   type UseFontFamilyResult,
 } from './FontFamily';
+export { ToolbarAlignment, type ToolbarAlignmentComponent } from './Alignment';
 export type { ToolbarTranslate } from './toolbar-context';

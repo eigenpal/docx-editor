@@ -20,6 +20,18 @@ export { DocxEditorRoot, type DocxEditorRootProps } from './editor/DocxEditorRoo
 export { DocxEditorViewport, type DocxEditorViewportProps } from './editor/DocxEditorViewport';
 export { DocxEditorContent, type DocxEditorContentProps } from './editor/DocxEditorContent';
 export { useDocxEditor } from './editor/context';
+// Context-fed chrome parts (also reachable as `DocxEditor.HorizontalRuler` /
+// `.VerticalRuler` / `.DocumentOutline`): thin reactive wrappers over the props-driven
+// ruler and outline components, fed from the provided editor.
+export {
+  DocxEditorHorizontalRuler,
+  DocxEditorVerticalRuler,
+  type DocxEditorRulerProps,
+} from './editor/DocxEditorRulers';
+export {
+  DocxEditorDocumentOutline,
+  type DocxEditorDocumentOutlineProps,
+} from './editor/DocxEditorOutline';
 export { useEditorState } from './editor/useEditorState';
 export { useEditorCommand, type EditorCommandState } from './editor/useEditorCommand';
 export { useEditorEvent } from './editor/useEditorEvent';
@@ -34,6 +46,7 @@ export {
   useFontFamily,
   type DocxEditorToolbarNamespace,
   type DocxEditorToolbarProps,
+  type ToolbarAlignmentComponent,
   type FontFamilyItemProps,
   type FontFamilyNamespace,
   type FontFamilyPartProps,

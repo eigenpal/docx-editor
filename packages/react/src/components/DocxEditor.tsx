@@ -8,6 +8,8 @@ import { DocxEditorRoot } from '../editor/DocxEditorRoot';
 import { DocxEditorViewport } from '../editor/DocxEditorViewport';
 import { useDocxEditorRefApi } from './DocxEditor/hooks/useDocxEditorRefApi';
 import { DocxEditorToolbar } from '../editor/toolbar';
+import { DocxEditorHorizontalRuler, DocxEditorVerticalRuler } from '../editor/DocxEditorRulers';
+import { DocxEditorDocumentOutline } from '../editor/DocxEditorOutline';
 import type { DocxEditorProps, DocxEditorRef } from '../types';
 
 /**
@@ -209,6 +211,12 @@ export interface DocxEditorNamespace extends ForwardRefExoticComponent<
   readonly Viewport: typeof DocxEditorViewport;
   readonly Content: typeof DocxEditorContent;
   readonly Toolbar: typeof DocxEditorToolbar;
+  /** Context-fed horizontal ruler (read-only; the props-driven export stays). */
+  readonly HorizontalRuler: typeof DocxEditorHorizontalRuler;
+  /** Context-fed vertical ruler (read-only; the props-driven export stays). */
+  readonly VerticalRuler: typeof DocxEditorVerticalRuler;
+  /** Context-fed heading outline over `Editor.getOutline()`. */
+  readonly DocumentOutline: typeof DocxEditorDocumentOutline;
 }
 
 export const DocxEditor: DocxEditorNamespace = Object.assign(DocxEditorImpl, {
@@ -216,4 +224,7 @@ export const DocxEditor: DocxEditorNamespace = Object.assign(DocxEditorImpl, {
   Viewport: DocxEditorViewport,
   Content: DocxEditorContent,
   Toolbar: DocxEditorToolbar,
+  HorizontalRuler: DocxEditorHorizontalRuler,
+  VerticalRuler: DocxEditorVerticalRuler,
+  DocumentOutline: DocxEditorDocumentOutline,
 });
