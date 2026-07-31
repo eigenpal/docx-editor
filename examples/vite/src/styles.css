@@ -7,6 +7,349 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ────────────────────────────────────────────────────────────────────────────
+   Composed demo (default route): demo-local chrome around the composition API.
+   Library toolbar parts are styled through their public hooks' data attributes
+   (`data-active`, `data-disabled`) and class names — no library CSS is patched.
+   ──────────────────────────────────────────────────────────────────────────── */
+
+.demo-app {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  font-family:
+    system-ui,
+    -apple-system,
+    'Segoe UI',
+    sans-serif;
+  background: var(--doc-bg);
+  color: var(--doc-text);
+}
+
+.demo-loading {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  color: var(--doc-text-muted);
+}
+
+/* The chrome surface is header + toolbar only: the seam (hairline + soft
+   shadow) closes the `--doc-surface` band DIRECTLY under the toolbar pill. The
+   ruler row lives outside, on the gray `--doc-bg` workspace below the seam.
+   `z-index` lifts the seam shadow over the workspace; the demo menus open
+   inside this stacking context, above everything below. */
+.demo-chrome {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  background: var(--doc-surface);
+  border-bottom: 1px solid var(--doc-border);
+  box-shadow: 0 1px 3px var(--doc-shadow-subtle);
+  position: relative;
+  z-index: 30;
+}
+
+/* Header bar: brand + menus | editable title | live status + switchers.
+   Transparent — the chrome surface behind it owns the background. */
+.demo-header {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 8px 16px;
+}
+
+.demo-header__left,
+.demo-header__right {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: 0 0 auto;
+  min-width: 0;
+}
+
+.demo-header__right {
+  justify-content: flex-end;
+}
+
+/* Title column: the editable name with the File / Format / Help row beneath. */
+.demo-header__title-block {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0;
+  padding-left: 6px;
+}
+
+.demo-header__menus {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.demo-title {
+  font-size: 15px;
+  font-weight: 500;
+  color: var(--doc-text);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  padding: 2px 8px;
+  min-width: 220px;
+  text-align: left;
+  transition:
+    border-color 0.15s,
+    background 0.15s;
+}
+
+.demo-title:hover {
+  border-color: var(--doc-border);
+}
+
+.demo-title:focus {
+  outline: none;
+  border-color: var(--doc-border-dark, var(--doc-border));
+  background: var(--doc-bg-subtle);
+}
+
+/* Demo dropdown menus (File / Format) */
+.demo-menu {
+  position: relative;
+  display: inline-block;
+}
+
+.demo-menu__trigger {
+  border: none;
+  background: transparent;
+  color: var(--doc-text);
+  font-size: 13px;
+  font-weight: 500;
+  padding: 5px 10px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.demo-menu__trigger:hover,
+.demo-menu__trigger--open {
+  background: var(--doc-bg-hover, var(--doc-bg-subtle));
+}
+
+.demo-menu__list {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  margin-top: 4px;
+  min-width: 200px;
+  background: var(--doc-surface);
+  border: 1px solid var(--doc-border);
+  border-radius: 8px;
+  box-shadow: 0 4px 12px var(--doc-shadow, rgba(0, 0, 0, 0.12));
+  padding: 4px;
+  z-index: 1000;
+}
+
+.demo-menu__item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  border: none;
+  background: transparent;
+  color: var(--doc-text);
+  font-size: 13px;
+  text-align: left;
+  padding: 6px 8px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background 0.1s;
+}
+
+.demo-menu__item:hover:not(:disabled) {
+  background: var(--doc-bg-hover, var(--doc-bg-subtle));
+}
+
+.demo-menu__item:disabled {
+  color: var(--doc-text-subtle);
+  cursor: default;
+}
+
+.demo-menu__check {
+  width: 14px;
+  flex-shrink: 0;
+  font-size: 11px;
+  color: var(--doc-text);
+}
+
+.demo-menu__label {
+  flex: 1;
+  white-space: nowrap;
+}
+
+.demo-menu__separator {
+  height: 1px;
+  background: var(--doc-border);
+  margin: 4px 0;
+}
+
+/* The LIBRARY toolbar is styled by the CORE stylesheet (`docx-toolbar` family).
+   The demo only insets the pill inside the white chrome band; the seam sits
+   right under it. */
+.demo-toolbar {
+  margin: 8px 12px;
+}
+
+/* The in-place customized FontFamily slot */
+.demo-font-trigger {
+  display: inline-flex;
+  align-items: center;
+  min-width: 150px;
+  height: 30px;
+  padding: 0 10px;
+  border: 1px solid var(--doc-border);
+  border-radius: 6px;
+  background: var(--doc-surface);
+  color: var(--doc-text);
+  font-size: 13px;
+  cursor: pointer;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  transition: background 0.15s;
+}
+
+.demo-font-trigger:hover:not(:disabled) {
+  background: var(--doc-bg-hover, var(--doc-bg-subtle));
+}
+
+.demo-font-trigger[data-disabled] {
+  color: var(--doc-text-subtle);
+  cursor: default;
+}
+
+/* The popup card and its rows come from the core recipe (white surface card,
+   8px radius, soft shadow, 4px viewport; roomy single-line rows with the
+   right-edge ✓ on the selected one — never a background slab). The demo only
+   widens the card so long family names breathe. */
+.demo-font-menu {
+  margin-top: 4px;
+  min-width: 220px;
+}
+
+/* Family name in its own typeface; clipped with an ellipsis, never wrapped. */
+.demo-font-item__name {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.demo-font-empty {
+  padding: 8px 10px;
+  font-size: 12px;
+  color: var(--doc-text-subtle);
+  white-space: nowrap;
+}
+
+/* The context-fed horizontal ruler row: the first WORKSPACE row, sitting on the
+   gray `--doc-bg` below the chrome seam, centered over the page column. The
+   ruler component sizes itself to the page width. When the outline overlay is
+   open, extra left padding keeps the ruler centered over the shifted page; the
+   padding transition matches the viewport's padding shift so both glide
+   together. */
+.demo-ruler-row {
+  display: flex;
+  justify-content: center;
+  padding: 6px 20px 2px;
+  overflow: hidden;
+  flex: none;
+  transition: padding 0.2s ease;
+}
+
+.demo-ruler-row--outline {
+  padding-left: 308px; /* 20px base + the 288px outline overlay reservation */
+}
+
+/* Editor area: the full-width scrolled page column with overlay panels on top.
+   The viewport never changes width — panels float above it and shift the page
+   column with padding — so the vertical ruler stays pinned at the far left. */
+.demo-main {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  align-items: stretch;
+  position: relative;
+}
+
+/* The outline is an OVERLAY panel: absolutely positioned over the viewport,
+   inset 20px past the vertical ruler's tick column so the two coexist (the
+   panel's own 12px anchor puts the back arrow at x=32, the chrome spec's
+   ruler-cleared anchor). 12px anchor + 240px panel + 16px page gap = the 288px
+   reservation the viewport/ruler paddings use. Stays mounted when closed:
+   width animates to 0 (clipping the panel) and `visibility` flips after the
+   slide so the closed panel is neither visible nor hit-testable. */
+.demo-outline {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 20px;
+  width: 268px;
+  overflow: hidden;
+  z-index: 20;
+  visibility: visible;
+  transition:
+    width 0.2s ease,
+    visibility 0s 0s;
+}
+
+.demo-outline--closed {
+  width: 0;
+  visibility: hidden;
+  transition:
+    width 0.2s ease,
+    visibility 0s 0.2s;
+}
+
+/* Collapsed state: the CORE `.docx-outline-toggle` owns the look (circular
+   disc, token-driven, dark-mode-aware); the demo adds only placement. Anchored
+   at 12px past the 20px vertical-ruler column so the disc never covers the
+   ticks — the same ruler-cleared anchor the open panel uses. */
+.demo-outline-toggle {
+  position: absolute;
+  top: 24px;
+  left: 32px;
+  z-index: 40;
+}
+
+/* Full-width scroll container. Opening the outline shifts the page column with
+   LEFT PADDING (the absolute vertical ruler at left: 0 is unaffected), on the
+   same ease the ruler row uses so the ruler stays centered over the page. */
+.demo-viewport {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  transition: padding 0.2s ease;
+}
+
+.demo-viewport--outline {
+  padding-left: 288px;
+}
+
+/* Vertical ruler: an absolutely positioned child of the scroll container, so it
+   scrolls WITH the document (absolute children live in the scrolled coordinate
+   space). The 24px top offset matches the page stack's top margin, so tick zero
+   sits on the first page's top edge, reference-style. */
+.demo-vruler {
+  position: absolute;
+  top: 24px;
+  left: 0;
+  z-index: 10;
+  pointer-events: none;
+}
+
 /* Mobile responsive overrides */
 @media (max-width: 768px) {
   /* Compact toolbar on mobile - horizontal scroll instead of wrapping */
@@ -21,6 +364,16 @@
     min-height: 36px;
   }
   .ep-root [role='toolbar']::-webkit-scrollbar {
+    display: none;
+  }
+
+  .demo-header__title-block {
+    display: none;
+  }
+
+  /* Rulers are desktop chrome; the vertical one would overlap the page on
+     small screens. */
+  .demo-vruler {
     display: none;
   }
 }

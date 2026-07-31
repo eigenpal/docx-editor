@@ -13,7 +13,24 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 const SRC = join(import.meta.dir, '..', 'src');
-const editorSource = readFileSync(join(SRC, 'components', 'DocxEditor.tsx'), 'utf8');
+
+// The host is now sugar over the provider-first composition layer, so the wiring these
+// rules pin lives across the sugar component AND the primitives it composes. The rules
+// apply to the union: the facade must be created/destroyed somewhere in this set, and
+// the forbidden symbols must appear nowhere in it.
+const editorSource = [
+  join(SRC, 'components', 'DocxEditor.tsx'),
+  join(SRC, 'editor', 'context.ts'),
+  join(SRC, 'editor', 'loading-snapshot.ts'),
+  join(SRC, 'editor', 'DocxEditorRoot.tsx'),
+  join(SRC, 'editor', 'DocxEditorViewport.tsx'),
+  join(SRC, 'editor', 'DocxEditorContent.tsx'),
+  join(SRC, 'editor', 'useEditorState.ts'),
+  join(SRC, 'editor', 'useEditorCommand.ts'),
+  join(SRC, 'editor', 'useEditorEvent.ts'),
+]
+  .map((path) => readFileSync(path, 'utf8'))
+  .join('\n');
 
 describe('React tree-lane wiring (phase 3)', () => {
   test('the editor is created through the composition root facade', () => {
@@ -62,7 +79,7 @@ describe('React tree-lane wiring (phase 3)', () => {
   });
 
   test('the facade is destroyed on cleanup', () => {
-    expect(editorSource).toContain('editor.destroy()');
+    expect(editorSource).toContain('instance.destroy()');
   });
 
   test('the container carries the shared style-scope and surface classes', () => {

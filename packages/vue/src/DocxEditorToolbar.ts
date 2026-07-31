@@ -13,14 +13,16 @@
 // here: it defaulted `showSave` to true where React rendered save only when a
 // handler was supplied, and it hardcoded English labels.
 
-import { defineComponent, h, type PropType, type VNode } from 'vue';
+import { defineComponent, h, ref, type PropType, type VNode } from 'vue';
 import type { Editor } from '@docx-editor.dev/core-contract/contracts/editor';
 import {
-  CHROME_GROUPS,
   CHROME_UNAVAILABLE_KEY,
+  chromeSlotId,
+  defaultChromeGroups,
   runToolbarCommand,
   toolbarCommandState,
   type ChromeControl,
+  type ChromeSlotId,
 } from '@docx-editor.dev/core-contract/editor';
 import { useEditorSnapshot } from './useEditorSnapshot';
 
@@ -55,27 +57,55 @@ function icon(paths: readonly string[]): VNode {
 
 function control(
   editor: Editor | null,
+  slotId: ChromeSlotId,
   c: ChromeControl,
   t: Translate,
   onSave: (() => void) | undefined
 ): VNode {
   const label = t(c.labelKey);
 
-  // A picker renders as a disabled combobox, matching its original shape.
-  if (c.paths === null) {
+  // A stepper-shaped parity control (font size) renders as the disabled
+  // minus / boxed value / plus lookalike, showing the registry's valueText.
+  if (c.shape === 'stepper' && c.state.kind === 'parityOnly') {
+    return h(
+      'span',
+      {
+        key: c.id,
+        class: 'ep-toolbar__stepper',
+        'data-testid': `toolbar-${slotId}`,
+        'aria-disabled': 'true',
+        onMousedown: (event: MouseEvent) => event.preventDefault(),
+      },
+      [
+        h('span', { class: 'ep-toolbar__stepper-button', 'aria-hidden': 'true' }, '−'),
+        h('span', { class: 'ep-toolbar__stepper-value' }, c.valueText ?? ''),
+        h('span', { class: 'ep-toolbar__stepper-button', 'aria-hidden': 'true' }, '+'),
+        h('span', { class: 'ep-sr-only' }, `${label} — ${t(CHROME_UNAVAILABLE_KEY)}`),
+      ]
+    );
+  }
+
+  // A dropdown-shaped parity control renders as a disabled combobox-lookalike,
+  // matching its registry shape: optional leading glyph (line spacing, editing mode),
+  // optional value text, caret. Test ids are keyed on the SLOT id
+  // (`toolbar-text.bold`): control ids are only unique within their group
+  // (`image.insert` / `table.insert`), so a bare control id would collide.
+  if (c.paths === null || (c.shape === 'dropdown' && c.state.kind === 'parityOnly')) {
+    const value = c.valueKey ? t(c.valueKey) : (c.valueText ?? '');
     return h(
       'span',
       {
         key: c.id,
         class: 'ep-toolbar__picker',
-        'data-testid': `toolbar-${c.id}`,
+        'data-testid': `toolbar-${slotId}`,
         'aria-disabled': 'true',
         // A picker is a <span>, so it does not take focus itself, but a mousedown
         // still blurs the editor. Same reasoning as the disabled buttons above.
         onMousedown: (event: MouseEvent) => event.preventDefault(),
       },
       [
-        h('span', { class: 'ep-toolbar__picker-value' }, c.valueKey ? t(c.valueKey) : ''),
+        ...(c.paths ? [icon(c.paths)] : []),
+        ...(value ? [h('span', { class: 'ep-toolbar__picker-value' }, value)] : []),
         h('span', { class: 'ep-toolbar__picker-caret', 'aria-hidden': 'true' }, '▾'),
         h('span', { class: 'ep-sr-only' }, `${label} — ${t(CHROME_UNAVAILABLE_KEY)}`),
       ]
@@ -90,7 +120,7 @@ function control(
         key: c.id,
         type: 'button',
         class: 'ep-toolbar__button',
-        'data-testid': `toolbar-${c.id}`,
+        'data-testid': `toolbar-${slotId}`,
         'data-parity-only': 'true',
         disabled: true,
         title: reason,
@@ -113,7 +143,7 @@ function control(
         key: c.id,
         type: 'button',
         class: 'ep-toolbar__button',
-        'data-testid': `toolbar-${c.id}`,
+        'data-testid': `toolbar-${slotId}`,
         disabled: !editor || !onSave,
         title: label,
         'aria-label': label,
@@ -124,33 +154,113 @@ function control(
     );
   }
 
-  const commandId = c.state.command;
-  const state = toolbarCommandState(editor, commandId);
-  // No active/pressed state.
-  //
-  // A toolbar should show whether bold is currently ON, and the repo's own guidance
-  // says controls must reflect live editor state rather than being static. It is
-  // omitted here because `CanResult` is `{ ok } | { ok, code, reason }` — the public
-  // contract can answer "may this run?" but not "is it currently applied?".
-  // Surfacing it needs a new public query, and M6V.1 is explicitly a visual-shell
-  // gate that must not widen the feature surface. Tracked as a known gap.
+  // The command comes from the SLOT id through `commandForSlot` inside the shared
+  // helpers — one command table for both adapters. `active` is `Editor.isActive`,
+  // derived in the engine for marks/alignment, surfaced as `aria-pressed` so the
+  // control reflects live editor state.
+  const state = toolbarCommandState(editor, slotId);
   return h(
     'button',
     {
       key: c.id,
       type: 'button',
       class: 'ep-toolbar__button',
-      'data-testid': `toolbar-${c.id}`,
+      'data-testid': `toolbar-${slotId}`,
       disabled: !state.enabled,
+      'aria-pressed': state.active ? 'true' : 'false',
       // The engine's own words, never an adapter paraphrase.
       title: state.disabledReason ?? label,
       'aria-label': label,
       onMousedown: (event: MouseEvent) => event.preventDefault(), // keep focus on the editor
-      onClick: () => runToolbarCommand(editor, commandId),
+      onClick: () => runToolbarCommand(editor, slotId),
     },
     [icon(c.paths)]
   );
 }
+
+const ALIGNMENT_SLOTS: readonly ChromeSlotId[] = [
+  'alignment.left',
+  'alignment.center',
+  'alignment.right',
+  'alignment.justify',
+];
+
+/**
+ * The merged alignment control: the chrome spec renders the four alignment slots
+ * as ONE dropdown (current alignment's icon + caret opening a four-option row), and
+ * both adapters merge the group the same way. Wired through the same shared
+ * can-before-exec helpers as every other control.
+ */
+const AlignmentDropdown = defineComponent({
+  name: 'DocxEditorToolbarAlignment',
+  props: {
+    editor: { type: Object as PropType<Editor | null>, default: null },
+    t: { type: Function as PropType<Translate>, required: true },
+    controls: { type: Array as PropType<readonly ChromeControl[]>, required: true },
+  },
+  setup(props) {
+    const open = ref(false);
+    return () => {
+      const options = ALIGNMENT_SLOTS.map((slot, index) => ({
+        slot,
+        control: props.controls[index]!,
+        state: toolbarCommandState(props.editor, slot),
+      }));
+      const current = options.find((option) => option.state.active) ?? options[0]!;
+      const enabled = options.some((option) => option.state.enabled);
+      const currentLabel = props.t(current.control.labelKey);
+      return h('span', { class: 'ep-toolbar__alignment', 'data-testid': 'toolbar-alignment' }, [
+        h(
+          'button',
+          {
+            type: 'button',
+            class: 'ep-toolbar__button ep-toolbar__alignment-trigger',
+            disabled: !enabled,
+            'aria-haspopup': 'true',
+            'aria-expanded': open.value ? 'true' : 'false',
+            'aria-label': currentLabel,
+            title: enabled ? currentLabel : (current.state.disabledReason ?? currentLabel),
+            onMousedown: (event: MouseEvent) => event.preventDefault(),
+            onClick: () => {
+              open.value = !open.value;
+            },
+          },
+          [
+            icon(current.control.paths ?? []),
+            h('span', { class: 'ep-toolbar__picker-caret', 'aria-hidden': 'true' }, '▾'),
+          ]
+        ),
+        open.value
+          ? h(
+              'div',
+              { class: 'ep-toolbar__alignment-popup' },
+              options.map((option) =>
+                h(
+                  'button',
+                  {
+                    key: option.slot,
+                    type: 'button',
+                    class: 'ep-toolbar__button',
+                    'data-testid': `toolbar-${option.slot}`,
+                    disabled: !option.state.enabled,
+                    'aria-pressed': option.state.active ? 'true' : 'false',
+                    title: option.state.disabledReason ?? props.t(option.control.labelKey),
+                    'aria-label': props.t(option.control.labelKey),
+                    onMousedown: (event: MouseEvent) => event.preventDefault(),
+                    onClick: () => {
+                      runToolbarCommand(props.editor, option.slot);
+                      open.value = false;
+                    },
+                  },
+                  [icon(option.control.paths ?? [])]
+                )
+              )
+            )
+          : null,
+      ]);
+    };
+  },
+});
 
 export default defineComponent({
   name: 'DocxEditorToolbar',
@@ -185,7 +295,10 @@ export default defineComponent({
           // is dead code, and `pointer-events: none` just moves the blur here.
           onMousedown: (event: MouseEvent) => event.preventDefault(),
         },
-        CHROME_GROUPS.map((group, index) =>
+        // The DEFAULT arrangement is the registry's default bar: contextual groups
+        // (image / table / save) are composition-only, and the alignment group
+        // renders as ONE merged dropdown — same rules as the React toolbar.
+        defaultChromeGroups().map((group, index) =>
           h('div', { key: group.id, class: 'ep-toolbar__group-wrap' }, [
             ...(index > 0 ? [h('div', { class: 'ep-toolbar__separator', role: 'separator' })] : []),
             h(
@@ -196,7 +309,17 @@ export default defineComponent({
                 'aria-label': props.t(group.labelKey),
                 'data-group': group.id,
               },
-              group.controls.map((c) => control(props.editor, c, props.t, props.onSave))
+              group.id === 'alignment'
+                ? [
+                    h(AlignmentDropdown, {
+                      editor: props.editor,
+                      t: props.t,
+                      controls: group.controls,
+                    }),
+                  ]
+                : group.controls.map((c) =>
+                    control(props.editor, chromeSlotId(group, c), c, props.t, props.onSave)
+                  )
             ),
           ])
         )

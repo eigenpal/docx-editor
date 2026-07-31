@@ -4,6 +4,10 @@
 
 ```ts
 
+import { CHROME_GROUPS } from '@docx-editor.dev/core-contract/editor';
+import { ChromeSlotId } from '@docx-editor.dev/core-contract/editor';
+import { ColorValue } from '@docx-editor.dev/core-contract/contracts/editor';
+import { commandForSlot } from '@docx-editor.dev/core-contract/editor';
 import { CSSProperties } from 'react';
 import { DisplayItem } from '@docx-editor.dev/core-contract/contracts/geometry';
 import { DisplayPage } from '@docx-editor.dev/core-contract/contracts/geometry';
@@ -12,8 +16,10 @@ import { DocumentChange } from '@docx-editor.dev/core-contract/contracts/editor'
 import { DocumentHandle } from '@docx-editor.dev/core-contract/contracts/editor';
 import { DocumentSource } from '@docx-editor.dev/core-contract/contracts/editor';
 import { DocxDocument } from '@docx-editor.dev/core-contract/contracts/types';
+import { DocxEditorInstance } from '@docx-editor.dev/core-contract/editor';
 import { Editor } from '@docx-editor.dev/core-contract/contracts/editor';
 import { EditorCommand } from '@docx-editor.dev/core-contract/contracts/editor';
+import { EditorEvents } from '@docx-editor.dev/core-contract/contracts/editor';
 import { EditorFontError } from '@docx-editor.dev/core-contract/contracts/editor';
 import { EditorFontErrorCode } from '@docx-editor.dev/core-contract/contracts/editor';
 import { EditorHost } from '@docx-editor.dev/core-contract/contracts/editor';
@@ -25,6 +31,7 @@ import { FontConfiguration } from '@docx-editor.dev/core-contract/contracts/edit
 import { FontFaceRequest } from '@docx-editor.dev/core-contract/contracts/editor';
 import { FontSource } from '@docx-editor.dev/core-contract/contracts/editor';
 import { FontSourceSubstitution } from '@docx-editor.dev/core-contract/contracts/editor';
+import { ForwardRefExoticComponent } from 'react';
 import { generateRulerTicks } from '@docx-editor.dev/core-contract/editor';
 import { NavigationCommand } from '@docx-editor.dev/core-contract/editor';
 import { PaginatedSurfaceState } from '@docx-editor.dev/core-contract/editor';
@@ -32,15 +39,27 @@ import { PX_PER_CM } from '@docx-editor.dev/core-contract/editor';
 import { PX_PER_INCH } from '@docx-editor.dev/core-contract/editor';
 import * as React$1 from 'react';
 import React__default from 'react';
+import { ReactElement } from 'react';
 import { ReactNode } from 'react';
 import { Ref } from 'react';
+import { RefAttributes } from 'react';
 import { rulerPageBox } from '@docx-editor.dev/core-contract/editor';
 import { RulerTick } from '@docx-editor.dev/core-contract/editor';
 import { RulerUnit } from '@docx-editor.dev/core-contract/editor';
-import { SectionProperties as SectionProperties_2 } from '@docx-editor.dev/core-contract/editor';
+import { runToolbarCommand } from '@docx-editor.dev/core-contract/editor';
+import { SectionProperties } from '@docx-editor.dev/core-contract/editor';
 import { SurfaceFormatting } from '@docx-editor.dev/core-contract/editor';
 import { TextMeasurer } from '@docx-editor.dev/core-contract/editor';
+import { Theme } from '@docx-editor.dev/core-contract/contracts/editor';
+import { ToolbarCommandState } from '@docx-editor.dev/core-contract/editor';
+import { toolbarCommandState } from '@docx-editor.dev/core-contract/editor';
 import { Translations } from '@docx-editor.dev/i18n';
+
+export { CHROME_GROUPS }
+
+export { ChromeSlotId }
+
+export { commandForSlot }
 
 export { DisplayItem }
 
@@ -54,7 +73,43 @@ export function DocumentName(input: DocumentNameProps): React__default.JSX.Eleme
 export { DocxDocument }
 
 // @public (undocumented)
-export const DocxEditor: React$1.ForwardRefExoticComponent<DocxEditorProps & React$1.RefAttributes<DocxEditorRef>>;
+export const DocxEditor: DocxEditorNamespace;
+
+// @public
+export function DocxEditorContent(input: DocxEditorContentProps): React$1.JSX.Element;
+
+// @public
+export interface DocxEditorContentProps {
+    className?: string;
+}
+
+// @public
+export function DocxEditorDocumentOutline(props: DocxEditorDocumentOutlineProps): ReactElement;
+
+// @public
+export interface DocxEditorDocumentOutlineProps {
+    leftOffset?: number;
+    onClose?: () => void;
+    topOffset?: number;
+}
+
+// @public
+export function DocxEditorHorizontalRuler(props: DocxEditorRulerProps): ReactElement;
+
+// @public
+export interface DocxEditorNamespace extends ForwardRefExoticComponent<DocxEditorProps & RefAttributes<DocxEditorRef>> {
+    // (undocumented)
+    readonly Content: typeof DocxEditorContent;
+    readonly DocumentOutline: typeof DocxEditorDocumentOutline;
+    readonly HorizontalRuler: typeof DocxEditorHorizontalRuler;
+    // (undocumented)
+    readonly Root: typeof DocxEditorRoot;
+    // (undocumented)
+    readonly Toolbar: typeof DocxEditorToolbar;
+    readonly VerticalRuler: typeof DocxEditorVerticalRuler;
+    // (undocumented)
+    readonly Viewport: typeof DocxEditorViewport;
+}
 
 // @public
 export interface DocxEditorProps {
@@ -99,6 +154,36 @@ export interface DocxEditorRef {
 }
 
 // @public
+export function DocxEditorRoot(props: DocxEditorRootProps): React$1.JSX.Element;
+
+// @public
+export interface DocxEditorRootProps {
+    // (undocumented)
+    author?: string;
+    // (undocumented)
+    children?: ReactNode;
+    document?: DocumentSource;
+    fonts?: FontConfiguration;
+    // (undocumented)
+    locale?: string;
+    mode?: 'edit' | 'view';
+    onChange?: (change: DocumentChange) => void;
+    onFontError?: (error: EditorFontError) => void;
+    onReady?: (editor: Editor) => void;
+    // (undocumented)
+    zoom?: number;
+}
+
+// @public
+export interface DocxEditorRulerProps {
+    // (undocumented)
+    className?: string;
+    // (undocumented)
+    style?: CSSProperties;
+    unit?: 'inch' | 'cm';
+}
+
+// @public
 export function DocxEditorShell(input: {
     i18n: React.ComponentProps<typeof LocaleProvider>['i18n'];
     isDark?: boolean;
@@ -119,11 +204,11 @@ export function DocxEditorShell(input: {
     toolbarHeight: number;
     editorScrollLeft: number;
     expandedSidebarItem: string | null;
-    trackedChanges: TrackedChangesResult['entries'];
+    trackedChanges: readonly TrackedChangeSummary[];
     onScrollContainerMouseDown: (e: React.MouseEvent) => void;
     onEditorBgMouseDown: (e: React.MouseEvent) => void;
     onEditorContextMenu: (e: React.MouseEvent) => void;
-    horizontalRulerProps: HorizontalRulerProps$1;
+    horizontalRulerProps: HorizontalRulerProps_2;
     verticalRulerProps: VerticalRulerProps$1;
     outlineProps: OutlineProps;
     onToggleOutline: () => void;
@@ -138,9 +223,119 @@ export function DocxEditorShell(input: {
     fileInputs: ReactNode;
 }): React$1.JSX.Element;
 
+// @public
+export const DocxEditorToolbar: DocxEditorToolbarNamespace;
+
+// @public
+export interface DocxEditorToolbarNamespace {
+    // (undocumented)
+    (props: DocxEditorToolbarProps): ReactNode;
+    // (undocumented)
+    readonly AlignCenter: ToolbarPartComponent;
+    // (undocumented)
+    readonly AlignJustify: ToolbarPartComponent;
+    // (undocumented)
+    readonly AlignLeft: ToolbarPartComponent;
+    // (undocumented)
+    readonly Alignment: ToolbarAlignmentComponent;
+    // (undocumented)
+    readonly AlignRight: ToolbarPartComponent;
+    // (undocumented)
+    readonly Bold: ToolbarPartComponent;
+    // (undocumented)
+    readonly BulletList: ToolbarPartComponent;
+    // (undocumented)
+    readonly Button: typeof ToolbarButton$1;
+    // (undocumented)
+    readonly ClearFormatting: ToolbarPartComponent;
+    // (undocumented)
+    readonly Comments: ToolbarPartComponent;
+    // (undocumented)
+    readonly EditingMode: ToolbarSlotPartComponent;
+    // (undocumented)
+    readonly FontColor: ToolbarSlotPartComponent;
+    // (undocumented)
+    readonly FontFamily: typeof FontFamily;
+    // (undocumented)
+    readonly FontSize: ToolbarSlotPartComponent;
+    // (undocumented)
+    readonly Highlight: ToolbarSlotPartComponent;
+    // (undocumented)
+    readonly ImageInsert: ToolbarPartComponent;
+    // (undocumented)
+    readonly ImageProperties: ToolbarPartComponent;
+    // (undocumented)
+    readonly Indent: ToolbarPartComponent;
+    // (undocumented)
+    readonly Italic: ToolbarPartComponent;
+    // (undocumented)
+    readonly LineSpacing: ToolbarSlotPartComponent;
+    // (undocumented)
+    readonly Link: ToolbarPartComponent;
+    // (undocumented)
+    readonly NumberedList: ToolbarPartComponent;
+    // (undocumented)
+    readonly Outdent: ToolbarPartComponent;
+    // (undocumented)
+    readonly Redo: ToolbarPartComponent;
+    // (undocumented)
+    readonly Save: ToolbarSlotPartComponent;
+    // (undocumented)
+    readonly Separator: typeof ToolbarSeparator;
+    // (undocumented)
+    readonly Strike: ToolbarPartComponent;
+    // (undocumented)
+    readonly StylePicker: ToolbarSlotPartComponent;
+    // (undocumented)
+    readonly Subscript: ToolbarPartComponent;
+    // (undocumented)
+    readonly Superscript: ToolbarPartComponent;
+    // (undocumented)
+    readonly TableInsert: ToolbarPartComponent;
+    // (undocumented)
+    readonly Underline: ToolbarPartComponent;
+    // (undocumented)
+    readonly Undo: ToolbarPartComponent;
+    // (undocumented)
+    readonly Zoom: ToolbarSlotPartComponent;
+}
+
+// @public
+export interface DocxEditorToolbarProps {
+    // (undocumented)
+    children?: ReactNode;
+    className?: string;
+    onSave?: () => void;
+    preset?: boolean;
+    t?: ToolbarTranslate;
+}
+
+// @public
+export function DocxEditorVerticalRuler(props: DocxEditorRulerProps): ReactElement;
+
+// @public
+export function DocxEditorViewport(input: DocxEditorViewportProps): React$1.JSX.Element;
+
+// @public
+export interface DocxEditorViewportProps {
+    // (undocumented)
+    children?: ReactNode;
+    className?: string;
+    // (undocumented)
+    style?: CSSProperties;
+}
+
 export { Editor }
 
 export { EditorCommand }
+
+// @public
+export interface EditorCommandState {
+    readonly disabledReason: string | null;
+    readonly execute: () => void;
+    readonly isActive: boolean;
+    readonly isEnabled: boolean;
+}
 
 export { EditorFontError }
 
@@ -161,6 +356,40 @@ export { FontConfiguration }
 
 export { FontFaceRequest }
 
+// @public
+export interface FontFamilyItemProps extends FontFamilyPartProps {
+    value: string;
+}
+
+// @public
+export interface FontFamilyNamespace {
+    // (undocumented)
+    (props: FontFamilyProps): ReactNode;
+    // (undocumented)
+    readonly Content: typeof FontFamilyContent;
+    // (undocumented)
+    readonly docxSlot: 'font.family';
+    // (undocumented)
+    readonly Item: typeof FontFamilyItem;
+    // (undocumented)
+    readonly Trigger: typeof FontFamilyTrigger;
+}
+
+// @public
+export interface FontFamilyPartProps {
+    // (undocumented)
+    asChild?: boolean;
+    // (undocumented)
+    children?: ReactNode;
+    // (undocumented)
+    className?: string;
+}
+
+// @public
+export interface FontFamilyProps extends FontFamilyPartProps {
+    hidden?: boolean;
+}
+
 export { FontSource }
 
 export { FontSourceSubstitution }
@@ -170,7 +399,7 @@ export { generateRulerTicks }
 // @public (undocumented)
 export function HorizontalRuler(input: HorizontalRulerProps): React__default.ReactElement;
 
-// @public
+// @public (undocumented)
 export interface HorizontalRulerProps {
     // (undocumented)
     className?: string;
@@ -197,13 +426,13 @@ export interface HorizontalRulerProps {
     // (undocumented)
     onTabMarkRemove?: (positionTwips: number) => void;
     // (undocumented)
-    sectionProps?: SectionProperties | null;
+    pageSetup?: RulerPageSetup | null;
     // (undocumented)
     showFirstLineIndent?: boolean;
     // (undocumented)
     style?: CSSProperties;
     // (undocumented)
-    tabMarks?: TabMark[] | null;
+    tabMarks?: RulerTabStop[] | null;
     // (undocumented)
     unit?: 'inch' | 'cm';
     // (undocumented)
@@ -236,7 +465,7 @@ interface PaginatedDocxEditorHandle {
     // (undocumented)
     redo(): void;
     save(): Uint8Array | null;
-    sectionProperties(): SectionProperties_2 | null;
+    sectionProperties(): SectionProperties | null;
     // (undocumented)
     selectAll(): void;
     // (undocumented)
@@ -308,6 +537,8 @@ export { RulerTick }
 
 export { RulerUnit }
 
+export { runToolbarCommand }
+
 // @public
 export function TitleBar(input: TitleBarProps): React__default.JSX.Element;
 
@@ -318,10 +549,45 @@ export function TitleBarRight(input: TitleBarRightProps): React__default.JSX.Ele
 export function Toolbar(explicitProps: ToolbarProps): React__default.JSX.Element;
 
 // @public
-export function ToolbarButton(input: ToolbarButtonProps): React__default.JSX.Element;
+export interface ToolbarAlignmentComponent {
+    // (undocumented)
+    (props: ToolbarSlotPartProps): ReturnType<typeof ToolbarAlignmentImpl>;
+    // (undocumented)
+    readonly docxSlot: 'alignment';
+}
+
+// @public
+export function ToolbarButton(input: ToolbarButtonProps_2): React__default.JSX.Element;
+
+// @public
+export interface ToolbarButtonProps {
+    asChild?: boolean;
+    // (undocumented)
+    children?: ReactNode;
+    // (undocumented)
+    className?: string;
+    hidden?: boolean;
+    icon?: ReactNode;
+    slot: ChromeSlotId;
+}
+
+export { ToolbarCommandState }
+
+export { toolbarCommandState }
 
 // @public
 export function ToolbarGroup(input: ToolbarGroupProps): React__default.JSX.Element;
+
+// @public (undocumented)
+export interface ToolbarPartComponent {
+    // (undocumented)
+    (props: ToolbarPartProps): ReturnType<typeof ToolbarButton$1>;
+    // (undocumented)
+    readonly docxSlot: ChromeSlotId;
+}
+
+// @public
+export type ToolbarPartProps = Omit<ToolbarButtonProps, 'slot'>;
 
 // @public
 export interface ToolbarProps {
@@ -332,7 +598,7 @@ export interface ToolbarProps {
     currentFormatting?: SelectionFormatting;
     disabled?: boolean;
     documentFonts?: readonly FontOption[];
-    documentStyles?: Style[];
+    documentStyles?: readonly DocumentStyleSummary[];
     editorRef?: React__default.RefObject<HTMLElement>;
     enableShortcuts?: boolean;
     fontFamilies?: ReadonlyArray<string | FontOption>;
@@ -397,7 +663,54 @@ export interface ToolbarProps {
 }
 
 // @public
+export interface ToolbarSeparatorProps {
+    // (undocumented)
+    className?: string;
+}
+
+// @public
+export interface ToolbarSlotPartComponent {
+    // (undocumented)
+    (props: ToolbarSlotPartProps): ReturnType<typeof ToolbarButton$1>;
+    // (undocumented)
+    readonly docxSlot: ChromeSlotId;
+}
+
+// @public
+export interface ToolbarSlotPartProps {
+    // (undocumented)
+    className?: string;
+    hidden?: boolean;
+}
+
+// @public
+export type ToolbarTranslate = (key: string) => string;
+
+// @public
+export function useDocxEditor(): DocxEditorInstance | null;
+
+// @public
+export function useEditorCommand(slotId: ChromeSlotId): EditorCommandState;
+
+// @public
+export function useEditorEvent<E extends keyof EditorEvents>(event: E, handler: EditorEvents[E]): void;
+
+// @public
 export function useEditorSnapshot(editor: Editor | null): number;
+
+// @public
+export function useEditorState<T>(selector: (snapshot: EditorSnapshot) => T, isEqual?: (a: T, b: T) => boolean): T;
+
+// @public
+export function useFontFamily(): UseFontFamilyResult;
+
+// @public
+export interface UseFontFamilyResult {
+    readonly isEnabled: boolean;
+    readonly options: readonly string[];
+    readonly setValue: (family: string) => void;
+    readonly value: string | null;
+}
 
 // @public
 export const VERSION = "0.0.2";
@@ -411,7 +724,7 @@ export interface VerticalRulerProps {
     editable?: boolean;
     onBottomMarginChange?: (marginTwips: number) => void;
     onTopMarginChange?: (marginTwips: number) => void;
-    sectionProps?: SectionProperties | null;
+    pageSetup?: RulerPageSetup | null;
     style?: CSSProperties;
     unit?: 'inch' | 'cm';
     zoom?: number;

@@ -17,11 +17,30 @@
 // verbatim (viewBox "0 -960 960 960"). They were extracted programmatically from
 // the reference commit rather than retyped, because a hand-copied path is a silent
 // visual regression that no assertion would catch.
+//
+// SLOT IDS ARE THE STABLE PUBLIC CONTRACT.
+//
+// Every control is addressed as `${groupId}.${controlId}` — `text.bold`,
+// `font.family`, `alignment.left`. These slot ids are the vocabulary a host uses
+// to place, replace, or hide chrome (Radix-style composition), and the key
+// `commandForSlot` resolves to an engine command. They are literal-typed
+// (`ChromeSlotId`) so a typo is a compile error, and they are PUBLIC API FOREVER:
+// renaming a group or control id is a breaking change. Control ids are unique
+// within their group, not globally — `image.insert` and `table.insert` coexist —
+// so anything keyed on a control (test ids, icon registries) must key on the
+// SLOT id, never the bare control id.
 
-/** Which toolbar controls are actually wired to an engine command. */
+import { GENERATED_ICON_PATHS } from './generated-icon-paths.ts';
+
+/** Which toolbar controls are actually wired to an engine action. */
 export type ChromeControlState =
-  /** Enabled when `Editor.can(command)` succeeds; runs `Editor.exec(command)`. */
-  | { readonly kind: 'command'; readonly command: ChromeCommandId }
+  /**
+   * Enabled when `Editor.can(commandForSlot(slot))` succeeds; a click runs
+   * `runToolbarCommand(editor, slot)`. The command itself is resolved from the
+   * SLOT id through `commandForSlot` in toolbar-commands.ts — the one command
+   * table both adapters share.
+   */
+  | { readonly kind: 'command' }
   /** `Editor.save()` — not a command. */
   | { readonly kind: 'save' }
   /**
@@ -33,9 +52,6 @@ export type ChromeControlState =
    * would claim a capability the engine does not have.
    */
   | { readonly kind: 'parityOnly' };
-
-/** The commands M6V.1 permits to be enabled. */
-export type ChromeCommandId = 'undo' | 'redo' | 'bold' | 'italic';
 
 /**
  * The SHAPE a control renders as (task M6V.1).
@@ -51,12 +67,11 @@ export type ChromeCommandId = 'undo' | 'redo' | 'bold' | 'italic';
  *  rendered nothing — the editing-mode control below is a `dropdown`, which is what the
  *  legacy product shows. A shape no descriptor names is a branch adapters must implement
  *  and can never exercise. */
-import { GENERATED_ICON_PATHS } from './generated-icon-paths.ts';
-
 export type ChromeControlShape = 'icon' | 'stepper' | 'dropdown' | 'colorSplit';
 
-export interface ChromeControl {
-  readonly id: string;
+export interface ChromeControl<Id extends string = string> {
+  /** Stable control id, unique WITHIN its group. Public API; renames are breaking. */
+  readonly id: Id;
   /** How it renders. Defaults to `icon`. */
   readonly shape?: ChromeControlShape;
   /** Displayed value for a stepper or dropdown (an i18n key, or a literal for numbers). */
@@ -72,13 +87,30 @@ export interface ChromeControl {
   readonly state: ChromeControlState;
 }
 
-export interface ChromeGroup {
-  readonly id: string;
+export interface ChromeGroup<Id extends string = string, ControlId extends string = string> {
+  /** Stable group id. Public API; renames are breaking. */
+  readonly id: Id;
   readonly labelKey: string;
-  readonly controls: readonly ChromeControl[];
+  /**
+   * Not part of the DEFAULT toolbar arrangement. The chrome spec shows these
+   * controls only in a context the engine does not model yet (an image or table
+   * selection), or not at all (save belongs in the host's File menu, never in the
+   * bar). Their slots stay public for composition — a host can still place
+   * `image.insert` or `file.save` explicitly — but the default chrome is the
+   * registry's default bar, which ends at the editing-mode picker.
+   */
+  readonly contextual?: true;
+  readonly controls: readonly ChromeControl<ControlId>[];
 }
 
-export const CHROME_GROUPS: readonly ChromeGroup[] = [
+/**
+ * The complete chrome, in bar order. Literal-typed (`as const`) so the slot-id
+ * vocabulary below is derived from the data and cannot drift from it.
+ *
+ * Taxonomy taste: ids are short, lowercaseCamel, and never repeat their group's name
+ * (`alignment.left`, not `alignment.alignLeft`; `font.family`, not `font.fontFamily`).
+ */
+export const CHROME_GROUPS = [
   {
     id: 'history',
     labelKey: 'formattingBar.groups.history',
@@ -87,13 +119,13 @@ export const CHROME_GROUPS: readonly ChromeGroup[] = [
         id: 'undo',
         labelKey: 'formattingBar.undoShortcut',
         paths: GENERATED_ICON_PATHS['undo'],
-        state: { kind: 'command', command: 'undo' },
+        state: { kind: 'command' },
       },
       {
         id: 'redo',
         labelKey: 'formattingBar.redoShortcut',
         paths: GENERATED_ICON_PATHS['redo'],
-        state: { kind: 'command', command: 'redo' },
+        state: { kind: 'command' },
       },
     ],
   },
@@ -102,7 +134,7 @@ export const CHROME_GROUPS: readonly ChromeGroup[] = [
     labelKey: 'formattingBar.groups.zoom',
     controls: [
       {
-        id: 'zoom',
+        id: 'level',
         shape: 'stepper',
         valueText: '100%',
         labelKey: 'formattingBar.groups.zoom',
@@ -131,7 +163,7 @@ export const CHROME_GROUPS: readonly ChromeGroup[] = [
     labelKey: 'formattingBar.groups.font',
     controls: [
       {
-        id: 'fontFamily',
+        id: 'family',
         shape: 'dropdown',
         labelKey: 'font.selectAriaLabel',
         paths: null,
@@ -139,7 +171,7 @@ export const CHROME_GROUPS: readonly ChromeGroup[] = [
         state: { kind: 'parityOnly' },
       },
       {
-        id: 'fontSize',
+        id: 'size',
         shape: 'stepper',
         valueText: '11',
         labelKey: 'fontSize.listLabel',
@@ -150,20 +182,20 @@ export const CHROME_GROUPS: readonly ChromeGroup[] = [
     ],
   },
   {
-    id: 'textFormatting',
+    id: 'text',
     labelKey: 'formattingBar.groups.textFormatting',
     controls: [
       {
         id: 'bold',
         labelKey: 'formattingBar.boldShortcut',
         paths: GENERATED_ICON_PATHS['format_bold'],
-        state: { kind: 'command', command: 'bold' },
+        state: { kind: 'command' },
       },
       {
         id: 'italic',
         labelKey: 'formattingBar.italicShortcut',
         paths: GENERATED_ICON_PATHS['format_italic'],
-        state: { kind: 'command', command: 'italic' },
+        state: { kind: 'command' },
       },
       {
         id: 'underline',
@@ -172,37 +204,35 @@ export const CHROME_GROUPS: readonly ChromeGroup[] = [
         state: { kind: 'parityOnly' },
       },
       {
-        id: 'strikethrough',
+        id: 'strike',
         labelKey: 'formattingBar.strikethrough',
         paths: GENERATED_ICON_PATHS['strikethrough_s'],
         state: { kind: 'parityOnly' },
       },
       {
-        id: 'fontColor',
+        // The chrome spec renders font colour INSIDE the text-formatting group,
+        // right after strikethrough (B I U S, then text colour, highlight, link).
+        // The swatch is the default red the apply half is seeded with before any
+        // pick ({ rgb: 'FF0000' }).
+        id: 'color',
         shape: 'colorSplit',
-        swatch: '#d93025',
+        swatch: '#ff0000',
         labelKey: 'formattingBar.fontColor',
         paths: GENERATED_ICON_PATHS['format_color_text'],
         state: { kind: 'parityOnly' },
       },
       {
-        id: 'highlightColor',
+        id: 'highlight',
         shape: 'colorSplit',
-        swatch: '#fff2a8',
+        swatch: '#ffff00',
         labelKey: 'formattingBar.highlightColor',
         paths: GENERATED_ICON_PATHS['ink_highlighter'],
         state: { kind: 'parityOnly' },
       },
       {
-        id: 'insertLink',
+        id: 'link',
         labelKey: 'formattingBar.insertLinkShortcut',
         paths: GENERATED_ICON_PATHS['link'],
-        state: { kind: 'parityOnly' },
-      },
-      {
-        id: 'clearFormatting',
-        labelKey: 'formattingBar.clearFormatting',
-        paths: GENERATED_ICON_PATHS['format_clear'],
         state: { kind: 'parityOnly' },
       },
     ],
@@ -212,13 +242,13 @@ export const CHROME_GROUPS: readonly ChromeGroup[] = [
     labelKey: 'formattingBar.groups.script',
     controls: [
       {
-        id: 'superscript',
+        id: 'super',
         labelKey: 'formattingBar.superscriptShortcut',
         paths: GENERATED_ICON_PATHS['superscript'],
         state: { kind: 'parityOnly' },
       },
       {
-        id: 'subscript',
+        id: 'sub',
         labelKey: 'formattingBar.subscriptShortcut',
         paths: GENERATED_ICON_PATHS['subscript'],
         state: { kind: 'parityOnly' },
@@ -226,35 +256,70 @@ export const CHROME_GROUPS: readonly ChromeGroup[] = [
     ],
   },
   {
+    // The chrome spec renders this whole group as ONE dropdown (icon + caret
+    // opening a four-option panel), not four buttons. The four slots stay — a host
+    // composes `alignment.left` etc. individually — only the DEFAULT rendering
+    // merges them; adapters key the merge on this group's id.
     id: 'alignment',
     labelKey: 'formattingBar.groups.alignment',
     controls: [
       {
-        id: 'alignLeft',
-        shape: 'dropdown',
+        id: 'left',
         labelKey: 'alignment.alignLeft',
         paths: GENERATED_ICON_PATHS['format_align_left'],
         state: { kind: 'parityOnly' },
       },
       {
-        id: 'alignCenter',
+        id: 'center',
         labelKey: 'alignment.center',
         paths: GENERATED_ICON_PATHS['format_align_center'],
         state: { kind: 'parityOnly' },
       },
       {
-        id: 'alignRight',
+        id: 'right',
         labelKey: 'alignment.alignRight',
         paths: GENERATED_ICON_PATHS['format_align_right'],
         state: { kind: 'parityOnly' },
       },
       {
-        id: 'alignJustify',
+        id: 'justify',
         labelKey: 'alignment.justify',
         paths: GENERATED_ICON_PATHS['format_align_justify'],
         state: { kind: 'parityOnly' },
       },
+    ],
+  },
+  {
+    id: 'list',
+    labelKey: 'formattingBar.groups.listFormatting',
+    controls: [
       {
+        id: 'bullet',
+        labelKey: 'lists.bulletList',
+        paths: GENERATED_ICON_PATHS['format_list_bulleted'],
+        state: { kind: 'parityOnly' },
+      },
+      {
+        id: 'numbered',
+        labelKey: 'lists.numberedList',
+        paths: GENERATED_ICON_PATHS['format_list_numbered'],
+        state: { kind: 'parityOnly' },
+      },
+      {
+        id: 'outdent',
+        labelKey: 'lists.decreaseIndent',
+        paths: GENERATED_ICON_PATHS['format_indent_decrease'],
+        state: { kind: 'parityOnly' },
+      },
+      {
+        id: 'indent',
+        labelKey: 'lists.increaseIndent',
+        paths: GENERATED_ICON_PATHS['format_indent_increase'],
+        state: { kind: 'parityOnly' },
+      },
+      {
+        // The chrome spec groups line spacing WITH the list buttons, after
+        // indent — not with alignment.
         id: 'lineSpacing',
         shape: 'dropdown',
         labelKey: 'lineSpacing.label',
@@ -264,61 +329,15 @@ export const CHROME_GROUPS: readonly ChromeGroup[] = [
     ],
   },
   {
-    id: 'listFormatting',
-    labelKey: 'formattingBar.groups.listFormatting',
+    // The chrome spec puts clear-formatting as a standalone control between the list
+    // group and the trailing review controls, flanked by separators.
+    id: 'format',
+    labelKey: 'formattingBar.clearFormatting',
     controls: [
       {
-        id: 'bulletList',
-        labelKey: 'lists.bulletList',
-        paths: GENERATED_ICON_PATHS['format_list_bulleted'],
-        state: { kind: 'parityOnly' },
-      },
-      {
-        id: 'numberedList',
-        labelKey: 'lists.numberedList',
-        paths: GENERATED_ICON_PATHS['format_list_numbered'],
-        state: { kind: 'parityOnly' },
-      },
-      {
-        id: 'decreaseIndent',
-        labelKey: 'lists.decreaseIndent',
-        paths: GENERATED_ICON_PATHS['format_indent_decrease'],
-        state: { kind: 'parityOnly' },
-      },
-      {
-        id: 'increaseIndent',
-        labelKey: 'lists.increaseIndent',
-        paths: GENERATED_ICON_PATHS['format_indent_increase'],
-        state: { kind: 'parityOnly' },
-      },
-    ],
-  },
-  {
-    id: 'image',
-    labelKey: 'formattingBar.groups.image',
-    controls: [
-      {
-        id: 'insertImage',
-        labelKey: 'toolbar.image',
-        paths: GENERATED_ICON_PATHS['image'],
-        state: { kind: 'parityOnly' },
-      },
-      {
-        id: 'imageProperties',
-        labelKey: 'formattingBar.imagePropertiesShortcut',
-        paths: GENERATED_ICON_PATHS['tune'],
-        state: { kind: 'parityOnly' },
-      },
-    ],
-  },
-  {
-    id: 'table',
-    labelKey: 'formattingBar.groups.table',
-    controls: [
-      {
-        id: 'insertTable',
-        labelKey: 'toolbar.table',
-        paths: GENERATED_ICON_PATHS['table'],
+        id: 'clear',
+        labelKey: 'formattingBar.clearFormatting',
+        paths: GENERATED_ICON_PATHS['format_clear'],
         state: { kind: 'parityOnly' },
       },
     ],
@@ -335,11 +354,44 @@ export const CHROME_GROUPS: readonly ChromeGroup[] = [
         state: { kind: 'parityOnly' },
       },
       {
+        // The "✎ Editing ▾" mode pill: icon + current-mode label + caret.
         id: 'editingMode',
         shape: 'dropdown',
         labelKey: 'editingMode.label',
         valueKey: 'editingMode.editing',
-        paths: null,
+        paths: GENERATED_ICON_PATHS['edit_note'],
+        state: { kind: 'parityOnly' },
+      },
+    ],
+  },
+  {
+    id: 'image',
+    labelKey: 'formattingBar.groups.image',
+    contextual: true,
+    controls: [
+      {
+        id: 'insert',
+        labelKey: 'toolbar.image',
+        paths: GENERATED_ICON_PATHS['image'],
+        state: { kind: 'parityOnly' },
+      },
+      {
+        id: 'properties',
+        labelKey: 'formattingBar.imagePropertiesShortcut',
+        paths: GENERATED_ICON_PATHS['tune'],
+        state: { kind: 'parityOnly' },
+      },
+    ],
+  },
+  {
+    id: 'table',
+    labelKey: 'formattingBar.groups.table',
+    contextual: true,
+    controls: [
+      {
+        id: 'insert',
+        labelKey: 'toolbar.table',
+        paths: GENERATED_ICON_PATHS['table'],
         state: { kind: 'parityOnly' },
       },
     ],
@@ -347,6 +399,7 @@ export const CHROME_GROUPS: readonly ChromeGroup[] = [
   {
     id: 'file',
     labelKey: 'toolbar.file',
+    contextual: true,
     controls: [
       {
         id: 'save',
@@ -356,7 +409,133 @@ export const CHROME_GROUPS: readonly ChromeGroup[] = [
       },
     ],
   },
-];
+] as const;
+
+// `satisfies`-style conformance check, phrased as a plain annotated alias because the
+// combined `as const satisfies readonly ChromeGroup[]` crashes API Extractor 7.x
+// ("Unable to follow symbol for 'const'", rushstack#4614) when an adapter re-exports
+// types derived from `typeof CHROME_GROUPS`. Same guarantee: every literal above must be
+// a valid `ChromeGroup`, and the literals stay literal.
+const CHROME_GROUPS_CONFORMANCE: readonly ChromeGroup[] = CHROME_GROUPS;
+void CHROME_GROUPS_CONFORMANCE;
+
+// The public unions are SPELLED OUT rather than written as `typeof CHROME_GROUPS`
+// projections, because API Extractor 7.x crashes following a type that reaches an
+// `as const` variable declaration ("Unable to follow symbol for 'const'",
+// rushstack#4754) — and the adapters re-export `ChromeSlotId`. The derived forms are
+// still computed below as private aliases, with mutual-assignability tripwires, so the
+// spelled-out unions CANNOT drift from the data without `typecheck` failing.
+
+/**
+ * Every group id in the chrome, as a literal union. Stable public API; renaming a group
+ * id is a breaking change.
+ *
+ * @public
+ */
+export type ChromeGroupId =
+  | 'history'
+  | 'zoom'
+  | 'styles'
+  | 'font'
+  | 'text'
+  | 'script'
+  | 'alignment'
+  | 'list'
+  | 'format'
+  | 'review'
+  | 'image'
+  | 'table'
+  | 'file';
+
+/**
+ * The public slot vocabulary: `${groupId}.${controlId}` for every control that actually
+ * exists — `text.bold`, `font.family`, `alignment.left`. THE stable contract a host
+ * composes against and `commandForSlot` resolves; renaming a slot is a breaking change.
+ *
+ * @public
+ */
+export type ChromeSlotId =
+  | 'history.undo'
+  | 'history.redo'
+  | 'zoom.level'
+  | 'styles.style'
+  | 'font.family'
+  | 'font.size'
+  | 'text.bold'
+  | 'text.italic'
+  | 'text.underline'
+  | 'text.strike'
+  | 'text.color'
+  | 'text.highlight'
+  | 'text.link'
+  | 'script.super'
+  | 'script.sub'
+  | 'alignment.left'
+  | 'alignment.center'
+  | 'alignment.right'
+  | 'alignment.justify'
+  | 'list.bullet'
+  | 'list.numbered'
+  | 'list.outdent'
+  | 'list.indent'
+  | 'list.lineSpacing'
+  | 'format.clear'
+  | 'review.comments'
+  | 'review.editingMode'
+  | 'image.insert'
+  | 'image.properties'
+  | 'table.insert'
+  | 'file.save';
+
+/**
+ * Every control id in the chrome, as a literal union. Unique WITHIN a group, not
+ * globally (`image.insert` / `table.insert`) — key consumers on {@link ChromeSlotId}.
+ *
+ * @public
+ */
+export type ChromeControlId = ChromeSlotId extends `${string}.${infer C}` ? C : never;
+
+// ── Drift tripwires (private; never followed by API Extractor) ────────────────────────
+// Both directions of assignability, so an id added, removed, or renamed in the data
+// without updating the public unions (or vice versa) is a compile error right here.
+type DerivedGroupId = (typeof CHROME_GROUPS)[number]['id'];
+type DerivedSlotId = {
+  [G in (typeof CHROME_GROUPS)[number] as G['id']]: `${G['id']}.${G['controls'][number]['id']}`;
+}[DerivedGroupId];
+type MutuallyAssignable<A, B> = [A] extends [B] ? ([B] extends [A] ? true : false) : false;
+const GROUP_IDS_MATCH_DATA: MutuallyAssignable<ChromeGroupId, DerivedGroupId> = true;
+const SLOT_IDS_MATCH_DATA: MutuallyAssignable<ChromeSlotId, DerivedSlotId> = true;
+void GROUP_IDS_MATCH_DATA;
+void SLOT_IDS_MATCH_DATA;
+
+/**
+ * The slot id of one control within its group. Only meaningful for entries of
+ * `CHROME_GROUPS` — the cast is sound because every group/control pair in the registry
+ * is, by construction, a member of the `ChromeSlotId` union.
+ *
+ * @public
+ */
+export function chromeSlotId(
+  group: { readonly id: string },
+  control: { readonly id: string }
+): ChromeSlotId {
+  return `${group.id}.${control.id}` as ChromeSlotId;
+}
+
+/**
+ * The groups of the DEFAULT toolbar arrangement, in bar order: every group that is
+ * not `contextual`. This is the registry's default bar — undo/redo through the
+ * editing-mode picker — and what both adapters render when the host composes
+ * nothing. Contextual slots (`image.*`, `table.insert`, `file.save`) remain
+ * available for explicit composition.
+ *
+ * @public
+ */
+export function defaultChromeGroups(): readonly ChromeGroup[] {
+  // Filtered through the ChromeGroup-typed view: the literal union's members omit
+  // the optional `contextual` key entirely, which TS treats as an unknown property.
+  return CHROME_GROUPS_CONFORMANCE.filter((group) => !group.contextual);
+}
 
 /** The menu region the legacy chrome shows above the toolbar. Parity-only. */
 export const CHROME_MENUS: readonly { readonly id: string; readonly labelKey: string }[] = [

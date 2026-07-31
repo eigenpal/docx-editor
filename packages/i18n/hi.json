@@ -192,7 +192,10 @@
       "lightBlue2": "हल्का नीला 2",
       "lightMagenta": "हल्का मैजेंटा",
       "brightGreen": "चमकीला हरा",
-      "violet": "बैंगनी"
+      "violet": "बैंगनी",
+      "darkCyan": null,
+      "darkMagenta": null,
+      "lightGray": null
     }
   },
   "dialogs": {

@@ -1,30 +1,25 @@
 /**
- * Color Resolver - Convert OOXML colors to CSS
+ * Color resolution for the editor chrome.
  *
- * Handles:
- * - Theme color references (accent1, dk1, etc.)
- * - RGB hex values
- * - "auto" colors (context-dependent)
- * - Tint/shade modifications
+ * Converts the contract's `ColorValue` (a discriminated union of `hex`,
+ * `theme`, and `auto`) to CSS-ready hex strings, and builds the Word-style
+ * theme tint/shade matrix the color picker renders.
  *
- * OOXML Color References:
- * - w:color/@w:val - RGB hex or "auto"
- * - w:color/@w:themeColor - Theme color slot
- * - w:color/@w:themeTint - Tint modifier (0-255, hex)
- * - w:color/@w:themeShade - Shade modifier (0-255, hex)
- *
- * Tint/Shade Calculations:
- * - Tint makes color lighter (blend with white)
- * - Shade makes color darker (blend with black)
- * - Value is in hex (00-FF), converted to 0-1 for calculation
+ * Tint/shade semantics follow ECMA-376 §17.3.2.41: the modifier is the
+ * fraction of the base color RETAINED, in 0–1. Tint interpolates each channel
+ * toward white (`channel * t + 255 * (1 - t)`); shade interpolates toward
+ * black (`channel * s`). The contract's numeric `tint`/`shade` fields carry
+ * that fraction directly (the OOXML hex attribute value divided by 255).
  */
 
-import type { ColorValue, Theme, ThemeColorSlot, ThemeColorScheme } from '../core-compat';
+import type {
+  ColorValue,
+  Theme,
+  ThemeColorScheme,
+} from '@docx-editor.dev/core-contract/contracts/editor';
 
-/**
- * Default theme colors (Office 2016 default theme)
- */
-const DEFAULT_THEME_COLORS: ThemeColorScheme = {
+/** Office default theme color scheme, used when a document supplies none. */
+const DEFAULT_THEME_COLORS: Readonly<Record<string, string>> = {
   dk1: '000000',
   lt1: 'FFFFFF',
   dk2: '44546A',
@@ -39,11 +34,8 @@ const DEFAULT_THEME_COLORS: ThemeColorScheme = {
   folHlink: '954F72',
 };
 
-/**
- * Highlight color mapping to hex values
- * These are the W3C standard colors for Word highlighting
- */
-const HIGHLIGHT_COLORS: Record<string, string> = {
+/** The fixed `w:highlight` name → hex table (ST_HighlightColor). */
+const HIGHLIGHT_COLORS: Readonly<Record<string, string>> = {
   black: '000000',
   blue: '0000FF',
   cyan: '00FFFF',
@@ -64,11 +56,11 @@ const HIGHLIGHT_COLORS: Record<string, string> = {
 };
 
 /**
- * Map alternative theme color names to standard slots
- * OOXML uses different names in different contexts
+ * OOXML uses several names for the same theme slot depending on context
+ * (`w:themeColor` values vs. drawingML scheme names); map them all to the
+ * scheme keys.
  */
-const THEME_COLOR_ALIASES: Record<string, ThemeColorSlot> = {
-  // Standard names
+const THEME_COLOR_ALIASES: Readonly<Record<string, string>> = {
   dk1: 'dk1',
   lt1: 'lt1',
   dk2: 'dk2',
@@ -81,14 +73,12 @@ const THEME_COLOR_ALIASES: Record<string, ThemeColorSlot> = {
   accent6: 'accent6',
   hlink: 'hlink',
   folHlink: 'folHlink',
-  // Alternative names used in some OOXML contexts
   dark1: 'dk1',
   light1: 'lt1',
   dark2: 'dk2',
   light2: 'lt2',
   hyperlink: 'hlink',
   followedHyperlink: 'folHlink',
-  // Background/text names (map to dk1/lt1)
   background1: 'lt1',
   text1: 'dk1',
   background2: 'lt2',
@@ -99,564 +89,133 @@ const THEME_COLOR_ALIASES: Record<string, ThemeColorSlot> = {
   bg2: 'lt2',
 };
 
-/**
- * Parse a hex color modifier value (tint or shade)
- * OOXML stores tint/shade as hex string (00-FF) representing 0-255
- *
- * @param hexValue - Hex string like "80" or "FF"
- * @returns Decimal value 0-1
- */
-function parseModifierValue(hexValue: string | undefined): number {
-  if (!hexValue) return 1;
-
-  const parsed = parseInt(hexValue, 16);
-  if (isNaN(parsed)) return 1;
-
-  // Value is 0-255, convert to 0-1
-  return parsed / 255;
-}
-
-/**
- * Parse RGB hex color to component values
- *
- * @param hex - 6-character hex color (no #)
- * @returns RGB object with r, g, b values 0-255
- */
 function hexToRgb(hex: string): { r: number; g: number; b: number } {
-  // Ensure 6 characters
-  const normalized = hex.padStart(6, '0').slice(0, 6);
-
+  const normalized = hex.replace(/^#/, '').padStart(6, '0').slice(0, 6);
   const r = parseInt(normalized.slice(0, 2), 16);
   const g = parseInt(normalized.slice(2, 4), 16);
   const b = parseInt(normalized.slice(4, 6), 16);
-
-  return {
-    r: isNaN(r) ? 0 : r,
-    g: isNaN(g) ? 0 : g,
-    b: isNaN(b) ? 0 : b,
-  };
+  return { r: isNaN(r) ? 0 : r, g: isNaN(g) ? 0 : g, b: isNaN(b) ? 0 : b };
 }
 
-/**
- * Convert RGB values to hex color
- *
- * @param r - Red 0-255
- * @param g - Green 0-255
- * @param b - Blue 0-255
- * @returns 6-character hex color (no #)
- */
 function rgbToHex(r: number, g: number, b: number): string {
   const toHex = (n: number) =>
     Math.max(0, Math.min(255, Math.round(n)))
       .toString(16)
       .padStart(2, '0');
-
   return `${toHex(r)}${toHex(g)}${toHex(b)}`.toUpperCase();
 }
 
 /**
- * Apply tint to a color (make lighter by blending with white)
- *
- * OOXML tint algorithm:
- * - Converts to HSL
- * - Adjusts luminance: newLum = lum + (1 - lum) * tint
- *
- * @param hex - 6-character hex color (no #)
- * @param tint - Tint value 0-1: how much of the original color to keep.
- *   1 = no change, 0 = fully white. Per ECMA-376 §17.3.2.41.
- * @returns Modified hex color
+ * Blend a color toward white. `keep` is the fraction of the base color
+ * retained (1 = unchanged, 0 = white), per ECMA-376 §17.3.2.41.
  */
-function applyTint(hex: string, tint: number): string {
-  if (tint >= 1) return hex;
-  if (tint <= 0) return 'FFFFFF';
-
-  // OOXML per-channel linear interpolation toward white:
-  // new_channel = channel * t + 255 * (1 - t)
+function applyTint(hex: string, keep: number): string {
+  if (keep >= 1) return hex.toUpperCase();
+  if (keep <= 0) return 'FFFFFF';
   const rgb = hexToRgb(hex);
   return rgbToHex(
-    Math.min(255, Math.max(0, Math.round(rgb.r * tint + 255 * (1 - tint)))),
-    Math.min(255, Math.max(0, Math.round(rgb.g * tint + 255 * (1 - tint)))),
-    Math.min(255, Math.max(0, Math.round(rgb.b * tint + 255 * (1 - tint))))
+    rgb.r * keep + 255 * (1 - keep),
+    rgb.g * keep + 255 * (1 - keep),
+    rgb.b * keep + 255 * (1 - keep)
   );
 }
 
 /**
- * Apply shade to a color (make darker by blending with black)
- *
- * OOXML shade algorithm:
- * - Converts to HSL
- * - Adjusts luminance: newLum = lum * shade
- *
- * @param hex - 6-character hex color (no #)
- * @param shade - Shade value 0-1: how much of the original color to keep.
- *   1 = no change, 0 = fully black. Per ECMA-376 §17.3.2.41.
- * @returns Modified hex color
+ * Blend a color toward black. `keep` is the fraction of the base color
+ * retained (1 = unchanged, 0 = black), per ECMA-376 §17.3.2.41.
  */
-function applyShade(hex: string, shade: number): string {
-  if (shade >= 1) return hex;
-  if (shade <= 0) return '000000';
-
-  // OOXML per-channel linear interpolation toward black:
-  // new_channel = channel * s
+function applyShade(hex: string, keep: number): string {
+  if (keep >= 1) return hex.toUpperCase();
+  if (keep <= 0) return '000000';
   const rgb = hexToRgb(hex);
-  return rgbToHex(
-    Math.min(255, Math.max(0, Math.round(rgb.r * shade))),
-    Math.min(255, Math.max(0, Math.round(rgb.g * shade))),
-    Math.min(255, Math.max(0, Math.round(rgb.b * shade)))
-  );
+  return rgbToHex(rgb.r * keep, rgb.g * keep, rgb.b * keep);
+}
+
+function clamp01(value: number): number {
+  return Math.max(0, Math.min(1, value));
+}
+
+/** Resolve a theme slot name (any alias) to a hex value, falling back to the Office defaults. */
+function resolveThemeSlotHex(theme: Theme | null | undefined, slot: string): string {
+  const key = THEME_COLOR_ALIASES[slot] ?? THEME_COLOR_ALIASES[slot.toLowerCase()] ?? slot;
+  const scheme: ThemeColorScheme | undefined = theme?.colorScheme;
+  const fromScheme = scheme?.[key];
+  if (typeof fromScheme === 'string' && fromScheme) return fromScheme;
+  return DEFAULT_THEME_COLORS[key] ?? '000000';
+}
+
+function normalizeHex(value: string): string | undefined {
+  const hex = value.replace(/^#/, '').toUpperCase();
+  if (/^[0-9A-F]{6}$/.test(hex)) return hex;
+  if (/^[0-9A-F]{3}$/.test(hex))
+    return hex
+      .split('')
+      .map((c) => c + c)
+      .join('');
+  return undefined;
 }
 
 /**
- * Get a theme color by slot name
- *
- * @param theme - Theme object
- * @param slot - Color slot name
- * @returns Hex color (6 characters, no #)
- */
-function getThemeColorValue(theme: Theme | null | undefined, slot: ThemeColorSlot): string {
-  // Map alias slots to actual color scheme keys
-  const schemeKey = THEME_COLOR_ALIASES[slot] ?? slot;
-
-  // Define the actual keys that exist on ThemeColorScheme
-  const schemeKeys = [
-    'dk1',
-    'lt1',
-    'dk2',
-    'lt2',
-    'accent1',
-    'accent2',
-    'accent3',
-    'accent4',
-    'accent5',
-    'accent6',
-    'hlink',
-    'folHlink',
-  ] as const;
-  type SchemeKey = (typeof schemeKeys)[number];
-
-  const isSchemeKey = (key: string): key is SchemeKey => schemeKeys.includes(key as SchemeKey);
-
-  if (!theme?.colorScheme) {
-    if (isSchemeKey(schemeKey)) {
-      return DEFAULT_THEME_COLORS[schemeKey] ?? '000000';
-    }
-    return '000000';
-  }
-
-  if (isSchemeKey(schemeKey)) {
-    return theme.colorScheme[schemeKey] ?? DEFAULT_THEME_COLORS[schemeKey] ?? '000000';
-  }
-
-  return '000000';
-}
-
-/**
- * Resolve a theme color name to a standard slot
- *
- * @param colorName - Theme color name (could be alias)
- * @returns Standard ThemeColorSlot or null if unknown
- */
-function resolveThemeColorSlot(colorName: string): ThemeColorSlot | null {
-  if (!colorName) return null;
-
-  const normalized = colorName.toLowerCase();
-  const slot = THEME_COLOR_ALIASES[colorName] ?? THEME_COLOR_ALIASES[normalized];
-
-  return slot ?? null;
-}
-
-/**
- * Resolve a ColorValue to a CSS color string
- *
- * @param color - ColorValue object with rgb, themeColor, tint/shade, or auto
- * @param theme - Theme for resolving theme colors
- * @param defaultColor - Default color if auto or undefined (default: black)
- * @returns CSS color string (e.g., "#FF0000" or "inherit")
+ * Resolve a contract `ColorValue` to a CSS color string (`#RRGGBB`).
+ * `auto` and missing values resolve to `defaultColor`.
  */
 export function resolveColor(
   color: ColorValue | undefined | null,
   theme: Theme | null | undefined,
   defaultColor: string = '000000'
 ): string {
-  if (!color) {
-    return `#${defaultColor}`;
-  }
-
-  // Handle "auto" color
-  if (color.auto) {
-    // Auto typically means black for text, but can be context-dependent
-    return `#${defaultColor}`;
-  }
-
-  let hexColor: string;
-
-  // Check for theme color first
-  if (color.themeColor) {
-    const slot = resolveThemeColorSlot(color.themeColor);
-    if (slot) {
-      hexColor = getThemeColorValue(theme, slot);
-    } else {
-      // Unknown theme color, use RGB if available or default
-      hexColor = color.rgb ?? defaultColor;
-    }
-
-    // Apply tint/shade modifiers
-    if (color.themeTint) {
-      const tintValue = parseModifierValue(color.themeTint);
-      hexColor = applyTint(hexColor, tintValue);
-    } else if (color.themeShade) {
-      const shadeValue = parseModifierValue(color.themeShade);
-      hexColor = applyShade(hexColor, shadeValue);
-    }
-  } else if (color.rgb) {
-    // "auto" in OOXML means automatic color (typically black)
-    hexColor = color.rgb === 'auto' ? defaultColor : color.rgb;
-  } else {
-    // No color specified
-    hexColor = defaultColor;
-  }
-
-  // Ensure proper format
-  return `#${hexColor.toUpperCase().replace(/^#/, '')}`;
+  if (!color || color.kind === 'auto') return `#${defaultColor}`;
+  if (color.kind === 'hex') return `#${normalizeHex(color.value) ?? defaultColor}`;
+  let hex = resolveThemeSlotHex(theme, color.slot);
+  if (color.tint !== undefined) hex = applyTint(hex, clamp01(color.tint));
+  else if (color.shade !== undefined) hex = applyShade(hex, clamp01(color.shade));
+  return `#${hex.toUpperCase()}`;
 }
 
 /**
- * Resolve any ColorValue (text, fill/shading, border, underline) to a 6-char
- * uppercase hex string — or `undefined` if transparent/unset/unresolvable.
- *
- * Shared display-side resolver. Prefer this over reading `.rgb` directly so
- * that `themeColor` + `themeTint`/`themeShade` are honored consistently across
- * all render paths (PM attrs, flow-model, clipboard HTML, toolbar swatches).
- *
- * When a themed color is present but `theme` is null/undefined, falls back to
- * `color.rgb` if Word wrote one for compat; otherwise returns `undefined`.
- *
- * @returns 6-char uppercase hex without `#`, or `undefined`.
+ * Resolve any `ColorValue` to a 6-char uppercase hex string without `#`, or
+ * `undefined` when the value is unset/`auto`/unresolvable. Theme slots resolve
+ * against the document theme when given, else the Office default scheme.
  */
 export function resolveColorToHex(
   color: ColorValue | undefined | null,
   theme: Theme | null | undefined
 ): string | undefined {
-  if (!color || color.auto) return undefined;
-
-  if (color.themeColor && theme) {
-    // resolveColor always returns `#XXXXXX`; drop the `#`.
-    return resolveColor(color, theme).slice(1);
-  }
-
-  if (color.rgb && color.rgb !== 'auto') {
-    return color.rgb.toUpperCase().replace(/^#/, '');
-  }
-
-  return undefined;
+  if (!color || color.kind === 'auto') return undefined;
+  if (color.kind === 'hex') return normalizeHex(color.value);
+  return resolveColor(color, theme).slice(1);
 }
 
-/**
- * Resolve a highlight color name to CSS
- *
- * @param highlight - Highlight color name (e.g., "yellow", "cyan")
- * @returns CSS color string or empty string for "none"
- */
+/** Resolve a `w:highlight` name to CSS, or `''` for `none`/unknown. */
 export function resolveHighlightColor(highlight: string | undefined): string {
-  if (!highlight || highlight === 'none') {
-    return '';
-  }
-
+  if (!highlight || highlight === 'none') return '';
   const hex = HIGHLIGHT_COLORS[highlight];
   return hex ? `#${hex}` : '';
 }
 
-/**
- * Resolve a shading fill or pattern color to CSS
- *
- * @param color - ColorValue for fill
- * @param theme - Theme for resolving theme colors
- * @returns CSS color string
- */
-export function resolveShadingColor(
-  color: ColorValue | undefined | null,
-  theme: Theme | null | undefined
-): string {
-  if (!color) return '';
-
-  // For shading, "auto" typically means transparent
-  if (color.auto) {
-    return 'transparent';
-  }
-
-  return resolveColor(color, theme);
-}
-
-/**
- * Check if a color is effectively black
- *
- * @param color - ColorValue object
- * @param theme - Theme for resolving theme colors
- * @returns True if color resolves to black or very dark
- */
-export function isBlack(
-  color: ColorValue | undefined | null,
-  theme: Theme | null | undefined
-): boolean {
-  if (!color) return false;
-  if (color.auto) return true;
-
-  const resolved = resolveColor(color, theme);
-  const hex = resolved.replace(/^#/, '').toLowerCase();
-
-  // Check if it's black or very dark
-  const rgb = hexToRgb(hex);
-  const luminance = (rgb.r + rgb.g + rgb.b) / 3;
-
-  return luminance < 20;
-}
-
-/**
- * Check if a color is effectively white
- *
- * @param color - ColorValue object
- * @param theme - Theme for resolving theme colors
- * @returns True if color resolves to white or very light
- */
-export function isWhite(
-  color: ColorValue | undefined | null,
-  theme: Theme | null | undefined
-): boolean {
-  if (!color) return false;
-
-  const resolved = resolveColor(color, theme);
-  const hex = resolved.replace(/^#/, '').toLowerCase();
-
-  // Check if it's white or very light
-  const rgb = hexToRgb(hex);
-  const luminance = (rgb.r + rgb.g + rgb.b) / 3;
-
-  return luminance > 235;
-}
-
-/**
- * Get contrasting text color for a background
- *
- * @param backgroundColor - Background ColorValue
- * @param theme - Theme for resolving theme colors
- * @returns Black or white hex color for best contrast
- */
-export function getContrastingColor(
-  backgroundColor: ColorValue | undefined | null,
-  theme: Theme | null | undefined
-): string {
-  if (!backgroundColor) return '#000000';
-
-  const bgResolved = resolveColor(backgroundColor, theme);
-  const bgHex = bgResolved.replace(/^#/, '');
-  const bgRgb = hexToRgb(bgHex);
-
-  // Calculate relative luminance using sRGB formula
-  const luminance = (0.299 * bgRgb.r + 0.587 * bgRgb.g + 0.114 * bgRgb.b) / 255;
-
-  // Return black for light backgrounds, white for dark
-  return luminance > 0.5 ? '#000000' : '#FFFFFF';
-}
-
-/**
- * Parse a color string (various formats) to ColorValue
- *
- * @param colorString - Color string like "FF0000", "auto", or theme color name
- * @returns ColorValue object
- */
-export function parseColorString(colorString: string | undefined): ColorValue | undefined {
-  if (!colorString) return undefined;
-
-  const normalized = colorString.trim();
-
-  if (normalized.toLowerCase() === 'auto') {
-    return { auto: true };
-  }
-
-  // Check if it's a theme color name
-  const themeSlot = resolveThemeColorSlot(normalized);
-  if (themeSlot) {
-    return { themeColor: themeSlot };
-  }
-
-  // Assume it's an RGB hex value
-  // Remove # if present and normalize to 6 chars
-  const hex = normalized.replace(/^#/, '').toUpperCase();
-
-  // Validate hex format
-  if (/^[0-9A-F]{6}$/i.test(hex)) {
-    return { rgb: hex };
-  }
-
-  // 3-character shorthand
-  if (/^[0-9A-F]{3}$/i.test(hex)) {
-    const expanded = hex
-      .split('')
-      .map((c) => c + c)
-      .join('');
-    return { rgb: expanded };
-  }
-
-  // Unknown format, return as RGB anyway
-  return { rgb: hex.padStart(6, '0').slice(0, 6) };
-}
-
-/**
- * Create a ColorValue from theme color reference
- *
- * @param themeColor - Theme color slot name
- * @param tint - Optional tint modifier
- * @param shade - Optional shade modifier
- * @returns ColorValue object
- */
-export function createThemeColor(
-  themeColor: ThemeColorSlot,
-  tint?: number,
-  shade?: number
-): ColorValue {
-  const result: ColorValue = { themeColor };
-
-  if (tint !== undefined && tint > 0 && tint < 1) {
-    result.themeTint = Math.round(tint * 255)
-      .toString(16)
-      .toUpperCase()
-      .padStart(2, '0');
-  }
-
-  if (shade !== undefined && shade > 0 && shade < 1) {
-    result.themeShade = Math.round(shade * 255)
-      .toString(16)
-      .toUpperCase()
-      .padStart(2, '0');
-  }
-
-  return result;
-}
-
-/**
- * Create a ColorValue from RGB hex
- *
- * @param hex - 6-character hex color (no #)
- * @returns ColorValue object
- */
-export function createRgbColor(hex: string): ColorValue {
-  return { rgb: hex.replace(/^#/, '').toUpperCase() };
-}
-
-/**
- * Darken a color by a percentage
- *
- * @param color - ColorValue to darken
- * @param theme - Theme for resolving
- * @param percent - Percentage to darken (0-100)
- * @returns CSS color string
- */
-export function darkenColor(
-  color: ColorValue | undefined | null,
-  theme: Theme | null | undefined,
-  percent: number
-): string {
-  const resolved = resolveColor(color, theme);
-  const hex = resolved.replace(/^#/, '');
-  // percent=80 means darken 80% → keep 20% of original
-  const shade = 1 - percent / 100;
-  return `#${applyShade(hex, shade)}`;
-}
-
-/**
- * Lighten a color by a percentage
- *
- * @param color - ColorValue to lighten
- * @param theme - Theme for resolving
- * @param percent - Percentage to lighten (0-100)
- * @returns CSS color string
- */
-export function lightenColor(
-  color: ColorValue | undefined | null,
-  theme: Theme | null | undefined,
-  percent: number
-): string {
-  const resolved = resolveColor(color, theme);
-  const hex = resolved.replace(/^#/, '');
-  // percent=80 means lighten 80% → keep 20% of original
-  const tint = 1 - percent / 100;
-  return `#${applyTint(hex, tint)}`;
-}
-
-/**
- * Blend two colors together
- *
- * @param color1 - First color
- * @param color2 - Second color
- * @param ratio - Blend ratio (0 = all color1, 1 = all color2)
- * @param theme - Theme for resolving
- * @returns CSS color string
- */
-export function blendColors(
-  color1: ColorValue | undefined | null,
-  color2: ColorValue | undefined | null,
-  ratio: number,
-  theme: Theme | null | undefined
-): string {
-  const resolved1 = resolveColor(color1, theme).replace(/^#/, '');
-  const resolved2 = resolveColor(color2, theme).replace(/^#/, '');
-
-  const rgb1 = hexToRgb(resolved1);
-  const rgb2 = hexToRgb(resolved2);
-
-  const blended = {
-    r: Math.round(rgb1.r * (1 - ratio) + rgb2.r * ratio),
-    g: Math.round(rgb1.g * (1 - ratio) + rgb2.g * ratio),
-    b: Math.round(rgb1.b * (1 - ratio) + rgb2.b * ratio),
-  };
-
-  return `#${rgbToHex(blended.r, blended.g, blended.b)}`;
-}
-
 // ============================================================================
-// HEX UTILITIES
+// THEME COLOR MATRIX FOR THE ADVANCED COLOR PICKER
 // ============================================================================
 
-/**
- * Ensure a hex color string has a '#' prefix.
- */
-export function ensureHexPrefix(hex: string): string {
-  return hex.startsWith('#') ? hex : `#${hex}`;
-}
-
-/**
- * Resolve a highlight color value to a CSS-ready string.
- * Tries OOXML named highlight first, then ensures hex prefix.
- */
-export function resolveHighlightToCss(value: string): string {
-  return resolveHighlightColor(value) || ensureHexPrefix(value);
-}
-
-// ============================================================================
-// THEME COLOR MATRIX FOR ADVANCED COLOR PICKER
-// ============================================================================
-
-/**
- * Theme color matrix cell
- */
+/** One swatch in the Word-style theme color matrix. */
 export interface ThemeMatrixCell {
-  /** Resolved hex color (6 chars, no #) */
+  /** Resolved hex color (6 chars, no #) — exactly what the swatch paints. */
   hex: string;
-  /** Theme color slot */
-  themeSlot: ThemeColorSlot;
-  /** Tint hex modifier if applicable (e.g., "CC") */
-  tint?: string;
-  /** Shade hex modifier if applicable (e.g., "BF") */
-  shade?: string;
-  /** Human-readable label (e.g., "Accent 1, Lighter 60%") */
+  /** Theme slot this column derives from. */
+  themeSlot: string;
+  /** Fraction of the base color kept when tinting (ECMA-376 §17.3.2.41). */
+  tint?: number;
+  /** Fraction of the base color kept when shading. */
+  shade?: number;
+  /** Human-readable label (e.g. "Accent 1, Lighter 60%"). */
   label: string;
 }
 
 /**
- * Theme color column order matching Word's color picker:
- * Background 1 (lt1), Text 1 (dk1), Background 2 (lt2), Text 2 (dk2), Accent 1-6
+ * Column order matching Word's picker:
+ * Background 1, Text 1, Background 2, Text 2, Accent 1–6.
  */
-const THEME_MATRIX_COLUMNS: Array<{ slot: ThemeColorSlot; name: string }> = [
+const THEME_MATRIX_COLUMNS: Array<{ slot: string; name: string }> = [
   { slot: 'lt1', name: 'Background 1' },
   { slot: 'dk1', name: 'Text 1' },
   { slot: 'lt2', name: 'Background 2' },
@@ -670,113 +229,52 @@ const THEME_MATRIX_COLUMNS: Array<{ slot: ThemeColorSlot; name: string }> = [
 ];
 
 /**
- * Tint/shade row definitions matching Word's picker.
- * Row 0 = base, rows 1-3 = tints (lighter), rows 4-5 = shades (darker).
+ * Row definitions matching Word's picker. `keep` is the retained fraction
+ * handed to tint/shade — e.g. "Lighter 80%" keeps 20% of the base color.
  */
 const THEME_MATRIX_ROWS: Array<{
   type: 'base' | 'tint' | 'shade';
-  value: number; // fraction 0-1
-  hexValue: string; // OOXML hex modifier
+  keep: number;
   labelSuffix: string;
 }> = [
-  { type: 'base', value: 0, hexValue: '', labelSuffix: '' },
-  { type: 'tint', value: 0.8, hexValue: 'CC', labelSuffix: ', Lighter 80%' },
-  { type: 'tint', value: 0.6, hexValue: '99', labelSuffix: ', Lighter 60%' },
-  { type: 'tint', value: 0.4, hexValue: '66', labelSuffix: ', Lighter 40%' },
-  { type: 'shade', value: 0.75, hexValue: 'BF', labelSuffix: ', Darker 25%' },
-  { type: 'shade', value: 0.5, hexValue: '80', labelSuffix: ', Darker 50%' },
+  { type: 'base', keep: 1, labelSuffix: '' },
+  { type: 'tint', keep: 0.2, labelSuffix: ', Lighter 80%' },
+  { type: 'tint', keep: 0.4, labelSuffix: ', Lighter 60%' },
+  { type: 'tint', keep: 0.6, labelSuffix: ', Lighter 40%' },
+  { type: 'shade', keep: 0.75, labelSuffix: ', Darker 25%' },
+  { type: 'shade', keep: 0.5, labelSuffix: ', Darker 50%' },
 ];
 
 /**
- * Compute a single tinted or shaded hex color from a base color.
- *
- * @param baseHex - 6-character hex color (no #)
- * @param type - 'tint' to lighten, 'shade' to darken
- * @param fraction - Amount (0-1). For tint: 0=no change, 1=white. For shade: 0=black, 1=no change.
- * @returns 6-character hex color (no #)
- */
-export function getThemeTintShadeHex(
-  baseHex: string,
-  type: 'tint' | 'shade',
-  fraction: number
-): string {
-  if (type === 'tint') {
-    // fraction is "how much to lighten" (0 = no change, 1 = fully white)
-    // applyTint wants "how much to keep" (1 = no change, 0 = fully white) → invert
-    return applyTint(baseHex, 1 - fraction);
-  }
-  // fraction is "how much to keep" (1 = no change, 0 = fully black) — matches applyShade
-  return applyShade(baseHex, fraction);
-}
-
-/**
- * Generate the 10×6 theme color matrix for an advanced color picker.
- *
- * Columns: lt1, dk1, lt2, dk2, accent1-6 (matches Word's order)
- * Rows: base, 80% tint, 60% tint, 40% tint, 25% shade, 50% shade
- *
- * @param colorScheme - Theme color scheme (falls back to Office 2016 defaults)
- * @returns 6 rows × 10 columns of ThemeMatrixCell
+ * Generate the 10×6 theme color matrix for the advanced color picker.
+ * Falls back to the Office default scheme when the document has none.
+ * Each cell's `tint`/`shade` is the exact modifier a picked `ColorValue`
+ * should carry, so the swatch and the resolved color cannot disagree.
  */
 export function generateThemeTintShadeMatrix(
   colorScheme?: ThemeColorScheme | null
 ): ThemeMatrixCell[][] {
   const scheme = colorScheme ?? DEFAULT_THEME_COLORS;
 
-  return THEME_MATRIX_ROWS.map((row) => {
-    return THEME_MATRIX_COLUMNS.map((col) => {
-      const baseHex =
-        scheme[col.slot as keyof ThemeColorScheme] ??
-        DEFAULT_THEME_COLORS[col.slot as keyof ThemeColorScheme] ??
-        '000000';
+  return THEME_MATRIX_ROWS.map((row) =>
+    THEME_MATRIX_COLUMNS.map((col) => {
+      const baseHex = scheme[col.slot] ?? DEFAULT_THEME_COLORS[col.slot] ?? '000000';
 
-      let hex: string;
-      if (row.type === 'base') {
-        hex = baseHex.toUpperCase();
-      } else if (row.type === 'tint') {
-        // row.value is "how much to lighten" (0.8 = 80% lighter)
-        // applyTint wants "how much to keep" → invert
-        hex = applyTint(baseHex, 1 - row.value);
-      } else {
-        // row.value for shade is "how much to keep" (0.75 = keep 75% = darken 25%)
-        hex = applyShade(baseHex, row.value);
-      }
+      const hex =
+        row.type === 'base'
+          ? baseHex.toUpperCase()
+          : row.type === 'tint'
+            ? applyTint(baseHex, row.keep)
+            : applyShade(baseHex, row.keep);
 
       const cell: ThemeMatrixCell = {
         hex,
         themeSlot: col.slot,
         label: `${col.name}${row.labelSuffix}`,
       };
-
-      if (row.type === 'tint' && row.hexValue) {
-        cell.tint = row.hexValue;
-      } else if (row.type === 'shade' && row.hexValue) {
-        cell.shade = row.hexValue;
-      }
-
+      if (row.type === 'tint') cell.tint = row.keep;
+      else if (row.type === 'shade') cell.shade = row.keep;
       return cell;
-    });
-  });
-}
-
-/**
- * Check if two colors are equal
- *
- * @param color1 - First color
- * @param color2 - Second color
- * @param theme - Theme for resolving
- * @returns True if colors resolve to the same value
- */
-export function colorsEqual(
-  color1: ColorValue | undefined | null,
-  color2: ColorValue | undefined | null,
-  theme: Theme | null | undefined
-): boolean {
-  if (!color1 && !color2) return true;
-  if (!color1 || !color2) return false;
-
-  const resolved1 = resolveColor(color1, theme).toUpperCase();
-  const resolved2 = resolveColor(color2, theme).toUpperCase();
-
-  return resolved1 === resolved2;
+    })
+  );
 }

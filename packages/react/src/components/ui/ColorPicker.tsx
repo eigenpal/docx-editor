@@ -1,13 +1,17 @@
 import { useState, useCallback, useMemo, useEffect } from 'react';
 import type { CSSProperties } from 'react';
-import type { ColorValue, Theme, ThemeColorScheme } from '../../core-compat';
+import type {
+  ColorValue,
+  Theme,
+  ThemeColorScheme,
+} from '@docx-editor.dev/core-contract/contracts/editor';
 import {
   generateThemeTintShadeMatrix,
   resolveColor,
   resolveColorToHex,
   resolveHighlightColor,
-} from '../../core-compat';
-import type { ThemeMatrixCell } from '../../core-compat';
+} from '../../lib/colorResolver';
+import type { ThemeMatrixCell } from '../../lib/colorResolver';
 import { useFixedDropdown } from '../../hooks/useFixedDropdown';
 import { MaterialSymbol } from './MaterialSymbol';
 import { useTranslation } from '../../i18n';
@@ -394,7 +398,11 @@ export function ColorPicker({
   const [pickedColor, setPickedColor] = useState<ColorValue | string>(
     () =>
       defaultColor ??
-      (mode === 'highlight' ? 'FFFF00' : mode === 'border' ? { rgb: '000000' } : { rgb: 'FF0000' })
+      (mode === 'highlight'
+        ? 'FFFF00'
+        : mode === 'border'
+          ? { kind: 'hex', value: '000000' }
+          : { kind: 'hex', value: 'FF0000' })
   );
   const { t } = useTranslation();
 
@@ -443,13 +451,12 @@ export function ColorPicker({
       if (mode === 'highlight') {
         picked = cell.hex;
       } else {
-        const colorValue: ColorValue = {
-          themeColor: cell.themeSlot,
-          rgb: cell.hex,
+        picked = {
+          kind: 'theme',
+          slot: cell.themeSlot,
+          ...(cell.tint !== undefined ? { tint: cell.tint } : {}),
+          ...(cell.shade !== undefined ? { shade: cell.shade } : {}),
         };
-        if (cell.tint) colorValue.themeTint = cell.tint;
-        if (cell.shade) colorValue.themeShade = cell.shade;
-        picked = colorValue;
       }
       setPickedColor(picked);
       onChange?.(picked);
@@ -460,7 +467,7 @@ export function ColorPicker({
 
   const handleStandardColorSelect = useCallback(
     (hex: string) => {
-      const picked: ColorValue | string = mode === 'highlight' ? hex : { rgb: hex };
+      const picked: ColorValue | string = mode === 'highlight' ? hex : { kind: 'hex', value: hex };
       setPickedColor(picked);
       onChange?.(picked);
       setIsOpen(false);
@@ -474,7 +481,7 @@ export function ColorPicker({
     if (mode === 'highlight') {
       onChange?.('none');
     } else {
-      onChange?.({ auto: true });
+      onChange?.({ kind: 'auto' });
     }
     setIsOpen(false);
   }, [mode, onChange]);
@@ -482,7 +489,7 @@ export function ColorPicker({
   const handleCustomApply = useCallback(() => {
     const hex = customHex.replace(/^#/, '').toUpperCase();
     if (/^[0-9A-F]{6}$/i.test(hex)) {
-      const picked: ColorValue | string = mode === 'highlight' ? hex : { rgb: hex };
+      const picked: ColorValue | string = mode === 'highlight' ? hex : { kind: 'hex', value: hex };
       setPickedColor(picked);
       onChange?.(picked);
       setIsOpen(false);

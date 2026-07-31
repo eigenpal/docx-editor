@@ -11,7 +11,66 @@
 
 export const VERSION = '0.0.2';
 
-export { DocxEditor } from './components/DocxEditor';
+export { DocxEditor, type DocxEditorNamespace } from './components/DocxEditor';
+
+// Provider-first composition layer: the primitives behind `DocxEditor` (also reachable
+// as `DocxEditor.Root` / `.Viewport` / `.Content`) and the hooks a custom chrome is
+// built from.
+export { DocxEditorRoot, type DocxEditorRootProps } from './editor/DocxEditorRoot';
+export { DocxEditorViewport, type DocxEditorViewportProps } from './editor/DocxEditorViewport';
+export { DocxEditorContent, type DocxEditorContentProps } from './editor/DocxEditorContent';
+export { useDocxEditor } from './editor/context';
+// Context-fed chrome parts (also reachable as `DocxEditor.HorizontalRuler` /
+// `.VerticalRuler` / `.DocumentOutline`): thin reactive wrappers over the props-driven
+// ruler and outline components, fed from the provided editor.
+export {
+  DocxEditorHorizontalRuler,
+  DocxEditorVerticalRuler,
+  type DocxEditorRulerProps,
+} from './editor/DocxEditorRulers';
+export {
+  DocxEditorDocumentOutline,
+  type DocxEditorDocumentOutlineProps,
+} from './editor/DocxEditorOutline';
+export { useEditorState } from './editor/useEditorState';
+export { useEditorCommand, type EditorCommandState } from './editor/useEditorCommand';
+export { useEditorEvent } from './editor/useEditorEvent';
+
+// The compound toolbar (also reachable as `DocxEditor.Toolbar`): default set with
+// in-place slot overrides, generic Button, and the font-family compound + hook. The
+// concrete part components live on the namespace statics; the index exports the
+// namespace, the hook, and the part prop types (the existing `Toolbar`/`ToolbarButton`
+// exports below keep their names, so the new parts are not re-exported bare).
+export {
+  DocxEditorToolbar,
+  useFontFamily,
+  type DocxEditorToolbarNamespace,
+  type DocxEditorToolbarProps,
+  type ToolbarAlignmentComponent,
+  type FontFamilyItemProps,
+  type FontFamilyNamespace,
+  type FontFamilyPartProps,
+  type FontFamilyProps,
+  type ToolbarButtonProps,
+  type ToolbarPartComponent,
+  type ToolbarPartProps,
+  type ToolbarSeparatorProps,
+  type ToolbarSlotPartComponent,
+  type ToolbarSlotPartProps,
+  type ToolbarTranslate,
+  type UseFontFamilyResult,
+} from './editor/toolbar';
+
+// The shared engine helpers both adapters expose, so the two package surfaces
+// match (enforced by `bun run check:export-parity`).
+export {
+  CHROME_GROUPS,
+  commandForSlot,
+  runToolbarCommand,
+  toolbarCommandState,
+  type ChromeSlotId,
+  type ToolbarCommandState,
+} from '@docx-editor.dev/core-contract/editor';
 export { PaginatedDocxEditor } from './components/PaginatedDocxEditor';
 export { PaginatedDocxEditorShell } from './components/PaginatedDocxEditorShell';
 export type { PaginatedDocxEditorShellProps } from './components/PaginatedDocxEditorShell';

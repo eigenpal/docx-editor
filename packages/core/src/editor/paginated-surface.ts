@@ -11,192 +11,70 @@
 // records — so the DOM is a picture, not a second source of truth. Keystrokes arrive through
 // a small offscreen input host, which is what gives the browser somewhere to put focus, the
 // IME and autofill without letting it own the document.
+//
+// The composition root lives here. Its seams are siblings: the host-facing contract in
+// paginated-surface-contract.ts, input wiring in surface-input.ts, selection/op planning in
+// surface-selection-ops.ts, formatting queries in surface-formatting.ts, and the page
+// environment in surface-pages.ts — all re-exported or consumed from this module.
 
 import { openTreeSession, type TreeDocxSession } from '@docx-editor.dev/core-contract/binding';
-import { parentNodeOf, type OoxmlPart, type TreeDocOp } from '@docx-editor.dev/core-contract/store';
+import type { TreeDocOp } from '@docx-editor.dev/core-contract/store';
 import {
   createFixedMeasurer,
   createLayoutScheduler,
   createLayoutSession,
   createParagraphLayoutCache,
-  geometryOfSection,
   readSectionProperties,
   documentOrder,
-  layoutHeaderFooterStory,
   layoutSemanticDocument,
-  caretAt,
   moveCaret,
-  pagesToMaterialize,
-  paragraphFragmentsOf,
   paragraphTextFromLayout,
-  spansInSelection,
   wordBoundary,
-  type HeaderFooterVariantName,
   type LayoutScope,
-  type PageFurniture,
-  type SectionProperties,
-  type NavigationCommand,
   type SemanticLayout,
   type SemanticPosition,
   type SemanticSelection,
-  type TextMeasurer,
 } from '@docx-editor.dev/core-contract/layout';
 import { paintSemanticLayout } from '@docx-editor.dev/core-contract/output';
 import { applySelectionToDom, selectionsEqual, semanticSelectionFromDom } from './dom-selection.ts';
+import type {
+  OpenPaginatedResult,
+  PaginatedSurface,
+  PaginatedSurfaceOptions,
+  PaginatedSurfaceState,
+} from './paginated-surface-contract.ts';
+import {
+  formattingAt,
+  isRunPropertyActive,
+  mergedProperties,
+  paragraphPropertiesOf,
+  selectionRunProperties,
+} from './surface-formatting.ts';
+import {
+  clampedToDocument,
+  collapsedAt,
+  deleteRangeOps,
+  orderedRangeOf,
+  selectedTextIn,
+  selectionMarkOf,
+} from './surface-selection-ops.ts';
+import {
+  createBeforeInputHandler,
+  createClipboardHandlers,
+  createKeyDownHandler,
+  paintedTextOf,
+  paragraphReplacePlan,
+} from './surface-input.ts';
+import { createFurnitureSource, equalPageSets, visiblePageSet } from './surface-pages.ts';
 
-export interface PaginatedSurfaceOptions {
-  readonly measurer?: TextMeasurer;
-  /**
-   * Identifies the measurer for cache invalidation.
-   *
-   * Fonts resolve asynchronously, so a host that swaps its measurer must change this or the
-   * cached pre-font layout is served for the rest of the session.
-   */
-  readonly producer?: string;
-  /** Points to CSS pixels. */
-  readonly scale?: number;
-  readonly onChange?: (state: PaginatedSurfaceState) => void;
-}
-
-/**
- * What the selection is currently formatted as.
- *
- * A value is present only when EVERY span in the selection agrees on it: a selection running
- * from 11pt into 14pt has no font size, and a toolbar should show a blank rather than pick
- * one of the two and imply the whole selection is that.
- */
-export interface SurfaceFormatting {
-  readonly bold: boolean;
-  readonly italic: boolean;
-  readonly underline: boolean;
-  readonly strikethrough: boolean;
-  readonly superscript: boolean;
-  readonly subscript: boolean;
-  readonly fontFamily: string | null;
-  /** Half-points, the unit OOXML stores and the picker expects. */
-  readonly fontSizeHalfPoints: number | null;
-  readonly color: string | null;
-  readonly highlight: string | null;
-  readonly alignment: 'left' | 'center' | 'right' | 'both' | null;
-  readonly styleId: string | null;
-}
-
-/**
- * Where the last pass spent its time, and how much work it actually did.
- *
- * The durations are the surface's own three phases — layout, paint, selection sync — timed
- * separately because they fail separately: a full relayout, a full repaint and a forced
- * reflow each have a different fix. The counters come free from machinery that already
- * exists: the layout session says how much was re-placed versus reused, and the scheduler
- * says how often work was thrown away as stale. `placed` equal to `total` on every
- * keystroke is the one-glance sign that incremental layout is not engaging.
- */
-export interface PaginatedSurfacePerf {
-  /** Time the last layout pass took, in milliseconds. */
-  readonly layoutMs: number;
-  /** Time the last paint took — building and swapping the page DOM. */
-  readonly paintMs: number;
-  /** Time the last selection sync took — writing the model selection into the browser. */
-  readonly selectionMs: number;
-  /** Paragraphs the last pass re-placed, against the number in the document. */
-  readonly placed: number;
-  readonly total: number;
-  /** Pages carried over from the previous layout without being rebuilt. */
-  readonly reusedPages: number;
-  /** Passes that could not resume and laid the document out from the top. */
-  readonly fullPasses: number;
-  /** Layouts discarded because the model had already moved on. */
-  readonly staleDiscards: number;
-  /** Cooperative runs abandoned mid-flight for a newer revision. */
-  readonly cancelledRuns: number;
-}
-
-export interface PaginatedSurfaceState {
-  readonly revision: number;
-  readonly pageCount: number;
-  readonly selection: SemanticSelection;
-  readonly canUndo: boolean;
-  readonly canRedo: boolean;
-  readonly lastRejection: string | null;
-  /** Timing and reuse counters for the last pass. Diagnostics, not document state. */
-  readonly perf: PaginatedSurfacePerf;
-}
-
-export interface PaginatedSurface {
-  readonly session: TreeDocxSession;
-  layout(): SemanticLayout;
-  state(): PaginatedSurfaceState;
-  /** Move the caret to a point in surface coordinates. */
-  type(text: string): void;
-  deleteBackward(): void;
-  /** Delete forward — the Delete key, and `deleteContentForward` from an IME. */
-  deleteForward(): void;
-  /** Delete to the previous word boundary — Alt/Ctrl+Backspace. */
-  deleteWordBackward(): void;
-  /** Delete to the next word boundary — Alt/Ctrl+Delete. */
-  deleteWordForward(): void;
-  splitParagraph(): void;
-  /** A tab character as a `w:tab` element, not a literal tab in the run text. */
-  insertTab(): void;
-  /** A `w:br` — Shift+Enter, a line break inside the same paragraph. */
-  insertLineBreak(): void;
-  /** Select the whole document. */
-  selectAll(): void;
-  /** Set the selection directly, for a host driving the surface programmatically. */
-  setSelection(next: SemanticSelection): void;
-  /** Toggle a run property over the selection, e.g. `b`, `i`, `u`. */
-  toggleRunProperty(localName: string, attributes?: Record<string, string>): void;
-  /**
-   * SET a run property over the selection, rather than toggling it.
-   *
-   * Font family, size and colour are values, not switches: picking Arial twice must leave
-   * the text in Arial, which a toggle would not.
-   */
-  setRunProperty(localName: string, attributes?: Record<string, string>): void;
-  /** Set a property on every paragraph the selection touches — alignment, style, spacing. */
-  setParagraphProperty(localName: string, attributes?: Record<string, string>): void;
-  /** Formatting as it stands at the selection, for a toolbar to reflect. */
-  formatting(): SurfaceFormatting;
-  /**
-   * The section the document declares: page size, margins, columns, orientation.
-   *
-   * What a ruler is made of, and what pagination is measured against.
-   */
-  sectionProperties(): SectionProperties;
-  /** The layout session, so a host or a test can see how much work a pass actually did. */
-  layoutSession(): {
-    readonly stats: {
-      readonly placed: number;
-      readonly total: number;
-      readonly reusedPages: number;
-    };
-  };
-  /** The selected text, for copy and cut. */
-  selectedText(): string;
-  /** Remove the selection, if any. Returns whether anything was deleted. */
-  deleteSelection(): boolean;
-  navigate(command: NavigationCommand, extend?: boolean): void;
-  /** Reverse the last history entry and put the caret back where it was made. */
-  undo(): void;
-  redo(): void;
-  focus(): void;
-  destroy(): void;
-}
-
-/**
- * Paragraph properties by paragraph id, one map per published layout.
- *
- * Weakly keyed on the layout because a layout is immutable: a new revision is a new
- * object, and superseded revisions release their index with the records.
- */
-const fragmentPropsByLayout = new WeakMap<
-  SemanticLayout,
-  Map<string, readonly { localName: string; attributes?: Record<string, string> }[]>
->();
-
-export type OpenPaginatedResult =
-  | { readonly ok: true; readonly surface: PaginatedSurface }
-  | { readonly ok: false; readonly reason: string; readonly detail?: string };
+export type {
+  OpenPaginatedResult,
+  PaginatedSurface,
+  PaginatedSurfaceOptions,
+  PaginatedSurfacePerf,
+  PaginatedSurfaceState,
+  SurfaceFormatting,
+} from './paginated-surface-contract.ts';
 
 /**
  * Mount a paginated surface over DOCX bytes.
@@ -271,68 +149,27 @@ export function mountPaginatedSurface(
   let lastPaintMs = 0;
   let lastSelectionMs = 0;
 
-  /**
-   * Header/footer stories, laid out once per part (phase 2, read-only).
-   *
-   * Keyed by part object identity plus width and producer: HF parts are immutable for the
-   * session's lifetime, but a section-width edit or a late-arriving font re-measures them.
-   */
-  const hfStoryMemo = new WeakMap<
-    object,
-    { width: number; producer: string; story: ReturnType<typeof layoutHeaderFooterStory> }
-  >();
+  // The document's declared geometry plus header/footer stories, laid out per part and
+  // memoized in the source itself.
+  const furnitureSource = createFurnitureSource({
+    session,
+    measurer,
+    producer,
+    cache: layoutCache,
+  });
 
   let currentLayout = layoutOnce();
   let desiredX: number | null = null;
-
-  /**
-   * The page the DOCUMENT asks for, not a constant.
-   *
-   * Read once per pass rather than cached: a section property is part of the tree, so an
-   * edit can change it, and paginating an A4 document onto Letter puts every page break in
-   * the wrong place before anything is painted.
-   */
-  function geometry(): ReturnType<typeof geometryOfSection> {
-    return geometryOfSection(readSectionProperties(session.part()));
-  }
-
-  function furniture(): PageFurniture | undefined {
-    const parts = session.headerFooterParts();
-    if (parts.headers.size === 0 && parts.footers.size === 0) return undefined;
-    const currentGeometry = geometry();
-    const width =
-      currentGeometry.width - currentGeometry.margin.left - currentGeometry.margin.right;
-    const storyOf = (part: OoxmlPart): ReturnType<typeof layoutHeaderFooterStory> => {
-      const memo = hfStoryMemo.get(part);
-      if (memo && memo.width === width && memo.producer === producer) return memo.story;
-      const story = layoutHeaderFooterStory(part, width, measurer, producer, layoutCache);
-      hfStoryMemo.set(part, { width, producer, story });
-      return story;
-    };
-    const mapStories = (
-      source: ReadonlyMap<HeaderFooterVariantName, OoxmlPart>
-    ): ReadonlyMap<HeaderFooterVariantName, ReturnType<typeof layoutHeaderFooterStory>> => {
-      const laid = new Map<HeaderFooterVariantName, ReturnType<typeof layoutHeaderFooterStory>>();
-      for (const [variant, part] of source) laid.set(variant, storyOf(part));
-      return laid;
-    };
-    return {
-      titlePage: readSectionProperties(session.part()).titlePage,
-      evenAndOddHeaders: parts.evenAndOddHeaders,
-      headers: mapStories(parts.headers),
-      footers: mapStories(parts.footers),
-    };
-  }
 
   function layoutOnce(): SemanticLayout {
     const began = now();
     const layout = layoutSemanticDocument(session.part(), session.revision(), {
       measurer,
-      geometry: geometry(),
+      geometry: furnitureSource.geometry(),
       cache: layoutCache,
       session: layoutSession,
       producer,
-      furniture: furniture(),
+      furniture: furnitureSource.furniture(),
     });
     lastLayoutMs = now() - began;
     return layout;
@@ -355,11 +192,11 @@ export function mountPaginatedSurface(
       const began = now();
       const layout = layoutSemanticDocument(session.part(), scope.revision, {
         measurer,
-        geometry: geometry(),
+        geometry: furnitureSource.geometry(),
         cache: layoutCache,
         session: layoutSession,
         producer,
-        furniture: furniture(),
+        furniture: furnitureSource.furniture(),
       });
       lastLayoutMs = now() - began;
       return layout;
@@ -378,32 +215,9 @@ export function mountPaginatedSurface(
   // editor sharing the store — reaches layout the same way.
   const unsubscribe = session.subscribe((modelChange) => scheduler.notify(modelChange));
 
-  /**
-   * The pages worth building in detail.
-   *
-   * The viewport is read from the nearest scrolling ancestor. Without one — print, export, a
-   * test — this returns every page, which is the safe reading: a wrong guess silently drops
-   * content rather than merely slowing something down.
-   */
+  /** The pages worth building in detail, for the current viewport and selection. */
   function visiblePages(): ReadonlySet<number> | undefined {
-    const scroller = container.closest('.docx-editor__scroll-container') as HTMLElement | null;
-    if (!scroller || scroller.clientHeight === 0) return undefined;
-    const pinned: number[] = [];
-    for (const position of [selection.anchor, selection.head]) {
-      const caret = caretAt(currentLayout, position);
-      if (caret) pinned.push(caret.pageIndex);
-    }
-    return pagesToMaterialize({
-      layout: currentLayout,
-      // Surface coordinates back to layout units: the records are in points and the scroll
-      // offset is in CSS pixels.
-      viewport: {
-        top: (scroller.scrollTop - container.offsetTop) / scale,
-        height: scroller.clientHeight / scale,
-      },
-      overscanPages: 1,
-      pinnedPages: pinned,
-    });
+    return visiblePageSet(container, currentLayout, selection, scale);
   }
 
   /** Publish any pending layout. Returns whether it did, so callers can avoid a double paint. */
@@ -437,13 +251,6 @@ export function mountPaginatedSurface(
 
   /** The set the current paint was built with, so a scroll can tell whether it must repaint. */
   let materializedSet: ReadonlySet<number> | undefined;
-
-  function equalPageSets(a: ReadonlySet<number> | undefined, b: typeof a): boolean {
-    if (a === b) return true;
-    if (!a || !b || a.size !== b.size) return false;
-    for (const index of a) if (!b.has(index)) return false;
-    return true;
-  }
 
   function render(notifyChange = true): void {
     const paintBegan = now();
@@ -821,7 +628,7 @@ export function mountPaginatedSurface(
               paragraphId: from.paragraphId,
               start: from.offset,
               end: to.offset,
-              properties: mergedProperties(selectionRunProperties(), {
+              properties: mergedProperties(selectionRunProperties(currentLayout, selection), {
                 localName,
                 ...(attributes ? { attributes } : {}),
               }),
@@ -843,7 +650,7 @@ export function mountPaginatedSurface(
       const ops = order.slice(firstIndex, lastIndex + 1).map((paragraphId) => ({
         op: 'setParagraphProperties' as const,
         paragraphId,
-        properties: mergedProperties(paragraphPropertiesOf(paragraphId), {
+        properties: mergedProperties(paragraphPropertiesOf(currentLayout, paragraphId), {
           localName,
           ...(attributes ? { attributes } : {}),
         }),
@@ -854,39 +661,7 @@ export function mountPaginatedSurface(
 
     sectionProperties: () => readSectionProperties(session.part()),
 
-    formatting() {
-      const spans = spansInSelection(currentLayout, selection);
-      const styles = spans.map((span) => span.style);
-      // Agreement across the WHOLE selection, or nothing. `every` over an empty list is
-      // true, so an empty selection reports the caret paragraph's alignment and no run
-      // properties — which is what a toolbar should show with nothing selected.
-      const agreed = <T>(pick: (style: (typeof styles)[number]) => T): T | null => {
-        if (styles.length === 0) return null;
-        const first = pick(styles[0]!);
-        return styles.every((style) => pick(style) === first) ? first : null;
-      };
-      const properties = paragraphPropertiesOf(selection.head.paragraphId);
-      const jc = properties.find((property) => property.localName === 'jc')?.attributes?.val;
-      const style = properties.find((property) => property.localName === 'pStyle')?.attributes?.val;
-      return {
-        bold: styles.length > 0 && styles.every((entry) => entry.bold),
-        italic: styles.length > 0 && styles.every((entry) => entry.italic),
-        underline: styles.length > 0 && styles.every((entry) => entry.underline !== null),
-        strikethrough: styles.length > 0 && styles.every((entry) => entry.strike),
-        superscript: styles.length > 0 && styles.every((e) => e.verticalAlign === 'superscript'),
-        subscript: styles.length > 0 && styles.every((e) => e.verticalAlign === 'subscript'),
-        fontFamily: agreed((entry) => entry.fontFamily),
-        fontSizeHalfPoints: (() => {
-          const points = agreed((entry) => entry.fontSizePt);
-          return points === null ? null : Math.round(points * 2);
-        })(),
-        color: agreed((entry) => entry.color),
-        highlight: agreed((entry) => entry.highlight),
-        alignment:
-          jc === 'center' || jc === 'right' || jc === 'both' ? jc : jc === 'end' ? 'right' : 'left',
-        styleId: style ?? null,
-      } satisfies SurfaceFormatting;
-    },
+    formatting: () => formattingAt(currentLayout, selection),
 
     toggleRunProperty(localName, attributes) {
       const { from, to } = orderedRange();
@@ -894,7 +669,7 @@ export function mountPaginatedSurface(
       // the NEXT character typed — are a separate lane; refusing is honest rather than
       // formatting a character the user did not select.
       if (from.paragraphId !== to.paragraphId || from.offset === to.offset) return;
-      const active = isRunPropertyActive(localName);
+      const active = isRunPropertyActive(currentLayout, selection, localName);
       commit(() =>
         session.applyTreeOps(
           [
@@ -907,7 +682,7 @@ export function mountPaginatedSurface(
               // the property may be inherited from a style, and removing the local override
               // would let the inherited value come back.
               properties: mergedProperties(
-                selectionRunProperties(),
+                selectionRunProperties(currentLayout, selection),
                 active
                   ? // `w:u` is a closed enumeration, not a boolean: its off value is `none`,
                     // and `val="0"` is an attribute value Word rejects outright.
@@ -923,20 +698,7 @@ export function mountPaginatedSurface(
 
     selectedText() {
       const { from, to } = orderedRange();
-      if (from.paragraphId === to.paragraphId) {
-        return textOf(from.paragraphId).slice(from.offset, to.offset);
-      }
-      const order = documentOrder(currentLayout);
-      const firstIndex = order.indexOf(from.paragraphId);
-      const lastIndex = order.indexOf(to.paragraphId);
-      if (firstIndex === -1 || lastIndex === -1) return '';
-      const parts = [textOf(from.paragraphId).slice(from.offset)];
-      for (let index = firstIndex + 1; index < lastIndex; index += 1) {
-        parts.push(textOf(order[index]!));
-      }
-      parts.push(textOf(to.paragraphId).slice(0, to.offset));
-      // Paragraphs are newline-separated, which is what a paste target expects.
-      return parts.join('\n');
+      return selectedTextIn(currentLayout, from, to);
     },
 
     deleteSelection() {
@@ -988,7 +750,7 @@ export function mountPaginatedSurface(
       // paragraph. The caret must still be CLAMPED to the tree undo just restored: leaving it
       // pointed past the end of a shortened paragraph, or at a paragraph the undo removed,
       // and every later keystroke was refused. Select All, type, undo froze the editor.
-      setSelection(clampedToDocument(selection));
+      setSelection(clampedToDocument(currentLayout, session.paragraphIds(), selection));
       return;
     }
     setSelection({
@@ -997,114 +759,14 @@ export function mountPaginatedSurface(
     });
   }
 
-  /**
-   * The current selection as a history mark, or null when it spans paragraphs.
-   *
-   * A mark addresses ONE paragraph, and a cross-paragraph selection has no honest single-id
-   * form; recording the head's paragraph would put the caret somewhere the user never had it.
-   */
+  /** The current selection as a history mark — one paragraph or nothing. */
   function selectionMark(): { paragraphId: string; start: number; end: number } | null {
-    if (selection.anchor.paragraphId !== selection.head.paragraphId) return null;
-    const start = Math.min(selection.anchor.offset, selection.head.offset);
-    const end = Math.max(selection.anchor.offset, selection.head.offset);
-    return { paragraphId: selection.head.paragraphId, start, end };
-  }
-
-  /**
-   * Whether a run property is already set across the WHOLE selection.
-   *
-   * Word's rule, and the one that makes a toggle feel right: a partly-bold selection goes
-   * fully bold on the first press rather than clearing the bold that is there.
-   */
-  function isRunPropertyActive(localName: string): boolean {
-    const spans = spansInSelection(currentLayout, selection);
-    if (spans.length === 0) return false;
-    const flagOf = (span: (typeof spans)[number]): boolean => {
-      switch (localName) {
-        case 'b':
-          return span.style.bold;
-        case 'i':
-          return span.style.italic;
-        case 'u':
-          return span.style.underline !== null;
-        default:
-          return false;
-      }
-    };
-    return spans.every(flagOf);
-  }
-
-  /**
-   * Merge one property into a set, replacing any entry with the same name.
-   *
-   * `setRunProperties` and `setParagraphProperties` REPLACE the whole container, so sending
-   * one property alone deleted every other: pressing Bold stripped a run's font, size and
-   * colour, and pressing Centre stripped a paragraph's style, numbering and indents.
-   */
-  function mergedProperties(
-    existing: readonly { localName: string; attributes?: Record<string, string> }[],
-    incoming: { localName: string; attributes?: Record<string, string> }
-  ): { localName: string; attributes?: Record<string, string> }[] {
-    const kept = existing.filter((entry) => entry.localName !== incoming.localName);
-    return [...kept, incoming];
-  }
-
-  /** The run properties in force across the selection, taken from its first span. */
-  function selectionRunProperties(): readonly {
-    localName: string;
-    attributes?: Record<string, string>;
-  }[] {
-    const spans = spansInSelection(currentLayout, selection);
-    return spans[0]?.props ?? [];
-  }
-
-  /** A paragraph's own properties, read back from the layout records. */
-  function paragraphPropertiesOf(
-    paragraphId: string
-  ): readonly { localName: string; attributes?: Record<string, string> }[] {
-    // Indexed per layout: the host reads formatting after every commit, and scanning all
-    // pages for one paragraph's `w:pPr` projection made that read O(document).
-    let index = fragmentPropsByLayout.get(currentLayout);
-    if (!index) {
-      index = new Map();
-      for (const page of currentLayout.pages) {
-        for (const fragment of paragraphFragmentsOf(page)) {
-          if (!index.has(fragment.paragraphId)) index.set(fragment.paragraphId, fragment.props);
-        }
-      }
-      fragmentPropsByLayout.set(currentLayout, index);
-    }
-    return index.get(paragraphId) ?? [];
-  }
-
-  /** A selection guaranteed to address content that exists at the current revision. */
-  function clampedToDocument(next: SemanticSelection): SemanticSelection {
-    const ids = session.paragraphIds();
-    const fallback = ids[0];
-    const clampPosition = (position: SemanticPosition): SemanticPosition => {
-      const paragraphId = ids.includes(position.paragraphId)
-        ? position.paragraphId
-        : (fallback ?? position.paragraphId);
-      const length = textOf(paragraphId).length;
-      return { paragraphId, offset: Math.max(0, Math.min(position.offset, length)) };
-    };
-    return { anchor: clampPosition(next.anchor), head: clampPosition(next.head) };
-  }
-
-  function collapsedAt(position: SemanticPosition): SemanticSelection {
-    return { anchor: position, head: position };
+    return selectionMarkOf(selection);
   }
 
   /** The selection in DOCUMENT order, whichever way the user dragged it. */
   function orderedRange(): { from: SemanticPosition; to: SemanticPosition } {
-    const { anchor, head } = selection;
-    if (anchor.paragraphId === head.paragraphId) {
-      return anchor.offset <= head.offset ? { from: anchor, to: head } : { from: head, to: anchor };
-    }
-    const order = documentOrder(currentLayout);
-    return order.indexOf(anchor.paragraphId) <= order.indexOf(head.paragraphId)
-      ? { from: anchor, to: head }
-      : { from: head, to: anchor };
+    return orderedRangeOf(currentLayout, selection);
   }
 
   function orderedStart(): SemanticPosition {
@@ -1116,86 +778,16 @@ export function mountPaginatedSurface(
     return paragraphTextFromLayout(currentLayout, paragraphId);
   }
 
-  /**
-   * Ops that remove the current selection, or none when it is collapsed.
-   *
-   * A selection spanning paragraphs is trimmed at both ends and then JOINED back into one,
-   * which is what makes selecting three paragraphs and typing behave like every other
-   * editor. The order matters: trim first, join after, so each join sees the text that is
-   * meant to survive rather than the text being removed.
-   */
+  /** Ops that remove the current selection, or none when it is collapsed. */
   function deleteSelectionOps(): Parameters<TreeDocxSession['applyTreeOps']>[0] {
     const { from, to } = orderedRange();
-    if (from.paragraphId === to.paragraphId) {
-      if (from.offset === to.offset) return [];
-      return [
-        { op: 'deleteText', paragraphId: from.paragraphId, start: from.offset, end: to.offset },
-      ];
-    }
-
-    const order = documentOrder(currentLayout);
-    const firstIndex = order.indexOf(from.paragraphId);
-    const lastIndex = order.indexOf(to.paragraphId);
-    if (firstIndex === -1 || lastIndex === -1) return [];
-
-    const ops: Parameters<TreeDocxSession['applyTreeOps']>[0][number][] = [];
-    // Tail of the first paragraph.
-    const firstText = textOf(from.paragraphId);
-    if (from.offset < firstText.length) {
-      ops.push({
-        op: 'deleteText',
-        paragraphId: from.paragraphId,
-        start: from.offset,
-        end: firstText.length,
-      });
-    }
-    // Whole paragraphs in between.
-    for (let index = firstIndex + 1; index < lastIndex; index += 1) {
-      const id = order[index]!;
-      const length = textOf(id).length;
-      if (length > 0) ops.push({ op: 'deleteText', paragraphId: id, start: 0, end: length });
-    }
-    // Head of the last paragraph.
-    if (to.offset > 0) {
-      ops.push({ op: 'deleteText', paragraphId: to.paragraphId, start: 0, end: to.offset });
-    }
-    // Then collapse the emptied paragraphs — but only WITHIN runs of consecutive sibling
-    // `w:p` elements. A join across a table (or any block this lane does not own) is not a
-    // paragraph edit: the store rightly refuses it, and one refused join vetoes the whole
-    // atomic transaction — Select All + Delete on any document containing a table deleted
-    // nothing at all. Text still clears everywhere; each block boundary keeps one empty
-    // paragraph beside it, which is the honest paragraph-lane reading of the gesture.
-    const part = session.part();
-    const positionsByParent = new Map<string, Map<string, number>>();
-    const consecutiveSiblings = (before: string, after: string): boolean => {
-      const parent = parentNodeOf(part, after);
-      if (!parent || parentNodeOf(part, before) !== parent) return false;
-      let positions = positionsByParent.get(parent.id);
-      if (!positions) {
-        positions = new Map<string, number>();
-        for (const [at, child] of parent.children.entries()) positions.set(child.id, at);
-        positionsByParent.set(parent.id, positions);
-      }
-      return positions.get(after) === (positions.get(before) ?? Number.NaN) + 1;
-    };
-    let groupHead = from.paragraphId;
-    let previous = from.paragraphId;
-    for (let index = firstIndex + 1; index <= lastIndex; index += 1) {
-      const id = order[index]!;
-      if (consecutiveSiblings(previous, id)) {
-        ops.push({ op: 'joinParagraphs', firstId: groupHead, secondId: id });
-      } else {
-        // Something that is not a selected paragraph sits between: start a new join group
-        // on ITS far side rather than joining across it.
-        groupHead = id;
-      }
-      previous = id;
-    }
-    return ops;
+    return deleteRangeOps(currentLayout, session.part(), from, to);
   }
 
   // Event wiring lives HERE rather than in each host, so React, Vue and a plain page get
-  // identical behaviour instead of three hand-written keymaps that drift.
+  // identical behaviour instead of three hand-written keymaps that drift. The handlers
+  // themselves are factories in surface-input.ts over the surface interface; this closure
+  // only owns the state they cannot — composition flags and the selection mirror.
   //
   // SELECTION GESTURES ARE THE BROWSER'S. Drag, double-click for a word, triple-click for a
   // paragraph, shift-click to extend, and selecting across a page boundary all come free
@@ -1255,177 +847,23 @@ export function mountPaginatedSurface(
   /**
    * Commit whatever the browser wrote into a paragraph that the surface could not intercept.
    *
-   * Deliberately narrow: one paragraph, expressed as a single replace of the differing
-   * middle. Anything wider would be guessing at what changed.
+   * The diff itself lives in surface-input.ts; this applies it and lands the caret.
    */
   function reconcileParagraphFromDom(paragraphId: string): void {
-    const painted = paintedTextOf(paragraphId);
+    const painted = paintedTextOf(pagesLayer, paragraphId);
     if (painted === null) return;
-    const modelText = textOf(paragraphId);
-    if (painted === modelText) return;
-
-    let prefix = 0;
-    while (
-      prefix < painted.length &&
-      prefix < modelText.length &&
-      painted[prefix] === modelText[prefix]
-    ) {
-      prefix += 1;
-    }
-    let suffix = 0;
-    while (
-      suffix < painted.length - prefix &&
-      suffix < modelText.length - prefix &&
-      painted[painted.length - 1 - suffix] === modelText[modelText.length - 1 - suffix]
-    ) {
-      suffix += 1;
-    }
-    const inserted = painted.slice(prefix, painted.length - suffix);
-    const ops: Parameters<TreeDocxSession['applyTreeOps']>[0][number][] = [];
-    if (modelText.length - suffix > prefix) {
-      ops.push({ op: 'deleteText', paragraphId, start: prefix, end: modelText.length - suffix });
-    }
-    if (inserted.length > 0) {
-      ops.push({ op: 'insertText', paragraphId, offset: prefix, text: inserted });
-    }
-    if (ops.length === 0) return;
-    commit(() => session.applyTreeOps(ops, selectionMark()));
-    setSelection(collapsedAt({ paragraphId, offset: prefix + inserted.length }));
+    const plan = paragraphReplacePlan(paragraphId, textOf(paragraphId), painted);
+    if (!plan) return;
+    commit(() => session.applyTreeOps(plan.ops, selectionMark()));
+    setSelection(collapsedAt({ paragraphId, offset: plan.caret }));
   }
 
-  /** The text the browser currently shows for a paragraph, across all its painted lines. */
-  function paintedTextOf(paragraphId: string): string | null {
-    const spans = pagesLayer.querySelectorAll('[data-paragraph-id][data-start]');
-    const pieces: { start: number; text: string }[] = [];
-    for (const span of spans) {
-      const element = span as HTMLElement;
-      if (element.dataset.paragraphId !== paragraphId) continue;
-      const start = Number(element.dataset.start);
-      if (!Number.isInteger(start)) continue;
-      pieces.push({ start, text: element.textContent ?? '' });
-    }
-    if (pieces.length === 0) return null;
-    pieces.sort((a, b) => a.start - b.start);
-    return pieces.map((piece) => piece.text).join('');
-  }
-
-  const NAVIGATION: Record<string, NavigationCommand> = {
-    ArrowLeft: 'left',
-    ArrowRight: 'right',
-    ArrowUp: 'up',
-    ArrowDown: 'down',
-    Home: 'lineStart',
-    End: 'lineEnd',
-  };
-
-  /** Run-property shortcuts, matching Word and every browser editor. */
-  const FORMATTING: Record<string, { localName: string; attributes?: Record<string, string> }> = {
-    b: { localName: 'b' },
-    i: { localName: 'i' },
-    u: { localName: 'u', attributes: { val: 'single' } },
-  };
-
-  const onKeyDown = (event: KeyboardEvent): void => {
-    const accel = event.metaKey || event.ctrlKey;
-    const command = NAVIGATION[event.key];
-    if (command) {
-      let scoped: NavigationCommand = command;
-      if (event.key === 'Home' || event.key === 'End') {
-        // Ctrl/Cmd+Home and End address the document rather than the line.
-        if (accel) scoped = event.key === 'Home' ? 'documentStart' : 'documentEnd';
-      } else if (
-        (event.key === 'ArrowLeft' || event.key === 'ArrowRight') &&
-        // Word-wise motion: Alt on macOS, Ctrl elsewhere. Both are accepted rather than
-        // sniffing the platform, so a mac keyboard on Linux still behaves.
-        (event.altKey || event.ctrlKey)
-      ) {
-        scoped = event.key === 'ArrowLeft' ? 'wordLeft' : 'wordRight';
-      } else if (accel && (event.key === 'ArrowUp' || event.key === 'ArrowDown')) {
-        scoped = event.key === 'ArrowUp' ? 'documentStart' : 'documentEnd';
-      }
-      surface.navigate(scoped, event.shiftKey);
-      event.preventDefault();
-      return;
-    }
-    if (event.key === 'PageUp' || event.key === 'PageDown') {
-      // A page is a real unit here — the surface knows where every page starts — so this
-      // moves by pages rather than by a guessed number of lines.
-      surface.navigate(event.key === 'PageUp' ? 'documentStart' : 'documentEnd', event.shiftKey);
-      event.preventDefault();
-      return;
-    }
-    if (event.key === 'Backspace') {
-      surface.deleteBackward();
-      event.preventDefault();
-      return;
-    }
-    if (event.key === 'Delete') {
-      surface.deleteForward();
-      event.preventDefault();
-      return;
-    }
-    if (event.key === 'Tab') {
-      surface.insertTab();
-      event.preventDefault();
-      return;
-    }
-    if (event.key === 'Enter') {
-      // Shift+Enter is a line break inside the paragraph, not a new paragraph.
-      if (event.shiftKey) surface.insertLineBreak();
-      else surface.splitParagraph();
-      event.preventDefault();
-      return;
-    }
-    if (accel && event.key.toLowerCase() === 'a') {
-      surface.selectAll();
-      event.preventDefault();
-      return;
-    }
-    if (accel && !event.shiftKey && FORMATTING[event.key.toLowerCase()]) {
-      const property = FORMATTING[event.key.toLowerCase()]!;
-      surface.toggleRunProperty(property.localName, property.attributes);
-      event.preventDefault();
-      return;
-    }
-    if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'z') {
-      // Undo and redo publish a model change like any other commit, so the scheduler
-      // repaints. What the scheduler cannot supply is WHERE the caret belongs: offsets in
-      // the reverted tree do not correspond to offsets in the one that replaced it, so the
-      // entry's own selection is restored.
-      if (event.shiftKey) surface.redo();
-      else surface.undo();
-      event.preventDefault();
-    }
-  };
-
-  /**
-   * Clipboard.
-   *
-   * PLAIN TEXT only, deliberately: writing HTML would invite reading it back, and pasted
-   * HTML is attacker-controlled markup that has no business reaching a sink here. Rich
-   * paste belongs behind the same bounded parse the file path uses.
-   */
-  const onCopy = (event: ClipboardEvent): void => {
-    const text = surface.selectedText();
-    if (!text) return;
-    event.clipboardData?.setData('text/plain', text);
-    event.preventDefault();
-  };
-
-  const onCut = (event: ClipboardEvent): void => {
-    const text = surface.selectedText();
-    if (!text) return;
-    event.clipboardData?.setData('text/plain', text);
-    surface.deleteSelection();
-    event.preventDefault();
-  };
-
-  const onPaste = (event: ClipboardEvent): void => {
-    const text = event.clipboardData?.getData('text/plain');
-    event.preventDefault();
-    if (!text) return;
-    insertPlainText(text);
-  };
+  const onKeyDown = createKeyDownHandler(surface);
+  const { onCopy, onCut, onPaste } = createClipboardHandlers(surface, insertPlainText);
+  const onBeforeInput = createBeforeInputHandler(surface, {
+    isComposing: () => composing,
+    insertPlainText,
+  });
 
   /** Insert text, turning newlines into real paragraph splits rather than literal characters. */
   function insertPlainText(text: string): void {
@@ -1485,79 +923,6 @@ export function mountPaginatedSurface(
       }
     );
   }
-
-  /** Plain text from an input event's data transfer, if it carries any. */
-  function dataTransferText(event: InputEvent): string | null {
-    const data = event.dataTransfer;
-    if (!data) return null;
-    // `text/plain` ONLY. `text/html` from a drag is markup from anywhere on the machine.
-    const text = data.getData('text/plain');
-    return text.length > 0 ? text : null;
-  }
-
-  const onBeforeInput = (event: InputEvent): void => {
-    // PREVENTED FIRST, dispatched second.
-    //
-    // The pages are editable, so anything this handler does not recognise is a mutation the
-    // browser performs on the painted DOM: Format-menu bold, emacs kill-line, transpose,
-    // yank, insert-list, drop. The model never sees it, and worse, every span after it keeps
-    // a `data-start` that no longer matches its text — so the NEXT keystroke commits at the
-    // wrong offset. An unknown input type must be dropped, never passed through.
-    event.preventDefault();
-
-    if (composing) {
-      // The IME owns the DOM until it finishes; reconciliation happens at composition end.
-      return;
-    }
-
-    if (event.inputType === 'insertText' && event.data != null) {
-      surface.type(event.data);
-      return;
-    }
-    if (event.inputType === 'insertFromPaste') {
-      // The paste handler already ran and did the work.
-      return;
-    }
-    if (event.inputType === 'insertReplacementText') {
-      // Autocorrect, dictation and smart substitutions arrive this way — NOT from a paste.
-      // The replacement text is on the event; applying it is how a correction survives
-      // instead of being silently dropped.
-      const replacement = event.data ?? dataTransferText(event);
-      if (replacement) surface.type(replacement);
-      return;
-    }
-    if (event.inputType === 'deleteContentBackward') {
-      surface.deleteBackward();
-      return;
-    }
-    if (event.inputType === 'deleteWordBackward') {
-      surface.deleteWordBackward();
-      return;
-    }
-    if (event.inputType === 'deleteContentForward') {
-      surface.deleteForward();
-      return;
-    }
-    if (event.inputType === 'deleteWordForward') {
-      surface.deleteWordForward();
-      return;
-    }
-    if (event.inputType === 'insertLineBreak') {
-      surface.insertLineBreak();
-      return;
-    }
-    if (event.inputType === 'insertFromDrop' || event.inputType === 'insertFromPasteAsQuotation') {
-      // Plain text only, like paste: dropped content carries `text/html` from anywhere on the
-      // machine, and parsing it here would be exactly the HTML-from-a-string sink the file
-      // path is bounded to avoid.
-      const dropped = dataTransferText(event);
-      if (dropped) insertPlainText(dropped);
-      return;
-    }
-    if (event.inputType === 'insertParagraph') {
-      surface.splitParagraph();
-    }
-  };
 
   // Selection lives on the document, so this is where the browser reports it changing —
   // whatever produced it: a drag, a double-click, Select All, or a caret move.

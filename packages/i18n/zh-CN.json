@@ -192,7 +192,10 @@
       "lightBlue2": "浅蓝 2",
       "lightMagenta": "浅品红",
       "brightGreen": "亮绿",
-      "violet": "紫罗兰色"
+      "violet": "紫罗兰色",
+      "darkCyan": null,
+      "darkMagenta": null,
+      "lightGray": null
     }
   },
   "dialogs": {

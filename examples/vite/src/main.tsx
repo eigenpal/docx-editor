@@ -8,16 +8,21 @@ const params = new URLSearchParams(location.search);
 // TreeDocumentStore -> tree binding). It shares no code with the PackageModel path, so it is
 // the surface that proves the replacement works before it becomes the default.
 const treeFirst = params.get('treeFirst') === '1';
-// The PAGINATED SURFACE is the default: painted pages from semantic layout records over the
-// canonical tree, mounted through the packaged React host. `?paginated=1` still resolves so
-// existing bookmarks and gates keep working. The legacy one-surface harness, the diagnostic
-// split pane (`?edit=1`) and the read-only engine preview (`?preview=engine`) were deleted
-// with the legacy editor lane.
-const paginated = params.get('paginated') === '1' || isDefaultSurface(params);
+// `?paginated=1` keeps the packaged `PaginatedDocxEditorShell` harness
+// reachable, for existing bookmarks and gates.
+const paginated = params.get('paginated') === '1';
+// The COMPOSED SURFACE is the default: the provider-first composition API
+// (`DocxEditor.Root` / `.Toolbar` / `.Viewport` / `.Content` + the public hooks) as the
+// flagship showcase. The one-surface harness, the diagnostic split pane
+// (`?edit=1`) and the read-only engine preview (`?preview=engine`) are no
+// longer part of this demo.
+const composed = isDefaultSurface(params);
 
 /** True when no explicit surface was asked for. */
 function isDefaultSurface(search: URLSearchParams): boolean {
-  return search.get('museum') !== '1' && search.get('treeFirst') !== '1';
+  return (
+    search.get('museum') !== '1' && search.get('treeFirst') !== '1' && search.get('paginated') !== '1'
+  );
 }
 const base = import.meta.env.BASE_URL;
 // `?fixture=<name>.docx` picks which same-origin fixture the preview loads. Sanitized to a
@@ -27,7 +32,7 @@ const fixtureParam = params.get('fixture') ?? '';
 // `e2e/fixtures/` by a vite plugin, so the demo and the e2e suite read the SAME bytes
 // and a second copy cannot drift. `?fixture=` still overrides it.
 const COMPREHENSIVE_FIXTURE = 'comprehensive-word-element-test.docx';
-const defaultFixture = paginated ? COMPREHENSIVE_FIXTURE : 'with-tables.docx';
+const defaultFixture = composed || paginated ? COMPREHENSIVE_FIXTURE : 'with-tables.docx';
 const fixtureName = /^[\w.-]+\.docx$/.test(fixtureParam) ? fixtureParam : defaultFixture;
 
 const container = document.getElementById('app');
@@ -35,7 +40,10 @@ if (container) {
   const root = createRoot(container);
   void (async () => {
     let view: ReactNode;
-    if (paginated) {
+    if (composed) {
+      const { ComposedEditorDemo } = await import('../../shared/ComposedEditorDemo.tsx');
+      view = <ComposedEditorDemo fixtureUrl={`${base}${fixtureName}`} />;
+    } else if (paginated) {
       const { PaginatedSurfaceDemo } = await import('../../shared/PaginatedSurfaceDemo.tsx');
       view = <PaginatedSurfaceDemo fixtureUrl={`${base}${fixtureName}`} />;
     } else if (treeFirst) {

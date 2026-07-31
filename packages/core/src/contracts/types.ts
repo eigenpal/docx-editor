@@ -138,6 +138,17 @@ export interface RunFormatting {
   readonly highlight?: string;
   readonly fontFamily?: string;
   readonly fontSizePt?: number;
+  // ── Selection-level additions (additive, all optional) ─────────────────────────────
+  // `EditorSnapshot.formatting` and `getSelectionFormatting` carry the FULL derivable
+  // shape through this one type, so a toolbar reads alignment, style and script state
+  // from the same object as bold/italic. On a `Run` these stay absent: a run has no
+  // alignment or paragraph style of its own.
+  readonly superscript?: boolean;
+  readonly subscript?: boolean;
+  /** Paragraph alignment at the selection. `both` is OOXML's spelling of justify. */
+  readonly alignment?: 'left' | 'center' | 'right' | 'both';
+  /** Paragraph style id (`w:pStyle`) at the selection. */
+  readonly styleId?: string;
 }
 
 export interface Table {

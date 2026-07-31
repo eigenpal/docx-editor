@@ -24,8 +24,8 @@ import type {
 } from '@docx-editor.dev/core-contract/editor';
 import type { FormattingAction, SelectionFormatting } from './Toolbar';
 import { EditorToolbar } from './EditorToolbar';
-import { HorizontalRuler } from './ui/HorizontalRuler';
-import type { SectionProperties as ContractSectionProperties } from '../core-compat';
+import { HorizontalRuler, type RulerPageSetup } from './ui/HorizontalRuler';
+import { resolveColorToHex } from '../lib/colorResolver';
 import { PaginatedDocxEditor, type PaginatedDocxEditorHandle } from './PaginatedDocxEditor';
 
 export interface PaginatedDocxEditorShellProps {
@@ -175,16 +175,13 @@ export function PaginatedDocxEditorShell({
         // the requested size, and the picker then redisplayed that.
         return editor.setRunProperty('sz', { val: String(Math.round(action.value * 2)) });
       case 'textColor': {
-        // The picker emits a ColorValue OBJECT for text, not a string — reading it as a
-        // string made every colour pick a silent no-op.
+        // The picker emits a contract ColorValue OBJECT for text, not a string.
+        // Hex and theme values resolve to a concrete hex (theme slots against the
+        // Office defaults — the engine does not expose the document theme yet);
+        // `auto` has no hex and is refused rather than approximated.
         const value = action.value;
-        const raw =
-          typeof value === 'string'
-            ? value
-            : value && typeof value === 'object' && 'rgb' in value
-              ? String((value as { rgb?: string }).rgb ?? '')
-              : '';
-        const hex = hexOf(raw);
+        const hex =
+          typeof value === 'string' ? hexOf(value) : (resolveColorToHex(value, null) ?? null);
         return hex ? editor.setRunProperty('color', { val: hex }) : undefined;
       }
       case 'highlightColor': {
@@ -221,23 +218,21 @@ export function PaginatedDocxEditorShell({
   useImperativeHandle(ref, () => editorRef.current as PaginatedDocxEditorHandle, []);
 
   const zoom = scale === undefined ? 1 : scale / (96 / 72);
-  // The engine's section carries more than the ruler's contract does — header, footer and
-  // gutter offsets — so it is narrowed rather than the ruler being widened to know about
-  // page furniture it does not draw.
-  const contractSection: ContractSectionProperties | null = section
+  // The engine's section carries more than the ruler reads — header, footer and
+  // gutter offsets, columns — so it is narrowed to the contract's page-setup
+  // shape rather than the ruler being widened to know about page furniture it
+  // does not draw.
+  const rulerPageSetup: RulerPageSetup | null = section
     ? {
-        pageWidth: section.pageSize.widthTwips,
-        pageHeight: section.pageSize.heightTwips,
+        pageWidthTwips: section.pageSize.widthTwips,
+        pageHeightTwips: section.pageSize.heightTwips,
         orientation: section.landscape ? 'landscape' : 'portrait',
-        marginTop: section.margins.topTwips,
-        marginBottom: section.margins.bottomTwips,
-        marginLeft: section.margins.leftTwips,
-        marginRight: section.margins.rightTwips,
-        headerDistance: section.margins.headerTwips,
-        footerDistance: section.margins.footerTwips,
-        gutter: section.margins.gutterTwips,
-        columnCount: section.columns.count,
-        columnSpace: section.columns.gapTwips,
+        marginsTwips: {
+          top: section.margins.topTwips,
+          right: section.margins.rightTwips,
+          bottom: section.margins.bottomTwips,
+          left: section.margins.leftTwips,
+        },
       }
     : null;
 
@@ -304,9 +299,9 @@ export function PaginatedDocxEditorShell({
         className="docx-editor__scroll-container"
         style={{ flex: 1, minHeight: 0, overflow: 'auto', background: 'var(--doc-bg)' }}
       >
-        {contractSection ? (
+        {rulerPageSetup ? (
           <div style={{ display: 'flex', justifyContent: 'center', padding: '4px 0' }}>
-            <HorizontalRuler sectionProps={contractSection} zoom={zoom} />
+            <HorizontalRuler pageSetup={rulerPageSetup} zoom={zoom} />
           </div>
         ) : null}
         <PaginatedDocxEditor

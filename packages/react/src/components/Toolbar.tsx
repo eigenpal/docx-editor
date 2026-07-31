@@ -13,8 +13,10 @@
 import React, { useCallback, useEffect, useRef } from 'react';
 import { useTranslation } from '../i18n';
 import type { CSSProperties, ReactNode } from 'react';
-import type { ColorValue, ParagraphAlignment, Style, Theme } from '../core-compat';
-import { resolveColorToHex } from '../core-compat';
+import type { ColorValue, Theme } from '@docx-editor.dev/core-contract/contracts/editor';
+import { resolveColorToHex } from '../lib/colorResolver';
+import type { DocumentStyleSummary } from '../lib/stylePreview';
+import type { ParagraphAlignment } from './ui/AlignmentButtons';
 import { Button } from './ui/Button';
 import { Tooltip } from './ui/Tooltip';
 import { FontPicker } from './ui/FontPicker';
@@ -169,8 +171,8 @@ export interface ToolbarProps {
   showLineSpacingPicker?: boolean;
   /** Whether to show style picker (default: true) */
   showStylePicker?: boolean;
-  /** Document styles for the style picker */
-  documentStyles?: Style[];
+  /** Document styles for the style picker (`Editor.getDocumentStyles()`). */
+  documentStyles?: readonly DocumentStyleSummary[];
   /** Theme for the style picker / color picker theme matrix */
   theme?: Theme | null;
   /** Callback for print action. Set to enable the File > Print menu entry. */
@@ -955,11 +957,6 @@ export function Toolbar(explicitProps: ToolbarProps) {
 // RE-EXPORTED UTILITIES (from toolbarUtils.ts)
 // ============================================================================
 
-export {
-  getSelectionFormatting,
-  applyFormattingAction,
-  hasActiveFormatting,
-  mapHexToHighlightName,
-} from './toolbarUtils';
+export { getSelectionFormatting, hasActiveFormatting, mapHexToHighlightName } from './toolbarUtils';
 
 export default Toolbar;

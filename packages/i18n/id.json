@@ -192,7 +192,10 @@
       "lightBlue2": "Biru Muda 2",
       "lightMagenta": "Magenta Muda",
       "brightGreen": "Hijau Cerah",
-      "violet": "Ungu Violet"
+      "violet": "Ungu Violet",
+      "darkCyan": null,
+      "darkMagenta": null,
+      "lightGray": null
     }
   },
   "dialogs": {

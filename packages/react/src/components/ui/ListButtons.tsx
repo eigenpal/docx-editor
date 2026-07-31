@@ -10,7 +10,6 @@
 
 import React, { useState, useCallback } from 'react';
 import type { CSSProperties, ReactNode } from 'react';
-import type { NumberFormat } from '../../core-compat';
 import { MaterialSymbol } from './MaterialSymbol';
 import { useTranslation } from '../../i18n';
 
@@ -18,9 +17,9 @@ import { useTranslation } from '../../i18n';
 // TYPES
 // ============================================================================
 
-// List-state types live in core; re-exported here for backwards compat.
-export type { ListType, ListState } from '../../core-compat';
-import type { ListState } from '../../core-compat';
+// List-state types live in the shared lib; re-exported here for backwards compat.
+export type { ListType, ListState } from '../../lib/listState';
+import type { ListState } from '../../lib/listState';
 
 /**
  * Props for the ListButtons component
@@ -297,7 +296,7 @@ export function ListButtons({
 // UTILITY FUNCTIONS
 // ============================================================================
 
-// Pure list-state helpers live in core; re-exported here so the
+// Pure list-state helpers live in the shared lib; re-exported here so the
 // existing import surface keeps working.
 export {
   createDefaultListState,
@@ -309,7 +308,7 @@ export {
   getNextIndentLevel,
   getPreviousIndentLevel,
   toggleListType,
-} from '../../core-compat';
+} from '../../lib/listState';
 
 /**
  * Get CSS for list indent
@@ -331,10 +330,16 @@ export function getDefaultBulletForLevel(level: number): string {
 }
 
 /**
+ * The number formats the default list presets cycle through (OOXML
+ * `w:numFmt` values). Presentation-only vocabulary for this control.
+ */
+export type ListNumberFormat = 'decimal' | 'lowerLetter' | 'lowerRoman';
+
+/**
  * Get default number format for a level
  */
-export function getDefaultNumberFormatForLevel(level: number): NumberFormat {
-  const formats: NumberFormat[] = [
+export function getDefaultNumberFormatForLevel(level: number): ListNumberFormat {
+  const formats: ListNumberFormat[] = [
     'decimal',
     'lowerLetter',
     'lowerRoman',

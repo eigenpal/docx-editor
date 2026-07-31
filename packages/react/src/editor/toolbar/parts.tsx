@@ -1,0 +1,172 @@
+// The named simple toolbar parts, the parity-only pickers, save, and the separator.
+//
+// Each part is pinned to one slot, carrying that slot as a STATIC (`docxSlot`) so the
+// toolbar root can recognize it among children and replace the matching entry of the
+// default arrangement in place. The static is the marker on purpose — displayName is
+// stripped by minifiers and was never identity.
+//
+// Two part species live here:
+//
+// - `definePart(slot)`: a live `ToolbarButton` for an ICON-shaped chrome control. A
+//   slot the engine has not wired renders disabled with the engine's own reason — the
+//   registry's parity rule (visible, never dropped, never faked).
+// - `definePicker(slot)`: a DISABLED COMBOBOX-LOOKALIKE for a dropdown-shaped control
+//   whose behavior the engine does not own yet (`styles.style`,
+//   `review.editingMode`). It shows the registry's placeholder value and a chevron,
+//   exactly like the Vue registry toolbar's picker, and deliberately does nothing.
+
+import { useContext } from 'react';
+import { CHROME_UNAVAILABLE_KEY, type ChromeSlotId } from '@docx-editor.dev/core-contract/editor';
+import { useDocxEditor } from '../context';
+import { ToolbarContext, useToolbarLabel } from './toolbar-context';
+import {
+  ToolbarButton,
+  chromeControlForSlot,
+  chromeIcon,
+  guardToolbarMousedown,
+  type ToolbarButtonProps,
+} from './ToolbarButton';
+
+/** Props for the named parts (`DocxEditorToolbar.Bold`, ...): the slot is pinned. @public */
+export type ToolbarPartProps = Omit<ToolbarButtonProps, 'slot'>;
+
+export interface ToolbarPartComponent {
+  (props: ToolbarPartProps): ReturnType<typeof ToolbarButton>;
+  readonly docxSlot: ChromeSlotId;
+}
+
+/**
+ * Props for the non-button parts (pickers, steppers, color splits, save). @public
+ */
+export interface ToolbarSlotPartProps {
+  className?: string;
+  /** Render nothing — inside the default arrangement this removes the slot. */
+  hidden?: boolean;
+}
+
+/** A non-button part pinned to one slot. @public */
+export interface ToolbarSlotPartComponent {
+  (props: ToolbarSlotPartProps): ReturnType<typeof ToolbarButton>;
+  readonly docxSlot: ChromeSlotId;
+}
+
+function definePart(slot: ChromeSlotId): ToolbarPartComponent {
+  const Part = (props: ToolbarPartProps) => <ToolbarButton slot={slot} {...props} />;
+  return Object.assign(Part, { docxSlot: slot });
+}
+
+export const ToolbarUndo = definePart('history.undo');
+export const ToolbarRedo = definePart('history.redo');
+export const ToolbarBold = definePart('text.bold');
+export const ToolbarItalic = definePart('text.italic');
+export const ToolbarUnderline = definePart('text.underline');
+export const ToolbarStrike = definePart('text.strike');
+export const ToolbarLink = definePart('text.link');
+export const ToolbarClearFormatting = definePart('format.clear');
+export const ToolbarSuperscript = definePart('script.super');
+export const ToolbarSubscript = definePart('script.sub');
+export const ToolbarAlignLeft = definePart('alignment.left');
+export const ToolbarAlignCenter = definePart('alignment.center');
+export const ToolbarAlignRight = definePart('alignment.right');
+export const ToolbarAlignJustify = definePart('alignment.justify');
+export const ToolbarBulletList = definePart('list.bullet');
+export const ToolbarNumberedList = definePart('list.numbered');
+export const ToolbarOutdent = definePart('list.outdent');
+export const ToolbarIndent = definePart('list.indent');
+export const ToolbarImageInsert = definePart('image.insert');
+export const ToolbarImageProperties = definePart('image.properties');
+export const ToolbarTableInsert = definePart('table.insert');
+export const ToolbarComments = definePart('review.comments');
+
+/**
+ * A disabled combobox-lookalike for a dropdown-shaped control the engine does not
+ * drive yet. Mirrors the Vue registry toolbar's picker: the registry placeholder
+ * value, a chevron, and the unavailable reason for assistive technology. It is a
+ * <span>, not a <button> — there is no action to take, and faking one would claim a
+ * capability the engine does not have.
+ */
+function definePicker(slot: ChromeSlotId): ToolbarSlotPartComponent {
+  const Part = ({ className, hidden }: ToolbarSlotPartProps) => {
+    const label = useToolbarLabel();
+    if (hidden) return null;
+    const control = chromeControlForSlot(slot);
+    const text = label(control?.labelKey ?? slot);
+    const value = control?.valueKey ? label(control.valueKey) : (control?.valueText ?? '');
+    return (
+      <span
+        className={`docx-toolbar__picker${className ? ` ${className}` : ''}`}
+        data-slot={slot}
+        aria-disabled="true"
+        // A <span> takes no focus itself, but a mousedown still blurs the editor; the
+        // container guard covers this too — belt and braces like the Vue picker.
+        onMouseDown={guardToolbarMousedown}
+      >
+        {/* Dropdown-shaped controls can carry a leading glyph (the line-spacing
+            icon, the editing-mode pencil) ahead of the value text. */}
+        {chromeIcon(control?.paths)}
+        {value ? <span className="docx-toolbar__picker-value">{value}</span> : null}
+        <span className="docx-toolbar__picker-caret" aria-hidden="true">
+          ▾
+        </span>
+        <span className="ep-sr-only">{`${text} — ${label(CHROME_UNAVAILABLE_KEY)}`}</span>
+      </span>
+    );
+  };
+  return Object.assign(Part, { docxSlot: slot });
+}
+
+export const ToolbarStylePicker = definePicker('styles.style');
+export const ToolbarEditingMode = definePicker('review.editingMode');
+// Line spacing is dropdown-SHAPED in the chrome spec (icon + caret), so its
+// parity-only rendering is the picker lookalike, not a bare icon button.
+export const ToolbarLineSpacing = definePicker('list.lineSpacing');
+
+/**
+ * The save control. Save is not an engine command (`Editor.save()` returns bytes the
+ * HOST must do something with), so this part is live only when the toolbar was given
+ * an `onSave` handler — the same contract as the Vue registry toolbar.
+ */
+function ToolbarSaveImpl({ className, hidden }: ToolbarSlotPartProps) {
+  const editor = useDocxEditor();
+  const { onSave } = useContext(ToolbarContext);
+  const label = useToolbarLabel();
+  if (hidden) return null;
+  const control = chromeControlForSlot('file.save');
+  const text = label(control?.labelKey ?? 'file.save');
+  const disabled = !editor || !onSave;
+  return (
+    <button
+      type="button"
+      className={`docx-toolbar__button${className ? ` ${className}` : ''}`}
+      data-slot="file.save"
+      disabled={disabled}
+      {...(disabled ? { 'data-disabled': '' } : {})}
+      aria-label={text}
+      title={text}
+      onMouseDown={guardToolbarMousedown}
+      onClick={() => onSave?.()}
+    >
+      {chromeIcon(control?.paths)}
+    </button>
+  );
+}
+
+export const ToolbarSave: ToolbarSlotPartComponent = Object.assign(ToolbarSaveImpl, {
+  docxSlot: 'file.save' as ChromeSlotId,
+});
+
+/** Props for `DocxEditorToolbar.Separator`. @public */
+export interface ToolbarSeparatorProps {
+  className?: string;
+}
+
+/** A vertical rule between toolbar groups. @public */
+export function ToolbarSeparator({ className }: ToolbarSeparatorProps) {
+  return (
+    <div
+      role="separator"
+      aria-orientation="vertical"
+      className={`docx-toolbar__separator${className ? ` ${className}` : ''}`}
+    />
+  );
+}

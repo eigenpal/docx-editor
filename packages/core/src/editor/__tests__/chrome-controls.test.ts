@@ -5,6 +5,9 @@
 // be actionable. A dropped control understates the parity gap; an extra enabled one
 // claims a capability the engine does not have. Both adapters render from this
 // descriptor, so asserting it here covers React and Vue at once.
+//
+// The slot-id vocabulary (`${groupId}.${controlId}`) is public API forever; the
+// pinned lists below are the breaking-change tripwire.
 
 import { describe, expect, test } from 'bun:test';
 import {
@@ -12,51 +15,105 @@ import {
   CHROME_MENUS,
   CHROME_UNAVAILABLE_KEY,
   chromeControlCount,
+  chromeSlotId,
+  type ChromeSlotId,
 } from '../chrome-controls.ts';
+import { commandForSlot } from '../toolbar-commands.ts';
 
-/** The ten legacy toolbar groups, from Toolbar.tsx at ref 9bb06c38, plus file/save. */
+/**
+ * The toolbar groups in the chrome spec's bar order: history, zoom, styles, font,
+ * then the text group carrying colour and highlight (B I U S · A · pen · link),
+ * script, the merged-rendering alignment group, the list group carrying line
+ * spacing, standalone clear, and the trailing review controls — with the
+ * contextual image/table/file groups (not in the default bar) closing the
+ * registry.
+ */
 const EXPECTED_GROUPS = [
   'history',
   'zoom',
   'styles',
   'font',
-  'textFormatting',
+  'text',
   'script',
   'alignment',
-  'listFormatting',
+  'list',
+  'format',
+  'review',
   'image',
   'table',
-  'review',
   'file',
 ];
+
+/** THE public slot taxonomy. A change here is a breaking API change — rename knowingly. */
+const EXPECTED_SLOTS: readonly ChromeSlotId[] = [
+  'history.undo',
+  'history.redo',
+  'zoom.level',
+  'styles.style',
+  'font.family',
+  'font.size',
+  'text.bold',
+  'text.italic',
+  'text.underline',
+  'text.strike',
+  'text.color',
+  'text.highlight',
+  'text.link',
+  'script.super',
+  'script.sub',
+  'alignment.left',
+  'alignment.center',
+  'alignment.right',
+  'alignment.justify',
+  'list.bullet',
+  'list.numbered',
+  'list.outdent',
+  'list.indent',
+  'list.lineSpacing',
+  'format.clear',
+  'review.comments',
+  'review.editingMode',
+  'image.insert',
+  'image.properties',
+  'table.insert',
+  'file.save',
+];
+
+const allSlots = (): ChromeSlotId[] =>
+  CHROME_GROUPS.flatMap((g) => g.controls.map((c) => chromeSlotId(g, c)));
 
 describe('legacy chrome descriptor', () => {
   test('carries every legacy toolbar group, in legacy order', () => {
     expect(CHROME_GROUPS.map((g) => g.id)).toEqual(EXPECTED_GROUPS);
   });
 
+  test('the slot taxonomy is exactly the pinned public vocabulary, in order', () => {
+    expect(allSlots()).toEqual([...EXPECTED_SLOTS]);
+  });
+
   test('only undo, redo, bold, italic may be commands, and only save may save', () => {
-    const commands = CHROME_GROUPS.flatMap((g) =>
-      g.controls
-        .filter((c) => c.state.kind === 'command')
-        .map((c) => (c.state as { command: string }).command)
+    const commandSlots = CHROME_GROUPS.flatMap((g) =>
+      g.controls.filter((c) => c.state.kind === 'command').map((c) => chromeSlotId(g, c))
     );
     // Exactly the four M6V.1 permits — no more, and none missing.
-    expect([...commands].sort()).toEqual(['bold', 'italic', 'redo', 'undo']);
+    expect([...commandSlots].sort()).toEqual([
+      'history.redo',
+      'history.undo',
+      'text.bold',
+      'text.italic',
+    ]);
+    // Every actionable chrome control resolves to a real engine command.
+    for (const slot of commandSlots) expect(commandForSlot(slot)).not.toBeNull();
 
-    const saves = CHROME_GROUPS.flatMap((g) =>
-      g.controls.filter((c) => c.state.kind === 'save')
-    );
+    const saves = CHROME_GROUPS.flatMap((g) => g.controls.filter((c) => c.state.kind === 'save'));
     expect(saves).toHaveLength(1);
   });
 
-  test('underline is present but NOT actionable', () => {
-    // Underline is the trap: it looks like bold and italic, but `RunProps.underline`
-    // is a boolean while `w:u` carries a style, so enabling it would either throw on
-    // save or silently downgrade a double underline. It must be visible and inert.
-    const underline = CHROME_GROUPS.flatMap((g) => g.controls).find(
-      (c) => c.id === 'underline'
-    );
+  test('underline is present but NOT actionable in the chrome', () => {
+    // Underline stays visible and inert in the M6V.1 chrome. The COMMAND exists
+    // (`commandForSlot('text.underline')` is wired), but enabling the chrome control is a
+    // deliberate product decision the descriptor has not taken.
+    const underline = CHROME_GROUPS.flatMap((g) => g.controls).find((c) => c.id === 'underline');
     expect(underline).toBeDefined();
     expect(underline!.state.kind).toBe('parityOnly');
   });
@@ -74,9 +131,31 @@ describe('legacy chrome descriptor', () => {
     expect(CHROME_UNAVAILABLE_KEY).toBe('formattingBar.unavailableInPreview');
   });
 
-  test('control ids are unique, so a testid cannot collide', () => {
-    const ids = CHROME_GROUPS.flatMap((g) => g.controls.map((c) => c.id));
-    expect(new Set(ids).size).toBe(ids.length);
+  test('slot ids are unique, so a testid cannot collide', () => {
+    // Control ids alone are NOT globally unique (`image.insert` / `table.insert`);
+    // uniqueness — and every consumer key — lives at the slot level.
+    const slots = allSlots();
+    expect(new Set(slots).size).toBe(slots.length);
+  });
+
+  test('control ids are unique within their group', () => {
+    for (const group of CHROME_GROUPS) {
+      const ids = group.controls.map((c) => c.id);
+      expect(new Set(ids).size, `group ${group.id}`).toBe(ids.length);
+    }
+  });
+
+  test('ids are short lowercaseCamel and never repeat their group name', () => {
+    for (const group of CHROME_GROUPS) {
+      expect(group.id).toMatch(/^[a-z][a-zA-Z]*$/);
+      for (const c of group.controls) {
+        expect(c.id, `${group.id}.${c.id}`).toMatch(/^[a-z][a-zA-Z]*$/);
+        expect(
+          c.id.toLowerCase().includes(group.id.toLowerCase()),
+          `${group.id}.${c.id} repeats its group name`
+        ).toBe(false);
+      }
+    }
   });
 
   test('icon controls carry at least one path, pickers carry none', () => {

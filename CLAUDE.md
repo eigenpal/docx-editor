@@ -19,24 +19,77 @@ The sole active production authority is
 `openspec/changes/typed-ooxml-paragraph-editor/`. Superseded active proposals
 are not requirements or task-sequencing authority.
 
-## Current engine work
+## Architecture — one pipeline
 
-The active slice is paragraph load, edit, layout, interaction, save, and reopen:
+There is ONE preservation model and ONE pipeline:
 
-`bounded OPC/XML parse -> typed + generic ordered OOXML tree -> DocumentStore ->
-derived indexes -> { EditorBinding -> ProseMirror · semantic layout -> safe DOM
-+ semantic interaction } -> normalized OOXML save`
+`bytes -> readOoxmlPackage (bounded OPC/XML) -> canonical typed+generic OoxmlNode
+tree per part -> TreeDocumentStore -> semantic-layout -> semantic-paint (painted
+pages ARE the editable surface) -> normalizing serializeOoxmlPart save`
 
-- The ordered OOXML tree is canonical. `store.apply(op)` is the only mutation
-  path; indexes and caches are revision-tagged projections.
-- `EditorBinding` maps ProseMirror transactions to `DocOp`s. Save and layout
-  never read ProseMirror or DOM geometry.
-- Layout owns page, paragraph-fragment, line, style-span, caret, selection, and
-  hit-test data. DOM output only paints those records.
-- Prove the slice in a private React harness first. Add paired React/Vue
-  production hosts only after the engine behavior stabilizes.
-- Tables, drawings, page furniture, notes, fields, collaboration, export,
-  server bindings, and the public object-model expansion remain deferred.
+Decisions:
+
+- **Canonical tree**: typed kinds where layout needs them (paragraph/run/table
+  vocabulary); everything else is a lossless `generic` node. Invalid/misplaced
+  known elements demote to generic. Unknown content never locks editing.
+- **Fidelity**: structural, gated by the D9 oracles (`canonicalOoxmlFingerprint`
+  + save/reopen `semanticDigest`). Modeled XML parts re-emit normalized;
+  byte identity applies to non-XML parts only.
+- **Mutation**: `TreeDocumentStore.transact` over `TreeDocOp`s (node id +
+  UTF-16 offset) is the only write path; the node index makes cell/nested
+  paragraphs ordinary. Cross-cell joins refused (`not-adjacent-siblings`).
+- **Layout** (`semantic-layout.ts`): DOM-free, injected `TextMeasurer`, points
+  everywhere (twips convert at property-read boundaries). `storyBlocks` walks
+  body/hdr/ftr roots and flattens block SDTs. Tables: row pagination,
+  header-row repeats, vMerge, clamped gridSpan (security guards live with the
+  code). Headers/footers: laid out once per variant at flow height, attached
+  per page. Incremental: per-block cache keys + flow checkpoints +
+  convergence; a no-change pass returns previous pages by identity.
+- **Paint/interaction**: painted pages are contenteditable but the DOM is a
+  picture — browser mutations are prevented and re-expressed as tree ops.
+  Selection maps only through `data-paragraph-id`/`data-start`. Page furniture
+  is `contenteditable=false` + `[data-docx-hf]`, excluded from selection.
+- **`createDocxEditor`** (`core/src/editor/docx-editor.ts`): full `Editor`
+  contract over the surface; unimplemented reads return typed empty values
+  (the `isActive` precedent). `snapshot()` is version-cached — same reference
+  until state moves, sub-objects reference-stable (`useSyncExternalStore`
+  contract); `perf` sits outside the snapshot. `attach(el)`/`detach()` split
+  creation from mounting; detach remounts from saved bytes (undo/caret reset).
+  Real derived reads: `getDocumentFonts/Styles/Outline`, formatting, page setup.
+- **Chrome registry** (`core/src/editor/chrome-controls.ts`): `CHROME_GROUPS`
+  is the toolbar taxonomy for both adapters; `ChromeSlotId` (`text.bold`,
+  `font.family`, …) is public API — renames are breaking.
+  `commandForSlot`/`commandForSlotValue` is the command table;
+  `toolbarCommandState`/`runToolbarCommand` provide shared can-before-exec
+  state. Unwired slots render disabled with the engine's reason.
+
+## React adapter — provider-first, everything is hooks
+
+`DocxEditor.Root` (owns the instance; created in an effect, StrictMode-safe,
+container-less) → `DocxEditor.Viewport` (renders the engine's load-bearing
+scroll classes) → `DocxEditor.Content` (attach/detach in a layout effect).
+All chrome — ours and consumers' — is hook consumers:
+
+- `useDocxEditor()`, `useEditorState(selector, isEqual?)` (one multiplexed
+  subscription, slice memoization — a page selector must NOT re-render on a
+  bold toggle), `useEditorCommand(slotId)` → `{execute, isActive, isEnabled,
+  disabledReason}`, `useEditorEvent`, `useFontFamily`.
+- `DocxEditor.Toolbar`: default arrangement derives FROM `CHROME_GROUPS` (never
+  hand-listed). Customization ladder: `className`/`data-active` CSS → `icon`
+  prop → `asChild` (in-tree Slot merges wiring onto the consumer's element) →
+  in-place slot override (a part child replaces its slot; `hidden` removes;
+  `preset={false}` opts out) → raw hooks. Complex parts are compounds
+  (`FontFamily.Trigger/Content/Item`) over a part-level context.
+- `<DocxEditor>` (props + the 7-member `DocxEditorRef`) is sugar over the same
+  primitives — parity-contract gated, do not widen the ref.
+- Toolbar/chrome mousedown must `preventDefault()` (skip INPUT/SELECT/
+  TEXTAREA) or it steals the caret.
+- Public surface language: describe capabilities, never engine history; no
+  implementation names (e.g. "tree") in exported symbols.
+
+Out of scope so far: structural table ops (insert row/column, merge), HF
+editing, comments/tracked-changes derivation, caret scroll-into-view,
+zoom-without-remount, the Vue twin of provider/hooks/toolbar.
 
 ## Verify
 

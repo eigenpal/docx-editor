@@ -1,10 +1,13 @@
 import React, { useEffect, useState } from 'react';
-import type { HeadingInfo } from '../core-compat';
+import type { Editor } from '@docx-editor.dev/core-contract/contracts/editor';
 import { MaterialSymbol } from './ui/Icons';
 import { useTranslation } from '../i18n';
 
-/** @deprecated Use HeadingInfo from utils/headingCollector instead */
-export type OutlineHeading = HeadingInfo;
+/**
+ * One heading of the engine's outline (`Editor.getOutline()`): text, level,
+ * and the block id `Editor.scrollToBlock` accepts. Derived from the contract.
+ */
+export type OutlineHeading = ReturnType<Editor['getOutline']>[number];
 
 // Outline panel geometry (px). Only the *_RESERVED_SPACE values leak out —
 // the editor uses them to size the layout so the centered page never sits
@@ -28,8 +31,9 @@ export const OUTLINE_BUTTON_RESERVED_SPACE =
   OUTLINE_BUTTON_LEFT_OFFSET + OUTLINE_BUTTON_BOX + OUTLINE_PAGE_GAP;
 
 interface DocumentOutlineProps {
-  headings: HeadingInfo[];
-  onHeadingClick: (pmPos: number) => void;
+  headings: readonly OutlineHeading[];
+  /** Called with the heading's block id — feed it to `Editor.scrollToBlock`. */
+  onHeadingClick: (blockId: string) => void;
   onClose: () => void;
   topOffset?: number;
   /** Horizontal scroll offset of the editor — outline slides left with the doc. */
@@ -149,14 +153,14 @@ export const DocumentOutline = React.memo(function DocumentOutline({
         ) : (
           headings.map((heading, index) => (
             <div
-              key={`${heading.pmPos}-${index}`}
+              key={`${heading.blockId}-${index}`}
               style={{
                 marginLeft: (heading.level - minLevel) * 16,
               }}
             >
               <button
                 className="docx-outline-heading-btn"
-                onClick={() => onHeadingClick(heading.pmPos)}
+                onClick={() => onHeadingClick(heading.blockId)}
                 style={{
                   display: 'block',
                   width: '100%',

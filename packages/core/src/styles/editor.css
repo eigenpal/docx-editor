@@ -2337,3 +2337,526 @@
 .docx-paginated-surface .docx-pages {
   outline: none;
 }
+
+/* ========================================================================
+ * COMPOUND TOOLBAR (`docx-toolbar` family) — the composition API's default
+ * chrome bar, the chrome spec's visual recipe:
+ *
+ * - bar: `flex items-center px-2 py-1 bg-muted rounded-full min-h-[36px]`
+ *   — the neutral #f1f3f4-family pill.
+ * - buttons: 28px ghost squares (h-7 w-7), muted
+ *   glyphs, subtle hover, the dark active slab (`.ep-toolbar-toggle`
+ *   [data-active] → --doc-toggle-active tokens), disabled at opacity .3.
+ * - pickers (style, font family, editing mode): TRANSPARENT triggers with a
+ *   chevron (h-8 rounded px-2 bg-transparent hover:bg-muted/80),
+ *   not bordered boxes.
+ * - font size: `− [boxed value] +` — only the VALUE is boxed
+ *   (`h-7 w-10 border bg-doc-bg-input rounded-none`).
+ * - dropdown card: `rounded-lg border bg-popover shadow-lg` with `p-1` viewport,
+ *   items `rounded px-2 py-1.5 text-sm hover:bg-muted` with a right-edge ✓,
+ *   group labels `px-2 py-1.5 text-xs font-medium text-muted-foreground`.
+ *   --radius is 0.5rem, so the card radius is 8px.
+ *
+ * SINGLE SOURCE OF TRUTH: both adapters get these rules from this sheet;
+ * adapters add no toolbar CSS of their own (`bun run check:adapter-css-thin`).
+ * Colors are exclusively `--doc-*` tokens, so dark mode re-themes the bar
+ * through the token overrides above — no rules are repeated per theme.
+ * ======================================================================== */
+
+.docx-toolbar {
+  display: flex;
+  align-items: center;
+  /* NOT overflow-scroll like the chrome spec's pill: this toolbar hosts LIVE popups
+   * (font menu, swatch grids) positioned absolutely inside their parts, and any
+   * overflow clipping on the bar would cut them off. Narrow viewports wrap to a
+   * second row instead. */
+  flex-wrap: wrap;
+  flex-shrink: 0;
+  gap: 2px;
+  min-height: 36px;
+  padding: 4px 8px;
+  /* The bar fill is the spec's `bg-muted` — hsl(210 40% 96.1%),
+   * a faint blue-gray, NOT the neutral #f1f3f4 hover gray. The --muted bridge var
+   * is defined in this sheet for light and dark, so this tracks dark mode too. */
+  background: hsl(var(--muted));
+  border-radius: 9999px;
+  color: var(--doc-text);
+  font:
+    400 13px/1 -apple-system,
+    BlinkMacSystemFont,
+    'Segoe UI',
+    Roboto,
+    sans-serif;
+}
+
+.docx-toolbar__button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  width: 28px;
+  height: 28px;
+  flex: none;
+  padding: 0;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  /* Glyphs are muted at rest (`text-muted-foreground`), full on hover. */
+  color: var(--doc-text-muted);
+  cursor: pointer;
+  transition:
+    background-color 0.12s ease,
+    color 0.12s ease;
+}
+
+.docx-toolbar__button:hover:not(:disabled) {
+  background: var(--doc-border);
+  color: var(--doc-text);
+}
+
+/* The dark active slab for toggles (B/I/U...): --doc-toggle-active-*. */
+.docx-toolbar__button[data-active],
+.docx-toolbar__button[data-active]:hover {
+  background: var(--doc-toggle-active-bg);
+  color: var(--doc-toggle-active-fg);
+}
+
+.docx-toolbar__button:disabled {
+  opacity: 0.3;
+  cursor: default;
+}
+
+/* Separator: `w-px h-6 bg-border mx-1.5`. */
+.docx-toolbar__separator {
+  width: 1px;
+  height: 24px;
+  flex: none;
+  margin: 0 6px;
+  background: var(--doc-border);
+}
+
+/* Picker (style picker, editing mode, line spacing): the spec's TRANSPARENT
+ * trigger — value (and/or glyph) plus a small chevron, hover-filled, no border.
+ * Parity-only pickers are aria-disabled <span>s — there is no action. */
+.docx-toolbar__picker {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 32px;
+  padding: 0 8px;
+  flex: none;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--doc-text);
+  white-space: nowrap;
+  user-select: none;
+}
+
+.docx-toolbar__picker[aria-disabled='true'] {
+  opacity: 0.5;
+}
+
+.docx-toolbar__picker-caret {
+  font-size: 10px;
+  color: var(--doc-text-muted);
+}
+
+/* The font-family compound: the trigger is the transparent picker trigger
+ * ("Arial ∨"); the popup is the shared dropdown card. */
+.docx-toolbar__font-family {
+  flex: none;
+}
+
+.docx-toolbar__font-family-trigger {
+  display: inline-flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 4px;
+  height: 32px;
+  min-width: 64px;
+  max-width: 180px;
+  padding: 0 8px;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--doc-text);
+  font: inherit;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  cursor: pointer;
+  transition: background-color 0.12s ease;
+}
+
+.docx-toolbar__font-family-trigger::after {
+  content: '▾';
+  font-size: 10px;
+  color: var(--doc-text-muted);
+}
+
+.docx-toolbar__font-family-trigger:hover:not(:disabled) {
+  background: var(--doc-border);
+}
+
+.docx-toolbar__font-family-trigger:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+/* ── The shared dropdown card: white surface
+ * card, 8px radius, soft layered shadow, a 4px inner viewport, small gray
+ * semibold group headings, roomy hover rows, and the ✓ on the selected row's
+ * right edge — selection is the checkmark, never a heavy background slab. */
+.docx-toolbar__menu {
+  background: var(--doc-surface);
+  border: 1px solid var(--doc-border);
+  border-radius: 8px;
+  box-shadow: var(--doc-shadow-lg);
+  padding: 4px;
+  color: var(--doc-text);
+}
+
+.docx-toolbar__menu-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-width: 112px;
+  text-align: left;
+  padding: 7px 10px;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--doc-text);
+  font-size: 13px;
+  line-height: 18px;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background-color 0.1s ease;
+}
+
+.docx-toolbar__menu-item:hover:not(:disabled) {
+  background: var(--doc-bg-hover);
+}
+
+.docx-toolbar__menu-item:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+/* Group heading: small gray semibold. */
+.docx-toolbar__menu-label {
+  padding: 8px 10px 4px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--doc-text-muted);
+  user-select: none;
+}
+
+.docx-toolbar__menu-separator {
+  height: 1px;
+  margin: 4px 0;
+  background: var(--doc-border);
+}
+
+/* The selected row's ✓, pushed to the right edge. */
+.docx-toolbar__menu-check {
+  margin-left: auto;
+  padding-left: 16px;
+  font-size: 12px;
+  color: var(--doc-text);
+}
+
+.docx-toolbar__font-family-content {
+  margin-top: 4px;
+}
+
+.docx-toolbar__font-family-item {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  text-align: left;
+  padding: 7px 10px;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--doc-text);
+  font-size: 13px;
+  line-height: 18px;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background-color 0.1s ease;
+}
+
+/* The current font gets the right-edge ✓ only — no filled slab; hover stays
+ * the ordinary subtle wash. */
+.docx-toolbar__font-family-item:hover {
+  background: var(--doc-bg-hover);
+}
+
+/* Steppers (font size, zoom): ghost − / + around the middle; no outer border.
+ * Only the font-size value is boxed; zoom's middle is a "%" + caret button. */
+.docx-toolbar__stepper {
+  display: inline-flex;
+  align-items: center;
+  height: 28px;
+  flex: none;
+}
+
+.docx-toolbar__stepper-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--doc-text-muted);
+  font-size: 14px;
+  line-height: 1;
+  cursor: pointer;
+  transition: background-color 0.12s ease;
+}
+
+.docx-toolbar__stepper-button:hover:not(:disabled) {
+  background: var(--doc-border);
+  color: var(--doc-text);
+}
+
+.docx-toolbar__stepper-button:disabled {
+  opacity: 0.3;
+  cursor: default;
+}
+
+.docx-toolbar__stepper-value {
+  min-width: 34px;
+  text-align: center;
+  color: var(--doc-text);
+  font-variant-numeric: tabular-nums;
+  user-select: none;
+}
+
+/* The boxed font-size value: `h-7 w-10 border bg-doc-bg-input rounded-none`. */
+.docx-toolbar__stepper-value--boxed {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  min-width: 40px;
+  height: 28px;
+  border: 1px solid var(--doc-border);
+  border-radius: 0;
+  background: var(--doc-surface);
+  font-size: 13px;
+}
+
+/* The zoom middle: transparent "%" trigger with a caret. */
+.docx-toolbar__stepper-value--menu {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  min-width: 52px;
+  height: 28px;
+  padding: 0 4px;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--doc-text);
+  font-size: 12px;
+  cursor: pointer;
+  transition: background-color 0.12s ease;
+}
+
+.docx-toolbar__stepper-value--menu:hover:not(:disabled) {
+  background: var(--doc-border);
+}
+
+.docx-toolbar__zoom {
+  position: relative;
+  display: inline-flex;
+  flex: none;
+}
+
+.docx-toolbar__zoom-menu {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  z-index: 30;
+  margin-top: 4px;
+  min-width: 96px;
+}
+
+/* The merged alignment dropdown: current-alignment icon + caret; the popup is
+ * the four-in-a-row panel with the active option highlighted. */
+.docx-toolbar__alignment {
+  position: relative;
+  display: inline-flex;
+  flex: none;
+}
+
+.docx-toolbar__alignment-trigger {
+  width: auto;
+  padding: 0 3px 0 5px;
+  gap: 1px;
+}
+
+.docx-toolbar__alignment-popup {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  z-index: 30;
+  margin-top: 4px;
+  display: flex;
+  gap: 2px;
+  padding: 6px;
+}
+
+.docx-toolbar__alignment-option {
+  width: 32px;
+  height: 32px;
+  color: var(--doc-text);
+}
+
+/* Panel active state: primary tint, NOT the bar's dark slab. */
+.docx-toolbar__alignment-option[data-active],
+.docx-toolbar__alignment-option[data-active]:hover {
+  background: var(--doc-primary-light);
+  color: var(--doc-primary);
+}
+
+/* Split colour controls (font colour, highlight): the two-half button —
+ * a 28px main half stacking the glyph over a 16×4 colour bar, and an 18px
+ * chevron half; a 2px gap sells "two buttons" without a divider line. */
+.docx-toolbar__colorsplit {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  flex: none;
+}
+
+.docx-toolbar__colorsplit-main {
+  flex-direction: column;
+  gap: 0;
+}
+
+.docx-toolbar__colorsplit-bar {
+  width: 16px;
+  height: 4px;
+  margin-top: -2px;
+  border-radius: 1px;
+  pointer-events: none;
+}
+
+.docx-toolbar__colorsplit-caret {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 28px;
+  padding: 0;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--doc-text-muted);
+  font-size: 10px;
+  cursor: pointer;
+  transition: background-color 0.12s ease;
+}
+
+.docx-toolbar__colorsplit-caret:hover:not(:disabled) {
+  background: var(--doc-border);
+}
+
+.docx-toolbar__colorsplit-caret:disabled {
+  opacity: 0.3;
+  cursor: default;
+}
+
+.docx-toolbar__swatch-popup {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  z-index: 30;
+  margin-top: 4px;
+  padding: 10px;
+  display: grid;
+  grid-template-columns: repeat(8, 20px);
+  gap: 4px;
+  background: var(--doc-surface);
+  border: 1px solid var(--doc-border);
+  border-radius: 8px;
+  box-shadow: var(--doc-shadow-lg);
+}
+
+.docx-toolbar__swatch {
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: 1px solid var(--doc-border-dark);
+  border-radius: 2px;
+  cursor: pointer;
+  transition:
+    transform 0.1s,
+    border-color 0.1s;
+}
+
+.docx-toolbar__swatch:hover {
+  transform: scale(1.15);
+  border-color: var(--doc-text);
+}
+
+/* ── Vue registry-toolbar (`ep-toolbar` family) additions for the same shapes:
+ * the parity stepper lookalike and the merged alignment dropdown. */
+.ep-toolbar__stepper {
+  display: inline-flex;
+  align-items: center;
+  height: 28px;
+  flex: none;
+}
+
+.ep-toolbar__stepper[aria-disabled='true'] {
+  opacity: 0.5;
+}
+
+.ep-toolbar__stepper-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 28px;
+  color: var(--doc-text-muted);
+  font-size: 14px;
+  user-select: none;
+}
+
+.ep-toolbar__stepper-value {
+  min-width: 34px;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+  user-select: none;
+}
+
+.ep-toolbar__alignment {
+  position: relative;
+  display: inline-flex;
+}
+
+.ep-toolbar__alignment-popup {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  z-index: 30;
+  margin-top: 4px;
+  display: flex;
+  gap: 2px;
+  padding: 6px;
+  background: var(--doc-surface);
+  border: 1px solid var(--doc-border);
+  border-radius: 8px;
+  box-shadow: var(--doc-shadow-lg);
+}

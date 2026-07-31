@@ -282,11 +282,13 @@ export interface Editor {
    * legacy adapter answered it by reading a ProseMirror `EditorState` directly, which the
    * greenfield architecture forbids in adapters.
    *
-   * DELIBERATE PLACEHOLDER: this returns `false` for every command today. The wiring is
-   * what matters first — adapters read active state through the public facade, so filling
-   * this in later lights up both toolbars with no adapter change. It must never return a
-   * value it has not actually derived from canonical state; `false` is the honest answer
-   * while the derivation does not exist.
+   * The derivation EXISTS for marks and alignment: `toggleMark` bold/italic/underline/
+   * strike answers from the snapshot's selection formatting (Word's agreement rule — true
+   * only when the WHOLE selection carries the mark), and `setAlignment` compares the
+   * command's `align` (with justify↔`both` mapped the way `exec` writes it) to the
+   * selection's paragraph alignment. Every other command still returns `false`: it must
+   * never return a value it has not actually derived from canonical state, and `false` is
+   * the honest answer while a derivation does not exist.
    */
   isActive(command: EditorCommand, options?: { scope?: EditorScope }): boolean;
 
@@ -768,6 +770,13 @@ export interface EditorSnapshot {
   readonly table: TableContext | null;
   readonly image: ImageContext | null;
   readonly page: { readonly current: number; readonly total: number };
+  /**
+   * Whether undo/redo have anything to apply, derived from the session's history.
+   * Optional and additive: an implementation that has not derived them omits them,
+   * and a consumer treats absent as `false` — the honest empty answer.
+   */
+  readonly canUndo?: boolean;
+  readonly canRedo?: boolean;
 }
 
 export interface ImageContext {

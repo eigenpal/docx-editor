@@ -12,7 +12,16 @@ import { join } from 'node:path';
 const VUE_SRC = join(import.meta.dir, '..', 'src');
 const REACT_SRC = join(import.meta.dir, '..', '..', 'react', 'src');
 const editorSource = readFileSync(join(VUE_SRC, 'DocxEditor.ts'), 'utf8');
-const reactEditorSource = readFileSync(join(REACT_SRC, 'components', 'DocxEditor.tsx'), 'utf8');
+// The React host is sugar over its provider-first composition primitives, so the shared
+// wiring (surface classes, setZoom) lives across the sugar component and those files.
+const reactEditorSource = [
+  join(REACT_SRC, 'components', 'DocxEditor.tsx'),
+  join(REACT_SRC, 'editor', 'DocxEditorRoot.tsx'),
+  join(REACT_SRC, 'editor', 'DocxEditorViewport.tsx'),
+  join(REACT_SRC, 'editor', 'DocxEditorContent.tsx'),
+]
+  .map((path) => readFileSync(path, 'utf8'))
+  .join('\n');
 
 describe('Vue tree-lane wiring (phase 3)', () => {
   test('the editor is created through the composition root facade', () => {

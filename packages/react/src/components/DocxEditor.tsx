@@ -1,26 +1,34 @@
 import { forwardRef, useEffect, useRef, useState } from 'react';
-import type { CSSProperties } from 'react';
+import type { CSSProperties, ForwardRefExoticComponent, RefAttributes } from 'react';
 import type { Editor } from '@docx-editor.dev/core-contract/contracts/editor';
-import { createDocxEditor } from '@docx-editor.dev/core-contract/editor';
 import { prefersColorSchemeDark, resolveIsDark, subscribeSystemDark } from '../lib/colorMode';
+import { useDocxEditor } from '../editor/context';
+import { DocxEditorContent } from '../editor/DocxEditorContent';
+import { DocxEditorRoot } from '../editor/DocxEditorRoot';
+import { DocxEditorViewport } from '../editor/DocxEditorViewport';
 import { useDocxEditorRefApi } from './DocxEditor/hooks/useDocxEditorRefApi';
+import { DocxEditorToolbar } from '../editor/toolbar';
+import { DocxEditorHorizontalRuler, DocxEditorVerticalRuler } from '../editor/DocxEditorRulers';
+import { DocxEditorDocumentOutline } from '../editor/DocxEditorOutline';
 import type { DocxEditorProps, DocxEditorRef } from '../types';
 
 /**
  * React host for the docx editor.
  *
- * THIN, mirroring `PaginatedDocxEditor`: the host owns a container element, the facade's
- * lifetime, and prop-to-facade forwarding — nothing else. `createDocxEditor` implements
- * the full `Editor` contract over the engine-owned paginated surface, which paints its
- * own pages into the container and owns caret, selection, and hit testing internally, so
- * the adapter measures nothing, paints nothing, and derives no geometry.
+ * SUGAR over the composition primitives, not a parallel implementation:
+ * `DocxEditor.Root` owns the facade's lifetime, `DocxEditor.Viewport` is the scroll
+ * container, `DocxEditor.Content` is the mount point the engine paints pages into.
+ * This component composes exactly those three (plus the optional `t`-gated title bar
+ * and the imperative ref bridge), so a host that outgrows the packaged chrome drops
+ * down to the same primitives without behavior change.
  *
  * Chrome is deliberately minimal for now: the full application chrome (toolbar, rulers,
  * sidebars) reads engine-published display and geometry state the facade answers with
  * typed empty values today, and rendering controls against empty state would show dead
  * chrome positioned on nothing. So a `t`-supplied host gets the title bar (slots,
- * editable name, save) above the surface; the rest of the chrome follows as the facade's
- * derivations land.
+ * editable name, save) above the painted document; the rest of the chrome follows as
+ * the facade's derivations land — or is built by the host from the hooks
+ * (`useEditorState`, `useEditorCommand`) today.
  */
 
 /**
@@ -65,141 +73,158 @@ const TITLE_INPUT_STYLE: CSSProperties = {
   padding: '2px 6px',
 };
 
-export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
-  function DocxEditor(props, ref) {
-    const {
-      document: doc,
-      fonts,
-      className,
-      t,
-      title,
-      onTitleChange,
-      renderTitleBarLeft,
-      renderTitleBarRight,
-      colorMode = 'light',
-    } = props;
+/**
+ * Bridges the context-published editor into the seven-member imperative handle. A
+ * child of `Root` rather than logic in the sugar component, so the handle reads the
+ * SAME instance every other consumer sees.
+ */
+function DocxEditorRefBridge({ forwardedRef }: { forwardedRef: React.Ref<DocxEditorRef> }) {
+  const editor = useDocxEditor();
+  const editorRef = useRef<Editor | null>(null);
+  editorRef.current = editor;
+  useDocxEditorRefApi({ ref: forwardedRef, editorRef });
+  return null;
+}
 
-    const containerRef = useRef<HTMLDivElement | null>(null);
-    const editorRef = useRef<Editor | null>(null);
+const DocxEditorImpl = forwardRef<DocxEditorRef, DocxEditorProps>(function DocxEditor(props, ref) {
+  const {
+    document: doc,
+    fonts,
+    className,
+    t,
+    title,
+    onTitleChange,
+    renderTitleBarLeft,
+    renderTitleBarRight,
+    colorMode = 'light',
+    author,
+    locale,
+    mode,
+    zoom,
+    onReady,
+    onChange,
+    onFontError,
+    onSave,
+  } = props;
 
-    // Latest props/callbacks, read inside effects without retriggering them.
-    const propsRef = useRef(props);
-    propsRef.current = props;
+  // Chrome colour mode: 'system' subscribes to the OS setting. Only the chrome
+  // root's `.dark` class moves — the
+  // document canvas stays Word-faithful.
+  const [systemDark, setSystemDark] = useState(prefersColorSchemeDark);
+  useEffect(() => {
+    if (colorMode !== 'system') return undefined;
+    return subscribeSystemDark(setSystemDark);
+  }, [colorMode]);
+  const isDark = resolveIsDark(colorMode, systemDark);
 
-    // Create the facade once per document/fonts identity. `mode`, `locale`, `author`,
-    // and the initial `zoom` are sampled at mount (as the prop docs say); later zoom
-    // changes flow through `setZoom` below rather than a teardown, so undo history and
-    // the caret survive parent re-renders.
-    useEffect(() => {
-      const container = containerRef.current;
-      if (!container) return undefined;
-      const p = propsRef.current;
-      const editor = createDocxEditor({
-        container,
-        ...(p.document !== undefined ? { document: p.document } : {}),
-        ...(p.fonts ? { fonts: p.fonts } : {}),
-        ...(p.author !== undefined ? { author: p.author } : {}),
-        ...(p.locale !== undefined ? { locale: p.locale } : {}),
-        ...(p.mode !== undefined ? { mode: p.mode } : {}),
-        ...(p.zoom !== undefined ? { zoom: p.zoom } : {}),
-        onFontError: (error) => propsRef.current.onFontError?.(error),
-      });
-      editorRef.current = editor;
-      const offChange = editor.on('change', (change) => propsRef.current.onChange?.(change));
-      propsRef.current.onReady?.(editor);
-      return () => {
-        offChange();
-        editor.destroy();
-        editorRef.current = null;
-      };
-    }, [doc, fonts]);
+  const chromeOn = Boolean(t);
 
-    // Zoom is a facade parameter, not a remount: the stored factor applies from the
-    // next mount the facade performs (see `DocxEditorInstance.setZoom`), and tearing the
-    // editor down for a zoom change would discard the user's edits and undo history.
-    const propZoom = props.zoom;
-    useEffect(() => {
-      if (propZoom !== undefined) editorRef.current?.setZoom(propZoom);
-    }, [propZoom]);
+  // The painted document: the primitive Viewport (scroll container, load-bearing
+  // classes) around the primitive Content (the engine's mount point). Chrome-off
+  // hosts get the caller's className on the viewport itself; chrome-on hosts theme
+  // the viewport with `dark` and put the className on the chrome wrapper below.
+  const viewport = (
+    <DocxEditorViewport
+      className={chromeOn ? (isDark ? 'dark' : undefined) : className}
+      style={chromeOn ? SCROLL_AREA_STYLE : undefined}
+    >
+      <DocxEditorContent />
+    </DocxEditorViewport>
+  );
 
-    // The seven-member imperative handle, each member forwarding to the facade.
-    useDocxEditorRefApi({ ref, editorRef });
-
-    // Chrome colour mode, resolved as the previous host resolved it: 'system'
-    // subscribes to the OS setting. Only the chrome root's `.dark` class moves — the
-    // document canvas stays Word-faithful.
-    const [systemDark, setSystemDark] = useState(prefersColorSchemeDark);
-    useEffect(() => {
-      if (colorMode !== 'system') return undefined;
-      return subscribeSystemDark(setSystemDark);
-    }, [colorMode]);
-    const isDark = resolveIsDark(colorMode, systemDark);
-
-    const chromeOn = Boolean(t);
-
-    // The painted document. `ep-root` scopes every --doc-* token; the viewport is the
-    // sole scroll container; `docx-paginated-surface` carries the engine surface's
-    // paper styling. The facade mounts its pages inside the inner element and owns
-    // that subtree.
-    const viewport = (
-      <div
-        data-testid="docx-editor-scroll"
-        className={`ep-root ep-one-surface ep-one-surface__viewport${
-          chromeOn && isDark ? ' dark' : ''
-        }${!chromeOn && className ? ` ${className}` : ''}`}
-        style={chromeOn ? SCROLL_AREA_STYLE : undefined}
-      >
-        <div
-          ref={containerRef}
-          className="docx-paginated-surface"
-          style={{ margin: '24px auto' }}
-        />
+  const tree = t ? (
+    <div
+      className={`ep-root${isDark ? ' dark' : ''}${className ? ` ${className}` : ''}`}
+      style={CONTAINER_STYLE}
+    >
+      <div style={TITLE_BAR_STYLE}>
+        {renderTitleBarLeft?.()}
+        {onTitleChange ? (
+          <input
+            aria-label={t('titleBar.documentNameAriaLabel')}
+            value={title ?? ''}
+            placeholder={t('titleBar.untitled')}
+            onChange={(event) => onTitleChange(event.target.value)}
+            style={TITLE_INPUT_STYLE}
+          />
+        ) : (
+          <span style={{ flex: 1, minWidth: 0, padding: '2px 6px' }}>
+            {title ?? t('titleBar.untitled')}
+          </span>
+        )}
+        {onSave ? (
+          <button
+            type="button"
+            onClick={() => onSave()}
+            style={{
+              font: 'inherit',
+              color: 'inherit',
+              backgroundColor: 'var(--doc-bg-input)',
+              border: '1px solid var(--doc-border-input)',
+              borderRadius: 4,
+              padding: '2px 10px',
+              cursor: 'pointer',
+            }}
+          >
+            {t('common.save')}
+          </button>
+        ) : null}
+        {renderTitleBarRight?.()}
       </div>
-    );
+      {viewport}
+    </div>
+  ) : (
+    viewport
+  );
 
-    if (!t) return viewport;
+  // Root owns the facade: created once per document/fonts identity, zoom follows
+  // through `setZoom`, callbacks are read at their latest identity.
+  return (
+    <DocxEditorRoot
+      {...(doc !== undefined ? { document: doc } : {})}
+      {...(fonts ? { fonts } : {})}
+      {...(author !== undefined ? { author } : {})}
+      {...(locale !== undefined ? { locale } : {})}
+      {...(mode !== undefined ? { mode } : {})}
+      {...(zoom !== undefined ? { zoom } : {})}
+      {...(onReady ? { onReady } : {})}
+      {...(onChange ? { onChange } : {})}
+      {...(onFontError ? { onFontError } : {})}
+    >
+      <DocxEditorRefBridge forwardedRef={ref} />
+      {tree}
+    </DocxEditorRoot>
+  );
+});
 
-    return (
-      <div
-        className={`ep-root${isDark ? ' dark' : ''}${className ? ` ${className}` : ''}`}
-        style={CONTAINER_STYLE}
-      >
-        <div style={TITLE_BAR_STYLE}>
-          {renderTitleBarLeft?.()}
-          {onTitleChange ? (
-            <input
-              aria-label={t('titleBar.documentNameAriaLabel')}
-              value={title ?? ''}
-              placeholder={t('titleBar.untitled')}
-              onChange={(event) => onTitleChange(event.target.value)}
-              style={TITLE_INPUT_STYLE}
-            />
-          ) : (
-            <span style={{ flex: 1, minWidth: 0, padding: '2px 6px' }}>
-              {title ?? t('titleBar.untitled')}
-            </span>
-          )}
-          {props.onSave ? (
-            <button
-              type="button"
-              onClick={() => propsRef.current.onSave?.()}
-              style={{
-                font: 'inherit',
-                color: 'inherit',
-                backgroundColor: 'var(--doc-bg-input)',
-                border: '1px solid var(--doc-border-input)',
-                borderRadius: 4,
-                padding: '2px 10px',
-                cursor: 'pointer',
-              }}
-            >
-              {t('common.save')}
-            </button>
-          ) : null}
-          {renderTitleBarRight?.()}
-        </div>
-        {viewport}
-      </div>
-    );
-  }
-);
+/**
+ * The composed editor component with its composition primitives attached as statics,
+ * so `<DocxEditor.Root>`, `<DocxEditor.Viewport>`, and `<DocxEditor.Content>` work
+ * without extra imports.
+ *
+ * @public
+ */
+export interface DocxEditorNamespace extends ForwardRefExoticComponent<
+  DocxEditorProps & RefAttributes<DocxEditorRef>
+> {
+  readonly Root: typeof DocxEditorRoot;
+  readonly Viewport: typeof DocxEditorViewport;
+  readonly Content: typeof DocxEditorContent;
+  readonly Toolbar: typeof DocxEditorToolbar;
+  /** Context-fed horizontal ruler (read-only; the props-driven export stays). */
+  readonly HorizontalRuler: typeof DocxEditorHorizontalRuler;
+  /** Context-fed vertical ruler (read-only; the props-driven export stays). */
+  readonly VerticalRuler: typeof DocxEditorVerticalRuler;
+  /** Context-fed heading outline over `Editor.getOutline()`. */
+  readonly DocumentOutline: typeof DocxEditorDocumentOutline;
+}
+
+export const DocxEditor: DocxEditorNamespace = Object.assign(DocxEditorImpl, {
+  Root: DocxEditorRoot,
+  Viewport: DocxEditorViewport,
+  Content: DocxEditorContent,
+  Toolbar: DocxEditorToolbar,
+  HorizontalRuler: DocxEditorHorizontalRuler,
+  VerticalRuler: DocxEditorVerticalRuler,
+  DocumentOutline: DocxEditorDocumentOutline,
+});

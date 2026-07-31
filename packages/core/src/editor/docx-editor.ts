@@ -6,15 +6,17 @@
 //
 // DELIBERATE PLACEHOLDER SHAPE — the `isActive` precedent, applied to a whole facade.
 //
-// The contract itself blesses honest-empty stubs: `isActive` documents that it returns
-// `false` for every command until the derivation exists, because a control that shows
-// nothing is better than one that shows a guess. This facade follows that rule everywhere:
+// The contract itself blesses honest-empty stubs: a control that shows nothing is better
+// than one that shows a guess. This facade follows that rule everywhere:
 //
-// - REAL: load/save, the exec subset below (marks, alignment, indent, line break,
-//   undo/redo, semantic setSelection, selection-addressed insert/delete text), selection
-//   formatting, page setup, page counts, snapshot, change/selectionChange/error events,
-//   focus, destroy, `query` for `selectedText` and `selectionFormatting`.
-// - HONEST EMPTY: styles, fonts, outline, comments, tracked changes, find, image/table
+// - REAL: load/save, the exec subset below (marks, mark attributes via `setMarkAttr`,
+//   alignment, indent, line break, undo/redo, semantic setSelection, selection-addressed
+//   insert/delete text), selection formatting, `isActive` for marks and alignment, page
+//   setup, page counts, the cached snapshot (with canUndo/canRedo),
+//   change/selectionChange/error events, focus, destroy, attach/detach, `query` for
+//   `selectedText` and `selectionFormatting`, and the document catalogs
+//   (`getDocumentFonts`/`getDocumentStyles`, derived from the canonical trees).
+// - HONEST EMPTY: outline, comments, tracked changes, find, image/table
 //   context, watermark, header/footer state, and the entire geometry/interaction cluster
 //   (`getInteractionFrame`, `hitTest`, `dispatchInteraction`, …) — the paginated surface
 //   owns caret, selection and hit testing INTERNALLY through the browser's own selection,
@@ -25,6 +27,16 @@
 //
 // Filling any of these in later lights up whichever control reads it, with no change to
 // callers — which is the point of wiring the full contract now.
+//
+// STATE TICK + CACHED SNAPSHOT (the external-store contract).
+//
+// The facade keeps a monotonic `stateVersion`, bumped at EVERY place observable state can
+// move: a committed change, a selection move, zoom, load success AND failure, the async
+// font remount (which goes through `mountBytes`), attach/detach, and destroy. `snapshot()`
+// derives lazily ONCE per version, deep-freezes, and returns the SAME reference until the
+// next bump — `useSyncExternalStore`'s getSnapshot contract, and N subscribers pay one
+// derivation instead of N. When it re-derives, the previous `formatting` and `page`
+// sub-objects are reused if value-equal, so selector results stay reference-stable too.
 
 import type {
   CanResult,
@@ -47,10 +59,6 @@ import type {
   Unsubscribe,
   ViewScope,
 } from '@docx-editor.dev/core-contract/contracts/editor';
-import type {
-  InteractionFrame,
-  SemanticPositionIndex,
-} from '@docx-editor.dev/core-contract/contracts/interaction';
 import {
   FontResolutionError,
   HARFBUZZ_SHAPING_LIBRARY,
@@ -60,76 +68,33 @@ import {
   type SemanticSelection as SurfaceSelection,
   type TextMeasurer,
 } from '@docx-editor.dev/core-contract/layout';
+import {
+  MARKS,
+  classifyCommand,
+  resolveMarkAttr,
+  deepFreezeValue,
+  editorError,
+  emptyInteractionFrame,
+  formattingEqual,
+  isSurfaceSelection,
+  normalizeSource,
+  pageEqual,
+  selectionsMatch,
+  snapshotsEqual,
+} from './docx-editor-support.ts';
 import { createLayoutShaping, toEditorFontError } from './font-configuration.ts';
 import { mountPaginatedSurface, type PaginatedSurface } from './paginated-surface.ts';
 
-// ---------------------------------------------------------------------------------------
-// Empty interaction frame.
-//
-// The engine does not publish interaction frames — the paginated surface owns caret,
-// selection and hit-test geometry directly. The facade still exposes the frame-shaped
-// members of the `Editor` contract, so it answers with one immutable empty frame.
-// ---------------------------------------------------------------------------------------
-
-/** Recursively freeze plain objects and arrays (idempotent). */
-function deepFreezeValue<T>(value: T): T {
-  if (value === null || typeof value !== 'object') return value;
-  if (Object.isFrozen(value)) return value;
-  if (Array.isArray(value)) {
-    for (const item of value) deepFreezeValue(item);
-    return Object.freeze(value);
-  }
-  const record = value as Record<string, unknown>;
-  for (const key of Object.keys(record)) deepFreezeValue(record[key]);
-  return Object.freeze(value);
-}
-
-const DEFAULT_PAGE_GAP_PX = 24;
-
-function emptySemanticIndex(storyId = ''): SemanticPositionIndex {
-  return {
-    stories: [{ storyId, scope: { kind: 'body' }, blocks: [] }],
-    caretStops: [],
-    ownershipRegions: [],
-  };
-}
-
-let emptyFrameSingleton: InteractionFrame | null = null;
-
-/** The single immutable frame every frame-shaped contract member answers with. */
-function emptyInteractionFrame(): InteractionFrame {
-  if (emptyFrameSingleton) return emptyFrameSingleton;
-  emptyFrameSingleton = deepFreezeValue({
-    id: { value: 0 },
-    revisions: {
-      modelRevision: 0,
-      layoutRevision: 0,
-      resourceEpoch: 0,
-      configurationEpoch: 0,
-      shapingProvenance: {
-        extensionFingerprint: 'empty',
-        shapingHash: 'empty',
-        producerVersion: 0,
-      },
-    },
-    completeness: { kind: 'complete' as const },
-    display: [],
-    semanticIndex: emptySemanticIndex(),
-    pageGeometry: [],
-    scrollGeometry: { contentHeight: 0, pageTops: [], pageGapPx: DEFAULT_PAGE_GAP_PX },
-    selection: null,
-    caret: null,
-    selectionGeometry: null,
-    focus: { scope: null, focused: false },
-    composition: { active: false, scope: null },
-    currentPage: { viewport: 0, caret: 0 },
-  }) as InteractionFrame;
-  return emptyFrameSingleton;
-}
-
 export interface DocxEditorConfig {
-  /** The element the paginated surface mounts into. The surface owns this subtree. */
-  container: HTMLElement;
+  /**
+   * The element the paginated surface mounts into. The surface owns this subtree.
+   *
+   * Optional: an instance created WITHOUT a container stashes its document bytes and does
+   * no DOM work until `attach(el)` — the provider-first shape, where the editor exists
+   * before any component has rendered a mount point. With a container, the document mounts
+   * immediately at construction, exactly as before.
+   */
+  container?: HTMLElement;
   /**
    * A document to load at construction. Bytes only in practice: a `DocumentHandle` cannot
    * be re-opened (the handle is identity, not content), so passing one emits a typed
@@ -146,73 +111,54 @@ export interface DocxEditorConfig {
 }
 
 /**
- * The concrete facade type: the full `Editor` contract plus one escape hatch.
+ * The concrete facade type: the full `Editor` contract plus the instance-only surface.
  *
- * `surface` exposes the underlying paginated surface for harnesses and tests that need
- * capabilities the contract does not carry yet (select-all, node-id addressed selection).
- * Production adapters must program against `Editor` alone.
+ * `surface`, `stateVersion`, `attach` and `detach` live HERE rather than on `Editor`:
+ * they are what a store binding and a mounting host need, not what document commands
+ * need. Production adapters program against `Editor` for everything else.
  */
 export interface DocxEditorInstance extends Editor {
+  /**
+   * The underlying paginated surface for harnesses and tests that need capabilities the
+   * contract does not carry yet (select-all, node-id addressed selection).
+   */
   readonly surface: PaginatedSurface | null;
+  /**
+   * Monotonic version of the observable editor state. Bumps whenever anything
+   * `snapshot()` reports could have moved — a committed change, a selection move, zoom,
+   * load success or failure, attach/detach, destroy. An external store (React's
+   * `useSyncExternalStore`) uses it as a cheap "did anything change" signal; `snapshot()`
+   * itself is cached per version and returns a stable reference between bumps.
+   */
+  stateVersion(): number;
+  /**
+   * Mount into `el`. If the instance holds pending document bytes (created without a
+   * container, or previously detached), they mount now — under the shaped measurer when
+   * fonts have resolved in the meantime. Attaching while already mounted elsewhere moves
+   * the live content via `session.save()`.
+   *
+   * HONEST COSTS: a mount from bytes is a fresh session — the undo stack and the caret do
+   * not survive re-attach (the same cost as the async font remount). After `destroy()`
+   * this is a no-op that emits a typed `error` event: a destroyed instance never remounts.
+   */
+  attach(el: HTMLElement): void;
+  /**
+   * Tear down the painted surface, stashing the CURRENT document bytes
+   * (`session.save()`) so a later `attach` restores the content — but not the undo stack
+   * or the caret. No-op when already detached or destroyed.
+   */
+  detach(): void;
 }
 
-/** Run-property spellings for the marks the surface can toggle, named as OOXML names them. */
-const MARKS: Readonly<Record<string, { localName: string; attributes?: Record<string, string> }>> =
-  {
-    bold: { localName: 'b' },
-    italic: { localName: 'i' },
-    underline: { localName: 'u', attributes: { val: 'single' } },
-    strike: { localName: 'strike' },
-  };
+type CommandGate = { ok: true } | { ok: false; refusal: Exclude<ExecResult, { ok: true }> };
 
-type CommandSupport =
-  | { readonly supported: true; readonly mutating: boolean }
-  | { readonly supported: false; readonly reason: string };
-
-function isSurfacePosition(value: unknown): value is SurfaceSelection['anchor'] {
-  return (
-    typeof value === 'object' &&
-    value !== null &&
-    typeof (value as { paragraphId?: unknown }).paragraphId === 'string' &&
-    typeof (value as { offset?: unknown }).offset === 'number'
-  );
-}
-
-/**
- * The one selection form the surface can honour: paragraph-id + offset endpoints.
- *
- * The contract's other position forms (`DocAnchor`, `DocLocation`, `SemanticTarget`)
- * address the document through indexes this lane does not build yet, so they are refused
- * as unsupported rather than resolved approximately.
- */
-function isSurfaceSelection(value: unknown): value is SurfaceSelection {
-  return (
-    typeof value === 'object' &&
-    value !== null &&
-    isSurfacePosition((value as { anchor?: unknown }).anchor) &&
-    isSurfacePosition((value as { head?: unknown }).head)
-  );
-}
-
-function editorError(code: string, message: string): EditorError {
-  const error = new Error(message) as Error & { code?: string };
-  error.code = code;
-  return error;
-}
-
-function selectionsMatch(a: SurfaceSelection | null, b: SurfaceSelection | null): boolean {
-  if (a === b) return true;
-  if (!a || !b) return false;
-  return (
-    a.anchor.paragraphId === b.anchor.paragraphId &&
-    a.anchor.offset === b.anchor.offset &&
-    a.head.paragraphId === b.head.paragraphId &&
-    a.head.offset === b.head.offset
-  );
-}
+/** The one frozen scope object every snapshot shares, so scope stays reference-equal. */
+const SCOPE_BODY: EditorScope = Object.freeze({ kind: 'body' as const });
 
 export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
-  const container = config.container;
+  let container: HTMLElement | null = config.container ?? null;
+  /** Document bytes waiting for a container — set when constructed or loaded detached. */
+  let pendingBytes: Uint8Array | null = null;
   const mode = config.mode ?? 'edit';
   let zoom =
     config.zoom !== undefined &&
@@ -232,6 +178,16 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
   let shapedMeasurer: TextMeasurer | undefined;
   let shapedProducer: string | undefined;
 
+  // ── State tick + cached snapshot ─────────────────────────────────────────────────────
+  let stateVersion = 0;
+  let cachedSnapshot: EditorSnapshot | null = null;
+  let cachedVersion = -1;
+
+  /** Called at every place observable state can move. Derivation stays lazy. */
+  function bump(): void {
+    stateVersion += 1;
+  }
+
   const handlers: { [E in keyof EditorEvents]: Set<EditorEvents[E]> } = {
     change: new Set(),
     selectionChange: new Set(),
@@ -243,9 +199,13 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
     for (const handler of [...handlers.error]) handler(error);
   }
 
+  function emitDocumentChange(change: DocumentChange): void {
+    for (const handler of [...handlers.change]) handler(change);
+  }
+
   function emitSelectionChange(): void {
     if (handlers.selectionChange.size === 0) return;
-    const snapshot = snapshotOf();
+    const snapshot = snapshotNow();
     for (const handler of [...handlers.selectionChange]) handler(snapshot);
   }
 
@@ -261,6 +221,13 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
   const scaleOf = (): number => zoom * (96 / 72);
 
   function mountBytes(bytes: Uint8Array): void {
+    if (!container) {
+      // Detached: no DOM work. The bytes wait for `attach`, which mounts them under
+      // whatever measurer has resolved by then.
+      pendingBytes = bytes;
+      bump();
+      return;
+    }
     teardownSurface();
     const result = mountPaginatedSurface(container, bytes, {
       scale: scaleOf(),
@@ -271,6 +238,14 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
         // The mount-time render reports before `surface` is assigned; nothing observable
         // has changed at that point, so it is not a selection change.
         if (!surface) return;
+        // A publish can change layout-derived state without moving the selection —
+        // toggling bold moves formatting agreement, not the caret. Worse, a `change`
+        // handler may have read `snapshot()` MID-COMMIT (the session notifies before the
+        // layout publishes) and cached a derivation against the layout this publish just
+        // replaced. Either way the cache is stale: bump unconditionally. A value-equal
+        // re-derivation returns the previous snapshot reference, so a no-op publish costs
+        // one comparison, never a spurious re-render.
+        bump();
         if (selectionsMatch(state.selection, lastSelection)) return;
         lastSelection = state.selection;
         emitSelectionChange();
@@ -278,6 +253,8 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
     });
     if (!result.ok) {
       parseError = result.detail ? `${result.reason}: ${result.detail}` : result.reason;
+      // Failure is observable state too: `snapshot().parseError` moved.
+      bump();
       emitError(editorError(result.reason, `failed to open document: ${parseError}`));
       return;
     }
@@ -291,15 +268,16 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
         deleted: change.deleted,
         dirty: change.dirty,
       };
-      for (const handler of [...handlers.change]) handler(documentChange);
+      // Bump BEFORE dispatch, so a handler reading `snapshot()` sees the new state.
+      bump();
+      emitDocumentChange(documentChange);
     });
-  }
-
-  function normalizeSource(source: DocumentSource): Uint8Array | null {
-    if (source instanceof Uint8Array) return source;
-    if (source instanceof ArrayBuffer) return new Uint8Array(source);
-    // The remaining form is a DocumentHandle: identity and revision, not content.
-    return null;
+    // The document arrived: an external store subscribed to `change`/`selectionChange`
+    // must learn about it, exactly as it learns about any later commit. Without these a
+    // store bound before `load()` never re-reads and keeps rendering "no document".
+    bump();
+    emitDocumentChange({ revision: surface.session.revision() });
+    emitSelectionChange();
   }
 
   // Fonts resolve asynchronously (HarfBuzz init + validation), and the surface samples its
@@ -307,7 +285,8 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
   // shaped measurer arrives the surface is remounted FROM THE CURRENT TREE — `session.save()`
   // — so every edit made before fonts resolved survives. What does not survive is the undo
   // stack and the caret, the honest cost of a full remount; a rescale-in-place path on the
-  // surface would remove it.
+  // surface would remove it. In the not-yet-attached case there is nothing to remount: the
+  // measurer is simply picked up by the next mount.
   if (config.fonts) {
     const fonts = config.fonts;
     void createLayoutShaping(fonts)
@@ -339,78 +318,19 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
       });
   }
 
-  /**
-   * Whether a command is in the wired subset, and whether it writes.
-   *
-   * One classifier serves `exec` and `can`, so a dry run can never disagree with the real
-   * one about what is supported.
-   */
-  function classify(command: EditorCommand): CommandSupport {
-    switch (command.type) {
-      case 'toggleMark':
-        return MARKS[command.mark]
-          ? { supported: true, mutating: true }
-          : { supported: false, reason: `mark '${command.mark}' is not supported` };
-      case 'setAlignment':
-        return { supported: true, mutating: true };
-      case 'setIndent':
-        return command.left !== undefined ||
-          command.right !== undefined ||
-          command.firstLine !== undefined ||
-          command.hanging !== undefined
-          ? { supported: true, mutating: true }
-          : { supported: false, reason: 'setIndent requires at least one indent field' };
-      case 'insertBreak':
-        // Page/column/section breaks belong to lanes the surface does not own yet.
-        return command.kind === 'line'
-          ? { supported: true, mutating: true }
-          : { supported: false, reason: `break kind '${command.kind}' is not supported` };
-      case 'insertText':
-        return command.target === undefined
-          ? { supported: true, mutating: true }
-          : {
-              supported: false,
-              reason: 'DocTarget addressing is not supported; text inserts at the selection',
-            };
-      case 'deleteText':
-        return command.target === undefined
-          ? { supported: true, mutating: true }
-          : {
-              supported: false,
-              reason: 'DocTarget addressing is not supported; deletion removes the selection',
-            };
-      case 'undo':
-      case 'redo':
-        return { supported: true, mutating: true };
-      case 'setSelection':
-        return 'range' in command && isSurfaceSelection(command.range)
-          ? { supported: true, mutating: false }
-          : {
-              supported: false,
-              reason:
-                'only a semantic { anchor: { paragraphId, offset }, head } selection is supported',
-            };
-      default:
-        return {
-          supported: false,
-          reason: `command '${command.type}' is not supported by the tree editor`,
-        };
-    }
-  }
-
-  function gate(
-    command: EditorCommand,
-    options?: { scope?: EditorScope }
-  ): { ok: true } | { ok: false; refusal: Exclude<ExecResult, { ok: true }> } {
+  function gate(command: EditorCommand, options?: { scope?: EditorScope }): CommandGate {
     if (options?.scope && options.scope.kind !== 'body') {
       return {
         ok: false,
         refusal: { ok: false, code: 'unsupported', reason: 'only the body scope is supported' },
       };
     }
-    const support = classify(command);
+    const support = classifyCommand(command);
     if (!support.supported) {
-      return { ok: false, refusal: { ok: false, code: 'unsupported', reason: support.reason } };
+      return {
+        ok: false,
+        refusal: { ok: false, code: support.code ?? 'unsupported', reason: support.reason },
+      };
     }
     if (!surface) {
       return {
@@ -427,6 +347,12 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
     return { ok: true };
   }
 
+  /**
+   * THE unified formatting derivation — the one place surface formatting becomes the
+   * contract's `RunFormatting`. `snapshot().formatting`, `getSelectionFormatting()`,
+   * `isActive` and the `selectionFormatting` query all read this shape (via the cached
+   * snapshot), so they can never disagree about what the selection carries.
+   */
   function runFormattingOf(): RunFormatting | null {
     if (!surface) return null;
     const formatting = surface.formatting();
@@ -435,12 +361,16 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
       italic: formatting.italic,
       underline: formatting.underline,
       strike: formatting.strikethrough,
+      superscript: formatting.superscript,
+      subscript: formatting.subscript,
       ...(formatting.color ? { color: { kind: 'hex' as const, value: formatting.color } } : {}),
       ...(formatting.highlight ? { highlight: formatting.highlight } : {}),
       ...(formatting.fontFamily ? { fontFamily: formatting.fontFamily } : {}),
       ...(formatting.fontSizeHalfPoints !== null
         ? { fontSizePt: formatting.fontSizeHalfPoints / 2 }
         : {}),
+      ...(formatting.alignment ? { alignment: formatting.alignment } : {}),
+      ...(formatting.styleId ? { styleId: formatting.styleId } : {}),
     };
   }
 
@@ -456,9 +386,10 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
     return caret ? caret.pageIndex + 1 : 1;
   }
 
-  function snapshotOf(): EditorSnapshot {
+  function deriveSnapshot(): EditorSnapshot {
+    const state = surface?.state() ?? null;
     return {
-      scope: { kind: 'body' },
+      scope: SCOPE_BODY,
       isLoading: false,
       parseError,
       editable: surface !== null && surface.session.editable && mode !== 'view',
@@ -470,7 +401,32 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
       table: null,
       image: null,
       page: { current: currentPage(), total: totalPages() },
+      canUndo: state?.canUndo ?? false,
+      canRedo: state?.canRedo ?? false,
     };
+  }
+
+  /**
+   * The cached read model. Derives at most once per state tick, deep-freezes, and reuses
+   * the previous `formatting`/`page` sub-objects (or the whole previous snapshot) when
+   * value-equal, so references only change when values do.
+   */
+  function snapshotNow(): EditorSnapshot {
+    if (cachedSnapshot && cachedVersion === stateVersion) return cachedSnapshot;
+    const previous = cachedSnapshot;
+    const fresh = deriveSnapshot();
+    let next: EditorSnapshot = fresh;
+    if (previous) {
+      const formatting = formattingEqual(fresh.formatting, previous.formatting)
+        ? previous.formatting
+        : fresh.formatting;
+      const page = pageEqual(fresh.page, previous.page) ? previous.page : fresh.page;
+      next = { ...fresh, formatting, page };
+      if (snapshotsEqual(next, previous)) next = previous;
+    }
+    cachedSnapshot = deepFreezeValue(next);
+    cachedVersion = stateVersion;
+    return cachedSnapshot;
   }
 
   if (config.document) {
@@ -485,6 +441,41 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
   const editor: DocxEditorInstance = {
     get surface() {
       return surface;
+    },
+
+    stateVersion: () => stateVersion,
+
+    attach(el) {
+      if (destroyed) {
+        // Terminal by design: React StrictMode double-invokes effects, and a component
+        // that destroyed its instance must create a new one rather than resurrect this.
+        emitError(
+          editorError('destroyed', 'this editor was destroyed; create a new instance to remount')
+        );
+        return;
+      }
+      if (surface && container === el) return;
+      if (surface) {
+        // Moving containers: carry the live content, not the original bytes.
+        pendingBytes = surface.session.save();
+        teardownSurface();
+      }
+      container = el;
+      const bytes = pendingBytes;
+      pendingBytes = null;
+      // A mount bumps the tick and emits change/selectionChange itself.
+      if (bytes) mountBytes(bytes);
+      else bump();
+    },
+
+    detach() {
+      if (destroyed) return;
+      if (surface) {
+        pendingBytes = surface.session.save();
+        teardownSurface();
+      }
+      container = null;
+      bump();
     },
 
     load(document) {
@@ -525,6 +516,14 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
           mounted.toggleRunProperty(mark.localName, mark.attributes);
           break;
         }
+        case 'setMarkAttr': {
+          // The gate already ran `resolveMarkAttr` through `classifyCommand`; resolving
+          // again here keeps exec's write derived from the command, not from trust.
+          const resolved = resolveMarkAttr(command);
+          if (!resolved.ok) return { ok: false, code: resolved.code, reason: resolved.reason };
+          mounted.setRunProperty(resolved.localName, resolved.attributes);
+          break;
+        }
         case 'setAlignment':
           // The contract says `justify`; `w:jc` spells it `both`.
           mounted.setParagraphProperty('jc', {
@@ -563,7 +562,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
           return { ok: true, changed: false };
         }
         default:
-          // Unreachable: `classify` refused everything else. Typed for the compiler.
+          // Unreachable: `classifyCommand` refused everything else. Typed for the compiler.
           return { ok: false, code: 'unsupported', reason: 'unsupported command' };
       }
 
@@ -577,24 +576,52 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
       return gated.ok ? { ok: true } : gated.refusal;
     },
 
-    // The documented deliberate placeholder: never a value it has not derived.
-    isActive: () => false,
+    // Derived for marks and alignment from the cached snapshot's formatting — Word's
+    // agreement rule, the same one `toggleRunProperty` toggles against. Everything else
+    // stays honest-false until its derivation exists.
+    isActive(command) {
+      const formatting = surface ? snapshotNow().formatting : null;
+      if (!formatting) return false;
+      switch (command.type) {
+        case 'toggleMark':
+          switch (command.mark) {
+            case 'bold':
+              return formatting.bold === true;
+            case 'italic':
+              return formatting.italic === true;
+            case 'underline':
+              return formatting.underline === true;
+            case 'strike':
+              return formatting.strike === true;
+            default:
+              return false;
+          }
+        case 'setAlignment':
+          // `exec` writes `justify` as `both`; compare in the same vocabulary.
+          return formatting.alignment === (command.align === 'justify' ? 'both' : command.align);
+        default:
+          return false;
+      }
+    },
 
-    getDocumentStyles: () => [],
-    getDocumentFonts: () => [],
-    getOutline: () => [],
+    // Real derivations from the canonical trees (session-memoized), no longer stubs.
+    getDocumentStyles: () => surface?.session.documentStyles() ?? [],
+    getDocumentFonts: () => surface?.session.documentFonts() ?? [],
+    getOutline: () => surface?.session.documentOutline() ?? [],
     getComments: () => [],
 
+    // Reads the SAME unified derivation as `snapshot().formatting` (one code path),
+    // reshaped to this member's declared vocabulary (half-points).
     getSelectionFormatting() {
-      if (!surface) return null;
-      const formatting = surface.formatting();
+      const formatting = surface ? snapshotNow().formatting : null;
+      if (!formatting) return null;
       return {
-        bold: formatting.bold,
-        italic: formatting.italic,
-        underline: formatting.underline,
+        ...(formatting.bold !== undefined ? { bold: formatting.bold } : {}),
+        ...(formatting.italic !== undefined ? { italic: formatting.italic } : {}),
+        ...(formatting.underline !== undefined ? { underline: formatting.underline } : {}),
         ...(formatting.fontFamily ? { fontFamily: formatting.fontFamily } : {}),
-        ...(formatting.fontSizeHalfPoints !== null
-          ? { fontSizeHalfPoints: formatting.fontSizeHalfPoints }
+        ...(formatting.fontSizePt !== undefined
+          ? { fontSizeHalfPoints: Math.round(formatting.fontSizePt * 2) }
           : {}),
         ...(formatting.styleId ? { styleId: formatting.styleId } : {}),
         ...(formatting.alignment ? { alignment: formatting.alignment } : {}),
@@ -632,7 +659,8 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
     getTrackedChanges: () => [],
 
     setActiveScope(_scope: ViewScope) {
-      // The body is the only editable view; a non-body scope has nowhere to go.
+      // The body is the only editable view; a non-body scope has nowhere to go. Nothing
+      // observable changes, so the state tick does not move.
     },
     getActiveScope: (): ViewScope => ({ kind: 'body' }),
 
@@ -642,7 +670,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
         case 'selectedText':
           return (surface?.selectedText() ?? '') as EditorQueryResults[K];
         case 'selectionFormatting':
-          return runFormattingOf() as EditorQueryResults[K];
+          return (surface ? snapshotNow().formatting : null) as EditorQueryResults[K];
         case 'isInsideToc':
           return false as EditorQueryResults[K];
         case 'trackedChanges':
@@ -667,7 +695,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
       }
     },
 
-    snapshot: () => snapshotOf(),
+    snapshot: () => snapshotNow(),
 
     getTotalPages: () => totalPages(),
     getCurrentPage: () => currentPage(),
@@ -688,6 +716,10 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
       }
       if (next === zoom) return { ok: true, changed: false };
       zoom = next;
+      // Zoom is snapshot state: bump and tell subscribers, with the fresh snapshot on the
+      // selectionChange channel (the store listens to both channels either way).
+      bump();
+      emitSelectionChange();
       // The surface samples its scale at mount and exposes no rescale-in-place, and a
       // remount here would discard the user's undo history for a zoom click. So the stored
       // zoom applies from the NEXT mount (a `load`, or the shaped-measurer remount);
@@ -752,6 +784,9 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
     destroy() {
       destroyed = true;
       teardownSurface();
+      container = null;
+      pendingBytes = null;
+      bump();
       for (const set of Object.values(handlers)) set.clear();
     },
 

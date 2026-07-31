@@ -24,12 +24,12 @@ export {
   type RulerUnit,
 } from './ruler-ticks.ts';
 export {
+  commandForSlot,
+  commandForSlotValue,
   runSave,
   runToolbarCommand,
-  toolbarCommand,
   toolbarCommandState,
   toolbarCommandStates,
-  type ToolbarCommandId,
   type ToolbarCommandState,
 } from './toolbar-commands.ts';
 
@@ -38,10 +38,14 @@ export {
   CHROME_MENUS,
   CHROME_UNAVAILABLE_KEY,
   chromeControlCount,
+  chromeSlotId,
+  defaultChromeGroups,
   type ChromeControl,
+  type ChromeControlId,
   type ChromeControlState,
-  type ChromeCommandId,
   type ChromeGroup,
+  type ChromeGroupId,
+  type ChromeSlotId,
 } from './chrome-controls.ts';
 export {
   mountPaginatedSurface,

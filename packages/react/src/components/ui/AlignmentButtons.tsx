@@ -9,7 +9,6 @@
 
 import React, { useState, useCallback } from 'react';
 import type { CSSProperties, ReactNode } from 'react';
-import type { ParagraphAlignment } from '../../core-compat';
 import { MaterialSymbol } from './MaterialSymbol';
 import { Button } from './Button';
 import { Tooltip } from './Tooltip';
@@ -21,6 +20,13 @@ import type { TranslationKey } from '../../i18n';
 // ============================================================================
 // TYPES
 // ============================================================================
+
+/**
+ * The paragraph alignments this control understands, in OOXML `w:jc`
+ * vocabulary (`both` is Word's justify; `distribute` renders as justify).
+ * Presentation-only: the dropdown emits the first four.
+ */
+export type ParagraphAlignment = 'left' | 'center' | 'right' | 'both' | 'distribute';
 
 /**
  * Alignment option for the buttons
