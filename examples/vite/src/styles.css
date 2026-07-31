@@ -36,14 +36,29 @@
   color: var(--doc-text-muted);
 }
 
-/* Header bar: brand + menus | editable title | live status + switchers */
+/* One chrome surface: header + toolbar + ruler row share the `--doc-surface`
+   background; the seam (hairline + soft shadow) sits BELOW the ruler row, so the
+   gray `--doc-bg` workspace begins only underneath the ruler. `z-index` lifts the
+   seam shadow over the workspace; the demo menus open inside this stacking
+   context, above everything below. */
+.demo-chrome {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  background: var(--doc-surface);
+  border-bottom: 1px solid var(--doc-border);
+  box-shadow: 0 1px 3px var(--doc-shadow-subtle);
+  position: relative;
+  z-index: 30;
+}
+
+/* Header bar: brand + menus | editable title | live status + switchers.
+   Transparent — the chrome surface behind it owns the background. */
 .demo-header {
   display: flex;
   align-items: center;
   gap: 16px;
   padding: 8px 16px;
-  background: var(--doc-surface);
-  border-bottom: 1px solid var(--doc-border);
 }
 
 .demo-header__left,
@@ -203,9 +218,11 @@
 }
 
 /* The LIBRARY toolbar is styled by the CORE stylesheet (`docx-toolbar` family).
-   The demo only floats the pill with a little breathing room. */
+   The demo only insets the pill inside the white chrome band, like the reference
+   bar (loose sides, tight bottom so the ruler row reads as part of the same
+   surface). */
 .demo-toolbar {
-  margin: 8px 12px;
+  margin: 8px 12px 4px;
 }
 
 /* The in-place customized FontFamily slot */
@@ -285,18 +302,27 @@
   white-space: nowrap;
 }
 
-/* The document viewport fills the rest of the app column */
-/* The context-fed horizontal ruler row: centered over the page column. The
-   ruler component sizes itself to the page width. */
+/* The context-fed horizontal ruler row: bottom row of the chrome surface,
+   centered over the page column. The ruler component sizes itself to the page
+   width. When the outline column is open, extra left padding keeps the ruler
+   centered over the shifted page; the padding transition matches the outline's
+   width transition so both glide together. */
 .demo-ruler-row {
   display: flex;
   justify-content: center;
-  padding: 2px 12px 0;
+  padding: 2px 20px 6px;
   overflow: hidden;
   flex: none;
+  transition: padding 0.2s ease;
 }
 
-/* Editor area: outline sidebar beside the scrolled page column. */
+.demo-ruler-row--outline {
+  padding-left: 288px; /* 20px base + the 268px outline column */
+}
+
+/* Editor area: panel columns beside the scrolled page column. Panels take REAL
+   width here (no overlay), so opening one compresses the page column; a right-side
+   comments rail would be a symmetric column after the viewport. */
 .demo-main {
   flex: 1;
   min-height: 0;
@@ -306,12 +332,27 @@
 }
 
 /* The outline panel positions absolutely inside its container, so the
-   sidebar is its positioning context. 240px panel + 12px anchor + 16px gap. */
+   sidebar is its positioning context. 240px panel + 12px anchor + 16px gap.
+   Stays mounted when closed: width animates to 0 (clipping the panel) and
+   `visibility` flips after the slide so the closed panel is neither visible nor
+   hit-testable. */
 .demo-outline {
   position: relative;
   width: 268px;
   flex: none;
   overflow: hidden;
+  visibility: visible;
+  transition:
+    width 0.2s ease,
+    visibility 0s 0s;
+}
+
+.demo-outline--closed {
+  width: 0;
+  visibility: hidden;
+  transition:
+    width 0.2s ease,
+    visibility 0s 0.2s;
 }
 
 /* Collapsed state: the CORE `.docx-outline-toggle` owns the look (the
@@ -327,6 +368,18 @@
   flex: 1;
   min-height: 0;
   overflow: auto;
+}
+
+/* Vertical ruler: an absolutely positioned child of the scroll container, so it
+   scrolls WITH the document (absolute children live in the scrolled coordinate
+   space). The 24px top offset matches the page stack's top margin, so tick zero
+   sits on the first page's top edge, reference-style. */
+.demo-vruler {
+  position: absolute;
+  top: 24px;
+  left: 0;
+  z-index: 10;
+  pointer-events: none;
 }
 
 /* Mobile responsive overrides */
@@ -347,6 +400,12 @@
   }
 
   .demo-header__title-block {
+    display: none;
+  }
+
+  /* Rulers are desktop chrome; the vertical one would overlap the page on
+     small screens. */
+  .demo-vruler {
     display: none;
   }
 }

@@ -273,11 +273,14 @@ function EditorChrome({
   onTitleChange,
   colorMode,
   onColorModeChange,
+  outlineOpen,
 }: {
   title: string;
   onTitleChange: (next: string) => void;
   colorMode: 'light' | 'dark';
   onColorModeChange: (next: 'light' | 'dark') => void;
+  /** The ruler re-centers over the page column when the outline takes width. */
+  outlineOpen: boolean;
 }) {
   const editor = useDocxEditor();
   const fileInputRef = useRef<HTMLInputElement | null>(null);
@@ -296,7 +299,11 @@ function EditorChrome({
   };
 
   return (
-    <>
+    // ONE chrome surface: header, toolbar and ruler row share the same
+    // `--doc-surface` background, and the seam (border + shadow) sits BELOW the
+    // ruler row — the gray workspace begins only underneath it. The ruler
+    // belongs to the header surface, not to the document workspace.
+    <div className="demo-chrome">
       <header className="demo-header">
         <div className="demo-header__left">
           <BrandLogo />
@@ -391,13 +398,19 @@ function EditorChrome({
         </DocxEditor.Toolbar.FontFamily>
       </DocxEditor.Toolbar>
 
-      {/* The context-fed horizontal ruler, placed per the chrome spec: below the toolbar,
-          centered over the page column. Read-only — the engine has no margin
-          commands yet, so nothing here pretends to drag. */}
-      <div className="demo-ruler-row" aria-hidden="true">
+      {/* The context-fed horizontal ruler: bottom row of the chrome surface,
+          centered over the page column. When the outline panel takes real width
+          the row gains matching left padding so the ruler stays centered over
+          the (shifted) page, with the same 0.2s ease the panel uses. Read-only —
+          the engine has no margin commands yet, so nothing here pretends to
+          drag. */}
+      <div
+        className={`demo-ruler-row${outlineOpen ? ' demo-ruler-row--outline' : ''}`}
+        aria-hidden="true"
+      >
         <DocxEditor.HorizontalRuler />
       </div>
-    </>
+    </div>
   );
 }
 
@@ -441,15 +454,21 @@ export function ComposedEditorDemo({ fixtureUrl }: { fixtureUrl: string }) {
             onTitleChange={setTitle}
             colorMode={colorMode}
             onColorModeChange={setColorMode}
+            outlineOpen={showOutline}
           />
-          {/* The chrome spec's layout: the heading outline in a left sidebar beside
-              the scrolled page column, collapsible. */}
+          {/* Panels RESHAPE the layout instead of overlaying it: the outline is a
+              real flex column whose width animates open/closed, so the page column
+              (and the ruler above, via the matching padding shift) compresses left.
+              A future comments rail mounts symmetrically after the viewport with
+              the same width mechanism, plus a mirrored ruler-row padding. */}
           <div className="demo-main">
-            {showOutline ? (
-              <aside className="demo-outline">
-                <DocxEditor.DocumentOutline onClose={() => setShowOutline(false)} />
-              </aside>
-            ) : (
+            <aside
+              className={`demo-outline${showOutline ? '' : ' demo-outline--closed'}`}
+              inert={!showOutline}
+            >
+              <DocxEditor.DocumentOutline onClose={() => setShowOutline(false)} />
+            </aside>
+            {!showOutline && (
               <button
                 type="button"
                 className="docx-outline-toggle demo-outline-toggle"
@@ -467,6 +486,12 @@ export function ComposedEditorDemo({ fixtureUrl }: { fixtureUrl: string }) {
               </button>
             )}
             <DocxEditor.Viewport className="demo-viewport">
+              {/* The vertical ruler rides INSIDE the scroll container as an
+                  absolutely positioned child, so it scrolls with the document and
+                  its top offset lines up with the first page's top edge. */}
+              <div className="demo-vruler" aria-hidden="true">
+                <DocxEditor.VerticalRuler />
+              </div>
               <DocxEditor.Content />
             </DocxEditor.Viewport>
           </div>
