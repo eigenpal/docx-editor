@@ -27,48 +27,41 @@ There is ONE preservation model and ONE pipeline:
 tree per part -> TreeDocumentStore -> semantic-layout -> semantic-paint (painted
 pages ARE the editable surface) -> normalizing serializeOoxmlPart save`
 
-Decisions that hold:
+Decisions:
 
-- **Canonical tree**: typed kinds for what layout needs (paragraph/run/table
-  vocabulary); everything else is a lossless `generic` node. Misplaced/invalid
-  known elements DEMOTE to generic (safe fallback, never data loss). Unknown
-  content never locks anything read-only; nothing fails closed.
-- **Fidelity is structural, not byte-range**: the two D9 oracles
-  (`canonicalOoxmlFingerprint` + save/reopen `semanticDigest`) are the gates.
-  Every modeled XML part re-emits NORMALIZED; byte identity holds only for
-  non-XML parts. Never promise byte-identical XML output.
+- **Canonical tree**: typed kinds where layout needs them (paragraph/run/table
+  vocabulary); everything else is a lossless `generic` node. Invalid/misplaced
+  known elements demote to generic. Unknown content never locks editing.
+- **Fidelity**: structural, gated by the D9 oracles (`canonicalOoxmlFingerprint`
+  + save/reopen `semanticDigest`). Modeled XML parts re-emit normalized;
+  byte identity applies to non-XML parts only.
 - **Mutation**: `TreeDocumentStore.transact` over `TreeDocOp`s (node id +
-  UTF-16 offset addressing) is the only write path; ops resolve paragraphs via
-  the node index, so cell/nested paragraphs need no special casing. Cross-cell
-  joins are refused at the store (`not-adjacent-siblings`).
-- **Layout** (`semantic-layout.ts`): DOM-free, measures via an injected
-  `TextMeasurer`, all points (twips convert once at property-read boundaries).
-  `storyBlocks` walks body/hdr/ftr roots and flattens block SDTs. Tables are
-  ported row-pagination (header-row repeats, vMerge, gridSpan clamps — the
-  security guards travel with the code). Headers/footers lay out once per
-  variant at flow height (never anchored extent) and attach per page.
-  Incremental engine: per-block cache keys + flow checkpoints + convergence;
-  a no-change pass returns the previous pages BY IDENTITY (paint reuse).
-- **Paint/interaction**: the painted pages are contenteditable; the DOM is a
-  picture — every browser mutation is prevented and re-expressed as tree ops.
-  Selection maps through `data-paragraph-id`/`data-start` only. Page furniture
-  is `contenteditable=false` + `[data-docx-hf]` and selection refuses to map
-  into it.
-- **`createDocxEditor`** (`core/src/editor/docx-editor.ts`) implements the FULL
-  `Editor` contract over the surface. Honest-empty doctrine: unimplemented
-  reads return typed empty values, never guesses (the contract's `isActive`
-  precedent). `snapshot()` is version-cached — same reference until state
-  moves, sub-objects reference-stable (the `useSyncExternalStore` contract);
-  `perf` is deliberately OUTSIDE the snapshot. `attach(el)`/`detach()` split
-  creation from mounting (provider-first); detach = save-bytes remount (undo
-  and caret are honestly lost). Derived-from-document reads are real:
-  `getDocumentFonts/Styles/Outline`, formatting, page setup.
+  UTF-16 offset) is the only write path; the node index makes cell/nested
+  paragraphs ordinary. Cross-cell joins refused (`not-adjacent-siblings`).
+- **Layout** (`semantic-layout.ts`): DOM-free, injected `TextMeasurer`, points
+  everywhere (twips convert at property-read boundaries). `storyBlocks` walks
+  body/hdr/ftr roots and flattens block SDTs. Tables: row pagination,
+  header-row repeats, vMerge, clamped gridSpan (security guards live with the
+  code). Headers/footers: laid out once per variant at flow height, attached
+  per page. Incremental: per-block cache keys + flow checkpoints +
+  convergence; a no-change pass returns previous pages by identity.
+- **Paint/interaction**: painted pages are contenteditable but the DOM is a
+  picture — browser mutations are prevented and re-expressed as tree ops.
+  Selection maps only through `data-paragraph-id`/`data-start`. Page furniture
+  is `contenteditable=false` + `[data-docx-hf]`, excluded from selection.
+- **`createDocxEditor`** (`core/src/editor/docx-editor.ts`): full `Editor`
+  contract over the surface; unimplemented reads return typed empty values
+  (the `isActive` precedent). `snapshot()` is version-cached — same reference
+  until state moves, sub-objects reference-stable (`useSyncExternalStore`
+  contract); `perf` sits outside the snapshot. `attach(el)`/`detach()` split
+  creation from mounting; detach remounts from saved bytes (undo/caret reset).
+  Real derived reads: `getDocumentFonts/Styles/Outline`, formatting, page setup.
 - **Chrome registry** (`core/src/editor/chrome-controls.ts`): `CHROME_GROUPS`
-  is the single toolbar taxonomy for BOTH adapters. `ChromeSlotId`
-  (`text.bold`, `font.family`, …) is public API forever — renames are
-  breaking. `commandForSlot`/`commandForSlotValue` is the one command table;
-  `toolbarCommandState`/`runToolbarCommand` give can-before-exec state shared
-  across adapters. Unwired slots render disabled with the engine's reason.
+  is the toolbar taxonomy for both adapters; `ChromeSlotId` (`text.bold`,
+  `font.family`, …) is public API — renames are breaking.
+  `commandForSlot`/`commandForSlotValue` is the command table;
+  `toolbarCommandState`/`runToolbarCommand` provide shared can-before-exec
+  state. Unwired slots render disabled with the engine's reason.
 
 ## React adapter — provider-first, everything is hooks
 
