@@ -1,10 +1,10 @@
-// Browser harness for the CANONICAL TREE stack (cutover step 2c).
+// PLAYWRIGHT HARNESS for the canonical tree stack. NOT a demo surface.
 //
-// Reachable at `?treeFirst=1`. Loads a fixture through `openTreeSession` — bounded OPC read
-// into typed/generic trees, `TreeDocumentStore`, the tree binding — and mounts the minimal
-// editable surface over it. Nothing here touches `PackageModel`, `openDocxSession`, or the
-// byte-range preservation snapshot, which is the whole point: it proves the replacement
-// stack drives a real contenteditable before it becomes the default path.
+// Exists only so `e2e/browser-first-tree.smoke.spec.ts` can drive the tree binding directly:
+// it loads a fixture through `openTreeSession` (bounded OPC read into typed/generic trees,
+// `TreeDocumentStore`, the tree binding) and mounts the minimal editable surface over it.
+// Nothing here touches `PackageModel`, `openDocxSession`, or the byte-range preservation
+// snapshot — that isolation is the point.
 //
 // Deliberately unstyled beyond a page-like sheet. It makes no pagination or layout claim.
 
@@ -25,7 +25,7 @@ declare global {
   }
 }
 
-export function TreeSurfaceDemo({ fixtureUrl }: { fixtureUrl: string }) {
+export function TreeSurfaceHarness({ fixtureUrl }: { fixtureUrl: string }) {
   const mountRef = useRef<HTMLDivElement | null>(null);
   const [status, setStatus] = useState('Loading…');
   const [state, setState] = useState<TreeSurfaceState | null>(null);

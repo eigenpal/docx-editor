@@ -115,11 +115,12 @@ export interface DocxEditorNamespace extends ForwardRefExoticComponent<DocxEdito
 export interface DocxEditorProps {
     // (undocumented)
     author?: string;
+    chrome?: boolean;
     // (undocumented)
     className?: string;
     readonly colorMode?: 'light' | 'dark' | 'system';
     document?: DocumentSource;
-    fonts: FontConfiguration;
+    fonts?: FontConfiguration;
     // (undocumented)
     locale?: string;
     mode?: EditorMode;

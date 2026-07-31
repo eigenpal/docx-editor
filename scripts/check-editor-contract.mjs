@@ -29,10 +29,11 @@ const REACT_PROPS_NOT_YET_IN_VUE = new Set([
   // M6V.1 chrome props, React-only until 10V.1 ports the chrome to Vue.
   //
   // These are NOT idiomatic-framework divergences like the three above — they are a
-  // deliberate, time-boxed gap with a named closing task. 10V.1 MUST remove all four
+  // deliberate, time-boxed gap with a named closing task. 10V.1 MUST remove all five
   // entries; a divergence with no closing task is how a gate quietly stops meaning
   // anything.
   't',
+  'chrome',
   'title',
   'onTitleChange',
   'onSave',
