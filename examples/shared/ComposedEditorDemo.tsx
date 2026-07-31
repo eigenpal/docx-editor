@@ -22,7 +22,6 @@ import {
   useEditorState,
   useFontFamily,
   type ChromeSlotId,
-  type EditorSnapshot,
 } from '@docx-editor.dev/react';
 import { createT, en, type TranslationKey } from '@docx-editor.dev/i18n';
 import { BrandLogo } from './BrandLogo';
@@ -38,10 +37,6 @@ import { DEMO_BUTTON, DEMO_PRIMARY_BUTTON, DEMO_SECONDARY_BUTTON } from './demoB
 /** English labels for the library toolbar's i18n keys. Demos are apps: English is fine. */
 const tEnglish = createT(en);
 const translate = (key: string): string => tEnglish(key as TranslationKey);
-
-/** Stable selectors so `useEditorState` memoization holds across renders. */
-const selectPage = (snapshot: EditorSnapshot) => snapshot.page;
-const selectEditable = (snapshot: EditorSnapshot) => snapshot.editable;
 
 /** Keep the caret: chrome mousedown must never move focus out of the document. */
 function keepCaret(event: ReactMouseEvent): void {
@@ -220,19 +215,6 @@ function HelpMenu() {
   );
 }
 
-/** Live page + editability chip straight off the snapshot. */
-function StatusChip() {
-  const page = useEditorState(selectPage);
-  const editable = useEditorState(selectEditable);
-  return (
-    <span className="demo-status-chip" data-testid="composed-status">
-      <span>{`Page ${page.current} / ${page.total}`}</span>
-      <span className="demo-status-chip__dot" aria-hidden="true" />
-      <span>{editable ? 'Editing' : 'Read-only'}</span>
-    </span>
-  );
-}
-
 // ─────────────────────────────────────────────────────────────────────────────
 // Toolbar customization: the in-place FontFamily override with typeface previews
 // ─────────────────────────────────────────────────────────────────────────────
@@ -273,6 +255,10 @@ interface PerfReading {
   key: string;
   layout: string;
   paintSel: string;
+  /** Browser-side: commit to presented frame (style/layout/composite after the DOM swap). */
+  frame: string | null;
+  /** Browser-side: keystroke-to-paint via the Event Timing API (duration + input delay). */
+  input: string | null;
   stale: string | null;
   rev: string;
 }
@@ -298,11 +284,20 @@ function PerfHud() {
   openRef.current = open;
   const [reading, setReading] = useState<PerfReading | null>(null);
 
+  // Browser-side numbers the engine cannot see: how long the browser took to PRESENT
+  // the frame after a commit's DOM swap, and keystroke-to-paint via the Event Timing
+  // API. Held in refs so measurement never re-renders on its own; `refresh` folds the
+  // latest values into the reading.
+  const frameMsRef = useRef<number | null>(null);
+  const inputRef = useRef<{ readonly durationMs: number; readonly delayMs: number } | null>(null);
+
   const refresh = useCallback(() => {
     if (!openRef.current) return;
     const state = editor?.surface?.state();
     if (!state) return;
     const { perf } = state;
+    const frameMs = frameMsRef.current;
+    const input = inputRef.current;
     const key = [
       perf.layoutMs,
       perf.paintMs,
@@ -312,6 +307,8 @@ function PerfHud() {
       perf.reusedPages,
       perf.staleDiscards,
       state.revision,
+      frameMs?.toFixed(1) ?? '',
+      input ? `${input.durationMs.toFixed(0)}/${input.delayMs.toFixed(1)}` : '',
     ].join('|');
     setReading((previous) =>
       previous?.key === key
@@ -320,16 +317,64 @@ function PerfHud() {
             key,
             layout: `layout ${ms(perf.layoutMs)} (placed ${perf.placed}/${perf.total}, reused ${perf.reusedPages})`,
             paintSel: `paint ${ms(perf.paintMs)} · sel ${ms(perf.selectionMs)}`,
+            frame: frameMs === null ? null : `dom frame ${ms(frameMs)}`,
+            input: input
+              ? `input ${ms(input.durationMs)} (delay ${ms(input.delayMs)})`
+              : null,
             stale: perf.staleDiscards > 0 ? `stale ${perf.staleDiscards}` : null,
             rev: `rev ${state.revision}`,
           }
     );
   }, [editor]);
 
+  // Commit -> presented frame: stamped at the change event, resolved after two animation
+  // frames (the first fires once the task's DOM work is done, the second after the frame
+  // the browser actually painted).
+  const measureFrame = useCallback(() => {
+    if (!openRef.current) return;
+    const began = performance.now();
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        frameMsRef.current = performance.now() - began;
+        refresh();
+      });
+    });
+  }, [refresh]);
+
   // Commits and selection moves re-read right away; the pass they announce may still
   // be in flight, and the poll below picks up its numbers when it lands.
   useEditorEvent('change', refresh);
+  useEditorEvent('change', measureFrame);
   useEditorEvent('selectionChange', refresh);
+
+  // Keystroke-to-paint, only while expanded. `durationThreshold` 16 is the API minimum;
+  // entries report the full hardware-input -> next-paint span plus the queuing delay.
+  useEffect(() => {
+    if (!open) return undefined;
+    if (
+      typeof PerformanceObserver === 'undefined' ||
+      !PerformanceObserver.supportedEntryTypes?.includes('event')
+    ) {
+      return undefined;
+    }
+    const observer = new PerformanceObserver((list) => {
+      let latest: PerformanceEventTiming | null = null;
+      for (const entry of list.getEntries() as PerformanceEventTiming[]) {
+        if (entry.name === 'keydown' || entry.name === 'beforeinput' || entry.name === 'input') {
+          latest = entry;
+        }
+      }
+      if (latest) {
+        inputRef.current = {
+          durationMs: latest.duration,
+          delayMs: latest.processingStart - latest.startTime,
+        };
+        refresh();
+      }
+    });
+    observer.observe({ type: 'event', durationThreshold: 16 } as PerformanceObserverInit);
+    return () => observer.disconnect();
+  }, [open, refresh]);
 
   useEffect(() => {
     if (!open) return undefined;
@@ -345,6 +390,8 @@ function PerfHud() {
         <div className="demo-perf-hud__panel" role="status">
           <div className="demo-perf-hud__row">{reading.layout}</div>
           <div className="demo-perf-hud__row">{reading.paintSel}</div>
+          {reading.frame ? <div className="demo-perf-hud__row">{reading.frame}</div> : null}
+          {reading.input ? <div className="demo-perf-hud__row">{reading.input}</div> : null}
           {reading.stale ? <div className="demo-perf-hud__row">{reading.stale}</div> : null}
           <div className="demo-perf-hud__row demo-perf-hud__row--muted">{reading.rev}</div>
         </div>
@@ -441,7 +488,6 @@ function EditorChrome({
         </div>
 
         <div className="demo-header__right">
-          <StatusChip />
           <ThemeToggle value={colorMode} onChange={onColorModeChange} />
           <button
             type="button"
