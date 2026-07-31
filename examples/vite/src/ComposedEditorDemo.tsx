@@ -630,7 +630,7 @@ export function ComposedEditorDemo({ fixtureUrl }: { fixtureUrl: string }) {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [colorMode, setColorMode] = useState<'light' | 'dark'>('light');
   const [title, setTitle] = useState('Sample Document');
-  const [showOutline, setShowOutline] = useState(true);
+  const [showOutline, setShowOutline] = useState(false);
 
   useEffect(() => {
     let cancelled = false;

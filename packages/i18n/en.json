@@ -151,6 +151,34 @@
     "noColor": "No Color",
     "automatic": "Automatic",
     "themeColors": "Theme Colors",
+    "theme": {
+      "background1": "Background 1",
+      "text1": "Text 1",
+      "background2": "Background 2",
+      "text2": "Text 2",
+      "accent1": "Accent 1",
+      "accent2": "Accent 2",
+      "accent3": "Accent 3",
+      "accent4": "Accent 4",
+      "accent5": "Accent 5",
+      "accent6": "Accent 6",
+      "lighter80": "Lighter 80%",
+      "lighter60": "Lighter 60%",
+      "lighter40": "Lighter 40%",
+      "darker25": "Darker 25%",
+      "darker50": "Darker 50%",
+      "lighter50": "Lighter 50%",
+      "lighter35": "Lighter 35%",
+      "lighter25": "Lighter 25%",
+      "lighter15": "Lighter 15%",
+      "lighter5": "Lighter 5%",
+      "darker5": "Darker 5%",
+      "darker10": "Darker 10%",
+      "darker15": "Darker 15%",
+      "darker35": "Darker 35%",
+      "darker75": "Darker 75%",
+      "darker90": "Darker 90%"
+    },
     "standardColors": "Standard Colors",
     "colors": {
       "black": "Black",
@@ -199,7 +227,8 @@
       "lightMagenta": "Light Magenta",
       "brightGreen": "Bright Green",
       "violet": "Violet"
-    }
+    },
+    "apply": "Apply"
   },
   "dialogs": {
     "findReplace": {

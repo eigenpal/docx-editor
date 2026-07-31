@@ -661,7 +661,10 @@ export function mountPaginatedSurface(
 
     sectionProperties: () => readSectionProperties(session.part()),
 
-    formatting: () => formattingAt(currentLayout, selection),
+    formatting: () =>
+      formattingAt(currentLayout, selection, (paragraphId, runProperties) =>
+        session.effectiveRunDefaults(paragraphId, runProperties)
+      ),
 
     toggleRunProperty(localName, attributes) {
       const { from, to } = orderedRange();

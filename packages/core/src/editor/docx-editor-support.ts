@@ -101,6 +101,9 @@ export type CommandSupport =
  * membership must not answer `constructor` or `__proto__` from the prototype chain.
  */
 export const HIGHLIGHT_NAMES: ReadonlySet<string> = new Set([
+  // `none` is part of the enumeration: Word's "No Color". The read lane reports it as
+  // "no highlight" (run-style maps it to null), so writing it clears the swatch.
+  'none',
   'black',
   'blue',
   'cyan',
@@ -170,11 +173,13 @@ export function resolveMarkAttr(command: { mark: string; value: unknown }): Reso
       return { ok: true, localName: 'sz', attributes: { val: String(value) } };
     }
     case 'color': {
-      if (typeof value !== 'string' || !HEX_COLOR_VALUE.test(value)) {
+      // `auto` is ST_HexColor's other member — Word's "Automatic". The read lane
+      // already treats it as "no colour" (run-style's hexColor), so it round-trips.
+      if (typeof value !== 'string' || (value !== 'auto' && !HEX_COLOR_VALUE.test(value))) {
         return {
           ok: false,
           code: 'invalidArgs',
-          reason: 'color requires a six-digit hex value like FF0000',
+          reason: "color requires a six-digit hex value like FF0000, or 'auto'",
         };
       }
       return { ok: true, localName: 'color', attributes: { val: value } };

@@ -105,7 +105,7 @@ export function headingLevelsByStyleId(
 }
 
 /** The `w:pPr/w:pStyle/@w:val` of one paragraph element, unvalidated. */
-function paragraphStyleId(paragraph: OoxmlElement): string | undefined {
+export function paragraphStyleId(paragraph: OoxmlElement): string | undefined {
   const pPr = childElement(paragraph, 'pPr');
   const pStyle = pPr ? childElement(pPr, 'pStyle') : undefined;
   return pStyle ? attributeValue(pStyle, 'val') : undefined;

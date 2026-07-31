@@ -313,6 +313,14 @@ export interface Editor {
   /** Font families the document actually uses, for the font picker. */
   getDocumentFonts(): readonly string[];
 
+  /**
+   * The document theme's ten picker colours (`a:clrScheme`) in Word's column order
+   * (Background 1, Text 1, Background 2, Text 2, Accent 1-6), each a six-digit hex
+   * without '#'. Empty when the document has no complete scheme — the picker then
+   * falls back to a default palette.
+   */
+  getDocumentThemeColors(): readonly { readonly slot: string; readonly hex: string }[];
+
   /** Heading outline for the navigation panel, in document order. */
   getOutline(): readonly {
     readonly text: string;
