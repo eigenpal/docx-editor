@@ -47,7 +47,6 @@ import type {
   EditorCommand,
   EditorError,
   EditorEvents,
-  EditorFontError,
   EditorQueries,
   EditorQueryResults,
   EditorScope,
@@ -59,9 +58,13 @@ import type {
   Unsubscribe,
   ViewScope,
 } from '@docx-editor.dev/core-contract/contracts/editor';
+import { EditorFontError } from '@docx-editor.dev/core-contract/contracts/editor';
 import {
   FontResolutionError,
+  HARD_MAX_AGGREGATE_FONT_BYTES,
+  HARD_MAX_FONT_BYTES,
   HARFBUZZ_SHAPING_LIBRARY,
+  fontRequestKey,
   caretAt,
   createFixedMeasurer,
   createShapedMeasurer,
@@ -83,6 +86,8 @@ import {
   snapshotsEqual,
 } from './docx-editor-support.ts';
 import { createLayoutShaping, toEditorFontError } from './font-configuration.ts';
+import { composeFontConfiguration, type FontConfigurationFragment } from './font-composition.ts';
+import { embeddedFontSources } from './embedded-font-sources.ts';
 import { mountPaginatedSurface, type PaginatedSurface } from './paginated-surface.ts';
 
 export interface DocxEditorConfig {
@@ -101,7 +106,16 @@ export interface DocxEditorConfig {
    * `error` event rather than silently loading nothing.
    */
   document?: DocumentSource;
-  fonts?: FontConfiguration;
+  /**
+   * Font bytes for Word-accurate (HarfBuzz-shaped) line wrap and pagination. Omitted,
+   * layout falls back to a fixed-width estimate; fonts embedded in the document are
+   * wired in automatically either way. For Word's default faces (Calibri, Times New
+   * Roman, …) pass `await loadDefaultFonts()` from `@docx-editor.dev/fonts` — a bare
+   * fragment (`{ sources, substitutions }`) is accepted and composed with defaults, or
+   * merge several origins yourself with `composeFontConfiguration`. Sampled per load;
+   * failures degrade to the fixed measurer and report through `onFontError`.
+   */
+  fonts?: FontConfiguration | FontConfigurationFragment;
   author?: string;
   locale?: string;
   /** `'view'` refuses every mutating command through the facade; default `'edit'`. */
@@ -131,6 +145,20 @@ export interface DocxEditorInstance extends Editor {
    * itself is cached per version and returns a stable reference between bumps.
    */
   stateVersion(): number;
+  /**
+   * Which measurer the current document's layout runs on, and whether shaped
+   * resolution is still in flight — the honest "are wrap points Word-accurate yet?"
+   * readout a host shows instead of guessing. `fixed` with `resolving: false` is the
+   * steady state for a document with no usable font source (the documented zero-config
+   * fallback); `shaped` means HarfBuzz measurement over real font bytes. Changes bump
+   * `stateVersion()`.
+   */
+  fontMeasurement(): {
+    readonly measurer: 'fixed' | 'shaped';
+    readonly resolving: boolean;
+    /** The shaped measurer's identity (admitted face hashes); absent while fixed. */
+    readonly producer?: string;
+  };
   /**
    * Mount into `el`. If the instance holds pending document bytes (created without a
    * container, or previously detached), they mount now — under the shaped measurer when
@@ -174,9 +202,25 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
   let lastSelection: SurfaceSelection | null = null;
   let destroyed = false;
 
-  /** The measurer built from `config.fonts` once shaping resolves; undefined until then. */
+  /** The measurer built per LOAD from `config.fonts` plus the document's embedded faces. */
   let shapedMeasurer: TextMeasurer | undefined;
   let shapedProducer: string | undefined;
+  /**
+   * Which DOCUMENT the shaped measurer belongs to. Embedded faces are a property of the
+   * loaded file, so `loadSeq` bumps per `load()` (and per constructor document) and every
+   * async resolution carries the sequence it was started for — a resolution that lands
+   * after the next `load()` must not install the previous document's fonts.
+   */
+  let loadSeq = 0;
+  /**
+   * The sequence font resolution has been KICKED for. Checked inside `mountBytes` so the
+   * shaped remount (which goes back through `mountBytes` with the same document) and an
+   * `attach` of the same document never restart resolution — restarting from the shaped
+   * remount would resolve → remount → resolve forever.
+   */
+  let fontKickSeq = -1;
+  /** True from the moment a load starts font work until it lands (or fails). */
+  let fontsResolving = false;
 
   // ── State tick + cached snapshot ─────────────────────────────────────────────────────
   let stateVersion = 0;
@@ -223,8 +267,10 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
   function mountBytes(bytes: Uint8Array): void {
     if (!container) {
       // Detached: no DOM work. The bytes wait for `attach`, which mounts them under
-      // whatever measurer has resolved by then.
+      // whatever measurer has resolved by then. A previous document's parse failure is
+      // not THESE bytes' state — `attach` re-derives any real error.
       pendingBytes = bytes;
+      parseError = null;
       bump();
       return;
     }
@@ -278,44 +324,147 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
     bump();
     emitDocumentChange({ revision: surface.session.revision() });
     emitSelectionChange();
+    // Fonts resolve per DOCUMENT (embedded faces live in the file), and only once per
+    // load: the shaped remount re-enters this function with `fontKickSeq` already
+    // current, so it mounts under the measurer it carries instead of restarting.
+    if (fontKickSeq !== loadSeq) {
+      fontKickSeq = loadSeq;
+      void resolveDocumentFonts(loadSeq, surface);
+    }
   }
 
-  // Fonts resolve asynchronously (HarfBuzz init + validation), and the surface samples its
-  // measurer at mount. So the document opens on the fixed measurer immediately, and when the
-  // shaped measurer arrives the surface is remounted FROM THE CURRENT TREE — `session.save()`
-  // — so every edit made before fonts resolved survives. What does not survive is the undo
-  // stack and the caret, the honest cost of a full remount; a rescale-in-place path on the
-  // surface would remove it. In the not-yet-attached case there is nothing to remount: the
-  // measurer is simply picked up by the next mount.
-  if (config.fonts) {
-    const fonts = config.fonts;
-    void createLayoutShaping(fonts)
-      .then((shaping) => {
-        if (destroyed) return;
-        shapedMeasurer = createShapedMeasurer({
-          shaper: shaping.shaper,
-          resolveFont: (style) => {
-            const resolved = shaping.fonts.resolve({
-              family: style.fontFamily ?? fonts.defaultFont.family,
-              weight: style.bold ? 700 : 400,
-              style: style.italic ? 'italic' : 'normal',
-            });
-            return resolved instanceof FontResolutionError ? null : resolved;
-          },
-          fallback: createFixedMeasurer(),
-          shapingLibrary: HARFBUZZ_SHAPING_LIBRARY,
-          unicodeDataVersion: '16.0.0',
-          ...(fonts.language ? { language: fonts.language } : {}),
-        });
-        shapedProducer = `shaped:${shaping.operation.extensionFingerprint}`;
-        if (surface) mountBytes(surface.session.save());
-      })
-      .catch((error: unknown) => {
-        if (destroyed) return;
-        const fontError = toEditorFontError(error);
-        config.onFontError?.(fontError);
-        emitError(fontError);
+  /** A NEW document: forget the previous document's measurer, then mount. */
+  function loadBytes(bytes: Uint8Array): void {
+    loadSeq += 1;
+    shapedMeasurer = undefined;
+    shapedProducer = undefined;
+    // A superseded in-flight resolution belongs to the PREVIOUS sequence; its stale
+    // guard will refuse to touch state, so the flag must reset here or a load that
+    // starts no font work of its own reports `resolving: true` forever.
+    fontsResolving = false;
+    mountBytes(bytes);
+  }
+
+  function reportFontError(error: EditorFontError): void {
+    config.onFontError?.(error);
+    emitError(error);
+  }
+
+  // Fonts resolve asynchronously (HarfBuzz init + validation) PER LOAD, composing the
+  // app's `config.fonts` with the faces the document itself embeds — explicit sources
+  // beat embedded ones, and both beat substitutions. The surface samples its measurer at
+  // mount, so the document opens on the fixed measurer immediately, and when the shaped
+  // measurer arrives the surface is remounted FROM THE CURRENT TREE — `session.save()` —
+  // so every edit made before fonts resolved survives. What does not survive is the undo
+  // stack and the caret, the honest cost of a full remount; a rescale-in-place path on
+  // the surface would remove it. In the not-yet-attached case there is nothing to
+  // remount: the measurer is simply picked up by the next mount.
+  //
+  // Failure is DEGRADATION, never a blocked load: a face the validator refuses drops
+  // with a typed report and the remaining faces admit; a wholly failed resolution leaves
+  // the document editable on the fixed measurer.
+  async function resolveDocumentFonts(seq: number, mounted: PaginatedSurface): Promise<void> {
+    // A bare fragment ({ sources, substitutions }) is a valid base: every other
+    // configuration field takes the documented defaults, with the load sequence as the
+    // epoch when the app pinned none.
+    const explicit = config.fonts;
+    const embedded = mounted.session.embeddedFonts();
+    // The zero-config, nothing-embedded common case does NO font work at all: no
+    // hashing, no HarfBuzz initialization, no remount.
+    if (!explicit && embedded.length === 0) return;
+    fontsResolving = true;
+    bump();
+    try {
+      const maxFontBytes =
+        (explicit && 'maxFontBytes' in explicit ? explicit.maxFontBytes : undefined) ??
+        HARD_MAX_FONT_BYTES;
+      // Embedded faces spend only what explicit sources left of the aggregate budget: a
+      // file must not be able to starve the fonts the app itself supplied.
+      const explicitBytes = (explicit?.sources ?? []).reduce(
+        (total, source) => total + source.bytes.byteLength,
+        0
+      );
+      // Faces the app's explicit sources already cover can never win composition:
+      // skipped up front so they spend neither budget nor hashing time. Key derivation
+      // is guarded by the same validity rule the mapper applies per-face.
+      const shadowedRequests = new Set(
+        (explicit?.sources ?? [])
+          .filter((source) => source.request.family.trim().length > 0)
+          .map((source) => fontRequestKey(source.request))
+      );
+      const fromDocument = embeddedFontSources(embedded, {
+        maxFontBytes,
+        aggregateBudget: Math.max(0, HARD_MAX_AGGREGATE_FONT_BYTES - explicitBytes),
+        shadowedRequests,
       });
+      for (const drop of fromDocument.dropped) {
+        reportFontError(
+          new EditorFontError(
+            drop.reason,
+            drop.reason === 'overLimit'
+              ? `embedded font ${drop.request.family} (${drop.partName}) exceeds the font byte budget`
+              : `embedded font part ${drop.partName} declares an invalid family name`,
+            { request: drop.request }
+          )
+        );
+      }
+      const fonts = composeFontConfiguration({ epoch: seq, ...explicit }, fromDocument);
+      // Nothing to shape: the fixed measurer stays. An app that DID supply a
+      // configuration deserves to hear that it contributed no usable source (every
+      // fetch failed, or the fragment was substitutions-only against no document
+      // faces) rather than a byte-limit error from the validator.
+      if (fonts.sources.length === 0) {
+        fontsResolving = false;
+        bump();
+        if (explicit) {
+          reportFontError(
+            new EditorFontError(
+              'missing',
+              'the supplied font configuration contains no usable sources; the fixed measurer stays in effect'
+            )
+          );
+        }
+        return;
+      }
+      const shaping = await createLayoutShaping(fonts);
+      if (destroyed || seq !== loadSeq) {
+        if (seq === loadSeq) fontsResolving = false;
+        return;
+      }
+      // Per-face degradation, reported: an embedded face the validator refused still
+      // resolves — to a typed error. Probing here (map lookups, no shaping work) is what
+      // turns a silent fixed-measurer fallback into a diagnosable one.
+      for (const source of fromDocument.sources) {
+        const resolved = shaping.fonts.resolve(source.request);
+        if (resolved instanceof FontResolutionError) {
+          reportFontError(toEditorFontError(resolved));
+        }
+      }
+      shapedMeasurer = createShapedMeasurer({
+        shaper: shaping.shaper,
+        resolveFont: (style) => {
+          const resolved = shaping.fonts.resolve({
+            family: style.fontFamily ?? fonts.defaultFont.family,
+            weight: style.bold ? 700 : 400,
+            style: style.italic ? 'italic' : 'normal',
+          });
+          return resolved instanceof FontResolutionError ? null : resolved;
+        },
+        fallback: createFixedMeasurer(),
+        shapingLibrary: HARFBUZZ_SHAPING_LIBRARY,
+        unicodeDataVersion: '16.0.0',
+        ...(fonts.language ? { language: fonts.language } : {}),
+      });
+      shapedProducer = `shaped:${shaping.operation.extensionFingerprint}`;
+      fontsResolving = false;
+      if (surface) mountBytes(surface.session.save());
+      else bump();
+    } catch (error) {
+      if (destroyed || seq !== loadSeq) return;
+      fontsResolving = false;
+      bump();
+      reportFontError(toEditorFontError(error));
+    }
   }
 
   function gate(command: EditorCommand, options?: { scope?: EditorScope }): CommandGate {
@@ -446,7 +595,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
 
   if (config.document) {
     const bytes = normalizeSource(config.document);
-    if (bytes) mountBytes(bytes);
+    if (bytes) loadBytes(bytes);
     else {
       parseError = 'a DocumentHandle cannot be re-loaded; pass DOCX bytes';
       emitError(editorError('unsupported', parseError));
@@ -459,6 +608,12 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
     },
 
     stateVersion: () => stateVersion,
+
+    fontMeasurement: () => ({
+      measurer: shapedMeasurer ? ('shaped' as const) : ('fixed' as const),
+      resolving: fontsResolving,
+      ...(shapedMeasurer && shapedProducer ? { producer: shapedProducer } : {}),
+    }),
 
     attach(el) {
       if (destroyed) {
@@ -503,7 +658,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
         );
         return;
       }
-      mountBytes(bytes);
+      loadBytes(bytes);
     },
 
     save() {

@@ -8,6 +8,7 @@ import type {
   FontConfiguration,
 } from '@docx-editor.dev/core-contract/contracts/editor';
 import { createDocxEditor } from '@docx-editor.dev/core-contract/editor';
+import type { FontConfigurationFragment } from '@docx-editor.dev/core-contract/editor';
 import type { DocxEditorRef, EditorMode } from './types';
 
 /**
@@ -52,9 +53,16 @@ export default defineComponent({
     zoom: { type: Number, default: undefined },
     locale: { type: String, default: undefined },
     author: { type: String, default: undefined },
+    /**
+     * Font bytes for Word-accurate (HarfBuzz-shaped) wrap and pagination — optional,
+     * exactly as in the React adapter: omitted, layout uses a fixed-width estimate and
+     * fonts embedded in the document still wire in automatically. Accepts a full
+     * `FontConfiguration` or a bare fragment (e.g. `await loadDefaultFonts()` from
+     * `@docx-editor.dev/fonts`). Identity change remounts.
+     */
     fonts: {
-      type: Object as PropType<FontConfiguration>,
-      required: true,
+      type: Object as PropType<FontConfiguration | FontConfigurationFragment>,
+      default: undefined,
     },
   },
   emits: {
@@ -85,7 +93,7 @@ export default defineComponent({
       const created = createDocxEditor({
         container: element,
         ...(props.document !== undefined ? { document: props.document } : {}),
-        fonts: props.fonts,
+        ...(props.fonts !== undefined ? { fonts: props.fonts } : {}),
         ...(props.author !== undefined ? { author: props.author } : {}),
         ...(props.locale !== undefined ? { locale: props.locale } : {}),
         ...(props.mode !== undefined ? { mode: props.mode } : {}),

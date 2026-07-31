@@ -22,7 +22,10 @@ import type {
   FontConfiguration,
 } from '@docx-editor.dev/core-contract/contracts/editor';
 import { createDocxEditor } from '@docx-editor.dev/core-contract/editor';
-import type { DocxEditorInstance } from '@docx-editor.dev/core-contract/editor';
+import type {
+  DocxEditorInstance,
+  FontConfigurationFragment,
+} from '@docx-editor.dev/core-contract/editor';
 import { DocxEditorContext } from './context';
 
 /**
@@ -36,8 +39,15 @@ import { DocxEditorContext } from './context';
 export interface DocxEditorRootProps {
   /** A document to load: DOCX bytes or an existing handle. Identity change remounts. */
   document?: DocumentSource;
-  /** Byte-backed font sources sampled at mount. Identity change remounts. */
-  fonts?: FontConfiguration;
+  /**
+   * Font bytes for Word-accurate (HarfBuzz-shaped) wrap and pagination. Omitted, layout
+   * uses a fixed-width estimate; fonts embedded in the document are wired automatically
+   * either way. Pass `await loadDefaultFonts()` from `@docx-editor.dev/fonts` for
+   * Word's default faces — a bare fragment is accepted — or compose several origins
+   * with `composeFontConfiguration`. Sampled at mount; identity change remounts;
+   * failures degrade to the fixed measurer and report through `onFontError`.
+   */
+  fonts?: FontConfiguration | FontConfigurationFragment;
   author?: string;
   locale?: string;
   /** `'edit'` (default) or `'view'` (read-only). Sampled at mount only. */

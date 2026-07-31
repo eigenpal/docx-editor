@@ -8,6 +8,7 @@ import { CHROME_GROUPS } from '@docx-editor.dev/core-contract/editor';
 import { ChromeSlotId } from '@docx-editor.dev/core-contract/editor';
 import { ColorValue } from '@docx-editor.dev/core-contract/contracts/editor';
 import { commandForSlot } from '@docx-editor.dev/core-contract/editor';
+import { composeFontConfiguration } from '@docx-editor.dev/core-contract/editor';
 import { CSSProperties } from 'react';
 import { DisplayItem } from '@docx-editor.dev/core-contract/contracts/geometry';
 import { DisplayPage } from '@docx-editor.dev/core-contract/contracts/geometry';
@@ -28,11 +29,19 @@ import { EditorScope } from '@docx-editor.dev/core-contract/contracts/editor';
 import { EditorSnapshot } from '@docx-editor.dev/core-contract/contracts/editor';
 import { ExecResult } from '@docx-editor.dev/core-contract/contracts/editor';
 import { FontConfiguration } from '@docx-editor.dev/core-contract/contracts/editor';
+import { FontConfigurationBase } from '@docx-editor.dev/core-contract/editor';
+import { FontConfigurationFragment } from '@docx-editor.dev/core-contract/editor';
 import { FontFaceRequest } from '@docx-editor.dev/core-contract/contracts/editor';
+import { FontLoadFailure } from '@docx-editor.dev/core-contract/editor';
+import { FontLoadFailureReason } from '@docx-editor.dev/core-contract/editor';
 import { FontSource } from '@docx-editor.dev/core-contract/contracts/editor';
 import { FontSourceSubstitution } from '@docx-editor.dev/core-contract/contracts/editor';
+import { FontUrlSource } from '@docx-editor.dev/core-contract/editor';
 import { ForwardRefExoticComponent } from 'react';
 import { generateRulerTicks } from '@docx-editor.dev/core-contract/editor';
+import { loadFonts } from '@docx-editor.dev/core-contract/editor';
+import { LoadFontsRequest } from '@docx-editor.dev/core-contract/editor';
+import { LoadFontsResult } from '@docx-editor.dev/core-contract/editor';
 import { NavigationCommand } from '@docx-editor.dev/core-contract/editor';
 import { PaginatedSurfaceState } from '@docx-editor.dev/core-contract/editor';
 import { PX_PER_CM } from '@docx-editor.dev/core-contract/editor';
@@ -54,12 +63,15 @@ import { Theme } from '@docx-editor.dev/core-contract/contracts/editor';
 import { ToolbarCommandState } from '@docx-editor.dev/core-contract/editor';
 import { toolbarCommandState } from '@docx-editor.dev/core-contract/editor';
 import { Translations } from '@docx-editor.dev/i18n';
+import { WORD_DEFAULT_FONT } from '@docx-editor.dev/core-contract/editor';
 
 export { CHROME_GROUPS }
 
 export { ChromeSlotId }
 
 export { commandForSlot }
+
+export { composeFontConfiguration }
 
 export { DisplayItem }
 
@@ -164,7 +176,7 @@ export interface DocxEditorRootProps {
     // (undocumented)
     children?: ReactNode;
     document?: DocumentSource;
-    fonts?: FontConfiguration;
+    fonts?: FontConfiguration | FontConfigurationFragment;
     // (undocumented)
     locale?: string;
     mode?: 'edit' | 'view';
@@ -355,6 +367,10 @@ export { EditorSnapshot }
 
 export { FontConfiguration }
 
+export { FontConfigurationBase }
+
+export { FontConfigurationFragment }
+
 export { FontFaceRequest }
 
 // @public
@@ -391,9 +407,15 @@ export interface FontFamilyProps extends FontFamilyPartProps {
     hidden?: boolean;
 }
 
+export { FontLoadFailure }
+
+export { FontLoadFailureReason }
+
 export { FontSource }
 
 export { FontSourceSubstitution }
+
+export { FontUrlSource }
 
 export { generateRulerTicks }
 
@@ -439,6 +461,12 @@ export interface HorizontalRulerProps {
     // (undocumented)
     zoom?: number;
 }
+
+export { loadFonts }
+
+export { LoadFontsRequest }
+
+export { LoadFontsResult }
 
 // @public (undocumented)
 export function Logo(input: LogoProps): React__default.JSX.Element;
@@ -730,6 +758,8 @@ export interface VerticalRulerProps {
     unit?: 'inch' | 'cm';
     zoom?: number;
 }
+
+export { WORD_DEFAULT_FONT }
 
 // (No @packageDocumentation comment for this package)
 

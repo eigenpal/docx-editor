@@ -16,6 +16,20 @@ export {
   toEditorFontError,
 } from './font-configuration.ts';
 export {
+  WORD_DEFAULT_FONT,
+  composeFontConfiguration,
+  type FontConfigurationBase,
+  type FontConfigurationFragment,
+} from './font-composition.ts';
+export {
+  loadFonts,
+  type FontLoadFailure,
+  type FontLoadFailureReason,
+  type FontUrlSource,
+  type LoadFontsRequest,
+  type LoadFontsResult,
+} from './load-fonts.ts';
+export {
   generateRulerTicks,
   rulerPageBox,
   PX_PER_INCH,

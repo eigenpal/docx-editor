@@ -23,6 +23,9 @@ import {
   useFontFamily,
   type ChromeSlotId,
 } from '@docx-editor.dev/react';
+import { composeFontConfiguration } from '@docx-editor.dev/core-contract/editor';
+import type { FontConfiguration } from '@docx-editor.dev/core-contract/contracts/editor';
+import { installDefaultFontFaces, loadDefaultFonts } from '@docx-editor.dev/fonts';
 import { createT, en, type TranslationKey } from '@docx-editor.dev/i18n';
 import { BrandLogo } from '../../shared/BrandLogo';
 import { AdapterSwitcher } from '../../shared/AdapterSwitcher';
@@ -275,6 +278,8 @@ const PERF_TIPS = {
   input:
     'Keystroke to next paint, from the Event Timing API. delay = how long the event sat queued before its handler ran. The browser only reports events over 16ms, so quiet typing may not update this.',
   stale: 'Layout passes discarded because the document changed again before they could publish.',
+  fonts:
+    'Which measurer produced this layout. shaped = HarfBuzz over real font bytes (Word-accurate wrap points); fixed = monospace estimate, the zero-config fallback.',
   rev: 'Document revision — the number of committed transactions this session.',
 } as const;
 
@@ -313,6 +318,12 @@ function PerfHud() {
     const { perf } = state;
     const frameMs = frameMsRef.current;
     const input = inputRef.current;
+    const fontState = editor?.fontMeasurement();
+    const fontValue = fontState
+      ? fontState.resolving
+        ? 'resolving…'
+        : fontState.measurer
+      : '';
     const key = [
       perf.layoutMs,
       perf.paintMs,
@@ -324,6 +335,7 @@ function PerfHud() {
       state.revision,
       frameMs?.toFixed(1) ?? '',
       input ? `${input.durationMs.toFixed(0)}/${input.delayMs.toFixed(1)}` : '',
+      fontValue,
     ].join('|');
     setReading((previous) => {
       if (previous?.key === key) return previous;
@@ -359,6 +371,15 @@ function PerfHud() {
           label: 'stale',
           value: String(perf.staleDiscards),
           tip: PERF_TIPS.stale,
+        });
+      }
+      if (fontValue) {
+        rows.push({
+          id: 'fonts',
+          label: 'fonts',
+          value: fontValue,
+          tip: PERF_TIPS.fonts,
+          muted: fontValue === 'fixed',
         });
       }
       rows.push({
@@ -631,6 +652,15 @@ export function ComposedEditorDemo({ fixtureUrl }: { fixtureUrl: string }) {
   const [colorMode, setColorMode] = useState<'light' | 'dark'>('light');
   const [title, setTitle] = useState('Sample Document');
   const [showOutline, setShowOutline] = useState(false);
+  // Word-default substitute fonts (Carlito for Calibri, Liberation Serif for Times, …)
+  // so wrap and pagination measure Word-accurately instead of on the fixed fallback.
+  // `settled` gates the FIRST mount — fonts and fixture load in parallel, and waiting
+  // for both avoids a visible remount. A load failure settles with no fonts: the
+  // editor opens on the fixed measurer, which is the documented degradation.
+  const [fonts, setFonts] = useState<{
+    settled: boolean;
+    configuration?: FontConfiguration;
+  }>({ settled: false });
 
   useEffect(() => {
     let cancelled = false;
@@ -649,13 +679,42 @@ export function ComposedEditorDemo({ fixtureUrl }: { fixtureUrl: string }) {
     };
   }, [fixtureUrl]);
 
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      try {
+        const fragment = await loadDefaultFonts();
+        // Degradations are diagnosable, not silent: a face that failed to load falls
+        // back to fixed-width measurement for that family only.
+        for (const failure of fragment.failures) {
+          console.warn(`[fonts] ${failure.family} (${failure.file}): ${failure.diagnostic}`);
+        }
+        // Paint-side twin: register the substitutes under the Word family names so
+        // painted glyphs use the same metrics the layout measured with.
+        void installDefaultFontFaces();
+        if (!cancelled) {
+          setFonts({ settled: true, configuration: composeFontConfiguration(fragment) });
+        }
+      } catch {
+        if (!cancelled) setFonts({ settled: true });
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   return (
     <div
       className={`ep-root demo-app${colorMode === 'dark' ? ' dark' : ''}`}
       data-testid="composed-mount"
     >
-      {bytes ? (
-        <DocxEditor.Root document={bytes}>
+      {bytes && fonts.settled ? (
+        <DocxEditor.Root
+          document={bytes}
+          {...(fonts.configuration ? { fonts: fonts.configuration } : {})}
+          onFontError={(error) => console.warn(`[fonts] ${error.code}: ${error.message}`)}
+        >
           <EditorChrome
             title={title}
             onTitleChange={setTitle}

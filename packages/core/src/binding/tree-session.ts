@@ -15,12 +15,14 @@ import type { Node as PMNode } from 'prosemirror-model';
 import {
   ORIGIN_IDS,
   TreeDocumentStore,
+  readEmbeddedFonts,
   readOoxmlPackage,
   resolveHeaderFooterParts,
   resolveRelationship,
   withPart,
   writeOoxmlPackage,
   paragraphTextOf,
+  type EmbeddedFont,
   type HeaderFooterParts,
   type OoxmlElement,
   type OoxmlPackage,
@@ -164,6 +166,13 @@ export interface TreeDocxSession {
    * in-session.
    */
   documentOutline(): readonly DocumentOutlineEntry[];
+  /**
+   * The faces the package EMBEDS (`word/fontTable.xml` embed relationships),
+   * deobfuscated — the only font source that needs neither a substitute nor a network.
+   * Extraction asserts nothing about validity; admitting a face is the font resource
+   * lane's job. Memoized once: the font table and font parts are immutable in-session.
+   */
+  embeddedFonts(): readonly EmbeddedFont[];
 }
 
 export type { DocumentStyleEntry } from './document-catalog.ts';
@@ -254,6 +263,30 @@ export function openTreeSession(bytes: Uint8Array): OpenTreeSessionResult {
     part ??= pkg.parts.get('/word/theme/theme1.xml');
     themeRoot = part?.root ?? null;
     return themeRoot;
+  };
+
+  // The font table part, resolved once through the main part's `fontTable` relationship
+  // (same discipline as the styles part), with the conventional name as fallback. The
+  // table and the font parts it points at are immutable in-session, so the extraction —
+  // which COPIES every deobfuscated part — runs at most once per session.
+  const FONT_TABLE_REL_TYPE =
+    'http://schemas.openxmlformats.org/officeDocument/2006/relationships/fontTable';
+  let embeddedFontsCache: readonly EmbeddedFont[] | null = null;
+  const resolveEmbeddedFonts = (): readonly EmbeddedFont[] => {
+    if (embeddedFontsCache) return embeddedFontsCache;
+    const record = (pkg.relationships.get(pkg.mainDocumentPart) ?? []).find(
+      (rel) => rel.type === FONT_TABLE_REL_TYPE
+    );
+    let part: OoxmlPart | undefined;
+    if (record) {
+      const resolved = resolveRelationship(record);
+      if (resolved.mode === 'Internal' && resolved.target.ok) {
+        part = pkg.parts.get(resolved.target.partName);
+      }
+    }
+    part ??= pkg.parts.get('/word/fontTable.xml');
+    embeddedFontsCache = Object.freeze(readEmbeddedFonts(pkg, part));
+    return embeddedFontsCache;
   };
 
   let fontsCache: { readonly revision: number; readonly fonts: readonly string[] } | null = null;
@@ -417,6 +450,8 @@ export function openTreeSession(bytes: Uint8Array): OpenTreeSessionResult {
         };
         return outlineCache.outline;
       },
+
+      embeddedFonts: resolveEmbeddedFonts,
     },
   };
 }
