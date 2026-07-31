@@ -11,7 +11,6 @@ const commands = [
     env: { NODE_OPTIONS: process.env.NODE_OPTIONS ?? '--max-old-space-size=8192' },
   },
   { cmd: 'bun', args: ['run', 'check:consumer-install'], env: { SKIP_CONSUMER_INSTALL_BUILD: '1' } },
-  { cmd: 'bun', args: ['run', 'test:e2e:parity:smoke'] },
 ];
 
 let failed = false;

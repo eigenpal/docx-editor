@@ -1,0 +1,258 @@
+{
+  "version": "package-test-migration-inventory/1.0.0",
+  "description": "Classification of retired package-coupled tests and engine-neutral retained coverage.",
+  "legacyCoreCoupled": {
+    "durableBehavior": [
+      {
+        "status": "durable-behavior-tombstone",
+        "coupling": {
+          "category": "legacy-adapter-binding",
+          "reason": "These adapter tests depend on the current editor binding, ProseMirror-facing view behavior, retired package document types, or adapter-owned toolbar, file-open, and TOC proxy wiring, but they still describe durable user-visible behavior."
+        },
+        "intent": {
+          "kind": "observable",
+          "summary": "React and Vue adapter load lifecycle, toolbar visibility, file-open customization, comment-threading, context-menu focus, visible scroll behavior, and TOC proxy behavior tied to the current editor binding."
+        },
+        "destination": {
+          "change": "typed-ooxml-paragraph-editor",
+          "area": "editor-binding/adapter-behavior-conformance"
+        },
+        "retainedFixtureRefs": [],
+        "sources": [
+          "packages/react/src/components/DocxEditor/fileOpen.test.tsx",
+          "packages/react/src/components/DocxEditor/ContentControlWidgets.test.tsx",
+          "packages/react/src/components/DocxEditor/helpMenu.test.tsx",
+          "packages/vue/src/composables/fileOpen.test.ts",
+          "packages/vue/src/composables/useDocxEditor.loadGeneration.test.ts",
+          "packages/vue/src/composables/useCommentSidebarItems.test.ts",
+          "packages/vue/src/composables/useContextMenus.cut.test.ts",
+          "packages/vue/src/composables/useOutlineSidebar.test.ts"
+        ]
+      },
+      {
+        "status": "durable-behavior-tombstone",
+        "coupling": {
+          "category": "legacy-bridge-surface",
+          "reason": "These bridge integration tests exercise the current editor bridge and reviewer bridge surfaces that are layered directly over the retired package architecture."
+        },
+        "intent": {
+          "kind": "observable",
+          "summary": "Editor bridge, reviewer bridge, and hosted MCP integration behavior exposed on top of the retired bridge contracts."
+        },
+        "destination": {
+          "change": "typed-ooxml-paragraph-editor",
+          "area": "server-bindings/mcp-bridge-conformance"
+        },
+        "retainedFixtureRefs": [
+          "e2e/fixtures/with-tables.docx"
+        ],
+        "sources": [
+          "packages/agents/src/__tests__/bridge.test.ts",
+          "packages/agents/src/__tests__/reviewerBridge.test.ts",
+          "packages/agents/src/__tests__/mcp-integration.test.ts"
+        ]
+      },
+      {
+        "status": "durable-behavior-tombstone",
+        "coupling": {
+          "category": "legacy-headless-core-surface",
+          "reason": "These headless reviewer tests operate directly on the current headless document model, tracked-change surface, comment surface, and save/reload behavior of the retired package surface."
+        },
+        "intent": {
+          "kind": "observable",
+          "summary": "Headless read/search/comment/change/note-body/save-roundtrip behavior bound to the retired headless core surface."
+        },
+        "destination": {
+          "change": "typed-ooxml-paragraph-editor",
+          "area": "server-bindings/headless-reviewer-conformance"
+        },
+        "retainedFixtureRefs": [
+          "e2e/fixtures/endnotes-tracked-changes.docx",
+          "e2e/fixtures/styled-content.docx"
+        ],
+        "sources": [
+          "packages/agents/src/__tests__/DocxReviewer.read.test.ts",
+          "packages/agents/src/__tests__/DocxReviewer.search.test.ts",
+          "packages/agents/src/__tests__/DocxReviewer.comments.test.ts",
+          "packages/agents/src/__tests__/DocxReviewer.changes.test.ts",
+          "packages/agents/src/__tests__/DocxReviewer.roundtrip.test.ts",
+          "packages/agents/src/__tests__/DocxReviewer.note-changes.test.ts",
+          "packages/agents/src/__tests__/DocxReviewer.note-changes-accept.test.ts",
+          "packages/agents/src/__tests__/DocxReviewer.applyReview-note-id.test.ts",
+          "packages/agents/src/__tests__/endnote-changes.integration.test.ts"
+        ]
+      },
+      {
+        "status": "durable-behavior-tombstone",
+        "coupling": {
+          "category": "legacy-bridge-surface",
+          "reason": "These MCP stdio and server tests contain durable framing, lifecycle, and protocol-envelope behavior, but they instantiate the retired EditorBridge and route through its fixed tool surface."
+        },
+        "intent": {
+          "kind": "observable",
+          "summary": "MCP stdio chunking, lifecycle, initialization, error-envelope, and request-routing behavior currently coupled to the retired bridge."
+        },
+        "destination": {
+          "change": "typed-ooxml-paragraph-editor",
+          "area": "server-bindings/mcp-transport-conformance"
+        },
+        "retainedFixtureRefs": [],
+        "sources": [
+          "packages/agents/src/__tests__/mcp-stdio.test.ts",
+          "packages/agents/src/__tests__/mcp-server.test.ts"
+        ]
+      },
+      {
+        "status": "durable-behavior-tombstone",
+        "coupling": {
+          "category": "legacy-bridge-surface",
+          "reason": "This test uses a synthetic retired EditorBridge, but it preserves durable shared tool-schema validation, normalization, and clean-text behavior that must be independently specified outside that bridge."
+        },
+        "intent": {
+          "kind": "observable",
+          "summary": "Tool schema compatibility with no empty enum members; rejection of invalid underline, highlight, and break values; highlight 'none' normalization; and clean-text reads that exclude revision and comment-anchor annotations."
+        },
+        "destination": {
+          "change": "typed-ooxml-paragraph-editor",
+          "area": "server-bindings/shared-tool-runtime-schema-conformance"
+        },
+        "retainedFixtureRefs": [],
+        "sources": [
+          "packages/agents/src/__tests__/tools.test.ts"
+        ]
+      }
+    ],
+    "implementationOnly": [
+      {
+        "status": "implementation-only-tombstone",
+        "coupling": {
+          "category": "legacy-bridge-surface",
+          "reason": "These runtime and type-level parity tests only assert the current bridge method surface and adapter ref contract, not durable document behavior."
+        },
+        "intent": {
+          "kind": "implementation-only",
+          "summary": "Runtime and type-level method-presence parity checks for the retired bridge wrapper and adapter refs."
+        },
+        "destination": {
+          "change": "typed-ooxml-paragraph-editor",
+          "area": "server-bindings/bridge-surface-audit"
+        },
+        "retainedFixtureRefs": [],
+        "sources": [
+          "packages/agents/src/__tests__/wordCompat.test.ts",
+          "packages/react/src/__tests__/ref-conformance.test-d.ts",
+          "packages/vue/src/__tests__/ref-conformance.test-d.ts"
+        ]
+      },
+      {
+        "status": "implementation-only-tombstone",
+        "coupling": {
+          "category": "legacy-adapter-binding",
+          "reason": "These adapter tests assert the hidden PM host and painted-pages event and guard lifecycle used by the current adapter implementations, not durable editor behavior."
+        },
+        "intent": {
+          "kind": "implementation-only",
+          "summary": "Hidden PM host portal behavior and painted-pages event and guard lifecycle internals."
+        },
+        "destination": {
+          "change": "typed-ooxml-paragraph-editor",
+          "area": "editor-binding/adapter-internal-surface-audit"
+        },
+        "retainedFixtureRefs": [],
+        "sources": [
+          "packages/react/src/components/DocxEditor/OffscreenEditorHost.portal.test.tsx",
+          "packages/react/src/components/DocxEditor/OffscreenEditorHost.ssr.test.tsx",
+          "packages/react/src/components/DocxEditor/hooks/usePaintedPagesGuardLifecycle.test.tsx",
+          "packages/vue/src/components/contentControlWidgetListeners.test.ts"
+        ]
+      },
+      {
+        "status": "implementation-only-tombstone",
+        "coupling": {
+          "category": "legacy-adapter-binding",
+          "reason": "This React adapter test reaches a utility re-export from the removed core implementation surface, so it does not exercise an adapter-owned engine-neutral implementation."
+        },
+        "intent": {
+          "kind": "implementation-only",
+          "summary": "Adapter re-export coverage for the retired package font-option normalization utility."
+        },
+        "destination": {
+          "change": "typed-ooxml-paragraph-editor",
+          "area": "adapter-runtime/utility-surface-audit"
+        },
+        "retainedFixtureRefs": [],
+        "sources": [
+          "packages/react/src/components/ui/normalizeFontFamilies.test.ts"
+        ]
+      }
+    ]
+  },
+  "engineNeutralRetained": [
+    {
+      "status": "engine-neutral-retained",
+      "coupling": {
+        "category": "engine-neutral",
+        "reason": "These are utility-level, UI-level, and declaration-contract tests with no dependency on the retired package surface, headless reviewer, or ProseMirror binding."
+      },
+      "intent": {
+        "kind": "observable",
+        "summary": "Adapter UI, declaration-contract, and i18n utility behavior that should remain live through the engine migration."
+      },
+      "destination": {
+        "change": "typed-ooxml-paragraph-editor",
+        "area": "adapter-runtime/utility-regressions"
+      },
+      "retainedFixtureRefs": [],
+      "sources": [
+        "packages/core/src/__tests__/consumer.test-d.ts",
+        "packages/i18n/src/plural-redos.test.ts"
+      ]
+    },
+    {
+      "status": "engine-neutral-retained",
+      "coupling": {
+        "category": "engine-neutral",
+        "reason": "This test validates JSON-RPC line framing, response encoders, type guards, and standard error codes without importing or instantiating the retired bridge."
+      },
+      "intent": {
+        "kind": "observable",
+        "summary": "Transport-neutral JSON-RPC framing and protocol primitives that remain valid without retired engine or bridge semantics."
+      },
+      "destination": {
+        "change": "typed-ooxml-paragraph-editor",
+        "area": "server-bindings/mcp-transport-contract"
+      },
+      "retainedFixtureRefs": [],
+      "sources": [
+        "packages/agents/src/__tests__/mcp-protocol.test.ts"
+      ]
+    }
+  ],
+  "engineNeutralRetired": [
+    {
+      "status": "engine-neutral-retired",
+      "coupling": {
+        "category": "engine-neutral",
+        "reason": "Engine-neutral when inventoried, but deleted with the adapter code they covered during the greenfield engine migration. Recorded here rather than dropped so the guard can still tell an intentional removal from silent drift."
+      },
+      "intent": {
+        "kind": "observable",
+        "summary": "Adapter utility and declaration-contract behavior whose subject no longer exists; re-add coverage with the replacement adapter surface, not by restoring these files."
+      },
+      "destination": {
+        "change": "typed-ooxml-paragraph-editor",
+        "area": "adapter-runtime/utility-regressions"
+      },
+      "retainedFixtureRefs": [],
+      "sources": [
+        "packages/react/src/components/ui/fontPickerValue.test.ts",
+        "packages/vue/src/__tests__/component-props-conformance.test-d.ts",
+        "packages/vue/src/components/ui/fontPickerValue.test.ts",
+        "packages/vue/src/composables/imageOverlayRect.test.ts",
+        "packages/vue/src/composables/useControllableBoolean.test.ts",
+        "packages/react/src/components/DocxEditor/hooks/useControllableBoolean.test.tsx",
+        "packages/react/src/components/dialogs/dataUrlToBlob.test.ts"
+      ]
+    }
+  ]
+}

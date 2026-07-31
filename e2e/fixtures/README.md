@@ -1,120 +1,32 @@
-# Test Fixtures
+# DOCX Fixtures
 
-This directory contains DOCX test fixtures for the Playwright test suite.
+This directory retains reusable DOCX fixtures and supporting source assets that
+exercise OOXML import, export, layout, pagination, headers/footers, floating
+objects, tables, notes, content controls, and related document behaviors.
 
-## Files
+The files fall into three broad groups:
 
-### empty.docx
+- Minimal synthetic fixtures such as `empty.docx`, `styled-content.docx`, and
+  `with-tables.docx`.
+- Regression-oriented documents covering specific OOXML structures such as
+  floating text boxes, footnotes/endnotes, tracked changes, header/footer
+  variants, image layout modes, TOC tabs, and content controls.
+- Supporting source assets used to regenerate fixtures, including
+  `generate-fixtures.ts`, `build-embedded-font-fixture.mjs`, and the image
+  assets in `demo/`, `test-image.png`, and `wide-test-image.png`.
 
-An empty DOCX document with default Word settings.
-Used for testing baseline document state.
+## Regenerating Fixtures
 
-### styled-content.docx
-
-A document containing styled content:
-
-- Bold, italic, and underlined text
-- Different font sizes
-- Paragraph with alignment variations
-- Mixed formatting
-
-### with-tables.docx
-
-A document containing tables:
-
-- Simple 3x3 table
-- Table with merged cells
-- Table with formatted content
-
-### complex-styles.docx
-
-A document with complex styling:
-
-- Custom styles
-- Theme colors
-- Headers/footers
-- Multiple sections
-
-### wrap-none-positioned-image-demo.docx
-
-A synthetic document containing a positioned image anchored with `wp:wrapNone`.
-Used to reproduce anchored images that should paint independently without adding
-paragraph flow height or text-wrap margins.
-
-### wrap-none-two-seals-title-box-demo.docx
-
-A synthetic title-page document containing two `behindDoc` `wp:wrapNone` images
-aligned to the left and right margins around a centered title box. Used to
-reproduce multiple non-wrapping anchored images on the same page.
-
-### image-layout-modes-demo.docx
-
-A synthetic document containing exactly one image of each of Word's three core
-layout modes — `wp:inline` (in-line), `wp:wrapSquare` (wrap-around float), and
-`wp:wrapTopAndBottom` (full-width block) — in a single document. Used by
-`e2e/tests/image-layout-modes.spec.ts` to lock in correct rendering of all
-three paths side by side.
-
-### issue-472-floating-textbox.docx
-
-A synthetic document containing a `wps:wsp` text box in a `wp:anchor` with
-`wp:wrapSquare wrapText="bothSides"`. Used to reproduce issue #472 without
-committing the private original document.
-
-### footnote-bottom-overflow.docx
-
-A synthetic document containing dense bottom-of-page footnote references with
-long citation-like note text. Used to verify that final footnote reservation and
-painted footnote height agree so notes do not run off the page.
-
-### footnote-overlap-regression.docx
-
-A synthetic document containing neutral filler paragraphs with dense short
-footnote references around page boundaries. Used to verify that references in
-split paragraph fragments are mapped to the page containing their rendered
-line, so the painted footnote area does not overlap body text.
-
-### endnotes-tracked-changes.docx
-
-A synthetic document with two body endnote references, separator and
-continuation-separator endnotes, and a normal endnote whose body contains a
-tracked insertion (`w:ins`). Used to verify the note-body serializer round-trip
-(separators + `w:endnoteRef` survive repack) and `getChanges({ includeEndnotes })`.
-
-### empty-table-row-vmerge.docx
-
-A synthetic document containing a table whose middle row is made entirely of
-`w:vMerge` continuation cells. Used to verify that DOCX import does not produce
-an invalid empty ProseMirror `tableRow`.
-
-### table-cell-selection-drag.docx
-
-A synthetic document containing a simple table with generic sample text. Used to
-verify precise drag selection inside a single table cell without promoting the
-selection to the whole cell.
-
-### toc-hyperlink-tabs.docx
-
-A synthetic document with one TOC1 paragraph wrapping
-`1[tab]Introduction[tab]5` inside a `<w:hyperlink>`, plus the TOC1 style with
-its right-aligned dot-leader tab stop. Used to verify that tabs inside
-hyperlinks survive parsing and that TOC entries render with dot leaders and
-right-aligned page numbers like Word.
-
-### inline-checkbox-controls.docx
-
-A synthetic document with inline Word checkbox content controls
-(`w14:checkbox`) covering unchecked, checked, untagged, locked, data-bound, and
-plain-text fallback cases. Used to verify that docx-editor paints the existing
-Word glyph in flow while exposing only unlocked/unbound controls as clickable
-editor widgets.
-
-## Generating Fixtures
-
-To regenerate fixtures, run:
+Some fixtures can be regenerated directly from this directory:
 
 ```bash
 bun run e2e/fixtures/generate-fixtures.ts
+bun e2e/fixtures/build-embedded-font-fixture.mjs
+```
+
+Additional fixture builders live under `scripts/`:
+
+```bash
 bun scripts/create-issue-472-floating-textbox-fixture.mjs
 bun scripts/create-footnote-bottom-overflow-fixture.mjs
 bun scripts/create-footnote-overlap-regression-fixture.mjs
@@ -124,4 +36,5 @@ bun scripts/create-toc-hyperlink-fixture.mjs
 bun scripts/create-inline-checkbox-controls-fixture.mjs e2e/fixtures/inline-checkbox-controls.docx
 ```
 
-Or manually create them using Microsoft Word or another DOCX editor.
+If a fixture does not have a checked-in generator, preserve the document and any
+adjacent source assets so its OOXML structure remains inspectable.

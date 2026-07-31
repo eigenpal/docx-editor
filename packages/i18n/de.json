@@ -83,7 +83,8 @@
     "imagePropertiesShortcut": "Bildeigenschaften (Alternativtext, Rahmen)...",
     "clearFormatting": "Formatierung löschen",
     "commentsAndChanges": "Kommentare & Änderungen",
-    "moreItems": "{count, plural, one {# weiteres Element} other {# weitere Elemente}}"
+    "moreItems": "{count, plural, one {# weiteres Element} other {# weitere Elemente}}",
+    "unavailableInPreview": null
   },
   "alignment": {
     "alignLeft": "Linksbündig",
@@ -871,5 +872,16 @@
   },
   "toc": {
     "updatePrompt": null
+  },
+  "app": {
+    "name": null,
+    "newDocument": null,
+    "by": null,
+    "framework": null,
+    "theme": null
+  },
+  "editingMode": {
+    "editing": null,
+    "label": null
   }
 }

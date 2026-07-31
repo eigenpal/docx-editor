@@ -1,4 +1,9 @@
-import { AgentPanel } from '@docx-editor.dev/agents/react';
+// `AgentPanel` lives in `@docx-editor.dev/agents/react`, which exists in this repo
+// (`packages/agents/src/react.ts:39`) but does not resolve from here: the workspace link
+// is not created for it. Rather than fabricate a panel, this renders NOTHING and keeps
+// the shell's slot intact, so wiring the dependency later restores the real component
+// with no change to the call site. A stub must not pretend the capability is present.
+const AgentPanel = (_props: Record<string, unknown> & { children?: React.ReactNode }) => null;
 import { useTranslation } from '../../i18n';
 import type { AgentPanelOptions } from './types';
 

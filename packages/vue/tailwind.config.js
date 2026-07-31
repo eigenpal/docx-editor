@@ -2,18 +2,29 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 
 const __configDir = path.dirname(fileURLToPath(import.meta.url));
+const monorepoRoot = path.resolve(__configDir, '../..');
+
+// Shared color/theme preset (single source of truth). Prefer the packaged preset;
+// fall back to the in-repo source copy when building from the workspace.
+const corePreset = (() => {
+  try {
+    return require('@docx-editor.dev/core/tailwind-preset.cjs');
+  } catch {
+    return require(path.join(monorepoRoot, 'packages/core/tailwind-preset.cjs'));
+  }
+})();
 
 /**
- * Shared color/theme palette lives in the core preset (single source of truth,
- * identical to React); this config only adds the Vue-specific content glob
- * (must include .vue SFCs) + .ep-root scoping.
+ * Vue adapter Tailwind config. Expands the `@tailwind utilities` directive in the shared
+ * core stylesheet against the Vue component sources, scoped to `.ep-root`, sharing the
+ * color/theme palette with React via the core preset.
  * @type {import('tailwindcss').Config}
  */
 export default {
-  presets: [require('@docx-editor.dev/core/tailwind-preset.cjs')],
-  // Scope all utilities under .ep-root to avoid clashing with host app CSS
+  presets: [corePreset],
   important: '.ep-root',
-  // Only scan library source files, not demo. Absolute path so this works no
-  // matter where Tailwind is invoked from (vite runs from packages/vue; see #340).
-  content: [path.join(__configDir, 'src/**/*.{ts,tsx,vue}')],
+  content: [
+    path.join(__configDir, 'src/**/*.{ts,vue}'),
+    path.join(monorepoRoot, 'examples/**/*.{ts,vue}'),
+  ],
 };

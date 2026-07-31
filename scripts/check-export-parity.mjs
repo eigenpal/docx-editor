@@ -4,10 +4,10 @@
  *   1. `package.json` `exports` subpaths (STRICT)
  *   2. Named exports from `src/index.ts` (STRICT after Vue un-stub readiness;
  *      documented framework-native divergences stay in the opt-out file)
- * Drift opt-out: backticked specifiers in
- *   openspec/changes/vue-editor-robust-implementation/notes/intentional-export-divergence.md
+ * Drift opt-outs: backticked specifiers in the archived historical notes below.
  *
- * Spec: openspec/changes/vue-editor-robust-implementation/specs/vue-react-parity/spec.md
+ * Historical spec:
+ *   openspec/changes/archive/2026-07-22-vue-editor-robust-implementation/specs/vue-react-parity/spec.md
  */
 
 import { readFileSync, existsSync } from 'node:fs';
@@ -21,10 +21,9 @@ const REACT_PKG = resolve(ROOT, 'packages/react/package.json');
 const VUE_PKG = resolve(ROOT, 'packages/vue/package.json');
 const REACT_INDEX = resolve(ROOT, 'packages/react/src/index.ts');
 const VUE_INDEX = resolve(ROOT, 'packages/vue/src/index.ts');
-const OPT_OUT = resolve(
-  ROOT,
-  'openspec/changes/vue-editor-robust-implementation/notes/intentional-export-divergence.md'
-);
+const OPT_OUT_PATHS = [
+  'openspec/changes/typed-ooxml-paragraph-editor/notes/intentional-export-divergence.md',
+].map((p) => resolve(ROOT, p));
 
 const STRICT_NAMED_EXPORTS = true;
 
@@ -33,13 +32,15 @@ function exportSubpaths(pkgPath) {
 }
 
 function loadAllowedDivergences() {
-  if (!existsSync(OPT_OUT)) return new Set();
   // Match only the FIRST backtick group on a list-item line. Prose secondary
   // backticks (`renamed from \`A\` to \`B\``) won't widen the opt-out.
   const allowed = new Set();
-  for (const line of readFileSync(OPT_OUT, 'utf8').split('\n')) {
-    const m = line.match(/^\s*-\s+`([^`]+)`/);
-    if (m) allowed.add(m[1]);
+  for (const path of OPT_OUT_PATHS) {
+    if (!existsSync(path)) continue;
+    for (const line of readFileSync(path, 'utf8').split('\n')) {
+      const m = line.match(/^\s*-\s+`([^`]+)`/);
+      if (m) allowed.add(m[1]);
+    }
   }
   return allowed;
 }
@@ -95,7 +96,7 @@ let failed = false;
 if (failed) {
   console.error(
     'Resolution: add the missing surface to the lagging adapter, or document the intentional divergence in\n' +
-      '  openspec/changes/vue-editor-robust-implementation/notes/intentional-export-divergence.md'
+      '  openspec/changes/typed-ooxml-paragraph-editor/notes/intentional-export-divergence.md'
   );
   process.exit(1);
 }

@@ -1,4 +1,5 @@
-import { defineConfig } from 'vite';
+import { defineConfig, type Plugin } from 'vite';
+import { readFile } from 'node:fs/promises';
 import react from '@vitejs/plugin-react';
 import tailwindcss from 'tailwindcss';
 import autoprefixer from 'autoprefixer';
@@ -15,6 +16,59 @@ async function fetchGitHubStars(): Promise<number | null> {
   return null;
 }
 
+/**
+ * Serve the canonical comprehensive fixture from ONE byte source (task M6D.1).
+ *
+ * The demo's bare `/` must load `e2e/fixtures/comprehensive-word-element-test.docx`.
+ * Copying it into `examples/vite/public/` would create a second DOCX that silently
+ * drifts from the fixture the e2e suite asserts against — the task explicitly calls
+ * for an asset mapping or an automated byte-identical copy instead. This maps the URL
+ * onto the real file at request time, so there is exactly one source of bytes and it
+ * cannot go stale.
+ *
+ * `build` copies it once into the output, so the deployed demo serves the same bytes
+ * rather than depending on a dev-only route.
+ */
+function canonicalFixturePlugin(): Plugin {
+  const fixtures = new Map([
+    [
+      '/comprehensive-word-element-test.docx',
+      path.join(monorepoRoot, 'e2e/fixtures/comprehensive-word-element-test.docx'),
+    ],
+    [
+      '/harfbuzz-text-fidelity.docx',
+      path.join(monorepoRoot, 'e2e/fixtures/harfbuzz-text-fidelity.docx'),
+    ],
+  ]);
+  return {
+    name: 'docx-editor-canonical-fixture',
+    configureServer(server) {
+      server.middlewares.use((req, res, next) => {
+        const source = req.url ? fixtures.get(req.url.split('?')[0]!) : undefined;
+        if (!source) return next();
+        readFile(source)
+          .then((bytes) => {
+            res.setHeader(
+              'Content-Type',
+              'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+            );
+            res.end(bytes);
+          })
+          .catch(next);
+      });
+    },
+    async generateBundle() {
+      for (const [url, source] of fixtures) {
+        this.emitFile({
+          type: 'asset',
+          fileName: url.slice(1),
+          source: await readFile(source),
+        });
+      }
+    },
+  };
+}
+
 export default defineConfig(async () => {
   const stars = await fetchGitHubStars();
   // `@docx-editor.dev/core` lives in a separate repo and is consumed from npm,
@@ -28,17 +82,39 @@ export default defineConfig(async () => {
 
   return {
     base: process.env.VITE_BASE_PATH ?? '/',
-    plugins: [react()],
+    plugins: [react(), canonicalFixturePlugin()],
     root: __dirname,
     resolve: {
       alias: usePublished
-        ? [{ find: '@', replacement: path.join(monorepoRoot, 'packages/react/src') }]
+        ? [
+            {
+              find: /^@docx-editor\.dev\/react$/,
+              replacement: path.join(monorepoRoot, 'packages/react/dist/index.mjs'),
+            },
+            { find: '@', replacement: path.join(monorepoRoot, 'packages/react/src') },
+          ]
         : [
             // Resolve package imports to source for live development
             // Order matters: more-specific prefixes before less-specific ones
             {
               find: '@docx-editor.dev/react',
               replacement: path.join(monorepoRoot, 'packages/react/src/index.ts'),
+            },
+            {
+              find: '@docx-editor.dev/core-contract/editor',
+              replacement: path.join(monorepoRoot, 'packages/core/src/editor/index.ts'),
+            },
+            // The remaining core-contract lane subpaths, one rule: files under
+            // `examples/shared/` sit outside this package's node_modules, so bare
+            // specifiers there only resolve through these aliases. `editor` and the
+            // `contracts/*` single-file entries are matched above / by the capture.
+            {
+              find: /^@docx-editor\.dev\/core-contract\/(binding|layout|output|store|sync|clients|server)$/,
+              replacement: path.join(monorepoRoot, 'packages/core/src/$1/index.ts'),
+            },
+            {
+              find: /^@docx-editor\.dev\/core-contract\/contracts\/(.+)$/,
+              replacement: path.join(monorepoRoot, 'packages/core/src/contracts/$1.ts'),
             },
             {
               find: '@docx-editor.dev/i18n',

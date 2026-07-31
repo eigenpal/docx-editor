@@ -13,7 +13,7 @@ import { cn } from '../../lib/utils';
 import type { TableAction } from './TableToolbar';
 import { useFixedDropdown } from '../../hooks/useFixedDropdown';
 import { useTranslation } from '../../i18n';
-import type { TranslationKey } from '@docx-editor.dev/i18n';
+import type { TranslationKey } from '../../i18n';
 
 export interface TableBorderPickerProps {
   onAction: (action: TableAction) => void;

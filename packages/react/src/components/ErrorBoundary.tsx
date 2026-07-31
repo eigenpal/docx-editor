@@ -15,8 +15,11 @@ import React, {
   useSyncExternalStore,
 } from 'react';
 import type { ReactNode, ErrorInfo, CSSProperties } from 'react';
-import { ErrorManager } from '@docx-editor.dev/core';
-import type { ErrorSeverity, ErrorNotification } from '@docx-editor.dev/core';
+// `ErrorManager` is UI-facing error plumbing, not engine state — the greenfield core
+// has none, so the implementation lives in the adapter beside the component
+// that uses it (see `../managers/ErrorManager`), unchanged.
+import { ErrorManager } from '../managers/ErrorManager';
+import type { ErrorSeverity, ErrorNotification } from '../managers/types';
 import { useTranslation } from '../i18n';
 
 // Re-export for backwards compat

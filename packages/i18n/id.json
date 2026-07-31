@@ -83,7 +83,8 @@
     "imagePropertiesShortcut": "Properti gambar (alt text, border)...",
     "clearFormatting": "Hapus Pemformatan",
     "commentsAndChanges": "Komentar & Perubahan",
-    "moreItems": "{count} item lainnya"
+    "moreItems": "{count} item lainnya",
+    "unavailableInPreview": null
   },
   "alignment": {
     "alignLeft": "Rata Kiri",
@@ -871,5 +872,16 @@
   },
   "toc": {
     "updatePrompt": null
+  },
+  "app": {
+    "name": null,
+    "newDocument": null,
+    "by": null,
+    "framework": null,
+    "theme": null
+  },
+  "editingMode": {
+    "editing": null,
+    "label": null
   }
 }

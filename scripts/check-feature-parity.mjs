@@ -10,7 +10,7 @@
 //
 // Run: node scripts/check-feature-parity.mjs
 // Output: structured Markdown report on stdout, JSON to
-//   openspec/changes/vue-editor-robust-implementation/notes/feature-parity-report.json
+//   openspec/changes/typed-ooxml-paragraph-editor/notes/feature-parity-report.json
 
 import fs from 'node:fs';
 import path from 'node:path';
@@ -21,17 +21,17 @@ const REACT_ROOT = path.join(ROOT, 'packages/react/src');
 const VUE_ROOT = path.join(ROOT, 'packages/vue/src');
 const REPORT_PATH = path.join(
   ROOT,
-  'openspec/changes/vue-editor-robust-implementation/notes/feature-parity-report.json'
+  'openspec/changes/typed-ooxml-paragraph-editor/notes/feature-parity-report.json'
 );
 const RENDER_PATH_DIVERGENCE = path.join(
   ROOT,
-  'openspec/changes/vue-editor-robust-implementation/notes/intentional-render-path-divergence.md'
+  'openspec/changes/typed-ooxml-paragraph-editor/notes/intentional-render-path-divergence.md'
 );
 
 // Files whose React-only-ness is documented as intentional in the
 // render-path divergence note. They share their behaviour with Vue
-// via packages/core/src/painter-model/, so the parity counter
-// shouldn't penalise them.
+// via the core package surface, so the parity counter should not
+// penalize them.
 function loadIntentionalRenderPathSet() {
   if (!fs.existsSync(RENDER_PATH_DIVERGENCE)) return new Set();
   const md = fs.readFileSync(RENDER_PATH_DIVERGENCE, 'utf8');
@@ -180,10 +180,10 @@ function diffSets(reactSet, vueSet) {
 function buildReport() {
   const reactFiles = walkFiles(REACT_ROOT, (n) => n.endsWith('.tsx') || n.endsWith('.ts'));
   const vueFiles = walkFiles(VUE_ROOT, (n) => n.endsWith('.vue') || n.endsWith('.ts'));
-  // Drop pure core re-exports — the surface lives in core, not in
-  // the adapter, so they shouldn't count as adapter-specific drift.
+  // Drop pure core re-exports, the surface lives in core, not in
+  // the adapter, so they should not count as adapter-specific drift.
   // Also drop files documented as intentional render-path divergence
-  // (Vue ships the same behaviour via core's painter).
+  // where Vue ships the same behaviour through the core package.
   const reactComponents = reactFiles
     .map(extractFromFile)
     .filter((f) => !f.isCoreReexport && !INTENTIONAL_RENDER_PATH.has(f.componentName));

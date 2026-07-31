@@ -83,7 +83,8 @@
     "imagePropertiesShortcut": "图片属性(替代文本、边框)...",
     "clearFormatting": "清除格式",
     "commentsAndChanges": null,
-    "moreItems": null
+    "moreItems": null,
+    "unavailableInPreview": null
   },
   "alignment": {
     "alignLeft": "左对齐",
@@ -871,5 +872,16 @@
   },
   "toc": {
     "updatePrompt": null
+  },
+  "app": {
+    "name": null,
+    "newDocument": null,
+    "by": null,
+    "framework": null,
+    "theme": null
+  },
+  "editingMode": {
+    "editing": null,
+    "label": null
   }
 }

@@ -1,92 +1,37 @@
 {
   "name": "@docx-editor.dev/vue",
   "version": "0.0.1",
-  "description": "Vue 3 DOCX editor adapter for @docx-editor.dev/core.",
-  "type": "module",
+  "author": {
+    "name": "Jedr Blaszyk",
+    "email": "jedr@eigenpal.com",
+    "url": "https://github.com/jedrazb"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/eigenpal/docx-editor.git",
+    "directory": "packages/vue"
+  },
   "main": "./dist/index.cjs",
   "module": "./dist/index.js",
-  "types": "./dist/index.d.ts",
+  "devDependencies": {
+    "@docx-editor.dev/core-contract": "workspace:*",
+    "vite-plugin-dts": "^5.0.0"
+  },
+  "peerDependencies": {
+    "vue": "^3.3.0"
+  },
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js",
       "require": "./dist/index.cjs"
-    },
-    "./ui": {
-      "types": "./dist/ui.d.ts",
-      "import": "./dist/ui.js",
-      "require": "./dist/ui.cjs"
-    },
-    "./composables": {
-      "types": "./dist/composables/index.d.ts",
-      "import": "./dist/composables.js",
-      "require": "./dist/composables.cjs"
-    },
-    "./dialogs": {
-      "types": "./dist/components/dialogs/index.d.ts",
-      "import": "./dist/dialogs.js",
-      "require": "./dist/dialogs.cjs"
-    },
-    "./plugin-api": {
-      "types": "./dist/plugin-api/index.d.ts",
-      "import": "./dist/plugin-api.js",
-      "require": "./dist/plugin-api.cjs"
-    },
-    "./styles": {
-      "types": "./dist/styles/index.d.ts",
-      "import": "./dist/styles.js",
-      "require": "./dist/styles.cjs"
-    },
-    "./styles.css": "./dist/docx-editor-vue.css"
-  },
-  "typesVersions": {
-    "*": {
-      "ui": [
-        "./dist/ui.d.ts"
-      ],
-      "composables": [
-        "./dist/composables/index.d.ts"
-      ],
-      "dialogs": [
-        "./dist/components/dialogs/index.d.ts"
-      ],
-      "plugin-api": [
-        "./dist/plugin-api/index.d.ts"
-      ],
-      "styles": [
-        "./dist/styles/index.d.ts"
-      ]
     }
   },
-  "sideEffects": [
-    "*.css"
-  ],
+  "description": "Vue 3 DOCX editor adapter for the @docx-editor.dev editor contract.",
   "files": [
     "dist"
   ],
-  "scripts": {
-    "build": "vite build && node ../../scripts/inject-package-doc.mjs --package @docx-editor.dev/vue",
-    "typecheck": "tsc --noEmit",
-    "api:extract": "node ../../scripts/api-extractor.mjs --package @docx-editor.dev/vue --local",
-    "api:check": "node ../../scripts/api-extractor.mjs --package @docx-editor.dev/vue"
-  },
-  "peerDependencies": {
-    "prosemirror-commands": "^1.5.2",
-    "prosemirror-dropcursor": "^1.8.2",
-    "prosemirror-history": "^1.4.0",
-    "prosemirror-keymap": "^1.2.2",
-    "prosemirror-model": "^1.19.4",
-    "prosemirror-state": "^1.4.3",
-    "prosemirror-tables": "^1.8.5",
-    "prosemirror-transform": "^1.12.0",
-    "prosemirror-view": "^1.41.6",
-    "vue": "^3.3.0"
-  },
-  "dependencies": {
-    "@docx-editor.dev/agents": "^0.0.1",
-    "@docx-editor.dev/core": "^0.0.1",
-    "@docx-editor.dev/i18n": "^0.0.1"
-  },
+  "homepage": "https://docx-editor.dev/",
   "keywords": [
     "docx",
     "editor",
@@ -94,26 +39,20 @@
     "word",
     "document"
   ],
-  "author": {
-    "name": "Jedr Blaszyk",
-    "email": "jedr@eigenpal.com",
-    "url": "https://github.com/jedrazb"
-  },
   "license": "Apache-2.0",
-  "homepage": "https://docx-editor.dev/",
-  "repository": {
-    "type": "git",
-    "url": "https://github.com/eigenpal/docx-editor.git",
-    "directory": "packages/vue"
-  },
   "publishConfig": {
     "access": "public"
   },
-  "devDependencies": {
-    "prosemirror-history": "^1.4.0",
-    "prosemirror-model": "^1.25.4",
-    "prosemirror-state": "^1.4.3",
-    "prosemirror-view": "^1.41.6",
-    "vite-plugin-dts": "^5.0.0"
+  "scripts": {
+    "build": "vite build && node ../../scripts/inject-package-doc.mjs --package @docx-editor.dev/vue",
+    "typecheck": "tsc --noEmit",
+    "api:extract": "node ../../scripts/api-extractor.mjs --package @docx-editor.dev/vue --local",
+    "api:check": "node ../../scripts/api-extractor.mjs --package @docx-editor.dev/vue"
+  },
+  "type": "module",
+  "types": "./dist/index.d.ts",
+  "dependencies": {
+    "@docx-editor.dev/core-contract": "workspace:*",
+    "harfbuzzjs": "1.4.0"
   }
 }

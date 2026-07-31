@@ -1,0 +1,573 @@
+{
+  "artifactVersion": "formatting-bakeoff-contract/2",
+  "authority": {
+    "candidateOutputMayChangeExpectedHashes": false,
+    "scope": "reviewed-input-only",
+    "task": "engine-core-spike/2.4"
+  },
+  "candidateApi": {
+    "actualOutputsRequired": [
+      "encodedUpdateBytesByUpdateRef",
+      "encodedSnapshotBytesBySnapshotRef",
+      "projectionOperationCountByAssertEvent",
+      "diagnosticsByRejectedEvent",
+      "canonicalStateByAssertEvent"
+    ],
+    "candidateA": {
+      "disable": "bodySequence.format(globalStart, length, { [kind]: null })",
+      "enable": "bodySequence.format(globalStart, length, { [kind]: contributionId })",
+      "formatKeysExactly": [
+        "bold",
+        "italic"
+      ],
+      "formattingMetadataFieldsExactly": [
+        "actorId",
+        "commitId",
+        "kind",
+        "semanticMarkId"
+      ],
+      "formattingMetadataLifecycle": "creation-only, excluded from UndoManager",
+      "forbidden": [
+        "ownership workaround",
+        "second mutable mark store",
+        "custom conflict merge",
+        "compensating rewrite",
+        "projection mutation"
+      ],
+      "projectionSource": "ordered bodySequence.toDelta()"
+    },
+    "candidateB": {
+      "addFieldsExactly": [
+        "actorId",
+        "commitId",
+        "kind",
+        "markKind",
+        "proposedSemanticMarkId",
+        "relativeEnd",
+        "relativeStart",
+        "storyId"
+      ],
+      "forbidden": [
+        "wildcard remove",
+        "record overwrite",
+        "record delete",
+        "destructive normalization",
+        "projection mutation"
+      ],
+      "recordLifecycle": "unique creation-only map records",
+      "removeFieldsExactly": [
+        "actorId",
+        "commitId",
+        "kind",
+        "markKind",
+        "relativeEnd",
+        "relativeStart",
+        "storyId",
+        "targetAddContributionIds"
+      ],
+      "removeTargets": "sorted unique non-empty causally observed add IDs of same story and mark kind",
+      "trackedTypes": [
+        "bodySequence",
+        "markContributions"
+      ]
+    },
+    "methodSurfaceExactly": [
+      "executeEvent",
+      "readActualMetrics",
+      "readCanonicalState",
+      "readRawEvidenceHash"
+    ]
+  },
+  "canonicalJson": {
+    "arraysPreserveOrder": true,
+    "duplicateObjectKeys": "reject",
+    "encoding": "UTF-8 without BOM",
+    "forbiddenKeys": [
+      "__proto__",
+      "constructor",
+      "prototype"
+    ],
+    "lineEnding": "LF",
+    "numbers": "finite JSON numbers; integers are safe integers; -0 serializes as 0",
+    "objectKeyOrder": "ascending ECMAScript UTF-16 code-unit order using < and >",
+    "objects": "ordinary enumerable data-property records only",
+    "strings": "JSON escaping without Unicode normalization",
+    "trailingNewline": true,
+    "unsupportedValues": "reject undefined, NaN, Infinity, bigint, symbols, accessors, cycles, sparse arrays"
+  },
+  "canonicalState": {
+    "fieldsExactly": [
+      "authored",
+      "checkpointId",
+      "formattingEvidence",
+      "identityMappings",
+      "managerStacks",
+      "paragraphProjection",
+      "reconstructionJournal",
+      "revision",
+      "sequence",
+      "stateVectorRef",
+      "storySequenceCreationId"
+    ],
+    "formattingEvidence": {
+      "fieldsExactly": [
+        "actorIds",
+        "authoredIntentFingerprint",
+        "commitIds",
+        "evidenceCreationIds",
+        "evidenceVersion",
+        "kind",
+        "resolvedSegments",
+        "semanticMarkIds"
+      ],
+      "evidenceVersion": "formatting-evidence/2",
+      "listOrdering": "canonical byte order, deduplicated",
+      "ordering": "kind, resolvedSegments[0].globalStart, resolvedSegments[0].globalEnd, evidenceCreationIds",
+      "resolvedSegmentFieldsExactly": [
+        "globalEnd",
+        "globalStart",
+        "storySequenceCreationId"
+      ],
+      "resolvedSegments": "ordered non-overlapping half-open text-only global ranges clipped at every paragraph boundary"
+    },
+    "normalizedSemanticIds": {
+      "authority": "candidate-specific only; never a FormattingEvidence field or cross-candidate semantic fingerprint input",
+      "contractArtifact": "representation-contracts.v2.json"
+    },
+    "stateDerivation": {
+      "base": "state-genesis is complete",
+      "derived": "copy baseStateRef, then replace each top-level key present in replace; arrays replace atomically; omission means unchanged; null is a value, never deletion",
+      "noChange": "preStateRef and postStateRef are identical"
+    }
+  },
+  "diagnosticSchema": {
+    "fieldsExactly": [
+      "actual",
+      "code",
+      "expected",
+      "eventId",
+      "fixtureId",
+      "jsonPointer",
+      "limit",
+      "message",
+      "phase",
+      "replicaId",
+      "seed"
+    ],
+    "phaseValues": [
+      "decode",
+      "preflight",
+      "apply",
+      "project",
+      "history-reconstruct",
+      "compare"
+    ],
+    "requiredCodes": [
+      "ACCESSOR_FORBIDDEN",
+      "ALLOCATOR_EXHAUSTED",
+      "BODY_SEQUENCE_LIMIT",
+      "BOUNDARY_COUNT_LIMIT",
+      "CAUSAL_TARGET_LIMIT",
+      "DUPLICATE_CAUSAL_TARGET",
+      "DANGEROUS_KEY",
+      "EMBED_NESTING_LIMIT",
+      "EMBED_PAYLOAD_LIMIT",
+      "EMPTY_CAUSAL_TARGETS",
+      "ENVELOPE_AFFINITY_MISMATCH",
+      "ENVELOPE_BACKEND_MISMATCH",
+      "ENVELOPE_BASE64URL_INVALID",
+      "ENVELOPE_CHECKPOINT_INVALID",
+      "ENVELOPE_DOCUMENT_MISMATCH",
+      "ENVELOPE_SCHEMA_MISMATCH",
+      "ENVELOPE_SEQUENCE_MISMATCH",
+      "ENVELOPE_UNRESOLVABLE",
+      "ENVELOPE_VERSION_MISMATCH",
+      "FORMATTING_RECORD_LIMIT",
+      "GENESIS_LIMIT",
+      "JOURNAL_EVENT_LIMIT",
+      "JOURNAL_CHECKPOINT_STACK_MISMATCH",
+      "JOURNAL_HORIZON_INVALID",
+      "NON_PLAIN_OBJECT",
+      "PLAIN_JSON_REQUIRED",
+      "REDO_STACK_LIMIT",
+      "REMOTE_UPDATE_LIMIT",
+      "REPAIR_EVIDENCE_LIMIT",
+      "REPLAY_BYTES_LIMIT",
+      "SESSION_LIMIT",
+      "SNAPSHOT_LIMIT",
+      "TARGET_KIND_MISMATCH",
+      "TARGET_NOT_OBSERVED",
+      "TARGET_STORY_MISMATCH",
+      "UNKNOWN_FORMATTING_METADATA",
+      "UNSAFE_INTEGER",
+      "UNDO_STACK_LIMIT"
+    ],
+    "version": "formatting-bakeoff-diagnostic/2"
+  },
+  "endpointEnvelope": {
+    "affinityAssocExactly": {
+      "after": 0,
+      "before": -1
+    },
+    "base64UrlValidationOrder": [
+      "payload byte ceiling",
+      "ASCII character ceiling 349526",
+      "alphabet ^[A-Za-z0-9_-]+$",
+      "no padding or whitespace",
+      "length mod 4 is not 1",
+      "decode",
+      "decoded ceiling 262144",
+      "exact re-encode equality"
+    ],
+    "fieldsExactly": [
+      "affinity",
+      "assoc",
+      "backendVersion",
+      "checkpoint",
+      "documentId",
+      "envelopeVersion",
+      "relativePositionBase64Url",
+      "schemaVersion",
+      "storySequenceCreationId"
+    ],
+    "version": "relative-endpoint/2"
+  },
+  "eventLanguage": {
+    "commonFieldsExactly": [
+      "actorId",
+      "destinationReplica",
+      "eventId",
+      "expectedCheckpointAfter",
+      "expectedCheckpointBefore",
+      "expectedRevisionAfter",
+      "expectedRevisionBefore",
+      "expectedStateVectorRelation",
+      "fixtureId",
+      "groupId",
+      "originId",
+      "postStateRef",
+      "preStateRef",
+      "sessionId",
+      "sourceReplica",
+      "type"
+    ],
+    "eventSpecificFieldsExactly": {
+      "assertRejected": [
+        "diagnostic",
+        "rejectedOperation",
+        "unchangedSurfaces"
+      ],
+      "assertState": [
+        "projectionOperationMetricRef",
+        "stateRef"
+      ],
+      "bootstrapReplica": [
+        "clientId",
+        "genesisSnapshotRef"
+      ],
+      "captureUpdate": [
+        "clientId",
+        "producerEventId",
+        "stateVectorAfter",
+        "stateVectorBefore",
+        "updateMetricRef",
+        "updateRef"
+      ],
+      "checkpoint": [
+        "checkpointRef",
+        "journalRef"
+      ],
+      "deliverUpdate": [
+        "deliveryDiagnostic",
+        "deliveryKind",
+        "deliveryOrdinal",
+        "sourceClientId",
+        "updateRef"
+      ],
+      "localSemanticOp": [
+        "expectedGlobalMapping",
+        "operation"
+      ],
+      "redo": [
+        "expectedPoppedStackItem"
+      ],
+      "repair": [
+        "repairRecordRef"
+      ],
+      "reopen": [
+        "journalRef",
+        "snapshotRef"
+      ],
+      "snapshot": [
+        "snapshotMetricRef",
+        "snapshotRef"
+      ],
+      "stopCapturing": [],
+      "undo": [
+        "expectedPoppedStackItem"
+      ]
+    },
+    "eventTypesExactly": [
+      "assertRejected",
+      "assertState",
+      "bootstrapReplica",
+      "captureUpdate",
+      "checkpoint",
+      "deliverUpdate",
+      "localSemanticOp",
+      "redo",
+      "repair",
+      "reopen",
+      "snapshot",
+      "stopCapturing",
+      "undo"
+    ],
+    "fixtureExpansion": {
+      "matrix": "event templates containing at least one placeholder expand once per matrix row; templates without placeholders emit once",
+      "nullSpecificFields": "after substitution, null event-specific operation fields are removed before closed-union validation",
+      "placeholder": "${name}",
+      "substitution": "an entire placeholder preserves the matrix value type; embedded placeholders produce strings",
+      "uniqueness": "expanded eventId values are globally unique across the corpus"
+    },
+    "nullability": "source/destination and actor/session/group/origin are explicit null when not applicable",
+    "operationFieldsExactly": {
+      "deleteText": [
+        "boundaryCreationId",
+        "endAffinity",
+        "endAssoc",
+        "kind",
+        "lengthUtf16",
+        "offsetUtf16",
+        "paragraphId",
+        "startAffinity",
+        "startAssoc",
+        "storyId"
+      ],
+      "disableMark": [
+        "boundaryCreationId",
+        "commitId",
+        "contributionId",
+        "endAffinity",
+        "endAssoc",
+        "endOffsetUtf16",
+        "kind",
+        "markKind",
+        "paragraphId",
+        "startAffinity",
+        "startAssoc",
+        "startOffsetUtf16",
+        "storyId",
+        "targetObservedContributionIds"
+      ],
+      "enableMark": [
+        "boundaryCreationId",
+        "commitId",
+        "contributionId",
+        "endAffinity",
+        "endAssoc",
+        "endOffsetUtf16",
+        "kind",
+        "markKind",
+        "paragraphId",
+        "semanticMarkId",
+        "startAffinity",
+        "startAssoc",
+        "startOffsetUtf16",
+        "storyId"
+      ],
+      "insertText": [
+        "boundaryCreationId",
+        "endAffinity",
+        "endAssoc",
+        "kind",
+        "offsetUtf16",
+        "paragraphId",
+        "startAffinity",
+        "startAssoc",
+        "storyId",
+        "text"
+      ],
+      "joinBoundary": [
+        "endAffinity",
+        "endAssoc",
+        "kind",
+        "leftBoundaryCreationId",
+        "leftParagraphId",
+        "rightBoundaryCreationId",
+        "rightParagraphId",
+        "startAffinity",
+        "startAssoc",
+        "storyId"
+      ],
+      "malformedInput": [
+        "inputKind",
+        "kind",
+        "mutation"
+      ],
+      "quotaAttempt": [
+        "attemptedValue",
+        "kind",
+        "quotaName"
+      ],
+      "splitBoundary": [
+        "boundaryCreationId",
+        "endAffinity",
+        "endAssoc",
+        "kind",
+        "newBoundaryCreationId",
+        "offsetUtf16",
+        "paragraphId",
+        "startAffinity",
+        "startAssoc",
+        "storyId",
+        "tailParagraphId"
+      ]
+    },
+    "operationKindsExactly": [
+      "deleteText",
+      "disableMark",
+      "enableMark",
+      "insertText",
+      "joinBoundary",
+      "malformedInput",
+      "quotaAttempt",
+      "splitBoundary"
+    ],
+    "globalMapping": {
+      "deleteText": "pre-state deletion half-open range",
+      "disableMark": "pre-state paragraph-local range translated to global sequence offsets",
+      "enableMark": "pre-state paragraph-local range translated to global sequence offsets",
+      "insertText": "post-state half-open range occupied by inserted UTF-16 units",
+      "joinBoundary": "pre-state unit range occupied by removed right boundary embed",
+      "splitBoundary": "pre-state zero-width insertion point for new boundary embed"
+    },
+    "quotaAttemptSemantics": "preflight-only prospective-state probe; at-limit succeeds without commit and overflow rejects without commit",
+    "repairHashing": {
+      "hash": "SHA-256 lowercase hexadecimal prefixed with sha256:",
+      "idInput": "canonical JSON UTF-8 bytes of the frozen tuple, no trailing LF",
+      "recordHashInput": "canonical JSON UTF-8 bytes of the repair record excluding expectedCanonicalHash, no trailing LF"
+    },
+    "revisionRule": "increment exactly once for each accepted localSemanticOp, deliverUpdate, undo, redo, or repair that writes; bootstrap, stopCapturing, captureUpdate, plain checkpoint, snapshot, reopen, assertions, and rejected/preflight-only probes do not increment",
+    "updateRule": "captureUpdate updateRef names bytes emitted by its exact earlier producerEventId; no bytes are frozen",
+    "version": "formatting-bakeoff-events/1"
+  },
+  "origins": [
+    {
+      "actorId": "actor-A",
+      "originId": "origin-A-session-1",
+      "sessionId": "session-A-1"
+    },
+    {
+      "actorId": "actor-A",
+      "originId": "origin-A-session-2",
+      "sessionId": "session-A-2"
+    },
+    {
+      "actorId": "actor-B",
+      "originId": "origin-B-session-1",
+      "sessionId": "session-B-1"
+    },
+    {
+      "actorId": "actor-C",
+      "originId": "origin-C-session-1",
+      "sessionId": "session-C-1"
+    },
+    {
+      "actorId": "system-remote",
+      "originId": "origin-remote-delivery",
+      "sessionId": "session-remote"
+    },
+    {
+      "actorId": "system-repair",
+      "originId": "origin-repair-untracked",
+      "sessionId": "session-repair"
+    }
+  ],
+  "quotas": {
+    "aggregateReplayBytes": 4194304,
+    "bodySequenceUtf16Units": 262144,
+    "boundaryEmbedCount": 4096,
+    "canonicalBoundaryPayloadBytes": 4096,
+    "causalDisableTargets": 256,
+    "formattingEvidenceSourceRecords": 8192,
+    "genesisPayloadBytes": 4194304,
+    "reconstructionJournalEvents": 64,
+    "redoEntriesPerActorSession": 32,
+    "relativePositionBase64UrlChars": 349526,
+    "relativePositionDecodedBytes": 262144,
+    "repairEvidenceRecords": 4096,
+    "retainedJournalHorizonEvents": 48,
+    "snapshotBytes": 8388608,
+    "trackedActorSessionsPerDocument": 16,
+    "undoEntriesPerActorSession": 32,
+    "validationNesting": 4,
+    "yjsReplicationUpdateBytes": 262144
+  },
+  "rejection": {
+    "atomicNoWriteSurfaces": [
+      "auditCursor",
+      "canonicalRevision",
+      "emittedUpdates",
+      "formattingEvidence",
+      "historyStacks",
+      "journal",
+      "notifications",
+      "repairEvidence",
+      "snapshot",
+      "storySequence"
+    ],
+    "rule": "validate prospective staging state before mutation; any local, delivery, restore, or quota breach rejects atomically"
+  },
+  "seededGenerator": {
+    "oracleArtifact": "generator.v2.json",
+    "algorithm": {
+      "name": "xorshift32",
+      "next": "x ^= x << 13; x ^= x >>> 17; x ^= x << 5; return x >>> 0",
+      "seedZeroInitialization": "state = 0x6d2b79f5 when seed is 0, otherwise state = seed >>> 0",
+      "selection": "next() modulo current domain length"
+    },
+    "domainExactly": [
+      "enableMark:bold",
+      "enableMark:italic",
+      "disableMark:bold",
+      "disableMark:italic"
+    ],
+    "operationCountPerSeed": 64,
+    "seeds": [
+      0,
+      1,
+      2,
+      7,
+      42,
+      255,
+      65537,
+      2147483647,
+      3735928559
+    ]
+  },
+  "winnerRule": {
+    "eligibility": "candidate is eligible if and only if every mandatory gate passes",
+    "metricAggregation": {
+      "bytesMetric": {
+        "candidateScore": "maximum per-corpus-run combinedBytes across all frozen corpus runs",
+        "combinedBytes": "encodedSnapshotBytes + aggregateEncodedUpdateBytes",
+        "encodedSnapshotBytes": "sum of byteLength for every snapshotRef produced in one corpus run",
+        "encodedUpdateBytes": "sum of byteLength for every unique updateRef produced in one corpus run; delivery repeats count zero additional bytes",
+        "unit": "bytes, non-negative safe integers"
+      },
+      "corpusRun": "one fixture expansion, one seed when seeded, and one explicit delivery permutation; rejected attempts are included and contribute emitted bytes only if any are emitted",
+      "projectionMetric": {
+        "candidateScore": "maximum projectionOperationCount of any assertState event across all frozen corpus runs",
+        "operationDefinition": "one inspected bodySequence delta item, boundary item, formatting source record, resolved endpoint, interval boundary, or emitted FormattingEvidence item counts one",
+        "unit": "operations, non-negative safe integers"
+      }
+    },
+    "selectionOrder": [
+      "eligible candidates only",
+      "lower maximum combined encoded snapshot + aggregate update bytes across the whole frozen corpus",
+      "lower maximum projection work count",
+      "exact tie chooses Candidate B"
+    ],
+    "ifNeitherEligible": "block task 2.4 and every dependent v2 task"
+  }
+}

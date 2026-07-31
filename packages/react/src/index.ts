@@ -1,15 +1,9 @@
 /**
  * @docx-editor.dev/react
  *
- * Curated root entry for the documented React editor API. Advanced surfaces
- * stay public through explicit subpaths:
- * - `@docx-editor.dev/react/ui`
- * - `@docx-editor.dev/react/dialogs`
- * - `@docx-editor.dev/react/hooks`
- * - `@docx-editor.dev/react/plugin-api`
- *
- * Framework-agnostic document utilities live in `@docx-editor.dev/core`.
- * Agent/MCP surfaces live in `@docx-editor.dev/agents`.
+ * React adapter for the DOCX editor. A thin renderer over the `Editor`
+ * contract from `@docx-editor.dev/core-contract`: it supplies DOM and paints
+ * the engine's positioned display list, and holds no editing-engine state.
  *
  * @packageDocumentation
  * @public
@@ -17,25 +11,55 @@
 
 export const VERSION = '0.0.2';
 
-// Main editor contract
-export {
-  DocxEditor,
-  type DocxEditorProps,
-  type DocxEditorRef,
-  type EditorMode,
-} from './components/DocxEditor';
-export { renderAsync, type RenderAsyncOptions, type DocxEditorHandle } from './renderAsync';
+export { DocxEditor } from './components/DocxEditor';
+export { PaginatedDocxEditor } from './components/PaginatedDocxEditor';
+export { PaginatedDocxEditorShell } from './components/PaginatedDocxEditorShell';
+export type { PaginatedDocxEditorShellProps } from './components/PaginatedDocxEditorShell';
+export type {
+  PaginatedDocxEditorHandle,
+  // The Vue name for the same contract, exported so the two adapters pair by name.
+  PaginatedDocxEditorHandle as PaginatedDocxEditorExpose,
+  PaginatedDocxEditorProps,
+} from './components/PaginatedDocxEditor';
+export { EditorFontError } from './types';
+export type {
+  DocxEditorProps,
+  DocxEditorRef,
+  EditorMode,
+  EditorFontErrorCode,
+  FontConfiguration,
+  FontFaceRequest,
+  FontSource,
+  FontSourceSubstitution,
+} from './types';
 
-// Document factory helpers — re-exported from `@docx-editor.dev/core` so
-// the common "spawn a blank editor" affordance is available without forcing
-// consumers to add `-core` to their dependency tree alongside `-react`.
+// Re-export the contract types a consumer needs to drive the editor.
+export type {
+  Editor,
+  EditorHost,
+  EditorCommand,
+  EditorQuery,
+  EditorSnapshot,
+  EditorScope,
+} from '@docx-editor.dev/core-contract/contracts/editor';
+export type {
+  DisplayPage,
+  DisplayItem,
+  DocPoint,
+} from '@docx-editor.dev/core-contract/contracts/geometry';
+export type { DocxDocument } from '@docx-editor.dev/core-contract/contracts/types';
+export { DocxEditorShell } from './components/DocxEditor/DocxEditorShell';
+export { Toolbar, ToolbarButton, ToolbarGroup, type ToolbarProps } from './components/Toolbar';
+export { TitleBar, MenuBar, DocumentName, Logo, TitleBarRight } from './components/TitleBar';
+export { PageIndicator } from './components/DocxEditor/PageIndicator';
+export { HorizontalRuler, type HorizontalRulerProps } from './components/ui/HorizontalRuler';
+export { VerticalRuler, RULER_WIDTH, type VerticalRulerProps } from './components/ui/VerticalRuler';
 export {
-  createEmptyDocument,
-  createDocumentWithText,
-  type CreateEmptyDocumentOptions,
-} from '@docx-editor.dev/core';
-
-// i18n contract — runtime only. Locale string types (LocaleStrings,
-// Translations, PartialLocaleStrings, TranslationKey) live in
-// `@docx-editor.dev/i18n`; import them from there.
-export { LocaleProvider, useTranslation, type LocaleProviderProps } from './i18n';
+  generateRulerTicks,
+  rulerPageBox,
+  PX_PER_INCH,
+  PX_PER_CM,
+  type RulerTick,
+  type RulerUnit,
+} from './rulerTicks';
+export { useEditorSnapshot } from './useEditorSnapshot';

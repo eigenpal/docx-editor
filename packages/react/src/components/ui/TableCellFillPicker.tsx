@@ -6,7 +6,7 @@
  */
 
 import { useCallback } from 'react';
-import type { ColorValue, Theme } from '@docx-editor.dev/core/types/document';
+import type { ColorValue, Theme } from '../../core-compat';
 import type { TableAction } from './TableToolbar';
 import { ColorPicker } from './ColorPicker';
 import { useTranslation } from '../../i18n';

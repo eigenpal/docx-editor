@@ -6,22 +6,64 @@
   "type": "module",
   "exports": {
     ".": {
-      "types": "./src/index.ts"
+      "types": "./src/index.ts",
+      "import": "./src/index.ts",
+      "default": "./src/index.ts"
+    },
+    "./binding": {
+      "types": "./src/binding/index.ts",
+      "import": "./src/binding/index.ts",
+      "default": "./src/binding/index.ts"
+    },
+    "./contracts/editor": {
+      "types": "./src/contracts/editor.ts",
+      "import": "./src/contracts/editor.ts",
+      "default": "./src/contracts/editor.ts"
+    },
+    "./contracts/geometry": {
+      "types": "./src/contracts/geometry.ts",
+      "import": "./src/contracts/geometry.ts",
+      "default": "./src/contracts/geometry.ts"
+    },
+    "./contracts/interaction": {
+      "types": "./src/contracts/interaction.ts",
+      "import": "./src/contracts/interaction.ts",
+      "default": "./src/contracts/interaction.ts"
+    },
+    "./contracts/mcp": {
+      "types": "./src/contracts/mcp.ts",
+      "import": "./src/contracts/mcp.ts",
+      "default": "./src/contracts/mcp.ts"
+    },
+    "./contracts/plugin": {
+      "types": "./src/contracts/plugin.ts",
+      "import": "./src/contracts/plugin.ts",
+      "default": "./src/contracts/plugin.ts"
+    },
+    "./contracts/types": {
+      "types": "./src/contracts/types-barrel.ts",
+      "import": "./src/contracts/types-barrel.ts",
+      "default": "./src/contracts/types-barrel.ts"
+    },
+    "./layout": {
+      "types": "./src/layout/index.ts",
+      "import": "./src/layout/index.ts",
+      "default": "./src/layout/index.ts"
+    },
+    "./output": {
+      "types": "./src/output/index.ts",
+      "import": "./src/output/index.ts",
+      "default": "./src/output/index.ts"
+    },
+    "./store": {
+      "types": "./src/store/index.ts",
+      "import": "./src/store/index.ts",
+      "default": "./src/store/index.ts"
     },
     "./editor": {
-      "types": "./src/editor.ts"
-    },
-    "./geometry": {
-      "types": "./src/geometry.ts"
-    },
-    "./plugin": {
-      "types": "./src/plugin.ts"
-    },
-    "./mcp": {
-      "types": "./src/mcp.ts"
-    },
-    "./types": {
-      "types": "./src/types-barrel.ts"
+      "types": "./src/editor/index.ts",
+      "import": "./src/editor/index.ts",
+      "default": "./src/editor/index.ts"
     }
   },
   "scripts": {
@@ -30,5 +72,28 @@
   "devDependencies": {
     "typescript": "^5.3.3"
   },
-  "license": "Apache-2.0"
+  "license": "Apache-2.0",
+  "dependencies": {
+    "bidi-js": "1.0.3",
+    "fast-xml-parser": "^4.5.0",
+    "fflate": "^0.8.2",
+    "harfbuzzjs": "1.4.0",
+    "prosemirror-commands": "^1.7.1",
+    "prosemirror-keymap": "^1.2.3",
+    "prosemirror-model": "^1.25.4",
+    "prosemirror-state": "^1.4.4",
+    "prosemirror-view": "^1.41.8"
+  },
+  "peerDependencies": {
+    "pdf-lib": "^1.17.1",
+    "yjs": "^13.6.0"
+  },
+  "peerDependenciesMeta": {
+    "pdf-lib": {
+      "optional": true
+    },
+    "yjs": {
+      "optional": true
+    }
+  }
 }

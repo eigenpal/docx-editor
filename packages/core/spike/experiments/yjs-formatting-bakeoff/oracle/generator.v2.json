@@ -1,0 +1,307 @@
+{
+  "artifactVersion": "formatting-bakeoff-generator/2",
+  "authority": "representation-neutral seeded formatting-property input",
+  "prng": {
+    "name": "xorshift32",
+    "seedNormalization": "Number(seed) >>> 0; normalized zero becomes 0x6d2b79f5",
+    "transition": [
+      "x = (x ^ ((x << 13) >>> 0)) >>> 0",
+      "x = (x ^ (x >>> 17)) >>> 0",
+      "x = (x ^ ((x << 5) >>> 0)) >>> 0"
+    ],
+    "selection": "next() modulo frozen domain length"
+  },
+  "genesis": {
+    "authoredIntentFingerprint": "sha256:2f7c4a53d4e07b178eab277de0f1eaf0cf4c80a66b7db6ee7c403ca06499e4b7",
+    "snapshotRef": "snapshot-genesis",
+    "storyId": "story-body",
+    "storySequenceCreationId": "sequence-body-creation-1",
+    "paragraphs": [
+      {
+        "boundaryCreationId": "boundary-p1",
+        "globalTextEnd": 7,
+        "globalTextStart": 1,
+        "paragraphId": "paragraph-1",
+        "text": "abcdef"
+      },
+      {
+        "boundaryCreationId": "boundary-p2",
+        "globalTextEnd": 14,
+        "globalTextStart": 8,
+        "paragraphId": "paragraph-2",
+        "text": "ghijkl"
+      }
+    ]
+  },
+  "validRangeTable": [
+    {
+      "boundaryCreationId": "boundary-p1",
+      "endAffinity": "after",
+      "endAssoc": 0,
+      "endOffsetUtf16": 2,
+      "globalEnd": 3,
+      "globalStart": 1,
+      "paragraphId": "paragraph-1",
+      "rangeId": "range-p1-0-2",
+      "startAffinity": "before",
+      "startAssoc": -1,
+      "startOffsetUtf16": 0
+    },
+    {
+      "boundaryCreationId": "boundary-p1",
+      "endAffinity": "after",
+      "endAssoc": 0,
+      "endOffsetUtf16": 4,
+      "globalEnd": 5,
+      "globalStart": 3,
+      "paragraphId": "paragraph-1",
+      "rangeId": "range-p1-2-4",
+      "startAffinity": "before",
+      "startAssoc": -1,
+      "startOffsetUtf16": 2
+    },
+    {
+      "boundaryCreationId": "boundary-p1",
+      "endAffinity": "after",
+      "endAssoc": 0,
+      "endOffsetUtf16": 6,
+      "globalEnd": 7,
+      "globalStart": 5,
+      "paragraphId": "paragraph-1",
+      "rangeId": "range-p1-4-6",
+      "startAffinity": "before",
+      "startAssoc": -1,
+      "startOffsetUtf16": 4
+    },
+    {
+      "boundaryCreationId": "boundary-p2",
+      "endAffinity": "after",
+      "endAssoc": 0,
+      "endOffsetUtf16": 2,
+      "globalEnd": 10,
+      "globalStart": 8,
+      "paragraphId": "paragraph-2",
+      "rangeId": "range-p2-0-2",
+      "startAffinity": "before",
+      "startAssoc": -1,
+      "startOffsetUtf16": 0
+    },
+    {
+      "boundaryCreationId": "boundary-p2",
+      "endAffinity": "after",
+      "endAssoc": 0,
+      "endOffsetUtf16": 4,
+      "globalEnd": 12,
+      "globalStart": 10,
+      "paragraphId": "paragraph-2",
+      "rangeId": "range-p2-2-4",
+      "startAffinity": "before",
+      "startAssoc": -1,
+      "startOffsetUtf16": 2
+    },
+    {
+      "boundaryCreationId": "boundary-p2",
+      "endAffinity": "after",
+      "endAssoc": 0,
+      "endOffsetUtf16": 6,
+      "globalEnd": 14,
+      "globalStart": 12,
+      "paragraphId": "paragraph-2",
+      "rangeId": "range-p2-4-6",
+      "startAffinity": "before",
+      "startAssoc": -1,
+      "startOffsetUtf16": 4
+    }
+  ],
+  "choices": {
+    "replicas": [
+      "replica-A",
+      "replica-B",
+      "replica-C"
+    ],
+    "actorsByReplica": {
+      "replica-A": "actor-A",
+      "replica-B": "actor-B",
+      "replica-C": "actor-C"
+    },
+    "clientIdsByReplica": {
+      "replica-A": 1101,
+      "replica-B": 2201,
+      "replica-C": 3301
+    },
+    "sessionsByActor": {
+      "actor-A": [
+        "session-A-1",
+        "session-A-2"
+      ],
+      "actor-B": [
+        "session-B-1"
+      ],
+      "actor-C": [
+        "session-C-1"
+      ]
+    },
+    "originsBySession": {
+      "session-A-1": "origin-A-session-1",
+      "session-A-2": "origin-A-session-2",
+      "session-B-1": "origin-B-session-1",
+      "session-C-1": "origin-C-session-1"
+    }
+  },
+  "operationDomainExactly": [
+    "enableMark:bold",
+    "enableMark:italic",
+    "disableMark:bold",
+    "disableMark:italic"
+  ],
+  "operationCount": 64,
+  "generation": {
+    "drawOrderExactly": [
+      "operation kind",
+      "replica",
+      "session",
+      "range"
+    ],
+    "enable": "mint semanticOperationId, contributionId, semanticMarkId, commitId, and groupId from seed+index; add becomes observed locally immediately",
+    "disable": "target the canonical-byte sorted unique set of every causally observed active add ContributionId whose story and mark kind match and whose resolved half-open global range intersects the disable range; common operation freezes the complete targetObservedContributionIds set",
+    "disableFallback": "when no causally observed active add matches story and kind and intersects the selected range, emit enableMark of the same kind and range with fallbackReason=no-observed-active-add",
+    "candidateA": "receives the identical complete semantic target set for neutral prerequisite preflight, then persists native null formatting only; it must not persist ownership metadata or use a conflict workaround",
+    "candidateB": "persists remove evidence targeting every ID in the identical frozen complete targetObservedContributionIds set",
+    "groupHistory": "append actual local semantic operation eventId to the selected replica localGroups; no synthetic undo/history entries"
+  },
+  "shadowState": {
+    "fieldsExactly": [
+      "activeAddsByKindRange",
+      "deliveredUpdateIds",
+      "knownSemanticOperationIds",
+      "localGroups",
+      "producedUpdateRefs"
+    ],
+    "delivery": "enable first delivery applies once; disable first delivery with any missing target add rejects atomically without update coverage, then applies once only on dependency retry; duplicate after successful coverage is no-change",
+    "disable": "removes every listed observed active add ID; target selection was already frozen from matching story/kind and intersecting resolved range",
+    "semanticFingerprint": "ordered canonical FormattingEvidence objects with exact fields from contract.v2.json; maximal kind/contributor coverage segments include storySequenceCreationId and global bounds; all ID/provenance arrays are deduplicated and sorted by canonical UTF-8 bytes; authoredIntentFingerprint is genesis.authoredIntentFingerprint"
+  },
+  "deliverySchedule": {
+    "phase": "after every fourth local operation/capture, deliver the oldest still-pending source/destination pair before generating the next operation; after operation 64 drain all remaining first deliveries",
+    "firstDeliveryOrder": "cadence deliveries scan produced updateRefs forward and destinations in reverse replica order; final drain scans produced updateRefs and destinations in reverse order, skipping pairs already delivered",
+    "dependencyRetryOrder": "after every source/destination pair has had one initial attempt and all add prerequisites have applied, retry rejected disable pairs in initial-attempt order; every retry must apply once",
+    "duplicateOrder": "only after dependency retries drain, repeat every successfully covered source/destination pair in forward produced updateRef order",
+    "deliveryKindsExactly": [
+      "first",
+      "rejected-missing-target",
+      "retry",
+      "duplicate"
+    ],
+    "missingTargetDiagnostic": {
+      "code": "missing-target-add",
+      "candidateScope": "Candidate A and Candidate B must both reject before applying representation-specific mutation or update coverage",
+      "fieldsExactly": [
+        "code",
+        "missingTargetAddIds",
+        "updateRef"
+      ]
+    },
+    "invariants": [
+      "every updateRef has exactly one captureUpdate producer",
+      "every source/destination pair receives exactly one initial attempt",
+      "disable initial attempt while any targeted add is missing at destination rejects with missing-target-add listing the sorted missing subset and changes no state, revision, state vector, or deliveredUpdateIds coverage",
+      "all add prerequisite updates apply before rejected disable pairs retry",
+      "successful first or retry delivery changes destination shadow and records update coverage exactly once",
+      "duplicate delivery has identical preStateRef and postStateRef"
+    ]
+  },
+  "eventExpansion": {
+    "closedEventTypesExactly": [
+      "bootstrapReplica",
+      "localSemanticOp",
+      "captureUpdate",
+      "deliverUpdate",
+      "assertState"
+    ],
+    "idFormats": {
+      "eventId": "gen-<seedHex>-<index>-<type>",
+      "groupId": "gen-<seedHex>-group-<index>",
+      "semanticOperationId": "gen-<seedHex>-op-<index>",
+      "stateRef": "gen-<seedHex>-state-<replica>-<ordinal>",
+      "updateRef": "gen-<seedHex>-update-<index>"
+    },
+    "captureRule": "each localSemanticOp is immediately followed by one captureUpdate",
+    "terminalAssertion": "one assertState per replica after all duplicate deliveries; all three stateRef values resolve to the same active semantic fingerprint"
+  },
+  "terminalDiagnosticFieldsExactly": [
+    "candidateDerivationChecks",
+    "deliveryCounts",
+    "diagnosticTraceHash",
+    "fallbackCount",
+    "lastPrngState",
+    "seed",
+    "semanticFingerprint"
+  ],
+  "deliveryCountFieldsExactly": [
+    "duplicate",
+    "firstSuccessful",
+    "rejectedBeforePrerequisite",
+    "successfulRetry"
+  ],
+  "candidateDerivationChecks": {
+    "candidateA": "derive each active segment with engine-core-spike-native-format-v2 approved input",
+    "candidateB": "derive each active segment with engine-core-spike-mark-v2 approved input",
+    "authority": "representation-contracts.v2.json"
+  },
+  "seedExpectations": [
+    {
+      "expectedDiagnosticTraceHash": "sha256:54c6a89664b9b403133bc4a350a2c739150e2580fed2a011883e162b2a34e363",
+      "expectedEventHash": "sha256:6a224faebfac0bcadf61e522504cbe50b719f0355204479dafebe86bcaf03af3",
+      "expectedSemanticFingerprintHash": "sha256:7ddba87fbea7ce7c5e30caba712f52f7b1ccf0d8bdfdef5affbf7f271ddbd681",
+      "seed": 0
+    },
+    {
+      "expectedDiagnosticTraceHash": "sha256:1340244e185130110587a0a2cedb453692c3019df2d72ed96802d97c4ce08856",
+      "expectedEventHash": "sha256:ad8f9ec586ec0e0880ac4bd94ec380be2ac52a55e59bd02295296bdbf4bf60e3",
+      "expectedSemanticFingerprintHash": "sha256:4da5ac8e762e199a1493596bdfeea84c84920b390d1e4dc57e9944d8da7011e5",
+      "seed": 1
+    },
+    {
+      "expectedDiagnosticTraceHash": "sha256:6535fda3a0fe0beab498f0f1e2895770f4947de7482f1b4e52940af0141a3fcf",
+      "expectedEventHash": "sha256:429d232449906f3c635ee564ac66812173951d4642f82b3dc8c09ae9b8a6b0af",
+      "expectedSemanticFingerprintHash": "sha256:197c71398dbe496cf1d5aa4c1e82da87ff0413f098b253e4d0bdbd561695554e",
+      "seed": 2
+    },
+    {
+      "expectedDiagnosticTraceHash": "sha256:687329eae47df7bc1d348b20476e071b0020fa65e15a51e6f1a957ddd713000f",
+      "expectedEventHash": "sha256:59f7e43a07c9fc432fa68f27c8f642a9b8a80c0384dbd98a4f945fbbbca4f81c",
+      "expectedSemanticFingerprintHash": "sha256:7b627482233913216e31a0c28a13c438a440bc72cbe7808886545aca73e10f5b",
+      "seed": 7
+    },
+    {
+      "expectedDiagnosticTraceHash": "sha256:21e6675e594ea8dd73b586a0ed005c579b78d71548d6239e7b71a777cee71702",
+      "expectedEventHash": "sha256:de33a7f34442e2920e0deabae6b20e229b26a70c7d449926501a767652d492ee",
+      "expectedSemanticFingerprintHash": "sha256:dfcdb5d26bdf35400f63e8d070bcfa0b3cea1e04bf867c538029b2a00a8ce16b",
+      "seed": 42
+    },
+    {
+      "expectedDiagnosticTraceHash": "sha256:027bb2575ddfd7f57ba0245d2d64a63b93a2f5a631b2960cadc32f577f6f8043",
+      "expectedEventHash": "sha256:69fc14637d382664010e285987cb081b5758ce029d087feda3dd703eb3ebd17a",
+      "expectedSemanticFingerprintHash": "sha256:5620d75429a85750f0c8d1626328d3e0b7e813c03d83554ac4c3aa7c85a88a89",
+      "seed": 255
+    },
+    {
+      "expectedDiagnosticTraceHash": "sha256:2d157ceffd8908ac953ac96b28e576650d8bf082da3155b943e68c78c6098be8",
+      "expectedEventHash": "sha256:d198d0e13a923f77245217d7861c902c7afb2b1d67951b18d0a34bdac6ff06b0",
+      "expectedSemanticFingerprintHash": "sha256:3d7b4e67b70f992998465d3de7037642bbf8e7e2da1c16530974469b6bd96648",
+      "seed": 65537
+    },
+    {
+      "expectedDiagnosticTraceHash": "sha256:4d71fca47c0f92c853bceb2e51740900cc0e29bb22ca7b6ebb5b33690fe21852",
+      "expectedEventHash": "sha256:92cb9d156495cde9972c197a7dfa574c1ba233258928af69537efbd258ac5aec",
+      "expectedSemanticFingerprintHash": "sha256:5150d3d3de926921d9954f541bbdc5e1a29058cc49ea6d5ded265a5686aa888d",
+      "seed": 2147483647
+    },
+    {
+      "expectedDiagnosticTraceHash": "sha256:ccb4878bb1f3c805b21384e7b0a332407e327e52ed955f3865f72ee6675dda31",
+      "expectedEventHash": "sha256:652fcfd722a92b24d101c0a017c487e269c2ee3869e57d08be0cd7ee7f8f60c1",
+      "expectedSemanticFingerprintHash": "sha256:c4ed597209a4e8a2aa5954168c92b29d24b2e29db1431def0dcf5fea446fdc37",
+      "seed": 3735928559
+    }
+  ]
+}

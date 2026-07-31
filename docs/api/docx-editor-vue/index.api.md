@@ -4,162 +4,999 @@
 
 ```ts
 
-import { App } from 'vue';
-import { Comment as Comment_2 } from '@docx-editor.dev/core/types/content';
-import { ContentControlFilter } from '@docx-editor.dev/core/agent';
-import { ContentControlValue } from '@docx-editor.dev/core/agent';
-import { createDocumentWithText } from '@docx-editor.dev/core';
-import { createEmptyDocument } from '@docx-editor.dev/core';
-import { CreateEmptyDocumentOptions } from '@docx-editor.dev/core';
-import { en as defaultLocale } from '@docx-editor.dev/i18n';
+import { ComponentOptionsMixin } from 'vue';
+import { ComponentProvideOptions } from 'vue';
 import { DefineComponent } from 'vue';
-import { Document as Document_2 } from '@docx-editor.dev/core/types/document';
-import { DocxInput } from '@docx-editor.dev/core/utils';
-import { EditorHandle } from '@docx-editor.dev/core';
-import { EditorRefLike } from '@docx-editor.dev/agents/bridge';
-import { EditorView } from 'prosemirror-view';
-import { FontDefinition } from '@docx-editor.dev/core/utils';
-import { FontOption } from '@docx-editor.dev/core/utils/fontOptions';
-import { MaybeRef } from 'vue';
-import { Plugin as Plugin_2 } from 'prosemirror-state';
-import { PMContentControl } from '@docx-editor.dev/core/prosemirror';
-import { ScrollToParaIdOptions } from '@docx-editor.dev/core/utils';
-import { SelectionState } from '@docx-editor.dev/core/prosemirror';
-import { StyleValue } from 'vue';
-import { TFunction } from '@docx-editor.dev/i18n';
-import { Theme } from '@docx-editor.dev/core/types/document';
-import { Translations } from '@docx-editor.dev/i18n';
-import { VNodeChild } from 'vue';
-
-export { createDocumentWithText }
-
-export { createEmptyDocument }
-
-export { CreateEmptyDocumentOptions }
-
-export { defaultLocale }
+import { ExtractPropTypes } from 'vue';
+import { PropType } from 'vue';
+import { PublicProps } from 'vue';
+import { Ref } from 'vue';
+import { RendererElement } from 'vue';
+import { RendererNode } from 'vue';
+import { VNode } from 'vue';
 
 // @public
-export const DocxEditor: DefineComponent<DocxEditorProps>;
+export const DEFERRED_DIALOGS: readonly ["findReplace", "hyperlink", "insertImage", "insertTable", "insertSymbol", "imageProperties", "footnoteProperties"];
+
+// @public (undocumented)
+export type DeferredDialogId = (typeof DEFERRED_DIALOGS)[number];
 
 // @public
-export interface DocxEditorHandle extends EditorHandle {
-    scrollToParaId: (paraId: string, options?: ScrollToParaIdOptions) => boolean;
-    scrollToPosition: (pmPos: number) => void;
-    setZoom: (zoom: number) => void;
+export type DisplayItem =
+| {
+    readonly kind: 'text';
+    readonly box: Rect;
+    readonly runs: readonly GlyphRun[];
+    readonly semantic: SemanticTextSpan;
+    readonly clusters: readonly ShapedCluster[];
+    readonly scope: ViewScope;
+    readonly docFrom?: number;
+    readonly docTo?: number;
+    readonly blockId?: number;
+    readonly synthetic?: boolean;
+    readonly interaction?: PositionedInteractionMeta;
 }
+| {
+    readonly kind: 'image';
+    readonly box: Rect;
+    readonly src: ImageRef;
+    readonly semantic: SemanticAtomicSpan;
+    readonly scope: ViewScope;
+    readonly docFrom?: number;
+    readonly docTo?: number;
+    readonly synthetic?: boolean;
+    readonly interaction?: PositionedInteractionMeta;
+}
+| {
+    readonly kind: 'fill';
+    readonly box: Rect;
+    readonly color: ColorValue;
+    readonly interaction?: PositionedInteractionMeta;
+}
+| {
+    readonly kind: 'tableBorder';
+    readonly segments: readonly BorderSeg[];
+    readonly cut?: 'top' | 'bottom';
+}
+| {
+    readonly kind: 'decoration';
+    readonly box: Rect;
+    readonly role: string;
+    readonly refId: string;
+    readonly detail?: Readonly<Record<string, unknown>>;
+    readonly interaction?: PositionedInteractionMeta;
+}
+/**
+* Escape hatch for anything not yet modelled as a first-class variant. Lets
+* the engine ship new positioned content before the contract names it;
+* adapters that don't recognise `name` skip it.
+*/
+| {
+    readonly kind: 'custom';
+    readonly name: string;
+    readonly box: Rect;
+    readonly detail?: unknown;
+    readonly interaction?: PositionedInteractionMeta;
+};
+
+// @public
+export interface DisplayPage {
+    // (undocumented)
+    readonly box: Rect;
+    readonly contentBox: Rect;
+    readonly index: number;
+    // (undocumented)
+    readonly items: readonly DisplayItem[];
+}
+
+// @public @deprecated (undocumented)
+export interface DocPoint {
+    readonly docPos: number;
+    // (undocumented)
+    readonly scope: ViewScope;
+}
+
+// @public
+export interface DocxDocument {
+    // (undocumented)
+    readonly body: DocumentBody;
+    // (undocumented)
+    readonly comments: readonly DocComment[];
+    // (undocumented)
+    readonly revisions: readonly Revision[];
+    // (undocumented)
+    readonly styles: StyleDefinitions;
+    // (undocumented)
+    readonly theme?: Theme;
+}
+
+// @public (undocumented)
+export const DocxEditor: DefineComponent<ExtractPropTypes<    {
+document: {
+type: PropType<DocumentSource>;
+default: undefined;
+};
+mode: {
+type: PropType<EditorMode>;
+default: string;
+};
+zoom: {
+type: NumberConstructor;
+default: undefined;
+};
+locale: {
+type: StringConstructor;
+default: undefined;
+};
+author: {
+type: StringConstructor;
+default: undefined;
+};
+fonts: {
+type: PropType<FontConfiguration>;
+required: true;
+};
+}>, () => VNode<RendererNode, RendererElement, {
+[key: string]: any;
+}>, {}, {}, {}, ComponentOptionsMixin, ComponentOptionsMixin, {
+ready: (_editor: Editor) => true;
+change: (_change: DocumentChange) => true;
+fontError: (_error: EditorFontError) => true;
+}, string, PublicProps, Readonly<ExtractPropTypes<    {
+document: {
+type: PropType<DocumentSource>;
+default: undefined;
+};
+mode: {
+type: PropType<EditorMode>;
+default: string;
+};
+zoom: {
+type: NumberConstructor;
+default: undefined;
+};
+locale: {
+type: StringConstructor;
+default: undefined;
+};
+author: {
+type: StringConstructor;
+default: undefined;
+};
+fonts: {
+type: PropType<FontConfiguration>;
+required: true;
+};
+}>> & Readonly<{
+onChange?: ((_change: DocumentChange) => any) | undefined;
+onReady?: ((_editor: Editor) => any) | undefined;
+onFontError?: ((_error: EditorFontError) => any) | undefined;
+}>, {
+author: string;
+document: DocumentSource;
+zoom: number;
+mode: EditorMode;
+locale: string;
+}, {}, {}, {}, string, ComponentProvideOptions, true, {}, any>;
 
 // @public
 export interface DocxEditorProps {
+    // (undocumented)
     author?: string;
-    className?: string;
-    colorMode?: 'light' | 'dark' | 'system';
-    commentsSidebarOpen?: boolean;
-    disableFindReplaceShortcuts?: boolean;
-    document?: Document_2 | null;
-    documentBuffer?: DocxInput | null;
-    documentName?: string;
-    documentNameEditable?: boolean;
-    externalPlugins?: Plugin_2[];
-    fontFamilies?: ReadonlyArray<string | FontOption>;
-    fonts?: ReadonlyArray<FontDefinition>;
-    i18n?: Translations;
-    initialZoom?: number;
+    document?: DocumentSource;
+    fonts: FontConfiguration;
+    // (undocumented)
+    locale?: string;
     mode?: EditorMode;
-    onChange?: (document: Document_2) => void;
-    onCommentAdd?: (comment: Comment_2) => void;
-    onCommentDelete?: (comment: Comment_2) => void;
-    onCommentReply?: (reply: Comment_2, parent: Comment_2) => void;
-    onCommentResolve?: (comment: Comment_2) => void;
-    onCommentsChange?: (comments: Comment_2[]) => void;
-    onCommentsSidebarOpenChange?: (open: boolean) => void;
-    onDocumentNameChange?: (name: string) => void;
-    onEditorViewReady?: (view: EditorView) => void;
-    onError?: (error: Error) => void;
-    onModeChange?: (mode: EditorMode) => void;
-    onOpen?: (file: File) => void | Promise<void>;
-    onPrint?: () => void;
-    onSelectionChange?: (state: SelectionState | null) => void;
-    readOnly?: boolean;
-    renderLogo?: () => VNodeChild;
-    renderTitleBarRight?: () => VNodeChild;
-    showFileOpen?: boolean;
-    showHelpMenu?: boolean;
-    showMenuBar?: boolean;
-    showOutline?: boolean;
-    showOutlineButton?: boolean;
-    showRuler?: boolean;
-    showToolbar?: boolean;
-    showZoomControl?: boolean;
-    style?: StyleValue;
-    theme?: Theme | null;
-    toolbarExtra?: () => VNodeChild;
-    watermarkPresets?: readonly string[];
+    onFontError?: (error: EditorFontError) => void;
+    // (undocumented)
+    zoom?: number;
 }
 
 // @public
-export type DocxEditorRef = EditorRefLike & {
-    getAgent(): null;
-    save(): Promise<ArrayBuffer | null>;
-    setZoom(zoom: number): void;
-    getZoom(): number;
+export interface DocxEditorRef {
+    exec(command: EditorCommand, options?: {
+        scope?: EditorScope;
+    }): ExecResult;
+    // (undocumented)
     focus(): void;
-    scrollToParaId(paraId: string, options?: ScrollToParaIdOptions): boolean;
-    scrollToPage(pageNumber: number): void;
-    scrollToPosition(pmPos: number): void;
-    scrollToCommentId(commentId: number): boolean;
-    scrollToChangeId(revisionId: number): boolean;
-    highlightRange(from: number, to: number): void;
-    openPrintPreview(): void;
-    print(): void;
-    loadDocument(doc: Document_2): void;
-    loadDocumentBuffer(buffer: DocxInput): Promise<void>;
-    updateTableOfContents(): boolean;
-    destroy(): void;
-    getContentControls(filter?: ContentControlFilter): PMContentControl[];
-    scrollToContentControl(filter: ContentControlFilter): boolean;
-    setContentControlContent(filter: ContentControlFilter, text: string, options?: {
-        force?: boolean;
-    }): boolean;
-    removeContentControl(filter: ContentControlFilter, options?: {
-        force?: boolean;
-        keepContent?: boolean;
-    }): boolean;
-    setContentControlValue(filter: ContentControlFilter, value: ContentControlValue, options?: {
-        force?: boolean;
-    }): boolean;
-};
+    getDocumentHandle(): DocumentHandle | null;
+    getEditor(): Editor | null;
+    load(document: DocumentSource): void;
+    save(): Promise<ArrayBuffer | null>;
+    snapshot(options?: {
+        scope?: EditorScope;
+    }): EditorSnapshot;
+}
 
 // @public (undocumented)
-export type EditorMode = 'editing' | 'suggesting' | 'viewing';
+export const DocxEditorShell: DefineComponent<    {}, () => VNode<RendererNode, RendererElement, {
+[key: string]: any;
+}>, {}, {}, {}, ComponentOptionsMixin, ComponentOptionsMixin, {}, string, PublicProps, Readonly<{}> & Readonly<{}>, {}, {}, {}, {}, string, ComponentProvideOptions, true, {}, any>;
 
 // @public
-export const i18nPlugin: {
-    install(app: App, i18n?: Translations): void;
+export interface DocxEditorShellProps {
+    // (undocumented)
+    readonly _slotsOnly?: never;
+}
+
+// @public (undocumented)
+export const DocxEditorSidebar: DefineComponent<ExtractPropTypes<    {
+editor: {
+type: PropType<Editor | null>;
+default: null;
 };
-
-// @public
-export function provideLocale(i18n?: MaybeRef<Translations | undefined>): void;
-
-// @public
-export function renderAsync(input: DocxInput, container: HTMLElement, options?: RenderAsyncOptions): Promise<DocxEditorHandle>;
-
-// @public
-export type RenderAsyncOptions = Omit<DocxEditorProps, 'documentBuffer' | 'document'> & {
-    onReady?: () => void;
-    onError?: (error: Error) => void;
-    onChange?: (document: Document_2) => void;
-    onRename?: (name: string) => void;
-    onMenuAction?: (action: string) => void;
-    onModeChange?: (mode: EditorMode) => void;
+open: {
+type: BooleanConstructor;
+default: boolean;
 };
+panels: {
+type: PropType<readonly SidebarPanel[]>;
+default: () => never[];
+};
+}>, () => VNode<RendererNode, RendererElement, {
+[key: string]: any;
+}> | null, {}, {}, {}, ComponentOptionsMixin, ComponentOptionsMixin, {
+close: () => true;
+}, string, PublicProps, Readonly<ExtractPropTypes<    {
+editor: {
+type: PropType<Editor | null>;
+default: null;
+};
+open: {
+type: BooleanConstructor;
+default: boolean;
+};
+panels: {
+type: PropType<readonly SidebarPanel[]>;
+default: () => never[];
+};
+}>> & Readonly<{
+onClose?: (() => any) | undefined;
+}>, {
+open: boolean;
+editor: Editor | null;
+panels: readonly SidebarPanel[];
+}, {}, {}, {}, string, ComponentProvideOptions, true, {}, any>;
+
+// @public (undocumented)
+export interface DocxEditorSidebarProps {
+    // (undocumented)
+    readonly editor: Editor | null;
+    // (undocumented)
+    readonly open: boolean;
+    // (undocumented)
+    readonly panels?: readonly SidebarPanel[];
+}
+
+// @public (undocumented)
+export const DocxEditorTitleBar: DefineComponent<ExtractPropTypes<    {
+title: {
+type: StringConstructor;
+required: true;
+};
+readOnly: {
+type: BooleanConstructor;
+default: boolean;
+};
+}>, () => VNode<RendererNode, RendererElement, {
+[key: string]: any;
+}>, {}, {}, {}, ComponentOptionsMixin, ComponentOptionsMixin, {
+'update:title': (_value: string) => true;
+}, string, PublicProps, Readonly<ExtractPropTypes<    {
+title: {
+type: StringConstructor;
+required: true;
+};
+readOnly: {
+type: BooleanConstructor;
+default: boolean;
+};
+}>> & Readonly<{
+"onUpdate:title"?: ((_value: string) => any) | undefined;
+}>, {
+readOnly: boolean;
+}, {}, {}, {}, string, ComponentProvideOptions, true, {}, any>;
+
+// @public (undocumented)
+export interface DocxEditorTitleBarProps {
+    // (undocumented)
+    readonly readOnly?: boolean;
+    // (undocumented)
+    readonly title: string;
+}
+
+// @public (undocumented)
+export const DocxEditorToolbar: DefineComponent<ExtractPropTypes<    {
+editor: {
+type: PropType<Editor | null>;
+default: null;
+};
+t: {
+type: PropType<Translate>;
+required: true;
+};
+onSave: {
+type: PropType<() => void>;
+default: undefined;
+};
+}>, () => VNode<RendererNode, RendererElement, {
+[key: string]: any;
+}>, {}, {}, {}, ComponentOptionsMixin, ComponentOptionsMixin, {}, string, PublicProps, Readonly<ExtractPropTypes<    {
+editor: {
+type: PropType<Editor | null>;
+default: null;
+};
+t: {
+type: PropType<Translate>;
+required: true;
+};
+onSave: {
+type: PropType<() => void>;
+default: undefined;
+};
+}>> & Readonly<{}>, {
+editor: Editor | null;
+onSave: () => void;
+}, {}, {}, {}, string, ComponentProvideOptions, true, {}, any>;
+
+// @public (undocumented)
+export interface DocxEditorToolbarProps {
+    // (undocumented)
+    readonly editor: Editor | null;
+    // (undocumented)
+    readonly onSave?: () => void;
+    // (undocumented)
+    readonly t: Translate;
+}
+
+// @public (undocumented)
+export interface Editor {
+    can(command: EditorCommand, options?: { scope?: EditorScope }): CanResult;
+    // (undocumented)
+    destroy(): void;
+    dispatchInteraction(
+    intent: InteractionIntent,
+    options?: { hostMetrics?: InteractionHostMetrics }
+    ): InteractionDispatchResult;
+    // (undocumented)
+    exec(command: EditorCommand, options?: { scope?: EditorScope }): ExecResult;
+    findMatches(
+    query: string,
+    options?: { readonly matchCase?: boolean; readonly wholeWord?: boolean }
+    ): readonly TextMatch[];
+    // (undocumented)
+    focus(scope?: EditorScope): InteractionOutcome<void>;
+    getAccessibilityObservation(): AccessibilityObservation;
+    // (undocumented)
+    getActiveScope(): ViewScope;
+    getCaretClientRect(): Rect | null;
+    getCaretGeometry(pos?: EditorPosition): CaretGeometry | null;
+    getCaretRect(pos?: EditorPosition): Rect | null;
+    getComments(): readonly {
+        readonly id: string;
+        readonly text: string;
+        readonly resolved: boolean;
+    }[];
+    // (undocumented)
+    getCurrentPage(mode?: 'viewport' | 'caret'): number;
+    getDisplay(): readonly DisplayPage[];
+    getDocumentFonts(): readonly string[];
+    getDocumentHandle(): DocumentHandle;
+    getDocumentStyles(): readonly {
+        readonly styleId: string;
+        readonly name: string;
+        readonly type: string;
+    }[];
+    getHeaderFooterState(): {
+        readonly editing: 'header' | 'footer' | null;
+        readonly sectionIndex: number;
+    } | null;
+    getInputHostObservation(): InputHostObservation | null;
+    getInteractionFrame(): InteractionFrame;
+    getInteractionHostMetrics(): InteractionHostMetrics | null;
+    getOutline(): readonly {
+        readonly text: string;
+        readonly level: number;
+        readonly blockId: string;
+    }[];
+    getPageGeometry(): readonly { index: number; box: Rect; contentBox: Rect }[];
+    getPageSetup(): {
+        readonly pageWidthTwips: number;
+        readonly pageHeightTwips: number;
+        readonly orientation: 'portrait' | 'landscape';
+        readonly marginsTwips: {
+            readonly top: number;
+            readonly right: number;
+            readonly bottom: number;
+            readonly left: number;
+        };
+    } | null;
+    getScrollGeometry(): ScrollGeometry;
+    getSelectedImage(): {
+        readonly id: string;
+        readonly widthEmu: number;
+        readonly heightEmu: number;
+    } | null;
+    getSelectedTable(): {
+        readonly blockId: string;
+        readonly rowCount: number;
+        readonly columnCount: number;
+        readonly cell: { readonly row: number; readonly column: number } | null;
+    } | null;
+    getSelectionFormatting(): {
+        readonly fontFamily?: string;
+        readonly fontSizeHalfPoints?: number;
+        readonly styleId?: string;
+        readonly alignment?: string;
+        readonly bold?: boolean;
+        readonly italic?: boolean;
+        readonly underline?: boolean;
+    } | null;
+    getSelectionGeometry(
+    range?: EditorSelection,
+    options?: SelectionGeometryOptions
+    ): SelectionGeometry | null;
+    getSelectionRects(range?: EditorSelection, options?: SelectionGeometryOptions): readonly Rect[];
+    // (undocumented)
+    getTotalPages(): number;
+    getTrackedChanges(): readonly {
+        readonly id: string;
+        readonly kind: string;
+        readonly author?: string;
+    }[];
+    getWatermark(): { readonly kind: 'text' | 'image'; readonly text?: string } | null;
+    // (undocumented)
+    getZoom(): number;
+    hitTest(point: Point, options?: HitTestOptions): SemanticHitTarget | null;
+    isActive(command: EditorCommand, options?: { scope?: EditorScope }): boolean;
+    load(document: DocumentSource): void;
+    // (undocumented)
+    on<E extends keyof EditorEvents>(event: E, handler: EditorEvents[E]): Unsubscribe;
+    // (undocumented)
+    query<K extends keyof EditorQueries>(
+    query: { type: K } & EditorQueries[K],
+    options?: { scope?: EditorScope }
+    ): EditorQueryResults[K];
+    relayout(options?: { sync?: boolean }): void;
+    resolvePointer(point: Point, options?: HitTestOptions): InteractionOutcome<SemanticHitTarget>;
+    save(): Promise<ArrayBuffer>;
+    // (undocumented)
+    scrollToBlock(blockId: string): boolean;
+    scrollToPage(pageNumber: number): boolean;
+    selectMatch(match: TextMatch): ExecResult;
+    // (undocumented)
+    setActiveScope(scope: ViewScope): void;
+    setZoom(zoom: number): ExecResult;
+    // (undocumented)
+    snapshot(options?: { scope?: EditorScope }): EditorSnapshot;
+}
+
+// @public (undocumented)
+export type EditorCommand = {
+    [K in keyof EditorCommands]: { type: K } & EditorCommands[K];
+}[keyof EditorCommands];
 
 // @public
-export function useTranslation(): {
-    t: TFunction;
+export class EditorFontError extends Error {
+    constructor(
+    code: EditorFontErrorCode,
+    message: string,
+    details: {
+        readonly request?: FontFaceRequest;
+        readonly diagnostic?: string;
+        readonly cause?: unknown;
+    } = {}
+    ) {
+        super(message, { cause: details.cause });
+        this.code = code;
+        this.request = details.request;
+        this.diagnostic = details.diagnostic;
+    }
+    // (undocumented)
+    readonly code: EditorFontErrorCode;
+    // (undocumented)
+    readonly diagnostic?: string;
+    // (undocumented)
+    readonly name: string = 'EditorFontError';
+    // (undocumented)
+    readonly request?: FontFaceRequest;
+}
+
+// @public (undocumented)
+export type EditorFontErrorCode =
+| 'initializationFailed'
+| 'missing'
+| 'forbidden'
+| 'overLimit'
+| 'malformed'
+| 'hashMismatch'
+| 'metadataMismatch'
+| 'fontFaceLoadFailed'
+| 'unsupportedFaceIndex'
+| 'missingFont'
+| 'hashInvalid'
+| 'fontMismatch'
+| 'unsupportedFace'
+| 'loadFailed';
+
+// @public
+export interface EditorHost {
+    afterCommit?(callback: () => void): void;
+    // (undocumented)
+    getBodyHostEl(): HTMLElement | null;
+    // (undocumented)
+    getHfHostEl(rId: string): HTMLElement | null;
+    getInteractionHostMetrics?(): InteractionHostMetrics | null;
+    // (undocumented)
+    getPagesContainer(): HTMLElement | null;
+    getRenderedTextGeometry?(): RenderedTextGeometryPort | null;
+    getScrollContainer(): HTMLElement | null;
+    onDisplay?(pages: readonly DisplayPage[]): void;
+    // (undocumented)
+    onScrollRestore?(pending: PendingScrollRestore): void;
+    // (undocumented)
+    onSelectionChange?(snapshot: EditorSnapshot): void;
+    // (undocumented)
+    onTotalPages?(total: number): void;
+    scheduleFrame(callback: () => void): () => void;
+}
+
+// @public (undocumented)
+export type EditorMode = 'edit' | 'view';
+
+// @public (undocumented)
+export type EditorQuery = {
+    [K in keyof EditorQueries]: { type: K } & EditorQueries[K];
+}[keyof EditorQueries];
+
+// @public
+export type EditorScope =
+| { kind: 'body' }
+| { kind: 'headerFooter'; rId: string }
+/** A footnote/endnote region, addressed by note id. */
+| { kind: 'note'; id: string }
+/** A text box or floating frame with its own content, addressed by id. */
+| { kind: 'frame'; id: string }
+/** Read-only aggregate across every view. Valid for queries, not for writes. */
+| { kind: 'all' };
+
+// @public
+export interface EditorSnapshot {
+    readonly editable: boolean;
+    // (undocumented)
+    readonly formatting: RunFormatting | null;
+    // (undocumented)
+    readonly image: ImageContext | null;
+    // (undocumented)
+    readonly isLoading: boolean;
+    // (undocumented)
+    readonly page: { readonly current: number; readonly total: number };
+    // (undocumented)
+    readonly parseError: string | null;
+    // (undocumented)
+    readonly scope: EditorScope;
+    // (undocumented)
+    readonly selection: DocRange | null;
+    // (undocumented)
+    readonly table: TableContext | null;
+    // (undocumented)
+    readonly zoom: number;
+}
+
+// @public
+export interface FontConfiguration {
+    // (undocumented)
+    readonly defaultFont: {
+        readonly family: string;
+        readonly sizeHalfPoints: number;
+    };
+    // (undocumented)
+    readonly epoch: number;
+    // (undocumented)
+    readonly language?: string;
+    // (undocumented)
+    readonly maxFontBytes: number;
+    // (undocumented)
+    readonly sources: readonly FontSource[];
+    // (undocumented)
+    readonly substitutions?: readonly FontSourceSubstitution[];
+}
+
+// @public
+export interface FontFaceRequest {
+    // (undocumented)
+    readonly family: string;
+    // (undocumented)
+    readonly style: 'normal' | 'italic';
+    // (undocumented)
+    readonly weight: number;
+}
+
+// @public
+export interface FontSource {
+    // (undocumented)
+    readonly availability?: 'available' | 'forbidden';
+    // (undocumented)
+    readonly bytes: Uint8Array;
+    // (undocumented)
+    readonly faceIndex: number;
+    // (undocumented)
+    readonly hash: string;
+    // (undocumented)
+    readonly id: string;
+    // (undocumented)
+    readonly request: FontFaceRequest;
+}
+
+// @public
+export interface FontSourceSubstitution {
+    // (undocumented)
+    readonly from: FontFaceRequest;
+    // (undocumented)
+    readonly to: FontFaceRequest;
+}
+
+// @public
+export function generateRulerTicks(lengthPx: number, unit: RulerUnit): RulerTick[] {
+    if (!Number.isFinite(lengthPx) || lengthPx <= 0) return [];
+    const // (undocumented)
+    ticks: RulerTick[] = [];
+    if (unit === 'inch') {
+        const // (undocumented)
+        step = PX_PER_INCH / 8;
+        const // (undocumented)
+        count = Math.floor(lengthPx / step);
+        for (let // (undocumented)
+        i = 0; i <= count; i += 1) {
+            const // (undocumented)
+            position = i * step;
+            if (i % 8 === 0) {
+                const // (undocumented)
+                inches = i / 8;
+                ticks.push({ position, height: 10, ...(inches > 0 ? { label: String(inches) } : {}) });
+            } else if (i % 4 === 0) ticks.push({ position, height: 6 });
+            else if (i % 2 === 0) ticks.push({ position, height: 4 });
+            else ticks.push({ position, height: 2 });
+        }
+        return ticks;
+    }
+    const // (undocumented)
+    step = PX_PER_CM / 10;
+    const // (undocumented)
+    count = Math.floor(lengthPx / step);
+    for (let // (undocumented)
+    i = 0; i <= count; i += 1) {
+        const // (undocumented)
+        position = i * step;
+        if (i % 10 === 0) {
+            const // (undocumented)
+            cm = i / 10;
+            ticks.push({ position, height: 10, ...(cm > 0 ? { label: String(cm) } : {}) });
+        } else if (i % 5 === 0) ticks.push({ position, height: 6 });
+        else ticks.push({ position, height: 3 });
+    }
+    return ticks;
+}
+
+// @public (undocumented)
+export const HorizontalRuler: DefineComponent<ExtractPropTypes<    {
+editor: {
+type: PropType<Editor | null>;
+default: null;
 };
+zoom: {
+type: NumberConstructor;
+default: number;
+};
+unit: {
+type: PropType<RulerUnit>;
+default: string;
+};
+}>, () => VNode<RendererNode, RendererElement, {
+[key: string]: any;
+}> | null, {}, {}, {}, ComponentOptionsMixin, ComponentOptionsMixin, {}, string, PublicProps, Readonly<ExtractPropTypes<    {
+editor: {
+type: PropType<Editor | null>;
+default: null;
+};
+zoom: {
+type: NumberConstructor;
+default: number;
+};
+unit: {
+type: PropType<RulerUnit>;
+default: string;
+};
+}>> & Readonly<{}>, {
+zoom: number;
+editor: Editor | null;
+unit: RulerUnit;
+}, {}, {}, {}, string, ComponentProvideOptions, true, {}, any>;
+
+// @public (undocumented)
+export interface HorizontalRulerProps {
+    // (undocumented)
+    readonly editor: Editor | null;
+    // (undocumented)
+    readonly unit?: RulerUnit;
+    // (undocumented)
+    readonly zoom?: number;
+}
+
+// @public (undocumented)
+export const PageIndicator: DefineComponent<ExtractPropTypes<    {
+editor: {
+type: PropType<Editor | null>;
+default: null;
+};
+visible: {
+type: BooleanConstructor;
+default: boolean;
+};
+}>, () => VNode<RendererNode, RendererElement, {
+[key: string]: any;
+}> | null, {}, {}, {}, ComponentOptionsMixin, ComponentOptionsMixin, {}, string, PublicProps, Readonly<ExtractPropTypes<    {
+editor: {
+type: PropType<Editor | null>;
+default: null;
+};
+visible: {
+type: BooleanConstructor;
+default: boolean;
+};
+}>> & Readonly<{}>, {
+visible: boolean;
+editor: Editor | null;
+}, {}, {}, {}, string, ComponentProvideOptions, true, {}, any>;
+
+// @public (undocumented)
+export interface PageIndicatorProps {
+    // (undocumented)
+    readonly editor: Editor | null;
+    // (undocumented)
+    readonly visible?: boolean;
+}
+
+// @public (undocumented)
+export const PaginatedDocxEditor: DefineComponent<ExtractPropTypes<    {
+source: {
+type: PropType<Uint8Array>;
+required: true;
+};
+scale: {
+type: NumberConstructor;
+default: undefined;
+};
+measurer: {
+type: PropType<TextMeasurer>;
+default: undefined;
+};
+className: {
+type: StringConstructor;
+default: string;
+};
+}>, () => VNode<RendererNode, RendererElement, {
+[key: string]: any;
+}>, {}, {}, {}, ComponentOptionsMixin, ComponentOptionsMixin, {
+stateChange: (state: PaginatedSurfaceState) => boolean;
+error: (reason: string, _detail?: string) => boolean;
+}, string, PublicProps, Readonly<ExtractPropTypes<    {
+source: {
+type: PropType<Uint8Array>;
+required: true;
+};
+scale: {
+type: NumberConstructor;
+default: undefined;
+};
+measurer: {
+type: PropType<TextMeasurer>;
+default: undefined;
+};
+className: {
+type: StringConstructor;
+default: string;
+};
+}>> & Readonly<{
+onError?: ((reason: string, _detail?: string | undefined) => any) | undefined;
+onStateChange?: ((state: PaginatedSurfaceState) => any) | undefined;
+}>, {
+scale: number;
+measurer: TextMeasurer;
+className: string;
+}, {}, {}, {}, string, ComponentProvideOptions, true, {}, any>;
+
+// @public
+export interface PaginatedDocxEditorExpose {
+    // (undocumented)
+    focus(): void;
+    // (undocumented)
+    formatting(): SurfaceFormatting | null;
+    // (undocumented)
+    navigate(command: NavigationCommand, extend?: boolean): void;
+    // (undocumented)
+    redo(): void;
+    // (undocumented)
+    save(): Uint8Array | null;
+    // (undocumented)
+    sectionProperties(): SectionProperties | null;
+    // (undocumented)
+    selectAll(): void;
+    // (undocumented)
+    setParagraphProperty(localName: string, attributes?: Record<string, string>): void;
+    // (undocumented)
+    setRunProperty(localName: string, attributes?: Record<string, string>): void;
+    // (undocumented)
+    toggleRunProperty(localName: string, attributes?: Record<string, string>): void;
+    // (undocumented)
+    type(text: string): void;
+    // (undocumented)
+    undo(): void;
+}
+
+// @public
+export type PaginatedDocxEditorHandle = PaginatedDocxEditorExpose;
+
+// @public
+export interface PaginatedDocxEditorProps {
+    // (undocumented)
+    readonly className?: string;
+    // (undocumented)
+    readonly measurer?: TextMeasurer;
+    // (undocumented)
+    readonly scale?: number;
+    // (undocumented)
+    readonly source: Uint8Array;
+}
+
+// @public (undocumented)
+export const PX_PER_CM = PX_PER_INCH / 2.54;
+
+// @public
+export const PX_PER_INCH = 96;
+
+// @public
+export const RULER_WIDTH = 20;
+
+// @public
+export function rulerPageBox(
+pages: readonly { readonly index: number; readonly box: { width: number; height: number } }[]
+): { width: number; height: number } | null {
+    const // (undocumented)
+    first = [...pages].sort((a, b) => a.index - b.index)[0];
+    return first ? first.box : null;
+}
+
+// @public (undocumented)
+export interface RulerTick {
+    // (undocumented)
+    readonly height: number;
+    readonly label?: string;
+    readonly position: number;
+}
+
+// @public (undocumented)
+export type RulerUnit = 'inch' | 'cm';
+
+// @public
+export function runSave(editor: Editor | null): Promise<ArrayBuffer> {
+    if (!editor) return Promise.reject(new Error('editor is not ready'));
+    return editor.save();
+}
+
+// @public
+export function runToolbarCommand(editor: Editor | null, id: ToolbarCommandId): ExecResult {
+    if (!editor) return { ok: false, code: 'unsupported', reason: 'editor is not ready' };
+    const // (undocumented)
+    allowed = editor.can(COMMANDS[id]);
+    if (!allowed.ok) return { ok: false, code: allowed.code, reason: allowed.reason };
+    return editor.exec(COMMANDS[id]);
+}
+
+// @public
+export interface SidebarPanel {
+    // (undocumented)
+    readonly content: VNode | VNode[] | string;
+    // (undocumented)
+    readonly id: string;
+    // (undocumented)
+    readonly title: string;
+}
+
+// @public
+export function toolbarCommand(id: ToolbarCommandId): EditorCommand {
+    return COMMANDS[id];
+}
+
+// @public
+export type ToolbarCommandId = 'bold' | 'italic' | 'underline' | 'undo' | 'redo';
+
+// @public
+export interface ToolbarCommandState {
+    readonly active: boolean;
+    readonly disabledReason: string | null;
+    // (undocumented)
+    readonly enabled: boolean;
+    // (undocumented)
+    readonly id: ToolbarCommandId;
+}
+
+// @public
+export function toolbarCommandState(
+editor: Editor | null,
+id: ToolbarCommandId
+): ToolbarCommandState {
+    if (!editor) return { id, enabled: false, disabledReason: 'editor is not ready', active: false };
+    const // (undocumented)
+    result: CanResult = editor.can(COMMANDS[id]);
+    // Optional call: `isActive` is newer than this helper's callers, and a host or test
+    // double built against the earlier contract must not crash the toolbar. Absent means
+    // "not active", which is the same honest default the engine placeholder returns.
+    const // (undocumented)
+    active = editor.isActive?.(COMMANDS[id]) ?? false;
+    return result.ok
+    ? { id, enabled: true, disabledReason: null, active }
+    : { id, enabled: false, disabledReason: result.reason, active };
+}
+
+// @public
+export function toolbarCommandStates(
+editor: Editor | null,
+ids: readonly ToolbarCommandId[]
+): readonly ToolbarCommandState[] {
+    return ids.map((id) => toolbarCommandState(editor, id));
+}
+
+// @public
+export function useEditorSnapshot(editor: () => Editor | null): Ref<number>;
 
 // @public
 export const VERSION = "0.0.2";
+
+// @public (undocumented)
+export const VerticalRuler: DefineComponent<ExtractPropTypes<    {
+editor: {
+type: PropType<Editor | null>;
+default: null;
+};
+zoom: {
+type: NumberConstructor;
+default: number;
+};
+unit: {
+type: PropType<RulerUnit>;
+default: string;
+};
+}>, () => VNode<RendererNode, RendererElement, {
+[key: string]: any;
+}> | null, {}, {}, {}, ComponentOptionsMixin, ComponentOptionsMixin, {}, string, PublicProps, Readonly<ExtractPropTypes<    {
+editor: {
+type: PropType<Editor | null>;
+default: null;
+};
+zoom: {
+type: NumberConstructor;
+default: number;
+};
+unit: {
+type: PropType<RulerUnit>;
+default: string;
+};
+}>> & Readonly<{}>, {
+zoom: number;
+editor: Editor | null;
+unit: RulerUnit;
+}, {}, {}, {}, string, ComponentProvideOptions, true, {}, any>;
+
+// @public (undocumented)
+export interface VerticalRulerProps {
+    // (undocumented)
+    readonly editor: Editor | null;
+    // (undocumented)
+    readonly unit?: RulerUnit;
+    // (undocumented)
+    readonly zoom?: number;
+}
 
 ```

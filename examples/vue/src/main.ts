@@ -1,10 +1,11 @@
+import './styles.css';
 import { createApp } from 'vue';
-import App from './App.vue';
-// Toolbar + dialog scoped styles ship as a separate file from the library
-// bundle (Vite's lib mode doesn't auto-inject CSS imports). The
-// alias-resolved dev path picks up SFC <style scoped> blocks via the Vue
-// compiler, but the published-package parity build (USE_PUBLISHED_PACKAGES=true)
-// needs this import or the toolbar renders unstyled.
-import '@docx-editor.dev/vue/styles.css';
 
-createApp(App).mount('#app');
+// The legacy one-surface harness (`?realAdapter=1`), the diagnostic split pane (`?edit=1`)
+// and the read-only engine preview (`?preview=engine`) were deleted with the legacy editor
+// lane. The Vue example now mounts the museum App only; the production Vue adapter is
+// exercised by the paired host tests and the parity example.
+void (async () => {
+  const App = (await import('./App.vue')).default;
+  createApp(App).mount('#app');
+})();

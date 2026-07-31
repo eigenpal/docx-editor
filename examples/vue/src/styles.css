@@ -1,0 +1,6 @@
+/* Import editor styles.
+   In standalone usage: @import '@docx-editor.dev/vue/styles.css';
+   The demo imports the canonical core chrome stylesheet from source, matching
+   the React example. Without it the Vue surface has no --doc-* tokens at all,
+   so the caret, selection highlight, and page background paint transparent. */
+@import '../../../packages/core/src/styles/editor.css';

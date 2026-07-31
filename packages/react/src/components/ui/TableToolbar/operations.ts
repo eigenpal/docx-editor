@@ -6,14 +6,14 @@
  * `@docx-editor.dev/react`.
  */
 
-import type { Table, TableCell, TableRow } from '@docx-editor.dev/core/types/document';
+import type { Table, TableCell, TableRow } from '../../../core-compat';
 import {
   type CellAnchor,
   computeSplitLayout,
   computeSplitDialogDefaults,
   redistributeColumnWidths,
   buildAnchorMaps,
-} from '@docx-editor.dev/core/utils';
+} from '../../../core-compat';
 import type { TableAction, TableContext, TableSelection, TableSplitConfig } from '../TableToolbar';
 
 // ============================================================================
@@ -336,6 +336,9 @@ export function splitTableCell(
       };
     }
   );
+  if (layout.newRowCount < 1 || layout.anchors.length === 0) {
+    return table;
+  }
 
   const { byStart, byCoveredSlot } = buildAnchorMaps(layout.anchors);
 

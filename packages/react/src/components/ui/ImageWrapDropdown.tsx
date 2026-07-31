@@ -4,7 +4,7 @@
 
 import { IconGridDropdown, type IconGridOption } from './IconGridDropdown';
 import { useTranslation } from '../../i18n';
-import type { TranslationKey } from '@docx-editor.dev/i18n';
+import type { TranslationKey } from '../../i18n';
 
 // Mirrors Word's simplified Picture > Wrap Text dropdown — five options.
 // Top-and-bottom and tight/through live in the right-click image menu where

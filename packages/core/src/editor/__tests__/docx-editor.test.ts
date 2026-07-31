@@ -1,0 +1,283 @@
+// The tree-lane Editor facade over the paginated surface (phase 3, part 1).
+//
+// What these tests pin down: the facade drives the REAL surface (painted pages, committed
+// ops, round-trippable bytes), refuses what it does not support with typed results rather
+// than silence, and honours mode: 'view' as a facade-level gate.
+
+import { GlobalRegistrator } from '@happy-dom/global-registrator';
+if (!GlobalRegistrator.isRegistered) GlobalRegistrator.register();
+
+import { describe, expect, test } from 'bun:test';
+import { zipSync, strToU8 } from 'fflate';
+import { readOoxmlPackage } from '../../store/package/ooxml-package.ts';
+import { createDocxEditor, type DocxEditorInstance } from '../docx-editor.ts';
+
+const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
+const CT = 'http://schemas.openxmlformats.org/package/2006/content-types';
+const REL = 'http://schemas.openxmlformats.org/package/2006/relationships';
+const OD = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument';
+
+function docx(body: string): Uint8Array {
+  return zipSync({
+    '[Content_Types].xml': strToU8(
+      `<Types xmlns="${CT}"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>` +
+        '<Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/></Types>'
+    ),
+    '_rels/.rels': strToU8(
+      `<Relationships xmlns="${REL}"><Relationship Id="rId1" Type="${OD}" Target="word/document.xml"/></Relationships>`
+    ),
+    'word/document.xml': strToU8(
+      `<w:document xmlns:w="${W}"><w:body>${body}</w:body></w:document>`
+    ),
+  });
+}
+
+const p = (text: string) => `<w:p><w:r><w:t>${text}</w:t></w:r></w:p>`;
+
+function mount(
+  body: string,
+  options: { mode?: 'edit' | 'view'; zoom?: number } = {}
+): { editor: DocxEditorInstance; container: HTMLElement } {
+  const container = document.createElement('div');
+  const editor = createDocxEditor({
+    container,
+    document: docx(body),
+    ...options,
+  });
+  if (!editor.surface) throw new Error('surface failed to mount');
+  return { editor, container };
+}
+
+describe('createDocxEditor', () => {
+  test('mounting paints pages into the container', () => {
+    const { editor, container } = mount(p('hello world'));
+    expect(container.querySelector('.docx-pages')).not.toBeNull();
+    const spans = container.querySelectorAll('[data-paragraph-id][data-start]');
+    expect(spans.length).toBeGreaterThan(0);
+    expect(container.textContent).toContain('hello world');
+    expect(editor.getTotalPages()).toBe(1);
+  });
+
+  test('toggleMark bold applies over a selection and formatting reflects it', () => {
+    const { editor } = mount(p('hello'));
+    editor.surface!.selectAll();
+    const result = editor.exec({ type: 'toggleMark', mark: 'bold' });
+    expect(result).toEqual({ ok: true, changed: true });
+    expect(editor.getSelectionFormatting()?.bold).toBe(true);
+    expect(editor.query({ type: 'selectionFormatting' })?.bold).toBe(true);
+  });
+
+  test('setAlignment writes w:jc and formatting reports it', () => {
+    const { editor } = mount(p('hello'));
+    editor.surface!.selectAll();
+    expect(editor.exec({ type: 'setAlignment', align: 'center' })).toEqual({
+      ok: true,
+      changed: true,
+    });
+    expect(editor.getSelectionFormatting()?.alignment).toBe('center');
+    // `justify` is spelled `both` in OOXML and read back as such.
+    editor.exec({ type: 'setAlignment', align: 'justify' });
+    expect(editor.getSelectionFormatting()?.alignment).toBe('both');
+  });
+
+  test('insertText types at the selection; undo and redo walk the history', () => {
+    const { editor } = mount(p('ab'));
+    expect(editor.exec({ type: 'insertText', text: 'X' })).toEqual({ ok: true, changed: true });
+    expect(editor.surface!.session.bodyText()).toBe('Xab');
+    expect(editor.exec({ type: 'undo' })).toEqual({ ok: true, changed: true });
+    expect(editor.surface!.session.bodyText()).toBe('ab');
+    expect(editor.exec({ type: 'redo' })).toEqual({ ok: true, changed: true });
+    expect(editor.surface!.session.bodyText()).toBe('Xab');
+    // An undo with nothing left to undo commits nothing and says so.
+    editor.exec({ type: 'undo' });
+    expect(editor.exec({ type: 'undo' })).toEqual({ ok: true, changed: false });
+  });
+
+  test('save() round-trips: the bytes reopen and the edit survives', async () => {
+    const { editor } = mount(p('hello'));
+    editor.exec({ type: 'insertText', text: 'X' });
+    const buffer = await editor.save();
+    expect(buffer).toBeInstanceOf(ArrayBuffer);
+    const bytes = new Uint8Array(buffer);
+    const reopened = readOoxmlPackage(bytes);
+    expect(reopened.ok).toBe(true);
+    // And the second editor sees the edit, which is the round trip that matters.
+    const second = mount(p('placeholder'));
+    second.editor.load(bytes);
+    expect(second.editor.surface!.session.bodyText()).toBe('Xhello');
+  });
+
+  test('snapshot reports the honest read model', () => {
+    const { editor } = mount(p('hello'));
+    const snapshot = editor.snapshot();
+    expect(snapshot.scope).toEqual({ kind: 'body' });
+    expect(snapshot.isLoading).toBe(false);
+    expect(snapshot.parseError).toBeNull();
+    expect(snapshot.editable).toBe(true);
+    expect(snapshot.zoom).toBe(1);
+    expect(snapshot.selection).toBeNull();
+    expect(snapshot.table).toBeNull();
+    expect(snapshot.image).toBeNull();
+    expect(snapshot.page).toEqual({ current: 1, total: 1 });
+    expect(editor.getCurrentPage()).toBe(1);
+  });
+
+  test("mode: 'view' refuses every mutating command with a typed result", () => {
+    const { editor } = mount(p('hello'), { mode: 'view' });
+    editor.surface!.selectAll();
+    const result = editor.exec({ type: 'toggleMark', mark: 'bold' });
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.code).toBe('locked');
+    expect(editor.can({ type: 'insertText', text: 'X' })).toMatchObject({
+      ok: false,
+      code: 'locked',
+    });
+    expect(editor.snapshot().editable).toBe(false);
+    // The document is untouched.
+    expect(editor.surface!.session.bodyText()).toBe('hello');
+  });
+
+  test('an unsupported command is refused, never silently dropped', () => {
+    const { editor } = mount(p('hello'));
+    const result = editor.exec({ type: 'insertTable', rows: 2, cols: 2 });
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.code).toBe('unsupported');
+    expect(editor.can({ type: 'insertTable', rows: 2, cols: 2 })).toMatchObject({
+      ok: false,
+      code: 'unsupported',
+    });
+    // A page break rides insertBreak but is not wired; a line break is.
+    expect(editor.can({ type: 'insertBreak', kind: 'page' })).toMatchObject({
+      ok: false,
+      code: 'unsupported',
+    });
+    expect(editor.can({ type: 'insertBreak', kind: 'line' })).toEqual({ ok: true });
+  });
+
+  test('setSelection passes a semantic paragraph selection through to the surface', () => {
+    const { editor } = mount(p('hello'));
+    const id = editor.surface!.session.paragraphIds()[0]!;
+    const result = editor.exec({
+      type: 'setSelection',
+      range: {
+        anchor: { paragraphId: id, offset: 1 },
+        head: { paragraphId: id, offset: 4 },
+      } as never,
+    });
+    expect(result).toEqual({ ok: true, changed: false });
+    expect(editor.query({ type: 'selectedText' })).toBe('ell');
+    expect(editor.surface!.selectedText()).toBe('ell');
+  });
+
+  test('load() with new bytes replaces the document', () => {
+    const { editor, container } = mount(p('first'));
+    editor.load(docx(p('second')));
+    expect(container.textContent).toContain('second');
+    expect(container.textContent).not.toContain('first');
+    expect(editor.surface!.session.bodyText()).toBe('second');
+  });
+
+  test('load() with a DocumentHandle emits a typed error and keeps the document', () => {
+    const { editor } = mount(p('hello'));
+    const errors: { code?: string }[] = [];
+    editor.on('error', (error) => errors.push(error));
+    editor.load(editor.getDocumentHandle());
+    expect(errors).toHaveLength(1);
+    expect(errors[0]!.code).toBe('unsupported');
+    expect(editor.surface!.session.bodyText()).toBe('hello');
+  });
+
+  test('unparsable bytes surface as an error event and snapshot parseError', () => {
+    const container = document.createElement('div');
+    const editor = createDocxEditor({ container });
+    const errors: Error[] = [];
+    editor.on('error', (error) => errors.push(error));
+    editor.load(strToU8('not a zip'));
+    expect(errors).toHaveLength(1);
+    expect(editor.snapshot().parseError).not.toBeNull();
+    expect(editor.surface).toBeNull();
+    expect(editor.exec({ type: 'undo' })).toMatchObject({ ok: false, code: 'notFound' });
+  });
+
+  test("on('change') fires per committed exec with the new revision", () => {
+    const { editor } = mount(p('hello'));
+    const changes: number[] = [];
+    const off = editor.on('change', (change) => changes.push(change.revision));
+    editor.exec({ type: 'insertText', text: 'X' });
+    expect(changes).toHaveLength(1);
+    expect(changes[0]).toBe(editor.getDocumentHandle().revision);
+    off();
+    editor.exec({ type: 'insertText', text: 'Y' });
+    expect(changes).toHaveLength(1);
+  });
+
+  test("on('selectionChange') fires when the selection moves", () => {
+    const { editor } = mount(p('hello'));
+    let fired = 0;
+    editor.on('selectionChange', () => {
+      fired += 1;
+    });
+    const id = editor.surface!.session.paragraphIds()[0]!;
+    editor.surface!.setSelection({
+      anchor: { paragraphId: id, offset: 2 },
+      head: { paragraphId: id, offset: 2 },
+    });
+    expect(fired).toBeGreaterThan(0);
+  });
+
+  test('getPageSetup reads the section the document declares (defaults here)', () => {
+    const { editor } = mount(p('hello'));
+    expect(editor.getPageSetup()).toEqual({
+      pageWidthTwips: 12240,
+      pageHeightTwips: 15840,
+      orientation: 'portrait',
+      marginsTwips: { top: 1440, right: 1440, bottom: 1440, left: 1440 },
+    });
+  });
+
+  test('zoom is validated, stored, and reported', () => {
+    const { editor } = mount(p('hello'));
+    expect(editor.getZoom()).toBe(1);
+    expect(editor.setZoom(0)).toMatchObject({ ok: false, code: 'invalidArgs' });
+    expect(editor.setZoom(Number.NaN)).toMatchObject({ ok: false, code: 'invalidArgs' });
+    expect(editor.setZoom(1.5)).toEqual({ ok: true, changed: true });
+    expect(editor.getZoom()).toBe(1.5);
+    expect(editor.setZoom(1.5)).toEqual({ ok: true, changed: false });
+  });
+
+  test('the honest-empty members answer with typed empty values', () => {
+    const { editor } = mount(p('hello'));
+    expect(editor.isActive({ type: 'toggleMark', mark: 'bold' })).toBe(false);
+    expect(editor.getDocumentStyles()).toEqual([]);
+    expect(editor.getOutline()).toEqual([]);
+    expect(editor.getComments()).toEqual([]);
+    expect(editor.findMatches('hello')).toEqual([]);
+    expect(editor.getSelectedTable()).toBeNull();
+    expect(editor.getWatermark()).toBeNull();
+    expect(editor.getDisplay()).toEqual([]);
+    expect(editor.getCaretRect()).toBeNull();
+    expect(editor.hitTest({ x: 0, y: 0 })).toBeNull();
+    expect(editor.query({ type: 'paragraphs' })).toEqual([]);
+    expect(editor.query({ type: 'selection' })).toBeNull();
+    const dispatch = editor.dispatchInteraction({
+      kind: 'focus',
+      frameId: { value: 0 },
+    });
+    expect(dispatch.outcome.ok).toBe(false);
+    expect(dispatch.hostEffects).toEqual([]);
+    const frame = editor.getInteractionFrame();
+    expect(frame.display).toEqual([]);
+    expect(frame.selection).toBeNull();
+  });
+
+  test('destroy() detaches the surface and empties the container', () => {
+    const { editor, container } = mount(p('hello'));
+    editor.destroy();
+    expect(container.childNodes.length).toBe(0);
+    expect(editor.surface).toBeNull();
+    expect(editor.exec({ type: 'insertText', text: 'X' })).toMatchObject({
+      ok: false,
+      code: 'notFound',
+    });
+  });
+});

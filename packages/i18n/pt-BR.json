@@ -83,7 +83,8 @@
     "imagePropertiesShortcut": "Propriedades da imagem (texto alternativo, borda)...",
     "clearFormatting": "Limpar formatação",
     "commentsAndChanges": null,
-    "moreItems": null
+    "moreItems": null,
+    "unavailableInPreview": null
   },
   "alignment": {
     "alignLeft": "Alinhar à esquerda",
@@ -871,5 +872,16 @@
   },
   "toc": {
     "updatePrompt": null
+  },
+  "app": {
+    "name": null,
+    "newDocument": null,
+    "by": null,
+    "framework": null,
+    "theme": null
+  },
+  "editingMode": {
+    "editing": null,
+    "label": null
   }
 }

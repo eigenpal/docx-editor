@@ -83,7 +83,8 @@
     "imagePropertiesShortcut": "Właściwości obrazu (tekst alternatywny, obramowanie)...",
     "clearFormatting": "Wyczyść formatowanie",
     "commentsAndChanges": null,
-    "moreItems": null
+    "moreItems": null,
+    "unavailableInPreview": null
   },
   "alignment": {
     "alignLeft": "Wyrównaj do lewej",
@@ -871,5 +872,16 @@
   },
   "toc": {
     "updatePrompt": null
+  },
+  "app": {
+    "name": null,
+    "newDocument": null,
+    "by": null,
+    "framework": null,
+    "theme": null
+  },
+  "editingMode": {
+    "editing": null,
+    "label": null
   }
 }

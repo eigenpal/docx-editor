@@ -10,7 +10,7 @@
 
 import React, { useState, useCallback } from 'react';
 import type { CSSProperties, ReactNode } from 'react';
-import type { NumberFormat } from '@docx-editor.dev/core/types/document';
+import type { NumberFormat } from '../../core-compat';
 import { MaterialSymbol } from './MaterialSymbol';
 import { useTranslation } from '../../i18n';
 
@@ -19,8 +19,8 @@ import { useTranslation } from '../../i18n';
 // ============================================================================
 
 // List-state types live in core; re-exported here for backwards compat.
-export type { ListType, ListState } from '@docx-editor.dev/core/utils/listState';
-import type { ListState } from '@docx-editor.dev/core/utils/listState';
+export type { ListType, ListState } from '../../core-compat';
+import type { ListState } from '../../core-compat';
 
 /**
  * Props for the ListButtons component
@@ -182,7 +182,11 @@ export function ListButton({
       onClick={disabled ? undefined : onClick}
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
-      disabled={disabled}
+      // Native disabled buttons suppress mousedown, defeating the focus-preserving
+      // handler above and dropping the editor caret. Preserve disabled semantics
+      // with ARIA while keeping pointer cancellation observable.
+      aria-disabled={disabled || undefined}
+      tabIndex={disabled ? -1 : undefined}
       title={title}
       aria-label={title}
       aria-pressed={active}
@@ -305,7 +309,7 @@ export {
   getNextIndentLevel,
   getPreviousIndentLevel,
   toggleListType,
-} from '@docx-editor.dev/core/utils/listState';
+} from '../../core-compat';
 
 /**
  * Get CSS for list indent

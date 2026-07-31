@@ -7,12 +7,12 @@
 #### Scenario: Find matches across the document
 
 - **WHEN** `findInDocument(view, query, { caseSensitive, limit })` is called
-- **THEN** it returns the same ordered, deduplicated match list (`paraId`, `match`, `before`, `after`) the adapters returned before the lift, honoring `caseSensitive` and `limit`
+- **THEN** it returns an ordered, deduplicated match list (`paraId`, `match`, `before`, `after`), honoring `caseSensitive` and `limit`
 
 #### Scenario: Selection info from current selection
 
 - **WHEN** `getSelectionInfo(view)` is called with a non-empty selection
-- **THEN** it returns `paraId`, `selectedText`, `paragraphText`, `before`, and `after` matching prior behavior, and returns `null` when there is no resolvable paragraph
+- **THEN** it returns `paraId`, `selectedText`, `paragraphText`, `before`, and `after` according to the documented operation contract, and returns `null` when there is no resolvable paragraph
 
 #### Scenario: Page content lookup
 

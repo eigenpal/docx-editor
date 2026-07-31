@@ -86,7 +86,8 @@
     "imagePropertiesShortcut": "Image properties (alt text, border)...",
     "clearFormatting": "Clear formatting",
     "commentsAndChanges": "Comments & Changes",
-    "moreItems": "{count, plural, one {# more item} other {# more items}}"
+    "moreItems": "{count, plural, one {# more item} other {# more items}}",
+    "unavailableInPreview": "Not available in this preview build"
   },
   "alignment": {
     "alignLeft": "Align Left",
@@ -871,5 +872,16 @@
       "summary": "{count, plural, one {# step} other {# steps}}",
       "earlier": "+ {count, plural, one {# earlier step} other {# earlier steps}}"
     }
+  },
+  "app": {
+    "name": "DOCX Editor",
+    "newDocument": "New",
+    "by": "by EigenPal",
+    "framework": "Framework",
+    "theme": "Theme"
+  },
+  "editingMode": {
+    "label": "Editing mode",
+    "editing": "Editing"
   }
 }

@@ -29,9 +29,9 @@ import type {
   Theme,
   ThemeColorScheme,
   Watermark,
-} from './types';
+} from './contracts/types';
 
-export type * from './types';
+export type * from './contracts/types';
 
 const NOT_IMPLEMENTED = 'contract-only stub: no implementation';
 

@@ -18,14 +18,14 @@ import {
 import { cn } from '../../lib/utils';
 import { useTranslation } from '../../i18n';
 import { getPrimaryFontFamily } from './fontPickerValue';
-import { excludeFontsByName } from '@docx-editor.dev/core/utils';
+import { excludeFontsByName } from '../../core-compat';
 
 // ============================================================================
 // TYPES
 // ============================================================================
 
-export type { FontOption } from '@docx-editor.dev/core/utils/fontOptions';
-import type { FontOption } from '@docx-editor.dev/core/utils/fontOptions';
+export type { FontOption } from '../../core-compat';
+import type { FontOption } from '../../core-compat';
 
 export interface FontPickerProps {
   value?: string;

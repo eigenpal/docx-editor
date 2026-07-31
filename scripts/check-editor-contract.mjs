@@ -3,39 +3,39 @@ import { resolve } from 'node:path';
 
 const root = resolve(import.meta.dirname, '..');
 
-const reactSource = readFileSync(
-  resolve(root, 'packages/react/src/components/DocxEditor.tsx'),
-  'utf8'
-);
-const vueSource = readFileSync(
-  resolve(root, 'packages/vue/src/components/DocxEditor/types.ts'),
-  'utf8'
-);
+// Greenfield type locations. The pre-rebuild paths
+// (`packages/react/src/components/DocxEditor.tsx`,
+// `packages/vue/src/components/DocxEditor/types.ts`) were deleted by the strip
+// at 701c1a9f, which left this gate throwing ENOENT on every run — a check that
+// cannot pass reads as coverage while measuring nothing.
+const reactSource = readFileSync(resolve(root, 'packages/react/src/types.ts'), 'utf8');
+const vueSource = readFileSync(resolve(root, 'packages/vue/src/types.ts'), 'utf8');
 
 const VUE_ONLY_PROPS = new Set([
-  // Vue chrome split that does not exist as a React prop.
-  'showMenuBar',
+  // None. The greenfield Vue adapter declares no prop React lacks.
 ]);
 
+// React props with no Vue PROP counterpart — each an idiomatic framework
+// divergence, not a missing feature. Vue exposes the same capability another
+// way, so these are declared divergences rather than gaps to close. The same
+// three are recorded in scripts/parity/parity.contract.json.
 const REACT_PROPS_NOT_YET_IN_VUE = new Set([
+  // Vue applies `class` as a native fallthrough attribute.
+  'className',
+  // Vue exposes these as EMITS (`@ready`, `@change`), which never appear in a
+  // props interface.
+  'onReady',
+  'onChange',
+  // M6V.1 chrome props, React-only until 10V.1 ports the chrome to Vue.
+  //
+  // These are NOT idiomatic-framework divergences like the three above — they are a
+  // deliberate, time-boxed gap with a named closing task. 10V.1 MUST remove all four
+  // entries; a divergence with no closing task is how a gate quietly stops meaning
+  // anything.
+  't',
+  'title',
+  'onTitleChange',
   'onSave',
-  'onFontsLoaded',
-  'externalContent',
-  'showMarginGuides',
-  'marginGuideColor',
-  'rulerUnit',
-  'placeholder',
-  'loadingIndicator',
-  'printOptions',
-  'onCopy',
-  'onCut',
-  'onPaste',
-  'comments',
-  'onRenderedDomContextReady',
-  'pluginOverlays',
-  'pluginSidebarItems',
-  'pluginRenderedDomContext',
-  'agentPanel',
 ]);
 
 function extractInterfaceBody(source, name) {
@@ -55,7 +55,7 @@ function extractInterfaceBody(source, name) {
 function extractPropKeys(source, name) {
   const body = extractInterfaceBody(source, name);
   const keys = new Set();
-  const propRegex = /^\s{2}([A-Za-z_$][\w$]*)\??\s*:/gm;
+  const propRegex = /^\s+([A-Za-z_$][\w$]*)\??\s*:/gm;
   for (const match of body.matchAll(propRegex)) keys.add(match[1]);
   return keys;
 }

@@ -13,13 +13,8 @@
 import React, { useCallback, useEffect, useRef } from 'react';
 import { useTranslation } from '../i18n';
 import type { CSSProperties, ReactNode } from 'react';
-import type {
-  ColorValue,
-  ParagraphAlignment,
-  Style,
-  Theme,
-} from '@docx-editor.dev/core/types/document';
-import { resolveColorToHex } from '@docx-editor.dev/core/utils';
+import type { ColorValue, ParagraphAlignment, Style, Theme } from '../core-compat';
+import { resolveColorToHex } from '../core-compat';
 import { Button } from './ui/Button';
 import { Tooltip } from './ui/Tooltip';
 import { FontPicker } from './ui/FontPicker';
@@ -324,7 +319,12 @@ export function ToolbarButton({
       data-active={active ? 'true' : undefined}
       onMouseDown={handleMouseDown}
       onClick={disabled ? undefined : onClick}
-      disabled={disabled}
+      // Native disabled controls receive no mouse event in Chromium, so their
+      // preventDefault handler cannot preserve the editor's focus/caret.
+      // Keep the control semantically disabled and out of tab order while
+      // allowing pointer-down cancellation at the toolbar boundary.
+      aria-disabled={disabled || undefined}
+      tabIndex={disabled ? -1 : undefined}
       aria-pressed={active ? true : false}
       aria-label={ariaLabel || title}
       data-testid={testId ? `toolbar-${testId}` : undefined}

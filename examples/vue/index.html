@@ -29,7 +29,15 @@
       background: #f5f5f5;
       min-height: 100vh;
     }
-    #app { width: 100%; min-height: 100vh; }
+    /* A DEFINITE height, not min-height: the harness root uses `height: 100%`,
+       which cannot resolve against a min-height-only parent and so collapsed to
+       content height. Independent review measured the consequence: the Vue viewport
+       reported clientHeight === scrollHeight, an assigned scrollTop did not stick,
+       and therefore the input-host scroll path never fired, drag autoscroll was a
+       silent no-op, and the scroll leg of the paired parity gate passed without
+       exercising anything. React's harness already gets a definite height from its
+       `height: 100vh` wrapper. */
+    #app { width: 100%; height: 100vh; }
   </style>
 </head>
 <body>

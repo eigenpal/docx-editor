@@ -55,6 +55,9 @@ jobs:
       - name: Install dependencies
         run: bun install --frozen-lockfile
 
+      - name: Spike oracle tests
+        run: bun run test:spike:oracles
+
       - name: Type check
         run: bun run typecheck
 
@@ -63,6 +66,18 @@ jobs:
 
       - name: Run tests
         run: bun test
+
+      - name: Install Playwright Chromium
+        run: bunx playwright install chromium
+
+      - name: Chromium accessibility-tree gate
+        run: bun run verify:a11y-tree
+
+      - name: Chromium production-adapter load/paginate/save/reopen smoke
+        run: bun run verify:real-adapter-smoke
+
+      - name: Chromium production-adapter input-host gate
+        run: bun run verify:real-adapter-gate
 
       - name: CLA logic tests
         run: bash .github/cla/cla.test.sh
