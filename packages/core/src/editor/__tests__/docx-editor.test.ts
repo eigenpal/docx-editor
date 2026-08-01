@@ -203,12 +203,13 @@ describe('createDocxEditor', () => {
       ok: false,
       code: 'unsupported',
     });
-    // A page break rides insertBreak but is not wired; a line break is.
-    expect(editor.can({ type: 'insertBreak', kind: 'page' })).toMatchObject({
+    // Line, page and section breaks are wired; `column` needs the multi-column lane.
+    expect(editor.can({ type: 'insertBreak', kind: 'line' })).toEqual({ ok: true });
+    expect(editor.can({ type: 'insertBreak', kind: 'page' })).toEqual({ ok: true });
+    expect(editor.can({ type: 'insertBreak', kind: 'column' })).toMatchObject({
       ok: false,
       code: 'unsupported',
     });
-    expect(editor.can({ type: 'insertBreak', kind: 'line' })).toEqual({ ok: true });
   });
 
   test('setSelection passes a semantic paragraph selection through to the surface', () => {
@@ -406,6 +407,29 @@ describe('createDocxEditor', () => {
       pageHeightTwips: 11906,
       orientation: 'landscape',
     });
+  });
+
+  test('insertBreak page writes a hard page break, not a line break', () => {
+    const { editor } = mount(p('hello'));
+    expect(editor.exec({ type: 'insertBreak', kind: 'page' })).toMatchObject({ ok: true });
+
+    // Word reads a hard page break as `w:br w:type="page"`. A plain `w:br` is Shift+Enter,
+    // a line break inside the paragraph — a different element with a different meaning.
+    const breaks: string[] = [];
+    const walk = (node: {
+      kind: string;
+      localName?: string;
+      attributes?: readonly { localName: string; value: string }[];
+      children?: readonly unknown[];
+    }): void => {
+      if (node.kind === 'textValue') return;
+      if (node.localName === 'br') {
+        breaks.push(node.attributes?.find((a) => a.localName === 'type')?.value ?? '');
+      }
+      for (const child of node.children ?? []) walk(child as typeof node);
+    };
+    walk(editor.surface!.session.part().root as never);
+    expect(breaks).toEqual(['page']);
   });
 
   test('insertBreak section splits at the caret and starts a new section', () => {

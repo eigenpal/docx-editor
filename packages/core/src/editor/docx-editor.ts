@@ -920,6 +920,12 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
             }
             break;
           }
+          // `page` has its own tree op and its own `w:br w:type="page"`. Falling through
+          // to a line break here made Ctrl+Enter silently insert the wrong element.
+          if (command.kind === 'page') {
+            mounted.insertPageBreak();
+            break;
+          }
           mounted.insertLineBreak();
           break;
         case 'insertText':

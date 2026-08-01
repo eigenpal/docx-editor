@@ -517,7 +517,7 @@ export const wordFeatures: WordFeature[] = [
     roundTrip: 'full',
     tier: 'community',
     notes:
-      'The layout engine paginates like Word: page breaks, keep rules, split paragraphs marked across pages.',
+      'The layout engine paginates like Word: page breaks, keep rules, split paragraphs marked across pages. Hard page breaks are insertable and write `w:br w:type="page"`.',
   },
   {
     id: 'layout.sections',
@@ -528,7 +528,7 @@ export const wordFeatures: WordFeature[] = [
     roundTrip: 'full',
     tier: 'community',
     notes:
-      'Page size, orientation and margins editable per section or whole document (Page Setup dialog, ruler drags); each section paginates against its own geometry, so mixed portrait/landscape documents render as Word shows them. Next-page section breaks insertable. Even/odd-page break parity and per-section columns are not modelled yet.',
+      'Page size, orientation and margins editable per section or whole document (Page Setup dialog, ruler drags); each section paginates against its own geometry, so mixed portrait/landscape documents render as Word shows them. Continuous sections continue on the page before them, as Word does, unless the paper size changes. Next-page section breaks insertable. Even/odd-page break parity (the blank page Word inserts to reach the right parity) and per-section columns are not modelled yet.',
   },
   {
     id: 'layout.headers-footers',
@@ -603,7 +603,7 @@ export const wordFeatures: WordFeature[] = [
     roundTrip: 'full',
     tier: 'community',
     notes:
-      'First, even, and default variants are selected per page and editable in place. The section setting that enables different even and odd pages has no UI.',
+      'First, even, and default variants are selected by the page\'s number in the document (so the alternation carries across section breaks) and editable in place. The section setting that enables different even and odd pages has no UI.',
   },
   {
     id: 'layout.vertical-align',

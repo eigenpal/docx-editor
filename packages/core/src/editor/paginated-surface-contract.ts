@@ -115,6 +115,8 @@ export interface PaginatedSurface {
   insertTab(): void;
   /** A `w:br` — Shift+Enter, a line break inside the same paragraph. */
   insertLineBreak(): void;
+  /** A `w:br w:type="page"` — Ctrl+Enter, a hard page break inside the paragraph. */
+  insertPageBreak(): void;
   /** Select the whole document. */
   selectAll(): void;
   /** Set the selection directly, for a host driving the surface programmatically. */

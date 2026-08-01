@@ -281,9 +281,9 @@ export function classifyCommand(command: EditorCommand): CommandSupport {
         ? { supported: true, mutating: true }
         : { supported: false, reason: 'setIndent requires at least one indent field' };
     case 'insertBreak':
-      // Line breaks and next-page section breaks are wired; page/column breaks belong
-      // to lanes the surface does not own yet.
-      return command.kind === 'line' || command.kind === 'section'
+      // Line, hard page, and next-page section breaks are wired. `column` belongs to the
+      // multi-column lane, which layout does not own yet.
+      return command.kind === 'line' || command.kind === 'page' || command.kind === 'section'
         ? { supported: true, mutating: true }
         : { supported: false, reason: `break kind '${command.kind}' is not supported` };
     case 'insertText':

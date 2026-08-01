@@ -16,7 +16,6 @@ import {
   geometryOfSection,
   layoutHeaderFooterStory,
   pagesToMaterialize,
-  readSectionProperties,
   type HeaderFooterVariantName,
   type NumberingIndex,
   type PageFurniture,
@@ -27,13 +26,6 @@ import {
 } from '@docx-editor.dev/core-contract/layout';
 
 export interface FurnitureSource {
-  /**
-   * The page the DOCUMENT's final section asks for.
-   *
-   * Prefer `sectionFurniture` for pagination: multi-section documents carry per-section
-   * geometry inside layout. This remains for chrome (ruler) that wants one geometry.
-   */
-  geometry(): ReturnType<typeof geometryOfSection>;
   /** Single-section / final-section furniture fallback. */
   furniture(): PageFurniture | undefined;
   /**
@@ -66,10 +58,6 @@ export function createFurnitureSource(env: {
     object,
     { width: number; producer: string; story: ReturnType<typeof layoutHeaderFooterStory> }
   >();
-
-  function geometry(): ReturnType<typeof geometryOfSection> {
-    return geometryOfSection(readSectionProperties(session.part()));
-  }
 
   function storyOf(part: OoxmlPart, width: number): ReturnType<typeof layoutHeaderFooterStory> {
     const memo = hfStoryMemo.get(part);
@@ -117,7 +105,7 @@ export function createFurnitureSource(env: {
     return all[all.length - 1];
   }
 
-  return { geometry, furniture, sectionFurniture };
+  return { furniture, sectionFurniture };
 }
 
 /** Immutable-in-session style + numbering projections shared by body and furniture layout. */

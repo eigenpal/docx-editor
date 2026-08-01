@@ -34,8 +34,16 @@ export interface SectionMargins {
   readonly gutterTwips: number;
 }
 
-/** How this section is placed relative to the previous one (ECMA-376 `CT_SectType`). */
-export type SectionBreakType = 'nextPage' | 'continuous' | 'evenPage' | 'oddPage';
+/**
+ * How this section is placed relative to the previous one (ECMA-376 17.6.22,
+ * `ST_SectionMark`).
+ *
+ * All five schema values are read. `nextColumn` paginates like `nextPage` for now: in a
+ * single-column section that IS Word's behaviour, and multi-column flow is not modelled,
+ * so collapsing it at the parse boundary would only hide the authored value from a
+ * consumer that asks.
+ */
+export type SectionBreakType = 'nextPage' | 'continuous' | 'evenPage' | 'oddPage' | 'nextColumn';
 
 export interface SectionProperties {
   readonly pageSize: { readonly widthTwips: number; readonly heightTwips: number };
@@ -45,8 +53,6 @@ export interface SectionProperties {
   readonly titlePage: boolean;
   /** Absent `w:type` defaults to `nextPage`. */
   readonly breakType: SectionBreakType;
-  /** The raw `w:sectPr` node this section was read from, when present. */
-  readonly sectPr?: OoxmlElement;
 }
 
 /**
@@ -124,7 +130,14 @@ const childNamed = (node: OoxmlNode, localName: string): OoxmlNode | undefined =
 function breakTypeOf(sectPr: OoxmlNode | undefined): SectionBreakType {
   const type = sectPr ? childNamed(sectPr, 'type') : undefined;
   const value = type ? attribute(type, 'val') : undefined;
-  if (value === 'continuous' || value === 'evenPage' || value === 'oddPage') return value;
+  if (
+    value === 'continuous' ||
+    value === 'evenPage' ||
+    value === 'oddPage' ||
+    value === 'nextColumn'
+  ) {
+    return value;
+  }
   // Absent or unknown → nextPage (ECMA-376 §17.6.22).
   return 'nextPage';
 }
@@ -178,7 +191,6 @@ export function parseSectionProperties(sectPr: OoxmlNode | null | undefined): Se
     landscape: orientation === 'landscape' || width > height,
     titlePage: readOnOffChild(sectPr, 'titlePg'),
     breakType: breakTypeOf(sectPr),
-    ...(sectPr.kind !== 'textValue' ? { sectPr: sectPr as OoxmlElement } : {}),
   };
 }
 

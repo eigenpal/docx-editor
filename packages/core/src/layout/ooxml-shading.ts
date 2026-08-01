@@ -26,15 +26,20 @@ export function resolveStrictHexFill(raw: string | undefined): string | undefine
 /**
  * Resolve a `w:shd` attribute bag to a validated RRGGBB fill, or undefined.
  *
- * Theme fills (`themeFill`) are deferred — never invent a colour from a theme reference.
+ * `w:themeFill` is a REFERENCE, and Word always writes the value it resolved to alongside
+ * it: `<w:shd w:val="clear" w:fill="D9E2F3" w:themeFill="accent1" w:themeFillTint="33"/>`.
+ * Reading `w:fill` in that case is not inventing a colour from the theme — it is reading
+ * the colour the producer computed. Dropping the fill because a theme reference sat next
+ * to it left every accent-shaded cell and paragraph unpainted.
+ *
  * `val="nil"` clears shading. Pattern vals are not rendered; a valid solid `fill` still
- * paints as a clear fill until pattern support lands.
+ * paints as a clear fill until pattern support lands. A theme reference with no usable
+ * `w:fill` still resolves to nothing rather than a guess.
  */
 export function resolveOoxmlShadingFill(
   attributes: Readonly<Record<string, string>> | undefined
 ): string | undefined {
   if (!attributes) return undefined;
-  if (attributes.themeFill !== undefined) return undefined;
   if (attributes.val === 'nil') return undefined;
   return resolveStrictHexFill(attributes.fill);
 }

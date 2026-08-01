@@ -381,16 +381,18 @@ describe('per-section pagination (the per-section lane)', () => {
     expect(second[0]!.lines[0]!.range.end).toBeGreaterThan(first[0]!.lines[0]!.range.end);
   });
 
-  // KNOWN GAP (merge of the per-section lanes): a NON-EMPTY continuous section still
-  // starts its own sheet. `layoutMultiSectionDocument` flushes pages per section, so
-  // `continuous` is honoured only for an EMPTY final section
-  // (`emptySectionNeedsBlankPage`). Resuming a section mid-sheet is an engine change,
-  // not a merge fix.
-  test.todo('a continuous boundary with identical geometry shares the page', () => {
+  test('a continuous boundary with identical geometry shares the page', () => {
     const part = load(
       paragraph('one', PORTRAIT) + paragraph('two') + sect(4000, 6000, 'continuous')
     );
-    expect(lay(part).pages).toHaveLength(1);
+    const layout = lay(part);
+    expect(layout.pages).toHaveLength(1);
+    // Both paragraphs are on the one sheet, and the continued section's content sits
+    // BELOW the section it continues — Word flows them as one column.
+    const fragments = layout.pages[0]!.fragments;
+    expect(fragments).toHaveLength(2);
+    expect(fragments[0]!.box.y).toBe(0);
+    expect(fragments[1]!.box.y).toBe(14);
   });
 
   test('a continuous boundary with a DIFFERENT geometry still breaks the page', () => {
@@ -399,6 +401,74 @@ describe('per-section pagination (the per-section lane)', () => {
       paragraph('one', PORTRAIT) + paragraph('two') + sect(6000, 4000, 'continuous')
     );
     expect(lay(part).pages).toHaveLength(2);
+  });
+
+  test('continuous chains: three sections flow down one sheet in order', () => {
+    const part = load(
+      paragraph('one', PORTRAIT) +
+        paragraph('two', sect(4000, 6000, 'continuous')) +
+        paragraph('three') +
+        sect(4000, 6000, 'continuous')
+    );
+    const layout = lay(part);
+    expect(layout.pages).toHaveLength(1);
+    expect(layout.pages[0]!.fragments.map((fragment) => fragment.box.y)).toEqual([0, 14, 28]);
+  });
+
+  test('a continuous section that does not fit overflows to a new sheet', () => {
+    // 80pt of content column at 14pt a line is 5 lines. Six paragraphs cannot share it.
+    const short = sect(4000, 2000);
+    const filled = 'a\n'.repeat(0) + 'a';
+    const part = load(
+      paragraph(filled, short) +
+        paragraph(filled) +
+        paragraph(filled) +
+        paragraph(filled) +
+        paragraph(filled) +
+        paragraph(filled) +
+        sect(4000, 2000, 'continuous')
+    );
+    const layout = lay(part);
+    expect(layout.pages.length).toBeGreaterThan(1);
+    // The overflow lands on a real second sheet, stacked with the 24pt gutter.
+    expect(layout.pages[1]!.box.y).toBe(layout.pages[0]!.box.height + 24);
+  });
+
+  test('an EMPTY continuous section between two others does not break the chain', () => {
+    const part = load(
+      paragraph('one', PORTRAIT) +
+        // An empty continuous section: a sectPr-carrying paragraph is the section's last,
+        // so this contributes no blocks of its own beyond that paragraph.
+        paragraph('two', sect(4000, 6000, 'continuous')) +
+        paragraph('three') +
+        sect(4000, 6000, 'continuous')
+    );
+    expect(lay(part).pages).toHaveLength(1);
+  });
+
+  test('an absent w:type defaults to nextPage, so identical geometry does NOT share', () => {
+    // Only `continuous` shares the sheet. The default must not start sharing pages just
+    // because the two sections happen to describe the same page (ECMA-376 17.6.22).
+    const part = load(paragraph('one', PORTRAIT) + paragraph('two') + PORTRAIT);
+    expect(lay(part).pages).toHaveLength(2);
+  });
+
+  test('a trailing page break ends the sheet: the continued section starts after it', () => {
+    // `endCursorY` is 0 both when a fresh column is empty and when a page break just
+    // closed the sheet. Only the first may be continued onto; Word puts the continued
+    // section AFTER the break, not on top of the page the break ended.
+    const part = load(
+      `<w:p><w:pPr>${PORTRAIT}</w:pPr><w:r><w:t>one</w:t></w:r>` +
+        '<w:r><w:br w:type="page"/></w:r></w:p>' +
+        paragraph('two') +
+        sect(4000, 6000, 'continuous')
+    );
+    const layout = lay(part);
+    expect(layout.pages).toHaveLength(2);
+    expect(layout.pages.map((page) => page.fragments.map((fragment) => fragment.box.y))).toEqual([
+      [0],
+      [0],
+    ]);
   });
 
   test('a single-section document paginates against its own sectPr', () => {

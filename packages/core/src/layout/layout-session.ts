@@ -60,6 +60,19 @@ export interface LayoutSession {
    * paths (unchanged / converged) must report this rather than the resume cursor.
    */
   endLineCounter: number;
+  /**
+   * Flow state after the last block of the previous pass, for a section that CONTINUES
+   * onto this one's last sheet (`w:type="continuous"`).
+   *
+   * `endCursorY` is the used height of that sheet's content column; `endSpaceAfter` is the
+   * trailing paragraph spacing still eligible for adjacent-spacing collapse. Reported by
+   * the early-exit paths (unchanged / converged) for the same reason as
+   * {@link endLineCounter}: the resume cursor is not the end of the flow.
+   */
+  endCursorY: number;
+  endSpaceAfter: number;
+  /** Whether the last page of that pass was still open (no trailing page break). */
+  endsOpenPage: boolean;
   stats: LayoutSessionStats;
   /** Present when the last pass was multi-section; child sessions live here. */
   multi: MultiSectionLayoutState | null;
@@ -75,6 +88,9 @@ export function createLayoutSession(): LayoutSession {
     keys: [],
     context: '',
     endLineCounter: 0,
+    endCursorY: 0,
+    endSpaceAfter: 0,
+    endsOpenPage: true,
     stats: { placed: 0, total: 0, reusedPages: 0, fullPasses: 0 },
     multi: null,
   };

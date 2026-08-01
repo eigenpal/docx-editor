@@ -50,12 +50,29 @@ describe('resolveOoxmlShadingFill', () => {
     expect(resolveOoxmlShadingFill({ val: 'clear', fill: 'FFEEAA' })).toBe('FFEEAA');
   });
 
-  test('rejects nil val, auto fill, theme fills, and CSS/URL payloads', () => {
+  test('rejects nil val, auto fill, and CSS/URL payloads', () => {
     expect(resolveOoxmlShadingFill({ val: 'nil', fill: 'F0F4F8' })).toBeUndefined();
     expect(resolveOoxmlShadingFill({ val: 'clear', fill: 'auto' })).toBeUndefined();
-    expect(resolveOoxmlShadingFill({ themeFill: 'accent1', fill: 'F0F4F8' })).toBeUndefined();
     expect(resolveOoxmlShadingFill({ val: 'clear', fill: 'url(x)' })).toBeUndefined();
     expect(resolveOoxmlShadingFill({ val: 'clear', fill: 'javascript:alert(1)' })).toBeUndefined();
+  });
+
+  test('a theme reference keeps the fill the producer resolved next to it', () => {
+    // Word writes both: the reference AND the computed value. Reading `w:fill` here is
+    // reading what the producer resolved, not inventing a colour from the theme.
+    expect(resolveOoxmlShadingFill({ themeFill: 'accent1', fill: 'F0F4F8' })).toBe('F0F4F8');
+    expect(
+      resolveOoxmlShadingFill({
+        val: 'clear',
+        fill: 'D9E2F3',
+        themeFill: 'accent1',
+        themeFillTint: '33',
+      })
+    ).toBe('D9E2F3');
+    // A reference with no usable value still resolves to nothing — no guessing.
+    expect(resolveOoxmlShadingFill({ themeFill: 'accent1' })).toBeUndefined();
+    expect(resolveOoxmlShadingFill({ themeFill: 'accent1', fill: 'auto' })).toBeUndefined();
+    expect(resolveOoxmlShadingFill({ themeFill: 'accent1', fill: 'url(x)' })).toBeUndefined();
   });
 });
 
@@ -133,13 +150,16 @@ describe('layout publishes paragraph and run shading without affecting measureme
     expect(fragment.shadingBox).toBeUndefined();
   });
 
-  test('run shading resolves and ignores theme fills', () => {
+  test('run shading resolves, including the value beside a theme reference', () => {
     expect(
       resolveRunStyle([{ localName: 'shd', attributes: { val: 'clear', fill: 'FFEEAA' } }]).shading
     ).toBe('FFEEAA');
     expect(
       resolveRunStyle([{ localName: 'shd', attributes: { themeFill: 'accent1', fill: 'FFEEAA' } }])
         .shading
+    ).toBe('FFEEAA');
+    expect(
+      resolveRunStyle([{ localName: 'shd', attributes: { themeFill: 'accent1' } }]).shading
     ).toBeNull();
   });
 });

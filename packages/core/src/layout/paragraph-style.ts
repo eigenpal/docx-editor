@@ -101,8 +101,14 @@ export function paragraphSpacing(props: readonly OoxmlProperty[]): ParagraphSpac
   let after = 0;
   for (const property of props) {
     if (property.localName !== 'spacing') continue;
-    before = twipsToPoints(property.attributes?.before);
-    after = twipsToPoints(property.attributes?.after);
+    // Merged PER ATTRIBUTE, not per element. `w:spacing` is one element carrying
+    // independent attributes, and a later entry in the cascade overrides only what it
+    // actually states: a style that sets `w:before` alone must not erase the `w:after`
+    // that `w:docDefaults` set, which is exactly the shape Word's own Heading styles have.
+    const authoredBefore = property.attributes?.before;
+    const authoredAfter = property.attributes?.after;
+    if (authoredBefore !== undefined) before = twipsToPoints(authoredBefore);
+    if (authoredAfter !== undefined) after = twipsToPoints(authoredAfter);
   }
   return { before, after };
 }

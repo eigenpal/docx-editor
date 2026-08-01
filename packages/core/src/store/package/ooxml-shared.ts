@@ -9,10 +9,16 @@
 import { isValidNCName } from './qname.ts';
 import type { OoxmlAttribute, OoxmlElement, OoxmlNode, OoxmlReadRejection } from './ooxml-tree.ts';
 
-export const WML_NAMESPACE_URI =
-  'http://schemas.openxmlformats.org/wordprocessingml/2006/main' as const;
-export const XML_NAMESPACE_URI = 'http://www.w3.org/XML/1998/namespace' as const;
-export const XMLNS_NAMESPACE_URI = 'http://www.w3.org/2000/xmlns/' as const;
+// No `as const` on the three below: a `const` bound to a string literal is already
+// literal-typed, and `typeof WML_NAMESPACE_URI` / `typeof XML_NAMESPACE_URI` are read by
+// the typed attribute kinds in `ooxml-tree.ts`. API Extractor 7.x crashes ("Unable to
+// follow symbol for 'const'", rushstack#4754) whenever a public type reaches an
+// `as const` variable declaration, and any public type that reaches `OoxmlElement` drags
+// these attribute kinds along with it. Same reason `CHROME_GROUPS` in
+// `editor/chrome-controls.ts` avoids the derived-from-`as const` form.
+export const WML_NAMESPACE_URI = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
+export const XML_NAMESPACE_URI = 'http://www.w3.org/XML/1998/namespace';
+export const XMLNS_NAMESPACE_URI = 'http://www.w3.org/2000/xmlns/';
 export const MC_NAMESPACE_URI = 'http://schemas.openxmlformats.org/markup-compatibility/2006';
 export const XSI_NAMESPACE_URI = 'http://www.w3.org/2001/XMLSchema-instance';
 export const MC_QNAME_LIST_ATTRIBUTES = new Set([

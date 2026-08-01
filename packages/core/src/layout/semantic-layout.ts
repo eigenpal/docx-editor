@@ -225,6 +225,19 @@ interface BlockLayoutResult {
   readonly layout: SemanticLayout;
   readonly pages: readonly PageRecord[];
   readonly lineCounter: number;
+  /** Used height of the LAST page's content column, for a section that continues onto it. */
+  readonly endCursorY: number;
+  /** Trailing paragraph spacing at the end of the flow, for adjacent-spacing collapse. */
+  readonly endSpaceAfter: number;
+  /**
+   * Whether the last page is the one the flow was still filling.
+   *
+   * False when the flow closed a page and opened nothing after it — an explicit
+   * `w:br w:type="page"` on the last paragraph. `endCursorY` is 0 in BOTH cases, so a
+   * section that continues onto this one cannot tell "empty column at the top of a fresh
+   * sheet" from "that sheet is full and the break already ended it" without this.
+   */
+  readonly endsOpenPage: boolean;
 }
 
 function layoutBlocksWithGeometry(
@@ -233,6 +246,9 @@ function layoutBlocksWithGeometry(
   options: SemanticLayoutOptions & {
     readonly geometry: PageGeometry;
     readonly lineCounterStart?: number;
+    readonly flowStartY?: number;
+    readonly spaceBeforeCarry?: number;
+    readonly pageIndexStart?: number;
   }
 ): BlockLayoutResult {
   const geometry = options.geometry;
@@ -291,7 +307,12 @@ function layoutBlocksWithGeometry(
     : '';
   // lineCounterStart participates: multi-section threads a global counter across sections, and
   // a shift from an earlier section's line count must invalidate this section's checkpoints.
-  const context = `${producer}|${geometry.width}x${geometry.height}|${geometry.margin.top},${geometry.margin.right},${geometry.margin.bottom},${geometry.margin.left}|lc:${lineCounterStart}${furnitureContext}`;
+  const flowStartY = options.flowStartY ?? 0;
+  const spaceBeforeCarry = options.spaceBeforeCarry ?? 0;
+  // Where this section's first sheet lands in the DOCUMENT. Even/odd header selection
+  // alternates by page number, so it is not a section-local question.
+  const pageIndexStart = options.pageIndexStart ?? 0;
+  const context = `${producer}|${geometry.width}x${geometry.height}|${geometry.margin.top},${geometry.margin.right},${geometry.margin.bottom},${geometry.margin.left}|lc:${lineCounterStart}|fs:${flowStartY},${spaceBeforeCarry}|pi:${pageIndexStart}${furnitureContext}`;
 
   // Prepass: everything needed to KEY a paragraph, before any of them is placed. Resuming
   // means knowing where the first change is, and that cannot be discovered while walking.
@@ -421,19 +442,26 @@ function layoutBlocksWithGeometry(
       layout: unchanged,
       pages: unchanged.pages,
       lineCounter: session.endLineCounter,
+      endCursorY: session.endCursorY,
+      endSpaceAfter: session.endSpaceAfter,
+      endsOpenPage: session.endsOpenPage,
     };
   }
 
   const pages: PageRecord[] = [];
   let pageFragments: BlockFragmentRecord[] = [];
-  let cursorY = 0;
+  // A continuous section resumes the previous section's column rather than opening a
+  // sheet, so its first block starts at that column's used height and its first paragraph
+  // is NOT at a page top — page-top space-before suppression must not apply to it, and the
+  // preceding paragraph's space-after still collapses against its space-before.
+  let cursorY = flowStartY;
   let lineCounter = lineCounterStart;
-  let previousSpaceAfter = 0;
+  let previousSpaceAfter = spaceBeforeCarry;
   const checkpoints: FlowCheckpoint[] = [];
   let startIndex = 0;
   let placed = 0;
   let reusedPages = 0;
-  let firstParagraphOfSection = true;
+  let firstParagraphOfSection = flowStartY === 0;
 
   // RESUME. The checkpoint before the first changed paragraph describes a flow the new
   // document still agrees with, so the pages completed by then are carried over by
@@ -459,11 +487,19 @@ function layoutBlocksWithGeometry(
     height: geometry.height,
   });
 
-  /** The variant page `index` shows: title page first, then even/odd when declared. */
+  /**
+   * The variant page `index` shows: title page first, then even/odd when declared.
+   *
+   * `w:titlePg` (17.6.55) is a property of the SECTION, so its first page is the section's
+   * own first — the local index. `w:evenAndOddHeaders` (17.10.1) lives in settings.xml and
+   * alternates by the page's number in the DOCUMENT, so it reads through `pageIndexStart`:
+   * a section that begins on an even page must open with the even header, and `remapPage`
+   * renumbers a page without ever re-picking its variant.
+   */
   const variantFor = (index: number): HeaderFooterVariantName =>
     furniture?.titlePage && index === 0
       ? 'first'
-      : furniture?.evenAndOddHeaders && (index + 1) % 2 === 0
+      : furniture?.evenAndOddHeaders && (pageIndexStart + index + 1) % 2 === 0
         ? 'even'
         : 'default';
 
@@ -1028,7 +1064,17 @@ function layoutBlocksWithGeometry(
     };
   }
 
-  if (!converged && (pageFragments.length > 0 || pages.length === 0)) flushPage();
+  // Captured BEFORE the terminal flush, which zeroes the cursor. A converged pass stopped
+  // early and never walked the tail, so its end state is the one the previous pass stored.
+  const endCursorY = converged && session ? session.endCursorY : cursorY;
+  const endSpaceAfter = converged && session ? session.endSpaceAfter : previousSpaceAfter;
+  // The terminal flush closes the page the flow was still filling. When it does NOT run,
+  // the last page was already closed by a page break and the cursor sits at the top of a
+  // sheet that was never opened — nothing may be appended to what is in `pages`.
+  const flushesOpenPage = !converged && (pageFragments.length > 0 || pages.length === 0);
+  const endsOpenPage = converged && session ? session.endsOpenPage : flushesOpenPage;
+
+  if (flushesOpenPage) flushPage();
   // Entries for paragraphs this pass never asked for are gone from the document, or their
   // context changed; holding them would let the cache grow with the session rather than
   // with the document.
@@ -1050,6 +1096,9 @@ function layoutBlocksWithGeometry(
     session.keys = keys;
     session.context = context;
     session.endLineCounter = lineCounter;
+    session.endCursorY = endCursorY;
+    session.endSpaceAfter = endSpaceAfter;
+    session.endsOpenPage = endsOpenPage;
     session.stats = {
       placed,
       total: prepared.length,
@@ -1057,7 +1106,7 @@ function layoutBlocksWithGeometry(
       fullPasses: session.stats.fullPasses + (startIndex === 0 ? 1 : 0),
     };
   }
-  return { layout, pages, lineCounter };
+  return { layout, pages, lineCounter, endCursorY, endSpaceAfter, endsOpenPage };
 }
 
 export { createFixedMeasurer } from './fixed-measurer.ts';

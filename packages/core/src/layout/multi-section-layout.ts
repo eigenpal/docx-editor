@@ -29,6 +29,12 @@ export interface SectionLayoutResult {
   readonly layout: SemanticLayout;
   readonly pages: readonly PageRecord[];
   readonly lineCounter: number;
+  /** Used height of the last page's content column, for a section continuing onto it. */
+  readonly endCursorY: number;
+  /** Trailing paragraph spacing at the end of the flow, for adjacent-spacing collapse. */
+  readonly endSpaceAfter: number;
+  /** Whether the last page is still open, or was closed by a trailing page break. */
+  readonly endsOpenPage: boolean;
 }
 
 export type LayoutSectionFn = (
@@ -37,6 +43,9 @@ export type LayoutSectionFn = (
   options: SemanticLayoutOptions & {
     readonly geometry: PageGeometry;
     readonly lineCounterStart?: number;
+    readonly flowStartY?: number;
+    readonly spaceBeforeCarry?: number;
+    readonly pageIndexStart?: number;
   }
 ) => SectionLayoutResult;
 
@@ -153,6 +162,61 @@ export function emptySectionNeedsBlankPage(
 }
 
 /**
+ * Whether two sections could occupy one sheet: identical page box and margins.
+ *
+ * A sheet has ONE size. Word honours `continuous` by continuing the column on the current
+ * page, which it cannot do when the new section restates the page — a continuous break that
+ * also changes paper size or orientation starts a new page in Word too.
+ */
+function sameGeometry(a: PageGeometry, b: PageGeometry): boolean {
+  return (
+    a.width === b.width &&
+    a.height === b.height &&
+    a.margin.top === b.margin.top &&
+    a.margin.right === b.margin.right &&
+    a.margin.bottom === b.margin.bottom &&
+    a.margin.left === b.margin.left &&
+    (a.headerDistance ?? 36) === (b.headerDistance ?? 36) &&
+    (a.footerDistance ?? 36) === (b.footerDistance ?? 36)
+  );
+}
+
+/**
+ * Append a continued section's first-page fragments to the sheet it continues.
+ *
+ * The fragments already carry content-relative offsets past the host page's used height
+ * (the section was laid out with `flowStartY`), so this is a concatenation, not a shift.
+ * The host page keeps its own furniture: the header/footer belong to the sheet, and the
+ * continued section contributes content to it, not chrome.
+ */
+function withAppendedFragments(page: PageRecord, continued: PageRecord): PageRecord {
+  if (continued.fragments.length === 0) return page;
+  return { ...page, fragments: [...page.fragments, ...continued.fragments] };
+}
+
+/**
+ * Publish a multi-section result onto the parent session, clearing the SINGLE-section
+ * resume state it does not own.
+ *
+ * `previous` is shared by both paths, but `keys` / `checkpoints` / `context` describe one
+ * flow over the whole body — meaningless once the document is sectioned. Leaving them
+ * behind let a document go single -> multi -> single and match the ORIGINAL single-section
+ * context on the way back, so the "nothing changed" early exit returned the multi-section
+ * pages: undoing a section break repainted the pre-undo pagination.
+ */
+function adoptMultiSectionResult(
+  session: LayoutSession,
+  finalized: SemanticLayout,
+  lineCounter: number
+): void {
+  session.previous = finalized;
+  session.endLineCounter = lineCounter;
+  session.keys = [];
+  session.checkpoints = [];
+  session.context = '';
+}
+
+/**
  * Lay a multi-section part out section by section, with per-section incremental sessions.
  *
  * `w:type` on a section (default `nextPage`) controls whether that section starts on a new
@@ -182,6 +246,12 @@ export function layoutMultiSectionDocument(
   let placed = 0;
   let total = 0;
   let reusedPages = 0;
+  // The open column at the end of the last section, for a `continuous` section to resume.
+  let flowCursorY = 0;
+  let flowSpaceAfter = 0;
+  let flowOpenPage = true;
+  let previousGeometry: PageGeometry | null = null;
+  let previousFurnitureKey = '';
 
   for (let sectionIndex = 0; sectionIndex < sections.length; sectionIndex += 1) {
     const section = sections[sectionIndex]!;
@@ -191,6 +261,8 @@ export function layoutMultiSectionDocument(
     const startIndex = pages.length;
     const startSheetY = sheetY;
     const prevSpan = multi?.spans[sectionIndex];
+
+    const furnitureKey = furnitureGeometryFingerprint(furniture);
 
     // Empty continuous: share/continue — record a zero-page span so section indices stay
     // aligned for incremental reuse, and do not invent a blank sheet.
@@ -204,6 +276,20 @@ export function layoutMultiSectionDocument(
       continue;
     }
 
+    // CONTINUOUS: Word keeps the new section on the page the last one ended, resuming the
+    // column immediately below its final paragraph. Only possible when the sheet does not
+    // change under it — same page box and margins, and the same furniture push-down, since
+    // both fix the content column this section would be flowing into.
+    const continues =
+      section.properties.breakType === 'continuous' &&
+      pages.length > 0 &&
+      // A trailing page break already ended the previous sheet. Word puts the continued
+      // section after that break, not on top of the page it closed.
+      flowOpenPage &&
+      previousGeometry !== null &&
+      sameGeometry(previousGeometry, geometry) &&
+      previousFurnitureKey === furnitureKey;
+
     // Empty nextPage/even/odd: lay out zero blocks so the section still flushes one blank
     // page under its own geometry and furniture (Word-compatible trailing section break).
     const sectionSession = multi?.sections[sectionIndex];
@@ -213,9 +299,18 @@ export function layoutMultiSectionDocument(
       geometry,
       furniture,
       lineCounterStart: lineCounter,
+      // A continued section's local page 0 IS the host sheet, so its document page index
+      // is one behind the stack; every other section starts a fresh sheet at `startIndex`.
+      pageIndexStart: continues ? startIndex - 1 : startIndex,
+      ...(continues ? { flowStartY: flowCursorY, spaceBeforeCarry: flowSpaceAfter } : {}),
       ...(sectionSession ? { session: sectionSession } : {}),
     });
     lineCounter = laid.lineCounter;
+    flowCursorY = laid.endCursorY;
+    flowSpaceAfter = laid.endSpaceAfter;
+    flowOpenPage = laid.endsOpenPage;
+    previousGeometry = geometry;
+    previousFurnitureKey = furnitureKey;
 
     if (sectionSession) {
       placed += sectionSession.stats.placed;
@@ -239,7 +334,33 @@ export function layoutMultiSectionDocument(
       prevSpan.remappedPages.length === laid.pages.length;
 
     let remapped: readonly PageRecord[];
-    if (localUnchanged && stackUnchanged) {
+    if (continues) {
+      // The section's first page is not a sheet: it is the tail of the one before it. Its
+      // fragments join that sheet and the shell is dropped; anything that overflowed onto
+      // a second page stacks normally from there. Identity reuse is skipped — the host
+      // sheet is rebuilt this pass, so no prior page record describes it.
+      const hostIndex = pages.length - 1;
+      const host = pages[hostIndex]!;
+      const merged = withAppendedFragments(host, laid.pages[0]!);
+      if (merged !== host) {
+        pages[hostIndex] = merged;
+        const remappedIndex = remappedAll.lastIndexOf(host);
+        if (remappedIndex !== -1) remappedAll[remappedIndex] = merged;
+      }
+      // The host section's span deliberately keeps the PRE-MERGE page. It records what
+      // that section alone produced, and a later pass republishes it verbatim through the
+      // identity-reuse path — so writing the merged page back there would re-append this
+      // section's fragments to a sheet that already carries them, once per pass, forever.
+      const built: PageRecord[] = [];
+      for (const page of laid.pages.slice(1)) {
+        const next = remapPage(page, pages.length, sheetY);
+        built.push(next);
+        pages.push(next);
+        remappedAll.push(next);
+        sheetY = next.box.y + next.box.height + 24;
+      }
+      remapped = built;
+    } else if (localUnchanged && stackUnchanged) {
       remapped = prevSpan.remappedPages;
       reusedPages += remapped.length;
       for (const page of remapped) {
@@ -278,8 +399,7 @@ export function layoutMultiSectionDocument(
       multi.previousPageCount = finalized.pages.length;
     }
     if (session) {
-      session.previous = finalized;
-      session.endLineCounter = lineCounter;
+      adoptMultiSectionResult(session, finalized, lineCounter);
       session.stats = {
         placed: 0,
         total: 0,
@@ -318,8 +438,7 @@ export function layoutMultiSectionDocument(
   }
 
   if (session) {
-    session.previous = finalized;
-    session.endLineCounter = lineCounter;
+    adoptMultiSectionResult(session, finalized, lineCounter);
     session.stats = {
       placed,
       total: total || 1,

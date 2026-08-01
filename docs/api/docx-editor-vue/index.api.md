@@ -320,8 +320,8 @@ onReady?: ((_editor: Editor) => any) | undefined;
 onFontError?: ((_error: EditorFontError) => any) | undefined;
 }>, {
 author: string;
-fonts: FontConfiguration | FontConfigurationFragment;
 document: DocumentSource;
+fonts: FontConfiguration | FontConfigurationFragment;
 zoom: number;
 mode: EditorMode;
 locale: string;

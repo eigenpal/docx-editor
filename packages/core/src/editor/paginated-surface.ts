@@ -645,6 +645,21 @@ export function mountPaginatedSurface(
       );
     },
 
+    insertPageBreak() {
+      const start = orderedStart();
+      commit(
+        () =>
+          session.applyTreeOps(
+            [
+              ...deleteSelectionOps(),
+              { op: 'insertPageBreak', paragraphId: start.paragraphId, offset: start.offset },
+            ],
+            selectionMark()
+          ),
+        () => collapsedAt({ ...start, offset: start.offset + 1 })
+      );
+    },
+
     setSelection: (next) => setSelection(next),
 
     selectAll() {

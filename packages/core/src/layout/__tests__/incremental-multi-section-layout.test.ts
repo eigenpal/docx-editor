@@ -155,6 +155,66 @@ describe('multi-section page identity and invalidation', () => {
     expect(lastAfter).not.toBe(lastBefore);
   });
 
+  test('a continuous section is not re-appended to its host sheet on every pass', () => {
+    // The host sheet is rebuilt each pass by concatenation. If the host section's span
+    // recorded the MERGED page, its identity-reuse path would republish a sheet that
+    // already carried this section, and the fragments would compound revision by
+    // revision — a duplicated paragraph id breaks selection mapping, not just paint.
+    const session = createLayoutSession();
+    const shared = (type = '') =>
+      `<w:pPr><w:sectPr>${type ? `<w:type w:val="${type}"/>` : ''}<w:pgSz w:w="6000" w:h="2400"/>` +
+      '<w:pgMar w:top="200" w:right="200" w:bottom="200" w:left="200" w:header="100" ' +
+      'w:footer="100"/></w:sectPr></w:pPr>';
+    const document = (revision: number) =>
+      load(
+        paragraph('host one', shared()) +
+          paragraph('host two') +
+          paragraph(`continued ${'x'.repeat(revision)}`, shared('continuous'))
+      );
+
+    for (let revision = 1; revision <= 4; revision += 1) {
+      const layout = lay(document(revision), revision, session);
+      const ids = layout.pages.flatMap((page) => page.fragments.map((fragment) => fragment.id));
+      expect(new Set(ids).size, `revision ${revision}: ${ids.join(',')}`).toBe(ids.length);
+      // And the incremental result still matches a clean pass of the same document.
+      expect(shapeOf(layout)).toBe(shapeOf(lay(document(revision), revision)));
+    }
+  });
+
+  test('single -> multi -> single does not serve the multi-section layout', () => {
+    // The single-section resume state (keys/context/checkpoints) describes ONE flow over
+    // the whole body. A multi-section pass must clear it, or undoing the section break
+    // recomputes the ORIGINAL single-section context, matches it, and the "nothing
+    // changed" early exit republishes the sectioned pagination.
+    const session = createLayoutSession();
+    const plain = Array.from({ length: 8 }, (_, index) =>
+      paragraph(`only ${index} ${'word '.repeat(6)}`)
+    ).join('');
+    const single = load(
+      `${plain}<w:sectPr><w:pgSz w:w="6000" w:h="2400"/><w:pgMar w:top="200" w:right="200" ` +
+        'w:bottom="200" w:left="200"/></w:sectPr>'
+    );
+    const before = lay(single, 1, session);
+
+    // Split it: the first paragraph closes a section of its own.
+    const split = Array.from({ length: 8 }, (_, index) =>
+      paragraph(`only ${index} ${'word '.repeat(6)}`, index === 0 ? sectPr() : '')
+    ).join('');
+    lay(
+      load(
+        `${split}<w:sectPr><w:pgSz w:w="6000" w:h="2400"/><w:pgMar w:top="200" w:right="200" ` +
+          'w:bottom="200" w:left="200"/></w:sectPr>'
+      ),
+      2,
+      session
+    );
+
+    // Undo. The same session must not report the sectioned layout.
+    const after = lay(single, 3, session);
+    expect(shapeOf(after)).toBe(shapeOf(before));
+    expect(shapeOf(after)).toBe(shapeOf(lay(single, 3)));
+  });
+
   test('structure change (section count) resets child sessions without poisoning shape', () => {
     const session = createLayoutSession();
     lay(load(twoSectionDocument()), 1, session);
