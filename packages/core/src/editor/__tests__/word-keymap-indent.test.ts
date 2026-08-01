@@ -27,7 +27,20 @@ const NUMBERING =
   '<w:lvl w:ilvl="1"><w:numFmt w:val="bullet"/><w:lvlText w:val="○"/>' +
   '<w:pPr><w:ind w:left="1440" w:hanging="360"/></w:pPr></w:lvl>' +
   '</w:abstractNum>' +
-  '<w:num w:numId="1"><w:abstractNumId w:val="0"/></w:num></w:numbering>';
+  // Level 0 ONLY — the shape a great many real documents have, including Word's own
+  // "Simple Bullet List" and "Upper Roman" in the comprehensive fixture.
+  '<w:abstractNum w:abstractNumId="1">' +
+  '<w:lvl w:ilvl="0"><w:numFmt w:val="bullet"/><w:lvlText w:val="§"/>' +
+  '<w:pPr><w:ind w:left="720" w:hanging="360"/></w:pPr>' +
+  '<w:rPr><w:rFonts w:ascii="Wingdings" w:hAnsi="Wingdings"/></w:rPr></w:lvl>' +
+  '</w:abstractNum>' +
+  '<w:abstractNum w:abstractNumId="2">' +
+  '<w:lvl w:ilvl="0"><w:numFmt w:val="upperRoman"/><w:lvlText w:val="%1."/>' +
+  '<w:pPr><w:ind w:left="720" w:hanging="360"/></w:pPr></w:lvl>' +
+  '</w:abstractNum>' +
+  '<w:num w:numId="1"><w:abstractNumId w:val="0"/></w:num>' +
+  '<w:num w:numId="2"><w:abstractNumId w:val="1"/></w:num>' +
+  '<w:num w:numId="3"><w:abstractNumId w:val="2"/></w:num></w:numbering>';
 
 function docx(body: string, withNumbering = false): Uint8Array {
   const files: Record<string, Uint8Array> = {
@@ -291,5 +304,101 @@ describe('Bullets and Numbering', () => {
     expect(markerOf(surface)).toMatchObject({ text: '•', level: 0 });
     surface.adjustIndent('increase');
     expect(markerOf(surface)).toMatchObject({ text: 'o', level: 1 });
+  });
+});
+
+describe('a list definition that declares only level 0', () => {
+  const shallow = (text: string, numId: string) =>
+    `<w:p><w:pPr><w:numPr><w:ilvl w:val="0"/><w:numId w:val="${numId}"/>` +
+    `</w:numPr></w:pPr><w:r><w:t>${text}</w:t></w:r></w:p>`;
+
+  test('indenting refuses rather than erasing the bullet', () => {
+    // numId 2 declares `ilvl 0` only. Demoting to a level it does not declare resolved to
+    // no marker at all: the paragraph silently stopped being a list item and sprang back
+    // to the margin, taking its bullet with it.
+    const surface = mount(shallow('alpha', '2'), true);
+    expect(markerOf(surface)).toMatchObject({ text: '§', level: 0 });
+    expect(surface.adjustIndent('increase')).toBe(false);
+    expect(markerOf(surface)).toMatchObject({ text: '§', level: 0 });
+  });
+
+  test('the same holds for a numbered list', () => {
+    const surface = mount(shallow('Introduction', '3'), true);
+    expect(markerOf(surface)?.text).toBe('I.');
+    expect(surface.adjustIndent('increase')).toBe(false);
+    expect(markerOf(surface)?.text).toBe('I.');
+  });
+
+  test('Tab does not destroy it either', () => {
+    const surface = mount(shallow('alpha', '2'), true);
+    createKeyDownHandler(surface)(key({ key: 'Tab' }));
+    expect(markerOf(surface)).toMatchObject({ text: '§', level: 0 });
+  });
+
+  test('the control reports itself disabled, so the toolbar can grey it out', () => {
+    const surface = mount(shallow('alpha', '2'), true);
+    expect(surface.canAdjustIndent('increase')).toBe(false);
+    expect(surface.canAdjustIndent('decrease')).toBe(false);
+  });
+
+  test('a definition that DOES declare the level still indents', () => {
+    const surface = mount(listItem('alpha'), true);
+    expect(surface.canAdjustIndent('increase')).toBe(true);
+    expect(surface.adjustIndent('increase')).toBe(true);
+    expect(markerOf(surface)).toMatchObject({ text: '○', level: 1 });
+  });
+});
+
+describe('list kind is read from w:numFmt, not the marker glyph', () => {
+  test('a bullet level using a letter-shaped glyph is still a bullet', () => {
+    // Word's own default list uses Courier `o` and Wingdings `§` at levels 2 and 3.
+    // Sniffing the glyph reported those as numbered and lit the wrong toolbar button.
+    const surface = mount(
+      '<w:p><w:pPr><w:numPr><w:ilvl w:val="0"/><w:numId w:val="2"/></w:numPr></w:pPr>' +
+        '<w:r><w:t>alpha</w:t></w:r></w:p>',
+      true
+    );
+    expect(markerOf(surface)?.text).toBe('§');
+    expect(surface.isListActive('bullet')).toBe(true);
+    expect(surface.isListActive('ordered')).toBe(false);
+  });
+
+  test('a numbered item does not report itself as a bullet', () => {
+    const surface = mount(
+      '<w:p><w:pPr><w:numPr><w:ilvl w:val="0"/><w:numId w:val="3"/></w:numPr></w:pPr>' +
+        '<w:r><w:t>Introduction</w:t></w:r></w:p>',
+      true
+    );
+    expect(surface.isListActive('ordered')).toBe(true);
+    expect(surface.isListActive('bullet')).toBe(false);
+  });
+});
+
+describe('turning a list off and on again', () => {
+  test('rejoins the list around it rather than minting a new glyph', () => {
+    const item = (text: string) =>
+      '<w:p><w:pPr><w:numPr><w:ilvl w:val="0"/><w:numId w:val="2"/></w:numPr></w:pPr>' +
+      `<w:r><w:t>${text}</w:t></w:r></w:p>`;
+    const surface = mount(item('one') + item('two') + item('three'), true);
+    const markers = () =>
+      surface
+        .layout()
+        .pages.flatMap((page) => page.fragments)
+        .flatMap((fragment) =>
+          fragment.kind === 'paragraph' && fragment.marker ? [fragment.marker.text] : []
+        );
+    expect(markers()).toEqual(['§', '§', '§']);
+
+    // Put the caret in the middle item, toggle its bullet off and back on.
+    const middle = surface.session.paragraphIds()[1]!;
+    surface.setSelection({
+      anchor: { paragraphId: middle, offset: 0 },
+      head: { paragraphId: middle, offset: 0 },
+    });
+    surface.toggleList('bullet');
+    expect(markers()).toEqual(['§', '§']);
+    surface.toggleList('bullet');
+    // The restored item takes its NEIGHBOURS' bullet, not a freshly minted one.
+    expect(markers()).toEqual(['§', '§', '§']);
   });
 });

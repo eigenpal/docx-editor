@@ -115,6 +115,22 @@ export function gateCommand(
   // History commands are gated on the HISTORY, not just the mode: `can` drives the
   // toolbar's enabled state, and an undo button that stays live over an empty stack
   // silently no-ops — Word greys it out.
+  // Indent is gated the same way, and for the same reason: a list item at level 0 cannot
+  // outdent, and one whose definition declares no deeper level cannot indent without
+  // losing its marker entirely.
+  if (command.type === 'adjustIndent' && !surface.canAdjustIndent(command.direction)) {
+    return {
+      ok: false,
+      refusal: {
+        ok: false,
+        code: 'unsupported',
+        reason:
+          command.direction === 'decrease'
+            ? 'the selection is already at the outermost level'
+            : 'the selection cannot indent any further',
+      },
+    };
+  }
   if (command.type === 'undo' && !surface.session.canUndo()) {
     return {
       ok: false,

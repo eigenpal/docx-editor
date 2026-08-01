@@ -25,5 +25,7 @@ export function publishListMarker(
     style: item.markerStyle,
     box: { x: box.x + originX, y: box.y, width: box.width, height: box.height },
     level: item.ilvl,
+    numId: item.numId,
+    numFmt: item.numFmt,
   };
 }

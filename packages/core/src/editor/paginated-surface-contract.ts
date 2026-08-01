@@ -129,6 +129,14 @@ export interface PaginatedSurface {
    * where there is no list to demote).
    */
   adjustIndent(direction: 'increase' | 'decrease'): boolean;
+  /**
+   * Whether Increase/Decrease Indent would do anything right now.
+   *
+   * A list item at level 0 cannot outdent, and one whose definition declares no deeper
+   * level cannot indent — Word greys both out rather than letting the press silently
+   * destroy the marker.
+   */
+  canAdjustIndent(direction: 'increase' | 'decrease'): boolean;
   /** Whether the paragraph at the caret is a list item, for Tab's Word-like fallback. */
   isListParagraph(): boolean;
   /**

@@ -17,6 +17,7 @@ import {
   type SemanticPosition,
   type SemanticSelection,
 } from '@docx-editor.dev/core-contract/layout';
+import type { ListMarkerRecord } from '@docx-editor.dev/core-contract/layout';
 import { mergedProperties, paragraphPropertiesOf } from './surface-formatting.ts';
 import type { PaginatedSurface } from './paginated-surface-contract.ts';
 
@@ -34,6 +35,8 @@ export interface SurfaceStructureDeps {
   selectionMark(): { paragraphId: string; start: number; end: number } | null;
   collapsedAt(position: SemanticPosition): SemanticSelection;
   deleteSelectionOps(): readonly TreeDocOp[];
+  /** Whether `numId` declares `level`, for refusing a demote that would erase the marker. */
+  numberingLevelExists(numId: string, level: number): boolean;
 }
 
 type StructureMethods = Pick<
@@ -45,6 +48,7 @@ type StructureMethods = Pick<
   | 'isListActive'
   | 'toggleList'
   | 'adjustIndent'
+  | 'canAdjustIndent'
   | 'sectionProperties'
   | 'sectionPropertiesAt'
   | 'setSectionProperties'
@@ -67,32 +71,72 @@ export function createSurfaceStructure(deps: SurfaceStructureDeps): StructureMet
 
   /** The list level of a paragraph, or null when it carries no numbering. */
   function listLevelOf(paragraphId: string): number | null {
+    return markerOf(paragraphId)?.level ?? null;
+  }
+
+  /** The marker layout resolved for a paragraph, or null when it is not a list item. */
+  function markerOf(paragraphId: string): ListMarkerRecord | null {
     for (const page of currentLayout.value.pages) {
       for (const fragment of page.fragments) {
-        if (fragment.kind !== 'paragraph') continue;
-        if (fragment.paragraphId !== paragraphId) continue;
-        return fragment.marker ? fragment.marker.level : null;
+        if (fragment.kind !== 'paragraph' || fragment.paragraphId !== paragraphId) continue;
+        return fragment.marker ?? null;
       }
     }
     return null;
   }
 
   /**
-   * Which kind of list a paragraph is in, from the marker layout resolved for it.
+   * Which kind of list a paragraph is in.
    *
-   * A marker whose text is a bare glyph is a bullet; one carrying digits or letters is a
-   * number. Reading the PAINTED marker rather than numbering.xml keeps this in step with
-   * whatever the level actually resolved to.
+   * Read from the resolved level's `w:numFmt`, never from the marker GLYPH: a bullet
+   * level may legitimately use a letter-shaped character (Wingdings `§`, Courier `o` —
+   * both of which Word's own default list uses at levels 2 and 3), so sniffing the text
+   * reported half of every multi-level bullet list as numbered.
    */
   function listKindOf(paragraphId: string): 'bullet' | 'ordered' | null {
-    for (const page of currentLayout.value.pages) {
-      for (const fragment of page.fragments) {
-        if (fragment.kind !== 'paragraph' || fragment.paragraphId !== paragraphId) continue;
-        if (!fragment.marker) return null;
-        return /[0-9a-zA-Z]/.test(fragment.marker.text) ? 'ordered' : 'bullet';
-      }
+    const marker = markerOf(paragraphId);
+    if (!marker) return null;
+    return marker.numFmt === 'bullet' ? 'bullet' : 'ordered';
+  }
+
+  /**
+   * The `w:numId` an adjacent paragraph of the same kind already uses, if any.
+   *
+   * Turning a list back on rejoins the list around it rather than minting a second
+   * definition — otherwise re-bulleting one item in the middle of a list gave it a
+   * different glyph from its neighbours.
+   */
+  function adjacentListNumId(
+    touched: readonly string[],
+    kind: 'bullet' | 'ordered'
+  ): string | null {
+    const order = documentOrder(currentLayout.value);
+    const first = order.indexOf(touched[0] ?? '');
+    const last = order.indexOf(touched[touched.length - 1] ?? '');
+    if (first === -1 || last === -1) return null;
+    // The paragraph BEFORE the selection, then the one after.
+    for (const index of [first - 1, last + 1]) {
+      const neighbour = order[index];
+      if (!neighbour) continue;
+      const marker = markerOf(neighbour);
+      if (!marker) continue;
+      if ((marker.numFmt === 'bullet' ? 'bullet' : 'ordered') === kind) return marker.numId;
     }
     return null;
+  }
+
+  /**
+   * Whether a list paragraph could move to `level`.
+   *
+   * A `w:abstractNum` need not declare all nine levels — plenty of real documents declare
+   * only `ilvl 0` — and a paragraph moved to a level its definition does not declare
+   * resolves to no marker at all: it silently stops being a list item and springs back to
+   * the margin. Refusing the move keeps the list intact, which is what Word's greyed-out
+   * Increase Indent communicates.
+   */
+  function listLevelExists(marker: ListMarkerRecord, level: number): boolean {
+    if (level < 0 || level > MAX_LIST_LEVEL) return false;
+    return deps.numberingLevelExists(marker.numId, level);
   }
 
   /** Authored `w:ind/@left` in twips, zero when the paragraph states none. */
@@ -180,7 +224,9 @@ export function createSurfaceStructure(deps: SurfaceStructureDeps): StructureMet
       // Word toggles OFF only when the whole selection is already that list; a mixed
       // selection becomes one list rather than clearing half of it.
       const turningOff = touched.every((paragraphId) => listKindOf(paragraphId) === kind);
-      const numId = turningOff ? null : session.ensureListDefinition(kind);
+      const numId = turningOff
+        ? null
+        : (adjacentListNumId(touched, kind) ?? session.ensureListDefinition(kind));
       if (!turningOff && numId === null) return false;
       const ops: TreeDocOp[] = touched.map((paragraphId) => ({
         op: 'setListNumbering',
@@ -196,6 +242,23 @@ export function createSurfaceStructure(deps: SurfaceStructureDeps): StructureMet
       return committed;
     },
 
+    canAdjustIndent(direction) {
+      const { from, to } = orderedRange();
+      const order = documentOrder(currentLayout.value);
+      const firstIndex = order.indexOf(from.paragraphId);
+      const lastIndex = order.indexOf(to.paragraphId);
+      if (firstIndex === -1 || lastIndex === -1) return false;
+      const step = direction === 'increase' ? 1 : -1;
+      // Enabled when ANY paragraph the selection touches could move. Word greys the
+      // control out only when nothing would happen at all.
+      return order.slice(firstIndex, lastIndex + 1).some((paragraphId) => {
+        const marker = markerOf(paragraphId);
+        if (marker) return listLevelExists(marker, marker.level + step);
+        const current = leftIndentTwipsOf(paragraphPropertiesOf(currentLayout.value, paragraphId));
+        return Math.max(0, current + step * INDENT_STEP_TWIPS) !== current;
+      });
+    },
+
     adjustIndent(direction) {
       const { from, to } = orderedRange();
       const order = documentOrder(currentLayout.value);
@@ -206,13 +269,14 @@ export function createSurfaceStructure(deps: SurfaceStructureDeps): StructureMet
       const ops: TreeDocOp[] = [];
       for (const paragraphId of order.slice(firstIndex, lastIndex + 1)) {
         const properties = paragraphPropertiesOf(currentLayout.value, paragraphId);
-        const level = listLevelOf(paragraphId);
-        if (level !== null) {
+        const marker = markerOf(paragraphId);
+        const level = marker?.level ?? null;
+        if (marker && level !== null) {
           // A list item DEMOTES rather than shifting: `w:ilvl` is what picks the level's
           // format out of numbering.xml, so the marker changes with the indent the way
           // Word's Tab does. Nine levels exist (17.9.24); the ends are no-ops, not errors.
           const next = level + step;
-          if (next < 0 || next > MAX_LIST_LEVEL) continue;
+          if (!listLevelExists(marker, next)) continue;
           ops.push({
             op: 'setListLevel',
             paragraphId,

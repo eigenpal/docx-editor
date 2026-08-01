@@ -26,6 +26,7 @@ import {
   resolveDefaultSurfaceMeasurer,
   documentOrder,
   layoutSemanticDocument,
+  resolveNumberingLevel,
   moveCaret,
   paragraphTextFromLayout,
   wordBoundary,
@@ -189,6 +190,8 @@ export function mountPaginatedSurface(
     selectionMark: () => selectionMark(),
     collapsedAt: (position) => collapsedAt(position),
     deleteSelectionOps: () => deleteSelectionOps(),
+    numberingLevelExists: (numId, level) =>
+      resolveNumberingLevel(numberingIndex(), numId, level) !== null,
   });
   let desiredX: number | null = null;
 

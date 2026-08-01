@@ -22,6 +22,8 @@ export interface ResolvedListItem {
   readonly numId: string;
   readonly ilvl: number;
   readonly abstractNumId: string;
+  /** `w:numFmt` of the resolved level — `bullet` or a numbering format. */
+  readonly numFmt: string;
   readonly markerText: string;
   readonly markerAlign: ListMarkerAlign;
   readonly suffix: ListSuffix;
@@ -219,6 +221,7 @@ export function resolveStoryListItems(
       numId: advanced.numId,
       ilvl: advanced.ilvl,
       abstractNumId: advanced.abstractNumId,
+      numFmt: advanced.level.numFmt,
       markerText: advanced.markerText,
       markerAlign: advanced.level.lvlJc,
       suffix: advanced.level.suff,
