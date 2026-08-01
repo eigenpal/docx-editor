@@ -55,6 +55,56 @@ export function commandForSlot(slotId: ChromeSlotId): EditorCommand | null {
 }
 
 // @public
+export function composeFontConfiguration(
+base: FontConfigurationBase,
+...fragments: readonly FontConfigurationFragment[]
+): FontConfiguration {
+    const // (undocumented)
+    origins: readonly FontConfigurationFragment[] = [base, ...fragments];
+
+    const // (undocumented)
+    sources: FontSource[] = [];
+    const // (undocumented)
+    sourceKeys = new Set<string>();
+    for (const // (undocumented)
+    origin of origins) {
+        for (const // (undocumented)
+        source of origin.sources ?? []) {
+            const // (undocumented)
+            key = fontRequestKey(source.request);
+            if (sourceKeys.has(key)) continue;
+            sourceKeys.add(key);
+            sources.push(source);
+        }
+    }
+
+    const // (undocumented)
+    substitutions: FontSourceSubstitution[] = [];
+    const // (undocumented)
+    substitutionKeys = new Set<string>();
+    for (const // (undocumented)
+    origin of origins) {
+        for (const // (undocumented)
+        substitution of origin.substitutions ?? []) {
+            const // (undocumented)
+            key = fontRequestKey(substitution.from);
+            if (sourceKeys.has(key) || substitutionKeys.has(key)) continue;
+            substitutionKeys.add(key);
+            substitutions.push(substitution);
+        }
+    }
+
+    return Object.freeze({
+        epoch: base.epoch ?? 0,
+        maxFontBytes: base.maxFontBytes ?? HARD_MAX_FONT_BYTES,
+        sources: Object.freeze(sources),
+        ...(substitutions.length > 0 ? { substitutions: Object.freeze(substitutions) } : {}),
+        defaultFont: base.defaultFont ?? WORD_DEFAULT_FONT,
+        ...(base.language !== undefined ? { language: base.language } : {}),
+    });
+}
+
+// @public
 export const DEFERRED_DIALOGS: readonly ["findReplace", "hyperlink", "insertImage", "insertTable", "insertSymbol", "imageProperties", "footnoteProperties"];
 
 // @public (undocumented)
@@ -172,8 +222,8 @@ type: StringConstructor;
 default: undefined;
 };
 fonts: {
-type: PropType<FontConfiguration>;
-required: true;
+type: PropType<FontConfiguration | FontConfigurationFragment>;
+default: undefined;
 };
 }>, () => VNode<RendererNode, RendererElement, {
 [key: string]: any;
@@ -203,8 +253,8 @@ type: StringConstructor;
 default: undefined;
 };
 fonts: {
-type: PropType<FontConfiguration>;
-required: true;
+type: PropType<FontConfiguration | FontConfigurationFragment>;
+default: undefined;
 };
 }>> & Readonly<{
 onChange?: ((_change: DocumentChange) => any) | undefined;
@@ -212,6 +262,7 @@ onReady?: ((_editor: Editor) => any) | undefined;
 onFontError?: ((_error: EditorFontError) => any) | undefined;
 }>, {
 author: string;
+fonts: FontConfiguration | FontConfigurationFragment;
 document: DocumentSource;
 zoom: number;
 mode: EditorMode;
@@ -223,7 +274,7 @@ export interface DocxEditorProps {
     // (undocumented)
     author?: string;
     document?: DocumentSource;
-    fonts: FontConfiguration;
+    fonts?: FontConfiguration | FontConfigurationFragment;
     // (undocumented)
     locale?: string;
     mode?: EditorMode;
@@ -647,6 +698,22 @@ export interface FontConfiguration {
 }
 
 // @public
+export interface FontConfigurationBase extends FontConfigurationFragment {
+    readonly defaultFont?: FontConfiguration['defaultFont'];
+    readonly epoch?: number;
+    readonly language?: string;
+    readonly maxFontBytes?: number;
+}
+
+// @public
+export interface FontConfigurationFragment {
+    // (undocumented)
+    readonly sources?: readonly FontSource[];
+    // (undocumented)
+    readonly substitutions?: readonly FontSourceSubstitution[];
+}
+
+// @public
 export interface FontFaceRequest {
     // (undocumented)
     readonly family: string;
@@ -655,6 +722,33 @@ export interface FontFaceRequest {
     // (undocumented)
     readonly weight: number;
 }
+
+// @public (undocumented)
+export interface FontLoadFailure {
+    // (undocumented)
+    readonly actualHash?: string;
+    // (undocumented)
+    readonly diagnostic?: string;
+    // (undocumented)
+    readonly expectedHash?: string;
+    // (undocumented)
+    readonly reason: FontLoadFailureReason;
+    // (undocumented)
+    readonly request: FontFaceRequest;
+    readonly status?: number;
+    // (undocumented)
+    readonly url: string;
+}
+
+// @public (undocumented)
+export type FontLoadFailureReason =
+| 'networkError'
+| 'httpError'
+| 'hashMismatch'
+| 'overLimit'
+| 'emptyResponse'
+/** The declared face itself is unusable (empty family, out-of-range weight); nothing was fetched. */
+| 'invalidRequest';
 
 // @public
 export interface FontSource {
@@ -678,6 +772,21 @@ export interface FontSourceSubstitution {
     readonly from: FontFaceRequest;
     // (undocumented)
     readonly to: FontFaceRequest;
+}
+
+// @public
+export interface FontUrlSource {
+    // (undocumented)
+    readonly faceIndex?: number;
+    // (undocumented)
+    readonly family: string;
+    readonly hash?: string;
+    // (undocumented)
+    readonly style: 'normal' | 'italic';
+    // (undocumented)
+    readonly url: string;
+    // (undocumented)
+    readonly weight: number;
 }
 
 // @public
@@ -765,6 +874,152 @@ export interface HorizontalRulerProps {
     readonly unit?: RulerUnit;
     // (undocumented)
     readonly zoom?: number;
+}
+
+// @public
+export async function loadFonts(request: LoadFontsRequest): Promise<LoadFontsResult> {
+    const // (undocumented)
+    fetcher = request.fetcher ?? fetch;
+    const // (undocumented)
+    maxFontBytes = request.maxFontBytes ?? HARD_MAX_FONT_BYTES;
+    const // (undocumented)
+    cache = await openCache(request.cacheName ?? 'docx-editor-fonts');
+
+    const // (undocumented)
+    sources: FontSource[] = [];
+    const // (undocumented)
+    failures: FontLoadFailure[] = [];
+
+    // Sequential per list order keeps admission deterministic; the fetches themselves are
+    // the slow part and typically few. Callers needing parallelism can shard the list.
+    for (const // (undocumented)
+    source of request.sources) {
+        const // (undocumented)
+        faceRequest: FontFaceRequest = Object.freeze({
+            family: source.family,
+            weight: source.weight,
+            style: source.style,
+        });
+        // Screened HERE, not at composition: the request contract refuses a malformed face
+        // with a THROW, so admitting one would detonate the configuration carrying every
+        // other font instead of degrading this single source. Same discipline the embedded
+        // lane applies to file-declared families.
+        const // (undocumented)
+        descriptorProblem = faceRequestProblem(faceRequest);
+        if (descriptorProblem) {
+            failures.push({
+                url: source.url,
+                request: faceRequest,
+                reason: 'invalidRequest',
+                diagnostic: descriptorProblem,
+            });
+            continue;
+        }
+        const // (undocumented)
+        admit = (bytes: Uint8Array, fromCache: boolean): 'admitted' | FontLoadFailure => {
+            if (bytes.byteLength === 0) {
+                return { url: source.url, request: faceRequest, reason: 'emptyResponse' };
+            }
+            if (bytes.byteLength > maxFontBytes) {
+                return { url: source.url, request: faceRequest, reason: 'overLimit' };
+            }
+            const // (undocumented)
+            actualHash = sha256FontBytes(bytes);
+            if (source.hash !== undefined && source.hash !== actualHash) {
+                return {
+                    url: source.url,
+                    request: faceRequest,
+                    reason: 'hashMismatch',
+                    expectedHash: source.hash,
+                    actualHash,
+                    ...(fromCache ? { diagnostic: 'cached bytes failed revalidation' } : {}),
+                };
+            }
+            sources.push({
+                request: faceRequest,
+                id: `url:${source.url}`,
+                bytes,
+                hash: actualHash,
+                faceIndex: source.faceIndex ?? 0,
+            });
+            return 'admitted';
+        };
+
+        // Cache first, revalidated by content hash. A poisoned or stale entry is discarded
+        // and the URL refetched — a cache problem is never a hard failure by itself.
+        const // (undocumented)
+        cached = await cachedBytes(cache, source.url);
+        if (cached) {
+            const // (undocumented)
+            verdict = admit(cached, true);
+            if (verdict === 'admitted') continue;
+            await discardEntry(cache, source.url);
+        }
+
+        let // (undocumented)
+        response: Response;
+        try {
+            response = await fetcher(source.url);
+        } catch (// (undocumented)
+        error) {
+            failures.push({
+                url: source.url,
+                request: faceRequest,
+                reason: 'networkError',
+                diagnostic: error instanceof Error ? error.message : String(error),
+            });
+            continue;
+        }
+        if (!response.ok) {
+            failures.push({
+                url: source.url,
+                request: faceRequest,
+                reason: 'httpError',
+                status: response.status,
+            });
+            continue;
+        }
+        let // (undocumented)
+        bytes: Uint8Array;
+        try {
+            bytes = new Uint8Array(await response.arrayBuffer());
+        } catch (// (undocumented)
+        error) {
+            failures.push({
+                url: source.url,
+                request: faceRequest,
+                reason: 'networkError',
+                diagnostic: error instanceof Error ? error.message : String(error),
+            });
+            continue;
+        }
+        const // (undocumented)
+        verdict = admit(bytes, false);
+        if (verdict === 'admitted') {
+            await storeBytes(cache, source.url, bytes);
+        } else {
+            failures.push(verdict);
+        }
+    }
+
+    return { sources, failures };
+}
+
+// @public (undocumented)
+export interface LoadFontsRequest {
+    readonly cacheName?: string;
+    readonly fetcher?: typeof fetch;
+    readonly maxFontBytes?: number;
+    // (undocumented)
+    readonly sources: readonly FontUrlSource[];
+}
+
+// @public (undocumented)
+export interface LoadFontsResult extends FontConfigurationFragment {
+    // (undocumented)
+    readonly failures: readonly FontLoadFailure[];
+    // (undocumented)
+    readonly sources: readonly FontSource[];
 }
 
 // @public (undocumented)
@@ -1053,5 +1308,11 @@ export interface VerticalRulerProps {
     // (undocumented)
     readonly zoom?: number;
 }
+
+// @public
+export const WORD_DEFAULT_FONT: FontConfiguration['defaultFont'] = Object.freeze({
+    family: 'Calibri',
+    sizeHalfPoints: 22,
+});
 
 ```

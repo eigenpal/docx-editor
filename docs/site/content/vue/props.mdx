@@ -144,16 +144,19 @@ Behaviour matches React. See the [Dark mode](/docs/1.x/guides/dark-mode) guide f
 
 ### Fonts
 
-`:fonts` registers custom font faces and `:font-families` constrains the picker; the full rules (FontDefinition shape, weights, stable references, error routing) are under [React props → Fonts](/docs/1.x/react/props#fonts) and apply unchanged.
+`:fonts` supplies the font bytes the engine measures with and `:font-families` constrains the picker; the full rules are under [React props → Fonts](/docs/1.x/react/props#fonts) and apply unchanged.
 
 ```vue
 <script setup lang="ts">
+import { ref, onMounted } from 'vue';
 import { DocxEditor } from '@docx-editor.dev/vue';
+import { loadDefaultFonts } from '@docx-editor.dev/fonts';
+import type { FontConfigurationFragment } from '@docx-editor.dev/vue';
 
-const fonts = [
-  { family: 'Custom Sans', src: '/fonts/CustomSans-Regular.woff2' },
-  { family: 'Custom Sans', src: '/fonts/CustomSans-Bold.woff2', weight: 700 },
-];
+const fonts = ref<FontConfigurationFragment>();
+onMounted(async () => {
+  fonts.value = await loadDefaultFonts();
+});
 </script>
 
 <template>
@@ -161,11 +164,12 @@ const fonts = [
     :document-buffer="buf"
     :fonts="fonts"
     :font-families="['Custom Sans', 'Arial']"
+    @font-error="(e) => report(e.code)"
   />
 </template>
 ```
 
-Keep the array reference stable (declared once in `setup`, not rebuilt inline). Font-load failures surface through the `@error` event; with no listener attached they fall back to `console.warn`. Note that React's `onFontsLoaded` callback has no Vue equivalent yet.
+Keep the reference stable — `:fonts` is sampled at mount and an identity change remounts the editor. Per-face failures surface through `@font-error`. See the [Fonts and measurement](/docs/1.x/guides/fonts) guide for the three font sources and how they compose.
 
 ### Title bar slots
 

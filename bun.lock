@@ -162,6 +162,7 @@
       "name": "docx-editor-example-vite",
       "dependencies": {
         "@docx-editor.dev/core-contract": "workspace:*",
+        "@docx-editor.dev/fonts": "workspace:*",
         "@docx-editor.dev/i18n": "workspace:*",
         "@docx-editor.dev/react": "workspace:*",
         "fflate": "^0.8.2",
@@ -249,6 +250,14 @@
         "pdf-lib",
         "yjs",
       ],
+    },
+    "packages/fonts": {
+      "name": "@docx-editor.dev/fonts",
+      "version": "0.0.1",
+      "devDependencies": {
+        "@docx-editor.dev/core-contract": "workspace:*",
+        "typescript": "^5.3.3",
+      },
     },
     "packages/i18n": {
       "name": "@docx-editor.dev/i18n",
@@ -474,6 +483,8 @@
     "@docx-editor.dev/core": ["@docx-editor.dev/core@0.0.1", "", {}, "sha512-bgs6qj+1g0QfmyjK6XHet8xhxxbsgm+zS+dW5NYTjAMMLXQo5QY1erJNmLfjtg7fDehzDrIxNM3jgiFWSYKtuw=="],
 
     "@docx-editor.dev/core-contract": ["@docx-editor.dev/core-contract@workspace:packages/core"],
+
+    "@docx-editor.dev/fonts": ["@docx-editor.dev/fonts@workspace:packages/fonts"],
 
     "@docx-editor.dev/i18n": ["@docx-editor.dev/i18n@workspace:packages/i18n"],
 

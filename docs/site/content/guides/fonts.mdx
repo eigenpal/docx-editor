@@ -1,0 +1,169 @@
+---
+title: 'Fonts and measurement'
+description: 'How the editor resolves fonts for Word-accurate line wrap and pagination: embedded DOCX fonts, metric-compatible substitutes, and app-supplied font URLs.'
+category: 'Guides'
+seoTitle: 'Fonts and text measurement'
+---
+
+The editor measures text with a real shaping engine (HarfBuzz) whenever it has font
+bytes to measure with. With no fonts at all it still works — layout falls back to a
+fixed-width estimate — but wrap and page-break points are then approximations rather
+than Word's. This guide covers the three ways fonts reach the editor and how they
+combine.
+
+## The three font sources
+
+**1. Fonts embedded in the document — automatic.** A `.docx` can carry the faces it was
+written in. When it does, the editor extracts them on load and measures with them. No
+configuration, no assets, no network: a document that brings its own fonts is
+Word-accurate out of the box.
+
+**2. Metric-compatible substitutes — one call.** Most documents use Word's default
+fonts (Calibri, Cambria, Times New Roman, Arial, Courier New), which are proprietary
+and cannot be bundled. The optional `@docx-editor.dev/fonts` package ships open-licensed
+faces built to match their metrics — identical advance widths, so lines wrap where Word
+wraps them:
+
+<Callout>
+`@docx-editor.dev/fonts` is not published to npm yet — it ships with the v2 line. The
+API below is stable; the package is workspace-only until then.
+</Callout>
+
+| Word font | Substitute | License |
+|---|---|---|
+| Calibri | Carlito | SIL OFL |
+| Cambria | Caladea | SIL OFL |
+| Times New Roman | Liberation Serif | SIL OFL |
+| Arial | Liberation Sans | SIL OFL |
+| Courier New | Liberation Mono | SIL OFL |
+
+```tsx
+import { useEffect, useState } from 'react';
+import { DocxEditor } from '@docx-editor.dev/react';
+import { loadDefaultFonts, installDefaultFontFaces } from '@docx-editor.dev/fonts';
+import type { FontConfigurationFragment } from '@docx-editor.dev/react';
+
+function Editor({ bytes }: { bytes: Uint8Array }) {
+  // `settled` gates the FIRST mount. `fonts` is sampled at mount and an identity change
+  // remounts, so mounting before fonts resolve costs a visible remount — and a remount
+  // resets the undo stack and the caret. Waiting once avoids both.
+  const [fonts, setFonts] = useState<{
+    settled: boolean;
+    value?: FontConfigurationFragment;
+  }>({ settled: false });
+
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      try {
+        const fragment = await loadDefaultFonts(); // or { families: ['Calibri'] }
+        // Optional: also register the substitutes with the browser under the Word family
+        // names, so painted glyphs use the same metrics layout measured with.
+        void installDefaultFontFaces();
+        if (!cancelled) setFonts({ settled: true, value: fragment });
+      } catch {
+        // A load failure settles with no fonts: the editor opens on the fixed measurer,
+        // which is the documented degradation.
+        if (!cancelled) setFonts({ settled: true });
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  if (!fonts.settled) return null;
+  return <DocxEditor.Root document={bytes} fonts={fonts.value} />;
+}
+```
+
+Font binaries load lazily as separate assets, only for the families you ask for.
+Importing the package fetches nothing.
+
+**3. Your own fonts — explicit URLs.** For brand fonts or licensed copies of the real
+faces, `loadFonts` fetches URLs you specify and caches them locally. When you pin a
+`sha256:` hash it gates admission hard — pin it for any URL not under your sole
+control:
+
+```ts
+// Both re-exported by the adapters: '@docx-editor.dev/react' and '@docx-editor.dev/vue'.
+import { loadFonts, composeFontConfiguration } from '@docx-editor.dev/react';
+
+const brand = await loadFonts({
+  sources: [
+    { url: '/fonts/AcmeSans-Regular.ttf', family: 'Acme Sans', weight: 400, style: 'normal' },
+    { url: '/fonts/AcmeSans-Bold.ttf', family: 'Acme Sans', weight: 700, style: 'normal', hash: 'sha256:…' },
+  ],
+});
+const fonts = composeFontConfiguration(brand, await loadDefaultFonts());
+```
+
+`loadFonts` never rejects for a single bad source: it returns the admitted sources plus
+a typed `failures` list, so the editor can open with partial coverage.
+
+You never have to compute a hash by hand. Pins are optional — omit `hash` for URLs on
+your own origin and `loadFonts` computes one for you. When you do want to pin a
+third-party URL, run it once without a pin and read the values back off the result:
+
+```ts
+const result = await loadFonts({ sources });
+console.log(result.sources.map((source) => `${source.id}: ${source.hash}`));
+```
+
+Paste those into your source list (or generate the list at build time, which is how
+`@docx-editor.dev/fonts` bakes the hashes for its own assets).
+
+## How sources combine
+
+`composeFontConfiguration(base, ...fragments)` merges any number of fragments into the
+one immutable configuration the editor samples per mount. Precedence is simple:
+
+1. **Explicit sources win.** A face you supply beats an embedded face with the same
+   family, weight, and style.
+2. **Embedded faces beat substitutions.** A document that embeds Calibri uses those
+   bytes; the Calibri→Carlito mapping applies only when no direct source exists.
+3. **First fragment wins** among equals, and duplicate faces are deduplicated rather
+   than erroring.
+
+## Degradation, not failure
+
+Fonts never block a document from opening. The document mounts immediately on the
+fixed measurer and swaps to shaped measurement in a single re-mount when fonts resolve.
+Edits made before fonts resolve survive that remount, but the undo stack and caret
+position do not — which is why the sample above waits for fonts before the first mount.
+Every failure — a corrupt embedded face, a 404, a hash mismatch — degrades exactly one
+face, reports a typed `EditorFontError` through `onFontError`, and leaves the rest
+measuring accurately.
+
+## Observing font state
+
+`onFontError` is a prop on `DocxEditor.Root` (and an option on `createDocxEditor`);
+each error carries a typed `code` (`missing`, `malformed`, `overLimit`,
+`hashMismatch`, …) and, where known, the face `request` it concerns. To answer "am I
+measuring Word-accurately right now?", read `fontMeasurement()` on the editor
+instance:
+
+```tsx
+<DocxEditor.Root
+  document={bytes}
+  fonts={fragment}
+  onFontError={(error) => report(error.code, error.message)}
+/>;
+
+// Inside the tree:
+const editor = useDocxEditor();
+editor?.fontMeasurement();
+// → { measurer: 'shaped' | 'fixed', resolving: boolean, producer?: string }
+```
+
+`{ measurer: 'fixed', resolving: false }` is the steady state for a document with no
+usable font source; `resolving: true` means shaped resolution is still in flight.
+
+## Honesty notes
+
+- **Metric-compatible is not identical.** Advance widths match, so wrap points match;
+  rare kerning-pair differences can still move an edge case. Documents that must
+  render the true faces should supply licensed bytes via `loadFonts`.
+- **The editor never fetches fonts on its own.** Opening a document performs no
+  network requests — `loadFonts` and `loadDefaultFonts` run only when your code calls
+  them. Embedded fonts come from inside the file itself.

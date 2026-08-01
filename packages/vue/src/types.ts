@@ -9,6 +9,7 @@ import type {
   ExecResult,
   FontConfiguration,
 } from '@docx-editor.dev/core-contract/contracts/editor';
+import type { FontConfigurationFragment } from '@docx-editor.dev/core-contract/editor';
 export { EditorFontError } from '@docx-editor.dev/core-contract/contracts/editor';
 export type {
   EditorFontErrorCode,
@@ -27,10 +28,12 @@ export type EditorMode = 'edit' | 'view';
  */
 export interface DocxEditorProps {
   /**
-   * Immutable byte-backed font sources sampled at mount. Remount to replace this
-   * configuration atomically.
+   * Font bytes for Word-accurate wrap and pagination, sampled at mount; remount to
+   * replace atomically. Omitted, layout estimates widths; fonts embedded in the document
+   * wire in automatically either way. Accepts a full configuration or a bare
+   * `{ sources, substitutions }` fragment (what `loadDefaultFonts()` returns).
    */
-  fonts: FontConfiguration;
+  fonts?: FontConfiguration | FontConfigurationFragment;
   /** A document to load: DOCX bytes or an existing handle. */
   document?: DocumentSource;
   /** 'edit' (default) or 'view' (read-only). Applied at mount only — not reactive; remount to change. */

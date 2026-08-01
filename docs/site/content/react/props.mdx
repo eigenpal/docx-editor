@@ -129,34 +129,33 @@ See the [Dark mode](/docs/1.x/guides/dark-mode) guide for how the canvas transfo
 
 ## Fonts
 
-`fontFamilies` controls what the toolbar dropdown offers. `fonts` (added in 1.1.0) registers the actual font faces so the editor can render and measure them. They are independent: list a family in `fontFamilies` to make it pickable, register it with `fonts` so its glyphs paint correctly.
+`fontFamilies` controls what the toolbar dropdown offers. `fonts` supplies the actual
+font bytes the engine measures with, so line wrap and page breaks match Word. They are
+independent: list a family in `fontFamilies` to make it pickable, supply its bytes
+through `fonts` so it measures accurately.
 
 | Prop | Type | Default | Description |
 |---|---|---|---|
-| `fonts` | `ReadonlyArray<FontDefinition>` | none | Custom font faces to register before the editor measures text. Each entry injects one `@font-face`. |
+| `fonts` | `FontConfiguration \| FontConfigurationFragment` | none | Font bytes for Word-accurate measurement. Fonts embedded in the document wire in automatically either way. |
 | `fontFamilies` | `ReadonlyArray<string \| FontOption>` | built-in 12 | Constrain the font picker to a specific list. |
-| `onFontsLoaded` | `() => void` | none | Fires once the registered faces are ready. |
+| `onFontError` | `(error: EditorFontError) => void` | none | Per-face failures (corrupt embedded face, 404, hash mismatch). |
 
-A `FontDefinition` is `{ family, src, weight? }`. `src` is a URL to a `woff2`/`woff`/`ttf`/`otf` file you host. Register multiple weights of the same family as separate entries that share `family`:
+The usual value is what `loadDefaultFonts()` returns:
 
 ```tsx
 import { DocxEditor } from '@docx-editor.dev/react';
+import { loadDefaultFonts } from '@docx-editor.dev/fonts';
 
-const FONTS = [
-  { family: 'Custom Sans', src: '/fonts/CustomSans-Regular.woff2' },
-  { family: 'Custom Sans', src: '/fonts/CustomSans-Bold.woff2', weight: 700 },
-];
+const fonts = await loadDefaultFonts();
 
-<DocxEditor
-  documentBuffer={buf}
-  fonts={FONTS}
-  fontFamilies={['Custom Sans', 'Arial', 'Times New Roman']}
-/>;
+<DocxEditor documentBuffer={buf} fonts={fonts} onFontError={(e) => report(e.code)} />;
 ```
 
-Pass a stable reference (module-level or memoized). Inline arrays re-register on every render; the loader dedupes by `family|weight|style` so it's harmless, but it wastes work.
+`fonts` is sampled at mount and its identity change remounts the editor, so pass a
+stable reference — resolve it once and hold it in state rather than building it inline.
 
-Font-load failures route through `onError` (see [Callbacks](#callbacks)), so you can forward them to your own tracker. With no `onError` attached they fall back to `console.warn`.
+See the [Fonts and measurement](/docs/1.x/guides/fonts) guide for the three font
+sources, how they compose, and how to supply your own faces with `loadFonts`.
 
 For host code that isn't using the React or Vue adapter, `@docx-editor.dev/core/utils` exports `loadFontFromUrl`, `loadFontDefinitions`, `onFontError`, and the `FontDefinition` type so you can drive the same registration directly.
 
