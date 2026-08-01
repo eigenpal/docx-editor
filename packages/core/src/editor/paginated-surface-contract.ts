@@ -22,6 +22,12 @@ export interface PaginatedSurfaceOptions {
    * cached pre-font layout is served for the rest of the session.
    */
   readonly producer?: string;
+  /**
+   * Maps a document-declared font family to the alias its registered bytes live under, so
+   * painted runs can use embedded glyphs without the file's family name entering the
+   * page-global CSS font namespace.
+   */
+  readonly fontAlias?: (family: string) => string | undefined;
   /** Points to CSS pixels. */
   readonly scale?: number;
   readonly onChange?: (state: PaginatedSurfaceState) => void;

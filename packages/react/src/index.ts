@@ -101,6 +101,7 @@ export type {
 export {
   WORD_DEFAULT_FONT,
   composeFontConfiguration,
+  createFontSource,
   loadFonts,
   type FontConfigurationBase,
   type FontConfigurationFragment,

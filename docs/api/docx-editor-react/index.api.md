@@ -9,6 +9,7 @@ import { ChromeSlotId } from '@docx-editor.dev/core-contract/editor';
 import { ColorValue } from '@docx-editor.dev/core-contract/contracts/editor';
 import { commandForSlot } from '@docx-editor.dev/core-contract/editor';
 import { composeFontConfiguration } from '@docx-editor.dev/core-contract/editor';
+import { createFontSource } from '@docx-editor.dev/core-contract/editor';
 import { CSSProperties } from 'react';
 import { DisplayItem } from '@docx-editor.dev/core-contract/contracts/geometry';
 import { DisplayPage } from '@docx-editor.dev/core-contract/contracts/geometry';
@@ -73,6 +74,8 @@ export { ChromeSlotId }
 export { commandForSlot }
 
 export { composeFontConfiguration }
+
+export { createFontSource }
 
 export { DisplayItem }
 

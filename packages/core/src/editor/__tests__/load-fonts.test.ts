@@ -7,13 +7,28 @@
 // hash-revalidated bytes (a poisoned entry is discarded and refetched).
 
 import { afterEach, describe, expect, test } from 'bun:test';
+import { readFileSync } from 'node:fs';
 import { sha256FontBytes } from '../../layout/index.ts';
-import { loadFonts } from '../load-fonts.ts';
+import { createFontSource, loadFonts } from '../load-fonts.ts';
 import { composeFontConfiguration } from '../font-composition.ts';
 
-const fontA = new Uint8Array([1, 2, 3, 4]);
-const fontB = new Uint8Array([5, 6, 7, 8]);
-const fontC = new Uint8Array([9, 10, 11, 12]);
+// REAL font bytes: `loadFonts` screens the sfnt signature at the boundary, so synthetic
+// payloads would all be refused as `malformed` — which is the point of that screen, and
+// is asserted on its own below. Distinct faces give distinct hashes.
+const fixture = (name: string): Uint8Array =>
+  new Uint8Array(
+    readFileSync(new URL(`../../layout/__tests__/fixtures/fonts/${name}`, import.meta.url))
+  );
+const fontA = fixture('DejaVuSans.ttf');
+const fontB = fixture('DejaVuSans-Bold.ttf');
+// A third DISTINCT but still structurally valid face: trailing padding changes the
+// content hash without touching the sfnt header or table directory.
+const fontC = ((): Uint8Array => {
+  const base = fixture('DejaVuSans.ttf');
+  const padded = new Uint8Array(base.byteLength + 16);
+  padded.set(base);
+  return padded;
+})();
 
 interface FakeFetch {
   readonly fetcher: typeof fetch;
@@ -225,7 +240,7 @@ describe('malformed face descriptors degrade that source only', () => {
       ],
       fetcher: (async (input: RequestInfo | URL) => {
         fetched.push(String(input));
-        return new Response(new Uint8Array([1, 2, 3, 4]));
+        return new Response(fontA.slice());
       }) as unknown as typeof fetch,
     });
     // Only the well-formed source was even requested.
@@ -237,5 +252,48 @@ describe('malformed face descriptors degrade that source only', () => {
     ]);
     // And the admitted set composes without throwing — the point of screening early.
     expect(() => composeFontConfiguration(result)).not.toThrow();
+  });
+});
+
+describe('bytes that are not a font are refused at the boundary', () => {
+  test('a 200 response carrying an HTML error page fails as malformed and is not cached', async () => {
+    const buckets = installFakeCaches();
+    const html = new TextEncoder().encode('<!doctype html><title>404</title>');
+    const { fetcher } = fakeFetch({ 'https://x/notafont.ttf': html });
+    const result = await loadFonts({
+      sources: [{ url: 'https://x/notafont.ttf', family: 'Acme', weight: 400, style: 'normal' }],
+      fetcher,
+    });
+    expect(result.sources).toHaveLength(0);
+    expect(result.failures[0]).toMatchObject({ reason: 'malformed' });
+    // Nothing poisons the cache, so a later load retries instead of failing forever.
+    expect(buckets.get('docx-editor-fonts')?.has('https://x/notafont.ttf') ?? false).toBe(false);
+  });
+});
+
+describe('createFontSource: bytes you already hold', () => {
+  test('valid bytes become a composable source with a computed hash', () => {
+    const result = createFontSource(fontA, { family: 'Acme', weight: 400, style: 'normal' });
+    expect('source' in result).toBe(true);
+    const source = (result as { source: { hash: string; id: string } }).source;
+    expect(source.hash).toBe(sha256FontBytes(fontA));
+    expect(source.id).toBe('bytes:Acme#400#normal');
+    // Composes without ceremony — the point of the helper.
+    expect(() =>
+      composeFontConfiguration({ sources: [(result as { source: never }).source] })
+    ).not.toThrow();
+  });
+
+  test('a bad descriptor or non-font bytes returns a typed failure, never throws', () => {
+    expect(createFontSource(fontA, { family: '  ', weight: 400, style: 'normal' })).toMatchObject({
+      failure: { reason: 'invalidRequest' },
+    });
+    expect(
+      createFontSource(new Uint8Array([1, 2, 3, 4]), {
+        family: 'Acme',
+        weight: 400,
+        style: 'normal',
+      })
+    ).toMatchObject({ failure: { reason: 'malformed' } });
   });
 });
