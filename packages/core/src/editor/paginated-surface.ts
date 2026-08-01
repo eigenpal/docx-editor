@@ -75,6 +75,7 @@ import {
   visiblePageSet,
   type SurfaceExtent,
 } from './surface-pages.ts';
+import { createSurfaceCaret } from './surface-caret.ts';
 import { createSurfaceStructure } from './surface-structure.ts';
 
 export type {
@@ -149,6 +150,10 @@ export function mountPaginatedSurface(
 
   container.style.position = 'relative';
   container.replaceChildren(pagesLayer);
+
+  // The engine paints its own insertion point. The native caret is a single device pixel,
+  // and an empty paragraph paints no text span for the browser to size one against.
+  const caret = createSurfaceCaret(pagesLayer, scale, () => ({ layout: currentLayout, selection }));
 
   const firstParagraph = session.paragraphIds()[0] ?? '';
   let selection: SemanticSelection = {
@@ -368,6 +373,8 @@ export function mountPaginatedSurface(
    * Layout still decides where the text is; this only says which characters are selected.
    */
   function syncDomSelection(): void {
+    // Ahead of the ownership guard: `render` and `setSelection` both pass through here.
+    caret.update();
     // Only when this surface owns the selection. `render` runs on mount and on every commit
     // — including one from another editor sharing the store — and writing unconditionally
     // yanked the caret out of whatever the user was actually typing in.
@@ -763,6 +770,7 @@ export function mountPaginatedSurface(
       // Drop pending layout work and stop listening BEFORE the DOM goes, or a commit from
       // another editor sharing this store would paint into a detached container.
       scheduler.cancel();
+      caret.destroy();
       unsubscribe();
       container.replaceChildren();
     },
