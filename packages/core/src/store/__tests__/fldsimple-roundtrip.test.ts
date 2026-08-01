@@ -233,9 +233,9 @@ describe('header fldSimple round-trip', () => {
     const reopenedHeader = reopened.package.parts.get('/word/header1.xml')!;
     expect(collectFldSimple(reopenedHeader.root).map(instrOf)).toEqual([instr]);
     expect(canonicalOoxmlFingerprint(reopenedHeader)).toBe(canonicalOoxmlFingerprint(header));
-    expect(
-      diffSemanticDigests(semanticDigest([header]), semanticDigest([reopenedHeader]))
-    ).toEqual([]);
+    expect(diffSemanticDigests(semanticDigest([header]), semanticDigest([reopenedHeader]))).toEqual(
+      []
+    );
 
     const docRels = new TextDecoder().decode(
       reopened.package.partBytes.get('/word/_rels/document.xml.rels')!
@@ -269,7 +269,9 @@ describe('package-level relationship xmlns emission', () => {
       'word/document.xml': strToU8(
         `<w:document xmlns:w="${W}"><w:body><w:p><w:r><w:t>x</w:t></w:r></w:p></w:body></w:document>`
       ),
-      'word/styles.xml': strToU8(`<w:styles xmlns:w="${W}"><w:style w:type="paragraph" w:styleId="Normal"/></w:styles>`),
+      'word/styles.xml': strToU8(
+        `<w:styles xmlns:w="${W}"><w:style w:type="paragraph" w:styleId="Normal"/></w:styles>`
+      ),
     });
     const loaded = readOoxmlPackage(bytes);
     expect(loaded.ok).toBe(true);
@@ -436,7 +438,9 @@ describe('comprehensive fixture root namespace declaration hygiene', () => {
       if (!uriMatch) continue;
       const uri = uriMatch[1]!;
       expect(byUri.get(uri)).toEqual([prefix]);
-      expect(savedXml).not.toMatch(new RegExp(`xmlns:ns\\d+="${uri.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}"`));
+      expect(savedXml).not.toMatch(
+        new RegExp(`xmlns:ns\\d+="${uri.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}"`)
+      );
     }
 
     const bytes = writeOoxmlPackage(loaded.package);

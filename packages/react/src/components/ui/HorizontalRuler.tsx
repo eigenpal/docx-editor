@@ -41,6 +41,8 @@ export interface HorizontalRulerProps {
   editable?: boolean;
   onLeftMarginChange?: (marginTwips: number) => void;
   onRightMarginChange?: (marginTwips: number) => void;
+  /** Fires when a margin drag is released — the moment to commit what the drag previewed. */
+  onMarginDragEnd?: () => void;
   onFirstLineIndentChange?: (indentTwips: number) => void;
   showFirstLineIndent?: boolean;
   firstLineIndent?: number;
@@ -98,6 +100,7 @@ export function HorizontalRuler({
   editable = false,
   onLeftMarginChange,
   onRightMarginChange,
+  onMarginDragEnd,
   onFirstLineIndentChange,
   showFirstLineIndent = false,
   firstLineIndent = 0,
@@ -123,6 +126,9 @@ export function HorizontalRuler({
   const pageWidthTwips = pageSetup?.pageWidthTwips ?? DEFAULT_PAGE_WIDTH_TWIPS;
   const leftMarginTwips = pageSetup?.marginsTwips.left ?? DEFAULT_MARGIN_TWIPS;
   const rightMarginTwips = pageSetup?.marginsTwips.right ?? DEFAULT_MARGIN_TWIPS;
+  // The binding gutter narrows the content area exactly as the left margin does, so the
+  // drag clamps must count it — the engine refuses margins that swallow the page.
+  const gutterTwips = pageSetup?.gutterTwips ?? 0;
   const contentTwips = pageWidthTwips - leftMarginTwips - rightMarginTwips;
 
   // Pixel conversions
@@ -161,13 +167,13 @@ export function HorizontalRuler({
       const positionTwips = pixelsToTwips(x / zoom);
 
       if (dragging === 'leftMargin') {
-        const maxMargin = pageWidthTwips - rightMarginTwips - 720;
+        const maxMargin = pageWidthTwips - rightMarginTwips - gutterTwips - 720;
         const rounded = Math.round(Math.max(0, Math.min(positionTwips, maxMargin)));
         setDragValue(rounded);
         onLeftMarginChange?.(rounded);
       } else if (dragging === 'rightMargin') {
         const fromRight = pageWidthTwips - positionTwips;
-        const maxMargin = pageWidthTwips - leftMarginTwips - 720;
+        const maxMargin = pageWidthTwips - leftMarginTwips - gutterTwips - 720;
         const rounded = Math.round(Math.max(0, Math.min(fromRight, maxMargin)));
         setDragValue(rounded);
         onRightMarginChange?.(rounded);
@@ -199,6 +205,7 @@ export function HorizontalRuler({
       pageWidthTwips,
       leftMarginTwips,
       rightMarginTwips,
+      gutterTwips,
       contentTwips,
       indentLeft,
       indentRight,
@@ -211,10 +218,11 @@ export function HorizontalRuler({
   );
 
   const handleDragEnd = useCallback(() => {
+    if (dragging === 'leftMargin' || dragging === 'rightMargin') onMarginDragEnd?.();
     setDragging(null);
     setDragValue(null);
     setDragPositionPx(null);
-  }, []);
+  }, [dragging, onMarginDragEnd]);
 
   useEffect(() => {
     if (dragging) {

@@ -31,6 +31,8 @@ export interface VerticalRulerProps {
   onTopMarginChange?: (marginTwips: number) => void;
   /** Callback when bottom margin changes (in twips) */
   onBottomMarginChange?: (marginTwips: number) => void;
+  /** Fires when a margin drag is released — the moment to commit what the drag previewed. */
+  onMarginDragEnd?: () => void;
   /** Unit to display (inches or cm) */
   unit?: 'inch' | 'cm';
   /** Additional CSS class name */
@@ -70,6 +72,7 @@ export function VerticalRuler({
   editable = false,
   onTopMarginChange,
   onBottomMarginChange,
+  onMarginDragEnd,
   unit = 'inch',
   className = '',
   style,
@@ -133,8 +136,9 @@ export function VerticalRuler({
 
   // Handle drag end
   const handleDragEnd = useCallback(() => {
+    if (dragging !== null) onMarginDragEnd?.();
     setDragging(null);
-  }, []);
+  }, [dragging, onMarginDragEnd]);
 
   // Add/remove document event listeners
   useEffect(() => {

@@ -221,9 +221,7 @@ describe('generic direct body children survive package save (task 4.6)', () => {
 
     const fingerprintBefore = canonicalOoxmlFingerprint(edited.part);
     const digestBefore = semanticDigest([edited.part]);
-    const reopened = readOoxmlPackage(
-      writeOoxmlPackage(withPart(loaded.package, edited.part))
-    );
+    const reopened = readOoxmlPackage(writeOoxmlPackage(withPart(loaded.package, edited.part)));
     if (!reopened.ok) throw new Error(reopened.reason);
 
     const reopenedMain = reopened.package.parts.get(main.name)!;
@@ -231,8 +229,8 @@ describe('generic direct body children survive package save (task 4.6)', () => {
     expect(JSON.stringify(reopenedMain)).toContain('flag');
     expect(canonicalOoxmlFingerprint(reopenedMain)).toBe(fingerprintBefore);
     expect(diffSemanticDigests(digestBefore, semanticDigest([reopenedMain]))).toEqual([]);
-    expect(deriveOoxmlIndexes(reopened.package, 2).stories.get(main.name)!.paragraphs[0]!.text).toBe(
-      'Xeditable'
-    );
+    expect(
+      deriveOoxmlIndexes(reopened.package, 2).stories.get(main.name)!.paragraphs[0]!.text
+    ).toBe('Xeditable');
   });
 });

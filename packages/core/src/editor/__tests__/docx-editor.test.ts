@@ -17,17 +17,23 @@ const CT = 'http://schemas.openxmlformats.org/package/2006/content-types';
 const REL = 'http://schemas.openxmlformats.org/package/2006/relationships';
 const OD = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument';
 
-function docx(body: string): Uint8Array {
+function docx(body: string, extraParts: Record<string, string> = {}): Uint8Array {
+  const overrides = Object.keys(extraParts)
+    .map((name) => `<Override PartName="/${name}" ContentType="application/xml"/>`)
+    .join('');
   return zipSync({
     '[Content_Types].xml': strToU8(
       `<Types xmlns="${CT}"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>` +
-        '<Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/></Types>'
+        `<Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>${overrides}</Types>`
     ),
     '_rels/.rels': strToU8(
       `<Relationships xmlns="${REL}"><Relationship Id="rId1" Type="${OD}" Target="word/document.xml"/></Relationships>`
     ),
     'word/document.xml': strToU8(
       `<w:document xmlns:w="${W}"><w:body>${body}</w:body></w:document>`
+    ),
+    ...Object.fromEntries(
+      Object.entries(extraParts).map(([name, xml]) => [name, strToU8(xml)] as const)
     ),
   });
 }
@@ -67,6 +73,41 @@ describe('createDocxEditor', () => {
     expect(editor.query({ type: 'selectionFormatting' })?.bold).toBe(true);
   });
 
+  test('a collapsed caret reports the formatting of the run beside it', () => {
+    const { editor } = mount(
+      '<w:p><w:r><w:t>plain</w:t></w:r><w:r><w:rPr><w:b/></w:rPr><w:t>bold</w:t></w:r></w:p>'
+    );
+    const pid = '/word/document.xml#0.0.0';
+    const caret = (offset: number) => ({
+      anchor: { paragraphId: pid, offset },
+      head: { paragraphId: pid, offset },
+    });
+    editor.exec({ type: 'setSelection', range: caret(7) });
+    expect(editor.getSelectionFormatting()?.bold).toBe(true);
+    expect(editor.isActive({ type: 'toggleMark', mark: 'bold' })).toBe(true);
+    editor.exec({ type: 'setSelection', range: caret(2) });
+    expect(editor.getSelectionFormatting()?.bold).toBe(false);
+    expect(editor.isActive({ type: 'toggleMark', mark: 'bold' })).toBe(false);
+  });
+
+  test('every toggleMark toggles OFF again, not just bold', () => {
+    // A mark missing from `isRunPropertyActive` reads as never-active, so its toggle
+    // re-applies forever instead of clearing — every toggleable mark must round-trip.
+    const { editor } = mount(p('hello'));
+    editor.surface!.selectAll();
+    for (const [mark, read] of [
+      ['bold', 'bold'],
+      ['italic', 'italic'],
+      ['underline', 'underline'],
+      ['strike', 'strike'],
+    ] as const) {
+      editor.exec({ type: 'toggleMark', mark });
+      expect(editor.snapshot().formatting?.[read]).toBe(true);
+      editor.exec({ type: 'toggleMark', mark });
+      expect(editor.snapshot().formatting?.[read]).toBe(false);
+    }
+  });
+
   test('setAlignment writes w:jc and formatting reports it', () => {
     const { editor } = mount(p('hello'));
     editor.surface!.selectAll();
@@ -88,9 +129,25 @@ describe('createDocxEditor', () => {
     expect(editor.surface!.session.bodyText()).toBe('ab');
     expect(editor.exec({ type: 'redo' })).toEqual({ ok: true, changed: true });
     expect(editor.surface!.session.bodyText()).toBe('Xab');
-    // An undo with nothing left to undo commits nothing and says so.
+    // An empty history REFUSES rather than silently no-opping: `can` drives the
+    // toolbar, and Word greys out undo/redo when there is nothing left.
     editor.exec({ type: 'undo' });
-    expect(editor.exec({ type: 'undo' })).toEqual({ ok: true, changed: false });
+    expect(editor.can({ type: 'undo' }).ok).toBe(false);
+    const spent = editor.exec({ type: 'undo' });
+    expect(spent.ok).toBe(false);
+    if (!spent.ok) expect(spent.reason).toBe('nothing to undo');
+  });
+
+  test('undo/redo enablement follows the history', () => {
+    const { editor } = mount(p('ab'));
+    expect(editor.can({ type: 'undo' }).ok).toBe(false);
+    expect(editor.can({ type: 'redo' }).ok).toBe(false);
+    editor.exec({ type: 'insertText', text: 'X' });
+    expect(editor.can({ type: 'undo' }).ok).toBe(true);
+    expect(editor.can({ type: 'redo' }).ok).toBe(false);
+    editor.exec({ type: 'undo' });
+    expect(editor.can({ type: 'undo' }).ok).toBe(false);
+    expect(editor.can({ type: 'redo' }).ok).toBe(true);
   });
 
   test('save() round-trips: the bytes reopen and the edit survives', async () => {
@@ -232,7 +289,154 @@ describe('createDocxEditor', () => {
       pageHeightTwips: 15840,
       orientation: 'portrait',
       marginsTwips: { top: 1440, right: 1440, bottom: 1440, left: 1440 },
+      gutterTwips: 0,
     });
+  });
+
+  test('setPageSetup writes margins, repaginates, and undoes as one step', () => {
+    const { editor } = mount(p('hello'));
+    expect(editor.can({ type: 'setPageSetup', marginLeft: 720 })).toEqual({ ok: true });
+    const result = editor.exec({ type: 'setPageSetup', marginLeft: 720, marginTop: 900 });
+    expect(result).toEqual({ ok: true, changed: true });
+    expect(editor.getPageSetup()?.marginsTwips).toEqual({
+      top: 900,
+      right: 1440,
+      bottom: 1440,
+      left: 720,
+    });
+    expect(editor.snapshot().canUndo).toBe(true);
+    editor.exec({ type: 'undo' });
+    expect(editor.getPageSetup()?.marginsTwips.left).toBe(1440);
+  });
+
+  test('setPageSetup orientation swaps the stored dimensions', () => {
+    const { editor } = mount(p('hello'));
+    editor.exec({ type: 'setPageSetup', orientation: 'landscape' });
+    expect(editor.getPageSetup()).toMatchObject({
+      pageWidthTwips: 15840,
+      pageHeightTwips: 12240,
+      orientation: 'landscape',
+    });
+    // Back to portrait: the dimensions swap back, whichever way they were stored.
+    editor.exec({ type: 'setPageSetup', orientation: 'portrait' });
+    expect(editor.getPageSetup()).toMatchObject({
+      pageWidthTwips: 12240,
+      pageHeightTwips: 15840,
+      orientation: 'portrait',
+    });
+  });
+
+  test('setPageSetup refuses hostile values with typed reasons', () => {
+    const { editor } = mount(p('hello'));
+    expect(editor.can({ type: 'setPageSetup' })).toMatchObject({ ok: false });
+    expect(editor.can({ type: 'setPageSetup', pageWidth: 0 })).toMatchObject({
+      ok: false,
+      code: 'invalidArgs',
+    });
+    expect(editor.can({ type: 'setPageSetup', marginLeft: -1 })).toMatchObject({
+      ok: false,
+      code: 'invalidArgs',
+    });
+    // Margins that swallow the page are refused by the op layer: nothing commits.
+    const before = editor.getDocumentHandle().revision;
+    editor.exec({ type: 'setPageSetup', marginLeft: 8000, marginRight: 8000 });
+    expect(editor.getDocumentHandle().revision).toBe(before);
+  });
+
+  test('snapshot().pageSetup is reference-stable until the section changes', () => {
+    const { editor } = mount(p('hello'));
+    const first = editor.snapshot().pageSetup;
+    expect(first).toEqual(editor.getPageSetup());
+    // An edit that does not touch the section keeps the same sub-object reference.
+    editor.exec({ type: 'insertText', text: 'X' });
+    expect(editor.snapshot().pageSetup).toBe(first);
+    // A section write moves it.
+    editor.exec({ type: 'setPageSetup', marginLeft: 720 });
+    expect(editor.snapshot().pageSetup).not.toBe(first);
+    expect(editor.snapshot().pageSetup?.marginsTwips.left).toBe(720);
+  });
+
+  test('a refused page setup surfaces as a typed error, not silent success', () => {
+    const { editor } = mount(p('hello'));
+    // Each margin passes per-field bounds; together they swallow the page.
+    const result = editor.exec({ type: 'setPageSetup', marginLeft: 8000, marginRight: 8000 });
+    expect(result).toMatchObject({ ok: false, code: 'invalidArgs' });
+  });
+
+  test('scope: section writes only the caret section of a multi-section document', () => {
+    const midBody =
+      '<w:p><w:pPr><w:sectPr><w:pgSz w:w="12240" w:h="15840"/></w:sectPr></w:pPr>' +
+      '<w:r><w:t>first section</w:t></w:r></w:p>' +
+      '<w:p><w:r><w:t>second section</w:t></w:r></w:p>' +
+      '<w:sectPr><w:pgSz w:w="12240" w:h="15840"/></w:sectPr>';
+    const { editor } = mount(midBody);
+    const first = editor.surface!.session.paragraphIds()[0]!;
+    editor.surface!.setSelection({
+      anchor: { paragraphId: first, offset: 0 },
+      head: { paragraphId: first, offset: 0 },
+    });
+    editor.exec({ type: 'setPageSetup', orientation: 'landscape', scope: 'section' });
+    // The caret's section flipped; snapshot follows the caret, so it reads landscape…
+    expect(editor.getPageSetup()).toMatchObject({ orientation: 'landscape' });
+    // …while the tail section kept portrait.
+    const second = editor.surface!.session.paragraphIds()[1]!;
+    editor.surface!.setSelection({
+      anchor: { paragraphId: second, offset: 0 },
+      head: { paragraphId: second, offset: 0 },
+    });
+    expect(editor.getPageSetup()).toMatchObject({ orientation: 'portrait' });
+  });
+
+  test('whole-document orientation flip preserves each section paper size', () => {
+    const midBody =
+      '<w:p><w:pPr><w:sectPr><w:pgSz w:w="11906" w:h="16838"/></w:sectPr></w:pPr>' +
+      '<w:r><w:t>a4 section</w:t></w:r></w:p>' +
+      '<w:p><w:r><w:t>letter tail</w:t></w:r></w:p>' +
+      '<w:sectPr><w:pgSz w:w="12240" w:h="15840"/></w:sectPr>';
+    const { editor } = mount(midBody);
+    editor.exec({ type: 'setPageSetup', orientation: 'landscape' });
+    const first = editor.surface!.session.paragraphIds()[0]!;
+    editor.surface!.setSelection({
+      anchor: { paragraphId: first, offset: 0 },
+      head: { paragraphId: first, offset: 0 },
+    });
+    // The A4 section swapped its OWN dimensions rather than inheriting Letter's.
+    expect(editor.getPageSetup()).toMatchObject({
+      pageWidthTwips: 16838,
+      pageHeightTwips: 11906,
+      orientation: 'landscape',
+    });
+  });
+
+  test('insertBreak section splits at the caret and starts a new section', () => {
+    const { editor } = mount(p('before after'));
+    const id = editor.surface!.session.paragraphIds()[0]!;
+    editor.surface!.setSelection({
+      anchor: { paragraphId: id, offset: 6 },
+      head: { paragraphId: id, offset: 6 },
+    });
+    expect(editor.can({ type: 'insertBreak', kind: 'section' } as never)).toEqual({ ok: true });
+    const result = editor.exec({ type: 'insertBreak', kind: 'section' } as never);
+    expect(result).toMatchObject({ ok: true, changed: true });
+    expect(editor.surface!.session.paragraphIds()).toHaveLength(2);
+    // The document now has two sections; one undo removes the break entirely.
+    expect(editor.surface!.layout().pages.length).toBeGreaterThanOrEqual(2);
+    editor.exec({ type: 'undo' });
+    expect(editor.surface!.session.paragraphIds()).toHaveLength(1);
+  });
+
+  test('the caret section drives the layout: a landscape section paginates landscape', () => {
+    const midBody =
+      '<w:p><w:pPr><w:sectPr><w:pgSz w:w="15840" w:h="12240" w:orient="landscape"/></w:sectPr></w:pPr>' +
+      '<w:r><w:t>landscape page</w:t></w:r></w:p>' +
+      '<w:p><w:r><w:t>portrait page</w:t></w:r></w:p>' +
+      '<w:sectPr><w:pgSz w:w="12240" w:h="15840"/></w:sectPr>';
+    const { editor } = mount(midBody);
+    const pages = editor.surface!.layout().pages;
+    expect(pages).toHaveLength(2);
+    // Twips to points: 15840/20 = 792 wide landscape sheet, then the portrait one.
+    expect([pages[0]!.box.width, pages[0]!.box.height]).toEqual([792, 612]);
+    expect([pages[1]!.box.width, pages[1]!.box.height]).toEqual([612, 792]);
   });
 
   test('zoom is validated, stored, and reported', () => {
@@ -485,6 +689,65 @@ describe('setMarkAttr (value-typed run formatting)', () => {
       editor.exec({ type: 'setMarkAttr', mark: 'highlight', attr: 'val', value: 'yellow' })
     ).toEqual({ ok: true, changed: true });
     expect(editor.snapshot().formatting?.highlight).toBe('yellow');
+  });
+
+  test("color 'auto' and highlight 'none' clear rather than being refused", () => {
+    const { editor } = mount(p('hello'));
+    editor.surface!.selectAll();
+    editor.exec({ type: 'setMarkAttr', mark: 'color', attr: 'val', value: 'FF0000' });
+    editor.exec({ type: 'setMarkAttr', mark: 'highlight', attr: 'val', value: 'yellow' });
+    expect(editor.exec({ type: 'setMarkAttr', mark: 'color', attr: 'val', value: 'auto' })).toEqual(
+      { ok: true, changed: true }
+    );
+    expect(
+      editor.exec({ type: 'setMarkAttr', mark: 'highlight', attr: 'val', value: 'none' })
+    ).toEqual({ ok: true, changed: true });
+    // The read lane reports both as "no value" — which is what Automatic/No Color mean.
+    expect(editor.snapshot().formatting?.color).toBeUndefined();
+    expect(editor.snapshot().formatting?.highlight ?? null).toBeNull();
+  });
+
+  test('a document without a theme part answers no theme colours', () => {
+    const { editor } = mount(p('hello'));
+    expect(editor.getDocumentThemeColors()).toEqual([]);
+  });
+
+  test('font boxes show the EFFECTIVE font: style chain, docDefaults, theme fonts', () => {
+    const A = 'http://schemas.openxmlformats.org/drawingml/2006/main';
+    const styles =
+      `<w:styles xmlns:w="${W}">` +
+      '<w:docDefaults><w:rPrDefault><w:rPr>' +
+      '<w:rFonts w:asciiTheme="minorHAnsi"/><w:sz w:val="22"/>' +
+      '</w:rPr></w:rPrDefault></w:docDefaults>' +
+      '<w:style w:type="paragraph" w:styleId="Title"><w:rPr>' +
+      '<w:rFonts w:ascii="Georgia"/><w:sz w:val="52"/></w:rPr></w:style>' +
+      '</w:styles>';
+    const theme =
+      `<a:theme xmlns:a="${A}"><a:themeElements><a:fontScheme name="Office">` +
+      '<a:majorFont><a:latin typeface="Calibri Light"/></a:majorFont>' +
+      '<a:minorFont><a:latin typeface="Calibri"/></a:minorFont>' +
+      '</a:fontScheme></a:themeElements></a:theme>';
+    const container = document.createElement('div');
+    const editor = createDocxEditor({
+      container,
+      document: docx(
+        '<w:p><w:pPr><w:pStyle w:val="Title"/></w:pPr><w:r><w:t>Heading</w:t></w:r></w:p>' +
+          p('body text'),
+        { 'word/styles.xml': styles, 'word/theme/theme1.xml': theme }
+      ),
+    });
+    const caret = (paragraphId: string, offset: number) => ({
+      anchor: { paragraphId, offset },
+      head: { paragraphId, offset },
+    });
+    // Caret in the styled heading: the style's own rPr wins.
+    editor.exec({ type: 'setSelection', range: caret('/word/document.xml#0.0.0', 3) });
+    expect(editor.snapshot().formatting?.fontFamily).toBe('Georgia');
+    expect(editor.snapshot().formatting?.fontSizePt).toBe(26);
+    // Caret in unstyled body text: docDefaults, with the theme font resolved.
+    editor.exec({ type: 'setSelection', range: caret('/word/document.xml#0.0.1', 3) });
+    expect(editor.snapshot().formatting?.fontFamily).toBe('Calibri');
+    expect(editor.snapshot().formatting?.fontSizePt).toBe(11);
   });
 
   test('invalid values are refused as invalidArgs before touching the document', () => {

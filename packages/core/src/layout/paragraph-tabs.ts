@@ -124,9 +124,7 @@ function mapToResolved(byTwips: Map<number, TabAlignment>): ResolvedTabStops {
  * Each `w:tabs` merges with `clear` support; absence inherits. Leaders are ignored — they
  * are a paint concern, not a break geometry input.
  */
-export function cascadedTabStops(
-  paragraphPropertyNodes: readonly OoxmlNode[]
-): ResolvedTabStops {
+export function cascadedTabStops(paragraphPropertyNodes: readonly OoxmlNode[]): ResolvedTabStops {
   const byTwips = new Map<number, TabAlignment>();
   for (const node of paragraphPropertyNodes) {
     if (!node || !isElement(node)) continue;

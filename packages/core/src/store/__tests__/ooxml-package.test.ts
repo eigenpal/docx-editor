@@ -313,17 +313,15 @@ describe('package writer (cutover step 2)', () => {
       '</pic:pic></a:graphicData></a:graphic></wp:inline></w:drawing></w:r>' +
       '<w:r><w:t>after</w:t></w:r>' +
       '</w:p>';
-    const types =
-      CONTENT_TYPES.replace(
-        '</Types>',
-        '<Override PartName="/word/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.styles+xml"/></Types>'
-      );
+    const types = CONTENT_TYPES.replace(
+      '</Types>',
+      '<Override PartName="/word/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.styles+xml"/></Types>'
+    );
     const docRels =
       `<Relationships xmlns="${REL_NS}">` +
       `<Relationship Id="rId2" Type="${IMAGE_REL}" Target="media/image1.png"/>` +
       '</Relationships>';
-    const document =
-      `<w:document xmlns:w="${W}" xmlns:r="${R}"><w:body>${drawing}</w:body></w:document>`;
+    const document = `<w:document xmlns:w="${W}" xmlns:r="${R}"><w:body>${drawing}</w:body></w:document>`;
 
     const original = readOoxmlPackage(
       build({
@@ -335,9 +333,9 @@ describe('package writer (cutover step 2)', () => {
     );
     if (!original.ok) throw new Error(original.reason);
     expect(original.package.partBytes.get('/word/media/image1.png')).toEqual(png);
-    expect([...(original.package.relationships.get('/word/document.xml') ?? [])].map((r) => r.id)).toEqual([
-      'rId2',
-    ]);
+    expect(
+      [...(original.package.relationships.get('/word/document.xml') ?? [])].map((r) => r.id)
+    ).toEqual(['rId2']);
 
     const part = original.package.parts.get('/word/document.xml')!;
     const paragraphId = deriveOoxmlIndexes(original.package, 0).stories.get('/word/document.xml')!
@@ -353,9 +351,9 @@ describe('package writer (cutover step 2)', () => {
     const reopened = readOoxmlPackage(writeOoxmlPackage(withPart(original.package, edited.part)));
     if (!reopened.ok) throw new Error(reopened.reason);
     expect(reopened.package.partBytes.get('/word/media/image1.png')).toEqual(png);
-    expect([...(reopened.package.relationships.get('/word/document.xml') ?? [])].map((r) => r.id)).toEqual([
-      'rId2',
-    ]);
+    expect(
+      [...(reopened.package.relationships.get('/word/document.xml') ?? [])].map((r) => r.id)
+    ).toEqual(['rId2']);
     const relsXml = new TextDecoder().decode(
       reopened.package.partBytes.get('/word/_rels/document.xml.rels')!
     );
@@ -374,7 +372,8 @@ describe('package writer (cutover step 2)', () => {
   });
 
   test('mc:Ignorable and AlternateContent survive package save/reopen', async () => {
-    const { canonicalOoxmlFingerprint, serializeOoxmlPart } = await import('../package/ooxml-tree.ts');
+    const { canonicalOoxmlFingerprint, serializeOoxmlPart } =
+      await import('../package/ooxml-tree.ts');
     const { writeOoxmlPackage } = await import('../package/ooxml-package.ts');
 
     const MC = 'http://schemas.openxmlformats.org/markup-compatibility/2006';

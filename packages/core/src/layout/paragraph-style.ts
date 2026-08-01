@@ -116,13 +116,10 @@ function resolveBorderEdge(node: OoxmlElement | undefined): ParagraphBorderEdge 
   // a style but no thickness still paints — matching Word's default of ½pt for bare edges.
   const eighths = integer(attributeValue(node, 'sz'));
   const widthPt =
-    eighths === null
-      ? 0.5
-      : clampNonNegative(eighths / 8, MAX_BORDER_WIDTH_PT) || 0.5;
+    eighths === null ? 0.5 : clampNonNegative(eighths / 8, MAX_BORDER_WIDTH_PT) || 0.5;
 
   const spaceRaw = integer(attributeValue(node, 'space'));
-  const spacePt =
-    spaceRaw === null ? 0 : clampNonNegative(spaceRaw, MAX_BORDER_SPACE_PT);
+  const spacePt = spaceRaw === null ? 0 : clampNonNegative(spaceRaw, MAX_BORDER_SPACE_PT);
 
   return {
     val,

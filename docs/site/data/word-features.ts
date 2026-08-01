@@ -93,7 +93,8 @@ export const wordFeatures: WordFeature[] = [
     rendering: 'full',
     roundTrip: 'full',
     tier: 'community',
-    notes: 'Custom fonts registered via the fonts prop; theme fonts resolved from the OOXML theme.',
+    notes:
+      'Custom fonts registered via the fonts prop (loadFonts fetches and hash-verifies app-specified URLs); theme fonts resolved from the OOXML theme. Word-accurate wrap and pagination need font bytes for shaped measurement — the optional @docx-editor.dev/fonts package supplies metric-compatible substitutes for the Word defaults (Carlito, Caladea, Liberation).',
   },
   {
     id: 'text.embedded-fonts',
@@ -104,7 +105,7 @@ export const wordFeatures: WordFeature[] = [
     roundTrip: 'preserved',
     tier: 'community',
     notes:
-      'Fonts embedded in the file (word/fonts) are de-obfuscated, rendered, and selectable in the toolbar under a Document fonts group. The embedded binaries round-trip on save; the editor does not add new embedded fonts.',
+      'Fonts embedded in the file (word/fonts) are de-obfuscated and wired into shaped text measurement automatically on load — no configuration or network. The embedded binaries round-trip on save; the editor does not add new embedded fonts.',
   },
   {
     id: 'text.color',
@@ -527,7 +528,7 @@ export const wordFeatures: WordFeature[] = [
     roundTrip: 'full',
     tier: 'community',
     notes:
-      'Margins editable; mid-body sectPr (section breaks) render and round-trip. Inserting new sections from the UI is not built yet.',
+      'Page size, orientation and margins editable per section or whole document (Page Setup dialog, ruler drags); each section paginates against its own geometry, so mixed portrait/landscape documents render as Word shows them. Next-page section breaks insertable. Even/odd-page break parity and per-section columns are not modelled yet.',
   },
   {
     id: 'layout.headers-footers',

@@ -57,6 +57,14 @@ exemptions go when it lands.
 - `EditorCommandState` — the result type of `useEditorCommand`.
 - `useEditorEvent` — typed facade event subscription hook; Vue twin is a composable,
   future task.
+- `usePageSetup` — page-setup read/write hook over `snapshot().pageSetup` and the
+  `setPageSetup` command; Vue twin is a composable, lands with the composable layer.
+- `PageSetupUpdate` — the fields `usePageSetup().apply` accepts.
+- `UsePageSetupReturn` — the hook's return type.
+- `DocxEditorPageSetupDialog` — context-fed Page Setup dialog part
+  (`DocxEditor.PageSetupDialog`) over `usePageSetup`; Vue twin lands with the
+  composable layer.
+- `DocxEditorPageSetupDialogProps` — the dialog part's props.
 - `CHROME_GROUPS` — core chrome registry re-exported for hook-built toolbars; Vue
   re-exports it when its composable layer lands.
 

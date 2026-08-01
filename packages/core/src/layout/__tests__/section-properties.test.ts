@@ -65,6 +65,13 @@ describe('a section is read from the document (task 11.1)', () => {
     expect(section.titlePage).toBe(true);
   });
 
+  test('swapped dimensions without the attribute still read as landscape', () => {
+    // Layout paginates against the dimensions, so a page wider than tall IS landscape
+    // whatever `w:orient` says (or fails to say).
+    const section = readSectionProperties(withSection('<w:pgSz w:w="15840" w:h="12240"/>'));
+    expect(section.landscape).toBe(true);
+  });
+
   test('columns are read, with a sane count', () => {
     const section = readSectionProperties(withSection('<w:cols w:num="3" w:space="540"/>'));
     expect(section.columns).toEqual({ count: 3, gapTwips: 540 });

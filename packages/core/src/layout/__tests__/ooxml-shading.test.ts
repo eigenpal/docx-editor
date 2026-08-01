@@ -14,10 +14,10 @@ import { resolveRunStyle } from '../run-style.ts';
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 
 function load(body: string): OoxmlPart {
-  const result = readOoxmlPart(
-    `<w:document xmlns:w="${W}"><w:body>${body}</w:body></w:document>`,
-    { name: '/word/document.xml', contentType: 'app/xml' }
-  );
+  const result = readOoxmlPart(`<w:document xmlns:w="${W}"><w:body>${body}</w:body></w:document>`, {
+    name: '/word/document.xml',
+    contentType: 'app/xml',
+  });
   if (!result.ok) throw new Error(result.reason);
   return result.part;
 }
@@ -135,13 +135,11 @@ describe('layout publishes paragraph and run shading without affecting measureme
 
   test('run shading resolves and ignores theme fills', () => {
     expect(
-      resolveRunStyle([{ localName: 'shd', attributes: { val: 'clear', fill: 'FFEEAA' } }])
-        .shading
+      resolveRunStyle([{ localName: 'shd', attributes: { val: 'clear', fill: 'FFEEAA' } }]).shading
     ).toBe('FFEEAA');
     expect(
-      resolveRunStyle([
-        { localName: 'shd', attributes: { themeFill: 'accent1', fill: 'FFEEAA' } },
-      ]).shading
+      resolveRunStyle([{ localName: 'shd', attributes: { themeFill: 'accent1', fill: 'FFEEAA' } }])
+        .shading
     ).toBeNull();
   });
 });

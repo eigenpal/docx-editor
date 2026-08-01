@@ -196,6 +196,35 @@
       "darkCyan": null,
       "darkMagenta": null,
       "lightGray": null
+    },
+    "apply": null,
+    "theme": {
+      "accent1": null,
+      "accent2": null,
+      "accent3": null,
+      "accent4": null,
+      "accent5": null,
+      "accent6": null,
+      "background1": null,
+      "background2": null,
+      "darker25": null,
+      "darker50": null,
+      "lighter40": null,
+      "lighter60": null,
+      "lighter80": null,
+      "text1": null,
+      "text2": null,
+      "lighter50": null,
+      "lighter35": null,
+      "lighter25": null,
+      "lighter15": null,
+      "lighter5": null,
+      "darker5": null,
+      "darker10": null,
+      "darker15": null,
+      "darker35": null,
+      "darker75": null,
+      "darker90": null
     }
   },
   "dialogs": {
@@ -384,7 +413,10 @@
         "a5": "A5 (14,8 × 21 cm)",
         "b5": "B5 (17,6 × 25 cm)",
         "executive": "Executive (18,4 × 26,7 cm)"
-      }
+      },
+      "applyTo": null,
+      "applyToDocument": null,
+      "applyToSection": null
     },
     "tableProperties": {
       "title": "Propriétés du tableau",

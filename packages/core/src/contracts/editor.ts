@@ -313,6 +313,14 @@ export interface Editor {
   /** Font families the document actually uses, for the font picker. */
   getDocumentFonts(): readonly string[];
 
+  /**
+   * The document theme's ten picker colours (`a:clrScheme`) in Word's column order
+   * (Background 1, Text 1, Background 2, Text 2, Accent 1-6), each a six-digit hex
+   * without '#'. Empty when the document has no complete scheme — the picker then
+   * falls back to a default palette.
+   */
+  getDocumentThemeColors(): readonly { readonly slot: string; readonly hex: string }[];
+
   /** Heading outline for the navigation panel, in document order. */
   getOutline(): readonly {
     readonly text: string;
@@ -369,17 +377,7 @@ export interface Editor {
   } | null;
 
   /** Section page setup — size, orientation and margins — for the page-setup dialog. */
-  getPageSetup(): {
-    readonly pageWidthTwips: number;
-    readonly pageHeightTwips: number;
-    readonly orientation: 'portrait' | 'landscape';
-    readonly marginsTwips: {
-      readonly top: number;
-      readonly right: number;
-      readonly bottom: number;
-      readonly left: number;
-    };
-  } | null;
+  getPageSetup(): PageSetup | null;
 
   /** The document watermark, for the watermark dialog. */
   getWatermark(): { readonly kind: 'text' | 'image'; readonly text?: string } | null;
@@ -565,7 +563,10 @@ export interface EditorCommands extends EditorCommandShape<DocEdits> {
    * Section-level page setup: the fields Word's Page Setup dialog and the rulers'
    * margin drags change. Twips throughout, matching OOXML. Every field is optional —
    * a margin drag sends one, the dialog sends several — and an omitted field is left
-   * as it is rather than reset.
+   * as it is rather than reset. `scope` is Word's "Apply to": `'document'` (the
+   * default) writes every section; `'section'` writes only the section the selection
+   * is in. An orientation change without explicit dimensions swaps each written
+   * section's own dimensions, preserving distinct paper sizes.
    */
   setPageSetup: {
     pageWidth?: number;
@@ -575,6 +576,7 @@ export interface EditorCommands extends EditorCommandShape<DocEdits> {
     marginBottom?: number;
     marginLeft?: number;
     orientation?: 'portrait' | 'landscape';
+    scope?: 'document' | 'section';
   };
 
   /** Remove the tab stop at this position (twips) from the current paragraph. */
@@ -753,6 +755,26 @@ export interface HyperlinkInfo {
 }
 
 /**
+ * Section page setup — size, orientation and margins, in twips — as `getPageSetup()`
+ * and `snapshot().pageSetup` report it and the `setPageSetup` command writes it. In a
+ * multi-section document this is the setup of the section the SELECTION is in, which
+ * is what a ruler or a dialog reflects — Word's behaviour.
+ */
+export interface PageSetup {
+  readonly pageWidthTwips: number;
+  readonly pageHeightTwips: number;
+  readonly orientation: 'portrait' | 'landscape';
+  readonly marginsTwips: {
+    readonly top: number;
+    readonly right: number;
+    readonly bottom: number;
+    readonly left: number;
+  };
+  /** Binding gutter (`w:gutter`), folded into the left margin by layout. */
+  readonly gutterTwips?: number;
+}
+
+/**
  * A read model of the current editor state, safe to hand to framework
  * rendering. Named `EditorSnapshot` rather than `EditorState` so it never
  * collides with an editing engine's own state type.
@@ -777,6 +799,12 @@ export interface EditorSnapshot {
    */
   readonly canUndo?: boolean;
   readonly canRedo?: boolean;
+  /**
+   * The section's page setup, reference-stable across ticks that did not change it.
+   * Optional and additive like `canUndo`: absent means the implementation has not
+   * derived it, `null` means no document is loaded.
+   */
+  readonly pageSetup?: PageSetup | null;
 }
 
 export interface ImageContext {

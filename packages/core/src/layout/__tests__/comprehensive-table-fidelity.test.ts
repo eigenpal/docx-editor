@@ -24,10 +24,7 @@ function cellText(cell: TableFragmentRecord['rows'][number]['cells'][number]): s
     .join('');
 }
 
-function findTable(
-  layout: ReturnType<typeof layoutFixture>,
-  needle: string
-): TableFragmentRecord {
+function findTable(layout: ReturnType<typeof layoutFixture>, needle: string): TableFragmentRecord {
   for (const page of layout.pages) {
     for (const fragment of page.fragments) {
       if (fragment.kind !== 'table') continue;

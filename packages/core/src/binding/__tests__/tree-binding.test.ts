@@ -158,9 +158,7 @@ describe('reverse mapping (task 6.2)', () => {
   });
 
   test('a page break maps to insertPageBreak and round-trips through the tree', () => {
-    const part = load(
-      '<w:p><w:r><w:t>a</w:t><w:br w:type="page"/><w:t>b</w:t></w:r></w:p>'
-    );
+    const part = load('<w:p><w:r><w:t>a</w:t><w:br w:type="page"/><w:t>b</w:t></w:r></w:p>');
     const id = bodyParagraphs(part)[0]!.id;
     const projected = treeToDoc(part);
     expect(projected.child(0).child(1).type.name).toBe('pageBreak');

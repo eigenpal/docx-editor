@@ -32,9 +32,14 @@ export {
   DocxEditorDocumentOutline,
   type DocxEditorDocumentOutlineProps,
 } from './editor/DocxEditorOutline';
+export {
+  DocxEditorPageSetupDialog,
+  type DocxEditorPageSetupDialogProps,
+} from './editor/DocxEditorPageSetup';
 export { useEditorState } from './editor/useEditorState';
 export { useEditorCommand, type EditorCommandState } from './editor/useEditorCommand';
 export { useEditorEvent } from './editor/useEditorEvent';
+export { usePageSetup, type PageSetupUpdate, type UsePageSetupReturn } from './editor/usePageSetup';
 
 // The compound toolbar (also reachable as `DocxEditor.Toolbar`): default set with
 // in-place slot overrides, generic Button, and the font-family compound + hook. The
@@ -91,6 +96,21 @@ export type {
   FontSource,
   FontSourceSubstitution,
 } from './types';
+// The font-composition surface, re-exported so the 80% path (fonts package + adapter)
+// never needs a core import.
+export {
+  WORD_DEFAULT_FONT,
+  composeFontConfiguration,
+  createFontSource,
+  loadFonts,
+  type FontConfigurationBase,
+  type FontConfigurationFragment,
+  type FontLoadFailure,
+  type FontLoadFailureReason,
+  type FontUrlSource,
+  type LoadFontsRequest,
+  type LoadFontsResult,
+} from '@docx-editor.dev/core-contract/editor';
 
 // Re-export the contract types a consumer needs to drive the editor.
 export type {
@@ -100,6 +120,7 @@ export type {
   EditorQuery,
   EditorSnapshot,
   EditorScope,
+  PageSetup,
 } from '@docx-editor.dev/core-contract/contracts/editor';
 export type {
   DisplayPage,

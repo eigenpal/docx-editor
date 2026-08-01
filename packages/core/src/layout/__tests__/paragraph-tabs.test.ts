@@ -36,10 +36,10 @@ function load(body: string): OoxmlPart {
 }
 
 function loadStyles(inner: string) {
-  const result = readOoxmlPart(
-    `<w:styles xmlns:w="${W}">${inner}</w:styles>`,
-    { name: '/word/styles.xml', contentType: 'app/xml' }
-  );
+  const result = readOoxmlPart(`<w:styles xmlns:w="${W}">${inner}</w:styles>`, {
+    name: '/word/styles.xml',
+    contentType: 'app/xml',
+  });
   if (!result.ok) throw new Error(result.reason);
   return result.part.root;
 }

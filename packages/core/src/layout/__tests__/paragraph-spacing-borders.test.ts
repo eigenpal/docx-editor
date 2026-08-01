@@ -10,20 +10,16 @@ import {
   paragraphSpacing,
 } from '../paragraph-style.ts';
 import { createFixedMeasurer, layoutSemanticDocument } from '../semantic-layout.ts';
-import {
-  fragmentsOfParagraph,
-  linesOf,
-  type PageGeometry,
-} from '../semantic-records.ts';
+import { fragmentsOfParagraph, linesOf, type PageGeometry } from '../semantic-records.ts';
 import { propertiesOf } from '../paragraph-flow.ts';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 
 function load(body: string): OoxmlPart {
-  const result = readOoxmlPart(
-    `<w:document xmlns:w="${W}"><w:body>${body}</w:body></w:document>`,
-    { name: '/word/document.xml', contentType: 'app/xml' }
-  );
+  const result = readOoxmlPart(`<w:document xmlns:w="${W}"><w:body>${body}</w:body></w:document>`, {
+    name: '/word/document.xml',
+    contentType: 'app/xml',
+  });
   if (!result.ok) throw new Error(result.reason);
   return result.part;
 }
@@ -183,9 +179,7 @@ describe('comprehensive fixture: bottom border rule and vertical spacing', () =>
     expect(empty.bottomBorder!.box.height).toBe(2);
     expect(empty.bottomBorder!.box.width).toBe(empty.box.width);
     // Fragment height covers before remainder + line + border extent + after.
-    expect(empty.box.height).toBe(
-      empty.spacing.before + 14 + 2 + 2 + empty.spacing.after
-    );
+    expect(empty.box.height).toBe(empty.spacing.before + 14 + 2 + 2 + empty.spacing.after);
   });
 
   test('vertical spacing collapses against the prior after and advances the next paragraph', () => {
@@ -193,11 +187,7 @@ describe('comprehensive fixture: bottom border rule and vertical spacing', () =>
     const layout = lay(part);
     const fragments = layout.pages[0]!.fragments.filter((f) => f.kind === 'paragraph');
     const [above, empty, below] = fragments;
-    if (
-      above!.kind !== 'paragraph' ||
-      empty!.kind !== 'paragraph' ||
-      below!.kind !== 'paragraph'
-    )
+    if (above!.kind !== 'paragraph' || empty!.kind !== 'paragraph' || below!.kind !== 'paragraph')
       return;
 
     // above after=10pt, empty before=5pt → empty's applied before collapses to 0.
@@ -207,7 +197,9 @@ describe('comprehensive fixture: bottom border rule and vertical spacing', () =>
     expect(empty!.spacing.after).toBe(6);
     expect(below!.spacing.before).toBe(0);
     expect(below!.box.y).toBe(empty!.box.y + empty!.box.height);
-    expect(below!.lines[0]!.box.y).toBe(empty!.bottomBorder!.box.y + empty!.bottomBorder!.box.height + 6);
+    expect(below!.lines[0]!.box.y).toBe(
+      empty!.bottomBorder!.box.y + empty!.bottomBorder!.box.height + 6
+    );
   });
 
   test('flattened props still round-trip spacing; borders resolve from the tree', () => {
@@ -257,8 +249,7 @@ describe('Word 2013+ top-of-page space-before suppression', () => {
   test('pageBreakBefore suppresses before at the top of the new page', () => {
     const layout = lay(
       load(
-        paragraph('first') +
-          paragraph('second', '<w:pageBreakBefore/><w:spacing w:before="200"/>')
+        paragraph('first') + paragraph('second', '<w:pageBreakBefore/><w:spacing w:before="200"/>')
       )
     );
     expect(layout.pages.length).toBeGreaterThanOrEqual(2);
@@ -329,18 +320,14 @@ describe('bottom border survives across a multi-line paragraph', () => {
     }
     const last = fragments[fragments.length - 1]!;
     expect(last.bottomBorder).toBeDefined();
-    expect(last.bottomBorder!.box.y).toBeGreaterThan(
-      last.lines[last.lines.length - 1]!.box.y
-    );
+    expect(last.bottomBorder!.box.y).toBeGreaterThan(last.lines[last.lines.length - 1]!.box.y);
   });
 });
 
 describe('linesOf still walks every line when spacing and borders are present', () => {
   test('source ranges remain contiguous', () => {
     const layout = lay(
-      load(
-        paragraph('hello', `<w:spacing w:after="200"/>${BOTTOM('w:val="single" w:sz="8"')}`)
-      )
+      load(paragraph('hello', `<w:spacing w:after="200"/>${BOTTOM('w:val="single" w:sz="8"')}`))
     );
     const lines = linesOf(layout);
     expect(lines).toHaveLength(1);

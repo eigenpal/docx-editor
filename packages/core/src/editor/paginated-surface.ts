@@ -23,8 +23,10 @@ import {
   createLayoutScheduler,
   createLayoutSession,
   createParagraphLayoutCache,
+  enumerateDocumentSections,
   readSectionProperties,
   resolveDefaultSurfaceMeasurer,
+  storyBlocks,
   documentOrder,
   layoutSemanticDocument,
   moveCaret,
@@ -288,6 +290,7 @@ export function mountPaginatedSurface(
     materializedSet = visiblePages();
     paintSemanticLayout(pagesLayer, currentLayout, {
       scale,
+      ...(options.fontAlias ? { fontAlias: options.fontAlias } : {}),
       // Only what is on screen, plus a band either side and the pages the caret and the
       // selection touch. A five-hundred-page document has five hundred pages of records and
       // a screen holds two; building them all is the difference between opening and hanging.
@@ -699,7 +702,80 @@ export function mountPaginatedSurface(
 
     sectionProperties: () => readSectionProperties(session.part()),
 
-    formatting: () => formattingAt(currentLayout, selection),
+    sectionPropertiesAt(paragraphId) {
+      const sections = enumerateDocumentSections(session.part());
+      if (sections.length === 1) return sections[0]!.properties;
+      const blocks = storyBlocks(session.part());
+      const contains = (node: (typeof blocks)[number], id: string): boolean => {
+        if (node.id === id) return true;
+        for (const child of node.children) {
+          if (child.kind !== 'textValue' && contains(child as (typeof blocks)[number], id)) {
+            return true;
+          }
+        }
+        return false;
+      };
+      const blockIndex = blocks.findIndex(
+        (block) => block.id === paragraphId || contains(block, paragraphId)
+      );
+      // An unknown id falls back to the tail section — the document-wide answer.
+      let owner = sections[sections.length - 1]!;
+      if (blockIndex !== -1) {
+        for (const section of sections) {
+          if (section.blockStart <= blockIndex) owner = section;
+          else break;
+        }
+      }
+      return owner.properties;
+    },
+
+    setSectionProperties(update) {
+      let committed = false;
+      commit(() => {
+        const result = session.applyTreeOps(
+          [{ op: 'setSectionProperties', ...update }],
+          selectionMark()
+        );
+        committed = result.committed;
+        return result;
+      });
+      return committed;
+    },
+
+    insertSectionBreak() {
+      const start = orderedStart();
+      const before = new Set(session.paragraphIds());
+      let committed = false;
+      commit(
+        () => {
+          const result = session.applyTreeOps(
+            [
+              // A break REPLACES a selection, like every other insertion.
+              ...deleteSelectionOps(),
+              { op: 'splitParagraph', paragraphId: start.paragraphId, offset: start.offset },
+              // The HEAD keeps the original id; it ends the new section, cloning the
+              // governing setup so the break changes where pages break, not how they look.
+              { op: 'setSectionMark', paragraphId: start.paragraphId },
+            ],
+            selectionMark()
+          );
+          committed = result.committed;
+          return result;
+        },
+        () => {
+          // The caret lands at the start of the tail — the first paragraph of the
+          // section the user keeps typing in, exactly where Word puts it.
+          const tail = session.paragraphIds().find((id) => !before.has(id));
+          return tail ? collapsedAt({ paragraphId: tail, offset: 0 }) : null;
+        }
+      );
+      return committed;
+    },
+
+    formatting: () =>
+      formattingAt(currentLayout, selection, (paragraphId, runProperties) =>
+        session.effectiveRunDefaults(paragraphId, runProperties)
+      ),
 
     toggleRunProperty(localName, attributes) {
       const { from, to } = orderedRange();

@@ -327,10 +327,7 @@ function cdataText(value: unknown): string {
   return value
     .map((entry) => {
       if (entry !== null && typeof entry === 'object' && '#text' in entry)
-        return requireXmlStringScalar(
-          (entry as Record<string, unknown>)['#text'],
-          'cdata'
-        );
+        return requireXmlStringScalar((entry as Record<string, unknown>)['#text'], 'cdata');
       throw new Error('non-scalar cdata');
     })
     .join('');
@@ -365,9 +362,7 @@ function convert(
       // Fail closed on non-scalars: `String({})` is "[object Object]", which would
       // silently corrupt authored attribute values (e.g. w:fldSimple/@w:instr) and
       // then round-trip as if that garbage were source text.
-      attributes[k.replace(/^@_/, '')] = decodeXmlEntities(
-        requireXmlStringScalar(v, 'attribute')
-      );
+      attributes[k.replace(/^@_/, '')] = decodeXmlEntities(requireXmlStringScalar(v, 'attribute'));
     }
     out.push({
       type: 'element',

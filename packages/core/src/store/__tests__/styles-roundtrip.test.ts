@@ -103,9 +103,7 @@ describe('styles.xml save/reopen with duplicate style ids', () => {
     const reopenedStyles = reopened.package.parts.get('/word/styles.xml')!;
     const reopenedMain = reopened.package.parts.get(reopened.package.mainDocumentPart)!;
     expect(canonicalOoxmlFingerprint(reopenedStyles)).toBe(stylesBefore);
-    expect(
-      diffSemanticDigests(digestBefore, semanticDigest([reopenedMain]))
-    ).toEqual([]);
+    expect(diffSemanticDigests(digestBefore, semanticDigest([reopenedMain]))).toEqual([]);
 
     const table = buildStyleCascadeTable(reopenedStyles.root);
     const heading = table.styles.get('Heading1')!;

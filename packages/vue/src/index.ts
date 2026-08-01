@@ -29,6 +29,21 @@ export type {
   FontSource,
   FontSourceSubstitution,
 } from './types';
+// The font-composition surface, re-exported so the 80% path (fonts package + adapter)
+// never needs a core import. Paired with the React barrel.
+export {
+  WORD_DEFAULT_FONT,
+  composeFontConfiguration,
+  createFontSource,
+  loadFonts,
+  type FontConfigurationBase,
+  type FontConfigurationFragment,
+  type FontLoadFailure,
+  type FontLoadFailureReason,
+  type FontUrlSource,
+  type LoadFontsRequest,
+  type LoadFontsResult,
+} from '@docx-editor.dev/core-contract/editor';
 
 // Re-export the contract types a consumer needs to drive the editor.
 export type {
@@ -38,6 +53,7 @@ export type {
   EditorQuery,
   EditorSnapshot,
   EditorScope,
+  PageSetup,
 } from '@docx-editor.dev/core-contract/contracts/editor';
 export type {
   DisplayPage,

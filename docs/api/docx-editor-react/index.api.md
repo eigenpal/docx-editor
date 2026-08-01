@@ -8,6 +8,8 @@ import { CHROME_GROUPS } from '@docx-editor.dev/core-contract/editor';
 import { ChromeSlotId } from '@docx-editor.dev/core-contract/editor';
 import { ColorValue } from '@docx-editor.dev/core-contract/contracts/editor';
 import { commandForSlot } from '@docx-editor.dev/core-contract/editor';
+import { composeFontConfiguration } from '@docx-editor.dev/core-contract/editor';
+import { createFontSource } from '@docx-editor.dev/core-contract/editor';
 import { CSSProperties } from 'react';
 import { DisplayItem } from '@docx-editor.dev/core-contract/contracts/geometry';
 import { DisplayPage } from '@docx-editor.dev/core-contract/contracts/geometry';
@@ -28,12 +30,21 @@ import { EditorScope } from '@docx-editor.dev/core-contract/contracts/editor';
 import { EditorSnapshot } from '@docx-editor.dev/core-contract/contracts/editor';
 import { ExecResult } from '@docx-editor.dev/core-contract/contracts/editor';
 import { FontConfiguration } from '@docx-editor.dev/core-contract/contracts/editor';
+import { FontConfigurationBase } from '@docx-editor.dev/core-contract/editor';
+import { FontConfigurationFragment } from '@docx-editor.dev/core-contract/editor';
 import { FontFaceRequest } from '@docx-editor.dev/core-contract/contracts/editor';
+import { FontLoadFailure } from '@docx-editor.dev/core-contract/editor';
+import { FontLoadFailureReason } from '@docx-editor.dev/core-contract/editor';
 import { FontSource } from '@docx-editor.dev/core-contract/contracts/editor';
 import { FontSourceSubstitution } from '@docx-editor.dev/core-contract/contracts/editor';
+import { FontUrlSource } from '@docx-editor.dev/core-contract/editor';
 import { ForwardRefExoticComponent } from 'react';
 import { generateRulerTicks } from '@docx-editor.dev/core-contract/editor';
+import { loadFonts } from '@docx-editor.dev/core-contract/editor';
+import { LoadFontsRequest } from '@docx-editor.dev/core-contract/editor';
+import { LoadFontsResult } from '@docx-editor.dev/core-contract/editor';
 import { NavigationCommand } from '@docx-editor.dev/core-contract/editor';
+import { PageSetup } from '@docx-editor.dev/core-contract/contracts/editor';
 import { PaginatedSurfaceState } from '@docx-editor.dev/core-contract/editor';
 import { PX_PER_CM } from '@docx-editor.dev/core-contract/editor';
 import { PX_PER_INCH } from '@docx-editor.dev/core-contract/editor';
@@ -54,12 +65,17 @@ import { Theme } from '@docx-editor.dev/core-contract/contracts/editor';
 import { ToolbarCommandState } from '@docx-editor.dev/core-contract/editor';
 import { toolbarCommandState } from '@docx-editor.dev/core-contract/editor';
 import { Translations } from '@docx-editor.dev/i18n';
+import { WORD_DEFAULT_FONT } from '@docx-editor.dev/core-contract/editor';
 
 export { CHROME_GROUPS }
 
 export { ChromeSlotId }
 
 export { commandForSlot }
+
+export { composeFontConfiguration }
+
+export { createFontSource }
 
 export { DisplayItem }
 
@@ -102,6 +118,7 @@ export interface DocxEditorNamespace extends ForwardRefExoticComponent<DocxEdito
     readonly Content: typeof DocxEditorContent;
     readonly DocumentOutline: typeof DocxEditorDocumentOutline;
     readonly HorizontalRuler: typeof DocxEditorHorizontalRuler;
+    readonly PageSetupDialog: typeof DocxEditorPageSetupDialog;
     // (undocumented)
     readonly Root: typeof DocxEditorRoot;
     // (undocumented)
@@ -112,14 +129,26 @@ export interface DocxEditorNamespace extends ForwardRefExoticComponent<DocxEdito
 }
 
 // @public
+export function DocxEditorPageSetupDialog(input: DocxEditorPageSetupDialogProps): ReactElement | null;
+
+// @public
+export interface DocxEditorPageSetupDialogProps {
+    // (undocumented)
+    className?: string;
+    onClose: () => void;
+    open: boolean;
+}
+
+// @public
 export interface DocxEditorProps {
     // (undocumented)
     author?: string;
+    chrome?: boolean;
     // (undocumented)
     className?: string;
     readonly colorMode?: 'light' | 'dark' | 'system';
     document?: DocumentSource;
-    fonts: FontConfiguration;
+    fonts?: FontConfiguration | FontConfigurationFragment;
     // (undocumented)
     locale?: string;
     mode?: EditorMode;
@@ -163,7 +192,7 @@ export interface DocxEditorRootProps {
     // (undocumented)
     children?: ReactNode;
     document?: DocumentSource;
-    fonts?: FontConfiguration;
+    fonts?: FontConfiguration | FontConfigurationFragment;
     // (undocumented)
     locale?: string;
     mode?: 'edit' | 'view';
@@ -354,6 +383,10 @@ export { EditorSnapshot }
 
 export { FontConfiguration }
 
+export { FontConfigurationBase }
+
+export { FontConfigurationFragment }
+
 export { FontFaceRequest }
 
 // @public
@@ -390,9 +423,15 @@ export interface FontFamilyProps extends FontFamilyPartProps {
     hidden?: boolean;
 }
 
+export { FontLoadFailure }
+
+export { FontLoadFailureReason }
+
 export { FontSource }
 
 export { FontSourceSubstitution }
+
+export { FontUrlSource }
 
 export { generateRulerTicks }
 
@@ -421,6 +460,7 @@ export interface HorizontalRulerProps {
     onIndentRightChange?: (indentTwips: number) => void;
     // (undocumented)
     onLeftMarginChange?: (marginTwips: number) => void;
+    onMarginDragEnd?: () => void;
     // (undocumented)
     onRightMarginChange?: (marginTwips: number) => void;
     // (undocumented)
@@ -439,6 +479,12 @@ export interface HorizontalRulerProps {
     zoom?: number;
 }
 
+export { loadFonts }
+
+export { LoadFontsRequest }
+
+export { LoadFontsResult }
+
 // @public (undocumented)
 export function Logo(input: LogoProps): React__default.JSX.Element;
 
@@ -451,6 +497,28 @@ export function PageIndicator(input: {
     totalPages: number;
     visible: boolean;
 }): React$1.JSX.Element;
+
+export { PageSetup }
+
+// @public
+export interface PageSetupUpdate {
+    // (undocumented)
+    readonly marginBottomTwips?: number;
+    // (undocumented)
+    readonly marginLeftTwips?: number;
+    // (undocumented)
+    readonly marginRightTwips?: number;
+    // (undocumented)
+    readonly marginTopTwips?: number;
+    // (undocumented)
+    readonly orientation?: 'portrait' | 'landscape';
+    // (undocumented)
+    readonly pageHeightTwips?: number;
+    // (undocumented)
+    readonly pageWidthTwips?: number;
+    // (undocumented)
+    readonly scope?: 'document' | 'section';
+}
 
 // @public (undocumented)
 export function PaginatedDocxEditor(input: PaginatedDocxEditorProps): React$1.JSX.Element;
@@ -713,6 +781,16 @@ export interface UseFontFamilyResult {
 }
 
 // @public
+export function usePageSetup(): UsePageSetupReturn;
+
+// @public
+export interface UsePageSetupReturn {
+    readonly apply: (update: PageSetupUpdate) => boolean;
+    readonly isEnabled: boolean;
+    readonly pageSetup: PageSetup | null;
+}
+
+// @public
 export const VERSION = "0.0.2";
 
 // @public (undocumented)
@@ -723,12 +801,15 @@ export interface VerticalRulerProps {
     className?: string;
     editable?: boolean;
     onBottomMarginChange?: (marginTwips: number) => void;
+    onMarginDragEnd?: () => void;
     onTopMarginChange?: (marginTwips: number) => void;
     pageSetup?: RulerPageSetup | null;
     style?: CSSProperties;
     unit?: 'inch' | 'cm';
     zoom?: number;
 }
+
+export { WORD_DEFAULT_FONT }
 
 // (No @packageDocumentation comment for this package)
 

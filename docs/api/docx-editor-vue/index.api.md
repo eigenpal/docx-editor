@@ -55,6 +55,114 @@ export function commandForSlot(slotId: ChromeSlotId): EditorCommand | null {
 }
 
 // @public
+export function composeFontConfiguration(
+base: FontConfigurationBase,
+...fragments: readonly FontConfigurationFragment[]
+): FontConfiguration {
+    const // (undocumented)
+    origins: readonly FontConfigurationFragment[] = [base, ...fragments];
+
+    const // (undocumented)
+    sources: FontSource[] = [];
+    const // (undocumented)
+    sourceKeys = new Set<string>();
+    for (const // (undocumented)
+    origin of origins) {
+        for (const // (undocumented)
+        source of origin.sources ?? []) {
+            const // (undocumented)
+            key = fontRequestKey(source.request);
+            if (sourceKeys.has(key)) continue;
+            sourceKeys.add(key);
+            sources.push(source);
+        }
+    }
+
+    const // (undocumented)
+    substitutions: FontSourceSubstitution[] = [];
+    const // (undocumented)
+    substitutionKeys = new Set<string>();
+    for (const // (undocumented)
+    origin of origins) {
+        for (const // (undocumented)
+        substitution of origin.substitutions ?? []) {
+            const // (undocumented)
+            key = fontRequestKey(substitution.from);
+            if (sourceKeys.has(key) || substitutionKeys.has(key)) continue;
+            substitutionKeys.add(key);
+            substitutions.push(substitution);
+        }
+    }
+
+    return Object.freeze({
+        epoch: base.epoch ?? 0,
+        maxFontBytes: base.maxFontBytes ?? HARD_MAX_FONT_BYTES,
+        sources: Object.freeze(sources),
+        ...(substitutions.length > 0 ? { substitutions: Object.freeze(substitutions) } : {}),
+        defaultFont: base.defaultFont ?? WORD_DEFAULT_FONT,
+        ...(base.language !== undefined ? { language: base.language } : {}),
+    });
+}
+
+// @public
+export function createFontSource(
+bytes: Uint8Array,
+request: FontFaceRequest & { readonly faceIndex?: number },
+options: { readonly id?: string; readonly maxFontBytes?: number } = {}
+): { readonly source: FontSource } | { readonly failure: FontLoadFailure } {
+    const // (undocumented)
+    faceRequest: FontFaceRequest = Object.freeze({
+        family: request.family,
+        weight: request.weight,
+        style: request.style,
+    });
+    const // (undocumented)
+    url =
+    options.id ?? `bytes:${faceRequest.family}#${faceRequest.weight}#${faceRequest.style}`;
+    const // (undocumented)
+    descriptorProblem = faceRequestProblem(faceRequest);
+    if (descriptorProblem) {
+        return {
+            failure: {
+                url,
+                request: faceRequest,
+                reason: 'invalidRequest',
+                diagnostic: descriptorProblem,
+            },
+        };
+    }
+    if (bytes.byteLength === 0) {
+        return { failure: { url, request: faceRequest, reason: 'emptyResponse' } };
+    }
+    if (bytes.byteLength > (options.maxFontBytes ?? HARD_MAX_FONT_BYTES)) {
+        return { failure: { url, request: faceRequest, reason: 'overLimit' } };
+    }
+    const // (undocumented)
+    faceIndex = request.faceIndex ?? 0;
+    const // (undocumented)
+    structural = boundedStructuralFontValidator(bytes, faceIndex);
+    if (!structural.valid) {
+        return {
+            failure: {
+                url,
+                request: faceRequest,
+                reason: 'malformed',
+                diagnostic: structural.diagnostic,
+            },
+        };
+    }
+    return {
+        source: {
+            request: faceRequest,
+            id: url,
+            bytes,
+            hash: sha256FontBytes(bytes),
+            faceIndex,
+        },
+    };
+}
+
+// @public
 export const DEFERRED_DIALOGS: readonly ["findReplace", "hyperlink", "insertImage", "insertTable", "insertSymbol", "imageProperties", "footnoteProperties"];
 
 // @public (undocumented)
@@ -172,8 +280,8 @@ type: StringConstructor;
 default: undefined;
 };
 fonts: {
-type: PropType<FontConfiguration>;
-required: true;
+type: PropType<FontConfiguration | FontConfigurationFragment>;
+default: undefined;
 };
 }>, () => VNode<RendererNode, RendererElement, {
 [key: string]: any;
@@ -203,8 +311,8 @@ type: StringConstructor;
 default: undefined;
 };
 fonts: {
-type: PropType<FontConfiguration>;
-required: true;
+type: PropType<FontConfiguration | FontConfigurationFragment>;
+default: undefined;
 };
 }>> & Readonly<{
 onChange?: ((_change: DocumentChange) => any) | undefined;
@@ -212,6 +320,7 @@ onReady?: ((_editor: Editor) => any) | undefined;
 onFontError?: ((_error: EditorFontError) => any) | undefined;
 }>, {
 author: string;
+fonts: FontConfiguration | FontConfigurationFragment;
 document: DocumentSource;
 zoom: number;
 mode: EditorMode;
@@ -223,7 +332,7 @@ export interface DocxEditorProps {
     // (undocumented)
     author?: string;
     document?: DocumentSource;
-    fonts: FontConfiguration;
+    fonts?: FontConfiguration | FontConfigurationFragment;
     // (undocumented)
     locale?: string;
     mode?: EditorMode;
@@ -427,6 +536,7 @@ export interface Editor {
         readonly name: string;
         readonly type: string;
     }[];
+    getDocumentThemeColors(): readonly { readonly slot: string; readonly hex: string }[];
     getHeaderFooterState(): {
         readonly editing: 'header' | 'footer' | null;
         readonly sectionIndex: number;
@@ -440,17 +550,7 @@ export interface Editor {
         readonly blockId: string;
     }[];
     getPageGeometry(): readonly { index: number; box: Rect; contentBox: Rect }[];
-    getPageSetup(): {
-        readonly pageWidthTwips: number;
-        readonly pageHeightTwips: number;
-        readonly orientation: 'portrait' | 'landscape';
-        readonly marginsTwips: {
-            readonly top: number;
-            readonly right: number;
-            readonly bottom: number;
-            readonly left: number;
-        };
-    } | null;
+    getPageSetup(): PageSetup | null;
     getScrollGeometry(): ScrollGeometry;
     getSelectedImage(): {
         readonly id: string;
@@ -614,6 +714,7 @@ export interface EditorSnapshot {
     readonly isLoading: boolean;
     // (undocumented)
     readonly page: { readonly current: number; readonly total: number };
+    readonly pageSetup?: PageSetup | null;
     // (undocumented)
     readonly parseError: string | null;
     // (undocumented)
@@ -646,6 +747,22 @@ export interface FontConfiguration {
 }
 
 // @public
+export interface FontConfigurationBase extends FontConfigurationFragment {
+    readonly defaultFont?: FontConfiguration['defaultFont'];
+    readonly epoch?: number;
+    readonly language?: string;
+    readonly maxFontBytes?: number;
+}
+
+// @public
+export interface FontConfigurationFragment {
+    // (undocumented)
+    readonly sources?: readonly FontSource[];
+    // (undocumented)
+    readonly substitutions?: readonly FontSourceSubstitution[];
+}
+
+// @public
 export interface FontFaceRequest {
     // (undocumented)
     readonly family: string;
@@ -654,6 +771,35 @@ export interface FontFaceRequest {
     // (undocumented)
     readonly weight: number;
 }
+
+// @public (undocumented)
+export interface FontLoadFailure {
+    // (undocumented)
+    readonly actualHash?: string;
+    // (undocumented)
+    readonly diagnostic?: string;
+    // (undocumented)
+    readonly expectedHash?: string;
+    // (undocumented)
+    readonly reason: FontLoadFailureReason;
+    // (undocumented)
+    readonly request: FontFaceRequest;
+    readonly status?: number;
+    // (undocumented)
+    readonly url: string;
+}
+
+// @public (undocumented)
+export type FontLoadFailureReason =
+| 'networkError'
+| 'httpError'
+| 'hashMismatch'
+| 'overLimit'
+| 'emptyResponse'
+/** The declared face itself is unusable (empty family, out-of-range weight); nothing was fetched. */
+| 'invalidRequest'
+/** The bytes are not a font at all — most often an HTML error page served with 200. */
+| 'malformed';
 
 // @public
 export interface FontSource {
@@ -677,6 +823,21 @@ export interface FontSourceSubstitution {
     readonly from: FontFaceRequest;
     // (undocumented)
     readonly to: FontFaceRequest;
+}
+
+// @public
+export interface FontUrlSource {
+    // (undocumented)
+    readonly faceIndex?: number;
+    // (undocumented)
+    readonly family: string;
+    readonly hash?: string;
+    // (undocumented)
+    readonly style: 'normal' | 'italic';
+    // (undocumented)
+    readonly url: string;
+    // (undocumented)
+    readonly weight: number;
 }
 
 // @public
@@ -766,6 +927,179 @@ export interface HorizontalRulerProps {
     readonly zoom?: number;
 }
 
+// @public
+export async function loadFonts(request: LoadFontsRequest): Promise<LoadFontsResult> {
+    const // (undocumented)
+    fetcher = request.fetcher ?? fetch;
+    const // (undocumented)
+    maxFontBytes = request.maxFontBytes ?? HARD_MAX_FONT_BYTES;
+    const // (undocumented)
+    cache = await openCache(request.cacheName ?? 'docx-editor-fonts');
+
+    // (undocumented)
+    export type Outcome = { readonly source: FontSource } | { readonly failure: FontLoadFailure };
+
+    // (undocumented)
+    export async function loadOne(source: FontUrlSource): Promise<Outcome> {
+        const // (undocumented)
+        faceRequest: FontFaceRequest = Object.freeze({
+            family: source.family,
+            weight: source.weight,
+            style: source.style,
+        });
+        // Screened HERE, not at composition: the request contract refuses a malformed face
+        // with a THROW, so admitting one would detonate the configuration carrying every
+        // other font instead of degrading this single source. Same discipline the embedded
+        // lane applies to file-declared families. Nothing is fetched for a bad descriptor.
+        const // (undocumented)
+        descriptorProblem = faceRequestProblem(faceRequest);
+        if (descriptorProblem) {
+            return {
+                failure: {
+                    url: source.url,
+                    request: faceRequest,
+                    reason: 'invalidRequest',
+                    diagnostic: descriptorProblem,
+                },
+            };
+        }
+
+        const // (undocumented)
+        admit = (bytes: Uint8Array, fromCache: boolean): FontSource | FontLoadFailure => {
+            if (bytes.byteLength === 0) {
+                return { url: source.url, request: faceRequest, reason: 'emptyResponse' };
+            }
+            if (bytes.byteLength > maxFontBytes) {
+                return { url: source.url, request: faceRequest, reason: 'overLimit' };
+            }
+            // A 200 response carrying an HTML error page passes every size check. Without this
+            // it would be admitted, cached, and then fail deep in shaping on EVERY later load,
+            // with nothing ever discarding the entry. A signature check is cheap and turns that
+            // into one typed failure at the boundary.
+            const // (undocumented)
+            structural = boundedStructuralFontValidator(bytes, source.faceIndex ?? 0);
+            if (!structural.valid) {
+                return {
+                    url: source.url,
+                    request: faceRequest,
+                    reason: 'malformed',
+                    diagnostic: structural.diagnostic,
+                };
+            }
+            const // (undocumented)
+            actualHash = sha256FontBytes(bytes);
+            if (source.hash !== undefined && source.hash !== actualHash) {
+                return {
+                    url: source.url,
+                    request: faceRequest,
+                    reason: 'hashMismatch',
+                    expectedHash: source.hash,
+                    actualHash,
+                    ...(fromCache ? { diagnostic: 'cached bytes failed revalidation' } : {}),
+                };
+            }
+            return {
+                request: faceRequest,
+                id: `url:${source.url}`,
+                bytes,
+                hash: actualHash,
+                faceIndex: source.faceIndex ?? 0,
+            };
+        };
+
+        // Cache first, revalidated by content hash. A poisoned or stale entry is discarded
+        // and the URL refetched — a cache problem is never a hard failure by itself.
+        const // (undocumented)
+        cached = await cachedBytes(cache, source.url);
+        if (cached) {
+            const // (undocumented)
+            verdict = admit(cached, true);
+            if (!('reason' in verdict)) return { source: verdict };
+            await discardEntry(cache, source.url);
+        }
+
+        let // (undocumented)
+        response: Response;
+        try {
+            response = await fetcher(source.url);
+        } catch (// (undocumented)
+        error) {
+            return {
+                failure: {
+                    url: source.url,
+                    request: faceRequest,
+                    reason: 'networkError',
+                    diagnostic: error instanceof Error ? error.message : String(error),
+                },
+            };
+        }
+        if (!response.ok) {
+            return {
+                failure: {
+                    url: source.url,
+                    request: faceRequest,
+                    reason: 'httpError',
+                    status: response.status,
+                },
+            };
+        }
+        let // (undocumented)
+        bytes: Uint8Array;
+        try {
+            bytes = new Uint8Array(await response.arrayBuffer());
+        } catch (// (undocumented)
+        error) {
+            return {
+                failure: {
+                    url: source.url,
+                    request: faceRequest,
+                    reason: 'networkError',
+                    diagnostic: error instanceof Error ? error.message : String(error),
+                },
+            };
+        }
+        const // (undocumented)
+        verdict = admit(bytes, false);
+        if ('reason' in verdict) return { failure: verdict };
+        await storeBytes(cache, source.url, bytes);
+        return { source: verdict };
+    }
+
+    // Fetched CONCURRENTLY — eight brand faces should be one round trip's wait, not eight.
+    // Results are reassembled in list order, so admission stays deterministic regardless of
+    // which response lands first.
+    const // (undocumented)
+    outcomes = await Promise.all(request.sources.map((source) => loadOne(source)));
+
+    const // (undocumented)
+    sources: FontSource[] = [];
+    const // (undocumented)
+    failures: FontLoadFailure[] = [];
+    for (const // (undocumented)
+    outcome of outcomes) {
+        if ('source' in outcome) sources.push(outcome.source);
+        else failures.push(outcome.failure);
+    }
+    return { sources, failures };
+}
+
+// @public (undocumented)
+export interface LoadFontsRequest {
+    readonly cacheName?: string;
+    readonly fetcher?: typeof fetch;
+    readonly maxFontBytes?: number;
+    // (undocumented)
+    readonly sources: readonly FontUrlSource[];
+}
+
+// @public (undocumented)
+export interface LoadFontsResult extends FontConfigurationFragment {
+    // (undocumented)
+    readonly failures: readonly FontLoadFailure[];
+    // (undocumented)
+    readonly sources: readonly FontSource[];
+}
+
 // @public (undocumented)
 export const PageIndicator: DefineComponent<ExtractPropTypes<    {
 editor: {
@@ -798,6 +1132,24 @@ export interface PageIndicatorProps {
     readonly editor: Editor | null;
     // (undocumented)
     readonly visible?: boolean;
+}
+
+// @public
+export interface PageSetup {
+    readonly gutterTwips?: number;
+    // (undocumented)
+    readonly marginsTwips: {
+        readonly top: number;
+        readonly right: number;
+        readonly bottom: number;
+        readonly left: number;
+    };
+    // (undocumented)
+    readonly orientation: 'portrait' | 'landscape';
+    // (undocumented)
+    readonly pageHeightTwips: number;
+    // (undocumented)
+    readonly pageWidthTwips: number;
 }
 
 // @public (undocumented)
@@ -1052,5 +1404,11 @@ export interface VerticalRulerProps {
     // (undocumented)
     readonly zoom?: number;
 }
+
+// @public
+export const WORD_DEFAULT_FONT: FontConfiguration['defaultFont'] = Object.freeze({
+    family: 'Calibri',
+    sizeHalfPoints: 22,
+});
 
 ```

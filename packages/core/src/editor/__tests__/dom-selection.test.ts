@@ -5,6 +5,7 @@ if (!GlobalRegistrator.isRegistered) GlobalRegistrator.register();
 
 import { describe, expect, test } from 'bun:test';
 import {
+  applySelectionToDom,
   positionFromDomPoint,
   selectionsEqual,
   semanticSelectionFromDom,
@@ -152,6 +153,49 @@ describe('a native selection becomes a semantic selection', () => {
     selection.addRange(range);
     expect(semanticSelectionFromDom(root, selection)).toBeNull();
     root.remove();
+  });
+});
+
+/** An empty paragraph as the painter emits it: fragment > line (with lineId) > <br>. */
+function paintedEmptyParagraph(paragraphId: string): HTMLElement {
+  const root = document.createElement('div');
+  const fragment = document.createElement('div');
+  fragment.className = 'docx-paragraph-fragment';
+  fragment.dataset.paragraphId = paragraphId;
+  fragment.dataset.fragmentIndex = '0';
+  const line = document.createElement('div');
+  line.className = 'docx-line';
+  line.dataset.lineId = 'line-1';
+  line.dataset.paragraphId = paragraphId;
+  line.append(document.createElement('br'));
+  fragment.append(line);
+  root.append(fragment);
+  return root;
+}
+
+describe('the empty-paragraph caret', () => {
+  const caret = { paragraphId: 'p9', offset: 0 };
+
+  test('a model caret in an empty paragraph targets the painted LINE, not the fragment', () => {
+    // The fragment carries the same identity, but its in-flow content box is empty
+    // (children are absolutely positioned), so a browser will not draw a caret there.
+    const root = paintedEmptyParagraph('p9');
+    document.body.append(root);
+    const applied = applySelectionToDom(root, { anchor: caret, head: caret }, getSelection());
+    expect(applied).toBe(true);
+    const anchorNode = getSelection()!.anchorNode as HTMLElement;
+    expect(anchorNode.classList.contains('docx-line')).toBe(true);
+    root.remove();
+  });
+
+  test('an endpoint on the caret-anchor <br> reads back as the paragraph start', () => {
+    const root = paintedEmptyParagraph('p9');
+    expect(positionFromDomPoint(root.querySelector('br')!, 0, root)).toEqual(caret);
+  });
+
+  test('an endpoint on the empty line reads back as the paragraph start', () => {
+    const root = paintedEmptyParagraph('p9');
+    expect(positionFromDomPoint(root.querySelector('.docx-line')!, 0, root)).toEqual(caret);
   });
 });
 

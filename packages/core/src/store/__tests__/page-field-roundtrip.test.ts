@@ -56,7 +56,9 @@ function collectFldCharTypes(root: OoxmlNode): string[] {
   const visit = (node: OoxmlNode): void => {
     if (node.kind === 'textValue') return;
     if (node.localName === 'fldChar' && node.namespaceUri === W) {
-      const type = node.attributes.find((attribute) => attribute.localName === 'fldCharType')?.value;
+      const type = node.attributes.find(
+        (attribute) => attribute.localName === 'fldCharType'
+      )?.value;
       if (type) found.push(type);
     }
     for (const child of node.children) visit(child);
@@ -101,9 +103,7 @@ describe('complex PAGE / NUMPAGES field round-trip', () => {
     expect(collectInstrText(reopened.root)).toEqual(['PAGE', 'NUMPAGES']);
     expect(collectFldCharTypes(reopened.root)).toEqual(collectFldCharTypes(original.root));
     expect(canonicalOoxmlFingerprint(reopened)).toBe(canonicalOoxmlFingerprint(original));
-    expect(diffSemanticDigests(semanticDigest([original]), semanticDigest([reopened]))).toEqual(
-      []
-    );
+    expect(diffSemanticDigests(semanticDigest([original]), semanticDigest([reopened]))).toEqual([]);
   });
 
   test('preserves complex fields through writeOoxmlPackage save and reopen', () => {
@@ -122,9 +122,7 @@ describe('complex PAGE / NUMPAGES field round-trip', () => {
     expect(collectInstrText(reopenedMain.root)).toEqual(['PAGE', 'NUMPAGES']);
     expect(collectFldCharTypes(reopenedMain.root)).toEqual(collectFldCharTypes(main.root));
     expect(canonicalOoxmlFingerprint(reopenedMain)).toBe(canonicalOoxmlFingerprint(main));
-    expect(
-      diffSemanticDigests(semanticDigest([main]), semanticDigest([reopenedMain]))
-    ).toEqual([]);
+    expect(diffSemanticDigests(semanticDigest([main]), semanticDigest([reopenedMain]))).toEqual([]);
   });
 
   test('footer part complex fields survive package save', () => {
@@ -165,8 +163,8 @@ describe('complex PAGE / NUMPAGES field round-trip', () => {
     const reopenedFooter = reopened.package.parts.get('/word/footer1.xml')!;
     expect(collectInstrText(reopenedFooter.root)).toEqual(['PAGE', 'NUMPAGES']);
     expect(canonicalOoxmlFingerprint(reopenedFooter)).toBe(canonicalOoxmlFingerprint(footer));
-    expect(
-      diffSemanticDigests(semanticDigest([footer]), semanticDigest([reopenedFooter]))
-    ).toEqual([]);
+    expect(diffSemanticDigests(semanticDigest([footer]), semanticDigest([reopenedFooter]))).toEqual(
+      []
+    );
   });
 });

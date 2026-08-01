@@ -21,8 +21,8 @@ import {
   type OoxmlNode,
   type OoxmlPart,
 } from '@docx-editor.dev/core-contract/store';
-import { storyBlocks } from './story-roots.ts';
 import { DEFAULT_PAGE_GEOMETRY, type PageGeometry } from './semantic-records.ts';
+import { storyBlocks } from './story-roots.ts';
 
 export interface SectionMargins {
   readonly topTwips: number;
@@ -129,8 +129,8 @@ function breakTypeOf(sectPr: OoxmlNode | undefined): SectionBreakType {
   return 'nextPage';
 }
 
-/** Parse one `w:sectPr` into geometry/break properties. */
-export function parseSectionProperties(sectPr: OoxmlNode | undefined): SectionProperties {
+/** Parse one `w:sectPr` into geometry/break properties (null reads as Word's defaults). */
+export function parseSectionProperties(sectPr: OoxmlNode | null | undefined): SectionProperties {
   if (!sectPr) return DEFAULT_SECTION_PROPERTIES;
 
   const pgSz = childNamed(sectPr, 'pgSz');
@@ -172,7 +172,10 @@ export function parseSectionProperties(sectPr: OoxmlNode | undefined): SectionPr
       count: cols ? Math.max(1, Math.min(12, Number(attribute(cols, 'num') ?? '1') || 1)) : 1,
       gapTwips: cols ? twips(attribute(cols, 'space'), 720, 31680) : defaults.columns.gapTwips,
     },
-    landscape: orientation === 'landscape',
+    // Render-truthful: Word writes swapped dimensions AND the attribute, but a file may
+    // carry only one. Width exceeding height IS a landscape page whatever the attribute
+    // says, because layout paginates against the dimensions.
+    landscape: orientation === 'landscape' || width > height,
     titlePage: readOnOffChild(sectPr, 'titlePg'),
     breakType: breakTypeOf(sectPr),
     ...(sectPr.kind !== 'textValue' ? { sectPr: sectPr as OoxmlElement } : {}),

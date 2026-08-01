@@ -165,9 +165,7 @@ describe('line breaking and pagination (task 7.3)', () => {
   });
 
   test('a page break in an otherwise empty paragraph pushes following content to the next page', () => {
-    const part = load(
-      '<w:p><w:r><w:br w:type="page"/></w:r></w:p>' + paragraph('after')
-    );
+    const part = load('<w:p><w:r><w:br w:type="page"/></w:r></w:p>' + paragraph('after'));
     const layout = lay(part, { ...SMALL, height: 1000 });
     expect(layout.pages).toHaveLength(2);
     expect(layout.pages[0]!.fragments[0]!.lines[0]!.spans[0]!.text).toBe('\f');
@@ -336,5 +334,77 @@ describe('paragraph alignment moves the published span boxes (w:jc)', () => {
     const last = line.spans[line.spans.length - 1]!;
     // 200 twips = 10pt of indent; the right edge is measured from it, not from the margin.
     expect(last.box.x + last.box.width).toBeCloseTo(10 + (available - 10), 5);
+  });
+});
+
+describe('per-section pagination (the per-section lane)', () => {
+  // Geometry reaches layout the way a document states it: `w:sectPr`, in twips. A
+  // mid-body section lives in the `w:pPr` of its LAST paragraph; the body-level one
+  // governs the tail.
+  const sect = (widthTwips: number, heightTwips: number, type = '') =>
+    `<w:sectPr>${type ? `<w:type w:val="${type}"/>` : ''}` +
+    `<w:pgSz w:w="${widthTwips}" w:h="${heightTwips}"/>` +
+    '<w:pgMar w:top="200" w:right="200" w:bottom="200" w:left="200" ' +
+    'w:header="0" w:footer="0" w:gutter="0"/></w:sectPr>';
+  // 200x300pt portrait and 300x200pt landscape, 10pt margins.
+  const PORTRAIT = sect(4000, 6000);
+  const LANDSCAPE = sect(6000, 4000);
+
+  test('a landscape section among portrait ones gets its own sheet, sized landscape', () => {
+    const part = load(
+      paragraph('one', PORTRAIT) + paragraph('two', LANDSCAPE) + paragraph('three') + PORTRAIT
+    );
+    const layout = lay(part);
+    expect(layout.pages).toHaveLength(3);
+    expect(layout.pages.map((page) => [page.box.width, page.box.height])).toEqual([
+      [200, 300],
+      [300, 200],
+      [200, 300],
+    ]);
+    // Sheets stack with the 24pt gutter, cumulative because heights differ.
+    expect(layout.pages.map((page) => page.box.y)).toEqual([0, 324, 548]);
+    // Each page's content box reflects ITS section's margins.
+    expect(layout.pages[1]!.contentBox.width).toBe(280);
+  });
+
+  test('lines break at their OWN section width', () => {
+    // 6px per char, portrait content width 180 -> 30 chars; landscape 280 -> 46 chars.
+    const text = 'word '.repeat(24).trim();
+    const part = load(paragraph(text, PORTRAIT) + paragraph(text) + LANDSCAPE);
+    const layout = lay(part);
+    const ids = layout.pages.flatMap((page) =>
+      page.fragments.map((fragment) => (fragment.kind === 'paragraph' ? fragment.paragraphId : ''))
+    );
+    const first = fragmentsOfParagraph(layout, ids[0]!);
+    const second = fragmentsOfParagraph(layout, ids[ids.length - 1]!);
+    expect(first[0]!.lines.length).toBeGreaterThan(second[0]!.lines.length);
+    expect(second[0]!.lines[0]!.range.end).toBeGreaterThan(first[0]!.lines[0]!.range.end);
+  });
+
+  // KNOWN GAP (merge of the per-section lanes): a NON-EMPTY continuous section still
+  // starts its own sheet. `layoutMultiSectionDocument` flushes pages per section, so
+  // `continuous` is honoured only for an EMPTY final section
+  // (`emptySectionNeedsBlankPage`). Resuming a section mid-sheet is an engine change,
+  // not a merge fix.
+  test.todo('a continuous boundary with identical geometry shares the page', () => {
+    const part = load(
+      paragraph('one', PORTRAIT) + paragraph('two') + sect(4000, 6000, 'continuous')
+    );
+    expect(lay(part).pages).toHaveLength(1);
+  });
+
+  test('a continuous boundary with a DIFFERENT geometry still breaks the page', () => {
+    // Two sections cannot share a sheet that has two sizes.
+    const part = load(
+      paragraph('one', PORTRAIT) + paragraph('two') + sect(6000, 4000, 'continuous')
+    );
+    expect(lay(part).pages).toHaveLength(2);
+  });
+
+  test('a single-section document paginates against its own sectPr', () => {
+    const part = load(paragraph('hello world') + paragraph('again') + PORTRAIT);
+    const layout = lay(part);
+    expect(layout.pages).toHaveLength(1);
+    expect([layout.pages[0]!.box.width, layout.pages[0]!.box.height]).toEqual([200, 300]);
   });
 });

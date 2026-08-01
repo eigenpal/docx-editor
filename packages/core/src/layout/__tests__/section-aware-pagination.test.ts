@@ -148,12 +148,11 @@ describe('section-aware pagination (cover + furniture)', () => {
         page.box.y + page.box.height + 1e-6
       );
       // Footer bottom sits at authored footerDistance from the sheet edge.
-      expect(page.box.y + page.box.height - (page.footer!.box.y + page.footer!.box.height)).toBeCloseTo(
-        bodyGeometry.footerDistance ?? 36,
-        5
-      );
-      const footerText = page.footer!.fragments
-        .flatMap((fragment) =>
+      expect(
+        page.box.y + page.box.height - (page.footer!.box.y + page.footer!.box.height)
+      ).toBeCloseTo(bodyGeometry.footerDistance ?? 36, 5);
+      const footerText = page
+        .footer!.fragments.flatMap((fragment) =>
           fragment.kind === 'paragraph'
             ? fragment.lines.flatMap((line) => line.spans.map((span) => span.text))
             : []
@@ -206,9 +205,7 @@ describe('section-aware pagination (cover + furniture)', () => {
       )
     );
     expect(textFormattingPage).toBeDefined();
-    const heading = textFormattingPage!.fragments.find(
-      (fragment) => fragment.kind === 'paragraph'
-    );
+    const heading = textFormattingPage!.fragments.find((fragment) => fragment.kind === 'paragraph');
     expect(heading?.kind).toBe('paragraph');
     if (!heading || heading.kind !== 'paragraph') return;
     expect(paragraphText(heading)).toMatch(/Text Formatting/);

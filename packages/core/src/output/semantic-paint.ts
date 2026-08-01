@@ -21,6 +21,36 @@ import type {
   TableFragmentRecord,
 } from '@docx-editor.dev/core-contract/layout';
 
+/**
+ * What the run painters need beyond the records: the pixel scale, and the optional
+ * family-alias lookup that lets embedded fonts paint without their file-declared family
+ * name entering the page-global CSS font namespace.
+ */
+export interface PaintContext {
+  readonly scale: number;
+  /**
+   * Maps a document-declared family to the alias the host registered its bytes under, or
+   * `undefined` when that family has no aliased face. Engine-minted values only.
+   */
+  readonly fontAlias?: (family: string) => string | undefined;
+}
+
+/**
+ * A stable per-function token so the paint-reuse key can tell one alias lookup from
+ * another. Identity is what matters (a new lookup means new fonts); the value is opaque.
+ */
+const aliasTokens = new WeakMap<object, string>();
+let nextAliasToken = 0;
+function aliasIdentity(alias: (family: string) => string | undefined): string {
+  let token = aliasTokens.get(alias);
+  if (!token) {
+    nextAliasToken += 1;
+    token = `alias${nextAliasToken}`;
+    aliasTokens.set(alias, token);
+  }
+  return token;
+}
+
 export interface PaintOptions {
   /** Points to CSS pixels. 96/72 renders a point as a CSS point at 100% zoom. */
   readonly scale?: number;
@@ -34,6 +64,12 @@ export interface PaintOptions {
    * instead of reflowing everything underneath.
    */
   readonly materialize?: ReadonlySet<number>;
+  /**
+   * Family-alias lookup for fonts the host registered on behalf of THIS document (see
+   * {@link PaintContext.fontAlias}). Painted runs emit the alias ahead of the declared
+   * family, so a file can never shadow a family name the host page uses.
+   */
+  readonly fontAlias?: (family: string) => string | undefined;
 }
 
 const HEX = /^[0-9A-Fa-f]{6}$/;
@@ -165,8 +201,9 @@ function applyUnderlineDecoration(
  * Face / box styles only — decorations are applied separately so underline and strike can
  * live on independent nested layers without sharing style/colour/thickness.
  */
-function applyRunFaceStyle(element: HTMLElement, style: ResolvedRunStyle, scale: number): void {
+function applyRunFaceStyle(element: HTMLElement, style: ResolvedRunStyle, ctx: PaintContext): void {
   const css = element.style;
+  const scale = ctx.scale;
   // Super/subscript draw at three quarters — the same reduction the measurer applies, so
   // the painted glyphs match the advance layout reserved. Painting them full size while
   // measuring them small made every line containing one slightly too wide.
@@ -177,7 +214,13 @@ function applyRunFaceStyle(element: HTMLElement, style: ResolvedRunStyle, scale:
   // Re-validated here even though the resolver already checked: this is the sink, and a
   // sink that trusts its caller is one refactor away from being the hole.
   if (style.fontFamily && FONT_NAME.test(style.fontFamily)) {
-    css.fontFamily = `"${style.fontFamily}"`;
+    // An alias names bytes the host registered for THIS document under a family a file
+    // cannot collide with. It leads, with the declared family behind it: document text
+    // gets the embedded glyphs while the page-global CSS font namespace keeps its own
+    // meaning for the declared name. `FONT_NAME` gates the declared family; the alias is
+    // engine-minted, never file-derived.
+    const alias = ctx.fontAlias?.(style.fontFamily);
+    css.fontFamily = alias ? `"${alias}", "${style.fontFamily}"` : `"${style.fontFamily}"`;
   }
   if (style.color && HEX.test(style.color)) css.color = `#${style.color}`;
   const highlight = style.highlight ? HIGHLIGHT.get(style.highlight) : undefined;
@@ -270,7 +313,7 @@ function positioned(
   return element;
 }
 
-function paintSpan(document: Document, span: StyleSpanRecord, scale: number): HTMLElement {
+function paintSpan(document: Document, span: StyleSpanRecord, ctx: PaintContext): HTMLElement {
   const element = document.createElement('span');
   element.className = 'layout-run layout-run-text';
   // Each run is its OWN box, aligned on the baseline.
@@ -284,20 +327,20 @@ function paintSpan(document: Document, span: StyleSpanRecord, scale: number): HT
   element.dataset.paragraphId = span.range.paragraphId;
   element.dataset.start = String(span.range.start);
   element.dataset.end = String(span.range.end);
-  applyRunFaceStyle(element, span.style, scale);
+  applyRunFaceStyle(element, span.style, ctx);
   // Layout owns advances that the browser cannot reconstruct: horizontal scaling (transform
   // does not reserve space) and OOXML tab stops (`\t` would otherwise paint as a narrow
   // native tab). Both must take the published box width so following runs start where
   // breakParagraph placed them — body, cells, and headers/footers share this painter.
   if (span.style.horizontalScalePercent !== 100 || span.text === '\t') {
-    element.style.width = `${span.box.width * scale}px`;
+    element.style.width = `${span.box.width * ctx.scale}px`;
   }
   if (span.text === '\t') {
     // Keep the model character for range mapping, but clip any native tab ink that would
     // spill past the reserved advance.
     element.style.overflow = 'hidden';
   }
-  mountRunText(document, element, span.text, span.style, scale);
+  mountRunText(document, element, span.text, span.style, ctx.scale);
   return element;
 }
 
@@ -317,7 +360,8 @@ function paintSpan(document: Document, span: StyleSpanRecord, scale: number): HT
  * `white-space: pre` keeps the browser from re-wrapping a line layout already decided, so
  * a line that measured slightly wide overflows by a hair rather than becoming two lines.
  */
-function paintLine(document: Document, line: LineRecord, scale: number): HTMLElement {
+function paintLine(document: Document, line: LineRecord, ctx: PaintContext): HTMLElement {
+  const scale = ctx.scale;
   const element = document.createElement('div');
   element.className = 'docx-line layout-line';
   element.dataset.lineId = line.id;
@@ -351,7 +395,16 @@ function paintLine(document: Document, line: LineRecord, scale: number): HTMLEle
   const gap = interSpanGap(line);
   if (gap > 0) element.style.wordSpacing = `${gap * scale}px`;
 
-  for (const span of line.spans) element.append(paintSpan(document, span, scale));
+  for (const span of line.spans) element.append(paintSpan(document, span, ctx));
+  // A span-less line (empty paragraph) has no inline content, and a browser will not
+  // draw a caret at a position with no inline box to measure. The <br> is the anchor;
+  // sizing it to the line keeps the caret the paragraph's font height, not the div's
+  // default.
+  if (line.spans.length === 0) {
+    const anchor = document.createElement('br');
+    anchor.style.lineHeight = `${line.box.height * scale}px`;
+    element.append(anchor);
+  }
   return element;
 }
 
@@ -371,8 +424,9 @@ function interSpanGap(line: LineRecord): number {
 function paintFragment(
   document: Document,
   fragment: ParagraphFragmentRecord,
-  scale: number
+  ctx: PaintContext
 ): HTMLElement {
+  const scale = ctx.scale;
   const element = positioned(document, 'div', fragment.box, scale);
   element.className = 'docx-paragraph-fragment layout-paragraph';
   element.dataset.paragraphId = fragment.paragraphId;
@@ -384,10 +438,10 @@ function paintFragment(
   }
   // List markers are layout furniture inside the hanging indent — never model text.
   if (fragment.marker) {
-    element.append(paintListMarker(document, fragment, scale));
+    element.append(paintListMarker(document, fragment, ctx));
   }
   for (const line of fragment.lines) {
-    const painted = paintLine(document, line, scale);
+    const painted = paintLine(document, line, ctx);
     // Line boxes are page-relative; inside a fragment they are drawn relative to it —
     // BOTH axes. The fragment box already carries the x origin (indent, or a table cell's
     // content edge), so an absolute left here would count that origin twice.
@@ -411,9 +465,10 @@ function paintFragment(
 function paintListMarker(
   document: Document,
   fragment: ParagraphFragmentRecord,
-  scale: number
+  ctx: PaintContext
 ): HTMLElement {
   const marker = fragment.marker!;
+  const scale = ctx.scale;
   const element = positioned(document, 'span', marker.box, scale);
   element.className = 'docx-list-marker';
   element.dataset.docxMarker = '';
@@ -424,7 +479,7 @@ function paintListMarker(
   element.style.display = 'block';
   element.style.overflow = 'visible';
   element.style.whiteSpace = 'pre';
-  applyRunFaceStyle(element, marker.style, scale);
+  applyRunFaceStyle(element, marker.style, ctx);
   mountRunText(document, element, marker.text, marker.style, scale);
   return element;
 }
@@ -504,8 +559,9 @@ function paintTableCell(
   document: Document,
   cell: TableCellFragmentRecord,
   rowBox: { readonly x: number; readonly y: number },
-  scale: number
+  ctx: PaintContext
 ): HTMLElement {
+  const scale = ctx.scale;
   const cellElement = positioned(document, 'div', cell.box, scale);
   cellElement.className = 'docx-table-cell';
   cellElement.style.left = `${(cell.box.x - rowBox.x) * scale}px`;
@@ -534,8 +590,8 @@ function paintTableCell(
   for (const block of cell.blocks) {
     const painted =
       block.kind === 'table'
-        ? paintTableFragment(document, block, scale)
-        : paintFragment(document, block, scale);
+        ? paintTableFragment(document, block, ctx)
+        : paintFragment(document, block, ctx);
     painted.style.left = `${(block.box.x - cell.box.x) * scale}px`;
     painted.style.top = `${(block.box.y - cell.box.y) * scale}px`;
     cellElement.append(painted);
@@ -552,8 +608,9 @@ function paintTableCell(
 function paintTableFragment(
   document: Document,
   fragment: TableFragmentRecord,
-  scale: number
+  ctx: PaintContext
 ): HTMLElement {
+  const scale = ctx.scale;
   const element = positioned(document, 'div', fragment.box, scale);
   element.className = 'docx-table-fragment layout-table';
   element.dataset.tableId = fragment.tableId;
@@ -568,7 +625,7 @@ function paintTableFragment(
     rowElement.style.top = `${(row.box.y - fragment.box.y) * scale}px`;
     rowElement.style.overflow = 'visible';
     for (const cell of row.cells) {
-      rowElement.append(paintTableCell(document, cell, row.box, scale));
+      rowElement.append(paintTableCell(document, cell, row.box, ctx));
     }
     element.append(rowElement);
   }
@@ -578,7 +635,7 @@ function paintTableFragment(
 function paintPage(
   document: Document,
   page: PageRecord,
-  options: { readonly scale: number; readonly ariaHidden: boolean },
+  options: PaintContext & { readonly ariaHidden: boolean },
   materialize: boolean
 ): HTMLElement {
   const element = positioned(document, 'div', page.box, options.scale);
@@ -610,8 +667,8 @@ function paintPage(
   for (const fragment of page.fragments) {
     content.append(
       fragment.kind === 'table'
-        ? paintTableFragment(document, fragment, options.scale)
-        : paintFragment(document, fragment, options.scale)
+        ? paintTableFragment(document, fragment, options)
+        : paintFragment(document, fragment, options)
     );
   }
   element.append(content);
@@ -634,8 +691,8 @@ function paintPage(
     for (const fragment of story.fragments) {
       container.append(
         fragment.kind === 'table'
-          ? paintTableFragment(document, fragment, options.scale)
-          : paintFragment(document, fragment, options.scale)
+          ? paintTableFragment(document, fragment, options)
+          : paintFragment(document, fragment, options)
       );
     }
     element.append(container);
@@ -682,9 +739,12 @@ export function paintSemanticLayout(
   const resolved = {
     scale: options.scale ?? 96 / 72,
     ariaHidden: options.ariaHidden ?? true,
+    ...(options.fontAlias ? { fontAlias: options.fontAlias } : {}),
   };
   const document = container.ownerDocument;
-  const parameters = `${resolved.scale}|${resolved.ariaHidden}`;
+  // The alias lookup is part of the paint parameters: a page painted before fonts
+  // registered must not be reused verbatim afterwards.
+  const parameters = `${resolved.scale}|${resolved.ariaHidden}|${resolved.fontAlias ? aliasIdentity(resolved.fontAlias) : ''}`;
   const previous = retainedPaints.get(container);
   const reusable =
     previous && previous.parameters === parameters

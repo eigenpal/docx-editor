@@ -15,6 +15,7 @@ import type { Node as PMNode } from 'prosemirror-model';
 import {
   ORIGIN_IDS,
   TreeDocumentStore,
+  readEmbeddedFonts,
   readOoxmlPackage,
   resolveHeaderFooterParts,
   resolveHeaderFooterPartsBySection,
@@ -22,6 +23,7 @@ import {
   withPart,
   writeOoxmlPackage,
   paragraphTextOf,
+  type EmbeddedFont,
   type HeaderFooterParts,
   type OoxmlElement,
   type OoxmlPackage,
@@ -36,7 +38,21 @@ import {
   collectDocumentStyles,
   type DocumentStyleEntry,
 } from './document-catalog.ts';
-import { collectDocumentOutline, type DocumentOutlineEntry } from './document-outline.ts';
+import {
+  collectDocumentOutline,
+  paragraphStyleId,
+  type DocumentOutlineEntry,
+} from './document-outline.ts';
+import {
+  collectDocumentThemeColors,
+  collectDocumentThemeFonts,
+  type DocumentThemeColorEntry,
+} from './document-theme.ts';
+import {
+  createRunDefaultsResolver,
+  type RunPropertyLike,
+  type StyleRunDefaults,
+} from './document-run-defaults.ts';
 import {
   allParagraphs,
   bodyParagraphs,
@@ -146,6 +162,23 @@ export interface TreeDocxSession {
    */
   numberingRoot(): OoxmlElement | null;
   /**
+   * The theme's ten picker colours (`a:clrScheme`), in Word's column order, or `[]`
+   * when the package has no complete scheme. Memoized once: the theme part is
+   * immutable for the session's lifetime.
+   */
+  documentThemeColors(): readonly DocumentThemeColorEntry[];
+  /**
+   * The run formatting a paragraph's content INHERITS when it authors none: the
+   * paragraph style's `basedOn` chain, then `w:docDefaults`, with theme `rFonts`
+   * attributes resolved through the font scheme. `runProperties` (the span's own
+   * authored properties) lets a theme-only run-level `w:rFonts` resolve too. This is
+   * what lets a toolbar always show the effective font, the way Word does.
+   */
+  effectiveRunDefaults(
+    paragraphId: string,
+    runProperties?: readonly RunPropertyLike[]
+  ): StyleRunDefaults;
+  /**
    * The heading outline of the BODY story, in document order: paragraphs whose
    * `w:pStyle` resolves to a heading through the styles part (built-in `heading N`
    * name, or the style's own `w:outlineLvl` 0..8). Memoized per main-part revision —
@@ -153,9 +186,17 @@ export interface TreeDocxSession {
    * in-session.
    */
   documentOutline(): readonly DocumentOutlineEntry[];
+  /**
+   * The faces the package EMBEDS (`word/fontTable.xml` embed relationships),
+   * deobfuscated — the only font source that needs neither a substitute nor a network.
+   * Extraction asserts nothing about validity; admitting a face is the font resource
+   * lane's job. Memoized once: the font table and font parts are immutable in-session.
+   */
+  embeddedFonts(): readonly EmbeddedFont[];
 }
 
 export type { DocumentStyleEntry } from './document-catalog.ts';
+export type { DocumentThemeColorEntry, ThemeColorSlot } from './document-theme.ts';
 export type { DocumentOutlineEntry } from './document-outline.ts';
 
 export type TreeSessionRejection = OoxmlPackageRejection | 'no-main-document-tree';
@@ -241,8 +282,64 @@ export function openTreeSession(bytes: Uint8Array): OpenTreeSessionResult {
     return numberingRoot;
   };
 
+  // The theme part, resolved like the styles part: through the main part's `theme`
+  // relationship, with the conventional name as a fallback. Immutable in-session.
+  const THEME_REL_TYPE =
+    'http://schemas.openxmlformats.org/officeDocument/2006/relationships/theme';
+  let themeRootResolved = false;
+  let themeRoot: OoxmlElement | null = null;
+  const resolveThemeRoot = (): OoxmlElement | null => {
+    if (themeRootResolved) return themeRoot;
+    themeRootResolved = true;
+    const record = (pkg.relationships.get(pkg.mainDocumentPart) ?? []).find(
+      (rel) => rel.type === THEME_REL_TYPE
+    );
+    let part: OoxmlPart | undefined;
+    if (record) {
+      const resolved = resolveRelationship(record);
+      if (resolved.mode === 'Internal' && resolved.target.ok) {
+        part = pkg.parts.get(resolved.target.partName);
+      }
+    }
+    part ??= pkg.parts.get('/word/theme/theme1.xml');
+    themeRoot = part?.root ?? null;
+    return themeRoot;
+  };
+
+  // The font table part, resolved once through the main part's `fontTable` relationship
+  // (same discipline as the styles part), with the conventional name as fallback. The
+  // table and the font parts it points at are immutable in-session, so the extraction —
+  // which COPIES every deobfuscated part — runs at most once per session.
+  const FONT_TABLE_REL_TYPE =
+    'http://schemas.openxmlformats.org/officeDocument/2006/relationships/fontTable';
+  let embeddedFontsCache: readonly EmbeddedFont[] | null = null;
+  const resolveEmbeddedFonts = (): readonly EmbeddedFont[] => {
+    if (embeddedFontsCache) return embeddedFontsCache;
+    const record = (pkg.relationships.get(pkg.mainDocumentPart) ?? []).find(
+      (rel) => rel.type === FONT_TABLE_REL_TYPE
+    );
+    let part: OoxmlPart | undefined;
+    if (record) {
+      const resolved = resolveRelationship(record);
+      if (resolved.mode === 'Internal' && resolved.target.ok) {
+        part = pkg.parts.get(resolved.target.partName);
+      }
+    }
+    part ??= pkg.parts.get('/word/fontTable.xml');
+    embeddedFontsCache = Object.freeze(readEmbeddedFonts(pkg, part));
+    return embeddedFontsCache;
+  };
+
   let fontsCache: { readonly revision: number; readonly fonts: readonly string[] } | null = null;
   let stylesCache: readonly DocumentStyleEntry[] | null = null;
+  let themeColorsCache: readonly DocumentThemeColorEntry[] | null = null;
+  let runDefaultsResolver:
+    | ((styleId: string | null, runProperties?: readonly RunPropertyLike[]) => StyleRunDefaults)
+    | null = null;
+  // Paragraph -> pStyle, per revision: an edit can change a paragraph's style, but the
+  // styles and theme parts cannot change in-session.
+  let pStyleCache: { readonly revision: number; readonly byId: Map<string, string | null> } | null =
+    null;
   let outlineCache: {
     readonly revision: number;
     readonly outline: readonly DocumentOutlineEntry[];
@@ -338,7 +435,9 @@ export function openTreeSession(bytes: Uint8Array): OpenTreeSessionResult {
 
       headerFooterParts() {
         headerFooterBySection ??= resolveHeaderFooterPartsBySection(pkg);
-        return headerFooterBySection[headerFooterBySection.length - 1] ?? resolveHeaderFooterParts(pkg);
+        return (
+          headerFooterBySection[headerFooterBySection.length - 1] ?? resolveHeaderFooterParts(pkg)
+        );
       },
 
       headerFooterPartsBySection() {
@@ -380,6 +479,28 @@ export function openTreeSession(bytes: Uint8Array): OpenTreeSessionResult {
 
       numberingRoot: () => resolveNumberingRoot(),
 
+      documentThemeColors() {
+        themeColorsCache ??= collectDocumentThemeColors(resolveThemeRoot());
+        return themeColorsCache;
+      },
+
+      effectiveRunDefaults(paragraphId, runProperties) {
+        runDefaultsResolver ??= createRunDefaultsResolver(
+          resolveStylesRoot(),
+          collectDocumentThemeFonts(resolveThemeRoot())
+        );
+        if (!pStyleCache || pStyleCache.revision !== store.revision) {
+          const byId = new Map<string, string | null>();
+          for (const paragraph of allParagraphs(store.part)) {
+            // `allParagraphs` collects paragraph ELEMENTS but is typed OoxmlNode.
+            if (paragraph.kind === 'textValue') continue;
+            byId.set(paragraph.id, paragraphStyleId(paragraph) ?? null);
+          }
+          pStyleCache = { revision: store.revision, byId };
+        }
+        return runDefaultsResolver(pStyleCache.byId.get(paragraphId) ?? null, runProperties);
+      },
+
       documentOutline() {
         // Keyed on the store revision, like the fonts: typing inside a heading or
         // splitting one changes the outline, but the styles part is immutable.
@@ -390,6 +511,8 @@ export function openTreeSession(bytes: Uint8Array): OpenTreeSessionResult {
         };
         return outlineCache.outline;
       },
+
+      embeddedFonts: resolveEmbeddedFonts,
     },
   };
 }
