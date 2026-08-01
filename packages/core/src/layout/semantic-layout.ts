@@ -25,6 +25,7 @@ import {
   collapsedSpaceBefore,
   paragraphBreaksBefore,
   type ParagraphBorderEdge,
+  type ParagraphLineSpacing,
   type ParagraphSpacing,
 } from './paragraph-style.ts';
 import { DEFAULT_RUN_STYLE, resolveRunStyle } from './run-style.ts';
@@ -164,6 +165,9 @@ type PreparedBlock =
       readonly available: number;
       readonly alignment: Alignment;
       readonly spacing: ParagraphSpacing;
+      readonly lineSpacing: ParagraphLineSpacing;
+      readonly contextualSpacing: boolean;
+      readonly styleId: string | null;
       readonly bottomBorder: ParagraphBorderEdge | undefined;
       readonly shading: string | undefined;
       readonly inheritedRunProperties: readonly OoxmlProperty[];
@@ -354,6 +358,9 @@ function layoutBlocksWithGeometry(
         available,
         alignment,
         spacing,
+        lineSpacing,
+        contextualSpacing,
+        styleId,
         bottomBorder,
         shading,
         inheritedRunProperties,
@@ -368,6 +375,9 @@ function layoutBlocksWithGeometry(
         available,
         alignment,
         spacing,
+        lineSpacing,
+        contextualSpacing,
+        styleId,
         bottomBorder,
         shading,
         inheritedRunProperties,
@@ -592,7 +602,7 @@ function layoutBlocksWithGeometry(
    * each continuation page, and rejected when the group itself exceeds a fresh content page.
    */
   const layoutTableInFlow = (table: OoxmlElement): void => {
-    const structure = readTableStructure(table, contentWidth, 0);
+    const structure = readTableStructure(table, contentWidth, 0, styleCascade);
     if (!structure || structure.rows.length === 0) return;
     const headerRows: SemanticTableRow[] = [];
     for (const row of structure.rows) {
@@ -879,12 +889,32 @@ function layoutBlocksWithGeometry(
       indent,
       alignment,
       available,
-      spacing,
+      spacing: authoredSpacing,
+      lineSpacing,
+      contextualSpacing,
+      styleId,
       bottomBorder,
       shading,
       inheritedRunProperties,
       tabStops,
     } = entry;
+    // `w:contextualSpacing` (17.3.1.9) drops the gap between paragraphs of the SAME style.
+    // Word's own ListParagraph sets it, so without this every Word-authored list carries a
+    // paragraph gap between its items.
+    const previousEntry = index > 0 ? prepared[index - 1] : undefined;
+    const nextEntry = prepared[index + 1];
+    const sameStyleAs = (other: PreparedBlock | undefined): boolean =>
+      other?.kind === 'paragraph' && other.styleId === styleId && styleId !== null;
+    const spacing: ParagraphSpacing = contextualSpacing
+      ? {
+          before: sameStyleAs(previousEntry) ? 0 : authoredSpacing.before,
+          after: sameStyleAs(nextEntry) ? 0 : authoredSpacing.after,
+        }
+      : authoredSpacing;
+    // `w:firstLine` moves the first line right of the indent, `w:hanging` moves it left.
+    // The schema treats them as mutually exclusive; where a producer writes both, hanging
+    // wins, which is how Word reads it.
+    const firstLineOffset = indent.hanging > 0 ? -indent.hanging : indent.firstLine;
     // Prefer the current-pass map so marker ordinals stay fresh even when the prepared
     // block memo reuses indent/break inputs from an earlier revision.
     const listItem = listItems?.get(paragraph.id) ?? entry.listItem;
@@ -909,7 +939,8 @@ function layoutBlocksWithGeometry(
       undefined,
       styleCascade
         ? (inherited, direct) => cascadeRunProperties(inherited, direct, styleCascade)
-        : undefined
+        : undefined,
+      { lineSpacing, firstLineOffset }
     );
 
     // Fit uses unsuppressed lead; top-of-page suppression applies after any flush below.
@@ -1028,8 +1059,11 @@ function layoutBlocksWithGeometry(
             box: { ...span.box, y: cursorY },
           })),
           measurer,
-          indent.left,
-          available,
+          // Alignment measures against the box the LINE actually got: a first line carrying
+          // `w:firstLine`/`w:hanging` starts elsewhere and has a different width, so centring
+          // or justifying it against the paragraph box would push it off its own margins.
+          indent.left + (lineIndex === 0 ? firstLineOffset : 0),
+          Math.max(1, available - (lineIndex === 0 ? firstLineOffset : 0)),
           alignment,
           isLastLine
         ),

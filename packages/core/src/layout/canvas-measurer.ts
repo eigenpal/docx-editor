@@ -113,6 +113,15 @@ export interface CanvasMeasurerOptions {
   readonly scale?: number;
   readonly fallbackFamily?: string;
   /**
+   * The engine-minted family a document-embedded face was registered under, if any.
+   *
+   * Paint prefers this alias over the declared family, so measurement has to as well: a
+   * document whose face is embedded rather than installed would otherwise be measured
+   * against the fallback and painted with the embedded glyphs, and every advance, wrap
+   * point and page break would be taken from a font the reader never sees.
+   */
+  readonly fontAlias?: (family: string) => string | undefined;
+  /**
    * Injected 2d text context from the editor/browser seam.
    *
    * `undefined` or `null` makes {@link tryCreateCanvasMeasurer} return null so the surface
@@ -132,8 +141,13 @@ export interface CanvasMeasurerOptions {
 
 export interface ResolvedSurfaceMeasurer {
   readonly measurer: TextMeasurer;
-  /** Cache-invalidation identity when the caller did not supply `producer`. */
-  readonly producer: 'canvas-measurer' | 'fixed-measurer';
+  /**
+   * Cache-invalidation identity when the caller did not supply `producer`.
+   *
+   * `canvas-measurer+embedded` is the canvas measurer resolving document-embedded faces:
+   * the same canvas, different advances, so it must not share a cache key space.
+   */
+  readonly producer: 'canvas-measurer' | 'canvas-measurer+embedded' | 'fixed-measurer';
 }
 
 /**
@@ -170,13 +184,20 @@ export function tryCreateCanvasMeasurer(options: CanvasMeasurerOptions = {}): Te
     normalizeCacheCapacity(options.maxMetricsEntries, DEFAULT_MAX_CANVAS_METRICS_CACHE_ENTRIES)
   );
 
+  const fontAlias = options.fontAlias;
   const fontOf = (style: ResolvedRunStyle): string => {
     // Re-validated at the sink: a font name is file-derived and this builds a CSS font
     // shorthand, so a name that could close the string is refused rather than escaped.
-    const family =
-      style.fontFamily && FONT_NAME.test(style.fontFamily)
-        ? `"${style.fontFamily}", ${fallbackFamily}`
-        : fallbackFamily;
+    // The alias is engine-minted, never file-derived, and is validated on the same rule
+    // so one code path cannot become the hole the other closed.
+    const declared = style.fontFamily && FONT_NAME.test(style.fontFamily) ? style.fontFamily : null;
+    const aliased = declared ? fontAlias?.(declared) : undefined;
+    const alias = aliased && FONT_NAME.test(aliased) ? aliased : null;
+    const family = declared
+      ? alias
+        ? `"${alias}", "${declared}", ${fallbackFamily}`
+        : `"${declared}", ${fallbackFamily}`
+      : fallbackFamily;
     const weight = style.bold ? 'bold' : 'normal';
     const slant = style.italic ? 'italic' : 'normal';
     const size = style.fontSizePt * (style.verticalAlign === 'baseline' ? 1 : 0.75) * scale;
@@ -243,6 +264,14 @@ export function resolveDefaultSurfaceMeasurer(
   options: CanvasMeasurerOptions = {}
 ): ResolvedSurfaceMeasurer {
   const canvas = tryCreateCanvasMeasurer({ ...options, scale: options.scale ?? scale });
-  if (canvas) return { measurer: canvas, producer: 'canvas-measurer' };
+  // The producer folds into every layout cache key. Registering embedded faces changes
+  // every advance in the document while no content changes to say so, so a measurer that
+  // resolves aliases must not share a key space with one that does not.
+  if (canvas) {
+    return {
+      measurer: canvas,
+      producer: options.fontAlias ? 'canvas-measurer+embedded' : 'canvas-measurer',
+    };
+  }
   return { measurer: createFixedMeasurer(), producer: 'fixed-measurer' };
 }

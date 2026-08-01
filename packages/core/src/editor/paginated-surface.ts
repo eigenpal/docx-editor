@@ -114,6 +114,8 @@ export function mountPaginatedSurface(
     ? null
     : resolveDefaultSurfaceMeasurer(scale, {
         context: tryCreateBrowserCanvasContext(container.ownerDocument),
+        // Measure with the same face paint draws with.
+        ...(options.fontAlias ? { fontAlias: options.fontAlias } : {}),
       });
   const measurer = options.measurer ?? defaults!.measurer;
   // Incremental layout machinery — without these every keystroke re-lays out the document.

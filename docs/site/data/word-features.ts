@@ -189,6 +189,8 @@ export const wordFeatures: WordFeature[] = [
     rendering: 'full',
     roundTrip: 'full',
     tier: 'community',
+    notes:
+      'Space before/after and line spacing (single, multiple, exactly, at least) all reach pagination, so a 1.5- or double-spaced document breaks pages where Word breaks them. Contextual spacing drops the gap between same-style neighbours, the way Word’s List Paragraph style intends.',
   },
   {
     id: 'paragraphs.indentation',
@@ -198,6 +200,8 @@ export const wordFeatures: WordFeature[] = [
     rendering: 'full',
     roundTrip: 'full',
     tier: 'community',
+    notes:
+      'Left, right, first-line and hanging indents all reach line geometry, so an indented first line starts where Word starts it and wraps with the room it actually has.',
   },
   {
     id: 'paragraphs.styles',
@@ -369,7 +373,7 @@ export const wordFeatures: WordFeature[] = [
     roundTrip: 'full',
     tier: 'community',
     notes:
-      'cnfStyle conditional formatting renders and round-trips; switching table styles from the UI is not built yet.',
+      'Table styles resolve through their basedOn chain: borders, cell margins and conditional formats (header row, total row, first/last column, row and column banding) come from styles.xml, gated by w:tblLook, with an explicit w:cnfStyle taking precedence. Switching table styles from the UI is not built yet.',
   },
   {
     id: 'tables.text-direction',

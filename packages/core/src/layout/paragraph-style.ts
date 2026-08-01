@@ -35,6 +35,40 @@ export interface ParagraphSpacing {
   readonly after: number;
 }
 
+/**
+ * Resolved line spacing (`w:spacing/@line` + `@lineRule`, ECMA-376 17.3.1.33).
+ *
+ * `auto` is the interesting one: `@line` is 240ths of a line, so 240 is single, 360 is
+ * one-and-a-half, 480 is double — and Word's own Normal style since 2013 is 259, i.e.
+ * 1.08. A document laid out at a flat single spacing is ~8% tight on EVERY line, which
+ * moves every page break, so this is not a cosmetic detail.
+ *
+ * `exact` fixes the line box at `@line` twips and lets tall glyphs clip, the way Word
+ * does. `atLeast` uses it as a floor.
+ */
+export type LineSpacingRule = 'auto' | 'exact' | 'atLeast';
+
+export interface ParagraphLineSpacing {
+  readonly rule: LineSpacingRule;
+  /** `auto`: the 240ths-of-a-line multiplier numerator. Otherwise points. */
+  readonly value: number;
+}
+
+/** Single spacing: what a paragraph that says nothing gets. */
+export const SINGLE_LINE_SPACING: ParagraphLineSpacing = Object.freeze({
+  rule: 'auto' as const,
+  value: 240,
+});
+
+/**
+ * Word's Format > Paragraph tops out at 132pt exact/atLeast and "Multiple 132". The
+ * ceilings here are wider than the UI but bounded: `@line` is attacker-controlled and
+ * becomes a line height, and an unbounded one paginates a short document into millions of
+ * sheets.
+ */
+const MAX_LINE_SPACING_MULTIPLE = 132;
+const MAX_LINE_SPACING_PT = 132 * 12;
+
 export interface ParagraphBorderEdge {
   /** Authored `ST_Border` value (`single`, `dashed`, …). */
   readonly val: string;
@@ -111,6 +145,81 @@ export function paragraphSpacing(props: readonly OoxmlProperty[]): ParagraphSpac
     if (authoredAfter !== undefined) after = twipsToPoints(authoredAfter);
   }
   return { before, after };
+}
+
+/**
+ * Resolve `w:line` / `w:lineRule` from flat paragraph properties.
+ *
+ * Merged per attribute for the same reason as before/after: `w:spacing` is one element
+ * carrying independent attributes, and a style that states only `@line` must not reset the
+ * rule an earlier entry in the cascade set.
+ */
+export function paragraphLineSpacing(props: readonly OoxmlProperty[]): ParagraphLineSpacing {
+  let rule: LineSpacingRule | undefined;
+  let line: number | undefined;
+  for (const property of props) {
+    if (property.localName !== 'spacing') continue;
+    const authoredRule = property.attributes?.lineRule;
+    if (authoredRule === 'auto' || authoredRule === 'exact' || authoredRule === 'atLeast') {
+      rule = authoredRule;
+    }
+    const authoredLine = property.attributes?.line;
+    if (authoredLine !== undefined) {
+      const twips = integer(authoredLine, true);
+      if (twips !== null) line = twips;
+    }
+  }
+  if (line === undefined) return SINGLE_LINE_SPACING;
+  // Absent `@lineRule` with a present `@line` defaults to `auto` (17.3.1.33).
+  const effective = rule ?? 'auto';
+  if (effective === 'auto') {
+    const multiple = line / 240;
+    if (!(multiple > 0)) return SINGLE_LINE_SPACING;
+    return { rule: 'auto', value: Math.min(multiple, MAX_LINE_SPACING_MULTIPLE) * 240 };
+  }
+  // A negative or zero exact/atLeast is not a line box Word would draw; fall back rather
+  // than paginate into a zero-height column.
+  const points = line / 20;
+  if (!(points > 0)) return SINGLE_LINE_SPACING;
+  return { rule: effective, value: Math.min(points, MAX_LINE_SPACING_PT) };
+}
+
+/**
+ * Apply resolved line spacing to a line's natural (glyph-derived) box.
+ *
+ * Extra leading goes ABOVE the text — the baseline moves down by the whole delta — which
+ * is what Word does for `auto` and `atLeast`. An `exact` box smaller than the glyphs keeps
+ * the baseline inside the box so the clipped text still sits on it.
+ */
+export function applyLineSpacing(
+  spacing: ParagraphLineSpacing,
+  naturalHeight: number,
+  naturalBaseline: number
+): { height: number; baseline: number } {
+  const height =
+    spacing.rule === 'auto'
+      ? naturalHeight * (spacing.value / 240)
+      : spacing.rule === 'exact'
+        ? spacing.value
+        : Math.max(naturalHeight, spacing.value);
+  const delta = height - naturalHeight;
+  if (delta >= 0) return { height, baseline: naturalBaseline + delta };
+  return { height, baseline: Math.max(0, Math.min(naturalBaseline, height)) };
+}
+
+/**
+ * `w:contextualSpacing` (17.3.1.9): drop before/after between paragraphs of the SAME
+ * style. Word's built-in `ListParagraph` sets it, so every list authored in Word gets a
+ * paragraph gap between items without this.
+ */
+export function paragraphContextualSpacing(props: readonly OoxmlProperty[]): boolean {
+  let value = false;
+  for (const property of props) {
+    if (property.localName !== 'contextualSpacing') continue;
+    const raw = property.attributes?.val;
+    value = raw !== '0' && raw !== 'false' && raw !== 'off';
+  }
+  return value;
 }
 
 function resolveBorderEdge(node: OoxmlElement | undefined): ParagraphBorderEdge | undefined {

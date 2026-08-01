@@ -24,12 +24,29 @@ import {
   type ResolvedTabStops,
 } from './paragraph-tabs.ts';
 import {
+  SINGLE_LINE_SPACING,
+  applyLineSpacing,
+  type ParagraphLineSpacing,
+} from './paragraph-style.ts';
+import {
   DEFAULT_RUN_STYLE,
   displayText,
   resolveRunStyle,
   type ResolvedRunStyle,
 } from './run-style.ts';
 import type { StyleSpanRecord, TextMeasurer } from './semantic-records.ts';
+
+/**
+ * Per-paragraph geometry the BREAK depends on, beyond width.
+ *
+ * Both change where lines start and how tall they are, so both belong in the caller's
+ * cache key — a paragraph re-broken at a different line spacing is a different break.
+ */
+export interface ParagraphFlowOptions {
+  readonly lineSpacing?: ParagraphLineSpacing;
+  /** First-line offset from the paragraph indent: `w:firstLine` right, `w:hanging` left. */
+  readonly firstLineOffset?: number;
+}
 
 /** One measurable piece of a paragraph: text carrying one property set. */
 interface Piece {
@@ -242,10 +259,16 @@ export function breakParagraph(
   inheritedRunProperties: readonly OoxmlProperty[] = [],
   tabStops: ResolvedTabStops = EMPTY_TAB_STOPS,
   pageContext?: FieldPageContext,
-  cascadeRuns?: RunPropertyCascader
+  cascadeRuns?: RunPropertyCascader,
+  flow?: ParagraphFlowOptions
 ): readonly PendingLine[] {
   const cached = cacheKey !== null && cache ? cache.get(cacheKey) : undefined;
   if (cached) return cached;
+
+  const lineSpacing = flow?.lineSpacing ?? SINGLE_LINE_SPACING;
+  // The first line starts `firstLineOffset` from the paragraph's left indent — right for
+  // `w:firstLine`, left (negative) for `w:hanging`. Every later line starts at the indent.
+  const firstLineOffset = flow?.firstLineOffset ?? 0;
 
   const pieces = piecesOfParagraph(paragraph, inheritedRunProperties, pageContext, cascadeRuns);
   const emptyStyle =
@@ -256,12 +279,22 @@ export function breakParagraph(
   const lines: PendingLine[] = [];
   let line: PendingLine = { spans: [], start: 0, end: 0, width: 0, height: 0, baseline: 0 };
 
+  // Where the line being built starts, and how much room it has. Only the first differs.
+  const lineOffset = (): number => (lines.length === 0 ? firstLineOffset : 0);
+  const lineOrigin = (): number => indentLeft + lineOffset();
+  const lineAvailable = (): number => Math.max(1, available - lineOffset());
+
   const closeLine = (): void => {
     const metrics = measurer.lineMetrics(emptyStyle);
     if (line.height === 0) {
       line.height = metrics.height;
       line.baseline = metrics.baseline;
     }
+    // Line spacing applies to the finished box, once, so a paragraph's rule governs every
+    // line it produced regardless of which run happened to be tallest.
+    const spaced = applyLineSpacing(lineSpacing, line.height, line.baseline);
+    line.height = spaced.height;
+    line.baseline = spaced.baseline;
     lines.push(line);
     line = {
       spans: [],
@@ -282,7 +315,7 @@ export function breakParagraph(
         text: PAGE_BREAK_CHAR,
         props: piece.props,
         style: piece.style,
-        box: { x: indentLeft + line.width, y: 0, width: 0, height: breakMetrics.height },
+        box: { x: lineOrigin() + line.width, y: 0, width: 0, height: breakMetrics.height },
       });
       line.height = Math.max(line.height, breakMetrics.height);
       line.baseline = Math.max(line.baseline, breakMetrics.baseline);
@@ -303,7 +336,7 @@ export function breakParagraph(
         text: '\n',
         props: piece.props,
         style: piece.style,
-        box: { x: indentLeft + line.width, y: 0, width: 0, height: breakMetrics.height },
+        box: { x: lineOrigin() + line.width, y: 0, width: 0, height: breakMetrics.height },
       });
       line.height = Math.max(line.height, breakMetrics.height);
       line.baseline = Math.max(line.baseline, breakMetrics.baseline);
@@ -326,8 +359,8 @@ export function breakParagraph(
       if (candidate === '\t') {
         // A tab that cannot advance on this line wraps first, then reapplies — matching
         // Word's "tab past the right margin starts a new line" behaviour.
-        if (line.spans.length > 0 && line.width >= available) closeLine();
-        const currentX = indentLeft + line.width;
+        if (line.spans.length > 0 && line.width >= lineAvailable()) closeLine();
+        const currentX = lineOrigin() + line.width;
         const segment = measureFollowingTabSegment(pieces, pieceIndex, boundary, measurer);
         const destination = nextTabDestination(tabStops, currentX, rightEdge);
         const width = tabAdvanceWidth(
@@ -355,13 +388,13 @@ export function breakParagraph(
       // Measured as DRAWN: `w:caps` changes the glyphs, so measuring the source text
       // would size the line for characters the reader never sees.
       const width = measurer.measure(displayText(candidate, piece.style), piece.style);
-      if (line.width + width > available && line.spans.length > 0) closeLine();
+      if (line.width + width > lineAvailable() && line.spans.length > 0) closeLine();
       line.spans.push({
         range: spanRange,
         text: candidate,
         props: piece.props,
         style: piece.style,
-        box: { x: indentLeft + line.width, y: 0, width, height: metrics.height },
+        box: { x: lineOrigin() + line.width, y: 0, width, height: metrics.height },
       });
       line.width += width;
       line.height = Math.max(line.height, metrics.height);

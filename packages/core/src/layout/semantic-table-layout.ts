@@ -247,12 +247,17 @@ function placeCellParagraph(
     available,
     alignment,
     spacing,
+    lineSpacing,
     bottomBorder,
     shading,
     inheritedRunProperties,
     tabStops,
     tabStopsCacheToken,
   } = resolveParagraphLayoutInputs(paragraph, cellContentWidth, deps.styleCascade, listItem);
+  // A cell paragraph breaks like a body paragraph: same line spacing, same first-line
+  // offset. Contextual spacing is a body-flow question (it compares document neighbours),
+  // so it is not applied per cell.
+  const firstLineOffset = indent.hanging > 0 ? -indent.hanging : indent.firstLine;
   const key = paragraphLayoutKey({
     paragraph,
     properties: [
@@ -277,7 +282,8 @@ function placeCellParagraph(
     deps.pageContext,
     deps.styleCascade
       ? (inherited, direct) => cascadeRunProperties(inherited, direct, deps.styleCascade)
-      : undefined
+      : undefined,
+    { lineSpacing, firstLineOffset }
   );
 
   const lineStart = options?.lineStart ?? 0;
@@ -315,8 +321,8 @@ function placeCellParagraph(
           box: { ...span.box, x: span.box.x + originX, y },
         })),
         deps.measurer,
-        originX + indent.left,
-        available,
+        originX + indent.left + (lineIndex === 0 ? firstLineOffset : 0),
+        Math.max(1, available - (lineIndex === 0 ? firstLineOffset : 0)),
         alignment,
         isLastLine
       ),
@@ -974,7 +980,7 @@ function emitNestedTable(
   deps: TableFlowDeps
 ): { readonly fragment: TableFragmentRecord; readonly bottom: number } | null {
   if (depth >= MAX_TABLE_NESTING) return null;
-  const structure = readTableStructure(table, Math.max(1, right - left), depth);
+  const structure = readTableStructure(table, Math.max(1, right - left), depth, deps.styleCascade);
   if (!structure || structure.rows.length === 0) return null;
   const rawRows: TableRowFragmentRecord[] = [];
   let y = top;

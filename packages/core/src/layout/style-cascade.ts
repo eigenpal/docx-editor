@@ -24,8 +24,11 @@ import {
 } from './paragraph-flow.ts';
 import {
   paragraphBorders,
+  paragraphContextualSpacing,
+  paragraphLineSpacing,
   paragraphSpacing,
   type ParagraphBorderEdge,
+  type ParagraphLineSpacing,
   type ParagraphSpacing,
 } from './paragraph-style.ts';
 import { paragraphShading } from './ooxml-shading.ts';
@@ -54,6 +57,16 @@ export interface StyleDefinition {
   readonly runProperties: readonly OoxmlProperty[];
   /** The style's `w:pPr` node, when present — needed for nested `w:pBdr`. */
   readonly paragraphPropertiesNode: OoxmlElement | undefined;
+  /** The style's `w:tblPr`, for a `w:type="table"` style. */
+  readonly tablePropertiesNode: OoxmlElement | undefined;
+  /**
+   * `w:tblStylePr` conditional formats by `w:type` (`firstRow`, `band1Horz`, …).
+   *
+   * Word puts a table's real appearance here: `Table Grid` carries its grid in the style's
+   * `w:tblBorders`, and the banded/​header looks live in these. A document states only
+   * `<w:tblStyle w:val="TableGrid"/>`.
+   */
+  readonly conditionalTableFormats: ReadonlyMap<string, OoxmlElement>;
 }
 
 export interface StyleCascadeTable {
@@ -79,6 +92,11 @@ export interface CascadedParagraphFormatting {
   readonly paragraphPropertyNodes: readonly OoxmlNode[];
   /** Inherited run properties for every run in the paragraph (before direct run `rPr`). */
   readonly runProperties: readonly OoxmlProperty[];
+  /**
+   * The style this paragraph resolved to, or null when it names none and there is no
+   * document default. `w:contextualSpacing` compares neighbours by exactly this.
+   */
+  readonly styleId: string | null;
 }
 
 function isElement(node: OoxmlNode): node is OoxmlElement {
@@ -166,6 +184,19 @@ function readStyleDefinition(
   const basedOn = isValidStyleId(basedOnRaw) ? basedOnRaw : null;
   const paragraphPropertiesNode = findParagraphProperties(node);
   const runPropertiesNode = findRunProperties(node);
+  const conditionalTableFormats = new Map<string, OoxmlElement>();
+  let seenConditional = 0;
+  for (const child of node.children) {
+    if (child.kind === 'textValue' || child.localName !== 'tblStylePr') continue;
+    // Bounded: `w:type` is an enumeration of nine values, but the element count is
+    // attacker-controlled and each one is retained.
+    if (seenConditional >= MAX_CONDITIONAL_TABLE_FORMATS) break;
+    seenConditional += 1;
+    const conditionType = attributeValue(child, 'type');
+    if (conditionType && !conditionalTableFormats.has(conditionType)) {
+      conditionalTableFormats.set(conditionType, child);
+    }
+  }
   return {
     styleId,
     type,
@@ -174,7 +205,48 @@ function readStyleDefinition(
     paragraphProperties: propertiesOf(paragraphPropertiesNode),
     runProperties: propertiesOf(runPropertiesNode),
     paragraphPropertiesNode,
+    tablePropertiesNode: childNamed(node, 'tblPr'),
+    conditionalTableFormats,
   };
+}
+
+/** Nine `ST_TblStyleOverrideType` values exist; the ceiling only bounds a hostile part. */
+const MAX_CONDITIONAL_TABLE_FORMATS = 32;
+
+/**
+ * A table style resolved through its `w:basedOn` chain.
+ *
+ * `tablePropertyNodes` is base-first, so a later node overrides an earlier one — the same
+ * ordering the paragraph cascade uses. `conditional` is flattened the same way, so a
+ * derived style's `firstRow` replaces its base's.
+ */
+export interface CascadedTableFormatting {
+  readonly tablePropertyNodes: readonly OoxmlElement[];
+  readonly conditional: ReadonlyMap<string, OoxmlElement>;
+}
+
+export const EMPTY_TABLE_FORMATTING: CascadedTableFormatting = Object.freeze({
+  tablePropertyNodes: Object.freeze([]) as readonly OoxmlElement[],
+  conditional: new Map<string, OoxmlElement>(),
+});
+
+/** Resolve a `w:tblStyle` id against the cascade, base-first. */
+export function cascadeTableFormatting(
+  table: StyleCascadeTable,
+  styleId: string | undefined
+): CascadedTableFormatting {
+  if (!styleId || !isValidStyleId(styleId)) return EMPTY_TABLE_FORMATTING;
+  const chain = styleChain(table, styleId, 'table');
+  if (chain.length === 0) return EMPTY_TABLE_FORMATTING;
+  const tablePropertyNodes: OoxmlElement[] = [];
+  const conditional = new Map<string, OoxmlElement>();
+  for (const style of chain) {
+    if (style.tablePropertiesNode) tablePropertyNodes.push(style.tablePropertiesNode);
+    for (const [conditionType, node] of style.conditionalTableFormats) {
+      conditional.set(conditionType, node);
+    }
+  }
+  return { tablePropertyNodes, conditional };
 }
 
 /**
@@ -268,7 +340,7 @@ function styleIdFromProps(
 function styleChain(
   table: StyleCascadeTable,
   styleId: string,
-  expectedType: 'paragraph' | 'character'
+  expectedType: 'paragraph' | 'character' | 'table'
 ): readonly StyleDefinition[] {
   const tip = table.styles.get(styleId);
   if (!tip || tip.type !== expectedType) return [];
@@ -328,7 +400,7 @@ export function cascadeParagraphFormatting(
     ...propertiesOf(directMarkRun),
   ];
 
-  return { paragraphProperties, paragraphPropertyNodes, runProperties };
+  return { paragraphProperties, paragraphPropertyNodes, runProperties, styleId: styleId ?? null };
 }
 
 /**
@@ -392,6 +464,12 @@ export interface ParagraphLayoutInputs {
   readonly available: number;
   readonly alignment: Alignment;
   readonly spacing: ParagraphSpacing;
+  /** Resolved `w:line` / `w:lineRule`; single spacing where the cascade says nothing. */
+  readonly lineSpacing: ParagraphLineSpacing;
+  /** `w:contextualSpacing`: drop before/after between same-style neighbours. */
+  readonly contextualSpacing: boolean;
+  /** Resolved paragraph style id, for the `w:contextualSpacing` neighbour comparison. */
+  readonly styleId: string | null;
   readonly bottomBorder: ParagraphBorderEdge | undefined;
   /** Validated 6-hex paragraph shading fill from cascaded `w:pPr/w:shd`, absent for none. */
   readonly shading: string | undefined;
@@ -457,6 +535,9 @@ export function resolveParagraphLayoutInputs(
     available: Math.max(1, contentWidth - indent.left - indent.right),
     alignment: paragraphAlignment(props),
     spacing: paragraphSpacing(props),
+    lineSpacing: paragraphLineSpacing(props),
+    contextualSpacing: paragraphContextualSpacing(props),
+    styleId: cascaded ? cascaded.styleId : (styleIdFromProps(props, 'pStyle') ?? null),
     bottomBorder: cascaded
       ? cascadedBottomBorder(cascaded.paragraphPropertyNodes)
       : paragraphBorders(pPr).bottom,

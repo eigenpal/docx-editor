@@ -13,6 +13,12 @@
 import type { OoxmlElement, OoxmlNode } from '@docx-editor.dev/core-contract/store';
 import { shadingFillFromElement } from './ooxml-shading.ts';
 import {
+  EMPTY_TABLE_FORMATTING,
+  cascadeTableFormatting,
+  type StyleCascadeTable,
+} from './style-cascade.ts';
+import { mergeCellBorders, mergeTableBorders } from './table-border-cascade.ts';
+import {
   EMPTY_CELL_BORDER_BOX,
   EMPTY_TABLE_BORDER_BOX,
   readCellBorders,
@@ -180,11 +186,6 @@ function mergeMargins(
   };
 }
 
-function readDefaultMargins(tblPr: OoxmlElement | undefined): CellMarginsPt {
-  const authored = readMarginSides(tblPr && childNamed(tblPr, 'tblCellMar'));
-  return mergeMargins(DEFAULT_CELL_MARGINS, authored);
-}
-
 /**
  * Column widths in points: from `w:tblGrid` when present, else an even split over the
  * hardened column count. The no-grid path is the security-sensitive one — see header.
@@ -230,30 +231,213 @@ function columnWidthsPt(
 }
 
 /**
+ * `w:tblLook` (17.4.56): which conditional formats of the table style are live.
+ *
+ * Word writes both the modern attributes (`w:firstRow="1"`) and the legacy `w:val`
+ * bitmask, and older producers write only the bitmask. Both are read; an attribute wins
+ * where the two disagree, because that is the newer statement.
+ */
+interface TableLook {
+  readonly firstRow: boolean;
+  readonly lastRow: boolean;
+  readonly firstColumn: boolean;
+  readonly lastColumn: boolean;
+  readonly rowBanding: boolean;
+  readonly columnBanding: boolean;
+}
+
+const DEFAULT_TABLE_LOOK: TableLook = Object.freeze({
+  firstRow: false,
+  lastRow: false,
+  firstColumn: false,
+  lastColumn: false,
+  rowBanding: false,
+  columnBanding: false,
+});
+
+function onOff(node: OoxmlElement, name: string): boolean | undefined {
+  const raw = attributeValue(node, name);
+  if (raw === undefined) return undefined;
+  return raw !== '0' && raw !== 'false' && raw !== 'off';
+}
+
+function readTableLook(tblPr: OoxmlElement | undefined): TableLook {
+  const look = tblPr && childNamed(tblPr, 'tblLook');
+  if (!look) return DEFAULT_TABLE_LOOK;
+  // The legacy bitmask: 0x0020 firstRow, 0x0040 lastRow, 0x0080 firstColumn,
+  // 0x0100 lastColumn, 0x0200 NO row banding, 0x0400 NO column banding.
+  const rawVal = attributeValue(look, 'val');
+  const mask = rawVal && /^[0-9A-Fa-f]{1,4}$/.test(rawVal) ? Number.parseInt(rawVal, 16) : 0;
+  return {
+    firstRow: onOff(look, 'firstRow') ?? (mask & 0x0020) !== 0,
+    lastRow: onOff(look, 'lastRow') ?? (mask & 0x0040) !== 0,
+    firstColumn: onOff(look, 'firstColumn') ?? (mask & 0x0080) !== 0,
+    lastColumn: onOff(look, 'lastColumn') ?? (mask & 0x0100) !== 0,
+    rowBanding:
+      onOff(look, 'noHBand') === undefined ? (mask & 0x0200) === 0 : !onOff(look, 'noHBand'),
+    columnBanding:
+      onOff(look, 'noVBand') === undefined ? (mask & 0x0400) === 0 : !onOff(look, 'noVBand'),
+  };
+}
+
+/** `w:cnfStyle`: the producer stating which conditions a row or cell is under. */
+function readCnfStyle(container: OoxmlElement | undefined): string | undefined {
+  const cnf = container && childNamed(container, 'cnfStyle');
+  return cnf ? attributeValue(cnf, 'val') : undefined;
+}
+
+/** Bit positions of `w:cnfStyle/@w:val` (17.4.7), most significant first. */
+const CNF_BITS = [
+  'firstRow',
+  'lastRow',
+  'firstCol',
+  'lastCol',
+  'band1Vert',
+  'band2Vert',
+  'band1Horz',
+  'band2Horz',
+  'nwCell',
+  'neCell',
+  'swCell',
+  'seCell',
+] as const;
+
+function cnfConditions(raw: string | undefined): readonly string[] {
+  if (!raw || !/^[01]{1,12}$/.test(raw)) return [];
+  const active: string[] = [];
+  for (let index = 0; index < raw.length && index < CNF_BITS.length; index += 1) {
+    if (raw[index] === '1') active.push(CNF_BITS[index]!);
+  }
+  return active;
+}
+
+/**
+ * Which of the style's conditional formats apply to one cell, weakest first.
+ *
+ * Word's precedence runs banding, then column, then row, then corner — so a first-row cell
+ * takes the header look over the band it happens to sit in. An explicit `w:cnfStyle`
+ * replaces the derivation entirely: the producer already did it.
+ */
+function conditionalTypesFor(input: {
+  readonly look: TableLook;
+  readonly rowIndex: number;
+  readonly rowCount: number;
+  readonly cellIndex: number;
+  readonly cellCount: number;
+  readonly rowCnf: string | undefined;
+  readonly cellCnf: string | undefined;
+}): readonly string[] {
+  const stated = [...cnfConditions(input.rowCnf), ...cnfConditions(input.cellCnf)];
+  if (stated.length > 0) return stated;
+
+  const { look, rowIndex, rowCount, cellIndex, cellCount } = input;
+  const isFirstRow = look.firstRow && rowIndex === 0;
+  const isLastRow = look.lastRow && rowCount > 1 && rowIndex === rowCount - 1;
+  const isFirstColumn = look.firstColumn && cellIndex === 0;
+  const isLastColumn = look.lastColumn && cellCount > 1 && cellIndex === cellCount - 1;
+
+  const active: string[] = [];
+  if (look.columnBanding && !isFirstColumn && !isLastColumn) {
+    const band = cellIndex - (look.firstColumn ? 1 : 0);
+    active.push(band % 2 === 0 ? 'band1Vert' : 'band2Vert');
+  }
+  if (look.rowBanding && !isFirstRow && !isLastRow) {
+    const band = rowIndex - (look.firstRow ? 1 : 0);
+    active.push(band % 2 === 0 ? 'band1Horz' : 'band2Horz');
+  }
+  if (isFirstColumn) active.push('firstCol');
+  if (isLastColumn) active.push('lastCol');
+  if (isFirstRow) active.push('firstRow');
+  if (isLastRow) active.push('lastRow');
+  if (isFirstRow && isFirstColumn) active.push('nwCell');
+  if (isFirstRow && isLastColumn) active.push('neCell');
+  if (isLastRow && isFirstColumn) active.push('swCell');
+  if (isLastRow && isLastColumn) active.push('seCell');
+  return active;
+}
+
+/**
  * Read one typed table node into a bounded structure, or null when the node is not a
  * typed table or sits beyond the nesting ceiling.
  */
 export function readTableStructure(
   table: OoxmlNode,
   contentWidthPt: number,
-  depth: number
+  depth: number,
+  styleCascade?: StyleCascadeTable
 ): SemanticTableStructure | null {
   if (depth >= MAX_TABLE_NESTING) return null;
   if (table.kind !== 'table') return null;
 
   const tblPr = childNamed(table, 'tblPr');
-  const defaultMargins = readDefaultMargins(tblPr);
-  const tableBorders = tblPr ? readTableBorders(tblPr) : EMPTY_TABLE_BORDER_BOX;
+  // A table's appearance mostly lives in its STYLE. Word writes
+  // `<w:tblStyle w:val="TableGrid"/>` and keeps the grid in styles.xml, so reading the
+  // table's own `w:tblPr` alone draws a borderless table where Word draws a full grid.
+  const styleId =
+    tblPr && childNamed(tblPr, 'tblStyle')
+      ? attributeValue(childNamed(tblPr, 'tblStyle')!, 'val')
+      : undefined;
+  const tableStyle = styleCascade
+    ? cascadeTableFormatting(styleCascade, styleId)
+    : EMPTY_TABLE_FORMATTING;
+  const look = readTableLook(tblPr);
+
+  let styleMargins = DEFAULT_CELL_MARGINS;
+  let styleBorders = EMPTY_TABLE_BORDER_BOX;
+  for (const node of tableStyle.tablePropertyNodes) {
+    styleMargins = mergeMargins(styleMargins, readMarginSides(childNamed(node, 'tblCellMar')));
+    styleBorders = mergeTableBorders(styleBorders, readTableBorders(node));
+  }
+  const defaultMargins = mergeMargins(
+    styleMargins,
+    readMarginSides(tblPr && childNamed(tblPr, 'tblCellMar'))
+  );
+  const tableBorders = mergeTableBorders(
+    styleBorders,
+    tblPr ? readTableBorders(tblPr) : EMPTY_TABLE_BORDER_BOX
+  );
+
+  const bodyRowIndex = new Map<string, number>();
+  let bodyRows = 0;
+  for (const rowNode of table.children) {
+    if (rowNode.kind !== 'tableRow') continue;
+    bodyRowIndex.set(rowNode.id, bodyRows);
+    bodyRows += 1;
+  }
 
   const rows: SemanticTableRow[] = [];
   for (const rowNode of table.children) {
     if (rowNode.kind !== 'tableRow') continue;
     const rowProperties = childNamed(rowNode, 'trPr');
+    const rowIndex = bodyRowIndex.get(rowNode.id) ?? 0;
+    let cellIndex = 0;
+    let cellCount = 0;
+    for (const child of rowNode.children) if (child.kind === 'tableCell') cellCount += 1;
     const cells: SemanticTableCell[] = [];
     for (const cellNode of rowNode.children) {
       if (cellNode.kind !== 'tableCell') continue;
       const cellProperties = childNamed(cellNode, 'tcPr');
-      const shading = readShading(cellProperties);
+      const conditions = conditionalTypesFor({
+        look,
+        rowIndex,
+        rowCount: bodyRows,
+        cellIndex,
+        cellCount,
+        // A producer may state the conditions itself rather than leave them to be derived.
+        rowCnf: readCnfStyle(rowProperties),
+        cellCnf: readCnfStyle(cellProperties),
+      });
+      cellIndex += 1;
+      let conditionalShading: string | undefined;
+      let conditionalBorders = EMPTY_CELL_BORDER_BOX;
+      for (const conditionType of conditions) {
+        const format = tableStyle.conditional.get(conditionType);
+        if (!format) continue;
+        const conditionTcPr = childNamed(format, 'tcPr');
+        conditionalShading = readShading(conditionTcPr) ?? conditionalShading;
+        conditionalBorders = mergeCellBorders(conditionalBorders, readCellBorders(conditionTcPr));
+      }
+      const shading = readShading(cellProperties) ?? conditionalShading;
       const cellMargins = mergeMargins(
         defaultMargins,
         readMarginSides(cellProperties && childNamed(cellProperties, 'tcMar'))
@@ -268,7 +452,10 @@ export function readTableStructure(
         vMergeContinue: readVMergeContinue(cellProperties),
         vAlign: readVAlign(cellProperties),
         margins: cellMargins,
-        borders: cellProperties ? readCellBorders(cellProperties) : EMPTY_CELL_BORDER_BOX,
+        borders: mergeCellBorders(
+          conditionalBorders,
+          cellProperties ? readCellBorders(cellProperties) : EMPTY_CELL_BORDER_BOX
+        ),
         ...(shading === undefined ? {} : { shading }),
         blocks,
       });
