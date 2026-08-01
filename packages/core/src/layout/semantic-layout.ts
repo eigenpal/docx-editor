@@ -911,13 +911,16 @@ function layoutBlocksWithGeometry(
           after: sameStyleAs(nextEntry) ? 0 : authoredSpacing.after,
         }
       : authoredSpacing;
-    // `w:firstLine` moves the first line right of the indent, `w:hanging` moves it left.
-    // The schema treats them as mutually exclusive; where a producer writes both, hanging
-    // wins, which is how Word reads it.
-    const firstLineOffset = indent.hanging > 0 ? -indent.hanging : indent.firstLine;
     // Prefer the current-pass map so marker ordinals stay fresh even when the prepared
     // block memo reuses indent/break inputs from an earlier revision.
     const listItem = listItems?.get(paragraph.id) ?? entry.listItem;
+    // `w:firstLine` moves the first line right of the indent, `w:hanging` moves it left.
+    // The schema treats them as mutually exclusive; where a producer writes both, hanging
+    // wins, which is how Word reads it.
+    // A NUMBERED/BULLETED paragraph's first-line slot belongs to the MARKER: `listMarkerBox`
+    // places it at `left - hanging`, and Word's `w:suff` tab puts the text back at `left`.
+    // Moving the text into that slot as well draws the bullet on top of its own first word.
+    const firstLineOffset = listItem ? 0 : indent.hanging > 0 ? -indent.hanging : indent.firstLine;
     const paragraphId = paragraph.id;
     const borderExtent = bottomBorderExtentPt(bottomBorder);
 

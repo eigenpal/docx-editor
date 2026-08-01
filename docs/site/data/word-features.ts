@@ -201,7 +201,7 @@ export const wordFeatures: WordFeature[] = [
     roundTrip: 'full',
     tier: 'community',
     notes:
-      'Left, right, first-line and hanging indents all reach line geometry, so an indented first line starts where Word starts it and wraps with the room it actually has.',
+      'Left, right, first-line and hanging indents all reach line geometry, so an indented first line starts where Word starts it and wraps with the room it actually has. Increase/Decrease Indent is on the toolbar and on Tab / Ctrl+M; inside a list it changes the level, so the marker changes with it.',
   },
   {
     id: 'paragraphs.styles',

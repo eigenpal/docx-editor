@@ -24,5 +24,6 @@ export function publishListMarker(
     text: item.markerText,
     style: item.markerStyle,
     box: { x: box.x + originX, y: box.y, width: box.width, height: box.height },
+    level: item.ilvl,
   };
 }

@@ -257,7 +257,10 @@ function placeCellParagraph(
   // A cell paragraph breaks like a body paragraph: same line spacing, same first-line
   // offset. Contextual spacing is a body-flow question (it compares document neighbours),
   // so it is not applied per cell.
-  const firstLineOffset = indent.hanging > 0 ? -indent.hanging : indent.firstLine;
+  // A NUMBERED/BULLETED paragraph's first-line slot belongs to the MARKER: `listMarkerBox`
+  // places it at `left - hanging`, and Word's `w:suff` tab puts the text back at `left`.
+  // Moving the text into that slot as well draws the bullet on top of its own first word.
+  const firstLineOffset = listItem ? 0 : indent.hanging > 0 ? -indent.hanging : indent.firstLine;
   const key = paragraphLayoutKey({
     paragraph,
     properties: [

@@ -181,6 +181,33 @@ export function mountPaginatedSurface(
   let currentLayout = layoutOnce();
   let desiredX: number | null = null;
 
+  /** Word's Increase/Decrease Indent step: one default tab stop. */
+  const INDENT_STEP_TWIPS = 720;
+  /** `w:ilvl` is 0..8 (ECMA-376 17.9.24). */
+  const MAX_LIST_LEVEL = 8;
+
+  /** The list level of a paragraph, or null when it carries no numbering. */
+  function listLevelOf(paragraphId: string): number | null {
+    for (const page of currentLayout.pages) {
+      for (const fragment of page.fragments) {
+        if (fragment.kind !== 'paragraph') continue;
+        if (fragment.paragraphId !== paragraphId) continue;
+        return fragment.marker ? fragment.marker.level : null;
+      }
+    }
+    return null;
+  }
+
+  /** Authored `w:ind/@left` in twips, zero when the paragraph states none. */
+  function leftIndentTwipsOf(
+    properties: readonly { localName: string; attributes?: Readonly<Record<string, string>> }[]
+  ): number {
+    const ind = properties.find((property) => property.localName === 'ind');
+    const raw = ind?.attributes?.left ?? ind?.attributes?.start;
+    if (!raw || !/^-?\d{1,7}$/.test(raw)) return 0;
+    return Number(raw);
+  }
+
   function layoutOnce(): SemanticLayout {
     const began = now();
     const layout = layoutSemanticDocument(session.part(), session.revision(), {
@@ -660,6 +687,64 @@ export function mountPaginatedSurface(
           ),
         () => collapsedAt({ ...start, offset: start.offset + 1 })
       );
+    },
+
+    isListParagraph() {
+      const { paragraphId } = orderedStart();
+      return listLevelOf(paragraphId) !== null;
+    },
+
+    adjustIndent(direction) {
+      const { from, to } = orderedRange();
+      const order = documentOrder(currentLayout);
+      const firstIndex = order.indexOf(from.paragraphId);
+      const lastIndex = order.indexOf(to.paragraphId);
+      if (firstIndex === -1 || lastIndex === -1) return false;
+      const step = direction === 'increase' ? 1 : -1;
+      const ops: TreeDocOp[] = [];
+      for (const paragraphId of order.slice(firstIndex, lastIndex + 1)) {
+        const properties = paragraphPropertiesOf(currentLayout, paragraphId);
+        const level = listLevelOf(paragraphId);
+        if (level !== null) {
+          // A list item DEMOTES rather than shifting: `w:ilvl` is what picks the level's
+          // format out of numbering.xml, so the marker changes with the indent the way
+          // Word's Tab does. Nine levels exist (17.9.24); the ends are no-ops, not errors.
+          const next = level + step;
+          if (next < 0 || next > MAX_LIST_LEVEL) continue;
+          ops.push({
+            op: 'setListLevel',
+            paragraphId,
+            level: next,
+          });
+          continue;
+        }
+        const current = leftIndentTwipsOf(properties);
+        const next = Math.max(0, current + step * INDENT_STEP_TWIPS);
+        if (next === current) continue;
+        const existing = properties.find((property) => property.localName === 'ind');
+        ops.push({
+          op: 'setParagraphProperties',
+          paragraphId,
+          properties: mergedProperties(properties, {
+            localName: 'ind',
+            attributes: {
+              ...(existing?.attributes ?? {}),
+              // Zero is written rather than dropped: an authored `w:ind` may inherit a
+              // non-zero left from its style, and removing the attribute would let that
+              // come back instead of taking the outdent.
+              left: String(next),
+            },
+          }),
+        });
+      }
+      if (ops.length === 0) return false;
+      let committed = false;
+      commit(() => {
+        const result = session.applyTreeOps(ops, selectionMark());
+        committed = result.committed;
+        return result;
+      });
+      return committed;
     },
 
     setSelection: (next) => setSelection(next),

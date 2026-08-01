@@ -89,6 +89,18 @@ export type TreeDocOp =
   | { readonly op: 'insertTab'; readonly paragraphId: string; readonly offset: number }
   | { readonly op: 'insertHardBreak'; readonly paragraphId: string; readonly offset: number }
   | { readonly op: 'insertPageBreak'; readonly paragraphId: string; readonly offset: number }
+  | {
+      /**
+       * Move a numbered paragraph to another `w:numPr/w:ilvl`.
+       *
+       * A list item's LEVEL is what selects its format out of `numbering.xml`, so this is
+       * the op behind Increase/Decrease Indent on a list: the marker changes with it. A
+       * paragraph carrying no `w:numPr` is refused rather than silently numbered.
+       */
+      readonly op: 'setListLevel';
+      readonly paragraphId: string;
+      readonly level: number;
+    }
   | { readonly op: 'splitParagraph'; readonly paragraphId: string; readonly offset: number }
   | {
       /**
@@ -166,6 +178,7 @@ export const TREE_DOC_OP_KINDS = [
   'insertTab',
   'insertHardBreak',
   'insertPageBreak',
+  'setListLevel',
   'splitParagraph',
   'splitParagraphMany',
   'joinParagraphs',
@@ -208,6 +221,7 @@ export type TreeOpRejection =
   | 'not-a-paragraph'
   | 'offset-out-of-range'
   | 'invalid-range'
+  | 'not-a-list-paragraph'
   | 'splits-surrogate-pair'
   | 'invalid-text'
   | 'unsupported-property'
@@ -591,6 +605,10 @@ export function validateTreeOp(part: OoxmlPart, op: TreeDocOp): TreeOpRejection 
       }
       if (typeof op.text !== 'string' || !isValidXmlText(op.text)) return 'invalid-text';
       if (splitsSurrogate(paragraph, op.offset)) return 'splits-surrogate-pair';
+      return null;
+    }
+    case 'setListLevel': {
+      if (!Number.isInteger(op.level) || op.level < 0 || op.level > 8) return 'invalid-range';
       return null;
     }
     case 'insertTab':

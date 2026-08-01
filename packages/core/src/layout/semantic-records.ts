@@ -137,6 +137,14 @@ export interface ListMarkerRecord {
   readonly text: string;
   readonly style: ResolvedRunStyle;
   readonly box: LayoutBox;
+  /**
+   * The `w:ilvl` this marker was resolved at, 0..8.
+   *
+   * Published because the level, not the geometry, is what Increase/Decrease Indent moves
+   * on a list paragraph — demoting an item re-resolves its format from `numbering.xml`,
+   * which is why a bullet becomes a hollow circle and a `1.` becomes an `a.`.
+   */
+  readonly level: number;
 }
 
 /**

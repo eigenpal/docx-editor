@@ -280,6 +280,10 @@ export function classifyCommand(command: EditorCommand): CommandSupport {
         command.hanging !== undefined
         ? { supported: true, mutating: true }
         : { supported: false, reason: 'setIndent requires at least one indent field' };
+    case 'adjustIndent':
+      return command.direction === 'increase' || command.direction === 'decrease'
+        ? { supported: true, mutating: true }
+        : { supported: false, reason: `indent direction '${command.direction}' is not supported` };
     case 'insertBreak':
       // Line, hard page, and next-page section breaks are wired. `column` belongs to the
       // multi-column lane, which layout does not own yet.

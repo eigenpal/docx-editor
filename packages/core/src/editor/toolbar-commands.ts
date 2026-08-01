@@ -44,6 +44,8 @@ const SLOT_COMMANDS: Partial<Record<ChromeSlotId, EditorCommand>> = {
   'alignment.center': { type: 'setAlignment', align: 'center' },
   'alignment.right': { type: 'setAlignment', align: 'right' },
   'alignment.justify': { type: 'setAlignment', align: 'justify' },
+  'list.indent': { type: 'adjustIndent', direction: 'increase' },
+  'list.outdent': { type: 'adjustIndent', direction: 'decrease' },
 };
 
 /**

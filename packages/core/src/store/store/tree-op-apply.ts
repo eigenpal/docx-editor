@@ -42,7 +42,27 @@ import {
   type TreeOpResult,
 } from './tree-op-validate.ts';
 
-function propertyElement(property: OoxmlProperty, id: string): OoxmlNode {
+/**
+ * Build one `w:pPr` child from a flat property, KEEPING the structure of the node it
+ * replaces.
+ *
+ * `OoxmlProperty` is flat — a name and attributes — but several `w:pPr` children carry
+ * their meaning in CHILDREN: `w:numPr` holds `w:ilvl`/`w:numId`, `w:tabs` holds `w:tab`,
+ * `w:pBdr` holds its edges. Rebuilding those from the flat projection alone emitted an
+ * empty element, so centring a list paragraph silently deleted its numbering and the
+ * bullet vanished. When the incoming property matches what is already there, the existing
+ * node is reused verbatim; when its attributes changed, the children still come across.
+ */
+function propertyElement(property: OoxmlProperty, id: string, prior?: OoxmlNode): OoxmlNode {
+  const attributes = Object.entries(property.attributes ?? {}).map(([localName, value]) => ({
+    kind: 'genericExtension' as const,
+    namespaceUri: WML_NAMESPACE_URI,
+    localName,
+    prefix: 'w',
+    value,
+  }));
+  const priorElement = prior && prior.kind !== 'textValue' ? prior : undefined;
+  if (priorElement && sameAttributes(priorElement, attributes)) return prior!;
   return {
     id,
     kind: 'generic',
@@ -50,15 +70,22 @@ function propertyElement(property: OoxmlProperty, id: string): OoxmlNode {
     localName: property.localName,
     prefix: 'w',
     namespaceBindings: [],
-    attributes: Object.entries(property.attributes ?? {}).map(([localName, value]) => ({
-      kind: 'genericExtension' as const,
-      namespaceUri: WML_NAMESPACE_URI,
-      localName,
-      prefix: 'w',
-      value,
-    })),
-    children: [],
+    attributes,
+    children: priorElement?.children ?? [],
   } as unknown as OoxmlNode;
+}
+
+function sameAttributes(
+  node: Exclude<OoxmlNode, { kind: 'textValue' }>,
+  attributes: readonly { readonly localName: string; readonly value: string }[]
+): boolean {
+  const existing = node.attributes ?? [];
+  if (existing.length !== attributes.length) return false;
+  for (const attribute of attributes) {
+    const match = existing.find((entry) => entry.localName === attribute.localName);
+    if (!match || match.value !== attribute.value) return false;
+  }
+  return true;
 }
 
 function textElement(nextId: () => string, text: string): OoxmlNode {
@@ -167,6 +194,8 @@ export function applyTreeOp(part: OoxmlPart, op: TreeDocOp, options?: EditOption
         [(mint) => simpleElement(mint, 'br', 'line')],
         options
       );
+    case 'setListLevel':
+      return applySetListLevel(part, paragraph, op.level, options, nextId);
     case 'insertPageBreak':
       return applyInsertContent(
         part,
@@ -185,7 +214,20 @@ export function applyTreeOp(part: OoxmlPart, op: TreeDocOp, options?: EditOption
       return applySetRunProperties(part, paragraph, op.start, op.end, op.properties, options);
     case 'setParagraphProperties': {
       const existing = paragraph.children.find((child) => child.kind === 'paragraphProperties');
-      const children = op.properties.map((property) => propertyElement(property, nextId()));
+      // Existing children by name, consumed in order, so a rewritten `w:pPr` carries the
+      // nested structure the flat projection cannot express.
+      const priorByName = new Map<string, OoxmlNode[]>();
+      for (const child of existing?.children ?? []) {
+        const bucket = priorByName.get(child.localName);
+        if (bucket) bucket.push(child);
+        else priorByName.set(child.localName, [child]);
+      }
+      const takenByName = new Map<string, number>();
+      const children = op.properties.map((property) => {
+        const taken = takenByName.get(property.localName) ?? 0;
+        takenByName.set(property.localName, taken + 1);
+        return propertyElement(property, nextId(), priorByName.get(property.localName)?.[taken]);
+      });
       const effect: TreeOpEffect = {
         dirty: [paragraph.id],
         created: [],
@@ -763,6 +805,44 @@ function applySetSectionProperties(
  * effective page setup, so the new section looks exactly like the one it was cut from —
  * which is what Word's next-page section break does.
  */
+/**
+ * Move a numbered paragraph to another level.
+ *
+ * Rewrites `w:numPr/w:ilvl` in place rather than rebuilding `w:pPr`: `w:numId` and every
+ * other paragraph property have to survive, and the level is the ONLY thing this op
+ * states. A paragraph without `w:numPr` is not a list item, so there is no level to move
+ * and the edit is refused — Increase Indent on a plain paragraph is a different op.
+ */
+function applySetListLevel(
+  part: OoxmlPart,
+  paragraph: OoxmlParagraphNode,
+  level: number,
+  options: EditOptions | undefined,
+  nextId: () => string
+): TreeOpResult {
+  const pPr = paragraph.children.find((child) => child.kind === 'paragraphProperties');
+  const numPr = pPr?.children.find((child) => child.localName === 'numPr');
+  if (!numPr) return { ok: false, reason: 'not-a-list-paragraph' };
+  const effect: TreeOpEffect = {
+    dirty: [paragraph.id],
+    created: [],
+    deleted: [],
+    dependencyKeys: TEXT_DEPS,
+    // The marker re-resolves from numbering.xml at the new level, and levels carry their
+    // own indents, so this reflows the paragraph rather than restyling it in place.
+    impact: 'flow-structural',
+  };
+  const ilvl = numPr.children.find(
+    (child) => child.kind !== 'textValue' && child.localName === 'ilvl'
+  );
+  const replacement = sectionElement(nextId(), 'ilvl', [wmlAttribute('val', String(level))], []);
+  if (ilvl) {
+    return fromEdit(replaceNode(part, ilvl.id, replacement, options), effect);
+  }
+  // Absent `w:ilvl` reads as level 0 (17.9.3); writing it makes the demotion explicit.
+  return fromEdit(insertChildren(part, numPr.id, 0, [replacement], options), effect);
+}
+
 function applySetSectionMark(
   part: OoxmlPart,
   paragraphId: string,

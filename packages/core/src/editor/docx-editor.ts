@@ -909,6 +909,16 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
           }
           break;
         }
+        case 'adjustIndent':
+          if (!mounted.adjustIndent(command.direction)) {
+            return {
+              ok: false,
+              code: 'invalidArgs',
+              reason:
+                mounted.state().lastRejection ?? 'the selection is already at that indent level',
+            };
+          }
+          break;
         case 'insertBreak':
           if (command.kind === 'section') {
             if (!mounted.insertSectionBreak()) {

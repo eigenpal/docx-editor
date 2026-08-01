@@ -9,6 +9,7 @@ import { readOoxmlPart, type OoxmlPart } from '@docx-editor.dev/core-contract/st
 import {
   applyLineSpacing,
   createFixedMeasurer,
+  buildNumberingIndex,
   layoutSemanticDocument,
   linesOf,
   paragraphContextualSpacing,
@@ -172,6 +173,33 @@ describe('first-line indent reaches line geometry', () => {
   test('w:hanging wins over w:firstLine, which the schema treats as exclusive', () => {
     const lines = narrow('<w:ind w:left="720" w:hanging="360" w:firstLine="720"/>');
     expect(lines[0]!.spans[0]!.box.x).toBe(18);
+  });
+
+  test('a LIST paragraph keeps its text out of the marker slot', () => {
+    // A numbered paragraph's hanging indent is the marker's slot. Moving the text into it
+    // as well draws the bullet on top of its own first word.
+    const numbering = readOoxmlPart(
+      `<w:numbering xmlns:w="${W}">` +
+        '<w:abstractNum w:abstractNumId="0"><w:lvl w:ilvl="0">' +
+        '<w:numFmt w:val="bullet"/><w:lvlText w:val="\u2022"/>' +
+        '<w:pPr><w:ind w:left="720" w:hanging="360"/></w:pPr>' +
+        '</w:lvl></w:abstractNum>' +
+        '<w:num w:numId="1"><w:abstractNumId w:val="0"/></w:num></w:numbering>',
+      { name: '/word/numbering.xml', contentType: 'app/xml' }
+    );
+    if (!numbering.ok) throw new Error(numbering.reason);
+    const item =
+      '<w:p><w:pPr><w:numPr><w:ilvl w:val="0"/><w:numId w:val="1"/></w:numPr></w:pPr>' +
+      '<w:r><w:t>alpha</w:t></w:r></w:p>';
+    const layout = layoutSemanticDocument(load(item), 1, {
+      measurer,
+      numberingIndex: buildNumberingIndex(numbering.part.root),
+    });
+    const fragment = layout.pages[0]!.fragments[0]!;
+    if (fragment.kind !== 'paragraph') throw new Error('expected a paragraph');
+    // Marker in the hanging slot at 18pt; text at the 36pt indent, not on top of it.
+    expect(fragment.marker!.box.x).toBe(18);
+    expect(fragment.lines[0]!.spans[0]!.box.x).toBe(36);
   });
 
   test('an indented first line has less room, so it wraps earlier', () => {

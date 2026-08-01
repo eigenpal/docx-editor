@@ -117,6 +117,20 @@ export interface PaginatedSurface {
   insertLineBreak(): void;
   /** A `w:br w:type="page"` — Ctrl+Enter, a hard page break inside the paragraph. */
   insertPageBreak(): void;
+  /**
+   * Word's Increase/Decrease Indent, over every paragraph the selection touches.
+   *
+   * A NUMBERED or BULLETED paragraph changes LEVEL: `w:numPr/w:ilvl` moves by one, which
+   * re-resolves its marker from `numbering.xml` — so a bullet becomes a hollow circle, a
+   * `1.` becomes an `a.`, exactly as Word demotes a list item. Everything else moves its
+   * `w:ind/@left` by one default tab stop, never past the margin.
+   *
+   * Answers whether anything changed, so a caller can fall back (Tab inserting a tab
+   * where there is no list to demote).
+   */
+  adjustIndent(direction: 'increase' | 'decrease'): boolean;
+  /** Whether the paragraph at the caret is a list item, for Tab's Word-like fallback. */
+  isListParagraph(): boolean;
   /** Select the whole document. */
   selectAll(): void;
   /** Set the selection directly, for a host driving the surface programmatically. */
