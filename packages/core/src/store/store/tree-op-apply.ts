@@ -408,6 +408,12 @@ function applySplit(
     }
   }
 
+  // A `w:sectPr` in the split paragraph's mark belongs to the TAIL: Word splits by
+  // inserting a fresh mark before the existing one, so the original mark — and the
+  // section boundary it carries — stays after ALL the paragraph's content. Cloning it
+  // onto both halves minted a phantom section (and a spurious page break) on every
+  // Enter in a section's last paragraph.
+  const headPPr = pPr ? withoutSectionMark(pPr) : undefined;
   const tailParagraph = {
     id: nextId(),
     kind: 'paragraph',
@@ -437,7 +443,7 @@ function applySplit(
   if (!parent) return { ok: false, reason: 'tree-invariant', detail: 'paragraph has no parent' };
   const headParagraph = Object.freeze({
     ...paragraph,
-    children: pPr ? [pPr, ...headChildren] : headChildren,
+    children: headPPr ? [headPPr, ...headChildren] : headChildren,
   }) as OoxmlNode;
   const siblings = parent.children.flatMap((child) =>
     child.id === paragraph.id ? [headParagraph, tailParagraph] : [child]
@@ -553,8 +559,14 @@ function applySplitMany(
     }
   }
 
+  // A `w:sectPr` in the mark belongs to the LAST piece only — the original mark ends up
+  // after all the paragraph's content, exactly as the single-split rule keeps it on the
+  // tail. Duplicating it minted one phantom section per pasted line.
+  const strippedPPr = pPr ? withoutSectionMark(pPr) : undefined;
   const tailParagraphs: OoxmlNode[] = [];
   for (let piece = 1; piece < pieceCount; piece += 1) {
+    const last = piece === pieceCount - 1;
+    const source = last ? pPr : strippedPPr;
     tailParagraphs.push({
       id: nextId(),
       kind: 'paragraph',
@@ -563,7 +575,7 @@ function applySplitMany(
       prefix: 'w',
       namespaceBindings: [],
       attributes: [],
-      children: pPr ? [cloneWithNewIds(pPr, nextId), ...pieces[piece]!] : pieces[piece]!,
+      children: source ? [cloneWithNewIds(source, nextId), ...pieces[piece]!] : pieces[piece]!,
     } as unknown as OoxmlNode);
   }
 
@@ -580,12 +592,27 @@ function applySplitMany(
   if (!parent) return { ok: false, reason: 'tree-invariant', detail: 'paragraph has no parent' };
   const headParagraph = Object.freeze({
     ...paragraph,
-    children: pPr ? [pPr, ...pieces[0]!] : pieces[0]!,
+    children: strippedPPr ? [strippedPPr, ...pieces[0]!] : pieces[0]!,
   }) as OoxmlNode;
   const siblings = parent.children.flatMap((child) =>
     child.id === paragraph.id ? [headParagraph, ...tailParagraphs] : [child]
   );
   return fromEdit(replaceChildren(part, parent.id, siblings, options), effect);
+}
+
+/**
+ * A `w:pPr` without its `w:sectPr`, keeping identity when there is none. `undefined`
+ * when the section mark was its only content — an empty `w:pPr` serializes markup a
+ * paragraph that never had one does not.
+ */
+function withoutSectionMark(pPr: OoxmlNode): OoxmlNode | undefined {
+  if (pPr.kind === 'textValue') return undefined;
+  const children = pPr.children.filter(
+    (child) => !('localName' in child) || child.localName !== 'sectPr'
+  );
+  if (children.length === pPr.children.length) return pPr;
+  if (children.length === 0) return undefined;
+  return { ...pPr, children } as OoxmlNode;
 }
 
 /** A deep copy with freshly minted identities, for content duplicated by a split. */
@@ -740,39 +767,46 @@ function applySetSectionMark(
     impact: 'flow-structural',
   };
 
-  const sectPr = sectionElement(
-    nextId(),
-    'sectPr',
-    [],
-    [
-      sectionElement(
+  // The WHOLE governing section is cloned — header/footer references, columns,
+  // `titlePg`, page numbering, everything. The new section becomes an EARLIER section,
+  // and §17.10.5 header inheritance only looks backwards: cloning just the page
+  // geometry would strip the headers off every page before the break. A document with
+  // no section at all gets the effective defaults, written out.
+  const sectPr = governing
+    ? cloneWithNewIds(governing, nextId)
+    : sectionElement(
         nextId(),
-        'pgSz',
+        'sectPr',
+        [],
         [
-          wmlAttribute('w', String(metrics.widthTwips)),
-          wmlAttribute('h', String(metrics.heightTwips)),
-          ...(metrics.widthTwips > metrics.heightTwips
-            ? [wmlAttribute('orient', 'landscape')]
-            : []),
-        ],
-        []
-      ),
-      sectionElement(
-        nextId(),
-        'pgMar',
-        [
-          wmlAttribute('top', String(metrics.topTwips)),
-          wmlAttribute('right', String(metrics.rightTwips)),
-          wmlAttribute('bottom', String(metrics.bottomTwips)),
-          wmlAttribute('left', String(metrics.leftTwips)),
-          wmlAttribute('header', String(metrics.headerTwips)),
-          wmlAttribute('footer', String(metrics.footerTwips)),
-          wmlAttribute('gutter', String(metrics.gutterTwips)),
-        ],
-        []
-      ),
-    ]
-  );
+          sectionElement(
+            nextId(),
+            'pgSz',
+            [
+              wmlAttribute('w', String(metrics.widthTwips)),
+              wmlAttribute('h', String(metrics.heightTwips)),
+              ...(metrics.widthTwips > metrics.heightTwips
+                ? [wmlAttribute('orient', 'landscape')]
+                : []),
+            ],
+            []
+          ),
+          sectionElement(
+            nextId(),
+            'pgMar',
+            [
+              wmlAttribute('top', String(metrics.topTwips)),
+              wmlAttribute('right', String(metrics.rightTwips)),
+              wmlAttribute('bottom', String(metrics.bottomTwips)),
+              wmlAttribute('left', String(metrics.leftTwips)),
+              wmlAttribute('header', String(metrics.headerTwips)),
+              wmlAttribute('footer', String(metrics.footerTwips)),
+              wmlAttribute('gutter', String(metrics.gutterTwips)),
+            ],
+            []
+          ),
+        ]
+      );
 
   const pPr = paragraph.children.find((child) => child.kind === 'paragraphProperties');
   if (!pPr) {

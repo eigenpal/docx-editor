@@ -66,6 +66,13 @@ export interface LayoutSectionInput {
   readonly firstBlock: number;
   /** How the section begins. `continuous` with an unchanged geometry shares the page. */
   readonly breakType?: 'nextPage' | 'continuous' | 'evenPage' | 'oddPage' | 'nextColumn';
+  /**
+   * A stable identity for the section (the `w:sectPr` node id). Folded into the layout
+   * context INSTEAD of `firstBlock`, so inserting or deleting a paragraph — which shifts
+   * every later block index but moves no section — keeps checkpoints resumable rather
+   * than forcing a full-document relayout on every Enter in a multi-section document.
+   */
+  readonly id?: string;
 }
 
 export interface SemanticLayoutOptions {
@@ -336,11 +343,14 @@ export function layoutSemanticDocument(
       ';' +
       [...furniture.footers].map(([variant, story]) => `f${variant}=${story.flowHeight}`).join(',')
     : '';
-  // EVERY section participates: a change to any section's geometry or extent moves breaks,
-  // so it must invalidate checkpoints exactly as the single geometry did.
+  // EVERY section participates: a change to any section's geometry, order or break type
+  // moves breaks, so it must invalidate checkpoints exactly as the single geometry did.
+  // Keyed by section IDENTITY, not block index: an insertion shifts every later block
+  // index without moving a section, and the per-index resume machinery (keys, firstChanged,
+  // convergence) already accounts for shifted content.
   const sectionsContext = sections
-    .map(({ geometry: g, firstBlock, breakType }) => {
-      return `${firstBlock}${breakType ?? 'nextPage'}@${g.width}x${g.height}|${g.margin.top},${g.margin.right},${g.margin.bottom},${g.margin.left}|${g.headerDistance ?? 36},${g.footerDistance ?? 36}`;
+    .map(({ geometry: g, breakType, id }) => {
+      return `${id ?? 'default'}~${breakType ?? 'nextPage'}@${g.width}x${g.height}|${g.margin.top},${g.margin.right},${g.margin.bottom},${g.margin.left}|${g.headerDistance ?? 36},${g.footerDistance ?? 36}`;
     })
     .join(';');
   const context = `${producer}|${sectionsContext}${furnitureContext}`;
@@ -545,7 +555,12 @@ export function layoutSemanticDocument(
 
   // Sheets of mixed widths centre against the widest, as Word lays a landscape page
   // among portrait ones. Single-section documents keep x = 0 exactly as before.
-  const maxSheetWidth = Math.max(...sectionMetrics.map((metrics) => metrics.geometry.width));
+  // A loop, not a spread: the section count is file-controlled and a spread of a huge
+  // array throws instead of degrading.
+  let maxSheetWidth = 0;
+  for (const metrics of sectionMetrics) {
+    maxSheetWidth = Math.max(maxSheetWidth, metrics.geometry.width);
+  }
 
   const flushPage = (): void => {
     const index = pages.length;

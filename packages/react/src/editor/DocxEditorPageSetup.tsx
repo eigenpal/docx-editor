@@ -172,6 +172,13 @@ export function DocxEditorPageSetupDialog({
       seeded.current = 'no';
       return;
     }
+    // A document unload while open (host called `load()`) drops the section to null:
+    // forget the seed so the NEXT document's section re-seeds instead of the old one
+    // being stamped over it.
+    if (seeded.current === 'yes' && pageSetup === null) {
+      seeded.current = 'no';
+      return;
+    }
     if (seeded.current === 'yes' || (seeded.current === 'loading' && pageSetup === null)) return;
     setPageWidth(pageSetup?.pageWidthTwips ?? DEFAULT_WIDTH);
     setPageHeight(pageSetup?.pageHeightTwips ?? DEFAULT_HEIGHT);

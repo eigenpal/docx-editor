@@ -163,15 +163,25 @@ export function mountPaginatedSurface(
   let currentLayout = layoutOnce();
   let desiredX: number | null = null;
 
+  // The per-section lane: every section paginates against its own geometry, so a
+  // landscape section among portrait ones lays out as Word shows it. Re-read per pass
+  // for the same reason the geometry is; the sectPr node id is the section's stable
+  // identity in the layout context.
+  function layoutSections() {
+    return readDocumentSections(session.part()).map((section) => ({
+      geometry: section.geometry,
+      firstBlock: section.firstBlock,
+      breakType: section.breakType,
+      ...(section.sectPrId !== null ? { id: section.sectPrId } : {}),
+    }));
+  }
+
   function layoutOnce(): SemanticLayout {
     const began = now();
     const layout = layoutSemanticDocument(session.part(), session.revision(), {
       measurer,
       geometry: furnitureSource.geometry(),
-      // The per-section lane: every section paginates against its own geometry, so a
-      // landscape section among portrait ones lays out as Word shows it. Re-read per
-      // pass for the same reason the geometry is.
-      sections: readDocumentSections(session.part()),
+      sections: layoutSections(),
       cache: layoutCache,
       session: layoutSession,
       producer,
@@ -199,7 +209,7 @@ export function mountPaginatedSurface(
       const layout = layoutSemanticDocument(session.part(), scope.revision, {
         measurer,
         geometry: furnitureSource.geometry(),
-        sections: readDocumentSections(session.part()),
+        sections: layoutSections(),
         cache: layoutCache,
         session: layoutSession,
         producer,
@@ -716,6 +726,8 @@ export function mountPaginatedSurface(
         () => {
           const result = session.applyTreeOps(
             [
+              // A break REPLACES a selection, like every other insertion.
+              ...deleteSelectionOps(),
               { op: 'splitParagraph', paragraphId: start.paragraphId, offset: start.offset },
               // The HEAD keeps the original id; it ends the new section, cloning the
               // governing setup so the break changes where pages break, not how they look.

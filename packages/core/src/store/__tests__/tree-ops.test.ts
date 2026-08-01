@@ -713,3 +713,40 @@ describe('setSectionProperties writes page setup surgically', () => {
     expect(canonicalOoxmlFingerprint(part)).toBe(fingerprint);
   });
 });
+
+describe('a section mark survives a split exactly once (the phantom-section fix)', () => {
+  const BOUNDARY =
+    '<w:p><w:pPr><w:jc w:val="center"/><w:sectPr><w:pgSz w:w="15840" w:h="12240"/></w:sectPr></w:pPr>' +
+    '<w:r><w:t>end of section one</w:t></w:r></w:p>' +
+    '<w:p><w:r><w:t>section two</w:t></w:r></w:p>' +
+    '<w:sectPr><w:pgSz w:w="12240" w:h="15840"/></w:sectPr>';
+
+  test('Enter in a section-boundary paragraph keeps ONE mark, on the tail', () => {
+    const part = load(BOUNDARY);
+    const [id] = paragraphIds(part);
+    const next = apply(part, { op: 'splitParagraph', paragraphId: id!, offset: 6 });
+    const serialized = serializeOoxmlPart(next);
+    // Still exactly two sectPr: the (moved) mid-body one and the body-level one. The
+    // section boundary stays after ALL the original content — with the tail — while
+    // other paragraph properties survive on both halves.
+    expect(serialized.match(/<w:sectPr>/g)).toHaveLength(2);
+    const [head, tail] = paragraphIds(next);
+    const headXml = serialized.slice(serialized.indexOf('<w:p>'), serialized.indexOf('</w:p>'));
+    expect(headXml).not.toContain('sectPr');
+    expect(serialized.match(/w:jc/g)).toHaveLength(2);
+    void head;
+    void tail;
+  });
+
+  test('a many-way split keeps the mark on the LAST piece only', () => {
+    const part = load(BOUNDARY);
+    const [id] = paragraphIds(part);
+    const next = apply(part, { op: 'splitParagraphMany', paragraphId: id!, offsets: [3, 6, 10] });
+    const serialized = serializeOoxmlPart(next);
+    expect(serialized.match(/<w:sectPr>/g)).toHaveLength(2);
+    // The mid-body mark sits in the last produced piece: after it, only "section two"
+    // and the body-level sectPr remain.
+    const afterMark = serialized.slice(serialized.indexOf('<w:sectPr>') + 1);
+    expect(afterMark).toContain('section two');
+  });
+});

@@ -280,6 +280,9 @@ export function allSectionNodes(part: OoxmlPart): OoxmlNode[] {
   const found: OoxmlNode[] = [];
   const walk = (node: OoxmlNode): void => {
     if (node.kind === 'textValue') return;
+    // A `sectPr` inside a table is not a section Word recognises and layout ignores it;
+    // writing to one would make the dialog appear to do nothing.
+    if (node.kind === 'table') return;
     if ('localName' in node && node.localName === 'sectPr') {
       found.push(node);
       return;
@@ -288,6 +291,24 @@ export function allSectionNodes(part: OoxmlPart): OoxmlNode[] {
   };
   walk(part.root);
   return found;
+}
+
+/** Whether a node sits inside a `w:tbl` — where a section mark must not be minted. */
+export function isTableNested(part: OoxmlPart, nodeId: string): boolean {
+  let nested = false;
+  let found = false;
+  const walk = (node: OoxmlNode, inTable: boolean): void => {
+    if (found || node.kind === 'textValue') return;
+    if (node.id === nodeId) {
+      nested = inTable;
+      found = true;
+      return;
+    }
+    const below = inTable || node.kind === 'table';
+    for (const child of node.children ?? []) walk(child, below);
+  };
+  walk(part.root, false);
+  return nested;
 }
 
 /** A `w:`-namespace attribute value by local name, off any element node. */
@@ -384,23 +405,26 @@ export function targetSectionNodes(
     return bodySectionOf(part) ? all : [...all, null];
   }
   // The governing section of a paragraph: the first paragraph AT or AFTER it (in
-  // document order) carrying a `w:pPr/w:sectPr`, else the body-level section.
+  // document order) carrying a `w:pPr/w:sectPr`, else the body-level section. The
+  // anchor may sit inside a table (the table belongs to a section), but a table-nested
+  // `sectPr` is never a boundary — Word does not recognise one.
   let seenAnchor = false;
   let governing: OoxmlNode | null | undefined;
-  const walk = (node: OoxmlNode): void => {
+  const walk = (node: OoxmlNode, inTable: boolean): void => {
     if (governing !== undefined || node.kind === 'textValue') return;
     if (node.kind === 'paragraph') {
       if (node.id === anchorParagraphId) seenAnchor = true;
-      if (seenAnchor) {
+      if (seenAnchor && !inTable) {
         const pPr = node.children.find((child) => child.kind === 'paragraphProperties');
         const sectPr = pPr ? sectionChild(pPr, 'sectPr') : null;
         if (sectPr) governing = sectPr;
       }
       return;
     }
-    for (const child of node.children ?? []) walk(child);
+    const below = inTable || node.kind === 'table';
+    for (const child of node.children ?? []) walk(child, below);
   };
-  walk(part.root);
+  walk(part.root, false);
   return [governing ?? bodySectionOf(part)];
 }
 
@@ -619,6 +643,9 @@ export function validateTreeOp(part: OoxmlPart, op: TreeDocOp): TreeOpRejection 
       const pPr = paragraph.children.find((child) => child.kind === 'paragraphProperties');
       // A paragraph already ending a section cannot end two.
       if (pPr && sectionChild(pPr, 'sectPr')) return 'invalid-property-value';
+      // A section cannot end inside a table cell: Word never writes one there, and the
+      // read side would ignore it — a committed no-op the user cannot see.
+      if (isTableNested(part, op.paragraphId)) return 'invalid-property-value';
       return null;
     }
     default:

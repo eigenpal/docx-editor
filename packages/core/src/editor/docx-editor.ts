@@ -858,7 +858,13 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
         }
         case 'insertBreak':
           if (command.kind === 'section') {
-            mounted.insertSectionBreak();
+            if (!mounted.insertSectionBreak()) {
+              return {
+                ok: false,
+                code: 'invalidArgs',
+                reason: mounted.state().lastRejection ?? 'the section break was refused',
+              };
+            }
             break;
           }
           mounted.insertLineBreak();
