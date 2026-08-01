@@ -26,7 +26,7 @@ const localFetcher = ((input: RequestInfo | URL) => {
 describe('fonts package through the engine', () => {
   test('a document naming Calibri measures via validated Carlito bytes', async () => {
     const fragment = await loadDefaultFonts({ families: ['Calibri'], fetcher: localFetcher });
-    const fonts = composeFontConfiguration({}, fragment);
+    const fonts = composeFontConfiguration(fragment);
     const shaping = await createLayoutShaping(fonts);
     const resolved = shaping.fonts.resolve({ family: 'Calibri', weight: 400, style: 'normal' });
     expect(resolved).not.toBeInstanceOf(FontResolutionError);

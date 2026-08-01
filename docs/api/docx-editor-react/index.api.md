@@ -132,7 +132,7 @@ export interface DocxEditorProps {
     className?: string;
     readonly colorMode?: 'light' | 'dark' | 'system';
     document?: DocumentSource;
-    fonts?: FontConfiguration;
+    fonts?: FontConfiguration | FontConfigurationFragment;
     // (undocumented)
     locale?: string;
     mode?: EditorMode;

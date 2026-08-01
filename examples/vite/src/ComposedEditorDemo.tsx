@@ -21,10 +21,10 @@ import {
   useEditorEvent,
   useEditorState,
   useFontFamily,
+  composeFontConfiguration,
   type ChromeSlotId,
+  type FontConfiguration,
 } from '@docx-editor.dev/react';
-import { composeFontConfiguration } from '@docx-editor.dev/core-contract/editor';
-import type { FontConfiguration } from '@docx-editor.dev/core-contract/contracts/editor';
 import { installDefaultFontFaces, loadDefaultFonts } from '@docx-editor.dev/fonts';
 import { createT, en, type TranslationKey } from '@docx-editor.dev/i18n';
 import { BrandLogo } from '../../shared/BrandLogo';

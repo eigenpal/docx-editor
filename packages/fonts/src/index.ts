@@ -202,6 +202,14 @@ const startedInstalls = new WeakMap<FontFaceSet, Set<string>>();
  * layout measured with instead of whatever the platform substitutes for "Calibri".
  * Presentation-only, app-triggered, idempotent per document (overlapping calls
  * included); returns the number of faces registered. No-op outside a DOM environment.
+ *
+ * NOT a substitute for {@link loadDefaultFonts}. This affects painting only — calling it
+ * alone leaves the engine measuring on the fixed fallback, which looks right and
+ * paginates wrong. Pair it with `loadDefaultFonts()` fed to the editor's `fonts` prop.
+ *
+ * The return value counts faces THIS call registered, so `0` covers "no DOM
+ * environment", "already registered", and "every face failed" alike; treat it as a
+ * diagnostic hint rather than a success signal.
  */
 export async function installDefaultFontFaces(
   options: LoadDefaultFontsOptions & { readonly document?: Document } = {}

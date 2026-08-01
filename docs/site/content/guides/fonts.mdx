@@ -24,6 +24,11 @@ and cannot be bundled. The optional `@docx-editor.dev/fonts` package ships open-
 faces built to match their metrics — identical advance widths, so lines wrap where Word
 wraps them:
 
+<Callout>
+`@docx-editor.dev/fonts` is not published to npm yet — it ships with the v2 line. The
+API below is stable; the package is workspace-only until then.
+</Callout>
+
 | Word font | Substitute | License |
 |---|---|---|
 | Calibri | Carlito | SIL OFL |
@@ -33,16 +38,43 @@ wraps them:
 | Courier New | Liberation Mono | SIL OFL |
 
 ```tsx
+import { useEffect, useState } from 'react';
+import { DocxEditor } from '@docx-editor.dev/react';
 import { loadDefaultFonts, installDefaultFontFaces } from '@docx-editor.dev/fonts';
+import type { FontConfigurationFragment } from '@docx-editor.dev/react';
 
-const fragment = await loadDefaultFonts(); // or { families: ['Calibri'] }
+function Editor({ bytes }: { bytes: Uint8Array }) {
+  // `settled` gates the FIRST mount. `fonts` is sampled at mount and an identity change
+  // remounts, so mounting before fonts resolve costs a visible remount — and a remount
+  // resets the undo stack and the caret. Waiting once avoids both.
+  const [fonts, setFonts] = useState<{
+    settled: boolean;
+    value?: FontConfigurationFragment;
+  }>({ settled: false });
 
-// The fonts prop accepts the fragment directly.
-<DocxEditor.Root document={bytes} fonts={fragment} />;
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      try {
+        const fragment = await loadDefaultFonts(); // or { families: ['Calibri'] }
+        // Optional: also register the substitutes with the browser under the Word family
+        // names, so painted glyphs use the same metrics layout measured with.
+        void installDefaultFontFaces();
+        if (!cancelled) setFonts({ settled: true, value: fragment });
+      } catch {
+        // A load failure settles with no fonts: the editor opens on the fixed measurer,
+        // which is the documented degradation.
+        if (!cancelled) setFonts({ settled: true });
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
-// Optional: also register the substitutes with the browser under the Word family
-// names, so painted glyphs use the same metrics layout measured with.
-await installDefaultFontFaces();
+  if (!fonts.settled) return null;
+  return <DocxEditor.Root document={bytes} fonts={fonts.value} />;
+}
 ```
 
 Font binaries load lazily as separate assets, only for the families you ask for.
@@ -97,6 +129,8 @@ one immutable configuration the editor samples per mount. Precedence is simple:
 
 Fonts never block a document from opening. The document mounts immediately on the
 fixed measurer and swaps to shaped measurement in a single re-mount when fonts resolve.
+Edits made before fonts resolve survive that remount, but the undo stack and caret
+position do not — which is why the sample above waits for fonts before the first mount.
 Every failure — a corrupt embedded face, a 404, a hash mismatch — degrades exactly one
 face, reports a typed `EditorFontError` through `onFontError`, and leaves the rest
 measuring accurately.

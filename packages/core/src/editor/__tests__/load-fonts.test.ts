@@ -9,6 +9,7 @@
 import { afterEach, describe, expect, test } from 'bun:test';
 import { sha256FontBytes } from '../../layout/index.ts';
 import { loadFonts } from '../load-fonts.ts';
+import { composeFontConfiguration } from '../font-composition.ts';
 
 const fontA = new Uint8Array([1, 2, 3, 4]);
 const fontB = new Uint8Array([5, 6, 7, 8]);
@@ -210,5 +211,31 @@ describe('loadFonts', () => {
     });
     expect(result.sources).toHaveLength(0);
     expect(result.failures[0]).toMatchObject({ reason: 'overLimit' });
+  });
+});
+
+describe('malformed face descriptors degrade that source only', () => {
+  test('an empty family or out-of-range weight fails its own source without fetching', async () => {
+    const fetched: string[] = [];
+    const result = await loadFonts({
+      sources: [
+        { url: 'https://x/blank.ttf', family: '   ', weight: 400, style: 'normal' },
+        { url: 'https://x/frac.ttf', family: 'Acme', weight: 500.5, style: 'normal' },
+        { url: 'https://x/good.ttf', family: 'Acme', weight: 400, style: 'normal' },
+      ],
+      fetcher: (async (input: RequestInfo | URL) => {
+        fetched.push(String(input));
+        return new Response(new Uint8Array([1, 2, 3, 4]));
+      }) as unknown as typeof fetch,
+    });
+    // Only the well-formed source was even requested.
+    expect(fetched).toEqual(['https://x/good.ttf']);
+    expect(result.sources).toHaveLength(1);
+    expect(result.failures.map((failure) => failure.reason)).toEqual([
+      'invalidRequest',
+      'invalidRequest',
+    ]);
+    // And the admitted set composes without throwing — the point of screening early.
+    expect(() => composeFontConfiguration(result)).not.toThrow();
   });
 });

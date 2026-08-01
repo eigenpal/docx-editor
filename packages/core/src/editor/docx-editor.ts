@@ -125,6 +125,19 @@ export interface DocxEditorConfig {
 }
 
 /**
+ * Which measurer the current document's layout runs on, and whether shaped resolution is
+ * still in flight. Returned by {@link DocxEditorInstance.fontMeasurement}.
+ */
+export interface FontMeasurementState {
+  /** `fixed` estimates advance widths; `shaped` measures real font bytes with HarfBuzz. */
+  readonly measurer: 'fixed' | 'shaped';
+  /** True while font resolution for the current document is still running. */
+  readonly resolving: boolean;
+  /** The shaped measurer's identity (admitted face hashes); absent while fixed. */
+  readonly producer?: string;
+}
+
+/**
  * The concrete facade type: the full `Editor` contract plus the instance-only surface.
  *
  * `surface`, `stateVersion`, `attach` and `detach` live HERE rather than on `Editor`:
@@ -153,12 +166,7 @@ export interface DocxEditorInstance extends Editor {
    * fallback); `shaped` means HarfBuzz measurement over real font bytes. Changes bump
    * `stateVersion()`.
    */
-  fontMeasurement(): {
-    readonly measurer: 'fixed' | 'shaped';
-    readonly resolving: boolean;
-    /** The shaped measurer's identity (admitted face hashes); absent while fixed. */
-    readonly producer?: string;
-  };
+  fontMeasurement(): FontMeasurementState;
   /**
    * Mount into `el`. If the instance holds pending document bytes (created without a
    * container, or previously detached), they mount now — under the shaped measurer when

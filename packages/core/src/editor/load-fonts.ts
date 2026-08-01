@@ -47,7 +47,9 @@ export type FontLoadFailureReason =
   | 'httpError'
   | 'hashMismatch'
   | 'overLimit'
-  | 'emptyResponse';
+  | 'emptyResponse'
+  /** The declared face itself is unusable (empty family, out-of-range weight); nothing was fetched. */
+  | 'invalidRequest';
 
 export interface FontLoadFailure {
   readonly url: string;
@@ -63,6 +65,21 @@ export interface FontLoadFailure {
 export interface LoadFontsResult extends FontConfigurationFragment {
   readonly sources: readonly FontSource[];
   readonly failures: readonly FontLoadFailure[];
+}
+
+/**
+ * Mirrors the request contract's own assertions (`assertRequest`) as a returned reason
+ * rather than a throw, so one bad entry in a caller's list degrades that entry only.
+ */
+function faceRequestProblem(request: FontFaceRequest): string | null {
+  if (request.family.trim().length === 0) return 'font family must not be empty';
+  if (!Number.isInteger(request.weight) || request.weight < 1 || request.weight > 1000) {
+    return 'font weight must be an integer from 1 through 1000';
+  }
+  if (request.style !== 'normal' && request.style !== 'italic') {
+    return 'font style must be normal or italic';
+  }
+  return null;
 }
 
 /** The Cache API when the environment provides one; absence degrades to direct fetch. */
@@ -132,6 +149,20 @@ export async function loadFonts(request: LoadFontsRequest): Promise<LoadFontsRes
       weight: source.weight,
       style: source.style,
     });
+    // Screened HERE, not at composition: the request contract refuses a malformed face
+    // with a THROW, so admitting one would detonate the configuration carrying every
+    // other font instead of degrading this single source. Same discipline the embedded
+    // lane applies to file-declared families.
+    const descriptorProblem = faceRequestProblem(faceRequest);
+    if (descriptorProblem) {
+      failures.push({
+        url: source.url,
+        request: faceRequest,
+        reason: 'invalidRequest',
+        diagnostic: descriptorProblem,
+      });
+      continue;
+    }
     const admit = (bytes: Uint8Array, fromCache: boolean): 'admitted' | FontLoadFailure => {
       if (bytes.byteLength === 0) {
         return { url: source.url, request: faceRequest, reason: 'emptyResponse' };

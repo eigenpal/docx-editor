@@ -11,6 +11,7 @@ import type {
   ExecResult,
   FontConfiguration,
 } from '@docx-editor.dev/core-contract/contracts/editor';
+import type { FontConfigurationFragment } from '@docx-editor.dev/core-contract/editor';
 export { EditorFontError } from '@docx-editor.dev/core-contract/contracts/editor';
 export type {
   EditorFontErrorCode,
@@ -38,7 +39,7 @@ export interface DocxEditorProps {
    * page looks right, but wrap points and pagination are estimated rather than
    * Word-accurate. Omit it to mount in one line; supply it when breaks must match Word.
    */
-  fonts?: FontConfiguration;
+  fonts?: FontConfiguration | FontConfigurationFragment;
   /**
    * Title-bar slots. The host owns what goes here — brand lockup, switchers, theme
    * toggle, Open/New/Save controls — and passes them in; the editor renders them

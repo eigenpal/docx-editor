@@ -274,7 +274,7 @@ export interface DocxEditorProps {
     // (undocumented)
     author?: string;
     document?: DocumentSource;
-    fonts: FontConfiguration;
+    fonts?: FontConfiguration | FontConfigurationFragment;
     // (undocumented)
     locale?: string;
     mode?: EditorMode;
@@ -699,13 +699,9 @@ export interface FontConfiguration {
 
 // @public
 export interface FontConfigurationBase extends FontConfigurationFragment {
-    // (undocumented)
     readonly defaultFont?: FontConfiguration['defaultFont'];
-    // (undocumented)
     readonly epoch?: number;
-    // (undocumented)
     readonly language?: string;
-    // (undocumented)
     readonly maxFontBytes?: number;
 }
 
@@ -750,7 +746,9 @@ export type FontLoadFailureReason =
 | 'httpError'
 | 'hashMismatch'
 | 'overLimit'
-| 'emptyResponse';
+| 'emptyResponse'
+/** The declared face itself is unusable (empty family, out-of-range weight); nothing was fetched. */
+| 'invalidRequest';
 
 // @public
 export interface FontSource {
@@ -902,6 +900,21 @@ export async function loadFonts(request: LoadFontsRequest): Promise<LoadFontsRes
             weight: source.weight,
             style: source.style,
         });
+        // Screened HERE, not at composition: the request contract refuses a malformed face
+        // with a THROW, so admitting one would detonate the configuration carrying every
+        // other font instead of degrading this single source. Same discipline the embedded
+        // lane applies to file-declared families.
+        const // (undocumented)
+        descriptorProblem = faceRequestProblem(faceRequest);
+        if (descriptorProblem) {
+            failures.push({
+                url: source.url,
+                request: faceRequest,
+                reason: 'invalidRequest',
+                diagnostic: descriptorProblem,
+            });
+            continue;
+        }
         const // (undocumented)
         admit = (bytes: Uint8Array, fromCache: boolean): 'admitted' | FontLoadFailure => {
             if (bytes.byteLength === 0) {

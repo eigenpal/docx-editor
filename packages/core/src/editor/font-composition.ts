@@ -38,9 +38,16 @@ export interface FontConfigurationFragment {
  * hard maximum, `defaultFont` Calibri at 11pt — Word's own default face and size).
  */
 export interface FontConfigurationBase extends FontConfigurationFragment {
+  /**
+   * Identity of this configuration's byte set. The engine uses it to tell one resolved
+   * font set from another; leave it unset and the editor supplies the load sequence.
+   */
   readonly epoch?: number;
+  /** Per-face byte ceiling. Defaults to the engine hard maximum; lower it to tighten intake. */
   readonly maxFontBytes?: number;
+  /** The face used when a run names no font. Defaults to Word's own: Calibri at 11pt. */
   readonly defaultFont?: FontConfiguration['defaultFont'];
+  /** BCP-47 tag passed to the shaper for language-sensitive shaping. */
   readonly language?: string;
 }
 
@@ -52,6 +59,11 @@ export const WORD_DEFAULT_FONT: FontConfiguration['defaultFont'] = Object.freeze
 
 /**
  * Merge a base and any number of fragments into one frozen `FontConfiguration`.
+ *
+ * A bare fragment IS a valid base, so the single-origin case is one argument:
+ * `composeFontConfiguration(await loadDefaultFonts())`. Pass extra fragments to layer
+ * origins, and set `epoch`/`maxFontBytes`/`defaultFont` on the base only when you need
+ * something other than the documented defaults.
  *
  * - Sources dedupe first-wins by (family, weight, style), in argument order — base
  *   before fragments, earlier fragments before later ones.
