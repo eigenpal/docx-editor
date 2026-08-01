@@ -409,6 +409,24 @@ describe('createDocxEditor', () => {
     });
   });
 
+  test('a caret move publishes a new snapshot reference', () => {
+    const { editor } = mount(p('alpha') + p('beta'));
+    const ids = editor.surface!.session.paragraphIds();
+    editor.surface!.setSelection({
+      anchor: { paragraphId: ids[0]!, offset: 0 },
+      head: { paragraphId: ids[0]!, offset: 0 },
+    });
+    const before = editor.snapshot();
+    editor.surface!.setSelection({
+      anchor: { paragraphId: ids[1]!, offset: 0 },
+      head: { paragraphId: ids[1]!, offset: 0 },
+    });
+    // Two paragraphs with identical formatting derive a value-equal snapshot; the
+    // reference must still move, or a `useSyncExternalStore` host never re-renders and
+    // every caret-dependent control keeps its previous answer.
+    expect(editor.snapshot()).not.toBe(before);
+  });
+
   test('insertBreak page writes a hard page break, not a line break', () => {
     const { editor } = mount(p('hello'));
     expect(editor.exec({ type: 'insertBreak', kind: 'page' })).toMatchObject({ ok: true });

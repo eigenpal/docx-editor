@@ -1522,7 +1522,10 @@
 
 .ep-one-surface__caret {
   position: absolute;
-  width: 1px;
+  /* 2px, not 1: a hairline caret disappears against body text at 100% zoom on a
+   * high-DPI screen, and reads as a rendering artefact rather than a cursor.
+   * Every desktop word processor draws a two-pixel insertion point. */
+  width: 2px;
   background: var(--doc-caret);
   animation: ep-caret-blink 1.06s steps(1) infinite;
 }

@@ -504,8 +504,22 @@ function paintListMarker(
   element.style.display = 'block';
   element.style.overflow = 'visible';
   element.style.whiteSpace = 'pre';
-  applyRunFaceStyle(element, marker.style, ctx);
-  mountRunText(document, element, marker.text, marker.style, scale);
+  // The marker sits on the FIRST LINE'S BASELINE, not at the top of its box.
+  //
+  // Painting the glyph directly into this block let it inherit the block's own default
+  // line-height at the marker's font size, so a `1.` in a smaller marker face landed
+  // below the text it numbers and a bullet floated above it. The same treatment
+  // `paintLine` gives a line fixes it: kill the anonymous strut with `font-size: 0`,
+  // apply the published box height as an explicit line-height, and let the glyph align on
+  // `baseline` inside it — which is exactly how every run on that line is aligned.
+  element.style.fontSize = '0';
+  element.style.lineHeight = `${marker.box.height * scale}px`;
+  const glyph = document.createElement('span');
+  glyph.style.display = 'inline-block';
+  glyph.style.verticalAlign = 'baseline';
+  applyRunFaceStyle(glyph, marker.style, ctx);
+  mountRunText(document, glyph, marker.text, marker.style, scale);
+  element.append(glyph);
   return element;
 }
 

@@ -101,11 +101,56 @@ describe('a real document whose list declares only level 0', () => {
     });
   });
 
+  test('a level-0 item of a MULTI-level list still cannot outdent', () => {
+    // Its definition declares four levels, so indenting IS possible — but there is no
+    // level above 0 to outdent to, and Word greys Decrease Indent out there.
+    withFixture((surface) => {
+      const item = itemNamed(surface, 'Level 0: Main category');
+      expect(item.marker?.level).toBe(0);
+      caretIn(surface, item.paragraphId);
+      expect(surface.canAdjustIndent('increase')).toBe(true);
+      expect(surface.canAdjustIndent('decrease')).toBe(false);
+      expect(surface.adjustIndent('decrease')).toBe(false);
+    });
+  });
+
+  test('a nested item CAN outdent', () => {
+    withFixture((surface) => {
+      const item = itemNamed(surface, 'Level 1: Sub-category');
+      expect(item.marker?.level).toBe(1);
+      caretIn(surface, item.paragraphId);
+      expect(surface.canAdjustIndent('decrease')).toBe(true);
+    });
+  });
+
   test('a level-0 item cannot outdent', () => {
     withFixture((surface) => {
       const item = itemNamed(surface, 'First bullet item');
       caretIn(surface, item.paragraphId);
       expect(surface.canAdjustIndent('decrease')).toBe(false);
+    });
+  });
+});
+
+describe('the snapshot follows the caret', () => {
+  test('moving the caret to a different paragraph publishes a new snapshot', () => {
+    // `snapshot().selection` is deliberately null, so two paragraphs with the same
+    // formatting derive a VALUE-equal snapshot. Reusing the reference then froze every
+    // control whose enabled state is a question about the caret: Decrease Indent stayed
+    // live on an outermost list item, and the bullet button stayed pressed after the
+    // caret moved into a numbered one.
+    withFixture((surface) => {
+      const first = itemNamed(surface, 'First bullet item');
+      const second = itemNamed(surface, 'Second bullet item');
+      caretIn(surface, first.paragraphId);
+      expect(surface.canAdjustIndent('decrease')).toBe(false);
+      caretIn(surface, second.paragraphId);
+      expect(surface.canAdjustIndent('decrease')).toBe(false);
+
+      // And the answer genuinely changes when the caret lands somewhere it differs.
+      const nested = itemNamed(surface, 'Level 1: Sub-category');
+      caretIn(surface, nested.paragraphId);
+      expect(surface.canAdjustIndent('decrease')).toBe(true);
     });
   });
 });

@@ -251,6 +251,8 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
   // ── State tick + cached snapshot ─────────────────────────────────────────────────────
   let stateVersion = 0;
   let cachedSnapshot: EditorSnapshot | null = null;
+  /** The caret the cached snapshot was derived for — see `snapshotNow`. */
+  let cachedCaret: ReturnType<PaginatedSurface['state']>['selection'] | null = null;
   let cachedVersion = -1;
 
   /** Called at every place observable state can move. Derivation stays lazy. */
@@ -625,6 +627,9 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
   function snapshotNow(): EditorSnapshot {
     if (cachedSnapshot && cachedVersion === stateVersion) return cachedSnapshot;
     const previous = cachedSnapshot;
+    const caret = surface?.state().selection ?? null;
+    const caretUnmoved = selectionsMatch(caret, cachedCaret);
+    cachedCaret = caret;
     const fresh = deriveSnapshot();
     let next: EditorSnapshot = fresh;
     if (previous) {
@@ -636,7 +641,17 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
         ? previous.pageSetup
         : fresh.pageSetup;
       next = { ...fresh, formatting, page, pageSetup };
-      if (snapshotsEqual(next, previous)) next = previous;
+      // Reuse the previous REFERENCE only when the caret has not moved either.
+      //
+      // `selection` is deliberately null (a `DocRange` addresses paragraphs by
+      // `w14:paraId`, which the surface cannot yet supply), so two different paragraphs
+      // with the same formatting derive a value-equal snapshot. A host subscribed through
+      // `useSyncExternalStore` then never re-renders on a caret move, and every control
+      // whose enabled state is a question about the CARET rather than about formatting
+      // kept its previous answer: Decrease Indent stayed live on a list item already at
+      // the outermost level, and the bullet button stayed pressed after the caret moved
+      // into a numbered one.
+      if (snapshotsEqual(next, previous) && caretUnmoved) next = previous;
     }
     cachedSnapshot = deepFreezeValue(next);
     cachedVersion = stateVersion;
