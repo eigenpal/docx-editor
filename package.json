@@ -17,9 +17,10 @@
   "scripts": {
     "api:check": "node scripts/api-extractor.mjs",
     "api:extract": "node scripts/api-extractor.mjs --local",
-    "build": "bun run build:packages && bun run build:react && bun run build:vue && bun run build:assemble",
-    "build:assemble": "rm -rf examples/parity/dist && mkdir -p examples/parity/dist && cp -R examples/vite/dist examples/parity/dist/react && cp -R examples/vue/dist examples/parity/dist/vue && cp examples/parity/index.html examples/parity/dist/index.html",
+    "build": "bun run build:packages:demo && bun run build:react && bun run build:assemble",
+    "build:assemble": "rm -rf examples/parity/dist && mkdir -p examples/parity/dist && cp -R examples/vite/dist examples/parity/dist/react && cp examples/parity/index.html examples/parity/dist/index.html",
     "build:packages": "bun run --filter '@docx-editor.dev/i18n' build && bun run --filter '@docx-editor.dev/react' build && bun run --filter '@docx-editor.dev/agents' --filter '@docx-editor.dev/vue' build && bun run --filter '@docx-editor.dev/nuxt' build",
+    "build:packages:demo": "bun run --filter '@docx-editor.dev/i18n' build && bun run --filter '@docx-editor.dev/react' build",
     "build:react": "cd examples/vite && USE_PUBLISHED_PACKAGES=true VITE_BASE_PATH=/react/ vite build",
     "build:spike:poc": "cd packages/core/spike && bun run build:poc",
     "build:vue": "cd examples/vue && USE_PUBLISHED_PACKAGES=true VITE_BASE_PATH=/vue/ vite build",

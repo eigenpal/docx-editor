@@ -58,7 +58,7 @@
   display: flex;
   align-items: center;
   gap: 16px;
-  padding: 8px 16px;
+  padding: 8px 16px 0;
 }
 
 .demo-header__left,
@@ -93,7 +93,7 @@
 
 .demo-title {
   font-size: 15px;
-  font-weight: 500;
+  font-weight: 400;
   color: var(--doc-text);
   background: transparent;
   border: 1px solid transparent;
@@ -127,7 +127,7 @@
   background: transparent;
   color: var(--doc-text);
   font-size: 13px;
-  font-weight: 500;
+  font-weight: 400;
   padding: 5px 10px;
   border-radius: 6px;
   cursor: pointer;
