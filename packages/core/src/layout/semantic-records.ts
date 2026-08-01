@@ -14,11 +14,22 @@
 // only run in a browser could not be tested deterministically or run headless.
 
 import type { OoxmlProperty } from '@docx-editor.dev/core-contract/store';
-import type { ParagraphBorderEdge, ParagraphSpacing } from './paragraph-style.ts';
+import type {
+  ParagraphBorderEdge,
+  ParagraphBorderSide,
+  ParagraphSpacing,
+} from './paragraph-style.ts';
+import type { TabLeader } from './paragraph-tabs.ts';
 import type { ResolvedRunStyle } from './run-style.ts';
 import type { ResolvedCellBorders } from './table-borders.ts';
 
-export type { ParagraphBorderEdge, ParagraphSpacing } from './paragraph-style.ts';
+export type {
+  ParagraphBorderEdge,
+  ParagraphBorderSide,
+  ParagraphBorders,
+  ParagraphSpacing,
+} from './paragraph-style.ts';
+export type { TabLeader } from './paragraph-tabs.ts';
 export type {
   ResolvedCellBorders,
   ResolvedTableBorderEdge,
@@ -53,6 +64,21 @@ export interface ParagraphBottomBorderRecord {
   readonly box: LayoutBox;
 }
 
+/**
+ * One `w:pBdr` rule as layout published it.
+ *
+ * `box` is the STROKE rectangle in the same coordinate space as the fragment, so paint sets a
+ * position and a colour and nothing else. It matters that paint cannot derive these itself:
+ * Word draws the side rules OUTSIDE the text column, so `box.x` on a `left`/`bar` stroke is
+ * left of the fragment box and a painter reasoning from the fragment alone would put it
+ * inside the text.
+ */
+export interface ParagraphBorderStrokeRecord {
+  readonly side: ParagraphBorderSide;
+  readonly edge: ParagraphBorderEdge;
+  readonly box: LayoutBox;
+}
+
 /** A run of text on one line sharing identical resolved formatting. */
 export interface StyleSpanRecord {
   readonly range: SourceRange;
@@ -68,6 +94,14 @@ export interface StyleSpanRecord {
    */
   readonly style: ResolvedRunStyle;
   readonly box: LayoutBox;
+  /**
+   * `w:tab/@w:leader` of the stop a `\t` span advanced to (ECMA-376 §17.3.1.38).
+   *
+   * Only ever set on a tab span, and only for a non-`none` leader. Paint repeats the glyph
+   * across the advance THIS box already reserved — the leader adds no width of its own, so
+   * it can never move the text that follows it.
+   */
+  readonly tabLeader?: TabLeader;
 }
 
 export interface LineRecord {
@@ -103,6 +137,14 @@ export interface ParagraphFragmentRecord {
   readonly spacing: ParagraphSpacing;
   /** Bottom rule on the final fragment when `w:pBdr/w:bottom` resolves; absent otherwise. */
   readonly bottomBorder?: ParagraphBottomBorderRecord;
+  /**
+   * Every `w:pBdr` rule this fragment draws, in paint order.
+   *
+   * A paragraph split across pages opens and closes exactly once: the `top` stroke rides the
+   * first fragment, the closing stroke the last. `bottomBorder` remains the bottom rule alone
+   * — a `between` rule closing a grouped paragraph is not one.
+   */
+  readonly borders?: readonly ParagraphBorderStrokeRecord[];
   /**
    * Validated 6-hex paragraph shading fill (`w:pPr/w:shd`), absent for none/auto.
    *

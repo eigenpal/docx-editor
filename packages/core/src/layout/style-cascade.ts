@@ -23,11 +23,13 @@ import {
   type Alignment,
 } from './paragraph-flow.ts';
 import {
+  cascadedParagraphBorders,
   paragraphBorders,
   paragraphContextualSpacing,
   paragraphLineSpacing,
   paragraphSpacing,
   type ParagraphBorderEdge,
+  type ParagraphBorders,
   type ParagraphLineSpacing,
   type ParagraphSpacing,
 } from './paragraph-style.ts';
@@ -219,14 +221,23 @@ const MAX_CONDITIONAL_TABLE_FORMATS = 32;
  * `tablePropertyNodes` is base-first, so a later node overrides an earlier one — the same
  * ordering the paragraph cascade uses. `conditional` is flattened the same way, so a
  * derived style's `firstRow` replaces its base's.
+ *
+ * A table style also carries whole-table `w:pPr`/`w:rPr` (17.7.6.1). That is how a style
+ * sets the type of every paragraph in the table before any row condition applies.
  */
 export interface CascadedTableFormatting {
   readonly tablePropertyNodes: readonly OoxmlElement[];
+  readonly paragraphPropertyNodes: readonly OoxmlElement[];
+  readonly paragraphProperties: readonly OoxmlProperty[];
+  readonly runProperties: readonly OoxmlProperty[];
   readonly conditional: ReadonlyMap<string, OoxmlElement>;
 }
 
 export const EMPTY_TABLE_FORMATTING: CascadedTableFormatting = Object.freeze({
   tablePropertyNodes: Object.freeze([]) as readonly OoxmlElement[],
+  paragraphPropertyNodes: Object.freeze([]) as readonly OoxmlElement[],
+  paragraphProperties: Object.freeze([]) as readonly OoxmlProperty[],
+  runProperties: Object.freeze([]) as readonly OoxmlProperty[],
   conditional: new Map<string, OoxmlElement>(),
 });
 
@@ -239,14 +250,77 @@ export function cascadeTableFormatting(
   const chain = styleChain(table, styleId, 'table');
   if (chain.length === 0) return EMPTY_TABLE_FORMATTING;
   const tablePropertyNodes: OoxmlElement[] = [];
+  const paragraphPropertyNodes: OoxmlElement[] = [];
+  const paragraphProperties: OoxmlProperty[] = [];
+  const runProperties: OoxmlProperty[] = [];
   const conditional = new Map<string, OoxmlElement>();
   for (const style of chain) {
     if (style.tablePropertiesNode) tablePropertyNodes.push(style.tablePropertiesNode);
+    if (style.paragraphPropertiesNode) paragraphPropertyNodes.push(style.paragraphPropertiesNode);
+    paragraphProperties.push(...style.paragraphProperties);
+    runProperties.push(...style.runProperties);
     for (const [conditionType, node] of style.conditionalTableFormats) {
       conditional.set(conditionType, node);
     }
   }
-  return { tablePropertyNodes, conditional };
+  return {
+    tablePropertyNodes,
+    paragraphPropertyNodes,
+    paragraphProperties,
+    runProperties,
+    conditional,
+  };
+}
+
+/**
+ * What a table style contributes to the paragraphs of ONE cell: the style's whole-table
+ * `w:pPr`/`w:rPr` followed by every `w:tblStylePr` the cell is under (17.7.6.6), weakest
+ * first in the caller's condition order (banding, column, row, corner).
+ *
+ * This is how Word makes a header row bold and centred while the document states nothing
+ * but `<w:tblStyle w:val="…"/>` on the table and plain runs in the cells.
+ */
+export interface TableCellStyleFormatting {
+  readonly paragraphProperties: readonly OoxmlProperty[];
+  /** Matching `w:pPr` nodes, for nested `w:pBdr` / `w:tabs` resolution. */
+  readonly paragraphPropertyNodes: readonly OoxmlElement[];
+  /** Inherited run properties for every run in the cell, before the paragraph style. */
+  readonly runProperties: readonly OoxmlProperty[];
+}
+
+export const EMPTY_TABLE_CELL_STYLE_FORMATTING: TableCellStyleFormatting = Object.freeze({
+  paragraphProperties: Object.freeze([]) as readonly OoxmlProperty[],
+  paragraphPropertyNodes: Object.freeze([]) as readonly OoxmlElement[],
+  runProperties: Object.freeze([]) as readonly OoxmlProperty[],
+});
+
+/** Flatten a table style's own and conditional paragraph/run properties for one cell. */
+export function tableCellStyleFormatting(
+  formatting: CascadedTableFormatting,
+  conditions: readonly string[]
+): TableCellStyleFormatting {
+  const paragraphPropertyNodes: OoxmlElement[] = [...formatting.paragraphPropertyNodes];
+  const paragraphProperties: OoxmlProperty[] = [...formatting.paragraphProperties];
+  const runProperties: OoxmlProperty[] = [...formatting.runProperties];
+  for (const conditionType of conditions) {
+    const format = formatting.conditional.get(conditionType);
+    if (!format) continue;
+    const conditionPPr = findParagraphProperties(format);
+    if (conditionPPr) {
+      paragraphPropertyNodes.push(conditionPPr);
+      paragraphProperties.push(...propertiesOf(conditionPPr));
+    }
+    const conditionRPr = findRunProperties(format);
+    if (conditionRPr) runProperties.push(...propertiesOf(conditionRPr));
+  }
+  if (
+    paragraphPropertyNodes.length === 0 &&
+    paragraphProperties.length === 0 &&
+    runProperties.length === 0
+  ) {
+    return EMPTY_TABLE_CELL_STYLE_FORMATTING;
+  }
+  return { paragraphProperties, paragraphPropertyNodes, runProperties };
 }
 
 /**
@@ -365,13 +439,16 @@ function styleChain(
 /**
  * Cascade paragraph + inherited run properties for one paragraph's direct `w:pPr`.
  *
- * Order: `docDefaults` → `basedOn` ancestors → paragraph style → direct formatting.
+ * Order: `docDefaults` → table style → `basedOn` ancestors → paragraph style → direct
+ * formatting, which is the style hierarchy of 17.7.2: a table style sits above the document
+ * defaults and below the paragraph style a cell paragraph names for itself.
  * When `w:pStyle` is absent, the document's default paragraph style (`w:default="1"`) is used.
  * Direct formatting is last so it overrides inherited values inside the existing resolvers.
  */
 export function cascadeParagraphFormatting(
   table: StyleCascadeTable,
-  directPPr: OoxmlNode | undefined
+  directPPr: OoxmlNode | undefined,
+  tableCellStyle?: TableCellStyleFormatting
 ): CascadedParagraphFormatting {
   const directProps = propertiesOf(directPPr);
   const styleId = styleIdFromProps(directProps, 'pStyle') ?? table.defaultParagraphStyleId;
@@ -379,12 +456,14 @@ export function cascadeParagraphFormatting(
 
   const paragraphProperties: OoxmlProperty[] = [
     ...table.docDefaultsParagraph,
+    ...(tableCellStyle?.paragraphProperties ?? []),
     ...chain.flatMap((style) => style.paragraphProperties),
     ...directProps,
   ];
 
   const paragraphPropertyNodes: OoxmlNode[] = [];
   if (table.docDefaultsParagraphNode) paragraphPropertyNodes.push(table.docDefaultsParagraphNode);
+  if (tableCellStyle) paragraphPropertyNodes.push(...tableCellStyle.paragraphPropertyNodes);
   for (const style of chain) {
     if (style.paragraphPropertiesNode) paragraphPropertyNodes.push(style.paragraphPropertiesNode);
   }
@@ -396,6 +475,7 @@ export function cascadeParagraphFormatting(
 
   const runProperties: OoxmlProperty[] = [
     ...table.docDefaultsRun,
+    ...(tableCellStyle?.runProperties ?? []),
     ...chain.flatMap((style) => style.runProperties),
     ...propertiesOf(directMarkRun),
   ];
@@ -471,6 +551,14 @@ export interface ParagraphLayoutInputs {
   /** Resolved paragraph style id, for the `w:contextualSpacing` neighbour comparison. */
   readonly styleId: string | null;
   readonly bottomBorder: ParagraphBorderEdge | undefined;
+  /**
+   * Every `CT_PBdr` edge after cascade, not just the bottom one.
+   *
+   * `bottomBorder` stays alongside it because the fragment signature and the table flow
+   * read that field by name; this is the whole box, so a cell paragraph gets the same
+   * frame a body paragraph does.
+   */
+  readonly borders: ParagraphBorders;
   /** Validated 6-hex paragraph shading fill from cascaded `w:pPr/w:shd`, absent for none. */
   readonly shading: string | undefined;
   readonly inheritedRunProperties: readonly OoxmlProperty[];
@@ -492,15 +580,21 @@ export interface ParagraphLayoutInputs {
  * When `listItem` is provided, its merged level indent becomes the paragraph indent (list
  * hanging / left from `numbering.xml`), which is what Word uses for fixture list paragraphs
  * that author no direct `w:ind`.
+ *
+ * `tableCellStyle` carries what the enclosing table's style says about this cell's
+ * paragraphs; body paragraphs pass nothing.
  */
 export function resolveParagraphLayoutInputs(
   paragraph: OoxmlElement,
   contentWidth: number,
   styleCascade: StyleCascadeTable | undefined,
-  listItem?: import('./list-resolve.ts').ResolvedListItem
+  listItem?: import('./list-resolve.ts').ResolvedListItem,
+  tableCellStyle?: TableCellStyleFormatting
 ): ParagraphLayoutInputs {
   const pPr = paragraph.children.find((child) => child.kind === 'paragraphProperties');
-  const cascaded = styleCascade ? cascadeParagraphFormatting(styleCascade, pPr) : null;
+  const cascaded = styleCascade
+    ? cascadeParagraphFormatting(styleCascade, pPr, tableCellStyle)
+    : null;
   const props = cascaded ? [...cascaded.paragraphProperties] : propertiesOf(pPr);
   const inheritedRunProperties = cascaded?.runProperties ?? [];
   const baseIndent = paragraphIndent(props);
@@ -541,6 +635,9 @@ export function resolveParagraphLayoutInputs(
     bottomBorder: cascaded
       ? cascadedBottomBorder(cascaded.paragraphPropertyNodes)
       : paragraphBorders(pPr).bottom,
+    borders: cascaded
+      ? cascadedParagraphBorders(cascaded.paragraphPropertyNodes)
+      : paragraphBorders(pPr),
     shading: paragraphShading(props),
     inheritedRunProperties,
     tabStops,

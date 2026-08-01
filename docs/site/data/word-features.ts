@@ -149,6 +149,17 @@ export const wordFeatures: WordFeature[] = [
       'w:outline, w:shadow, w:emboss, w:imprint and w:em render and round-trip; not settable from the toolbar. w14 glow and gradient text fill are not supported.',
   },
   {
+    id: 'text.hidden',
+    name: 'Hidden text (vanish)',
+    category: 'text',
+    editing: 'none',
+    rendering: 'full',
+    roundTrip: 'full',
+    tier: 'community',
+    notes:
+      'w:vanish runs are not drawn and take no space, so pages break where Word breaks them; the text survives a round trip. There is no "show hidden text" view option, and a paragraph whose MARK is vanished still occupies a line.',
+  },
+  {
     id: 'text.math',
     name: 'Math equations (OMML)',
     category: 'text',
@@ -222,6 +233,8 @@ export const wordFeatures: WordFeature[] = [
     rendering: 'full',
     roundTrip: 'full',
     tier: 'community',
+    notes:
+      'All six w:pBdr edges render — top, left, bottom, right, the w:between rule that makes consecutive same-bordered paragraphs one box, and the w:bar change bar. Side rules sit outside the text column and do not reflow it, as in Word. A border group split across a page break keeps its opening and closing rules with the first and last paragraph rather than redrawing them at the page edge, and w:shadow is read but not drawn.',
   },
   {
     id: 'paragraphs.tabs',
@@ -232,7 +245,7 @@ export const wordFeatures: WordFeature[] = [
     roundTrip: 'full',
     tier: 'community',
     notes:
-      'Existing tab stops render (incl. right-tabs and dotted leaders in TOCs); a tab-stop editing UI is not built yet.',
+      'Existing tab stops render, including right/decimal tabs and dot, hyphen and underscore leaders. The document\'s own w:defaultTabStop is honoured, so a metric-locale grid lands where Word puts it, in headers and footers as well as the body. A tab-stop editing UI is not built yet.',
   },
   {
     id: 'paragraphs.frames',
@@ -375,7 +388,7 @@ export const wordFeatures: WordFeature[] = [
     roundTrip: 'full',
     tier: 'community',
     notes:
-      'Table styles resolve through their basedOn chain: borders, cell margins and conditional formats (header row, total row, first/last column, row and column banding) come from styles.xml, gated by w:tblLook, with an explicit w:cnfStyle taking precedence. Switching table styles from the UI is not built yet.',
+      'Table styles resolve through their basedOn chain: borders, cell margins, shading and the paragraph/run formatting a conditional format carries (so a header row comes out bold and centred) all come from styles.xml, gated by w:tblLook, with an explicit w:cnfStyle taking precedence. Conditional cell margins and switching table styles from the UI are not built yet.',
   },
   {
     id: 'tables.text-direction',

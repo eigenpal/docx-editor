@@ -21,16 +21,24 @@ import { paragraphLayoutKey, type ParagraphLayoutCache } from './layout-cache.ts
 import { alignSpans, breakParagraph, type Alignment, type PendingLine } from './paragraph-flow.ts';
 import {
   appliedSpaceBefore,
-  bottomBorderExtentPt,
+  paragraphBorderExtentPt,
+  cascadedParagraphBorders,
   collapsedSpaceBefore,
+  paragraphBorders,
+  paragraphBordersFingerprint,
   paragraphBreaksBefore,
-  type ParagraphBorderEdge,
+  type ParagraphBorders,
   type ParagraphLineSpacing,
   type ParagraphSpacing,
 } from './paragraph-style.ts';
 import { DEFAULT_RUN_STYLE, resolveRunStyle } from './run-style.ts';
-import type { ResolvedTabStops } from './paragraph-tabs.ts';
 import {
+  tabStopsFingerprint,
+  withDefaultTabInterval,
+  type ResolvedTabStops,
+} from './paragraph-tabs.ts';
+import {
+  cascadeParagraphFormatting,
   resolveParagraphLayoutInputs,
   cascadeRunProperties,
   type StyleCascadeTable,
@@ -62,6 +70,7 @@ import {
   type LineRecord,
   type PageGeometry,
   type PageRecord,
+  type ParagraphBorderStrokeRecord,
   type ParagraphBottomBorderRecord,
   type SemanticLayout,
   type TableRowFragmentRecord,
@@ -153,6 +162,16 @@ export interface SemanticLayoutOptions {
    * once so counters continue across section boundaries and table document order.
    */
   readonly listItems?: ReadonlyMap<string, ResolvedListItem>;
+  /**
+   * `w:settings/w:defaultTabStop` in points (ECMA-376 §17.15.1.25); absent keeps the 0.5"
+   * schema default.
+   *
+   * It arrives as an option because the paragraph cascade cannot see `settings.xml`. A
+   * metric-locale template declares 1134 twips (2cm) and every default-interval tab in the
+   * document belongs on that grid. Constant for a session — the settings part is immutable
+   * here — which is why the prepared-block memo does not key on it.
+   */
+  readonly defaultTabStopPt?: number;
 }
 
 /** Prepass results by block node, valid while the width and producer both hold. */
@@ -168,7 +187,15 @@ type PreparedBlock =
       readonly lineSpacing: ParagraphLineSpacing;
       readonly contextualSpacing: boolean;
       readonly styleId: string | null;
-      readonly bottomBorder: ParagraphBorderEdge | undefined;
+      readonly borders: ParagraphBorders;
+      /**
+       * Border identity + indent, for the `w:between` group rule.
+       *
+       * Indent participates because a group whose members sit at different indents would need
+       * a stepped outline; splitting the group there gives each member its own closed box,
+       * which is the near miss rather than a rule drawn through the text.
+       */
+      readonly borderGroupKey: string;
       readonly shading: string | undefined;
       readonly inheritedRunProperties: readonly OoxmlProperty[];
       readonly tabStops: ResolvedTabStops;
@@ -184,6 +211,50 @@ interface PreparedBlockMemo {
 }
 
 const preparedBlocks = new WeakMap<OoxmlNode, PreparedBlockMemo>();
+
+/**
+ * Does any style — or `w:docDefaults` — in this cascade declare a `w:pBdr`?
+ *
+ * Cached per table because it decides whether resolving a paragraph's borders needs the full
+ * cascade at all. For the overwhelming majority of documents no style carries one, and there
+ * the direct `w:pPr` IS the answer; running `cascadeParagraphFormatting` a second time per
+ * paragraph to learn that would make the prepass, not placement, the cost of a layout.
+ */
+const cascadeBorderDeclarations = new WeakMap<StyleCascadeTable, boolean>();
+
+function styleCascadeDeclaresBorders(table: StyleCascadeTable): boolean {
+  const cached = cascadeBorderDeclarations.get(table);
+  if (cached !== undefined) return cached;
+  const declaresPBdr = (props: readonly OoxmlProperty[]): boolean =>
+    props.some((property) => property.localName === 'pBdr');
+  let declares = declaresPBdr(table.docDefaultsParagraph);
+  if (!declares) {
+    for (const style of table.styles.values()) {
+      if (declaresPBdr(style.paragraphProperties)) {
+        declares = true;
+        break;
+      }
+    }
+  }
+  cascadeBorderDeclarations.set(table, declares);
+  return declares;
+}
+
+/**
+ * Resolve `w:pBdr` for one paragraph, through the style cascade when a style could contribute.
+ *
+ * `resolveParagraphLayoutInputs` publishes the bottom edge only, so the full set is resolved
+ * here from the same nodes it cascades — same last-`w:pBdr`-wins rule, all six edges.
+ */
+function resolveParagraphBorders(
+  pPr: OoxmlNode | undefined,
+  styleCascade: StyleCascadeTable | undefined
+): ParagraphBorders {
+  if (!styleCascade || !styleCascadeDeclaresBorders(styleCascade)) return paragraphBorders(pPr);
+  return cascadedParagraphBorders(
+    cascadeParagraphFormatting(styleCascade, pPr).paragraphPropertyNodes
+  );
+}
 
 export function layoutSemanticDocument(
   part: OoxmlPart,
@@ -264,10 +335,14 @@ function layoutBlocksWithGeometry(
   // cannot reuse breaks measured under another inheritance table.
   const styleCascade = options.styleCascade;
   const listItems = options.listItems;
+  // The default-tab interval moves every default-interval tab, and the prepared-block memo
+  // is keyed by producer — so it belongs here rather than only in the per-paragraph token.
+  const defaultTabStopPt = options.defaultTabStopPt;
   const producer =
     (options.producer ?? 'unversioned-measurer') +
     (styleCascade ? `|sc:${styleCascade.cacheToken}` : '') +
-    (listItems && listItems.size > 0 ? `|num:${listItems.size}` : '');
+    (listItems && listItems.size > 0 ? `|num:${listItems.size}` : '') +
+    (defaultTabStopPt !== undefined ? `|dts:${defaultTabStopPt}` : '');
 
   const contentWidth = geometry.width - geometry.margin.left - geometry.margin.right;
 
@@ -361,12 +436,20 @@ function layoutBlocksWithGeometry(
         lineSpacing,
         contextualSpacing,
         styleId,
-        bottomBorder,
         shading,
         inheritedRunProperties,
-        tabStops,
-        tabStopsCacheToken,
       } = preparedParagraph;
+      const borders = resolveParagraphBorders(
+        block.children.find((child) => child.kind === 'paragraphProperties'),
+        styleCascade
+      );
+      const bordersToken = paragraphBordersFingerprint(borders);
+      // `w:defaultTabStop` lives in settings.xml, which the paragraph cascade never reads.
+      const tabStops = withDefaultTabInterval(preparedParagraph.tabStops, defaultTabStopPt);
+      const tabStopsCacheToken =
+        tabStops === preparedParagraph.tabStops
+          ? preparedParagraph.tabStopsCacheToken
+          : tabStopsFingerprint(tabStops);
       entry = {
         kind: 'paragraph',
         paragraph: block,
@@ -378,7 +461,9 @@ function layoutBlocksWithGeometry(
         lineSpacing,
         contextualSpacing,
         styleId,
-        bottomBorder,
+        borders,
+        borderGroupKey:
+          bordersToken === '' ? '' : `${bordersToken}@${indent.left},${indent.left + available}`,
         shading,
         inheritedRunProperties,
         tabStops,
@@ -586,6 +671,7 @@ function layoutBlocksWithGeometry(
     nextLineId: () => `line-${lineCounter++}`,
     styleCascade,
     listItems,
+    ...(defaultTabStopPt !== undefined ? { defaultTabStopPt } : {}),
     borderOwnershipBudget: createTableBorderOwnershipBudget(),
     vMergeResolveBudget: createTableVMergeResolveBudget(),
   };
@@ -893,7 +979,7 @@ function layoutBlocksWithGeometry(
       lineSpacing,
       contextualSpacing,
       styleId,
-      bottomBorder,
+      borders,
       shading,
       inheritedRunProperties,
       tabStops,
@@ -922,7 +1008,22 @@ function layoutBlocksWithGeometry(
     // Moving the text into that slot as well draws the bullet on top of its own first word.
     const firstLineOffset = listItem ? 0 : indent.hanging > 0 ? -indent.hanging : indent.firstLine;
     const paragraphId = paragraph.id;
-    const borderExtent = bottomBorderExtentPt(bottomBorder);
+    // `w:between` (§17.3.1.24): consecutive paragraphs with IDENTICAL border settings are ONE
+    // bordered block in Word — the box opens above the first and closes below the last, and
+    // each interior boundary carries `w:between` or nothing. Applying a box to three selected
+    // paragraphs in Word draws one box, not three, and this is why.
+    const borderGroupKey = entry.borderGroupKey;
+    const inSameBorderGroup = (other: PreparedBlock | undefined): boolean =>
+      borderGroupKey !== '' &&
+      other?.kind === 'paragraph' &&
+      other.borderGroupKey === borderGroupKey;
+    const continuesAbove = inSameBorderGroup(previousEntry);
+    const continuesBelow = inSameBorderGroup(nextEntry);
+    const topEdge = continuesAbove ? undefined : borders.top;
+    // What closes the paragraph: the bottom rule, or the `between` rule when the block runs on.
+    const closingEdge = continuesBelow ? borders.between : borders.bottom;
+    const topExtent = paragraphBorderExtentPt(topEdge);
+    const borderExtent = paragraphBorderExtentPt(closingEdge);
 
     if (paragraphBreaksBefore(props) && (pageFragments.length > 0 || pages.length === 0)) {
       flushPage();
@@ -955,7 +1056,7 @@ function layoutBlocksWithGeometry(
           : resolveRunStyle(inheritedRunProperties);
       const firstHeight = lines[0]?.height ?? measurer.lineMetrics(emptyStyle).height;
       const firstTail = lines.length <= 1 ? borderExtent + spacing.after : 0;
-      if (cursorY + lead + firstHeight + firstTail > contentHeight && cursorY > 0) {
+      if (cursorY + lead + topExtent + firstHeight + firstTail > contentHeight && cursorY > 0) {
         flushPage();
         previousSpaceAfter = 0;
       }
@@ -969,6 +1070,10 @@ function layoutBlocksWithGeometry(
       firstParagraphOfSection
     );
     if (appliedBefore > 0) cursorY += appliedBefore;
+    // The top rule and its gap are flow height above the first line, exactly as the bottom
+    // rule is flow height below the last — pagination has to see both or a boxed paragraph
+    // overhangs the bottom margin by the height of its own frame.
+    if (topExtent > 0) cursorY += topExtent;
     firstParagraphOfSection = false;
 
     // Place the lines, fragmenting at page boundaries.
@@ -976,32 +1081,92 @@ function layoutBlocksWithGeometry(
     let pending: LineRecord[] = [];
     let fragmentStart = lines[0]?.start ?? 0;
     let fragmentBefore = appliedBefore;
+    // Reserved above the FIRST fragment only: a paragraph continued onto the next page opens
+    // once, the same way it closes once.
+    let fragmentTopExtent = topExtent;
     let endedWithPageBreak = false;
     previousSpaceAfter = 0;
 
     const flushFragment = (isLast: boolean): void => {
       if (pending.length === 0) return;
-      const top = pending[0]!.box.y - fragmentBefore;
+      const linesTop = pending[0]!.box.y;
+      const top = linesTop - fragmentBefore - fragmentTopExtent;
       const linesBottom =
         pending[pending.length - 1]!.box.y + pending[pending.length - 1]!.box.height;
       const appliedAfter = isLast ? spacing.after : 0;
+      const strokes: ParagraphBorderStrokeRecord[] = [];
       let bottomBorderRecord: ParagraphBottomBorderRecord | undefined;
+      let contentTop = linesTop;
       let contentBottom = linesBottom;
-      if (isLast && bottomBorder) {
-        const ruleY = linesBottom + bottomBorder.spacePt;
-        bottomBorderRecord = {
-          edge: bottomBorder,
-          box: {
-            x: indent.left,
-            y: ruleY,
-            width: available,
-            height: bottomBorder.widthPt,
-          },
+      if (fragmentTopExtent > 0 && topEdge) {
+        const ruleY = linesTop - topEdge.spacePt - topEdge.widthPt;
+        strokes.push({
+          side: 'top',
+          edge: topEdge,
+          box: { x: indent.left, y: ruleY, width: available, height: topEdge.widthPt },
+        });
+        contentTop = ruleY;
+      }
+      if (isLast && closingEdge) {
+        const ruleY = linesBottom + closingEdge.spacePt;
+        const box = {
+          x: indent.left,
+          y: ruleY,
+          width: available,
+          height: closingEdge.widthPt,
         };
-        contentBottom = ruleY + bottomBorder.widthPt;
+        strokes.push({ side: continuesBelow ? 'between' : 'bottom', edge: closingEdge, box });
+        // `bottomBorder` stays the BOTTOM rule alone: a `between` rule closing a grouped
+        // paragraph is a different edge, and a consumer reading it as the box's bottom would
+        // draw the block's frame at every interior boundary.
+        if (!continuesBelow) bottomBorderRecord = { edge: closingEdge, box };
+        contentBottom = ruleY + closingEdge.widthPt;
       }
       if (isLast) cursorY = Math.max(cursorY, contentBottom + appliedAfter);
       const height = Math.max(contentBottom + appliedAfter - top, 0);
+      // Side rules run the height of the bordered block, and inside a group they run THROUGH
+      // the inter-paragraph gap so the box reads as one outline rather than a ladder.
+      const sideTop = continuesAbove && fragmentIndex === 0 ? top : contentTop;
+      const sideBottom = continuesBelow && isLast ? top + height : contentBottom;
+      const sideHeight = Math.max(sideBottom - sideTop, 0);
+      if (borders.left) {
+        strokes.push({
+          side: 'left',
+          edge: borders.left,
+          box: {
+            x: indent.left - borders.left.spacePt - borders.left.widthPt,
+            y: sideTop,
+            width: borders.left.widthPt,
+            height: sideHeight,
+          },
+        });
+      }
+      if (borders.right) {
+        strokes.push({
+          side: 'right',
+          edge: borders.right,
+          box: {
+            x: indent.left + available + borders.right.spacePt,
+            y: sideTop,
+            width: borders.right.widthPt,
+            height: sideHeight,
+          },
+        });
+      }
+      // `w:bar` is the change-bar rule beside the paragraph. It belongs to the paragraph, not
+      // to the block, so it neither opens nor closes with the group.
+      if (borders.bar) {
+        strokes.push({
+          side: 'bar',
+          edge: borders.bar,
+          box: {
+            x: indent.left - borders.bar.spacePt - borders.bar.widthPt,
+            y: linesTop,
+            width: borders.bar.widthPt,
+            height: Math.max(linesBottom - linesTop, 0),
+          },
+        });
+      }
       const marker =
         fragmentIndex === 0
           ? publishListMarker(
@@ -1023,6 +1188,7 @@ function layoutBlocksWithGeometry(
         props,
         spacing: { before: fragmentBefore, after: appliedAfter },
         ...(bottomBorderRecord ? { bottomBorder: bottomBorderRecord } : {}),
+        ...(strokes.length > 0 ? { borders: strokes } : {}),
         ...(shading === undefined
           ? {}
           : { shading, shadingBox: paragraphShadingBox(pending, indent.left, available)! }),
@@ -1034,6 +1200,7 @@ function layoutBlocksWithGeometry(
       fragmentStart = pending[pending.length - 1]!.range.end;
       pending = [];
       fragmentBefore = 0;
+      fragmentTopExtent = 0;
     };
 
     for (const [lineIndex, pendingLine] of lines.entries()) {
@@ -1046,6 +1213,7 @@ function layoutBlocksWithGeometry(
         flushFragment(false);
         flushPage();
         fragmentBefore = 0;
+        fragmentTopExtent = 0;
       }
       const record: LineRecord = {
         id: `line-${lineCounter}`,
@@ -1080,6 +1248,7 @@ function layoutBlocksWithGeometry(
         flushFragment(isLastLine);
         flushPage();
         fragmentBefore = 0;
+        fragmentTopExtent = 0;
         endedWithPageBreak = true;
       }
     }

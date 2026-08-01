@@ -13,6 +13,7 @@
 import type {
   LineRecord,
   PageRecord,
+  ParagraphBorderStrokeRecord,
   ParagraphFragmentRecord,
   ResolvedRunStyle,
   SemanticLayout,
@@ -440,6 +441,15 @@ function paintFragment(
   if (fragment.marker) {
     element.append(paintListMarker(document, fragment, ctx));
   }
+  // Tab leaders are furniture too, and they are painted BEFORE the lines so the glyphs sit
+  // behind the text rather than over it.
+  for (const line of fragment.lines) {
+    for (const span of line.spans) {
+      if (!span.tabLeader) continue;
+      const leader = paintTabLeader(document, fragment, line, span, ctx);
+      if (leader) element.append(leader);
+    }
+  }
   for (const line of fragment.lines) {
     const painted = paintLine(document, line, ctx);
     // Line boxes are page-relative; inside a fragment they are drawn relative to it —
@@ -450,8 +460,23 @@ function paintFragment(
     painted.style.left = `${(left - fragment.box.x) * scale}px`;
     element.append(painted);
   }
-  if (fragment.bottomBorder) {
-    element.append(paintBottomBorder(document, fragment, scale));
+  // Layout owns border geometry. Side rules sit OUTSIDE the text column — Word draws them
+  // there and never reflows the text for them — so a painter deriving an edge from the
+  // fragment box would put the frame through the words.
+  if (fragment.borders) {
+    for (const stroke of fragment.borders) {
+      element.append(paintParagraphBorder(document, fragment, stroke, scale));
+    }
+  } else if (fragment.bottomBorder) {
+    // Table-cell paragraphs still publish the bottom rule alone.
+    element.append(
+      paintParagraphBorder(
+        document,
+        fragment,
+        { side: 'bottom', edge: fragment.bottomBorder.edge, box: fragment.bottomBorder.box },
+        scale
+      )
+    );
   }
   return element;
 }
@@ -485,6 +510,86 @@ function paintListMarker(
 }
 
 /**
+ * ST_TabTlc (ECMA-376 §17.3.1.38) to the glyph Word repeats across the tab.
+ *
+ * A Map, not an object literal, for the same reason as the decoration tables: the key comes
+ * out of a document and an object literal answers `constructor` with a function.
+ * `heavy` has no separate character — Word draws a thicker rule, approximated by the
+ * underscore in the run's own face at bold weight rather than by inventing a font.
+ */
+const TAB_LEADER_GLYPH = new Map<string, string>(
+  Object.entries({
+    dot: '.',
+    hyphen: '-',
+    underscore: '_',
+    heavy: '_',
+    middleDot: '·',
+  })
+);
+
+/**
+ * Ceiling on repeated leader glyphs for one tab.
+ *
+ * The repeat count is derived from a layout width and a resolved font size — both bounded —
+ * but this is still a `.repeat()` bound, so it gets an explicit cap rather than trusting the
+ * arithmetic upstream of it. `overflow: hidden` trims whatever the cap leaves over.
+ */
+const MAX_TAB_LEADER_GLYPHS = 512;
+
+/**
+ * Paint the leader of one tab across the advance layout already reserved for it.
+ *
+ * Inert furniture (`data-docx-tab-leader`), the same class as list markers: it carries no
+ * source range, so it can never be selected, copied or serialised. Critically it is NOT a
+ * child of the tab span — `dom-selection` reads a span's length from its `textContent`, and
+ * a hundred dots inside the `\t` run would make every offset after it wrong.
+ */
+function paintTabLeader(
+  document: Document,
+  fragment: ParagraphFragmentRecord,
+  line: LineRecord,
+  span: StyleSpanRecord,
+  ctx: PaintContext
+): HTMLElement | null {
+  const glyph = span.tabLeader ? TAB_LEADER_GLYPH.get(span.tabLeader) : undefined;
+  if (!glyph || span.box.width <= 0) return null;
+  const scale = ctx.scale;
+
+  const layer = document.createElement('div');
+  layer.className = 'docx-tab-leader';
+  layer.dataset.docxTabLeader = '';
+  layer.setAttribute('contenteditable', 'false');
+  layer.setAttribute('aria-hidden', 'true');
+  layer.style.position = 'absolute';
+  layer.style.left = `${(span.box.x - fragment.box.x) * scale}px`;
+  layer.style.top = `${(line.box.y - fragment.box.y) * scale}px`;
+  layer.style.width = `${span.box.width * scale}px`;
+  layer.style.height = `${line.box.height * scale}px`;
+  layer.style.overflow = 'hidden';
+  layer.style.whiteSpace = 'pre';
+  layer.style.pointerEvents = 'none';
+  layer.style.userSelect = 'none';
+  // The zero-size strut plus an explicit line-height is how `paintLine` sits its runs, so
+  // reusing it here puts the leader on exactly the baseline the text on this line got.
+  layer.style.fontSize = '0';
+  layer.style.lineHeight = `${line.box.height * scale}px`;
+
+  const glyphs = document.createElement('span');
+  glyphs.style.display = 'inline-block';
+  glyphs.style.verticalAlign = 'baseline';
+  applyRunFaceStyle(glyphs, span.style, ctx);
+  if (span.tabLeader === 'heavy') glyphs.style.fontWeight = 'bold';
+  // Under-estimate the glyph advance at a fifth of the em so the repeat always OVERFILLS the
+  // reserved width; the clip decides where it ends, which is what keeps the leader from
+  // stopping short of the stop in a face with narrow punctuation.
+  const advancePt = Math.max(0.5, span.style.fontSizePt * 0.2);
+  const count = Math.min(MAX_TAB_LEADER_GLYPHS, Math.ceil(span.box.width / advancePt) + 1);
+  glyphs.textContent = glyph.repeat(count); // SAFE: textContent, never innerHTML
+  layer.append(glyphs);
+  return layer;
+}
+
+/**
  * Paint paragraph shading from layout-published geometry.
  *
  * Height/position come from `shadingBox` (line union) — not from fragment outer height or
@@ -506,44 +611,56 @@ function paintParagraphShading(
 }
 
 /**
- * Paint the bottom paragraph rule from layout geometry.
+ * Paint one `w:pBdr` rule from layout geometry.
  *
- * Height, colour and position come from the record — never from computed style or
+ * Size, colour and position come from the record — never from computed style or
  * getBoundingClientRect. Colour is re-validated at the sink like every other file-derived
- * style value.
+ * style value, and `side` is a closed union so it can safely reach a class name.
  */
-function paintBottomBorder(
+function paintParagraphBorder(
   document: Document,
   fragment: ParagraphFragmentRecord,
+  stroke: ParagraphBorderStrokeRecord,
   scale: number
 ): HTMLElement {
-  const border = fragment.bottomBorder!;
-  const rule = positioned(document, 'div', border.box, scale);
-  rule.className = 'docx-paragraph-border docx-paragraph-border-bottom';
+  const rule = positioned(document, 'div', stroke.box, scale);
+  rule.className = `docx-paragraph-border docx-paragraph-border-${stroke.side}`;
   rule.setAttribute('aria-hidden', 'true');
-  rule.style.left = `${(border.box.x - fragment.box.x) * scale}px`;
-  rule.style.top = `${(border.box.y - fragment.box.y) * scale}px`;
-  // Height already set by `positioned` from the published box; colour is the only extra.
-  const color = border.edge.color && HEX.test(border.edge.color) ? border.edge.color : '000000';
+  rule.style.left = `${(stroke.box.x - fragment.box.x) * scale}px`;
+  rule.style.top = `${(stroke.box.y - fragment.box.y) * scale}px`;
+  // Size already set by `positioned` from the published box; colour is the only extra.
+  const color = stroke.edge.color && HEX.test(stroke.edge.color) ? stroke.edge.color : '000000';
   rule.style.backgroundColor = `#${color}`;
+  // A side rule is a tall thin box, so its dash/double pattern runs down it rather than across.
+  const vertical = stroke.side === 'left' || stroke.side === 'right' || stroke.side === 'bar';
   // `val` selects a CSS approximation; unknown styles fall back to a solid rule so a
   // recognised thickness is never silently dropped.
-  switch (border.edge.val) {
+  switch (stroke.edge.val) {
     case 'dashed':
-    case 'dashSmallGap':
-      rule.style.backgroundImage = `linear-gradient(to right, #${color} 60%, transparent 60%)`;
-      rule.style.backgroundSize = `${Math.max(4, 4 * scale)}px 100%`;
+    case 'dashSmallGap': {
+      const period = Math.max(4, 4 * scale);
+      rule.style.backgroundImage = `linear-gradient(to ${vertical ? 'bottom' : 'right'}, #${color} 60%, transparent 60%)`;
+      rule.style.backgroundSize = vertical ? `100% ${period}px` : `${period}px 100%`;
       break;
-    case 'dotted':
-      rule.style.backgroundImage = `linear-gradient(to right, #${color} 35%, transparent 35%)`;
-      rule.style.backgroundSize = `${Math.max(3, 3 * scale)}px 100%`;
+    }
+    case 'dotted': {
+      const period = Math.max(3, 3 * scale);
+      rule.style.backgroundImage = `linear-gradient(to ${vertical ? 'bottom' : 'right'}, #${color} 35%, transparent 35%)`;
+      rule.style.backgroundSize = vertical ? `100% ${period}px` : `${period}px 100%`;
       break;
+    }
     case 'double': {
-      // Two hairlines inside the published box height — still layout-owned geometry.
-      const half = Math.max(1, (border.box.height * scale) / 3);
+      // Two hairlines inside the published box thickness — still layout-owned geometry.
+      const thickness = (vertical ? stroke.box.width : stroke.box.height) * scale;
+      const half = Math.max(1, thickness / 3);
       rule.style.backgroundColor = 'transparent';
-      rule.style.borderTop = `${half}px solid #${color}`;
-      rule.style.borderBottom = `${half}px solid #${color}`;
+      if (vertical) {
+        rule.style.borderLeft = `${half}px solid #${color}`;
+        rule.style.borderRight = `${half}px solid #${color}`;
+      } else {
+        rule.style.borderTop = `${half}px solid #${color}`;
+        rule.style.borderBottom = `${half}px solid #${color}`;
+      }
       rule.style.boxSizing = 'border-box';
       break;
     }

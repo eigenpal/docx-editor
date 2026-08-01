@@ -23,12 +23,14 @@ import type { OoxmlElement } from '@docx-editor.dev/core-contract/store';
 import type { FieldPageContext } from './field-projection.ts';
 import { paragraphLayoutKey, type ParagraphLayoutCache } from './layout-cache.ts';
 import { alignSpans, breakParagraph, type PendingLine } from './paragraph-flow.ts';
-import { collapsedSpaceBefore } from './paragraph-style.ts';
+import { collapsedSpaceBefore, paragraphBorderExtentPt } from './paragraph-style.ts';
+import { tabStopsFingerprint, withDefaultTabInterval } from './paragraph-tabs.ts';
 import { DEFAULT_RUN_STYLE } from './run-style.ts';
 import {
   resolveParagraphLayoutInputs,
   cascadeRunProperties,
   type StyleCascadeTable,
+  type TableCellStyleFormatting,
 } from './style-cascade.ts';
 import { paragraphShadingBox } from './ooxml-shading.ts';
 import {
@@ -43,6 +45,7 @@ import {
 import type {
   BlockFragmentRecord,
   LineRecord,
+  ParagraphBorderStrokeRecord,
   ParagraphBottomBorderRecord,
   ParagraphFragmentRecord,
   TableCellFragmentRecord,
@@ -116,6 +119,11 @@ export interface TableFlowDeps {
    */
   readonly listItems?: ReadonlyMap<string, ResolvedListItem>;
   /**
+   * `w:settings/w:defaultTabStop` in points; absent keeps the 0.5" schema default. A cell
+   * paragraph tabs on the same document-wide grid as a body paragraph.
+   */
+  readonly defaultTabStopPt?: number;
+  /**
    * Shared sparse ownership-interval budget for border finalize across nested tables in
    * one layout pass. Created once per flow; omit only in isolated unit tests.
    */
@@ -185,6 +193,16 @@ function shiftBlocks(blocks: readonly BlockFragmentRecord[], dy: number): BlockF
             },
           }
         : {}),
+      // Every `w:pBdr` stroke, not only the bottom one. vAlign moves the whole paragraph
+      // down its cell; a frame left at the pre-shift y would sit above the text it encloses.
+      ...(block.borders
+        ? {
+            borders: block.borders.map((strokeRecord) => ({
+              ...strokeRecord,
+              box: { ...strokeRecord.box, y: strokeRecord.box.y + dy },
+            })),
+          }
+        : {}),
       ...(block.marker
         ? {
             marker: {
@@ -230,6 +248,8 @@ function placeCellParagraph(
     readonly includeAfter?: boolean;
     /** When false, omit the bottom border (paragraph continues). */
     readonly includeBottomBorder?: boolean;
+    /** What the table style says about this cell's paragraphs (17.7.6.6). */
+    readonly tableCellStyle?: TableCellStyleFormatting;
   }
 ): {
   readonly fragment: ParagraphFragmentRecord | null;
@@ -249,11 +269,22 @@ function placeCellParagraph(
     spacing,
     lineSpacing,
     bottomBorder,
+    borders,
     shading,
     inheritedRunProperties,
-    tabStops,
-    tabStopsCacheToken,
-  } = resolveParagraphLayoutInputs(paragraph, cellContentWidth, deps.styleCascade, listItem);
+    tabStops: cascadedTabStops,
+    tabStopsCacheToken: cascadedTabStopsCacheToken,
+  } = resolveParagraphLayoutInputs(
+    paragraph,
+    cellContentWidth,
+    deps.styleCascade,
+    listItem,
+    options?.tableCellStyle
+  );
+  // `w:defaultTabStop` lives in settings.xml, which the paragraph cascade never reads.
+  const tabStops = withDefaultTabInterval(cascadedTabStops, deps.defaultTabStopPt);
+  const tabStopsCacheToken =
+    tabStops === cascadedTabStops ? cascadedTabStopsCacheToken : tabStopsFingerprint(tabStops);
   // A cell paragraph breaks like a body paragraph: same line spacing, same first-line
   // offset. Contextual spacing is a body-flow question (it compares document neighbours),
   // so it is not applied per cell.
@@ -297,8 +328,14 @@ function placeCellParagraph(
 
   const appliedBefore =
     lineStart === 0 ? collapsedSpaceBefore(spacing.before, previousSpaceAfter) : 0;
+  const fragmentX = originX + indent.left;
+  // The top rule and its gap are flow height above the first line, exactly as the bottom rule
+  // is flow height below the last — so the cell's content band has to reserve it or a boxed
+  // paragraph's frame paints over the cell's own top border. Reserved on the FIRST fragment
+  // only: a paragraph continued onto the next page opens once, the way it closes once.
+  const topExtent = lineStart === 0 ? paragraphBorderExtentPt(borders.top) : 0;
   const records: LineRecord[] = [];
-  let y = top + appliedBefore;
+  let y = top + appliedBefore + topExtent;
   let nextLineIndex = lineStart;
   let fitted = false;
 
@@ -354,25 +391,84 @@ function placeCellParagraph(
   }
 
   const complete = nextLineIndex >= lines.length;
+  const linesTop = records[0]!.box.y;
   const linesBottom = y;
+  // Every `w:pBdr` edge, in the paint order body flow publishes: open, close, sides, bar.
+  //
+  // `w:between` grouping (§17.3.1.24) is NOT applied inside a cell. Grouping is a decision
+  // about a paragraph's NEIGHBOURS, and cell flow places one paragraph at a time with no
+  // lookahead, so a run of identically bordered cell paragraphs each closes with its own
+  // `w:bottom` — Word would draw one frame around the run.
+  const strokes: ParagraphBorderStrokeRecord[] = [];
   let bottomBorderRecord: ParagraphBottomBorderRecord | undefined;
+  let contentTop = linesTop;
   let contentBottom = linesBottom;
+  if (topExtent > 0 && borders.top) {
+    const ruleY = linesTop - borders.top.spacePt - borders.top.widthPt;
+    strokes.push({
+      side: 'top',
+      edge: borders.top,
+      box: { x: fragmentX, y: ruleY, width: available, height: borders.top.widthPt },
+    });
+    contentTop = ruleY;
+  }
   if (complete && includeBottomBorder && bottomBorder) {
     const ruleY = linesBottom + bottomBorder.spacePt;
-    bottomBorderRecord = {
-      edge: bottomBorder,
-      box: {
-        x: originX + indent.left,
-        y: ruleY,
-        width: available,
-        height: bottomBorder.widthPt,
-      },
+    const box = {
+      x: fragmentX,
+      y: ruleY,
+      width: available,
+      height: bottomBorder.widthPt,
     };
+    bottomBorderRecord = { edge: bottomBorder, box };
+    strokes.push({ side: 'bottom', edge: bottomBorder, box });
     contentBottom = ruleY + bottomBorder.widthPt;
+  }
+  // Side rules run corner to corner of THIS fragment's frame. Horizontally they are
+  // publish-only: Word draws them outside the text column and never re-breaks the lines for
+  // them, which is why `available` above is untouched by a box.
+  const sideHeight = Math.max(contentBottom - contentTop, 0);
+  if (borders.left) {
+    strokes.push({
+      side: 'left',
+      edge: borders.left,
+      box: {
+        x: fragmentX - borders.left.spacePt - borders.left.widthPt,
+        y: contentTop,
+        width: borders.left.widthPt,
+        height: sideHeight,
+      },
+    });
+  }
+  if (borders.right) {
+    strokes.push({
+      side: 'right',
+      edge: borders.right,
+      box: {
+        x: fragmentX + available + borders.right.spacePt,
+        y: contentTop,
+        width: borders.right.widthPt,
+        height: sideHeight,
+      },
+    });
+  }
+  // `w:bar` is the change-bar rule beside the paragraph, not part of the frame — it runs the
+  // text only and adds no flow height, so a barred cell paragraph is exactly as tall as a
+  // bare one.
+  if (borders.bar) {
+    strokes.push({
+      side: 'bar',
+      edge: borders.bar,
+      box: {
+        x: fragmentX - borders.bar.spacePt - borders.bar.widthPt,
+        y: linesTop,
+        width: borders.bar.widthPt,
+        height: Math.max(linesBottom - linesTop, 0),
+      },
+    });
   }
   const appliedAfter = complete && includeAfter ? spacing.after : 0;
   const bottom = contentBottom + appliedAfter;
-  const fragmentX = originX + indent.left;
   const shadingBox =
     shading === undefined ? undefined : paragraphShadingBox(records, fragmentX, available);
   const marker =
@@ -399,6 +495,7 @@ function placeCellParagraph(
       props,
       spacing: { before: appliedBefore, after: appliedAfter },
       ...(bottomBorderRecord ? { bottomBorder: bottomBorderRecord } : {}),
+      ...(strokes.length > 0 ? { borders: strokes } : {}),
       ...(shading === undefined ? {} : { shading }),
       ...(shadingBox === undefined ? {} : { shadingBox }),
       ...(marker ? { marker } : {}),
@@ -457,7 +554,8 @@ function flowBlocksInBoxBounded(
   maxBottom: number,
   depth: number,
   deps: TableFlowDeps,
-  cursor: CellPlaceCursor
+  cursor: CellPlaceCursor,
+  tableCellStyle?: TableCellStyleFormatting
 ): {
   readonly blocks: BlockFragmentRecord[];
   readonly bottom: number;
@@ -521,6 +619,7 @@ function flowBlocksInBoxBounded(
         maxBottom,
         includeAfter: true,
         includeBottomBorder: true,
+        ...(tableCellStyle ? { tableCellStyle } : {}),
       }
     );
     if (!placed.fitted || !placed.fragment) {
@@ -737,7 +836,8 @@ export function layoutRowFragmentBounded(
           contentMaxBottom,
           depth,
           deps,
-          cursor
+          cursor,
+          cell.styleFormatting
         );
         blocks = flow.blocks;
         contentBottom = flow.bottom;
@@ -872,17 +972,26 @@ export function finalizeTableRows(
     for (const cell of row.cells) authoredById.set(cell.id, cell);
   }
 
-  // One-pass column-keyed merge spans — O(cells), not O(rows × columns²).
-  const mergeSpanById = resolveVMergeSpans(rows, vMergeWork, vMergeBudget);
+  // One-pass column-keyed merge spans — O(cells), not O(rows × columns²). These rows are
+  // one PAGE FRAGMENT: a merge whose restart was placed on an earlier page is headed here
+  // by its continuation copy, which is why that copy comes back keyed in the span map.
+  const mergeSpanById = resolveVMergeSpans(rows, vMergeWork, vMergeBudget, {
+    pageFragment: true,
+  });
 
   // Expand restart heights and shift content for vAlign over the full span.
   const expanded: TableRowFragmentRecord[] = rows.map((row, rowIndex) => ({
     ...row,
     cells: row.cells.map((cell) => {
-      if (cell.vMergeContinue) {
+      const resolvedSpan = mergeSpanById.get(cell.id);
+      if (cell.vMergeContinue && resolvedSpan === undefined) {
         return { ...cell, paintInert: true, rowSpan: 1, borders: {}, blocks: [] };
       }
-      const span = mergeSpanById.get(cell.id) ?? 1;
+      // A carried-in continuation paints like the restart it continues: Word draws the
+      // merged cell's rules, fill and box on every page the merge crosses. Its content
+      // stayed with the restart on the earlier page, so `blocks` is empty either way.
+      const carried = cell.vMergeContinue;
+      const span = resolvedSpan ?? 1;
       let height = cell.box.height;
       if (span > 1) {
         const last = rows[rowIndex + span - 1]!;
@@ -912,6 +1021,7 @@ export function finalizeTableRows(
       }
       return {
         ...cell,
+        ...(carried ? { vMergeContinue: false, paintInert: false } : {}),
         rowSpan: span,
         blocks,
         box: { ...cell.box, height },

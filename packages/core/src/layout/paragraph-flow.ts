@@ -376,6 +376,9 @@ export function breakParagraph(
           props: piece.props,
           style: piece.style,
           box: { x: currentX, y: 0, width, height: metrics.height },
+          // The leader belongs to the stop that was REACHED, so it is resolved here with the
+          // destination rather than re-derived from the paragraph at paint time.
+          ...(destination.leader ? { tabLeader: destination.leader } : {}),
         });
         line.width += width;
         line.height = Math.max(line.height, metrics.height);

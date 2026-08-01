@@ -164,6 +164,12 @@ export interface TreeDocxSession {
    */
   numberingRoot(): OoxmlElement | null;
   /**
+   * Root of the settings part tree (`w:settings`), for document-wide layout constants such
+   * as `w:defaultTabStop`. Memoized once; `null` when the package has no settings part.
+   * Settings editing is a later slice, so this is immutable for the session.
+   */
+  settingsRoot(): OoxmlElement | null;
+  /**
    * The theme's ten picker colours (`a:clrScheme`), in Word's column order, or `[]`
    * when the package has no complete scheme. Memoized once: the theme part is
    * immutable for the session's lifetime.
@@ -291,6 +297,31 @@ export function openTreeSession(bytes: Uint8Array): OpenTreeSessionResult {
     part ??= pkg.parts.get('/word/numbering.xml');
     numberingRoot = part?.root ?? null;
     return numberingRoot;
+  };
+
+  // The settings part, resolved like the styles part. Word writes document-wide layout
+  // constants here — `w:defaultTabStop` among them — that no paragraph property chain can
+  // see, so layout has to be handed them separately.
+  const SETTINGS_REL_TYPE =
+    'http://schemas.openxmlformats.org/officeDocument/2006/relationships/settings';
+  let settingsRootResolved = false;
+  let settingsRoot: OoxmlElement | null = null;
+  const resolveSettingsRoot = (): OoxmlElement | null => {
+    if (settingsRootResolved) return settingsRoot;
+    settingsRootResolved = true;
+    const record = (pkg.relationships.get(pkg.mainDocumentPart) ?? []).find(
+      (rel) => rel.type === SETTINGS_REL_TYPE
+    );
+    let part: OoxmlPart | undefined;
+    if (record) {
+      const resolved = resolveRelationship(record);
+      if (resolved.mode === 'Internal' && resolved.target.ok) {
+        part = pkg.parts.get(resolved.target.partName);
+      }
+    }
+    part ??= pkg.parts.get('/word/settings.xml');
+    settingsRoot = part?.root ?? null;
+    return settingsRoot;
   };
 
   // The theme part, resolved like the styles part: through the main part's `theme`
@@ -489,6 +520,8 @@ export function openTreeSession(bytes: Uint8Array): OpenTreeSessionResult {
       stylesRoot: () => resolveStylesRoot(),
 
       numberingRoot: () => resolveNumberingRoot(),
+
+      settingsRoot: () => resolveSettingsRoot(),
 
       documentThemeColors() {
         themeColorsCache ??= collectDocumentThemeColors(resolveThemeRoot());

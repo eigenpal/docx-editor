@@ -34,6 +34,11 @@ export function fragmentSignature(fragment: BlockFragmentRecord): string {
           fragment.props,
           fragment.spacing,
           fragment.bottomBorder,
+          // Every `w:pBdr` stroke, not just the bottom one. A left rule's colour or width
+          // moves nothing else that is hashed here — `props` carries `pBdr` without its
+          // children — so leaving it out converges the repainted fragment against the stale
+          // one and keeps drawing the old frame.
+          fragment.borders,
           fragment.shading,
           fragment.shadingBox,
           fragment.marker,

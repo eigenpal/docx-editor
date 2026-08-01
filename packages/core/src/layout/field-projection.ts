@@ -383,6 +383,10 @@ interface PendingPageProjection {
  * When projecting, suppressed cached-result model ranges still advance the canonical offset
  * so following `w:t` stays aligned with `paragraphTextOf`. The projected piece covers that
  * suppressed range (or a zero-width insertion point when the cache is empty).
+ *
+ * Hidden runs (`w:vanish`) are suppressed the same way — no piece, offset still advances — so
+ * they are never measured, laid out or painted. A paragraph whose runs are all hidden yields
+ * no pieces and is laid out exactly like an empty paragraph, which keeps its caret target.
  */
 export function piecesOfParagraph(
   paragraph: OoxmlNode,
@@ -423,6 +427,12 @@ export function piecesOfParagraph(
       pendingProjection = null;
       return;
     }
+    if (pendingProjection.style.hidden) {
+      // `w:vanish` governs the DISPLAYED result the same way it governs literal text, so a
+      // hidden field projects nothing rather than painting digits Word would not show.
+      pendingProjection = null;
+      return;
+    }
     const text = projectPageFieldValue(pendingProjection.kind, pageContext);
     push(
       text,
@@ -448,7 +458,11 @@ export function piecesOfParagraph(
   ): void => {
     const text = modelTextOfRunChild(grand);
     if (text.length === 0) return;
-    push(text, props, style, false, offset, offset + text.length);
+    // Hidden text (`w:vanish`, ECMA-376 §17.3.2.45) is skipped, not emitted-then-hidden: Word
+    // paginates as if it were absent, so measuring it would break pages in the wrong place.
+    // The offset still advances — the characters remain in the model and `paragraphTextOf`
+    // counts them, so every following piece would desync from tree ops otherwise.
+    if (!style.hidden) push(text, props, style, false, offset, offset + text.length);
     offset += text.length;
   };
 
@@ -520,6 +534,12 @@ export function piecesOfParagraph(
       if (pendingProjection && isInsideFieldResult(field)) {
         const text = modelTextOfRunChild(grand);
         if (text.length > 0) {
+          if (style.hidden) {
+            // Hidden cached-result text is neither buffered nor allowed to donate the
+            // projected style; only the offset advances (as in `pushRunContent`).
+            offset += text.length;
+            continue;
+          }
           // First measurable cached-result run wins the projected style.
           if (!pendingProjection.capturedResultStyle) {
             pendingProjection.props = props;

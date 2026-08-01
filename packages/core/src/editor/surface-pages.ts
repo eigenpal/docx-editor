@@ -12,6 +12,7 @@ import {
   buildNumberingIndex,
   buildStyleCascadeTable,
   caretAt,
+  defaultTabIntervalFromSettings,
   enumerateDocumentSections,
   geometryOfSection,
   layoutHeaderFooterStory,
@@ -43,14 +44,21 @@ export function createFurnitureSource(env: {
   readonly producer: string;
   readonly cache: Parameters<typeof layoutHeaderFooterStory>[4];
   readonly styleCascade?: Parameters<typeof layoutHeaderFooterStory>[5];
+  /**
+   * `w:settings/w:defaultTabStop` in points. Furniture tabs on the document's grid, so a
+   * page-number tab in a metric-locale footer lands where Word puts it.
+   */
+  readonly defaultTabStopPt?: number;
 }): FurnitureSource {
-  const { session, measurer, producer, cache, styleCascade } = env;
+  const { session, measurer, producer, cache, styleCascade, defaultTabStopPt } = env;
 
   /**
    * Header/footer stories, laid out once per part for baseline height (phase 2, read-only).
    *
    * Keyed by part object identity plus width and producer: HF parts are immutable for the
    * session's lifetime, but a section-width edit or a late-arriving font re-measures them.
+   * The default-tab interval is not in the key because it is fixed for the life of THIS
+   * source — it is captured once from the settings part, which cannot change in-session.
    * PAGE/NUMPAGES projection is applied later only for stories that contain those fields,
    * via `withPageContext` during layout finalize — not paint-time substitution.
    */
@@ -62,7 +70,17 @@ export function createFurnitureSource(env: {
   function storyOf(part: OoxmlPart, width: number): ReturnType<typeof layoutHeaderFooterStory> {
     const memo = hfStoryMemo.get(part);
     if (memo && memo.width === width && memo.producer === producer) return memo.story;
-    const story = layoutHeaderFooterStory(part, width, measurer, producer, cache, styleCascade);
+    const story = layoutHeaderFooterStory(
+      part,
+      width,
+      measurer,
+      producer,
+      cache,
+      styleCascade,
+      undefined,
+      undefined,
+      defaultTabStopPt
+    );
     hfStoryMemo.set(part, { width, producer, story });
     return story;
   }
@@ -112,6 +130,11 @@ export function createFurnitureSource(env: {
 export function createSurfaceStyleDeps(session: TreeDocxSession): {
   readonly styleCascade: StyleCascadeTable | undefined;
   /**
+   * `w:settings/w:defaultTabStop` in points. Read once: the settings part is immutable
+   * in-session, like the styles part.
+   */
+  readonly defaultTabStopPt: number;
+  /**
    * Read per layout pass, not captured once.
    *
    * The styles part is immutable in-session, but the numbering part is NOT: turning on
@@ -125,6 +148,7 @@ export function createSurfaceStyleDeps(session: TreeDocxSession): {
   let index: NumberingIndex | undefined;
   return {
     styleCascade: buildStyleCascadeTable(session.stylesRoot()),
+    defaultTabStopPt: defaultTabIntervalFromSettings(session.settingsRoot()),
     numberingIndex() {
       const current = session.numberingRoot();
       if (index === undefined || current !== root) {

@@ -13,9 +13,12 @@
 import type { OoxmlElement, OoxmlNode } from '@docx-editor.dev/core-contract/store';
 import { shadingFillFromElement } from './ooxml-shading.ts';
 import {
+  EMPTY_TABLE_CELL_STYLE_FORMATTING,
   EMPTY_TABLE_FORMATTING,
   cascadeTableFormatting,
+  tableCellStyleFormatting,
   type StyleCascadeTable,
+  type TableCellStyleFormatting,
 } from './style-cascade.ts';
 import { mergeCellBorders, mergeTableBorders } from './table-border-cascade.ts';
 import {
@@ -45,6 +48,9 @@ export const CELL_PAD = 3;
 
 /** Soft ceiling on a single margin side (~22"). */
 const MAX_CELL_MARGIN_PT = 31_680 / 20;
+
+/** Distinct conditional-format combinations memoized per table; see `styleFormattingFor`. */
+const MAX_CELL_CONDITION_SETS = 256;
 
 export type CellVerticalAlign = 'top' | 'center' | 'bottom';
 
@@ -76,6 +82,11 @@ export interface SemanticTableCell {
   readonly borders: CellBorderBox;
   /** Validated 6-hex shading fill, absent for none/auto. */
   readonly shading?: string;
+  /**
+   * What the table style says about this cell's paragraphs and runs (17.7.6.6) — a header
+   * row's bold and centring live here, not in the cell's own properties.
+   */
+  readonly styleFormatting: TableCellStyleFormatting;
   /** Block children in reading order: `paragraph` and `table` typed nodes only. */
   readonly blocks: readonly OoxmlElement[];
 }
@@ -397,6 +408,22 @@ export function readTableStructure(
     tblPr ? readTableBorders(tblPr) : EMPTY_TABLE_BORDER_BOX
   );
 
+  // Cells under the same conditions resolve to the same paragraph/run material, and a table
+  // has few distinct condition sets. Memoized per table so a 10k-cell table flattens the
+  // style chain a handful of times, not once per cell. A hostile `w:cnfStyle` can still name
+  // up to 4096 distinct sets, so the memo stops growing at the ceiling and later cells simply
+  // resolve unmemoized — same bounded per-cell work either way.
+  const styleByConditions = new Map<string, TableCellStyleFormatting>();
+  const styleFormattingFor = (conditions: readonly string[]): TableCellStyleFormatting => {
+    if (tableStyle === EMPTY_TABLE_FORMATTING) return EMPTY_TABLE_CELL_STYLE_FORMATTING;
+    const key = conditions.join('|');
+    const cached = styleByConditions.get(key);
+    if (cached) return cached;
+    const resolved = tableCellStyleFormatting(tableStyle, conditions);
+    if (styleByConditions.size < MAX_CELL_CONDITION_SETS) styleByConditions.set(key, resolved);
+    return resolved;
+  };
+
   const bodyRowIndex = new Map<string, number>();
   let bodyRows = 0;
   for (const rowNode of table.children) {
@@ -457,6 +484,7 @@ export function readTableStructure(
           cellProperties ? readCellBorders(cellProperties) : EMPTY_CELL_BORDER_BOX
         ),
         ...(shading === undefined ? {} : { shading }),
+        styleFormatting: styleFormattingFor(conditions),
         blocks,
       });
     }

@@ -1,0 +1,227 @@
+// `w:pBdr` on a paragraph INSIDE a table cell (ECMA-376 §17.3.1.24).
+//
+// Body flow publishes all six edges; cell flow read only `w:bottom`, so the boxed callout
+// every template puts in a cell — four rules around a note — rendered as a lone underline.
+
+import { GlobalRegistrator } from '@happy-dom/global-registrator';
+if (!GlobalRegistrator.isRegistered) GlobalRegistrator.register();
+
+import { describe, expect, test } from 'bun:test';
+import { readOoxmlPart, type OoxmlPart } from '@docx-editor.dev/core-contract/store';
+import { createFixedMeasurer, layoutSemanticDocument } from '../semantic-layout.ts';
+import {
+  type PageGeometry,
+  type ParagraphBorderSide,
+  type ParagraphFragmentRecord,
+  type SemanticLayout,
+} from '../semantic-records.ts';
+import { paintSemanticLayout } from '../../output/semantic-paint.ts';
+
+const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
+
+function load(body: string): OoxmlPart {
+  const result = readOoxmlPart(`<w:document xmlns:w="${W}"><w:body>${body}</w:body></w:document>`, {
+    name: '/word/document.xml',
+    contentType: 'app/xml',
+  });
+  if (!result.ok) throw new Error(result.reason);
+  return result.part;
+}
+
+const measurer = createFixedMeasurer(6, 14);
+
+/** Tiny page: 100pt tall, 10pt margins → 80pt content box, so a cell row paginates. */
+const TINY: PageGeometry = {
+  width: 200,
+  height: 100,
+  margin: { top: 10, right: 10, bottom: 10, left: 10 },
+};
+
+const lay = (body: string, geometry?: PageGeometry): SemanticLayout =>
+  layoutSemanticDocument(load(body), 1, { measurer, ...(geometry ? { geometry } : {}) });
+
+const paragraph = (text: string, pPr = '') =>
+  `<w:p>${pPr ? `<w:pPr>${pPr}</w:pPr>` : ''}${text ? `<w:r><w:t>${text}</w:t></w:r>` : ''}</w:p>`;
+
+const oneCellTable = (content: string, tcPr = '') =>
+  `<w:tbl><w:tr><w:tc>${tcPr}${content}</w:tc></w:tr></w:tbl>`;
+
+/** A four-edge box: 1pt rules, 4pt from the text — Word's own Box defaults. */
+const BOX =
+  '<w:pBdr>' +
+  '<w:top w:val="single" w:sz="8" w:space="4" w:color="C00000"/>' +
+  '<w:left w:val="single" w:sz="8" w:space="4" w:color="C00000"/>' +
+  '<w:bottom w:val="single" w:sz="8" w:space="4" w:color="C00000"/>' +
+  '<w:right w:val="single" w:sz="8" w:space="4" w:color="C00000"/>' +
+  '</w:pBdr>';
+
+/** Every cell paragraph fragment of a layout, in reading order across pages. */
+function cellParagraphs(layout: SemanticLayout): ParagraphFragmentRecord[] {
+  const found: ParagraphFragmentRecord[] = [];
+  for (const page of layout.pages) {
+    for (const fragment of page.fragments) {
+      if (fragment.kind !== 'table') continue;
+      for (const row of fragment.rows) {
+        for (const cell of row.cells) {
+          for (const block of cell.blocks) {
+            if (block.kind === 'paragraph') found.push(block);
+          }
+        }
+      }
+    }
+  }
+  return found;
+}
+
+function sides(fragment: ParagraphFragmentRecord): ParagraphBorderSide[] {
+  return (fragment.borders ?? []).map((entry) => entry.side);
+}
+
+function stroke(fragment: ParagraphFragmentRecord, side: ParagraphBorderSide) {
+  const found = (fragment.borders ?? []).find((entry) => entry.side === side);
+  if (!found) throw new Error(`no ${side} stroke on ${fragment.id}`);
+  return found;
+}
+
+describe('a boxed cell paragraph publishes the whole frame, not just the underline', () => {
+  test('all four edges are placed around the cell text', () => {
+    const fragment = cellParagraphs(lay(oneCellTable(paragraph('note', BOX))))[0]!;
+    expect(sides(fragment).sort()).toEqual(['bottom', 'left', 'right', 'top']);
+  });
+
+  test('the rules sit at the same offsets body flow uses', () => {
+    const fragment = cellParagraphs(lay(oneCellTable(paragraph('note', BOX))))[0]!;
+    const line = fragment.lines[0]!;
+    const top = stroke(fragment, 'top');
+    const bottom = stroke(fragment, 'bottom');
+    const left = stroke(fragment, 'left');
+    const right = stroke(fragment, 'right');
+
+    // Horizontal rules span the cell's text column, `space` away from the lines.
+    expect(top.box.y + top.box.height).toBe(line.box.y - 4);
+    expect(bottom.box.y).toBe(line.box.y + line.box.height + 4);
+    expect(top.box.x).toBe(line.box.x);
+    expect(top.box.width).toBe(line.box.width);
+
+    // Word draws the side rules OUTSIDE the text column and never re-breaks the lines,
+    // so inside a cell they hang into the cell margin exactly as they hang into the
+    // page margin in the body.
+    expect(left.box.x + left.box.width).toBe(line.box.x - 4);
+    expect(right.box.x).toBe(line.box.x + line.box.width + 4);
+    expect(left.box.y).toBe(top.box.y);
+    expect(left.box.y + left.box.height).toBe(bottom.box.y + bottom.box.height);
+    expect(right.box.height).toBe(left.box.height);
+  });
+
+  test('bottomBorder still names the bottom rule alone', () => {
+    const fragment = cellParagraphs(lay(oneCellTable(paragraph('note', BOX))))[0]!;
+    expect(fragment.bottomBorder?.box).toEqual(stroke(fragment, 'bottom').box);
+  });
+
+  test('the top rule is flow height: it pushes the text down and grows the row', () => {
+    const bareLayout = lay(oneCellTable(paragraph('note')));
+    const boxedLayout = lay(oneCellTable(paragraph('note', BOX)));
+    const bare = cellParagraphs(bareLayout)[0]!;
+    const boxed = cellParagraphs(boxedLayout)[0]!;
+    // top space (4) + top rule (1) above the line; bottom space (4) + rule (1) below it.
+    expect(boxed.lines[0]!.box.y - bare.lines[0]!.box.y).toBe(5);
+    expect(boxed.box.height - bare.box.height).toBe(10);
+    expect(boxed.box.y).toBe(bare.box.y);
+    // The cell has to grow with it, or the frame paints over the cell's own bottom rule.
+    const rowOf = (layout: SemanticLayout) =>
+      layout.pages[0]!.fragments.find((fragment) => fragment.kind === 'table')!;
+    expect(rowOf(boxedLayout).box.height - rowOf(bareLayout).box.height).toBe(10);
+  });
+
+  test('a box does not reflow cell text — same breaks as an unbordered twin', () => {
+    const words = Array.from({ length: 30 }, (_, index) => `word${index}`).join(' ');
+    const bare = cellParagraphs(lay(oneCellTable(paragraph(words))))[0]!;
+    const boxed = cellParagraphs(lay(oneCellTable(paragraph(words, BOX))))[0]!;
+    expect(boxed.lines.map((line) => line.range.end)).toEqual(
+      bare.lines.map((line) => line.range.end)
+    );
+    expect(boxed.box.width).toBe(bare.box.width);
+  });
+
+  test('w:bar draws beside the cell paragraph and costs no height', () => {
+    const BAR = '<w:pBdr><w:bar w:val="single" w:sz="8" w:space="2"/></w:pBdr>';
+    const fragment = cellParagraphs(lay(oneCellTable(paragraph('changed', BAR))))[0]!;
+    expect(sides(fragment)).toEqual(['bar']);
+    const bar = stroke(fragment, 'bar');
+    const line = fragment.lines[0]!;
+    expect(bar.box.x + bar.box.width).toBe(line.box.x - 2);
+    expect(bar.box.height).toBe(line.box.height);
+    expect(fragment.box.height).toBe(
+      cellParagraphs(lay(oneCellTable(paragraph('changed'))))[0]!.box.height
+    );
+  });
+
+  test('an unbordered cell paragraph publishes no strokes at all', () => {
+    expect(cellParagraphs(lay(oneCellTable(paragraph('plain'))))[0]!.borders).toBeUndefined();
+  });
+});
+
+describe('a boxed cell paragraph that spans pages opens once and closes once', () => {
+  const long = 'word '.repeat(40).trim();
+
+  test('the top rule rides the first fragment and the bottom the last', () => {
+    const fragments = cellParagraphs(lay(oneCellTable(paragraph(long, BOX)), TINY));
+    expect(fragments.length).toBeGreaterThan(1);
+    expect(sides(fragments[0]!)).toContain('top');
+    expect(sides(fragments[0]!)).not.toContain('bottom');
+    const last = fragments[fragments.length - 1]!;
+    expect(sides(last)).toContain('bottom');
+    expect(sides(last)).not.toContain('top');
+    // Exactly one closing rule across the whole paragraph.
+    expect(fragments.filter((fragment) => sides(fragment).includes('bottom'))).toHaveLength(1);
+    // The side rules follow the text onto every page it reaches.
+    for (const fragment of fragments) expect(sides(fragment)).toContain('left');
+  });
+
+  test('no fragment paints its frame past the page content box', () => {
+    const layout = lay(oneCellTable(paragraph(long, BOX)), TINY);
+    for (const page of layout.pages) {
+      const limit = page.contentBox.height;
+      for (const fragment of cellParagraphs({ ...layout, pages: [page] })) {
+        for (const entry of fragment.borders ?? []) {
+          expect(entry.box.y + entry.box.height).toBeLessThanOrEqual(limit + 0.001);
+        }
+      }
+    }
+  });
+});
+
+describe('vAlign moves the frame with the text it encloses', () => {
+  test('a centred cell shifts strokes and lines by the same amount', () => {
+    // Two cells in one row: a tall one sets the row height, the bordered one centres in it.
+    const body =
+      '<w:tbl><w:tr>' +
+      `<w:tc><w:tcPr><w:vAlign w:val="center"/></w:tcPr>${paragraph('note', BOX)}</w:tc>` +
+      `<w:tc>${Array.from({ length: 6 }, (_, index) => paragraph(`tall${index}`)).join('')}</w:tc>` +
+      '</w:tr></w:tbl>';
+    const centred = cellParagraphs(lay(body))[0]!;
+    const flush = cellParagraphs(lay(body.replace('<w:vAlign w:val="center"/>', '')))[0]!;
+    const dy = centred.lines[0]!.box.y - flush.lines[0]!.box.y;
+    expect(dy).toBeGreaterThan(0);
+    for (const side of ['top', 'bottom', 'left', 'right'] as const) {
+      expect(stroke(centred, side).box.y - stroke(flush, side).box.y).toBeCloseTo(dy, 6);
+    }
+  });
+});
+
+describe('paint draws the cell frame from the published boxes', () => {
+  test('four rules reach the DOM at the layout-owned geometry', () => {
+    const layout = lay(oneCellTable(paragraph('note', BOX)));
+    const fragment = cellParagraphs(layout)[0]!;
+    const container = document.createElement('div');
+    paintSemanticLayout(container, layout, { scale: 1 });
+    expect(container.querySelectorAll('.docx-paragraph-border')).toHaveLength(4);
+    for (const side of ['top', 'left', 'bottom', 'right'] as const) {
+      const rule = container.querySelector<HTMLElement>(`.docx-paragraph-border-${side}`)!;
+      const published = stroke(fragment, side);
+      expect(Number.parseFloat(rule.style.left)).toBeCloseTo(published.box.x - fragment.box.x, 6);
+      expect(Number.parseFloat(rule.style.top)).toBeCloseTo(published.box.y - fragment.box.y, 6);
+      expect(rule.style.backgroundColor.toLowerCase()).toBe('#c00000');
+    }
+  });
+});

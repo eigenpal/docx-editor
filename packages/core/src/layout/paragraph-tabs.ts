@@ -27,10 +27,22 @@ export const DEFAULT_TAB_INTERVAL_PT = DEFAULT_TAB_INTERVAL_TWIPS / 20;
 
 export type TabAlignment = 'left' | 'center' | 'right' | 'decimal';
 
+/**
+ * `w:tab/@w:leader` (ECMA-376 §17.3.1.38, ST_TabTlc): the character repeated across the
+ * space a tab reserves. `none` is the default and is represented by an absent leader.
+ *
+ * This is the difference between a Word table of contents and a column of headings floating
+ * next to a column of page numbers, so it is carried through layout to paint rather than
+ * dropped as a geometry-irrelevant attribute.
+ */
+export type TabLeader = 'dot' | 'hyphen' | 'underscore' | 'heavy' | 'middleDot';
+
 export interface TabStop {
   /** Position from the paragraph content origin, in points. */
   readonly positionPt: number;
   readonly alignment: TabAlignment;
+  /** Absent for `none` — the schema default and the overwhelming majority of stops. */
+  readonly leader?: TabLeader;
 }
 
 export interface ResolvedTabStops {
@@ -46,6 +58,14 @@ export const EMPTY_TAB_STOPS: ResolvedTabStops = Object.freeze({
 });
 
 const TAB_ALIGNMENTS = new Set<string>(['left', 'center', 'right', 'decimal']);
+
+const TAB_LEADERS = new Set<string>(['dot', 'hyphen', 'underscore', 'heavy', 'middleDot']);
+
+/** A resolved stop before ordering: position is the map key. */
+interface TabStopEntry {
+  readonly alignment: TabAlignment;
+  readonly leader?: TabLeader;
+}
 
 function isElement(node: OoxmlNode): node is OoxmlElement {
   return node.kind !== 'textValue';
@@ -76,13 +96,13 @@ function clampPositionTwips(twips: number): number | null {
 }
 
 /**
- * Apply one `w:tabs` element onto a position→alignment map.
+ * Apply one `w:tabs` element onto a position→stop map.
  *
  * `clear` removes a stop at that position; recognised alignments upsert. Unknown `val` and
  * non-stop kinds (`bar`, `num`, …) are ignored. At most `MAX_TAB_STOPS` survive.
  */
 function applyTabsElement(
-  byTwips: Map<number, TabAlignment>,
+  byTwips: Map<number, TabStopEntry>,
   tabs: OoxmlElement | undefined
 ): void {
   if (!tabs) return;
@@ -101,31 +121,43 @@ function applyTabsElement(
     }
     if (!TAB_ALIGNMENTS.has(val)) continue;
     if (byTwips.size >= MAX_TAB_STOPS && !byTwips.has(twips)) continue;
-    byTwips.set(twips, val as TabAlignment);
+    // An unrecognised leader is `none`, not a rejected stop: the geometry is still authored.
+    const leader = attributeValue(child, 'leader');
+    byTwips.set(twips, {
+      alignment: val as TabAlignment,
+      ...(leader !== undefined && TAB_LEADERS.has(leader) ? { leader: leader as TabLeader } : {}),
+    });
   }
 }
 
-function mapToResolved(byTwips: Map<number, TabAlignment>): ResolvedTabStops {
+function mapToResolved(
+  byTwips: Map<number, TabStopEntry>,
+  defaultIntervalPt: number = DEFAULT_TAB_INTERVAL_PT
+): ResolvedTabStops {
   const ordered = [...byTwips.entries()].sort((a, b) => a[0] - b[0]);
   const stops: TabStop[] = [];
   for (let index = 0; index < ordered.length && index < MAX_TAB_STOPS; index += 1) {
-    const [twips, alignment] = ordered[index]!;
-    stops.push({ positionPt: twips / 20, alignment });
+    const [twips, entry] = ordered[index]!;
+    stops.push({ positionPt: twips / 20, alignment: entry.alignment, ...normalizedLeader(entry) });
   }
   return {
     stops: Object.freeze(stops),
-    defaultIntervalPt: DEFAULT_TAB_INTERVAL_PT,
+    defaultIntervalPt,
   };
+}
+
+function normalizedLeader(entry: TabStopEntry): { leader?: TabLeader } {
+  return entry.leader ? { leader: entry.leader } : {};
 }
 
 /**
  * Resolve tab stops from cascaded `w:pPr` nodes (docDefaults → style chain → direct).
  *
- * Each `w:tabs` merges with `clear` support; absence inherits. Leaders are ignored — they
- * are a paint concern, not a break geometry input.
+ * Each `w:tabs` merges with `clear` support; absence inherits. The leader travels with the
+ * stop that declared it — a `clear` at the same position discards both together.
  */
 export function cascadedTabStops(paragraphPropertyNodes: readonly OoxmlNode[]): ResolvedTabStops {
-  const byTwips = new Map<number, TabAlignment>();
+  const byTwips = new Map<number, TabStopEntry>();
   for (const node of paragraphPropertyNodes) {
     if (!node || !isElement(node)) continue;
     applyTabsElement(byTwips, childNamed(node, 'tabs'));
@@ -136,14 +168,55 @@ export function cascadedTabStops(paragraphPropertyNodes: readonly OoxmlNode[]): 
 /** Direct `w:pPr` only — used when no style cascade table is present. */
 export function paragraphTabStops(pPr: OoxmlNode | undefined): ResolvedTabStops {
   if (!pPr || !isElement(pPr)) return EMPTY_TAB_STOPS;
-  const byTwips = new Map<number, TabAlignment>();
+  const byTwips = new Map<number, TabStopEntry>();
   applyTabsElement(byTwips, childNamed(pPr, 'tabs'));
   return mapToResolved(byTwips);
+}
+
+/**
+ * Republish stops under a document-wide default-tab interval (`w:defaultTabStop`).
+ *
+ * The cascade resolves stops from the paragraph's own property chain, which cannot see
+ * `settings.xml`; the interval is a document constant that arrives from the session. Returns
+ * the input unchanged when nothing moves, so a cache-key fingerprint stays stable.
+ */
+export function withDefaultTabInterval(
+  tabs: ResolvedTabStops,
+  defaultIntervalPt: number | undefined
+): ResolvedTabStops {
+  if (defaultIntervalPt === undefined) return tabs;
+  if (!Number.isFinite(defaultIntervalPt) || defaultIntervalPt <= 0) return tabs;
+  if (defaultIntervalPt === tabs.defaultIntervalPt) return tabs;
+  return { stops: tabs.stops, defaultIntervalPt };
+}
+
+/**
+ * Read `w:settings/w:defaultTabStop` (ECMA-376 §17.15.1.25), in points.
+ *
+ * Word's own interval, not a constant: a metric-locale template writes `w:val="1134"` (2cm)
+ * and every default-interval tab in the document lands on that grid instead of the 0.5"
+ * one. The value is FILE-DERIVED, so a non-integer, non-positive or out-of-range `val` falls
+ * back to the schema default rather than being trusted into layout arithmetic.
+ *
+ * `ST_TwipsMeasure` also admits a universal measure (`"2cm"`); Word writes plain twips, and
+ * the spelled form falls back to the default rather than being parsed here.
+ */
+export function defaultTabIntervalFromSettings(settings: OoxmlNode | null | undefined): number {
+  if (!settings || !isElement(settings)) return DEFAULT_TAB_INTERVAL_PT;
+  const element = childNamed(settings, 'defaultTabStop');
+  if (!element) return DEFAULT_TAB_INTERVAL_PT;
+  const twips = integerTwips(attributeValue(element, 'val'));
+  if (twips === null || twips <= 0 || twips > MAX_TAB_POSITION_TWIPS) {
+    return DEFAULT_TAB_INTERVAL_PT;
+  }
+  return twips / 20;
 }
 
 export interface TabDestination {
   readonly positionPt: number;
   readonly alignment: TabAlignment;
+  /** Leader of the stop that was reached; absent for `none` and for default-interval tabs. */
+  readonly leader?: TabLeader;
 }
 
 /**
@@ -161,12 +234,14 @@ export function nextTabDestination(
       return {
         positionPt: Math.min(stop.positionPt, edge),
         alignment: stop.alignment,
+        ...(stop.leader ? { leader: stop.leader } : {}),
       };
     }
   }
   const interval = tabs.defaultIntervalPt > 0 ? tabs.defaultIntervalPt : DEFAULT_TAB_INTERVAL_PT;
   let next = Math.ceil((currentX + 1e-9) / interval) * interval;
   if (next <= currentX) next += interval;
+  // A default-interval tab has no leader: only an authored `w:tab` can carry one.
   return {
     positionPt: Math.min(next, edge),
     alignment: 'left',
@@ -210,8 +285,13 @@ export function tabAdvanceWidth(
  * bags, so style-inherited stops must be named explicitly or breaks would collide.
  */
 export function tabStopsFingerprint(tabs: ResolvedTabStops): string {
+  // The leader is in the key because the BREAK is what paint reads: a cached line reused
+  // after a leader-only change would keep painting the old dots (or none).
   const stops = tabs.stops
-    .map((stop) => `${stop.alignment}@${Math.round(stop.positionPt * 1000)}`)
+    .map(
+      (stop) =>
+        `${stop.alignment}@${Math.round(stop.positionPt * 1000)}${stop.leader ? `/${stop.leader}` : ''}`
+    )
     .join(',');
   return `tabs(${stops}|d${Math.round(tabs.defaultIntervalPt * 1000)})`;
 }

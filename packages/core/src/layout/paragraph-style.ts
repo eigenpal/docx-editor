@@ -78,11 +78,39 @@ export interface ParagraphBorderEdge {
   readonly widthPt: number;
   /** Gap from text to the rule, in points (`w:space`). */
   readonly spacePt: number;
+  /**
+   * `w:shadow` — Word offsets a drop shadow behind the rule.
+   *
+   * Present only when authored true, so an edge that says nothing keeps the shape earlier
+   * fixtures assert. Resolved and carried; drawing it is deferred.
+   */
+  readonly shadow?: true;
 }
 
+/** The six `CT_PBdr` children, in schema order (ECMA-376 §17.3.1.24). */
+export const PARAGRAPH_BORDER_SIDES = ['top', 'left', 'bottom', 'right', 'between', 'bar'] as const;
+
+export type ParagraphBorderSide = (typeof PARAGRAPH_BORDER_SIDES)[number];
+
+/**
+ * A paragraph's resolved `w:pBdr` (ECMA-376 §17.3.1.24).
+ *
+ * `top`/`left`/`bottom`/`right` are the four physical edges of the box. The other two are
+ * group-relative: `between` draws at a boundary INSIDE a run of consecutive paragraphs whose
+ * border settings are identical, and `bar` is the vertical change-bar rule beside the
+ * paragraph, drawn whether or not the paragraph groups with its neighbours.
+ */
 export interface ParagraphBorders {
+  readonly top?: ParagraphBorderEdge;
+  readonly left?: ParagraphBorderEdge;
   readonly bottom?: ParagraphBorderEdge;
+  readonly right?: ParagraphBorderEdge;
+  readonly between?: ParagraphBorderEdge;
+  readonly bar?: ParagraphBorderEdge;
 }
+
+/** A paragraph that declares no `w:pBdr` at all, shared so the common case allocates nothing. */
+const NO_PARAGRAPH_BORDERS: ParagraphBorders = Object.freeze({});
 
 const HEX_COLOR = /^[0-9A-Fa-f]{6}$/;
 
@@ -236,33 +264,114 @@ function resolveBorderEdge(node: OoxmlElement | undefined): ParagraphBorderEdge 
   const spaceRaw = integer(attributeValue(node, 'space'));
   const spacePt = spaceRaw === null ? 0 : clampNonNegative(spaceRaw, MAX_BORDER_SPACE_PT);
 
+  const shadow = attributeValue(node, 'shadow');
+  const hasShadow =
+    shadow !== undefined && shadow !== '0' && shadow !== 'false' && shadow !== 'off';
+
   return {
     val,
     color: hexColor(attributeValue(node, 'color')),
     widthPt,
     spacePt,
+    ...(hasShadow ? { shadow: true as const } : {}),
+  };
+}
+
+/**
+ * Every edge of one `w:pBdr` element.
+ *
+ * `w:start`/`w:end` are the logical-direction synonyms some producers write instead of
+ * `w:left`/`w:right`; the physical name wins when a file states both, because that is the
+ * one the transitional schema (§17.3.1.24) actually declares.
+ */
+function bordersOfElement(pBdr: OoxmlElement): ParagraphBorders {
+  const top = resolveBorderEdge(childNamed(pBdr, 'top'));
+  const left = resolveBorderEdge(childNamed(pBdr, 'left') ?? childNamed(pBdr, 'start'));
+  const bottom = resolveBorderEdge(childNamed(pBdr, 'bottom'));
+  const right = resolveBorderEdge(childNamed(pBdr, 'right') ?? childNamed(pBdr, 'end'));
+  const between = resolveBorderEdge(childNamed(pBdr, 'between'));
+  const bar = resolveBorderEdge(childNamed(pBdr, 'bar'));
+  return {
+    ...(top ? { top } : {}),
+    ...(left ? { left } : {}),
+    ...(bottom ? { bottom } : {}),
+    ...(right ? { right } : {}),
+    ...(between ? { between } : {}),
+    ...(bar ? { bar } : {}),
   };
 }
 
 /**
  * Resolve `w:pBdr` from the paragraph-properties node.
  *
- * Nested — `bottom` is a child of `pBdr`, not an attribute — so this reads the typed tree
+ * Nested — every edge is a child of `pBdr`, not an attribute — so this reads the typed tree
  * rather than the flattened `OoxmlProperty[]` bag `propertiesOf` builds for leaf props.
- * Bottom is the accepted edge for this slice; other edges remain unread.
  */
 export function paragraphBorders(pPr: OoxmlNode | undefined): ParagraphBorders {
   if (!pPr || pPr.kind === 'textValue') return {};
   const pBdr = childNamed(pPr, 'pBdr');
   if (!pBdr) return {};
-  const bottom = resolveBorderEdge(childNamed(pBdr, 'bottom'));
-  return bottom ? { bottom } : {};
+  return bordersOfElement(pBdr);
+}
+
+/**
+ * `w:pBdr` after the style cascade: a later `w:pBdr` replaces an earlier one WHOLESALE.
+ *
+ * Word does not merge edges across the cascade. A style that states only `w:bottom` discards
+ * the box its `basedOn` ancestor declared, so folding edge by edge would leave a lone
+ * underline surrounded by a box no one authored. Absence inherits; `nil`/`none` clear.
+ */
+export function cascadedParagraphBorders(
+  paragraphPropertyNodes: readonly OoxmlNode[]
+): ParagraphBorders {
+  let borders: ParagraphBorders = NO_PARAGRAPH_BORDERS;
+  for (const node of paragraphPropertyNodes) {
+    if (!node || node.kind === 'textValue') continue;
+    const pBdr = childNamed(node, 'pBdr');
+    if (!pBdr) continue;
+    borders = bordersOfElement(pBdr);
+  }
+  return borders;
+}
+
+/**
+ * Extent one border edge occupies away from the text it decorates: gap plus rule, in points.
+ *
+ * Vertically that is flow height — a top rule pushes the first line down, a bottom rule holds
+ * the page open below the last one — so pagination has to see it. Horizontally it is
+ * publish-only: Word draws left/right paragraph rules OUTSIDE the text column and never
+ * re-breaks the lines, which is why adding a box to a paragraph in Word does not reflow it.
+ */
+export function paragraphBorderExtentPt(edge: ParagraphBorderEdge | undefined): number {
+  if (!edge) return 0;
+  return edge.spacePt + edge.widthPt;
 }
 
 /** Vertical extent a bottom border adds below the last line (gap + rule). */
 export function bottomBorderExtentPt(edge: ParagraphBorderEdge | undefined): number {
-  if (!edge) return 0;
-  return edge.spacePt + edge.widthPt;
+  return paragraphBorderExtentPt(edge);
+}
+
+/**
+ * Identity of a paragraph's border set, for the `w:between` group rule.
+ *
+ * Word treats consecutive paragraphs whose border settings are IDENTICAL as ONE bordered
+ * block: the top rule draws above the first, the bottom rule below the last, and each
+ * interior boundary gets `w:between` or nothing (§17.3.1.24). That is why applying a box to
+ * three selected paragraphs in Word draws one box and not three.
+ *
+ * Empty string means "no borders", which never groups with anything.
+ */
+export function paragraphBordersFingerprint(borders: ParagraphBorders): string {
+  const parts: string[] = [];
+  for (const side of PARAGRAPH_BORDER_SIDES) {
+    const edge = borders[side];
+    if (!edge) continue;
+    parts.push(
+      `${side}:${edge.val},${edge.color ?? 'auto'},${edge.widthPt},${edge.spacePt},${edge.shadow ? 1 : 0}`
+    );
+  }
+  return parts.join('|');
 }
 
 /**

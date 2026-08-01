@@ -43,17 +43,39 @@ interface ActiveMerge {
   span: number;
 }
 
+export interface VMergeResolveOptions {
+  /**
+   * These rows are ONE PAGE FRAGMENT of a table rather than the whole table. Two things
+   * follow, and neither can be seen from the rows alone in a whole-table resolve:
+   *
+   * - a continuation cell whose restart was placed on an EARLIER fragment heads the merge
+   *   here. Word keeps drawing a vertically merged cell on every page the merge crosses
+   *   (17.4.85 `w:vMerge`); dropping it leaves a hole in the continuation page's grid.
+   * - a repeated `w:tblHeader` row (17.4.78) is a copy of a row already painted on an
+   *   earlier page, so it hands no open merge to the body rows below it.
+   */
+  readonly pageFragment?: boolean;
+}
+
 /**
- * Map restart cell id → visual row span (≥ 1). Continuation / orphan cells are
- * omitted (callers treat missing as 1 for restarts only).
+ * Map merge-head cell id → visual row span (≥ 1). Continuation / orphan cells are
+ * omitted (callers treat missing as 1 for restarts only); under `pageFragment` a
+ * carried-in continuation is itself a head and appears in the map.
  */
 export function resolveVMergeSpans(
   rows: readonly TableRowFragmentRecord[],
   work?: TableVMergeResolveWork,
-  budget?: TableVMergeResolveBudget
+  budget?: TableVMergeResolveBudget,
+  options?: VMergeResolveOptions
 ): Map<string, number> {
   const mergeSpanById = new Map<string, number>();
   const activeByColumn = new Map<number, ActiveMerge>();
+  const pageFragment = options?.pageFragment === true;
+  // Columns a cell of this fragment segment has already claimed. A continue at a column
+  // nobody claimed yet came from the previous fragment; a continue after a claim is the
+  // malformed mid-table case and keeps the historical ignore.
+  const claimedColumns = pageFragment ? new Set<number>() : null;
+  let inHeaderRepeatPrefix = pageFragment;
 
   const lookup = (): void => {
     if (work) work.columnLookups += 1;
@@ -82,6 +104,13 @@ export function resolveVMergeSpans(
       break;
     }
 
+    if (inHeaderRepeatPrefix && row.isHeaderRepeat !== true) {
+      // End of the repeated header group: nothing it opened reaches the body rows.
+      inHeaderRepeatPrefix = false;
+      flushActives();
+      claimedColumns?.clear();
+    }
+
     const touched = new Set<number>();
     let rowAborted = false;
     for (const cell of row.cells) {
@@ -101,14 +130,21 @@ export function resolveVMergeSpans(
       if (cell.vMergeContinue) {
         lookup();
         const active = activeByColumn.get(col);
-        if (active) active.span += 1;
-        // Orphan continue: no open restart at this column — ignore (historical behavior).
+        if (active) {
+          active.span += 1;
+        } else if (claimedColumns && !claimedColumns.has(col)) {
+          // Carried in from the previous page fragment: this copy heads the merge here.
+          lookup();
+          activeByColumn.set(col, { id: cell.id, span: 1 });
+        }
+        // Anything else is an orphan continue — ignore (historical behavior).
       } else {
         // Plain cell or restart: end any prior open merge at this column, then open.
         closeColumn(col);
         lookup();
         activeByColumn.set(col, { id: cell.id, span: 1 });
       }
+      claimedColumns?.add(col);
     }
 
     if (rowAborted) {

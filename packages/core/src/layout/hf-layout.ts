@@ -120,6 +120,12 @@ function createBoundedContextCache(maxEntries: number): {
  * When `pageContext` is set, allowlisted PAGE/NUMPAGES instructions project live values;
  * otherwise those fields contribute only cached result text (often empty). Field-free
  * stories ignore `pageContext` and share one baseline layout.
+ *
+ * `defaultTabStopPt` is the document's `w:settings/w:defaultTabStop` (ECMA-376 §17.15.1.25)
+ * in points; absent keeps the 0.5" schema default. Furniture tabs on the SAME grid as the
+ * body — a page-number tab in a metric-locale footer belongs on the document's interval, not
+ * on a constant. It sits at the tail because the parameters ahead of it are already
+ * positional; new callers should keep passing `undefined` for what they do not set.
  */
 export function layoutHeaderFooterStory(
   part: OoxmlPart,
@@ -129,7 +135,8 @@ export function layoutHeaderFooterStory(
   cache?: ParagraphLayoutCache<readonly PendingLine[]>,
   styleCascade?: StyleCascadeTable,
   pageContext?: FieldPageContext,
-  maxPageContextEntries: number = DEFAULT_MAX_HF_PAGE_CONTEXT_ENTRIES
+  maxPageContextEntries: number = DEFAULT_MAX_HF_PAGE_CONTEXT_ENTRIES,
+  defaultTabStopPt?: number
 ): HeaderFooterStoryLayout {
   const needs = detectStoryPageFields(part.root);
   const contextCache = createBoundedContextCache(maxPageContextEntries);
@@ -157,6 +164,7 @@ export function layoutHeaderFooterStory(
       nextLineId: () => `hf-${part.name}-line-${lineCounter++}`,
       styleCascade,
       pageContext: effectiveCtx,
+      ...(defaultTabStopPt !== undefined ? { defaultTabStopPt } : {}),
     });
 
     const story: HeaderFooterStoryLayout = {
