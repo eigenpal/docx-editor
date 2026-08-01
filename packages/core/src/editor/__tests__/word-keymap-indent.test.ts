@@ -56,9 +56,13 @@ function docx(body: string, withNumbering = false): Uint8Array {
 }
 
 function mount(body: string, withNumbering = false): PaginatedSurface {
+  return mountBytes(docx(body, withNumbering));
+}
+
+function mountBytes(bytes: Uint8Array): PaginatedSurface {
   const container = document.createElement('div');
   document.body.append(container);
-  const opened = mountPaginatedSurface(container, docx(body, withNumbering));
+  const opened = mountPaginatedSurface(container, bytes);
   if (!opened.ok) throw new Error(opened.reason);
   return opened.surface;
 }
@@ -217,5 +221,75 @@ describe('the Word keymap', () => {
     const redone = surface.layout().pages[0]!.fragments[0]!;
     if (redone.kind !== 'paragraph') throw new Error('expected a paragraph');
     expect(redone.lines[0]!.box.x).toBe(36);
+  });
+});
+
+describe('Bullets and Numbering', () => {
+  test('a plain document gains numbering.xml, its rel and its content type', () => {
+    const surface = mount('<w:p><w:r><w:t>alpha</w:t></w:r></w:p>');
+    expect(surface.isListActive('bullet')).toBe(false);
+    expect(surface.toggleList('bullet')).toBe(true);
+
+    const marker = markerOf(surface);
+    expect(marker).toMatchObject({ text: '•', level: 0 });
+    expect(surface.isListActive('bullet')).toBe(true);
+
+    // The whole package has to survive a save/reopen, not just the tree.
+    const reopened = mountBytes(surface.session.save());
+    expect(markerOf(reopened)).toMatchObject({ text: '•' });
+  });
+
+  test('an ordered list numbers, and the two kinds are distinguishable', () => {
+    const surface = mount('<w:p><w:r><w:t>alpha</w:t></w:r></w:p>');
+    surface.toggleList('ordered');
+    expect(markerOf(surface)?.text).toBe('1.');
+    expect(surface.isListActive('ordered')).toBe(true);
+    expect(surface.isListActive('bullet')).toBe(false);
+  });
+
+  test('toggling the same kind again removes the list', () => {
+    const surface = mount('<w:p><w:r><w:t>alpha</w:t></w:r></w:p>');
+    surface.toggleList('bullet');
+    expect(markerOf(surface)).toBeDefined();
+    surface.toggleList('bullet');
+    expect(markerOf(surface)).toBeUndefined();
+    expect(JSON.stringify(surface.session.part().root)).not.toContain('numPr');
+  });
+
+  test('switching kinds replaces rather than clears', () => {
+    const surface = mount('<w:p><w:r><w:t>alpha</w:t></w:r></w:p>');
+    surface.toggleList('bullet');
+    surface.toggleList('ordered');
+    expect(markerOf(surface)?.text).toBe('1.');
+  });
+
+  test('a document that already has numbering reuses its definition', () => {
+    const surface = mount(listItem('alpha') + '<w:p><w:r><w:t>beta</w:t></w:r></w:p>', true);
+    const before = JSON.stringify(surface.session.part().root);
+    surface.selectAll();
+    surface.toggleList('bullet');
+    const numbering = surface.session.save();
+    // One abstractNum only: a definition per toggled paragraph makes a document unreadable.
+    const reopened = mountBytes(numbering);
+    expect(markerOf(reopened)).toMatchObject({ text: '•' });
+    expect(before).toContain('numPr');
+  });
+
+  test('the toggle keeps the rest of w:pPr', () => {
+    const surface = mount(
+      '<w:p><w:pPr><w:jc w:val="center"/></w:pPr><w:r><w:t>alpha</w:t></w:r></w:p>'
+    );
+    surface.toggleList('bullet');
+    const xml = JSON.stringify(surface.session.part().root);
+    expect(xml).toContain('center');
+    expect(xml).toContain('numPr');
+  });
+
+  test('a new list demotes and promotes like any other', () => {
+    const surface = mount('<w:p><w:r><w:t>alpha</w:t></w:r></w:p>');
+    surface.toggleList('bullet');
+    expect(markerOf(surface)).toMatchObject({ text: '•', level: 0 });
+    surface.adjustIndent('increase');
+    expect(markerOf(surface)).toMatchObject({ text: 'o', level: 1 });
   });
 });

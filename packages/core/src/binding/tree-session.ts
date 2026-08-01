@@ -22,8 +22,10 @@ import {
   resolveRelationship,
   withPart,
   writeOoxmlPackage,
+  ensureListDefinition,
   paragraphTextOf,
   type EmbeddedFont,
+  type ListKind,
   type HeaderFooterParts,
   type OoxmlElement,
   type OoxmlPackage,
@@ -193,6 +195,15 @@ export interface TreeDocxSession {
    * lane's job. Memoized once: the font table and font parts are immutable in-session.
    */
   embeddedFonts(): readonly EmbeddedFont[];
+  /**
+   * The `w:numId` of a bullet or numbered list definition, creating one where the document
+   * has none — including `numbering.xml` itself, its relationship and its content type.
+   *
+   * A document Word has never numbered carries no numbering part at all, so the first
+   * bullet a user asks for has to bring the whole definition with it. An existing
+   * definition of the same kind is reused rather than duplicated.
+   */
+  ensureListDefinition(kind: ListKind): string | null;
 }
 
 export type { DocumentStyleEntry } from './document-catalog.ts';
@@ -513,6 +524,18 @@ export function openTreeSession(bytes: Uint8Array): OpenTreeSessionResult {
       },
 
       embeddedFonts: resolveEmbeddedFonts,
+
+      ensureListDefinition(kind) {
+        // The numbering part lives on the PACKAGE, not the main-part tree, so this is the
+        // one edit that does not go through `store.transact`. The memoized numbering root
+        // is cleared so layout re-reads the definitions this just added.
+        const ensured = ensureListDefinition(currentPackage(), kind);
+        if (!ensured) return null;
+        pkg = ensured.pkg;
+        numberingRootResolved = false;
+        numberingRoot = null;
+        return ensured.numId;
+      },
     },
   };
 }

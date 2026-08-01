@@ -7,7 +7,7 @@
 // story memo.
 
 import type { TreeDocxSession } from '@docx-editor.dev/core-contract/binding';
-import type { OoxmlPart } from '@docx-editor.dev/core-contract/store';
+import type { OoxmlElement, OoxmlPart } from '@docx-editor.dev/core-contract/store';
 import {
   buildNumberingIndex,
   buildStyleCascadeTable,
@@ -111,11 +111,28 @@ export function createFurnitureSource(env: {
 /** Immutable-in-session style + numbering projections shared by body and furniture layout. */
 export function createSurfaceStyleDeps(session: TreeDocxSession): {
   readonly styleCascade: StyleCascadeTable | undefined;
-  readonly numberingIndex: NumberingIndex;
+  /**
+   * Read per layout pass, not captured once.
+   *
+   * The styles part is immutable in-session, but the numbering part is NOT: turning on
+   * bullets creates a definition, and a captured index would keep reporting the document
+   * as unnumbered. `session.numberingRoot()` is memoized until that happens, so re-reading
+   * costs a map lookup on every other pass.
+   */
+  numberingIndex(): NumberingIndex;
 } {
+  let root: OoxmlElement | null | undefined;
+  let index: NumberingIndex | undefined;
   return {
     styleCascade: buildStyleCascadeTable(session.stylesRoot()),
-    numberingIndex: buildNumberingIndex(session.numberingRoot()),
+    numberingIndex() {
+      const current = session.numberingRoot();
+      if (index === undefined || current !== root) {
+        root = current;
+        index = buildNumberingIndex(current);
+      }
+      return index;
+    },
   };
 }
 

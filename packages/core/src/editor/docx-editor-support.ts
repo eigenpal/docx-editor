@@ -280,6 +280,10 @@ export function classifyCommand(command: EditorCommand): CommandSupport {
         command.hanging !== undefined
         ? { supported: true, mutating: true }
         : { supported: false, reason: 'setIndent requires at least one indent field' };
+    case 'toggleList':
+      return command.kind === 'bullet' || command.kind === 'ordered'
+        ? { supported: true, mutating: true }
+        : { supported: false, reason: `list kind '${command.kind}' is not supported` };
     case 'adjustIndent':
       return command.direction === 'increase' || command.direction === 'decrease'
         ? { supported: true, mutating: true }

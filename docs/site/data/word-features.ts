@@ -265,6 +265,8 @@ export const wordFeatures: WordFeature[] = [
     rendering: 'full',
     roundTrip: 'full',
     tier: 'community',
+    notes:
+      'Toolbar toggle creates the definition on first use, numbering.xml included, so a document that has never carried a list can start one. Tab and the indent buttons change the level, and the marker changes with it.',
   },
   {
     id: 'lists.numbered',

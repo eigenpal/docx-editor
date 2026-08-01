@@ -196,6 +196,8 @@ export function applyTreeOp(part: OoxmlPart, op: TreeDocOp, options?: EditOption
       );
     case 'setListLevel':
       return applySetListLevel(part, paragraph, op.level, options, nextId);
+    case 'setListNumbering':
+      return applySetListNumbering(part, paragraph, op.numId, op.level ?? 0, options, nextId);
     case 'insertPageBreak':
       return applyInsertContent(
         part,
@@ -841,6 +843,70 @@ function applySetListLevel(
   }
   // Absent `w:ilvl` reads as level 0 (17.9.3); writing it makes the demotion explicit.
   return fromEdit(insertChildren(part, numPr.id, 0, [replacement], options), effect);
+}
+
+/**
+ * Put a paragraph in a list, or take it out.
+ *
+ * Surgical on `w:numPr` rather than a `w:pPr` rewrite: a paragraph keeps its alignment,
+ * spacing, style and borders across the toggle. `w:numPr` must be the first child of
+ * `w:pPr` after `w:pStyle` (17.3.1.26), so a new one is inserted there rather than
+ * appended.
+ */
+function applySetListNumbering(
+  part: OoxmlPart,
+  paragraph: OoxmlParagraphNode,
+  numId: string | null,
+  level: number,
+  options: EditOptions | undefined,
+  nextId: () => string
+): TreeOpResult {
+  const effect: TreeOpEffect = {
+    dirty: [paragraph.id],
+    created: [],
+    deleted: [],
+    dependencyKeys: TEXT_DEPS,
+    // Numbering changes the marker, the indent and therefore the flow.
+    impact: 'flow-structural',
+  };
+  const pPr = paragraph.children.find((child) => child.kind === 'paragraphProperties');
+  const existing = pPr?.children.find((child) => child.localName === 'numPr');
+
+  if (numId === null) {
+    if (!existing) return ok(part, effect);
+    return fromEdit(removeNode(part, existing.id, options), effect);
+  }
+
+  const numPr = sectionElement(
+    nextId(),
+    'numPr',
+    [],
+    [
+      sectionElement(nextId(), 'ilvl', [wmlAttribute('val', String(level))], []),
+      sectionElement(nextId(), 'numId', [wmlAttribute('val', numId)], []),
+    ]
+  );
+  if (existing) return fromEdit(replaceNode(part, existing.id, numPr, options), effect);
+  if (pPr) {
+    // After `w:pStyle` when there is one — the schema fixes this order.
+    const afterStyle = pPr.children.findIndex((child) => child.localName === 'pStyle') + 1;
+    return fromEdit(insertChildren(part, pPr.id, afterStyle, [numPr], options), effect);
+  }
+  // The TYPED kind, not a generic element: every reader that looks for paragraph
+  // properties — numbering, the style cascade, borders — finds them by
+  // `kind === 'paragraphProperties'`, so a generic `w:pPr` is invisible to all of them.
+  const created = {
+    id: nextId(),
+    kind: 'paragraphProperties',
+    namespaceUri: WML_NAMESPACE_URI,
+    localName: 'pPr',
+    prefix: 'w',
+    namespaceBindings: [],
+    attributes: [],
+    children: [numPr],
+  } as unknown as OoxmlNode;
+  // `w:pPr` must be the paragraph's FIRST child per the schema.
+  return fromEdit(insertChildren(part, paragraph.id, 0, [created], options), effect);
 }
 
 function applySetSectionMark(

@@ -175,3 +175,4 @@ export {
   type SemanticDigest,
   type StoryDigest,
 } from './ooxml-digest.ts';
+export { ensureListDefinition, type ListKind } from './numbering-part.ts';

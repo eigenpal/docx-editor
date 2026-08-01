@@ -909,6 +909,15 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
           }
           break;
         }
+        case 'toggleList':
+          if (!mounted.toggleList(command.kind)) {
+            return {
+              ok: false,
+              code: 'invalidArgs',
+              reason: mounted.state().lastRejection ?? 'the list change was refused',
+            };
+          }
+          break;
         case 'adjustIndent':
           if (!mounted.adjustIndent(command.direction)) {
             return {
@@ -995,6 +1004,10 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
         case 'setAlignment':
           // `exec` writes `justify` as `both`; compare in the same vocabulary.
           return formatting.alignment === (command.align === 'justify' ? 'both' : command.align);
+        case 'toggleList':
+          // Pressed only when the WHOLE selection is that list, matching the toggle's own
+          // rule: a mixed selection is not "on".
+          return surface?.isListActive(command.kind) ?? false;
         default:
           return false;
       }

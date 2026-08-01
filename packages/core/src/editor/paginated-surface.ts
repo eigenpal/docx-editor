@@ -198,6 +198,24 @@ export function mountPaginatedSurface(
     return null;
   }
 
+  /**
+   * Which kind of list a paragraph is in, from the marker layout resolved for it.
+   *
+   * A marker whose text is a bare glyph is a bullet; one carrying digits or letters is a
+   * number. Reading the PAINTED marker rather than numbering.xml keeps this in step with
+   * whatever the level actually resolved to.
+   */
+  function listKindOf(paragraphId: string): 'bullet' | 'ordered' | null {
+    for (const page of currentLayout.pages) {
+      for (const fragment of page.fragments) {
+        if (fragment.kind !== 'paragraph' || fragment.paragraphId !== paragraphId) continue;
+        if (!fragment.marker) return null;
+        return /[0-9a-zA-Z]/.test(fragment.marker.text) ? 'ordered' : 'bullet';
+      }
+    }
+    return null;
+  }
+
   /** Authored `w:ind/@left` in twips, zero when the paragraph states none. */
   function leftIndentTwipsOf(
     properties: readonly { localName: string; attributes?: Readonly<Record<string, string>> }[]
@@ -216,7 +234,7 @@ export function mountPaginatedSurface(
       session: layoutSession,
       producer,
       styleCascade,
-      numberingIndex,
+      numberingIndex: numberingIndex(),
       sectionFurniture: furnitureSource.sectionFurniture(),
       furniture: furnitureSource.furniture(),
     });
@@ -245,7 +263,7 @@ export function mountPaginatedSurface(
         session: layoutSession,
         producer,
         styleCascade,
-        numberingIndex,
+        numberingIndex: numberingIndex(),
         sectionFurniture: furnitureSource.sectionFurniture(),
         furniture: furnitureSource.furniture(),
       });
@@ -692,6 +710,46 @@ export function mountPaginatedSurface(
     isListParagraph() {
       const { paragraphId } = orderedStart();
       return listLevelOf(paragraphId) !== null;
+    },
+
+    isListActive(kind) {
+      const { from, to } = orderedRange();
+      const order = documentOrder(currentLayout);
+      const firstIndex = order.indexOf(from.paragraphId);
+      const lastIndex = order.indexOf(to.paragraphId);
+      if (firstIndex === -1 || lastIndex === -1) return false;
+      const wanted = kind === 'bullet' ? 'bullet' : 'ordered';
+      const touched = order.slice(firstIndex, lastIndex + 1);
+      return (
+        touched.length > 0 && touched.every((paragraphId) => listKindOf(paragraphId) === wanted)
+      );
+    },
+
+    toggleList(kind) {
+      const { from, to } = orderedRange();
+      const order = documentOrder(currentLayout);
+      const firstIndex = order.indexOf(from.paragraphId);
+      const lastIndex = order.indexOf(to.paragraphId);
+      if (firstIndex === -1 || lastIndex === -1) return false;
+      const touched = order.slice(firstIndex, lastIndex + 1);
+      if (touched.length === 0) return false;
+      // Word toggles OFF only when the whole selection is already that list; a mixed
+      // selection becomes one list rather than clearing half of it.
+      const turningOff = touched.every((paragraphId) => listKindOf(paragraphId) === kind);
+      const numId = turningOff ? null : session.ensureListDefinition(kind);
+      if (!turningOff && numId === null) return false;
+      const ops: TreeDocOp[] = touched.map((paragraphId) => ({
+        op: 'setListNumbering',
+        paragraphId,
+        numId,
+      }));
+      let committed = false;
+      commit(() => {
+        const result = session.applyTreeOps(ops, selectionMark());
+        committed = result.committed;
+        return result;
+      });
+      return committed;
     },
 
     adjustIndent(direction) {

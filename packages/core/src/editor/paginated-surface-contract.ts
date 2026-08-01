@@ -131,6 +131,16 @@ export interface PaginatedSurface {
   adjustIndent(direction: 'increase' | 'decrease'): boolean;
   /** Whether the paragraph at the caret is a list item, for Tab's Word-like fallback. */
   isListParagraph(): boolean;
+  /**
+   * Word's Bullets and Numbering buttons.
+   *
+   * Turns every paragraph the selection touches into a list of `kind`, or takes them all
+   * out when they are already one. The definition is created in `numbering.xml` on first
+   * use — a document that has never carried a list has no numbering part at all.
+   */
+  toggleList(kind: 'bullet' | 'ordered'): boolean;
+  /** Whether every paragraph the selection touches is already a list of `kind`. */
+  isListActive(kind: 'bullet' | 'ordered'): boolean;
   /** Select the whole document. */
   selectAll(): void;
   /** Set the selection directly, for a host driving the surface programmatically. */

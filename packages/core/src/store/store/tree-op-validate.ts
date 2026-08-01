@@ -101,6 +101,18 @@ export type TreeDocOp =
       readonly paragraphId: string;
       readonly level: number;
     }
+  | {
+      /**
+       * Put a paragraph in a list, or take it out of one.
+       *
+       * `numId` names a `w:num` in `numbering.xml`; null removes `w:numPr` entirely, which
+       * is what turning a bullet off means. Everything else in `w:pPr` survives.
+       */
+      readonly op: 'setListNumbering';
+      readonly paragraphId: string;
+      readonly numId: string | null;
+      readonly level?: number;
+    }
   | { readonly op: 'splitParagraph'; readonly paragraphId: string; readonly offset: number }
   | {
       /**
@@ -179,6 +191,7 @@ export const TREE_DOC_OP_KINDS = [
   'insertHardBreak',
   'insertPageBreak',
   'setListLevel',
+  'setListNumbering',
   'splitParagraph',
   'splitParagraphMany',
   'joinParagraphs',
@@ -609,6 +622,13 @@ export function validateTreeOp(part: OoxmlPart, op: TreeDocOp): TreeOpRejection 
     }
     case 'setListLevel': {
       if (!Number.isInteger(op.level) || op.level < 0 || op.level > 8) return 'invalid-range';
+      return null;
+    }
+    case 'setListNumbering': {
+      const level = op.level ?? 0;
+      if (!Number.isInteger(level) || level < 0 || level > 8) return 'invalid-range';
+      // A numId is file-addressable and becomes an attribute value: digits only.
+      if (op.numId !== null && !/^\d{1,9}$/.test(op.numId)) return 'invalid-range';
       return null;
     }
     case 'insertTab':
