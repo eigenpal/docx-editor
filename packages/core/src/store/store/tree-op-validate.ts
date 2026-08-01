@@ -108,6 +108,19 @@ export type TreeDocOp =
        * `numId` names a `w:num` in `numbering.xml`; null removes `w:numPr` entirely, which
        * is what turning a bullet off means. Everything else in `w:pPr` survives.
        */
+      /**
+       * Run properties of the PARAGRAPH MARK (`w:pPr/w:rPr`, ECMA-376 17.3.1.29).
+       *
+       * The mark carries the formatting a paragraph's own pilcrow has, and Word keeps it
+       * in step whenever formatting is applied to a whole paragraph. It is what a list
+       * marker inherits its face from — so without it, sizing a bulleted paragraph leaves
+       * the bullet at the old size.
+       */
+      readonly op: 'setParagraphMarkProperties';
+      readonly paragraphId: string;
+      readonly properties: readonly OoxmlProperty[];
+    }
+  | {
       readonly op: 'setListNumbering';
       readonly paragraphId: string;
       readonly numId: string | null;
@@ -192,6 +205,7 @@ export const TREE_DOC_OP_KINDS = [
   'insertPageBreak',
   'setListLevel',
   'setListNumbering',
+  'setParagraphMarkProperties',
   'splitParagraph',
   'splitParagraphMany',
   'joinParagraphs',
@@ -624,6 +638,8 @@ export function validateTreeOp(part: OoxmlPart, op: TreeDocOp): TreeOpRejection 
       if (!Number.isInteger(op.level) || op.level < 0 || op.level > 8) return 'invalid-range';
       return null;
     }
+    case 'setParagraphMarkProperties':
+      return Array.isArray(op.properties) ? null : 'invalid-range';
     case 'setListNumbering': {
       const level = op.level ?? 0;
       if (!Number.isInteger(level) || level < 0 || level > 8) return 'invalid-range';

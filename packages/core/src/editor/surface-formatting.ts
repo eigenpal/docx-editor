@@ -171,3 +171,30 @@ export function formattingAt(
     styleId: style ?? null,
   } satisfies SurfaceFormatting;
 }
+
+/**
+ * The paragraph-mark edit that keeps a whole-paragraph format change honest.
+ *
+ * Word writes the same run properties onto the paragraph MARK (`w:pPr/w:rPr`) whenever
+ * formatting is applied to an entire paragraph. That mark is what a list marker inherits
+ * its face from, so without it, sizing a bulleted paragraph left the bullet at the old
+ * size beside text that had grown.
+ *
+ * Returns nothing when the range does not cover the whole paragraph — formatting part of a
+ * paragraph must not restyle its pilcrow, and therefore must not move its marker.
+ */
+export function paragraphMarkOps(
+  paragraphText: string,
+  from: { readonly paragraphId: string; readonly offset: number },
+  to: { readonly paragraphId: string; readonly offset: number },
+  properties: readonly SurfaceProperty[]
+): readonly {
+  readonly op: 'setParagraphMarkProperties';
+  readonly paragraphId: string;
+  readonly properties: readonly SurfaceProperty[];
+}[] {
+  if (from.paragraphId !== to.paragraphId) return [];
+  if (from.offset !== 0 || to.offset !== paragraphText.length) return [];
+  if (paragraphText.length === 0) return [];
+  return [{ op: 'setParagraphMarkProperties', paragraphId: from.paragraphId, properties }];
+}

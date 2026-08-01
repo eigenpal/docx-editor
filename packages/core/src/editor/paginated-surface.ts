@@ -45,13 +45,6 @@ import type {
   PaginatedSurfaceState,
 } from './paginated-surface-contract.ts';
 import {
-  formattingAt,
-  isRunPropertyActive,
-  mergedProperties,
-  paragraphPropertiesOf,
-  selectionRunProperties,
-} from './surface-formatting.ts';
-import {
   clampedToDocument,
   collapsedAt,
   deleteRangeOps,
@@ -76,6 +69,7 @@ import {
   type SurfaceExtent,
 } from './surface-pages.ts';
 import { createSurfaceCaret } from './surface-caret.ts';
+import { createSurfaceFormat } from './surface-format.ts';
 import { createSurfaceStructure } from './surface-structure.ts';
 
 export type {
@@ -186,6 +180,15 @@ export function mountPaginatedSurface(
   let currentLayout = layoutOnce();
   // Structural edits — breaks, lists, indent, sections — are their own lane over the same
   // session and commit path.
+  const format = createSurfaceFormat({
+    session,
+    layout: () => currentLayout,
+    selection: () => selection,
+    commit: (run, nextSelection) => commit(run, nextSelection),
+    orderedRange: () => orderedRange(),
+    selectionMark: () => selectionMark(),
+    textOf: (paragraphId) => textOf(paragraphId),
+  });
   const structure = createSurfaceStructure({
     session,
     layout: () => currentLayout,
@@ -642,6 +645,7 @@ export function mountPaginatedSurface(
     },
 
     ...structure,
+    ...format,
 
     setSelection: (next) => setSelection(next),
 
@@ -654,86 +658,6 @@ export function mountPaginatedSurface(
         anchor: { paragraphId: first, offset: 0 },
         head: { paragraphId: last, offset: textOf(last).length },
       });
-    },
-
-    setRunProperty(localName, attributes) {
-      const { from, to } = orderedRange();
-      if (from.paragraphId !== to.paragraphId || from.offset === to.offset) return;
-      commit(() =>
-        session.applyTreeOps(
-          [
-            {
-              op: 'setRunProperties',
-              paragraphId: from.paragraphId,
-              start: from.offset,
-              end: to.offset,
-              properties: mergedProperties(selectionRunProperties(currentLayout, selection), {
-                localName,
-                ...(attributes ? { attributes } : {}),
-              }),
-            },
-          ],
-          selectionMark()
-        )
-      );
-    },
-
-    setParagraphProperty(localName, attributes) {
-      const { from, to } = orderedRange();
-      const order = documentOrder(currentLayout);
-      const firstIndex = order.indexOf(from.paragraphId);
-      const lastIndex = order.indexOf(to.paragraphId);
-      if (firstIndex === -1 || lastIndex === -1) return;
-      // EVERY paragraph the selection touches, not just the one the caret is in: selecting
-      // three paragraphs and pressing centre must centre three paragraphs.
-      const ops = order.slice(firstIndex, lastIndex + 1).map((paragraphId) => ({
-        op: 'setParagraphProperties' as const,
-        paragraphId,
-        properties: mergedProperties(paragraphPropertiesOf(currentLayout, paragraphId), {
-          localName,
-          ...(attributes ? { attributes } : {}),
-        }),
-      }));
-      if (ops.length === 0) return;
-      commit(() => session.applyTreeOps(ops, selectionMark()));
-    },
-
-    formatting: () =>
-      formattingAt(currentLayout, selection, (paragraphId, runProperties) =>
-        session.effectiveRunDefaults(paragraphId, runProperties)
-      ),
-
-    toggleRunProperty(localName, attributes) {
-      const { from, to } = orderedRange();
-      // A collapsed caret has no range to format. Stored marks — formatting that applies to
-      // the NEXT character typed — are a separate lane; refusing is honest rather than
-      // formatting a character the user did not select.
-      if (from.paragraphId !== to.paragraphId || from.offset === to.offset) return;
-      const active = isRunPropertyActive(currentLayout, selection, localName);
-      commit(() =>
-        session.applyTreeOps(
-          [
-            {
-              op: 'setRunProperties',
-              paragraphId: from.paragraphId,
-              start: from.offset,
-              end: to.offset,
-              // Toggling OFF sends an explicit `val="0"` rather than dropping the element:
-              // the property may be inherited from a style, and removing the local override
-              // would let the inherited value come back.
-              properties: mergedProperties(
-                selectionRunProperties(currentLayout, selection),
-                active
-                  ? // `w:u` is a closed enumeration, not a boolean: its off value is `none`,
-                    // and `val="0"` is an attribute value Word rejects outright.
-                    { localName, attributes: { val: localName === 'u' ? 'none' : '0' } }
-                  : { localName, ...(attributes ? { attributes } : {}) }
-              ),
-            },
-          ],
-          selectionMark()
-        )
-      );
     },
 
     selectedText() {

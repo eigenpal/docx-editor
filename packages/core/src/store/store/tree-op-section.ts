@@ -21,6 +21,7 @@ import {
   replaceNode,
   type EditOptions,
 } from '../package/ooxml-edit.ts';
+import type { OoxmlProperty } from './tree-op-validate.ts';
 import {
   bodyNodeOf,
   metricsOfSection,
@@ -491,4 +492,75 @@ function sectionInsertIndex(children: readonly OoxmlNode[], localName: string): 
       laterSiblings.has(child.localName as (typeof SECT_PR_SEQUENCE)[number])
   );
   return before === -1 ? children.length : before;
+}
+
+/**
+ * `CT_PPr` child order (17.3.1.26). `w:rPr` sits after every base property and before
+ * `w:sectPr`, so a mark written at the end of `w:pPr` would land on the wrong side of a
+ * section mark and Word's reader rejects it.
+ */
+const AFTER_PARAGRAPH_MARK = new Set(['sectPr', 'pPrChange']);
+
+/**
+ * Write the run properties of the paragraph MARK (`w:pPr/w:rPr`, 17.3.1.29).
+ *
+ * Surgical on `w:rPr`, like `setListNumbering` is on `w:numPr`: the mark is one nested
+ * child of `w:pPr` and everything else there — the style, the numbering, the borders —
+ * has to survive. It cannot go through `setParagraphProperties` at all, because that takes
+ * a FLAT property bag and the mark's own run properties are children.
+ *
+ * An empty `properties` removes the element rather than leaving an empty `w:rPr`, so a
+ * cleared mark digests identically to one that never had any.
+ */
+export function applySetParagraphMarkProperties(
+  part: OoxmlPart,
+  paragraph: OoxmlParagraphNode,
+  properties: readonly OoxmlProperty[],
+  options: EditOptions | undefined,
+  nextId: () => string,
+  buildProperty: (property: OoxmlProperty, id: string) => OoxmlNode
+): TreeOpResult {
+  const effect: TreeOpEffect = {
+    dirty: [paragraph.id],
+    created: [],
+    deleted: [],
+    dependencyKeys: TEXT_DEPS,
+    // The mark is what a list marker inherits its face from, so a change here re-resolves
+    // the marker and can change its measured width.
+    impact: 'paragraph-local',
+  };
+  const pPr = paragraph.children.find((child) => child.kind === 'paragraphProperties');
+  const existing = pPr?.children.find((child) => child.localName === 'rPr');
+
+  if (properties.length === 0) {
+    if (!existing) return ok(part, effect);
+    return fromEdit(removeNode(part, existing.id, options), effect);
+  }
+
+  const rPr = sectionElement(
+    nextId(),
+    'rPr',
+    [],
+    properties.map((property) => buildProperty(property, nextId()))
+  );
+  if (existing) return fromEdit(replaceNode(part, existing.id, rPr, options), effect);
+  if (pPr) {
+    const before = pPr.children.findIndex((child) => AFTER_PARAGRAPH_MARK.has(child.localName));
+    const index = before === -1 ? pPr.children.length : before;
+    return fromEdit(insertChildren(part, pPr.id, index, [rPr], options), effect);
+  }
+  // The TYPED kind: every reader finds paragraph properties by
+  // `kind === 'paragraphProperties'`, so a generic `w:pPr` is invisible to all of them.
+  const created = {
+    id: nextId(),
+    kind: 'paragraphProperties',
+    namespaceUri: WML_NAMESPACE_URI,
+    localName: 'pPr',
+    prefix: 'w',
+    namespaceBindings: [],
+    attributes: [],
+    children: [rPr],
+  } as unknown as OoxmlNode;
+  // `w:pPr` must be the paragraph's FIRST child per the schema.
+  return fromEdit(insertChildren(part, paragraph.id, 0, [created], options), effect);
 }

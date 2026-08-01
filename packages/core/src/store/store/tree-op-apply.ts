@@ -24,6 +24,7 @@ import {
 import { TEXT_DEPS, cloneWithNewIds, fromEdit, ok, parentOf } from './tree-op-nodes.ts';
 import {
   applySetListLevel,
+  applySetParagraphMarkProperties,
   withoutSectionMark,
   applySetListNumbering,
   applySetSectionMark,
@@ -181,6 +182,15 @@ export function applyTreeOp(part: OoxmlPart, op: TreeDocOp, options?: EditOption
       );
     case 'setListLevel':
       return applySetListLevel(part, paragraph, op.level, options, nextId);
+    case 'setParagraphMarkProperties':
+      return applySetParagraphMarkProperties(
+        part,
+        paragraph,
+        op.properties,
+        options,
+        nextId,
+        propertyElement
+      );
     case 'setListNumbering':
       return applySetListNumbering(part, paragraph, op.numId, op.level ?? 0, options, nextId);
     case 'insertPageBreak':
