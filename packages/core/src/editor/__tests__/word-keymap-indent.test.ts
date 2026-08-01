@@ -402,3 +402,67 @@ describe('turning a list off and on again', () => {
     expect(markers()).toEqual(['§', '§', '§']);
   });
 });
+
+describe('Enter at the end of a list', () => {
+  test('makes another item, then leaves the list on the empty one', () => {
+    const surface = mount(listItem('alpha'), true);
+    const handler = createKeyDownHandler(surface);
+    const id = surface.session.paragraphIds()[0]!;
+    surface.setSelection({
+      anchor: { paragraphId: id, offset: 5 },
+      head: { paragraphId: id, offset: 5 },
+    });
+
+    // First Enter: a new, empty item in the same list.
+    handler(key({ key: 'Enter' }));
+    expect(surface.session.paragraphIds().length).toBe(2);
+    expect(markerOf(surface)).toBeDefined();
+    // The caret follows the split, so the second Enter acts on the new item.
+    expect(surface.isListParagraph()).toBe(true);
+
+    // Second Enter on that empty item: out of the list, and no third paragraph.
+    handler(key({ key: 'Enter' }));
+    expect(surface.session.paragraphIds().length).toBe(2);
+    expect(surface.isListParagraph()).toBe(false);
+  });
+
+  test('a nested item steps out one level at a time', () => {
+    const surface = mount(listItem('alpha', 1), true);
+    const id = surface.session.paragraphIds()[0]!;
+    surface.setSelection({
+      anchor: { paragraphId: id, offset: 5 },
+      head: { paragraphId: id, offset: 5 },
+    });
+    const handler = createKeyDownHandler(surface);
+    // The marker of the paragraph the CARET is in, not the first in the document.
+    const levelAtCaret = () => {
+      const caret = surface.state().selection.head.paragraphId;
+      for (const page of surface.layout().pages) {
+        for (const fragment of page.fragments) {
+          if (fragment.kind !== 'paragraph' || fragment.paragraphId !== caret) continue;
+          return fragment.marker?.level ?? null;
+        }
+      }
+      return null;
+    };
+    handler(key({ key: 'Enter' }));
+    expect(levelAtCaret()).toBe(1);
+    handler(key({ key: 'Enter' }));
+    // Level 1 -> level 0, still a list.
+    expect(levelAtCaret()).toBe(0);
+    handler(key({ key: 'Enter' }));
+    expect(surface.isListParagraph()).toBe(false);
+  });
+
+  test('Enter inside text still splits the paragraph', () => {
+    const surface = mount(listItem('alpha'), true);
+    const id = surface.session.paragraphIds()[0]!;
+    surface.setSelection({
+      anchor: { paragraphId: id, offset: 2 },
+      head: { paragraphId: id, offset: 2 },
+    });
+    createKeyDownHandler(surface)(key({ key: 'Enter' }));
+    expect(surface.session.paragraphIds().length).toBe(2);
+    expect(surface.isListParagraph()).toBe(true);
+  });
+});

@@ -190,6 +190,7 @@ export function mountPaginatedSurface(
     selectionMark: () => selectionMark(),
     collapsedAt: (position) => collapsedAt(position),
     deleteSelectionOps: () => deleteSelectionOps(),
+    paragraphTextOf: (paragraphId) => textOf(paragraphId),
     numberingLevelExists: (numId, level) =>
       resolveNumberingLevel(numberingIndex(), numId, level) !== null,
   });

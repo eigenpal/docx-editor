@@ -137,6 +137,13 @@ export interface PaginatedSurface {
    * destroy the marker.
    */
   canAdjustIndent(direction: 'increase' | 'decrease'): boolean;
+  /**
+   * Enter on an empty list item: outdent a level, or leave the list at level 0.
+   *
+   * Answers false when the caret is not on an empty list item, so the caller falls
+   * through to an ordinary paragraph split.
+   */
+  exitListOnEmptyItem(): boolean;
   /** Whether the paragraph at the caret is a list item, for Tab's Word-like fallback. */
   isListParagraph(): boolean;
   /**

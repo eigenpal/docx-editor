@@ -119,7 +119,8 @@ export function createKeyDownHandler(surface: PaginatedSurface): (event: Keyboar
       //   Ctrl+Enter   a hard page break (`w:br w:type="page"`)
       if (accel) surface.insertPageBreak();
       else if (event.shiftKey) surface.insertLineBreak();
-      else surface.splitParagraph();
+      // Enter on an empty list item ends the list rather than making another empty one.
+      else if (!surface.exitListOnEmptyItem()) surface.splitParagraph();
       event.preventDefault();
       return;
     }

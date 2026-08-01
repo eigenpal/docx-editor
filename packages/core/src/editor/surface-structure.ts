@@ -35,6 +35,8 @@ export interface SurfaceStructureDeps {
   selectionMark(): { paragraphId: string; start: number; end: number } | null;
   collapsedAt(position: SemanticPosition): SemanticSelection;
   deleteSelectionOps(): readonly TreeDocOp[];
+  /** The model text of one paragraph, for telling an empty list item from a filled one. */
+  paragraphTextOf(paragraphId: string): string;
   /** Whether `numId` declares `level`, for refusing a demote that would erase the marker. */
   numberingLevelExists(numId: string, level: number): boolean;
 }
@@ -49,6 +51,7 @@ type StructureMethods = Pick<
   | 'toggleList'
   | 'adjustIndent'
   | 'canAdjustIndent'
+  | 'exitListOnEmptyItem'
   | 'sectionProperties'
   | 'sectionPropertiesAt'
   | 'setSectionProperties'
@@ -193,6 +196,36 @@ export function createSurfaceStructure(deps: SurfaceStructureDeps): StructureMet
           ),
         () => collapsedAt({ ...start, offset: start.offset + 1 })
       );
+    },
+
+    /**
+     * Enter on an EMPTY list item leaves the list, the way Word does.
+     *
+     * Pressing Enter at the end of a list makes another item; pressing it again on that
+     * still-empty item is how a user says "I am done with this list". Word outdents one
+     * level per press and drops the numbering at level 0. Answers whether it handled the
+     * key, so the caller falls through to an ordinary split when it did not.
+     */
+    exitListOnEmptyItem() {
+      const { from, to } = orderedRange();
+      if (from.paragraphId !== to.paragraphId || from.offset !== to.offset) return false;
+      const marker = markerOf(from.paragraphId);
+      if (!marker) return false;
+      // Only an EMPTY item: Enter inside text still splits the paragraph.
+      const text = deps.paragraphTextOf(from.paragraphId);
+      if (text.length > 0) return false;
+
+      const outdented = marker.level > 0 && listLevelExists(marker, marker.level - 1);
+      const op: TreeDocOp = outdented
+        ? { op: 'setListLevel', paragraphId: from.paragraphId, level: marker.level - 1 }
+        : { op: 'setListNumbering', paragraphId: from.paragraphId, numId: null };
+      let committed = false;
+      commit(() => {
+        const result = session.applyTreeOps([op], selectionMark());
+        committed = result.committed;
+        return result;
+      });
+      return committed;
     },
 
     isListParagraph() {
