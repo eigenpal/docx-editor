@@ -85,7 +85,11 @@ import {
   selectionsMatch,
   snapshotsEqual,
 } from './docx-editor-support.ts';
-import { createLayoutShaping, toEditorFontError } from './font-configuration.ts';
+import {
+  createLayoutShaping,
+  disposeLayoutShaping,
+  toEditorFontError,
+} from './font-configuration.ts';
 import { composeFontConfiguration, type FontConfigurationFragment } from './font-composition.ts';
 import { embeddedFontSources } from './embedded-font-sources.ts';
 import { mountPaginatedSurface, type PaginatedSurface } from './paginated-surface.ts';
@@ -354,7 +358,14 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
   }
 
   function reportFontError(error: EditorFontError): void {
-    config.onFontError?.(error);
+    // A host handler that throws must not abort font resolution — reporting a dropped
+    // face would then cost the whole shaped measurer, and the catch's own report would
+    // throw again as an unhandled rejection.
+    try {
+      config.onFontError?.(error);
+    } catch {
+      /* the host's reporting problem, not the document's */
+    }
     emitError(error);
   }
 
@@ -434,28 +445,69 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
         }
         return;
       }
-      const shaping = await createLayoutShaping(fonts);
+      let shaping = await createLayoutShaping(fonts);
       if (destroyed || seq !== loadSeq) {
+        // This shaping can never be installed; release its wasm objects rather than
+        // dropping it unreferenced. Every load builds a new shaper.
+        disposeLayoutShaping(shaping);
         if (seq === loadSeq) fontsResolving = false;
         return;
       }
       // Per-face degradation, reported: an embedded face the validator refused still
       // resolves — to a typed error. Probing here (map lookups, no shaping work) is what
       // turns a silent fixed-measurer fallback into a diagnosable one.
+      const refusedEmbedded = new Set<string>();
       for (const source of fromDocument.sources) {
         const resolved = shaping.fonts.resolve(source.request);
         if (resolved instanceof FontResolutionError) {
           reportFontError(toEditorFontError(resolved));
+          refusedEmbedded.add(source.id);
         }
+      }
+      // A refused embedded face is worse than no embedded face: composition drops a
+      // substitution whenever a DIRECT source exists for that family, so a damaged
+      // (or crafted) embedded "Calibri" would disable a perfectly good Carlito for the
+      // whole document. Composition cannot know admission outcomes, so recompose once
+      // without the refused faces and let the substitutions come back.
+      if (refusedEmbedded.size > 0 && refusedEmbedded.size < fromDocument.sources.length) {
+        const survivors = fromDocument.sources.filter((source) => !refusedEmbedded.has(source.id));
+        const superseded = shaping;
+        shaping = await createLayoutShaping(
+          composeFontConfiguration({ epoch: seq, ...explicit }, { sources: survivors })
+        );
+        disposeLayoutShaping(superseded);
+        if (destroyed || seq !== loadSeq) {
+          disposeLayoutShaping(shaping);
+          if (seq === loadSeq) fontsResolving = false;
+          return;
+        }
+      } else if (refusedEmbedded.size === fromDocument.sources.length && !explicit) {
+        // Nothing embedded survived and the app supplied nothing: the fixed measurer is
+        // already the right answer, and every failure has been reported.
+        fontsResolving = false;
+        bump();
+        return;
       }
       shapedMeasurer = createShapedMeasurer({
         shaper: shaping.shaper,
         resolveFont: (style) => {
-          const resolved = shaping.fonts.resolve({
-            family: style.fontFamily ?? fonts.defaultFont.family,
-            weight: style.bold ? 700 : 400,
-            style: style.italic ? 'italic' : 'normal',
-          });
+          // The run family is FILE-DERIVED and reaches `resolve` on every measured run.
+          // `resolve` ASSERTS its request (a whitespace-only family throws), and the
+          // measurer calls this outside its own guard, so an unusable family must return
+          // the fixed fallback here rather than throw through layout — which would fail
+          // the remount and take the mounted document with it.
+          const family = style.fontFamily ?? fonts.defaultFont.family;
+          if (family.trim().length === 0) return null;
+          let resolved: ReturnType<typeof shaping.fonts.resolve>;
+          try {
+            resolved = shaping.fonts.resolve({
+              family,
+              weight: style.bold ? 700 : 400,
+              style: style.italic ? 'italic' : 'normal',
+            });
+          } catch {
+            return null;
+          }
           return resolved instanceof FontResolutionError ? null : resolved;
         },
         fallback: createFixedMeasurer(),
@@ -465,8 +517,24 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
       });
       shapedProducer = `shaped:${shaping.operation.extensionFingerprint}`;
       fontsResolving = false;
-      if (surface) mountBytes(surface.session.save());
-      else bump();
+      if (surface) {
+        // The remount tears the surface down BEFORE building the replacement, so the
+        // saved bytes are the only copy of the live document while it runs. Hold them:
+        // a mount that throws must leave a recoverable editor, not an empty container
+        // with the document gone. Font fidelity is never worth losing the document.
+        const saved = surface.session.save();
+        try {
+          mountBytes(saved);
+        } catch (remountError) {
+          shapedMeasurer = undefined;
+          shapedProducer = undefined;
+          if (!surface) {
+            pendingBytes = saved;
+            mountBytes(saved);
+          }
+          reportFontError(toEditorFontError(remountError));
+        }
+      } else bump();
     } catch (error) {
       if (destroyed || seq !== loadSeq) return;
       fontsResolving = false;

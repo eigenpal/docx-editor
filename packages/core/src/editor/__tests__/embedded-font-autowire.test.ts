@@ -411,3 +411,30 @@ describe('duplicate embedded face declarations collapse at the mapper', () => {
     expect(both.sources).toHaveLength(2);
   });
 });
+
+// The run family is file-derived and reaches the resolver on EVERY measured run. A
+// family the request contract refuses (whitespace-only) used to throw through layout,
+// fail the shaped remount, and leave the editor with no surface and no bytes — the
+// document silently vanished mid-session. Fidelity must never cost the document.
+describe('a hostile run family cannot destroy the mounted document', () => {
+  const HOSTILE_RUN =
+    '<w:p><w:r><w:rPr><w:rFonts w:ascii="   " w:hAnsi="   "/></w:rPr>' +
+    '<w:t xml:space="preserve">crafted</w:t></w:r></w:p>';
+
+  test('the document survives shaped resolution and stays saveable', async () => {
+    const container = document.createElement('div');
+    const editor = createDocxEditor({
+      container,
+      document: docxWithEmbeds(HOSTILE_RUN + p('normal'), EMBED_BOTH),
+      onFontError: () => {},
+    });
+    expect(container.textContent).toContain('crafted');
+    await fontsSettled(editor);
+    // Still mounted, still showing the document, still saveable.
+    expect(editor.surface).not.toBeNull();
+    expect(container.textContent).toContain('crafted');
+    expect(editor.surface!.session.bodyText()).toContain('crafted');
+    expect(editor.snapshot().parseError ?? null).toBeNull();
+    editor.destroy();
+  });
+});
