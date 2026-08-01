@@ -155,6 +155,7 @@ export {
   createLayoutSession,
   layoutSemanticDocument,
   type HeaderFooterVariantName,
+  type LayoutSectionInput,
   type LayoutSession,
   type LayoutSessionStats,
   type PageFurniture,
@@ -170,7 +171,12 @@ export {
 export {
   DEFAULT_SECTION_PROPERTIES,
   geometryOfSection,
+  paragraphSectionNode,
+  readDocumentSections,
   readSectionProperties,
+  sectionPropertiesOf,
+  type DocumentSection,
+  type SectionBreakType,
   type SectionMargins,
   type SectionProperties,
 } from './section-properties.ts';

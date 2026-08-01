@@ -289,7 +289,154 @@ describe('createDocxEditor', () => {
       pageHeightTwips: 15840,
       orientation: 'portrait',
       marginsTwips: { top: 1440, right: 1440, bottom: 1440, left: 1440 },
+      gutterTwips: 0,
     });
+  });
+
+  test('setPageSetup writes margins, repaginates, and undoes as one step', () => {
+    const { editor } = mount(p('hello'));
+    expect(editor.can({ type: 'setPageSetup', marginLeft: 720 })).toEqual({ ok: true });
+    const result = editor.exec({ type: 'setPageSetup', marginLeft: 720, marginTop: 900 });
+    expect(result).toEqual({ ok: true, changed: true });
+    expect(editor.getPageSetup()?.marginsTwips).toEqual({
+      top: 900,
+      right: 1440,
+      bottom: 1440,
+      left: 720,
+    });
+    expect(editor.snapshot().canUndo).toBe(true);
+    editor.exec({ type: 'undo' });
+    expect(editor.getPageSetup()?.marginsTwips.left).toBe(1440);
+  });
+
+  test('setPageSetup orientation swaps the stored dimensions', () => {
+    const { editor } = mount(p('hello'));
+    editor.exec({ type: 'setPageSetup', orientation: 'landscape' });
+    expect(editor.getPageSetup()).toMatchObject({
+      pageWidthTwips: 15840,
+      pageHeightTwips: 12240,
+      orientation: 'landscape',
+    });
+    // Back to portrait: the dimensions swap back, whichever way they were stored.
+    editor.exec({ type: 'setPageSetup', orientation: 'portrait' });
+    expect(editor.getPageSetup()).toMatchObject({
+      pageWidthTwips: 12240,
+      pageHeightTwips: 15840,
+      orientation: 'portrait',
+    });
+  });
+
+  test('setPageSetup refuses hostile values with typed reasons', () => {
+    const { editor } = mount(p('hello'));
+    expect(editor.can({ type: 'setPageSetup' })).toMatchObject({ ok: false });
+    expect(editor.can({ type: 'setPageSetup', pageWidth: 0 })).toMatchObject({
+      ok: false,
+      code: 'invalidArgs',
+    });
+    expect(editor.can({ type: 'setPageSetup', marginLeft: -1 })).toMatchObject({
+      ok: false,
+      code: 'invalidArgs',
+    });
+    // Margins that swallow the page are refused by the op layer: nothing commits.
+    const before = editor.getDocumentHandle().revision;
+    editor.exec({ type: 'setPageSetup', marginLeft: 8000, marginRight: 8000 });
+    expect(editor.getDocumentHandle().revision).toBe(before);
+  });
+
+  test('snapshot().pageSetup is reference-stable until the section changes', () => {
+    const { editor } = mount(p('hello'));
+    const first = editor.snapshot().pageSetup;
+    expect(first).toEqual(editor.getPageSetup());
+    // An edit that does not touch the section keeps the same sub-object reference.
+    editor.exec({ type: 'insertText', text: 'X' });
+    expect(editor.snapshot().pageSetup).toBe(first);
+    // A section write moves it.
+    editor.exec({ type: 'setPageSetup', marginLeft: 720 });
+    expect(editor.snapshot().pageSetup).not.toBe(first);
+    expect(editor.snapshot().pageSetup?.marginsTwips.left).toBe(720);
+  });
+
+  test('a refused page setup surfaces as a typed error, not silent success', () => {
+    const { editor } = mount(p('hello'));
+    // Each margin passes per-field bounds; together they swallow the page.
+    const result = editor.exec({ type: 'setPageSetup', marginLeft: 8000, marginRight: 8000 });
+    expect(result).toMatchObject({ ok: false, code: 'invalidArgs' });
+  });
+
+  test('scope: section writes only the caret section of a multi-section document', () => {
+    const midBody =
+      '<w:p><w:pPr><w:sectPr><w:pgSz w:w="12240" w:h="15840"/></w:sectPr></w:pPr>' +
+      '<w:r><w:t>first section</w:t></w:r></w:p>' +
+      '<w:p><w:r><w:t>second section</w:t></w:r></w:p>' +
+      '<w:sectPr><w:pgSz w:w="12240" w:h="15840"/></w:sectPr>';
+    const { editor } = mount(midBody);
+    const first = editor.surface!.session.paragraphIds()[0]!;
+    editor.surface!.setSelection({
+      anchor: { paragraphId: first, offset: 0 },
+      head: { paragraphId: first, offset: 0 },
+    });
+    editor.exec({ type: 'setPageSetup', orientation: 'landscape', scope: 'section' });
+    // The caret's section flipped; snapshot follows the caret, so it reads landscape…
+    expect(editor.getPageSetup()).toMatchObject({ orientation: 'landscape' });
+    // …while the tail section kept portrait.
+    const second = editor.surface!.session.paragraphIds()[1]!;
+    editor.surface!.setSelection({
+      anchor: { paragraphId: second, offset: 0 },
+      head: { paragraphId: second, offset: 0 },
+    });
+    expect(editor.getPageSetup()).toMatchObject({ orientation: 'portrait' });
+  });
+
+  test('whole-document orientation flip preserves each section paper size', () => {
+    const midBody =
+      '<w:p><w:pPr><w:sectPr><w:pgSz w:w="11906" w:h="16838"/></w:sectPr></w:pPr>' +
+      '<w:r><w:t>a4 section</w:t></w:r></w:p>' +
+      '<w:p><w:r><w:t>letter tail</w:t></w:r></w:p>' +
+      '<w:sectPr><w:pgSz w:w="12240" w:h="15840"/></w:sectPr>';
+    const { editor } = mount(midBody);
+    editor.exec({ type: 'setPageSetup', orientation: 'landscape' });
+    const first = editor.surface!.session.paragraphIds()[0]!;
+    editor.surface!.setSelection({
+      anchor: { paragraphId: first, offset: 0 },
+      head: { paragraphId: first, offset: 0 },
+    });
+    // The A4 section swapped its OWN dimensions rather than inheriting Letter's.
+    expect(editor.getPageSetup()).toMatchObject({
+      pageWidthTwips: 16838,
+      pageHeightTwips: 11906,
+      orientation: 'landscape',
+    });
+  });
+
+  test('insertBreak section splits at the caret and starts a new section', () => {
+    const { editor } = mount(p('before after'));
+    const id = editor.surface!.session.paragraphIds()[0]!;
+    editor.surface!.setSelection({
+      anchor: { paragraphId: id, offset: 6 },
+      head: { paragraphId: id, offset: 6 },
+    });
+    expect(editor.can({ type: 'insertBreak', kind: 'section' } as never)).toEqual({ ok: true });
+    const result = editor.exec({ type: 'insertBreak', kind: 'section' } as never);
+    expect(result).toMatchObject({ ok: true, changed: true });
+    expect(editor.surface!.session.paragraphIds()).toHaveLength(2);
+    // The document now has two sections; one undo removes the break entirely.
+    expect(editor.surface!.layout().pages.length).toBeGreaterThanOrEqual(2);
+    editor.exec({ type: 'undo' });
+    expect(editor.surface!.session.paragraphIds()).toHaveLength(1);
+  });
+
+  test('the caret section drives the layout: a landscape section paginates landscape', () => {
+    const midBody =
+      '<w:p><w:pPr><w:sectPr><w:pgSz w:w="15840" w:h="12240" w:orient="landscape"/></w:sectPr></w:pPr>' +
+      '<w:r><w:t>landscape page</w:t></w:r></w:p>' +
+      '<w:p><w:r><w:t>portrait page</w:t></w:r></w:p>' +
+      '<w:sectPr><w:pgSz w:w="12240" w:h="15840"/></w:sectPr>';
+    const { editor } = mount(midBody);
+    const pages = editor.surface!.layout().pages;
+    expect(pages).toHaveLength(2);
+    // Twips to points: 15840/20 = 792 wide landscape sheet, then the portrait one.
+    expect([pages[0]!.box.width, pages[0]!.box.height]).toEqual([792, 612]);
+    expect([pages[1]!.box.width, pages[1]!.box.height]).toEqual([612, 792]);
   });
 
   test('zoom is validated, stored, and reported', () => {

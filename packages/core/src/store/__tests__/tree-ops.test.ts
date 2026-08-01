@@ -534,3 +534,219 @@ describe('splitParagraphMany equals the sequence of single splits it stands for'
     if (!result.ok) expect(result.reason).toBe('offset-out-of-range');
   });
 });
+
+// ---------------------------------------------------------------------------------------
+// setSectionProperties: the body-level section write path (page setup).
+// ---------------------------------------------------------------------------------------
+
+/** The body-level `w:sectPr`, plus attribute maps of a named child, straight off the tree. */
+function sectionOf(part: OoxmlPart): OoxmlNode | null {
+  let found: OoxmlNode | null = null;
+  const walk = (node: OoxmlNode): void => {
+    if (node.kind === 'textValue' || found) return;
+    if (node.kind === 'body') {
+      for (const child of node.children) {
+        if (child.kind !== 'textValue' && 'localName' in child && child.localName === 'sectPr') {
+          found = child;
+        }
+      }
+      return;
+    }
+    for (const child of node.children ?? []) walk(child);
+  };
+  walk(part.root);
+  return found;
+}
+
+function sectionChildAttrs(part: OoxmlPart, localName: string): Record<string, string> | null {
+  const sectPr = sectionOf(part);
+  if (!sectPr || sectPr.kind === 'textValue') return null;
+  for (const child of sectPr.children) {
+    if (child.kind === 'textValue' || !('localName' in child) || child.localName !== localName) {
+      continue;
+    }
+    const attrs: Record<string, string> = {};
+    for (const entry of child.attributes ?? []) attrs[entry.localName] = entry.value;
+    return attrs;
+  }
+  return null;
+}
+
+const WITH_SECTION =
+  '<w:p><w:r><w:t>x</w:t></w:r></w:p>' +
+  '<w:sectPr><w:headerReference w:type="default" r:id="rId9" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"/>' +
+  '<w:pgSz w:w="12240" w:h="15840" w:code="1"/>' +
+  '<w:pgMar w:top="1440" w:right="1440" w:bottom="1440" w:left="1440" w:header="708" w:footer="708" w:gutter="120"/>' +
+  '<w:cols w:num="2" w:space="708"/><w:titlePg/></w:sectPr>';
+
+describe('setSectionProperties writes page setup surgically', () => {
+  test('a margin write touches only the sides it names', () => {
+    const part = load(WITH_SECTION);
+    const next = apply(part, {
+      op: 'setSectionProperties',
+      marginLeftTwips: 720,
+      marginTopTwips: 900,
+    });
+    expect(sectionChildAttrs(next, 'pgMar')).toEqual({
+      top: '900',
+      right: '1440',
+      bottom: '1440',
+      left: '720',
+      header: '708',
+      footer: '708',
+      gutter: '120',
+    });
+    // Untouched siblings keep their authored form, references included.
+    expect(sectionChildAttrs(next, 'cols')).toEqual({ num: '2', space: '708' });
+    expect(serializeOoxmlPart(next)).toContain('headerReference');
+    expect(serializeOoxmlPart(next)).toContain('titlePg');
+  });
+
+  test('landscape writes swapped-ready orient and drops a stale paper code on resize', () => {
+    const part = load(WITH_SECTION);
+    const next = apply(part, {
+      op: 'setSectionProperties',
+      pageWidthTwips: 15840,
+      pageHeightTwips: 12240,
+      orientation: 'landscape',
+    });
+    expect(sectionChildAttrs(next, 'pgSz')).toEqual({
+      w: '15840',
+      h: '12240',
+      orient: 'landscape',
+    });
+  });
+
+  test('portrait is the absence of the orient attribute', () => {
+    const part = load(WITH_SECTION.replace('w:code="1"', 'w:code="1" w:orient="landscape"'));
+    const next = apply(part, { op: 'setSectionProperties', orientation: 'portrait' });
+    // Only orientation changed: the dimensions and the paper code survive.
+    expect(sectionChildAttrs(next, 'pgSz')).toEqual({ w: '12240', h: '15840', code: '1' });
+  });
+
+  test('a document with no sectPr gets one, as the body last child', () => {
+    const part = load(SIMPLE);
+    const next = apply(part, {
+      op: 'setSectionProperties',
+      pageWidthTwips: 11906,
+      pageHeightTwips: 16838,
+      marginLeftTwips: 1080,
+    });
+    expect(sectionChildAttrs(next, 'pgSz')).toEqual({ w: '11906', h: '16838' });
+    // A minted pgMar carries the full schema set, defaults made explicit.
+    expect(sectionChildAttrs(next, 'pgMar')).toEqual({
+      top: '1440',
+      right: '1440',
+      bottom: '1440',
+      left: '1080',
+      header: '720',
+      footer: '720',
+      gutter: '0',
+    });
+    const serialized = serializeOoxmlPart(next);
+    expect(serialized.indexOf('<w:sectPr')).toBeGreaterThan(serialized.indexOf('</w:p>'));
+  });
+
+  test('a sectPr without pgMar gains one placed after pgSz', () => {
+    const part = load(
+      '<w:p><w:r><w:t>x</w:t></w:r></w:p><w:sectPr><w:pgSz w:w="12240" w:h="15840"/><w:cols w:num="1"/></w:sectPr>'
+    );
+    const next = apply(part, { op: 'setSectionProperties', marginTopTwips: 720 });
+    const serialized = serializeOoxmlPart(next);
+    expect(serialized.indexOf('<w:pgMar')).toBeGreaterThan(serialized.indexOf('<w:pgSz'));
+    expect(serialized.indexOf('<w:pgMar')).toBeLessThan(serialized.indexOf('<w:cols'));
+  });
+
+  test('a multi-section document is updated WHOLE — every sectPr, not just the last', () => {
+    // Word's dialog semantics: page setup applies to the whole document. Touching only
+    // the body-level section leaves "portrait, …, landscape", which Word renders as one
+    // landscape page among portrait ones.
+    const part = load(
+      '<w:p><w:pPr><w:sectPr><w:pgSz w:w="12240" w:h="15840"/>' +
+        '<w:pgMar w:top="1440" w:right="1440" w:bottom="1440" w:left="1440" w:header="708" w:footer="708" w:gutter="0"/>' +
+        '</w:sectPr></w:pPr><w:r><w:t>section one</w:t></w:r></w:p>' +
+        '<w:p><w:r><w:t>section two</w:t></w:r></w:p>' +
+        '<w:sectPr><w:pgSz w:w="12240" w:h="15840"/></w:sectPr>'
+    );
+    const next = apply(part, {
+      op: 'setSectionProperties',
+      pageWidthTwips: 15840,
+      pageHeightTwips: 12240,
+      orientation: 'landscape',
+      marginLeftTwips: 720,
+    });
+    const serialized = serializeOoxmlPart(next);
+    // Both sections carry the landscape size…
+    expect(serialized.match(/w:orient="landscape"/g)).toHaveLength(2);
+    expect(serialized.match(/<w:pgSz [^>]*w:w="15840"/g)).toHaveLength(2);
+    expect(serialized).not.toContain('w:w="12240"');
+    // …and both carry the margin, the mid-body one keeping its authored header/footer.
+    expect(serialized.match(/w:left="720"/g)).toHaveLength(2);
+    expect(serialized).toContain('w:header="708"');
+  });
+
+  test('the effect is flow-structural, so everything repaginates', () => {
+    const part = load(WITH_SECTION);
+    const result = applyTreeOp(part, { op: 'setSectionProperties', marginLeftTwips: 720 });
+    expect(result.ok).toBe(true);
+    if (result.ok) expect(result.effect.impact).toBe('flow-structural');
+  });
+
+  test('hostile or empty writes are refused before any tree work', () => {
+    const part = load(WITH_SECTION);
+    const fingerprint = canonicalOoxmlFingerprint(part);
+    const hostile: TreeDocOp[] = [
+      { op: 'setSectionProperties' },
+      { op: 'setSectionProperties', pageWidthTwips: 0 },
+      { op: 'setSectionProperties', pageWidthTwips: 999999999 },
+      { op: 'setSectionProperties', pageWidthTwips: 612.5 },
+      { op: 'setSectionProperties', marginLeftTwips: -720 },
+      { op: 'setSectionProperties', orientation: 'sideways' as 'portrait' },
+      // Margins that swallow the page: layout would fall back silently; the write refuses.
+      { op: 'setSectionProperties', marginLeftTwips: 8000, marginRightTwips: 8000 },
+    ];
+    for (const op of hostile) {
+      const result = applyTreeOp(part, op);
+      expect(result.ok).toBe(false);
+      if (!result.ok) expect(result.reason).toBe('invalid-property-value');
+    }
+    expect(canonicalOoxmlFingerprint(part)).toBe(fingerprint);
+  });
+});
+
+describe('a section mark survives a split exactly once (the phantom-section fix)', () => {
+  const BOUNDARY =
+    '<w:p><w:pPr><w:jc w:val="center"/><w:sectPr><w:pgSz w:w="15840" w:h="12240"/></w:sectPr></w:pPr>' +
+    '<w:r><w:t>end of section one</w:t></w:r></w:p>' +
+    '<w:p><w:r><w:t>section two</w:t></w:r></w:p>' +
+    '<w:sectPr><w:pgSz w:w="12240" w:h="15840"/></w:sectPr>';
+
+  test('Enter in a section-boundary paragraph keeps ONE mark, on the tail', () => {
+    const part = load(BOUNDARY);
+    const [id] = paragraphIds(part);
+    const next = apply(part, { op: 'splitParagraph', paragraphId: id!, offset: 6 });
+    const serialized = serializeOoxmlPart(next);
+    // Still exactly two sectPr: the (moved) mid-body one and the body-level one. The
+    // section boundary stays after ALL the original content — with the tail — while
+    // other paragraph properties survive on both halves.
+    expect(serialized.match(/<w:sectPr>/g)).toHaveLength(2);
+    const [head, tail] = paragraphIds(next);
+    const headXml = serialized.slice(serialized.indexOf('<w:p>'), serialized.indexOf('</w:p>'));
+    expect(headXml).not.toContain('sectPr');
+    expect(serialized.match(/w:jc/g)).toHaveLength(2);
+    void head;
+    void tail;
+  });
+
+  test('a many-way split keeps the mark on the LAST piece only', () => {
+    const part = load(BOUNDARY);
+    const [id] = paragraphIds(part);
+    const next = apply(part, { op: 'splitParagraphMany', paragraphId: id!, offsets: [3, 6, 10] });
+    const serialized = serializeOoxmlPart(next);
+    expect(serialized.match(/<w:sectPr>/g)).toHaveLength(2);
+    // The mid-body mark sits in the last produced piece: after it, only "section two"
+    // and the body-level sectPr remain.
+    const afterMark = serialized.slice(serialized.indexOf('<w:sectPr>') + 1);
+    expect(afterMark).toContain('section two');
+  });
+});

@@ -53,6 +53,7 @@ import type {
   EditorSnapshot,
   ExecResult,
   FontConfiguration,
+  PageSetup,
   RunFormatting,
   TextMatch,
   Unsubscribe,
@@ -82,6 +83,7 @@ import {
   isSurfaceSelection,
   normalizeSource,
   pageEqual,
+  pageSetupEqual,
   selectionsMatch,
   snapshotsEqual,
 } from './docx-editor-support.ts';
@@ -614,6 +616,29 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
     };
   }
 
+  /**
+   * THE page-setup derivation — `getPageSetup()` and `snapshot().pageSetup` both read
+   * this shape, so the dialog and the rulers can never disagree about the section. In a
+   * multi-section document it is the CARET's section, which is what a ruler reflects
+   * when the caret crosses a section boundary — Word's behaviour.
+   */
+  function pageSetupOf(): PageSetup | null {
+    if (!surface) return null;
+    const section = surface.sectionPropertiesAt(surface.state().selection.head.paragraphId);
+    return {
+      pageWidthTwips: section.pageSize.widthTwips,
+      pageHeightTwips: section.pageSize.heightTwips,
+      orientation: section.landscape ? ('landscape' as const) : ('portrait' as const),
+      marginsTwips: {
+        top: section.margins.topTwips,
+        right: section.margins.rightTwips,
+        bottom: section.margins.bottomTwips,
+        left: section.margins.leftTwips,
+      },
+      gutterTwips: section.margins.gutterTwips,
+    };
+  }
+
   function totalPages(): number {
     return surface ? surface.state().pageCount : 0;
   }
@@ -643,6 +668,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
       page: { current: currentPage(), total: totalPages() },
       canUndo: state?.canUndo ?? false,
       canRedo: state?.canRedo ?? false,
+      pageSetup: pageSetupOf(),
     };
   }
 
@@ -661,7 +687,10 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
         ? previous.formatting
         : fresh.formatting;
       const page = pageEqual(fresh.page, previous.page) ? previous.page : fresh.page;
-      next = { ...fresh, formatting, page };
+      const pageSetup = pageSetupEqual(fresh.pageSetup ?? null, previous.pageSetup ?? null)
+        ? previous.pageSetup
+        : fresh.pageSetup;
+      next = { ...fresh, formatting, page, pageSetup };
       if (snapshotsEqual(next, previous)) next = previous;
     }
     cachedSnapshot = deepFreezeValue(next);
@@ -785,7 +814,59 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
           mounted.setParagraphProperty('ind', attributes);
           break;
         }
+        case 'setPageSetup': {
+          const anchor =
+            command.scope === 'section' ? mounted.state().selection.head.paragraphId : undefined;
+          // When orientation arrives WITH explicit dimensions, the dimensions are
+          // oriented here — Word stores landscape as swapped dimensions plus the
+          // attribute. Orientation ALONE stays alone: the op swaps each written
+          // section's own dimensions, so distinct paper sizes survive the flip.
+          let width = command.pageWidth;
+          let height = command.pageHeight;
+          if (command.orientation !== undefined && (width !== undefined || height !== undefined)) {
+            const section = anchor
+              ? mounted.sectionPropertiesAt(anchor)
+              : mounted.sectionProperties();
+            const w = width ?? section.pageSize.widthTwips;
+            const h = height ?? section.pageSize.heightTwips;
+            width = command.orientation === 'landscape' ? Math.max(w, h) : Math.min(w, h);
+            height = command.orientation === 'landscape' ? Math.min(w, h) : Math.max(w, h);
+          }
+          const committed = mounted.setSectionProperties({
+            ...(width !== undefined ? { pageWidthTwips: width } : {}),
+            ...(height !== undefined ? { pageHeightTwips: height } : {}),
+            ...(command.orientation !== undefined ? { orientation: command.orientation } : {}),
+            ...(command.marginTop !== undefined ? { marginTopTwips: command.marginTop } : {}),
+            ...(command.marginRight !== undefined ? { marginRightTwips: command.marginRight } : {}),
+            ...(command.marginBottom !== undefined
+              ? { marginBottomTwips: command.marginBottom }
+              : {}),
+            ...(command.marginLeft !== undefined ? { marginLeftTwips: command.marginLeft } : {}),
+            ...(anchor !== undefined ? { anchorParagraphId: anchor } : {}),
+          });
+          // The op layer can refuse what per-field bounds cannot see — margins that
+          // together swallow a page. A refusal must surface as one, not close a dialog
+          // claiming success.
+          if (!committed) {
+            return {
+              ok: false,
+              code: 'invalidArgs',
+              reason: mounted.state().lastRejection ?? 'the page setup change was refused',
+            };
+          }
+          break;
+        }
         case 'insertBreak':
+          if (command.kind === 'section') {
+            if (!mounted.insertSectionBreak()) {
+              return {
+                ok: false,
+                code: 'invalidArgs',
+                reason: mounted.state().lastRejection ?? 'the section break was refused',
+              };
+            }
+            break;
+          }
           mounted.insertLineBreak();
           break;
         case 'insertText':
@@ -885,21 +966,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
     getSelectedImage: () => null,
     getSelectedTable: () => null,
 
-    getPageSetup() {
-      if (!surface) return null;
-      const section = surface.sectionProperties();
-      return {
-        pageWidthTwips: section.pageSize.widthTwips,
-        pageHeightTwips: section.pageSize.heightTwips,
-        orientation: section.landscape ? ('landscape' as const) : ('portrait' as const),
-        marginsTwips: {
-          top: section.margins.topTwips,
-          right: section.margins.rightTwips,
-          bottom: section.margins.bottomTwips,
-          left: section.margins.leftTwips,
-        },
-      };
-    },
+    getPageSetup: () => pageSetupOf(),
 
     getWatermark: () => null,
     getHeaderFooterState: () => null,

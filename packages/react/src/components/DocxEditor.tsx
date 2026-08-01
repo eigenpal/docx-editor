@@ -10,6 +10,7 @@ import { useDocxEditorRefApi } from './DocxEditor/hooks/useDocxEditorRefApi';
 import { DocxEditorToolbar } from '../editor/toolbar';
 import { DocxEditorHorizontalRuler, DocxEditorVerticalRuler } from '../editor/DocxEditorRulers';
 import { DocxEditorDocumentOutline } from '../editor/DocxEditorOutline';
+import { DocxEditorPageSetupDialog } from '../editor/DocxEditorPageSetup';
 import { useTranslation } from '../i18n';
 import type { TranslationKey } from '../i18n';
 import type { DocxEditorProps, DocxEditorRef } from '../types';
@@ -238,12 +239,14 @@ export interface DocxEditorNamespace extends ForwardRefExoticComponent<
   readonly Viewport: typeof DocxEditorViewport;
   readonly Content: typeof DocxEditorContent;
   readonly Toolbar: typeof DocxEditorToolbar;
-  /** Context-fed horizontal ruler (read-only; the props-driven export stays). */
+  /** Context-fed horizontal ruler with draggable margins (props-driven export stays). */
   readonly HorizontalRuler: typeof DocxEditorHorizontalRuler;
-  /** Context-fed vertical ruler (read-only; the props-driven export stays). */
+  /** Context-fed vertical ruler with draggable margins (props-driven export stays). */
   readonly VerticalRuler: typeof DocxEditorVerticalRuler;
   /** Context-fed heading outline over `Editor.getOutline()`. */
   readonly DocumentOutline: typeof DocxEditorDocumentOutline;
+  /** Page Setup dialog — size, orientation, margins — applied as one undo step. */
+  readonly PageSetupDialog: typeof DocxEditorPageSetupDialog;
 }
 
 export const DocxEditor: DocxEditorNamespace = Object.assign(DocxEditorImpl, {
@@ -254,4 +257,5 @@ export const DocxEditor: DocxEditorNamespace = Object.assign(DocxEditorImpl, {
   HorizontalRuler: DocxEditorHorizontalRuler,
   VerticalRuler: DocxEditorVerticalRuler,
   DocumentOutline: DocxEditorDocumentOutline,
+  PageSetupDialog: DocxEditorPageSetupDialog,
 });

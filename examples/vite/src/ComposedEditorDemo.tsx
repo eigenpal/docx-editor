@@ -192,11 +192,18 @@ function InsertMenu() {
   // The chrome spec's menu row is File · Format · Insert · Help. Image and table
   // insertion are UNWIRED engine slots (`image.insert` / `table.insert`), so the items
   // bind through `useEditorCommand` and render disabled with the engine's own reason —
-  // present but disabled, never faked.
+  // present but disabled, never faked. The section break is a live engine command.
+  const editor = useDocxEditor();
   return (
     <DemoMenu label="Insert">
       <CommandMenuItem slot="image.insert">Image</CommandMenuItem>
       <CommandMenuItem slot="table.insert">Table</CommandMenuItem>
+      <MenuItem
+        onSelect={() => editor?.exec({ type: 'insertBreak', kind: 'section' })}
+        disabled={!editor}
+      >
+        Section break (next page)
+      </MenuItem>
     </DemoMenu>
   );
 }
@@ -507,6 +514,7 @@ function EditorChrome({
 }) {
   const editor = useDocxEditor();
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const [showPageSetup, setShowPageSetup] = useState(false);
 
   const openFile = (file: File) => {
     void file.arrayBuffer().then((buffer) => {
@@ -553,6 +561,9 @@ function EditorChrome({
               </MenuItem>
               <MenuItem onSelect={saveDocument} disabled={!editor}>
                 Save as .docx
+              </MenuItem>
+              <MenuItem onSelect={() => setShowPageSetup(true)} disabled={!editor}>
+                Page setup&hellip;
               </MenuItem>
             </DemoMenu>
             <FormatMenu />
@@ -619,6 +630,9 @@ function EditorChrome({
           </DocxEditor.Toolbar.FontFamily.Content>
         </DocxEditor.Toolbar.FontFamily>
       </DocxEditor.Toolbar>
+
+      {/* File > Page setup: the library dialog, applied as one undo step. */}
+      <DocxEditor.PageSetupDialog open={showPageSetup} onClose={() => setShowPageSetup(false)} />
     </div>
   );
 }

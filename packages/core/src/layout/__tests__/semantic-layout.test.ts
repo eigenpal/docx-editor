@@ -304,3 +304,93 @@ describe('paragraph alignment moves the published span boxes (w:jc)', () => {
     expect(last.box.x + last.box.width).toBeCloseTo(10 + (available - 10), 5);
   });
 });
+
+describe('per-section pagination (the per-section lane)', () => {
+  const PORTRAIT: PageGeometry = {
+    width: 200,
+    height: 300,
+    margin: { top: 10, right: 10, bottom: 10, left: 10 },
+  };
+  const LANDSCAPE: PageGeometry = {
+    width: 300,
+    height: 200,
+    margin: { top: 10, right: 10, bottom: 10, left: 10 },
+  };
+
+  test('a landscape section among portrait ones gets its own sheet, sized landscape', () => {
+    const part = load(paragraph('one') + paragraph('two') + paragraph('three'));
+    const layout = layoutSemanticDocument(part, 1, {
+      measurer,
+      sections: [
+        { geometry: PORTRAIT, firstBlock: 0 },
+        { geometry: LANDSCAPE, firstBlock: 1 },
+        { geometry: PORTRAIT, firstBlock: 2 },
+      ],
+    });
+    expect(layout.pages).toHaveLength(3);
+    expect(layout.pages.map((page) => [page.box.width, page.box.height])).toEqual([
+      [200, 300],
+      [300, 200],
+      [200, 300],
+    ]);
+    // Sheets stack with the 24pt gutter, cumulative because heights differ.
+    expect(layout.pages.map((page) => page.box.y)).toEqual([0, 324, 548]);
+    // Each page's content box reflects ITS section's margins.
+    expect(layout.pages[1]!.contentBox.width).toBe(280);
+  });
+
+  test('lines break at their OWN section width', () => {
+    // 6px per char, portrait content width 180 → 30 chars; landscape 280 → 46 chars.
+    const text = 'word '.repeat(24).trim();
+    const part = load(paragraph(text) + paragraph(text));
+    const layout = layoutSemanticDocument(part, 1, {
+      measurer,
+      sections: [
+        { geometry: PORTRAIT, firstBlock: 0 },
+        { geometry: LANDSCAPE, firstBlock: 1 },
+      ],
+    });
+    const ids = layout.pages.flatMap((page) =>
+      page.fragments.map((fragment) => (fragment.kind === 'paragraph' ? fragment.paragraphId : ''))
+    );
+    const first = fragmentsOfParagraph(layout, ids[0]!);
+    const second = fragmentsOfParagraph(layout, ids[ids.length - 1]!);
+    expect(first[0]!.lines.length).toBeGreaterThan(second[0]!.lines.length);
+    expect(second[0]!.lines[0]!.range.end).toBeGreaterThan(first[0]!.lines[0]!.range.end);
+  });
+
+  test('a continuous boundary with identical geometry shares the page', () => {
+    const part = load(paragraph('one') + paragraph('two'));
+    const layout = layoutSemanticDocument(part, 1, {
+      measurer,
+      sections: [
+        { geometry: PORTRAIT, firstBlock: 0 },
+        { geometry: PORTRAIT, firstBlock: 1, breakType: 'continuous' },
+      ],
+    });
+    expect(layout.pages).toHaveLength(1);
+  });
+
+  test('a continuous boundary with a DIFFERENT geometry still breaks the page', () => {
+    // Two sections cannot share a sheet that has two sizes.
+    const part = load(paragraph('one') + paragraph('two'));
+    const layout = layoutSemanticDocument(part, 1, {
+      measurer,
+      sections: [
+        { geometry: PORTRAIT, firstBlock: 0 },
+        { geometry: LANDSCAPE, firstBlock: 1, breakType: 'continuous' },
+      ],
+    });
+    expect(layout.pages).toHaveLength(2);
+  });
+
+  test('single-section input matches the plain geometry call exactly', () => {
+    const part = load(paragraph('hello world') + paragraph('again'));
+    const plain = lay(part, SMALL);
+    const sectioned = layoutSemanticDocument(part, 1, {
+      measurer,
+      sections: [{ geometry: SMALL, firstBlock: 0 }],
+    });
+    expect(JSON.stringify(sectioned.pages)).toBe(JSON.stringify(plain.pages));
+  });
+});

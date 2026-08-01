@@ -25,8 +25,14 @@ import {
 } from '../package/ooxml-edit.ts';
 import { DEPENDENCY_KEY_IDS } from '../registry/frozen-ids.ts';
 import {
+  bodyNodeOf,
   isParagraph,
+  metricsOfSection,
+  plannedSectionDimensions,
+  sectionAttribute,
+  sectionChild,
   segmentsOf,
+  targetSectionNodes,
   validateTreeOp,
   type OoxmlProperty,
   type TreeDocOp,
@@ -125,6 +131,8 @@ export function applyTreeOp(part: OoxmlPart, op: TreeDocOp, options?: EditOption
   if (rejection) return { ok: false, reason: rejection };
 
   if (op.op === 'joinParagraphs') return applyJoin(part, op.firstId, op.secondId, options);
+  if (op.op === 'setSectionProperties') return applySetSectionProperties(part, op, options);
+  if (op.op === 'setSectionMark') return applySetSectionMark(part, op.paragraphId, options);
 
   const paragraph = findNode(part, op.paragraphId) as OoxmlParagraphNode;
   const nextId = createNodeIdAllocator(part);
@@ -400,6 +408,12 @@ function applySplit(
     }
   }
 
+  // A `w:sectPr` in the split paragraph's mark belongs to the TAIL: Word splits by
+  // inserting a fresh mark before the existing one, so the original mark — and the
+  // section boundary it carries — stays after ALL the paragraph's content. Cloning it
+  // onto both halves minted a phantom section (and a spurious page break) on every
+  // Enter in a section's last paragraph.
+  const headPPr = pPr ? withoutSectionMark(pPr) : undefined;
   const tailParagraph = {
     id: nextId(),
     kind: 'paragraph',
@@ -429,7 +443,7 @@ function applySplit(
   if (!parent) return { ok: false, reason: 'tree-invariant', detail: 'paragraph has no parent' };
   const headParagraph = Object.freeze({
     ...paragraph,
-    children: pPr ? [pPr, ...headChildren] : headChildren,
+    children: headPPr ? [headPPr, ...headChildren] : headChildren,
   }) as OoxmlNode;
   const siblings = parent.children.flatMap((child) =>
     child.id === paragraph.id ? [headParagraph, tailParagraph] : [child]
@@ -545,8 +559,14 @@ function applySplitMany(
     }
   }
 
+  // A `w:sectPr` in the mark belongs to the LAST piece only — the original mark ends up
+  // after all the paragraph's content, exactly as the single-split rule keeps it on the
+  // tail. Duplicating it minted one phantom section per pasted line.
+  const strippedPPr = pPr ? withoutSectionMark(pPr) : undefined;
   const tailParagraphs: OoxmlNode[] = [];
   for (let piece = 1; piece < pieceCount; piece += 1) {
+    const last = piece === pieceCount - 1;
+    const source = last ? pPr : strippedPPr;
     tailParagraphs.push({
       id: nextId(),
       kind: 'paragraph',
@@ -555,7 +575,7 @@ function applySplitMany(
       prefix: 'w',
       namespaceBindings: [],
       attributes: [],
-      children: pPr ? [cloneWithNewIds(pPr, nextId), ...pieces[piece]!] : pieces[piece]!,
+      children: source ? [cloneWithNewIds(source, nextId), ...pieces[piece]!] : pieces[piece]!,
     } as unknown as OoxmlNode);
   }
 
@@ -572,12 +592,27 @@ function applySplitMany(
   if (!parent) return { ok: false, reason: 'tree-invariant', detail: 'paragraph has no parent' };
   const headParagraph = Object.freeze({
     ...paragraph,
-    children: pPr ? [pPr, ...pieces[0]!] : pieces[0]!,
+    children: strippedPPr ? [strippedPPr, ...pieces[0]!] : pieces[0]!,
   }) as OoxmlNode;
   const siblings = parent.children.flatMap((child) =>
     child.id === paragraph.id ? [headParagraph, ...tailParagraphs] : [child]
   );
   return fromEdit(replaceChildren(part, parent.id, siblings, options), effect);
+}
+
+/**
+ * A `w:pPr` without its `w:sectPr`, keeping identity when there is none. `undefined`
+ * when the section mark was its only content — an empty `w:pPr` serializes markup a
+ * paragraph that never had one does not.
+ */
+function withoutSectionMark(pPr: OoxmlNode): OoxmlNode | undefined {
+  if (pPr.kind === 'textValue') return undefined;
+  const children = pPr.children.filter(
+    (child) => !('localName' in child) || child.localName !== 'sectPr'
+  );
+  if (children.length === pPr.children.length) return pPr;
+  if (children.length === 0) return undefined;
+  return { ...pPr, children } as OoxmlNode;
 }
 
 /** A deep copy with freshly minted identities, for content duplicated by a split. */
@@ -594,6 +629,348 @@ function parentOf(part: OoxmlPart, nodeId: string): OoxmlElement | null {
   // Served from the part's node index rather than a fresh full-tree walk: split and join
   // ask for a parent on every op, and the walk made each one O(document).
   return parentNodeOf(part, nodeId);
+}
+
+type SetSectionPropertiesOp = Extract<TreeDocOp, { op: 'setSectionProperties' }>;
+
+function wmlAttribute(localName: string, value: string) {
+  return {
+    kind: 'genericExtension' as const,
+    namespaceUri: WML_NAMESPACE_URI,
+    localName,
+    prefix: 'w',
+    value,
+  };
+}
+
+function sectionElement(
+  id: string,
+  localName: string,
+  attributes: readonly unknown[],
+  children: readonly OoxmlNode[]
+): OoxmlNode {
+  return {
+    id,
+    kind: 'generic',
+    namespaceUri: WML_NAMESPACE_URI,
+    localName,
+    prefix: 'w',
+    namespaceBindings: [],
+    attributes,
+    children,
+  } as unknown as OoxmlNode;
+}
+
+const attributesOf = (node: OoxmlNode | null): readonly { localName: string; value: string }[] =>
+  node && node.kind !== 'textValue' && 'attributes' in node
+    ? (node.attributes as readonly { localName: string; value: string }[])
+    : [];
+
+const childrenOf = (node: OoxmlNode | null): readonly OoxmlNode[] =>
+  node && node.kind !== 'textValue' ? (node.children ?? []) : [];
+
+/**
+ * Merge the op's fields into its TARGET sections — every `w:sectPr` in the part
+ * (Word's "Apply to: Whole document", the default), or only the section governing
+ * `anchorParagraphId` ("Apply to: This section"). A body-level section is minted when
+ * the write must reach the implicit tail section.
+ *
+ * ONE tree rebuild whatever the section count: the replacements are collected first and
+ * applied in a single structural-sharing map over the root, because a per-section
+ * rebuild copied the body's entire child list once per section — quadratic in a
+ * file-controlled count, which a hostile many-section document turns into a freeze.
+ *
+ * Per section the merge is surgical: only the attributes the op carries are rewritten.
+ * Everything else — `header`/`footer`/`gutter` distances, unknown `pgSz` attributes,
+ * `cols`, `titlePg`, header/footer references — keeps its authored bytes and its node
+ * identity, so a margin drag cannot degrade fidelity anywhere it did not touch. The one
+ * deliberate drop is the `pgSz` paper `code` when the dimensions change: a stale paper
+ * code contradicts the new size, and Word rewrites it on its own next save.
+ */
+function applySetSectionProperties(
+  part: OoxmlPart,
+  op: SetSectionPropertiesOp,
+  options?: EditOptions
+): TreeOpResult {
+  const body = bodyNodeOf(part);
+  if (!body) return { ok: false, reason: 'tree-invariant', detail: 'part has no body' };
+
+  const touchesSize =
+    op.pageWidthTwips !== undefined ||
+    op.pageHeightTwips !== undefined ||
+    op.orientation !== undefined;
+  const touchesMargins =
+    op.marginTopTwips !== undefined ||
+    op.marginRightTwips !== undefined ||
+    op.marginBottomTwips !== undefined ||
+    op.marginLeftTwips !== undefined;
+
+  const effect: TreeOpEffect = {
+    dirty: [],
+    created: [],
+    deleted: [],
+    dependencyKeys: TEXT_DEPS,
+    impact: 'flow-structural',
+  };
+
+  const nextId = createNodeIdAllocator(part);
+  const targets = targetSectionNodes(part, op.anchorParagraphId);
+  const replacements = new Map<string, readonly OoxmlNode[]>();
+  let mintedBodySection: OoxmlNode | null = null;
+  for (const section of targets) {
+    const children = mergedSectionChildren(section, op, touchesSize, touchesMargins, nextId);
+    if (section) replacements.set(section.id, children);
+    // A null target is the implicit body-level section: mint it, as the body's LAST
+    // child per the schema.
+    else mintedBodySection = sectionElement(nextId(), 'sectPr', [], children);
+  }
+
+  const rebuilt = (node: OoxmlNode): OoxmlNode => {
+    if (node.kind === 'textValue') return node;
+    const replacement = replacements.get(node.id);
+    if (replacement) return { ...node, children: replacement } as OoxmlNode;
+    let changed = false;
+    const children = node.children.map((child) => {
+      const next = rebuilt(child);
+      if (next !== child) changed = true;
+      return next;
+    });
+    if (node.kind === 'body' && mintedBodySection) {
+      return { ...node, children: [...children, mintedBodySection] } as OoxmlNode;
+    }
+    return changed ? ({ ...node, children } as OoxmlNode) : node;
+  };
+
+  const nextRootChildren = part.root.children.map(rebuilt);
+  return fromEdit(replaceChildren(part, part.root.id, nextRootChildren, options), effect);
+}
+
+/**
+ * End a section at one paragraph: mint `w:pPr/w:sectPr` cloning the governing section's
+ * effective page setup, so the new section looks exactly like the one it was cut from —
+ * which is what Word's next-page section break does.
+ */
+function applySetSectionMark(
+  part: OoxmlPart,
+  paragraphId: string,
+  options?: EditOptions
+): TreeOpResult {
+  const paragraph = findNode(part, paragraphId) as OoxmlParagraphNode;
+  const nextId = createNodeIdAllocator(part);
+  const governing = targetSectionNodes(part, paragraphId)[0] ?? null;
+  const metrics = metricsOfSection(governing);
+  const effect: TreeOpEffect = {
+    dirty: [paragraphId],
+    created: [],
+    deleted: [],
+    dependencyKeys: TEXT_DEPS,
+    impact: 'flow-structural',
+  };
+
+  // The WHOLE governing section is cloned — header/footer references, columns,
+  // `titlePg`, page numbering, everything. The new section becomes an EARLIER section,
+  // and §17.10.5 header inheritance only looks backwards: cloning just the page
+  // geometry would strip the headers off every page before the break. A document with
+  // no section at all gets the effective defaults, written out.
+  const sectPr = governing
+    ? cloneWithNewIds(governing, nextId)
+    : sectionElement(
+        nextId(),
+        'sectPr',
+        [],
+        [
+          sectionElement(
+            nextId(),
+            'pgSz',
+            [
+              wmlAttribute('w', String(metrics.widthTwips)),
+              wmlAttribute('h', String(metrics.heightTwips)),
+              ...(metrics.widthTwips > metrics.heightTwips
+                ? [wmlAttribute('orient', 'landscape')]
+                : []),
+            ],
+            []
+          ),
+          sectionElement(
+            nextId(),
+            'pgMar',
+            [
+              wmlAttribute('top', String(metrics.topTwips)),
+              wmlAttribute('right', String(metrics.rightTwips)),
+              wmlAttribute('bottom', String(metrics.bottomTwips)),
+              wmlAttribute('left', String(metrics.leftTwips)),
+              wmlAttribute('header', String(metrics.headerTwips)),
+              wmlAttribute('footer', String(metrics.footerTwips)),
+              wmlAttribute('gutter', String(metrics.gutterTwips)),
+            ],
+            []
+          ),
+        ]
+      );
+
+  const pPr = paragraph.children.find((child) => child.kind === 'paragraphProperties');
+  if (!pPr) {
+    const minted = {
+      id: nextId(),
+      kind: 'paragraphProperties',
+      namespaceUri: WML_NAMESPACE_URI,
+      localName: 'pPr',
+      prefix: 'w',
+      namespaceBindings: [],
+      attributes: [],
+      children: [sectPr],
+    } as unknown as OoxmlNode;
+    // `w:pPr` must be the paragraph's FIRST child per the schema.
+    return fromEdit(insertChildren(part, paragraph.id, 0, [minted], options), effect);
+  }
+  // `w:sectPr` sits near the END of CT_PPr's sequence, before only `w:pPrChange`.
+  const change = pPr.children.findIndex(
+    (child) => 'localName' in child && child.localName === 'pPrChange'
+  );
+  return fromEdit(
+    insertChildren(part, pPr.id, change === -1 ? pPr.children.length : change, [sectPr], options),
+    effect
+  );
+}
+
+/** One section's rebuilt child list with the op's pgSz/pgMar fields merged in. */
+function mergedSectionChildren(
+  sectPr: OoxmlNode | null,
+  op: SetSectionPropertiesOp,
+  touchesSize: boolean,
+  touchesMargins: boolean,
+  nextId: () => string
+): OoxmlNode[] {
+  const current = metricsOfSection(sectPr);
+
+  const existingPgSz = sectionChild(sectPr, 'pgSz');
+  let nextPgSz: OoxmlNode | null = null;
+  if (touchesSize) {
+    // Per-section dimensions, from the SAME planner validation approved: an orientation
+    // change without explicit dimensions swaps this section's own — an A4 section stays
+    // A4-sized through a whole-document landscape flip.
+    const { widthTwips: width, heightTwips: height } = plannedSectionDimensions(current, op);
+    const dimensionsChanged = width !== current.widthTwips || height !== current.heightTwips;
+    const orient =
+      op.orientation !== undefined
+        ? op.orientation === 'landscape'
+          ? 'landscape'
+          : undefined // Word's portrait is the ABSENCE of the attribute.
+        : sectionAttribute(existingPgSz, 'orient');
+    const dropped = new Set(['w', 'h', 'orient', ...(dimensionsChanged ? ['code'] : [])]);
+    const kept = attributesOf(existingPgSz).filter((entry) => !dropped.has(entry.localName));
+    nextPgSz = sectionElement(
+      existingPgSz?.id ?? nextId(),
+      'pgSz',
+      [
+        wmlAttribute('w', String(width)),
+        wmlAttribute('h', String(height)),
+        ...(orient ? [wmlAttribute('orient', orient)] : []),
+        ...kept,
+      ],
+      childrenOf(existingPgSz)
+    );
+  }
+
+  const existingPgMar = sectionChild(sectPr, 'pgMar');
+  let nextPgMar: OoxmlNode | null = null;
+  if (touchesMargins) {
+    const sides: readonly [string, number | undefined, number][] = [
+      ['top', op.marginTopTwips, current.topTwips],
+      ['right', op.marginRightTwips, current.rightTwips],
+      ['bottom', op.marginBottomTwips, current.bottomTwips],
+      ['left', op.marginLeftTwips, current.leftTwips],
+    ];
+    if (existingPgMar) {
+      const written = new Set(
+        sides.filter(([, value]) => value !== undefined).map(([name]) => name)
+      );
+      const kept = attributesOf(existingPgMar).filter((entry) => !written.has(entry.localName));
+      nextPgMar = sectionElement(
+        existingPgMar.id,
+        'pgMar',
+        [
+          ...sides
+            .filter(([, value]) => value !== undefined)
+            .map(([name, value]) => wmlAttribute(name, String(value))),
+          ...kept,
+        ],
+        childrenOf(existingPgMar)
+      );
+    } else {
+      // Minting `w:pgMar` writes the full attribute set the schema requires, with the
+      // effective values for everything the op did not say — explicit defaults are the
+      // same document the implicit ones were.
+      nextPgMar = sectionElement(
+        nextId(),
+        'pgMar',
+        [
+          ...sides.map(([name, value, fallback]) => wmlAttribute(name, String(value ?? fallback))),
+          wmlAttribute('header', String(current.headerTwips)),
+          wmlAttribute('footer', String(current.footerTwips)),
+          wmlAttribute('gutter', String(current.gutterTwips)),
+        ],
+        []
+      );
+    }
+  }
+
+  let children = [...childrenOf(sectPr)];
+  if (nextPgSz) {
+    if (existingPgSz) {
+      children = children.map((child) => (child.id === existingPgSz.id ? nextPgSz : child));
+    } else {
+      children.splice(sectionInsertIndex(children, 'pgSz'), 0, nextPgSz);
+    }
+  }
+  if (nextPgMar) {
+    if (existingPgMar) {
+      children = children.map((child) => (child.id === existingPgMar.id ? nextPgMar : child));
+    } else {
+      children.splice(sectionInsertIndex(children, 'pgMar'), 0, nextPgMar);
+    }
+  }
+  return children;
+}
+
+/**
+ * `CT_SectPr`'s child sequence from `w:pgSz` on — a minted element must precede every
+ * LATER-sequence sibling already present (`docGrid`, `sectPrChange`, …), or Word
+ * reports the file as corrupt.
+ */
+const SECT_PR_SEQUENCE = [
+  'pgSz',
+  'pgMar',
+  'paperSrc',
+  'pgBorders',
+  'lnNumType',
+  'pgNumType',
+  'cols',
+  'formProt',
+  'vAlign',
+  'noEndnote',
+  'titlePg',
+  'textDirection',
+  'bidi',
+  'rtlGutter',
+  'docGrid',
+  'printerSettings',
+  'sectPrChange',
+] as const;
+
+function sectionInsertIndex(children: readonly OoxmlNode[], localName: string): number {
+  const laterSiblings = new Set(
+    SECT_PR_SEQUENCE.slice(
+      SECT_PR_SEQUENCE.indexOf(localName as (typeof SECT_PR_SEQUENCE)[number]) + 1
+    )
+  );
+  const before = children.findIndex(
+    (child) =>
+      child.kind !== 'textValue' &&
+      'localName' in child &&
+      laterSiblings.has(child.localName as (typeof SECT_PR_SEQUENCE)[number])
+  );
+  return before === -1 ? children.length : before;
 }
 
 function applyJoin(

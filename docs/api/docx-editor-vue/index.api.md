@@ -492,17 +492,7 @@ export interface Editor {
         readonly blockId: string;
     }[];
     getPageGeometry(): readonly { index: number; box: Rect; contentBox: Rect }[];
-    getPageSetup(): {
-        readonly pageWidthTwips: number;
-        readonly pageHeightTwips: number;
-        readonly orientation: 'portrait' | 'landscape';
-        readonly marginsTwips: {
-            readonly top: number;
-            readonly right: number;
-            readonly bottom: number;
-            readonly left: number;
-        };
-    } | null;
+    getPageSetup(): PageSetup | null;
     getScrollGeometry(): ScrollGeometry;
     getSelectedImage(): {
         readonly id: string;
@@ -666,6 +656,7 @@ export interface EditorSnapshot {
     readonly isLoading: boolean;
     // (undocumented)
     readonly page: { readonly current: number; readonly total: number };
+    readonly pageSetup?: PageSetup | null;
     // (undocumented)
     readonly parseError: string | null;
     // (undocumented)
@@ -1054,6 +1045,24 @@ export interface PageIndicatorProps {
     readonly editor: Editor | null;
     // (undocumented)
     readonly visible?: boolean;
+}
+
+// @public
+export interface PageSetup {
+    readonly gutterTwips?: number;
+    // (undocumented)
+    readonly marginsTwips: {
+        readonly top: number;
+        readonly right: number;
+        readonly bottom: number;
+        readonly left: number;
+    };
+    // (undocumented)
+    readonly orientation: 'portrait' | 'landscape';
+    // (undocumented)
+    readonly pageHeightTwips: number;
+    // (undocumented)
+    readonly pageWidthTwips: number;
 }
 
 // @public (undocumented)
