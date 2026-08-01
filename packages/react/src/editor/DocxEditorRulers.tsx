@@ -10,7 +10,7 @@
 // no relayout storm at mousemove frequency. Editability follows what the engine reports
 // (`usePageSetup().isEnabled`), so against a read-only document the handles stay inert.
 
-import { useCallback, useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import type { CSSProperties, ReactElement } from 'react';
 import type { EditorSnapshot } from '@docx-editor.dev/core-contract/contracts/editor';
 import { HorizontalRuler, type RulerPageSetup } from '../components/ui/HorizontalRuler';
@@ -46,22 +46,30 @@ function useMarginDrag(): {
 } {
   const { apply } = usePageSetup();
   const [pending, setPending] = useState<PendingMargins>({});
+  // The ref mirrors the state so `commit` can read the latest drag value WITHOUT doing
+  // work inside a setState updater — updaters must stay pure (StrictMode double-invokes
+  // them, which would commit two undo entries per drag).
+  const pendingRef = useRef<PendingMargins>({});
   const preview = useCallback(
-    (side: keyof PendingMargins) => (twips: number) =>
-      setPending((current) => ({ ...current, [side]: Math.round(twips) })),
+    (side: keyof PendingMargins) => (twips: number) => {
+      pendingRef.current = { ...pendingRef.current, [side]: Math.round(twips) };
+      setPending(pendingRef.current);
+    },
     []
   );
   const commit = useCallback(() => {
-    setPending((current) => {
-      if (Object.keys(current).length > 0) {
-        apply({
-          ...(current.top !== undefined ? { marginTop: current.top } : {}),
-          ...(current.right !== undefined ? { marginRight: current.right } : {}),
-          ...(current.bottom !== undefined ? { marginBottom: current.bottom } : {}),
-          ...(current.left !== undefined ? { marginLeft: current.left } : {}),
-        });
-      }
-      return {};
+    const current = pendingRef.current;
+    pendingRef.current = {};
+    setPending({});
+    if (Object.keys(current).length === 0) return;
+    // A ruler drag is Word's "this section" gesture: dragging the margin of a landscape
+    // section must not reshape the portrait sections around it.
+    apply({
+      ...(current.top !== undefined ? { marginTopTwips: current.top } : {}),
+      ...(current.right !== undefined ? { marginRightTwips: current.right } : {}),
+      ...(current.bottom !== undefined ? { marginBottomTwips: current.bottom } : {}),
+      ...(current.left !== undefined ? { marginLeftTwips: current.left } : {}),
+      scope: 'section',
     });
   }, [apply]);
   return { pending, preview, commit };

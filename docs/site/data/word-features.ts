@@ -528,7 +528,7 @@ export const wordFeatures: WordFeature[] = [
     roundTrip: 'full',
     tier: 'community',
     notes:
-      'Margins editable; mid-body sectPr (section breaks) render and round-trip. Inserting new sections from the UI is not built yet.',
+      'Page size, orientation and margins editable per section or whole document (Page Setup dialog, ruler drags); each section paginates against its own geometry, so mixed portrait/landscape documents render as Word shows them. Next-page section breaks insertable. Even/odd-page break parity and per-section columns are not modelled yet.',
   },
   {
     id: 'layout.headers-footers',

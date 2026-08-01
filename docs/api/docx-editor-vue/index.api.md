@@ -642,7 +642,7 @@ export type EditorScope =
 /** Read-only aggregate across every view. Valid for queries, not for writes. */
 | { kind: 'all' };
 
-// @public (undocumented)
+// @public
 export interface EditorSnapshot {
     // (undocumented)
     readonly canRedo?: boolean;
@@ -1045,6 +1045,24 @@ export interface PageIndicatorProps {
     readonly editor: Editor | null;
     // (undocumented)
     readonly visible?: boolean;
+}
+
+// @public
+export interface PageSetup {
+    readonly gutterTwips?: number;
+    // (undocumented)
+    readonly marginsTwips: {
+        readonly top: number;
+        readonly right: number;
+        readonly bottom: number;
+        readonly left: number;
+    };
+    // (undocumented)
+    readonly orientation: 'portrait' | 'landscape';
+    // (undocumented)
+    readonly pageHeightTwips: number;
+    // (undocumented)
+    readonly pageWidthTwips: number;
 }
 
 // @public (undocumented)

@@ -122,13 +122,14 @@ export type TreeDocOp =
     }
   | {
       /**
-       * Set page-setup fields — page size, orientation, margins — on EVERY `w:sectPr`
-       * in the part: Word's "Apply to: Whole document". The one op not addressed by
-       * paragraph id; a document with no section gets a body-level one minted as the
-       * body's last child. Omitted fields are left exactly as authored per section;
-       * `orientation` writes or removes the `w:orient` attribute only — dimension
-       * swapping is the COMMAND layer's business, so the op stays a literal record of
-       * what changed.
+       * Set page-setup fields — page size, orientation, margins — on every targeted
+       * `w:sectPr`: all of them (Word's "Apply to: Whole document", the default) or
+       * only the one governing `anchorParagraphId`. A document whose write must reach
+       * the implicit tail section gets a body-level `w:sectPr` minted as the body's
+       * last child. Omitted fields are left exactly as authored per section. Explicit
+       * dimensions are written literally; `orientation` WITHOUT dimensions swaps each
+       * section's own (see `plannedSectionDimensions`), so distinct paper sizes
+       * survive a whole-document flip.
        */
       readonly op: 'setSectionProperties';
       readonly pageWidthTwips?: number;
@@ -138,6 +139,22 @@ export type TreeDocOp =
       readonly marginRightTwips?: number;
       readonly marginBottomTwips?: number;
       readonly marginLeftTwips?: number;
+      /**
+       * Word's "Apply to: This section": update only the section GOVERNING this
+       * paragraph — the nearest mid-body `w:sectPr` at or after it, else the body-level
+       * one. Absent means every section.
+       */
+      readonly anchorParagraphId?: string;
+    }
+  | {
+      /**
+       * End a section AT this paragraph: mint a `w:pPr/w:sectPr` cloning the governing
+       * section's effective page setup, so the blocks up to and including this paragraph
+       * become their own section (a next-page section break). The paragraph must not
+       * already carry one.
+       */
+      readonly op: 'setSectionMark';
+      readonly paragraphId: string;
     };
 
 export type TreeDocOpKind = TreeDocOp['op'];
@@ -153,6 +170,7 @@ export const TREE_DOC_OP_KINDS = [
   'setRunProperties',
   'setParagraphProperties',
   'setSectionProperties',
+  'setSectionMark',
 ] as const satisfies readonly TreeDocOpKind[];
 
 // Compile-time exhaustiveness, matching the legacy `DOC_OP_KINDS` guard: a new op must be
@@ -324,6 +342,68 @@ export function currentSectionMetrics(part: OoxmlPart): SectionMetrics {
   return metricsOfSection(bodySectionOf(part));
 }
 
+type SectionWriteOp = Extract<TreeDocOp, { op: 'setSectionProperties' }>;
+
+/**
+ * The dimensions ONE section ends up with under this op — the single source both
+ * validation and application read, so a value the check approved is exactly the value
+ * written. An orientation change WITHOUT explicit dimensions swaps the section's own
+ * current dimensions, so distinct paper sizes survive a whole-document orientation flip.
+ */
+export function plannedSectionDimensions(
+  metrics: SectionMetrics,
+  op: SectionWriteOp
+): { readonly widthTwips: number; readonly heightTwips: number } {
+  let width = op.pageWidthTwips ?? metrics.widthTwips;
+  let height = op.pageHeightTwips ?? metrics.heightTwips;
+  if (
+    op.orientation !== undefined &&
+    op.pageWidthTwips === undefined &&
+    op.pageHeightTwips === undefined
+  ) {
+    const long = Math.max(metrics.widthTwips, metrics.heightTwips);
+    const short = Math.min(metrics.widthTwips, metrics.heightTwips);
+    width = op.orientation === 'landscape' ? long : short;
+    height = op.orientation === 'landscape' ? short : long;
+  }
+  return { widthTwips: width, heightTwips: height };
+}
+
+/**
+ * The sections this op writes: the one governing the anchor paragraph, or all of them.
+ * `null` entries mean "the body-level section, which must be minted".
+ */
+export function targetSectionNodes(
+  part: OoxmlPart,
+  anchorParagraphId: string | undefined
+): readonly (OoxmlNode | null)[] {
+  if (anchorParagraphId === undefined) {
+    const all = allSectionNodes(part);
+    // A body-level section governs the tail even when the document never wrote one; a
+    // whole-document write must reach that implicit section too, so it is minted.
+    return bodySectionOf(part) ? all : [...all, null];
+  }
+  // The governing section of a paragraph: the first paragraph AT or AFTER it (in
+  // document order) carrying a `w:pPr/w:sectPr`, else the body-level section.
+  let seenAnchor = false;
+  let governing: OoxmlNode | null | undefined;
+  const walk = (node: OoxmlNode): void => {
+    if (governing !== undefined || node.kind === 'textValue') return;
+    if (node.kind === 'paragraph') {
+      if (node.id === anchorParagraphId) seenAnchor = true;
+      if (seenAnchor) {
+        const pPr = node.children.find((child) => child.kind === 'paragraphProperties');
+        const sectPr = pPr ? sectionChild(pPr, 'sectPr') : null;
+        if (sectPr) governing = sectPr;
+      }
+      return;
+    }
+    for (const child of node.children ?? []) walk(child);
+  };
+  walk(part.root);
+  return [governing ?? bodySectionOf(part)];
+}
+
 /** The effective metrics of ONE section node (null reads as Word's defaults). */
 export function metricsOfSection(sectPr: OoxmlNode | null): SectionMetrics {
   const pgSz = sectionChild(sectPr, 'pgSz');
@@ -440,20 +520,27 @@ export function validateTreeOp(part: OoxmlPart, op: TreeDocOp): TreeOpRejection 
     ) {
       return 'invalid-property-value';
     }
+    if (op.anchorParagraphId !== undefined) {
+      const anchor = findNode(part, op.anchorParagraphId);
+      if (!anchor) return 'unknown-paragraph';
+      if (!isParagraph(anchor)) return 'not-a-paragraph';
+    }
     if (!bodyNodeOf(part)) return 'tree-invariant';
-    // The merged result must keep a positive content area. The read side falls back to
-    // default geometry when margins swallow the page; a WRITE that would trip that
-    // fallback is refused instead, so the user sees a rejection rather than a document
-    // that silently snaps to Letter.
-    const current = currentSectionMetrics(part);
-    const width = op.pageWidthTwips ?? current.widthTwips;
-    const height = op.pageHeightTwips ?? current.heightTwips;
-    const top = op.marginTopTwips ?? current.topTwips;
-    const right = op.marginRightTwips ?? current.rightTwips;
-    const bottom = op.marginBottomTwips ?? current.bottomTwips;
-    const left = op.marginLeftTwips ?? current.leftTwips;
-    if (width - left - current.gutterTwips - right <= 0 || height - top - bottom <= 0) {
-      return 'invalid-property-value';
+    // EVERY section the op will write must keep a positive content area — checked against
+    // the same planned values apply writes, so a value the check approved is exactly the
+    // value written. The read side falls back to default geometry when margins swallow
+    // the page; a WRITE that would trip that fallback is refused instead, so the user
+    // sees a rejection rather than a document that silently snaps to Letter.
+    for (const section of targetSectionNodes(part, op.anchorParagraphId)) {
+      const current = metricsOfSection(section);
+      const { widthTwips, heightTwips } = plannedSectionDimensions(current, op);
+      const top = op.marginTopTwips ?? current.topTwips;
+      const right = op.marginRightTwips ?? current.rightTwips;
+      const bottom = op.marginBottomTwips ?? current.bottomTwips;
+      const left = op.marginLeftTwips ?? current.leftTwips;
+      if (widthTwips - left - current.gutterTwips - right <= 0 || heightTwips - top - bottom <= 0) {
+        return 'invalid-property-value';
+      }
     }
     return null;
   }
@@ -528,6 +615,12 @@ export function validateTreeOp(part: OoxmlPart, op: TreeDocOp): TreeOpRejection 
     }
     case 'setParagraphProperties':
       return validateProperties(op.properties, PARAGRAPH_PROPERTY_SET);
+    case 'setSectionMark': {
+      const pPr = paragraph.children.find((child) => child.kind === 'paragraphProperties');
+      // A paragraph already ending a section cannot end two.
+      if (pPr && sectionChild(pPr, 'sectPr')) return 'invalid-property-value';
+      return null;
+    }
     default:
       return 'unknown-op';
   }

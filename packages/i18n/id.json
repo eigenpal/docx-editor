@@ -434,7 +434,10 @@
         "a5": "A5 (14,8 × 21 cm)",
         "b5": "B5 (17,6 × 25 cm)",
         "executive": "Executive (18,42 × 26,67 cm)"
-      }
+      },
+      "applyTo": null,
+      "applyToDocument": null,
+      "applyToSection": null
     },
     "tableProperties": {
       "title": "Properti Tabel",

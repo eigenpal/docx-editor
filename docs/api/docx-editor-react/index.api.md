@@ -20,7 +20,6 @@ import { DocxDocument } from '@docx-editor.dev/core-contract/contracts/types';
 import { DocxEditorInstance } from '@docx-editor.dev/core-contract/editor';
 import { Editor } from '@docx-editor.dev/core-contract/contracts/editor';
 import { EditorCommand } from '@docx-editor.dev/core-contract/contracts/editor';
-import { EditorCommands } from '@docx-editor.dev/core-contract/contracts/editor';
 import { EditorEvents } from '@docx-editor.dev/core-contract/contracts/editor';
 import { EditorFontError } from '@docx-editor.dev/core-contract/contracts/editor';
 import { EditorFontErrorCode } from '@docx-editor.dev/core-contract/contracts/editor';
@@ -496,8 +495,27 @@ export function PageIndicator(input: {
     visible: boolean;
 }): React$1.JSX.Element;
 
+export { PageSetup }
+
 // @public
-export type PageSetupUpdate = EditorCommands['setPageSetup'];
+export interface PageSetupUpdate {
+    // (undocumented)
+    readonly marginBottomTwips?: number;
+    // (undocumented)
+    readonly marginLeftTwips?: number;
+    // (undocumented)
+    readonly marginRightTwips?: number;
+    // (undocumented)
+    readonly marginTopTwips?: number;
+    // (undocumented)
+    readonly orientation?: 'portrait' | 'landscape';
+    // (undocumented)
+    readonly pageHeightTwips?: number;
+    // (undocumented)
+    readonly pageWidthTwips?: number;
+    // (undocumented)
+    readonly scope?: 'document' | 'section';
+}
 
 // @public (undocumented)
 export function PaginatedDocxEditor(input: PaginatedDocxEditorProps): React$1.JSX.Element;

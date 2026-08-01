@@ -192,11 +192,18 @@ function InsertMenu() {
   // The chrome spec's menu row is File · Format · Insert · Help. Image and table
   // insertion are UNWIRED engine slots (`image.insert` / `table.insert`), so the items
   // bind through `useEditorCommand` and render disabled with the engine's own reason —
-  // present but disabled, never faked.
+  // present but disabled, never faked. The section break is a live engine command.
+  const editor = useDocxEditor();
   return (
     <DemoMenu label="Insert">
       <CommandMenuItem slot="image.insert">Image</CommandMenuItem>
       <CommandMenuItem slot="table.insert">Table</CommandMenuItem>
+      <MenuItem
+        onSelect={() => editor?.exec({ type: 'insertBreak', kind: 'section' })}
+        disabled={!editor}
+      >
+        Section break (next page)
+      </MenuItem>
     </DemoMenu>
   );
 }

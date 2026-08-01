@@ -75,13 +75,28 @@ portrait.
    toggle; the slot registry stays untouched. Vue twin is deferred, matching
    the adapter-parity lane.
 
+## Per-section lane (added in the same PR)
+
+Initially deferred, then pulled in: `readDocumentSections` maps every section
+to the blocks it governs; `layoutSemanticDocument` takes a `sections` input
+and paginates each against its own geometry (next-page boundaries start a new
+sheet; `continuous` with an unchanged geometry shares one; sheets of mixed
+sizes stack cumulatively and centre against the widest). Reads
+(`getPageSetup`, `snapshot().pageSetup`, rulers) follow the CARET's section.
+Writes take Word's "Apply to": `scope: 'section'` anchors the op to the
+selection's governing section; ruler drags are always this-section. An
+orientation change without explicit dimensions swaps each written section's
+own dimensions. `insertBreak` kind `section` splits at the caret and mints a
+`w:pPr/w:sectPr` cloning the governing setup. The apply is ONE
+structural-sharing tree rebuild regardless of section count (a per-section
+rebuild was quadratic in a file-controlled number), and validation checks the
+planned result per targeted section.
+
 ## Out of scope
 
-Per-section LAYOUT (rendering a document's own mixed orientations — the demo
-doc's landscape section renders portrait today because layout paginates the
-whole flow against the body-level section; that is the deferred per-section
-lane), per-section-targeted editing ("Apply to: this section"), paper-size
-`w:code` maintenance
+Even/odd-page break parity (those break like nextPage), per-section columns
+and header/footer re-breaking at section width (furniture is positioned per
+page but broken at the body width), paper-size `w:code` maintenance
 beyond dropping it when dimensions change, header/footer distance UI, gutter
 UI, indent drag on rulers (needs the stored-selection indent lane).
 

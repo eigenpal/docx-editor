@@ -3,20 +3,31 @@
 // dialog and any consumer chrome, so they can never disagree about the section.
 
 import { useCallback, useMemo } from 'react';
-import type {
-  EditorCommands,
-  EditorSnapshot,
-  PageSetup,
-} from '@docx-editor.dev/core-contract/contracts/editor';
+import type { EditorSnapshot, PageSetup } from '@docx-editor.dev/core-contract/contracts/editor';
 import { useDocxEditor } from './context';
 import { useEditorState } from './useEditorState';
 
-/** The fields `apply` accepts — the engine's `setPageSetup` payload, twips throughout. @public */
-export type PageSetupUpdate = EditorCommands['setPageSetup'];
+/**
+ * The fields `apply` accepts — twips throughout, like every read shape. Omitted fields
+ * are left as authored. `scope` is Word's "Apply to": `'document'` (the default) writes
+ * every section, `'section'` only the one the selection is in.
+ *
+ * @public
+ */
+export interface PageSetupUpdate {
+  readonly pageWidthTwips?: number;
+  readonly pageHeightTwips?: number;
+  readonly orientation?: 'portrait' | 'landscape';
+  readonly marginTopTwips?: number;
+  readonly marginRightTwips?: number;
+  readonly marginBottomTwips?: number;
+  readonly marginLeftTwips?: number;
+  readonly scope?: 'document' | 'section';
+}
 
 /** What `usePageSetup` returns. @public */
 export interface UsePageSetupReturn {
-  /** The section's page setup, or null while nothing is loaded. Reference-stable. */
+  /** The CARET section's page setup, or null while nothing is loaded. Reference-stable. */
   readonly pageSetup: PageSetup | null;
   /** Whether the engine can write page setup right now (mounted, editable). */
   readonly isEnabled: boolean;
@@ -31,7 +42,8 @@ const selectEditable = (snapshot: EditorSnapshot): boolean => snapshot.editable;
  * The section's page setup — size, orientation, margins — plus the command to change it.
  *
  * Reads `snapshot().pageSetup`, which is reference-stable across ticks that did not move
- * the section, so a subscriber re-renders only when the page actually changes shape.
+ * the section, so a subscriber re-renders only when the page actually changes shape. In
+ * a multi-section document it reflects the CARET's section, as Word's ruler does.
  *
  * @public
  */
@@ -50,7 +62,21 @@ export function usePageSetup(): UsePageSetupReturn {
   const apply = useCallback(
     (update: PageSetupUpdate): boolean => {
       if (!editor) return false;
-      const result = editor.exec({ type: 'setPageSetup', ...update });
+      // The literal `type` comes LAST so no runtime caller can override it through the
+      // update object.
+      const result = editor.exec({
+        ...(update.pageWidthTwips !== undefined ? { pageWidth: update.pageWidthTwips } : {}),
+        ...(update.pageHeightTwips !== undefined ? { pageHeight: update.pageHeightTwips } : {}),
+        ...(update.orientation !== undefined ? { orientation: update.orientation } : {}),
+        ...(update.marginTopTwips !== undefined ? { marginTop: update.marginTopTwips } : {}),
+        ...(update.marginRightTwips !== undefined ? { marginRight: update.marginRightTwips } : {}),
+        ...(update.marginBottomTwips !== undefined
+          ? { marginBottom: update.marginBottomTwips }
+          : {}),
+        ...(update.marginLeftTwips !== undefined ? { marginLeft: update.marginLeftTwips } : {}),
+        ...(update.scope !== undefined ? { scope: update.scope } : {}),
+        type: 'setPageSetup',
+      });
       return result.ok;
     },
     [editor]

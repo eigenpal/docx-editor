@@ -52,6 +52,7 @@ export type {
   EditorQuery,
   EditorSnapshot,
   EditorScope,
+  PageSetup,
 } from '@docx-editor.dev/core-contract/contracts/editor';
 export type {
   DisplayPage,

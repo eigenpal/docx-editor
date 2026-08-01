@@ -132,6 +132,66 @@ describe('DocxEditor.PageSetupDialog', () => {
     });
   });
 
+  test('a refused apply keeps the dialog OPEN instead of claiming success', async () => {
+    let closed = false;
+    const { view, editor } = mountDialog(() => {
+      closed = true;
+    });
+    const before = editor().getDocumentHandle().revision;
+    await act(async () => {
+      // Each margin is individually legal; together they swallow a Letter page.
+      fireEvent.change(view.getByLabelText('Left'), { target: { value: '8' } });
+      fireEvent.change(view.getByLabelText('Right'), { target: { value: '8' } });
+    });
+    await act(async () => {
+      fireEvent.click(view.getByText('Apply'));
+    });
+    expect(closed).toBe(false);
+    expect(editor().getDocumentHandle().revision).toBe(before);
+  });
+
+  test('Apply to: this section writes only the caret section', async () => {
+    const midBody = docx(
+      '<w:p><w:pPr><w:sectPr><w:pgSz w:w="12240" w:h="15840"/></w:sectPr></w:pPr>' +
+        '<w:r><w:t>first section</w:t></w:r></w:p>' +
+        '<w:p><w:r><w:t>second section</w:t></w:r></w:p>' +
+        '<w:sectPr><w:pgSz w:w="12240" w:h="15840"/></w:sectPr>'
+    );
+    let instance: DocxEditorInstance | null = null;
+    const view = render(
+      <DocxEditorRoot
+        document={midBody}
+        onReady={(editor) => {
+          instance = editor as DocxEditorInstance;
+        }}
+      >
+        <DocxEditorPageSetupDialog open onClose={() => {}} />
+        <DocxEditorViewport>
+          <DocxEditorContent />
+        </DocxEditorViewport>
+      </DocxEditorRoot>
+    );
+    const editor = () => instance! as DocxEditorInstance;
+    // Caret sits in the FIRST section (the default selection starts at the top).
+    await act(async () => {
+      fireEvent.change(view.getByLabelText('Apply to'), { target: { value: 'section' } });
+      fireEvent.change(view.getByLabelText('Orientation'), { target: { value: 'landscape' } });
+    });
+    await act(async () => {
+      fireEvent.click(view.getByText('Apply'));
+    });
+    // The caret's section is landscape; the tail section stayed portrait.
+    expect(editor().getPageSetup()).toMatchObject({ orientation: 'landscape' });
+    const second = editor().surface!.session.paragraphIds()[1]!;
+    await act(async () => {
+      editor().surface!.setSelection({
+        anchor: { paragraphId: second, offset: 0 },
+        head: { paragraphId: second, offset: 0 },
+      });
+    });
+    expect(editor().getPageSetup()).toMatchObject({ orientation: 'portrait' });
+  });
+
   test('Cancel writes nothing', async () => {
     let closed = false;
     const { view, editor } = mountDialog(() => {

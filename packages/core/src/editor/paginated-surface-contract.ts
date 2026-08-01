@@ -133,9 +133,17 @@ export interface PaginatedSurface {
    */
   sectionProperties(): SectionProperties;
   /**
-   * Write body-level section fields — page size, orientation, margins — as ONE undoable
-   * transaction. Twips throughout; omitted fields are left as authored. Returns whether
-   * the write committed (a hostile value is refused by the op layer).
+   * The section GOVERNING one paragraph — what a ruler or dialog reflects when the
+   * caret sits in a multi-section document. Falls back to the body-level section for
+   * an unknown id.
+   */
+  sectionPropertiesAt(paragraphId: string): SectionProperties;
+  /**
+   * Write section page-setup fields — size, orientation, margins — as ONE undoable
+   * transaction. Twips throughout; omitted fields are left as authored. With
+   * `anchorParagraphId` only that paragraph's governing section is written (Word's
+   * "Apply to: This section"); without it, every section. Returns whether the write
+   * committed (a hostile value is refused by the op layer).
    */
   setSectionProperties(update: {
     readonly pageWidthTwips?: number;
@@ -145,7 +153,14 @@ export interface PaginatedSurface {
     readonly marginRightTwips?: number;
     readonly marginBottomTwips?: number;
     readonly marginLeftTwips?: number;
+    readonly anchorParagraphId?: string;
   }): boolean;
+  /**
+   * Insert a next-page section break at the caret: the paragraph splits, and the head
+   * ends a new section cloning the governing section's page setup — Word's Layout >
+   * Breaks > Next Page. One undoable step. Returns whether the break committed.
+   */
+  insertSectionBreak(): boolean;
   /** The layout session, so a host or a test can see how much work a pass actually did. */
   layoutSession(): {
     readonly stats: {

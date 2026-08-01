@@ -563,7 +563,10 @@ export interface EditorCommands extends EditorCommandShape<DocEdits> {
    * Section-level page setup: the fields Word's Page Setup dialog and the rulers'
    * margin drags change. Twips throughout, matching OOXML. Every field is optional —
    * a margin drag sends one, the dialog sends several — and an omitted field is left
-   * as it is rather than reset.
+   * as it is rather than reset. `scope` is Word's "Apply to": `'document'` (the
+   * default) writes every section; `'section'` writes only the section the selection
+   * is in. An orientation change without explicit dimensions swaps each written
+   * section's own dimensions, preserving distinct paper sizes.
    */
   setPageSetup: {
     pageWidth?: number;
@@ -573,6 +576,7 @@ export interface EditorCommands extends EditorCommandShape<DocEdits> {
     marginBottom?: number;
     marginLeft?: number;
     orientation?: 'portrait' | 'landscape';
+    scope?: 'document' | 'section';
   };
 
   /** Remove the tab stop at this position (twips) from the current paragraph. */
@@ -751,13 +755,10 @@ export interface HyperlinkInfo {
 }
 
 /**
- * A read model of the current editor state, safe to hand to framework
- * rendering. Named `EditorSnapshot` rather than `EditorState` so it never
- * collides with an editing engine's own state type.
- */
-/**
  * Section page setup — size, orientation and margins, in twips — as `getPageSetup()`
- * and `snapshot().pageSetup` report it and the `setPageSetup` command writes it.
+ * and `snapshot().pageSetup` report it and the `setPageSetup` command writes it. In a
+ * multi-section document this is the setup of the section the SELECTION is in, which
+ * is what a ruler or a dialog reflects — Word's behaviour.
  */
 export interface PageSetup {
   readonly pageWidthTwips: number;
@@ -769,8 +770,15 @@ export interface PageSetup {
     readonly bottom: number;
     readonly left: number;
   };
+  /** Binding gutter (`w:gutter`), folded into the left margin by layout. */
+  readonly gutterTwips?: number;
 }
 
+/**
+ * A read model of the current editor state, safe to hand to framework
+ * rendering. Named `EditorSnapshot` rather than `EditorState` so it never
+ * collides with an editing engine's own state type.
+ */
 export interface EditorSnapshot {
   readonly scope: EditorScope;
   readonly isLoading: boolean;

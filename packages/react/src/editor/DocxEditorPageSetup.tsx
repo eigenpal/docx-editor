@@ -5,7 +5,7 @@
 // `setPageSetup` command on Apply, so the whole dialog is a single undo step. The host
 // owns visibility (`open`/`onClose`); the engine owns everything else.
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import type { CSSProperties, ReactElement } from 'react';
 import { useTranslation } from '../i18n';
 import { usePageSetup } from './usePageSetup';
@@ -159,11 +159,20 @@ export function DocxEditorPageSetupDialog({
   const [marginBottom, setMarginBottom] = useState(DEFAULT_MARGIN);
   const [marginLeft, setMarginLeft] = useState(DEFAULT_MARGIN);
   const [marginRight, setMarginRight] = useState(DEFAULT_MARGIN);
+  const [scope, setScope] = useState<'document' | 'section'>('document');
+  const panelRef = useRef<HTMLDivElement | null>(null);
 
-  // Re-seed the form from the document each time the dialog OPENS — not on every
-  // section tick, or a concurrent edit would fight the user's typing.
+  // Seed the form from the document when the dialog OPENS — not on every section tick,
+  // or a concurrent edit would fight the user's typing. `'loading'` covers a dialog
+  // mounted open before the document finishes loading: the first non-null section
+  // re-seeds once, so Apply can never stamp placeholder defaults over a real document.
+  const seeded = useRef<'no' | 'loading' | 'yes'>('no');
   useEffect(() => {
-    if (!open) return;
+    if (!open) {
+      seeded.current = 'no';
+      return;
+    }
+    if (seeded.current === 'yes' || (seeded.current === 'loading' && pageSetup === null)) return;
     setPageWidth(pageSetup?.pageWidthTwips ?? DEFAULT_WIDTH);
     setPageHeight(pageSetup?.pageHeightTwips ?? DEFAULT_HEIGHT);
     setOrientation(pageSetup?.orientation ?? 'portrait');
@@ -171,7 +180,13 @@ export function DocxEditorPageSetupDialog({
     setMarginBottom(pageSetup?.marginsTwips.bottom ?? DEFAULT_MARGIN);
     setMarginLeft(pageSetup?.marginsTwips.left ?? DEFAULT_MARGIN);
     setMarginRight(pageSetup?.marginsTwips.right ?? DEFAULT_MARGIN);
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- seed on open only
+    setScope('document');
+    seeded.current = pageSetup === null ? 'loading' : 'yes';
+  }, [open, pageSetup]);
+
+  // Focus the panel on open so Escape works before any field is clicked.
+  useEffect(() => {
+    if (open) panelRef.current?.focus();
   }, [open]);
 
   const handlePageSizeChange = useCallback(
@@ -196,14 +211,17 @@ export function DocxEditorPageSetupDialog({
   );
 
   const handleApply = useCallback(() => {
+    // A refused write (margins that swallow the page) keeps the dialog OPEN: `apply`
+    // is honest about op-layer rejections, so closing here would claim success.
     const accepted = apply({
-      pageWidth,
-      pageHeight,
+      pageWidthTwips: pageWidth,
+      pageHeightTwips: pageHeight,
       orientation,
-      marginTop,
-      marginRight,
-      marginBottom,
-      marginLeft,
+      marginTopTwips: marginTop,
+      marginRightTwips: marginRight,
+      marginBottomTwips: marginBottom,
+      marginLeftTwips: marginLeft,
+      scope,
     });
     if (accepted) onClose();
   }, [
@@ -215,6 +233,7 @@ export function DocxEditorPageSetupDialog({
     marginRight,
     marginBottom,
     marginLeft,
+    scope,
     onClose,
   ]);
 
@@ -254,6 +273,8 @@ export function DocxEditorPageSetupDialog({
       }}
     >
       <div
+        ref={panelRef}
+        tabIndex={-1}
         style={dialogStyle}
         onClick={(event) => event.stopPropagation()}
         // A mousedown that reaches the painted pages moves the caret; the inputs still
@@ -305,6 +326,19 @@ export function DocxEditorPageSetupDialog({
           {marginRow('bottom', marginBottom, setMarginBottom)}
           {marginRow('left', marginLeft, setMarginLeft)}
           {marginRow('right', marginRight, setMarginRight)}
+
+          <div style={rowStyle}>
+            <label style={labelStyle}>{t('dialogs.pageSetup.applyTo')}</label>
+            <select
+              style={inputStyle}
+              value={scope}
+              onChange={(event) => setScope(event.target.value as 'document' | 'section')}
+              aria-label={t('dialogs.pageSetup.applyTo')}
+            >
+              <option value="document">{t('dialogs.pageSetup.applyToDocument')}</option>
+              <option value="section">{t('dialogs.pageSetup.applyToSection')}</option>
+            </select>
+          </div>
         </div>
 
         <div style={footerStyle}>

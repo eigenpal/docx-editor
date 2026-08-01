@@ -59,8 +59,24 @@ export interface PageFurniture {
   readonly footers: ReadonlyMap<HeaderFooterVariantName, HeaderFooterStoryLayout>;
 }
 
+/** One section's slice of the flow, as pagination consumes it. */
+export interface LayoutSectionInput {
+  readonly geometry: PageGeometry;
+  /** Index into the story's blocks of the first block this section governs. */
+  readonly firstBlock: number;
+  /** How the section begins. `continuous` with an unchanged geometry shares the page. */
+  readonly breakType?: 'nextPage' | 'continuous' | 'evenPage' | 'oddPage' | 'nextColumn';
+}
+
 export interface SemanticLayoutOptions {
   readonly geometry?: PageGeometry;
+  /**
+   * Per-section page geometry (the per-section lane). Sections partition the story's
+   * blocks by `firstBlock`; each paginates against its own geometry, and a non-continuous
+   * boundary starts a new page — one landscape section among portrait ones lays out as
+   * Word shows it. Absent or single-entry means the whole story flows in `geometry`.
+   */
+  readonly sections?: readonly LayoutSectionInput[];
   readonly measurer: TextMeasurer;
   /**
    * Reuse of measured-and-broken paragraphs across revisions (task 9.2).
@@ -193,6 +209,20 @@ function fragmentSignature(fragment: BlockFragmentRecord): string {
   return signature;
 }
 
+/** Whether two sections could share a sheet: identical page box and margins. */
+function sameGeometry(a: PageGeometry, b: PageGeometry): boolean {
+  return (
+    a.width === b.width &&
+    a.height === b.height &&
+    a.margin.top === b.margin.top &&
+    a.margin.right === b.margin.right &&
+    a.margin.bottom === b.margin.bottom &&
+    a.margin.left === b.margin.left &&
+    (a.headerDistance ?? 36) === (b.headerDistance ?? 36) &&
+    (a.footerDistance ?? 36) === (b.footerDistance ?? 36)
+  );
+}
+
 /** Whether a paragraph must start a new page (`w:pageBreakBefore`). */
 function breaksBefore(props: readonly OoxmlProperty[]): boolean {
   return props.some(
@@ -239,50 +269,81 @@ export function layoutSemanticDocument(
   revision: number,
   options: SemanticLayoutOptions
 ): SemanticLayout {
-  const geometry = options.geometry ?? DEFAULT_PAGE_GEOMETRY;
   const measurer = options.measurer;
   const cache = options.cache;
   // Defaults to a constant deliberately NAMED for the risk: fonts resolve asynchronously, so
   // a caller that swaps the measurer without changing this is served the pre-font layout for
   // the rest of the session.
   const producer = options.producer ?? 'unversioned-measurer';
-
-  const contentWidth = geometry.width - geometry.margin.left - geometry.margin.right;
-
-  // PAGE FURNITURE. A header taller than the top-margin remainder pushes the content area
-  // down (Word's behaviour), computed as the worst case over the variants in use so the
-  // content column is one height for every page. Capped at 40% of the sheet per edge: a
-  // hostile header of five hundred paragraphs must not shrink the content area to nothing,
-  // because pagination into a zero-height column never terminates.
   const furniture = options.furniture;
-  const headerDistance = geometry.headerDistance ?? 36;
-  const footerDistance = geometry.footerDistance ?? 36;
+
+  // SECTIONS. The flow is partitioned into sections, each paginating against its own
+  // geometry. The single-geometry call is the degenerate one-section case, so there is
+  // exactly one pagination path.
+  const sections: readonly LayoutSectionInput[] =
+    options.sections && options.sections.length > 0
+      ? options.sections
+      : [{ geometry: options.geometry ?? DEFAULT_PAGE_GEOMETRY, firstBlock: 0 }];
+
+  // PAGE FURNITURE push-down, derived per section geometry. A header taller than the
+  // top-margin remainder pushes the content area down (Word's behaviour), computed as the
+  // worst case over the variants in use so the content column is one height for every page
+  // of the section. Capped at 40% of the sheet per edge: a hostile header of five hundred
+  // paragraphs must not shrink the content area to nothing, because pagination into a
+  // zero-height column never terminates.
   const maxFlow = (stories: ReadonlyMap<string, HeaderFooterStoryLayout> | undefined): number => {
     let max = 0;
     for (const story of stories?.values() ?? []) max = Math.max(max, story.flowHeight);
     return max;
   };
-  const furnitureCap = geometry.height * 0.4;
-  const effectiveTop = Math.min(
-    furnitureCap,
-    Math.max(geometry.margin.top, furniture ? headerDistance + maxFlow(furniture.headers) : 0)
-  );
-  const effectiveBottom = Math.min(
-    furnitureCap,
-    Math.max(geometry.margin.bottom, furniture ? footerDistance + maxFlow(furniture.footers) : 0)
-  );
-  const contentHeight = geometry.height - effectiveTop - effectiveBottom;
+  interface SectionMetrics {
+    readonly geometry: PageGeometry;
+    readonly contentWidth: number;
+    readonly contentHeight: number;
+    readonly effectiveTop: number;
+    readonly headerDistance: number;
+    readonly footerDistance: number;
+  }
+  const metricsOf = (geometry: PageGeometry): SectionMetrics => {
+    const headerDistance = geometry.headerDistance ?? 36;
+    const footerDistance = geometry.footerDistance ?? 36;
+    const furnitureCap = geometry.height * 0.4;
+    const effectiveTop = Math.min(
+      furnitureCap,
+      Math.max(geometry.margin.top, furniture ? headerDistance + maxFlow(furniture.headers) : 0)
+    );
+    const effectiveBottom = Math.min(
+      furnitureCap,
+      Math.max(geometry.margin.bottom, furniture ? footerDistance + maxFlow(furniture.footers) : 0)
+    );
+    return {
+      geometry,
+      contentWidth: geometry.width - geometry.margin.left - geometry.margin.right,
+      contentHeight: geometry.height - effectiveTop - effectiveBottom,
+      effectiveTop,
+      headerDistance,
+      footerDistance,
+    };
+  };
+  const sectionMetrics = sections.map((section) => metricsOf(section.geometry));
 
   const session = options.session;
   const furnitureContext = furniture
-    ? `|hf:${headerDistance},${footerDistance},${furniture.titlePage ? 1 : 0}${furniture.evenAndOddHeaders ? 1 : 0};` +
+    ? `|hf:${furniture.titlePage ? 1 : 0}${furniture.evenAndOddHeaders ? 1 : 0};` +
       [...furniture.headers]
         .map(([variant, story]) => `h${variant}=${story.flowHeight}`)
         .join(',') +
       ';' +
       [...furniture.footers].map(([variant, story]) => `f${variant}=${story.flowHeight}`).join(',')
     : '';
-  const context = `${producer}|${geometry.width}x${geometry.height}|${geometry.margin.top},${geometry.margin.right},${geometry.margin.bottom},${geometry.margin.left}${furnitureContext}`;
+  // EVERY section participates: a change to any section's geometry or extent moves breaks,
+  // so it must invalidate checkpoints exactly as the single geometry did.
+  const sectionsContext = sections
+    .map(({ geometry: g, firstBlock, breakType }) => {
+      return `${firstBlock}${breakType ?? 'nextPage'}@${g.width}x${g.height}|${g.margin.top},${g.margin.right},${g.margin.bottom},${g.margin.left}|${g.headerDistance ?? 36},${g.footerDistance ?? 36}`;
+    })
+    .join(';');
+  const context = `${producer}|${sectionsContext}${furnitureContext}`;
 
   // Prepass: everything needed to KEY a paragraph, before any of them is placed. Resuming
   // means knowing where the first change is, and that cannot be discovered while walking.
@@ -293,7 +354,27 @@ export function layoutSemanticDocument(
   // for every paragraph on every pass made the prepass, not placement, the cost of an
   // incremental layout: a one-character edit re-keyed the entire document.
   const bodies = storyBlocks(part);
-  const prepared = bodies.map((block): PreparedBlock => {
+
+  // Which section governs each block. Sections partition the block list by `firstBlock`;
+  // blocks before the first section's start (malformed input) flow in the first section.
+  const sectionOfBlock = new Array<number>(bodies.length);
+  {
+    let sectionIndex = 0;
+    for (let index = 0; index < bodies.length; index += 1) {
+      while (
+        sectionIndex + 1 < sections.length &&
+        sections[sectionIndex + 1]!.firstBlock <= index
+      ) {
+        sectionIndex += 1;
+      }
+      sectionOfBlock[index] = sectionIndex;
+    }
+  }
+
+  const prepared = bodies.map((block, blockIndex): PreparedBlock => {
+    // A block is broken at ITS section's width — that is what makes a landscape section's
+    // lines longer than its portrait neighbours'.
+    const contentWidth = sectionMetrics[sectionOfBlock[blockIndex]!]!.contentWidth;
     const memo = preparedBlocks.get(block);
     if (memo && memo.contentWidth === contentWidth && memo.producer === producer) {
       return memo.entry;
@@ -394,6 +475,14 @@ export function layoutSemanticDocument(
   let placed = 0;
   let reusedPages = 0;
 
+  // The section whose geometry the page being built uses. The boundary switch happens as
+  // part of PLACING a section's first block, after that block's checkpoint — so a resumed
+  // pass re-derives the same switch from the same block index.
+  let activeSectionIndex = 0;
+  let active = sectionMetrics[0]!;
+  /** Where the NEXT page's sheet begins. Cumulative, because sheets vary in height. */
+  let pageTop = 0;
+
   // RESUME. The checkpoint before the first changed paragraph describes a flow the new
   // document still agrees with, so the pages completed by then are carried over by
   // REFERENCE — unchanged pages keep their identity, which is what lets a consumer skip
@@ -407,14 +496,13 @@ export function layoutSemanticDocument(
     startIndex = firstChanged;
     reusedPages = pages.length;
     checkpoints.push(...session.checkpoints.slice(0, firstChanged));
+    const lastCarried = pages[pages.length - 1];
+    pageTop = lastCarried ? lastCarried.box.y + lastCarried.box.height + 24 : 0;
+    // The page being built belongs to the section of the block placed BEFORE the resume
+    // point; the loop re-runs the boundary switch if the resumed block starts a section.
+    activeSectionIndex = sectionOfBlock[startIndex - 1] ?? 0;
+    active = sectionMetrics[activeSectionIndex]!;
   }
-
-  const pageBox = (index: number): LayoutBox => ({
-    x: 0,
-    y: index * (geometry.height + 24), // 24pt gutter between sheets, for the scroll surface
-    width: geometry.width,
-    height: geometry.height,
-  });
 
   /** The variant page `index` shows: title page first, then even/odd when declared. */
   const variantFor = (index: number): HeaderFooterVariantName =>
@@ -436,20 +524,41 @@ export function layoutSemanticDocument(
     if (!story) return undefined;
     const y =
       kind === 'header'
-        ? box.y + headerDistance
-        : box.y + geometry.height - footerDistance - story.flowHeight;
+        ? box.y + active.headerDistance
+        : box.y + active.geometry.height - active.footerDistance - story.flowHeight;
+    // The story's lines were BROKEN at the body section's width (furniture is laid out
+    // once per variant); on a page of another section it is positioned in that page's
+    // margins. Re-breaking furniture per section is a follow-up refinement.
     return {
       kind,
       variant,
       partName: story.partName,
-      box: { x: box.x + geometry.margin.left, y, width: contentWidth, height: story.flowHeight },
+      box: {
+        x: box.x + active.geometry.margin.left,
+        y,
+        width: active.contentWidth,
+        height: story.flowHeight,
+      },
       fragments: story.fragments,
     };
   };
 
+  // Sheets of mixed widths centre against the widest, as Word lays a landscape page
+  // among portrait ones. Single-section documents keep x = 0 exactly as before.
+  const maxSheetWidth = Math.max(...sectionMetrics.map((metrics) => metrics.geometry.width));
+
   const flushPage = (): void => {
     const index = pages.length;
-    const box = pageBox(index);
+    const geometry = active.geometry;
+    // 24pt gutter between sheets, for the scroll surface. Cumulative, not index-derived:
+    // sheets no longer share one height.
+    const box: LayoutBox = {
+      x: (maxSheetWidth - geometry.width) / 2,
+      y: pageTop,
+      width: geometry.width,
+      height: geometry.height,
+    };
+    pageTop += geometry.height + 24;
     const header = furnitureFor('header', index, box);
     const footer = furnitureFor('footer', index, box);
     pages.push({
@@ -458,9 +567,9 @@ export function layoutSemanticDocument(
       box,
       contentBox: {
         x: box.x + geometry.margin.left,
-        y: box.y + effectiveTop,
-        width: contentWidth,
-        height: contentHeight,
+        y: box.y + active.effectiveTop,
+        width: active.contentWidth,
+        height: active.contentHeight,
       },
       fragments: pageFragments,
       ...(header ? { header } : {}),
@@ -484,7 +593,7 @@ export function layoutSemanticDocument(
    * leading `w:tblHeader` rows re-emit atop each continuation page before a body row.
    */
   const layoutTableInFlow = (table: OoxmlElement): void => {
-    const structure = readTableStructure(table, contentWidth, 0);
+    const structure = readTableStructure(table, active.contentWidth, 0);
     if (!structure || structure.rows.length === 0) return;
     const lineHeight = measurer.lineMetrics(DEFAULT_RUN_STYLE).height;
     const headerRows = [];
@@ -507,7 +616,7 @@ export function layoutSemanticDocument(
         box: {
           x: 0,
           y: fragmentTop,
-          width: contentWidth,
+          width: active.contentWidth,
           height: last.box.y + last.box.height - fragmentTop,
         },
       });
@@ -515,7 +624,7 @@ export function layoutSemanticDocument(
       rows = [];
     };
     for (const row of structure.rows) {
-      if (cursorY + lineHeight + 2 * CELL_PAD > contentHeight && cursorY > 0) {
+      if (cursorY + lineHeight + 2 * CELL_PAD > active.contentHeight && cursorY > 0) {
         closeTableFragment();
         flushPage();
         fragmentTop = 0;
@@ -596,6 +705,22 @@ export function layoutSemanticDocument(
       }
     }
 
+    // SECTION BOUNDARY. This block belongs to a later section: close the page the previous
+    // section was filling (unless it is still empty) and switch the flow onto the new
+    // section's geometry. `continuous` with an unchanged geometry shares the page —
+    // Word's column-change case; a changed geometry cannot share a sheet, so it breaks.
+    // Even/odd parity blanks are not modelled: those types break like `nextPage`.
+    const blockSection = sectionOfBlock[index] ?? sections.length - 1;
+    if (blockSection !== activeSectionIndex) {
+      const next = sectionMetrics[blockSection]!;
+      const sharesPage =
+        (sections[blockSection]!.breakType ?? 'nextPage') === 'continuous' &&
+        sameGeometry(active.geometry, next.geometry);
+      if (!sharesPage && pageFragments.length > 0) flushPage();
+      activeSectionIndex = blockSection;
+      active = next;
+    }
+
     placed += 1;
 
     if (entry.kind === 'table') {
@@ -650,7 +775,7 @@ export function layoutSemanticDocument(
 
     for (const [lineIndex, pendingLine] of lines.entries()) {
       if (
-        cursorY + pendingLine.height > contentHeight &&
+        cursorY + pendingLine.height > active.contentHeight &&
         (pending.length > 0 || pageFragments.length > 0)
       ) {
         flushFragment();

@@ -618,11 +618,13 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
 
   /**
    * THE page-setup derivation — `getPageSetup()` and `snapshot().pageSetup` both read
-   * this shape, so the dialog and the rulers can never disagree about the section.
+   * this shape, so the dialog and the rulers can never disagree about the section. In a
+   * multi-section document it is the CARET's section, which is what a ruler reflects
+   * when the caret crosses a section boundary — Word's behaviour.
    */
   function pageSetupOf(): PageSetup | null {
     if (!surface) return null;
-    const section = surface.sectionProperties();
+    const section = surface.sectionPropertiesAt(surface.state().selection.head.paragraphId);
     return {
       pageWidthTwips: section.pageSize.widthTwips,
       pageHeightTwips: section.pageSize.heightTwips,
@@ -633,6 +635,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
         bottom: section.margins.bottomTwips,
         left: section.margins.leftTwips,
       },
+      gutterTwips: section.margins.gutterTwips,
     };
   }
 
@@ -812,22 +815,24 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
           break;
         }
         case 'setPageSetup': {
-          // Orientation NORMALIZATION lives here, not in the op: Word stores landscape as
-          // swapped dimensions plus the attribute, so a command asking for landscape must
-          // end with width > height whether the caller sent dimensions or not. The op
-          // below records only literal values.
+          const anchor =
+            command.scope === 'section' ? mounted.state().selection.head.paragraphId : undefined;
+          // When orientation arrives WITH explicit dimensions, the dimensions are
+          // oriented here — Word stores landscape as swapped dimensions plus the
+          // attribute. Orientation ALONE stays alone: the op swaps each written
+          // section's own dimensions, so distinct paper sizes survive the flip.
           let width = command.pageWidth;
           let height = command.pageHeight;
-          if (command.orientation !== undefined) {
-            const section = mounted.sectionProperties();
-            const w = command.pageWidth ?? section.pageSize.widthTwips;
-            const h = command.pageHeight ?? section.pageSize.heightTwips;
-            const long = Math.max(w, h);
-            const short = Math.min(w, h);
-            width = command.orientation === 'landscape' ? long : short;
-            height = command.orientation === 'landscape' ? short : long;
+          if (command.orientation !== undefined && (width !== undefined || height !== undefined)) {
+            const section = anchor
+              ? mounted.sectionPropertiesAt(anchor)
+              : mounted.sectionProperties();
+            const w = width ?? section.pageSize.widthTwips;
+            const h = height ?? section.pageSize.heightTwips;
+            width = command.orientation === 'landscape' ? Math.max(w, h) : Math.min(w, h);
+            height = command.orientation === 'landscape' ? Math.min(w, h) : Math.max(w, h);
           }
-          mounted.setSectionProperties({
+          const committed = mounted.setSectionProperties({
             ...(width !== undefined ? { pageWidthTwips: width } : {}),
             ...(height !== undefined ? { pageHeightTwips: height } : {}),
             ...(command.orientation !== undefined ? { orientation: command.orientation } : {}),
@@ -837,10 +842,25 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
               ? { marginBottomTwips: command.marginBottom }
               : {}),
             ...(command.marginLeft !== undefined ? { marginLeftTwips: command.marginLeft } : {}),
+            ...(anchor !== undefined ? { anchorParagraphId: anchor } : {}),
           });
+          // The op layer can refuse what per-field bounds cannot see — margins that
+          // together swallow a page. A refusal must surface as one, not close a dialog
+          // claiming success.
+          if (!committed) {
+            return {
+              ok: false,
+              code: 'invalidArgs',
+              reason: mounted.state().lastRejection ?? 'the page setup change was refused',
+            };
+          }
           break;
         }
         case 'insertBreak':
+          if (command.kind === 'section') {
+            mounted.insertSectionBreak();
+            break;
+          }
           mounted.insertLineBreak();
           break;
         case 'insertText':

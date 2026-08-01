@@ -281,8 +281,9 @@ export function classifyCommand(command: EditorCommand): CommandSupport {
         ? { supported: true, mutating: true }
         : { supported: false, reason: 'setIndent requires at least one indent field' };
     case 'insertBreak':
-      // Page/column/section breaks belong to lanes the surface does not own yet.
-      return command.kind === 'line'
+      // Line breaks and next-page section breaks are wired; page/column breaks belong
+      // to lanes the surface does not own yet.
+      return command.kind === 'line' || command.kind === 'section'
         ? { supported: true, mutating: true }
         : { supported: false, reason: `break kind '${command.kind}' is not supported` };
     case 'insertText':
@@ -343,6 +344,17 @@ export function classifyCommand(command: EditorCommand): CommandSupport {
           supported: false,
           code: 'invalidArgs',
           reason: "orientation must be 'portrait' or 'landscape'",
+        };
+      }
+      if (
+        command.scope !== undefined &&
+        command.scope !== 'document' &&
+        command.scope !== 'section'
+      ) {
+        return {
+          supported: false,
+          code: 'invalidArgs',
+          reason: "scope must be 'document' or 'section'",
         };
       }
       return { supported: true, mutating: true };
@@ -420,7 +432,8 @@ export function pageSetupEqual(a: PageSetup | null, b: PageSetup | null): boolea
     a.marginsTwips.top === b.marginsTwips.top &&
     a.marginsTwips.right === b.marginsTwips.right &&
     a.marginsTwips.bottom === b.marginsTwips.bottom &&
-    a.marginsTwips.left === b.marginsTwips.left
+    a.marginsTwips.left === b.marginsTwips.left &&
+    a.gutterTwips === b.gutterTwips
   );
 }
 
