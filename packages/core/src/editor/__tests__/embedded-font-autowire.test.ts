@@ -14,7 +14,7 @@
 import { GlobalRegistrator } from '@happy-dom/global-registrator';
 if (!GlobalRegistrator.isRegistered) GlobalRegistrator.register();
 
-import { describe, expect, test } from 'bun:test';
+import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import { readFileSync } from 'node:fs';
 import { zipSync, strToU8 } from 'fflate';
 import type { EditorFontError } from '../../contracts/editor.ts';
@@ -435,6 +435,100 @@ describe('a hostile run family cannot destroy the mounted document', () => {
     expect(container.textContent).toContain('crafted');
     expect(editor.surface!.session.bodyText()).toContain('crafted');
     expect(editor.snapshot().parseError ?? null).toBeNull();
+    editor.destroy();
+  });
+});
+
+// Paint-side registration, end to end (issue #78). Happy-dom ships neither
+// `document.fonts` nor `FontFace`, so the environment is stubbed per test.
+describe('embedded faces paint through an engine-minted alias', () => {
+  class StubFontFace {
+    constructor(
+      readonly family: string,
+      readonly bytes: ArrayBuffer,
+      readonly descriptors: { readonly weight: string; readonly style: string }
+    ) {}
+    load(): Promise<unknown> {
+      return Promise.resolve(this);
+    }
+  }
+  class StubFontFaceSet {
+    readonly faces = new Set<StubFontFace>();
+    add(face: StubFontFace): void {
+      this.faces.add(face);
+    }
+    delete(face: StubFontFace): boolean {
+      return this.faces.delete(face);
+    }
+  }
+
+  let fontSet: StubFontFaceSet;
+  beforeEach(() => {
+    fontSet = new StubFontFaceSet();
+    (document as unknown as { fonts: StubFontFaceSet }).fonts = fontSet;
+    (globalThis as unknown as { FontFace: typeof StubFontFace }).FontFace = StubFontFace;
+  });
+  afterEach(() => {
+    delete (document as unknown as { fonts?: StubFontFaceSet }).fonts;
+    delete (globalThis as unknown as { FontFace?: typeof StubFontFace }).FontFace;
+  });
+
+  test('a hostile declared family never reaches document.fonts, but still paints', async () => {
+    const container = document.createElement('div');
+    const editor = createDocxEditor({
+      container,
+      // The document claims to embed the host application's own UI font.
+      document: docxWithEmbeds(p('spoofed', 'Segoe UI'), [
+        { family: 'Segoe UI', slot: 'embedRegular', bytes: regularBytes },
+      ]),
+      onFontError: () => {},
+    });
+    await fontsSettled(editor);
+
+    const registered = [...fontSet.faces].map((face) => face.family);
+    expect(registered).toHaveLength(1);
+    // THE security property: the page-global registry never learns "Segoe UI".
+    expect(registered[0]).not.toBe('Segoe UI');
+    expect(registered[0]).toMatch(/^docx-embedded-/);
+
+    // And the painted run asks for the alias FIRST, with the declared family behind it,
+    // so the embedded glyphs are used without shadowing anything.
+    const painted = container.querySelector<HTMLElement>('[data-paragraph-id] .layout-run-text');
+    expect(painted).not.toBeNull();
+    expect(painted!.style.fontFamily).toContain(registered[0]!);
+    expect(painted!.style.fontFamily).toContain('Segoe UI');
+    expect(painted!.style.fontFamily.indexOf(registered[0]!)).toBeLessThan(
+      painted!.style.fontFamily.indexOf('Segoe UI')
+    );
+    editor.destroy();
+    expect(fontSet.faces.size).toBe(0);
+  });
+
+  test('a replaced document removes the previous document’s faces', async () => {
+    const container = document.createElement('div');
+    const editor = createDocxEditor({
+      container,
+      document: docxWithEmbeds(p('first'), EMBED_BOTH),
+    });
+    await fontsSettled(editor);
+    expect(fontSet.faces.size).toBe(2);
+    editor.load(docxWithEmbeds(p('second, no embeds'), []));
+    expect(fontSet.faces.size).toBe(0);
+    editor.destroy();
+  });
+
+  test('a validator-rejected face is never registered', async () => {
+    const container = document.createElement('div');
+    const editor = createDocxEditor({
+      container,
+      document: docxWithEmbeds(p('partial'), [
+        { family: 'DejaVu Sans', slot: 'embedRegular', bytes: regularBytes },
+        { family: 'Broken Face', slot: 'embedRegular', bytes: new Uint8Array(4096).fill(0x42) },
+      ]),
+      onFontError: () => {},
+    });
+    await fontsSettled(editor);
+    expect(fontSet.faces.size).toBe(1);
     editor.destroy();
   });
 });

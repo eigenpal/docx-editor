@@ -16,7 +16,14 @@ combine.
 **1. Fonts embedded in the document — automatic.** A `.docx` can carry the faces it was
 written in. When it does, the editor extracts them on load and measures with them. No
 configuration, no assets, no network: a document that brings its own fonts is
-Word-accurate out of the box.
+Word-accurate out of the box, in metrics and in pixels — the editor also registers the
+embedded bytes with the browser so the painted pages show the real glyphs, not a platform
+substitute.
+
+Those faces register under an internal alias, never under the family name the document
+declares. A `.docx` controls its own font names, and the browser's font registry is
+page-wide, so registering a document's `Segoe UI` would repaint your application's own
+buttons and dialogs with glyphs from that file.
 
 **2. Metric-compatible substitutes — one call.** Most documents use Word's default
 fonts (Calibri, Cambria, Times New Roman, Arial, Courier New), which are proprietary
@@ -112,6 +119,21 @@ console.log(result.sources.map((source) => `${source.id}: ${source.hash}`));
 
 Paste those into your source list (or generate the list at build time, which is how
 `@docx-editor.dev/fonts` bakes the hashes for its own assets).
+
+Already hold the bytes — a file input, IndexedDB, a bundler import? `createFontSource`
+turns them into a source directly, with the hash computed for you. It returns a typed
+failure rather than throwing when the descriptor or the bytes are unusable:
+
+```ts
+import { createFontSource, composeFontConfiguration } from '@docx-editor.dev/react';
+
+const made = createFontSource(bytes, { family: 'Acme Sans', weight: 400, style: 'normal' });
+if ('source' in made) {
+  const fonts = composeFontConfiguration({ sources: [made.source] });
+} else {
+  report(made.failure.reason); // 'malformed', 'overLimit', 'invalidRequest', …
+}
+```
 
 ## How sources combine
 

@@ -257,6 +257,7 @@ export function mountPaginatedSurface(
     materializedSet = visiblePages();
     paintSemanticLayout(pagesLayer, currentLayout, {
       scale,
+      ...(options.fontAlias ? { fontAlias: options.fontAlias } : {}),
       // Only what is on screen, plus a band either side and the pages the caret and the
       // selection touch. A five-hundred-page document has five hundred pages of records and
       // a screen holds two; building them all is the difference between opening and hanging.

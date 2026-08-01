@@ -15,7 +15,11 @@
 // coverage (unresolved families measure via the fixed fallback) and report.
 
 import type { FontFaceRequest, FontSource } from '@docx-editor.dev/core-contract/contracts/editor';
-import { HARD_MAX_FONT_BYTES, sha256FontBytes } from '@docx-editor.dev/core-contract/layout';
+import {
+  HARD_MAX_FONT_BYTES,
+  boundedStructuralFontValidator,
+  sha256FontBytes,
+} from '@docx-editor.dev/core-contract/layout';
 import type { FontConfigurationFragment } from './font-composition.ts';
 
 /** One URL to fetch and the face it claims to be. */
@@ -49,7 +53,9 @@ export type FontLoadFailureReason =
   | 'overLimit'
   | 'emptyResponse'
   /** The declared face itself is unusable (empty family, out-of-range weight); nothing was fetched. */
-  | 'invalidRequest';
+  | 'invalidRequest'
+  /** The bytes are not a font at all — most often an HTML error page served with 200. */
+  | 'malformed';
 
 export interface FontLoadFailure {
   readonly url: string;
@@ -138,12 +144,9 @@ export async function loadFonts(request: LoadFontsRequest): Promise<LoadFontsRes
   const maxFontBytes = request.maxFontBytes ?? HARD_MAX_FONT_BYTES;
   const cache = await openCache(request.cacheName ?? 'docx-editor-fonts');
 
-  const sources: FontSource[] = [];
-  const failures: FontLoadFailure[] = [];
+  type Outcome = { readonly source: FontSource } | { readonly failure: FontLoadFailure };
 
-  // Sequential per list order keeps admission deterministic; the fetches themselves are
-  // the slow part and typically few. Callers needing parallelism can shard the list.
-  for (const source of request.sources) {
+  async function loadOne(source: FontUrlSource): Promise<Outcome> {
     const faceRequest: FontFaceRequest = Object.freeze({
       family: source.family,
       weight: source.weight,
@@ -152,23 +155,38 @@ export async function loadFonts(request: LoadFontsRequest): Promise<LoadFontsRes
     // Screened HERE, not at composition: the request contract refuses a malformed face
     // with a THROW, so admitting one would detonate the configuration carrying every
     // other font instead of degrading this single source. Same discipline the embedded
-    // lane applies to file-declared families.
+    // lane applies to file-declared families. Nothing is fetched for a bad descriptor.
     const descriptorProblem = faceRequestProblem(faceRequest);
     if (descriptorProblem) {
-      failures.push({
-        url: source.url,
-        request: faceRequest,
-        reason: 'invalidRequest',
-        diagnostic: descriptorProblem,
-      });
-      continue;
+      return {
+        failure: {
+          url: source.url,
+          request: faceRequest,
+          reason: 'invalidRequest',
+          diagnostic: descriptorProblem,
+        },
+      };
     }
-    const admit = (bytes: Uint8Array, fromCache: boolean): 'admitted' | FontLoadFailure => {
+
+    const admit = (bytes: Uint8Array, fromCache: boolean): FontSource | FontLoadFailure => {
       if (bytes.byteLength === 0) {
         return { url: source.url, request: faceRequest, reason: 'emptyResponse' };
       }
       if (bytes.byteLength > maxFontBytes) {
         return { url: source.url, request: faceRequest, reason: 'overLimit' };
+      }
+      // A 200 response carrying an HTML error page passes every size check. Without this
+      // it would be admitted, cached, and then fail deep in shaping on EVERY later load,
+      // with nothing ever discarding the entry. A signature check is cheap and turns that
+      // into one typed failure at the boundary.
+      const structural = boundedStructuralFontValidator(bytes, source.faceIndex ?? 0);
+      if (!structural.valid) {
+        return {
+          url: source.url,
+          request: faceRequest,
+          reason: 'malformed',
+          diagnostic: structural.diagnostic,
+        };
       }
       const actualHash = sha256FontBytes(bytes);
       if (source.hash !== undefined && source.hash !== actualHash) {
@@ -181,14 +199,13 @@ export async function loadFonts(request: LoadFontsRequest): Promise<LoadFontsRes
           ...(fromCache ? { diagnostic: 'cached bytes failed revalidation' } : {}),
         };
       }
-      sources.push({
+      return {
         request: faceRequest,
         id: `url:${source.url}`,
         bytes,
         hash: actualHash,
         faceIndex: source.faceIndex ?? 0,
-      });
-      return 'admitted';
+      };
     };
 
     // Cache first, revalidated by content hash. A poisoned or stale entry is discarded
@@ -196,7 +213,7 @@ export async function loadFonts(request: LoadFontsRequest): Promise<LoadFontsRes
     const cached = await cachedBytes(cache, source.url);
     if (cached) {
       const verdict = admit(cached, true);
-      if (verdict === 'admitted') continue;
+      if (!('reason' in verdict)) return { source: verdict };
       await discardEntry(cache, source.url);
     }
 
@@ -204,42 +221,114 @@ export async function loadFonts(request: LoadFontsRequest): Promise<LoadFontsRes
     try {
       response = await fetcher(source.url);
     } catch (error) {
-      failures.push({
-        url: source.url,
-        request: faceRequest,
-        reason: 'networkError',
-        diagnostic: error instanceof Error ? error.message : String(error),
-      });
-      continue;
+      return {
+        failure: {
+          url: source.url,
+          request: faceRequest,
+          reason: 'networkError',
+          diagnostic: error instanceof Error ? error.message : String(error),
+        },
+      };
     }
     if (!response.ok) {
-      failures.push({
-        url: source.url,
-        request: faceRequest,
-        reason: 'httpError',
-        status: response.status,
-      });
-      continue;
+      return {
+        failure: {
+          url: source.url,
+          request: faceRequest,
+          reason: 'httpError',
+          status: response.status,
+        },
+      };
     }
     let bytes: Uint8Array;
     try {
       bytes = new Uint8Array(await response.arrayBuffer());
     } catch (error) {
-      failures.push({
-        url: source.url,
-        request: faceRequest,
-        reason: 'networkError',
-        diagnostic: error instanceof Error ? error.message : String(error),
-      });
-      continue;
+      return {
+        failure: {
+          url: source.url,
+          request: faceRequest,
+          reason: 'networkError',
+          diagnostic: error instanceof Error ? error.message : String(error),
+        },
+      };
     }
     const verdict = admit(bytes, false);
-    if (verdict === 'admitted') {
-      await storeBytes(cache, source.url, bytes);
-    } else {
-      failures.push(verdict);
-    }
+    if ('reason' in verdict) return { failure: verdict };
+    await storeBytes(cache, source.url, bytes);
+    return { source: verdict };
   }
 
+  // Fetched CONCURRENTLY — eight brand faces should be one round trip's wait, not eight.
+  // Results are reassembled in list order, so admission stays deterministic regardless of
+  // which response lands first.
+  const outcomes = await Promise.all(request.sources.map((source) => loadOne(source)));
+
+  const sources: FontSource[] = [];
+  const failures: FontLoadFailure[] = [];
+  for (const outcome of outcomes) {
+    if ('source' in outcome) sources.push(outcome.source);
+    else failures.push(outcome.failure);
+  }
   return { sources, failures };
+}
+
+/**
+ * Turn font bytes you ALREADY hold into a `FontSource` — a file input, IndexedDB, a
+ * bundler import. `loadFonts` covers URLs; this covers everything else, so no caller has
+ * to hand-assemble the record or reach for a hashing helper.
+ *
+ * Returns a typed failure instead of throwing when the descriptor or the bytes are
+ * unusable, matching `loadFonts`: one bad face degrades itself, never its neighbours.
+ */
+export function createFontSource(
+  bytes: Uint8Array,
+  request: FontFaceRequest & { readonly faceIndex?: number },
+  options: { readonly id?: string; readonly maxFontBytes?: number } = {}
+): { readonly source: FontSource } | { readonly failure: FontLoadFailure } {
+  const faceRequest: FontFaceRequest = Object.freeze({
+    family: request.family,
+    weight: request.weight,
+    style: request.style,
+  });
+  const url =
+    options.id ?? `bytes:${faceRequest.family}#${faceRequest.weight}#${faceRequest.style}`;
+  const descriptorProblem = faceRequestProblem(faceRequest);
+  if (descriptorProblem) {
+    return {
+      failure: {
+        url,
+        request: faceRequest,
+        reason: 'invalidRequest',
+        diagnostic: descriptorProblem,
+      },
+    };
+  }
+  if (bytes.byteLength === 0) {
+    return { failure: { url, request: faceRequest, reason: 'emptyResponse' } };
+  }
+  if (bytes.byteLength > (options.maxFontBytes ?? HARD_MAX_FONT_BYTES)) {
+    return { failure: { url, request: faceRequest, reason: 'overLimit' } };
+  }
+  const faceIndex = request.faceIndex ?? 0;
+  const structural = boundedStructuralFontValidator(bytes, faceIndex);
+  if (!structural.valid) {
+    return {
+      failure: {
+        url,
+        request: faceRequest,
+        reason: 'malformed',
+        diagnostic: structural.diagnostic,
+      },
+    };
+  }
+  return {
+    source: {
+      request: faceRequest,
+      id: url,
+      bytes,
+      hash: sha256FontBytes(bytes),
+      faceIndex,
+    },
+  };
 }

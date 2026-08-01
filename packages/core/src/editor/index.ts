@@ -22,6 +22,7 @@ export {
   type FontConfigurationFragment,
 } from './font-composition.ts';
 export {
+  createFontSource,
   loadFonts,
   type FontLoadFailure,
   type FontLoadFailureReason,

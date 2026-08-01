@@ -92,6 +92,10 @@ import {
 } from './font-configuration.ts';
 import { composeFontConfiguration, type FontConfigurationFragment } from './font-composition.ts';
 import { embeddedFontSources } from './embedded-font-sources.ts';
+import {
+  registerEmbeddedFontFaces,
+  type EmbeddedFontFaceRegistration,
+} from './embedded-font-faces.ts';
 import { mountPaginatedSurface, type PaginatedSurface } from './paginated-surface.ts';
 
 export interface DocxEditorConfig {
@@ -218,6 +222,16 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
   let shapedMeasurer: TextMeasurer | undefined;
   let shapedProducer: string | undefined;
   /**
+   * Browser registration for this document's embedded faces, under engine-minted aliases
+   * (issue #78 — a file's own family name must never reach the page-global FontFaceSet).
+   * Owned per load: a replaced document and `destroy()` remove exactly these faces.
+   */
+  let embeddedFaces: EmbeddedFontFaceRegistration | null = null;
+  function disposeEmbeddedFaces(): void {
+    embeddedFaces?.dispose();
+    embeddedFaces = null;
+  }
+  /**
    * Which DOCUMENT the shaped measurer belongs to. Embedded faces are a property of the
    * loaded file, so `loadSeq` bumps per `load()` (and per constructor document) and every
    * async resolution carries the sequence it was started for — a resolution that lands
@@ -292,6 +306,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
       ...(shapedMeasurer
         ? { measurer: shapedMeasurer, ...(shapedProducer ? { producer: shapedProducer } : {}) }
         : {}),
+      ...(embeddedFaces ? { fontAlias: embeddedFaces.alias } : {}),
       onChange: (state) => {
         // The mount-time render reports before `surface` is assigned; nothing observable
         // has changed at that point, so it is not a selection change.
@@ -350,6 +365,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
     loadSeq += 1;
     shapedMeasurer = undefined;
     shapedProducer = undefined;
+    disposeEmbeddedFaces();
     // A superseded in-flight resolution belongs to the PREVIOUS sequence; its stale
     // guard will refuse to touch state, so the flag must reset here or a load that
     // starts no font work of its own reports `resolving: true` forever.
@@ -488,6 +504,34 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
         bump();
         return;
       }
+      // Paint-side twin, BEFORE the remount so the first shaped paint already carries the
+      // embedded glyphs. Only faces the validator ADMITTED are handed over, and each
+      // resolves through the shaping snapshot so the bytes registered are the validated,
+      // owned copies — never the raw file view.
+      const admitted = fromDocument.sources
+        .filter((source) => !refusedEmbedded.has(source.id))
+        .map((source) => {
+          const resolved = shaping.fonts.resolve(source.request);
+          return resolved instanceof FontResolutionError || resolved.id !== source.id
+            ? null
+            : {
+                request: source.request,
+                id: resolved.id,
+                bytes: resolved.bytes,
+                hash: resolved.hash,
+                faceIndex: resolved.faceIndex,
+              };
+        })
+        .filter((source): source is NonNullable<typeof source> => source !== null);
+      const registration = await registerEmbeddedFontFaces(admitted);
+      if (destroyed || seq !== loadSeq) {
+        registration.dispose();
+        disposeLayoutShaping(shaping);
+        if (seq === loadSeq) fontsResolving = false;
+        return;
+      }
+      disposeEmbeddedFaces();
+      embeddedFaces = registration;
       shapedMeasurer = createShapedMeasurer({
         shaper: shaping.shaper,
         resolveFont: (style) => {
@@ -523,8 +567,17 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
         // a mount that throws must leave a recoverable editor, not an empty container
         // with the document gone. Font fidelity is never worth losing the document.
         const saved = surface.session.save();
+        // A remount replaces the whole subtree, so focus lands on `document.body` — the
+        // user typing while fonts resolved would silently stop being able to type.
+        // Restore it when the OLD surface had it; never steal it otherwise.
+        const hadFocus =
+          typeof document !== 'undefined' &&
+          document.activeElement !== null &&
+          container !== null &&
+          container.contains(document.activeElement);
         try {
           mountBytes(saved);
+          if (hadFocus) surface?.focus();
         } catch (remountError) {
           shapedMeasurer = undefined;
           shapedProducer = undefined;
@@ -1030,6 +1083,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
 
     destroy() {
       destroyed = true;
+      disposeEmbeddedFaces();
       teardownSurface();
       container = null;
       pendingBytes = null;
