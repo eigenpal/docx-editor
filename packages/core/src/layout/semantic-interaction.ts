@@ -8,7 +8,7 @@
 // take, so a click, a caret and an edit all speak one coordinate system: a hit test can be
 // handed straight to `insertText` without a translation step that could disagree.
 
-import { hitTestPage, spanOffsetX } from './semantic-hit-test.ts';
+import { caretBoxOnLine, hitTestPage, spanOffsetX } from './semantic-hit-test.ts';
 import type {
   LineRecord,
   SemanticLayout,
@@ -149,11 +149,12 @@ export function caretAt(
 ): CaretGeometry | null {
   for (const { line, pageIndex } of paragraphLinesIndex(layout).get(position.paragraphId) ?? []) {
     if (position.offset < line.range.start || position.offset > line.range.end) continue;
+    const box = caretBoxOnLine(line, position.offset, measurer);
     return {
       position,
-      x: xWithinLine(line, position.offset, measurer),
-      y: line.box.y,
-      height: line.box.height,
+      x: box.x,
+      y: box.y,
+      height: box.height,
       lineId: line.id,
       pageIndex,
     };

@@ -533,3 +533,56 @@ describe('the caret sits at a glyph edge', () => {
     expect(hit(layout, caret.x, 5, proportional)!.position.offset).toBe(3);
   });
 });
+
+describe('the caret is as tall as the run it sits in', () => {
+  // A line is as tall as its LARGEST run, so a caret in small text on a line that also
+  // carries large text was drawn several times the height of the text it was in.
+  const mixed = lay(
+    `<w:p>` +
+      `<w:r><w:rPr><w:sz w:val="16"/></w:rPr><w:t xml:space="preserve">8pt </w:t></w:r>` +
+      `<w:r><w:rPr><w:sz w:val="72"/></w:rPr><w:t>36pt</w:t></w:r>` +
+      `</w:p>`
+  );
+  const line = paragraphFragmentsOf(mixed.pages[0]!)[0]!.lines[0]!;
+
+  test('the fixture really does mix run sizes on one line', () => {
+    const heights = line.spans.map((span) => span.box.height);
+    expect(heights.length).toBe(2);
+    expect(Math.max(...heights)).toBeGreaterThan(Math.min(...heights) * 2);
+    expect(line.box.height).toBe(Math.max(...heights));
+  });
+
+  test('a caret in the small run is the SMALL run’s height', () => {
+    const small = line.spans[0]!;
+    const caret = caretAt(mixed, { paragraphId: P0, offset: small.range.start + 1 }, measurer)!;
+    expect(caret.height).toBe(small.box.height);
+    expect(caret.height).toBeLessThan(line.box.height);
+  });
+
+  test('and a caret in the large run is the large one’s', () => {
+    const large = line.spans[1]!;
+    const caret = caretAt(mixed, { paragraphId: P0, offset: large.range.start + 1 }, measurer)!;
+    expect(caret.height).toBe(large.box.height);
+    expect(caret.y).toBe(large.box.y);
+  });
+
+  test('at the boundary the caret belongs to the run a keystroke would continue', () => {
+    const small = line.spans[0]!;
+    const caret = caretAt(mixed, { paragraphId: P0, offset: small.range.end }, measurer)!;
+    expect(caret.height).toBe(small.box.height);
+  });
+
+  test('an empty paragraph still gets a caret, from its line', () => {
+    const empty = lay('<w:p/>');
+    const emptyLine = paragraphFragmentsOf(empty.pages[0]!)[0]!.lines[0]!;
+    const caret = caretAt(empty, { paragraphId: P0, offset: 0 }, measurer)!;
+    expect(caret.height).toBe(emptyLine.box.height);
+    expect(caret.height).toBeGreaterThan(0);
+  });
+
+  test('and what a click reports matches what gets painted', () => {
+    const small = line.spans[0]!;
+    const found = hit(mixed, small.box.x + 2, line.box.y + 2, measurer)!;
+    expect(found.caret.height).toBe(caretAt(mixed, found.position, measurer)!.height);
+  });
+});

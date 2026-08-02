@@ -392,13 +392,14 @@ function resolveParagraph(
     paragraphId: line.range.paragraphId,
     offset: resolved.offset,
   };
+  const box = caretBoxOnLine(line, resolved.offset, context.measurer);
   return {
     position,
     caret: {
       position,
       x: resolved.x,
-      y: line.box.y,
-      height: line.box.height,
+      y: box.y,
+      height: box.height,
       lineId: line.id,
       pageIndex: context.pageIndex,
     },
@@ -617,6 +618,43 @@ export function spanOffsetX(
     return span.box.x + span.box.width * (within / length);
   }
   return span.box.x + prefixWidth(span, within, measurer);
+}
+
+/**
+ * Where a caret sits on a line: its x, and the box it should be drawn at.
+ *
+ * The height comes from the RUN at the insertion point, not from the line. A line is as tall
+ * as its largest run, so a caret in 11pt text on a line that also carries 36pt text was drawn
+ * three times the height of the text it sits in. Word sizes the insertion point to the run it
+ * would type into, which is also how the painter already draws the selection band: every run
+ * is its own inline box, and the band steps with the text.
+ *
+ * At a boundary the run BEFORE the offset wins — that is the run a keystroke would continue —
+ * except at the start of the line, where there is nothing before it.
+ */
+export function caretBoxOnLine(
+  line: LineRecord,
+  offset: number,
+  measurer: TextMeasurer | undefined
+): { x: number; y: number; height: number } {
+  const spans = line.spans;
+  if (spans.length === 0) {
+    return { x: line.box.x, y: line.box.y, height: line.box.height };
+  }
+  let chosen = spans[0]!;
+  for (const span of spans) {
+    if (offset > span.range.start && offset >= span.range.end) chosen = span;
+    else if (offset > span.range.start && offset < span.range.end) {
+      chosen = span;
+      break;
+    }
+  }
+  return {
+    x: spanOffsetX(chosen, offset, measurer),
+    // A zero-height span would leave no caret at all; the line is the honest floor.
+    y: chosen.box.height > 0 ? chosen.box.y : line.box.y,
+    height: chosen.box.height > 0 ? chosen.box.height : line.box.height,
+  };
 }
 
 function offsetWithinSpan(span: StyleSpanRecord, x: number, context: HitContext): LineOffset {

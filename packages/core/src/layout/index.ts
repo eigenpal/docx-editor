@@ -342,6 +342,7 @@ export {
   hitTestSheet,
   isFurniturePoint,
   lineEndOffset,
+  caretBoxOnLine,
   pageAtY,
   spanOffsetX,
   type HitPoint,
