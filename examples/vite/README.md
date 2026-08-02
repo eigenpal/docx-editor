@@ -21,7 +21,7 @@ Or from this directory: `bun run dev`.
 | ---------------- | ------------------------------------------------------- |
 | `src/App.tsx`    | The editor: open `.docx`, edit, render an agent panel   |
 | `src/main.tsx`   | React root + `styles.css`                               |
-| `index.html`     | Loads the Material Symbols font for toolbar icons       |
+| `index.html`     | Page shell, icons, and share tags                       |
 | `vite.config.ts` | Aliases `@docx-editor.dev/*` to workspace source in dev |
 
 ## Minimal integration
@@ -44,14 +44,7 @@ To open a real file, read it as an `ArrayBuffer` and pass it as
 npm install @docx-editor.dev/react @docx-editor.dev/core
 ```
 
-The React adapter injects its own CSS. The toolbar icons need the Material
-Symbols font, add this to `index.html`:
-
-```html
-<link
-  rel="stylesheet"
-  href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200&display=block"
-/>
-```
+The React adapter injects its own CSS. Toolbar icons are bundled as inline
+SVG, so there is no icon font to load.
 
 Docs: https://www.docx-editor.dev/docs/1.x/react

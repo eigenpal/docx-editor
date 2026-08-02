@@ -4,17 +4,11 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>docx-editor — Realtime Collaboration</title>
-    <link rel="icon" href="/favicon.ico" />
-
-    <!-- Preconnect to Google Fonts -->
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-
-    <!-- Load Material Symbols font early with display=block to prevent FOUT -->
-    <link
-      rel="stylesheet"
-      href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200&display=block"
-    />
+    <link rel="icon" href="/favicon.ico" sizes="any" />
+    <link rel="icon" href="/icon.svg" type="image/svg+xml" />
+    <link rel="apple-touch-icon" href="/icon.png" />
+    <link rel="icon" type="image/png" sizes="192x192" href="/web-app-manifest-192x192.png" />
+    <link rel="icon" type="image/png" sizes="512x512" href="/web-app-manifest-512x512.png" />
 
     <style>
       * {
@@ -54,45 +48,7 @@
           transform: rotate(360deg);
         }
       }
-
-      /* Hide Material Symbols text until font loads */
-      .material-symbols-outlined {
-        font-family: 'Material Symbols Outlined';
-        font-weight: normal;
-        font-style: normal;
-        line-height: 1;
-        letter-spacing: normal;
-        text-transform: none;
-        display: inline-block;
-        white-space: nowrap;
-        word-wrap: normal;
-        direction: ltr;
-        -webkit-font-feature-settings: 'liga';
-        -webkit-font-smoothing: antialiased;
-        visibility: hidden;
-      }
-
-      /* Show icons once font is loaded */
-      .fonts-loaded .material-symbols-outlined {
-        visibility: visible;
-      }
     </style>
-
-    <script>
-      // Detect when Material Symbols font is loaded
-      if (document.fonts) {
-        document.fonts.ready.then(function () {
-          document.documentElement.classList.add('fonts-loaded');
-        });
-        document.fonts.load('24px "Material Symbols Outlined"').then(function () {
-          document.documentElement.classList.add('fonts-loaded');
-        });
-      } else {
-        setTimeout(function () {
-          document.documentElement.classList.add('fonts-loaded');
-        }, 500);
-      }
-    </script>
   </head>
   <body>
     <div id="app">
