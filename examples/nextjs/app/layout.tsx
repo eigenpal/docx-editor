@@ -1,8 +1,9 @@
 import type { Metadata } from 'next';
 import './globals.css';
 
-// Icons and share image match the other demos so the favicon, PWA install
-// prompt, and link previews all use the same artwork.
+// Icons and share image match the other demos, so the favicon and link previews
+// use the same artwork. The manifest-sized PNGs are declared as icons only; this
+// demo ships no webmanifest.
 export const metadata: Metadata = {
   // Resolves the relative og/twitter image URLs below; without it Next warns
   // at build time and emits an unusable relative URL in the share tags.
