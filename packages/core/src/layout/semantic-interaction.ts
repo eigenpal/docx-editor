@@ -8,7 +8,7 @@
 // take, so a click, a caret and an edit all speak one coordinate system: a hit test can be
 // handed straight to `insertText` without a translation step that could disagree.
 
-import { DEFAULT_VERTICAL_WEIGHT, hitTestPage } from './semantic-hit-test.ts';
+import { hitTestPage } from './semantic-hit-test.ts';
 import type { LineRecord, SemanticLayout, StyleSpanRecord } from './semantic-records.ts';
 import { paragraphFragmentsOf } from './semantic-records.ts';
 
@@ -163,33 +163,13 @@ export function hitTestSemantic(
   layout: SemanticLayout,
   point: { readonly x: number; readonly y: number; readonly pageIndex?: number }
 ): CaretGeometry | null {
-  if (point.pageIndex !== undefined) {
-    const hit = hitTestPage(layout, point.pageIndex, point);
-    if (hit) return hit.caret;
-    // Fall through rather than refuse: a page index that is not in this layout is a stale
-    // caller, not a reason to leave the caret where it was.
-  }
-  // No page named: score the same point against every page and take the nearest answer. The
-  // pointer path always knows its page, so this is the headless and out-of-range route.
-  let best: CaretGeometry | null = null;
-  let bestScore = Number.POSITIVE_INFINITY;
-  for (const page of layout.pages) {
-    const hit = hitTestPage(layout, page.index, point);
-    if (!hit) continue;
-    const caret = hit.caret;
-    const vertical =
-      point.y < caret.y
-        ? caret.y - point.y
-        : point.y > caret.y + caret.height
-          ? point.y - (caret.y + caret.height)
-          : 0;
-    const score = Math.abs(caret.x - point.x) + vertical * DEFAULT_VERTICAL_WEIGHT;
-    if (score < bestScore) {
-      bestScore = score;
-      best = caret;
-    }
-  }
-  return best;
+  // The point is PAGE-CONTENT relative, so it only means something on one page. Scoring it
+  // against every page cost a full-document walk to answer with page 0 anyway: on uniform
+  // geometry each page produces an identical score and the first one wins by construction.
+  // Naming page 0 outright is the same answer, honestly, in constant time.
+  const pageIndex =
+    point.pageIndex !== undefined && layout.pages[point.pageIndex] ? point.pageIndex : 0;
+  return hitTestPage(layout, pageIndex, point)?.caret ?? null;
 }
 
 /** The rectangles covering a selection, one per line it spans. */

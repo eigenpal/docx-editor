@@ -242,3 +242,122 @@ describe('a rectangle on the clipboard', () => {
     expect(cellSelectionText(layout, selection)).toBe('B1\nB2\nB3');
   });
 });
+
+describe('the rectangle grows until it is actually a rectangle', () => {
+  test('staggered column spans converge instead of stopping one short', () => {
+    // Column growth only propagates forward through one pass, so a cell in an earlier row
+    // that newly overlaps needs another. A fixed pass count published a ragged selection
+    // whose `columns` disagreed with its own `cellIds`.
+    const wide = (n: number) => `<w:tcPr><w:gridSpan w:val="${n}"/></w:tcPr>`;
+    const rowA = tr([0, 1, 2, 3, 4].map((i) => tc(p(`A${i}`), wide(2))).join(''));
+    const rowB = tr(
+      tc(p('B0')) + [1, 2, 3, 4].map((i) => tc(p(`B${i}`), wide(2))).join('') + tc(p('B5'))
+    );
+    const layout = lay(`<w:tbl>${rowA}${rowB}</w:tbl>`);
+    const table = tableOf(layout);
+    const last = (row: number) => {
+      const cells = table.rows[row]!.cells;
+      const cell = cells[cells.length - 1]!;
+      return {
+        tableId: table.tableId,
+        rowId: table.rows[row]!.id,
+        cellId: cell.id,
+        rowIndex: row,
+        gridColumn: cell.gridColumn,
+        gridSpan: cell.gridSpan,
+      };
+    };
+    const selection = cellSelectionBetween(layout, last(0), last(1))!;
+    // Every cell whose columns intersect the range must be wholly inside it.
+    for (const row of table.rows) {
+      for (const cell of row.cells) {
+        const from = cell.gridColumn;
+        const to = cell.gridColumn + Math.max(1, cell.gridSpan) - 1;
+        if (to < selection.columns.from || from > selection.columns.to) continue;
+        expect({
+          cell: cell.id,
+          whole: from >= selection.columns.from && to <= selection.columns.to,
+        }).toEqual({ cell: cell.id, whole: true });
+      }
+    }
+  });
+});
+
+describe('a rectangle whose cells are all empty', () => {
+  test('still aims inside its own table, not at the top of the document', () => {
+    // Pointing at the document's first paragraph meant the next keystroke typed outside the
+    // table entirely.
+    const layout = lay(p('intro') + `<w:tbl>${tr(tc('') + tc(p('B1')))}</w:tbl>`);
+    const table = tableOf(layout);
+    const empty = table.rows[0]!.cells[0]!;
+    const selection = cellSelectionBetween(
+      layout,
+      {
+        tableId: table.tableId,
+        rowId: table.rows[0]!.id,
+        cellId: empty.id,
+        rowIndex: 0,
+        gridColumn: empty.gridColumn,
+        gridSpan: empty.gridSpan,
+      },
+      {
+        tableId: table.tableId,
+        rowId: table.rows[0]!.id,
+        cellId: empty.id,
+        rowIndex: 0,
+        gridColumn: empty.gridColumn,
+        gridSpan: empty.gridSpan,
+      }
+    )!;
+    expect(selection.text.anchor.paragraphId).not.toBe('/word/document.xml#0.0.0');
+    expect(selection.text.anchor.paragraphId.startsWith(table.tableId)).toBe(true);
+  });
+});
+
+describe('the clipboard grid lines up', () => {
+  test('a row that starts late keeps its columns aligned', () => {
+    // `w:gridBefore` leaves the first grid column empty. Emitting one field per PRESENT cell
+    // shifted every later column one place left.
+    const layout = lay(
+      `<w:tbl>${tr(tc(p('A1')) + tc(p('B1')))}${tr(
+        tc(p('B2')),
+        '<w:trPr><w:gridBefore w:val="1"/></w:trPr>'
+      )}</w:tbl>`
+    );
+    const table = tableOf(layout);
+    const address = (row: number, cell: number) => {
+      const record = table.rows[row]!.cells[cell]!;
+      return {
+        tableId: table.tableId,
+        rowId: table.rows[row]!.id,
+        cellId: record.id,
+        rowIndex: row,
+        gridColumn: record.gridColumn,
+        gridSpan: record.gridSpan,
+      };
+    };
+    const selection = cellSelectionBetween(layout, address(0, 0), address(1, 0))!;
+    const rows = cellSelectionText(layout, selection).split('\n');
+    expect(rows).toHaveLength(2);
+    // Whatever the second row holds, it must not put its cell under the first column.
+    expect(rows[1]!.split('\t').length).toBe(rows[0]!.split('\t').length);
+  });
+});
+
+describe('nested tables', () => {
+  test('a paragraph inside a nested table reports the INNER table', () => {
+    // `collectParagraphs` recurses, so the outer table also "contains" the inner paragraphs.
+    // Reporting the outer one contradicted the innermost-cell rule the hit test follows.
+    const inner = `<w:tbl>${tr(tc(p('deep')))}</w:tbl>`;
+    const layout = lay(`<w:tbl>${tr(tc(inner) + tc(p('beside')))}</w:tbl>`);
+    const outer = tableOf(layout);
+    const innerFragment = outer.rows[0]!.cells[0]!.blocks[0]!;
+    if (innerFragment.kind !== 'table') throw new Error('fixture has no nested table');
+    const deep = innerFragment.rows[0]!.cells[0]!.blocks[0]!;
+    if (deep.kind !== 'paragraph') throw new Error('nested cell is not a paragraph');
+
+    const context = tableContextAt(layout, deep.paragraphId)!;
+    expect(context.tableId).toBe(innerFragment.tableId);
+    expect(context.tableId).not.toBe(outer.tableId);
+  });
+});

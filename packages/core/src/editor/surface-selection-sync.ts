@@ -213,7 +213,12 @@ export function createSurfaceSelectionSync(deps: SurfaceSelectionSyncDeps): Surf
       // A deliberate model move is the exception, and the reason this cannot simply refuse to
       // write: a commit installs its own post-edit caret, and the DOM selection left over
       // from before the edit addresses offsets that no longer mean the same thing.
-      const adopted = modelMoved ? false : adoptPendingDomSelection();
+      // The SAME two reasons `onSelectionChange` refuses apply here, and this is the reader
+      // that runs on every repaint. A rectangle of cells keeps the DOM deliberately collapsed,
+      // so a scroll or an undo would "adopt" that collapse, leave the overlay painting four
+      // cells, and turn the next Delete into a one-character edit inside one of them.
+      const holdOff = deps.holdsCellSelection?.() === true || deps.isGesturing?.() === true;
+      const adopted = modelMoved || holdOff ? false : adoptPendingDomSelection();
       modelMoved = false;
       return adopted;
     },

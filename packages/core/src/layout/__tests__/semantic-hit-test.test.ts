@@ -15,6 +15,8 @@ import {
   lineEndOffset,
   pageAtY,
 } from '../semantic-hit-test.ts';
+import { caretAt } from '../semantic-interaction.ts';
+import { resetGraphemeBoundary, setGraphemeBoundary } from '../grapheme.ts';
 import { createFixedMeasurer, layoutSemanticDocument } from '../semantic-layout.ts';
 import type { ResolvedRunStyle } from '../run-style.ts';
 import {
@@ -43,7 +45,7 @@ const P1 = '/word/document.xml#0.0.1';
 
 const p = (text: string) => `<w:p><w:r><w:t>${text}</w:t></w:r></w:p>`;
 const tc = (content: string, tcPr = '') => `<w:tc>${tcPr}${content}</w:tc>`;
-const tr = (cells: string) => `<w:tr>${cells}</w:tr>`;
+const tr = (cells: string, trPr = '') => `<w:tr>${trPr}${cells}</w:tr>`;
 
 /** Every hit test in this file names its page, the way the pointer path does. */
 const hit = (layout: SemanticLayout, x: number, y: number, port?: TextMeasurer) =>
@@ -341,5 +343,164 @@ describe('cost', () => {
     calls = 0;
     hitTestPage(layout, 0, { x: 40, y: 5 }, { measurer: counting });
     expect(calls).toBe(0);
+  });
+});
+
+describe('a press always resolves, whatever the table holds', () => {
+  // A click has to put the caret somewhere. Every case here produced NO position at all,
+  // which the pointer lane turns into a dead press: no caret, no focus, nothing.
+  test('a page of nothing but vertical-merge continuations is still clickable', () => {
+    const rows = Array.from({ length: 120 }, () => tr(tc('', '<w:tcPr><w:vMerge/></w:tcPr>'))).join(
+      ''
+    );
+    const layout = lay(
+      `<w:tbl>${tr(tc(p('origin'), '<w:tcPr><w:vMerge w:val="restart"/></w:tcPr>'))}${rows}</w:tbl>`
+    );
+    expect(layout.pages.length).toBeGreaterThan(1);
+    for (const page of layout.pages) {
+      expect(hitTestPage(layout, page.index, { x: 20, y: 20 })).not.toBeNull();
+    }
+  });
+
+  test('a cell holding no block at all is still clickable', () => {
+    const layout = lay(`<w:tbl>${tr(tc(''))}</w:tbl>` + p('after'));
+    expect(hit(layout, 20, 5)).not.toBeNull();
+  });
+
+  test('a row holding no cell at all is still clickable', () => {
+    const layout = lay(`<w:tbl>${tr('')}</w:tbl>` + p('after'));
+    expect(hit(layout, 20, 5)).not.toBeNull();
+  });
+});
+
+describe('a vertical merge that began on an earlier page', () => {
+  // The merged run starts on one page and continues on the next, so a walk confined to the
+  // continuation's own fragment finds no origin and the click lands in another column.
+  const rows = Array.from({ length: 90 }, (_, index) =>
+    tr(tc('', '<w:tcPr><w:vMerge/></w:tcPr>') + tc(p(`R${index}`)))
+  ).join('');
+  const layout = lay(
+    `<w:tbl>${tr(
+      tc(p('LEFT'), '<w:tcPr><w:vMerge w:val="restart"/></w:tcPr>') + tc(p('R'))
+    )}${rows}</w:tbl>`
+  );
+
+  test('the fixture really does continue onto a later page', () => {
+    expect(layout.pages.length).toBeGreaterThan(1);
+  });
+
+  test('clicking it resolves to the merged column, not the one beside it', () => {
+    const later = layout.pages[layout.pages.length - 1]!;
+    const table = later.fragments.find((block) => block.kind === 'table');
+    if (!table || table.kind !== 'table') throw new Error('fixture is not a table');
+    const row = table.rows[1] ?? table.rows[0]!;
+    const found = hitTestPage(layout, later.index, {
+      x: row.cells[0]!.box.x + 5,
+      y: row.box.y + 5,
+    })!;
+    expect(found.cell!.gridColumn).toBe(0);
+  });
+});
+
+describe('a repeated header row', () => {
+  const layout = lay(
+    `<w:tbl>${tr(
+      tc(p('HEAD ')) + tc(p('H2')),
+      '<w:trPr><w:tblHeader/></w:trPr>'
+    )}${Array.from({ length: 90 }, (_, i) => tr(tc(p(`A${i}`)) + tc(p(`B${i}`)))).join('')}</w:tbl>`
+  );
+
+  test('the fixture really does repeat the header', () => {
+    expect(layout.pages.length).toBeGreaterThan(1);
+    const later = layout.pages[1]!.fragments.find((block) => block.kind === 'table');
+    if (!later || later.kind !== 'table') throw new Error('fixture is not a table');
+    expect(later.rows[0]!.isHeaderRepeat).toBe(true);
+  });
+
+  test('a repeat does not make the original look soft-wrapped', () => {
+    // The repeat re-emits the same paragraph with a DIFFERENT line id, so recording it made
+    // every earlier copy look wrapped — and the trailing space became unreachable.
+    const first = layout.pages[0]!.fragments.find((block) => block.kind === 'table');
+    if (!first || first.kind !== 'table') throw new Error('fixture is not a table');
+    const cell = first.rows[0]!.cells[0]!.blocks[0]!;
+    if (cell.kind !== 'paragraph') throw new Error('fixture cell is not a paragraph');
+    const line = cell.lines[0]!;
+    expect(lineEndOffset(layout, line)).toBe(line.range.end);
+  });
+
+  test('a position it resolves always paints on the page it was clicked on', () => {
+    // A repeat is a COPY: its paragraphs already have caret stops on the original's page, so
+    // resolving into one returned a position whose caret painted on a different page.
+    for (const page of layout.pages) {
+      const found = hitTestPage(layout, page.index, { x: 20, y: 8 });
+      if (!found) continue;
+      const caret = caretAt(layout, found.position);
+      expect({ page: page.index, agrees: caret?.pageIndex === found.pageIndex }).toEqual({
+        page: page.index,
+        agrees: true,
+      });
+    }
+  });
+});
+
+describe('the caches key on everything their answer depends on', () => {
+  test('a second measurer is not served the first one’s widths', () => {
+    const wide: TextMeasurer = {
+      measure: (text) => text.length * 20,
+      lineMetrics: () => ({ height: 14, baseline: 11 }),
+    };
+    const narrow: TextMeasurer = {
+      measure: (text) => text.length * 2,
+      lineMetrics: () => ({ height: 14, baseline: 11 }),
+    };
+    const layout = lay(p('abcdefghij'), wide);
+    const first = hit(layout, 50, 5, narrow)!.position.offset;
+    const second = hit(layout, 50, 5, wide)!.position.offset;
+    // At 20pt per character x=50 is nearest the boundary after 2; at 2pt it is past the end.
+    expect(second).toBe(2);
+    expect(first).toBe(10);
+    expect(first).not.toBe(second);
+  });
+
+  test('replacing the grapheme boundary is not masked by a warm cache', () => {
+    const layout = lay(p('éx'));
+    hit(layout, 3, 5, measurer);
+    setGraphemeBoundary({
+      // One segment per code unit, so the combining mark becomes its own boundary.
+      segment: (text) =>
+        [...text].map((character, index) => ({
+          index,
+          text: character,
+          utf16From: index,
+          utf16To: index + 1,
+        })),
+    });
+    try {
+      const offsets = new Set<number>();
+      for (let x = 0; x <= 18; x += 1) offsets.add(hit(layout, x, 5, measurer)!.position.offset);
+      expect(offsets.has(1)).toBe(true);
+    } finally {
+      resetGraphemeBoundary();
+    }
+  });
+});
+
+describe('the caret x of a trimmed line end', () => {
+  test('comes from the span that holds the offset, not from the right edge', () => {
+    // Two runs each contributing one trailing space — ordinary in producer-split text. The
+    // caret used to paint at the far right edge, past the space it had just stepped back over.
+    const layout = lay(
+      `<w:p><w:r><w:t xml:space="preserve">${'word '.repeat(14)}word</w:t></w:r>` +
+        `<w:r><w:t xml:space="preserve"> </w:t></w:r>` +
+        `<w:r><w:t xml:space="preserve"> </w:t></w:r>` +
+        `<w:r><w:t>tail</w:t></w:r></w:p>`
+    );
+    const lines = paragraphFragmentsOf(layout.pages[0]!)[0]!.lines;
+    if (lines.length < 2) return; // the fixture did not wrap; nothing to assert
+    const first = lines[0]!;
+    const found = hit(layout, 9999, first.box.y + 2)!;
+    const spanRight = first.spans.reduce((max, s) => Math.max(max, s.box.x + s.box.width), 0);
+    if (found.position.offset === first.range.end) return; // nothing was trimmed
+    expect(found.caret.x).toBeLessThan(spanRight);
   });
 });

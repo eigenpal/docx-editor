@@ -123,6 +123,15 @@ function tableIndex(layout: SemanticLayout): Map<string, TableIndex> {
   return index;
 }
 
+/** The number of grid columns a table spans, from the widest row. */
+function columnCountOf(table: TableIndex): number {
+  let columns = 0;
+  for (const cells of table.rows.values()) {
+    for (const cell of cells) columns = Math.max(columns, spans(cell).to + 1);
+  }
+  return columns;
+}
+
 /** Anything that occupies grid columns — a painted cell, or an address naming one. */
 interface GridExtent {
   readonly gridColumn: number;
@@ -163,9 +172,14 @@ export function cellSelectionBetween(
   const continuesInRange = (rowIndex: number): boolean =>
     (table.rows.get(rowIndex) ?? []).some((cell) => cell.vMergeContinue && overlapsColumns(cell));
 
-  // Both ranges only ever grow and are bounded by the table, so this terminates; the pass cap
-  // is a backstop against a record set that says something impossible, not a real limit.
-  for (let pass = 0; pass <= table.rows.size + 1; pass += 1) {
+  // Loop until STABLE. A fixed pass count was wrong: column growth only propagates forward
+  // through the row scan, so a cell in an earlier row that newly overlaps needs another pass,
+  // and stopping early published a ragged selection whose `columns` disagreed with its own
+  // `cellIds`. Both ranges only ever grow and are bounded by the table, so this terminates;
+  // the counter is an assertion against a record set that says something impossible.
+  const maxPasses = table.rows.size + columnCountOf(table) + 2;
+  for (let pass = 0; ; pass += 1) {
+    if (pass > maxPasses) break;
     let grew = false;
     // A cell spanning columns cannot be half selected: touching it pulls the rectangle out to
     // its full width.
@@ -217,7 +231,7 @@ export function cellSelectionBetween(
     cellIds,
     rows: { from: rowFrom, to: rowTo },
     columns: { from: columnFrom, to: columnTo },
-    text: textRangeOf(layout, cellIds),
+    text: textRangeOf(layout, anchor.tableId, cellIds),
   };
 }
 
@@ -261,18 +275,40 @@ function collectParagraphs(block: BlockFragmentRecord, into: string[], seen: Set
  * and the DOM mirror can act on a cell selection without knowing it is one. A rectangle whose
  * cells are all empty still has to name a position, or those readers would have nothing.
  */
-function textRangeOf(layout: SemanticLayout, cellIds: readonly string[]): SemanticSelection {
+function textRangeOf(
+  layout: SemanticLayout,
+  tableId: string,
+  cellIds: readonly string[]
+): SemanticSelection {
   const paragraphs = paragraphsInCells(layout, cellIds);
   const first = paragraphs[0];
   const last = paragraphs[paragraphs.length - 1];
-  if (!first || !last) return emptySelection(layout);
+  if (!first || !last) return nearestPositionInTable(layout, tableId);
   return {
     anchor: { paragraphId: first, offset: 0 },
     head: { paragraphId: last, offset: paragraphTextFromLayout(layout, last).length },
   };
 }
 
-function emptySelection(layout: SemanticLayout): SemanticSelection {
+/**
+ * A position for a rectangle whose cells are all empty.
+ *
+ * Inside the SAME table. Falling back to the document's first paragraph put the caret outside
+ * the table entirely, so the next keystroke typed at the top of the document — a rectangle
+ * that selects nothing must still not aim somewhere else.
+ */
+function nearestPositionInTable(layout: SemanticLayout, tableId: string): SemanticSelection {
+  const table = tableIndex(layout).get(tableId);
+  for (const entry of table?.placed ?? []) {
+    if (entry.isHeaderRepeat) continue;
+    const found: string[] = [];
+    for (const block of entry.cell.blocks) collectParagraphs(block, found, new Set());
+    const paragraphId = found[0];
+    if (paragraphId) {
+      const at = { paragraphId, offset: 0 };
+      return { anchor: at, head: at };
+    }
+  }
   for (const page of layout.pages) {
     for (const fragment of paragraphFragmentsOf(page)) {
       const at = { paragraphId: fragment.paragraphId, offset: 0 };
@@ -344,21 +380,34 @@ export function cellSelectionText(layout: SemanticLayout, selection: CellSelecti
   const table = tableIndex(layout).get(selection.tableId);
   if (!table) return '';
   const wanted = new Set(selection.cellIds);
-  const rows = new Map<number, string[]>();
+  const rows = new Map<number, Map<number, string>>();
   const seen = new Set<string>();
   for (const entry of table.placed) {
     if (entry.isHeaderRepeat || !wanted.has(entry.cell.id) || seen.has(entry.cell.id)) continue;
     seen.add(entry.cell.id);
-    const paragraphs: string[] = [];
-    for (const block of entry.cell.blocks) collectParagraphs(block, paragraphs, new Set());
-    const text = paragraphs.map((id) => paragraphTextFromLayout(layout, id)).join('\n');
+    // Every placement of the cell, not just the first: a row that splits mid-content across
+    // pages puts the rest of its paragraphs in a later fragment, and reading one placement
+    // silently dropped that tail from the clipboard.
+    const text = paragraphsInCells(layout, [entry.cell.id])
+      .map((id) => paragraphTextFromLayout(layout, id))
+      .join('\n');
     const row = rows.get(entry.rowIndex);
-    if (row) row.push(text);
-    else rows.set(entry.rowIndex, [text]);
+    if (row) row.set(entry.cell.gridColumn, text);
+    else rows.set(entry.rowIndex, new Map([[entry.cell.gridColumn, text]]));
   }
   return [...rows.keys()]
     .sort((left, right) => left - right)
-    .map((index) => rows.get(index)!.join('\t'))
+    .map((index) => {
+      const row = rows.get(index)!;
+      const fields: string[] = [];
+      // One field per GRID COLUMN, not per present cell. A row with `w:gridBefore`, or any
+      // interior gap, otherwise shifts every later column one place left and the grid no
+      // longer lines up when it is pasted.
+      for (let column = selection.columns.from; column <= selection.columns.to; column += 1) {
+        fields.push(row.get(column) ?? '');
+      }
+      return fields.join('\t');
+    })
     .join('\n');
 }
 
@@ -382,24 +431,30 @@ export function tableContextAt(
   layout: SemanticLayout,
   paragraphId: string
 ): TableCellContext | null {
+  let best: TableCellContext | null = null;
+  let bestDepth = -1;
   for (const [tableId, table] of tableIndex(layout)) {
     for (const entry of table.placed) {
       if (entry.isHeaderRepeat) continue;
       const found: string[] = [];
       for (const block of entry.cell.blocks) collectParagraphs(block, found, new Set());
       if (!found.includes(paragraphId)) continue;
-      let columns = 0;
-      for (const cells of table.rows.values()) {
-        for (const cell of cells) columns = Math.max(columns, spans(cell).to + 1);
-      }
-      return {
+      // The INNERMOST table wins. `collectParagraphs` recurses, so an outer table also
+      // "contains" a nested table's paragraphs — and reporting the outer one contradicted
+      // `SemanticHit.cell`, which names the innermost cell, as well as what Word reports.
+      // Nesting depth reads straight off the canonical id: a nested table's id extends its
+      // containing cell's.
+      const depth = tableId.length;
+      if (depth <= bestDepth) continue;
+      bestDepth = depth;
+      best = {
         tableId,
         rows: table.rows.size,
-        columns,
+        columns: columnCountOf(table),
         rowIndex: entry.rowIndex,
         columnIndex: entry.cell.gridColumn,
       };
     }
   }
-  return null;
+  return best;
 }

@@ -617,3 +617,113 @@ describe('a rectangle survives the browser reporting its own selection', () => {
     mounted.surface.destroy();
   });
 });
+
+describe('a rectangle is not the text range it stands in for', () => {
+  test('deleting one column does NOT empty the columns beside it', async () => {
+    // The range from A1 to A2 runs through B1 on the way. Deleting through it emptied cells
+    // the drag never covered — the exact failure the rectangle exists to prevent.
+    const mounted = mount(TABLE);
+    press(mounted, ...inCell(0, 0));
+    move(...inCell(1, 0));
+    release(...inCell(1, 0));
+    expect(mounted.surface.state().cellSelection!.columns).toEqual({ from: 0, to: 0 });
+
+    expect(mounted.surface.deleteSelection()).toBe(true);
+    await Promise.resolve();
+    const painted = [...mounted.pages.querySelectorAll('.docx-table-cell')].map(
+      (cell) => cell.textContent
+    );
+    expect(painted).toEqual(['', 'B1', '', 'B2']);
+    mounted.surface.destroy();
+  });
+
+  test('a repaint while a rectangle is live does not collapse the model selection', async () => {
+    // The DOM deliberately holds a COLLAPSED selection while a rectangle is live, so it
+    // disagrees with the model by construction. The pre-paint reader adopted that
+    // disagreement, leaving the overlay painting four cells while Delete edited one
+    // character.
+    const mounted = mount(TABLE);
+    press(mounted, ...inCell(0, 0));
+    move(...inCell(1, 1));
+    release(...inCell(1, 1));
+
+    await Promise.resolve();
+    mounted.surface.type('');
+    const before = mounted.surface.state();
+    expect(before.cellSelection).toBeNull();
+
+    // And again, this time forcing a repaint that is NOT an edit.
+    const second = mount(TABLE);
+    press(second, ...inCell(0, 0));
+    move(...inCell(1, 1));
+    release(...inCell(1, 1));
+    await Promise.resolve();
+    second.surface.setCellSelection(second.surface.state().cellSelection);
+    expect(second.surface.state().cellSelection!.cellIds).toHaveLength(4);
+    expect(second.surface.deleteSelection()).toBe(true);
+    await Promise.resolve();
+    expect(
+      [...second.pages.querySelectorAll('.docx-table-cell')].map((cell) => cell.textContent)
+    ).toEqual(['', '', '', '']);
+    second.surface.destroy();
+    mounted.surface.destroy();
+  });
+
+  test('an edit clears the rectangle rather than leaving a stale one painted', () => {
+    const mounted = mount(TABLE);
+    press(mounted, ...inCell(0, 0));
+    move(...inCell(1, 1));
+    release(...inCell(1, 1));
+    mounted.surface.deleteSelection();
+    expect(mounted.surface.state().cellSelection).toBeNull();
+    expect(mounted.container.querySelectorAll('.docx-cell-selection-rect')).toHaveLength(0);
+    mounted.surface.destroy();
+  });
+
+  test('formatting a rectangle actually formats it, and keeps it selected', () => {
+    // The read side reported the cells; the write side refused every multi-paragraph range,
+    // so pressing Bold over selected cells was a silent no-op.
+    const mounted = mount(TABLE);
+    press(mounted, ...inCell(0, 0));
+    move(...inCell(1, 1));
+    release(...inCell(1, 1));
+    expect(mounted.surface.formatting().bold).toBe(false);
+
+    mounted.surface.toggleRunProperty('b');
+    expect(mounted.surface.formatting().bold).toBe(true);
+    expect(mounted.surface.state().cellSelection!.cellIds).toHaveLength(4);
+    mounted.surface.destroy();
+  });
+});
+
+describe('the gesture cannot be stranded', () => {
+  test('a second pointer does not inherit the first one’s gesture', () => {
+    const mounted = mount(paragraph('hello world'));
+    press(mounted, 0, 5);
+    mounted.pages.dispatchEvent(pointer('pointerdown', 30, 5, { pointerId: 2 }));
+    // The first pointer's release must not leave a live gesture behind.
+    release(0, 5);
+    document.dispatchEvent(pointer('pointerup', 30, 5, { pointerId: 2 }));
+    document.dispatchEvent(pointer('pointermove', 500, 5, { pointerId: 2 }));
+    expect(offsets(mounted.surface)).toEqual([5, 5]);
+    mounted.surface.destroy();
+  });
+
+  test('a slow second click is a fresh click, not a double', async () => {
+    const mounted = mount(paragraph('hello world'));
+    press(mounted, 12, 5);
+    await new Promise((resolve) => setTimeout(resolve, 520));
+    press(mounted, 12, 5);
+    expect(offsets(mounted.surface)).toEqual([2, 2]);
+    mounted.surface.destroy();
+  });
+
+  test('a click then a shift-click extends, it does not select a word', () => {
+    const mounted = mount(paragraph('hello world'));
+    press(mounted, 12, 5);
+    release(12, 5);
+    press(mounted, 12, 5, { shiftKey: true });
+    expect(offsets(mounted.surface)).toEqual([2, 2]);
+    mounted.surface.destroy();
+  });
+});

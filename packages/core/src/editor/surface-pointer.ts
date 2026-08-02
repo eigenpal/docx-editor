@@ -254,6 +254,23 @@ export function createPointerController(
   // Autoscroll
   // ---------------------------------------------------------------------------------
 
+  /**
+   * The element the `scroll` listener is REGISTERED on, captured once.
+   *
+   * `destroy()` used to look the scroller up again, and `closest` returns null once the
+   * container has been unparented — so the listener stayed attached to an element that then
+   * retained the whole surface through this closure.
+   */
+  const scrollHost: HTMLElement | null = container.closest('.docx-editor__scroll-container');
+
+  /**
+   * The scroller to FOLLOW during a drag, looked up live.
+   *
+   * Deliberately not `scrollHost`: a host is free to build its chrome after mounting, so the
+   * scroll container may not exist yet when the controller is constructed. Autoscroll has to
+   * find it whenever the drag actually happens. Invalidation is covered regardless, by the
+   * capture-phase listener on the window below.
+   */
   function scroller(): HTMLElement | null {
     return container.closest('.docx-editor__scroll-container');
   }
@@ -353,13 +370,18 @@ export function createPointerController(
   }
 
   function countClick(event: PointerEvent): number {
-    const now = event.timeStamp || Date.now();
+    // ONE clock. `event.timeStamp` is relative to the document's time origin and `Date.now()`
+    // is absolute, so falling back between them produces a delta of about minus 1.7e12 — and
+    // a negative number is `<= 500`, which made every press after it count as a double click
+    // for the rest of the session. No sub-millisecond precision is needed for a 500ms window.
+    const now = Date.now();
+    const since = now - lastClickAt;
     const near =
       Math.abs(event.clientX - lastClickX) <= MULTI_CLICK_SLOP_PX &&
       Math.abs(event.clientY - lastClickY) <= MULTI_CLICK_SLOP_PX;
     // Counted here rather than read off `detail`, which browsers disagree about on
     // `pointerdown` — some report the click count, some report zero.
-    clickCount = near && now - lastClickAt <= MULTI_CLICK_MS ? clickCount + 1 : 1;
+    clickCount = near && since >= 0 && since <= MULTI_CLICK_MS ? clickCount + 1 : 1;
     lastClickAt = now;
     lastClickX = event.clientX;
     lastClickY = event.clientY;
@@ -378,6 +400,10 @@ export function createPointerController(
     // Touch keeps the browser's own panning: claiming the gesture would stop the page
     // scrolling under a finger, which is a much worse trade than a less exact caret.
     if (event.pointerType === 'touch') return;
+    // A second pointer arriving mid-gesture used to overwrite the slot, stranding the first
+    // one's capture and its listeners — and `dragging()` then stayed true forever, which
+    // silently disabled selection adoption for the rest of the surface's life.
+    if (gesture) endGesture();
 
     layerRect = null;
     const hit = resolve(event.clientX, event.clientY);
@@ -389,11 +415,26 @@ export function createPointerController(
     // explicitly, and BEFORE the selection is set.
     host.focus();
 
+    // Before the first `setSelection`: publishing a selection runs the host's own `onChange`,
+    // and a host that throws there used to strand the gesture with no `pointerup` listener —
+    // `dragging()` stayed true and killed selection adoption until the next successful press.
+    try {
+      pagesLayer.setPointerCapture(event.pointerId);
+    } catch {
+      // Capture is an optimisation, not a requirement — the document listeners below see the
+      // rest of the gesture wherever the pointer goes.
+    }
+    document.addEventListener('pointermove', onPointerMove);
+    document.addEventListener('pointerup', onPointerUp);
+    document.addEventListener('pointercancel', onPointerUp);
+
     const layout = host.layout();
     const count = countClick(event);
-    const granularity = GRANULARITIES[(count - 1) % GRANULARITIES.length]!;
+    const granularity = event.shiftKey
+      ? 'character'
+      : GRANULARITIES[(count - 1) % GRANULARITIES.length]!;
 
-    if (event.shiftKey && granularity === 'character') {
+    if (event.shiftKey) {
       // Extend from the anchor the existing selection already has, so shift-clicking on the
       // far side of a range pivots around the end the user did not place.
       const current = host.selection();
@@ -406,7 +447,7 @@ export function createPointerController(
         clientX: event.clientX,
         clientY: event.clientY,
       };
-      host.setSelection({ anchor: current.anchor, head: hit.position });
+      publish(() => host.setSelection({ anchor: current.anchor, head: hit.position }));
     } else {
       const anchorRange = rangeAt(layout, hit.position, granularity);
       gesture = {
@@ -418,19 +459,19 @@ export function createPointerController(
         clientX: event.clientX,
         clientY: event.clientY,
       };
-      host.setSelection({ anchor: anchorRange.from, head: anchorRange.to });
+      publish(() => host.setSelection({ anchor: anchorRange.from, head: anchorRange.to }));
     }
-
-    try {
-      pagesLayer.setPointerCapture(event.pointerId);
-    } catch {
-      // Capture is an optimisation, not a requirement — the document-level listeners below
-      // already see the rest of the gesture wherever the pointer goes.
-    }
-    document.addEventListener('pointermove', onPointerMove);
-    document.addEventListener('pointerup', onPointerUp);
-    document.addEventListener('pointercancel', onPointerUp);
   };
+
+  /** Publish a selection without letting a throwing host strand the gesture. */
+  function publish(write: () => void): void {
+    try {
+      write();
+    } catch (error) {
+      endGesture();
+      throw error;
+    }
+  }
 
   const onPointerMove = (event: PointerEvent): void => {
     const active = gesture;
@@ -461,6 +502,13 @@ export function createPointerController(
   };
 
   function endGesture(): void {
+    if (gesture) {
+      try {
+        pagesLayer.releasePointerCapture(gesture.pointerId);
+      } catch {
+        // Already released, or never captured.
+      }
+    }
     gesture = null;
     layerRect = null;
     stopAutoScroll();
@@ -476,14 +524,22 @@ export function createPointerController(
   };
 
   pagesLayer.addEventListener('pointerdown', onPointerDown);
-  scroller()?.addEventListener('scroll', onScroll, { passive: true });
+  scrollHost?.addEventListener('scroll', onScroll, { passive: true });
+  // Anything that can move the layer under a live pointer invalidates the cached origin, not
+  // only the scroller this surface sits in: an ancestor or the window can scroll, and a
+  // resize re-centres the page stack. Capture phase, because a scroll on an inner element
+  // does not bubble.
+  view?.addEventListener('scroll', onScroll, { capture: true, passive: true });
+  view?.addEventListener('resize', onScroll, { passive: true });
 
   return {
     dragging: () => gesture !== null,
     destroy() {
       endGesture();
       pagesLayer.removeEventListener('pointerdown', onPointerDown);
-      scroller()?.removeEventListener('scroll', onScroll);
+      scrollHost?.removeEventListener('scroll', onScroll);
+      view?.removeEventListener('scroll', onScroll, { capture: true });
+      view?.removeEventListener('resize', onScroll);
     },
   };
 }

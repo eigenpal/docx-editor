@@ -28,6 +28,7 @@ import {
   cellSelectionRects,
   cellSelectionText,
   documentOrder,
+  paragraphsInCells,
   layoutSemanticDocument,
   resolveNumberingLevel,
   moveCaret,
@@ -207,7 +208,7 @@ export function mountPaginatedSurface(
     session,
     layout: () => currentLayout,
     selection: () => selection,
-    commit: (run, nextSelection) => commit(run, nextSelection),
+    commit: (run, nextSelection, options) => commit(run, nextSelection, options),
     orderedRange: () => orderedRange(),
     selectionMark: () => selectionMark(),
     textOf: (paragraphId) => textOf(paragraphId),
@@ -403,8 +404,15 @@ export function mountPaginatedSurface(
 
   function commit(
     run: () => ReturnType<TreeDocxSession['applyPmDoc']> | boolean,
-    selectionAfter?: () => SemanticSelection | null
+    selectionAfter?: () => SemanticSelection | null,
+    options: { readonly keepCellSelection?: boolean } | undefined = {}
   ): void {
+    // An edit invalidates the rectangle: its cells' content has changed, and the collapsed
+    // DOM selection it installed still points at the PRE-edit anchor. Left standing it kept
+    // painting a highlight over text that had moved, kept suppressing selection adoption, and
+    // kept feeding a stale cell list to the toolbar. Formatting is the one caller that
+    // legitimately keeps it — Word leaves cells selected after Bold.
+    if (!options?.keepCellSelection) cellSelection = null;
     // Whatever the DOM selection holds, it was made against the text BEFORE this edit, so its
     // offsets stop meaning the same thing the moment the ops land. The render below must
     // write the model's selection out, never read the stale one back.
@@ -491,6 +499,9 @@ export function mountPaginatedSurface(
     cellSelection = next;
     if (next) selection = next.text;
     desiredX = null;
+    // Settled, not moved: the mirror on the next line makes the two agree before any render
+    // can read them back — the same reason `setSelection` says so.
+    selectionSync.noteSelectionSettled();
     selectionSync.mirrorToDom();
     renderOverlay();
     options.onChange?.(currentState());
@@ -809,6 +820,19 @@ export function mountPaginatedSurface(
 
   /** Ops that remove the current selection, or none when it is collapsed. */
   function deleteSelectionOps(): Parameters<TreeDocxSession['applyTreeOps']>[0] {
+    // A RECTANGLE is not the range it stands in for. Rows one and two of column one, read as
+    // a range, run through every cell between them — so deleting through the range empties
+    // cells the drag never covered, which is the exact failure the rectangle exists to
+    // prevent. Clear each selected cell's own paragraphs instead, and join nothing: Word
+    // empties the cells and never merges them.
+    if (cellSelection) {
+      const ops: TreeDocOp[] = [];
+      for (const paragraphId of paragraphsInCells(currentLayout, cellSelection.cellIds)) {
+        const length = paragraphTextFromLayout(currentLayout, paragraphId).length;
+        if (length > 0) ops.push({ op: 'deleteText', paragraphId, start: 0, end: length });
+      }
+      return ops;
+    }
     const { from, to } = orderedRange();
     return deleteRangeOps(currentLayout, session.part(), from, to);
   }

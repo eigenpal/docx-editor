@@ -21,7 +21,7 @@
 // Refusing to answer is never right: a click has to put the caret somewhere, and returning
 // null makes it do nothing at all.
 
-import { segmentGraphemes } from './grapheme.ts';
+import { graphemeBoundaryEpoch, segmentGraphemes } from './grapheme.ts';
 import type { CaretGeometry, SemanticPosition } from './semantic-interaction.ts';
 import type {
   BlockFragmentRecord,
@@ -112,6 +112,19 @@ interface LayoutHitIndex {
   readonly rowIndexById: ReadonlyMap<string, number>;
   /** The id of the LAST line each paragraph occupies, for the soft-wrap end rule. */
   readonly lastLineIdOfParagraph: ReadonlyMap<string, string>;
+  /**
+   * The cell a vertical-merge continuation continues, for every continuation in the layout.
+   *
+   * Built across ALL pages, because a merged run routinely starts on one page and continues
+   * on the next: a fragment-local walk finds nothing there and the click resolves into
+   * whatever cell happens to be nearest — a different column.
+   */
+  readonly mergeOriginOf: ReadonlyMap<TableCellFragmentRecord, MergedCellOrigin>;
+}
+
+interface MergedCellOrigin {
+  readonly row: TableRowFragmentRecord;
+  readonly cell: TableCellFragmentRecord;
 }
 
 /**
@@ -132,11 +145,21 @@ function hitIndex(layout: SemanticLayout): LayoutHitIndex {
   const rowIndexById = new Map<string, number>();
   const lastLineIdOfParagraph = new Map<string, string>();
   const rowsSeenPerTable = new Map<string, number>();
+  const mergeOriginOf = new Map<TableCellFragmentRecord, MergedCellOrigin>();
+  /** The most recent non-continuation cell per table column, in document order. */
+  const openMerge = new Map<string, MergedCellOrigin>();
 
-  const visitBlocks = (blocks: readonly BlockFragmentRecord[]): void => {
+  const visitBlocks = (blocks: readonly BlockFragmentRecord[], inHeaderRepeat: boolean): void => {
     for (const block of blocks) {
       if (block.kind === 'paragraph') {
-        for (const line of block.lines) lastLineIdOfParagraph.set(line.range.paragraphId, line.id);
+        // A repeated header row re-emits the SAME paragraph ids with DIFFERENT line ids, so
+        // letting it write here leaves every earlier page's copy looking like it soft-wrapped
+        // — and the end of that line becomes unreachable.
+        if (!inHeaderRepeat) {
+          for (const line of block.lines) {
+            lastLineIdOfParagraph.set(line.range.paragraphId, line.id);
+          }
+        }
         continue;
       }
       for (const row of block.rows) {
@@ -147,17 +170,38 @@ function hitIndex(layout: SemanticLayout): LayoutHitIndex {
           rowIndexById.set(row.id, next);
           rowsSeenPerTable.set(block.tableId, next + 1);
         }
-        for (const cell of row.cells) visitBlocks(cell.blocks);
+        for (const cell of row.cells) {
+          // Repeats are copies, so they neither open a merge nor continue one.
+          if (!row.isHeaderRepeat && !inHeaderRepeat) {
+            const column = `${block.tableId}|${cell.gridColumn}`;
+            // Keyed on what matters — this cell paints nothing — rather than on any one of
+            // the flags layout uses to say so. A merge re-opened on a continuation page
+            // reports `vMergeContinue: false` and still holds no blocks, so testing the flag
+            // alone left exactly the cells that need an origin without one.
+            if (cell.blocks.length === 0) {
+              const origin = openMerge.get(column);
+              if (origin) mergeOriginOf.set(cell, origin);
+            } else {
+              openMerge.set(column, { row, cell });
+            }
+          }
+          visitBlocks(cell.blocks, inHeaderRepeat || row.isHeaderRepeat);
+        }
       }
     }
   };
 
   for (const page of layout.pages) {
     pageTops.push(page.box.y);
-    visitBlocks(page.fragments);
+    visitBlocks(page.fragments, false);
   }
 
-  const index: LayoutHitIndex = { pageTops, rowIndexById, lastLineIdOfParagraph };
+  const index: LayoutHitIndex = {
+    pageTops,
+    rowIndexById,
+    lastLineIdOfParagraph,
+    mergeOriginOf,
+  };
   hitIndexCache.set(layout, index);
   return index;
 }
@@ -218,7 +262,27 @@ export function hitTestPage(
     verticalWeight: options.verticalWeight ?? DEFAULT_VERTICAL_WEIGHT,
     measurer: options.measurer,
   };
-  return resolveBlocks(page.fragments, point, context, null);
+  const hit = resolveBlocks(page.fragments, point, context, null);
+  if (hit) return hit;
+
+  // This page paints no reachable text — a run of vertical-merge continuations whose origin
+  // is pages back, or a table fragment carrying nothing at all. A press still has to land
+  // somewhere, so walk outward to the nearest page that does hold text. Only ever reached on
+  // a page that would otherwise be a dead click.
+  for (let distance = 1; distance < layout.pages.length; distance += 1) {
+    for (const index of [pageIndex - distance, pageIndex + distance]) {
+      const neighbour = layout.pages[index];
+      if (!neighbour) continue;
+      const found = resolveBlocks(
+        neighbour.fragments,
+        point,
+        { ...context, pageIndex: neighbour.index },
+        null
+      );
+      if (found) return found;
+    }
+  }
+  return null;
 }
 
 /**
@@ -273,30 +337,45 @@ function resolveBlocks(
   context: HitContext,
   cell: TableCellAddress | null
 ): SemanticHit | null {
+  if (blocks.length === 0) return null;
+
   // Containment first, and HALF-OPEN, so a point exactly on the edge two stacked blocks share
   // belongs to the lower one — the same rule the line bands use, decided by construction
   // rather than by a tolerance. Distance alone cannot express it: the shared edge is zero
   // away from both boxes, and first-wins would silently hand it to the block above.
+  let contained: BlockFragmentRecord | null = null;
   for (const block of blocks) {
     if (!contains(block.box, point)) continue;
-    return block.kind === 'paragraph'
-      ? resolveParagraph(block, point, context, cell, true)
-      : resolveTable(block, point, context, cell);
+    contained = block;
+    const hit = resolveOneBlock(block, point, context, cell);
+    if (hit) return hit;
+    break;
   }
 
-  let best: BlockFragmentRecord | null = null;
-  let bestScore = Number.POSITIVE_INFINITY;
-  for (const block of blocks) {
-    const score = weightedDistance(block.box, point, context.verticalWeight);
-    if (score < bestScore) {
-      bestScore = score;
-      best = block;
-    }
+  // Nearest-first, and it keeps going. A block CAN fail to answer — a table fragment that
+  // paints nothing but vertical-merge continuations holds no text at all — and stopping at
+  // the first refusal is what turned those pages into dead clicks, which is never the right
+  // answer for a press.
+  const ranked = blocks
+    .filter((block) => block !== contained)
+    .map((block) => ({ block, score: weightedDistance(block.box, point, context.verticalWeight) }))
+    .sort((left, right) => left.score - right.score);
+  for (const { block } of ranked) {
+    const hit = resolveOneBlock(block, point, context, cell);
+    if (hit) return hit;
   }
-  if (!best) return null;
-  return best.kind === 'paragraph'
-    ? resolveParagraph(best, point, context, cell, false)
-    : resolveTable(best, point, context, cell);
+  return null;
+}
+
+function resolveOneBlock(
+  block: BlockFragmentRecord,
+  point: HitPoint,
+  context: HitContext,
+  cell: TableCellAddress | null
+): SemanticHit | null {
+  return block.kind === 'paragraph'
+    ? resolveParagraph(block, point, context, cell, contains(block.box, point))
+    : resolveTable(block, point, context, cell);
 }
 
 function resolveParagraph(
@@ -326,7 +405,13 @@ function resolveParagraph(
     pageIndex: context.pageIndex,
     lineId: line.id,
     cell,
-    onGlyphs: insideBox && resolved.withinSpan,
+    // The LINE's band, not the block's: a paragraph with trailing space is taller than its
+    // text, and a point in that space is not on a glyph however far inside the block it is.
+    onGlyphs:
+      insideBox &&
+      resolved.withinSpan &&
+      point.y >= line.box.y &&
+      point.y < line.box.y + line.box.height,
   };
 }
 
@@ -409,16 +494,21 @@ function offsetOnLine(line: LineRecord, x: number, context: HitContext): LineOff
 function endOfLine(line: LineRecord, rightEdge: number, context: HitContext): LineOffset {
   const offset = lineEndOffset(context.layout, line);
   if (offset === line.range.end) return { offset, x: rightEdge, withinSpan: false };
-  // The end moved back over a trailing space, so the caret's x has to move back with it.
-  const last = line.spans[line.spans.length - 1];
-  if (!last || offset < last.range.start) return { offset, x: rightEdge, withinSpan: false };
-  const width = context.measurer
-    ? prefixWidth(last, offset - last.range.start, context.measurer)
-    : last.box.width *
-      (last.range.end > last.range.start
-        ? (offset - last.range.start) / (last.range.end - last.range.start)
-        : 0);
-  return { offset, x: last.box.x + width, withinSpan: false };
+  // The end moved back over trailing space, so the caret's x moves back with it — into
+  // whichever span now CONTAINS that offset. Assuming the last span holds it paints the caret
+  // at the far right edge whenever two runs each contributed one trailing space, which is
+  // ordinary in text a producer split on revision ids.
+  for (let index = line.spans.length - 1; index >= 0; index -= 1) {
+    const span = line.spans[index]!;
+    if (offset < span.range.start) continue;
+    const within = offset - span.range.start;
+    const width = context.measurer
+      ? prefixWidth(span, within, context.measurer)
+      : span.box.width *
+        (span.range.end > span.range.start ? within / (span.range.end - span.range.start) : 0);
+    return { offset, x: span.box.x + width, withinSpan: false };
+  }
+  return { offset, x: rightEdge, withinSpan: false };
 }
 
 /**
@@ -454,17 +544,30 @@ function characterAt(line: LineRecord, offset: number): string | null {
 // Within a span
 // ---------------------------------------------------------------------------------------
 
-const boundaryCache = new WeakMap<StyleSpanRecord, readonly number[]>();
-const prefixCache = new WeakMap<StyleSpanRecord, Map<number, number>>();
+const boundaryCache = new WeakMap<
+  StyleSpanRecord,
+  { epoch: number; boundaries: readonly number[] }
+>();
+/**
+ * Keyed on the MEASURER first.
+ *
+ * Widths depend on who measured, so a cache keyed on the span alone serves the first
+ * measurer's numbers to every later one — and two ports over one layout is exactly what a
+ * second surface, or a headless probe, does.
+ */
+const prefixCache = new WeakMap<TextMeasurer, WeakMap<StyleSpanRecord, Map<number, number>>>();
 
 /** Grapheme boundaries of a span's text, as UTF-16 offsets within it. */
 function boundariesOf(span: StyleSpanRecord): readonly number[] {
+  // Segmentation is replaceable, and `grapheme.ts` states the rule: a cache whose value
+  // depends on it must carry the epoch in its key rather than trust anyone to clear it.
+  const epoch = graphemeBoundaryEpoch();
   const cached = boundaryCache.get(span);
-  if (cached) return cached;
+  if (cached && cached.epoch === epoch) return cached.boundaries;
   const boundaries: number[] = [0];
   for (const segment of segmentGraphemes(span.text)) boundaries.push(segment.utf16To);
   if (boundaries[boundaries.length - 1] !== span.text.length) boundaries.push(span.text.length);
-  boundaryCache.set(span, boundaries);
+  boundaryCache.set(span, { epoch, boundaries });
   return boundaries;
 }
 
@@ -477,10 +580,15 @@ function boundariesOf(span: StyleSpanRecord): readonly number[] {
  * as the geometry it describes.
  */
 function prefixWidth(span: StyleSpanRecord, utf16: number, measurer: TextMeasurer): number {
-  let widths = prefixCache.get(span);
+  let perSpan = prefixCache.get(measurer);
+  if (!perSpan) {
+    perSpan = new WeakMap<StyleSpanRecord, Map<number, number>>();
+    prefixCache.set(measurer, perSpan);
+  }
+  let widths = perSpan.get(span);
   if (!widths) {
     widths = new Map<number, number>();
-    prefixCache.set(span, widths);
+    perSpan.set(span, widths);
   }
   const cached = widths.get(utf16);
   if (cached !== undefined) return cached;
@@ -599,90 +707,74 @@ function addressOf(
   };
 }
 
-/**
- * The cell a vertical-merge continuation is a continuation OF.
- *
- * A continuation paints its box but holds no blocks, so resolving into it directly would find
- * no paragraph and fall through to "somewhere else on the page". Walking up to the origin puts
- * the caret in the text that is actually drawn in that visual cell. When the origin began on a
- * previous page there is nothing above to find, and the continuation stands.
- */
-function mergeOrigin(
-  table: TableFragmentRecord,
-  row: TableRowFragmentRecord,
-  cell: TableCellFragmentRecord
-): { row: TableRowFragmentRecord; cell: TableCellFragmentRecord } {
-  const rowAt = table.rows.indexOf(row);
-  for (let index = rowAt - 1; index >= 0; index -= 1) {
-    const above = table.rows[index]!;
-    if (above.isHeaderRepeat) continue;
-    for (const candidate of above.cells) {
-      if (candidate.gridColumn !== cell.gridColumn) continue;
-      if (!candidate.vMergeContinue) return { row: above, cell: candidate };
-      break;
-    }
-  }
-  return { row, cell };
-}
-
 function resolveTable(
   table: TableFragmentRecord,
   point: HitPoint,
   context: HitContext,
   outerCell: TableCellAddress | null
 ): SemanticHit | null {
+  void outerCell;
+  // A repeated header row is a COPY. Its paragraphs already have caret stops on the page the
+  // original sits on, and resolving into one returns a position whose caret and selection
+  // paint there instead of where the click was — so interaction ignores repeats, exactly as
+  // the records say it should. A fragment that is nothing BUT repeats still has to answer.
+  const authored = table.rows.filter((row) => !row.isHeaderRepeat);
+  const rows = authored.length > 0 ? authored : table.rows;
+
+  const candidates: MergedCellOrigin[] = [];
   const row = bandSelect(
-    table.rows,
+    rows,
     point.y,
     (item) => item.box.y,
     (item) => item.box.height
   );
-  if (!row) return resolveBlocks([], point, context, outerCell);
-  const hitCell = bandSelect(
-    row.cells,
-    point.x,
-    (item) => item.box.x,
-    (item) => item.box.width
-  );
-  if (!hitCell) return null;
+  if (row) {
+    const hitCell = bandSelect(
+      row.cells,
+      point.x,
+      (item) => item.box.x,
+      (item) => item.box.width
+    );
+    // A continuation paints its box but holds no blocks, so resolving into it directly would
+    // find no paragraph. Its origin may be on an EARLIER PAGE, which is why the index tracks
+    // merges across the whole layout rather than within this fragment.
+    if (hitCell) candidates.push(originOf(context, row, hitCell));
+  }
 
-  const origin = hitCell.vMergeContinue ? mergeOrigin(table, row, hitCell) : { row, cell: hitCell };
-  const address = addressOf(context.layout, table, origin.row, origin.cell);
-  // Recursing with the SAME point is what makes cell padding work with no rule of its own: the
-  // padding is outside every block box, so the nearest-block rule picks the block beside it and
-  // the line clamp finishes the job — bottom padding lands at the end of the last block.
-  const inside = resolveBlocks(origin.cell.blocks, point, context, address);
-  if (inside) return inside;
-
-  // An empty cell, or a merge whose origin is on an earlier page: fall back to the nearest cell
-  // in this fragment that actually holds text, so the click still puts the caret somewhere.
-  return resolveNearestFilledCell(table, point, context);
-}
-
-function resolveNearestFilledCell(
-  table: TableFragmentRecord,
-  point: HitPoint,
-  context: HitContext
-): SemanticHit | null {
-  let bestRow: TableRowFragmentRecord | null = null;
-  let bestCell: TableCellFragmentRecord | null = null;
-  let bestScore = Number.POSITIVE_INFINITY;
-  for (const row of table.rows) {
-    for (const cell of row.cells) {
+  // Then every other cell that actually holds something, nearest first — an empty cell, or a
+  // merge whose origin this layout does not carry, must still put the caret somewhere.
+  const rest: { entry: MergedCellOrigin; score: number }[] = [];
+  for (const candidateRow of rows) {
+    for (const cell of candidateRow.cells) {
       if (cell.blocks.length === 0) continue;
-      const score = weightedDistance(cell.box, point, context.verticalWeight);
-      if (score < bestScore) {
-        bestScore = score;
-        bestRow = row;
-        bestCell = cell;
-      }
+      if (candidates.some((entry) => entry.cell === cell)) continue;
+      rest.push({
+        entry: { row: candidateRow, cell },
+        score: weightedDistance(cell.box, point, context.verticalWeight),
+      });
     }
   }
-  if (!bestRow || !bestCell) return null;
-  return resolveBlocks(
-    bestCell.blocks,
-    point,
-    context,
-    addressOf(context.layout, table, bestRow, bestCell)
-  );
+  rest.sort((left, right) => left.score - right.score);
+
+  for (const { row: cellRow, cell } of [...candidates, ...rest.map((item) => item.entry)]) {
+    const address = addressOf(context.layout, table, cellRow, cell);
+    // Recursing with the SAME point is what makes cell padding work with no rule of its own:
+    // the padding is outside every block box, so the nearest-block rule picks the block beside
+    // it and the line clamp finishes the job — bottom padding lands at the end of the last
+    // block.
+    const hit = resolveBlocks(cell.blocks, point, context, address);
+    if (hit) return hit;
+  }
+  // This fragment paints no text at all. The caller keeps looking.
+  return null;
+}
+
+/** The cell whose text is drawn in a cell's box: itself, or the merge it continues. */
+function originOf(
+  context: HitContext,
+  row: TableRowFragmentRecord,
+  cell: TableCellFragmentRecord
+): MergedCellOrigin {
+  if (cell.blocks.length > 0) return { row, cell };
+  return hitIndex(context.layout).mergeOriginOf.get(cell) ?? { row, cell };
 }

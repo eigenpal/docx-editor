@@ -2,8 +2,8 @@
 
 ## Re-recorded at section 13 (Word-accurate pointer interaction)
 
-- `bun test`: **2660 pass, 0 fail, 0 errors**, with section 13 rebased onto the Word-fidelity
-  work. 2606 of those predate this section; it adds 54.
+- `bun test`: **2682 pass, 0 fail, 0 errors**, with section 13 rebased onto the Word-fidelity
+  work. 2606 of those predate this section; it adds 76.
 - `bun run typecheck`: passed (all packages; `@docx-editor.dev/agents` skips for the reason
   recorded under 11.3).
 - `bun run api:check`: passed, 0 errors. Requires the React and Vue packages to be BUILT
