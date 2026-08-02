@@ -88,6 +88,7 @@ export {
   canonicalOoxmlFingerprint,
   ooxmlTreesEqual,
 } from './ooxml-tree.ts';
+export { readOnOffChild } from './ooxml-shared.ts';
 export {
   type ZipRejection,
   type ZipLimits,
@@ -124,6 +125,8 @@ export {
 } from './ooxml-package.ts';
 export {
   resolveHeaderFooterParts,
+  resolveHeaderFooterPartsBySection,
+  collectSectionPropertyNodes,
   type HeaderFooterParts,
   type HeaderFooterVariant,
 } from './hf-references.ts';
@@ -149,6 +152,14 @@ export {
   type OoxmlEditResult,
 } from './ooxml-edit.ts';
 export {
+  PAGE_BREAK_CHAR,
+  hardBreakAttributes,
+  hardBreakKind,
+  hardBreakText,
+  isPageBreakNode,
+  type HardBreakKind,
+} from './hard-break.ts';
+export {
   deriveOoxmlIndexes,
   type OoxmlIndexes,
   type ParagraphIndexEntry,
@@ -164,3 +175,4 @@ export {
   type SemanticDigest,
   type StoryDigest,
 } from './ooxml-digest.ts';
+export { ensureListDefinition, type ListKind } from './numbering-part.ts';

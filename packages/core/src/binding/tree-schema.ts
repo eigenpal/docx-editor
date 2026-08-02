@@ -76,6 +76,16 @@ export const treeSchema = new Schema({
       parseDOM: [{ tag: 'br' }],
     },
 
+    /** `w:br w:type="page"`. */
+    pageBreak: {
+      inline: true,
+      group: 'inline',
+      atom: true,
+      selectable: false,
+      toDOM: () => ['span', { 'data-token': 'page-break', class: 'docx-page-break' }],
+      parseDOM: [{ tag: 'span[data-token="page-break"]' }],
+    },
+
     /**
      * Any tree node the paragraph holds that this schema does not model — a drawing, a
      * field, a future element. Inert and non-editable, but PRESENT and positional, so the

@@ -147,6 +147,38 @@ describe('line breaking and pagination (task 7.3)', () => {
     expect(layout.pages[1]!.fragments[0]!.lines[0]!.spans[0]!.text).toBe('second');
   });
 
+  test('w:br w:type="page" forces a page break inside one paragraph', () => {
+    const part = load(
+      '<w:p><w:r><w:t>before</w:t><w:br w:type="page"/><w:t>after</w:t></w:r></w:p>'
+    );
+    const layout = lay(part, { ...SMALL, height: 1000 });
+    expect(layout.pages).toHaveLength(2);
+    const paragraphId = '/word/document.xml#0.0.0';
+    const fragments = fragmentsOfParagraph(layout, paragraphId);
+    expect(fragments).toHaveLength(2);
+    expect(fragments[0]!.lines.map((line) => line.spans.map((s) => s.text).join('')).join('')).toBe(
+      'before\f'
+    );
+    expect(fragments[1]!.lines.map((line) => line.spans.map((s) => s.text).join('')).join('')).toBe(
+      'after'
+    );
+  });
+
+  test('a page break in an otherwise empty paragraph pushes following content to the next page', () => {
+    const part = load('<w:p><w:r><w:br w:type="page"/></w:r></w:p>' + paragraph('after'));
+    const layout = lay(part, { ...SMALL, height: 1000 });
+    expect(layout.pages).toHaveLength(2);
+    expect(layout.pages[0]!.fragments[0]!.lines[0]!.spans[0]!.text).toBe('\f');
+    expect(layout.pages[1]!.fragments[0]!.lines[0]!.spans[0]!.text).toBe('after');
+  });
+
+  test('an ordinary w:br remains a line break', () => {
+    const part = load('<w:p><w:r><w:t>a</w:t><w:br/><w:t>b</w:t></w:r></w:p>');
+    const layout = lay(part, { ...SMALL, height: 1000 });
+    expect(layout.pages).toHaveLength(1);
+    expect(linesOf(layout)).toHaveLength(2);
+  });
+
   test('a left indent narrows the line and offsets it', () => {
     const part = load(paragraph('indented', '<w:ind w:left="720"/>')); // 720 twips = 36pt
     const [fragment] = layout(part).pages[0]!.fragments;
@@ -306,27 +338,23 @@ describe('paragraph alignment moves the published span boxes (w:jc)', () => {
 });
 
 describe('per-section pagination (the per-section lane)', () => {
-  const PORTRAIT: PageGeometry = {
-    width: 200,
-    height: 300,
-    margin: { top: 10, right: 10, bottom: 10, left: 10 },
-  };
-  const LANDSCAPE: PageGeometry = {
-    width: 300,
-    height: 200,
-    margin: { top: 10, right: 10, bottom: 10, left: 10 },
-  };
+  // Geometry reaches layout the way a document states it: `w:sectPr`, in twips. A
+  // mid-body section lives in the `w:pPr` of its LAST paragraph; the body-level one
+  // governs the tail.
+  const sect = (widthTwips: number, heightTwips: number, type = '') =>
+    `<w:sectPr>${type ? `<w:type w:val="${type}"/>` : ''}` +
+    `<w:pgSz w:w="${widthTwips}" w:h="${heightTwips}"/>` +
+    '<w:pgMar w:top="200" w:right="200" w:bottom="200" w:left="200" ' +
+    'w:header="0" w:footer="0" w:gutter="0"/></w:sectPr>';
+  // 200x300pt portrait and 300x200pt landscape, 10pt margins.
+  const PORTRAIT = sect(4000, 6000);
+  const LANDSCAPE = sect(6000, 4000);
 
   test('a landscape section among portrait ones gets its own sheet, sized landscape', () => {
-    const part = load(paragraph('one') + paragraph('two') + paragraph('three'));
-    const layout = layoutSemanticDocument(part, 1, {
-      measurer,
-      sections: [
-        { geometry: PORTRAIT, firstBlock: 0 },
-        { geometry: LANDSCAPE, firstBlock: 1 },
-        { geometry: PORTRAIT, firstBlock: 2 },
-      ],
-    });
+    const part = load(
+      paragraph('one', PORTRAIT) + paragraph('two', LANDSCAPE) + paragraph('three') + PORTRAIT
+    );
+    const layout = lay(part);
     expect(layout.pages).toHaveLength(3);
     expect(layout.pages.map((page) => [page.box.width, page.box.height])).toEqual([
       [200, 300],
@@ -340,16 +368,10 @@ describe('per-section pagination (the per-section lane)', () => {
   });
 
   test('lines break at their OWN section width', () => {
-    // 6px per char, portrait content width 180 → 30 chars; landscape 280 → 46 chars.
+    // 6px per char, portrait content width 180 -> 30 chars; landscape 280 -> 46 chars.
     const text = 'word '.repeat(24).trim();
-    const part = load(paragraph(text) + paragraph(text));
-    const layout = layoutSemanticDocument(part, 1, {
-      measurer,
-      sections: [
-        { geometry: PORTRAIT, firstBlock: 0 },
-        { geometry: LANDSCAPE, firstBlock: 1 },
-      ],
-    });
+    const part = load(paragraph(text, PORTRAIT) + paragraph(text) + LANDSCAPE);
+    const layout = lay(part);
     const ids = layout.pages.flatMap((page) =>
       page.fragments.map((fragment) => (fragment.kind === 'paragraph' ? fragment.paragraphId : ''))
     );
@@ -360,37 +382,99 @@ describe('per-section pagination (the per-section lane)', () => {
   });
 
   test('a continuous boundary with identical geometry shares the page', () => {
-    const part = load(paragraph('one') + paragraph('two'));
-    const layout = layoutSemanticDocument(part, 1, {
-      measurer,
-      sections: [
-        { geometry: PORTRAIT, firstBlock: 0 },
-        { geometry: PORTRAIT, firstBlock: 1, breakType: 'continuous' },
-      ],
-    });
+    const part = load(
+      paragraph('one', PORTRAIT) + paragraph('two') + sect(4000, 6000, 'continuous')
+    );
+    const layout = lay(part);
     expect(layout.pages).toHaveLength(1);
+    // Both paragraphs are on the one sheet, and the continued section's content sits
+    // BELOW the section it continues — Word flows them as one column.
+    const fragments = layout.pages[0]!.fragments;
+    expect(fragments).toHaveLength(2);
+    expect(fragments[0]!.box.y).toBe(0);
+    expect(fragments[1]!.box.y).toBe(14);
   });
 
   test('a continuous boundary with a DIFFERENT geometry still breaks the page', () => {
     // Two sections cannot share a sheet that has two sizes.
-    const part = load(paragraph('one') + paragraph('two'));
-    const layout = layoutSemanticDocument(part, 1, {
-      measurer,
-      sections: [
-        { geometry: PORTRAIT, firstBlock: 0 },
-        { geometry: LANDSCAPE, firstBlock: 1, breakType: 'continuous' },
-      ],
-    });
-    expect(layout.pages).toHaveLength(2);
+    const part = load(
+      paragraph('one', PORTRAIT) + paragraph('two') + sect(6000, 4000, 'continuous')
+    );
+    expect(lay(part).pages).toHaveLength(2);
   });
 
-  test('single-section input matches the plain geometry call exactly', () => {
-    const part = load(paragraph('hello world') + paragraph('again'));
-    const plain = lay(part, SMALL);
-    const sectioned = layoutSemanticDocument(part, 1, {
-      measurer,
-      sections: [{ geometry: SMALL, firstBlock: 0 }],
-    });
-    expect(JSON.stringify(sectioned.pages)).toBe(JSON.stringify(plain.pages));
+  test('continuous chains: three sections flow down one sheet in order', () => {
+    const part = load(
+      paragraph('one', PORTRAIT) +
+        paragraph('two', sect(4000, 6000, 'continuous')) +
+        paragraph('three') +
+        sect(4000, 6000, 'continuous')
+    );
+    const layout = lay(part);
+    expect(layout.pages).toHaveLength(1);
+    expect(layout.pages[0]!.fragments.map((fragment) => fragment.box.y)).toEqual([0, 14, 28]);
+  });
+
+  test('a continuous section that does not fit overflows to a new sheet', () => {
+    // 80pt of content column at 14pt a line is 5 lines. Six paragraphs cannot share it.
+    const short = sect(4000, 2000);
+    const filled = 'a\n'.repeat(0) + 'a';
+    const part = load(
+      paragraph(filled, short) +
+        paragraph(filled) +
+        paragraph(filled) +
+        paragraph(filled) +
+        paragraph(filled) +
+        paragraph(filled) +
+        sect(4000, 2000, 'continuous')
+    );
+    const layout = lay(part);
+    expect(layout.pages.length).toBeGreaterThan(1);
+    // The overflow lands on a real second sheet, stacked with the 24pt gutter.
+    expect(layout.pages[1]!.box.y).toBe(layout.pages[0]!.box.height + 24);
+  });
+
+  test('an EMPTY continuous section between two others does not break the chain', () => {
+    const part = load(
+      paragraph('one', PORTRAIT) +
+        // An empty continuous section: a sectPr-carrying paragraph is the section's last,
+        // so this contributes no blocks of its own beyond that paragraph.
+        paragraph('two', sect(4000, 6000, 'continuous')) +
+        paragraph('three') +
+        sect(4000, 6000, 'continuous')
+    );
+    expect(lay(part).pages).toHaveLength(1);
+  });
+
+  test('an absent w:type defaults to nextPage, so identical geometry does NOT share', () => {
+    // Only `continuous` shares the sheet. The default must not start sharing pages just
+    // because the two sections happen to describe the same page (ECMA-376 17.6.22).
+    const part = load(paragraph('one', PORTRAIT) + paragraph('two') + PORTRAIT);
+    expect(lay(part).pages).toHaveLength(2);
+  });
+
+  test('a trailing page break ends the sheet: the continued section starts after it', () => {
+    // `endCursorY` is 0 both when a fresh column is empty and when a page break just
+    // closed the sheet. Only the first may be continued onto; Word puts the continued
+    // section AFTER the break, not on top of the page the break ended.
+    const part = load(
+      `<w:p><w:pPr>${PORTRAIT}</w:pPr><w:r><w:t>one</w:t></w:r>` +
+        '<w:r><w:br w:type="page"/></w:r></w:p>' +
+        paragraph('two') +
+        sect(4000, 6000, 'continuous')
+    );
+    const layout = lay(part);
+    expect(layout.pages).toHaveLength(2);
+    expect(layout.pages.map((page) => page.fragments.map((fragment) => fragment.box.y))).toEqual([
+      [0],
+      [0],
+    ]);
+  });
+
+  test('a single-section document paginates against its own sectPr', () => {
+    const part = load(paragraph('hello world') + paragraph('again') + PORTRAIT);
+    const layout = lay(part);
+    expect(layout.pages).toHaveLength(1);
+    expect([layout.pages[0]!.box.width, layout.pages[0]!.box.height]).toEqual([200, 300]);
   });
 });

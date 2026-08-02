@@ -45,10 +45,27 @@ Decisions:
   code). Headers/footers: laid out once per variant at flow height, attached
   per page. Incremental: per-block cache keys + flow checkpoints +
   convergence; a no-change pass returns previous pages by identity.
+  Paragraph-level fidelity resolves through the style cascade
+  (`layout/style-cascade.ts`): `w:spacing` line rules, first-line/hanging
+  indents, `w:contextualSpacing`, `w:pBdr` on all edges, tab stops and leaders,
+  `w:vanish` (not measured, not painted), list markers from `numbering.xml`,
+  and table styles through their `basedOn` chain gated by `w:tblLook`.
 - **Paint/interaction**: painted pages are contenteditable but the DOM is a
   picture — browser mutations are prevented and re-expressed as tree ops.
   Selection maps only through `data-paragraph-id`/`data-start`. Page furniture
   is `contenteditable=false` + `[data-docx-hf]`, excluded from selection.
+- **Caret** (`editor/surface-caret.ts`): the engine paints its own insertion
+  point and suppresses the native one (`caret-color: transparent` on the pages
+  layer) for exactly as long as it does. Geometry comes from `caretAt` on the
+  layout, never from the DOM, so an empty paragraph gets a caret too. The
+  element is furniture (`data-docx-marker`, `contenteditable=false`) and lives
+  on the page content box, not on a line — dom-selection reads child indices.
+  Everything fails soft: range selection, IME composition, or an unplaced
+  position hands the native caret back rather than leaving no caret.
+- **Input** (`editor/surface-input.ts`): one keymap for every host — Word's
+  paragraph shortcuts, `beforeinput` dispatch, clipboard, IME readback — as
+  factories over `PaginatedSurface`, so React, Vue and a plain page cannot
+  drift into three hand-written keymaps.
 - **`createDocxEditor`** (`core/src/editor/docx-editor.ts`): full `Editor`
   contract over the surface; unimplemented reads return typed empty values
   (the `isActive` precedent). `snapshot()` is version-cached — same reference
@@ -62,6 +79,10 @@ Decisions:
   `commandForSlot`/`commandForSlotValue` is the command table;
   `toolbarCommandState`/`runToolbarCommand` provide shared can-before-exec
   state. Unwired slots render disabled with the engine's reason.
+  `ChromeControlState` says HOW a control dispatches (`command` / `value` /
+  `save`), never whether it is enabled — enabled state has exactly one source,
+  `toolbarCommandState`. There is no static "permanently disabled" kind: the
+  old `parityOnly` went stale the moment the engine wired those slots.
 
 ## React adapter — provider-first, everything is hooks
 
@@ -89,7 +110,9 @@ All chrome — ours and consumers' — is hook consumers:
 
 Out of scope so far: structural table ops (insert row/column, merge), HF
 editing, comments/tracked-changes derivation, caret scroll-into-view,
-zoom-without-remount, the Vue twin of provider/hooks/toolbar.
+zoom-without-remount, the Vue twin of provider/hooks. Vue's toolbar now derives
+its enabled state from the same `toolbarCommandState`, but it has grown no
+value chrome (font list, size, colour), so those slots stay disabled there.
 
 ## Verify
 

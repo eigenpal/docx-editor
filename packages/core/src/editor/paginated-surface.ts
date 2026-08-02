@@ -13,22 +13,21 @@
 // IME and autofill without letting it own the document.
 //
 // The composition root lives here. Its seams are siblings: the host-facing contract in
-// paginated-surface-contract.ts, input wiring in surface-input.ts, selection/op planning in
+// paginated-surface-contract.ts, input wiring in surface-input.ts, the two-way selection
+// mirror and the IME lane in surface-selection-sync.ts, selection/op planning in
 // surface-selection-ops.ts, formatting queries in surface-formatting.ts, and the page
 // environment in surface-pages.ts — all re-exported or consumed from this module.
 
 import { openTreeSession, type TreeDocxSession } from '@docx-editor.dev/core-contract/binding';
 import type { TreeDocOp } from '@docx-editor.dev/core-contract/store';
 import {
-  createFixedMeasurer,
   createLayoutScheduler,
   createLayoutSession,
   createParagraphLayoutCache,
-  readDocumentSections,
-  readSectionProperties,
-  storyBlocks,
+  resolveDefaultSurfaceMeasurer,
   documentOrder,
   layoutSemanticDocument,
+  resolveNumberingLevel,
   moveCaret,
   paragraphTextFromLayout,
   wordBoundary,
@@ -38,20 +37,13 @@ import {
   type SemanticSelection,
 } from '@docx-editor.dev/core-contract/layout';
 import { paintSemanticLayout } from '@docx-editor.dev/core-contract/output';
-import { applySelectionToDom, selectionsEqual, semanticSelectionFromDom } from './dom-selection.ts';
+import { tryCreateBrowserCanvasContext } from './browser-canvas-context.ts';
 import type {
   OpenPaginatedResult,
   PaginatedSurface,
   PaginatedSurfaceOptions,
   PaginatedSurfaceState,
 } from './paginated-surface-contract.ts';
-import {
-  formattingAt,
-  isRunPropertyActive,
-  mergedProperties,
-  paragraphPropertiesOf,
-  selectionRunProperties,
-} from './surface-formatting.ts';
 import {
   clampedToDocument,
   collapsedAt,
@@ -64,10 +56,20 @@ import {
   createBeforeInputHandler,
   createClipboardHandlers,
   createKeyDownHandler,
-  paintedTextOf,
-  paragraphReplacePlan,
 } from './surface-input.ts';
-import { createFurnitureSource, equalPageSets, visiblePageSet } from './surface-pages.ts';
+import {
+  createFurnitureSource,
+  createSurfaceStyleDeps,
+  equalPageSets,
+  equalSurfaceExtents,
+  surfaceExtent,
+  visiblePageSet,
+  type SurfaceExtent,
+} from './surface-pages.ts';
+import { createSurfaceCaret } from './surface-caret.ts';
+import { createSurfaceFormat } from './surface-format.ts';
+import { createSurfaceSelectionSync } from './surface-selection-sync.ts';
+import { createSurfaceStructure } from './surface-structure.ts';
 
 export type {
   OpenPaginatedResult,
@@ -99,16 +101,23 @@ export function mountPaginatedSurface(
     };
   }
   const session = opened.session;
-  const measurer = options.measurer ?? createFixedMeasurer();
   const scale = options.scale ?? 96 / 72;
-  // The incremental machinery, actually wired. Without these the surface re-measured and
-  // re-placed the entire document on every keystroke, which the caches and the session were
-  // built to avoid.
+  // Editor seam creates the canvas; layout only consumes the injected context.
+  const defaults = options.measurer
+    ? null
+    : resolveDefaultSurfaceMeasurer(scale, {
+        context: tryCreateBrowserCanvasContext(container.ownerDocument),
+        // Measure with the same face paint draws with.
+        ...(options.fontAlias ? { fontAlias: options.fontAlias } : {}),
+      });
+  const measurer = options.measurer ?? defaults!.measurer;
+  // Incremental layout machinery — without these every keystroke re-lays out the document.
   const layoutCache = createParagraphLayoutCache<never>();
   const layoutSession = createLayoutSession();
-  // Identifies WHO measured. A cache keyed on content alone would serve the pre-font layout
-  // for the rest of the session once fonts resolve, so the measurer's identity is folded in.
-  const producer = options.producer ?? (options.measurer ? 'host-measurer' : 'fixed-measurer');
+  // Measurer identity folds into the cache key so a later font resolution cannot serve stale layout.
+  const producer =
+    options.producer ??
+    (options.measurer ? 'host-measurer' : (defaults?.producer ?? 'fixed-measurer'));
   const document = container.ownerDocument;
 
   const pagesLayer = document.createElement('div');
@@ -135,6 +144,10 @@ export function mountPaginatedSurface(
   container.style.position = 'relative';
   container.replaceChildren(pagesLayer);
 
+  // The engine paints its own insertion point. The native caret is a single device pixel,
+  // and an empty paragraph paints no text span for the browser to size one against.
+  const caret = createSurfaceCaret(pagesLayer, scale, () => ({ layout: currentLayout, selection }));
+
   const firstParagraph = session.paragraphIds()[0] ?? '';
   let selection: SemanticSelection = {
     anchor: { paragraphId: firstParagraph, offset: 0 },
@@ -151,40 +164,56 @@ export function mountPaginatedSurface(
   let lastPaintMs = 0;
   let lastSelectionMs = 0;
 
-  // The document's declared geometry plus header/footer stories, laid out per part and
-  // memoized in the source itself.
+  // Styles/numbering are immutable in-session; cascade + index are built once and shared
+  // by body layout and header/footer stories.
+  const { styleCascade, numberingIndex, defaultTabStopPt } = createSurfaceStyleDeps(session);
   const furnitureSource = createFurnitureSource({
     session,
     measurer,
     producer,
     cache: layoutCache,
+    styleCascade,
+    defaultTabStopPt,
   });
 
   let currentLayout = layoutOnce();
+  // Structural edits — breaks, lists, indent, sections — are their own lane over the same
+  // session and commit path.
+  const format = createSurfaceFormat({
+    session,
+    layout: () => currentLayout,
+    selection: () => selection,
+    commit: (run, nextSelection) => commit(run, nextSelection),
+    orderedRange: () => orderedRange(),
+    selectionMark: () => selectionMark(),
+    textOf: (paragraphId) => textOf(paragraphId),
+  });
+  const structure = createSurfaceStructure({
+    session,
+    layout: () => currentLayout,
+    commit: (run, nextSelection) => commit(run, nextSelection),
+    orderedStart: () => orderedStart(),
+    orderedRange: () => orderedRange(),
+    selectionMark: () => selectionMark(),
+    collapsedAt: (position) => collapsedAt(position),
+    deleteSelectionOps: () => deleteSelectionOps(),
+    paragraphTextOf: (paragraphId) => textOf(paragraphId),
+    numberingLevelExists: (numId, level) =>
+      resolveNumberingLevel(numberingIndex(), numId, level) !== null,
+  });
   let desiredX: number | null = null;
-
-  // The per-section lane: every section paginates against its own geometry, so a
-  // landscape section among portrait ones lays out as Word shows it. Re-read per pass
-  // for the same reason the geometry is; the sectPr node id is the section's stable
-  // identity in the layout context.
-  function layoutSections() {
-    return readDocumentSections(session.part()).map((section) => ({
-      geometry: section.geometry,
-      firstBlock: section.firstBlock,
-      breakType: section.breakType,
-      ...(section.sectPrId !== null ? { id: section.sectPrId } : {}),
-    }));
-  }
 
   function layoutOnce(): SemanticLayout {
     const began = now();
     const layout = layoutSemanticDocument(session.part(), session.revision(), {
       measurer,
-      geometry: furnitureSource.geometry(),
-      sections: layoutSections(),
       cache: layoutCache,
       session: layoutSession,
       producer,
+      styleCascade,
+      defaultTabStopPt,
+      numberingIndex: numberingIndex(),
+      sectionFurniture: furnitureSource.sectionFurniture(),
       furniture: furnitureSource.furniture(),
     });
     lastLayoutMs = now() - began;
@@ -208,11 +237,13 @@ export function mountPaginatedSurface(
       const began = now();
       const layout = layoutSemanticDocument(session.part(), scope.revision, {
         measurer,
-        geometry: furnitureSource.geometry(),
-        sections: layoutSections(),
         cache: layoutCache,
         session: layoutSession,
         producer,
+        styleCascade,
+        defaultTabStopPt,
+        numberingIndex: numberingIndex(),
+        sectionFurniture: furnitureSource.sectionFurniture(),
         furniture: furnitureSource.furniture(),
       });
       lastLayoutMs = now() - began;
@@ -268,8 +299,23 @@ export function mountPaginatedSurface(
 
   /** The set the current paint was built with, so a scroll can tell whether it must repaint. */
   let materializedSet: ReadonlySet<number> | undefined;
+  /** Sizing the last paint used, so scroll can re-centre when the visible width band moves. */
+  let materializedExtent: SurfaceExtent | undefined;
+
+  function applyPageOffsets(extent: SurfaceExtent): void {
+    for (const page of currentLayout.pages) {
+      const element = pagesLayer.querySelector<HTMLElement>(`[data-page-index="${page.index}"]`);
+      if (!element) continue;
+      const offsetX = extent.pageOffsetX.get(page.index) ?? 0;
+      element.style.left = `${(page.box.x + offsetX) * scale}px`;
+    }
+  }
 
   function render(notifyChange = true): void {
+    // Reading the DOM selection BEFORE the paint replaces the nodes it lives in is what makes
+    // a repaint carry a gesture the queued `selectionchange` has not delivered yet, rather
+    // than erase it — see `adoptBeforePaint`.
+    const adopted = selectionSync.adoptBeforePaint();
     const paintBegan = now();
     materializedSet = visiblePages();
     paintSemanticLayout(pagesLayer, currentLayout, {
@@ -289,19 +335,20 @@ export function mountPaginatedSurface(
     // The pages are absolutely positioned, so the layer has no intrinsic size and the
     // surface would collapse to zero — pages then escape whatever centres or scrolls it.
     // Size it from the records, which is the only place the extent is known.
-    const last = currentLayout.pages[currentLayout.pages.length - 1];
-    const width = Math.max(0, ...currentLayout.pages.map((page) => page.box.x + page.box.width));
-    const height = last ? last.box.y + last.box.height : 0;
-    pagesLayer.style.width = `${width * scale}px`;
-    pagesLayer.style.height = `${height * scale}px`;
-    container.style.width = `${width * scale}px`;
-    container.style.height = `${height * scale}px`;
+    materializedExtent = surfaceExtent(currentLayout, materializedSet);
+    applyPageOffsets(materializedExtent);
+    pagesLayer.style.width = `${materializedExtent.width * scale}px`;
+    pagesLayer.style.height = `${materializedExtent.height * scale}px`;
+    container.style.width = `${materializedExtent.width * scale}px`;
+    container.style.height = `${materializedExtent.height * scale}px`;
     // Sizing included: the style writes above invalidate layout, and the selection sync
     // right after is what forces the browser to resolve it. Splitting the timer here would
     // book the paint's own cost to the selection phase.
     lastPaintMs = now() - paintBegan;
     syncDomSelection();
-    if (notifyChange) options.onChange?.(currentState());
+    // A scroll reports nothing — nothing about the document or the selection moved. Taking up
+    // a pending gesture DID move the selection, so that pass has to report after all.
+    if (notifyChange || adopted) options.onChange?.(currentState());
   }
 
   /**
@@ -313,7 +360,15 @@ export function mountPaginatedSurface(
    * not report a state change: nothing about the document, selection or revision moved.
    */
   function rematerialize(): void {
-    if (equalPageSets(visiblePages(), materializedSet)) return;
+    const nextSet = visiblePages();
+    const nextExtent = surfaceExtent(currentLayout, nextSet);
+    if (
+      materializedExtent &&
+      equalPageSets(nextSet, materializedSet) &&
+      equalSurfaceExtents(nextExtent, materializedExtent)
+    ) {
+      return;
+    }
     render(false);
   }
 
@@ -326,48 +381,17 @@ export function mountPaginatedSurface(
    * Layout still decides where the text is; this only says which characters are selected.
    */
   function syncDomSelection(): void {
-    // Only when this surface owns the selection. `render` runs on mount and on every commit
-    // — including one from another editor sharing the store — and writing unconditionally
-    // yanked the caret out of whatever the user was actually typing in.
-    if (!ownsSelection()) return;
-    applyingSelection = true;
-    const began = now();
-    applySelectionToDom(pagesLayer, selection, document.getSelection());
-    lastSelectionMs = now() - began;
-    // Cleared on a LATER task, because `selectionchange` is queued rather than dispatched
-    // synchronously. Clearing it here would defeat the guard in every real browser while
-    // still appearing to work under a synchronous test DOM.
-    queueMicrotask(() => {
-      applyingSelection = false;
-    });
-  }
-
-  /**
-   * Whether writing the selection would take it from someone else.
-   *
-   * True when focus or the selection is already inside these pages, and also when NOTHING
-   * holds a selection — writing one then takes it from nobody. What this refuses is the case
-   * that matters: a caret living in another element, which a repaint here would otherwise
-   * yank away with no focus change and no interaction.
-   */
-  function ownsSelection(): boolean {
-    const active = document.activeElement;
-    if (active && pagesLayer.contains(active)) return true;
-    const domSelection = document.getSelection();
-    if (!domSelection || domSelection.rangeCount === 0) return true;
-    const anchor = domSelection.anchorNode;
-    if (!anchor) return true;
-    // A selection anchored in a subtree that has been removed from the document belongs to
-    // nobody — a surface that was torn down, or a re-rendered host. Refusing to write over
-    // it would leave this surface unable to show its own caret.
-    if (!anchor.isConnected) return true;
-    return pagesLayer.contains(anchor);
+    selectionSync.mirrorToDom();
   }
 
   function commit(
     run: () => ReturnType<TreeDocxSession['applyPmDoc']> | boolean,
     selectionAfter?: () => SemanticSelection | null
   ): void {
+    // Whatever the DOM selection holds, it was made against the text BEFORE this edit, so its
+    // offsets stop meaning the same thing the moment the ops land. The render below must
+    // write the model's selection out, never read the stale one back.
+    selectionSync.noteModelMoved();
     // Ops go through the session, so the tree stays the only state. A refusal is surfaced
     // rather than silently dropped: the view is repainted from what the model actually
     // holds, so the user never keeps looking at an edit that will not be saved.
@@ -398,9 +422,45 @@ export function mountPaginatedSurface(
   function setSelection(next: SemanticSelection, keepDesiredX = false): void {
     selection = next;
     if (!keepDesiredX) desiredX = null;
+    // SETTLED, not moved: this mirrors into the DOM on the next line, so the two agree before
+    // any render can read them back — including a move raised earlier that no render has
+    // carried out. `restoreSelection` raises the flag and only `flushLayout` takes it down, so
+    // `undo` on an empty history left it up and disarmed the NEXT repaint, whenever it came.
+    selectionSync.noteSelectionSettled();
     syncDomSelection();
     options.onChange?.(currentState());
   }
+
+  /**
+   * The two-way selection mirror and the IME lane.
+   *
+   * Created HERE, after the commit path it drives and before the listeners it answers: every
+   * function it is handed is a hoisted declaration, and nothing renders until the mount paint
+   * at the end of this factory.
+   */
+  const selectionSync = createSurfaceSelectionSync({
+    session,
+    document,
+    pagesLayer,
+    selection: () => selection,
+    setSelection: (next) => setSelection(next),
+    // The raw take-up, without the mirror or the report `setSelection` performs: the render
+    // this runs inside is about to do both.
+    adoptSelection: (next) => {
+      selection = next;
+      desiredX = null;
+    },
+    commit: (run) => commit(run),
+    render: () => render(),
+    flushLayout: () => flushLayout(),
+    updateCaret: () => caret.update(),
+    textOf: (paragraphId) => textOf(paragraphId),
+    selectionMark: () => selectionMark(),
+    now,
+    recordSelectionMs: (ms) => {
+      lastSelectionMs = ms;
+    },
+  });
 
   const surface: PaginatedSurface = {
     session,
@@ -592,35 +652,8 @@ export function mountPaginatedSurface(
       );
     },
 
-    insertTab() {
-      const start = orderedStart();
-      commit(
-        () =>
-          session.applyTreeOps(
-            [
-              ...deleteSelectionOps(),
-              { op: 'insertTab', paragraphId: start.paragraphId, offset: start.offset },
-            ],
-            selectionMark()
-          ),
-        () => collapsedAt({ ...start, offset: start.offset + 1 })
-      );
-    },
-
-    insertLineBreak() {
-      const start = orderedStart();
-      commit(
-        () =>
-          session.applyTreeOps(
-            [
-              ...deleteSelectionOps(),
-              { op: 'insertHardBreak', paragraphId: start.paragraphId, offset: start.offset },
-            ],
-            selectionMark()
-          ),
-        () => collapsedAt({ ...start, offset: start.offset + 1 })
-      );
-    },
+    ...structure,
+    ...format,
 
     setSelection: (next) => setSelection(next),
 
@@ -633,158 +666,6 @@ export function mountPaginatedSurface(
         anchor: { paragraphId: first, offset: 0 },
         head: { paragraphId: last, offset: textOf(last).length },
       });
-    },
-
-    setRunProperty(localName, attributes) {
-      const { from, to } = orderedRange();
-      if (from.paragraphId !== to.paragraphId || from.offset === to.offset) return;
-      commit(() =>
-        session.applyTreeOps(
-          [
-            {
-              op: 'setRunProperties',
-              paragraphId: from.paragraphId,
-              start: from.offset,
-              end: to.offset,
-              properties: mergedProperties(selectionRunProperties(currentLayout, selection), {
-                localName,
-                ...(attributes ? { attributes } : {}),
-              }),
-            },
-          ],
-          selectionMark()
-        )
-      );
-    },
-
-    setParagraphProperty(localName, attributes) {
-      const { from, to } = orderedRange();
-      const order = documentOrder(currentLayout);
-      const firstIndex = order.indexOf(from.paragraphId);
-      const lastIndex = order.indexOf(to.paragraphId);
-      if (firstIndex === -1 || lastIndex === -1) return;
-      // EVERY paragraph the selection touches, not just the one the caret is in: selecting
-      // three paragraphs and pressing centre must centre three paragraphs.
-      const ops = order.slice(firstIndex, lastIndex + 1).map((paragraphId) => ({
-        op: 'setParagraphProperties' as const,
-        paragraphId,
-        properties: mergedProperties(paragraphPropertiesOf(currentLayout, paragraphId), {
-          localName,
-          ...(attributes ? { attributes } : {}),
-        }),
-      }));
-      if (ops.length === 0) return;
-      commit(() => session.applyTreeOps(ops, selectionMark()));
-    },
-
-    sectionProperties: () => readSectionProperties(session.part()),
-
-    sectionPropertiesAt(paragraphId) {
-      const sections = readDocumentSections(session.part());
-      if (sections.length === 1) return sections[0]!.properties;
-      const blocks = storyBlocks(session.part());
-      const contains = (node: (typeof blocks)[number], id: string): boolean => {
-        if (node.id === id) return true;
-        for (const child of node.children) {
-          if (child.kind !== 'textValue' && contains(child as (typeof blocks)[number], id)) {
-            return true;
-          }
-        }
-        return false;
-      };
-      const blockIndex = blocks.findIndex(
-        (block) => block.id === paragraphId || contains(block, paragraphId)
-      );
-      // An unknown id falls back to the tail section — the document-wide answer.
-      let owner = sections[sections.length - 1]!;
-      if (blockIndex !== -1) {
-        for (const section of sections) {
-          if (section.firstBlock <= blockIndex) owner = section;
-          else break;
-        }
-      }
-      return owner.properties;
-    },
-
-    setSectionProperties(update) {
-      let committed = false;
-      commit(() => {
-        const result = session.applyTreeOps(
-          [{ op: 'setSectionProperties', ...update }],
-          selectionMark()
-        );
-        committed = result.committed;
-        return result;
-      });
-      return committed;
-    },
-
-    insertSectionBreak() {
-      const start = orderedStart();
-      const before = new Set(session.paragraphIds());
-      let committed = false;
-      commit(
-        () => {
-          const result = session.applyTreeOps(
-            [
-              // A break REPLACES a selection, like every other insertion.
-              ...deleteSelectionOps(),
-              { op: 'splitParagraph', paragraphId: start.paragraphId, offset: start.offset },
-              // The HEAD keeps the original id; it ends the new section, cloning the
-              // governing setup so the break changes where pages break, not how they look.
-              { op: 'setSectionMark', paragraphId: start.paragraphId },
-            ],
-            selectionMark()
-          );
-          committed = result.committed;
-          return result;
-        },
-        () => {
-          // The caret lands at the start of the tail — the first paragraph of the
-          // section the user keeps typing in, exactly where Word puts it.
-          const tail = session.paragraphIds().find((id) => !before.has(id));
-          return tail ? collapsedAt({ paragraphId: tail, offset: 0 }) : null;
-        }
-      );
-      return committed;
-    },
-
-    formatting: () =>
-      formattingAt(currentLayout, selection, (paragraphId, runProperties) =>
-        session.effectiveRunDefaults(paragraphId, runProperties)
-      ),
-
-    toggleRunProperty(localName, attributes) {
-      const { from, to } = orderedRange();
-      // A collapsed caret has no range to format. Stored marks — formatting that applies to
-      // the NEXT character typed — are a separate lane; refusing is honest rather than
-      // formatting a character the user did not select.
-      if (from.paragraphId !== to.paragraphId || from.offset === to.offset) return;
-      const active = isRunPropertyActive(currentLayout, selection, localName);
-      commit(() =>
-        session.applyTreeOps(
-          [
-            {
-              op: 'setRunProperties',
-              paragraphId: from.paragraphId,
-              start: from.offset,
-              end: to.offset,
-              // Toggling OFF sends an explicit `val="0"` rather than dropping the element:
-              // the property may be inherited from a style, and removing the local override
-              // would let the inherited value come back.
-              properties: mergedProperties(
-                selectionRunProperties(currentLayout, selection),
-                active
-                  ? // `w:u` is a closed enumeration, not a boolean: its off value is `none`,
-                    // and `val="0"` is an attribute value Word rejects outright.
-                    { localName, attributes: { val: localName === 'u' ? 'none' : '0' } }
-                  : { localName, ...(attributes ? { attributes } : {}) }
-              ),
-            },
-          ],
-          selectionMark()
-        )
-      );
     },
 
     selectedText() {
@@ -821,6 +702,7 @@ export function mountPaginatedSurface(
       // Drop pending layout work and stop listening BEFORE the DOM goes, or a commit from
       // another editor sharing this store would paint into a detached container.
       scheduler.cancel();
+      caret.destroy();
       unsubscribe();
       container.replaceChildren();
     },
@@ -835,6 +717,10 @@ export function mountPaginatedSurface(
   function restoreSelection(
     mark: { paragraphId: string; start: number; end: number } | null
   ): void {
+    // The tree about to be published is not the one the DOM selection was made against, so
+    // the flush below must not read it back: offsets in the reverted tree do not correspond
+    // to offsets in the one that replaced it.
+    selectionSync.noteModelMoved();
     flushLayout();
     if (!mark) {
       // No recorded mark — a cross-paragraph edit records none, because a mark addresses one
@@ -877,82 +763,13 @@ export function mountPaginatedSurface(
 
   // Event wiring lives HERE rather than in each host, so React, Vue and a plain page get
   // identical behaviour instead of three hand-written keymaps that drift. The handlers
-  // themselves are factories in surface-input.ts over the surface interface; this closure
-  // only owns the state they cannot — composition flags and the selection mirror.
-  //
-  // SELECTION GESTURES ARE THE BROWSER'S. Drag, double-click for a word, triple-click for a
-  // paragraph, shift-click to extend, and selecting across a page boundary all come free
-  // because the painted spans are real text. Re-implementing them from records is how a
-  // surface ends up feeling worse than a textarea. Layout still owns geometry: what comes
-  // back from the DOM is which CHARACTERS were gestured over, never where they are.
-  let applyingSelection = false;
-  /**
-   * Whether an IME is composing.
-   *
-   * `beforeinput` for `insertCompositionText` is NOT cancelable — `preventDefault` is a
-   * no-op — so composed text unavoidably lands in the painted DOM. The surface therefore
-   * stops repainting for the duration (a repaint mid-composition destroys the IME's own
-   * anchor and aborts or duplicates the session) and reconciles once when it ends.
-   */
-  let composing = false;
-  /** The paragraph the composition started in, so the right one is reconciled. */
-  let composingParagraph: string | null = null;
-
-  /** Mirror the native selection into the model. Ignores selections outside painted text. */
-  const adoptDomSelection = (): void => {
-    const next = semanticSelectionFromDom(pagesLayer, document.getSelection());
-    if (!next || selectionsEqual(next, selection)) return;
-    setSelection(next);
-  };
-
-  const onSelectionChange = (): void => {
-    // Ignore the echo of our own write, and anything happening outside the pages. The flag
-    // is cleared on a later task rather than synchronously: browsers QUEUE `selectionchange`
-    // rather than firing it from `setBaseAndExtent`, so clearing it in a `finally` would
-    // leave it false by the time the echo arrives — and every programmatic selection would
-    // be read straight back, fighting the user mid-drag.
-    if (applyingSelection) return;
-    if (composing) return;
-    adoptDomSelection();
-  };
-
-  const onCompositionStart = (): void => {
-    composing = true;
-    composingParagraph = selection.head.paragraphId;
-    session.beginComposition();
-  };
-
-  const onCompositionEnd = (): void => {
-    composing = false;
-    const paragraphId = composingParagraph ?? selection.head.paragraphId;
-    composingParagraph = null;
-    // The composed text is in the DOM and nowhere else. Read it back, diff it against what
-    // the model holds for that paragraph, and commit the difference — the only route by
-    // which an IME edit can reach the tree, since it could not be intercepted.
-    reconcileParagraphFromDom(paragraphId);
-    session.endComposition();
-    flushLayout();
-    render();
-  };
-
-  /**
-   * Commit whatever the browser wrote into a paragraph that the surface could not intercept.
-   *
-   * The diff itself lives in surface-input.ts; this applies it and lands the caret.
-   */
-  function reconcileParagraphFromDom(paragraphId: string): void {
-    const painted = paintedTextOf(pagesLayer, paragraphId);
-    if (painted === null) return;
-    const plan = paragraphReplacePlan(paragraphId, textOf(paragraphId), painted);
-    if (!plan) return;
-    commit(() => session.applyTreeOps(plan.ops, selectionMark()));
-    setSelection(collapsedAt({ paragraphId, offset: plan.caret }));
-  }
-
+  // themselves are factories over the surface interface: keys, clipboard and `beforeinput` in
+  // surface-input.ts, the selection mirror and the IME lane in surface-selection-sync.ts.
+  const { onSelectionChange, onCompositionStart, onCompositionEnd } = selectionSync;
   const onKeyDown = createKeyDownHandler(surface);
   const { onCopy, onCut, onPaste } = createClipboardHandlers(surface, insertPlainText);
   const onBeforeInput = createBeforeInputHandler(surface, {
-    isComposing: () => composing,
+    isComposing: () => selectionSync.isComposing(),
     insertPlainText,
   });
 

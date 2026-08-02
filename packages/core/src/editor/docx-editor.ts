@@ -44,7 +44,6 @@ import type {
   DocumentHandle,
   DocumentSource,
   Editor,
-  EditorCommand,
   EditorError,
   EditorEvents,
   EditorQueries,
@@ -53,8 +52,6 @@ import type {
   EditorSnapshot,
   ExecResult,
   FontConfiguration,
-  PageSetup,
-  RunFormatting,
   TextMatch,
   Unsubscribe,
   ViewScope,
@@ -66,27 +63,30 @@ import {
   HARD_MAX_FONT_BYTES,
   HARFBUZZ_SHAPING_LIBRARY,
   fontRequestKey,
-  caretAt,
   createFixedMeasurer,
   createShapedMeasurer,
   type SemanticSelection as SurfaceSelection,
   type TextMeasurer,
 } from '@docx-editor.dev/core-contract/layout';
 import {
-  MARKS,
-  classifyCommand,
-  resolveMarkAttr,
   deepFreezeValue,
   editorError,
   emptyInteractionFrame,
   formattingEqual,
-  isSurfaceSelection,
   normalizeSource,
   pageEqual,
   pageSetupEqual,
   selectionsMatch,
   snapshotsEqual,
 } from './docx-editor-support.ts';
+import { execEditorCommand } from './docx-editor-exec.ts';
+import {
+  currentPage as currentPageOf,
+  pageSetupOf,
+  gateCommand,
+  runFormattingOf,
+  totalPages as totalPagesOf,
+} from './docx-editor-derive.ts';
 import {
   createLayoutShaping,
   disposeLayoutShaping,
@@ -196,8 +196,6 @@ export interface DocxEditorInstance extends Editor {
   detach(): void;
 }
 
-type CommandGate = { ok: true } | { ok: false; refusal: Exclude<ExecResult, { ok: true }> };
-
 /** The one frozen scope object every snapshot shares, so scope stays reference-equal. */
 const SCOPE_BODY: EditorScope = Object.freeze({ kind: 'body' as const });
 
@@ -253,6 +251,10 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
   // ── State tick + cached snapshot ─────────────────────────────────────────────────────
   let stateVersion = 0;
   let cachedSnapshot: EditorSnapshot | null = null;
+  /** The caret the cached snapshot was derived for — see `snapshotNow`. */
+  let cachedCaret: ReturnType<PaginatedSurface['state']>['selection'] | null = null;
+  /** The document revision the cached snapshot was derived for — see `snapshotNow`. */
+  let cachedRevision = -1;
   let cachedVersion = -1;
 
   /** Called at every place observable state can move. Derivation stays lazy. */
@@ -598,112 +600,6 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
     }
   }
 
-  function gate(command: EditorCommand, options?: { scope?: EditorScope }): CommandGate {
-    if (options?.scope && options.scope.kind !== 'body') {
-      return {
-        ok: false,
-        refusal: { ok: false, code: 'unsupported', reason: 'only the body scope is supported' },
-      };
-    }
-    const support = classifyCommand(command);
-    if (!support.supported) {
-      return {
-        ok: false,
-        refusal: { ok: false, code: support.code ?? 'unsupported', reason: support.reason },
-      };
-    }
-    if (!surface) {
-      return {
-        ok: false,
-        refusal: { ok: false, code: 'notFound', reason: 'no document is loaded' },
-      };
-    }
-    if (support.mutating && (mode === 'view' || !surface.session.editable)) {
-      return {
-        ok: false,
-        refusal: { ok: false, code: 'locked', reason: 'the document is read-only' },
-      };
-    }
-    // History commands are gated on the HISTORY, not just the mode: `can` drives the
-    // toolbar's enabled state, and an undo button that stays live over an empty stack
-    // silently no-ops — Word greys it out.
-    if (command.type === 'undo' && !surface.session.canUndo()) {
-      return {
-        ok: false,
-        refusal: { ok: false, code: 'unsupported', reason: 'nothing to undo' },
-      };
-    }
-    if (command.type === 'redo' && !surface.session.canRedo()) {
-      return {
-        ok: false,
-        refusal: { ok: false, code: 'unsupported', reason: 'nothing to redo' },
-      };
-    }
-    return { ok: true };
-  }
-
-  /**
-   * THE unified formatting derivation — the one place surface formatting becomes the
-   * contract's `RunFormatting`. `snapshot().formatting`, `getSelectionFormatting()`,
-   * `isActive` and the `selectionFormatting` query all read this shape (via the cached
-   * snapshot), so they can never disagree about what the selection carries.
-   */
-  function runFormattingOf(): RunFormatting | null {
-    if (!surface) return null;
-    const formatting = surface.formatting();
-    return {
-      bold: formatting.bold,
-      italic: formatting.italic,
-      underline: formatting.underline,
-      strike: formatting.strikethrough,
-      superscript: formatting.superscript,
-      subscript: formatting.subscript,
-      ...(formatting.color ? { color: { kind: 'hex' as const, value: formatting.color } } : {}),
-      ...(formatting.highlight ? { highlight: formatting.highlight } : {}),
-      ...(formatting.fontFamily ? { fontFamily: formatting.fontFamily } : {}),
-      ...(formatting.fontSizeHalfPoints !== null
-        ? { fontSizePt: formatting.fontSizeHalfPoints / 2 }
-        : {}),
-      ...(formatting.alignment ? { alignment: formatting.alignment } : {}),
-      ...(formatting.styleId ? { styleId: formatting.styleId } : {}),
-    };
-  }
-
-  /**
-   * THE page-setup derivation — `getPageSetup()` and `snapshot().pageSetup` both read
-   * this shape, so the dialog and the rulers can never disagree about the section. In a
-   * multi-section document it is the CARET's section, which is what a ruler reflects
-   * when the caret crosses a section boundary — Word's behaviour.
-   */
-  function pageSetupOf(): PageSetup | null {
-    if (!surface) return null;
-    const section = surface.sectionPropertiesAt(surface.state().selection.head.paragraphId);
-    return {
-      pageWidthTwips: section.pageSize.widthTwips,
-      pageHeightTwips: section.pageSize.heightTwips,
-      orientation: section.landscape ? ('landscape' as const) : ('portrait' as const),
-      marginsTwips: {
-        top: section.margins.topTwips,
-        right: section.margins.rightTwips,
-        bottom: section.margins.bottomTwips,
-        left: section.margins.leftTwips,
-      },
-      gutterTwips: section.margins.gutterTwips,
-    };
-  }
-
-  function totalPages(): number {
-    return surface ? surface.state().pageCount : 0;
-  }
-
-  function currentPage(): number {
-    // Caret page from the layout records. There is no viewport tracking on this facade yet,
-    // so `'viewport'` honestly answers with the caret's page as the nearest derivable value.
-    if (!surface) return 1;
-    const caret = caretAt(surface.layout(), surface.state().selection.head);
-    return caret ? caret.pageIndex + 1 : 1;
-  }
-
   function deriveSnapshot(): EditorSnapshot {
     const state = surface?.state() ?? null;
     return {
@@ -715,13 +611,13 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
       // A DocRange addresses paragraphs by `w14:paraId`; the surface selection addresses
       // canonical node ids. Until that mapping exists, null is the honest answer.
       selection: null,
-      formatting: runFormattingOf(),
+      formatting: runFormattingOf(surface),
       table: null,
       image: null,
-      page: { current: currentPage(), total: totalPages() },
+      page: { current: currentPageOf(surface), total: totalPagesOf(surface) },
       canUndo: state?.canUndo ?? false,
       canRedo: state?.canRedo ?? false,
-      pageSetup: pageSetupOf(),
+      pageSetup: pageSetupOf(surface),
     };
   }
 
@@ -733,6 +629,12 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
   function snapshotNow(): EditorSnapshot {
     if (cachedSnapshot && cachedVersion === stateVersion) return cachedSnapshot;
     const previous = cachedSnapshot;
+    const caret = surface?.state().selection ?? null;
+    const caretUnmoved = selectionsMatch(caret, cachedCaret);
+    cachedCaret = caret;
+    const revision = surface?.session.revision() ?? -1;
+    const documentUnmoved = revision === cachedRevision;
+    cachedRevision = revision;
     const fresh = deriveSnapshot();
     let next: EditorSnapshot = fresh;
     if (previous) {
@@ -744,7 +646,24 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
         ? previous.pageSetup
         : fresh.pageSetup;
       next = { ...fresh, formatting, page, pageSetup };
-      if (snapshotsEqual(next, previous)) next = previous;
+      // Reuse the previous REFERENCE only when neither the caret NOR the document moved.
+      //
+      // The snapshot is a lossy projection: `selection` is deliberately null (a `DocRange`
+      // addresses paragraphs by `w14:paraId`, which the surface cannot yet supply), and
+      // nothing in it names the document revision. So two genuinely different states
+      // derive value-equal snapshots, and a host subscribed through `useSyncExternalStore`
+      // never re-renders — freezing every control whose state is a question the snapshot
+      // does not carry, because `toolbarCommandState` re-asks `Editor.can`/`isActive` only
+      // when the store ticks.
+      //
+      // Caret: Decrease Indent stayed live on a list item already at the outermost level,
+      // and the bullet button stayed pressed after the caret moved into a numbered one.
+      //
+      // Revision: an edit that changes only STRUCTURE leaves formatting, page, canUndo and
+      // canRedo all equal at an unmoved caret. Toggling a bullet OFF (a second press) left
+      // the button pressed, and one Increase Indent that reached the deepest level a
+      // definition declares left the button live for a press that could only be refused.
+      if (snapshotsEqual(next, previous) && caretUnmoved && documentUnmoved) next = previous;
     }
     cachedSnapshot = deepFreezeValue(next);
     cachedVersion = stateVersion;
@@ -833,126 +752,20 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
     },
 
     exec(command, options) {
-      const gated = gate(command, options);
+      const gated = gateCommand(command, surface, mode, options);
       if (!gated.ok) return gated.refusal;
       const mounted = surface!;
       const before = mounted.session.revision();
 
-      switch (command.type) {
-        case 'toggleMark': {
-          const mark = MARKS[command.mark]!;
-          mounted.toggleRunProperty(mark.localName, mark.attributes);
-          break;
-        }
-        case 'setMarkAttr': {
-          // The gate already ran `resolveMarkAttr` through `classifyCommand`; resolving
-          // again here keeps exec's write derived from the command, not from trust.
-          const resolved = resolveMarkAttr(command);
-          if (!resolved.ok) return { ok: false, code: resolved.code, reason: resolved.reason };
-          mounted.setRunProperty(resolved.localName, resolved.attributes);
-          break;
-        }
-        case 'setAlignment':
-          // The contract says `justify`; `w:jc` spells it `both`.
-          mounted.setParagraphProperty('jc', {
-            val: command.align === 'justify' ? 'both' : command.align,
-          });
-          break;
-        case 'setIndent': {
-          const attributes: Record<string, string> = {};
-          if (command.left !== undefined) attributes.left = String(command.left);
-          if (command.right !== undefined) attributes.right = String(command.right);
-          if (command.firstLine !== undefined) attributes.firstLine = String(command.firstLine);
-          if (command.hanging !== undefined) attributes.hanging = String(command.hanging);
-          mounted.setParagraphProperty('ind', attributes);
-          break;
-        }
-        case 'setPageSetup': {
-          const anchor =
-            command.scope === 'section' ? mounted.state().selection.head.paragraphId : undefined;
-          // When orientation arrives WITH explicit dimensions, the dimensions are
-          // oriented here — Word stores landscape as swapped dimensions plus the
-          // attribute. Orientation ALONE stays alone: the op swaps each written
-          // section's own dimensions, so distinct paper sizes survive the flip.
-          let width = command.pageWidth;
-          let height = command.pageHeight;
-          if (command.orientation !== undefined && (width !== undefined || height !== undefined)) {
-            const section = anchor
-              ? mounted.sectionPropertiesAt(anchor)
-              : mounted.sectionProperties();
-            const w = width ?? section.pageSize.widthTwips;
-            const h = height ?? section.pageSize.heightTwips;
-            width = command.orientation === 'landscape' ? Math.max(w, h) : Math.min(w, h);
-            height = command.orientation === 'landscape' ? Math.min(w, h) : Math.max(w, h);
-          }
-          const committed = mounted.setSectionProperties({
-            ...(width !== undefined ? { pageWidthTwips: width } : {}),
-            ...(height !== undefined ? { pageHeightTwips: height } : {}),
-            ...(command.orientation !== undefined ? { orientation: command.orientation } : {}),
-            ...(command.marginTop !== undefined ? { marginTopTwips: command.marginTop } : {}),
-            ...(command.marginRight !== undefined ? { marginRightTwips: command.marginRight } : {}),
-            ...(command.marginBottom !== undefined
-              ? { marginBottomTwips: command.marginBottom }
-              : {}),
-            ...(command.marginLeft !== undefined ? { marginLeftTwips: command.marginLeft } : {}),
-            ...(anchor !== undefined ? { anchorParagraphId: anchor } : {}),
-          });
-          // The op layer can refuse what per-field bounds cannot see — margins that
-          // together swallow a page. A refusal must surface as one, not close a dialog
-          // claiming success.
-          if (!committed) {
-            return {
-              ok: false,
-              code: 'invalidArgs',
-              reason: mounted.state().lastRejection ?? 'the page setup change was refused',
-            };
-          }
-          break;
-        }
-        case 'insertBreak':
-          if (command.kind === 'section') {
-            if (!mounted.insertSectionBreak()) {
-              return {
-                ok: false,
-                code: 'invalidArgs',
-                reason: mounted.state().lastRejection ?? 'the section break was refused',
-              };
-            }
-            break;
-          }
-          mounted.insertLineBreak();
-          break;
-        case 'insertText':
-          mounted.type(command.text);
-          break;
-        case 'deleteText':
-          mounted.deleteSelection();
-          break;
-        case 'undo':
-          mounted.undo();
-          break;
-        case 'redo':
-          mounted.redo();
-          break;
-        case 'setSelection': {
-          if ('range' in command && isSurfaceSelection(command.range)) {
-            mounted.setSelection(command.range);
-          }
-          // Selection is not document state: nothing to save changed.
-          return { ok: true, changed: false };
-        }
-        default:
-          // Unreachable: `classifyCommand` refused everything else. Typed for the compiler.
-          return { ok: false, code: 'unsupported', reason: 'unsupported command' };
-      }
-
+      const result = execEditorCommand(mounted, command);
+      if (result) return result;
       // `changed` is read from the model, not assumed: a toggle on a collapsed caret or an
       // undo on an empty stack commits nothing, and reporting `changed: true` would be a lie.
       return { ok: true, changed: mounted.session.revision() !== before };
     },
 
     can(command, options): CanResult {
-      const gated = gate(command, options);
+      const gated = gateCommand(command, surface, mode, options);
       return gated.ok ? { ok: true } : gated.refusal;
     },
 
@@ -979,6 +792,10 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
         case 'setAlignment':
           // `exec` writes `justify` as `both`; compare in the same vocabulary.
           return formatting.alignment === (command.align === 'justify' ? 'both' : command.align);
+        case 'toggleList':
+          // Pressed only when the WHOLE selection is that list, matching the toggle's own
+          // rule: a mixed selection is not "on".
+          return surface?.isListActive(command.kind) ?? false;
         default:
           return false;
       }
@@ -1019,7 +836,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
     getSelectedImage: () => null,
     getSelectedTable: () => null,
 
-    getPageSetup: () => pageSetupOf(),
+    getPageSetup: () => pageSetupOf(surface),
 
     getWatermark: () => null,
     getHeaderFooterState: () => null,
@@ -1064,8 +881,8 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
 
     snapshot: () => snapshotNow(),
 
-    getTotalPages: () => totalPages(),
-    getCurrentPage: () => currentPage(),
+    getTotalPages: () => totalPagesOf(surface),
+    getCurrentPage: () => currentPageOf(surface),
 
     scrollToPage: () => false,
     scrollToBlock: () => false,

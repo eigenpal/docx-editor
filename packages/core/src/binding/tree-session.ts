@@ -18,11 +18,14 @@ import {
   readEmbeddedFonts,
   readOoxmlPackage,
   resolveHeaderFooterParts,
+  resolveHeaderFooterPartsBySection,
   resolveRelationship,
   withPart,
   writeOoxmlPackage,
+  ensureListDefinition,
   paragraphTextOf,
   type EmbeddedFont,
+  type ListKind,
   type HeaderFooterParts,
   type OoxmlElement,
   type OoxmlPackage,
@@ -125,10 +128,18 @@ export interface TreeDocxSession {
   /**
    * The resolved header/footer parts of the section, by variant (phase 2, read-only).
    *
+   * Returns the FINAL section's effective parts after OOXML inheritance. Prefer
+   * `headerFooterPartsBySection` for multi-section pagination.
+   *
    * Immutable for the session's lifetime: header/footer EDITING is a later slice, so a
    * host may key derived layout by part object identity.
    */
   headerFooterParts(): HeaderFooterParts;
+  /**
+   * Per-section header/footer parts after OOXML inheritance, index-aligned with
+   * `enumerateDocumentSections`.
+   */
+  headerFooterPartsBySection(): readonly HeaderFooterParts[];
   /**
    * Font family names the document uses, from every `w:rFonts` in the CURRENT main
    * part plus the styles and header/footer parts — validated, deduplicated, sorted.
@@ -141,6 +152,23 @@ export interface TreeDocxSession {
    * A document without a styles part answers `[]`.
    */
   documentStyles(): readonly DocumentStyleEntry[];
+  /**
+   * Root of the styles part tree, for layout's style cascade. Memoized once; `null` when
+   * the package has no styles part. Styles editing is a later slice, so this is immutable
+   * for the session.
+   */
+  stylesRoot(): OoxmlElement | null;
+  /**
+   * Root of the numbering part tree (`w:numbering`), for list layout. Memoized once;
+   * `null` when the package has no numbering part. Numbering editing is a later slice.
+   */
+  numberingRoot(): OoxmlElement | null;
+  /**
+   * Root of the settings part tree (`w:settings`), for document-wide layout constants such
+   * as `w:defaultTabStop`. Memoized once; `null` when the package has no settings part.
+   * Settings editing is a later slice, so this is immutable for the session.
+   */
+  settingsRoot(): OoxmlElement | null;
   /**
    * The theme's ten picker colours (`a:clrScheme`), in Word's column order, or `[]`
    * when the package has no complete scheme. Memoized once: the theme part is
@@ -173,6 +201,15 @@ export interface TreeDocxSession {
    * lane's job. Memoized once: the font table and font parts are immutable in-session.
    */
   embeddedFonts(): readonly EmbeddedFont[];
+  /**
+   * The `w:numId` of a bullet or numbered list definition, creating one where the document
+   * has none — including `numbering.xml` itself, its relationship and its content type.
+   *
+   * A document Word has never numbered carries no numbering part at all, so the first
+   * bullet a user asks for has to bring the whole definition with it. An existing
+   * definition of the same kind is reused rather than duplicated.
+   */
+  ensureListDefinition(kind: ListKind): string | null;
 }
 
 export type { DocumentStyleEntry } from './document-catalog.ts';
@@ -207,7 +244,7 @@ export function openTreeSession(bytes: Uint8Array): OpenTreeSessionResult {
   if (!main) return { ok: false, reason: 'no-main-document-tree', detail: pkg.mainDocumentPart };
 
   const store = new TreeDocumentStore(main);
-  let headerFooter: HeaderFooterParts | null = null;
+  let headerFooterBySection: readonly HeaderFooterParts[] | null = null;
   let lastChange: TreeModelChange | null = null;
   store.subscribe((change) => {
     lastChange = change;
@@ -215,12 +252,13 @@ export function openTreeSession(bytes: Uint8Array): OpenTreeSessionResult {
 
   const currentPackage = (): OoxmlPackage => withPart(pkg, store.part);
 
-  // The styles part, resolved once through the main part's `styles` relationship (the
-  // same resolution discipline `resolveHeaderFooterParts` uses), with the conventional
-  // part name as a fallback for packages whose rels part is absent or degenerate.
-  // Styles editing is a later slice, so the part is immutable in-session.
+  // The styles / numbering parts, resolved once through the main part's relationships
+  // (the same resolution discipline `resolveHeaderFooterParts` uses), with conventional
+  // part names as fallbacks. Both are immutable in-session (editing is a later slice).
   const STYLES_REL_TYPE =
     'http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles';
+  const NUMBERING_REL_TYPE =
+    'http://schemas.openxmlformats.org/officeDocument/2006/relationships/numbering';
   let stylesRootResolved = false;
   let stylesRoot: OoxmlElement | null = null;
   const resolveStylesRoot = (): OoxmlElement | null => {
@@ -239,6 +277,51 @@ export function openTreeSession(bytes: Uint8Array): OpenTreeSessionResult {
     part ??= pkg.parts.get('/word/styles.xml');
     stylesRoot = part?.root ?? null;
     return stylesRoot;
+  };
+
+  let numberingRootResolved = false;
+  let numberingRoot: OoxmlElement | null = null;
+  const resolveNumberingRoot = (): OoxmlElement | null => {
+    if (numberingRootResolved) return numberingRoot;
+    numberingRootResolved = true;
+    const record = (pkg.relationships.get(pkg.mainDocumentPart) ?? []).find(
+      (rel) => rel.type === NUMBERING_REL_TYPE
+    );
+    let part: OoxmlPart | undefined;
+    if (record) {
+      const resolved = resolveRelationship(record);
+      if (resolved.mode === 'Internal' && resolved.target.ok) {
+        part = pkg.parts.get(resolved.target.partName);
+      }
+    }
+    part ??= pkg.parts.get('/word/numbering.xml');
+    numberingRoot = part?.root ?? null;
+    return numberingRoot;
+  };
+
+  // The settings part, resolved like the styles part. Word writes document-wide layout
+  // constants here — `w:defaultTabStop` among them — that no paragraph property chain can
+  // see, so layout has to be handed them separately.
+  const SETTINGS_REL_TYPE =
+    'http://schemas.openxmlformats.org/officeDocument/2006/relationships/settings';
+  let settingsRootResolved = false;
+  let settingsRoot: OoxmlElement | null = null;
+  const resolveSettingsRoot = (): OoxmlElement | null => {
+    if (settingsRootResolved) return settingsRoot;
+    settingsRootResolved = true;
+    const record = (pkg.relationships.get(pkg.mainDocumentPart) ?? []).find(
+      (rel) => rel.type === SETTINGS_REL_TYPE
+    );
+    let part: OoxmlPart | undefined;
+    if (record) {
+      const resolved = resolveRelationship(record);
+      if (resolved.mode === 'Internal' && resolved.target.ok) {
+        part = pkg.parts.get(resolved.target.partName);
+      }
+    }
+    part ??= pkg.parts.get('/word/settings.xml');
+    settingsRoot = part?.root ?? null;
+    return settingsRoot;
   };
 
   // The theme part, resolved like the styles part: through the main part's `theme`
@@ -393,22 +476,38 @@ export function openTreeSession(bytes: Uint8Array): OpenTreeSessionResult {
       },
 
       headerFooterParts() {
-        // Resolved once: references and parts are immutable while HF editing stays a
-        // later slice, and callers key layout off part object identity.
-        headerFooter ??= resolveHeaderFooterParts(pkg);
-        return headerFooter;
+        headerFooterBySection ??= resolveHeaderFooterPartsBySection(pkg);
+        return (
+          headerFooterBySection[headerFooterBySection.length - 1] ?? resolveHeaderFooterParts(pkg)
+        );
+      },
+
+      headerFooterPartsBySection() {
+        headerFooterBySection ??= resolveHeaderFooterPartsBySection(pkg);
+        return headerFooterBySection;
       },
 
       documentFonts() {
         // Keyed on the store revision: an edit can add or remove a run-level
         // `w:rFonts`, but the styles and header/footer parts cannot change in-session.
         if (fontsCache && fontsCache.revision === store.revision) return fontsCache.fonts;
-        headerFooter ??= resolveHeaderFooterParts(pkg);
+        headerFooterBySection ??= resolveHeaderFooterPartsBySection(pkg);
         const roots: OoxmlElement[] = [store.part.root];
         const styles = resolveStylesRoot();
         if (styles) roots.push(styles);
-        for (const part of headerFooter.headers.values()) roots.push(part.root);
-        for (const part of headerFooter.footers.values()) roots.push(part.root);
+        const seen = new Set<OoxmlPart>();
+        for (const section of headerFooterBySection) {
+          for (const part of section.headers.values()) {
+            if (seen.has(part)) continue;
+            seen.add(part);
+            roots.push(part.root);
+          }
+          for (const part of section.footers.values()) {
+            if (seen.has(part)) continue;
+            seen.add(part);
+            roots.push(part.root);
+          }
+        }
         fontsCache = { revision: store.revision, fonts: collectDocumentFonts(roots) };
         return fontsCache.fonts;
       },
@@ -417,6 +516,12 @@ export function openTreeSession(bytes: Uint8Array): OpenTreeSessionResult {
         stylesCache ??= collectDocumentStyles(resolveStylesRoot());
         return stylesCache;
       },
+
+      stylesRoot: () => resolveStylesRoot(),
+
+      numberingRoot: () => resolveNumberingRoot(),
+
+      settingsRoot: () => resolveSettingsRoot(),
 
       documentThemeColors() {
         themeColorsCache ??= collectDocumentThemeColors(resolveThemeRoot());
@@ -452,6 +557,18 @@ export function openTreeSession(bytes: Uint8Array): OpenTreeSessionResult {
       },
 
       embeddedFonts: resolveEmbeddedFonts,
+
+      ensureListDefinition(kind) {
+        // The numbering part lives on the PACKAGE, not the main-part tree, so this is the
+        // one edit that does not go through `store.transact`. The memoized numbering root
+        // is cleared so layout re-reads the definitions this just added.
+        const ensured = ensureListDefinition(currentPackage(), kind);
+        if (!ensured) return null;
+        pkg = ensured.pkg;
+        numberingRootResolved = false;
+        numberingRoot = null;
+        return ensured.numId;
+      },
     },
   };
 }

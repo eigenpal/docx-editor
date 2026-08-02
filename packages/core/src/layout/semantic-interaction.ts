@@ -311,7 +311,9 @@ export type NavigationCommand =
   | 'lineStart'
   | 'lineEnd'
   | 'documentStart'
-  | 'documentEnd';
+  | 'documentEnd'
+  | 'pageUp'
+  | 'pageDown';
 
 /**
  * The text of one paragraph, read back from the layout records.
@@ -428,6 +430,33 @@ export function moveCaret(
       return { position: stops[0]!.position, desiredX: null };
     case 'documentEnd':
       return { position: stops[stops.length - 1]!.position, desiredX: null };
+    case 'pageUp':
+    case 'pageDown': {
+      // A page IS a unit here — the layout knows which sheet every caret stop is on — so
+      // this moves one sheet rather than guessing a line count. Word keeps the column
+      // position across the jump, like an arrow key does.
+      const targetX = desiredX ?? current.x;
+      const targetPage = current.pageIndex + (command === 'pageUp' ? -1 : 1);
+      const onTarget = stops.filter((stop) => stop.pageIndex === targetPage);
+      if (onTarget.length === 0) {
+        // Off the first or last sheet: the document edge, which is what every editor does
+        // rather than refusing the key.
+        const edge = command === 'pageUp' ? stops[0]! : stops[stops.length - 1]!;
+        return { position: edge.position, desiredX: targetX };
+      }
+      // The stop nearest the SAME point on the target sheet, both axes: the caret should
+      // land where the eye expects it, not at the top of the page.
+      let best = onTarget[0]!;
+      let bestDistance = Number.POSITIVE_INFINITY;
+      for (const stop of onTarget) {
+        const distance = Math.abs(stop.y - current.y) * 1000 + Math.abs(stop.x - targetX);
+        if (distance < bestDistance) {
+          bestDistance = distance;
+          best = stop;
+        }
+      }
+      return { position: best.position, desiredX: targetX };
+    }
     case 'up':
     case 'down': {
       const targetX = desiredX ?? current.x;

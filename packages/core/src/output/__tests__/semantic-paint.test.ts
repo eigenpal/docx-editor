@@ -5,18 +5,34 @@ if (!GlobalRegistrator.isRegistered) GlobalRegistrator.register();
 
 import { describe, expect, test } from 'bun:test';
 import { readOoxmlPart } from '@docx-editor.dev/core-contract/store';
-import { createFixedMeasurer, layoutSemanticDocument } from '@docx-editor.dev/core-contract/layout';
+import {
+  buildNumberingIndex,
+  createFixedMeasurer,
+  layoutSemanticDocument,
+} from '@docx-editor.dev/core-contract/layout';
 import { paintSemanticLayout } from '../semantic-paint.ts';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 
-function layoutOf(body: string) {
+function layoutOf(body: string, numbering?: string) {
   const read = readOoxmlPart(`<w:document xmlns:w="${W}"><w:body>${body}</w:body></w:document>`, {
     name: '/word/document.xml',
     contentType: 'app/xml',
   });
   if (!read.ok) throw new Error(read.reason);
-  return layoutSemanticDocument(read.part, 7, { measurer: createFixedMeasurer(6, 14) });
+  let numberingIndex;
+  if (numbering) {
+    const num = readOoxmlPart(`<w:numbering xmlns:w="${W}">${numbering}</w:numbering>`, {
+      name: '/word/numbering.xml',
+      contentType: 'app/xml',
+    });
+    if (!num.ok) throw new Error(num.reason);
+    numberingIndex = buildNumberingIndex(num.part.root);
+  }
+  return layoutSemanticDocument(read.part, 7, {
+    measurer: createFixedMeasurer(6, 14),
+    ...(numberingIndex ? { numberingIndex } : {}),
+  });
 }
 
 function paint(body: string): HTMLElement {
@@ -50,7 +66,7 @@ describe('the painter is a non-authoritative consumer', () => {
     expect(line.style.top).toBe('0px');
     // A line never re-wraps: layout already decided where it ends.
     expect(line.style.whiteSpace).toBe('pre');
-    const spans = [...container.querySelectorAll<HTMLElement>('.docx-line span')];
+    const spans = [...container.querySelectorAll<HTMLElement>('.layout-run-text')];
     expect(spans).toHaveLength(2);
     for (const span of spans) expect(span.style.left).toBe('');
   });
@@ -61,10 +77,10 @@ describe('the painter is a non-authoritative consumer', () => {
     expect(lines.length).toBeGreaterThan(1);
     for (const line of lines) {
       expect(line.style.height).toBe('14px'); // the fixed measurer's line height at scale 1
-      // NOT the line box: each run keeps its own box so a mixed-size line highlights
-      // stepped rather than as one slab. Lines still tile because layout's line height is
-      // the font's own ascent + descent + line gap, which is what `normal` resolves to.
-      expect(line.style.lineHeight).toBe('normal');
+      // Zero host font-size strut; published height is the authoritative line-height.
+      expect(line.style.fontSize).toBe('0px');
+      expect(line.style.lineHeight).toBe('14px');
+      expect(line.style.overflow).toBe('visible');
     }
     // Consecutive lines sit exactly one line height apart.
     expect(Number.parseFloat(lines[1]!.style.top)).toBe(
@@ -74,7 +90,7 @@ describe('the painter is a non-authoritative consumer', () => {
 
   test('every span carries its model range, so the DOM maps back without a lookup', () => {
     const span = paint('<w:p><w:r><w:t>hello</w:t></w:r></w:p>').querySelector<HTMLElement>(
-      '.docx-line span'
+      '.layout-run-text'
     )!;
     expect(span.dataset.paragraphId).toBe('/word/document.xml#0.0.0');
     expect(span.dataset.start).toBe('0');
@@ -85,7 +101,7 @@ describe('the painter is a non-authoritative consumer', () => {
     const span = paint(
       '<w:p><w:r><w:rPr><w:b/><w:i/><w:sz w:val="44"/><w:color w:val="C00000"/>' +
         '<w:u w:val="double"/></w:rPr><w:t>styled</w:t></w:r></w:p>'
-    ).querySelector<HTMLElement>('.docx-line span')!;
+    ).querySelector<HTMLElement>('.layout-run-text')!;
     expect(span.style.fontWeight).toBe('bold');
     expect(span.style.fontStyle).toBe('italic');
     expect(span.style.fontSize).toBe('22px'); // 44 half-points at scale 1
@@ -133,6 +149,30 @@ describe('the painter is a non-authoritative consumer', () => {
     const page = container.querySelector<HTMLElement>('.docx-page')!;
     expect(page.style.width).toBe('1224px'); // 612pt at scale 2
   });
+
+  test('a tab span reserves layout box width, not the browser native tab advance', () => {
+    // Regression: inline-block + textContent `\t` otherwise collapses to a narrow native
+    // tab (~one character), so right/center stops never reach the painted surface even
+    // when breakParagraph published the correct advance.
+    const body =
+      `<w:p><w:pPr><w:tabs><w:tab w:val="right" w:pos="2400"/></w:tabs></w:pPr>` +
+      `<w:r><w:t>L</w:t><w:tab/><w:t>ABCD</w:t></w:r></w:p>`;
+    const layout = layoutOf(body);
+    const tabRecord = layout.pages[0]!.fragments.flatMap((fragment) =>
+      fragment.kind === 'paragraph' ? fragment.lines : []
+    )
+      .flatMap((line) => line.spans)
+      .find((span) => span.text === '\t')!;
+    expect(tabRecord.box.width).toBeGreaterThan(6);
+
+    const container = document.createElement('div');
+    paintSemanticLayout(container, layout, { scale: 1 });
+    const tabEl = [...container.querySelectorAll<HTMLElement>('.layout-run-text')].find(
+      (el) => el.textContent === '\t'
+    )!;
+    expect(tabEl.style.width).toBe(`${tabRecord.box.width}px`);
+    expect(tabEl.style.overflow).toBe('hidden');
+  });
 });
 
 describe('each run is its own box, so a mixed-size line highlights stepped', () => {
@@ -143,7 +183,7 @@ describe('each run is its own box, so a mixed-size line highlights stepped', () 
     // own size — the band steps with the text, which is how Word draws it — and character
     // granularity is unaffected, so a word can still be selected part-way through.
     const span = paint('<w:p><w:r><w:t>hello</w:t></w:r></w:p>').querySelector<HTMLElement>(
-      '.docx-line span'
+      '.layout-run-text'
     )!;
     expect(span.style.display).toBe('inline-block');
     expect(span.style.verticalAlign).toBe('baseline');
@@ -154,12 +194,33 @@ describe('each run is its own box, so a mixed-size line highlights stepped', () 
       '<w:p><w:r><w:rPr><w:sz w:val="16"/></w:rPr><w:t>8pt</w:t></w:r>' +
         '<w:r><w:rPr><w:sz w:val="72"/></w:rPr><w:t>36pt</w:t></w:r></w:p>'
     );
-    const spans = [...container.querySelectorAll<HTMLElement>('.docx-line span')];
+    const line = container.querySelector<HTMLElement>('.docx-line')!;
+    const spans = [...container.querySelectorAll<HTMLElement>('.layout-run-text')];
     expect(spans).toHaveLength(2);
     expect(spans[0]!.style.fontSize).toBe('8px'); // 16 half-points at scale 1
     expect(spans[1]!.style.fontSize).toBe('36px');
+    // Line strut is zeroed; child runs still own their sizes and baseline alignment.
+    expect(line.style.fontSize).toBe('0px');
+    expect(spans[0]!.style.verticalAlign).toBe('baseline');
+    expect(spans[1]!.style.verticalAlign).toBe('baseline');
     // One line, not two: layout put them together and the painter must not re-flow them.
     expect(container.querySelectorAll('.docx-line')).toHaveLength(1);
+  });
+
+  test('superscript keeps a relative offset and is not clipped by the line box', () => {
+    const container = paint(
+      '<w:p><w:r><w:t>x</w:t></w:r>' +
+        '<w:r><w:rPr><w:vertAlign w:val="superscript"/></w:rPr><w:t>2</w:t></w:r></w:p>'
+    );
+    const line = container.querySelector<HTMLElement>('.docx-line')!;
+    const spans = [...container.querySelectorAll<HTMLElement>('.layout-run-text')];
+    expect(line.style.overflow).toBe('visible');
+    expect(line.style.fontSize).toBe('0px');
+    const superRun = spans.find((span) => span.textContent === '2')!;
+    expect(superRun.style.position).toBe('relative');
+    expect(Number.parseFloat(superRun.style.top)).toBeLessThan(0);
+    expect(superRun.style.fontSize).toBe('8.25px'); // 11pt * 0.75 at scale 1
+    expect(superRun.style.verticalAlign).toBe('baseline');
   });
 });
 
@@ -218,5 +279,328 @@ describe('a highlighted run is marked so dark mode can spare it', () => {
     ).querySelector<HTMLElement>('.docx-line span')!;
     expect(span.dataset.highlight).toBeUndefined();
     expect(span.style.backgroundColor).toBe('');
+  });
+});
+
+describe('paragraph and character shading paint from validated fills', () => {
+  test('fixture-equivalent paragraph and run fills paint on fragment and glyph box', () => {
+    const body =
+      `<w:p><w:pPr><w:shd w:val="clear" w:fill="F0F4F8"/></w:pPr>` +
+      `<w:r><w:rPr><w:shd w:val="clear" w:fill="FFEEAA"/></w:rPr><w:t>hi</w:t></w:r></w:p>`;
+    const container = paint(body);
+    const fragment = container.querySelector<HTMLElement>('.docx-paragraph-fragment')!;
+    const band = container.querySelector<HTMLElement>('.docx-paragraph-shading')!;
+    const span = container.querySelector<HTMLElement>('.docx-line span')!;
+    expect(fragment.style.backgroundColor).toBe('');
+    expect(band.style.backgroundColor.toLowerCase()).toBe('#f0f4f8');
+    expect(span.style.backgroundColor.toLowerCase()).toBe('#ffeeaa');
+  });
+
+  test('paragraph shading band uses published line geometry, not before/after', () => {
+    const body =
+      `<w:p><w:pPr><w:shd w:val="clear" w:fill="F0F4F8"/>` +
+      `<w:spacing w:before="200" w:after="120"/></w:pPr>` +
+      `<w:r><w:t>shaded</w:t></w:r></w:p>`;
+    const layout = layoutOf(body);
+    const record = layout.pages[0]!.fragments[0]!;
+    expect(record.kind).toBe('paragraph');
+    if (record.kind !== 'paragraph') return;
+    expect(record.shadingBox).toBeDefined();
+
+    const container = paint(body);
+    const fragment = container.querySelector<HTMLElement>('.docx-paragraph-fragment')!;
+    const band = container.querySelector<HTMLElement>('.docx-paragraph-shading')!;
+    expect(fragment.style.backgroundColor).toBe('');
+    expect(band).not.toBeNull();
+    expect(band.style.backgroundColor.toLowerCase()).toBe('#f0f4f8');
+    // Geometry comes from the record, relative to the fragment — not from the DOM.
+    expect(band.style.height).toBe(`${record.shadingBox!.height}px`);
+    expect(Number.parseFloat(band.style.top)).toBe(record.shadingBox!.y - record.box.y);
+    expect(Number.parseFloat(band.style.top)).toBe(10); // before=200 twips
+    expect(band.style.width).toBe(`${record.shadingBox!.width}px`);
+    // Outer fragment still carries spacing for flow; band does not.
+    expect(fragment.style.height).toBe(`${record.box.height}px`);
+    expect(record.box.height).toBe(10 + 14 + 6);
+    expect(record.shadingBox!.height).toBe(14);
+  });
+
+  test('highlight overrides character shading', () => {
+    const span = paint(
+      '<w:p><w:r><w:rPr><w:shd w:val="clear" w:fill="FFEEAA"/>' +
+        '<w:highlight w:val="yellow"/></w:rPr><w:t>hi</w:t></w:r></w:p>'
+    ).querySelector<HTMLElement>('.docx-line span')!;
+    expect(span.dataset.highlight).toBe('yellow');
+    expect(span.style.backgroundColor.toLowerCase()).toBe('#ffff00');
+  });
+
+  test('hostile paragraph and run fills are refused at the sink', () => {
+    const container = paint(
+      '<w:p><w:pPr><w:shd w:val="clear" w:fill="url(evil)"/></w:pPr>' +
+        '<w:r><w:rPr><w:shd w:val="clear" w:fill="javascript:alert(1)"/></w:rPr>' +
+        '<w:t>x</w:t></w:r></w:p>'
+    );
+    const fragment = container.querySelector<HTMLElement>('.docx-paragraph-fragment')!;
+    const band = container.querySelector<HTMLElement>('.docx-paragraph-shading');
+    const span = container.querySelector<HTMLElement>('.docx-line span')!;
+    expect(fragment.style.backgroundColor).toBe('');
+    expect(band).toBeNull();
+    expect(span.style.backgroundColor).toBe('');
+    expect(fragment.style.backgroundImage).toBe('');
+    expect(span.style.backgroundImage).toBe('');
+  });
+
+  test('line strut is zeroed so character shading can share the paragraph band top', () => {
+    // Regression for the inherited 16px host font-size strut: paragraph shading uses the
+    // published line box, while character shading paints on baseline-aligned runs. With a
+    // non-zero line strut those run backgrounds sat 2px below the band in the browser.
+    const body =
+      `<w:p><w:pPr><w:shd w:val="clear" w:fill="F0F4F8"/>` +
+      `<w:spacing w:after="120"/></w:pPr>` +
+      `<w:r><w:t>Paragraph-level shading. </w:t></w:r>` +
+      `<w:r><w:rPr><w:shd w:val="clear" w:fill="FFEEAA"/></w:rPr>` +
+      `<w:t>Character-level shading.</w:t></w:r></w:p>`;
+    const layout = layoutOf(body);
+    const record = layout.pages[0]!.fragments[0]!;
+    expect(record.kind).toBe('paragraph');
+    if (record.kind !== 'paragraph') return;
+
+    const container = paint(body);
+    // Host pages commonly set 16px; paint must not inherit that onto the line strut.
+    container.style.fontSize = '16px';
+    const fragment = container.querySelector<HTMLElement>('.docx-paragraph-fragment')!;
+    const band = container.querySelector<HTMLElement>('.docx-paragraph-shading')!;
+    const line = container.querySelector<HTMLElement>('.docx-line')!;
+    const charRun = [...container.querySelectorAll<HTMLElement>('.layout-run-text')].find(
+      (el) => el.style.backgroundColor.toLowerCase() === '#ffeeaa'
+    )!;
+
+    expect(line.style.fontSize).toBe('0px');
+    expect(line.style.lineHeight).toBe(`${record.shadingBox!.height}px`);
+    expect(line.style.height).toBe(`${record.shadingBox!.height}px`);
+    expect(band.style.height).toBe(line.style.height);
+    expect(Number.parseFloat(band.style.top)).toBe(Number.parseFloat(line.style.top));
+    expect(charRun.style.verticalAlign).toBe('baseline');
+    expect(charRun.style.fontSize).not.toBe('0px');
+    // Selection / model mapping stay on the outer run after nested decoration work.
+    expect(charRun.dataset.start).toBeDefined();
+    expect(charRun.dataset.end).toBeDefined();
+    // Happy-dom rects are coarse; when both boxes report a top, they must match.
+    const bandTop = band.getBoundingClientRect().top;
+    const runTop = charRun.getBoundingClientRect().top;
+    if (Number.isFinite(bandTop) && Number.isFinite(runTop) && (bandTop !== 0 || runTop !== 0)) {
+      expect(runTop - bandTop).toBe(0);
+    }
+    // After spacing remains on the fragment only.
+    expect(Number.parseFloat(fragment.style.height)).toBeGreaterThan(
+      Number.parseFloat(band.style.height)
+    );
+  });
+});
+
+describe('run underline and strike decorations (fixture variants + mixed)', () => {
+  const runOf = (body: string): HTMLElement =>
+    paint(body).querySelector<HTMLElement>('.layout-run-text')!;
+
+  test('single strike paints a solid line-through', () => {
+    const run = runOf(
+      '<w:p><w:r><w:rPr><w:strike/></w:rPr><w:t>strikethrough text</w:t></w:r></w:p>'
+    );
+    expect(run.style.textDecorationLine).toBe('line-through');
+    expect(run.style.textDecorationStyle === '' || run.style.textDecorationStyle === 'solid').toBe(
+      true
+    );
+    expect(run.style.textDecorationStyle).not.toBe('double');
+    expect(run.querySelectorAll('[data-docx-deco]')).toHaveLength(0);
+  });
+
+  test('double strike paints a true double line-through', () => {
+    const run = runOf(
+      '<w:p><w:r><w:rPr><w:dstrike/></w:rPr><w:t>double strikethrough</w:t></w:r></w:p>'
+    );
+    expect(run.style.textDecorationLine).toBe('line-through');
+    expect(run.style.textDecorationStyle).toBe('double');
+  });
+
+  test('when both strike flags are set, double strike wins', () => {
+    const run = runOf(
+      '<w:p><w:r><w:rPr><w:strike/><w:dstrike/></w:rPr><w:t>both</w:t></w:r></w:p>'
+    );
+    expect(run.style.textDecorationLine).toBe('line-through');
+    expect(run.style.textDecorationStyle).toBe('double');
+  });
+
+  test('fixture underline variants map style and thick weight', () => {
+    const cases: Array<{ val: string; style: string; heavy: boolean }> = [
+      { val: 'single', style: 'solid', heavy: false },
+      { val: 'thick', style: 'solid', heavy: true },
+      { val: 'double', style: 'double', heavy: false },
+      { val: 'wave', style: 'wavy', heavy: false },
+      { val: 'dotted', style: 'dotted', heavy: false },
+      { val: 'dash', style: 'dashed', heavy: false },
+    ];
+    for (const entry of cases) {
+      const run = runOf(
+        `<w:p><w:r><w:rPr><w:u w:val="${entry.val}"/></w:rPr><w:t>${entry.val}</w:t></w:r></w:p>`
+      );
+      expect(run.style.textDecorationLine).toBe('underline');
+      expect(run.style.textDecorationStyle).toBe(entry.style);
+      if (entry.heavy) {
+        expect(run.style.textDecorationThickness).toContain('0.12em');
+        expect(run.style.textDecorationThickness).toContain('2px');
+      } else {
+        expect(Boolean(run.style.textDecorationThickness)).toBe(false);
+      }
+    }
+  });
+
+  test('wavy underline keeps its authored colour', () => {
+    const run = runOf(
+      '<w:p><w:r><w:rPr><w:u w:val="wave" w:color="FF0000"/></w:rPr><w:t>Wavy underline</w:t></w:r></w:p>'
+    );
+    expect(run.style.textDecorationStyle).toBe('wavy');
+    expect(run.style.textDecorationColor.toLowerCase()).toBe('#ff0000');
+  });
+
+  test('mixed underline and strike use independent nested layers', () => {
+    const run = runOf(
+      '<w:p><w:r><w:rPr><w:u w:val="wave" w:color="C00000"/><w:strike/></w:rPr>' +
+        '<w:t>mixed</w:t></w:r></w:p>'
+    );
+    expect(run.style.textDecorationLine).toBe('');
+    expect(run.dataset.start).toBe('0');
+    expect(run.dataset.end).toBe('5');
+    const underline = run.querySelector<HTMLElement>('[data-docx-deco="underline"]')!;
+    const strike = run.querySelector<HTMLElement>('[data-docx-deco="strike"]')!;
+    expect(underline).not.toBeNull();
+    expect(strike).not.toBeNull();
+    expect(underline.style.textDecorationLine).toBe('underline');
+    expect(underline.style.textDecorationStyle).toBe('wavy');
+    expect(underline.style.textDecorationColor.toLowerCase()).toBe('#c00000');
+    expect(strike.style.textDecorationLine).toBe('line-through');
+    expect(
+      strike.style.textDecorationStyle === '' || strike.style.textDecorationStyle === 'solid'
+    ).toBe(true);
+    expect(strike.style.textDecorationStyle).not.toBe('wavy');
+    expect(strike.style.textDecorationColor).toBe('');
+    expect(run.textContent).toBe('mixed');
+    // Nested deco layers are not a second model-range surface.
+    expect(underline.dataset.paragraphId).toBeUndefined();
+    expect(strike.dataset.start).toBeUndefined();
+  });
+
+  test('double underline plus single strike does not double the strike', () => {
+    const run = runOf(
+      '<w:p><w:r><w:rPr><w:u w:val="double"/><w:strike/></w:rPr><w:t>x</w:t></w:r></w:p>'
+    );
+    const underline = run.querySelector<HTMLElement>('[data-docx-deco="underline"]')!;
+    const strike = run.querySelector<HTMLElement>('[data-docx-deco="strike"]')!;
+    expect(underline.style.textDecorationStyle).toBe('double');
+    expect(strike.style.textDecorationStyle).not.toBe('double');
+  });
+
+  test('single underline plus double strike keeps strike double', () => {
+    const run = runOf(
+      '<w:p><w:r><w:rPr><w:u w:val="single"/><w:dstrike/></w:rPr><w:t>x</w:t></w:r></w:p>'
+    );
+    const underline = run.querySelector<HTMLElement>('[data-docx-deco="underline"]')!;
+    const strike = run.querySelector<HTMLElement>('[data-docx-deco="strike"]')!;
+    expect(underline.style.textDecorationStyle).toBe('solid');
+    expect(strike.style.textDecorationStyle).toBe('double');
+  });
+
+  test('thick underline plus strike keeps heavy thickness on underline only', () => {
+    const run = runOf(
+      '<w:p><w:r><w:rPr><w:u w:val="thick"/><w:strike/></w:rPr><w:t>x</w:t></w:r></w:p>'
+    );
+    const underline = run.querySelector<HTMLElement>('[data-docx-deco="underline"]')!;
+    const strike = run.querySelector<HTMLElement>('[data-docx-deco="strike"]')!;
+    expect(underline.style.textDecorationThickness).toContain('0.12em');
+    // Happy-dom leaves unset thickness as undefined rather than "".
+    expect(Boolean(strike.style.textDecorationThickness)).toBe(false);
+  });
+
+  test('highlight and shading stay on the outer layout-run with nested decorations', () => {
+    const run = runOf(
+      '<w:p><w:r><w:rPr><w:u w:val="single"/><w:strike/>' +
+        '<w:highlight w:val="yellow"/></w:rPr><w:t>hi</w:t></w:r></w:p>'
+    );
+    expect(run.dataset.highlight).toBe('yellow');
+    expect(run.style.backgroundColor.toLowerCase()).toBe('#ffff00');
+    expect(run.querySelector('[data-docx-deco="underline"]')).not.toBeNull();
+    expect(run.dataset.start).toBe('0');
+    expect(run.dataset.end).toBe('2');
+  });
+
+  test('a hostile underline colour is refused at the sink', () => {
+    const run = runOf(
+      '<w:p><w:r><w:rPr><w:u w:val="single" w:color="javascript:alert(1)"/></w:rPr>' +
+        '<w:t>x</w:t></w:r></w:p>'
+    );
+    expect(run.style.textDecorationLine).toBe('underline');
+    expect(run.style.textDecorationColor).toBe('');
+    expect(run.style.backgroundImage).toBe('');
+  });
+});
+
+describe('paragraph bottom borders paint from layout geometry', () => {
+  test('empty bordered paragraph paints a rule at the published box', () => {
+    const body =
+      '<w:p><w:pPr><w:spacing w:before="100" w:after="120"/>' +
+      '<w:pBdr><w:bottom w:val="single" w:sz="16" w:space="2" w:color="FF0000"/></w:pBdr>' +
+      '</w:pPr></w:p>';
+    const layout = layoutOf(body);
+    const fragment = layout.pages[0]!.fragments[0]!;
+    expect(fragment.kind).toBe('paragraph');
+    if (fragment.kind !== 'paragraph') return;
+    expect(fragment.bottomBorder).toBeDefined();
+
+    const container = paint(body);
+    const rule = container.querySelector<HTMLElement>('.docx-paragraph-border-bottom')!;
+    expect(rule).not.toBeNull();
+    expect(rule.style.backgroundColor.toLowerCase()).toBe('#ff0000');
+    // Geometry comes from the record, relative to the fragment — not from the DOM.
+    expect(rule.style.height).toBe(`${fragment.bottomBorder!.box.height}px`);
+    expect(Number.parseFloat(rule.style.top)).toBe(fragment.bottomBorder!.box.y - fragment.box.y);
+    expect(rule.style.width).toBe(`${fragment.bottomBorder!.box.width}px`);
+  });
+
+  test('a hostile border colour is refused at the sink', () => {
+    const container = paint(
+      '<w:p><w:pPr><w:pBdr><w:bottom w:val="single" w:sz="8" w:color="javascript:alert(1)"/>' +
+        '</w:pBdr></w:pPr><w:r><w:t>x</w:t></w:r></w:p>'
+    );
+    const rule = container.querySelector<HTMLElement>('.docx-paragraph-border-bottom');
+    // Invalid colour falls back to black — never a javascript: or url() value.
+    expect(rule?.style.backgroundColor.toLowerCase()).toBe('#000000');
+    expect(rule?.style.backgroundImage).toBe('');
+  });
+});
+
+describe('list marker paint', () => {
+  const NUM = `
+    <w:abstractNum w:abstractNumId="1">
+      <w:lvl w:ilvl="0"><w:start w:val="1"/><w:numFmt w:val="bullet"/><w:lvlText w:val="•"/>
+        <w:lvlJc w:val="left"/><w:pPr><w:ind w:left="720" w:hanging="360"/></w:pPr></w:lvl>
+    </w:abstractNum>
+    <w:num w:numId="1"><w:abstractNumId w:val="1"/>
+      <w:lvlOverride w:ilvl="0"><w:startOverride w:val="1"/></w:lvlOverride></w:num>`;
+
+  test('paints an inert marker outside model text ranges', () => {
+    const layout = layoutOf(
+      '<w:p><w:pPr><w:numPr><w:ilvl w:val="0"/><w:numId w:val="1"/></w:numPr></w:pPr>' +
+        '<w:r><w:t>Item</w:t></w:r></w:p>',
+      NUM
+    );
+    const container = document.createElement('div');
+    paintSemanticLayout(container, layout, { scale: 1 });
+    const marker = container.querySelector<HTMLElement>('[data-docx-marker]');
+    expect(marker).not.toBeNull();
+    expect(marker!.textContent).toBe('•');
+    expect(marker!.getAttribute('contenteditable')).toBe('false');
+    expect(marker!.dataset.start).toBeUndefined();
+    expect(marker!.dataset.paragraphId).toBeUndefined();
+    const run = container.querySelector<HTMLElement>('.layout-run-text');
+    expect(run?.textContent).toBe('Item');
+    expect(run?.dataset.start).toBe('0');
   });
 });

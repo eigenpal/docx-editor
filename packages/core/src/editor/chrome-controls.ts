@@ -32,26 +32,44 @@
 
 import { GENERATED_ICON_PATHS } from './generated-icon-paths.ts';
 
-/** Which toolbar controls are actually wired to an engine action. */
+/**
+ * HOW a control reaches the engine — never WHETHER it is enabled.
+ *
+ * Enabled state has exactly one source: `toolbarCommandState(editor, slot)`, which
+ * asks `Editor.can`. The registry is static data and cannot know what the engine
+ * will honour at this selection, in this document, at this moment.
+ *
+ * There used to be a fourth member, `parityOnly`, meaning "visible but permanently
+ * disabled". It was a second, static answer to the question `Editor.can` already
+ * answers, and it went stale the moment the engine wired underline, strike, the four
+ * alignments, the list commands and the four value slots: the registry still said
+ * parity-only, React ignored it and ran them, and Vue believed it and rendered twelve
+ * WORKING commands permanently disabled. A slot the engine has not wired needs no
+ * registry flag — `commandForSlot` answers null and `toolbarCommandState` disables the
+ * control with the engine's own words ("not wired to an editor command").
+ */
 export type ChromeControlState =
   /**
-   * Enabled when `Editor.can(commandForSlot(slot))` succeeds; a click runs
-   * `runToolbarCommand(editor, slot)`. The command itself is resolved from the
-   * SLOT id through `commandForSlot` in toolbar-commands.ts — the one command
-   * table both adapters share.
+   * Dispatched as one fixed engine command: enabled when
+   * `Editor.can(commandForSlot(slot))` succeeds, a click runs
+   * `runToolbarCommand(editor, slot)`. The command is resolved from the SLOT id
+   * through `commandForSlot` in toolbar-commands.ts — the one command table both
+   * adapters share. A slot with no row there is simply not wired YET, and says so
+   * through the engine rather than through this descriptor.
    */
   | { readonly kind: 'command' }
-  /** `Editor.save()` — not a command. */
-  | { readonly kind: 'save' }
   /**
-   * Present for visual parity, permanently disabled with a localized reason.
+   * Dispatched with a PICKED value: `commandForSlotValue(slot, value)`. Enabled when
+   * the engine would honour a well-formed value right now (`toolbarCommandState`
+   * probes for exactly that), so the control needs chrome that produces a value — a
+   * font list, a size, a colour — before a click means anything.
    *
-   * M6V.1 is explicit that only undo, redo, bold, italic, and save may act, and
-   * that every other legacy control MUST stay VISIBLE but disabled rather than be
-   * dropped. A missing button would understate the parity gap; an enabled one
-   * would claim a capability the engine does not have.
+   * A distinct kind because 'command' cannot describe it: there is no fixed command
+   * to hand `Editor.can`, and a bare click has nothing to send.
    */
-  | { readonly kind: 'parityOnly' };
+  | { readonly kind: 'value' }
+  /** `Editor.save()` — not a command (see `runSave`). */
+  | { readonly kind: 'save' };
 
 /**
  * The SHAPE a control renders as (task M6V.1).
@@ -134,13 +152,20 @@ export const CHROME_GROUPS = [
     labelKey: 'formattingBar.groups.zoom',
     controls: [
       {
+        // Zoom is facade state, not a command and not a mark value: the chrome that
+        // drives it calls `Editor.setZoom` and reads `snapshot().zoom` (React's zoom
+        // stepper does exactly that). No kind describes that dispatch, and inventing
+        // one for a single control would add a branch adapters must implement and only
+        // one slot could ever exercise — so this stays 'command', where the shared
+        // helper reports the honest "not wired to an editor command" for chrome that
+        // has no zoom wiring of its own.
         id: 'level',
         shape: 'stepper',
         valueText: '100%',
         labelKey: 'formattingBar.groups.zoom',
         paths: null,
         valueKey: 'zoom.zoomLevel',
-        state: { kind: 'parityOnly' },
+        state: { kind: 'command' },
       },
     ],
   },
@@ -154,7 +179,7 @@ export const CHROME_GROUPS = [
         labelKey: 'styles.selectAriaLabel',
         paths: null,
         valueKey: 'styles.normalText',
-        state: { kind: 'parityOnly' },
+        state: { kind: 'command' },
       },
     ],
   },
@@ -168,7 +193,7 @@ export const CHROME_GROUPS = [
         labelKey: 'font.selectAriaLabel',
         paths: null,
         valueKey: 'font.sansSerif',
-        state: { kind: 'parityOnly' },
+        state: { kind: 'value' },
       },
       {
         id: 'size',
@@ -177,7 +202,7 @@ export const CHROME_GROUPS = [
         labelKey: 'fontSize.listLabel',
         paths: null,
         valueKey: 'fontSize.label',
-        state: { kind: 'parityOnly' },
+        state: { kind: 'value' },
       },
     ],
   },
@@ -201,13 +226,13 @@ export const CHROME_GROUPS = [
         id: 'underline',
         labelKey: 'formattingBar.underlineShortcut',
         paths: GENERATED_ICON_PATHS['format_underlined'],
-        state: { kind: 'parityOnly' },
+        state: { kind: 'command' },
       },
       {
         id: 'strike',
         labelKey: 'formattingBar.strikethrough',
         paths: GENERATED_ICON_PATHS['strikethrough_s'],
-        state: { kind: 'parityOnly' },
+        state: { kind: 'command' },
       },
       {
         // The chrome spec renders font colour INSIDE the text-formatting group,
@@ -219,7 +244,7 @@ export const CHROME_GROUPS = [
         swatch: '#ff0000',
         labelKey: 'formattingBar.fontColor',
         paths: GENERATED_ICON_PATHS['format_color_text'],
-        state: { kind: 'parityOnly' },
+        state: { kind: 'value' },
       },
       {
         id: 'highlight',
@@ -227,13 +252,13 @@ export const CHROME_GROUPS = [
         swatch: '#ffff00',
         labelKey: 'formattingBar.highlightColor',
         paths: GENERATED_ICON_PATHS['ink_highlighter'],
-        state: { kind: 'parityOnly' },
+        state: { kind: 'value' },
       },
       {
         id: 'link',
         labelKey: 'formattingBar.insertLinkShortcut',
         paths: GENERATED_ICON_PATHS['link'],
-        state: { kind: 'parityOnly' },
+        state: { kind: 'command' },
       },
     ],
   },
@@ -245,13 +270,13 @@ export const CHROME_GROUPS = [
         id: 'super',
         labelKey: 'formattingBar.superscriptShortcut',
         paths: GENERATED_ICON_PATHS['superscript'],
-        state: { kind: 'parityOnly' },
+        state: { kind: 'command' },
       },
       {
         id: 'sub',
         labelKey: 'formattingBar.subscriptShortcut',
         paths: GENERATED_ICON_PATHS['subscript'],
-        state: { kind: 'parityOnly' },
+        state: { kind: 'command' },
       },
     ],
   },
@@ -267,25 +292,25 @@ export const CHROME_GROUPS = [
         id: 'left',
         labelKey: 'alignment.alignLeft',
         paths: GENERATED_ICON_PATHS['format_align_left'],
-        state: { kind: 'parityOnly' },
+        state: { kind: 'command' },
       },
       {
         id: 'center',
         labelKey: 'alignment.center',
         paths: GENERATED_ICON_PATHS['format_align_center'],
-        state: { kind: 'parityOnly' },
+        state: { kind: 'command' },
       },
       {
         id: 'right',
         labelKey: 'alignment.alignRight',
         paths: GENERATED_ICON_PATHS['format_align_right'],
-        state: { kind: 'parityOnly' },
+        state: { kind: 'command' },
       },
       {
         id: 'justify',
         labelKey: 'alignment.justify',
         paths: GENERATED_ICON_PATHS['format_align_justify'],
-        state: { kind: 'parityOnly' },
+        state: { kind: 'command' },
       },
     ],
   },
@@ -297,25 +322,25 @@ export const CHROME_GROUPS = [
         id: 'bullet',
         labelKey: 'lists.bulletList',
         paths: GENERATED_ICON_PATHS['format_list_bulleted'],
-        state: { kind: 'parityOnly' },
+        state: { kind: 'command' },
       },
       {
         id: 'numbered',
         labelKey: 'lists.numberedList',
         paths: GENERATED_ICON_PATHS['format_list_numbered'],
-        state: { kind: 'parityOnly' },
+        state: { kind: 'command' },
       },
       {
         id: 'outdent',
         labelKey: 'lists.decreaseIndent',
         paths: GENERATED_ICON_PATHS['format_indent_decrease'],
-        state: { kind: 'parityOnly' },
+        state: { kind: 'command' },
       },
       {
         id: 'indent',
         labelKey: 'lists.increaseIndent',
         paths: GENERATED_ICON_PATHS['format_indent_increase'],
-        state: { kind: 'parityOnly' },
+        state: { kind: 'command' },
       },
       {
         // The chrome spec groups line spacing WITH the list buttons, after
@@ -324,7 +349,7 @@ export const CHROME_GROUPS = [
         shape: 'dropdown',
         labelKey: 'lineSpacing.label',
         paths: GENERATED_ICON_PATHS['format_line_spacing'],
-        state: { kind: 'parityOnly' },
+        state: { kind: 'command' },
       },
     ],
   },
@@ -338,7 +363,7 @@ export const CHROME_GROUPS = [
         id: 'clear',
         labelKey: 'formattingBar.clearFormatting',
         paths: GENERATED_ICON_PATHS['format_clear'],
-        state: { kind: 'parityOnly' },
+        state: { kind: 'command' },
       },
     ],
   },
@@ -351,7 +376,7 @@ export const CHROME_GROUPS = [
         shape: 'icon',
         labelKey: 'formattingBar.commentsAndChanges',
         paths: GENERATED_ICON_PATHS['comment'],
-        state: { kind: 'parityOnly' },
+        state: { kind: 'command' },
       },
       {
         // The "✎ Editing ▾" mode pill: icon + current-mode label + caret.
@@ -360,7 +385,7 @@ export const CHROME_GROUPS = [
         labelKey: 'editingMode.label',
         valueKey: 'editingMode.editing',
         paths: GENERATED_ICON_PATHS['edit_note'],
-        state: { kind: 'parityOnly' },
+        state: { kind: 'command' },
       },
     ],
   },
@@ -373,13 +398,13 @@ export const CHROME_GROUPS = [
         id: 'insert',
         labelKey: 'toolbar.image',
         paths: GENERATED_ICON_PATHS['image'],
-        state: { kind: 'parityOnly' },
+        state: { kind: 'command' },
       },
       {
         id: 'properties',
         labelKey: 'formattingBar.imagePropertiesShortcut',
         paths: GENERATED_ICON_PATHS['tune'],
-        state: { kind: 'parityOnly' },
+        state: { kind: 'command' },
       },
     ],
   },
@@ -392,7 +417,7 @@ export const CHROME_GROUPS = [
         id: 'insert',
         labelKey: 'toolbar.table',
         paths: GENERATED_ICON_PATHS['table'],
-        state: { kind: 'parityOnly' },
+        state: { kind: 'command' },
       },
     ],
   },
@@ -550,5 +575,10 @@ export function chromeControlCount(): number {
   return CHROME_GROUPS.reduce((n, g) => n + g.controls.length, 0);
 }
 
-/** i18n key for the tooltip on a control that exists only for visual parity. */
+/**
+ * i18n key for the tooltip on a control an ADAPTER renders but cannot drive yet — a
+ * value slot in a toolbar that has grown no picker for it, say. It is never the reason
+ * a control is disabled: when the ENGINE refuses, the tooltip is the engine's own
+ * `disabledReason`, never an adapter paraphrase.
+ */
 export const CHROME_UNAVAILABLE_KEY = 'formattingBar.unavailableInPreview';

@@ -280,10 +280,18 @@ export function classifyCommand(command: EditorCommand): CommandSupport {
         command.hanging !== undefined
         ? { supported: true, mutating: true }
         : { supported: false, reason: 'setIndent requires at least one indent field' };
+    case 'toggleList':
+      return command.kind === 'bullet' || command.kind === 'ordered'
+        ? { supported: true, mutating: true }
+        : { supported: false, reason: `list kind '${command.kind}' is not supported` };
+    case 'adjustIndent':
+      return command.direction === 'increase' || command.direction === 'decrease'
+        ? { supported: true, mutating: true }
+        : { supported: false, reason: `indent direction '${command.direction}' is not supported` };
     case 'insertBreak':
-      // Line breaks and next-page section breaks are wired; page/column breaks belong
-      // to lanes the surface does not own yet.
-      return command.kind === 'line' || command.kind === 'section'
+      // Line, hard page, and next-page section breaks are wired. `column` belongs to the
+      // multi-column lane, which layout does not own yet.
+      return command.kind === 'line' || command.kind === 'page' || command.kind === 'section'
         ? { supported: true, mutating: true }
         : { supported: false, reason: `break kind '${command.kind}' is not supported` };
     case 'insertText':

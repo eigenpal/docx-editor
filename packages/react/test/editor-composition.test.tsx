@@ -259,7 +259,12 @@ describe('the sugar <DocxEditor> (namespace + ref parity)', () => {
     expect(DocxEditor.Content).toBe(DocxEditorContent);
   });
 
-  test('the target provider-first usage works through the namespace', () => {
+  test('the target provider-first usage works through the namespace', async () => {
+    let instance: DocxEditorInstance | null = null;
+    function Capture() {
+      instance = useDocxEditor();
+      return null;
+    }
     function MyToolbar() {
       const bold = useEditorCommand('text.bold');
       const page = useEditorState(selectPage);
@@ -277,6 +282,7 @@ describe('the sugar <DocxEditor> (namespace + ref parity)', () => {
     }
     const view = render(
       <DocxEditor.Root document={SOURCE}>
+        <Capture />
         <MyToolbar />
         <DocxEditor.Viewport>
           <DocxEditor.Content />
@@ -284,6 +290,12 @@ describe('the sugar <DocxEditor> (namespace + ref parity)', () => {
       </DocxEditor.Root>
     );
     expect(view.getByTestId('ns-page').textContent).toBe('1 / 1');
+    // Run formatting needs a RANGE: a collapsed caret carries no formatting yet, so the
+    // control is honestly disabled until something is selected.
+    expect((view.getByTestId('ns-bold') as HTMLButtonElement).disabled).toBe(true);
+    await act(async () => {
+      instance!.surface!.selectAll();
+    });
     expect((view.getByTestId('ns-bold') as HTMLButtonElement).disabled).toBe(false);
     expect(view.container.querySelectorAll('.docx-page').length).toBeGreaterThan(0);
   });

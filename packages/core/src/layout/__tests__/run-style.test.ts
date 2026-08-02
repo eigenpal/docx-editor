@@ -39,15 +39,42 @@ describe('every D8 run property resolves', () => {
     expect(resolve('u', { val: 'none' }).underline).toBeNull();
   });
 
+  test('fixture underline variants resolve without collapsing thick or double', () => {
+    expect(resolve('u', { val: 'thick' }).underline).toEqual({ variant: 'thick', color: null });
+    expect(resolve('u', { val: 'double' }).underline).toEqual({ variant: 'double', color: null });
+    expect(resolve('u', { val: 'dotted' }).underline).toEqual({ variant: 'dotted', color: null });
+    expect(resolve('u', { val: 'dash' }).underline).toEqual({ variant: 'dash', color: null });
+  });
+
   test('strike and double strike are separate properties', () => {
     expect(resolve('strike').strike).toBe(true);
     expect(resolve('dstrike').doubleStrike).toBe(true);
     expect(resolve('strike').doubleStrike).toBe(false);
   });
 
+  test('strike and dstrike can both be present; paint chooses double', () => {
+    const style = resolveRunStyle([{ localName: 'strike' }, { localName: 'dstrike' }]);
+    expect(style.strike).toBe(true);
+    expect(style.doubleStrike).toBe(true);
+  });
+
+  test('a hostile underline colour is dropped at resolve', () => {
+    expect(resolve('u', { val: 'single', color: 'javascript:alert(1)' }).underline).toEqual({
+      variant: 'single',
+      color: null,
+    });
+  });
+
   test('highlight, and none meaning absent', () => {
     expect(resolve('highlight', { val: 'yellow' }).highlight).toBe('yellow');
     expect(resolve('highlight', { val: 'none' }).highlight).toBeNull();
+  });
+
+  test('character shading is a strict hex fill', () => {
+    expect(resolve('shd', { val: 'clear', fill: 'FFEEAA' }).shading).toBe('FFEEAA');
+    expect(resolve('shd', { val: 'clear', fill: 'auto' }).shading).toBeNull();
+    expect(resolve('shd', { val: 'nil', fill: 'FFEEAA' }).shading).toBeNull();
+    expect(resolve('shd', { val: 'clear', fill: 'url(x)' }).shading).toBeNull();
   });
 
   test('vertical alignment and baseline shift', () => {
@@ -108,5 +135,15 @@ describe('style equality drives span merging', () => {
     expect(runStylesEqual(resolve('u', { val: 'single' }), resolve('u', { val: 'double' }))).toBe(
       false
     );
+  });
+
+  test('thick underline is not equal to single', () => {
+    expect(runStylesEqual(resolve('u', { val: 'single' }), resolve('u', { val: 'thick' }))).toBe(
+      false
+    );
+  });
+
+  test('strike is not equal to double strike', () => {
+    expect(runStylesEqual(resolve('strike'), resolve('dstrike'))).toBe(false);
   });
 });

@@ -8,6 +8,7 @@
 
 import type { OoxmlNode, OoxmlParagraphNode, OoxmlPart } from '../package/ooxml-tree.ts';
 import { findNode } from '../package/ooxml-edit.ts';
+import { paragraphPropertiesNodeOf } from './tree-op-nodes.ts';
 import { isValidXmlText } from '../package/sinks.ts';
 
 /**
@@ -88,6 +89,44 @@ export type TreeDocOp =
     }
   | { readonly op: 'insertTab'; readonly paragraphId: string; readonly offset: number }
   | { readonly op: 'insertHardBreak'; readonly paragraphId: string; readonly offset: number }
+  | { readonly op: 'insertPageBreak'; readonly paragraphId: string; readonly offset: number }
+  | {
+      /**
+       * Move a numbered paragraph to another `w:numPr/w:ilvl`.
+       *
+       * A list item's LEVEL is what selects its format out of `numbering.xml`, so this is
+       * the op behind Increase/Decrease Indent on a list: the marker changes with it. A
+       * paragraph carrying no `w:numPr` is refused rather than silently numbered.
+       */
+      readonly op: 'setListLevel';
+      readonly paragraphId: string;
+      readonly level: number;
+    }
+  | {
+      /**
+       * Put a paragraph in a list, or take it out of one.
+       *
+       * `numId` names a `w:num` in `numbering.xml`; null removes `w:numPr` entirely, which
+       * is what turning a bullet off means. Everything else in `w:pPr` survives.
+       */
+      /**
+       * Run properties of the PARAGRAPH MARK (`w:pPr/w:rPr`, ECMA-376 17.3.1.29).
+       *
+       * The mark carries the formatting a paragraph's own pilcrow has, and Word keeps it
+       * in step whenever formatting is applied to a whole paragraph. It is what a list
+       * marker inherits its face from — so without it, sizing a bulleted paragraph leaves
+       * the bullet at the old size.
+       */
+      readonly op: 'setParagraphMarkProperties';
+      readonly paragraphId: string;
+      readonly properties: readonly OoxmlProperty[];
+    }
+  | {
+      readonly op: 'setListNumbering';
+      readonly paragraphId: string;
+      readonly numId: string | null;
+      readonly level?: number;
+    }
   | { readonly op: 'splitParagraph'; readonly paragraphId: string; readonly offset: number }
   | {
       /**
@@ -164,6 +203,10 @@ export const TREE_DOC_OP_KINDS = [
   'deleteText',
   'insertTab',
   'insertHardBreak',
+  'insertPageBreak',
+  'setListLevel',
+  'setListNumbering',
+  'setParagraphMarkProperties',
   'splitParagraph',
   'splitParagraphMany',
   'joinParagraphs',
@@ -206,6 +249,7 @@ export type TreeOpRejection =
   | 'not-a-paragraph'
   | 'offset-out-of-range'
   | 'invalid-range'
+  | 'not-a-list-paragraph'
   | 'splits-surrogate-pair'
   | 'invalid-text'
   | 'unsupported-property'
@@ -415,7 +459,7 @@ export function targetSectionNodes(
     if (node.kind === 'paragraph') {
       if (node.id === anchorParagraphId) seenAnchor = true;
       if (seenAnchor && !inTable) {
-        const pPr = node.children.find((child) => child.kind === 'paragraphProperties');
+        const pPr = paragraphPropertiesNodeOf(node);
         const sectPr = pPr ? sectionChild(pPr, 'sectPr') : null;
         if (sectPr) governing = sectPr;
       }
@@ -591,8 +635,28 @@ export function validateTreeOp(part: OoxmlPart, op: TreeDocOp): TreeOpRejection 
       if (splitsSurrogate(paragraph, op.offset)) return 'splits-surrogate-pair';
       return null;
     }
+    case 'setListLevel': {
+      if (!Number.isInteger(op.level) || op.level < 0 || op.level > 8) return 'invalid-range';
+      return null;
+    }
+    case 'setParagraphMarkProperties':
+      if (!Array.isArray(op.properties)) return 'invalid-range';
+      // The MARK is a run property container (CT_ParaRPr), so it takes the same boundary
+      // `setRunProperties` does. Checking only that the argument was an array let an op
+      // MINT any element name into `w:pPr/w:rPr` — `<w:rPr><w:sectPr/></w:rPr>` applied
+      // clean and serialized — and skipped the attribute-name/value checks every other
+      // property op runs before a value reaches the XML sink.
+      return validateProperties(op.properties, RUN_PROPERTY_SET);
+    case 'setListNumbering': {
+      const level = op.level ?? 0;
+      if (!Number.isInteger(level) || level < 0 || level > 8) return 'invalid-range';
+      // A numId is file-addressable and becomes an attribute value: digits only.
+      if (op.numId !== null && !/^\d{1,9}$/.test(op.numId)) return 'invalid-range';
+      return null;
+    }
     case 'insertTab':
-    case 'insertHardBreak': {
+    case 'insertHardBreak':
+    case 'insertPageBreak': {
       if (!Number.isInteger(op.offset) || op.offset < 0 || op.offset > length) {
         return 'offset-out-of-range';
       }
@@ -640,7 +704,7 @@ export function validateTreeOp(part: OoxmlPart, op: TreeDocOp): TreeOpRejection 
     case 'setParagraphProperties':
       return validateProperties(op.properties, PARAGRAPH_PROPERTY_SET);
     case 'setSectionMark': {
-      const pPr = paragraph.children.find((child) => child.kind === 'paragraphProperties');
+      const pPr = paragraphPropertiesNodeOf(paragraph);
       // A paragraph already ending a section cannot end two.
       if (pPr && sectionChild(pPr, 'sectPr')) return 'invalid-property-value';
       // A section cannot end inside a table cell: Word never writes one there, and the

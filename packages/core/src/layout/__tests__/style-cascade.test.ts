@@ -1,0 +1,534 @@
+// Bounded layout-side style cascade (docDefaults, basedOn, last-wins duplicates).
+
+import { describe, expect, test } from 'bun:test';
+import { readOoxmlPart, type OoxmlElement } from '@docx-editor.dev/core-contract/store';
+import {
+  MAX_STYLE_BASED_ON_DEPTH,
+  MAX_STYLE_DEFINITIONS,
+  buildStyleCascadeTable,
+  cascadeParagraphFormatting,
+  cascadeRunProperties,
+  cascadedBottomBorder,
+  isValidStyleId,
+} from '../style-cascade.ts';
+import { resolveRunStyle } from '../run-style.ts';
+import { paragraphSpacing } from '../paragraph-style.ts';
+import { createFixedMeasurer, layoutSemanticDocument } from '../semantic-layout.ts';
+import { linesOf } from '../semantic-records.ts';
+import { createParagraphLayoutCache } from '../layout-cache.ts';
+
+const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
+
+function loadStyles(body: string): OoxmlElement {
+  const result = readOoxmlPart(`<w:styles xmlns:w="${W}">${body}</w:styles>`, {
+    name: '/word/styles.xml',
+    contentType: 'app/xml',
+  });
+  if (!result.ok) throw new Error(result.reason);
+  return result.part.root;
+}
+
+function loadDocument(body: string) {
+  const result = readOoxmlPart(`<w:document xmlns:w="${W}"><w:body>${body}</w:body></w:document>`, {
+    name: '/word/document.xml',
+    contentType: 'app/xml',
+  });
+  if (!result.ok) throw new Error(result.reason);
+  return result.part;
+}
+
+function paragraphPPr(body: string) {
+  return loadDocument(body).root.children[0]!.children[0]!.children.find(
+    (child) => child.kind === 'paragraphProperties'
+  );
+}
+
+const HEADING1_FIRST =
+  `<w:style w:type="paragraph" w:styleId="Heading1">` +
+  `<w:name w:val="Heading 1"/><w:basedOn w:val="Normal"/>` +
+  `<w:rPr><w:color w:val="2E74B5"/><w:sz w:val="32"/></w:rPr></w:style>`;
+
+const HEADING1_LAST =
+  `<w:style w:type="paragraph" w:styleId="Heading1">` +
+  `<w:name w:val="Heading 1"/><w:basedOn w:val="Normal"/>` +
+  `<w:pPr><w:spacing w:before="360" w:after="200"/></w:pPr>` +
+  `<w:rPr><w:rFonts w:ascii="Arial" w:hAnsi="Arial"/><w:b/>` +
+  `<w:color w:val="1B3A5C"/><w:sz w:val="36"/></w:rPr></w:style>`;
+
+const HEADING2_LAST =
+  `<w:style w:type="paragraph" w:styleId="Heading2">` +
+  `<w:name w:val="Heading 2"/><w:basedOn w:val="Normal"/>` +
+  `<w:pPr><w:spacing w:before="280" w:after="160"/></w:pPr>` +
+  `<w:rPr><w:rFonts w:ascii="Arial"/><w:b/>` +
+  `<w:color w:val="2E75B6"/><w:sz w:val="30"/></w:rPr></w:style>`;
+
+const DOC_DEFAULTS =
+  `<w:docDefaults><w:rPrDefault><w:rPr>` +
+  `<w:rFonts w:ascii="Arial"/><w:sz w:val="22"/>` +
+  `</w:rPr></w:rPrDefault><w:pPrDefault/></w:docDefaults>`;
+
+describe('isValidStyleId guards attacker-controlled ids', () => {
+  test('rejects empty, over-long, control, and dangerous keys', () => {
+    expect(isValidStyleId(undefined)).toBe(false);
+    expect(isValidStyleId('')).toBe(false);
+    expect(isValidStyleId('a'.repeat(129))).toBe(false);
+    expect(isValidStyleId('bad\nid')).toBe(false);
+    expect(isValidStyleId('__proto__')).toBe(false);
+    expect(isValidStyleId('constructor')).toBe(false);
+    expect(isValidStyleId('Heading1')).toBe(true);
+  });
+});
+
+describe('buildStyleCascadeTable last-wins and docDefaults', () => {
+  test('duplicate Heading1 keeps the last definition', () => {
+    const table = buildStyleCascadeTable(loadStyles(HEADING1_FIRST + HEADING1_LAST));
+    const style = table.styles.get('Heading1')!;
+    expect(resolveRunStyle(style.runProperties)).toMatchObject({
+      fontFamily: 'Arial',
+      fontSizePt: 18,
+      bold: true,
+      color: '1B3A5C',
+    });
+    expect(paragraphSpacing(style.paragraphProperties)).toEqual({ before: 18, after: 10 });
+  });
+
+  test('docDefaults populate the table', () => {
+    const table = buildStyleCascadeTable(loadStyles(DOC_DEFAULTS));
+    expect(resolveRunStyle(table.docDefaultsRun)).toMatchObject({
+      fontFamily: 'Arial',
+      fontSizePt: 11,
+    });
+  });
+
+  test('duplicate last-wins also for default flags', () => {
+    const twoDefaults =
+      `<w:style w:type="paragraph" w:default="1" w:styleId="Normal">` +
+      `<w:rPr><w:sz w:val="20"/></w:rPr></w:style>` +
+      `<w:style w:type="paragraph" w:default="1" w:styleId="Body">` +
+      `<w:rPr><w:sz w:val="28"/></w:rPr></w:style>`;
+    expect(buildStyleCascadeTable(loadStyles(twoDefaults)).defaultParagraphStyleId).toBe('Body');
+
+    const bodyClearsDefault =
+      twoDefaults +
+      `<w:style w:type="paragraph" w:styleId="Body">` +
+      `<w:rPr><w:sz w:val="32"/></w:rPr></w:style>`;
+    const table = buildStyleCascadeTable(loadStyles(bodyClearsDefault));
+    // Last Body definition dropped the default flag, so no default paragraph remains.
+    expect(table.defaultParagraphStyleId).toBeNull();
+    expect(resolveRunStyle(table.styles.get('Body')!.runProperties).fontSizePt).toBe(16);
+  });
+
+  test('hostile style ids are dropped, not stored', () => {
+    const styles =
+      `<w:style w:type="paragraph" w:styleId="__proto__">` +
+      `<w:rPr><w:sz w:val="40"/></w:rPr></w:style>` +
+      `<w:style w:type="paragraph" w:styleId="Safe">` +
+      `<w:basedOn w:val="constructor"/>` +
+      `<w:rPr><w:sz w:val="24"/></w:rPr></w:style>`;
+    const table = buildStyleCascadeTable(loadStyles(styles));
+    expect(table.styles.has('__proto__')).toBe(false);
+    expect(table.styles.get('Safe')!.basedOn).toBeNull();
+  });
+});
+
+describe('default paragraph style when pStyle is absent', () => {
+  test('applies w:default paragraph style to bare paragraphs', () => {
+    const styles =
+      DOC_DEFAULTS +
+      `<w:style w:type="paragraph" w:default="1" w:styleId="Normal">` +
+      `<w:pPr><w:spacing w:before="120" w:after="80"/></w:pPr>` +
+      `<w:rPr><w:color w:val="336699"/><w:sz w:val="26"/></w:rPr></w:style>`;
+    const table = buildStyleCascadeTable(loadStyles(styles));
+    expect(table.defaultParagraphStyleId).toBe('Normal');
+    const cascaded = cascadeParagraphFormatting(table, undefined);
+    expect(paragraphSpacing(cascaded.paragraphProperties)).toEqual({ before: 6, after: 4 });
+    expect(resolveRunStyle(cascaded.runProperties)).toMatchObject({
+      fontFamily: 'Arial',
+      fontSizePt: 13,
+      color: '336699',
+    });
+  });
+
+  test('explicit pStyle still wins over the default paragraph style', () => {
+    const styles =
+      `<w:style w:type="paragraph" w:default="1" w:styleId="Normal">` +
+      `<w:rPr><w:sz w:val="20"/><w:color w:val="111111"/></w:rPr></w:style>` +
+      HEADING1_LAST;
+    const table = buildStyleCascadeTable(loadStyles(styles));
+    const cascaded = cascadeParagraphFormatting(
+      table,
+      paragraphPPr(`<w:p><w:pPr><w:pStyle w:val="Heading1"/></w:pPr><w:r><w:t>x</w:t></w:r></w:p>`)
+    );
+    expect(resolveRunStyle(cascaded.runProperties)).toMatchObject({
+      fontSizePt: 18,
+      color: '1B3A5C',
+      bold: true,
+    });
+  });
+});
+
+describe('character rStyle cascade and default character style', () => {
+  test('default character style applies when rStyle is absent', () => {
+    const styles =
+      `<w:style w:type="character" w:default="1" w:styleId="DefaultParagraphFont">` +
+      `<w:rPr><w:color w:val="AA5500"/></w:rPr></w:style>`;
+    const table = buildStyleCascadeTable(loadStyles(styles));
+    expect(table.defaultCharacterStyleId).toBe('DefaultParagraphFont');
+    const merged = cascadeRunProperties(
+      [],
+      [{ localName: 'sz', attributes: { val: '24' } }],
+      table
+    );
+    expect(resolveRunStyle(merged)).toMatchObject({ fontSizePt: 12, color: 'AA5500' });
+  });
+
+  test('explicit rStyle basedOn chain with direct formatting precedence', () => {
+    const styles =
+      `<w:style w:type="character" w:default="1" w:styleId="DefaultParagraphFont">` +
+      `<w:rPr><w:color w:val="000000"/><w:sz w:val="20"/></w:rPr></w:style>` +
+      `<w:style w:type="character" w:styleId="BaseChar"><w:basedOn w:val="DefaultParagraphFont"/>` +
+      `<w:rPr><w:i/><w:sz w:val="28"/></w:rPr></w:style>` +
+      `<w:style w:type="character" w:styleId="Emph"><w:basedOn w:val="BaseChar"/>` +
+      `<w:rPr><w:color w:val="CC0000"/></w:rPr></w:style>`;
+    const table = buildStyleCascadeTable(loadStyles(styles));
+    const merged = cascadeRunProperties(
+      [{ localName: 'rFonts', attributes: { ascii: 'Arial' } }],
+      [
+        { localName: 'rStyle', attributes: { val: 'Emph' } },
+        { localName: 'sz', attributes: { val: '40' } },
+      ],
+      table
+    );
+    expect(resolveRunStyle(merged)).toMatchObject({
+      fontFamily: 'Arial',
+      italic: true,
+      color: 'CC0000',
+      fontSizePt: 20, // direct wins over BaseChar's 14pt
+    });
+  });
+
+  test('rStyle cycles stop without hanging', () => {
+    const styles =
+      `<w:style w:type="character" w:styleId="A"><w:basedOn w:val="B"/>` +
+      `<w:rPr><w:sz w:val="30"/></w:rPr></w:style>` +
+      `<w:style w:type="character" w:styleId="B"><w:basedOn w:val="A"/>` +
+      `<w:rPr><w:color w:val="00AA00"/></w:rPr></w:style>`;
+    const table = buildStyleCascadeTable(loadStyles(styles));
+    const merged = cascadeRunProperties(
+      [],
+      [{ localName: 'rStyle', attributes: { val: 'A' } }],
+      table
+    );
+    expect(resolveRunStyle(merged)).toMatchObject({ fontSizePt: 15, color: '00AA00' });
+  });
+
+  test('paragraph-typed style named by rStyle contributes nothing', () => {
+    const styles =
+      `<w:style w:type="paragraph" w:styleId="Heading1">` +
+      `<w:rPr><w:sz w:val="48"/><w:color w:val="FF0000"/></w:rPr></w:style>`;
+    const table = buildStyleCascadeTable(loadStyles(styles));
+    const merged = cascadeRunProperties(
+      [],
+      [
+        { localName: 'rStyle', attributes: { val: 'Heading1' } },
+        { localName: 'sz', attributes: { val: '22' } },
+      ],
+      table
+    );
+    expect(resolveRunStyle(merged)).toMatchObject({ fontSizePt: 11, color: null });
+  });
+});
+
+describe('cascadeParagraphFormatting basedOn, cycles, depth, overrides', () => {
+  test('basedOn inherits parent size while own color wins', () => {
+    const styles =
+      `<w:style w:type="paragraph" w:styleId="Base">` +
+      `<w:rPr><w:sz w:val="40"/><w:color w:val="111111"/></w:rPr></w:style>` +
+      `<w:style w:type="paragraph" w:styleId="Child"><w:basedOn w:val="Base"/>` +
+      `<w:rPr><w:color w:val="AABBCC"/></w:rPr></w:style>`;
+    const table = buildStyleCascadeTable(loadStyles(styles));
+    const cascaded = cascadeParagraphFormatting(
+      table,
+      paragraphPPr(`<w:p><w:pPr><w:pStyle w:val="Child"/></w:pPr><w:r><w:t>x</w:t></w:r></w:p>`)
+    );
+    expect(resolveRunStyle(cascaded.runProperties)).toMatchObject({
+      fontSizePt: 20,
+      color: 'AABBCC',
+    });
+  });
+
+  test('basedOn cycles stop without hanging', () => {
+    const styles =
+      `<w:style w:type="paragraph" w:styleId="A"><w:basedOn w:val="B"/>` +
+      `<w:rPr><w:sz w:val="30"/></w:rPr></w:style>` +
+      `<w:style w:type="paragraph" w:styleId="B"><w:basedOn w:val="A"/>` +
+      `<w:rPr><w:color w:val="FF0000"/></w:rPr></w:style>`;
+    const table = buildStyleCascadeTable(loadStyles(styles));
+    const cascaded = cascadeParagraphFormatting(
+      table,
+      paragraphPPr(`<w:p><w:pPr><w:pStyle w:val="A"/></w:pPr><w:r><w:t>x</w:t></w:r></w:p>`)
+    );
+    expect(resolveRunStyle(cascaded.runProperties)).toMatchObject({
+      fontSizePt: 15,
+      color: 'FF0000',
+    });
+  });
+
+  test('basedOn depth is capped', () => {
+    const parts: string[] = [];
+    for (let i = 0; i <= MAX_STYLE_BASED_ON_DEPTH + 4; i += 1) {
+      const id = `S${i}`;
+      const based = i === 0 ? '' : `<w:basedOn w:val="S${i - 1}"/>`;
+      const sz = 20 + i;
+      parts.push(
+        `<w:style w:type="paragraph" w:styleId="${id}">${based}` +
+          `<w:rPr><w:sz w:val="${sz}"/></w:rPr></w:style>`
+      );
+    }
+    const tip = `S${MAX_STYLE_BASED_ON_DEPTH + 4}`;
+    const table = buildStyleCascadeTable(loadStyles(parts.join('')));
+    const cascaded = cascadeParagraphFormatting(
+      table,
+      paragraphPPr(`<w:p><w:pPr><w:pStyle w:val="${tip}"/></w:pPr><w:r><w:t>x</w:t></w:r></w:p>`)
+    );
+    expect(cascaded.runProperties.some((property) => property.localName === 'sz')).toBe(true);
+    const size = resolveRunStyle(cascaded.runProperties).fontSizePt;
+    expect(size).toBeGreaterThan(0);
+    expect(size).not.toBe(10);
+  });
+
+  test('direct run formatting overrides inherited style', () => {
+    const table = buildStyleCascadeTable(loadStyles(HEADING1_LAST));
+    const inherited = cascadeParagraphFormatting(
+      table,
+      paragraphPPr(`<w:p><w:pPr><w:pStyle w:val="Heading1"/></w:pPr><w:r><w:t>x</w:t></w:r></w:p>`)
+    ).runProperties;
+    const merged = cascadeRunProperties(inherited, [
+      { localName: 'sz', attributes: { val: '24' } },
+      { localName: 'color', attributes: { val: '00FF00' } },
+    ]);
+    expect(resolveRunStyle(merged)).toMatchObject({
+      fontFamily: 'Arial',
+      bold: true,
+      fontSizePt: 12,
+      color: '00FF00',
+    });
+  });
+
+  test('direct paragraph spacing overrides style spacing', () => {
+    const table = buildStyleCascadeTable(loadStyles(HEADING1_LAST));
+    const cascaded = cascadeParagraphFormatting(
+      table,
+      paragraphPPr(
+        `<w:p><w:pPr><w:pStyle w:val="Heading1"/>` +
+          `<w:spacing w:before="40" w:after="60"/></w:pPr>` +
+          `<w:r><w:t>x</w:t></w:r></w:p>`
+      )
+    );
+    expect(paragraphSpacing(cascaded.paragraphProperties)).toEqual({ before: 2, after: 3 });
+  });
+
+  test('cascaded bottom border inherits from style unless direct pBdr wins', () => {
+    const styles =
+      `<w:style w:type="paragraph" w:styleId="Ruled">` +
+      `<w:pPr><w:pBdr><w:bottom w:val="single" w:sz="24" w:color="FF0000" w:space="4"/>` +
+      `</w:pBdr></w:pPr></w:style>`;
+    const table = buildStyleCascadeTable(loadStyles(styles));
+    const styled = cascadeParagraphFormatting(
+      table,
+      paragraphPPr(`<w:p><w:pPr><w:pStyle w:val="Ruled"/></w:pPr><w:r><w:t>x</w:t></w:r></w:p>`)
+    );
+    expect(cascadedBottomBorder(styled.paragraphPropertyNodes)).toMatchObject({
+      color: 'FF0000',
+      widthPt: 3,
+      spacePt: 4,
+    });
+  });
+});
+
+describe('bounded cacheToken fingerprint', () => {
+  test('cacheToken is a bounded hex fingerprint, not the full styles dump', () => {
+    const many: string[] = [];
+    for (let i = 0; i < 200; i += 1) {
+      many.push(
+        `<w:style w:type="paragraph" w:styleId="S${i}">` +
+          `<w:rPr><w:sz w:val="${20 + (i % 40)}"/><w:color w:val="${(0x100000 + i)
+            .toString(16)
+            .slice(-6)
+            .toUpperCase()}"/></w:rPr></w:style>`
+      );
+    }
+    const table = buildStyleCascadeTable(loadStyles(many.join('')));
+    expect(table.styles.size).toBe(200);
+    expect(table.cacheToken).toMatch(/^[0-9a-f]{16}$/);
+    expect(table.cacheToken.length).toBe(16);
+  });
+
+  test('identical tables share a token; a property change invalidates', () => {
+    const base =
+      DOC_DEFAULTS +
+      `<w:style w:type="paragraph" w:default="1" w:styleId="Normal">` +
+      `<w:rPr><w:sz w:val="22"/><w:color w:val="111111"/></w:rPr></w:style>`;
+    const a = buildStyleCascadeTable(loadStyles(base));
+    const b = buildStyleCascadeTable(loadStyles(base));
+    expect(a.cacheToken).toBe(b.cacheToken);
+
+    const changed =
+      DOC_DEFAULTS +
+      `<w:style w:type="paragraph" w:default="1" w:styleId="Normal">` +
+      `<w:rPr><w:sz w:val="22"/><w:color w:val="222222"/></w:rPr></w:style>`;
+    const c = buildStyleCascadeTable(loadStyles(changed));
+    expect(c.cacheToken).not.toBe(a.cacheToken);
+  });
+
+  test('layout cache misses after styles change via producer token', () => {
+    const measurer = createFixedMeasurer(6, 14);
+    const cache = createParagraphLayoutCache<never>();
+    const part = loadDocument(`<w:p><w:r><w:t>body</w:t></w:r></w:p>`);
+    const stylesA =
+      `<w:style w:type="paragraph" w:default="1" w:styleId="Normal">` +
+      `<w:rPr><w:sz w:val="22"/></w:rPr></w:style>`;
+    const stylesB =
+      `<w:style w:type="paragraph" w:default="1" w:styleId="Normal">` +
+      `<w:rPr><w:sz w:val="44"/></w:rPr></w:style>`;
+    const tableA = buildStyleCascadeTable(loadStyles(stylesA));
+    const tableB = buildStyleCascadeTable(loadStyles(stylesB));
+    expect(tableA.cacheToken).not.toBe(tableB.cacheToken);
+
+    const first = layoutSemanticDocument(part, 1, {
+      measurer,
+      styleCascade: tableA,
+      cache,
+    });
+    const second = layoutSemanticDocument(part, 2, {
+      measurer,
+      styleCascade: tableB,
+      cache,
+    });
+    expect(linesOf(first)[0]!.spans[0]!.style.fontSizePt).toBe(11);
+    expect(linesOf(second)[0]!.spans[0]!.style.fontSizePt).toBe(22);
+  });
+
+  test('definition count is capped', () => {
+    const parts: string[] = [];
+    for (let i = 0; i < MAX_STYLE_DEFINITIONS + 10; i += 1) {
+      parts.push(
+        `<w:style w:type="paragraph" w:styleId="X${i}"><w:rPr><w:sz w:val="20"/></w:rPr></w:style>`
+      );
+    }
+    const table = buildStyleCascadeTable(loadStyles(parts.join('')));
+    expect(table.styles.size).toBe(MAX_STYLE_DEFINITIONS);
+  });
+});
+
+describe('layout applies Heading1 / Heading2 cascade', () => {
+  const measurer = createFixedMeasurer(6, 14);
+
+  test('Heading1 fixture: Arial bold 18pt #1B3A5C with spacing 18/10', () => {
+    const table = buildStyleCascadeTable(
+      loadStyles(DOC_DEFAULTS + HEADING1_FIRST + HEADING1_LAST + HEADING2_LAST)
+    );
+    const part = loadDocument(
+      `<w:p><w:pPr><w:pStyle w:val="Heading1"/></w:pPr>` +
+        `<w:r><w:t>Table of Contents</w:t></w:r></w:p>`
+    );
+    const layout = layoutSemanticDocument(part, 1, { measurer, styleCascade: table });
+    const [line] = linesOf(layout);
+    const span = line!.spans[0]!;
+    expect(span.style).toMatchObject({
+      fontFamily: 'Arial',
+      fontSizePt: 18,
+      bold: true,
+      color: '1B3A5C',
+    });
+    const fragment = layout.pages[0]!.fragments[0]!;
+    expect(fragment.kind).toBe('paragraph');
+    if (fragment.kind === 'paragraph') {
+      expect(fragment.spacing).toEqual({ before: 18, after: 10 });
+      expect(fragment.box.y).toBe(0);
+      expect(fragment.lines[0]!.box.y).toBe(18);
+    }
+  });
+
+  test('sibling Heading2 last-wins values', () => {
+    const table = buildStyleCascadeTable(
+      loadStyles(
+        `<w:style w:type="paragraph" w:styleId="Heading2">` +
+          `<w:rPr><w:color w:val="000000"/><w:sz w:val="20"/></w:rPr></w:style>` +
+          HEADING2_LAST
+      )
+    );
+    const part = loadDocument(
+      `<w:p><w:pPr><w:pStyle w:val="Heading2"/></w:pPr><w:r><w:t>Section</w:t></w:r></w:p>`
+    );
+    const layout = layoutSemanticDocument(part, 1, { measurer, styleCascade: table });
+    expect(linesOf(layout)[0]!.spans[0]!.style).toMatchObject({
+      fontFamily: 'Arial',
+      fontSizePt: 15,
+      bold: true,
+      color: '2E75B6',
+    });
+  });
+
+  test('docDefaults apply to bare runs with no pStyle', () => {
+    const table = buildStyleCascadeTable(loadStyles(DOC_DEFAULTS));
+    const part = loadDocument(`<w:p><w:r><w:t>body</w:t></w:r></w:p>`);
+    const layout = layoutSemanticDocument(part, 1, { measurer, styleCascade: table });
+    expect(linesOf(layout)[0]!.spans[0]!.style).toMatchObject({
+      fontFamily: 'Arial',
+      fontSizePt: 11,
+    });
+  });
+
+  test('default paragraph + character styles reach layout without explicit style refs', () => {
+    const styles =
+      DOC_DEFAULTS +
+      `<w:style w:type="paragraph" w:default="1" w:styleId="Normal">` +
+      `<w:rPr><w:color w:val="102030"/></w:rPr></w:style>` +
+      `<w:style w:type="character" w:default="1" w:styleId="DefaultParagraphFont">` +
+      `<w:rPr><w:i/></w:rPr></w:style>`;
+    const table = buildStyleCascadeTable(loadStyles(styles));
+    const part = loadDocument(`<w:p><w:r><w:t>plain</w:t></w:r></w:p>`);
+    const layout = layoutSemanticDocument(part, 1, { measurer, styleCascade: table });
+    expect(linesOf(layout)[0]!.spans[0]!.style).toMatchObject({
+      fontFamily: 'Arial',
+      fontSizePt: 11,
+      color: '102030',
+      italic: true,
+    });
+  });
+
+  test('rStyle in a run reaches layout with direct override', () => {
+    const styles =
+      DOC_DEFAULTS +
+      `<w:style w:type="character" w:styleId="Strong">` +
+      `<w:rPr><w:b/><w:color w:val="990000"/><w:sz w:val="28"/></w:rPr></w:style>`;
+    const table = buildStyleCascadeTable(loadStyles(styles));
+    const part = loadDocument(
+      `<w:p><w:r><w:rPr><w:rStyle w:val="Strong"/><w:sz w:val="20"/></w:rPr>` +
+        `<w:t>emph</w:t></w:r></w:p>`
+    );
+    const layout = layoutSemanticDocument(part, 1, { measurer, styleCascade: table });
+    expect(linesOf(layout)[0]!.spans[0]!.style).toMatchObject({
+      bold: true,
+      color: '990000',
+      fontSizePt: 10,
+    });
+  });
+
+  test('direct run rPr still wins over Heading1', () => {
+    const table = buildStyleCascadeTable(loadStyles(HEADING1_LAST));
+    const part = loadDocument(
+      `<w:p><w:pPr><w:pStyle w:val="Heading1"/></w:pPr>` +
+        `<w:r><w:rPr><w:sz w:val="20"/><w:color w:val="00AA00"/></w:rPr>` +
+        `<w:t>mixed</w:t></w:r></w:p>`
+    );
+    const layout = layoutSemanticDocument(part, 1, { measurer, styleCascade: table });
+    expect(linesOf(layout)[0]!.spans[0]!.style).toMatchObject({
+      fontFamily: 'Arial',
+      bold: true,
+      fontSizePt: 10,
+      color: '00AA00',
+    });
+  });
+});

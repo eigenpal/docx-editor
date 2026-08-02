@@ -9,10 +9,16 @@
 import { isValidNCName } from './qname.ts';
 import type { OoxmlAttribute, OoxmlElement, OoxmlNode, OoxmlReadRejection } from './ooxml-tree.ts';
 
-export const WML_NAMESPACE_URI =
-  'http://schemas.openxmlformats.org/wordprocessingml/2006/main' as const;
-export const XML_NAMESPACE_URI = 'http://www.w3.org/XML/1998/namespace' as const;
-export const XMLNS_NAMESPACE_URI = 'http://www.w3.org/2000/xmlns/' as const;
+// No `as const` on the three below: a `const` bound to a string literal is already
+// literal-typed, and `typeof WML_NAMESPACE_URI` / `typeof XML_NAMESPACE_URI` are read by
+// the typed attribute kinds in `ooxml-tree.ts`. API Extractor 7.x crashes ("Unable to
+// follow symbol for 'const'", rushstack#4754) whenever a public type reaches an
+// `as const` variable declaration, and any public type that reaches `OoxmlElement` drags
+// these attribute kinds along with it. Same reason `CHROME_GROUPS` in
+// `editor/chrome-controls.ts` avoids the derived-from-`as const` form.
+export const WML_NAMESPACE_URI = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
+export const XML_NAMESPACE_URI = 'http://www.w3.org/XML/1998/namespace';
+export const XMLNS_NAMESPACE_URI = 'http://www.w3.org/2000/xmlns/';
 export const MC_NAMESPACE_URI = 'http://schemas.openxmlformats.org/markup-compatibility/2006';
 export const XSI_NAMESPACE_URI = 'http://www.w3.org/2001/XMLSchema-instance';
 export const MC_QNAME_LIST_ATTRIBUTES = new Set([
@@ -123,6 +129,19 @@ export function validateQNameAttributeValues(
     canonicalQNameAttributeValue(attribute, bindings, ownerNamespaceUri, ownerLocalName);
 }
 
+/**
+ * The `w:pPr` children that legally FOLLOW `w:rPr`.
+ *
+ * `CT_PPr` (ECMA-376 17.3.1.26) is `CT_PPrBase`, then `w:rPr`, then `w:sectPr`, then
+ * `w:pPrChange` — so the paragraph-mark properties are NOT last. Requiring them to be
+ * demoted the `w:pPr` of every section-ending paragraph, and of every paragraph carrying a
+ * tracked property change, to a generic node: the tree still round-tripped it, but nothing
+ * downstream could read the paragraph's style, alignment, indent or numbering out of it,
+ * and writing a paragraph mark onto a section-ending paragraph produced a document that
+ * reopened demoted.
+ */
+const PPR_ELEMENTS_AFTER_RPR = new Set(['sectPr', 'pPrChange']);
+
 export function validKnownKind(kind: KnownKind, children: readonly OoxmlNode[]): boolean {
   switch (kind) {
     case 'document':
@@ -167,7 +186,15 @@ export function validKnownKind(kind: KnownKind, children: readonly OoxmlNode[]):
       return (
         children.every((child) => child.kind === 'runProperties' || child.kind === 'generic') &&
         children.filter((child) => child.kind === 'runProperties').length <= 1 &&
-        (runProperties < 0 || runProperties === children.length - 1)
+        (runProperties < 0 ||
+          children
+            .slice(runProperties + 1)
+            .every(
+              (child) =>
+                child.kind === 'generic' &&
+                child.namespaceUri === WML_NAMESPACE_URI &&
+                PPR_ELEMENTS_AFTER_RPR.has(child.localName)
+            ))
       );
     }
     case 'text':
@@ -199,4 +226,70 @@ export function validKnownKind(kind: KnownKind, children: readonly OoxmlNode[]):
     case 'tableProperties':
       return children.every((child) => child.kind === 'generic');
   }
+}
+
+/** XML 1.0 whitespace — the set Word uses for `w:t` boundary semantics. */
+export function isXmlWhitespaceChar(char: string): boolean {
+  return char === ' ' || char === '\t' || char === '\r' || char === '\n';
+}
+
+/** True when a `w:t` text value must carry `xml:space="preserve"` on save. */
+export function wmlTextNeedsXmlSpacePreserve(text: string): boolean {
+  return (
+    text.length > 0 &&
+    (isXmlWhitespaceChar(text[0]!) || isXmlWhitespaceChar(text[text.length - 1]!))
+  );
+}
+
+/** Text content of a typed `w:t` element, or empty when absent or malformed. */
+export function wmlTextValueOf(node: OoxmlElement): string {
+  const child = node.children.find((candidate) => candidate.kind === 'textValue');
+  return child?.kind === 'textValue' ? child.value : '';
+}
+
+/**
+ * Canonical `w:t` attributes for normalized serialization and fingerprinting.
+ * Injects `xml:space="preserve"` when boundary whitespace requires it; drops a
+ * redundant or stale `xml:space` when the text no longer needs it. Other authored
+ * attributes (including generic extensions) are preserved verbatim.
+ */
+export function normalizedWmlTextAttributes(
+  attributes: readonly OoxmlAttribute[],
+  text: string
+): readonly OoxmlAttribute[] {
+  const withoutSpace = attributes.filter(
+    (attribute) =>
+      !(attribute.namespaceUri === XML_NAMESPACE_URI && attribute.localName === 'space')
+  );
+  if (!wmlTextNeedsXmlSpacePreserve(text)) return withoutSpace;
+  return [
+    ...withoutSpace,
+    {
+      kind: 'xmlSpace',
+      namespaceUri: XML_NAMESPACE_URI,
+      localName: 'space',
+      prefix: 'xml',
+      value: 'preserve',
+    },
+  ];
+}
+
+function ooxmlChildNamed(node: OoxmlNode, localName: string): OoxmlElement | undefined {
+  if (node.kind === 'textValue') return undefined;
+  for (const child of node.children) {
+    if (child.kind !== 'textValue' && child.localName === localName) return child;
+  }
+  return undefined;
+}
+
+function ooxmlAttributeValue(node: OoxmlElement, localName: string): string | undefined {
+  return node.attributes.find((attribute) => attribute.localName === localName)?.value;
+}
+
+/** OOXML on/off toggle: on only when present and `w:val` does not explicitly disable. */
+export function readOnOffChild(parent: OoxmlNode, localName: string): boolean {
+  const child = ooxmlChildNamed(parent, localName);
+  if (!child) return false;
+  const value = ooxmlAttributeValue(child, 'val');
+  return value === undefined || !(value === '0' || value === 'false' || value === 'off');
 }

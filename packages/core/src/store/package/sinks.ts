@@ -56,6 +56,8 @@ function isForbiddenXmlUnit(cu: number): boolean {
  * pass.
  */
 export function isValidXmlText(value: string): boolean {
+  // Objects/arrays must never reach serialization: `String({})` is "[object Object]".
+  if (typeof value !== 'string') return false;
   for (let i = 0; i < value.length; i++) {
     const cu = value.charCodeAt(i);
     if (isForbiddenXmlUnit(cu)) return false;
@@ -72,6 +74,8 @@ export function isValidXmlText(value: string): boolean {
 
 /** Validate (fail-closed) then XML-escape an authored value bound for an owned attribute/text node. */
 export function escapeXmlChecked(value: string, what: string): string {
+  if (typeof value !== 'string')
+    throw new Error(`${what} must be a string scalar (got ${typeof value})`);
   if (!isValidXmlText(value)) throw new Error(`${what} contains a character not valid in XML 1.0`);
   return escapeXml(value);
 }

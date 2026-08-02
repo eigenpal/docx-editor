@@ -11,6 +11,7 @@
 // which is what the D8 boundary covers.
 
 import type { OoxmlProperty } from '@docx-editor.dev/core-contract/store';
+import { resolveOoxmlShadingFill } from './ooxml-shading.ts';
 
 export type VerticalAlign = 'baseline' | 'superscript' | 'subscript';
 
@@ -34,6 +35,13 @@ export interface ResolvedRunStyle {
   readonly doubleStrike: boolean;
   /** An `ST_HighlightColor` name, or null. */
   readonly highlight: string | null;
+  /**
+   * Character shading fill (`w:rPr/w:shd`), validated RRGGBB, or null.
+   *
+   * Paint applies this as the glyph-box background; a recognised highlight overrides it.
+   * Measurement ignores shading.
+   */
+  readonly shading: string | null;
   readonly verticalAlign: VerticalAlign;
   /** `w:position`, in points. Positive raises the baseline. */
   readonly baselineShiftPt: number;
@@ -45,6 +53,18 @@ export interface ResolvedRunStyle {
   readonly horizontalScalePercent: number;
   /** `w:kern`, in points: the size at or above which kerning applies. 0 disables it. */
   readonly kerningMinPt: number;
+  /**
+   * `w:vanish` (ECMA-376 §17.3.2.45): the run is hidden text.
+   *
+   * Word does not draw it AND does not paginate it — hidden index or comment text takes no
+   * space at all. So this cannot be a paint-time opacity: a hidden run that is still measured
+   * pushes every following line, and every following page break, to the wrong place. Layout
+   * drops the content instead (see `piecesOfParagraph`).
+   *
+   * `w:specVanish` (§17.3.2.36) is a different property — an always-hidden paragraph mark on
+   * a heading — and never sets this.
+   */
+  readonly hidden: boolean;
 }
 
 /** The style a run inherits when it authors nothing. */
@@ -58,6 +78,7 @@ export const DEFAULT_RUN_STYLE: ResolvedRunStyle = Object.freeze({
   strike: false,
   doubleStrike: false,
   highlight: null,
+  shading: null,
   verticalAlign: 'baseline',
   baselineShiftPt: 0,
   caps: false,
@@ -65,6 +86,7 @@ export const DEFAULT_RUN_STYLE: ResolvedRunStyle = Object.freeze({
   characterSpacingPt: 0,
   horizontalScalePercent: 100,
   kerningMinPt: 0,
+  hidden: false,
 });
 
 const HEX_COLOR = /^[0-9A-Fa-f]{6}$/;
@@ -142,6 +164,12 @@ export function resolveRunStyle(props: readonly OoxmlProperty[]): ResolvedRunSty
         style.highlight = value && value !== 'none' ? value : null;
         break;
       }
+      case 'shd': {
+        // Strict hex fill only; theme/pattern rendering is deferred. Paint lets highlight
+        // override this colour when both are present.
+        style.shading = resolveOoxmlShadingFill(property.attributes) ?? null;
+        break;
+      }
       case 'vertAlign': {
         const value = property.attributes?.val;
         if (value === 'superscript' || value === 'subscript') style.verticalAlign = value;
@@ -178,6 +206,11 @@ export function resolveRunStyle(props: readonly OoxmlProperty[]): ResolvedRunSty
         if (halfPoints !== null) style.kerningMinPt = halfPoints / 2;
         break;
       }
+      case 'vanish':
+        // A toggle like `w:b`, so a later `w:val="0"` from direct formatting un-hides text a
+        // character style hid. `w:specVanish` is deliberately not folded in here.
+        style.hidden = toggle(property);
+        break;
       default:
         // `szCs`, `bCs`, `iCs` are the complex-script counterparts; they belong to the
         // bidi lane, not to this one, and are preserved by the tree either way.
@@ -206,6 +239,7 @@ export function runStylesEqual(a: ResolvedRunStyle, b: ResolvedRunStyle): boolea
     a.strike === b.strike &&
     a.doubleStrike === b.doubleStrike &&
     a.highlight === b.highlight &&
+    a.shading === b.shading &&
     a.verticalAlign === b.verticalAlign &&
     a.baselineShiftPt === b.baselineShiftPt &&
     a.caps === b.caps &&
@@ -213,6 +247,7 @@ export function runStylesEqual(a: ResolvedRunStyle, b: ResolvedRunStyle): boolea
     a.characterSpacingPt === b.characterSpacingPt &&
     a.horizontalScalePercent === b.horizontalScalePercent &&
     a.kerningMinPt === b.kerningMinPt &&
+    a.hidden === b.hidden &&
     a.underline?.variant === b.underline?.variant &&
     a.underline?.color === b.underline?.color
   );

@@ -13,7 +13,10 @@ import { describe, expect, test } from 'bun:test';
 import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { dirname, join, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { readOoxmlPackage } from '../package/ooxml-package.ts';
+import { readOoxmlPackage, withPart, writeOoxmlPackage } from '../package/ooxml-package.ts';
+import { canonicalOoxmlFingerprint } from '../package/ooxml-tree.ts';
+import { diffSemanticDigests, semanticDigest } from '../package/ooxml-digest.ts';
+import { applyTreeOp } from '../store/tree-ops.ts';
 import { deriveOoxmlIndexes } from '../package/ooxml-indexes.ts';
 import { paragraphTextOf } from '../store/tree-ops.ts';
 import { TreeDocumentStore } from '../store/tree-store.ts';
@@ -198,5 +201,36 @@ describe('the one model reaches beyond plain body paragraphs (phase-4 sweep)', (
     if (!opened.ok) return;
     const header = opened.session.headerFooterParts().headers.get('default');
     expect(header).toBeDefined();
+  });
+});
+
+describe('generic direct body children survive package save (task 4.6)', () => {
+  test('a body-level unknown element survives a nearby paragraph edit through writeOoxmlPackage', () => {
+    const body =
+      '<w:p><w:r><w:t>editable</w:t></w:r></w:p>' +
+      '<ext:futureBodyChild xmlns:ext="urn:test:ext" flag="keep">orphan</ext:futureBodyChild>' +
+      '<w:p><w:r><w:t>neighbor</w:t></w:r></w:p>';
+    const loaded = readOoxmlPackage(buildDocx(body));
+    if (!loaded.ok) throw new Error(loaded.reason);
+
+    const main = loaded.package.parts.get(loaded.package.mainDocumentPart)!;
+    const indexes = deriveOoxmlIndexes(loaded.package, 1);
+    const paragraphId = indexes.stories.get(main.name)!.paragraphs[0]!.nodeId;
+    const edited = applyTreeOp(main, { op: 'insertText', paragraphId, offset: 0, text: 'X' });
+    if (!edited.ok) throw new Error(edited.reason);
+
+    const fingerprintBefore = canonicalOoxmlFingerprint(edited.part);
+    const digestBefore = semanticDigest([edited.part]);
+    const reopened = readOoxmlPackage(writeOoxmlPackage(withPart(loaded.package, edited.part)));
+    if (!reopened.ok) throw new Error(reopened.reason);
+
+    const reopenedMain = reopened.package.parts.get(main.name)!;
+    expect(JSON.stringify(reopenedMain)).toContain('futureBodyChild');
+    expect(JSON.stringify(reopenedMain)).toContain('flag');
+    expect(canonicalOoxmlFingerprint(reopenedMain)).toBe(fingerprintBefore);
+    expect(diffSemanticDigests(digestBefore, semanticDigest([reopenedMain]))).toEqual([]);
+    expect(
+      deriveOoxmlIndexes(reopened.package, 2).stories.get(main.name)!.paragraphs[0]!.text
+    ).toBe('Xeditable');
   });
 });

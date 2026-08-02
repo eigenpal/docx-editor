@@ -5,9 +5,9 @@
 // tree-op-validate.ts so a rejected op is a true no-op. The op vocabulary and the segment
 // model live in tree-op-validate.ts; both are re-exported via tree-ops.ts.
 
+import { hardBreakAttributes, hardBreakText } from '../package/hard-break.ts';
 import {
   WML_NAMESPACE_URI,
-  type OoxmlElement,
   type OoxmlNode,
   type OoxmlParagraphNode,
   type OoxmlPart,
@@ -16,23 +16,39 @@ import {
   createNodeIdAllocator,
   findNode,
   insertChildren,
-  parentNodeOf,
   removeNode,
   replaceChildren,
   replaceNode,
   type EditOptions,
-  type OoxmlEditResult,
 } from '../package/ooxml-edit.ts';
-import { DEPENDENCY_KEY_IDS } from '../registry/frozen-ids.ts';
 import {
-  bodyNodeOf,
+  TEXT_DEPS,
+  cloneWithNewIds,
+  fromEdit,
+  isParagraphPropertiesNode,
+  isRunPropertiesNode,
+  namedChild,
+  ok,
+  paragraphPropertiesNodeOf,
+  parentOf,
+  runPropertiesNodeOf,
+} from './tree-op-nodes.ts';
+import {
+  PARAGRAPH_VOCABULARY,
+  RUN_VOCABULARY,
+  mergedPropertyChildren,
+} from './tree-op-properties.ts';
+import {
+  applySetListLevel,
+  applySetParagraphMarkProperties,
+  withoutSectionMark,
+  applySetListNumbering,
+  applySetSectionMark,
+  applySetSectionProperties,
+} from './tree-op-section.ts';
+import {
   isParagraph,
-  metricsOfSection,
-  plannedSectionDimensions,
-  sectionAttribute,
-  sectionChild,
   segmentsOf,
-  targetSectionNodes,
   validateTreeOp,
   type OoxmlProperty,
   type TreeDocOp,
@@ -40,25 +56,6 @@ import {
   type TreeOpRejection,
   type TreeOpResult,
 } from './tree-op-validate.ts';
-
-function propertyElement(property: OoxmlProperty, id: string): OoxmlNode {
-  return {
-    id,
-    kind: 'generic',
-    namespaceUri: WML_NAMESPACE_URI,
-    localName: property.localName,
-    prefix: 'w',
-    namespaceBindings: [],
-    attributes: Object.entries(property.attributes ?? {}).map(([localName, value]) => ({
-      kind: 'genericExtension' as const,
-      namespaceUri: WML_NAMESPACE_URI,
-      localName,
-      prefix: 'w',
-      value,
-    })),
-    children: [],
-  } as unknown as OoxmlNode;
-}
 
 function textElement(nextId: () => string, text: string): OoxmlNode {
   const valueId = nextId();
@@ -76,7 +73,11 @@ function textElement(nextId: () => string, text: string): OoxmlNode {
   } as unknown as OoxmlNode;
 }
 
-function simpleElement(nextId: () => string, localName: 'tab' | 'br'): OoxmlNode {
+function simpleElement(
+  nextId: () => string,
+  localName: 'tab' | 'br',
+  breakKind: 'line' | 'page' = 'line'
+): OoxmlNode {
   return {
     id: nextId(),
     kind: localName === 'tab' ? 'tab' : 'hardBreak',
@@ -84,7 +85,7 @@ function simpleElement(nextId: () => string, localName: 'tab' | 'br'): OoxmlNode
     localName,
     prefix: 'w',
     namespaceBindings: [],
-    attributes: [],
+    attributes: localName === 'br' ? [...hardBreakAttributes(breakKind)] : [],
     children: [],
   } as unknown as OoxmlNode;
 }
@@ -100,19 +101,6 @@ function runElement(nextId: () => string, children: readonly OoxmlNode[]): Ooxml
     attributes: [],
     children,
   } as unknown as OoxmlNode;
-}
-
-const TEXT_DEPS = [DEPENDENCY_KEY_IDS.story];
-
-function ok(part: OoxmlPart, effect: TreeOpEffect): TreeOpResult {
-  return { ok: true, part, effect };
-}
-
-function fromEdit(result: OoxmlEditResult, effect: TreeOpEffect): TreeOpResult {
-  if (!result.ok) {
-    return { ok: false, reason: 'tree-invariant', detail: JSON.stringify(result.issues) };
-  }
-  return ok(result.part, effect);
 }
 
 /**
@@ -159,7 +147,21 @@ export function applyTreeOp(part: OoxmlPart, op: TreeDocOp, options?: EditOption
         part,
         paragraph,
         op.offset,
-        [(mint) => simpleElement(mint, 'br')],
+        [(mint) => simpleElement(mint, 'br', 'line')],
+        options
+      );
+    case 'setListLevel':
+      return applySetListLevel(part, paragraph, op.level, options, nextId);
+    case 'setParagraphMarkProperties':
+      return applySetParagraphMarkProperties(part, paragraph, op.properties, options, nextId);
+    case 'setListNumbering':
+      return applySetListNumbering(part, paragraph, op.numId, op.level ?? 0, options, nextId);
+    case 'insertPageBreak':
+      return applyInsertContent(
+        part,
+        paragraph,
+        op.offset,
+        [(mint) => simpleElement(mint, 'br', 'page')],
         options
       );
     case 'deleteText':
@@ -171,8 +173,13 @@ export function applyTreeOp(part: OoxmlPart, op: TreeDocOp, options?: EditOption
     case 'setRunProperties':
       return applySetRunProperties(part, paragraph, op.start, op.end, op.properties, options);
     case 'setParagraphProperties': {
-      const existing = paragraph.children.find((child) => child.kind === 'paragraphProperties');
-      const children = op.properties.map((property) => propertyElement(property, nextId()));
+      const existing = paragraphPropertiesNodeOf(paragraph);
+      const children = mergedPropertyChildren(
+        existing?.children ?? [],
+        op.properties,
+        PARAGRAPH_VOCABULARY,
+        nextId
+      );
       const effect: TreeOpEffect = {
         dirty: [paragraph.id],
         created: [],
@@ -180,9 +187,9 @@ export function applyTreeOp(part: OoxmlPart, op: TreeDocOp, options?: EditOption
         dependencyKeys: TEXT_DEPS,
         impact: 'paragraph-local',
       };
-      if (op.properties.length === 0) {
-        // Clearing properties removes the container entirely rather than leaving an empty
-        // `w:pPr`, so a cleared paragraph digests identically to one that never had any.
+      if (children.length === 0) {
+        // Nothing left to hold: the container goes rather than staying as an empty `w:pPr`,
+        // so a cleared paragraph digests identically to one that never had any.
         return existing
           ? fromEdit(removeNode(part, existing.id, options), effect)
           : ok(part, effect);
@@ -338,7 +345,7 @@ function applyDeleteText(
       if (child.kind !== 'run') continue;
       // A run's children are elements only, so "content" is simply anything that is not
       // the run's own property container.
-      const hasContent = child.children.some((grand) => grand.kind !== 'runProperties');
+      const hasContent = child.children.some((grand) => !isRunPropertiesNode(grand));
       if (hasContent) continue;
       const removed = removeNode(current, child.id, options);
       if (!removed.ok) return fromEdit(removed, effect);
@@ -346,6 +353,94 @@ function applyDeleteText(
     }
   }
   return ok(current, effect);
+}
+
+/**
+ * The range markers that CLOSE a span of content (17.13.6, 17.13.5.2, 17.13.4.x).
+ *
+ * A marker sitting exactly on the split has no character to sit before or after, so the
+ * side it takes is a decision: an end marker stays with the head, leaving the range it
+ * closes closed around the content it always covered, and everything else — a start
+ * marker, a hyperlink, a picture's run — moves down with the caret.
+ */
+const RANGE_END_MARKERS: ReadonlySet<string> = new Set([
+  'bookmarkEnd',
+  'commentRangeEnd',
+  'moveFromRangeEnd',
+  'moveToRangeEnd',
+  'permEnd',
+  'customXmlInsRangeEnd',
+  'customXmlDelRangeEnd',
+  'customXmlMoveFromRangeEnd',
+  'customXmlMoveToRangeEnd',
+]);
+
+/** The range-START element each range-END element closes; `w:id` pairs the two. */
+const RANGE_START_OF_END: ReadonlyMap<string, string> = new Map([
+  ['bookmarkEnd', 'bookmarkStart'],
+  ['commentRangeEnd', 'commentRangeStart'],
+  ['moveFromRangeEnd', 'moveFromRangeStart'],
+  ['moveToRangeEnd', 'moveToRangeStart'],
+  ['permEnd', 'permStart'],
+  ['customXmlInsRangeEnd', 'customXmlInsRangeStart'],
+  ['customXmlDelRangeEnd', 'customXmlDelRangeStart'],
+  ['customXmlMoveFromRangeEnd', 'customXmlMoveFromRangeStart'],
+  ['customXmlMoveToRangeEnd', 'customXmlMoveToRangeStart'],
+]);
+
+const RANGE_START_MARKERS: ReadonlySet<string> = new Set(RANGE_START_OF_END.values());
+
+function closesARange(node: OoxmlNode): boolean {
+  return node.kind !== 'textValue' && RANGE_END_MARKERS.has(node.localName);
+}
+
+/** A marker's identity as `name\0id`, so a start and the end that closes it share a key. */
+function rangeKey(localName: string, node: OoxmlNode): string | null {
+  if (node.kind === 'textValue') return null;
+  const id = node.attributes.find((attribute) => attribute.localName === 'id');
+  return id ? `${localName} ${id.value}` : null;
+}
+
+function opensARange(node: OoxmlNode): string | null {
+  if (node.kind === 'textValue' || !RANGE_START_MARKERS.has(node.localName)) return null;
+  return rangeKey(node.localName, node);
+}
+
+/**
+ * Whether a range-end marker closes a range that was already OPEN before this position.
+ *
+ * An end marker stays with the head so the range it closes stays closed around the content
+ * it always covered — but only when its start is behind it. A range that opens AND closes at
+ * the split (an empty bookmark, a comment anchored on the caret) has its start marker in the
+ * tail: keeping the end behind emitted `<w:p>…<w:bookmarkEnd id="1"/></w:p><w:p><w:bookmark
+ * Start id="1"/>…` — the pair inverted across two paragraphs, an end with no start before it.
+ * Such an end follows its own start into the tail instead.
+ */
+function closesAnOpenRange(child: OoxmlNode, openedHere: ReadonlySet<string>): boolean {
+  if (!closesARange(child) || child.kind === 'textValue') return false;
+  const opener = RANGE_START_OF_END.get(child.localName);
+  const key = opener ? rangeKey(opener, child) : null;
+  return key === null || !openedHere.has(key);
+}
+
+/**
+ * Which half a paragraph child that measures ZERO characters belongs to.
+ *
+ * A hyperlink, a bookmark or comment marker, a run holding only a picture: none of them
+ * contributes a text offset, but each sits at a definite POSITION between the runs that do.
+ * Sending them all to the head — the rule this replaces — moved every hyperlink in a
+ * sentence backwards past the caret, left comment ranges as empty marker pairs around the
+ * wrong half, and carried an inline picture into the paragraph below when the user pressed
+ * Enter at the end of the line.
+ */
+function zeroLengthGoesToHead(
+  child: OoxmlNode,
+  position: number,
+  offset: number,
+  openedHere: ReadonlySet<string>
+): boolean {
+  if (position !== offset) return position < offset;
+  return closesAnOpenRange(child, openedHere);
 }
 
 function applySplit(
@@ -358,19 +453,30 @@ function applySplit(
   const segments = segmentsOf(paragraph);
   const headChildren: OoxmlNode[] = [];
   const tailChildren: OoxmlNode[] = [];
-  const pPr = paragraph.children.find((child) => child.kind === 'paragraphProperties');
+  const pPr = paragraphPropertiesNodeOf(paragraph);
 
+  // The running text offset the walk has reached, which is the position of anything that
+  // measures nothing.
+  let cursor = 0;
+  // The range starts seen AT the current position — the ones whose end markers, if they
+  // also sit here, must not be left behind in the head.
+  const openedHere = new Set<string>();
   for (const child of paragraph.children) {
-    if (child.kind === 'paragraphProperties') continue;
-    if (child.kind !== 'run') {
-      // Unknown paragraph-level content stays with the HEAD: it has no offset, so moving it
-      // would be an invented decision.
-      headChildren.push(child);
+    if (isParagraphPropertiesNode(child)) continue;
+    const runSegments =
+      child.kind === 'run' ? segments.filter((segment) => segment.runId === child.id) : [];
+    if (runSegments.length === 0) {
+      (zeroLengthGoesToHead(child, cursor, offset, openedHere) ? headChildren : tailChildren).push(
+        child
+      );
+      const opened = opensARange(child);
+      if (opened) openedHere.add(opened);
       continue;
     }
-    const runSegments = segments.filter((segment) => segment.runId === child.id);
-    const runStart = runSegments[0]?.start ?? Number.POSITIVE_INFINITY;
-    const runEnd = runSegments[runSegments.length - 1]?.end ?? runStart;
+    const runStart = runSegments[0]!.start;
+    const runEnd = runSegments[runSegments.length - 1]!.end;
+    if (runEnd > cursor) openedHere.clear();
+    cursor = runEnd;
     if (runEnd <= offset) {
       headChildren.push(child);
       continue;
@@ -381,11 +487,11 @@ function applySplit(
     }
     // The run straddles the split: divide its content children, keeping `w:rPr` on BOTH
     // halves so formatting survives the split.
-    const rPr = child.children.find((grand) => grand.kind === 'runProperties');
+    const rPr = runPropertiesNodeOf(child);
     const headContent: OoxmlNode[] = [];
     const tailContent: OoxmlNode[] = [];
     for (const grand of child.children) {
-      if (grand.kind === 'runProperties') continue;
+      if (isRunPropertiesNode(grand)) continue;
       const segment = runSegments.find((candidate) => contains(grand, candidate.node.id));
       if (!segment) {
         headContent.push(grand);
@@ -452,15 +558,21 @@ function applySplit(
 }
 
 /** The resulting paragraph a source offset belongs to: how many boundaries lie at or before it. */
-function pieceIndexOf(offsets: readonly number[], position: number): number {
+function pieceIndexOf(
+  offsets: readonly number[],
+  position: number,
+  atBoundary: 'tail' | 'head' = 'tail'
+): number {
   // Binary search — a whole-document paste can carry thousands of boundaries, and every
   // segment asks. Content sitting exactly ON a boundary opens that boundary's tail, which
-  // is what the equivalent sequence of single splits does.
+  // is what the equivalent sequence of single splits does; `head` is for the range-end
+  // markers the single split keeps behind, so a range that closed at the caret stays closed.
   let low = 0;
   let high = offsets.length;
   while (low < high) {
     const mid = (low + high) >> 1;
-    if (offsets[mid]! <= position) low = mid + 1;
+    const before = atBoundary === 'tail' ? offsets[mid]! <= position : offsets[mid]! < position;
+    if (before) low = mid + 1;
     else high = mid;
   }
   return low;
@@ -485,21 +597,33 @@ function applySplitMany(
 ): TreeOpResult {
   const nextId = createNodeIdAllocator(part);
   const segments = segmentsOf(paragraph);
-  const pPr = paragraph.children.find((child) => child.kind === 'paragraphProperties');
+  const pPr = paragraphPropertiesNodeOf(paragraph);
   const pieceCount = offsets.length + 1;
   const pieces: OoxmlNode[][] = Array.from({ length: pieceCount }, () => []);
 
+  // The running text offset the walk has reached — the position of anything measuring
+  // nothing, exactly as the single split reads it.
+  let cursor = 0;
+  const openedHere = new Set<string>();
   for (const child of paragraph.children) {
-    if (child.kind === 'paragraphProperties') continue;
-    if (child.kind !== 'run') {
-      // Unknown paragraph-level content stays with the HEAD: it has no offset, so moving it
-      // would be an invented decision. Matches the single-split rule.
-      pieces[0]!.push(child);
+    if (isParagraphPropertiesNode(child)) continue;
+    const runSegments =
+      child.kind === 'run' ? segments.filter((segment) => segment.runId === child.id) : [];
+    if (runSegments.length === 0) {
+      const piece = pieceIndexOf(
+        offsets,
+        cursor,
+        closesAnOpenRange(child, openedHere) ? 'head' : 'tail'
+      );
+      pieces[piece]!.push(child);
+      const opened = opensARange(child);
+      if (opened) openedHere.add(opened);
       continue;
     }
-    const runSegments = segments.filter((segment) => segment.runId === child.id);
-    const runStart = runSegments[0]?.start ?? Number.POSITIVE_INFINITY;
-    const runEnd = runSegments[runSegments.length - 1]?.end ?? runStart;
+    const runStart = runSegments[0]!.start;
+    const runEnd = runSegments[runSegments.length - 1]!.end;
+    if (runEnd > cursor) openedHere.clear();
+    cursor = runEnd;
     const startPiece = pieceIndexOf(offsets, runStart);
     const endPiece = runEnd > runStart ? pieceIndexOf(offsets, runEnd - 1) : startPiece;
     if (startPiece === endPiece) {
@@ -510,10 +634,10 @@ function applySplitMany(
 
     // The run straddles at least one boundary: divide its content children, keeping
     // `w:rPr` on every produced piece so formatting survives each break.
-    const rPr = child.children.find((grand) => grand.kind === 'runProperties');
+    const rPr = runPropertiesNodeOf(child);
     const contentByPiece: OoxmlNode[][] = Array.from({ length: pieceCount }, () => []);
     for (const grand of child.children) {
-      if (grand.kind === 'runProperties') continue;
+      if (isRunPropertiesNode(grand)) continue;
       const segment = runSegments.find((candidate) => contains(grand, candidate.node.id));
       if (!segment) {
         contentByPiece[startPiece]!.push(grand);
@@ -600,379 +724,6 @@ function applySplitMany(
   return fromEdit(replaceChildren(part, parent.id, siblings, options), effect);
 }
 
-/**
- * A `w:pPr` without its `w:sectPr`, keeping identity when there is none. `undefined`
- * when the section mark was its only content — an empty `w:pPr` serializes markup a
- * paragraph that never had one does not.
- */
-function withoutSectionMark(pPr: OoxmlNode): OoxmlNode | undefined {
-  if (pPr.kind === 'textValue') return undefined;
-  const children = pPr.children.filter(
-    (child) => !('localName' in child) || child.localName !== 'sectPr'
-  );
-  if (children.length === pPr.children.length) return pPr;
-  if (children.length === 0) return undefined;
-  return { ...pPr, children } as OoxmlNode;
-}
-
-/** A deep copy with freshly minted identities, for content duplicated by a split. */
-function cloneWithNewIds(node: OoxmlNode, nextId: () => string): OoxmlNode {
-  if (node.kind === 'textValue') return { id: nextId(), kind: 'textValue', value: node.value };
-  return {
-    ...node,
-    id: nextId(),
-    children: node.children.map((child) => cloneWithNewIds(child, nextId)),
-  } as OoxmlNode;
-}
-
-function parentOf(part: OoxmlPart, nodeId: string): OoxmlElement | null {
-  // Served from the part's node index rather than a fresh full-tree walk: split and join
-  // ask for a parent on every op, and the walk made each one O(document).
-  return parentNodeOf(part, nodeId);
-}
-
-type SetSectionPropertiesOp = Extract<TreeDocOp, { op: 'setSectionProperties' }>;
-
-function wmlAttribute(localName: string, value: string) {
-  return {
-    kind: 'genericExtension' as const,
-    namespaceUri: WML_NAMESPACE_URI,
-    localName,
-    prefix: 'w',
-    value,
-  };
-}
-
-function sectionElement(
-  id: string,
-  localName: string,
-  attributes: readonly unknown[],
-  children: readonly OoxmlNode[]
-): OoxmlNode {
-  return {
-    id,
-    kind: 'generic',
-    namespaceUri: WML_NAMESPACE_URI,
-    localName,
-    prefix: 'w',
-    namespaceBindings: [],
-    attributes,
-    children,
-  } as unknown as OoxmlNode;
-}
-
-const attributesOf = (node: OoxmlNode | null): readonly { localName: string; value: string }[] =>
-  node && node.kind !== 'textValue' && 'attributes' in node
-    ? (node.attributes as readonly { localName: string; value: string }[])
-    : [];
-
-const childrenOf = (node: OoxmlNode | null): readonly OoxmlNode[] =>
-  node && node.kind !== 'textValue' ? (node.children ?? []) : [];
-
-/**
- * Merge the op's fields into its TARGET sections — every `w:sectPr` in the part
- * (Word's "Apply to: Whole document", the default), or only the section governing
- * `anchorParagraphId` ("Apply to: This section"). A body-level section is minted when
- * the write must reach the implicit tail section.
- *
- * ONE tree rebuild whatever the section count: the replacements are collected first and
- * applied in a single structural-sharing map over the root, because a per-section
- * rebuild copied the body's entire child list once per section — quadratic in a
- * file-controlled count, which a hostile many-section document turns into a freeze.
- *
- * Per section the merge is surgical: only the attributes the op carries are rewritten.
- * Everything else — `header`/`footer`/`gutter` distances, unknown `pgSz` attributes,
- * `cols`, `titlePg`, header/footer references — keeps its authored bytes and its node
- * identity, so a margin drag cannot degrade fidelity anywhere it did not touch. The one
- * deliberate drop is the `pgSz` paper `code` when the dimensions change: a stale paper
- * code contradicts the new size, and Word rewrites it on its own next save.
- */
-function applySetSectionProperties(
-  part: OoxmlPart,
-  op: SetSectionPropertiesOp,
-  options?: EditOptions
-): TreeOpResult {
-  const body = bodyNodeOf(part);
-  if (!body) return { ok: false, reason: 'tree-invariant', detail: 'part has no body' };
-
-  const touchesSize =
-    op.pageWidthTwips !== undefined ||
-    op.pageHeightTwips !== undefined ||
-    op.orientation !== undefined;
-  const touchesMargins =
-    op.marginTopTwips !== undefined ||
-    op.marginRightTwips !== undefined ||
-    op.marginBottomTwips !== undefined ||
-    op.marginLeftTwips !== undefined;
-
-  const effect: TreeOpEffect = {
-    dirty: [],
-    created: [],
-    deleted: [],
-    dependencyKeys: TEXT_DEPS,
-    impact: 'flow-structural',
-  };
-
-  const nextId = createNodeIdAllocator(part);
-  const targets = targetSectionNodes(part, op.anchorParagraphId);
-  const replacements = new Map<string, readonly OoxmlNode[]>();
-  let mintedBodySection: OoxmlNode | null = null;
-  for (const section of targets) {
-    const children = mergedSectionChildren(section, op, touchesSize, touchesMargins, nextId);
-    if (section) replacements.set(section.id, children);
-    // A null target is the implicit body-level section: mint it, as the body's LAST
-    // child per the schema.
-    else mintedBodySection = sectionElement(nextId(), 'sectPr', [], children);
-  }
-
-  const rebuilt = (node: OoxmlNode): OoxmlNode => {
-    if (node.kind === 'textValue') return node;
-    const replacement = replacements.get(node.id);
-    if (replacement) return { ...node, children: replacement } as OoxmlNode;
-    let changed = false;
-    const children = node.children.map((child) => {
-      const next = rebuilt(child);
-      if (next !== child) changed = true;
-      return next;
-    });
-    if (node.kind === 'body' && mintedBodySection) {
-      return { ...node, children: [...children, mintedBodySection] } as OoxmlNode;
-    }
-    return changed ? ({ ...node, children } as OoxmlNode) : node;
-  };
-
-  const nextRootChildren = part.root.children.map(rebuilt);
-  return fromEdit(replaceChildren(part, part.root.id, nextRootChildren, options), effect);
-}
-
-/**
- * End a section at one paragraph: mint `w:pPr/w:sectPr` cloning the governing section's
- * effective page setup, so the new section looks exactly like the one it was cut from —
- * which is what Word's next-page section break does.
- */
-function applySetSectionMark(
-  part: OoxmlPart,
-  paragraphId: string,
-  options?: EditOptions
-): TreeOpResult {
-  const paragraph = findNode(part, paragraphId) as OoxmlParagraphNode;
-  const nextId = createNodeIdAllocator(part);
-  const governing = targetSectionNodes(part, paragraphId)[0] ?? null;
-  const metrics = metricsOfSection(governing);
-  const effect: TreeOpEffect = {
-    dirty: [paragraphId],
-    created: [],
-    deleted: [],
-    dependencyKeys: TEXT_DEPS,
-    impact: 'flow-structural',
-  };
-
-  // The WHOLE governing section is cloned — header/footer references, columns,
-  // `titlePg`, page numbering, everything. The new section becomes an EARLIER section,
-  // and §17.10.5 header inheritance only looks backwards: cloning just the page
-  // geometry would strip the headers off every page before the break. A document with
-  // no section at all gets the effective defaults, written out.
-  const sectPr = governing
-    ? cloneWithNewIds(governing, nextId)
-    : sectionElement(
-        nextId(),
-        'sectPr',
-        [],
-        [
-          sectionElement(
-            nextId(),
-            'pgSz',
-            [
-              wmlAttribute('w', String(metrics.widthTwips)),
-              wmlAttribute('h', String(metrics.heightTwips)),
-              ...(metrics.widthTwips > metrics.heightTwips
-                ? [wmlAttribute('orient', 'landscape')]
-                : []),
-            ],
-            []
-          ),
-          sectionElement(
-            nextId(),
-            'pgMar',
-            [
-              wmlAttribute('top', String(metrics.topTwips)),
-              wmlAttribute('right', String(metrics.rightTwips)),
-              wmlAttribute('bottom', String(metrics.bottomTwips)),
-              wmlAttribute('left', String(metrics.leftTwips)),
-              wmlAttribute('header', String(metrics.headerTwips)),
-              wmlAttribute('footer', String(metrics.footerTwips)),
-              wmlAttribute('gutter', String(metrics.gutterTwips)),
-            ],
-            []
-          ),
-        ]
-      );
-
-  const pPr = paragraph.children.find((child) => child.kind === 'paragraphProperties');
-  if (!pPr) {
-    const minted = {
-      id: nextId(),
-      kind: 'paragraphProperties',
-      namespaceUri: WML_NAMESPACE_URI,
-      localName: 'pPr',
-      prefix: 'w',
-      namespaceBindings: [],
-      attributes: [],
-      children: [sectPr],
-    } as unknown as OoxmlNode;
-    // `w:pPr` must be the paragraph's FIRST child per the schema.
-    return fromEdit(insertChildren(part, paragraph.id, 0, [minted], options), effect);
-  }
-  // `w:sectPr` sits near the END of CT_PPr's sequence, before only `w:pPrChange`.
-  const change = pPr.children.findIndex(
-    (child) => 'localName' in child && child.localName === 'pPrChange'
-  );
-  return fromEdit(
-    insertChildren(part, pPr.id, change === -1 ? pPr.children.length : change, [sectPr], options),
-    effect
-  );
-}
-
-/** One section's rebuilt child list with the op's pgSz/pgMar fields merged in. */
-function mergedSectionChildren(
-  sectPr: OoxmlNode | null,
-  op: SetSectionPropertiesOp,
-  touchesSize: boolean,
-  touchesMargins: boolean,
-  nextId: () => string
-): OoxmlNode[] {
-  const current = metricsOfSection(sectPr);
-
-  const existingPgSz = sectionChild(sectPr, 'pgSz');
-  let nextPgSz: OoxmlNode | null = null;
-  if (touchesSize) {
-    // Per-section dimensions, from the SAME planner validation approved: an orientation
-    // change without explicit dimensions swaps this section's own — an A4 section stays
-    // A4-sized through a whole-document landscape flip.
-    const { widthTwips: width, heightTwips: height } = plannedSectionDimensions(current, op);
-    const dimensionsChanged = width !== current.widthTwips || height !== current.heightTwips;
-    const orient =
-      op.orientation !== undefined
-        ? op.orientation === 'landscape'
-          ? 'landscape'
-          : undefined // Word's portrait is the ABSENCE of the attribute.
-        : sectionAttribute(existingPgSz, 'orient');
-    const dropped = new Set(['w', 'h', 'orient', ...(dimensionsChanged ? ['code'] : [])]);
-    const kept = attributesOf(existingPgSz).filter((entry) => !dropped.has(entry.localName));
-    nextPgSz = sectionElement(
-      existingPgSz?.id ?? nextId(),
-      'pgSz',
-      [
-        wmlAttribute('w', String(width)),
-        wmlAttribute('h', String(height)),
-        ...(orient ? [wmlAttribute('orient', orient)] : []),
-        ...kept,
-      ],
-      childrenOf(existingPgSz)
-    );
-  }
-
-  const existingPgMar = sectionChild(sectPr, 'pgMar');
-  let nextPgMar: OoxmlNode | null = null;
-  if (touchesMargins) {
-    const sides: readonly [string, number | undefined, number][] = [
-      ['top', op.marginTopTwips, current.topTwips],
-      ['right', op.marginRightTwips, current.rightTwips],
-      ['bottom', op.marginBottomTwips, current.bottomTwips],
-      ['left', op.marginLeftTwips, current.leftTwips],
-    ];
-    if (existingPgMar) {
-      const written = new Set(
-        sides.filter(([, value]) => value !== undefined).map(([name]) => name)
-      );
-      const kept = attributesOf(existingPgMar).filter((entry) => !written.has(entry.localName));
-      nextPgMar = sectionElement(
-        existingPgMar.id,
-        'pgMar',
-        [
-          ...sides
-            .filter(([, value]) => value !== undefined)
-            .map(([name, value]) => wmlAttribute(name, String(value))),
-          ...kept,
-        ],
-        childrenOf(existingPgMar)
-      );
-    } else {
-      // Minting `w:pgMar` writes the full attribute set the schema requires, with the
-      // effective values for everything the op did not say — explicit defaults are the
-      // same document the implicit ones were.
-      nextPgMar = sectionElement(
-        nextId(),
-        'pgMar',
-        [
-          ...sides.map(([name, value, fallback]) => wmlAttribute(name, String(value ?? fallback))),
-          wmlAttribute('header', String(current.headerTwips)),
-          wmlAttribute('footer', String(current.footerTwips)),
-          wmlAttribute('gutter', String(current.gutterTwips)),
-        ],
-        []
-      );
-    }
-  }
-
-  let children = [...childrenOf(sectPr)];
-  if (nextPgSz) {
-    if (existingPgSz) {
-      children = children.map((child) => (child.id === existingPgSz.id ? nextPgSz : child));
-    } else {
-      children.splice(sectionInsertIndex(children, 'pgSz'), 0, nextPgSz);
-    }
-  }
-  if (nextPgMar) {
-    if (existingPgMar) {
-      children = children.map((child) => (child.id === existingPgMar.id ? nextPgMar : child));
-    } else {
-      children.splice(sectionInsertIndex(children, 'pgMar'), 0, nextPgMar);
-    }
-  }
-  return children;
-}
-
-/**
- * `CT_SectPr`'s child sequence from `w:pgSz` on — a minted element must precede every
- * LATER-sequence sibling already present (`docGrid`, `sectPrChange`, …), or Word
- * reports the file as corrupt.
- */
-const SECT_PR_SEQUENCE = [
-  'pgSz',
-  'pgMar',
-  'paperSrc',
-  'pgBorders',
-  'lnNumType',
-  'pgNumType',
-  'cols',
-  'formProt',
-  'vAlign',
-  'noEndnote',
-  'titlePg',
-  'textDirection',
-  'bidi',
-  'rtlGutter',
-  'docGrid',
-  'printerSettings',
-  'sectPrChange',
-] as const;
-
-function sectionInsertIndex(children: readonly OoxmlNode[], localName: string): number {
-  const laterSiblings = new Set(
-    SECT_PR_SEQUENCE.slice(
-      SECT_PR_SEQUENCE.indexOf(localName as (typeof SECT_PR_SEQUENCE)[number]) + 1
-    )
-  );
-  const before = children.findIndex(
-    (child) =>
-      child.kind !== 'textValue' &&
-      'localName' in child &&
-      laterSiblings.has(child.localName as (typeof SECT_PR_SEQUENCE)[number])
-  );
-  return before === -1 ? children.length : before;
-}
-
 function applyJoin(
   part: OoxmlPart,
   firstId: string,
@@ -1000,7 +751,7 @@ function applyJoin(
 
   // The survivor keeps ITS paragraph properties; the removed paragraph's are dropped, which
   // matches Word: joining into a paragraph adopts that paragraph's formatting.
-  const moved = second.children.filter((child) => child.kind !== 'paragraphProperties');
+  const moved = second.children.filter((child) => !isParagraphPropertiesNode(child));
 
   // A single edit against the shared parent: the surviving `w:p` receives the second
   // paragraph's content children, and the second `w:p` leaves the child sequence, in the
@@ -1011,11 +762,66 @@ function applyJoin(
   if (!first || first.kind !== 'paragraph') {
     return { ok: false, reason: 'tree-invariant', detail: 'survivor missing' };
   }
-  const merged = Object.freeze({ ...first, children: [...first.children, ...moved] }) as OoxmlNode;
+  const nextId = createNodeIdAllocator(part);
+  const kept = withSectionMarkOf(first, second, nextId);
+  const merged = Object.freeze({ ...kept, children: [...kept.children, ...moved] }) as OoxmlNode;
   const siblings = parent.children.flatMap((child) =>
     child.id === firstId ? [merged] : child.id === secondId ? [] : [child]
   );
   return fromEdit(replaceChildren(part, parent.id, siblings, options), effect);
+}
+
+/**
+ * The join survivor, carrying the SECTION MARK of the paragraph that leaves.
+ *
+ * `w:sectPr` in a paragraph's mark is not formatting: it is where a section ENDS (17.6.17).
+ * A join deletes the FIRST paragraph's mark, so the mark that survives the merge is the
+ * second's, and the section boundary rides on it. Dropping it with the rest of the second
+ * paragraph's `w:pPr` merged the section into the one that follows, taking that section's
+ * page size, orientation and headers over every page of it.
+ */
+function withSectionMarkOf(
+  first: OoxmlNode & { readonly children: readonly OoxmlNode[] },
+  second: OoxmlParagraphNode,
+  nextId: () => string
+): OoxmlNode & { readonly children: readonly OoxmlNode[] } {
+  const sectPr = namedChild(paragraphPropertiesNodeOf(second), 'sectPr');
+  if (!sectPr) return first;
+  const carried = cloneWithNewIds(sectPr, nextId);
+  const pPr = paragraphPropertiesNodeOf(first);
+  if (!pPr) {
+    const minted = {
+      id: nextId(),
+      kind: 'paragraphProperties',
+      namespaceUri: WML_NAMESPACE_URI,
+      localName: 'pPr',
+      prefix: 'w',
+      namespaceBindings: [],
+      attributes: [],
+      children: [carried],
+    } as unknown as OoxmlNode;
+    // `w:pPr` must be the paragraph's FIRST child per the schema.
+    return { ...first, children: [minted, ...first.children] } as OoxmlNode & {
+      readonly children: readonly OoxmlNode[];
+    };
+  }
+  // The survivor's own mark, if it had one, goes with the paragraph mark being deleted.
+  // `w:sectPr` sits near the END of CT_PPr's sequence, before only `w:pPrChange`.
+  const others = pPr.children.filter(
+    (child) => child.kind === 'textValue' || child.localName !== 'sectPr'
+  );
+  const change = others.findIndex(
+    (child) => child.kind !== 'textValue' && child.localName === 'pPrChange'
+  );
+  const at = change === -1 ? others.length : change;
+  const rebuilt = {
+    ...pPr,
+    children: [...others.slice(0, at), carried, ...others.slice(at)],
+  } as OoxmlNode;
+  return {
+    ...first,
+    children: first.children.map((child) => (child.id === pPr.id ? rebuilt : child)),
+  } as OoxmlNode & { readonly children: readonly OoxmlNode[] };
 }
 
 function applySetRunProperties(
@@ -1053,25 +859,36 @@ function applySetRunProperties(
   for (const runId of runIds) {
     const run = findNode(current, runId);
     if (!run || run.kind !== 'run') continue;
-    const existing = run.children.find((child) => child.kind === 'runProperties');
-    const content = run.children.filter((child) => child.kind !== 'runProperties');
-    if (properties.length === 0) {
+    const existing = runPropertiesNodeOf(run);
+    const content = run.children.filter((child) => !isRunPropertiesNode(child));
+    const children = mergedPropertyChildren(
+      existing?.children ?? [],
+      properties,
+      RUN_VOCABULARY,
+      nextId
+    );
+    if (children.length === 0) {
       if (!existing) continue;
       const cleared = replaceChildren(current, run.id, content, options);
       if (!cleared.ok) return fromEdit(cleared, effect);
       current = cleared.part;
       continue;
     }
-    const rPr = {
-      id: existing?.id ?? nextId(),
-      kind: 'runProperties',
-      namespaceUri: WML_NAMESPACE_URI,
-      localName: 'rPr',
-      prefix: 'w',
-      namespaceBindings: [],
-      attributes: [],
-      children: properties.map((property) => propertyElement(property, nextId())),
-    } as unknown as OoxmlNode;
+    // An EXISTING container is rewritten in place, kind and attributes intact. Minting a
+    // typed replacement for one the read demoted would have dropped whatever demoted it
+    // (a `w:val` on `w:rPr`), and a typed node may not carry that attribute at all.
+    const rPr = existing
+      ? ({ ...existing, children } as OoxmlNode)
+      : ({
+          id: nextId(),
+          kind: 'runProperties',
+          namespaceUri: WML_NAMESPACE_URI,
+          localName: 'rPr',
+          prefix: 'w',
+          namespaceBindings: [],
+          attributes: [],
+          children,
+        } as unknown as OoxmlNode);
     // `w:rPr` must lead the run's children.
     const updated = replaceChildren(current, run.id, [rPr, ...content], options);
     if (!updated.ok) return fromEdit(updated, effect);
@@ -1088,18 +905,29 @@ function splitRunsAt(
   options?: EditOptions
 ): { ok: true; part: OoxmlPart } | { ok: false; reason: TreeOpRejection; detail?: string } {
   const segments = segmentsOf(paragraph);
-  const straddling = segments.find(
-    (segment) => segment.node.kind === 'textValue' && segment.start < offset && segment.end > offset
-  );
-  if (!straddling) return { ok: true, part };
-  const run = findNode(part, straddling.runId);
+  // The run the offset falls INSIDE, wherever inside: looking only for a straddling TEXT
+  // VALUE missed every boundary between two of a run's own children. A `w:tab` and a
+  // `w:br` each measure one character, so `<w:r><w:t>a</w:t><w:tab/><w:t>b</w:t></w:r>`
+  // has edges at 1 and 2 that no text value straddles — the run was left whole, the range
+  // then matched it through the tab's segment, and formatting the tab alone bolded all
+  // three characters.
+  const runIds: string[] = [];
+  for (const segment of segments) {
+    if (runIds[runIds.length - 1] !== segment.runId) runIds.push(segment.runId);
+  }
+  const straddling = runIds.find((runId) => {
+    const own = segments.filter((segment) => segment.runId === runId);
+    return own[0]!.start < offset && own[own.length - 1]!.end > offset;
+  });
+  if (straddling === undefined) return { ok: true, part };
+  const run = findNode(part, straddling);
   if (!run || run.kind !== 'run') return { ok: false, reason: 'tree-invariant' };
   const nextId = createNodeIdAllocator(part);
-  const rPr = run.children.find((child) => child.kind === 'runProperties');
+  const rPr = runPropertiesNodeOf(run);
   const headContent: OoxmlNode[] = [];
   const tailContent: OoxmlNode[] = [];
   for (const child of run.children) {
-    if (child.kind === 'runProperties') continue;
+    if (isRunPropertiesNode(child)) continue;
     const segment = segments.find(
       (candidate) => candidate.runId === run.id && contains(child, candidate.node.id)
     );
@@ -1139,7 +967,7 @@ export function paragraphTextOf(part: OoxmlPart, paragraphId: string): string | 
   for (const segment of segmentsOf(paragraph)) {
     if (segment.node.kind === 'textValue') text += segment.node.value;
     else if (segment.node.kind === 'tab') text += '\t';
-    else text += '\n';
+    else if (segment.node.kind === 'hardBreak') text += hardBreakText(segment.node);
   }
   return text;
 }

@@ -122,6 +122,18 @@ describe('text operations over UTF-16 offsets (task 5.1)', () => {
     expect(serializeOoxmlPart(broken)).toContain('<w:br/>');
   });
 
+  test('insertPageBreak writes w:br w:type="page" and survives save/reopen', () => {
+    const part = load('<w:p><w:r><w:t>ab</w:t></w:r></w:p>');
+    const [id] = paragraphIds(part);
+    const withBreak = apply(part, { op: 'insertPageBreak', paragraphId: id!, offset: 1 });
+    expect(paragraphTextOf(withBreak, id!)).toBe('a\fb');
+    const saved = serializeOoxmlPart(withBreak);
+    expect(saved).toContain('<w:br w:type="page"/>');
+    const reopened = load(saved);
+    const [reopenedId] = paragraphIds(reopened);
+    expect(paragraphTextOf(reopened, reopenedId!)).toBe('a\fb');
+  });
+
   test('an edit next to unknown content leaves the unknown node untouched', () => {
     const part = load(WITH_UNKNOWN);
     const [id] = paragraphIds(part);
@@ -130,6 +142,55 @@ describe('text operations over UTF-16 offsets (task 5.1)', () => {
     const out = serializeOoxmlPart(next);
     expect(out).toContain('urn:clip');
     expect(out).toContain('drawing');
+  });
+
+  test('insertText at boundaries emits xml:space preserve on save/reopen', () => {
+    const part = load('<w:p><w:r><w:t>Hello</w:t></w:r></w:p>');
+    const [id] = paragraphIds(part);
+    const leading = apply(part, { op: 'insertText', paragraphId: id!, offset: 0, text: ' ' });
+    const both = apply(leading, { op: 'insertText', paragraphId: id!, offset: 6, text: ' ' });
+    expect(paragraphTextOf(both, id!)).toBe(' Hello ');
+    const saved = serializeOoxmlPart(both);
+    expect(saved).toContain('<w:t xml:space="preserve"> </w:t>');
+    expect(saved).toContain('<w:t>Hello</w:t>');
+    const reopened = load(saved);
+    const [reopenedId] = paragraphIds(reopened);
+    expect(paragraphTextOf(reopened, reopenedId!)).toBe(' Hello ');
+  });
+
+  test('replace across run boundaries keeps trailing space on save/reopen', () => {
+    const part = load(FORMATTED);
+    const [id] = paragraphIds(part);
+    const next = apply(part, { op: 'insertText', paragraphId: id!, offset: 4, text: 'X' });
+    expect(paragraphTextOf(next, id!)).toBe('BoldX plain');
+    const saved = serializeOoxmlPart(next);
+    expect(saved).toContain('<w:t xml:space="preserve"> plain</w:t>');
+    const reopened = load(saved);
+    expect(paragraphTextOf(reopened, paragraphIds(reopened)[0]!)).toBe('BoldX plain');
+  });
+
+  test('split preserves boundary whitespace through save/reopen', () => {
+    const part = load('<w:p><w:r><w:t>Hello world</w:t></w:r></w:p>');
+    const [id] = paragraphIds(part);
+    const split = apply(part, { op: 'splitParagraph', paragraphId: id!, offset: 5 });
+    const ids = paragraphIds(split);
+    expect(paragraphTextOf(split, ids[1]!)).toBe(' world');
+    const saved = serializeOoxmlPart(split);
+    expect(saved).toContain('<w:t xml:space="preserve"> world</w:t>');
+    const reopened = load(saved);
+    const reopenedIds = paragraphIds(reopened);
+    expect(paragraphTextOf(reopened, reopenedIds[1]!)).toBe(' world');
+  });
+
+  test('whitespace-only insertText survives save/reopen', () => {
+    const part = load('<w:p><w:r><w:t>Helloworld</w:t></w:r></w:p>');
+    const [id] = paragraphIds(part);
+    const next = apply(part, { op: 'insertText', paragraphId: id!, offset: 5, text: '  ' });
+    expect(paragraphTextOf(next, id!)).toBe('Hello  world');
+    const saved = serializeOoxmlPart(next);
+    expect(saved).toContain('<w:t xml:space="preserve">  </w:t>');
+    const reopened = load(saved);
+    expect(paragraphTextOf(reopened, paragraphIds(reopened)[0]!)).toBe('Hello  world');
   });
 });
 

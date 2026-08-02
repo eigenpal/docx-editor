@@ -230,6 +230,39 @@ export default [
     },
   },
 
+  // semantic-layout.ts is the story loop: section flow, paragraph fragmentation
+  // and table-row pagination advance ONE cursor, and a paragraph that spans a
+  // page boundary is decided by all three at once. Splitting them into modules
+  // would mean passing that cursor across a boundary and re-deriving the same
+  // state on the other side. semantic-table-layout.ts is the same argument for
+  // row-split pagination, which has to stay with cell flow and finalize because
+  // a row's real height is only known after its cells have laid out. Both were
+  // carrying a blanket `eslint-disable max-lines`, which removes the ceiling
+  // instead of raising it; these keep the ceiling, with headroom.
+  {
+    files: [
+      'packages/core/src/layout/semantic-layout.ts',
+      'packages/core/src/layout/semantic-table-layout.ts',
+    ],
+    rules: {
+      'max-lines': ['error', { max: 1500, skipBlankLines: false, skipComments: false }],
+    },
+  },
+
+  // table-borders.ts resolves the collapsed border model: cell-over-table
+  // inheritance, the conflict rule (width, then style, then colour darkness,
+  // then reading order), and the per-column ownership grid that decides which
+  // of two adjacent cells draws a shared edge. Those cannot be separated —
+  // ownership is decided BY the conflict outcome — and the file sat at 997 of
+  // the default 1000 after the Word-matching conflict fix, which is one edit
+  // from a build break. Bumped for headroom while the ceiling still holds.
+  {
+    files: ['packages/core/src/layout/table-borders.ts'],
+    rules: {
+      'max-lines': ['error', { max: 1100, skipBlankLines: false, skipComments: false }],
+    },
+  },
+
   // Agent-use framework-agnostic surface — top-level utilities + tools/,
   // ai-sdk/ (excluding the per-framework entry files), i18n/, __tests__/.
   // TODO: drop the `ignores` list once task §9 migrates the React hooks

@@ -16,8 +16,10 @@ import {
   layoutSemanticDocument,
 } from '../semantic-layout.ts';
 import { MAX_TABLE_COLUMNS } from '../semantic-table.ts';
+import { TablePaginationError } from '../semantic-table-layout.ts';
 import {
   paragraphFragmentsOf,
+  type PageGeometry,
   type PageRecord,
   type SemanticLayout,
   type TableFragmentRecord,
@@ -111,6 +113,32 @@ describe('semantic table layout', () => {
     expect(nested.rows[0]!.cells[0]!.blocks[0]!.kind).toBe('paragraph');
   });
 
+  test('many nested wide tables finalize under a shared ownership budget without dense blow-up', () => {
+    // Each nested table declares a hostile-wide tblGrid but only one cell — sparse
+    // ownership must not allocate nestCount × columnCount dense slots, and the
+    // shared layout budget must cover every nested finalize in one pass.
+    const nestCount = 32;
+    const gridCols = Array.from({ length: 64 }, () => '<w:gridCol w:w="144"/>').join('');
+    const nested = Array.from(
+      { length: nestCount },
+      (_, i) => `<w:tbl><w:tblGrid>${gridCols}</w:tblGrid>${tr(tc(p(`n${i}`)))}</w:tbl>`
+    ).join('');
+    const part = loadPart(`<w:tbl>${tr(tc(nested))}</w:tbl>`);
+    const result = layout(part);
+    const [outer] = allTableFragments(result);
+    const host = outer!.rows[0]!.cells[0]!;
+    const nestedTables = host.blocks.filter((block) => block.kind === 'table');
+    expect(nestedTables.length).toBeGreaterThanOrEqual(16);
+    expect(nestedTables.length).toBeLessThanOrEqual(nestCount);
+    for (const table of nestedTables) {
+      if (table.kind !== 'table') throw new Error('unreachable');
+      expect(table.rows).toHaveLength(1);
+      expect(table.rows[0]!.cells).toHaveLength(1);
+      // Borders resolved (finalize ran) without throwing / truncating mid-nest fatally.
+      expect(table.rows[0]!.cells[0]!.blocks[0]!.kind).toBe('paragraph');
+    }
+  });
+
   test('a tblHeader row repeats atop each page and stays out of interaction walks', () => {
     const header = tr(tc(p('HEAD')), '<w:trPr><w:tblHeader/></w:trPr>');
     const body = Array.from({ length: 60 }, (_, i) => tr(tc(p(`row ${i}`)))).join('');
@@ -162,14 +190,119 @@ describe('semantic table layout', () => {
     );
     const result = layout(part);
     const [table] = allTableFragments(result);
+    const restart = table!.rows[0]!.cells[0]!;
     const continueCell = table!.rows[1]!.cells[0]!;
     expect(continueCell.vMergeContinue).toBe(true);
+    expect(continueCell.paintInert).toBe(true);
     expect(continueCell.blocks).toHaveLength(0);
     expect(continueCell.box.height).toBe(table!.rows[1]!.box.height);
+    // Restart spans both row heights; no interior seam border on the restart bottom.
+    expect(restart.rowSpan).toBe(2);
+    expect(restart.box.height).toBe(table!.rows[0]!.box.height + table!.rows[1]!.box.height);
+    // Continue is paint-inert (no seam fill/borders); restart owns the outer bottom only.
+    expect(continueCell.borders).toEqual({});
     // The continuation's text never reaches the records.
     const order = documentOrder(result);
     const texts = order.map((id) => paragraphTextFromLayout(result, id));
     expect(texts).not.toContain('ghost');
+  });
+
+  test('nested tables with vMerge finalize spans across sibling nests', () => {
+    // Sibling nests share the layout-wide vMerge budget; each nest must still expand
+    // its restart. Heavy row×column linearity is covered by table-vmerge unit counters.
+    const nestCount = 16;
+    const chainRows = 4;
+    const makeChain = (tag: string) =>
+      Array.from({ length: chainRows }, (_, r) =>
+        tr(
+          tc(
+            p(`${tag}-${r}`),
+            r === 0
+              ? '<w:tcPr><w:vMerge w:val="restart"/></w:tcPr>'
+              : '<w:tcPr><w:vMerge/></w:tcPr>'
+          ) + tc(p(`${tag}-s${r}`))
+        )
+      ).join('');
+    const nested = Array.from(
+      { length: nestCount },
+      (_, i) => `<w:tbl>${makeChain(`t${i}`)}</w:tbl>`
+    ).join('');
+    const part = loadPart(`<w:tbl>${tr(tc(nested))}</w:tbl>`);
+    const result = layout(part);
+    const [outer] = allTableFragments(result);
+    const host = outer!.rows[0]!.cells[0]!;
+    const nestedTables = host.blocks.filter((block) => block.kind === 'table');
+    expect(nestedTables.length).toBeGreaterThanOrEqual(8);
+    for (const table of nestedTables) {
+      if (table.kind !== 'table') throw new Error('unreachable');
+      expect(table.rows.length).toBe(chainRows);
+      const restart = table.rows[0]!.cells[0]!;
+      expect(restart.rowSpan).toBe(chainRows);
+      expect(table.rows[1]!.cells[0]!.vMergeContinue).toBe(true);
+      expect(table.rows[1]!.cells[0]!.paintInert).toBe(true);
+      expect(restart.box.height).toBeCloseTo(
+        table.rows.reduce((sum, row) => sum + row.box.height, 0),
+        5
+      );
+    }
+  });
+
+  test('malformed mid-chain vMerge restart splits spans like the historical scan', () => {
+    const part = loadPart(
+      '<w:tbl>' +
+        tr(tc(p('r1'), '<w:tcPr><w:vMerge w:val="restart"/></w:tcPr>') + tc(p('a'))) +
+        tr(tc(p('g1'), '<w:tcPr><w:vMerge/></w:tcPr>') + tc(p('b'))) +
+        tr(tc(p('r2'), '<w:tcPr><w:vMerge w:val="restart"/></w:tcPr>') + tc(p('c'))) +
+        tr(tc(p('g2'), '<w:tcPr><w:vMerge/></w:tcPr>') + tc(p('d'))) +
+        '</w:tbl>'
+    );
+    const [table] = allTableFragments(layout(part));
+    expect(table!.rows[0]!.cells[0]!.rowSpan).toBe(2);
+    expect(table!.rows[2]!.cells[0]!.rowSpan).toBe(2);
+    expect(table!.rows[0]!.cells[0]!.box.height).toBe(
+      table!.rows[0]!.box.height + table!.rows[1]!.box.height
+    );
+  });
+
+  test('authored tcMar insets content; omitted sides fall back to CELL_PAD', () => {
+    const part = loadPart(
+      '<w:tbl>' +
+        tr(
+          tc(
+            p('x'),
+            '<w:tcPr><w:tcMar>' +
+              '<w:top w:w="80" w:type="dxa"/>' +
+              '<w:left w:w="120" w:type="dxa"/>' +
+              '<w:bottom w:w="80" w:type="dxa"/>' +
+              '<w:right w:w="120" w:type="dxa"/>' +
+              '</w:tcMar></w:tcPr>'
+          )
+        ) +
+        '</w:tbl>'
+    );
+    const cell = allTableFragments(layout(part))[0]!.rows[0]!.cells[0]!;
+    const para = cell.blocks[0]!;
+    // left 6pt, top 4pt from tcMar (120/80 twips).
+    expect(para.box.x).toBe(cell.box.x + 6);
+    expect(para.box.y).toBe(cell.box.y + 4);
+  });
+
+  test('vAlign center shifts cell content within the row', () => {
+    const part = loadPart(
+      '<w:tbl>' +
+        tr(
+          tc(p('short'), '<w:tcPr><w:vAlign w:val="center"/></w:tcPr>') +
+            tc(p('a much longer cell text that wraps across several lines of the narrow column'))
+        ) +
+        '</w:tbl>'
+    );
+    const row = allTableFragments(layout(part))[0]!.rows[0]!;
+    const short = row.cells[0]!;
+    const tall = row.cells[1]!;
+    expect(row.box.height).toBe(tall.box.height);
+    const shortTop = short.blocks[0]!.box.y;
+    // Centered content sits below the top pad of a top-aligned cell.
+    expect(shortTop).toBeGreaterThan(short.box.y + 3);
   });
 
   test('column widths come from the grid when present', () => {
@@ -306,5 +439,340 @@ describe('incremental layout with tables', () => {
     expect(keysAfter[0]).toBe(keysBefore[0]!); // 'before' paragraph untouched
     expect(keysAfter[1]).not.toBe(keysBefore[1]!); // the table re-keys
     expect(keysAfter[2]).toBe(keysBefore[2]!); // 'after' paragraph untouched
+  });
+});
+
+/** Tiny page: 100pt tall, 10pt margins → 80pt content box. */
+const TINY: PageGeometry = {
+  width: 200,
+  height: 100,
+  margin: { top: 10, right: 10, bottom: 10, left: 10 },
+};
+
+function layoutTiny(part: OoxmlPart) {
+  return layoutSemanticDocument(part, 0, {
+    measurer: createFixedMeasurer(),
+    geometry: TINY,
+  });
+}
+
+function assertNoContentOverflow(result: SemanticLayout): void {
+  for (const page of result.pages) {
+    const limit = page.contentBox.height;
+    for (const fragment of page.fragments) {
+      expect(fragment.box.y + fragment.box.height).toBeLessThanOrEqual(limit + 0.001);
+      if (fragment.kind === 'table') {
+        for (const row of fragment.rows) {
+          expect(row.box.y + row.box.height).toBeLessThanOrEqual(limit + 0.001);
+        }
+      }
+    }
+  }
+}
+
+describe('table row pagination (tiny page)', () => {
+  test('a tall multi-paragraph cell fragments across pages without overflowing', () => {
+    const paras = Array.from({ length: 30 }, (_, i) => p(`P${i}`)).join('');
+    const part = loadPart(`<w:tbl>${tr(tc(paras))}</w:tbl>`);
+    const result = layoutTiny(part);
+    expect(result.pages.length).toBeGreaterThan(1);
+    assertNoContentOverflow(result);
+    const texts = documentOrder(result).map((id) => paragraphTextFromLayout(result, id));
+    expect(texts).toEqual(Array.from({ length: 30 }, (_, i) => `P${i}`));
+    // Continuation row records share the authored row id.
+    const bodyRows = allTableFragments(result).flatMap((fragment) =>
+      fragment.rows.filter((row) => !row.isHeaderRepeat)
+    );
+    expect(bodyRows.length).toBeGreaterThan(1);
+    expect(new Set(bodyRows.map((row) => row.id)).size).toBe(1);
+    expect(bodyRows.some((row) => row.isContinuation)).toBe(true);
+  });
+
+  test('a wrapped single paragraph splits at line boundaries', () => {
+    // Fixed measurer: 6pt/char, content width 180 → ~30 chars/line; long text wraps.
+    const long = 'word '.repeat(40).trim();
+    const part = loadPart(`<w:tbl>${tr(tc(p(long)))}</w:tbl>`);
+    const result = layoutTiny(part);
+    expect(result.pages.length).toBeGreaterThan(1);
+    assertNoContentOverflow(result);
+    const frags = allTableFragments(result).flatMap((fragment) =>
+      fragment.rows.flatMap((row) =>
+        row.cells.flatMap((cell) => cell.blocks.filter((block) => block.kind === 'paragraph'))
+      )
+    );
+    expect(frags.length).toBeGreaterThan(1);
+    // Ranges abut without overlap.
+    for (let index = 1; index < frags.length; index += 1) {
+      const prev = frags[index - 1]!;
+      const next = frags[index]!;
+      if (prev.kind !== 'paragraph' || next.kind !== 'paragraph') continue;
+      expect(next.range.start).toBe(prev.range.end);
+    }
+  });
+
+  test('w:cantSplit overheight fails closed instead of overflowing', () => {
+    const paras = Array.from({ length: 30 }, (_, i) => p(`X${i}`)).join('');
+    const part = loadPart(`<w:tbl>${tr(tc(paras), '<w:trPr><w:cantSplit/></w:trPr>')}</w:tbl>`);
+    expect(() => layoutTiny(part)).toThrow(TablePaginationError);
+    try {
+      layoutTiny(part);
+    } catch (error) {
+      expect(error).toBeInstanceOf(TablePaginationError);
+      expect((error as TablePaginationError).code).toBe('table-row-overheight');
+    }
+  });
+
+  test('w:cantSplit that fits a fresh page moves whole rather than splitting', () => {
+    // One short row fills most of the first page; cantSplit row fits alone on page 2.
+    const filler = tr(tc(Array.from({ length: 4 }, (_, i) => p(`F${i}`)).join('')));
+    const body = tr(tc(p('keep-together') + p('second')), '<w:trPr><w:cantSplit/></w:trPr>');
+    const part = loadPart(`<w:tbl>${filler}${body}</w:tbl>`);
+    const result = layoutTiny(part);
+    assertNoContentOverflow(result);
+    const keep = allTableFragments(result).flatMap((fragment) =>
+      fragment.rows.filter((row) =>
+        row.cells.some((cell) =>
+          cell.blocks.some(
+            (block) =>
+              block.kind === 'paragraph' &&
+              block.lines.some((line) => line.spans.some((span) => span.text === 'keep-together'))
+          )
+        )
+      )
+    );
+    expect(keep).toHaveLength(1);
+    expect(keep[0]!.isContinuation).toBeUndefined();
+  });
+
+  test('tblHeader repeats on continuation pages of a split body row', () => {
+    const header = tr(tc(p('HEAD')), '<w:trPr><w:tblHeader/></w:trPr>');
+    const paras = Array.from({ length: 20 }, (_, i) => p(`B${i}`)).join('');
+    const part = loadPart(`<w:tbl>${header}${tr(tc(paras))}</w:tbl>`);
+    const result = layoutTiny(part);
+    expect(result.pages.length).toBeGreaterThan(1);
+    assertNoContentOverflow(result);
+    for (const page of result.pages.slice(1)) {
+      const tables = tableFragments(page);
+      if (tables.length === 0) continue;
+      expect(tables[0]!.rows[0]!.isHeaderRepeat).toBe(true);
+    }
+  });
+
+  function rowCellText(row: { cells: TableFragmentRecord['rows'][number]['cells'] }): string {
+    return row.cells
+      .flatMap((cell) =>
+        cell.blocks.flatMap((block) => (block.kind === 'paragraph' ? block.lines : []))
+      )
+      .flatMap((line) => line.spans)
+      .map((span) => span.text)
+      .join('');
+  }
+
+  test('two+ tblHeader rows stay together as one atomic group', () => {
+    const h1 = tr(tc(p('H1')), '<w:trPr><w:tblHeader/></w:trPr>');
+    const h2 = tr(tc(p('H2')), '<w:trPr><w:tblHeader/></w:trPr>');
+    const body = tr(tc(p('body')));
+    const part = loadPart(`<w:tbl>${h1}${h2}${body}</w:tbl>`);
+    const result = layoutTiny(part);
+    assertNoContentOverflow(result);
+    const [table] = allTableFragments(result);
+    expect(table!.rows.map(rowCellText)).toEqual(['H1', 'H2', 'body']);
+    // No fragment leads with a partial header group (H1 without H2 or vice versa).
+    for (const page of result.pages) {
+      for (const fragment of tableFragments(page)) {
+        const texts = fragment.rows.map(rowCellText);
+        const h1i = texts.indexOf('H1');
+        const h2i = texts.indexOf('H2');
+        if (h1i >= 0 || h2i >= 0) {
+          expect(h1i).toBeGreaterThanOrEqual(0);
+          expect(h2i).toBe(h1i + 1);
+        }
+      }
+    }
+  });
+
+  test('header group moves whole when the remainder fits one header but not the group', () => {
+    // TINY content = 80pt; one para row ≈ 20pt. Three filler paras leave ~20pt — enough for
+    // H1 alone, not H1+H2. The group must move intact rather than split.
+    const filler = Array.from({ length: 3 }, (_, i) => p(`F${i}`)).join('');
+    const h1 = tr(tc(p('H1')), '<w:trPr><w:tblHeader/></w:trPr>');
+    const h2 = tr(tc(p('H2')), '<w:trPr><w:tblHeader/></w:trPr>');
+    const body = tr(tc(p('body')));
+    const part = loadPart(`${filler}<w:tbl>${h1}${h2}${body}</w:tbl>`);
+    const result = layoutTiny(part);
+    assertNoContentOverflow(result);
+    expect(result.pages.length).toBeGreaterThan(1);
+
+    let sawPartialHeaderPage = false;
+    for (const page of result.pages) {
+      const tables = tableFragments(page);
+      for (const fragment of tables) {
+        const texts = fragment.rows.map(rowCellText);
+        const h1i = texts.indexOf('H1');
+        const h2i = texts.indexOf('H2');
+        if (h1i >= 0 && h2i < 0) sawPartialHeaderPage = true;
+        if (h2i >= 0 && h1i < 0) sawPartialHeaderPage = true;
+        if (h1i >= 0 && h2i >= 0) {
+          expect(h2i).toBe(h1i + 1);
+        }
+      }
+    }
+    expect(sawPartialHeaderPage).toBe(false);
+    // Header group lands with body on a later page, not stranded alone mid-split.
+    const withHeaders = result.pages.filter((page) =>
+      tableFragments(page).some((fragment) =>
+        fragment.rows.some((row) => rowCellText(row) === 'H1')
+      )
+    );
+    expect(withHeaders.length).toBeGreaterThanOrEqual(1);
+    for (const page of withHeaders) {
+      const fragment = tableFragments(page)[0]!;
+      const texts = fragment.rows.map(rowCellText);
+      expect(texts.slice(0, 2)).toEqual(['H1', 'H2']);
+    }
+  });
+
+  test('continuation pages repeat the complete multi-row header group', () => {
+    const h1 = tr(tc(p('H1')), '<w:trPr><w:tblHeader/></w:trPr>');
+    const h2 = tr(tc(p('H2')), '<w:trPr><w:tblHeader/></w:trPr>');
+    const paras = Array.from({ length: 20 }, (_, i) => p(`B${i}`)).join('');
+    const part = loadPart(`<w:tbl>${h1}${h2}${tr(tc(paras))}</w:tbl>`);
+    const result = layoutTiny(part);
+    expect(result.pages.length).toBeGreaterThan(1);
+    assertNoContentOverflow(result);
+
+    for (const page of result.pages.slice(1)) {
+      const tables = tableFragments(page);
+      if (tables.length === 0) continue;
+      const lead = tables[0]!.rows.slice(0, 2);
+      expect(lead).toHaveLength(2);
+      expect(lead.every((row) => row.isHeaderRepeat)).toBe(true);
+      expect(lead.map(rowCellText)).toEqual(['H1', 'H2']);
+    }
+    // Authored header paragraphs appear once in interaction order.
+    const order = documentOrder(result).map((id) => paragraphTextFromLayout(result, id));
+    expect(order.filter((text) => text === 'H1')).toHaveLength(1);
+    expect(order.filter((text) => text === 'H2')).toHaveLength(1);
+  });
+
+  test('overheight header group fails closed', () => {
+    // Five one-line header rows ≈ 100pt > 80pt content box.
+    const headers = Array.from({ length: 5 }, (_, i) =>
+      tr(tc(p(`H${i}`)), '<w:trPr><w:tblHeader/></w:trPr>')
+    ).join('');
+    const part = loadPart(`<w:tbl>${headers}${tr(tc(p('body')))}</w:tbl>`);
+    expect(() => layoutTiny(part)).toThrow(TablePaginationError);
+    try {
+      layoutTiny(part);
+    } catch (error) {
+      expect(error).toBeInstanceOf(TablePaginationError);
+      expect((error as TablePaginationError).code).toBe('table-row-overheight');
+    }
+  });
+
+  test('multi-row header group repeats ahead of tall body / vMerge continuation', () => {
+    const h1 = tr(
+      tc(p('H1'), '<w:tcPr><w:vMerge w:val="restart"/></w:tcPr>') + tc(p('H1b')),
+      '<w:trPr><w:tblHeader/></w:trPr>'
+    );
+    const h2 = tr(
+      tc(p('ghost-h'), '<w:tcPr><w:vMerge/></w:tcPr>') + tc(p('H2b')),
+      '<w:trPr><w:tblHeader/></w:trPr>'
+    );
+    const tall = Array.from({ length: 16 }, (_, i) => p(`T${i}`)).join('');
+    const body = tr(tc(tall, '<w:tcPr><w:vMerge w:val="restart"/></w:tcPr>') + tc(p('side')));
+    const cont = tr(tc(p('ghost-b'), '<w:tcPr><w:vMerge/></w:tcPr>') + tc(p('side2')));
+    const part = loadPart(`<w:tbl>${h1}${h2}${body}${cont}</w:tbl>`);
+    const result = layoutTiny(part);
+    expect(result.pages.length).toBeGreaterThan(1);
+    assertNoContentOverflow(result);
+
+    for (const page of result.pages.slice(1)) {
+      const tables = tableFragments(page);
+      if (tables.length === 0) continue;
+      const lead = tables[0]!.rows.slice(0, 2);
+      expect(lead.every((row) => row.isHeaderRepeat)).toBe(true);
+      expect(lead.map(rowCellText)).toEqual(['H1H1b', 'H2b']);
+    }
+    const order = documentOrder(result).map((id) => paragraphTextFromLayout(result, id));
+    expect(order).not.toContain('ghost-h');
+    expect(order).not.toContain('ghost-b');
+    expect(order.filter((text) => text.startsWith('T'))).toHaveLength(16);
+  });
+
+  test('vMerge near a page break keeps restart/continue records valid', () => {
+    // Tall first row forces a break before the continue row.
+    const tall = Array.from({ length: 8 }, (_, i) => p(`T${i}`)).join('');
+    const part = loadPart(
+      '<w:tbl>' +
+        tr(tc(tall, '<w:tcPr><w:vMerge w:val="restart"/></w:tcPr>') + tc(p('side'))) +
+        tr(tc(p('ghost'), '<w:tcPr><w:vMerge/></w:tcPr>') + tc(p('side2'))) +
+        '</w:tbl>'
+    );
+    const result = layoutTiny(part);
+    assertNoContentOverflow(result);
+    const order = documentOrder(result).map((id) => paragraphTextFromLayout(result, id));
+    expect(order).not.toContain('ghost');
+    expect(order.filter((text) => text.startsWith('T'))).toHaveLength(8);
+  });
+
+  test('nested table inside a tall cell lays out without content overflow when row fits pages', () => {
+    const nested = `<w:tbl>${tr(tc(p('inner')))}</w:tbl>`;
+    const paras = Array.from({ length: 12 }, (_, i) => p(`N${i}`)).join('');
+    const part = loadPart(`<w:tbl>${tr(tc(paras + nested + p('after')))}</w:tbl>`);
+    const result = layoutTiny(part);
+    assertNoContentOverflow(result);
+    const texts = documentOrder(result).map((id) => paragraphTextFromLayout(result, id));
+    expect(texts).toContain('inner');
+    expect(texts).toContain('after');
+  });
+
+  test('incremental reuse still matches a clean pass after a tall-cell edit', () => {
+    const paras = Array.from({ length: 12 }, (_, i) => p(`E${i}`)).join('');
+    const part = loadPart(p('before') + `<w:tbl>${tr(tc(paras))}</w:tbl>` + p('after'));
+    const measurer = createFixedMeasurer();
+    const cache = createParagraphLayoutCache<readonly PendingLine[]>();
+    const session = createLayoutSession();
+    layoutSemanticDocument(part, 0, { measurer, cache, session, geometry: TINY });
+
+    const findParagraph = (
+      node: import('../../store/package/ooxml-tree.ts').OoxmlNode,
+      needle: string
+    ): string | null => {
+      if (node.kind === 'textValue') return null;
+      if (node.kind === 'paragraph' && JSON.stringify(node).includes(`"${needle}"`)) return node.id;
+      for (const child of node.children) {
+        const found = findParagraph(child, needle);
+        if (found) return found;
+      }
+      return null;
+    };
+    const paragraphId = findParagraph(part.root, 'E0');
+    if (!paragraphId) throw new Error('missing E0');
+    const edited = applyTreeOp(part, { op: 'insertText', paragraphId, offset: 0, text: 'Z' });
+    if (!edited.ok) throw new Error(edited.reason);
+    const incremental = layoutSemanticDocument(edited.part, 1, {
+      measurer,
+      cache,
+      session,
+      geometry: TINY,
+    });
+    const clean = layoutSemanticDocument(edited.part, 1, {
+      measurer: createFixedMeasurer(),
+      geometry: TINY,
+    });
+    expect(JSON.parse(JSON.stringify(incremental))).toEqual(JSON.parse(JSON.stringify(clean)));
+    assertNoContentOverflow(incremental);
+  });
+});
+
+describe('comprehensive fixture table pagination regression', () => {
+  test('comprehensive-word-element-test lays out without content-box overflow', () => {
+    const part = fixturePart('comprehensive-word-element-test.docx');
+    const result = layout(part);
+    expect(result.pages.length).toBeGreaterThan(0);
+    assertNoContentOverflow(result);
+    // Tables still produce reachable cell text.
+    expect(allTableFragments(result).length).toBeGreaterThan(0);
   });
 });

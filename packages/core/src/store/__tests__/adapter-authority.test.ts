@@ -32,6 +32,7 @@ const FORBIDDEN_PACKAGE_ROOTS = [
   '@docx-editor.dev/core-contract/output',
 ];
 
+/** Workspace dependencies that keep adapters thin without granting private engine authority. */
 const ALLOWED_ENGINE_DEPS = new Set([
   '@docx-editor.dev/agents',
   '@docx-editor.dev/core-contract',

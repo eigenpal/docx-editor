@@ -19,6 +19,25 @@ const NAVIGATION: Record<string, NavigationCommand> = {
   End: 'lineEnd',
 };
 
+/** Paragraph alignment shortcuts (`w:jc`), matching Word. */
+const ALIGNMENT: Record<string, string> = {
+  l: 'left',
+  e: 'center',
+  r: 'right',
+  j: 'both',
+};
+
+/**
+ * Line-spacing shortcuts, in 240ths of a line — Word's Ctrl+1 / Ctrl+5 / Ctrl+2.
+ *
+ * `w:lineRule="auto"` is what makes these MULTIPLES rather than fixed heights.
+ */
+const LINE_SPACING: Record<string, string> = {
+  '1': '240',
+  '5': '360',
+  '2': '480',
+};
+
 /** Run-property shortcuts, matching Word and every browser editor. */
 const FORMATTING: Record<string, { localName: string; attributes?: Record<string, string> }> = {
   b: { localName: 'b' },
@@ -50,31 +69,58 @@ export function createKeyDownHandler(surface: PaginatedSurface): (event: Keyboar
       return;
     }
     if (event.key === 'PageUp' || event.key === 'PageDown') {
-      // A page is a real unit here — the surface knows where every page starts — so this
-      // moves by pages rather than by a guessed number of lines.
-      surface.navigate(event.key === 'PageUp' ? 'documentStart' : 'documentEnd', event.shiftKey);
+      // A page is a real unit here — every caret stop knows its sheet — so this moves ONE
+      // page. Ctrl/Cmd is Word's jump to the document edge.
+      surface.navigate(
+        accel
+          ? event.key === 'PageUp'
+            ? 'documentStart'
+            : 'documentEnd'
+          : event.key === 'PageUp'
+            ? 'pageUp'
+            : 'pageDown',
+        event.shiftKey
+      );
       event.preventDefault();
       return;
     }
     if (event.key === 'Backspace') {
-      surface.deleteBackward();
+      // Ctrl/Alt+Backspace deletes the word before the caret — Word, and every native
+      // text field on both platforms.
+      if (accel || event.altKey) surface.deleteWordBackward();
+      else surface.deleteBackward();
       event.preventDefault();
       return;
     }
     if (event.key === 'Delete') {
-      surface.deleteForward();
+      if (accel || event.altKey) surface.deleteWordForward();
+      else surface.deleteForward();
       event.preventDefault();
       return;
     }
     if (event.key === 'Tab') {
-      surface.insertTab();
+      // In a LIST, Tab demotes and Shift+Tab promotes — the list level, so the marker
+      // changes with it. Outside one, Tab is a tab character and Shift+Tab outdents,
+      // which is what Word does.
+      if (surface.isListParagraph()) {
+        surface.adjustIndent(event.shiftKey ? 'decrease' : 'increase');
+      } else if (event.shiftKey) {
+        surface.adjustIndent('decrease');
+      } else {
+        surface.insertTab();
+      }
       event.preventDefault();
       return;
     }
     if (event.key === 'Enter') {
-      // Shift+Enter is a line break inside the paragraph, not a new paragraph.
-      if (event.shiftKey) surface.insertLineBreak();
-      else surface.splitParagraph();
+      // Three different breaks on one key, exactly as Word maps them:
+      //   Enter        end the paragraph and start a new one
+      //   Shift+Enter  a line break INSIDE the paragraph (`w:br`)
+      //   Ctrl+Enter   a hard page break (`w:br w:type="page"`)
+      if (accel) surface.insertPageBreak();
+      else if (event.shiftKey) surface.insertLineBreak();
+      // Enter on an empty list item ends the list rather than making another empty one.
+      else if (!surface.exitListOnEmptyItem()) surface.splitParagraph();
       event.preventDefault();
       return;
     }
@@ -86,6 +132,35 @@ export function createKeyDownHandler(surface: PaginatedSurface): (event: Keyboar
     if (accel && !event.shiftKey && FORMATTING[event.key.toLowerCase()]) {
       const property = FORMATTING[event.key.toLowerCase()]!;
       surface.toggleRunProperty(property.localName, property.attributes);
+      event.preventDefault();
+      return;
+    }
+    if (accel && event.shiftKey && event.key.toLowerCase() === 'm') {
+      surface.adjustIndent('decrease');
+      event.preventDefault();
+      return;
+    }
+    if (accel && !event.shiftKey && event.key.toLowerCase() === 'm') {
+      surface.adjustIndent('increase');
+      event.preventDefault();
+      return;
+    }
+    if (accel && !event.shiftKey && ALIGNMENT[event.key.toLowerCase()]) {
+      surface.setParagraphProperty('jc', { val: ALIGNMENT[event.key.toLowerCase()]! });
+      event.preventDefault();
+      return;
+    }
+    if (accel && !event.shiftKey && LINE_SPACING[event.key]) {
+      surface.setParagraphProperty('spacing', {
+        line: LINE_SPACING[event.key]!,
+        lineRule: 'auto',
+      });
+      event.preventDefault();
+      return;
+    }
+    // Ctrl+Y is Windows' redo; Ctrl/Cmd+Shift+Z is the mac one. Word accepts both.
+    if (accel && event.key.toLowerCase() === 'y') {
+      surface.redo();
       event.preventDefault();
       return;
     }

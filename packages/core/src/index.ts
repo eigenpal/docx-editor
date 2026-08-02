@@ -77,6 +77,21 @@ export interface DocEdits {
   insertHyperlink: { target: DocTarget; href: string; text?: string };
   removeHyperlink: { target: DocTarget };
   insertBreak: { target: DocTarget; kind: 'page' | 'column' | 'line' | 'section' };
+  /**
+   * Word's Increase/Decrease Indent.
+   *
+   * A numbered or bulleted paragraph changes LEVEL, so its marker re-resolves from the
+   * numbering definition — a bullet becomes a hollow circle, a `1.` becomes an `a.`.
+   * Every other paragraph moves its left indent by one default tab stop.
+   */
+  adjustIndent: { target: DocTarget; direction: 'increase' | 'decrease' };
+  /**
+   * Word's Bullets and Numbering.
+   *
+   * Turns the selection into a list, or takes it out of one when it already is. The
+   * definition is created on first use, `numbering.xml` included.
+   */
+  toggleList: { target: DocTarget; kind: 'bullet' | 'ordered' };
   splitParagraph: { target: DocTarget };
   mergeParagraphs: { target: DocTarget };
   setVariable: { name: string; value: string };

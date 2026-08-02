@@ -14,7 +14,30 @@
 // only run in a browser could not be tested deterministically or run headless.
 
 import type { OoxmlProperty } from '@docx-editor.dev/core-contract/store';
+import type {
+  ParagraphBorderEdge,
+  ParagraphBorderSide,
+  ParagraphSpacing,
+} from './paragraph-style.ts';
+import type { TabLeader } from './paragraph-tabs.ts';
 import type { ResolvedRunStyle } from './run-style.ts';
+import type { ResolvedCellBorders } from './table-borders.ts';
+
+export type {
+  ParagraphBorderEdge,
+  ParagraphBorderSide,
+  ParagraphBorders,
+  ParagraphSpacing,
+} from './paragraph-style.ts';
+export type { TabLeader } from './paragraph-tabs.ts';
+export type {
+  ResolvedCellBorders,
+  ResolvedTableBorderEdge,
+  ResolvedTableBorderEdgeSegment,
+  TableBorderSideName,
+  TableBorderStrokeRecord,
+  TableBorderStyle,
+} from './table-borders.ts';
 
 /** A half-open UTF-16 range inside one paragraph, addressed by its canonical node id. */
 export interface SourceRange {
@@ -28,6 +51,32 @@ export interface LayoutBox {
   readonly y: number;
   readonly width: number;
   readonly height: number;
+}
+
+/**
+ * A bottom paragraph border as layout published it.
+ *
+ * `box` is the rule's geometry in the same coordinate space as the fragment (page-content
+ * relative). Paint positions from this box and MUST NOT remeasure the border.
+ */
+export interface ParagraphBottomBorderRecord {
+  readonly edge: ParagraphBorderEdge;
+  readonly box: LayoutBox;
+}
+
+/**
+ * One `w:pBdr` rule as layout published it.
+ *
+ * `box` is the STROKE rectangle in the same coordinate space as the fragment, so paint sets a
+ * position and a colour and nothing else. It matters that paint cannot derive these itself:
+ * Word draws the side rules OUTSIDE the text column, so `box.x` on a `left`/`bar` stroke is
+ * left of the fragment box and a painter reasoning from the fragment alone would put it
+ * inside the text.
+ */
+export interface ParagraphBorderStrokeRecord {
+  readonly side: ParagraphBorderSide;
+  readonly edge: ParagraphBorderEdge;
+  readonly box: LayoutBox;
 }
 
 /** A run of text on one line sharing identical resolved formatting. */
@@ -45,6 +94,14 @@ export interface StyleSpanRecord {
    */
   readonly style: ResolvedRunStyle;
   readonly box: LayoutBox;
+  /**
+   * `w:tab/@w:leader` of the stop a `\t` span advanced to (ECMA-376 §17.3.1.38).
+   *
+   * Only ever set on a tab span, and only for a non-`none` leader. Paint repeats the glyph
+   * across the advance THIS box already reserved — the leader adds no width of its own, so
+   * it can never move the text that follows it.
+   */
+  readonly tabLeader?: TabLeader;
 }
 
 export interface LineRecord {
@@ -71,8 +128,75 @@ export interface ParagraphFragmentRecord {
   readonly fragmentIndex: number;
   readonly range: SourceRange;
   readonly props: readonly OoxmlProperty[];
+  /**
+   * Before/after spacing applied to THIS fragment, in points.
+   *
+   * Continuations carry `before: 0`; only the final fragment carries `after`. The numbers
+   * already reflect Word's adjacent-collapse against the previous paragraph's after.
+   */
+  readonly spacing: ParagraphSpacing;
+  /** Bottom rule on the final fragment when `w:pBdr/w:bottom` resolves; absent otherwise. */
+  readonly bottomBorder?: ParagraphBottomBorderRecord;
+  /**
+   * Every `w:pBdr` rule this fragment draws, in paint order.
+   *
+   * A paragraph split across pages opens and closes exactly once: the `top` stroke rides the
+   * first fragment, the closing stroke the last. `bottomBorder` remains the bottom rule alone
+   * — a `between` rule closing a grouped paragraph is not one.
+   */
+  readonly borders?: readonly ParagraphBorderStrokeRecord[];
+  /**
+   * Validated 6-hex paragraph shading fill (`w:pPr/w:shd`), absent for none/auto.
+   *
+   * Paint fills {@link shadingBox} (line/content area only). Measurement ignores it.
+   */
+  readonly shading?: string;
+  /**
+   * Geometry of the paragraph shading band when {@link shading} is set.
+   *
+   * Covers the fragment's line boxes (indent-aware width) — not before/after spacing or
+   * bottom-border extent. Absent when there is no fill.
+   */
+  readonly shadingBox?: LayoutBox;
+  /**
+   * List marker painted in the hanging-indent slot of the FIRST fragment only.
+   *
+   * Not part of model text: no UTF-16 range, never contributes to caret/selection offsets,
+   * and must not be serialised back into the paragraph.
+   */
+  readonly marker?: ListMarkerRecord;
   readonly lines: readonly LineRecord[];
   readonly box: LayoutBox;
+}
+
+/**
+ * A numbering marker as layout published it.
+ *
+ * Geometry is in the same coordinate space as the fragment (page-content or cell-content
+ * relative). Paint positions from this box and MUST NOT remeasure the marker.
+ */
+export interface ListMarkerRecord {
+  readonly text: string;
+  readonly style: ResolvedRunStyle;
+  readonly box: LayoutBox;
+  /**
+   * The `w:ilvl` this marker was resolved at, 0..8.
+   *
+   * Published because the level, not the geometry, is what Increase/Decrease Indent moves
+   * on a list paragraph — demoting an item re-resolves its format from `numbering.xml`,
+   * which is why a bullet becomes a hollow circle and a `1.` becomes an `a.`.
+   */
+  readonly level: number;
+  /**
+   * The `w:numId` this marker resolved through.
+   *
+   * Published with the level because the two together are what identifies a list: whether
+   * a demote is even possible depends on which levels THIS definition declares, and a
+   * document may hold several lists whose level 0 looks identical.
+   */
+  readonly numId: string;
+  /** `w:numFmt` of the resolved level — `bullet` or a numbering format. */
+  readonly numFmt: string;
 }
 
 /**
@@ -101,6 +225,11 @@ export interface TableRowFragmentRecord {
    * but excluded from interaction walks so each caret stop exists exactly once.
    */
   readonly isHeaderRepeat: boolean;
+  /**
+   * True when this record continues a row that already emitted content on a prior page
+   * (cell content fragmented at a paragraph/line boundary). Same `id` as the lead fragment.
+   */
+  readonly isContinuation?: boolean;
   readonly cells: readonly TableCellFragmentRecord[];
   readonly box: LayoutBox;
 }
@@ -114,8 +243,23 @@ export interface TableCellFragmentRecord {
   readonly gridSpan: number;
   /** A vertical-merge continuation paints its box but holds no blocks. */
   readonly vMergeContinue: boolean;
+  /**
+   * When true, paint skips borders/fill/content for this cell (vMerge continue). Grid
+   * bookkeeping and the box remain so selection/geometry walks stay consistent.
+   */
+  readonly paintInert?: boolean;
+  /** Number of rows this restart cell visually spans (1 when not a vertical merge). */
+  readonly rowSpan?: number;
   /** Validated 6-hex cell shading fill, absent for none/auto. */
   readonly shading?: string;
+  /**
+   * Layout-owned resolved borders after collapsed conflict resolution.
+   *
+   * Includes convenience per-side edges, per-grid-interval winners, and explicit compound
+   * stroke rectangles in cell-local points. Paint only scales and draws — it must not
+   * invent stroke/gap/corner geometry.
+   */
+  readonly borders?: ResolvedCellBorders;
   /** Nested blocks in reading order; recursion carries nested tables. */
   readonly blocks: readonly BlockFragmentRecord[];
   readonly box: LayoutBox;
@@ -129,8 +273,10 @@ export type BlockFragmentRecord = ParagraphFragmentRecord | TableFragmentRecord;
  *
  * `box` is absolute (sheet coordinates) and sized to the story's FLOW height — never to
  * any anchored-object extent, which is the rule that keeps a decorated header's hit area
- * from covering the body. `fragments` are story-relative (origin at the box's top-left)
- * and SHARED between the pages that show the same variant.
+ * from covering the body. `fragments` are story-relative (origin at the box's top-left).
+ * Baseline furniture may be shared across pages of the same variant when the story has no
+ * allowlisted PAGE/NUMPAGES fields; after page-field finalize, projections are per page
+ * (or per distinct field values for NUMPAGES-only stories).
  */
 export interface HeaderFooterStoryRecord {
   readonly kind: 'header' | 'footer';
@@ -138,6 +284,14 @@ export interface HeaderFooterStoryRecord {
   readonly partName: string;
   readonly box: LayoutBox;
   readonly fragments: readonly BlockFragmentRecord[];
+  /**
+   * Transient projector used between furniture attach and document-level page-field
+   * finalize. Absent on published layout records after finalize.
+   */
+  readonly pageFieldProjector?: (context: {
+    readonly pageNumber: number;
+    readonly pageCount: number;
+  }) => HeaderFooterStoryRecord;
 }
 
 export interface PageRecord {

@@ -157,6 +157,28 @@ describe('reverse mapping (task 6.2)', () => {
     expect(paragraphTextOf(commit(part, doc), id)).toBe('a\t\nb');
   });
 
+  test('a page break maps to insertPageBreak and round-trips through the tree', () => {
+    const part = load('<w:p><w:r><w:t>a</w:t><w:br w:type="page"/><w:t>b</w:t></w:r></w:p>');
+    const id = bodyParagraphs(part)[0]!.id;
+    const projected = treeToDoc(part);
+    expect(projected.child(0).child(1).type.name).toBe('pageBreak');
+    expect(paragraphTextOf(part, id)).toBe('a\fb');
+
+    const plain = load('<w:p><w:r><w:t>ab</w:t></w:r></w:p>');
+    const plainId = bodyParagraphs(plain)[0]!.id;
+    const doc = treeSchema.node('doc', null, [
+      treeSchema.node('paragraph', { nodeId: plainId, props: [] }, [
+        treeSchema.text('a'),
+        treeSchema.node('pageBreak'),
+        treeSchema.text('b'),
+      ]),
+    ]);
+    const mapped = docToTreeOps(plain, doc);
+    if (!mapped.ok) throw new Error(mapped.reason);
+    expect(mapped.ops).toEqual([{ op: 'insertPageBreak', paragraphId: plainId, offset: 1 }]);
+    expect(paragraphTextOf(commit(plain, doc), plainId)).toBe('a\fb');
+  });
+
   test('a run property change maps to setRunProperties over the affected range', () => {
     const part = load(SIMPLE);
     const id = bodyParagraphs(part)[0]!.id;

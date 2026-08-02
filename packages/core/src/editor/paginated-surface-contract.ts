@@ -115,6 +115,47 @@ export interface PaginatedSurface {
   insertTab(): void;
   /** A `w:br` — Shift+Enter, a line break inside the same paragraph. */
   insertLineBreak(): void;
+  /** A `w:br w:type="page"` — Ctrl+Enter, a hard page break inside the paragraph. */
+  insertPageBreak(): void;
+  /**
+   * Word's Increase/Decrease Indent, over every paragraph the selection touches.
+   *
+   * A NUMBERED or BULLETED paragraph changes LEVEL: `w:numPr/w:ilvl` moves by one, which
+   * re-resolves its marker from `numbering.xml` — so a bullet becomes a hollow circle, a
+   * `1.` becomes an `a.`, exactly as Word demotes a list item. Everything else moves its
+   * `w:ind/@left` by one default tab stop, never past the margin.
+   *
+   * Answers whether anything changed, so a caller can fall back (Tab inserting a tab
+   * where there is no list to demote).
+   */
+  adjustIndent(direction: 'increase' | 'decrease'): boolean;
+  /**
+   * Whether Increase/Decrease Indent would do anything right now.
+   *
+   * A list item at level 0 cannot outdent, and one whose definition declares no deeper
+   * level cannot indent — Word greys both out rather than letting the press silently
+   * destroy the marker.
+   */
+  canAdjustIndent(direction: 'increase' | 'decrease'): boolean;
+  /**
+   * Enter on an empty list item: outdent a level, or leave the list at level 0.
+   *
+   * Answers false when the caret is not on an empty list item, so the caller falls
+   * through to an ordinary paragraph split.
+   */
+  exitListOnEmptyItem(): boolean;
+  /** Whether the paragraph at the caret is a list item, for Tab's Word-like fallback. */
+  isListParagraph(): boolean;
+  /**
+   * Word's Bullets and Numbering buttons.
+   *
+   * Turns every paragraph the selection touches into a list of `kind`, or takes them all
+   * out when they are already one. The definition is created in `numbering.xml` on first
+   * use — a document that has never carried a list has no numbering part at all.
+   */
+  toggleList(kind: 'bullet' | 'ordered'): boolean;
+  /** Whether every paragraph the selection touches is already a list of `kind`. */
+  isListActive(kind: 'bullet' | 'ordered'): boolean;
   /** Select the whole document. */
   selectAll(): void;
   /** Set the selection directly, for a host driving the surface programmatically. */

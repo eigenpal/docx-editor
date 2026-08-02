@@ -15,21 +15,60 @@ import type {
   OoxmlPart,
   OoxmlProperty,
 } from '@docx-editor.dev/core-contract/store';
+import { finalizePageFieldProjection } from './field-projection.ts';
 import { paragraphLayoutKey, type ParagraphLayoutCache } from './layout-cache.ts';
+import { alignSpans, breakParagraph, type Alignment, type PendingLine } from './paragraph-flow.ts';
 import {
-  alignSpans,
-  breakParagraph,
-  paragraphAlignment,
-  paragraphIndent,
-  propertiesOf,
-  type Alignment,
-  type PendingLine,
-} from './paragraph-flow.ts';
-import { DEFAULT_RUN_STYLE, type ResolvedRunStyle } from './run-style.ts';
-import { CELL_PAD, readTableStructure } from './semantic-table.ts';
-import { layoutRowFragment, type TableFlowDeps } from './semantic-table-layout.ts';
+  appliedSpaceBefore,
+  paragraphBorderExtentPt,
+  cascadedParagraphBorders,
+  collapsedSpaceBefore,
+  paragraphBorders,
+  paragraphBordersFingerprint,
+  paragraphBreaksBefore,
+  type ParagraphBorders,
+  type ParagraphLineSpacing,
+  type ParagraphSpacing,
+} from './paragraph-style.ts';
+import {
+  adjustedBreakIndex,
+  keepNextFlowKeys,
+  keepNextGroupHeight,
+  paragraphKeeps,
+  MAX_KEEP_NEXT_CHAIN,
+  type ParagraphKeeps,
+} from './pagination-keeps.ts';
+import { DEFAULT_RUN_STYLE, resolveRunStyle } from './run-style.ts';
+import {
+  tabStopsFingerprint,
+  withDefaultTabInterval,
+  type ResolvedTabStops,
+} from './paragraph-tabs.ts';
+import {
+  cascadeParagraphFormatting,
+  resolveParagraphLayoutInputs,
+  cascadeRunProperties,
+  type StyleCascadeTable,
+} from './style-cascade.ts';
+import { paragraphShadingBox } from './ooxml-shading.ts';
+import { readTableStructure, type SemanticTableRow } from './semantic-table.ts';
+import {
+  createTableBorderOwnershipBudget,
+  createTableVMergeResolveBudget,
+  finalizeTableRows,
+  initialCellCursors,
+  layoutRowFragment,
+  layoutRowFragmentBounded,
+  measureRowHeight,
+  MAX_TABLE_ROW_FRAGMENTS,
+  rowWithSplitBorders,
+  TablePaginationError,
+  type CellPlaceCursor,
+  type TableFlowDeps,
+} from './semantic-table-layout.ts';
 import { storyBlocks } from './story-roots.ts';
-import type { HeaderFooterStoryLayout } from './hf-layout.ts';
+import { type HeaderFooterStoryLayout } from './hf-layout.ts';
+import { enumerateDocumentSections, geometryOfSection } from './section-properties.ts';
 import {
   DEFAULT_PAGE_GEOMETRY,
   type BlockFragmentRecord,
@@ -38,10 +77,24 @@ import {
   type LineRecord,
   type PageGeometry,
   type PageRecord,
+  type ParagraphBorderStrokeRecord,
+  type ParagraphBottomBorderRecord,
   type SemanticLayout,
   type TableRowFragmentRecord,
   type TextMeasurer,
 } from './semantic-records.ts';
+import type { NumberingIndex } from './numbering-index.ts';
+import { firstLineShift, withResolvedListItems, type ResolvedListItem } from './list-resolve.ts';
+import { publishListMarker } from './list-marker.ts';
+import { sameFragments } from './semantic-fragment-signature.ts';
+import { type FlowCheckpoint, type LayoutSession } from './layout-session.ts';
+import { furnitureForSection, layoutMultiSectionDocument } from './multi-section-layout.ts';
+
+export {
+  createLayoutSession,
+  type LayoutSession,
+  type LayoutSessionStats,
+} from './layout-session.ts';
 
 /** Which header/footer variant a page shows (ECMA-376 §17.10.5). */
 export type HeaderFooterVariantName = 'default' | 'first' | 'even';
@@ -49,8 +102,10 @@ export type HeaderFooterVariantName = 'default' | 'first' | 'even';
 /**
  * Pre-laid page furniture, supplied by the host (phase 2).
  *
- * Stories are laid out ONCE per variant (`layoutHeaderFooterStory`) and attached per page
- * here; the body pass only selects the variant and computes the push-down.
+ * Baseline stories are laid out once per variant (`layoutHeaderFooterStory`) for furniture
+ * height. Stories that actually contain allowlisted PAGE/NUMPAGES fields attach a projector
+ * so document-level finalize can re-layout under the known page count; field-free furniture
+ * reuses the baseline on every sheet.
  */
 export interface PageFurniture {
   readonly titlePage: boolean;
@@ -59,31 +114,8 @@ export interface PageFurniture {
   readonly footers: ReadonlyMap<HeaderFooterVariantName, HeaderFooterStoryLayout>;
 }
 
-/** One section's slice of the flow, as pagination consumes it. */
-export interface LayoutSectionInput {
-  readonly geometry: PageGeometry;
-  /** Index into the story's blocks of the first block this section governs. */
-  readonly firstBlock: number;
-  /** How the section begins. `continuous` with an unchanged geometry shares the page. */
-  readonly breakType?: 'nextPage' | 'continuous' | 'evenPage' | 'oddPage' | 'nextColumn';
-  /**
-   * A stable identity for the section (the `w:sectPr` node id). Folded into the layout
-   * context INSTEAD of `firstBlock`, so inserting or deleting a paragraph — which shifts
-   * every later block index but moves no section — keeps checkpoints resumable rather
-   * than forcing a full-document relayout on every Enter in a multi-section document.
-   */
-  readonly id?: string;
-}
-
 export interface SemanticLayoutOptions {
   readonly geometry?: PageGeometry;
-  /**
-   * Per-section page geometry (the per-section lane). Sections partition the story's
-   * blocks by `firstBlock`; each paginates against its own geometry, and a non-continuous
-   * boundary starts a new page — one landscape section among portrait ones lays out as
-   * Word shows it. Absent or single-entry means the whole story flows in `geometry`.
-   */
-  readonly sections?: readonly LayoutSectionInput[];
   readonly measurer: TextMeasurer;
   /**
    * Reuse of measured-and-broken paragraphs across revisions (task 9.2).
@@ -106,162 +138,80 @@ export interface SemanticLayoutOptions {
    * Holds the previous complete layout and a flow checkpoint per paragraph, so a pass can
    * resume just before the first affected paragraph instead of re-placing the document from
    * the top, and can stop early when the flow reconverges with the previous run.
+   *
+   * Multi-section documents keep per-section child sessions on {@link LayoutSession.multi}.
    */
   readonly session?: LayoutSession;
   /** Header/footer stories to attach per page; absent means no furniture. */
   readonly furniture?: PageFurniture;
+  /**
+   * Per-section furniture, index-aligned with `enumerateDocumentSections`.
+   *
+   * When present, multi-section layout attaches each section's own headers/footers (after
+   * OOXML inheritance). `furniture` remains the single-section / last-section fallback.
+   */
+  readonly sectionFurniture?: readonly (PageFurniture | undefined)[];
+  /**
+   * Styles-part cascade table (docDefaults + `w:style` last-wins). Absent keeps direct
+   * formatting only — the pre-cascade behaviour, used by unit tests that never open a
+   * package.
+   */
+  readonly styleCascade?: StyleCascadeTable;
+  /**
+   * Projection of `/word/numbering.xml`. Absent keeps pre-list behaviour (no markers /
+   * level indents). The index is immutable for a session; list counter state is derived
+   * per layout pass from document order.
+   */
+  readonly numberingIndex?: NumberingIndex;
+  /**
+   * Optional precomputed list items for the body story. When absent and
+   * {@link numberingIndex} is set, layout walks the full body (including table cells)
+   * once so counters continue across section boundaries and table document order.
+   */
+  readonly listItems?: ReadonlyMap<string, ResolvedListItem>;
+  /**
+   * `w:settings/w:defaultTabStop` in points (ECMA-376 §17.15.1.25); absent keeps the 0.5"
+   * schema default.
+   *
+   * It arrives as an option because the paragraph cascade cannot see `settings.xml`. A
+   * metric-locale template declares 1134 twips (2cm) and every default-interval tab in the
+   * document belongs on that grid. Constant for a session — the settings part is immutable
+   * here — which is why the prepared-block memo does not key on it.
+   */
+  readonly defaultTabStopPt?: number;
 }
 
-/** The flow state as it stood immediately before one block was placed. */
-interface FlowCheckpoint {
-  /** Completed pages at this point. The prefix of the previous layout that still stands. */
-  readonly pageCount: number;
-  /** Fragments already on the page being built. */
-  readonly pageFragments: readonly BlockFragmentRecord[];
-  readonly cursorY: number;
-  readonly lineCounter: number;
-}
-
-export interface LayoutSessionStats {
-  /** Paragraphs placed by the last pass, against the number in the document. */
-  readonly placed: number;
-  readonly total: number;
-  /** Pages carried over from the previous layout without being rebuilt. */
-  readonly reusedPages: number;
-  /** Passes that could not resume and laid the document out from the top. */
-  readonly fullPasses: number;
-}
-
-export interface LayoutSession {
-  /** @internal Mutable across passes; a caller only creates one and passes it back. */
-  previous: SemanticLayout | null;
-  checkpoints: FlowCheckpoint[];
-  keys: string[];
-  /** Geometry and producer of the previous pass; a change to either forces a full pass. */
-  context: string;
-  stats: LayoutSessionStats;
-}
-
-/**
- * A layout session, retained across revisions by the caller.
- *
- * Separate from the paragraph cache because it holds a different thing: the cache stores
- * how a paragraph BREAKS, this stores where the flow WAS. One survives reflow, the other
- * is invalidated by it.
- */
-export function createLayoutSession(): LayoutSession {
-  return {
-    previous: null,
-    checkpoints: [],
-    keys: [],
-    context: '',
-    stats: { placed: 0, total: 0, reusedPages: 0, fullPasses: 0 },
-  };
-}
-
-/**
- * Are two pending-fragment lists the same CONTENT?
- *
- * Structural, not by identity: a paragraph re-placed by this pass produces a new object even
- * when it lands exactly where it did before, and comparing references would refuse to
- * converge on precisely the edits that leave the flow undisturbed — the common case.
- *
- * The page the tail begins with embeds these fragments, so reusing that page is only sound
- * if what is pending here matches what was pending there.
- */
-function sameFragments(
-  a: readonly BlockFragmentRecord[],
-  b: readonly BlockFragmentRecord[]
-): boolean {
-  if (a.length !== b.length) return false;
-  for (let index = 0; index < a.length; index += 1) {
-    const left = a[index]!;
-    const right = b[index]!;
-    if (left === right) continue;
-    if (fragmentSignature(left) !== fragmentSignature(right)) return false;
-  }
-  return true;
-}
-
-const signatures = new WeakMap<BlockFragmentRecord, string>();
-
-/** Cached per record, so a fragment is serialized once however often convergence is tested. */
-function fragmentSignature(fragment: BlockFragmentRecord): string {
-  const cached = signatures.get(fragment);
-  if (cached !== undefined) return cached;
-  // Every PUBLISHED field participates. A field left out converges a freshly built
-  // fragment against a stale one and discards the new value — the exact bug the `props`
-  // note below records for paragraph properties.
-  const signature =
-    fragment.kind === 'table'
-      ? JSON.stringify([
-          fragment.id,
-          fragment.tableId,
-          fragment.fragmentIndex,
-          fragment.box,
-          fragment.rows,
-        ])
-      : JSON.stringify([
-          fragment.id,
-          fragment.box,
-          fragment.range,
-          // `props` is a PUBLISHED field. A paragraph-property change layout does not read
-          // moves no geometry, so without this the freshly built fragment converged against
-          // the old one and was discarded — leaving a painter or style consumer reading the
-          // pre-edit value.
-          fragment.props,
-          fragment.lines.map((line) => [line.id, line.box, line.baseline, line.spans]),
-        ]);
-  signatures.set(fragment, signature);
-  return signature;
-}
-
-/** Whether two sections could share a sheet: identical page box and margins. */
-function sameGeometry(a: PageGeometry, b: PageGeometry): boolean {
-  return (
-    a.width === b.width &&
-    a.height === b.height &&
-    a.margin.top === b.margin.top &&
-    a.margin.right === b.margin.right &&
-    a.margin.bottom === b.margin.bottom &&
-    a.margin.left === b.margin.left &&
-    (a.headerDistance ?? 36) === (b.headerDistance ?? 36) &&
-    (a.footerDistance ?? 36) === (b.footerDistance ?? 36)
-  );
-}
-
-/** Whether a paragraph must start a new page (`w:pageBreakBefore`). */
-function breaksBefore(props: readonly OoxmlProperty[]): boolean {
-  return props.some(
-    (property) =>
-      property.localName === 'pageBreakBefore' &&
-      property.attributes?.val !== '0' &&
-      property.attributes?.val !== 'false'
-  );
-}
-
-/**
- * Lay a part out into pages, fragments, lines and spans.
- *
- * Deterministic: same tree plus same measurer produces byte-identical records, which is what
- * makes the incremental engine of section 9 differentially testable against a clean run.
- */
 /** Prepass results by block node, valid while the width and producer both hold. */
 type PreparedBlock =
   | {
       readonly kind: 'paragraph';
       readonly paragraph: OoxmlElement;
       readonly props: OoxmlProperty[];
-      readonly indent: { left: number; right: number };
+      readonly indent: { left: number; right: number; hanging: number; firstLine: number };
       readonly available: number;
       readonly alignment: Alignment;
+      readonly spacing: ParagraphSpacing;
+      readonly lineSpacing: ParagraphLineSpacing;
+      readonly contextualSpacing: boolean;
+      readonly styleId: string | null;
+      readonly borders: ParagraphBorders;
+      /**
+       * Border identity + indent, for the `w:between` group rule.
+       *
+       * Indent participates because a group whose members sit at different indents would need
+       * a stepped outline; splitting the group there gives each member its own closed box,
+       * which is the near miss rather than a rule drawn through the text.
+       */
+      readonly borderGroupKey: string;
+      readonly shading: string | undefined;
+      readonly inheritedRunProperties: readonly OoxmlProperty[];
+      readonly tabStops: ResolvedTabStops;
+      /** `w:widowControl` / `w:keepNext` / `w:keepLines`, after the style cascade. */
+      readonly keeps: ParagraphKeeps;
+      readonly listItem?: ResolvedListItem;
       readonly key: string;
     }
-  | {
-      readonly kind: 'table';
-      readonly table: OoxmlElement;
-      readonly key: string;
-    };
+  | { readonly kind: 'table'; readonly table: OoxmlElement; readonly key: string };
 
 interface PreparedBlockMemo {
   readonly contentWidth: number;
@@ -271,89 +221,186 @@ interface PreparedBlockMemo {
 
 const preparedBlocks = new WeakMap<OoxmlNode, PreparedBlockMemo>();
 
+/**
+ * Does any style — or `w:docDefaults` — in this cascade declare a `w:pBdr`?
+ *
+ * Cached per table because it decides whether resolving a paragraph's borders needs the full
+ * cascade at all. For the overwhelming majority of documents no style carries one, and there
+ * the direct `w:pPr` IS the answer; running `cascadeParagraphFormatting` a second time per
+ * paragraph to learn that would make the prepass, not placement, the cost of a layout.
+ */
+const cascadeBorderDeclarations = new WeakMap<StyleCascadeTable, boolean>();
+
+function styleCascadeDeclaresBorders(table: StyleCascadeTable): boolean {
+  const cached = cascadeBorderDeclarations.get(table);
+  if (cached !== undefined) return cached;
+  const declaresPBdr = (props: readonly OoxmlProperty[]): boolean =>
+    props.some((property) => property.localName === 'pBdr');
+  let declares = declaresPBdr(table.docDefaultsParagraph);
+  if (!declares) {
+    for (const style of table.styles.values()) {
+      if (declaresPBdr(style.paragraphProperties)) {
+        declares = true;
+        break;
+      }
+    }
+  }
+  cascadeBorderDeclarations.set(table, declares);
+  return declares;
+}
+
+/**
+ * Resolve `w:pBdr` for one paragraph, through the style cascade when a style could contribute.
+ *
+ * `resolveParagraphLayoutInputs` publishes the bottom edge only, so the full set is resolved
+ * here from the same nodes it cascades — same last-`w:pBdr`-wins rule, all six edges.
+ */
+function resolveParagraphBorders(
+  pPr: OoxmlNode | undefined,
+  styleCascade: StyleCascadeTable | undefined
+): ParagraphBorders {
+  if (!styleCascade || !styleCascadeDeclaresBorders(styleCascade)) return paragraphBorders(pPr);
+  return cascadedParagraphBorders(
+    cascadeParagraphFormatting(styleCascade, pPr).paragraphPropertyNodes
+  );
+}
+
 export function layoutSemanticDocument(
   part: OoxmlPart,
   revision: number,
   options: SemanticLayoutOptions
 ): SemanticLayout {
+  const sections = enumerateDocumentSections(part);
+  const blocks = storyBlocks(part);
+  // Full-body list resolve so counters continue across sections and table cells.
+  const optionsWithLists = withResolvedListItems(options, blocks);
+
+  if (sections.length > 1) {
+    return layoutMultiSectionDocument(
+      blocks,
+      sections,
+      revision,
+      optionsWithLists,
+      layoutBlocksWithGeometry
+    );
+  }
+
+  const section = sections[0];
+  const geometry =
+    options.geometry ?? (section ? geometryOfSection(section.properties) : DEFAULT_PAGE_GEOMETRY);
+  const furniture =
+    furnitureForSection(optionsWithLists, 0, sections.length) ?? optionsWithLists.furniture;
+  const laid = layoutBlocksWithGeometry(blocks, revision, {
+    ...optionsWithLists,
+    geometry,
+    furniture,
+  });
+  const finalized = finalizePageFieldProjection(laid.layout);
+  // layoutBlocksWithGeometry stores the pre-projection layout on the session; replace it so
+  // incremental reuse keeps projected PAGE/NUMPAGES furniture.
+  if (options.session) {
+    options.session.multi = null;
+    options.session.previous = finalized;
+  }
+  return finalized;
+}
+
+interface BlockLayoutResult {
+  readonly layout: SemanticLayout;
+  readonly pages: readonly PageRecord[];
+  readonly lineCounter: number;
+  /** Used height of the LAST page's content column, for a section that continues onto it. */
+  readonly endCursorY: number;
+  /** Trailing paragraph spacing at the end of the flow, for adjacent-spacing collapse. */
+  readonly endSpaceAfter: number;
+  /**
+   * Whether the last page is the one the flow was still filling.
+   *
+   * False when the flow closed a page and opened nothing after it — an explicit
+   * `w:br w:type="page"` on the last paragraph. `endCursorY` is 0 in BOTH cases, so a
+   * section that continues onto this one cannot tell "empty column at the top of a fresh
+   * sheet" from "that sheet is full and the break already ended it" without this.
+   */
+  readonly endsOpenPage: boolean;
+}
+
+function layoutBlocksWithGeometry(
+  bodies: readonly OoxmlElement[],
+  revision: number,
+  options: SemanticLayoutOptions & {
+    readonly geometry: PageGeometry;
+    readonly lineCounterStart?: number;
+    readonly flowStartY?: number;
+    readonly spaceBeforeCarry?: number;
+    readonly pageIndexStart?: number;
+  }
+): BlockLayoutResult {
+  const geometry = options.geometry;
   const measurer = options.measurer;
   const cache = options.cache;
   // Defaults to a constant deliberately NAMED for the risk: fonts resolve asynchronously, so
   // a caller that swaps the measurer without changing this is served the pre-font layout for
-  // the rest of the session.
-  const producer = options.producer ?? 'unversioned-measurer';
+  // the rest of the session. The style-cascade token is folded in so a different styles part
+  // cannot reuse breaks measured under another inheritance table.
+  const styleCascade = options.styleCascade;
+  const listItems = options.listItems;
+  // The default-tab interval moves every default-interval tab, and the prepared-block memo
+  // is keyed by producer — so it belongs here rather than only in the per-paragraph token.
+  const defaultTabStopPt = options.defaultTabStopPt;
+  const producer =
+    (options.producer ?? 'unversioned-measurer') +
+    (styleCascade ? `|sc:${styleCascade.cacheToken}` : '') +
+    (listItems && listItems.size > 0 ? `|num:${listItems.size}` : '') +
+    (defaultTabStopPt !== undefined ? `|dts:${defaultTabStopPt}` : '');
+
+  const contentWidth = geometry.width - geometry.margin.left - geometry.margin.right;
+
+  // PAGE FURNITURE. A header taller than the top-margin remainder pushes the content area
+  // down (Word's behaviour), computed as the worst case over the variants in use so the
+  // content column is one height for every page. Capped at 40% of the sheet per edge: a
+  // hostile header of five hundred paragraphs must not shrink the content area to nothing,
+  // because pagination into a zero-height column never terminates.
   const furniture = options.furniture;
-
-  // SECTIONS. The flow is partitioned into sections, each paginating against its own
-  // geometry. The single-geometry call is the degenerate one-section case, so there is
-  // exactly one pagination path.
-  const sections: readonly LayoutSectionInput[] =
-    options.sections && options.sections.length > 0
-      ? options.sections
-      : [{ geometry: options.geometry ?? DEFAULT_PAGE_GEOMETRY, firstBlock: 0 }];
-
-  // PAGE FURNITURE push-down, derived per section geometry. A header taller than the
-  // top-margin remainder pushes the content area down (Word's behaviour), computed as the
-  // worst case over the variants in use so the content column is one height for every page
-  // of the section. Capped at 40% of the sheet per edge: a hostile header of five hundred
-  // paragraphs must not shrink the content area to nothing, because pagination into a
-  // zero-height column never terminates.
+  const headerDistance = geometry.headerDistance ?? 36;
+  const footerDistance = geometry.footerDistance ?? 36;
   const maxFlow = (stories: ReadonlyMap<string, HeaderFooterStoryLayout> | undefined): number => {
     let max = 0;
     for (const story of stories?.values() ?? []) max = Math.max(max, story.flowHeight);
     return max;
   };
-  interface SectionMetrics {
-    readonly geometry: PageGeometry;
-    readonly contentWidth: number;
-    readonly contentHeight: number;
-    readonly effectiveTop: number;
-    readonly headerDistance: number;
-    readonly footerDistance: number;
-  }
-  const metricsOf = (geometry: PageGeometry): SectionMetrics => {
-    const headerDistance = geometry.headerDistance ?? 36;
-    const footerDistance = geometry.footerDistance ?? 36;
-    const furnitureCap = geometry.height * 0.4;
-    const effectiveTop = Math.min(
-      furnitureCap,
-      Math.max(geometry.margin.top, furniture ? headerDistance + maxFlow(furniture.headers) : 0)
-    );
-    const effectiveBottom = Math.min(
-      furnitureCap,
-      Math.max(geometry.margin.bottom, furniture ? footerDistance + maxFlow(furniture.footers) : 0)
-    );
-    return {
-      geometry,
-      contentWidth: geometry.width - geometry.margin.left - geometry.margin.right,
-      contentHeight: geometry.height - effectiveTop - effectiveBottom,
-      effectiveTop,
-      headerDistance,
-      footerDistance,
-    };
-  };
-  const sectionMetrics = sections.map((section) => metricsOf(section.geometry));
+  const furnitureCap = geometry.height * 0.4;
+  const effectiveTop = Math.min(
+    furnitureCap,
+    Math.max(geometry.margin.top, furniture ? headerDistance + maxFlow(furniture.headers) : 0)
+  );
+  const effectiveBottom = Math.min(
+    furnitureCap,
+    Math.max(geometry.margin.bottom, furniture ? footerDistance + maxFlow(furniture.footers) : 0)
+  );
+  const contentHeight = geometry.height - effectiveTop - effectiveBottom;
 
   const session = options.session;
+  const lineCounterStart = options.lineCounterStart ?? 0;
   const furnitureContext = furniture
-    ? `|hf:${furniture.titlePage ? 1 : 0}${furniture.evenAndOddHeaders ? 1 : 0};` +
+    ? `|hf:${headerDistance},${footerDistance},${furniture.titlePage ? 1 : 0}${furniture.evenAndOddHeaders ? 1 : 0};` +
       [...furniture.headers]
-        .map(([variant, story]) => `h${variant}=${story.flowHeight}`)
+        .map(([variant, story]) => `h${variant}=${story.flowHeight}@${story.contentKey}`)
+        .sort()
         .join(',') +
       ';' +
-      [...furniture.footers].map(([variant, story]) => `f${variant}=${story.flowHeight}`).join(',')
+      [...furniture.footers]
+        .map(([variant, story]) => `f${variant}=${story.flowHeight}@${story.contentKey}`)
+        .sort()
+        .join(',')
     : '';
-  // EVERY section participates: a change to any section's geometry, order or break type
-  // moves breaks, so it must invalidate checkpoints exactly as the single geometry did.
-  // Keyed by section IDENTITY, not block index: an insertion shifts every later block
-  // index without moving a section, and the per-index resume machinery (keys, firstChanged,
-  // convergence) already accounts for shifted content.
-  const sectionsContext = sections
-    .map(({ geometry: g, breakType, id }) => {
-      return `${id ?? 'default'}~${breakType ?? 'nextPage'}@${g.width}x${g.height}|${g.margin.top},${g.margin.right},${g.margin.bottom},${g.margin.left}|${g.headerDistance ?? 36},${g.footerDistance ?? 36}`;
-    })
-    .join(';');
-  const context = `${producer}|${sectionsContext}${furnitureContext}`;
+  // lineCounterStart participates: multi-section threads a global counter across sections, and
+  // a shift from an earlier section's line count must invalidate this section's checkpoints.
+  const flowStartY = options.flowStartY ?? 0;
+  const spaceBeforeCarry = options.spaceBeforeCarry ?? 0;
+  // Where this section's first sheet lands in the DOCUMENT. Even/odd header selection
+  // alternates by page number, so it is not a section-local question.
+  const pageIndexStart = options.pageIndexStart ?? 0;
+  const context = `${producer}|${geometry.width}x${geometry.height}|${geometry.margin.top},${geometry.margin.right},${geometry.margin.bottom},${geometry.margin.left}|lc:${lineCounterStart}|fs:${flowStartY},${spaceBeforeCarry}|pi:${pageIndexStart}${furnitureContext}`;
 
   // Prepass: everything needed to KEY a paragraph, before any of them is placed. Resuming
   // means knowing where the first change is, and that cannot be discovered while walking.
@@ -363,28 +410,7 @@ export function layoutSemanticDocument(
   // and the producer. Recomputing the key — a serialization of the paragraph's subtree —
   // for every paragraph on every pass made the prepass, not placement, the cost of an
   // incremental layout: a one-character edit re-keyed the entire document.
-  const bodies = storyBlocks(part);
-
-  // Which section governs each block. Sections partition the block list by `firstBlock`;
-  // blocks before the first section's start (malformed input) flow in the first section.
-  const sectionOfBlock = new Array<number>(bodies.length);
-  {
-    let sectionIndex = 0;
-    for (let index = 0; index < bodies.length; index += 1) {
-      while (
-        sectionIndex + 1 < sections.length &&
-        sections[sectionIndex + 1]!.firstBlock <= index
-      ) {
-        sectionIndex += 1;
-      }
-      sectionOfBlock[index] = sectionIndex;
-    }
-  }
-
-  const prepared = bodies.map((block, blockIndex): PreparedBlock => {
-    // A block is broken at ITS section's width — that is what makes a landscape section's
-    // lines longer than its portrait neighbours'.
-    const contentWidth = sectionMetrics[sectionOfBlock[blockIndex]!]!.contentWidth;
+  const prepared = bodies.map((block): PreparedBlock => {
     const memo = preparedBlocks.get(block);
     if (memo && memo.contentWidth === contentWidth && memo.producer === producer) {
       return memo.entry;
@@ -403,21 +429,65 @@ export function layoutSemanticDocument(
         }),
       };
     } else {
-      const props = propertiesOf(
-        block.children.find((child) => child.kind === 'paragraphProperties')
+      const listItem = listItems?.get(block.id);
+      const preparedParagraph = resolveParagraphLayoutInputs(
+        block,
+        contentWidth,
+        styleCascade,
+        listItem
       );
-      const indent = paragraphIndent(props);
-      const available = Math.max(1, contentWidth - indent.left - indent.right);
+      const {
+        props,
+        indent,
+        available,
+        alignment,
+        spacing,
+        lineSpacing,
+        contextualSpacing,
+        styleId,
+        shading,
+        inheritedRunProperties,
+      } = preparedParagraph;
+      const borders = resolveParagraphBorders(
+        block.children.find((child) => child.kind === 'paragraphProperties'),
+        styleCascade
+      );
+      const bordersToken = paragraphBordersFingerprint(borders);
+      // `w:defaultTabStop` lives in settings.xml, which the paragraph cascade never reads.
+      const tabStops = withDefaultTabInterval(preparedParagraph.tabStops, defaultTabStopPt);
+      const tabStopsCacheToken =
+        tabStops === preparedParagraph.tabStops
+          ? preparedParagraph.tabStopsCacheToken
+          : tabStopsFingerprint(tabStops);
       entry = {
         kind: 'paragraph',
         paragraph: block,
         props,
         indent,
         available,
-        alignment: paragraphAlignment(props),
+        alignment,
+        spacing,
+        lineSpacing,
+        contextualSpacing,
+        styleId,
+        borders,
+        borderGroupKey:
+          bordersToken === '' ? '' : `${bordersToken}@${indent.left},${indent.left + available}`,
+        shading,
+        inheritedRunProperties,
+        tabStops,
+        keeps: paragraphKeeps(props),
+        ...(listItem ? { listItem } : {}),
         key: paragraphLayoutKey({
           paragraph: block,
-          properties: props,
+          properties: [
+            ...props,
+            ...inheritedRunProperties,
+            { localName: 'tabStops', attributes: { token: tabStopsCacheToken } },
+            ...(listItem
+              ? [{ localName: 'list', attributes: { token: listItem.cacheToken } }]
+              : []),
+          ],
           width: available,
           producer,
         }),
@@ -428,6 +498,10 @@ export function layoutSemanticDocument(
   });
 
   const keys = prepared.map((entry) => entry.key);
+  const keepsNext = prepared.map((entry) => entry.kind === 'paragraph' && entry.keeps.keepNext);
+  // FLOW keys — what incremental resume compares. `keys` stays what the break cache is
+  // stored under; only `w:keepNext` makes the two differ (§17.3.1.15).
+  const flowKeys = keepNextFlowKeys(keys, (index) => keepsNext[index]!);
   const previous = session?.previous ?? null;
   // A geometry or producer change invalidates every checkpoint, because it moves every
   // break; resuming from one would place new content against a stale flow.
@@ -436,8 +510,8 @@ export function layoutSemanticDocument(
   /** The first paragraph whose layout inputs differ from the previous pass. */
   let firstChanged = 0;
   if (resumable) {
-    const limit = Math.min(keys.length, session.keys.length);
-    while (firstChanged < limit && keys[firstChanged] === session.keys[firstChanged]) {
+    const limit = Math.min(flowKeys.length, session.keys.length);
+    while (firstChanged < limit && flowKeys[firstChanged] === session.keys[firstChanged]) {
       firstChanged += 1;
     }
   }
@@ -451,10 +525,11 @@ export function layoutSemanticDocument(
    */
   let commonSuffix = 0;
   if (resumable) {
-    const maxSuffix = Math.min(keys.length, session.keys.length) - firstChanged;
+    const maxSuffix = Math.min(flowKeys.length, session.keys.length) - firstChanged;
     while (
       commonSuffix < maxSuffix &&
-      keys[keys.length - 1 - commonSuffix] === session.keys[session.keys.length - 1 - commonSuffix]
+      flowKeys[flowKeys.length - 1 - commonSuffix] ===
+        session.keys[session.keys.length - 1 - commonSuffix]
     ) {
       commonSuffix += 1;
     }
@@ -473,25 +548,30 @@ export function layoutSemanticDocument(
       fullPasses: session.stats.fullPasses,
     };
     cache?.retain(new Set(keys));
-    return unchanged;
+    return {
+      layout: unchanged,
+      pages: unchanged.pages,
+      lineCounter: session.endLineCounter,
+      endCursorY: session.endCursorY,
+      endSpaceAfter: session.endSpaceAfter,
+      endsOpenPage: session.endsOpenPage,
+    };
   }
 
   const pages: PageRecord[] = [];
   let pageFragments: BlockFragmentRecord[] = [];
-  let cursorY = 0;
-  let lineCounter = 0;
+  // A continuous section resumes the previous section's column rather than opening a
+  // sheet, so its first block starts at that column's used height and its first paragraph
+  // is NOT at a page top — page-top space-before suppression must not apply to it, and the
+  // preceding paragraph's space-after still collapses against its space-before.
+  let cursorY = flowStartY;
+  let lineCounter = lineCounterStart;
+  let previousSpaceAfter = spaceBeforeCarry;
   const checkpoints: FlowCheckpoint[] = [];
   let startIndex = 0;
   let placed = 0;
   let reusedPages = 0;
-
-  // The section whose geometry the page being built uses. The boundary switch happens as
-  // part of PLACING a section's first block, after that block's checkpoint — so a resumed
-  // pass re-derives the same switch from the same block index.
-  let activeSectionIndex = 0;
-  let active = sectionMetrics[0]!;
-  /** Where the NEXT page's sheet begins. Cumulative, because sheets vary in height. */
-  let pageTop = 0;
+  let firstParagraphOfSection = flowStartY === 0;
 
   // RESUME. The checkpoint before the first changed paragraph describes a flow the new
   // document still agrees with, so the pages completed by then are carried over by
@@ -503,22 +583,33 @@ export function layoutSemanticDocument(
     pageFragments = [...checkpoint.pageFragments];
     cursorY = checkpoint.cursorY;
     lineCounter = checkpoint.lineCounter;
+    previousSpaceAfter = checkpoint.previousSpaceAfter;
     startIndex = firstChanged;
+    firstParagraphOfSection = false;
     reusedPages = pages.length;
     checkpoints.push(...session.checkpoints.slice(0, firstChanged));
-    const lastCarried = pages[pages.length - 1];
-    pageTop = lastCarried ? lastCarried.box.y + lastCarried.box.height + 24 : 0;
-    // The page being built belongs to the section of the block placed BEFORE the resume
-    // point; the loop re-runs the boundary switch if the resumed block starts a section.
-    activeSectionIndex = sectionOfBlock[startIndex - 1] ?? 0;
-    active = sectionMetrics[activeSectionIndex]!;
   }
 
-  /** The variant page `index` shows: title page first, then even/odd when declared. */
+  const pageBox = (index: number): LayoutBox => ({
+    x: 0,
+    y: index * (geometry.height + 24), // 24pt gutter between sheets, for the scroll surface
+    width: geometry.width,
+    height: geometry.height,
+  });
+
+  /**
+   * The variant page `index` shows: title page first, then even/odd when declared.
+   *
+   * `w:titlePg` (17.6.55) is a property of the SECTION, so its first page is the section's
+   * own first — the local index. `w:evenAndOddHeaders` (17.10.1) lives in settings.xml and
+   * alternates by the page's number in the DOCUMENT, so it reads through `pageIndexStart`:
+   * a section that begins on an even page must open with the even header, and `remapPage`
+   * renumbers a page without ever re-picking its variant.
+   */
   const variantFor = (index: number): HeaderFooterVariantName =>
     furniture?.titlePage && index === 0
       ? 'first'
-      : furniture?.evenAndOddHeaders && (index + 1) % 2 === 0
+      : furniture?.evenAndOddHeaders && (pageIndexStart + index + 1) % 2 === 0
         ? 'even'
         : 'default';
 
@@ -532,48 +623,38 @@ export function layoutSemanticDocument(
     const story = (kind === 'header' ? furniture.headers : furniture.footers).get(variant);
     // An absent variant shows nothing — Word falls back to blank, not to `default`.
     if (!story) return undefined;
-    const y =
-      kind === 'header'
-        ? box.y + active.headerDistance
-        : box.y + active.geometry.height - active.footerDistance - story.flowHeight;
-    // The story's lines were BROKEN at the body section's width (furniture is laid out
-    // once per variant); on a page of another section it is positioned in that page's
-    // margins. Re-breaking furniture per section is a follow-up refinement.
+    const place = (laid: HeaderFooterStoryLayout): HeaderFooterStoryRecord => {
+      const y =
+        kind === 'header'
+          ? box.y + headerDistance
+          : box.y + geometry.height - footerDistance - laid.flowHeight;
+      return {
+        kind,
+        variant,
+        partName: laid.partName,
+        box: {
+          x: box.x + geometry.margin.left,
+          y,
+          width: contentWidth,
+          height: laid.flowHeight,
+        },
+        fragments: laid.fragments,
+      };
+    };
+    const placed = place(story);
+    const needs = story.pageFieldNeeds;
+    // Only stories with allowlisted PAGE/NUMPAGES need finalize-time re-layout. Field-free
+    // furniture keeps the baseline fragments on every sheet (no per-page projector).
+    if (!needs.hasPage && !needs.hasNumPages) return placed;
     return {
-      kind,
-      variant,
-      partName: story.partName,
-      box: {
-        x: box.x + active.geometry.margin.left,
-        y,
-        width: active.contentWidth,
-        height: story.flowHeight,
-      },
-      fragments: story.fragments,
+      ...placed,
+      pageFieldProjector: (context) => place(story.withPageContext(context)),
     };
   };
 
-  // Sheets of mixed widths centre against the widest, as Word lays a landscape page
-  // among portrait ones. Single-section documents keep x = 0 exactly as before.
-  // A loop, not a spread: the section count is file-controlled and a spread of a huge
-  // array throws instead of degrading.
-  let maxSheetWidth = 0;
-  for (const metrics of sectionMetrics) {
-    maxSheetWidth = Math.max(maxSheetWidth, metrics.geometry.width);
-  }
-
   const flushPage = (): void => {
     const index = pages.length;
-    const geometry = active.geometry;
-    // 24pt gutter between sheets, for the scroll surface. Cumulative, not index-derived:
-    // sheets no longer share one height.
-    const box: LayoutBox = {
-      x: (maxSheetWidth - geometry.width) / 2,
-      y: pageTop,
-      width: geometry.width,
-      height: geometry.height,
-    };
-    pageTop += geometry.height + 24;
+    const box = pageBox(index);
     const header = furnitureFor('header', index, box);
     const footer = furnitureFor('footer', index, box);
     pages.push({
@@ -582,9 +663,9 @@ export function layoutSemanticDocument(
       box,
       contentBox: {
         x: box.x + geometry.margin.left,
-        y: box.y + active.effectiveTop,
-        width: active.contentWidth,
-        height: active.contentHeight,
+        y: box.y + effectiveTop,
+        width: contentWidth,
+        height: contentHeight,
       },
       fragments: pageFragments,
       ...(header ? { header } : {}),
@@ -594,24 +675,69 @@ export function layoutSemanticDocument(
     cursorY = 0;
   };
 
-  // Table layout shares the flow's line counter and paragraph cache.
+  // Table layout shares the flow's line counter, paragraph cache, and precomputed list
+  // items (counters already advanced in document order, including cell paragraphs).
+  // Border ownership intervals and vMerge cell visits are budgeted once per pass so nested
+  // finalize cannot amplify past the shared ceilings.
   const tableDeps: TableFlowDeps = {
     measurer,
     cache,
     producer,
     nextLineId: () => `line-${lineCounter++}`,
+    styleCascade,
+    listItems,
+    ...(defaultTabStopPt !== undefined ? { defaultTabStopPt } : {}),
+    borderOwnershipBudget: createTableBorderOwnershipBudget(),
+    vMergeResolveBudget: createTableVMergeResolveBudget(),
   };
 
+  type PreparedParagraph = Extract<PreparedBlock, { kind: 'paragraph' }>;
+
+  // Current-pass list map first, so marker ordinals stay fresh when the memo reuses inputs.
+  const firstLineOffsetOf = (entry: PreparedParagraph): number =>
+    firstLineShift(
+      listItems?.get(entry.paragraph.id) ?? entry.listItem,
+      entry.indent,
+      measurer,
+      entry.tabStops,
+      entry.available
+    );
+
+  // Shared by placement and by the `w:keepNext` lookahead, which needs the height of the
+  // blocks it keeps WITH. Both read the same cache entry, so the lookahead re-measures nothing.
+  const breakBlock = (entry: PreparedParagraph) =>
+    breakParagraph(
+      entry.paragraph,
+      entry.paragraph.id,
+      entry.indent.left,
+      entry.available,
+      measurer,
+      cache,
+      cache ? entry.key : null,
+      entry.inheritedRunProperties,
+      entry.tabStops,
+      undefined,
+      styleCascade
+        ? (inherited, direct) => cascadeRunProperties(inherited, direct, styleCascade)
+        : undefined,
+      { lineSpacing: entry.lineSpacing, firstLineOffset: firstLineOffsetOf(entry) }
+    );
+
   /**
-   * Lay out one top-level table with bounded whole-row pagination.
-   * A row that would not fit forces a page break first (a single row never splits, v1);
-   * leading `w:tblHeader` rows re-emit atop each continuation page before a body row.
+   * Lay out one top-level table with OOXML-aligned row pagination.
+   *
+   * Preflights the real unsplit row height (not a one-line estimate). A row that fits on a
+   * fresh page but not the current remainder moves whole. A row taller than a fresh page
+   * fragments at paragraph/line boundaries when splittable; `w:cantSplit` and unsafe nested
+   * cuts fail closed via {@link TablePaginationError} instead of overflowing contentHeight.
+   * Contiguous leading `w:tblHeader` rows form one atomic repeated group: preflighted and
+   * placed together, moved whole when the remainder is too short, re-emitted complete atop
+   * each continuation page, and rejected when the group itself exceeds a fresh content page.
    */
   const layoutTableInFlow = (table: OoxmlElement): void => {
-    const structure = readTableStructure(table, active.contentWidth, 0);
+    const structure = readTableStructure(table, contentWidth, 0, styleCascade);
     if (!structure || structure.rows.length === 0) return;
-    const lineHeight = measurer.lineMetrics(DEFAULT_RUN_STYLE).height;
-    const headerRows = [];
+    const headerRows: SemanticTableRow[] = [];
     for (const row of structure.rows) {
       if (row.isHeader) headerRows.push(row);
       else break;
@@ -619,58 +745,215 @@ export function layoutSemanticDocument(
     let fragmentIndex = 0;
     let fragmentTop = cursorY;
     let rows: TableRowFragmentRecord[] = [];
+    // Authored rows backing the open fragment (includes header repeats) for finalize.
+    let sourceRows: (typeof structure.rows)[number][] = [];
     const closeTableFragment = (): void => {
       if (rows.length === 0) return;
-      const last = rows[rows.length - 1]!;
+      const finalized = finalizeTableRows(
+        rows,
+        structure,
+        sourceRows,
+        tableDeps.borderOwnershipBudget,
+        tableDeps.vMergeResolveBudget
+      );
+      const last = finalized[finalized.length - 1]!;
       pageFragments.push({
         kind: 'table',
         id: `${table.id}#f${fragmentIndex}`,
         tableId: table.id,
         fragmentIndex,
-        rows,
+        rows: finalized,
         box: {
           x: 0,
           y: fragmentTop,
-          width: active.contentWidth,
+          width: contentWidth,
           height: last.box.y + last.box.height - fragmentTop,
         },
       });
       fragmentIndex += 1;
       rows = [];
+      sourceRows = [];
     };
-    for (const row of structure.rows) {
-      if (cursorY + lineHeight + 2 * CELL_PAD > active.contentHeight && cursorY > 0) {
+
+    /**
+     * Place the contiguous leading header rows as one group. Never splits the group across
+     * pages; fails closed when the group itself is taller than a fresh content page.
+     */
+    const placeHeaderGroup = (asRepeat: boolean): void => {
+      if (headerRows.length === 0) return;
+
+      let groupHeight = 0;
+      for (const headerRow of headerRows) {
+        groupHeight += measureRowHeight(headerRow, structure.columnWidthsPt, 0, 0, tableDeps);
+      }
+      if (groupHeight > contentHeight + 0.001) {
+        throw new TablePaginationError(
+          'table-row-overheight',
+          `Table header group (${headerRows.length} row(s)) is taller than the page content box`
+        );
+      }
+      if (cursorY + groupHeight > contentHeight + 0.001 && cursorY > 0) {
         closeTableFragment();
         flushPage();
         fragmentTop = 0;
-        // Re-emit the header rows before a continuing body row (not before a header itself).
-        if (!row.isHeader) {
-          for (const headerRow of headerRows) {
-            const placed = layoutRowFragment(
-              headerRow,
-              structure.columnWidthsPt,
-              0,
-              cursorY,
-              true,
-              0,
-              tableDeps
-            );
-            rows.push(placed.record);
-            cursorY = placed.bottom;
-          }
-        }
       }
-      const placed = layoutRowFragment(
-        row,
-        structure.columnWidthsPt,
-        0,
-        cursorY,
-        false,
-        0,
-        tableDeps
-      );
-      rows.push(placed.record);
-      cursorY = placed.bottom;
+
+      for (const headerRow of headerRows) {
+        const placed = layoutRowFragment(
+          headerRow,
+          structure.columnWidthsPt,
+          0,
+          cursorY,
+          asRepeat,
+          0,
+          tableDeps
+        );
+        if (placed.bottom > contentHeight + 0.001) {
+          throw new TablePaginationError(
+            'table-row-overheight',
+            `Table header row ${headerRow.id} overflowed the page content box`
+          );
+        }
+        rows.push(placed.record);
+        sourceRows.push(headerRow);
+        cursorY = placed.bottom;
+      }
+    };
+
+    const breakForContinuation = (emitHeaders: boolean): void => {
+      closeTableFragment();
+      flushPage();
+      fragmentTop = 0;
+      if (emitHeaders) placeHeaderGroup(true);
+    };
+
+    // Initial authored header group (not repeats) — atomic with body-row pagination below.
+    placeHeaderGroup(false);
+
+    for (const row of structure.rows.slice(headerRows.length)) {
+      const naturalHeight = measureRowHeight(row, structure.columnWidthsPt, 0, 0, tableDeps);
+      let cursors: CellPlaceCursor[] = initialCellCursors(row);
+      let isContinuation = false;
+      let fragmentsForRow = 0;
+      let movedToFreshPage = false;
+
+      // Whole-row move: fits a fresh page but not the remaining band.
+      if (
+        naturalHeight <= contentHeight + 0.001 &&
+        cursorY + naturalHeight > contentHeight + 0.001 &&
+        cursorY > 0
+      ) {
+        breakForContinuation(true);
+        movedToFreshPage = true;
+      }
+
+      for (;;) {
+        fragmentsForRow += 1;
+        if (fragmentsForRow > MAX_TABLE_ROW_FRAGMENTS) {
+          throw new TablePaginationError(
+            'table-row-fragment-limit',
+            `Table row ${row.id} exceeded ${MAX_TABLE_ROW_FRAGMENTS} page fragments`
+          );
+        }
+
+        const remaining = contentHeight - cursorY;
+        if (remaining <= 0.001 && cursorY > 0) {
+          if (movedToFreshPage) {
+            throw new TablePaginationError(
+              'table-row-overheight',
+              `Table row ${row.id} cannot fit after repeated header rows`
+            );
+          }
+          breakForContinuation(true);
+          movedToFreshPage = true;
+          continue;
+        }
+
+        // Prefer an unsplit placement when the natural height fits the remaining band.
+        if (!isContinuation && naturalHeight <= remaining + 0.001) {
+          const placed = layoutRowFragment(
+            row,
+            structure.columnWidthsPt,
+            0,
+            cursorY,
+            false,
+            0,
+            tableDeps
+          );
+          if (placed.bottom > contentHeight + 0.001) {
+            throw new TablePaginationError(
+              'table-row-overheight',
+              `Table row ${row.id} overflowed the page content box after placement`
+            );
+          }
+          rows.push(placed.record);
+          sourceRows.push(row);
+          cursorY = placed.bottom;
+          break;
+        }
+
+        // Does not fit the remaining band.
+        if (row.cantSplit) {
+          if (cursorY > 0 && !movedToFreshPage) {
+            breakForContinuation(true);
+            movedToFreshPage = true;
+            continue;
+          }
+          throw new TablePaginationError(
+            'table-row-overheight',
+            `Table row ${row.id} has w:cantSplit and is taller than the available page content`
+          );
+        }
+
+        const placed = layoutRowFragmentBounded(
+          row,
+          structure.columnWidthsPt,
+          0,
+          cursorY,
+          contentHeight,
+          false,
+          isContinuation,
+          0,
+          tableDeps,
+          cursors
+        );
+
+        // First attempt on a non-empty page placed nothing useful → move to next page.
+        if (!placed.fitted && cursorY > 0 && !movedToFreshPage) {
+          breakForContinuation(true);
+          movedToFreshPage = true;
+          continue;
+        }
+
+        if (!placed.fitted) {
+          throw new TablePaginationError(
+            placed.nestedSplitBlocked ? 'table-row-split-unsupported' : 'table-row-overheight',
+            placed.nestedSplitBlocked
+              ? `Table row ${row.id} contains a nested table taller than the page content box`
+              : `Table row ${row.id} has content that cannot fit a page content box`
+          );
+        }
+
+        if (placed.bottom > contentHeight + 0.001) {
+          throw new TablePaginationError(
+            'table-row-overheight',
+            `Table row ${row.id} overflowed the page content box`
+          );
+        }
+
+        const hasMore = placed.remainder !== null;
+        const source = rowWithSplitBorders(row, isContinuation, hasMore);
+        rows.push(placed.record);
+        sourceRows.push(source);
+        cursorY = placed.bottom;
+
+        if (!hasMore) break;
+
+        cursors = placed.remainder!;
+        isContinuation = true;
+        movedToFreshPage = false;
+        breakForContinuation(true);
+      }
     }
     closeTableFragment();
   };
@@ -686,6 +969,7 @@ export function layoutSemanticDocument(
       pageFragments: [...pageFragments],
       cursorY,
       lineCounter,
+      previousSpaceAfter,
     };
 
     // CONVERGENCE. Once inside the unchanged tail, if the flow returns to exactly the state
@@ -708,6 +992,7 @@ export function layoutSemanticDocument(
         mark &&
         mark.cursorY === cursorY &&
         mark.lineCounter === lineCounter &&
+        mark.previousSpaceAfter === previousSpaceAfter &&
         mark.pageCount === pages.length &&
         sameFragments(mark.pageFragments, pageFragments)
       ) {
@@ -716,59 +1001,222 @@ export function layoutSemanticDocument(
         reusedPages += tail.length;
         converged = true;
         convergedAt = index;
+        // Tail line ids come from the previous pass; report the terminal counter so a
+        // multi-section orchestrator can thread the global line sequence correctly.
+        lineCounter = session.endLineCounter;
         break;
       }
-    }
-
-    // SECTION BOUNDARY. This block belongs to a later section: close the page the previous
-    // section was filling (unless it is still empty) and switch the flow onto the new
-    // section's geometry. `continuous` with an unchanged geometry shares the page —
-    // Word's column-change case; a changed geometry cannot share a sheet, so it breaks.
-    // Even/odd parity blanks are not modelled: those types break like `nextPage`.
-    const blockSection = sectionOfBlock[index] ?? sections.length - 1;
-    if (blockSection !== activeSectionIndex) {
-      const next = sectionMetrics[blockSection]!;
-      const sharesPage =
-        (sections[blockSection]!.breakType ?? 'nextPage') === 'continuous' &&
-        sameGeometry(active.geometry, next.geometry);
-      if (!sharesPage && pageFragments.length > 0) flushPage();
-      activeSectionIndex = blockSection;
-      active = next;
     }
 
     placed += 1;
 
     if (entry.kind === 'table') {
+      previousSpaceAfter = 0;
       layoutTableInFlow(entry.table);
       continue;
     }
 
-    const { paragraph, props, indent, alignment, available } = entry;
+    const {
+      paragraph,
+      props,
+      indent,
+      alignment,
+      available,
+      spacing: authoredSpacing,
+      contextualSpacing,
+      styleId,
+      borders,
+      shading,
+      inheritedRunProperties,
+      keeps,
+    } = entry;
+    // `w:contextualSpacing` (17.3.1.9) drops the gap between paragraphs of the SAME style.
+    // Word's own ListParagraph sets it, so without this every Word-authored list carries a
+    // paragraph gap between its items.
+    const previousEntry = index > 0 ? prepared[index - 1] : undefined;
+    const nextEntry = prepared[index + 1];
+    const sameStyleAs = (other: PreparedBlock | undefined): boolean =>
+      other?.kind === 'paragraph' && other.styleId === styleId && styleId !== null;
+    const spacing: ParagraphSpacing = contextualSpacing
+      ? {
+          before: sameStyleAs(previousEntry) ? 0 : authoredSpacing.before,
+          after: sameStyleAs(nextEntry) ? 0 : authoredSpacing.after,
+        }
+      : authoredSpacing;
+    const listItem = listItems?.get(paragraph.id) ?? entry.listItem;
+    // `w:firstLine` moves the first line right of the indent, `w:hanging` moves it left.
+    // The schema treats them as mutually exclusive; where a producer writes both, hanging
+    // wins, which is how Word reads it.
+    // A NUMBERED/BULLETED paragraph's first-line slot belongs to the MARKER: `listMarkerBox`
+    // places it at `left - hanging`, and Word's `w:suff` puts the text back at `left` — or
+    // after the marker, or at the next tab stop past an overflowing one (§17.9.30).
+    const firstLineOffset = firstLineOffsetOf(entry);
     const paragraphId = paragraph.id;
+    // `w:between` (§17.3.1.24): consecutive paragraphs with IDENTICAL border settings are ONE
+    // bordered block in Word — the box opens above the first and closes below the last, and
+    // each interior boundary carries `w:between` or nothing. Applying a box to three selected
+    // paragraphs in Word draws one box, not three, and this is why.
+    const borderGroupKey = entry.borderGroupKey;
+    const inSameBorderGroup = (other: PreparedBlock | undefined): boolean =>
+      borderGroupKey !== '' &&
+      other?.kind === 'paragraph' &&
+      other.borderGroupKey === borderGroupKey;
+    const continuesAbove = inSameBorderGroup(previousEntry);
+    const continuesBelow = inSameBorderGroup(nextEntry);
+    const topEdge = continuesAbove ? undefined : borders.top;
+    // What closes the paragraph: the bottom rule, or the `between` rule when the block runs on.
+    const closingEdge = continuesBelow ? borders.between : borders.bottom;
+    const topExtent = paragraphBorderExtentPt(topEdge);
+    const borderExtent = paragraphBorderExtentPt(closingEdge);
 
-    if (breaksBefore(props) && (pageFragments.length > 0 || pages.length === 0)) {
+    if (paragraphBreaksBefore(props) && (pageFragments.length > 0 || pages.length === 0)) {
       flushPage();
+      previousSpaceAfter = 0;
     }
 
-    const lines = breakParagraph(
-      paragraph,
-      paragraphId,
-      indent.left,
-      available,
-      measurer,
-      cache,
-      cache ? entry.key : null
+    const lines = breakBlock(entry);
+
+    // Fit uses unsuppressed lead; top-of-page suppression applies after any flush below.
+    {
+      const lead = collapsedSpaceBefore(spacing.before, previousSpaceAfter);
+      const emptyStyle =
+        inheritedRunProperties.length === 0
+          ? DEFAULT_RUN_STYLE
+          : resolveRunStyle(inheritedRunProperties);
+      const firstHeight = lines[0]?.height ?? measurer.lineMetrics(emptyStyle).height;
+      const firstTail = lines.length <= 1 ? borderExtent + spacing.after : 0;
+      let needed = lead + topExtent + firstHeight + firstTail;
+      // `w:keepNext` (§17.3.1.15): this paragraph may not be the last thing on its page. Priced
+      // ONCE per chain, at its head — a member whose predecessor keeps too already moved with
+      // the group. A chain that cannot fit a page of its own is abandoned.
+      if (keeps.keepNext && !keepsNext[index - 1]) {
+        const group = keepNextGroupHeight(prepared, index, previousSpaceAfter, (at) => {
+          const member = prepared[at];
+          return member?.kind === 'paragraph' ? breakBlock(member).map((l) => l.height) : [];
+        });
+        if (group !== null && group + topExtent <= contentHeight) {
+          needed = Math.max(needed, group + topExtent);
+        }
+      }
+      if (cursorY + needed > contentHeight && cursorY > 0) {
+        flushPage();
+        previousSpaceAfter = 0;
+      }
+    }
+
+    const atTopOfPage = cursorY === 0 && pageFragments.length === 0;
+    const appliedBefore = appliedSpaceBefore(
+      spacing.before,
+      previousSpaceAfter,
+      atTopOfPage,
+      firstParagraphOfSection
     );
+    if (appliedBefore > 0) cursorY += appliedBefore;
+    // The top rule and its gap are flow height above the first line, exactly as the bottom
+    // rule is flow height below the last — pagination has to see both or a boxed paragraph
+    // overhangs the bottom margin by the height of its own frame.
+    if (topExtent > 0) cursorY += topExtent;
+    firstParagraphOfSection = false;
 
     // Place the lines, fragmenting at page boundaries.
     let fragmentIndex = 0;
     let pending: LineRecord[] = [];
     let fragmentStart = lines[0]?.start ?? 0;
+    let fragmentBefore = appliedBefore;
+    // Reserved above the FIRST fragment only: a paragraph continued onto the next page opens
+    // once, the same way it closes once.
+    let fragmentTopExtent = topExtent;
+    let endedWithPageBreak = false;
+    previousSpaceAfter = 0;
 
-    const flushFragment = (): void => {
+    const flushFragment = (isLast: boolean): void => {
       if (pending.length === 0) return;
-      const top = pending[0]!.box.y;
-      const height = pending.reduce((sum, record) => sum + record.box.height, 0);
+      const linesTop = pending[0]!.box.y;
+      const top = linesTop - fragmentBefore - fragmentTopExtent;
+      const linesBottom =
+        pending[pending.length - 1]!.box.y + pending[pending.length - 1]!.box.height;
+      const appliedAfter = isLast ? spacing.after : 0;
+      const strokes: ParagraphBorderStrokeRecord[] = [];
+      let bottomBorderRecord: ParagraphBottomBorderRecord | undefined;
+      let contentTop = linesTop;
+      let contentBottom = linesBottom;
+      if (fragmentTopExtent > 0 && topEdge) {
+        const ruleY = linesTop - topEdge.spacePt - topEdge.widthPt;
+        strokes.push({
+          side: 'top',
+          edge: topEdge,
+          box: { x: indent.left, y: ruleY, width: available, height: topEdge.widthPt },
+        });
+        contentTop = ruleY;
+      }
+      if (isLast && closingEdge) {
+        const ruleY = linesBottom + closingEdge.spacePt;
+        const box = {
+          x: indent.left,
+          y: ruleY,
+          width: available,
+          height: closingEdge.widthPt,
+        };
+        strokes.push({ side: continuesBelow ? 'between' : 'bottom', edge: closingEdge, box });
+        // `bottomBorder` stays the BOTTOM rule alone: a `between` rule closing a grouped
+        // paragraph is a different edge, and a consumer reading it as the box's bottom would
+        // draw the block's frame at every interior boundary.
+        if (!continuesBelow) bottomBorderRecord = { edge: closingEdge, box };
+        contentBottom = ruleY + closingEdge.widthPt;
+      }
+      if (isLast) cursorY = Math.max(cursorY, contentBottom + appliedAfter);
+      const height = Math.max(contentBottom + appliedAfter - top, 0);
+      // Side rules run the height of the bordered block, and inside a group they run THROUGH
+      // the inter-paragraph gap so the box reads as one outline rather than a ladder.
+      const sideTop = continuesAbove && fragmentIndex === 0 ? top : contentTop;
+      const sideBottom = continuesBelow && isLast ? top + height : contentBottom;
+      const sideHeight = Math.max(sideBottom - sideTop, 0);
+      if (borders.left) {
+        strokes.push({
+          side: 'left',
+          edge: borders.left,
+          box: {
+            x: indent.left - borders.left.spacePt - borders.left.widthPt,
+            y: sideTop,
+            width: borders.left.widthPt,
+            height: sideHeight,
+          },
+        });
+      }
+      if (borders.right) {
+        strokes.push({
+          side: 'right',
+          edge: borders.right,
+          box: {
+            x: indent.left + available + borders.right.spacePt,
+            y: sideTop,
+            width: borders.right.widthPt,
+            height: sideHeight,
+          },
+        });
+      }
+      // `w:bar` is the change-bar rule beside the paragraph. It belongs to the paragraph, not
+      // to the block, so it neither opens nor closes with the group.
+      if (borders.bar) {
+        strokes.push({
+          side: 'bar',
+          edge: borders.bar,
+          box: {
+            x: indent.left - borders.bar.spacePt - borders.bar.widthPt,
+            y: linesTop,
+            width: borders.bar.widthPt,
+            height: Math.max(linesBottom - linesTop, 0),
+          },
+        });
+      }
+      const marker =
+        fragmentIndex === 0
+          ? publishListMarker(
+              listItem,
+              measurer,
+              pending[0] ? { y: pending[0].box.y, height: pending[0].box.height } : undefined
+            )
+          : undefined;
       pageFragments.push({
         kind: 'paragraph',
         id: `${paragraphId}#f${fragmentIndex}`,
@@ -780,21 +1228,67 @@ export function layoutSemanticDocument(
           end: pending[pending.length - 1]!.range.end,
         },
         props,
+        spacing: { before: fragmentBefore, after: appliedAfter },
+        ...(bottomBorderRecord ? { bottomBorder: bottomBorderRecord } : {}),
+        ...(strokes.length > 0 ? { borders: strokes } : {}),
+        ...(shading === undefined
+          ? {}
+          : { shading, shadingBox: paragraphShadingBox(pending, indent.left, available)! }),
+        ...(marker ? { marker } : {}),
         lines: pending,
         box: { x: indent.left, y: top, width: available, height },
       });
       fragmentIndex += 1;
       fragmentStart = pending[pending.length - 1]!.range.end;
       pending = [];
+      fragmentBefore = 0;
+      fragmentTopExtent = 0;
     };
 
-    for (const [lineIndex, pendingLine] of lines.entries()) {
+    // First line of this paragraph on the CURRENT page: the anchor a keep rule retreats to.
+    // Not always 0 — a paragraph already cut by a page boundary keeps what it kept. Each
+    // retreat moves a line onto a later page, so the walk terminates; `maxRetreats` guards a
+    // future rule that could cycle, and fails OPEN at the natural break rather than throwing.
+    let fragmentFirstLine = 0;
+    let retreats = 0;
+    const maxRetreats = lines.length + MAX_KEEP_NEXT_CHAIN;
+
+    for (let lineIndex = 0; lineIndex < lines.length; lineIndex += 1) {
+      const pendingLine = lines[lineIndex]!;
+      const isLastLine = lineIndex === lines.length - 1;
+      const tail = isLastLine ? borderExtent + spacing.after : 0;
       if (
-        cursorY + pendingLine.height > active.contentHeight &&
-        (pending.length > 0 || pageFragments.length > 0)
+        cursorY + pendingLine.height + tail > contentHeight &&
+        (pending.length > 0 || pageFragments.length > 0 || pages.length > 0)
       ) {
-        flushFragment();
+        // `w:widowControl` (§17.3.1.44) / `w:keepLines` (§17.3.1.16) change where a paragraph
+        // may be CUT, not where it fits: retreat off a stranded line, or off keepLines whole.
+        const alone = pageFragments.length === 0;
+        const breakAt =
+          retreats < maxRetreats
+            ? adjustedBreakIndex(lineIndex, fragmentFirstLine, lines.length, keeps, alone)
+            : lineIndex;
+        const retreated = breakAt < lineIndex;
+        // Un-placing hands line ids BACK: a line re-placed on the next page must carry the id
+        // it already took, or every id below it is out of step with a clean pass.
+        for (let back = lineIndex; back > breakAt; back -= 1) {
+          const removed = pending.pop()!;
+          cursorY -= removed.box.height;
+          lineCounter -= 1;
+        }
+        // Moving WHOLE means it now OPENS a page: space-before drops, the top rule travels.
+        const movesWhole = retreated && pending.length === 0 && fragmentIndex === 0;
+        flushFragment(false);
         flushPage();
+        fragmentBefore = 0;
+        if (movesWhole) cursorY = fragmentTopExtent;
+        else fragmentTopExtent = 0;
+        fragmentFirstLine = breakAt;
+        if (retreated) {
+          retreats += 1;
+          lineIndex = breakAt - 1;
+          continue;
+        }
       }
       const record: LineRecord = {
         id: `line-${lineCounter}`,
@@ -811,10 +1305,13 @@ export function layoutSemanticDocument(
             box: { ...span.box, y: cursorY },
           })),
           measurer,
-          indent.left,
-          available,
+          // Alignment measures against the box the LINE actually got: a first line carrying
+          // `w:firstLine`/`w:hanging` starts elsewhere and has a different width, so centring
+          // or justifying it against the paragraph box would push it off its own margins.
+          indent.left + (lineIndex === 0 ? firstLineOffset : 0),
+          Math.max(1, available - (lineIndex === 0 ? firstLineOffset : 0)),
           alignment,
-          lineIndex === lines.length - 1
+          isLastLine
         ),
         box: { x: indent.left, y: cursorY, width: available, height: pendingLine.height },
         baseline: pendingLine.baseline,
@@ -822,8 +1319,18 @@ export function layoutSemanticDocument(
       lineCounter += 1;
       pending.push(record);
       cursorY += pendingLine.height;
+      if (pendingLine.pageBreakAfter) {
+        flushFragment(isLastLine);
+        flushPage();
+        fragmentBefore = 0;
+        fragmentTopExtent = 0;
+        endedWithPageBreak = true;
+        // An explicit break is the author's cut; the keep rules apply afresh after it.
+        fragmentFirstLine = lineIndex + 1;
+      }
     }
-    flushFragment();
+    flushFragment(true);
+    previousSpaceAfter = endedWithPageBreak ? 0 : spacing.after;
   }
 
   // A TERMINAL checkpoint, describing the flow after the last paragraph. Without it,
@@ -836,10 +1343,21 @@ export function layoutSemanticDocument(
       pageFragments: [...pageFragments],
       cursorY,
       lineCounter,
+      previousSpaceAfter,
     };
   }
 
-  if (!converged && (pageFragments.length > 0 || pages.length === 0)) flushPage();
+  // Captured BEFORE the terminal flush, which zeroes the cursor. A converged pass stopped
+  // early and never walked the tail, so its end state is the one the previous pass stored.
+  const endCursorY = converged && session ? session.endCursorY : cursorY;
+  const endSpaceAfter = converged && session ? session.endSpaceAfter : previousSpaceAfter;
+  // The terminal flush closes the page the flow was still filling. When it does NOT run,
+  // the last page was already closed by a page break and the cursor sits at the top of a
+  // sheet that was never opened — nothing may be appended to what is in `pages`.
+  const flushesOpenPage = !converged && (pageFragments.length > 0 || pages.length === 0);
+  const endsOpenPage = converged && session ? session.endsOpenPage : flushesOpenPage;
+
+  if (flushesOpenPage) flushPage();
   // Entries for paragraphs this pass never asked for are gone from the document, or their
   // context changed; holding them would let the cache grow with the session rather than
   // with the document.
@@ -850,8 +1368,6 @@ export function layoutSemanticDocument(
   const layout: SemanticLayout = { revision, pages };
   if (session) {
     session.previous = layout;
-    // A converged pass stops early, so the tail's checkpoints were never recomputed; the
-    // previous pass's remain valid precisely because the flow matched.
     // A converged pass stops early, so the tail's checkpoints were never recomputed. The
     // previous pass's remain valid precisely because the flow matched at the join.
     session.checkpoints = converged
@@ -860,8 +1376,12 @@ export function layoutSemanticDocument(
           ...session.checkpoints.slice(convergedAt + (session.keys.length - prepared.length)),
         ]
       : checkpoints;
-    session.keys = keys;
+    session.keys = flowKeys;
     session.context = context;
+    session.endLineCounter = lineCounter;
+    session.endCursorY = endCursorY;
+    session.endSpaceAfter = endSpaceAfter;
+    session.endsOpenPage = endsOpenPage;
     session.stats = {
       placed,
       total: prepared.length,
@@ -869,33 +1389,7 @@ export function layoutSemanticDocument(
       fullPasses: session.stats.fullPasses + (startIndex === 0 ? 1 : 0),
     };
   }
-  return layout;
+  return { layout, pages, lineCounter, endCursorY, endSpaceAfter, endsOpenPage };
 }
 
-/**
- * A deterministic measurer for tests and headless use.
- *
- * Monospace by construction: every character is the same width and every line the same
- * height, scaled by `w:sz` when present. Real shaping is the HarfBuzz path; this exists so
- * layout behaviour can be asserted without a font stack deciding the answer.
- */
-export function createFixedMeasurer(charWidth = 6, lineHeight = 14): TextMeasurer {
-  // 11pt is the size the base width and height describe; everything else scales from it.
-  const scale = (style: ResolvedRunStyle): number => style.fontSizePt / 11;
-  return {
-    measure: (text, style) => {
-      // Advance, then horizontal scaling, then character spacing — the order Word applies
-      // them, and the order that makes `w:spacing` an absolute per-character addition
-      // rather than something the scale multiplies.
-      const advance = text.length * charWidth * scale(style);
-      const scaled = advance * (style.horizontalScalePercent / 100);
-      return scaled + text.length * style.characterSpacingPt;
-    },
-    lineMetrics: (style) => {
-      // Super/subscript draw smaller, so they need less line height than their nominal size.
-      const shrink = style.verticalAlign === 'baseline' ? 1 : 0.75;
-      const height = lineHeight * scale(style) * shrink;
-      return { height, baseline: height * 0.8 };
-    },
-  };
-}
+export { createFixedMeasurer } from './fixed-measurer.ts';

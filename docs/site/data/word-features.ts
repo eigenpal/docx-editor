@@ -149,6 +149,17 @@ export const wordFeatures: WordFeature[] = [
       'w:outline, w:shadow, w:emboss, w:imprint and w:em render and round-trip; not settable from the toolbar. w14 glow and gradient text fill are not supported.',
   },
   {
+    id: 'text.hidden',
+    name: 'Hidden text (vanish)',
+    category: 'text',
+    editing: 'none',
+    rendering: 'full',
+    roundTrip: 'full',
+    tier: 'community',
+    notes:
+      'w:vanish runs are not drawn and take no space, so pages break where Word breaks them; the text survives a round trip. There is no "show hidden text" view option, and a paragraph whose MARK is vanished still occupies a line.',
+  },
+  {
     id: 'text.math',
     name: 'Math equations (OMML)',
     category: 'text',
@@ -189,6 +200,8 @@ export const wordFeatures: WordFeature[] = [
     rendering: 'full',
     roundTrip: 'full',
     tier: 'community',
+    notes:
+      'Space before/after and line spacing (single, multiple, exactly, at least) all reach pagination, so a 1.5- or double-spaced document breaks pages where Word breaks them. Contextual spacing drops the gap between same-style neighbours, the way Word’s List Paragraph style intends.',
   },
   {
     id: 'paragraphs.indentation',
@@ -198,6 +211,8 @@ export const wordFeatures: WordFeature[] = [
     rendering: 'full',
     roundTrip: 'full',
     tier: 'community',
+    notes:
+      'Left, right, first-line and hanging indents all reach line geometry, so an indented first line starts where Word starts it and wraps with the room it actually has. Increase/Decrease Indent is on the toolbar and on Tab / Ctrl+M; inside a list it changes the level, so the marker changes with it.',
   },
   {
     id: 'paragraphs.styles',
@@ -214,10 +229,12 @@ export const wordFeatures: WordFeature[] = [
     id: 'paragraphs.borders',
     name: 'Paragraph borders & fills',
     category: 'paragraphs',
-    editing: 'full',
+    editing: 'partial',
     rendering: 'full',
     roundTrip: 'full',
     tier: 'community',
+    notes:
+      'Paragraph shading (w:shd) is editable. Borders render and round-trip but cannot be added, changed or removed from the editor yet.',
   },
   {
     id: 'paragraphs.tabs',
@@ -228,7 +245,7 @@ export const wordFeatures: WordFeature[] = [
     roundTrip: 'full',
     tier: 'community',
     notes:
-      'Existing tab stops render (incl. right-tabs and dotted leaders in TOCs); a tab-stop editing UI is not built yet.',
+      'Existing tab stops render, including right/decimal tabs and dot, hyphen and underscore leaders. The document\'s own w:defaultTabStop is honoured, so a metric-locale grid lands where Word puts it, in headers and footers as well as the body. A tab-stop editing UI is not built yet.',
   },
   {
     id: 'paragraphs.frames',
@@ -261,6 +278,8 @@ export const wordFeatures: WordFeature[] = [
     rendering: 'full',
     roundTrip: 'full',
     tier: 'community',
+    notes:
+      'Toolbar toggle creates the definition on first use, numbering.xml included, so a document that has never carried a list can start one. Tab and the indent buttons change the level, and the marker changes with it.',
   },
   {
     id: 'lists.numbered',
@@ -369,7 +388,7 @@ export const wordFeatures: WordFeature[] = [
     roundTrip: 'full',
     tier: 'community',
     notes:
-      'cnfStyle conditional formatting renders and round-trips; switching table styles from the UI is not built yet.',
+      'Table styles resolve through their basedOn chain: borders, cell margins, shading and the paragraph/run formatting a conditional format carries (so a header row comes out bold and centred) all come from styles.xml, gated by w:tblLook, with an explicit w:cnfStyle taking precedence. Conditional cell margins and switching table styles from the UI are not built yet.',
   },
   {
     id: 'tables.text-direction',
@@ -517,7 +536,7 @@ export const wordFeatures: WordFeature[] = [
     roundTrip: 'full',
     tier: 'community',
     notes:
-      'The layout engine paginates like Word: page breaks, keep rules, split paragraphs marked across pages.',
+      'The layout engine paginates like Word: page breaks, keep rules, split paragraphs marked across pages. Hard page breaks are insertable and write `w:br w:type="page"`.',
   },
   {
     id: 'layout.sections',
@@ -528,7 +547,7 @@ export const wordFeatures: WordFeature[] = [
     roundTrip: 'full',
     tier: 'community',
     notes:
-      'Page size, orientation and margins editable per section or whole document (Page Setup dialog, ruler drags); each section paginates against its own geometry, so mixed portrait/landscape documents render as Word shows them. Next-page section breaks insertable. Even/odd-page break parity and per-section columns are not modelled yet.',
+      'Page size, orientation and margins editable per section or whole document (Page Setup dialog, ruler drags); each section paginates against its own geometry, so mixed portrait/landscape documents render as Word shows them. Section breaks insertable. Even/odd-page break parity (the blank page Word inserts to reach the right parity) and per-section columns are not modelled yet.',
   },
   {
     id: 'layout.headers-footers',
@@ -568,11 +587,11 @@ export const wordFeatures: WordFeature[] = [
     name: 'Multi-column layout',
     category: 'layout',
     editing: 'none',
-    rendering: 'full',
+    rendering: 'none',
     roundTrip: 'full',
     tier: 'community',
     notes:
-      'Text flows into newspaper columns with balancing and separators; column count is not editable from the UI.',
+      'The section w:cols count and gap are read and round-trip, but text does not yet flow into columns: a three-column section renders as one full-width column.',
   },
   {
     id: 'layout.page-borders',
@@ -603,7 +622,7 @@ export const wordFeatures: WordFeature[] = [
     roundTrip: 'full',
     tier: 'community',
     notes:
-      'First, even, and default variants are selected per page and editable in place. The section setting that enables different even and odd pages has no UI.',
+      'First, even, and default variants are selected by the page\'s number in the document (so the alternation carries across section breaks) and editable in place. The section setting that enables different even and odd pages has no UI.',
   },
   {
     id: 'layout.vertical-align',
