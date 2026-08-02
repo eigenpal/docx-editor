@@ -70,6 +70,15 @@ export interface SurfaceSelectionSyncDeps {
    * contenteditable firing `beforeinput`. So it writes a collapsed selection instead.
    */
   domSelection?(): SemanticSelection;
+  /**
+   * Whether a rectangle of table cells is currently selected.
+   *
+   * Distinct from a gesture: a rectangle OUTLIVES the drag that made it, and the DOM holds a
+   * collapsed selection for the whole time it is live. Adopting that disagreement would clear
+   * the rectangle on the first report after release. Only an explicit gesture replaces one,
+   * and every explicit gesture goes through `setSelection`, which clears it.
+   */
+  holdsCellSelection?(): boolean;
 }
 
 export interface SurfaceSelectionSync {
@@ -256,6 +265,7 @@ export function createSurfaceSelectionSync(deps: SurfaceSelectionSyncDeps): Surf
       if (applyingSelection) return;
       if (composing) return;
       if (deps.isGesturing?.()) return;
+      if (deps.holdsCellSelection?.()) return;
       adoptDomSelection();
     },
 

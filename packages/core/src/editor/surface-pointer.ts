@@ -336,11 +336,17 @@ export function createPointerController(
    */
   function extendCells(active: Gesture, hit: SemanticHit): boolean {
     const anchorCell = active.anchorCell;
-    if (!anchorCell || !hit.cell) return false;
-    if (hit.cell.tableId !== anchorCell.tableId) return false;
+    if (!anchorCell) return false;
+    if (!hit.cell || hit.cell.tableId !== anchorCell.tableId) {
+      // The pointer has left the table. A promoted gesture KEEPS what it has: sweeping a
+      // couple of cells and letting the pointer stray past the last column or below the last
+      // row is an ordinary way to select them, and dropping back to a text selection there
+      // would throw the whole rectangle away at the moment of release.
+      return active.cellDragging;
+    }
     if (!active.cellDragging && hit.cell.cellId === anchorCell.cellId) return false;
     const next = cellSelectionBetween(host.layout(), anchorCell, hit.cell);
-    if (!next) return false;
+    if (!next) return active.cellDragging;
     active.cellDragging = true;
     host.setCellSelection(next);
     return true;

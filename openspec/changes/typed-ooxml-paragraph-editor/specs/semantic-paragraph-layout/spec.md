@@ -56,6 +56,32 @@ Caret stops, hit testing, selection, keyboard navigation, and composition anchor
 - **WHEN** a pointer coordinate hits a painted paragraph line
 - **THEN** semantic hit-test data resolves a stable paragraph text position independent of DOM node identity
 
+### Requirement: Pointer resolution off the glyphs
+Resolving a pointer to a text position SHALL answer for coordinates that fall outside every painted glyph box, and SHALL NOT refuse. A coordinate left of a line's first glyph SHALL resolve to that line's start and one right of its last glyph to that line's end; a coordinate above or below a block's lines SHALL clamp into that block; a coordinate between two sheets SHALL resolve on the sheet above it; and the block a coordinate belongs to SHALL be chosen with vertical distance weighted above horizontal distance.
+
+#### Scenario: Pointer lands in a paragraph indent
+- **WHEN** a pointer coordinate falls left of an indented line's first glyph, outside every fragment box
+- **THEN** the resolved position is the start of that line rather than a position in a neighbouring block
+
+#### Scenario: Pointer lands past the end of a wrapped line
+- **WHEN** a pointer coordinate falls right of the last glyph of a soft-wrapped line
+- **THEN** the resolved position is that line's end excluding the space the wrap consumed
+
+#### Scenario: Pointer lands in a table cell's padding
+- **WHEN** a pointer coordinate falls inside a cell but outside every block painted in it
+- **THEN** the resolved position is in the nearest block of that cell, and names the covering cell for a vertically merged region
+
+### Requirement: Rectangular cell selection
+A pointer drag that leaves the table cell it began in SHALL select the rectangle of cells between the two, not the text range spanning them. The rectangle SHALL grow until every column-spanning and vertically merged cell it touches is wholly contained, SHALL remain a rectangle for the rest of that gesture, and SHALL carry an equivalent text range so consumers that address text need no knowledge of it.
+
+#### Scenario: Drag crosses into another cell
+- **WHEN** a pointer drag beginning in one cell resolves into a different cell of the same table
+- **THEN** the selection becomes the rectangle of cells between them and remains one until the gesture ends
+
+#### Scenario: Drag reaches a merged cell
+- **WHEN** the rectangle touches a cell spanning several grid columns or a vertical merge continuation
+- **THEN** the rectangle grows to contain that cell's full extent rather than part of it
+
 ### Requirement: Output is a non-authoritative consumer
 The browser output layer SHALL safely construct and update native DOM from semantic layout records and SHALL NOT remeasure text, repaginate content, or publish canonical geometry.
 

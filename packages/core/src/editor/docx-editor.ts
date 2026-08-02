@@ -65,7 +65,6 @@ import {
   fontRequestKey,
   createFixedMeasurer,
   createShapedMeasurer,
-  tableContextAt,
   type SemanticSelection as SurfaceSelection,
   type TextMeasurer,
 } from '@docx-editor.dev/core-contract/layout';

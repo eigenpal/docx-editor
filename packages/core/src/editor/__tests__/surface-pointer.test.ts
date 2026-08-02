@@ -567,3 +567,53 @@ describe('what a rectangle means to everything downstream', () => {
     mounted.surface.destroy();
   });
 });
+
+describe('a promoted drag that leaves the table', () => {
+  test('keeps the cells it had, rather than throwing them away', () => {
+    // Sweeping a couple of cells and letting the pointer stray past the last column is an
+    // ordinary way to select them. Falling back to a text selection there loses the whole
+    // rectangle at the moment of release.
+    const mounted = mount(TABLE);
+    press(mounted, ...inCell(0, 0));
+    move(...inCell(1, 1));
+    expect(mounted.surface.state().cellSelection!.cellIds).toHaveLength(4);
+
+    move(9999, 9999);
+    expect(mounted.surface.state().cellSelection!.cellIds).toHaveLength(4);
+    release(9999, 9999);
+    expect(mounted.surface.state().cellSelection!.cellIds).toHaveLength(4);
+    mounted.surface.destroy();
+  });
+
+  test('but a drag that never left its cell is still ordinary text', () => {
+    // Out of the cell and straight into the paragraph below the table, without ever crossing
+    // into a second cell: nothing promoted it, so it stays a text selection.
+    const mounted = mount(TABLE + paragraph('after'));
+    press(mounted, ...inCell(0, 0));
+    move(9999, 9999);
+    expect(mounted.surface.state().cellSelection).toBeNull();
+    expect(mounted.surface.state().selection.head.paragraphId).toBe(
+      mounted.surface.session.paragraphIds().at(-1)!
+    );
+    release(9999, 9999);
+    mounted.surface.destroy();
+  });
+});
+
+describe('a rectangle survives the browser reporting its own selection', () => {
+  test('the collapsed native selection does not clear it after the drag ends', async () => {
+    // The DOM deliberately holds a COLLAPSED selection while a rectangle is live, so it
+    // disagrees with the model by construction. Adopting that disagreement cleared the whole
+    // rectangle on the first report after release.
+    const mounted = mount(TABLE);
+    press(mounted, ...inCell(0, 0));
+    move(...inCell(1, 1));
+    release(...inCell(1, 1));
+
+    await Promise.resolve();
+    document.dispatchEvent(new Event('selectionchange'));
+    expect(mounted.surface.state().cellSelection!.cellIds).toHaveLength(4);
+    expect(mounted.container.querySelectorAll('.docx-cell-selection-rect')).toHaveLength(4);
+    mounted.surface.destroy();
+  });
+});

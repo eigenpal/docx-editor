@@ -484,6 +484,7 @@ export function mountPaginatedSurface(
     },
     isGesturing: () => pointer?.dragging() ?? false,
     domSelection: () => (cellSelection ? collapsedAt(cellSelection.text.anchor) : selection),
+    holdsCellSelection: () => cellSelection !== null,
   });
 
   function setCellSelection(next: CellSelection | null): void {
