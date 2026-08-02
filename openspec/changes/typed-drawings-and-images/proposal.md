@@ -36,12 +36,12 @@ This lane also carries the most security surface of the five. An image is a rela
 
 **Editing**
 
-- `TreeDocOp` gains insert-image, replace-image, delete-image, resize-image, set-image-crop, set-image-alt-text, set-wrap-mode, and set-anchor-position. Insert adds the media part, its content-type override, and its relationship in the same transaction.
+- `TreeDocOp` gains the operations behind the already-declared edits — `setImageWrapType`, `setImagePosition`, `setImageProperties`, `insertImage` — plus replace, delete, resize, crop, and alt text. Insert adds the media part, its content-type override, and its relationship in the same transaction.
 - Resize and crop write `wp:extent` and `a:srcRect`; they never re-encode the media.
 
 **React adapter**
 
-- Wire `image.insert` and `image.properties` in `SLOT_COMMANDS`.
+- Wire `image.insert` and `image.properties` in `SLOT_COMMANDS`, and add `image.wrap` (value-typed) and `image.altText` to `ChromeSlotId`. Wiring a value-typed wrap menu needs two engine extensions that do not exist: a value command that is not a `setMarkAttr`, and a current value on `ToolbarCommandState` — a boolean `active` cannot say which of nine choices applies. The second is shared with `review.displayMode`.
 - Selection handles for resize, a drag affordance for an anchored image, and a properties dialog with size, crop, alt text, and position.
 - A wrap menu keyed on Word's user-facing choices — In Line with Text, Square, Square Left, Square Right, Tight, Through, Top and Bottom, Behind Text, In Front of Text — each mapping to exactly one representation. Behind Text and In Front of Text are both `wrapNone` and differ only by `@behindDoc`, so the menu's model is the choice, not the wrap element.
 

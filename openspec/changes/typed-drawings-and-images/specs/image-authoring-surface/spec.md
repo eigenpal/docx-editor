@@ -67,11 +67,55 @@ Dragging an anchored drawing SHALL commit a new position through the store, expr
 - **WHEN** a drag approaches the viewport edge
 - **THEN** the view scrolls, and the committed position accounts for the scroll
 
+### Requirement: The wrap menu is wired as a value-typed chrome slot
+
+`image.wrap` SHALL be a `kind: 'value'` control in the chrome registry, so both adapters derive it from `CHROME_GROUPS` and neither hand-lists it. Wiring it requires three extensions that do not exist today, and all three SHALL land with it:
+
+1. **The slot id.** `image.wrap` and `image.altText` SHALL be added to `ChromeSlotId`. That union is public API forever, so the ids are chosen once.
+2. **A value command that is not a run mark.** `commandForSlotValue` resolves a value-typed slot through `VALUE_SLOT_MARKS` into a `setMarkAttr` command, and answers `null` for anything absent. A wrap choice is not a run-mark attribute, so the value path SHALL be widened to carry a slot-specific command. The command itself already exists: `setImageWrapType`, whose `target` is exactly the nine choices below.
+3. **A current value on the state, and a snapshot that can express it.** `ToolbarCommandState` carries `{ id, enabled, disabledReason, active }`; a boolean cannot say *which* of nine choices applies. Worse, the read side is narrower than the write side: `setImageWrapType` accepts nine targets while `ImageContext.wrap` reports six — `squareLeft`, `squareRight`, and `through` are settable but not reportable. Both SHALL be widened so every choice a user can set is a choice the menu can show as selected.
+
+The third extension is shared: `review.displayMode` and `review.editingMode` need the same current-value reporting. Whichever change lands first SHALL widen `ToolbarCommandState` once rather than adding a parallel mechanism.
+
+#### Scenario: One registry entry lights up both adapters
+
+- **WHEN** `image.wrap` is added to `CHROME_GROUPS` and wired
+- **THEN** the React and Vue default toolbars derive the control from the registry, with no hand-listing in either adapter
+
+#### Scenario: The menu renders its current selection
+
+- **WHEN** a drawing with `wrapSquare` `@wrapText="left"` is selected
+- **THEN** `image.wrap`'s reported value is Square Left and the menu renders that item selected
+- **AND** the selection is read from the engine's reported value, not recomputed by the adapter from the document
+
+#### Scenario: Disabled with the engine's reason
+
+- **WHEN** no drawing is selected, or the selected drawing declares `@locked` or `a:graphicFrameLocks/@noMove`
+- **THEN** `image.wrap` renders disabled and its tooltip is the engine's own `disabledReason`, never a string invented by the adapter
+
+#### Scenario: Choosing a value commits one transaction
+
+- **WHEN** the user picks a wrap choice from the menu
+- **THEN** the engine command for that slot and value is executed once, producing one `ModelChange` and one history entry
+
+#### Scenario: An unwired slot is honest
+
+- **WHEN** a value-typed slot has no entry in the value-command table
+- **THEN** it renders disabled with the engine's reason rather than appearing enabled and doing nothing on click
+
+#### Scenario: The contextual image group reaches the bar
+
+- **WHEN** the default toolbar is built and a drawing is selected
+- **THEN** the `image` group's controls are reachable
+- **AND** how a `contextual` group surfaces is settled once for the whole group rather than per control
+
 ### Requirement: The wrap menu presents Word's choices, each with one OOXML representation
 
 `image.wrap` SHALL present the user-facing wrap choices Word offers, not the raw wrap-element vocabulary. A choice SHALL map to exactly one representation, and the mapping SHALL be total in both directions so a loaded document selects the right menu item:
 
-| Menu choice | Representation |
+The nine choices are `setImageWrapType`'s `target` values, unchanged:
+
+| Menu choice (`target`) | Representation |
 | --- | --- |
 | In Line with Text | `wp:inline` |
 | Square | `wp:anchor` + `wrapSquare` `@wrapText="bothSides"` |

@@ -57,6 +57,7 @@
 
 - [ ] 6.1 Wire `review.comments` and `review.editingMode` by adding their `SLOT_COMMANDS` rows; both already carry `state: { kind: 'command' }` and render disabled only because the table has no entry
 - [ ] 6.2 Add `review.accept`, `review.reject`, `review.acceptAll`, `review.rejectAll`, `review.displayMode`; ids are public API forever
+- [ ] 6.2a `review.displayMode` and `review.editingMode` must report their **current value**, which `ToolbarCommandState` cannot express — it carries only a boolean `active`. Coordinate with `typed-drawings-and-images`, which needs the same for `image.wrap`; widen `ToolbarCommandState` once rather than adding a parallel mechanism
 - [ ] 6.3 Review sidebar with cards positioned from semantic layout records, never from measuring painted DOM
 - [ ] 6.4 Card↔range selection in both directions; next-change and previous-change navigation across stories
 - [ ] 6.5 **Settle the delete-parent-with-replies policy against a Word comparison** before implementing reply deletion
