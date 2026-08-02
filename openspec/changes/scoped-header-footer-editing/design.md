@@ -1,0 +1,72 @@
+# Design — scoped header and footer editing
+
+## Context
+
+`typed-ooxml-paragraph-editor` is the production authority. Its D7 inventory lists headers and footers as deferred for editing with layout "read-only page furniture supported"; this change is that lane's named future gate.
+
+Two of the ledger's parse/model claims are stronger than the code:
+
+- `hf-references.ts` resolves from `findBodySectPr`, which finds a `w:sectPr` that is a direct child of `w:body`. Mid-body sections declare theirs inside `w:pPr`. On the comprehensive fixture that means four of five sections are invisible and the last section's pair is applied to the whole document.
+- `semantic-layout.ts` selects the variant with `index === 0`, where `index` is the document page index, and reads `titlePage` from the same single `w:sectPr`. `w:titlePg` is a section property.
+
+Neither is exercised by any fixture in the repository, because every reference in the comprehensive fixture is `default` and settings disable odd/even. The `first` and `even` paths are uncovered code.
+
+## Decisions
+
+### H1: Resolution is a function of the section, computed at layout
+
+`section-properties.ts` already exposes `readDocumentSections`; `hf-references.ts` does not use it. Joining the two is the whole fix for per-section resolution.
+
+Resolution stays a function — `(section, kind, variant, precedingSections, settings) → part | inherited-part | none` — rather than a stored map. A stored map would go stale on every re-pagination, every section-property edit, and every `w:pgNumType` change, and there is no cheap way to know which.
+
+### H2: The resolution result reports inheritance
+
+The dangerous case is not rendering the wrong header. It is a user editing an inherited header and silently changing three earlier sections. Word shows "Same as Previous" for exactly this reason. Returning a bare part name makes the warning impossible without a second query, so the result carries `inherited`.
+
+### H3: The first section with no reference renders empty
+
+This is the comprehensive fixture's actual shape and today's actual bug. OOXML models furniture as a chain of overrides; the first link has nothing behind it. Rendering a later section's header invents content that is not in the file, which is what happens today.
+
+### H4: Keep the two rules that are already right
+
+`hf-references.ts` fails open on a dangling `r:id` and honours the first reference of a duplicated type. Both match Word. Neither changes.
+
+Likewise `variantFor`'s comment is correct — "An absent variant shows nothing — Word falls back to blank, not to `default`" — and that rule survives. Only the *scope* of `index === 0` and of `titlePage` is wrong.
+
+### H5: `hf-layout.ts` does not change shape
+
+It already lays a story out once per variant at the section's content width, keeps `flowHeight` as the box size — the rule that an anchored object's extent must never size the box — and namespaces line ids by part so a header change does not move the body's line counter. Per-section resolution changes *which* stories exist and *which page gets which*, not how one is laid out.
+
+### H6: Editing scopes the furniture rather than un-furnishing it
+
+Today furniture is `contenteditable=false` with `[data-docx-hf]` and is excluded from selection. Removing that would let a body drag select header text on every page.
+
+The scope is a mode: while open, one story's fragments join the caret space; while closed, all furniture is inert. This is the smallest change that gives editing without giving up the selection guarantee, and it keeps the previous architecture's mistake — a second visible editor over the painted region — off the table, since painted pages already are the editable surface.
+
+### H7: Fields evaluate at paint, and everything else is inert
+
+One footer part paints on twenty pages with twenty `PAGE` values. Rewriting the cached result before each paint would make every repaint a document mutation; one part per page would multiply the stories. Paint-time evaluation keeps the story singular and the saved `w:instrText` untouched.
+
+The inert-by-default rule is a security requirement, not a scoping convenience. The fields lane in `deferred-features.md` commits to keeping DDE and external inclusion non-executable, and this change types fields for the first time. Typing them is exactly when an evaluator could accidentally acquire a fetch.
+
+### H8: A literal tab is text
+
+`header1.xml` declares a right tab stop at 9026 twips and then separates its runs with a literal U+0009 inside `<w:t xml:space="preserve">`. Word does not advance on that character.
+
+Pinning this matters because the wrong implementation is rewarded: treating the literal as an advance makes this fixture look correct. The consequence is that these two headers will not paint as three tidy sections, and the fixture must not be "fixed" to hide it — a separate fixture covers real `w:tab` layout.
+
+### H9: The archived-era HF spec is superseded, not left standing
+
+`openspec/specs/header-footer-editing/spec.md` describes a hidden ProseMirror `EditorView` per `rId` with the painter rendering it. That architecture is gone. Leaving it in `openspec/specs/` makes a reader believe the system works a way it does not. This change archives or rewrites it; it does not quietly add a second, contradictory description.
+
+## Open questions
+
+1. **What renders today for the fixture's first section?** Predicted from the code: the final section's header (`rId12`). Task 0.1 requires observing it in the browser rather than asserting it from a reading. If the prediction is wrong, the diagnosis above is wrong and this design needs revisiting before code.
+
+2. **`w:sectPr/@w:type` other than `nextPage`.** `continuous`, `evenPage`, `oddPage`, and `nextColumn` change which page a section starts on, which changes even/odd resolution. Modelled here, not specified for layout, not covered by any fixture.
+
+3. **Watermarks.** In real documents a watermark is a `w:pict`/VML shape or a floating drawing inside a header. Blocked on `typed-drawings-and-images`; it will land in this area and should not be designed twice.
+
+4. **Notes referenced from a header.** `typed-notes-footnotes-endnotes` round-trips such a reference and does not lay it out. Whichever change lands second confirms the two agree.
+
+5. **Vue parity.** Out of scope by request; `paragraph-adapter-acceptance` gates production support on paired adapters, so this change alone produces no support claim.
