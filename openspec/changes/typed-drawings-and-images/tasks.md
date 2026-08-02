@@ -60,7 +60,8 @@
 - [ ] 6.5 Wire `image.insert` and `image.properties` by adding their `SLOT_COMMANDS` rows; both already carry `state: { kind: 'command' }`. Settle how the `contextual` `image` group reaches the default bar. Add `image.wrap` and `image.altText` — ids are public API forever
 - [ ] 6.6 Resize handles positioned from layout records, one history entry per drag, preview without committing
 - [ ] 6.7 Anchored drag writing `wp:posOffset` against existing frames, with edge auto-scroll
-- [ ] 6.8 Wrap menu, including inline↔floating conversion in one transaction
+- [ ] 6.8 Wrap menu keyed on Word's user-facing choices, not the wrap element: In Line with Text, Square, Square Left, Square Right, Tight, Through, Top and Bottom, Behind Text, In Front of Text. **Behind Text and In Front of Text are both `wrapNone` and differ only by `@behindDoc`** — a menu derived from the wrap element loses the distinction. Mapping total in both directions; inline↔floating conversion in one transaction
+- [ ] 6.8a Settle which side `ST_WrapText` `left` / `right` puts the text on against Word before labelling Square Left and Square Right
 - [ ] 6.9 Properties dialog: size, crop, alt text, position; reset-to-natural-size from intrinsic dimensions and DPI
 - [ ] 6.10 Alt text to assistive technology; a drawing with neither `@descr` nor `@name` is exposed as decorative
 - [ ] 6.11 Keyboard resize with a defined step; chrome mousedown `preventDefault()` except on INPUT/SELECT/TEXTAREA

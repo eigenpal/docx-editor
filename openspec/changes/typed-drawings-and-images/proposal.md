@@ -42,7 +42,8 @@ This lane also carries the most security surface of the five. An image is a rela
 **React adapter**
 
 - Wire `image.insert` and `image.properties` in `SLOT_COMMANDS`.
-- Selection handles for resize, a drag affordance for an anchored image, a wrap-mode menu, and a properties dialog with size, crop, alt text, and position.
+- Selection handles for resize, a drag affordance for an anchored image, and a properties dialog with size, crop, alt text, and position.
+- A wrap menu keyed on Word's user-facing choices — In Line with Text, Square, Square Left, Square Right, Tight, Through, Top and Bottom, Behind Text, In Front of Text — each mapping to exactly one representation. Behind Text and In Front of Text are both `wrapNone` and differ only by `@behindDoc`, so the menu's model is the choice, not the wrap element.
 
 ## Capabilities
 

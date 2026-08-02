@@ -67,14 +67,57 @@ Dragging an anchored drawing SHALL commit a new position through the store, expr
 - **WHEN** a drag approaches the viewport edge
 - **THEN** the view scrolls, and the committed position accounts for the scroll
 
-### Requirement: Wrap mode is a menu, and changing it re-flows
+### Requirement: The wrap menu presents Word's choices, each with one OOXML representation
 
-`image.wrap` SHALL offer the wrap modes with their `ST_WrapText` sides. Changing it SHALL commit through the store and re-run layout.
+`image.wrap` SHALL present the user-facing wrap choices Word offers, not the raw wrap-element vocabulary. A choice SHALL map to exactly one representation, and the mapping SHALL be total in both directions so a loaded document selects the right menu item:
 
-#### Scenario: Menu reflects the current mode
+| Menu choice | Representation |
+| --- | --- |
+| In Line with Text | `wp:inline` |
+| Square | `wp:anchor` + `wrapSquare` `@wrapText="bothSides"` |
+| Square Left | `wp:anchor` + `wrapSquare` `@wrapText="left"` |
+| Square Right | `wp:anchor` + `wrapSquare` `@wrapText="right"` |
+| Tight | `wp:anchor` + `wrapTight` |
+| Through | `wp:anchor` + `wrapThrough` |
+| Top and Bottom | `wp:anchor` + `wrapTopAndBottom` |
+| Behind Text | `wp:anchor` + `wrapNone` + `@behindDoc="1"` |
+| In Front of Text | `wp:anchor` + `wrapNone` + `@behindDoc="0"` |
 
-- **WHEN** a drawing with `wrapSquare` is selected
-- **THEN** the menu shows square as active
+**Behind Text and In Front of Text are the same wrap element.** Both are `wrapNone`; only `@behindDoc` separates them. A menu derived from the wrap element alone collapses them into one entry and loses the distinction, so the menu's model SHALL be the choice above, not the wrap element.
+
+Changing a choice SHALL commit through the store in one transaction and re-run layout.
+
+#### Scenario: Every choice round-trips to its own menu item
+
+- **WHEN** a document containing each of the nine representations is loaded and each drawing is selected in turn
+- **THEN** the menu shows exactly the matching choice as active, with no two representations selecting the same item and no representation selecting none
+
+#### Scenario: Behind Text and In Front of Text are distinguishable
+
+- **WHEN** one drawing is `wrapNone` with `@behindDoc="1"` and another is `wrapNone` with `@behindDoc="0"`
+- **THEN** the first shows Behind Text active and the second shows In Front of Text active
+- **AND** selecting the other choice flips `@behindDoc` without changing the wrap element
+
+#### Scenario: Behind Text paints under the text and does not displace it
+
+- **WHEN** the user chooses Behind Text for an inline drawing
+- **THEN** it becomes an anchored `wrapNone` drawing with `@behindDoc="1"`, positioned where it sat
+- **AND** the surrounding text re-flows as if the drawing were absent, and the drawing paints beneath the text layer with the text legible over it
+
+#### Scenario: In Front of Text paints over the text
+
+- **WHEN** the user chooses In Front of Text
+- **THEN** the drawing paints above the text layer, and the text still flows as if it were absent
+
+#### Scenario: Square side is reflected, not flattened
+
+- **WHEN** a drawing is `wrapSquare` with `@wrapText="left"`
+- **THEN** the menu shows Square Left active, not a generic Square
+
+#### Scenario: Which side `left` means is settled against Word
+
+- **WHEN** the Square Left and Square Right items are implemented
+- **THEN** the reading of `ST_WrapText` `left` and `right` — which side the text flows on — is confirmed against Word and recorded, rather than inferred from the attribute name
 
 #### Scenario: Inline to floating
 

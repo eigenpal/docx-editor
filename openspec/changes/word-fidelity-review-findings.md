@@ -19,7 +19,7 @@ All five changes describe new `TreeDocOp`s and new model shapes without reconcil
 | `ContentControlType` | No member for an untyped control, `group`, `docPartObj`, `citation`, `bibliography`, `equation` | content controls |
 | `DocEdits.setContentControlValue: { value: string }` | Per-type value shapes required (ISO date → `@w:fullDate`, checkbox toggle, dropdown item) | content controls |
 | `DocEdits.addRepeatingSectionItem` / `removeRepeatingSectionItem` | Already shipped, while `typed-content-controls` §8.3 defers repeating sections to a later change | content controls |
-| `EditorSnapshot.image.wrap` | Missing `through`; conflates `@behindDoc` with wrap mode | drawings |
+| `EditorSnapshot.image.wrap` | `'inline'\|'square'\|'tight'\|'topAndBottom'\|'behind'\|'inFront'` is the right *user-facing* shape — `behind` and `inFront` correctly separate two states that share `wrapNone`. It lacks `through`, and lacks the square left/right distinction Word's menu offers | drawings |
 | `Editor.getSelectedImage()` | Returns `{id, widthEmu, heightEmu}`; the properties dialog needs wrap, crop, alt text | drawings |
 | `Editor.getHeaderFooterState()` | Returns `{editing, sectionIndex}`; the chrome needs variant, `rId`, and inherited | header/footer |
 | `SectionProperties.footnote` / `.endnote` `{numFmt, numRestart, position, numStart}` | Already shipped; `typed-notes` describes note properties as new | notes |
