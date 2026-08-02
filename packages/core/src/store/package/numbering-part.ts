@@ -129,6 +129,50 @@ const childrenNamed = (node: OoxmlElement, localName: string): OoxmlElement[] =>
 const attribute = (node: OoxmlElement, localName: string): string | undefined =>
   node.attributes.find((entry) => entry.localName === localName)?.value;
 
+/** What one grafted element must look like, verified AFTER the authored XML is parsed. */
+interface AuthoredShape {
+  readonly localName: string;
+  /** An attribute whose value must match exactly, pinning the element to its id. */
+  readonly attribute?: { readonly localName: string; readonly value: string };
+}
+
+/**
+ * Parse engine-authored numbering XML and verify it is EXACTLY the elements the template
+ * meant to produce — same philosophy as `withNumberingContentType`'s post-condition.
+ *
+ * The templates above interpolate only validated integers and engine constants, so this
+ * can never fire today; it exists so a future edit that lets anything else into an
+ * interpolation grafts NOTHING instead of grafting a surprise. Returns the elements in
+ * shape order, or null when the parse or the shape check refuses.
+ */
+function authoredElements(
+  xml: string,
+  shapes: readonly AuthoredShape[]
+): readonly OoxmlElement[] | null {
+  const read = readOoxmlPart(`<w:numbering xmlns:w="${W}">${xml}</w:numbering>`, {
+    name: NUMBERING_PART,
+    contentType: NUMBERING_CONTENT_TYPE,
+  });
+  if (!read.ok) return null;
+  const elements: OoxmlElement[] = [];
+  for (const node of read.part.root.children) {
+    if (node.kind !== 'textValue') elements.push(node as OoxmlElement);
+  }
+  if (elements.length !== shapes.length) return null;
+  for (let index = 0; index < shapes.length; index += 1) {
+    const element = elements[index]!;
+    const shape = shapes[index]!;
+    if (element.namespaceUri !== W || element.localName !== shape.localName) return null;
+    if (
+      shape.attribute &&
+      attribute(element, shape.attribute.localName) !== shape.attribute.value
+    ) {
+      return null;
+    }
+  }
+  return elements;
+}
+
 /**
  * `CT_Numbering`'s child sequence (ECMA-376 17.9.16). ORDER IS LOAD-BEARING.
  *
@@ -222,21 +266,24 @@ export function ensureListDefinition(
 
   const abstractNumId = nextFreeId(abstractNums, 'abstractNumId');
   const numId = nextFreeId(nums, 'numId');
-  // The new definitions are authored as their own document, then GRAFTED under fresh ids.
-  // `w:abstractNum` must precede every `w:num` (17.9.1), and Word's reader is strict about
-  // it, so the two groups are inserted at their own boundaries rather than appended.
-  const authored = readOoxmlPart(
-    `<w:numbering xmlns:w="${W}">` +
-      abstractNumXml(kind, abstractNumId) +
-      `<w:num w:numId="${numId}"><w:abstractNumId w:val="${abstractNumId}"/></w:num>` +
-      '</w:numbering>',
-    { name: NUMBERING_PART, contentType: NUMBERING_CONTENT_TYPE }
+  // The new definitions are authored as their own document, shape-verified, then GRAFTED
+  // under fresh ids. `w:abstractNum` must precede every `w:num` (17.9.1), and Word's
+  // reader is strict about it, so the two groups are inserted at their own boundaries
+  // rather than appended.
+  const authored = authoredElements(
+    abstractNumXml(kind, abstractNumId) +
+      `<w:num w:numId="${numId}"><w:abstractNumId w:val="${abstractNumId}"/></w:num>`,
+    [
+      {
+        localName: 'abstractNum',
+        attribute: { localName: 'abstractNumId', value: String(abstractNumId) },
+      },
+      { localName: 'num', attribute: { localName: 'numId', value: String(numId) } },
+    ]
   );
-  if (!authored.ok) return null;
+  if (!authored) return null;
   const nextId = createNodeIdAllocator(numbering);
-  const [newAbstract, newNum] = authored.part.root.children.map((node) =>
-    withFreshIds(node, nextId)
-  );
+  const [newAbstract, newNum] = authored.map((node) => withFreshIds(node, nextId));
   if (!newAbstract || !newNum) return null;
 
   // Each lands at its CT_NUMBERING_SEQUENCE slot — see `sequenceInsertIndex`. `w:num` is
@@ -336,6 +383,10 @@ export function ensureNumberingLevel(
   kind: ListKind
 ): OoxmlPackage | null {
   if (!Number.isInteger(level) || level < 0 || level >= LEVEL_COUNT) return null;
+  // `numId` is FILE-DERIVED (a paragraph's `w:numPr`), used here only as a comparison
+  // key — bounded like the layout index bounds ids, so a pathological id cannot make the
+  // lookups below churn through megabyte string comparisons.
+  if (numId.length === 0 || numId.length > 64) return null;
   const numbering = pkg.parts.get(NUMBERING_PART);
   if (!numbering) return null;
   const root = numbering.root;
@@ -357,19 +408,16 @@ export function ensureNumberingLevel(
   // the part schema-invalid, which Word repairs by dropping it.
   if (levels.length >= LEVEL_COUNT) return null;
 
-  const authored = readOoxmlPart(
-    `<w:numbering xmlns:w="${W}">${levelXml(kind, level)}</w:numbering>`,
-    { name: NUMBERING_PART, contentType: NUMBERING_CONTENT_TYPE }
-  );
-  if (!authored.ok) return null;
-  const node = authored.part.root.children[0];
-  if (!node) return null;
+  const authored = authoredElements(levelXml(kind, level), [
+    { localName: 'lvl', attribute: { localName: 'ilvl', value: String(level) } },
+  ]);
+  if (!authored) return null;
   const nextId = createNodeIdAllocator(numbering);
   const inserted = insertChildren(
     numbering,
     abstract.id,
     levelInsertIndex(abstract.children, level),
-    [withFreshIds(node, nextId)]
+    [withFreshIds(authored[0]!, nextId)]
   );
   if (!inserted.ok) return null;
 

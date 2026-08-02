@@ -9,7 +9,7 @@ import { GlobalRegistrator } from '@happy-dom/global-registrator';
 if (!GlobalRegistrator.isRegistered) GlobalRegistrator.register();
 
 import { describe, expect, test } from 'bun:test';
-import { zipSync, strToU8 } from 'fflate';
+import { zipSync, unzipSync, strToU8, strFromU8 } from 'fflate';
 import { mountPaginatedSurface, type PaginatedSurface } from '../paginated-surface.ts';
 import { createKeyDownHandler } from '../surface-input.ts';
 
@@ -426,6 +426,27 @@ describe('numbering.xml that fights the graft', () => {
     expect(markerOf(surface)).toMatchObject({ text: '§', level: 0 });
     expect(surface.adjustIndent('increase')).toBe(true);
     expect(markerOf(surface)).toMatchObject({ text: 'o', level: 1 });
+  });
+
+  test('a graft never de-escapes a hostile authored value on save', () => {
+    // The part being edited carries an attacker string that WOULD be markup if it ever
+    // reached the file unescaped. The graft edits the same part; the save must re-escape
+    // the authored value exactly as it arrived.
+    const hostile =
+      '<w:abstractNum w:abstractNumId="1">' +
+      '<w:lvl w:ilvl="0"><w:numFmt w:val="bullet"/>' +
+      '<w:lvlText w:val="&quot;/&gt;&lt;w:sectPr/&gt;&lt;w:lvl w:ilvl=&quot;1&quot;"/>' +
+      '<w:pPr><w:ind w:left="720" w:hanging="360"/></w:pPr></w:lvl>' +
+      '</w:abstractNum>' +
+      '<w:num w:numId="2"><w:abstractNumId w:val="1"/></w:num>';
+    const surface = mount(shallow('alpha', '2'), true, { numberingXml: hostile });
+    expect(surface.adjustIndent('increase')).toBe(true);
+    const saved = strFromU8(unzipSync(surface.session.save())['word/numbering.xml']!);
+    // The payload is still character data, not markup …
+    expect(saved).not.toContain('/><w:sectPr/>');
+    expect(saved).toContain('&lt;w:sectPr/&gt;');
+    // … and the graft itself landed.
+    expect(saved).toContain('Courier New');
   });
 });
 
