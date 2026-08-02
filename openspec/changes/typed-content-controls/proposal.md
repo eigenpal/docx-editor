@@ -74,7 +74,8 @@ Measured from `e2e/fixtures/comprehensive-word-element-test.docx`. Seventeen `w:
 | `w:dropDownList` | 3 | "Department", "Status", "Risk Level"; 32 `w:listItem` total across dropdowns and combos |
 | `w:comboBox` | 2 | "Priority Level", "Team Lead" |
 | `w:date` | 3 | with `w:dateFormat`, `w:lid`, `w:storeMappedDataAs`, `w:calendar` |
-| no type element | 7 | one TOC wrapper, four inline checkbox-style, two rich-text form fields |
+| `w14:checkbox` | 4 | inline, with `w14:checked`, `w14:checkedState val="2612"`, `w14:uncheckedState val="2610"`, font MS Gothic |
+| no type element | 3 | one TOC wrapper and two rich-text form fields |
 
 Other measurements:
 
@@ -84,11 +85,10 @@ Other measurements:
 
 Not present, so not claimable from this file:
 
-- `w:lock` — **not a single control in the fixture declares one**. The entire lock surface, which is this change's main correctness claim, is uncovered by it.
-- `w:dataBinding` — no XML-bound control anywhere.
-- `w:placeholder/w:docPart` — every prompt is literal content, never a glossary reference. There is no glossary part in the package.
-- Real `w14:checkbox` controls. The four checkbox-style controls are **untyped inline `w:sdt` wrapping a `w:sym`** with `w:char="2612"` / `"2610"` in MS Gothic — ballot-box glyphs, not checkbox content controls. A widget that toggles them by swapping a symbol character is toggling text, not a checkbox.
-- `w:docPartObj`, `w:docPartList`, `w:group`, `w:citation`, `w:bibliography`, `w:equation`, `w:picture`, repeating sections, `w:temporary`, `w:tabIndex`.
+- `w:lock` — no control in **this** fixture declares one. Other fixtures do: `block-sdt-comprehensive.docx`, `block-sdt-widgets.docx`, `block-sdt-showcase.docx`, and `inline-checkbox-controls.docx` each declare `w:lock w:val="sdtContentLocked"` **and** `w:dataBinding`. An earlier draft of this proposal claimed no fixture in the repository declared a lock; that was wrong, and lock enforcement is testable today.
+- `w:dataBinding` — none in this fixture; present in the four listed above.
+- `w:placeholder/w:docPart` — every prompt here is literal content, never a glossary reference. There is no glossary part in the package.
+- `w:docPartObj`, `w:docPartList`, `w:group`, `w:citation`, `w:bibliography`, `w:equation`, `w:picture`, repeating sections, `w:temporary`, `w:tabIndex`, `w:sdtEndPr`.
 - Row-level and cell-level `w:sdt` (`w:sdtContent` containing `w:tr` or `w:tc`). All five in-table controls wrap block content *inside* a cell.
 
 ## Impact

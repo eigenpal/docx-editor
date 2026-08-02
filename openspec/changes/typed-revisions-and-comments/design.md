@@ -4,12 +4,13 @@
 
 `typed-ooxml-paragraph-editor` is the production authority. This change closes two of its deferred lanes together — tracked changes and comments — because they share anchor infrastructure, a review surface, and one chrome group.
 
-The current failure is not "the feature is missing". It is that generic preservation renders tracked content as if it were final:
+The current failure is not "the feature is missing". `piecesOf` in `packages/core/src/layout/paragraph-flow.ts` walks only direct children of kind `run` and `continue`s on everything else. `w:ins` and `w:del` are `generic`, so their nested runs are never reached and **tracked content is dropped from layout entirely** — the insertion does not appear, and neither does the deletion.
 
-- `w:ins` is a generic wrapper holding typed runs. Those runs flow, so proposed insertions look like ordinary text.
-- `w:delText` is text. It flows. **Deleted content renders as live content.**
+A reviewer therefore sees a third text: not the original, not the proposal, and not a merge. The markup survives the save, so nothing signals the loss until the file is compared in Word.
 
-A reviewer therefore sees a merged document that is neither the original nor the proposal, with nothing indicating any of it is proposed. That is worse than not opening the file, and it is why this change ranks the "`w:delText` is never laid out as ordinary text" requirement above the review UI.
+This corrects an earlier draft of this design, which claimed tracked content rendered *as ordinary text*. It does not, and the difference matters: the requirement that follows is not only "`w:delText` is never laid out as ordinary text" but "tracked content reaches layout at all, under a presentation the display mode selects". Any implementation that merely styles what already flows would fix nothing, because nothing flows.
+
+The same root cause hits inline content controls, whose runs are also nested inside a `generic` wrapper — `typed-content-controls` owns that half.
 
 Comments fail quietly instead: the anchors are generic and invisible and `comments.xml` is not a story, so the review thread does not exist in the editor at all.
 

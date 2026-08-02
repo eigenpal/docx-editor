@@ -111,15 +111,21 @@ The `first` variant SHALL apply to the first page **of its own section** when th
 - **WHEN** a section sets `w:cols w:num="2" w:sep="true"`
 - **THEN** a vertical rule is drawn between the columns
 
-### Requirement: A literal tab character is text, not a tab advance
+### Requirement: The treatment of a literal tab character is decided once, against Word
 
-Only a `w:tab` node SHALL advance to the next tab stop. U+0009 inside `w:t` SHALL be treated as text content.
+A `w:tab` node SHALL advance to the next tab stop. The treatment of U+0009 inside `w:t` is **not decided by ECMA-376** and SHALL be settled by comparison against Word, recorded as evidence, and then applied uniformly to every story. It SHALL NOT be inferred independently per renderer or per part.
 
-#### Scenario: Literal tab in a header
+#### Scenario: The rule is uniform across every affected part
 
-- **WHEN** a header paragraph declares a right tab stop at 9026 twips and separates two runs with a literal tab inside `<w:t xml:space="preserve">`, as `header1.xml` in the comprehensive fixture does
-- **THEN** the second run is NOT advanced to the tab stop
-- **AND** the literal character round-trips unchanged
+- **WHEN** the settled rule is applied
+- **THEN** it holds identically for all five affected parts of the comprehensive fixture — `header1`, `header4`, `footer1`, `footer2`, `footer3` — and for the body
+- **AND** the literal character round-trips unchanged either way
+
+#### Scenario: Evidence is recorded, not assumed
+
+- **WHEN** the rule is implemented
+- **THEN** the Word comparison that decided it is recorded with the change
+- **AND** no test asserts a tab advance, or its absence, on the basis of the schema alone
 
 #### Scenario: Real tab element in a header
 

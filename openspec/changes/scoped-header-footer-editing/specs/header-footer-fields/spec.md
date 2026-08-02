@@ -6,9 +6,16 @@ The canonical tree SHALL type the complex field form — `w:fldChar` with `@w:fl
 
 #### Scenario: Complex PAGE field in a footer
 
-- **WHEN** a footer contains begin / `PAGE` instruction / separate / cached `1` / end, as every footer in the comprehensive fixture does
-- **THEN** the model holds a typed field whose instruction is `PAGE` and whose cached result is `1`
+- **WHEN** a footer contains begin / `PAGE` instruction / separate / cached result / end
+- **THEN** the model holds a typed field whose instruction is `PAGE` and whose cached result is that content
 - **AND** an unedited round trip matches by canonical fingerprint
+
+#### Scenario: Complex field with an empty result
+
+- **WHEN** a field emits `separate` immediately followed by `end`, as every footer in the comprehensive fixture does — the file carries no cached result anywhere
+- **THEN** the field types with an empty cached result rather than failing to parse
+- **AND** the empty result round-trips as empty; no result is fabricated on save
+- **AND** cached-result preservation is tested against a fixture that actually has one, not against this file
 
 #### Scenario: Simple field stays simple
 

@@ -1,7 +1,7 @@
 ## 0. Baseline before code
 
-- [ ] 0.1 Author the tracked-changes fixture from §7.1 **first**. No fixture in this repository contains a single `w:ins`, `w:del`, `w:moveFrom`, or property-change wrapper, so nothing in `revision-model` is observable or testable until one exists
-- [ ] 0.2 Load that fixture in the demo and record what renders today. The expected finding is that inserted and deleted text both render as ordinary text, indistinguishable from final content. Confirm it rather than assume it
+- [ ] 0.1 Inventory the tracked-change coverage that already exists — `list-pagination-break.docx`, `issue-68-large-comments-suggestions.docx` (which also ships `commentsExtended.xml`), `issue-319-sections.docx`, `endnotes-tracked-changes.docx` — and record which requirements each already exercises. §7 fills the remainder; it does not start from zero
+- [ ] 0.2 Load `list-pagination-break.docx` in the demo and record what renders today. The expected finding is that tracked content is **absent**, because `piecesOf` skips non-`run` children and `w:ins`/`w:del` are generic. Confirm it rather than assume it — an earlier draft of this change asserted the opposite (that tracked text rendered as ordinary text) and was wrong
 - [ ] 0.3 Load `comprehensive-word-element-test.docx` and confirm its four comments are invisible in the editor
 - [ ] 0.4 Re-read `openspec/changes/typed-ooxml-paragraph-editor/baseline.md` and record the current `bun test` result
 - [ ] 0.5 Confirm with review that the D8 boundary expansion — revision family, comment markup, comment bodies as stories — is accepted before typing any node
@@ -55,7 +55,7 @@
 
 ## 6. React adapter
 
-- [ ] 6.1 Wire `review.comments` and `review.editingMode` in `SLOT_COMMANDS` — both are declared and unwired today
+- [ ] 6.1 Enable `review.comments` and `review.editingMode`: change `state` from `{kind:'parityOnly'}` to `{kind:'command'}` **and** add `SLOT_COMMANDS` rows. Both are parity-only today, so the adapters render `formattingBar.unavailableInPreview` and a `SLOT_COMMANDS` row alone changes nothing
 - [ ] 6.2 Add `review.accept`, `review.reject`, `review.acceptAll`, `review.rejectAll`, `review.displayMode`; ids are public API forever
 - [ ] 6.3 Review sidebar with cards positioned from semantic layout records, never from measuring painted DOM
 - [ ] 6.4 Card↔range selection in both directions; next-change and previous-change navigation across stories
@@ -67,16 +67,17 @@
 - [ ] 6.10 Sidebar mousedown `preventDefault()` except on INPUT/SELECT/TEXTAREA; keyboard reachability
 - [ ] 6.11 `bun run api:extract`, `bun run check:parity`
 
-## 7. Fixtures — tracked changes have zero coverage in this repository
+## 7. Fixtures — fill the gaps around the coverage that already exists
 
-- [ ] 7.1 `revisions-basic.docx` — `w:ins`, `w:del` with `w:delText`, two authors, dates, and `<w:trackChanges/>` in settings. **Author this before task 0.2**
-- [ ] 7.2 `revisions-moves.docx` — a `w:moveFrom` / `w:moveTo` pair with range markers, plus one orphaned half
-- [ ] 7.3 `revisions-properties.docx` — `w:rPrChange`, `w:pPrChange`, `w:tblPrChange`, `w:tcPrChange`, `w:trPrChange`, `w:sectPrChange`, `w:tblGridChange`
-- [ ] 7.4 `revisions-nested.docx` — an insertion by one author inside a deletion by another
-- [ ] 7.5 `revisions-tables.docx` — `w:cellIns`, `w:cellDel`, `w:cellMerge`
-- [ ] 7.6 `comments-threaded.docx` — `commentsExtended.xml` with `@w15:paraIdParent` and `@w15:done`, `commentsIds.xml`, `commentsExtensible.xml`, and real `w14:paraId` values
-- [ ] 7.7 `comments-overlapping.docx` — overlapping and nested ranges, plus a comment anchored in a header
-- [ ] 7.8 Keep the comprehensive fixture as the no-thread-data case: four flat comments, no sibling parts, no `w14:paraId`, and one comment whose text says "Reply:" and is not one
+- [ ] 7.1 Use `list-pagination-break.docx` and `issue-319-sections.docx` as the basic insert/delete/property-change corpus. Author `revisions-basic.docx` only if a small, readable case is wanted alongside them — the coverage itself is not missing
+- [ ] 7.2 `revisions-moves.docx` — a `w:moveFrom` / `w:moveTo` pair **with `CT_MoveBookmark` range markers carrying `@w:name`**, plus one orphaned half. `list-pagination-break.docx` has 14 move elements; check whether it carries the range markers before authoring
+- [ ] 7.3 `revisions-properties.docx` — the property changes not already covered: `w:tblPrChange`, `w:tblPrExChange`, `w:tcPrChange`, `w:trPrChange`, `w:sectPrChange`, `w:tblGridChange`
+- [ ] 7.4 `revisions-paragraph-marks.docx` — `w:pPr/w:rPr/w:ins` and `w:del` on paragraph marks, the split/merge case
+- [ ] 7.5 `revisions-nested.docx` — an insertion by one author inside a deletion by another
+- [ ] 7.6 `revisions-tables.docx` — `w:cellIns`, `w:cellDel`, `w:cellMerge`, and `w:trPr/w:ins` / `w:del`
+- [ ] 7.7 Use `issue-68-large-comments-suggestions.docx` as the threaded-comment fixture — it already ships `commentsExtended.xml`. Author `comments-threaded.docx` only for the `commentsIds.xml` / `commentsExtensible.xml` parts it lacks
+- [ ] 7.8 `comments-overlapping.docx` — overlapping and nested ranges, a comment anchored in a header, and a comment range spanning a table boundary
+- [ ] 7.9 Keep the comprehensive fixture as the no-thread-data case: four flat comments, no sibling parts, no `w14:paraId`, and one comment whose text says "Reply:" and is not one
 
 ## 8. Retire the superseded spec
 
@@ -98,3 +99,20 @@
 - [ ] 10.2 `w:rsid` interpretation — preserved, never generated
 - [ ] 10.3 Collaboration and replicated undo — a separate lane in `deferred-features.md`. Durable anchors are a prerequisite for it; do not begin it here
 - [ ] 10.4 Tracked changes inside drawings — blocked on `typed-drawings-and-images`
+
+## 11. Review findings to close first
+
+See `openspec/changes/word-fidelity-review-findings.md`.
+
+- [ ] 11.1 **Settle `proposeInsertion`/`proposeDeletion`/`proposeReplacement` versus store-level suggesting mode as ONE decision.** The shipped `DocEdits` comment explicitly rejects a global toggle. Two write vocabularies for one intent is the ownership problem D2 exists to prevent (finding 2)
+- [ ] 11.2 Reconcile `Revision.date` (required, must become optional), `Revision.part` (optional 3-value, must be required and widened), `Revision.type` (no move/cell/paragraph-mark), and `DocComment` (no anchor/story/orphan) — with the semver consequence stated (finding 2)
+- [ ] 11.3 Add spec scenarios for **paragraph-mark revisions** (`EG_ParaRPrTrackChanges`) including the merge-on-accept rule (finding 3.2)
+- [ ] 11.4 Add accept/reject semantics for **row and cell revisions** — `w:trPr/w:ins`/`w:del`, `w:cellIns`/`w:cellDel`/`w:cellMerge`. As written, accepting a row deletion leaves the row (finding 3.3)
+- [ ] 11.5 Make `@w:name` the stated move-pairing key in the spec, not only the proposal (finding 3.4)
+- [ ] 11.6 Read and write document-level `w:trackRevisions`; handle `w:documentProtection/@w:edit="trackedChanges"`, `w:doNotTrackMoves`, `w:doNotTrackFormatting` — the last two contradict current requirements
+- [ ] 11.7 Add the four `w:customXml*RangeStart`/`End` pairs, `w:tblPrExChange`, `CT_ParaRPrChange`, `w:numPr/w:ins`, `w:delInstrText`
+- [ ] 11.8 Declare a D12 impact class, and say how a display-mode switch invalidates a change-scoped layout session without a `ModelChange` (finding 5)
+- [ ] 11.9 Add an IME rule: one composition in suggesting mode is ONE `w:ins` and one D10 history entry, not a chain
+- [ ] 11.10 Comment anchors are specified only inside a paragraph; `EG_RangeMarkupElements` also sits between paragraphs, rows, and cells (finding 3)
+- [ ] 11.11 State what a tracked note insertion, control value change, and drawing deletion are — the other four changes defer to requirements that do not yet exist (finding 4)
+- [ ] 11.12 Add the missing `## MODIFIED` spec delta for `core-comment-ops`

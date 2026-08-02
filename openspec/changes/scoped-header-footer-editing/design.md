@@ -49,11 +49,13 @@ One footer part paints on twenty pages with twenty `PAGE` values. Rewriting the 
 
 The inert-by-default rule is a security requirement, not a scoping convenience. The fields lane in `deferred-features.md` commits to keeping DDE and external inclusion non-executable, and this change types fields for the first time. Typing them is exactly when an evaluator could accidentally acquire a fetch.
 
-### H8: A literal tab is text
+### H8: The literal-tab rule is scheduled, not asserted
 
-`header1.xml` declares a right tab stop at 9026 twips and then separates its runs with a literal U+0009 inside `<w:t xml:space="preserve">`. Word does not advance on that character.
+Five of the fixture's eight header/footer parts — `header1`, `header4`, `footer1`, `footer2`, `footer3` — declare a right tab stop at 9026 twips and then separate their runs with a literal U+0009 inside `<w:t xml:space="preserve">`. The fixture has **zero** `w:tab` elements in any header or footer.
 
-Pinning this matters because the wrong implementation is rewarded: treating the literal as an advance makes this fixture look correct. The consequence is that these two headers will not paint as three tidy sections, and the fixture must not be "fixed" to hide it — a separate fixture covers real `w:tab` layout.
+An earlier draft of this design stated "Word does not advance on that character" as settled fact. It is not. ECMA-376 says only that `CT_Text` is text and that `w:tab` is the declared advance; it does not say what a renderer does with U+0009 in text, and Word's behaviour here is contested in practice.
+
+Asserting it would have pinned a possibly wrong rendering into a test — precisely the failure this design works hardest to avoid elsewhere. So task 3.5 settles it against Word and records the evidence, and the rule is then pinned once for all five parts rather than inferred per renderer. The same applies to "the first duplicate reference wins, matching Word", which is also asserted and unsourced.
 
 ### H9: The archived-era HF spec is superseded, not left standing
 

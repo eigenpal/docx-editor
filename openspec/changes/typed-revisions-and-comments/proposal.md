@@ -5,18 +5,28 @@
 - **Tracked changes**: parse `generic preserved`; model `untyped revision wrappers`; layout `deferred`; edit `deferred, including accept/reject`. Gate: "typed revisions and provenance, review projection, accept/reject `DocOp`s, layout, save/reopen conformance, and paired acceptance."
 - **Comments and annotations**: parse `generic preserved with relationships and anchor markup`; model `untyped anchors and bodies`; layout `deferred`; edit `deferred`. Gate: "durable typed anchors, comment operations, presentation, orphan/overlap policy, save/reopen conformance, and paired acceptance."
 
-The failure mode is specific and bad. A `w:ins` wrapper is a generic node holding typed runs; those runs flow, so **inserted text renders as ordinary text and deleted text inside `w:del` renders as ordinary text too** — because `w:delText` is preserved and, being text, is laid out. A reviewer opening a tracked document sees a merged document that is neither the original nor the proposal, with no indication that any of it is proposed. Nothing warns them.
+The failure mode is worse than "unsupported". `packages/core/src/layout/paragraph-flow.ts` flattens a paragraph in `piecesOf`, which walks only **direct** children of kind `run`:
 
-Comments fail the other way: `w:commentRangeStart` / `w:commentRangeEnd` / `w:commentReference` are generic and invisible, and `word/comments.xml` is never a story, so a document's entire review thread silently does not exist in the editor.
+```ts
+for (const child of paragraph.children) {
+  if (child.kind !== 'run') continue;
+```
 
-Two chrome slots already declare the intent — `review.comments` and `review.editingMode` are in `CHROME_GROUPS` — and neither is in `SLOT_COMMANDS`, so both render disabled with "not wired to an editor command". This change wires them.
+`w:ins` and `w:del` are `generic`, so the runs nested inside them are never reached. **Tracked content is not laid out at all — it is silently dropped.** An insertion vanishes and a deletion vanishes, so a reviewer opening a tracked document sees neither the original nor the proposal but a third text that exists nowhere, with no warning. Saving it back preserves the markup, so the loss is invisible until someone compares in Word.
+
+Comments fail the same way for a different reason: `w:commentRangeStart` / `w:commentRangeEnd` / `w:commentReference` are generic and invisible, and `word/comments.xml` is never a story, so a document's entire review thread does not exist in the editor.
+
+Two chrome slots already name the intent — `review.comments` and `review.editingMode` are in `CHROME_GROUPS` — but both carry `state: { kind: 'parityOnly' }`, so the adapters short-circuit and render the localized `formattingBar.unavailableInPreview` rather than a disabled command. Enabling them needs **two** changes, not one: the `state` becomes `{ kind: 'command' }` **and** a row is added to `SLOT_COMMANDS`. A `SLOT_COMMANDS` row alone does nothing.
 
 ## What Changes
 
 **Typed revisions**
 
-- Add typed kinds for the revision family to `packages/core/src/store/package/ooxml-tree.ts`: `w:ins`, `w:del`, `w:delText`, `w:moveFrom`, `w:moveTo`, `w:moveFromRangeStart`/`End`, `w:moveToRangeStart`/`End`, and the property-change wrappers `w:rPrChange`, `w:pPrChange`, `w:tblPrChange`, `w:tcPrChange`, `w:trPrChange`, `w:sectPrChange`, `w:tblGridChange`, plus `w:cellIns`, `w:cellDel`, `w:cellMerge`.
-- Every one extends `CT_TrackChange`, which extends `CT_Markup`: `@w:id` (required), `@w:author` (required), `@w:date` (optional). Provenance is required by the schema and SHALL be required by any operation that creates a revision — `author` is not optional at the API.
+- Add typed kinds for the revision family to `packages/core/src/store/package/ooxml-tree.ts`: `w:ins`, `w:del`, `w:delText`, `w:delInstrText`, `w:moveFrom`, `w:moveTo`, `w:moveFromRangeStart`/`End`, `w:moveToRangeStart`/`End`, the four `w:customXml*RangeStart`/`End` pairs, and the property-change wrappers `w:rPrChange`, `w:pPrChange`, `w:tblPrChange`, `w:tblPrExChange`, `w:tcPrChange`, `w:trPrChange`, `w:sectPrChange`, `w:tblGridChange`, plus `w:cellIns`, `w:cellDel`, `w:cellMerge`.
+- **Three different base types, and they do not agree.** `w:ins` / `w:del` / `w:moveFrom` / `w:moveTo` and the property-change wrappers extend `CT_TrackChange` → `CT_Markup`: `@w:id` required, `@w:author` required, `@w:date` optional. The move **range starts** (`w:moveFromRangeStart`, `w:moveToRangeStart`) are `CT_MoveBookmark` → `CT_Bookmark`: `@w:name` **required**, `@w:author` required, and `@w:date` **required**, plus `@w:colFirst` / `@w:colLast`. The move **range ends** are `CT_MarkupRange` → `CT_Markup`: **no author and no date at all**. Requiring an author on a range end refuses valid files; writing one emits invalid XML.
+- `@w:name` on the move range markers is the **join key** that pairs a `moveFrom` with its `moveTo`. Pairing is by name, not by proximity or id.
+- **Paragraph-mark revisions.** `w:pPr/w:rPr` is `CT_ParaRPr`, which opens with the `EG_ParaRPrTrackChanges` group: `w:ins`, `w:del`, `w:moveFrom`, `w:moveTo`. These mark *the paragraph mark itself*, and they are how Word records a paragraph split or merge. Accepting a deleted paragraph mark merges the paragraph with the following one.
+- **Row and cell revisions carry their own semantics.** `CT_TrPr` holds `w:ins` / `w:del` / `w:trPrChange`; `CT_TcPr` holds `w:cellIns` / `w:cellDel` / `w:cellMerge`. Accepting a tracked row deletion removes the row, not merely the `w:del` element inside its `w:trPr`.
 - Revision ids are unique **within a part**, not across the package. A revision is addressed by (part, id), never by id alone.
 
 **Revision layout and rendering**
@@ -86,11 +96,20 @@ Comments — **not** exercised:
 - Comments anchored in a header, footer, or note.
 - Overlapping or nested comment ranges.
 
-Tracked changes — **entirely absent**:
+Tracked changes — **entirely absent from this fixture**:
 
-- Zero `w:ins`, zero `w:del`, zero `w:delText`, zero `w:moveFrom` / `w:moveTo`, zero `w:rPrChange` / `w:pPrChange` / `w:tblPrChange`, zero `w:rsid`, and no `<w:trackChanges/>` in `word/settings.xml`.
+- Zero `w:ins`, zero `w:del`, zero `w:delText`, zero `w:moveFrom` / `w:moveTo`, zero `w:rPrChange` / `w:pPrChange` / `w:tblPrChange`, zero `w:rsid`, and no `w:trackRevisions` in `word/settings.xml`.
 
-**No fixture in this repository exercises tracked changes.** Every requirement in `revision-model` is unverifiable until the fixtures in `tasks.md` §7 exist. This is the single largest evidence gap across the five changes and is stated here rather than discovered during implementation.
+**But the repository is not short of tracked-change fixtures**, and an earlier draft of this proposal wrongly claimed it was. Existing coverage in `e2e/fixtures/`:
+
+| Fixture | Coverage |
+| --- | --- |
+| `list-pagination-break.docx` | 1114 `w:ins`, 1396 `w:del`, 1761 `w:delText`, 14 `w:moveFrom` / `w:moveTo`, plus `w:rPrChange` and `w:pPrChange` at scale |
+| `issue-68-large-comments-suggestions.docx` | 212 `w:ins`, 105 `w:del`, **and `word/commentsExtended.xml`** |
+| `issue-319-sections.docx` | insertions, deletions, `w:rPrChange`, `w:pPrChange` |
+| `endnotes-tracked-changes.docx` | revisions inside a note part |
+
+Roughly 20 fixtures carry `w14:paraId` and two carry `commentsExtended.xml`, so threading and durable-id work has real input too. Task §7 is therefore an inventory-then-fill exercise, not a from-scratch authoring block. What remains genuinely uncovered is narrower: the move **range markers** with `@w:name` pairing, row and cell revisions (`w:cellIns` / `w:cellDel` / `w:cellMerge`, `w:trPr/w:ins`), `w:sectPrChange`, and a deliberately nested two-author case.
 
 ## Impact
 

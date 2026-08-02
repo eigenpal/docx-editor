@@ -68,11 +68,16 @@ Control properties SHALL be typed per `CT_SdtPr`, which is an `xsd:sequence`: `r
 - **WHEN** a control declares the Microsoft `w14:checkbox` element
 - **THEN** it is typed as a vendor extension and is distinguishable from the ECMA-376 type elements
 
-#### Scenario: A symbol is not a checkbox
+#### Scenario: The checkbox extension is read before a control is called untyped
 
-- **WHEN** an untyped inline control wraps a `w:sym` with `w:char="2612"`, as the comprehensive fixture's checkbox-style controls do
-- **THEN** it is NOT reported as a checkbox control
-- **AND** any widget offered for it is a text-level affordance, not a checkbox value operation
+- **WHEN** a control declares `w14:checkbox` and no ECMA-376 type element, as the comprehensive fixture's four inline checkbox controls do
+- **THEN** it is reported as a checkbox control, not as an untyped rich-text container
+- **AND** its `w14:checked`, `w14:checkedState`, and `w14:uncheckedState` glyph and font are typed
+
+#### Scenario: A bare symbol with no checkbox extension is not a checkbox
+
+- **WHEN** an inline control wraps a `w:sym` and declares neither a type element nor `w14:checkbox`
+- **THEN** it is an untyped control and no checkbox widget is offered for it
 
 ### Requirement: Data binding is preserved and not resolved
 

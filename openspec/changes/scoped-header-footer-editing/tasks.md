@@ -19,7 +19,7 @@
 - [ ] 2.2 Make `variantFor` section-relative for `first` — the first page of the section, not of the document
 - [ ] 2.3 Keep `w:evenAndOddHeaders` document-scoped and evaluated against the displayed page number
 - [ ] 2.4 Keep the absent-variant-renders-blank rule
-- [ ] 2.5 Cover `first` and `even` with tests; both paths are uncovered by any current fixture
+- [ ] 2.5 Cover `first` and `even` with tests, starting from `titlePg-header-footer.docx` (2 `first`, 2 `even`, `w:titlePg`) and `section-inheritance-header-footer.docx`; nine fixtures carry `first` and five carry `even`
 
 ## 3. Section geometry
 
@@ -27,7 +27,8 @@
 - [ ] 3.2 Read `w:pgNumType` (`start`, `fmt`, `chapStyle`, `chapSep`); an empty element reports no authored values and re-emits empty
 - [ ] 3.3 Read `w:cols/@w:sep` and draw the column separator
 - [ ] 3.4 Push the body content area down when a story's flow height exceeds the header margin; keep flow height — never an anchored extent — as the box size
-- [ ] 3.5 Pin the literal-tab rule with a test over `header1.xml`, and record in the fixture notes that this header is a tolerance case
+- [ ] 3.5 **Settle the literal-U+0009 rule against Word before writing a test.** ECMA-376 does not decide it. Then pin it across all five affected parts — `header1`, `header4`, `footer1`, `footer2`, `footer3` — not just `header1`, and record the evidence
+- [ ] 3.6 Settle "first duplicate reference wins" against Word too; it is currently asserted and unsourced
 
 ## 4. Typed fields
 
@@ -64,11 +65,11 @@
 
 ## 8. Fixtures
 
-- [ ] 8.1 `hf-variants.docx` — `w:titlePg` on a mid-document section plus `first` and `even` references with `w:evenAndOddHeaders` enabled. No current fixture covers either path
-- [ ] 8.2 `hf-inheritance.docx` — a section declaring only a footer, a section declaring nothing, and a first section declaring nothing
+- [ ] 8.1 Use `titlePg-header-footer.docx` and `section-inheritance-header-footer.docx` for variant and inheritance coverage. Author `hf-variants.docx` only for the case they lack: `w:titlePg` on a **mid-document** section, which is the section-relative bug this change fixes
+- [ ] 8.2 Extend from `section-inheritance-header-footer.docx`; the case it may lack is a **first** section declaring nothing, which is the comprehensive fixture's shape
 - [ ] 8.3 `hf-tall-header.docx` — a header taller than its margin, to exercise the push-down
 - [ ] 8.4 `hf-page-numbering.docx` — `w:pgNumType` with `start` and `fmt="lowerRoman"`, plus `SECTIONPAGES`
-- [ ] 8.5 `hf-real-tabs.docx` — a three-section header using `w:tab` nodes, so tab layout is covered by a file that is not the literal-tab tolerance case
+- [ ] 8.5 `hf-real-tabs.docx` — a three-section header using `w:tab` nodes. The comprehensive fixture has **zero** `w:tab` elements in any header or footer, so real tab layout has no coverage there at all
 - [ ] 8.6 Keep the comprehensive fixture as the round-trip and tolerance fixture
 
 ## 9. Verification and honest scope
@@ -87,3 +88,19 @@
 - [ ] 10.2 `w:sectPr/@w:type` values other than `nextPage` — modelled, not laid out
 - [ ] 10.3 Note references inside headers and footers — owned by `typed-notes-footnotes-endnotes`
 - [ ] 10.4 Field instructions outside the page-number family — inert by design, not a gap to close later without a security review
+
+## 11. Review findings to close first
+
+See `openspec/changes/word-fidelity-review-findings.md`.
+
+- [ ] 11.1 **Declare the D8 boundary expansion.** This is the only one of the five changes that never does, and it types the whole field vocabulary plus four section properties (finding 5)
+- [ ] 11.2 Move page-number field evaluation out of paint and into layout, with a reserved width, so a line measured with a cached result does not paint a wider string. `typed-notes` §3.8 solves the identical problem (finding 5)
+- [ ] 11.3 Add a demotion rule for malformed fields — an `end` with no `begin`, an orphaned `w:instrText`, nested fields. This is the one new vocabulary with no fail-open rule
+- [ ] 11.4 Field atomicity is scoped to the HF editing scope but fields are document-wide; a body `TOC`/`REF`/`SEQ` is left editable character-by-character (finding 3.6)
+- [ ] 11.5 Own or explicitly defer `CT_FldChar/w:ffData` legacy form fields — they carry `entryMacro`/`exitMacro` and are what `w:formProt` protects (finding 3.6)
+- [ ] 11.6 Sweep the remaining `EG_SectPrContents`: `w:pgBorders`, `w:vAlign`, `w:lnNumType`, `w:docGrid`, `w:bidi`, `w:rtlGutter`, `w:textDirection`, `w:formProt`, `w:noEndnote`
+- [ ] 11.7 Column geometry is still count+gap; `CT_Columns` has `w:col` children with per-column `@w:w`/`@w:space`
+- [ ] 11.8 Give header/footer story-content edits a `global` impact class (finding 5)
+- [ ] 11.9 Resolve `w:sectPr/@w:type` — `continuous` makes "the first page of its section" undefined, which the section-relative `titlePg` fix depends on (finding 3)
+- [ ] 11.10 Add the missing `## MODIFIED` spec delta for `header-footer-editing`; `openspec validate --strict` does not catch its absence
+- [ ] 11.11 Assign the watermark owner with `typed-drawings-and-images` (finding 4)

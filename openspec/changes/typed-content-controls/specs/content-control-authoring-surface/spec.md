@@ -29,10 +29,11 @@ The painted surface SHALL offer a widget for each control type that has a value:
 - **WHEN** the user presses a widget trigger
 - **THEN** the mousedown is prevented so the caret does not move, per the chrome mousedown rule
 
-#### Scenario: No widget for a symbol masquerading as a checkbox
+#### Scenario: Toggling a checkbox rewrites state and glyph together
 
-- **WHEN** an untyped inline control wraps a ballot-box `w:sym`, as the comprehensive fixture's do
-- **THEN** no checkbox widget is offered, because the control declares no checkbox type
+- **WHEN** the user toggles one of the comprehensive fixture's four `w14:checkbox` controls
+- **THEN** `w14:checked` flips and the content glyph is rewritten from that control's own `w14:checkedState` / `w14:uncheckedState` value and font, in one transaction
+- **AND** the glyph is never hardcoded — a control declaring states other than 2612 / 2610 uses its own
 
 ### Requirement: Form-fill navigation across controls
 

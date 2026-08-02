@@ -38,13 +38,23 @@ This is why placeholder cannot be handled by styling alone.
 
 `w:placeholder/w:docPart` points at a glossary entry. The fixture has none, and reading the glossary document is a separate part-loading concern. Both cases are specified; only the literal one is implemented, and the requirement says so rather than implying the glossary works.
 
-### S5: The fixture's checkboxes are not checkboxes
+### S5: The fixture's checkboxes are real `w14:checkbox` controls
 
-The four checkbox-style controls are untyped inline `w:sdt` wrapping `w:sym` with `w:char="2612"` / `"2610"` in MS Gothic — ballot-box glyphs. A real Word checkbox control declares `w14:checkbox` in `w:sdtPr`.
+An earlier draft of this design claimed the opposite — that the four checkbox-style controls were untyped inline `w:sdt` wrapping a ballot-box `w:sym`, and that offering them a widget would be toggling text. That was a misreading, caused by searching `w:sdtPr` for `w:`-prefixed type elements only, which cannot match a `w14:`-prefixed one.
 
-Offering a checkbox widget for these would mean toggling a symbol character and calling it a value operation. The requirement refuses that: no declared type, no typed widget. A file authored by Word with real checkboxes gets the widget; this file does not.
+They are Word-authored checkbox content controls:
 
-This is the same shape of trap as the literal-tab case in `scoped-header-footer-editing`: the fixture rewards an implementation that is wrong on real files.
+```xml
+<w:sdtPr><w14:checkbox>
+  <w14:checked w14:val="1"/>
+  <w14:checkedState w14:val="2612" w14:font="MS Gothic"/>
+  <w14:uncheckedState w14:val="2610" w14:font="MS Gothic"/>
+</w14:checkbox></w:sdtPr>
+```
+
+The `w:sym` is their **content**, which is exactly how Word renders a checkbox: the control's state selects between `w14:checkedState` and `w14:uncheckedState`, and the chosen glyph is written into `w:sdtContent`. So the toggle operation is real, and it is not "swap a character" — it sets `w14:checked` and rewrites the content glyph from the control's own declared states.
+
+Two consequences. First, the fixture is a valid checkbox fixture and `inline-checkbox-controls.docx` is a second one, so this path needs no new file. Second, `w14:checkbox` is a Microsoft extension outside `CT_SdtPr`'s type choice, which means a control can carry it *and* declare no ECMA-376 type element — so "untyped" and "checkbox" are not mutually exclusive, and the model must read the extension before concluding a control is untyped. On this fixture that distinction moves three controls, not seven.
 
 ### S6: Data binding is preserved and refused, not half-supported
 

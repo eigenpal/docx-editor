@@ -57,7 +57,7 @@
 - [ ] 6.2 Insert adds part, override, and relationship in one transaction; validates bytes before writing anything
 - [ ] 6.3 Delete refcounts the media part; resize and crop leave media byte-identical
 - [ ] 6.4 Impact class no narrower than `flow-structural` for extent and wrap changes
-- [ ] 6.5 Wire `image.insert` and `image.properties` in `SLOT_COMMANDS`; add `image.wrap` and `image.altText` — ids are public API forever
+- [ ] 6.5 Enable `image.insert` and `image.properties`: change `state` from `{kind:'parityOnly'}` to `{kind:'command'}` **and** add `SLOT_COMMANDS` rows. A row alone leaves them rendering `formattingBar.unavailableInPreview`. Resolve how the `contextual: true` `image` group reaches the default bar. Add `image.wrap` and `image.altText` — ids are public API forever
 - [ ] 6.6 Resize handles positioned from layout records, one history entry per drag, preview without committing
 - [ ] 6.7 Anchored drag writing `wp:posOffset` against existing frames, with edge auto-scroll
 - [ ] 6.8 Wrap menu, including inline↔floating conversion in one transaction
@@ -69,9 +69,9 @@
 
 ## 7. Fixtures — the comprehensive file covers inline layout and one square wrap, nothing else
 
-- [ ] 7.1 `images-external.docx` — an `r:link` image and a `TargetMode="External"` relationship. **The no-zero-click-fetch rule has no coverage in this repository until this exists.** Author it before task 2.4
-- [ ] 7.2 `images-wrap.docx` — `wrapNone`, `wrapTight` with a polygon, `wrapThrough`, `wrapTopAndBottom`, and each `ST_WrapText` side
-- [ ] 7.3 `images-crop.docx` — a real non-empty `a:srcRect`; every `a:srcRect` in the comprehensive fixture is empty
+- [ ] 7.1 Use `list-pagination-break.docx` for the external-relationship rule — it already carries 27 `TargetMode="External"` image relationships. Author `images-external.docx` only for the `r:link` form if that file lacks it. An earlier draft claimed no coverage existed; it does
+- [ ] 7.2 Start from `float-wrap-comprehensive-test.docx`, `image-layout-modes-demo.docx`, and `issue-705-anchored-header-letterhead.docx`, which already cover `wrapTight`, `wrapThrough`, and `wrapTopAndBottom`; author only the missing `ST_WrapText` sides and the `wrapNone` case
+- [ ] 7.3 `images-crop.docx` — a real non-empty `a:srcRect`. **This is a genuine repository-wide gap**: no fixture anywhere has one, so cropping is untestable until it exists
 - [ ] 7.4 `images-zorder.docx` — two overlapping anchored drawings with differing `@relativeHeight`, one `@behindDoc="1"`, and one `@allowOverlap="0"`
 - [ ] 7.5 `images-formats.docx` — JPEG, GIF, SVG, TIFF, EMF, and WMF, to exercise decode and placeholder paths
 - [ ] 7.6 `images-header.docx` — a page-relative anchored drawing in a header, to pin the header-sizing rule
@@ -102,3 +102,21 @@
 - [ ] 10.4 `a:effectLst` shadows, reflections, and artistic effects
 - [ ] 10.5 VML (`w:pict`) — a separate vocabulary. **Watermarks live here and `scoped-header-footer-editing` also defers them; assign an owner before either change merges**
 - [ ] 10.6 Tracked deletion of a drawing — owned by `typed-revisions-and-comments`
+
+## 11. Review findings to close first
+
+See `openspec/changes/word-fidelity-review-findings.md`.
+
+- [ ] 11.1 **Decide `mc:AlternateContent` handling before typing anything.** Word wraps shapes, text boxes, and `wp14` anchors in `mc:Choice`/`mc:Fallback`; under D1 the wrapper demotes to generic and the anchor never types — on most real files (finding 3.1)
+- [ ] 11.2 Reconcile `EditorSnapshot.image.wrap` (no `through`, conflates `@behindDoc`) and `Editor.getSelectedImage()` (no wrap/crop/alt) with the shipped contract (finding 2)
+- [ ] 11.3 Add `@hidden` on `CT_Anchor` and `a:CT_NonVisualDrawingProps` — a hidden drawing that paints is a visible defect. Add `@title` alongside `@descr`; Word's alt-text UI writes both, and the current fallback would announce `name="Picture 3"`
+- [ ] 11.4 Honour `@locked` and `a:graphicFrameLocks` (`noResize`, `noSelect`, `noMove`, `noChangeAspect`) before presenting handles
+- [ ] 11.5 `wp:simplePos` is a required child and `@simplePos="1"` overrides `positionH`/`positionV`; only the positionH/V path is specified
+- [ ] 11.6 Wrap distances come from the **wrap element's own** `distT/B/L/R`, not the anchor's, and `wp:effectExtent` widens both reserved space and wrap bounds
+- [ ] 11.7 `a:xfrm/@rot` is in 60000ths of a degree, `wp:extent` is the rotated bounding box while `a:xfrm/a:ext` is unrotated, and `a:prstGeom` **clips** rather than merely round-tripping
+- [ ] 11.8 Model `a:blip` effects at least enough for watermarks — `a:lum`+`a:grayscl` is how Word writes a washed-out watermark image, which would otherwise paint at full saturation over the text
+- [ ] 11.9 Add a demotion rule for malformed drawings — a `wp:anchor` in inline position, a non-numeric `wp:extent`, two children
+- [ ] 11.10 `wp:docPr/@id` is required and must be allocated by insert-image
+- [ ] 11.11 Own or explicitly defer `w:object` (OLE, `@progId`, `@updateMode`) and `w:altChunk` — the latter pulls another part's content into the flow and deserves the same explicit refusal as `TargetMode="External"` (finding 3)
+- [ ] 11.12 Add the missing `## MODIFIED` spec delta for `core-image-commit`
+- [ ] 11.13 Assign the watermark owner with `scoped-header-footer-editing` (finding 4)

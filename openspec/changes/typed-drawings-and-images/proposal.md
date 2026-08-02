@@ -4,7 +4,7 @@
 
 Layout being deferred means a `w:drawing` occupies no space and paints nothing. `comprehensive-word-element-test.docx` has eleven of them — ten inline, one floating — and the four PNGs behind them are in the package, related, and never seen. A user opening a document with a logo, a chart image, or a signature block sees the text reflowed around holes where the pictures were, with no indication that anything is missing.
 
-Two chrome slots already declare the intent: `image.insert` and `image.properties` are in `CHROME_GROUPS` and absent from `SLOT_COMMANDS`, so both render disabled with "not wired to an editor command".
+Two chrome slots already name the intent: `image.insert` and `image.properties` are in `CHROME_GROUPS`. Both carry `state: { kind: 'parityOnly' }`, so the adapters short-circuit and render the localized `formattingBar.unavailableInPreview` — the "not wired to an editor command" path never runs for them. Enabling them needs the `state` to become `{ kind: 'command' }` **and** a `SLOT_COMMANDS` row. The `image` group is also `contextual: true`, so `defaultChromeGroups()` filters it out of the default bar entirely; that has to be addressed too, or the controls exist and never render.
 
 This lane also carries the most security surface of the five. An image is a relationship to a binary part, and a `TargetMode="External"` relationship is a URL. Typing drawings is exactly when a zero-click fetch can be introduced.
 
@@ -64,20 +64,20 @@ Exercised:
 
 | Feature | Evidence |
 | --- | --- |
-| Inline drawings | 10, extents from 152400×152400 EMU (0.17") to 2857500×762000 EMU (3.0"×0.8") |
+| Inline drawings | 10, extents from 152400×152400 EMU (0.17") to 2857500×762000 EMU (3.125"×0.83") |
 | Anchored drawing | 1, `wrapSquare`, `@behindDoc="0"`, `@allowOverlap="1"`, `@layoutInCell="1"`, `@relativeHeight="952500"` |
 | Anchor positioning | `positionH relativeFrom="margin"` with `wp:align`=right; `positionV relativeFrom="paragraph"` with `wp:posOffset`=0 |
 | Distance insets | `@distL="114300"` on the anchor |
 | Alt text | all 11 carry `wp:docPr/@name` and `@descr` |
 | Effect extent and geometry | 11 `wp:effectExtent`, 11 `a:prstGeom` |
-| Embedded media | `r:embed` to four PNGs, one reused across five drawings |
-| Reuse | `rId14`, `rId15`, `rId16` each referenced by more than one drawing |
+| Embedded media | `r:embed` to four PNGs |
+| Reuse | `rId14`, `rId15`, `rId16` referenced by three drawings each; `rId17` by two |
 
 Not exercised:
 
-- Every `a:srcRect` in the file is `<a:srcRect/>` — **empty. There is no actual cropping anywhere in this fixture.**
-- `r:link` and external-mode image relationships. **The no-zero-click-fetch rule, this change's main security claim, is uncovered by this file.**
-- Wrap modes other than `wrapSquare`: no `wrapNone`, `wrapTight`, `wrapThrough`, or `wrapTopAndBottom`.
+- Every `a:srcRect` in the file is `<a:srcRect/>` — **empty**. This one is a genuine repository-wide gap: no fixture anywhere carries a non-empty `a:srcRect`, so cropping has no coverage at all.
+- `r:link` and external-mode image relationships — none here. Coverage does exist elsewhere: `list-pagination-break.docx` carries **27** image relationships with `TargetMode="External"`. An earlier draft claimed the repository had none, which was wrong; the security rule is testable today.
+- Wrap modes other than `wrapSquare` — none here, but `float-wrap-comprehensive-test.docx`, `image-layout-modes-demo.docx`, `issue-705-anchored-header-letterhead.docx`, and `demo.docx` cover `wrapTight`, `wrapThrough`, and `wrapTopAndBottom`.
 - `@behindDoc="1"` — nothing behind text.
 - Rotation, `@flipH` / `@flipV`, `a:ln` borders, `a:effectLst`, `a:tile`.
 - Non-PNG media: no JPEG, GIF, SVG, TIFF, EMF, or WMF.

@@ -55,13 +55,13 @@
 
 ## 6. Fixtures — the comprehensive file covers almost none of the correctness claims
 
-- [ ] 6.1 `sdt-locks.docx` — every `ST_Lock` value across block, inline, and in-cell controls. **No existing fixture declares a single `w:lock`**, so lock enforcement is untestable until this exists. Author it before task 4.2
-- [ ] 6.2 `sdt-checkbox.docx` — real `w14:checkbox` controls, so the checkbox widget is tested against a Word-authored file rather than the fixture's ballot-box symbols
-- [ ] 6.3 `sdt-databinding.docx` — a `w:dataBinding` control plus its custom XML part, to test preserve-and-refuse
+- [ ] 6.1 Start from the locks that already exist — `block-sdt-comprehensive.docx`, `block-sdt-widgets.docx`, `block-sdt-showcase.docx`, and `inline-checkbox-controls.docx` all declare `w:lock w:val="sdtContentLocked"`. Author `sdt-locks.docx` only to cover the `ST_Lock` values those files lack (`sdtLocked`, `unlocked`) and the nesting case
+- [ ] 6.2 Checkbox coverage already exists in two places — the comprehensive fixture's four inline `w14:checkbox` controls and `inline-checkbox-controls.docx` (10 occurrences). No new checkbox fixture is needed
+- [ ] 6.3 `w:dataBinding` coverage already exists in the four fixtures named in 6.1; use them for preserve-and-refuse rather than authoring a new file
 - [ ] 6.4 `sdt-placeholder-glossary.docx` — `w:placeholder/w:docPart` with a glossary part, to pin preserve-without-resolving
 - [ ] 6.5 `sdt-row-cell.docx` — row-level and cell-level `w:sdt`; the comprehensive fixture has none
 - [ ] 6.6 `sdt-nesting.docx` — nesting past the bound, to prove content survives and recursion stops
-- [ ] 6.7 Keep the comprehensive fixture as the round-trip fixture and record its two tolerance cases: symbol-based pseudo-checkboxes, and prompts with no glossary reference
+- [ ] 6.7 Keep the comprehensive fixture as the round-trip fixture. Its one tolerance case is prompts with `w:showingPlcHdr` and no `w:placeholder/w:docPart`. Its checkboxes are **not** a tolerance case — they are real `w14:checkbox` controls
 
 ## 7. Verification and honest scope
 
@@ -80,3 +80,17 @@
 - [ ] 8.3 `w15:repeatingSection` — a Microsoft extension needing its own change; add/remove-item interacts with numbering, bookmarks, and tracked changes
 - [ ] 8.4 `w:docPartObj` gallery behaviour; the fixture's TOC control paints its cached field result, since non-page-number field instructions stay inert
 - [ ] 8.5 Tracked value changes — owned by `typed-revisions-and-comments`
+
+## 9. Review findings to close first
+
+See `openspec/changes/word-fidelity-review-findings.md`.
+
+- [ ] 9.1 **Choose the chrome slots.** This change proposes none while requiring an inspector, show-all-controls, form-fill navigation, and remove-control. `DocxEditor.Toolbar` derives from `CHROME_GROUPS`, so none of them can render. Include an insert path — Word's Developer tab creates controls (finding 6)
+- [ ] 9.2 Reconcile with the shipped contract: `ContentControlSummary.locked?: boolean`, `ContentControlType`, `setContentControlValue: {value: string}`, and the already-shipped `addRepeatingSectionItem`/`removeRepeatingSectionItem` (finding 2)
+- [ ] 9.3 Type `w:sdtEndPr` — a member of every `CT_SdtBlock`/`Run`/`Cell`/`Row` sequence, and at risk on the fingerprint oracle
+- [ ] 9.4 Give `w:temporary` behaviour: the control removes itself once its contents are edited — the other half of the placeholder transition
+- [ ] 9.5 State that `w:sdtPr/w:rPr` is where the placeholder's grey italic actually comes from
+- [ ] 9.6 Define lock resolution across nesting, and connect it to `w:documentProtection/@w:edit="forms"` and sectPr `w:formProt`
+- [ ] 9.7 Own or defer `w:customXml` and `w:smartTag` — same content positions as `w:sdt`, same UTF-16 offset correctness argument (finding 3)
+- [ ] 9.8 Declare a D12 impact class; placeholder replacement and value changes both re-flow (finding 5)
+- [ ] 9.9 Resolve `mc:AlternateContent` with `typed-drawings-and-images` — it also gates `mc:Ignorable`-declared `w14:checkbox` (finding 3.1)
