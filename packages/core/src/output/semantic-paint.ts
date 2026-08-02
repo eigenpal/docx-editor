@@ -699,6 +699,11 @@ function paintTableCell(
   cellElement.style.top = `${(cell.box.y - rowBox.y) * scale}px`;
   cellElement.style.boxSizing = 'border-box';
   cellElement.style.overflow = 'visible';
+  // Cell identity in the DOM, so a gesture or a highlight can name the cell it is over
+  // without re-deriving the grid from geometry.
+  cellElement.dataset.cellId = cell.id;
+  cellElement.dataset.gridColumn = String(cell.gridColumn);
+  cellElement.dataset.gridSpan = String(cell.gridSpan);
   if (cell.rowSpan && cell.rowSpan > 1) {
     cellElement.dataset.rowSpan = String(cell.rowSpan);
   }

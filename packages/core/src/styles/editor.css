@@ -127,6 +127,12 @@
   --doc-revision-insertion-tint: rgba(46, 125, 50, 0.05);
   --doc-revision-deletion-tint: rgba(198, 40, 40, 0.05);
 
+  /* Selected table cells. A native selection is a run of characters and cannot
+    * express a rectangle of cells, so that one highlight is drawn rather than
+    * left to the browser. Kept close to the browser's own selection tint so the
+    * two read as the same gesture. */
+  --doc-cell-selection: rgba(26, 115, 232, 0.22);
+
   /* Shadows & overlays */
   --doc-shadow: rgba(0, 0, 0, 0.15);
   --doc-shadow-strong: rgba(0, 0, 0, 0.3);
@@ -2334,10 +2340,23 @@
   user-select: text;
   -webkit-user-select: text;
 }
-/* The caret and the highlight are the BROWSER's, so they follow real glyph shapes and
+/* The caret and the TEXT highlight are the BROWSER's, so they follow real glyph shapes and
    per-line metrics instead of the uniform band a hand-drawn rectangle produces. */
 .docx-paginated-surface .docx-pages {
   outline: none;
+}
+
+/* The one highlight a native selection cannot express: a rectangle of table cells. Drawn on
+   a sibling layer of the pages — never inside them, where the page painter would sweep it
+   away and a keystroke could land in it. */
+.docx-paginated-surface .docx-selection-overlay {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.docx-paginated-surface .docx-cell-selection-rect {
+  background-color: var(--doc-cell-selection);
 }
 
 /* ========================================================================

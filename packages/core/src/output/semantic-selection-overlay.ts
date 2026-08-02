@@ -1,0 +1,66 @@
+// The selection the browser cannot draw.
+//
+// A native selection is a run of characters, so it can highlight a text range and nothing
+// else. A rectangle of table cells is not a run of characters — sweeping A1 to B2 selects four
+// cells, and asking the DOM to show that would draw a band through every character between the
+// first and the last instead.
+//
+// So it is painted, from the same records everything else is painted from. A pure sink like
+// the page painter: geometry in, elements out, nothing measured back.
+
+import type { SemanticLayout } from '../layout/semantic-records.ts';
+
+/** A rectangle in page-content coordinates, on a named page. */
+export interface OverlayRect {
+  readonly pageIndex: number;
+  readonly x: number;
+  readonly y: number;
+  readonly width: number;
+  readonly height: number;
+}
+
+export interface SelectionOverlayOptions {
+  /** Points to CSS pixels. */
+  readonly scale: number;
+  /**
+   * Per-page horizontal offset the page painter applied, by page index.
+   *
+   * A document whose pages differ in width centres each one individually, so a page is drawn
+   * at an x its record does not carry. Without the same offset here a highlight would sit
+   * beside the cells it describes.
+   */
+  readonly pageOffsetX?: ReadonlyMap<number, number>;
+}
+
+/**
+ * Draw a set of rectangles over the pages.
+ *
+ * The layer is a SIBLING of the pages, never a child: the page painter sweeps anything it did
+ * not paint out of its own subtree, and a stray child of a contenteditable is editable content
+ * a keystroke could land in.
+ */
+export function paintSelectionOverlay(
+  layer: HTMLElement,
+  layout: SemanticLayout,
+  rects: readonly OverlayRect[],
+  options: SelectionOverlayOptions
+): void {
+  const document = layer.ownerDocument;
+  const scale = options.scale;
+  const painted: HTMLElement[] = [];
+  for (const rect of rects) {
+    const page = layout.pages[rect.pageIndex];
+    if (!page) continue;
+    const element = document.createElement('div');
+    element.className = 'docx-cell-selection-rect';
+    element.style.position = 'absolute';
+    // Page-content coordinates to the sheet space the layer is laid out in.
+    const offsetX = options.pageOffsetX?.get(rect.pageIndex) ?? 0;
+    element.style.left = `${(page.contentBox.x + rect.x + offsetX) * scale}px`;
+    element.style.top = `${(page.contentBox.y + rect.y) * scale}px`;
+    element.style.width = `${rect.width * scale}px`;
+    element.style.height = `${rect.height * scale}px`;
+    painted.push(element);
+  }
+  layer.replaceChildren(...painted);
+}

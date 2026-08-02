@@ -326,6 +326,14 @@ export {
   type TableCellStyleFormatting,
 } from './style-cascade.ts';
 export {
+  cellSelectionBetween,
+  cellSelectionRects,
+  paragraphsInCells,
+  spansInCells,
+  type CellSelection,
+  type PlacedCell,
+} from './semantic-cell-selection.ts';
+export {
   DEFAULT_VERTICAL_WEIGHT,
   hitTestPage,
   hitTestSheet,

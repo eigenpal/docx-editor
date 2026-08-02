@@ -15,6 +15,7 @@
 // sits on screen, which is the one fact the records cannot carry; every position, band and
 // clamp comes from `semantic-hit-test.ts`.
 
+import { cellSelectionBetween, type CellSelection } from '../layout/semantic-cell-selection.ts';
 import {
   hitTestPage,
   pageAtY,
@@ -42,10 +43,20 @@ export interface PointerHost {
    * ratio between the two.
    */
   scale(): number;
+  /**
+   * The horizontal offset the painter drew a page at, beyond its record position.
+   *
+   * Pages of differing width are centred individually, so on a mixed-orientation document a
+   * page's painted x is not the x its record carries. The transform has to undo that or every
+   * point on such a page resolves shifted.
+   */
+  pageOffsetX(pageIndex: number): number;
   layout(): SemanticLayout;
   measurer(): TextMeasurer | undefined;
   selection(): SemanticSelection;
   setSelection(next: SemanticSelection): void;
+  cellSelection(): CellSelection | null;
+  setCellSelection(next: CellSelection | null): void;
   focus(): void;
 }
 
@@ -95,6 +106,8 @@ interface Gesture {
   readonly anchorRange: PositionRange;
   /** The cell the press landed in, or null outside a table. */
   readonly anchorCell: TableCellAddress | null;
+  /** Set once the drag leaves the cell it started in, and never unset before the release. */
+  cellDragging: boolean;
   /** Last client point, so autoscroll can keep extending while the pointer is still. */
   clientX: number;
   clientY: number;
@@ -149,7 +162,10 @@ export function createPointerController(
     return hitTestPage(
       layout,
       pageIndex,
-      { x: sheet.x - page.contentBox.x, y: sheet.y - page.contentBox.y },
+      {
+        x: sheet.x - page.contentBox.x - host.pageOffsetX(pageIndex),
+        y: sheet.y - page.contentBox.y,
+      },
       measurer ? { measurer } : {}
     );
   }
@@ -305,7 +321,29 @@ export function createPointerController(
     // An unresolvable move is a no-op, never a collapse: a pointer that has left the document
     // should leave the selection where it last was rather than throwing it away.
     if (!hit) return;
+    if (extendCells(active, hit)) return;
     host.setSelection(extend(host.layout(), active.anchorRange, hit.position, active.granularity));
+  }
+
+  /**
+   * Promote a drag that has crossed into another cell, and keep it promoted.
+   *
+   * Leaving a cell is the whole signal — no pixel threshold, because a threshold would make
+   * the same gesture mean different things depending on how the cells happen to be sized. Once
+   * promoted it STAYS promoted for the rest of the drag: dragging back into the cell it
+   * started in gives a one-cell rectangle, not a text selection, so the gesture cannot flip
+   * type under the pointer.
+   */
+  function extendCells(active: Gesture, hit: SemanticHit): boolean {
+    const anchorCell = active.anchorCell;
+    if (!anchorCell || !hit.cell) return false;
+    if (hit.cell.tableId !== anchorCell.tableId) return false;
+    if (!active.cellDragging && hit.cell.cellId === anchorCell.cellId) return false;
+    const next = cellSelectionBetween(host.layout(), anchorCell, hit.cell);
+    if (!next) return false;
+    active.cellDragging = true;
+    host.setCellSelection(next);
+    return true;
   }
 
   function countClick(event: PointerEvent): number {
@@ -358,6 +396,7 @@ export function createPointerController(
         granularity,
         anchorRange: { from: current.anchor, to: current.anchor },
         anchorCell: hit.cell,
+        cellDragging: false,
         clientX: event.clientX,
         clientY: event.clientY,
       };
@@ -369,6 +408,7 @@ export function createPointerController(
         granularity,
         anchorRange,
         anchorCell: hit.cell,
+        cellDragging: false,
         clientX: event.clientX,
         clientY: event.clientY,
       };
@@ -406,8 +446,12 @@ export function createPointerController(
       // Already released, or never captured.
     }
     // One last assertion of the model's selection over whatever the browser settled on while
-    // the gesture was running, now that the drag guard has been lifted.
-    host.setSelection(host.selection());
+    // the gesture was running, now that the drag guard has been lifted. A rectangle has to be
+    // re-asserted as a rectangle, or writing the plain selection would collapse it back to
+    // the text range it stands in for.
+    const cells = host.cellSelection();
+    if (cells) host.setCellSelection(cells);
+    else host.setSelection(host.selection());
   };
 
   function endGesture(): void {

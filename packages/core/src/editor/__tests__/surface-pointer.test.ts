@@ -112,6 +112,23 @@ const offsets = (surface: PaginatedSurface): [number, number] => {
   return [anchor.offset, head.offset];
 };
 
+const move = (x: number, y: number): void => {
+  document.dispatchEvent(pointer('pointermove', x, y));
+};
+
+const cell = (content: string, tcPr = '') => `<w:tc>${tcPr}${content}</w:tc>`;
+const row = (cells: string) => `<w:tr>${cells}</w:tr>`;
+/** Two by two, so a drag can leave a cell in either direction. */
+const TABLE =
+  `<w:tbl>${row(cell(paragraph('A1')) + cell(paragraph('B1')))}` +
+  `${row(cell(paragraph('A2')) + cell(paragraph('B2')))}</w:tbl>`;
+
+/** Page-content coordinates of a point inside the given cell of that fixture. */
+const inCell = (rowIndex: number, column: number): [number, number] => [
+  column * 234 + 10,
+  rowIndex * 20 + 5,
+];
+
 describe('a press beside the text', () => {
   test('left of the first glyph puts the caret at the START of the line', () => {
     const mounted = mount(paragraph('hello world'));
@@ -403,6 +420,122 @@ describe('shift-click', () => {
     expect(offsets(mounted.surface)).toEqual([6, 10]);
     press(mounted, 0, 5, { shiftKey: true });
     expect(offsets(mounted.surface)).toEqual([6, 0]);
+    mounted.surface.destroy();
+  });
+});
+
+describe('dragging across table cells', () => {
+  test('a drag that leaves its cell selects the RECTANGLE, not the text between', () => {
+    // The text range from A1 to B2 runs through B1 on the way. Selecting that would highlight
+    // a cell the drag never covered, and one delete would act on it.
+    const mounted = mount(TABLE);
+    press(mounted, ...inCell(0, 0));
+    move(...inCell(1, 1));
+
+    const cells = mounted.surface.state().cellSelection!;
+    expect(cells.kind).toBe('cells');
+    expect(cells.cellIds).toHaveLength(4);
+    expect(cells.rows).toEqual({ from: 0, to: 1 });
+    expect(cells.columns).toEqual({ from: 0, to: 1 });
+    release(...inCell(1, 1));
+    mounted.surface.destroy();
+  });
+
+  test('a drag INSIDE one cell stays an ordinary text selection', () => {
+    // No pixel threshold decides this — leaving the cell does. A drag that stays put selects
+    // characters however far it travels.
+    const mounted = mount(TABLE);
+    press(mounted, 0, 5);
+    move(...inCell(0, 0));
+    expect(mounted.surface.state().cellSelection).toBeNull();
+    const { anchor, head } = mounted.surface.state().selection;
+    expect(anchor.paragraphId).toBe(head.paragraphId);
+    expect(head.offset).toBeGreaterThan(anchor.offset);
+    release(...inCell(0, 0));
+    mounted.surface.destroy();
+  });
+
+  test('once promoted it stays promoted, even back in the cell it started in', () => {
+    // A gesture that flipped type under the pointer would be unusable: the same drag would
+    // mean one thing on the way out and another on the way back.
+    const mounted = mount(TABLE);
+    press(mounted, ...inCell(0, 0));
+    move(...inCell(0, 1));
+    move(...inCell(0, 0));
+
+    const cells = mounted.surface.state().cellSelection!;
+    expect(cells.cellIds).toHaveLength(1);
+    expect(cells.kind).toBe('cells');
+    release(...inCell(0, 0));
+    mounted.surface.destroy();
+  });
+
+  test('the selected cells are painted, since a native selection cannot show them', () => {
+    const mounted = mount(TABLE);
+    press(mounted, ...inCell(0, 0));
+    move(...inCell(1, 1));
+
+    const overlay = mounted.container.querySelector<HTMLElement>('.docx-selection-overlay')!;
+    expect(overlay.querySelectorAll('.docx-cell-selection-rect')).toHaveLength(4);
+    // Beside the pages, never inside them: the page painter sweeps its own subtree.
+    expect(overlay.parentElement).toBe(mounted.container);
+    expect(mounted.pages.contains(overlay)).toBe(false);
+    release(...inCell(1, 1));
+    mounted.surface.destroy();
+  });
+
+  test('and the native selection is collapsed, not run through the cells between', () => {
+    const mounted = mount(TABLE);
+    press(mounted, ...inCell(0, 0));
+    move(...inCell(1, 1));
+    const domSelection = document.getSelection()!;
+    expect(domSelection.isCollapsed).toBe(true);
+    release(...inCell(1, 1));
+    mounted.surface.destroy();
+  });
+
+  test('a plain click afterwards clears the rectangle', () => {
+    const mounted = mount(TABLE);
+    press(mounted, ...inCell(0, 0));
+    move(...inCell(1, 1));
+    release(...inCell(1, 1));
+    expect(mounted.surface.state().cellSelection).not.toBeNull();
+
+    press(mounted, ...inCell(1, 1));
+    expect(mounted.surface.state().cellSelection).toBeNull();
+    expect(mounted.container.querySelectorAll('.docx-cell-selection-rect')).toHaveLength(0);
+    mounted.surface.destroy();
+  });
+
+  test('the release does not collapse the rectangle back to a text selection', () => {
+    const mounted = mount(TABLE);
+    press(mounted, ...inCell(0, 0));
+    move(...inCell(1, 1));
+    release(...inCell(1, 1));
+    expect(mounted.surface.state().cellSelection!.cellIds).toHaveLength(4);
+    mounted.surface.destroy();
+  });
+
+  test('a rectangle still names a text range, so deleting one works untouched', () => {
+    const mounted = mount(TABLE);
+    press(mounted, ...inCell(0, 0));
+    move(...inCell(1, 1));
+    release(...inCell(1, 1));
+
+    expect(mounted.surface.deleteSelection()).toBe(true);
+    // The table survives; only its text went.
+    expect(mounted.container.querySelectorAll('.docx-table-cell')).toHaveLength(4);
+    mounted.surface.destroy();
+  });
+
+  test('painted cells carry their identity, so a highlight can name what it is over', () => {
+    const mounted = mount(TABLE);
+    const cells = [...mounted.pages.querySelectorAll<HTMLElement>('.docx-table-cell')];
+    expect(cells).toHaveLength(4);
+    for (const element of cells) {
+      expect(element.dataset.cellId).toBeTruthy();
+      expect(element.dataset.gridColumn).toMatch(/^[01]$/);
+    }
     mounted.surface.destroy();
   });
 });

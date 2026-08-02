@@ -61,6 +61,15 @@ export interface SurfaceSelectionSyncDeps {
    * whatever the DOM guessed, halfway through the drag.
    */
   isGesturing?(): boolean;
+  /**
+   * What to write into the browser's own selection, when that is not the model selection.
+   *
+   * A rectangle of table cells has no native equivalent: writing the text range it stands in
+   * for would draw a band running through every cell in between — the very thing the
+   * rectangle exists to avoid — and leaving the DOM with no selection at all stops a
+   * contenteditable firing `beforeinput`. So it writes a collapsed selection instead.
+   */
+  domSelection?(): SemanticSelection;
 }
 
 export interface SurfaceSelectionSync {
@@ -222,7 +231,11 @@ export function createSurfaceSelectionSync(deps: SurfaceSelectionSyncDeps): Surf
       if (!ownsSelection()) return;
       applyingSelection = true;
       const began = deps.now();
-      applySelectionToDom(pagesLayer, deps.selection(), document.getSelection());
+      applySelectionToDom(
+        pagesLayer,
+        deps.domSelection?.() ?? deps.selection(),
+        document.getSelection()
+      );
       deps.recordSelectionMs(deps.now() - began);
       // Cleared on a LATER task, because `selectionchange` is queued rather than dispatched
       // synchronously. Clearing it here would defeat the guard in every real browser while

@@ -25,18 +25,20 @@ import {
   createLayoutSession,
   createParagraphLayoutCache,
   resolveDefaultSurfaceMeasurer,
+  cellSelectionRects,
   documentOrder,
   layoutSemanticDocument,
   resolveNumberingLevel,
   moveCaret,
   paragraphTextFromLayout,
   wordBoundary,
+  type CellSelection,
   type LayoutScope,
   type SemanticLayout,
   type SemanticPosition,
   type SemanticSelection,
 } from '@docx-editor.dev/core-contract/layout';
-import { paintSemanticLayout } from '@docx-editor.dev/core-contract/output';
+import { paintSelectionOverlay, paintSemanticLayout } from '@docx-editor.dev/core-contract/output';
 import { tryCreateBrowserCanvasContext } from './browser-canvas-context.ts';
 import type {
   OpenPaginatedResult,
@@ -142,8 +144,20 @@ export function mountPaginatedSurface(
   pagesLayer.setAttribute('aria-multiline', 'true');
   pagesLayer.style.outline = 'none';
 
+  // The one highlight the browser cannot draw. A SIBLING of the pages, never a child: the
+  // page painter sweeps anything it did not paint out of its own subtree, and a stray child
+  // of a contenteditable is editable content a keystroke could land in.
+  const overlayLayer = document.createElement('div');
+  overlayLayer.className = 'docx-selection-overlay';
+  overlayLayer.contentEditable = 'false';
+  overlayLayer.setAttribute('aria-hidden', 'true');
+  overlayLayer.style.position = 'absolute';
+  overlayLayer.style.left = '0';
+  overlayLayer.style.top = '0';
+  overlayLayer.style.pointerEvents = 'none';
+
   container.style.position = 'relative';
-  container.replaceChildren(pagesLayer);
+  container.replaceChildren(pagesLayer, overlayLayer);
 
   // The engine paints its own insertion point. The native caret is a single device pixel,
   // and an empty paragraph paints no text span for the browser to size one against.
@@ -154,6 +168,14 @@ export function mountPaginatedSurface(
     anchor: { paragraphId: firstParagraph, offset: 0 },
     head: { paragraphId: firstParagraph, offset: 0 },
   };
+  /**
+   * The rectangle of cells a table drag selected, or null for an ordinary text selection.
+   *
+   * A SIBLING of `selection` rather than a variant of it: `selection` always holds a valid
+   * text range — the one this rectangle stands in for — so deletion, the clipboard, the DOM
+   * mirror and viewport pinning keep working with no knowledge that a rectangle exists.
+   */
+  let cellSelection: CellSelection | null = null;
   let lastRejection: string | null = null;
 
   // Phase timers, one slot per phase rather than a log: the state reports the LAST pass,
@@ -281,6 +303,7 @@ export function mountPaginatedSurface(
       revision: session.revision(),
       pageCount: currentLayout.pages.length,
       selection,
+      cellSelection,
       canUndo: session.canUndo(),
       canRedo: session.canRedo(),
       lastRejection,
@@ -342,11 +365,14 @@ export function mountPaginatedSurface(
     pagesLayer.style.height = `${materializedExtent.height * scale}px`;
     container.style.width = `${materializedExtent.width * scale}px`;
     container.style.height = `${materializedExtent.height * scale}px`;
+    overlayLayer.style.width = `${materializedExtent.width * scale}px`;
+    overlayLayer.style.height = `${materializedExtent.height * scale}px`;
     // Sizing included: the style writes above invalidate layout, and the selection sync
     // right after is what forces the browser to resolve it. Splitting the timer here would
     // book the paint's own cost to the selection phase.
     lastPaintMs = now() - paintBegan;
-    syncDomSelection();
+    renderOverlay();
+    selectionSync.mirrorToDom();
     // A scroll reports nothing — nothing about the document or the selection moved. Taking up
     // a pending gesture DID move the selection, so that pass has to report after all.
     if (notifyChange || adopted) options.onChange?.(currentState());
@@ -371,18 +397,6 @@ export function mountPaginatedSurface(
       return;
     }
     render(false);
-  }
-
-  /**
-   * Push the model selection into the browser's own selection.
-   *
-   * The caret and the highlight are the BROWSER's, drawn over the text layout painted — so
-   * they follow real glyph shapes instead of the uniform band a hand-drawn rectangle gives,
-   * and a caret between two lines of different size looks right without special-casing.
-   * Layout still decides where the text is; this only says which characters are selected.
-   */
-  function syncDomSelection(): void {
-    selectionSync.mirrorToDom();
   }
 
   function commit(
@@ -422,13 +436,18 @@ export function mountPaginatedSurface(
 
   function setSelection(next: SemanticSelection, keepDesiredX = false): void {
     selection = next;
+    // Any plain selection cancels a rectangle. A caret placed by a click, a keystroke or an
+    // edit is a text selection by definition, and leaving the rectangle behind would keep
+    // painting cells that are no longer chosen.
+    cellSelection = null;
     if (!keepDesiredX) desiredX = null;
     // SETTLED, not moved: this mirrors into the DOM on the next line, so the two agree before
     // any render can read them back — including a move raised earlier that no render has
     // carried out. `restoreSelection` raises the flag and only `flushLayout` takes it down, so
     // `undo` on an empty history left it up and disarmed the NEXT repaint, whenever it came.
     selectionSync.noteSelectionSettled();
-    syncDomSelection();
+    selectionSync.mirrorToDom();
+    renderOverlay();
     options.onChange?.(currentState());
   }
 
@@ -462,7 +481,30 @@ export function mountPaginatedSurface(
       lastSelectionMs = ms;
     },
     isGesturing: () => pointer?.dragging() ?? false,
+    domSelection: () => (cellSelection ? collapsedAt(cellSelection.text.anchor) : selection),
   });
+
+  function setCellSelection(next: CellSelection | null): void {
+    cellSelection = next;
+    if (next) selection = next.text;
+    desiredX = null;
+    selectionSync.mirrorToDom();
+    renderOverlay();
+    options.onChange?.(currentState());
+  }
+
+  /** Draw the selected cells, or clear the layer when nothing is selected that way. */
+  function renderOverlay(): void {
+    paintSelectionOverlay(
+      overlayLayer,
+      currentLayout,
+      cellSelection ? cellSelectionRects(currentLayout, cellSelection.cellIds) : [],
+      // Pages of differing width are centred individually, so the overlay has to carry the
+      // same per-page offset the painter applied or a highlight in a landscape section would
+      // sit beside the cells it describes.
+      { scale, pageOffsetX: materializedExtent?.pageOffsetX }
+    );
+  }
 
   const surface: PaginatedSurface = {
     session,
@@ -686,6 +728,7 @@ export function mountPaginatedSurface(
       return true;
     },
 
+    setCellSelection,
     layoutSession: () => layoutSession,
 
     undo: () => restoreSelection(session.undo()),
@@ -878,10 +921,16 @@ export function mountPaginatedSurface(
       pagesLayer,
       container,
       scale: () => scale,
+      // Pages of differing width are centred individually, so a landscape page among
+      // portrait ones is painted at an x its record does not carry. Without this the
+      // transform reads every point on such a page shifted by that offset.
+      pageOffsetX: (pageIndex) => materializedExtent?.pageOffsetX.get(pageIndex) ?? 0,
       layout: () => currentLayout,
       measurer: () => measurer,
       selection: () => selection,
       setSelection: (next) => setSelection(next),
+      cellSelection: () => cellSelection,
+      setCellSelection: (next) => setCellSelection(next),
       focus: () => pagesLayer.focus(),
     },
     options.pointer ? { mode: options.pointer } : {}
