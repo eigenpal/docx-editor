@@ -5,7 +5,12 @@
 // half both of them need.
 
 import { parentNodeOf, type OoxmlEditResult } from '../package/ooxml-edit.ts';
-import type { OoxmlElement, OoxmlNode, OoxmlPart } from '../package/ooxml-tree.ts';
+import {
+  WML_NAMESPACE_URI,
+  type OoxmlElement,
+  type OoxmlNode,
+  type OoxmlPart,
+} from '../package/ooxml-tree.ts';
 import { DEPENDENCY_KEY_IDS } from '../registry/frozen-ids.ts';
 import type { TreeOpEffect, TreeOpResult } from './tree-op-validate.ts';
 
@@ -30,6 +35,47 @@ export function cloneWithNewIds(node: OoxmlNode, nextId: () => string): OoxmlNod
     id: nextId(),
     children: node.children.map((child) => cloneWithNewIds(child, nextId)),
   } as OoxmlNode;
+}
+
+/**
+ * A paragraph's property container: its `w:pPr`, whether or not the canonical read TYPED it.
+ *
+ * A `w:pPr` demotes to generic whenever the reader's known-node invariant refuses it, and one
+ * shape that trips it is ordinary Word output — a paragraph mark (`w:rPr`) followed by
+ * `w:sectPr` or `w:pPrChange`, which is exactly the CT_PPr order (17.3.1.26). Matching only
+ * `kind === 'paragraphProperties'` made every op that writes paragraph properties miss that
+ * container and mint a SECOND `w:pPr`, which Word rejects outright; the split appliers lost
+ * the tail's properties the same way. The element the paragraph actually has is the one an
+ * op must write, so the lookup names it.
+ */
+export function paragraphPropertiesNodeOf(paragraph: OoxmlNode): OoxmlElement | undefined {
+  if (paragraph.kind === 'textValue') return undefined;
+  const children: readonly OoxmlNode[] = paragraph.children;
+  return children.find(
+    (child): child is OoxmlElement => child.kind !== 'textValue' && isParagraphPropertiesNode(child)
+  );
+}
+
+export function isParagraphPropertiesNode(node: OoxmlNode): boolean {
+  if (node.kind === 'paragraphProperties') return true;
+  return (
+    node.kind === 'generic' && node.localName === 'pPr' && node.namespaceUri === WML_NAMESPACE_URI
+  );
+}
+
+/** A named `w:`-namespace child element of a property container. */
+export function namedChild(
+  container: OoxmlNode | undefined | null,
+  localName: string
+): OoxmlElement | undefined {
+  if (!container || container.kind === 'textValue') return undefined;
+  const children: readonly OoxmlNode[] = container.children;
+  return children.find(
+    (child): child is OoxmlElement =>
+      child.kind !== 'textValue' &&
+      child.localName === localName &&
+      child.namespaceUri === WML_NAMESPACE_URI
+  );
 }
 
 export function parentOf(part: OoxmlPart, nodeId: string): OoxmlElement | null {

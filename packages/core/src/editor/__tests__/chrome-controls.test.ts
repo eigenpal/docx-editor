@@ -1,9 +1,11 @@
 // Legacy chrome descriptor contract (interactive-paginated-editing M6V.1).
 //
-// M6V.1 is a visual-parity gate with two rules that are easy to break silently:
-// every legacy control must remain PRESENT, and only undo/redo/bold/italic/save may
-// be actionable. A dropped control understates the parity gap; an extra enabled one
-// claims a capability the engine does not have. Both adapters render from this
+// M6V.1 is a visual-parity gate whose first rule is easy to break silently: every
+// legacy control must remain PRESENT, because a dropped control understates the parity
+// gap. Its second rule — which controls may ACT — is no longer the descriptor's to
+// state: enabled state is `Editor.can`'s answer, so the descriptor only says HOW a
+// control reaches the engine, and the assertions below hold it to the command table
+// rather than to a pinned list of "permitted" controls. Both adapters render from this
 // descriptor, so asserting it here covers React and Vue at once.
 //
 // The slot-id vocabulary (`${groupId}.${controlId}`) is public API forever; the
@@ -18,7 +20,7 @@ import {
   chromeSlotId,
   type ChromeSlotId,
 } from '../chrome-controls.ts';
-import { commandForSlot } from '../toolbar-commands.ts';
+import { commandForSlot, commandForSlotValue } from '../toolbar-commands.ts';
 
 /**
  * The toolbar groups in the chrome spec's bar order: history, zoom, styles, font,
@@ -91,31 +93,51 @@ describe('legacy chrome descriptor', () => {
     expect(allSlots()).toEqual([...EXPECTED_SLOTS]);
   });
 
-  test('only undo, redo, bold, italic may be commands, and only save may save', () => {
+  test('every slot the engine wires is declared as a command, and only save may save', () => {
     const commandSlots = CHROME_GROUPS.flatMap((g) =>
       g.controls.filter((c) => c.state.kind === 'command').map((c) => chromeSlotId(g, c))
     );
-    // Exactly the four M6V.1 permits — no more, and none missing.
-    expect([...commandSlots].sort()).toEqual([
-      'history.redo',
-      'history.undo',
-      'text.bold',
-      'text.italic',
-    ]);
-    // Every actionable chrome control resolves to a real engine command.
-    for (const slot of commandSlots) expect(commandForSlot(slot)).not.toBeNull();
+    // The descriptor may not UNDER-claim: a slot the command table wires must be
+    // declared 'command', or an adapter that trusts the descriptor renders a working
+    // command permanently disabled — which is exactly what Vue did for twelve slots
+    // while React ran them.
+    for (const slot of allSlots()) {
+      if (commandForSlot(slot) === null) continue;
+      expect(commandSlots, `${slot} is wired but not declared a command`).toContain(slot);
+    }
 
     const saves = CHROME_GROUPS.flatMap((g) => g.controls.filter((c) => c.state.kind === 'save'));
     expect(saves).toHaveLength(1);
   });
 
-  test('underline is present but NOT actionable in the chrome', () => {
-    // Underline stays visible and inert in the M6V.1 chrome. The COMMAND exists
-    // (`commandForSlot('text.underline')` is wired), but enabling the chrome control is a
-    // deliberate product decision the descriptor has not taken.
+  test('the value-typed slots are declared as values, not commands', () => {
+    // These four take a PICKED value through `commandForSlotValue`; there is no fixed
+    // command to hand `Editor.can`, so a bare click has nothing to send and chrome must
+    // produce a value first.
+    const valueSlots = CHROME_GROUPS.flatMap((g) =>
+      g.controls.filter((c) => c.state.kind === 'value').map((c) => chromeSlotId(g, c))
+    );
+    expect([...valueSlots].sort()).toEqual([
+      'font.family',
+      'font.size',
+      'text.color',
+      'text.highlight',
+    ]);
+    for (const slot of valueSlots) {
+      // No fixed command, but a well-formed value resolves to one.
+      expect(commandForSlot(slot)).toBeNull();
+      expect(commandForSlotValue(slot, 'Arial')).not.toBeNull();
+    }
+  });
+
+  test('underline is wired, and the descriptor says so', () => {
+    // The regression this pins: underline carried a "permanently disabled" descriptor
+    // long after `commandForSlot('text.underline')` started answering. A registry
+    // constant cannot be a second, staler answer to what `Editor.can` decides.
     const underline = CHROME_GROUPS.flatMap((g) => g.controls).find((c) => c.id === 'underline');
     expect(underline).toBeDefined();
-    expect(underline!.state.kind).toBe('parityOnly');
+    expect(underline!.state.kind).toBe('command');
+    expect(commandForSlot('text.underline')).not.toBeNull();
   });
 
   test('every control has a label key and no control hardcodes English', () => {

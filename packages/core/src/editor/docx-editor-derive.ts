@@ -131,6 +131,35 @@ export function gateCommand(
       },
     };
   }
+  // Run formatting is written over a RANGE INSIDE ONE PARAGRAPH (surface-format.ts's
+  // `toggleRunProperty`/`setRunProperty` both return early otherwise). Without this the
+  // press was the worst kind of failure: `can` said yes, `exec` reported
+  // `{ ok: true, changed: false }`, and the document did not move — Bold over a
+  // three-paragraph selection, or a font pick with the caret between two letters, looked
+  // live and did nothing at all. The engine now says why, and the button greys out.
+  if (command.type === 'toggleMark' || command.type === 'setMarkAttr') {
+    const { anchor, head } = surface.state().selection;
+    if (anchor.paragraphId !== head.paragraphId) {
+      return {
+        ok: false,
+        refusal: {
+          ok: false,
+          code: 'unsupported',
+          reason: 'run formatting applies within one paragraph; this selection spans several',
+        },
+      };
+    }
+    if (anchor.offset === head.offset) {
+      return {
+        ok: false,
+        refusal: {
+          ok: false,
+          code: 'unsupported',
+          reason: 'select the text to format; a caret carries no formatting yet',
+        },
+      };
+    }
+  }
   if (command.type === 'undo' && !surface.session.canUndo()) {
     return {
       ok: false,

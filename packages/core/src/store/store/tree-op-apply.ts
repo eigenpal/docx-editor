@@ -21,7 +21,21 @@ import {
   replaceNode,
   type EditOptions,
 } from '../package/ooxml-edit.ts';
-import { TEXT_DEPS, cloneWithNewIds, fromEdit, ok, parentOf } from './tree-op-nodes.ts';
+import {
+  TEXT_DEPS,
+  cloneWithNewIds,
+  fromEdit,
+  isParagraphPropertiesNode,
+  namedChild,
+  ok,
+  paragraphPropertiesNodeOf,
+  parentOf,
+} from './tree-op-nodes.ts';
+import {
+  PARAGRAPH_VOCABULARY,
+  RUN_VOCABULARY,
+  mergedPropertyChildren,
+} from './tree-op-properties.ts';
 import {
   applySetListLevel,
   applySetParagraphMarkProperties,
@@ -40,52 +54,6 @@ import {
   type TreeOpRejection,
   type TreeOpResult,
 } from './tree-op-validate.ts';
-
-/**
- * Build one `w:pPr` child from a flat property, KEEPING the structure of the node it
- * replaces.
- *
- * `OoxmlProperty` is flat — a name and attributes — but several `w:pPr` children carry
- * their meaning in CHILDREN: `w:numPr` holds `w:ilvl`/`w:numId`, `w:tabs` holds `w:tab`,
- * `w:pBdr` holds its edges. Rebuilding those from the flat projection alone emitted an
- * empty element, so centring a list paragraph silently deleted its numbering and the
- * bullet vanished. When the incoming property matches what is already there, the existing
- * node is reused verbatim; when its attributes changed, the children still come across.
- */
-function propertyElement(property: OoxmlProperty, id: string, prior?: OoxmlNode): OoxmlNode {
-  const attributes = Object.entries(property.attributes ?? {}).map(([localName, value]) => ({
-    kind: 'genericExtension' as const,
-    namespaceUri: WML_NAMESPACE_URI,
-    localName,
-    prefix: 'w',
-    value,
-  }));
-  const priorElement = prior && prior.kind !== 'textValue' ? prior : undefined;
-  if (priorElement && sameAttributes(priorElement, attributes)) return prior!;
-  return {
-    id,
-    kind: 'generic',
-    namespaceUri: WML_NAMESPACE_URI,
-    localName: property.localName,
-    prefix: 'w',
-    namespaceBindings: [],
-    attributes,
-    children: priorElement?.children ?? [],
-  } as unknown as OoxmlNode;
-}
-
-function sameAttributes(
-  node: Exclude<OoxmlNode, { kind: 'textValue' }>,
-  attributes: readonly { readonly localName: string; readonly value: string }[]
-): boolean {
-  const existing = node.attributes ?? [];
-  if (existing.length !== attributes.length) return false;
-  for (const attribute of attributes) {
-    const match = existing.find((entry) => entry.localName === attribute.localName);
-    if (!match || match.value !== attribute.value) return false;
-  }
-  return true;
-}
 
 function textElement(nextId: () => string, text: string): OoxmlNode {
   const valueId = nextId();
@@ -183,14 +151,7 @@ export function applyTreeOp(part: OoxmlPart, op: TreeDocOp, options?: EditOption
     case 'setListLevel':
       return applySetListLevel(part, paragraph, op.level, options, nextId);
     case 'setParagraphMarkProperties':
-      return applySetParagraphMarkProperties(
-        part,
-        paragraph,
-        op.properties,
-        options,
-        nextId,
-        propertyElement
-      );
+      return applySetParagraphMarkProperties(part, paragraph, op.properties, options, nextId);
     case 'setListNumbering':
       return applySetListNumbering(part, paragraph, op.numId, op.level ?? 0, options, nextId);
     case 'insertPageBreak':
@@ -210,21 +171,13 @@ export function applyTreeOp(part: OoxmlPart, op: TreeDocOp, options?: EditOption
     case 'setRunProperties':
       return applySetRunProperties(part, paragraph, op.start, op.end, op.properties, options);
     case 'setParagraphProperties': {
-      const existing = paragraph.children.find((child) => child.kind === 'paragraphProperties');
-      // Existing children by name, consumed in order, so a rewritten `w:pPr` carries the
-      // nested structure the flat projection cannot express.
-      const priorByName = new Map<string, OoxmlNode[]>();
-      for (const child of existing?.children ?? []) {
-        const bucket = priorByName.get(child.localName);
-        if (bucket) bucket.push(child);
-        else priorByName.set(child.localName, [child]);
-      }
-      const takenByName = new Map<string, number>();
-      const children = op.properties.map((property) => {
-        const taken = takenByName.get(property.localName) ?? 0;
-        takenByName.set(property.localName, taken + 1);
-        return propertyElement(property, nextId(), priorByName.get(property.localName)?.[taken]);
-      });
+      const existing = paragraphPropertiesNodeOf(paragraph);
+      const children = mergedPropertyChildren(
+        existing?.children ?? [],
+        op.properties,
+        PARAGRAPH_VOCABULARY,
+        nextId
+      );
       const effect: TreeOpEffect = {
         dirty: [paragraph.id],
         created: [],
@@ -232,9 +185,9 @@ export function applyTreeOp(part: OoxmlPart, op: TreeDocOp, options?: EditOption
         dependencyKeys: TEXT_DEPS,
         impact: 'paragraph-local',
       };
-      if (op.properties.length === 0) {
-        // Clearing properties removes the container entirely rather than leaving an empty
-        // `w:pPr`, so a cleared paragraph digests identically to one that never had any.
+      if (children.length === 0) {
+        // Nothing left to hold: the container goes rather than staying as an empty `w:pPr`,
+        // so a cleared paragraph digests identically to one that never had any.
         return existing
           ? fromEdit(removeNode(part, existing.id, options), effect)
           : ok(part, effect);
@@ -400,6 +353,45 @@ function applyDeleteText(
   return ok(current, effect);
 }
 
+/**
+ * The range markers that CLOSE a span of content (17.13.6, 17.13.5.2, 17.13.4.x).
+ *
+ * A marker sitting exactly on the split has no character to sit before or after, so the
+ * side it takes is a decision: an end marker stays with the head, leaving the range it
+ * closes closed around the content it always covered, and everything else — a start
+ * marker, a hyperlink, a picture's run — moves down with the caret.
+ */
+const RANGE_END_MARKERS: ReadonlySet<string> = new Set([
+  'bookmarkEnd',
+  'commentRangeEnd',
+  'moveFromRangeEnd',
+  'moveToRangeEnd',
+  'permEnd',
+  'customXmlInsRangeEnd',
+  'customXmlDelRangeEnd',
+  'customXmlMoveFromRangeEnd',
+  'customXmlMoveToRangeEnd',
+]);
+
+function closesARange(node: OoxmlNode): boolean {
+  return node.kind !== 'textValue' && RANGE_END_MARKERS.has(node.localName);
+}
+
+/**
+ * Which half a paragraph child that measures ZERO characters belongs to.
+ *
+ * A hyperlink, a bookmark or comment marker, a run holding only a picture: none of them
+ * contributes a text offset, but each sits at a definite POSITION between the runs that do.
+ * Sending them all to the head — the rule this replaces — moved every hyperlink in a
+ * sentence backwards past the caret, left comment ranges as empty marker pairs around the
+ * wrong half, and carried an inline picture into the paragraph below when the user pressed
+ * Enter at the end of the line.
+ */
+function zeroLengthGoesToHead(child: OoxmlNode, position: number, offset: number): boolean {
+  if (position !== offset) return position < offset;
+  return closesARange(child);
+}
+
 function applySplit(
   part: OoxmlPart,
   paragraph: OoxmlParagraphNode,
@@ -410,19 +402,22 @@ function applySplit(
   const segments = segmentsOf(paragraph);
   const headChildren: OoxmlNode[] = [];
   const tailChildren: OoxmlNode[] = [];
-  const pPr = paragraph.children.find((child) => child.kind === 'paragraphProperties');
+  const pPr = paragraphPropertiesNodeOf(paragraph);
 
+  // The running text offset the walk has reached, which is the position of anything that
+  // measures nothing.
+  let cursor = 0;
   for (const child of paragraph.children) {
-    if (child.kind === 'paragraphProperties') continue;
-    if (child.kind !== 'run') {
-      // Unknown paragraph-level content stays with the HEAD: it has no offset, so moving it
-      // would be an invented decision.
-      headChildren.push(child);
+    if (isParagraphPropertiesNode(child)) continue;
+    const runSegments =
+      child.kind === 'run' ? segments.filter((segment) => segment.runId === child.id) : [];
+    if (runSegments.length === 0) {
+      (zeroLengthGoesToHead(child, cursor, offset) ? headChildren : tailChildren).push(child);
       continue;
     }
-    const runSegments = segments.filter((segment) => segment.runId === child.id);
-    const runStart = runSegments[0]?.start ?? Number.POSITIVE_INFINITY;
-    const runEnd = runSegments[runSegments.length - 1]?.end ?? runStart;
+    const runStart = runSegments[0]!.start;
+    const runEnd = runSegments[runSegments.length - 1]!.end;
+    cursor = runEnd;
     if (runEnd <= offset) {
       headChildren.push(child);
       continue;
@@ -504,15 +499,21 @@ function applySplit(
 }
 
 /** The resulting paragraph a source offset belongs to: how many boundaries lie at or before it. */
-function pieceIndexOf(offsets: readonly number[], position: number): number {
+function pieceIndexOf(
+  offsets: readonly number[],
+  position: number,
+  atBoundary: 'tail' | 'head' = 'tail'
+): number {
   // Binary search — a whole-document paste can carry thousands of boundaries, and every
   // segment asks. Content sitting exactly ON a boundary opens that boundary's tail, which
-  // is what the equivalent sequence of single splits does.
+  // is what the equivalent sequence of single splits does; `head` is for the range-end
+  // markers the single split keeps behind, so a range that closed at the caret stays closed.
   let low = 0;
   let high = offsets.length;
   while (low < high) {
     const mid = (low + high) >> 1;
-    if (offsets[mid]! <= position) low = mid + 1;
+    const before = atBoundary === 'tail' ? offsets[mid]! <= position : offsets[mid]! < position;
+    if (before) low = mid + 1;
     else high = mid;
   }
   return low;
@@ -537,21 +538,25 @@ function applySplitMany(
 ): TreeOpResult {
   const nextId = createNodeIdAllocator(part);
   const segments = segmentsOf(paragraph);
-  const pPr = paragraph.children.find((child) => child.kind === 'paragraphProperties');
+  const pPr = paragraphPropertiesNodeOf(paragraph);
   const pieceCount = offsets.length + 1;
   const pieces: OoxmlNode[][] = Array.from({ length: pieceCount }, () => []);
 
+  // The running text offset the walk has reached — the position of anything measuring
+  // nothing, exactly as the single split reads it.
+  let cursor = 0;
   for (const child of paragraph.children) {
-    if (child.kind === 'paragraphProperties') continue;
-    if (child.kind !== 'run') {
-      // Unknown paragraph-level content stays with the HEAD: it has no offset, so moving it
-      // would be an invented decision. Matches the single-split rule.
-      pieces[0]!.push(child);
+    if (isParagraphPropertiesNode(child)) continue;
+    const runSegments =
+      child.kind === 'run' ? segments.filter((segment) => segment.runId === child.id) : [];
+    if (runSegments.length === 0) {
+      const piece = pieceIndexOf(offsets, cursor, closesARange(child) ? 'head' : 'tail');
+      pieces[piece]!.push(child);
       continue;
     }
-    const runSegments = segments.filter((segment) => segment.runId === child.id);
-    const runStart = runSegments[0]?.start ?? Number.POSITIVE_INFINITY;
-    const runEnd = runSegments[runSegments.length - 1]?.end ?? runStart;
+    const runStart = runSegments[0]!.start;
+    const runEnd = runSegments[runSegments.length - 1]!.end;
+    cursor = runEnd;
     const startPiece = pieceIndexOf(offsets, runStart);
     const endPiece = runEnd > runStart ? pieceIndexOf(offsets, runEnd - 1) : startPiece;
     if (startPiece === endPiece) {
@@ -679,7 +684,7 @@ function applyJoin(
 
   // The survivor keeps ITS paragraph properties; the removed paragraph's are dropped, which
   // matches Word: joining into a paragraph adopts that paragraph's formatting.
-  const moved = second.children.filter((child) => child.kind !== 'paragraphProperties');
+  const moved = second.children.filter((child) => !isParagraphPropertiesNode(child));
 
   // A single edit against the shared parent: the surviving `w:p` receives the second
   // paragraph's content children, and the second `w:p` leaves the child sequence, in the
@@ -690,11 +695,66 @@ function applyJoin(
   if (!first || first.kind !== 'paragraph') {
     return { ok: false, reason: 'tree-invariant', detail: 'survivor missing' };
   }
-  const merged = Object.freeze({ ...first, children: [...first.children, ...moved] }) as OoxmlNode;
+  const nextId = createNodeIdAllocator(part);
+  const kept = withSectionMarkOf(first, second, nextId);
+  const merged = Object.freeze({ ...kept, children: [...kept.children, ...moved] }) as OoxmlNode;
   const siblings = parent.children.flatMap((child) =>
     child.id === firstId ? [merged] : child.id === secondId ? [] : [child]
   );
   return fromEdit(replaceChildren(part, parent.id, siblings, options), effect);
+}
+
+/**
+ * The join survivor, carrying the SECTION MARK of the paragraph that leaves.
+ *
+ * `w:sectPr` in a paragraph's mark is not formatting: it is where a section ENDS (17.6.17).
+ * A join deletes the FIRST paragraph's mark, so the mark that survives the merge is the
+ * second's, and the section boundary rides on it. Dropping it with the rest of the second
+ * paragraph's `w:pPr` merged the section into the one that follows, taking that section's
+ * page size, orientation and headers over every page of it.
+ */
+function withSectionMarkOf(
+  first: OoxmlNode & { readonly children: readonly OoxmlNode[] },
+  second: OoxmlParagraphNode,
+  nextId: () => string
+): OoxmlNode & { readonly children: readonly OoxmlNode[] } {
+  const sectPr = namedChild(paragraphPropertiesNodeOf(second), 'sectPr');
+  if (!sectPr) return first;
+  const carried = cloneWithNewIds(sectPr, nextId);
+  const pPr = paragraphPropertiesNodeOf(first);
+  if (!pPr) {
+    const minted = {
+      id: nextId(),
+      kind: 'paragraphProperties',
+      namespaceUri: WML_NAMESPACE_URI,
+      localName: 'pPr',
+      prefix: 'w',
+      namespaceBindings: [],
+      attributes: [],
+      children: [carried],
+    } as unknown as OoxmlNode;
+    // `w:pPr` must be the paragraph's FIRST child per the schema.
+    return { ...first, children: [minted, ...first.children] } as OoxmlNode & {
+      readonly children: readonly OoxmlNode[];
+    };
+  }
+  // The survivor's own mark, if it had one, goes with the paragraph mark being deleted.
+  // `w:sectPr` sits near the END of CT_PPr's sequence, before only `w:pPrChange`.
+  const others = pPr.children.filter(
+    (child) => child.kind === 'textValue' || child.localName !== 'sectPr'
+  );
+  const change = others.findIndex(
+    (child) => child.kind !== 'textValue' && child.localName === 'pPrChange'
+  );
+  const at = change === -1 ? others.length : change;
+  const rebuilt = {
+    ...pPr,
+    children: [...others.slice(0, at), carried, ...others.slice(at)],
+  } as OoxmlNode;
+  return {
+    ...first,
+    children: first.children.map((child) => (child.id === pPr.id ? rebuilt : child)),
+  } as OoxmlNode & { readonly children: readonly OoxmlNode[] };
 }
 
 function applySetRunProperties(
@@ -734,7 +794,13 @@ function applySetRunProperties(
     if (!run || run.kind !== 'run') continue;
     const existing = run.children.find((child) => child.kind === 'runProperties');
     const content = run.children.filter((child) => child.kind !== 'runProperties');
-    if (properties.length === 0) {
+    const children = mergedPropertyChildren(
+      existing?.children ?? [],
+      properties,
+      RUN_VOCABULARY,
+      nextId
+    );
+    if (children.length === 0) {
       if (!existing) continue;
       const cleared = replaceChildren(current, run.id, content, options);
       if (!cleared.ok) return fromEdit(cleared, effect);
@@ -749,7 +815,7 @@ function applySetRunProperties(
       prefix: 'w',
       namespaceBindings: [],
       attributes: [],
-      children: properties.map((property) => propertyElement(property, nextId())),
+      children,
     } as unknown as OoxmlNode;
     // `w:rPr` must lead the run's children.
     const updated = replaceChildren(current, run.id, [rPr, ...content], options);

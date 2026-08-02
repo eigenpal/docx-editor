@@ -8,6 +8,7 @@
 
 import type { OoxmlNode, OoxmlParagraphNode, OoxmlPart } from '../package/ooxml-tree.ts';
 import { findNode } from '../package/ooxml-edit.ts';
+import { paragraphPropertiesNodeOf } from './tree-op-nodes.ts';
 import { isValidXmlText } from '../package/sinks.ts';
 
 /**
@@ -458,7 +459,7 @@ export function targetSectionNodes(
     if (node.kind === 'paragraph') {
       if (node.id === anchorParagraphId) seenAnchor = true;
       if (seenAnchor && !inTable) {
-        const pPr = node.children.find((child) => child.kind === 'paragraphProperties');
+        const pPr = paragraphPropertiesNodeOf(node);
         const sectPr = pPr ? sectionChild(pPr, 'sectPr') : null;
         if (sectPr) governing = sectPr;
       }
@@ -697,7 +698,7 @@ export function validateTreeOp(part: OoxmlPart, op: TreeDocOp): TreeOpRejection 
     case 'setParagraphProperties':
       return validateProperties(op.properties, PARAGRAPH_PROPERTY_SET);
     case 'setSectionMark': {
-      const pPr = paragraph.children.find((child) => child.kind === 'paragraphProperties');
+      const pPr = paragraphPropertiesNodeOf(paragraph);
       // A paragraph already ending a section cannot end two.
       if (pPr && sectionChild(pPr, 'sectPr')) return 'invalid-property-value';
       // A section cannot end inside a table cell: Word never writes one there, and the

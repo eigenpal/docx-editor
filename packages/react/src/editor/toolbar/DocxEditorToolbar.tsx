@@ -8,8 +8,9 @@
 // as a live `ToolbarButton` (disabled with the engine's reason until it is wired)
 // without touching this file. Controls whose SHAPE the registry declares specially
 // render through their dedicated parts: the FontFamily compound, the font-size and
-// zoom steppers (wired), the colour split buttons (wired), the parity-only pickers
-// (disabled lookalikes), and save (live only with an `onSave` handler).
+// zoom steppers (wired), the colour split buttons (wired), the pickers this toolbar
+// does not drive yet (disabled lookalikes), and save (live only with an `onSave`
+// handler).
 //
 // WITH children, each child that is a toolbar PART — detected by the static slot
 // marker (`Component.docxSlot`, or `ToolbarButton`'s marker plus its `slot` prop;
@@ -76,7 +77,7 @@ type PartLike = (props: { hidden?: boolean }) => ReactNode;
 
 /**
  * The parts whose slot needs more than an icon button: compounds, steppers, colour
- * splits, parity-only pickers, and save. Everything NOT named here renders as a live
+ * splits, the undriven pickers, and save. Everything NOT named here renders as a live
  * `ToolbarButton` for its slot — which is also the fallback for any control a future
  * registry revision adds, so the arrangement below never goes stale.
  */

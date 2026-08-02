@@ -253,6 +253,8 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
   let cachedSnapshot: EditorSnapshot | null = null;
   /** The caret the cached snapshot was derived for — see `snapshotNow`. */
   let cachedCaret: ReturnType<PaginatedSurface['state']>['selection'] | null = null;
+  /** The document revision the cached snapshot was derived for — see `snapshotNow`. */
+  let cachedRevision = -1;
   let cachedVersion = -1;
 
   /** Called at every place observable state can move. Derivation stays lazy. */
@@ -630,6 +632,9 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
     const caret = surface?.state().selection ?? null;
     const caretUnmoved = selectionsMatch(caret, cachedCaret);
     cachedCaret = caret;
+    const revision = surface?.session.revision() ?? -1;
+    const documentUnmoved = revision === cachedRevision;
+    cachedRevision = revision;
     const fresh = deriveSnapshot();
     let next: EditorSnapshot = fresh;
     if (previous) {
@@ -641,17 +646,24 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
         ? previous.pageSetup
         : fresh.pageSetup;
       next = { ...fresh, formatting, page, pageSetup };
-      // Reuse the previous REFERENCE only when the caret has not moved either.
+      // Reuse the previous REFERENCE only when neither the caret NOR the document moved.
       //
-      // `selection` is deliberately null (a `DocRange` addresses paragraphs by
-      // `w14:paraId`, which the surface cannot yet supply), so two different paragraphs
-      // with the same formatting derive a value-equal snapshot. A host subscribed through
-      // `useSyncExternalStore` then never re-renders on a caret move, and every control
-      // whose enabled state is a question about the CARET rather than about formatting
-      // kept its previous answer: Decrease Indent stayed live on a list item already at
-      // the outermost level, and the bullet button stayed pressed after the caret moved
-      // into a numbered one.
-      if (snapshotsEqual(next, previous) && caretUnmoved) next = previous;
+      // The snapshot is a lossy projection: `selection` is deliberately null (a `DocRange`
+      // addresses paragraphs by `w14:paraId`, which the surface cannot yet supply), and
+      // nothing in it names the document revision. So two genuinely different states
+      // derive value-equal snapshots, and a host subscribed through `useSyncExternalStore`
+      // never re-renders — freezing every control whose state is a question the snapshot
+      // does not carry, because `toolbarCommandState` re-asks `Editor.can`/`isActive` only
+      // when the store ticks.
+      //
+      // Caret: Decrease Indent stayed live on a list item already at the outermost level,
+      // and the bullet button stayed pressed after the caret moved into a numbered one.
+      //
+      // Revision: an edit that changes only STRUCTURE leaves formatting, page, canUndo and
+      // canRedo all equal at an unmoved caret. Toggling a bullet OFF (a second press) left
+      // the button pressed, and one Increase Indent that reached the deepest level a
+      // definition declares left the button live for a press that could only be refused.
+      if (snapshotsEqual(next, previous) && caretUnmoved && documentUnmoved) next = previous;
     }
     cachedSnapshot = deepFreezeValue(next);
     cachedVersion = stateVersion;

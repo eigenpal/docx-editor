@@ -33,7 +33,15 @@ import {
   type TreeOpEffect,
   type TreeOpResult,
 } from './tree-op-validate.ts';
-import { TEXT_DEPS, cloneWithNewIds, fromEdit, ok } from './tree-op-nodes.ts';
+import {
+  TEXT_DEPS,
+  cloneWithNewIds,
+  fromEdit,
+  namedChild,
+  ok,
+  paragraphPropertiesNodeOf,
+} from './tree-op-nodes.ts';
+import { RUN_VOCABULARY, mergedPropertyChildren } from './tree-op-properties.ts';
 
 /**
  * A `w:pPr` without its `w:sectPr`, keeping identity when there is none. `undefined`
@@ -184,8 +192,8 @@ export function applySetListLevel(
   options: EditOptions | undefined,
   nextId: () => string
 ): TreeOpResult {
-  const pPr = paragraph.children.find((child) => child.kind === 'paragraphProperties');
-  const numPr = pPr?.children.find((child) => child.localName === 'numPr');
+  const pPr = paragraphPropertiesNodeOf(paragraph);
+  const numPr = namedChild(pPr, 'numPr');
   if (!numPr) return { ok: false, reason: 'not-a-list-paragraph' };
   const effect: TreeOpEffect = {
     dirty: [paragraph.id],
@@ -231,8 +239,8 @@ export function applySetListNumbering(
     // Numbering changes the marker, the indent and therefore the flow.
     impact: 'flow-structural',
   };
-  const pPr = paragraph.children.find((child) => child.kind === 'paragraphProperties');
-  const existing = pPr?.children.find((child) => child.localName === 'numPr');
+  const pPr = paragraphPropertiesNodeOf(paragraph);
+  const existing = namedChild(pPr, 'numPr');
 
   if (numId === null) {
     if (!existing) return ok(part, effect);
@@ -251,7 +259,10 @@ export function applySetListNumbering(
   if (existing) return fromEdit(replaceNode(part, existing.id, numPr, options), effect);
   if (pPr) {
     // After `w:pStyle` when there is one — the schema fixes this order.
-    const afterStyle = pPr.children.findIndex((child) => child.localName === 'pStyle') + 1;
+    const afterStyle =
+      pPr.children.findIndex(
+        (child) => child.kind !== 'textValue' && child.localName === 'pStyle'
+      ) + 1;
     return fromEdit(insertChildren(part, pPr.id, afterStyle, [numPr], options), effect);
   }
   // The TYPED kind, not a generic element: every reader that looks for paragraph
@@ -329,7 +340,7 @@ export function applySetSectionMark(
         ]
       );
 
-  const pPr = paragraph.children.find((child) => child.kind === 'paragraphProperties');
+  const pPr = paragraphPropertiesNodeOf(paragraph);
   if (!pPr) {
     const minted = {
       id: nextId(),
@@ -517,8 +528,7 @@ export function applySetParagraphMarkProperties(
   paragraph: OoxmlParagraphNode,
   properties: readonly OoxmlProperty[],
   options: EditOptions | undefined,
-  nextId: () => string,
-  buildProperty: (property: OoxmlProperty, id: string) => OoxmlNode
+  nextId: () => string
 ): TreeOpResult {
   const effect: TreeOpEffect = {
     dirty: [paragraph.id],
@@ -529,23 +539,29 @@ export function applySetParagraphMarkProperties(
     // the marker and can change its measured width.
     impact: 'paragraph-local',
   };
-  const pPr = paragraph.children.find((child) => child.kind === 'paragraphProperties');
-  const existing = pPr?.children.find((child) => child.localName === 'rPr');
+  const pPr = paragraphPropertiesNodeOf(paragraph);
+  const existing = namedChild(pPr, 'rPr');
+  // The mark is a run property container like any other: what the op names is rewritten,
+  // and what it cannot name — a `w:rStyle` character style, `w:lang`, a revision record —
+  // stays where it was authored.
+  const children = mergedPropertyChildren(
+    existing?.children ?? [],
+    properties,
+    RUN_VOCABULARY,
+    nextId
+  );
 
-  if (properties.length === 0) {
+  if (children.length === 0) {
     if (!existing) return ok(part, effect);
     return fromEdit(removeNode(part, existing.id, options), effect);
   }
 
-  const rPr = sectionElement(
-    nextId(),
-    'rPr',
-    [],
-    properties.map((property) => buildProperty(property, nextId()))
-  );
+  const rPr = sectionElement(existing?.id ?? nextId(), 'rPr', [], children);
   if (existing) return fromEdit(replaceNode(part, existing.id, rPr, options), effect);
   if (pPr) {
-    const before = pPr.children.findIndex((child) => AFTER_PARAGRAPH_MARK.has(child.localName));
+    const before = pPr.children.findIndex(
+      (child) => child.kind !== 'textValue' && AFTER_PARAGRAPH_MARK.has(child.localName)
+    );
     const index = before === -1 ? pPr.children.length : before;
     return fromEdit(insertChildren(part, pPr.id, index, [rPr], options), effect);
   }

@@ -145,6 +145,16 @@ function findRunProperties(container: OoxmlElement | undefined): OoxmlElement | 
   return undefined;
 }
 
+/**
+ * A container's `w:pPr`, whether or not the canonical read TYPED it.
+ *
+ * The typed kind is not guaranteed: a `w:pPr` demotes to generic whenever the reader's
+ * known-node invariant refuses it, and one shape that trips it is ordinary Word output —
+ * the paragraph mark (`w:rPr`) followed by `w:sectPr` or `w:pPrChange`, which is exactly
+ * the CT_PPr order (17.3.1.26). A demoted container matched by kind alone reads as no
+ * properties at all, so the paragraph renders with none of its authored alignment,
+ * indent, numbering or style.
+ */
 function findParagraphProperties(container: OoxmlElement | undefined): OoxmlElement | undefined {
   if (!container) return undefined;
   for (const child of container.children) {
@@ -591,7 +601,7 @@ export function resolveParagraphLayoutInputs(
   listItem?: import('./list-resolve.ts').ResolvedListItem,
   tableCellStyle?: TableCellStyleFormatting
 ): ParagraphLayoutInputs {
-  const pPr = paragraph.children.find((child) => child.kind === 'paragraphProperties');
+  const pPr = findParagraphProperties(paragraph);
   const cascaded = styleCascade
     ? cascadeParagraphFormatting(styleCascade, pPr, tableCellStyle)
     : null;

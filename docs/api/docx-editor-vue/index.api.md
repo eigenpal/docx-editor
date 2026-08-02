@@ -1285,6 +1285,13 @@ export function runToolbarCommand(editor: Editor | null, id: ChromeSlotId): Exec
     const // (undocumented)
     command = commandForSlot(id);
     if (!command) {
+        if (id === 'file.save') {
+            return {
+                ok: false,
+                code: 'unsupported',
+                reason: 'save is not a command; run it with runSave(editor)',
+            };
+        }
         return { ok: false, code: 'unsupported', reason: 'not wired to an editor command' };
     }
     const // (undocumented)
@@ -1331,6 +1338,18 @@ export function toolbarCommandState(editor: Editor | null, id: ChromeSlotId): To
             return canApply.ok
             ? { id, enabled: true, disabledReason: null, active: false }
             : { id, enabled: false, disabledReason: canApply.reason, active: false };
+        }
+        // Save is wired — just not as a command. Reporting it "not wired to an editor
+        // command" told a host the capability is missing when what is actually missing is a
+        // COMMAND for it: the control runs `runSave`, and both adapters reach it by branching
+        // on the registry's `kind: 'save'`. Say which of the two it is.
+        if (id === 'file.save') {
+            return {
+                id,
+                enabled: false,
+                disabledReason: 'save is not a command; run it with runSave(editor)',
+                active: false,
+            };
         }
         return { id, enabled: false, disabledReason: 'not wired to an editor command', active: false };
     }

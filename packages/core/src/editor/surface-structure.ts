@@ -18,7 +18,11 @@ import {
   type SemanticSelection,
 } from '@docx-editor.dev/core-contract/layout';
 import type { ListMarkerRecord } from '@docx-editor.dev/core-contract/layout';
-import { mergedProperties, paragraphPropertiesOf } from './surface-formatting.ts';
+import {
+  directParagraphProperties,
+  mergedProperties,
+  paragraphPropertiesOf,
+} from './surface-formatting.ts';
 import type { PaginatedSurface } from './paginated-surface-contract.ts';
 
 /** What the composition root lends this lane: its session, its layout, and its commit. */
@@ -317,14 +321,21 @@ export function createSurfaceStructure(deps: SurfaceStructureDeps): StructureMet
           });
           continue;
         }
+        // The step moves from the EFFECTIVE indent (what the user sees, cascade included),
+        // but it is written as the paragraph's own formatting, merged over the paragraph's
+        // own `w:pPr` — an op whose base is the cascade is refused (`directParagraphProperties`).
         const current = leftIndentTwipsOf(properties);
         const next = Math.max(0, current + step * INDENT_STEP_TWIPS);
         if (next === current) continue;
-        const existing = properties.find((property) => property.localName === 'ind');
+        const direct = directParagraphProperties(session.part(), paragraphId);
+        // Only the paragraph's OWN `w:ind` attributes are carried over: `w:ind` cascades
+        // attribute by attribute (17.3.1.12), so an inherited hanging survives untouched
+        // rather than being restated here.
+        const existing = direct.find((property) => property.localName === 'ind');
         ops.push({
           op: 'setParagraphProperties',
           paragraphId,
-          properties: mergedProperties(properties, {
+          properties: mergedProperties(direct, {
             localName: 'ind',
             attributes: {
               ...(existing?.attributes ?? {}),

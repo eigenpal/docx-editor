@@ -50,6 +50,23 @@ function spanFor(node: Node): { element: Element; identity: SpanIdentity } | nul
   return null;
 }
 
+/** The first painted span at, above, or inside a node — whichever comes first in DOM order. */
+function spanAtOrInside(
+  node: Node,
+  last: boolean
+): { element: Element; identity: SpanIdentity } | null {
+  const own = spanFor(node);
+  if (own) return own;
+  if (node.nodeType !== Node.ELEMENT_NODE) return null;
+  const spans = (node as Element).querySelectorAll('[data-paragraph-id][data-start]');
+  const ordered = last ? [...spans].reverse() : [...spans];
+  for (const span of ordered) {
+    const identity = identityOf(span);
+    if (identity) return { element: span, identity };
+  }
+  return null;
+}
+
 /**
  * Resolve an endpoint expressed as a child index into a model position.
  *
@@ -57,25 +74,32 @@ function spanFor(node: Node): { element: Element; identity: SpanIdentity } | nul
  * triple-clicking a paragraph, or dragging past the end of a line, does exactly that. The
  * offset is then a CHILD INDEX, not a character offset.
  *
- * An index equal to the child count means "after the last child", which is the END of that
- * child's text. Clamping to the last child and then reading offset zero — as this did — came
- * back short by the whole final run of the line, so a triple-click selected everything but
- * the last word.
+ * The children are not all model text. A paragraph fragment holds a shading band, a list
+ * marker, tab leaders and border rules alongside its lines, and the RULES ARE PAINTED LAST —
+ * so "after the last child" landed on a border rather than on the final run, and any index
+ * that happened to hit furniture resolved to nothing. Both cases then fell through to the
+ * empty-line answer, offset zero, silently moving the endpoint to the paragraph start.
+ *
+ * So scan outward from the index instead of clamping to one child: forward for the next
+ * painted text (its START, the position the index points AT), then backward for the previous
+ * (its END, the position the index points AFTER).
  */
 function positionFromChildIndex(container: Element, index: number): SemanticPosition | null {
   const children = [...container.childNodes];
   if (children.length === 0) return null;
-  if (index >= children.length) {
-    const last = spanFor(children[children.length - 1]!);
-    if (!last) return null;
+  for (let at = Math.max(0, index); at < children.length; at += 1) {
+    const found = spanAtOrInside(children[at]!, false);
+    if (found) return { paragraphId: found.identity.paragraphId, offset: found.identity.start };
+  }
+  for (let at = Math.min(index, children.length) - 1; at >= 0; at -= 1) {
+    const found = spanAtOrInside(children[at]!, true);
+    if (!found) continue;
     return {
-      paragraphId: last.identity.paragraphId,
-      offset: last.identity.start + (last.element.textContent?.length ?? 0),
+      paragraphId: found.identity.paragraphId,
+      offset: found.identity.start + (found.element.textContent?.length ?? 0),
     };
   }
-  const found = spanFor(children[Math.max(0, index)]!);
-  if (!found) return null;
-  return { paragraphId: found.identity.paragraphId, offset: found.identity.start };
+  return null;
 }
 
 /**
@@ -98,9 +122,27 @@ export function positionFromDomPoint(
   const nearestElement =
     node.nodeType === Node.ELEMENT_NODE ? (node as Element) : node.parentElement;
   if (nearestElement?.closest('[data-docx-hf]')) return null;
-  // List markers are painted furniture, not model text — refuse rather than mapping into
-  // the adjacent run via a child-index fallback.
-  if (nearestElement?.closest('[data-docx-marker]')) return null;
+
+  // A LIST MARKER is furniture with one honest answer. It carries no source range, so it
+  // cannot be mapped through a child index — but it is painted at the paragraph's own start,
+  // inside the hanging indent, which is exactly the position Word gives a click on a bullet.
+  //
+  // Returning nothing instead is what made this worth changing: a double-click on the first
+  // word of a list item can anchor in the marker, the whole selection then failed to map,
+  // and the caller kept the PREVIOUS model selection while the browser showed the new one —
+  // so the next toolbar command formatted a range the user could no longer see.
+  //
+  // The engine's painted caret shares this attribute but hangs off the page content box, so
+  // it has no owning paragraph and still resolves to nothing, which is what it should do.
+  const marker = nearestElement?.closest('[data-docx-marker]');
+  if (marker) return marker.parentElement ? paragraphStartAt(marker.parentElement) : null;
+
+  // A TAB LEADER has no such answer: it is drawn across the advance of a tab in the MIDDLE
+  // of a paragraph, so the paragraph start would be a lie and its repeated glyphs are not
+  // model characters. It is `pointer-events: none` and `user-select: none`, so a real
+  // endpoint should never land in one; refusing explicitly keeps that a property rather than
+  // an accident of how the ancestors happen to be attributed.
+  if (nearestElement?.closest('[data-docx-tab-leader]')) return null;
 
   // An ELEMENT endpoint carries a child index, never a character offset — including when the
   // element is a painted span. Runs are inline-blocks, so a shift-click or a drag across one
@@ -152,10 +194,30 @@ export function semanticSelectionFromDom(
 
   const anchor = positionFromDomPoint(anchorNode, anchorOffset, root);
   const head = positionFromDomPoint(focusNode, focusOffset, root);
-  if (!anchor || !head) return null;
+  // ONE resolvable end is still an answer. A drag that starts in the body and ends in the
+  // header, or the reverse, has an end the model can address; collapsing to it costs the
+  // user a range they could not have edited anyway, whereas returning nothing left the model
+  // on whatever it held BEFORE the gesture — and the next command ran on that.
+  if (!anchor || !head) {
+    const only = anchor ?? head;
+    return only ? { anchor: only, head: only } : null;
+  }
   // Anchor and head are kept in the order the USER dragged them, not sorted: which end is
   // moving is what shift-arrow has to extend from.
   return { anchor, head };
+}
+
+/**
+ * Whether a native selection is inside the painted pages at all.
+ *
+ * Tells "the user gestured here and it did not map" from "the selection belongs to something
+ * else on the page" — the first must never leave a stale model selection behind, the second
+ * must never disturb one.
+ */
+export function domSelectionTouchesPages(root: Element, domSelection: Selection | null): boolean {
+  if (!domSelection || domSelection.rangeCount === 0) return false;
+  const { anchorNode, focusNode } = domSelection;
+  return (!!anchorNode && root.contains(anchorNode)) || (!!focusNode && root.contains(focusNode));
 }
 
 /**
@@ -176,7 +238,7 @@ function domPointFromPosition(
   for (const span of spans) {
     const identity = identityOf(span);
     if (!identity || identity.paragraphId !== position.paragraphId) continue;
-    const text = span.firstChild;
+    const text = textNodeOf(span);
     const length = span.textContent?.length ?? 0;
     const end = identity.start + length;
     if (!text) continue;
@@ -199,6 +261,20 @@ function domPointFromPosition(
   return emptyLine ? { node: emptyLine, offset: 0 } : null;
 }
 
+/**
+ * The text node a span's characters actually live in.
+ *
+ * A run that is BOTH underlined and struck mounts its text under nested decoration spans, so
+ * the run element's first child is an element rather than the text. Handing that to
+ * `setBaseAndExtent` with a character offset turns the offset into a CHILD INDEX, and the
+ * browser rejects the whole write — no caret and no highlight anywhere inside such a run.
+ */
+function textNodeOf(span: Element): Node | null {
+  let node: Node | null = span.firstChild;
+  while (node && node.nodeType === Node.ELEMENT_NODE) node = node.firstChild;
+  return node && node.nodeType === Node.TEXT_NODE ? node : null;
+}
+
 /** The painted line belonging to a paragraph, whether or not it holds any runs. */
 function lineOfParagraph(root: Element, paragraphId: string): Element | null {
   let fragment: Element | null = null;
@@ -214,17 +290,31 @@ function lineOfParagraph(root: Element, paragraphId: string): Element | null {
   return fragment;
 }
 
-/** The caret position for an empty painted line: the start of the paragraph it belongs to. */
-function emptyLinePosition(element: Element): SemanticPosition | null {
+/** The start of the paragraph an element was painted for, whatever the element is. */
+function paragraphStartAt(element: Element): SemanticPosition | null {
   // Resolved via `closest`, not the element's own dataset: the endpoint may be the caret
   // anchor <br> INSIDE the line rather than the line itself.
-  const line = element.closest('[data-paragraph-id]') as HTMLElement | null;
-  // A span hit (`data-start`) is not an empty line — refusing keeps a future inline
+  const container = element.closest('[data-paragraph-id]') as HTMLElement | null;
+  // A span hit (`data-start`) is not a container — refusing keeps a future inline
   // element from silently snapping the caret to the paragraph start.
-  if (!line || line.dataset.start !== undefined) return null;
-  const paragraphId = line.dataset.paragraphId;
+  if (!container || container.dataset.start !== undefined) return null;
+  const paragraphId = container.dataset.paragraphId;
   if (!paragraphId || !PARAGRAPH_ID.test(paragraphId) || paragraphId === '__proto__') return null;
   return { paragraphId, offset: 0 };
+}
+
+/** The caret position for an empty painted line: the start of the paragraph it belongs to. */
+function emptyLinePosition(element: Element): SemanticPosition | null {
+  const start = paragraphStartAt(element);
+  if (!start) return null;
+  // A container that HOLDS painted text is not an empty line, and an endpoint that reached
+  // here through one arrived on FURNITURE — a border rule, a shading band, a tab leader.
+  // Answering "offset 0" for those silently dragged the endpoint to the paragraph start,
+  // which on a bordered or shaded paragraph turned a click near its edge into a selection
+  // running back to the beginning.
+  const container = element.closest('[data-paragraph-id]')!;
+  if (container.querySelector('[data-paragraph-id][data-start]')) return null;
+  return start;
 }
 
 /**

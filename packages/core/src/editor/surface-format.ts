@@ -13,12 +13,14 @@ import {
   type SemanticSelection,
 } from '@docx-editor.dev/core-contract/layout';
 import {
+  directParagraphMarkProperties,
+  directParagraphProperties,
   formattingAt,
   isRunPropertyActive,
   mergedProperties,
   paragraphMarkOps,
-  paragraphPropertiesOf,
-  selectionRunProperties,
+  runPropertyEdits,
+  type SurfaceProperty,
 } from './surface-formatting.ts';
 import type { PaginatedSurface } from './paginated-surface-contract.ts';
 
@@ -54,32 +56,50 @@ export function createSurfaceFormat(deps: SurfaceFormatDeps): FormatMethods {
     },
   };
 
+  /**
+   * Write one run property across the range: one op per run it covers, each stating that
+   * run's own properties plus the incoming one, and — when the range is a whole paragraph —
+   * the same change to the paragraph mark over the mark's own properties.
+   *
+   * Every base comes from the canonical tree rather than the layout, because the layout
+   * publishes the cascade and an op that restates the cascade is either refused outright or
+   * silently freezes inherited formatting as direct — see `runPropertyEdits`.
+   */
+  const writeRunProperty = (
+    from: SemanticPosition,
+    to: SemanticPosition,
+    incoming: SurfaceProperty
+  ): void => {
+    const part = session.part();
+    const edits = runPropertyEdits(part, from.paragraphId, from.offset, to.offset, incoming);
+    // No run in range means nothing was formatted, so the mark must not move either.
+    if (edits.length === 0) return;
+    const markProperties = mergedProperties(
+      directParagraphMarkProperties(part, from.paragraphId),
+      incoming
+    );
+    commit(() =>
+      session.applyTreeOps(
+        [
+          ...edits.map((edit) => ({
+            op: 'setRunProperties' as const,
+            paragraphId: from.paragraphId,
+            start: edit.start,
+            end: edit.end,
+            properties: edit.properties,
+          })),
+          ...paragraphMarkOps(textOf(from.paragraphId), from, to, markProperties),
+        ],
+        selectionMark()
+      )
+    );
+  };
+
   return {
     setRunProperty(localName, attributes) {
       const { from, to } = orderedRange();
       if (from.paragraphId !== to.paragraphId || from.offset === to.offset) return;
-      const properties = mergedProperties(
-        selectionRunProperties(currentLayout.value, selectionNow.value),
-        {
-          localName,
-          ...(attributes ? { attributes } : {}),
-        }
-      );
-      commit(() =>
-        session.applyTreeOps(
-          [
-            {
-              op: 'setRunProperties',
-              paragraphId: from.paragraphId,
-              start: from.offset,
-              end: to.offset,
-              properties,
-            },
-            ...paragraphMarkOps(textOf(from.paragraphId), from, to, properties),
-          ],
-          selectionMark()
-        )
-      );
+      writeRunProperty(from, to, { localName, ...(attributes ? { attributes } : {}) });
     },
 
     setParagraphProperty(localName, attributes) {
@@ -90,10 +110,14 @@ export function createSurfaceFormat(deps: SurfaceFormatDeps): FormatMethods {
       if (firstIndex === -1 || lastIndex === -1) return;
       // EVERY paragraph the selection touches, not just the one the caret is in: selecting
       // three paragraphs and pressing centre must centre three paragraphs.
+      //
+      // Merged against what each paragraph ITSELF authors, never the cascade the layout
+      // publishes: the op replaces the properties it names and drops the ones it does not,
+      // so its base has to be the paragraph's own `w:pPr` — see `directParagraphProperties`.
       const ops = order.slice(firstIndex, lastIndex + 1).map((paragraphId) => ({
         op: 'setParagraphProperties' as const,
         paragraphId,
-        properties: mergedProperties(paragraphPropertiesOf(currentLayout.value, paragraphId), {
+        properties: mergedProperties(directParagraphProperties(session.part(), paragraphId), {
           localName,
           ...(attributes ? { attributes } : {}),
         }),
@@ -114,31 +138,16 @@ export function createSurfaceFormat(deps: SurfaceFormatDeps): FormatMethods {
       // formatting a character the user did not select.
       if (from.paragraphId !== to.paragraphId || from.offset === to.offset) return;
       const active = isRunPropertyActive(currentLayout.value, selectionNow.value, localName);
-      const properties = mergedProperties(
-        selectionRunProperties(currentLayout.value, selectionNow.value),
+      writeRunProperty(
+        from,
+        to,
         active
-          ? // `w:u` is a closed enumeration, not a boolean: its off value is `none`,
-            // and `val="0"` is an attribute value Word rejects outright.
+          ? // Toggling OFF sends an explicit `val="0"` rather than dropping the element: the
+            // property may be inherited from a style, and removing the local override would
+            // let the inherited value come back. `w:u` is a closed enumeration, not a
+            // boolean: its off value is `none`, and `val="0"` is one Word rejects outright.
             { localName, attributes: { val: localName === 'u' ? 'none' : '0' } }
           : { localName, ...(attributes ? { attributes } : {}) }
-      );
-      commit(() =>
-        session.applyTreeOps(
-          [
-            {
-              op: 'setRunProperties',
-              paragraphId: from.paragraphId,
-              start: from.offset,
-              end: to.offset,
-              // Toggling OFF sends an explicit `val="0"` rather than dropping the element:
-              // the property may be inherited from a style, and removing the local override
-              // would let the inherited value come back.
-              properties,
-            },
-            ...paragraphMarkOps(textOf(from.paragraphId), from, to, properties),
-          ],
-          selectionMark()
-        )
       );
     },
   };

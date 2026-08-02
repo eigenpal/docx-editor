@@ -7,7 +7,7 @@
 // child REPLACES its slot in
 // place (and `hidden` removes it); `preset={false}` verbatim rendering; live Bold
 // state through a click; asChild prop merging; the wired font-size stepper, zoom
-// stepper, and colour split buttons; the parity-only pickers rendering disabled; that
+// stepper, and colour split buttons; the undriven pickers rendering disabled; that
 // FontFamily's options come from the DOCUMENT'S fonts and selecting one applies it;
 // and the caret-preserving mousedown contract.
 
@@ -350,7 +350,7 @@ describe('the shaped parts', () => {
     expect(editor().snapshot().formatting?.highlight).toBe('cyan');
   });
 
-  test('a parity-only dropdown renders as a DISABLED combobox-lookalike, never a control', () => {
+  test('an undriven dropdown renders as a DISABLED combobox-lookalike, never a control', () => {
     const { view } = mountToolbar(<DocxEditorToolbar />);
     for (const slot of ['styles.style', 'review.editingMode']) {
       const picker = view.container.querySelector(`[data-slot="${slot}"]`)!;
@@ -452,7 +452,7 @@ describe('the FontFamily compound', () => {
   });
 
   test('custom Item children render inside a composed FontFamily', async () => {
-    const { view } = mountToolbar(
+    const { view, editor } = mountToolbar(
       <DocxEditorToolbar preset={false}>
         <DocxEditorToolbar.FontFamily>
           <DocxEditorToolbar.FontFamily.Trigger />
@@ -465,6 +465,11 @@ describe('the FontFamily compound', () => {
       </DocxEditorToolbar>,
       FONTED_SOURCE
     );
+    // The font picker writes RUN formatting, so it needs a range — a collapsed caret
+    // carries none yet and the trigger is honestly disabled until something is selected.
+    await act(async () => {
+      editor().surface!.selectAll();
+    });
     const trigger = view.container.querySelector(
       '.docx-toolbar__font-family-trigger'
     ) as HTMLButtonElement;
@@ -516,5 +521,71 @@ describe('namespace statics', () => {
     expect(DocxEditorToolbar.Save.docxSlot).toBe('file.save');
     expect(DocxEditorToolbar.BulletList.docxSlot).toBe('list.bullet');
     expect(DocxEditorToolbar.TableInsert.docxSlot).toBe('table.insert');
+  });
+});
+
+// The React half of the enabled-state contract the Vue toolbar is held to in
+// `packages/vue/test/toolbar-engine-state.test.ts`. Same slots, same rules: a control is
+// enabled because `Editor.can` said so, never because the chrome registry said so.
+//
+// React always worked here — `ToolbarButton` goes through `useEditorCommand` and has
+// never read the registry's state kind — while Vue branched on it and rendered twelve
+// wired commands permanently disabled. These assertions are the tripwire that keeps
+// React on the engine's answer, so the two adapters cannot drift apart again.
+describe('enabled state is the engine answer, not a registry constant', () => {
+  test('underline is live: enabled at a range selection, and a click applies it', async () => {
+    const { view, editor } = mountToolbar(<DocxEditorToolbar />);
+    await act(async () => {
+      editor().surface!.selectAll();
+    });
+    const underline = view.container.querySelector(
+      '[data-slot="text.underline"]'
+    ) as HTMLButtonElement;
+    expect(underline.disabled).toBe(false);
+    // The label, not an "unavailable" apology.
+    expect(underline.title).toBe('formattingBar.underlineShortcut');
+    await act(async () => {
+      underline.click();
+    });
+    expect(editor().snapshot().formatting?.underline).toBe(true);
+    expect(underline.hasAttribute('data-active')).toBe(true);
+  });
+
+  test('the list controls are live, and outdent tracks the engine rather than a flag', async () => {
+    const { view, editor } = mountToolbar(<DocxEditorToolbar />);
+    await act(async () => {
+      editor().surface!.selectAll();
+    });
+    const indent = view.container.querySelector('[data-slot="list.indent"]') as HTMLButtonElement;
+    const outdent = view.container.querySelector('[data-slot="list.outdent"]') as HTMLButtonElement;
+    expect(indent.disabled).toBe(false);
+    // Nothing to outdent at level 0 — the engine's answer, and it changes when the
+    // document does.
+    expect(outdent.disabled).toBe(true);
+    await act(async () => {
+      indent.click();
+    });
+    expect(outdent.disabled).toBe(false);
+  });
+
+  test('a slot with no command is dead with the engine reason, inside the default bar', () => {
+    const { view } = mountToolbar(<DocxEditorToolbar />);
+    for (const slot of ['text.link', 'script.super', 'script.sub', 'format.clear']) {
+      const button = view.container.querySelector(`[data-slot="${slot}"]`) as HTMLButtonElement;
+      expect(button.disabled, slot).toBe(true);
+      expect(button.title, slot).toBe('not wired to an editor command');
+    }
+  });
+
+  test('a wired control the engine refuses NOW shows the engine reason', () => {
+    // Run formatting needs a range: at a collapsed caret the engine refuses, and the
+    // tooltip is its refusal — not a permanent "unavailable in preview".
+    const { view } = mountToolbar(<DocxEditorToolbar />);
+    const underline = view.container.querySelector(
+      '[data-slot="text.underline"]'
+    ) as HTMLButtonElement;
+    expect(underline.disabled).toBe(true);
+    expect(underline.title).not.toBe('formattingBar.underlineShortcut');
+    expect(underline.title.length).toBeGreaterThan(0);
   });
 });

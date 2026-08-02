@@ -36,7 +36,12 @@ import {
   type SemanticSelection,
 } from '@docx-editor.dev/core-contract/layout';
 import { paintSemanticLayout } from '@docx-editor.dev/core-contract/output';
-import { applySelectionToDom, selectionsEqual, semanticSelectionFromDom } from './dom-selection.ts';
+import {
+  applySelectionToDom,
+  domSelectionTouchesPages,
+  selectionsEqual,
+  semanticSelectionFromDom,
+} from './dom-selection.ts';
 import { tryCreateBrowserCanvasContext } from './browser-canvas-context.ts';
 import type {
   OpenPaginatedResult,
@@ -313,6 +318,21 @@ export function mountPaginatedSurface(
   }
 
   function render(notifyChange = true): void {
+    // ADOPT BEFORE PAINTING.
+    //
+    // `selectionchange` is QUEUED, never dispatched from the gesture that caused it, so
+    // between the browser making a selection and this surface hearing about it there is a
+    // window on every browser. A repaint landing inside that window used to replace the nodes
+    // the selection lives in and then write the MODEL's older selection into the new ones —
+    // so a double-click was made correctly and did not survive the next scroll, and the model
+    // never learned the word had been selected at all. Reading the DOM first makes the
+    // repaint carry the gesture rather than erase it.
+    //
+    // A deliberate model move is the exception, and the reason this cannot simply refuse to
+    // write: a commit installs its own post-edit caret, and the DOM selection left over from
+    // before the edit addresses offsets that no longer mean the same thing.
+    const adopted = modelMoved ? false : adoptPendingDomSelection();
+    modelMoved = false;
     const paintBegan = now();
     materializedSet = visiblePages();
     paintSemanticLayout(pagesLayer, currentLayout, {
@@ -343,7 +363,23 @@ export function mountPaginatedSurface(
     // book the paint's own cost to the selection phase.
     lastPaintMs = now() - paintBegan;
     syncDomSelection();
-    if (notifyChange) options.onChange?.(currentState());
+    // A scroll reports nothing — nothing about the document or the selection moved. Taking up
+    // a pending gesture DID move the selection, so that pass has to report after all.
+    if (notifyChange || adopted) options.onChange?.(currentState());
+  }
+
+  /**
+   * Take up a selection the user has made but the queued `selectionchange` has not delivered.
+   *
+   * Assigns rather than going through `setSelection`: the render this runs inside is about to
+   * mirror the selection into the DOM and report the new state anyway.
+   */
+  function adoptPendingDomSelection(): boolean {
+    const next = semanticSelectionFromDom(pagesLayer, document.getSelection());
+    if (!next || selectionsEqual(next, selection)) return false;
+    selection = next;
+    desiredX = null;
+    return true;
   }
 
   /**
@@ -420,6 +456,10 @@ export function mountPaginatedSurface(
     run: () => ReturnType<TreeDocxSession['applyPmDoc']> | boolean,
     selectionAfter?: () => SemanticSelection | null
   ): void {
+    // Whatever the DOM selection holds, it was made against the text BEFORE this edit, so its
+    // offsets stop meaning the same thing the moment the ops land. The render below must
+    // write the model's selection out, never read the stale one back.
+    modelMoved = true;
     // Ops go through the session, so the tree stays the only state. A refusal is surfaced
     // rather than silently dropped: the view is repainted from what the model actually
     // holds, so the user never keeps looking at an edit that will not be saved.
@@ -450,6 +490,8 @@ export function mountPaginatedSurface(
   function setSelection(next: SemanticSelection, keepDesiredX = false): void {
     selection = next;
     if (!keepDesiredX) desiredX = null;
+    // No `modelMoved` here: this mirrors into the DOM on the next line, so the two agree
+    // before any render can read them back.
     syncDomSelection();
     options.onChange?.(currentState());
   }
@@ -709,6 +751,10 @@ export function mountPaginatedSurface(
   function restoreSelection(
     mark: { paragraphId: string; start: number; end: number } | null
   ): void {
+    // The tree about to be published is not the one the DOM selection was made against, so
+    // the flush below must not read it back: offsets in the reverted tree do not correspond
+    // to offsets in the one that replaced it.
+    modelMoved = true;
     flushLayout();
     if (!mark) {
       // No recorded mark — a cross-paragraph edit records none, because a mark addresses one
@@ -761,6 +807,14 @@ export function mountPaginatedSurface(
   // back from the DOM is which CHARACTERS were gestured over, never where they are.
   let applyingSelection = false;
   /**
+   * Whether the MODEL holds the newer of the two selections.
+   *
+   * Set by a deliberate move — a commit's post-edit caret, a navigation, undo — and cleared by
+   * the render that pushes it out. Every other render repaints a selection nobody moved, which
+   * is exactly when whatever the user has gestured since is the newer of the two.
+   */
+  let modelMoved = false;
+  /**
    * Whether an IME is composing.
    *
    * `beforeinput` for `insertCompositionText` is NOT cancelable — `preventDefault` is a
@@ -774,8 +828,24 @@ export function mountPaginatedSurface(
 
   /** Mirror the native selection into the model. Ignores selections outside painted text. */
   const adoptDomSelection = (): void => {
-    const next = semanticSelectionFromDom(pagesLayer, document.getSelection());
-    if (!next || selectionsEqual(next, selection)) return;
+    const domSelection = document.getSelection();
+    const next = semanticSelectionFromDom(pagesLayer, domSelection);
+    if (!next) {
+      // NOT MAPPING IS NOT NOTHING HAPPENING.
+      //
+      // A gesture that landed inside these pages and resolved to no model position — header
+      // furniture, which names paragraphs of another part — used to return here silently,
+      // leaving the model on the range it held BEFORE. The browser then showed one selection
+      // and the model held another, so the next toolbar command formatted text the user was
+      // no longer looking at. Collapsing costs a range the model could not address anyway;
+      // keeping one costs an edit in the wrong place.
+      if (!domSelectionTouchesPages(pagesLayer, domSelection)) return;
+      const collapsed = collapsedAt(selection.head);
+      if (selectionsEqual(collapsed, selection)) return;
+      setSelection(collapsed);
+      return;
+    }
+    if (selectionsEqual(next, selection)) return;
     setSelection(next);
   };
 

@@ -151,14 +151,50 @@ function storyRootOf(root: OoxmlElement): OoxmlElement | null {
   return null;
 }
 
+/**
+ * How deep a story is followed when collecting its paragraphs.
+ *
+ * Tables nest inside cells, and content controls nest inside both, so the walk has to
+ * recurse — and a file-supplied tree is attacker-controlled, so the recursion is capped
+ * rather than trusted to terminate at a sane depth. Well past anything Word authors; the
+ * parse-time depth limit is the real bound, this is the belt to its braces.
+ */
+const MAX_STORY_NESTING = 64;
+
+/**
+ * Every paragraph of a story, in document order — including the ones inside tables and
+ * block content controls.
+ *
+ * Walking only the body's direct `w:p` children put every table cell and every block SDT
+ * OUTSIDE the oracle: a round trip that emptied a cell reported zero differences, and the
+ * fingerprint oracle cannot cover for that (it compares a tree against its own reopen, so
+ * content lost identically on every pass fingerprints equal). Paragraphs are not descended
+ * into — a textbox story inside a run is a different story, digested through the generic
+ * structure of the run that holds it.
+ */
+function collectStoryParagraphs(
+  container: OoxmlElement,
+  out: OoxmlParagraphNode[],
+  depth: number
+): void {
+  if (depth > MAX_STORY_NESTING) return;
+  for (const child of container.children) {
+    if (child.kind === 'textValue') continue;
+    if (child.kind === 'paragraph') {
+      out.push(child);
+      continue;
+    }
+    collectStoryParagraphs(child, out, depth + 1);
+  }
+}
+
 /** Digest one part's story, or null when the part holds no flowable root. */
 export function digestPart(part: OoxmlPart): StoryDigest | null {
   const body = storyRootOf(part.root);
   if (!body) return null;
-  const paragraphs: ParagraphDigest[] = [];
-  for (const child of body.children) {
-    if (child.kind === 'paragraph') paragraphs.push(digestParagraph(child, paragraphs.length));
-  }
+  const found: OoxmlParagraphNode[] = [];
+  collectStoryParagraphs(body, found, 0);
+  const paragraphs = found.map((paragraph, ordinal) => digestParagraph(paragraph, ordinal));
   return { partName: part.name, paragraphs };
 }
 

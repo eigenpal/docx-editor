@@ -55,6 +55,26 @@ function icon(paths: readonly string[]): VNode {
   );
 }
 
+/**
+ * Whether THIS TOOLBAR can dispatch a control — a fact about the adapter, never about
+ * the engine.
+ *
+ * A value-typed slot needs chrome that produces a value (a font list, a size, a colour)
+ * before a click means anything, and the non-icon shapes need that chrome too; this
+ * toolbar has grown none of it yet, so those controls render as their shape's disabled
+ * lookalike. EVERYTHING ELSE asks `toolbarCommandState`, so the engine — not this file —
+ * decides what is enabled, and a command the engine wires lights up in both adapters at
+ * once.
+ *
+ * This used to read the registry's `state.kind === 'parityOnly'`, a static claim that
+ * had gone stale for twelve wired slots: underline, strike, the four alignments, the
+ * four list controls and the four value slots all ran fine in React while Vue drew them
+ * permanently disabled.
+ */
+function isDrivenHere(c: ChromeControl): boolean {
+  return c.state.kind === 'command' && (c.shape ?? 'icon') === 'icon';
+}
+
 function control(
   editor: Editor | null,
   slotId: ChromeSlotId,
@@ -64,9 +84,31 @@ function control(
 ): VNode {
   const label = t(c.labelKey);
 
-  // A stepper-shaped parity control (font size) renders as the disabled
-  // minus / boxed value / plus lookalike, showing the registry's valueText.
-  if (c.shape === 'stepper' && c.state.kind === 'parityOnly') {
+  // Save first: it IS driven here, just not as a command (`Editor.save()` returns bytes
+  // the host must deliver), so it must not fall into the undriven branches below.
+  if (c.state.kind === 'save') {
+    return h(
+      'button',
+      {
+        key: c.id,
+        type: 'button',
+        class: 'ep-toolbar__button',
+        'data-testid': `toolbar-${slotId}`,
+        disabled: !editor || !onSave,
+        title: label,
+        'aria-label': label,
+        onMousedown: (event: MouseEvent) => event.preventDefault(),
+        onClick: () => onSave?.(),
+      },
+      // Save is icon-shaped in the registry; `?? []` is the type-level guard, not a
+      // real case (a pathless save would render an empty button).
+      [icon(c.paths ?? [])]
+    );
+  }
+
+  // A stepper-shaped control this toolbar cannot drive (zoom, font size) renders as the
+  // disabled minus / boxed value / plus lookalike, showing the registry's valueText.
+  if (c.shape === 'stepper' && !isDrivenHere(c)) {
     return h(
       'span',
       {
@@ -85,12 +127,12 @@ function control(
     );
   }
 
-  // A dropdown-shaped parity control renders as a disabled combobox-lookalike,
-  // matching its registry shape: optional leading glyph (line spacing, editing mode),
-  // optional value text, caret. Test ids are keyed on the SLOT id
-  // (`toolbar-text.bold`): control ids are only unique within their group
+  // A dropdown-shaped control this toolbar cannot drive renders as a disabled
+  // combobox-lookalike, matching its registry shape: optional leading glyph (line
+  // spacing, editing mode), optional value text, caret. Test ids are keyed on the SLOT
+  // id (`toolbar-text.bold`): control ids are only unique within their group
   // (`image.insert` / `table.insert`), so a bare control id would collide.
-  if (c.paths === null || (c.shape === 'dropdown' && c.state.kind === 'parityOnly')) {
+  if (c.paths === null || (c.shape === 'dropdown' && !isDrivenHere(c))) {
     const value = c.valueKey ? t(c.valueKey) : (c.valueText ?? '');
     return h(
       'span',
@@ -112,7 +154,12 @@ function control(
     );
   }
 
-  if (c.state.kind === 'parityOnly') {
+  // What is left that this toolbar cannot drive is the colour splits: value slots whose
+  // shape carries an icon, so they keep the icon-button look rather than becoming a
+  // combobox. Disabled because THIS toolbar has no colour picker — the engine would
+  // honour a colour today (React's split buttons dispatch one), which is why the reason
+  // is the adapter's "unavailable" string and not an engine refusal.
+  if (!isDrivenHere(c)) {
     const reason = `${label} — ${t(CHROME_UNAVAILABLE_KEY)}`;
     return h(
       'button',
@@ -121,34 +168,18 @@ function control(
         type: 'button',
         class: 'ep-toolbar__button',
         'data-testid': `toolbar-${slotId}`,
+        // Kept under its original name: hosts style off it, and it still marks exactly
+        // what it always marked — present for parity, not driven by this toolbar.
         'data-parity-only': 'true',
         disabled: true,
         title: reason,
         'aria-label': reason,
-        // Even a DISABLED control must not steal focus. Round-5 review measured all
-        // 24 parity-only controls moving `document.activeElement` to BODY, dropping
+        // Even a DISABLED control must not steal focus. Round-5 review measured every
+        // undriven control moving `document.activeElement` to BODY, dropping
         // `frame.focus.focused`, un-painting the caret, and leaving all six geometry
-        // keys refused — 24/24 in both adapters. Clicking the visible Underline
-        // button cost the user their caret and their keyboard.
+        // keys refused — in both adapters. Clicking a visible disabled button cost the
+        // user their caret and their keyboard.
         onMousedown: (event: MouseEvent) => event.preventDefault(),
-      },
-      [icon(c.paths)]
-    );
-  }
-
-  if (c.state.kind === 'save') {
-    return h(
-      'button',
-      {
-        key: c.id,
-        type: 'button',
-        class: 'ep-toolbar__button',
-        'data-testid': `toolbar-${slotId}`,
-        disabled: !editor || !onSave,
-        title: label,
-        'aria-label': label,
-        onMousedown: (event: MouseEvent) => event.preventDefault(),
-        onClick: () => onSave?.(),
       },
       [icon(c.paths)]
     );

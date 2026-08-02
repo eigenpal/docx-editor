@@ -129,6 +129,19 @@ export function validateQNameAttributeValues(
     canonicalQNameAttributeValue(attribute, bindings, ownerNamespaceUri, ownerLocalName);
 }
 
+/**
+ * The `w:pPr` children that legally FOLLOW `w:rPr`.
+ *
+ * `CT_PPr` (ECMA-376 17.3.1.26) is `CT_PPrBase`, then `w:rPr`, then `w:sectPr`, then
+ * `w:pPrChange` — so the paragraph-mark properties are NOT last. Requiring them to be
+ * demoted the `w:pPr` of every section-ending paragraph, and of every paragraph carrying a
+ * tracked property change, to a generic node: the tree still round-tripped it, but nothing
+ * downstream could read the paragraph's style, alignment, indent or numbering out of it,
+ * and writing a paragraph mark onto a section-ending paragraph produced a document that
+ * reopened demoted.
+ */
+const PPR_ELEMENTS_AFTER_RPR = new Set(['sectPr', 'pPrChange']);
+
 export function validKnownKind(kind: KnownKind, children: readonly OoxmlNode[]): boolean {
   switch (kind) {
     case 'document':
@@ -173,7 +186,15 @@ export function validKnownKind(kind: KnownKind, children: readonly OoxmlNode[]):
       return (
         children.every((child) => child.kind === 'runProperties' || child.kind === 'generic') &&
         children.filter((child) => child.kind === 'runProperties').length <= 1 &&
-        (runProperties < 0 || runProperties === children.length - 1)
+        (runProperties < 0 ||
+          children
+            .slice(runProperties + 1)
+            .every(
+              (child) =>
+                child.kind === 'generic' &&
+                child.namespaceUri === WML_NAMESPACE_URI &&
+                PPR_ELEMENTS_AFTER_RPR.has(child.localName)
+            ))
       );
     }
     case 'text':

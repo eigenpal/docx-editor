@@ -1,4 +1,4 @@
-// The named simple toolbar parts, the parity-only pickers, save, and the separator.
+// The named simple toolbar parts, the inert pickers, save, and the separator.
 //
 // Each part is pinned to one slot, carrying that slot as a STATIC (`docxSlot`) so the
 // toolbar root can recognize it among children and replace the matching entry of the
@@ -118,7 +118,7 @@ function definePicker(slot: ChromeSlotId): ToolbarSlotPartComponent {
 export const ToolbarStylePicker = definePicker('styles.style');
 export const ToolbarEditingMode = definePicker('review.editingMode');
 // Line spacing is dropdown-SHAPED in the chrome spec (icon + caret), so its
-// parity-only rendering is the picker lookalike, not a bare icon button.
+// undriven rendering is the picker lookalike, not a bare icon button.
 export const ToolbarLineSpacing = definePicker('list.lineSpacing');
 
 /**
