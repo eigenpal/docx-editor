@@ -55,7 +55,7 @@
 
 ## 6. React adapter
 
-- [ ] 6.1 Enable `review.comments` and `review.editingMode`: change `state` from `{kind:'parityOnly'}` to `{kind:'command'}` **and** add `SLOT_COMMANDS` rows. Both are parity-only today, so the adapters render `formattingBar.unavailableInPreview` and a `SLOT_COMMANDS` row alone changes nothing
+- [ ] 6.1 Wire `review.comments` and `review.editingMode` by adding their `SLOT_COMMANDS` rows; both already carry `state: { kind: 'command' }` and render disabled only because the table has no entry
 - [ ] 6.2 Add `review.accept`, `review.reject`, `review.acceptAll`, `review.rejectAll`, `review.displayMode`; ids are public API forever
 - [ ] 6.3 Review sidebar with cards positioned from semantic layout records, never from measuring painted DOM
 - [ ] 6.4 Card↔range selection in both directions; next-change and previous-change navigation across stories

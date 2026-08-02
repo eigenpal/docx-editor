@@ -4,28 +4,15 @@
 
 `typed-ooxml-paragraph-editor` is the production authority. Its D7 inventory lists headers and footers as deferred for editing with layout "read-only page furniture supported"; this change is that lane's named future gate.
 
-Two of the ledger's parse/model claims are stronger than the code:
-
-- `hf-references.ts` resolves from `findBodySectPr`, which finds a `w:sectPr` that is a direct child of `w:body`. Mid-body sections declare theirs inside `w:pPr`. On the comprehensive fixture that means four of five sections are invisible and the last section's pair is applied to the whole document.
-- `semantic-layout.ts` selects the variant with `index === 0`, where `index` is the document page index, and reads `titlePage` from the same single `w:sectPr`. `w:titlePg` is a section property.
-
-Neither is exercised by any fixture in the repository, because every reference in the comprehensive fixture is `default` and settings disable odd/even. The `first` and `even` paths are uncovered code.
+Resolution, inheritance, variant selection, flow-height box sizing, and `PAGE`/`NUMPAGES` projection all ship. What does not is editing: the furniture is inert, and there is no way to create, delete, link, unlink, or author a header at all.
 
 ## Decisions
 
-### H1: Resolution is a function of the section, computed at layout
+### H1: Resolution is settled; this change consumes it
 
-`section-properties.ts` already exposes `readDocumentSections`; `hf-references.ts` does not use it. Joining the two is the whole fix for per-section resolution.
+`resolveHeaderFooterPartsBySection` already computes per-section resolution with inheritance and per-section `titlePage`, and layout attaches it per section. Resolution stays a function rather than a stored map — a map would go stale on every re-pagination and section-property edit — and this change does not reopen it. It adds conformance coverage and consumes the inherited-versus-declared distinction to warn a user before an edit propagates backwards.
 
-Resolution stays a function — `(section, kind, variant, precedingSections, settings) → part | inherited-part | none` — rather than a stored map. A stored map would go stale on every re-pagination, every section-property edit, and every `w:pgNumType` change, and there is no cheap way to know which.
-
-### H2: The resolution result reports inheritance
-
-The dangerous case is not rendering the wrong header. It is a user editing an inherited header and silently changing three earlier sections. Word shows "Same as Previous" for exactly this reason. Returning a bare part name makes the warning impossible without a second query, so the result carries `inherited`.
-
-### H3: The first section with no reference renders empty
-
-This is the comprehensive fixture's actual shape and today's actual bug. OOXML models furniture as a chain of overrides; the first link has nothing behind it. Rendering a later section's header invents content that is not in the file, which is what happens today.
+The warning is the reason that distinction has to survive to the surface. The dangerous case is not rendering the wrong header; it is a user editing an inherited header and silently changing three earlier sections. Word shows "Same as Previous" for exactly this reason.
 
 ### H4: Keep the two rules that are already right
 

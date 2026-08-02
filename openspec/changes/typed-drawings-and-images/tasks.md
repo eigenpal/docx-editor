@@ -57,7 +57,7 @@
 - [ ] 6.2 Insert adds part, override, and relationship in one transaction; validates bytes before writing anything
 - [ ] 6.3 Delete refcounts the media part; resize and crop leave media byte-identical
 - [ ] 6.4 Impact class no narrower than `flow-structural` for extent and wrap changes
-- [ ] 6.5 Enable `image.insert` and `image.properties`: change `state` from `{kind:'parityOnly'}` to `{kind:'command'}` **and** add `SLOT_COMMANDS` rows. A row alone leaves them rendering `formattingBar.unavailableInPreview`. Resolve how the `contextual: true` `image` group reaches the default bar. Add `image.wrap` and `image.altText` — ids are public API forever
+- [ ] 6.5 Wire `image.insert` and `image.properties` by adding their `SLOT_COMMANDS` rows; both already carry `state: { kind: 'command' }`. Settle how the `contextual` `image` group reaches the default bar. Add `image.wrap` and `image.altText` — ids are public API forever
 - [ ] 6.6 Resize handles positioned from layout records, one history entry per drag, preview without committing
 - [ ] 6.7 Anchored drag writing `wp:posOffset` against existing frames, with edge auto-scroll
 - [ ] 6.8 Wrap menu, including inline↔floating conversion in one transaction

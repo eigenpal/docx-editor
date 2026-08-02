@@ -2,57 +2,34 @@
 
 `deferred-features.md` records headers and footers as: parse `related story parts with typed section references`; model `story content resolved by section`; layout `read-only page furniture supported`; edit `deferred`. Its named future gate is "scoped editing, inherited page-furniture interaction, save/reopen fixtures, and paired acceptance".
 
-Reading the code, two of those claims are stronger than what ships.
+**Resolution and placement now ship.** `resolveHeaderFooterPartsBySection` resolves every section's references and applies OOXML inheritance through `inheritMaps`, carrying `titlePage` per section; `multi-section-layout.ts` attaches the result per section; and `variantFor` picks the variant correctly — `w:titlePg` against the section-local page index, `w:evenAndOddHeaders` against the document index via `pageIndexStart`. `layoutHeaderFooterStory` sizes the box by story flow height, never by an anchored object's extent. Page-number projection ships too: `field-projection.ts` runs a complex-field machine during `piecesOfParagraph`, so `PAGE` and `NUMPAGES` are evaluated **in layout, before measurement**, with layout reuse keyed by the page count.
 
-**Header/footer parts are not resolved by section.** `packages/core/src/store/package/hf-references.ts` resolves references from exactly one place:
+So the lane's remaining gate is the part it was always named for: **editing**. Page furniture is `contenteditable=false` and `[data-docx-hf]`, excluded from selection, and there is no way to author a header at all — no create, no delete, no link or unlink from the previous section, and no chrome.
 
-```ts
-const sectPr = findBodySectPr(main.root);   // a w:sectPr that is a direct child of w:body
-if (!sectPr) return EMPTY;
-```
+Four smaller gaps sit alongside it. `SECTIONPAGES` is not in the allowlist, which is only `PAGE | NUMPAGES`. `w:pgNumType` is not read, so a section cannot restart or reformat its page numbers and the fixture's `<w:pgNumType/>` must round-trip as empty. `w:cols/@w:sep` is not read, so the fixture's two-column section draws no separator rule. And several `EG_SectPrContents` members that change what a page looks like — `w:pgBorders`, `w:vAlign`, `w:lnNumType`, per-column `w:col` widths — are unmodelled.
 
-A document's mid-body sections declare their `w:sectPr` inside `w:pPr`, not under `w:body`. Those are invisible to this function. `comprehensive-word-element-test.docx` has five sections; four declare their properties mid-body. Only the final section's pair (`rId12` / `rId13`) is ever resolved, and it is applied to every page in the document — including the first section, which in the file declares **no header or footer at all** and should render blank.
-
-**Variant selection is document-global, not section-relative.** `semantic-layout.ts`:
-
-```ts
-const variantFor = (index: number): HeaderFooterVariantName =>
-  furniture?.titlePage && index === 0 ? 'first'
-  : furniture?.evenAndOddHeaders && (index + 1) % 2 === 0 ? 'even'
-  : 'default';
-```
-
-`index === 0` is the first page of the *document*. `w:titlePg` is a section property: each section's first page takes the `first` variant. And `titlePage` itself is read from one `w:sectPr` — the same document-global one.
-
-Editing is deferred outright: page furniture is `contenteditable=false` and `[data-docx-hf]`, excluded from selection.
-
-This change closes the lane: per-section resolution, correct variant selection, page-number fields, and scoped editing.
+This change closes editing and those four gaps.
 
 ## What Changes
 
-**Per-section resolution**
+**Confirm what ships, then build on it**
 
-- Replace `resolveHeaderFooterParts(pkg)` — one document-global answer — with a per-section resolution built on `readDocumentSections`, which `section-properties.ts` already provides and which `hf-references.ts` does not use.
-- Implement inheritance per ECMA-376: a section declaring no reference for a needed kind and variant uses what the preceding section resolves to. The **first** section has no predecessor; declaring none means the region renders empty.
-- Keep the existing fail-open behaviour for a dangling `r:id` and the existing first-reference-wins rule for a duplicated type. Both match Word and both are already right.
-- Report whether a resolved part was inherited, so the editing surface can warn before an edit propagates backwards.
-
-**Correct variant selection**
-
-- `w:titlePg` becomes a per-section property; the `first` variant applies to the first page **of its section**.
-- `w:evenAndOddHeaders` stays document-scoped, because the setting has no per-section form, and is evaluated against the displayed page number.
-- Keep today's correct rule that an absent variant renders blank rather than falling back to `default`.
+- Per-section resolution, inheritance, section-relative `w:titlePg`, document-relative odd/even, blank-on-absent-variant, fail-open on a dangling `r:id`, and flow-height box sizing are implemented. This change adds conformance coverage for them against the fixtures that exercise `first` and `even`, and does not re-implement them.
+- Resolution already reports enough to tell an inherited part from a declared one; the editing surface consumes that so a user is warned before an edit propagates backwards.
 
 **Section geometry the model does not carry yet**
 
-- `headerDistanceTwips` / `footerDistanceTwips` from `w:pgMar/@w:header` and `@w:footer`.
+Header and footer distances already ship on `SectionProperties.margins`. Still missing:
+
 - `pageNumbering` from `w:pgNumType` (`start`, `fmt`, `chapStyle`, `chapSep`), including the fixture's empty `<w:pgNumType/>`, which must round-trip as an empty element rather than being dropped or populated.
-- `separator` on columns from `w:cols/@w:sep`, which the fixture sets.
+- `separator` on columns from `w:cols/@w:sep`, which the fixture sets and which currently draws nothing.
+- `w:pgBorders`, `w:vAlign`, `w:lnNumType`, and per-column `w:col` widths for unequal columns.
 
 **Page-number fields**
 
-- Type the field vocabulary: `w:fldChar` (`begin` / `separate` / `end`), `w:instrText`, and the `w:fldSimple` shorthand, preserving `@w:dirty` and `@w:fldLock`.
-- Evaluate `PAGE`, `NUMPAGES`, and `SECTIONPAGES` **in layout, before measurement**, for the page the story attaches to, so the evaluated text is what gets measured. One part renders different text on different pages while remaining one story with one editing scope, and a right-aligned or tab-positioned number stays positioned when it crosses from one digit to two.
+- `PAGE` and `NUMPAGES` already project in layout with reuse keyed by page count. Add **`SECTIONPAGES`**, which is not in the allowlist today, and make its reuse key the section's page count.
+- Confirm the projection survives the editing scope: a `PAGE` field shows the edited page's own number while its scope is open.
+- Type the field vocabulary as canonical nodes — `w:fldChar`, `w:instrText`, `w:fldSimple` — preserving `@w:dirty` and `@w:fldLock`, so a field is one addressable unit for caret movement and deletion rather than a run sequence the parse machine recognises.
 - Every other field instruction stays **inert** — round-tripped, painted from its cached result, never executed. This preserves the `deferred-features.md` fields-lane security posture: DDE and external inclusion are non-executable.
 
 **Scoped editing**

@@ -1,29 +1,29 @@
-## 0. Confirm the diagnosis before changing code
+## 0. Confirm the shipped baseline
 
-- [ ] 0.1 Load `comprehensive-word-element-test.docx` in the demo and record which header and footer each of the five sections actually paints today. The prediction is that every page shows `rId12` / `rId13`; if it does not, `design.md` is wrong and this change is re-planned before any edit
-- [ ] 0.2 Record whether the first section paints blank or paints a later section's header — that single observation is the change's headline defect
-- [ ] 0.3 Re-read `openspec/changes/typed-ooxml-paragraph-editor/baseline.md` and record the current `bun test` result, so later "no regression" claims compare against a number that was read
+- [ ] 0.1 Load `comprehensive-word-element-test.docx` in the demo and record which header and footer each of the five sections paints. Per-section resolution and inheritance ship, so each section should paint its own pair and the first section should paint blank
+- [ ] 0.2 Load `titlePg-header-footer.docx` and `section-inheritance-header-footer.docx` and confirm `first` and `even` variants resolve per section
+- [ ] 0.3 Record the current `bun test` result so later "no regression" claims compare against a number that was read
 
-## 1. Per-section resolution
+## 1. Conformance for what already ships
 
-- [ ] 1.1 Replace the single-`w:sectPr` lookup in `hf-references.ts` with per-section resolution built on `readDocumentSections`
-- [ ] 1.2 Implement inheritance from the preceding section, per kind and per variant
-- [ ] 1.3 First section with no reference resolves to none, not to a later section's part
-- [ ] 1.4 Report `inherited` on the resolution result
-- [ ] 1.5 Preserve fail-open on a dangling `r:id` and first-reference-wins on a duplicated type; add tests pinning both so the rewrite cannot lose them
-- [ ] 1.6 Update `resolveHeaderFooterParts`'s callers; the document-global signature goes away rather than gaining a section parameter with a default
+- [ ] 1.1 Cover per-section resolution and inheritance against the fixtures above; these paths had no fixture coverage when they landed
+- [ ] 1.2 Cover section-relative `w:titlePg` on a **mid-document** section, and document-relative odd/even for a section beginning on an even page
+- [ ] 1.3 Cover the first section declaring no reference — it renders blank, not a later section's part
+- [ ] 1.4 Pin fail-open on a dangling `r:id` and first-reference-wins on a duplicated type, so a later refactor cannot lose them
+- [ ] 1.5 Pin flow-height box sizing against a header containing a page-relative anchored drawing
 
-## 2. Variant selection
+## 2. Page-number fields
 
-- [ ] 2.1 Make `titlePage` a per-section property
-- [ ] 2.2 Make `variantFor` section-relative for `first` — the first page of the section, not of the document
-- [ ] 2.3 Keep `w:evenAndOddHeaders` document-scoped and evaluated against the displayed page number
-- [ ] 2.4 Keep the absent-variant-renders-blank rule
-- [ ] 2.5 Cover `first` and `even` with tests, starting from `titlePg-header-footer.docx` (2 `first`, 2 `even`, `w:titlePg`) and `section-inheritance-header-footer.docx`; nine fixtures carry `first` and five carry `even`
+- [ ] 2.1 Add `SECTIONPAGES` to the allowlist, with reuse keyed by the section's page count
+- [ ] 2.2 Type `w:fldChar`, `w:instrText`, and `w:fldSimple` as canonical nodes so a field is one addressable unit, preserving `@w:dirty` and `@w:fldLock`
+- [ ] 2.3 Add a demotion rule for malformed fields — an `end` with no `begin`, an orphaned `w:instrText`, nested fields
+- [ ] 2.4 Assert every non-page-number instruction stays inert, with no fetch at load, layout, paint, or save
+- [ ] 2.5 Assert right-aligned, centred, and tab-positioned numbers stay positioned across the single-to-double-digit boundary
+- [ ] 2.6 Assert `NUMPAGES` updates everywhere when pagination changes the page count
 
 ## 3. Section geometry
 
-- [ ] 3.1 Read `w:pgMar/@w:header` and `@w:footer` into `SectionProperties`
+- [ ] 3.1 Header and footer distances already ship on `SectionProperties.margins`; cover them rather than re-reading them
 - [ ] 3.2 Read `w:pgNumType` (`start`, `fmt`, `chapStyle`, `chapSep`); an empty element reports no authored values and re-emits empty
 - [ ] 3.3 Read `w:cols/@w:sep` and draw the column separator
 - [ ] 3.4 Push the body content area down when a story's flow height exceeds the header margin; keep flow height — never an anchored extent — as the box size
@@ -33,7 +33,6 @@
 ## 4. Typed fields
 
 - [ ] 4.1 Add typed field kinds to `ooxml-tree.ts` for `w:fldChar`, `w:instrText`, and `w:fldSimple`, preserving `@w:dirty` and `@w:fldLock`
-- [ ] 4.2 Evaluate `PAGE`, `NUMPAGES`, `SECTIONPAGES` in layout before measurement, keyed by the page the story attaches to; evaluation publishes no `ModelChange` (see §12.5)
 - [ ] 4.3 Honour `w:pgNumType` start and format in `PAGE`
 - [ ] 4.4 Leave every other instruction inert; add a security test asserting no fetch is issued at load, layout, paint, or save for an external-inclusion instruction
 - [ ] 4.5 Preserve the cached result on save rather than recomputing it

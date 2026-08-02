@@ -16,7 +16,7 @@ for (const child of paragraph.children) {
 
 Comments fail the same way for a different reason: `w:commentRangeStart` / `w:commentRangeEnd` / `w:commentReference` are generic and invisible, and `word/comments.xml` is never a story, so a document's entire review thread does not exist in the editor.
 
-Two chrome slots already name the intent — `review.comments` and `review.editingMode` are in `CHROME_GROUPS` — but both carry `state: { kind: 'parityOnly' }`, so the adapters short-circuit and render the localized `formattingBar.unavailableInPreview` rather than a disabled command. Enabling them needs **two** changes, not one: the `state` becomes `{ kind: 'command' }` **and** a row is added to `SLOT_COMMANDS`. A `SLOT_COMMANDS` row alone does nothing.
+Two chrome slots already name the intent: `review.comments` and `review.editingMode` are in `CHROME_GROUPS` with `state: { kind: 'command' }`, and neither appears in `SLOT_COMMANDS`. `commandForSlot` therefore answers `null` and both render disabled with the engine's own reason, "not wired to an editor command". Wiring each is one row.
 
 ## What Changes
 

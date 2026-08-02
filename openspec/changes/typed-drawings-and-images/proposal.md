@@ -4,7 +4,7 @@
 
 Layout being deferred means a `w:drawing` occupies no space and paints nothing. `comprehensive-word-element-test.docx` has eleven of them — ten inline, one floating — and the four PNGs behind them are in the package, related, and never seen. A user opening a document with a logo, a chart image, or a signature block sees the text reflowed around holes where the pictures were, with no indication that anything is missing.
 
-Two chrome slots already name the intent: `image.insert` and `image.properties` are in `CHROME_GROUPS`. Both carry `state: { kind: 'parityOnly' }`, so the adapters short-circuit and render the localized `formattingBar.unavailableInPreview` — the "not wired to an editor command" path never runs for them. Enabling them needs the `state` to become `{ kind: 'command' }` **and** a `SLOT_COMMANDS` row. The `image` group is also `contextual: true`, so `defaultChromeGroups()` filters it out of the default bar entirely; that has to be addressed too, or the controls exist and never render.
+Two chrome slots already name the intent: `image.insert` and `image.properties` are in `CHROME_GROUPS` with `state: { kind: 'command' }`, and neither appears in `SLOT_COMMANDS`, so both render disabled with "not wired to an editor command". Wiring each is one row. The `image` group is `contextual`, so how it reaches the default bar has to be settled alongside.
 
 This lane also carries the most security surface of the five. An image is a relationship to a binary part, and a `TargetMode="External"` relationship is a URL. Typing drawings is exactly when a zero-click fetch can be introduced.
 

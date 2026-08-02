@@ -38,7 +38,7 @@ A section declaring no reference for a needed kind and variant SHALL use what th
 
 - **WHEN** the document's first section declares neither `w:headerReference` nor `w:footerReference`, as the comprehensive fixture's first section does
 - **THEN** its pages render an empty header and an empty footer
-- **AND** they do NOT render a later section's header, which is what a document-global resolution produces today
+- **AND** they do NOT render a later section's header
 
 #### Scenario: Inheritance is per kind and per variant
 
