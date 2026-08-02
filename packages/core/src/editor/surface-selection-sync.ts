@@ -53,6 +53,14 @@ export interface SurfaceSelectionSyncDeps {
   now(): number;
   /** Book the cost of one mirror into the surface's perf slot. */
   recordSelectionMs(ms: number): void;
+  /**
+   * Whether a pointer gesture currently owns the selection.
+   *
+   * A drag publishes its own selection on every move, and the browser reports its own idea of
+   * what is selected alongside it. Adopting one of those mid-gesture snaps the caret back to
+   * whatever the DOM guessed, halfway through the drag.
+   */
+  isGesturing?(): boolean;
 }
 
 export interface SurfaceSelectionSync {
@@ -234,6 +242,7 @@ export function createSurfaceSelectionSync(deps: SurfaceSelectionSyncDeps): Surf
       // be read straight back, fighting the user mid-drag.
       if (applyingSelection) return;
       if (composing) return;
+      if (deps.isGesturing?.()) return;
       adoptDomSelection();
     },
 

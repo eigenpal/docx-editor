@@ -30,6 +30,14 @@ export interface PaginatedSurfaceOptions {
   readonly fontAlias?: (family: string) => string | undefined;
   /** Points to CSS pixels. */
   readonly scale?: number;
+  /**
+   * Who resolves a pointer to a caret.
+   *
+   * `'engine'` (the default) answers from the layout records, which is what makes a click in
+   * a margin, an indent or a cell's padding land where it was aimed. `'native'` binds no
+   * pointer handlers and leaves the browser's own caret placement in charge.
+   */
+  readonly pointer?: 'engine' | 'native';
   readonly onChange?: (state: PaginatedSurfaceState) => void;
 }
 

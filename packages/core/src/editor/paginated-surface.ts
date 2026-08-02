@@ -68,6 +68,7 @@ import {
 } from './surface-pages.ts';
 import { createSurfaceCaret } from './surface-caret.ts';
 import { createSurfaceFormat } from './surface-format.ts';
+import { createPointerController, type PointerController } from './surface-pointer.ts';
 import { createSurfaceSelectionSync } from './surface-selection-sync.ts';
 import { createSurfaceStructure } from './surface-structure.ts';
 
@@ -460,6 +461,7 @@ export function mountPaginatedSurface(
     recordSelectionMs: (ms) => {
       lastSelectionMs = ms;
     },
+    isGesturing: () => pointer?.dragging() ?? false,
   });
 
   const surface: PaginatedSurface = {
@@ -699,6 +701,7 @@ export function mountPaginatedSurface(
       pagesLayer.removeEventListener('compositionstart', onCompositionStart);
       pagesLayer.removeEventListener('compositionend', onCompositionEnd);
       scroller?.removeEventListener('scroll', onScroll);
+      pointer?.destroy();
       // Drop pending layout work and stop listening BEFORE the DOM goes, or a commit from
       // another editor sharing this store would paint into a detached container.
       scheduler.cancel();
@@ -766,6 +769,15 @@ export function mountPaginatedSurface(
   // themselves are factories over the surface interface: keys, clipboard and `beforeinput` in
   // surface-input.ts, the selection mirror and the IME lane in surface-selection-sync.ts.
   const { onSelectionChange, onCompositionStart, onCompositionEnd } = selectionSync;
+
+  /**
+   * The pointer lane's handle, assigned once the surface it drives exists.
+   *
+   * Read by the selection mirror: the browser keeps reporting its own idea of the selection
+   * while a gesture runs, and adopting one of those mid-drag snaps the caret back to whatever
+   * the DOM guessed.
+   */
+  let pointer: PointerController | null = null;
   const onKeyDown = createKeyDownHandler(surface);
   const { onCopy, onCut, onPaste } = createClipboardHandlers(surface, insertPlainText);
   const onBeforeInput = createBeforeInputHandler(surface, {
@@ -860,6 +872,20 @@ export function mountPaginatedSurface(
     else queueMicrotask(run);
   };
   scroller?.addEventListener('scroll', onScroll, { passive: true });
+
+  pointer = createPointerController(
+    {
+      pagesLayer,
+      container,
+      scale: () => scale,
+      layout: () => currentLayout,
+      measurer: () => measurer,
+      selection: () => selection,
+      setSelection: (next) => setSelection(next),
+      focus: () => pagesLayer.focus(),
+    },
+    options.pointer ? { mode: options.pointer } : {}
+  );
 
   render();
   return { ok: true, surface };

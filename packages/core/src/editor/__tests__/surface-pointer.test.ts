@@ -1,0 +1,408 @@
+// Pointer gestures over the painted pages.
+//
+// The surface claims pointer input because the browser cannot answer where a point is: the
+// painted pages are shrink-to-fit line boxes, so the margin, the indent and the leading
+// between lines are outside every box it knows about. These are the clicks that used to go
+// wherever its fallback chose.
+
+import { GlobalRegistrator } from '@happy-dom/global-registrator';
+if (!GlobalRegistrator.isRegistered) GlobalRegistrator.register();
+
+import { describe, expect, test } from 'bun:test';
+import { zipSync, strToU8 } from 'fflate';
+import { mountPaginatedSurface, type PaginatedSurface } from '../paginated-surface.ts';
+
+const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
+const CT = 'http://schemas.openxmlformats.org/package/2006/content-types';
+const REL = 'http://schemas.openxmlformats.org/package/2006/relationships';
+const OD = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument';
+
+function docx(body: string): Uint8Array {
+  return zipSync({
+    '[Content_Types].xml': strToU8(
+      `<Types xmlns="${CT}"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>` +
+        '<Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/></Types>'
+    ),
+    '_rels/.rels': strToU8(
+      `<Relationships xmlns="${REL}"><Relationship Id="rId1" Type="${OD}" Target="word/document.xml"/></Relationships>`
+    ),
+    'word/document.xml': strToU8(
+      `<w:document xmlns:w="${W}"><w:body>${body}</w:body></w:document>`
+    ),
+  });
+}
+
+const paragraph = (text: string) => `<w:p><w:r><w:t>${text}</w:t></w:r></w:p>`;
+
+/** The page's content box origin, which page-content coordinates are measured from. */
+const MARGIN = 72;
+
+interface Mounted {
+  readonly surface: PaginatedSurface;
+  readonly container: HTMLElement;
+  readonly pages: HTMLElement;
+}
+
+function mount(body: string, options: { pointer?: 'engine' | 'native' } = {}): Mounted {
+  const container = document.createElement('div');
+  document.body.append(container);
+  const result = mountPaginatedSurface(container, docx(body), {
+    scale: 1,
+    ...(options.pointer ? { pointer: options.pointer } : {}),
+  });
+  if (!result.ok) throw new Error(`${result.reason}: ${result.detail ?? ''}`);
+  const pages = container.querySelector<HTMLElement>('.docx-pages')!;
+  // happy-dom reports no layout at all, so the one measurement the controller makes — where
+  // the pages layer sits on screen — is supplied. A deliberately non-zero origin, so a
+  // controller that forgot to subtract it would fail rather than pass by coincidence.
+  stubRect(pages, { left: 100, top: 50, bottom: 50 });
+  return { surface: result.surface, container, pages };
+}
+
+function stubRect(
+  element: HTMLElement,
+  rect: { left: number; top: number; bottom?: number }
+): void {
+  Object.defineProperty(element, 'getBoundingClientRect', {
+    configurable: true,
+    value: () => ({
+      left: rect.left,
+      top: rect.top,
+      right: rect.left + 1000,
+      bottom: rect.bottom ?? rect.top + 1000,
+      width: 1000,
+      height: (rect.bottom ?? rect.top + 1000) - rect.top,
+      x: rect.left,
+      y: rect.top,
+    }),
+  });
+}
+
+/** Page-content coordinates to the client point that lands on them. */
+const clientOf = (x: number, y: number) => ({
+  clientX: 100 + MARGIN + x,
+  clientY: 50 + MARGIN + y,
+});
+
+function pointer(type: string, x: number, y: number, init: PointerEventInit = {}): PointerEvent {
+  return new PointerEvent(type, {
+    bubbles: true,
+    cancelable: true,
+    button: 0,
+    pointerId: 1,
+    pointerType: 'mouse',
+    ...clientOf(x, y),
+    ...init,
+  });
+}
+
+/** A press, at page-content coordinates. Returns the event so its defaults can be inspected. */
+function press(mounted: Mounted, x: number, y: number, init: PointerEventInit = {}): PointerEvent {
+  const event = pointer('pointerdown', x, y, init);
+  mounted.pages.dispatchEvent(event);
+  return event;
+}
+
+const release = (x: number, y: number): void => {
+  document.dispatchEvent(pointer('pointerup', x, y));
+};
+
+const offsets = (surface: PaginatedSurface): [number, number] => {
+  const { anchor, head } = surface.state().selection;
+  return [anchor.offset, head.offset];
+};
+
+describe('a press beside the text', () => {
+  test('left of the first glyph puts the caret at the START of the line', () => {
+    const mounted = mount(paragraph('hello world'));
+    press(mounted, -40, 5);
+    expect(offsets(mounted.surface)).toEqual([0, 0]);
+    mounted.surface.destroy();
+  });
+
+  test('right of the last glyph puts the caret at the END of the line', () => {
+    const mounted = mount(paragraph('hello world'));
+    press(mounted, 500, 5);
+    expect(offsets(mounted.surface)).toEqual([11, 11]);
+    mounted.surface.destroy();
+  });
+
+  test('below the last line lands in the last paragraph', () => {
+    const mounted = mount(paragraph('one') + paragraph('two'));
+    press(mounted, 500, 400);
+    const { head } = mounted.surface.state().selection;
+    expect(head.paragraphId).toBe(mounted.surface.session.paragraphIds()[1]!);
+    expect(head.offset).toBe(3);
+    mounted.surface.destroy();
+  });
+
+  test('the press is claimed, so the browser does not also place a caret of its own', () => {
+    const mounted = mount(paragraph('hello'));
+    expect(press(mounted, -40, 5).defaultPrevented).toBe(true);
+    mounted.surface.destroy();
+  });
+
+  test('and focus is taken explicitly, because preventing the press cancels it', () => {
+    const mounted = mount(paragraph('hello'));
+    press(mounted, -40, 5);
+    expect(document.activeElement).toBe(mounted.pages);
+    mounted.surface.destroy();
+  });
+
+  test('the layer origin is subtracted, not assumed to be zero', () => {
+    const mounted = mount(paragraph('hello world'));
+    // The same client point read against an origin 40 further right is 40 further LEFT in the
+    // document, which here is the difference between a glyph and the margin.
+    stubRect(mounted.pages, { left: 140, top: 50 });
+    mounted.pages.dispatchEvent(
+      new PointerEvent('pointerdown', {
+        bubbles: true,
+        cancelable: true,
+        button: 0,
+        pointerId: 1,
+        pointerType: 'mouse',
+        clientX: 100 + MARGIN + 30,
+        clientY: 50 + MARGIN + 5,
+      })
+    );
+    // 30 in the old frame is -10 in the new one: the margin, so the start of the line.
+    expect(offsets(mounted.surface)).toEqual([0, 0]);
+    mounted.surface.destroy();
+  });
+});
+
+describe('what the engine does NOT claim', () => {
+  test('a non-primary button keeps its native behaviour and the current selection', () => {
+    const mounted = mount(paragraph('hello world'));
+    press(mounted, 30, 5);
+    const before = offsets(mounted.surface);
+    const event = press(mounted, 500, 5, { button: 2 });
+    expect(event.defaultPrevented).toBe(false);
+    expect(offsets(mounted.surface)).toEqual(before);
+    mounted.surface.destroy();
+  });
+
+  test('a press on page furniture is a no-op, not a jump to the top of the body', () => {
+    const mounted = mount(paragraph('hello world'));
+    press(mounted, 30, 5);
+    const before = offsets(mounted.surface);
+
+    const furniture = document.createElement('div');
+    furniture.dataset.docxHf = 'header';
+    mounted.pages.append(furniture);
+    const event = new PointerEvent('pointerdown', {
+      bubbles: true,
+      cancelable: true,
+      button: 0,
+      pointerId: 1,
+      pointerType: 'mouse',
+      ...clientOf(-40, 5),
+    });
+    furniture.dispatchEvent(event);
+
+    expect(event.defaultPrevented).toBe(false);
+    expect(offsets(mounted.surface)).toEqual(before);
+    mounted.surface.destroy();
+  });
+
+  test('touch keeps the browser panning, which matters more than an exact caret', () => {
+    const mounted = mount(paragraph('hello world'));
+    press(mounted, 30, 5);
+    const before = offsets(mounted.surface);
+    const event = press(mounted, 500, 5, { pointerType: 'touch' });
+    expect(event.defaultPrevented).toBe(false);
+    expect(offsets(mounted.surface)).toEqual(before);
+    mounted.surface.destroy();
+  });
+
+  test("'native' binds nothing at all", () => {
+    const mounted = mount(paragraph('hello world'), { pointer: 'native' });
+    const event = press(mounted, -40, 5);
+    expect(event.defaultPrevented).toBe(false);
+    expect(offsets(mounted.surface)).toEqual([0, 0]);
+    mounted.surface.destroy();
+  });
+});
+
+describe('dragging', () => {
+  test('a drag extends from where it started', () => {
+    const mounted = mount(paragraph('hello world'));
+    press(mounted, 0, 5);
+    document.dispatchEvent(pointer('pointermove', 36, 5));
+    expect(offsets(mounted.surface)).toEqual([0, 6]);
+    release(36, 5);
+    mounted.surface.destroy();
+  });
+
+  test('dragging backwards keeps the anchor where the press was', () => {
+    const mounted = mount(paragraph('hello world'));
+    press(mounted, 36, 5);
+    document.dispatchEvent(pointer('pointermove', 0, 5));
+    expect(offsets(mounted.surface)).toEqual([6, 0]);
+    release(0, 5);
+    mounted.surface.destroy();
+  });
+
+  test('the browser does not get to overrule the gesture halfway through it', async () => {
+    // A contenteditable keeps reporting its own idea of the selection while a drag runs.
+    // Adopting one mid-gesture snaps the caret back to whatever the DOM guessed.
+    const mounted = mount(paragraph('hello world'));
+    press(mounted, 0, 5);
+    document.dispatchEvent(pointer('pointermove', 36, 5));
+
+    // A DIFFERENT selection, planted in the DOM, after the surface's own echo guard has
+    // lapsed. Without both of those the report would either match the model or be ignored as
+    // an echo, and the test would pass without the drag guard existing at all.
+    await Promise.resolve();
+    const span = mounted.pages.querySelector<HTMLElement>('[data-paragraph-id][data-start]')!;
+    const range = document.createRange();
+    range.setStart(span.firstChild!, 2);
+    range.setEnd(span.firstChild!, 3);
+    const domSelection = document.getSelection()!;
+    domSelection.removeAllRanges();
+    domSelection.addRange(range);
+    document.dispatchEvent(new Event('selectionchange'));
+
+    expect(offsets(mounted.surface)).toEqual([0, 6]);
+    release(36, 5);
+    mounted.surface.destroy();
+  });
+
+  test('and the same report IS adopted once the gesture is over', async () => {
+    // The other half of the guard: outside a gesture the DOM is still how keyboard selection,
+    // Select All and assistive technology reach the model.
+    const mounted = mount(paragraph('hello world'));
+    press(mounted, 0, 5);
+    release(0, 5);
+
+    await Promise.resolve();
+    const span = mounted.pages.querySelector<HTMLElement>('[data-paragraph-id][data-start]')!;
+    const range = document.createRange();
+    range.setStart(span.firstChild!, 2);
+    range.setEnd(span.firstChild!, 3);
+    const domSelection = document.getSelection()!;
+    domSelection.removeAllRanges();
+    domSelection.addRange(range);
+    document.dispatchEvent(new Event('selectionchange'));
+
+    expect(offsets(mounted.surface)).toEqual([2, 3]);
+    mounted.surface.destroy();
+  });
+
+  test('a move after the gesture ends changes nothing', () => {
+    const mounted = mount(paragraph('hello world'));
+    press(mounted, 0, 5);
+    release(0, 5);
+    document.dispatchEvent(pointer('pointermove', 500, 5));
+    expect(offsets(mounted.surface)).toEqual([0, 0]);
+    mounted.surface.destroy();
+  });
+
+  /** A drag to `clientY` inside a viewport running from 0 to 200, and what it scrolled. */
+  async function dragToward(clientY: number): Promise<number> {
+    const mounted = mount(paragraph('hello world'));
+    const scroller = document.createElement('div');
+    scroller.className = 'docx-editor__scroll-container';
+    document.body.append(scroller);
+    scroller.append(mounted.container);
+    stubRect(scroller, { left: 0, top: 0, bottom: 200 });
+    scroller.scrollTop = 0;
+
+    press(mounted, 0, 5);
+    document.dispatchEvent(
+      new PointerEvent('pointermove', {
+        bubbles: true,
+        cancelable: true,
+        pointerId: 1,
+        pointerType: 'mouse',
+        clientX: 100 + MARGIN,
+        clientY,
+      })
+    );
+    await new Promise((resolve) => setTimeout(resolve, 40));
+    const scrolled = scroller.scrollTop;
+    release(0, 5);
+    scroller.remove();
+    mounted.surface.destroy();
+    return scrolled;
+  }
+
+  test('a drag past the edge of the view pulls the view after it', async () => {
+    expect(await dragToward(199)).toBeGreaterThan(0);
+  });
+
+  test('and a drag nowhere near the edge does not', async () => {
+    // Without this the test above would pass just as well for a controller that scrolled on
+    // every move, which would make a drag through the middle of the page unusable.
+    expect(await dragToward(100)).toBe(0);
+  });
+});
+
+describe('click count', () => {
+  test('a second click selects the word under it', () => {
+    const mounted = mount(paragraph('hello world'));
+    press(mounted, 12, 5);
+    press(mounted, 12, 5);
+    expect(offsets(mounted.surface)).toEqual([0, 5]);
+    mounted.surface.destroy();
+  });
+
+  test('a double-click at the END of a word takes the word, not the space after it', () => {
+    // The caret sits between characters, so the edge is ambiguous. Preferring the character
+    // on the right and falling back to the left is what resolves it the way Word does.
+    const mounted = mount(paragraph('hello world'));
+    press(mounted, 30, 5);
+    press(mounted, 30, 5);
+    expect(offsets(mounted.surface)).toEqual([0, 5]);
+    mounted.surface.destroy();
+  });
+
+  test('a third click takes the whole paragraph', () => {
+    const mounted = mount(paragraph('hello world'));
+    press(mounted, 12, 5);
+    press(mounted, 12, 5);
+    press(mounted, 12, 5);
+    expect(offsets(mounted.surface)).toEqual([0, 11]);
+    mounted.surface.destroy();
+  });
+
+  test('a click somewhere else starts counting again', () => {
+    const mounted = mount(paragraph('hello world'));
+    press(mounted, 12, 5);
+    press(mounted, 60, 5);
+    expect(offsets(mounted.surface)).toEqual([10, 10]);
+    mounted.surface.destroy();
+  });
+
+  test('dragging after a double-click keeps taking whole words', () => {
+    const mounted = mount(paragraph('hello world'));
+    press(mounted, 12, 5);
+    press(mounted, 12, 5);
+    document.dispatchEvent(pointer('pointermove', 40, 5));
+    expect(offsets(mounted.surface)).toEqual([0, 11]);
+    release(40, 5);
+    mounted.surface.destroy();
+  });
+});
+
+describe('shift-click', () => {
+  test('extends from the anchor the selection already has', () => {
+    const mounted = mount(paragraph('hello world'));
+    press(mounted, 0, 5);
+    release(0, 5);
+    press(mounted, 60, 5, { shiftKey: true });
+    expect(offsets(mounted.surface)).toEqual([0, 10]);
+    mounted.surface.destroy();
+  });
+
+  test('and pivots around it rather than around the visible start', () => {
+    const mounted = mount(paragraph('hello world'));
+    press(mounted, 36, 5);
+    document.dispatchEvent(pointer('pointermove', 60, 5));
+    release(60, 5);
+    expect(offsets(mounted.surface)).toEqual([6, 10]);
+    press(mounted, 0, 5, { shiftKey: true });
+    expect(offsets(mounted.surface)).toEqual([6, 0]);
+    mounted.surface.destroy();
+  });
+});
