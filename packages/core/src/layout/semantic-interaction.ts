@@ -8,6 +8,7 @@
 // take, so a click, a caret and an edit all speak one coordinate system: a hit test can be
 // handed straight to `insertText` without a translation step that could disagree.
 
+import { DEFAULT_VERTICAL_WEIGHT, hitTestPage } from './semantic-hit-test.ts';
 import type { LineRecord, SemanticLayout, StyleSpanRecord } from './semantic-records.ts';
 import { paragraphFragmentsOf } from './semantic-records.ts';
 
@@ -148,53 +149,44 @@ export function caretAt(layout: SemanticLayout, position: SemanticPosition): Car
 }
 
 /**
- * The caret position nearest a point.
+ * The caret position nearest a point, in PAGE-CONTENT coordinates.
  *
  * Never returns null for a point inside the document: a click in the margin, past the end of
  * a line, or below the last line still has an obvious intended caret, and refusing to answer
  * would make those clicks do nothing.
+ *
+ * The rules live in `semantic-hit-test.ts`, which answers with the cell address and the
+ * on-glyphs flag a pointer controller needs too; this keeps the geometry-only shape for
+ * callers that want nothing else.
  */
 export function hitTestSemantic(
   layout: SemanticLayout,
   point: { readonly x: number; readonly y: number; readonly pageIndex?: number }
 ): CaretGeometry | null {
-  const stops = caretStops(layout);
-  if (stops.length === 0) return null;
-
-  const candidates =
-    point.pageIndex === undefined
-      ? stops
-      : stops.filter((stop) => stop.pageIndex === point.pageIndex);
-  const pool = candidates.length > 0 ? candidates : stops;
-
-  // Prefer the line whose vertical band contains the point; otherwise the nearest band.
-  let bestLineDistance = Number.POSITIVE_INFINITY;
-  for (const stop of pool) {
-    const distance =
-      point.y < stop.y
-        ? stop.y - point.y
-        : point.y > stop.y + stop.height
-          ? point.y - (stop.y + stop.height)
-          : 0;
-    if (distance < bestLineDistance) bestLineDistance = distance;
+  if (point.pageIndex !== undefined) {
+    const hit = hitTestPage(layout, point.pageIndex, point);
+    if (hit) return hit.caret;
+    // Fall through rather than refuse: a page index that is not in this layout is a stale
+    // caller, not a reason to leave the caret where it was.
   }
-  const onBestLine = pool.filter((stop) => {
-    const distance =
-      point.y < stop.y
-        ? stop.y - point.y
-        : point.y > stop.y + stop.height
-          ? point.y - (stop.y + stop.height)
+  // No page named: score the same point against every page and take the nearest answer. The
+  // pointer path always knows its page, so this is the headless and out-of-range route.
+  let best: CaretGeometry | null = null;
+  let bestScore = Number.POSITIVE_INFINITY;
+  for (const page of layout.pages) {
+    const hit = hitTestPage(layout, page.index, point);
+    if (!hit) continue;
+    const caret = hit.caret;
+    const vertical =
+      point.y < caret.y
+        ? caret.y - point.y
+        : point.y > caret.y + caret.height
+          ? point.y - (caret.y + caret.height)
           : 0;
-    return distance === bestLineDistance;
-  });
-
-  let best = onBestLine[0]!;
-  let bestDistance = Math.abs(best.x - point.x);
-  for (const stop of onBestLine) {
-    const distance = Math.abs(stop.x - point.x);
-    if (distance < bestDistance) {
-      best = stop;
-      bestDistance = distance;
+    const score = Math.abs(caret.x - point.x) + vertical * DEFAULT_VERTICAL_WEIGHT;
+    if (score < bestScore) {
+      bestScore = score;
+      best = caret;
     }
   }
   return best;

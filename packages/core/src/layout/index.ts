@@ -326,6 +326,18 @@ export {
   type TableCellStyleFormatting,
 } from './style-cascade.ts';
 export {
+  DEFAULT_VERTICAL_WEIGHT,
+  hitTestPage,
+  hitTestSheet,
+  isFurniturePoint,
+  lineEndOffset,
+  pageAtY,
+  type HitPoint,
+  type HitTestOptions,
+  type SemanticHit,
+  type TableCellAddress,
+} from './semantic-hit-test.ts';
+export {
   caretAt,
   caretStops,
   compositionAnchor,

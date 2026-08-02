@@ -1,0 +1,345 @@
+// Pointer hit testing in model space.
+//
+// Every case here is a point that is NOT on a glyph — an indent, a margin, the gap between
+// two lines, a cell's padding, the gutter between two sheets. Those are the clicks a person
+// makes when aiming at the start or the end of a line, and answering them well is the whole
+// difference between a caret that goes where it was meant to and one that jumps.
+
+import { describe, expect, test } from 'bun:test';
+import { readOoxmlPart, type OoxmlPart } from '@docx-editor.dev/core-contract/store';
+import {
+  DEFAULT_VERTICAL_WEIGHT,
+  hitTestPage,
+  hitTestSheet,
+  isFurniturePoint,
+  lineEndOffset,
+  pageAtY,
+} from '../semantic-hit-test.ts';
+import { createFixedMeasurer, layoutSemanticDocument } from '../semantic-layout.ts';
+import type { ResolvedRunStyle } from '../run-style.ts';
+import {
+  paragraphFragmentsOf,
+  type SemanticLayout,
+  type TextMeasurer,
+} from '../semantic-records.ts';
+
+const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
+
+function load(body: string): OoxmlPart {
+  const result = readOoxmlPart(`<w:document xmlns:w="${W}"><w:body>${body}</w:body></w:document>`, {
+    name: '/word/document.xml',
+    contentType: 'app/xml',
+  });
+  if (!result.ok) throw new Error(result.reason);
+  return result.part;
+}
+
+const measurer = createFixedMeasurer(6, 14);
+const lay = (body: string, port: TextMeasurer = measurer): SemanticLayout =>
+  layoutSemanticDocument(load(body), 1, { measurer: port });
+
+const P0 = '/word/document.xml#0.0.0';
+const P1 = '/word/document.xml#0.0.1';
+
+const p = (text: string) => `<w:p><w:r><w:t>${text}</w:t></w:r></w:p>`;
+const tc = (content: string, tcPr = '') => `<w:tc>${tcPr}${content}</w:tc>`;
+const tr = (cells: string) => `<w:tr>${cells}</w:tr>`;
+
+/** Every hit test in this file names its page, the way the pointer path does. */
+const hit = (layout: SemanticLayout, x: number, y: number, port?: TextMeasurer) =>
+  hitTestPage(layout, 0, { x, y }, port ? { measurer: port } : {});
+
+describe('a click beside a line', () => {
+  test('left of the first glyph is the START of that line', () => {
+    // The single most common miss: aiming at the start of a line and landing in the margin.
+    const layout = lay(p('abcdef'));
+    expect(hit(layout, -40, 5)!.position).toEqual({ paragraphId: P0, offset: 0 });
+  });
+
+  test('left of an INDENTED line is still that line, not the one below it', () => {
+    // The indent strip is outside the paragraph's box entirely, so nothing contains the point.
+    const layout = lay(`<w:p><w:pPr><w:ind w:left="1440"/></w:pPr><w:r><w:t>abc</w:t></w:r></w:p>`);
+    const found = hit(layout, 10, 5)!;
+    expect(found.position).toEqual({ paragraphId: P0, offset: 0 });
+    expect(found.onGlyphs).toBe(false);
+  });
+
+  test('right of the last glyph is the END of that line', () => {
+    const layout = lay(p('abc'));
+    expect(hit(layout, 9999, 5)!.position).toEqual({ paragraphId: P0, offset: 3 });
+  });
+
+  test('a CENTRED line measures from its glyphs, not from its line box', () => {
+    // The line box spans the full column while the text sits in the middle of it. Reading the
+    // line box would call a click in the left third "inside the line" and interpolate a
+    // position out of empty space.
+    const layout = lay(`<w:p><w:pPr><w:jc w:val="center"/></w:pPr><w:r><w:t>abc</w:t></w:r></w:p>`);
+    const spans = paragraphFragmentsOf(layout.pages[0]!)[0]!.lines[0]!.spans;
+    expect(spans[0]!.box.x).toBeGreaterThan(200);
+    expect(hit(layout, 100, 5)!.position.offset).toBe(0);
+    expect(hit(layout, 400, 5)!.position.offset).toBe(3);
+  });
+
+  test('an empty paragraph can still be clicked into', () => {
+    const layout = lay('<w:p/>');
+    expect(hit(layout, 300, 5)!.position).toEqual({ paragraphId: P0, offset: 0 });
+  });
+});
+
+describe('a click above or below the lines', () => {
+  test('above the first line clamps into the first line', () => {
+    const layout = lay(p('abc'));
+    expect(hit(layout, 12, -500)!.position.offset).toBe(2);
+  });
+
+  test('below the last line clamps into the last line', () => {
+    const layout = lay(p('ab') + p('cd'));
+    const found = hit(layout, 9999, 9999)!;
+    expect(found.position).toEqual({ paragraphId: P1, offset: 2 });
+  });
+
+  test('between two lines the LOWER line wins, with no epsilon anywhere', () => {
+    // Bands are half-open, so a point exactly on a shared edge belongs to one line by
+    // construction rather than by a tolerance somebody has to keep tuned.
+    const layout = lay(p('ab') + p('cd'));
+    expect(hit(layout, 0, 14)!.position.paragraphId).toBe(P1);
+    expect(hit(layout, 0, 13.999)!.position.paragraphId).toBe(P0);
+  });
+});
+
+describe('the nearest-block rule weights the vertical axis', () => {
+  // An indented first paragraph and a full-width second one. A point in the left margin,
+  // LEVEL with the first line, is horizontally nearer the second paragraph's box and
+  // vertically nearer the first. Word puts the caret on the line you are level with.
+  const layout = lay(
+    `<w:p><w:pPr><w:ind w:left="1440"/></w:pPr><w:r><w:t>first</w:t></w:r></w:p>` + p('second')
+  );
+
+  test('level-with-a-short-line beats directly-below-a-long-one', () => {
+    expect(hitTestPage(layout, 0, { x: 10, y: 5 })!.position.paragraphId).toBe(P0);
+  });
+
+  test('and the weight is what does it, not the geometry by itself', () => {
+    // Same point, same layout, weight removed: the answer flips. Without this the test would
+    // pass for a reason that has nothing to do with the rule under test.
+    const unweighted = hitTestPage(layout, 0, { x: 10, y: 5 }, { verticalWeight: 1 });
+    expect(unweighted!.position.paragraphId).toBe(P1);
+    expect(DEFAULT_VERTICAL_WEIGHT).toBe(8);
+  });
+});
+
+describe('the end of a soft-wrapped line', () => {
+  const layout = lay(p('word '.repeat(30).trim()));
+  const lines = paragraphFragmentsOf(layout.pages[0]!)[0]!.lines;
+
+  test('the fixture really does wrap, or the rule is untested', () => {
+    expect(lines.length).toBe(2);
+    expect(lines[0]!.range.end).toBe(75);
+  });
+
+  test('the space that caused the wrap is not part of the line the caret can reach', () => {
+    // Landing on it would draw the caret at the start of the NEXT line, which reads as the
+    // click having missed entirely.
+    expect(lineEndOffset(layout, lines[0]!)).toBe(74);
+    expect(hit(layout, 9999, 5)!.position.offset).toBe(74);
+  });
+
+  test('the LAST line of a paragraph has no wrap space to discount', () => {
+    expect(lineEndOffset(layout, lines[1]!)).toBe(lines[1]!.range.end);
+    expect(hit(layout, 9999, 20)!.position.offset).toBe(149);
+  });
+});
+
+describe('pages', () => {
+  const layout = lay(p('x').repeat(200));
+
+  test('the fixture really does span several sheets', () => {
+    expect(layout.pages.length).toBeGreaterThan(3);
+  });
+
+  test('the gutter between two sheets belongs to the sheet ABOVE it', () => {
+    // The nearest text to a point in that gap is the last line of the page above.
+    const first = layout.pages[0]!;
+    const gutterY = first.box.y + first.box.height + 4;
+    expect(gutterY).toBeLessThan(layout.pages[1]!.box.y);
+    expect(pageAtY(layout, gutterY)).toBe(0);
+  });
+
+  test('above the first sheet clamps to it, past the last sheet clamps to that', () => {
+    expect(pageAtY(layout, -9999)).toBe(0);
+    expect(pageAtY(layout, 9_999_999)).toBe(layout.pages.length - 1);
+  });
+
+  test('a sheet-space point resolves through the page it lands on', () => {
+    const second = layout.pages[1]!;
+    const found = hitTestSheet(layout, {
+      x: second.contentBox.x - 30,
+      y: second.contentBox.y + 5,
+    })!;
+    expect(found.pageIndex).toBe(1);
+    expect(found.position.offset).toBe(0);
+  });
+
+  test('an empty document answers nothing rather than guessing', () => {
+    expect(hitTestPage({ revision: 1, pages: [] }, 0, { x: 0, y: 0 })).toBeNull();
+    expect(pageAtY({ revision: 1, pages: [] }, 0)).toBe(-1);
+  });
+
+  test('a point over no page furniture is not reported as furniture', () => {
+    expect(isFurniturePoint(layout, { x: 100, y: 100 })).toBe(false);
+  });
+});
+
+describe('tables', () => {
+  const grid = `<w:tbl>${tr(tc(p('A1')) + tc(p('B1')))}${tr(tc(p('A2')) + tc(p('B2')))}</w:tbl>`;
+  const layout = lay(grid);
+  const table = layout.pages[0]!.fragments[0]!;
+  if (table.kind !== 'table') throw new Error('fixture is not a table');
+
+  test('the fixture is a two-by-two grid', () => {
+    expect(table.rows).toHaveLength(2);
+    expect(table.rows[0]!.cells).toHaveLength(2);
+  });
+
+  test('a click in a cell resolves to that cell, and names it', () => {
+    const found = hit(layout, table.rows[1]!.cells[1]!.box.x + 5, table.rows[1]!.box.y + 5)!;
+    expect(found.cell).toMatchObject({
+      tableId: table.tableId,
+      rowId: table.rows[1]!.id,
+      cellId: table.rows[1]!.cells[1]!.id,
+      rowIndex: 1,
+      gridColumn: 1,
+    });
+  });
+
+  test("a click in a cell's LEFT padding lands at the start of its text", () => {
+    const cell = table.rows[0]!.cells[1]!;
+    const found = hit(layout, cell.box.x + 1, table.rows[0]!.box.y + 2)!;
+    expect(found.position.offset).toBe(0);
+    expect(found.cell!.cellId).toBe(cell.id);
+  });
+
+  test("a click in a cell's BOTTOM padding lands at the END of its last block", () => {
+    // Falls out of the recursion: the padding is outside every block box, so the nearest
+    // block is the last one and the line clamp finishes the job.
+    const cell = table.rows[0]!.cells[0]!;
+    const found = hit(layout, cell.box.x + cell.box.width - 1, cell.box.y + cell.box.height - 1)!;
+    expect(found.position.offset).toBe(2);
+    expect(found.cell!.cellId).toBe(cell.id);
+  });
+
+  test('a click past the last column still names the last column', () => {
+    const found = hit(layout, 9999, table.rows[0]!.box.y + 5)!;
+    expect(found.cell!.gridColumn).toBe(1);
+  });
+
+  test('a row ordinal counts the table, not the page', () => {
+    expect(hit(layout, 5, table.rows[0]!.box.y + 5)!.cell!.rowIndex).toBe(0);
+    expect(hit(layout, 5, table.rows[1]!.box.y + 5)!.cell!.rowIndex).toBe(1);
+  });
+});
+
+describe('a vertically merged cell', () => {
+  const merged = `<w:tbl>${tr(
+    tc(p('top'), '<w:tcPr><w:vMerge w:val="restart"/></w:tcPr>') + tc(p('B1'))
+  )}${tr(tc('', '<w:tcPr><w:vMerge/></w:tcPr>') + tc(p('B2')))}</w:tbl>`;
+  const layout = lay(merged);
+  const table = layout.pages[0]!.fragments[0]!;
+  if (table.kind !== 'table') throw new Error('fixture is not a table');
+
+  test('the fixture really is a continuation holding no blocks', () => {
+    expect(table.rows[1]!.cells[0]!.vMergeContinue).toBe(true);
+    expect(table.rows[1]!.cells[0]!.blocks).toHaveLength(0);
+  });
+
+  test('clicking the continuation puts the caret in the text drawn there', () => {
+    // The continuation paints a box but holds nothing. Resolving into it directly would find
+    // no paragraph and fall through to somewhere else on the page entirely.
+    const origin = table.rows[0]!.cells[0]!;
+    const originBlock = origin.blocks[0]!;
+    if (originBlock.kind !== 'paragraph') throw new Error('fixture cell is not a paragraph');
+    const found = hit(layout, 5, table.rows[1]!.box.y + 5)!;
+    expect(found.position.paragraphId).toBe(originBlock.paragraphId);
+    expect(found.cell!.cellId).toBe(origin.id);
+  });
+});
+
+describe('the character within a run', () => {
+  /** Narrow `i`, wide `a` — so a uniform interpolation and a real search disagree. */
+  const proportional: TextMeasurer = {
+    measure: (text) => [...text].reduce((sum, char) => sum + (char === 'i' ? 2 : 10), 0),
+    lineMetrics: () => ({ height: 14, baseline: 11 }),
+  };
+
+  test('the measurer resolves the boundary the pointer is actually nearest', () => {
+    const layout = lay(p('iiiia'), proportional);
+    // Prefix widths are 0, 2, 4, 6, 8, 18. A point at 9 is one unit past the boundary at 8
+    // and nine short of the one at 18.
+    expect(hit(layout, 9, 5, proportional)!.position.offset).toBe(4);
+  });
+
+  test('and without one the answer is the honest interpolation, not the same number', () => {
+    // Proves the measurer is doing the work rather than the two paths happening to agree.
+    const layout = lay(p('iiiia'), proportional);
+    expect(hit(layout, 9, 5)!.position.offset).toBe(3);
+  });
+
+  test('a grapheme cluster is never split', () => {
+    const layout = lay(p('éx'));
+    for (let x = 0; x <= 18; x += 1) {
+      expect(hit(layout, x, 5, measurer)!.position.offset).not.toBe(1);
+    }
+  });
+
+  test('a point on the glyphs reports itself as such', () => {
+    const layout = lay(p('abcdef'));
+    expect(hit(layout, 12, 5)!.onGlyphs).toBe(true);
+    expect(hit(layout, 9999, 5)!.onGlyphs).toBe(false);
+  });
+});
+
+describe('cost', () => {
+  test('a hit test does not scan the document', () => {
+    // Hit testing runs on every pointer move of a drag. Anything proportional to document
+    // length here makes dragging through a long document quadratic in its length, so the
+    // budget is asserted structurally rather than by a clock.
+    let calls = 0;
+    const counting: TextMeasurer = {
+      measure: (text, style: ResolvedRunStyle) => {
+        calls += 1;
+        return measurer.measure(text, style);
+      },
+      lineMetrics: (style: ResolvedRunStyle) => measurer.lineMetrics(style),
+    };
+    const layout = lay(p('the quick brown fox jumps over the lazy dog').repeat(1200), counting);
+    expect(layout.pages.length).toBeGreaterThan(20);
+
+    const last = layout.pages.length - 1;
+    calls = 0;
+    hitTestPage(layout, 0, { x: 40, y: 5 }, { measurer: counting });
+    const onFirstPage = calls;
+    calls = 0;
+    hitTestPage(layout, last, { x: 40, y: 5 }, { measurer: counting });
+    const onLastPage = calls;
+
+    // A binary search over one span's grapheme boundaries, and nothing else.
+    expect(onFirstPage).toBeLessThanOrEqual(16);
+    expect(onLastPage).toBeLessThanOrEqual(16);
+  });
+
+  test('and a re-crossed span costs nothing the second time', () => {
+    let calls = 0;
+    const counting: TextMeasurer = {
+      measure: (text, style: ResolvedRunStyle) => {
+        calls += 1;
+        return measurer.measure(text, style);
+      },
+      lineMetrics: (style: ResolvedRunStyle) => measurer.lineMetrics(style),
+    };
+    const layout = lay(p('abcdefghijklmnop'), counting);
+    hitTestPage(layout, 0, { x: 40, y: 5 }, { measurer: counting });
+    calls = 0;
+    hitTestPage(layout, 0, { x: 40, y: 5 }, { measurer: counting });
+    expect(calls).toBe(0);
+  });
+});
