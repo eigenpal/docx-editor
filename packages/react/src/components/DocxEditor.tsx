@@ -4,6 +4,7 @@ import type { Editor } from '@docx-editor.dev/core-contract/contracts/editor';
 import { prefersColorSchemeDark, resolveIsDark, subscribeSystemDark } from '../lib/colorMode';
 import { useDocxEditor } from '../editor/context';
 import { DocxEditorContent } from '../editor/DocxEditorContent';
+import { DocxEditorLoading } from '../editor/DocxEditorLoading';
 import { DocxEditorRoot } from '../editor/DocxEditorRoot';
 import { DocxEditorViewport } from '../editor/DocxEditorViewport';
 import { useDocxEditorRefApi } from './DocxEditor/hooks/useDocxEditorRefApi';
@@ -239,6 +240,8 @@ export interface DocxEditorNamespace extends ForwardRefExoticComponent<
   readonly Viewport: typeof DocxEditorViewport;
   readonly Content: typeof DocxEditorContent;
   readonly Toolbar: typeof DocxEditorToolbar;
+  /** Conditional loading screen: renders while there is no document to paint. */
+  readonly Loading: typeof DocxEditorLoading;
   /** Context-fed horizontal ruler with draggable margins (props-driven export stays). */
   readonly HorizontalRuler: typeof DocxEditorHorizontalRuler;
   /** Context-fed vertical ruler with draggable margins (props-driven export stays). */
@@ -254,6 +257,7 @@ export const DocxEditor: DocxEditorNamespace = Object.assign(DocxEditorImpl, {
   Viewport: DocxEditorViewport,
   Content: DocxEditorContent,
   Toolbar: DocxEditorToolbar,
+  Loading: DocxEditorLoading,
   HorizontalRuler: DocxEditorHorizontalRuler,
   VerticalRuler: DocxEditorVerticalRuler,
   DocumentOutline: DocxEditorDocumentOutline,

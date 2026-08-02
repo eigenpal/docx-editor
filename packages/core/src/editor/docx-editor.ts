@@ -604,7 +604,17 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
     const state = surface?.state() ?? null;
     return {
       scope: SCOPE_BODY,
-      isLoading: false,
+      // "No document to work with, and nothing went wrong" — deliberately NOT "nothing
+      // painted". Bytes count from the moment they are handed over, whether they are
+      // still waiting for `attach` (`pendingBytes`) or already mounted (`surface`), so
+      // this survives a detach/remount and never depends on a mount point existing.
+      //
+      // That distinction is load-bearing: a host may legitimately gate its
+      // `DocxEditor.Content` on this flag, and a definition that only cleared once pages
+      // painted would deadlock — nothing paints until Content mounts, and Content never
+      // mounts while the flag is set. A parse failure clears it too; a document that
+      // cannot open is not still arriving, and `parseError` is how that is reported.
+      isLoading: parseError === null && surface === null && pendingBytes === null,
       parseError,
       editable: surface !== null && surface.session.editable && mode !== 'view',
       zoom,

@@ -781,6 +781,10 @@ export interface PageSetup {
  */
 export interface EditorSnapshot {
   readonly scope: EditorScope;
+  /** Whether the editor is still waiting for a document: no bytes handed over yet, and no
+   *  parse failure. Bytes count from the moment they are supplied, not from the moment
+   *  pages paint, so this stays false across a detach and remount. Safe to gate a mount
+   *  point on — it never depends on one existing. */
   readonly isLoading: boolean;
   readonly parseError: string | null;
   /** Whether the loaded document is being edited: a patchable document opened in edit mode. A

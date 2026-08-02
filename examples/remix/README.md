@@ -50,7 +50,7 @@ server build.
 | --------------------------- | ------------------------------------------ |
 | `app/routes/_index.tsx`     | Mount guard + lazy editor import           |
 | `app/components/Editor.tsx` | `<DocxEditor />` and file handling         |
-| `app/root.tsx`              | Loads the Material Symbols font            |
+| `app/root.tsx`              | Document shell, page icons                 |
 | `vite.config.ts`            | Remix Vite plugin + Tailwind/PostCSS setup |
 
 ## Use it in your own Remix app

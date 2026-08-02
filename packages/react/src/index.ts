@@ -19,6 +19,13 @@ export { DocxEditor, type DocxEditorNamespace } from './components/DocxEditor';
 export { DocxEditorRoot, type DocxEditorRootProps } from './editor/DocxEditorRoot';
 export { DocxEditorViewport, type DocxEditorViewportProps } from './editor/DocxEditorViewport';
 export { DocxEditorContent, type DocxEditorContentProps } from './editor/DocxEditorContent';
+export {
+  DocxEditorLoading,
+  DocxEditorLoadingSpinner,
+  type DocxEditorLoadingComponent,
+  type DocxEditorLoadingProps,
+  type DocxEditorLoadingSpinnerProps,
+} from './editor/DocxEditorLoading';
 export { useDocxEditor } from './editor/context';
 // Context-fed chrome parts (also reachable as `DocxEditor.HorizontalRuler` /
 // `.VerticalRuler` / `.DocumentOutline`): thin reactive wrappers over the props-driven

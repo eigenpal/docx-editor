@@ -9,13 +9,11 @@ import '../styles.css';
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>docx-editor — Astro Example</title>
-    <link rel="icon" href="/favicon.ico" />
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link
-      rel="stylesheet"
-      href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200&display=block"
-    />
+    <link rel="icon" href="/favicon.ico" sizes="any" />
+    <link rel="icon" href="/icon.svg" type="image/svg+xml" />
+    <link rel="apple-touch-icon" href="/icon.png" />
+    <link rel="icon" type="image/png" sizes="192x192" href="/web-app-manifest-192x192.png" />
+    <link rel="icon" type="image/png" sizes="512x512" href="/web-app-manifest-512x512.png" />
     <style>
       * { margin: 0; padding: 0; box-sizing: border-box; }
       body {
@@ -23,29 +21,7 @@ import '../styles.css';
         background: #f5f5f5;
         min-height: 100vh;
       }
-      .material-symbols-outlined {
-        font-family: 'Material Symbols Outlined';
-        font-weight: normal;
-        font-style: normal;
-        line-height: 1;
-        display: inline-block;
-        visibility: hidden;
-      }
-      .fonts-loaded .material-symbols-outlined {
-        visibility: visible;
-      }
     </style>
-    <script is:inline>
-      if (document.fonts) {
-        document.fonts.ready.then(function() {
-          document.documentElement.classList.add('fonts-loaded');
-        });
-      } else {
-        setTimeout(function() {
-          document.documentElement.classList.add('fonts-loaded');
-        }, 500);
-      }
-    </script>
   </head>
   <body>
     <Editor client:only="react" />
