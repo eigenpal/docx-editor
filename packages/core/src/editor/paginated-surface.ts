@@ -30,6 +30,7 @@ import {
   resolveNumberingLevel,
   moveCaret,
   paragraphTextFromLayout,
+  withNumberingStyleLinks,
   wordBoundary,
   type LayoutScope,
   type SemanticLayout,
@@ -198,8 +199,16 @@ export function mountPaginatedSurface(
     collapsedAt: (position) => collapsedAt(position),
     deleteSelectionOps: () => deleteSelectionOps(),
     paragraphTextOf: (paragraphId) => textOf(paragraphId),
+    // Resolved through `w:numStyleLink` the way LAYOUT resolves markers (§17.9.21):
+    // against the raw index a delegating definition has no levels of its own, so every
+    // level of Word's List Bullet / List Number styles read as missing and a plain
+    // `setListLevel` was refused where layout would have rendered the marker fine.
     numberingLevelExists: (numId, level) =>
-      resolveNumberingLevel(numberingIndex(), numId, level) !== null,
+      resolveNumberingLevel(
+        withNumberingStyleLinks(numberingIndex(), styleCascade),
+        numId,
+        level
+      ) !== null,
   });
   let desiredX: number | null = null;
 

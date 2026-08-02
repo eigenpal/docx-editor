@@ -137,7 +137,10 @@ export interface PaginatedSurface {
    *
    * A list item at level 0 cannot outdent and one at level 8 cannot indent — `w:ilvl`
    * has nine levels and Word greys the control out at the ends. A missing level
-   * DEFINITION never disables it: `adjustIndent` declares the level as it goes.
+   * DEFINITION never disables it: `adjustIndent` declares the level as it goes. The one
+   * residue: a `w:numStyleLink` definition missing the level refuses the declaration
+   * (its levels belong to the linked style), so there the press is a safe no-op rather
+   * than a greyed control.
    */
   canAdjustIndent(direction: 'increase' | 'decrease'): boolean;
   /**

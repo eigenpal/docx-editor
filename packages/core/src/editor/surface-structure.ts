@@ -179,11 +179,17 @@ export function createSurfaceStructure(deps: SurfaceStructureDeps): StructureMet
   function ensureListLevel(marker: ListMarkerRecord, level: number): boolean {
     if (level < 0 || level > MAX_LIST_LEVEL) return false;
     if (deps.numberingLevelExists(marker.numId, level)) return true;
-    return session.ensureNumberingLevel(
+    const declared = session.ensureNumberingLevel(
       marker.numId,
       level,
       marker.numFmt === 'bullet' ? 'bullet' : 'ordered'
     );
+    // The write path and the layout index are DIFFERENT readers of numbering.xml, and a
+    // hostile file can make them disagree — a foreign-namespace `lvl` satisfies a lax
+    // "already declared" while resolving to nothing. Only the index's answer decides
+    // whether `setListLevel` is safe: an ensure the index cannot see is a skip, not a
+    // commit that silently erases the marker.
+    return declared && deps.numberingLevelExists(marker.numId, level);
   }
 
   /** Authored `w:ind/@left` in twips, zero when the paragraph states none. */

@@ -71,23 +71,26 @@ function levelXml(kind: ListKind, ilvl: number): string {
   // 0.25" per level, with the marker in a 0.25" hanging slot — Word's own list geometry.
   const left = 720 * (ilvl + 1);
   const start = '<w:start w:val="1"/>';
-  // Everything from `w:lvlJc` on: the tail of the sequence, shared by both kinds.
-  const tail =
-    `<w:lvlJc w:val="left"/>` + `<w:pPr><w:ind w:left="${left}" w:hanging="360"/></w:pPr>`;
   if (kind === 'bullet') {
     const bullet = BULLETS[ilvl % BULLETS.length]!;
     return (
       `<w:lvl w:ilvl="${ilvl}">${start}<w:numFmt w:val="bullet"/>` +
-      `<w:lvlText w:val="${bullet.text}"/>${tail}` +
+      `<w:lvlText w:val="${bullet.text}"/><w:lvlJc w:val="left"/>` +
+      `<w:pPr><w:ind w:left="${left}" w:hanging="360"/></w:pPr>` +
       `<w:rPr><w:rFonts w:ascii="${bullet.font}" w:hAnsi="${bullet.font}" w:hint="default"/></w:rPr>` +
       '</w:lvl>'
     );
   }
   const format = NUMBER_FORMATS[ilvl % NUMBER_FORMATS.length]!;
+  // Word's stock template right-aligns its roman levels in a narrower 180-twip hanging
+  // slot (a "viii." grows leftward from the marker edge); the other formats are
+  // left-aligned in the ordinary 360-twip slot.
+  const roman = format === 'lowerRoman';
   // `%N` is the placeholder for level N+1's counter; each level shows only its own.
   return (
     `<w:lvl w:ilvl="${ilvl}">${start}<w:numFmt w:val="${format}"/>` +
-    `<w:lvlText w:val="%${ilvl + 1}."/>${tail}</w:lvl>`
+    `<w:lvlText w:val="%${ilvl + 1}."/><w:lvlJc w:val="${roman ? 'right' : 'left'}"/>` +
+    `<w:pPr><w:ind w:left="${left}" w:hanging="${roman ? 180 : 360}"/></w:pPr></w:lvl>`
   );
 }
 
@@ -113,6 +116,11 @@ const childrenNamed = (node: OoxmlElement, localName: string): OoxmlElement[] =>
   const found: OoxmlElement[] = [];
   for (const child of node.children) {
     if (child.kind === 'textValue' || child.localName !== localName) continue;
+    // Namespace-checked like the layout index's reader: these bytes come out of an
+    // attacker-supplied `.docx`, and a foreign-namespace `<x:lvl>` matched by local name
+    // alone made this module and layout disagree about what is declared — the write path
+    // "saw" a level the index resolves to nothing.
+    if (child.namespaceUri !== W) continue;
     found.push(child as OoxmlElement);
   }
   return found;
@@ -282,15 +290,24 @@ const CT_ABSTRACT_NUM_SEQUENCE = [
   'lvl',
 ];
 
+/**
+ * A `w:ilvl` attribute parsed with the SAME rule the layout index uses (`integerAttr`), so
+ * "declared" here can never mean something the index refuses to resolve. Null for absent,
+ * non-decimal, or lenient spellings the index rejects (`+1`, `1e0`).
+ */
+function parsedIlvl(node: OoxmlElement): number | null {
+  const raw = attribute(node, 'ilvl');
+  if (raw === undefined || !/^\d{1,9}$/.test(raw)) return null;
+  return Number(raw);
+}
+
 /** Where a new `w:lvl` of `ilvl` belongs among an abstractNum's children. */
 function levelInsertIndex(children: readonly OoxmlNode[], ilvl: number): number {
   let at = 0;
   children.forEach((child, index) => {
     if (child.kind === 'textValue') return;
-    if (child.localName === 'lvl') {
-      const raw = attribute(child as OoxmlElement, 'ilvl');
-      const existing = raw !== undefined && /^\d$/.test(raw) ? Number(raw) : 0;
-      if (existing < ilvl) at = index + 1;
+    if (child.localName === 'lvl' && (child as OoxmlElement).namespaceUri === W) {
+      if ((parsedIlvl(child as OoxmlElement) ?? 0) < ilvl) at = index + 1;
       return;
     }
     if (CT_ABSTRACT_NUM_SEQUENCE.includes(child.localName)) at = index + 1;
@@ -333,10 +350,12 @@ export function ensureNumberingLevel(
   if (!abstract) return null;
   if (childrenNamed(abstract, 'numStyleLink').length > 0) return null;
 
-  const declared = childrenNamed(abstract, 'lvl').some(
-    (node) => attribute(node, 'ilvl') === String(level)
-  );
-  if (declared) return pkg;
+  const levels = childrenNamed(abstract, 'lvl');
+  if (levels.some((node) => parsedIlvl(node) === level)) return pkg;
+  // `CT_AbstractNum` caps `lvl` at nine (17.9.1). An abstract already at the cap whose
+  // levels do not include this one is authored junk (duplicate ilvls); a tenth would make
+  // the part schema-invalid, which Word repairs by dropping it.
+  if (levels.length >= LEVEL_COUNT) return null;
 
   const authored = readOoxmlPart(
     `<w:numbering xmlns:w="${W}">${levelXml(kind, level)}</w:numbering>`,
