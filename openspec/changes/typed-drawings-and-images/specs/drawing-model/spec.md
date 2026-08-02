@@ -176,3 +176,33 @@ Parts containing drawings SHALL pass the canonical tree fingerprint on an unedit
 
 - **WHEN** an image is resized, saved, and reopened
 - **THEN** the digest reports the new extent, the unchanged crop, the unchanged alt text, and byte-identical media
+
+### Requirement: Drawing identifiers are allocated unique, non-zero, and in range
+
+Allocation SHALL seed from the maximum drawing id already present in the document, plus one, and SHALL NOT derive an id from a clock, timestamp, random source, or hash. It SHALL never allocate `0`.
+
+`wp:docPr/@id` is `ST_DrawingElementId` — `xsd:unsignedInt`, so `0` to `4294967295` — and it is **required**. Word additionally expects it unique within the document and treats `0` as invalid; a package where every drawing carries `id="0"` renders only one image.
+
+Relationship ids for new media SHALL likewise be allocated from the existing relationship ids of the target part, and SHALL NOT be a clock or random value.
+
+#### Scenario: Seeded from the document
+
+- **WHEN** an image is inserted into a document whose highest `wp:docPr/@id` is 11
+- **THEN** the allocated id is 12, not a clock-derived value
+
+#### Scenario: Never zero
+
+- **WHEN** a drawing id is allocated
+- **THEN** it is greater than zero
+
+#### Scenario: Duplicate ids on load do not become duplicate ids on save
+
+- **WHEN** a loaded package carries `id="0"` on every drawing — the template-engine case
+- **THEN** every drawing still renders
+- **AND** ids authored by this engine are unique, without silently rewriting the loaded ones on an unedited round trip
+
+#### Scenario: Exported ids stay inside unsignedInt
+
+- **WHEN** a package containing engine-authored drawings is saved and opened in Word
+- **THEN** it opens without a repair prompt
+- **AND** a conformance test asserts the bound directly

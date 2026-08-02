@@ -181,3 +181,24 @@ Comment parts and their siblings SHALL pass the canonical tree fingerprint on an
 
 - **WHEN** a reply is added, saved, and reopened
 - **THEN** the digest reports the parent link, the author, the date, and the body as equivalent, and the other comments unchanged
+
+### Requirement: Comment and paraId allocation is bounded and document-seeded
+
+Comment ids share `ST_DecimalNumber`'s unbounded schema type and Word's signed 32-bit limit, and SHALL be allocated by seeding from the document's maximum comment id plus one, never from a clock, timestamp, random source, or hash.
+
+`w14:paraId` is `ST_LongHexNumber` — `xsd:hexBinary` of length 4, so exactly **8 hex digits**. An allocated value SHALL be 8 hex digits, unique within the document, and SHALL NOT be the reserved all-zero value.
+
+#### Scenario: Comment ids are seeded from the document
+
+- **WHEN** a comment is added to a document whose highest comment id is 3
+- **THEN** the allocated id is 4, and it is within signed 32-bit
+
+#### Scenario: paraId is well-formed
+
+- **WHEN** a `w14:paraId` is allocated on first thread write
+- **THEN** it is exactly 8 hex digits, is not `00000000`, and collides with no existing value in the document
+
+#### Scenario: Exported ids open in Word
+
+- **WHEN** a document with engine-authored comments and replies is saved and opened in Word
+- **THEN** it opens without a repair prompt and the thread structure is intact

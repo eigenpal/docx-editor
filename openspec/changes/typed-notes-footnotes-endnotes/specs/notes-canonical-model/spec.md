@@ -150,3 +150,30 @@ Note parts SHALL pass both repository-owned oracles: the namespace-aware canonic
 
 - **WHEN** a note part contains markup outside this vocabulary
 - **THEN** it is preserved in order and reported by the digest's preserved-generic-node comparison
+
+### Requirement: Note identifiers are allocated inside the range Word accepts
+
+`CT_FtnEdn/@w:id` is `ST_DecimalNumber` — `xsd:integer`, unbounded in the schema — while Word treats it as a signed 32-bit integer. Allocation SHALL seed from the maximum note id already present in the relevant note part, plus one, clamped to signed 32-bit, and SHALL NOT derive an id from a clock, timestamp, random source, or hash.
+
+Negative and zero ids are **reserved**: the comprehensive fixture uses `-1` for `separator` and `0` for `continuationSeparator`. Allocation SHALL only produce positive ids, and SHALL NOT reuse a reserved value even when no separator note occupies it.
+
+#### Scenario: Seeded from the document
+
+- **WHEN** a footnote is inserted into a document whose highest footnote id is 3
+- **THEN** the allocated id is 4, not a clock-derived value
+
+#### Scenario: Reserved ids are never allocated
+
+- **WHEN** a note id is allocated for a part containing no separator notes
+- **THEN** the allocated id is still positive; `-1` and `0` are not reused
+
+#### Scenario: Exported ids stay inside signed 32-bit
+
+- **WHEN** a package containing engine-authored notes is saved and opened in Word
+- **THEN** it opens without a repair prompt
+- **AND** a conformance test asserts the bound directly rather than relying on schema validation
+
+#### Scenario: Footnote and endnote spaces are independent
+
+- **WHEN** ids are allocated in both parts
+- **THEN** each is seeded from its own part's maximum, and a footnote id does not constrain an endnote id

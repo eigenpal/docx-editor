@@ -29,26 +29,6 @@ The canonical tree SHALL type `w:ins`, `w:del`, `w:delText`, `w:moveFrom`, `w:mo
 - **WHEN** a revision element outside this vocabulary appears
 - **THEN** it is preserved in order as a generic node and does not block editing
 
-### Requirement: Revision ids are unique within a part, never across the package
-
-A revision SHALL be addressed by the pair (part, id). Two revisions in different parts MAY share an id.
-
-#### Scenario: Same id in body and footnote part
-
-- **WHEN** the body and a footnote part each contain a revision with `w:id="4"`
-- **THEN** both are separately addressable and neither shadows the other
-
-#### Scenario: Accept addresses a part
-
-- **WHEN** accept-revision is called with an id but no part
-- **THEN** it is refused with `invalidArgs` rather than resolving to whichever part is found first
-
-#### Scenario: Allocation does not reuse a live id
-
-- **WHEN** a revision is created in a part
-- **THEN** its id does not collide with any live revision id in that part
-- **AND** allocation is monotonic within an editor instance, so an id freed by a deletion is not immediately reissued
-
 ### Requirement: Deleted text is never laid out as ordinary text
 
 `w:delText` SHALL NOT flow as ordinary content. Its presentation SHALL be determined by the active display mode, and it SHALL be excluded from the ordinary caret space so a user cannot type inside deleted content as if it were live.
@@ -105,7 +85,7 @@ The display mode SHALL be one of all-markup, proposed result, or original. Chang
 
 ### Requirement: Accept and reject have defined semantics per revision kind
 
-`TreeDocOp` SHALL include accept-revision, reject-revision, accept-all, and reject-all, addressed by (part, id) or by a range. Each SHALL commit atomically.
+`TreeDocOp` SHALL include accept-revision, reject-revision, accept-all, and reject-all, addressed by the revision's `(id, author, date)` triple within a named part, or by a range. Each SHALL commit atomically, resolving every site that shares the triple in one transaction.
 
 #### Scenario: Accept an insertion
 
@@ -205,3 +185,44 @@ Parts containing revisions SHALL pass the canonical tree fingerprint on an unedi
 
 - **WHEN** one revision is accepted, saved, and reopened
 - **THEN** the digest reports the accepted content present, that revision absent, and every other revision's id, author, date, and content unchanged
+
+### Requirement: Revision identifiers are allocated safely and addressed by their full identity
+
+A revision identifier SHALL be allocated from the maximum revision id already present in the document, plus one, clamped to signed 32-bit. It SHALL NOT be derived from a clock, a timestamp, a random source, or a hash.
+
+This is a range the schema does not enforce: `CT_Markup/@w:id` is `ST_DecimalNumber`, a restriction of `xsd:integer` with **no bounds**, while Word treats it as a signed 32-bit integer. A schema validator therefore accepts a value Word rejects, and the document opens with a repair prompt.
+
+`@w:id` is **not** unique and **not** author-scoped. Two authors' revisions may legally share an id in one part, and one logical revision deliberately spans many elements sharing a single id — a tracked row insertion is `w:trPr/w:ins` on the row plus `w:cellIns` on each of its cells. A revision SHALL therefore be identified by the triple `(id, author, date)`, and addressed together with the part that contains it. Addressing by `(part, id)` alone SHALL NOT be used: it merges two authors' distinct revisions and cannot express a multi-site revision.
+
+#### Scenario: Seeded from the document, never from a clock
+
+- **WHEN** suggesting mode allocates a revision id in a document whose highest existing revision id is 12
+- **THEN** the allocated id is 13
+- **AND** an id derived from `Date.now()` — a 13-digit value far outside signed 32-bit — is never written
+
+#### Scenario: Exported ids stay inside signed 32-bit
+
+- **WHEN** a package containing engine-authored revisions is saved
+- **THEN** every `w:id` on every revision element is within signed 32-bit range
+- **AND** a conformance test asserts the bound directly, because schema validation will not catch a violation
+
+#### Scenario: Round-trip through Word
+
+- **WHEN** a document edited in suggesting mode is saved and opened in Word
+- **THEN** it opens without a repair prompt and its revisions are listed in the review pane
+
+#### Scenario: Two authors sharing one id
+
+- **WHEN** one part contains a revision `(id 4, author A)` and another `(id 4, author B)`
+- **THEN** both are separately addressable and neither is merged into the other
+
+#### Scenario: One revision across many sites
+
+- **WHEN** a tracked row insertion carries `w:trPr/w:ins` on the row and `w:cellIns` on each of its three cells, all sharing one id, author, and date
+- **THEN** they resolve as ONE revision, accepted or rejected in one transaction and one undo step
+- **AND** the review surface lists them as one entry, not four
+
+#### Scenario: Exhaustion is an error, not an overflow
+
+- **WHEN** the signed 32-bit space has no value left
+- **THEN** allocation fails with `invalidArgs` and publishes no `ModelChange`, rather than wrapping or truncating

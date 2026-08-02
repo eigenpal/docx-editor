@@ -86,3 +86,48 @@ All five changes describe new `TreeDocOp`s and new model shapes without reconcil
 The OOXML modelling within each element's own boundary, the D9 two-oracle discipline, the security posture (no zero-click fetch, bounds before allocation, text-content-not-markup), and the honest Vue-parity carve-outs all reviewed clean. Every source path named in the five Impact sections exists. All five pass `openspec validate --strict`.
 
 The structural weakness is uniform: each change types the element it is named after thoroughly and stops where that element meets the rest of OOXML — and each was written against the schemas and the engine's internal lanes rather than against the public contract and the adapter surface it has to land on. Sections 2 through 6 are that gap.
+
+## 8. Identifier allocation
+
+A revision-id counter seeded from a clock produces values around 1.8e12 — thirteen digits. Word's revision ids are signed 32-bit, so those values overflow, and the exported file opens with a repair prompt. The document is unusable in the application it was written for, and the symptom appears only on export.
+
+**The schema will not catch this.** `CT_Markup/@w:id` is `ST_DecimalNumber`, a restriction of `xsd:integer` with no bounds at all. A validator passes the file; Word rejects it. Any conformance test that relies on schema validation to police an identifier is testing nothing.
+
+Every identifier space this repository writes now carries an explicit requirement: seed from the document's existing maximum, clamp to the consuming application's range, never derive from a clock, timestamp, random source, or hash, and fail with `invalidArgs` on exhaustion rather than wrapping.
+
+| Identifier | Schema type | Real bound |
+| --- | --- | --- |
+| Revision `w:id` (`CT_Markup`) | `ST_DecimalNumber` = `xsd:integer`, unbounded | Word: signed 32-bit |
+| Comment `w:id` | same | Word: signed 32-bit |
+| Note `w:id` (`CT_FtnEdn`) | same | Word: signed 32-bit; `-1` and `0` reserved for the separators |
+| Content control `w:id` | `CT_DecimalNumber/@w:val` | Word: signed 32-bit; optional, never fabricate |
+| `wp:docPr/@id` | `ST_DrawingElementId` = `xsd:unsignedInt` | Word: unique per document, non-zero |
+| `w14:paraId` | `ST_LongHexNumber` = `xsd:hexBinary` length 4 | exactly 8 hex digits, not `00000000` |
+
+The current `packages/core/src` has no clock-seeded identifier — the only `Date.now()` is a performance timer fallback in `paginated-surface.ts`. The requirements exist so the regression cannot return through the new allocators these five changes introduce.
+
+## 9. Revision identity — a rule the repository had already settled
+
+An earlier draft of `revision-model` required revision ids to be "unique within a part" and addressed a revision by `(part, id)`. Both are wrong, and `openspec/changes/archive/2026-07-22-tracked-structural-changes/` had already decided it:
+
+> Two distinct revisions that happen to share `w:id` across different authors (legal per ECMA-376 since `w:id` is not author-scoped) SHALL NOT be merged.
+
+`@w:id` carries no uniqueness constraint and no author scoping. Two consequences the old rule got wrong:
+
+- Two authors' revisions may legally share an id in one part. `(part, id)` merges them.
+- One logical revision is deliberately many elements sharing one id — a tracked row insertion writes `w:trPr/w:ins` on the row and `w:cellIns` on every cell. A uniqueness rule cannot express the most common structural revision at all.
+
+Identity is now the `(id, author, date)` triple resolved within a named part, and accept/reject resolves every site carrying that triple in one transaction and one undo step.
+
+**This is the general finding, not a one-off.** The archive holds settled design for all five lanes — `2026-07-22-tracked-structural-changes` (41 requirements covering paragraph-mark, row, cell, and section revisions, and cross-revision rejection, which this change still lists as an open question), `2026-07-22-track-changes-comments`, `2026-07-22-block-sdt-roundtrip`, `2026-05-28-unify-hf-editing`, `2026-03-16-float-image-text-wrapping-143-188`, and `2026-07-22-context-menu`. These five changes were written against ECMA-376 and the current source and cite none of it. Much is previous-architecture and cannot be adopted wholesale, but the OOXML semantics and the UX decisions transfer, and re-deriving them worse is exactly what the deferred-features ledger exists to prevent. **An archive pass per lane is a prerequisite, not an optional cross-check.**
+
+## 10. Sizing
+
+Each of the five is roughly the size of the repository's entire active production authority:
+
+| | requirements | scenarios | tasks |
+| --- | --- | --- | --- |
+| `typed-ooxml-paragraph-editor` (the authority) | 38 | 53 | 68 |
+| each of the five | 16–21 | 65–89 | 63–85 |
+
+Note the ratio: the authority runs ~1.4 scenarios per requirement, these run ~4. That is over-specified in scenarios and under-specified in requirements — several scenarios here are requirements wearing a scenario's clothes, which makes them hard to review and hard to mark done. Each change should be split along its existing capability seams so a model change can land before its surface.

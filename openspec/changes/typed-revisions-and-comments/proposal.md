@@ -27,7 +27,7 @@ Two chrome slots already name the intent — `review.comments` and `review.editi
 - `@w:name` on the move range markers is the **join key** that pairs a `moveFrom` with its `moveTo`. Pairing is by name, not by proximity or id.
 - **Paragraph-mark revisions.** `w:pPr/w:rPr` is `CT_ParaRPr`, which opens with the `EG_ParaRPrTrackChanges` group: `w:ins`, `w:del`, `w:moveFrom`, `w:moveTo`. These mark *the paragraph mark itself*, and they are how Word records a paragraph split or merge. Accepting a deleted paragraph mark merges the paragraph with the following one.
 - **Row and cell revisions carry their own semantics.** `CT_TrPr` holds `w:ins` / `w:del` / `w:trPrChange`; `CT_TcPr` holds `w:cellIns` / `w:cellDel` / `w:cellMerge`. Accepting a tracked row deletion removes the row, not merely the `w:del` element inside its `w:trPr`.
-- Revision ids are unique **within a part**, not across the package. A revision is addressed by (part, id), never by id alone.
+- **Revision identity is the `(id, author, date)` triple, within a named part.** `@w:id` is `ST_DecimalNumber` with no uniqueness constraint and no author scoping: two authors' revisions may share an id in one part, and one logical revision deliberately spans many elements sharing an id — a tracked row insertion is `w:trPr/w:ins` on the row plus `w:cellIns` on every cell. Addressing by `(part, id)` merges the first case and cannot express the second. This follows the decision already archived in `2026-07-22-tracked-structural-changes`.
 
 **Revision layout and rendering**
 
@@ -37,7 +37,7 @@ Two chrome slots already name the intent — `review.comments` and `review.editi
 
 **Accept and reject**
 
-- `TreeDocOp` gains accept-revision, reject-revision, accept-all, reject-all, addressed by (part, id) or by a range.
+- `TreeDocOp` gains accept-revision, reject-revision, accept-all, reject-all, addressed by the triple within a part or by a range, resolving every site that shares the triple in one transaction.
 - Accepting an insertion unwraps it; rejecting removes its content. Accepting a deletion removes the content and converts `w:delText` back to nothing; rejecting unwraps it and converts `w:delText` to `w:t`. A move is accepted or rejected as a **pair** — accepting the `moveTo` without the `moveFrom` duplicates content.
 - Nested revisions — an insertion by one author inside a deletion by another — have a defined resolution order, and it is stated rather than left to traversal order.
 
@@ -67,7 +67,7 @@ Two chrome slots already name the intent — `review.comments` and `review.editi
 
 ### New Capabilities
 
-- `revision-model`: typed revision family, required provenance, part-scoped ids, accept/reject semantics, display modes, and rendering rules.
+- `revision-model`: typed revision family, required provenance, `(id, author, date)` identity and safe id allocation, accept/reject semantics, display modes, and rendering rules.
 - `comment-thread-model`: typed comment markup, the sibling thread parts, `w14:paraId` allocation, durable anchors, and orphan/overlap policy.
 - `review-surface`: chrome slots, suggesting mode, the sidebar, and navigation.
 

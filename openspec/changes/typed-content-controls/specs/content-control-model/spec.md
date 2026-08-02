@@ -160,3 +160,25 @@ Parts containing content controls SHALL pass the canonical tree fingerprint on a
 
 - **WHEN** a dropdown's value is set, the package is saved and reopened
 - **THEN** the digest reports that control's type, items, tag, alias, lock, and new value as equivalent, and every other control unchanged
+
+### Requirement: Content-control identifiers are allocated inside the range Word accepts
+
+`CT_SdtPr/w:id` is `CT_DecimalNumber`, whose `@w:val` is `ST_DecimalNumber` — `xsd:integer`, unbounded in the schema — while Word treats it as a signed 32-bit integer. Where this change writes a `w:id`, it SHALL seed from the maximum control id already present in the document, plus one, clamped to signed 32-bit, and SHALL NOT derive one from a clock, timestamp, random source, or hash.
+
+`w:id` remains optional and SHALL NOT be fabricated for a control that does not declare one; five controls in the comprehensive fixture omit it and must round-trip without gaining one.
+
+#### Scenario: Seeded from the document
+
+- **WHEN** a control is created in a document whose highest control id is 90210
+- **THEN** the allocated id is 90211, not a clock-derived value
+
+#### Scenario: Exported ids stay inside signed 32-bit
+
+- **WHEN** a package containing an engine-authored control is saved and opened in Word
+- **THEN** it opens without a repair prompt
+- **AND** a conformance test asserts the bound directly
+
+#### Scenario: Absent id is not fabricated
+
+- **WHEN** a control declaring no `w:id` is loaded, edited, and saved
+- **THEN** no `w:id` is added

@@ -22,11 +22,15 @@ Comments fail quietly instead: the anchors are generic and invisible and `commen
 
 `@w:date` is optional in the schema and stays optional here. Fabricating a date on a file that omits one is a silent content change.
 
-### R2: Revision ids are part-scoped
+### R2: Revision identity is the (id, author, date) triple, not (part, id)
 
-`@w:id` is unique within a part. A body revision and a footnote revision can both be `4`. Addressing by id alone resolves to whichever part is searched first, which is a correctness bug that only shows up on documents with tracked notes — exactly the documents most likely to be under review.
+An earlier draft of this design said `@w:id` is unique within a part and made `(part, id)` the address. That is wrong twice over, and `2026-07-22-tracked-structural-changes` in the archive had already settled it: `@w:id` is `ST_DecimalNumber` on `CT_Markup` with no uniqueness constraint and no author scoping.
 
-Refusing an id-without-part address is better than defaulting to the body, because the default is right often enough to hide the bug.
+Two authors' revisions may legally carry the same id in one part, so `(part, id)` merges distinct revisions. And one logical revision is deliberately many elements sharing an id — a tracked row insertion writes `w:trPr/w:ins` on the row and `w:cellIns` on each cell — so a uniqueness rule cannot express the most common structural revision at all.
+
+The identity is the `(id, author, date)` triple, resolved within a named part, and accept/reject resolves every site carrying that triple in one transaction and one undo step.
+
+The part still matters: a body revision and a footnote revision may share a triple, so an address without a part is refused rather than resolving to whichever part is searched first.
 
 ### R3: Deleted content leaves the caret space
 
