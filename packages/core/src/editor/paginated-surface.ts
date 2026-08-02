@@ -163,7 +163,11 @@ export function mountPaginatedSurface(
 
   // The engine paints its own insertion point. The native caret is a single device pixel,
   // and an empty paragraph paints no text span for the browser to size one against.
-  const caret = createSurfaceCaret(pagesLayer, scale, () => ({ layout: currentLayout, selection }));
+  const caret = createSurfaceCaret(pagesLayer, scale, () => ({
+    layout: currentLayout,
+    selection,
+    measurer,
+  }));
 
   const firstParagraph = session.paragraphIds()[0] ?? '';
   let selection: SemanticSelection = {

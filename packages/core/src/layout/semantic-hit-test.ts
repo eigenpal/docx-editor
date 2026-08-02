@@ -597,6 +597,28 @@ function prefixWidth(span: StyleSpanRecord, utf16: number, measurer: TextMeasure
   return width;
 }
 
+/**
+ * The x of a model offset inside a span — the inverse of {@link offsetWithinSpan}.
+ *
+ * Shares the measurement, and the cache, with the hit test. Interpolating across the span's
+ * advance instead is exact only for a uniform one: in a proportional face the caret for
+ * offset 4 of an 8-character span is drawn at half its width, which lands in the middle of a
+ * glyph rather than between two.
+ */
+export function spanOffsetX(
+  span: StyleSpanRecord,
+  offset: number,
+  measurer: TextMeasurer | undefined
+): number {
+  const length = span.range.end - span.range.start;
+  if (length <= 0) return span.box.x;
+  const within = Math.max(0, Math.min(offset - span.range.start, length));
+  if (!measurer || span.text.length !== length) {
+    return span.box.x + span.box.width * (within / length);
+  }
+  return span.box.x + prefixWidth(span, within, measurer);
+}
+
 function offsetWithinSpan(span: StyleSpanRecord, x: number, context: HitContext): LineOffset {
   const target = x - span.box.x;
   const length = span.range.end - span.range.start;

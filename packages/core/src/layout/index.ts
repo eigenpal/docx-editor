@@ -343,6 +343,7 @@ export {
   isFurniturePoint,
   lineEndOffset,
   pageAtY,
+  spanOffsetX,
   type HitPoint,
   type HitTestOptions,
   type SemanticHit,

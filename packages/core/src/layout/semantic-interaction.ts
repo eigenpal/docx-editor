@@ -8,8 +8,13 @@
 // take, so a click, a caret and an edit all speak one coordinate system: a hit test can be
 // handed straight to `insertText` without a translation step that could disagree.
 
-import { hitTestPage } from './semantic-hit-test.ts';
-import type { LineRecord, SemanticLayout, StyleSpanRecord } from './semantic-records.ts';
+import { hitTestPage, spanOffsetX } from './semantic-hit-test.ts';
+import type {
+  LineRecord,
+  SemanticLayout,
+  StyleSpanRecord,
+  TextMeasurer,
+} from './semantic-records.ts';
 import { paragraphFragmentsOf } from './semantic-records.ts';
 
 /** A caret position in the model. */
@@ -77,7 +82,11 @@ function paragraphLinesIndex(layout: SemanticLayout): Map<string, PlacedLine[]> 
 }
 
 /** The x offset of `offset` within a line, by walking its spans. */
-function xWithinLine(line: LineRecord, offset: number): number {
+function xWithinLine(
+  line: LineRecord,
+  offset: number,
+  measurer?: TextMeasurer | undefined
+): number {
   let x = line.box.x;
   for (const span of line.spans) {
     if (offset <= span.range.start) return span.box.x;
@@ -85,11 +94,11 @@ function xWithinLine(line: LineRecord, offset: number): number {
       x = span.box.x + span.box.width;
       continue;
     }
-    // Inside this span: interpolate by character. A proportional shaper would supply real
-    // per-glyph advances; with a uniform advance this is exact, and it stays honest about
-    // being an interpolation rather than pretending to per-glyph precision.
-    const fraction = (offset - span.range.start) / Math.max(1, span.range.end - span.range.start);
-    return span.box.x + span.box.width * fraction;
+    // MEASURED, not interpolated. Interpolating across the span's advance is exact only for a
+    // uniform one — in any proportional face it draws the caret a fraction of the way through
+    // the span rather than at a glyph edge, so a caret between two letters appeared on top of
+    // one. Without a measurer it still interpolates, and says so.
+    return spanOffsetX(span, offset, measurer);
   }
   return x;
 }
@@ -133,12 +142,16 @@ export function caretStops(layout: SemanticLayout): CaretGeometry[] {
 }
 
 /** Geometry for one model position, or null when it is not laid out. */
-export function caretAt(layout: SemanticLayout, position: SemanticPosition): CaretGeometry | null {
+export function caretAt(
+  layout: SemanticLayout,
+  position: SemanticPosition,
+  measurer?: TextMeasurer
+): CaretGeometry | null {
   for (const { line, pageIndex } of paragraphLinesIndex(layout).get(position.paragraphId) ?? []) {
     if (position.offset < line.range.start || position.offset > line.range.end) continue;
     return {
       position,
-      x: xWithinLine(line, position.offset),
+      x: xWithinLine(line, position.offset, measurer),
       y: line.box.y,
       height: line.box.height,
       lineId: line.id,

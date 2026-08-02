@@ -14,6 +14,7 @@ import {
   isFurniturePoint,
   lineEndOffset,
   pageAtY,
+  spanOffsetX,
 } from '../semantic-hit-test.ts';
 import { caretAt } from '../semantic-interaction.ts';
 import { resetGraphemeBoundary, setGraphemeBoundary } from '../grapheme.ts';
@@ -502,5 +503,33 @@ describe('the caret x of a trimmed line end', () => {
     const spanRight = first.spans.reduce((max, s) => Math.max(max, s.box.x + s.box.width), 0);
     if (found.position.offset === first.range.end) return; // nothing was trimmed
     expect(found.caret.x).toBeLessThan(spanRight);
+  });
+});
+
+describe('the caret sits at a glyph edge', () => {
+  /** Narrow `i`, wide `W` — a proportional face, where interpolation and truth diverge. */
+  const proportional: TextMeasurer = {
+    measure: (text) => [...text].reduce((sum, ch) => sum + (ch === 'i' ? 2 : 30), 0),
+    lineMetrics: () => ({ height: 14, baseline: 11 }),
+  };
+
+  test('measured, not interpolated across the span', () => {
+    // Interpolation puts offset 3 of a 6-character span at half its advance, which in a
+    // proportional face is nowhere near a glyph boundary — it draws the caret THROUGH a
+    // letter. The painted caret reads this, so the error is visible, not theoretical.
+    const layout = lay(p('iiiWWW'), proportional);
+    const span = paragraphFragmentsOf(layout.pages[0]!)[0]!.lines[0]!.spans[0]!;
+    // True edge after "iii" is 3 narrow glyphs; interpolation would say half of 96.
+    expect(spanOffsetX(span, 3, proportional)).toBe(span.box.x + 6);
+    expect(spanOffsetX(span, 3, undefined)).toBe(span.box.x + span.box.width / 2);
+  });
+
+  test('and caretAt uses it, so the caret and the hit test agree', () => {
+    const layout = lay(p('iiiWWW'), proportional);
+    const caret = caretAt(layout, { paragraphId: P0, offset: 3 }, proportional)!;
+    const span = paragraphFragmentsOf(layout.pages[0]!)[0]!.lines[0]!.spans[0]!;
+    expect(caret.x).toBe(span.box.x + 6);
+    // Clicking where the caret is drawn resolves back to the offset it was drawn for.
+    expect(hit(layout, caret.x, 5, proportional)!.position.offset).toBe(3);
   });
 });
