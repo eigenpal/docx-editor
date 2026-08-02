@@ -76,7 +76,7 @@ This change closes the lane: per-section resolution, correct variant selection, 
 
 ### Modified Capabilities
 
-- `header-footer-editing` (`openspec/specs/header-footer-editing/spec.md`) is an archived-era spec describing the previous dual-renderer architecture — a hidden ProseMirror view per `rId` and a painter that renders it. That architecture no longer exists: painted pages **are** the editable surface. This change supersedes it. The old spec is not silently left standing as if it still described the system; `tasks.md` §7 requires it be archived or rewritten as part of this change.
+None.
 
 ## Fixture evidence
 
@@ -99,7 +99,7 @@ Exercised:
 
 Not exercised:
 
-- `w:headerReference w:type="first"` and `"even"`. Every reference here is `default`, and settings carry `<w:evenAndOddHeaders w:val="false"/>`. Other fixtures do cover both — `titlePg-header-footer.docx` (2 `first`, 2 `even`, `w:titlePg`) and `section-inheritance-header-footer.docx` (2 `first`, `w:titlePg`), among nine carrying `first` and five carrying `even`. An earlier draft claimed the repository had no coverage; that was wrong, and `section-inheritance-header-footer.docx` is close to the inheritance fixture §8.2 proposed authoring.
+- `w:headerReference w:type="first"` and `"even"`. Every reference here is `default`, and settings carry `<w:evenAndOddHeaders w:val="false"/>`. Other fixtures do cover both — `titlePg-header-footer.docx` (2 `first`, 2 `even`, `w:titlePg`) and `section-inheritance-header-footer.docx` (2 `first`, `w:titlePg`), among nine carrying `first` and five carrying `even`. `section-inheritance-header-footer.docx` is close to the inheritance fixture §8.2 covers.
 - `w:titlePg`, absent from every section here.
 - Images, tables, or content controls inside a header or footer.
 - A non-empty `w:pgNumType` — no restarted or roman page numbering.
@@ -108,7 +108,7 @@ Not exercised:
 
 Fixture oddity: **five** of the eight header/footer parts — `header1`, `header4`, `footer1`, `footer2`, `footer3` — separate their left and right text with a **literal U+0009 inside `<w:t xml:space="preserve">`** while declaring a right tab stop at 9026 twips. The fixture contains **zero `w:tab` elements in any header or footer**, so a test scoped to `header1` alone misses most of the case.
 
-Whether Word advances on a literal U+0009 in `w:t` is **not settled by ECMA-376** — `CT_Text` is plain text, `w:tab` is the declared advance — and it is contested in practice. This change no longer asserts the answer; `tasks.md` §3.5 schedules a Word comparison, as the other contested behaviours here get one. An earlier draft stated the rule as fact and would have pinned a possibly wrong rendering into a test.
+Whether Word advances on a literal U+0009 in `w:t` is **not settled by ECMA-376** — `CT_Text` is plain text, `w:tab` is the declared advance — and it is contested in practice. This change does not assert the answer; `tasks.md` §3.5 schedules a Word comparison, as the other contested behaviours here get one.
 
 Also non-Word: all seven `w:fldSimple` carry `w:instr="[object Object]"`, a generator bug, and every complex field emits `separate` immediately followed by `end` — so the fixture contains **no cached field result at all** and cannot test cached-result preservation.
 

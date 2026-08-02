@@ -85,12 +85,12 @@
 
 See `openspec/changes/word-fidelity-review-findings.md`.
 
-- [ ] 9.1 **Choose the chrome slots.** This change proposes none while requiring an inspector, show-all-controls, form-fill navigation, and remove-control. `DocxEditor.Toolbar` derives from `CHROME_GROUPS`, so none of them can render. Include an insert path — Word's Developer tab creates controls (finding 6)
-- [ ] 9.2 Reconcile with the shipped contract: `ContentControlSummary.locked?: boolean`, `ContentControlType`, `setContentControlValue: {value: string}`, and the already-shipped `addRepeatingSectionItem`/`removeRepeatingSectionItem` (finding 2)
+- [ ] 9.1 **Choose the chrome slots.** This change proposes none while requiring an inspector, show-all-controls, form-fill navigation, and remove-control. `DocxEditor.Toolbar` derives from `CHROME_GROUPS`, so none of them can render. Include an insert path — Word's Developer tab creates controls (finding 5)
+- [ ] 9.2 Reconcile with the shipped contract: `ContentControlSummary.locked?: boolean`, `ContentControlType`, `setContentControlValue: {value: string}`, and the already-shipped `addRepeatingSectionItem`/`removeRepeatingSectionItem` (finding 1)
 - [ ] 9.3 Type `w:sdtEndPr` — a member of every `CT_SdtBlock`/`Run`/`Cell`/`Row` sequence, and at risk on the fingerprint oracle
 - [ ] 9.4 Give `w:temporary` behaviour: the control removes itself once its contents are edited — the other half of the placeholder transition
 - [ ] 9.5 State that `w:sdtPr/w:rPr` is where the placeholder's grey italic actually comes from
 - [ ] 9.6 Define lock resolution across nesting, and connect it to `w:documentProtection/@w:edit="forms"` and sectPr `w:formProt`
-- [ ] 9.7 Own or defer `w:customXml` and `w:smartTag` — same content positions as `w:sdt`, same UTF-16 offset correctness argument (finding 3)
-- [ ] 9.8 Declare a D12 impact class; placeholder replacement and value changes both re-flow (finding 5)
-- [ ] 9.9 Resolve `mc:AlternateContent` with `typed-drawings-and-images` — it also gates `mc:Ignorable`-declared `w14:checkbox` (finding 3.1)
+- [ ] 9.7 Own or defer `w:customXml` and `w:smartTag` — same content positions as `w:sdt`, same UTF-16 offset correctness argument (finding 2)
+- [ ] 9.8 Declare a D12 impact class; placeholder replacement and value changes both re-flow (finding 4)
+- [ ] 9.9 Resolve `mc:AlternateContent` with `typed-drawings-and-images` — it also gates `mc:Ignorable`-declared `w14:checkbox` (finding 2.1)

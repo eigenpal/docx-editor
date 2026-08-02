@@ -1,7 +1,7 @@
 ## 0. Baseline before code
 
 - [ ] 0.1 Inventory the tracked-change coverage that already exists — `list-pagination-break.docx`, `issue-68-large-comments-suggestions.docx` (which also ships `commentsExtended.xml`), `issue-319-sections.docx`, `endnotes-tracked-changes.docx` — and record which requirements each already exercises. §7 fills the remainder; it does not start from zero
-- [ ] 0.2 Load `list-pagination-break.docx` in the demo and record what renders today. The expected finding is that tracked content is **absent**, because `piecesOf` skips non-`run` children and `w:ins`/`w:del` are generic. Confirm it rather than assume it — an earlier draft of this change asserted the opposite (that tracked text rendered as ordinary text) and was wrong
+- [ ] 0.2 Load `list-pagination-break.docx` in the demo and record what renders today. The expected finding is that tracked content is **absent**, because `piecesOf` skips non-`run` children and `w:ins`/`w:del` are generic. Confirm it in the browser rather than assume it
 - [ ] 0.3 Load `comprehensive-word-element-test.docx` and confirm its four comments are invisible in the editor
 - [ ] 0.4 Re-read `openspec/changes/typed-ooxml-paragraph-editor/baseline.md` and record the current `bun test` result
 - [ ] 0.5 Confirm with review that the D8 boundary expansion — revision family, comment markup, comment bodies as stories — is accepted before typing any node
@@ -79,10 +79,6 @@
 - [ ] 7.8 `comments-overlapping.docx` — overlapping and nested ranges, a comment anchored in a header, and a comment range spanning a table boundary
 - [ ] 7.9 Keep the comprehensive fixture as the no-thread-data case: four flat comments, no sibling parts, no `w14:paraId`, and one comment whose text says "Reply:" and is not one
 
-## 8. Retire the superseded spec
-
-- [ ] 8.1 `openspec/specs/core-comment-ops/spec.md` specifies ProseMirror transaction builders that no longer exist. Archive or rewrite it in this change, **carrying its id-allocation requirement forward verbatim** against the store's allocator. Do not leave two contradictory descriptions standing, and do not lose the requirement
-
 ## 9. Verification and honest scope
 
 - [ ] 9.1 **Vue is not done.** `paragraph-adapter-acceptance` gates production support on paired adapters; React only by request. Open the follow-up before merge; do not describe either lane as supported
@@ -104,15 +100,15 @@
 
 See `openspec/changes/word-fidelity-review-findings.md`.
 
-- [ ] 11.1 **Settle `proposeInsertion`/`proposeDeletion`/`proposeReplacement` versus store-level suggesting mode as ONE decision.** The shipped `DocEdits` comment explicitly rejects a global toggle. Two write vocabularies for one intent is the ownership problem D2 exists to prevent (finding 2)
-- [ ] 11.2 Reconcile `Revision.date` (required, must become optional), `Revision.part` (optional 3-value, must be required and widened), `Revision.type` (no move/cell/paragraph-mark), and `DocComment` (no anchor/story/orphan) — with the semver consequence stated (finding 2)
-- [ ] 11.3 Add spec scenarios for **paragraph-mark revisions** (`EG_ParaRPrTrackChanges`) including the merge-on-accept rule (finding 3.2)
-- [ ] 11.4 Add accept/reject semantics for **row and cell revisions** — `w:trPr/w:ins`/`w:del`, `w:cellIns`/`w:cellDel`/`w:cellMerge`. As written, accepting a row deletion leaves the row (finding 3.3)
-- [ ] 11.5 Make `@w:name` the stated move-pairing key in the spec, not only the proposal (finding 3.4)
+- [ ] 11.1 **Settle `proposeInsertion`/`proposeDeletion`/`proposeReplacement` versus store-level suggesting mode as ONE decision.** The shipped `DocEdits` comment explicitly rejects a global toggle. Two write vocabularies for one intent is the ownership problem D2 exists to prevent (finding 1)
+- [ ] 11.2 Reconcile `Revision.date` (required, must become optional), `Revision.part` (optional 3-value, must be required and widened), `Revision.type` (no move/cell/paragraph-mark), and `DocComment` (no anchor/story/orphan) — with the semver consequence stated (finding 1)
+- [ ] 11.3 Add spec scenarios for **paragraph-mark revisions** (`EG_ParaRPrTrackChanges`) including the merge-on-accept rule (finding 2.2)
+- [ ] 11.4 Add accept/reject semantics for **row and cell revisions** — `w:trPr/w:ins`/`w:del`, `w:cellIns`/`w:cellDel`/`w:cellMerge`. As written, accepting a row deletion leaves the row (finding 2.3)
+- [ ] 11.5 Make `@w:name` the stated move-pairing key in the spec, not only the proposal (finding 2.4)
 - [ ] 11.6 Read and write document-level `w:trackRevisions`; handle `w:documentProtection/@w:edit="trackedChanges"`, `w:doNotTrackMoves`, `w:doNotTrackFormatting` — the last two contradict current requirements
 - [ ] 11.7 Add the four `w:customXml*RangeStart`/`End` pairs, `w:tblPrExChange`, `CT_ParaRPrChange`, `w:numPr/w:ins`, `w:delInstrText`
-- [ ] 11.8 Declare a D12 impact class, and say how a display-mode switch invalidates a change-scoped layout session without a `ModelChange` (finding 5)
+- [ ] 11.8 Declare a D12 impact class, and say how a display-mode switch invalidates a change-scoped layout session without a `ModelChange` (finding 4)
 - [ ] 11.9 Add an IME rule: one composition in suggesting mode is ONE `w:ins` and one D10 history entry, not a chain
-- [ ] 11.10 Comment anchors are specified only inside a paragraph; `EG_RangeMarkupElements` also sits between paragraphs, rows, and cells (finding 3)
-- [ ] 11.11 State what a tracked note insertion, control value change, and drawing deletion are — the other four changes defer to requirements that do not yet exist (finding 4)
+- [ ] 11.10 Comment anchors are specified only inside a paragraph; `EG_RangeMarkupElements` also sits between paragraphs, rows, and cells (finding 2)
+- [ ] 11.11 State what a tracked note insertion, control value change, and drawing deletion are — the other four changes defer to requirements that do not yet exist (finding 3)
 - [ ] 11.12 Add the missing `## MODIFIED` spec delta for `core-comment-ops`

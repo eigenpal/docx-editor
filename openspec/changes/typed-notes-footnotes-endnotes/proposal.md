@@ -57,7 +57,7 @@ D8 fixes the accepted paragraph-property boundary and states that expanding it "
 
 ### Modified Capabilities
 
-None under `openspec/specs/`. The note lane in `deferred-features.md` moves from deferred to supported, and that ledger entry is rewritten rather than deleted.
+None. The note lane in `deferred-features.md` moves from deferred to supported, and that ledger entry is rewritten rather than deleted.
 
 ## Fixture evidence
 

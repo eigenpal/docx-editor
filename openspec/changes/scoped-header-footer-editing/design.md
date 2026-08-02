@@ -53,13 +53,9 @@ The inert-by-default rule is a security requirement, not a scoping convenience. 
 
 Five of the fixture's eight header/footer parts — `header1`, `header4`, `footer1`, `footer2`, `footer3` — declare a right tab stop at 9026 twips and then separate their runs with a literal U+0009 inside `<w:t xml:space="preserve">`. The fixture has **zero** `w:tab` elements in any header or footer.
 
-An earlier draft of this design stated "Word does not advance on that character" as settled fact. It is not. ECMA-376 says only that `CT_Text` is text and that `w:tab` is the declared advance; it does not say what a renderer does with U+0009 in text, and Word's behaviour here is contested in practice.
+ECMA-376 does not decide what a renderer does with U+0009 in text. It says only that `CT_Text` is text and that `w:tab` is the declared advance, and Word's behaviour here is contested in practice.
 
-Asserting it would have pinned a possibly wrong rendering into a test — precisely the failure this design works hardest to avoid elsewhere. So task 3.5 settles it against Word and records the evidence, and the rule is then pinned once for all five parts rather than inferred per renderer. The same applies to "the first duplicate reference wins, matching Word", which is also asserted and unsourced.
-
-### H9: The archived-era HF spec is superseded, not left standing
-
-`openspec/specs/header-footer-editing/spec.md` describes a hidden ProseMirror `EditorView` per `rId` with the painter rendering it. That architecture is gone. Leaving it in `openspec/specs/` makes a reader believe the system works a way it does not. This change archives or rewrites it; it does not quietly add a second, contradictory description.
+Asserting an answer would pin a possibly wrong rendering into a test — precisely the failure this design works hardest to avoid elsewhere. So task 3.5 settles it against Word and records the evidence, and the rule is then pinned once for all five parts rather than inferred per renderer. The same applies to "the first duplicate reference wins, matching Word", which is also asserted and unsourced.
 
 ## Open questions
 

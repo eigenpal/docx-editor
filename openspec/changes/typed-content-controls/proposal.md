@@ -62,7 +62,7 @@ A template-driven document — which is most of what content controls are for �
 
 ### Modified Capabilities
 
-None under `openspec/specs/`. The content-controls entry in `deferred-features.md` is rewritten to its post-change status.
+None. The content-controls entry in `deferred-features.md` is rewritten to its post-change status.
 
 ## Fixture evidence
 
@@ -85,7 +85,7 @@ Other measurements:
 
 Not present, so not claimable from this file:
 
-- `w:lock` — no control in **this** fixture declares one. Other fixtures do: `block-sdt-comprehensive.docx`, `block-sdt-widgets.docx`, `block-sdt-showcase.docx`, and `inline-checkbox-controls.docx` each declare `w:lock w:val="sdtContentLocked"` **and** `w:dataBinding`. An earlier draft of this proposal claimed no fixture in the repository declared a lock; that was wrong, and lock enforcement is testable today.
+- `w:lock` — no control in **this** fixture declares one. Other fixtures do: `block-sdt-comprehensive.docx`, `block-sdt-widgets.docx`, `block-sdt-showcase.docx`, and `inline-checkbox-controls.docx` each declare `w:lock w:val="sdtContentLocked"` **and** `w:dataBinding`. Lock enforcement is therefore testable today.
 - `w:dataBinding` — none in this fixture; present in the four listed above.
 - `w:placeholder/w:docPart` — every prompt here is literal content, never a glossary reference. There is no glossary part in the package.
 - `w:docPartObj`, `w:docPartList`, `w:group`, `w:citation`, `w:bibliography`, `w:equation`, `w:picture`, repeating sections, `w:temporary`, `w:tabIndex`, `w:sdtEndPr`.

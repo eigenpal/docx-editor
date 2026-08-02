@@ -54,7 +54,7 @@ This lane also carries the most security surface of the five. An image is a rela
 
 ### Modified Capabilities
 
-- `core-image-commit` (`openspec/specs/core-image-commit/spec.md`) specifies image resize and drag as ProseMirror commit builders from the previous architecture, where PM transactions were the write path. It is superseded by the `TreeDocOp` operations here. `tasks.md` §8 requires it be archived or rewritten rather than left standing.
+None.
 
 ## Fixture evidence
 
@@ -76,7 +76,7 @@ Exercised:
 Not exercised:
 
 - Every `a:srcRect` in the file is `<a:srcRect/>` — **empty**. This one is a genuine repository-wide gap: no fixture anywhere carries a non-empty `a:srcRect`, so cropping has no coverage at all.
-- `r:link` and external-mode image relationships — none here. Coverage does exist elsewhere: `list-pagination-break.docx` carries **27** image relationships with `TargetMode="External"`. An earlier draft claimed the repository had none, which was wrong; the security rule is testable today.
+- `r:link` and external-mode image relationships — none here. Coverage does exist elsewhere: `list-pagination-break.docx` carries **27** image relationships with `TargetMode="External"`. The security rule is therefore testable today.
 - Wrap modes other than `wrapSquare` — none here, but `float-wrap-comprehensive-test.docx`, `image-layout-modes-demo.docx`, `issue-705-anchored-header-letterhead.docx`, and `demo.docx` cover `wrapTight`, `wrapThrough`, and `wrapTopAndBottom`.
 - `@behindDoc="1"` — nothing behind text.
 - Rotation, `@flipH` / `@flipV`, `a:ln` borders, `a:effectLst`, `a:tile`.

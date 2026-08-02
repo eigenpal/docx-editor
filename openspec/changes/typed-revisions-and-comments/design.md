@@ -8,7 +8,7 @@ The current failure is not "the feature is missing". `piecesOf` in `packages/cor
 
 A reviewer therefore sees a third text: not the original, not the proposal, and not a merge. The markup survives the save, so nothing signals the loss until the file is compared in Word.
 
-This corrects an earlier draft of this design, which claimed tracked content rendered *as ordinary text*. It does not, and the difference matters: the requirement that follows is not only "`w:delText` is never laid out as ordinary text" but "tracked content reaches layout at all, under a presentation the display mode selects". Any implementation that merely styles what already flows would fix nothing, because nothing flows.
+The distinction matters for what gets built: the requirement is not only "`w:delText` is never laid out as ordinary text" but "tracked content reaches layout at all, under a presentation the display mode selects". An implementation that merely styles what already flows would fix nothing, because nothing flows.
 
 The same root cause hits inline content controls, whose runs are also nested inside a `generic` wrapper — `typed-content-controls` owns that half.
 
@@ -24,7 +24,7 @@ Comments fail quietly instead: the anchors are generic and invisible and `commen
 
 ### R2: Revision identity is the (id, author, date) triple, not (part, id)
 
-An earlier draft of this design said `@w:id` is unique within a part and made `(part, id)` the address. That is wrong twice over, and `2026-07-22-tracked-structural-changes` in the archive had already settled it: `@w:id` is `ST_DecimalNumber` on `CT_Markup` with no uniqueness constraint and no author scoping.
+`@w:id` is `ST_DecimalNumber` on `CT_Markup`, with no uniqueness constraint and no author scoping. Addressing a revision by `(part, id)` is therefore wrong twice over.
 
 Two authors' revisions may legally carry the same id in one part, so `(part, id)` merges distinct revisions. And one logical revision is deliberately many elements sharing an id — a tracked row insertion writes `w:trPr/w:ins` on the row and `w:cellIns` on each cell — so a uniqueness rule cannot express the most common structural revision at all.
 
@@ -73,12 +73,6 @@ A comment body is block content — `CT_Comment` extends `CT_TrackChange` with `
 ### R10: Comment text is attacker-controlled
 
 Author names, initials, and body text come from a file. `.docx` is a zip of XML an attacker fully controls. The requirement that comment text is set as text content and never assigned as markup is a security requirement, not a style preference, and it belongs in the spec so a reviewer can check it.
-
-### R11: `core-comment-ops` is superseded in part, not deleted
-
-`openspec/specs/core-comment-ops/spec.md` specifies ProseMirror transaction builders (`createCommentTr`, `replyTr`, `proposeChangeTr`) — the previous architecture, where PM transactions were the write path. They are gone.
-
-Its second requirement is not architecture-specific: instance-scoped, monotonic, no-reuse id allocation, so two editors on one page do not share a counter. That survives verbatim and is re-stated against the store's allocator. Deleting the whole spec would lose a requirement that was learned from a real bug.
 
 ## Open questions
 

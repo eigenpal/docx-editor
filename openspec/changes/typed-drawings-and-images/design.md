@@ -40,7 +40,7 @@ An image relationship with `TargetMode="External"` is a URL from an attacker-con
 
 The requirement is written as "loading, laying out, painting, and saving perform no network request", with a scenario, so a reviewer can check it and a test can assert it. Preserving the relationship while refusing the fetch keeps the file intact and the user safe.
 
-**No fixture in this repository contains an external or linked image**, so this — the change's main security claim — has no coverage until `tasks.md` §7 authors one.
+`list-pagination-break.docx` carries 27 image relationships with `TargetMode="External"`, so this claim is testable against an existing fixture.
 
 ### I6: Unrenderable is not the same as absent
 
@@ -61,10 +61,6 @@ Three drawings in the fixture reference `rId14`. Deleting one drawing and removi
 ### I9: A drag is one history entry
 
 A pointer-move-per-op drag produces hundreds of `ModelChange`s, hundreds of layout passes, and an undo stack the user cannot use. Live feedback is a preview; the commit happens on release. This matches D10's rule that one user intent is one semantic history entry.
-
-### I10: `core-image-commit` is superseded
-
-`openspec/specs/core-image-commit/spec.md` specifies image resize and drag as ProseMirror commit builders — the previous architecture, where PM transactions were the write path. That path is gone. Leaving the spec in `openspec/specs/` describes a system that does not exist.
 
 ## Open questions
 

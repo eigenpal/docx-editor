@@ -69,7 +69,7 @@
 
 ## 7. Fixtures — the comprehensive file covers inline layout and one square wrap, nothing else
 
-- [ ] 7.1 Use `list-pagination-break.docx` for the external-relationship rule — it already carries 27 `TargetMode="External"` image relationships. Author `images-external.docx` only for the `r:link` form if that file lacks it. An earlier draft claimed no coverage existed; it does
+- [ ] 7.1 Use `list-pagination-break.docx` for the external-relationship rule — it already carries 27 `TargetMode="External"` image relationships. Author `images-external.docx` only for the `r:link` form if that file lacks it.
 - [ ] 7.2 Start from `float-wrap-comprehensive-test.docx`, `image-layout-modes-demo.docx`, and `issue-705-anchored-header-letterhead.docx`, which already cover `wrapTight`, `wrapThrough`, and `wrapTopAndBottom`; author only the missing `ST_WrapText` sides and the `wrapNone` case
 - [ ] 7.3 `images-crop.docx` — a real non-empty `a:srcRect`. **This is a genuine repository-wide gap**: no fixture anywhere has one, so cropping is untestable until it exists
 - [ ] 7.4 `images-zorder.docx` — two overlapping anchored drawings with differing `@relativeHeight`, one `@behindDoc="1"`, and one `@allowOverlap="0"`
@@ -78,10 +78,6 @@
 - [ ] 7.7 `images-nonpicture.docx` — a chart, a group, and a text box, to pin extent-plus-placeholder
 - [ ] 7.8 `images-transform.docx` — rotation, `@flipH`, `@flipV`
 - [ ] 7.9 Keep the comprehensive fixture as the inline-layout and round-trip fixture, and record that its `a:srcRect` elements are empty so nobody reads it as crop coverage
-
-## 8. Retire the superseded spec
-
-- [ ] 8.1 `openspec/specs/core-image-commit/spec.md` specifies ProseMirror commit builders for image resize and drag. That write path no longer exists. Archive or rewrite it in this change; do not leave two contradictory descriptions standing
 
 ## 9. Verification and honest scope
 
@@ -107,8 +103,8 @@
 
 See `openspec/changes/word-fidelity-review-findings.md`.
 
-- [ ] 11.1 **Decide `mc:AlternateContent` handling before typing anything.** Word wraps shapes, text boxes, and `wp14` anchors in `mc:Choice`/`mc:Fallback`; under D1 the wrapper demotes to generic and the anchor never types — on most real files (finding 3.1)
-- [ ] 11.2 Reconcile `EditorSnapshot.image.wrap` (no `through`, conflates `@behindDoc`) and `Editor.getSelectedImage()` (no wrap/crop/alt) with the shipped contract (finding 2)
+- [ ] 11.1 **Decide `mc:AlternateContent` handling before typing anything.** Word wraps shapes, text boxes, and `wp14` anchors in `mc:Choice`/`mc:Fallback`; under D1 the wrapper demotes to generic and the anchor never types — on most real files (finding 2.1)
+- [ ] 11.2 Reconcile `EditorSnapshot.image.wrap` (no `through`, conflates `@behindDoc`) and `Editor.getSelectedImage()` (no wrap/crop/alt) with the shipped contract (finding 1)
 - [ ] 11.3 Add `@hidden` on `CT_Anchor` and `a:CT_NonVisualDrawingProps` — a hidden drawing that paints is a visible defect. Add `@title` alongside `@descr`; Word's alt-text UI writes both, and the current fallback would announce `name="Picture 3"`
 - [ ] 11.4 Honour `@locked` and `a:graphicFrameLocks` (`noResize`, `noSelect`, `noMove`, `noChangeAspect`) before presenting handles
 - [ ] 11.5 `wp:simplePos` is a required child and `@simplePos="1"` overrides `positionH`/`positionV`; only the positionH/V path is specified
@@ -117,6 +113,6 @@ See `openspec/changes/word-fidelity-review-findings.md`.
 - [ ] 11.8 Model `a:blip` effects at least enough for watermarks — `a:lum`+`a:grayscl` is how Word writes a washed-out watermark image, which would otherwise paint at full saturation over the text
 - [ ] 11.9 Add a demotion rule for malformed drawings — a `wp:anchor` in inline position, a non-numeric `wp:extent`, two children
 - [ ] 11.10 `wp:docPr/@id` is required and must be allocated by insert-image
-- [ ] 11.11 Own or explicitly defer `w:object` (OLE, `@progId`, `@updateMode`) and `w:altChunk` — the latter pulls another part's content into the flow and deserves the same explicit refusal as `TargetMode="External"` (finding 3)
+- [ ] 11.11 Own or explicitly defer `w:object` (OLE, `@progId`, `@updateMode`) and `w:altChunk` — the latter pulls another part's content into the flow and deserves the same explicit refusal as `TargetMode="External"` (finding 2)
 - [ ] 11.12 Add the missing `## MODIFIED` spec delta for `core-image-commit`
-- [ ] 11.13 Assign the watermark owner with `scoped-header-footer-editing` (finding 4)
+- [ ] 11.13 Assign the watermark owner with `scoped-header-footer-editing` (finding 3)

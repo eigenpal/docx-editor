@@ -28,7 +28,7 @@ The surface still reads the lock, but only to disable controls and explain why. 
 
 The lock vocabulary is `ST_Lock`: `sdtLocked`, `contentLocked`, `sdtContentLocked`, `unlocked`. Collapsing it to a boolean loses the distinction between "you may edit this but not delete the field" and the reverse, which is the entire point of a template.
 
-**No fixture in this repository declares a lock.** The main correctness claim of this change is therefore untestable against existing files, which is why `tasks.md` §6 authors one before §4 implements enforcement.
+The comprehensive fixture declares no lock, but `block-sdt-comprehensive.docx`, `block-sdt-widgets.docx`, `block-sdt-showcase.docx`, and `inline-checkbox-controls.docx` each declare `sdtContentLocked`, so enforcement is testable today. `tasks.md` §6 adds only the `ST_Lock` values and the nesting case those files lack.
 
 ### S4: Placeholder is a state with a transition, not a string
 
@@ -40,9 +40,7 @@ This is why placeholder cannot be handled by styling alone.
 
 ### S5: The fixture's checkboxes are real `w14:checkbox` controls
 
-An earlier draft of this design claimed the opposite — that the four checkbox-style controls were untyped inline `w:sdt` wrapping a ballot-box `w:sym`, and that offering them a widget would be toggling text. That was a misreading, caused by searching `w:sdtPr` for `w:`-prefixed type elements only, which cannot match a `w14:`-prefixed one.
-
-They are Word-authored checkbox content controls:
+The fixture's four checkbox-style controls are Word-authored checkbox content controls. Detecting them requires searching `w:sdtPr` for the `w14:`-prefixed extension as well as the `w:`-prefixed ECMA-376 type elements; a scan for `w:`-prefixed types alone reports them as untyped.
 
 ```xml
 <w:sdtPr><w14:checkbox>
@@ -54,7 +52,7 @@ They are Word-authored checkbox content controls:
 
 The `w:sym` is their **content**, which is exactly how Word renders a checkbox: the control's state selects between `w14:checkedState` and `w14:uncheckedState`, and the chosen glyph is written into `w:sdtContent`. So the toggle operation is real, and it is not "swap a character" — it sets `w14:checked` and rewrites the content glyph from the control's own declared states.
 
-Two consequences. First, the fixture is a valid checkbox fixture and `inline-checkbox-controls.docx` is a second one, so this path needs no new file. Second, `w14:checkbox` is a Microsoft extension outside `CT_SdtPr`'s type choice, which means a control can carry it *and* declare no ECMA-376 type element — so "untyped" and "checkbox" are not mutually exclusive, and the model must read the extension before concluding a control is untyped. On this fixture that distinction moves three controls, not seven.
+Two consequences. First, the fixture is a valid checkbox fixture and `inline-checkbox-controls.docx` is a second one, so this path needs no new file. Second, `w14:checkbox` is a Microsoft extension outside `CT_SdtPr`'s type choice, which means a control can carry it *and* declare no ECMA-376 type element — so "untyped" and "checkbox" are not mutually exclusive, and the model must read the extension before concluding a control is untyped. Three controls in the comprehensive fixture are genuinely untyped; the other four are checkboxes.
 
 ### S6: Data binding is preserved and refused, not half-supported
 

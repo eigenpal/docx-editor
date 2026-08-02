@@ -86,9 +86,9 @@
 
 See `openspec/changes/word-fidelity-review-findings.md`.
 
-- [ ] 9.1 Type `w:footnoteRef`, `w:endnoteRef`, `w:separator`, `w:continuationSeparator` — all are `EG_RunInnerContent`, not note types. The note's own mark and the separator have nothing to hang on without them (finding 3.5)
+- [ ] 9.1 Type `w:footnoteRef`, `w:endnoteRef`, `w:separator`, `w:continuationSeparator` — all are `EG_RunInnerContent`, not note types. The note's own mark and the separator have nothing to hang on without them (finding 2.5)
 - [ ] 9.2 Add `sectEnd` and `docEnd` footnote positions to the layout spec; `ST_FtnPos` has four values and only two are specified
-- [ ] 9.3 Use the shipped `EditorScope { kind: 'note'; id }` rather than the parallel `{noteKind, noteId}` this change invented; reconcile with `SectionProperties.footnote`/`.endnote`, which already ship (finding 2)
+- [ ] 9.3 Use the shipped `EditorScope { kind: 'note'; id }` rather than the parallel `{noteKind, noteId}` this change invented; reconcile with `SectionProperties.footnote`/`.endnote`, which already ship (finding 1)
 - [ ] 9.4 `w:footnotePr` appears in 18 fixtures and `w:endnotePr` in 19 — start from those before authoring `notes-properties.docx` (§6.1)
-- [ ] 9.5 Resolve the `ST_NumberFormat` shared-owner question with `scoped-header-footer-editing` (finding 4)
+- [ ] 9.5 Resolve the `ST_NumberFormat` shared-owner question with `scoped-header-footer-editing` (finding 3)
 - [ ] 9.6 `ST_FtnEdn` has an explicit `normal` value; do not normalise it away against the fingerprint oracle

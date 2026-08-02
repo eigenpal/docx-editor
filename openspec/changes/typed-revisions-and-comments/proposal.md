@@ -27,7 +27,7 @@ Two chrome slots already name the intent — `review.comments` and `review.editi
 - `@w:name` on the move range markers is the **join key** that pairs a `moveFrom` with its `moveTo`. Pairing is by name, not by proximity or id.
 - **Paragraph-mark revisions.** `w:pPr/w:rPr` is `CT_ParaRPr`, which opens with the `EG_ParaRPrTrackChanges` group: `w:ins`, `w:del`, `w:moveFrom`, `w:moveTo`. These mark *the paragraph mark itself*, and they are how Word records a paragraph split or merge. Accepting a deleted paragraph mark merges the paragraph with the following one.
 - **Row and cell revisions carry their own semantics.** `CT_TrPr` holds `w:ins` / `w:del` / `w:trPrChange`; `CT_TcPr` holds `w:cellIns` / `w:cellDel` / `w:cellMerge`. Accepting a tracked row deletion removes the row, not merely the `w:del` element inside its `w:trPr`.
-- **Revision identity is the `(id, author, date)` triple, within a named part.** `@w:id` is `ST_DecimalNumber` with no uniqueness constraint and no author scoping: two authors' revisions may share an id in one part, and one logical revision deliberately spans many elements sharing an id — a tracked row insertion is `w:trPr/w:ins` on the row plus `w:cellIns` on every cell. Addressing by `(part, id)` merges the first case and cannot express the second. This follows the decision already archived in `2026-07-22-tracked-structural-changes`.
+- **Revision identity is the `(id, author, date)` triple, within a named part.** `@w:id` is `ST_DecimalNumber` with no uniqueness constraint and no author scoping: two authors' revisions may share an id in one part, and one logical revision deliberately spans many elements sharing an id — a tracked row insertion is `w:trPr/w:ins` on the row plus `w:cellIns` on every cell. Addressing by `(part, id)` merges the first case and cannot express the second.
 
 **Revision layout and rendering**
 
@@ -73,7 +73,7 @@ Two chrome slots already name the intent — `review.comments` and `review.editi
 
 ### Modified Capabilities
 
-- `core-comment-ops` (`openspec/specs/core-comment-ops/spec.md`) specifies `createCommentTr` / `replyTr` / `proposeChangeTr` as ProseMirror transaction builders and a `createCommentIdAllocator()` with monotonic-no-reuse semantics. Those are from the previous architecture, where ProseMirror transactions were the write path. The write path is now `TreeDocumentStore.transact` over `TreeDocOp`s. The **id-allocation requirements survive and are re-stated against the store**; the transaction-builder requirements are superseded. `tasks.md` §8 requires that spec be archived or rewritten rather than left standing.
+None.
 
 ## Fixture evidence
 
@@ -100,7 +100,7 @@ Tracked changes — **entirely absent from this fixture**:
 
 - Zero `w:ins`, zero `w:del`, zero `w:delText`, zero `w:moveFrom` / `w:moveTo`, zero `w:rPrChange` / `w:pPrChange` / `w:tblPrChange`, zero `w:rsid`, and no `w:trackRevisions` in `word/settings.xml`.
 
-**But the repository is not short of tracked-change fixtures**, and an earlier draft of this proposal wrongly claimed it was. Existing coverage in `e2e/fixtures/`:
+**The repository is not short of tracked-change fixtures.** Existing coverage in `e2e/fixtures/`:
 
 | Fixture | Coverage |
 | --- | --- |
