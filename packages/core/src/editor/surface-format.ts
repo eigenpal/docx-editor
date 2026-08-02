@@ -36,6 +36,14 @@ export interface SurfaceFormatDeps {
   orderedRange(): { from: SemanticPosition; to: SemanticPosition };
   selectionMark(): { paragraphId: string; start: number; end: number } | null;
   textOf(paragraphId: string): string;
+  /**
+   * The cells a rectangular table selection covers, when one is live.
+   *
+   * A rectangle is NOT the text range it stands in for: rows one and two of column one, read
+   * as a range, sweep through every cell between them — so a toolbar reading the range
+   * reports formatting from cells the user never selected.
+   */
+  selectedCells?(): readonly string[] | undefined;
 }
 
 type FormatMethods = Pick<
@@ -127,8 +135,12 @@ export function createSurfaceFormat(deps: SurfaceFormatDeps): FormatMethods {
     },
 
     formatting: () =>
-      formattingAt(currentLayout.value, selectionNow.value, (paragraphId: string, runProperties) =>
-        session.effectiveRunDefaults(paragraphId, runProperties)
+      formattingAt(
+        currentLayout.value,
+        selectionNow.value,
+        (paragraphId: string, runProperties) =>
+          session.effectiveRunDefaults(paragraphId, runProperties),
+        deps.selectedCells?.()
       ),
 
     toggleRunProperty(localName, attributes) {
@@ -137,7 +149,12 @@ export function createSurfaceFormat(deps: SurfaceFormatDeps): FormatMethods {
       // the NEXT character typed — are a separate lane; refusing is honest rather than
       // formatting a character the user did not select.
       if (from.paragraphId !== to.paragraphId || from.offset === to.offset) return;
-      const active = isRunPropertyActive(currentLayout.value, selectionNow.value, localName);
+      const active = isRunPropertyActive(
+        currentLayout.value,
+        selectionNow.value,
+        localName,
+        deps.selectedCells?.()
+      );
       writeRunProperty(
         from,
         to,

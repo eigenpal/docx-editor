@@ -328,10 +328,13 @@ export {
 export {
   cellSelectionBetween,
   cellSelectionRects,
+  cellSelectionText,
   paragraphsInCells,
   spansInCells,
+  tableContextAt,
   type CellSelection,
   type PlacedCell,
+  type TableCellContext,
 } from './semantic-cell-selection.ts';
 export {
   DEFAULT_VERTICAL_WEIGHT,

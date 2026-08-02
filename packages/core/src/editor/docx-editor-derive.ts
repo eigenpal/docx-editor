@@ -11,12 +11,13 @@ import type {
   ExecResult,
   PageSetup,
   RunFormatting,
+  TableContext,
 } from '../contracts/editor.ts';
 import { classifyCommand } from './docx-editor-support.ts';
 
 /** Whether a command may run, and the engine's own refusal when it may not. */
 export type CommandGate = { ok: true } | { ok: false; refusal: Exclude<ExecResult, { ok: true }> };
-import { caretAt } from '@docx-editor.dev/core-contract/layout';
+import { caretAt, tableContextAt } from '@docx-editor.dev/core-contract/layout';
 import type { PaginatedSurface } from './paginated-surface-contract.ts';
 
 /**
@@ -173,4 +174,28 @@ export function gateCommand(
     };
   }
   return { ok: true };
+}
+
+/**
+ * Where the caret is in a table, if it is in one.
+ *
+ * Answered for a plain caret, not only for a rectangular cell selection: "am I in a table" is
+ * a question about the caret, and reporting it only during a drag would leave a toolbar
+ * showing its table controls disabled the whole time the user was typing in a cell.
+ */
+export function tableContextOf(surface: PaginatedSurface | null): TableContext | null {
+  if (!surface) return null;
+  const state = surface.state();
+  const cells = state.cellSelection;
+  // `selection` is a rectangle's own text range when one is live, so its head is inside the
+  // table either way and one lookup serves both.
+  const context = tableContextAt(surface.layout(), state.selection.head.paragraphId);
+  if (!context) return null;
+  return {
+    rows: context.rows,
+    columns: context.columns,
+    // A rectangle reports its top-left, which is where its commands are anchored.
+    rowIndex: cells ? cells.rows.from : context.rowIndex,
+    columnIndex: cells ? cells.columns.from : context.columnIndex,
+  };
 }

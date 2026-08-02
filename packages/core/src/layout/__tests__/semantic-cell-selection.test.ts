@@ -9,8 +9,10 @@ import { readOoxmlPart, type OoxmlPart } from '@docx-editor.dev/core-contract/st
 import {
   cellSelectionBetween,
   cellSelectionRects,
+  cellSelectionText,
   paragraphsInCells,
   spansInCells,
+  tableContextAt,
 } from '../semantic-cell-selection.ts';
 import { hitTestPage, type TableCellAddress } from '../semantic-hit-test.ts';
 import { createFixedMeasurer, layoutSemanticDocument } from '../semantic-layout.ts';
@@ -191,5 +193,52 @@ describe('merges cannot be selected in half', () => {
     };
     const selection = cellSelectionBetween(layout, anchor, anchor)!;
     expect(selection.cellIds).not.toContain(table.rows[2]!.cells[0]!.id);
+  });
+});
+
+describe('where the caret is in a table', () => {
+  const layout = lay(GRID);
+  const table = tableOf(layout);
+
+  test('a caret in a cell reports the table it is in, and where', () => {
+    // Answered for a plain caret, not only for a rectangle: a toolbar has to know it is in a
+    // table while the user is typing, or its table controls sit disabled the whole time.
+    const paragraph = table.rows[1]!.cells[2]!.blocks[0]!;
+    if (paragraph.kind !== 'paragraph') throw new Error('fixture cell is not a paragraph');
+    expect(tableContextAt(layout, paragraph.paragraphId)).toEqual({
+      tableId: table.tableId,
+      rows: 3,
+      columns: 3,
+      rowIndex: 1,
+      columnIndex: 2,
+    });
+  });
+
+  test('a paragraph outside every table reports nothing', () => {
+    const outside = lay(p('loose') + GRID);
+    expect(tableContextAt(outside, '/word/document.xml#0.0.0')).toBeNull();
+  });
+});
+
+describe('a rectangle on the clipboard', () => {
+  const layout = lay(GRID);
+  const table = tableOf(layout);
+  const at = (row: number, column: number): TableCellAddress => ({
+    tableId: table.tableId,
+    rowId: table.rows[row]!.id,
+    cellId: table.rows[row]!.cells[column]!.id,
+    rowIndex: row,
+    gridColumn: table.rows[row]!.cells[column]!.gridColumn,
+    gridSpan: table.rows[row]!.cells[column]!.gridSpan,
+  });
+
+  test('is a grid: tabs between cells, newlines between rows', () => {
+    const selection = cellSelectionBetween(layout, at(0, 0), at(1, 1))!;
+    expect(cellSelectionText(layout, selection)).toBe('A1\tB1\nA2\tB2');
+  });
+
+  test('a single column is one cell per line', () => {
+    const selection = cellSelectionBetween(layout, at(0, 1), at(2, 1))!;
+    expect(cellSelectionText(layout, selection)).toBe('B1\nB2\nB3');
   });
 });

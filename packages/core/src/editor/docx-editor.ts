@@ -65,6 +65,7 @@ import {
   fontRequestKey,
   createFixedMeasurer,
   createShapedMeasurer,
+  tableContextAt,
   type SemanticSelection as SurfaceSelection,
   type TextMeasurer,
 } from '@docx-editor.dev/core-contract/layout';
@@ -86,6 +87,7 @@ import {
   gateCommand,
   runFormattingOf,
   totalPages as totalPagesOf,
+  tableContextOf,
 } from './docx-editor-derive.ts';
 import {
   createLayoutShaping,
@@ -622,7 +624,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
       // canonical node ids. Until that mapping exists, null is the honest answer.
       selection: null,
       formatting: runFormattingOf(surface),
-      table: null,
+      table: tableContextOf(surface),
       image: null,
       page: { current: currentPageOf(surface), total: totalPagesOf(surface) },
       canUndo: state?.canUndo ?? false,

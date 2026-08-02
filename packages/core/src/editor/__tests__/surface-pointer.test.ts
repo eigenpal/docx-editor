@@ -539,3 +539,31 @@ describe('dragging across table cells', () => {
     mounted.surface.destroy();
   });
 });
+
+describe('what a rectangle means to everything downstream', () => {
+  test('it copies as a grid, not as one run of characters', () => {
+    const mounted = mount(TABLE);
+    press(mounted, ...inCell(0, 0));
+    move(...inCell(1, 1));
+    release(...inCell(1, 1));
+    expect(mounted.surface.selectedText()).toBe('A1\tB1\nA2\tB2');
+    mounted.surface.destroy();
+  });
+
+  test('formatting reads the CELLS, not the text range they stand in for', () => {
+    // A rectangle down column one has a text range that runs through column two on the way.
+    // Reading the range would report the formatting of cells the drag never covered.
+    const bold =
+      `<w:tbl>${row(cell(paragraph('A1')) + cell(`<w:p><w:r><w:rPr><w:b/></w:rPr><w:t>B1</w:t></w:r></w:p>`))}` +
+      `${row(cell(paragraph('A2')) + cell(paragraph('B2')))}</w:tbl>`;
+    const mounted = mount(bold);
+    press(mounted, ...inCell(0, 0));
+    move(...inCell(1, 0));
+    release(...inCell(1, 0));
+
+    expect(mounted.surface.state().cellSelection!.columns).toEqual({ from: 0, to: 0 });
+    // Column one is not bold anywhere. The range from A1 to A2 passes through bold B1.
+    expect(mounted.surface.formatting().bold).toBe(false);
+    mounted.surface.destroy();
+  });
+});

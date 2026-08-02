@@ -10,9 +10,11 @@
 import {
   documentOrder,
   paragraphFragmentsOf,
+  spansInCells,
   spansInSelection,
   type SemanticLayout,
   type SemanticSelection,
+  type StyleSpanRecord,
 } from '@docx-editor.dev/core-contract/layout';
 import {
   ACCEPTED_PARAGRAPH_PROPERTIES,
@@ -260,6 +262,33 @@ export function runPropertyEdits(
 }
 
 /**
+ * The spans a selection covers, whichever kind of selection it is.
+ *
+ * A rectangle of table cells is NOT the text range it stands in for: rows one and two of
+ * column one, read as a range, sweep through every cell between them, so a toolbar would
+ * report the formatting of cells the user never selected. Reading the cells directly is the
+ * only difference cell selection makes to any of these queries.
+ */
+function selectionSpans(
+  layout: SemanticLayout,
+  selection: SemanticSelection,
+  cells?: readonly string[]
+): readonly StyleSpanRecord[] {
+  return cells && cells.length > 0
+    ? spansInCells(layout, cells)
+    : spansInSelection(layout, selection);
+}
+
+/** The run properties in force across the selection, taken from its first span. */
+export function selectionRunProperties(
+  layout: SemanticLayout,
+  selection: SemanticSelection,
+  cells?: readonly string[]
+): readonly SurfaceProperty[] {
+  return selectionSpans(layout, selection, cells)[0]?.props ?? [];
+}
+
+/**
  * Whether a run property is already set across the WHOLE selection.
  *
  * Word's rule, and the one that makes a toggle feel right: a partly-bold selection goes
@@ -268,9 +297,10 @@ export function runPropertyEdits(
 export function isRunPropertyActive(
   layout: SemanticLayout,
   selection: SemanticSelection,
-  localName: string
+  localName: string,
+  cells?: readonly string[]
 ): boolean {
-  const spans = spansInSelection(layout, selection);
+  const spans = selectionSpans(layout, selection, cells);
   if (spans.length === 0) return false;
   const flagOf = (span: (typeof spans)[number]): boolean => {
     switch (localName) {
@@ -304,9 +334,10 @@ export type InheritedRunDefaults = (
 export function formattingAt(
   layout: SemanticLayout,
   selection: SemanticSelection,
-  inherited?: InheritedRunDefaults
+  inherited?: InheritedRunDefaults,
+  cells?: readonly string[]
 ): SurfaceFormatting {
-  const spans = spansInSelection(layout, selection);
+  const spans = selectionSpans(layout, selection, cells);
   const styles = spans.map((span) => span.style);
   // Agreement across the WHOLE selection, or nothing. A collapsed caret yields the one
   // span beside it (Word's rule), so the toolbar reflects the run the user is typing in.

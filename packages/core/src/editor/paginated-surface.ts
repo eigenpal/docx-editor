@@ -26,6 +26,7 @@ import {
   createParagraphLayoutCache,
   resolveDefaultSurfaceMeasurer,
   cellSelectionRects,
+  cellSelectionText,
   documentOrder,
   layoutSemanticDocument,
   resolveNumberingLevel,
@@ -210,6 +211,7 @@ export function mountPaginatedSurface(
     orderedRange: () => orderedRange(),
     selectionMark: () => selectionMark(),
     textOf: (paragraphId) => textOf(paragraphId),
+    selectedCells: () => cellSelection?.cellIds,
   });
   const structure = createSurfaceStructure({
     session,
@@ -713,6 +715,9 @@ export function mountPaginatedSurface(
     },
 
     selectedText() {
+      // A rectangle copies as a grid — tabs between cells, newlines between rows — because
+      // the text range it stands in for would paste back as one run with the grid gone.
+      if (cellSelection) return cellSelectionText(currentLayout, cellSelection);
       const { from, to } = orderedRange();
       return selectedTextIn(currentLayout, from, to);
     },

@@ -332,3 +332,74 @@ export function cellSelectionRects(
   }
   return rects;
 }
+
+/**
+ * A cell selection as plain text: tabs between cells, newlines between rows.
+ *
+ * What a spreadsheet and every other word processor put on the clipboard for a rectangle, and
+ * the only shape that survives the trip: the text range a rectangle stands in for would paste
+ * back as one run of characters with the grid gone.
+ */
+export function cellSelectionText(layout: SemanticLayout, selection: CellSelection): string {
+  const table = tableIndex(layout).get(selection.tableId);
+  if (!table) return '';
+  const wanted = new Set(selection.cellIds);
+  const rows = new Map<number, string[]>();
+  const seen = new Set<string>();
+  for (const entry of table.placed) {
+    if (entry.isHeaderRepeat || !wanted.has(entry.cell.id) || seen.has(entry.cell.id)) continue;
+    seen.add(entry.cell.id);
+    const paragraphs: string[] = [];
+    for (const block of entry.cell.blocks) collectParagraphs(block, paragraphs, new Set());
+    const text = paragraphs.map((id) => paragraphTextFromLayout(layout, id)).join('\n');
+    const row = rows.get(entry.rowIndex);
+    if (row) row.push(text);
+    else rows.set(entry.rowIndex, [text]);
+  }
+  return [...rows.keys()]
+    .sort((left, right) => left - right)
+    .map((index) => rows.get(index)!.join('\t'))
+    .join('\n');
+}
+
+/** Where a paragraph sits in a table, if it sits in one. */
+export interface TableCellContext {
+  readonly tableId: string;
+  readonly rows: number;
+  readonly columns: number;
+  readonly rowIndex: number;
+  readonly columnIndex: number;
+}
+
+/**
+ * The table context of one paragraph — what a toolbar reflects when the caret is in a cell.
+ *
+ * Answers for a plain caret, not only for a cell selection, because "am I in a table" is a
+ * question about where the caret is and a toolbar that only knew during a rectangle drag
+ * would show its table controls disabled while the user was typing in a cell.
+ */
+export function tableContextAt(
+  layout: SemanticLayout,
+  paragraphId: string
+): TableCellContext | null {
+  for (const [tableId, table] of tableIndex(layout)) {
+    for (const entry of table.placed) {
+      if (entry.isHeaderRepeat) continue;
+      const found: string[] = [];
+      for (const block of entry.cell.blocks) collectParagraphs(block, found, new Set());
+      if (!found.includes(paragraphId)) continue;
+      let columns = 0;
+      for (const cells of table.rows.values()) {
+        for (const cell of cells) columns = Math.max(columns, spans(cell).to + 1);
+      }
+      return {
+        tableId,
+        rows: table.rows.size,
+        columns,
+        rowIndex: entry.rowIndex,
+        columnIndex: entry.cell.gridColumn,
+      };
+    }
+  }
+  return null;
+}
