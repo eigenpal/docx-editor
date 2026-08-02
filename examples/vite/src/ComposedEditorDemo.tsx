@@ -782,19 +782,19 @@ export function ComposedEditorDemo({ fixtureUrl }: { fixtureUrl: string }) {
             <PerfHud />
           </div>
         </DocxEditor.Root>
+      ) : loadError ? (
+        // A failed fetch is NOT a loading state: it is terminal, and routing it through
+        // the polite live region would announce it as progress. Its own assertive region.
+        <div className="demo-loading" role="alert">
+          {`Could not load the document: ${loadError}`}
+        </div>
       ) : (
         // The library's loading surface rather than a hand-rolled div: rendered outside
-        // a `Root` it always shows, which is exactly this branch's condition. The demo
-        // supplies its own children, so the packaged spinner is replaced wholesale.
+        // a `Root` it always shows, which is exactly this branch's condition. Children
+        // replace the packaged screen, so the spinner is composed back in by name.
         <DocxEditor.Loading className="demo-loading">
-          {loadError ? (
-            `Could not load the document: ${loadError}`
-          ) : (
-            <>
-              <span className="docx-editor__loading-spinner" aria-hidden="true" />
-              <span>Loading document…</span>
-            </>
-          )}
+          <DocxEditor.Loading.Spinner />
+          <span>Loading document…</span>
         </DocxEditor.Loading>
       )}
     </div>

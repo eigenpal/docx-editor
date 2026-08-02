@@ -710,7 +710,6 @@ export interface EditorSnapshot {
     readonly formatting: RunFormatting | null;
     // (undocumented)
     readonly image: ImageContext | null;
-    // (undocumented)
     readonly isLoading: boolean;
     // (undocumented)
     readonly page: { readonly current: number; readonly total: number };

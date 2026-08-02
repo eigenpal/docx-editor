@@ -3003,8 +3003,14 @@
   font-size: 14px;
 }
 
-/* The default screen when the host supplies no children. */
+/* The default screen when the host supplies no children.
+   `display` and `box-sizing` are explicit rather than inherited from Tailwind's
+   preflight: the part emits its own `ep-root`, so it can be composed somewhere the
+   preflight does not reach, and an inline span would otherwise measure 42px and only
+   size at all by accident of being a flex item. */
 .docx-editor__loading-spinner {
+  display: block;
+  box-sizing: border-box;
   width: 36px;
   height: 36px;
   border: 3px solid var(--doc-border);

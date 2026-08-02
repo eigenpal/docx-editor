@@ -113,13 +113,28 @@ export interface DocxEditorDocumentOutlineProps {
 export function DocxEditorHorizontalRuler(props: DocxEditorRulerProps): ReactElement;
 
 // @public
-export function DocxEditorLoading(input: DocxEditorLoadingProps): React$1.JSX.Element | null;
+export const DocxEditorLoading: DocxEditorLoadingComponent;
+
+// @public
+export interface DocxEditorLoadingComponent {
+    (props: DocxEditorLoadingProps): ReactNode;
+    readonly Spinner: typeof DocxEditorLoadingSpinner;
+}
 
 // @public
 export interface DocxEditorLoadingProps {
     children?: ReactNode;
     className?: string;
+    style?: CSSProperties;
     when?: boolean;
+}
+
+// @public
+export function DocxEditorLoadingSpinner(input: DocxEditorLoadingSpinnerProps): React$1.JSX.Element;
+
+// @public
+export interface DocxEditorLoadingSpinnerProps {
+    className?: string;
 }
 
 // @public

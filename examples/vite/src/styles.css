@@ -27,9 +27,18 @@
   color: var(--doc-text);
 }
 
-/* Layout only — `DocxEditor.Loading` brings the centering, gap, and muted text. */
+/* Layout only for the loading surface — `DocxEditor.Loading` brings the centering, gap,
+   and muted text. The error branch is a bare div, so it still needs them. */
 .demo-loading {
   flex: 1;
+}
+
+.demo-loading[role='alert'] {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  color: var(--doc-text-muted);
 }
 
 /* The chrome surface is header + toolbar only: the seam (hairline + soft

@@ -68,11 +68,16 @@ exemptions go when it lands.
 - `CHROME_GROUPS` — core chrome registry re-exported for hook-built toolbars; Vue
   re-exports it when its composable layer lands.
 - `DocxEditorLoading` — the conditional loading surface (`DocxEditor.Loading`) over
-  `useEditorState`'s `isLoading`, with a `when` prop for the host's own pre-mount async.
-  It is a consumer of the composition layer, so the Vue twin lands with the composable
-  layer alongside the other context-fed parts above. The styles it renders already live
-  in the core stylesheet, so the Vue part is markup only.
-- `DocxEditorLoadingProps` — the part's props (`when`, `className`, `children`).
+  `snapshot.isLoading`, with a `when` prop for the host's own pre-mount async. It is a
+  consumer of the composition layer, so the Vue twin lands with the composable layer
+  alongside the other context-fed parts above. The styles and the `loading.label` string
+  already live in core, so the Vue part is markup only.
+- `DocxEditorLoadingProps` — the part's props (`when`, `className`, `style`, `children`).
+- `DocxEditorLoadingSpinner` — the packaged indicator on its own
+  (`DocxEditor.Loading.Spinner`), so custom children can compose it back rather than
+  hand-copying its class name.
+- `DocxEditorLoadingSpinnerProps`
+- `DocxEditorLoadingComponent` — the part plus its `.Spinner` static.
 
 The compound toolbar (default set with in-place slot overrides, generic Button part,
 FontFamily compound + hook) landed React-first on the composition layer above. Vue's

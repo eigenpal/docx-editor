@@ -1,11 +1,13 @@
 // `DocxEditor.Loading` — the conditional loading surface.
 //
-// What these pin down: it shows while there is no document to paint and disappears once
-// there is; it reads the SAME `isLoading` the rest of the composition layer reads, so
-// the loading screen and the chrome can never disagree; `when` ORs the host's own
-// pre-mount async in (the fetch of bytes/fonts, which happens before `Root` can be given
-// a `document` at all); host children replace the packaged spinner wholesale; and the
-// server path renders it, so SSR emits a loading screen rather than a blank box.
+// What these pin down: it shows while the editor has no document and disappears as soon
+// as bytes are handed over; it is SAFE TO GATE A MOUNT POINT ON, which is why the
+// condition is document presence rather than painted pages (the latter deadlocks, and
+// flickers back on when a viewport unmounts); a parse failure ends it rather than
+// spinning forever; `when` ORs the host's own pre-mount async in; host children replace
+// the packaged screen while `Loading.Spinner` composes it back; the default screen has
+// an announceable name; and the server path renders it, so SSR emits a loading screen
+// rather than a blank box.
 
 // MUST be first: happy-dom registration happens on import.
 import './dom-setup.ts';
@@ -22,6 +24,7 @@ import { DocxEditorLoading } from '../src/editor/DocxEditorLoading.tsx';
 import { DocxEditorRoot } from '../src/editor/DocxEditorRoot.tsx';
 import { DocxEditorViewport } from '../src/editor/DocxEditorViewport.tsx';
 import { DocxEditorContent } from '../src/editor/DocxEditorContent.tsx';
+import { useEditorState } from '../src/editor/useEditorState.ts';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 const CT = 'http://schemas.openxmlformats.org/package/2006/content-types';
@@ -74,29 +77,150 @@ describe('DocxEditor.Loading', () => {
     expect(view.container.textContent).toContain('hello world');
   });
 
-  test('`when` keeps it up while the host is still fetching, independent of the editor', () => {
-    // The demo case: bytes are still downloading, so `Root` has no document to be given
-    // yet. The editor itself reports loaded, and only `when` holds the screen.
+  test('with NO condition wired up, a Root still awaiting its document keeps it up', () => {
+    // The point of the default. The facade exists but was handed no bytes, which is the
+    // shape a host has while its fetch is in flight — a bare `<DocxEditor.Loading/>` has
+    // to cover it, or every host would be forced to hand-wire `when`.
     const view = render(
       <DocxEditorRoot>
-        <DocxEditorLoading when>
-          <span>fetching bytes</span>
+        <DocxEditorLoading>
+          <span>no document yet</span>
         </DocxEditorLoading>
       </DocxEditorRoot>
     );
 
     const el = view.container.querySelector(LOADING);
     expect(el).not.toBeNull();
-    expect(el!.textContent).toContain('fetching bytes');
+    expect(el!.textContent).toContain('no document yet');
+  });
 
-    // Same tree, host async settled: the screen goes away.
-    view.rerender(
+  test('the same bare part yields as soon as a document is handed over', () => {
+    const view = render(
       <DocxEditorRoot>
-        <DocxEditorLoading when={false}>
-          <span>fetching bytes</span>
+        <DocxEditorLoading>
+          <span>no document yet</span>
+        </DocxEditorLoading>
+        <DocxEditorViewport>
+          <DocxEditorContent />
+        </DocxEditorViewport>
+      </DocxEditorRoot>
+    );
+    expect(view.container.querySelector(LOADING)).not.toBeNull();
+
+    // Document identity lands: Root rebuilds the facade, pages paint, screen retires.
+    view.rerender(
+      <DocxEditorRoot document={SOURCE}>
+        <DocxEditorLoading>
+          <span>no document yet</span>
+        </DocxEditorLoading>
+        <DocxEditorViewport>
+          <DocxEditorContent />
+        </DocxEditorViewport>
+      </DocxEditorRoot>
+    );
+    expect(view.container.querySelector(LOADING)).toBeNull();
+    expect(view.container.textContent).toContain('hello world');
+  });
+
+  test('gating the mount point on it resolves instead of deadlocking', () => {
+    // The trap this part must not set. A host that reads the loading state to decide
+    // whether to render `Content` is the natural composition — and if the condition were
+    // keyed on painted pages it could never clear, because nothing paints until Content
+    // mounts and Content would never mount. Document presence is what makes it safe.
+    function Gated() {
+      const loading = useEditorState((snapshot) => snapshot.isLoading);
+      return loading ? (
+        <DocxEditorLoading>
+          <span>waiting</span>
+        </DocxEditorLoading>
+      ) : (
+        <DocxEditorViewport>
+          <DocxEditorContent />
+        </DocxEditorViewport>
+      );
+    }
+
+    const view = render(
+      <DocxEditorRoot document={SOURCE}>
+        <Gated />
+      </DocxEditorRoot>
+    );
+
+    expect(view.container.querySelector(LOADING)).toBeNull();
+    expect(view.container.textContent).toContain('hello world');
+    expect(view.container.querySelectorAll('.docx-page').length).toBeGreaterThan(0);
+  });
+
+  test('unmounting the viewport does not bring the screen back over a loaded document', () => {
+    // `detach()` stashes the live bytes, so the document is still there — only the mount
+    // point went away. A condition keyed on page count would flip back here.
+    const view = render(
+      <DocxEditorRoot document={SOURCE}>
+        <DocxEditorLoading>
+          <span>waiting</span>
+        </DocxEditorLoading>
+        <DocxEditorViewport>
+          <DocxEditorContent />
+        </DocxEditorViewport>
+      </DocxEditorRoot>
+    );
+    expect(view.container.querySelector(LOADING)).toBeNull();
+
+    view.rerender(
+      <DocxEditorRoot document={SOURCE}>
+        <DocxEditorLoading>
+          <span>waiting</span>
         </DocxEditorLoading>
       </DocxEditorRoot>
     );
+    expect(view.container.querySelector(LOADING)).toBeNull();
+  });
+
+  test('`when` ORs in host async the editor cannot observe, and releases with it', () => {
+    // A host that mounts the provider only after its own fetch settles: the editor has
+    // a document and reports painted, so only `when` can hold the screen.
+    const view = render(
+      <DocxEditorRoot document={SOURCE}>
+        <DocxEditorLoading when>
+          <span>fetching fonts</span>
+        </DocxEditorLoading>
+        <DocxEditorViewport>
+          <DocxEditorContent />
+        </DocxEditorViewport>
+      </DocxEditorRoot>
+    );
+
+    const el = view.container.querySelector(LOADING);
+    expect(el).not.toBeNull();
+    expect(el!.textContent).toContain('fetching fonts');
+
+    view.rerender(
+      <DocxEditorRoot document={SOURCE}>
+        <DocxEditorLoading when={false}>
+          <span>fetching fonts</span>
+        </DocxEditorLoading>
+        <DocxEditorViewport>
+          <DocxEditorContent />
+        </DocxEditorViewport>
+      </DocxEditorRoot>
+    );
+    expect(view.container.querySelector(LOADING)).toBeNull();
+  });
+
+  test('a document that cannot be parsed ends the loading state rather than spinning forever', () => {
+    // Nothing paints, but nothing is arriving either. A permanent spinner would be the
+    // worst of the three outcomes, so the part retires and lets the host report.
+    const view = render(
+      <DocxEditorRoot document={new Uint8Array([1, 2, 3, 4])}>
+        <DocxEditorLoading>
+          <span>still loading</span>
+        </DocxEditorLoading>
+        <DocxEditorViewport>
+          <DocxEditorContent />
+        </DocxEditorViewport>
+      </DocxEditorRoot>
+    );
+
     expect(view.container.querySelector(LOADING)).toBeNull();
   });
 
@@ -109,6 +233,43 @@ describe('DocxEditor.Loading', () => {
     expect(el.getAttribute('role')).toBe('status');
     expect(el.getAttribute('aria-live')).toBe('polite');
     expect(el.querySelector(SPINNER)!.getAttribute('aria-hidden')).toBe('true');
+  });
+
+  test('the default screen has something to announce, not an empty live region', () => {
+    // The spinner is aria-hidden, so without a text node `role="status"` would announce
+    // "" — worse than having no live region at all.
+    const view = render(<DocxEditorLoading when />);
+    const el = view.container.querySelector(LOADING)!;
+
+    expect(el.textContent!.trim().length).toBeGreaterThan(0);
+    expect(el.querySelector('.ep-sr-only')).not.toBeNull();
+  });
+
+  test('carries its own token scope, so it is styled wherever it is composed', () => {
+    // `--doc-*` lives on `.ep-root` and `Root` renders no DOM: without this the part
+    // paints an unresolved, contrast-free ring when placed beside the Viewport.
+    const view = render(<DocxEditorLoading when />);
+    expect(view.container.querySelector(LOADING)!.classList.contains('ep-root')).toBe(true);
+  });
+
+  test('Loading.Spinner composes the packaged indicator into custom children', () => {
+    const view = render(
+      <DocxEditorLoading when>
+        <DocxEditorLoading.Spinner />
+        <span>my label</span>
+      </DocxEditorLoading>
+    );
+    const el = view.container.querySelector(LOADING)!;
+
+    expect(el.querySelector(SPINNER)).not.toBeNull();
+    expect(el.textContent).toContain('my label');
+  });
+
+  test('accepts style, as the other container-shaped parts do', () => {
+    const view = render(<DocxEditorLoading when style={{ minHeight: '240px' }} />);
+    expect(
+      (view.container.querySelector(LOADING) as HTMLElement).style.minHeight
+    ).toBe('240px');
   });
 
   test('host children replace the spinner rather than sitting beside it', () => {
@@ -127,7 +288,7 @@ describe('DocxEditor.Loading', () => {
     const view = render(<DocxEditorLoading when className="demo-loading" />);
     const el = view.container.querySelector(LOADING)!;
 
-    expect(el.className).toBe('docx-editor__loading demo-loading');
+    expect(el.className).toBe('ep-root docx-editor__loading demo-loading');
   });
 
   test('outside a Root it stays up: there is no editor to report otherwise', () => {
