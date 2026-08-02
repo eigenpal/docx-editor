@@ -47,14 +47,7 @@ npm install @docx-editor.dev/react @docx-editor.dev/core
 npx astro add react
 ```
 
-Always mount the editor with `client:only="react"`. Load the Material
-Symbols font in the page `<head>`:
-
-```html
-<link
-  rel="stylesheet"
-  href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200&display=block"
-/>
-```
+Always mount the editor with `client:only="react"`. Toolbar icons are
+bundled as inline SVG, so there is no icon font to load.
 
 Docs: https://www.docx-editor.dev/docs/1.x/react

@@ -46,7 +46,7 @@ const doc = ref(createEmptyDocument());
 
 | File             | What it does                                 |
 | ---------------- | -------------------------------------------- |
-| `nuxt.config.ts` | Registers the module, loads Material Symbols |
+| `nuxt.config.ts` | Registers the module, sets the page icons    |
 | `app.vue`        | Opens a `.docx` and renders `<DocxEditor>`   |
 
 ## Use it in your own Nuxt app
@@ -56,7 +56,7 @@ npm install @docx-editor.dev/nuxt @docx-editor.dev/core
 ```
 
 Add the module to `nuxt.config.ts`. The module handles the client-only
-boundary and the stylesheet. Load the Material Symbols font via
-`app.head.link` in `nuxt.config.ts` for the toolbar icons.
+boundary and the stylesheet. Toolbar icons are bundled as inline SVG, so
+there is no icon font to load.
 
 Docs: https://www.docx-editor.dev/docs/1.x/vue/nuxt

@@ -46,7 +46,7 @@ access during prerender.
 | --------------------------- | ---------------------------------------- |
 | `app/page.tsx`              | Server shell, client-only editor import  |
 | `app/components/Editor.tsx` | `'use client'` editor component          |
-| `app/layout.tsx`            | Loads the Material Symbols font          |
+| `app/layout.tsx`            | Page metadata, icons, share tags         |
 | `next.config.ts`            | Monorepo file tracing + build-time flags |
 
 ## Use it in your own Next.js app
@@ -56,7 +56,7 @@ npm install @docx-editor.dev/react @docx-editor.dev/core
 ```
 
 Always import `DocxEditor` through `dynamic(..., { ssr: false })`, or wrap it
-in a `'use client'` component that only renders after mount. Load the
-Material Symbols font in `app/layout.tsx`.
+in a `'use client'` component that only renders after mount. Toolbar icons are
+bundled as inline SVG, so there is no icon font to load.
 
 Docs: https://www.docx-editor.dev/docs/1.x/react
