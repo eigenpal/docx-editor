@@ -17,7 +17,6 @@
 // All coordinates are points, relative to the page content box — exactly the space body
 // paragraph fragments already live in. Cell paragraph breaks go through the shared
 // `breakParagraph`, so they hit the same cache with keys at the cell's content width.
-/* eslint-disable max-lines -- bounded row-split pagination stays with cell flow and finalize */
 
 import type { OoxmlElement } from '@docx-editor.dev/core-contract/store';
 import type { FieldPageContext } from './field-projection.ts';
@@ -53,7 +52,7 @@ import type {
   TableRowFragmentRecord,
   TextMeasurer,
 } from './semantic-records.ts';
-import type { ResolvedListItem } from './list-resolve.ts';
+import { firstLineShift, type ResolvedListItem } from './list-resolve.ts';
 import { publishListMarker } from './list-marker.ts';
 import {
   borderExtentPt,
@@ -289,9 +288,9 @@ function placeCellParagraph(
   // offset. Contextual spacing is a body-flow question (it compares document neighbours),
   // so it is not applied per cell.
   // A NUMBERED/BULLETED paragraph's first-line slot belongs to the MARKER: `listMarkerBox`
-  // places it at `left - hanging`, and Word's `w:suff` tab puts the text back at `left`.
-  // Moving the text into that slot as well draws the bullet on top of its own first word.
-  const firstLineOffset = listItem ? 0 : indent.hanging > 0 ? -indent.hanging : indent.firstLine;
+  // places it at `left - hanging`, and Word's `w:suff` puts the text back at `left` — or
+  // after the marker, or at the next tab stop past an overflowing one (§17.9.30).
+  const firstLineOffset = firstLineShift(listItem, indent, deps.measurer, tabStops, available);
   const key = paragraphLayoutKey({
     paragraph,
     properties: [
@@ -792,7 +791,6 @@ export function layoutRowFragmentBounded(
     readonly nestedSplitBlocked: boolean;
   }
   const flowed: FlowedCell[] = [];
-  let colCursor = 0;
   let anyFitted = false;
   let anyNestedBlocked = false;
   // Minimum row band even for empty/vMerge-continue cells.
@@ -806,11 +804,13 @@ export function layoutRowFragmentBounded(
       previousSpaceAfter: 0,
       paragraphFragmentIndex: 0,
     };
+    // The grid column is decided once, at read time, where `w:gridBefore` is known and the
+    // row's TOTAL span is bounded (a row of maximum-span cells would otherwise walk millions
+    // of grid intervals in the border pass). Never re-derived by accumulating spans here.
     const span = cell.gridSpan;
-    const cellX = left + sumCols(cols, 0, colCursor);
-    const cellW = sumCols(cols, colCursor, Math.min(colCursor + span, cols.length)) || total;
-    const gridColumn = colCursor;
-    colCursor += span;
+    const gridColumn = cell.gridColumn;
+    const cellX = left + sumCols(cols, 0, gridColumn);
+    const cellW = sumCols(cols, gridColumn, Math.min(gridColumn + span, cols.length)) || total;
     const insets = contentInsets(cell.margins, cell.borders);
     const topInset = isContinuation ? borderExtentPt(cell.borders.top) : insets.top;
     const contentTop = rowTop + topInset;

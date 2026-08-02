@@ -81,11 +81,150 @@ export function formatLowerLetter(value: number): string {
   return formatUpperLetter(value).toLowerCase();
 }
 
+/** `ordinal` (§17.18.59): 1st, 2nd, 3rd, 4th … 11th, 12th, 13th, 21st. */
+export function formatOrdinal(value: number): string {
+  const n = clampListValue(value);
+  const tens = n % 100;
+  const ones = n % 10;
+  const suffix =
+    tens >= 11 && tens <= 13
+      ? 'th'
+      : ones === 1
+        ? 'st'
+        : ones === 2
+          ? 'nd'
+          : ones === 3
+            ? 'rd'
+            : 'th';
+  return `${n}${suffix}`;
+}
+
+/** `hex` (§17.18.59): uppercase hexadecimal, the spelling Word writes. */
+export function formatHex(value: number): string {
+  return clampListValue(value).toString(16).toUpperCase();
+}
+
 /**
- * Format one counter for a `w:numFmt` value.
+ * `chicago` (§17.18.59): the Chicago-manual note sequence `*`, `†`, `‡`, `§`, then the same
+ * four doubled, tripled, …
  *
- * Unknown formats fall back to decimal so a marker still appears rather than vanishing.
+ * The repeat count comes from a counter, so it is capped rather than trusted: a hostile
+ * `w:start` must not build a long string.
+ */
+export function formatChicago(value: number): string {
+  const glyphs = ['*', '†', '‡', '§'];
+  const n = clampListValue(value);
+  if (n <= 0) return glyphs[0]!;
+  const index = (n - 1) % glyphs.length;
+  const repeat = Math.min(Math.floor((n - 1) / glyphs.length) + 1, MAX_CHICAGO_REPEAT);
+  return glyphs[index]!.repeat(repeat);
+}
+
+/** Hard ceiling on a repeated `chicago` glyph — never a file-derived repeat count. */
+const MAX_CHICAGO_REPEAT = 8;
+
+const CARDINAL_ONES: readonly string[] = [
+  'zero',
+  'one',
+  'two',
+  'three',
+  'four',
+  'five',
+  'six',
+  'seven',
+  'eight',
+  'nine',
+  'ten',
+  'eleven',
+  'twelve',
+  'thirteen',
+  'fourteen',
+  'fifteen',
+  'sixteen',
+  'seventeen',
+  'eighteen',
+  'nineteen',
+];
+
+const CARDINAL_TENS: readonly string[] = [
+  '',
+  '',
+  'twenty',
+  'thirty',
+  'forty',
+  'fifty',
+  'sixty',
+  'seventy',
+  'eighty',
+  'ninety',
+];
+
+/** English words for 0…9999 — the whole range `clampListValue` admits, so never unbounded. */
+function cardinalWords(value: number): string {
+  const n = clampListValue(value);
+  if (n < 20) return CARDINAL_ONES[n]!;
+  if (n < 100) {
+    const rest = n % 10;
+    return CARDINAL_TENS[Math.floor(n / 10)]! + (rest === 0 ? '' : `-${CARDINAL_ONES[rest]!}`);
+  }
+  if (n < 1000) {
+    const rest = n % 100;
+    return `${CARDINAL_ONES[Math.floor(n / 100)]!} hundred${rest === 0 ? '' : ` ${cardinalWords(rest)}`}`;
+  }
+  const rest = n % 1000;
+  return `${CARDINAL_ONES[Math.floor(n / 1000)]!} thousand${rest === 0 ? '' : ` ${cardinalWords(rest)}`}`;
+}
+
+function capitalize(text: string): string {
+  return text.length === 0 ? text : text[0]!.toUpperCase() + text.slice(1);
+}
+
+/** `cardinalText` (§17.18.59): One, Two, Twenty-three, One hundred one. */
+export function formatCardinalText(value: number): string {
+  return capitalize(cardinalWords(value));
+}
+
+// A Map, not an object literal: the key comes from our own word table, but a lookup that
+// cannot reach `__proto__` / `constructor` is the cheaper habit to keep.
+const ORDINAL_WORDS: ReadonlyMap<string, string> = new Map([
+  ['zero', 'zeroth'],
+  ['one', 'first'],
+  ['two', 'second'],
+  ['three', 'third'],
+  ['five', 'fifth'],
+  ['eight', 'eighth'],
+  ['nine', 'ninth'],
+  ['twelve', 'twelfth'],
+]);
+
+/** Ordinal form of ONE cardinal word: `twenty` → `twentieth`, `four` → `fourth`. */
+function ordinalWord(word: string): string {
+  const known = ORDINAL_WORDS.get(word);
+  if (known !== undefined) return known;
+  if (word.endsWith('y')) return `${word.slice(0, -1)}ieth`;
+  return `${word}th`;
+}
+
+/** `ordinalText` (§17.18.59): First, Second, Twenty-third, One hundred first. */
+export function formatOrdinalText(value: number): string {
+  const words = cardinalWords(value);
+  // Only the LAST word takes the ordinal ending: "one hundred twenty-third".
+  const cut = Math.max(words.lastIndexOf(' '), words.lastIndexOf('-'));
+  const head = cut < 0 ? '' : words.slice(0, cut + 1);
+  return capitalize(head + ordinalWord(words.slice(cut + 1)));
+}
+
+/**
+ * Format one counter for a `w:numFmt` value (ST_NumberFormat, §17.18.59).
+ *
+ * `none` prints NOTHING — it is the format Word uses for a level that contributes only
+ * literal text, and formatting it as decimal invents a number the document never had.
  * `bullet` is not formatted here — callers use the literal `lvlText`.
+ *
+ * The remaining enumerants (`japaneseCounting`, `hebrew1`, `thaiNumbers`, `ganada`, …) are
+ * per-script numeral sequences we do not carry glyph tables for. They fall back to decimal
+ * deliberately: the ORDINAL is still the authored one, only the script differs, which reads
+ * as a number in the wrong alphabet rather than as a missing or wrong marker.
  */
 export function formatNumFmt(numFmt: string, value: number): string {
   switch (numFmt) {
@@ -101,6 +240,20 @@ export function formatNumFmt(numFmt: string, value: number): string {
       return formatUpperLetter(value);
     case 'lowerLetter':
       return formatLowerLetter(value);
+    case 'ordinal':
+      return formatOrdinal(value);
+    case 'cardinalText':
+      return formatCardinalText(value);
+    case 'ordinalText':
+      return formatOrdinalText(value);
+    case 'hex':
+      return formatHex(value);
+    case 'chicago':
+      return formatChicago(value);
+    // `numberInDash` brackets the number with dashes: 1 → "- 1 -".
+    case 'numberInDash':
+      return `- ${formatDecimal(value)} -`;
+    case 'none':
     case 'bullet':
       return '';
     default:

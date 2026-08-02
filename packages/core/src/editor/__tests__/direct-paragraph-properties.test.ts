@@ -185,3 +185,66 @@ describe('a paragraph property press writes the paragraph, not its cascade', () 
     expect(ownParagraphProperties(surface).sort()).toEqual(['ind', 'pStyle']);
   });
 });
+
+/** The first paragraph's own `w:ind` attributes, by local name. */
+function ownIndent(surface: PaginatedSurface): Record<string, string> {
+  const paragraphId = surface.session.paragraphIds()[0]!;
+  const find = (node: OoxmlNode): OoxmlNode | null => {
+    if (node.kind === 'textValue') return null;
+    if (node.id === paragraphId) return node;
+    for (const child of node.children) {
+      const hit = find(child);
+      if (hit) return hit;
+    }
+    return null;
+  };
+  const paragraph = find(surface.session.part().root);
+  if (!paragraph || paragraph.kind === 'textValue') throw new Error('paragraph not in the tree');
+  const pPr = paragraph.children.find(
+    (child) => child.kind !== 'textValue' && child.localName === 'pPr'
+  );
+  if (!pPr || pPr.kind === 'textValue') return {};
+  const ind = pPr.children.find((child) => child.kind !== 'textValue' && child.localName === 'ind');
+  if (!ind || ind.kind === 'textValue') return {};
+  return Object.fromEntries(ind.attributes.map((entry) => [entry.localName, entry.value]));
+}
+
+describe('an indent step rewrites the spelling the paragraph already uses', () => {
+  // `CT_Ind` carries the left indent under two names — `w:left` and the direction-relative
+  // `w:start` (17.3.1.12) — and both may appear on one element. Writing `w:left` onto a
+  // paragraph authored with `w:start` therefore did not restate the indent, it ADDED a
+  // second, different one; nothing makes the two readers agree about which wins, and this
+  // engine's own rule is `left ?? start`, so the paragraph moved here and not in Word.
+  const startIndented = (twips: string) =>
+    `<w:p><w:pPr><w:ind w:start="${twips}"/></w:pPr><w:r><w:t>hello</w:t></w:r></w:p>`;
+
+  test('Increase Indent on a w:start paragraph states one indent, not two', () => {
+    const surface = mount(startIndented('720'));
+    expect(surface.adjustIndent('increase')).toBe(true);
+    expect(ownIndent(surface)).toEqual({ start: '1440' });
+  });
+
+  test('Decrease Indent on a w:start paragraph actually outdents it', () => {
+    // The worse half: the outdent was written as `w:left="0"` beside an untouched
+    // `w:start="720"`, so a reader honouring `w:start` saw no change at all.
+    const surface = mount(startIndented('720'));
+    expect(surface.adjustIndent('decrease')).toBe(true);
+    expect(ownIndent(surface)).toEqual({ start: '0' });
+  });
+
+  test('a paragraph authoring BOTH spellings keeps them in step', () => {
+    const surface = mount(
+      '<w:p><w:pPr><w:ind w:start="720" w:left="720"/></w:pPr><w:r><w:t>hello</w:t></w:r></w:p>'
+    );
+    expect(surface.adjustIndent('increase')).toBe(true);
+    expect(ownIndent(surface)).toEqual({ start: '1440', left: '1440' });
+  });
+
+  test('a paragraph authoring neither still gets w:left, and keeps its hanging', () => {
+    const surface = mount(
+      '<w:p><w:pPr><w:ind w:hanging="360"/></w:pPr><w:r><w:t>hello</w:t></w:r></w:p>'
+    );
+    expect(surface.adjustIndent('increase')).toBe(true);
+    expect(ownIndent(surface)).toEqual({ hanging: '360', left: '720' });
+  });
+});

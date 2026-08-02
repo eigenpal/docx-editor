@@ -8,7 +8,6 @@
 // wholesale: the lines that fit stay, the rest continue on the next page under the same
 // paragraph id. That is what makes a cross-page paragraph one paragraph for selection and
 // two boxes for pagination.
-/* eslint-disable max-lines -- section flow + table row pagination stay co-located with the story loop */
 
 import type {
   OoxmlElement,
@@ -31,6 +30,14 @@ import {
   type ParagraphLineSpacing,
   type ParagraphSpacing,
 } from './paragraph-style.ts';
+import {
+  adjustedBreakIndex,
+  keepNextFlowKeys,
+  keepNextGroupHeight,
+  paragraphKeeps,
+  MAX_KEEP_NEXT_CHAIN,
+  type ParagraphKeeps,
+} from './pagination-keeps.ts';
 import { DEFAULT_RUN_STYLE, resolveRunStyle } from './run-style.ts';
 import {
   tabStopsFingerprint,
@@ -77,7 +84,7 @@ import {
   type TextMeasurer,
 } from './semantic-records.ts';
 import type { NumberingIndex } from './numbering-index.ts';
-import { withResolvedListItems, type ResolvedListItem } from './list-resolve.ts';
+import { firstLineShift, withResolvedListItems, type ResolvedListItem } from './list-resolve.ts';
 import { publishListMarker } from './list-marker.ts';
 import { sameFragments } from './semantic-fragment-signature.ts';
 import { type FlowCheckpoint, type LayoutSession } from './layout-session.ts';
@@ -199,6 +206,8 @@ type PreparedBlock =
       readonly shading: string | undefined;
       readonly inheritedRunProperties: readonly OoxmlProperty[];
       readonly tabStops: ResolvedTabStops;
+      /** `w:widowControl` / `w:keepNext` / `w:keepLines`, after the style cascade. */
+      readonly keeps: ParagraphKeeps;
       readonly listItem?: ResolvedListItem;
       readonly key: string;
     }
@@ -467,6 +476,7 @@ function layoutBlocksWithGeometry(
         shading,
         inheritedRunProperties,
         tabStops,
+        keeps: paragraphKeeps(props),
         ...(listItem ? { listItem } : {}),
         key: paragraphLayoutKey({
           paragraph: block,
@@ -488,6 +498,10 @@ function layoutBlocksWithGeometry(
   });
 
   const keys = prepared.map((entry) => entry.key);
+  const keepsNext = prepared.map((entry) => entry.kind === 'paragraph' && entry.keeps.keepNext);
+  // FLOW keys — what incremental resume compares. `keys` stays what the break cache is
+  // stored under; only `w:keepNext` makes the two differ (§17.3.1.15).
+  const flowKeys = keepNextFlowKeys(keys, (index) => keepsNext[index]!);
   const previous = session?.previous ?? null;
   // A geometry or producer change invalidates every checkpoint, because it moves every
   // break; resuming from one would place new content against a stale flow.
@@ -496,8 +510,8 @@ function layoutBlocksWithGeometry(
   /** The first paragraph whose layout inputs differ from the previous pass. */
   let firstChanged = 0;
   if (resumable) {
-    const limit = Math.min(keys.length, session.keys.length);
-    while (firstChanged < limit && keys[firstChanged] === session.keys[firstChanged]) {
+    const limit = Math.min(flowKeys.length, session.keys.length);
+    while (firstChanged < limit && flowKeys[firstChanged] === session.keys[firstChanged]) {
       firstChanged += 1;
     }
   }
@@ -511,10 +525,11 @@ function layoutBlocksWithGeometry(
    */
   let commonSuffix = 0;
   if (resumable) {
-    const maxSuffix = Math.min(keys.length, session.keys.length) - firstChanged;
+    const maxSuffix = Math.min(flowKeys.length, session.keys.length) - firstChanged;
     while (
       commonSuffix < maxSuffix &&
-      keys[keys.length - 1 - commonSuffix] === session.keys[session.keys.length - 1 - commonSuffix]
+      flowKeys[flowKeys.length - 1 - commonSuffix] ===
+        session.keys[session.keys.length - 1 - commonSuffix]
     ) {
       commonSuffix += 1;
     }
@@ -675,6 +690,38 @@ function layoutBlocksWithGeometry(
     borderOwnershipBudget: createTableBorderOwnershipBudget(),
     vMergeResolveBudget: createTableVMergeResolveBudget(),
   };
+
+  type PreparedParagraph = Extract<PreparedBlock, { kind: 'paragraph' }>;
+
+  // Current-pass list map first, so marker ordinals stay fresh when the memo reuses inputs.
+  const firstLineOffsetOf = (entry: PreparedParagraph): number =>
+    firstLineShift(
+      listItems?.get(entry.paragraph.id) ?? entry.listItem,
+      entry.indent,
+      measurer,
+      entry.tabStops,
+      entry.available
+    );
+
+  // Shared by placement and by the `w:keepNext` lookahead, which needs the height of the
+  // blocks it keeps WITH. Both read the same cache entry, so the lookahead re-measures nothing.
+  const breakBlock = (entry: PreparedParagraph) =>
+    breakParagraph(
+      entry.paragraph,
+      entry.paragraph.id,
+      entry.indent.left,
+      entry.available,
+      measurer,
+      cache,
+      cache ? entry.key : null,
+      entry.inheritedRunProperties,
+      entry.tabStops,
+      undefined,
+      styleCascade
+        ? (inherited, direct) => cascadeRunProperties(inherited, direct, styleCascade)
+        : undefined,
+      { lineSpacing: entry.lineSpacing, firstLineOffset: firstLineOffsetOf(entry) }
+    );
 
   /**
    * Lay out one top-level table with OOXML-aligned row pagination.
@@ -976,13 +1023,12 @@ function layoutBlocksWithGeometry(
       alignment,
       available,
       spacing: authoredSpacing,
-      lineSpacing,
       contextualSpacing,
       styleId,
       borders,
       shading,
       inheritedRunProperties,
-      tabStops,
+      keeps,
     } = entry;
     // `w:contextualSpacing` (17.3.1.9) drops the gap between paragraphs of the SAME style.
     // Word's own ListParagraph sets it, so without this every Word-authored list carries a
@@ -997,16 +1043,14 @@ function layoutBlocksWithGeometry(
           after: sameStyleAs(nextEntry) ? 0 : authoredSpacing.after,
         }
       : authoredSpacing;
-    // Prefer the current-pass map so marker ordinals stay fresh even when the prepared
-    // block memo reuses indent/break inputs from an earlier revision.
     const listItem = listItems?.get(paragraph.id) ?? entry.listItem;
     // `w:firstLine` moves the first line right of the indent, `w:hanging` moves it left.
     // The schema treats them as mutually exclusive; where a producer writes both, hanging
     // wins, which is how Word reads it.
     // A NUMBERED/BULLETED paragraph's first-line slot belongs to the MARKER: `listMarkerBox`
-    // places it at `left - hanging`, and Word's `w:suff` tab puts the text back at `left`.
-    // Moving the text into that slot as well draws the bullet on top of its own first word.
-    const firstLineOffset = listItem ? 0 : indent.hanging > 0 ? -indent.hanging : indent.firstLine;
+    // places it at `left - hanging`, and Word's `w:suff` puts the text back at `left` — or
+    // after the marker, or at the next tab stop past an overflowing one (§17.9.30).
+    const firstLineOffset = firstLineOffsetOf(entry);
     const paragraphId = paragraph.id;
     // `w:between` (§17.3.1.24): consecutive paragraphs with IDENTICAL border settings are ONE
     // bordered block in Word — the box opens above the first and closes below the last, and
@@ -1030,22 +1074,7 @@ function layoutBlocksWithGeometry(
       previousSpaceAfter = 0;
     }
 
-    const lines = breakParagraph(
-      paragraph,
-      paragraphId,
-      indent.left,
-      available,
-      measurer,
-      cache,
-      cache ? entry.key : null,
-      inheritedRunProperties,
-      tabStops,
-      undefined,
-      styleCascade
-        ? (inherited, direct) => cascadeRunProperties(inherited, direct, styleCascade)
-        : undefined,
-      { lineSpacing, firstLineOffset }
-    );
+    const lines = breakBlock(entry);
 
     // Fit uses unsuppressed lead; top-of-page suppression applies after any flush below.
     {
@@ -1056,7 +1085,20 @@ function layoutBlocksWithGeometry(
           : resolveRunStyle(inheritedRunProperties);
       const firstHeight = lines[0]?.height ?? measurer.lineMetrics(emptyStyle).height;
       const firstTail = lines.length <= 1 ? borderExtent + spacing.after : 0;
-      if (cursorY + lead + topExtent + firstHeight + firstTail > contentHeight && cursorY > 0) {
+      let needed = lead + topExtent + firstHeight + firstTail;
+      // `w:keepNext` (§17.3.1.15): this paragraph may not be the last thing on its page. Priced
+      // ONCE per chain, at its head — a member whose predecessor keeps too already moved with
+      // the group. A chain that cannot fit a page of its own is abandoned.
+      if (keeps.keepNext && !keepsNext[index - 1]) {
+        const group = keepNextGroupHeight(prepared, index, previousSpaceAfter, (at) => {
+          const member = prepared[at];
+          return member?.kind === 'paragraph' ? breakBlock(member).map((l) => l.height) : [];
+        });
+        if (group !== null && group + topExtent <= contentHeight) {
+          needed = Math.max(needed, group + topExtent);
+        }
+      }
+      if (cursorY + needed > contentHeight && cursorY > 0) {
         flushPage();
         previousSpaceAfter = 0;
       }
@@ -1203,17 +1245,50 @@ function layoutBlocksWithGeometry(
       fragmentTopExtent = 0;
     };
 
-    for (const [lineIndex, pendingLine] of lines.entries()) {
+    // First line of this paragraph on the CURRENT page: the anchor a keep rule retreats to.
+    // Not always 0 — a paragraph already cut by a page boundary keeps what it kept. Each
+    // retreat moves a line onto a later page, so the walk terminates; `maxRetreats` guards a
+    // future rule that could cycle, and fails OPEN at the natural break rather than throwing.
+    let fragmentFirstLine = 0;
+    let retreats = 0;
+    const maxRetreats = lines.length + MAX_KEEP_NEXT_CHAIN;
+
+    for (let lineIndex = 0; lineIndex < lines.length; lineIndex += 1) {
+      const pendingLine = lines[lineIndex]!;
       const isLastLine = lineIndex === lines.length - 1;
       const tail = isLastLine ? borderExtent + spacing.after : 0;
       if (
         cursorY + pendingLine.height + tail > contentHeight &&
         (pending.length > 0 || pageFragments.length > 0 || pages.length > 0)
       ) {
+        // `w:widowControl` (§17.3.1.44) / `w:keepLines` (§17.3.1.16) change where a paragraph
+        // may be CUT, not where it fits: retreat off a stranded line, or off keepLines whole.
+        const alone = pageFragments.length === 0;
+        const breakAt =
+          retreats < maxRetreats
+            ? adjustedBreakIndex(lineIndex, fragmentFirstLine, lines.length, keeps, alone)
+            : lineIndex;
+        const retreated = breakAt < lineIndex;
+        // Un-placing hands line ids BACK: a line re-placed on the next page must carry the id
+        // it already took, or every id below it is out of step with a clean pass.
+        for (let back = lineIndex; back > breakAt; back -= 1) {
+          const removed = pending.pop()!;
+          cursorY -= removed.box.height;
+          lineCounter -= 1;
+        }
+        // Moving WHOLE means it now OPENS a page: space-before drops, the top rule travels.
+        const movesWhole = retreated && pending.length === 0 && fragmentIndex === 0;
         flushFragment(false);
         flushPage();
         fragmentBefore = 0;
-        fragmentTopExtent = 0;
+        if (movesWhole) cursorY = fragmentTopExtent;
+        else fragmentTopExtent = 0;
+        fragmentFirstLine = breakAt;
+        if (retreated) {
+          retreats += 1;
+          lineIndex = breakAt - 1;
+          continue;
+        }
       }
       const record: LineRecord = {
         id: `line-${lineCounter}`,
@@ -1250,6 +1325,8 @@ function layoutBlocksWithGeometry(
         fragmentBefore = 0;
         fragmentTopExtent = 0;
         endedWithPageBreak = true;
+        // An explicit break is the author's cut; the keep rules apply afresh after it.
+        fragmentFirstLine = lineIndex + 1;
       }
     }
     flushFragment(true);
@@ -1299,7 +1376,7 @@ function layoutBlocksWithGeometry(
           ...session.checkpoints.slice(convergedAt + (session.keys.length - prepared.length)),
         ]
       : checkpoints;
-    session.keys = keys;
+    session.keys = flowKeys;
     session.context = context;
     session.endLineCounter = lineCounter;
     session.endCursorY = endCursorY;

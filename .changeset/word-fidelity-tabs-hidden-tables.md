@@ -1,5 +1,5 @@
 ---
-'@docx-editor.dev/core': patch
+'@docx-editor.dev/react': patch
 ---
 
 Tab leaders render. A tab that reaches a stop declaring `w:leader` now fills its advance with the leader glyph, so a Word table of contents keeps the dots between each heading and its page number. The document's own `w:defaultTabStop` is honoured as well, in headers and footers as well as the body, so a metric-locale tab grid lands where Word puts it instead of on a hardcoded half-inch.

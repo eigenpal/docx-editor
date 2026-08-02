@@ -1,5 +1,5 @@
 ---
-'@docx-editor.dev/core': patch
+'@docx-editor.dev/react': patch
 ---
 
 Continuous section breaks now continue on the page before them, the way Word renders them, instead of starting a new page. A continuous break that also changes the paper size still starts a new page, as it does in Word.

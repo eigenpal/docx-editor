@@ -13,7 +13,8 @@
 // IME and autofill without letting it own the document.
 //
 // The composition root lives here. Its seams are siblings: the host-facing contract in
-// paginated-surface-contract.ts, input wiring in surface-input.ts, selection/op planning in
+// paginated-surface-contract.ts, input wiring in surface-input.ts, the two-way selection
+// mirror and the IME lane in surface-selection-sync.ts, selection/op planning in
 // surface-selection-ops.ts, formatting queries in surface-formatting.ts, and the page
 // environment in surface-pages.ts — all re-exported or consumed from this module.
 
@@ -36,12 +37,6 @@ import {
   type SemanticSelection,
 } from '@docx-editor.dev/core-contract/layout';
 import { paintSemanticLayout } from '@docx-editor.dev/core-contract/output';
-import {
-  applySelectionToDom,
-  domSelectionTouchesPages,
-  selectionsEqual,
-  semanticSelectionFromDom,
-} from './dom-selection.ts';
 import { tryCreateBrowserCanvasContext } from './browser-canvas-context.ts';
 import type {
   OpenPaginatedResult,
@@ -61,8 +56,6 @@ import {
   createBeforeInputHandler,
   createClipboardHandlers,
   createKeyDownHandler,
-  paintedTextOf,
-  paragraphReplacePlan,
 } from './surface-input.ts';
 import {
   createFurnitureSource,
@@ -75,6 +68,7 @@ import {
 } from './surface-pages.ts';
 import { createSurfaceCaret } from './surface-caret.ts';
 import { createSurfaceFormat } from './surface-format.ts';
+import { createSurfaceSelectionSync } from './surface-selection-sync.ts';
 import { createSurfaceStructure } from './surface-structure.ts';
 
 export type {
@@ -318,21 +312,10 @@ export function mountPaginatedSurface(
   }
 
   function render(notifyChange = true): void {
-    // ADOPT BEFORE PAINTING.
-    //
-    // `selectionchange` is QUEUED, never dispatched from the gesture that caused it, so
-    // between the browser making a selection and this surface hearing about it there is a
-    // window on every browser. A repaint landing inside that window used to replace the nodes
-    // the selection lives in and then write the MODEL's older selection into the new ones —
-    // so a double-click was made correctly and did not survive the next scroll, and the model
-    // never learned the word had been selected at all. Reading the DOM first makes the
-    // repaint carry the gesture rather than erase it.
-    //
-    // A deliberate model move is the exception, and the reason this cannot simply refuse to
-    // write: a commit installs its own post-edit caret, and the DOM selection left over from
-    // before the edit addresses offsets that no longer mean the same thing.
-    const adopted = modelMoved ? false : adoptPendingDomSelection();
-    modelMoved = false;
+    // Reading the DOM selection BEFORE the paint replaces the nodes it lives in is what makes
+    // a repaint carry a gesture the queued `selectionchange` has not delivered yet, rather
+    // than erase it — see `adoptBeforePaint`.
+    const adopted = selectionSync.adoptBeforePaint();
     const paintBegan = now();
     materializedSet = visiblePages();
     paintSemanticLayout(pagesLayer, currentLayout, {
@@ -369,20 +352,6 @@ export function mountPaginatedSurface(
   }
 
   /**
-   * Take up a selection the user has made but the queued `selectionchange` has not delivered.
-   *
-   * Assigns rather than going through `setSelection`: the render this runs inside is about to
-   * mirror the selection into the DOM and report the new state anyway.
-   */
-  function adoptPendingDomSelection(): boolean {
-    const next = semanticSelectionFromDom(pagesLayer, document.getSelection());
-    if (!next || selectionsEqual(next, selection)) return false;
-    selection = next;
-    desiredX = null;
-    return true;
-  }
-
-  /**
    * Follow the viewport: scrolling must reveal BUILT pages, not shells.
    *
    * Materialization is decided at paint time, and without this it was only ever decided on a
@@ -412,44 +381,7 @@ export function mountPaginatedSurface(
    * Layout still decides where the text is; this only says which characters are selected.
    */
   function syncDomSelection(): void {
-    // Ahead of the ownership guard: `render` and `setSelection` both pass through here.
-    caret.update();
-    // Only when this surface owns the selection. `render` runs on mount and on every commit
-    // — including one from another editor sharing the store — and writing unconditionally
-    // yanked the caret out of whatever the user was actually typing in.
-    if (!ownsSelection()) return;
-    applyingSelection = true;
-    const began = now();
-    applySelectionToDom(pagesLayer, selection, document.getSelection());
-    lastSelectionMs = now() - began;
-    // Cleared on a LATER task, because `selectionchange` is queued rather than dispatched
-    // synchronously. Clearing it here would defeat the guard in every real browser while
-    // still appearing to work under a synchronous test DOM.
-    queueMicrotask(() => {
-      applyingSelection = false;
-    });
-  }
-
-  /**
-   * Whether writing the selection would take it from someone else.
-   *
-   * True when focus or the selection is already inside these pages, and also when NOTHING
-   * holds a selection — writing one then takes it from nobody. What this refuses is the case
-   * that matters: a caret living in another element, which a repaint here would otherwise
-   * yank away with no focus change and no interaction.
-   */
-  function ownsSelection(): boolean {
-    const active = document.activeElement;
-    if (active && pagesLayer.contains(active)) return true;
-    const domSelection = document.getSelection();
-    if (!domSelection || domSelection.rangeCount === 0) return true;
-    const anchor = domSelection.anchorNode;
-    if (!anchor) return true;
-    // A selection anchored in a subtree that has been removed from the document belongs to
-    // nobody — a surface that was torn down, or a re-rendered host. Refusing to write over
-    // it would leave this surface unable to show its own caret.
-    if (!anchor.isConnected) return true;
-    return pagesLayer.contains(anchor);
+    selectionSync.mirrorToDom();
   }
 
   function commit(
@@ -459,7 +391,7 @@ export function mountPaginatedSurface(
     // Whatever the DOM selection holds, it was made against the text BEFORE this edit, so its
     // offsets stop meaning the same thing the moment the ops land. The render below must
     // write the model's selection out, never read the stale one back.
-    modelMoved = true;
+    selectionSync.noteModelMoved();
     // Ops go through the session, so the tree stays the only state. A refusal is surfaced
     // rather than silently dropped: the view is repainted from what the model actually
     // holds, so the user never keeps looking at an edit that will not be saved.
@@ -490,11 +422,45 @@ export function mountPaginatedSurface(
   function setSelection(next: SemanticSelection, keepDesiredX = false): void {
     selection = next;
     if (!keepDesiredX) desiredX = null;
-    // No `modelMoved` here: this mirrors into the DOM on the next line, so the two agree
-    // before any render can read them back.
+    // SETTLED, not moved: this mirrors into the DOM on the next line, so the two agree before
+    // any render can read them back — including a move raised earlier that no render has
+    // carried out. `restoreSelection` raises the flag and only `flushLayout` takes it down, so
+    // `undo` on an empty history left it up and disarmed the NEXT repaint, whenever it came.
+    selectionSync.noteSelectionSettled();
     syncDomSelection();
     options.onChange?.(currentState());
   }
+
+  /**
+   * The two-way selection mirror and the IME lane.
+   *
+   * Created HERE, after the commit path it drives and before the listeners it answers: every
+   * function it is handed is a hoisted declaration, and nothing renders until the mount paint
+   * at the end of this factory.
+   */
+  const selectionSync = createSurfaceSelectionSync({
+    session,
+    document,
+    pagesLayer,
+    selection: () => selection,
+    setSelection: (next) => setSelection(next),
+    // The raw take-up, without the mirror or the report `setSelection` performs: the render
+    // this runs inside is about to do both.
+    adoptSelection: (next) => {
+      selection = next;
+      desiredX = null;
+    },
+    commit: (run) => commit(run),
+    render: () => render(),
+    flushLayout: () => flushLayout(),
+    updateCaret: () => caret.update(),
+    textOf: (paragraphId) => textOf(paragraphId),
+    selectionMark: () => selectionMark(),
+    now,
+    recordSelectionMs: (ms) => {
+      lastSelectionMs = ms;
+    },
+  });
 
   const surface: PaginatedSurface = {
     session,
@@ -754,7 +720,7 @@ export function mountPaginatedSurface(
     // The tree about to be published is not the one the DOM selection was made against, so
     // the flush below must not read it back: offsets in the reverted tree do not correspond
     // to offsets in the one that replaced it.
-    modelMoved = true;
+    selectionSync.noteModelMoved();
     flushLayout();
     if (!mark) {
       // No recorded mark — a cross-paragraph edit records none, because a mark addresses one
@@ -797,106 +763,13 @@ export function mountPaginatedSurface(
 
   // Event wiring lives HERE rather than in each host, so React, Vue and a plain page get
   // identical behaviour instead of three hand-written keymaps that drift. The handlers
-  // themselves are factories in surface-input.ts over the surface interface; this closure
-  // only owns the state they cannot — composition flags and the selection mirror.
-  //
-  // SELECTION GESTURES ARE THE BROWSER'S. Drag, double-click for a word, triple-click for a
-  // paragraph, shift-click to extend, and selecting across a page boundary all come free
-  // because the painted spans are real text. Re-implementing them from records is how a
-  // surface ends up feeling worse than a textarea. Layout still owns geometry: what comes
-  // back from the DOM is which CHARACTERS were gestured over, never where they are.
-  let applyingSelection = false;
-  /**
-   * Whether the MODEL holds the newer of the two selections.
-   *
-   * Set by a deliberate move — a commit's post-edit caret, a navigation, undo — and cleared by
-   * the render that pushes it out. Every other render repaints a selection nobody moved, which
-   * is exactly when whatever the user has gestured since is the newer of the two.
-   */
-  let modelMoved = false;
-  /**
-   * Whether an IME is composing.
-   *
-   * `beforeinput` for `insertCompositionText` is NOT cancelable — `preventDefault` is a
-   * no-op — so composed text unavoidably lands in the painted DOM. The surface therefore
-   * stops repainting for the duration (a repaint mid-composition destroys the IME's own
-   * anchor and aborts or duplicates the session) and reconciles once when it ends.
-   */
-  let composing = false;
-  /** The paragraph the composition started in, so the right one is reconciled. */
-  let composingParagraph: string | null = null;
-
-  /** Mirror the native selection into the model. Ignores selections outside painted text. */
-  const adoptDomSelection = (): void => {
-    const domSelection = document.getSelection();
-    const next = semanticSelectionFromDom(pagesLayer, domSelection);
-    if (!next) {
-      // NOT MAPPING IS NOT NOTHING HAPPENING.
-      //
-      // A gesture that landed inside these pages and resolved to no model position — header
-      // furniture, which names paragraphs of another part — used to return here silently,
-      // leaving the model on the range it held BEFORE. The browser then showed one selection
-      // and the model held another, so the next toolbar command formatted text the user was
-      // no longer looking at. Collapsing costs a range the model could not address anyway;
-      // keeping one costs an edit in the wrong place.
-      if (!domSelectionTouchesPages(pagesLayer, domSelection)) return;
-      const collapsed = collapsedAt(selection.head);
-      if (selectionsEqual(collapsed, selection)) return;
-      setSelection(collapsed);
-      return;
-    }
-    if (selectionsEqual(next, selection)) return;
-    setSelection(next);
-  };
-
-  const onSelectionChange = (): void => {
-    // Ignore the echo of our own write, and anything happening outside the pages. The flag
-    // is cleared on a later task rather than synchronously: browsers QUEUE `selectionchange`
-    // rather than firing it from `setBaseAndExtent`, so clearing it in a `finally` would
-    // leave it false by the time the echo arrives — and every programmatic selection would
-    // be read straight back, fighting the user mid-drag.
-    if (applyingSelection) return;
-    if (composing) return;
-    adoptDomSelection();
-  };
-
-  const onCompositionStart = (): void => {
-    composing = true;
-    composingParagraph = selection.head.paragraphId;
-    session.beginComposition();
-  };
-
-  const onCompositionEnd = (): void => {
-    composing = false;
-    const paragraphId = composingParagraph ?? selection.head.paragraphId;
-    composingParagraph = null;
-    // The composed text is in the DOM and nowhere else. Read it back, diff it against what
-    // the model holds for that paragraph, and commit the difference — the only route by
-    // which an IME edit can reach the tree, since it could not be intercepted.
-    reconcileParagraphFromDom(paragraphId);
-    session.endComposition();
-    flushLayout();
-    render();
-  };
-
-  /**
-   * Commit whatever the browser wrote into a paragraph that the surface could not intercept.
-   *
-   * The diff itself lives in surface-input.ts; this applies it and lands the caret.
-   */
-  function reconcileParagraphFromDom(paragraphId: string): void {
-    const painted = paintedTextOf(pagesLayer, paragraphId);
-    if (painted === null) return;
-    const plan = paragraphReplacePlan(paragraphId, textOf(paragraphId), painted);
-    if (!plan) return;
-    commit(() => session.applyTreeOps(plan.ops, selectionMark()));
-    setSelection(collapsedAt({ paragraphId, offset: plan.caret }));
-  }
-
+  // themselves are factories over the surface interface: keys, clipboard and `beforeinput` in
+  // surface-input.ts, the selection mirror and the IME lane in surface-selection-sync.ts.
+  const { onSelectionChange, onCompositionStart, onCompositionEnd } = selectionSync;
   const onKeyDown = createKeyDownHandler(surface);
   const { onCopy, onCut, onPaste } = createClipboardHandlers(surface, insertPlainText);
   const onBeforeInput = createBeforeInputHandler(surface, {
-    isComposing: () => composing,
+    isComposing: () => selectionSync.isComposing(),
     insertPlainText,
   });
 

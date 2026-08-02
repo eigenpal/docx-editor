@@ -85,15 +85,18 @@ describe('border conflict (zero cell spacing)', () => {
     expect(resolveBorderConflict(none, none)).toEqual(none);
   });
 
-  test('higher weight wins; dotted/dashed weight is 1', () => {
-    expect(borderWeight(edge('dotted', '339933', 12))).toBe(1);
-    expect(borderWeight(edge('double', '2E75B6', 0.375))).toBeGreaterThan(1);
+  test('the wider rule wins; style only ranks a tie', () => {
+    // Weight is the authored width in eighths, never a width × style-rank product: a 12pt
+    // dotted rule is heavy, and a 0.375pt double is not heavier than a 0.5pt single.
+    expect(borderWeight(edge('dotted', '339933', 12))).toBe(96);
+    expect(borderWeight(edge('double', '2E75B6', 0.375))).toBe(3);
     const winner = resolveBorderConflict(
       edge('double', '2E75B6', 0.375),
       edge('single', null, 0.5)
     );
-    expect(winner.state).toBe('edge');
-    if (winner.state === 'edge') expect(winner.style).toBe('double');
+    expect(winner).toMatchObject({ style: 'single', widthPt: 0.5 });
+    const tie = resolveBorderConflict(edge('double', '2E75B6', 0.5), edge('single', null, 0.5));
+    expect(tie).toMatchObject({ style: 'double' });
   });
 
   test('effective cascade: cell edge wins over table; none yields to table on outer only', () => {
@@ -458,7 +461,9 @@ describe('per-grid-interval conflict + stroke geometry', () => {
         gridEnd: 2,
         startPt: 1,
         endPt: 2,
-        edge: { style: 'dotted', color: '339933', widthPt: 0.125 },
+        // Equal width (1 eighth): style ranks the tie before colour does, and dashed
+        // outranks dotted.
+        edge: { style: 'dashed', color: 'CC3333', widthPt: 0.125 },
       },
     ]);
     expect(merged[0]![0]!.right).toBeUndefined();

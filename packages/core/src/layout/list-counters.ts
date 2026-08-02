@@ -146,11 +146,19 @@ export function createListCounterState(index: NumberingIndex): ListCounterState 
         return value;
       });
 
+      // `w:isLgl` (§17.9.9): a legal-numbering level renders EVERY level its `w:lvlText`
+      // references in decimal, whatever format those levels declare — `Artikel I.01` is
+      // authored, `Artikel 1.1` is what Word paints. `bullet` and `none` are left alone:
+      // neither prints a counter, so "display it as decimal" would invent one.
+      const effectiveFormats = level.isLgl
+        ? formats.map((format) => (format === 'bullet' || format === 'none' ? format : 'decimal'))
+        : formats;
+
       const markerText = level.vanish
         ? ''
         : level.numFmt === 'bullet' && !/%[1-9]/.test(level.lvlText)
           ? level.lvlText
-          : expandLvlText(level.lvlText, expandCounters, formats);
+          : expandLvlText(level.lvlText, expandCounters, effectiveFormats);
 
       return {
         abstractNumId,

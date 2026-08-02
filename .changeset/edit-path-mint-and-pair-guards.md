@@ -1,0 +1,5 @@
+---
+'@docx-editor.dev/react': patch
+---
+
+Six holes in the edit path are closed. Formatting a paragraph mark accepted any element name it was handed and wrote it into the document; it now takes the same property set as run formatting and refuses the rest. Splitting a paragraph at a bookmark or comment range that both opened and closed at the caret left the closing marker in the paragraph above its own opening marker; the pair now stays together. Formatting a range whose edge fell between text and a tab or a line break inside one run applied to the whole run instead of the selected character. A run whose properties the reader could not model was formatted by adding a second set beside the first, and split by leaving all of them on the first half; that container is now recognised wherever a modelled one is. Paragraph properties come out in schema order even when the file they were read from was not. The save/reopen check stopped descending at 64 levels of nesting, quietly leaving deeper paragraphs unchecked; it now reaches everything the reader accepts.

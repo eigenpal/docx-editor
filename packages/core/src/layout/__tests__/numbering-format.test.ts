@@ -33,8 +33,11 @@ describe('numbering formatters', () => {
     expect(formatUpperLetter(27)).toBe('AA');
   });
 
-  test('unknown formats fall back to decimal', () => {
-    expect(formatNumFmt('chicago', 3)).toBe('3');
+  test('per-script sequences we carry no glyphs for fall back to decimal', () => {
+    // Same ordinal, different script — a legible number beats a missing marker.
+    expect(formatNumFmt('japaneseCounting', 3)).toBe('3');
+    expect(formatNumFmt('hebrew1', 3)).toBe('3');
+    expect(formatNumFmt('not-a-format', 3)).toBe('3');
   });
 
   test('hostile counters clamp', () => {

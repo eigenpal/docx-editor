@@ -1,5 +1,5 @@
 ---
-'@docx-editor.dev/core': patch
+'@docx-editor.dev/react': patch
 ---
 
 Indenting a list item no longer destroys it. A `w:abstractNum` need not declare all nine levels — many real documents declare only the first — and moving a paragraph to a level its definition does not declare left it with no marker at all: the bullet or numeral vanished and the text sprang back to the margin. The move is now refused, and Increase and Decrease Indent report themselves disabled when they would do nothing, so the toolbar greys them out the way Word does.

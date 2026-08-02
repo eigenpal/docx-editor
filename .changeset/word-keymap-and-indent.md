@@ -1,5 +1,5 @@
 ---
-'@docx-editor.dev/core': patch
+'@docx-editor.dev/react': patch
 ---
 
 Increase and Decrease Indent are wired to the toolbar. Inside a numbered or bulleted list they change the list level, so the marker re-resolves from the numbering definition the way Word demotes an item; everywhere else they move the left indent by one default tab stop and never past the margin.

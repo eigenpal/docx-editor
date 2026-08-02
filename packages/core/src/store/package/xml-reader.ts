@@ -26,7 +26,15 @@ export type XmlRejection =
   | 'invalid-limits'
   | 'parse-error';
 
-const MAX_DEPTH = 256; // recursion-depth ceiling at the trust boundary
+/**
+ * Recursion-depth ceiling at the trust boundary, enforced twice: `preflightDepth` refuses
+ * the bytes before the parser allocates anything, and `convert` throws if a tree somehow
+ * exceeds it anyway. Exported because it is what BOUNDS every later walk over a part —
+ * nothing downstream needs a cap of its own smaller than this one, and a smaller cap only
+ * makes that walk stop early on a document this one already admitted.
+ */
+export const MAX_XML_DEPTH = 256;
+const MAX_DEPTH = MAX_XML_DEPTH;
 export const XML_HARD_MAX_BYTES = 64 * 1024 * 1024;
 export const XML_HARD_MAX_ELEMENTS = 1_000_000;
 

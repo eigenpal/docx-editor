@@ -219,6 +219,11 @@ export function mergedPropertyChildren(
   }
 
   for (const [localName, bucket] of wanted) {
+    // Only the vocabulary is authorable. Validation refuses an op that names anything
+    // else, so this is the second lock on the same door: a merge is the one place a name
+    // becomes an ELEMENT, and it must not be reachable from a caller that forgot to
+    // validate.
+    if (!vocabulary.authorable.has(localName)) continue;
     for (let index = taken.get(localName) ?? 0; index < bucket.length; index += 1) {
       const node = propertyElement(bucket[index]!, nextId());
       const rank = rankOf(vocabulary.sequence, node);
@@ -227,5 +232,37 @@ export function mergedPropertyChildren(
       else children.splice(at, 0, node);
     }
   }
-  return children;
+  return inSchemaOrder(children, vocabulary.sequence);
+}
+
+/**
+ * The container's MODELLED children in `CT_PPr` order, leaving everything else where it was
+ * authored.
+ *
+ * Placing only the NEW children by rank is enough when the container was already ordered,
+ * and not otherwise: `CT_PPr` is a strict `xsd:sequence`, an out-of-order `w:pPr` still
+ * reads as a typed container (only the mark's position is checked), and a rewrite that
+ * preserved the authored positions of the children it rewrote emitted the same invalid
+ * order back — `<w:pPr><w:jc/><w:pStyle/></w:pPr>` centred through the op came out
+ * `<w:ind/><w:jc/><w:pStyle/>`, which Word reports as unreadable. An element the sequence
+ * does not model (a `w14:` text effect, an `mc:AlternateContent`) keeps its authored slot:
+ * its position is not ours to decide, and moving it could reorder it past the very child
+ * it was written to modify.
+ */
+function inSchemaOrder(children: readonly OoxmlNode[], sequence: readonly string[]): OoxmlNode[] {
+  const slots: number[] = [];
+  const modelled: OoxmlNode[] = [];
+  children.forEach((child, index) => {
+    if (rankOf(sequence, child) === sequence.length) return;
+    slots.push(index);
+    modelled.push(child);
+  });
+  const result = [...children];
+  if (modelled.length < 2) return result;
+  // Stable, so repeats of one name keep their authored order relative to each other.
+  const sorted = [...modelled].sort((a, b) => rankOf(sequence, a) - rankOf(sequence, b));
+  slots.forEach((slot, index) => {
+    result[slot] = sorted[index]!;
+  });
+  return result;
 }

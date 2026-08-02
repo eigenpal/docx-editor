@@ -7,8 +7,32 @@
 
 import type { CellBorderBox, TableBorderBox, TableBorderSide } from './table-borders.ts';
 
+const NONE: TableBorderSide = { state: 'none' };
+
 const later = (base: TableBorderSide, over: TableBorderSide): TableBorderSide =>
   over.state === 'omitted' ? base : over;
+
+/**
+ * What one cell side is before any ADJACENT cell has its say.
+ *
+ * - omitted → the table's own rule for that position (`tblBorders`, `insideH`/`insideV`)
+ * - edge → the cell wins outright; no weight fight with the table
+ * - none → an explicit `w:val="nil"`. On an interior side it stays none, so two nil
+ *   neighbours suppress the shared grid line. On an OUTER side the table's border may still
+ *   show through, since nil states nothing about the table's own frame.
+ */
+export function effectiveBorderSide(
+  authored: TableBorderSide,
+  tableSide: TableBorderSide,
+  options: { readonly interior?: boolean } = {}
+): TableBorderSide {
+  if (authored.state === 'omitted') return tableSide;
+  if (authored.state === 'none') {
+    if (options.interior) return NONE;
+    return tableSide.state === 'edge' ? tableSide : NONE;
+  }
+  return authored;
+}
 
 /**
  * Layer one border box over another: a side the later box OMITS inherits.

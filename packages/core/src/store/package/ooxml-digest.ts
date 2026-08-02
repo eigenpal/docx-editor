@@ -6,12 +6,29 @@
 // oracles and forbids one compensating for the other: serialize, REOPEN the produced bytes,
 // and compare a digest of what the reopened package actually means.
 //
-// The digest deliberately covers exactly what the spec names — paragraph identities,
-// content tokens, accepted run and paragraph properties, and generic-node structure — and
-// deliberately ignores lexical detail, because byte equality is the alternative D9 rejects:
-// it rejects harmless normalization while failing to say what was lost.
+// The digest covers what a document MEANS — its blocks and their containment, the
+// properties every one of them declares, and paragraph text — and deliberately ignores
+// lexical detail, because byte equality is the alternative D9 rejects: it fails on harmless
+// normalization while still not saying what was lost.
+//
+// It is the only net there is, so its holes are the fidelity risk of the whole engine.
+// Three of them were measured, and all three are closed here:
+//
+//   - `propertyTokens` read ONE level, so every property whose meaning lives in its
+//     CHILDREN digested as a bare name. `w:numPr` has no attributes of its own: numbering
+//     `3/0` and `99/5` were the same token, and so were a six-edge `w:pBdr` and `<w:pBdr/>`,
+//     a full tab-stop list and `<w:tabs/>`, a bold 24pt paragraph mark and `<w:rPr/>`.
+//   - The walk HARVESTED paragraphs out of the block tree, so nothing else in it was
+//     digested at all: `w:tblPr`, `w:tblGrid`, `w:tcPr` (`gridSpan`, `vMerge`), every
+//     `w:sectPr` — page size, margins, header references, `titlePg` — could all be dropped
+//     for zero differences, and a table flattened into loose paragraphs read as identical
+//     because containment itself was not observable.
+//   - A part with no `w:body`/`w:hdr`/`w:ftr` digested as `null`, so `numbering.xml`,
+//     `styles.xml` and `settings.xml` were not covered by ANY oracle: an `abstractNum`
+//     could lose eight of its nine levels in silence.
 
 import { hardBreakText } from './hard-break.ts';
+import { MAX_XML_DEPTH } from './xml-reader.ts';
 import { canonicalOoxmlFingerprint, WML_NAMESPACE_URI } from './ooxml-tree.ts';
 import type {
   OoxmlElement,
@@ -28,9 +45,15 @@ export interface ParagraphDigest {
    *  legitimately re-derives them, and requiring them to match would test the id scheme
    *  rather than the content. */
   readonly ordinal: number;
+  /**
+   * Where the paragraph SITS: the element path from the story root, so a paragraph that
+   * moves out of the table cell it was written in is a difference rather than a paragraph
+   * with the same ordinal and the same text.
+   */
+  readonly path: string;
   /** Text content, including tabs and hard breaks as their characters. */
   readonly text: string;
-  /** Accepted paragraph properties, as sorted `local=value` tokens. */
+  /** Accepted paragraph properties, as sorted tokens including nested children. */
   readonly paragraphProperties: readonly string[];
   /** Per-run accepted properties, in run order. */
   readonly runProperties: readonly (readonly string[])[];
@@ -41,6 +64,15 @@ export interface ParagraphDigest {
 export interface StoryDigest {
   readonly partName: string;
   readonly paragraphs: readonly ParagraphDigest[];
+  /**
+   * Every block-level element of the part OUTSIDE a paragraph, in document order, as
+   * `path name(attributes)` — the tables, rows, cells, sections, content controls and
+   * their property children, each at the position that says what contains it.
+   *
+   * A paragraph's own internals are not here (they are its `ParagraphDigest`), which keeps
+   * this list proportional to a document's STRUCTURE rather than its text.
+   */
+  readonly structure: readonly string[];
 }
 
 export interface SemanticDigest {
@@ -53,6 +85,58 @@ export type DigestDifference = {
   readonly after: string;
 };
 
+/** A namespace-qualified name; the URI, never the authored prefix, which normalizes. */
+function qualifiedName(node: OoxmlElement): string {
+  return node.namespaceUri === WML_NAMESPACE_URI
+    ? node.localName
+    : `{${node.namespaceUri}}${node.localName}`;
+}
+
+function attributeTokens(node: OoxmlElement): string[] {
+  const values: string[] = [];
+  for (const attribute of node.attributes) {
+    values.push(
+      attribute.namespaceUri === '' || attribute.namespaceUri === WML_NAMESPACE_URI
+        ? `${attribute.localName}=${attribute.value}`
+        : `{${attribute.namespaceUri}}${attribute.localName}=${attribute.value}`
+    );
+  }
+  // Attribute ORDER is not authored meaning — a serializer may emit them in any order.
+  values.sort();
+  return values;
+}
+
+/**
+ * One property as a token, INCLUDING everything nested inside it.
+ *
+ * A property's meaning is not always in its attributes: `w:numPr` carries the list and the
+ * level in `w:ilvl`/`w:numId` and has no attributes at all, `w:tabs` holds one `w:tab` per
+ * stop, `w:pBdr` an element per edge. Reading only the first level digested every one of
+ * them as a bare name, so replacing the whole set with an empty element was a zero-
+ * difference round trip.
+ *
+ * Bounded by the parse ceiling (`MAX_XML_DEPTH`), which already bounds the tree this walks:
+ * `preflightDepth` refuses deeper bytes before the parser allocates.
+ */
+function propertyToken(node: OoxmlElement, depth: number): string {
+  const values = attributeTokens(node);
+  const head =
+    values.length > 0 ? `${qualifiedName(node)}(${values.join(',')})` : qualifiedName(node);
+  if (depth >= MAX_XML_DEPTH) return head;
+  const nested: string[] = [];
+  for (const child of node.children) {
+    if (child.kind === 'textValue') {
+      if (child.value !== '') nested.push(`#${child.value}`);
+      continue;
+    }
+    nested.push(propertyToken(child, depth + 1));
+  }
+  // Sorted for the same reason the token list is: order inside a property container is
+  // schema-fixed and carries no authored meaning.
+  nested.sort();
+  return nested.length > 0 ? `${head}[${nested.join(',')}]` : head;
+}
+
 function propertyTokens(
   container: OoxmlRunPropertiesNode | OoxmlParagraphPropertiesNode | undefined
 ): string[] {
@@ -60,12 +144,7 @@ function propertyTokens(
   const tokens: string[] = [];
   for (const child of container.children) {
     if (child.namespaceUri !== WML_NAMESPACE_URI) continue;
-    const values: string[] = [];
-    for (const attribute of child.attributes) {
-      values.push(`${attribute.localName}=${attribute.value}`);
-    }
-    values.sort();
-    tokens.push(values.length > 0 ? `${child.localName}(${values.join(',')})` : child.localName);
+    tokens.push(propertyToken(child, 1));
   }
   // Sorted: OOXML property order inside `w:rPr` / `w:pPr` is schema-fixed and carries no
   // authored meaning, so a serializer that emits them in a different valid order has lost
@@ -110,7 +189,11 @@ function collectGeneric(node: OoxmlNode, out: string[]): void {
   for (const child of node.children) collectGeneric(child, out);
 }
 
-function digestParagraph(paragraph: OoxmlParagraphNode, ordinal: number): ParagraphDigest {
+function digestParagraph(
+  paragraph: OoxmlParagraphNode,
+  ordinal: number,
+  path: string
+): ParagraphDigest {
   const pPr = paragraph.children.find(
     (child): child is OoxmlParagraphPropertiesNode => child.kind === 'paragraphProperties'
   );
@@ -133,6 +216,7 @@ function digestParagraph(paragraph: OoxmlParagraphNode, ordinal: number): Paragr
   }
   return {
     ordinal,
+    path,
     text,
     paragraphProperties: propertyTokens(pPr),
     runProperties,
@@ -140,65 +224,94 @@ function digestParagraph(paragraph: OoxmlParagraphNode, ordinal: number): Paragr
   };
 }
 
-function storyRootOf(root: OoxmlElement): OoxmlElement | null {
+/**
+ * Where a part's blocks live: its `w:body`, `w:hdr` or `w:ftr`.
+ *
+ * `null` is NOT the answer for a part that has none. `numbering.xml`, `styles.xml` and
+ * `settings.xml` carry no story and were therefore digested by nothing at all — an
+ * `abstractNum` losing eight of its nine levels, a style losing its `w:tblStylePr`, a
+ * `w:defaultTabStop` vanishing: every one a zero-difference round trip. Those parts have
+ * no paragraphs to digest, but they are almost entirely STRUCTURE, and the structure walk
+ * reads them exactly as it reads a table.
+ */
+function storyRootOf(root: OoxmlElement): OoxmlElement {
   if (root.localName === 'hdr' || root.localName === 'ftr') return root;
   if (root.kind === 'body') return root;
   for (const child of root.children) {
     if (child.kind === 'textValue') continue;
-    const found = storyRootOf(child);
-    if (found) return found;
+    if (child.kind === 'body' || child.localName === 'hdr' || child.localName === 'ftr') {
+      return child;
+    }
   }
-  return null;
+  return root;
 }
 
 /**
- * How deep a story is followed when collecting its paragraphs.
+ * Every block of a story, in document order, with what CONTAINS it.
  *
- * Tables nest inside cells, and content controls nest inside both, so the walk has to
- * recurse — and a file-supplied tree is attacker-controlled, so the recursion is capped
- * rather than trusted to terminate at a sane depth. Well past anything Word authors; the
- * parse-time depth limit is the real bound, this is the belt to its braces.
- */
-const MAX_STORY_NESTING = 64;
-
-/**
- * Every paragraph of a story, in document order — including the ones inside tables and
- * block content controls.
+ * Two jobs in one walk, because they answer the same question. Paragraphs are collected
+ * wherever they sit — inside a table cell, inside a block content control, nested in both
+ * — and everything that is not a paragraph is digested as structure: its name, its own
+ * attributes, and its position. Harvesting only the paragraphs left every table property,
+ * every cell span and every section unchecked, and made a table flattened into loose
+ * paragraphs indistinguishable from the table.
  *
- * Walking only the body's direct `w:p` children put every table cell and every block SDT
- * OUTSIDE the oracle: a round trip that emptied a cell reported zero differences, and the
- * fingerprint oracle cannot cover for that (it compares a tree against its own reopen, so
- * content lost identically on every pass fingerprints equal). Paragraphs are not descended
- * into — a textbox story inside a run is a different story, digested through the generic
+ * A paragraph is not descended into: its content is its own `ParagraphDigest`, and a
+ * textbox story inside one of its runs is a different story, digested through the generic
  * structure of the run that holds it.
+ *
+ * Linear in element count — one token per element outside a paragraph — and bounded by
+ * `MAX_XML_DEPTH`, which the reader has already enforced on the bytes.
  */
-function collectStoryParagraphs(
+function collectBlocks(
   container: OoxmlElement,
-  out: OoxmlParagraphNode[],
+  path: string,
+  paragraphs: OoxmlParagraphNode[],
+  paths: string[],
+  structure: string[],
   depth: number
 ): void {
-  if (depth > MAX_STORY_NESTING) return;
+  if (depth > MAX_XML_DEPTH) return;
+  let index = 0;
   for (const child of container.children) {
-    if (child.kind === 'textValue') continue;
-    if (child.kind === 'paragraph') {
-      out.push(child);
+    // Whitespace between block elements is not content and does not survive the read;
+    // anything else at this level is an anomaly worth reporting rather than skipping.
+    if (child.kind === 'textValue') {
+      if (child.value.trim() !== '') structure.push(`${path}/#text ${child.value}`);
       continue;
     }
-    collectStoryParagraphs(child, out, depth + 1);
+    const childPath = path === '' ? String(index) : `${path}/${index}`;
+    index += 1;
+    if (child.kind === 'paragraph') {
+      paragraphs.push(child);
+      paths.push(childPath);
+      structure.push(`${childPath} p`);
+      continue;
+    }
+    const attributes = attributeTokens(child);
+    structure.push(
+      attributes.length > 0
+        ? `${childPath} ${qualifiedName(child)}(${attributes.join(',')})`
+        : `${childPath} ${qualifiedName(child)}`
+    );
+    collectBlocks(child, childPath, paragraphs, paths, structure, depth + 1);
   }
 }
 
-/** Digest one part's story, or null when the part holds no flowable root. */
+/** Digest one part: its paragraphs, and the structure that holds them. */
 export function digestPart(part: OoxmlPart): StoryDigest | null {
-  const body = storyRootOf(part.root);
-  if (!body) return null;
+  const root = storyRootOf(part.root);
   const found: OoxmlParagraphNode[] = [];
-  collectStoryParagraphs(body, found, 0);
-  const paragraphs = found.map((paragraph, ordinal) => digestParagraph(paragraph, ordinal));
-  return { partName: part.name, paragraphs };
+  const paths: string[] = [];
+  const structure: string[] = [];
+  collectBlocks(root, '', found, paths, structure, 0);
+  const paragraphs = found.map((paragraph, ordinal) =>
+    digestParagraph(paragraph, ordinal, paths[ordinal]!)
+  );
+  return { partName: part.name, paragraphs, structure };
 }
 
-/** Digest every story-bearing part, in the given order. */
+/** Digest every part, in the given order. */
 export function semanticDigest(parts: Iterable<OoxmlPart>): SemanticDigest {
   const stories: StoryDigest[] = [];
   for (const part of parts) {
@@ -244,6 +357,7 @@ export function diffSemanticDigests(
       const pa = a.paragraphs[p]!;
       const pb = b.paragraphs[p]!;
       if (pa.text !== pb.text) report(at(`.p[${p}].text`), pa.text, pb.text);
+      if (pa.path !== pb.path) report(at(`.p[${p}].path`), pa.path, pb.path);
       if (JSON.stringify(pa.paragraphProperties) !== JSON.stringify(pb.paragraphProperties)) {
         report(at(`.p[${p}].paragraphProperties`), pa.paragraphProperties, pb.paragraphProperties);
       }
@@ -252,6 +366,15 @@ export function diffSemanticDigests(
       }
       if (JSON.stringify(pa.genericStructure) !== JSON.stringify(pb.genericStructure)) {
         report(at(`.p[${p}].genericStructure`), pa.genericStructure, pb.genericStructure);
+      }
+    }
+    if (a.structure.length !== b.structure.length) {
+      report(at('.structure.length'), a.structure.length, b.structure.length);
+    }
+    const structureCount = Math.min(a.structure.length, b.structure.length);
+    for (let i = 0; i < structureCount; i += 1) {
+      if (a.structure[i] !== b.structure[i]) {
+        report(at(`.structure[${i}]`), a.structure[i], b.structure[i]);
       }
     }
   }

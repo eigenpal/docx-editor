@@ -188,12 +188,11 @@
 }
 
 /* ========================================================================
-  * Dark theme scaffold. Add the `dark` class to the .ep-root element to
-  * enable it (Tailwind darkMode: ['class'] is already configured). Theming is
-  * driven by these token overrides — every UI token above is re-pointed here,
-  * so all chrome re-themes automatically. The document canvas is left untouched
-  * on purpose. Values are intentionally left as TODO placeholders — the
-  * structure is in place so dark mode is a drop-in once the palette is chosen.
+  * Dark theme. Add the `dark` class to the .ep-root element to enable it
+  * (Tailwind darkMode: ['class'] is already configured). Theming is driven by
+  * these token overrides — every UI token above is re-pointed here, so all
+  * chrome re-themes automatically. The document canvas is left untouched on
+  * purpose: it must stay Word-faithful.
   *
   * NOTE: because `important: '.ep-root'` emits `dark:` utilities as
   * `.ep-root .dark\:x:is(.dark *)`, those variants only match DESCENDANTS of a

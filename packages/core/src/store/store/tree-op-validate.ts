@@ -640,7 +640,13 @@ export function validateTreeOp(part: OoxmlPart, op: TreeDocOp): TreeOpRejection 
       return null;
     }
     case 'setParagraphMarkProperties':
-      return Array.isArray(op.properties) ? null : 'invalid-range';
+      if (!Array.isArray(op.properties)) return 'invalid-range';
+      // The MARK is a run property container (CT_ParaRPr), so it takes the same boundary
+      // `setRunProperties` does. Checking only that the argument was an array let an op
+      // MINT any element name into `w:pPr/w:rPr` — `<w:rPr><w:sectPr/></w:rPr>` applied
+      // clean and serialized — and skipped the attribute-name/value checks every other
+      // property op runs before a value reaches the XML sink.
+      return validateProperties(op.properties, RUN_PROPERTY_SET);
     case 'setListNumbering': {
       const level = op.level ?? 0;
       if (!Number.isInteger(level) || level < 0 || level > 8) return 'invalid-range';

@@ -229,12 +229,12 @@ export const wordFeatures: WordFeature[] = [
     id: 'paragraphs.borders',
     name: 'Paragraph borders & fills',
     category: 'paragraphs',
-    editing: 'full',
+    editing: 'partial',
     rendering: 'full',
     roundTrip: 'full',
     tier: 'community',
     notes:
-      'All six w:pBdr edges render — top, left, bottom, right, the w:between rule that makes consecutive same-bordered paragraphs one box, and the w:bar change bar. Side rules sit outside the text column and do not reflow it, as in Word. A border group split across a page break keeps its opening and closing rules with the first and last paragraph rather than redrawing them at the page edge, and w:shadow is read but not drawn.',
+      'Paragraph shading (w:shd) is editable. Borders render and round-trip but cannot be added, changed or removed from the editor yet.',
   },
   {
     id: 'paragraphs.tabs',
@@ -547,7 +547,7 @@ export const wordFeatures: WordFeature[] = [
     roundTrip: 'full',
     tier: 'community',
     notes:
-      'Page size, orientation and margins editable per section or whole document (Page Setup dialog, ruler drags); each section paginates against its own geometry, so mixed portrait/landscape documents render as Word shows them. Continuous sections continue on the page before them, as Word does, unless the paper size changes. Next-page section breaks insertable. Even/odd-page break parity (the blank page Word inserts to reach the right parity) and per-section columns are not modelled yet.',
+      'Page size, orientation and margins editable per section or whole document (Page Setup dialog, ruler drags); each section paginates against its own geometry, so mixed portrait/landscape documents render as Word shows them. Section breaks insertable. Even/odd-page break parity (the blank page Word inserts to reach the right parity) and per-section columns are not modelled yet.',
   },
   {
     id: 'layout.headers-footers',
@@ -587,11 +587,11 @@ export const wordFeatures: WordFeature[] = [
     name: 'Multi-column layout',
     category: 'layout',
     editing: 'none',
-    rendering: 'full',
+    rendering: 'none',
     roundTrip: 'full',
     tier: 'community',
     notes:
-      'Text flows into newspaper columns with balancing and separators; column count is not editable from the UI.',
+      'The section w:cols count and gap are read and round-trip, but text does not yet flow into columns: a three-column section renders as one full-width column.',
   },
   {
     id: 'layout.page-borders',

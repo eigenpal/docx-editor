@@ -49,6 +49,16 @@ export const CELL_PAD = 3;
 /** Soft ceiling on a single margin side (~22"). */
 const MAX_CELL_MARGIN_PT = 31_680 / 20;
 
+/**
+ * Soft ceiling on one grid column (~22", Word's widest page). `w:gridCol/@w:w` is the one
+ * geometry number a file states that every cell box, row box and border stroke inherits, so
+ * it is read and clamped exactly like `twipsSide` reads a margin.
+ */
+const MAX_COLUMN_WIDTH_PT = 31_680 / 20;
+
+/** Highest grid column a cell may start on; keeps a row's total span bounded. */
+const LAST_GRID_COLUMN = MAX_TABLE_COLUMNS - 1;
+
 /** Distinct conditional-format combinations memoized per table; see `styleFormattingFor`. */
 const MAX_CELL_CONDITION_SETS = 256;
 
@@ -72,6 +82,13 @@ export interface SemanticTableCell {
   readonly id: string;
   /** Clamped to [1, MAX_TABLE_COLUMNS] at read time; layout never re-derives it. */
   readonly gridSpan: number;
+  /**
+   * Absolute grid column this cell starts on, after `w:gridBefore` and every preceding
+   * span. Structural conditional formats and cell geometry both key on this, never on the
+   * cell's position in the row: one `gridSpan` cell otherwise shifts firstCol/lastCol and
+   * the vertical bands for every cell after it.
+   */
+  readonly gridColumn: number;
   /** A vMerge cell that is not the restart continues the cell above: box, no content. */
   readonly vMergeContinue: boolean;
   /** `w:vAlign` — defaults to top when omitted/unrecognised. */
@@ -129,6 +146,15 @@ function readGridSpan(cellProperties: OoxmlElement | undefined): number {
   if (!value || !/^\d{1,7}$/.test(value)) return 1;
   const span = Number(value);
   return Number.isInteger(span) && span > 1 ? Math.min(span, MAX_TABLE_COLUMNS) : 1;
+}
+
+/** `w:gridBefore` / `w:gridAfter` (17.4.14 / 17.4.13): grid columns the row leaves empty. */
+function readGridSkip(rowProperties: OoxmlElement | undefined, localName: string): number {
+  const raw = rowProperties && childNamed(rowProperties, localName);
+  const value = raw && attributeValue(raw, 'val');
+  if (!value || !/^\d{1,7}$/.test(value)) return 0;
+  const count = Number(value);
+  return Number.isInteger(count) && count > 0 ? Math.min(count, MAX_TABLE_COLUMNS) : 0;
 }
 
 function readVMergeContinue(cellProperties: OoxmlElement | undefined): boolean {
@@ -197,47 +223,43 @@ function mergeMargins(
   };
 }
 
+/** Declared `w:gridCol` elements, bounded before anything is allocated from them. */
+function gridColumnElements(table: OoxmlElement): readonly OoxmlElement[] {
+  const grid = childNamed(table, 'tblGrid');
+  if (!grid) return [];
+  const cols: OoxmlElement[] = [];
+  for (const child of grid.children) {
+    if (child.kind !== 'textValue' && child.localName === 'gridCol') {
+      cols.push(child);
+      if (cols.length >= MAX_TABLE_COLUMNS) break;
+    }
+  }
+  return cols;
+}
+
 /**
  * Column widths in points: from `w:tblGrid` when present, else an even split over the
  * hardened column count. The no-grid path is the security-sensitive one — see header.
  */
 function columnWidthsPt(
-  table: OoxmlElement,
-  rows: readonly SemanticTableRow[],
+  cols: readonly OoxmlElement[],
+  columnCount: number,
   contentWidthPt: number
 ): readonly number[] {
-  const grid = childNamed(table, 'tblGrid');
-  if (grid) {
-    const cols: OoxmlElement[] = [];
-    for (const child of grid.children) {
-      if (child.kind !== 'textValue' && child.localName === 'gridCol') cols.push(child);
-    }
-    if (cols.length > 0) {
-      const bounded = cols.slice(0, MAX_TABLE_COLUMNS);
-      return bounded.map((col) => {
-        const raw = attributeValue(col, 'w');
-        const twips = raw !== undefined ? Number(raw) : NaN;
-        return Number.isFinite(twips) && twips > 0 ? twips / 20 : contentWidthPt / bounded.length;
-      });
-    }
+  if (cols.length > 0) {
+    return cols.map((col) => {
+      // Digits only and clamped, exactly like `twipsSide`: `w="999999999"` otherwise
+      // becomes a ~50,000,000pt column that every cell box and border stroke inherits.
+      const raw = attributeValue(col, 'w');
+      if (raw === undefined || !/^\d{1,9}$/.test(raw)) return contentWidthPt / cols.length;
+      const pt = Number(raw) / 20;
+      if (!Number.isFinite(pt) || pt <= 0) return contentWidthPt / cols.length;
+      return pt > MAX_COLUMN_WIDTH_PT ? MAX_COLUMN_WIDTH_PT : pt;
+    });
   }
-  // Fold, never spread; per-cell span clamped BEFORE it is summed; total clamped.
-  let colCount = 1;
-  for (const row of rows) {
-    let rowCols = 0;
-    for (const cell of row.cells) {
-      rowCols += cell.gridSpan; // already clamped by readGridSpan
-      if (rowCols >= MAX_TABLE_COLUMNS) break;
-    }
-    if (rowCols > colCount) colCount = rowCols;
-    if (colCount >= MAX_TABLE_COLUMNS) {
-      colCount = MAX_TABLE_COLUMNS;
-      break;
-    }
-  }
-  const width = contentWidthPt / colCount;
+  const width = contentWidthPt / columnCount;
   const widths: number[] = [];
-  for (let index = 0; index < colCount; index += 1) widths.push(width);
+  for (let index = 0; index < columnCount; index += 1) widths.push(width);
   return widths;
 }
 
@@ -257,13 +279,20 @@ interface TableLook {
   readonly columnBanding: boolean;
 }
 
+/**
+ * No `w:tblLook` at all says exactly what an empty `<w:tblLook/>` says. `noHBand`/`noVBand`
+ * are NEGATIVE flags and the legacy bitmask defaults to `0000`, so 17.4.56's default is to
+ * apply row and column banding but neither the first/last row nor the first/last column
+ * format. Reading the absent element as "nothing is live" made the same semantic state
+ * render two different ways depending on whether the producer wrote the empty tag.
+ */
 const DEFAULT_TABLE_LOOK: TableLook = Object.freeze({
   firstRow: false,
   lastRow: false,
   firstColumn: false,
   lastColumn: false,
-  rowBanding: false,
-  columnBanding: false,
+  rowBanding: true,
+  columnBanding: true,
 });
 
 function onOff(node: OoxmlElement, name: string): boolean | undefined {
@@ -272,6 +301,12 @@ function onOff(node: OoxmlElement, name: string): boolean | undefined {
   return raw !== '0' && raw !== 'false' && raw !== 'off';
 }
 
+/**
+ * `w:tblLook` is read from the TABLE's own `w:tblPr` only, never cascaded from the style it
+ * names. The schema admits `w:tblLook` inside a table style's `w:tblPr`, but the look is
+ * Word's per-table "Table Style Options" checkbox set — a property of this table's use of
+ * the style, not of the style — and Word writes one on every table it creates.
+ */
 function readTableLook(tblPr: OoxmlElement | undefined): TableLook {
   const look = tblPr && childNamed(tblPr, 'tblLook');
   if (!look) return DEFAULT_TABLE_LOOK;
@@ -291,13 +326,7 @@ function readTableLook(tblPr: OoxmlElement | undefined): TableLook {
   };
 }
 
-/** `w:cnfStyle`: the producer stating which conditions a row or cell is under. */
-function readCnfStyle(container: OoxmlElement | undefined): string | undefined {
-  const cnf = container && childNamed(container, 'cnfStyle');
-  return cnf ? attributeValue(cnf, 'val') : undefined;
-}
-
-/** Bit positions of `w:cnfStyle/@w:val` (17.4.7), most significant first. */
+/** Bit positions of `w:cnfStyle/@w:val` (17.4.7 row, 17.4.8 cell), most significant first. */
 const CNF_BITS = [
   'firstRow',
   'lastRow',
@@ -313,58 +342,115 @@ const CNF_BITS = [
   'seCell',
 ] as const;
 
-function cnfConditions(raw: string | undefined): readonly string[] {
-  if (!raw || !/^[01]{1,12}$/.test(raw)) return [];
-  const active: string[] = [];
-  for (let index = 0; index < raw.length && index < CNF_BITS.length; index += 1) {
-    if (raw[index] === '1') active.push(CNF_BITS[index]!);
+/** The same twelve conditions as named `w:cnfStyle` attributes (CT_Cnf), in bit order. */
+const CNF_ATTRIBUTES = [
+  'firstRow',
+  'lastRow',
+  'firstColumn',
+  'lastColumn',
+  'oddVBand',
+  'evenVBand',
+  'oddHBand',
+  'evenHBand',
+  'firstRowFirstColumn',
+  'firstRowLastColumn',
+  'lastRowFirstColumn',
+  'lastRowLastColumn',
+] as const;
+
+/**
+ * `w:cnfStyle`: the producer stating which conditions a row or cell is under.
+ *
+ * Read like `w:tblLook`, from both encodings — the legacy `w:val` bitmask and the named
+ * attributes, which are all a strict-conformant producer writes.
+ */
+function readCnfStyle(container: OoxmlElement | undefined, into: Set<string>): void {
+  const cnf = container && childNamed(container, 'cnfStyle');
+  if (!cnf) return;
+  const raw = attributeValue(cnf, 'val');
+  if (raw && /^[01]{1,12}$/.test(raw)) {
+    for (let index = 0; index < raw.length && index < CNF_BITS.length; index += 1) {
+      if (raw[index] === '1') into.add(CNF_BITS[index]!);
+    }
   }
-  return active;
+  for (let index = 0; index < CNF_ATTRIBUTES.length; index += 1) {
+    if (onOff(cnf, CNF_ATTRIBUTES[index]!) === true) into.add(CNF_BITS[index]!);
+  }
 }
+
+/**
+ * Word layers a table style's conditional formats weakest first: the whole table, then the
+ * bands, then first/last column, then first/last row, then the four corners (17.7.6). Both
+ * the derived and the stated conditions emit through this one order — `w:cnfStyle` lists
+ * its conditions in BIT order, which puts the bands last and let a banding fill overwrite
+ * the shading of a styled header row.
+ */
+const CONDITION_PRECEDENCE = [
+  'band1Vert',
+  'band2Vert',
+  'band1Horz',
+  'band2Horz',
+  'firstCol',
+  'lastCol',
+  'firstRow',
+  'lastRow',
+  'nwCell',
+  'neCell',
+  'swCell',
+  'seCell',
+] as const;
 
 /**
  * Which of the style's conditional formats apply to one cell, weakest first.
  *
- * Word's precedence runs banding, then column, then row, then corner — so a first-row cell
- * takes the header look over the band it happens to sit in. An explicit `w:cnfStyle`
- * replaces the derivation entirely: the producer already did it.
+ * A `w:cnfStyle` is added to the derivation rather than replacing it: it is a cache the
+ * producer wrote, and a row that states "I am the header" is still in whichever column and
+ * band the grid puts it in. Structural conditions key on the GRID COLUMN the cell occupies,
+ * so a `gridSpan` or a `w:gridBefore` earlier in the row cannot shift them.
  */
 function conditionalTypesFor(input: {
   readonly look: TableLook;
   readonly rowIndex: number;
   readonly rowCount: number;
-  readonly cellIndex: number;
-  readonly cellCount: number;
-  readonly rowCnf: string | undefined;
-  readonly cellCnf: string | undefined;
+  readonly gridColumn: number;
+  readonly gridSpan: number;
+  readonly columnCount: number;
+  readonly rowProperties: OoxmlElement | undefined;
+  readonly cellProperties: OoxmlElement | undefined;
 }): readonly string[] {
-  const stated = [...cnfConditions(input.rowCnf), ...cnfConditions(input.cellCnf)];
-  if (stated.length > 0) return stated;
+  const active = new Set<string>();
+  readCnfStyle(input.rowProperties, active);
+  readCnfStyle(input.cellProperties, active);
 
-  const { look, rowIndex, rowCount, cellIndex, cellCount } = input;
-  const isFirstRow = look.firstRow && rowIndex === 0;
-  const isLastRow = look.lastRow && rowCount > 1 && rowIndex === rowCount - 1;
-  const isFirstColumn = look.firstColumn && cellIndex === 0;
-  const isLastColumn = look.lastColumn && cellCount > 1 && cellIndex === cellCount - 1;
+  const { look, rowIndex, rowCount, gridColumn, gridSpan, columnCount } = input;
+  const isFirstRow = active.has('firstRow') || (look.firstRow && rowIndex === 0);
+  const isLastRow = active.has('lastRow') || (look.lastRow && rowIndex === rowCount - 1);
+  const isFirstColumn = active.has('firstCol') || (look.firstColumn && gridColumn === 0);
+  const isLastColumn =
+    active.has('lastCol') || (look.lastColumn && gridColumn + gridSpan >= columnCount);
 
-  const active: string[] = [];
-  if (look.columnBanding && !isFirstColumn && !isLastColumn) {
-    const band = cellIndex - (look.firstColumn ? 1 : 0);
-    active.push(band % 2 === 0 ? 'band1Vert' : 'band2Vert');
+  const statedVBand = active.has('band1Vert') || active.has('band2Vert');
+  if (!statedVBand && look.columnBanding && !isFirstColumn && !isLastColumn) {
+    const band = gridColumn - (look.firstColumn ? 1 : 0);
+    active.add(band % 2 === 0 ? 'band1Vert' : 'band2Vert');
   }
-  if (look.rowBanding && !isFirstRow && !isLastRow) {
+  const statedHBand = active.has('band1Horz') || active.has('band2Horz');
+  if (!statedHBand && look.rowBanding && !isFirstRow && !isLastRow) {
     const band = rowIndex - (look.firstRow ? 1 : 0);
-    active.push(band % 2 === 0 ? 'band1Horz' : 'band2Horz');
+    active.add(band % 2 === 0 ? 'band1Horz' : 'band2Horz');
   }
-  if (isFirstColumn) active.push('firstCol');
-  if (isLastColumn) active.push('lastCol');
-  if (isFirstRow) active.push('firstRow');
-  if (isLastRow) active.push('lastRow');
-  if (isFirstRow && isFirstColumn) active.push('nwCell');
-  if (isFirstRow && isLastColumn) active.push('neCell');
-  if (isLastRow && isFirstColumn) active.push('swCell');
-  if (isLastRow && isLastColumn) active.push('seCell');
-  return active;
+  if (isFirstColumn) active.add('firstCol');
+  if (isLastColumn) active.add('lastCol');
+  if (isFirstRow) active.add('firstRow');
+  if (isLastRow) active.add('lastRow');
+  if (isFirstRow && isFirstColumn) active.add('nwCell');
+  if (isFirstRow && isLastColumn) active.add('neCell');
+  if (isLastRow && isFirstColumn) active.add('swCell');
+  if (isLastRow && isLastColumn) active.add('seCell');
+
+  const ordered: string[] = [];
+  for (const condition of CONDITION_PRECEDENCE) if (active.has(condition)) ordered.push(condition);
+  return ordered;
 }
 
 /**
@@ -424,35 +510,70 @@ export function readTableStructure(
     return resolved;
   };
 
-  const bodyRowIndex = new Map<string, number>();
-  let bodyRows = 0;
+  // Grid pass. Every cell's absolute grid column, and the table's column count, are settled
+  // before any conditional format is derived — both key on the grid, not on cell order. A
+  // cell may start no later than the last column and may not span past it, which is what
+  // bounds a ROW's total span: per-cell `w:gridSpan` is already clamped, but a row of
+  // thousands of maximum-span cells would otherwise walk millions of grid intervals in the
+  // border pass. Fails closed like the ownership and vMerge budgets: the overflow cells
+  // pile onto the last column instead of extending the grid.
+  interface RowPlan {
+    readonly node: OoxmlElement;
+    readonly properties: OoxmlElement | undefined;
+    readonly starts: readonly number[];
+    readonly spans: readonly number[];
+    readonly gridColumns: number;
+  }
+  const plans: RowPlan[] = [];
+  let derivedColumns = 1;
   for (const rowNode of table.children) {
     if (rowNode.kind !== 'tableRow') continue;
-    bodyRowIndex.set(rowNode.id, bodyRows);
-    bodyRows += 1;
+    const properties = childNamed(rowNode, 'trPr');
+    const starts: number[] = [];
+    const spans: number[] = [];
+    let cursor = Math.min(readGridSkip(properties, 'gridBefore'), LAST_GRID_COLUMN);
+    for (const cellNode of rowNode.children) {
+      if (cellNode.kind !== 'tableCell') continue;
+      const start = Math.min(cursor, LAST_GRID_COLUMN);
+      const span = Math.min(
+        readGridSpan(childNamed(cellNode, 'tcPr')),
+        MAX_TABLE_COLUMNS - start // ≥ 1: `start` never exceeds the last column
+      );
+      starts.push(start);
+      spans.push(span);
+      cursor = start + span;
+    }
+    const gridColumns = Math.min(cursor + readGridSkip(properties, 'gridAfter'), MAX_TABLE_COLUMNS);
+    if (gridColumns > derivedColumns) derivedColumns = gridColumns;
+    plans.push({ node: rowNode, properties, starts, spans, gridColumns });
   }
 
+  const gridCols = gridColumnElements(table);
+  const columnCount = gridCols.length > 0 ? gridCols.length : derivedColumns;
+  const bodyRows = plans.length;
+
   const rows: SemanticTableRow[] = [];
-  for (const rowNode of table.children) {
-    if (rowNode.kind !== 'tableRow') continue;
-    const rowProperties = childNamed(rowNode, 'trPr');
-    const rowIndex = bodyRowIndex.get(rowNode.id) ?? 0;
+  for (let rowIndex = 0; rowIndex < plans.length; rowIndex += 1) {
+    const plan = plans[rowIndex]!;
+    const rowNode = plan.node;
+    const rowProperties = plan.properties;
     let cellIndex = 0;
-    let cellCount = 0;
-    for (const child of rowNode.children) if (child.kind === 'tableCell') cellCount += 1;
     const cells: SemanticTableCell[] = [];
     for (const cellNode of rowNode.children) {
       if (cellNode.kind !== 'tableCell') continue;
       const cellProperties = childNamed(cellNode, 'tcPr');
+      const gridColumn = plan.starts[cellIndex]!;
+      const gridSpan = plan.spans[cellIndex]!;
       const conditions = conditionalTypesFor({
         look,
         rowIndex,
         rowCount: bodyRows,
-        cellIndex,
-        cellCount,
+        gridColumn,
+        gridSpan,
+        columnCount,
         // A producer may state the conditions itself rather than leave them to be derived.
-        rowCnf: readCnfStyle(rowProperties),
-        cellCnf: readCnfStyle(cellProperties),
+        rowProperties,
+        cellProperties,
       });
       cellIndex += 1;
       let conditionalShading: string | undefined;
@@ -475,7 +596,8 @@ export function readTableStructure(
       }
       cells.push({
         id: cellNode.id,
-        gridSpan: readGridSpan(cellProperties),
+        gridSpan,
+        gridColumn,
         vMergeContinue: readVMergeContinue(cellProperties),
         vAlign: readVAlign(cellProperties),
         margins: cellMargins,
@@ -497,7 +619,7 @@ export function readTableStructure(
   }
 
   return {
-    columnWidthsPt: columnWidthsPt(table, rows, contentWidthPt),
+    columnWidthsPt: columnWidthsPt(gridCols, columnCount, contentWidthPt),
     rows,
     tableBorders,
     defaultMargins,

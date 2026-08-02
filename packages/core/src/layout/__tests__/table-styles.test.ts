@@ -119,7 +119,8 @@ describe('w:tblLook decides which conditional formats are live', () => {
 
   test('firstRow shading applies only when the look enables it', () => {
     const off = readTableStructure(table('<w:tblStyle w:val="TableGrid"/>'), 468, 0, cascade());
-    expect(shadingOf(off)[0]![0]).toBeUndefined();
+    // No `w:tblLook` is 17.4.56's default — banding, but no header row.
+    expect(shadingOf(off)[0]![0]).not.toBe('4472C4');
 
     const on = readTableStructure(
       table('<w:tblStyle w:val="TableGrid"/><w:tblLook w:firstRow="1" w:noHBand="1"/>'),

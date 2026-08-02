@@ -5,6 +5,8 @@ import type { OoxmlElement, OoxmlNode, OoxmlProperty } from '@docx-editor.dev/co
 import { createListCounterState } from './list-counters.ts';
 import {
   EMPTY_NUMBERING_INDEX,
+  MAX_LEVEL_INDENT_PT,
+  resolveNumberingStyleLinks,
   type ListMarkerAlign,
   type ListSuffix,
   type NumberingIndex,
@@ -13,10 +15,15 @@ import {
 import {
   cascadeParagraphFormatting,
   cascadeRunProperties,
+  MAX_STYLE_BASED_ON_DEPTH,
   type StyleCascadeTable,
+  type StyleDefinition,
 } from './style-cascade.ts';
+import { EMPTY_TAB_STOPS, nextTabDestination, type ResolvedTabStops } from './paragraph-tabs.ts';
+import { mapSymbolPuaText } from './symbol-encoding.ts';
 import { resolveRunStyle, type ResolvedRunStyle } from './run-style.ts';
 import { paragraphIndent, propertiesOf } from './paragraph-flow.ts';
+import type { TextMeasurer } from './semantic-records.ts';
 
 export interface ResolvedListItem {
   readonly numId: string;
@@ -88,8 +95,51 @@ export function readNumPr(
   return found;
 }
 
+/**
+ * The `w:numId` a style numbers with, following `w:basedOn` (§17.9.21 link target).
+ *
+ * A `w:numStyleLink` names a style, not a number: Word's own List Bullet / List Number are
+ * paragraph styles whose `w:numPr` points at the `w:num` that owns the real levels. The walk
+ * is depth-capped with a visited set because the `basedOn` chain comes from the file.
+ */
+function numIdForStyle(styleCascade: StyleCascadeTable, styleId: string): string | undefined {
+  const seen = new Set<string>();
+  let current: StyleDefinition | undefined = styleCascade.styles.get(styleId);
+  for (let depth = 0; current !== undefined && depth < MAX_STYLE_BASED_ON_DEPTH; depth += 1) {
+    if (seen.has(current.styleId)) return undefined;
+    seen.add(current.styleId);
+    const node = current.paragraphPropertiesNode;
+    const numPr = node ? readNumPr([node]) : null;
+    if (numPr) return numPr.numId;
+    current = current.basedOn === null ? undefined : styleCascade.styles.get(current.basedOn);
+  }
+  return undefined;
+}
+
+/**
+ * Resolve `w:numStyleLink` delegation using the document's styles (§17.9.21).
+ *
+ * Without a style table there is nothing to follow, so the index is returned unchanged —
+ * and so it is when nothing delegates, which keeps layout cache identity.
+ */
+export function withNumberingStyleLinks(
+  index: NumberingIndex,
+  styleCascade: StyleCascadeTable | undefined
+): NumberingIndex {
+  if (!styleCascade) return index;
+  return resolveNumberingStyleLinks(index, (styleId) => numIdForStyle(styleCascade, styleId));
+}
+
 function paragraphHasIndent(props: readonly OoxmlProperty[]): boolean {
   return props.some((property) => property.localName === 'ind');
+}
+
+/** Bound a file-derived indent both ways — negative is legal, unbounded is not. */
+function clampIndentPt(pt: number): number {
+  if (!Number.isFinite(pt)) return 0;
+  if (pt > MAX_LEVEL_INDENT_PT) return MAX_LEVEL_INDENT_PT;
+  if (pt < -MAX_LEVEL_INDENT_PT) return -MAX_LEVEL_INDENT_PT;
+  return pt;
 }
 
 /**
@@ -110,8 +160,10 @@ export function mergeListIndent(
     if (property.localName !== 'ind') continue;
     const h = property.attributes?.hanging;
     const f = property.attributes?.firstLine;
-    if (h && /^\d{1,9}$/.test(h)) hanging = Number(h) / 20;
-    if (f && /^-?\d{1,9}$/.test(f)) firstLine = Math.max(0, Number(f) / 20);
+    if (h && /^\d{1,9}$/.test(h)) hanging = clampIndentPt(Number(h) / 20);
+    // `w:firstLine` is read SIGNED: Word keeps one signed first-line indent where a negative
+    // value hangs, which is why it and `w:hanging` are mutually exclusive (§17.3.1.12).
+    if (f && /^-?\d{1,9}$/.test(f)) firstLine = clampIndentPt(Number(f) / 20);
   }
   return {
     left: para.left,
@@ -175,12 +227,16 @@ export function walkStoryParagraphs(
 export function resolveStoryListItems(
   blocks: readonly OoxmlElement[],
   index: NumberingIndex,
-  styleCascade: StyleCascadeTable | undefined
+  styleCascade: StyleCascadeTable | undefined,
+  isFontAvailable?: (family: string) => boolean
 ): ReadonlyMap<string, ResolvedListItem> {
   const map = new Map<string, ResolvedListItem>();
   if (index.nums.size === 0) return map;
 
-  const counters = createListCounterState(index);
+  // A definition that delegates through `w:numStyleLink` has no levels of its own; resolving
+  // the link here is what keeps those paragraphs from losing their markers entirely.
+  const linked = withNumberingStyleLinks(index, styleCascade);
+  const counters = createListCounterState(linked);
   for (const paragraph of walkStoryParagraphs(blocks)) {
     const pPr = paragraph.children.find((child) => child.kind === 'paragraphProperties');
     const cascaded = styleCascade ? cascadeParagraphFormatting(styleCascade, pPr) : null;
@@ -203,6 +259,15 @@ export function resolveStoryListItems(
       styleCascade
     );
     const markerStyle = resolveRunStyle(markerProps);
+    // Word writes a Symbol/Wingdings bullet as font-byte + 0xF000 (`` = U+F0B7 in
+    // Symbol), which is a private-use codepoint no other font can draw. Mapping it here —
+    // where the marker's FAMILY is finally known — keeps measurement and paint on the same
+    // string; doing it in the painter would size the marker box for a glyph nobody draws.
+    const markerText = mapSymbolPuaText(
+      advanced.markerText,
+      markerStyle.fontFamily,
+      isFontAvailable
+    );
     const cacheToken = [
       advanced.numId,
       advanced.ilvl,
@@ -215,6 +280,9 @@ export function resolveStoryListItems(
       advanced.level.lvlJc,
       advanced.level.suff,
       advanced.level.vanish ? 1 : 0,
+      // Not the ordinal — its LENGTH. The first line starts where the marker ends whenever
+      // the marker overflows its hanging slot, so `9.` and `10.` can break differently.
+      markerText.length,
     ].join('|');
 
     map.set(paragraph.id, {
@@ -222,7 +290,7 @@ export function resolveStoryListItems(
       ilvl: advanced.ilvl,
       abstractNumId: advanced.abstractNumId,
       numFmt: advanced.level.numFmt,
-      markerText: advanced.markerText,
+      markerText,
       markerAlign: advanced.level.lvlJc,
       suffix: advanced.level.suff,
       indent,
@@ -244,6 +312,12 @@ export function withResolvedListItems<
     readonly numberingIndex?: NumberingIndex;
     readonly listItems?: ReadonlyMap<string, ResolvedListItem>;
     readonly styleCascade?: StyleCascadeTable;
+    /**
+     * Host oracle for "is this font family really loaded". Supplied, a Symbol/Wingdings
+     * bullet keeps the file's own private-use codepoint so the authored typeface draws it;
+     * absent, it falls back to the Unicode equivalent rather than a tofu box.
+     */
+    readonly isFontAvailable?: (family: string) => boolean;
   },
 >(
   options: T,
@@ -252,11 +326,16 @@ export function withResolvedListItems<
   readonly numberingIndex: NumberingIndex;
   readonly listItems?: ReadonlyMap<string, ResolvedListItem>;
 } {
-  const numberingIndex = options.numberingIndex ?? EMPTY_NUMBERING_INDEX;
+  // Published already linked (§17.9.21), so every reader of the index — not just the item
+  // map built here — sees the levels a `w:numStyleLink` delegates to.
+  const numberingIndex = withNumberingStyleLinks(
+    options.numberingIndex ?? EMPTY_NUMBERING_INDEX,
+    options.styleCascade
+  );
   const listItems =
     options.listItems ??
     (numberingIndex.nums.size > 0
-      ? resolveStoryListItems(blocks, numberingIndex, options.styleCascade)
+      ? resolveStoryListItems(blocks, numberingIndex, options.styleCascade, options.isFontAvailable)
       : undefined);
   return {
     ...options,
@@ -284,7 +363,11 @@ export function listMarkerBox(
 
   const textLeft = item.indent.left;
   const hanging = item.indent.hanging;
-  const slotLeft = Math.max(0, textLeft - hanging);
+  // Markers stop at the content origin — except for a paragraph the author pulled INTO the
+  // margin with a negative `w:ind` (§17.3.1.12), where pinning the marker at zero would put
+  // the number to the RIGHT of the text it numbers.
+  const floor = Math.min(0, textLeft);
+  const slotLeft = Math.max(floor, textLeft - hanging);
   const slotWidth = Math.max(hanging, markerWidth);
   let x = slotLeft;
   if (item.markerAlign === 'right') {
@@ -292,7 +375,63 @@ export function listMarkerBox(
   } else if (item.markerAlign === 'center') {
     x = slotLeft + (slotWidth - markerWidth) / 2;
   }
-  // Keep markers from starting left of the content origin.
-  if (x < 0) x = 0;
+  if (x < floor) x = floor;
   return { x, y: lineY, width: Math.max(markerWidth, 0), height: lineHeight };
+}
+
+/**
+ * Where the FIRST line of a list paragraph starts, relative to `indent.left` (§17.9.30).
+ *
+ * A list paragraph's hanging indent is the marker's slot, so ordinarily the text starts at
+ * `indent.left` and this is 0 — `w:suff="tab"` with a marker that fits is exactly that case.
+ * The other three cases are where Word and a forced zero part company:
+ *
+ * - `w:suff="space"` — one space after the marker, then the text. Not a tab, not the indent.
+ * - `w:suff="nothing"` — the text begins immediately after the marker.
+ * - `w:suff="tab"` with a marker WIDER than its slot (`viii.`, `%1.%2.%3.`) — the suffix tab
+ *   advances to the next tab stop past the marker, so the first line moves right instead of
+ *   the marker being painted over its own first word.
+ */
+export function listFirstLineOffset(
+  item: ResolvedListItem,
+  measurer: TextMeasurer,
+  tabStops: ResolvedTabStops = EMPTY_TAB_STOPS,
+  rightEdge = Number.POSITIVE_INFINITY
+): number {
+  if (!item.markerText) return 0;
+  const markerWidth = measurer.measure(item.markerText, item.markerStyle);
+  const box = listMarkerBox(item, markerWidth, 0, 0);
+  if (!box) return 0;
+  const textLeft = item.indent.left;
+  const markerEnd = box.x + box.width;
+  if (item.suffix === 'nothing') return markerEnd - textLeft;
+  if (item.suffix === 'space') {
+    return markerEnd + measurer.measure(' ', item.markerStyle) - textLeft;
+  }
+  // `tab`: the implied stop is the paragraph indent itself; only an overflowing marker has
+  // to look further along the paragraph's own stops.
+  if (markerEnd <= textLeft) return 0;
+  return nextTabDestination(tabStops, markerEnd, rightEdge).positionPt - textLeft;
+}
+
+/**
+ * First-line offset for ANY paragraph: `w:firstLine` right, `w:hanging` left — except a list
+ * item, whose first line is placed by its marker and `w:suff` ({@link listFirstLineOffset}).
+ */
+export function firstLineShift(
+  item: ResolvedListItem | undefined,
+  indent: { readonly left: number; readonly hanging: number; readonly firstLine: number },
+  measurer: TextMeasurer,
+  tabStops?: ResolvedTabStops,
+  available?: number
+): number {
+  if (item) {
+    return listFirstLineOffset(
+      item,
+      measurer,
+      tabStops,
+      available === undefined ? undefined : indent.left + available
+    );
+  }
+  return indent.hanging > 0 ? -indent.hanging : indent.firstLine;
 }

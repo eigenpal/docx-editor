@@ -26,10 +26,12 @@ import {
   cloneWithNewIds,
   fromEdit,
   isParagraphPropertiesNode,
+  isRunPropertiesNode,
   namedChild,
   ok,
   paragraphPropertiesNodeOf,
   parentOf,
+  runPropertiesNodeOf,
 } from './tree-op-nodes.ts';
 import {
   PARAGRAPH_VOCABULARY,
@@ -343,7 +345,7 @@ function applyDeleteText(
       if (child.kind !== 'run') continue;
       // A run's children are elements only, so "content" is simply anything that is not
       // the run's own property container.
-      const hasContent = child.children.some((grand) => grand.kind !== 'runProperties');
+      const hasContent = child.children.some((grand) => !isRunPropertiesNode(grand));
       if (hasContent) continue;
       const removed = removeNode(current, child.id, options);
       if (!removed.ok) return fromEdit(removed, effect);
@@ -373,8 +375,52 @@ const RANGE_END_MARKERS: ReadonlySet<string> = new Set([
   'customXmlMoveToRangeEnd',
 ]);
 
+/** The range-START element each range-END element closes; `w:id` pairs the two. */
+const RANGE_START_OF_END: ReadonlyMap<string, string> = new Map([
+  ['bookmarkEnd', 'bookmarkStart'],
+  ['commentRangeEnd', 'commentRangeStart'],
+  ['moveFromRangeEnd', 'moveFromRangeStart'],
+  ['moveToRangeEnd', 'moveToRangeStart'],
+  ['permEnd', 'permStart'],
+  ['customXmlInsRangeEnd', 'customXmlInsRangeStart'],
+  ['customXmlDelRangeEnd', 'customXmlDelRangeStart'],
+  ['customXmlMoveFromRangeEnd', 'customXmlMoveFromRangeStart'],
+  ['customXmlMoveToRangeEnd', 'customXmlMoveToRangeStart'],
+]);
+
+const RANGE_START_MARKERS: ReadonlySet<string> = new Set(RANGE_START_OF_END.values());
+
 function closesARange(node: OoxmlNode): boolean {
   return node.kind !== 'textValue' && RANGE_END_MARKERS.has(node.localName);
+}
+
+/** A marker's identity as `name\0id`, so a start and the end that closes it share a key. */
+function rangeKey(localName: string, node: OoxmlNode): string | null {
+  if (node.kind === 'textValue') return null;
+  const id = node.attributes.find((attribute) => attribute.localName === 'id');
+  return id ? `${localName} ${id.value}` : null;
+}
+
+function opensARange(node: OoxmlNode): string | null {
+  if (node.kind === 'textValue' || !RANGE_START_MARKERS.has(node.localName)) return null;
+  return rangeKey(node.localName, node);
+}
+
+/**
+ * Whether a range-end marker closes a range that was already OPEN before this position.
+ *
+ * An end marker stays with the head so the range it closes stays closed around the content
+ * it always covered — but only when its start is behind it. A range that opens AND closes at
+ * the split (an empty bookmark, a comment anchored on the caret) has its start marker in the
+ * tail: keeping the end behind emitted `<w:p>…<w:bookmarkEnd id="1"/></w:p><w:p><w:bookmark
+ * Start id="1"/>…` — the pair inverted across two paragraphs, an end with no start before it.
+ * Such an end follows its own start into the tail instead.
+ */
+function closesAnOpenRange(child: OoxmlNode, openedHere: ReadonlySet<string>): boolean {
+  if (!closesARange(child) || child.kind === 'textValue') return false;
+  const opener = RANGE_START_OF_END.get(child.localName);
+  const key = opener ? rangeKey(opener, child) : null;
+  return key === null || !openedHere.has(key);
 }
 
 /**
@@ -387,9 +433,14 @@ function closesARange(node: OoxmlNode): boolean {
  * wrong half, and carried an inline picture into the paragraph below when the user pressed
  * Enter at the end of the line.
  */
-function zeroLengthGoesToHead(child: OoxmlNode, position: number, offset: number): boolean {
+function zeroLengthGoesToHead(
+  child: OoxmlNode,
+  position: number,
+  offset: number,
+  openedHere: ReadonlySet<string>
+): boolean {
   if (position !== offset) return position < offset;
-  return closesARange(child);
+  return closesAnOpenRange(child, openedHere);
 }
 
 function applySplit(
@@ -407,16 +458,24 @@ function applySplit(
   // The running text offset the walk has reached, which is the position of anything that
   // measures nothing.
   let cursor = 0;
+  // The range starts seen AT the current position — the ones whose end markers, if they
+  // also sit here, must not be left behind in the head.
+  const openedHere = new Set<string>();
   for (const child of paragraph.children) {
     if (isParagraphPropertiesNode(child)) continue;
     const runSegments =
       child.kind === 'run' ? segments.filter((segment) => segment.runId === child.id) : [];
     if (runSegments.length === 0) {
-      (zeroLengthGoesToHead(child, cursor, offset) ? headChildren : tailChildren).push(child);
+      (zeroLengthGoesToHead(child, cursor, offset, openedHere) ? headChildren : tailChildren).push(
+        child
+      );
+      const opened = opensARange(child);
+      if (opened) openedHere.add(opened);
       continue;
     }
     const runStart = runSegments[0]!.start;
     const runEnd = runSegments[runSegments.length - 1]!.end;
+    if (runEnd > cursor) openedHere.clear();
     cursor = runEnd;
     if (runEnd <= offset) {
       headChildren.push(child);
@@ -428,11 +487,11 @@ function applySplit(
     }
     // The run straddles the split: divide its content children, keeping `w:rPr` on BOTH
     // halves so formatting survives the split.
-    const rPr = child.children.find((grand) => grand.kind === 'runProperties');
+    const rPr = runPropertiesNodeOf(child);
     const headContent: OoxmlNode[] = [];
     const tailContent: OoxmlNode[] = [];
     for (const grand of child.children) {
-      if (grand.kind === 'runProperties') continue;
+      if (isRunPropertiesNode(grand)) continue;
       const segment = runSegments.find((candidate) => contains(grand, candidate.node.id));
       if (!segment) {
         headContent.push(grand);
@@ -545,17 +604,25 @@ function applySplitMany(
   // The running text offset the walk has reached — the position of anything measuring
   // nothing, exactly as the single split reads it.
   let cursor = 0;
+  const openedHere = new Set<string>();
   for (const child of paragraph.children) {
     if (isParagraphPropertiesNode(child)) continue;
     const runSegments =
       child.kind === 'run' ? segments.filter((segment) => segment.runId === child.id) : [];
     if (runSegments.length === 0) {
-      const piece = pieceIndexOf(offsets, cursor, closesARange(child) ? 'head' : 'tail');
+      const piece = pieceIndexOf(
+        offsets,
+        cursor,
+        closesAnOpenRange(child, openedHere) ? 'head' : 'tail'
+      );
       pieces[piece]!.push(child);
+      const opened = opensARange(child);
+      if (opened) openedHere.add(opened);
       continue;
     }
     const runStart = runSegments[0]!.start;
     const runEnd = runSegments[runSegments.length - 1]!.end;
+    if (runEnd > cursor) openedHere.clear();
     cursor = runEnd;
     const startPiece = pieceIndexOf(offsets, runStart);
     const endPiece = runEnd > runStart ? pieceIndexOf(offsets, runEnd - 1) : startPiece;
@@ -567,10 +634,10 @@ function applySplitMany(
 
     // The run straddles at least one boundary: divide its content children, keeping
     // `w:rPr` on every produced piece so formatting survives each break.
-    const rPr = child.children.find((grand) => grand.kind === 'runProperties');
+    const rPr = runPropertiesNodeOf(child);
     const contentByPiece: OoxmlNode[][] = Array.from({ length: pieceCount }, () => []);
     for (const grand of child.children) {
-      if (grand.kind === 'runProperties') continue;
+      if (isRunPropertiesNode(grand)) continue;
       const segment = runSegments.find((candidate) => contains(grand, candidate.node.id));
       if (!segment) {
         contentByPiece[startPiece]!.push(grand);
@@ -792,8 +859,8 @@ function applySetRunProperties(
   for (const runId of runIds) {
     const run = findNode(current, runId);
     if (!run || run.kind !== 'run') continue;
-    const existing = run.children.find((child) => child.kind === 'runProperties');
-    const content = run.children.filter((child) => child.kind !== 'runProperties');
+    const existing = runPropertiesNodeOf(run);
+    const content = run.children.filter((child) => !isRunPropertiesNode(child));
     const children = mergedPropertyChildren(
       existing?.children ?? [],
       properties,
@@ -807,16 +874,21 @@ function applySetRunProperties(
       current = cleared.part;
       continue;
     }
-    const rPr = {
-      id: existing?.id ?? nextId(),
-      kind: 'runProperties',
-      namespaceUri: WML_NAMESPACE_URI,
-      localName: 'rPr',
-      prefix: 'w',
-      namespaceBindings: [],
-      attributes: [],
-      children,
-    } as unknown as OoxmlNode;
+    // An EXISTING container is rewritten in place, kind and attributes intact. Minting a
+    // typed replacement for one the read demoted would have dropped whatever demoted it
+    // (a `w:val` on `w:rPr`), and a typed node may not carry that attribute at all.
+    const rPr = existing
+      ? ({ ...existing, children } as OoxmlNode)
+      : ({
+          id: nextId(),
+          kind: 'runProperties',
+          namespaceUri: WML_NAMESPACE_URI,
+          localName: 'rPr',
+          prefix: 'w',
+          namespaceBindings: [],
+          attributes: [],
+          children,
+        } as unknown as OoxmlNode);
     // `w:rPr` must lead the run's children.
     const updated = replaceChildren(current, run.id, [rPr, ...content], options);
     if (!updated.ok) return fromEdit(updated, effect);
@@ -833,18 +905,29 @@ function splitRunsAt(
   options?: EditOptions
 ): { ok: true; part: OoxmlPart } | { ok: false; reason: TreeOpRejection; detail?: string } {
   const segments = segmentsOf(paragraph);
-  const straddling = segments.find(
-    (segment) => segment.node.kind === 'textValue' && segment.start < offset && segment.end > offset
-  );
-  if (!straddling) return { ok: true, part };
-  const run = findNode(part, straddling.runId);
+  // The run the offset falls INSIDE, wherever inside: looking only for a straddling TEXT
+  // VALUE missed every boundary between two of a run's own children. A `w:tab` and a
+  // `w:br` each measure one character, so `<w:r><w:t>a</w:t><w:tab/><w:t>b</w:t></w:r>`
+  // has edges at 1 and 2 that no text value straddles — the run was left whole, the range
+  // then matched it through the tab's segment, and formatting the tab alone bolded all
+  // three characters.
+  const runIds: string[] = [];
+  for (const segment of segments) {
+    if (runIds[runIds.length - 1] !== segment.runId) runIds.push(segment.runId);
+  }
+  const straddling = runIds.find((runId) => {
+    const own = segments.filter((segment) => segment.runId === runId);
+    return own[0]!.start < offset && own[own.length - 1]!.end > offset;
+  });
+  if (straddling === undefined) return { ok: true, part };
+  const run = findNode(part, straddling);
   if (!run || run.kind !== 'run') return { ok: false, reason: 'tree-invariant' };
   const nextId = createNodeIdAllocator(part);
-  const rPr = run.children.find((child) => child.kind === 'runProperties');
+  const rPr = runPropertiesNodeOf(run);
   const headContent: OoxmlNode[] = [];
   const tailContent: OoxmlNode[] = [];
   for (const child of run.children) {
-    if (child.kind === 'runProperties') continue;
+    if (isRunPropertiesNode(child)) continue;
     const segment = segments.find(
       (candidate) => candidate.runId === run.id && contains(child, candidate.node.id)
     );

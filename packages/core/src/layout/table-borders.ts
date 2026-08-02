@@ -10,6 +10,7 @@
 import type { OoxmlElement } from '@docx-editor.dev/core-contract/store';
 import { MAX_BORDER_WIDTH_PT } from './paragraph-style.ts';
 import { resolveStrictHexFill } from './ooxml-shading.ts';
+import { effectiveBorderSide } from './table-border-cascade.ts';
 import {
   buildColumnOwnershipIndexes,
   ownerAt,
@@ -18,6 +19,7 @@ import {
 } from './table-border-ownership.ts';
 
 export type { TableBorderGridResolveWork, TableBorderOwnershipBudget };
+export { effectiveBorderSide } from './table-border-cascade.ts';
 export {
   createTableBorderOwnershipBudget,
   MAX_BORDER_OWNERSHIP_INTERVALS,
@@ -170,7 +172,7 @@ const EMPTY_CELL_BORDERS: CellBorderBox = {
   right: OMITTED,
 };
 
-/** MS-OE376-ish border numbers for conflict weight. */
+/** Style rank, used only to break a conflict between two rules of the SAME width. */
 const BORDER_NUMBER: Readonly<Record<TableBorderStyle, number>> = {
   single: 1,
   thick: 2,
@@ -276,12 +278,18 @@ export function readCellBorders(tcPr: OoxmlElement | undefined): CellBorderBox {
   return readBox(tcPr && childNamed(tcPr, 'tcBorders'), ['top', 'left', 'bottom', 'right']);
 }
 
+/**
+ * Conflict weight: the authored width in eighths of a point, and nothing else.
+ *
+ * Word-matching, not conformance — §17.4.39 (`w:tblBorders`) and §17.4.66 (`w:tcBorders`)
+ * describe the elements and specify no conflict algorithm. Word picks the heavier RULE, so
+ * a 6pt dashed rule beats a hairline single. Folding the style rank into the weight (an
+ * `sz × border-number` product) made a 0.5pt double outrank a 1pt single and made every
+ * dashed or dotted rule weigh 1 regardless of `w:sz`, which erased its width entirely.
+ */
 export function borderWeight(side: TableBorderSide): number {
   if (side.state !== 'edge') return 0;
-  // Dotted/dashed family: MS-OE376 forces weight 1 regardless of sz.
-  if (side.style === 'dotted' || side.style === 'dashed') return 1;
-  const eighths = Math.max(1, Math.round(side.widthPt * 8));
-  return eighths * BORDER_NUMBER[side.style];
+  return Math.max(1, Math.round(side.widthPt * 8));
 }
 
 function colorBrightness(color: string | null): number {
@@ -295,8 +303,9 @@ function colorBrightness(color: string | null): number {
 /**
  * Pick the winner between two candidates on a shared grid line (zero cell spacing).
  *
- * `none` loses to any edge; two `none`/omitted yield omitted (no paint). Equal weights
- * prefer the darker color, then `preferFirst` (reading-order / first candidate).
+ * `none` loses to any edge; two `none`/omitted yield omitted (no paint). Width decides;
+ * equal widths rank by style, then prefer the darker color, then `preferFirst`
+ * (reading-order / first candidate).
  */
 export function resolveBorderConflict(
   first: TableBorderSide,
@@ -312,6 +321,9 @@ export function resolveBorderConflict(
   const w2 = borderWeight(second);
   if (w1 > w2) return first;
   if (w2 > w1) return second;
+  const s1 = BORDER_NUMBER[first.style];
+  const s2 = BORDER_NUMBER[second.style];
+  if (s1 !== s2) return s1 > s2 ? first : second;
   const b1 = colorBrightness(first.color);
   const b2 = colorBrightness(second.color);
   if (b1 < b2) return first;
@@ -332,26 +344,6 @@ function tableFallback(
   if (!interior) return table[side];
   if (side === 'top' || side === 'bottom') return table.insideH;
   return table.insideV;
-}
-
-/**
- * Effective edge before adjacent-cell / outer conflict.
- *
- * - omitted → table fallback
- * - edge → cell wins outright (no weight fight with table)
- * - none → on outer edges, table may still show; on interior edges, explicit none stays
- *   none so `none`/`none` neighbors suppress the grid line (Word §5.3 mid-vertical).
- */
-export function effectiveBorderSide(
-  authored: TableBorderSide,
-  tableSide: TableBorderSide,
-  options: { readonly interior?: boolean } = {}
-): TableBorderSide {
-  if (authored.state === 'omitted') return tableSide;
-  if (authored.state === 'none') {
-    return options.interior ? NONE : resolveBorderConflict(NONE, tableSide);
-  }
-  return authored;
 }
 
 export interface BorderGridCell {
@@ -807,6 +799,26 @@ export function resolveTableCellBorderGrid(
       interior,
     });
 
+  /**
+   * Conflict over a shared interior grid line, honouring where each side came from.
+   *
+   * An explicit `w:val="nil"` is a statement, not an omission — it is what Word writes when
+   * a cell is given "No Border" — so it suppresses the line even though the neighbour, by
+   * omitting its own side, still inherits `insideH`/`insideV`. Only a neighbour that
+   * AUTHORS an edge of its own overrides the nil, and then the ordinary weight fight
+   * decides. Word-matching: §17.4.39 / §17.4.66 specify no algorithm.
+   */
+  const interiorConflict = (
+    mine: TableBorderSide,
+    theirs: TableBorderSide,
+    mineEffective: TableBorderSide,
+    theirsEffective: TableBorderSide
+  ): TableBorderSide => {
+    if (mine.state === 'none' && theirs.state !== 'edge') return NONE;
+    if (theirs.state === 'none' && mine.state !== 'edge') return NONE;
+    return resolveBorderConflict(mineEffective, theirsEffective);
+  };
+
   for (let rowIndex = 0; rowIndex < rowCount; rowIndex += 1) {
     const row = rows[rowIndex]!;
     for (let cellIndex = 0; cellIndex < row.length; cellIndex += 1) {
@@ -860,8 +872,12 @@ export function resolveTableCellBorderGrid(
           if (below?.cell.vMergeContinue) {
             edge = OMITTED;
           } else {
-            const belowTop = below ? effective(below.cell, 'top', true) : table.insideH;
-            edge = resolveBorderConflict(effective(cell, 'bottom', true), belowTop);
+            edge = interiorConflict(
+              cell.borders.bottom,
+              below ? below.cell.borders.top : OMITTED,
+              effective(cell, 'bottom', true),
+              below ? effective(below.cell, 'top', true) : table.insideH
+            );
           }
         }
         bottomRaw.push({ gridStart: col, gridEnd: col + 1, edge: asResolved(edge) });
@@ -875,8 +891,12 @@ export function resolveTableCellBorderGrid(
           edge = effective(cell, 'right', false);
         } else {
           const neighbor = ownerAt(ownership, r, lastCol + 1, work);
-          const neighborLeft = neighbor ? effective(neighbor.cell, 'left', true) : table.insideV;
-          edge = resolveBorderConflict(effective(cell, 'right', true), neighborLeft);
+          edge = interiorConflict(
+            cell.borders.right,
+            neighbor ? neighbor.cell.borders.left : OMITTED,
+            effective(cell, 'right', true),
+            neighbor ? effective(neighbor.cell, 'left', true) : table.insideV
+          );
         }
         rightRaw.push({ gridStart: r, gridEnd: r + 1, edge: asResolved(edge) });
       }

@@ -154,6 +154,25 @@ export function frozenLine(line: PendingLine): PendingLine {
   }) as PendingLine;
 }
 
+/**
+ * Soft ceiling on an indent, in twips (31_680 ≈ 22"), matching the paragraph-spacing and
+ * tab-position bounds. `w:ind` is attacker-controlled and flows straight into `rightEdge`
+ * and the available line width, so an unbounded value reaches paint geometry.
+ */
+export const MAX_PARAGRAPH_INDENT_TWIPS = 31_680;
+
+function indentTwips(raw: string | undefined): number | null {
+  // Up to 9 digits so an oversized authored value reaches the clamp rather than being read
+  // as a measurement; a longer digit string is garbage, and `Number` turns enough of them
+  // into `Infinity`, which then poisons every width derived from it.
+  if (raw === undefined || !/^-?\d{1,9}$/.test(raw)) return null;
+  const twips = Number(raw);
+  if (!Number.isFinite(twips)) return null;
+  if (twips > MAX_PARAGRAPH_INDENT_TWIPS) return MAX_PARAGRAPH_INDENT_TWIPS;
+  if (twips < -MAX_PARAGRAPH_INDENT_TWIPS) return -MAX_PARAGRAPH_INDENT_TWIPS;
+  return twips;
+}
+
 export function paragraphIndent(props: readonly OoxmlProperty[]): {
   left: number;
   right: number;
@@ -162,10 +181,14 @@ export function paragraphIndent(props: readonly OoxmlProperty[]): {
   let right = 0;
   for (const property of props) {
     if (property.localName !== 'ind') continue;
+    // `w:start`/`w:end` are the ISO 29500 Strict spellings of `w:left`/`w:right`; the
+    // physical name wins where a producer writes both.
     const rawLeft = property.attributes?.left ?? property.attributes?.start;
     const rawRight = property.attributes?.right ?? property.attributes?.end;
-    if (rawLeft && /^-?\d+$/.test(rawLeft)) left = Number(rawLeft) / 20;
-    if (rawRight && /^-?\d+$/.test(rawRight)) right = Number(rawRight) / 20;
+    const twipsLeft = indentTwips(rawLeft);
+    const twipsRight = indentTwips(rawRight);
+    if (twipsLeft !== null) left = twipsLeft / 20;
+    if (twipsRight !== null) right = twipsRight / 20;
   }
   return { left, right };
 }

@@ -63,6 +63,31 @@ export function isParagraphPropertiesNode(node: OoxmlNode): boolean {
   );
 }
 
+/**
+ * A run's property container: its `w:rPr`, whether or not the canonical read TYPED it.
+ *
+ * The same tolerance `paragraphPropertiesNodeOf` gives `w:pPr`, for the same reason. An
+ * `w:rPr` demotes to generic whenever the known-node invariant refuses it — a stray `w:val`
+ * on the container, a typed child where only generic ones belong — and matching on
+ * `kind === 'runProperties'` alone then treated that container as run CONTENT: formatting
+ * the run prepended a SECOND `w:rPr` beside the first, and splitting the run left the whole
+ * of it on the head so the tail lost its formatting.
+ */
+export function runPropertiesNodeOf(run: OoxmlNode): OoxmlElement | undefined {
+  if (run.kind === 'textValue') return undefined;
+  const children: readonly OoxmlNode[] = run.children;
+  return children.find(
+    (child): child is OoxmlElement => child.kind !== 'textValue' && isRunPropertiesNode(child)
+  );
+}
+
+export function isRunPropertiesNode(node: OoxmlNode): boolean {
+  if (node.kind === 'runProperties') return true;
+  return (
+    node.kind === 'generic' && node.localName === 'rPr' && node.namespaceUri === WML_NAMESPACE_URI
+  );
+}
+
 /** A named `w:`-namespace child element of a property container. */
 export function namedChild(
   container: OoxmlNode | undefined | null,

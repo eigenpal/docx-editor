@@ -13,8 +13,20 @@ export const MAX_NUMBERING_DEFINITIONS = 512;
 /** Soft ceiling on override entries per `w:num`. */
 export const MAX_LVL_OVERRIDES = 9;
 
-/** Maximum hanging / indent from a level, in points (≈22"). */
+/** Maximum hanging / indent magnitude from a level, in points (≈22"). */
 export const MAX_LEVEL_INDENT_PT = 31_680 / 20;
+
+/**
+ * Soft ceiling on a `w:numStyleLink` chain (§17.9.21).
+ *
+ * A definition delegates to a style, whose `w:numPr` names a `w:num`, whose abstract may
+ * delegate again. Real templates never chain; the cap plus the visited set is what stops a
+ * file-authored cycle from spinning here.
+ */
+export const MAX_NUM_STYLE_LINK_HOPS = 8;
+
+/** Style ids are bounded strings; a link target longer than this is not one. */
+const MAX_STYLE_LINK_LENGTH = 128;
 
 export type ListSuffix = 'tab' | 'space' | 'nothing';
 export type ListMarkerAlign = 'left' | 'center' | 'right';
@@ -39,6 +51,11 @@ export interface NumberingLevel {
    * Omitted in XML → restart when the previous level (or any earlier level) is used.
    */
   readonly lvlRestart?: number;
+  /**
+   * `w:isLgl` (§17.9.9): render EVERY level referenced by this level's `w:lvlText` in
+   * decimal, whatever number format those levels declare for themselves.
+   */
+  readonly isLgl: boolean;
   /** Level `w:rPr` as flat properties (for marker face / vanish). */
   readonly runProperties: readonly OoxmlProperty[];
   /** True when level run props request vanish — marker must not paint. */
@@ -54,6 +71,18 @@ export interface LevelOverride {
 export interface AbstractNumDefinition {
   readonly abstractNumId: string;
   readonly levels: ReadonlyMap<number, NumberingLevel>;
+  /**
+   * `w:numStyleLink` (§17.9.21): this definition carries no levels of its own — the numbering
+   * lives on the named style. Word follows the link; resolve it with
+   * {@link resolveNumberingStyleLinks} before reading levels, or every paragraph on this
+   * abstract renders with NO marker at all.
+   */
+  readonly numStyleLink?: string;
+  /**
+   * `w:styleLink` (§17.9.23): the definition side of the same pair — this abstract IS the
+   * numbering of the named style. Kept so a link can be verified rather than assumed.
+   */
+  readonly styleLink?: string;
 }
 
 export interface NumDefinition {
@@ -101,6 +130,22 @@ function clampNonNegativePt(twips: number): number {
   return pt > MAX_LEVEL_INDENT_PT ? MAX_LEVEL_INDENT_PT : pt;
 }
 
+/**
+ * Clamp a SIGNED indent (`ST_SignedTwipsMeasure`) to the bounded range.
+ *
+ * `w:ind/@w:start`(`left`) and `@w:end`(`right`) are signed in CT_Ind (§17.3.1.12): Word
+ * honours a negative one by pulling the paragraph OUT into the margin. Clamping it to zero
+ * moved the whole list back to the text edge. Magnitude is still bounded both ways, because
+ * the value is file-derived.
+ */
+function clampSignedPt(twips: number): number {
+  const pt = twips / 20;
+  if (!Number.isFinite(pt)) return 0;
+  if (pt > MAX_LEVEL_INDENT_PT) return MAX_LEVEL_INDENT_PT;
+  if (pt < -MAX_LEVEL_INDENT_PT) return -MAX_LEVEL_INDENT_PT;
+  return pt;
+}
+
 function parseIndent(pPr: OoxmlElement | undefined): NumberingLevelIndent {
   const empty = { left: 0, right: 0, hanging: 0, firstLine: 0 };
   if (!pPr) return empty;
@@ -108,13 +153,18 @@ function parseIndent(pPr: OoxmlElement | undefined): NumberingLevelIndent {
   if (!ind) return empty;
   const leftTwips = integerAttr(attr(ind, 'left') ?? attr(ind, 'start'), true);
   const rightTwips = integerAttr(attr(ind, 'right') ?? attr(ind, 'end'), true);
+  // `w:hanging` is unsigned in the schema, and a negative one is meaningless: the hanging
+  // slot cannot be to the RIGHT of the text it hangs from.
   const hangingTwips = integerAttr(attr(ind, 'hanging'));
+  // `w:firstLine` is declared unsigned, but Word's model keeps ONE signed first-line indent
+  // where negative means hanging — which is why the two attributes are mutually exclusive.
+  // A negative one is therefore read as authored rather than flattened to zero.
   const firstLineTwips = integerAttr(attr(ind, 'firstLine'), true);
   return {
-    left: leftTwips === null ? 0 : clampNonNegativePt(Math.max(0, leftTwips)),
-    right: rightTwips === null ? 0 : clampNonNegativePt(Math.max(0, rightTwips)),
+    left: leftTwips === null ? 0 : clampSignedPt(leftTwips),
+    right: rightTwips === null ? 0 : clampSignedPt(rightTwips),
     hanging: hangingTwips === null ? 0 : clampNonNegativePt(hangingTwips),
-    firstLine: firstLineTwips === null ? 0 : clampNonNegativePt(Math.max(0, firstLineTwips)),
+    firstLine: firstLineTwips === null ? 0 : clampSignedPt(firstLineTwips),
   };
 }
 
@@ -128,6 +178,23 @@ function parseAlign(raw: string | undefined): ListMarkerAlign {
   if (raw === 'center') return 'center';
   if (raw === 'right' || raw === 'end') return 'right';
   return 'left';
+}
+
+/** `CT_OnOff` child element: present means on unless it explicitly says otherwise. */
+function onOffChild(parent: OoxmlElement, localName: string): boolean {
+  const element = child(parent, localName);
+  if (!element) return false;
+  const val = attr(element, 'val');
+  return val !== '0' && val !== 'false' && val !== 'off';
+}
+
+/** Bounded read of a link target (`w:styleLink` / `w:numStyleLink` `@w:val`). */
+function linkTarget(lvlParent: OoxmlElement, localName: string): string | undefined {
+  const element = child(lvlParent, localName);
+  if (!element) return undefined;
+  const val = attr(element, 'val');
+  if (val === undefined || val.length === 0 || val.length > MAX_STYLE_LINK_LENGTH) return undefined;
+  return val;
 }
 
 function toggleOn(props: readonly OoxmlProperty[], localName: string): boolean {
@@ -183,6 +250,7 @@ function parseLevel(lvl: OoxmlElement): NumberingLevel | null {
     suff,
     indent: parseIndent(pPr),
     ...(lvlRestart !== undefined ? { lvlRestart } : {}),
+    isLgl: onOffChild(lvl, 'isLgl'),
     runProperties,
     vanish: toggleOn(runProperties, 'vanish'),
   };
@@ -200,7 +268,14 @@ function parseAbstractNum(node: OoxmlElement): AbstractNumDefinition | null {
     const level = parseLevel(childNode);
     if (level && !levels.has(level.ilvl)) levels.set(level.ilvl, level);
   }
-  return { abstractNumId, levels };
+  const numStyleLink = linkTarget(node, 'numStyleLink');
+  const styleLink = linkTarget(node, 'styleLink');
+  return {
+    abstractNumId,
+    levels,
+    ...(numStyleLink !== undefined ? { numStyleLink } : {}),
+    ...(styleLink !== undefined ? { styleLink } : {}),
+  };
 }
 
 function parseOverride(node: OoxmlElement): { ilvl: number; override: LevelOverride } | null {
@@ -276,6 +351,69 @@ export function buildNumberingIndex(root: OoxmlElement | null | undefined): Numb
   }
 
   return { abstractNums, nums };
+}
+
+/**
+ * `styleId` → the `w:numId` that style's `w:numPr` names, or undefined.
+ *
+ * Supplied by the caller because styles.xml is not this module's material. Every value it
+ * returns is file-derived and is only ever used as a lookup key here.
+ */
+export type NumberingStyleLookup = (styleId: string) => string | undefined;
+
+/**
+ * Follow one abstract definition's `w:numStyleLink` chain to the definition that owns levels.
+ *
+ * `numStyleLink` → style → the style's `w:numId` → that num's abstract. Word's own
+ * List Bullet / List Number styles are exactly this shape. Returns null when the chain
+ * breaks or CYCLES (a style whose numbering links back to itself is reachable from any
+ * `.docx`, so the visited set is a guard, not a nicety).
+ */
+function followNumStyleLink(
+  index: NumberingIndex,
+  start: AbstractNumDefinition,
+  lookup: NumberingStyleLookup
+): AbstractNumDefinition | null {
+  const visited = new Set<string>([start.abstractNumId]);
+  let current = start;
+  for (let hop = 0; hop < MAX_NUM_STYLE_LINK_HOPS; hop += 1) {
+    const link = current.numStyleLink;
+    if (link === undefined) return current;
+    const numId = lookup(link);
+    if (numId === undefined) return null;
+    const num = index.nums.get(numId);
+    if (!num) return null;
+    const next = index.abstractNums.get(num.abstractNumId);
+    if (!next || visited.has(next.abstractNumId)) return null;
+    visited.add(next.abstractNumId);
+    current = next;
+  }
+  return null;
+}
+
+/**
+ * Resolve `w:numStyleLink` delegation against a style→numId lookup (§17.9.21).
+ *
+ * A delegating abstract has no `w:lvl` of its own, so without this every paragraph on it
+ * resolves to no level, no marker text, and renders as plain text with the bullet MISSING.
+ * Returns the input unchanged when nothing delegates, so layout cache identity is kept, and
+ * is idempotent: re-resolving an already-linked index changes nothing.
+ */
+export function resolveNumberingStyleLinks(
+  index: NumberingIndex,
+  lookup: NumberingStyleLookup
+): NumberingIndex {
+  let changed = false;
+  const abstractNums = new Map(index.abstractNums);
+  for (const [id, definition] of index.abstractNums) {
+    if (definition.numStyleLink === undefined) continue;
+    const target = followNumStyleLink(index, definition, lookup);
+    if (!target || target.levels === definition.levels || target.levels.size === 0) continue;
+    // The link is kept so the resolve is idempotent and the delegation stays inspectable.
+    abstractNums.set(id, { ...definition, levels: target.levels });
+    changed = true;
+  }
+  return changed ? { abstractNums, nums: index.nums } : index;
 }
 
 /** Resolve the effective level for a `numId` + `ilvl`, applying overrides. */

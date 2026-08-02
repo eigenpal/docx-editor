@@ -62,6 +62,28 @@ type StructureMethods = Pick<
   | 'insertSectionBreak'
 >;
 
+/**
+ * The `w:ind` attributes that state a new LEFT indent, written in the spellings the
+ * paragraph already uses.
+ *
+ * `CT_Ind` spells the left indent twice: `w:left` and, in the direction-relative vocabulary
+ * ISO 29500 kept, `w:start` (17.3.1.12) — and the type carries BOTH, so a paragraph authored
+ * with one and rewritten with the other ends up stating two different indents in one element.
+ * That is not a tidiness problem: nothing makes the two readers agree about which of the pair
+ * governs, and this engine's own is `left ?? start`, so `<w:ind w:start="720" w:left="1440"/>`
+ * is a paragraph that moved here and did not move in Word. Rewriting what is there keeps the
+ * element saying one thing.
+ */
+function leftIndentAttributes(
+  authored: Readonly<Record<string, string>> | undefined,
+  value: string
+): Record<string, string> {
+  const attributes: Record<string, string> = { ...(authored ?? {}) };
+  if (authored?.start !== undefined) attributes.start = value;
+  if (authored?.start === undefined || authored.left !== undefined) attributes.left = value;
+  return attributes;
+}
+
 export function createSurfaceStructure(deps: SurfaceStructureDeps): StructureMethods {
   const { session, commit, orderedStart, orderedRange, selectionMark, collapsedAt } = deps;
   const deleteSelectionOps = deps.deleteSelectionOps;
@@ -337,13 +359,10 @@ export function createSurfaceStructure(deps: SurfaceStructureDeps): StructureMet
           paragraphId,
           properties: mergedProperties(direct, {
             localName: 'ind',
-            attributes: {
-              ...(existing?.attributes ?? {}),
-              // Zero is written rather than dropped: an authored `w:ind` may inherit a
-              // non-zero left from its style, and removing the attribute would let that
-              // come back instead of taking the outdent.
-              left: String(next),
-            },
+            // Zero is written rather than dropped: an authored `w:ind` may inherit a
+            // non-zero left from its style, and removing the attribute would let that
+            // come back instead of taking the outdent.
+            attributes: leftIndentAttributes(existing?.attributes, String(next)),
           }),
         });
       }

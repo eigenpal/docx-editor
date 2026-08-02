@@ -57,7 +57,27 @@ export const EMPTY_TAB_STOPS: ResolvedTabStops = Object.freeze({
   defaultIntervalPt: DEFAULT_TAB_INTERVAL_PT,
 });
 
-const TAB_ALIGNMENTS = new Set<string>(['left', 'center', 'right', 'decimal']);
+/**
+ * `ST_TabJc` (§17.18.83) spellings this lane places, mapped to a physical alignment.
+ *
+ * `start`/`end` are the direction-relative names ISO 29500 Strict uses where Transitional
+ * writes `left`/`right`, and a Strict-saved document writes nothing else. Dropping them
+ * discarded the stop ENTIRELY — a right-aligned TOC stop became a default-interval left tab
+ * and every page number in the table of contents slid inboard. `w:pPr/w:ind` and `w:jc`
+ * already read the Strict spellings (`paragraph-style.ts`, `paragraph-flow.ts`); this makes
+ * tabs agree with them. `bar` and `num` are not stops and stay unhandled.
+ *
+ * This lane is left-to-right, so `start` is `left` and `end` is `right`, exactly as
+ * `paragraphAlignment` resolves `w:jc`.
+ */
+const TAB_ALIGNMENTS = new Map<string, TabAlignment>([
+  ['left', 'left'],
+  ['start', 'left'],
+  ['center', 'center'],
+  ['right', 'right'],
+  ['end', 'right'],
+  ['decimal', 'decimal'],
+]);
 
 const TAB_LEADERS = new Set<string>(['dot', 'hyphen', 'underscore', 'heavy', 'middleDot']);
 
@@ -119,12 +139,13 @@ function applyTabsElement(
       byTwips.delete(twips);
       continue;
     }
-    if (!TAB_ALIGNMENTS.has(val)) continue;
+    const alignment = TAB_ALIGNMENTS.get(val);
+    if (alignment === undefined) continue;
     if (byTwips.size >= MAX_TAB_STOPS && !byTwips.has(twips)) continue;
     // An unrecognised leader is `none`, not a rejected stop: the geometry is still authored.
     const leader = attributeValue(child, 'leader');
     byTwips.set(twips, {
-      alignment: val as TabAlignment,
+      alignment,
       ...(leader !== undefined && TAB_LEADERS.has(leader) ? { leader: leader as TabLeader } : {}),
     });
   }

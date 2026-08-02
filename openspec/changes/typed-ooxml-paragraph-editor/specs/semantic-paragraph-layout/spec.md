@@ -15,19 +15,27 @@ Every line and style span SHALL retain stable story/paragraph identity and canon
 - **THEN** its style spans cover the line's source text in order without gaps or overlaps
 
 ### Requirement: Accepted paragraph layout boundary
-Semantic layout SHALL resolve and represent the D8 run and paragraph property boundary, including authored whitespace, tabs, line hard breaks, and typed `w:br w:type="page"` page breaks; `w:spacing` before/after with collapsed adjacent spacing; and `w:pBdr/w:bottom` only. Section-aware pagination SHALL honour per-section page size and margins, default/`nextPage` section breaks, `titlePage`, and per-section read-only header/footer furniture inheritance, including bounded allowlisted complex `PAGE`/`NUMPAGES` projection for page-furniture numbering. Hyperlinks, body fields (including inert generic `w:fldSimple`), comments, tracked changes, images, tables, content controls, header/footer editing, notes, non-bottom paragraph borders, `continuous`/`evenPage`/`oddPage` section semantics, and multi-column flow SHALL remain outside this layout acceptance.
+Semantic layout SHALL resolve and represent the D8 run and paragraph property boundary, including authored whitespace, tabs, line hard breaks, and typed `w:br w:type="page"` page breaks; `w:spacing` before/after with collapsed adjacent spacing; `w:contextualSpacing` in body flow; line spacing under all three `w:lineRule` values; and all six `w:pBdr` edges. Border resolution SHALL place `top` and `bottom` as flow height, publish `between` in place of `bottom` where a paragraph continues into an identically bordered neighbour, and publish `left`, `right`, and `bar` outside the text column without reflowing it. Section-aware pagination SHALL honour per-section page size and margins, default/`nextPage` and `continuous` section breaks, `titlePage`, and per-section read-only header/footer furniture inheritance, including bounded allowlisted complex `PAGE`/`NUMPAGES` projection for page-furniture numbering. A `continuous` boundary SHALL share the preceding sheet only when the section's geometry and furniture are identical and the sheet is still open, and SHALL otherwise start a new sheet rather than publish a mixed one. Hyperlinks, body fields (including inert generic `w:fldSimple`), comments, tracked changes, images, content controls, header/footer editing, notes, paragraph-border authoring, `w:between` in table-cell and header/footer flow, border `w:shadow` and `themeColor`, `evenPage`/`oddPage`/`nextColumn` section semantics, and multi-column flow SHALL remain outside this layout acceptance.
 
 #### Scenario: Accepted properties affect layout and spans
-- **WHEN** accepted run properties, paragraph spacing/indents/tabs/numbering, pagination controls, `w:spacing` before/after, `w:pBdr/w:bottom`, inline page breaks, or per-section geometry occur in the paragraph fixture
+- **WHEN** accepted run properties, paragraph spacing/indents/tabs/numbering, pagination controls, `w:spacing` before/after, `w:contextualSpacing`, any `w:pBdr` edge, inline page breaks, or per-section geometry occur in the paragraph fixture
 - **THEN** page, fragment, line, and style-span output reflects each property with stable source ranges
 
 #### Scenario: Inline page break splits a paragraph across pages
 - **WHEN** a paragraph contains `w:br w:type="page"` between inline content
 - **THEN** layout places content before the break on the current page and content after the break on the next page while preserving one paragraph identity
 
-#### Scenario: Paragraph spacing and bottom border affect fragment boxes
-- **WHEN** adjacent paragraphs declare `w:spacing` before/after and/or a paragraph declares `w:pBdr/w:bottom`
-- **THEN** fragment vertical placement applies collapsed before/after spacing and reserves bottom-border extent without claiming support for other border edges
+#### Scenario: Paragraph spacing and borders affect fragment boxes
+- **WHEN** adjacent paragraphs declare `w:spacing` before/after and/or a paragraph declares a `w:pBdr` box
+- **THEN** fragment vertical placement applies collapsed before/after spacing, reserves top- and bottom-border extent as flow height, and publishes the side and bar rules beside the unchanged text column
+
+#### Scenario: Consecutive identically bordered paragraphs form one box
+- **WHEN** adjacent body paragraphs resolve the same border set and the set declares `w:between`
+- **THEN** the group opens above its first member and closes below its last, interior boundaries carry the `between` rule rather than a bottom border, and a differing border set or an unbordered neighbour ends the group
+
+#### Scenario: Continuous section shares the preceding sheet
+- **WHEN** a section declares `w:type w:val="continuous"` and its geometry and furniture match the preceding section on a still-open sheet
+- **THEN** its content continues down that sheet from the live flow cursor instead of starting a new page, and a differing geometry or a closed sheet starts a new page instead
 
 #### Scenario: Multi-section document paginates per section
 - **WHEN** a body story contains multiple sections ended by paragraph-level or body `w:sectPr` with distinct geometry and read-only header/footer references

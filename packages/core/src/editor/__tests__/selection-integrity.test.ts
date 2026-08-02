@@ -439,6 +439,49 @@ describe('a render never discards a gesture the model has not adopted yet', () =
       scroller.remove();
     }
   });
+
+  test('an undo with nothing to undo does not disarm the next repaint', async () => {
+    // THE FLAG THAT STAYS RAISED.
+    //
+    // The guard that lets a model move win over the DOM is raised by `restoreSelection` and
+    // taken down by the render that carries it out — but `undo` on an EMPTY history commits
+    // nothing, so there is no render, and the flag stayed up. Ctrl+Z as the first thing a
+    // user presses therefore disarmed the NEXT repaint, whenever it came, and that repaint
+    // wrote the caret over the selection the user had made since.
+    const { surface, host, scroller } = mountScrolled();
+    try {
+      const id = surface.session.paragraphIds()[0]!;
+      expect(surface.session.canUndo()).toBe(false);
+      surface.undo();
+      await Promise.resolve();
+
+      surface.setSelection({
+        anchor: { paragraphId: id, offset: 0 },
+        head: { paragraphId: id, offset: 0 },
+      });
+      // The gesture, made inside the window where the surface treats `selectionchange` as
+      // the echo of its own write — which is what a queued event looks like from here.
+      const run = host.querySelector('.docx-page[data-page-index="0"] [data-start]')!;
+      const text = textNodeIn(run);
+      const selection = document.getSelection()!;
+      selection.removeAllRanges();
+      const range = document.createRange();
+      range.setStart(text, 0);
+      range.setEnd(text, 4);
+      selection.addRange(range);
+      expect(surface.state().selection.head.offset).toBe(0);
+      await Promise.resolve();
+
+      scroller.scrollTop = surface.layout().pages[1]!.box.y;
+      scroller.dispatchEvent(new Event('scroll'));
+      await new Promise((resolve) => setTimeout(resolve, 50));
+
+      expect(surface.state().selection.head.offset).toBe(4);
+    } finally {
+      surface.destroy();
+      scroller.remove();
+    }
+  });
 });
 
 describe('the unmappable backstop only fires when nothing maps', () => {

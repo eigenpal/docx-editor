@@ -1,5 +1,5 @@
 ---
-'@docx-editor.dev/core': patch
+'@docx-editor.dev/react': patch
 ---
 
 Line spacing is now honoured. `w:spacing` with `w:line` and `w:lineRule` resolves for single, multiple, exactly and at-least, so a 1.5- or double-spaced document breaks pages where Word breaks them. Word's own Normal style is 1.08, so this shifts almost every document.
