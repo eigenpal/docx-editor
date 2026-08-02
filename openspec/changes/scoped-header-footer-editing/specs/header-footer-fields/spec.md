@@ -47,20 +47,49 @@ The canonical tree SHALL type the complex field form — `w:fldChar` with `@w:fl
 - **WHEN** a field's instruction is rendered for debugging or inspection
 - **THEN** it is set as text content, never built into DOM from a string
 
-### Requirement: Page-number fields evaluate per painted page
+### Requirement: Page-number fields are evaluated in layout, per page, before measurement
 
-`PAGE`, `NUMPAGES`, and `SECTIONPAGES` SHALL be evaluated at paint time against the page being painted, so one header or footer story renders different text on different pages while remaining one story with one editing scope.
+`PAGE`, `NUMPAGES`, and `SECTIONPAGES` SHALL be evaluated during layout for the page the story is being attached to, and the evaluated text SHALL be what is measured. Evaluation SHALL NOT be a paint-time substitution into a line whose width was computed from the cached result: a line measured for `1` and painted with `12` mis-positions every tab stop, right-alignment, and centring on that line.
+
+A header or footer story SHALL be laid out once per variant **per distinct evaluated-result geometry**. Pages whose field results measure to the same widths share one laid-out story; a page whose results measure differently gets its own. Evaluation SHALL apply no `TreeDocOp` and publish no `ModelChange`.
 
 #### Scenario: One footer, many pages
 
 - **WHEN** a footer containing `Page {PAGE} of {NUMPAGES}` applies to pages 3 through 9 of a 12-page document
-- **THEN** page 3 paints "Page 3 of 12" and page 9 paints "Page 9 of 12"
-- **AND** the story is still laid out once per variant, not once per page
+- **THEN** page 3 shows "Page 3 of 12" and page 9 shows "Page 9 of 12"
+
+#### Scenario: A wider result does not break alignment
+
+- **WHEN** a right-aligned footer field evaluates to `9` on one page and `10` on the next
+- **THEN** both are right-aligned to the same edge, because each was measured with its own evaluated text
+- **AND** neither overflows the content box nor leaves a gap sized for the other page's value
+
+#### Scenario: Centred and tab-positioned results stay positioned
+
+- **WHEN** a centred footer reads `Page {PAGE} of {NUMPAGES}` across a document that crosses from single to double digits
+- **THEN** every page's text is centred on its own measured width
+
+#### Scenario: Layout is shared where the geometry is identical
+
+- **WHEN** twenty pages of a footer evaluate to results of identical measured width
+- **THEN** they share one laid-out story rather than producing twenty layouts
 
 #### Scenario: Evaluation does not mutate the tree
 
-- **WHEN** the same footer paints on twenty pages
-- **THEN** no `TreeDocOp` is applied and no `ModelChange` is published by painting
+- **WHEN** the same footer is laid out and painted across twenty pages
+- **THEN** no `TreeDocOp` is applied and no `ModelChange` is published, and the saved `w:instrText` is unchanged
+
+#### Scenario: Total pages is correct after pagination changes
+
+- **WHEN** an edit changes the document from 12 pages to 13
+- **THEN** every `NUMPAGES` in every header and footer shows 13 without a manual refresh
+- **AND** every `PAGE` still shows its own page's number
+
+#### Scenario: Page numbers are correct while the scope is being edited
+
+- **WHEN** the user opens the footer scope on page 7 and types beside a `PAGE` field
+- **THEN** the field continues to show 7 — the value for the page being edited — not a placeholder, not `1`, and not the field code
+- **AND** the other pages continue to show their own numbers
 
 #### Scenario: PAGE respects a section restart
 

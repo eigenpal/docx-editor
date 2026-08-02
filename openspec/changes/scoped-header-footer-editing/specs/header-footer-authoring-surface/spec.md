@@ -1,5 +1,54 @@
 ## ADDED Requirements
 
+### Requirement: An open header or footer scope behaves exactly as the body editor
+
+Inside an open scope, editing SHALL be the body editor's behaviour applied to the header or footer story. Every editing capability the body has SHALL work identically, with the story boundary as the **only** difference. There SHALL NOT be a reduced or special-cased editing path for page furniture.
+
+This covers, without exception: text entry and replacement; IME composition; backward and forward deletion across run boundaries; paragraph split and join; click, drag, double-click-word, triple-click-paragraph, Shift-click, and select-all; arrow, word-wise, line-wise, Home/End, and page navigation; every mark and paragraph command the toolbar exposes; styles; lists and indentation; tables; find and replace; copy, cut, and paste; the context menu; and undo and redo.
+
+Scope-boundary rules that follow from it: select-all selects the story, not the document; Home/End and line navigation resolve within the story; arrow navigation off the story's last position does not walk into the body; and paste of block content lands in the story.
+
+#### Scenario: Every toolbar command applies in scope
+
+- **WHEN** a header scope is open with a selection, and any enabled toolbar command is invoked
+- **THEN** it applies to the header story with the same effect it would have on an equivalent body selection
+- **AND** a command is disabled in the scope only where the engine gives a reason, never because the surface is a header
+
+#### Scenario: Word-like keyboard behaviour is identical
+
+- **WHEN** the user presses Enter, Backspace, Delete, Mod-B/I/U, or select-all in an open scope
+- **THEN** the resulting document state matches what the same keys produce on equivalent body content
+
+#### Scenario: IME composition is one entry
+
+- **WHEN** the user composes text with an IME in an open scope
+- **THEN** the composition commits as one semantic history entry, exactly as in the body
+
+#### Scenario: Select-all is scoped
+
+- **WHEN** the user presses select-all in an open header scope
+- **THEN** the header story is selected and no body content is selected
+
+#### Scenario: Navigation stops at the story boundary
+
+- **WHEN** the caret is at the last position of an open header scope and the user presses the right arrow
+- **THEN** the caret stays within the story rather than continuing into the body
+
+#### Scenario: Undo is scoped to the edit, not to the surface
+
+- **WHEN** the user edits a header, leaves the scope, and presses undo
+- **THEN** the header edit is undone as one entry, through the same semantic history the body uses
+
+#### Scenario: Tables and lists behave the same
+
+- **WHEN** a header contains a table or a list and the user edits it in scope
+- **THEN** cell navigation, row behaviour, and list continuation match the body's
+
+#### Scenario: Find and replace reaches the open scope
+
+- **WHEN** find is invoked with a header scope open
+- **THEN** matches within that story are found and selectable
+
 ### Requirement: Header and footer stories become an editable scope
 
 Entering a header or footer scope SHALL make that story's painted fragments selectable and editable; leaving SHALL restore the body scope. Outside the scope the story remains page furniture: `contenteditable=false`, carrying `[data-docx-hf]`, and excluded from selection. Every mutation SHALL route through the store, never through browser DOM mutation.

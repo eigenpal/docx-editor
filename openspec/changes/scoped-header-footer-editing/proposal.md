@@ -52,12 +52,12 @@ This change closes the lane: per-section resolution, correct variant selection, 
 **Page-number fields**
 
 - Type the field vocabulary: `w:fldChar` (`begin` / `separate` / `end`), `w:instrText`, and the `w:fldSimple` shorthand, preserving `@w:dirty` and `@w:fldLock`.
-- Evaluate `PAGE`, `NUMPAGES`, and `SECTIONPAGES` at paint time against the page being painted, so one part renders different text on different pages while remaining one story with one editing scope.
+- Evaluate `PAGE`, `NUMPAGES`, and `SECTIONPAGES` **in layout, before measurement**, for the page the story attaches to, so the evaluated text is what gets measured. One part renders different text on different pages while remaining one story with one editing scope, and a right-aligned or tab-positioned number stays positioned when it crosses from one digit to two.
 - Every other field instruction stays **inert** — round-tripped, painted from its cached result, never executed. This preserves the `deferred-features.md` fields-lane security posture: DDE and external inclusion are non-executable.
 
 **Scoped editing**
 
-- A header or footer story becomes an editable scope: entering it makes that story's fragments selectable and editable while the body dims; leaving it restores the body scope and selection.
+- A header or footer story becomes an editable scope, and inside it editing is **the body editor's behaviour applied to that story** — same keyboard, same commands, same selection, same undo, same IME, with the story boundary as the only difference. There is no reduced editing path for page furniture. Leaving restores the body scope and selection.
 - Page furniture stays furniture when not being edited. `[data-docx-hf]` exclusion is scoped to the non-editing state rather than removed.
 - `TreeDocOp` gains create-header-footer, delete-header-footer, link-to-previous, unlink-from-previous, and set-section-furniture-options. Unlink clones the inherited part; link garbage-collects an orphaned part, its relationship, and its content-type override.
 

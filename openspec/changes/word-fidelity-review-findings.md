@@ -49,7 +49,6 @@ All five changes describe new `TreeDocOp`s and new model shapes without reconcil
 - `typed-revisions-and-comments` declares no D12 impact class for accept/reject, and specifies display-mode switching as re-running layout without publishing a `ModelChange` — but D12 keys change-scoped layout off `ModelChange` evidence. Nothing says how a non-`ModelChange` input invalidates the session.
 - `typed-content-controls` declares no impact class at all; placeholder replacement, dropdown values, and date reformatting all change text length and can re-flow.
 - `scoped-header-footer-editing` gives an impact class to lifecycle ops but not to story-content edits, which change flow height on every page of every section resolving to that part — that is `global`.
-- **Header/footer page-number fields are specified to evaluate at paint**, so a line measured with the cached result paints a wider string on page 12 of 120. `typed-notes` solves the identical problem explicitly with a reserved mark width; the field path needs the same treatment, and evaluation belongs in layout rather than the `output` lane.
 
 ## 5. Adapter surface
 

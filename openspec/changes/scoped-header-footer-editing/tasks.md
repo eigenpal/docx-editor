@@ -33,7 +33,7 @@
 ## 4. Typed fields
 
 - [ ] 4.1 Add typed field kinds to `ooxml-tree.ts` for `w:fldChar`, `w:instrText`, and `w:fldSimple`, preserving `@w:dirty` and `@w:fldLock`
-- [ ] 4.2 Evaluate `PAGE`, `NUMPAGES`, `SECTIONPAGES` at paint time, keyed by the painted page; painting publishes no `ModelChange`
+- [ ] 4.2 Evaluate `PAGE`, `NUMPAGES`, `SECTIONPAGES` in layout before measurement, keyed by the page the story attaches to; evaluation publishes no `ModelChange` (see §12.5)
 - [ ] 4.3 Honour `w:pgNumType` start and format in `PAGE`
 - [ ] 4.4 Leave every other instruction inert; add a security test asserting no fetch is issued at load, layout, paint, or save for an external-inclusion instruction
 - [ ] 4.5 Preserve the cached result on save rather than recomputing it
@@ -100,3 +100,15 @@ See `openspec/changes/word-fidelity-review-findings.md`.
 - [ ] 11.9 Resolve `w:sectPr/@w:type` — `continuous` makes "the first page of its section" undefined, which the section-relative `titlePg` fix depends on (finding 2)
 - [ ] 11.10 Add the missing `## MODIFIED` spec delta for `header-footer-editing`; `openspec validate --strict` does not catch its absence
 - [ ] 11.11 Assign the watermark owner with `typed-drawings-and-images` (finding 3)
+
+## 12. Body parity and page-number correctness
+
+- [ ] 12.1 Drive the open scope through the **same** editing path as the body — no reduced or special-cased furniture editor. Any capability that needs a scope-specific branch is a defect to justify, not a shortcut to take
+- [ ] 12.2 Scope-boundary rules: select-all selects the story; Home/End and line navigation resolve within it; arrow navigation off the last position does not walk into the body; block paste lands in the story
+- [ ] 12.3 Run the body's own editing test suite against an open header scope, so parity is proven rather than asserted
+- [ ] 12.4 IME composition in scope commits as one semantic history entry
+- [ ] 12.5 Evaluate `PAGE` / `NUMPAGES` / `SECTIONPAGES` **in layout, before measurement**, keyed by the page the story attaches to — not as a paint-time substitution. A line measured for `1` and painted with `12` mis-positions every tab stop and right-alignment on that line
+- [ ] 12.6 Lay a story out once per variant per distinct evaluated-result geometry; pages whose results measure identically share one layout
+- [ ] 12.7 Assert right-aligned, centred, and tab-positioned page numbers stay positioned across a single-to-double-digit boundary
+- [ ] 12.8 Assert `NUMPAGES` updates everywhere when pagination changes the page count, with no manual refresh
+- [ ] 12.9 Assert a `PAGE` field shows the edited page's own number while its scope is open — not a placeholder, not `1`, not the field code

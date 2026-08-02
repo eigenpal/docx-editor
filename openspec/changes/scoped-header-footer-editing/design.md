@@ -41,11 +41,17 @@ It already lays a story out once per variant at the section's content width, kee
 
 Today furniture is `contenteditable=false` with `[data-docx-hf]` and is excluded from selection. Removing that would let a body drag select header text on every page.
 
-The scope is a mode: while open, one story's fragments join the caret space; while closed, all furniture is inert. This is the smallest change that gives editing without giving up the selection guarantee, and it keeps the previous architecture's mistake — a second visible editor over the painted region — off the table, since painted pages already are the editable surface.
+The scope is a mode: while open, one story's fragments join the caret space; while closed, all furniture is inert. This is the smallest change that gives editing without giving up the selection guarantee.
 
-### H7: Fields evaluate at paint, and everything else is inert
+Because it is a mode rather than a separate editor, the editing behaviour inside it is the body's, unchanged. That is the point: a second, reduced editing path for page furniture is how header editing drifts from body editing feature by feature until users notice that lists, tables, or undo behave differently in a header. The parity requirement makes the drift a spec violation rather than an oversight, and task 12.3 proves it by running the body's own editing tests against an open scope.
 
-One footer part paints on twenty pages with twenty `PAGE` values. Rewriting the cached result before each paint would make every repaint a document mutation; one part per page would multiply the stories. Paint-time evaluation keeps the story singular and the saved `w:instrText` untouched.
+### H7: Fields evaluate in layout, and everything else is inert
+
+One footer part appears on twenty pages with twenty `PAGE` values. Rewriting the cached result before each paint would make every repaint a document mutation; one story per page would multiply the layouts.
+
+Evaluating at paint time is the obvious shortcut and it is wrong: the line would be measured with the cached result and painted with the real one, so a right-aligned `12` sits where `1` was measured to sit. Tab stops, centring, and the fixture's own right-aligned footers all break at the single-to-double-digit boundary.
+
+So evaluation happens in layout, before measurement, and a story is laid out once per variant **per distinct evaluated-result geometry**. Pages whose numbers measure to the same widths share one layout, which keeps the common case cheap; only a page whose result measures differently costs another. The saved `w:instrText` is untouched either way.
 
 The inert-by-default rule is a security requirement, not a scoping convenience. The fields lane in `deferred-features.md` commits to keeping DDE and external inclusion non-executable, and this change types fields for the first time. Typing them is exactly when an evaluator could accidentally acquire a fetch.
 
