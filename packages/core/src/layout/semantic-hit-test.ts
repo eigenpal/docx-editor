@@ -22,6 +22,7 @@
 // null makes it do nothing at all.
 
 import { graphemeBoundaryEpoch, segmentGraphemes } from './grapheme.ts';
+import { baselineShiftPtOf } from './run-style.ts';
 import type { CaretGeometry, SemanticPosition } from './semantic-interaction.ts';
 import type {
   BlockFragmentRecord,
@@ -649,11 +650,21 @@ export function caretBoxOnLine(
       break;
     }
   }
+  const x = spanOffsetX(chosen, offset, measurer);
+  // Span boxes are NOT baseline-aligned — every one of them starts at the line's top, and the
+  // painter baseline-aligns the glyphs in CSS. Taking the box directly drew a small run's
+  // caret at the top of a tall line, floating above the text it belonged to. Aligning it the
+  // way the text is aligned needs the run's own ascent, which is what the measurer answers.
+  const metrics = measurer?.lineMetrics(chosen.style);
+  if (!metrics || metrics.height <= 0) {
+    return { x, y: line.box.y, height: line.box.height };
+  }
   return {
-    x: spanOffsetX(chosen, offset, measurer),
-    // A zero-height span would leave no caret at all; the line is the honest floor.
-    y: chosen.box.height > 0 ? chosen.box.y : line.box.y,
-    height: chosen.box.height > 0 ? chosen.box.height : line.box.height,
+    x,
+    // Super and subscript lift the glyphs off the baseline without moving the box, so the
+    // caret has to follow them or it is drawn over the text beside it instead of at them.
+    y: line.box.y + line.baseline - metrics.baseline - baselineShiftPtOf(chosen.style),
+    height: metrics.height,
   };
 }
 

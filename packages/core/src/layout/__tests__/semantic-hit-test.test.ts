@@ -586,3 +586,56 @@ describe('the caret is as tall as the run it sits in', () => {
     expect(found.caret.height).toBe(caretAt(mixed, found.position, measurer)!.height);
   });
 });
+
+describe('the caret is aligned the way the text is', () => {
+  // Span boxes all start at the LINE's top — the painter baseline-aligns the glyphs in CSS —
+  // so reading a span box directly drew a small run's caret floating above the text it was
+  // in, and a superscript caret over the text beside it.
+  const proportional: TextMeasurer = {
+    measure: (text, style) => text.length * style.fontSizePt * 0.5,
+    lineMetrics: (style) => ({ height: style.fontSizePt * 1.2, baseline: style.fontSizePt * 0.95 }),
+  };
+  const doc = lay(
+    `<w:p>` +
+      `<w:r><w:rPr><w:sz w:val="16"/></w:rPr><w:t xml:space="preserve">8pt </w:t></w:r>` +
+      `<w:r><w:rPr><w:sz w:val="72"/></w:rPr><w:t>36pt</w:t></w:r>` +
+      `<w:r><w:rPr><w:vertAlign w:val="superscript"/><w:sz w:val="22"/></w:rPr><w:t>sup</w:t></w:r>` +
+      `</w:p>`,
+    proportional
+  );
+  const line = paragraphFragmentsOf(doc.pages[0]!)[0]!.lines[0]!;
+  /** Where a caret's own baseline falls, given the measurer's 0.95 ascent ratio. */
+  const baselineOf = (offset: number): number => {
+    const caret = caretAt(doc, { paragraphId: P0, offset }, proportional)!;
+    return caret.y + (caret.height / 1.2) * 0.95;
+  };
+
+  test('the fixture stacks every span at the line top, which is the trap', () => {
+    expect(line.spans.map((span) => span.box.y)).toEqual([0, 0, 0]);
+    expect(line.baseline).toBeGreaterThan(0);
+  });
+
+  test('a small run and a large run share the line’s baseline', () => {
+    expect(baselineOf(1)).toBeCloseTo(line.baseline, 5);
+    expect(baselineOf(6)).toBeCloseTo(line.baseline, 5);
+  });
+
+  test('so a small caret sits ON its text, not at the top of the line', () => {
+    const small = caretAt(doc, { paragraphId: P0, offset: 1 }, proportional)!;
+    // Well below the line top, and its descender just past the baseline.
+    expect(small.y).toBeGreaterThan(line.box.y + line.box.height / 2);
+    expect(small.y + small.height).toBeGreaterThan(line.baseline);
+    expect(small.y).toBeLessThan(line.baseline);
+  });
+
+  test('and a superscript caret is lifted exactly as far as its glyphs', () => {
+    // The painter raises superscript by a third of the font size without moving the box.
+    expect(line.baseline - baselineOf(10)).toBeCloseTo(11 * 0.33, 5);
+  });
+
+  test('without a measurer it falls back to the line, rather than guessing', () => {
+    const caret = caretAt(doc, { paragraphId: P0, offset: 1 })!;
+    expect(caret.y).toBe(line.box.y);
+    expect(caret.height).toBe(line.box.height);
+  });
+});

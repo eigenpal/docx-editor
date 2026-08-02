@@ -302,6 +302,7 @@ export {
 } from './layout-scheduler.ts';
 export {
   DEFAULT_RUN_STYLE,
+  baselineShiftPtOf,
   displayText,
   resolveRunStyle,
   runStylesEqual,
