@@ -312,32 +312,44 @@ describe('a list definition that declares only level 0', () => {
     `<w:p><w:pPr><w:numPr><w:ilvl w:val="0"/><w:numId w:val="${numId}"/>` +
     `</w:numPr></w:pPr><w:r><w:t>${text}</w:t></w:r></w:p>`;
 
-  test('indenting refuses rather than erasing the bullet', () => {
-    // numId 2 declares `ilvl 0` only. Demoting to a level it does not declare resolved to
-    // no marker at all: the paragraph silently stopped being a list item and sprang back
-    // to the margin, taking its bullet with it.
+  test('indenting DECLARES the missing level rather than erasing the bullet', () => {
+    // numId 2 declares `ilvl 0` only. Demoting to a level it does not declare used to
+    // resolve to no marker at all — and before that was guarded, the paragraph silently
+    // stopped being a list item. Word never greys Increase Indent out here: it defines
+    // the level with its stock bullet for that depth, and so does this.
     const surface = mount(shallow('alpha', '2'), true);
     expect(markerOf(surface)).toMatchObject({ text: '§', level: 0 });
-    expect(surface.adjustIndent('increase')).toBe(false);
+    expect(surface.adjustIndent('increase')).toBe(true);
+    expect(markerOf(surface)).toMatchObject({ text: 'o', level: 1 });
+    // And back: the item's own level 0 still resolves to its authored glyph.
+    expect(surface.adjustIndent('decrease')).toBe(true);
     expect(markerOf(surface)).toMatchObject({ text: '§', level: 0 });
   });
 
-  test('the same holds for a numbered list', () => {
+  test("a numbered list gains Word's default format for the depth", () => {
     const surface = mount(shallow('Introduction', '3'), true);
     expect(markerOf(surface)?.text).toBe('I.');
-    expect(surface.adjustIndent('increase')).toBe(false);
-    expect(markerOf(surface)?.text).toBe('I.');
+    expect(surface.adjustIndent('increase')).toBe(true);
+    // Depth 1 of Word's default cycle is lowerLetter.
+    expect(markerOf(surface)?.text).toBe('a.');
   });
 
-  test('Tab does not destroy it either', () => {
+  test('the declared level survives a save and reopen', () => {
+    const surface = mount(shallow('alpha', '2'), true);
+    expect(surface.adjustIndent('increase')).toBe(true);
+    const reopened = mountBytes(surface.session.save());
+    expect(markerOf(reopened)).toMatchObject({ text: 'o', level: 1 });
+  });
+
+  test('Tab takes the same lane', () => {
     const surface = mount(shallow('alpha', '2'), true);
     createKeyDownHandler(surface)(key({ key: 'Tab' }));
-    expect(markerOf(surface)).toMatchObject({ text: '§', level: 0 });
+    expect(markerOf(surface)).toMatchObject({ text: 'o', level: 1 });
   });
 
-  test('the control reports itself disabled, so the toolbar can grey it out', () => {
+  test('the control stays enabled, greying out only at the ends of the range', () => {
     const surface = mount(shallow('alpha', '2'), true);
-    expect(surface.canAdjustIndent('increase')).toBe(false);
+    expect(surface.canAdjustIndent('increase')).toBe(true);
     expect(surface.canAdjustIndent('decrease')).toBe(false);
   });
 

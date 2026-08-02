@@ -23,6 +23,7 @@ import {
   withPart,
   writeOoxmlPackage,
   ensureListDefinition,
+  ensureNumberingLevel,
   paragraphTextOf,
   type EmbeddedFont,
   type ListKind,
@@ -210,6 +211,15 @@ export interface TreeDocxSession {
    * definition of the same kind is reused rather than duplicated.
    */
   ensureListDefinition(kind: ListKind): string | null;
+  /**
+   * Declare `level` in the list definition `numId` names, with Word's default format for
+   * that depth, or answer false.
+   *
+   * Word never greys Increase Indent out on a list item: demoting past the deepest level
+   * a definition declares makes Word define the level, cycling its stock bullets and
+   * number formats. An already-declared level answers true without changing anything.
+   */
+  ensureNumberingLevel(numId: string, level: number, kind: ListKind): boolean;
 }
 
 export type { DocumentStyleEntry } from './document-catalog.ts';
@@ -568,6 +578,19 @@ export function openTreeSession(bytes: Uint8Array): OpenTreeSessionResult {
         numberingRootResolved = false;
         numberingRoot = null;
         return ensured.numId;
+      },
+
+      ensureNumberingLevel(numId, level, kind) {
+        // Same lane as `ensureListDefinition`: the numbering part lives on the PACKAGE,
+        // and the memoized numbering root must forget what it read before this write.
+        const ensured = ensureNumberingLevel(currentPackage(), numId, level, kind);
+        if (!ensured) return false;
+        if (ensured !== currentPackage()) {
+          pkg = ensured;
+          numberingRootResolved = false;
+          numberingRoot = null;
+        }
+        return true;
       },
     },
   };

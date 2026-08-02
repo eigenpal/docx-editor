@@ -264,6 +264,102 @@ export function ensureListDefinition(
   return { pkg: next, numId: String(numId) };
 }
 
+/**
+ * `CT_AbstractNum`'s child sequence (ECMA-376 17.9.1). ORDER IS LOAD-BEARING.
+ *
+ * `nsid?, multiLevelType?, tmpl?, name?, styleLink?, numStyleLink?, lvl*` is a strict
+ * `xsd:sequence`, so a grafted `w:lvl` must land after every header element. Among the
+ * `w:lvl` siblings themselves the schema imposes no order, but Word writes them by `ilvl`
+ * and this keeps that shape.
+ */
+const CT_ABSTRACT_NUM_SEQUENCE = [
+  'nsid',
+  'multiLevelType',
+  'tmpl',
+  'name',
+  'styleLink',
+  'numStyleLink',
+  'lvl',
+];
+
+/** Where a new `w:lvl` of `ilvl` belongs among an abstractNum's children. */
+function levelInsertIndex(children: readonly OoxmlNode[], ilvl: number): number {
+  let at = 0;
+  children.forEach((child, index) => {
+    if (child.kind === 'textValue') return;
+    if (child.localName === 'lvl') {
+      const raw = attribute(child as OoxmlElement, 'ilvl');
+      const existing = raw !== undefined && /^\d$/.test(raw) ? Number(raw) : 0;
+      if (existing < ilvl) at = index + 1;
+      return;
+    }
+    if (CT_ABSTRACT_NUM_SEQUENCE.includes(child.localName)) at = index + 1;
+  });
+  return at;
+}
+
+/**
+ * Declare `level` in the definition `numId` names, with Word's default format for that
+ * level, or refuse.
+ *
+ * Word never greys Increase Indent out on a list item: demoting past the deepest level a
+ * `w:abstractNum` declares makes Word DEFINE the level, cycling its stock bullets
+ * (Symbol •, Courier `o`, Wingdings ▪) or number formats (decimal, lowerLetter,
+ * lowerRoman) by depth. This is that write. An already-declared level returns the package
+ * unchanged, so callers may ask first and act second without a second lookup.
+ *
+ * A delegating definition (`w:numStyleLink`, 17.9.21) is refused: its levels live on the
+ * linked style's definition, and a `w:lvl` grafted here would be shadowed the moment the
+ * link resolves.
+ */
+export function ensureNumberingLevel(
+  pkg: OoxmlPackage,
+  numId: string,
+  level: number,
+  kind: ListKind
+): OoxmlPackage | null {
+  if (!Number.isInteger(level) || level < 0 || level >= LEVEL_COUNT) return null;
+  const numbering = pkg.parts.get(NUMBERING_PART);
+  if (!numbering) return null;
+  const root = numbering.root;
+
+  const num = childrenNamed(root, 'num').find((node) => attribute(node, 'numId') === numId);
+  const abstractRef = num ? childrenNamed(num, 'abstractNumId')[0] : undefined;
+  const abstractId = abstractRef ? attribute(abstractRef, 'val') : undefined;
+  if (!abstractId) return null;
+  const abstract = childrenNamed(root, 'abstractNum').find(
+    (node) => attribute(node, 'abstractNumId') === abstractId
+  );
+  if (!abstract) return null;
+  if (childrenNamed(abstract, 'numStyleLink').length > 0) return null;
+
+  const declared = childrenNamed(abstract, 'lvl').some(
+    (node) => attribute(node, 'ilvl') === String(level)
+  );
+  if (declared) return pkg;
+
+  const authored = readOoxmlPart(
+    `<w:numbering xmlns:w="${W}">${levelXml(kind, level)}</w:numbering>`,
+    { name: NUMBERING_PART, contentType: NUMBERING_CONTENT_TYPE }
+  );
+  if (!authored.ok) return null;
+  const node = authored.part.root.children[0];
+  if (!node) return null;
+  const nextId = createNodeIdAllocator(numbering);
+  const inserted = insertChildren(
+    numbering,
+    abstract.id,
+    levelInsertIndex(abstract.children, level),
+    [withFreshIds(node, nextId)]
+  );
+  if (!inserted.ok) return null;
+
+  return Object.freeze({
+    ...pkg,
+    parts: new Map([...pkg.parts, [NUMBERING_PART, inserted.part]]),
+  });
+}
+
 /** Re-key a grafted subtree so it cannot collide with the part it is joining. */
 function withFreshIds(node: OoxmlNode, nextId: () => string): OoxmlNode {
   if (node.kind === 'textValue') return { ...node, id: nextId() } as OoxmlNode;

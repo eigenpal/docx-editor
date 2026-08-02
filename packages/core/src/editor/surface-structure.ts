@@ -155,17 +155,35 @@ export function createSurfaceStructure(deps: SurfaceStructureDeps): StructureMet
   }
 
   /**
-   * Whether a list paragraph could move to `level`.
+   * Whether a list paragraph could move to `level` WITHOUT touching `numbering.xml`.
    *
    * A `w:abstractNum` need not declare all nine levels — plenty of real documents declare
    * only `ilvl 0` — and a paragraph moved to a level its definition does not declare
    * resolves to no marker at all: it silently stops being a list item and springs back to
-   * the margin. Refusing the move keeps the list intact, which is what Word's greyed-out
-   * Increase Indent communicates.
+   * the margin. `adjustIndent` answers that by DECLARING the level first (Word's own move:
+   * its stock bullets and number formats cycle by depth); this check is for the paths that
+   * must not write, like Enter on an empty item deciding between outdent and exit.
    */
   function listLevelExists(marker: ListMarkerRecord, level: number): boolean {
     if (level < 0 || level > MAX_LIST_LEVEL) return false;
     return deps.numberingLevelExists(marker.numId, level);
+  }
+
+  /**
+   * Make `level` resolvable for `marker`'s definition, declaring it when missing.
+   *
+   * The declared format is Word's default for that depth. Refusal (a delegating
+   * `w:numStyleLink` definition, a vanished part) leaves the document untouched and the
+   * move skipped.
+   */
+  function ensureListLevel(marker: ListMarkerRecord, level: number): boolean {
+    if (level < 0 || level > MAX_LIST_LEVEL) return false;
+    if (deps.numberingLevelExists(marker.numId, level)) return true;
+    return session.ensureNumberingLevel(
+      marker.numId,
+      level,
+      marker.numFmt === 'bullet' ? 'bullet' : 'ordered'
+    );
   }
 
   /** Authored `w:ind/@left` in twips, zero when the paragraph states none. */
@@ -309,10 +327,15 @@ export function createSurfaceStructure(deps: SurfaceStructureDeps): StructureMet
       if (firstIndex === -1 || lastIndex === -1) return false;
       const step = direction === 'increase' ? 1 : -1;
       // Enabled when ANY paragraph the selection touches could move. Word greys the
-      // control out only when nothing would happen at all.
+      // control out only when nothing would happen at all — and for a list item that is
+      // the ENDS of the level range, never a missing definition: a level `numbering.xml`
+      // does not declare gets declared on the way (see `ensureListLevel`).
       return order.slice(firstIndex, lastIndex + 1).some((paragraphId) => {
         const marker = markerOf(paragraphId);
-        if (marker) return listLevelExists(marker, marker.level + step);
+        if (marker) {
+          const next = marker.level + step;
+          return next >= 0 && next <= MAX_LIST_LEVEL;
+        }
         const current = leftIndentTwipsOf(paragraphPropertiesOf(currentLayout.value, paragraphId));
         return Math.max(0, current + step * INDENT_STEP_TWIPS) !== current;
       });
@@ -334,8 +357,13 @@ export function createSurfaceStructure(deps: SurfaceStructureDeps): StructureMet
           // A list item DEMOTES rather than shifting: `w:ilvl` is what picks the level's
           // format out of numbering.xml, so the marker changes with the indent the way
           // Word's Tab does. Nine levels exist (17.9.24); the ends are no-ops, not errors.
+          // A level the definition does not declare is DECLARED first — Word's own move,
+          // cycling its stock bullets and number formats by depth. The declaration lands
+          // outside the transaction, like `toggleList`'s `ensureListDefinition`: if the
+          // commit then fails, the extra level is unreferenced and harmless.
           const next = level + step;
-          if (!listLevelExists(marker, next)) continue;
+          if (next < 0 || next > MAX_LIST_LEVEL) continue;
+          if (!ensureListLevel(marker, next)) continue;
           ops.push({
             op: 'setListLevel',
             paragraphId,
