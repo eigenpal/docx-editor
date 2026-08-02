@@ -783,9 +783,19 @@ export function ComposedEditorDemo({ fixtureUrl }: { fixtureUrl: string }) {
           </div>
         </DocxEditor.Root>
       ) : (
-        <div className="demo-loading" data-testid="composed-loading">
-          {loadError ? `Could not load the document: ${loadError}` : 'Loading document…'}
-        </div>
+        // The library's loading surface rather than a hand-rolled div: rendered outside
+        // a `Root` it always shows, which is exactly this branch's condition. The demo
+        // supplies its own children, so the packaged spinner is replaced wholesale.
+        <DocxEditor.Loading className="demo-loading">
+          {loadError ? (
+            `Could not load the document: ${loadError}`
+          ) : (
+            <>
+              <span className="docx-editor__loading-spinner" aria-hidden="true" />
+              <span>Loading document…</span>
+            </>
+          )}
+        </DocxEditor.Loading>
       )}
     </div>
   );

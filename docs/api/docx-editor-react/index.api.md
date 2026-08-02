@@ -113,11 +113,22 @@ export interface DocxEditorDocumentOutlineProps {
 export function DocxEditorHorizontalRuler(props: DocxEditorRulerProps): ReactElement;
 
 // @public
+export function DocxEditorLoading(input: DocxEditorLoadingProps): React$1.JSX.Element | null;
+
+// @public
+export interface DocxEditorLoadingProps {
+    children?: ReactNode;
+    className?: string;
+    when?: boolean;
+}
+
+// @public
 export interface DocxEditorNamespace extends ForwardRefExoticComponent<DocxEditorProps & RefAttributes<DocxEditorRef>> {
     // (undocumented)
     readonly Content: typeof DocxEditorContent;
     readonly DocumentOutline: typeof DocxEditorDocumentOutline;
     readonly HorizontalRuler: typeof DocxEditorHorizontalRuler;
+    readonly Loading: typeof DocxEditorLoading;
     readonly PageSetupDialog: typeof DocxEditorPageSetupDialog;
     // (undocumented)
     readonly Root: typeof DocxEditorRoot;
