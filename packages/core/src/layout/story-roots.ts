@@ -12,6 +12,7 @@
 // locks, dropdown behaviour — is not modelled.
 
 import type { OoxmlElement, OoxmlNode, OoxmlPart } from '@docx-editor.dev/core-contract/store';
+import { revisionRemovesParagraph } from './revision-visibility.ts';
 
 /** Nested `w:sdt` wrappers deeper than this stop flattening; content stays preserved. */
 const MAX_SDT_NESTING = 32;
@@ -43,6 +44,10 @@ export function storyBlocks(part: OoxmlPart): OoxmlElement[] {
   const collect = (children: readonly OoxmlNode[], depth: number): void => {
     for (const child of children) {
       if (child.kind === 'paragraph' || child.kind === 'table') {
+        // A paragraph whose mark AND content a tracked revision deleted is not part of the
+        // rendered document; without this it reaches pagination with no spans and still
+        // claims a full line box.
+        if (child.kind === 'paragraph' && revisionRemovesParagraph(child)) continue;
         blocks.push(child);
         continue;
       }

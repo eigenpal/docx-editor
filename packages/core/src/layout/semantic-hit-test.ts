@@ -326,6 +326,31 @@ function weightedDistance(box: LayoutBox, point: HitPoint, verticalWeight: numbe
 }
 
 /**
+ * How far a point is from a BLOCK, which is not the same question as how far it is from the
+ * block's box.
+ *
+ * A table owns its whole horizontal band. Its box is only as wide as its columns, so the
+ * blank strip beside a narrow table sits outside every box on the page, and plain
+ * nearest-box hands that strip to whichever PARAGRAPH above or below happens to be closer —
+ * a click level with row three lands two paragraphs up. Word puts the caret in the nearest
+ * cell of the row you clicked beside, so a table level with the point is at distance zero
+ * horizontally and the row resolution below picks the cell.
+ *
+ * Paragraphs keep the plain measure: their boxes start at the left indent, and the indent
+ * strip must stay reachable by real proximity.
+ */
+function blockDistance(
+  block: BlockFragmentRecord,
+  point: HitPoint,
+  verticalWeight: number
+): number {
+  if (block.kind !== 'table') return weightedDistance(block.box, point, verticalWeight);
+  const dy = Math.max(block.box.y - point.y, 0, point.y - (block.box.y + block.box.height));
+  if (dy > 0) return weightedDistance(block.box, point, verticalWeight);
+  return 0;
+}
+
+/**
  * The block a point means, then the position within it.
  *
  * A paragraph's box starts at its left INDENT, so the indent strip — the most common place to
@@ -359,7 +384,7 @@ function resolveBlocks(
   // answer for a press.
   const ranked = blocks
     .filter((block) => block !== contained)
-    .map((block) => ({ block, score: weightedDistance(block.box, point, context.verticalWeight) }))
+    .map((block) => ({ block, score: blockDistance(block, point, context.verticalWeight) }))
     .sort((left, right) => left.score - right.score);
   for (const { block } of ranked) {
     const hit = resolveOneBlock(block, point, context, cell);

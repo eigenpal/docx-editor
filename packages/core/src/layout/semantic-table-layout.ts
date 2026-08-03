@@ -36,6 +36,7 @@ import {
   CELL_PAD,
   MAX_TABLE_NESTING,
   readTableStructure,
+  tableOriginX,
   type CellMarginsPt,
   type SemanticTableCell,
   type SemanticTableRow,
@@ -84,6 +85,9 @@ export {
 
 /** Soft ceiling on fragments emitted for one authored row (hostile / runaway splits). */
 export const MAX_TABLE_ROW_FRAGMENTS = 4096;
+
+/** A cell box never narrows below this, however wide a `w:tblCellSpacing` gap is stated. */
+const MIN_CELL_BOX_PT = 1;
 
 export type TablePaginationErrorCode =
   | 'table-row-overheight'
@@ -759,7 +763,8 @@ export function layoutRowFragment(
   rowTop: number,
   isHeaderRepeat: boolean,
   depth: number,
-  deps: TableFlowDeps
+  deps: TableFlowDeps,
+  cellSpacingPt = 0
 ): { readonly record: TableRowFragmentRecord; readonly bottom: number } {
   const placed = layoutRowFragmentBounded(
     row,
@@ -771,7 +776,8 @@ export function layoutRowFragment(
     false,
     depth,
     deps,
-    initialCellCursors(row)
+    initialCellCursors(row),
+    cellSpacingPt
   );
   return { record: placed.record, bottom: placed.bottom };
 }
@@ -805,9 +811,16 @@ export function layoutRowFragmentBounded(
   isContinuation: boolean,
   depth: number,
   deps: TableFlowDeps,
-  cursors: readonly CellPlaceCursor[]
+  cursors: readonly CellPlaceCursor[],
+  cellSpacingPt = 0
 ): LayoutRowBoundedResult {
   const total = sumCols(cols, 0, cols.length);
+  // `w:tblCellSpacing`: each cell gives up half of every gap it shares with a neighbour.
+  // `w:tblCellSpacing` (17.4.45) separates ADJACENT cell edges, so each of the two cells
+  // sharing a gap gives up half of it. Applied inside the grid slot rather than by widening
+  // the table, which keeps every column boundary, border interval and hit box where the
+  // resolved grid put it.
+  const gap = Number.isFinite(cellSpacingPt) && cellSpacingPt > 0 ? cellSpacingPt / 2 : 0;
   const defaultLineHeight = deps.measurer.lineMetrics(DEFAULT_RUN_STYLE).height;
 
   interface FlowedCell {
@@ -843,8 +856,12 @@ export function layoutRowFragmentBounded(
     // of grid intervals in the border pass). Never re-derived by accumulating spans here.
     const span = cell.gridSpan;
     const gridColumn = cell.gridColumn;
-    const cellX = left + sumCols(cols, 0, gridColumn);
-    const cellW = sumCols(cols, gridColumn, Math.min(gridColumn + span, cols.length)) || total;
+    const slotX = left + sumCols(cols, 0, gridColumn);
+    const slotW = sumCols(cols, gridColumn, Math.min(gridColumn + span, cols.length)) || total;
+    // Never let the gap consume the cell: a spacing wider than the column keeps a hairline.
+    const inset = Math.min(gap, Math.max((slotW - MIN_CELL_BOX_PT) / 2, 0));
+    const cellX = slotX + inset;
+    const cellW = Math.max(slotW - 2 * inset, MIN_CELL_BOX_PT);
     const insets = contentInsets(cell.margins, cell.borders);
     const topInset = isContinuation ? borderExtentPt(cell.borders.top) : insets.top;
     const contentTop = rowTop + topInset;
@@ -975,14 +992,15 @@ export function measureRowHeight(
   cols: readonly number[],
   left: number,
   depth: number,
-  deps: TableFlowDeps
+  deps: TableFlowDeps,
+  cellSpacingPt = 0
 ): number {
   let lineCounter = 0;
   const probeDeps: TableFlowDeps = {
     ...deps,
     nextLineId: () => `probe-${lineCounter++}`,
   };
-  const placed = layoutRowFragment(row, cols, left, 0, false, depth, probeDeps);
+  const placed = layoutRowFragment(row, cols, left, 0, false, depth, probeDeps, cellSpacingPt);
   return placed.record.box.height;
 }
 
@@ -1127,12 +1145,25 @@ function emitNestedTable(
   deps: TableFlowDeps
 ): { readonly fragment: TableFragmentRecord; readonly bottom: number } | null {
   if (depth >= MAX_TABLE_NESTING) return null;
-  const structure = readTableStructure(table, Math.max(1, right - left), depth, deps.styleCascade);
+  const containerWidth = Math.max(1, right - left);
+  const structure = readTableStructure(table, containerWidth, depth, deps.styleCascade);
   if (!structure || structure.rows.length === 0) return null;
+  // A nested table is placed inside its CELL's content box by the same rules a top-level one
+  // is placed inside the text column.
+  const tableLeft = left + tableOriginX(structure, containerWidth);
   const rawRows: TableRowFragmentRecord[] = [];
   let y = top;
   for (const row of structure.rows) {
-    const placed = layoutRowFragment(row, structure.columnWidthsPt, left, y, false, depth, deps);
+    const placed = layoutRowFragment(
+      row,
+      structure.columnWidthsPt,
+      tableLeft,
+      y,
+      false,
+      depth,
+      deps,
+      structure.cellSpacingPt
+    );
     rawRows.push(placed.record);
     y = placed.bottom;
   }
@@ -1153,7 +1184,7 @@ function emitNestedTable(
       tableId: table.id,
       fragmentIndex: 0,
       rows,
-      box: { x: left, y: top, width, height: y - top },
+      box: { x: tableLeft, y: top, width, height: y - top },
     },
     bottom: y,
   };
@@ -1180,7 +1211,8 @@ export function layoutTableFragment(
       y,
       isHeaderRepeat(row),
       depth,
-      deps
+      deps,
+      structure.cellSpacingPt
     );
     rawRows.push(placed.record);
     y = placed.bottom;

@@ -51,7 +51,7 @@ import {
   type StyleCascadeTable,
 } from './style-cascade.ts';
 import { paragraphShadingBox } from './ooxml-shading.ts';
-import { readTableStructure, type SemanticTableRow } from './semantic-table.ts';
+import { readTableStructure, tableOriginX, type SemanticTableRow } from './semantic-table.ts';
 import {
   createTableBorderOwnershipBudget,
   createTableVMergeResolveBudget,
@@ -754,6 +754,9 @@ function layoutBlocksWithGeometry(
   const layoutTableInFlow = (table: OoxmlElement): void => {
     const structure = readTableStructure(table, contentWidth, 0, styleCascade);
     if (!structure || structure.rows.length === 0) return;
+    // `w:tblInd` / `w:jc` place the table inside the text column; every row and the fragment
+    // box share the one origin so cell geometry and the reported box cannot drift apart.
+    const tableLeft = tableOriginX(structure, contentWidth);
     const headerRows: SemanticTableRow[] = [];
     for (const row of structure.rows) {
       if (row.isHeader) headerRows.push(row);
@@ -781,9 +784,13 @@ function layoutBlocksWithGeometry(
         fragmentIndex,
         rows: finalized,
         box: {
-          x: 0,
+          x: tableLeft,
           y: fragmentTop,
-          width: contentWidth,
+          // The table's own width, not the page's. Reporting `contentWidth` here described
+          // every table as exactly page-wide while its cells spanned whatever the resolved
+          // grid said — narrower for most tables, wider for a fixed-layout one that
+          // genuinely overflows the margin.
+          width: structure.columnWidthsPt.reduce((sum, columnWidth) => sum + columnWidth, 0),
           height: last.box.y + last.box.height - fragmentTop,
         },
       });
@@ -801,7 +808,14 @@ function layoutBlocksWithGeometry(
 
       let groupHeight = 0;
       for (const headerRow of headerRows) {
-        groupHeight += measureRowHeight(headerRow, structure.columnWidthsPt, 0, 0, tableDeps);
+        groupHeight += measureRowHeight(
+          headerRow,
+          structure.columnWidthsPt,
+          tableLeft,
+          0,
+          tableDeps,
+          structure.cellSpacingPt
+        );
       }
       if (groupHeight > contentHeight + 0.001) {
         throw new TablePaginationError(
@@ -819,11 +833,12 @@ function layoutBlocksWithGeometry(
         const placed = layoutRowFragment(
           headerRow,
           structure.columnWidthsPt,
-          0,
+          tableLeft,
           cursorY,
           asRepeat,
           0,
-          tableDeps
+          tableDeps,
+          structure.cellSpacingPt
         );
         if (placed.bottom > contentHeight + 0.001) {
           throw new TablePaginationError(
@@ -848,7 +863,14 @@ function layoutBlocksWithGeometry(
     placeHeaderGroup(false);
 
     for (const row of structure.rows.slice(headerRows.length)) {
-      const naturalHeight = measureRowHeight(row, structure.columnWidthsPt, 0, 0, tableDeps);
+      const naturalHeight = measureRowHeight(
+        row,
+        structure.columnWidthsPt,
+        tableLeft,
+        0,
+        tableDeps,
+        structure.cellSpacingPt
+      );
       let cursors: CellPlaceCursor[] = initialCellCursors(row);
       let isContinuation = false;
       let fragmentsForRow = 0;
@@ -891,11 +913,12 @@ function layoutBlocksWithGeometry(
           const placed = layoutRowFragment(
             row,
             structure.columnWidthsPt,
-            0,
+            tableLeft,
             cursorY,
             false,
             0,
-            tableDeps
+            tableDeps,
+            structure.cellSpacingPt
           );
           if (placed.bottom > contentHeight + 0.001) {
             throw new TablePaginationError(
@@ -925,14 +948,15 @@ function layoutBlocksWithGeometry(
         const placed = layoutRowFragmentBounded(
           row,
           structure.columnWidthsPt,
-          0,
+          tableLeft,
           cursorY,
           contentHeight,
           false,
           isContinuation,
           0,
           tableDeps,
-          cursors
+          cursors,
+          structure.cellSpacingPt
         );
 
         // First attempt on a non-empty page placed nothing useful → move to next page.
