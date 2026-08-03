@@ -58,7 +58,7 @@
     "lint": "eslint packages/*/src/",
     "lint:fix": "eslint packages/*/src/ --fix",
     "parity:prepublish": "node scripts/parity-prepublish.mjs",
-    "prepare": "husky",
+    "prepare": "husky && bun run --filter '@docx-editor.dev/i18n' build",
     "preview": "bun run build && bunx serve examples/parity/dist -p 4173",
     "reference:fetch": "node scripts/fetch-reference.mjs",
     "release": "bun run build:packages && changeset publish",

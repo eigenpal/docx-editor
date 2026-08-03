@@ -15,6 +15,7 @@
   "module": "./dist/index.js",
   "devDependencies": {
     "@docx-editor.dev/core-contract": "workspace:*",
+    "fflate": "^0.8.2",
     "vite-plugin-dts": "^5.0.0"
   },
   "peerDependencies": {

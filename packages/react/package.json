@@ -34,7 +34,8 @@
     }
   },
   "devDependencies": {
-    "@docx-editor.dev/core-contract": "workspace:*"
+    "@docx-editor.dev/core-contract": "workspace:*",
+    "fflate": "^0.8.2"
   },
   "keywords": [
     "docx",
