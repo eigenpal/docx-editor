@@ -574,6 +574,15 @@ export function mountPaginatedSurface(
   let materializedSet: ReadonlySet<number> | undefined;
   /** Sizing the last paint used, so scroll can re-centre when the visible width band moves. */
   let materializedExtent: SurfaceExtent | undefined;
+  /**
+   * The scroller whose SIZE is being watched, and the observer watching it.
+   *
+   * Declared here, above the paint that re-checks them, so `watchScrollerSize` can never be
+   * reached before its own state exists — the wiring below runs late, and a temporal dead
+   * zone would be a ReferenceError thrown out of a repaint.
+   */
+  let viewportObserver: ResizeObserver | null = null;
+  let observedScroller: HTMLElement | null = null;
 
   function applyPageOffsets(extent: SurfaceExtent): void {
     for (const page of currentLayout.pages) {
@@ -621,6 +630,9 @@ export function mountPaginatedSurface(
     // book the paint's own cost to the selection phase.
     lastPaintMs = now() - paintBegan;
     renderOverlay();
+    // The surface may only now have been wrapped in its viewport, so the size watcher
+    // re-resolves its target here rather than trusting what existed at mount.
+    watchScrollerSize();
     selectionSync.mirrorToDom();
     // A scroll reports nothing — nothing about the document or the selection moved. Taking up
     // a pending gesture DID move the selection, so that pass has to report after all.
@@ -717,6 +729,24 @@ export function mountPaginatedSurface(
     if (!flushLayout()) render();
   }
 
+  /**
+   * Whether every page the CURRENT selection touches has been built.
+   *
+   * Read from `materializedSet` rather than recomputed: deciding this from the viewport
+   * would read `scrollTop`, and forcing a layout on a path that runs for every arrow key is
+   * the kind of cost that does not show up until a long document is open. `undefined` means
+   * nothing is virtualized and every page is built, which is the safe reading everywhere
+   * else too.
+   */
+  function selectionPagesBuilt(): boolean {
+    if (!materializedSet) return true;
+    for (const position of [selection.anchor, selection.head]) {
+      const caret = caretAt(currentLayout, position);
+      if (caret && !materializedSet.has(caret.pageIndex)) return false;
+    }
+    return true;
+  }
+
   function setSelection(next: SemanticSelection, keepDesiredX = false): void {
     // Moving the caret discards a stored caret format — Word's rule. Landing back on the
     // exact armed position (the mirror re-adopting the same caret) keeps it.
@@ -728,6 +758,23 @@ export function mountPaginatedSurface(
     // painting cells that are no longer chosen.
     cellSelection = null;
     if (!keepDesiredX) desiredX = null;
+    // THE MIRROR NEEDS NODES TO WRITE INTO, AND AN UNBUILT PAGE HAS NONE.
+    //
+    // A selection can land on a page virtualization has not built — an outline jump, a
+    // search hit, any host driving the caret — and that is precisely the page it lands on,
+    // since the reason to move the caret there is that the user is not looking at it yet.
+    // The mirror then wrote into nodes that do not exist, which fails silently; the caret
+    // stayed where it was, and the next repaint read the STALE DOM selection back and
+    // overwrote the navigation entirely. Building the page first is what makes the write
+    // land: `visiblePageSet` pins the pages the selection touches, so this paint brings the
+    // target into existence wherever it is.
+    if (!selectionPagesBuilt()) {
+      // The MODEL is the newer of the two until that write lands, so this repaint must not
+      // adopt the DOM selection it is about to replace — which is the very stale value the
+      // navigation is trying to leave behind.
+      selectionSync.noteModelMoved();
+      render(false);
+    }
     // SETTLED, not moved: this mirrors into the DOM on the next line, so the two agree before
     // any render can read them back — including a move raised earlier that no render has
     // carried out. `restoreSelection` raises the flag and only `flushLayout` takes it down, so
@@ -1114,6 +1161,9 @@ export function mountPaginatedSurface(
       pagesLayer.removeEventListener('compositionstart', onCompositionStart);
       pagesLayer.removeEventListener('compositionend', onCompositionEnd);
       document.removeEventListener('scroll', onScroll, { capture: true });
+      container.ownerDocument.defaultView?.removeEventListener('resize', onViewportResize);
+      viewportObserver?.disconnect();
+      observedScroller = null;
       pointer?.destroy();
       navigation.destroy();
       // Drop pending layout work and stop listening BEFORE the DOM goes, or a commit from
@@ -1351,21 +1401,54 @@ export function mountPaginatedSurface(
   // scroller captured with `closest` at mount time is routinely null — and a null one meant
   // no listener at all, so scrolling never built the pages it revealed. Every page past the
   // first screenful stayed blank until some unrelated commit forced a repaint.
-  let scrollScheduled = false;
-  const onScroll = (event: Event): void => {
-    const scroller = surfaceScroller(container);
-    if (!scroller || event.target !== scroller) return;
-    if (scrollScheduled) return;
-    scrollScheduled = true;
+  let rematerializeScheduled = false;
+  /** Coalesce to a frame: twenty events and one event cost the same repaint. */
+  function scheduleRematerialize(): void {
+    if (rematerializeScheduled) return;
+    rematerializeScheduled = true;
     const raf = container.ownerDocument.defaultView?.requestAnimationFrame;
     const run = (): void => {
-      scrollScheduled = false;
+      rematerializeScheduled = false;
       rematerialize();
     };
     if (raf) raf(run);
     else queueMicrotask(run);
+  }
+
+  const onScroll = (event: Event): void => {
+    const scroller = surfaceScroller(container);
+    if (!scroller || event.target !== scroller) return;
+    scheduleRematerialize();
   };
   document.addEventListener('scroll', onScroll, { capture: true, passive: true });
+
+  // WHICH PAGES ARE VISIBLE DEPENDS ON THE VIEWPORT'S SIZE, NOT ONLY ON ITS SCROLL OFFSET.
+  //
+  // `visiblePageSet` reads `clientHeight`, so a viewport that grows reveals pages the last
+  // paint had no reason to build — and a resize fires no `scroll`. Nothing asked for a
+  // repaint, so the newly uncovered sheets stayed blank until the user scrolled or typed:
+  // maximizing the window, closing a side panel, rotating a tablet, or the browser chrome
+  // collapsing on scroll-up all land there.
+  const onViewportResize = (): void => {
+    scheduleRematerialize();
+  };
+  const view = container.ownerDocument.defaultView;
+  view?.addEventListener('resize', onViewportResize, { passive: true });
+  // The window event covers a resized window; an observer covers everything that changes
+  // the scroller WITHOUT one — a collapsing panel, a wrapping toolbar, a CSS change. The
+  // scroller is resolved lazily for the same reason the scroll listener binds to the
+  // document: at mount the host has routinely not wrapped the surface in its viewport yet.
+  viewportObserver =
+    typeof view?.ResizeObserver === 'function' ? new view.ResizeObserver(onViewportResize) : null;
+  function watchScrollerSize(): void {
+    if (!viewportObserver) return;
+    const scroller = surfaceScroller(container);
+    if (scroller === observedScroller) return;
+    viewportObserver.disconnect();
+    observedScroller = scroller;
+    if (scroller) viewportObserver.observe(scroller);
+  }
+  watchScrollerSize();
 
   pointer = createPointerController(
     {

@@ -6,11 +6,12 @@
 // and the ruler parts — so the panel follows edits (retitling, adding or deleting a
 // heading) without a bespoke channel.
 //
-// NAVIGATION IS THE CARET, not a scroll. A heading click focuses the surface and moves
-// the selection to the heading paragraph's start through the facade's semantic
-// `setSelection`. The engine has no caret-scroll-into-view yet (`scrollToBlock` is an
-// honest stub), so the wrapper does not pretend to scroll; when the engine grows that
-// capability the same click starts navigating visually with no adapter change.
+// A heading click both MOVES THE CARET and BRINGS THE HEADING INTO VIEW: the selection
+// goes to the heading paragraph's start through the facade's semantic `setSelection`, and
+// `scrollToBlock` reveals it. The two are separate because moving the caret does not move
+// the viewport — a heading twenty pages down was selected where nobody could see it.
+// The reveal resolves through layout rather than the DOM, so it works for a page that has
+// not been materialized yet, which is exactly the page an outline jump asks for.
 
 import { useCallback, useMemo } from 'react';
 import type { ReactElement } from 'react';

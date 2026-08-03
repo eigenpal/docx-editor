@@ -368,6 +368,19 @@ function paintSpan(
     // Keep the model character for range mapping, but clip any native tab ink that would
     // spill past the reserved advance.
     element.style.overflow = 'hidden';
+    // A CLIPPED BOX MUST NOT DECIDE THE LINE'S BASELINE.
+    //
+    // `overflow: hidden` makes an inline-block's baseline its BOTTOM MARGIN EDGE
+    // (CSS 2.1 §10.8.1) instead of the baseline of its text. Left baseline-aligned, the
+    // tab therefore asked the line box for its whole band above the baseline — more than
+    // any glyph run asks for, since a run only needs its ascent — so the browser pushed
+    // the common baseline down to satisfy it and every word on the line dropped with it.
+    // On a tabbed line that put the text ~3.4px below where layout published the baseline,
+    // and the tab leader (its own layer, correctly baselined) then read as floating above
+    // the text it was supposed to sit level with. Aligning the tab to the line box top
+    // takes it out of the baseline calculation entirely; the box still clips, and its top
+    // is exactly where a baseline-aligned run of the same band lands anyway.
+    element.style.verticalAlign = 'top';
   }
   mountRunText(document, element, span.text, span.style, ctx.scale);
   return element;
