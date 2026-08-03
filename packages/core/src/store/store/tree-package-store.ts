@@ -29,8 +29,10 @@ import {
 } from '../package/note-lifecycle.ts';
 import { resolveNotesPart } from '../package/note-references.ts';
 import type { NoteKind } from '../package/note-nodes.ts';
+import { mergePersistentPackageShell } from '../package/package-shell-persistence.ts';
 import { ORIGIN_IDS } from '../registry/frozen-ids.ts';
 import type { ImpactClass, TreeDocOp, TreeOpRejection } from './tree-ops.ts';
+import { deleteMayStrandNote } from './tree-package-gates.ts';
 import {
   TreeDocumentStore,
   type SelectionMark,
@@ -263,11 +265,18 @@ export class TreePackageStore {
     const checkpoint = store.checkpoint();
     // Only `deleteText` can remove noteReference atoms; skip package-wide cascade otherwise.
     let mayDeleteNoteAtoms = false;
+    const deleteTargets = new Set<string>();
     const result = store.transact(
       (ctx) => {
         build({
           apply: (op) => {
-            if (op.op === 'deleteText') mayDeleteNoteAtoms = true;
+            if (
+              op.op === 'deleteText' &&
+              !mayDeleteNoteAtoms &&
+              deleteMayStrandNote(this.pkg, store.part, op, deleteTargets)
+            ) {
+              mayDeleteNoteAtoms = true;
+            }
             return ctx.apply(op);
           },
           selectionBefore: (selection) => ctx.selectionBefore(selection),
@@ -343,8 +352,16 @@ export class TreePackageStore {
   }
 
   beginComposition(scope: StoryScope, selectionBefore: SelectionMark | null = null): boolean {
-    const resolved = this.resolveStory(scope);
+    let resolved = this.resolveStory(scope);
     if (!resolved.ok) return false;
+    // One package can have only one open IME unit. Switching stories commits the previous
+    // unit before opening the next; otherwise the old store remains permanently composed
+    // and subsequent edits never enter unified history.
+    if (this.compositionSession && this.compositionSession.partName !== resolved.story.partName) {
+      this.endComposition();
+      resolved = this.resolveStory(scope);
+      if (!resolved.ok) return false;
+    }
     // Capture package + story stacks before the composition opens so a later cascade can
     // promote (or cancel-restore) against the pre-composition baseline.
     if (!this.compositionSession) {
@@ -585,33 +602,39 @@ export class TreePackageStore {
    * Install a full package snapshot: body + opened story stores track the snapshot's parts.
    * Stores whose parts disappeared stay parked (history identity preserved) so a later
    * package undo can reconnect them; rId cache rebuilds from remaining relationships.
+   *
+   * Numbering / hyperlink shell resources minted via {@link replacePackageShell} are merged
+   * from the live package onto the snapshot so lifecycle undo cannot orphan story `numId` /
+   * `r:id` references. Furniture and notes parts remain snapshot-owned.
    */
   private installPackageSnapshot(snapshot: OoxmlPackage): void {
-    const main = snapshot.parts.get(snapshot.mainDocumentPart);
+    // Capture live shell before replacing — snapshot may predate numbering/hyperlink writes.
+    const merged = mergePersistentPackageShell(snapshot, this.pkg);
+    const main = merged.parts.get(merged.mainDocumentPart);
     if (!main) return;
     this.body.replacePart(main);
 
     for (const [name, store] of this.stories) {
-      const part = snapshot.parts.get(name);
+      const part = merged.parts.get(name);
       if (!part) continue;
       store.replacePart(part);
     }
 
     this.rIdToPartName.clear();
-    const relationships = snapshot.relationships.get(snapshot.mainDocumentPart) ?? [];
+    const relationships = merged.relationships.get(merged.mainDocumentPart) ?? [];
     for (const record of relationships) {
       if (record.type !== HEADER_REL_TYPE && record.type !== FOOTER_REL_TYPE) continue;
       const resolved = resolveRelationship(record);
       if (resolved.mode !== 'Internal' || !resolved.target.ok) continue;
       if (
         this.stories.has(resolved.target.partName) &&
-        snapshot.parts.has(resolved.target.partName)
+        merged.parts.has(resolved.target.partName)
       ) {
         this.rIdToPartName.set(record.id, resolved.target.partName);
       }
     }
 
-    this.pkg = snapshot;
+    this.pkg = merged;
     // Re-overlay open stores present in the snapshot so currentPackage stays authoritative.
     this.pkg = withPart(this.pkg, this.body.part);
     for (const store of this.stories.values()) {

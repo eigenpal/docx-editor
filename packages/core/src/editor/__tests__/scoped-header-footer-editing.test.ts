@@ -623,7 +623,7 @@ describe('surface-root pointer delegation for HF / notes', () => {
     return event;
   }
 
-  test('root listener: press on painted header band enters HF scope and dims body', () => {
+  test('root listener: double press on painted header band enters HF scope and dims body', () => {
     const { surface, container } = mount(
       docx({ header: RIGHT_TAB_HEADER, footer: RIGHT_TAB_FOOTER, body: `${p('One')}${p('Two')}` })
     );
@@ -638,6 +638,9 @@ describe('surface-root pointer delegation for HF / notes', () => {
     // Margin whitespace ABOVE the flowed story box — still inside the activation band.
     const clientX = header.box.x + 8;
     const clientY = Math.max(page.box.y + 2, header.box.y - 4);
+    const first = pressAt(pages, pages, clientX, clientY);
+    expect(first.defaultPrevented).toBe(false);
+    expect(surface.activeScope()).toEqual({ kind: 'body' });
     const event = pressAt(pages, pages, clientX, clientY);
 
     expect(event.defaultPrevented).toBe(true);
@@ -660,7 +663,7 @@ describe('surface-root pointer delegation for HF / notes', () => {
     surface.destroy();
   });
 
-  test('root listener: press on painted footer band enters footer scope', () => {
+  test('root listener: double press on painted footer band enters footer scope', () => {
     const { surface, container } = mount(
       docx({ header: p('H'), footer: p('FOOTER'), body: p('Body') })
     );
@@ -673,6 +676,14 @@ describe('surface-root pointer delegation for HF / notes', () => {
     const painted = container.querySelector('[data-docx-hf="footer"]') as HTMLElement;
     expect(painted).toBeTruthy();
 
+    const first = pressAt(
+      pages,
+      painted,
+      footer.box.x + 4,
+      footer.box.y + Math.max(1, footer.box.height / 2)
+    );
+    expect(first.defaultPrevented).toBe(false);
+    expect(surface.activeScope()).toEqual({ kind: 'body' });
     const event = pressAt(
       pages,
       painted,
@@ -698,6 +709,8 @@ describe('surface-root pointer delegation for HF / notes', () => {
 
     // Dispatch on the furniture node far outside the sheet — storyHit misses, DOM fallback
     // must still open the painted rId (proves listener composition after rebase).
+    const first = pressAt(pages, painted, -500, -500);
+    expect(first.defaultPrevented).toBe(false);
     const event = pressAt(pages, painted, -500, -500);
     expect(event.defaultPrevented).toBe(true);
     expect(surface.activeScope()).toEqual({ kind: 'headerFooter', rId: 'rId10' });

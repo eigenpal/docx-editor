@@ -38,6 +38,7 @@ import {
   MAX_NOTES_LAID_OUT,
   MAX_NOTE_FRAGMENTS,
   type NoteLayoutFallbackReason,
+  type NoteSeparatorLayout,
   type NoteStoryLayout,
   type LayoutNoteStoryOptions,
 } from './note-layout.ts';
@@ -66,6 +67,11 @@ export const MAX_NOTE_AREA_FRAGMENTS = 4_096;
 
 /** Cap on empty pages created solely to drain footnote/endnote overflow. */
 export const MAX_NOTE_OVERFLOW_PAGES = 256;
+
+/** One document-wide allowance shared by every footnote/endnote overflow stream. */
+interface NoteOverflowBudget {
+  remaining: number;
+}
 
 /**
  * Minimum body band (points) retained when computing footnote bottom reserves.
@@ -97,6 +103,11 @@ export type NotePaginationFallbackReason =
   | 'note-reflow-exhausted'
   | 'note-area-fragment-limit'
   | 'note-overflow-page-limit'
+  /**
+   * Overflow/drain iteration placed zero note stories while carry/pending remained —
+   * abort rather than minting blank separator-only sheets up to the page budget.
+   */
+  | 'note-overflow-stalled'
   /** A single note line exceeds the full content column; content is not placed overflowing. */
   | 'note-line-exceeds-page';
 
@@ -133,6 +144,8 @@ interface PageRefHit {
   readonly customMarkFollows: boolean;
   readonly sectionIndex: number;
 }
+
+export type { PageRefHit };
 
 type NoteCarryMap = Map<
   string,
@@ -173,21 +186,87 @@ function paragraphFragmentsOfBlocks(
   return found;
 }
 
+/** Paragraph-id → refs index for linear {@link filterRefsOnPage} over a layout pass. */
+export type PageRefIndex = ReadonlyMap<string, readonly PageRefHit[]>;
+
+/** Build a reusable paragraph-id index (document order preserved per paragraph). */
+export function buildPageRefIndex(allRefs: readonly PageRefHit[]): PageRefIndex {
+  const map = new Map<string, PageRefHit[]>();
+  for (const ref of allRefs) {
+    const list = map.get(ref.paragraphId);
+    if (list) list.push(ref);
+    else map.set(ref.paragraphId, [ref]);
+  }
+  return map;
+}
+
 /**
  * Collect note references that appear in laid-out body fragments on a page.
  * Matches {@link ParagraphFragmentRecord.range} ownership (half-open + boundary affinity).
+ *
+ * Pass {@link buildPageRefIndex} result as `refIndex` for O(fragments + matching refs)
+ * instead of scanning every document ref against every page fragment.
  */
 export function filterRefsOnPage(
   page: PageRecord,
-  allRefs: readonly PageRefHit[]
+  allRefs: readonly PageRefHit[],
+  refIndex?: PageRefIndex
 ): readonly PageRefHit[] {
   const fragments = paragraphFragmentsOfBlocks(page.fragments);
-  return allRefs.filter((ref) =>
-    fragments.some(
-      (fragment) =>
-        fragment.paragraphId === ref.paragraphId && fragmentOwnsAtomOffset(fragment, ref.atomOffset)
-    )
-  );
+  if (!refIndex) {
+    return allRefs.filter((ref) =>
+      fragments.some(
+        (fragment) =>
+          fragment.paragraphId === ref.paragraphId &&
+          fragmentOwnsAtomOffset(fragment, ref.atomOffset)
+      )
+    );
+  }
+  const out: PageRefHit[] = [];
+  const claimed = new Set<PageRefHit>();
+  for (const fragment of fragments) {
+    const candidates = refIndex.get(fragment.paragraphId);
+    if (!candidates) continue;
+    for (const ref of candidates) {
+      if (claimed.has(ref)) continue;
+      if (!fragmentOwnsAtomOffset(fragment, ref.atomOffset)) continue;
+      claimed.add(ref);
+      out.push(ref);
+    }
+  }
+  return out;
+}
+
+/**
+ * Pass-local cache for separator / continuationSeparator layouts.
+ * Tall authored separators are expensive to re-measure on every drain page.
+ */
+interface NoteSeparatorCache {
+  get(
+    part: OoxmlPart | null | undefined,
+    kind: 'separator' | 'continuationSeparator',
+    contentWidth: number,
+    noteKind: NoteKind,
+    maxFlowHeightPt: number,
+    opts: LayoutNoteStoryOptions,
+    reasons: NotePaginationFallbackReason[]
+  ): NoteSeparatorLayout;
+}
+
+function createNoteSeparatorCache(): NoteSeparatorCache {
+  const map = new Map<string, NoteSeparatorLayout>();
+  return {
+    get(part, kind, contentWidth, noteKind, maxFlowHeightPt, opts, reasons) {
+      const partKey = part?.name ?? 'none';
+      const key = `${partKey}\0${noteKind}\0${kind}\0${contentWidth}\0${maxFlowHeightPt}`;
+      const cached = map.get(key);
+      if (cached) return cached;
+      const laid = layoutNoteSeparator(part, kind, contentWidth, opts, noteKind, maxFlowHeightPt);
+      map.set(key, laid);
+      if (laid.fallbackReason) reasons.push(laid.fallbackReason);
+      return laid;
+    },
+  };
 }
 
 /** Scan an OOXML part's laid-out paragraph ids → refs already collected from the package. */
@@ -678,6 +757,7 @@ function buildFootnoteArea(
      * reserve measurement so height is not clipped before body reflow.
      */
     readonly reserveColumnBudget?: boolean;
+    readonly separatorCache?: NoteSeparatorCache;
   }
 ): { area: NoteAreaRecord | undefined; nextCarry: NoteCarryMap } {
   const nextCarry: NoteCarryMap = new Map(continuationCarry);
@@ -691,13 +771,29 @@ function buildFootnoteArea(
   let fragmentBudget = MAX_NOTE_AREA_FRAGMENTS;
   const separatorKind =
     continuationCarry.size > 0 ? ('continuationSeparator' as const) : ('separator' as const);
-  const separator = layoutNoteSeparator(
-    input.footnotesPart,
-    separatorKind,
-    contentWidth,
-    opts,
-    'footnote'
-  );
+  const maxSepHeight = Math.max(0, page.contentBox.height);
+  const separator = options?.separatorCache
+    ? options.separatorCache.get(
+        input.footnotesPart,
+        separatorKind,
+        contentWidth,
+        'footnote',
+        maxSepHeight,
+        opts,
+        reasons
+      )
+    : (() => {
+        const laid = layoutNoteSeparator(
+          input.footnotesPart,
+          separatorKind,
+          contentWidth,
+          opts,
+          'footnote',
+          maxSepHeight
+        );
+        if (laid.fallbackReason) reasons.push(laid.fallbackReason);
+        return laid;
+      })();
 
   const slackBudget = Math.max(
     0,
@@ -998,7 +1094,10 @@ function buildEndnoteArea(
   placement: 'sectEnd' | 'docEnd',
   continuationCarry: NoteCarryMap,
   reasons: NotePaginationFallbackReason[],
-  options?: { readonly separatorKind?: 'separator' | 'continuationSeparator' }
+  options?: {
+    readonly separatorKind?: 'separator' | 'continuationSeparator';
+    readonly separatorCache?: NoteSeparatorCache;
+  }
 ): { area: NoteAreaRecord | undefined; nextCarry: NoteCarryMap; remainingRefs: PageRefHit[] } {
   const nextCarry: NoteCarryMap = new Map(continuationCarry);
   const remainingRefs: PageRefHit[] = [];
@@ -1013,13 +1112,30 @@ function buildEndnoteArea(
     kind === 'footnote' ? input.footnotesPart : input.endnotesPart;
   // Separator drawn from endnotes part when placing endnote area; footnotes at sect/doc end
   // still use the endnotes-area chrome (Word draws the endnote separator for doc-end notes).
-  const separator = layoutNoteSeparator(
-    input.endnotesPart ?? input.footnotesPart,
-    separatorKind,
-    contentWidth,
-    opts,
-    'endnote'
-  );
+  const sepPart = input.endnotesPart ?? input.footnotesPart;
+  const maxSepHeight = Math.max(0, page.contentBox.height);
+  const separator = options?.separatorCache
+    ? options.separatorCache.get(
+        sepPart,
+        separatorKind,
+        contentWidth,
+        'endnote',
+        maxSepHeight,
+        opts,
+        reasons
+      )
+    : (() => {
+        const laid = layoutNoteSeparator(
+          sepPart,
+          separatorKind,
+          contentWidth,
+          opts,
+          'endnote',
+          maxSepHeight
+        );
+        if (laid.fallbackReason) reasons.push(laid.fallbackReason);
+        return laid;
+      })();
   const sepHeight = separator.flowHeight;
   const bodyBottom = bodyUsedHeight(page);
   // Existing endnotes already consume room below body (merged on re-entry).
@@ -1205,23 +1321,35 @@ function drainFootnoteCarryPages(
   input: NotesLayoutInput,
   noteMarks: NoteMarkContext,
   reasons: NotePaginationFallbackReason[],
-  overflowBudget: NoteOverflowBudget
+  overflowBudget: NoteOverflowBudget,
+  separatorCache: NoteSeparatorCache
 ): { pages: PageRecord[]; carry: NoteCarryMap } {
   let nextPages = pages;
   let nextCarry = carry;
   while (nextCarry.size > 0 && overflowBudget.remaining > 0) {
     const template = nextPages[nextPages.length - 1]!;
     const page = cloneEmptyOverflowPage(template, template.index + 1, 'footnote-drain');
-    const built = buildFootnoteArea(page, [], input, noteMarks, 'pageBottom', nextCarry, reasons);
+    const built = buildFootnoteArea(page, [], input, noteMarks, 'pageBottom', nextCarry, reasons, {
+      separatorCache,
+    });
+    const notesPlaced = built.area?.notes.length ?? 0;
     nextCarry = built.nextCarry;
-    if (!built.area) {
-      reasons.push('note-overflow-page-limit');
+    // Zero-progress: separator-only / empty area while carry remains — do not mint up to
+    // MAX_NOTE_OVERFLOW_PAGES blank sheets (tall-separator amplifier).
+    if (notesPlaced === 0) {
+      reasons.push('note-overflow-stalled');
+      if (built.area) {
+        nextPages = [...nextPages, { ...page, footnotes: built.area }];
+        overflowBudget.remaining -= 1;
+      }
       break;
     }
-    nextPages = [...nextPages, { ...page, footnotes: built.area }];
+    nextPages = [...nextPages, { ...page, footnotes: built.area! }];
     overflowBudget.remaining -= 1;
   }
-  if (nextCarry.size > 0) reasons.push('note-overflow-page-limit');
+  if (nextCarry.size > 0 && !reasons.includes('note-overflow-stalled')) {
+    reasons.push('note-overflow-page-limit');
+  }
   return { pages: nextPages, carry: nextCarry };
 }
 
@@ -1233,7 +1361,8 @@ function insertOverflowPageAt(
 ): { pages: PageRecord[]; pageIndex: number } {
   const page = cloneEmptyOverflowPage(template, insertAt, noteStream);
   const next = [...pages.slice(0, insertAt), page, ...pages.slice(insertAt)];
-  return { pages: reindexPages(next), pageIndex: insertAt };
+  // Defer reindex to attachNotesToLayout — per-insert reindex is O(overflow²).
+  return { pages: next, pageIndex: insertAt };
 }
 
 /**
@@ -1284,6 +1413,7 @@ function placeEndnotesFromPage(
     readonly stopBeforeIndex?: number;
     /** First page index of the owning section (for SECTIONPAGES patching). */
     readonly sectionStartIndex?: number;
+    readonly separatorCache?: NoteSeparatorCache;
   }
 ): PageRecord[] {
   if (refs.length === 0 || pages.length === 0) return pages;
@@ -1297,6 +1427,7 @@ function placeEndnotesFromPage(
   let stopBefore = options?.stopBeforeIndex ?? Number.POSITIVE_INFINITY;
   const sectionStart = options?.sectionStartIndex ?? startIndex;
   const boundToSection = options?.stopBeforeIndex !== undefined;
+  const separatorCache = options?.separatorCache;
 
   while (pending.length > 0 || carry.size > 0) {
     if (index >= nextPages.length || index >= stopBefore) {
@@ -1325,9 +1456,11 @@ function placeEndnotesFromPage(
     }
     const built = buildEndnoteArea(page, pending, input, noteMarks, placement, carry, reasons, {
       separatorKind,
+      ...(separatorCache ? { separatorCache } : {}),
     });
     carry = built.nextCarry;
     pending = built.remainingRefs;
+    const notesPlaced = built.area?.notes.length ?? 0;
     if (built.area) {
       const prev = nextPages[index]!;
       nextPages[index] = {
@@ -1352,6 +1485,16 @@ function placeEndnotesFromPage(
       separatorKind = 'separator';
       continue;
     }
+    // Empty overflow sheet that placed nothing while work remains: stall (tall separator).
+    if (
+      notesPlaced === 0 &&
+      (carry.size > 0 || pending.length > 0) &&
+      page.fragments.length === 0 &&
+      page.noteStream === 'endnote-overflow'
+    ) {
+      reasons.push('note-overflow-stalled');
+      break;
+    }
     if (carry.size > 0 || pending.length > 0) {
       separatorKind = 'continuationSeparator';
       index += 1;
@@ -1360,7 +1503,9 @@ function placeEndnotesFromPage(
     break;
   }
   if (pending.length > 0 || carry.size > 0) {
-    reasons.push('note-overflow-page-limit');
+    if (!reasons.includes('note-overflow-stalled')) {
+      reasons.push('note-overflow-page-limit');
+    }
   }
 
   if (boundToSection) {
@@ -1397,11 +1542,13 @@ export function computeFootnoteReserves(
   const reserves = new Map<number, number>();
   const reasons: NotePaginationFallbackReason[] = [];
   let carry: NoteCarryMap = new Map();
+  const refIndex = buildPageRefIndex(allRefs);
+  const separatorCache = createNoteSeparatorCache();
 
   for (const page of layout.pages) {
     // Strip any prior note-pass output so reserve height is body-only.
     const bodyPage = bodyOnlyPage(page);
-    const pageRefs = filterRefsOnPage(bodyPage, allRefs);
+    const pageRefs = filterRefsOnPage(bodyPage, allRefs, refIndex);
     const fnRefs = pageRefs.filter((r) => r.noteKind === 'footnote');
     // Position from first ref's section (Word uses section of the page).
     const sectionIndex = fnRefs[0]?.sectionIndex ?? 0;
@@ -1423,7 +1570,7 @@ export function computeFootnoteReserves(
       props.pos,
       carry,
       reasons,
-      { reserveColumnBudget: true }
+      { reserveColumnBudget: true, separatorCache }
     );
     carry = nextCarry;
     const needed = Math.min(area?.box.height ?? 0, maxArea);
@@ -1463,12 +1610,14 @@ export function attachNotesToLayout(
   const reasons: NotePaginationFallbackReason[] = [...(options?.fallbackReasons ?? [])];
   const paragraphSectionIndex = options?.paragraphSectionIndex ?? new Map<string, number>();
   const overflowBudget: NoteOverflowBudget = { remaining: MAX_NOTE_OVERFLOW_PAGES };
+  const refIndex = buildPageRefIndex(allRefs);
+  const separatorCache = createNoteSeparatorCache();
 
   // Build sites for mark derivation (page index from layout).
   const footnoteSites: NoteReferenceSite[] = [];
   const endnoteSites: NoteReferenceSite[] = [];
   for (const page of layout.pages) {
-    for (const ref of filterRefsOnPage(page, allRefs)) {
+    for (const ref of filterRefsOnPage(page, allRefs, refIndex)) {
       const site: NoteReferenceSite = {
         noteId: ref.noteId,
         sectionIndex: ref.sectionIndex,
@@ -1488,7 +1637,7 @@ export function attachNotesToLayout(
 
   let pages: PageRecord[] = layout.pages.map((page) => {
     const bodyPage = bodyOnlyPage(page);
-    const pageRefs = filterRefsOnPage(page, allRefs);
+    const pageRefs = filterRefsOnPage(page, allRefs, refIndex);
     const fnRefs = pageRefs.filter((r) => r.noteKind === 'footnote');
     const enRefs = pageRefs.filter((r) => r.noteKind === 'endnote');
 
@@ -1530,7 +1679,8 @@ export function attachNotesToLayout(
         noteMarks,
         props.pos,
         carry,
-        reasons
+        reasons,
+        { separatorCache }
       );
       footnotes = built.area;
       carry = built.nextCarry;
@@ -1552,7 +1702,8 @@ export function attachNotesToLayout(
       input,
       noteMarks,
       reasons,
-      overflowBudget
+      overflowBudget,
+      separatorCache
     );
     pages = drained.pages;
     carry = drained.carry;
@@ -1586,6 +1737,7 @@ export function attachNotesToLayout(
         {
           stopBeforeIndex: stopBefore,
           sectionStartIndex: sectionStart,
+          separatorCache,
         }
       );
     }
@@ -1602,7 +1754,8 @@ export function attachNotesToLayout(
       noteMarks,
       'docEnd',
       reasons,
-      overflowBudget
+      overflowBudget,
+      { separatorCache }
     );
   }
 

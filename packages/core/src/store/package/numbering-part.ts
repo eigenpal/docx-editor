@@ -510,6 +510,10 @@ function freeRelationshipId(pkg: OoxmlPackage): string {
       if (match) max = Math.max(max, Number(match[1]));
     }
   }
+  for (const external of pkg.externalTargets) {
+    const match = /^rId(\d{1,9})$/.exec(external.id);
+    if (match) max = Math.max(max, Number(match[1]));
+  }
   return `rId${max + 1}`;
 }
 

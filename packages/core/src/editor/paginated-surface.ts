@@ -75,6 +75,7 @@ import { createSurfaceNavigation } from './surface-navigation.ts';
 import {
   furnitureCaretHost,
   navigateInActiveScope,
+  noteCaretHost,
   pointerHeaderFooterState,
   scopedDocumentOrder,
   setHeaderFooterEditingChrome,
@@ -173,12 +174,28 @@ export function mountPaginatedSurface(
 
   const caret = createSurfaceCaret(pagesLayer, scale, () => {
     const active = hfScope?.getActive() ?? null;
+    const activeNote = noteOps?.activeNoteScope() ?? null;
+    const notePageIndex = noteOps?.activeNotePageIndex() ?? null;
+    const scopedHost = active
+      ? furnitureCaretHost(pagesLayer, active.pageIndex)
+      : activeNote
+        ? noteCaretHost(pagesLayer, activeNote.id, notePageIndex)
+        : null;
     return {
       layout: currentLayout,
       selection,
       measurer,
-      ...(active ? { preferredPageIndex: active.pageIndex } : {}),
-      furnitureHost: active ? furnitureCaretHost(pagesLayer, active.pageIndex) : null,
+      ...(active
+        ? { preferredPageIndex: active.pageIndex }
+        : notePageIndex !== null
+          ? { preferredPageIndex: notePageIndex }
+          : {}),
+      scopedHost,
+      ...(active
+        ? { scopedHostKind: 'headerFooter' as const }
+        : activeNote
+          ? { scopedHostKind: 'note' as const }
+          : {}),
     };
   });
 
@@ -1047,6 +1064,7 @@ export function mountPaginatedSurface(
         command,
         desiredX,
         hfScope?.getActive() ?? null,
+        noteScopeId(),
         measurer
       );
       if (!moved) return;
@@ -1600,6 +1618,12 @@ export function mountPaginatedSurface(
       // The caret is positioned from layout regardless, so nothing needs the browser's scroll.
       focus: () => pagesLayer.focus({ preventScroll: true }),
       activeHeaderFooter: () => pointerHeaderFooterState(hfScope?.getActive() ?? null),
+      activeNote: () => {
+        const scope = noteOps?.activeNoteScope();
+        return scope
+          ? { scopeId: scope.id, pageIndex: noteOps?.activeNotePageIndex() ?? null }
+          : null;
+      },
       enterHeaderFooter: (info) => {
         hfScope?.enterHeaderFooter({
           rId: info.rId,
@@ -1608,11 +1632,11 @@ export function mountPaginatedSurface(
           ...(info.position ? { position: info.position } : {}),
         });
       },
-      enterNote: (scopeId, position) => {
-        noteOps?.enterNote(scopeId, position);
+      enterNote: (scopeId, position, pageIndex) => {
+        noteOps?.enterNote(scopeId, position, pageIndex);
       },
-      exitNote: () => {
-        noteOps?.exitNote();
+      exitNote: (restoreBody) => {
+        noteOps?.exitNote(restoreBody);
       },
       exitHeaderFooter: () => hfScope?.exitHeaderFooter(),
     },

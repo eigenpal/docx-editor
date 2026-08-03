@@ -2380,7 +2380,7 @@ a.docx-hyperlink:focus-visible {
  * painted ink for print (print media resets opacity). */
 .docx-paginated-surface .docx-hf:not([data-docx-hf-active]),
 .docx-pages .docx-hf:not([data-docx-hf-active]) {
-  cursor: pointer;
+  cursor: text;
 }
 
 .docx-pages--hf-editing .docx-page-content {

@@ -53,11 +53,10 @@ export interface SurfaceCaretInput {
    * Prefer this sheet when the same paragraph paints on multiple pages (open shared HF).
    */
   readonly preferredPageIndex?: number;
-  /**
-   * Furniture host for an open header/footer. Story-relative caret geometry is parented here
-   * rather than under `.docx-page-content` (which does not contain furniture).
-   */
-  readonly furnitureHost?: HTMLElement | null;
+  /** Host for an open header/footer or note whose caret geometry is story-relative. */
+  readonly scopedHost?: HTMLElement | null;
+  /** Distinguishes stable placement keys for the two scoped story kinds. */
+  readonly scopedHostKind?: 'headerFooter' | 'note';
 }
 
 export interface SurfaceCaret {
@@ -113,6 +112,8 @@ export function createSurfaceCaret(
   let steadyTimer: ReturnType<typeof setTimeout> | null = null;
   /** The geometry last painted, so a repaint in place is told from a real move. */
   let placed: string | null = null;
+  /** Last scoped host whose native caret was suppressed. */
+  let suppressedHost: HTMLElement | null = null;
 
   function hasFocus(): boolean {
     const active = document.activeElement;
@@ -136,8 +137,8 @@ export function createSurfaceCaret(
     element.classList.remove(STEADY_CLASS);
     element.remove();
     pagesLayer.style.removeProperty('caret-color');
-    const activeHf = pagesLayer.querySelector<HTMLElement>('[data-docx-hf-active]');
-    activeHf?.style.removeProperty('caret-color');
+    suppressedHost?.style.removeProperty('caret-color');
+    suppressedHost = null;
   }
 
   /** Hold the caret solid while it is moving, then let the blink resume. */
@@ -155,7 +156,7 @@ export function createSurfaceCaret(
       hide();
       return;
     }
-    const { layout, selection, furnitureHost, preferredPageIndex, measurer } = read();
+    const { layout, selection, scopedHost, scopedHostKind, preferredPageIndex, measurer } = read();
     // A range selection shows the browser's highlight; an insertion point inside it would
     // claim a position the selection does not have.
     if (!isCollapsed(selection)) {
@@ -172,10 +173,10 @@ export function createSurfaceCaret(
       hide();
       return;
     }
-    // Open furniture: parent into the active HF band (story-relative coords). Body: page
-    // content box (content-relative coords). Never paint furniture geometry into the body box.
+    // Open scoped story: parent into the story host (story-relative coords). Body: page
+    // content box (content-relative coords). Never paint scoped geometry into the body box.
     const host =
-      furnitureHost ??
+      scopedHost ??
       pagesLayer.querySelector<HTMLElement>(
         `[data-page-index="${geometry.pageIndex}"] > .docx-page-content`
       );
@@ -188,11 +189,16 @@ export function createSurfaceCaret(
     element.style.height = `${geometry.height * scale}px`;
     if (element.parentNode !== host) host.append(element);
     // Suppress the native caret only while ours is up, and inline so it beats the
-    // `[contenteditable='true']` rule in the stylesheet — pages layer AND active HF band.
+    // `[contenteditable='true']` rule in the stylesheet — pages layer AND scoped story.
     pagesLayer.style.caretColor = 'transparent';
-    if (furnitureHost) furnitureHost.style.caretColor = 'transparent';
+    if (suppressedHost && suppressedHost !== scopedHost) {
+      suppressedHost.style.removeProperty('caret-color');
+    }
+    suppressedHost = scopedHost ?? null;
+    suppressedHost?.style.setProperty('caret-color', 'transparent');
 
-    const key = `${geometry.pageIndex}:${host === furnitureHost ? 'hf' : 'body'}:${geometry.x}:${geometry.y}:${geometry.height}`;
+    const hostKind = host === scopedHost ? (scopedHostKind ?? 'scoped') : 'body';
+    const key = `${geometry.pageIndex}:${hostKind}:${geometry.x}:${geometry.y}:${geometry.height}`;
     if (key !== placed) {
       placed = key;
       markMoving();

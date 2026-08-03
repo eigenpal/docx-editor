@@ -16,7 +16,7 @@ import {
   settingsPartOf,
 } from '../../store/package/note-properties.ts';
 import { createFixedMeasurer } from '../fixed-measurer.ts';
-import { layoutSemanticDocument } from '../semantic-layout.ts';
+import { createLayoutSession, layoutSemanticDocument } from '../semantic-layout.ts';
 import { noteStoryBlocks } from '../story-roots.ts';
 import { layoutNoteById, normalNotesOf } from '../note-layout.ts';
 import type { NotesLayoutInput } from '../note-pagination.ts';
@@ -335,6 +335,31 @@ describe('note layout + pagination', () => {
     expect(endnotePages.length).toBeGreaterThan(0);
     // Endnotes attach to a late page (docEnd), not every referencing page.
     expect(endnotePages.length).toBeLessThanOrEqual(layout.pages.length);
+  });
+
+  test('repeated incremental passes replace note areas instead of accumulating them', () => {
+    const { part, notes } = loadFixture(COMPREHENSIVE);
+    const session = createLayoutSession();
+    const first = layoutSemanticDocument(part, 1, {
+      measurer: notes.measurer,
+      notes,
+      session,
+      producer: 'note-idempotence',
+    });
+    const second = layoutSemanticDocument(part, 2, {
+      measurer: notes.measurer,
+      notes,
+      session,
+      producer: 'note-idempotence',
+    });
+    const shape = (layout: typeof first) =>
+      layout.pages.map((page) => ({
+        footnoteHeight: page.footnotes?.box.height ?? 0,
+        footnoteCount: page.footnotes?.notes.length ?? 0,
+        endnoteHeight: page.endnotes?.box.height ?? 0,
+        endnoteCount: page.endnotes?.notes.length ?? 0,
+      }));
+    expect(shape(second)).toEqual(shape(first));
   });
 
   test('taller note body increases footnote area height', () => {

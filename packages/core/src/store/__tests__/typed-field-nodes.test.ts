@@ -371,9 +371,17 @@ describe('malformed demotion (fail-open)', () => {
         `</w:r></w:p>`
     );
     const paragraph = paragraphOf(part);
-    expect(paragraphTextOf(part, paragraph.id)).toBe(FIELD_ATOM_CHAR);
-    expect(atomicFieldSpansOf(paragraph)).toHaveLength(1);
+    expect(paragraphTextOf(part, paragraph.id)).toBe('KEEP');
+    expect(atomicFieldSpansOf(paragraph)).toHaveLength(0);
   });
+
+  test('many unmatched begins are demoted in linear time', () => {
+    const begins = `<w:fldChar w:fldCharType="begin"/>`.repeat(8_000);
+    const part = parse(`<w:p><w:r>${begins}<w:t>KEEP</w:t></w:r></w:p>`);
+    const paragraph = paragraphOf(part);
+    expect(atomicFieldSpansOf(paragraph)).toHaveLength(0);
+    expect(paragraphTextOf(part, paragraph.id)).toBe('KEEP');
+  }, 1_000);
 
   test('fields do not form across paragraphs', () => {
     const part = parse(

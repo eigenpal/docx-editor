@@ -325,8 +325,9 @@ export function atomicFieldSpansOf(
 
     if (endIndex < 0 || nestingOverflow) {
       // Demote: missing end or hostile nesting — do not emit an atomic span.
-      i += 1;
-      continue;
+      // The forward scan already exhausted the paragraph. Advancing one begin at a time
+      // would rescan the same hostile suffix quadratically; fail closed for the suffix.
+      break;
     }
 
     // Instruction overflow still yields an atomic unit (content stays one selectable

@@ -299,7 +299,9 @@ export {
 } from './note-layout.ts';
 export {
   attachNotesToLayout,
+  buildPageRefIndex,
   computeFootnoteReserves,
+  filterRefsOnPage,
   fragmentOwnsAtomOffset,
   provisionalNoteMarks,
   MAX_NOTE_OVERFLOW_PAGES,
@@ -308,6 +310,7 @@ export {
   type NotesLayoutInput,
   type NotesAttachResult,
   type NotePaginationFallbackReason,
+  type PageRefIndex,
 } from './note-pagination.ts';
 export { noteMarkKey, projectedNoteMarkText, type NoteMarkContext } from './note-projection.ts';
 export { storyBlocks, noteStoryBlocks } from './story-roots.ts';
@@ -319,12 +322,15 @@ export {
 export {
   DEFAULT_SECTION_PROPERTIES,
   enumerateDocumentSections,
+  enumerateDocumentSectionsBounded,
   geometryOfSection,
+  MAX_DOCUMENT_SECTIONS,
   paragraphSectionNode,
   parsePageNumbering,
   parseSectionProperties,
   readSectionProperties,
   type DocumentSection,
+  type DocumentSectionsEnumeration,
   type SectionBreakType,
   type SectionMargins,
   type SectionPageNumbering,

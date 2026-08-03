@@ -84,10 +84,16 @@ export interface PointerHost {
   focus(): void;
   /** When a header/footer scope is open, the story the pointer should resolve against. */
   activeHeaderFooter?(): ActiveHeaderFooterPointerState | null;
+  /** When a footnote/endnote scope is open, the note the pointer should resolve against. */
+  activeNote?(): { readonly scopeId: string; readonly pageIndex: number | null } | null;
   /** Double-click enter on painted furniture. */
   enterHeaderFooter?(info: EnterHeaderFooterPointerRequest): void;
   /** Enter a painted note story for scoped editing. */
-  enterNote?(scopeId: string, position?: { paragraphId: string; offset: number }): void;
+  enterNote?(
+    scopeId: string,
+    position?: { paragraphId: string; offset: number },
+    pageIndex?: number
+  ): void;
   /** Leave note scope; when true the host restores the saved body selection. */
   exitNote?(restoreBody?: boolean): void;
   /** Leave furniture scope; when true the host restores the saved body selection. */
@@ -215,6 +221,16 @@ export function createPointerController(
   }
 
   function resolve(clientX: number, clientY: number): SemanticHit | null {
+    const activeNote = host.activeNote?.() ?? null;
+    if (activeNote) {
+      const layout = host.layout();
+      const noteHit = findNoteAtSheetPoint(layout, sheetPoint(clientX, clientY), host.pageOffsetX);
+      if (!noteHit || noteHit.scopeId !== activeNote.scopeId) return null;
+      const measurer = host.measurer();
+      return hitTestFragments(layout, noteHit.pageIndex, noteHit.fragments, noteHit.local, {
+        ...(measurer ? { measurer } : {}),
+      });
+    }
     const active = host.activeHeaderFooter?.() ?? null;
     if (!active) return resolveBody(clientX, clientY);
 
@@ -272,6 +288,12 @@ export function createPointerController(
   const orderCache = new WeakMap<SemanticLayout, Map<string, number>>();
 
   function paragraphRank(layout: SemanticLayout, paragraphId: string): number {
+    const activeNote = host.activeNote?.();
+    if (activeNote) {
+      const order = scopedDocumentOrder(layout, null, activeNote.scopeId);
+      const at = order.indexOf(paragraphId);
+      return at === -1 ? -1 : at;
+    }
     const active = host.activeHeaderFooter?.();
     if (active) {
       const order = scopedDocumentOrder(layout, scopeBinding(active));
@@ -507,6 +529,7 @@ export function createPointerController(
     const layout = host.layout();
     const sheet = sheetPoint(event.clientX, event.clientY);
     const active = host.activeHeaderFooter?.() ?? null;
+    const activeNote = host.activeNote?.() ?? null;
     const storyHit = findStoryAtSheetPoint(layout, sheet, host.pageOffsetX);
     const noteHit = findNoteAtSheetPoint(layout, sheet, host.pageOffsetX);
     const furnitureDom = (event.target as Element | null)?.closest('[data-docx-hf]');
@@ -514,6 +537,8 @@ export function createPointerController(
     const target = event.target as Element | null;
     const noteRefEl = target?.closest<HTMLElement>('[data-docx-note-ref]');
     const noteMarkBackEl = target?.closest<HTMLElement>('[data-docx-note-mark-back]');
+    let pressClickCount: number | null = null;
+    const clicks = (): number => (pressClickCount ??= countClick(event));
 
     // Body citation → note; note mark → body (DOM attrs from paint, not React-only).
     if (noteRefEl?.dataset.docxNoteScope) {
@@ -535,12 +560,34 @@ export function createPointerController(
       const hit = hitTestFragments(layout, noteHit.pageIndex, noteHit.fragments, noteHit.local, {
         ...(measurer ? { measurer } : {}),
       });
-      host.enterNote?.(
-        noteHit.scopeId,
-        hit ? { paragraphId: hit.position.paragraphId, offset: hit.position.offset } : undefined
-      );
-      event.preventDefault();
-      return;
+      if (!activeNote || activeNote.scopeId !== noteHit.scopeId) {
+        event.preventDefault();
+        host.focus();
+        host.enterNote?.(
+          noteHit.scopeId,
+          hit ? { paragraphId: hit.position.paragraphId, offset: hit.position.offset } : undefined,
+          noteHit.pageIndex
+        );
+        return;
+      }
+      if (activeNote.pageIndex !== noteHit.pageIndex) {
+        event.preventDefault();
+        host.focus();
+        host.enterNote?.(
+          noteHit.scopeId,
+          hit ? { paragraphId: hit.position.paragraphId, offset: hit.position.offset } : undefined,
+          noteHit.pageIndex
+        );
+        return;
+      }
+      // The active note uses the ordinary gesture lane below: drag, shift-click and
+      // multi-click must behave like body text rather than reopening the scope each time.
+    } else if (activeNote) {
+      if (!isBodyContentPoint(layout, sheet, host.pageOffsetX)) return;
+      // Clicking body text leaves the note and places a fresh body selection at the click,
+      // rather than restoring the citation selection first and requiring a second click.
+      host.exitNote?.(false);
+      host.focus();
     }
 
     if (active) {
@@ -566,6 +613,9 @@ export function createPointerController(
         return;
       }
     } else if (onFurniture) {
+      // Match Word's activation model: an inactive header/footer takes a double click.
+      // A single press in page-margin whitespace must not dim and lock the body.
+      if (clicks() < 2) return;
       // Enter from the activation band / story box (semantic furniture record). When the
       // DOM hit the painted `[data-docx-hf]` but sheet geometry missed (stale offset, etc.),
       // fall back to the painted relationship id so the press is never a silent no-op.
@@ -621,7 +671,7 @@ export function createPointerController(
     document.addEventListener('pointerup', onPointerUp);
     document.addEventListener('pointercancel', onPointerUp);
 
-    const count = countClick(event);
+    const count = clicks();
     const granularity = event.shiftKey
       ? 'character'
       : GRANULARITIES[(count - 1) % GRANULARITIES.length]!;

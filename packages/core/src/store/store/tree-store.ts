@@ -183,11 +183,13 @@ export class TreeDocumentStore {
   }
 
   /**
-   * Replace the current part without recording history. Used by the package coordinator
-   * when restoring a full-package snapshot after a lifecycle undo/redo.
+   * Replace the current part without recording history, but advance the revision so
+   * revision-keyed projections cannot survive a package snapshot install.
    */
   replacePart(part: OoxmlPart): void {
+    if (part === this.current) return;
     this.current = part;
+    this.rev += 1;
   }
 
   /**

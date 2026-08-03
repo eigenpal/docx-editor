@@ -11,6 +11,7 @@ import {
   DEFAULT_MAX_EDITABLE_STORY_PARTS,
   TreePackageStore,
   type StoryScope,
+  type TreePackageStoreOptions,
   type TreeModelChange,
 } from '../store/tree-package-store.ts';
 import { readOoxmlPackage, writeOoxmlPackage } from '../package/ooxml-package.ts';
@@ -81,7 +82,7 @@ function loadPackage(bytes: Uint8Array) {
   return result.package;
 }
 
-function openPackage(bytes: Uint8Array, options?: { maxEditableStoryParts?: number }) {
+function openPackage(bytes: Uint8Array, options?: TreePackageStoreOptions) {
   const pkg = loadPackage(bytes);
   const main = pkg.parts.get(pkg.mainDocumentPart);
   if (!main) throw new Error('no main');
@@ -124,6 +125,54 @@ const bodyAndHeaderDoc = (): Uint8Array =>
   });
 
 describe('TreePackageStore — body and HF coexistence', () => {
+  test('ordinary body delete does not run a package-wide note cascade', () => {
+    let cascadeCalls = 0;
+    const store = openPackage(build({}), {
+      cascadeDeletedNoteReferences: (_before, after) => {
+        cascadeCalls += 1;
+        return after;
+      },
+    });
+    const bodyScope: StoryScope = { kind: 'body' };
+    const bodyId = paragraphIds(store.partFor(bodyScope)!)[0]!;
+
+    const result = store.transact(bodyScope, (ctx) => {
+      ctx.apply({ op: 'deleteText', paragraphId: bodyId, start: 3, end: 4 });
+    });
+
+    expect(result.ok).toBe(true);
+    expect(cascadeCalls).toBe(0);
+    expect(paragraphTextOf(store.partFor(bodyScope)!, bodyId)).toBe('bod');
+  });
+
+  test('switching composition scope closes the previous story history unit', () => {
+    const store = openPackage(bodyAndHeaderDoc());
+    const bodyScope: StoryScope = { kind: 'body' };
+    const headerScope: StoryScope = { kind: 'headerFooter', rId: 'rId7' };
+    const bodyId = paragraphIds(store.partFor(bodyScope)!)[0]!;
+    const headerId = paragraphIds(store.partFor(headerScope)!)[0]!;
+
+    expect(store.beginComposition(bodyScope)).toBe(true);
+    expect(
+      store.transact(bodyScope, (ctx) => {
+        ctx.apply({ op: 'insertText', paragraphId: bodyId, offset: 4, text: '!' });
+      }).ok
+    ).toBe(true);
+    expect(store.beginComposition(headerScope)).toBe(true);
+    expect(
+      store.transact(headerScope, (ctx) => {
+        ctx.apply({ op: 'insertText', paragraphId: headerId, offset: 6, text: 'X' });
+      }).ok
+    ).toBe(true);
+    store.endComposition();
+
+    expect(store.canUndo).toBe(true);
+    store.undo();
+    expect(paragraphTextOf(store.partFor(headerScope)!, headerId)).toBe('HEADER');
+    store.undo();
+    expect(paragraphTextOf(store.partFor(bodyScope)!, bodyId)).toBe('body');
+  });
+
   test('body and header stores keep independent revisions and indexes', () => {
     const store = openPackage(bodyAndHeaderDoc());
     const bodyScope: StoryScope = { kind: 'body' };

@@ -133,6 +133,7 @@ describe('insertNote', () => {
   test('creates part/rel/content-type and allocates id from max+1', () => {
     const store = openStore(build({}));
     const paragraphId = firstParagraphId(store.currentPackage());
+    const bodyRevision = store.revisionFor({ kind: 'body' });
     const result = store.applyLifecycleOp({
       op: 'insertNote',
       noteKind: 'footnote',
@@ -142,6 +143,7 @@ describe('insertNote', () => {
     expect(result.ok).toBe(true);
     if (!result.ok) throw new Error(result.reason);
     expect(result.change?.impact).toBe('global');
+    expect(store.revisionFor({ kind: 'body' })).toBe((bodyRevision ?? 0) + 1);
 
     const pkg = store.currentPackage();
     const notes = resolveNotesPart(pkg, 'footnote');
@@ -288,6 +290,19 @@ describe('deleteNote / convertNote / cascade', () => {
       noteId: 99,
     });
     expect(result.ok).toBe(false);
+  });
+
+  test('deleteNote refuses reserved separator ids', () => {
+    const pkg = load(build({ footnotes: seededNotes }));
+    for (const noteId of [-1, 0]) {
+      const result = applyNoteLifecycleOp(pkg, {
+        op: 'deleteNote',
+        noteKind: 'footnote',
+        noteId,
+      });
+      expect(result.ok).toBe(false);
+      if (!result.ok) expect(result.detail).toBe('noteId');
+    }
   });
 });
 

@@ -50,6 +50,8 @@ export type NoteLayoutFallbackReason =
   | 'note-fragment-limit'
   | 'note-reflow-exhausted'
   | 'note-height-cap'
+  /** Authored separator/continuationSeparator taller than the content column. */
+  | 'note-separator-height-cap'
   | 'missing-note-body'
   | 'dangling-note-reference';
 
@@ -82,6 +84,8 @@ export interface NoteSeparatorLayout {
    * story has real paragraph/run/border content that paint should render as fragments.
    */
   readonly ruleStyle?: NoteSeparatorRuleStyle;
+  /** Set when an oversize authored separator was replaced with a synthetic rule. */
+  readonly fallbackReason?: NoteLayoutFallbackReason;
 }
 
 export interface LayoutNoteStoryOptions {
@@ -289,13 +293,18 @@ function runIsMarkerOnly(run: OoxmlElement): boolean {
  * Marker-only / missing separators emit no paragraph fragments — paint draws the rule
  * from {@link NoteSeparatorLayout.ruleStyle} + box geometry. Authored separators with
  * real paragraph/run/border content keep their fragment story (including `w:pBdr`).
+ *
+ * When `maxFlowHeightPt` is set and an authored separator exceeds it, the engine fails
+ * closed to a short synthetic rule ({@link note-separator-height-cap}) so note pagination
+ * cannot burn the overflow budget on zero-progress separator-only pages.
  */
 export function layoutNoteSeparator(
   part: OoxmlPart | null | undefined,
   kind: 'separator' | 'continuationSeparator',
   contentWidth: number,
   options: LayoutNoteStoryOptions,
-  noteKind: NoteKind
+  noteKind: NoteKind,
+  maxFlowHeightPt?: number
 ): NoteSeparatorLayout {
   const ruleStyle = defaultNoteSeparatorRuleStyle(noteKind, kind);
   const authored = findSeparatorNote(part, kind);
@@ -311,6 +320,17 @@ export function layoutNoteSeparator(
     }
     const laid = layoutNoteStory(authored, contentWidth, options);
     if (laid && laid.flowHeight > 0) {
+      const cap = maxFlowHeightPt ?? Number.POSITIVE_INFINITY;
+      if (laid.flowHeight > cap + 0.001) {
+        return {
+          kind,
+          fragments: [],
+          flowHeight: DEFAULT_NOTE_SEPARATOR_HEIGHT_PT,
+          synthetic: true,
+          ruleStyle,
+          fallbackReason: 'note-separator-height-cap',
+        };
+      }
       return {
         kind,
         fragments: laid.fragments,

@@ -1011,9 +1011,11 @@ export function layoutRowFragmentBounded(
   });
 
   // Exact clips: leftover cell content is not continued onto the next page (17.18.37).
-  const remainderCursors = clipExact ? null : flowed.every((entry) => entry.complete)
+  const remainderCursors = clipExact
     ? null
-    : flowed.map((entry) => entry.nextCursor);
+    : flowed.every((entry) => entry.complete)
+      ? null
+      : flowed.map((entry) => entry.nextCursor);
   const complete = clipExact || flowed.every((entry) => entry.complete);
 
   return {

@@ -818,6 +818,9 @@ export const CHROME_MENUS: readonly ChromeMenu[] = [
       { kind: 'item', slot: 'image.insert' },
       { kind: 'item', slot: 'table.insert', picker: 'tableGrid' },
       { kind: 'separator' },
+      { kind: 'item', slot: 'insert.footnote' },
+      { kind: 'item', slot: 'insert.endnote' },
+      { kind: 'separator' },
       {
         kind: 'submenu',
         labelKey: 'toolbar.break',

@@ -818,9 +818,11 @@ export function openTreeSession(bytes: Uint8Array): OpenTreeSessionResult {
       },
 
       ensureHyperlinkRelationship(url) {
-        // Same lane as `ensureListDefinition`: a package write, not a tree op, so it sits
-        // outside the undo stack. `currentPackage()` mints a fresh object per call, so the
-        // identity check compares against the SAME instance the write was given.
+        // Package write, not a tree op: the story undo unit names the rId, while the
+        // relationship itself is session-persistent across lifecycle package snapshots
+        // (see `mergePersistentPackageShell`). Leftover rels are harmless; missing ones are not.
+        // `currentPackage()` mints a fresh object per call, so the identity check compares
+        // against the SAME instance the write was given.
         const before = currentPackage();
         const ensured = ensureHyperlinkRelationship(before, url);
         if (!ensured) return null;
@@ -829,9 +831,10 @@ export function openTreeSession(bytes: Uint8Array): OpenTreeSessionResult {
       },
 
       ensureListDefinition(kind) {
-        // The numbering part lives on the PACKAGE, not the main-part tree, so this is the
-        // one edit that does not go through `store.transact`. The memoized numbering root
-        // is cleared so layout re-reads the definitions this just added.
+        // The numbering part lives on the PACKAGE, not the main-part tree. Definitions are
+        // monotonic in-session and persist across lifecycle package undo/redo so story
+        // `numId` references cannot go dead. The memoized numbering root is cleared so
+        // layout re-reads the definitions this just added.
         const ensured = ensureListDefinition(currentPackage(), kind);
         if (!ensured) return null;
         packageStore.replacePackageShell(ensured.pkg);

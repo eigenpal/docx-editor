@@ -50,7 +50,6 @@ const EXPECTED_GROUPS = [
   'review',
   'image',
   'table',
-  'insert',
   'file',
   'insert',
 ];
@@ -220,7 +219,7 @@ describe('legacy chrome descriptor', () => {
   });
 
   test('the count is stable, so a dropped control fails rather than passing quietly', () => {
-    expect(chromeControlCount()).toBe(37);
+    expect(chromeControlCount()).toBe(43);
   });
 
   test('the menu region carries the chrome menus, in bar order', () => {

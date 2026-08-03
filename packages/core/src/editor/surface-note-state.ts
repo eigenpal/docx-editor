@@ -40,6 +40,9 @@ export type NotePropertiesStateSnapshot = {
   readonly endnote: NotePropertiesSlice;
 };
 
+/** Hard cap for attacker-controlled note text exposed to hover chrome. */
+export const MAX_NOTE_PREVIEW_CHARS = 500;
+
 function paragraphSectionIndexOf(session: TreeDocxSession, paragraphId: string): number {
   const part = session.part();
   const sections = enumerateDocumentSections(part);
@@ -140,14 +143,20 @@ export function notePreviewTextOf(session: TreeDocxSession, scopeId: string): st
   if (!parsed) return null;
   const part = resolveNotesPart(session.currentPackage(), parsed.noteKind);
   if (!part) return null;
-  const note = findNoteById(part.root, parsed.noteId);
+  const notePart = part;
+  const note = findNoteById(notePart.root, parsed.noteId);
   if (!note) return null;
   const chunks: string[] = [];
+  let remaining = MAX_NOTE_PREVIEW_CHARS;
   const walk = (node: OoxmlNode, depth: number): void => {
-    if (depth > 32) return;
+    if (depth > 32 || remaining <= 0) return;
     if (node.kind === 'paragraph' && typeof node.id === 'string') {
-      const text = paragraphTextOf(part, node.id);
-      if (text) chunks.push(text.replace(/\uFFFC/g, '').trim());
+      const text = (paragraphTextOf(notePart, node.id) ?? '').replace(/\uFFFC/g, '').trim();
+      if (text) {
+        const chunk = text.slice(0, remaining);
+        chunks.push(chunk);
+        remaining -= chunk.length;
+      }
       return;
     }
     if (node.kind === 'textValue') return;

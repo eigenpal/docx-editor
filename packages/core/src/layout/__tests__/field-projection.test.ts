@@ -1,8 +1,6 @@
 // Safe PAGE / NUMPAGES field projection: allowlist, hostile instructions, and layout geometry.
 
 import { describe, expect, test } from 'bun:test';
-import { readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
 import { zipSync, strToU8 } from 'fflate';
 import {
   createFixedMeasurer,
@@ -24,7 +22,6 @@ import { DEFAULT_MAX_HF_PAGE_CONTEXT_ENTRIES, layoutHeaderFooterStory } from '..
 import {
   readOoxmlPackage,
   resolveHeaderFooterPartsBySection,
-  writeOoxmlPackage,
   type OoxmlPart,
 } from '@docx-editor.dev/core-contract/store';
 
@@ -32,11 +29,6 @@ const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 const R = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships';
 const CT = 'http://schemas.openxmlformats.org/package/2006/content-types';
 const REL = 'http://schemas.openxmlformats.org/package/2006/relationships';
-
-const FIXTURE = resolve(
-  import.meta.dir,
-  '../../../../../e2e/fixtures/comprehensive-word-element-test.docx'
-);
 
 const measurer = createFixedMeasurer(6, 14);
 
@@ -160,7 +152,6 @@ describe('field instruction allowlist', () => {
     expect(projectPageFieldValue('NUMPAGES', { pageNumber: 2, pageCount: 26 })).toBe('26');
   });
 });
-
 describe('complex field piece projection', () => {
   test('empty PAGE/NUMPAGES project under page context and keep surrounding offsets', () => {
     const part = parsePart(
@@ -829,226 +820,6 @@ describe('document layout page index and page count', () => {
         )
         .join('');
       expect(text).toBe('Static');
-    }
-  });
-});
-
-describe('inert body fldSimple (deferred)', () => {
-  test('fldSimple PAGE/NUMPAGES never project and emit no pieces even with page context', () => {
-    const part = parsePart(
-      `<w:p>` +
-        `<w:r><w:t>Page </w:t></w:r>` +
-        `<w:fldSimple w:instr="PAGE"/>` +
-        `<w:r><w:t> of </w:t></w:r>` +
-        `<w:fldSimple w:instr="NUMPAGES \\* MERGEFORMAT"/>` +
-        `</w:p>`
-    );
-    const paragraph = part.root.children[0]!.children.find((c) => c.kind === 'paragraph')!;
-    const pieces = piecesOfParagraph(paragraph, [], { pageNumber: 2, pageCount: 26 });
-    expect(pieces.map((p) => p.text)).toEqual(['Page ', ' of ']);
-    expect(pieces.every((p) => !p.projected)).toBe(true);
-    // fldSimple contributes one model atom each; surrounding text offsets skip the atoms.
-    expect(pieces[0]).toMatchObject({ start: 0, end: 5 });
-    expect(pieces[1]).toMatchObject({ start: 6, end: 10 });
-  });
-
-  test('fldSimple advances exactly one unit and does not emit cache text pieces', () => {
-    const part = parsePart(
-      `<w:p>` +
-        `<w:r><w:t>before</w:t></w:r>` +
-        `<w:fldSimple w:instr="DATE \\@ &quot;yyyy&quot;"><w:r><w:t>1999</w:t></w:r></w:fldSimple>` +
-        `<w:r><w:t>after</w:t></w:r>` +
-        `</w:p>`
-    );
-    const paragraph = part.root.children[0]!.children.find((c) => c.kind === 'paragraph')!;
-    const pieces = piecesOfParagraph(paragraph, [], { pageNumber: 1, pageCount: 9 });
-    expect(pieces.map((p) => p.text)).toEqual(['before', 'after']);
-    expect(pieces[0]).toMatchObject({ start: 0, end: 6 });
-    expect(pieces[1]).toMatchObject({ start: 7, end: 12 });
-    expect(pieces.some((p) => p.text.includes('1999'))).toBe(false);
-  });
-
-  test('hostile INCLUDETEXT fldSimple stays fully inert', () => {
-    const part = parsePart(
-      `<w:p>` +
-        `<w:r><w:t>A</w:t></w:r>` +
-        `<w:fldSimple w:instr="INCLUDETEXT &quot;http://evil.example/x&quot;">` +
-        `<w:r><w:t>cached</w:t></w:r></w:fldSimple>` +
-        `<w:r><w:t>B</w:t></w:r>` +
-        `</w:p>`
-    );
-    const paragraph = part.root.children[0]!.children.find((c) => c.kind === 'paragraph')!;
-    expect(
-      piecesOfParagraph(paragraph, [], { pageNumber: 1, pageCount: 2 }).map((p) => p.text)
-    ).toEqual(['A', 'B']);
-  });
-
-  test('body fldSimple survives save/reopen structurally while staying layout-inert', () => {
-    const body =
-      `<w:p>` +
-      `<w:r><w:t>Page </w:t></w:r>` +
-      `<w:fldSimple w:instr="PAGE"><w:r><w:t>1</w:t></w:r></w:fldSimple>` +
-      `<w:r><w:t> of </w:t></w:r>` +
-      `<w:fldSimple w:instr="NUMPAGES"><w:r><w:t>99</w:t></w:r></w:fldSimple>` +
-      `</w:p>`;
-    const loaded = readOoxmlPackage(
-      zipSync({
-        '[Content_Types].xml': strToU8(
-          `<Types xmlns="${CT}">` +
-            '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>' +
-            '<Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>' +
-            '</Types>'
-        ),
-        '_rels/.rels': strToU8(
-          `<Relationships xmlns="${REL}"><Relationship Id="rId1" Type="${R}/officeDocument" Target="word/document.xml"/></Relationships>`
-        ),
-        'word/document.xml': strToU8(
-          `<w:document xmlns:w="${W}"><w:body>${body}<w:sectPr/></w:body></w:document>`
-        ),
-      })
-    );
-    expect(loaded.ok).toBe(true);
-    if (!loaded.ok) return;
-
-    const collectInstr = (
-      root: import('@docx-editor.dev/core-contract/store').OoxmlNode
-    ): string[] => {
-      const found: string[] = [];
-      const visit = (node: import('@docx-editor.dev/core-contract/store').OoxmlNode): void => {
-        if (node.kind === 'textValue') return;
-        if (node.kind === 'fldSimple') {
-          const instr = node.attributes.find((a) => a.localName === 'instr')?.value;
-          if (instr !== undefined) found.push(instr);
-        } else if (
-          node.kind === 'generic' &&
-          node.localName === 'fldSimple' &&
-          node.namespaceUri === W
-        ) {
-          const instr = node.attributes.find((a) => a.localName === 'instr')?.value;
-          if (instr !== undefined) found.push(instr);
-        }
-        for (const child of node.children) visit(child);
-      };
-      visit(root);
-      return found;
-    };
-
-    const main = loaded.package.parts.get(loaded.package.mainDocumentPart)!;
-    expect(collectInstr(main.root)).toEqual(['PAGE', 'NUMPAGES']);
-
-    const reopened = readOoxmlPackage(writeOoxmlPackage(loaded.package));
-    expect(reopened.ok).toBe(true);
-    if (!reopened.ok) return;
-    const reopenedMain = reopened.package.parts.get(reopened.package.mainDocumentPart)!;
-    expect(collectInstr(reopenedMain.root)).toEqual(['PAGE', 'NUMPAGES']);
-
-    const paragraph = reopenedMain.root.children[0]!.children.find((c) => c.kind === 'paragraph')!;
-    expect(
-      piecesOfParagraph(paragraph, [], { pageNumber: 4, pageCount: 12 }).map((p) => p.text)
-    ).toEqual(['Page ', ' of ']);
-  });
-
-  test('footer complex PAGE/NUMPAGES still project while body fldSimple stays inert', () => {
-    const body =
-      `<w:p>` +
-      `<w:r><w:t>Body </w:t></w:r>` +
-      `<w:fldSimple w:instr="PAGE"><w:r><w:t>9</w:t></w:r></w:fldSimple>` +
-      `<w:r><w:t> end</w:t></w:r>` +
-      `</w:p>`;
-    const footer =
-      `<w:p><w:r><w:t>Page </w:t></w:r>` +
-      `<w:r><w:fldChar w:fldCharType="begin"/><w:instrText>PAGE</w:instrText>` +
-      `<w:fldChar w:fldCharType="separate"/><w:fldChar w:fldCharType="end"/></w:r>` +
-      `<w:r><w:t> of </w:t></w:r>` +
-      `<w:r><w:fldChar w:fldCharType="begin"/><w:instrText>NUMPAGES</w:instrText>` +
-      `<w:fldChar w:fldCharType="separate"/><w:fldChar w:fldCharType="end"/></w:r></w:p>`;
-    const bytes = footerDoc(footer, body);
-    const loaded = readOoxmlPackage(bytes);
-    expect(loaded.ok).toBe(true);
-    if (!loaded.ok) return;
-
-    const part = loaded.package.parts.get(loaded.package.mainDocumentPart)!;
-    const layout = layoutSemanticDocument(part, 1, {
-      measurer,
-      producer: 'test',
-      sectionFurniture: furnitureFromPackage(loaded.package, part),
-    });
-    expect(layout.pages.length).toBeGreaterThanOrEqual(1);
-    const page = layout.pages[0]!;
-    const footerText = page.footer?.fragments
-      .flatMap((f) =>
-        f.kind === 'paragraph' ? f.lines.flatMap((l) => l.spans.map((s) => s.text)) : []
-      )
-      .join('');
-    expect(footerText).toBe(`Page 1 of ${layout.pages.length}`);
-
-    const bodyText = page.fragments
-      .flatMap((f) =>
-        f.kind === 'paragraph' ? f.lines.flatMap((l) => l.spans.map((s) => s.text)) : []
-      )
-      .join('');
-    expect(bodyText).toBe('Body  end');
-    expect(bodyText).not.toContain('9');
-  });
-});
-
-describe('comprehensive fixture footer PAGE/NUMPAGES', () => {
-  test('body page footer shows Page N of totalPages', () => {
-    const bytes = new Uint8Array(readFileSync(FIXTURE));
-    const loaded = readOoxmlPackage(bytes);
-    expect(loaded.ok).toBe(true);
-    if (!loaded.ok) return;
-    const part = loaded.package.parts.get(loaded.package.mainDocumentPart)!;
-    const layout = layoutSemanticDocument(part, 1, {
-      measurer,
-      producer: 'test',
-      sectionFurniture: furnitureFromPackage(loaded.package, part),
-    });
-    expect(layout.pages.length).toBeGreaterThan(1);
-    const pageCount = layout.pages.length;
-    // Cover (index 0) has no HF; first body sheet with footer1 is index 1.
-    const page = layout.pages[1]!;
-    expect(page.footer).toBeDefined();
-    const text = page
-      .footer!.fragments.flatMap((f) =>
-        f.kind === 'paragraph' ? f.lines.flatMap((l) => l.spans.map((s) => s.text)) : []
-      )
-      .join('');
-    expect(text).toContain(`Page 2 of ${pageCount}`);
-    expect(text).toMatch(/QA Automation Department/);
-  });
-
-  test('cover stays bare; remapped body furniture keeps authored sheet-relative Y', () => {
-    const bytes = new Uint8Array(readFileSync(FIXTURE));
-    const loaded = readOoxmlPackage(bytes);
-    expect(loaded.ok).toBe(true);
-    if (!loaded.ok) return;
-    const part = loaded.package.parts.get(loaded.package.mainDocumentPart)!;
-    const sections = enumerateDocumentSections(part);
-    const bodyGeometry = geometryOfSection(sections[1]!.properties);
-    const layout = layoutSemanticDocument(part, 1, {
-      measurer,
-      producer: 'test',
-      sectionFurniture: furnitureFromPackage(loaded.package, part),
-    });
-
-    expect(layout.pages[0]!.header).toBeUndefined();
-    expect(layout.pages[0]!.footer).toBeUndefined();
-
-    for (let index = 1; index < Math.min(layout.pages.length, 4); index += 1) {
-      const page = layout.pages[index]!;
-      expect(page.header).toBeDefined();
-      expect(page.footer).toBeDefined();
-      expect(page.header!.box.y - page.box.y).toBeCloseTo(bodyGeometry.headerDistance ?? 36, 5);
-      expect(
-        page.box.y + page.box.height - (page.footer!.box.y + page.footer!.box.height)
-      ).toBeCloseTo(bodyGeometry.footerDistance ?? 36, 5);
-      const text = page
-        .footer!.fragments.flatMap((f) =>
-          f.kind === 'paragraph' ? f.lines.flatMap((l) => l.spans.map((s) => s.text)) : []
-        )
-        .join('');
-      expect(text).toContain(`Page ${index + 1} of ${layout.pages.length}`);
     }
   });
 });

@@ -3,7 +3,11 @@
 import { describe, expect, test } from 'bun:test';
 import { readFileSync } from 'node:fs';
 import { readOoxmlPackage } from '../../store/package/ooxml-package.ts';
-import { readOoxmlPart, type OoxmlElement, type OoxmlPart } from '../../store/package/ooxml-tree.ts';
+import {
+  readOoxmlPart,
+  type OoxmlElement,
+  type OoxmlPart,
+} from '../../store/package/ooxml-tree.ts';
 import { createFixedMeasurer, layoutSemanticDocument } from '../semantic-layout.ts';
 import { MAX_TABLE_ROW_HEIGHT_PT, readTableStructure } from '../semantic-table.ts';
 import { TablePaginationError } from '../semantic-table-layout.ts';
@@ -74,7 +78,9 @@ describe('w:trHeight parse', () => {
   });
 
   test('hostile and zero values demote to auto; oversized val clamps', () => {
-    expect(structureOf(`<w:tbl>${tr(tc(p('x')), trHeight('0', 'atLeast'))}</w:tbl>`).rows[0]!.height).toEqual({
+    expect(
+      structureOf(`<w:tbl>${tr(tc(p('x')), trHeight('0', 'atLeast'))}</w:tbl>`).rows[0]!.height
+    ).toEqual({
       rule: 'auto',
     });
     expect(

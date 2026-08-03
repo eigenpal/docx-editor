@@ -24,6 +24,12 @@ export function freeRelationshipId(pkg: OoxmlPackage): string {
       if (match) max = Math.max(max, Number(match[1]));
     }
   }
+  // External hyperlink targets live outside `relationships`; ignoring them reused ids and
+  // collided with later furniture allocation after shell resources persisted across undo.
+  for (const external of pkg.externalTargets) {
+    const match = /^rId(\d{1,9})$/.exec(external.id);
+    if (match) max = Math.max(max, Number(match[1]));
+  }
   return `rId${max + 1}`;
 }
 

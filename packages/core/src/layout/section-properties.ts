@@ -24,6 +24,13 @@ import {
 import { DEFAULT_PAGE_GEOMETRY, type PageGeometry } from './semantic-records.ts';
 import { storyBlocks } from './story-roots.ts';
 
+/**
+ * Hard ceiling on sections enumerated from a document (matches write-path
+ * `MAX_SECTIONS` in note/hf lifecycle). Hostile packages with unbounded `w:sectPr`
+ * marks fail closed here rather than amplifying layout props arrays.
+ */
+export const MAX_DOCUMENT_SECTIONS = 4_096;
+
 export interface SectionMargins {
   readonly topTwips: number;
   readonly rightTwips: number;
@@ -311,17 +318,40 @@ export function readSectionProperties(part: OoxmlPart): SectionProperties {
  * A paragraph carrying `w:pPr/w:sectPr` ends the current section (that paragraph is IN the
  * section being ended). The body-level `w:sectPr` ends the final section. A document with
  * neither yields one section of Word defaults covering every block.
+ *
+ * Enumeration is capped at {@link MAX_DOCUMENT_SECTIONS}. Further paragraph-level section
+ * breaks are ignored and remaining blocks fold into the last accepted section (fail closed).
  */
 export function enumerateDocumentSections(part: OoxmlPart): DocumentSection[] {
+  return enumerateDocumentSectionsBounded(part).sections;
+}
+
+export interface DocumentSectionsEnumeration {
+  readonly sections: DocumentSection[];
+  /** True when paragraph-level sectPr marks beyond {@link MAX_DOCUMENT_SECTIONS} were dropped. */
+  readonly truncated: boolean;
+}
+
+/**
+ * Like {@link enumerateDocumentSections}, but reports whether the section bound clipped
+ * hostile input. Prefer the plain enumerator for normal layout; use this when a caller
+ * needs a named fail-closed diagnostic.
+ */
+export function enumerateDocumentSectionsBounded(part: OoxmlPart): DocumentSectionsEnumeration {
   const blocks = storyBlocks(part);
   const sections: DocumentSection[] = [];
   let blockStart = 0;
+  let truncated = false;
 
   for (let index = 0; index < blocks.length; index += 1) {
     const block = blocks[index]!;
     if (block.kind !== 'paragraph') continue;
     const sectPr = paragraphSectionNode(block);
     if (!sectPr) continue;
+    if (sections.length >= MAX_DOCUMENT_SECTIONS) {
+      truncated = true;
+      continue;
+    }
     sections.push({
       index: sections.length,
       properties: parseSectionProperties(sectPr),
@@ -331,12 +361,29 @@ export function enumerateDocumentSections(part: OoxmlPart): DocumentSection[] {
     blockStart = index + 1;
   }
 
+  if (truncated) {
+    // Hostile extra breaks ignored: extend the last accepted section over remaining blocks.
+    if (sections.length > 0) {
+      const last = sections[sections.length - 1]!;
+      sections[sections.length - 1] = {
+        ...last,
+        blockEndExclusive: blocks.length,
+      };
+    }
+    return { sections, truncated: true };
+  }
+
   const bodySectPr = bodySectionNode(part);
   // Final section: remaining blocks governed by the body-level `w:sectPr`. When every block
   // already closed a paragraph-level section, still honour a trailing body-level `sectPr` as
   // an empty final section (common in multi-section packages). A document with neither yields
   // one default section covering every block.
   if (blockStart < blocks.length || sections.length === 0) {
+    if (sections.length >= MAX_DOCUMENT_SECTIONS) {
+      const last = sections[sections.length - 1]!;
+      sections[sections.length - 1] = { ...last, blockEndExclusive: blocks.length };
+      return { sections, truncated: true };
+    }
     sections.push({
       index: sections.length,
       properties: parseSectionProperties(bodySectPr),
@@ -344,6 +391,9 @@ export function enumerateDocumentSections(part: OoxmlPart): DocumentSection[] {
       blockEndExclusive: blocks.length,
     });
   } else if (bodySectPr) {
+    if (sections.length >= MAX_DOCUMENT_SECTIONS) {
+      return { sections, truncated: true };
+    }
     sections.push({
       index: sections.length,
       properties: parseSectionProperties(bodySectPr),
@@ -352,7 +402,7 @@ export function enumerateDocumentSections(part: OoxmlPart): DocumentSection[] {
     });
   }
 
-  return sections;
+  return { sections, truncated };
 }
 
 /**

@@ -10,13 +10,14 @@ import { describe, expect, test } from 'bun:test';
 import { zipSync, strToU8 } from 'fflate';
 import { mountPaginatedSurface, type PaginatedSurface } from '../paginated-surface.ts';
 import { createDocxEditor } from '../docx-editor.ts';
+import { MAX_NOTE_PREVIEW_CHARS } from '../surface-note-state.ts';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 const R = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships';
 const CT = 'http://schemas.openxmlformats.org/package/2006/content-types';
 const REL = 'http://schemas.openxmlformats.org/package/2006/relationships';
 
-function noteDoc(): Uint8Array {
+function noteDoc(noteText = 'Note text'): Uint8Array {
   const body =
     `<w:p><w:r><w:t>Body</w:t></w:r>` +
     `<w:r><w:rPr><w:vertAlign w:val="superscript"/></w:rPr>` +
@@ -24,7 +25,7 @@ function noteDoc(): Uint8Array {
   const footnotes =
     `<w:footnote w:type="separator" w:id="-1"><w:p><w:r><w:separator/></w:r></w:p></w:footnote>` +
     `<w:footnote w:type="continuationSeparator" w:id="0"><w:p><w:r><w:continuationSeparator/></w:r></w:p></w:footnote>` +
-    `<w:footnote w:id="1"><w:p><w:r><w:footnoteRef/><w:t>Note text</w:t></w:r></w:p></w:footnote>`;
+    `<w:footnote w:id="1"><w:p><w:r><w:footnoteRef/><w:t>${noteText}</w:t></w:r></w:p></w:footnote>`;
   return zipSync({
     '[Content_Types].xml': strToU8(
       `<Types xmlns="${CT}">` +
@@ -74,11 +75,28 @@ describe('scoped note editing', () => {
     const { surface } = mount(noteDoc());
     expect(surface.enterNote('footnote:1')).toBe(true);
     expect(surface.activeScope()).toEqual({ kind: 'note', id: 'footnote:1' });
+    // The generated noteRef atom occupies offset 0; editing starts after the mark.
+    expect(surface.state().selection).toEqual({
+      anchor: { paragraphId: '/word/footnotes.xml#0.2.0', offset: 1 },
+      head: { paragraphId: '/word/footnotes.xml#0.2.0', offset: 1 },
+    });
     surface.type('!');
     const noteText = surface.session.storyText({ kind: 'notesPart', noteKind: 'footnote' });
     expect(noteText).toContain('!');
     expect(surface.session.bodyText()).toContain('Body');
     expect(surface.session.bodyText()).not.toContain('!');
+    surface.destroy();
+  });
+
+  test('note caret is parented into the note story instead of body page content', () => {
+    const { container, surface } = mount(noteDoc());
+    const pages = container.querySelector<HTMLElement>('.docx-pages')!;
+    pages.focus();
+    expect(surface.enterNote('footnote:1')).toBe(true);
+    const caret = container.querySelector<HTMLElement>('[data-docx-caret]');
+    expect(caret).toBeTruthy();
+    expect(caret?.parentElement?.dataset.docxNoteScope).toBe('footnote:1');
+    expect(caret?.parentElement?.matches('[data-docx-note]')).toBe(true);
     surface.destroy();
   });
 
@@ -113,6 +131,17 @@ describe('scoped note editing', () => {
     );
     expect(noteIds.has(anchor.paragraphId)).toBe(true);
     expect(noteIds.has(head.paragraphId)).toBe(true);
+    surface.destroy();
+  });
+
+  test('arrow navigation stays inside the open note story', () => {
+    const { surface } = mount(noteDoc());
+    expect(surface.enterNote('footnote:1')).toBe(true);
+    const before = surface.state().selection.head;
+    surface.navigate('right');
+    const after = surface.state().selection.head;
+    expect(after.paragraphId).toBe(before.paragraphId);
+    expect(after.offset).toBe(before.offset + 1);
     surface.destroy();
   });
 
@@ -151,6 +180,32 @@ describe('scoped note editing', () => {
     const snap = editor.snapshot();
     expect(snap).toBeTruthy();
     editor.detach();
+  });
+
+  test('note preview text is bounded before React hover chrome receives it', () => {
+    const editor = createDocxEditor({ document: noteDoc('x'.repeat(MAX_NOTE_PREVIEW_CHARS * 3)) });
+    const host = document.createElement('div');
+    document.body.append(host);
+    editor.attach(host);
+    const preview = editor.getNotePreviewText('footnote:1');
+    expect(preview).not.toBeNull();
+    expect(preview!.length).toBe(MAX_NOTE_PREVIEW_CHARS);
+    editor.detach();
+  });
+
+  test('insertNote opens the new note after its generated mark', () => {
+    const { surface } = mount(noteDoc());
+    expect(surface.insertNote('endnote')).toBe(true);
+    const scope = surface.activeScope();
+    expect(scope.kind).toBe('note');
+    if (scope.kind !== 'note') throw new Error('new note did not open');
+    expect(scope.id).toMatch(/^endnote:\d+$/);
+    expect(surface.state().selection.anchor.offset).toBe(1);
+    surface.type('New endnote');
+    expect(surface.session.storyText({ kind: 'notesPart', noteKind: 'endnote' })).toContain(
+      'New endnote'
+    );
+    surface.destroy();
   });
 
   test('undo reverts a note-scoped type in one step', () => {

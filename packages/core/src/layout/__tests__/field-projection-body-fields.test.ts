@@ -103,10 +103,7 @@ describe('field format ownership', () => {
     const part = parse(
       `<w:p>` +
         `<w:r><w:t>A</w:t></w:r>` +
-        complexField(
-          'DATE',
-          `<w:r><w:rPr><w:i/></w:rPr><w:t>January</w:t></w:r>`
-        ) +
+        complexField('DATE', `<w:r><w:rPr><w:i/></w:rPr><w:t>January</w:t></w:r>`) +
         `<w:r><w:t>Z</w:t></w:r>` +
         `</w:p>`
     );
@@ -122,10 +119,7 @@ describe('field format ownership', () => {
     const part = parse(
       `<w:p>` +
         `<w:r><w:t>A</w:t></w:r>` +
-        complexField(
-          'DATE',
-          `<w:r><w:rPr><w:i/></w:rPr><w:t>January</w:t></w:r>`
-        ) +
+        complexField('DATE', `<w:r><w:rPr><w:i/></w:rPr><w:t>January</w:t></w:r>`) +
         `<w:r><w:t>Z</w:t></w:r>` +
         `</w:p>`
     );
@@ -206,9 +200,8 @@ describe('field format ownership', () => {
     expect(runHasItalic(first)).toBe(true);
     expect(runHasBold(second)).toBe(true);
     expect(runHasItalic(second)).toBe(false);
-    const secondRPr = second!.kind === 'run'
-      ? second!.children.find((c) => c.kind === 'runProperties')
-      : null;
+    const secondRPr =
+      second!.kind === 'run' ? second!.children.find((c) => c.kind === 'runProperties') : null;
     expect(
       secondRPr &&
         secondRPr.kind !== 'textValue' &&

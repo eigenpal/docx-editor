@@ -57,8 +57,10 @@ import {
 import {
   collectPackageNoteReferences,
   createNoteReferenceScanBudget,
+  MAX_NOTE_REFERENCE_MUTATION_SCAN,
   resolveNotesPart,
   normalNoteIds,
+  type NoteReferenceHit,
   type NoteReferenceScanBudget,
 } from './note-references.ts';
 import { isValidXmlText } from './sinks.ts';
@@ -244,6 +246,10 @@ export interface NoteLifecycleOptions {
   readonly scanBudget?: NoteReferenceScanBudget;
 }
 
+function createMutationScanBudget(): NoteReferenceScanBudget {
+  return createNoteReferenceScanBudget(MAX_NOTE_REFERENCE_MUTATION_SCAN);
+}
+
 /**
  * Apply one note lifecycle op atomically. Rejected ops leave the input package untouched.
  */
@@ -357,9 +363,8 @@ function applyDeleteNote(
   options?: NoteLifecycleOptions
 ): NoteLifecycleResult {
   if (!isNoteKind(op.noteKind)) return fail('invalidArgs', 'noteKind');
-  if (!Number.isInteger(op.noteId) || op.noteId < -0x80000000 || op.noteId > NOTE_ID_MAX) {
-    return fail('invalidArgs', 'noteId');
-  }
+  // Reserved non-positive ids own separators/continuation notices, not user notes.
+  if (!isPositiveNoteId(op.noteId)) return fail('invalidArgs', 'noteId');
 
   const notesPart = resolveNotesPart(pkg, op.noteKind);
   if (!notesPart) return fail('invalidArgs', 'missing-notes-part');
@@ -412,8 +417,8 @@ export function cascadeDeletedNoteReferences(
   after: OoxmlPackage,
   options?: CascadeDeletedNoteReferencesOptions
 ): OoxmlPackage | null {
-  const beforeBudget = options?.beforeBudget ?? createNoteReferenceScanBudget();
-  const afterBudget = options?.afterBudget ?? createNoteReferenceScanBudget();
+  const beforeBudget = options?.beforeBudget ?? createMutationScanBudget();
+  const afterBudget = options?.afterBudget ?? createMutationScanBudget();
   const beforeHits = collectPackageNoteReferences(before, {
     budget: beforeBudget,
     maxHits: Number.POSITIVE_INFINITY,
@@ -450,7 +455,8 @@ export function cascadeDeletedNoteReferences(
 function applyConvertNote(
   pkg: OoxmlPackage,
   op: Extract<NoteLifecycleOp, { op: 'convertNote' }>,
-  options?: NoteLifecycleOptions
+  options?: NoteLifecycleOptions,
+  prescanned?: readonly NoteReferenceHit[]
 ): NoteLifecycleResult {
   if (!isNoteKind(op.fromKind)) return fail('invalidArgs', 'fromKind');
   if (!isPositiveNoteId(op.noteId)) return fail('invalidArgs', 'noteId');
@@ -466,12 +472,8 @@ function applyConvertNote(
   }
 
   // Scan-before-mutate: refuse before any package write if refs cannot be fully walked.
-  const scanBudget = options?.scanBudget ?? createNoteReferenceScanBudget();
-  const plannedHits = collectPackageNoteReferences(pkg, {
-    budget: scanBudget,
-    maxHits: Number.POSITIVE_INFINITY,
-  }).filter((hit) => hit.noteKind === op.fromKind && hit.noteId === op.noteId);
-  if (scanBudget.truncated) return fail('tree-invariant', 'reference-scan-truncated');
+  const plannedHits = plannedReferenceHits(pkg, op.fromKind, op.noteId, options, prescanned);
+  if (!plannedHits) return fail('tree-invariant', 'reference-scan-truncated');
 
   let next = pkg;
   const ensured = ensureNotesPart(next, toKind);
@@ -518,6 +520,32 @@ function applyConvertNote(
   };
 }
 
+function plannedReferenceHits(
+  pkg: OoxmlPackage,
+  fromKind: NoteKind,
+  noteId: number,
+  options?: NoteLifecycleOptions,
+  prescanned?: readonly NoteReferenceHit[]
+): readonly NoteReferenceHit[] | null {
+  const matches = (hit: NoteReferenceHit): boolean =>
+    hit.noteKind === fromKind && hit.noteId === noteId;
+  if (prescanned) {
+    const reused = prescanned.filter(matches);
+    if (reused.every((hit) => referenceStillResolves(pkg, hit))) return reused;
+  }
+  const budget = options?.scanBudget ?? createMutationScanBudget();
+  const hits = collectPackageNoteReferences(pkg, {
+    budget,
+    maxHits: Number.POSITIVE_INFINITY,
+  }).filter(matches);
+  return budget.truncated ? null : hits;
+}
+
+function referenceStillResolves(pkg: OoxmlPackage, hit: NoteReferenceHit): boolean {
+  const part = pkg.parts.get(hit.partName);
+  return part !== undefined && findNode(part, hit.nodeId) !== null;
+}
+
 function applyConvertAllNotes(
   pkg: OoxmlPackage,
   op: Extract<NoteLifecycleOp, { op: 'convertAllNotes' }>,
@@ -534,6 +562,13 @@ function applyConvertAllNotes(
     return { ok: true, package: pkg, impact: 'global' };
   }
 
+  const scanBudget = options?.scanBudget ?? createMutationScanBudget();
+  const prescanned = collectPackageNoteReferences(pkg, {
+    budget: scanBudget,
+    maxHits: Number.POSITIVE_INFINITY,
+  });
+  if (scanBudget.truncated) return fail('tree-invariant', 'reference-scan-truncated');
+
   let next = pkg;
   let createdPartName: string | undefined;
   let lastNoteId: number | undefined;
@@ -546,7 +581,8 @@ function applyConvertAllNotes(
         fromKind: op.fromKind,
         noteId,
       },
-      options
+      undefined,
+      prescanned
     );
     if (!result.ok) return result;
     next = result.package;
@@ -1032,7 +1068,7 @@ function removeReferencesEverywhere(
   noteId: number,
   sharedBudget?: NoteReferenceScanBudget
 ): OoxmlPackage | null {
-  const budget = sharedBudget ?? createNoteReferenceScanBudget();
+  const budget = sharedBudget ?? createMutationScanBudget();
   const hits = collectPackageNoteReferences(pkg, {
     budget,
     maxHits: Number.POSITIVE_INFINITY,

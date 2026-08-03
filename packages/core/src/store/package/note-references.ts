@@ -30,6 +30,12 @@ const ENDNOTES_REL = 'http://schemas.openxmlformats.org/officeDocument/2006/rela
 export const MAX_NOTE_REFERENCE_SCAN = 20_000;
 
 /**
+ * Higher bounded cap for explicit note mutations. Diagnostics stay cheap at
+ * `MAX_NOTE_REFERENCE_SCAN`; lifecycle commands must still work on ordinary long documents.
+ */
+export const MAX_NOTE_REFERENCE_MUTATION_SCAN = 1_000_000;
+
+/**
  * Cap on XML parts walked in one package-wide note-reference scan (N/N+1 gate).
  * Soft targets are not allowed: exceeding this marks the shared budget truncated.
  */

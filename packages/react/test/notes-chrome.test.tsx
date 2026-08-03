@@ -106,7 +106,10 @@ function mountChrome(
         instance = editor as DocxEditorInstance;
       }}
     >
-      <DocxEditorToolbar />
+      <DocxEditorToolbar>
+        <DocxEditorToolbar.Button slot="insert.footnote" />
+        <DocxEditorToolbar.Button slot="insert.endnote" />
+      </DocxEditorToolbar>
       <DocxEditorNotesChrome />
       {extra}
       <DocxEditorViewport>
@@ -196,7 +199,10 @@ describe('DocxEditor.NotesChrome', () => {
         view.container.querySelector('[data-slot="insert.endnote"]') as HTMLButtonElement
       );
     });
-    expect(editor().can({ type: 'insertNote', noteKind: 'endnote' }).ok).toBe(true);
+    expect(editor().getActiveScope().kind).toBe('note');
+    expect(editor().getActiveScope()).toEqual(
+      expect.objectContaining({ kind: 'note', id: expect.stringMatching(/^endnote:\d+$/) })
+    );
     const refs = view.container.querySelectorAll('[data-docx-note-ref]');
     expect(refs.length).toBeGreaterThan(0);
   });

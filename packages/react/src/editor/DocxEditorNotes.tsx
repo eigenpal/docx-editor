@@ -203,6 +203,8 @@ export function DocxEditorNotesChrome({
       top: preview?.y ?? 0,
       zIndex: Z_INDEX.popover,
       maxWidth: 280,
+      maxHeight: '40vh',
+      overflowY: 'auto',
       padding: '8px 10px',
       background: 'var(--doc-popover-bg, #fff)',
       color: 'var(--doc-popover-fg, #111)',
@@ -210,7 +212,9 @@ export function DocxEditorNotesChrome({
       boxShadow: 'var(--doc-shadow, 0 4px 16px rgba(0,0,0,.12))',
       fontSize: 12,
       lineHeight: 1.4,
-      pointerEvents: 'auto',
+      // A preview is informational, never an interaction surface. Large attacker-authored
+      // notes must not cover the viewport or intercept pointer input.
+      pointerEvents: 'none',
     }),
     [preview]
   );

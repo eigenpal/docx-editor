@@ -181,6 +181,23 @@ export function activeStoryCaretStops(
   return caretStopsForBlocks(layout, active.pageIndex, story.fragments, measurer);
 }
 
+/** Story-scoped caret stops for one open footnote/endnote, including continuations. */
+export function activeNoteCaretStops(
+  layout: SemanticLayout,
+  scopeId: string,
+  measurer?: TextMeasurer
+): CaretGeometry[] | null {
+  const stops: CaretGeometry[] = [];
+  for (const page of layout.pages) {
+    for (const area of [page.footnotes, page.endnotes]) {
+      const note = area?.notes.find((candidate) => candidate.scopeId === scopeId);
+      if (!note) continue;
+      stops.push(...caretStopsForBlocks(layout, page.index, note.fragments, measurer));
+    }
+  }
+  return stops.length > 0 ? stops : null;
+}
+
 /** Active `[data-docx-hf-active]` host for the preferred furniture page, if any. */
 export function furnitureCaretHost(pagesLayer: HTMLElement, pageIndex: number): HTMLElement | null {
   return (
@@ -188,6 +205,27 @@ export function furnitureCaretHost(pagesLayer: HTMLElement, pageIndex: number): 
       `[data-page-index="${pageIndex}"] > [data-docx-hf-active]`
     ) ?? pagesLayer.querySelector<HTMLElement>('[data-docx-hf-active]')
   );
+}
+
+/** Painted note host for scoped caret geometry (which is relative to the note story). */
+export function noteCaretHost(
+  pagesLayer: HTMLElement,
+  scopeId: string,
+  preferredPageIndex?: number | null
+): HTMLElement | null {
+  const candidates = pagesLayer.querySelectorAll<HTMLElement>('[data-docx-note-scope]');
+  let first: HTMLElement | null = null;
+  for (const candidate of candidates) {
+    if (candidate.dataset.docxNoteScope !== scopeId || !candidate.matches('[data-docx-note]')) {
+      continue;
+    }
+    first ??= candidate;
+    const pageIndex = Number(
+      candidate.closest<HTMLElement>('[data-page-index]')?.dataset.pageIndex
+    );
+    if (preferredPageIndex !== null && pageIndex === preferredPageIndex) return candidate;
+  }
+  return first;
 }
 
 /**
@@ -255,9 +293,14 @@ export function navigateInActiveScope(
   command: NavigationCommand,
   desiredX: number | null,
   active: HeaderFooterScopeBinding | null,
+  noteScopeId?: string | null,
   measurer?: TextMeasurer
 ): { position: SemanticPosition; desiredX: number | null } | null {
-  const storyStops = active ? activeStoryCaretStops(layout, active, measurer) : null;
+  const storyStops = active
+    ? activeStoryCaretStops(layout, active, measurer)
+    : noteScopeId
+      ? activeNoteCaretStops(layout, noteScopeId, measurer)
+      : null;
   return moveCaret(layout, position, command, desiredX, {
     ...(measurer ? { measurer } : {}),
     ...(storyStops ? { stops: storyStops } : {}),
