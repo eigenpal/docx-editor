@@ -315,39 +315,6 @@ export const CHROME_GROUPS = [
     ],
   },
   {
-    id: 'indent',
-    labelKey: 'formattingBar.groups.indent',
-    // CONTEXTUAL until both adapters can drive it. `CHROME_GROUPS` is shared, and Vue's
-    // toolbar renders a stepper it cannot drive as an inert span — a dead lookalike
-    // control is worse than an absent one. React places these explicitly; when the Vue
-    // part lands this flag comes off and they join the default bar.
-    contextual: true,
-    controls: [
-      {
-        // Exact indent, where `list.indent`/`list.outdent` only STEP: a drag can express
-        // 0.63" and no ladder can, so the ruler needs a typed twin in the bar.
-        id: 'left',
-        shape: 'stepper',
-        valueText: '0"',
-        labelKey: 'indent.left',
-        // No icon: a stepper renders − value + , like zoom and font size. The
-        // indent ICONS belong to `list.indent`/`list.outdent`, which step.
-        paths: null,
-        valueKey: 'indent.left',
-        state: { kind: 'value' },
-      },
-      {
-        id: 'right',
-        shape: 'stepper',
-        valueText: '0"',
-        labelKey: 'indent.right',
-        paths: null,
-        valueKey: 'indent.right',
-        state: { kind: 'value' },
-      },
-    ],
-  },
-  {
     id: 'list',
     labelKey: 'formattingBar.groups.listFormatting',
     controls: [
@@ -498,7 +465,6 @@ export type ChromeGroupId =
   | 'text'
   | 'script'
   | 'alignment'
-  | 'indent'
   | 'list'
   | 'format'
   | 'review'
@@ -533,8 +499,6 @@ export type ChromeSlotId =
   | 'alignment.center'
   | 'alignment.right'
   | 'alignment.justify'
-  | 'indent.left'
-  | 'indent.right'
   | 'list.bullet'
   | 'list.numbered'
   | 'list.outdent'

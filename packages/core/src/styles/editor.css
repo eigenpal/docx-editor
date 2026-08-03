@@ -2742,38 +2742,6 @@ a.docx-hyperlink:focus-visible {
   flex: none;
 }
 
-/* Exact-indent steppers. Wider box than font size: it shows a unit as well as a number. */
-.docx-toolbar__indent {
-  position: relative;
-  display: inline-flex;
-  flex: none;
-}
-
-.docx-toolbar__indent-input {
-  padding: 0;
-  font: inherit;
-  font-size: 13px;
-  min-width: 3.25rem;
-  cursor: text;
-}
-
-.docx-toolbar__indent-input:focus {
-  outline: 2px solid var(--doc-accent);
-  outline-offset: -2px;
-}
-
-.docx-toolbar__indent-input:disabled {
-  opacity: 0.5;
-  cursor: default;
-}
-
-/* A mixed selection still shows the FIRST paragraph's value and stays live, as Word does.
-   The value is marked as speaking for one paragraph rather than the whole selection. */
-.docx-toolbar__indent[data-mixed] .docx-toolbar__indent-input {
-  font-style: italic;
-  opacity: 0.85;
-}
-
 .docx-toolbar__font-size-input {
   padding: 0;
   font: inherit;

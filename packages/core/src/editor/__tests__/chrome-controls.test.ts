@@ -38,7 +38,6 @@ const EXPECTED_GROUPS = [
   'text',
   'script',
   'alignment',
-  'indent',
   'list',
   'format',
   'review',
@@ -68,8 +67,6 @@ const EXPECTED_SLOTS: readonly ChromeSlotId[] = [
   'alignment.center',
   'alignment.right',
   'alignment.justify',
-  'indent.left',
-  'indent.right',
   'list.bullet',
   'list.numbered',
   'list.outdent',
@@ -123,8 +120,6 @@ describe('legacy chrome descriptor', () => {
     expect([...valueSlots].sort()).toEqual([
       'font.family',
       'font.size',
-      'indent.left',
-      'indent.right',
       'styles.style',
       'text.color',
       'text.highlight',
@@ -204,7 +199,7 @@ describe('legacy chrome descriptor', () => {
   });
 
   test('the count is stable, so a dropped control fails rather than passing quietly', () => {
-    expect(chromeControlCount()).toBe(33);
+    expect(chromeControlCount()).toBe(31);
   });
 
   test('the menu region carries the legacy menus', () => {

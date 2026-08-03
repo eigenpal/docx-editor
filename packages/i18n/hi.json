@@ -58,8 +58,7 @@
       "alignment": "संरेखण",
       "listFormatting": "सूची प्रारूपण",
       "image": "चित्र",
-      "table": "तालिका",
-      "indent": null
+      "table": "तालिका"
     },
     "undo": "पूर्ववत करें",
     "undoShortcut": "पूर्ववत करें (Ctrl+Z)",
@@ -964,14 +963,5 @@
       "headings": null
     },
     "title": null
-  },
-  "indent": {
-    "decreaseLeft": null,
-    "decreaseRight": null,
-    "increaseLeft": null,
-    "increaseRight": null,
-    "left": null,
-    "mixed": null,
-    "right": null
   }
 }

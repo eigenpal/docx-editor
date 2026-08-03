@@ -629,11 +629,6 @@ function EditorChrome({
             <FontPreviewItems />
           </DocxEditor.Toolbar.FontFamily.Content>
         </DocxEditor.Toolbar.FontFamily>
-        {/* The exact-indent steppers. Their registry group is contextual, so they are not
-            in the default arrangement and a host places them deliberately — these append
-            after the default set. They are the typed twin of the ruler's drag handles. */}
-        <DocxEditor.Toolbar.IndentLeft />
-        <DocxEditor.Toolbar.IndentRight />
       </DocxEditor.Toolbar>
 
       {/* File > Page setup: the library dialog, applied as one undo step. */}

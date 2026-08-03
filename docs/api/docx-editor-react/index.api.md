@@ -40,6 +40,7 @@ import { FontSourceSubstitution } from '@docx-editor.dev/core-contract/contracts
 import { FontUrlSource } from '@docx-editor.dev/core-contract/editor';
 import { ForwardRefExoticComponent } from 'react';
 import { generateRulerTicks } from '@docx-editor.dev/core-contract/editor';
+import { IndentFormatting } from '@docx-editor.dev/core-contract/contracts/editor';
 import { loadFonts } from '@docx-editor.dev/core-contract/editor';
 import { LoadFontsRequest } from '@docx-editor.dev/core-contract/editor';
 import { LoadFontsResult } from '@docx-editor.dev/core-contract/editor';
@@ -389,8 +390,6 @@ export interface DocxEditorToolbarNamespace {
     readonly ImageProperties: ToolbarPartComponent;
     // (undocumented)
     readonly Indent: ToolbarPartComponent;
-    readonly IndentLeft: ToolbarIndentComponent;
-    readonly IndentRight: ToolbarIndentComponent;
     // (undocumented)
     readonly Italic: ToolbarPartComponent;
     // (undocumented)
@@ -611,6 +610,16 @@ export interface HyperlinkPopupState {
 // @public
 export interface HyperLinkProps extends HyperLinkPartProps {
     preset?: boolean;
+}
+
+// @public
+export interface IndentUpdate {
+    // (undocumented)
+    readonly firstLine?: number | null;
+    // (undocumented)
+    readonly left?: number | null;
+    // (undocumented)
+    readonly right?: number | null;
 }
 
 export { loadFonts }
@@ -911,25 +920,6 @@ export { toolbarCommandState }
 export function ToolbarGroup(input: ToolbarGroupProps): react__default.JSX.Element;
 
 // @public (undocumented)
-export interface ToolbarIndentComponent {
-    // (undocumented)
-    (props: ToolbarIndentProps): ReactNode;
-    // (undocumented)
-    readonly docxSlot: 'indent.left' | 'indent.right';
-}
-
-// @public
-export const ToolbarIndentLeft: ToolbarIndentComponent;
-
-// @public
-export interface ToolbarIndentProps extends ToolbarSlotPartProps {
-    readonly unit?: 'inch' | 'cm';
-}
-
-// @public
-export const ToolbarIndentRight: ToolbarIndentComponent;
-
-// @public (undocumented)
 export interface ToolbarPartComponent {
     // (undocumented)
     (props: ToolbarPartProps): ReturnType<typeof ToolbarButton$1>;
@@ -1172,6 +1162,16 @@ export interface UsePageSetupReturn {
     readonly apply: (update: PageSetupUpdate) => boolean;
     readonly isEnabled: boolean;
     readonly pageSetup: PageSetup | null;
+}
+
+// @public
+export function useParagraphIndent(): UseParagraphIndentReturn;
+
+// @public
+export interface UseParagraphIndentReturn {
+    readonly apply: (update: IndentUpdate) => boolean;
+    readonly indent: IndentFormatting | null;
+    readonly isEnabled: boolean;
 }
 
 // @public

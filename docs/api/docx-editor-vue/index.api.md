@@ -36,8 +36,6 @@ export type ChromeSlotId =
 | 'alignment.center'
 | 'alignment.right'
 | 'alignment.justify'
-| 'indent.left'
-| 'indent.right'
 | 'list.bullet'
 | 'list.numbered'
 | 'list.outdent'

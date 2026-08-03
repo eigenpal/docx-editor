@@ -58,8 +58,7 @@
       "alignment": "יישור טקסט",
       "listFormatting": "עיצוב רשימה",
       "image": "תמונה",
-      "table": "טבלה",
-      "indent": null
+      "table": "טבלה"
     },
     "undo": "בטל",
     "undoShortcut": "בטל (Ctrl+Z)",
@@ -964,14 +963,5 @@
       "headings": null
     },
     "title": null
-  },
-  "indent": {
-    "decreaseLeft": null,
-    "decreaseRight": null,
-    "increaseLeft": null,
-    "increaseRight": null,
-    "left": null,
-    "mixed": null,
-    "right": null
   }
 }

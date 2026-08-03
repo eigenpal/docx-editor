@@ -12,22 +12,17 @@
 
 import { useCallback, useMemo, useRef, useState } from 'react';
 import type { CSSProperties, ReactElement } from 'react';
-import type {
-  EditorSnapshot,
-  IndentFormatting,
-} from '@docx-editor.dev/core-contract/contracts/editor';
+import type { EditorSnapshot } from '@docx-editor.dev/core-contract/contracts/editor';
 import type { RulerIndent } from '@docx-editor.dev/core-contract/editor';
 import { HorizontalRuler, type RulerPageSetup } from '../components/ui/HorizontalRuler';
 import { VerticalRuler } from '../components/ui/VerticalRuler';
 import { useDocxEditor } from './context';
 import { useEditorState } from './useEditorState';
 import { usePageSetup } from './usePageSetup';
+import { useParagraphIndent } from './useParagraphIndent';
 import { useNavigationShift } from './navigation/navigation-layout';
 
 const selectZoom = (snapshot: EditorSnapshot): number => snapshot.zoom;
-const selectEditable = (snapshot: EditorSnapshot): boolean => snapshot.editable;
-const selectIndent = (snapshot: EditorSnapshot): IndentFormatting | null =>
-  snapshot.formatting?.indent ?? null;
 
 /** Props for the context-fed ruler parts. @public */
 export interface DocxEditorRulerProps {
@@ -108,17 +103,13 @@ function selectionKey(editor: ReturnType<typeof useDocxEditor>): string {
  */
 function useIndentDrag(): IndentDrag {
   const editor = useDocxEditor();
-  const editable = useEditorState(selectEditable);
-  const stored = useEditorState(selectIndent);
+  // The READ and the WRITE both come from the public hook, so the ruler is exactly the
+  // chrome a host could build itself — no privileged path.
+  const { indent: stored, isEnabled, apply } = useParagraphIndent();
   const [pending, setPending] = useState<RulerIndent | null>(null);
   const pendingRef = useRef<RulerIndent | null>(null);
   // The selection the drag STARTED against.
   const anchorRef = useRef<string | null>(null);
-
-  const isEnabled = useMemo(
-    () => editable && editor !== null && editor.can({ type: 'setIndent', left: 0 }).ok,
-    [editor, editable]
-  );
 
   const preview = useCallback(
     (next: RulerIndent) => {
@@ -135,19 +126,14 @@ function useIndentDrag(): IndentDrag {
     pendingRef.current = null;
     anchorRef.current = null;
     setPending(null);
-    if (!next || !editor) return;
+    if (!next) return;
     // A drag describes the paragraphs that were selected when it began, and `setIndent`
     // carries no target — it writes wherever the selection is NOW. An agent write or a
     // layout catch-up between press and release would otherwise land the drag on somebody
     // else's paragraphs.
     if (anchor !== null && anchor !== selectionKey(editor)) return;
-    editor.exec({
-      type: 'setIndent',
-      left: next.left,
-      right: next.right,
-      firstLine: next.firstLine,
-    });
-  }, [editor]);
+    apply({ left: next.left, right: next.right, firstLine: next.firstLine });
+  }, [editor, apply]);
 
   const indent = useMemo(
     () =>

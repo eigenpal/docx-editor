@@ -59,7 +59,6 @@
       "textFormatting": "Text formatting",
       "script": "Script",
       "alignment": "Alignment",
-      "indent": "Indent",
       "listFormatting": "List formatting",
       "image": "Image",
       "table": "Table"
@@ -142,15 +141,6 @@
     "increase": "Increase font size",
     "label": "Font size",
     "listLabel": "Font sizes"
-  },
-  "indent": {
-    "left": "Left indent",
-    "right": "Right indent",
-    "decreaseLeft": "Decrease left indent",
-    "increaseLeft": "Increase left indent",
-    "decreaseRight": "Decrease right indent",
-    "increaseRight": "Increase right indent",
-    "mixed": "Mixed indents in the selection"
   },
   "zoom": {
     "ariaLabel": "Zoom: {label}",

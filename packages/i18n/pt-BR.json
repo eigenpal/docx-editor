@@ -58,8 +58,7 @@
       "alignment": "Alinhamento",
       "listFormatting": "Formatação de lista",
       "image": "Imagem",
-      "table": "Tabela",
-      "indent": null
+      "table": "Tabela"
     },
     "undo": "Desfazer",
     "undoShortcut": "Desfazer (Ctrl+Z)",
@@ -964,14 +963,5 @@
       "headings": null
     },
     "title": null
-  },
-  "indent": {
-    "decreaseLeft": null,
-    "decreaseRight": null,
-    "increaseLeft": null,
-    "increaseRight": null,
-    "left": null,
-    "mixed": null,
-    "right": null
   }
 }

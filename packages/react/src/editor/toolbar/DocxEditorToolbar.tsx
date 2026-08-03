@@ -58,13 +58,7 @@ import {
   type ToolbarPartComponent,
   type ToolbarSlotPartComponent,
 } from './parts';
-import {
-  ToolbarFontSize,
-  ToolbarIndentLeft,
-  ToolbarIndentRight,
-  ToolbarZoom,
-  type ToolbarIndentComponent,
-} from './steppers';
+import { ToolbarFontSize, ToolbarZoom } from './steppers';
 import { ToolbarLineSpacing } from './LineSpacing';
 import { ToolbarFontColor, ToolbarHighlight } from './ColorSplit';
 import { ToolbarAlignment, type ToolbarAlignmentComponent } from './Alignment';
@@ -99,10 +93,6 @@ const SHAPED_PARTS: Partial<Record<ChromeSlotId, PartLike>> = {
   // from the engine, like every other control.
   'text.link': ToolbarLink,
   'list.lineSpacing': ToolbarLineSpacing,
-  // Exact indents, as steppers rather than icon buttons — `list.indent`/`list.outdent`
-  // remain the stepping pair beside them.
-  'indent.left': ToolbarIndentLeft,
-  'indent.right': ToolbarIndentRight,
   'review.editingMode': ToolbarEditingMode,
   'file.save': ToolbarSave,
 };
@@ -253,11 +243,6 @@ export interface DocxEditorToolbarNamespace {
   readonly NumberedList: ToolbarPartComponent;
   readonly Outdent: ToolbarPartComponent;
   readonly Indent: ToolbarPartComponent;
-  /** Exact left indent, where {@link Indent} steps. Placed deliberately: its registry
-   *  group is contextual, so it is not in the default arrangement. */
-  readonly IndentLeft: ToolbarIndentComponent;
-  /** Exact right indent. */
-  readonly IndentRight: ToolbarIndentComponent;
   readonly ImageInsert: ToolbarPartComponent;
   readonly ImageProperties: ToolbarPartComponent;
   readonly TableInsert: ToolbarPartComponent;
@@ -301,9 +286,6 @@ export const DocxEditorToolbar: DocxEditorToolbarNamespace = Object.assign(DocxE
   NumberedList: ToolbarNumberedList,
   Outdent: ToolbarOutdent,
   Indent: ToolbarIndent,
-  // Distinct from `Indent`/`Outdent` above, which STEP: these set an exact value.
-  IndentLeft: ToolbarIndentLeft,
-  IndentRight: ToolbarIndentRight,
   ImageInsert: ToolbarImageInsert,
   ImageProperties: ToolbarImageProperties,
   TableInsert: ToolbarTableInsert,
