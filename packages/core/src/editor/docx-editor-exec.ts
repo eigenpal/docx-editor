@@ -42,6 +42,24 @@ export function execEditorCommand(
         val: command.align === 'justify' ? 'both' : command.align,
       });
       break;
+    case 'setParagraphStyle': {
+      // The styleId must name a paragraph style the DOCUMENT defines: writing a dangling
+      // `w:pStyle` would render as Normal here and as a missing style everywhere else.
+      // Checked at exec rather than `can` because `can` also answers the toolbar's probe,
+      // which must mean "would a well-formed pick be honoured" on any document.
+      const known = mounted.session
+        .documentStyles()
+        .some((style) => style.type === 'paragraph' && style.styleId === command.styleId);
+      if (!known) {
+        return {
+          ok: false,
+          code: 'invalidArgs',
+          reason: `style '${command.styleId}' is not a paragraph style of this document`,
+        };
+      }
+      mounted.setParagraphProperty('pStyle', { val: command.styleId });
+      break;
+    }
     case 'setIndent': {
       const attributes: Record<string, string> = {};
       if (command.left !== undefined) attributes.left = String(command.left);

@@ -103,7 +103,11 @@ import {
   registerEmbeddedFontFaces,
   type EmbeddedFontFaceRegistration,
 } from './embedded-font-faces.ts';
-import { mountPaginatedSurface, type PaginatedSurface } from './paginated-surface.ts';
+import {
+  mountPaginatedSurface,
+  type PaginatedSurface,
+  type PaginatedSurfaceState,
+} from './paginated-surface.ts';
 
 export interface DocxEditorConfig {
   /**
@@ -221,6 +225,15 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
   let parseError: string | null = null;
   let unsubscribeSession: Unsubscribe | null = null;
   let lastSelection: SurfaceSelection | null = null;
+  /**
+   * The armed typing format the last tick reported (Word's stored marks).
+   *
+   * Arming moves NO document revision and NO caret, so neither of this facade's two change
+   * signals fires for it — and a host that only ever hears events would leave its Bold
+   * button unpressed while the engine had it armed. Reference-compared: the surface hands
+   * back the same array while the armed set is unchanged.
+   */
+  let lastPendingFormat: PaginatedSurfaceState['pendingFormat'] = null;
   let destroyed = false;
 
   /** The measurer built per LOAD from `config.fonts` plus the document's embedded faces. */
@@ -294,6 +307,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
     surface?.destroy();
     surface = null;
     lastSelection = null;
+    lastPendingFormat = null;
   }
 
   /** Points to CSS pixels: zoom 1 paints at the browser's 96dpi reading of a 72dpi point. */
@@ -328,7 +342,12 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
         // re-derivation returns the previous snapshot reference, so a no-op publish costs
         // one comparison, never a spurious re-render.
         bump();
-        if (selectionsMatch(state.selection, lastSelection)) return;
+        // The armed typing format is observable state with no other channel: it moves no
+        // revision (so no `change`) and no caret (so the guard below would return). A host
+        // learns about a Bold press at a collapsed caret here or not at all.
+        const pendingMoved = state.pendingFormat !== lastPendingFormat;
+        lastPendingFormat = state.pendingFormat;
+        if (selectionsMatch(state.selection, lastSelection) && !pendingMoved) return;
         lastSelection = state.selection;
         emitSelectionChange();
       },
@@ -776,8 +795,11 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
 
       const result = execEditorCommand(mounted, command);
       if (result) return result;
-      // `changed` is read from the model, not assumed: a toggle on a collapsed caret or an
-      // undo on an empty stack commits nothing, and reporting `changed: true` would be a lie.
+      // `changed` is read from the model, not assumed: reporting `changed: true` where the
+      // document did not move would be a lie. It answers for the DOCUMENT, not for
+      // observable state — a mark toggled at a collapsed caret ARMS the typing format
+      // (`toggleRunProperty`), which moves the snapshot and fires a tick while committing
+      // nothing, so it correctly reports `changed: false`.
       return { ok: true, changed: mounted.session.revision() !== before };
     },
 

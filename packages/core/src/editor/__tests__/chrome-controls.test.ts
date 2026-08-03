@@ -111,7 +111,7 @@ describe('legacy chrome descriptor', () => {
   });
 
   test('the value-typed slots are declared as values, not commands', () => {
-    // These four take a PICKED value through `commandForSlotValue`; there is no fixed
+    // These take a PICKED value through `commandForSlotValue`; there is no fixed
     // command to hand `Editor.can`, so a bare click has nothing to send and chrome must
     // produce a value first.
     const valueSlots = CHROME_GROUPS.flatMap((g) =>
@@ -120,6 +120,7 @@ describe('legacy chrome descriptor', () => {
     expect([...valueSlots].sort()).toEqual([
       'font.family',
       'font.size',
+      'styles.style',
       'text.color',
       'text.highlight',
     ]);

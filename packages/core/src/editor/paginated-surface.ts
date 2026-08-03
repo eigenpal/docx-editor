@@ -73,6 +73,11 @@ import {
 } from './surface-pages.ts';
 import { createSurfaceCaret } from './surface-caret.ts';
 import { createSurfaceFormat } from './surface-format.ts';
+import {
+  authoredRunPropertiesAt,
+  mergedProperties,
+  type SurfaceProperty,
+} from './surface-formatting.ts';
 import { createPointerController, type PointerController } from './surface-pointer.ts';
 import { createSurfaceSelectionSync } from './surface-selection-sync.ts';
 import { createSurfaceStructure } from './surface-structure.ts';
@@ -185,6 +190,113 @@ export function mountPaginatedSurface(
   let cellSelection: CellSelection | null = null;
   let lastRejection: string | null = null;
 
+  /**
+   * The armed typing format: what was pressed (`properties`) over the face the caret had
+   * when it was pressed (`base`). The base is CAPTURED AT ARM TIME, Word's rule — delete
+   * the run beside the caret and the next characters still come out in the face you armed,
+   * not in whatever run the caret drifted against.
+   */
+  interface ArmedFormat {
+    readonly properties: readonly SurfaceProperty[];
+    readonly base: readonly SurfaceProperty[];
+  }
+
+  /**
+   * The stored-marks lane: run properties armed at a collapsed caret, applied to the next
+   * characters typed there (Word's pending-format behavior — Bold at a caret, then type).
+   *
+   * Anchored to the position it was armed at: a selection change away from it discards it,
+   * the caret-preserving edits (Backspace, Delete, Enter) re-anchor it, and `type()` or
+   * the IME readback consumes it. The anchor is double-checked at consumption so a missed
+   * clearing path degrades to "the format is forgotten", never "the wrong text is styled".
+   */
+  let pendingFormats: ({ readonly position: SemanticPosition } & ArmedFormat) | null = null;
+
+  /** The armed pending properties, if the selection still sits where they were armed. */
+  function pendingAtCaret(): readonly SurfaceProperty[] | null {
+    return armedAtCaret()?.properties ?? null;
+  }
+
+  /** The full armed state — properties AND captured base — anchored at the current caret. */
+  function armedAtCaret(): ArmedFormat | null {
+    if (!pendingFormats) return null;
+    const at = pendingFormats.position;
+    const collapsedThere = (position: SemanticPosition): boolean =>
+      position.paragraphId === at.paragraphId && position.offset === at.offset;
+    return collapsedThere(selection.anchor) && collapsedThere(selection.head)
+      ? pendingFormats
+      : null;
+  }
+
+  /** Discard pending caret formatting when `next` is not collapsed at its anchor. */
+  function reconcilePendingWith(next: SemanticSelection): void {
+    if (!pendingFormats) return;
+    const at = pendingFormats.position;
+    const stays =
+      next.anchor.paragraphId === at.paragraphId &&
+      next.anchor.offset === at.offset &&
+      next.head.paragraphId === at.paragraphId &&
+      next.head.offset === at.offset;
+    if (!stays) pendingFormats = null;
+  }
+
+  /**
+   * The op that applies the armed caret formatting to text just inserted at its anchor,
+   * or nothing when no format is armed there.
+   *
+   * One producer for BOTH insertion lanes — `type()` and the IME composition readback —
+   * so composed text takes the armed format exactly like typed text (Word's behavior).
+   * The armed properties merge over the base captured at ARM time (the caret run's own
+   * authored `w:rPr`, never the cascade); `setRunProperties` replaces the whole `w:rPr`
+   * over the range it names, so the op is complete on its own. The anchor is matched
+   * exactly; an ambiguous diff that lands the insert elsewhere degrades to "the format is
+   * forgotten", never "the wrong text is styled".
+   */
+  /**
+   * Apply an insertion together with the armed caret format, and — if the store refuses the
+   * combined transaction — apply the insertion ALONE.
+   *
+   * THE KEYSTROKE IS NOT THE FORMAT'S HOSTAGE. The armed op rides the insert's transaction
+   * so the two are one undo step, which means a property the store rejects would take the
+   * typed characters down with it, silently, on every keystroke until the caret moved. Arm
+   * time already refuses names outside the vocabulary; this covers everything it cannot see
+   * — a malformed attribute value, a store rule that only fails against this document — and
+   * degrades to "the format is forgotten", which is the promise this lane makes.
+   */
+  function withoutPendingOnRejection(
+    withFormat: readonly TreeDocOp[],
+    withoutFormat: readonly TreeDocOp[],
+    mark: ReturnType<typeof selectionMark>,
+    redoMark?: { paragraphId: string; start: number; end: number }
+  ): ReturnType<TreeDocxSession['applyTreeOps']> {
+    const result = session.applyTreeOps([...withFormat], mark, redoMark);
+    if (withFormat.length === withoutFormat.length || !result.rejected) return result;
+    return session.applyTreeOps([...withoutFormat], mark, redoMark);
+  }
+
+  function consumePendingFormatOps(
+    paragraphId: string,
+    offset: number,
+    length: number
+  ): TreeDocOp[] {
+    const armed = armedAtCaret();
+    if (!armed || length === 0) return [];
+    const at = pendingFormats!.position;
+    if (at.paragraphId !== paragraphId || at.offset !== offset) return [];
+    return [
+      {
+        op: 'setRunProperties',
+        paragraphId,
+        start: offset,
+        end: offset + length,
+        properties: armed.properties.reduce(
+          (merged, property) => mergedProperties(merged, property),
+          [...armed.base]
+        ),
+      },
+    ];
+  }
+
   // Phase timers, one slot per phase rather than a log: the state reports the LAST pass,
   // and a host that wants history samples `onChange`. `performance.now()` where the host
   // has one — monotonic, sub-millisecond — and wall clock where it does not (a bare test
@@ -218,11 +330,36 @@ export function mountPaginatedSurface(
     selectionMark: () => selectionMark(),
     textOf: (paragraphId) => textOf(paragraphId),
     selectedCells: () => cellSelection?.cellIds,
+    pendingFormats: () => pendingAtCaret(),
+    setPendingFormats: (next) => {
+      if (next === null || next.length === 0) {
+        if (!pendingFormats) return;
+        pendingFormats = null;
+      } else {
+        // Armed only at a collapsed caret — a range selection formats directly. The base
+        // is captured on the FIRST arm at this caret and kept across further presses:
+        // it is the face the user saw when they started pressing buttons.
+        const { anchor, head } = selection;
+        if (anchor.paragraphId !== head.paragraphId || anchor.offset !== head.offset) return;
+        const base =
+          armedAtCaret()?.base ??
+          authoredRunPropertiesAt(session.part(), head.paragraphId, head.offset);
+        pendingFormats = { position: head, properties: next, base };
+      }
+      // Not document state, but observable state: the toolbar's Bold must light up NOW,
+      // and the snapshot cache invalidates on this report.
+      options.onChange?.(currentState());
+    },
   });
   const structure = createSurfaceStructure({
     session,
     layout: () => currentLayout,
-    commit: (run, nextSelection) => commit(run, nextSelection),
+    // Structural edits at the caret KEEP the armed typing format, the way Word does: a
+    // Shift+Enter line break, a Tab, a page break or turning the paragraph into a list item
+    // all leave the user typing at a new caret in the face they armed. Captured before the
+    // ops run, re-anchored at the post-edit caret.
+    commit: (run, nextSelection) =>
+      commit(run, nextSelection, { rearmPending: armedAtCaret() ?? undefined }),
     orderedStart: () => orderedStart(),
     orderedRange: () => orderedRange(),
     selectionMark: () => selectionMark(),
@@ -300,7 +437,15 @@ export function mountPaginatedSurface(
 
   // Every committed transaction, whatever produced it — this surface, undo, or another
   // editor sharing the store — reaches layout the same way.
-  const unsubscribe = session.subscribe((modelChange) => scheduler.notify(modelChange));
+  const unsubscribe = session.subscribe((modelChange) => {
+    // A commit from OUTSIDE this surface retires the armed typing format: the tree it was
+    // armed against has moved, and the offsets it is anchored to no longer mean what they
+    // did. This surface's own commits already cleared it before running their ops (and
+    // re-arm afterwards, which happens after this fires), so this is only ever the
+    // external case.
+    pendingFormats = null;
+    scheduler.notify(modelChange);
+  });
 
   /** The pages worth building in detail, for the current viewport and selection. */
   function visiblePages(): ReadonlySet<number> | undefined {
@@ -323,6 +468,9 @@ export function mountPaginatedSurface(
       canUndo: session.canUndo(),
       canRedo: session.canRedo(),
       lastRejection,
+      // Reference-stable while unchanged: `pendingAtCaret` hands back the stored array,
+      // so a host can compare states to see whether the armed format moved.
+      pendingFormat: pendingAtCaret(),
       perf: {
         layoutMs: lastLayoutMs,
         paintMs: lastPaintMs,
@@ -418,7 +566,18 @@ export function mountPaginatedSurface(
   function commit(
     run: () => ReturnType<TreeDocxSession['applyPmDoc']> | boolean,
     selectionAfter?: () => SemanticSelection | null,
-    options: { readonly keepCellSelection?: boolean } | undefined = {}
+    options:
+      | {
+          readonly keepCellSelection?: boolean;
+          /**
+           * Re-anchor this armed typing format at the POST-edit caret instead of retiring
+           * it. Word's rule: Backspace, Delete and Enter keep the typing format — bold
+           * pressed at a caret survives deleting a character or opening a new paragraph,
+           * and applies to whatever is typed next there.
+           */
+          readonly rearmPending?: ArmedFormat;
+        }
+      | undefined = {}
   ): void {
     // An edit invalidates the rectangle: its cells' content has changed, and the collapsed
     // DOM selection it installed still points at the PRE-edit anchor. Left standing it kept
@@ -426,6 +585,10 @@ export function mountPaginatedSurface(
     // kept feeding a stale cell list to the toolbar. Formatting is the one caller that
     // legitimately keeps it — Word leaves cells selected after Bold.
     if (!options?.keepCellSelection) cellSelection = null;
+    // A committed edit retires the stored caret format unless the caller re-arms it below:
+    // the consumers (`type()`, the IME readback) capture the properties BEFORE calling here,
+    // and the caret-preserving edits (Backspace, Delete, Enter) pass `rearmPending`.
+    pendingFormats = null;
     // Whatever the DOM selection holds, it was made against the text BEFORE this edit, so its
     // offsets stop meaning the same thing the moment the ops land. The render below must
     // write the model's selection out, never read the stale one back.
@@ -451,6 +614,18 @@ export function mountPaginatedSurface(
         selection = next;
         desiredX = null;
       }
+      // Re-anchor AFTER the post-edit caret is installed, so the armed format follows the
+      // edit (Backspace moves it one left, Enter moves it into the new paragraph). Only a
+      // collapsed caret can hold one — the same invariant arming enforces.
+      const rearm = options?.rearmPending;
+      if (rearm && rearm.properties.length > 0) {
+        const { anchor, head } = selection;
+        if (anchor.paragraphId === head.paragraphId && anchor.offset === head.offset) {
+          // The new anchor LAST: `armedAtCaret()` hands back the full armed record, and
+          // its stale position must not override where the edit just put the caret.
+          pendingFormats = { properties: rearm.properties, base: rearm.base, position: head };
+        }
+      }
     }
     // A committed edit repaints through the scheduler's publish; a REFUSED one commits
     // nothing, so the surface still has to refresh the state it just changed.
@@ -458,6 +633,9 @@ export function mountPaginatedSurface(
   }
 
   function setSelection(next: SemanticSelection, keepDesiredX = false): void {
+    // Moving the caret discards a stored caret format — Word's rule. Landing back on the
+    // exact armed position (the mirror re-adopting the same caret) keeps it.
+    reconcilePendingWith(next);
     selection = next;
     // Any plain selection cancels a rectangle. A caret placed by a click, a keystroke or an
     // edit is a text selection by definition, and leaving the rectangle behind would keep
@@ -490,6 +668,7 @@ export function mountPaginatedSurface(
     // The raw take-up, without the mirror or the report `setSelection` performs: the render
     // this runs inside is about to do both.
     adoptSelection: (next) => {
+      reconcilePendingWith(next);
       selection = next;
       desiredX = null;
     },
@@ -498,6 +677,8 @@ export function mountPaginatedSurface(
     flushLayout: () => flushLayout(),
     updateCaret: () => caret.update(),
     textOf: (paragraphId) => textOf(paragraphId),
+    pendingFormatOps: (paragraphId, offset, length) =>
+      consumePendingFormatOps(paragraphId, offset, length),
     selectionMark: () => selectionMark(),
     now,
     recordSelectionMs: (ms) => {
@@ -510,7 +691,10 @@ export function mountPaginatedSurface(
 
   function setCellSelection(next: CellSelection | null): void {
     cellSelection = next;
-    if (next) selection = next.text;
+    if (next) {
+      reconcilePendingWith(next.text);
+      selection = next.text;
+    }
     desiredX = null;
     // Settled, not moved: the mirror on the next line makes the two agree before any render
     // can read them back — the same reason `setSelection` says so.
@@ -550,21 +734,26 @@ export function mountPaginatedSurface(
       // puts the text where the removed characters used to be rather than where the user
       // was typing.
       const start = orderedStart();
+      // Consume the stored caret format (armed only at a collapsed caret, so it cannot
+      // coexist with the delete ops below): the typed range gets the caret run's own
+      // properties plus the armed ones, in the SAME transaction — one undo step.
+      const pendingOps = consumePendingFormatOps(start.paragraphId, start.offset, text.length);
+      const insertOps: TreeDocOp[] = [
+        ...deleteSelectionOps(),
+        { op: 'insertText', paragraphId: start.paragraphId, offset: start.offset, text },
+      ];
+      const redoMark = {
+        paragraphId: start.paragraphId,
+        start: start.offset + text.length,
+        end: start.offset + text.length,
+      };
       commit(
         () =>
-          session.applyTreeOps(
-            [
-              ...deleteSelectionOps(),
-              { op: 'insertText', paragraphId: start.paragraphId, offset: start.offset, text },
-            ],
+          withoutPendingOnRejection(
+            [...insertOps, ...pendingOps],
+            insertOps,
             selectionMark(),
-            // Where the caret ENDS, so redo puts it back there rather than leaving it
-            // addressing the tree the undo discarded.
-            {
-              paragraphId: start.paragraphId,
-              start: start.offset + text.length,
-              end: start.offset + text.length,
-            }
+            redoMark
           ),
         () => collapsedAt({ paragraphId: start.paragraphId, offset: start.offset + text.length })
       );
@@ -580,6 +769,9 @@ export function mountPaginatedSurface(
         );
         return;
       }
+      // Word keeps the typing format across Backspace: bold armed at a caret survives
+      // deleting the character before it, re-anchored where the caret lands.
+      const armed = armedAtCaret() ?? undefined;
       const position = selection.head;
       if (position.offset === 0) {
         // Backspace at the start of a paragraph pulls it into the previous one. Refusing
@@ -596,7 +788,8 @@ export function mountPaginatedSurface(
               [{ op: 'joinParagraphs', firstId: previous, secondId: position.paragraphId }],
               selectionMark()
             ),
-          () => collapsedAt({ paragraphId: previous, offset: joinAt })
+          () => collapsedAt({ paragraphId: previous, offset: joinAt }),
+          { rearmPending: armed }
         );
         return;
       }
@@ -613,7 +806,8 @@ export function mountPaginatedSurface(
             ],
             selectionMark()
           ),
-        () => collapsedAt({ ...position, offset: position.offset - 1 })
+        () => collapsedAt({ ...position, offset: position.offset - 1 }),
+        { rearmPending: armed }
       );
     },
 
@@ -623,6 +817,9 @@ export function mountPaginatedSurface(
       // whichever end the user happened to drag to.
       const position = orderedStart();
       const before = new Set(session.paragraphIds());
+      // Word carries the typing format across Enter: bold armed before the split applies
+      // to the first characters typed in the new paragraph.
+      const armed = armedAtCaret() ?? undefined;
       commit(
         () =>
           session.applyTreeOps(
@@ -640,7 +837,8 @@ export function mountPaginatedSurface(
           // The tail is the id the store minted that was not there before.
           const tail = session.paragraphIds().find((id) => !before.has(id));
           return tail ? collapsedAt({ paragraphId: tail, offset: 0 }) : null;
-        }
+        },
+        { rearmPending: armed }
       );
     },
 
@@ -668,7 +866,8 @@ export function mountPaginatedSurface(
             [{ op: 'deleteText', paragraphId: head.paragraphId, start: target, end: head.offset }],
             selectionMark()
           ),
-        () => collapsedAt({ ...head, offset: target })
+        () => collapsedAt({ ...head, offset: target }),
+        { rearmPending: armedAtCaret() ?? undefined }
       );
     },
 
@@ -680,31 +879,40 @@ export function mountPaginatedSurface(
         surface.deleteForward();
         return;
       }
-      commit(() =>
-        session.applyTreeOps(
-          [{ op: 'deleteText', paragraphId: head.paragraphId, start: head.offset, end: target }],
-          selectionMark()
-        )
+      commit(
+        () =>
+          session.applyTreeOps(
+            [{ op: 'deleteText', paragraphId: head.paragraphId, start: head.offset, end: target }],
+            selectionMark()
+          ),
+        undefined,
+        { rearmPending: armedAtCaret() ?? undefined }
       );
     },
 
     deleteForward() {
       if (surface.deleteSelection()) return;
+      // Delete keeps the typing format like Backspace does — the caret does not move, so
+      // the armed format re-anchors in place.
+      const armed = armedAtCaret() ?? undefined;
       const position = selection.head;
       const text = textOf(position.paragraphId);
       if (position.offset < text.length) {
-        commit(() =>
-          session.applyTreeOps(
-            [
-              {
-                op: 'deleteText',
-                paragraphId: position.paragraphId,
-                start: position.offset,
-                end: position.offset + 1,
-              },
-            ],
-            selectionMark()
-          )
+        commit(
+          () =>
+            session.applyTreeOps(
+              [
+                {
+                  op: 'deleteText',
+                  paragraphId: position.paragraphId,
+                  start: position.offset,
+                  end: position.offset + 1,
+                },
+              ],
+              selectionMark()
+            ),
+          undefined,
+          { rearmPending: armed }
         );
         return;
       }
@@ -719,7 +927,8 @@ export function mountPaginatedSurface(
             [{ op: 'joinParagraphs', firstId: position.paragraphId, secondId: next }],
             selectionMark()
           ),
-        () => collapsedAt(position)
+        () => collapsedAt(position),
+        { rearmPending: armed }
       );
     },
 
@@ -793,6 +1002,11 @@ export function mountPaginatedSurface(
   function restoreSelection(
     mark: { paragraphId: string; start: number; end: number } | null
   ): void {
+    // Undo and redo go straight to the session rather than through `commit`, so the armed
+    // typing format is retired here. Word discards it on undo, and a history entry can
+    // restore the caret to the exact position it was armed at — which would otherwise leave
+    // it armed against a tree the undo has already replaced.
+    pendingFormats = null;
     // The tree about to be published is not the one the DOM selection was made against, so
     // the flush below must not read it back: offsets in the reverted tree do not correspond
     // to offsets in the one that replaced it.
@@ -890,6 +1104,10 @@ export function mountPaginatedSurface(
     const start = orderedStart();
     const joined = lines.join('');
     const ops: TreeDocOp[] = [...deleteSelectionOps()];
+    // Plain text pasted at a caret takes the armed typing format, like typed text — Word
+    // formats a plain paste as if you had typed it. Written over the PRE-SPLIT offsets, so
+    // the op runs before `splitParagraphMany` cuts the paragraph up.
+    const pendingOps = consumePendingFormatOps(start.paragraphId, start.offset, joined.length);
     if (joined.length > 0) {
       ops.push({
         op: 'insertText',
@@ -897,6 +1115,7 @@ export function mountPaginatedSurface(
         offset: start.offset,
         text: joined,
       });
+      ops.push(...pendingOps);
     }
     const boundaries: number[] = [];
     let consumed = 0;
@@ -911,8 +1130,9 @@ export function mountPaginatedSurface(
 
     const before = new Set(session.paragraphIds());
     const lastLine = lines[lines.length - 1]!;
+    const withoutFormat = ops.filter((op) => !pendingOps.includes(op));
     commit(
-      () => session.applyTreeOps(ops, selectionMark()),
+      () => withoutPendingOnRejection(ops, withoutFormat, selectionMark()),
       () => {
         if (boundaries.length === 0) {
           return collapsedAt({

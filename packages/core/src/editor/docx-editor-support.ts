@@ -278,6 +278,31 @@ export function classifyCommand(command: EditorCommand): CommandSupport {
     }
     case 'setAlignment':
       return { supported: true, mutating: true };
+    case 'setParagraphStyle': {
+      // Shape gate only, like `insertText`: whether the styleId names a style the DOCUMENT
+      // defines is checked at exec, where the styles part is in hand. The bounds mirror the
+      // catalog's own (`collectDocumentStyles`), so no listed style can be refused here.
+      if (command.target !== undefined) {
+        return {
+          supported: false,
+          reason: 'DocTarget addressing is not supported; the style applies at the selection',
+        };
+      }
+      if (
+        typeof command.styleId !== 'string' ||
+        command.styleId.length === 0 ||
+        command.styleId.length > 128 ||
+        // eslint-disable-next-line no-control-regex
+        /[\u0000-\u001f\u007f-\u009f]/.test(command.styleId)
+      ) {
+        return {
+          supported: false,
+          code: 'invalidArgs',
+          reason: 'setParagraphStyle requires a styleId of 1-128 printable characters',
+        };
+      }
+      return { supported: true, mutating: true };
+    }
     case 'setIndent':
       return command.left !== undefined ||
         command.right !== undefined ||

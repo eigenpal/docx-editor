@@ -43,10 +43,13 @@ const SOURCE = docx('<w:p><w:r><w:t>hello world</w:t></w:r></w:p>');
 
 const teardowns: (() => void)[] = [];
 
-function mountToolbar(): { editor: DocxEditorInstance; toolbar: HTMLElement } {
+function mountToolbar(source: Uint8Array = SOURCE): {
+  editor: DocxEditorInstance;
+  toolbar: HTMLElement;
+} {
   const surfaceHost = document.createElement('div');
   document.body.appendChild(surfaceHost);
-  const editor = createDocxEditor({ container: surfaceHost, document: SOURCE });
+  const editor = createDocxEditor({ container: surfaceHost, document: source });
 
   const toolbarHost = document.createElement('div');
   document.body.appendChild(toolbarHost);
@@ -160,14 +163,19 @@ describe('the Vue toolbar reads enabled state from the engine', () => {
   });
 
   test('a wired control the engine refuses NOW is disabled with the engine’s reason', async () => {
-    // Run formatting needs a range: at a collapsed caret the engine refuses, and the
-    // control must show THAT, not the registry's old permanent "unavailable in preview".
-    const { toolbar } = mountToolbar();
+    // Run formatting is written within ONE paragraph: over a multi-paragraph selection
+    // the engine refuses, and the control must show THAT, not the registry's old
+    // permanent "unavailable in preview". (A collapsed caret no longer refuses — it
+    // arms the engine's stored-marks lane instead.)
+    const { editor, toolbar } = mountToolbar(
+      docx('<w:p><w:r><w:t>alpha</w:t></w:r></w:p><w:p><w:r><w:t>beta</w:t></w:r></w:p>')
+    );
+    editor.surface!.selectAll();
     await nextTick();
     const underline = slot(toolbar, 'text.underline') as HTMLButtonElement;
     expect(underline.disabled).toBe(true);
     expect(underline.title).not.toContain('formattingBar.unavailableInPreview');
-    expect(underline.title.length).toBeGreaterThan(0);
+    expect(underline.title).toContain('one paragraph');
   });
 
   test('the shapes this toolbar cannot drive still render, and say so', async () => {

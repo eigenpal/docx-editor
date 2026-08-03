@@ -16,10 +16,13 @@ import {
   directParagraphMarkProperties,
   directParagraphProperties,
   formattingAt,
+  isAuthorableRunProperty,
   isRunPropertyActive,
   mergedProperties,
   paragraphMarkOps,
+  pendingPropertyState,
   runPropertyEdits,
+  withPendingFormatting,
   type SurfaceProperty,
 } from './surface-formatting.ts';
 import type { TreeDocOp } from '@docx-editor.dev/core-contract/store';
@@ -47,6 +50,13 @@ export interface SurfaceFormatDeps {
    * reports formatting from cells the user never selected.
    */
   selectedCells?(): readonly string[] | undefined;
+  /**
+   * The stored-marks lane: run properties armed at a collapsed caret, applied to the next
+   * characters typed there. Owned by the composition root because IT knows when the caret
+   * moves (which discards them) and when `type()` consumes them.
+   */
+  pendingFormats(): readonly SurfaceProperty[] | null;
+  setPendingFormats(next: readonly SurfaceProperty[] | null): void;
 }
 
 type FormatMethods = Pick<
@@ -146,6 +156,20 @@ export function createSurfaceFormat(deps: SurfaceFormatDeps): FormatMethods {
     return true;
   };
 
+  /**
+   * Arm one property for the next characters typed at the caret.
+   *
+   * REFUSED HERE if the store could not author it. An armed property is applied inside the
+   * KEYSTROKE's transaction, so a name outside the D8 run vocabulary would not fail at the
+   * press — it would reject the insert too, and go on rejecting every keystroke at that
+   * caret in silence. Every other write reaches the store in the same turn as the press and
+   * surfaces its own refusal; this one has to be checked before it can be stored.
+   */
+  const armPending = (incoming: SurfaceProperty): void => {
+    if (!isAuthorableRunProperty(incoming.localName)) return;
+    deps.setPendingFormats(mergedProperties(deps.pendingFormats() ?? [], incoming));
+  };
+
   return {
     setRunProperty(localName, attributes) {
       const incoming = { localName, ...(attributes ? { attributes } : {}) };
@@ -155,7 +179,13 @@ export function createSurfaceFormat(deps: SurfaceFormatDeps): FormatMethods {
         return;
       }
       const { from, to } = orderedRange();
-      if (from.paragraphId !== to.paragraphId || from.offset === to.offset) return;
+      if (from.paragraphId !== to.paragraphId) return;
+      if (from.offset === to.offset) {
+        // A collapsed caret arms the value for the NEXT characters typed — picking a font
+        // with nothing selected is how Word starts typing in that font.
+        armPending(incoming);
+        return;
+      }
       writeRunProperty(from, to, incoming);
     },
 
@@ -184,17 +214,26 @@ export function createSurfaceFormat(deps: SurfaceFormatDeps): FormatMethods {
     },
 
     formatting: () =>
-      formattingAt(
-        currentLayout.value,
-        selectionNow.value,
-        (paragraphId: string, runProperties) =>
-          session.effectiveRunDefaults(paragraphId, runProperties),
-        deps.selectedCells?.()
+      // Pending caret formatting overlays the document's answer, so the toolbar shows what
+      // the next character typed will look like while a stored format is armed.
+      withPendingFormatting(
+        formattingAt(
+          currentLayout.value,
+          selectionNow.value,
+          (paragraphId: string, runProperties) =>
+            session.effectiveRunDefaults(paragraphId, runProperties),
+          deps.selectedCells?.()
+        ),
+        deps.pendingFormats()
       ),
 
     toggleRunProperty(localName, attributes) {
       const cells = deps.selectedCells?.();
-      const active = isRunPropertyActive(currentLayout.value, selectionNow.value, localName, cells);
+      // A pending entry answers for the toggle state ahead of the document — pressing Bold
+      // twice at a caret must cancel, not double-arm.
+      const active =
+        pendingPropertyState(deps.pendingFormats(), localName) ??
+        isRunPropertyActive(currentLayout.value, selectionNow.value, localName, cells);
       // Toggling OFF sends an explicit `val="0"` rather than dropping the element: the
       // property may be inherited from a style, and removing the local override would let the
       // inherited value come back. `w:u` is a closed enumeration, not a boolean: its off
@@ -207,17 +246,30 @@ export function createSurfaceFormat(deps: SurfaceFormatDeps): FormatMethods {
         return;
       }
       const { from, to } = orderedRange();
-      // A collapsed caret has no range to format. Stored marks — formatting that applies to
-      // the NEXT character typed — are a separate lane; refusing is honest rather than
-      // formatting a character the user did not select.
-      if (from.paragraphId !== to.paragraphId || from.offset === to.offset) return;
-      writeRunProperty(
-        from,
-        to,
-        active
-          ? { localName, attributes: { val: localName === 'u' ? 'none' : '0' } }
-          : { localName, ...(attributes ? { attributes } : {}) }
-      );
+      if (from.paragraphId !== to.paragraphId) return;
+      if (from.offset === to.offset) {
+        // The stored-marks lane: a collapsed caret has no range to format, so the toggle is
+        // remembered and applied to the next characters typed at this position (Word's
+        // behavior). Moving the caret discards it — the composition root owns that rule.
+        //
+        // A toggle that lands BACK on what the document already gives disarms the entry
+        // rather than arming an explicit override: Bold pressed twice must leave nothing
+        // pending, or typing would split the run to write a redundant `b val="0"`.
+        const pending = deps.pendingFormats() ?? [];
+        const documentActive = isRunPropertyActive(
+          currentLayout.value,
+          selectionNow.value,
+          localName
+        );
+        if (!active === documentActive) {
+          const kept = pending.filter((property) => property.localName !== localName);
+          deps.setPendingFormats(kept.length > 0 ? kept : null);
+        } else {
+          armPending(incoming);
+        }
+        return;
+      }
+      writeRunProperty(from, to, incoming);
     },
   };
 }

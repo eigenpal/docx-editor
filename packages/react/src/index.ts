@@ -56,6 +56,7 @@ export { usePageSetup, type PageSetupUpdate, type UsePageSetupReturn } from './e
 export {
   DocxEditorToolbar,
   useFontFamily,
+  useParagraphStyle,
   type DocxEditorToolbarNamespace,
   type DocxEditorToolbarProps,
   type ToolbarAlignmentComponent,
@@ -63,6 +64,11 @@ export {
   type FontFamilyNamespace,
   type FontFamilyPartProps,
   type FontFamilyProps,
+  type ParagraphStyleItemProps,
+  type ParagraphStyleNamespace,
+  type ParagraphStyleOption,
+  type ParagraphStylePartProps,
+  type ParagraphStyleProps,
   type ToolbarButtonProps,
   type ToolbarPartComponent,
   type ToolbarPartProps,
@@ -71,6 +77,7 @@ export {
   type ToolbarSlotPartProps,
   type ToolbarTranslate,
   type UseFontFamilyResult,
+  type UseParagraphStyleResult,
 } from './editor/toolbar';
 
 // The shared engine helpers both adapters expose, so the two package surfaces

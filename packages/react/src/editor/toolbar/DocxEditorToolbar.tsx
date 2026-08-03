@@ -51,7 +51,6 @@ import {
   ToolbarSave,
   ToolbarSeparator,
   ToolbarStrike,
-  ToolbarStylePicker,
   ToolbarSubscript,
   ToolbarSuperscript,
   ToolbarTableInsert,
@@ -64,6 +63,7 @@ import { ToolbarFontSize, ToolbarZoom } from './steppers';
 import { ToolbarFontColor, ToolbarHighlight } from './ColorSplit';
 import { ToolbarAlignment, type ToolbarAlignmentComponent } from './Alignment';
 import { FontFamily, useFontFamily } from './FontFamily';
+import { ParagraphStyle, useParagraphStyle } from './ParagraphStyle';
 
 /**
  * A default-arrangement key: a chrome slot, or `'alignment'` for the MERGED
@@ -83,7 +83,7 @@ type PartLike = (props: { hidden?: boolean }) => ReactNode;
  */
 const SHAPED_PARTS: Partial<Record<ChromeSlotId, PartLike>> = {
   'zoom.level': ToolbarZoom,
-  'styles.style': ToolbarStylePicker,
+  'styles.style': ParagraphStyle,
   'font.family': FontFamily,
   'font.size': ToolbarFontSize,
   'text.color': ToolbarFontColor,
@@ -248,7 +248,7 @@ export interface DocxEditorToolbarNamespace {
   readonly FontColor: ToolbarSlotPartComponent;
   readonly Highlight: ToolbarSlotPartComponent;
   readonly Zoom: ToolbarSlotPartComponent;
-  readonly StylePicker: ToolbarSlotPartComponent;
+  readonly StylePicker: typeof ParagraphStyle;
   readonly EditingMode: ToolbarSlotPartComponent;
   readonly Save: ToolbarSlotPartComponent;
 }
@@ -291,9 +291,9 @@ export const DocxEditorToolbar: DocxEditorToolbarNamespace = Object.assign(DocxE
   FontColor: ToolbarFontColor,
   Highlight: ToolbarHighlight,
   Zoom: ToolbarZoom,
-  StylePicker: ToolbarStylePicker,
+  StylePicker: ParagraphStyle,
   EditingMode: ToolbarEditingMode,
   Save: ToolbarSave,
 });
 
-export { useFontFamily };
+export { useFontFamily, useParagraphStyle };
