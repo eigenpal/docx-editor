@@ -22,6 +22,8 @@ import {
   runPropertyEdits,
   type SurfaceProperty,
 } from './surface-formatting.ts';
+import type { TreeDocOp } from '@docx-editor.dev/core-contract/store';
+import { paragraphsInCells } from '@docx-editor.dev/core-contract/layout';
 import type { PaginatedSurface } from './paginated-surface-contract.ts';
 
 /** What the composition root lends this lane. */
@@ -31,11 +33,20 @@ export interface SurfaceFormatDeps {
   selection(): SemanticSelection;
   commit(
     run: () => TreeApplyResult | boolean,
-    nextSelection?: () => SemanticSelection | null
+    nextSelection?: () => SemanticSelection | null,
+    options?: { readonly keepCellSelection?: boolean }
   ): void;
   orderedRange(): { from: SemanticPosition; to: SemanticPosition };
   selectionMark(): { paragraphId: string; start: number; end: number } | null;
   textOf(paragraphId: string): string;
+  /**
+   * The cells a rectangular table selection covers, when one is live.
+   *
+   * A rectangle is NOT the text range it stands in for: rows one and two of column one, read
+   * as a range, sweep through every cell between them — so a toolbar reading the range
+   * reports formatting from cells the user never selected.
+   */
+  selectedCells?(): readonly string[] | undefined;
 }
 
 type FormatMethods = Pick<
@@ -95,11 +106,57 @@ export function createSurfaceFormat(deps: SurfaceFormatDeps): FormatMethods {
     );
   };
 
+  /**
+   * Write one run property over every paragraph of a rectangular cell selection.
+   *
+   * The read side already reports the CELLS rather than the range they stand in for, so the
+   * write has to match or the toolbar shows a state its own button cannot change — pressing
+   * Bold over selected cells was a silent no-op, because a rectangle spans several paragraphs
+   * and the single-paragraph guard refused every one of them.
+   */
+  const writeRunPropertyOverCells = (
+    cells: readonly string[],
+    incoming: SurfaceProperty
+  ): boolean => {
+    const part = session.part();
+    const ops: TreeDocOp[] = [];
+    for (const paragraphId of paragraphsInCells(currentLayout.value, cells)) {
+      const text = textOf(paragraphId);
+      if (text.length === 0) continue;
+      for (const edit of runPropertyEdits(part, paragraphId, 0, text.length, incoming)) {
+        ops.push({
+          op: 'setRunProperties' as const,
+          paragraphId,
+          start: edit.start,
+          end: edit.end,
+          properties: edit.properties,
+        });
+      }
+      ops.push({
+        op: 'setParagraphMarkProperties' as const,
+        paragraphId,
+        properties: mergedProperties(directParagraphMarkProperties(part, paragraphId), incoming),
+      });
+    }
+    if (ops.length === 0) return false;
+    // Word leaves the cells selected after formatting them, so the rectangle survives.
+    commit(() => session.applyTreeOps(ops, selectionMark()), undefined, {
+      keepCellSelection: true,
+    });
+    return true;
+  };
+
   return {
     setRunProperty(localName, attributes) {
+      const incoming = { localName, ...(attributes ? { attributes } : {}) };
+      const cells = deps.selectedCells?.();
+      if (cells && cells.length > 0) {
+        writeRunPropertyOverCells(cells, incoming);
+        return;
+      }
       const { from, to } = orderedRange();
       if (from.paragraphId !== to.paragraphId || from.offset === to.offset) return;
-      writeRunProperty(from, to, { localName, ...(attributes ? { attributes } : {}) });
+      writeRunProperty(from, to, incoming);
     },
 
     setParagraphProperty(localName, attributes) {
@@ -127,26 +184,38 @@ export function createSurfaceFormat(deps: SurfaceFormatDeps): FormatMethods {
     },
 
     formatting: () =>
-      formattingAt(currentLayout.value, selectionNow.value, (paragraphId: string, runProperties) =>
-        session.effectiveRunDefaults(paragraphId, runProperties)
+      formattingAt(
+        currentLayout.value,
+        selectionNow.value,
+        (paragraphId: string, runProperties) =>
+          session.effectiveRunDefaults(paragraphId, runProperties),
+        deps.selectedCells?.()
       ),
 
     toggleRunProperty(localName, attributes) {
+      const cells = deps.selectedCells?.();
+      const active = isRunPropertyActive(currentLayout.value, selectionNow.value, localName, cells);
+      // Toggling OFF sends an explicit `val="0"` rather than dropping the element: the
+      // property may be inherited from a style, and removing the local override would let the
+      // inherited value come back. `w:u` is a closed enumeration, not a boolean: its off
+      // value is `none`, and `val="0"` is one Word rejects outright.
+      const incoming = active
+        ? { localName, attributes: { val: localName === 'u' ? 'none' : '0' } }
+        : { localName, ...(attributes ? { attributes } : {}) };
+      if (cells && cells.length > 0) {
+        writeRunPropertyOverCells(cells, incoming);
+        return;
+      }
       const { from, to } = orderedRange();
       // A collapsed caret has no range to format. Stored marks — formatting that applies to
       // the NEXT character typed — are a separate lane; refusing is honest rather than
       // formatting a character the user did not select.
       if (from.paragraphId !== to.paragraphId || from.offset === to.offset) return;
-      const active = isRunPropertyActive(currentLayout.value, selectionNow.value, localName);
       writeRunProperty(
         from,
         to,
         active
-          ? // Toggling OFF sends an explicit `val="0"` rather than dropping the element: the
-            // property may be inherited from a style, and removing the local override would
-            // let the inherited value come back. `w:u` is a closed enumeration, not a
-            // boolean: its off value is `none`, and `val="0"` is one Word rejects outright.
-            { localName, attributes: { val: localName === 'u' ? 'none' : '0' } }
+          ? { localName, attributes: { val: localName === 'u' ? 'none' : '0' } }
           : { localName, ...(attributes ? { attributes } : {}) }
       );
     },

@@ -252,3 +252,16 @@ export function runStylesEqual(a: ResolvedRunStyle, b: ResolvedRunStyle): boolea
     a.underline?.color === b.underline?.color
   );
 }
+
+/**
+ * How far a run's glyphs are lifted off the line's baseline, in points. Positive is up.
+ *
+ * Super and subscript move the GLYPHS without moving the run's box, so the box keeps tiling
+ * the line and the selection band stays continuous. Anything drawing at the glyphs — the
+ * painter, and the caret — has to apply this itself, and from one place, or the two drift.
+ */
+export function baselineShiftPtOf(style: ResolvedRunStyle): number {
+  if (style.verticalAlign === 'superscript') return style.baselineShiftPt + style.fontSizePt * 0.33;
+  if (style.verticalAlign === 'subscript') return style.baselineShiftPt - style.fontSizePt * 0.16;
+  return style.baselineShiftPt;
+}

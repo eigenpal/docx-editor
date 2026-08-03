@@ -10,6 +10,7 @@
 // `createElement` plus `textContent` and never from an HTML string, and every style value
 // comes from the RESOLVED style rather than from raw authored text.
 
+import { baselineShiftPtOf } from '@docx-editor.dev/core-contract/layout';
 import type {
   LineRecord,
   PageRecord,
@@ -240,11 +241,7 @@ function applyRunFaceStyle(element: HTMLElement, style: ResolvedRunStyle, ctx: P
   // grows the line box to contain the raised glyph, which pushes a line's selection band
   // past the line layout published and over its neighbour. A relative offset moves the
   // glyph without touching the box, so the band still tiles.
-  let shiftPt = style.baselineShiftPt;
-  if (style.verticalAlign !== 'baseline') {
-    shiftPt +=
-      style.verticalAlign === 'superscript' ? style.fontSizePt * 0.33 : -style.fontSizePt * 0.16;
-  }
+  const shiftPt = baselineShiftPtOf(style);
   if (shiftPt !== 0) {
     css.position = 'relative';
     css.top = `${-shiftPt * scale}px`;
@@ -699,6 +696,11 @@ function paintTableCell(
   cellElement.style.top = `${(cell.box.y - rowBox.y) * scale}px`;
   cellElement.style.boxSizing = 'border-box';
   cellElement.style.overflow = 'visible';
+  // Cell identity in the DOM, so a gesture or a highlight can name the cell it is over
+  // without re-deriving the grid from geometry.
+  cellElement.dataset.cellId = cell.id;
+  cellElement.dataset.gridColumn = String(cell.gridColumn);
+  cellElement.dataset.gridSpan = String(cell.gridSpan);
   if (cell.rowSpan && cell.rowSpan > 1) {
     cellElement.dataset.rowSpan = String(cell.rowSpan);
   }

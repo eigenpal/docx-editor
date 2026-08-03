@@ -6,6 +6,7 @@
 
 import type { TreeDocxSession } from '@docx-editor.dev/core-contract/binding';
 import type {
+  CellSelection,
   NavigationCommand,
   SectionProperties,
   SemanticLayout,
@@ -30,6 +31,14 @@ export interface PaginatedSurfaceOptions {
   readonly fontAlias?: (family: string) => string | undefined;
   /** Points to CSS pixels. */
   readonly scale?: number;
+  /**
+   * Who resolves a pointer to a caret.
+   *
+   * `'engine'` (the default) answers from the layout records, which is what makes a click in
+   * a margin, an indent or a cell's padding land where it was aimed. `'native'` binds no
+   * pointer handlers and leaves the browser's own caret placement in charge.
+   */
+  readonly pointer?: 'engine' | 'native';
   readonly onChange?: (state: PaginatedSurfaceState) => void;
 }
 
@@ -90,6 +99,14 @@ export interface PaginatedSurfaceState {
   readonly revision: number;
   readonly pageCount: number;
   readonly selection: SemanticSelection;
+  /**
+   * The rectangle of table cells a drag across cells selected, or null.
+   *
+   * `selection` always holds the equivalent TEXT range, so a reader that does not care about
+   * rectangles needs no branch. This is for the ones that do — the highlight, and table
+   * commands that act on cells rather than characters.
+   */
+  readonly cellSelection: CellSelection | null;
   readonly canUndo: boolean;
   readonly canRedo: boolean;
   readonly lastRejection: string | null;
@@ -101,7 +118,6 @@ export interface PaginatedSurface {
   readonly session: TreeDocxSession;
   layout(): SemanticLayout;
   state(): PaginatedSurfaceState;
-  /** Move the caret to a point in surface coordinates. */
   type(text: string): void;
   deleteBackward(): void;
   /** Delete forward — the Delete key, and `deleteContentForward` from an IME. */
@@ -160,6 +176,13 @@ export interface PaginatedSurface {
   selectAll(): void;
   /** Set the selection directly, for a host driving the surface programmatically. */
   setSelection(next: SemanticSelection): void;
+  /**
+   * Select a rectangle of table cells, or clear one with null.
+   *
+   * The equivalent text range is installed alongside it, so `state().selection` stays valid
+   * for every reader that does not know rectangles exist.
+   */
+  setCellSelection(next: CellSelection | null): void;
   /** Toggle a run property over the selection, e.g. `b`, `i`, `u`. */
   toggleRunProperty(localName: string, attributes?: Record<string, string>): void;
   /**

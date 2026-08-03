@@ -12,3 +12,8 @@
 export const ENGINE_OUTPUT_PACKAGE = '@docx-editor.dev/core-contract/output' as const;
 
 export { paintSemanticLayout, type PaintOptions } from './semantic-paint.ts';
+export {
+  paintSelectionOverlay,
+  type OverlayRect,
+  type SelectionOverlayOptions,
+} from './semantic-selection-overlay.ts';

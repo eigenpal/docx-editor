@@ -53,6 +53,32 @@ export interface SurfaceSelectionSyncDeps {
   now(): number;
   /** Book the cost of one mirror into the surface's perf slot. */
   recordSelectionMs(ms: number): void;
+  /**
+   * Whether a pointer gesture currently owns the selection.
+   *
+   * A drag publishes its own selection on every move, and the browser reports its own idea of
+   * what is selected alongside it. Adopting one of those mid-gesture snaps the caret back to
+   * whatever the DOM guessed, halfway through the drag.
+   */
+  isGesturing?(): boolean;
+  /**
+   * What to write into the browser's own selection, when that is not the model selection.
+   *
+   * A rectangle of table cells has no native equivalent: writing the text range it stands in
+   * for would draw a band running through every cell in between — the very thing the
+   * rectangle exists to avoid — and leaving the DOM with no selection at all stops a
+   * contenteditable firing `beforeinput`. So it writes a collapsed selection instead.
+   */
+  domSelection?(): SemanticSelection;
+  /**
+   * Whether a rectangle of table cells is currently selected.
+   *
+   * Distinct from a gesture: a rectangle OUTLIVES the drag that made it, and the DOM holds a
+   * collapsed selection for the whole time it is live. Adopting that disagreement would clear
+   * the rectangle on the first report after release. Only an explicit gesture replaces one,
+   * and every explicit gesture goes through `setSelection`, which clears it.
+   */
+  holdsCellSelection?(): boolean;
 }
 
 export interface SurfaceSelectionSync {
@@ -187,7 +213,12 @@ export function createSurfaceSelectionSync(deps: SurfaceSelectionSyncDeps): Surf
       // A deliberate model move is the exception, and the reason this cannot simply refuse to
       // write: a commit installs its own post-edit caret, and the DOM selection left over
       // from before the edit addresses offsets that no longer mean the same thing.
-      const adopted = modelMoved ? false : adoptPendingDomSelection();
+      // The SAME two reasons `onSelectionChange` refuses apply here, and this is the reader
+      // that runs on every repaint. A rectangle of cells keeps the DOM deliberately collapsed,
+      // so a scroll or an undo would "adopt" that collapse, leave the overlay painting four
+      // cells, and turn the next Delete into a one-character edit inside one of them.
+      const holdOff = deps.holdsCellSelection?.() === true || deps.isGesturing?.() === true;
+      const adopted = modelMoved || holdOff ? false : adoptPendingDomSelection();
       modelMoved = false;
       return adopted;
     },
@@ -214,7 +245,11 @@ export function createSurfaceSelectionSync(deps: SurfaceSelectionSyncDeps): Surf
       if (!ownsSelection()) return;
       applyingSelection = true;
       const began = deps.now();
-      applySelectionToDom(pagesLayer, deps.selection(), document.getSelection());
+      applySelectionToDom(
+        pagesLayer,
+        deps.domSelection?.() ?? deps.selection(),
+        document.getSelection()
+      );
       deps.recordSelectionMs(deps.now() - began);
       // Cleared on a LATER task, because `selectionchange` is queued rather than dispatched
       // synchronously. Clearing it here would defeat the guard in every real browser while
@@ -234,6 +269,8 @@ export function createSurfaceSelectionSync(deps: SurfaceSelectionSyncDeps): Surf
       // be read straight back, fighting the user mid-drag.
       if (applyingSelection) return;
       if (composing) return;
+      if (deps.isGesturing?.()) return;
+      if (deps.holdsCellSelection?.()) return;
       adoptDomSelection();
     },
 

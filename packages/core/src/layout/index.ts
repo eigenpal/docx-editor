@@ -302,6 +302,7 @@ export {
 } from './layout-scheduler.ts';
 export {
   DEFAULT_RUN_STYLE,
+  baselineShiftPtOf,
   displayText,
   resolveRunStyle,
   runStylesEqual,
@@ -325,6 +326,31 @@ export {
   // Referenced by `SemanticTableCell`: what a table style says about a cell's paragraphs.
   type TableCellStyleFormatting,
 } from './style-cascade.ts';
+export {
+  cellSelectionBetween,
+  cellSelectionRects,
+  cellSelectionText,
+  paragraphsInCells,
+  spansInCells,
+  tableContextAt,
+  type CellSelection,
+  type PlacedCell,
+  type TableCellContext,
+} from './semantic-cell-selection.ts';
+export {
+  DEFAULT_VERTICAL_WEIGHT,
+  hitTestPage,
+  hitTestSheet,
+  isFurniturePoint,
+  lineEndOffset,
+  caretBoxOnLine,
+  pageAtY,
+  spanOffsetX,
+  type HitPoint,
+  type HitTestOptions,
+  type SemanticHit,
+  type TableCellAddress,
+} from './semantic-hit-test.ts';
 export {
   caretAt,
   caretStops,

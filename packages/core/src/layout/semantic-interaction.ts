@@ -8,7 +8,13 @@
 // take, so a click, a caret and an edit all speak one coordinate system: a hit test can be
 // handed straight to `insertText` without a translation step that could disagree.
 
-import type { LineRecord, SemanticLayout, StyleSpanRecord } from './semantic-records.ts';
+import { caretBoxOnLine, hitTestPage, spanOffsetX } from './semantic-hit-test.ts';
+import type {
+  LineRecord,
+  SemanticLayout,
+  StyleSpanRecord,
+  TextMeasurer,
+} from './semantic-records.ts';
 import { paragraphFragmentsOf } from './semantic-records.ts';
 
 /** A caret position in the model. */
@@ -76,7 +82,11 @@ function paragraphLinesIndex(layout: SemanticLayout): Map<string, PlacedLine[]> 
 }
 
 /** The x offset of `offset` within a line, by walking its spans. */
-function xWithinLine(line: LineRecord, offset: number): number {
+function xWithinLine(
+  line: LineRecord,
+  offset: number,
+  measurer?: TextMeasurer | undefined
+): number {
   let x = line.box.x;
   for (const span of line.spans) {
     if (offset <= span.range.start) return span.box.x;
@@ -84,11 +94,11 @@ function xWithinLine(line: LineRecord, offset: number): number {
       x = span.box.x + span.box.width;
       continue;
     }
-    // Inside this span: interpolate by character. A proportional shaper would supply real
-    // per-glyph advances; with a uniform advance this is exact, and it stays honest about
-    // being an interpolation rather than pretending to per-glyph precision.
-    const fraction = (offset - span.range.start) / Math.max(1, span.range.end - span.range.start);
-    return span.box.x + span.box.width * fraction;
+    // MEASURED, not interpolated. Interpolating across the span's advance is exact only for a
+    // uniform one — in any proportional face it draws the caret a fraction of the way through
+    // the span rather than at a glyph edge, so a caret between two letters appeared on top of
+    // one. Without a measurer it still interpolates, and says so.
+    return spanOffsetX(span, offset, measurer);
   }
   return x;
 }
@@ -132,14 +142,19 @@ export function caretStops(layout: SemanticLayout): CaretGeometry[] {
 }
 
 /** Geometry for one model position, or null when it is not laid out. */
-export function caretAt(layout: SemanticLayout, position: SemanticPosition): CaretGeometry | null {
+export function caretAt(
+  layout: SemanticLayout,
+  position: SemanticPosition,
+  measurer?: TextMeasurer
+): CaretGeometry | null {
   for (const { line, pageIndex } of paragraphLinesIndex(layout).get(position.paragraphId) ?? []) {
     if (position.offset < line.range.start || position.offset > line.range.end) continue;
+    const box = caretBoxOnLine(line, position.offset, measurer);
     return {
       position,
-      x: xWithinLine(line, position.offset),
-      y: line.box.y,
-      height: line.box.height,
+      x: box.x,
+      y: box.y,
+      height: box.height,
       lineId: line.id,
       pageIndex,
     };
@@ -148,56 +163,27 @@ export function caretAt(layout: SemanticLayout, position: SemanticPosition): Car
 }
 
 /**
- * The caret position nearest a point.
+ * The caret position nearest a point, in PAGE-CONTENT coordinates.
  *
  * Never returns null for a point inside the document: a click in the margin, past the end of
  * a line, or below the last line still has an obvious intended caret, and refusing to answer
  * would make those clicks do nothing.
+ *
+ * The rules live in `semantic-hit-test.ts`, which answers with the cell address and the
+ * on-glyphs flag a pointer controller needs too; this keeps the geometry-only shape for
+ * callers that want nothing else.
  */
 export function hitTestSemantic(
   layout: SemanticLayout,
   point: { readonly x: number; readonly y: number; readonly pageIndex?: number }
 ): CaretGeometry | null {
-  const stops = caretStops(layout);
-  if (stops.length === 0) return null;
-
-  const candidates =
-    point.pageIndex === undefined
-      ? stops
-      : stops.filter((stop) => stop.pageIndex === point.pageIndex);
-  const pool = candidates.length > 0 ? candidates : stops;
-
-  // Prefer the line whose vertical band contains the point; otherwise the nearest band.
-  let bestLineDistance = Number.POSITIVE_INFINITY;
-  for (const stop of pool) {
-    const distance =
-      point.y < stop.y
-        ? stop.y - point.y
-        : point.y > stop.y + stop.height
-          ? point.y - (stop.y + stop.height)
-          : 0;
-    if (distance < bestLineDistance) bestLineDistance = distance;
-  }
-  const onBestLine = pool.filter((stop) => {
-    const distance =
-      point.y < stop.y
-        ? stop.y - point.y
-        : point.y > stop.y + stop.height
-          ? point.y - (stop.y + stop.height)
-          : 0;
-    return distance === bestLineDistance;
-  });
-
-  let best = onBestLine[0]!;
-  let bestDistance = Math.abs(best.x - point.x);
-  for (const stop of onBestLine) {
-    const distance = Math.abs(stop.x - point.x);
-    if (distance < bestDistance) {
-      best = stop;
-      bestDistance = distance;
-    }
-  }
-  return best;
+  // The point is PAGE-CONTENT relative, so it only means something on one page. Scoring it
+  // against every page cost a full-document walk to answer with page 0 anyway: on uniform
+  // geometry each page produces an identical score and the first one wins by construction.
+  // Naming page 0 outright is the same answer, honestly, in constant time.
+  const pageIndex =
+    point.pageIndex !== undefined && layout.pages[point.pageIndex] ? point.pageIndex : 0;
+  return hitTestPage(layout, pageIndex, point)?.caret ?? null;
 }
 
 /** The rectangles covering a selection, one per line it spans. */

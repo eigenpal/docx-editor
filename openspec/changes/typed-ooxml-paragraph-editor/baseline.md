@@ -1,6 +1,22 @@
 # Baseline evidence
 
-## Current baseline (re-recorded after section 3, task 3.3)
+## Re-recorded at section 13 (Word-accurate pointer interaction)
+
+- `bun test`: **2682 pass, 0 fail, 0 errors**, with section 13 rebased onto the Word-fidelity
+  work. 2606 of those predate this section; it adds 76.
+- `bun run typecheck`: passed (all packages; `@docx-editor.dev/agents` skips for the reason
+  recorded under 11.3).
+- `bun run api:check`: passed, 0 errors. Requires the React and Vue packages to be BUILT
+  first; a clean checkout reports "No built .d.ts files" until then.
+- `bun run i18n:validate`, `bun run check:parity-contract`, `bun run check:adapter-css-thin`:
+  passed.
+- `openspec validate typed-ooxml-paragraph-editor --strict`: valid.
+- `bun run check:parity` still stops at `check:public-docs-surface`, unchanged and for the
+  reason recorded under task 11.4.
+- Note: `bun install` must have run. Without it the layout lane cannot resolve `harfbuzzjs`
+  and the whole font/shaping suite fails at module load, which reads as 27 unrelated failures.
+
+## Earlier baseline (re-recorded after section 3, task 3.3)
 
 Recorded after the gate infrastructure repair. This supersedes the original capture below,
 which is retained because this change's tasks were written against it.

@@ -32,12 +32,21 @@ import {
   caretAt,
   type SemanticLayout,
   type SemanticSelection,
+  type TextMeasurer,
 } from '@docx-editor.dev/core-contract/layout';
 
 /** What the caret reads at paint time. Both move independently of the caret itself. */
 export interface SurfaceCaretInput {
   readonly layout: SemanticLayout;
   readonly selection: SemanticSelection;
+  /**
+   * The port the layout was measured with.
+   *
+   * Without it the caret's x is interpolated across a span's advance, which only lands on a
+   * glyph edge in a monospaced face — in any proportional one the caret is drawn through a
+   * letter rather than beside it.
+   */
+  readonly measurer?: TextMeasurer;
 }
 
 export interface SurfaceCaret {
@@ -140,7 +149,9 @@ export function createSurfaceCaret(
       hide();
       return;
     }
-    const geometry = caretAt(layout, selection.head);
+    // Measured, not interpolated: the caret has to sit at a glyph edge, and a span's advance
+    // divided by its character count only lands there in a monospaced face.
+    const geometry = caretAt(layout, selection.head, read().measurer);
     if (!geometry || !Number.isInteger(geometry.pageIndex)) {
       hide();
       return;
