@@ -76,7 +76,7 @@ describe('list-pagination-break.docx', () => {
     const nested = project(body, 'all-markup').nested;
     expect(nested.length).toBeGreaterThan(0);
     const authors = nested[0]!.map((revision) => `${revision.kind}:${revision.author}`);
-    expect(authors).toEqual(['insert:Author', 'delete:Jonathan Melke']);
+    expect(authors).toEqual(['insert:Author', 'delete:John Doe']);
   });
 
   test('containment governs: the nested pair vanishes from both resolved modes', () => {
