@@ -82,6 +82,16 @@ export interface DocxEditorProps {
    * panel loses the packaged UI and nothing else.
    */
   hyperlinkPopup?: boolean;
+  /**
+   * Render the packaged navigation pane — headings and find — over the document's left
+   * gutter (`false` removes it and its toggle).
+   *
+   * On by default because an open pane costs the document nothing: it floats over gutter
+   * space that is already empty, and only moves the page when the window is genuinely too
+   * narrow to hold both. Compose `DocxEditor.Navigation` yourself, or build on
+   * `useNavigationPane` / `useDocumentOutline` / `useDocumentSearch`, for a different one.
+   */
+  navigation?: boolean;
   /** A document to load: DOCX bytes or an existing handle. */
   document?: DocumentSource;
   /** 'edit' (default) or 'view' (read-only). Applied at mount only — not reactive; remount to change. */

@@ -44,6 +44,13 @@ const REACT_PROPS_NOT_YET_IN_VUE = new Set([
   // `text.link` enabled state all come from core — so this gap is the panel, not the
   // capability. Removed when the Vue provider/hooks twin lands.
   'hyperlinkPopup',
+  // The navigation pane rides that same provider/hooks layer: a compound plus three
+  // behavior hooks over the context-published editor, so its Vue twin is the composable
+  // form. The ENGINE half is already shared — the search derivation, the session memo,
+  // `findMatches`/`selectMatch` and the outline all live in core, and Vue reaches them
+  // through the same facade — so this gap is the panel, not the capability. Removed when
+  // the Vue provider/hooks twin lands.
+  'navigation',
 ]);
 
 function extractInterfaceBody(source, name) {

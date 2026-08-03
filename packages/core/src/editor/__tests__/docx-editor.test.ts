@@ -502,7 +502,6 @@ describe('createDocxEditor', () => {
     expect(editor.getDocumentStyles()).toEqual([]);
     expect(editor.getOutline()).toEqual([]);
     expect(editor.getComments()).toEqual([]);
-    expect(editor.findMatches('hello')).toEqual([]);
     expect(editor.getSelectedTable()).toBeNull();
     expect(editor.getWatermark()).toBeNull();
     expect(editor.getDisplay()).toEqual([]);

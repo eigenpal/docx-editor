@@ -787,6 +787,17 @@ export interface TextMatch {
   readonly runOffset: number;
   /** The matched text as it appears in the document. */
   readonly text: string;
+  /**
+   * Paragraph text immediately before and after the match, bounded at the derivation
+   * boundary. A results list shows the match in its sentence — "…as described in this
+   * **Exhi**bit A" — and nothing else in the contract can reach paragraph text, so a
+   * caller would otherwise have to re-read the document to render one row.
+   *
+   * Optional and additive: an implementation that has not derived them omits them, and a
+   * consumer treats absent as empty.
+   */
+  readonly contextBefore?: string;
+  readonly contextAfter?: string;
 }
 
 export interface HyperlinkInfo {

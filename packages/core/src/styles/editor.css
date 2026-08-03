@@ -3324,3 +3324,408 @@ a.docx-hyperlink:focus-visible {
   font-size: 12px;
   line-height: 1.35;
 }
+
+/* ============================================================================
+ * DOCUMENT NAVIGATION PANE  (`DocxEditor.Navigation`)
+ *
+ * A pane that FLOATS over the document's left gutter rather than docking beside
+ * it. On any reasonably wide window the gutter is already empty — a Letter page
+ * in a 1600px viewport leaves ~500px on each side — so opening the pane must
+ * move nothing. The adapter measures the gutter and publishes the only case that
+ * needs a shift (a window too narrow to hold both) as `--docx-nav-shift` on the
+ * scroll container; the rule below is the one place that consumes it.
+ *
+ * Everything here is chrome, so it is token-driven and dark-mode-aware. The
+ * document canvas underneath stays Word-faithful and untouched.
+ * ========================================================================= */
+
+/* The page column moves ONLY by what the adapter computed, and only while a pane
+ * is open. Absent (no pane mounted, pane closed, gutter wide enough) the custom
+ * property falls back to 0 and this rule is inert. */
+.ep-root .docx-editor__scroll-container {
+  padding-inline-start: var(--docx-nav-shift, 0px);
+  transition: padding-inline-start 0.2s ease;
+}
+
+/* Positioning frame: the gutter strip to the left of the page. `pointer-events`
+ * is off on the frame and back on for its controls, so the strip never eats a
+ * click meant for the document behind it. */
+.ep-root .docx-nav {
+  position: absolute;
+  inset-block: 0;
+  inset-inline-start: 0;
+  width: var(--docx-nav-reservation, 328px);
+  z-index: 40;
+  pointer-events: none;
+  font-size: 13px;
+  color: var(--doc-text);
+}
+
+.ep-root .docx-nav > * {
+  pointer-events: auto;
+}
+
+/* Collapsed: the panel stays MOUNTED (a typed query and a scrolled list survive a
+ * close/reopen) and is taken out of layout with `display: none` — React state
+ * lives on either way. `inert` on the element keeps it out of the tab order.
+ *
+ * DELIBERATELY NOT ANIMATED. Growing the width from zero clips the panel's
+ * contents, so every heading appears to unwrap from the left edge while the
+ * text reflows inside the shrinking box. The pane is a tool you open to look
+ * something up; it should be there when you ask for it. */
+.ep-root .docx-nav__panel-shell {
+  display: none;
+  position: absolute;
+  inset-block: 0;
+  inset-inline-start: var(--docx-nav-inset, 32px);
+  width: var(--docx-nav-width, 280px);
+  flex-direction: column;
+  background: var(--doc-bg);
+}
+
+.ep-root .docx-nav--open .docx-nav__panel-shell {
+  display: flex;
+}
+
+/* The collapsed disc. Aligned with the page's top edge, not the viewport's, so it
+ * sits where the panel's back arrow will appear, and inset past the vertical
+ * ruler's 20px tick column so it never covers the ticks. */
+.ep-root .docx-nav__toggle {
+  position: absolute;
+  inset-block-start: 24px;
+  inset-inline-start: var(--docx-nav-inset, 32px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  border: 1px solid var(--doc-border-light);
+  background: var(--doc-bg-hover);
+  color: var(--doc-text-muted);
+  cursor: pointer;
+  transition:
+    background-color 0.12s ease,
+    color 0.12s ease,
+    box-shadow 0.12s ease;
+}
+
+.ep-root .docx-nav__toggle:hover {
+  background: var(--doc-border);
+  color: var(--doc-text);
+  box-shadow: 0 1px 3px var(--doc-shadow);
+}
+
+.ep-root .docx-nav__toggle:focus-visible,
+.ep-root .docx-nav__close:focus-visible,
+.ep-root .docx-nav__tab:focus-visible,
+.ep-root .docx-nav__stepper:focus-visible,
+.ep-root .docx-nav__heading:focus-visible,
+.ep-root .docx-nav__result:focus-visible {
+  outline: 2px solid var(--doc-primary);
+  outline-offset: 2px;
+}
+
+/* ── Header ───────────────────────────────────────────────────────────────── */
+
+.ep-root .docx-nav__header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 20px 12px 8px 0;
+  flex: none;
+}
+
+.ep-root .docx-nav__close {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  flex: none;
+  border: none;
+  border-radius: 50%;
+  background: none;
+  color: var(--doc-text-muted);
+  cursor: pointer;
+}
+
+.ep-root .docx-nav__close:hover {
+  background: var(--doc-bg-hover);
+  color: var(--doc-text);
+}
+
+.ep-root .docx-nav__title {
+  margin: 0;
+  font-size: 17px;
+  font-weight: 600;
+  line-height: 1.2;
+  color: var(--doc-text);
+}
+
+/* ── Tabs ─────────────────────────────────────────────────────────────────── */
+
+.ep-root .docx-nav__tabs {
+  display: flex;
+  align-items: stretch;
+  gap: 4px;
+  padding-inline: 4px;
+  margin-block-end: 10px;
+  border-block-end: 1px solid var(--doc-border-light);
+  flex: none;
+}
+
+.ep-root .docx-nav__tab {
+  appearance: none;
+  border: none;
+  background: none;
+  padding: 8px 10px;
+  font: inherit;
+  font-size: 13px;
+  color: var(--doc-text-muted);
+  cursor: pointer;
+  border-block-end: 2px solid transparent;
+  margin-block-end: -1px;
+}
+
+.ep-root .docx-nav__tab:hover {
+  color: var(--doc-text);
+}
+
+.ep-root .docx-nav__tab--selected {
+  color: var(--doc-primary);
+  border-block-end-color: var(--doc-primary);
+  font-weight: 600;
+}
+
+/* ── Panels ───────────────────────────────────────────────────────────────── */
+
+.ep-root .docx-nav__panel {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  flex: 1;
+  padding-inline: 4px;
+  gap: 8px;
+}
+
+.ep-root .docx-nav__panel[hidden] {
+  display: none;
+}
+
+.ep-root .docx-nav__empty {
+  margin: 0;
+  padding: 8px;
+  color: var(--doc-text-subtle);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.ep-root .docx-nav__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  overflow-y: auto;
+  min-height: 0;
+  flex: 1;
+}
+
+/* ── Search box ───────────────────────────────────────────────────────────── */
+
+.ep-root .docx-nav__searchbox {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: none;
+  padding: 5px 8px;
+  border: 1px solid var(--doc-border-input);
+  border-radius: 4px;
+  background: var(--doc-bg-input);
+}
+
+.ep-root .docx-nav__searchbox:focus-within {
+  border-color: var(--doc-primary);
+  box-shadow: 0 0 0 1px var(--doc-primary);
+}
+
+.ep-root .docx-nav__search-icon {
+  color: var(--doc-text-muted);
+  flex: none;
+}
+
+.ep-root .docx-nav__search-input {
+  flex: 1;
+  min-width: 0;
+  border: none;
+  outline: none;
+  background: none;
+  font: inherit;
+  font-size: 13px;
+  color: var(--doc-text);
+}
+
+.ep-root .docx-nav__search-input::placeholder {
+  color: var(--doc-text-placeholder);
+}
+
+/* The UA's own clear affordance would sit next to ours. */
+.ep-root .docx-nav__search-input::-webkit-search-cancel-button {
+  appearance: none;
+}
+
+.ep-root .docx-nav__search-clear {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: 20px;
+  height: 20px;
+  border: none;
+  border-radius: 50%;
+  background: none;
+  color: var(--doc-text-muted);
+  cursor: pointer;
+}
+
+.ep-root .docx-nav__search-clear:hover {
+  background: var(--doc-bg-hover);
+  color: var(--doc-text);
+}
+
+/* ── Find: options, counter, results ──────────────────────────────────────── */
+
+.ep-root .docx-nav__options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  flex: none;
+  padding-inline: 2px;
+}
+
+.ep-root .docx-nav__option {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--doc-text-muted);
+  cursor: pointer;
+}
+
+.ep-root .docx-nav__resultbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  flex: none;
+  min-height: 28px;
+  padding-inline: 2px;
+}
+
+.ep-root .docx-nav__count {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--doc-text);
+}
+
+.ep-root .docx-nav__steppers {
+  display: flex;
+  gap: 4px;
+}
+
+.ep-root .docx-nav__stepper {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: 1px solid var(--doc-border-input);
+  border-radius: 4px;
+  background: var(--doc-bg-input);
+  color: var(--doc-text-muted);
+  cursor: pointer;
+}
+
+.ep-root .docx-nav__stepper:hover:not(:disabled) {
+  background: var(--doc-bg-hover);
+  color: var(--doc-text);
+}
+
+.ep-root .docx-nav__stepper:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.ep-root .docx-nav__result {
+  display: block;
+  width: 100%;
+  text-align: start;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  background: none;
+  padding: 7px 8px;
+  font: inherit;
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--doc-text-muted);
+  cursor: pointer;
+}
+
+.ep-root .docx-nav__result:hover {
+  background: var(--doc-bg-hover);
+}
+
+/* The active result reads as the one the caret is on: bordered, like Word's. */
+.ep-root .docx-nav__result--active {
+  border-color: var(--doc-primary);
+  color: var(--doc-text);
+}
+
+.ep-root .docx-nav__result-text {
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.ep-root .docx-nav__result-hit {
+  background: none;
+  color: var(--doc-text);
+  font-weight: 700;
+}
+
+/* ── Headings list ────────────────────────────────────────────────────────── */
+
+.ep-root .docx-nav__heading {
+  display: block;
+  width: 100%;
+  text-align: start;
+  border: none;
+  border-radius: 4px;
+  background: none;
+  padding-block: 5px;
+  padding-inline-end: 8px;
+  font: inherit;
+  font-size: 13px;
+  line-height: 1.4;
+  color: var(--doc-text);
+  cursor: pointer;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ep-root .docx-nav__heading:hover {
+  background: var(--doc-bg-hover);
+}
+
+.ep-root .docx-nav__heading--current {
+  background: var(--doc-primary-light);
+  font-weight: 600;
+}
+
+/* Reduced motion: the page still moves when it has to, it just does not glide. */
+@media (prefers-reduced-motion: reduce) {
+  .ep-root .docx-editor__scroll-container {
+    transition-duration: 0s;
+  }
+}

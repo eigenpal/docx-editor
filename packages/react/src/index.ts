@@ -43,6 +43,44 @@ export {
   DocxEditorPageSetupDialog,
   type DocxEditorPageSetupDialogProps,
 } from './editor/DocxEditorPageSetup';
+// The navigation pane (also reachable as `DocxEditor.Navigation`): the compound over the
+// left gutter, its parts, and the three hooks a custom pane is built from. The pane FLOATS
+// — it displaces the page only when the gutter is too narrow to hold it, and
+// `navigationShift` is that rule as a pure function a host can reuse or test.
+export {
+  DocxEditorNavigation,
+  NavigationClose,
+  NavigationFind,
+  NavigationHeader,
+  NavigationHeadings,
+  NavigationTab,
+  NavigationTabs,
+  NavigationTitle,
+  NavigationToggle,
+  NAVIGATION_PANE_GAP,
+  NAVIGATION_PANE_INSET,
+  NAVIGATION_PANE_WIDTH,
+  SEARCH_DEBOUNCE_MS,
+  SEARCH_MATCH_LIMIT,
+  navigationPaneReservation,
+  navigationShift,
+  useDocumentOutline,
+  useDocumentSearch,
+  useNavigationPane,
+  useNavigationShift,
+  type DocxEditorNavigationNamespace,
+  type DocxEditorNavigationProps,
+  type NavigationPartProps,
+  type NavigationShiftInput,
+  type NavigationTabProps,
+  type NavigationTabValue,
+  type OutlineHeading,
+  type OutlineHeadingItem,
+  type UseDocumentOutlineResult,
+  type UseDocumentSearchResult,
+  type UseNavigationPaneOptions,
+  type UseNavigationPaneResult,
+} from './editor/navigation';
 // The link popover (also reachable as `DocxEditor.HyperLink`) and its headless hook. The
 // parts live on the namespace statics; a host that wants a different panel takes the hook.
 export {

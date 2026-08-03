@@ -11,6 +11,7 @@ import { useDocxEditorRefApi } from './DocxEditor/hooks/useDocxEditorRefApi';
 import { DocxEditorToolbar } from '../editor/toolbar';
 import { DocxEditorHorizontalRuler, DocxEditorVerticalRuler } from '../editor/DocxEditorRulers';
 import { DocxEditorDocumentOutline } from '../editor/DocxEditorOutline';
+import { Navigation as DocxEditorNavigationCompound } from '../editor/navigation';
 import { DocxEditorPageSetupDialog } from '../editor/DocxEditorPageSetup';
 import { DocxEditorHyperLink } from '../editor/DocxEditorHyperLink';
 import { useTranslation } from '../i18n';
@@ -61,6 +62,19 @@ const SCROLL_AREA_STYLE: CSSProperties = {
   minHeight: 0,
   minWidth: 0,
   overflowAnchor: 'none',
+};
+
+/**
+ * The workspace row: the positioning context an overlay pane anchors to, wrapped around
+ * the scroll container. `position: relative` is load-bearing — the navigation pane is
+ * absolutely positioned against this box's left edge.
+ */
+const WORKSPACE_STYLE: CSSProperties = {
+  position: 'relative',
+  display: 'flex',
+  flex: 1,
+  minHeight: 0,
+  minWidth: 0,
 };
 
 const TITLE_BAR_STYLE: CSSProperties = {
@@ -118,6 +132,7 @@ const DocxEditorImpl = forwardRef<DocxEditorRef, DocxEditorProps>(function DocxE
     onFontError,
     onSave,
     hyperlinkPopup,
+    navigation = true,
   } = props;
 
   // Chrome colour mode: 'system' subscribes to the OS setting. Only the chrome
@@ -207,7 +222,14 @@ const DocxEditorImpl = forwardRef<DocxEditorRef, DocxEditorProps>(function DocxE
           so `defaultChromeGroups()` filters it out and only explicit composition mounts it.
           The title bar above carries the save control instead. */}
       <DocxEditorToolbar t={translate} />
-      {viewport}
+      {/* The navigation pane is a SIBLING of the viewport inside a positioned row, not a
+          column beside it: it floats over the gutter to the left of the centred page and
+          leaves the page alone until the window is too narrow to hold both. Without a
+          pane this wrapper is an inert flex row around the same viewport. */}
+      <div style={WORKSPACE_STYLE}>
+        {navigation ? <DocxEditorNavigationCompound t={translate} /> : null}
+        {viewport}
+      </div>
     </div>
   ) : (
     viewport
@@ -255,6 +277,12 @@ export interface DocxEditorNamespace extends ForwardRefExoticComponent<
   readonly VerticalRuler: typeof DocxEditorVerticalRuler;
   /** Context-fed heading outline over `Editor.getOutline()`. */
   readonly DocumentOutline: typeof DocxEditorDocumentOutline;
+  /**
+   * The navigation pane — Headings and Find — with its parts as statics (`.Header`,
+   * `.Close`, `.Title`, `.Tabs`, `.Tab`, `.Headings`, `.Find`, `.Toggle`). Mounted by
+   * default; `navigation={false}` removes it.
+   */
+  readonly Navigation: typeof DocxEditorNavigationCompound;
   /** Page Setup dialog — size, orientation, margins — applied as one undo step. */
   readonly PageSetupDialog: typeof DocxEditorPageSetupDialog;
   /**
@@ -273,6 +301,7 @@ export const DocxEditor: DocxEditorNamespace = Object.assign(DocxEditorImpl, {
   HorizontalRuler: DocxEditorHorizontalRuler,
   VerticalRuler: DocxEditorVerticalRuler,
   DocumentOutline: DocxEditorDocumentOutline,
+  Navigation: DocxEditorNavigationCompound,
   PageSetupDialog: DocxEditorPageSetupDialog,
   HyperLink: DocxEditorHyperLink,
 });

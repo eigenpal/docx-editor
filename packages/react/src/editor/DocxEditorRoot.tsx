@@ -12,7 +12,7 @@
 // the first dies unused, the second is the one the tree sees. Identity of the published
 // instance flows through `useState`, so consumers re-render when it lands.
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import type {
   DocumentChange,
@@ -28,6 +28,10 @@ import type {
 } from '@docx-editor.dev/core-contract/editor';
 import { DocxEditorContext } from './context';
 import { HyperlinkPopupContext, useHyperlinkPopupInstance } from './useHyperlinkPopup';
+import {
+  NavigationLayoutContext,
+  createNavigationLayoutStore,
+} from './navigation/navigation-layout';
 
 /**
  * Props for `DocxEditor.Root`. Creation parameters (`document`, `fonts`, `author`,
@@ -116,12 +120,20 @@ export function DocxEditorRoot(props: DocxEditorRootProps) {
     if (zoom !== undefined) editor?.setZoom(zoom);
   }, [editor, zoom]);
 
+  // The channel between an open navigation pane and the chrome it displaces. A store
+  // rather than state: the shift is recomputed on every viewport resize, and state here
+  // would re-render the whole editor subtree at resize frequency. Created once per Root —
+  // its identity must not change, or the two consumers resubscribe on every render.
+  const navigationLayout = useMemo(createNavigationLayoutStore, []);
+
   return (
     <DocxEditorContext.Provider value={editor}>
-      {/* ONE link-popover state per editor, published here so a TOOLBAR button and the
-          popover panel — which are siblings, not ancestor and descendant — see the same
-          open/closed state and only one of them registers with the engine's gestures. */}
-      <HyperlinkPopupProvider>{children}</HyperlinkPopupProvider>
+      <NavigationLayoutContext.Provider value={navigationLayout}>
+        {/* ONE link-popover state per editor, published here so a TOOLBAR button and the
+            popover panel — which are siblings, not ancestor and descendant — see the same
+            open/closed state and only one of them registers with the engine's gestures. */}
+        <HyperlinkPopupProvider>{children}</HyperlinkPopupProvider>
+      </NavigationLayoutContext.Provider>
     </DocxEditorContext.Provider>
   );
 }

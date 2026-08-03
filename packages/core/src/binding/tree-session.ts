@@ -52,6 +52,11 @@ import {
   type DocumentOutlineEntry,
 } from './document-outline.ts';
 import {
+  collectTextMatches,
+  type DocumentSearchOptions,
+  type DocumentSearchResult,
+} from './document-search.ts';
+import {
   collectDocumentThemeColors,
   collectDocumentThemeFonts,
   type DocumentThemeColorEntry,
@@ -201,6 +206,16 @@ export interface TreeDocxSession {
    * in-session.
    */
   documentOutline(): readonly DocumentOutlineEntry[];
+  /**
+   * Every occurrence of `query` in the BODY story, in document order, addressed in the
+   * same offset vocabulary the tree ops and the surface selection use — so a match can be
+   * handed straight to `setSelection` without re-deriving anything.
+   *
+   * Memoized one deep, keyed on the revision AND the question asked: a find panel asks the
+   * same question on every tick, and a different query replaces the entry rather than
+   * growing a cache the session would have to bound.
+   */
+  findText(query: string, options?: DocumentSearchOptions): DocumentSearchResult;
   /**
    * The faces the package EMBEDS (`word/fontTable.xml` embed relationships),
    * deobfuscated — the only font source that needs neither a substitute nor a network.
@@ -452,6 +467,14 @@ export function openTreeSession(bytes: Uint8Array): OpenTreeSessionResult {
     readonly revision: number;
     readonly outline: readonly DocumentOutlineEntry[];
   } | null = null;
+  // Last search answered, keyed on the revision AND the exact question. A find panel asks
+  // the same question repeatedly — a re-render, a tick, a next/previous press — and one
+  // entry is enough to make those free; a different query simply replaces it.
+  let searchCache: {
+    readonly revision: number;
+    readonly key: string;
+    readonly result: DocumentSearchResult;
+  } | null = null;
   let anchorsCache: {
     readonly revision: number;
     readonly index: ParagraphAnchorIndex;
@@ -641,6 +664,18 @@ export function openTreeSession(bytes: Uint8Array): OpenTreeSessionResult {
           outline: collectDocumentOutline(store.part, resolveStylesRoot()),
         };
         return outlineCache.outline;
+      },
+
+      findText(query, options) {
+        const key = `${options?.matchCase === true ? 'c' : ''}${
+          options?.wholeWord === true ? 'w' : ''
+        }${options?.limit ?? ''} ${query}`;
+        if (searchCache && searchCache.revision === store.revision && searchCache.key === key) {
+          return searchCache.result;
+        }
+        const result = collectTextMatches(store.part, query, options ?? {});
+        searchCache = { revision: store.revision, key, result };
+        return result;
       },
 
       embeddedFonts: resolveEmbeddedFonts,

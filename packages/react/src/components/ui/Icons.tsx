@@ -6,38 +6,9 @@
  */
 
 import type { CSSProperties } from 'react';
+import { SvgIcon, type IconProps } from './icon-base';
 
-export interface IconProps {
-  size?: number;
-  className?: string;
-  style?: CSSProperties;
-}
-
-const defaultSize = 20;
-
-// SVG wrapper for Material Symbols (viewBox 0 -960 960 960)
-function SvgIcon({
-  size = defaultSize,
-  className = '',
-  style,
-  children,
-}: IconProps & { children: React.ReactNode }) {
-  return (
-    <svg
-      xmlns="http://www.w3.org/2000/svg"
-      width={size}
-      height={size}
-      viewBox="0 -960 960 960"
-      fill="currentColor"
-      className={className}
-      style={{ display: 'inline-flex', flexShrink: 0, ...style }}
-      aria-hidden="true"
-    >
-      {children}
-    </svg>
-  );
-}
-
+export type { IconProps };
 // ============================================================================
 // TOOLBAR ICONS
 // ============================================================================
@@ -727,6 +698,22 @@ export function IconArrowBack(props: IconProps) {
   );
 }
 
+export function IconSearch(props: IconProps) {
+  return (
+    <SvgIcon {...props}>
+      <path d="M784-120 532-372q-30 24-69 38t-83 14q-109 0-184.5-75.5T120-580q0-109 75.5-184.5T380-840q109 0 184.5 75.5T640-580q0 44-14 83t-38 69l252 252-56 56ZM380-400q75 0 127.5-52.5T560-580q0-75-52.5-127.5T380-760q-75 0-127.5 52.5T200-580q0 75 52.5 127.5T380-400Z" />
+    </SvgIcon>
+  );
+}
+
+export function IconToc(props: IconProps) {
+  return (
+    <SvgIcon {...props}>
+      <path d="M120-240v-80h240v80H120Zm0-200v-80h480v80H120Zm0-200v-80h720v80H120Z" />
+    </SvgIcon>
+  );
+}
+
 export function IconDoneAll(props: IconProps) {
   return (
     <SvgIcon {...props}>
@@ -944,6 +931,9 @@ const iconMap: Record<string, React.ComponentType<IconProps>> = {
   branding_watermark: IconWatermark,
   // Navigation
   arrow_back: IconArrowBack,
+  // Navigation pane
+  search: IconSearch,
+  toc: IconToc,
   // Comments sidebar
   done_all: IconDoneAll,
   check_circle: IconCheckCircle,

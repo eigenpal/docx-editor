@@ -139,6 +139,53 @@ does. Only the panel is React-only.
 - `HyperlinkPopupMode`
 - `HyperlinkPopupAnchor`
 
+The navigation pane rides the same provider/hooks layer: a compound plus three behavior
+hooks over the context-published editor, so its Vue twin is the composable form and lands
+with the rest of that layer. The ENGINE half is already adapter-neutral — the search
+derivation, the session memo, `findMatches`/`selectMatch` and the outline all live in core,
+and Vue reaches them through the same facade. Only the panel and the displacement rule are
+React-only.
+
+- `DocxEditorNavigation` — the pane compound (`DocxEditor.Navigation`) with Headings and
+  Find tabs.
+- `DocxEditorNavigationNamespace` — the compound plus its `.Header` / `.Close` / `.Title` /
+  `.Tabs` / `.Tab` / `.Headings` / `.Find` / `.Toggle` statics.
+- `DocxEditorNavigationProps`
+- `NavigationHeader` — the pane's title row part.
+- `NavigationClose`
+- `NavigationTitle`
+- `NavigationTabs`
+- `NavigationTab`
+- `NavigationTabProps`
+- `NavigationHeadings` — the heading list part, over `useDocumentOutline`.
+- `NavigationFind` — the find panel part, over `useDocumentSearch`.
+- `NavigationToggle` — the collapsed disc.
+- `NavigationPartProps` — the parts' shared props.
+- `NavigationTabValue` — the tab union (`'headings' | 'find'`).
+- `useNavigationPane` — open state, active tab, and the displacement an open pane is
+  entitled to; Vue twin is a composable, future task.
+- `UseNavigationPaneOptions`
+- `UseNavigationPaneResult`
+- `useNavigationShift` — the px the chrome is currently displaced by, for a host placing
+  its own chrome alongside the pane.
+- `useDocumentOutline` — headings, nesting depth, and the jump, over `Editor.getOutline`.
+- `UseDocumentOutlineResult`
+- `OutlineHeading` — one heading of the engine's outline.
+- `OutlineHeadingItem` — a heading plus its rendering depth.
+- `useDocumentSearch` — the find panel's behavior over `Editor.findMatches` /
+  `selectMatch`.
+- `UseDocumentSearchResult`
+- `SEARCH_DEBOUNCE_MS` — the quiet period before a typed query is run.
+- `SEARCH_MATCH_LIMIT` — the engine's cap, so a caller can report "2000+" honestly.
+- `navigationShift` — the displacement rule as a pure function (viewport width, page width,
+  reservation → padding), exported so a host can reuse or test it rather than
+  reverse-engineering the centring behaviour.
+- `NavigationShiftInput`
+- `navigationPaneReservation` — the left space an open pane needs.
+- `NAVIGATION_PANE_WIDTH`
+- `NAVIGATION_PANE_INSET`
+- `NAVIGATION_PANE_GAP`
+
 ## Vue-only
 
 - `DocxEditorShellProps`

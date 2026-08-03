@@ -17,6 +17,7 @@ import { HorizontalRuler, type RulerPageSetup } from '../components/ui/Horizonta
 import { VerticalRuler } from '../components/ui/VerticalRuler';
 import { useEditorState } from './useEditorState';
 import { usePageSetup } from './usePageSetup';
+import { useNavigationShift } from './navigation/navigation-layout';
 
 const selectZoom = (snapshot: EditorSnapshot): number => snapshot.zoom;
 
@@ -87,6 +88,10 @@ export function DocxEditorHorizontalRuler(props: DocxEditorRulerProps): ReactEle
   const { pageSetup, isEnabled } = usePageSetup();
   const zoom = useEditorState(selectZoom);
   const { pending, preview, commit } = useMarginDrag();
+  // The ruler sits ABOVE the scroll container, so an open navigation pane displaces the
+  // page without displacing the ruler unless the ruler is told. Same value, same easing,
+  // so the tick marks stay over the page they measure. Zero when no pane is mounted.
+  const shift = useNavigationShift();
   return (
     <HorizontalRuler
       pageSetup={previewed(pageSetup, pending)}
@@ -97,7 +102,14 @@ export function DocxEditorHorizontalRuler(props: DocxEditorRulerProps): ReactEle
       onMarginDragEnd={commit}
       unit={props.unit ?? 'inch'}
       className={props.className ?? ''}
-      style={props.style}
+      style={{
+        ...props.style,
+        // The ruler is centred by its host row, so the same rule applies as to the page:
+        // a left offset of S moves a centred box by S/2. Feeding the ruler the SAME px the
+        // viewport pads by keeps the two in lockstep at every window width.
+        marginInlineStart: shift,
+        transition: 'margin-inline-start 0.2s ease',
+      }}
     />
   );
 }

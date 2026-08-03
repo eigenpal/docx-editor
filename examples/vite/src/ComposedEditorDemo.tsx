@@ -639,18 +639,13 @@ function EditorChrome({
 
 /**
  * The context-fed horizontal ruler: the first workspace row, sitting on the gray
- * `--doc-bg` BELOW the chrome seam, centered over the page column. When the
- * outline panel is open the row gains matching left padding so the ruler stays
- * centered over the (shifted) page, with the same 0.2s ease the panel uses.
- * Read-only — the engine has no margin commands yet, so nothing here pretends
- * to drag.
+ * `--doc-bg` BELOW the chrome seam, centered over the page column. It follows an
+ * open navigation pane on its own — the part reads the pane's published shift —
+ * so this row carries no pane-aware class of its own.
  */
-function RulerRow({ outlineOpen }: { outlineOpen: boolean }) {
+function RulerRow() {
   return (
-    <div
-      className={`demo-ruler-row${outlineOpen ? ' demo-ruler-row--outline' : ''}`}
-      aria-hidden="true"
-    >
+    <div className="demo-ruler-row" aria-hidden="true">
       <DocxEditor.HorizontalRuler />
     </div>
   );
@@ -735,41 +730,20 @@ export function ComposedEditorDemo({ fixtureUrl }: { fixtureUrl: string }) {
             colorMode={colorMode}
             onColorModeChange={setColorMode}
           />
-          <RulerRow outlineOpen={showOutline} />
+          <RulerRow />
           {/* The viewport stays FULL-WIDTH so the vertical ruler (an absolute
               child of the scroll container, pinned at left: 0) never moves. The
-              outline is an absolutely positioned overlay panel inset past the
-              vertical ruler's ticks; opening it shifts the page column right via
-              a padding on the viewport (and the ruler row above, via the
-              matching padding), both on the same 0.2s ease. A future comments
-              rail overlays symmetrically on the right with a mirrored padding. */}
+              navigation pane floats over the gutter to the LEFT of the centered
+              page and moves the document only when the window is too narrow to
+              hold both — it owns that measurement, so the demo supplies nothing
+              but the positioned row it anchors to. */}
           <div className="demo-main">
-            <aside
-              className={`demo-outline${showOutline ? '' : ' demo-outline--closed'}`}
-              inert={!showOutline}
-            >
-              <DocxEditor.DocumentOutline onClose={() => setShowOutline(false)} />
-            </aside>
-            {!showOutline && (
-              <button
-                type="button"
-                className="docx-outline-toggle demo-outline-toggle"
-                aria-label="Show document outline"
-                title="Show document outline"
-                onMouseDown={keepCaret}
-                onClick={() => setShowOutline(true)}
-              >
-                <svg viewBox="0 -960 960 960" width={20} height={20} aria-hidden="true">
-                  <path
-                    d="M120-240v-80h240v80H120Zm0-200v-80h480v80H120Zm0-200v-80h720v80H120Z"
-                    fill="currentColor"
-                  />
-                </svg>
-              </button>
-            )}
-            <DocxEditor.Viewport
-              className={`demo-viewport${showOutline ? ' demo-viewport--outline' : ''}`}
-            >
+            <DocxEditor.Navigation
+              open={showOutline}
+              onOpenChange={setShowOutline}
+              paneWidth={280}
+            />
+            <DocxEditor.Viewport className="demo-viewport">
               {/* The vertical ruler rides INSIDE the scroll container as an
                   absolutely positioned child, so it scrolls with the document and
                   its top offset lines up with the first page's top edge. */}
