@@ -375,6 +375,7 @@ export {
   type SemanticSelection,
 } from './semantic-interaction.ts';
 export {
+  AUTO_PREFERRED_WIDTH,
   CELL_PAD,
   DEFAULT_CELL_MARGINS,
   MAX_TABLE_COLUMNS,
@@ -382,6 +383,8 @@ export {
   readTableStructure,
   type CellMarginsPt,
   type CellVerticalAlign,
+  type PreferredWidth,
+  type PreferredWidthType,
   type SemanticTableCell,
   type SemanticTableRow,
   type SemanticTableStructure,

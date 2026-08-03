@@ -783,7 +783,11 @@ function layoutBlocksWithGeometry(
         box: {
           x: 0,
           y: fragmentTop,
-          width: contentWidth,
+          // The table's own width, not the page's. Reporting `contentWidth` here described
+          // every table as exactly page-wide while its cells spanned whatever the resolved
+          // grid said — narrower for most tables, wider for a fixed-layout one that
+          // genuinely overflows the margin.
+          width: structure.columnWidthsPt.reduce((sum, columnWidth) => sum + columnWidth, 0),
           height: last.box.y + last.box.height - fragmentTop,
         },
       });

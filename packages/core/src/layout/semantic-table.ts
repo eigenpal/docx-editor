@@ -59,6 +59,65 @@ const MAX_COLUMN_WIDTH_PT = 31_680 / 20;
 /** Highest grid column a cell may start on; keeps a row's total span bounded. */
 const LAST_GRID_COLUMN = MAX_TABLE_COLUMNS - 1;
 
+/**
+ * `w:tblW` / `w:tcW` (CT_TblWidth, 17.4.87): a PREFERRED width plus the unit it is stated
+ * in. Preferred is the operative word — it is what the producer asked for, not what the
+ * table resolved to. `w:tblGrid` carries the resolved grid, and where the two disagree the
+ * grid wins for any table that has one.
+ *
+ * `pct` is stated in fiftieths of a percent (5000 = 100%), and older producers write the
+ * `"50%"` string form instead; both are read. `auto` and `nil` carry no width.
+ */
+export type PreferredWidthType = 'dxa' | 'pct' | 'auto' | 'nil';
+
+export interface PreferredWidth {
+  readonly type: PreferredWidthType;
+  /** POINTS for `dxa`, PERCENT (0–100) for `pct`, 0 for `auto`/`nil`. */
+  readonly value: number;
+}
+
+export const AUTO_PREFERRED_WIDTH: PreferredWidth = Object.freeze({ type: 'auto', value: 0 });
+
+/** Widest a `pct` preference may resolve to, so `w:w="999999"` cannot inflate a table. */
+const MAX_PREFERRED_PERCENT = 100;
+
+/**
+ * Read a CT_TblWidth element. Digits-only and clamped exactly like `twipsSide`: every
+ * number here is attacker-controlled and feeds cell box geometry.
+ *
+ * A missing `w:type` means `dxa` per the schema default, but a missing `w:w` means the
+ * element states nothing at all, which is `auto`.
+ */
+function readPreferredWidth(node: OoxmlElement | undefined): PreferredWidth {
+  if (!node) return AUTO_PREFERRED_WIDTH;
+  const rawType = attributeValue(node, 'type');
+  const type: PreferredWidthType =
+    rawType === 'pct' || rawType === 'auto' || rawType === 'nil' || rawType === 'dxa'
+      ? rawType
+      : 'dxa';
+  if (type === 'auto' || type === 'nil') return { type, value: 0 };
+
+  const raw = attributeValue(node, 'w');
+  if (raw === undefined) return AUTO_PREFERRED_WIDTH;
+
+  if (type === 'pct') {
+    // `"50%"` (string form) or `2500` (fiftieths of a percent).
+    const asString = /^(\d{1,7})%$/.exec(raw);
+    const percent = asString
+      ? Number(asString[1])
+      : /^\d{1,7}$/.test(raw)
+        ? Number(raw) / 50
+        : Number.NaN;
+    if (!Number.isFinite(percent) || percent <= 0) return AUTO_PREFERRED_WIDTH;
+    return { type: 'pct', value: Math.min(percent, MAX_PREFERRED_PERCENT) };
+  }
+
+  if (!/^\d{1,9}$/.test(raw)) return AUTO_PREFERRED_WIDTH;
+  const pt = Number(raw) / 20;
+  if (!Number.isFinite(pt) || pt <= 0) return AUTO_PREFERRED_WIDTH;
+  return { type: 'dxa', value: Math.min(pt, MAX_COLUMN_WIDTH_PT) };
+}
+
 /** Distinct conditional-format combinations memoized per table; see `styleFormattingFor`. */
 const MAX_CELL_CONDITION_SETS = 256;
 
@@ -100,6 +159,12 @@ export interface SemanticTableCell {
   /** Validated 6-hex shading fill, absent for none/auto. */
   readonly shading?: string;
   /**
+   * `w:tcW` — the width this cell ASKED for. Only consulted where `w:tblGrid` cannot
+   * settle the geometry (absent or degenerate grid); a table that states a grid has already
+   * resolved its columns and the grid wins. See `resolveColumnWidthsPt`.
+   */
+  readonly preferredWidth: PreferredWidth;
+  /**
    * What the table style says about this cell's paragraphs and runs (17.7.6.6) — a header
    * row's bold and centring live here, not in the cell's own properties.
    */
@@ -123,6 +188,13 @@ export interface SemanticTableRow {
 export interface SemanticTableStructure {
   readonly columnWidthsPt: readonly number[];
   readonly rows: readonly SemanticTableRow[];
+  /** `w:tblPr/w:tblW` — the width the table asked for. */
+  readonly tableWidth: PreferredWidth;
+  /**
+   * `w:tblPr/w:tblLayout/@w:type="fixed"` (17.4.53). Fixed layout takes the grid as final;
+   * anything else is autofit, which in Word never renders wider than the text column.
+   */
+  readonly layoutFixed: boolean;
   /** Table-level `tblBorders` (three-state, including insideH/insideV). */
   readonly tableBorders: TableBorderBox;
   /** Table-level `tblCellMar` defaults (per-side, CELL_PAD when a side is omitted). */
@@ -238,29 +310,148 @@ function gridColumnElements(table: OoxmlElement): readonly OoxmlElement[] {
 }
 
 /**
- * Column widths in points: from `w:tblGrid` when present, else an even split over the
- * hardened column count. The no-grid path is the security-sensitive one — see header.
+ * Column widths from `w:tblGrid` alone, or null when the grid cannot settle them.
+ *
+ * Digits only and clamped, exactly like `twipsSide`: `w="999999999"` otherwise becomes a
+ * ~50,000,000pt column that every cell box and border stroke inherits. A single unreadable
+ * `w:gridCol` no longer poisons one column with an even-split guess — the whole grid is
+ * rejected and the caller falls back to the authored `w:tcW` preferences instead, which is
+ * the better evidence about what the producer meant.
  */
-function columnWidthsPt(
-  cols: readonly OoxmlElement[],
+function gridColumnWidthsPt(
+  cols: readonly OoxmlElement[]
+): { readonly widths: readonly number[]; readonly clamped: boolean } | null {
+  if (cols.length === 0) return null;
+  const widths: number[] = [];
+  let clamped = false;
+  for (const col of cols) {
+    const raw = attributeValue(col, 'w');
+    if (raw === undefined || !/^\d{1,9}$/.test(raw)) return null;
+    const pt = Number(raw) / 20;
+    if (!Number.isFinite(pt) || pt <= 0) return null;
+    if (pt > MAX_COLUMN_WIDTH_PT) {
+      clamped = true;
+      widths.push(MAX_COLUMN_WIDTH_PT);
+    } else {
+      widths.push(pt);
+    }
+  }
+  return { widths, clamped };
+}
+
+/** One cell's grid footprint and stated width preference, for the no-grid fallback. */
+interface CellWidthClaim {
+  readonly start: number;
+  readonly span: number;
+  readonly preferred: PreferredWidth;
+}
+
+/**
+ * Column widths derived from `w:tcW` when there is no usable `w:tblGrid`.
+ *
+ * Producers that omit `w:tblGrid` state their geometry entirely in `w:tcW`, and an even
+ * split over the column count throws all of it away. Each column takes the first definite
+ * `dxa` claim covering it, narrowest footprint first so a `gridSpan` cell never overwrites
+ * a column some single-column cell already stated. A spanning claim splits evenly across
+ * the columns it covers that nothing else has settled. Columns still unclaimed share
+ * whatever is left of the content width, and never go to zero.
+ */
+function preferredColumnWidthsPt(
+  claims: readonly CellWidthClaim[],
   columnCount: number,
   contentWidthPt: number
-): readonly number[] {
-  if (cols.length > 0) {
-    return cols.map((col) => {
-      // Digits only and clamped, exactly like `twipsSide`: `w="999999999"` otherwise
-      // becomes a ~50,000,000pt column that every cell box and border stroke inherits.
-      const raw = attributeValue(col, 'w');
-      if (raw === undefined || !/^\d{1,9}$/.test(raw)) return contentWidthPt / cols.length;
-      const pt = Number(raw) / 20;
-      if (!Number.isFinite(pt) || pt <= 0) return contentWidthPt / cols.length;
-      return pt > MAX_COLUMN_WIDTH_PT ? MAX_COLUMN_WIDTH_PT : pt;
-    });
+): readonly number[] | null {
+  const settled = new Array<number>(columnCount).fill(0);
+  const ordered = [...claims]
+    .filter((claim) => claim.preferred.type === 'dxa' && claim.start < columnCount)
+    .sort((a, b) => a.span - b.span);
+  if (ordered.length === 0) return null;
+
+  for (const claim of ordered) {
+    const last = Math.min(claim.start + claim.span, columnCount);
+    const open: number[] = [];
+    for (let index = claim.start; index < last; index += 1)
+      if (settled[index] === 0) open.push(index);
+    if (open.length === 0) continue;
+    // A spanning cell states the width of its whole footprint, so only the part not already
+    // accounted for by narrower claims is what these columns get to share.
+    let remaining = claim.preferred.value;
+    for (let index = claim.start; index < last; index += 1) remaining -= settled[index]!;
+    if (remaining <= 0) continue;
+    const each = remaining / open.length;
+    for (const index of open) settled[index] = each;
   }
-  const width = contentWidthPt / columnCount;
-  const widths: number[] = [];
-  for (let index = 0; index < columnCount; index += 1) widths.push(width);
-  return widths;
+
+  const stated = settled.reduce((total, width) => total + width, 0);
+  if (stated <= 0) return null;
+  const unsettled = settled.filter((width) => width === 0).length;
+  if (unsettled === 0) return settled;
+  // Nothing stated these columns. Give them what the content width has left over, or a
+  // hairline when the stated columns already fill it, so no column collapses to zero.
+  const leftover = Math.max(contentWidthPt - stated, unsettled * MIN_DERIVED_COLUMN_PT);
+  const each = leftover / unsettled;
+  return settled.map((width) => (width === 0 ? each : width));
+}
+
+/** Floor for a column nothing states, so a derived grid never contains a zero column. */
+const MIN_DERIVED_COLUMN_PT = 1;
+
+/** Rounding slack when comparing a resolved table width against the content box. */
+const WIDTH_EPSILON_PT = 0.001;
+
+/**
+ * The table's resolved column widths, in points.
+ *
+ * Order of evidence: `w:tblGrid` (the producer's own resolved grid) beats `w:tcW` (what
+ * cells asked for) beats an even split. The grid is the resolved answer for any table that
+ * has one, so reading `w:tcW` does NOT mean overriding a stated grid with it — for a
+ * well-formed file the two agree, and where they disagree the grid is the later statement.
+ *
+ * Fit is then applied per 17.4.53. A `w:tblLayout w:type="fixed"` table takes its grid as
+ * final and is left alone: Word genuinely renders a fixed table past the right margin
+ * rather than shrinking it, so clamping one here would DIVERGE from Word. Every other
+ * table is autofit, which in Word never renders wider than the text column, so an autofit
+ * grid wider than the content box is scaled down proportionally.
+ *
+ * Scaling only ever shrinks. Stretching a narrow table up to `w:tblW` is a separate
+ * question with its own compatibility surface, and an autofit table that is narrower than
+ * the page is already showing what Word shows.
+ */
+function resolveColumnWidthsPt(input: {
+  readonly gridCols: readonly OoxmlElement[];
+  readonly claims: readonly CellWidthClaim[];
+  readonly columnCount: number;
+  readonly contentWidthPt: number;
+  readonly tableWidth: PreferredWidth;
+  readonly layoutFixed: boolean;
+}): readonly number[] {
+  const { columnCount, contentWidthPt } = input;
+  const available = Math.max(contentWidthPt, MIN_DERIVED_COLUMN_PT);
+
+  const grid = gridColumnWidthsPt(input.gridCols);
+  const resolved =
+    grid?.widths ??
+    preferredColumnWidthsPt(input.claims, columnCount, available) ??
+    new Array<number>(columnCount).fill(available / columnCount);
+
+  const total = resolved.reduce((sum, width) => sum + width, 0);
+  if (total <= 0) return new Array<number>(columnCount).fill(available / columnCount);
+  // Fixed layout states that the grid IS the geometry, overflow included.
+  if (input.layoutFixed) return resolved;
+  // A column so wide it had to be clamped is not geometry anyone authored, and a fit
+  // derived from it would let one hostile `w:gridCol` shrink every legitimate column in the
+  // table. The clamp already bounds the damage to that one column; leave its siblings be.
+  if (grid?.clamped === true) return resolved;
+
+  const target =
+    input.tableWidth.type === 'dxa'
+      ? Math.min(input.tableWidth.value, available)
+      : input.tableWidth.type === 'pct'
+        ? Math.min((available * input.tableWidth.value) / 100, available)
+        : available;
+  if (total <= target + WIDTH_EPSILON_PT) return resolved;
+  const scale = target / total;
+  return resolved.map((width) => width * scale);
 }
 
 /**
@@ -522,30 +713,37 @@ export function readTableStructure(
     readonly properties: OoxmlElement | undefined;
     readonly starts: readonly number[];
     readonly spans: readonly number[];
+    readonly preferred: readonly PreferredWidth[];
     readonly gridColumns: number;
   }
   const plans: RowPlan[] = [];
+  const claims: CellWidthClaim[] = [];
   let derivedColumns = 1;
   for (const rowNode of table.children) {
     if (rowNode.kind !== 'tableRow') continue;
     const properties = childNamed(rowNode, 'trPr');
     const starts: number[] = [];
     const spans: number[] = [];
+    const preferred: PreferredWidth[] = [];
     let cursor = Math.min(readGridSkip(properties, 'gridBefore'), LAST_GRID_COLUMN);
     for (const cellNode of rowNode.children) {
       if (cellNode.kind !== 'tableCell') continue;
+      const cellPr = childNamed(cellNode, 'tcPr');
       const start = Math.min(cursor, LAST_GRID_COLUMN);
       const span = Math.min(
-        readGridSpan(childNamed(cellNode, 'tcPr')),
+        readGridSpan(cellPr),
         MAX_TABLE_COLUMNS - start // ≥ 1: `start` never exceeds the last column
       );
+      const width = readPreferredWidth(cellPr && childNamed(cellPr, 'tcW'));
       starts.push(start);
       spans.push(span);
+      preferred.push(width);
+      claims.push({ start, span, preferred: width });
       cursor = start + span;
     }
     const gridColumns = Math.min(cursor + readGridSkip(properties, 'gridAfter'), MAX_TABLE_COLUMNS);
     if (gridColumns > derivedColumns) derivedColumns = gridColumns;
-    plans.push({ node: rowNode, properties, starts, spans, gridColumns });
+    plans.push({ node: rowNode, properties, starts, spans, preferred, gridColumns });
   }
 
   const gridCols = gridColumnElements(table);
@@ -606,6 +804,7 @@ export function readTableStructure(
           cellProperties ? readCellBorders(cellProperties) : EMPTY_CELL_BORDER_BOX
         ),
         ...(shading === undefined ? {} : { shading }),
+        preferredWidth: plan.preferred[cellIndex - 1] ?? AUTO_PREFERRED_WIDTH,
         styleFormatting: styleFormattingFor(conditions),
         blocks,
       });
@@ -618,9 +817,22 @@ export function readTableStructure(
     });
   }
 
+  const tableWidth = readPreferredWidth(tblPr && childNamed(tblPr, 'tblW'));
+  const tblLayout = tblPr && childNamed(tblPr, 'tblLayout');
+  const layoutFixed = tblLayout ? attributeValue(tblLayout, 'type') === 'fixed' : false;
+
   return {
-    columnWidthsPt: columnWidthsPt(gridCols, columnCount, contentWidthPt),
+    columnWidthsPt: resolveColumnWidthsPt({
+      gridCols,
+      claims,
+      columnCount,
+      contentWidthPt,
+      tableWidth,
+      layoutFixed,
+    }),
     rows,
+    tableWidth,
+    layoutFixed,
     tableBorders,
     defaultMargins,
   };
