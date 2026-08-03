@@ -83,9 +83,17 @@ export function createSurfaceFormat(deps: SurfaceFormatDeps): FormatMethods {
   };
 
   /**
-   * Write one run property across the range: one op per run it covers, each stating that
-   * run's own properties plus the incoming one, and — when the range is a whole paragraph —
-   * the same change to the paragraph mark over the mark's own properties.
+   * Write one run property across the selected range — however many paragraphs it spans.
+   *
+   * One op per run the range covers, each stating that run's own properties plus the
+   * incoming one, and — for every paragraph the range covers WHOLE — the same change to that
+   * paragraph's mark over the mark's own properties.
+   *
+   * The range is walked the same way `deleteRangeOps` walks it: the tail of the first
+   * paragraph, every paragraph in between entire, then the head of the last. Formatting used
+   * to stop at the first pilcrow, which left the whole run-formatting half of the toolbar
+   * disabled on a cross-paragraph selection while the READS (already range-wide) reported
+   * state no control could change.
    *
    * Every base comes from the canonical tree rather than the layout, because the layout
    * publishes the cascade and an op that restates the cascade is either refused outright or
@@ -97,28 +105,72 @@ export function createSurfaceFormat(deps: SurfaceFormatDeps): FormatMethods {
     incoming: SurfaceProperty
   ): void => {
     const part = session.part();
-    const edits = runPropertyEdits(part, from.paragraphId, from.offset, to.offset, incoming);
-    // No run in range means nothing was formatted, so the mark must not move either.
-    if (edits.length === 0) return;
-    const markProperties = mergedProperties(
-      directParagraphMarkProperties(part, from.paragraphId),
-      incoming
-    );
-    commit(() =>
-      session.applyTreeOps(
-        [
-          ...edits.map((edit) => ({
-            op: 'setRunProperties' as const,
-            paragraphId: from.paragraphId,
-            start: edit.start,
-            end: edit.end,
-            properties: edit.properties,
-          })),
-          ...paragraphMarkOps(textOf(from.paragraphId), from, to, markProperties),
-        ],
-        selectionMark()
-      )
-    );
+    if (from.paragraphId === to.paragraphId) {
+      const edits = runPropertyEdits(part, from.paragraphId, from.offset, to.offset, incoming);
+      // No run in range means nothing was formatted, so the mark must not move either.
+      if (edits.length === 0) return;
+      const markProperties = mergedProperties(
+        directParagraphMarkProperties(part, from.paragraphId),
+        incoming
+      );
+      commit(() =>
+        session.applyTreeOps(
+          [
+            ...edits.map((edit) => ({
+              op: 'setRunProperties' as const,
+              paragraphId: from.paragraphId,
+              start: edit.start,
+              end: edit.end,
+              properties: edit.properties,
+            })),
+            ...paragraphMarkOps(textOf(from.paragraphId), from, to, markProperties),
+          ],
+          selectionMark()
+        )
+      );
+      return;
+    }
+    const order = documentOrder(currentLayout.value);
+    const firstIndex = order.indexOf(from.paragraphId);
+    const lastIndex = order.indexOf(to.paragraphId);
+    // An endpoint the published order does not know is a layout that has not caught up;
+    // writing a partial range would be worse than writing none.
+    if (firstIndex === -1 || lastIndex === -1) return;
+    const ops: TreeDocOp[] = [];
+    for (let index = firstIndex; index <= lastIndex; index += 1) {
+      const paragraphId = order[index]!;
+      const text = textOf(paragraphId);
+      const start = index === firstIndex ? from.offset : 0;
+      const end = index === lastIndex ? to.offset : text.length;
+      const edits = start < end ? runPropertyEdits(part, paragraphId, start, end, incoming) : [];
+      for (const edit of edits) {
+        ops.push({
+          op: 'setRunProperties',
+          paragraphId,
+          start: edit.start,
+          end: edit.end,
+          properties: edit.properties,
+        });
+      }
+      // The mark follows a paragraph the range covers WHOLE and no other: that is what a
+      // list marker inherits its face from, and formatting part of a paragraph must not
+      // restyle its pilcrow. An empty paragraph between the endpoints is covered whole by
+      // definition and has no run to carry the change, so its mark is the only place the
+      // format can live — without it, typing into that line came out unformatted.
+      const covered =
+        index > firstIndex && index < lastIndex
+          ? true
+          : start === 0 && end === text.length && text.length > 0;
+      if (covered && (edits.length > 0 || text.length === 0)) {
+        ops.push({
+          op: 'setParagraphMarkProperties',
+          paragraphId,
+          properties: mergedProperties(directParagraphMarkProperties(part, paragraphId), incoming),
+        });
+      }
+    }
+    if (ops.length === 0) return;
+    commit(() => session.applyTreeOps(ops, selectionMark()));
   };
 
   /**
@@ -184,8 +236,7 @@ export function createSurfaceFormat(deps: SurfaceFormatDeps): FormatMethods {
         return;
       }
       const { from, to } = orderedRange();
-      if (from.paragraphId !== to.paragraphId) return;
-      if (from.offset === to.offset) {
+      if (from.paragraphId === to.paragraphId && from.offset === to.offset) {
         // A collapsed caret arms the value for the NEXT characters typed — picking a font
         // with nothing selected is how Word starts typing in that font.
         armPending(incoming);
@@ -252,8 +303,7 @@ export function createSurfaceFormat(deps: SurfaceFormatDeps): FormatMethods {
         return;
       }
       const { from, to } = orderedRange();
-      if (from.paragraphId !== to.paragraphId) return;
-      if (from.offset === to.offset) {
+      if (from.paragraphId === to.paragraphId && from.offset === to.offset) {
         // The stored-marks lane: a collapsed caret has no range to format, so the toggle is
         // remembered and applied to the next characters typed at this position (Word's
         // behavior). Moving the caret discards it — the composition root owns that rule.

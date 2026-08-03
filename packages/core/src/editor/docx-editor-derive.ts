@@ -219,16 +219,6 @@ export function gateCommand(
       },
     };
   }
-  // Run formatting is written over a RANGE INSIDE ONE PARAGRAPH (surface-format.ts's
-  // `toggleRunProperty`/`setRunProperty` both return early otherwise). Without this the
-  // press was the worst kind of failure: `can` said yes, `exec` reported
-  // `{ ok: true, changed: false }`, and the document did not move — Bold over a
-  // three-paragraph selection looked live and did nothing at all. The engine says why,
-  // and the button greys out. A COLLAPSED caret is allowed through: it arms the surface's
-  // stored-marks lane (pending formatting the next characters typed will take), which is
-  // a real state change even though the document has not moved yet. (The guard itself is
-  // two blocks down; the style-picker gate below is a different control.)
-  //
   // The style picker's probe promises "a well-formed pick would be honoured": on a
   // document that defines no paragraph styles, no pick can be — every styleId is refused
   // at exec — so the control must grey out rather than open an empty, dead listbox.
@@ -244,19 +234,6 @@ export function gateCommand(
         reason: 'this document defines no paragraph styles',
       },
     };
-  }
-  if (command.type === 'toggleMark' || command.type === 'setMarkAttr') {
-    const { anchor, head } = surface.state().selection;
-    if (anchor.paragraphId !== head.paragraphId) {
-      return {
-        ok: false,
-        refusal: {
-          ok: false,
-          code: 'unsupported',
-          reason: 'run formatting applies within one paragraph; this selection spans several',
-        },
-      };
-    }
   }
   if (command.type === 'undo' && !surface.session.canUndo()) {
     return {

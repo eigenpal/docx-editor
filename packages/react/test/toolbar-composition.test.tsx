@@ -662,10 +662,9 @@ describe('enabled state is the engine answer, not a registry constant', () => {
   });
 
   test('a wired control the engine refuses NOW shows the engine reason', async () => {
-    // Run formatting is written within ONE paragraph: over a multi-paragraph selection
-    // the engine refuses, and the tooltip is its refusal — not a permanent
-    // "unavailable in preview". (A collapsed caret no longer refuses: it arms the
-    // stored-marks lane instead.)
+    // Undo over an empty history: the engine refuses, and the tooltip is its refusal —
+    // not a permanent "unavailable in preview". A refusal that lifts as soon as the
+    // document moves is the whole point; a registry constant could not.
     const twoParagraphs = docx(
       '<w:p><w:r><w:t>alpha</w:t></w:r></w:p><w:p><w:r><w:t>beta</w:t></w:r></w:p>'
     );
@@ -673,11 +672,15 @@ describe('enabled state is the engine answer, not a registry constant', () => {
     await act(async () => {
       editor().surface!.selectAll();
     });
-    const underline = view.container.querySelector(
-      '[data-slot="text.underline"]'
-    ) as HTMLButtonElement;
-    expect(underline.disabled).toBe(true);
-    expect(underline.title).not.toBe('formattingBar.underlineShortcut');
-    expect(underline.title).toContain('one paragraph');
+    const undo = view.container.querySelector('[data-slot="history.undo"]') as HTMLButtonElement;
+    expect(undo.disabled).toBe(true);
+    expect(undo.title).toContain('nothing to undo');
+
+    await act(async () => {
+      (
+        view.container.querySelector('[data-slot="text.underline"]') as HTMLButtonElement
+      ).click();
+    });
+    expect(undo.disabled).toBe(false);
   });
 });

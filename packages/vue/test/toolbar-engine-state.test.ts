@@ -165,19 +165,22 @@ describe('the Vue toolbar reads enabled state from the engine', () => {
   });
 
   test('a wired control the engine refuses NOW is disabled with the engine’s reason', async () => {
-    // Run formatting is written within ONE paragraph: over a multi-paragraph selection
-    // the engine refuses, and the control must show THAT, not the registry's old
-    // permanent "unavailable in preview". (A collapsed caret no longer refuses — it
-    // arms the engine's stored-marks lane instead.)
+    // Undo over an empty history: the engine refuses, and the control must show THAT, not
+    // the registry's old permanent "unavailable in preview". A refusal that lifts as soon
+    // as the document moves is the whole point — a registry constant could not.
     const { editor, toolbar } = mountToolbar(
       docx('<w:p><w:r><w:t>alpha</w:t></w:r></w:p><w:p><w:r><w:t>beta</w:t></w:r></w:p>')
     );
     editor.surface!.selectAll();
     await nextTick();
-    const underline = slot(toolbar, 'text.underline') as HTMLButtonElement;
-    expect(underline.disabled).toBe(true);
-    expect(underline.title).not.toContain('formattingBar.unavailableInPreview');
-    expect(underline.title).toContain('one paragraph');
+    const undo = slot(toolbar, 'history.undo') as HTMLButtonElement;
+    expect(undo.disabled).toBe(true);
+    expect(undo.title).not.toContain('formattingBar.unavailableInPreview');
+    expect(undo.title).toContain('nothing to undo');
+
+    (slot(toolbar, 'text.underline') as HTMLButtonElement).click();
+    await nextTick();
+    expect(undo.disabled).toBe(false);
   });
 
   test('the shapes this toolbar cannot drive still render, and say so', async () => {
