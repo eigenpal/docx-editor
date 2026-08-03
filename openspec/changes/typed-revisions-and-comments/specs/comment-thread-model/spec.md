@@ -44,6 +44,12 @@ Threading, resolved state, durable ids, and UTC dates SHALL be read from `commen
 - **WHEN** `commentsExtended.xml` marks a comment `@w15:done="1"`
 - **THEN** it is presented as resolved
 
+#### Scenario: A sibling part present without thread links is not threading
+
+- **WHEN** `commentsExtended.xml` is present and every `w15:commentEx` carries `@w15:done` with no `@w15:paraIdParent`, as `issue-68-large-comments-suggestions.docx` does for all 212 of its comments
+- **THEN** resolved state is read from it
+- **AND** every comment is still presented as top-level, because the part's presence is not itself evidence of a thread
+
 #### Scenario: Absent sibling parts mean no threads and no resolved state
 
 - **WHEN** a package contains `comments.xml` but none of the three sibling parts, as the comprehensive fixture does
@@ -55,9 +61,32 @@ Threading, resolved state, durable ids, and UTC dates SHALL be read from `commen
 - **WHEN** a package containing all three sibling parts is loaded and saved unedited
 - **THEN** each matches its input by canonical fingerprint
 
-### Requirement: `w14:paraId` is allocated on first write, never assumed
+### Requirement: A reply against a tracked change is a comment on that change's range
 
-Threading and resolved state require `w14:paraId` on comment paragraphs. Where a document has none, the system SHALL allocate them when it first writes thread state, SHALL record the allocation, and SHALL NOT link comments by position.
+OOXML gives a revision no body, no thread, and no reply: `w:ins` and `w:del` carry `(@w:id, @w:author, @w:date)` and nothing else. A reply offered against a revision SHALL therefore commit as a comment anchored over that revision's resolved range, and SHALL NOT invent markup on the revision element.
+
+#### Scenario: Replying to a revision creates a comment
+
+- **WHEN** the user replies to a tracked insertion from the review surface
+- **THEN** a comment is created whose anchor range covers that revision's content
+- **AND** the revision element itself is unchanged, keeping its id, author, and date
+
+#### Scenario: The comment threads under the change it covers
+
+- **WHEN** a comment's range overlaps a revision's range
+- **THEN** the review surface presents the comment with that change
+- **AND** the association is derived from the ranges, not stored as a new attribute
+
+#### Scenario: Reply is not offered when comments cannot be written
+
+- **WHEN** a build renders revisions but has no comment write path
+- **THEN** the reply affordance is not rendered, rather than rendered and inert
+
+### Requirement: `w14:paraId` is allocated on first comment write, never assumed
+
+Threading and resolved state require `w14:paraId` on **comment** paragraphs. Where a document has none, the system SHALL allocate them when it first writes thread state, SHALL record the allocation, and SHALL NOT link comments by position.
+
+This requirement governs `word/comments.xml`. Paragraph identity in the main part is allocated at load by `normalizeParagraphIdentity`, because `DocAnchor` addresses paragraphs by `w14:paraId` and an unidentified paragraph is unaddressable. The comment part SHALL NOT be normalized at load.
 
 #### Scenario: Reply on a document with no paraId
 
@@ -70,10 +99,10 @@ Threading and resolved state require `w14:paraId` on comment paragraphs. Where a
 - **WHEN** `w14:paraId` values are allocated
 - **THEN** each is an 8-hex-digit value, unique within the document, and not the reserved all-zero value
 
-#### Scenario: No allocation without a write
+#### Scenario: No allocation in the comment part without a comment write
 
-- **WHEN** a document with no `w14:paraId` is loaded, laid out, and saved without a comment write
-- **THEN** no `w14:paraId` is added and the package matches its input by canonical fingerprint
+- **WHEN** a package whose `comments.xml` has no `w14:paraId` is loaded, laid out, and saved without a comment write
+- **THEN** no `w14:paraId` is added to `comments.xml` and that part matches its input by canonical fingerprint
 
 ### Requirement: Comment anchors are durable ranges over node identity
 

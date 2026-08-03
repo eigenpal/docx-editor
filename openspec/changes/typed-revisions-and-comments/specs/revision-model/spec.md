@@ -2,12 +2,33 @@
 
 ### Requirement: The revision family is typed with required provenance
 
-The canonical tree SHALL type `w:ins`, `w:del`, `w:delText`, `w:moveFrom`, `w:moveTo`, the four move-range markers, the property-change wrappers (`w:rPrChange`, `w:pPrChange`, `w:tblPrChange`, `w:tcPrChange`, `w:trPrChange`, `w:sectPrChange`, `w:tblGridChange`), and the cell-revision elements (`w:cellIns`, `w:cellDel`, `w:cellMerge`). Every one extends `CT_TrackChange`, so `@w:id` and `@w:author` are required and `@w:date` is optional.
+The canonical tree SHALL type `w:ins`, `w:del`, `w:delText`, `w:delInstrText`, `w:moveFrom`, `w:moveTo`, the four move-range markers, the property-change wrappers (`w:rPrChange`, `w:pPrChange`, `w:tblPrChange`, `w:tblPrExChange`, `w:tcPrChange`, `w:trPrChange`, `w:sectPrChange`, `w:tblGridChange`), and the cell-revision elements (`w:cellIns`, `w:cellDel`, `w:cellMerge`).
+
+These do **not** share one base type, and typing them as if they did is wrong in both directions — it refuses valid files and emits invalid XML:
+
+| Elements | Base type | Required | Absent from the type |
+| --- | --- | --- | --- |
+| `w:ins`, `w:del`, `w:moveFrom`, `w:moveTo`, the property-change wrappers, the cell-revision elements | `CT_TrackChange` | `@w:id`, `@w:author` | — (`@w:date` is optional) |
+| `w:moveFromRangeStart`, `w:moveToRangeStart` | `CT_MoveBookmark` | `@w:name`, `@w:author`, `@w:date` | — (`@w:colFirst`, `@w:colLast` optional) |
+| `w:moveFromRangeEnd`, `w:moveToRangeEnd` | `CT_MarkupRange` | `@w:id` | `@w:author`, `@w:date` |
 
 #### Scenario: Insertion types with its provenance
 
 - **WHEN** a `w:ins` wrapping runs is loaded
 - **THEN** it is a typed revision node carrying its id, author, and date
+
+#### Scenario: A move range end carries no provenance
+
+- **WHEN** a `w:moveFromRangeEnd` or `w:moveToRangeEnd` is loaded
+- **THEN** it types with its `@w:id` alone
+- **AND** loading is not refused for the absent author and date, and neither is written on save
+
+#### Scenario: The two move join keys are distinct
+
+- **WHEN** a document pairs move halves
+- **THEN** a `moveFrom` range is paired to its `moveTo` range by `@w:name`
+- **AND** a range start is paired to its range end by `@w:id`
+- **AND** neither key is used for the other join, because in a real document the two halves of a named pair carry different ids
 
 #### Scenario: Author is required at the API
 
@@ -28,6 +49,12 @@ The canonical tree SHALL type `w:ins`, `w:del`, `w:delText`, `w:moveFrom`, `w:mo
 
 - **WHEN** a revision element outside this vocabulary appears
 - **THEN** it is preserved in order as a generic node and does not block editing
+
+#### Scenario: Revisions type in every story, not only the body
+
+- **WHEN** a package carries revisions in a header, a footer, a footnote, or an endnote part
+- **THEN** each types, lays out, and is addressable in that story
+- **AND** a document whose only revision is outside `document.xml` presents that revision rather than reporting none
 
 ### Requirement: Deleted text is never laid out as ordinary text
 
@@ -117,6 +144,27 @@ The display mode SHALL be one of all-markup, proposed result, or original. Chang
 - **WHEN** a property change is rejected
 - **THEN** the properties recorded inside the change wrapper are restored and the wrapper is removed
 
+#### Scenario: Accept a deleted paragraph mark
+
+- **WHEN** a paragraph carries `w:pPr/w:rPr/w:del` and that revision is accepted
+- **THEN** the paragraph mark is removed and the paragraph merges with the one that follows it
+- **AND** removing only the `w:del` element, which would leave two paragraphs, is not the applied behaviour
+
+#### Scenario: Reject a deleted paragraph mark
+
+- **WHEN** the same revision is rejected
+- **THEN** the `w:del` is removed from `w:pPr/w:rPr` and the two paragraphs stay separate
+
+#### Scenario: Accept an inserted paragraph mark
+
+- **WHEN** a paragraph carries `w:pPr/w:rPr/w:ins` and that revision is accepted
+- **THEN** the `w:ins` is removed and the paragraph split it recorded is kept
+
+#### Scenario: Reject an inserted paragraph mark
+
+- **WHEN** the same revision is rejected
+- **THEN** the paragraph mark is removed and the paragraph merges with the one that follows it, undoing the split
+
 #### Scenario: A move is accepted or rejected as a pair
 
 - **WHEN** accept-revision targets one half of a `w:moveFrom` / `w:moveTo` pair
@@ -128,10 +176,26 @@ The display mode SHALL be one of all-markup, proposed result, or original. Chang
 - **WHEN** a document contains a `w:moveTo` with no matching `w:moveFrom`
 - **THEN** it loads, is reported as an orphaned move by a diagnostic, and is treated as an insertion for accept/reject
 
-#### Scenario: Nested revisions resolve in a declared order
+#### Scenario: Nested revisions resolve by containment
 
-- **WHEN** an insertion by one author sits inside a deletion by another and the outer deletion is accepted
-- **THEN** the resolution follows the specified order — inner first, then outer — and produces the same result regardless of traversal direction
+- **WHEN** an insertion by one author sits inside a deletion by another and the outer deletion is **accepted**
+- **THEN** the content is removed and the inner insertion is removed with it, because the container did not survive
+
+#### Scenario: A surviving container preserves its inner revision
+
+- **WHEN** the outer deletion of the same nesting is **rejected**
+- **THEN** the content remains and the inner insertion remains pending, unresolved on its author's behalf
+
+#### Scenario: Containment resolution is traversal-independent
+
+- **WHEN** the same nested revision is resolved by a depth-first and by a breadth-first walk
+- **THEN** both produce the same tree, because the rule is stated on containment rather than on visit order
+
+#### Scenario: A revision kind without defined structural semantics is refused
+
+- **WHEN** accept or reject targets a revision kind the engine cannot resolve structurally, such as a row deletion carried by `w:trPr/w:del`
+- **THEN** it is refused with `unsupported`, no `ModelChange` is published, and the document is unchanged
+- **AND** the markup is never removed on its own, because removing the `w:del` inside `w:trPr` would leave the row present while presenting the deletion as accepted
 
 #### Scenario: Accept-all is one history entry
 
@@ -215,6 +279,17 @@ This is a range the schema does not enforce: `CT_Markup/@w:id` is `ST_DecimalNum
 
 - **WHEN** one part contains a revision `(id 4, author A)` and another `(id 4, author B)`
 - **THEN** both are separately addressable and neither is merged into the other
+
+#### Scenario: One id in two parts is two revisions
+
+- **WHEN** a package carries a property change `w:id="0"` inside a style definition in `styles.xml` and an unrelated revision `w:id="0"` in `document.xml`
+- **THEN** they resolve as two distinct revisions, because the address includes the part
+- **AND** an address that names no part is refused with `invalidArgs` rather than resolving to whichever part is searched first
+
+#### Scenario: A style-definition revision is not a document revision
+
+- **WHEN** `styles.xml` carries `w:pPrChange` or `w:rPrChange` inside a style definition
+- **THEN** it round-trips, and it is not presented on the review surface as a revision to document content, because it changes a style rather than a position in a story
 
 #### Scenario: One revision across many sites
 

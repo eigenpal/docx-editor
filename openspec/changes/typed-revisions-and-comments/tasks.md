@@ -1,7 +1,8 @@
 ## 0. Baseline before code
 
-- [ ] 0.1 Inventory the tracked-change coverage that already exists — `list-pagination-break.docx`, `issue-68-large-comments-suggestions.docx` (which also ships `commentsExtended.xml`), `issue-319-sections.docx`, `endnotes-tracked-changes.docx` — and record which requirements each already exercises. §7 fills the remainder; it does not start from zero
-- [ ] 0.2 Load `list-pagination-break.docx` in the demo and record what renders today. The expected finding is that tracked content is **absent**, because `piecesOf` skips non-`run` children and `w:ins`/`w:del` are generic. Confirm it in the browser rather than assume it
+- [x] 0.1 Inventory the tracked-change coverage that already exists. Done and recorded per part in `proposal.md`. Result: move range markers, row and cell revisions, `w:sectPrChange`, `w:tblPrExChange`, `w:tblGridChange`, `w:delInstrText`, and paragraph-mark revisions are all already covered; a comment reply, `w:cellMerge`, an orphaned move half, a nested two-author case, and overlapping comment ranges are not
+- [x] 0.1a Source-level confirmation of the layout gap: `piecesOfParagraph` in `packages/core/src/layout/field-projection.ts` ends with `for (const child of paragraph.children) if (child.kind === 'run') processRun(child, 1)`. Runs nested in `w:ins` / `w:del` are never visited, so tracked content does not reach layout
+- [ ] 0.2 Load `list-pagination-break.docx` in the demo and record what renders today, confirming the source-level finding in 0.1a in the browser rather than inferring it
 - [ ] 0.3 Load `comprehensive-word-element-test.docx` and confirm its four comments are invisible in the editor
 - [ ] 0.4 Re-read `openspec/changes/typed-ooxml-paragraph-editor/baseline.md` and record the current `bun test` result
 - [ ] 0.5 Confirm with review that the D8 boundary expansion — revision family, comment markup, comment bodies as stories — is accepted before typing any node
@@ -29,8 +30,11 @@
 - [ ] 3.2 Per-kind semantics: insertion, deletion, property change — including `w:delText` → `w:t` on rejecting a deletion
 - [ ] 3.3 Move pairs resolve together; accepting a `moveTo` alone is unreachable from any path
 - [ ] 3.4 Orphaned move half degrades to insertion or deletion semantics with a diagnostic
-- [ ] 3.5 **Declare the nested-revision resolution order in `design.md` before implementing it**, and assert the result is independent of traversal direction
+- [ ] 3.5 Implement the containment rule declared in `design.md` R6 — the outer decision settles whether the content exists, and an inner revision survives exactly when the content does. Assert the result is identical under depth-first and breadth-first resolution
 - [ ] 3.6 accept-all and reject-all are one transaction, one `ModelChange`, one undo
+- [ ] 3.7 Paragraph-mark revisions: accepting `w:pPr/w:rPr/w:del` merges with the following paragraph, rejecting `w:pPr/w:rPr/w:ins` does the same. Removing the element alone is the wrong behaviour and must be asserted against
+- [ ] 3.8 Per `design.md` R11, every revision kind without defined structural semantics is refused with `unsupported` and no `ModelChange`. Refusing kinds in this pass: `w:cellIns`, `w:cellDel`, `w:cellMerge`, `w:trPr/w:ins`/`w:del`, `w:trPrChange`, `w:tcPrChange`, `w:tblPrChange`, `w:tblPrExChange`, `w:tblGridChange`, `w:sectPrChange`. Assert the tree is unchanged after a refusal
+- [ ] 3.9 Accept/reject resolves within a named part. Assert against the colliding `w:id="0"` in `list-pagination-break.docx`'s `styles.xml` and `document.xml` that neither resolution touches the other part
 
 ## 4. Suggesting mode
 
@@ -45,7 +49,8 @@
 - [ ] 5.1 Type `w:commentRangeStart`, `w:commentRangeEnd`, `w:commentReference`, and `CT_Comment` with `@w:initials`
 - [ ] 5.2 Comment bodies become stories — coordinate with `typed-notes-footnotes-endnotes`, which extends `storyBlocks` for the same reason; land the extension once
 - [ ] 5.3 Load `commentsExtended.xml`, `commentsIds.xml`, `commentsExtensible.xml` under the existing bounded-parse and safe-relationship rules
-- [ ] 5.4 Allocate `w14:paraId` on first thread write only; assert a load-layout-save with no comment write adds none and stays fingerprint-identical
+- [ ] 5.4 Allocate `w14:paraId` on first thread write only **in `comments.xml`**; assert a load-layout-save with no comment write adds none there and that part stays fingerprint-identical. The main part is already normalized at load by `normalizeParagraphIdentity` (`store/package/para-id.ts`, called from `binding/tree-session.ts`) for `DocAnchor` addressing; do not extend it to the comment part and do not revert it. See `design.md` R8
+- [ ] 5.4a Reply against a tracked change commits as `addComment` over that revision's resolved range, per `design.md` R12. Assert the revision element is byte-unchanged afterwards
 - [ ] 5.5 Durable anchors over node identity with declared boundary affinity; survive insert, split, join, and partial delete
 - [ ] 5.6 **Choose and write down the orphan policy** — retain-and-report or delete — then implement it. It must not be decided by whichever branch the code happens to take
 - [ ] 5.7 Overlapping and nested comment ranges
@@ -60,6 +65,8 @@
 - [ ] 6.2a `review.displayMode` and `review.editingMode` must report their **current value**, which `ToolbarCommandState` cannot express — it carries only a boolean `active`. Coordinate with `typed-drawings-and-images`, which needs the same for `image.wrap`; widen `ToolbarCommandState` once rather than adding a parallel mechanism
 - [ ] 6.3 Review sidebar with cards positioned from semantic layout records, never from measuring painted DOM
 - [ ] 6.4 Card↔range selection in both directions; next-change and previous-change navigation across stories
+- [ ] 6.4a Caret activation: a caret inside a commented range or a revision makes that item active, opens its card with the reply affordance ready, and highlights the range. Derived from the selection against layout ranges, so click, keyboard, and navigation activate identically. Both sides of the caret are considered, so a caret resting at a range's end still activates it; the innermost range wins when ranges nest; a resolved comment does not activate
+- [ ] 6.4b The active range is marked with a dataset attribute on the painted span. It is never expressed by building a CSS rule from an interpolated comment or revision id
 - [ ] 6.5 **Settle the delete-parent-with-replies policy against a Word comparison** before implementing reply deletion
 - [ ] 6.6 **Cross-change check**: confirm with `typed-notes-footnotes-endnotes`, `typed-content-controls`, `scoped-header-footer-editing`, and `typed-drawings-and-images` that none of them introduced a second revision model. Each defers to this change; verify rather than assume
 - [ ] 6.7 Confirmation before accept-all / reject-all
@@ -70,15 +77,19 @@
 
 ## 7. Fixtures — fill the gaps around the coverage that already exists
 
+Counts are measured per part; see the fixture-evidence tables in `proposal.md`. Author only what is listed as missing.
+
 - [ ] 7.1 Use `list-pagination-break.docx` and `issue-319-sections.docx` as the basic insert/delete/property-change corpus. Author `revisions-basic.docx` only if a small, readable case is wanted alongside them — the coverage itself is not missing
-- [ ] 7.2 `revisions-moves.docx` — a `w:moveFrom` / `w:moveTo` pair **with `CT_MoveBookmark` range markers carrying `@w:name`**, plus one orphaned half. `list-pagination-break.docx` has 14 move elements; check whether it carries the range markers before authoring
-- [ ] 7.3 `revisions-properties.docx` — the property changes not already covered: `w:tblPrChange`, `w:tblPrExChange`, `w:tcPrChange`, `w:trPrChange`, `w:sectPrChange`, `w:tblGridChange`
-- [ ] 7.4 `revisions-paragraph-marks.docx` — `w:pPr/w:rPr/w:ins` and `w:del` on paragraph marks, the split/merge case
-- [ ] 7.5 `revisions-nested.docx` — an insertion by one author inside a deletion by another
-- [ ] 7.6 `revisions-tables.docx` — `w:cellIns`, `w:cellDel`, `w:cellMerge`, and `w:trPr/w:ins` / `w:del`
-- [ ] 7.7 Use `issue-68-large-comments-suggestions.docx` as the threaded-comment fixture — it already ships `commentsExtended.xml`. Author `comments-threaded.docx` only for the `commentsIds.xml` / `commentsExtensible.xml` parts it lacks
-- [ ] 7.8 `comments-overlapping.docx` — overlapping and nested ranges, a comment anchored in a header, and a comment range spanning a table boundary
+- [ ] 7.2 Move **range markers are already covered**: `list-pagination-break.docx` carries four complete named pairs (`move234347936`–`move234347939`) whose starts have `@w:name`/`@w:author`/`@w:date` and whose ends have `@w:id` only. Assert against it directly. Author `revisions-move-orphan.docx` for the one missing case: a `w:moveTo` whose named `moveFrom` half is absent
+- [ ] 7.3 Property changes are **already covered** by `list-pagination-break.docx` — `w:tblPrChange`, `w:tblPrExChange`, `w:tcPrChange`, `w:trPrChange`, `w:sectPrChange`, and `w:tblGridChange` all occur there. Assert against it; author nothing
+- [ ] 7.4 Paragraph-mark revisions are **already covered**: 377 `w:pPr/w:rPr/w:ins`/`w:del` in `list-pagination-break.docx`, 16 in `issue-319-sections.docx`. Author `revisions-paragraph-marks.docx` only if a small readable split/merge case is wanted for the merge-on-accept assertion
+- [ ] 7.5 `revisions-nested.docx` — an insertion by one author inside a deletion by another. **Genuinely missing**
+- [ ] 7.6 Row and cell revisions are **partly covered**: 8 `w:cellIns` and 24 `w:cellDel` in `list-pagination-break.docx`. Author `revisions-cell-merge.docx` for `w:cellMerge` alone, which occurs in no fixture
+- [ ] 7.7 **`issue-68-large-comments-suggestions.docx` is not a threaded fixture.** It ships `commentsExtended.xml`, but all 212 `w15:commentEx` entries carry `w15:done` only and the repository contains zero `w15:paraIdParent`. Use it for the resolved-state and comment-`w14:paraId` cases. Author `comments-threaded.docx` for threading, `commentsIds.xml`, and `commentsExtensible.xml` — all three are missing, and threading is a prerequisite for reply, not an extra
+- [ ] 7.8 `comments-overlapping.docx` — overlapping and nested ranges, a comment anchored in a header, and a comment range spanning a table boundary. **Genuinely missing**
 - [ ] 7.9 Keep the comprehensive fixture as the no-thread-data case: four flat comments, no sibling parts, no `w14:paraId`, and one comment whose text says "Reply:" and is not one
+- [ ] 7.10 Revisions outside the body are **already covered** and must be asserted, not assumed: `header3.xml` in `list-pagination-break.docx` (5 `w:ins`), `footer1.xml`/`footer3.xml` in `issue-319-sections.docx`, and `endnotes.xml` in `endnotes-tracked-changes.docx` (its only revision — `document.xml` has none)
+- [ ] 7.11 `styles.xml` in `list-pagination-break.docx` carries `w:pPrChange` and `w:rPrChange` inside the `Normal` and `NoList1` **style definitions**, with `w:id="0"` and `w:id="1"` — ids also in use in `document.xml`. Assert that a style-definition revision is never presented as a document-flow revision, and that the colliding ids resolve to different revisions
 
 ## 9. Verification and honest scope
 
@@ -103,9 +114,9 @@ See `openspec/changes/word-fidelity-review-findings.md`.
 
 - [ ] 11.1 **Settle `proposeInsertion`/`proposeDeletion`/`proposeReplacement` versus store-level suggesting mode as ONE decision.** The shipped `DocEdits` comment explicitly rejects a global toggle. Two write vocabularies for one intent is the ownership problem D2 exists to prevent (finding 1)
 - [ ] 11.2 Reconcile `Revision.date` (required, must become optional), `Revision.part` (optional 3-value, must be required and widened), `Revision.type` (no move/cell/paragraph-mark), and `DocComment` (no anchor/story/orphan) — with the semver consequence stated (finding 1)
-- [ ] 11.3 Add spec scenarios for **paragraph-mark revisions** (`EG_ParaRPrTrackChanges`) including the merge-on-accept rule (finding 2.2)
-- [ ] 11.4 Add accept/reject semantics for **row and cell revisions** — `w:trPr/w:ins`/`w:del`, `w:cellIns`/`w:cellDel`/`w:cellMerge`. As written, accepting a row deletion leaves the row (finding 2.3)
-- [ ] 11.5 Make `@w:name` the stated move-pairing key in the spec, not only the proposal (finding 2.4)
+- [x] 11.3 Spec scenarios for **paragraph-mark revisions** (`EG_ParaRPrTrackChanges`) added to `revision-model`, covering accept-merges and reject-merges in both directions
+- [ ] 11.4 Add accept/reject semantics for **row and cell revisions** — `w:trPr/w:ins`/`w:del`, `w:cellIns`/`w:cellDel`/`w:cellMerge`. Until they exist, `design.md` R11 refuses these kinds with `unsupported` (task 3.8) rather than removing the markup and leaving the row, which is the corruption finding 2.3 identified
+- [x] 11.5 `@w:name` is now the stated move-pairing key in `revision-model`, alongside the separate `@w:id` join that pairs a range start to its range end. Both are asserted against `list-pagination-break.docx`
 - [ ] 11.6 Read and write document-level `w:trackRevisions`; handle `w:documentProtection/@w:edit="trackedChanges"`, `w:doNotTrackMoves`, `w:doNotTrackFormatting` — the last two contradict current requirements
 - [ ] 11.7 Add the four `w:customXml*RangeStart`/`End` pairs, `w:tblPrExChange`, `CT_ParaRPrChange`, `w:numPr/w:ins`, `w:delInstrText`
 - [ ] 11.8 Declare a D12 impact class, and say how a display-mode switch invalidates a change-scoped layout session without a `ModelChange` (finding 4)

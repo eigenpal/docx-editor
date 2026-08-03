@@ -48,9 +48,38 @@ Specifying the modes as equal to accept-all and reject-all *output* gives a stro
 
 An orphaned half is a real file condition — Word produces one when the other half is deleted — so it degrades to insertion or deletion semantics with a diagnostic, rather than refusing the document.
 
-### R6: Nested revisions need a declared order, not a traversal artifact
+### R6: Nested revisions resolve by containment, not by traversal order
 
-An insertion by author A inside a deletion by author B is ordinary in a two-round review. Accepting the outer deletion has to decide what happens to the inner insertion. Whatever the answer, it must be the same regardless of whether the tree is walked depth-first or breadth-first, and it must be written down. Leaving it to traversal order produces a result that changes when an unrelated part of the walker is refactored.
+An insertion by author A inside a deletion by author B is ordinary in a two-round review. Accepting the outer deletion has to decide what happens to the inner insertion, and the answer must not change when an unrelated part of the walker is refactored.
+
+**The rule: containment governs existence, and a surviving container preserves its inner revisions verbatim.**
+
+| Action on the outer revision | Content | Inner revision |
+| --- | --- | --- |
+| Accept `w:del` | removed | removed with it |
+| Reject `w:del` | kept | preserved, still pending |
+| Accept `w:ins` | kept | preserved, still pending |
+| Reject `w:ins` | removed | removed with it |
+
+Read plainly: the outer decision settles whether the content exists at all. An inner revision is a pending decision *about that content*, so it survives exactly when the content survives, and it is never silently resolved on the inner author's behalf.
+
+Stating the rule on containment rather than on visit order is what makes it traversal-independent. A depth-first and a breadth-first walker both have to answer "is this node inside a revision that was removed", and they agree.
+
+### R11: A partial implementation refuses, it does not approximate
+
+Accept and reject land before every revision kind has defined structural semantics. The kinds without them SHALL be refused with `unsupported` and surfaced as read-only on the review surface, rather than resolved by the nearest available rule.
+
+The case that forces this: accepting a tracked row deletion by removing the `w:del` inside `w:trPr` leaves the row in the table. The markup is gone, the reviewer sees the decision applied, and the document now says the opposite of what was accepted. A refusal is visible and recoverable; that is not.
+
+`list-pagination-break.docx` contains 8 `w:cellIns`, 24 `w:cellDel`, 4 `w:trPrChange`, and 34 `w:tcPrChange`, so refusals are not a theoretical branch. They will be on screen the first time the fixture is opened, and the surface must state the engine's reason rather than hide the card.
+
+### R12: Replying to a tracked change is a comment, because OOXML has nothing else
+
+`w:ins` and `w:del` carry `(@w:id, @w:author, @w:date)` and no body. There is no reply, no thread, and no text on a revision anywhere in the schema.
+
+A reply offered against a revision is therefore an `addComment` whose anchor is that revision's resolved range, and the surface threads the comment under the change because their ranges overlap. This is the only faithful reading. Storing reply text on the revision itself would require inventing markup, which would either be dropped by Word or make the file invalid.
+
+It follows that reply is a comment write, with comment id allocation, `w14:paraId` on the comment paragraph, and `commentsExtended.xml`. A build that ships revision rendering without comment writes cannot offer reply at all, and should not render the affordance.
 
 ### R7: Threads live in the sibling parts, and prose is not evidence
 
@@ -60,11 +89,20 @@ The comprehensive fixture has none of the three sibling parts, and comment `w:id
 
 So: no sibling part, no thread. The surface says the file has no thread data rather than pretending or guessing.
 
-### R8: `w14:paraId` is allocated on write, never on load
+### R8: Comment `w14:paraId` is allocated on write, never on load
 
-Thread state is keyed by `w14:paraId`, and the fixture has **zero** across the whole package. Allocating them on load would rewrite a document nobody edited, which breaks canonical-fingerprint equality on an untouched round trip.
+Thread state is keyed by `w14:paraId` on **comment** paragraphs, and the comprehensive fixture has zero across the whole package. Allocating them on load would rewrite a document nobody edited, which breaks canonical-fingerprint equality on an untouched round trip.
 
 Allocating on the first thread write is the smallest change that keeps both properties: an untouched document is untouched, and a replied-to document gains exactly the ids the reply needs.
+
+**Scope correction.** An earlier draft stated this for every paragraph in the package. That contradicts shipped behaviour: `normalizeParagraphIdentity` in `packages/core/src/store/package/para-id.ts` mints paraIds for the **main part** at session open, called from `binding/tree-session.ts`, because `DocAnchor.paraId` addresses paragraphs by that value and an unidentified paragraph is unaddressable.
+
+The two are reconciled by scope, not by reverting either:
+
+- **Main part**: normalized at load, as shipped. Its byte-stability early return returns the input part unchanged when every paragraph already has a valid unique id, so any document Word saved round-trips identically. Documents that lack ids gain them, and that is the accepted cost of addressability.
+- **`comments.xml`**: never normalized at load. Comment paraIds are minted only when a comment or reply is written, so a document that is opened and saved without a comment write gains none.
+
+The requirement in `comment-thread-model` is therefore about comment paragraphs specifically, and the "no allocation without a write" scenario is asserted against the comment part.
 
 ### R9: Comment bodies are stories
 
