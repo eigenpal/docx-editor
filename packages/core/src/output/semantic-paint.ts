@@ -332,9 +332,22 @@ function paintSpan(
   // uniform slab again. The caller passes the height this run's band should be (its own
   // published height, plus the line's extra leading, capped at the line height).
   element.style.lineHeight = `${bandHeightPt * ctx.scale}px`;
-  element.dataset.paragraphId = span.range.paragraphId;
-  element.dataset.start = String(span.range.start);
-  element.dataset.end = String(span.range.end);
+  // ADDRESSABLE ONLY IF IT OWNS OFFSETS. Selection maps through `data-paragraph-id` +
+  // `data-start` and reads an endpoint as `start + textContent.length`, so a span whose
+  // painted text is wider than its model range hands back an offset the paragraph does not
+  // have. A `w:ptab` is exactly that — one painted `\t` over a ZERO-WIDTH range — and a
+  // click just left of a contents line's page number resolved to the end of the paragraph,
+  // the same answer as clicking after it. Zero-width spans paint as furniture instead: the
+  // advance and its leader are still drawn, and the mapper resolves through the real text
+  // either side. An ordinary `w:tab` keeps its address; it does occupy an offset.
+  if (span.range.end > span.range.start) {
+    element.dataset.paragraphId = span.range.paragraphId;
+    element.dataset.start = String(span.range.start);
+    element.dataset.end = String(span.range.end);
+  } else {
+    element.setAttribute('aria-hidden', 'true');
+    element.contentEditable = 'false';
+  }
   applyRunFaceStyle(element, span.style, ctx);
   // Layout owns advances that the browser cannot reconstruct: horizontal scaling (transform
   // does not reserve space) and OOXML tab stops (`\t` would otherwise paint as a narrow

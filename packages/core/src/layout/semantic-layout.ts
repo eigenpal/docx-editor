@@ -720,7 +720,13 @@ function layoutBlocksWithGeometry(
       styleCascade
         ? (inherited, direct) => cascadeRunProperties(inherited, direct, styleCascade)
         : undefined,
-      { lineSpacing: entry.lineSpacing, firstLineOffset: firstLineOffsetOf(entry) }
+      {
+        lineSpacing: entry.lineSpacing,
+        firstLineOffset: firstLineOffsetOf(entry),
+        // The page's text column, so a `w:ptab` measuring against the margin ignores the
+        // paragraph's own indents the way Word does.
+        marginExtent: { left: 0, right: entry.indent.left + entry.available + entry.indent.right },
+      }
     );
 
   /**
@@ -1252,8 +1258,11 @@ function layoutBlocksWithGeometry(
               // fill that stopped at the line area left a pale stripe floating inside an
               // empty rectangle. Unbordered shading keeps the line area, which is what Word
               // fills there. Borders paint after this, so the frame is never covered.
+              // Gated on a real FRAME — a side rule is what makes the fill a box. A heading
+              // with only `w:bottom` is the common single-edge case, and widening its fill
+              // down to the rule would be a silent change in the opposite direction.
               shadingBox:
-                strokes.length > 0
+                borders.left || borders.right
                   ? {
                       x: boxLeft,
                       y: contentTop,

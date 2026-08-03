@@ -48,6 +48,16 @@ export interface ParagraphFlowOptions {
   readonly lineSpacing?: ParagraphLineSpacing;
   /** First-line offset from the paragraph indent: `w:firstLine` right, `w:hanging` left. */
   readonly firstLineOffset?: number;
+  /**
+   * The containing text column — the page content box, or a table cell's — in the same
+   * coordinates as `indentLeft`.
+   *
+   * `w:ptab/@w:relativeTo="margin"` measures against THIS, not against the paragraph's own
+   * indented column: a contents line inside an indented paragraph still puts its page
+   * number at the margin. Absent, a positional tab falls back to the paragraph's column,
+   * which is the same answer whenever the paragraph carries no indents.
+   */
+  readonly marginExtent?: { readonly left: number; readonly right: number };
 }
 
 /** One measurable piece of a paragraph: text carrying one property set. */
@@ -128,21 +138,35 @@ function measureFollowingTabSegment(
  * Where a `w:ptab` sends the caret, in the same shape `nextTabDestination` answers with.
  *
  * ECMA-376 §17.3.3.16: the position is stated by `w:alignment` against the reference
- * `w:relativeTo` names, rather than looked up in `w:tabs`. `margin` is the text column;
- * `indent` measures from the paragraph's own left indent, which for a right or centre
- * alignment is the same right edge either way. `leftMargin` collapses to the column's left.
+ * `w:relativeTo` names, rather than looked up in `w:tabs`.
+ *
+ * ONLY `w:alignment` is honoured here; the reference is always the paragraph's own text
+ * column (`indentLeft`..`rightEdge`), which is what `w:relativeTo="margin"` — the value
+ * every contents field Word generates carries — means. `indent` differs from it only for
+ * an indented paragraph and `leftMargin` only for a ptab pointing backwards, both of which
+ * the clamp in `tabAdvanceWidth` already resolves to no advance. `positionalTabOf` still
+ * validates the attribute so a hostile value cannot reach geometry if that changes.
  */
 function positionalTabDestination(
   positional: PositionalTab,
   indentLeft: number,
-  rightEdge: number
+  rightEdge: number,
+  marginExtent: { readonly left: number; readonly right: number } | undefined
 ): { positionPt: number; alignment: 'left' | 'center' | 'right' | 'decimal'; leader?: TabLeader } {
+  // `indent` measures against the paragraph's own column; `margin` and `leftMargin` against
+  // the containing one. They differ exactly when the paragraph is indented — which is where
+  // reading `w:relativeTo` and then ignoring it put the page number short of the margin by
+  // the width of the indent.
+  const column =
+    positional.relativeTo === 'indent' || !marginExtent
+      ? { left: indentLeft, right: rightEdge }
+      : marginExtent;
   const positionPt =
     positional.alignment === 'right'
-      ? rightEdge
+      ? column.right
       : positional.alignment === 'center'
-        ? (indentLeft + rightEdge) / 2
-        : indentLeft;
+        ? (column.left + column.right) / 2
+        : column.left;
   return {
     positionPt,
     alignment: positional.alignment,
@@ -424,9 +448,23 @@ export function breakParagraph(
         const segment = measureFollowingTabSegment(pieces, pieceIndex, boundary, measurer);
         // A `w:ptab` states its own destination and leader, so it does NOT consult the
         // paragraph's tab stops — a table-of-contents line authored with one has none.
-        const destination = piece.positionalTab
-          ? positionalTabDestination(piece.positionalTab, indentLeft, rightEdge)
-          : nextTabDestination(tabStops, currentX, rightEdge);
+        // A positional tab whose destination is at or behind the caret cannot advance —
+        // a left-aligned one almost never can, and it is also the fallback for a malformed
+        // `w:alignment`. Falling back to the ordinary stop rule keeps the glyphs apart
+        // instead of reproducing the very run-together text this element exists to prevent.
+        const positional = piece.positionalTab
+          ? positionalTabDestination(piece.positionalTab, indentLeft, rightEdge, flow?.marginExtent)
+          : null;
+        const destination =
+          positional === null
+            ? nextTabDestination(tabStops, currentX, rightEdge)
+            : positional.positionPt > currentX
+              ? positional
+              : {
+                  // The stop changes; the LEADER is the element's own and survives it.
+                  ...nextTabDestination(tabStops, currentX, rightEdge),
+                  ...(positional.leader ? { leader: positional.leader } : {}),
+                };
         const width = tabAdvanceWidth(
           destination.alignment,
           currentX,

@@ -201,7 +201,9 @@ export function gateCommand(
   // three-paragraph selection looked live and did nothing at all. The engine says why,
   // and the button greys out. A COLLAPSED caret is allowed through: it arms the surface's
   // stored-marks lane (pending formatting the next characters typed will take), which is
-  // a real state change even though the document has not moved yet.
+  // a real state change even though the document has not moved yet. (The guard itself is
+  // two blocks down; the style-picker gate below is a different control.)
+  //
   // The style picker's probe promises "a well-formed pick would be honoured": on a
   // document that defines no paragraph styles, no pick can be — every styleId is refused
   // at exec — so the control must grey out rather than open an empty, dead listbox.

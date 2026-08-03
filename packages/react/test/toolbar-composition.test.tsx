@@ -379,10 +379,14 @@ describe('the shaped parts', () => {
         `<Relationships xmlns="${REL}"><Relationship Id="rId9" Type="${STYLE_REL}" Target="styles.xml"/></Relationships>`
       ),
       'word/styles.xml': strToU8(
+        // Declared OUT of gallery order on purpose — a round-tripped file routinely is, and
+        // a picker that just echoes `styles.xml` shows Heading 1 above Normal.
         `<w:styles xmlns:w="${W}">` +
-          '<w:style w:type="paragraph" w:styleId="Normal" w:default="1"><w:name w:val="Normal"/></w:style>' +
           '<w:style w:type="paragraph" w:styleId="Heading1"><w:name w:val="heading 1"/>' +
-          '<w:rPr><w:b/><w:color w:val="1F3864"/></w:rPr></w:style>' +
+          '<w:rPr><w:b/><w:color w:val="1F3864"/><w:sz w:val="64"/></w:rPr></w:style>' +
+          // Unranked: keeps its document position, after everything Word's gallery ranks.
+          '<w:style w:type="paragraph" w:styleId="Callout"><w:name w:val="Callout"/></w:style>' +
+          '<w:style w:type="paragraph" w:styleId="Normal" w:default="1"><w:name w:val="Normal"/></w:style>' +
           // A character style must NOT appear among the paragraph options.
           '<w:style w:type="character" w:styleId="Emphasis"><w:name w:val="Emphasis"/></w:style>' +
           '</w:styles>'
@@ -406,7 +410,9 @@ describe('the shaped parts', () => {
     const items = [
       ...view.container.querySelectorAll('[data-slot="styles.style"] [role="option"]'),
     ].map((item) => item.textContent);
-    expect(items).toEqual(['Normal', 'heading 1']);
+    // Word's gallery order, NOT the order the part lists them in, with the unranked style
+    // keeping its document position at the end.
+    expect(items).toEqual(['Normal', 'heading 1', 'Callout']);
 
     // Each row renders in the style's OWN face, so the menu previews rather than listing
     // identical rows. The values come from the engine's bounded derivation and go into a
@@ -416,6 +422,14 @@ describe('the shaped parts', () => {
     ) as HTMLElement;
     expect(headingRow.style.fontWeight).toBe('700');
     expect(headingRow.style.color.toUpperCase()).toBe('#1F3864');
+    // 32pt in the document, CLAMPED for the menu: a Title at its own size would push every
+    // other row off the screen, and the row still reads as bigger than body text.
+    expect(headingRow.style.fontSize).toBe('20px');
+    const normalRow = view.container.querySelector(
+      '[data-slot="styles.style"] [role="option"]:nth-of-type(1) span'
+    ) as HTMLElement;
+    expect(normalRow.style.fontWeight).toBe('');
+    expect(Number.parseFloat(normalRow.style.fontSize || '0')).toBeLessThan(20);
 
     const heading = [
       ...view.container.querySelectorAll('[data-slot="styles.style"] [role="option"]'),

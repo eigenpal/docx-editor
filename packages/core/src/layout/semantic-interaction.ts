@@ -104,10 +104,36 @@ function xWithinLine(
 }
 
 /**
+ * Whether a LATER line of the same paragraph starts at this offset, and so owns it.
+ *
+ * Asked across the whole paragraph rather than the current fragment: a paragraph split by a
+ * page boundary continues on the next page, and the line that owns the position may live in
+ * a different fragment. `caretAt` resolves against the same paragraph-wide index, so both
+ * lanes answer with the same line. When nothing later claims it — a layout that produced no
+ * line after the break — the break's own line keeps the stop rather than losing the position.
+ */
+function laterLineOwns(layout: SemanticLayout, line: LineRecord, offset: number): boolean {
+  const lines = paragraphLinesIndex(layout).get(line.range.paragraphId) ?? [];
+  let seen = false;
+  for (const placed of lines) {
+    if (placed.line === line) {
+      seen = true;
+      continue;
+    }
+    if (seen && placed.line.range.start === offset) return true;
+  }
+  return false;
+}
+
+/**
  * Every caret stop in the document, in reading order.
  *
  * One per character boundary on every line, plus the line end. Derived rather than stored,
  * so a stop can never survive the content it described.
+ *
+ * Ownership of a position SHARED by two lines is decided here exactly as `caretAt` decides
+ * it, or the caret the user sees and the stop the arrow keys move to would sit on different
+ * rows.
  */
 export function caretStops(layout: SemanticLayout): CaretGeometry[] {
   const stops: CaretGeometry[] = [];
@@ -115,6 +141,20 @@ export function caretStops(layout: SemanticLayout): CaretGeometry[] {
     for (const fragment of paragraphFragmentsOf(page)) {
       for (const line of fragment.lines) {
         for (let offset = line.range.start; offset <= line.range.end; offset += 1) {
+          // A line ENDED BY A HARD BREAK does not own the position after it — the line the
+          // break opened does, and `caretAt` places the caret there. Emitting it here too
+          // would put the stop this lane navigates to on a different line from the caret
+          // the user can see: Home would jump to the row above, Down would skip the new
+          // line entirely, and the empty line a trailing Shift+Enter opens would be
+          // unreachable because the dedup below discarded its only stop as a duplicate.
+          if (
+            offset === line.range.end &&
+            offset > line.range.start &&
+            endsWithLineBreak(line) &&
+            laterLineOwns(layout, line, offset)
+          ) {
+            continue;
+          }
           // A continuation line's first stop is the same model position as the previous
           // line's last, so it is emitted once — by the line that starts there.
           if (offset === line.range.start && offset > fragment.range.start && stops.length > 0) {
@@ -348,6 +388,13 @@ export function paragraphTextFromLayout(layout: SemanticLayout, paragraphId: str
   const seen = new Set<string>();
   for (const { line } of paragraphLinesIndex(layout).get(paragraphId) ?? []) {
     for (const span of line.spans) {
+      // A ZERO-WIDTH span stands for something the model does not spell — a `w:ptab`, an
+      // empty field projection. It contributes no characters, and a span whose painted text
+      // is longer than its model range would make this reconstruction longer than the
+      // paragraph actually is. That matters far beyond a stray character: this IS the
+      // surface's `paragraphTextOf`, so the deletion range, the clamp and the word walk are
+      // all computed from it, and a phantom tab put every one of them past the model's end.
+      if (span.range.end === span.range.start) continue;
       // A paragraph that crosses a page produces fragments over the SAME source ranges, so
       // spans can repeat; keyed by range, they contribute once.
       const key = `${span.range.start}:${span.range.end}`;

@@ -75,7 +75,11 @@ export interface UseParagraphStyleResult {
   readonly value: string | null;
   /** Apply a paragraph style through the can-before-exec path; a refusal is a safe no-op. */
   readonly setValue: (styleId: string) => void;
-  /** The document's paragraph styles (validated ids and display names, document order). */
+  /**
+   * The document's paragraph styles — validated ids and display names, in the engine's
+   * Word-gallery order (Normal, Title, Subtitle, the headings, then everything else in
+   * document order), NOT the order `styles.xml` happens to list them in.
+   */
   readonly options: readonly ParagraphStyleOption[];
   /** Whether the engine would honour a style change right now. */
   readonly isEnabled: boolean;

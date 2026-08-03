@@ -391,6 +391,104 @@ describe('paint draws every published stroke and invents no geometry', () => {
     const rule = container.querySelector<HTMLElement>('.docx-paragraph-border-left')!;
     expect(rule.style.backgroundImage).toContain('to bottom');
   });
+
+  /** The painted rule's rectangle, in fragment-relative pixels. */
+  function rect(container: HTMLElement, selector: string) {
+    const element = container.querySelector<HTMLElement>(selector)!;
+    const left = Number.parseFloat(element.style.left);
+    const top = Number.parseFloat(element.style.top);
+    return {
+      element,
+      left,
+      top,
+      right: left + Number.parseFloat(element.style.width),
+      bottom: top + Number.parseFloat(element.style.height),
+    };
+  }
+
+  test('THE PAINTED RULES CLOSE: corner to corner in the DOM, not only in the records', () => {
+    // The record assertions above compare each rule to its own published box, so they hold
+    // whatever those boxes say — including the geometry that made a callout paint as two
+    // horizontal rules with two detached bars beside them. This reads the four elements the
+    // browser actually lays out and checks they meet, which is what "a closed rectangle"
+    // means to someone looking at the page.
+    const container = painted(paragraph('boxed', BOX));
+    const top = rect(container, '.docx-paragraph-border-top');
+    const bottom = rect(container, '.docx-paragraph-border-bottom');
+    const left = rect(container, '.docx-paragraph-border-left');
+    const right = rect(container, '.docx-paragraph-border-right');
+
+    expect(top.left).toBe(left.left);
+    expect(top.right).toBe(right.right);
+    expect(bottom.left).toBe(left.left);
+    expect(bottom.right).toBe(right.right);
+    expect(left.top).toBe(top.top);
+    expect(right.top).toBe(top.top);
+    expect(left.bottom).toBe(bottom.bottom);
+    expect(right.bottom).toBe(bottom.bottom);
+    // A frame with real extent, not four rules collapsed onto one another.
+    expect(top.right - top.left).toBeGreaterThan(0);
+    expect(bottom.bottom - top.top).toBeGreaterThan(0);
+  });
+
+  test('the left rule is painted OUTSIDE the fragment box, and nothing clips it', () => {
+    // Word draws the side rules beyond the text column without reflowing the text, so the
+    // left rule's fragment-relative offset is NEGATIVE. That only reaches the screen if no
+    // ancestor the painter builds clips it — an `overflow: hidden` anywhere on the chain
+    // would silently shave the left edge off every callout in the document.
+    const container = painted(paragraph('boxed', BOX));
+    const left = rect(container, '.docx-paragraph-border-left');
+    expect(left.left).toBeLessThan(0);
+    for (
+      let node: HTMLElement | null = left.element;
+      node && node !== container;
+      node = node.parentElement
+    ) {
+      expect(node.style.overflow).not.toBe('hidden');
+    }
+  });
+
+  test('a shaded box paints ONE band over the whole frame, UNDER the rules', () => {
+    // Two things a fill has to get right and neither shows up in a layout record: it has to
+    // cover the rectangle the borders draw (a fill clipped to the line band is the pale
+    // stripe inside an empty box), and it has to be painted BEFORE the rules — these are
+    // absolutely-positioned siblings with no z-index, so DOM order IS paint order and a
+    // band appended last would lie on top of all four edges and hide them.
+    const container = painted(paragraph('note', `${BOX}<w:shd w:val="clear" w:fill="E8F0FE"/>`));
+    const bands = container.querySelectorAll<HTMLElement>('.docx-paragraph-shading');
+    expect(bands).toHaveLength(1);
+    const band = rect(container, '.docx-paragraph-shading');
+    expect(band.element.style.backgroundColor.toLowerCase()).toBe('#e8f0fe');
+
+    const top = rect(container, '.docx-paragraph-border-top');
+    const bottom = rect(container, '.docx-paragraph-border-bottom');
+    const left = rect(container, '.docx-paragraph-border-left');
+    const right = rect(container, '.docx-paragraph-border-right');
+    expect(band.left).toBe(left.left);
+    expect(band.right).toBe(right.right);
+    expect(band.top).toBe(top.top);
+    expect(band.bottom).toBe(bottom.bottom);
+
+    const siblings = [...band.element.parentElement!.children];
+    const bandIndex = siblings.indexOf(band.element);
+    for (const rule of container.querySelectorAll('.docx-paragraph-border')) {
+      expect(siblings.indexOf(rule)).toBeGreaterThan(bandIndex);
+    }
+    // And it is inert decoration, never a selection endpoint.
+    expect(band.element.getAttribute('aria-hidden')).toBe('true');
+  });
+
+  test('shading WITHOUT borders still paints only the line band', () => {
+    // The frame rule must not have widened the ordinary case: an unbordered shaded
+    // paragraph fills the text band, so the paragraph's before/after spacing stays unfilled.
+    const body = paragraph('note', '<w:shd w:val="clear" w:fill="E8F0FE"/>');
+    const fragment = paragraphsOf(lay(body))[0]!;
+    const band = rect(painted(body), '.docx-paragraph-shading');
+    const line = fragment.lines[0]!;
+    expect(band.top).toBe(line.box.y - fragment.box.y);
+    expect(band.bottom - band.top).toBe(line.box.height);
+    expect(band.left).toBe(line.box.x - fragment.box.x);
+  });
 });
 
 describe('a shaded box is filled across the frame, not just the text band', () => {

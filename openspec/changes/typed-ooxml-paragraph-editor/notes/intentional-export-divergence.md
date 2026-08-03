@@ -110,7 +110,8 @@ part/prop exports go with it.
 - `useParagraphStyle` — the style-picker behavior hook (value / options / setValue /
   isEnabled) over `Editor.getDocumentStyles` + `commandForSlotValue('styles.style')`.
 - `UseParagraphStyleResult`
-- `ParagraphStyleOption` — one pickable paragraph style (`styleId` + display name).
+- `ParagraphStyleOption` — one pickable paragraph style (`styleId`, display name, and the
+  bounded `preview` a row renders itself in).
 - `ParagraphStyleProps` — the compound ParagraphStyle root's props.
 - `ParagraphStylePartProps` — shared Trigger/Content sub-part props.
 - `ParagraphStyleItemProps`
