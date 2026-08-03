@@ -273,6 +273,35 @@ export {
 export { layoutHeaderFooterStory } from './hf-layout.ts';
 export { storyBlocks } from './story-roots.ts';
 export {
+  commentAnchorsOfStory,
+  commentsOfPart,
+  threadStateOfPart,
+  W15_NAMESPACE_URI,
+  type CommentAnchor,
+  type CommentPosition,
+  type CommentRecord,
+  type CommentThreadState,
+} from './comment-anchors.ts';
+export {
+  activeReviewItem,
+  commentItemsOf,
+  paragraphOrderOf,
+  reviewItemId,
+  revisionItemsOf,
+  sortReviewItems,
+  type ReviewItem,
+  type ReviewPosition,
+  type ReviewRange,
+} from './review-items.ts';
+export {
+  DEFAULT_REVISION_DISPLAY_MODE,
+  revisionsAreDeletion,
+  revisionsVisible,
+  type RevisionAttribution,
+  type RevisionDisplayMode,
+  type RevisionKind,
+} from './revision-projection.ts';
+export {
   createShapedMeasurer,
   type LayoutShapingOptions,
   type ShapedMeasurerOptions,
