@@ -102,6 +102,15 @@ export interface StyleSpanRecord {
    * it can never move the text that follows it.
    */
   readonly tabLeader?: TabLeader;
+  /**
+   * Advance of ONE leader glyph in this run's face, in points, measured by layout.
+   *
+   * Paint cannot ask a font how wide a character is, so without this it had to guess and
+   * deliberately overfill, leaving the dots at whatever spacing an over-long string
+   * happened to produce. Measured, the leader is spaced exactly as the same character
+   * typed there would be — which is what Word draws.
+   */
+  readonly tabLeaderAdvancePt?: number;
 }
 
 export interface LineRecord {

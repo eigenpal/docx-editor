@@ -26,6 +26,7 @@ import {
   createParagraphLayoutCache,
   resolveDefaultSurfaceMeasurer,
   cellSelectionRects,
+  caretAt,
   cellSelectionText,
   documentOrder,
   paragraphsInCells,
@@ -68,6 +69,7 @@ import {
   equalPageSets,
   equalSurfaceExtents,
   surfaceExtent,
+  surfaceScroller,
   visiblePageSet,
   type SurfaceExtent,
 } from './surface-pages.ts';
@@ -938,6 +940,22 @@ export function mountPaginatedSurface(
 
     setSelection: (next) => setSelection(next),
 
+    revealPage(pageIndex, options) {
+      const page = currentLayout.pages.find((entry) => entry.index === pageIndex);
+      return page ? scrollToContentY(page.box.y, page.box.height, options) : false;
+    },
+
+    revealParagraph(paragraphId, options) {
+      flushLayout();
+      // The paragraph's own line, not the top of its page: a heading two thirds down a
+      // page is the thing the caller asked to see.
+      const caret = caretAt(currentLayout, { paragraphId, offset: 0 });
+      if (!caret) return false;
+      const page = currentLayout.pages.find((entry) => entry.index === caret.pageIndex);
+      if (!page) return false;
+      return scrollToContentY(page.box.y + caret.y, caret.height, options);
+    },
+
     selectAll() {
       const ids = session.paragraphIds();
       const first = ids[0];
@@ -983,7 +1001,7 @@ export function mountPaginatedSurface(
       pagesLayer.removeEventListener('paste', onPaste as EventListener);
       pagesLayer.removeEventListener('compositionstart', onCompositionStart);
       pagesLayer.removeEventListener('compositionend', onCompositionEnd);
-      scroller?.removeEventListener('scroll', onScroll);
+      document.removeEventListener('scroll', onScroll, { capture: true });
       pointer?.destroy();
       // Drop pending layout work and stop listening BEFORE the DOM goes, or a commit from
       // another editor sharing this store would paint into a detached container.
@@ -1025,6 +1043,52 @@ export function mountPaginatedSurface(
       anchor: { paragraphId: mark.paragraphId, offset: mark.start },
       head: { paragraphId: mark.paragraphId, offset: mark.end },
     });
+  }
+
+  /**
+   * Scroll the surface's container so a band of CONTENT space is in view.
+   *
+   * Layout coordinates, scaled here — never element measurement. The page a reveal is
+   * asked for is usually one that has not been materialized yet, so it has no element to
+   * read a position from; the records always know where it is.
+   */
+  function scrollToContentY(
+    contentY: number,
+    contentHeight: number,
+    options?: {
+      block?: 'start' | 'center' | 'nearest';
+      offsetPx?: number;
+      behavior?: ScrollBehavior;
+    }
+  ): boolean {
+    const scroller = surfaceScroller(container);
+    if (!scroller || scroller.clientHeight === 0) return false;
+    const top = contentY * scale + container.offsetTop;
+    const height = contentHeight * scale;
+    const padding = options?.offsetPx ?? 24;
+    const block = options?.block ?? 'start';
+    const viewport = scroller.clientHeight;
+    if (block === 'nearest') {
+      const above = top < scroller.scrollTop;
+      const below = top + height > scroller.scrollTop + viewport;
+      if (!above && !below) return true;
+    }
+    const target =
+      block === 'center'
+        ? top - Math.max(0, (viewport - height) / 2)
+        : block === 'nearest' && top > scroller.scrollTop
+          ? top + height + padding - viewport
+          : top - padding;
+    const maxScroll = Math.max(0, scroller.scrollHeight - viewport);
+    scroller.scrollTo({
+      top: Math.max(0, Math.min(target, maxScroll)),
+      behavior: options?.behavior ?? 'auto',
+    });
+    // Materialization follows the scroller, and a programmatic scroll fires `scroll`
+    // asynchronously — repaint now so the revealed page is BUILT rather than a blank
+    // sheet the caller has to scroll again to fill.
+    rematerialize();
+    return true;
   }
 
   /** The current selection as a history mark — one paragraph or nothing. */
@@ -1165,9 +1229,16 @@ export function mountPaginatedSurface(
   // Attached at mount, when the host's chrome — including the scroll container — already
   // exists. Coalesced to a frame: a wheel fires far more scroll events than there are
   // frames, and each repaint costs the same whether one event asked for it or twenty.
-  const scroller = container.closest('.docx-editor__scroll-container');
+  // BOUND TO THE DOCUMENT, RESOLVED PER EVENT. `scroll` does not bubble, but it does fire
+  // in the CAPTURE phase on every ancestor, and that is the only binding that survives the
+  // mount order: a host attaches the surface and only then wraps it in its viewport, so a
+  // scroller captured with `closest` at mount time is routinely null — and a null one meant
+  // no listener at all, so scrolling never built the pages it revealed. Every page past the
+  // first screenful stayed blank until some unrelated commit forced a repaint.
   let scrollScheduled = false;
-  const onScroll = (): void => {
+  const onScroll = (event: Event): void => {
+    const scroller = surfaceScroller(container);
+    if (!scroller || event.target !== scroller) return;
     if (scrollScheduled) return;
     scrollScheduled = true;
     const raf = container.ownerDocument.defaultView?.requestAnimationFrame;
@@ -1178,7 +1249,7 @@ export function mountPaginatedSurface(
     if (raf) raf(run);
     else queueMicrotask(run);
   };
-  scroller?.addEventListener('scroll', onScroll, { passive: true });
+  document.addEventListener('scroll', onScroll, { capture: true, passive: true });
 
   pointer = createPointerController(
     {

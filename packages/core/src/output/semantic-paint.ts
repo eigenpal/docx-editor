@@ -10,7 +10,7 @@
 // `createElement` plus `textContent` and never from an HTML string, and every style value
 // comes from the RESOLVED style rather than from raw authored text.
 
-import { baselineShiftPtOf } from '@docx-editor.dev/core-contract/layout';
+import { baselineShiftPtOf, TAB_LEADER_GLYPH } from '@docx-editor.dev/core-contract/layout';
 import type {
   LineRecord,
   PageRecord,
@@ -563,15 +563,6 @@ function paintListMarker(
  * `heavy` has no separate character — Word draws a thicker rule, approximated by the
  * underscore in the run's own face at bold weight rather than by inventing a font.
  */
-const TAB_LEADER_GLYPH = new Map<string, string>(
-  Object.entries({
-    dot: '.',
-    hyphen: '-',
-    underscore: '_',
-    heavy: '_',
-    middleDot: '·',
-  })
-);
 
 /**
  * Ceiling on repeated leader glyphs for one tab.
@@ -632,12 +623,27 @@ function paintTabLeader(
   glyphs.style.verticalAlign = 'baseline';
   applyRunFaceStyle(glyphs, span.style, ctx);
   if (span.tabLeader === 'heavy') glyphs.style.fontWeight = 'bold';
-  // Under-estimate the glyph advance at a fifth of the em so the repeat always OVERFILLS the
-  // reserved width; the clip decides where it ends, which is what keeps the leader from
-  // stopping short of the stop in a face with narrow punctuation.
-  const advancePt = Math.max(0.5, span.style.fontSizePt * 0.2);
-  const count = Math.min(MAX_TAB_LEADER_GLYPHS, Math.ceil(span.box.width / advancePt) + 1);
+  // ONE GLYPH PER ITS OWN ADVANCE — the leader is the same character typed over and over,
+  // and Word spaces it exactly as typing it would. Layout measured that advance in this
+  // run's face; guessing it (a fifth of the em, deliberately short so the repeat overfilled
+  // and the clip decided where it ended) left the dots at whatever spacing an over-long
+  // string happened to produce, reading as a fine dotted rule rather than periods. Falls
+  // back to the old estimate only for a record laid out before the measurement existed.
+  const advancePt =
+    span.tabLeaderAdvancePt && span.tabLeaderAdvancePt > 0
+      ? span.tabLeaderAdvancePt
+      : Math.max(0.5, span.style.fontSizePt * 0.2);
+  // Two glyphs of margin over the measured fit: the browser resolves its own face and its
+  // advance may run a shade narrower than the measurer's, which would stop the leader short
+  // of the stop. The layer clips, so the spare glyphs cost nothing.
+  const count = Math.min(
+    MAX_TAB_LEADER_GLYPHS,
+    Math.max(1, Math.floor(span.box.width / advancePt) + 2)
+  );
   glyphs.textContent = glyph.repeat(count); // SAFE: textContent, never innerHTML
+  // No tracking on top of the glyph's own advance — the leader is plain repeated
+  // punctuation, and inherited letter-spacing would re-space it.
+  glyphs.style.letterSpacing = '0';
   layer.append(glyphs);
   return layer;
 }

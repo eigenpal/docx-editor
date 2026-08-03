@@ -22,6 +22,7 @@ import {
   EMPTY_TAB_STOPS,
   nextTabDestination,
   tabAdvanceWidth,
+  TAB_LEADER_GLYPH,
   type ResolvedTabStops,
   type TabLeader,
 } from './paragraph-tabs.ts';
@@ -479,8 +480,18 @@ export function breakParagraph(
           style: piece.style,
           box: { x: currentX, y: 0, width, height: metrics.height },
           // The leader belongs to the stop that was REACHED, so it is resolved here with the
-          // destination rather than re-derived from the paragraph at paint time.
-          ...(destination.leader ? { tabLeader: destination.leader } : {}),
+          // destination rather than re-derived from the paragraph at paint time — and its
+          // glyph is MEASURED here too, in this run's own face, because paint has no
+          // measurer and a guessed advance cannot space the dots the way typing them would.
+          ...(destination.leader
+            ? {
+                tabLeader: destination.leader,
+                tabLeaderAdvancePt: measurer.measure(
+                  TAB_LEADER_GLYPH.get(destination.leader) ?? '.',
+                  piece.style
+                ),
+              }
+            : {}),
         });
         line.width += width;
         line.height = Math.max(line.height, metrics.height);

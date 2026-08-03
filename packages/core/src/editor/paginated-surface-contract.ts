@@ -95,6 +95,18 @@ export interface PaginatedSurfacePerf {
   readonly cancelledRuns: number;
 }
 
+/** How a reveal places its target in the viewport. */
+export interface RevealOptions {
+  /**
+   * `'start'` puts the target near the top (a heading the user jumped to), `'center'`
+   * centres it, `'nearest'` scrolls only when it is out of view. Default `'start'`.
+   */
+  readonly block?: 'start' | 'center' | 'nearest';
+  /** Padding above the target, in CSS pixels. Default 24. */
+  readonly offsetPx?: number;
+  readonly behavior?: ScrollBehavior;
+}
+
 export interface PaginatedSurfaceState {
   readonly revision: number;
   readonly pageCount: number;
@@ -189,6 +201,18 @@ export interface PaginatedSurface {
   isListActive(kind: 'bullet' | 'ordered'): boolean;
   /** Select the whole document. */
   selectAll(): void;
+  /**
+   * Scroll a page, or the page a paragraph sits on, into view. Returns whether it
+   * scrolled — false when the target is not laid out, or the surface is not inside a
+   * scroll container, so a caller can tell "no such target" from "done".
+   *
+   * The geometry comes from the LAYOUT, never from the DOM: a page that has not been
+   * materialized yet has no element to measure, and that is exactly the page a reveal is
+   * usually asked for. `revealParagraph` scrolls to the paragraph's own line rather than
+   * the top of its page, so a heading deep in a page lands in view.
+   */
+  revealPage(pageIndex: number, options?: RevealOptions): boolean;
+  revealParagraph(paragraphId: string, options?: RevealOptions): boolean;
   /** Set the selection directly, for a host driving the surface programmatically. */
   setSelection(next: SemanticSelection): void;
   /**

@@ -929,8 +929,15 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
     getTotalPages: () => totalPagesOf(surface),
     getCurrentPage: () => currentPageOf(surface),
 
-    scrollToPage: () => false,
-    scrollToBlock: () => false,
+    // Page NUMBERS are 1-based in this contract; the layout indexes from 0.
+    scrollToPage: (pageNumber: number) =>
+      Number.isInteger(pageNumber) && pageNumber >= 1
+        ? (surface?.revealPage(pageNumber - 1) ?? false)
+        : false,
+    scrollToBlock: (blockId: string) =>
+      typeof blockId === 'string' && blockId.length > 0
+        ? (surface?.revealParagraph(blockId) ?? false)
+        : false,
 
     getZoom: () => zoom,
     setZoom(next: number): ExecResult {

@@ -61,6 +61,10 @@ export function DocxEditorDocumentOutline(props: DocxEditorDocumentOutlineProps)
         type: 'setSelection',
         range: { anchor: position, head: position } as never,
       });
+      // Moving the caret does not move the VIEWPORT — a heading twenty pages down was
+      // selected where the user could not see it. The engine knows which page the block
+      // is on, so the outline asks it to reveal rather than reaching into the DOM.
+      editor.scrollToBlock(blockId);
     },
     [editor]
   );

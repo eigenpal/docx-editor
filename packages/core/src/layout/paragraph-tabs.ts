@@ -37,6 +37,21 @@ export type TabAlignment = 'left' | 'center' | 'right' | 'decimal';
  */
 export type TabLeader = 'dot' | 'hyphen' | 'underscore' | 'heavy' | 'middleDot';
 
+/**
+ * The character each leader repeats (§17.3.1.38, ST_TabTlc).
+ *
+ * Lives with the type rather than with the painter because LAYOUT has to measure it: a
+ * leader is the same character typed over and over, and the only way to space it the way
+ * typing it would is to ask the measurer how wide it actually is.
+ */
+export const TAB_LEADER_GLYPH: ReadonlyMap<TabLeader, string> = new Map([
+  ['dot', '.'],
+  ['hyphen', '-'],
+  ['underscore', '_'],
+  ['heavy', '_'],
+  ['middleDot', '\u00B7'],
+]);
+
 export interface TabStop {
   /** Position from the paragraph content origin, in points. */
   readonly positionPt: number;
