@@ -40,6 +40,8 @@ import {
   type TransactionContext,
 } from './tree-store.ts';
 
+type NoteCascadeFn = (before: OoxmlPackage, after: OoxmlPackage) => OoxmlPackage | null;
+
 const HEADER_REL_TYPE =
   'http://schemas.openxmlformats.org/officeDocument/2006/relationships/header';
 const FOOTER_REL_TYPE =
@@ -89,6 +91,11 @@ export interface TreePackageStoreOptions {
   readonly historyLimit?: number;
   /** Bound on opened story stores; defaults to {@link DEFAULT_MAX_EDITABLE_STORY_PARTS}. */
   readonly maxEditableStoryParts?: number;
+  /**
+   * Test seam for note-reference cascade after `deleteText`. Production uses
+   * {@link cascadeDeletedNoteReferences}.
+   */
+  readonly cascadeDeletedNoteReferences?: NoteCascadeFn;
 }
 
 interface StoryHistoryPointer {
@@ -123,6 +130,7 @@ export class TreePackageStore {
   private readonly subscribers = new Set<(change: TreeModelChange) => void>();
   private readonly historyLimit: number;
   private readonly maxEditableStoryParts: number;
+  private readonly cascadeNoteReferences: NoteCascadeFn;
   private lastChange: TreeModelChange | null = null;
   private compositionPartName: string | null = null;
   private commitCounter = 0;
@@ -131,6 +139,8 @@ export class TreePackageStore {
     this.pkg = withPart(pkg, main);
     this.historyLimit = options.historyLimit ?? 200;
     this.maxEditableStoryParts = options.maxEditableStoryParts ?? DEFAULT_MAX_EDITABLE_STORY_PARTS;
+    this.cascadeNoteReferences =
+      options.cascadeDeletedNoteReferences ?? cascadeDeletedNoteReferences;
     this.body = new TreeDocumentStore(main, { historyLimit: this.historyLimit });
     this.body.setStoryRef({ kind: 'body', partName: main.name });
     // Body is always open; HF stores are opened lazily and count against the cap.
@@ -239,6 +249,7 @@ export class TreePackageStore {
     const beforePackage = this.currentPackage();
     const beforeDepth = store.historyDepth;
     const compositionWasOpen = store.compositionActive;
+    const checkpoint = store.checkpoint();
     // Only `deleteText` can remove noteReference atoms; skip package-wide cascade otherwise.
     let mayDeleteNoteAtoms = false;
     const result = store.transact(
@@ -272,17 +283,23 @@ export class TreePackageStore {
     this.syncPackageFromStore(store);
 
     // Cascade note-body deletion when a reference atom was removed by text delete.
+    // Body mutation + cascade share one package history unit; local story history is
+    // discarded on promotion so a later undo cannot replay the orphan story entry.
     let cascaded = false;
     if (result.change && mayDeleteNoteAtoms) {
       const afterStory = this.currentPackage();
-      const cascadedPkg = cascadeDeletedNoteReferences(beforePackage, afterStory);
+      const cascadedPkg = this.cascadeNoteReferences(beforePackage, afterStory);
       if (cascadedPkg === null) {
-        // Roll back the story mutation by restoring the pre-transaction package.
+        // Roll back story mutation AND history stacks (including redo cleared by transact).
+        store.restoreCheckpoint(checkpoint);
         this.installPackageSnapshot(beforePackage);
         return { ok: false, reason: 'invalidArgs', detail: 'note-cascade-failed' };
       }
       if (cascadedPkg !== afterStory) {
         this.installPackageSnapshot(cascadedPkg);
+        if (!compositionWasOpen) {
+          store.restoreHistoryStacks(checkpoint);
+        }
         cascaded = true;
       }
     }
@@ -368,6 +385,10 @@ export class TreePackageStore {
           ...(result.detail ? { detail: result.detail } : {}),
         };
       }
+      // Identity/no-op success (e.g. empty convertAllNotes): no pointer, revision, or event.
+      if (result.package === before) {
+        return { ok: true, change: null };
+      }
       this.installPackageSnapshot(result.package);
       this.pushUndoPointer({ kind: 'package', before, after: result.package });
       this.packageRev += 1;
@@ -378,6 +399,7 @@ export class TreePackageStore {
         story,
         result.createdPartName ? [result.createdPartName] : []
       );
+      this.evictUnreachableStories();
       return { ok: true, change };
     }
 
@@ -404,6 +426,7 @@ export class TreePackageStore {
       story,
       result.createdPartName ? [result.createdPartName] : []
     );
+    this.evictUnreachableStories();
     return { ok: true, change };
   }
 
@@ -414,12 +437,14 @@ export class TreePackageStore {
       this.installPackageSnapshot(pointer.before);
       this.redoOrder.push(pointer);
       this.packageRev += 1;
-      return this.publishSynthetic(
+      const change = this.publishSynthetic(
         ORIGIN_IDS.mutationUndo,
         'global',
         { kind: 'body', partName: this.body.part.name },
         []
       );
+      this.evictUnreachableStories();
+      return change;
     }
     const store =
       pointer.partName === this.body.part.name ? this.body : this.stories.get(pointer.partName);
@@ -430,6 +455,7 @@ export class TreePackageStore {
     this.syncPackageFromStore(store);
     this.packageRev += 1;
     this.publish(change);
+    this.evictUnreachableStories();
     return change;
   }
 
@@ -440,12 +466,14 @@ export class TreePackageStore {
       this.installPackageSnapshot(pointer.after);
       this.undoOrder.push(pointer);
       this.packageRev += 1;
-      return this.publishSynthetic(
+      const change = this.publishSynthetic(
         ORIGIN_IDS.mutationRedo,
         'global',
         { kind: 'body', partName: this.body.part.name },
         []
       );
+      this.evictUnreachableStories();
+      return change;
     }
     const store =
       pointer.partName === this.body.part.name ? this.body : this.stories.get(pointer.partName);
@@ -456,6 +484,7 @@ export class TreePackageStore {
     this.syncPackageFromStore(store);
     this.packageRev += 1;
     this.publish(change);
+    this.evictUnreachableStories();
     return change;
   }
 
@@ -549,6 +578,9 @@ export class TreePackageStore {
       };
     }
     if (this.openedStoryCount() >= this.maxEditableStoryParts) {
+      this.evictUnreachableStories();
+    }
+    if (this.openedStoryCount() >= this.maxEditableStoryParts) {
       return {
         ok: false,
         reason: 'too-many-story-stores',
@@ -598,6 +630,9 @@ export class TreePackageStore {
 
     // Body + opened HF stores. Opening one more must stay within the bound.
     if (this.openedStoryCount() >= this.maxEditableStoryParts) {
+      this.evictUnreachableStories();
+    }
+    if (this.openedStoryCount() >= this.maxEditableStoryParts) {
       return {
         ok: false,
         reason: 'too-many-story-stores',
@@ -644,6 +679,50 @@ export class TreePackageStore {
     this.undoOrder.push(pointer);
     this.redoOrder.length = 0;
     if (this.undoOrder.length > this.historyLimit) this.undoOrder.shift();
+    this.evictUnreachableStories();
+  }
+
+  /**
+   * Drop parked story stores that no current package part and no undo/redo pointer can
+   * restore. History-reachable identities stay so edit→delete→undo reconnects the same
+   * store; unreachable parked entries must not hold `maxEditableStoryParts` forever.
+   */
+  private evictUnreachableStories(): void {
+    const retained = this.retainedStoryPartNames();
+    for (const [name] of [...this.stories]) {
+      if (retained.has(name)) continue;
+      this.stories.delete(name);
+      for (const [rId, partName] of [...this.rIdToPartName]) {
+        if (partName === name) this.rIdToPartName.delete(rId);
+      }
+    }
+  }
+
+  private retainedStoryPartNames(): Set<string> {
+    const retained = new Set<string>();
+    const live = this.pkg;
+    for (const name of this.stories.keys()) {
+      if (live.parts.has(name)) retained.add(name);
+    }
+    for (const pointer of this.undoOrder) {
+      this.retainPointerStoryParts(pointer, retained);
+    }
+    for (const pointer of this.redoOrder) {
+      this.retainPointerStoryParts(pointer, retained);
+    }
+    return retained;
+  }
+
+  private retainPointerStoryParts(pointer: HistoryPointer, retained: Set<string>): void {
+    if (pointer.kind === 'story') {
+      retained.add(pointer.partName);
+      return;
+    }
+    for (const name of this.stories.keys()) {
+      if (pointer.before.parts.has(name) || pointer.after.parts.has(name)) {
+        retained.add(name);
+      }
+    }
   }
 
   private publish(change: TreeModelChange): void {

@@ -33,8 +33,10 @@ export interface NoteMarkContext {
   readonly marks: ReadonlyMap<string, string | null>;
   /**
    * When set, every automatic mark measures at least this string's width (eachPage
-   * reservation). Display text may still be the real mark; measurement uses the wider of
-   * the two so digit-width feedback cannot oscillate.
+   * reservation). The string is the widest-measuring candidate under the effective mark
+   * style (actual marks plus a bounded per-section value window) — not merely the longest
+   * by codepoint count. Display text may still be the real mark; measurement uses the wider
+   * of the two so digit-width / proportional-glyph feedback cannot oscillate.
    */
   readonly reservedMarkText?: string;
   /**

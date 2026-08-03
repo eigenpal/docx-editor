@@ -304,6 +304,7 @@ export {
   provisionalNoteMarks,
   MAX_NOTE_OVERFLOW_PAGES,
   MAX_NOTE_REFLOW_ATTEMPTS,
+  MAX_EACH_PAGE_MARK_CANDIDATES,
   type NotesLayoutInput,
   type NotesAttachResult,
   type NotePaginationFallbackReason,

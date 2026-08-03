@@ -55,11 +55,11 @@ import {
   isLegalNumRestart,
 } from './note-properties.ts';
 import {
-  collectNoteReferences,
   collectPackageNoteReferences,
   createNoteReferenceScanBudget,
   resolveNotesPart,
   normalNoteIds,
+  type NoteReferenceScanBudget,
 } from './note-references.ts';
 import { isValidXmlText } from './sinks.ts';
 import { atomicFieldSpansOf, isFldSimple } from './field-nodes.ts';
@@ -70,7 +70,6 @@ const FOOTNOTES_REL =
 const ENDNOTES_REL = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/endnotes';
 const FOOTNOTES_CT = 'application/vnd.openxmlformats-officedocument.wordprocessingml.footnotes+xml';
 const ENDNOTES_CT = 'application/vnd.openxmlformats-officedocument.wordprocessingml.endnotes+xml';
-const MAX_PARTS_SCAN = 256;
 const MAX_SECTIONS = 4_096;
 
 /** Built-in Word character styles for note marks — not user theme aliases. */
@@ -79,15 +78,27 @@ const BUILTIN_NOTE_REFERENCE_STYLE: Readonly<Record<NoteKind, string>> = {
   endnote: 'EndnoteReference',
 };
 
+function isWmlValAttribute(attr: {
+  readonly localName: string;
+  readonly namespaceUri: string;
+}): boolean {
+  return (
+    attr.localName === 'val' &&
+    (attr.namespaceUri === WML_NAMESPACE_URI || attr.namespaceUri === '')
+  );
+}
+
 /**
  * Rewrite `w:rStyle/@w:val` on a run that directly holds a note citation or body mark.
  *
  * Matching rule (bounded): only when the run contains a `noteReference` / `noteRef` atom
  * (typed or generic `w:footnoteReference`, `w:endnoteReference`, `w:footnoteRef`,
- * `w:endnoteRef`) AND `w:rPr/w:rStyle/@w:val` exactly equals the source kind's built-in
- * style (`FootnoteReference` / `EndnoteReference`). Custom style ids, absent `rPr`, and
- * absent `rStyle` are left unchanged — Word does not require a character style on note
- * marks for validity; layout resolves marks through element type + cascade defaults.
+ * `w:endnoteRef`) AND a WML-namespaced `w:rPr/w:rStyle` whose WML `@w:val` exactly equals
+ * the source kind's built-in style (`FootnoteReference` / `EndnoteReference`). Foreign
+ * namespace `rStyle` / `val` attributes are preserved byte-for-byte. Custom style ids,
+ * absent `rPr`, and absent `rStyle` are left unchanged — Word does not require a character
+ * style on note marks for validity; layout resolves marks through element type + cascade
+ * defaults.
  */
 function rewriteRunBuiltinNoteReferenceStyle(
   run: OoxmlNode,
@@ -105,9 +116,15 @@ function rewriteRunBuiltinNoteReferenceStyle(
     if (child.kind !== 'runProperties') return child;
     let propsChanged = false;
     const props = child.children.map((prop) => {
-      if (prop.kind !== 'generic' || prop.localName !== 'rStyle') return prop;
+      if (
+        prop.kind !== 'generic' ||
+        prop.namespaceUri !== WML_NAMESPACE_URI ||
+        prop.localName !== 'rStyle'
+      ) {
+        return prop;
+      }
       const hasFromVal = prop.attributes.some(
-        (attr) => attr.localName === 'val' && attr.value === fromStyle
+        (attr) => isWmlValAttribute(attr) && attr.value === fromStyle
       );
       if (!hasFromVal) return prop;
       propsChanged = true;
@@ -115,7 +132,7 @@ function rewriteRunBuiltinNoteReferenceStyle(
       return {
         ...prop,
         attributes: prop.attributes.map((attr) =>
-          attr.localName === 'val' ? { ...attr, value: toStyle } : attr
+          isWmlValAttribute(attr) && attr.value === fromStyle ? { ...attr, value: toStyle } : attr
         ),
       };
     });
@@ -219,20 +236,32 @@ function isPositiveNoteId(value: unknown): value is number {
   );
 }
 
+export interface NoteLifecycleOptions {
+  /**
+   * Shared part + visited-node budget for reference scans. When omitted a fresh default
+   * budget is used. Truncation rejects the op with the original package unchanged.
+   */
+  readonly scanBudget?: NoteReferenceScanBudget;
+}
+
 /**
  * Apply one note lifecycle op atomically. Rejected ops leave the input package untouched.
  */
-export function applyNoteLifecycleOp(pkg: OoxmlPackage, op: NoteLifecycleOp): NoteLifecycleResult {
+export function applyNoteLifecycleOp(
+  pkg: OoxmlPackage,
+  op: NoteLifecycleOp,
+  options?: NoteLifecycleOptions
+): NoteLifecycleResult {
   if (!isNoteLifecycleOp(op)) return fail('invalidArgs', 'unknown-op');
   switch (op.op) {
     case 'insertNote':
       return applyInsertNote(pkg, op);
     case 'deleteNote':
-      return applyDeleteNote(pkg, op);
+      return applyDeleteNote(pkg, op, options);
     case 'convertNote':
-      return applyConvertNote(pkg, op);
+      return applyConvertNote(pkg, op, options);
     case 'convertAllNotes':
-      return applyConvertAllNotes(pkg, op);
+      return applyConvertAllNotes(pkg, op, options);
     case 'setNoteProperties':
       return applySetNoteProperties(pkg, op);
   }
@@ -321,7 +350,8 @@ function applyInsertNote(
 
 function applyDeleteNote(
   pkg: OoxmlPackage,
-  op: Extract<NoteLifecycleOp, { op: 'deleteNote' }>
+  op: Extract<NoteLifecycleOp, { op: 'deleteNote' }>,
+  options?: NoteLifecycleOptions
 ): NoteLifecycleResult {
   if (!isNoteKind(op.noteKind)) return fail('invalidArgs', 'noteKind');
   if (!Number.isInteger(op.noteId) || op.noteId < -0x80000000 || op.noteId > NOTE_ID_MAX) {
@@ -333,8 +363,9 @@ function applyDeleteNote(
   const note = findNoteById(notesPart.root, op.noteId);
   if (!note) return fail('invalidArgs', 'note-not-found');
 
-  let next = removeReferencesEverywhere(pkg, op.noteKind, op.noteId);
-  if (!next) return fail('tree-invariant', 'reference-remove');
+  const removedRefs = removeReferencesEverywhere(pkg, op.noteKind, op.noteId, options?.scanBudget);
+  if (!removedRefs) return fail('tree-invariant', 'reference-scan-truncated');
+  let next = removedRefs;
 
   const currentNotes = resolveNotesPart(next, op.noteKind);
   if (!currentNotes) return fail('tree-invariant', 'notes-part-lost');
@@ -397,7 +428,8 @@ export function cascadeDeletedNoteReferences(
 
 function applyConvertNote(
   pkg: OoxmlPackage,
-  op: Extract<NoteLifecycleOp, { op: 'convertNote' }>
+  op: Extract<NoteLifecycleOp, { op: 'convertNote' }>,
+  options?: NoteLifecycleOptions
 ): NoteLifecycleResult {
   if (!isNoteKind(op.fromKind)) return fail('invalidArgs', 'fromKind');
   if (!isPositiveNoteId(op.noteId)) return fail('invalidArgs', 'noteId');
@@ -411,6 +443,14 @@ function applyConvertNote(
   if (type === 'separator' || type === 'continuationSeparator' || type === 'continuationNotice') {
     return fail('invalidArgs', 'separator-not-convertible');
   }
+
+  // Scan-before-mutate: refuse before any package write if refs cannot be fully walked.
+  const scanBudget = options?.scanBudget ?? createNoteReferenceScanBudget();
+  const plannedHits = collectPackageNoteReferences(pkg, {
+    budget: scanBudget,
+    maxHits: Number.POSITIVE_INFINITY,
+  }).filter((hit) => hit.noteKind === op.fromKind && hit.noteId === op.noteId);
+  if (scanBudget.truncated) return fail('tree-invariant', 'reference-scan-truncated');
 
   let next = pkg;
   const ensured = ensureNotesPart(next, toKind);
@@ -442,8 +482,8 @@ function applyConvertNote(
     next = withPart(next, removed.part);
   }
 
-  // Rewrite every reference of the old kind/id to the new kind/id.
-  const rewritten = rewriteReferencesEverywhere(next, op.fromKind, op.noteId, toKind, newId);
+  // Rewrite every previously planned reference of the old kind/id to the new kind/id.
+  const rewritten = rewriteReferencesEverywhere(next, op.fromKind, toKind, newId, plannedHits);
   if (!rewritten) return fail('tree-invariant', 'reference-rewrite');
   next = rewritten;
 
@@ -459,7 +499,8 @@ function applyConvertNote(
 
 function applyConvertAllNotes(
   pkg: OoxmlPackage,
-  op: Extract<NoteLifecycleOp, { op: 'convertAllNotes' }>
+  op: Extract<NoteLifecycleOp, { op: 'convertAllNotes' }>,
+  options?: NoteLifecycleOptions
 ): NoteLifecycleResult {
   if (!isNoteKind(op.fromKind)) return fail('invalidArgs', 'fromKind');
   const sourcePart = resolveNotesPart(pkg, op.fromKind);
@@ -477,11 +518,15 @@ function applyConvertAllNotes(
   let lastNoteId: number | undefined;
   const toKind: NoteKind = op.fromKind === 'footnote' ? 'endnote' : 'footnote';
   for (const noteId of ids) {
-    const result = applyConvertNote(next, {
-      op: 'convertNote',
-      fromKind: op.fromKind,
-      noteId,
-    });
+    const result = applyConvertNote(
+      next,
+      {
+        op: 'convertNote',
+        fromKind: op.fromKind,
+        noteId,
+      },
+      options
+    );
     if (!result.ok) return result;
     next = result.package;
     if (result.createdPartName) createdPartName = result.createdPartName;
@@ -635,11 +680,11 @@ function locateParagraph(
   pkg: OoxmlPackage,
   paragraphId: string
 ): { partName: string; paragraph: OoxmlParagraphNode } | null {
-  let scanned = 0;
+  const budget = createNoteReferenceScanBudget();
   for (const part of pkg.parts.values()) {
-    if (scanned >= MAX_PARTS_SCAN) break;
-    scanned += 1;
     if (!part.name.endsWith('.xml')) continue;
+    if (budget.parts >= budget.maxParts) return null;
+    budget.parts += 1;
     const node = findNode(part, paragraphId);
     if (node && node.kind === 'paragraph') {
       return { partName: part.name, paragraph: node };
@@ -896,28 +941,40 @@ function findTextParent(paragraph: OoxmlParagraphNode, valueId: string): OoxmlNo
   return walk(paragraph);
 }
 
+/**
+ * Scan every XML part under one shared budget, then remove matching references.
+ * Truncation returns null without mutating `pkg`.
+ */
 function removeReferencesEverywhere(
   pkg: OoxmlPackage,
   noteKind: NoteKind,
-  noteId: number
+  noteId: number,
+  sharedBudget?: NoteReferenceScanBudget
 ): OoxmlPackage | null {
+  const budget = sharedBudget ?? createNoteReferenceScanBudget();
+  const hits = collectPackageNoteReferences(pkg, {
+    budget,
+    maxHits: Number.POSITIVE_INFINITY,
+  }).filter((hit) => hit.noteKind === noteKind && hit.noteId === noteId);
+  if (budget.truncated) return null;
+
   let next = pkg;
-  let scanned = 0;
-  for (const part of pkg.parts.values()) {
-    if (scanned >= MAX_PARTS_SCAN) break;
-    scanned += 1;
-    if (!part.name.endsWith('.xml')) continue;
-    const current = next.parts.get(part.name) ?? part;
-    const hits = collectNoteReferences(current).filter(
-      (hit) => hit.noteKind === noteKind && hit.noteId === noteId
-    );
-    if (hits.length === 0) continue;
+  // Apply per part so one story's edits do not invalidate another part's node ids.
+  const byPart = new Map<string, string[]>();
+  for (const hit of hits) {
+    const list = byPart.get(hit.partName) ?? [];
+    list.push(hit.nodeId);
+    byPart.set(hit.partName, list);
+  }
+  for (const [partName, nodeIds] of byPart) {
+    const current = next.parts.get(partName);
+    if (!current) return null;
     let working = current;
-    for (const hit of hits) {
-      // Prefer removing the owning run when it only holds the reference (+ rPr).
-      const parentRun = findOwningRun(working, hit.nodeId);
+    for (const nodeId of nodeIds) {
+      if (!findNode(working, nodeId)) continue;
+      const parentRun = findOwningRun(working, nodeId);
       const targetId =
-        parentRun && runIsNoteReferenceOnly(parentRun, hit.nodeId) ? parentRun.id : hit.nodeId;
+        parentRun && runIsNoteReferenceOnly(parentRun, nodeId) ? parentRun.id : nodeId;
       const removed = removeNode(working, targetId);
       if (!removed.ok) return null;
       working = removed.part;
@@ -949,41 +1006,48 @@ function runIsNoteReferenceOnly(run: OoxmlElement, refId: string): boolean {
   return true;
 }
 
+/**
+ * Rewrite previously scanned reference hits. Callers must have already verified the scan
+ * completed without truncation against the pre-mutation package.
+ */
 function rewriteReferencesEverywhere(
   pkg: OoxmlPackage,
   fromKind: NoteKind,
-  fromId: number,
   toKind: NoteKind,
-  toId: number
+  toId: number,
+  plannedHits: readonly { readonly partName: string; readonly nodeId: string }[]
 ): OoxmlPackage | null {
   let next = pkg;
-  let scanned = 0;
   const toLocal = toKind === 'footnote' ? 'footnoteReference' : 'endnoteReference';
-  for (const part of pkg.parts.values()) {
-    if (scanned >= MAX_PARTS_SCAN) break;
-    scanned += 1;
-    if (!part.name.endsWith('.xml')) continue;
-    const current = next.parts.get(part.name) ?? part;
-    const hits = collectNoteReferences(current).filter(
-      (hit) => hit.noteKind === fromKind && hit.noteId === fromId
-    );
-    if (hits.length === 0) continue;
+  const byPart = new Map<string, string[]>();
+  for (const hit of plannedHits) {
+    const list = byPart.get(hit.partName) ?? [];
+    list.push(hit.nodeId);
+    byPart.set(hit.partName, list);
+  }
+
+  for (const [partName, nodeIds] of byPart) {
+    const current = next.parts.get(partName);
+    if (!current) return null;
     let working = current;
-    for (const hit of hits) {
-      const node = findNode(working, hit.nodeId);
+    for (const nodeId of nodeIds) {
+      const node = findNode(working, nodeId);
       if (!node || node.kind === 'textValue') return null;
       const replacedNode: OoxmlNode = {
         ...node,
         kind: 'noteReference',
         localName: toLocal,
         attributes: node.attributes.map((attr) =>
-          attr.localName === 'id' ? { ...attr, value: String(toId) } : attr
+          attr.localName === 'id' &&
+          (attr.namespaceUri === WML_NAMESPACE_URI || attr.namespaceUri === '')
+            ? { ...attr, value: String(toId) }
+            : attr
         ),
       } as OoxmlNode;
-      const replaced = replaceNode(working, hit.nodeId, replacedNode);
+      const replaced = replaceNode(working, nodeId, replacedNode);
       if (!replaced.ok) return null;
       working = replaced.part;
-      const parentRun = findOwningRun(working, hit.nodeId);
+      const parentRun = findOwningRun(working, nodeId);
       if (parentRun) {
         const styledRun = rewriteRunBuiltinNoteReferenceStyle(parentRun, fromKind, toKind);
         if (styledRun !== parentRun) {
@@ -995,6 +1059,8 @@ function rewriteReferencesEverywhere(
     }
     next = withPart(next, working);
   }
+
+  // Defensive: plannedHits may be empty when the note body exists without citations.
   return next;
 }
 

@@ -20,6 +20,7 @@ import { layoutSemanticDocument } from '../semantic-layout.ts';
 import { noteStoryBlocks } from '../story-roots.ts';
 import { layoutNoteById, normalNotesOf } from '../note-layout.ts';
 import type { NotesLayoutInput } from '../note-pagination.ts';
+import { MAX_EACH_PAGE_MARK_CANDIDATES, provisionalNoteMarks } from '../note-pagination.ts';
 import { isNoteNode, noteIdOf } from '../../store/package/note-nodes.ts';
 import { paintSemanticLayout } from '../../output/semantic-paint.ts';
 import { buildStyleCascadeTable } from '../style-cascade.ts';
@@ -683,5 +684,262 @@ describe('note layout + pagination', () => {
       .filter((n) => !n.continuation)
       .map((n) => n.mark);
     expect(marks).toEqual(['i', '10']);
+  });
+
+  test('single tall note paragraph splits at line boundaries without clipping', () => {
+    // One wrapped paragraph (no block boundaries) taller than the footnote room on a short page.
+    const bytes = zipSync({
+      '[Content_Types].xml': strToU8(
+        `<Types xmlns="${CT}">` +
+          '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>' +
+          '<Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>' +
+          '<Override PartName="/word/footnotes.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.footnotes+xml"/>' +
+          '</Types>'
+      ),
+      '_rels/.rels': strToU8(
+        `<Relationships xmlns="${REL}"><Relationship Id="rId1" Type="${R}/officeDocument" Target="word/document.xml"/></Relationships>`
+      ),
+      'word/_rels/document.xml.rels': strToU8(
+        `<Relationships xmlns="${REL}"><Relationship Id="rIdFn" Type="${R}/footnotes" Target="footnotes.xml"/></Relationships>`
+      ),
+      'word/document.xml': strToU8(
+        `<w:document xmlns:w="${W}" xmlns:r="${R}"><w:body>` +
+          `<w:p><w:r><w:t>Body</w:t><w:footnoteReference w:id="1"/></w:r></w:p>` +
+          '<w:sectPr><w:pgSz w:w="12240" w:h="5040"/><w:pgMar w:top="360" w:right="720" w:bottom="360" w:left="720"/></w:sectPr>' +
+          '</w:body></w:document>'
+      ),
+      'word/footnotes.xml': strToU8(
+        `<w:footnotes xmlns:w="${W}">` +
+          `<w:footnote w:type="separator" w:id="-1"><w:p><w:r><w:separator/></w:r></w:p></w:footnote>` +
+          `<w:footnote w:type="continuationSeparator" w:id="0"><w:p><w:r><w:continuationSeparator/></w:r></w:p></w:footnote>` +
+          `<w:footnote w:id="1"><w:p><w:r><w:t>${'NoteWord '.repeat(400)}</w:t></w:r></w:p></w:footnote>` +
+          '</w:footnotes>'
+      ),
+    });
+    const loaded = readOoxmlPackage(bytes);
+    expect(loaded.ok).toBe(true);
+    if (!loaded.ok) throw new Error(loaded.reason);
+    const part = loaded.package.parts.get(loaded.package.mainDocumentPart)!;
+    const documentFootnoteProps = resolveFootnoteProperties(undefined, undefined);
+    const documentEndnoteProps = resolveEndnoteProperties(undefined, undefined);
+    const notes: NotesLayoutInput = {
+      footnotesPart: resolveNotesPart(loaded.package, 'footnote'),
+      endnotesPart: null,
+      footnotePropsBySection: [documentFootnoteProps],
+      endnotePropsBySection: [documentEndnoteProps],
+      documentFootnoteProps,
+      documentEndnoteProps,
+      measurer: createFixedMeasurer(),
+      producer: 'note-line-split',
+    };
+    const layout = layoutSemanticDocument(part, 1, {
+      measurer: notes.measurer,
+      notes,
+      producer: 'note-line-split',
+    });
+    expect(layout.pages.length).toBeGreaterThan(1);
+    const stories = layout.pages.flatMap((page) => page.footnotes?.notes ?? []);
+    expect(stories.length).toBeGreaterThan(1);
+    expect(stories.some((n) => n.continuation)).toBe(true);
+    // Geometry: every note area and fragment stays inside the content column.
+    for (const page of layout.pages) {
+      const area = page.footnotes;
+      if (!area) continue;
+      expect(area.box.y + area.box.height).toBeLessThanOrEqual(
+        page.contentBox.y + page.contentBox.height + 0.05
+      );
+      for (const note of area.notes) {
+        expect(note.box.y + note.box.height).toBeLessThanOrEqual(
+          page.contentBox.y + page.contentBox.height + 0.05
+        );
+        for (const fragment of note.fragments) {
+          const absBottom = note.box.y + fragment.box.y + fragment.box.height;
+          expect(absBottom).toBeLessThanOrEqual(page.contentBox.y + page.contentBox.height + 0.05);
+        }
+      }
+    }
+    const laidAlone = layoutNoteById(notes.footnotesPart, 1, layout.pages[0]!.contentBox.width, {
+      measurer: notes.measurer,
+      producer: 'note-line-split',
+    });
+    expect(laidAlone).not.toBeNull();
+    const placedHeight = stories.reduce((sum, n) => sum + n.box.height, 0);
+    expect(placedHeight).toBeGreaterThan(laidAlone!.flowHeight * 0.9);
+  });
+
+  test('sectEnd places on true section end with overflow before next section', () => {
+    // Section 0: early endnote ref, then enough body to span later pages. Section 1: more body.
+    // Long sectEnd endnote must land after section 0's last body page, not on section 1 pages.
+    const s0Body = Array.from(
+      { length: 40 },
+      (_, i) => `<w:p><w:r><w:t>S0 para ${i} ${'body '.repeat(30)}</w:t></w:r></w:p>`
+    ).join('');
+    const s1Body = Array.from(
+      { length: 20 },
+      (_, i) => `<w:p><w:r><w:t>S1 para ${i} ${'next '.repeat(30)}</w:t></w:r></w:p>`
+    ).join('');
+    const noteParas = Array.from(
+      { length: 60 },
+      (_, i) => `<w:p><w:r><w:t>Endnote overflow ${i} ${'z'.repeat(60)}</w:t></w:r></w:p>`
+    ).join('');
+    const bytes = zipSync({
+      '[Content_Types].xml': strToU8(
+        `<Types xmlns="${CT}">` +
+          '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>' +
+          '<Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>' +
+          '<Override PartName="/word/endnotes.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.endnotes+xml"/>' +
+          '</Types>'
+      ),
+      '_rels/.rels': strToU8(
+        `<Relationships xmlns="${REL}"><Relationship Id="rId1" Type="${R}/officeDocument" Target="word/document.xml"/></Relationships>`
+      ),
+      'word/_rels/document.xml.rels': strToU8(
+        `<Relationships xmlns="${REL}"><Relationship Id="rIdEn" Type="${R}/endnotes" Target="endnotes.xml"/></Relationships>`
+      ),
+      'word/document.xml': strToU8(
+        `<w:document xmlns:w="${W}" xmlns:r="${R}"><w:body>` +
+          `<w:p><w:r><w:t>Early</w:t><w:endnoteReference w:id="1"/></w:r></w:p>` +
+          s0Body +
+          `<w:p><w:pPr><w:sectPr>` +
+          `<w:pgSz w:w="12240" w:h="7200"/><w:pgMar w:top="720" w:right="720" w:bottom="720" w:left="720"/>` +
+          `<w:endnotePr><w:pos w:val="sectEnd"/></w:endnotePr>` +
+          `</w:sectPr></w:pPr><w:r><w:t>S0 end</w:t></w:r></w:p>` +
+          s1Body +
+          `<w:sectPr><w:pgSz w:w="12240" w:h="7200"/><w:pgMar w:top="720" w:right="720" w:bottom="720" w:left="720"/>` +
+          `<w:endnotePr><w:pos w:val="sectEnd"/></w:endnotePr></w:sectPr>` +
+          '</w:body></w:document>'
+      ),
+      'word/endnotes.xml': strToU8(
+        `<w:endnotes xmlns:w="${W}">` +
+          `<w:endnote w:type="separator" w:id="-1"><w:p><w:r><w:separator/></w:r></w:p></w:endnote>` +
+          `<w:endnote w:type="continuationSeparator" w:id="0"><w:p><w:r><w:continuationSeparator/></w:r></w:p></w:endnote>` +
+          `<w:endnote w:id="1">${noteParas}</w:endnote>` +
+          '</w:endnotes>'
+      ),
+    });
+    const loaded = readOoxmlPackage(bytes);
+    expect(loaded.ok).toBe(true);
+    if (!loaded.ok) throw new Error(loaded.reason);
+    const part = loaded.package.parts.get(loaded.package.mainDocumentPart)!;
+    const documentFootnoteProps = resolveFootnoteProperties(undefined, undefined);
+    const sectEnd = resolveEndnoteProperties({ pos: 'sectEnd' });
+    const notes: NotesLayoutInput = {
+      footnotesPart: null,
+      endnotesPart: resolveNotesPart(loaded.package, 'endnote'),
+      footnotePropsBySection: [documentFootnoteProps, documentFootnoteProps],
+      endnotePropsBySection: [sectEnd, sectEnd],
+      documentFootnoteProps,
+      documentEndnoteProps: sectEnd,
+      measurer: createFixedMeasurer(),
+      producer: 'note-sectend-multi',
+    };
+    const layout = layoutSemanticDocument(part, 1, {
+      measurer: notes.measurer,
+      notes,
+      producer: 'note-sectend-multi',
+    });
+    expect(layout.pages.length).toBeGreaterThan(3);
+
+    const textOf = (page: (typeof layout.pages)[number]): string => {
+      const parts: string[] = [];
+      for (const fragment of page.fragments) {
+        if (fragment.kind !== 'paragraph') continue;
+        for (const line of fragment.lines) {
+          for (const span of line.spans) parts.push(span.text);
+        }
+      }
+      return parts.join('');
+    };
+
+    const s0Pages = layout.pages.filter((page) => textOf(page).includes('S0 para'));
+    const s1Pages = layout.pages.filter((page) => textOf(page).includes('S1 para'));
+    expect(s0Pages.length).toBeGreaterThan(1);
+    expect(s1Pages.length).toBeGreaterThan(0);
+
+    const pagesWithEndnotes = layout.pages.filter((page) => (page.endnotes?.notes.length ?? 0) > 0);
+    expect(pagesWithEndnotes.length).toBeGreaterThan(1);
+    // No section-1 body page may carry the section-0 endnote area.
+    for (const page of s1Pages) {
+      expect(page.endnotes).toBeUndefined();
+    }
+    // Endnotes start at/after the last section-0 body page, never before the early-only ref page
+    // when later section-0 body pages exist.
+    const lastS0BodyIndex = Math.max(...s0Pages.map((p) => p.index));
+    const firstEndnoteIndex = Math.min(...pagesWithEndnotes.map((p) => p.index));
+    expect(firstEndnoteIndex).toBeGreaterThanOrEqual(lastS0BodyIndex);
+    const firstS1Index = Math.min(...s1Pages.map((p) => p.index));
+    for (const page of pagesWithEndnotes) {
+      expect(page.index).toBeLessThan(firstS1Index);
+    }
+    for (const page of pagesWithEndnotes) {
+      const area = page.endnotes!;
+      expect(area.box.y + area.box.height).toBeLessThanOrEqual(
+        page.contentBox.y + page.contentBox.height + 0.05
+      );
+    }
+  });
+
+  test('eachPage reserved mark uses measured width across formats', () => {
+    // Proportional measurer: roman glyphs are wide, decimal digits are narrow — so a shorter
+    // roman string can out-measure a longer decimal string.
+    const proportional = {
+      measure: (text: string, style: { fontSizePt: number }) => {
+        let units = 0;
+        for (const ch of text) {
+          units += /[ivxlcdm]/i.test(ch) ? 10 : 1;
+        }
+        return units * (style.fontSizePt / 11);
+      },
+      lineMetrics: createFixedMeasurer().lineMetrics,
+    };
+    const romanEachPage = resolveFootnoteProperties({
+      numFmt: 'lowerRoman',
+      numStart: 1,
+      numRestart: 'eachPage',
+    });
+    const decimalEachPage = resolveFootnoteProperties({
+      numFmt: 'decimal',
+      numStart: 1,
+      numRestart: 'eachPage',
+    });
+    const documentEndnoteProps = resolveEndnoteProperties(undefined, undefined);
+    const marks = provisionalNoteMarks(
+      [
+        {
+          noteKind: 'footnote',
+          noteId: 1,
+          paragraphId: 'p1',
+          atomOffset: 0,
+          customMarkFollows: false,
+          sectionIndex: 0,
+        },
+        {
+          noteKind: 'footnote',
+          noteId: 2,
+          paragraphId: 'p2',
+          atomOffset: 0,
+          customMarkFollows: false,
+          sectionIndex: 1,
+        },
+      ],
+      {
+        footnotesPart: null,
+        endnotesPart: null,
+        footnotePropsBySection: [romanEachPage, decimalEachPage],
+        endnotePropsBySection: [documentEndnoteProps, documentEndnoteProps],
+        documentFootnoteProps: romanEachPage,
+        documentEndnoteProps,
+        measurer: proportional,
+        producer: 'note-reserve-width',
+      }
+    );
+    expect(MAX_EACH_PAGE_MARK_CANDIDATES).toBeGreaterThanOrEqual(8);
+    // Old length-based pick would prefer "10"/"11"/…; measured width prefers roman (e.g. viii).
+    expect(marks.reservedMarkText).toBeTruthy();
+    expect(/[ivxlcdm]/i.test(marks.reservedMarkText!)).toBe(true);
+    const style = { fontSizePt: 11 };
+    const reservedW = proportional.measure(marks.reservedMarkText!, style);
+    const decimalW = proportional.measure('10', style);
+    expect(reservedW).toBeGreaterThan(decimalW);
   });
 });

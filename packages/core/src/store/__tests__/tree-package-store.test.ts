@@ -384,4 +384,64 @@ describe('TreePackageStore — parked story history across delete/restore', () =
     expect(store.redo()).not.toBeNull();
     expect(store.currentPackage().parts.has('/word/header1.xml')).toBe(false);
   });
+
+  test('parked stores retain the cap while history can restore them; evict when unreachable', () => {
+    // Cap is body + 1. Opening the header parks it on delete; the footer is a distinct
+    // part that still cannot open while the parked identity is history-reachable.
+    const withHistory = openPackage(bodyAndHeaderDoc(), {
+      maxEditableStoryParts: 2,
+      historyLimit: 50,
+    });
+    const headerScope: StoryScope = { kind: 'headerFooter', rId: 'rId7' };
+    const headerId = paragraphIds(withHistory.partFor(headerScope)!)[0]!;
+    withHistory.transact(headerScope, (ctx) => {
+      ctx.apply({ op: 'insertText', paragraphId: headerId, offset: 0, text: 'A' });
+    });
+    expect(
+      withHistory.applyLifecycleOp({
+        op: 'deleteHeaderFooter',
+        sectionIndex: 0,
+        kind: 'header',
+        variant: 'default',
+      }).ok
+    ).toBe(true);
+    expect(withHistory.openedStoryCount()).toBe(2); // parked, retained by undo
+
+    const footerWhileParked = withHistory.resolveStory({ kind: 'headerFooter', rId: 'rId8' });
+    expect(footerWhileParked.ok).toBe(false);
+    if (!footerWhileParked.ok) expect(footerWhileParked.reason).toBe('too-many-story-stores');
+
+    // Tight history: drop the delete pointer so the parked store becomes unreachable.
+    const evicting = openPackage(bodyAndHeaderDoc(), {
+      maxEditableStoryParts: 2,
+      historyLimit: 1,
+    });
+    const evictScope: StoryScope = { kind: 'headerFooter', rId: 'rId7' };
+    const evictId = paragraphIds(evicting.partFor(evictScope)!)[0]!;
+    evicting.transact(evictScope, (ctx) => {
+      ctx.apply({ op: 'insertText', paragraphId: evictId, offset: 0, text: 'X' });
+    });
+    expect(
+      evicting.applyLifecycleOp({
+        op: 'deleteHeaderFooter',
+        sectionIndex: 0,
+        kind: 'header',
+        variant: 'default',
+      }).ok
+    ).toBe(true);
+    expect(evicting.openedStoryCount()).toBe(2);
+
+    const bodyId = paragraphIds(evicting.bodyStore().part)[0]!;
+    expect(
+      evicting.transact({ kind: 'body' }, (ctx) => {
+        ctx.apply({ op: 'insertText', paragraphId: bodyId, offset: 0, text: '!' });
+      }).ok
+    ).toBe(true);
+    // historyLimit 1: body story pointer replaces delete → parked evicted.
+    expect(evicting.openedStoryCount()).toBe(1);
+
+    const footerAfterEvict = evicting.resolveStory({ kind: 'headerFooter', rId: 'rId8' });
+    expect(footerAfterEvict.ok).toBe(true);
+    expect(evicting.openedStoryCount()).toBe(2);
+  });
 });

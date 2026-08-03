@@ -11,14 +11,17 @@ import {
   diagnoseNoteReferences,
   findNoteById,
   isNormalNote,
+  MAX_NOTE_REFERENCE_PARTS,
   noteIdOf,
   noteKindOf,
   noteReferenceKindOf,
   readOoxmlPackage,
+  readOoxmlPart,
   resolveNotesPart,
   serializeOoxmlPart,
   writeOoxmlPackage,
   type OoxmlPackage,
+  type OoxmlPart,
 } from '../package/index.ts';
 import { diffSemanticDigests, semanticDigest } from '../package/ooxml-digest.ts';
 import { TreePackageStore } from '../store/tree-package-store.ts';
@@ -488,6 +491,75 @@ describe('convertNote reference style rewriting', () => {
     expect(endXml).toContain('<w:rStyle w:val="MyNoteMark"/>');
     expect(endXml).not.toContain('EndnoteReference');
   });
+
+  test('preserves foreign-namespace rStyle/val while rewriting WML built-in', () => {
+    const body =
+      `<w:p xmlns:x="urn:evil"><w:r><w:rPr>` +
+      `<x:rStyle x:val="FootnoteReference"/>` +
+      `<w:rStyle w:val="FootnoteReference" x:val="FootnoteReference"/>` +
+      `</w:rPr><w:footnoteReference w:id="1"/></w:r></w:p>`;
+    const store = openStore(
+      build({
+        body,
+        footnotes: footnoteWithStyledBody,
+        endnotes: endnoteSeeds,
+      })
+    );
+    const beforeFp = canonicalOoxmlFingerprint(
+      store.currentPackage().parts.get(store.currentPackage().mainDocumentPart)!
+    );
+    const result = store.applyLifecycleOp({
+      op: 'convertNote',
+      fromKind: 'footnote',
+      noteId: 1,
+    });
+    expect(result.ok).toBe(true);
+    if (!result.ok) throw new Error(result.reason);
+
+    const mainXml = serializeOoxmlPart(
+      store.currentPackage().parts.get(store.currentPackage().mainDocumentPart)!
+    );
+    expect(mainXml).toContain('<w:rStyle w:val="EndnoteReference"');
+    expect(mainXml).toMatch(/x:rStyle[^>]*x:val="FootnoteReference"/);
+    expect(mainXml).toContain('x:val="FootnoteReference"');
+    // Foreign lookalike must not be rewritten to EndnoteReference.
+    expect(mainXml).toMatch(/x:rStyle[^>]*x:val="FootnoteReference"/);
+    expect(mainXml).not.toMatch(/x:rStyle[^>]*x:val="EndnoteReference"/);
+
+    store.undo();
+    expect(
+      canonicalOoxmlFingerprint(
+        store.currentPackage().parts.get(store.currentPackage().mainDocumentPart)!
+      )
+    ).toBe(beforeFp);
+  });
+
+  test('rewrites built-in style on citation nested under hyperlink', () => {
+    const body =
+      `<w:p><w:hyperlink w:anchor="here"><w:r><w:rPr>` +
+      `<w:rStyle w:val="FootnoteReference"/></w:rPr>` +
+      `<w:footnoteReference w:id="1"/></w:r></w:hyperlink></w:p>`;
+    const store = openStore(
+      build({
+        body,
+        footnotes: footnoteWithStyledBody,
+        endnotes: endnoteSeeds,
+      })
+    );
+    const result = store.applyLifecycleOp({
+      op: 'convertNote',
+      fromKind: 'footnote',
+      noteId: 1,
+    });
+    expect(result.ok).toBe(true);
+    if (!result.ok) throw new Error(result.reason);
+    const mainXml = serializeOoxmlPart(
+      store.currentPackage().parts.get(store.currentPackage().mainDocumentPart)!
+    );
+    expect(mainXml).toContain('<w:endnoteReference');
+    expect(mainXml).toContain('<w:rStyle w:val="EndnoteReference"/>');
+    expect(mainXml).toContain('<w:hyperlink');
+  });
 });
 
 describe('setNoteProperties', () => {
@@ -686,11 +758,114 @@ describe('note reference scan budget', () => {
     const hits = collectNoteReferences(pkg.parts.get(pkg.mainDocumentPart)!);
     expect(hits).toHaveLength(1);
     expect(hits[0]!.atomOffset).toBe(1);
+    expect(hits[0]!.partName).toBe(pkg.mainDocumentPart);
 
     const budget = createNoteReferenceScanBudget(8);
     collectPackageNoteReferences(pkg, { budget });
     expect(budget.visited).toBeLessThanOrEqual(8);
     collectPackageNoteReferences(pkg, { budget });
     expect(budget.truncated).toBe(true);
+  });
+
+  function padPart(name: string): OoxmlPart {
+    const read = readOoxmlPart(
+      `<w:hdr xmlns:w="${W}"><w:p><w:r><w:t>pad</w:t></w:r></w:p></w:hdr>`,
+      {
+        name,
+        contentType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.header+xml',
+      }
+    );
+    if (!read.ok) throw new Error(read.reason);
+    return read.part;
+  }
+
+  /** Insert padding XML parts ahead of existing ones so late refs sit after the part gate. */
+  function prependPaddingParts(pkg: OoxmlPackage, count: number): OoxmlPackage {
+    const parts = new Map<string, OoxmlPart>();
+    for (let i = 0; i < count; i += 1) {
+      const name = `/word/_pad${i}.xml`;
+      parts.set(name, padPart(name));
+    }
+    for (const [name, part] of pkg.parts) parts.set(name, part);
+    return { ...pkg, parts };
+  }
+
+  test('deleteNote N parts succeeds; N+1 truncates atomically with package unchanged', () => {
+    const body = `<w:p><w:r><w:footnoteReference w:id="1"/></w:r></w:p>`;
+    const base = load(build({ body, footnotes: seededNotes }));
+    const xmlCount = [...base.parts.values()].filter((part) => part.name.endsWith('.xml')).length;
+
+    const atCap = prependPaddingParts(base, 0);
+    const ok = applyNoteLifecycleOp(
+      atCap,
+      { op: 'deleteNote', noteKind: 'footnote', noteId: 1 },
+      { scanBudget: createNoteReferenceScanBudget(20_000, xmlCount) }
+    );
+    expect(ok.ok).toBe(true);
+
+    const padded = prependPaddingParts(base, 3);
+    const beforeFp = canonicalOoxmlFingerprint(padded.parts.get(padded.mainDocumentPart)!);
+    const beforeNotesFp = canonicalOoxmlFingerprint(resolveNotesPart(padded, 'footnote')!);
+    // Cap equals padding only — original document/notes parts are past the gate and hold
+    // the late reference.
+    const refused = applyNoteLifecycleOp(
+      padded,
+      { op: 'deleteNote', noteKind: 'footnote', noteId: 1 },
+      { scanBudget: createNoteReferenceScanBudget(20_000, 3) }
+    );
+    expect(refused.ok).toBe(false);
+    if (refused.ok) throw new Error('expected truncation');
+    expect(refused.detail).toBe('reference-scan-truncated');
+    expect(canonicalOoxmlFingerprint(padded.parts.get(padded.mainDocumentPart)!)).toBe(beforeFp);
+    expect(canonicalOoxmlFingerprint(resolveNotesPart(padded, 'footnote')!)).toBe(beforeNotesFp);
+    expect(collectNoteReferences(padded.parts.get(padded.mainDocumentPart)!)).toHaveLength(1);
+    expect(findNoteById(resolveNotesPart(padded, 'footnote')!.root, 1)).toBeDefined();
+  });
+
+  test('convertNote rejects on visited-node budget exhaustion before late reference', () => {
+    const body = `<w:p><w:r><w:footnoteReference w:id="1"/></w:r></w:p>`;
+    const base = load(
+      build({
+        body,
+        footnotes: seededNotes,
+        endnotes:
+          `<w:endnote w:type="separator" w:id="-1"><w:p/></w:endnote>` +
+          `<w:endnote w:type="continuationSeparator" w:id="0"><w:p/></w:endnote>`,
+      })
+    );
+    const padded = prependPaddingParts(base, 8);
+    const beforeMain = canonicalOoxmlFingerprint(padded.parts.get(padded.mainDocumentPart)!);
+    const beforeFn = canonicalOoxmlFingerprint(resolveNotesPart(padded, 'footnote')!);
+
+    const refused = applyNoteLifecycleOp(
+      padded,
+      { op: 'convertNote', fromKind: 'footnote', noteId: 1 },
+      // Tiny visited budget exhausts while walking padding parts; late citation never seen.
+      { scanBudget: createNoteReferenceScanBudget(12, MAX_NOTE_REFERENCE_PARTS) }
+    );
+    expect(refused.ok).toBe(false);
+    if (refused.ok) throw new Error('expected truncation');
+    expect(refused.detail).toBe('reference-scan-truncated');
+    expect(canonicalOoxmlFingerprint(padded.parts.get(padded.mainDocumentPart)!)).toBe(beforeMain);
+    expect(canonicalOoxmlFingerprint(resolveNotesPart(padded, 'footnote')!)).toBe(beforeFn);
+    expect(resolveNotesPart(padded, 'endnote')).not.toBeNull();
+    expect(
+      resolveNotesPart(padded, 'endnote')!.root.children.some((child) => isNormalNote(child))
+    ).toBe(false);
+  });
+
+  test('package collector marks part-budget truncation without mutating hits into a partial rewrite', () => {
+    const body = `<w:p><w:r><w:footnoteReference w:id="1"/></w:r></w:p>`;
+    const base = load(build({ body, footnotes: seededNotes }));
+    const padded = prependPaddingParts(base, 2);
+    const budget = createNoteReferenceScanBudget(20_000, 2);
+    const hits = collectPackageNoteReferences(padded, {
+      budget,
+      maxHits: Number.POSITIVE_INFINITY,
+    });
+    expect(budget.truncated).toBe(true);
+    expect(budget.parts).toBe(2);
+    // Late main-document reference must not appear when the part gate truncates first.
+    expect(hits.every((hit) => hit.partName.startsWith('/word/_pad'))).toBe(true);
   });
 });

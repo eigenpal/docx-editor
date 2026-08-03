@@ -3,8 +3,9 @@
 // Fail-open on load (matching `resolveHeaderFooterParts`): dangling references are
 // retained and reported. Mutation paths that target a missing note fail closed elsewhere.
 //
-// Scans are bounded by visited nodes (not hit count). Package-wide collectors share one
-// visited budget so hostile parts cannot multiply a per-part cap.
+// Scans are bounded by visited nodes (not hit count) and XML part count. Package-wide
+// collectors share one budget so hostile parts cannot multiply a per-part cap. Mutation
+// callers MUST treat `budget.truncated` as atomic failure — never apply a partial rewrite.
 
 import { WML_NAMESPACE_URI } from './ooxml-shared.ts';
 import type { OoxmlNode, OoxmlParagraphNode, OoxmlPart } from './ooxml-tree.ts';
@@ -36,6 +37,12 @@ const ENDNOTES_REL = 'http://schemas.openxmlformats.org/officeDocument/2006/rela
 /** Cap on nodes visited while scanning for note references across stories. */
 export const MAX_NOTE_REFERENCE_SCAN = 20_000;
 
+/**
+ * Cap on XML parts walked in one package-wide note-reference scan (N/N+1 gate).
+ * Soft targets are not allowed: exceeding this marks the shared budget truncated.
+ */
+export const MAX_NOTE_REFERENCE_PARTS = 256;
+
 export type NoteDiagnosticCode = 'dangling-note-reference';
 
 export interface NoteDiagnostic {
@@ -54,20 +61,25 @@ export interface NoteReferenceHit {
   /** Canonical UTF-16 atom offset within {@link paragraphId} (U+FFFC model). */
   readonly atomOffset: number;
   readonly customMarkFollows: boolean;
+  /** Canonical part name that owns this reference. */
+  readonly partName: string;
 }
 
-/** Mutable visited-node budget shared across parts / package snapshots. */
+/** Mutable visited-node + part budget shared across parts / package snapshots. */
 export interface NoteReferenceScanBudget {
   visited: number;
   readonly maxVisited: number;
-  /** Set when a walk stops before finishing because the visited cap was hit. */
+  parts: number;
+  readonly maxParts: number;
+  /** Set when a walk stops before finishing because a cap was hit. */
   truncated: boolean;
 }
 
 export function createNoteReferenceScanBudget(
-  maxVisited: number = MAX_NOTE_REFERENCE_SCAN
+  maxVisited: number = MAX_NOTE_REFERENCE_SCAN,
+  maxParts: number = MAX_NOTE_REFERENCE_PARTS
 ): NoteReferenceScanBudget {
-  return { visited: 0, maxVisited, truncated: false };
+  return { visited: 0, maxVisited, parts: 0, maxParts, truncated: false };
 }
 
 function isWml(node: OoxmlNode, localName: string): boolean {
@@ -110,6 +122,15 @@ function charge(budget: NoteReferenceScanBudget | undefined): boolean {
   return true;
 }
 
+function chargePart(budget: NoteReferenceScanBudget): boolean {
+  if (budget.parts >= budget.maxParts) {
+    budget.truncated = true;
+    return false;
+  }
+  budget.parts += 1;
+  return true;
+}
+
 /** Resolve the footnotes or endnotes part via safe Internal document relationships. */
 export function resolveNotesPart(pkg: OoxmlPackage, noteKind: NoteKind): OoxmlPart | null {
   const typeUri = noteKind === 'footnote' ? FOOTNOTES_REL : ENDNOTES_REL;
@@ -127,15 +148,40 @@ export function resolveNotesPart(pkg: OoxmlPackage, noteKind: NoteKind): OoxmlPa
   return null;
 }
 
+function pushReferenceHit(
+  hits: NoteReferenceHit[],
+  node: OoxmlNode,
+  paragraphId: string,
+  atomOffset: number,
+  partName: string,
+  maxHits: number
+): void {
+  const refKind = noteReferenceKindOf(node);
+  if (!refKind) return;
+  const noteId = noteIdOf(node);
+  if (noteId === null || hits.length >= maxHits) return;
+  hits.push({
+    noteKind: refKind,
+    noteId,
+    nodeId: node.id,
+    paragraphId,
+    atomOffset,
+    customMarkFollows: customMarkFollowsOf(node),
+    partName,
+  });
+}
+
 /**
  * Collect note references inside one paragraph with canonical UTF-16 atom offsets.
  * Offset rules mirror `segmentsOf` (fields + note atoms = one unit each).
+ * Walks hyperlink and generic inline containers so demoted wrappers cannot hide refs.
  */
 function collectParagraphNoteReferences(
   paragraph: OoxmlParagraphNode,
   hits: NoteReferenceHit[],
   budget: NoteReferenceScanBudget | undefined,
-  maxHits: number
+  maxHits: number,
+  partName: string
 ): void {
   if (hits.length >= maxHits || (budget && budget.truncated)) return;
 
@@ -161,21 +207,8 @@ function collectParagraphNoteReferences(
     if (covered.has(node.id)) return;
 
     const noteAtom = noteAtomById.get(node.id);
-    if (noteAtom || isNoteAtomNode(node)) {
-      const refKind = noteReferenceKindOf(node);
-      if (refKind) {
-        const noteId = noteIdOf(node);
-        if (noteId !== null && hits.length < maxHits) {
-          hits.push({
-            noteKind: refKind,
-            noteId,
-            nodeId: node.id,
-            paragraphId: paragraph.id,
-            atomOffset: offset,
-            customMarkFollows: customMarkFollowsOf(node),
-          });
-        }
-      }
+    if (noteAtom || isNoteAtomNode(node) || noteReferenceKindOf(node) !== null) {
+      pushReferenceHit(hits, node, paragraph.id, offset, partName, maxHits);
       offset += 1;
       return;
     }
@@ -197,7 +230,12 @@ function collectParagraphNoteReferences(
       offset += 1;
       return;
     }
-    if (node.kind === 'runProperties' || node.kind === 'generic') return;
+    if (node.kind === 'runProperties') return;
+    if (node.kind === 'generic') {
+      // Demoted wrappers may still nest runs/refs; charge continues via recursion.
+      for (const child of node.children) visitRunChild(child);
+      return;
+    }
     if (node.kind === 'text') {
       for (const child of node.children) visitRunChild(child);
       return;
@@ -218,7 +256,9 @@ function collectParagraphNoteReferences(
       for (const grand of child.children) visitRunChild(grand);
       return;
     }
-    if (child.kind === 'hyperlink') {
+    // Hyperlink is a typed run container; generic wrappers (demoted SDT/link husks) may
+    // still hold runs or nested containers — walk both so refs cannot hide.
+    if (child.kind === 'hyperlink' || child.kind === 'generic') {
       for (const inner of child.children) visitInline(inner);
     }
   };
@@ -228,7 +268,8 @@ function collectParagraphNoteReferences(
 
 /**
  * Walk a part for typed/generic note references. Bounded by visited nodes; skips deep
- * hostile nesting. When `budget` is supplied it is shared and mutated in place.
+ * hostile nesting by marking the shared budget truncated. When `budget` is supplied it is
+ * shared and mutated in place.
  */
 export function collectNoteReferences(
   part: OoxmlPart,
@@ -237,17 +278,23 @@ export function collectNoteReferences(
     readonly budget?: NoteReferenceScanBudget;
   }
 ): readonly NoteReferenceHit[] {
+  // Hit count is a soft collector bound for diagnostics only. Mutation paths pass an
+  // unbounded maxHits and rely on the visited-node budget (+ truncation) instead.
   const maxHits = options?.maxHits ?? MAX_NOTE_REFERENCE_SCAN;
   const budget = options?.budget;
   const hits: NoteReferenceHit[] = [];
 
   const walk = (node: OoxmlNode, depth: number): void => {
-    if (hits.length >= maxHits || depth > 64) return;
+    if (hits.length >= maxHits || (budget && budget.truncated)) return;
+    if (depth > 64) {
+      if (budget) budget.truncated = true;
+      return;
+    }
     if (!charge(budget)) return;
     if (node.kind === 'textValue') return;
 
     if (node.kind === 'paragraph') {
-      collectParagraphNoteReferences(node, hits, budget, maxHits);
+      collectParagraphNoteReferences(node, hits, budget, maxHits, part.name);
       return;
     }
 
@@ -258,18 +305,24 @@ export function collectNoteReferences(
   return hits;
 }
 
-/** Collect references across every XML part under one shared visited-node budget. */
+/** Collect references across every XML part under one shared part + visited-node budget. */
 export function collectPackageNoteReferences(
   pkg: OoxmlPackage,
-  options?: { readonly budget?: NoteReferenceScanBudget }
+  options?: {
+    readonly budget?: NoteReferenceScanBudget;
+    /** Soft hit cap for diagnostics. Omit / Infinity for mutation scans. */
+    readonly maxHits?: number;
+  }
 ): readonly NoteReferenceHit[] {
   const budget = options?.budget ?? createNoteReferenceScanBudget();
+  const maxHits = options?.maxHits ?? MAX_NOTE_REFERENCE_SCAN;
   const hits: NoteReferenceHit[] = [];
   for (const part of pkg.parts.values()) {
-    if (budget.truncated || hits.length >= MAX_NOTE_REFERENCE_SCAN) break;
+    if (budget.truncated) break;
     if (!part.name.endsWith('.xml')) continue;
+    if (!chargePart(budget)) break;
     const batch = collectNoteReferences(part, {
-      maxHits: MAX_NOTE_REFERENCE_SCAN - hits.length,
+      maxHits: Number.isFinite(maxHits) ? Math.max(0, maxHits - hits.length) : maxHits,
       budget,
     });
     hits.push(...batch);

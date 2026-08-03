@@ -53,7 +53,9 @@ import type {
 } from './semantic-records.ts';
 import type { ParagraphLayoutCache } from './layout-cache.ts';
 import type { PendingLine } from './paragraph-flow.ts';
-import type { StyleCascadeTable } from './style-cascade.ts';
+import { cascadeRunProperties, type StyleCascadeTable } from './style-cascade.ts';
+import { DEFAULT_RUN_STYLE, resolveRunStyle, type ResolvedRunStyle } from './run-style.ts';
+import { finalizePageFieldProjection } from './field-projection.ts';
 
 /** Bound on reflow attempts per document layout pass. */
 export const MAX_NOTE_REFLOW_ATTEMPTS = 8;
@@ -64,11 +66,24 @@ export const MAX_NOTE_AREA_FRAGMENTS = 4_096;
 /** Cap on empty pages created solely to drain footnote/endnote overflow. */
 export const MAX_NOTE_OVERFLOW_PAGES = 256;
 
+/**
+ * Cap on synthetic eachPage mark candidates measured per section (plus actual marks).
+ *
+ * eachPage sequences restart every page, so a page almost never carries more than a
+ * handful of auto-numbered notes. Measuring `numStart .. numStart + N - 1` covers
+ * single→double digit decimal growth and typical roman width peaks (e.g. `viii` vs `ix`)
+ * without scanning hostile `numStart` ranges unboundedly. Derived marks already assigned
+ * for the pass are always included in addition to this window.
+ */
+export const MAX_EACH_PAGE_MARK_CANDIDATES = 12;
+
 export type NotePaginationFallbackReason =
   | NoteLayoutFallbackReason
   | 'note-reflow-exhausted'
   | 'note-area-fragment-limit'
-  | 'note-overflow-page-limit';
+  | 'note-overflow-page-limit'
+  /** A single note line exceeds the full content column; content is not placed overflowing. */
+  | 'note-line-exceeds-page';
 
 export interface NotesLayoutInput {
   readonly footnotesPart: OoxmlPart | null;
@@ -212,20 +227,183 @@ function layoutOpts(input: NotesLayoutInput, noteMarks?: NoteMarkContext): Layou
   };
 }
 
+function shiftParagraphFragment(
+  fragment: ParagraphFragmentRecord,
+  dy: number
+): ParagraphFragmentRecord {
+  if (dy === 0) return fragment;
+  return {
+    ...fragment,
+    box: { ...fragment.box, y: fragment.box.y + dy },
+    ...(fragment.shadingBox
+      ? { shadingBox: { ...fragment.shadingBox, y: fragment.shadingBox.y + dy } }
+      : {}),
+    ...(fragment.bottomBorder
+      ? {
+          bottomBorder: {
+            ...fragment.bottomBorder,
+            box: { ...fragment.bottomBorder.box, y: fragment.bottomBorder.box.y + dy },
+          },
+        }
+      : {}),
+    ...(fragment.borders
+      ? {
+          borders: fragment.borders.map((stroke) => ({
+            ...stroke,
+            box: { ...stroke.box, y: stroke.box.y + dy },
+          })),
+        }
+      : {}),
+    ...(fragment.marker
+      ? {
+          marker: {
+            ...fragment.marker,
+            box: { ...fragment.marker.box, y: fragment.marker.box.y + dy },
+          },
+        }
+      : {}),
+    lines: fragment.lines.map((line) => ({
+      ...line,
+      box: { ...line.box, y: line.box.y + dy },
+      spans: line.spans.map((span) => ({
+        ...span,
+        box: { ...span.box, y: span.box.y + dy },
+      })),
+    })),
+  };
+}
+
 function shiftFragments(
   fragments: readonly BlockFragmentRecord[],
   dy: number
 ): BlockFragmentRecord[] {
   if (dy === 0) return [...fragments];
-  return fragments.map((fragment) => ({
-    ...fragment,
-    box: { ...fragment.box, y: fragment.box.y + dy },
-  }));
+  return fragments.map((fragment) => {
+    if (fragment.kind === 'paragraph') return shiftParagraphFragment(fragment, dy);
+    return {
+      ...fragment,
+      box: { ...fragment.box, y: fragment.box.y + dy },
+    };
+  });
 }
 
+/**
+ * Split one paragraph fragment at a line boundary so the head fits under `availableBottom`
+ * (story-relative). Empty head means no line fits — caller must defer the fragment.
+ */
+function splitParagraphFragmentByBottom(
+  fragment: ParagraphFragmentRecord,
+  availableBottom: number
+): {
+  readonly head: ParagraphFragmentRecord | null;
+  readonly tail: ParagraphFragmentRecord | null;
+} {
+  if (fragment.lines.length === 0) {
+    return fragment.box.y + fragment.box.height <= availableBottom + 0.001
+      ? { head: fragment, tail: null }
+      : { head: null, tail: fragment };
+  }
+
+  let cut = 0;
+  for (; cut < fragment.lines.length; cut += 1) {
+    const line = fragment.lines[cut]!;
+    if (line.box.y + line.box.height > availableBottom + 0.001) break;
+  }
+  if (cut === 0) return { head: null, tail: fragment };
+  if (cut >= fragment.lines.length) return { head: fragment, tail: null };
+
+  const headLines = fragment.lines.slice(0, cut);
+  const tailLines = fragment.lines.slice(cut);
+  const headLast = headLines[headLines.length - 1]!;
+  const headTop = fragment.box.y;
+  const headBottom = headLast.box.y + headLast.box.height;
+  const headBorders = fragment.borders?.filter((stroke) => stroke.side !== 'bottom');
+
+  const head: ParagraphFragmentRecord = {
+    ...fragment,
+    range: {
+      paragraphId: fragment.paragraphId,
+      start: headLines[0]!.range.start,
+      end: headLast.range.end,
+    },
+    spacing: { before: fragment.spacing.before, after: 0 },
+    lines: headLines,
+    box: { ...fragment.box, height: Math.max(0, headBottom - headTop) },
+    ...(headBorders && headBorders.length > 0 ? { borders: headBorders } : { borders: undefined }),
+    bottomBorder: undefined,
+    ...(fragment.shadingBox
+      ? {
+          shadingBox: {
+            ...fragment.shadingBox,
+            height: Math.max(0, headBottom - fragment.shadingBox.y),
+          },
+        }
+      : {}),
+  };
+
+  // Keep the tail in the original story coordinate space; {@link splitNoteFragments} rebases
+  // the whole raw tail with one shift so sibling blocks stay contiguous.
+  const tailLast = tailLines[tailLines.length - 1]!;
+  const tailTop = tailLines[0]!.box.y;
+  const tailBottom = tailLast.box.y + tailLast.box.height;
+  const tailBorders = fragment.borders?.filter((stroke) => stroke.side !== 'top');
+  const tail: ParagraphFragmentRecord = {
+    ...fragment,
+    id: `${fragment.paragraphId}#f${fragment.fragmentIndex + 1}`,
+    fragmentIndex: fragment.fragmentIndex + 1,
+    range: {
+      paragraphId: fragment.paragraphId,
+      start: tailLines[0]!.range.start,
+      end: tailLines[tailLines.length - 1]!.range.end,
+    },
+    spacing: { before: 0, after: fragment.spacing.after },
+    lines: tailLines,
+    box: {
+      x: fragment.box.x,
+      y: tailTop,
+      width: fragment.box.width,
+      height: Math.max(0, tailBottom - tailTop),
+    },
+    marker: undefined,
+    ...(tailBorders && tailBorders.length > 0 ? { borders: tailBorders } : { borders: undefined }),
+    ...(fragment.bottomBorder ? { bottomBorder: fragment.bottomBorder } : {}),
+    ...(fragment.shadingBox
+      ? {
+          shadingBox: {
+            x: fragment.shadingBox.x,
+            y: tailTop,
+            width: fragment.shadingBox.width,
+            height: Math.max(0, tailBottom - tailTop),
+          },
+        }
+      : {}),
+  };
+  return { head, tail };
+}
+
+function fragmentFlowBottom(fragments: readonly BlockFragmentRecord[]): number {
+  let bottom = 0;
+  for (const fragment of fragments) {
+    bottom = Math.max(bottom, fragment.box.y + fragment.box.height);
+  }
+  return bottom;
+}
+
+/**
+ * Split a note story so the head fits in `availableHeight` (story-relative).
+ *
+ * Allows an empty head (entire story moves to the next page) instead of accepting a first
+ * fragment taller than the remaining room. Paragraph fragments split at line boundaries;
+ * a single line that exceeds a full content column records {@link note-line-exceeds-page}
+ * and is not placed with overflowing geometry.
+ */
 function splitNoteFragments(
   laid: NoteStoryLayout,
-  availableHeight: number
+  availableHeight: number,
+  options?: {
+    readonly fullContentHeight?: number;
+    readonly reasons?: NotePaginationFallbackReason[];
+  }
 ): {
   readonly head: readonly BlockFragmentRecord[];
   readonly headHeight: number;
@@ -240,22 +418,156 @@ function splitNoteFragments(
       tailHeight: 0,
     };
   }
+  if (availableHeight <= 0.001) {
+    return {
+      head: [],
+      headHeight: 0,
+      tail: laid.fragments,
+      tailHeight: laid.flowHeight,
+    };
+  }
+
   const head: BlockFragmentRecord[] = [];
   let headHeight = 0;
   let cut = 0;
+  let partialTail: BlockFragmentRecord | null = null;
+
   for (let i = 0; i < laid.fragments.length && i < MAX_NOTE_FRAGMENTS; i += 1) {
     const fragment = laid.fragments[i]!;
     const next = fragment.box.y + fragment.box.height;
-    if (next > availableHeight + 0.001 && head.length > 0) break;
-    head.push(fragment);
-    headHeight = next;
-    cut = i + 1;
+    if (next <= availableHeight + 0.001) {
+      head.push(fragment);
+      headHeight = next;
+      cut = i + 1;
+      continue;
+    }
+
+    if (fragment.kind === 'paragraph') {
+      const split = splitParagraphFragmentByBottom(fragment, availableHeight);
+      if (split.head) {
+        head.push(split.head);
+        headHeight = split.head.box.y + split.head.box.height;
+        partialTail = split.tail;
+        cut = i + 1;
+      } else {
+        // No line fits in the remaining room — leave head as-is (possibly empty) and
+        // defer this fragment. When the room is a full content column and one line still
+        // does not fit, record a named fallback rather than overflowing geometry.
+        const fullH = options?.fullContentHeight ?? availableHeight;
+        const firstLine = fragment.lines[0];
+        const lineH = firstLine?.box.height ?? fragment.box.height;
+        if (head.length === 0 && availableHeight >= fullH - 0.001 && lineH > fullH + 0.001) {
+          options?.reasons?.push('note-line-exceeds-page');
+          // Skip the unsplittable fragment; continue attempting later siblings on a fresh
+          // carry rather than clipping it into the column.
+          cut = i + 1;
+          partialTail = null;
+          const rest = laid.fragments.slice(cut);
+          const dy = rest[0]?.box.y ?? 0;
+          return {
+            head: [],
+            headHeight: 0,
+            tail: shiftFragments(rest, -dy),
+            tailHeight: Math.max(0, laid.flowHeight - dy),
+          };
+        }
+        cut = i;
+        partialTail = null;
+      }
+      break;
+    }
+
+    // Tables / non-paragraph: never accept an overflowing first fragment.
+    cut = i;
+    break;
   }
-  const rawTail = laid.fragments.slice(cut);
+
+  const rawTail = [...(partialTail ? [partialTail] : []), ...laid.fragments.slice(cut)];
+  if (rawTail.length === 0) {
+    return { head, headHeight, tail: [], tailHeight: 0 };
+  }
   const dy = rawTail[0]?.box.y ?? 0;
   const tail = shiftFragments(rawTail, -dy);
-  const tailHeight = Math.max(0, laid.flowHeight - dy);
+  const tailHeight = fragmentFlowBottom(tail);
   return { head, headHeight, tail, tailHeight };
+}
+
+function effectiveNoteMarkStyle(
+  noteKind: NoteKind,
+  styleCascade: StyleCascadeTable | undefined
+): ResolvedRunStyle {
+  const styleId = noteKind === 'footnote' ? 'FootnoteReference' : 'EndnoteReference';
+  if (!styleCascade) {
+    return { ...DEFAULT_RUN_STYLE, verticalAlign: 'superscript' };
+  }
+  const props = cascadeRunProperties(
+    [],
+    [{ localName: 'rStyle', attributes: { val: styleId } }],
+    styleCascade
+  );
+  return resolveRunStyle(props);
+}
+
+/**
+ * Pick the widest-measuring eachPage reservation string across actual marks and a bounded
+ * window of per-section candidate values/formats. Selection is by measured width under the
+ * effective mark style — not string length — so proportional fonts where a shorter glyph
+ * run is wider (e.g. `ii` vs `10`) reserve correctly.
+ */
+function selectEachPageReservedMarkText(
+  marks: ReadonlyMap<string, string | null>,
+  input: NotesLayoutInput,
+  footnoteSites: readonly NoteReferenceSite[],
+  endnoteSites: readonly NoteReferenceSite[]
+): string | undefined {
+  const candidates = new Set<string>();
+  for (const mark of marks.values()) {
+    if (mark && mark.length > 0) candidates.add(mark);
+  }
+
+  const sectionCount = Math.max(
+    input.footnotePropsBySection.length,
+    input.endnotePropsBySection.length,
+    1,
+    ...footnoteSites.map((site) => site.sectionIndex + 1),
+    ...endnoteSites.map((site) => site.sectionIndex + 1)
+  );
+
+  let usesEachPage = false;
+  for (let sectionIndex = 0; sectionIndex < sectionCount; sectionIndex += 1) {
+    const fn = footnotePropsFor(input, sectionIndex);
+    if (fn.numRestart === 'eachPage') {
+      usesEachPage = true;
+      for (let i = 0; i < MAX_EACH_PAGE_MARK_CANDIDATES; i += 1) {
+        const text = formatNumFmt(fn.numFmt, fn.numStart + i);
+        if (text.length > 0) candidates.add(text);
+      }
+    }
+    const en = endnotePropsFor(input, sectionIndex);
+    if (en.numRestart === 'eachPage') {
+      usesEachPage = true;
+      for (let i = 0; i < MAX_EACH_PAGE_MARK_CANDIDATES; i += 1) {
+        const text = formatNumFmt(en.numFmt, en.numStart + i);
+        if (text.length > 0) candidates.add(text);
+      }
+    }
+  }
+  if (!usesEachPage || candidates.size === 0) return undefined;
+
+  const style = effectiveNoteMarkStyle('footnote', input.styleCascade);
+  let best: string | undefined;
+  let bestWidth = -1;
+  for (const text of candidates) {
+    const width = input.measurer.measure(text, style);
+    if (
+      width > bestWidth + 0.001 ||
+      (Math.abs(width - bestWidth) <= 0.001 && text.length > (best?.length ?? 0))
+    ) {
+      best = text;
+      bestWidth = width;
+    }
+  }
+  return best;
 }
 
 function buildMarkContext(
@@ -277,22 +589,12 @@ function buildMarkContext(
     marks.set(noteMarkKey('endnote', entry.noteId), entry.mark);
   }
 
-  // eachPage: reserve digit width per section that restarts on pages; keep the widest
-  // candidate so 9→10 cannot re-paginate under any section's numFmt.
-  let reservedMarkText: string | undefined;
-  const sectionCount = Math.max(
-    input.footnotePropsBySection.length,
-    1,
-    ...footnoteSites.map((site) => site.sectionIndex + 1)
+  const reservedMarkText = selectEachPageReservedMarkText(
+    marks,
+    input,
+    footnoteSites,
+    endnoteSites
   );
-  for (let sectionIndex = 0; sectionIndex < sectionCount; sectionIndex += 1) {
-    const props = footnotePropsFor(input, sectionIndex);
-    if (props.numRestart !== 'eachPage') continue;
-    const candidate = formatNumFmt(props.numFmt, Math.max(props.numStart + 9, 10));
-    if (!reservedMarkText || candidate.length > reservedMarkText.length) {
-      reservedMarkText = candidate;
-    }
-  }
   return {
     marks,
     ...(reservedMarkText ? { reservedMarkText } : {}),
@@ -339,6 +641,8 @@ function buildFootnoteArea(
     placement === 'beneathText'
       ? Math.max(0, page.contentBox.height - bodyUsedHeight(page) - separator.flowHeight)
       : Math.max(0, page.contentBox.height - bodyUsedHeight(page) - separator.flowHeight);
+  const fullNoteColumn = Math.max(0, page.contentBox.height - separator.flowHeight);
+  const splitOpts = { fullContentHeight: fullNoteColumn, reasons };
 
   // Place continuations.
   for (const [scopeId, carry] of continuationCarry) {
@@ -373,7 +677,8 @@ function buildFootnoteArea(
           fragments: carry.fragments,
           flowHeight: carry.height,
         },
-        room
+        room,
+        splitOpts
       );
       if (split.head.length > 0) {
         notes.push({
@@ -437,7 +742,7 @@ function buildFootnoteArea(
       });
       stackHeight += laid.flowHeight;
     } else {
-      const split = splitNoteFragments(laid, room);
+      const split = splitNoteFragments(laid, room, splitOpts);
       if (split.head.length > 0) {
         notes.push({
           noteKind: 'footnote',
@@ -534,6 +839,68 @@ function cloneEmptyOverflowPage(template: PageRecord, index: number): PageRecord
   };
 }
 
+/** Section indexes represented by body paragraph fragments on a page. */
+function pageBodySectionIndexes(
+  page: PageRecord,
+  paragraphSectionIndex: ReadonlyMap<string, number>
+): readonly number[] {
+  const found = new Set<number>();
+  for (const fragment of paragraphFragmentsOfBlocks(page.fragments)) {
+    found.add(paragraphSectionIndex.get(fragment.paragraphId) ?? 0);
+  }
+  return [...found].sort((a, b) => a - b);
+}
+
+/** Last page index that carries any body content owned by `sectionIndex`. */
+function lastPageIndexForSection(
+  pages: readonly PageRecord[],
+  sectionIndex: number,
+  paragraphSectionIndex: ReadonlyMap<string, number>
+): number {
+  for (let i = pages.length - 1; i >= 0; i -= 1) {
+    if (pageBodySectionIndexes(pages[i]!, paragraphSectionIndex).includes(sectionIndex)) {
+      return i;
+    }
+  }
+  return Math.max(0, pages.length - 1);
+}
+
+/**
+ * Exclusive upper bound for advancing into existing pages while placing section-end notes:
+ * the first page after `sectionIndex`'s last page that has no body content from that section.
+ * Overflow sheets are inserted at this boundary so notes never land on a later section's pages.
+ */
+function sectionEndInsertBound(
+  pages: readonly PageRecord[],
+  sectionIndex: number,
+  paragraphSectionIndex: ReadonlyMap<string, number>
+): number {
+  const last = lastPageIndexForSection(pages, sectionIndex, paragraphSectionIndex);
+  for (let i = last + 1; i < pages.length; i += 1) {
+    const sections = pageBodySectionIndexes(pages[i]!, paragraphSectionIndex);
+    if (sections.length === 0) continue;
+    if (!sections.includes(sectionIndex)) return i;
+  }
+  return pages.length;
+}
+
+function reindexPages(pages: readonly PageRecord[]): PageRecord[] {
+  return pages.map((page, index) => {
+    if (page.index === index && page.id === `page-${index}`) return page;
+    return { ...page, id: `page-${index}`, index };
+  });
+}
+
+/**
+ * After note overflow insertion, reindex sheets and re-project allowlisted PAGE fields.
+ * Inserted overflow pages already carry a `pageFieldSource` cloned from the section template;
+ * document-level NUMPAGES and furniture text need finalize against the new page count.
+ */
+function reindexAndFinalizeFields(pages: readonly PageRecord[]): PageRecord[] {
+  const reindexed = reindexPages(pages);
+  return [...finalizePageFieldProjection({ revision: 0, pages: reindexed }).pages];
+}
+
 /**
  * Place endnotes (or sect/doc-end footnotes) onto `page`, splitting under a continuation
  * separator when they do not fit. Returns unplaced carry for further pages.
@@ -570,6 +937,8 @@ function buildEndnoteArea(
   );
   const sepHeight = separator.flowHeight;
   const availableForNotes = Math.max(0, page.contentBox.height - bodyUsedHeight(page) - sepHeight);
+  const fullNoteColumn = Math.max(0, page.contentBox.height - sepHeight);
+  const splitOpts = { fullContentHeight: fullNoteColumn, reasons };
 
   const notes: NoteStoryRecord[] = [];
   let stackHeight = 0;
@@ -603,7 +972,8 @@ function buildEndnoteArea(
           fragments: carry.fragments,
           flowHeight: carry.height,
         },
-        room
+        room,
+        splitOpts
       );
       if (split.head.length > 0) {
         notes.push({
@@ -662,7 +1032,7 @@ function buildEndnoteArea(
       });
       stackHeight += laid.flowHeight;
     } else {
-      const split = splitNoteFragments(laid, room);
+      const split = splitNoteFragments(laid, room, splitOpts);
       if (split.head.length > 0) {
         notes.push({
           noteKind: ref.noteKind,
@@ -760,6 +1130,46 @@ function drainFootnoteCarryPages(
   return { pages: nextPages, carry: nextCarry };
 }
 
+function insertOverflowPageAt(
+  pages: PageRecord[],
+  insertAt: number,
+  template: PageRecord
+): { pages: PageRecord[]; pageIndex: number } {
+  const page = cloneEmptyOverflowPage(template, insertAt);
+  const next = [...pages.slice(0, insertAt), page, ...pages.slice(insertAt)];
+  return { pages: reindexPages(next), pageIndex: insertAt };
+}
+
+/**
+ * Patch section-local PAGE/SECTIONPAGES sources for pages `[start, endExclusive)` after
+ * overflow sheets were inserted into that section.
+ */
+function patchSectionFieldSources(
+  pages: PageRecord[],
+  start: number,
+  endExclusive: number
+): PageRecord[] {
+  if (endExclusive <= start || start >= pages.length) return pages;
+  const end = Math.min(endExclusive, pages.length);
+  const anchor = pages[start]!;
+  const displayedStart = anchor.pageFieldSource?.pageNumber ?? start + 1;
+  const format = anchor.pageFieldSource?.format;
+  const count = end - start;
+  const next = [...pages];
+  for (let i = start; i < end; i += 1) {
+    const page = next[i]!;
+    next[i] = {
+      ...page,
+      pageFieldSource: {
+        pageNumber: displayedStart + (i - start),
+        sectionPageCount: count,
+        ...(format ? { format } : {}),
+      },
+    };
+  }
+  return next;
+}
+
 /** Place collected endnotes starting at `startIndex`, creating overflow pages as needed. */
 function placeEndnotesFromPage(
   pages: PageRecord[],
@@ -768,24 +1178,44 @@ function placeEndnotesFromPage(
   input: NotesLayoutInput,
   noteMarks: NoteMarkContext,
   placement: 'sectEnd' | 'docEnd',
-  reasons: NotePaginationFallbackReason[]
+  reasons: NotePaginationFallbackReason[],
+  options?: {
+    /**
+     * Exclusive index of the first page that belongs to a later section. Overflow sheets are
+     * inserted here rather than advancing into subsequent-section body pages.
+     */
+    readonly stopBeforeIndex?: number;
+    /** First page index of the owning section (for SECTIONPAGES patching). */
+    readonly sectionStartIndex?: number;
+  }
 ): PageRecord[] {
   if (refs.length === 0 || pages.length === 0) return pages;
-  const nextPages = [...pages];
+  let nextPages = [...pages];
   let pending = [...refs];
   let carry: NoteCarryMap = new Map();
   let index = startIndex;
   let created = 0;
   let separatorKind: 'separator' | 'continuationSeparator' = 'separator';
+  // Tracks the first later-section page as overflow sheets are inserted before it.
+  let stopBefore = options?.stopBeforeIndex ?? Number.POSITIVE_INFINITY;
+  const sectionStart = options?.sectionStartIndex ?? startIndex;
+  const boundToSection = options?.stopBeforeIndex !== undefined;
 
   while ((pending.length > 0 || carry.size > 0) && created <= MAX_NOTE_OVERFLOW_PAGES) {
-    if (index >= nextPages.length) {
+    if (index >= nextPages.length || index >= stopBefore) {
       if (created >= MAX_NOTE_OVERFLOW_PAGES) {
         reasons.push('note-overflow-page-limit');
         break;
       }
-      const template = nextPages[nextPages.length - 1]!;
-      nextPages.push(cloneEmptyOverflowPage(template, template.index + 1));
+      const template =
+        nextPages[Math.min(Math.max(index, 1), nextPages.length) - 1] ??
+        nextPages[nextPages.length - 1]!;
+      const insertAt = Math.min(index, stopBefore, nextPages.length);
+      const inserted = insertOverflowPageAt(nextPages, insertAt, template);
+      nextPages = inserted.pages;
+      index = inserted.pageIndex;
+      // Later-section pages shifted right by one; keep the boundary after the new sheet.
+      if (boundToSection) stopBefore = insertAt + 1;
       created += 1;
     }
     const page = nextPages[index]!;
@@ -813,7 +1243,7 @@ function placeEndnotesFromPage(
     } else if (carry.size === 0 && pending.length === 0) {
       break;
     } else if (!built.area && carry.size === 0 && pending.length > 0) {
-      // No room on this page — advance / create the next.
+      // No room on this page — advance / create the next (still before later sections).
       index += 1;
       separatorKind = 'separator';
       continue;
@@ -827,6 +1257,16 @@ function placeEndnotesFromPage(
   }
   if (pending.length > 0 || carry.size > 0) {
     reasons.push('note-overflow-page-limit');
+  }
+
+  if (boundToSection) {
+    nextPages = patchSectionFieldSources(
+      nextPages,
+      sectionStart,
+      Math.min(stopBefore, nextPages.length)
+    );
+  } else if (created > 0) {
+    nextPages = patchSectionFieldSources(nextPages, sectionStart, nextPages.length);
   }
   return nextPages;
 }
@@ -897,9 +1337,13 @@ export function attachNotesToLayout(
   layout: SemanticLayout,
   allRefs: readonly PageRefHit[],
   input: NotesLayoutInput,
-  options?: { readonly fallbackReasons?: readonly NotePaginationFallbackReason[] }
+  options?: {
+    readonly fallbackReasons?: readonly NotePaginationFallbackReason[];
+    readonly paragraphSectionIndex?: ReadonlyMap<string, number>;
+  }
 ): NotesAttachResult {
   const reasons: NotePaginationFallbackReason[] = [...(options?.fallbackReasons ?? [])];
+  const paragraphSectionIndex = options?.paragraphSectionIndex ?? new Map<string, number>();
 
   // Build sites for mark derivation (page index from layout).
   const footnoteSites: NoteReferenceSite[] = [];
@@ -978,6 +1422,8 @@ export function attachNotesToLayout(
     };
   });
 
+  const pageCountBeforeOverflow = pages.length;
+
   // Drain footnote continuations that outlive the final body page.
   if (carry.size > 0) {
     const drained = drainFootnoteCarryPages(pages, carry, input, noteMarks, reasons);
@@ -985,19 +1431,26 @@ export function attachNotesToLayout(
     carry = drained.carry;
   }
 
-  // Place sectEnd endnotes on the last page of each section (approximate: last page
-  // whose body paragraphs belong to that section — fall back to last page overall).
+  // Place sectEnd notes on the true last page of each section (body fragment ownership),
+  // inserting overflow sheets before the next section rather than advancing into it.
   if (endnotesBySection.size > 0 && pages.length > 0) {
-    for (const [sectionIndex, refs] of endnotesBySection) {
-      const target =
-        [...pages]
-          .reverse()
-          .find((page) =>
-            filterRefsOnPage(page, allRefs).some((r) => r.sectionIndex === sectionIndex)
-          ) ?? pages[pages.length - 1]!;
-      const idx = pages.findIndex((p) => p.index === target.index);
-      if (idx < 0) continue;
-      pages = placeEndnotesFromPage(pages, idx, refs, input, noteMarks, 'sectEnd', reasons);
+    // Process sections in ascending order so later stopBefore indexes stay valid as we insert.
+    const sectionIndexes = [...endnotesBySection.keys()].sort((a, b) => a - b);
+    for (const sectionIndex of sectionIndexes) {
+      const refs = endnotesBySection.get(sectionIndex)!;
+      const lastIdx = lastPageIndexForSection(pages, sectionIndex, paragraphSectionIndex);
+      const stopBefore = sectionEndInsertBound(pages, sectionIndex, paragraphSectionIndex);
+      let sectionStart = lastIdx;
+      for (let i = 0; i <= lastIdx; i += 1) {
+        if (pageBodySectionIndexes(pages[i]!, paragraphSectionIndex).includes(sectionIndex)) {
+          sectionStart = i;
+          break;
+        }
+      }
+      pages = placeEndnotesFromPage(pages, lastIdx, refs, input, noteMarks, 'sectEnd', reasons, {
+        stopBeforeIndex: stopBefore,
+        sectionStartIndex: sectionStart,
+      });
     }
   }
 
@@ -1011,6 +1464,10 @@ export function attachNotesToLayout(
       'docEnd',
       reasons
     );
+  }
+
+  if (pages.length !== pageCountBeforeOverflow) {
+    pages = reindexAndFinalizeFields(pages);
   }
 
   return {
@@ -1131,6 +1588,7 @@ export function layoutSemanticDocumentWithNotes<
 
   const attached = attachNotesToLayout(bodyLayout, allHits, notesInput, {
     fallbackReasons,
+    paragraphSectionIndex,
   });
   if (optionsWithLists.session) {
     optionsWithLists.session.previous = attached.layout;

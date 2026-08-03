@@ -303,6 +303,7 @@ export {
 } from './note-properties.ts';
 export {
   MAX_NOTE_REFERENCE_SCAN,
+  MAX_NOTE_REFERENCE_PARTS,
   collectNoteReferences,
   collectPackageNoteReferences,
   createNoteReferenceScanBudget,
@@ -321,6 +322,7 @@ export {
   isNoteLifecycleOp,
   type NoteLifecycleImpact,
   type NoteLifecycleOp,
+  type NoteLifecycleOptions,
   type NoteLifecycleRejection,
   type NoteLifecycleResult,
 } from './note-lifecycle.ts';

@@ -116,6 +116,21 @@ export interface TreeDocumentStoreOptions {
   readonly historyLimit?: number;
 }
 
+/**
+ * Opaque document+history checkpoint for package-coordinator rollback.
+ * Used when a story mutation may promote to a package undo unit (note-ref cascade).
+ */
+export interface TreeDocumentCheckpoint {
+  readonly part: OoxmlPart;
+  readonly revision: number;
+  readonly undoStack: readonly HistoryEntry[];
+  readonly redoStack: readonly HistoryEntry[];
+  readonly composition: {
+    readonly entry: HistoryEntry;
+    readonly committed: boolean;
+  } | null;
+}
+
 export class TreeDocumentStore {
   private current: OoxmlPart;
   private rev = 0;
@@ -173,6 +188,48 @@ export class TreeDocumentStore {
    */
   replacePart(part: OoxmlPart): void {
     this.current = part;
+  }
+
+  /**
+   * Snapshot part, revision, and undo/redo stacks so the package coordinator can roll
+   * back a story transaction that fails after commit (e.g. note-reference cascade) or
+   * discard a local history entry when promoting to a package undo unit.
+   */
+  checkpoint(): TreeDocumentCheckpoint {
+    return {
+      part: this.current,
+      revision: this.rev,
+      undoStack: this.undoStack.slice(),
+      redoStack: this.redoStack.slice(),
+      composition: this.composition
+        ? { entry: { ...this.composition.entry }, committed: this.composition.committed }
+        : null,
+    };
+  }
+
+  /** Full restore — part, revision, history stacks, and composition. */
+  restoreCheckpoint(checkpoint: TreeDocumentCheckpoint): void {
+    this.current = checkpoint.part;
+    this.rev = checkpoint.revision;
+    this.undoStack.length = 0;
+    this.undoStack.push(...checkpoint.undoStack);
+    this.redoStack.length = 0;
+    this.redoStack.push(...checkpoint.redoStack);
+    this.composition = checkpoint.composition
+      ? { entry: { ...checkpoint.composition.entry }, committed: checkpoint.composition.committed }
+      : null;
+  }
+
+  /**
+   * Restore undo/redo stacks only, keeping the current part and revision.
+   * Used when a story mutation is promoted to a package history pointer so the local
+   * orphan entry does not steal a later undo.
+   */
+  restoreHistoryStacks(checkpoint: TreeDocumentCheckpoint): void {
+    this.undoStack.length = 0;
+    this.undoStack.push(...checkpoint.undoStack);
+    this.redoStack.length = 0;
+    this.redoStack.push(...checkpoint.redoStack);
   }
 
   subscribe(listener: (change: TreeModelChange) => void): () => void {
