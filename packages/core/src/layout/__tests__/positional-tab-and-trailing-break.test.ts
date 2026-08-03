@@ -167,10 +167,23 @@ describe('a w:ptab leader is PAINTED across the advance, not merely published', 
     const line = paragraphs(layout)[0]!.lines[0]!;
     const container = painted(CONTENTS);
     const leader = container.querySelector<HTMLElement>('[data-docx-tab-leader]')!;
-    expect(Number.parseFloat(leader.style.lineHeight)).toBeCloseTo(2 * line.baseline, 5);
-    // Which is NOT the line box — the bug this pins is exactly that mistake.
-    expect(Number.parseFloat(leader.style.lineHeight)).not.toBeCloseTo(line.box.height, 5);
-    expect(line.baseline).toBeLessThan(line.box.height);
+    const glyphs = leader.firstElementChild as HTMLElement;
+    const text = container.querySelector<HTMLElement>('[data-start]')!;
+
+    // SET UP EXACTLY LIKE THE TEXT, so the browser resolves the same baseline: the line's
+    // own line-height, and the run's own face. Two earlier attempts hung the glyphs off a
+    // zero-size strut and placed its baseline arithmetically — a strut with no metrics
+    // baselines at half the line-height (the vertical centre), and an inline-block aligns
+    // by its own internal baseline, so the dots came out centred and then below the text.
+    expect(Number.parseFloat(leader.style.lineHeight)).toBeCloseTo(line.box.height, 5);
+    // The layer mirrors a painted LINE (strut killed, line height explicit) and the glyphs
+    // mirror a painted RUN (baseline-aligned inline-block with its own band height). Any
+    // other combination moved the dots off the text's baseline.
+    expect(Number.parseFloat(leader.style.fontSize)).toBe(0);
+    expect(glyphs.style.display).toBe('inline-block');
+    expect(glyphs.style.verticalAlign).toBe('baseline');
+    expect(glyphs.style.fontSize).toBe(text.style.fontSize);
+    expect(glyphs.style.lineHeight).toBe(text.style.lineHeight);
   });
 
   test('a ptab with no leader paints no layer at all', () => {

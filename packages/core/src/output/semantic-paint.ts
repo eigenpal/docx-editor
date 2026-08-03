@@ -606,22 +606,35 @@ function paintTabLeader(
   layer.style.whiteSpace = 'pre';
   layer.style.pointerEvents = 'none';
   layer.style.userSelect = 'none';
-  // LEADER DOTS SIT ON THE BASELINE, like the periods they stand in for — Word and Docs
-  // both draw them as ordinary typed punctuation resting on the text baseline, not floating
-  // at the middle of the line.
+  // LEADER DOTS SIT ON THE BASELINE, like the periods they stand in for.
   //
-  // A zero-size strut takes its half-leading equally above and below, so its baseline lands
-  // at HALF the line-height: with the full line height that is the vertical centre, which
-  // is where the dots were. Doubling the published baseline puts the strut's baseline at
-  // `line.baseline` from the layer's top instead — the same baseline `paintLine` gave the
-  // text beside it. Anything the taller line-height pushes below the box is clipped.
+  // The layer is therefore an ordinary line of text in the run's own face, with the LINE's
+  // line-height — the same two things `paintLine` gives the text beside it, so the browser
+  // resolves the identical baseline. Earlier attempts hung the glyphs off a zero-size strut
+  // and tried to place that strut's baseline arithmetically; a strut with no metrics puts
+  // its baseline at half the line-height (the vertical centre), and an inline-block aligns
+  // by its OWN internal baseline rather than the one the arithmetic targeted, so the dots
+  // came out first centred and then below the text. Matching the text's own setup is the
+  // only version that needs no correction.
+  // MIRROR `paintLine` EXACTLY, because the baseline is whatever that structure resolves
+  // to and no arithmetic here can second-guess it: strut killed with `font-size: 0`, the
+  // published line height as an explicit line-height, and the glyphs as a baseline-aligned
+  // inline-block carrying their own BAND height — the run's own height plus the line's
+  // extra leading, capped at the line box. Leaving the band off let the glyphs inherit the
+  // whole line height, and their inner line box then centred them; putting the face on the
+  // container instead gave the strut different metrics from the dots and floated them.
   layer.style.fontSize = '0';
-  layer.style.lineHeight = `${2 * line.baseline * scale}px`;
+  layer.style.lineHeight = `${line.box.height * scale}px`;
+
+  let tallest = 0;
+  for (const entry of line.spans) tallest = Math.max(tallest, entry.box.height);
+  const band = Math.min(span.box.height + Math.max(0, line.box.height - tallest), line.box.height);
 
   const glyphs = document.createElement('span');
   glyphs.style.display = 'inline-block';
   glyphs.style.verticalAlign = 'baseline';
   applyRunFaceStyle(glyphs, span.style, ctx);
+  glyphs.style.lineHeight = `${band * scale}px`;
   if (span.tabLeader === 'heavy') glyphs.style.fontWeight = 'bold';
   // ONE GLYPH PER ITS OWN ADVANCE — the leader is the same character typed over and over,
   // and Word spaces it exactly as typing it would. Layout measured that advance in this
