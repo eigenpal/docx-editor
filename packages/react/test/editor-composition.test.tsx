@@ -290,9 +290,10 @@ describe('the sugar <DocxEditor> (namespace + ref parity)', () => {
       </DocxEditor.Root>
     );
     expect(view.getByTestId('ns-page').textContent).toBe('1 / 1');
-    // Run formatting needs a RANGE: a collapsed caret carries no formatting yet, so the
-    // control is honestly disabled until something is selected.
-    expect((view.getByTestId('ns-bold') as HTMLButtonElement).disabled).toBe(true);
+    // A collapsed caret is live too: pressing Bold there arms the stored-marks lane
+    // (formatting for the next characters typed), so the control never greys out at a
+    // caret the way it does over an unwritable selection.
+    expect((view.getByTestId('ns-bold') as HTMLButtonElement).disabled).toBe(false);
     await act(async () => {
       instance!.surface!.selectAll();
     });

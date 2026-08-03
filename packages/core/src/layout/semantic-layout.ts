@@ -720,7 +720,13 @@ function layoutBlocksWithGeometry(
       styleCascade
         ? (inherited, direct) => cascadeRunProperties(inherited, direct, styleCascade)
         : undefined,
-      { lineSpacing: entry.lineSpacing, firstLineOffset: firstLineOffsetOf(entry) }
+      {
+        lineSpacing: entry.lineSpacing,
+        firstLineOffset: firstLineOffsetOf(entry),
+        // The page's text column, so a `w:ptab` measuring against the margin ignores the
+        // paragraph's own indents the way Word does.
+        marginExtent: { left: 0, right: entry.indent.left + entry.available + entry.indent.right },
+      }
     );
 
   /**
@@ -1140,21 +1146,33 @@ function layoutBlocksWithGeometry(
       let bottomBorderRecord: ParagraphBottomBorderRecord | undefined;
       let contentTop = linesTop;
       let contentBottom = linesBottom;
+      // THE FOUR EDGES ARE ONE BOX. The side rules sit outside the text column by their own
+      // `w:space`, so a top rule drawn only across the column stops short of them and the
+      // frame reads as two horizontal rules with two detached vertical bars beside it —
+      // which is what a callout looked like. Word closes the rectangle, so the horizontal
+      // rules span from the left rule's outer edge to the right rule's.
+      const boxLeft = borders.left
+        ? indent.left - borders.left.spacePt - borders.left.widthPt
+        : indent.left;
+      const boxRight = borders.right
+        ? indent.left + available + borders.right.spacePt + borders.right.widthPt
+        : indent.left + available;
+      const boxWidth = Math.max(boxRight - boxLeft, 0);
       if (fragmentTopExtent > 0 && topEdge) {
         const ruleY = linesTop - topEdge.spacePt - topEdge.widthPt;
         strokes.push({
           side: 'top',
           edge: topEdge,
-          box: { x: indent.left, y: ruleY, width: available, height: topEdge.widthPt },
+          box: { x: boxLeft, y: ruleY, width: boxWidth, height: topEdge.widthPt },
         });
         contentTop = ruleY;
       }
       if (isLast && closingEdge) {
         const ruleY = linesBottom + closingEdge.spacePt;
         const box = {
-          x: indent.left,
+          x: boxLeft,
           y: ruleY,
-          width: available,
+          width: boxWidth,
           height: closingEdge.widthPt,
         };
         strokes.push({ side: continuesBelow ? 'between' : 'bottom', edge: closingEdge, box });
@@ -1233,7 +1251,26 @@ function layoutBlocksWithGeometry(
         ...(strokes.length > 0 ? { borders: strokes } : {}),
         ...(shading === undefined
           ? {}
-          : { shading, shadingBox: paragraphShadingBox(pending, indent.left, available)! }),
+          : {
+              shading,
+              // A BORDERED paragraph is shaded across the whole frame, not just the text
+              // band: Word fills the box its borders draw, `w:space` padding included, so a
+              // fill that stopped at the line area left a pale stripe floating inside an
+              // empty rectangle. Unbordered shading keeps the line area, which is what Word
+              // fills there. Borders paint after this, so the frame is never covered.
+              // Gated on a real FRAME — a side rule is what makes the fill a box. A heading
+              // with only `w:bottom` is the common single-edge case, and widening its fill
+              // down to the rule would be a silent change in the opposite direction.
+              shadingBox:
+                borders.left || borders.right
+                  ? {
+                      x: boxLeft,
+                      y: contentTop,
+                      width: boxWidth,
+                      height: Math.max(contentBottom - contentTop, 0),
+                    }
+                  : paragraphShadingBox(pending, indent.left, available)!,
+            }),
         ...(marker ? { marker } : {}),
         lines: pending,
         box: { x: indent.left, y: top, width: available, height },

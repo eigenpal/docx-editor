@@ -340,7 +340,7 @@ export interface DocxEditorToolbarNamespace {
     // (undocumented)
     readonly Strike: ToolbarPartComponent;
     // (undocumented)
-    readonly StylePicker: ToolbarSlotPartComponent;
+    readonly StylePicker: typeof ParagraphStyle;
     // (undocumented)
     readonly Subscript: ToolbarPartComponent;
     // (undocumented)
@@ -618,6 +618,55 @@ export interface PaginatedDocxEditorShellProps {
     readonly source: Uint8Array;
 }
 
+// @public
+export interface ParagraphStyleItemProps extends ParagraphStylePartProps {
+    value: string;
+}
+
+// @public
+export interface ParagraphStyleNamespace {
+    // (undocumented)
+    (props: ParagraphStyleProps): ReactNode;
+    // (undocumented)
+    readonly Content: typeof ParagraphStyleContent;
+    // (undocumented)
+    readonly docxSlot: 'styles.style';
+    // (undocumented)
+    readonly Item: typeof ParagraphStyleItem;
+    // (undocumented)
+    readonly Trigger: typeof ParagraphStyleTrigger;
+}
+
+// @public
+export interface ParagraphStyleOption {
+    // (undocumented)
+    readonly name: string;
+    readonly preview: {
+        readonly fontFamily: string | null;
+        readonly fontSizePt: number | null;
+        readonly bold: boolean;
+        readonly italic: boolean;
+        readonly color: string | null;
+    };
+    // (undocumented)
+    readonly styleId: string;
+}
+
+// @public
+export interface ParagraphStylePartProps {
+    // (undocumented)
+    asChild?: boolean;
+    // (undocumented)
+    children?: ReactNode;
+    // (undocumented)
+    className?: string;
+}
+
+// @public
+export interface ParagraphStyleProps extends ParagraphStylePartProps {
+    hidden?: boolean;
+}
+
 export { PX_PER_CM }
 
 export { PX_PER_INCH }
@@ -814,6 +863,17 @@ export interface UsePageSetupReturn {
     readonly apply: (update: PageSetupUpdate) => boolean;
     readonly isEnabled: boolean;
     readonly pageSetup: PageSetup | null;
+}
+
+// @public
+export function useParagraphStyle(): UseParagraphStyleResult;
+
+// @public
+export interface UseParagraphStyleResult {
+    readonly isEnabled: boolean;
+    readonly options: readonly ParagraphStyleOption[];
+    readonly setValue: (styleId: string) => void;
+    readonly value: string | null;
 }
 
 // @public

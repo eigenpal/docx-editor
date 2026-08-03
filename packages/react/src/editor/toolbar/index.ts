@@ -22,5 +22,14 @@ export {
   type FontFamilyProps,
   type UseFontFamilyResult,
 } from './FontFamily';
+export {
+  useParagraphStyle,
+  type ParagraphStyleItemProps,
+  type ParagraphStyleNamespace,
+  type ParagraphStyleOption,
+  type ParagraphStylePartProps,
+  type ParagraphStyleProps,
+  type UseParagraphStyleResult,
+} from './ParagraphStyle';
 export { ToolbarAlignment, type ToolbarAlignmentComponent } from './Alignment';
 export type { ToolbarTranslate } from './toolbar-context';

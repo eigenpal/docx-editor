@@ -352,7 +352,7 @@ describe('the shaped parts', () => {
 
   test('an undriven dropdown renders as a DISABLED combobox-lookalike, never a control', () => {
     const { view } = mountToolbar(<DocxEditorToolbar />);
-    for (const slot of ['styles.style', 'review.editingMode']) {
+    for (const slot of ['review.editingMode']) {
       const picker = view.container.querySelector(`[data-slot="${slot}"]`)!;
       expect(picker.tagName).toBe('SPAN');
       expect(picker.getAttribute('aria-disabled')).toBe('true');
@@ -360,11 +360,93 @@ describe('the shaped parts', () => {
       // No interactive element inside: nothing to click, nothing faked.
       expect(picker.querySelector('button')).toBeNull();
     }
-    // The registry placeholder value shows (raw keys — no `t` here).
-    expect(
-      view.container.querySelector('[data-slot="styles.style"] .docx-toolbar__picker-value')!
-        .textContent
-    ).toBe('styles.normalText');
+  });
+
+  test('the style picker lists the DOCUMENT paragraph styles and a pick applies one', async () => {
+    const STYLE_REL =
+      'http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles';
+    const styled = zipSync({
+      '[Content_Types].xml': strToU8(
+        `<Types xmlns="${CT}">` +
+          '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>' +
+          '<Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>' +
+          '<Override PartName="/word/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.styles+xml"/></Types>'
+      ),
+      '_rels/.rels': strToU8(
+        `<Relationships xmlns="${REL}"><Relationship Id="rId1" Type="${OD}" Target="word/document.xml"/></Relationships>`
+      ),
+      'word/_rels/document.xml.rels': strToU8(
+        `<Relationships xmlns="${REL}"><Relationship Id="rId9" Type="${STYLE_REL}" Target="styles.xml"/></Relationships>`
+      ),
+      'word/styles.xml': strToU8(
+        // Declared OUT of gallery order on purpose — a round-tripped file routinely is, and
+        // a picker that just echoes `styles.xml` shows Heading 1 above Normal.
+        `<w:styles xmlns:w="${W}">` +
+          '<w:style w:type="paragraph" w:styleId="Heading1"><w:name w:val="heading 1"/>' +
+          '<w:rPr><w:b/><w:color w:val="1F3864"/><w:sz w:val="64"/></w:rPr></w:style>' +
+          // Unranked: keeps its document position, after everything Word's gallery ranks.
+          '<w:style w:type="paragraph" w:styleId="Callout"><w:name w:val="Callout"/></w:style>' +
+          '<w:style w:type="paragraph" w:styleId="Normal" w:default="1"><w:name w:val="Normal"/></w:style>' +
+          // A character style must NOT appear among the paragraph options.
+          '<w:style w:type="character" w:styleId="Emphasis"><w:name w:val="Emphasis"/></w:style>' +
+          '</w:styles>'
+      ),
+      'word/document.xml': strToU8(
+        `<w:document xmlns:w="${W}"><w:body><w:p><w:r><w:t>hello</w:t></w:r></w:p></w:body></w:document>`
+      ),
+    });
+    const { view, editor } = mountToolbar(<DocxEditorToolbar />, styled);
+
+    // Live: a real button trigger showing the unstyled placeholder (raw key — no `t`).
+    const trigger = view.container.querySelector(
+      '[data-slot="styles.style"] .docx-toolbar__style-trigger'
+    ) as HTMLButtonElement;
+    expect(trigger.disabled).toBe(false);
+    // The paragraph names no `w:pStyle`, but it IS written in the document's default
+    // style, and that is what Word's box shows — not a generic placeholder over a style
+    // the menu below lists by name with the tick beside nothing.
+    expect(trigger.textContent).toBe('Normal');
+
+    await act(async () => {
+      trigger.click();
+    });
+    const rows = [...view.container.querySelectorAll('[data-slot="styles.style"] [role="option"]')];
+    // The selected row carries a ✓ glyph, so compare the label span rather than the row.
+    const items = rows.map((row) => row.querySelector('span')?.textContent);
+    // Word's gallery order, NOT the order the part lists them in, with the unranked style
+    // keeping its document position at the end.
+    expect(items).toEqual(['Normal', 'heading 1', 'Callout']);
+    // The paragraph states no `w:pStyle` but IS written in the default style, so the tick
+    // sits on it. Reading "no style" as "nothing selected" left every row unticked while
+    // the trigger showed a placeholder for a style the list names.
+    expect(rows[0]!.getAttribute('aria-selected')).toBe('true');
+    expect(rows[1]!.getAttribute('aria-selected')).toBe('false');
+
+    // Each row renders in the style's OWN face, so the menu previews rather than listing
+    // identical rows. The values come from the engine's bounded derivation and go into a
+    // style OBJECT — never a CSS string.
+    const headingRow = view.container.querySelector(
+      '[data-slot="styles.style"] [role="option"]:nth-of-type(2) span'
+    ) as HTMLElement;
+    expect(headingRow.style.fontWeight).toBe('700');
+    expect(headingRow.style.color.toUpperCase()).toBe('#1F3864');
+    // 32pt in the document, CLAMPED for the menu: a Title at its own size would push every
+    // other row off the screen, and the row still reads as bigger than body text.
+    expect(headingRow.style.fontSize).toBe('20px');
+    const normalRow = view.container.querySelector(
+      '[data-slot="styles.style"] [role="option"]:nth-of-type(1) span'
+    ) as HTMLElement;
+    expect(normalRow.style.fontWeight).toBe('');
+    expect(Number.parseFloat(normalRow.style.fontSize || '0')).toBeLessThan(20);
+
+    const heading = [
+      ...view.container.querySelectorAll('[data-slot="styles.style"] [role="option"]'),
+    ][1] as HTMLButtonElement;
+    await act(async () => {
+      heading.click();
+    });
+    expect(editor().snapshot().formatting?.styleId).toBe('Heading1');
+    expect(trigger.textContent).toBe('heading 1');
   });
 
   test('save is NOT in the default bar (contextual slot); composed, it needs onSave to be live', async () => {
@@ -577,15 +659,23 @@ describe('enabled state is the engine answer, not a registry constant', () => {
     }
   });
 
-  test('a wired control the engine refuses NOW shows the engine reason', () => {
-    // Run formatting needs a range: at a collapsed caret the engine refuses, and the
-    // tooltip is its refusal — not a permanent "unavailable in preview".
-    const { view } = mountToolbar(<DocxEditorToolbar />);
+  test('a wired control the engine refuses NOW shows the engine reason', async () => {
+    // Run formatting is written within ONE paragraph: over a multi-paragraph selection
+    // the engine refuses, and the tooltip is its refusal — not a permanent
+    // "unavailable in preview". (A collapsed caret no longer refuses: it arms the
+    // stored-marks lane instead.)
+    const twoParagraphs = docx(
+      '<w:p><w:r><w:t>alpha</w:t></w:r></w:p><w:p><w:r><w:t>beta</w:t></w:r></w:p>'
+    );
+    const { view, editor } = mountToolbar(<DocxEditorToolbar />, twoParagraphs);
+    await act(async () => {
+      editor().surface!.selectAll();
+    });
     const underline = view.container.querySelector(
       '[data-slot="text.underline"]'
     ) as HTMLButtonElement;
     expect(underline.disabled).toBe(true);
     expect(underline.title).not.toBe('formattingBar.underlineShortcut');
-    expect(underline.title.length).toBeGreaterThan(0);
+    expect(underline.title).toContain('one paragraph');
   });
 });

@@ -245,7 +245,7 @@ export const wordFeatures: WordFeature[] = [
     roundTrip: 'full',
     tier: 'community',
     notes:
-      'Existing tab stops render, including right/decimal tabs and dot, hyphen and underscore leaders. The document\'s own w:defaultTabStop is honoured, so a metric-locale grid lands where Word puts it, in headers and footers as well as the body. A tab-stop editing UI is not built yet.',
+      'Existing tab stops render, including right/decimal tabs and dot, hyphen and underscore leaders. Positional tabs (w:ptab) render too, so a table-of-contents line reads as one: entry left, leader dots between, page number flush right. The document\'s own w:defaultTabStop is honoured, so a metric-locale grid lands where Word puts it, in headers and footers as well as the body. A tab-stop editing UI is not built yet.',
   },
   {
     id: 'paragraphs.frames',

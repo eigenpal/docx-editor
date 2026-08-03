@@ -77,6 +77,19 @@ const AUTHORABLE_PARAGRAPH_PROPERTIES: ReadonlySet<string> = new Set(ACCEPTED_PA
 const AUTHORABLE_RUN_PROPERTIES: ReadonlySet<string> = new Set(ACCEPTED_RUN_PROPERTIES);
 
 /**
+ * Whether an op may name this run property at all.
+ *
+ * The stored-marks lane needs this AT ARM TIME. Every other write reaches the store in the
+ * same turn as the press, so a name the store refuses surfaces immediately; an ARMED
+ * property is not applied until the user types, and it rides the keystroke's own
+ * transaction — a name outside the vocabulary would take the typed characters down with
+ * it, silently, on every keystroke until the caret moved.
+ */
+export function isAuthorableRunProperty(localName: string): boolean {
+  return AUTHORABLE_RUN_PROPERTIES.has(localName);
+}
+
+/**
  * A node's own property container (`w:pPr`, `w:rPr`) among its children.
  *
  * A container the canonical read demoted to generic is still the node's own properties —
@@ -262,6 +275,118 @@ export function runPropertyEdits(
 }
 
 /**
+ * What a run at the CARET itself authors — the base pending caret formatting merges over.
+ *
+ * Word's rule for a collapsed caret: the character typed next takes the formatting of the
+ * run to the caret's LEFT; at the very start of a paragraph it takes the run to the right;
+ * in an empty paragraph it takes the paragraph mark's own `w:rPr`. The same authored-only
+ * narrowing as every other write base applies — echoing the cascade would freeze inherited
+ * formatting as direct.
+ */
+export function authoredRunPropertiesAt(
+  part: OoxmlPart,
+  paragraphId: string,
+  offset: number
+): readonly SurfaceProperty[] {
+  const paragraph = findNode(part, paragraphId);
+  if (!paragraph || paragraph.kind === 'textValue') return [];
+  let cursor = 0;
+  let left: OoxmlNode | null = null;
+  let right: OoxmlNode | null = null;
+  for (const child of paragraph.children) {
+    if (child.kind !== 'run') continue;
+    const runStart = cursor;
+    cursor += addressableLength(child);
+    if (cursor === runStart) continue;
+    if (runStart < offset && offset <= cursor) left = child;
+    if (right === null && runStart <= offset && offset < cursor) right = child;
+  }
+  const owner = left ?? right;
+  if (owner) {
+    return authoredProperties(
+      propertyContainer(owner, 'runProperties', 'rPr'),
+      AUTHORABLE_RUN_PROPERTIES
+    );
+  }
+  // No addressable run at all: an empty paragraph, whose mark is what Word reads.
+  return directParagraphMarkProperties(part, paragraphId);
+}
+
+/**
+ * Whether a PENDING property list holds `localName` in its ON state, or `null` when the
+ * list does not speak to it. The off spellings mirror what `toggleRunProperty` writes:
+ * `val="0"` for the boolean toggles, `val="none"` for `w:u` (a closed enumeration).
+ */
+export function pendingPropertyState(
+  pending: readonly SurfaceProperty[] | null,
+  localName: string
+): boolean | null {
+  const entry = pending?.find((property) => property.localName === localName);
+  if (!entry) return null;
+  const val = entry.attributes?.val;
+  if (localName === 'u') return val !== 'none';
+  // ST_OnOff's full off vocabulary (17.17.4): `0`, `false` and `off` all mean off, and the
+  // read lane treats them alike. Listing only the two this module WRITES would let a host
+  // arming `val="off"` directly see a toolbar pressed over text that renders unformatted.
+  return val !== '0' && val !== 'false' && val !== 'off' && val !== 'none';
+}
+
+/**
+ * The formatting snapshot with PENDING caret formatting laid over it, so the toolbar
+ * reflects what the next character typed will look like — Word's rule while a stored
+ * format is armed. Only the fields pending properties can express are touched; everything
+ * else answers from the document.
+ */
+export function withPendingFormatting(
+  formatting: SurfaceFormatting,
+  pending: readonly SurfaceProperty[] | null
+): SurfaceFormatting {
+  if (!pending || pending.length === 0) return formatting;
+  let next = formatting;
+  for (const property of pending) {
+    const val = property.attributes?.val;
+    switch (property.localName) {
+      case 'b':
+        next = { ...next, bold: pendingPropertyState(pending, 'b') === true };
+        break;
+      case 'i':
+        next = { ...next, italic: pendingPropertyState(pending, 'i') === true };
+        break;
+      case 'u':
+        next = { ...next, underline: pendingPropertyState(pending, 'u') === true };
+        break;
+      case 'strike':
+        next = { ...next, strikethrough: pendingPropertyState(pending, 'strike') === true };
+        break;
+      case 'vertAlign':
+        next = {
+          ...next,
+          superscript: val === 'superscript',
+          subscript: val === 'subscript',
+        };
+        break;
+      case 'rFonts':
+        next = { ...next, fontFamily: property.attributes?.ascii ?? next.fontFamily };
+        break;
+      case 'sz': {
+        const halfPoints = Number(val);
+        if (Number.isFinite(halfPoints)) next = { ...next, fontSizeHalfPoints: halfPoints };
+        break;
+      }
+      case 'color':
+        next = { ...next, color: val === 'auto' ? null : (val ?? next.color) };
+        break;
+      case 'highlight':
+        next = { ...next, highlight: val === 'none' ? null : (val ?? next.highlight) };
+        break;
+      default:
+        break;
+    }
+  }
+  return next;
+}
+
+/**
  * The spans a selection covers, whichever kind of selection it is.
  *
  * A rectangle of table cells is NOT the text range it stands in for: rows one and two of
@@ -335,7 +460,13 @@ export function formattingAt(
   layout: SemanticLayout,
   selection: SemanticSelection,
   inherited?: InheritedRunDefaults,
-  cells?: readonly string[]
+  cells?: readonly string[],
+  /**
+   * `w:style[@w:default='1'][@w:type='paragraph']` — the style a paragraph that names none
+   * is actually written in. Word's style box shows THAT (normally "Normal"), not a blank:
+   * "no `w:pStyle`" is a statement about the file, not about what the user is looking at.
+   */
+  defaultParagraphStyleId?: string | null
 ): SurfaceFormatting {
   const spans = selectionSpans(layout, selection, cells);
   const styles = spans.map((span) => span.style);
@@ -382,10 +513,18 @@ export function formattingAt(
         ? ('right' as const)
         : ('left' as const);
   });
+  // Resolved per paragraph BEFORE agreement, so a styled paragraph selected together with
+  // an unstyled one still reads as mixed (two different styles), while an unstyled
+  // paragraph on its own reports the default rather than nothing. Comparing raw `w:pStyle`
+  // presence conflated "the selection disagrees" with "this paragraph states no style" and
+  // showed a generic placeholder over a paragraph whose style the menu listed by name —
+  // with the tick beside none of the rows.
   const style =
     paragraphValue(
       (properties) =>
-        properties.find((property) => property.localName === 'pStyle')?.attributes?.val
+        properties.find((property) => property.localName === 'pStyle')?.attributes?.val ??
+        defaultParagraphStyleId ??
+        undefined
     ) ?? null;
   return {
     bold: styles.length > 0 && styles.every((entry) => entry.bold),

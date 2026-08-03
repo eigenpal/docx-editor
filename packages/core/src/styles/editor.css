@@ -2485,11 +2485,28 @@
 
 /* The font-family compound: the trigger is the transparent picker trigger
  * ("Arial ∨"); the popup is the shared dropdown card. */
-.docx-toolbar__font-family {
+.docx-toolbar__font-family,
+.docx-toolbar__style {
   flex: none;
 }
 
-.docx-toolbar__font-family-trigger {
+/* The STYLE trigger is fixed width, not content width: the label changes with every
+ * caret move ("Normal" -> "Heading 1" -> "List Paragraph"), and a box that resizes with it
+ * shunts the whole toolbar sideways as the user clicks around the document. Word and Docs
+ * both hold this box at a constant width and ellipsise. */
+.docx-toolbar__style-trigger {
+  width: 132px;
+  flex: none;
+}
+
+.docx-toolbar__style-trigger > span:first-child {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.docx-toolbar__font-family-trigger,
+.docx-toolbar__style-trigger {
   display: inline-flex;
   align-items: center;
   justify-content: space-between;
@@ -2510,17 +2527,20 @@
   transition: background-color 0.12s ease;
 }
 
-.docx-toolbar__font-family-trigger::after {
+.docx-toolbar__font-family-trigger::after,
+.docx-toolbar__style-trigger::after {
   content: '▾';
   font-size: 10px;
   color: var(--doc-text-muted);
 }
 
-.docx-toolbar__font-family-trigger:hover:not(:disabled) {
+.docx-toolbar__font-family-trigger:hover:not(:disabled),
+.docx-toolbar__style-trigger:hover:not(:disabled) {
   background: var(--doc-border);
 }
 
-.docx-toolbar__font-family-trigger:disabled {
+.docx-toolbar__font-family-trigger:disabled,
+.docx-toolbar__style-trigger:disabled {
   opacity: 0.5;
   cursor: default;
 }
@@ -2589,11 +2609,13 @@
   color: var(--doc-text);
 }
 
-.docx-toolbar__font-family-content {
+.docx-toolbar__font-family-content,
+.docx-toolbar__style-content {
   margin-top: 4px;
 }
 
-.docx-toolbar__font-family-item {
+.docx-toolbar__font-family-item,
+.docx-toolbar__style-item {
   display: flex;
   align-items: center;
   width: 100%;
@@ -2612,7 +2634,8 @@
 
 /* The current font gets the right-edge ✓ only — no filled slab; hover stays
  * the ordinary subtle wash. */
-.docx-toolbar__font-family-item:hover {
+.docx-toolbar__font-family-item:hover,
+.docx-toolbar__style-item:hover {
   background: var(--doc-bg-hover);
 }
 

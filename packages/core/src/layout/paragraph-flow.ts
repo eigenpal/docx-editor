@@ -14,6 +14,7 @@ import {
   piecesOfParagraph,
   propertiesOfRunContainer,
   type FieldPageContext,
+  type PositionalTab,
   type RunPropertyCascader,
 } from './field-projection.ts';
 import type { ParagraphLayoutCache } from './layout-cache.ts';
@@ -21,7 +22,9 @@ import {
   EMPTY_TAB_STOPS,
   nextTabDestination,
   tabAdvanceWidth,
+  TAB_LEADER_GLYPH,
   type ResolvedTabStops,
+  type TabLeader,
 } from './paragraph-tabs.ts';
 import {
   SINGLE_LINE_SPACING,
@@ -46,6 +49,16 @@ export interface ParagraphFlowOptions {
   readonly lineSpacing?: ParagraphLineSpacing;
   /** First-line offset from the paragraph indent: `w:firstLine` right, `w:hanging` left. */
   readonly firstLineOffset?: number;
+  /**
+   * The containing text column — the page content box, or a table cell's — in the same
+   * coordinates as `indentLeft`.
+   *
+   * `w:ptab/@w:relativeTo="margin"` measures against THIS, not against the paragraph's own
+   * indented column: a contents line inside an indented paragraph still puts its page
+   * number at the margin. Absent, a positional tab falls back to the paragraph's column,
+   * which is the same answer whenever the paragraph carries no indents.
+   */
+  readonly marginExtent?: { readonly left: number; readonly right: number };
 }
 
 /** One measurable piece of a paragraph: text carrying one property set. */
@@ -120,6 +133,46 @@ function measureFollowingTabSegment(
     }
   }
   return { width, decimalOffset: sawDecimal ? decimalOffset : width };
+}
+
+/**
+ * Where a `w:ptab` sends the caret, in the same shape `nextTabDestination` answers with.
+ *
+ * ECMA-376 §17.3.3.16: the position is stated by `w:alignment` against the reference
+ * `w:relativeTo` names, rather than looked up in `w:tabs`.
+ *
+ * ONLY `w:alignment` is honoured here; the reference is always the paragraph's own text
+ * column (`indentLeft`..`rightEdge`), which is what `w:relativeTo="margin"` — the value
+ * every contents field Word generates carries — means. `indent` differs from it only for
+ * an indented paragraph and `leftMargin` only for a ptab pointing backwards, both of which
+ * the clamp in `tabAdvanceWidth` already resolves to no advance. `positionalTabOf` still
+ * validates the attribute so a hostile value cannot reach geometry if that changes.
+ */
+function positionalTabDestination(
+  positional: PositionalTab,
+  indentLeft: number,
+  rightEdge: number,
+  marginExtent: { readonly left: number; readonly right: number } | undefined
+): { positionPt: number; alignment: 'left' | 'center' | 'right' | 'decimal'; leader?: TabLeader } {
+  // `indent` measures against the paragraph's own column; `margin` and `leftMargin` against
+  // the containing one. They differ exactly when the paragraph is indented — which is where
+  // reading `w:relativeTo` and then ignoring it put the page number short of the margin by
+  // the width of the indent.
+  const column =
+    positional.relativeTo === 'indent' || !marginExtent
+      ? { left: indentLeft, right: rightEdge }
+      : marginExtent;
+  const positionPt =
+    positional.alignment === 'right'
+      ? column.right
+      : positional.alignment === 'center'
+        ? (column.left + column.right) / 2
+        : column.left;
+  return {
+    positionPt,
+    alignment: positional.alignment,
+    ...(positional.leader ? { leader: positional.leader } : {}),
+  };
 }
 
 export interface PendingLine {
@@ -329,6 +382,9 @@ export function breakParagraph(
     };
   };
 
+  /** Whether the last thing placed was a line break, so the paragraph ends on a fresh line. */
+  let trailingLineBreak = false;
+
   for (let pieceIndex = 0; pieceIndex < pieces.length; pieceIndex += 1) {
     const piece = pieces[pieceIndex]!;
     if (piece.text === PAGE_BREAK_CHAR) {
@@ -345,6 +401,7 @@ export function breakParagraph(
       line.end = piece.end;
       closeLine();
       lines[lines.length - 1]!.pageBreakAfter = true;
+      trailingLineBreak = false;
       continue;
     }
     if (piece.text === '\n') {
@@ -365,8 +422,10 @@ export function breakParagraph(
       line.baseline = Math.max(line.baseline, breakMetrics.baseline);
       line.end = piece.end;
       closeLine();
+      trailingLineBreak = true;
       continue;
     }
+    trailingLineBreak = false;
     const metrics = measurer.lineMetrics(piece.style);
     let consumed = 0;
     for (const boundary of wordBoundaries(piece.text)) {
@@ -375,9 +434,12 @@ export function breakParagraph(
       // Projected PAGE/NUMPAGES digits publish the suppressed cached-result model range (or a
       // zero-width insertion point when the cache was empty) so surrounding source offsets
       // stay aligned with binding / paragraphTextOf.
-      const spanRange = piece.projected
-        ? { paragraphId, start: piece.start, end: piece.end }
-        : { paragraphId, start: piece.start + consumed, end: piece.start + boundary };
+      // A projected field publishes the model range it stands in for; a `w:ptab` publishes
+      // its ZERO-WIDTH insertion point, because it contributes no text to the paragraph.
+      const spanRange =
+        piece.projected || piece.positionalTab
+          ? { paragraphId, start: piece.start, end: piece.end }
+          : { paragraphId, start: piece.start + consumed, end: piece.start + boundary };
 
       if (candidate === '\t') {
         // A tab that cannot advance on this line wraps first, then reapplies — matching
@@ -385,7 +447,25 @@ export function breakParagraph(
         if (line.spans.length > 0 && line.width >= lineAvailable()) closeLine();
         const currentX = lineOrigin() + line.width;
         const segment = measureFollowingTabSegment(pieces, pieceIndex, boundary, measurer);
-        const destination = nextTabDestination(tabStops, currentX, rightEdge);
+        // A `w:ptab` states its own destination and leader, so it does NOT consult the
+        // paragraph's tab stops — a table-of-contents line authored with one has none.
+        // A positional tab whose destination is at or behind the caret cannot advance —
+        // a left-aligned one almost never can, and it is also the fallback for a malformed
+        // `w:alignment`. Falling back to the ordinary stop rule keeps the glyphs apart
+        // instead of reproducing the very run-together text this element exists to prevent.
+        const positional = piece.positionalTab
+          ? positionalTabDestination(piece.positionalTab, indentLeft, rightEdge, flow?.marginExtent)
+          : null;
+        const destination =
+          positional === null
+            ? nextTabDestination(tabStops, currentX, rightEdge)
+            : positional.positionPt > currentX
+              ? positional
+              : {
+                  // The stop changes; the LEADER is the element's own and survives it.
+                  ...nextTabDestination(tabStops, currentX, rightEdge),
+                  ...(positional.leader ? { leader: positional.leader } : {}),
+                };
         const width = tabAdvanceWidth(
           destination.alignment,
           currentX,
@@ -400,13 +480,23 @@ export function breakParagraph(
           style: piece.style,
           box: { x: currentX, y: 0, width, height: metrics.height },
           // The leader belongs to the stop that was REACHED, so it is resolved here with the
-          // destination rather than re-derived from the paragraph at paint time.
-          ...(destination.leader ? { tabLeader: destination.leader } : {}),
+          // destination rather than re-derived from the paragraph at paint time — and its
+          // glyph is MEASURED here too, in this run's own face, because paint has no
+          // measurer and a guessed advance cannot space the dots the way typing them would.
+          ...(destination.leader
+            ? {
+                tabLeader: destination.leader,
+                tabLeaderAdvancePt: measurer.measure(
+                  TAB_LEADER_GLYPH.get(destination.leader) ?? '.',
+                  piece.style
+                ),
+              }
+            : {}),
         });
         line.width += width;
         line.height = Math.max(line.height, metrics.height);
         line.baseline = Math.max(line.baseline, metrics.baseline);
-        line.end = piece.projected ? piece.end : piece.start + boundary;
+        line.end = piece.projected || piece.positionalTab ? piece.end : piece.start + boundary;
         consumed = boundary;
         continue;
       }
@@ -429,8 +519,13 @@ export function breakParagraph(
       consumed = boundary;
     }
   }
-  // An empty paragraph still occupies one line, or it would have no caret target.
-  if (line.spans.length > 0 || lines.length === 0) closeLine();
+  // An empty paragraph still occupies one line, or it would have no caret target. So does
+  // the line a TRAILING hard break opens: Shift+Enter at the end of a paragraph moves the
+  // caret onto a new, empty line in Word, and without this the break closed the only line
+  // there was and left nothing after it — the caret fell back to the end of the line the
+  // break had just terminated, sitting a break's width to the right of the last glyph,
+  // and the new line only appeared once something was typed into it.
+  if (line.spans.length > 0 || lines.length === 0 || trailingLineBreak) closeLine();
   if (cacheKey !== null && cache) cache.set(cacheKey, lines.map(frozenLine));
   return lines;
 }

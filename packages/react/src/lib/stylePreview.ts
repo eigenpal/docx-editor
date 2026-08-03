@@ -32,8 +32,9 @@ export interface StylePreviewProps {
 }
 
 /**
- * A resolved paragraph-style option (document order, with extracted visual
- * fields). Adapters add their own localized label on top of `name`.
+ * A resolved paragraph-style option, with extracted visual fields, in whatever
+ * order the engine's catalog answered (Word-gallery order, not `styles.xml`
+ * order). Adapters add their own localized label on top of `name`.
  * @public
  */
 export interface ResolvedStyleOption {
@@ -100,10 +101,12 @@ export function getStylePreviewProps(input: {
 
 /**
  * Filter the engine's document-style summaries to the paragraph styles and
- * shape them for the picker, in document order. The contract summary carries
- * no visibility or run-formatting fields, so every option shares the default
- * priority and the preview falls back to the well-known per-style sizes.
- * Returns `[]` when there are no styles (adapters fall back to presets).
+ * shape them for the picker, keeping the catalog's own order. The summary
+ * carries no visibility field and this projection ignores its `preview`, so
+ * every option shares the default priority and the preview falls back to the
+ * well-known per-style sizes; the live picker (`ParagraphStyle`) reads
+ * `preview` directly instead. Returns `[]` when there are no styles (adapters
+ * fall back to presets).
  * @public
  */
 export function resolveParagraphStyleOptions(

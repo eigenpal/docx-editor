@@ -520,12 +520,18 @@ function endOfLine(line: LineRecord, rightEdge: number, context: HitContext): Li
  * but the caret belongs before it — otherwise clicking in the right margin puts the caret
  * visually at the start of the NEXT line, which reads as the click having missed. The last
  * line of a paragraph has no such space to discount.
+ *
+ * A HARD BREAK is the same story with a character that is always there: the position after
+ * it belongs to the line the break opened (`caretAt` places it there), so a click in the
+ * right margin of the line the break ENDED has to stop in front of it or the caret appears
+ * a row below the click.
  */
 export function lineEndOffset(layout: SemanticLayout, line: LineRecord): number {
   if (hitIndex(layout).lastLineIdOfParagraph.get(line.range.paragraphId) === line.id) {
     return line.range.end;
   }
   let offset = line.range.end;
+  if (offset > line.range.start && characterAt(line, offset - 1) === '\n') offset -= 1;
   while (offset > line.range.start && characterAt(line, offset - 1) === ' ') offset -= 1;
   return offset;
 }

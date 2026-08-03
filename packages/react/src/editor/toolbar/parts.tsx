@@ -11,9 +11,10 @@
 //   slot the engine has not wired renders disabled with the engine's own reason — the
 //   registry's parity rule (visible, never dropped, never faked).
 // - `definePicker(slot)`: a DISABLED COMBOBOX-LOOKALIKE for a dropdown-shaped control
-//   whose behavior the engine does not own yet (`styles.style`,
-//   `review.editingMode`). It shows the registry's placeholder value and a chevron,
+//   whose behavior the engine does not own yet (`review.editingMode`,
+//   `list.lineSpacing`). It shows the registry's placeholder value and a chevron,
 //   exactly like the Vue registry toolbar's picker, and deliberately does nothing.
+//   (`styles.style` graduated to the live `ParagraphStyle` compound.)
 
 import { useContext } from 'react';
 import { CHROME_UNAVAILABLE_KEY, type ChromeSlotId } from '@docx-editor.dev/core-contract/editor';
@@ -115,7 +116,6 @@ function definePicker(slot: ChromeSlotId): ToolbarSlotPartComponent {
   return Object.assign(Part, { docxSlot: slot });
 }
 
-export const ToolbarStylePicker = definePicker('styles.style');
 export const ToolbarEditingMode = definePicker('review.editingMode');
 // Line spacing is dropdown-SHAPED in the chrome spec (icon + caret), so its
 // undriven rendering is the picker lookalike, not a bare icon button.

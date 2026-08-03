@@ -4,8 +4,9 @@
 // Three lies this pins down, all of one family (a control that looks live and is not):
 //
 // 1. A mark command the surface CANNOT write reported `can: ok` and then
-//    `{ ok: true, changed: false }`. Bold over several paragraphs, or a font pick with a
-//    collapsed caret, left the button enabled, un-pressed, and the document untouched.
+//    `{ ok: true, changed: false }`. Bold over several paragraphs left the button
+//    enabled, un-pressed, and the document untouched. (A collapsed caret is NOT such a
+//    selection: it arms the stored-marks lane, pinned below.)
 // 2. `snapshot()` reused its previous REFERENCE across an edit that changed only
 //    structure, so a `useSyncExternalStore` host never re-rendered and every control that
 //    re-asks `Editor.can`/`isActive` on a store tick kept its stale answer — the bullet
@@ -88,32 +89,81 @@ describe('a run-formatting control never looks live over a selection it cannot w
     expect(state.disabledReason).toContain('one paragraph');
   });
 
-  test('a collapsed caret disables the marks and the value pickers alike', () => {
+  test('a collapsed caret arms pending formatting instead of disabling the marks', () => {
     const editor = mount(p('alpha'));
     select(editor, [0, 2], [0, 2]);
     const revision = editor.surface!.session.revision();
 
-    for (const slot of ['text.bold', 'text.italic', 'text.underline', 'text.strike'] as const) {
-      const state = toolbarCommandState(editor, slot);
-      expect(state.enabled).toBe(false);
-      expect(state.disabledReason).toContain('select the text to format');
+    // Word's stored-marks lane: the controls stay live at a caret, and pressing one arms
+    // the format for the next characters typed.
+    for (const slot of [
+      'text.bold',
+      'text.italic',
+      'text.underline',
+      'text.strike',
+      'font.family',
+      'font.size',
+      'text.color',
+      'text.highlight',
+    ] as const) {
+      expect(toolbarCommandState(editor, slot).enabled).toBe(true);
     }
-    // The value-typed slots gate through the same `setMarkAttr` probe, so they cannot
-    // disagree: a font pick with no text selected would write nothing either.
-    for (const slot of ['font.family', 'font.size', 'text.color', 'text.highlight'] as const) {
-      expect(toolbarCommandState(editor, slot).enabled).toBe(false);
-    }
-    expect(editor.exec({ type: 'toggleMark', mark: 'bold' }).ok).toBe(false);
-    expect(
-      editor.exec({ type: 'setMarkAttr', mark: 'fontFamily', attr: 'family', value: 'Georgia' }).ok
-    ).toBe(false);
-    expect(editor.surface!.session.revision()).toBe(revision);
 
-    // A real range in one paragraph is still live — the gate is about what can be written,
-    // not a blanket refusal.
-    select(editor, [0, 0], [0, 5]);
-    expect(toolbarCommandState(editor, 'text.bold').enabled).toBe(true);
-    expect(toolbarCommandState(editor, 'font.family').enabled).toBe(true);
+    // Arming changes no document text, but the toolbar reflects it immediately.
+    expect(editor.exec({ type: 'toggleMark', mark: 'bold' }).ok).toBe(true);
+    expect(editor.surface!.session.revision()).toBe(revision);
+    expect(editor.snapshot().formatting?.bold).toBe(true);
+    expect(toolbarCommandState(editor, 'text.bold').active).toBe(true);
+    // A second press cancels the armed format rather than double-arming it.
+    expect(editor.exec({ type: 'toggleMark', mark: 'bold' }).ok).toBe(true);
+    expect(editor.snapshot().formatting?.bold).toBe(false);
+    editor.exec({ type: 'toggleMark', mark: 'bold' });
+
+    // Typing consumes it: the typed characters are bold, their neighbours untouched.
+    editor.surface!.type('XY');
+    select(editor, [0, 2], [0, 4]);
+    expect(editor.snapshot().formatting?.bold).toBe(true);
+    select(editor, [0, 0], [0, 2]);
+    expect(editor.snapshot().formatting?.bold).toBe(false);
+    select(editor, [0, 4], [0, 7]);
+    expect(editor.snapshot().formatting?.bold).toBe(false);
+
+    // Moving the caret discards an armed format instead of applying it somewhere else.
+    select(editor, [0, 1], [0, 1]);
+    editor.exec({ type: 'toggleMark', mark: 'italic' });
+    expect(editor.snapshot().formatting?.italic).toBe(true);
+    select(editor, [0, 6], [0, 6]);
+    expect(editor.snapshot().formatting?.italic).toBe(false);
+    editor.surface!.type('z');
+    select(editor, [0, 6], [0, 7]);
+    expect(editor.snapshot().formatting?.italic).toBe(false);
+  });
+
+  test('arming at a caret EMITS, so a host that only listens still re-renders', () => {
+    // The lie this pins: arming moves no revision (so no `change`) and no caret (so the
+    // selection guard used to return early), leaving a subscriber-driven toolbar showing
+    // Bold unpressed while the engine had it armed. Both adapters read state only through
+    // these events — `snapshot()` is PULLED, so a test that only reads it cannot see this.
+    const editor = mount(p('alpha'));
+    select(editor, [0, 2], [0, 2]);
+    let ticks = 0;
+    editor.on('selectionChange', () => {
+      ticks += 1;
+    });
+    editor.on('change', () => {
+      ticks += 1;
+    });
+
+    editor.exec({ type: 'toggleMark', mark: 'bold' });
+    expect(ticks).toBeGreaterThan(0);
+    expect(editor.snapshot().formatting?.bold).toBe(true);
+
+    // Disarming has to reach the host too, or the button stays pressed over a caret that
+    // no longer carries the format.
+    const armed = ticks;
+    editor.exec({ type: 'toggleMark', mark: 'bold' });
+    expect(ticks).toBeGreaterThan(armed);
+    expect(editor.snapshot().formatting?.bold).toBe(false);
   });
 });
 

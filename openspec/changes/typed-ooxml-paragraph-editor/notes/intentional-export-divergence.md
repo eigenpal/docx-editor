@@ -107,6 +107,15 @@ part/prop exports go with it.
 - `FontFamilyPartProps` — shared Trigger/Content sub-part props.
 - `FontFamilyItemProps`
 - `FontFamilyNamespace` — FontFamily with `.Trigger`/`.Content`/`.Item` statics.
+- `useParagraphStyle` — the style-picker behavior hook (value / options / setValue /
+  isEnabled) over `Editor.getDocumentStyles` + `commandForSlotValue('styles.style')`.
+- `UseParagraphStyleResult`
+- `ParagraphStyleOption` — one pickable paragraph style (`styleId`, display name, and the
+  bounded `preview` a row renders itself in).
+- `ParagraphStyleProps` — the compound ParagraphStyle root's props.
+- `ParagraphStylePartProps` — shared Trigger/Content sub-part props.
+- `ParagraphStyleItemProps`
+- `ParagraphStyleNamespace` — ParagraphStyle with `.Trigger`/`.Content`/`.Item` statics.
 
 ## Vue-only
 

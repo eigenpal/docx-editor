@@ -198,6 +198,7 @@ export {
   tabAdvanceWidth,
   tabStopsFingerprint,
   withDefaultTabInterval,
+  TAB_LEADER_GLYPH,
   type ResolvedTabStops,
   type TabAlignment,
   type TabDestination,

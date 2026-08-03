@@ -316,7 +316,12 @@ function placeCellParagraph(
     deps.styleCascade
       ? (inherited, direct) => cascadeRunProperties(inherited, direct, deps.styleCascade)
       : undefined,
-    { lineSpacing, firstLineOffset }
+    {
+      lineSpacing,
+      firstLineOffset,
+      // A cell's own content box is the column a positional tab measures against.
+      marginExtent: { left: 0, right: indent.left + available + indent.right },
+    }
   );
 
   const lineStart = options?.lineStart ?? 0;
@@ -402,21 +407,32 @@ function placeCellParagraph(
   let bottomBorderRecord: ParagraphBottomBorderRecord | undefined;
   let contentTop = linesTop;
   let contentBottom = linesBottom;
+  // THE FOUR EDGES ARE ONE BOX — the same rule the body flow follows, and it has to be the
+  // same here or one document paints the identical callout two ways depending on whether it
+  // sits in a table cell or a header. The side rules stand outside the text column by their
+  // own `w:space`, so horizontals drawn only across the column leave the frame open.
+  const boxLeft = borders.left
+    ? fragmentX - borders.left.spacePt - borders.left.widthPt
+    : fragmentX;
+  const boxRight = borders.right
+    ? fragmentX + available + borders.right.spacePt + borders.right.widthPt
+    : fragmentX + available;
+  const boxWidth = Math.max(boxRight - boxLeft, 0);
   if (topExtent > 0 && borders.top) {
     const ruleY = linesTop - borders.top.spacePt - borders.top.widthPt;
     strokes.push({
       side: 'top',
       edge: borders.top,
-      box: { x: fragmentX, y: ruleY, width: available, height: borders.top.widthPt },
+      box: { x: boxLeft, y: ruleY, width: boxWidth, height: borders.top.widthPt },
     });
     contentTop = ruleY;
   }
   if (complete && includeBottomBorder && bottomBorder) {
     const ruleY = linesBottom + bottomBorder.spacePt;
     const box = {
-      x: fragmentX,
+      x: boxLeft,
       y: ruleY,
-      width: available,
+      width: boxWidth,
       height: bottomBorder.widthPt,
     };
     bottomBorderRecord = { edge: bottomBorder, box };
@@ -468,8 +484,19 @@ function placeCellParagraph(
   }
   const appliedAfter = complete && includeAfter ? spacing.after : 0;
   const bottom = contentBottom + appliedAfter;
+  // Shading fills the FRAME when there is one (a side rule is what makes it a box), and the
+  // line area otherwise — the body flow's rule, stated once more for the cell lane.
   const shadingBox =
-    shading === undefined ? undefined : paragraphShadingBox(records, fragmentX, available);
+    shading === undefined
+      ? undefined
+      : borders.left || borders.right
+        ? {
+            x: boxLeft,
+            y: contentTop,
+            width: boxWidth,
+            height: Math.max(contentBottom - contentTop, 0),
+          }
+        : paragraphShadingBox(records, fragmentX, available);
   const marker =
     lineStart === 0
       ? publishListMarker(

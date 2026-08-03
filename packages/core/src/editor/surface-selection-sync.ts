@@ -14,6 +14,7 @@
 
 import type { TreeApplyResult, TreeDocxSession } from '@docx-editor.dev/core-contract/binding';
 import type { SemanticSelection } from '@docx-editor.dev/core-contract/layout';
+import type { TreeDocOp } from '@docx-editor.dev/core-contract/store';
 import {
   applySelectionToDom,
   domSelectionTouchesPages,
@@ -48,6 +49,13 @@ export interface SurfaceSelectionSyncDeps {
   updateCaret(): void;
   /** The model text of one paragraph, for diffing what an IME wrote against it. */
   textOf(paragraphId: string): string;
+  /**
+   * The ops that apply the surface's armed caret formatting (stored marks) to text the
+   * readback is about to insert at `offset`, or `[]` when nothing is armed there. Word
+   * applies the typing format to composed text exactly like typed text, and this is the
+   * only insertion lane that does not go through `type()`.
+   */
+  pendingFormatOps?(paragraphId: string, offset: number, length: number): TreeDocOp[];
   selectionMark(): { paragraphId: string; start: number; end: number } | null;
   /** The surface's clock, so every phase timer reads the same one. */
   now(): number;
@@ -194,7 +202,23 @@ export function createSurfaceSelectionSync(deps: SurfaceSelectionSyncDeps): Surf
     if (painted === null) return;
     const plan = paragraphReplacePlan(paragraphId, deps.textOf(paragraphId), painted);
     if (!plan) return;
-    deps.commit(() => session.applyTreeOps(plan.ops, deps.selectionMark()));
+    // Composed text takes the armed caret format like typed text would — same transaction,
+    // one undo step. Asked BEFORE the commit (which retires the armed state), and only for
+    // an insert landing exactly on the armed anchor; a diff that resolved elsewhere simply
+    // forgets the format.
+    const insert = plan.ops.find(
+      (op): op is Extract<(typeof plan.ops)[number], { op: 'insertText' }> => op.op === 'insertText'
+    );
+    const formatOps = insert
+      ? (deps.pendingFormatOps?.(paragraphId, insert.offset, insert.text.length) ?? [])
+      : [];
+    deps.commit(() => {
+      const result = session.applyTreeOps([...plan.ops, ...formatOps], deps.selectionMark());
+      // The composed text is not the armed format's hostage: a refused format op must not
+      // take the IME's own edit down with it (the same rule `type()` follows).
+      if (formatOps.length === 0 || !result.rejected) return result;
+      return session.applyTreeOps(plan.ops, deps.selectionMark());
+    });
     deps.setSelection(collapsedAt({ paragraphId, offset: plan.caret }));
   }
 

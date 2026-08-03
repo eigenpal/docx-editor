@@ -97,17 +97,22 @@ describe('a boxed cell paragraph publishes the whole frame, not just the underli
     const left = stroke(fragment, 'left');
     const right = stroke(fragment, 'right');
 
-    // Horizontal rules span the cell's text column, `space` away from the lines.
+    // Horizontal rules sit `space` away from the lines vertically.
     expect(top.box.y + top.box.height).toBe(line.box.y - 4);
     expect(bottom.box.y).toBe(line.box.y + line.box.height + 4);
-    expect(top.box.x).toBe(line.box.x);
-    expect(top.box.width).toBe(line.box.width);
 
     // Word draws the side rules OUTSIDE the text column and never re-breaks the lines,
     // so inside a cell they hang into the cell margin exactly as they hang into the
     // page margin in the body.
     expect(left.box.x + left.box.width).toBe(line.box.x - 4);
     expect(right.box.x).toBe(line.box.x + line.box.width + 4);
+
+    // And the frame CLOSES, exactly as it does in body flow — one document must not paint
+    // the same callout two ways depending on whether it sits in a cell.
+    expect(top.box.x).toBe(left.box.x);
+    expect(top.box.x + top.box.width).toBe(right.box.x + right.box.width);
+    expect(bottom.box.x).toBe(top.box.x);
+    expect(bottom.box.width).toBe(top.box.width);
     expect(left.box.y).toBe(top.box.y);
     expect(left.box.y + left.box.height).toBe(bottom.box.y + bottom.box.height);
     expect(right.box.height).toBe(left.box.height);
@@ -223,5 +228,25 @@ describe('paint draws the cell frame from the published boxes', () => {
       expect(Number.parseFloat(rule.style.top)).toBeCloseTo(published.box.y - fragment.box.y, 6);
       expect(rule.style.backgroundColor.toLowerCase()).toBe('#c00000');
     }
+  });
+});
+
+describe('a shaded box in a cell is filled across the frame', () => {
+  test('shading covers the bordered rectangle, exactly as it does in body flow', () => {
+    // The border/shading rule landed in the body flow first; a cell paragraph kept painting
+    // the old geometry, so one document rendered the identical callout two ways.
+    const fragment = cellParagraphs(
+      lay(oneCellTable(paragraph('note', `${BOX}<w:shd w:val="clear" w:fill="E8F0FE"/>`)))
+    )[0]!;
+    const top = stroke(fragment, 'top');
+    const bottom = stroke(fragment, 'bottom');
+    const left = stroke(fragment, 'left');
+    const right = stroke(fragment, 'right');
+    const box = fragment.shadingBox!;
+    expect(fragment.shading).toBe('E8F0FE');
+    expect(box.x).toBe(left.box.x);
+    expect(box.x + box.width).toBe(right.box.x + right.box.width);
+    expect(box.y).toBe(top.box.y);
+    expect(box.y + box.height).toBe(bottom.box.y + bottom.box.height);
   });
 });

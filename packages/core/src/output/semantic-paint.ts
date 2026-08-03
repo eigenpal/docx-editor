@@ -10,7 +10,7 @@
 // `createElement` plus `textContent` and never from an HTML string, and every style value
 // comes from the RESOLVED style rather than from raw authored text.
 
-import { baselineShiftPtOf } from '@docx-editor.dev/core-contract/layout';
+import { baselineShiftPtOf, TAB_LEADER_GLYPH } from '@docx-editor.dev/core-contract/layout';
 import type {
   LineRecord,
   PageRecord,
@@ -332,9 +332,22 @@ function paintSpan(
   // uniform slab again. The caller passes the height this run's band should be (its own
   // published height, plus the line's extra leading, capped at the line height).
   element.style.lineHeight = `${bandHeightPt * ctx.scale}px`;
-  element.dataset.paragraphId = span.range.paragraphId;
-  element.dataset.start = String(span.range.start);
-  element.dataset.end = String(span.range.end);
+  // ADDRESSABLE ONLY IF IT OWNS OFFSETS. Selection maps through `data-paragraph-id` +
+  // `data-start` and reads an endpoint as `start + textContent.length`, so a span whose
+  // painted text is wider than its model range hands back an offset the paragraph does not
+  // have. A `w:ptab` is exactly that — one painted `\t` over a ZERO-WIDTH range — and a
+  // click just left of a contents line's page number resolved to the end of the paragraph,
+  // the same answer as clicking after it. Zero-width spans paint as furniture instead: the
+  // advance and its leader are still drawn, and the mapper resolves through the real text
+  // either side. An ordinary `w:tab` keeps its address; it does occupy an offset.
+  if (span.range.end > span.range.start) {
+    element.dataset.paragraphId = span.range.paragraphId;
+    element.dataset.start = String(span.range.start);
+    element.dataset.end = String(span.range.end);
+  } else {
+    element.setAttribute('aria-hidden', 'true');
+    element.contentEditable = 'false';
+  }
   applyRunFaceStyle(element, span.style, ctx);
   // Layout owns advances that the browser cannot reconstruct: horizontal scaling (transform
   // does not reserve space) and OOXML tab stops (`\t` would otherwise paint as a narrow
@@ -550,15 +563,6 @@ function paintListMarker(
  * `heavy` has no separate character — Word draws a thicker rule, approximated by the
  * underscore in the run's own face at bold weight rather than by inventing a font.
  */
-const TAB_LEADER_GLYPH = new Map<string, string>(
-  Object.entries({
-    dot: '.',
-    hyphen: '-',
-    underscore: '_',
-    heavy: '_',
-    middleDot: '·',
-  })
-);
 
 /**
  * Ceiling on repeated leader glyphs for one tab.
@@ -602,22 +606,57 @@ function paintTabLeader(
   layer.style.whiteSpace = 'pre';
   layer.style.pointerEvents = 'none';
   layer.style.userSelect = 'none';
-  // The zero-size strut plus an explicit line-height is how `paintLine` sits its runs, so
-  // reusing it here puts the leader on exactly the baseline the text on this line got.
+  // LEADER DOTS SIT ON THE BASELINE, like the periods they stand in for.
+  //
+  // The layer is therefore an ordinary line of text in the run's own face, with the LINE's
+  // line-height — the same two things `paintLine` gives the text beside it, so the browser
+  // resolves the identical baseline. Earlier attempts hung the glyphs off a zero-size strut
+  // and tried to place that strut's baseline arithmetically; a strut with no metrics puts
+  // its baseline at half the line-height (the vertical centre), and an inline-block aligns
+  // by its OWN internal baseline rather than the one the arithmetic targeted, so the dots
+  // came out first centred and then below the text. Matching the text's own setup is the
+  // only version that needs no correction.
+  // MIRROR `paintLine` EXACTLY, because the baseline is whatever that structure resolves
+  // to and no arithmetic here can second-guess it: strut killed with `font-size: 0`, the
+  // published line height as an explicit line-height, and the glyphs as a baseline-aligned
+  // inline-block carrying their own BAND height — the run's own height plus the line's
+  // extra leading, capped at the line box. Leaving the band off let the glyphs inherit the
+  // whole line height, and their inner line box then centred them; putting the face on the
+  // container instead gave the strut different metrics from the dots and floated them.
   layer.style.fontSize = '0';
   layer.style.lineHeight = `${line.box.height * scale}px`;
+
+  let tallest = 0;
+  for (const entry of line.spans) tallest = Math.max(tallest, entry.box.height);
+  const band = Math.min(span.box.height + Math.max(0, line.box.height - tallest), line.box.height);
 
   const glyphs = document.createElement('span');
   glyphs.style.display = 'inline-block';
   glyphs.style.verticalAlign = 'baseline';
   applyRunFaceStyle(glyphs, span.style, ctx);
+  glyphs.style.lineHeight = `${band * scale}px`;
   if (span.tabLeader === 'heavy') glyphs.style.fontWeight = 'bold';
-  // Under-estimate the glyph advance at a fifth of the em so the repeat always OVERFILLS the
-  // reserved width; the clip decides where it ends, which is what keeps the leader from
-  // stopping short of the stop in a face with narrow punctuation.
-  const advancePt = Math.max(0.5, span.style.fontSizePt * 0.2);
-  const count = Math.min(MAX_TAB_LEADER_GLYPHS, Math.ceil(span.box.width / advancePt) + 1);
+  // ONE GLYPH PER ITS OWN ADVANCE — the leader is the same character typed over and over,
+  // and Word spaces it exactly as typing it would. Layout measured that advance in this
+  // run's face; guessing it (a fifth of the em, deliberately short so the repeat overfilled
+  // and the clip decided where it ended) left the dots at whatever spacing an over-long
+  // string happened to produce, reading as a fine dotted rule rather than periods. Falls
+  // back to the old estimate only for a record laid out before the measurement existed.
+  const advancePt =
+    span.tabLeaderAdvancePt && span.tabLeaderAdvancePt > 0
+      ? span.tabLeaderAdvancePt
+      : Math.max(0.5, span.style.fontSizePt * 0.2);
+  // Two glyphs of margin over the measured fit: the browser resolves its own face and its
+  // advance may run a shade narrower than the measurer's, which would stop the leader short
+  // of the stop. The layer clips, so the spare glyphs cost nothing.
+  const count = Math.min(
+    MAX_TAB_LEADER_GLYPHS,
+    Math.max(1, Math.floor(span.box.width / advancePt) + 2)
+  );
   glyphs.textContent = glyph.repeat(count); // SAFE: textContent, never innerHTML
+  // No tracking on top of the glyph's own advance — the leader is plain repeated
+  // punctuation, and inherited letter-spacing would re-space it.
+  glyphs.style.letterSpacing = '0';
   layer.append(glyphs);
   return layer;
 }

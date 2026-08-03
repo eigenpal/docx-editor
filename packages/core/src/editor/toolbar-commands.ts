@@ -73,25 +73,38 @@ const VALUE_SLOT_MARKS: Partial<Record<ChromeSlotId, { mark: string; attr: strin
  * Known-valid probe values, so `toolbarCommandState` can ask `Editor.can` about a
  * value-typed slot without having a value yet. The probe never executes: it only
  * answers "would a well-formed value be honoured right now" — which is the editable
- * gate, exactly what enables the picker.
+ * gate, exactly what enables the picker. The style probe passes the SHAPE gate on any
+ * document (existence is an exec-time check), which is exactly right: the picker's
+ * options come from `getDocumentStyles`, so a real pick always exists.
  */
 const VALUE_SLOT_PROBES: Partial<Record<ChromeSlotId, unknown>> = {
   'font.family': 'Arial',
   'font.size': 22,
   'text.color': '000000',
   'text.highlight': 'yellow',
+  'styles.style': 'Normal',
 };
 
 /**
- * The engine command for a VALUE-TYPED slot (`font.family`, `font.size`,
- * `text.color`, `text.highlight`) carrying the picked value, or `null` for a slot
- * that does not take a value. The value is validated by the engine's own
- * `setMarkAttr` gate (`can` refuses a malformed one with `invalidArgs`), so a host
- * can pass user input through unmodified.
+ * The engine command for a VALUE-TYPED slot carrying the picked value, or `null` for a
+ * slot that does not take a value.
+ *
+ * Two families: the run-property pickers (`font.family`, `font.size`, `text.color`,
+ * `text.highlight`) resolve to `setMarkAttr`, and `styles.style` resolves to
+ * `setParagraphStyle` — a paragraph styleId, not a mark. Either way the value is
+ * validated by the engine's own gate (`can` refuses a malformed one with `invalidArgs`;
+ * a styleId the document does not define is refused at `exec`), so a host can pass user
+ * input through unmodified.
  *
  * @public
  */
 export function commandForSlotValue(slotId: ChromeSlotId, value: unknown): EditorCommand | null {
+  // The style picker is value-typed but not a MARK: its value is a paragraph styleId.
+  // Passed through unvalidated like the mark values — the engine's own gate refuses a
+  // malformed one (`classifyCommand`) and an unknown one (`exec`), with typed reasons.
+  if (slotId === 'styles.style') {
+    return { type: 'setParagraphStyle', styleId: value as string };
+  }
   const entry = VALUE_SLOT_MARKS[slotId];
   if (!entry) return null;
   return { type: 'setMarkAttr', mark: entry.mark, attr: entry.attr, value };

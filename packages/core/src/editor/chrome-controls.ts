@@ -179,7 +179,7 @@ export const CHROME_GROUPS = [
         labelKey: 'styles.selectAriaLabel',
         paths: null,
         valueKey: 'styles.normalText',
-        state: { kind: 'command' },
+        state: { kind: 'value' },
       },
     ],
   },

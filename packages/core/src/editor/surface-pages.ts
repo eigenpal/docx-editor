@@ -167,13 +167,24 @@ export function createSurfaceStyleDeps(session: TreeDocxSession): {
  * test — this returns every page, which is the safe reading: a wrong guess silently drops
  * content rather than merely slowing something down.
  */
+/**
+ * The scroll container a mounted surface lives in, or null when it is not in one.
+ *
+ * ONE definition, because "where does this document scroll" has to be the same answer for
+ * the code that decides which pages to build and the code that scrolls to one — a reveal
+ * that moved a different element than materialization watches would scroll to a blank page.
+ */
+export function surfaceScroller(container: HTMLElement): HTMLElement | null {
+  return container.closest('.docx-editor__scroll-container') as HTMLElement | null;
+}
+
 export function visiblePageSet(
   container: HTMLElement,
   layout: SemanticLayout,
   selection: SemanticSelection,
   scale: number
 ): ReadonlySet<number> | undefined {
-  const scroller = container.closest('.docx-editor__scroll-container') as HTMLElement | null;
+  const scroller = surfaceScroller(container);
   if (!scroller || scroller.clientHeight === 0) return undefined;
   const pinned: number[] = [];
   for (const position of [selection.anchor, selection.head]) {

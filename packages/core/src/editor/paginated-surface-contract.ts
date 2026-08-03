@@ -95,6 +95,18 @@ export interface PaginatedSurfacePerf {
   readonly cancelledRuns: number;
 }
 
+/** How a reveal places its target in the viewport. */
+export interface RevealOptions {
+  /**
+   * `'start'` puts the target near the top (a heading the user jumped to), `'center'`
+   * centres it, `'nearest'` scrolls only when it is out of view. Default `'start'`.
+   */
+  readonly block?: 'start' | 'center' | 'nearest';
+  /** Padding above the target, in CSS pixels. Default 24. */
+  readonly offsetPx?: number;
+  readonly behavior?: ScrollBehavior;
+}
+
 export interface PaginatedSurfaceState {
   readonly revision: number;
   readonly pageCount: number;
@@ -110,6 +122,15 @@ export interface PaginatedSurfaceState {
   readonly canUndo: boolean;
   readonly canRedo: boolean;
   readonly lastRejection: string | null;
+  /**
+   * The typing format armed at the caret (Word's stored marks), or null.
+   *
+   * NOT document state — nothing is written until the next characters are typed — but it
+   * IS observable state: `formatting()` reports it, so a host that reflects the toolbar
+   * has to learn when it moves. Reference-stable while unchanged, so a host can compare
+   * it to decide whether to re-derive. See `toggleRunProperty` for the lane itself.
+   */
+  readonly pendingFormat: readonly { readonly localName: string }[] | null;
   /** Timing and reuse counters for the last pass. Diagnostics, not document state. */
   readonly perf: PaginatedSurfacePerf;
 }
@@ -180,6 +201,18 @@ export interface PaginatedSurface {
   isListActive(kind: 'bullet' | 'ordered'): boolean;
   /** Select the whole document. */
   selectAll(): void;
+  /**
+   * Scroll a page, or the page a paragraph sits on, into view. Returns whether it
+   * scrolled — false when the target is not laid out, or the surface is not inside a
+   * scroll container, so a caller can tell "no such target" from "done".
+   *
+   * The geometry comes from the LAYOUT, never from the DOM: a page that has not been
+   * materialized yet has no element to measure, and that is exactly the page a reveal is
+   * usually asked for. `revealParagraph` scrolls to the paragraph's own line rather than
+   * the top of its page, so a heading deep in a page lands in view.
+   */
+  revealPage(pageIndex: number, options?: RevealOptions): boolean;
+  revealParagraph(paragraphId: string, options?: RevealOptions): boolean;
   /** Set the selection directly, for a host driving the surface programmatically. */
   setSelection(next: SemanticSelection): void;
   /**
@@ -189,18 +222,35 @@ export interface PaginatedSurface {
    * for every reader that does not know rectangles exist.
    */
   setCellSelection(next: CellSelection | null): void;
-  /** Toggle a run property over the selection, e.g. `b`, `i`, `u`. */
+  /**
+   * Toggle a run property over the selection, e.g. `b`, `i`, `u`.
+   *
+   * AT A COLLAPSED CARET this ARMS the property instead of writing it — Word's stored
+   * marks. Nothing reaches the document until the next characters are typed there, and
+   * those take the armed format; the armed state shows in `formatting()` and in
+   * `state().pendingFormat` immediately, so a toolbar reflects the press. It survives the
+   * caret-preserving edits (Backspace, Delete, Enter) and IME composition, and is
+   * discarded when the caret moves elsewhere or the document is undone. A property the
+   * store cannot author is refused at arm time rather than left to poison the keystroke.
+   */
   toggleRunProperty(localName: string, attributes?: Record<string, string>): void;
   /**
    * SET a run property over the selection, rather than toggling it.
    *
    * Font family, size and colour are values, not switches: picking Arial twice must leave
-   * the text in Arial, which a toggle would not.
+   * the text in Arial, which a toggle would not. Arms at a collapsed caret on the same
+   * terms as `toggleRunProperty`.
    */
   setRunProperty(localName: string, attributes?: Record<string, string>): void;
   /** Set a property on every paragraph the selection touches — alignment, style, spacing. */
   setParagraphProperty(localName: string, attributes?: Record<string, string>): void;
-  /** Formatting as it stands at the selection, for a toolbar to reflect. */
+  /**
+   * Formatting as it stands at the selection, for a toolbar to reflect.
+   *
+   * With a typing format armed at the caret this reports what the NEXT characters typed
+   * will look like, not what the document holds — which is the answer a toolbar wants and
+   * the one Word gives.
+   */
   formatting(): SurfaceFormatting;
   /**
    * The section the document declares: page size, margins, columns, orientation.

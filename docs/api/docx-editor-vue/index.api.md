@@ -535,6 +535,13 @@ export interface Editor {
         readonly styleId: string;
         readonly name: string;
         readonly type: string;
+        readonly preview: {
+            readonly fontFamily: string | null;
+            readonly fontSizePt: number | null;
+            readonly bold: boolean;
+            readonly italic: boolean;
+            readonly color: string | null;
+        };
     }[];
     getDocumentThemeColors(): readonly { readonly slot: string; readonly hex: string }[];
     getHeaderFooterState(): {

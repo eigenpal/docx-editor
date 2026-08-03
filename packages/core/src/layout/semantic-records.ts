@@ -102,6 +102,15 @@ export interface StyleSpanRecord {
    * it can never move the text that follows it.
    */
   readonly tabLeader?: TabLeader;
+  /**
+   * Advance of ONE leader glyph in this run's face, in points, measured by layout.
+   *
+   * Paint cannot ask a font how wide a character is, so without this it had to guess and
+   * deliberately overfill, leaving the dots at whatever spacing an over-long string
+   * happened to produce. Measured, the leader is spaced exactly as the same character
+   * typed there would be — which is what Word draws.
+   */
+  readonly tabLeaderAdvancePt?: number;
 }
 
 export interface LineRecord {
@@ -148,14 +157,19 @@ export interface ParagraphFragmentRecord {
   /**
    * Validated 6-hex paragraph shading fill (`w:pPr/w:shd`), absent for none/auto.
    *
-   * Paint fills {@link shadingBox} (line/content area only). Measurement ignores it.
+   * Paint fills {@link shadingBox}. Measurement ignores it.
    */
   readonly shading?: string;
   /**
-   * Geometry of the paragraph shading band when {@link shading} is set.
+   * Geometry of the paragraph shading band when {@link shading} is set. Absent when there
+   * is no fill.
    *
-   * Covers the fragment's line boxes (indent-aware width) — not before/after spacing or
-   * bottom-border extent. Absent when there is no fill.
+   * TWO SHAPES, because Word fills two different things. An UNBORDERED paragraph is filled
+   * across its line boxes (indent-aware width), and before/after spacing stays unfilled. A
+   * paragraph that publishes any {@link borders} stroke is filled across the rectangle those
+   * strokes draw instead — `w:space` padding and rule extent included — so a callout's fill
+   * reaches its frame rather than leaving a pale stripe floating inside an empty box. Paint
+   * draws the strokes after the fill, so the frame is never covered.
    */
   readonly shadingBox?: LayoutBox;
   /**
