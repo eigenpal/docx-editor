@@ -144,6 +144,38 @@ export function validateQNameAttributeValues(
  */
 const PPR_ELEMENTS_AFTER_RPR = new Set(['sectPr', 'pPrChange']);
 
+/** The four content-position revision wrappers, which nest and carry runs. */
+export function isContentRevisionKind(
+  kind: OoxmlNode['kind']
+): kind is 'revisionInsert' | 'revisionDelete' | 'revisionMoveFrom' | 'revisionMoveTo' {
+  return (
+    kind === 'revisionInsert' ||
+    kind === 'revisionDelete' ||
+    kind === 'revisionMoveFrom' ||
+    kind === 'revisionMoveTo'
+  );
+}
+
+/** Move-range and comment-range boundary markers, which are empty and sit between runs. */
+export function isRangeMarkerKind(
+  kind: OoxmlNode['kind']
+): kind is
+  | 'moveFromRangeStart'
+  | 'moveFromRangeEnd'
+  | 'moveToRangeStart'
+  | 'moveToRangeEnd'
+  | 'commentRangeStart'
+  | 'commentRangeEnd' {
+  return (
+    kind === 'moveFromRangeStart' ||
+    kind === 'moveFromRangeEnd' ||
+    kind === 'moveToRangeStart' ||
+    kind === 'moveToRangeEnd' ||
+    kind === 'commentRangeStart' ||
+    kind === 'commentRangeEnd'
+  );
+}
+
 /**
  * Content that is PRESERVED rather than structural, and may therefore sit anywhere a
  * `generic` child may sit.
@@ -155,13 +187,18 @@ const PPR_ELEMENTS_AFTER_RPR = new Set(['sectPr', 'pPrChange']);
  * demoted `w:body` is not a cosmetic loss: nothing downstream finds a paragraph in it, so a
  * document with one stray bookmark would open blank. Admitting them wherever `generic` is
  * admitted keeps typing them additive.
+ *
+ * The move-range and comment-range markers are the same class and join for the same reason:
+ * `EG_RangeMarkupElements` sits in `EG_PContent` and between block-level siblings alike, so a
+ * comment anchored across a table boundary would otherwise demote the container holding it.
  */
 function isPreservedChild(child: OoxmlNode): boolean {
   return (
     child.kind === 'generic' ||
     child.kind === 'bookmarkStart' ||
     child.kind === 'bookmarkEnd' ||
-    child.kind === 'hyperlink'
+    child.kind === 'hyperlink' ||
+    isRangeMarkerKind(child.kind)
   );
 }
 
@@ -181,7 +218,10 @@ export function validKnownKind(kind: KnownKind, children: readonly OoxmlNode[]):
       return (
         children.every(
           (child) =>
-            child.kind === 'paragraphProperties' || child.kind === 'run' || isPreservedChild(child)
+            child.kind === 'paragraphProperties' ||
+            child.kind === 'run' ||
+            isContentRevisionKind(child.kind) ||
+            isPreservedChild(child)
         ) &&
         (properties < 0 || properties === 0) &&
         children.filter((child) => child.kind === 'paragraphProperties').length <= 1
@@ -198,7 +238,12 @@ export function validKnownKind(kind: KnownKind, children: readonly OoxmlNode[]):
      * schema-legal and a reader that demoted it would stop the inner link's runs painting.
      */
     case 'hyperlink':
-      return children.every((child) => child.kind === 'run' || isPreservedChild(child));
+      // `EG_PContent` includes the revision wrappers, and a tracked edit inside a link is
+      // ordinary, so a `w:ins` here must not demote the link.
+      return children.every(
+        (child) =>
+          child.kind === 'run' || isContentRevisionKind(child.kind) || isPreservedChild(child)
+      );
     case 'bookmarkStart':
     case 'bookmarkEnd':
       return children.length === 0;
@@ -209,16 +254,45 @@ export function validKnownKind(kind: KnownKind, children: readonly OoxmlNode[]):
           (child) =>
             child.kind === 'runProperties' ||
             child.kind === 'text' ||
+            child.kind === 'deletedText' ||
             child.kind === 'tab' ||
             child.kind === 'hardBreak' ||
             child.kind === 'bookmarkStart' ||
             child.kind === 'bookmarkEnd' ||
+            child.kind === 'commentReference' ||
             child.kind === 'generic'
         ) &&
         (properties < 0 || properties === 0) &&
         children.filter((child) => child.kind === 'runProperties').length <= 1
       );
     }
+    // Revision wrappers carry run-level content and may nest — an insertion inside a
+    // deletion is ordinary in a two-round review. Deliberately permissive, like the table
+    // arms: demotion to generic is the safe fallback and generic round-trips losslessly.
+    case 'revisionInsert':
+    case 'revisionDelete':
+    case 'revisionMoveFrom':
+    case 'revisionMoveTo':
+      return children.every(
+        (child) =>
+          child.kind === 'run' || isContentRevisionKind(child.kind) || isPreservedChild(child)
+      );
+    // Range markers and the comment reference are empty elements. Any child means this is
+    // not the element the schema describes, so it demotes rather than being trusted.
+    case 'moveFromRangeStart':
+    case 'moveFromRangeEnd':
+    case 'moveToRangeStart':
+    case 'moveToRangeEnd':
+    case 'commentRangeStart':
+    case 'commentRangeEnd':
+    case 'commentReference':
+      return children.length === 0;
+    case 'comments':
+      return children.every((child) => child.kind === 'comment' || isPreservedChild(child));
+    case 'comment':
+      return children.every(
+        (child) => child.kind === 'paragraph' || child.kind === 'table' || isPreservedChild(child)
+      );
     case 'runProperties':
       return children.every((child) => child.kind === 'generic');
     case 'paragraphProperties': {
@@ -238,6 +312,7 @@ export function validKnownKind(kind: KnownKind, children: readonly OoxmlNode[]):
       );
     }
     case 'text':
+    case 'deletedText':
       return children.every((child) => child.kind === 'textValue');
     case 'tab':
     case 'hardBreak':

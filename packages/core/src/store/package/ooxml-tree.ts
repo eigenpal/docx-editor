@@ -164,6 +164,8 @@ export interface OoxmlParagraphNode extends OoxmlElementBase<
     | OoxmlHyperlinkNode
     | OoxmlBookmarkStartNode
     | OoxmlBookmarkEndNode
+    | OoxmlRevisionContentNode
+    | OoxmlRangeMarkerNode
     | OoxmlGenericElementNode
   )[],
   readonly OoxmlKnownNodeAttribute[]
@@ -218,6 +220,8 @@ export interface OoxmlHyperlinkNode extends OoxmlElementBase<
     | OoxmlHyperlinkNode
     | OoxmlBookmarkStartNode
     | OoxmlBookmarkEndNode
+    | OoxmlRevisionContentNode
+    | OoxmlRangeMarkerNode
     | OoxmlGenericElementNode
   )[],
   readonly OoxmlKnownNodeAttribute[]
@@ -225,6 +229,35 @@ export interface OoxmlHyperlinkNode extends OoxmlElementBase<
   readonly kind: 'hyperlink';
   readonly namespaceUri: typeof WML_NAMESPACE_URI;
   readonly localName: 'hyperlink';
+}
+
+/**
+ * A content-position revision wrapper — `w:ins`, `w:del`, `w:moveFrom`, `w:moveTo`.
+ *
+ * These wrap runs, so a walk that visits only direct `run` children never reaches
+ * the content inside them. Typing them is what lets layout descend deliberately
+ * rather than treating tracked content as unknown markup.
+ *
+ * ECMA-376 §17.13.5.18/.14/.25/.29. All four extend `CT_TrackChange`: `@w:id` and
+ * `@w:author` are required, `@w:date` is optional and is never fabricated.
+ *
+ * The SAME element names appear in property positions — `w:pPr/w:rPr/w:ins` marks a
+ * paragraph mark, `w:trPr/w:del` marks a row — where they carry no content and mean
+ * something structurally different. Those stay generic; see `contentRevisionKind`.
+ */
+export interface OoxmlRevisionContentNode extends OoxmlElementBase<
+  readonly (
+    | OoxmlRunNode
+    | OoxmlRevisionContentNode
+    | OoxmlHyperlinkNode
+    | OoxmlRangeMarkerNode
+    | OoxmlGenericElementNode
+  )[],
+  readonly OoxmlKnownNodeAttribute[]
+> {
+  readonly kind: 'revisionInsert' | 'revisionDelete' | 'revisionMoveFrom' | 'revisionMoveTo';
+  readonly namespaceUri: typeof WML_NAMESPACE_URI;
+  readonly localName: 'ins' | 'del' | 'moveFrom' | 'moveTo';
 }
 
 /**
@@ -253,12 +286,84 @@ export interface OoxmlBookmarkEndNode extends OoxmlElementBase<
   readonly localName: 'bookmarkEnd';
 }
 
+/**
+ * A range marker: the move-range and comment-range boundaries.
+ *
+ * Three of the base types in this family disagree, and the disagreement is load-bearing:
+ *
+ * - `w:moveFromRangeStart` / `w:moveToRangeStart` are `CT_MoveBookmark` (§17.13.5.22/.26):
+ *   `@w:name`, `@w:author`, and `@w:date` are all REQUIRED.
+ * - `w:moveFromRangeEnd` / `w:moveToRangeEnd` / `w:commentRangeStart` / `w:commentRangeEnd`
+ *   are `CT_MarkupRange` (§17.13.5.21): `@w:id` only, with NO author and NO date. Requiring
+ *   provenance here refuses valid files; writing it emits invalid XML.
+ *
+ * Two different join keys ride on these: `@w:name` pairs a `moveFrom` range with its
+ * `moveTo` range, while `@w:id` pairs a range start with its own range end. In a real
+ * document the two halves of a named pair carry different ids, so neither key substitutes
+ * for the other.
+ */
+export interface OoxmlRangeMarkerNode extends OoxmlElementBase<
+  readonly [],
+  readonly OoxmlKnownNodeAttribute[]
+> {
+  readonly kind:
+    | 'moveFromRangeStart'
+    | 'moveFromRangeEnd'
+    | 'moveToRangeStart'
+    | 'moveToRangeEnd'
+    | 'commentRangeStart'
+    | 'commentRangeEnd';
+  readonly namespaceUri: typeof WML_NAMESPACE_URI;
+  readonly localName:
+    | 'moveFromRangeStart'
+    | 'moveFromRangeEnd'
+    | 'moveToRangeStart'
+    | 'moveToRangeEnd'
+    | 'commentRangeStart'
+    | 'commentRangeEnd';
+}
+
+/** `w:commentReference` — the in-run mark that carries the comment's anchor point. */
+export interface OoxmlCommentReferenceNode extends OoxmlElementBase<
+  readonly [],
+  readonly OoxmlKnownNodeAttribute[]
+> {
+  readonly kind: 'commentReference';
+  readonly namespaceUri: typeof WML_NAMESPACE_URI;
+  readonly localName: 'commentReference';
+}
+
+/** The `word/comments.xml` root (`CT_Comments`, §17.13.4.2). */
+export interface OoxmlCommentsNode extends OoxmlElementBase<
+  readonly (OoxmlCommentNode | OoxmlGenericElementNode)[],
+  readonly OoxmlKnownNodeAttribute[]
+> {
+  readonly kind: 'comments';
+  readonly namespaceUri: typeof WML_NAMESPACE_URI;
+  readonly localName: 'comments';
+}
+
+/**
+ * One comment (`CT_Comment`, §17.13.4.4) — `CT_TrackChange` plus `@w:initials`, holding
+ * block content. The block content is why a comment body is a story rather than a string.
+ */
+export interface OoxmlCommentNode extends OoxmlElementBase<
+  readonly (OoxmlParagraphNode | OoxmlTableNode | OoxmlGenericElementNode)[],
+  readonly OoxmlKnownNodeAttribute[]
+> {
+  readonly kind: 'comment';
+  readonly namespaceUri: typeof WML_NAMESPACE_URI;
+  readonly localName: 'comment';
+}
+
 export interface OoxmlRunNode extends OoxmlElementBase<
   readonly (
     | OoxmlRunPropertiesNode
     | OoxmlTextElementNode
+    | OoxmlDeletedTextNode
     | OoxmlTabNode
     | OoxmlHardBreakNode
+    | OoxmlCommentReferenceNode
     | OoxmlGenericElementNode
   )[],
   readonly OoxmlKnownNodeAttribute[]
@@ -266,6 +371,21 @@ export interface OoxmlRunNode extends OoxmlElementBase<
   readonly kind: 'run';
   readonly namespaceUri: typeof WML_NAMESPACE_URI;
   readonly localName: 'r';
+}
+
+/**
+ * `w:delText` (§17.3.3.7) — the text container a run uses once its content is deleted.
+ *
+ * Structurally identical to `w:t`, and deliberately a DIFFERENT kind: it must never flow
+ * as ordinary text, and rejecting the deletion that contains it turns it back into `w:t`.
+ */
+export interface OoxmlDeletedTextNode extends OoxmlElementBase<
+  readonly OoxmlTextNode[],
+  readonly OoxmlKnownNodeAttribute[]
+> {
+  readonly kind: 'deletedText';
+  readonly namespaceUri: typeof WML_NAMESPACE_URI;
+  readonly localName: 'delText';
 }
 
 export interface OoxmlRunPropertiesNode extends OoxmlElementBase<
@@ -333,6 +453,7 @@ export type OoxmlElement =
   | OoxmlBookmarkEndNode
   | OoxmlRunPropertiesNode
   | OoxmlTextElementNode
+  | OoxmlDeletedTextNode
   | OoxmlParagraphPropertiesNode
   | OoxmlTabNode
   | OoxmlHardBreakNode
@@ -341,6 +462,11 @@ export type OoxmlElement =
   | OoxmlTableCellNode
   | OoxmlTableGridNode
   | OoxmlTablePropertiesNode
+  | OoxmlRevisionContentNode
+  | OoxmlRangeMarkerNode
+  | OoxmlCommentReferenceNode
+  | OoxmlCommentsNode
+  | OoxmlCommentNode
   | OoxmlGenericElementNode;
 
 export type OoxmlNode = OoxmlElement | OoxmlTextNode;
@@ -417,6 +543,7 @@ const KNOWN_WML_ELEMENTS: Readonly<Record<string, KnownKind>> = {
   r: 'run',
   rPr: 'runProperties',
   t: 'text',
+  delText: 'deletedText',
   pPr: 'paragraphProperties',
   tab: 'tab',
   br: 'hardBreak',
@@ -428,7 +555,80 @@ const KNOWN_WML_ELEMENTS: Readonly<Record<string, KnownKind>> = {
   hyperlink: 'hyperlink',
   bookmarkStart: 'bookmarkStart',
   bookmarkEnd: 'bookmarkEnd',
+  moveFromRangeStart: 'moveFromRangeStart',
+  moveFromRangeEnd: 'moveFromRangeEnd',
+  moveToRangeStart: 'moveToRangeStart',
+  moveToRangeEnd: 'moveToRangeEnd',
+  commentRangeStart: 'commentRangeStart',
+  commentRangeEnd: 'commentRangeEnd',
+  commentReference: 'commentReference',
+  comments: 'comments',
+  comment: 'comment',
 };
+
+/**
+ * `w:ins` / `w:del` / `w:moveFrom` / `w:moveTo` in a CONTENT position, by parent.
+ *
+ * These four names are overloaded in WML. In a content position they wrap runs and are
+ * a revision to the text. In a property position they are a revision to something else
+ * entirely and hold no content:
+ *
+ * | Position | Meaning |
+ * | --- | --- |
+ * | `w:pPr/w:rPr/w:ins` | the PARAGRAPH MARK was inserted (`EG_ParaRPrTrackChanges`) |
+ * | `w:trPr/w:del` | the table ROW was deleted |
+ * | `w:tcPr/w:cellIns` | the CELL was inserted |
+ * | `w:numPr/w:ins` | the numbering reference was inserted |
+ *
+ * Typing the property-position ones as content revisions would put empty wrappers into
+ * the flow and invite a walker to "accept" them by deletion, which for a row leaves the
+ * row present while reporting the deletion applied. They stay generic and are read by
+ * name where their own semantics are implemented.
+ *
+ * Classification is by parent rather than by children because an EMPTY `w:ins` is legal
+ * in both positions, so the children cannot tell them apart.
+ */
+const REVISION_CONTENT_KINDS: Readonly<Record<string, KnownKind>> = {
+  ins: 'revisionInsert',
+  del: 'revisionDelete',
+  moveFrom: 'revisionMoveFrom',
+  moveTo: 'revisionMoveTo',
+};
+
+/** Parents whose `w:ins`/`w:del` children are property revisions, not content revisions. */
+const PROPERTY_REVISION_PARENTS: ReadonlySet<string> = new Set([
+  'rPr',
+  'pPr',
+  'trPr',
+  'tcPr',
+  'tblPr',
+  'tblPrEx',
+  'numPr',
+  'sectPr',
+  'rPrChange',
+  'pPrChange',
+  'trPrChange',
+  'tcPrChange',
+  'tblPrChange',
+  'tblPrExChange',
+  'sectPrChange',
+]);
+
+/**
+ * The kind for a WML element given the local name of its parent element.
+ *
+ * `parentLocalName` is undefined at a part root, where no revision element is in a
+ * property position anyway.
+ */
+function wmlKindFor(localName: string, parentLocalName: string | undefined): KnownKind | 'generic' {
+  const revision = REVISION_CONTENT_KINDS[localName];
+  if (revision !== undefined) {
+    return parentLocalName !== undefined && PROPERTY_REVISION_PARENTS.has(parentLocalName)
+      ? 'generic'
+      : revision;
+  }
+  return KNOWN_WML_ELEMENTS[localName] ?? 'generic';
+}
 
 function deepFreezeNode(node: OoxmlNode): OoxmlNode {
   if (node.kind === 'textValue') return Object.freeze(node);
@@ -593,7 +793,8 @@ function convertElement(
   inherited: ReadonlyMap<string, string>,
   partName: string,
   path: string,
-  inheritedPreserve: boolean
+  inheritedPreserve: boolean,
+  parentWmlLocalName?: string
 ): OoxmlElement {
   const declarations = namespaceDeclarations(element, inherited);
   const name = resolveElementName(element.name, declarations.bindings);
@@ -606,15 +807,17 @@ function convertElement(
     name.localName
   );
   const preserve = resolvedXmlSpace(attributes, inheritedPreserve);
-  const candidateKind =
-    name.namespaceUri === WML_NAMESPACE_URI
-      ? (KNOWN_WML_ELEMENTS[name.localName] ?? 'generic')
-      : 'generic';
+  const isWml = name.namespaceUri === WML_NAMESPACE_URI;
+  const candidateKind = isWml ? wmlKindFor(name.localName, parentWmlLocalName) : 'generic';
   const retainedChildren = canonicalLegacyChildren(
     element.children,
     preserve,
-    candidateKind === 'text'
+    candidateKind === 'text' || candidateKind === 'deletedText'
   );
+  // A non-WML element is not a WML property parent, so it must not suppress a nested
+  // revision. Passing undefined keeps `w:ins` inside, say, an `mc:Fallback` a content
+  // revision, which is what it is.
+  const childParentName = isWml ? name.localName : undefined;
   const children = retainedChildren.map((child, index): OoxmlNode => {
     const childPath = `${path}.${index}`;
     if (child.type === 'text')
@@ -623,7 +826,14 @@ function convertElement(
         kind: 'textValue',
         value: child.value,
       };
-    return convertElement(child, declarations.bindings, partName, childPath, preserve);
+    return convertElement(
+      child,
+      declarations.bindings,
+      partName,
+      childPath,
+      preserve,
+      childParentName
+    );
   });
   const kind =
     candidateKind !== 'generic' &&
