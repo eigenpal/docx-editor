@@ -198,6 +198,8 @@ React-only.
 - `MenuItemProps` — one chrome slot as a row.
 - `MenuRowProps` — a presentational row, for a host action that is not a slot.
 - `MenuActionProps` — the pinned Open/Save/Page-setup rows' props.
+- `MenuReportIssueProps` — Help's one packaged row, named so a host can drop it or point
+  it at its own support channel rather than this project's tracker.
 - `MenuSeparatorProps`
 - `MenuSubmenuProps`
 - `MenuTableGridProps` — Word's 6×6 insert-table size picker.

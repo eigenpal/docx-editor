@@ -3837,7 +3837,12 @@ a.docx-hyperlink:focus-visible {
   top: -4px;
   left: 100%;
   margin-top: 0;
-  margin-left: 2px;
+  /* FLUSH against the parent panel, not offset by a gap. The panel is absolutely
+   * positioned and out of flow, so the wrapper's hit box is the parent ROW only — a
+   * pointer sample landing in a gap strip would hit the parent panel instead, fire the
+   * wrapper's mouseleave, and close the submenu the user was moving toward. Visual
+   * separation comes from the card's own border and shadow. */
+  margin-left: 0;
   min-width: 240px;
 }
 

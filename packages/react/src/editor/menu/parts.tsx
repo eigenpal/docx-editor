@@ -12,7 +12,7 @@
 // the menu context, which the root resolves once — host override, else the packaged
 // default — so the row itself holds no policy.
 
-import { useCallback, useId, useState } from 'react';
+import { useCallback, useId, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import {
   CHROME_MENUS,
@@ -282,6 +282,12 @@ export function MenuSubmenu({ labelKey, paths, className, children }: MenuSubmen
       className={`docx-menubar__submenu${className ? ` ${className}` : ''}`}
       onMouseEnter={() => setOpen(true)}
       onMouseLeave={() => setOpen(false)}
+      // Focus leaving the whole submenu closes it. Without this, a panel opened by
+      // TABBING onto the parent stays open forever — `onMouseLeave` cannot fire for a
+      // pointer that never arrived, and it then floats over the rows below it.
+      onBlur={(event) => {
+        if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setOpen(false);
+      }}
     >
       <button
         type="button"
@@ -292,7 +298,12 @@ export function MenuSubmenu({ labelKey, paths, className, children }: MenuSubmen
         {...(open ? { 'data-open': '' } : {})}
         onMouseDown={guardToolbarMousedown}
         onFocus={() => setOpen(true)}
-        onClick={() => setOpen((current) => !current)}
+        // OPENS, never toggles. The pointer that clicked this row is already inside the
+        // wrapper, so `onMouseEnter` has set `open` — a toggle would read the state hover
+        // just wrote and close the panel the click was meant to open, and no further
+        // `mouseEnter` fires while the pointer stays put. Closing is `onMouseLeave`'s and
+        // the blur handler's job, which is also how Word and Docs behave.
+        onClick={() => setOpen(true)}
       >
         <span className="docx-menubar__item-icon" aria-hidden="true">
           {chromeIcon(paths)}
@@ -500,6 +511,12 @@ export function Menu({ id, labelKey, className, hidden, children }: MenuProps) {
   const { openMenu, setOpenMenu } = useMenuContext();
   const label = useMenuLabel();
   const panelId = useId();
+  // Set when HOVER switched the bar to this menu. The click that follows a hover-switch
+  // must not toggle: the pointer moved onto a closed trigger, hover opened it, and by the
+  // time `onClick` runs the state says "already open" — so a plain toggle would close the
+  // menu the user just clicked on, which reads as the bar closing on them. Consumed by
+  // the next click; a click on the ALREADY-open menu still closes it.
+  const switchedByHover = useRef(false);
   const registry = CHROME_MENUS.find((menu) => menu.id === id);
   const open = openMenu === id;
   if (hidden) return null;
@@ -517,11 +534,23 @@ export function Menu({ id, labelKey, className, hidden, children }: MenuProps) {
         className="docx-menubar__trigger"
         {...(open ? { 'data-open': '' } : {})}
         onMouseDown={guardToolbarMousedown}
-        onClick={() => setOpenMenu(open ? null : id)}
+        onClick={() => {
+          if (switchedByHover.current) {
+            switchedByHover.current = false;
+            return;
+          }
+          setOpenMenu(open ? null : id);
+        }}
         // Docs' bar behaviour: once a menu is open the bar tracks the pointer, so
         // sliding across the triggers browses the menus without further clicks.
         onMouseEnter={() => {
-          if (openMenu !== null) setOpenMenu(id);
+          if (openMenu !== null && openMenu !== id) {
+            switchedByHover.current = true;
+            setOpenMenu(id);
+          }
+        }}
+        onMouseLeave={() => {
+          switchedByHover.current = false;
         }}
       >
         {text}
@@ -555,6 +584,47 @@ export const MenuFile = defineMenu('file');
 export const MenuFormat = defineMenu('format');
 export const MenuInsert = defineMenu('insert');
 
+/** Props for `DocxEditor.Menu.ReportIssue`. @public */
+export interface MenuReportIssueProps {
+  className?: string;
+  /** Render nothing — inside the packaged Help menu this removes the row. */
+  hidden?: boolean;
+  /** Replaces the packaged handler. Falls back to the menu's `onReportIssue`, then to
+   *  this project's own tracker. */
+  onSelect?: () => void;
+}
+
+/**
+ * Help › Report issue.
+ *
+ * A NAMED part rather than anonymous markup inside the Help menu, because it is the one
+ * packaged row that reaches OUTSIDE the host's product: it opens this project's issue
+ * tracker with the current page URL and user agent prefilled. A host embedding the editor
+ * in its own app has every reason to point that somewhere else or drop it, and it should
+ * not have to rebuild the menu to do either — `reportIssue={false}` removes it,
+ * `onReportIssue` redirects it, and this part composes it back by name.
+ *
+ * @public
+ */
+export function MenuReportIssue({ className, hidden, onSelect }: MenuReportIssueProps) {
+  const { setOpenMenu, onReportIssue } = useMenuContext();
+  const label = useMenuLabel();
+  if (hidden) return null;
+  const run = onSelect ?? onReportIssue ?? openReportIssue;
+  return (
+    <MenuRow
+      slot="help.reportIssue"
+      onSelect={() => {
+        run();
+        setOpenMenu(null);
+      }}
+      {...(className ? { className } : {})}
+    >
+      {label('toolbar.reportIssue')}
+    </MenuRow>
+  );
+}
+
 /**
  * Help.
  *
@@ -563,22 +633,17 @@ export const MenuInsert = defineMenu('insert');
  * a report for this project's own tracker, so the packaged Help menu supplies it here
  * rather than in the shared registry, where a Vue or vanilla host would inherit a link it
  * never asked for. Replace the whole menu by name to say something else.
+ *
+ * With no children and `reportIssue` unset the menu carries that one row; with
+ * `reportIssue={false}` it carries nothing, and Help is dropped rather than left as a
+ * trigger that opens an empty panel.
  */
 function MenuHelpImpl({ children, ...rest }: Omit<MenuProps, 'id'>) {
-  const { setOpenMenu } = useMenuContext();
-  const label = useMenuLabel();
+  const { reportIssue } = useMenuContext();
+  if (children === undefined && reportIssue === false) return null;
   return (
     <Menu id="help" {...rest}>
-      {children ?? (
-        <MenuRow
-          onSelect={() => {
-            openReportIssue();
-            setOpenMenu(null);
-          }}
-        >
-          {label('toolbar.reportIssue')}
-        </MenuRow>
-      )}
+      {children ?? <MenuReportIssue />}
     </Menu>
   );
 }

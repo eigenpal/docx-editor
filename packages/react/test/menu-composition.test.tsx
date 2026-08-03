@@ -291,6 +291,115 @@ describe('chrome contracts', () => {
     expect(without.queryByTestId('docx-toolbar')).not.toBeNull();
   });
 
+  test('hovering to a different trigger then clicking it KEEPS that menu open', () => {
+    // The bar tracks the pointer once something is open, so by the time the click lands
+    // the state already says "open" — a plain toggle closed the menu the user had just
+    // clicked on, which reads as the bar closing on them.
+    const { view } = mountMenu(<DocxEditorMenu />);
+    openMenu(view, 'toolbar.file');
+    const insert = [...view.container.querySelectorAll<HTMLButtonElement>('.docx-menubar__trigger')] //
+      .find((button) => button.textContent === 'toolbar.insert')!;
+    act(() => {
+      fireEvent.mouseEnter(insert);
+    });
+    expect(insert.getAttribute('aria-expanded')).toBe('true');
+    act(() => {
+      fireEvent.click(insert);
+    });
+    expect(insert.getAttribute('aria-expanded')).toBe('true');
+    expect(view.container.querySelectorAll('[role="menu"]').length).toBe(1);
+
+    // A click on the menu that is ALREADY open still closes it.
+    act(() => {
+      fireEvent.click(insert);
+    });
+    expect(view.container.querySelectorAll('[role="menu"]').length).toBe(0);
+  });
+
+  test('clicking a submenu parent the pointer already opened keeps it open', () => {
+    // Same class of bug one level down: `onMouseEnter` opened the panel, so a toggling
+    // click closed it — and no further mouseEnter fires while the pointer sits still.
+    const { view } = mountMenu(<DocxEditorMenu />);
+    openMenu(view, 'toolbar.insert');
+    openSubmenu(view, 'toolbar.break');
+    expect(row(view, 'insert.pageBreak')).toBeDefined();
+    const parent = [...view.container.querySelectorAll<HTMLElement>('.docx-menubar__submenu')] //
+      .find((element) => element.textContent?.includes('toolbar.break'))!;
+    act(() => {
+      fireEvent.click(parent.querySelector('button')!);
+    });
+    expect(view.container.querySelector('[data-slot="insert.pageBreak"]')).not.toBeNull();
+  });
+
+  test('a submenu opened by keyboard focus closes when focus leaves it', () => {
+    // `onMouseLeave` cannot fire for a pointer that never arrived, so a tab-opened panel
+    // used to float over the rows below it until the whole bar closed.
+    const { view } = mountMenu(<DocxEditorMenu />);
+    openMenu(view, 'toolbar.insert');
+    const parent = [...view.container.querySelectorAll<HTMLElement>('.docx-menubar__submenu')] //
+      .find((element) => element.textContent?.includes('toolbar.break'))!;
+    act(() => {
+      fireEvent.focus(parent.querySelector('button')!);
+    });
+    expect(view.container.querySelector('[data-slot="insert.pageBreak"]')).not.toBeNull();
+    act(() => {
+      fireEvent.blur(parent.querySelector('button')!, { relatedTarget: document.body });
+    });
+    expect(view.container.querySelector('[data-slot="insert.pageBreak"]')).toBeNull();
+  });
+
+  test('Ctrl/Cmd+S is scoped to this editor, not to the whole document', async () => {
+    let saved = 0;
+    const { view } = mountMenu(<DocxEditorMenu onSave={() => (saved += 1)} />);
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    // A field elsewhere on the host page: outside the editor root entirely.
+    const outside = document.createElement('input');
+    document.body.appendChild(outside);
+    act(() => {
+      fireEvent.keyDown(outside, { key: 's', ctrlKey: true });
+    });
+    expect(saved).toBe(0);
+
+    // Inside the editor, the shortcut works.
+    act(() => {
+      fireEvent.keyDown(bar(view), { key: 's', ctrlKey: true });
+    });
+    expect(saved).toBe(1);
+    outside.remove();
+  });
+
+  test('Help › Report issue is addressable: `reportIssue={false}` drops it and Help', () => {
+    const { view } = mountMenu(<DocxEditorMenu />);
+    expect(menuIds(bar(view))).toContain('help');
+    cleanup();
+
+    // The one packaged row that reaches OUTSIDE the host's product, so a host must be able
+    // to remove it without giving up the bar.
+    const dropped = mountMenu(<DocxEditorMenu reportIssue={false} />);
+    expect(menuIds(bar(dropped.view))).not.toContain('help');
+  });
+
+  test('`onReportIssue` redirects the row at the host, without replacing the menu', () => {
+    let reported = 0;
+    const { view } = mountMenu(<DocxEditorMenu onReportIssue={() => (reported += 1)} />);
+    openMenu(view, 'toolbar.help');
+    act(() => {
+      fireEvent.click(view.container.querySelector<HTMLButtonElement>('[data-slot="help.reportIssue"]')!);
+    });
+    expect(reported).toBe(1);
+  });
+
+  test('`<DocxEditor menu={{...}}>` forwards menu props instead of forcing menu={false}', () => {
+    const view = render(<DocxEditor document={SOURCE} menu={{ reportIssue: false }} />);
+    expect(view.queryByTestId('docx-menubar')).not.toBeNull();
+    expect(view.container.querySelector('[data-menu="help"]')).toBeNull();
+    // The rest of the bar is untouched.
+    expect(view.container.querySelector('[data-menu="insert"]')).not.toBeNull();
+  });
+
   test('Escape closes the open menu', () => {
     const { view } = mountMenu(<DocxEditorMenu />);
     openMenu(view, 'toolbar.file');

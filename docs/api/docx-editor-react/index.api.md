@@ -210,6 +210,7 @@ export interface DocxEditorMenuNamespace {
     readonly Open: typeof MenuOpen;
     // (undocumented)
     readonly PageSetup: typeof MenuPageSetup;
+    readonly ReportIssue: typeof MenuReportIssue;
     readonly Row: typeof MenuRow;
     // (undocumented)
     readonly Save: typeof MenuSave;
@@ -228,8 +229,10 @@ export interface DocxEditorMenuProps {
     fileName?: string;
     onOpen?: () => void;
     onPageSetup?: () => void;
+    onReportIssue?: () => void;
     onSave?: () => void;
     preset?: boolean;
+    reportIssue?: boolean;
     t?: ToolbarTranslate;
 }
 
@@ -313,7 +316,7 @@ export interface DocxEditorProps {
     hyperlinkPopup?: boolean;
     // (undocumented)
     locale?: string;
-    menu?: boolean;
+    menu?: boolean | DocxEditorMenuProps;
     mode?: EditorMode;
     navigation?: boolean;
     onChange?: (change: DocumentChange) => void;
@@ -740,6 +743,14 @@ export interface MenuProps {
     hidden?: boolean;
     id: ChromeMenuId;
     labelKey?: string;
+}
+
+// @public
+export interface MenuReportIssueProps {
+    // (undocumented)
+    className?: string;
+    hidden?: boolean;
+    onSelect?: () => void;
 }
 
 // @public

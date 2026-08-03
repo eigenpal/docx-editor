@@ -47,6 +47,7 @@ import {
   MenuRow,
   MenuSave,
   MenuSeparator,
+  MenuReportIssue,
   MenuSubmenu,
   MenuTableGrid,
   type MenuPartComponent,
@@ -118,6 +119,15 @@ export interface DocxEditorMenuProps {
   /** Replaces File › Page setup. The default opens the packaged Page Setup dialog. */
   onPageSetup?: () => void;
   /**
+   * Replaces Help › Report issue. The default opens THIS project's issue tracker,
+   * prefilled with the current page URL and user agent — so a host embedding the editor
+   * in its own product should point this at its own support channel, or drop the row with
+   * `reportIssue={false}`.
+   */
+  onReportIssue?: () => void;
+  /** `false` removes Help › Report issue, and the Help menu with it. Default `true`. */
+  reportIssue?: boolean;
+  /**
    * `false` renders children verbatim with no default arrangement. Default `true`: menu
    * children override their menu in place, others append.
    */
@@ -134,7 +144,18 @@ function menuOfChild(child: ReactNode): ChromeMenuId | null {
 }
 
 function DocxEditorMenuRoot(props: DocxEditorMenuProps) {
-  const { className, t, fileName, onOpen, onSave, onPageSetup, preset = true, children } = props;
+  const {
+    className,
+    t,
+    fileName,
+    onOpen,
+    onSave,
+    onPageSetup,
+    onReportIssue,
+    reportIssue,
+    preset = true,
+    children,
+  } = props;
   const editor = useDocxEditor();
   const [openMenu, setOpenMenu] = useState<ChromeMenuId | null>(null);
   const [pageSetupOpen, setPageSetupOpen] = useState(false);
@@ -165,7 +186,16 @@ function DocxEditorMenuRoot(props: DocxEditorMenuProps) {
 
   const packagedSave = useCallback(() => {
     if (!editor) return;
-    void editor.save().then((buffer) => download(buffer, downloadName(fileName)));
+    // `Editor.save()` REJECTS when there is no document to serialize, and the parser's own
+    // refusals (zip bomb, oversized part) surface the same way. Swallowing that leaves the
+    // user with no download and no error — they conclude it worked. The rejection is
+    // reported through the same channel a host's `onChange` uses.
+    void editor
+      .save()
+      .then((buffer) => download(buffer, downloadName(fileName)))
+      .catch((error: unknown) => {
+        console.error('[docx-editor] save failed', error);
+      });
   }, [editor, fileName]);
 
   const packagedPageSetup = useCallback(() => setPageSetupOpen(true), []);
@@ -183,6 +213,19 @@ function DocxEditorMenuRoot(props: DocxEditorMenuProps) {
     const onKeyDown = (event: globalThis.KeyboardEvent) => {
       if (!(event.metaKey || event.ctrlKey) || event.altKey || event.shiftKey) return;
       const key = event.key.toLowerCase();
+      if (key !== 's' && key !== 'o') return;
+      // SCOPED to this editor. A document-level listener that fires wherever focus happens
+      // to be means an embedded editor eats the host page's Cmd+S while the user types in
+      // an unrelated field, and two mounted editors both answer one keypress. The shortcut
+      // belongs to the editor the user is actually in: the chrome, the painted surface, or
+      // anything else under this instance's root.
+      // `.ep-root` is the library's own scope class and wraps the whole editor — chrome,
+      // viewport and painted pages — so one containment test covers the bar AND the
+      // document. A composition that does not use it falls back to the bar's own subtree,
+      // which is narrow but never wrong.
+      const target = event.target as Node | null;
+      const scope = rootRef.current?.closest('.ep-root') ?? rootRef.current;
+      if (!target || !scope?.contains(target)) return;
       if (key === 's' && resolvedSave) {
         event.preventDefault();
         resolvedSave();
@@ -203,8 +246,10 @@ function DocxEditorMenuRoot(props: DocxEditorMenuProps) {
       onOpen: resolvedOpen,
       onSave: resolvedSave,
       onPageSetup: resolvedPageSetup,
+      onReportIssue,
+      reportIssue,
     }),
-    [t, openMenu, resolvedOpen, resolvedSave, resolvedPageSetup]
+    [t, openMenu, resolvedOpen, resolvedSave, resolvedPageSetup, onReportIssue, reportIssue]
   );
 
   let content: ReactNode;
@@ -258,7 +303,15 @@ function DocxEditorMenuRoot(props: DocxEditorMenuProps) {
           // Cleared so choosing the SAME file twice fires a change event again.
           event.target.value = '';
           if (!file || !editor) return;
-          void file.arrayBuffer().then((buffer) => editor.load(new Uint8Array(buffer)));
+          // A read or a parse can fail — a revoked file handle, or the package guards
+          // refusing a zip bomb. Reporting it beats a silent no-op that leaves the previous
+          // document painted and the user believing the new one opened.
+          void file
+            .arrayBuffer()
+            .then((buffer) => editor.load(new Uint8Array(buffer)))
+            .catch((error: unknown) => {
+              console.error('[docx-editor] could not open the file', error);
+            });
         }}
       />
       {/* The packaged Page Setup dialog. A host that passed `onPageSetup` never opens it. */}
@@ -289,6 +342,8 @@ export interface DocxEditorMenuNamespace {
   readonly Open: typeof MenuOpen;
   readonly Save: typeof MenuSave;
   readonly PageSetup: typeof MenuPageSetup;
+  /** Help › Report issue, so a host can drop it or point it elsewhere by name. */
+  readonly ReportIssue: typeof MenuReportIssue;
 }
 
 /**
@@ -316,4 +371,5 @@ export const DocxEditorMenu: DocxEditorMenuNamespace = Object.assign(DocxEditorM
   Open: MenuOpen,
   Save: MenuSave,
   PageSetup: MenuPageSetup,
+  ReportIssue: MenuReportIssue,
 });

@@ -220,12 +220,15 @@ const DocxEditorImpl = forwardRef<DocxEditorRef, DocxEditorProps>(function DocxE
               label, icon and enabled state with the toolbar control for the same
               capability. Open and Save work with no configuration; `onOpen`/`onSave`
               replace them. */}
-          {menu ? (
+          {menu !== false ? (
             <DocxEditorMenu
               t={translate}
               {...(title !== undefined ? { fileName: title } : {})}
               {...(onOpen ? { onOpen } : {})}
               {...(onSave ? { onSave } : {})}
+              // An object `menu` is menu props, spread LAST so a host's own handler wins
+              // over the ones derived from the top-level props above.
+              {...(typeof menu === 'object' ? menu : {})}
             />
           ) : null}
         </div>

@@ -147,6 +147,7 @@ export {
   type MenuItemProps,
   type MenuPartComponent,
   type MenuProps,
+  type MenuReportIssueProps,
   type MenuRowProps,
   type MenuSeparatorProps,
   type MenuSubmenuProps,

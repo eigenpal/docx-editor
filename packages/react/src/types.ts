@@ -12,6 +12,7 @@ import type {
   FontConfiguration,
 } from '@docx-editor.dev/core-contract/contracts/editor';
 import type { FontConfigurationFragment } from '@docx-editor.dev/core-contract/editor';
+import type { DocxEditorMenuProps } from './editor/menu';
 export { EditorFontError } from '@docx-editor.dev/core-contract/contracts/editor';
 export type {
   EditorFontErrorCode,
@@ -89,15 +90,19 @@ export interface DocxEditorProps {
    */
   onOpen?: () => void;
   /**
-   * Render the packaged menu bar — File · Format · Insert · Help — under the document
-   * title (`false` removes it).
+   * The packaged menu bar — File · Format · Insert · Help — under the document title.
+   *
+   * `false` removes it. An OBJECT is `DocxEditorMenuProps`, passed straight through, so a
+   * host can redirect one row without giving up the bar: `menu={{ reportIssue: false }}`
+   * drops the report-an-issue row, `menu={{ onPageSetup: openMine }}` swaps the dialog,
+   * and `menu={{ children: <DocxEditor.Menu.File>…</DocxEditor.Menu.File> }}` replaces a
+   * whole menu in place. Before this took an object the only way to change any of that was
+   * `menu={false}` plus rebuilding the entire title block.
    *
    * Every actionable row is a chrome slot, so it shares its label, icon, command and
-   * enabled state with the toolbar control for the same capability; rows the engine cannot
-   * honour yet render present and disabled with the engine's own reason. Compose
-   * `DocxEditor.Menu` yourself for a different arrangement.
+   * enabled state with the toolbar control for the same capability.
    */
-  menu?: boolean;
+  menu?: boolean | DocxEditorMenuProps;
   /**
    * Render the packaged hyperlink popover (`false` removes it).
    *

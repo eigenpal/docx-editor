@@ -22,6 +22,10 @@ export interface MenuContextValue {
   readonly onOpen: (() => void) | undefined;
   readonly onSave: (() => void) | undefined;
   readonly onPageSetup: (() => void) | undefined;
+  /** Replaces the packaged Help row's handler. */
+  readonly onReportIssue: (() => void) | undefined;
+  /** `false` drops the packaged Help row, and Help with it. */
+  readonly reportIssue: boolean | undefined;
 }
 
 export const MenuContext = createContext<MenuContextValue>({
@@ -31,6 +35,8 @@ export const MenuContext = createContext<MenuContextValue>({
   onOpen: undefined,
   onSave: undefined,
   onPageSetup: undefined,
+  onReportIssue: undefined,
+  reportIssue: undefined,
 });
 
 export function useMenuContext(): MenuContextValue {
