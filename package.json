@@ -4,6 +4,7 @@
   "private": true,
   "workspaces": [
     "packages/*",
+    "packages/core/spike",
     "examples/agents-demo",
     "examples/agent-chat-demo",
     "examples/astro",
@@ -62,11 +63,11 @@
     "preview": "bun run build && bunx serve examples/parity/dist -p 4173",
     "reference:fetch": "node scripts/fetch-reference.mjs",
     "release": "bun run build:packages && changeset publish",
-    "test": "bun test",
+    "test": "bun test packages/agents packages/core/src packages/fonts packages/i18n packages/react packages/vue",
     "test:e2e:editor": "playwright test --config e2e/editor-smoke.config.ts",
     "test:spike": "cd packages/core/spike && bun run test",
     "test:spike:oracles": "cd packages/core/spike && bun test tests/manifest.self-test.test.ts tests/yjs-schema.test.ts tests/yjs-v2-oracles.test.ts tests/comparators.test.ts tests/vocabulary.test.ts tests/review-regressions.test.ts tests/second-review-regressions.test.ts tests/third-review-regressions.test.ts tests/fourth-review-regressions.test.ts tests/migration-inventory.test.ts tests/test-boundary-guard.test.ts",
-    "test:watch": "bun test --watch",
+    "test:watch": "bun test --watch packages/agents packages/core/src packages/fonts packages/i18n packages/react packages/vue",
     "typecheck": "bun run --filter '*' typecheck",
     "typecheck:spike": "cd packages/core/spike && bun run typecheck",
     "version-packages": "changeset version"

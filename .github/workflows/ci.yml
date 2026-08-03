@@ -7,12 +7,18 @@ name: CI
 # bun.lock first and then runs the same checks inline), so we skip them
 # here. GitHub treats skipped required checks as passing since 2022, so
 # branch protection still works.
+#
+# Both integration branches are listed. `main` is the repository default;
+# `docx-editor-v2` is the branch the engine work merges into, and a
+# trigger that names only `main` silently exempts every PR opened against
+# it — lint, test, build, api:check and the parity gates never run. Any
+# new long-lived integration branch has to be added here too.
 
 on:
   push:
-    branches: [main]
+    branches: [main, docx-editor-v2]
   pull_request:
-    branches: [main]
+    branches: [main, docx-editor-v2]
 
 # Least-privilege default GITHUB_TOKEN: lint/test/build only read the repo.
 permissions:
@@ -58,14 +64,23 @@ jobs:
       - name: Spike oracle tests
         run: bun run test:spike:oracles
 
+      # The adapters import `@docx-editor.dev/i18n` by package name, which resolves to its
+      # built `dist`. Without this the type check fails on the import rather than on
+      # anything the commit changed.
+      - name: Build i18n
+        run: bun run --filter '@docx-editor.dev/i18n' build
+
       - name: Type check
         run: bun run typecheck
 
       - name: i18n locale + typed-exports sync check
         run: bun run i18n:validate
 
+      # `bun run test`, not a bare `bun test`: the script names the product packages, so the
+      # spike harness is not walked a second time by the suite that already ran its reviewed
+      # oracles above.
       - name: Run tests
-        run: bun test
+        run: bun run test
 
       - name: Install Playwright Chromium
         run: bunx playwright install chromium

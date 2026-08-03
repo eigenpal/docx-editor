@@ -53,7 +53,8 @@ type PackageInventoryGroup = {
   status:
     | 'durable-behavior-tombstone'
     | 'implementation-only-tombstone'
-    | 'engine-neutral-retained';
+    | 'engine-neutral-retained'
+    | 'engine-neutral-retired';
   coupling: {
     category:
       | 'legacy-adapter-binding'
