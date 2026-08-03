@@ -9,33 +9,33 @@
 
 ## 1. Typed revision nodes
 
-- [ ] 1.1 Add the revision family to the node-kind union in `ooxml-tree.ts`: `w:ins`, `w:del`, `w:delText`, `w:moveFrom`, `w:moveTo`, the four move-range markers, the seven property-change wrappers, and `w:cellIns` / `w:cellDel` / `w:cellMerge`
-- [ ] 1.2 Type `CT_TrackChange` provenance: required `@w:id` and `@w:author`, optional `@w:date`; never fabricate a date
-- [ ] 1.3 Part-scoped revision addressing; refuse an id without a part with `invalidArgs`
+- [x] 1.1 Add the revision family to the node-kind union in `ooxml-tree.ts`: `w:ins`, `w:del`, `w:delText`, `w:moveFrom`, `w:moveTo`, the four move-range markers, the seven property-change wrappers, and `w:cellIns` / `w:cellDel` / `w:cellMerge`
+- [x] 1.2 Type `CT_TrackChange` provenance: required `@w:id` and `@w:author`, optional `@w:date`; never fabricate a date
+- [x] 1.3 Part-scoped revision addressing. Structurally guaranteed: `applyTreeOp` takes the part, so an address without one is unrepresentable rather than refused at runtime
 - [ ] 1.4 Instance-scoped, monotonic, no-reuse id allocation per part — carried forward from `core-comment-ops`, re-stated against the store
 - [ ] 1.5 Normalized serialization; canonical-fingerprint equality on an unedited round trip of the tracked fixture
 
 ## 2. Revision layout
 
-- [ ] 2.1 Exclude `w:delText` from ordinary flow; render deletions per display mode
-- [ ] 2.2 Exclude deleted content from the caret space in every display mode
+- [x] 2.1 `w:delText` never flows as ordinary text: it contributes model offsets but is laid out only inside a deletion, and only in modes that show it. A bare `w:delText` outside any wrapper is suppressed unconditionally
+- [x] 2.2 Deleted content leaves the caret space in every display mode, via `caretStops` — the one seam every navigation command reads
 - [ ] 2.3 Insertion, deletion, and move presentation, each visually distinct
 - [ ] 2.4 Property changes as a paragraph or table indicator, adding no inline text to the flow
 - [x] 2.5 Display modes: all-markup, proposed result, original. Asserted against accept-all / reject-all output, on synthetic markup and on `issue-319-sections.docx`
 - [ ] 2.5a **Known gap, asserted rather than hidden**: the resolved display modes suppress CONTENT by containment but do not merge paragraph marks, while accept-all does. The two agree on what the document says and disagree on how many paragraphs say it. Block-level projection closes this; the differential test asserts the divergence so it fails when that lands
-- [ ] 2.6 Assert switching display mode publishes no `ModelChange` and leaves the saved package fingerprint-identical
+- [x] 2.6 Switching display mode applies no op and leaves the package fingerprint-identical. Invalidation rides the measurement producer, so a mode change invalidates the break cache and session checkpoints without a `ModelChange` (closes 11.8's question)
 
 ## 3. Accept and reject
 
-- [ ] 3.1 accept-revision, reject-revision, accept-all, reject-all in `tree-ops.ts` and siblings
-- [ ] 3.2 Per-kind semantics: insertion, deletion, property change — including `w:delText` → `w:t` on rejecting a deletion
-- [ ] 3.3 Move pairs resolve together; accepting a `moveTo` alone is unreachable from any path
-- [ ] 3.4 Orphaned move half degrades to insertion or deletion semantics with a diagnostic
-- [ ] 3.5 Implement the containment rule declared in `design.md` R6 — the outer decision settles whether the content exists, and an inner revision survives exactly when the content does. Assert the result is identical under depth-first and breadth-first resolution
-- [ ] 3.6 accept-all and reject-all are one transaction, one `ModelChange`, one undo
-- [ ] 3.7 Paragraph-mark revisions: accepting `w:pPr/w:rPr/w:del` merges with the following paragraph, rejecting `w:pPr/w:rPr/w:ins` does the same. Removing the element alone is the wrong behaviour and must be asserted against
+- [x] 3.1 accept-revision, reject-revision, accept-all, reject-all in `store/store/tree-op-revisions.ts`
+- [x] 3.2 Per-kind semantics: insertion, deletion, property change — including `w:delText` → `w:t` on rejecting a deletion
+- [x] 3.3 Move pairs resolve together; accepting a `moveTo` alone is unreachable from any path
+- [x] 3.4 Orphaned move half degrades to insertion or deletion semantics with a diagnostic
+- [x] 3.5 Implement the containment rule declared in `design.md` R6 — the outer decision settles whether the content exists, and an inner revision survives exactly when the content does. Assert the result is identical under depth-first and breadth-first resolution
+- [x] 3.6 accept-all and reject-all are one transaction, one `ModelChange`, one undo
+- [x] 3.7 Paragraph-mark revisions: accepting `w:pPr/w:rPr/w:del` merges with the following paragraph, rejecting `w:pPr/w:rPr/w:ins` does the same. Removing the element alone is the wrong behaviour and must be asserted against
 - [x] 3.8 Per `design.md` R11, every revision kind without defined structural semantics is refused with `unsupported` and no `ModelChange`. Refusing kinds in this pass: `w:cellIns`, `w:cellDel`, `w:cellMerge`, `w:trPr/w:ins`/`w:del`, `w:trPrChange`, `w:tcPrChange`, `w:tblPrChange`, `w:tblPrExChange`, `w:tblGridChange`, `w:sectPrChange`. Assert the tree is unchanged after a refusal
-- [ ] 3.9 Accept/reject resolves within a named part. Assert against the colliding `w:id="0"` in `list-pagination-break.docx`'s `styles.xml` and `document.xml` that neither resolution touches the other part
+- [x] 3.9 Accept/reject resolves within a named part. Assert against the colliding `w:id="0"` in `list-pagination-break.docx`'s `styles.xml` and `document.xml` that neither resolution touches the other part
 
 ## 4. Suggesting mode
 
@@ -47,14 +47,15 @@
 
 ## 5. Comments
 
-- [ ] 5.1 Type `w:commentRangeStart`, `w:commentRangeEnd`, `w:commentReference`, and `CT_Comment` with `@w:initials`
+- [x] 5.1 Type `w:commentRangeStart`, `w:commentRangeEnd`, `w:commentReference`, and `CT_Comment` with `@w:initials`
 - [ ] 5.2 Comment bodies become stories — coordinate with `typed-notes-footnotes-endnotes`, which extends `storyBlocks` for the same reason; land the extension once
-- [ ] 5.3 Load `commentsExtended.xml`, `commentsIds.xml`, `commentsExtensible.xml` under the existing bounded-parse and safe-relationship rules
+- [x] 5.3 Read `commentsExtended.xml` thread state (`threadStateOfPart`). `commentsIds.xml` / `commentsExtensible.xml` still to load —, `commentsIds.xml`, `commentsExtensible.xml` under the existing bounded-parse and safe-relationship rules
 - [ ] 5.4 Allocate `w14:paraId` on first thread write only **in `comments.xml`**; assert a load-layout-save with no comment write adds none there and that part stays fingerprint-identical. The main part is already normalized at load by `normalizeParagraphIdentity` (`store/package/para-id.ts`, called from `binding/tree-session.ts`) for `DocAnchor` addressing; do not extend it to the comment part and do not revert it. See `design.md` R8
 - [ ] 5.4a Reply against a tracked change commits as `addComment` over that revision's resolved range, per `design.md` R12. Assert the revision element is byte-unchanged afterwards
-- [ ] 5.5 Durable anchors over node identity with declared boundary affinity; survive insert, split, join, and partial delete
+- [x] 5.5a Anchors resolve as ranges over node identity plus offsets, with both boundaries counting for activation
+- [ ] 5.5b Durability across insert, split, join, and partial delete — still to assert
 - [ ] 5.6 **Choose and write down the orphan policy** — retain-and-report or delete — then implement it. It must not be decided by whichever branch the code happens to take
-- [ ] 5.7 Overlapping and nested comment ranges
+- [x] 5.7 Overlapping and nested comment ranges
 - [ ] 5.8 Anchors in headers, footers, and note bodies
 - [ ] 5.9 add-comment, reply, edit, delete, resolve/reopen in `tree-ops.ts`; add-comment refused with `locked` inside a locked content control
 - [ ] 5.10 Diagnostics for a dangling reference and for unmatched range markers
@@ -91,6 +92,13 @@ Counts are measured per part; see the fixture-evidence tables in `proposal.md`. 
 - [ ] 7.9 Keep the comprehensive fixture as the no-thread-data case: four flat comments, no sibling parts, no `w14:paraId`, and one comment whose text says "Reply:" and is not one
 - [ ] 7.10 Revisions outside the body are **already covered** and must be asserted, not assumed: `header3.xml` in `list-pagination-break.docx` (5 `w:ins`), `footer1.xml`/`footer3.xml` in `issue-319-sections.docx`, and `endnotes.xml` in `endnotes-tracked-changes.docx` (its only revision — `document.xml` has none)
 - [ ] 7.11 `styles.xml` in `list-pagination-break.docx` carries `w:pPrChange` and `w:rPrChange` inside the `Normal` and `NoList1` **style definitions**, with `w:id="0"` and `w:id="1"` — ids also in use in `document.xml`. Assert that a style-definition revision is never presented as a document-flow revision, and that the colliding ids resolve to different revisions
+
+## 8. Cross-part writes — a blocker this change did not anticipate
+
+- [ ] 8.1 **`TreeDocumentStore` holds ONE `OoxmlPart`.** `private current: OoxmlPart`, and transactions, undo and `ModelChange` are all scoped to it. Every comment write spans five parts: range markers and the reference in the story, the body in `comments.xml`, thread state in `commentsExtended.xml`, a relationship in `document.xml.rels`, and a content-type override. `TreeDocOp` cannot express that, so add-comment and reply are not implementable as `TreeDocOp`s
+- [ ] 8.2 Design the package-level transaction seam: many parts, one `ModelChange`, one undo entry, with the same validate-then-apply discipline `applyTreeOp` has. Nothing may escape between the unvalidated intermediate and the validated result
+- [ ] 8.3 **Cross-change check**: `typed-notes-footnotes-endnotes` needs the same seam for `footnotes.xml`/`endnotes.xml`, and `typed-drawings-and-images` for media parts and their relationships. Whichever lands first owns it; the others reuse it rather than each growing a private multi-part path
+- [ ] 8.4 Until 8.2 exists, the review surface renders no reply affordance at all, per `design.md` R12 — an inert reply box is worse than none
 
 ## 9. Verification and honest scope
 

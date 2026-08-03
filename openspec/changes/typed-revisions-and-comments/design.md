@@ -73,6 +73,28 @@ The case that forces this: accepting a tracked row deletion by removing the `w:d
 
 `list-pagination-break.docx` contains 8 `w:cellIns`, 24 `w:cellDel`, 4 `w:trPrChange`, and 34 `w:tcPrChange`, so refusals are not a theoretical branch. They will be on screen the first time the fixture is opened, and the surface must state the engine's reason rather than hide the card.
 
+### R13: Comment writes need a package-level transaction that does not exist yet
+
+Found while implementing, not before: `TreeDocumentStore` holds a single part. `private current: OoxmlPart`, and transactions, history and `ModelChange` are all scoped to it. `applyTreeOp(part, op)` takes one part and returns one part.
+
+A comment write touches five:
+
+| Part | What it gains |
+| --- | --- |
+| the story (`document.xml`, a header, a note) | `w:commentRangeStart`, `w:commentRangeEnd`, `w:commentReference` |
+| `word/comments.xml` | the comment body, created if the package has none |
+| `word/commentsExtended.xml` | `w15:commentEx`, created if the package has none |
+| `word/_rels/document.xml.rels` | the relationship to the comment part |
+| `[Content_Types].xml` | the override for each new part |
+
+So add-comment and reply are not `TreeDocOp`s, and no amount of care inside one makes them so. Splitting the write into one op per part would give five `ModelChange`s and five undo entries for one user action, and would leave the package inconsistent between them — a story referencing a comment that does not exist yet.
+
+The seam this needs is a package-level transaction with the same validate-then-apply discipline `applyTreeOp` already has: many parts in, one validated package out, one `ModelChange`, one history entry.
+
+This is not specific to comments. `typed-notes-footnotes-endnotes` needs it for `footnotes.xml` and `endnotes.xml`; `typed-drawings-and-images` needs it for media parts and their relationships. Whichever change lands it owns it; the others reuse it rather than each growing a private multi-part path.
+
+Until it exists, the review surface renders no reply affordance rather than an inert one, per R12.
+
 ### R12: Replying to a tracked change is a comment, because OOXML has nothing else
 
 `w:ins` and `w:del` carry `(@w:id, @w:author, @w:date)` and no body. There is no reply, no thread, and no text on a revision anywhere in the schema.
