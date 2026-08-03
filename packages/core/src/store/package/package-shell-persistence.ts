@@ -5,9 +5,13 @@
 // predate those writes. Replaying the snapshot alone would drop the shell resources while
 // a later story redo restores `w:numId` / `r:id` references — dead ids.
 //
-// Furniture and notes lifecycle parts stay snapshot-owned: undo must remove them. Only
-// monotonic shell resources (numbering part + hyperlink externals) are re-applied, and only
-// when their relationship ids do not collide with internals the snapshot already declares.
+// Furniture and notes lifecycle parts stay snapshot-owned: undo must remove them. Scoped
+// hyperlink `.rels` / externalTargets for those owners are still re-applied — parked when
+// the owner part is temporarily absent — so a later lifecycle+story redo cannot leave a
+// dangling `r:id`. {@link pruneUnreachableHyperlinkShell} drops that parking once no live
+// part and no package/story history can restore the owner. Only monotonic shell resources
+// (numbering part + hyperlink externals) are re-applied, and only when their relationship
+// ids do not collide with internals the snapshot already declares.
 
 import { strFromU8, strToU8 } from 'fflate';
 import { createNodeIdAllocator, insertChildren } from './ooxml-edit.ts';
@@ -41,6 +45,42 @@ export function mergePersistentPackageShell(
   if (snapshot === live) return snapshot;
   let next = mergeNumberingShell(snapshot, live);
   next = mergeHyperlinkShell(next, live);
+  return next;
+}
+
+/**
+ * Drop parked scoped hyperlink shell resources whose owner part is no longer live and not
+ * retained by package/story history. Main-document hyperlinks are never pruned here.
+ *
+ * Pure: returns `pkg` by identity when nothing to drop.
+ */
+export function pruneUnreachableHyperlinkShell(
+  pkg: OoxmlPackage,
+  retainedOwnerParts: ReadonlySet<string>
+): OoxmlPackage {
+  const dropOwners = new Set<string>();
+  for (const entry of pkg.externalTargets) {
+    if (entry.type !== HYPERLINK_RELATIONSHIP_TYPE) continue;
+    if (entry.ownerPart === pkg.mainDocumentPart) continue;
+    if (pkg.parts.has(entry.ownerPart)) continue;
+    if (retainedOwnerParts.has(entry.ownerPart)) continue;
+    dropOwners.add(entry.ownerPart);
+  }
+  // Orphan `.rels` left from a prior park with no remaining external index row.
+  for (const name of pkg.parts.keys()) {
+    const owner = ownerPartForRelsName(name);
+    if (!owner || owner === pkg.mainDocumentPart) continue;
+    if (pkg.parts.has(owner)) continue;
+    if (retainedOwnerParts.has(owner)) continue;
+    if (pkg.externalTargets.some((entry) => entry.ownerPart === owner)) continue;
+    dropOwners.add(owner);
+  }
+  if (dropOwners.size === 0) return pkg;
+
+  let next = pkg;
+  for (const owner of dropOwners) {
+    next = withoutOwnedHyperlinkShell(next, owner);
+  }
   return next;
 }
 
@@ -112,15 +152,21 @@ function mergeHyperlinkShell(snapshot: OoxmlPackage, live: OoxmlPackage): OoxmlP
   return next;
 }
 
-/** Map a live owner part name onto the snapshot package (main-document name may differ). */
+/**
+ * Map a live owner part name onto the snapshot package (main-document name may differ).
+ *
+ * Scoped owners (header/footer/notes) are returned even when the snapshot temporarily
+ * lacks the part — lifecycle undo removes furniture/notes while hyperlink shell resources
+ * stay parked under the same owner name until redo or {@link pruneUnreachableHyperlinkShell}.
+ */
 function remapOwnerPart(
   snapshot: OoxmlPackage,
   live: OoxmlPackage,
   liveOwner: string
 ): string | null {
   if (liveOwner === live.mainDocumentPart) return snapshot.mainDocumentPart;
-  if (snapshot.parts.has(liveOwner)) return liveOwner;
-  return null;
+  if (typeof liveOwner !== 'string' || liveOwner.length === 0) return null;
+  return liveOwner;
 }
 
 function withInternalRelationship(
@@ -166,7 +212,8 @@ function withExternalHyperlink(
 ): OoxmlPackage | null {
   const owner = ownerPart;
   if (typeof owner !== 'string' || owner.length === 0) return null;
-  if (owner !== pkg.mainDocumentPart && !pkg.parts.has(owner)) return null;
+  // Owner may be absent after lifecycle undo: park `.rels` + externalTargets under the
+  // owner name so a later redo can resolve story `r:id`s. Do not invent the owner part.
   const relsName = relsPartNameFor(owner);
   const existing = pkg.parts.get(relsName);
   const authored = readOoxmlPart(
@@ -230,6 +277,31 @@ function withFreshIds(node: OoxmlNode, nextId: () => string): OoxmlNode {
 function relsPartNameFor(partName: string): string {
   const slash = partName.lastIndexOf('/');
   return `${partName.slice(0, slash)}/_rels/${partName.slice(slash + 1)}.rels`;
+}
+
+/** `/word/_rels/header1.xml.rels` → `/word/header1.xml`; non-rels names → null. */
+function ownerPartForRelsName(partName: string): string | null {
+  const match = /^(.*)\/_rels\/([^/]+)\.rels$/.exec(partName);
+  if (!match) return null;
+  const folder = match[1]!;
+  const base = match[2]!;
+  if (folder === '' || base === '') return null;
+  return `${folder}/${base}`;
+}
+
+/** Drop hyperlink externals + `.rels` for one parked owner without touching other parts. */
+function withoutOwnedHyperlinkShell(pkg: OoxmlPackage, ownerPart: string): OoxmlPackage {
+  const relsName = relsPartNameFor(ownerPart);
+  const parts = new Map(pkg.parts);
+  parts.delete(relsName);
+  const partBytes = new Map(pkg.partBytes);
+  partBytes.delete(relsName);
+  const relationships = new Map(pkg.relationships);
+  relationships.delete(ownerPart);
+  const externalTargets = Object.freeze(
+    pkg.externalTargets.filter((entry) => entry.ownerPart !== ownerPart)
+  );
+  return Object.freeze({ ...pkg, parts, partBytes, relationships, externalTargets });
 }
 
 /**

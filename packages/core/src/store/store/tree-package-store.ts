@@ -29,7 +29,10 @@ import {
 } from '../package/note-lifecycle.ts';
 import { resolveNotesPart } from '../package/note-references.ts';
 import type { NoteKind } from '../package/note-nodes.ts';
-import { mergePersistentPackageShell } from '../package/package-shell-persistence.ts';
+import {
+  mergePersistentPackageShell,
+  pruneUnreachableHyperlinkShell,
+} from '../package/package-shell-persistence.ts';
 import { ORIGIN_IDS } from '../registry/frozen-ids.ts';
 import type { ImpactClass, TreeDocOp, TreeOpRejection } from './tree-ops.ts';
 import { deleteBlockMayStrandNote, deleteMayStrandNote } from './tree-package-gates.ts';
@@ -613,7 +616,9 @@ export class TreePackageStore {
    *
    * Numbering / hyperlink shell resources minted via {@link replacePackageShell} are merged
    * from the live package onto the snapshot so lifecycle undo cannot orphan story `numId` /
-   * `r:id` references. Furniture and notes parts remain snapshot-owned.
+   * `r:id` references. Furniture and notes parts remain snapshot-owned; scoped hyperlink
+   * `.rels` for those owners park when the part is temporarily absent and are pruned once
+   * history can no longer restore the owner.
    */
   private installPackageSnapshot(snapshot: OoxmlPackage): void {
     // Capture live shell before replacing — snapshot may predate numbering/hyperlink writes.
@@ -773,6 +778,9 @@ export class TreePackageStore {
    * Drop parked story stores that no current package part and no undo/redo pointer can
    * restore. History-reachable identities stay so edit→delete→undo reconnects the same
    * store; unreachable parked entries must not hold `maxEditableStoryParts` forever.
+   *
+   * Also prunes scoped hyperlink shell resources parked for owners that are no longer
+   * live and not history-reachable (see `pruneUnreachableHyperlinkShell`).
    */
   private evictUnreachableStories(): void {
     const retained = this.retainedStoryPartNames();
@@ -783,6 +791,9 @@ export class TreePackageStore {
         if (partName === name) this.rIdToPartName.delete(rId);
       }
     }
+    const hyperlinkOwners = this.retainedHyperlinkOwnerParts(retained);
+    const pruned = pruneUnreachableHyperlinkShell(this.pkg, hyperlinkOwners);
+    if (pruned !== this.pkg) this.pkg = pruned;
   }
 
   private retainedStoryPartNames(): Set<string> {
@@ -800,6 +811,24 @@ export class TreePackageStore {
     return retained;
   }
 
+  /**
+   * Owners whose scoped hyperlink shell must survive while furniture/notes parts are
+   * temporarily absent: opened/parked story retention plus every part name that package
+   * history can still restore (even when the story store was never opened).
+   */
+  private retainedHyperlinkOwnerParts(storyRetained: ReadonlySet<string>): Set<string> {
+    const retained = new Set<string>(storyRetained);
+    retained.add(this.pkg.mainDocumentPart);
+    retained.add(this.body.part.name);
+    for (const pointer of this.undoOrder) {
+      this.retainPointerHyperlinkOwners(pointer, retained);
+    }
+    for (const pointer of this.redoOrder) {
+      this.retainPointerHyperlinkOwners(pointer, retained);
+    }
+    return retained;
+  }
+
   private retainPointerStoryParts(pointer: HistoryPointer, retained: Set<string>): void {
     if (pointer.kind === 'story') {
       retained.add(pointer.partName);
@@ -810,6 +839,15 @@ export class TreePackageStore {
         retained.add(name);
       }
     }
+  }
+
+  private retainPointerHyperlinkOwners(pointer: HistoryPointer, retained: Set<string>): void {
+    if (pointer.kind === 'story') {
+      retained.add(pointer.partName);
+      return;
+    }
+    for (const name of pointer.before.parts.keys()) retained.add(name);
+    for (const name of pointer.after.parts.keys()) retained.add(name);
   }
 
   private publish(change: TreeModelChange): void {

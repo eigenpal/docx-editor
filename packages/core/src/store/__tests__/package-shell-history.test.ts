@@ -3,10 +3,13 @@
 
 import { describe, expect, test } from 'bun:test';
 import { zipSync, strToU8 } from 'fflate';
-import { readOoxmlPackage } from '../package/ooxml-package.ts';
+import { readOoxmlPackage, writeOoxmlPackage } from '../package/ooxml-package.ts';
 import { serializeOoxmlPart } from '../package/ooxml-serialize.ts';
 import { ensureListDefinition } from '../package/numbering-part.ts';
-import { ensureHyperlinkRelationship } from '../package/hyperlink-part.ts';
+import {
+  ensureHyperlinkRelationship,
+  relationshipTargetIn,
+} from '../package/hyperlink-part.ts';
 import { HYPERLINK_RELATIONSHIP_TYPE } from '../package/hyperlink.ts';
 import { resolveNotesPart } from '../package/note-references.ts';
 import { TreePackageStore } from '../store/tree-package-store.ts';
@@ -17,6 +20,7 @@ const CT = 'http://schemas.openxmlformats.org/package/2006/content-types';
 const REL = 'http://schemas.openxmlformats.org/package/2006/relationships';
 const OD = `${R}/officeDocument`;
 const NUMBERING_PART = '/word/numbering.xml';
+const HEADER_REL_TYPE = `${R}/header`;
 
 function blankDoc(): Uint8Array {
   return zipSync({
@@ -38,12 +42,12 @@ function blankDoc(): Uint8Array {
   });
 }
 
-function openStore(): TreePackageStore {
+function openStore(options?: ConstructorParameters<typeof TreePackageStore>[2]): TreePackageStore {
   const result = readOoxmlPackage(blankDoc());
   if (!result.ok) throw new Error(result.reason);
   const main = result.package.parts.get(result.package.mainDocumentPart);
   if (!main) throw new Error('no main');
-  return new TreePackageStore(result.package, main);
+  return new TreePackageStore(result.package, main, options);
 }
 
 function firstParagraphId(store: TreePackageStore): string {
@@ -57,6 +61,19 @@ function firstParagraphId(store: TreePackageStore): string {
   const id = ids[0];
   if (!id) throw new Error('no paragraph');
   return id;
+}
+
+function paragraphIdsIn(part: {
+  root: { kind?: string; id?: string; children?: readonly unknown[] };
+}): string[] {
+  const ids: string[] = [];
+  const walk = (node: { kind?: string; id?: string; children?: readonly unknown[] }): void => {
+    if (!node || node.kind === 'textValue') return;
+    if (node.kind === 'paragraph' && node.id) ids.push(node.id);
+    for (const child of node.children ?? []) walk(child as typeof node);
+  };
+  walk(part.root);
+  return ids;
 }
 
 function numberingNumIds(store: TreePackageStore): string[] {
@@ -92,7 +109,31 @@ function documentHyperlinkIds(store: TreePackageStore): string[] {
 }
 
 function hasHeaderPart(store: TreePackageStore): boolean {
-  return [...store.currentPackage().parts.keys()].some((name) => String(name).includes('header'));
+  // Parked scoped `.rels` keep `/word/_rels/headerN.xml.rels` while the owner is absent —
+  // only the furniture part itself counts as rendered furniture.
+  return [...store.currentPackage().parts.keys()].some((name) =>
+    /\/header\d*\.xml$/.test(String(name))
+  );
+}
+
+function headerRelationshipId(store: TreePackageStore): string {
+  const pkg = store.currentPackage();
+  const record = (pkg.relationships.get(pkg.mainDocumentPart) ?? []).find(
+    (entry) => entry.type === HEADER_REL_TYPE
+  );
+  if (!record) throw new Error('no header relationship');
+  return record.id;
+}
+
+function scopedHyperlinkOwners(store: TreePackageStore, ownerPart: string, url: string) {
+  return store
+    .currentPackage()
+    .externalTargets.filter(
+      (entry) =>
+        entry.ownerPart === ownerPart &&
+        entry.type === HYPERLINK_RELATIONSHIP_TYPE &&
+        entry.rawTarget === url
+    );
 }
 
 describe('package shell persistence across lifecycle undo/redo', () => {
@@ -219,5 +260,224 @@ describe('package shell persistence across lifecycle undo/redo', () => {
         [...store.currentPackage().contentTypes.overrides.keys()].some((k) => k.includes('header'))
     ).toBe(false);
     expect(numberingNumIds(store)).toContain(ensured!.numId);
+  });
+
+  test('HF lifecycle then scoped hyperlink: undo×2 redo×2 keeps rId resolvable', () => {
+    const store = openStore();
+    const url = 'https://example.com/hf-scoped';
+
+    expect(
+      store.applyLifecycleOp({
+        op: 'createHeaderFooter',
+        sectionIndex: 0,
+        kind: 'header',
+        variant: 'default',
+      }).ok
+    ).toBe(true);
+    const headerScope = { kind: 'headerFooter' as const, rId: headerRelationshipId(store) };
+    const headerPart = store.partFor(headerScope)!;
+    const headerName = headerPart.name;
+    const paragraphId = paragraphIdsIn(headerPart)[0]!;
+
+    const ensured = ensureHyperlinkRelationship(store.currentPackage(), url, headerName);
+    expect(ensured).toBeTruthy();
+    store.replacePackageShell(ensured!.pkg);
+    const rId = ensured!.relationshipId;
+
+    expect(
+      store.transact(headerScope, (ctx) => {
+        ctx.apply({ op: 'insertText', paragraphId, offset: 0, text: 'HEADER' });
+        ctx.apply({
+          op: 'insertHyperlink',
+          paragraphId,
+          start: 0,
+          end: 6,
+          relationshipId: rId,
+        });
+      }).ok
+    ).toBe(true);
+
+    expect(scopedHyperlinkOwners(store, headerName, url)).toHaveLength(1);
+    expect(relationshipTargetIn(store.currentPackage(), headerName, rId)?.target).toBe(url);
+    expect(
+      store
+        .currentPackage()
+        .externalTargets.some(
+          (entry) =>
+            entry.ownerPart === store.currentPackage().mainDocumentPart && entry.rawTarget === url
+        )
+    ).toBe(false);
+
+    expect(store.undo()).not.toBeNull(); // story
+    expect(relationshipTargetIn(store.currentPackage(), headerName, rId)?.target).toBe(url);
+    expect(store.undo()).not.toBeNull(); // lifecycle create
+    expect(hasHeaderPart(store)).toBe(false);
+    // Parked shell survives owner absence.
+    expect(scopedHyperlinkOwners(store, headerName, url)).toHaveLength(1);
+    expect(
+      store
+        .currentPackage()
+        .externalTargets.some(
+          (entry) =>
+            entry.ownerPart === store.currentPackage().mainDocumentPart && entry.rawTarget === url
+        )
+    ).toBe(false);
+
+    expect(store.redo()).not.toBeNull(); // header
+    expect(hasHeaderPart(store)).toBe(true);
+    expect(relationshipTargetIn(store.currentPackage(), headerName, rId)?.target).toBe(url);
+
+    expect(store.redo()).not.toBeNull(); // story
+    expect(JSON.stringify(store.partFor(headerScope)!.root)).toContain('"kind":"hyperlink"');
+    expect(relationshipTargetIn(store.currentPackage(), headerName, rId)?.target).toBe(url);
+
+    const reopened = readOoxmlPackage(writeOoxmlPackage(store.currentPackage()));
+    expect(reopened.ok).toBe(true);
+    if (!reopened.ok) return;
+    expect(relationshipTargetIn(reopened.package, headerName, rId)?.target).toBe(url);
+    expect(
+      reopened.package.externalTargets.some(
+        (entry) =>
+          entry.ownerPart === reopened.package.mainDocumentPart && entry.rawTarget === url
+      )
+    ).toBe(false);
+  });
+
+  test('note lifecycle then scoped hyperlink: undo×2 redo×2 keeps rId resolvable', () => {
+    const store = openStore();
+    const bodyParagraphId = firstParagraphId(store);
+    const url = 'https://example.com/note-scoped';
+
+    expect(
+      store.applyLifecycleOp({
+        op: 'insertNote',
+        noteKind: 'footnote',
+        paragraphId: bodyParagraphId,
+        offset: 4,
+      }).ok
+    ).toBe(true);
+    const notesScope = { kind: 'notesPart' as const, noteKind: 'footnote' as const };
+    const notesPart = store.partFor(notesScope)!;
+    const notesName = notesPart.name;
+    // Skip separator/continuation notes; the inserted body is the last note paragraph.
+    const paragraphId = paragraphIdsIn(notesPart).at(-1)!;
+
+    const ensured = ensureHyperlinkRelationship(store.currentPackage(), url, notesName);
+    expect(ensured).toBeTruthy();
+    store.replacePackageShell(ensured!.pkg);
+    const rId = ensured!.relationshipId;
+
+    expect(
+      store.transact(notesScope, (ctx) => {
+        ctx.apply({ op: 'insertText', paragraphId, offset: 0, text: 'NOTE' });
+        ctx.apply({
+          op: 'insertHyperlink',
+          paragraphId,
+          start: 0,
+          end: 4,
+          relationshipId: rId,
+        });
+      }).ok
+    ).toBe(true);
+
+    expect(scopedHyperlinkOwners(store, notesName, url)).toHaveLength(1);
+    expect(relationshipTargetIn(store.currentPackage(), notesName, rId)?.target).toBe(url);
+    expect(
+      store
+        .currentPackage()
+        .externalTargets.some(
+          (entry) =>
+            entry.ownerPart === store.currentPackage().mainDocumentPart && entry.rawTarget === url
+        )
+    ).toBe(false);
+
+    expect(store.undo()).not.toBeNull(); // story
+    expect(store.undo()).not.toBeNull(); // note lifecycle
+    expect(resolveNotesPart(store.currentPackage(), 'footnote')).toBeNull();
+    expect(scopedHyperlinkOwners(store, notesName, url)).toHaveLength(1);
+    expect(
+      store
+        .currentPackage()
+        .externalTargets.some(
+          (entry) =>
+            entry.ownerPart === store.currentPackage().mainDocumentPart && entry.rawTarget === url
+        )
+    ).toBe(false);
+
+    expect(store.redo()).not.toBeNull(); // notes part
+    expect(resolveNotesPart(store.currentPackage(), 'footnote')).not.toBeNull();
+    expect(relationshipTargetIn(store.currentPackage(), notesName, rId)?.target).toBe(url);
+
+    expect(store.redo()).not.toBeNull(); // story
+    expect(JSON.stringify(store.partFor(notesScope)!.root)).toContain('"kind":"hyperlink"');
+    expect(relationshipTargetIn(store.currentPackage(), notesName, rId)?.target).toBe(url);
+
+    const reopened = readOoxmlPackage(writeOoxmlPackage(store.currentPackage()));
+    expect(reopened.ok).toBe(true);
+    if (!reopened.ok) return;
+    expect(relationshipTargetIn(reopened.package, notesName, rId)?.target).toBe(url);
+    expect(
+      reopened.package.externalTargets.some(
+        (entry) =>
+          entry.ownerPart === reopened.package.mainDocumentPart && entry.rawTarget === url
+      )
+    ).toBe(false);
+  });
+
+  test('scoped hyperlink shell evicts when history can no longer restore the owner', () => {
+    const store = openStore({ historyLimit: 2 });
+    const url = 'https://example.com/hf-evict';
+    const bodyParagraphId = firstParagraphId(store);
+
+    expect(
+      store.applyLifecycleOp({
+        op: 'createHeaderFooter',
+        sectionIndex: 0,
+        kind: 'header',
+        variant: 'default',
+      }).ok
+    ).toBe(true);
+    const headerScope = { kind: 'headerFooter' as const, rId: headerRelationshipId(store) };
+    const headerName = store.partFor(headerScope)!.name;
+    const paragraphId = paragraphIdsIn(store.partFor(headerScope)!)[0]!;
+
+    const ensured = ensureHyperlinkRelationship(store.currentPackage(), url, headerName)!;
+    store.replacePackageShell(ensured.pkg);
+    expect(
+      store.transact(headerScope, (ctx) => {
+        ctx.apply({ op: 'insertText', paragraphId, offset: 0, text: 'HDR' });
+        ctx.apply({
+          op: 'insertHyperlink',
+          paragraphId,
+          start: 0,
+          end: 3,
+          relationshipId: ensured.relationshipId,
+        });
+      }).ok
+    ).toBe(true);
+
+    expect(store.undo()).not.toBeNull();
+    expect(store.undo()).not.toBeNull();
+    expect(hasHeaderPart(store)).toBe(false);
+    expect(scopedHyperlinkOwners(store, headerName, url)).toHaveLength(1);
+
+    // New body edits clear redo and eventually drop the create pointer from undo —
+    // the parked header owner becomes unreachable and its shell must go with it.
+    expect(
+      store.transact({ kind: 'body' }, (ctx) => {
+        ctx.apply({ op: 'insertText', paragraphId: bodyParagraphId, offset: 0, text: '1' });
+      }).ok
+    ).toBe(true);
+    expect(
+      store.transact({ kind: 'body' }, (ctx) => {
+        ctx.apply({ op: 'insertText', paragraphId: bodyParagraphId, offset: 0, text: '2' });
+      }).ok
+    ).toBe(true);
+
+    expect(hasHeaderPart(store)).toBe(false);
+    expect(scopedHyperlinkOwners(store, headerName, url)).toHaveLength(0);
+    expect(
+      store.currentPackage().parts.has(`/word/_rels/${headerName.slice('/word/'.length)}.rels`)
+    ).toBe(false);
   });
 });
