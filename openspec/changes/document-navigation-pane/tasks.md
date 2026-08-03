@@ -31,7 +31,7 @@
 ## 4. Verification
 
 - [x] 4.1 Browser: at 1728px the page's left edge is 456px with the pane closed AND open — the document does not move.
-- [x] 4.2 Browser: at 1200px the pane publishes 240px and the page lands at 312px, clearing the panel's 296px right edge.
+- [x] 4.2 Browser: at 1200px the pane publishes 272px and the page lands at 328px, clearing the panel's 312px right edge.
 - [x] 4.3 Browser: Find over the element-test fixture returns results with context, the readout goes total → position, and selecting a result scrolls the document to the match and selects it.
 - [x] 4.4 Empirical check that padding P moves the centred page by P/2 and pins at P past the crossover — the assumption the shift rule is built on.
 

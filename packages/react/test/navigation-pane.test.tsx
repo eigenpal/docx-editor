@@ -29,6 +29,7 @@ import {
   navigationPaneReservation,
   navigationShift,
 } from '../src/editor/navigation/navigation-geometry.ts';
+import { RULER_WIDTH } from '../src/components/ui/VerticalRuler.tsx';
 
 afterEach(cleanup);
 
@@ -43,10 +44,17 @@ describe('navigationShift', () => {
 
   test('does not move the document when the gutter already has room', () => {
     // 1728px viewport, 816px page: 456px of empty gutter on each side, and the pane needs
-    // 312. This is the case the whole feature exists for — the page holds still.
+    // 328. This is the case the whole feature exists for — the page holds still.
+    expect(RESERVATION).toBe(328);
     expect(
       navigationShift({ viewportWidth: 1728, pageWidthPx: PAGE, reservation: RESERVATION })
     ).toBe(0);
+  });
+
+  test('the panel clears a vertical ruler pinned at the viewport edge', () => {
+    // The ruler is pinned at left: 0. An inset under its width puts the panel and its
+    // collapsed disc on top of the tick marks.
+    expect(NAVIGATION_PANE_INSET).toBeGreaterThanOrEqual(RULER_WIDTH);
   });
 
   test('does not move the document at the exact break-even gutter', () => {
@@ -56,15 +64,15 @@ describe('navigationShift', () => {
   });
 
   test('moves the page by exactly the deficit while it is still centred', () => {
-    // 1200px viewport: 192px gutter against a 312px reservation. A centred page moves by
-    // HALF the padding, so the padding is twice the 120px deficit, and the page lands on
+    // 1200px viewport: 192px gutter against a 328px reservation. A centred page moves by
+    // HALF the padding, so the padding is twice the 136px deficit, and the page lands on
     // the reservation exactly.
     const shift = navigationShift({
       viewportWidth: 1200,
       pageWidthPx: PAGE,
       reservation: RESERVATION,
     });
-    expect(shift).toBe(240);
+    expect(shift).toBe(272);
     const gutter = (1200 - PAGE) / 2;
     expect(gutter + shift / 2).toBe(RESERVATION);
   });

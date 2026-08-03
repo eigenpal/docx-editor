@@ -638,7 +638,7 @@ export function MenuBar(): react__default.JSX.Element;
 export const NAVIGATION_PANE_GAP = 16;
 
 // @public
-export const NAVIGATION_PANE_INSET = 16;
+export const NAVIGATION_PANE_INSET = 32;
 
 // @public
 export const NAVIGATION_PANE_WIDTH = 280;

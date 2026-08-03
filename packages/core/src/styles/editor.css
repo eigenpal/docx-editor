@@ -3354,7 +3354,7 @@ a.docx-hyperlink:focus-visible {
   position: absolute;
   inset-block: 0;
   inset-inline-start: 0;
-  width: var(--docx-nav-reservation, 312px);
+  width: var(--docx-nav-reservation, 328px);
   z-index: 40;
   pointer-events: none;
   font-size: 13px;
@@ -3366,38 +3366,34 @@ a.docx-hyperlink:focus-visible {
 }
 
 /* Collapsed: the panel stays MOUNTED (a typed query and a scrolled list survive a
- * close/reopen) and animates to zero width. `visibility` flips after the slide so
- * the closed panel is neither visible nor hit-testable, and `inert` on the
- * element itself keeps it out of the tab order. */
+ * close/reopen) and is taken out of layout with `display: none` — React state
+ * lives on either way. `inert` on the element keeps it out of the tab order.
+ *
+ * DELIBERATELY NOT ANIMATED. Growing the width from zero clips the panel's
+ * contents, so every heading appears to unwrap from the left edge while the
+ * text reflows inside the shrinking box. The pane is a tool you open to look
+ * something up; it should be there when you ask for it. */
 .ep-root .docx-nav__panel-shell {
+  display: none;
   position: absolute;
   inset-block: 0;
-  inset-inline-start: 16px;
-  width: 0;
-  overflow: hidden;
-  display: flex;
+  inset-inline-start: var(--docx-nav-inset, 32px);
+  width: var(--docx-nav-width, 280px);
   flex-direction: column;
-  visibility: hidden;
   background: var(--doc-bg);
-  transition:
-    width 0.2s ease,
-    visibility 0s 0.2s;
 }
 
 .ep-root .docx-nav--open .docx-nav__panel-shell {
-  width: var(--docx-nav-width, 280px);
-  visibility: visible;
-  transition:
-    width 0.2s ease,
-    visibility 0s 0s;
+  display: flex;
 }
 
 /* The collapsed disc. Aligned with the page's top edge, not the viewport's, so it
- * sits where the panel's back arrow will appear. */
+ * sits where the panel's back arrow will appear, and inset past the vertical
+ * ruler's 20px tick column so it never covers the ticks. */
 .ep-root .docx-nav__toggle {
   position: absolute;
   inset-block-start: 24px;
-  inset-inline-start: 16px;
+  inset-inline-start: var(--docx-nav-inset, 32px);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -3727,10 +3723,9 @@ a.docx-hyperlink:focus-visible {
   font-weight: 600;
 }
 
-/* Reduced motion: the pane still opens and closes, it just does not slide. */
+/* Reduced motion: the page still moves when it has to, it just does not glide. */
 @media (prefers-reduced-motion: reduce) {
-  .ep-root .docx-editor__scroll-container,
-  .ep-root .docx-nav__panel-shell {
+  .ep-root .docx-editor__scroll-container {
     transition-duration: 0s;
   }
 }

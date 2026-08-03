@@ -10,7 +10,7 @@ A degenerate measurement (a viewport not yet laid out, a document with no page s
 
 #### Scenario: A wide window does not move at all
 
-- **WHEN** the pane opens in a 1728px viewport showing an 816px page, leaving 456px of gutter against a 312px reservation
+- **WHEN** the pane opens in a 1728px viewport showing an 816px page, leaving 456px of gutter against a 328px reservation
 - **THEN** the published displacement is 0 and the page's left edge is unchanged
 
 #### Scenario: The break-even gutter still does not move
@@ -20,8 +20,8 @@ A degenerate measurement (a viewport not yet laid out, a document with no page s
 
 #### Scenario: A narrow window moves by exactly the deficit
 
-- **WHEN** the pane opens in a 1200px viewport showing an 816px page, leaving a 192px gutter against a 312px reservation
-- **THEN** the published displacement is 240px — twice the 120px deficit, because a centred page moves by half the padding — and the page's left edge lands on 312px
+- **WHEN** the pane opens in a 1200px viewport showing an 816px page, leaving a 192px gutter against a 328px reservation
+- **THEN** the published displacement is 272px — twice the 136px deficit, because a centred page moves by half the padding — and the page's left edge lands on 328px
 
 #### Scenario: Too narrow to centre pins the page at the reservation
 
@@ -63,12 +63,28 @@ A part rendered outside its compound root SHALL throw rather than render nothing
 
 ### Requirement: The pane keeps its state across a close and reopen
 
-The pane SHALL stay mounted when closed, animating to zero width, and SHALL be removed from the tab order and from hit testing while closed. A typed query, its results, and a scrolled list SHALL survive a close and reopen.
+The pane SHALL stay mounted when closed, taken out of layout, and SHALL be removed from the tab order and from hit testing while closed. A typed query, its results, and a scrolled list SHALL survive a close and reopen.
+
+Opening SHALL NOT be animated. Growing the panel's width from zero clips its contents, so every row appears to unwrap from the left edge while its text reflows inside the growing box — the pane is a tool you open to look something up, and it should be there when asked for. The document's own displacement, when one is needed, MAY still ease.
 
 #### Scenario: Closed but present
 
 - **WHEN** the pane is closed
 - **THEN** its panel element is still in the document, marked inert, and neither focusable nor hit-testable
+
+#### Scenario: Opening is immediate
+
+- **WHEN** the pane opens
+- **THEN** the panel is at its full width in the first painted frame, with no width transition
+
+### Requirement: The pane clears a vertical ruler
+
+The panel and its collapsed toggle SHALL be inset past a vertical ruler pinned at the viewport's left edge, so neither covers the tick marks.
+
+#### Scenario: Neither the panel nor the disc sits on the ticks
+
+- **WHEN** the editor renders a vertical ruler and the pane is opened or collapsed
+- **THEN** the pane's inset is at least the ruler's width
 
 ### Requirement: The find panel reads honestly
 

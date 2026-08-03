@@ -15,8 +15,13 @@
 /** Panel width, in px, when the host does not choose one. */
 export const NAVIGATION_PANE_WIDTH = 280;
 
-/** Gap between the viewport's left edge and the panel. */
-export const NAVIGATION_PANE_INSET = 16;
+/**
+ * Gap between the viewport's left edge and the panel.
+ *
+ * Clears a vertical ruler: `RULER_WIDTH` is 20px pinned at the viewport's left edge, so
+ * anything less puts the panel and its collapsed disc on top of the tick marks.
+ */
+export const NAVIGATION_PANE_INSET = 32;
 
 /** Clearance kept between the panel's right edge and the page. */
 export const NAVIGATION_PANE_GAP = 16;

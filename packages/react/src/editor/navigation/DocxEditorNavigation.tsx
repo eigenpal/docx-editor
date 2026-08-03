@@ -21,7 +21,11 @@ import type { CSSProperties, ReactElement, ReactNode } from 'react';
 import { useTranslation } from '../../i18n';
 import type { TranslationKey } from '../../i18n';
 import { NavigationContext } from './navigation-context';
-import { NAVIGATION_PANE_WIDTH, navigationPaneReservation } from './navigation-geometry';
+import {
+  NAVIGATION_PANE_INSET,
+  NAVIGATION_PANE_WIDTH,
+  navigationPaneReservation,
+} from './navigation-geometry';
 import { useDocumentOutline } from './useDocumentOutline';
 import { useDocumentSearch } from './useDocumentSearch';
 import { useNavigationPane, type UseNavigationPaneOptions } from './useNavigationPane';
@@ -92,6 +96,7 @@ export function DocxEditorNavigation(props: DocxEditorNavigationProps): ReactEle
           {
             // Numbers this component owns, not file data: safe as computed inline values.
             '--docx-nav-width': `${width}px`,
+            '--docx-nav-inset': `${NAVIGATION_PANE_INSET}px`,
             '--docx-nav-reservation': `${navigationPaneReservation(width)}px`,
             ...style,
           } as CSSProperties
