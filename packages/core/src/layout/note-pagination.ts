@@ -68,6 +68,20 @@ export const MAX_NOTE_AREA_FRAGMENTS = 4_096;
 export const MAX_NOTE_OVERFLOW_PAGES = 256;
 
 /**
+ * Minimum body band (points) retained when computing footnote bottom reserves.
+ *
+ * Reserving the full content column would shrink body flow to 1pt and chase blank
+ * sheets as every reference line fails to land. Oversized notes split/continue into
+ * the shared overflow budget instead of evacuating the referencing page.
+ */
+const MIN_FOOTNOTE_BODY_BAND_PT = 14;
+
+/** One document-wide allowance shared by every footnote/endnote overflow stream. */
+interface NoteOverflowBudget {
+  remaining: number;
+}
+
+/**
  * Cap on synthetic eachPage mark candidates measured per section (plus actual marks).
  *
  * eachPage sequences restart every page, so a page almost never carries more than a
@@ -610,6 +624,15 @@ function bodyUsedHeight(page: PageRecord): number {
   return bottom;
 }
 
+/** Remove note-pass output before recomputing it from canonical references. */
+function bodyOnlyPage(page: PageRecord): PageRecord {
+  const { footnotes, endnotes, noteStream, ...body } = page;
+  void footnotes;
+  void endnotes;
+  void noteStream;
+  return body;
+}
+
 /**
  * Content-column y (relative to contentBox.y) at which footnotes begin, or the column
  * bottom when the page has no footnote area. Endnotes must stay strictly above this.
@@ -647,7 +670,15 @@ function buildFootnoteArea(
   noteMarks: NoteMarkContext,
   placement: FootnotePosition,
   continuationCarry: NoteCarryMap,
-  reasons: NotePaginationFallbackReason[]
+  reasons: NotePaginationFallbackReason[],
+  options?: {
+    /**
+     * When true, size the note stack against the content column (minus
+     * {@link MIN_FOOTNOTE_BODY_BAND_PT}) instead of leftover body slack. Used by
+     * reserve measurement so height is not clipped before body reflow.
+     */
+    readonly reserveColumnBudget?: boolean;
+  }
 ): { area: NoteAreaRecord | undefined; nextCarry: NoteCarryMap } {
   const nextCarry: NoteCarryMap = new Map(continuationCarry);
   const pageRefs = refs.filter((ref) => ref.noteKind === 'footnote');
@@ -668,10 +699,15 @@ function buildFootnoteArea(
     'footnote'
   );
 
-  const availableForNotes =
-    placement === 'beneathText'
-      ? Math.max(0, page.contentBox.height - bodyUsedHeight(page) - separator.flowHeight)
-      : Math.max(0, page.contentBox.height - bodyUsedHeight(page) - separator.flowHeight);
+  const slackBudget = Math.max(
+    0,
+    page.contentBox.height - bodyUsedHeight(page) - separator.flowHeight
+  );
+  const columnBudget = Math.max(
+    0,
+    page.contentBox.height - MIN_FOOTNOTE_BODY_BAND_PT - separator.flowHeight
+  );
+  const availableForNotes = options?.reserveColumnBudget ? columnBudget : slackBudget;
   const fullNoteColumn = Math.max(0, page.contentBox.height - separator.flowHeight);
   const splitOpts = { fullContentHeight: fullNoteColumn, reasons };
 
@@ -1168,12 +1204,12 @@ function drainFootnoteCarryPages(
   carry: NoteCarryMap,
   input: NotesLayoutInput,
   noteMarks: NoteMarkContext,
-  reasons: NotePaginationFallbackReason[]
+  reasons: NotePaginationFallbackReason[],
+  overflowBudget: NoteOverflowBudget
 ): { pages: PageRecord[]; carry: NoteCarryMap } {
   let nextPages = pages;
   let nextCarry = carry;
-  let created = 0;
-  while (nextCarry.size > 0 && created < MAX_NOTE_OVERFLOW_PAGES) {
+  while (nextCarry.size > 0 && overflowBudget.remaining > 0) {
     const template = nextPages[nextPages.length - 1]!;
     const page = cloneEmptyOverflowPage(template, template.index + 1, 'footnote-drain');
     const built = buildFootnoteArea(page, [], input, noteMarks, 'pageBottom', nextCarry, reasons);
@@ -1183,7 +1219,7 @@ function drainFootnoteCarryPages(
       break;
     }
     nextPages = [...nextPages, { ...page, footnotes: built.area }];
-    created += 1;
+    overflowBudget.remaining -= 1;
   }
   if (nextCarry.size > 0) reasons.push('note-overflow-page-limit');
   return { pages: nextPages, carry: nextCarry };
@@ -1239,6 +1275,7 @@ function placeEndnotesFromPage(
   noteMarks: NoteMarkContext,
   placement: 'sectEnd' | 'docEnd',
   reasons: NotePaginationFallbackReason[],
+  overflowBudget: NoteOverflowBudget,
   options?: {
     /**
      * Exclusive index of the first page that belongs to a later section. Overflow sheets are
@@ -1261,9 +1298,9 @@ function placeEndnotesFromPage(
   const sectionStart = options?.sectionStartIndex ?? startIndex;
   const boundToSection = options?.stopBeforeIndex !== undefined;
 
-  while ((pending.length > 0 || carry.size > 0) && created <= MAX_NOTE_OVERFLOW_PAGES) {
+  while (pending.length > 0 || carry.size > 0) {
     if (index >= nextPages.length || index >= stopBefore) {
-      if (created >= MAX_NOTE_OVERFLOW_PAGES) {
+      if (overflowBudget.remaining <= 0) {
         reasons.push('note-overflow-page-limit');
         break;
       }
@@ -1277,6 +1314,7 @@ function placeEndnotesFromPage(
       // Later-section pages shifted right by one; keep the boundary after the new sheet.
       if (boundToSection) stopBefore = insertAt + 1;
       created += 1;
+      overflowBudget.remaining -= 1;
     }
     const page = nextPages[index]!;
     // Footnote-only drain pages are never free endnote hosts — skip past the drain run
@@ -1340,6 +1378,11 @@ function placeEndnotesFromPage(
 /**
  * Compute per-page bottom reserves (points) needed for footnotes given a provisional layout.
  * Used by the bounded reflow loop before final attach.
+ *
+ * Height is measured against a column-derived note budget (not leftover body slack). Measuring
+ * from slack makes `stable` true on the first pass and never shrinks the body — references and
+ * notes then compete for the same band. Oversized notes still split/continue within the budget;
+ * {@link MIN_FOOTNOTE_BODY_BAND_PT} keeps a body band so reflow cannot chase blank sheets.
  */
 export function computeFootnoteReserves(
   layout: SemanticLayout,
@@ -1356,7 +1399,9 @@ export function computeFootnoteReserves(
   let carry: NoteCarryMap = new Map();
 
   for (const page of layout.pages) {
-    const pageRefs = filterRefsOnPage(page, allRefs);
+    // Strip any prior note-pass output so reserve height is body-only.
+    const bodyPage = bodyOnlyPage(page);
+    const pageRefs = filterRefsOnPage(bodyPage, allRefs);
     const fnRefs = pageRefs.filter((r) => r.noteKind === 'footnote');
     // Position from first ref's section (Word uses section of the page).
     const sectionIndex = fnRefs[0]?.sectionIndex ?? 0;
@@ -1365,28 +1410,35 @@ export function computeFootnoteReserves(
       // No per-page reservation — collected later.
       continue;
     }
+
+    // Column budget for the note stack (separator is added inside buildFootnoteArea).
+    // Cap so body retains MIN_FOOTNOTE_BODY_BAND_PT for a referencing line to land.
+    const maxArea = Math.max(0, bodyPage.contentBox.height - MIN_FOOTNOTE_BODY_BAND_PT);
+
     const { area, nextCarry } = buildFootnoteArea(
-      page,
+      bodyPage,
       fnRefs,
       input,
       noteMarks,
       props.pos,
       carry,
-      reasons
+      reasons,
+      { reserveColumnBudget: true }
     );
     carry = nextCarry;
-    const needed = area?.box.height ?? 0;
+    const needed = Math.min(area?.box.height ?? 0, maxArea);
     // Also reserve for carry that didn't fit — force room on next pages via body shrink.
     const prev = reserves.get(page.index) ?? 0;
     reserves.set(page.index, Math.max(prev, needed));
   }
 
-  // Stability: reserves that fit within remaining body slack without pushing refs.
+  // Stable only when the body has already left enough room for the measured reserve.
+  // (Needed heights are no longer slack-clipped, so a full-body first pass is unstable.)
   let stable = true;
   for (const page of layout.pages) {
     const needed = reserves.get(page.index) ?? 0;
     if (needed <= 0) continue;
-    const used = bodyUsedHeight(page);
+    const used = bodyUsedHeight(bodyOnlyPage(page));
     if (used + needed > page.contentBox.height + 0.5) {
       stable = false;
       break;
@@ -1410,6 +1462,7 @@ export function attachNotesToLayout(
 ): NotesAttachResult {
   const reasons: NotePaginationFallbackReason[] = [...(options?.fallbackReasons ?? [])];
   const paragraphSectionIndex = options?.paragraphSectionIndex ?? new Map<string, number>();
+  const overflowBudget: NoteOverflowBudget = { remaining: MAX_NOTE_OVERFLOW_PAGES };
 
   // Build sites for mark derivation (page index from layout).
   const footnoteSites: NoteReferenceSite[] = [];
@@ -1434,6 +1487,7 @@ export function attachNotesToLayout(
   const endnotesDoc: PageRefHit[] = [];
 
   let pages: PageRecord[] = layout.pages.map((page) => {
+    const bodyPage = bodyOnlyPage(page);
     const pageRefs = filterRefsOnPage(page, allRefs);
     const fnRefs = pageRefs.filter((r) => r.noteKind === 'footnote');
     const enRefs = pageRefs.filter((r) => r.noteKind === 'endnote');
@@ -1470,7 +1524,7 @@ export function attachNotesToLayout(
         return pos === 'pageBottom' || pos === 'beneathText';
       });
       const built = buildFootnoteArea(
-        page,
+        bodyPage,
         pageBottomRefs,
         input,
         noteMarks,
@@ -1483,7 +1537,7 @@ export function attachNotesToLayout(
     }
 
     return {
-      ...page,
+      ...bodyPage,
       ...(footnotes ? { footnotes } : {}),
     };
   });
@@ -1492,7 +1546,14 @@ export function attachNotesToLayout(
 
   // Drain footnote continuations that outlive the final body page.
   if (carry.size > 0) {
-    const drained = drainFootnoteCarryPages(pages, carry, input, noteMarks, reasons);
+    const drained = drainFootnoteCarryPages(
+      pages,
+      carry,
+      input,
+      noteMarks,
+      reasons,
+      overflowBudget
+    );
     pages = drained.pages;
     carry = drained.carry;
   }
@@ -1513,10 +1574,20 @@ export function attachNotesToLayout(
           break;
         }
       }
-      pages = placeEndnotesFromPage(pages, lastIdx, refs, input, noteMarks, 'sectEnd', reasons, {
-        stopBeforeIndex: stopBefore,
-        sectionStartIndex: sectionStart,
-      });
+      pages = placeEndnotesFromPage(
+        pages,
+        lastIdx,
+        refs,
+        input,
+        noteMarks,
+        'sectEnd',
+        reasons,
+        overflowBudget,
+        {
+          stopBeforeIndex: stopBefore,
+          sectionStartIndex: sectionStart,
+        }
+      );
     }
   }
 
@@ -1530,7 +1601,8 @@ export function attachNotesToLayout(
       input,
       noteMarks,
       'docEnd',
-      reasons
+      reasons,
+      overflowBudget
     );
   }
 
