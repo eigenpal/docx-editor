@@ -177,9 +177,9 @@ describe('complex field piece projection', () => {
     const pieces = piecesOfParagraph(paragraph, [], { pageNumber: 2, pageCount: 26 });
     expect(pieces.map((p) => p.text)).toEqual(['Page ', '2', ' of ', '26']);
     expect(pieces[0]).toMatchObject({ start: 0, end: 5 });
-    expect(pieces[1]).toMatchObject({ start: 5, end: 5, projected: true });
-    expect(pieces[2]).toMatchObject({ start: 5, end: 9 });
-    expect(pieces[3]).toMatchObject({ start: 9, end: 9, projected: true });
+    expect(pieces[1]).toMatchObject({ start: 5, end: 6, projected: true });
+    expect(pieces[2]).toMatchObject({ start: 6, end: 10 });
+    expect(pieces[3]).toMatchObject({ start: 10, end: 11, projected: true });
   });
 
   test('without page context empty fields stay empty', () => {
@@ -233,7 +233,7 @@ describe('complex field piece projection', () => {
   });
 
   test('A99Z projects A7Z with canonical Z offset and bold result style', () => {
-    // Model text is A99Z; live PAGE replaces cached "99" with "7" while Z keeps offset 3.
+    // Model text is A\uFFFCZ; live PAGE replaces the atom with "7" while Z stays at offset 2.
     const part = parsePart(
       `<w:p>` +
         `<w:r><w:t>A</w:t></w:r>` +
@@ -250,9 +250,9 @@ describe('complex field piece projection', () => {
     expect(pieces.map((p) => p.text)).toEqual(['A', '7', 'Z']);
     expect(pieces[0]).toMatchObject({ start: 0, end: 1 });
     expect(pieces[0]!.projected).toBeUndefined();
-    expect(pieces[1]).toMatchObject({ start: 1, end: 3, projected: true });
+    expect(pieces[1]).toMatchObject({ start: 1, end: 2, projected: true });
     expect(pieces[1]!.style.bold).toBe(true);
-    expect(pieces[2]).toMatchObject({ start: 3, end: 4 });
+    expect(pieces[2]).toMatchObject({ start: 2, end: 3 });
   });
 
   test('multi-run cached result uses the first measurable run style', () => {
@@ -270,10 +270,10 @@ describe('complex field piece projection', () => {
     const paragraph = part.root.children[0]!.children.find((c) => c.kind === 'paragraph')!;
     const pieces = piecesOfParagraph(paragraph, [], { pageNumber: 7, pageCount: 10 });
     expect(pieces.map((p) => p.text)).toEqual(['7', 'Z']);
-    expect(pieces[0]).toMatchObject({ start: 0, end: 2, projected: true });
+    expect(pieces[0]).toMatchObject({ start: 0, end: 1, projected: true });
     expect(pieces[0]!.style.bold).toBe(true);
     expect(pieces[0]!.style.italic).toBe(false);
-    expect(pieces[1]).toMatchObject({ start: 2, end: 3 });
+    expect(pieces[1]).toMatchObject({ start: 1, end: 2 });
   });
 
   test('malformed field missing end does not project', () => {
@@ -313,7 +313,11 @@ describe('header/footer page-context layout cache', () => {
     if (!loaded.ok) return;
     const footer = [...loaded.package.parts.values()].find((p) => p.name.includes('footer1'))!;
     const baseline = layoutHeaderFooterStory(footer, 300, measurer, 'test');
-    expect(baseline.pageFieldNeeds).toEqual({ hasPage: true, hasNumPages: true });
+    expect(baseline.pageFieldNeeds).toEqual({
+      hasPage: true,
+      hasNumPages: true,
+      hasSectionPages: false,
+    });
     expect(storyText(footer)).toBe('L\tPage  of ');
     const page2 = baseline.withPageContext({ pageNumber: 2, pageCount: 26 });
     const page10 = baseline.withPageContext({ pageNumber: 10, pageCount: 26 });
@@ -349,7 +353,11 @@ describe('header/footer page-context layout cache', () => {
     if (!loaded.ok) return;
     const footer = [...loaded.package.parts.values()].find((p) => p.name.includes('footer1'))!;
     const baseline = layoutHeaderFooterStory(footer, 300, measurer, 'test');
-    expect(baseline.pageFieldNeeds).toEqual({ hasPage: false, hasNumPages: false });
+    expect(baseline.pageFieldNeeds).toEqual({
+      hasPage: false,
+      hasNumPages: false,
+      hasSectionPages: false,
+    });
     expect(baseline.withPageContext({ pageNumber: 1, pageCount: 9 })).toBe(baseline);
     expect(baseline.withPageContext({ pageNumber: 9, pageCount: 9 })).toBe(baseline);
   });
@@ -365,7 +373,11 @@ describe('header/footer page-context layout cache', () => {
     if (!loaded.ok) return;
     const footer = [...loaded.package.parts.values()].find((p) => p.name.includes('footer1'))!;
     const baseline = layoutHeaderFooterStory(footer, 300, measurer, 'test');
-    expect(baseline.pageFieldNeeds).toEqual({ hasPage: false, hasNumPages: true });
+    expect(baseline.pageFieldNeeds).toEqual({
+      hasPage: false,
+      hasNumPages: true,
+      hasSectionPages: false,
+    });
     const page1 = baseline.withPageContext({ pageNumber: 1, pageCount: 12 });
     const page7 = baseline.withPageContext({ pageNumber: 7, pageCount: 12 });
     expect(page1).toBe(page7);
@@ -429,18 +441,30 @@ describe('story page-field detection', () => {
         `<w:fldChar w:fldCharType="separate"/><w:fldChar w:fldCharType="end"/></w:r>` +
         `</w:p>`
     );
-    expect(detectStoryPageFields(both.root)).toEqual({ hasPage: true, hasNumPages: true });
+    expect(detectStoryPageFields(both.root)).toEqual({
+      hasPage: true,
+      hasNumPages: true,
+      hasSectionPages: false,
+    });
 
     const simpleOnly = parsePart(
       `<w:p><w:fldSimple w:instr="PAGE"/><w:fldSimple w:instr="NUMPAGES"/></w:p>`
     );
-    expect(detectStoryPageFields(simpleOnly.root)).toEqual({ hasPage: false, hasNumPages: false });
+    expect(detectStoryPageFields(simpleOnly.root)).toEqual({
+      hasPage: false,
+      hasNumPages: false,
+      hasSectionPages: false,
+    });
 
     const hostile = parsePart(
       `<w:p><w:r><w:fldChar w:fldCharType="begin"/><w:instrText>${'X'.repeat(MAX_FIELD_INSTRUCTION_CHARS + 1)}</w:instrText>` +
         `<w:fldChar w:fldCharType="separate"/><w:fldChar w:fldCharType="end"/></w:r></w:p>`
     );
-    expect(detectStoryPageFields(hostile.root)).toEqual({ hasPage: false, hasNumPages: false });
+    expect(detectStoryPageFields(hostile.root)).toEqual({
+      hasPage: false,
+      hasNumPages: false,
+      hasSectionPages: false,
+    });
     expect(MAX_STORY_FIELD_SCAN_NODES).toBeGreaterThan(0);
   });
 
@@ -454,7 +478,11 @@ describe('story page-field detection', () => {
         `<w:r><w:fldChar w:fldCharType="end"/></w:r>` +
         `</w:p>`
     );
-    expect(detectStoryPageFields(pageOnly.root)).toEqual({ hasPage: true, hasNumPages: false });
+    expect(detectStoryPageFields(pageOnly.root)).toEqual({
+      hasPage: true,
+      hasNumPages: false,
+      hasSectionPages: false,
+    });
 
     const numOnly = parsePart(
       `<w:p>` +
@@ -465,7 +493,11 @@ describe('story page-field detection', () => {
         `<w:r><w:fldChar w:fldCharType="end"/></w:r>` +
         `</w:p>`
     );
-    expect(detectStoryPageFields(numOnly.root)).toEqual({ hasPage: false, hasNumPages: true });
+    expect(detectStoryPageFields(numOnly.root)).toEqual({
+      hasPage: false,
+      hasNumPages: true,
+      hasSectionPages: false,
+    });
   });
 
   test('detects instruction text split across runs', () => {
@@ -478,7 +510,11 @@ describe('story page-field detection', () => {
         `<w:r><w:fldChar w:fldCharType="end"/></w:r>` +
         `</w:p>`
     );
-    expect(detectStoryPageFields(part.root)).toEqual({ hasPage: false, hasNumPages: true });
+    expect(detectStoryPageFields(part.root)).toEqual({
+      hasPage: false,
+      hasNumPages: true,
+      hasSectionPages: false,
+    });
 
     const pageSplit = parsePart(
       `<w:p>` +
@@ -489,7 +525,11 @@ describe('story page-field detection', () => {
         `<w:r><w:fldChar w:fldCharType="end"/></w:r>` +
         `</w:p>`
     );
-    expect(detectStoryPageFields(pageSplit.root)).toEqual({ hasPage: true, hasNumPages: false });
+    expect(detectStoryPageFields(pageSplit.root)).toEqual({
+      hasPage: true,
+      hasNumPages: false,
+      hasSectionPages: false,
+    });
   });
 
   test('detects mixed PAGE and NUMPAGES when each field is split across runs', () => {
@@ -509,7 +549,11 @@ describe('story page-field detection', () => {
         `<w:r><w:fldChar w:fldCharType="end"/></w:r>` +
         `</w:p>`
     );
-    expect(detectStoryPageFields(part.root)).toEqual({ hasPage: true, hasNumPages: true });
+    expect(detectStoryPageFields(part.root)).toEqual({
+      hasPage: true,
+      hasNumPages: true,
+      hasSectionPages: false,
+    });
   });
 
   test('malformed cross-paragraph fields do not count', () => {
@@ -524,13 +568,21 @@ describe('story page-field detection', () => {
         `<w:r><w:fldChar w:fldCharType="end"/></w:r>` +
         `</w:p>`
     );
-    expect(detectStoryPageFields(part.root)).toEqual({ hasPage: false, hasNumPages: false });
+    expect(detectStoryPageFields(part.root)).toEqual({
+      hasPage: false,
+      hasNumPages: false,
+      hasSectionPages: false,
+    });
 
     const numCross = parsePart(
       `<w:p><w:r><w:fldChar w:fldCharType="begin"/></w:r><w:r><w:instrText>NUMPAGES</w:instrText></w:r></w:p>` +
         `<w:p><w:r><w:fldChar w:fldCharType="separate"/></w:r><w:r><w:fldChar w:fldCharType="end"/></w:r></w:p>`
     );
-    expect(detectStoryPageFields(numCross.root)).toEqual({ hasPage: false, hasNumPages: false });
+    expect(detectStoryPageFields(numCross.root)).toEqual({
+      hasPage: false,
+      hasNumPages: false,
+      hasSectionPages: false,
+    });
   });
 
   test('hostile oversize instructions split across runs stay undetected', () => {
@@ -544,7 +596,11 @@ describe('story page-field detection', () => {
         `<w:r><w:fldChar w:fldCharType="end"/></w:r>` +
         `</w:p>`
     );
-    expect(detectStoryPageFields(part.root)).toEqual({ hasPage: false, hasNumPages: false });
+    expect(detectStoryPageFields(part.root)).toEqual({
+      hasPage: false,
+      hasNumPages: false,
+      hasSectionPages: false,
+    });
   });
 });
 
@@ -571,10 +627,18 @@ describe('header/footer split-field projection and reuse', () => {
     expect(loaded.ok).toBe(true);
     if (!loaded.ok) return;
     const footer = [...loaded.package.parts.values()].find((p) => p.name.includes('footer1'))!;
-    expect(detectStoryPageFields(footer.root)).toEqual({ hasPage: true, hasNumPages: true });
+    expect(detectStoryPageFields(footer.root)).toEqual({
+      hasPage: true,
+      hasNumPages: true,
+      hasSectionPages: false,
+    });
 
     const baseline = layoutHeaderFooterStory(footer, 300, measurer, 'test');
-    expect(baseline.pageFieldNeeds).toEqual({ hasPage: true, hasNumPages: true });
+    expect(baseline.pageFieldNeeds).toEqual({
+      hasPage: true,
+      hasNumPages: true,
+      hasSectionPages: false,
+    });
     // Without page context, cached result text stays (often stale).
     expect(
       baseline.fragments
@@ -623,7 +687,11 @@ describe('header/footer split-field projection and reuse', () => {
     if (!loaded.ok) return;
     const footer = [...loaded.package.parts.values()].find((p) => p.name.includes('footer1'))!;
     const baseline = layoutHeaderFooterStory(footer, 300, measurer, 'test');
-    expect(baseline.pageFieldNeeds).toEqual({ hasPage: false, hasNumPages: true });
+    expect(baseline.pageFieldNeeds).toEqual({
+      hasPage: false,
+      hasNumPages: true,
+      hasSectionPages: false,
+    });
     const a = baseline.withPageContext({ pageNumber: 1, pageCount: 12 });
     const b = baseline.withPageContext({ pageNumber: 9, pageCount: 12 });
     expect(a).toBe(b);
@@ -779,12 +847,12 @@ describe('inert body fldSimple (deferred)', () => {
     const pieces = piecesOfParagraph(paragraph, [], { pageNumber: 2, pageCount: 26 });
     expect(pieces.map((p) => p.text)).toEqual(['Page ', ' of ']);
     expect(pieces.every((p) => !p.projected)).toBe(true);
-    // Surrounding run text stays contiguous in the model range — fldSimple contributes nothing.
+    // fldSimple contributes one model atom each; surrounding text offsets skip the atoms.
     expect(pieces[0]).toMatchObject({ start: 0, end: 5 });
-    expect(pieces[1]).toMatchObject({ start: 5, end: 9 });
+    expect(pieces[1]).toMatchObject({ start: 6, end: 10 });
   });
 
-  test('cached fldSimple result text does not advance offsets or create selectable spans', () => {
+  test('fldSimple advances exactly one unit and does not emit cache text pieces', () => {
     const part = parsePart(
       `<w:p>` +
         `<w:r><w:t>before</w:t></w:r>` +
@@ -796,7 +864,7 @@ describe('inert body fldSimple (deferred)', () => {
     const pieces = piecesOfParagraph(paragraph, [], { pageNumber: 1, pageCount: 9 });
     expect(pieces.map((p) => p.text)).toEqual(['before', 'after']);
     expect(pieces[0]).toMatchObject({ start: 0, end: 6 });
-    expect(pieces[1]).toMatchObject({ start: 6, end: 11 });
+    expect(pieces[1]).toMatchObject({ start: 7, end: 12 });
     expect(pieces.some((p) => p.text.includes('1999'))).toBe(false);
   });
 
@@ -848,7 +916,14 @@ describe('inert body fldSimple (deferred)', () => {
       const found: string[] = [];
       const visit = (node: import('@docx-editor.dev/core-contract/store').OoxmlNode): void => {
         if (node.kind === 'textValue') return;
-        if (node.kind === 'generic' && node.localName === 'fldSimple' && node.namespaceUri === W) {
+        if (node.kind === 'fldSimple') {
+          const instr = node.attributes.find((a) => a.localName === 'instr')?.value;
+          if (instr !== undefined) found.push(instr);
+        } else if (
+          node.kind === 'generic' &&
+          node.localName === 'fldSimple' &&
+          node.namespaceUri === W
+        ) {
           const instr = node.attributes.find((a) => a.localName === 'instr')?.value;
           if (instr !== undefined) found.push(instr);
         }

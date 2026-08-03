@@ -98,6 +98,8 @@ The scope's chrome SHALL state the region kind, the section it belongs to, the v
 - **THEN** the chrome shows "Same as previous" (localized) before any typing
 - **AND** the user is told the edit will also change the preceding section's pages
 
+**Depends on** the inherited-vs-declared resolution query (`section-page-furniture`); not available from today's `getHeaderFooterState()` stub.
+
 #### Scenario: Variant is named
 
 - **WHEN** the section sets `w:titlePg` and the user edits its first page's header

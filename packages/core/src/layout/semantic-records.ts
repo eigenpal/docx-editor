@@ -142,6 +142,23 @@ export interface StyleSpanRecord {
    * it was handed.
    */
   readonly link?: SpanLinkRecord;
+  /**
+   * Live PAGE/NUMPAGES/SECTIONPAGES projection (layout-time evaluated text).
+   *
+   * Not model-editable until typed fields land: paint treats these as atomic furniture and
+   * selection mapping refuses them the way it refuses markers.
+   */
+  readonly projected?: boolean;
+  /**
+   * Footnote/endnote navigation metadata for projected note atoms.
+   *
+   * Paint tags body citations (`to-note`) and note-body marks (`to-body`) so React chrome
+   * can jump without owning layout logic.
+   */
+  readonly noteNav?: {
+    readonly scopeId: string;
+    readonly direction: 'to-note' | 'to-body';
+  };
 }
 
 export interface LineRecord {
@@ -361,13 +378,20 @@ export type BlockFragmentRecord = ParagraphFragmentRecord | TableFragmentRecord;
  * any anchored-object extent, which is the rule that keeps a decorated header's hit area
  * from covering the body. `fragments` are story-relative (origin at the box's top-left).
  * Baseline furniture may be shared across pages of the same variant when the story has no
- * allowlisted PAGE/NUMPAGES fields; after page-field finalize, projections are per page
- * (or per distinct field values for NUMPAGES-only stories).
+ * allowlisted PAGE/NUMPAGES/SECTIONPAGES fields; after page-field finalize, projections are
+ * per page (or per distinct field values for count-only stories).
  */
 export interface HeaderFooterStoryRecord {
   readonly kind: 'header' | 'footer';
   readonly variant: 'default' | 'first' | 'even';
   readonly partName: string;
+  /**
+   * Main-document relationship id that resolves to this part (`EditorScope.rId`).
+   *
+   * Present when the furniture source could name the relationship; scoped editing binds
+   * on this id so shared parts stay one story across pages/sections.
+   */
+  readonly rId?: string;
   readonly box: LayoutBox;
   readonly fragments: readonly BlockFragmentRecord[];
   /**
@@ -377,7 +401,53 @@ export interface HeaderFooterStoryRecord {
   readonly pageFieldProjector?: (context: {
     readonly pageNumber: number;
     readonly pageCount: number;
+    readonly sectionPageCount?: number;
+    readonly format?: string;
   }) => HeaderFooterStoryRecord;
+}
+
+/**
+ * One footnote or endnote story as it sits on one page (or continuation page).
+ *
+ * Notes are ordinary editable stories — NOT `[data-docx-hf]` furniture. `box` is absolute
+ * (sheet coordinates). `fragments` are story-relative. Separators are nonselectable paint
+ * geometry owned by the parent {@link NoteAreaRecord}.
+ */
+export interface NoteStoryRecord {
+  readonly noteKind: 'footnote' | 'endnote';
+  readonly noteId: number;
+  /** `footnote:N` / `endnote:N` — EditorScope note id. */
+  readonly scopeId: string;
+  /** Derived display mark for this occurrence; null when customMarkFollows / continuation. */
+  readonly mark: string | null;
+  /** True when this is a continuation fragment (no leading mark). */
+  readonly continuation?: boolean;
+  readonly box: LayoutBox;
+  readonly fragments: readonly BlockFragmentRecord[];
+}
+
+/**
+ * Footnote / endnote area on one page: separator + stacked note stories.
+ *
+ * `placement` records how the area was positioned. `fallbackReason` is set when the
+ * bounded reflow loop exhausted and layout kept the reference with its note on a later
+ * page (D12 named fallback).
+ */
+export interface NoteAreaRecord {
+  readonly kind: 'footnotes' | 'endnotes';
+  readonly placement: 'pageBottom' | 'beneathText' | 'sectEnd' | 'docEnd';
+  readonly box: LayoutBox;
+  /** Separator rule / authored separator story; absent when no notes on this page. */
+  readonly separator?: {
+    readonly kind: 'separator' | 'continuationSeparator';
+    readonly box: LayoutBox;
+    readonly fragments: readonly BlockFragmentRecord[];
+    readonly synthetic: boolean;
+    /** Layout-owned single/double rule when marker-only or synthetic; absent for authored stories. */
+    readonly ruleStyle?: 'single' | 'double';
+  };
+  readonly notes: readonly NoteStoryRecord[];
+  readonly fallbackReason?: string;
 }
 
 export interface PageRecord {
@@ -391,6 +461,19 @@ export interface PageRecord {
   /** Page furniture for this page's variant, absent when the document declares none. */
   readonly header?: HeaderFooterStoryRecord;
   readonly footer?: HeaderFooterStoryRecord;
+  /** Footnotes reserved on this page (pageBottom / beneathText / continuations). */
+  readonly footnotes?: NoteAreaRecord;
+  /** Endnotes collected on this page (sectEnd / docEnd). */
+  readonly endnotes?: NoteAreaRecord;
+  /**
+   * Section-local PAGE/SECTIONPAGES inputs for finalize. Absent → physical page index and
+   * document-wide section count (empty `w:pgNumType` behaviour).
+   */
+  readonly pageFieldSource?: {
+    readonly pageNumber: number;
+    readonly sectionPageCount: number;
+    readonly format?: string;
+  };
 }
 
 export interface SemanticLayout {

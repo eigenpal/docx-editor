@@ -90,7 +90,11 @@ describe('bounded instrText extraction (node/depth/character caps)', () => {
         `<w:fldChar w:fldCharType="separate"/><w:fldChar w:fldCharType="end"/></w:r>` +
         `</w:p>`
     );
-    expect(detectStoryPageFields(part.root)).toEqual({ hasPage: false, hasNumPages: false });
+    expect(detectStoryPageFields(part.root)).toEqual({
+      hasPage: false,
+      hasNumPages: false,
+      hasSectionPages: false,
+    });
   });
 
   test('instrText with many descendants below the node cap still detects PAGE', () => {
@@ -101,7 +105,11 @@ describe('bounded instrText extraction (node/depth/character caps)', () => {
         `<w:fldChar w:fldCharType="separate"/><w:fldChar w:fldCharType="end"/></w:r>` +
         `</w:p>`
     );
-    expect(detectStoryPageFields(part.root)).toEqual({ hasPage: true, hasNumPages: false });
+    expect(detectStoryPageFields(part.root)).toEqual({
+      hasPage: true,
+      hasNumPages: false,
+      hasSectionPages: false,
+    });
   });
 
   test('instrText nested deeper than the depth cap stays undetected', () => {
@@ -112,7 +120,11 @@ describe('bounded instrText extraction (node/depth/character caps)', () => {
         `<w:fldChar w:fldCharType="separate"/><w:fldChar w:fldCharType="end"/></w:r>` +
         `</w:p>`
     );
-    expect(detectStoryPageFields(part.root)).toEqual({ hasPage: false, hasNumPages: false });
+    expect(detectStoryPageFields(part.root)).toEqual({
+      hasPage: false,
+      hasNumPages: false,
+      hasSectionPages: false,
+    });
   });
 
   test('instrText nested within the depth cap still detects PAGE', () => {
@@ -123,7 +135,11 @@ describe('bounded instrText extraction (node/depth/character caps)', () => {
         `<w:fldChar w:fldCharType="separate"/><w:fldChar w:fldCharType="end"/></w:r>` +
         `</w:p>`
     );
-    expect(detectStoryPageFields(part.root)).toEqual({ hasPage: true, hasNumPages: false });
+    expect(detectStoryPageFields(part.root)).toEqual({
+      hasPage: true,
+      hasNumPages: false,
+      hasSectionPages: false,
+    });
   });
 
   test('projection refuses hostile oversize instrText descendants', () => {
@@ -138,10 +154,10 @@ describe('bounded instrText extraction (node/depth/character caps)', () => {
     );
     const paragraph = part.root.children[0]!.children.find((c) => c.kind === 'paragraph')!;
     const pieces = piecesOfParagraph(paragraph, [], { pageNumber: 7, pageCount: 10 });
-    // Instruction overflow / scan exhaust → inert cached result, no live projection.
+    // Instruction overflow / scan exhaust → atomic field with no live projection or cached piece.
     expect(pieces.some((p) => p.projected)).toBe(false);
-    expect(pieces.map((p) => p.text)).toEqual(['A', '99', 'Z']);
-    expect(pieces[2]).toMatchObject({ start: 3, end: 4 });
+    expect(pieces.map((p) => p.text)).toEqual(['A', 'Z']);
+    expect(pieces[1]).toMatchObject({ start: 1, end: 2 });
   });
 
   test('HF layout detection and projection share the same bounded machine', () => {
@@ -156,9 +172,17 @@ describe('bounded instrText extraction (node/depth/character caps)', () => {
     expect(loaded.ok).toBe(true);
     if (!loaded.ok) return;
     const footer = [...loaded.package.parts.values()].find((p) => p.name.includes('footer1'))!;
-    expect(detectStoryPageFields(footer.root)).toEqual({ hasPage: false, hasNumPages: false });
+    expect(detectStoryPageFields(footer.root)).toEqual({
+      hasPage: false,
+      hasNumPages: false,
+      hasSectionPages: false,
+    });
     const baseline = layoutHeaderFooterStory(footer, 300, measurer, 'test');
-    expect(baseline.pageFieldNeeds).toEqual({ hasPage: false, hasNumPages: false });
+    expect(baseline.pageFieldNeeds).toEqual({
+      hasPage: false,
+      hasNumPages: false,
+      hasSectionPages: false,
+    });
     // No projector path: page context is a no-op identity reuse.
     expect(baseline.withPageContext({ pageNumber: 3, pageCount: 9 })).toBe(baseline);
 
@@ -173,9 +197,17 @@ describe('bounded instrText extraction (node/depth/character caps)', () => {
     expect(okLoaded.ok).toBe(true);
     if (!okLoaded.ok) return;
     const okFooter = [...okLoaded.package.parts.values()].find((p) => p.name.includes('footer1'))!;
-    expect(detectStoryPageFields(okFooter.root)).toEqual({ hasPage: true, hasNumPages: false });
+    expect(detectStoryPageFields(okFooter.root)).toEqual({
+      hasPage: true,
+      hasNumPages: false,
+      hasSectionPages: false,
+    });
     const okBaseline = layoutHeaderFooterStory(okFooter, 300, measurer, 'test');
-    expect(okBaseline.pageFieldNeeds).toEqual({ hasPage: true, hasNumPages: false });
+    expect(okBaseline.pageFieldNeeds).toEqual({
+      hasPage: true,
+      hasNumPages: false,
+      hasSectionPages: false,
+    });
     const projected = okBaseline.withPageContext({ pageNumber: 3, pageCount: 9 });
     expect(
       projected.fragments

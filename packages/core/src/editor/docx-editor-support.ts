@@ -500,6 +500,63 @@ export function classifyCommand(command: EditorCommand): CommandSupport {
     case 'undo':
     case 'redo':
       return { supported: true, mutating: true };
+    case 'editHeaderFooter':
+      return command.position === 'header' || command.position === 'footer'
+        ? { supported: true, mutating: true }
+        : { supported: false, reason: "editHeaderFooter requires position 'header' or 'footer'" };
+    case 'exitHeaderFooter':
+      return { supported: true, mutating: false };
+    case 'removeHeaderFooter':
+    case 'linkHeaderFooterToPrevious':
+    case 'unlinkHeaderFooterFromPrevious':
+      return { supported: true, mutating: true };
+    case 'setHeaderFooterOptions': {
+      const empty =
+        command.titlePage === undefined &&
+        command.evenAndOddHeaders === undefined &&
+        command.headerDistanceTwips === undefined &&
+        command.footerDistanceTwips === undefined;
+      return empty
+        ? { supported: false, reason: 'setHeaderFooterOptions requires at least one option' }
+        : { supported: true, mutating: true };
+    }
+    case 'insertPageField':
+      return command.field === 'PAGE' ||
+        command.field === 'NUMPAGES' ||
+        command.field === 'SECTIONPAGES' ||
+        command.field === 'PAGE_X_OF_Y'
+        ? { supported: true, mutating: true }
+        : {
+            supported: false,
+            reason:
+              "insertPageField field must be 'PAGE', 'NUMPAGES', 'SECTIONPAGES', or 'PAGE_X_OF_Y'",
+          };
+    case 'insertNote':
+      return command.noteKind === 'footnote' || command.noteKind === 'endnote'
+        ? { supported: true, mutating: true }
+        : { supported: false, reason: "insertNote noteKind must be 'footnote' or 'endnote'" };
+    case 'deleteNote':
+      return command.noteKind === 'footnote' || command.noteKind === 'endnote'
+        ? { supported: true, mutating: true }
+        : { supported: false, reason: "deleteNote noteKind must be 'footnote' or 'endnote'" };
+    case 'convertNote':
+      return command.fromKind === 'footnote' || command.fromKind === 'endnote'
+        ? { supported: true, mutating: true }
+        : { supported: false, reason: "convertNote fromKind must be 'footnote' or 'endnote'" };
+    case 'convertAllNotes':
+      return command.fromKind === 'footnote' || command.fromKind === 'endnote'
+        ? { supported: true, mutating: true }
+        : { supported: false, reason: "convertAllNotes fromKind must be 'footnote' or 'endnote'" };
+    case 'setNoteProperties':
+      if (command.endnote?.position === 'pageBottom') {
+        return {
+          supported: false,
+          reason: 'endnote-pageBottom',
+        };
+      }
+      return command.footnote !== undefined || command.endnote !== undefined
+        ? { supported: true, mutating: true }
+        : { supported: false, reason: 'setNoteProperties requires footnote and/or endnote fields' };
     case 'setSelection':
       // Shape gate only: whether an anchor's paraId exists (and its `search` phrase is
       // unique) is a property of the DOCUMENT, checked at exec — the same split as

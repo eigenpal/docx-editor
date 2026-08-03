@@ -6,8 +6,8 @@
 // inherits its face from.
 
 import type { TreeApplyResult, TreeDocxSession } from '@docx-editor.dev/core-contract/binding';
+import type { StoryScope } from '@docx-editor.dev/core-contract/store';
 import {
-  documentOrder,
   type SemanticLayout,
   type SemanticPosition,
   type SemanticSelection,
@@ -33,6 +33,8 @@ import type { PaginatedSurface } from './paginated-surface-contract.ts';
 /** What the composition root lends this lane. */
 export interface SurfaceFormatDeps {
   readonly session: TreeDocxSession;
+  /** Active story for mutations — body or `{ kind: 'headerFooter', rId }`. */
+  storyScope(): StoryScope;
   layout(): SemanticLayout;
   selection(): SemanticSelection;
   commit(
@@ -43,6 +45,8 @@ export interface SurfaceFormatDeps {
   orderedRange(): { from: SemanticPosition; to: SemanticPosition };
   selectionMark(): { paragraphId: string; start: number; end: number } | null;
   textOf(paragraphId: string): string;
+  /** Paragraph ids in reading order for the active scope (body or open furniture story). */
+  paragraphOrder(): readonly string[];
   /**
    * The cells a rectangular table selection covers, when one is live.
    *
@@ -72,6 +76,12 @@ type FormatMethods = Pick<
 
 export function createSurfaceFormat(deps: SurfaceFormatDeps): FormatMethods {
   const { session, commit, orderedRange, selectionMark, textOf } = deps;
+  const storyPart = () => session.partFor(deps.storyScope()) ?? session.part();
+  const applyOps = (
+    ops: Parameters<TreeDocxSession['applyTreeOps']>[0],
+    before?: Parameters<TreeDocxSession['applyTreeOps']>[1],
+    after?: Parameters<TreeDocxSession['applyTreeOps']>[2]
+  ) => session.applyTreeOps(ops, before, after, deps.storyScope());
   const currentLayout = {
     get value(): SemanticLayout {
       return deps.layout();
@@ -105,7 +115,7 @@ export function createSurfaceFormat(deps: SurfaceFormatDeps): FormatMethods {
     to: SemanticPosition,
     incoming: SurfaceProperty
   ): void => {
-    const part = session.part();
+    const part = storyPart();
     if (from.paragraphId === to.paragraphId) {
       const edits = runPropertyEdits(part, from.paragraphId, from.offset, to.offset, incoming);
       // No run in range means nothing was formatted, so the mark must not move either.
@@ -115,7 +125,7 @@ export function createSurfaceFormat(deps: SurfaceFormatDeps): FormatMethods {
         incoming
       );
       commit(() =>
-        session.applyTreeOps(
+        applyOps(
           [
             ...edits.map((edit) => ({
               op: 'setRunProperties' as const,
@@ -131,7 +141,7 @@ export function createSurfaceFormat(deps: SurfaceFormatDeps): FormatMethods {
       );
       return;
     }
-    const order = documentOrder(currentLayout.value);
+    const order = deps.paragraphOrder();
     const firstIndex = order.indexOf(from.paragraphId);
     const lastIndex = order.indexOf(to.paragraphId);
     // An endpoint the published order does not know is a layout that has not caught up;
@@ -183,7 +193,7 @@ export function createSurfaceFormat(deps: SurfaceFormatDeps): FormatMethods {
       }
     }
     if (ops.length === 0) return;
-    commit(() => session.applyTreeOps(ops, selectionMark()));
+    commit(() => applyOps(ops, selectionMark()));
   };
 
   /**
@@ -198,7 +208,7 @@ export function createSurfaceFormat(deps: SurfaceFormatDeps): FormatMethods {
     cells: readonly string[],
     incoming: SurfaceProperty
   ): boolean => {
-    const part = session.part();
+    const part = storyPart();
     const ops: TreeDocOp[] = [];
     for (const paragraphId of paragraphsInCells(currentLayout.value, cells)) {
       const text = textOf(paragraphId);
@@ -223,7 +233,7 @@ export function createSurfaceFormat(deps: SurfaceFormatDeps): FormatMethods {
     }
     if (ops.length === 0) return false;
     // Word leaves the cells selected after formatting them, so the rectangle survives.
-    commit(() => session.applyTreeOps(ops, selectionMark()), undefined, {
+    commit(() => applyOps(ops, selectionMark()), undefined, {
       keepCellSelection: true,
     });
     return true;
@@ -263,7 +273,7 @@ export function createSurfaceFormat(deps: SurfaceFormatDeps): FormatMethods {
 
     setParagraphProperty(localName, attributes, options) {
       const { from, to } = orderedRange();
-      const order = documentOrder(currentLayout.value);
+      const order = deps.paragraphOrder();
       const firstIndex = order.indexOf(from.paragraphId);
       const lastIndex = order.indexOf(to.paragraphId);
       if (firstIndex === -1 || lastIndex === -1) return;
@@ -273,8 +283,9 @@ export function createSurfaceFormat(deps: SurfaceFormatDeps): FormatMethods {
       // Merged against what each paragraph ITSELF authors, never the cascade the layout
       // publishes: the op replaces the properties it names and drops the ones it does not,
       // so its base has to be the paragraph's own `w:pPr` — see `directParagraphProperties`.
+      const part = storyPart();
       const ops = order.slice(firstIndex, lastIndex + 1).map((paragraphId) => {
-        const own = directParagraphProperties(session.part(), paragraphId);
+        const own = directParagraphProperties(part, paragraphId);
         // `mergeAttributes` is for the properties that carry SEVERAL independent settings
         // in one element. `w:spacing` holds the line rule, the space before and the space
         // after; replacing it wholesale meant picking a line spacing deleted the paragraph's
@@ -300,7 +311,7 @@ export function createSurfaceFormat(deps: SurfaceFormatDeps): FormatMethods {
         };
       });
       if (ops.length === 0) return;
-      commit(() => session.applyTreeOps(ops, selectionMark()));
+      commit(() => applyOps(ops, selectionMark()));
     },
 
     formatting: () =>
@@ -388,7 +399,7 @@ export function createSurfaceFormat(deps: SurfaceFormatDeps): FormatMethods {
       // formatting the user had just asked to be rid of.
       deps.setPendingFormats(null);
       const layout = currentLayout.value;
-      const order = documentOrder(layout);
+      const order = deps.paragraphOrder();
       const cells = deps.selectedCells?.();
       const paragraphIds =
         cells && cells.length > 0
@@ -397,7 +408,7 @@ export function createSurfaceFormat(deps: SurfaceFormatDeps): FormatMethods {
       if (paragraphIds.length === 0) return;
       const { from, to } = orderedRange();
       const rectangular = cells !== undefined && cells.length > 0;
-      const part = session.part();
+      const part = storyPart();
       const ops: TreeDocOp[] = [];
       for (const paragraphId of paragraphIds) {
         const text = textOf(paragraphId);
@@ -429,7 +440,7 @@ export function createSurfaceFormat(deps: SurfaceFormatDeps): FormatMethods {
         }
       }
       if (ops.length === 0) return;
-      commit(() => session.applyTreeOps(ops, selectionMark()), undefined, {
+      commit(() => applyOps(ops, selectionMark()), undefined, {
         keepCellSelection: rectangular,
       });
     },

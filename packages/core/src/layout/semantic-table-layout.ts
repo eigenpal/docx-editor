@@ -33,7 +33,6 @@ import {
 } from './style-cascade.ts';
 import { paragraphShadingBox } from './ooxml-shading.ts';
 import {
-  CELL_PAD,
   MAX_TABLE_NESTING,
   readTableStructure,
   tableOriginX,
@@ -116,6 +115,8 @@ export interface TableFlowDeps {
   readonly styleCascade?: StyleCascadeTable;
   /** When set (header/footer page projection), PAGE/NUMPAGES resolve against this context. */
   readonly pageContext?: FieldPageContext;
+  /** Derived footnote/endnote marks for noteReference / noteRef projection. */
+  readonly noteMarks?: import('./note-projection.ts').NoteMarkContext;
   /**
    * Precomputed body-story list items (including cell paragraphs). Absent for header/footer
    * stories that do not share the body counter stream.
@@ -331,6 +332,7 @@ function placeCellParagraph(
       // A cell's own content box is the column a positional tab measures against.
       marginExtent: { left: 0, right: indent.left + available + indent.right },
       ...(deps.projectLink ? { projectLink: deps.projectLink } : {}),
+      ...(deps.noteMarks ? { noteMarks: deps.noteMarks } : {}),
     }
   );
 
@@ -841,8 +843,11 @@ export function layoutRowFragmentBounded(
   const flowed: FlowedCell[] = [];
   let anyFitted = false;
   let anyNestedBlocked = false;
-  // Minimum row band even for empty/vMerge-continue cells.
-  let rowBottom = Math.min(maxBottom, rowTop + defaultLineHeight + 2 * CELL_PAD);
+  // Grow from the row top. Empty / vMerge-continue cells contribute one default line plus
+  // THEIR authored insets below; fitted cells contribute measured content only. Seeding with
+  // `defaultLineHeight + 2 * CELL_PAD` used to force ~20pt rows even when tcMar was tighter
+  // and the cell's own line was shorter — nested tables picked that up as blank bottom pad.
+  let rowBottom = rowTop;
 
   for (let cellIndex = 0; cellIndex < row.cells.length; cellIndex += 1) {
     const cell = row.cells[cellIndex]!;
@@ -902,9 +907,14 @@ export function layoutRowFragmentBounded(
       }
     }
 
+    // Fitted content owns the height (including its final paragraph's spaceAfter). Do not
+    // re-floor with defaultLineHeight — that invented bottom pad when the measured line was
+    // shorter than the DEFAULT_RUN_STYLE line. Empty / continue cells still need one line.
     const cellBottom = Math.min(
       maxBottom,
-      Math.max(contentBottom + insets.bottom, rowTop + topInset + defaultLineHeight + insets.bottom)
+      fitted
+        ? contentBottom + insets.bottom
+        : rowTop + topInset + defaultLineHeight + insets.bottom
     );
     if (cellBottom > rowBottom) rowBottom = cellBottom;
 

@@ -7,9 +7,8 @@
 // composition root.
 
 import type { TreeApplyResult, TreeDocxSession } from '@docx-editor.dev/core-contract/binding';
-import type { TreeDocOp } from '@docx-editor.dev/core-contract/store';
+import type { TreeDocOp, StoryScope } from '@docx-editor.dev/core-contract/store';
 import {
-  documentOrder,
   enumerateDocumentSections,
   readSectionProperties,
   storyBlocks,
@@ -29,6 +28,8 @@ import type { RangeDeletionPlan } from './surface-selection-ops.ts';
 /** What the composition root lends this lane: its session, its layout, and its commit. */
 export interface SurfaceStructureDeps {
   readonly session: TreeDocxSession;
+  /** Active story for content mutations — body or open furniture. */
+  storyScope(): StoryScope;
   /** The CURRENT layout — read per call, never captured. */
   layout(): SemanticLayout;
   commit(
@@ -52,6 +53,8 @@ export interface SurfaceStructureDeps {
   paragraphTextOf(paragraphId: string): string;
   /** Whether `numId` declares `level`, for refusing a demote that would erase the marker. */
   numberingLevelExists(numId: string, level: number): boolean;
+  /** Paragraph ids in reading order for the active scope. */
+  paragraphOrder(): readonly string[];
 }
 
 type StructureMethods = Pick<
@@ -152,6 +155,14 @@ function writeFirstLine(
 export function createSurfaceStructure(deps: SurfaceStructureDeps): StructureMethods {
   const { session, commit, orderedStart, orderedRange, selectionMark, collapsedAt } = deps;
   const deleteSelectionPlan = deps.deleteSelectionPlan;
+  const storyPart = () => session.partFor(deps.storyScope()) ?? session.part();
+  const applyOps = (
+    ops: Parameters<TreeDocxSession['applyTreeOps']>[0],
+    before?: Parameters<TreeDocxSession['applyTreeOps']>[1],
+    after?: Parameters<TreeDocxSession['applyTreeOps']>[2]
+  ): ReturnType<TreeDocxSession['applyTreeOps']> =>
+    session.applyTreeOps(ops, before, after, deps.storyScope());
+  const orderOf = () => deps.paragraphOrder();
   const currentLayout = {
     get value(): SemanticLayout {
       return deps.layout();
@@ -204,7 +215,7 @@ export function createSurfaceStructure(deps: SurfaceStructureDeps): StructureMet
     touched: readonly string[],
     kind: 'bullet' | 'ordered'
   ): string | null {
-    const order = documentOrder(currentLayout.value);
+    const order = orderOf();
     const first = order.indexOf(touched[0] ?? '');
     const last = order.indexOf(touched[touched.length - 1] ?? '');
     if (first === -1 || last === -1) return null;
@@ -273,7 +284,7 @@ export function createSurfaceStructure(deps: SurfaceStructureDeps): StructureMet
       const start = plan.collapseTo;
       commit(
         () =>
-          session.applyTreeOps(
+          applyOps(
             [
               ...plan.ops,
               { op: 'insertTab', paragraphId: start.paragraphId, offset: start.offset },
@@ -289,7 +300,7 @@ export function createSurfaceStructure(deps: SurfaceStructureDeps): StructureMet
       const start = plan.collapseTo;
       commit(
         () =>
-          session.applyTreeOps(
+          applyOps(
             [
               ...plan.ops,
               { op: 'insertHardBreak', paragraphId: start.paragraphId, offset: start.offset },
@@ -305,7 +316,7 @@ export function createSurfaceStructure(deps: SurfaceStructureDeps): StructureMet
       const start = plan.collapseTo;
       commit(
         () =>
-          session.applyTreeOps(
+          applyOps(
             [
               ...plan.ops,
               { op: 'insertPageBreak', paragraphId: start.paragraphId, offset: start.offset },
@@ -339,7 +350,7 @@ export function createSurfaceStructure(deps: SurfaceStructureDeps): StructureMet
         : { op: 'setListNumbering', paragraphId: from.paragraphId, numId: null };
       let committed = false;
       commit(() => {
-        const result = session.applyTreeOps([op], selectionMark());
+        const result = applyOps([op], selectionMark());
         committed = result.committed;
         return result;
       });
@@ -353,7 +364,7 @@ export function createSurfaceStructure(deps: SurfaceStructureDeps): StructureMet
 
     isListActive(kind) {
       const { from, to } = orderedRange();
-      const order = documentOrder(currentLayout.value);
+      const order = orderOf();
       const firstIndex = order.indexOf(from.paragraphId);
       const lastIndex = order.indexOf(to.paragraphId);
       if (firstIndex === -1 || lastIndex === -1) return false;
@@ -366,7 +377,7 @@ export function createSurfaceStructure(deps: SurfaceStructureDeps): StructureMet
 
     toggleList(kind) {
       const { from, to } = orderedRange();
-      const order = documentOrder(currentLayout.value);
+      const order = orderOf();
       const firstIndex = order.indexOf(from.paragraphId);
       const lastIndex = order.indexOf(to.paragraphId);
       if (firstIndex === -1 || lastIndex === -1) return false;
@@ -386,7 +397,7 @@ export function createSurfaceStructure(deps: SurfaceStructureDeps): StructureMet
       }));
       let committed = false;
       commit(() => {
-        const result = session.applyTreeOps(ops, selectionMark());
+        const result = applyOps(ops, selectionMark());
         committed = result.committed;
         return result;
       });
@@ -395,7 +406,7 @@ export function createSurfaceStructure(deps: SurfaceStructureDeps): StructureMet
 
     canAdjustIndent(direction) {
       const { from, to } = orderedRange();
-      const order = documentOrder(currentLayout.value);
+      const order = orderOf();
       const firstIndex = order.indexOf(from.paragraphId);
       const lastIndex = order.indexOf(to.paragraphId);
       if (firstIndex === -1 || lastIndex === -1) return false;
@@ -417,7 +428,7 @@ export function createSurfaceStructure(deps: SurfaceStructureDeps): StructureMet
 
     adjustIndent(direction) {
       const { from, to } = orderedRange();
-      const order = documentOrder(currentLayout.value);
+      const order = orderOf();
       const firstIndex = order.indexOf(from.paragraphId);
       const lastIndex = order.indexOf(to.paragraphId);
       if (firstIndex === -1 || lastIndex === -1) return false;
@@ -451,7 +462,7 @@ export function createSurfaceStructure(deps: SurfaceStructureDeps): StructureMet
         const current = leftIndentTwipsOf(properties);
         const next = Math.max(0, current + step * INDENT_STEP_TWIPS);
         if (next === current) continue;
-        const direct = directParagraphProperties(session.part(), paragraphId);
+        const direct = directParagraphProperties(storyPart(), paragraphId);
         // Only the paragraph's OWN `w:ind` attributes are carried over: `w:ind` cascades
         // attribute by attribute (17.3.1.12), so an inherited hanging survives untouched
         // rather than being restated here.
@@ -471,7 +482,7 @@ export function createSurfaceStructure(deps: SurfaceStructureDeps): StructureMet
       if (ops.length === 0) return false;
       let committed = false;
       commit(() => {
-        const result = session.applyTreeOps(ops, selectionMark());
+        const result = applyOps(ops, selectionMark());
         committed = result.committed;
         return result;
       });
@@ -554,9 +565,12 @@ export function createSurfaceStructure(deps: SurfaceStructureDeps): StructureMet
     setSectionProperties(update) {
       let committed = false;
       commit(() => {
+        // Section geometry lives on the body story, never on an open furniture scope.
         const result = session.applyTreeOps(
           [{ op: 'setSectionProperties', ...update }],
-          selectionMark()
+          selectionMark(),
+          undefined,
+          { kind: 'body' }
         );
         committed = result.committed;
         return result;
@@ -565,6 +579,8 @@ export function createSurfaceStructure(deps: SurfaceStructureDeps): StructureMet
     },
 
     insertSectionBreak() {
+      // Section breaks are body-only; refuse while a furniture scope is open.
+      if (deps.storyScope().kind !== 'body') return false;
       const plan = deleteSelectionPlan();
       const start = plan.collapseTo;
       const before = new Set(session.paragraphIds());
@@ -580,7 +596,9 @@ export function createSurfaceStructure(deps: SurfaceStructureDeps): StructureMet
               // governing setup so the break changes where pages break, not how they look.
               { op: 'setSectionMark', paragraphId: start.paragraphId },
             ],
-            selectionMark()
+            selectionMark(),
+            undefined,
+            { kind: 'body' }
           );
           committed = result.committed;
           return result;

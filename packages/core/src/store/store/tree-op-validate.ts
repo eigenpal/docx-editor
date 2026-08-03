@@ -1,68 +1,32 @@
-// The op vocabulary and pre-application validation (tree-ops seam).
+// Pre-application validation for tree ops (tree-ops seam).
 //
-// This module owns what an op IS — the declarative, JSON-safe `TreeDocOp` shapes, the
-// accepted property boundaries, the effect/rejection contracts — plus the segment model
-// that flattens a paragraph into UTF-16 addressable units, and `validateTreeOp`, which
-// runs BEFORE any tree work so a rejected op leaves the tree, revision and indexes exactly
-// as they were. Application lives in tree-op-apply.ts; both are re-exported via tree-ops.ts.
+// `validateTreeOp` runs BEFORE any tree work so a rejected op leaves the tree, revision
+// and indexes exactly as they were. The op vocabulary lives in tree-op-types.ts; the
+// segment model in tree-op-segments.ts; section addressing in tree-op-section-address.ts.
+// Application lives in tree-op-apply.ts; public entry is tree-ops.ts.
 
 import type { OoxmlNode, OoxmlParagraphNode, OoxmlPart } from '../package/ooxml-tree.ts';
 import { findNode } from '../package/ooxml-edit.ts';
-import { paragraphPropertiesNodeOf } from './tree-op-nodes.ts';
 import { validateDeleteBlock } from './tree-op-blocks.ts';
 import { isValidXmlText } from '../package/sinks.ts';
-
-/**
- * The accepted RUN property boundary (design D8), as the OOXML element names that carry it.
- *
- * An explicit allowlist rather than "any `w:rPr` child": a property outside D8 has no
- * resolver, no layout behavior and no support claim, so accepting it here would let an
- * operation assert support the engine does not have. Unknown properties still ROUND-TRIP —
- * they are generic nodes in the tree — they simply cannot be authored by an op.
- */
-export const ACCEPTED_RUN_PROPERTIES = [
-  'rFonts', // font family
-  'sz', // half-point size
-  'szCs',
-  'color',
-  'b', // bold
-  'bCs',
-  'i', // italic
-  'iCs',
-  'u', // underline variant and color
-  'strike',
-  'dstrike', // double strike
-  'highlight',
-  'vertAlign', // superscript / subscript
-  'position', // baseline offset
-  'caps',
-  'smallCaps',
-  'spacing', // character spacing
-  'w', // horizontal scaling
-  'kern',
-] as const;
-// `w:rStyle` is deliberately ABSENT. It is preserved, not accepted: this list is the set a
-// property write REPLACES, so admitting the character style would make a bold toggle delete
-// it. `insertHyperlink` writes `w:rStyle` itself, as part of making the run a link, which is
-// what Word does and what leaves every other write alone.
-
-/** The accepted PARAGRAPH property boundary (design D8). */
-export const ACCEPTED_PARAGRAPH_PROPERTIES = [
-  'pStyle',
-  'jc', // alignment
-  'spacing', // before/after + line spacing and rule
-  'ind', // left/right/first-line/hanging indents
-  'tabs',
-  'numPr', // numbering identity and level
-  'keepNext',
-  'keepLines',
-  'widowControl',
-  'pageBreakBefore',
-  'shd', // shading
-] as const;
-
-export type AcceptedRunProperty = (typeof ACCEPTED_RUN_PROPERTIES)[number];
-export type AcceptedParagraphProperty = (typeof ACCEPTED_PARAGRAPH_PROPERTIES)[number];
+import { paragraphPropertiesNodeOf } from './tree-op-nodes.ts';
+import {
+  bodyNodeOf,
+  isTableNested,
+  metricsOfSection,
+  plannedSectionDimensions,
+  sectionChild,
+  targetSectionNodes,
+} from './tree-op-section-address.ts';
+import { isParagraph, paragraphLength, segmentsOf, splitsSurrogate } from './tree-op-segments.ts';
+import {
+  ACCEPTED_PARAGRAPH_PROPERTIES,
+  ACCEPTED_RUN_PROPERTIES,
+  TREE_DOC_OP_KINDS,
+  type OoxmlProperty,
+  type TreeDocOp,
+  type TreeOpRejection,
+} from './tree-op-types.ts';
 
 const RUN_PROPERTY_SET: ReadonlySet<string> = new Set(ACCEPTED_RUN_PROPERTIES);
 const PARAGRAPH_PROPERTY_SET: ReadonlySet<string> = new Set(ACCEPTED_PARAGRAPH_PROPERTIES);
@@ -711,6 +675,49 @@ function validateHyperlinkTarget(op: {
 export function validateTreeOp(part: OoxmlPart, op: TreeDocOp): TreeOpRejection | null {
   if (!TREE_DOC_OP_KINDS.includes(op.op)) return 'unknown-op';
 
+  // Package-level furniture ops cannot run against a single part. Shape-check here so
+  // applyTreeOp refuses them; TreePackageStore.applyLifecycleOp is the commit path.
+  if (
+    op.op === 'createHeaderFooter' ||
+    op.op === 'deleteHeaderFooter' ||
+    op.op === 'linkToPrevious' ||
+    op.op === 'unlinkFromPrevious'
+  ) {
+    if (!Number.isInteger(op.sectionIndex) || op.sectionIndex < 0) return 'invalidArgs';
+    if (op.kind !== 'header' && op.kind !== 'footer') return 'invalidArgs';
+    if (op.variant !== 'default' && op.variant !== 'first' && op.variant !== 'even') {
+      return 'invalidArgs';
+    }
+    return 'invalidArgs';
+  }
+  if (op.op === 'setSectionFurnitureOptions') {
+    const empty =
+      op.titlePage === undefined &&
+      op.evenAndOddHeaders === undefined &&
+      op.headerDistanceTwips === undefined &&
+      op.footerDistanceTwips === undefined;
+    if (empty) return 'invalidArgs';
+    for (const value of [op.headerDistanceTwips, op.footerDistanceTwips]) {
+      if (value === undefined) continue;
+      if (!Number.isInteger(value) || value < 0 || value > 31680) return 'invalidArgs';
+    }
+    if (
+      op.sectionIndex !== undefined &&
+      (!Number.isInteger(op.sectionIndex) || op.sectionIndex < 0)
+    ) {
+      return 'invalidArgs';
+    }
+    return 'invalidArgs';
+  }
+  if (
+    op.op === 'insertNote' ||
+    op.op === 'deleteNote' ||
+    op.op === 'convertNote' ||
+    op.op === 'setNoteProperties'
+  ) {
+    return 'invalidArgs';
+  }
+
   if (op.op === 'setSectionProperties') {
     const dims = [op.pageWidthTwips, op.pageHeightTwips];
     const margins = [
@@ -832,6 +839,21 @@ export function validateTreeOp(part: OoxmlPart, op: TreeDocOp): TreeOpRejection 
       if (splitsSurrogate(paragraph, op.offset)) return 'splits-surrogate-pair';
       return null;
     }
+    case 'insertPageField': {
+      if (!Number.isInteger(op.offset) || op.offset < 0 || op.offset > length) {
+        return 'offset-out-of-range';
+      }
+      if (splitsSurrogate(paragraph, op.offset)) return 'splits-surrogate-pair';
+      if (
+        op.field !== 'PAGE' &&
+        op.field !== 'NUMPAGES' &&
+        op.field !== 'SECTIONPAGES' &&
+        op.field !== 'PAGE_X_OF_Y'
+      ) {
+        return 'invalidArgs';
+      }
+      return null;
+    }
     case 'splitParagraph': {
       if (!Number.isInteger(op.offset) || op.offset < 0 || op.offset > length) {
         return 'offset-out-of-range';
@@ -909,3 +931,34 @@ export function validateTreeOp(part: OoxmlPart, op: TreeDocOp): TreeOpRejection 
       return 'unknown-op';
   }
 }
+
+// Backward-compatible re-exports: callers that imported vocabulary/segmentation/section
+// helpers from this module keep resolving here. Canonical homes are the modules above.
+export {
+  ACCEPTED_PARAGRAPH_PROPERTIES,
+  ACCEPTED_RUN_PROPERTIES,
+  TREE_DOC_OP_KINDS,
+  type AcceptedParagraphProperty,
+  type AcceptedRunProperty,
+  type ImpactClass,
+  type OoxmlProperty,
+  type TreeDocOp,
+  type TreeDocOpKind,
+  type TreeOpEffect,
+  type TreeOpRejection,
+  type TreeOpResult,
+} from './tree-op-types.ts';
+export { isParagraph, runsUnder, segmentsOf, type Segment } from './tree-op-segments.ts';
+export {
+  allSectionNodes,
+  bodyNodeOf,
+  bodySectionOf,
+  currentSectionMetrics,
+  isTableNested,
+  metricsOfSection,
+  plannedSectionDimensions,
+  sectionAttribute,
+  sectionChild,
+  targetSectionNodes,
+  type SectionMetrics,
+} from './tree-op-section-address.ts';

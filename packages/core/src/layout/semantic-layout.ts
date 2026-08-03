@@ -15,7 +15,12 @@ import type {
   OoxmlPart,
   OoxmlProperty,
 } from '@docx-editor.dev/core-contract/store';
-import { finalizePageFieldProjection, type HyperlinkProjector } from './field-projection.ts';
+import {
+  finalizePageFieldProjection,
+  storyNeedsPageFields,
+  withPageFieldSources,
+  type HyperlinkProjector,
+} from './field-projection.ts';
 import { paragraphLayoutKey, type ParagraphLayoutCache } from './layout-cache.ts';
 import { alignSpans, breakParagraph, type Alignment, type PendingLine } from './paragraph-flow.ts';
 import {
@@ -69,20 +74,21 @@ import {
 import { storyBlocks } from './story-roots.ts';
 import { type HeaderFooterStoryLayout } from './hf-layout.ts';
 import { enumerateDocumentSections, geometryOfSection } from './section-properties.ts';
-import {
-  DEFAULT_PAGE_GEOMETRY,
-  type BlockFragmentRecord,
-  type HeaderFooterStoryRecord,
-  type LayoutBox,
-  type LineRecord,
-  type PageGeometry,
-  type PageRecord,
-  type ParagraphBorderStrokeRecord,
-  type ParagraphBottomBorderRecord,
-  type SemanticLayout,
-  type TableRowFragmentRecord,
-  type TextMeasurer,
+import { layoutSemanticDocumentWithNotes } from './note-pagination.ts';
+import type {
+  BlockFragmentRecord,
+  HeaderFooterStoryRecord,
+  LayoutBox,
+  LineRecord,
+  PageGeometry,
+  PageRecord,
+  ParagraphBorderStrokeRecord,
+  ParagraphBottomBorderRecord,
+  SemanticLayout,
+  TableRowFragmentRecord,
+  TextMeasurer,
 } from './semantic-records.ts';
+import { DEFAULT_PAGE_GEOMETRY } from './semantic-records.ts';
 import type { NumberingIndex } from './numbering-index.ts';
 import { firstLineShift, withResolvedListItems, type ResolvedListItem } from './list-resolve.ts';
 import { publishListMarker } from './list-marker.ts';
@@ -188,6 +194,18 @@ export interface SemanticLayoutOptions {
    * degradation a headless test or a furniture-only pass gets, and it is the safe one.
    */
   readonly projectLink?: HyperlinkProjector;
+  /**
+   * Footnote/endnote layout input. When present, body layout projects note marks and a
+   * post-pass attaches note areas (with bounded reflow for pageBottom reservation).
+   */
+  readonly notes?: import('./note-pagination.ts').NotesLayoutInput;
+  /**
+   * Per-page bottom reserves (points) subtracted from content height before line placement.
+   * Produced by the note reflow loop; absent means full content column.
+   */
+  readonly pageBottomReserves?: ReadonlyMap<number, number>;
+  /** Derived note marks for body/note projection (provisional or final). */
+  readonly noteMarks?: import('./note-projection.ts').NoteMarkContext;
 }
 
 /** Prepass results by block node, valid while the width and producer both hold. */
@@ -284,34 +302,43 @@ export function layoutSemanticDocument(
   // Full-body list resolve so counters continue across sections and table cells.
   const optionsWithLists = withResolvedListItems(options, blocks);
 
-  if (sections.length > 1) {
-    return layoutMultiSectionDocument(
-      blocks,
-      sections,
-      revision,
-      optionsWithLists,
-      layoutBlocksWithGeometry
-    );
+  const runBody = (opts: SemanticLayoutOptions): SemanticLayout => {
+    if (sections.length > 1) {
+      return layoutMultiSectionDocument(blocks, sections, revision, opts, layoutBlocksWithGeometry);
+    }
+
+    const section = sections[0];
+    const geometry =
+      opts.geometry ?? (section ? geometryOfSection(section.properties) : DEFAULT_PAGE_GEOMETRY);
+    const furniture = furnitureForSection(opts, 0, sections.length) ?? opts.furniture;
+    const laid = layoutBlocksWithGeometry(blocks, revision, {
+      ...opts,
+      geometry,
+      furniture,
+    });
+    const numbering = section?.properties.pageNumbering;
+    const annotated: SemanticLayout = {
+      revision: laid.layout.revision,
+      pages: withPageFieldSources(
+        laid.pages,
+        numbering?.start ?? 1,
+        laid.pages.length,
+        numbering?.fmt
+      ),
+    };
+    const finalized = finalizePageFieldProjection(annotated);
+    if (opts.session) {
+      opts.session.multi = null;
+      opts.session.previous = finalized;
+    }
+    return finalized;
+  };
+
+  if (!options.notes) {
+    return runBody(optionsWithLists);
   }
 
-  const section = sections[0];
-  const geometry =
-    options.geometry ?? (section ? geometryOfSection(section.properties) : DEFAULT_PAGE_GEOMETRY);
-  const furniture =
-    furnitureForSection(optionsWithLists, 0, sections.length) ?? optionsWithLists.furniture;
-  const laid = layoutBlocksWithGeometry(blocks, revision, {
-    ...optionsWithLists,
-    geometry,
-    furniture,
-  });
-  const finalized = finalizePageFieldProjection(laid.layout);
-  // layoutBlocksWithGeometry stores the pre-projection layout on the session; replace it so
-  // incremental reuse keeps projected PAGE/NUMPAGES furniture.
-  if (options.session) {
-    options.session.multi = null;
-    options.session.previous = finalized;
-  }
-  return finalized;
+  return layoutSemanticDocumentWithNotes(part, sections, optionsWithLists, options.notes, runBody);
 }
 
 interface BlockLayoutResult {
@@ -386,8 +413,8 @@ function layoutBlocksWithGeometry(
     furnitureCap,
     Math.max(geometry.margin.bottom, furniture ? footerDistance + maxFlow(furniture.footers) : 0)
   );
-  const contentHeight = geometry.height - effectiveTop - effectiveBottom;
-
+  const baseContentHeight = geometry.height - effectiveTop - effectiveBottom;
+  const pageBottomReserves = options.pageBottomReserves;
   const session = options.session;
   const lineCounterStart = options.lineCounterStart ?? 0;
   const furnitureContext = furniture
@@ -409,7 +436,18 @@ function layoutBlocksWithGeometry(
   // Where this section's first sheet lands in the DOCUMENT. Even/odd header selection
   // alternates by page number, so it is not a section-local question.
   const pageIndexStart = options.pageIndexStart ?? 0;
-  const context = `${producer}|${geometry.width}x${geometry.height}|${geometry.margin.top},${geometry.margin.right},${geometry.margin.bottom},${geometry.margin.left}|lc:${lineCounterStart}|fs:${flowStartY},${spaceBeforeCarry}|pi:${pageIndexStart}${furnitureContext}`;
+  const notesReserveKey = pageBottomReserves
+    ? `|nr:${[...pageBottomReserves].map(([i, h]) => `${i}=${h}`).join(',')}`
+    : '';
+  const noteMarksKey = options.noteMarks
+    ? `|nm:${options.noteMarks.reservedMarkText ?? ''}:${options.noteMarks.marks.size}`
+    : '';
+  const context = `${producer}|${geometry.width}x${geometry.height}|${geometry.margin.top},${geometry.margin.right},${geometry.margin.bottom},${geometry.margin.left}|lc:${lineCounterStart}|fs:${flowStartY},${spaceBeforeCarry}|pi:${pageIndexStart}${furnitureContext}${notesReserveKey}${noteMarksKey}`;
+
+  const pages: PageRecord[] = [];
+  /** Available body height on the page currently being filled (`pages.length`). */
+  const contentHeight = (): number =>
+    Math.max(1, baseContentHeight - (pageBottomReserves?.get(pages.length) ?? 0));
 
   // Prepass: everything needed to KEY a paragraph, before any of them is placed. Resuming
   // means knowing where the first change is, and that cannot be discovered while walking.
@@ -567,7 +605,6 @@ function layoutBlocksWithGeometry(
     };
   }
 
-  const pages: PageRecord[] = [];
   let pageFragments: BlockFragmentRecord[] = [];
   // A continuous section resumes the previous section's column rather than opening a
   // sheet, so its first block starts at that column's used height and its first paragraph
@@ -641,6 +678,7 @@ function layoutBlocksWithGeometry(
         kind,
         variant,
         partName: laid.partName,
+        ...(laid.rId ? { rId: laid.rId } : {}),
         box: {
           x: box.x + geometry.margin.left,
           y,
@@ -652,9 +690,9 @@ function layoutBlocksWithGeometry(
     };
     const placed = place(story);
     const needs = story.pageFieldNeeds;
-    // Only stories with allowlisted PAGE/NUMPAGES need finalize-time re-layout. Field-free
-    // furniture keeps the baseline fragments on every sheet (no per-page projector).
-    if (!needs.hasPage && !needs.hasNumPages) return placed;
+    // Only stories with allowlisted PAGE/NUMPAGES/SECTIONPAGES need finalize-time re-layout.
+    // Field-free furniture keeps the baseline fragments on every sheet (no per-page projector).
+    if (!storyNeedsPageFields(needs)) return placed;
     return {
       ...placed,
       pageFieldProjector: (context) => place(story.withPageContext(context)),
@@ -674,7 +712,7 @@ function layoutBlocksWithGeometry(
         x: box.x + geometry.margin.left,
         y: box.y + effectiveTop,
         width: contentWidth,
-        height: contentHeight,
+        height: baseContentHeight,
       },
       fragments: pageFragments,
       ...(header ? { header } : {}),
@@ -697,6 +735,7 @@ function layoutBlocksWithGeometry(
     listItems,
     ...(defaultTabStopPt !== undefined ? { defaultTabStopPt } : {}),
     ...(options.projectLink ? { projectLink: options.projectLink } : {}),
+    ...(options.noteMarks ? { noteMarks: options.noteMarks } : {}),
     borderOwnershipBudget: createTableBorderOwnershipBudget(),
     vMergeResolveBudget: createTableVMergeResolveBudget(),
   };
@@ -737,6 +776,7 @@ function layoutBlocksWithGeometry(
         // paragraph's own indents the way Word does.
         marginExtent: { left: 0, right: entry.indent.left + entry.available + entry.indent.right },
         ...(options.projectLink ? { projectLink: options.projectLink } : {}),
+        ...(options.noteMarks ? { noteMarks: options.noteMarks } : {}),
       }
     );
 
@@ -746,7 +786,7 @@ function layoutBlocksWithGeometry(
    * Preflights the real unsplit row height (not a one-line estimate). A row that fits on a
    * fresh page but not the current remainder moves whole. A row taller than a fresh page
    * fragments at paragraph/line boundaries when splittable; `w:cantSplit` and unsafe nested
-   * cuts fail closed via {@link TablePaginationError} instead of overflowing contentHeight.
+   * cuts fail closed via {@link TablePaginationError} instead of overflowing contentHeight().
    * Contiguous leading `w:tblHeader` rows form one atomic repeated group: preflighted and
    * placed together, moved whole when the remainder is too short, re-emitted complete atop
    * each continuation page, and rejected when the group itself exceeds a fresh content page.
@@ -817,13 +857,13 @@ function layoutBlocksWithGeometry(
           structure.cellSpacingPt
         );
       }
-      if (groupHeight > contentHeight + 0.001) {
+      if (groupHeight > contentHeight() + 0.001) {
         throw new TablePaginationError(
           'table-row-overheight',
           `Table header group (${headerRows.length} row(s)) is taller than the page content box`
         );
       }
-      if (cursorY + groupHeight > contentHeight + 0.001 && cursorY > 0) {
+      if (cursorY + groupHeight > contentHeight() + 0.001 && cursorY > 0) {
         closeTableFragment();
         flushPage();
         fragmentTop = 0;
@@ -840,7 +880,7 @@ function layoutBlocksWithGeometry(
           tableDeps,
           structure.cellSpacingPt
         );
-        if (placed.bottom > contentHeight + 0.001) {
+        if (placed.bottom > contentHeight() + 0.001) {
           throw new TablePaginationError(
             'table-row-overheight',
             `Table header row ${headerRow.id} overflowed the page content box`
@@ -878,8 +918,8 @@ function layoutBlocksWithGeometry(
 
       // Whole-row move: fits a fresh page but not the remaining band.
       if (
-        naturalHeight <= contentHeight + 0.001 &&
-        cursorY + naturalHeight > contentHeight + 0.001 &&
+        naturalHeight <= contentHeight() + 0.001 &&
+        cursorY + naturalHeight > contentHeight() + 0.001 &&
         cursorY > 0
       ) {
         breakForContinuation(true);
@@ -895,7 +935,7 @@ function layoutBlocksWithGeometry(
           );
         }
 
-        const remaining = contentHeight - cursorY;
+        const remaining = contentHeight() - cursorY;
         if (remaining <= 0.001 && cursorY > 0) {
           if (movedToFreshPage) {
             throw new TablePaginationError(
@@ -920,7 +960,7 @@ function layoutBlocksWithGeometry(
             tableDeps,
             structure.cellSpacingPt
           );
-          if (placed.bottom > contentHeight + 0.001) {
+          if (placed.bottom > contentHeight() + 0.001) {
             throw new TablePaginationError(
               'table-row-overheight',
               `Table row ${row.id} overflowed the page content box after placement`
@@ -950,7 +990,7 @@ function layoutBlocksWithGeometry(
           structure.columnWidthsPt,
           tableLeft,
           cursorY,
-          contentHeight,
+          contentHeight(),
           false,
           isContinuation,
           0,
@@ -975,7 +1015,7 @@ function layoutBlocksWithGeometry(
           );
         }
 
-        if (placed.bottom > contentHeight + 0.001) {
+        if (placed.bottom > contentHeight() + 0.001) {
           throw new TablePaginationError(
             'table-row-overheight',
             `Table row ${row.id} overflowed the page content box`
@@ -1135,11 +1175,11 @@ function layoutBlocksWithGeometry(
           const member = prepared[at];
           return member?.kind === 'paragraph' ? breakBlock(member).map((l) => l.height) : [];
         });
-        if (group !== null && group + topExtent <= contentHeight) {
+        if (group !== null && group + topExtent <= contentHeight()) {
           needed = Math.max(needed, group + topExtent);
         }
       }
-      if (cursorY + needed > contentHeight && cursorY > 0) {
+      if (cursorY + needed > contentHeight() && cursorY > 0) {
         flushPage();
         previousSpaceAfter = 0;
       }
@@ -1331,7 +1371,7 @@ function layoutBlocksWithGeometry(
       const isLastLine = lineIndex === lines.length - 1;
       const tail = isLastLine ? borderExtent + spacing.after : 0;
       if (
-        cursorY + pendingLine.height + tail > contentHeight &&
+        cursorY + pendingLine.height + tail > contentHeight() &&
         (pending.length > 0 || pageFragments.length > 0 || pages.length > 0)
       ) {
         // `w:widowControl` (§17.3.1.44) / `w:keepLines` (§17.3.1.16) change where a paragraph

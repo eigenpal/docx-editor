@@ -9,7 +9,7 @@
 // finalized page identities from the previous pass are restored for untouched sheets.
 
 import type { OoxmlElement } from '@docx-editor.dev/core-contract/store';
-import { finalizePageFieldProjection } from './field-projection.ts';
+import { finalizePageFieldProjection, withPageFieldSources } from './field-projection.ts';
 import { remapPage, type HeaderFooterStoryLayout } from './hf-layout.ts';
 import {
   createLayoutSession,
@@ -104,6 +104,12 @@ export function multiSectionStructureKey(
     .map((section, index) => {
       const geometry = geometryOfSection(section.properties);
       const furniture = furnitureForSection(options, index, sections.length);
+      const pn = section.properties.pageNumbering;
+      // Empty `{}` and absent both key as no authored numbering; attribute edits must bust
+      // incremental reuse so PAGE start/fmt / SECTIONPAGES stay correct.
+      const pnKey = pn
+        ? `pn:${pn.start ?? ''},${pn.fmt ?? ''},${pn.chapStyle ?? ''},${pn.chapSep ?? ''}`
+        : 'pn:';
       return [
         section.blockStart,
         section.blockEndExclusive,
@@ -117,6 +123,7 @@ export function multiSectionStructureKey(
         geometry.headerDistance ?? 36,
         geometry.footerDistance ?? 36,
         furnitureGeometryFingerprint(furniture),
+        pnKey,
       ].join(':');
     })
     .join('|');
@@ -252,6 +259,8 @@ export function layoutMultiSectionDocument(
   let flowOpenPage = true;
   let previousGeometry: PageGeometry | null = null;
   let previousFurnitureKey = '';
+  /** Next displayed PAGE value if the following section does not author `w:start`. */
+  let nextDisplayed = 1;
 
   for (let sectionIndex = 0; sectionIndex < sections.length; sectionIndex += 1) {
     const section = sections[sectionIndex]!;
@@ -333,6 +342,10 @@ export function layoutMultiSectionDocument(
       prevSpan.sheetY === startSheetY &&
       prevSpan.remappedPages.length === laid.pages.length;
 
+    const numbering = section.properties.pageNumbering;
+    const displayedStart = numbering?.start !== undefined ? numbering.start : nextDisplayed;
+    const format = numbering?.fmt;
+
     let remapped: readonly PageRecord[];
     if (continues) {
       // The section's first page is not a sheet: it is the tail of the one before it. Its
@@ -353,13 +366,19 @@ export function layoutMultiSectionDocument(
       // section's fragments to a sheet that already carries them, once per pass, forever.
       const built: PageRecord[] = [];
       for (const page of laid.pages.slice(1)) {
-        const next = remapPage(page, pages.length, sheetY);
+        const next = remapPage(page, pages.length + built.length, sheetY);
         built.push(next);
-        pages.push(next);
-        remappedAll.push(next);
         sheetY = next.box.y + next.box.height + 24;
       }
-      remapped = built;
+      // Local page 0 lived on the host; overflow pages start at displayedStart + 1.
+      // SECTIONPAGES counts the host contribution plus overflow sheets.
+      const sectionPageCount = built.length + 1;
+      remapped = withPageFieldSources(built, displayedStart + 1, sectionPageCount, format);
+      for (const page of remapped) {
+        pages.push(page);
+        remappedAll.push(page);
+      }
+      nextDisplayed = displayedStart + sectionPageCount;
     } else if (localUnchanged && stackUnchanged) {
       remapped = prevSpan.remappedPages;
       reusedPages += remapped.length;
@@ -368,16 +387,20 @@ export function layoutMultiSectionDocument(
         remappedAll.push(page);
         sheetY = page.box.y + page.box.height + 24;
       }
+      nextDisplayed = displayedStart + remapped.length;
     } else {
       const built: PageRecord[] = [];
       for (const page of laid.pages) {
-        const next = remapPage(page, pages.length, sheetY);
+        const next = remapPage(page, pages.length + built.length, sheetY);
         built.push(next);
-        pages.push(next);
-        remappedAll.push(next);
         sheetY = next.box.y + next.box.height + 24;
       }
-      remapped = built;
+      remapped = withPageFieldSources(built, displayedStart, built.length, format);
+      for (const page of remapped) {
+        pages.push(page);
+        remappedAll.push(page);
+      }
+      nextDisplayed = displayedStart + remapped.length;
     }
 
     newSpans.push({

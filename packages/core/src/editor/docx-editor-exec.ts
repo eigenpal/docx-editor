@@ -10,6 +10,21 @@ import type { EditorCommand, ExecResult } from '../contracts/editor.ts';
 import type { PaginatedSurface } from './paginated-surface-contract.ts';
 import { MARKS, isSurfaceSelection, resolveMarkAttr } from './docx-editor-support.ts';
 import { isDocAnchor, isDocAnchorRange, resolveAnchorSelection } from './anchor-resolution.ts';
+import {
+  execEditHeaderFooter,
+  execInsertPageField,
+  execLinkHeaderFooter,
+  execRemoveHeaderFooter,
+  execSetHeaderFooterOptions,
+  execUnlinkHeaderFooter,
+} from './docx-editor-hf.ts';
+import {
+  execConvertAllNotes,
+  execConvertNote,
+  execDeleteNote,
+  execInsertNote,
+  execSetNoteProperties,
+} from './docx-editor-notes.ts';
 
 /**
  * Run one admitted command against the surface.
@@ -223,6 +238,32 @@ export function execEditorCommand(
     case 'redo':
       mounted.redo();
       break;
+    case 'editHeaderFooter':
+      return execEditHeaderFooter(mounted, command);
+    case 'exitHeaderFooter': {
+      if (typeof mounted.exitHeaderFooter === 'function') mounted.exitHeaderFooter();
+      return { ok: true, changed: false };
+    }
+    case 'removeHeaderFooter':
+      return execRemoveHeaderFooter(mounted, command);
+    case 'linkHeaderFooterToPrevious':
+      return execLinkHeaderFooter(mounted, command);
+    case 'unlinkHeaderFooterFromPrevious':
+      return execUnlinkHeaderFooter(mounted, command);
+    case 'setHeaderFooterOptions':
+      return execSetHeaderFooterOptions(mounted, command);
+    case 'insertPageField':
+      return execInsertPageField(mounted, command);
+    case 'insertNote':
+      return execInsertNote(mounted, command);
+    case 'deleteNote':
+      return execDeleteNote(mounted, command);
+    case 'convertNote':
+      return execConvertNote(mounted, command);
+    case 'convertAllNotes':
+      return execConvertAllNotes(mounted, command);
+    case 'setNoteProperties':
+      return execSetNoteProperties(mounted, command);
     case 'setSelection': {
       if ('range' in command && isSurfaceSelection(command.range)) {
         mounted.setSelection(command.range);

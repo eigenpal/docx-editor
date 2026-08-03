@@ -62,6 +62,11 @@ describe('slot → command table (commandForSlot)', () => {
     expect(commandForSlot('alignment.center')).toEqual({ type: 'setAlignment', align: 'center' });
     expect(commandForSlot('alignment.right')).toEqual({ type: 'setAlignment', align: 'right' });
     expect(commandForSlot('alignment.justify')).toEqual({ type: 'setAlignment', align: 'justify' });
+    expect(commandForSlot('insert.pageNumber')).toEqual({ type: 'insertPageField', field: 'PAGE' });
+    expect(commandForSlot('insert.pageXofY')).toEqual({
+      type: 'insertPageField',
+      field: 'PAGE_X_OF_Y',
+    });
   });
 
   test('an unwired slot answers null, never an invented command', () => {

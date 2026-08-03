@@ -45,7 +45,9 @@
     "watermark": "Filigrane",
     "break": null,
     "sectionBreakContinuous": null,
-    "sectionBreakNextPage": null
+    "sectionBreakNextPage": null,
+    "insertFootnote": "Insérer une note de bas de page",
+    "insertEndnote": "Insérer une note de fin"
   },
   "formattingBar": {
     "groups": {
@@ -58,7 +60,8 @@
       "alignment": "Alignement",
       "listFormatting": "Format de liste",
       "image": "Image",
-      "table": "Tableau"
+      "table": "Tableau",
+      "insert": "Insertion"
     },
     "undo": "Annuler",
     "undoShortcut": "Annuler (Ctrl+Z)",
@@ -848,7 +851,28 @@
     "insertPageNumber": "Insérer le numéro de page",
     "insertTotalPages": "Insérer le nombre total de pages",
     "remove": "Supprimer {label}",
-    "closeEditing": "Fermer l'édition de {label}"
+    "closeEditing": "Fermer l'édition de {label}",
+    "chromeAriaLabel": "Édition des en-têtes et pieds de page",
+    "firstPageHeader": "En-tête de la première page",
+    "firstPageFooter": "Pied de page de la première page",
+    "evenPageHeader": "En-tête des pages paires",
+    "evenPageFooter": "Pied de page des pages paires",
+    "regionSection": "{region} — Section {section}",
+    "sameAsPrevious": "Identique au précédent",
+    "sameAsPreviousHint": "Les modifications s'appliquent aussi aux pages de la section précédente.",
+    "differentFirstPage": "Première page différente",
+    "differentOddEven": "Pages paires et impaires différentes",
+    "differentOddEvenHint": "S'applique à l'ensemble du document.",
+    "linkToPrevious": "Lier au précédent",
+    "unlinkFromPrevious": "Dissocier du précédent",
+    "headerDistance": "Distance de l'en-tête par rapport au bord",
+    "footerDistance": "Distance du pied de page par rapport au bord",
+    "removeHeader": "Supprimer l'en-tête",
+    "removeFooter": "Supprimer le pied de page",
+    "insertSectionPages": "Insérer le nombre de pages de la section",
+    "insertPageXofY": "Insérer page X sur Y",
+    "pageXofYLabel": "Page",
+    "pageXofYSeparator": "sur"
   },
   "image": {
     "placeholder": "Insérer une image",
@@ -963,5 +987,23 @@
       "headings": null
     },
     "title": null
+  },
+  "notes": {
+    "editingBanner": "Modification de la note",
+    "closeNote": "Fermer la note",
+    "delete": "Supprimer la note",
+    "convertToEndnote": "Convertir en note de fin",
+    "convertToFootnote": "Convertir en note de bas de page",
+    "scope": "Appliquer à",
+    "scopeDocument": "Document entier",
+    "scopeSection": "Cette section",
+    "previewFallback": "Note de bas de page",
+    "chromeAriaLabel": "Édition de note",
+    "editingRegion": "{kind} {number}",
+    "footnoteKind": "Note de bas de page",
+    "endnoteKind": "Note de fin",
+    "convertAllFootnotes": "Convertir toutes les notes de bas de page en notes de fin",
+    "convertAllEndnotes": "Convertir toutes les notes de fin en notes de bas de page",
+    "inheritedValue": "(hérité)"
   }
 }

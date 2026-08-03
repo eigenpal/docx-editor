@@ -51,7 +51,12 @@ export interface LayoutScope {
 }
 
 /** Widening order. A batch takes the widest impact any of its commits had. */
-const IMPACT_ORDER: readonly ImpactClass[] = ['text-local', 'paragraph-local', 'flow-structural'];
+const IMPACT_ORDER: readonly ImpactClass[] = [
+  'text-local',
+  'paragraph-local',
+  'flow-structural',
+  'global',
+];
 
 function widen(a: ImpactClass, b: ImpactClass): ImpactClass {
   return IMPACT_ORDER.indexOf(b) > IMPACT_ORDER.indexOf(a) ? b : a;
@@ -281,12 +286,16 @@ export function createLayoutScheduler(options: LayoutSchedulerOptions): LayoutSc
           state.paragraphIds.add(entry.join.removed);
         }
       }
-      if (change.impact === 'flow-structural') state.structural = true;
+      if (change.impact === 'flow-structural' || change.impact === 'global') {
+        state.structural = true;
+      }
       arm();
     },
 
     invalidateAll(revision, reason) {
       const state = ensure(revision);
+      // Full invalidation remains flow-structural: `global` is reserved for shared story
+      // parts (header/footer) whose edit reaches every attached page.
       state.impact = 'flow-structural';
       state.structural = true;
       // Not a node-level invalidation: no id is dirty, the whole flow is. An empty id set

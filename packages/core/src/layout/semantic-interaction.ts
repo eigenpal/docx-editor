@@ -10,6 +10,7 @@
 
 import { caretBoxOnLine, hitTestPage, spanOffsetX } from './semantic-hit-test.ts';
 import type {
+  BlockFragmentRecord,
   LineRecord,
   SemanticLayout,
   StyleSpanRecord,
@@ -67,7 +68,33 @@ function paragraphLinesIndex(layout: SemanticLayout): Map<string, PlacedLine[]> 
   const cached = paragraphLinesCache.get(layout);
   if (cached) return cached;
   const index = new Map<string, PlacedLine[]>();
+  const indexFragments = (
+    fragments: readonly import('./semantic-records.ts').BlockFragmentRecord[],
+    pageIndex: number
+  ): void => {
+    const visit = (
+      blocks: readonly import('./semantic-records.ts').BlockFragmentRecord[]
+    ): void => {
+      for (const block of blocks) {
+        if (block.kind === 'paragraph') {
+          for (const line of block.lines) {
+            const entry = index.get(line.range.paragraphId);
+            const placed = { line, pageIndex };
+            if (entry) entry.push(placed);
+            else index.set(line.range.paragraphId, [placed]);
+          }
+          continue;
+        }
+        for (const row of block.rows) {
+          if (row.isHeaderRepeat) continue;
+          for (const cell of row.cells) visit(cell.blocks);
+        }
+      }
+    };
+    visit(fragments);
+  };
   for (const page of layout.pages) {
+    // Body first — primary story for caret stops built elsewhere via paragraphFragmentsOf.
     for (const fragment of paragraphFragmentsOf(page)) {
       for (const line of fragment.lines) {
         const entry = index.get(line.range.paragraphId);
@@ -75,6 +102,15 @@ function paragraphLinesIndex(layout: SemanticLayout): Map<string, PlacedLine[]> 
         if (entry) entry.push(placed);
         else index.set(line.range.paragraphId, [placed]);
       }
+    }
+    // Furniture paragraphs share this index so formatting / paragraphTextFromLayout can
+    // resolve an open header/footer selection. documentOrder and caretStops stay body-only.
+    if (page.header) indexFragments(page.header.fragments, page.index);
+    if (page.footer) indexFragments(page.footer.fragments, page.index);
+    // Note stories (footnotes/endnotes) — same formatting lane as furniture; not body order.
+    for (const area of [page.footnotes, page.endnotes]) {
+      if (!area) continue;
+      for (const note of area.notes) indexFragments(note.fragments, page.index);
     }
   }
   paragraphLinesCache.set(layout, index);
@@ -126,59 +162,17 @@ function laterLineOwns(layout: SemanticLayout, line: LineRecord, offset: number)
 }
 
 /**
- * Every caret stop in the document, in reading order.
- *
- * One per character boundary on every line, plus the line end. Derived rather than stored,
- * so a stop can never survive the content it described.
- *
- * Ownership of a position SHARED by two lines is decided here exactly as `caretAt` decides
- * it, or the caret the user sees and the stop the arrow keys move to would sit on different
- * rows.
+ * True when `offset` sits strictly inside a span that is not a 1:1 model↔paint mapping
+ * (projected PAGE digits, leaders) — those interiors are not navigable caret stops.
+ * Tabs keep a 1:1 `\t` range; their wide box is still only two stops (before/after).
  */
-export function caretStops(layout: SemanticLayout): CaretGeometry[] {
-  const stops: CaretGeometry[] = [];
-  for (const page of layout.pages) {
-    for (const fragment of paragraphFragmentsOf(page)) {
-      for (const line of fragment.lines) {
-        for (let offset = line.range.start; offset <= line.range.end; offset += 1) {
-          // A line ENDED BY A HARD BREAK does not own the position after it — the line the
-          // break opened does, and `caretAt` places the caret there. Emitting it here too
-          // would put the stop this lane navigates to on a different line from the caret
-          // the user can see: Home would jump to the row above, Down would skip the new
-          // line entirely, and the empty line a trailing Shift+Enter opens would be
-          // unreachable because the dedup below discarded its only stop as a duplicate.
-          if (
-            offset === line.range.end &&
-            offset > line.range.start &&
-            endsWithLineBreak(line) &&
-            laterLineOwns(layout, line, offset)
-          ) {
-            continue;
-          }
-          // A continuation line's first stop is the same model position as the previous
-          // line's last, so it is emitted once — by the line that starts there.
-          if (offset === line.range.start && offset > fragment.range.start && stops.length > 0) {
-            const previous = stops[stops.length - 1]!;
-            if (
-              previous.position.paragraphId === line.range.paragraphId &&
-              previous.position.offset === offset
-            ) {
-              continue;
-            }
-          }
-          stops.push({
-            position: { paragraphId: line.range.paragraphId, offset },
-            x: xWithinLine(line, offset),
-            y: line.box.y,
-            height: line.box.height,
-            lineId: line.id,
-            pageIndex: page.index,
-          });
-        }
-      }
-    }
+function isNonNavigableInterior(line: LineRecord, offset: number): boolean {
+  for (const span of line.spans) {
+    if (offset <= span.range.start || offset >= span.range.end) continue;
+    if (span.projected) return true;
+    if (span.text.length !== span.range.end - span.range.start) return true;
   }
-  return stops;
+  return false;
 }
 
 /**
@@ -194,21 +188,155 @@ function endsWithLineBreak(line: {
   return line.spans[line.spans.length - 1]?.text === '\n';
 }
 
+function pushLineCaretStops(
+  stops: CaretGeometry[],
+  layout: SemanticLayout,
+  line: LineRecord,
+  pageIndex: number,
+  fragmentStart: number,
+  measurer?: TextMeasurer
+): void {
+  for (let offset = line.range.start; offset <= line.range.end; offset += 1) {
+    // A line ENDED BY A HARD BREAK does not own the position after it — the line the
+    // break opened does, and `caretAt` places the caret there. Emitting it here too
+    // would put the stop this lane navigates to on a different line from the caret
+    // the user can see: Home would jump to the row above, Down would skip the new
+    // line entirely, and the empty line a trailing Shift+Enter opens would be
+    // unreachable because the dedup below discarded its only stop as a duplicate.
+    if (
+      offset === line.range.end &&
+      offset > line.range.start &&
+      endsWithLineBreak(line) &&
+      laterLineOwns(layout, line, offset)
+    ) {
+      continue;
+    }
+    // A continuation line's first stop is the same model position as the previous
+    // line's last, so it is emitted once — by the line that starts there.
+    if (offset === line.range.start && offset > fragmentStart && stops.length > 0) {
+      const previous = stops[stops.length - 1]!;
+      if (
+        previous.position.paragraphId === line.range.paragraphId &&
+        previous.position.offset === offset
+      ) {
+        continue;
+      }
+    }
+    if (isNonNavigableInterior(line, offset)) continue;
+    stops.push({
+      position: { paragraphId: line.range.paragraphId, offset },
+      x: xWithinLine(line, offset, measurer),
+      y: line.box.y,
+      height: line.box.height,
+      lineId: line.id,
+      pageIndex,
+    });
+  }
+}
+
+function visitParagraphFragments(
+  layout: SemanticLayout,
+  blocks: readonly BlockFragmentRecord[],
+  pageIndex: number,
+  stops: CaretGeometry[],
+  measurer?: TextMeasurer
+): void {
+  for (const block of blocks) {
+    if (block.kind === 'paragraph') {
+      for (const line of block.lines) {
+        pushLineCaretStops(stops, layout, line, pageIndex, block.range.start, measurer);
+      }
+      continue;
+    }
+    for (const row of block.rows) {
+      if (row.isHeaderRepeat) continue;
+      for (const cell of row.cells)
+        visitParagraphFragments(layout, cell.blocks, pageIndex, stops, measurer);
+    }
+  }
+}
+
+/**
+ * Every caret stop in the document body, in reading order.
+ *
+ * One per character boundary on every line, plus the line end. Derived rather than stored,
+ * so a stop can never survive the content it described. Ownership of a position SHARED by
+ * two lines is decided here exactly as `caretAt` decides it. Furniture stories use
+ * {@link caretStopsForBlocks} so open header/footer navigation never walks body stops.
+ */
+export function caretStops(layout: SemanticLayout, measurer?: TextMeasurer): CaretGeometry[] {
+  const stops: CaretGeometry[] = [];
+  for (const page of layout.pages) {
+    for (const fragment of paragraphFragmentsOf(page)) {
+      for (const line of fragment.lines) {
+        pushLineCaretStops(stops, layout, line, page.index, fragment.range.start, measurer);
+      }
+    }
+  }
+  return stops;
+}
+
+/**
+ * Caret stops for one story's block fragments (header/footer), in reading order.
+ *
+ * Coordinates stay story-relative — the same space `hitTestFragments` and furniture paint
+ * use — so arrow motion follows tab-stop geometry and projected field atoms without mixing
+ * body sheet offsets.
+ */
+export function caretStopsForBlocks(
+  layout: SemanticLayout,
+  pageIndex: number,
+  fragments: readonly BlockFragmentRecord[],
+  measurer?: TextMeasurer
+): CaretGeometry[] {
+  if (!layout.pages[pageIndex]) return [];
+  const stops: CaretGeometry[] = [];
+  visitParagraphFragments(layout, fragments, pageIndex, stops, measurer);
+  return stops;
+}
+
+export interface CaretAtOptions {
+  readonly measurer?: TextMeasurer;
+  /**
+   * Prefer geometry from this sheet when the same paragraph paints on multiple pages
+   * (shared header/footer copies).
+   */
+  readonly preferredPageIndex?: number;
+}
+
+function resolveCaretAtOptions(measurerOrOptions?: TextMeasurer | CaretAtOptions): CaretAtOptions {
+  if (!measurerOrOptions) return {};
+  if (typeof (measurerOrOptions as TextMeasurer).measure === 'function') {
+    return { measurer: measurerOrOptions as TextMeasurer };
+  }
+  return measurerOrOptions as CaretAtOptions;
+}
+
 /** Geometry for one model position, or null when it is not laid out. */
 export function caretAt(
   layout: SemanticLayout,
   position: SemanticPosition,
-  measurer?: TextMeasurer
+  measurerOrOptions?: TextMeasurer | CaretAtOptions
 ): CaretGeometry | null {
+  const options = resolveCaretAtOptions(measurerOrOptions);
+  const placed = paragraphLinesIndex(layout).get(position.paragraphId) ?? [];
+  const preferred = options.preferredPageIndex;
+  const ordered =
+    preferred === undefined
+      ? placed
+      : [...placed].sort((a, b) => {
+          const aHit = a.pageIndex === preferred ? 0 : 1;
+          const bHit = b.pageIndex === preferred ? 0 : 1;
+          return aHit - bHit;
+        });
   // A position at a line's END is also the START of the next one, and the first line that
   // contains it is not always the right answer. After a HARD BREAK it is the wrong one: the
   // break is what ended the line, so the caret belongs at the start of the line the user
   // just opened — not a break's width to the right of the last glyph on the line above,
   // which is what a Shift+Enter looked like. Soft wraps stay on the first match, where the
   // offset is genuinely shared and the end of the visual line is the conventional answer.
-  let afterBreak: { line: (typeof lines)[number]['line']; pageIndex: number } | null = null;
-  const lines = paragraphLinesIndex(layout).get(position.paragraphId) ?? [];
-  for (const { line, pageIndex } of lines) {
+  let afterBreak: { line: LineRecord; pageIndex: number } | null = null;
+  for (const { line, pageIndex } of ordered) {
     if (position.offset < line.range.start || position.offset > line.range.end) continue;
     if (
       position.offset === line.range.end &&
@@ -220,11 +348,11 @@ export function caretAt(
       afterBreak ??= { line, pageIndex };
       continue;
     }
-    const box = caretBoxOnLine(line, position.offset, measurer);
+    const box = caretBoxOnLine(line, position.offset, options.measurer);
     return { position, x: box.x, y: box.y, height: box.height, lineId: line.id, pageIndex };
   }
   if (afterBreak) {
-    const box = caretBoxOnLine(afterBreak.line, position.offset, measurer);
+    const box = caretBoxOnLine(afterBreak.line, position.offset, options.measurer);
     return {
       position,
       x: box.x,
@@ -349,6 +477,13 @@ function orderPositions(
   layout: SemanticLayout,
   selection: SemanticSelection
 ): { from: SemanticPosition; to: SemanticPosition } | null {
+  // Same paragraph needs no document-wide order — furniture stories are absent from
+  // body `documentOrder` but still format within one paragraph.
+  if (selection.anchor.paragraphId === selection.head.paragraphId) {
+    return selection.anchor.offset <= selection.head.offset
+      ? { from: selection.anchor, to: selection.head }
+      : { from: selection.head, to: selection.anchor };
+  }
   const order = documentOrder(layout);
   const anchorIndex = order.indexOf(selection.anchor.paragraphId);
   const headIndex = order.indexOf(selection.head.paragraphId);
@@ -441,6 +576,15 @@ export function wordBoundary(text: string, offset: number, direction: -1 | 1): n
   return index;
 }
 
+export interface MoveCaretOptions {
+  /**
+   * Precomputed stops for the active story. Open header/footer navigation MUST pass
+   * story-scoped stops from {@link caretStopsForBlocks}; body keeps the default.
+   */
+  readonly stops?: readonly CaretGeometry[];
+  readonly measurer?: TextMeasurer;
+}
+
 /**
  * Move a caret.
  *
@@ -452,9 +596,10 @@ export function moveCaret(
   layout: SemanticLayout,
   position: SemanticPosition,
   command: NavigationCommand,
-  desiredX: number | null = null
+  desiredX: number | null = null,
+  options: MoveCaretOptions = {}
 ): { position: SemanticPosition; desiredX: number | null } | null {
-  const stops = caretStops(layout);
+  const stops = options.stops ? [...options.stops] : caretStops(layout, options.measurer);
   if (stops.length === 0) return null;
   const index = stops.findIndex(
     (stop) =>
@@ -582,6 +727,16 @@ export function spansInSelection(
   const spans: StyleSpanRecord[] = [];
   // Only the paragraphs the selection touches; iterating every line of the document made
   // the toolbar's formatting read scale with document length instead of selection length.
+  if (ordered.from.paragraphId === ordered.to.paragraphId) {
+    for (const { line } of paragraphLinesIndex(layout).get(ordered.from.paragraphId) ?? []) {
+      const overlap = lineOverlap(layout, line, ordered.from, ordered.to);
+      if (!overlap) continue;
+      for (const span of line.spans) {
+        if (span.range.end > overlap.start && span.range.start < overlap.end) spans.push(span);
+      }
+    }
+    return spans;
+  }
   const order = documentOrder(layout);
   const index = documentOrderIndex(layout);
   const lines = paragraphLinesIndex(layout);

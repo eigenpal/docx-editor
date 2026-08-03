@@ -45,7 +45,9 @@
     "symbol": "Simbol",
     "watermark": "Tanda Air",
     "help": "Bantuan",
-    "reportIssue": "Laporkan Masalah"
+    "reportIssue": "Laporkan Masalah",
+    "insertFootnote": "Sisipkan catatan kaki",
+    "insertEndnote": "Sisipkan catatan akhir"
   },
   "formattingBar": {
     "groups": {
@@ -58,7 +60,8 @@
       "alignment": "Perataan",
       "listFormatting": "Pemformatan Daftar",
       "image": "Gambar",
-      "table": "Tabel"
+      "table": "Tabel",
+      "insert": "Sisipkan"
     },
     "undo": "Urungkan",
     "undoShortcut": "Urungkan (Ctrl+Z)",
@@ -864,7 +867,28 @@
     "insertPageNumber": "Sisipkan nomor halaman saat ini",
     "insertTotalPages": "Sisipkan jumlah total halaman",
     "remove": "Hapus {label}",
-    "closeEditing": "Tutup pengeditan {label}"
+    "closeEditing": "Tutup pengeditan {label}",
+    "chromeAriaLabel": "Pengeditan header dan footer",
+    "firstPageHeader": "Header halaman pertama",
+    "firstPageFooter": "Footer halaman pertama",
+    "evenPageHeader": "Header halaman genap",
+    "evenPageFooter": "Footer halaman genap",
+    "regionSection": "{region} — Bagian {section}",
+    "sameAsPrevious": "Sama dengan sebelumnya",
+    "sameAsPreviousHint": "Edit juga berlaku untuk halaman bagian sebelumnya.",
+    "differentFirstPage": "Halaman pertama berbeda",
+    "differentOddEven": "Halaman ganjil dan genap berbeda",
+    "differentOddEvenHint": "Berlaku untuk seluruh dokumen.",
+    "linkToPrevious": "Tautkan ke sebelumnya",
+    "unlinkFromPrevious": "Putus tautan dari sebelumnya",
+    "headerDistance": "Jarak header dari tepi",
+    "footerDistance": "Jarak footer dari tepi",
+    "removeHeader": "Hapus header",
+    "removeFooter": "Hapus footer",
+    "insertSectionPages": "Sisipkan jumlah halaman bagian",
+    "insertPageXofY": "Sisipkan halaman X dari Y",
+    "pageXofYLabel": "Halaman",
+    "pageXofYSeparator": "dari"
   },
   "image": {
     "placeholder": "Placeholder gambar",
@@ -963,5 +987,23 @@
       "headings": null
     },
     "title": null
+  },
+  "notes": {
+    "editingBanner": "Mengedit catatan",
+    "closeNote": "Tutup catatan",
+    "delete": "Hapus catatan",
+    "convertToEndnote": "Konversi ke catatan akhir",
+    "convertToFootnote": "Konversi ke catatan kaki",
+    "scope": "Terapkan ke",
+    "scopeDocument": "Seluruh dokumen",
+    "scopeSection": "Bagian ini",
+    "previewFallback": "Catatan kaki",
+    "chromeAriaLabel": "Pengeditan catatan",
+    "editingRegion": "{kind} {number}",
+    "footnoteKind": "Catatan kaki",
+    "endnoteKind": "Catatan akhir",
+    "convertAllFootnotes": "Konversi semua catatan kaki ke catatan akhir",
+    "convertAllEndnotes": "Konversi semua catatan akhir ke catatan kaki",
+    "inheritedValue": "(diwarisi)"
   }
 }

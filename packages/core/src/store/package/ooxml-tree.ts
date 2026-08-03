@@ -164,6 +164,7 @@ export interface OoxmlParagraphNode extends OoxmlElementBase<
     | OoxmlHyperlinkNode
     | OoxmlBookmarkStartNode
     | OoxmlBookmarkEndNode
+    | OoxmlFldSimpleNode
     | OoxmlGenericElementNode
   )[],
   readonly OoxmlKnownNodeAttribute[]
@@ -259,6 +260,12 @@ export interface OoxmlRunNode extends OoxmlElementBase<
     | OoxmlTextElementNode
     | OoxmlTabNode
     | OoxmlHardBreakNode
+    | OoxmlFldCharNode
+    | OoxmlInstrTextNode
+    | OoxmlNoteReferenceNode
+    | OoxmlNoteRefNode
+    | OoxmlSeparatorNode
+    | OoxmlContinuationSeparatorNode
     | OoxmlGenericElementNode
   )[],
   readonly OoxmlKnownNodeAttribute[]
@@ -313,6 +320,138 @@ export interface OoxmlHardBreakNode extends OoxmlElementBase<
   readonly localName: 'br';
 }
 
+/**
+ * Complex-field character (`w:fldChar`).
+ *
+ * Children stay generic so `w:ffData` (legacy form fields / macros) round-trips as inert
+ * payload and is never promoted to an executable surface. `@w:fldCharType`, `@w:dirty`,
+ * and `@w:fldLock` are preserved on `attributes`.
+ */
+export interface OoxmlFldCharNode extends OoxmlElementBase<
+  readonly OoxmlGenericElementNode[],
+  readonly OoxmlKnownNodeAttribute[]
+> {
+  readonly kind: 'fldChar';
+  readonly namespaceUri: typeof WML_NAMESPACE_URI;
+  readonly localName: 'fldChar';
+}
+
+/**
+ * Field instruction text (`w:instrText`), same text-carrier shape as `w:t`.
+ *
+ * Instruction strings are never executed; layout may recognize allowlisted page-number
+ * keywords only.
+ */
+export interface OoxmlInstrTextNode extends OoxmlElementBase<
+  readonly OoxmlTextNode[],
+  readonly OoxmlKnownNodeAttribute[]
+> {
+  readonly kind: 'instrText';
+  readonly namespaceUri: typeof WML_NAMESPACE_URI;
+  readonly localName: 'instrText';
+}
+
+/**
+ * Simple field (`w:fldSimple`) at paragraph content level.
+ *
+ * `@w:instr`, `@w:dirty`, and `@w:fldLock` round-trip on `attributes`. Cached result
+ * children stay structurally preserved; the field is one atomic addressable unit.
+ */
+export interface OoxmlFldSimpleNode extends OoxmlElementBase<
+  readonly (OoxmlRunNode | OoxmlGenericElementNode)[],
+  readonly OoxmlKnownNodeAttribute[]
+> {
+  readonly kind: 'fldSimple';
+  readonly namespaceUri: typeof WML_NAMESPACE_URI;
+  readonly localName: 'fldSimple';
+}
+
+/**
+ * Footnotes part root (`w:footnotes`). Children are typed notes or preserved generics.
+ * Never a story root itself — each note body is its own story for layout.
+ */
+export interface OoxmlFootnotesNode extends OoxmlElementBase<
+  readonly (OoxmlNoteNode | OoxmlGenericElementNode)[],
+  readonly OoxmlKnownNodeAttribute[]
+> {
+  readonly kind: 'footnotes';
+  readonly namespaceUri: typeof WML_NAMESPACE_URI;
+  readonly localName: 'footnotes';
+}
+
+/**
+ * Endnotes part root (`w:endnotes`). Same content model as {@link OoxmlFootnotesNode}.
+ */
+export interface OoxmlEndnotesNode extends OoxmlElementBase<
+  readonly (OoxmlNoteNode | OoxmlGenericElementNode)[],
+  readonly OoxmlKnownNodeAttribute[]
+> {
+  readonly kind: 'endnotes';
+  readonly namespaceUri: typeof WML_NAMESPACE_URI;
+  readonly localName: 'endnotes';
+}
+
+/**
+ * One footnote or endnote (`w:footnote` / `w:endnote`).
+ *
+ * Discriminated by `localName`. `@w:id` and optional `@w:type` (`ST_FtnEdn`, including
+ * authored `normal`) live on `attributes`. Children are ordinary block content.
+ */
+export interface OoxmlNoteNode extends OoxmlElementBase<
+  readonly (OoxmlParagraphNode | OoxmlTableNode | OoxmlGenericElementNode)[],
+  readonly OoxmlKnownNodeAttribute[]
+> {
+  readonly kind: 'note';
+  readonly namespaceUri: typeof WML_NAMESPACE_URI;
+  readonly localName: 'footnote' | 'endnote';
+}
+
+/**
+ * Body citation (`w:footnoteReference` / `w:endnoteReference`) as a typed run child.
+ * Display mark is derived — never stored as text. One UTF-16 atom in addressing.
+ */
+export interface OoxmlNoteReferenceNode extends OoxmlElementBase<
+  readonly [],
+  readonly OoxmlKnownNodeAttribute[]
+> {
+  readonly kind: 'noteReference';
+  readonly namespaceUri: typeof WML_NAMESPACE_URI;
+  readonly localName: 'footnoteReference' | 'endnoteReference';
+}
+
+/**
+ * Auto mark inside a note body (`w:footnoteRef` / `w:endnoteRef`).
+ * One UTF-16 atom; display digit is derived at paint time.
+ */
+export interface OoxmlNoteRefNode extends OoxmlElementBase<
+  readonly [],
+  readonly OoxmlKnownNodeAttribute[]
+> {
+  readonly kind: 'noteRef';
+  readonly namespaceUri: typeof WML_NAMESPACE_URI;
+  readonly localName: 'footnoteRef' | 'endnoteRef';
+}
+
+/** Run-inner separator rule (`w:separator`). One UTF-16 atom. */
+export interface OoxmlSeparatorNode extends OoxmlElementBase<
+  readonly [],
+  readonly OoxmlKnownNodeAttribute[]
+> {
+  readonly kind: 'separator';
+  readonly namespaceUri: typeof WML_NAMESPACE_URI;
+  readonly localName: 'separator';
+}
+
+/** Run-inner continuation separator (`w:continuationSeparator`). One UTF-16 atom. */
+export interface OoxmlContinuationSeparatorNode extends OoxmlElementBase<
+  readonly [],
+  readonly OoxmlKnownNodeAttribute[]
+> {
+  readonly kind: 'continuationSeparator';
+  readonly namespaceUri: typeof WML_NAMESPACE_URI;
+  readonly localName: 'continuationSeparator';
+}
+
 export interface OoxmlGenericElementNode extends OoxmlElementBase<readonly OoxmlNode[]> {
   readonly kind: 'generic';
 }
@@ -336,6 +475,16 @@ export type OoxmlElement =
   | OoxmlParagraphPropertiesNode
   | OoxmlTabNode
   | OoxmlHardBreakNode
+  | OoxmlFldCharNode
+  | OoxmlInstrTextNode
+  | OoxmlFldSimpleNode
+  | OoxmlFootnotesNode
+  | OoxmlEndnotesNode
+  | OoxmlNoteNode
+  | OoxmlNoteReferenceNode
+  | OoxmlNoteRefNode
+  | OoxmlSeparatorNode
+  | OoxmlContinuationSeparatorNode
   | OoxmlTableNode
   | OoxmlTableRowNode
   | OoxmlTableCellNode
@@ -420,6 +569,19 @@ const KNOWN_WML_ELEMENTS: Readonly<Record<string, KnownKind>> = {
   pPr: 'paragraphProperties',
   tab: 'tab',
   br: 'hardBreak',
+  fldChar: 'fldChar',
+  instrText: 'instrText',
+  fldSimple: 'fldSimple',
+  footnotes: 'footnotes',
+  endnotes: 'endnotes',
+  footnote: 'note',
+  endnote: 'note',
+  footnoteReference: 'noteReference',
+  endnoteReference: 'noteReference',
+  footnoteRef: 'noteRef',
+  endnoteRef: 'noteRef',
+  separator: 'separator',
+  continuationSeparator: 'continuationSeparator',
   tbl: 'table',
   tr: 'tableRow',
   tc: 'tableCell',
@@ -613,7 +775,7 @@ function convertElement(
   const retainedChildren = canonicalLegacyChildren(
     element.children,
     preserve,
-    candidateKind === 'text'
+    candidateKind === 'text' || candidateKind === 'instrText'
   );
   const children = retainedChildren.map((child, index): OoxmlNode => {
     const childPath = `${path}.${index}`;
@@ -628,7 +790,18 @@ function convertElement(
   const kind =
     candidateKind !== 'generic' &&
     resolvedAttributes.compatibleWithKnownNode &&
-    validKnownKind(candidateKind, children)
+    validKnownKind(candidateKind, children) &&
+    (candidateKind !== 'fldChar' ||
+      attributes.some((attribute) => {
+        if (attribute.localName !== 'fldCharType') return false;
+        if (attribute.namespaceUri !== WML_NAMESPACE_URI && attribute.namespaceUri !== '') {
+          return false;
+        }
+        return (
+          attribute.value === 'begin' || attribute.value === 'separate' || attribute.value === 'end'
+        );
+      })) &&
+    noteKindCompatible(candidateKind, name.localName, attributes)
       ? candidateKind
       : 'generic';
   return {
@@ -641,6 +814,70 @@ function convertElement(
     attributes,
     children,
   } as OoxmlElement;
+}
+
+/** Extra gates for typed note vocabulary — illegal id/type demotes fail-open. */
+function noteKindCompatible(
+  kind: KnownKind | 'generic',
+  localName: string,
+  attributes: readonly OoxmlAttribute[]
+): boolean {
+  if (
+    kind !== 'note' &&
+    kind !== 'noteReference' &&
+    kind !== 'noteRef' &&
+    kind !== 'separator' &&
+    kind !== 'continuationSeparator' &&
+    kind !== 'footnotes' &&
+    kind !== 'endnotes'
+  ) {
+    return true;
+  }
+
+  const attr = (local: string): string | undefined => {
+    for (const entry of attributes) {
+      if (entry.localName !== local) continue;
+      if (entry.namespaceUri === WML_NAMESPACE_URI || entry.namespaceUri === '') return entry.value;
+    }
+    return undefined;
+  };
+
+  if (kind === 'note') {
+    if (localName !== 'footnote' && localName !== 'endnote') return false;
+    const id = attr('id');
+    if (id === undefined || !/^-?\d{1,10}$/.test(id)) return false;
+    const n = Number(id);
+    if (!Number.isInteger(n) || n < -0x80000000 || n > 0x7fffffff) return false;
+    const type = attr('type');
+    if (
+      type !== undefined &&
+      type !== 'normal' &&
+      type !== 'separator' &&
+      type !== 'continuationSeparator' &&
+      type !== 'continuationNotice'
+    ) {
+      return false;
+    }
+    return true;
+  }
+
+  if (kind === 'noteReference') {
+    if (localName !== 'footnoteReference' && localName !== 'endnoteReference') return false;
+    const id = attr('id');
+    if (id === undefined || !/^-?\d{1,10}$/.test(id)) return false;
+    const n = Number(id);
+    return Number.isInteger(n) && n >= -0x80000000 && n <= 0x7fffffff;
+  }
+
+  if (kind === 'noteRef') {
+    return localName === 'footnoteRef' || localName === 'endnoteRef';
+  }
+
+  if (kind === 'separator') return localName === 'separator';
+  if (kind === 'continuationSeparator') return localName === 'continuationSeparator';
+  if (kind === 'footnotes') return localName === 'footnotes';
+  if (kind === 'endnotes') return localName === 'endnotes';
+  return true;
 }
 
 /**

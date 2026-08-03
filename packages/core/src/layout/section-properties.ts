@@ -45,6 +45,28 @@ export interface SectionMargins {
  */
 export type SectionBreakType = 'nextPage' | 'continuous' | 'evenPage' | 'oddPage' | 'nextColumn';
 
+/**
+ * Authored `w:pgNumType` (ECMA-376 CT_PageNumber).
+ *
+ * Distinguishes three states via {@link SectionProperties.pageNumbering}:
+ * - element absent → `undefined` (Word defaults; no empty element to re-emit)
+ * - empty `<w:pgNumType/>` → `{}` (present, no authored attrs; must round-trip empty)
+ * - attributes set → only those keys appear (never invent schema defaults like `fmt=decimal`)
+ *
+ * `chapStyle` / `chapSep` are preserved for consumers; PAGE projection does not yet compose
+ * chapter numbers (heading outline resolution is out of this slice).
+ */
+export interface SectionPageNumbering {
+  /** Authored `@w:start` when present and in range; otherwise omitted. */
+  readonly start?: number;
+  /** Authored `@w:fmt` (ST_NumberFormat) when present; otherwise omitted. */
+  readonly fmt?: string;
+  /** Authored `@w:chapStyle` outline level when present and in range. */
+  readonly chapStyle?: number;
+  /** Authored `@w:chapSep` when present (hyphen / period / colon / emDash / enDash). */
+  readonly chapSep?: string;
+}
+
 export interface SectionProperties {
   readonly pageSize: { readonly widthTwips: number; readonly heightTwips: number };
   readonly margins: SectionMargins;
@@ -53,6 +75,11 @@ export interface SectionProperties {
   readonly titlePage: boolean;
   /** Absent `w:type` defaults to `nextPage`. */
   readonly breakType: SectionBreakType;
+  /**
+   * Authored page-number type. Absent when `w:pgNumType` is missing; empty object when the
+   * element is present with no attributes (comprehensive-fixture shape).
+   */
+  readonly pageNumbering?: SectionPageNumbering;
 }
 
 /**
@@ -142,6 +169,53 @@ function breakTypeOf(sectPr: OoxmlNode | undefined): SectionBreakType {
   return 'nextPage';
 }
 
+const CHAPTER_SEPS = new Set(['hyphen', 'period', 'colon', 'emDash', 'enDash']);
+
+/**
+ * Parse authored `w:pgNumType` without inventing schema defaults.
+ *
+ * Returns `undefined` when the element is absent. An empty element yields `{}` so callers
+ * can tell "present but unauthored" from "missing" and serialization can re-emit empty.
+ * Hostile / out-of-range attribute values are dropped rather than clamped into meaning.
+ */
+export function parsePageNumbering(sectPr: OoxmlNode): SectionPageNumbering | undefined {
+  const pgNumType = childNamed(sectPr, 'pgNumType');
+  if (!pgNumType || pgNumType.kind === 'textValue') return undefined;
+
+  const numbering: {
+    start?: number;
+    fmt?: string;
+    chapStyle?: number;
+    chapSep?: string;
+  } = {};
+
+  const startRaw = attribute(pgNumType, 'start');
+  if (startRaw !== undefined && /^-?\d{1,7}$/.test(startRaw)) {
+    const start = Number(startRaw);
+    // Page starts are positive; Word rejects 0 / negative in practice. Cap hostile sizes.
+    if (Number.isFinite(start) && start >= 0 && start <= 9999) numbering.start = start;
+  }
+
+  const fmt = attribute(pgNumType, 'fmt');
+  if (fmt !== undefined && fmt.length > 0 && fmt.length <= 64 && !/[<>&"']/.test(fmt)) {
+    numbering.fmt = fmt;
+  }
+
+  const chapStyleRaw = attribute(pgNumType, 'chapStyle');
+  if (chapStyleRaw !== undefined && /^\d{1,2}$/.test(chapStyleRaw)) {
+    const chapStyle = Number(chapStyleRaw);
+    // Outline levels are 0…9 in WordprocessingML heading practice.
+    if (Number.isFinite(chapStyle) && chapStyle >= 0 && chapStyle <= 9) {
+      numbering.chapStyle = chapStyle;
+    }
+  }
+
+  const chapSep = attribute(pgNumType, 'chapSep');
+  if (chapSep !== undefined && CHAPTER_SEPS.has(chapSep)) numbering.chapSep = chapSep;
+
+  return numbering;
+}
+
 /** Parse one `w:sectPr` into geometry/break properties (null reads as Word's defaults). */
 export function parseSectionProperties(sectPr: OoxmlNode | null | undefined): SectionProperties {
   if (!sectPr) return DEFAULT_SECTION_PROPERTIES;
@@ -158,6 +232,8 @@ export function parseSectionProperties(sectPr: OoxmlNode | null | undefined): Se
   const height = pgSz
     ? twips(attribute(pgSz, 'h'), defaults.pageSize.heightTwips)
     : defaults.pageSize.heightTwips;
+
+  const pageNumbering = parsePageNumbering(sectPr);
 
   return {
     pageSize: { widthTwips: width, heightTwips: height },
@@ -191,6 +267,7 @@ export function parseSectionProperties(sectPr: OoxmlNode | null | undefined): Se
     landscape: orientation === 'landscape' || width > height,
     titlePage: readOnOffChild(sectPr, 'titlePg'),
     breakType: breakTypeOf(sectPr),
+    ...(pageNumbering !== undefined ? { pageNumbering } : {}),
   };
 }
 

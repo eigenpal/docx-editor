@@ -12,7 +12,7 @@ import {
   type OoxmlPart,
 } from '../package/ooxml-tree.ts';
 import { DEPENDENCY_KEY_IDS } from '../registry/frozen-ids.ts';
-import type { TreeOpEffect, TreeOpResult } from './tree-op-validate.ts';
+import type { TreeOpEffect, TreeOpResult } from './tree-op-types.ts';
 
 export const TEXT_DEPS = [DEPENDENCY_KEY_IDS.story];
 

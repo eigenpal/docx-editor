@@ -2,7 +2,18 @@
 
 ### Requirement: Note parts parse into typed canonical nodes
 
-The canonical tree SHALL type `w:footnotes`, `w:endnotes`, `w:footnote`, and `w:endnote`. Each note node SHALL carry its numeric `w:id` and its `w:type` (`separator`, `continuationSeparator`, `continuationNotice`, or absent for a normal note). Note children SHALL be ordinary block content — the same typed paragraph and table kinds the body uses — with unknown content demoting to `generic` per D1.
+The canonical tree SHALL type `w:footnotes`, `w:endnotes`, `w:footnote`, and
+`w:endnote` (kind `note`, discriminated by `localName`). Each note node SHALL
+carry its numeric `w:id` and its authored `w:type` (`normal`, `separator`,
+`continuationSeparator`, `continuationNotice`, or absent). Authored `normal`
+SHALL round-trip and MUST NOT be normalised away. Note children SHALL be
+ordinary block content — the same typed paragraph and table kinds the body uses
+— with unknown content demoting to `generic` per D1.
+
+The run-inner marks `w:footnoteRef` / `w:endnoteRef` (kind `noteRef`),
+`w:separator`, and `w:continuationSeparator` SHALL also be typed. Each of
+`noteReference`, `noteRef`, `separator`, and `continuationSeparator` SHALL
+contribute exactly one UTF-16 unit (`U+FFFC`) to paragraph addressing.
 
 #### Scenario: Both note parts type
 
@@ -103,7 +114,16 @@ The number rendered for a note SHALL be computed from the document order of its 
 
 ### Requirement: Note operations commit through the store
 
-`TreeDocOp` SHALL include insert-footnote, insert-endnote, delete-note, set-note-properties, and convert-note. Each SHALL validate against the derived indexes and commit atomically through `TreeDocumentStore.transact`, publishing one `ModelChange`. A rejected operation SHALL publish nothing.
+`TreeDocOp` SHALL include `insertNote`, `deleteNote`, `setNoteProperties`, and
+`convertNote`. Each SHALL commit atomically through
+`TreePackageStore.applyLifecycleOp` (package snapshot undo), publishing one
+`ModelChange`. A rejected operation SHALL publish nothing.
+
+`TreePackageStore` SHALL expose `StoryScope { kind: 'notesPart'; noteKind }` —
+one lazy store per footnotes/endnotes part, resolved through safe Internal
+document relationships. Editing focus uses shipped
+`EditorScope { kind: 'note'; id }` with canonical id encoding
+`footnote:<signed-id>` / `endnote:<signed-id>`.
 
 #### Scenario: Insert allocates an unused id
 

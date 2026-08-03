@@ -272,7 +272,41 @@ export {
   type ResolvedSurfaceMeasurer,
 } from './canvas-measurer.ts';
 export { layoutHeaderFooterStory } from './hf-layout.ts';
-export { storyBlocks } from './story-roots.ts';
+export {
+  deriveNoteDisplayMarks,
+  noteDisplayMarkMap,
+  type NoteDisplayMark,
+  type NoteReferenceSite,
+} from './note-numbering.ts';
+export {
+  layoutNoteStory,
+  layoutNoteById,
+  layoutNoteSeparator,
+  noteLineIdPrefix,
+  normalNotesOf,
+  findSeparatorNote,
+  isMarkerOnlySeparatorNote,
+  defaultNoteSeparatorRuleStyle,
+  noteSeparatorAreaBox,
+  syntheticSeparatorBox,
+  MAX_NOTES_LAID_OUT,
+  MAX_NOTE_FRAGMENTS,
+  type NoteStoryLayout,
+  type NoteSeparatorLayout,
+  type NoteSeparatorRuleStyle,
+  type NoteLayoutFallbackReason,
+} from './note-layout.ts';
+export {
+  attachNotesToLayout,
+  computeFootnoteReserves,
+  provisionalNoteMarks,
+  MAX_NOTE_REFLOW_ATTEMPTS,
+  type NotesLayoutInput,
+  type NotesAttachResult,
+  type NotePaginationFallbackReason,
+} from './note-pagination.ts';
+export { noteMarkKey, projectedNoteMarkText, type NoteMarkContext } from './note-projection.ts';
+export { storyBlocks, noteStoryBlocks } from './story-roots.ts';
 export {
   createShapedMeasurer,
   type LayoutShapingOptions,
@@ -283,11 +317,13 @@ export {
   enumerateDocumentSections,
   geometryOfSection,
   paragraphSectionNode,
+  parsePageNumbering,
   parseSectionProperties,
   readSectionProperties,
   type DocumentSection,
   type SectionBreakType,
   type SectionMargins,
+  type SectionPageNumbering,
   type SectionProperties,
 } from './section-properties.ts';
 export { pagesToMaterialize, type MaterializationInput, type ViewportWindow } from './viewport.ts';
@@ -359,6 +395,7 @@ export {
 export {
   caretAt,
   caretStops,
+  caretStopsForBlocks,
   compositionAnchor,
   documentOrder,
   // `hitTest` is already taken by the legacy painted-geometry lane; this one answers in
@@ -369,7 +406,9 @@ export {
   selectionRects,
   spansInSelection,
   wordBoundary,
+  type CaretAtOptions,
   type CaretGeometry,
+  type MoveCaretOptions,
   type NavigationCommand,
   type SelectionRect,
   type SemanticPosition,

@@ -12,7 +12,7 @@ import {
   ACCEPTED_PARAGRAPH_PROPERTIES,
   ACCEPTED_RUN_PROPERTIES,
   type OoxmlProperty,
-} from './tree-op-validate.ts';
+} from './tree-op-types.ts';
 
 /**
  * `CT_PPr`'s child sequence (ECMA-376 17.3.1.26). A `w:pPr` whose children are out of this

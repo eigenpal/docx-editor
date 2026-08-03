@@ -21,7 +21,6 @@ import {
   replaceNode,
   type EditOptions,
 } from '../package/ooxml-edit.ts';
-import type { OoxmlProperty } from './tree-op-validate.ts';
 import {
   bodyNodeOf,
   metricsOfSection,
@@ -29,10 +28,8 @@ import {
   sectionAttribute,
   sectionChild,
   targetSectionNodes,
-  type TreeDocOp,
-  type TreeOpEffect,
-  type TreeOpResult,
-} from './tree-op-validate.ts';
+} from './tree-op-section-address.ts';
+import type { OoxmlProperty, TreeDocOp, TreeOpEffect, TreeOpResult } from './tree-op-types.ts';
 import {
   TEXT_DEPS,
   cloneWithNewIds,

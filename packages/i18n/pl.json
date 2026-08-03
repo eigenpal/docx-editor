@@ -45,7 +45,9 @@
     "watermark": "Znak wodny",
     "break": null,
     "sectionBreakContinuous": null,
-    "sectionBreakNextPage": null
+    "sectionBreakNextPage": null,
+    "insertFootnote": "Wstaw przypis dolny",
+    "insertEndnote": "Wstaw przypis końcowy"
   },
   "formattingBar": {
     "groups": {
@@ -58,7 +60,8 @@
       "alignment": "Wyrównanie",
       "listFormatting": "Formatowanie listy",
       "image": "Obraz",
-      "table": "Tabela"
+      "table": "Tabela",
+      "insert": "Wstaw"
     },
     "undo": "Cofnij",
     "undoShortcut": "Cofnij (Ctrl+Z)",
@@ -845,7 +848,28 @@
     "insertPageNumber": "Wstaw numer bieżącej strony",
     "insertTotalPages": "Wstaw łączną liczbę stron",
     "remove": "Usuń — {label}",
-    "closeEditing": "Zamknij edycję — {label}"
+    "closeEditing": "Zamknij edycję — {label}",
+    "chromeAriaLabel": "Edycja nagłówka i stopki",
+    "firstPageHeader": "Nagłówek pierwszej strony",
+    "firstPageFooter": "Stopka pierwszej strony",
+    "evenPageHeader": "Nagłówek stron parzystych",
+    "evenPageFooter": "Stopka stron parzystych",
+    "regionSection": "{region} — Sekcja {section}",
+    "sameAsPrevious": "Taki sam jak poprzedni",
+    "sameAsPreviousHint": "Edycje dotyczą także stron poprzedniej sekcji.",
+    "differentFirstPage": "Inna pierwsza strona",
+    "differentOddEven": "Inne strony parzyste i nieparzyste",
+    "differentOddEvenHint": "Dotyczy całego dokumentu.",
+    "linkToPrevious": "Połącz z poprzednim",
+    "unlinkFromPrevious": "Odłącz od poprzedniego",
+    "headerDistance": "Odległość nagłówka od krawędzi",
+    "footerDistance": "Odległość stopki od krawędzi",
+    "removeHeader": "Usuń nagłówek",
+    "removeFooter": "Usuń stopkę",
+    "insertSectionPages": "Wstaw liczbę stron sekcji",
+    "insertPageXofY": "Wstaw stronę X z Y",
+    "pageXofYLabel": "Strona",
+    "pageXofYSeparator": "z"
   },
   "image": {
     "placeholder": "Symbol zastępczy obrazu",
@@ -963,5 +987,23 @@
       "headings": null
     },
     "title": null
+  },
+  "notes": {
+    "editingBanner": "Edycja przypisu",
+    "closeNote": "Zamknij przypis",
+    "delete": "Usuń przypis",
+    "convertToEndnote": "Konwertuj na przypis końcowy",
+    "convertToFootnote": "Konwertuj na przypis dolny",
+    "scope": "Zastosuj do",
+    "scopeDocument": "Cały dokument",
+    "scopeSection": "Ta sekcja",
+    "previewFallback": "Przypis dolny",
+    "chromeAriaLabel": "Edycja przypisu",
+    "editingRegion": "{kind} {number}",
+    "footnoteKind": "Przypis dolny",
+    "endnoteKind": "Przypis końcowy",
+    "convertAllFootnotes": "Konwertuj wszystkie przypisy dolne na przypisy końcowe",
+    "convertAllEndnotes": "Konwertuj wszystkie przypisy końcowe na przypisy dolne",
+    "inheritedValue": "(dziedziczone)"
   }
 }

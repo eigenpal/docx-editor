@@ -51,6 +51,12 @@ const SLOT_COMMANDS: Partial<Record<ChromeSlotId, EditorCommand>> = {
   'list.numbered': { type: 'toggleList', kind: 'ordered' },
   'list.indent': { type: 'adjustIndent', direction: 'increase' },
   'list.outdent': { type: 'adjustIndent', direction: 'decrease' },
+  'insert.footnote': { type: 'insertNote', noteKind: 'footnote' },
+  'insert.endnote': { type: 'insertNote', noteKind: 'endnote' },
+  'insert.pageNumber': { type: 'insertPageField', field: 'PAGE' },
+  'insert.totalPages': { type: 'insertPageField', field: 'NUMPAGES' },
+  'insert.sectionPages': { type: 'insertPageField', field: 'SECTIONPAGES' },
+  'insert.pageXofY': { type: 'insertPageField', field: 'PAGE_X_OF_Y' },
   'insert.pageBreak': { type: 'insertBreak', kind: 'page' },
   'insert.sectionBreakNextPage': { type: 'insertBreak', kind: 'section' },
   // `insert.sectionBreakContinuous` and `insert.toc` are deliberately absent: a continuous

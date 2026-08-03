@@ -68,6 +68,8 @@ export interface ParagraphFlowOptions {
    * link, which is what a table-cell or furniture pass without a resolver gets.
    */
   readonly projectLink?: HyperlinkProjector;
+  /** Derived footnote/endnote marks for noteReference / noteRef projection. */
+  readonly noteMarks?: import('./note-projection.ts').NoteMarkContext;
 }
 
 /** One measurable piece of a paragraph: text carrying one property set. */
@@ -80,6 +82,17 @@ interface Piece {
   readonly end: number;
   /** Live PAGE/NUMPAGES projection — model range covers suppressed cached result (or zero-width if empty). */
   readonly projected?: boolean;
+  /** When set, measure this instead of `text` (note-mark width reservation). */
+  readonly measureText?: string;
+  /** Note citation / mark navigation for paint. */
+  readonly noteNav?: {
+    readonly scopeId: string;
+    readonly direction: 'to-note' | 'to-body';
+  };
+  /** Zero-width `w:ptab` destination metadata. */
+  readonly positionalTab?: PositionalTab;
+  /** Sanitized hyperlink this piece belongs to. */
+  readonly link?: import('./semantic-records.ts').SpanLinkRecord;
 }
 
 export function propertiesOf(container: OoxmlNode | undefined): OoxmlProperty[] {
@@ -372,7 +385,8 @@ export function breakParagraph(
     inheritedRunProperties,
     pageContext,
     cascadeRuns,
-    flow?.projectLink
+    flow?.projectLink,
+    flow?.noteMarks
   );
   const emptyStyle =
     inheritedRunProperties.length === 0
@@ -536,6 +550,8 @@ export function breakParagraph(
               }
             : {}),
           ...(piece.link ? { link: piece.link } : {}),
+          ...(piece.projected ? { projected: true as const } : {}),
+          ...(piece.noteNav ? { noteNav: piece.noteNav } : {}),
         });
         line.width += width;
         line.height = Math.max(line.height, metrics.height);
@@ -546,8 +562,10 @@ export function breakParagraph(
       }
 
       // Measured as DRAWN: `w:caps` changes the glyphs, so measuring the source text
-      // would size the line for characters the reader never sees.
-      const width = measurer.measure(displayText(candidate, piece.style), piece.style);
+      // would size the line for characters the reader never sees. Note marks may reserve
+      // a wider measureText (eachPage) while painting the real digits.
+      const measureSource = piece.measureText ?? candidate;
+      const width = measurer.measure(displayText(measureSource, piece.style), piece.style);
       if (line.width + width > lineAvailable() && line.spans.length > 0) closeLine();
       line.spans.push({
         range: spanRange,
@@ -556,6 +574,8 @@ export function breakParagraph(
         style: piece.style,
         box: { x: lineOrigin() + line.width, y: 0, width, height: metrics.height },
         ...(piece.link ? { link: piece.link } : {}),
+        ...(piece.projected ? { projected: true as const } : {}),
+        ...(piece.noteNav ? { noteNav: piece.noteNav } : {}),
       });
       line.width += width;
       line.height = Math.max(line.height, metrics.height);

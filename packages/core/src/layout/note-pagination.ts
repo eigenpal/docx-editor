@@ -1,0 +1,917 @@
+// Footnote / endnote pagination: reservation, split/continuation, sect/doc end collection.
+//
+// Body flow places references; this module lays referenced notes at content width, reserves
+// separator+note area (pageBottom / beneathText), bounds the reflow loop, and attaches
+// layout-owned note records. Endnotes reserve nothing on reference pages — they collect at
+// sectEnd / docEnd. Hostile counts and oscillation fail closed with named reasons.
+
+import type { OoxmlNode, OoxmlPart } from '@docx-editor.dev/core-contract/store';
+import { collectNoteReferences } from '../store/package/note-references.ts';
+import type { DocumentSection } from './section-properties.ts';
+import { storyBlocks } from './story-roots.ts';
+import {
+  customMarkFollows,
+  formatNoteScopeId,
+  noteIdOf,
+  noteReferenceKindOf,
+  type NoteKind,
+} from '../store/package/note-nodes.ts';
+import {
+  resolveEndnoteProperties,
+  resolveFootnoteProperties,
+  type FootnotePosition,
+  type ResolvedEndnoteProperties,
+  type ResolvedFootnoteProperties,
+} from '../store/package/note-properties.ts';
+import { formatNumFmt } from './numbering-format.ts';
+import {
+  deriveNoteDisplayMarks,
+  noteDisplayMarkMap,
+  type NoteReferenceSite,
+} from './note-numbering.ts';
+import {
+  layoutNoteById,
+  layoutNoteSeparator,
+  noteSeparatorAreaBox,
+  MAX_NOTES_LAID_OUT,
+  MAX_NOTE_FRAGMENTS,
+  type NoteLayoutFallbackReason,
+  type NoteStoryLayout,
+  type LayoutNoteStoryOptions,
+} from './note-layout.ts';
+import { noteMarkKey, type NoteMarkContext } from './note-projection.ts';
+import type {
+  BlockFragmentRecord,
+  NoteAreaRecord,
+  NoteStoryRecord,
+  PageRecord,
+  ParagraphFragmentRecord,
+  SemanticLayout,
+  TextMeasurer,
+} from './semantic-records.ts';
+import type { ParagraphLayoutCache } from './layout-cache.ts';
+import type { PendingLine } from './paragraph-flow.ts';
+import type { StyleCascadeTable } from './style-cascade.ts';
+
+/** Bound on reflow attempts per document layout pass. */
+export const MAX_NOTE_REFLOW_ATTEMPTS = 8;
+
+/** Cap on total note story fragments attached across the document. */
+export const MAX_NOTE_AREA_FRAGMENTS = 4_096;
+
+export type NotePaginationFallbackReason =
+  | NoteLayoutFallbackReason
+  | 'note-reflow-exhausted'
+  | 'note-area-fragment-limit';
+
+export interface NotesLayoutInput {
+  readonly footnotesPart: OoxmlPart | null;
+  readonly endnotesPart: OoxmlPart | null;
+  /** Per-section resolved footnote properties (index-aligned with document sections). */
+  readonly footnotePropsBySection: readonly ResolvedFootnoteProperties[];
+  /** Per-section resolved endnote properties. */
+  readonly endnotePropsBySection: readonly ResolvedEndnoteProperties[];
+  /** Document-level defaults (section 0 fallback). */
+  readonly documentFootnoteProps: ResolvedFootnoteProperties;
+  readonly documentEndnoteProps: ResolvedEndnoteProperties;
+  readonly measurer: TextMeasurer;
+  readonly producer: string;
+  readonly cache?: ParagraphLayoutCache<readonly PendingLine[]>;
+  readonly styleCascade?: StyleCascadeTable;
+  readonly defaultTabStopPt?: number;
+}
+
+export interface NotesAttachResult {
+  readonly layout: SemanticLayout;
+  readonly fallbackReasons: readonly NotePaginationFallbackReason[];
+  /** Mark context used for the final body projection (for incremental cache tokens). */
+  readonly noteMarks: NoteMarkContext;
+}
+
+interface PageRefHit {
+  readonly noteKind: NoteKind;
+  readonly noteId: number;
+  readonly paragraphId: string;
+  readonly customMarkFollows: boolean;
+  readonly sectionIndex: number;
+}
+
+function paragraphFragmentsOfBlocks(
+  blocks: readonly BlockFragmentRecord[]
+): ParagraphFragmentRecord[] {
+  const found: ParagraphFragmentRecord[] = [];
+  const visit = (list: readonly BlockFragmentRecord[]): void => {
+    for (const block of list) {
+      if (block.kind === 'paragraph') {
+        found.push(block);
+        continue;
+      }
+      for (const row of block.rows) {
+        if (row.isHeaderRepeat) continue;
+        for (const cell of row.cells) visit(cell.blocks);
+      }
+    }
+  };
+  visit(blocks);
+  return found;
+}
+
+/**
+ * Collect note references that appear in laid-out body fragments on a page.
+ * Walks painted paragraph identity back through the store is not required — callers
+ * supply refs discovered during package walk and we filter by paragraph id presence.
+ */
+export function filterRefsOnPage(
+  page: PageRecord,
+  allRefs: readonly PageRefHit[]
+): readonly PageRefHit[] {
+  const paragraphIds = new Set(
+    paragraphFragmentsOfBlocks(page.fragments).map((fragment) => fragment.paragraphId)
+  );
+  return allRefs.filter((ref) => paragraphIds.has(ref.paragraphId));
+}
+
+/** Scan an OOXML part's laid-out paragraph ids → refs already collected from the package. */
+export function buildPageRefHits(
+  refs: readonly {
+    readonly noteKind: NoteKind;
+    readonly noteId: number;
+    readonly paragraphId: string;
+    readonly customMarkFollows: boolean;
+  }[],
+  paragraphSectionIndex: ReadonlyMap<string, number>
+): readonly PageRefHit[] {
+  const hits: PageRefHit[] = [];
+  for (const ref of refs) {
+    if (hits.length >= MAX_NOTES_LAID_OUT) break;
+    hits.push({
+      ...ref,
+      sectionIndex: paragraphSectionIndex.get(ref.paragraphId) ?? 0,
+    });
+  }
+  return hits;
+}
+
+function footnotePropsFor(
+  input: NotesLayoutInput,
+  sectionIndex: number
+): ResolvedFootnoteProperties {
+  return (
+    input.footnotePropsBySection[sectionIndex] ??
+    input.footnotePropsBySection[0] ??
+    input.documentFootnoteProps
+  );
+}
+
+function endnotePropsFor(input: NotesLayoutInput, sectionIndex: number): ResolvedEndnoteProperties {
+  return (
+    input.endnotePropsBySection[sectionIndex] ??
+    input.endnotePropsBySection[0] ??
+    input.documentEndnoteProps
+  );
+}
+
+function layoutOpts(input: NotesLayoutInput, noteMarks?: NoteMarkContext): LayoutNoteStoryOptions {
+  return {
+    measurer: input.measurer,
+    producer: input.producer,
+    cache: input.cache,
+    styleCascade: input.styleCascade,
+    defaultTabStopPt: input.defaultTabStopPt,
+    noteMarks,
+  };
+}
+
+function shiftFragments(
+  fragments: readonly BlockFragmentRecord[],
+  dy: number
+): BlockFragmentRecord[] {
+  if (dy === 0) return [...fragments];
+  return fragments.map((fragment) => ({
+    ...fragment,
+    box: { ...fragment.box, y: fragment.box.y + dy },
+  }));
+}
+
+function splitNoteFragments(
+  laid: NoteStoryLayout,
+  availableHeight: number
+): {
+  readonly head: readonly BlockFragmentRecord[];
+  readonly headHeight: number;
+  readonly tail: readonly BlockFragmentRecord[];
+  readonly tailHeight: number;
+} {
+  if (laid.flowHeight <= availableHeight + 0.001) {
+    return {
+      head: laid.fragments,
+      headHeight: laid.flowHeight,
+      tail: [],
+      tailHeight: 0,
+    };
+  }
+  const head: BlockFragmentRecord[] = [];
+  let headHeight = 0;
+  let cut = 0;
+  for (let i = 0; i < laid.fragments.length && i < MAX_NOTE_FRAGMENTS; i += 1) {
+    const fragment = laid.fragments[i]!;
+    const next = fragment.box.y + fragment.box.height;
+    if (next > availableHeight + 0.001 && head.length > 0) break;
+    head.push(fragment);
+    headHeight = next;
+    cut = i + 1;
+  }
+  const rawTail = laid.fragments.slice(cut);
+  const dy = rawTail[0]?.box.y ?? 0;
+  const tail = shiftFragments(rawTail, -dy);
+  const tailHeight = Math.max(0, laid.flowHeight - dy);
+  return { head, headHeight, tail, tailHeight };
+}
+
+function buildMarkContext(
+  footnoteSites: readonly NoteReferenceSite[],
+  endnoteSites: readonly NoteReferenceSite[],
+  footnoteProps: ResolvedFootnoteProperties,
+  endnoteProps: ResolvedEndnoteProperties,
+  reserveEachPage: boolean
+): NoteMarkContext {
+  const fnMarks = deriveNoteDisplayMarks('footnote', footnoteSites, footnoteProps);
+  const enMarks = deriveNoteDisplayMarks('endnote', endnoteSites, endnoteProps);
+  const marks = new Map<string, string | null>();
+  for (const entry of fnMarks) {
+    marks.set(noteMarkKey('footnote', entry.noteId), entry.mark);
+  }
+  for (const entry of enMarks) {
+    marks.set(noteMarkKey('endnote', entry.noteId), entry.mark);
+  }
+  let reservedMarkText: string | undefined;
+  if (reserveEachPage && footnoteProps.numRestart === 'eachPage') {
+    // Reserve two-digit width (or numFmt equivalent for 10) so 9→10 cannot re-paginate.
+    reservedMarkText = formatNumFmt(footnoteProps.numFmt, Math.max(footnoteProps.numStart + 9, 10));
+  }
+  return {
+    marks,
+    ...(reservedMarkText ? { reservedMarkText } : {}),
+  };
+}
+
+function bodyUsedHeight(page: PageRecord): number {
+  let bottom = 0;
+  for (const fragment of page.fragments) {
+    bottom = Math.max(bottom, fragment.box.y + fragment.box.height);
+  }
+  return bottom;
+}
+
+function buildFootnoteArea(
+  page: PageRecord,
+  refs: readonly PageRefHit[],
+  input: NotesLayoutInput,
+  noteMarks: NoteMarkContext,
+  placement: FootnotePosition,
+  continuationCarry: Map<
+    string,
+    { fragments: readonly BlockFragmentRecord[]; height: number; mark: string | null }
+  >,
+  reasons: NotePaginationFallbackReason[]
+): { area: NoteAreaRecord | undefined; nextCarry: typeof continuationCarry } {
+  const nextCarry = new Map(continuationCarry);
+  const pageRefs = refs.filter((ref) => ref.noteKind === 'footnote');
+  const contentWidth = page.contentBox.width;
+  const opts = layoutOpts(input, noteMarks);
+
+  // Continuations from previous page first.
+  const notes: NoteStoryRecord[] = [];
+  let stackHeight = 0;
+  let fragmentBudget = MAX_NOTE_AREA_FRAGMENTS;
+  const separatorKind =
+    continuationCarry.size > 0 ? ('continuationSeparator' as const) : ('separator' as const);
+  const separator = layoutNoteSeparator(
+    input.footnotesPart,
+    separatorKind,
+    contentWidth,
+    opts,
+    'footnote'
+  );
+
+  const availableForNotes =
+    placement === 'beneathText'
+      ? Math.max(0, page.contentBox.height - bodyUsedHeight(page) - separator.flowHeight)
+      : Math.max(0, page.contentBox.height - bodyUsedHeight(page) - separator.flowHeight);
+
+  // Place continuations.
+  for (const [scopeId, carry] of continuationCarry) {
+    const parsed = scopeId.match(/^(footnote|endnote):(-?\d+)$/);
+    if (!parsed || parsed[1] !== 'footnote') continue;
+    const noteId = Number(parsed[2]);
+    const room = Math.max(0, availableForNotes - stackHeight);
+    if (carry.height <= room + 0.001) {
+      notes.push({
+        noteKind: 'footnote',
+        noteId,
+        scopeId,
+        mark: null,
+        continuation: true,
+        box: {
+          x: page.contentBox.x,
+          y: 0,
+          width: contentWidth,
+          height: carry.height,
+        },
+        fragments: carry.fragments,
+      });
+      stackHeight += carry.height;
+      nextCarry.delete(scopeId);
+    } else {
+      const split = splitNoteFragments(
+        {
+          noteKind: 'footnote',
+          noteId,
+          scopeId,
+          noteType: undefined,
+          fragments: carry.fragments,
+          flowHeight: carry.height,
+        },
+        room
+      );
+      if (split.head.length > 0) {
+        notes.push({
+          noteKind: 'footnote',
+          noteId,
+          scopeId,
+          mark: null,
+          continuation: true,
+          box: {
+            x: page.contentBox.x,
+            y: 0,
+            width: contentWidth,
+            height: split.headHeight,
+          },
+          fragments: split.head,
+        });
+        stackHeight += split.headHeight;
+      }
+      if (split.tail.length > 0) {
+        nextCarry.set(scopeId, {
+          fragments: split.tail,
+          height: split.tailHeight,
+          mark: null,
+        });
+      } else {
+        nextCarry.delete(scopeId);
+      }
+    }
+  }
+
+  for (const ref of pageRefs) {
+    if (notes.length >= MAX_NOTES_LAID_OUT) {
+      reasons.push('note-count-limit');
+      break;
+    }
+    const laid = layoutNoteById(input.footnotesPart, ref.noteId, contentWidth, opts);
+    if (!laid) {
+      reasons.push('missing-note-body');
+      continue;
+    }
+    const mark = noteMarks.marks.get(noteMarkKey('footnote', ref.noteId)) ?? null;
+    const room = Math.max(0, availableForNotes - stackHeight);
+    fragmentBudget -= laid.fragments.length;
+    if (fragmentBudget < 0) {
+      reasons.push('note-area-fragment-limit');
+      break;
+    }
+    if (laid.flowHeight <= room + 0.001) {
+      notes.push({
+        noteKind: 'footnote',
+        noteId: ref.noteId,
+        scopeId: laid.scopeId,
+        mark: ref.customMarkFollows ? null : mark,
+        box: {
+          x: page.contentBox.x,
+          y: 0,
+          width: contentWidth,
+          height: laid.flowHeight,
+        },
+        fragments: laid.fragments,
+      });
+      stackHeight += laid.flowHeight;
+    } else {
+      const split = splitNoteFragments(laid, room);
+      if (split.head.length > 0) {
+        notes.push({
+          noteKind: 'footnote',
+          noteId: ref.noteId,
+          scopeId: laid.scopeId,
+          mark: ref.customMarkFollows ? null : mark,
+          box: {
+            x: page.contentBox.x,
+            y: 0,
+            width: contentWidth,
+            height: split.headHeight,
+          },
+          fragments: split.head,
+        });
+        stackHeight += split.headHeight;
+      }
+      if (split.tail.length > 0) {
+        nextCarry.set(laid.scopeId, {
+          fragments: split.tail,
+          height: split.tailHeight,
+          mark: null,
+        });
+      }
+    }
+  }
+
+  if (notes.length === 0 && continuationCarry.size === 0) {
+    return { area: undefined, nextCarry };
+  }
+
+  const sepHeight = separator.flowHeight;
+  const totalHeight = sepHeight + stackHeight;
+  const bodyBottom = bodyUsedHeight(page);
+  let areaTop: number;
+  if (placement === 'beneathText') {
+    areaTop = page.contentBox.y + bodyBottom;
+  } else {
+    // pageBottom — pin to bottom of content column.
+    areaTop = page.contentBox.y + page.contentBox.height - totalHeight;
+    // Never overlap body text.
+    areaTop = Math.max(areaTop, page.contentBox.y + bodyBottom);
+  }
+
+  let cursorY = areaTop + sepHeight;
+  const placedNotes: NoteStoryRecord[] = notes.map((note) => {
+    const placed = {
+      ...note,
+      box: { ...note.box, y: cursorY },
+    };
+    cursorY += note.box.height;
+    return placed;
+  });
+
+  const sepBox = noteSeparatorAreaBox(separator, page.contentBox.x, contentWidth, areaTop);
+
+  const area: NoteAreaRecord = {
+    kind: 'footnotes',
+    placement: placement === 'beneathText' ? 'beneathText' : 'pageBottom',
+    box: {
+      x: page.contentBox.x,
+      y: areaTop,
+      width: contentWidth,
+      height: totalHeight,
+    },
+    separator: {
+      kind: separatorKind,
+      box: sepBox,
+      fragments: separator.fragments,
+      synthetic: separator.synthetic,
+      ...(separator.ruleStyle !== undefined ? { ruleStyle: separator.ruleStyle } : {}),
+    },
+    notes: placedNotes,
+  };
+  return { area, nextCarry };
+}
+
+function buildEndnoteArea(
+  page: PageRecord,
+  refs: readonly PageRefHit[],
+  input: NotesLayoutInput,
+  noteMarks: NoteMarkContext,
+  placement: 'sectEnd' | 'docEnd',
+  reasons: NotePaginationFallbackReason[]
+): NoteAreaRecord | undefined {
+  if (refs.length === 0) return undefined;
+  const contentWidth = page.contentBox.width;
+  const opts = layoutOpts(input, noteMarks);
+  const separator = layoutNoteSeparator(
+    input.endnotesPart,
+    'separator',
+    contentWidth,
+    opts,
+    'endnote'
+  );
+  const sepHeight = separator.flowHeight;
+
+  const notes: NoteStoryRecord[] = [];
+  let stackHeight = 0;
+  for (const ref of refs) {
+    if (notes.length >= MAX_NOTES_LAID_OUT) {
+      reasons.push('note-count-limit');
+      break;
+    }
+    const laid = layoutNoteById(input.endnotesPart, ref.noteId, contentWidth, opts);
+    if (!laid) {
+      reasons.push('missing-note-body');
+      continue;
+    }
+    const mark = noteMarks.marks.get(noteMarkKey('endnote', ref.noteId)) ?? null;
+    notes.push({
+      noteKind: 'endnote',
+      noteId: ref.noteId,
+      scopeId: laid.scopeId,
+      mark: ref.customMarkFollows ? null : mark,
+      box: {
+        x: page.contentBox.x,
+        y: 0,
+        width: contentWidth,
+        height: laid.flowHeight,
+      },
+      fragments: laid.fragments,
+    });
+    stackHeight += laid.flowHeight;
+  }
+  if (notes.length === 0) return undefined;
+
+  const bodyBottom = bodyUsedHeight(page);
+  const areaTop = page.contentBox.y + bodyBottom;
+  let cursorY = areaTop + sepHeight;
+  const placedNotes = notes.map((note) => {
+    const placed = { ...note, box: { ...note.box, y: cursorY } };
+    cursorY += note.box.height;
+    return placed;
+  });
+
+  const sepBox = noteSeparatorAreaBox(separator, page.contentBox.x, contentWidth, areaTop);
+
+  return {
+    kind: 'endnotes',
+    placement,
+    box: {
+      x: page.contentBox.x,
+      y: areaTop,
+      width: contentWidth,
+      height: sepHeight + stackHeight,
+    },
+    separator: {
+      kind: 'separator' as const,
+      box: sepBox,
+      fragments: separator.fragments,
+      synthetic: separator.synthetic,
+      ...(separator.ruleStyle !== undefined ? { ruleStyle: separator.ruleStyle } : {}),
+    },
+    notes: placedNotes,
+  };
+}
+
+/**
+ * Compute per-page bottom reserves (points) needed for footnotes given a provisional layout.
+ * Used by the bounded reflow loop before final attach.
+ */
+export function computeFootnoteReserves(
+  layout: SemanticLayout,
+  allRefs: readonly PageRefHit[],
+  input: NotesLayoutInput,
+  noteMarks: NoteMarkContext
+): {
+  readonly reserves: ReadonlyMap<number, number>;
+  readonly stable: boolean;
+  readonly reasons: readonly NotePaginationFallbackReason[];
+} {
+  const reserves = new Map<number, number>();
+  const reasons: NotePaginationFallbackReason[] = [];
+  let carry = new Map<
+    string,
+    { fragments: readonly BlockFragmentRecord[]; height: number; mark: string | null }
+  >();
+
+  for (const page of layout.pages) {
+    const pageRefs = filterRefsOnPage(page, allRefs);
+    const fnRefs = pageRefs.filter((r) => r.noteKind === 'footnote');
+    // Position from first ref's section (Word uses section of the page).
+    const sectionIndex = fnRefs[0]?.sectionIndex ?? 0;
+    const props = footnotePropsFor(input, sectionIndex);
+    if (props.pos === 'sectEnd' || props.pos === 'docEnd') {
+      // No per-page reservation — collected later.
+      continue;
+    }
+    const { area, nextCarry } = buildFootnoteArea(
+      page,
+      fnRefs,
+      input,
+      noteMarks,
+      props.pos,
+      carry,
+      reasons
+    );
+    carry = nextCarry;
+    const needed = area?.box.height ?? 0;
+    // Also reserve for carry that didn't fit — force room on next pages via body shrink.
+    const prev = reserves.get(page.index) ?? 0;
+    reserves.set(page.index, Math.max(prev, needed));
+  }
+
+  // Stability: reserves that fit within remaining body slack without pushing refs.
+  let stable = true;
+  for (const page of layout.pages) {
+    const needed = reserves.get(page.index) ?? 0;
+    if (needed <= 0) continue;
+    const used = bodyUsedHeight(page);
+    if (used + needed > page.contentBox.height + 0.5) {
+      stable = false;
+      break;
+    }
+  }
+  return { reserves, stable, reasons };
+}
+
+/**
+ * Attach footnote/endnote areas onto a body layout. Does not re-paginate — callers that
+ * need reservation must re-run body layout with {@link pageBottomReserves} first.
+ */
+export function attachNotesToLayout(
+  layout: SemanticLayout,
+  allRefs: readonly PageRefHit[],
+  input: NotesLayoutInput,
+  options?: { readonly fallbackReasons?: readonly NotePaginationFallbackReason[] }
+): NotesAttachResult {
+  const reasons: NotePaginationFallbackReason[] = [...(options?.fallbackReasons ?? [])];
+
+  // Build sites for mark derivation (page index from layout).
+  const footnoteSites: NoteReferenceSite[] = [];
+  const endnoteSites: NoteReferenceSite[] = [];
+  for (const page of layout.pages) {
+    for (const ref of filterRefsOnPage(page, allRefs)) {
+      const site: NoteReferenceSite = {
+        noteId: ref.noteId,
+        sectionIndex: ref.sectionIndex,
+        pageIndex: page.index,
+        customMarkFollows: ref.customMarkFollows,
+      };
+      if (ref.noteKind === 'footnote') footnoteSites.push(site);
+      else endnoteSites.push(site);
+    }
+  }
+
+  const fnProps = input.documentFootnoteProps;
+  const enProps = input.documentEndnoteProps;
+  const noteMarks = buildMarkContext(
+    footnoteSites,
+    endnoteSites,
+    fnProps,
+    enProps,
+    fnProps.numRestart === 'eachPage'
+  );
+
+  let carry = new Map<
+    string,
+    { fragments: readonly BlockFragmentRecord[]; height: number; mark: string | null }
+  >();
+  const endnotesBySection = new Map<number, PageRefHit[]>();
+  const endnotesDoc: PageRefHit[] = [];
+
+  const pages: PageRecord[] = layout.pages.map((page) => {
+    const pageRefs = filterRefsOnPage(page, allRefs);
+    const fnRefs = pageRefs.filter((r) => r.noteKind === 'footnote');
+    const enRefs = pageRefs.filter((r) => r.noteKind === 'endnote');
+
+    for (const ref of enRefs) {
+      const props = endnotePropsFor(input, ref.sectionIndex);
+      if (props.pos === 'sectEnd') {
+        const list = endnotesBySection.get(ref.sectionIndex) ?? [];
+        list.push(ref);
+        endnotesBySection.set(ref.sectionIndex, list);
+      } else {
+        endnotesDoc.push(ref);
+      }
+    }
+
+    // Footnotes that collect at sect/doc end join the endnote-style collectors.
+    for (const ref of fnRefs) {
+      const props = footnotePropsFor(input, ref.sectionIndex);
+      if (props.pos === 'sectEnd') {
+        const list = endnotesBySection.get(ref.sectionIndex) ?? [];
+        list.push(ref);
+        endnotesBySection.set(ref.sectionIndex, list);
+      } else if (props.pos === 'docEnd') {
+        endnotesDoc.push(ref);
+      }
+    }
+
+    const sectionIndex = fnRefs[0]?.sectionIndex ?? 0;
+    const props = footnotePropsFor(input, sectionIndex);
+    let footnotes: NoteAreaRecord | undefined;
+    if (props.pos === 'pageBottom' || props.pos === 'beneathText') {
+      const built = buildFootnoteArea(page, fnRefs, input, noteMarks, props.pos, carry, reasons);
+      footnotes = built.area;
+      carry = built.nextCarry;
+    }
+
+    return {
+      ...page,
+      ...(footnotes ? { footnotes } : {}),
+    };
+  });
+
+  // Place sectEnd endnotes on the last page of each section (approximate: last page
+  // whose body paragraphs belong to that section — fall back to last page overall).
+  if (endnotesBySection.size > 0 && pages.length > 0) {
+    for (const [sectionIndex, refs] of endnotesBySection) {
+      const target =
+        [...pages]
+          .reverse()
+          .find((page) =>
+            filterRefsOnPage(page, allRefs).some((r) => r.sectionIndex === sectionIndex)
+          ) ?? pages[pages.length - 1]!;
+      const area = buildEndnoteArea(target, refs, input, noteMarks, 'sectEnd', reasons);
+      if (!area) continue;
+      const idx = pages.findIndex((p) => p.index === target.index);
+      if (idx < 0) continue;
+      const prev = pages[idx]!;
+      pages[idx] = {
+        ...prev,
+        endnotes: prev.endnotes
+          ? {
+              ...area,
+              notes: [...prev.endnotes.notes, ...area.notes],
+              box: {
+                ...area.box,
+                height: prev.endnotes.box.height + area.box.height,
+              },
+            }
+          : area,
+      };
+    }
+  }
+
+  if (endnotesDoc.length > 0 && pages.length > 0) {
+    const last = pages[pages.length - 1]!;
+    const area = buildEndnoteArea(last, endnotesDoc, input, noteMarks, 'docEnd', reasons);
+    if (area) {
+      pages[pages.length - 1] = {
+        ...last,
+        endnotes: last.endnotes
+          ? {
+              ...area,
+              notes: [...last.endnotes.notes, ...area.notes],
+              box: {
+                ...area.box,
+                y: last.endnotes.box.y,
+                height: last.endnotes.box.height + area.box.height,
+              },
+            }
+          : area,
+      };
+    }
+  }
+
+  return {
+    layout: { revision: layout.revision, pages },
+    fallbackReasons: reasons,
+    noteMarks,
+  };
+}
+
+/** Body-story note references only (HF / nested notes are round-tripped, not laid out). */
+function collectBodyNoteReferences(part: OoxmlPart): readonly {
+  readonly noteKind: NoteKind;
+  readonly noteId: number;
+  readonly paragraphId: string;
+  readonly customMarkFollows: boolean;
+}[] {
+  return collectNoteReferences(part).map((hit) => ({
+    noteKind: hit.noteKind,
+    noteId: hit.noteId,
+    paragraphId: hit.paragraphId,
+    customMarkFollows: hit.customMarkFollows,
+  }));
+}
+
+/** Map paragraph id → section index for note numbering / position resolution. */
+function paragraphSectionIndexOf(
+  part: OoxmlPart,
+  sections: readonly DocumentSection[]
+): ReadonlyMap<string, number> {
+  const map = new Map<string, number>();
+  const blocks = storyBlocks(part);
+  for (let sectionIndex = 0; sectionIndex < sections.length; sectionIndex += 1) {
+    const section = sections[sectionIndex]!;
+    for (let i = section.blockStart; i < section.blockEndExclusive; i += 1) {
+      const block = blocks[i];
+      if (!block) continue;
+      if (block.kind === 'paragraph') {
+        map.set(block.id, sectionIndex);
+        continue;
+      }
+      // Tables: walk cell paragraphs lightly (bounded).
+      const walk = (node: OoxmlNode, depth: number): void => {
+        if (depth > 32) return;
+        if (node.kind === 'textValue') return;
+        if (node.kind === 'paragraph') {
+          map.set(node.id, sectionIndex);
+          return;
+        }
+        for (const child of node.children) walk(child, depth + 1);
+      };
+      walk(block, 0);
+    }
+  }
+  return map;
+}
+
+/**
+ * Notes path: provisional marks → body layout → reserve → bounded reflow → attach.
+ * `runBody` is the coordinator's body layout pass (single- or multi-section).
+ */
+export function layoutSemanticDocumentWithNotes<
+  Opts extends {
+    noteMarks?: NoteMarkContext;
+    pageBottomReserves?: ReadonlyMap<number, number>;
+    session?: { previous: SemanticLayout | null; multi: unknown };
+  },
+>(
+  part: OoxmlPart,
+  sections: readonly DocumentSection[],
+  optionsWithLists: Opts,
+  notesInput: NotesLayoutInput,
+  runBody: (opts: Opts) => SemanticLayout
+): SemanticLayout {
+  const packageRefs = collectBodyNoteReferences(part);
+  const paragraphSectionIndex = paragraphSectionIndexOf(part, sections);
+  const allHits = buildPageRefHits(packageRefs, paragraphSectionIndex);
+  const noteMarks = provisionalNoteMarks(allHits, notesInput);
+  let reserves: ReadonlyMap<number, number> = new Map();
+  let fallbackReasons: NotePaginationFallbackReason[] = [];
+  let bodyLayout: SemanticLayout = runBody({
+    ...optionsWithLists,
+    noteMarks,
+    pageBottomReserves: reserves,
+  });
+
+  for (let attempt = 0; attempt < MAX_NOTE_REFLOW_ATTEMPTS; attempt += 1) {
+    const computed = computeFootnoteReserves(bodyLayout, allHits, notesInput, noteMarks);
+    fallbackReasons = [...computed.reasons];
+    if (computed.stable) {
+      reserves = computed.reserves;
+      break;
+    }
+    // Grow reserves monotonically so the loop cannot oscillate.
+    const next = new Map(reserves);
+    for (const [pageIndex, height] of computed.reserves) {
+      next.set(pageIndex, Math.max(next.get(pageIndex) ?? 0, height));
+    }
+    const unchanged =
+      next.size === reserves.size && [...next].every(([k, v]) => (reserves.get(k) ?? 0) === v);
+    reserves = next;
+    if (unchanged) {
+      fallbackReasons.push('note-reflow-exhausted');
+      break;
+    }
+    bodyLayout = runBody({
+      ...optionsWithLists,
+      noteMarks,
+      pageBottomReserves: reserves,
+      // Reflow must not reuse checkpoints sized for a different reserve set.
+      session: undefined,
+    });
+    if (attempt === MAX_NOTE_REFLOW_ATTEMPTS - 1) {
+      fallbackReasons.push('note-reflow-exhausted');
+    }
+  }
+
+  const attached = attachNotesToLayout(bodyLayout, allHits, notesInput, {
+    fallbackReasons,
+  });
+  if (optionsWithLists.session) {
+    optionsWithLists.session.previous = attached.layout;
+  }
+  return attached.layout;
+}
+
+/**
+ * Build a continuous (pre-page) mark context for the first body layout pass.
+ * eachPage reserves digit width; final marks refine after page assignment.
+ */
+export function provisionalNoteMarks(
+  refs: readonly PageRefHit[],
+  input: NotesLayoutInput
+): NoteMarkContext {
+  const footnoteSites: NoteReferenceSite[] = [];
+  const endnoteSites: NoteReferenceSite[] = [];
+  for (const ref of refs) {
+    const site: NoteReferenceSite = {
+      noteId: ref.noteId,
+      sectionIndex: ref.sectionIndex,
+      customMarkFollows: ref.customMarkFollows,
+    };
+    if (ref.noteKind === 'footnote') footnoteSites.push(site);
+    else endnoteSites.push(site);
+  }
+  return buildMarkContext(
+    footnoteSites,
+    endnoteSites,
+    input.documentFootnoteProps,
+    input.documentEndnoteProps,
+    input.documentFootnoteProps.numRestart === 'eachPage'
+  );
+}
+
+export {
+  resolveFootnoteProperties,
+  resolveEndnoteProperties,
+  formatNoteScopeId,
+  noteReferenceKindOf,
+  noteIdOf,
+  customMarkFollows,
+  noteDisplayMarkMap,
+};

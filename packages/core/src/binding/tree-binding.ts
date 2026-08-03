@@ -153,7 +153,9 @@ export function bodyParagraphs(part: OoxmlPart): OoxmlNode[] {
 
 /**
  * EVERY editable paragraph of a part, in reading order — body paragraphs AND paragraphs
- * inside table cells (descending through nested tables).
+ * inside table cells (descending through nested tables), including header/footer story
+ * roots (`w:hdr` / `w:ftr`) and typed note bodies (`w:footnote` / `w:endnote`) so scoped
+ * furniture / note editing addresses the same set.
  *
  * Deliberately separate from `bodyParagraphs`: the PM projection (`treeToDoc`/
  * `docToTreeOps`) stays a body-level lane, while the paginated surface addresses cell
@@ -192,8 +194,18 @@ export function allParagraphs(part: OoxmlPart): OoxmlNode[] {
   };
   const walk = (node: OoxmlNode): void => {
     if (node.kind === 'textValue') return;
-    if (node.kind === 'body') {
+    // Body, header, footer, and typed note bodies are the story roots that hold editable
+    // block content. Notes parts nest notes under footnotes/endnotes; each note is a story.
+    if (node.kind === 'body' || node.localName === 'hdr' || node.localName === 'ftr') {
       walkBlocks(node.children);
+      return;
+    }
+    if (node.kind === 'note') {
+      walkBlocks(node.children);
+      return;
+    }
+    if (node.kind === 'footnotes' || node.kind === 'endnotes') {
+      for (const child of node.children) walk(child);
       return;
     }
     for (const child of node.children) walk(child);

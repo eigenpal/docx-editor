@@ -7,10 +7,12 @@ export {
   ACCEPTED_RUN_PROPERTIES,
   applyTreeOp,
   paragraphTextOf,
+  segmentsOf,
   validateTreeOp,
   TREE_DOC_OP_KINDS,
   type ImpactClass,
   type OoxmlProperty,
+  type Segment,
   type TreeDocOp,
   type TreeDocOpKind,
   type TreeOpEffect,
@@ -25,4 +27,14 @@ export {
   type TransactResult as TreeTransactResult,
   type TreeDocumentStoreOptions,
   type TreeModelChange,
+  type TreeStoryRef,
 } from './tree-store.ts';
+export {
+  DEFAULT_MAX_EDITABLE_STORY_PARTS,
+  TreePackageStore,
+  type PackageTransactResult,
+  type StoryResolveResult,
+  type StoryScope,
+  type StoryTargetRejection,
+  type TreePackageStoreOptions,
+} from './tree-package-store.ts';

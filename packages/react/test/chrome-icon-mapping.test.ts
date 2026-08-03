@@ -48,6 +48,12 @@ const ICON_FOR_SLOT: Record<string, string> = {
   'image.insert': 'image',
   'image.properties': 'tune',
   'table.insert': 'table',
+  'insert.footnote': 'format_list_numbered',
+  'insert.endnote': 'format_list_numbered',
+  'insert.pageNumber': 'format_list_numbered',
+  'insert.totalPages': 'format_list_numbered',
+  'insert.sectionPages': 'format_list_numbered',
+  'insert.pageXofY': 'format_list_numbered',
   'review.comments': 'comment',
   // The "✎ Editing ▾" mode pill's leading pencil glyph.
   'review.editingMode': 'edit_note',

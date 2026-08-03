@@ -478,6 +478,42 @@ export const CHROME_GROUPS = [
     contextual: true,
     controls: [
       {
+        id: 'footnote',
+        labelKey: 'toolbar.insertFootnote',
+        paths: GENERATED_ICON_PATHS['format_list_numbered'],
+        state: { kind: 'command' },
+      },
+      {
+        id: 'endnote',
+        labelKey: 'toolbar.insertEndnote',
+        paths: GENERATED_ICON_PATHS['format_list_numbered'],
+        state: { kind: 'command' },
+      },
+      {
+        id: 'pageNumber',
+        labelKey: 'headerFooter.insertPageNumber',
+        paths: GENERATED_ICON_PATHS['format_list_numbered'],
+        state: { kind: 'command' },
+      },
+      {
+        id: 'totalPages',
+        labelKey: 'headerFooter.insertTotalPages',
+        paths: GENERATED_ICON_PATHS['format_list_numbered'],
+        state: { kind: 'command' },
+      },
+      {
+        id: 'sectionPages',
+        labelKey: 'headerFooter.insertSectionPages',
+        paths: GENERATED_ICON_PATHS['format_list_numbered'],
+        state: { kind: 'command' },
+      },
+      {
+        id: 'pageXofY',
+        labelKey: 'headerFooter.insertPageXofY',
+        paths: GENERATED_ICON_PATHS['format_list_numbered'],
+        state: { kind: 'command' },
+      },
+      {
         id: 'pageBreak',
         labelKey: 'toolbar.pageBreak',
         paths: GENERATED_ICON_PATHS['page_break'],
@@ -588,6 +624,12 @@ export type ChromeSlotId =
   | 'file.open'
   | 'file.save'
   | 'file.pageSetup'
+  | 'insert.footnote'
+  | 'insert.endnote'
+  | 'insert.pageNumber'
+  | 'insert.totalPages'
+  | 'insert.sectionPages'
+  | 'insert.pageXofY'
   | 'insert.pageBreak'
   | 'insert.sectionBreakNextPage'
   | 'insert.sectionBreakContinuous'

@@ -81,6 +81,17 @@ export {
   type UseNavigationPaneOptions,
   type UseNavigationPaneResult,
 } from './editor/navigation';
+export {
+  DocxEditorHeaderFooterChrome,
+  type DocxEditorHeaderFooterChromeProps,
+} from './editor/DocxEditorHeaderFooter';
+export { DocxEditorNotesChrome, type DocxEditorNotesChromeProps } from './editor/DocxEditorNotes';
+export { useHeaderFooterState } from './editor/useHeaderFooterState';
+export {
+  useNotePropertiesState,
+  useNoteScopeState,
+  type NotePropertiesState,
+} from './editor/useNoteScopeState';
 // The link popover (also reachable as `DocxEditor.HyperLink`) and its headless hook. The
 // parts live on the namespace statics; a host that wants a different panel takes the hook.
 export {

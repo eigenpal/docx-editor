@@ -108,11 +108,13 @@ All chrome — ours and consumers' — is hook consumers:
 - Public surface language: describe capabilities, never engine history; no
   implementation names (e.g. "tree") in exported symbols.
 
-Out of scope so far: structural table ops (insert row/column, merge), HF
-editing, comments/tracked-changes derivation, caret scroll-into-view,
-zoom-without-remount, the Vue twin of provider/hooks. Vue's toolbar now derives
-its enabled state from the same `toolbarCommandState`, but it has grown no
-value chrome (font list, size, colour), so those slots stay disabled there.
+Out of scope so far: structural table ops (insert row/column, merge),
+comments/tracked-changes derivation, caret scroll-into-view,
+zoom-without-remount, the Vue twin of provider/hooks. React ships scoped
+header/footer and footnote/endnote editing chrome; Vue furniture/notes chrome
+is deferred. Vue's toolbar now derives its enabled state from the same
+`toolbarCommandState`, but it has grown no value chrome (font list, size,
+colour), so those slots stay disabled there.
 
 ## Verify
 

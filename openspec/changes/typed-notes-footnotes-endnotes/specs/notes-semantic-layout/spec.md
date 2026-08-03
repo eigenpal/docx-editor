@@ -44,6 +44,16 @@ When resolved footnote position is `pageBottom`, a footnote's fragments SHALL be
 - **WHEN** position resolves to `beneathText` and the page is half empty
 - **THEN** the area starts under the last body line and the rest of the page is blank
 
+#### Scenario: Footnote sectEnd
+
+- **WHEN** footnote position resolves to `sectEnd`
+- **THEN** footnote bodies for that section collect at the section end (same ownership rule as endnote `sectEnd`), not in a per-page bottom area
+
+#### Scenario: Footnote docEnd
+
+- **WHEN** footnote position resolves to `docEnd`
+- **THEN** footnote bodies collect after the last section's body (same ownership rule as endnote `docEnd`)
+
 ### Requirement: The footnote feedback loop is bounded and its fallback is named
 
 Reserving the area can push the referencing line to the next page, which moves the note, which changes the reservation. Layout SHALL bound the re-flow attempts for a page. On exhausting the bound it SHALL keep the reference and its note together on the later page, and SHALL record the fallback as an explicit layout reason, consistent with D12's conservative-fallback discipline.

@@ -40,9 +40,16 @@ import type {
   Unsubscribe,
   Watermark,
 } from './types';
+import type {
+  EditorHeaderFooterCommands,
+  EditorNoteCommands,
+  HeaderFooterState,
+  NotePropertiesState,
+} from './editor-hf-notes.ts';
 
 export type * from './types';
 export type * from './interaction';
+export type * from './editor-hf-notes.ts';
 
 const NOT_IMPLEMENTED = 'contract-only stub: no implementation';
 
@@ -194,7 +201,13 @@ export interface EditorConfig {
 export type EditorScope =
   | { kind: 'body' }
   | { kind: 'headerFooter'; rId: string }
-  /** A footnote/endnote region, addressed by note id. */
+  /**
+   * A footnote/endnote region.
+   *
+   * `id` encodes kind + signed note id as `footnote:<id>` or `endnote:<id>`
+   * (e.g. `footnote:2`). Use `formatNoteScopeId` / `parseNoteScopeId` from the
+   * store package. Do not invent a parallel `{ noteKind, noteId }` scope arm.
+   */
   | { kind: 'note'; id: string }
   /** A text box or floating frame with its own content, addressed by id. */
   | { kind: 'frame'; id: string }
@@ -394,10 +407,13 @@ export interface Editor {
   getWatermark(): { readonly kind: 'text' | 'image'; readonly text?: string } | null;
 
   /** Header/footer editing state: which region is being edited, if any. */
-  getHeaderFooterState(): {
-    readonly editing: 'header' | 'footer' | null;
-    readonly sectionIndex: number;
-  } | null;
+  getHeaderFooterState(): HeaderFooterState | null;
+
+  /** Resolved and authored note properties for the caret section — properties dialog read-model. */
+  getNotePropertiesState(): NotePropertiesState | null;
+
+  /** Plain-text note preview for hover chrome. */
+  getNotePreviewText(scopeId: string): string | null;
 
   /** Tracked changes in the document, for the review sidebar. */
   getTrackedChanges(): readonly {
@@ -522,7 +538,8 @@ type EditorCommandShape<T> = {
     (T[K] extends { author: infer A } ? { author?: A } : unknown);
 };
 
-export interface EditorCommands extends EditorCommandShape<DocEdits> {
+export interface EditorCommands
+  extends EditorCommandShape<DocEdits>, EditorHeaderFooterCommands, EditorNoteCommands {
   toggleMark: { mark: string };
   setMarkAttr: { mark: string; attr: string; value: unknown };
   /**
@@ -644,19 +661,6 @@ export interface EditorCommands extends EditorCommandShape<DocEdits> {
   removeTabMark: { positionTwips: number };
 
   /**
-   * Open a header or footer for editing, materialising an empty one if the section has
-   * none — which is what a double-click on the header band means in Word. `firstPage`
-   * selects the `w:titlePg` variant.
-   */
-  editHeaderFooter: { position: 'header' | 'footer'; firstPage?: boolean; sectionIndex?: number };
-
-  /** Leave header/footer editing and return to the body. */
-  exitHeaderFooter: Record<never, never>;
-
-  /** Delete the header or footer being edited, and its relationship. */
-  removeHeaderFooter: { position: 'header' | 'footer'; firstPage?: boolean };
-
-  /**
    * Replace one found match with `text`. Addressed by {@link TextMatch} rather than a
    * `DocTarget` because that is what `findMatches` hands back, and re-deriving a target
    * from it in the caller is where an off-by-one would come from. An empty `text`
@@ -716,15 +720,6 @@ export interface EditorCommands extends EditorCommandShape<DocEdits> {
     alt?: string;
     borderWidthEmu?: number;
     borderColor?: ColorValue;
-  };
-
-  /**
-   * Footnote and endnote properties for the section — numbering format, restart rule
-   * and position, as Word's dialog offers them.
-   */
-  setNoteProperties: {
-    footnote?: { numFmt?: string; numRestart?: string; position?: string; numStart?: number };
-    endnote?: { numFmt?: string; numRestart?: string; position?: string; numStart?: number };
   };
 
   setWatermark: { watermark: Watermark | null };

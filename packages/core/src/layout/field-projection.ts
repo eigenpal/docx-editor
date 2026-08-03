@@ -1,27 +1,59 @@
-// Safe PAGE / NUMPAGES field projection for read-only page furniture.
+// Safe PAGE / NUMPAGES / SECTIONPAGES field projection for read-only page furniture.
 //
-// Field instructions are attacker-controlled and MUST NEVER execute. This module recognizes
-// only exact normalized allowlisted `PAGE` and `NUMPAGES` instructions (after stripping the
-// inert Word formatting switch `\* MERGEFORMAT`). Everything else stays inert: cached result
-// text between complex-field `fldChar separate`/`end` may display when it lives in addressable
-// run `w:t`, but the instruction is not evaluated, and no external fetch / HTML / DOM
-// geometry is consulted.
+// Field instructions are attacker-controlled and MUST NEVER execute. Recognition of
+// allowlisted instructions and the shared complex-field scan machine live in
+// `field-instruction.ts`. This module projects those fields into measurable pieces and
+// finalizes furniture once document page counts are known.
 //
-// Shipped scope is furniture-only: header/footer stories re-layout under a per-page context
-// via `finalizePageFieldProjection`. Body fields stay deferred — `w:fldSimple` is a generic
-// container whose cached children are not addressable by tree ops / `paragraphTextOf`, so
-// its content must neither advance semantic model offsets nor emit selectable spans.
+// Well-formed complex fields and `w:fldSimple` each contribute one UTF-16 model unit
+// (aligned with `paragraphTextOf` / `segmentsOf`). Cached result text is not independently
+// editable. Malformed fields demote so interior content never disappears.
+//
+// Shipped scope is furniture-only for live page-number evaluation. `w:fldSimple` advances
+// the model offset but stays layout-inert for page-field evaluation (body simple fields
+// remain deferred).
 //
 // Projection is a layout concern (span geometry + tab alignment), not paint-time substitution.
-// Detection and piece projection share one bounded complex-field machine: no recursive walk
-// over hostile OOXML, and node/depth/character budgets apply to instruction extraction.
 
 import {
+  atomicFieldSpansOf,
   hardBreakText,
+  isFldSimple,
   WML_NAMESPACE_URI,
   type OoxmlNode,
+  type OoxmlParagraphNode,
   type OoxmlProperty,
 } from '@docx-editor.dev/core-contract/store';
+import {
+  allowlistedPageField,
+  consumeScanNode,
+  createFieldParseState,
+  createScanBudget,
+  detectStoryPageFields,
+  ingestInstrTextBounded,
+  isCollectingInstruction,
+  isFldChar,
+  isInsideFieldResult,
+  isInstrText,
+  MAX_FIELD_INSTRUCTION_CHARS,
+  MAX_FIELD_NESTING,
+  MAX_STORY_FIELD_SCAN_DEPTH,
+  MAX_STORY_FIELD_SCAN_NODES,
+  NO_STORY_PAGE_FIELDS,
+  normalizeFieldInstruction,
+  onFldCharBegin,
+  onFldCharEnd,
+  onFldCharSeparate,
+  resetFieldParseState,
+  type AllowlistedPageField,
+  type StoryPageFieldNeeds,
+} from './field-instruction.ts';
+import { formatDecimal, formatNumFmt } from './numbering-format.ts';
+import {
+  isProjectableNoteAtom,
+  projectedNoteMarkText,
+  type NoteMarkContext,
+} from './note-projection.ts';
 import { resolveRunStyle, type ResolvedRunStyle } from './run-style.ts';
 import type {
   HeaderFooterStoryRecord,
@@ -29,57 +61,52 @@ import type {
   SpanLinkRecord,
 } from './semantic-records.ts';
 
+// Re-export instruction recognition + detection so existing layout-local imports stay stable.
+export {
+  MAX_FIELD_INSTRUCTION_CHARS,
+  MAX_FIELD_NESTING,
+  MAX_STORY_FIELD_SCAN_DEPTH,
+  MAX_STORY_FIELD_SCAN_NODES,
+  NO_STORY_PAGE_FIELDS,
+  allowlistedPageField,
+  detectStoryPageFields,
+  normalizeFieldInstruction,
+  type AllowlistedPageField,
+  type StoryPageFieldNeeds,
+};
+
 /** Optional per-run merge of inherited + direct `rPr` (character styles, defaults). */
 export type RunPropertyCascader = (
   inherited: readonly OoxmlProperty[],
   direct: readonly OoxmlProperty[]
 ) => readonly OoxmlProperty[];
 
-/** Caps hostile instruction blobs and nesting depth (fail closed → inert). */
-export const MAX_FIELD_INSTRUCTION_CHARS = 256;
-export const MAX_FIELD_NESTING = 4;
-
 /**
- * Caps for furniture field-presence scans and paragraph projection walks. Attacker-controlled
- * OOXML can nest arbitrarily under `instrText`; every descendant counts against these budgets.
- * Exceeding any budget fails closed (no detect / no project).
+ * Page-field evaluation context for furniture projection.
+ *
+ * `pageNumber` is the displayed PAGE value after section `w:pgNumType/@w:start` (1-based).
+ * `pageCount` is document NUMPAGES. `sectionPageCount` is SECTIONPAGES for the attached
+ * section. `format` is the authored `w:pgNumType/@w:fmt` applied only to PAGE.
  */
-export const MAX_STORY_FIELD_SCAN_NODES = 4096;
-export const MAX_STORY_FIELD_SCAN_DEPTH = 64;
-
-/** 1-based physical page index and document page count from semantic layout. */
 export interface FieldPageContext {
   readonly pageNumber: number;
   readonly pageCount: number;
+  /** SECTIONPAGES; defaults to `pageCount` when omitted (single-section callers). */
+  readonly sectionPageCount?: number;
+  /** Authored ST_NumberFormat for PAGE; absent → decimal. */
+  readonly format?: string;
 }
 
-export type AllowlistedPageField = 'PAGE' | 'NUMPAGES';
-
 /**
- * Which allowlisted complex page fields a header/footer story actually contains.
- *
- * Drives layout reuse: no fields → one baseline; NUMPAGES only → one layout per page count;
- * PAGE (with or without NUMPAGES) → per `(pageNumber, pageCount)` with a bounded cache.
- * `w:fldSimple` never counts — it stays layout-inert.
+ * Per-page source for {@link finalizePageFieldProjection}, attached before document-level
+ * page count is known. `pageCount` (NUMPAGES) is filled at finalize from `layout.pages.length`.
  */
-export interface StoryPageFieldNeeds {
-  readonly hasPage: boolean;
-  readonly hasNumPages: boolean;
+export interface PageFieldSource {
+  readonly pageNumber: number;
+  readonly sectionPageCount: number;
+  readonly format?: string;
 }
 
-export const NO_STORY_PAGE_FIELDS: StoryPageFieldNeeds = Object.freeze({
-  hasPage: false,
-  hasNumPages: false,
-});
-
-/**
- * One measurable piece produced while walking runs (including projected field results).
- *
- * Projected PAGE/NUMPAGES text covers the suppressed cached-result model range when the field
- * authored result runs (`start`..`end` match `paragraphTextOf` offsets for that cache). Empty
- * result fields keep a zero-width range at the insertion offset. Furniture is read-only /
- * non-selectable at the surface; the range still stays canonical-aligned for layout consumers.
- */
 /**
  * A `w:ptab` — the ABSOLUTE-position tab (ECMA-376 §17.3.3.16), which is what a table of
  * contents line is actually made of.
@@ -95,6 +122,14 @@ export interface PositionalTab {
   readonly leader?: 'dot' | 'hyphen' | 'underscore' | 'middleDot';
 }
 
+/**
+ * One measurable piece produced while walking runs (including projected field results).
+ *
+ * Projected page-field text covers the single atomic model unit for a well-formed field
+ * (`start`..`end` is length 1, matching `paragraphTextOf`). Empty-result allowlisted fields
+ * still occupy that unit. Furniture is read-only / non-selectable at the surface; the range
+ * stays canonical-aligned for layout consumers.
+ */
 export interface FieldAwarePiece {
   readonly text: string;
   readonly props: readonly OoxmlProperty[];
@@ -113,6 +148,16 @@ export interface FieldAwarePiece {
   readonly positionalTab?: PositionalTab;
   /** The hyperlink this piece came from, already sanitized, or absent for ordinary text. */
   readonly link?: SpanLinkRecord;
+  /**
+   * When set, layout measures this string instead of `text` (eachPage note-mark width
+   * reservation). Paint still uses `text`.
+   */
+  readonly measureText?: string;
+  /** Note citation / mark navigation for paint (body ↔ note). */
+  readonly noteNav?: {
+    readonly scopeId: string;
+    readonly direction: 'to-note' | 'to-body';
+  };
 }
 
 const PTAB_ALIGNMENTS = new Set(['left', 'center', 'right']);
@@ -161,66 +206,33 @@ export function positionalTabOf(node: OoxmlNode): PositionalTab | null {
  */
 export type HyperlinkProjector = (link: OoxmlNode) => SpanLinkRecord | null;
 
-const MERGEFORMAT_SUFFIX = /\s*\\\*\s*MERGEFORMAT\s*$/i;
-
 /**
- * Normalize a raw `instrText` blob for allowlist matching.
+ * Format a displayed PAGE value through the shared ST_NumberFormat resolver.
  *
- * Trims, collapses whitespace, uppercases, and strips a trailing inert `\* MERGEFORMAT`.
- * Returns null when the instruction exceeds the length cap (hostile / truncated → inert).
+ * Unknown / script-specific formats fall back to decimal (same convention as list markers).
+ * `none` / `bullet` are meaningless for page numbers and also fall back to decimal so a
+ * hostile fmt cannot blank the furniture.
  */
-export function normalizeFieldInstruction(raw: string): string | null {
-  if (raw.length > MAX_FIELD_INSTRUCTION_CHARS) return null;
-  const collapsed = raw.replace(/\s+/g, ' ').trim().toUpperCase();
-  if (collapsed.length > MAX_FIELD_INSTRUCTION_CHARS) return null;
-  return collapsed.replace(MERGEFORMAT_SUFFIX, '').trim();
+export function formatPageNumber(value: number, format: string | undefined): string {
+  if (!Number.isFinite(value) || value < 0) return '';
+  const n = Math.floor(value);
+  const fmt = format && format.length > 0 ? format : 'decimal';
+  if (fmt === 'none' || fmt === 'bullet') return formatDecimal(n);
+  const text = formatNumFmt(fmt, n);
+  return text.length > 0 ? text : formatDecimal(n);
 }
 
-/**
- * Exact allowlist for live page-field projection.
- *
- * Broader `isEvaluableField` keywords (DATE, TOC, …) remain unevaluated here on purpose.
- */
-export function allowlistedPageField(instruction: string): AllowlistedPageField | null {
-  const normalized = normalizeFieldInstruction(instruction);
-  if (normalized === 'PAGE' || normalized === 'NUMPAGES') return normalized;
-  return null;
-}
-
-/** Decimal digit string for an allowlisted page field under a page context. */
+/** Digit / formatted string for an allowlisted page field under a page context. */
 export function projectPageFieldValue(
   kind: AllowlistedPageField,
   context: FieldPageContext
 ): string {
-  const value = kind === 'PAGE' ? context.pageNumber : context.pageCount;
+  if (kind === 'PAGE') return formatPageNumber(context.pageNumber, context.format);
+  const value =
+    kind === 'NUMPAGES' ? context.pageCount : (context.sectionPageCount ?? context.pageCount);
   // Layout-derived counts are already bounded by pagination; still refuse non-finite junk.
   if (!Number.isFinite(value) || value < 0) return '';
-  return String(Math.floor(value));
-}
-
-function attribute(node: OoxmlNode, localName: string): string | undefined {
-  if (node.kind === 'textValue' || !('attributes' in node)) return undefined;
-  for (const entry of node.attributes ?? []) {
-    if (entry.localName === localName) return entry.value;
-  }
-  return undefined;
-}
-
-function isWmlGeneric(node: OoxmlNode, localName: string): boolean {
-  return (
-    node.kind === 'generic' &&
-    'localName' in node &&
-    node.localName === localName &&
-    node.namespaceUri === WML_NAMESPACE_URI
-  );
-}
-
-function isFldChar(node: OoxmlNode, type: 'begin' | 'separate' | 'end'): boolean {
-  return isWmlGeneric(node, 'fldChar') && attribute(node, 'fldCharType') === type;
-}
-
-function isInstrText(node: OoxmlNode): boolean {
-  return isWmlGeneric(node, 'instrText');
+  return formatDecimal(Math.floor(value));
 }
 
 function runPropertiesOf(
@@ -233,164 +245,6 @@ function runPropertiesOf(
   );
   if (cascadeRuns) return [...cascadeRuns(inherited, direct)];
   return inherited.length === 0 ? direct : [...inherited, ...direct];
-}
-
-/** Shared node/depth budget for detection and paragraph projection walks. */
-interface FieldScanBudget {
-  nodes: number;
-  exhausted: boolean;
-}
-
-function createScanBudget(): FieldScanBudget {
-  return { nodes: 0, exhausted: false };
-}
-
-function consumeScanNode(budget: FieldScanBudget): boolean {
-  if (budget.exhausted) return false;
-  budget.nodes += 1;
-  if (budget.nodes > MAX_STORY_FIELD_SCAN_NODES) {
-    budget.exhausted = true;
-    return false;
-  }
-  return true;
-}
-
-/**
- * Shared complex-field parse machine used by furniture detection and piece projection.
- *
- * State spans runs in document order within one paragraph (Word's normal split of
- * begin / instrText / separate / result / end). Callers reset at paragraph boundaries so
- * malformed cross-paragraph fields stay inert. Nested fields beyond {@link MAX_FIELD_NESTING}
- * and instructions past {@link MAX_FIELD_INSTRUCTION_CHARS} fail closed.
- */
-type FieldParsePhase = 'idle' | 'instruction' | 'result';
-
-interface ComplexFieldParseState {
-  nesting: number;
-  instruction: string;
-  instructionOverflow: boolean;
-  nestingOverflow: boolean;
-  phase: FieldParsePhase;
-}
-
-function createFieldParseState(): ComplexFieldParseState {
-  return {
-    nesting: 0,
-    instruction: '',
-    instructionOverflow: false,
-    nestingOverflow: false,
-    phase: 'idle',
-  };
-}
-
-function resetFieldParseState(state: ComplexFieldParseState): void {
-  state.nesting = 0;
-  state.instruction = '';
-  state.instructionOverflow = false;
-  state.nestingOverflow = false;
-  state.phase = 'idle';
-}
-
-function onFldCharBegin(state: ComplexFieldParseState): void {
-  if (state.nesting === 0) {
-    state.instruction = '';
-    state.instructionOverflow = false;
-    state.nestingOverflow = false;
-    state.phase = 'instruction';
-  }
-  state.nesting += 1;
-  if (state.nesting > MAX_FIELD_NESTING) state.nestingOverflow = true;
-}
-
-function onInstrText(state: ComplexFieldParseState, chunk: string): void {
-  if (state.phase !== 'instruction' || state.nesting !== 1 || state.instructionOverflow) return;
-  if (state.instruction.length + chunk.length > MAX_FIELD_INSTRUCTION_CHARS) {
-    state.instructionOverflow = true;
-    state.instruction = '';
-    return;
-  }
-  state.instruction += chunk;
-}
-
-/**
- * Iteratively extract `instrText` descendants into the field instruction buffer.
- *
- * Every descendant counts against the shared node budget; depth is absolute from the story
- * or paragraph root. No recursive traversal — hostile wide/deep trees cannot bypass caps.
- * Any budget miss marks the instruction inert (`instructionOverflow`).
- */
-function ingestInstrTextBounded(
-  state: ComplexFieldParseState,
-  instrNode: OoxmlNode,
-  budget: FieldScanBudget,
-  instrDepth: number
-): void {
-  if (state.phase !== 'instruction' || state.nesting !== 1 || state.instructionOverflow) {
-    // Still charge the instrText node itself when the caller has not already.
-    return;
-  }
-  if (instrDepth > MAX_STORY_FIELD_SCAN_DEPTH) {
-    state.instructionOverflow = true;
-    state.instruction = '';
-    return;
-  }
-
-  // Explicit stack walk: [node, depth] pairs. The instrText element was already consumed by
-  // the caller; only descendants are pushed.
-  const stack: { node: OoxmlNode; depth: number }[] = [];
-  const children = instrNode.kind === 'textValue' ? [] : (instrNode.children ?? []);
-  for (let i = children.length - 1; i >= 0; i -= 1) {
-    stack.push({ node: children[i]!, depth: instrDepth + 1 });
-  }
-
-  while (stack.length > 0) {
-    const frame = stack.pop()!;
-    if (!consumeScanNode(budget)) {
-      state.instructionOverflow = true;
-      state.instruction = '';
-      return;
-    }
-    if (frame.depth > MAX_STORY_FIELD_SCAN_DEPTH) {
-      state.instructionOverflow = true;
-      state.instruction = '';
-      return;
-    }
-    if (frame.node.kind === 'textValue') {
-      onInstrText(state, frame.node.value);
-      if (state.instructionOverflow) return;
-      continue;
-    }
-    const grandChildren = frame.node.children ?? [];
-    for (let i = grandChildren.length - 1; i >= 0; i -= 1) {
-      stack.push({ node: grandChildren[i]!, depth: frame.depth + 1 });
-    }
-  }
-}
-
-/**
- * Advance past `fldChar separate`. Returns an allowlisted kind when the outermost field's
- * instruction is evaluable; otherwise null (inert / nested / overflow).
- */
-function onFldCharSeparate(state: ComplexFieldParseState): AllowlistedPageField | null {
-  if (state.nesting !== 1 || state.phase !== 'instruction') return null;
-  state.phase = 'result';
-  if (state.instructionOverflow || state.nestingOverflow) return null;
-  return allowlistedPageField(state.instruction);
-}
-
-function onFldCharEnd(state: ComplexFieldParseState): void {
-  if (state.nesting > 0) state.nesting -= 1;
-  if (state.nesting === 0) resetFieldParseState(state);
-}
-
-/** True while collecting instruction text — run content in this phase is not measurable. */
-function isCollectingInstruction(state: ComplexFieldParseState): boolean {
-  return state.phase === 'instruction' && state.nesting >= 1;
-}
-
-/** True while inside an outermost field result that was live-projected. */
-function isInsideFieldResult(state: ComplexFieldParseState): boolean {
-  return state.phase === 'result' && state.nesting >= 1;
 }
 
 export function propertiesOfRunContainer(container: OoxmlNode | undefined): OoxmlProperty[] {
@@ -422,65 +276,76 @@ function modelTextOfRunChild(grand: OoxmlNode): string {
 }
 
 /**
- * Pending live projection deferred until the field end so result-run style and the full
- * suppressed cached-result model range are known.
+ * Pending live or inert-cache projection for one atomic field unit.
  *
- * Deterministic result style rule: use the first cached-result run that contributes measurable
- * model text (`w:t` / tab / hard break). If the result is empty, fall back to the `separate`
- * run's style (Word often authors formatting only on result runs).
- *
- * Cached result runs are buffered (not emitted) while pending. A well-formed `end` discards
- * the buffer and publishes the projection; a missing `end` fails closed (no projection) and
- * flushes the buffer so following offsets stay canonical.
+ * Well-formed complex fields contribute exactly one UTF-16 model unit. Cached result text
+ * is not independently addressable — it only donates display text and result-run style.
+ * Missing `end` demotes: buffered cache is flushed as ordinary pieces with real lengths.
  */
-interface PendingPageProjection {
-  kind: AllowlistedPageField;
-  resultStart: number;
+interface PendingFieldProjection {
+  /** Allowlisted kind when live-projecting; null paints inert cached text at the atom. */
+  kind: AllowlistedPageField | null;
+  /** True when this pending field is a well-formed atomic unit (begin will close). */
+  atomic: boolean;
+  atomStart: number;
   props: readonly OoxmlProperty[];
   style: ResolvedRunStyle;
   capturedResultStyle: boolean;
+  /** Cached result text (for inert display or demotion flush). */
+  cachedText: string;
+  /** Demotion-only: ordinary pieces when the field fails to close. */
   buffered: FieldAwarePiece[];
+  /** Demotion-only running offset mirror while buffering ordinary pieces. */
+  bufferOffset: number;
 }
 
 /**
- * Flatten a paragraph into measurable pieces, projecting allowlisted PAGE/NUMPAGES when a
+ * Flatten a paragraph into measurable pieces, projecting allowlisted page fields when a
  * page context is supplied (furniture finalize / `withPageContext`).
  *
- * Complex-field state spans runs. Nested fields beyond {@link MAX_FIELD_NESTING}, oversized
- * instructions, scan-budget overflows, and non-allowlisted instructions never evaluate: only
- * addressable cached result `w:t` inside runs (if any) remains visible.
+ * Well-formed complex fields (`begin`→`end`) and typed/generic `w:fldSimple` each contribute
+ * one UTF-16 model unit so offsets stay aligned with `paragraphTextOf`. Cached result text
+ * is never independently editable. Malformed fields demote: markers contribute nothing and
+ * interior result text stays visible at its natural length.
  *
- * Generic `w:fldSimple` siblings are skipped entirely — their cached children are not in the
- * tree-ops model range, so emitting them would desync layout offsets from `paragraphTextOf`
- * and create non-addressable selectable spans. Body simple fields stay deferred.
+ * `w:fldSimple` advances the model offset by one but stays layout-inert for page-field
+ * evaluation (body simple fields remain deferred) — no piece is emitted for the atom.
  *
- * When projecting, suppressed cached-result model ranges still advance the canonical offset
- * so following `w:t` stays aligned with `paragraphTextOf`. The projected piece covers that
- * suppressed range (or a zero-width insertion point when the cache is empty).
- *
- * Hidden runs (`w:vanish`) are suppressed the same way — no piece, offset still advances — so
- * they are never measured, laid out or painted. A paragraph whose runs are all hidden yields
- * no pieces and is laid out exactly like an empty paragraph, which keeps its caret target.
+ * Hidden runs (`w:vanish`) emit no piece while still advancing offsets.
  */
 export function piecesOfParagraph(
   paragraph: OoxmlNode,
   inheritedRunProperties: readonly OoxmlProperty[] = [],
   pageContext?: FieldPageContext,
   cascadeRuns?: RunPropertyCascader,
-  projectLink?: HyperlinkProjector
+  projectLink?: HyperlinkProjector,
+  noteMarks?: NoteMarkContext
 ): FieldAwarePiece[] {
   if (paragraph.kind === 'textValue') return [];
+  if (paragraph.kind !== 'paragraph') return [];
 
   const pieces: FieldAwarePiece[] = [];
   let offset = 0;
   /** The link the walk is currently inside, so every piece it emits is tagged with it. */
   let currentLink: SpanLinkRecord | undefined;
 
-  // Complex-field machine — document order across runs within this paragraph.
+  const atoms = atomicFieldSpansOf(paragraph as OoxmlParagraphNode, {
+    maxNesting: MAX_FIELD_NESTING,
+    maxInstructionChars: MAX_FIELD_INSTRUCTION_CHARS,
+  });
+  const atomBeginIds = new Set(
+    atoms.filter((span) => span.kind === 'complex').map((s) => s.node.id)
+  );
+  const coveredIds = new Set<string>();
+  for (const span of atoms) {
+    for (const id of span.removeNodeIds) coveredIds.add(id);
+  }
+
   const field = createFieldParseState();
   const budget = createScanBudget();
-  /** When set, suppress model result text because we will emit a live projection at end. */
-  let pendingProjection: PendingPageProjection | null = null;
+  let pending: PendingFieldProjection | null = null;
+  /** Outermost begin id when the open field is atomic. */
+  let openAtomicBeginId: string | null = null;
 
   const push = (
     text: string,
@@ -489,12 +354,26 @@ export function piecesOfParagraph(
     projected: boolean,
     start: number,
     end: number,
-    positionalTab?: PositionalTab
+    extras?: {
+      readonly positionalTab?: PositionalTab;
+      readonly measureText?: string;
+      readonly noteNav?: FieldAwarePiece['noteNav'];
+    }
   ): void => {
     if (text.length === 0 && !projected) return;
     const link = currentLink ? { link: currentLink } : {};
     if (projected) {
-      pieces.push({ text, props, style, start, end, projected: true, ...link });
+      pieces.push({
+        text,
+        props,
+        style,
+        start,
+        end,
+        projected: true,
+        ...(extras?.measureText !== undefined ? { measureText: extras.measureText } : {}),
+        ...(extras?.noteNav ? { noteNav: extras.noteNav } : {}),
+        ...link,
+      });
       return;
     }
     if (text.length === 0) return;
@@ -504,38 +383,67 @@ export function piecesOfParagraph(
       style,
       start,
       end,
-      ...(positionalTab ? { positionalTab } : {}),
+      ...(extras?.positionalTab ? { positionalTab: extras.positionalTab } : {}),
       ...link,
     });
   };
 
-  const commitPendingProjection = (): void => {
-    if (!pendingProjection || !pageContext) {
-      pendingProjection = null;
+  const commitAtomicField = (): void => {
+    if (!pending || !pending.atomic) {
+      pending = null;
+      openAtomicBeginId = null;
       return;
     }
-    if (pendingProjection.style.hidden) {
-      // `w:vanish` governs the DISPLAYED result the same way it governs literal text, so a
-      // hidden field projects nothing rather than painting digits Word would not show.
-      pendingProjection = null;
+    const start = pending.atomStart;
+    const end = start + 1;
+    if (pending.style.hidden) {
+      // Vanish: no piece, atom still advances (already counted at begin).
+      pending = null;
+      openAtomicBeginId = null;
       return;
     }
-    const text = projectPageFieldValue(pendingProjection.kind, pageContext);
-    push(
-      text,
-      pendingProjection.props,
-      pendingProjection.style,
-      true,
-      pendingProjection.resultStart,
-      offset
-    );
-    pendingProjection = null;
+    if (pending.kind && pageContext) {
+      const text = projectPageFieldValue(pending.kind, pageContext);
+      push(text, pending.props, pending.style, true, start, end);
+    } else if (pending.cachedText.length > 0) {
+      // Inert non-page field: paint cached result over the single model unit.
+      push(pending.cachedText, pending.props, pending.style, false, start, end);
+    }
+    pending = null;
+    openAtomicBeginId = null;
   };
 
-  const abandonPendingProjection = (): void => {
-    if (!pendingProjection) return;
-    for (const piece of pendingProjection.buffered) pieces.push(piece);
-    pendingProjection = null;
+  const abandonPending = (): void => {
+    if (!pending) return;
+    if (pending.atomic) {
+      // Missing end after an atomic begin should not happen (atoms require end). If the
+      // scan budget aborts mid-field, roll the atom back and flush any buffered cache.
+      offset = pending.atomStart;
+      for (const piece of pending.buffered) {
+        pieces.push({
+          ...piece,
+          start: offset,
+          end: offset + (piece.end - piece.start),
+        });
+        offset += piece.end - piece.start;
+      }
+      if (pending.cachedText.length > 0 && pending.buffered.length === 0) {
+        push(
+          pending.cachedText,
+          pending.props,
+          pending.style,
+          false,
+          offset,
+          offset + pending.cachedText.length
+        );
+        offset += pending.cachedText.length;
+      }
+    } else {
+      for (const piece of pending.buffered) pieces.push(piece);
+      offset = pending.bufferOffset;
+    }
+    pending = null;
+    openAtomicBeginId = null;
   };
 
   const pushRunContent = (
@@ -543,19 +451,44 @@ export function piecesOfParagraph(
     props: readonly OoxmlProperty[],
     style: ResolvedRunStyle
   ): void => {
+    if (isProjectableNoteAtom(grand)) {
+      const projected = projectedNoteMarkText(grand, noteMarks);
+      const start = offset;
+      const end = start + 1;
+      offset = end;
+      if (style.hidden) return;
+      if (!projected) return;
+      // Empty display (customMarkFollows / separator / dangling) still advances the model
+      // unit; only non-empty marks emit a measurable projected piece.
+      if (projected.text.length === 0 && !projected.measureText) return;
+      const noteNav =
+        projected.scopeId && projected.nav
+          ? { scopeId: projected.scopeId, direction: projected.nav }
+          : undefined;
+      push(
+        projected.text.length > 0 ? projected.text : (projected.measureText ?? ''),
+        props,
+        style,
+        true,
+        start,
+        end,
+        {
+          ...(projected.measureText !== undefined ? { measureText: projected.measureText } : {}),
+          ...(noteNav ? { noteNav } : {}),
+        }
+      );
+      return;
+    }
     // A `w:ptab` advances the line but occupies NO model offset, so it is pushed with a
     // zero-width range and the offset does not move.
     const positional = positionalTabOf(grand);
     if (positional) {
-      if (!style.hidden) push('\t', props, style, false, offset, offset, positional);
+      if (!style.hidden)
+        push('\t', props, style, false, offset, offset, { positionalTab: positional });
       return;
     }
     const text = modelTextOfRunChild(grand);
     if (text.length === 0) return;
-    // Hidden text (`w:vanish`, ECMA-376 §17.3.2.45) is skipped, not emitted-then-hidden: Word
-    // paginates as if it were absent, so measuring it would break pages in the wrong place.
-    // The offset still advances — the characters remain in the model and `paragraphTextOf`
-    // counts them, so every following piece would desync from tree ops otherwise.
     if (!style.hidden) push(text, props, style, false, offset, offset + text.length);
     offset += text.length;
   };
@@ -567,15 +500,14 @@ export function piecesOfParagraph(
 
     for (const grand of run.children) {
       if (!consumeScanNode(budget)) {
-        // Budget exhausted: fail closed for further field recognition, surface any buffered
-        // cache, and keep emitting addressable text so following offsets stay visible.
-        abandonPendingProjection();
+        abandonPending();
         resetFieldParseState(field);
         if (grand.kind === 'runProperties') continue;
         if (isFldChar(grand, 'begin') || isFldChar(grand, 'separate') || isFldChar(grand, 'end')) {
           continue;
         }
         if (isInstrText(grand)) continue;
+        if (coveredIds.has(grand.id) && openAtomicBeginId === null) continue;
         pushRunContent(grand, props, style);
         continue;
       }
@@ -583,10 +515,26 @@ export function piecesOfParagraph(
       if (grand.kind === 'runProperties') continue;
 
       if (isFldChar(grand, 'begin')) {
+        const atomic = atomBeginIds.has(grand.id);
         onFldCharBegin(field);
         if (field.nesting === 1) {
-          // A new outermost field replaces any dangling pending projection (malformed).
-          abandonPendingProjection();
+          abandonPending();
+          openAtomicBeginId = atomic ? grand.id : null;
+          pending = {
+            kind: null,
+            atomic,
+            atomStart: offset,
+            props,
+            style,
+            capturedResultStyle: false,
+            cachedText: '',
+            buffered: [],
+            bufferOffset: offset,
+          };
+          if (atomic) {
+            // Reserve the single model unit up front so surrounding offsets stay stable.
+            offset += 1;
+          }
         }
         continue;
       }
@@ -599,19 +547,11 @@ export function piecesOfParagraph(
       if (isFldChar(grand, 'separate')) {
         const outermostSeparate = field.nesting === 1 && field.phase === 'instruction';
         const kind = onFldCharSeparate(field);
-        if (outermostSeparate) {
-          if (kind && pageContext) {
-            pendingProjection = {
-              kind,
-              resultStart: offset,
-              props,
-              style,
-              capturedResultStyle: false,
-              buffered: [],
-            };
-          } else {
-            abandonPendingProjection();
-          }
+        if (outermostSeparate && pending) {
+          pending.kind = kind && pageContext ? kind : null;
+          // Prefer separate-run style until a measurable result run donates one.
+          pending.props = props;
+          pending.style = style;
         }
         continue;
       }
@@ -619,37 +559,62 @@ export function piecesOfParagraph(
       if (isFldChar(grand, 'end')) {
         const outermostEnd = field.nesting === 1;
         onFldCharEnd(field);
-        if (outermostEnd) commitPendingProjection();
+        if (outermostEnd) {
+          if (pending?.atomic) commitAtomicField();
+          else abandonPending();
+        }
         continue;
       }
 
-      if (isCollectingInstruction(field)) continue;
+      if (isCollectingInstruction(field)) {
+        // Only well-formed atomic fields suppress instruction-phase run content.
+        // Demoted / malformed opens must not make surrounding text disappear.
+        if (pending?.atomic) continue;
+      }
 
-      if (pendingProjection && isInsideFieldResult(field)) {
+      if (pending && isInsideFieldResult(field)) {
         const text = modelTextOfRunChild(grand);
-        if (text.length > 0) {
-          if (style.hidden) {
-            // Hidden cached-result text is neither buffered nor allowed to donate the
-            // projected style; only the offset advances (as in `pushRunContent`).
-            offset += text.length;
-            continue;
+        if (text.length === 0) continue;
+
+        if (pending.atomic) {
+          // Atomic unit: cache donates display text/style only — offset already reserved.
+          if (style.hidden) continue;
+          if (!pending.capturedResultStyle) {
+            pending.props = props;
+            pending.style = style;
+            pending.capturedResultStyle = true;
           }
-          // First measurable cached-result run wins the projected style.
-          if (!pendingProjection.capturedResultStyle) {
-            pendingProjection.props = props;
-            pendingProjection.style = style;
-            pendingProjection.capturedResultStyle = true;
-          }
-          pendingProjection.buffered.push({
-            text,
-            props,
-            style,
-            start: offset,
-            end: offset + text.length,
-          });
-          offset += text.length;
+          pending.cachedText += text;
+          continue;
         }
+
+        // Demoted field: result text is ordinary addressable content.
+        if (style.hidden) {
+          offset += text.length;
+          pending.bufferOffset = offset;
+          continue;
+        }
+        if (!pending.capturedResultStyle) {
+          pending.props = props;
+          pending.style = style;
+          pending.capturedResultStyle = true;
+        }
+        pending.buffered.push({
+          text,
+          props,
+          style,
+          start: offset,
+          end: offset + text.length,
+        });
+        offset += text.length;
+        pending.bufferOffset = offset;
         continue;
+      }
+
+      // Covered by a closed atomic field we already committed — should not reach here
+      // because those nodes are skipped via the begin→end control flow. Still guard.
+      if (coveredIds.has(grand.id) && openAtomicBeginId === null && atomBeginIds.size > 0) {
+        // Node belongs to a later/earlier atom; if we're between fields, skip chrome only.
       }
 
       pushRunContent(grand, props, style);
@@ -659,10 +624,15 @@ export function piecesOfParagraph(
   // Typed runs contribute measurable / selectable text — including the runs inside a
   // `w:hyperlink`, which is a run CONTAINER and not a leaf. Skipping it is what made every
   // link's words vanish from the painted page while still occupying model offsets. Generic
-  // siblings (including `w:fldSimple`) stay structurally preserved but layout-inert.
+  // siblings stay structurally preserved but layout-inert for page-field evaluation.
+  // Typed/generic `w:fldSimple` advances one model unit (atomic) without emitting a piece.
   // Paragraph root counts as depth 0; run children sit at depth 1.
   if (!consumeScanNode(budget)) return pieces;
   const processInline = (child: OoxmlNode, depth: number): void => {
+    if (isFldSimple(child)) {
+      offset += 1;
+      return;
+    }
     if (child.kind === 'run') {
       processRun(child, depth);
       return;
@@ -677,125 +647,89 @@ export function piecesOfParagraph(
     currentLink = previous;
   };
   for (const child of paragraph.children) processInline(child, 1);
-  // Malformed field missing end: fail closed (no live projection) but keep cached result text.
-  abandonPendingProjection();
+  // Malformed field missing end: demote — surface cached/buffered text, no live projection.
+  abandonPending();
 
   return pieces;
+}
+
+/** True when any allowlisted page field is present. */
+export function storyNeedsPageFields(needs: StoryPageFieldNeeds): boolean {
+  return needs.hasPage || needs.hasNumPages || needs.hasSectionPages;
 }
 
 /**
  * Cache-key token for a page context under known field needs.
  *
- * Absent context and field-free stories share the empty baseline key. NUMPAGES-only stories
- * key on page count alone so every sheet of a finished document reuses one layout. PAGE
- * (with or without NUMPAGES) keys the full pair.
+ * Absent context and field-free stories share the empty baseline key. Keys include only the
+ * dimensions the story actually reads so NUMPAGES-only / SECTIONPAGES-only stories reuse one
+ * layout across every sheet that shares that count, while PAGE (and format) still distinguish
+ * sheets whose measured digit widths differ.
  */
 export function fieldPageContextToken(
   context: FieldPageContext | undefined,
   needs: StoryPageFieldNeeds = NO_STORY_PAGE_FIELDS
 ): string {
   if (!context) return '';
-  if (!needs.hasPage && !needs.hasNumPages) return '';
-  if (!needs.hasPage) return `|fld:n/${context.pageCount}`;
-  return `|fld:${context.pageNumber}/${context.pageCount}`;
+  if (!storyNeedsPageFields(needs)) return '';
+  const parts: string[] = [];
+  if (needs.hasPage) {
+    parts.push(`p${context.pageNumber}`);
+    if (context.format) parts.push(`f${context.format}`);
+  }
+  if (needs.hasNumPages) parts.push(`n${context.pageCount}`);
+  if (needs.hasSectionPages) parts.push(`s${context.sectionPageCount ?? context.pageCount}`);
+  return `|fld:${parts.join('/')}`;
 }
 
 /**
- * Bounded scan for allowlisted complex PAGE / NUMPAGES fields in a header/footer part.
+ * Attach section-local PAGE/SECTIONPAGES sources to remapped sheet pages.
  *
- * Walks the part tree with node/depth caps. Field state spans runs in document order within
- * each paragraph — the same machine {@link piecesOfParagraph} uses — and resets at paragraph
- * boundaries so malformed cross-paragraph fields never count. Generic `w:fldSimple` is ignored
- * so detection cannot re-enable deferred body-style simple fields in furniture either.
- * Instruction text is extracted iteratively under the same node/depth/character budgets.
+ * `displayedStart` is the 1-based PAGE value of the first page in `pages` (after
+ * `w:pgNumType/@w:start` and cross-section continuation). NUMPAGES is filled later at
+ * document finalize.
+ *
+ * Pages whose existing {@link PageFieldSource} already matches are returned by identity so
+ * incremental layout can keep sheet records stable across no-op re-annotation.
  */
-export function detectStoryPageFields(root: OoxmlNode): StoryPageFieldNeeds {
-  let hasPage = false;
-  let hasNumPages = false;
-  const budget = createScanBudget();
-  const field = createFieldParseState();
-
-  const note = (kind: AllowlistedPageField): void => {
-    if (kind === 'PAGE') hasPage = true;
-    else hasNumPages = true;
-  };
-
-  const processFieldChild = (grand: OoxmlNode, depth: number): void => {
-    if (grand.kind === 'runProperties') return;
-
-    if (isFldChar(grand, 'begin')) {
-      onFldCharBegin(field);
-      return;
+export function withPageFieldSources(
+  pages: readonly import('./semantic-records.ts').PageRecord[],
+  displayedStart: number,
+  sectionPageCount: number,
+  format: string | undefined
+): import('./semantic-records.ts').PageRecord[] {
+  let changed = false;
+  const next = pages.map((page, index) => {
+    const pageNumber = displayedStart + index;
+    const existing = page.pageFieldSource;
+    if (
+      existing &&
+      existing.pageNumber === pageNumber &&
+      existing.sectionPageCount === sectionPageCount &&
+      existing.format === format
+    ) {
+      return page;
     }
-
-    if (isInstrText(grand)) {
-      ingestInstrTextBounded(field, grand, budget, depth);
-      return;
-    }
-
-    if (isFldChar(grand, 'separate')) {
-      const kind = onFldCharSeparate(field);
-      if (kind) note(kind);
-      return;
-    }
-
-    if (isFldChar(grand, 'end')) {
-      onFldCharEnd(field);
-    }
-  };
-
-  const scanRun = (run: OoxmlNode, depth: number): void => {
-    if (run.kind !== 'run') return;
-    for (const grand of run.children) {
-      if (!consumeScanNode(budget)) return;
-      processFieldChild(grand, depth + 1);
-    }
-  };
-
-  const walk = (node: OoxmlNode, depth: number): void => {
-    if (hasPage && hasNumPages) return;
-    if (!consumeScanNode(budget)) return;
-    if (depth > MAX_STORY_FIELD_SCAN_DEPTH) return;
-    if (node.kind === 'textValue') return;
-
-    // Paragraph boundary: Word complex fields do not legally span paragraphs. Reset so a
-    // begin in one paragraph cannot pair with separate/end in another.
-    if (node.kind === 'paragraph') {
-      resetFieldParseState(field);
-      for (const child of node.children) {
-        walk(child, depth + 1);
-        if (hasPage && hasNumPages) return;
-        if (budget.exhausted) return;
-      }
-      resetFieldParseState(field);
-      return;
-    }
-
-    if (node.kind === 'run') {
-      // Shared field state across sibling runs (and nested run containers) in this paragraph.
-      scanRun(node, depth);
-      return;
-    }
-
-    for (const child of node.children) {
-      walk(child, depth + 1);
-      if (hasPage && hasNumPages) return;
-      if (budget.exhausted) return;
-    }
-  };
-
-  walk(root, 0);
-  if (!hasPage && !hasNumPages) return NO_STORY_PAGE_FIELDS;
-  return { hasPage, hasNumPages };
+    changed = true;
+    return {
+      ...page,
+      pageFieldSource: {
+        pageNumber,
+        sectionPageCount,
+        ...(format ? { format } : {}),
+      },
+    };
+  });
+  return changed ? next : (pages as import('./semantic-records.ts').PageRecord[]);
 }
 
 /**
- * Project allowlisted PAGE/NUMPAGES onto every page's read-only furniture once the document
- * page count is known. Body stories are unchanged.
+ * Project allowlisted PAGE/NUMPAGES/SECTIONPAGES onto every page's read-only furniture once
+ * the document page count is known. Body stories are unchanged.
  *
- * Uses 1-based physical page indices (`page.index + 1`). Section `w:pgNumType` start/restart
- * is not modelled yet; empty `pgNumType` (the comprehensive fixture) keeps physical numbering.
- * NUMPAGES is the semantic layout total page count.
+ * Uses {@link PageFieldSource} when present (section restart + SECTIONPAGES + fmt). Absent
+ * source keeps physical 1-based indices (`page.index + 1`) and treats the whole document as
+ * one section — the empty-`pgNumType` comprehensive-fixture behaviour.
  */
 export function finalizePageFieldProjection(layout: SemanticLayout): SemanticLayout {
   const pageCount = layout.pages.length;
@@ -803,9 +737,12 @@ export function finalizePageFieldProjection(layout: SemanticLayout): SemanticLay
 
   let changed = false;
   const pages = layout.pages.map((page) => {
+    const source = page.pageFieldSource;
     const context: FieldPageContext = {
-      pageNumber: page.index + 1,
+      pageNumber: source?.pageNumber ?? page.index + 1,
       pageCount,
+      sectionPageCount: source?.sectionPageCount ?? pageCount,
+      ...(source?.format ? { format: source.format } : {}),
     };
     const project = (
       story: HeaderFooterStoryRecord | undefined

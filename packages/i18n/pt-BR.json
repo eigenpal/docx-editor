@@ -45,7 +45,9 @@
     "watermark": "Marca d'água",
     "break": null,
     "sectionBreakContinuous": null,
-    "sectionBreakNextPage": null
+    "sectionBreakNextPage": null,
+    "insertFootnote": "Inserir nota de rodapé",
+    "insertEndnote": "Inserir nota de fim"
   },
   "formattingBar": {
     "groups": {
@@ -58,7 +60,8 @@
       "alignment": "Alinhamento",
       "listFormatting": "Formatação de lista",
       "image": "Imagem",
-      "table": "Tabela"
+      "table": "Tabela",
+      "insert": "Inserir"
     },
     "undo": "Desfazer",
     "undoShortcut": "Desfazer (Ctrl+Z)",
@@ -845,7 +848,28 @@
     "insertPageNumber": "Inserir número da página atual",
     "insertTotalPages": "Inserir contagem total de páginas",
     "remove": "Remover {label}",
-    "closeEditing": "Fechar edição de {label}"
+    "closeEditing": "Fechar edição de {label}",
+    "chromeAriaLabel": "Edição de cabeçalho e rodapé",
+    "firstPageHeader": "Cabeçalho da primeira página",
+    "firstPageFooter": "Rodapé da primeira página",
+    "evenPageHeader": "Cabeçalho de páginas pares",
+    "evenPageFooter": "Rodapé de páginas pares",
+    "regionSection": "{region} — Seção {section}",
+    "sameAsPrevious": "Igual ao anterior",
+    "sameAsPreviousHint": "As edições também se aplicam às páginas da seção anterior.",
+    "differentFirstPage": "Primeira página diferente",
+    "differentOddEven": "Páginas ímpares e pares diferentes",
+    "differentOddEvenHint": "Aplica-se a todo o documento.",
+    "linkToPrevious": "Vincular ao anterior",
+    "unlinkFromPrevious": "Desvincular do anterior",
+    "headerDistance": "Distância do cabeçalho da borda",
+    "footerDistance": "Distância do rodapé da borda",
+    "removeHeader": "Remover cabeçalho",
+    "removeFooter": "Remover rodapé",
+    "insertSectionPages": "Inserir contagem de páginas da seção",
+    "insertPageXofY": "Inserir página X de Y",
+    "pageXofYLabel": "Página",
+    "pageXofYSeparator": "de"
   },
   "image": {
     "placeholder": "Espaço reservado para imagem",
@@ -963,5 +987,23 @@
       "headings": null
     },
     "title": null
+  },
+  "notes": {
+    "editingBanner": "Editando nota",
+    "closeNote": "Fechar nota",
+    "delete": "Excluir nota",
+    "convertToEndnote": "Converter em nota de fim",
+    "convertToFootnote": "Converter em nota de rodapé",
+    "scope": "Aplicar a",
+    "scopeDocument": "Documento inteiro",
+    "scopeSection": "Esta seção",
+    "previewFallback": "Nota de rodapé",
+    "chromeAriaLabel": "Edição de nota",
+    "editingRegion": "{kind} {number}",
+    "footnoteKind": "Nota de rodapé",
+    "endnoteKind": "Nota de fim",
+    "convertAllFootnotes": "Converter todas as notas de rodapé em notas de fim",
+    "convertAllEndnotes": "Converter todas as notas de fim em notas de rodapé",
+    "inheritedValue": "(herdado)"
   }
 }

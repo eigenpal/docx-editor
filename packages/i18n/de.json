@@ -45,7 +45,9 @@
     "watermark": "Wasserzeichen",
     "break": null,
     "sectionBreakContinuous": null,
-    "sectionBreakNextPage": null
+    "sectionBreakNextPage": null,
+    "insertFootnote": "Fußnote einfügen",
+    "insertEndnote": "Endnote einfügen"
   },
   "formattingBar": {
     "groups": {
@@ -58,7 +60,8 @@
       "alignment": "Ausrichtung",
       "listFormatting": "Listenformatierung",
       "image": "Grafik",
-      "table": "Tabelle"
+      "table": "Tabelle",
+      "insert": "Einfügen"
     },
     "undo": "Rückgängig",
     "undoShortcut": "Rückgängig (Strg+Z)",
@@ -845,7 +848,28 @@
     "insertPageNumber": "Aktuelle Seitenzahl einfügen",
     "insertTotalPages": "Gesamtseitenzahl einfügen",
     "remove": "{label} entfernen",
-    "closeEditing": "{label}-Bearbeitung schließen"
+    "closeEditing": "{label}-Bearbeitung schließen",
+    "chromeAriaLabel": "Kopf- und Fußzeilenbearbeitung",
+    "firstPageHeader": "Kopfzeile der ersten Seite",
+    "firstPageFooter": "Fußzeile der ersten Seite",
+    "evenPageHeader": "Kopfzeile gerader Seiten",
+    "evenPageFooter": "Fußzeile gerader Seiten",
+    "regionSection": "{region} — Abschnitt {section}",
+    "sameAsPrevious": "Wie vorherige",
+    "sameAsPreviousHint": "Änderungen gelten auch für die Seiten des vorherigen Abschnitts.",
+    "differentFirstPage": "Erste Seite abweichend",
+    "differentOddEven": "Gerade und ungerade Seiten abweichend",
+    "differentOddEvenHint": "Gilt für das gesamte Dokument.",
+    "linkToPrevious": "Mit vorherigem verknüpfen",
+    "unlinkFromPrevious": "Verknüpfung mit vorherigem aufheben",
+    "headerDistance": "Kopfzeilenabstand vom Rand",
+    "footerDistance": "Fußzeilenabstand vom Rand",
+    "removeHeader": "Kopfzeile entfernen",
+    "removeFooter": "Fußzeile entfernen",
+    "insertSectionPages": "Abschnittsseitenzahl einfügen",
+    "insertPageXofY": "Seite X von Y einfügen",
+    "pageXofYLabel": "Seite",
+    "pageXofYSeparator": "von"
   },
   "image": {
     "placeholder": "Bildplatzhalter",
@@ -963,5 +987,23 @@
       "headings": null
     },
     "title": null
+  },
+  "notes": {
+    "editingBanner": "Fußnote bearbeiten",
+    "closeNote": "Fußnote schließen",
+    "delete": "Fußnote löschen",
+    "convertToEndnote": "In Endnote umwandeln",
+    "convertToFootnote": "In Fußnote umwandeln",
+    "scope": "Anwenden auf",
+    "scopeDocument": "Ganzes Dokument",
+    "scopeSection": "Dieser Abschnitt",
+    "previewFallback": "Fußnote",
+    "chromeAriaLabel": "Fußnotenbearbeitung",
+    "editingRegion": "{kind} {number}",
+    "footnoteKind": "Fußnote",
+    "endnoteKind": "Endnote",
+    "convertAllFootnotes": "Alle Fußnoten in Endnoten umwandeln",
+    "convertAllEndnotes": "Alle Endnoten in Fußnoten umwandeln",
+    "inheritedValue": "(geerbt)"
   }
 }

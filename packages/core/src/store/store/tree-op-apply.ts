@@ -2,10 +2,12 @@
 //
 // This module owns turning a VALIDATED op into a new part plus its structural effect.
 // Application is pure: `applyTreeOp` never mutates its input, and it validates first via
-// tree-op-validate.ts so a rejected op is a true no-op. The op vocabulary and the segment
-// model live in tree-op-validate.ts; both are re-exported via tree-ops.ts.
+// tree-op-validate.ts so a rejected op is a true no-op. Vocabulary, segmentation, and
+// validation live in sibling tree-op-* modules; tree-ops.ts re-exports the public surface.
+/* eslint-disable max-lines -- pre-existing size; furniture lifecycle only adds union narrowing */
 
 import { hardBreakAttributes, hardBreakText } from '../package/hard-break.ts';
+import { fieldAtomText } from '../package/field-nodes.ts';
 import {
   WML_NAMESPACE_URI,
   type OoxmlAttribute,
@@ -56,18 +58,16 @@ import {
   applySetSectionMark,
   applySetSectionProperties,
 } from './tree-op-section.ts';
-import {
-  isParagraph,
-  runsUnder,
-  segmentsOf,
-  type Segment,
-  validateTreeOp,
-  type OoxmlProperty,
-  type TreeDocOp,
-  type TreeOpEffect,
-  type TreeOpRejection,
-  type TreeOpResult,
-} from './tree-op-validate.ts';
+import { pageFieldContentBuilders } from './tree-op-fields.ts';
+import { isParagraph, runsUnder, segmentsOf, type Segment } from './tree-op-segments.ts';
+import type {
+  OoxmlProperty,
+  TreeDocOp,
+  TreeOpEffect,
+  TreeOpRejection,
+  TreeOpResult,
+} from './tree-op-types.ts';
+import { validateTreeOp } from './tree-op-validate.ts';
 
 function textElement(nextId: () => string, text: string): OoxmlNode {
   const valueId = nextId();
@@ -136,6 +136,21 @@ export function applyTreeOp(part: OoxmlPart, op: TreeDocOp, options?: EditOption
   if (op.op === 'removeHyperlink') return applyRemoveHyperlink(part, op.linkId, options);
   if (op.op === 'setSectionProperties') return applySetSectionProperties(part, op, options);
   if (op.op === 'setSectionMark') return applySetSectionMark(part, op.paragraphId, options);
+  // Package-lifecycle / note-part ops are refused by validateTreeOp; this arm narrows the
+  // union so the story appliers below can address paragraphId safely.
+  if (
+    op.op === 'createHeaderFooter' ||
+    op.op === 'deleteHeaderFooter' ||
+    op.op === 'linkToPrevious' ||
+    op.op === 'unlinkFromPrevious' ||
+    op.op === 'setSectionFurnitureOptions' ||
+    op.op === 'insertNote' ||
+    op.op === 'deleteNote' ||
+    op.op === 'convertNote' ||
+    op.op === 'setNoteProperties'
+  ) {
+    return { ok: false, reason: 'invalidArgs', detail: 'package-lifecycle-op' };
+  }
 
   const paragraph = findNode(part, op.paragraphId) as OoxmlParagraphNode;
   const nextId = createNodeIdAllocator(part);
@@ -177,6 +192,14 @@ export function applyTreeOp(part: OoxmlPart, op: TreeDocOp, options?: EditOption
         paragraph,
         op.offset,
         [(mint) => simpleElement(mint, 'br', 'page')],
+        options
+      );
+    case 'insertPageField':
+      return applyInsertContent(
+        part,
+        paragraph,
+        op.offset,
+        pageFieldContentBuilders(op.field),
         options
       );
     case 'deleteText':
@@ -335,6 +358,17 @@ function applyDeleteText(
   // Highest offset first, so earlier segment positions stay valid as edits apply.
   for (const segment of [...segments].reverse()) {
     if (segment.end <= start || segment.start >= end) continue;
+    if (segment.removeNodeIds && segment.removeNodeIds.length > 0) {
+      // Atomic field: remove begin→end (or fldSimple) as one unit. Partial overlap still
+      // deletes the whole field — caret cannot land inside the unit.
+      for (const nodeId of segment.removeNodeIds) {
+        if (!findNode(current, nodeId)) continue;
+        const removed = removeNode(current, nodeId, options);
+        if (!removed.ok) return fromEdit(removed, effect);
+        current = removed.part;
+      }
+      continue;
+    }
     if (segment.node.kind !== 'textValue') {
       const removed = removeNode(current, segment.node.id, options);
       if (!removed.ok) return fromEdit(removed, effect);
@@ -1604,9 +1638,21 @@ export function paragraphTextOf(part: OoxmlPart, paragraphId: string): string | 
   if (!isParagraph(paragraph)) return null;
   let text = '';
   for (const segment of segmentsOf(paragraph)) {
+    if (segment.removeNodeIds && segment.removeNodeIds.length > 0) {
+      text += fieldAtomText();
+      continue;
+    }
     if (segment.node.kind === 'textValue') text += segment.node.value;
     else if (segment.node.kind === 'tab') text += '\t';
     else if (segment.node.kind === 'hardBreak') text += hardBreakText(segment.node);
+    else if (
+      segment.node.kind === 'fldChar' ||
+      segment.node.kind === 'fldSimple' ||
+      (segment.node.kind === 'generic' &&
+        (segment.node.localName === 'fldChar' || segment.node.localName === 'fldSimple'))
+    ) {
+      text += fieldAtomText();
+    }
   }
   return text;
 }

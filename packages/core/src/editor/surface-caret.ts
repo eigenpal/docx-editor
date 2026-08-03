@@ -47,6 +47,17 @@ export interface SurfaceCaretInput {
    * letter rather than beside it.
    */
   readonly measurer?: TextMeasurer;
+  /** When true, hide the engine caret (range selection / IME still take precedence). */
+  readonly suppress?: boolean;
+  /**
+   * Prefer this sheet when the same paragraph paints on multiple pages (open shared HF).
+   */
+  readonly preferredPageIndex?: number;
+  /**
+   * Furniture host for an open header/footer. Story-relative caret geometry is parented here
+   * rather than under `.docx-page-content` (which does not contain furniture).
+   */
+  readonly furnitureHost?: HTMLElement | null;
 }
 
 export interface SurfaceCaret {
@@ -125,6 +136,8 @@ export function createSurfaceCaret(
     element.classList.remove(STEADY_CLASS);
     element.remove();
     pagesLayer.style.removeProperty('caret-color');
+    const activeHf = pagesLayer.querySelector<HTMLElement>('[data-docx-hf-active]');
+    activeHf?.style.removeProperty('caret-color');
   }
 
   /** Hold the caret solid while it is moving, then let the blink resume. */
@@ -138,11 +151,11 @@ export function createSurfaceCaret(
   }
 
   function update(): void {
-    if (composing || !hasFocus()) {
+    if (composing || !hasFocus() || read().suppress) {
       hide();
       return;
     }
-    const { layout, selection } = read();
+    const { layout, selection, furnitureHost, preferredPageIndex, measurer } = read();
     // A range selection shows the browser's highlight; an insertion point inside it would
     // claim a position the selection does not have.
     if (!isCollapsed(selection)) {
@@ -151,29 +164,35 @@ export function createSurfaceCaret(
     }
     // Measured, not interpolated: the caret has to sit at a glyph edge, and a span's advance
     // divided by its character count only lands there in a monospaced face.
-    const geometry = caretAt(layout, selection.head, read().measurer);
+    const geometry = caretAt(layout, selection.head, {
+      ...(measurer ? { measurer } : {}),
+      ...(preferredPageIndex !== undefined ? { preferredPageIndex } : {}),
+    });
     if (!geometry || !Number.isInteger(geometry.pageIndex)) {
       hide();
       return;
     }
-    // Only a MATERIALIZED page has a content box; an off-screen one is a sized shell, and
-    // the caret has nowhere to be painted until it is built.
-    const content = pagesLayer.querySelector<HTMLElement>(
-      `[data-page-index="${geometry.pageIndex}"] > .docx-page-content`
-    );
-    if (!content) {
+    // Open furniture: parent into the active HF band (story-relative coords). Body: page
+    // content box (content-relative coords). Never paint furniture geometry into the body box.
+    const host =
+      furnitureHost ??
+      pagesLayer.querySelector<HTMLElement>(
+        `[data-page-index="${geometry.pageIndex}"] > .docx-page-content`
+      );
+    if (!host) {
       hide();
       return;
     }
     element.style.left = `${geometry.x * scale}px`;
     element.style.top = `${geometry.y * scale}px`;
     element.style.height = `${geometry.height * scale}px`;
-    if (element.parentNode !== content) content.append(element);
+    if (element.parentNode !== host) host.append(element);
     // Suppress the native caret only while ours is up, and inline so it beats the
-    // `[contenteditable='true']` rule in the stylesheet.
+    // `[contenteditable='true']` rule in the stylesheet — pages layer AND active HF band.
     pagesLayer.style.caretColor = 'transparent';
+    if (furnitureHost) furnitureHost.style.caretColor = 'transparent';
 
-    const key = `${geometry.pageIndex}:${geometry.x}:${geometry.y}:${geometry.height}`;
+    const key = `${geometry.pageIndex}:${host === furnitureHost ? 'hf' : 'body'}:${geometry.x}:${geometry.y}:${geometry.height}`;
     if (key !== placed) {
       placed = key;
       markMoving();
