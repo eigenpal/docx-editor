@@ -24,7 +24,7 @@ export function execEditorCommand(
 ): ExecResult | null {
   switch (command.type) {
     case 'toggleMark': {
-      const mark = MARKS[command.mark]!;
+      const mark = MARKS.get(command.mark)!;
       mounted.toggleRunProperty(mark.localName, mark.attributes);
       break;
     }
@@ -36,6 +36,42 @@ export function execEditorCommand(
       mounted.setRunProperty(resolved.localName, resolved.attributes);
       break;
     }
+    case 'clearFormatting':
+      mounted.clearFormatting();
+      break;
+    case 'setLineSpacing':
+      // `w:line` is 240ths of a line under `auto` and twentieths of a point otherwise —
+      // one attribute, two units, which is exactly why the command takes the rule's own.
+      mounted.setParagraphProperty(
+        'spacing',
+        command.rule === 'multiple'
+          ? { line: String(Math.round(command.value * 240)), lineRule: 'auto' }
+          : {
+              line: String(Math.round(command.value * 20)),
+              lineRule: command.rule === 'exact' ? 'exact' : 'atLeast',
+            },
+        { mergeAttributes: true }
+      );
+      break;
+    case 'setParagraphSpacing':
+      mounted.setParagraphProperty(
+        'spacing',
+        {
+          // `null` REMOVES the attribute (Word's "Remove space before paragraph"), which is
+          // not the same as writing a zero: a removed value inherits from the style again.
+          ...(command.beforePt !== undefined
+            ? {
+                before:
+                  command.beforePt === null ? null : String(Math.round(command.beforePt * 20)),
+              }
+            : {}),
+          ...(command.afterPt !== undefined
+            ? { after: command.afterPt === null ? null : String(Math.round(command.afterPt * 20)) }
+            : {}),
+        },
+        { mergeAttributes: true }
+      );
+      break;
     case 'setAlignment':
       // The contract says `justify`; `w:jc` spells it `both`.
       mounted.setParagraphProperty('jc', {

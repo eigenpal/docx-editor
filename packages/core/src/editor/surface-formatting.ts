@@ -290,6 +290,51 @@ export function runPropertyEdits(
 }
 
 /**
+ * Whether any run the range covers authors a property an op could clear.
+ *
+ * The eraser's "is there anything here to erase" question. Asked because an op that names
+ * nothing still COUNTS as applied: the store publishes a revision and pushes an undo entry
+ * for it even though the tree comes back identical, so pressing Clear Formatting on already
+ * clean text reported `changed: true` and cost an undo press that undid nothing.
+ *
+ * Walks exactly where `runPropertyEdits` walks, so the two can never disagree about which
+ * runs a range covers.
+ */
+export function hasAuthoredRunProperties(
+  part: OoxmlPart,
+  paragraphId: string,
+  start: number,
+  end: number
+): boolean {
+  const paragraph = findNode(part, paragraphId);
+  if (!paragraph || paragraph.kind === 'textValue') return false;
+  let offset = 0;
+  let found = false;
+  const visit = (child: OoxmlNode): void => {
+    if (found) return;
+    if (child.kind === 'hyperlink') {
+      for (const inner of child.children) visit(inner);
+      return;
+    }
+    if (child.kind !== 'run') return;
+    const runStart = offset;
+    offset += addressableLength(child);
+    if (offset === runStart) return;
+    if (Math.max(runStart, start) >= Math.min(offset, end)) return;
+    if (
+      authoredProperties(
+        propertyContainer(child, 'runProperties', 'rPr'),
+        AUTHORABLE_RUN_PROPERTIES
+      ).length > 0
+    ) {
+      found = true;
+    }
+  };
+  for (const child of paragraph.children) visit(child);
+  return found;
+}
+
+/**
  * What a run at the CARET itself authors — the base pending caret formatting merges over.
  *
  * Word's rule for a collapsed caret: the character typed next takes the formatting of the
@@ -334,11 +379,19 @@ export function authoredRunPropertiesAt(
  */
 export function pendingPropertyState(
   pending: readonly SurfaceProperty[] | null,
-  localName: string
+  localName: string,
+  /** The value being toggled, for a property whose ON state is one member of an
+   *  enumeration rather than a boolean (`w:vertAlign`). */
+  value?: string
 ): boolean | null {
   const entry = pending?.find((property) => property.localName === localName);
   if (!entry) return null;
   const val = entry.attributes?.val;
+  // `w:vertAlign` armed as `superscript` says NOTHING about whether subscript is on — it
+  // says subscript is off. Comparing presence alone made pressing Subscript over an armed
+  // superscript read as "already on" and write `baseline`, so the press did the opposite of
+  // its label.
+  if (localName === 'vertAlign') return val === value;
   if (localName === 'u') return val !== 'none';
   // ST_OnOff's full off vocabulary (17.17.4): `0`, `false` and `off` all mean off, and the
   // read lane treats them alike. Listing only the two this module WRITES would let a host
@@ -438,7 +491,10 @@ export function isRunPropertyActive(
   layout: SemanticLayout,
   selection: SemanticSelection,
   localName: string,
-  cells?: readonly string[]
+  cells?: readonly string[],
+  /** The value being toggled, for a property whose ON state is one member of an
+   *  enumeration rather than a boolean (`w:vertAlign`). */
+  value?: string
 ): boolean {
   const spans = selectionSpans(layout, selection, cells);
   if (spans.length === 0) return false;
@@ -452,6 +508,11 @@ export function isRunPropertyActive(
         return span.style.underline !== null;
       case 'strike':
         return span.style.strike;
+      case 'vertAlign':
+        // Its OWN value, not "is raised or lowered at all". Presence alone would make
+        // Subscript over superscripted text read as already on, so the press would write
+        // `baseline` and un-raise the text instead of lowering it.
+        return span.style.verticalAlign === value;
       default:
         // Every toggleable mark MUST be listed: answering false for one that is
         // active makes its toggle re-apply forever instead of clearing.
@@ -541,6 +602,33 @@ export function formattingAt(
         defaultParagraphStyleId ??
         undefined
     ) ?? null;
+  // `w:spacing` carries three independent things, so they are read as three: the line rule
+  // and its value, and the space before/after. All in the vocabulary a toolbar shows —
+  // LINES for a multiple, points for everything else — because 276 twentieths and 276
+  // 240ths are the same attribute meaning two different quantities, and a control that
+  // showed the raw number would be right half the time.
+  const spacing = (properties: readonly SurfaceProperty[]) =>
+    properties.find((property) => property.localName === 'spacing')?.attributes;
+  const lineSpacingText = paragraphValue((properties) => {
+    const attributes = spacing(properties);
+    const line = Number(attributes?.line);
+    if (!Number.isFinite(line)) return '';
+    // `w:lineRule` defaults to `auto` (17.3.1.33), which is Word's "Multiple".
+    const rule = attributes?.lineRule ?? 'auto';
+    if (rule === 'auto') return `multiple:${Math.round((line / 240) * 100) / 100}`;
+    return `${rule === 'exact' ? 'exact' : 'atLeast'}:${Math.round((line / 20) * 100) / 100}`;
+  });
+  const lineSpacing = ((): SurfaceFormatting['lineSpacing'] => {
+    if (!lineSpacingText) return null;
+    const [rule, value] = lineSpacingText.split(':');
+    return { rule: rule as 'multiple' | 'exact' | 'atLeast', value: Number(value) };
+  })();
+  const spacePt = (attribute: 'before' | 'after') =>
+    paragraphValue((properties) => {
+      const raw = Number(spacing(properties)?.[attribute]);
+      return Number.isFinite(raw) ? Math.round((raw / 20) * 100) / 100 : null;
+    });
+
   return {
     bold: styles.length > 0 && styles.every((entry) => entry.bold),
     italic: styles.length > 0 && styles.every((entry) => entry.italic),
@@ -558,6 +646,9 @@ export function formattingAt(
     highlight: agreed((entry) => entry.highlight),
     alignment,
     styleId: style,
+    lineSpacing,
+    spaceBeforePt: spacePt('before'),
+    spaceAfterPt: spacePt('after'),
   } satisfies SurfaceFormatting;
 }
 

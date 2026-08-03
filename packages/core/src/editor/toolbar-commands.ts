@@ -40,6 +40,9 @@ const SLOT_COMMANDS: Partial<Record<ChromeSlotId, EditorCommand>> = {
   'text.italic': { type: 'toggleMark', mark: 'italic' },
   'text.underline': { type: 'toggleMark', mark: 'underline' },
   'text.strike': { type: 'toggleMark', mark: 'strike' },
+  'script.super': { type: 'toggleMark', mark: 'superscript' },
+  'script.sub': { type: 'toggleMark', mark: 'subscript' },
+  'format.clear': { type: 'clearFormatting' },
   'alignment.left': { type: 'setAlignment', align: 'left' },
   'alignment.center': { type: 'setAlignment', align: 'center' },
   'alignment.right': { type: 'setAlignment', align: 'right' },
@@ -108,6 +111,9 @@ const VALUE_SLOT_PROBES: Partial<Record<ChromeSlotId, unknown>> = {
   'text.color': '000000',
   'text.highlight': 'yellow',
   'styles.style': 'Normal',
+  // Single spacing: the one pick every document can honour, so the probe answers the
+  // editable gate and nothing narrower.
+  'list.lineSpacing': 1,
 };
 
 /**
@@ -129,6 +135,12 @@ export function commandForSlotValue(slotId: ChromeSlotId, value: unknown): Edito
   // malformed one (`classifyCommand`) and an unknown one (`exec`), with typed reasons.
   if (slotId === 'styles.style') {
     return { type: 'setParagraphStyle', styleId: value as string };
+  }
+  // The line-spacing picker's value is a MULTIPLE (Word's 1.0 / 1.15 / 1.5 / 2.0 menu).
+  // `exact` and `atLeast` are the paragraph dialog's, not a one-number dropdown's, so a
+  // host that wants them builds `setLineSpacing` itself.
+  if (slotId === 'list.lineSpacing') {
+    return { type: 'setLineSpacing', rule: 'multiple', value: value as number };
   }
   const entry = VALUE_SLOT_MARKS[slotId];
   if (!entry) return null;

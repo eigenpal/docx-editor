@@ -110,7 +110,11 @@
     "double": "Doppelt",
     "lineSpacingTitle": "Zeilenabstand: {label}",
     "blockSpacingRules": "Absatzabstand",
-    "label": "Zeilenabstand"
+    "label": "Zeilenabstand",
+    "addSpaceAfter": null,
+    "addSpaceBefore": null,
+    "removeSpaceAfter": null,
+    "removeSpaceBefore": null
   },
   "styles": {
     "selectAriaLabel": "Absatzformatvorlage auswählen",

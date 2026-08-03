@@ -78,15 +78,31 @@ export function emptyInteractionFrame(): InteractionFrame {
   return emptyFrameSingleton;
 }
 
-/** Run-property spellings for the marks the surface can toggle, named as OOXML names them. */
-export const MARKS: Readonly<
-  Record<string, { localName: string; attributes?: Record<string, string> }>
-> = {
-  bold: { localName: 'b' },
-  italic: { localName: 'i' },
-  underline: { localName: 'u', attributes: { val: 'single' } },
-  strike: { localName: 'strike' },
-};
+/**
+ * Run-property spellings for the marks the surface can toggle, named as OOXML names them.
+ *
+ * Superscript and subscript are ONE property with two of its three values (`w:vertAlign`,
+ * ST_VerticalAlignRun, 17.3.2.42), not two independent switches. Spelling them as two marks
+ * over one `localName` is what makes them mutually exclusive for free — a property write
+ * replaces the entry with the same name — and it is why the toggle has to compare the VALUE
+ * in force rather than the mere presence of the element.
+ *
+ * A Map, not an object literal, because the key is CALLER input: an object answers
+ * `constructor` and `toString` off the prototype chain, so `toggleMark` with either name
+ * passed the support gate and reached the store, which then refused the write — `can` said
+ * yes and the press did nothing. `HIGHLIGHT_NAMES` is a Set for the same reason.
+ */
+export const MARKS: ReadonlyMap<
+  string,
+  { localName: string; attributes?: Record<string, string> }
+> = new Map([
+  ['bold', { localName: 'b' }],
+  ['italic', { localName: 'i' }],
+  ['underline', { localName: 'u', attributes: { val: 'single' } }],
+  ['strike', { localName: 'strike' }],
+  ['superscript', { localName: 'vertAlign', attributes: { val: 'superscript' } }],
+  ['subscript', { localName: 'vertAlign', attributes: { val: 'subscript' } }],
+]);
 
 export type CommandSupport =
   | { readonly supported: true; readonly mutating: boolean }
@@ -267,7 +283,7 @@ export function normalizeSource(source: DocumentSource): Uint8Array | null {
 export function classifyCommand(command: EditorCommand): CommandSupport {
   switch (command.type) {
     case 'toggleMark':
-      return MARKS[command.mark]
+      return MARKS.has(command.mark)
         ? { supported: true, mutating: true }
         : { supported: false, reason: `mark '${command.mark}' is not supported` };
     case 'setMarkAttr': {
@@ -278,6 +294,44 @@ export function classifyCommand(command: EditorCommand): CommandSupport {
     }
     case 'setAlignment':
       return { supported: true, mutating: true };
+    case 'clearFormatting':
+      return { supported: true, mutating: true };
+    case 'setLineSpacing': {
+      // Bounds are `w:spacing/@w:line`'s own (ST_SignedTwipsMeasure in practice, but Word
+      // rejects a non-positive line height outright). Checked here so a malformed pick is
+      // refused with a typed reason rather than writing a `w:spacing` Word will not open.
+      const rules = ['multiple', 'exact', 'atLeast'];
+      if (!rules.includes(command.rule)) {
+        return {
+          supported: false,
+          code: 'invalidArgs',
+          reason: "setLineSpacing requires a rule of 'multiple', 'exact' or 'atLeast'",
+        };
+      }
+      const raw = command.rule === 'multiple' ? command.value * 240 : command.value * 20;
+      if (!Number.isFinite(command.value) || command.value <= 0 || Math.round(raw) > 31680) {
+        return {
+          supported: false,
+          code: 'invalidArgs',
+          reason: 'setLineSpacing requires a positive value no taller than 1584pt',
+        };
+      }
+      return { supported: true, mutating: true };
+    }
+    case 'setParagraphSpacing': {
+      for (const field of ['beforePt', 'afterPt'] as const) {
+        const value = command[field];
+        if (value === undefined || value === null) continue;
+        if (!Number.isFinite(value) || value < 0 || value > 1584) {
+          return {
+            supported: false,
+            code: 'invalidArgs',
+            reason: `setParagraphSpacing requires ${field} between 0 and 1584 points`,
+          };
+        }
+      }
+      return { supported: true, mutating: true };
+    }
     case 'setParagraphStyle': {
       // Shape gate only, like `insertText`: whether the styleId names a style the DOCUMENT
       // defines is checked at exec, where the styles part is in hand. The bounds mirror the
@@ -457,6 +511,37 @@ export function classifyCommand(command: EditorCommand): CommandSupport {
 // a React store comparing by reference does not re-render every subscriber on every tick.
 // ---------------------------------------------------------------------------------------
 
+/**
+ * Compile-time exhaustiveness for `formattingEqual`, in the manner of the content-node
+ * switches: every key of `RunFormatting` is listed, so ADDING a field fails `typecheck`
+ * here until its comparison is written.
+ *
+ * A field the comparator misses is a field the cache reports as unchanged. The previous
+ * object is handed back, a host reading `snapshot().formatting` by reference never sees the
+ * value move, and the control that made the write goes on showing the old state while the
+ * document holds the new one — a silent, one-line-of-omission bug that no test of the write
+ * path can catch, because the write is fine. A comment asking the next author to remember
+ * is not a guarantee; this is.
+ */
+const COMPARED_FORMATTING_KEYS: Record<keyof Required<RunFormatting>, true> = {
+  bold: true,
+  italic: true,
+  underline: true,
+  strike: true,
+  color: true,
+  highlight: true,
+  fontFamily: true,
+  fontSizePt: true,
+  superscript: true,
+  subscript: true,
+  alignment: true,
+  styleId: true,
+  lineSpacing: true,
+  spaceBeforePt: true,
+  spaceAfterPt: true,
+};
+void COMPARED_FORMATTING_KEYS;
+
 /** Value equality for the snapshot's `formatting` sub-object (color compared by value). */
 export function formattingEqual(a: RunFormatting | null, b: RunFormatting | null): boolean {
   if (a === b) return true;
@@ -472,7 +557,11 @@ export function formattingEqual(a: RunFormatting | null, b: RunFormatting | null
     a.fontFamily !== b.fontFamily ||
     a.fontSizePt !== b.fontSizePt ||
     a.alignment !== b.alignment ||
-    a.styleId !== b.styleId
+    a.styleId !== b.styleId ||
+    a.spaceBeforePt !== b.spaceBeforePt ||
+    a.spaceAfterPt !== b.spaceAfterPt ||
+    a.lineSpacing?.rule !== b.lineSpacing?.rule ||
+    a.lineSpacing?.value !== b.lineSpacing?.value
   ) {
     return false;
   }

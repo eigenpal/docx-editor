@@ -132,6 +132,29 @@ describe('the Vue toolbar reads enabled state from the engine', () => {
     expect(outdent.disabled).toBe(false);
   });
 
+  test('superscript, subscript and clear-formatting are live here too', async () => {
+    // Parity with React's half of this contract: these three are plain command slots, so
+    // wiring them in the shared table has to light them up in BOTH adapters at once.
+    const { editor, toolbar } = mountToolbar();
+    editor.surface!.selectAll();
+    await nextTick();
+    for (const id of ['script.super', 'script.sub', 'format.clear']) {
+      const button = slot(toolbar, id) as HTMLButtonElement;
+      expect(button.disabled, id).toBe(false);
+      expect(button.title, id).not.toBe('not wired to an editor command');
+    }
+
+    const superscript = slot(toolbar, 'script.super') as HTMLButtonElement;
+    superscript.click();
+    await nextTick();
+    expect(editor.snapshot().formatting?.superscript).toBe(true);
+    expect(superscript.getAttribute('aria-pressed')).toBe('true');
+
+    (slot(toolbar, 'format.clear') as HTMLButtonElement).click();
+    await nextTick();
+    expect(editor.snapshot().formatting?.superscript).toBe(false);
+  });
+
   test('the merged alignment dropdown applies an alignment', async () => {
     const { editor, toolbar } = mountToolbar();
     editor.surface!.selectAll();
@@ -157,7 +180,11 @@ describe('the Vue toolbar reads enabled state from the engine', () => {
     // the capability is missing when only the wiring is.
     // `text.link` is deliberately absent: it graduated to a chrome-driven slot, so it is
     // enabled in both adapters now — Vue's press reports what is missing (a target).
-    for (const id of ['script.super', 'script.sub', 'format.clear']) {
+    // Nor are `script.super`/`script.sub`/`format.clear` — they graduated to real
+    // commands, which is exactly what this list is supposed to shrink by. Comments are
+    // the last unwired control the DEFAULT bar renders; the remaining unwired slots
+    // (image, table) are contextual and not in it.
+    for (const id of ['review.comments']) {
       const button = slot(toolbar, id) as HTMLButtonElement;
       expect(button.disabled, id).toBe(true);
       expect(button.title, id).toBe('not wired to an editor command');
@@ -165,19 +192,22 @@ describe('the Vue toolbar reads enabled state from the engine', () => {
   });
 
   test('a wired control the engine refuses NOW is disabled with the engine’s reason', async () => {
-    // Run formatting is written within ONE paragraph: over a multi-paragraph selection
-    // the engine refuses, and the control must show THAT, not the registry's old
-    // permanent "unavailable in preview". (A collapsed caret no longer refuses — it
-    // arms the engine's stored-marks lane instead.)
+    // Undo over an empty history: the engine refuses, and the control must show THAT, not
+    // the registry's old permanent "unavailable in preview". A refusal that lifts as soon
+    // as the document moves is the whole point — a registry constant could not.
     const { editor, toolbar } = mountToolbar(
       docx('<w:p><w:r><w:t>alpha</w:t></w:r></w:p><w:p><w:r><w:t>beta</w:t></w:r></w:p>')
     );
     editor.surface!.selectAll();
     await nextTick();
-    const underline = slot(toolbar, 'text.underline') as HTMLButtonElement;
-    expect(underline.disabled).toBe(true);
-    expect(underline.title).not.toContain('formattingBar.unavailableInPreview');
-    expect(underline.title).toContain('one paragraph');
+    const undo = slot(toolbar, 'history.undo') as HTMLButtonElement;
+    expect(undo.disabled).toBe(true);
+    expect(undo.title).not.toContain('formattingBar.unavailableInPreview');
+    expect(undo.title).toContain('nothing to undo');
+
+    (slot(toolbar, 'text.underline') as HTMLButtonElement).click();
+    await nextTick();
+    expect(undo.disabled).toBe(false);
   });
 
   test('the shapes this toolbar cannot drive still render, and say so', async () => {

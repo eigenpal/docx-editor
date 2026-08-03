@@ -110,7 +110,11 @@
     "double": "Çift",
     "lineSpacingTitle": "Satır aralığı: {label}",
     "blockSpacingRules": "Paragraf aralığı",
-    "label": null
+    "label": null,
+    "addSpaceAfter": null,
+    "addSpaceBefore": null,
+    "removeSpaceAfter": null,
+    "removeSpaceBefore": null
   },
   "styles": {
     "selectAriaLabel": "Paragraf stili seç",

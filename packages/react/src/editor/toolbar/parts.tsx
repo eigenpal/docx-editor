@@ -11,10 +11,10 @@
 //   slot the engine has not wired renders disabled with the engine's own reason — the
 //   registry's parity rule (visible, never dropped, never faked).
 // - `definePicker(slot)`: a DISABLED COMBOBOX-LOOKALIKE for a dropdown-shaped control
-//   whose behavior the engine does not own yet (`review.editingMode`,
-//   `list.lineSpacing`). It shows the registry's placeholder value and a chevron,
-//   exactly like the Vue registry toolbar's picker, and deliberately does nothing.
-//   (`styles.style` graduated to the live `ParagraphStyle` compound.)
+//   whose behavior the engine does not own yet (`review.editingMode`). It shows the
+//   registry's placeholder value and a chevron, exactly like the Vue registry toolbar's
+//   picker, and deliberately does nothing. (`styles.style` graduated to the live
+//   `ParagraphStyle` compound, and `list.lineSpacing` to `ToolbarLineSpacing`.)
 
 import { useContext } from 'react';
 import {
@@ -169,7 +169,6 @@ function definePicker(slot: ChromeSlotId): ToolbarSlotPartComponent {
 export const ToolbarEditingMode = definePicker('review.editingMode');
 // Line spacing is dropdown-SHAPED in the chrome spec (icon + caret), so its
 // undriven rendering is the picker lookalike, not a bare icon button.
-export const ToolbarLineSpacing = definePicker('list.lineSpacing');
 
 /**
  * The save control. Save is not an engine command (`Editor.save()` returns bytes the

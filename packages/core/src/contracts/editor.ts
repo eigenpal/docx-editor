@@ -525,7 +525,41 @@ type EditorCommandShape<T> = {
 export interface EditorCommands extends EditorCommandShape<DocEdits> {
   toggleMark: { mark: string };
   setMarkAttr: { mark: string; attr: string; value: unknown };
+  /**
+   * Word's Clear All Formatting (Home > Font > the eraser).
+   *
+   * Takes direct CHARACTER formatting off the selected text, and resets every paragraph the
+   * selection touches to the document's default paragraph style with its direct paragraph
+   * properties dropped — alignment, indents, spacing, list membership. Character formatting
+   * is a range and paragraph formatting is not, so a partial selection clears the text it
+   * covers and still resets the paragraph it sits in, which is Word's split.
+   *
+   * Formatting inherited from a style is not touched: this removes what the document states
+   * DIRECTLY, so the text falls back to what its style gives it rather than to nothing.
+   *
+   * A CHARACTER STYLE survives, and so do paragraph borders and hidden text. Those live
+   * outside the property vocabulary an edit can name — a run's `w:rStyle`, `w:vanish` and
+   * `w:bdr`, a paragraph's `w:pBdr` and `w:outlineLvl` — and are preserved rather than
+   * dropped, which is where this stops short of Word: clearing a run that carries a
+   * character style leaves that style's face on it.
+   */
+  clearFormatting: Record<never, never>;
   setAlignment: { align: 'left' | 'center' | 'right' | 'justify' };
+  /**
+   * Word's Line Spacing, on every paragraph the selection touches.
+   *
+   * `value` is in the unit the RULE implies, which is the unit Word's own dialog uses:
+   * LINES for `multiple` (1, 1.15, 1.5, 2), points for `exact` and `atLeast`. The
+   * OOXML attribute is one number meaning two different quantities depending on
+   * `w:lineRule`, and a caller should not have to know which.
+   */
+  setLineSpacing: { rule: 'multiple' | 'exact' | 'atLeast'; value: number };
+  /**
+   * Space above and below a paragraph, in points, on every paragraph the selection
+   * touches. Omitting a field leaves it as authored; `null` clears it, which is how
+   * Word's "Remove space before/after paragraph" differs from setting it to zero.
+   */
+  setParagraphSpacing: { beforePt?: number | null; afterPt?: number | null };
   setIndent: { left?: number; right?: number; firstLine?: number; hanging?: number };
   toggleList: { kind: 'bullet' | 'ordered' };
 
