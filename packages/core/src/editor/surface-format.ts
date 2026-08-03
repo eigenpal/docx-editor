@@ -133,6 +133,7 @@ export function createSurfaceFormat(deps: SurfaceFormatDeps): FormatMethods {
               start: edit.start,
               end: edit.end,
               properties: edit.properties,
+              ...(edit.targetRunIds ? { targetRunIds: edit.targetRunIds } : {}),
             })),
             ...paragraphMarkOps(textOf(from.paragraphId), from, to, markProperties),
           ],
@@ -161,6 +162,7 @@ export function createSurfaceFormat(deps: SurfaceFormatDeps): FormatMethods {
           start: edit.start,
           end: edit.end,
           properties: edit.properties,
+          ...(edit.targetRunIds ? { targetRunIds: edit.targetRunIds } : {}),
         });
       }
       // The mark follows a paragraph whose PILCROW the selection contains, which is what a
@@ -223,6 +225,7 @@ export function createSurfaceFormat(deps: SurfaceFormatDeps): FormatMethods {
           start: edit.start,
           end: edit.end,
           properties: edit.properties,
+          ...(edit.targetRunIds ? { targetRunIds: edit.targetRunIds } : {}),
         });
       }
       ops.push({

@@ -250,6 +250,11 @@ export interface RunPropertyEdit {
   readonly start: number;
   readonly end: number;
   readonly properties: readonly SurfaceProperty[];
+  /**
+   * When set, `setRunProperties` formats only these runs (field result ownership). Needed
+   * when several result runs share one atom offset so each keeps its own merged bag.
+   */
+  readonly targetRunIds?: readonly string[];
 }
 
 /**
@@ -276,15 +281,34 @@ function runAddressRanges(
 ): Map<string, { start: number; end: number }> {
   const runRanges = new Map<string, { start: number; end: number }>();
   for (const segment of segmentsOf(paragraph)) {
-    if (!segment.runId) continue;
-    const existing = runRanges.get(segment.runId);
-    if (!existing) runRanges.set(segment.runId, { start: segment.start, end: segment.end });
-    else {
-      existing.start = Math.min(existing.start, segment.start);
-      existing.end = Math.max(existing.end, segment.end);
+    const ids =
+      segment.formatRunIds && segment.formatRunIds.length > 0
+        ? segment.formatRunIds
+        : segment.runId
+          ? [segment.runId]
+          : [];
+    for (const runId of ids) {
+      const existing = runRanges.get(runId);
+      if (!existing) runRanges.set(runId, { start: segment.start, end: segment.end });
+      else {
+        existing.start = Math.min(existing.start, segment.start);
+        existing.end = Math.max(existing.end, segment.end);
+      }
     }
   }
   return runRanges;
+}
+
+/** Runs that own field-result formatting for atoms in this paragraph. */
+function formatOwnedRunIds(
+  paragraph: Extract<OoxmlNode, { kind: 'paragraph' }>
+): ReadonlySet<string> {
+  const ids = new Set<string>();
+  for (const segment of segmentsOf(paragraph)) {
+    if (!segment.formatRunIds) continue;
+    for (const runId of segment.formatRunIds) ids.add(runId);
+  }
+  return ids;
 }
 
 /**
@@ -317,9 +341,18 @@ export function runPropertyEdits(
   const edits: RunPropertyEdit[] = [];
   // Field/note atoms contribute one unit on the begin run (segmentsOf). Hyperlink descent
   // keeps link text addressable — skipping `w:hyperlink` used to mis-offset every run after.
+  // Field format ownership maps the atom onto result runs via `formatRunIds`.
   const runRanges = runAddressRanges(paragraph);
+  const formatOwned = formatOwnedRunIds(paragraph);
   const visit = (child: OoxmlNode): void => {
     if (child.kind === 'hyperlink') {
+      for (const inner of child.children) visit(inner);
+      return;
+    }
+    if (
+      child.kind === 'fldSimple' ||
+      (child.kind === 'generic' && child.localName === 'fldSimple')
+    ) {
       for (const inner of child.children) visit(inner);
       return;
     }
@@ -339,6 +372,7 @@ export function runPropertyEdits(
         ),
         incoming
       ),
+      ...(formatOwned.has(child.id) ? { targetRunIds: [child.id] } : {}),
     });
   };
   for (const child of paragraph.children) visit(child);
@@ -369,6 +403,13 @@ export function hasAuthoredRunProperties(
   const visit = (child: OoxmlNode): void => {
     if (found) return;
     if (child.kind === 'hyperlink') {
+      for (const inner of child.children) visit(inner);
+      return;
+    }
+    if (
+      child.kind === 'fldSimple' ||
+      (child.kind === 'generic' && child.localName === 'fldSimple')
+    ) {
       for (const inner of child.children) visit(inner);
       return;
     }
@@ -410,6 +451,13 @@ export function authoredRunPropertiesAt(
   let right: OoxmlNode | null = null;
   const visit = (child: OoxmlNode): void => {
     if (child.kind === 'hyperlink') {
+      for (const inner of child.children) visit(inner);
+      return;
+    }
+    if (
+      child.kind === 'fldSimple' ||
+      (child.kind === 'generic' && child.localName === 'fldSimple')
+    ) {
       for (const inner of child.children) visit(inner);
       return;
     }

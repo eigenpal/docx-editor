@@ -784,9 +784,10 @@ export function openTreeSession(bytes: Uint8Array): OpenTreeSessionResult {
       },
 
       findText(query, options) {
+        const store = bodyStore();
         const key = `${options?.matchCase === true ? 'c' : ''}${
           options?.wholeWord === true ? 'w' : ''
-        }${options?.limit ?? ''} ${query}`;
+        }${options?.limit ?? ''}${'\u0000'}${query}`;
         if (searchCache && searchCache.revision === store.revision && searchCache.key === key) {
           return searchCache.result;
         }

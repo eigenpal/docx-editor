@@ -493,10 +493,15 @@ export function breakParagraph(
       // stay aligned with binding / paragraphTextOf.
       // A projected field publishes the model range it stands in for; a `w:ptab` publishes
       // its ZERO-WIDTH insertion point, because it contributes no text to the paragraph.
-      const spanRange =
-        piece.projected || piece.positionalTab
-          ? { paragraphId, start: piece.start, end: piece.end }
-          : { paragraphId, start: piece.start + consumed, end: piece.start + boundary };
+      // Defensive: any piece whose display length disagrees with its model range is also
+      // layout-owned (inert DATE/TOC/REF/… cache before `projected` was set).
+      const layoutOwned =
+        Boolean(piece.projected) ||
+        Boolean(piece.positionalTab) ||
+        piece.end - piece.start !== piece.text.length;
+      const spanRange = layoutOwned
+        ? { paragraphId, start: piece.start, end: piece.end }
+        : { paragraphId, start: piece.start + consumed, end: piece.start + boundary };
 
       if (candidate === '\t') {
         // A tab that cannot advance on this line wraps first, then reapplies — matching
@@ -550,13 +555,13 @@ export function breakParagraph(
               }
             : {}),
           ...(piece.link ? { link: piece.link } : {}),
-          ...(piece.projected ? { projected: true as const } : {}),
+          ...(layoutOwned && !piece.positionalTab ? { projected: true as const } : {}),
           ...(piece.noteNav ? { noteNav: piece.noteNav } : {}),
         });
         line.width += width;
         line.height = Math.max(line.height, metrics.height);
         line.baseline = Math.max(line.baseline, metrics.baseline);
-        line.end = piece.projected || piece.positionalTab ? piece.end : piece.start + boundary;
+        line.end = layoutOwned ? piece.end : piece.start + boundary;
         consumed = boundary;
         continue;
       }
@@ -574,13 +579,13 @@ export function breakParagraph(
         style: piece.style,
         box: { x: lineOrigin() + line.width, y: 0, width, height: metrics.height },
         ...(piece.link ? { link: piece.link } : {}),
-        ...(piece.projected ? { projected: true as const } : {}),
+        ...(layoutOwned && !piece.positionalTab ? { projected: true as const } : {}),
         ...(piece.noteNav ? { noteNav: piece.noteNav } : {}),
       });
       line.width += width;
       line.height = Math.max(line.height, metrics.height);
       line.baseline = Math.max(line.baseline, metrics.baseline);
-      line.end = piece.projected ? piece.end : piece.start + boundary;
+      line.end = layoutOwned ? piece.end : piece.start + boundary;
       consumed = boundary;
     }
   }

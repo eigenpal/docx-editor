@@ -137,7 +137,7 @@ export interface FieldAwarePiece {
   /** UTF-16 model offset range; projected fields cover suppressed cached-result text when present. */
   readonly start: number;
   readonly end: number;
-  /** True when text was projected from page context rather than model `w:t`. */
+  /** True when text substitutes for a model unit (page field or inert atomic cache). */
   readonly projected?: boolean;
   /**
    * Set when this piece is a `w:ptab`. Its range is ZERO-WIDTH: the element is generic in
@@ -406,8 +406,9 @@ export function piecesOfParagraph(
       const text = projectPageFieldValue(pending.kind, pageContext);
       push(text, pending.props, pending.style, true, start, end);
     } else if (pending.cachedText.length > 0) {
-      // Inert non-page field: paint cached result over the single model unit.
-      push(pending.cachedText, pending.props, pending.style, false, start, end);
+      // Inert non-page field: paint cached result as layout-owned substitution for the
+      // single model unit (same as live PAGE) so hit-test/span ranges stay one atom.
+      push(pending.cachedText, pending.props, pending.style, true, start, end);
     }
     pending = null;
     openAtomicBeginId = null;

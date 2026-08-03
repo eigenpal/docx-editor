@@ -161,6 +161,12 @@ export type TreeDocOp =
       readonly start: number;
       readonly end: number;
       readonly properties: readonly OoxmlProperty[];
+      /**
+       * When set, format only these runs (field result ownership). Offset range still
+       * gates the edit and drives edge splits; without this, multi-run field results that
+       * share one atom offset would homogenise under a single property bag.
+       */
+      readonly targetRunIds?: readonly string[];
     }
   | {
       readonly op: 'setParagraphProperties';

@@ -200,9 +200,9 @@ describe('complex field piece projection', () => {
         `</w:p>`
     );
     const paragraph = part.root.children[0]!.children.find((c) => c.kind === 'paragraph')!;
-    expect(
-      piecesOfParagraph(paragraph, [], { pageNumber: 1, pageCount: 9 }).map((p) => p.text)
-    ).toEqual(['1999']);
+    const pieces = piecesOfParagraph(paragraph, [], { pageNumber: 1, pageCount: 9 });
+    expect(pieces.map((p) => p.text)).toEqual(['1999']);
+    expect(pieces[0]).toMatchObject({ start: 0, end: 1, projected: true });
   });
 
   test('INCLUDETEXT stays inert even with a result', () => {

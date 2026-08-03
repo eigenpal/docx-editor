@@ -9,6 +9,7 @@
 import type { TreeApplyResult, TreeDocxSession } from '@docx-editor.dev/core-contract/binding';
 import type { TreeDocOp, StoryScope } from '@docx-editor.dev/core-contract/store';
 import {
+  documentOrder,
   enumerateDocumentSections,
   readSectionProperties,
   storyBlocks,

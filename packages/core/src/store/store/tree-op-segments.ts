@@ -25,6 +25,11 @@ export interface Segment {
    * field begin→end or `fldSimple`). Absent for ordinary text/tab/break segments.
    */
   readonly removeNodeIds?: readonly string[];
+  /**
+   * When set, run formatting for this atom targets these runs (field result ownership),
+   * not necessarily `runId`. Absent for ordinary text/tab/break segments.
+   */
+  readonly formatRunIds?: readonly string[];
 }
 
 export function isParagraph(node: OoxmlNode | null): node is OoxmlParagraphNode {
@@ -62,6 +67,7 @@ export function segmentsOf(paragraph: OoxmlParagraphNode): Segment[] {
     readonly runId: string;
     readonly node: OoxmlNode;
     readonly removeNodeIds: readonly string[];
+    readonly formatRunIds?: readonly string[];
   }): void => {
     segments.push({
       runId: span.runId,
@@ -69,6 +75,9 @@ export function segmentsOf(paragraph: OoxmlParagraphNode): Segment[] {
       start: offset,
       end: offset + 1,
       removeNodeIds: span.removeNodeIds,
+      ...(span.formatRunIds && span.formatRunIds.length > 0
+        ? { formatRunIds: span.formatRunIds }
+        : {}),
     });
     offset += 1;
   };

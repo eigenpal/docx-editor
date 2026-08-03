@@ -148,6 +148,12 @@ export function isFieldChrome(node: OoxmlNode): boolean {
  *
  * `removeNodeIds` lists every node that must leave with the unit (begin…end chrome and
  * cached-result content for complex fields; the `fldSimple` element for simple fields).
+ *
+ * `formatRunIds` lists the runs whose `w:rPr` owns displayed result formatting — result-phase
+ * runs with measurable cache text for complex fields, child `w:r`s for `fldSimple`, or the
+ * separate/begin run when the result is empty. Delete / caret addressing still uses `runId`
+ * (the begin / simple node); formatting must not rewrite chrome-only begin runs when the
+ * painted glyphs come from a different result run.
  */
 export interface AtomicFieldSpan {
   readonly kind: 'complex' | 'simple';
@@ -156,6 +162,8 @@ export interface AtomicFieldSpan {
   /** Run that owns the begin marker; empty string for paragraph-level `fldSimple`. */
   readonly runId: string;
   readonly removeNodeIds: readonly string[];
+  /** Runs that own displayed result formatting (may differ from `runId`). */
+  readonly formatRunIds: readonly string[];
 }
 
 interface RunChildRef {
@@ -187,6 +195,22 @@ export function atomicFieldSpansOf(
   // Flatten run children in document order for the complex-field machine.
   // Hyperlink is a run container: fields inside a link are ordinary paragraph text.
   const flat: RunChildRef[] = [];
+  /** Child `w:r` ids inside a `fldSimple` — those runs own displayed result formatting. */
+  const formatRunIdsOfSimple = (simple: OoxmlNode): readonly string[] => {
+    if (simple.kind === 'textValue') return [];
+    const ids: string[] = [];
+    const visit = (node: OoxmlNode): void => {
+      if (node.kind === 'run') {
+        ids.push(node.id);
+        return;
+      }
+      if (node.kind === 'textValue') return;
+      for (const child of node.children ?? []) visit(child);
+    };
+    for (const child of simple.children ?? []) visit(child);
+    return ids;
+  };
+
   const visitInline = (child: OoxmlNode): void => {
     if (child.kind === 'fldSimple' || (child.kind === 'generic' && isFldSimple(child))) {
       spans.push({
@@ -194,6 +218,7 @@ export function atomicFieldSpansOf(
         node: child,
         runId: '',
         removeNodeIds: [child.id],
+        formatRunIds: formatRunIdsOfSimple(child),
       });
       return;
     }
@@ -225,6 +250,9 @@ export function atomicFieldSpansOf(
     let instructionOverflow = false;
     let phase: 'instruction' | 'result' | 'done' = 'instruction';
     const removeIds: string[] = [];
+    const resultFormatRunIds: string[] = [];
+    const seenFormatRuns = new Set<string>();
+    let separateRunId: string | undefined;
     let endIndex = -1;
 
     for (let j = i; j < flat.length; j += 1) {
@@ -251,7 +279,10 @@ export function atomicFieldSpansOf(
       }
 
       if (isFldChar(node, 'separate')) {
-        if (nesting === 1 && phase === 'instruction') phase = 'result';
+        if (nesting === 1 && phase === 'instruction') {
+          phase = 'result';
+          separateRunId = entry.runId;
+        }
         if (nesting >= 1) removeIds.push(node.id);
         continue;
       }
@@ -278,6 +309,10 @@ export function atomicFieldSpansOf(
             node.kind === 'textValue'
           ) {
             removeIds.push(node.id);
+            if (entry.runId && !seenFormatRuns.has(entry.runId)) {
+              seenFormatRuns.add(entry.runId);
+              resultFormatRunIds.push(entry.runId);
+            }
           } else if (node.kind === 'generic') {
             // Non-text generic inside result stays with the field on delete.
             removeIds.push(node.id);
@@ -299,11 +334,23 @@ export function atomicFieldSpansOf(
     // callers that want the signal via a separate scan.
     void instructionOverflow;
 
+    // Empty result: format the separate run when present, else the begin run (matches
+    // projection's style fallback when no result run donates `rPr`).
+    const formatRunIds =
+      resultFormatRunIds.length > 0
+        ? resultFormatRunIds
+        : separateRunId
+          ? [separateRunId]
+          : current.runId
+            ? [current.runId]
+            : [];
+
     spans.push({
       kind: 'complex',
       node: current.node,
       runId: current.runId,
       removeNodeIds: [...new Set(removeIds)],
+      formatRunIds,
     });
     i = endIndex + 1;
   }

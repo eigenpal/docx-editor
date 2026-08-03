@@ -212,7 +212,15 @@ export function applyTreeOp(part: OoxmlPart, op: TreeDocOp, options?: EditOption
     case 'splitParagraphMany':
       return applySplitMany(part, paragraph, op.offsets, options);
     case 'setRunProperties':
-      return applySetRunProperties(part, paragraph, op.start, op.end, op.properties, options);
+      return applySetRunProperties(
+        part,
+        paragraph,
+        op.start,
+        op.end,
+        op.properties,
+        options,
+        op.targetRunIds
+      );
     case 'setParagraphProperties': {
       const existing = paragraphPropertiesNodeOf(paragraph);
       const children = mergedPropertyChildren(
@@ -1504,7 +1512,8 @@ function applySetRunProperties(
   start: number,
   end: number,
   properties: readonly OoxmlProperty[],
-  options?: EditOptions
+  options?: EditOptions,
+  targetRunIds?: readonly string[]
 ): TreeOpResult {
   const effect: TreeOpEffect = {
     dirty: [paragraph.id],
@@ -1514,6 +1523,7 @@ function applySetRunProperties(
     impact: 'text-local',
   };
   // Split at both edges first, so the range lands on whole runs and only those runs change.
+  // Field atoms keep result runs off the segment map, so splits never touch format targets.
   let current = part;
   for (const boundary of [end, start]) {
     const target = findNode(current, paragraph.id) as OoxmlParagraphNode;
@@ -1524,11 +1534,19 @@ function applySetRunProperties(
 
   const target = findNode(current, paragraph.id) as OoxmlParagraphNode;
   const segments = segmentsOf(target);
-  const runIds = new Set(
-    segments
-      .filter((segment) => segment.start >= start && segment.end <= end)
-      .map((segment) => segment.runId)
-  );
+  const runIds = new Set<string>();
+  if (targetRunIds && targetRunIds.length > 0) {
+    for (const runId of targetRunIds) runIds.add(runId);
+  } else {
+    for (const segment of segments) {
+      if (segment.start < start || segment.end > end) continue;
+      if (segment.formatRunIds && segment.formatRunIds.length > 0) {
+        for (const runId of segment.formatRunIds) runIds.add(runId);
+      } else if (segment.runId) {
+        runIds.add(segment.runId);
+      }
+    }
+  }
   const nextId = createNodeIdAllocator(current);
   for (const runId of runIds) {
     const run = findNode(current, runId);
