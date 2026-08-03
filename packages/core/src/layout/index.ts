@@ -381,6 +381,7 @@ export {
   MAX_TABLE_COLUMNS,
   MAX_TABLE_NESTING,
   readTableStructure,
+  tableOriginX,
   type CellMarginsPt,
   type CellVerticalAlign,
   type PreferredWidth,
@@ -388,7 +389,9 @@ export {
   type SemanticTableCell,
   type SemanticTableRow,
   type SemanticTableStructure,
+  type TableAlignment,
 } from './semantic-table.ts';
+export { paragraphMarkDeleted, revisionRemovesParagraph } from './revision-visibility.ts';
 export {
   MAX_TABLE_ROW_FRAGMENTS,
   TablePaginationError,

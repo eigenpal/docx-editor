@@ -17,6 +17,7 @@
 
 import type { OoxmlElement, OoxmlNode } from '@docx-editor.dev/core-contract/store';
 import { shadingFillFromElement } from './ooxml-shading.ts';
+import { revisionRemovesParagraph } from './revision-visibility.ts';
 import {
   EMPTY_TABLE_CELL_STYLE_FORMATTING,
   EMPTY_TABLE_FORMATTING,
@@ -168,6 +169,36 @@ const MAX_CELL_CONDITION_SETS = 256;
 
 export type CellVerticalAlign = 'top' | 'center' | 'bottom';
 
+/** `w:tblPr/w:jc` (17.4.29, ST_JcTable): where the table sits within the text column. */
+export type TableAlignment = 'left' | 'center' | 'right';
+
+/**
+ * Ceiling on `w:tblInd`, so a stated indent cannot push a table off the sheet. Read through
+ * the same unsigned path as every other width here: a negative indent (Word pulls a table
+ * into the margin with one) is rejected rather than applied.
+ */
+const MAX_TABLE_INDENT_PT = 31_680 / 20;
+
+/** `w:tblPr/w:jc`, defaulting to left when absent or unrecognised. */
+function readTableAlignment(container: OoxmlElement | undefined): TableAlignment | undefined {
+  const jc = container && childNamed(container, 'jc');
+  if (!jc) return undefined;
+  const value = attributeValue(jc, 'val');
+  // `start`/`end` are the strict-conformant spellings of `left`/`right`.
+  if (value === 'center') return 'center';
+  if (value === 'right' || value === 'end') return 'right';
+  if (value === 'left' || value === 'start') return 'left';
+  return undefined;
+}
+
+/** A CT_TblWidth read down to points, for the `dxa` geometry the placement reads use. */
+function preferredLengthPt(node: OoxmlElement | undefined, limit: number): number | undefined {
+  if (!node) return undefined;
+  const width = readPreferredWidth(node);
+  if (width.type !== 'dxa') return undefined;
+  return Math.min(width.value, limit);
+}
+
 export interface CellMarginsPt {
   readonly top: number;
   readonly right: number;
@@ -239,6 +270,22 @@ export interface SemanticTableStructure {
   readonly rows: readonly SemanticTableRow[];
   /** `w:tblPr/w:tblW` — the width the table asked for. */
   readonly tableWidth: PreferredWidth;
+  /**
+   * `w:tblInd` (17.4.50) in points — "this indentation should shift the table into the text
+   * margin by the specified amount". Applies to a left-aligned table; `w:jc` decides the
+   * placement outright for the other two.
+   */
+  readonly indentPt: number;
+  /** `w:tblPr/w:jc` (17.4.29) — where the table sits in the text column. */
+  readonly alignment: TableAlignment;
+  /**
+   * `w:tblCellSpacing` (17.4.45) in points: the gap between adjacent cell edges. Applied as
+   * a half-gap inset on each side of every cell, so cells separate visually without the grid
+   * itself moving. Word ALSO grows the table's overall width by the spacing it adds around
+   * the outside; that part is not modelled, so a spaced table is laid out on the same grid
+   * its file states rather than a wider one.
+   */
+  readonly cellSpacingPt: number;
   /**
    * `w:tblPr/w:tblLayout/@w:type="fixed"` (17.4.52 — 17.4.53 is the `w:tblPrEx` exception
    * variant, not this element). Fixed layout takes the grid as final;
@@ -555,6 +602,24 @@ function resolveColumnWidthsPt(input: {
   if (Math.abs(total - target) <= WIDTH_EPSILON_PT) return resolved;
   const scale = target / total;
   return resolved.map((width) => width * scale);
+}
+
+/**
+ * Where a table's left edge sits inside the box that contains it.
+ *
+ * 17.4.50 puts a left-aligned table at `w:tblInd` from the leading margin. 17.4.29's other
+ * two placements are stated relative to the containing box instead, so the indent does not
+ * also apply to them — Word centres a centred table in the text column whatever indent the
+ * file carries. A table wider than its container starts flush so its leading edge stays on
+ * the page rather than being centred off it.
+ */
+export function tableOriginX(structure: SemanticTableStructure, containerWidthPt: number): number {
+  const width = structure.columnWidthsPt.reduce((sum, column) => sum + column, 0);
+  const slack = containerWidthPt - width;
+  if (!Number.isFinite(slack) || slack <= 0) return 0;
+  if (structure.alignment === 'center') return slack / 2;
+  if (structure.alignment === 'right') return slack;
+  return Math.min(structure.indentPt, slack);
 }
 
 /**
@@ -917,6 +982,10 @@ export function readTableStructure(
       );
       const blocks: OoxmlElement[] = [];
       for (const child of cellNode.children) {
+        // A paragraph a tracked revision has removed claims a full line box while rendering
+        // nothing; a cell of them is a stack of blank lines that pushes the rest of the table
+        // down the page.
+        if (child.kind === 'paragraph' && revisionRemovesParagraph(child)) continue;
         if (child.kind === 'paragraph' || child.kind === 'table') blocks.push(child);
       }
       cells.push({
@@ -950,11 +1019,20 @@ export function readTableStructure(
   // it. 17.4.52: an absent `w:tblLayout` means autofit.
   let styleTableWidth = AUTO_PREFERRED_WIDTH;
   let styleLayoutFixed: boolean | undefined;
+  let styleIndentPt: number | undefined;
+  let styleAlignment: TableAlignment | undefined;
+  let styleCellSpacingPt: number | undefined;
   for (const node of tableStyle.tablePropertyNodes) {
     const styleW = childNamed(node, 'tblW');
     if (styleW) styleTableWidth = readPreferredWidth(styleW);
     const styleLayout = childNamed(node, 'tblLayout');
     if (styleLayout) styleLayoutFixed = attributeValue(styleLayout, 'type') === 'fixed';
+    styleIndentPt =
+      preferredLengthPt(childNamed(node, 'tblInd'), MAX_TABLE_INDENT_PT) ?? styleIndentPt;
+    styleAlignment = readTableAlignment(node) ?? styleAlignment;
+    styleCellSpacingPt =
+      preferredLengthPt(childNamed(node, 'tblCellSpacing'), MAX_CELL_MARGIN_PT) ??
+      styleCellSpacingPt;
   }
   const ownTblW = tblPr && childNamed(tblPr, 'tblW');
   const tableWidth = ownTblW ? readPreferredWidth(ownTblW) : styleTableWidth;
@@ -962,6 +1040,15 @@ export function readTableStructure(
   const layoutFixed = tblLayout
     ? attributeValue(tblLayout, 'type') === 'fixed'
     : (styleLayoutFixed ?? false);
+  const indentPt =
+    preferredLengthPt(tblPr && childNamed(tblPr, 'tblInd'), MAX_TABLE_INDENT_PT) ??
+    styleIndentPt ??
+    0;
+  const alignment = readTableAlignment(tblPr) ?? styleAlignment ?? 'left';
+  const cellSpacingPt =
+    preferredLengthPt(tblPr && childNamed(tblPr, 'tblCellSpacing'), MAX_CELL_MARGIN_PT) ??
+    styleCellSpacingPt ??
+    0;
 
   return {
     columnWidthsPt: resolveColumnWidthsPt({
@@ -975,6 +1062,9 @@ export function readTableStructure(
     rows,
     tableWidth,
     layoutFixed,
+    indentPt,
+    alignment,
+    cellSpacingPt,
     tableBorders,
     defaultMargins,
   };
