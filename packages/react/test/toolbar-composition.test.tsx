@@ -204,7 +204,7 @@ describe('live button state', () => {
     expect(editor().snapshot().formatting?.bold).toBe(true);
   });
 
-  test('a generic Button on an unwired slot is disabled with the not-wired reason', () => {
+  test('a generic Button on an unwired slot is disabled, quoting the ENGINE', () => {
     const { view } = mountToolbar(
       <DocxEditorToolbar preset={false}>
         <DocxEditorToolbar.Button slot="image.insert" />
@@ -215,9 +215,61 @@ describe('live button state', () => {
     ) as HTMLButtonElement;
     expect(button.disabled).toBe(true);
     expect(button.hasAttribute('data-disabled')).toBe(true);
-    expect(button.title).toBe('not wired to an editor command');
+    // `insertImage` IS in the edit vocabulary — it is simply not executed by this engine
+    // yet — so the slot carries a probe and the tooltip is the engine's own refusal.
+    // Chrome's "not wired to an editor command" would have been a guess about a question
+    // the engine can answer, and would have gone stale the day the engine wires it.
+    expect(button.title).toBe("command 'insertImage' is not supported by the tree editor");
     // Not a toggle: no aria-pressed claim.
     expect(button.hasAttribute('aria-pressed')).toBe(false);
+  });
+
+  test('Action is a host-owned control: no slot, our styling, our caret guard', () => {
+    // `Button` is slot-bound on purpose — that is what stops a control and its menu twin
+    // describing one capability two ways. An action the ENGINE does not model has no slot
+    // and never will, and before this the host hand-wrote our private class name.
+    let ran = 0;
+    const { view } = mountToolbar(
+      <DocxEditorToolbar>
+        <DocxEditorToolbar.Action label="Send for review" onSelect={() => (ran += 1)} />
+      </DocxEditorToolbar>
+    );
+    const action = view.container.querySelector<HTMLButtonElement>(
+      '[aria-label="Send for review"]'
+    )!;
+    // Appended after the whole default arrangement — it drives no slot.
+    const toolbar = toolbarElement(view);
+    expect(toolbar.lastElementChild).toBe(action);
+    expect(action.className).toContain('docx-toolbar__button');
+
+    // The caret guard is the reason this is a component and not a documented class name.
+    const down = new MouseEvent('mousedown', { bubbles: true, cancelable: true });
+    action.dispatchEvent(down);
+    expect(down.defaultPrevented).toBe(true);
+
+    act(() => {
+      action.click();
+    });
+    expect(ran).toBe(1);
+  });
+
+  test('Action carries pressed and disabled state the host owns', () => {
+    const { view } = mountToolbar(
+      <DocxEditorToolbar preset={false}>
+        <DocxEditorToolbar.Action label="Track changes" active />
+        <DocxEditorToolbar.Action label="Publish" disabled disabledReason="Needs approval" />
+      </DocxEditorToolbar>
+    );
+    const tracked = view.container.querySelector<HTMLButtonElement>(
+      '[aria-label="Track changes"]'
+    )!;
+    expect(tracked.getAttribute('aria-pressed')).toBe('true');
+    expect(tracked.hasAttribute('data-active')).toBe(true);
+
+    const publish = view.container.querySelector<HTMLButtonElement>('[aria-label="Publish"]')!;
+    expect(publish.disabled).toBe(true);
+    // Say WHY, the way the engine's own controls do.
+    expect(publish.title).toBe('Needs approval');
   });
 
   test('asChild merges onto the child: className concat, click toggles, data-active flows', async () => {

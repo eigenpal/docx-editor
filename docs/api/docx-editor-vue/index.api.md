@@ -47,7 +47,13 @@ export type ChromeSlotId =
 | 'image.insert'
 | 'image.properties'
 | 'table.insert'
-| 'file.save';
+| 'file.open'
+| 'file.save'
+| 'file.pageSetup'
+| 'insert.pageBreak'
+| 'insert.sectionBreakNextPage'
+| 'insert.sectionBreakContinuous'
+| 'insert.toc';
 
 // @public
 export function commandForSlot(slotId: ChromeSlotId): EditorCommand | null {
@@ -402,8 +408,8 @@ default: () => never[];
 }>> & Readonly<{
 onClose?: (() => any) | undefined;
 }>, {
-editor: Editor | null;
 open: boolean;
+editor: Editor | null;
 panels: readonly SidebarPanel[];
 }, {}, {}, {}, string, ComponentProvideOptions, true, {}, any>;
 
@@ -1298,6 +1304,13 @@ export function runToolbarCommand(editor: Editor | null, id: ChromeSlotId): Exec
                 reason: 'save is not a command; run it with runSave(editor)',
             };
         }
+        if (id === 'file.open') {
+            return {
+                ok: false,
+                code: 'unsupported',
+                reason: 'open is not a command; run it with editor.load(bytes)',
+            };
+        }
         return { ok: false, code: 'unsupported', reason: 'not wired to an editor command' };
     }
     const // (undocumented)
@@ -1345,6 +1358,23 @@ export function toolbarCommandState(editor: Editor | null, id: ChromeSlotId): To
             ? { id, enabled: true, disabledReason: null, active: false }
             : { id, enabled: false, disabledReason: canApply.reason, active: false };
         }
+        // A slot with a PROBE has a command shape the engine can judge, even though no fixed
+        // command can be dispatched from a bare click. When the engine REFUSES the probe, that
+        // refusal is the honest reason and it is the engine's own words — quote it rather than
+        // inventing one. When the engine ALLOWS it, the gap is this chrome's, not the engine's,
+        // so the answer falls through below: the capability exists, this control cannot reach
+        // it. That asymmetry is deliberate — reporting "enabled" here would light up
+        // `text.link` in an adapter that has grown no link UI, which is the enabled-dead-button
+        // this table exists to avoid.
+        const // (undocumented)
+        shapeProbe = CHROME_PROBES[id];
+        if (shapeProbe) {
+            const // (undocumented)
+            judged: CanResult = editor.can(shapeProbe);
+            if (!judged.ok) {
+                return { id, enabled: false, disabledReason: judged.reason, active: false };
+            }
+        }
         // Save is wired — just not as a command. Reporting it "not wired to an editor
         // command" told a host the capability is missing when what is actually missing is a
         // COMMAND for it: the control runs `runSave`, and both adapters reach it by branching
@@ -1354,6 +1384,17 @@ export function toolbarCommandState(editor: Editor | null, id: ChromeSlotId): To
                 id,
                 enabled: false,
                 disabledReason: 'save is not a command; run it with runSave(editor)',
+                active: false,
+            };
+        }
+        // Open is save's twin and gets the same distinction: the capability is there, a
+        // COMMAND for it is not. Bytes come from a picker the host owns and go in through
+        // `Editor.load`, so chrome that has one drives the control itself.
+        if (id === 'file.open') {
+            return {
+                id,
+                enabled: false,
+                disabledReason: 'open is not a command; run it with editor.load(bytes)',
                 active: false,
             };
         }

@@ -114,6 +114,7 @@ export {
   useParagraphStyle,
   type DocxEditorToolbarNamespace,
   type DocxEditorToolbarProps,
+  type ToolbarActionProps,
   type ToolbarAlignmentComponent,
   type FontFamilyItemProps,
   type FontFamilyNamespace,
@@ -135,13 +136,41 @@ export {
   type UseParagraphStyleResult,
 } from './editor/toolbar';
 
+// The compound menu bar (also reachable as `DocxEditor.Menu`): File · Format · Insert ·
+// Help, derived FROM `CHROME_MENUS` so a row and its toolbar twin cannot describe the same
+// capability differently. The parts live on the namespace statics; the index exports the
+// namespace and the part prop types.
+export {
+  DocxEditorMenu,
+  type DocxEditorMenuNamespace,
+  type DocxEditorMenuProps,
+  type MenuActionProps,
+  type MenuId,
+  type MenuItemProps,
+  type MenuPartComponent,
+  type MenuProps,
+  type MenuReportIssueProps,
+  type MenuRowProps,
+  type MenuSeparatorProps,
+  type MenuSubmenuProps,
+  type MenuTableGridProps,
+} from './editor/menu';
+
 // The shared engine helpers both adapters expose, so the two package surfaces
 // match (enforced by `bun run check:export-parity`).
 export {
   CHROME_GROUPS,
+  CHROME_MENUS,
+  chromeMenuSlots,
   commandForSlot,
   runToolbarCommand,
   toolbarCommandState,
+  type ChromeMenu,
+  type ChromeMenuEntry,
+  type ChromeMenuId,
+  type ChromeMenuItemEntry,
+  type ChromeMenuSeparatorEntry,
+  type ChromeMenuSubmenuEntry,
   type ChromeSlotId,
   type ToolbarCommandState,
 } from '@docx-editor.dev/core-contract/editor';

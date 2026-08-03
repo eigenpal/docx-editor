@@ -2618,9 +2618,16 @@ a.docx-hyperlink:focus-visible {
   background: var(--doc-bg-hover);
 }
 
-.docx-toolbar__menu-item:disabled {
+.docx-toolbar__menu-item:disabled,
+/* Menu rows carry `aria-disabled` rather than the native attribute, so they stay focusable
+ * and their reason stays announceable. The look must not depend on `:disabled`. */
+.docx-toolbar__menu-item[aria-disabled='true'] {
   opacity: 0.5;
   cursor: default;
+}
+
+.ep-root .docx-menubar__item[aria-disabled='true']:hover {
+  background: transparent;
 }
 
 /* Group heading: small gray semibold. */
@@ -3728,4 +3735,165 @@ a.docx-hyperlink:focus-visible {
   .ep-root .docx-editor__scroll-container {
     transition-duration: 0s;
   }
+}
+
+/* ── The menu bar: File · Format · Insert · Help ───────────────────────────────────────
+ *
+ * Sits under the document title, above the toolbar pill. Triggers are plain text — no
+ * chrome at rest, a soft gray plate on hover and while open — and the panels reuse the
+ * shared `.docx-toolbar__menu` card so a menu row and a toolbar dropdown row are the same
+ * object. What the menu adds is the ROW GRID: a fixed icon column so labels line up down
+ * the panel, and a right-hand shortcut column. */
+.ep-root .docx-menubar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 2px;
+  color: var(--doc-text);
+  font:
+    400 13px/1 -apple-system,
+    BlinkMacSystemFont,
+    'Segoe UI',
+    Roboto,
+    sans-serif;
+}
+
+.ep-root .docx-menubar__menu-root {
+  position: relative;
+}
+
+.ep-root .docx-menubar__trigger {
+  padding: 4px 8px;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--doc-text);
+  font: inherit;
+  line-height: 18px;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background-color 0.12s ease;
+}
+
+.ep-root .docx-menubar__trigger:hover,
+.ep-root .docx-menubar__trigger[data-open] {
+  background: var(--doc-bg-hover);
+}
+
+/* The panel: the shared card, dropped below its trigger. */
+.ep-root .docx-menubar__menu {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  z-index: 30;
+  margin-top: 4px;
+  min-width: 220px;
+}
+
+/* The row grid: icon | label | shortcut. The icon column is reserved even on a row with
+ * no glyph, so nothing shifts between rows. */
+.ep-root .docx-menubar__item {
+  gap: 12px;
+}
+
+.ep-root .docx-menubar__item-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: 18px;
+  height: 18px;
+  color: var(--doc-text-muted);
+}
+
+.ep-root .docx-menubar__item-label {
+  flex: 1;
+  text-align: left;
+}
+
+.ep-root .docx-menubar__item-shortcut,
+.ep-root .docx-menubar__item-caret {
+  flex: none;
+  margin-left: 24px;
+  color: var(--doc-text-muted);
+  font-size: 12px;
+}
+
+.ep-root .docx-menubar__item-caret {
+  margin-left: 16px;
+  font-size: 14px;
+}
+
+/* An applied toggle row (Bold on bold text) reads as the checked one. */
+.ep-root .docx-menubar__item[data-active] {
+  background: var(--doc-primary-light);
+}
+
+/* ── Submenus ──────────────────────────────────────────────────────────────────────── */
+.ep-root .docx-menubar__submenu {
+  position: relative;
+}
+
+.ep-root .docx-menubar__submenu > .docx-menubar__item[data-open] {
+  background: var(--doc-bg-hover);
+}
+
+/* Opens to the RIGHT of its parent row, top-aligned with it — Word's and Docs' geometry.
+ * The small negative offset pulls the panel's padding back onto the row. */
+.ep-root .docx-menubar__submenu-panel {
+  top: -4px;
+  left: 100%;
+  margin-top: 0;
+  /* FLUSH against the parent panel, not offset by a gap. The panel is absolutely
+   * positioned and out of flow, so the wrapper's hit box is the parent ROW only — a
+   * pointer sample landing in a gap strip would hit the parent panel instead, fire the
+   * wrapper's mouseleave, and close the submenu the user was moving toward. Visual
+   * separation comes from the card's own border and shadow. */
+  margin-left: 0;
+  min-width: 240px;
+}
+
+/* ── The insert-table size grid ────────────────────────────────────────────────────── */
+.ep-root .docx-menubar__grid {
+  padding: 8px;
+}
+
+/* Rows are real elements now (`role="row"`), so the cells lay out per row rather than as
+ * one grid container. */
+.ep-root .docx-menubar__grid-cells {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.ep-root .docx-menubar__grid-row {
+  display: flex;
+  gap: 3px;
+}
+
+.ep-root .docx-menubar__grid-cell {
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 1px solid var(--doc-border);
+  border-radius: 2px;
+  background: var(--doc-surface);
+  cursor: pointer;
+  transition:
+    background-color 0.06s ease,
+    border-color 0.06s ease;
+}
+
+.ep-root .docx-menubar__grid-cell[data-filled] {
+  background: var(--doc-primary);
+  border-color: var(--doc-primary);
+}
+
+.ep-root .docx-menubar__grid-caption {
+  min-height: 18px;
+  padding-top: 6px;
+  text-align: center;
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--doc-text-muted);
 }

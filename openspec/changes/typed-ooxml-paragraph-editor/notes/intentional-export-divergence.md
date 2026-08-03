@@ -186,6 +186,40 @@ React-only.
 - `NAVIGATION_PANE_INSET`
 - `NAVIGATION_PANE_GAP`
 
+- `DocxEditorMenu` — the compound menu bar (`DocxEditor.Menu`): File · Format · Insert ·
+  Help, derived from `CHROME_MENUS` so a row and its toolbar twin share one label, icon,
+  command and enabled state. It is a consumer of the composition layer above (context,
+  `useEditorCommand`, the Page Setup part), so the Vue twin lands with the composable
+  layer. The registry, the command rows and the styles already live in core, so the Vue
+  part is markup only.
+- `DocxEditorMenuNamespace` — the bar plus its parts as statics.
+- `DocxEditorMenuProps`
+- `MenuProps` — one menu of the bar (`DocxEditor.Menu.Menu`).
+- `MenuItemProps` — one chrome slot as a row.
+- `MenuRowProps` — a presentational row, for a host action that is not a slot.
+- `MenuActionProps` — the pinned Open/Save/Page-setup rows' props.
+- `MenuId` — a menu's identity: one of the registry's four, or a host's own. The
+  `(string & {})` arm is what lets a product add a menu the library knows nothing about.
+- `ToolbarActionProps` — a host-owned toolbar action with no chrome slot, the twin of
+  `Menu.Row`. Deliberately NOT a shared concept: it carries no engine wiring, so there is
+  nothing for core to own. The Vue twin is markup, and lands with the composable layer.
+- `MenuReportIssueProps` — Help's one packaged row, named so a host can drop it or point
+  it at its own support channel rather than this project's tracker.
+- `MenuSeparatorProps`
+- `MenuSubmenuProps`
+- `MenuTableGridProps` — Word's 6×6 insert-table size picker.
+- `MenuPartComponent` — a menu pinned to one registry id.
+- `CHROME_MENUS` — the core menu registry, re-exported for hook-built menu bars beside
+  `CHROME_GROUPS` above; Vue re-exports it when its composable layer lands.
+- `chromeMenuSlots` — every slot the menu bar places, for a parity assertion or a host
+  enumerating reachable capabilities.
+- `ChromeMenu`
+- `ChromeMenuId`
+- `ChromeMenuEntry`
+- `ChromeMenuItemEntry`
+- `ChromeMenuSubmenuEntry`
+- `ChromeMenuSeparatorEntry`
+
 ## Vue-only
 
 - `DocxEditorShellProps`

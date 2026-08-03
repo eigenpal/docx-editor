@@ -17,17 +17,24 @@ import {
   CHROME_MENUS,
   CHROME_UNAVAILABLE_KEY,
   chromeControlCount,
+  chromeMenuSlots,
   chromeSlotId,
+  type ChromeMenuEntry,
   type ChromeSlotId,
 } from '../chrome-controls.ts';
-import { commandForSlot, commandForSlotValue } from '../toolbar-commands.ts';
+import {
+  chromeProbeForSlot,
+  commandForSlot,
+  commandForSlotValue,
+  toolbarCommandState,
+} from '../toolbar-commands.ts';
 
 /**
  * The toolbar groups in the chrome spec's bar order: history, zoom, styles, font,
  * then the text group carrying colour and highlight (B I U S · A · pen · link),
  * script, the merged-rendering alignment group, the list group carrying line
  * spacing, standalone clear, and the trailing review controls — with the
- * contextual image/table/file groups (not in the default bar) closing the
+ * contextual image/table/file/insert groups (not in the default bar) closing the
  * registry.
  */
 const EXPECTED_GROUPS = [
@@ -44,6 +51,7 @@ const EXPECTED_GROUPS = [
   'image',
   'table',
   'file',
+  'insert',
 ];
 
 /** THE public slot taxonomy. A change here is a breaking API change — rename knowingly. */
@@ -78,7 +86,13 @@ const EXPECTED_SLOTS: readonly ChromeSlotId[] = [
   'image.insert',
   'image.properties',
   'table.insert',
+  'file.open',
   'file.save',
+  'file.pageSetup',
+  'insert.pageBreak',
+  'insert.sectionBreakNextPage',
+  'insert.sectionBreakContinuous',
+  'insert.toc',
 ];
 
 const allSlots = (): ChromeSlotId[] =>
@@ -199,10 +213,82 @@ describe('legacy chrome descriptor', () => {
   });
 
   test('the count is stable, so a dropped control fails rather than passing quietly', () => {
-    expect(chromeControlCount()).toBe(31);
+    expect(chromeControlCount()).toBe(37);
   });
 
-  test('the menu region carries the legacy menus', () => {
+  test('the menu region carries the chrome menus, in bar order', () => {
     expect(CHROME_MENUS.map((m) => m.id)).toEqual(['file', 'format', 'insert', 'help']);
+  });
+
+  test('every menu row names a real slot, so a menu cannot describe a control twice', () => {
+    // The whole point of arrangement-over-slots: a row's label, icon, command and enabled
+    // state come from the registry entry it names. A slot that does not exist would leave
+    // the row unlabelled and its enabled state unanswerable.
+    const slots = new Set<string>(allSlots());
+    for (const slot of chromeMenuSlots()) {
+      expect(slots, `menu row ${slot}`).toContain(slot);
+    }
+  });
+
+  test('menu rows are unique, so no capability appears twice in the bar', () => {
+    const rows = chromeMenuSlots();
+    expect(new Set(rows).size).toBe(rows.length);
+  });
+
+  test('submenu parents carry a label key and an icon, never a slot', () => {
+    // A parent row opens a panel; it has no command, so giving it a slot would mint a
+    // public id for a control `Editor.can` could never answer about.
+    const walk = (entries: readonly ChromeMenuEntry[]): void => {
+      for (const entry of entries) {
+        if (entry.kind !== 'submenu') continue;
+        expect(entry.labelKey).toMatch(/^[a-z][a-zA-Z]*\./);
+        expect(entry.labelKey).not.toContain(' ');
+        expect(entry.paths?.length ?? 0).toBeGreaterThan(0);
+        expect(entry.items.length).toBeGreaterThan(0);
+        walk(entry.items);
+      }
+    };
+    for (const menu of CHROME_MENUS) walk(menu.entries);
+  });
+
+  test('the File menu offers open, save and page setup — and no print', () => {
+    const file = CHROME_MENUS.find((m) => m.id === 'file');
+    expect(file).toBeDefined();
+    const rows = file!.entries.flatMap((e) => (e.kind === 'item' ? [e.slot] : []));
+    expect(rows).toEqual(['file.open', 'file.save', 'file.pageSetup']);
+  });
+
+  test('the Insert menu reaches the two break kinds the engine wires', () => {
+    // `insert.pageBreak` and `insert.sectionBreakNextPage` are live commands; the
+    // continuous break is present and refused, so the menu shows Word's three choices
+    // without faking the one layout cannot do.
+    expect(commandForSlot('insert.pageBreak')).toEqual({ type: 'insertBreak', kind: 'page' });
+    expect(commandForSlot('insert.sectionBreakNextPage')).toEqual({
+      type: 'insertBreak',
+      kind: 'section',
+    });
+    expect(commandForSlot('insert.sectionBreakContinuous')).toBeNull();
+  });
+
+  test('open and save each report which of the two they are missing', () => {
+    // Both capabilities EXIST — what neither has is a command. Reporting the generic "not
+    // wired to an editor command" would tell a host the capability is missing.
+    expect(toolbarCommandState(null, 'file.open').disabledReason).toBe('editor is not ready');
+    const stub = {
+      can: () => ({ ok: false as const, code: 'unsupported' as const, reason: 'no' }),
+      exec: () => ({ ok: false as const, code: 'unsupported' as const, reason: 'no' }),
+    } as unknown as Parameters<typeof toolbarCommandState>[0];
+    expect(toolbarCommandState(stub, 'file.open').disabledReason).toContain('editor.load(bytes)');
+    expect(toolbarCommandState(stub, 'file.save').disabledReason).toContain('runSave(editor)');
+  });
+
+  test('page setup is probe-driven, like the link control', () => {
+    // The dialog supplies the values, so there is no fixed command — but the capability is
+    // real, and the probe is how chrome that owns a dialog asks whether it is honoured.
+    expect(commandForSlot('file.pageSetup')).toBeNull();
+    expect(chromeProbeForSlot('file.pageSetup')).toEqual({
+      type: 'setPageSetup',
+      orientation: 'portrait',
+    });
   });
 });

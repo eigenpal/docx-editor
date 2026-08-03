@@ -62,6 +62,7 @@ import { ToolbarFontSize, ToolbarZoom } from './steppers';
 import { ToolbarLineSpacing } from './LineSpacing';
 import { ToolbarFontColor, ToolbarHighlight } from './ColorSplit';
 import { ToolbarAlignment, type ToolbarAlignmentComponent } from './Alignment';
+import { ToolbarAction } from './ToolbarAction';
 import { FontFamily, useFontFamily } from './FontFamily';
 import { ParagraphStyle, useParagraphStyle } from './ParagraphStyle';
 
@@ -222,6 +223,8 @@ function DocxEditorToolbarRoot(props: DocxEditorToolbarProps) {
 export interface DocxEditorToolbarNamespace {
   (props: DocxEditorToolbarProps): ReactNode;
   readonly Button: typeof ToolbarButton;
+  /** A host-owned action the chrome registry does not describe. */
+  readonly Action: typeof ToolbarAction;
   readonly Separator: typeof ToolbarSeparator;
   readonly Undo: ToolbarPartComponent;
   readonly Redo: ToolbarPartComponent;
@@ -265,6 +268,7 @@ export interface DocxEditorToolbarNamespace {
  */
 export const DocxEditorToolbar: DocxEditorToolbarNamespace = Object.assign(DocxEditorToolbarRoot, {
   Button: ToolbarButton,
+  Action: ToolbarAction,
   Separator: ToolbarSeparator,
   Undo: ToolbarUndo,
   Redo: ToolbarRedo,

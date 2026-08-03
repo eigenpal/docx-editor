@@ -51,7 +51,13 @@ const ICON_FOR_SLOT: Record<string, string> = {
   'review.comments': 'comment',
   // The "✎ Editing ▾" mode pill's leading pencil glyph.
   'review.editingMode': 'edit_note',
+  'file.open': 'file_upload',
   'file.save': 'file_download',
+  'file.pageSetup': 'settings',
+  'insert.pageBreak': 'page_break',
+  'insert.sectionBreakNextPage': 'horizontal_rule',
+  'insert.sectionBreakContinuous': 'border_horizontal',
+  'insert.toc': 'format_list_numbered',
 };
 
 const slotsWithControls = CHROME_GROUPS.flatMap((g) =>

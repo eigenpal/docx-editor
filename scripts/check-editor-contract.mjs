@@ -51,6 +51,15 @@ const REACT_PROPS_NOT_YET_IN_VUE = new Set([
   // through the same facade — so this gap is the panel, not the capability. Removed when
   // the Vue provider/hooks twin lands.
   'navigation',
+  // The menu bar rides that same provider/hooks layer. The ENGINE half is already shared
+  // and MORE so than the pane's: `CHROME_MENUS` is the core registry both adapters read,
+  // every actionable row is a `ChromeSlotId` whose enabled state comes from the same
+  // `toolbarCommandState`, the two break commands are core rows, and the styles are in
+  // the core stylesheet — so the Vue twin is markup over data it already has. `onOpen` is
+  // that bar's File row handler and closes with it. Removed when the Vue provider/hooks
+  // twin lands.
+  'menu',
+  'onOpen',
 ]);
 
 function extractInterfaceBody(source, name) {
