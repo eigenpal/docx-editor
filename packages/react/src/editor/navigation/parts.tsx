@@ -1,0 +1,446 @@
+// The navigation pane's parts: `DocxEditor.Navigation.Header` / `.Close` / `.Title` /
+// `.Tabs` / `.Tab` / `.Headings` / `.Find` / `.Toggle`.
+//
+// Each reads the pane state from context and renders only its own markup, so a host can
+// keep the packaged Headings list while replacing the header, or drop the tab strip and
+// pin one tab. Class names carry the look (core stylesheet, `--doc-*` tokens); nothing
+// here hard-codes a colour.
+//
+// EVERY STRING THAT LANDS IN A ROW IS ALREADY BOUNDED. Heading text arrives from
+// `Editor.getOutline()` and match text/context from `Editor.findMatches()`, both validated
+// at the engine's derivation boundary (length-capped, control characters flattened). These
+// components put them in `textContent` only — never in a style string, never in markup.
+
+import { useCallback, useMemo, useState } from 'react';
+import type { CSSProperties, KeyboardEvent, ReactElement, ReactNode } from 'react';
+import type { TextMatch } from '@docx-editor.dev/core-contract/contracts/editor';
+import { MaterialSymbol } from '../../components/ui/Icons';
+import { useNavigationContext } from './navigation-context';
+// Aliased: this module also EXPORTS a component called `NavigationTab`, and the two
+// declarations would collide in the generated .d.ts.
+import type { NavigationTab as NavigationTabId } from './useNavigationPane';
+
+/** Shared props for the pane's structural parts. @public */
+export interface NavigationPartProps {
+  className?: string;
+  style?: CSSProperties;
+  children?: ReactNode;
+}
+
+/** The tabs the pane supports, in strip order. Module-level so the keyboard handler
+ * does not rebuild it (and its dependency identity) on every render. */
+const TABS: NavigationTabId[] = ['headings', 'find'];
+
+const cx = (...parts: (string | false | undefined)[]) => parts.filter(Boolean).join(' ');
+
+// ─── Header ──────────────────────────────────────────────────────────────────────────
+
+/**
+ * The pane's title row. With no children it renders the close arrow and the title.
+ *
+ * @public
+ */
+export function NavigationHeader({
+  className,
+  style,
+  children,
+}: NavigationPartProps): ReactElement {
+  return (
+    <div className={cx('docx-nav__header', className)} style={style}>
+      {children ?? (
+        <>
+          <NavigationClose />
+          <NavigationTitle />
+        </>
+      )}
+    </div>
+  );
+}
+
+/** The back arrow that closes the pane. @public */
+export function NavigationClose({ className, style, children }: NavigationPartProps): ReactElement {
+  const { pane, t } = useNavigationContext('Close');
+  return (
+    <button
+      type="button"
+      className={cx('docx-nav__close', className)}
+      style={style}
+      aria-label={t('navigation.closeAriaLabel')}
+      title={t('navigation.closeTitle')}
+      onClick={() => pane.setOpen(false)}
+    >
+      {children ?? <MaterialSymbol name="arrow_back" size={20} />}
+    </button>
+  );
+}
+
+/** The pane's heading text. @public */
+export function NavigationTitle({ className, style, children }: NavigationPartProps): ReactElement {
+  const { t } = useNavigationContext('Title');
+  return (
+    <h2 className={cx('docx-nav__title', className)} style={style}>
+      {children ?? t('navigation.title')}
+    </h2>
+  );
+}
+
+// ─── Tabs ────────────────────────────────────────────────────────────────────────────
+
+/**
+ * The tab strip. With no children it renders one `Tab` per tab the pane supports.
+ *
+ * A real `role="tablist"`, so arrow keys move between tabs and a screen reader announces
+ * the panel each one controls.
+ *
+ * @public
+ */
+export function NavigationTabs({ className, style, children }: NavigationPartProps): ReactElement {
+  const { pane, t } = useNavigationContext('Tabs');
+
+  const onKeyDown = useCallback(
+    (event: KeyboardEvent) => {
+      const delta = event.key === 'ArrowRight' ? 1 : event.key === 'ArrowLeft' ? -1 : 0;
+      if (delta === 0) return;
+      event.preventDefault();
+      const index = TABS.indexOf(pane.tab);
+      pane.setTab(TABS[(index + delta + TABS.length) % TABS.length]!);
+    },
+    [pane]
+  );
+
+  return (
+    <div
+      className={cx('docx-nav__tabs', className)}
+      style={style}
+      role="tablist"
+      aria-label={t('navigation.title')}
+      onKeyDown={onKeyDown}
+    >
+      {children ?? TABS.map((value) => <NavigationTab key={value} value={value} />)}
+    </div>
+  );
+}
+
+/** Props for one tab. @public */
+export interface NavigationTabProps extends NavigationPartProps {
+  value: NavigationTabId;
+}
+
+/** One tab button. Children replace the label. @public */
+export function NavigationTab({
+  value,
+  className,
+  style,
+  children,
+}: NavigationTabProps): ReactElement {
+  const { pane, t } = useNavigationContext('Tab');
+  const selected = pane.tab === value;
+  return (
+    <button
+      type="button"
+      role="tab"
+      id={`docx-nav-tab-${value}`}
+      aria-selected={selected}
+      aria-controls={`docx-nav-panel-${value}`}
+      tabIndex={selected ? 0 : -1}
+      className={cx('docx-nav__tab', selected && 'docx-nav__tab--selected', className)}
+      style={style}
+      onClick={() => pane.setTab(value)}
+    >
+      {children ?? t(`navigation.tabs.${value}`)}
+    </button>
+  );
+}
+
+// ─── Search box ──────────────────────────────────────────────────────────────────────
+
+function SearchBox({
+  value,
+  onChange,
+  onClear,
+  placeholder,
+  label,
+  clearLabel,
+  autoFocus,
+}: {
+  value: string;
+  onChange: (next: string) => void;
+  onClear: () => void;
+  placeholder: string;
+  label: string;
+  clearLabel: string;
+  autoFocus?: boolean;
+}): ReactElement {
+  return (
+    <div className="docx-nav__searchbox">
+      <MaterialSymbol name="search" size={18} className="docx-nav__search-icon" />
+      <input
+        type="search"
+        className="docx-nav__search-input"
+        value={value}
+        placeholder={placeholder}
+        aria-label={label}
+        autoFocus={autoFocus}
+        onChange={(event) => onChange(event.target.value)}
+      />
+      {value.length > 0 && (
+        <button
+          type="button"
+          className="docx-nav__search-clear"
+          aria-label={clearLabel}
+          onClick={onClear}
+        >
+          <MaterialSymbol name="close" size={16} />
+        </button>
+      )}
+    </div>
+  );
+}
+
+// ─── Headings tab ────────────────────────────────────────────────────────────────────
+
+/**
+ * The heading list, indented by outline depth. Clicking a row moves the caret to that
+ * heading and brings it into view.
+ *
+ * The filter box narrows the list CLIENT-SIDE — it hides rows whose text does not contain
+ * what you typed. It is deliberately not the document search: filtering an outline and
+ * searching a document are different questions, and the Find tab answers the second one.
+ *
+ * @public
+ */
+export function NavigationHeadings({ className, style }: NavigationPartProps): ReactElement {
+  const { pane, outline, t } = useNavigationContext('Headings');
+  const [filter, setFilter] = useState('');
+
+  const items = useMemo(() => {
+    const needle = filter.trim().toLowerCase();
+    if (needle.length === 0) return outline.items;
+    return outline.items.filter((item) => item.heading.text.toLowerCase().includes(needle));
+  }, [outline.items, filter]);
+
+  const hidden = pane.tab !== 'headings';
+
+  return (
+    <div
+      className={cx('docx-nav__panel', className)}
+      style={style}
+      role="tabpanel"
+      id="docx-nav-panel-headings"
+      aria-labelledby="docx-nav-tab-headings"
+      hidden={hidden}
+    >
+      <SearchBox
+        value={filter}
+        onChange={setFilter}
+        onClear={() => setFilter('')}
+        placeholder={t('navigation.find.placeholder')}
+        label={t('navigation.find.inputAriaLabel')}
+        clearLabel={t('navigation.find.clearAriaLabel')}
+      />
+      {outline.isEmpty ? (
+        <p className="docx-nav__empty">{t('navigation.headings.noHeadings')}</p>
+      ) : items.length === 0 ? (
+        <p className="docx-nav__empty">{t('navigation.find.noResults')}</p>
+      ) : (
+        <ul className="docx-nav__list">
+          {items.map((item, index) => (
+            <li key={`${item.heading.blockId}-${index}`}>
+              <button
+                type="button"
+                className={cx(
+                  'docx-nav__heading',
+                  outline.selectedBlockId === item.heading.blockId && 'docx-nav__heading--current'
+                )}
+                // Depth is a number the engine derived, not a file string: safe as a
+                // computed inline value, and CSS reads it for the indent.
+                style={{ paddingInlineStart: `${8 + item.depth * 14}px` }}
+                title={item.heading.text}
+                onClick={() => outline.goTo(item.heading.blockId)}
+              >
+                {item.heading.text}
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+// ─── Find tab ────────────────────────────────────────────────────────────────────────
+
+/** One result row: the match in context, with the matched span emphasised. */
+function ResultRow({
+  match,
+  active,
+  onSelect,
+}: {
+  match: TextMatch;
+  active: boolean;
+  onSelect: () => void;
+}): ReactElement {
+  return (
+    <li>
+      <button
+        type="button"
+        className={cx('docx-nav__result', active && 'docx-nav__result--active')}
+        aria-current={active ? 'true' : undefined}
+        onClick={onSelect}
+      >
+        <span className="docx-nav__result-text">
+          {match.contextBefore}
+          <mark className="docx-nav__result-hit">{match.text}</mark>
+          {match.contextAfter}
+        </span>
+      </button>
+    </li>
+  );
+}
+
+/**
+ * The find panel: a query box, a result counter with previous/next, the match-case and
+ * whole-word toggles, and the result list. Selecting a result moves the caret onto the
+ * match and reveals its page.
+ *
+ * @public
+ */
+export function NavigationFind({ className, style }: NavigationPartProps): ReactElement {
+  const { pane, search, t } = useNavigationContext('Find');
+  const hidden = pane.tab !== 'find';
+  const hasQuery = search.query.trim().length > 0;
+
+  // Before any navigation nothing is selected, so the readout is a TOTAL, not a position:
+  // saying "Result 1 of 7" while the caret has not moved claims a selection that is not
+  // there. Once next/previous or a row click has landed, it becomes the position.
+  const counter =
+    search.matches.length === 0
+      ? null
+      : search.activeIndex < 0
+        ? t(search.truncated ? 'navigation.find.totalTruncated' : 'navigation.find.total', {
+            total: search.matches.length,
+          })
+        : t(search.truncated ? 'navigation.find.counterTruncated' : 'navigation.find.counter', {
+            current: search.activeIndex + 1,
+            total: search.matches.length,
+          });
+
+  return (
+    <div
+      className={cx('docx-nav__panel', className)}
+      style={style}
+      role="tabpanel"
+      id="docx-nav-panel-find"
+      aria-labelledby="docx-nav-tab-find"
+      hidden={hidden}
+    >
+      <SearchBox
+        value={search.query}
+        onChange={search.setQuery}
+        onClear={search.clear}
+        placeholder={t('navigation.find.placeholder')}
+        label={t('navigation.find.inputAriaLabel')}
+        clearLabel={t('navigation.find.clearAriaLabel')}
+      />
+
+      <div
+        className="docx-nav__options"
+        role="group"
+        aria-label={t('navigation.find.optionsAriaLabel')}
+      >
+        <label className="docx-nav__option">
+          <input
+            type="checkbox"
+            checked={search.matchCase}
+            onChange={(event) => search.setMatchCase(event.target.checked)}
+          />
+          {t('navigation.find.matchCase')}
+        </label>
+        <label className="docx-nav__option">
+          <input
+            type="checkbox"
+            checked={search.wholeWord}
+            onChange={(event) => search.setWholeWord(event.target.checked)}
+          />
+          {t('navigation.find.wholeWord')}
+        </label>
+      </div>
+
+      <div className="docx-nav__resultbar">
+        <span className="docx-nav__count" aria-live="polite">
+          {/* Nothing typed says nothing: an empty box is not "no results". */}
+          {!hasQuery
+            ? ''
+            : search.isPending
+              ? t('navigation.find.searching')
+              : (counter ?? t('navigation.find.noResults'))}
+        </span>
+        <span className="docx-nav__steppers">
+          <button
+            type="button"
+            className="docx-nav__stepper"
+            aria-label={t('navigation.find.previousAriaLabel')}
+            disabled={search.matches.length === 0}
+            onClick={search.previous}
+          >
+            <MaterialSymbol name="keyboard_arrow_up" size={18} />
+          </button>
+          <button
+            type="button"
+            className="docx-nav__stepper"
+            aria-label={t('navigation.find.nextAriaLabel')}
+            disabled={search.matches.length === 0}
+            onClick={search.next}
+          >
+            <MaterialSymbol name="keyboard_arrow_down" size={18} />
+          </button>
+        </span>
+      </div>
+
+      {search.matches.length > 0 && (
+        <ul className="docx-nav__list" aria-label={t('navigation.find.resultsAriaLabel')}>
+          {search.matches.map((match, index) => (
+            <ResultRow
+              key={`${match.blockId}-${match.start}-${index}`}
+              match={match}
+              active={index === search.activeIndex}
+              onSelect={() => search.goTo(index)}
+            />
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+// ─── Toggle ──────────────────────────────────────────────────────────────────────────
+
+/**
+ * The collapsed pane's disc button. `DocxEditor.Navigation` renders one for you while the
+ * pane is closed; place it yourself (a toolbar, a menu) with `toggle={false}` on the root.
+ *
+ * @public
+ */
+export function NavigationToggle({
+  className,
+  style,
+  children,
+}: NavigationPartProps): ReactElement {
+  const { pane, t } = useNavigationContext('Toggle');
+  return (
+    <button
+      type="button"
+      className={cx('docx-nav__toggle', className)}
+      style={style}
+      aria-label={t('navigation.openAriaLabel')}
+      aria-expanded={pane.open}
+      title={t('navigation.openTitle')}
+      // A mousedown that reaches the document surface moves the caret; the pane opening
+      // must leave the user's place in the text alone.
+      onMouseDown={(event) => event.preventDefault()}
+      onClick={pane.toggle}
+    >
+      {children ?? <MaterialSymbol name="toc" size={20} />}
+    </button>
+  );
+}

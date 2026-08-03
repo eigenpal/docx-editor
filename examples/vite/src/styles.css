@@ -261,26 +261,22 @@
 
 /* The context-fed horizontal ruler row: the first WORKSPACE row, sitting on the
    gray `--doc-bg` below the chrome seam, centered over the page column. The
-   ruler component sizes itself to the page width. When the outline overlay is
-   open, extra left padding keeps the ruler centered over the shifted page; the
-   padding transition matches the viewport's padding shift so both glide
-   together. */
+   ruler component sizes itself to the page width, and follows an open navigation
+   pane on its own — the part reads the pane's published shift — so this row needs
+   no pane-aware padding of its own. */
 .demo-ruler-row {
   display: flex;
   justify-content: center;
   padding: 6px 20px 2px;
   overflow: hidden;
   flex: none;
-  transition: padding 0.2s ease;
 }
 
-.demo-ruler-row--outline {
-  padding-left: 308px; /* 20px base + the 288px outline overlay reservation */
-}
-
-/* Editor area: the full-width scrolled page column with overlay panels on top.
-   The viewport never changes width — panels float above it and shift the page
-   column with padding — so the vertical ruler stays pinned at the far left. */
+/* Editor area: the full-width scrolled page column with the navigation pane
+   floating over its left gutter. The viewport never changes width — the pane
+   overlays it and publishes its own shift, which `DocxEditor.Viewport` and
+   `DocxEditor.HorizontalRuler` consume — so the vertical ruler stays pinned at
+   the far left and the page holds still whenever the gutter already had room. */
 .demo-main {
   flex: 1;
   min-height: 0;
@@ -289,58 +285,12 @@
   position: relative;
 }
 
-/* The outline is an OVERLAY panel: absolutely positioned over the viewport,
-   inset 20px past the vertical ruler's tick column so the two coexist (the
-   panel's own 12px anchor puts the back arrow at x=32, the chrome spec's
-   ruler-cleared anchor). 12px anchor + 240px panel + 16px page gap = the 288px
-   reservation the viewport/ruler paddings use. Stays mounted when closed:
-   width animates to 0 (clipping the panel) and `visibility` flips after the
-   slide so the closed panel is neither visible nor hit-testable. */
-.demo-outline {
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  left: 20px;
-  width: 268px;
-  overflow: hidden;
-  z-index: 20;
-  visibility: visible;
-  transition:
-    width 0.2s ease,
-    visibility 0s 0s;
-}
-
-.demo-outline--closed {
-  width: 0;
-  visibility: hidden;
-  transition:
-    width 0.2s ease,
-    visibility 0s 0.2s;
-}
-
-/* Collapsed state: the CORE `.docx-outline-toggle` owns the look (circular
-   disc, token-driven, dark-mode-aware); the demo adds only placement. Anchored
-   at 12px past the 20px vertical-ruler column so the disc never covers the
-   ticks — the same ruler-cleared anchor the open panel uses. */
-.demo-outline-toggle {
-  position: absolute;
-  top: 24px;
-  left: 32px;
-  z-index: 40;
-}
-
-/* Full-width scroll container. Opening the outline shifts the page column with
-   LEFT PADDING (the absolute vertical ruler at left: 0 is unaffected), on the
-   same ease the ruler row uses so the ruler stays centered over the page. */
+/* Full-width scroll container. Any displacement an open pane needs arrives as
+   the library's own padding; the demo adds none. */
 .demo-viewport {
   flex: 1;
   min-height: 0;
   overflow: auto;
-  transition: padding 0.2s ease;
-}
-
-.demo-viewport--outline {
-  padding-left: 288px;
 }
 
 /* Vertical ruler: an absolutely positioned child of the scroll container, so it

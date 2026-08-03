@@ -926,12 +926,43 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
       };
     },
 
-    findMatches: () => [],
-    selectMatch: (_match: TextMatch): ExecResult => ({
-      ok: false,
-      code: 'unsupported',
-      reason: 'find is not wired on the tree editor yet',
-    }),
+    // Search reads the canonical tree through the session's memo, so repeated identical
+    // questions (a find panel re-rendering, a next/previous press) cost nothing. The
+    // `truncated` half of the derivation is dropped here because this member's declared
+    // answer is an array; a caller comparing the length against the documented cap learns
+    // the same thing.
+    findMatches: (query, options) =>
+      surface?.session.findText(query, {
+        ...(options?.matchCase !== undefined ? { matchCase: options.matchCase } : {}),
+        ...(options?.wholeWord !== undefined ? { wholeWord: options.wholeWord } : {}),
+      }).matches ?? [],
+
+    // Finding is a read and selecting is a write, so this is the only half that moves the
+    // caret. The match already carries the paragraph id and the offsets in the surface's
+    // own vocabulary, so there is nothing to re-derive — and REVEALING is separate from
+    // selecting, because moving the caret does not move the viewport: a match twenty pages
+    // down would otherwise be selected where nobody could see it.
+    selectMatch(match: TextMatch): ExecResult {
+      if (!surface) {
+        return { ok: false, code: 'notFound', reason: 'no document is loaded' };
+      }
+      if (
+        typeof match?.blockId !== 'string' ||
+        match.blockId.length === 0 ||
+        !Number.isInteger(match.start) ||
+        match.start < 0 ||
+        !Number.isInteger(match.length) ||
+        match.length < 0
+      ) {
+        return { ok: false, code: 'invalidArgs', reason: 'match must carry a blockId and offsets' };
+      }
+      surface.setSelection({
+        anchor: { paragraphId: match.blockId, offset: match.start },
+        head: { paragraphId: match.blockId, offset: match.start + match.length },
+      });
+      surface.revealParagraph(match.blockId);
+      return { ok: true, changed: false };
+    },
 
     getSelectedImage: () => null,
     getSelectedTable: () => null,

@@ -678,6 +678,38 @@
     "title": "Outline",
     "noHeadings": "No headings found. Add headings to your document to see them here."
   },
+  "navigation": {
+    "ariaLabel": "Document navigation",
+    "title": "Navigation",
+    "openAriaLabel": "Open navigation",
+    "openTitle": "Navigation",
+    "closeAriaLabel": "Close navigation",
+    "closeTitle": "Close navigation",
+    "tabs": {
+      "headings": "Headings",
+      "find": "Find"
+    },
+    "headings": {
+      "noHeadings": "No headings found. Add headings to your document to see them here."
+    },
+    "find": {
+      "placeholder": "Search document",
+      "inputAriaLabel": "Search document",
+      "clearAriaLabel": "Clear search",
+      "previousAriaLabel": "Previous result",
+      "nextAriaLabel": "Next result",
+      "matchCase": "Match case",
+      "wholeWord": "Whole words only",
+      "optionsAriaLabel": "Search options",
+      "resultsAriaLabel": "Search results",
+      "noResults": "No results",
+      "searching": "Searching…",
+      "counter": "Result {current} of {total}",
+      "counterTruncated": "Result {current} of {total}+",
+      "total": "{total, plural, one {# result} other {# results}}",
+      "totalTruncated": "{total, plural, other {#+ results}}"
+    }
+  },
   "sidebar": {
     "ariaLabel": "Annotations sidebar"
   },
