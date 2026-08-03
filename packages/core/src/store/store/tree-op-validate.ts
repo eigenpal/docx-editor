@@ -345,6 +345,13 @@ export type TreeOpRejection =
   | 'unsupported-property'
   | 'invalid-property-value'
   | 'not-adjacent-siblings'
+  /** The transaction named a part the package does not hold. */
+  | 'unknown-part'
+  /**
+   * The transaction would have published a package that does not open: a relationship
+   * pointing at a part nobody created, or a part with no declared content type.
+   */
+  | 'package-invariant'
   /** No revision in this part carries the addressed `(id, author, date)` triple. */
   | 'unknown-revision'
   /**

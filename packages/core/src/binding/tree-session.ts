@@ -309,14 +309,16 @@ export function openTreeSession(bytes: Uint8Array): OpenTreeSessionResult {
   const normalized = normalizeParagraphIdentity(main);
   if (normalized !== main) pkg = withPart(pkg, normalized);
 
-  const store = new TreeDocumentStore(normalized);
+  // The store owns the whole package now, so a transaction that writes several parts is one
+  // publication and one undo entry. `store.part` still answers with the main document part.
+  const store = new TreeDocumentStore(pkg, pkg.mainDocumentPart);
   let headerFooterBySection: readonly HeaderFooterParts[] | null = null;
   let lastChange: TreeModelChange | null = null;
   store.subscribe((change) => {
     lastChange = change;
   });
 
-  const currentPackage = (): OoxmlPackage => withPart(pkg, store.part);
+  const currentPackage = (): OoxmlPackage => store.package;
 
   // The styles / numbering parts, resolved once through the main part's relationships
   // (the same resolution discipline `resolveHeaderFooterParts` uses), with conventional
@@ -673,11 +675,13 @@ export function openTreeSession(bytes: Uint8Array): OpenTreeSessionResult {
       },
 
       ensureListDefinition(kind) {
-        // The numbering part lives on the PACKAGE, not the main-part tree, so this is the
-        // one edit that does not go through `store.transact`. The memoized numbering root
-        // is cleared so layout re-reads the definitions this just added.
+        // The numbering part lives on the PACKAGE and this is not a user intent, so it takes
+        // the graft lane rather than `store.transact`: no revision, no undo entry. It goes
+        // THROUGH the store so the package has one owner. The memoized numbering root is
+        // cleared so layout re-reads the definitions this just added.
         const ensured = ensureListDefinition(currentPackage(), kind);
         if (!ensured) return null;
+        store.graftPackage(() => ensured.pkg);
         pkg = ensured.pkg;
         numberingRootResolved = false;
         numberingRoot = null;
@@ -693,6 +697,7 @@ export function openTreeSession(bytes: Uint8Array): OpenTreeSessionResult {
         const ensured = ensureNumberingLevel(before, numId, level, kind);
         if (!ensured) return false;
         if (ensured !== before) {
+          store.graftPackage(() => ensured);
           pkg = ensured;
           numberingRootResolved = false;
           numberingRoot = null;

@@ -93,6 +93,18 @@ export {
 } from './ooxml-tree.ts';
 export { readOnOffChild, isContentRevisionKind, isRangeMarkerKind } from './ooxml-shared.ts';
 export {
+  relationshipsOf,
+  relsPartNameFor,
+  resolveContentTypeOf,
+  validatePackageInvariants,
+  withContentTypeOverride,
+  withNewPart,
+  withRelationship,
+  type PackageInvariantCode,
+  type PackageInvariantIssue,
+  type PackageInvariantResult,
+} from './package-edit.ts';
+export {
   type ZipRejection,
   type ZipLimits,
   type ZipReadResult,
