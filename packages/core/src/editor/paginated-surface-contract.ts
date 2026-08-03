@@ -326,6 +326,24 @@ export interface PaginatedSurface {
    */
   readonly navigation: SurfaceNavigation;
   /**
+   * Pin the current selection so it stays VISIBLY selected while focus is elsewhere.
+   *
+   * A document has one selection: the moment a panel focuses an input of its own the browser
+   * takes the highlight off the text, which is when the user most needs to see what the panel
+   * is about to act on. This draws the range on the engine's own overlay instead, so it
+   * survives the focus move. The MODEL selection is untouched — the op the panel finally runs
+   * addresses the same characters it always would.
+   *
+   * The pin releases itself when the caret leaves the range (either edge counts as inside),
+   * which is what lets a host close its panel on "the user clicked somewhere else" without
+   * every adapter reimplementing that comparison.
+   */
+  retainSelection(): void;
+  /** Drop the pin and stop drawing it, whether or not the caret ever left. */
+  releaseSelection(): void;
+  /** The pinned range, or null once it was released or escaped. */
+  retainedSelection(): SemanticSelection | null;
+  /**
    * `bookmarkName -> position` over the current revision, for resolving an internal link.
    * First in document order wins a duplicate name, matching Word.
    */

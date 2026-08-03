@@ -212,7 +212,10 @@ export function useHyperlinkPopupInstance(active = true): UseHyperlinkPopupResul
     [editor]
   );
 
-  const close = useCallback(() => setState(CLOSED), []);
+  const close = useCallback(() => {
+    editor?.surface?.releaseSelection();
+    setState(CLOSED);
+  }, [editor]);
 
   /**
    * Open for the caret's own link, or for a new one — what Ctrl/Cmd+K and the toolbar
@@ -238,6 +241,11 @@ export function useHyperlinkPopupInstance(active = true): UseHyperlinkPopupResul
       return;
     }
     const selected = editor?.query({ type: 'selectedText' }) ?? '';
+    // The text stays SELECTED while the panel is up. Focusing the URL field moves the
+    // browser's one selection into it, so without this the highlight the user is about to
+    // turn into a link vanishes exactly when they need to see it. The engine draws it on its
+    // own overlay and releases the pin when the caret leaves — which is what closes us below.
+    editor?.surface?.retainSelection();
     setState({
       mode: 'editing',
       link: null,
@@ -279,6 +287,24 @@ export function useHyperlinkPopupInstance(active = true): UseHyperlinkPopupResul
     if (current.mode !== 'reading' || !current.link) return;
     const atCaret = editor?.surface?.hyperlinks.linkAtCaret() ?? null;
     if (atCaret && atCaret.id === current.link.id) return;
+    setState(CLOSED);
+  }, [snapshot, editor]);
+
+  // A CREATE panel closes when the caret leaves the range it is about to link.
+  //
+  // The same question as above — "is what the panel says still true" — asked of a panel that
+  // has no link yet: what it says is "these words are about to become a link", and clicking
+  // somewhere else makes that false. The engine owns the comparison (it releases the pin when
+  // the caret escapes, either edge counting as inside), so this reads a fact rather than
+  // recomputing document order in the adapter, and Vue gets the same rule from the same place.
+  //
+  // Only a panel that RETAINED something is governed by this: an edit panel opened on an
+  // existing link is covered by the effect above, and typing in the URL field moves no caret.
+  useEffect(() => {
+    const current = stateRef.current;
+    if (current.mode !== 'editing' || current.link) return;
+    const surface = editor?.surface;
+    if (!surface || surface.retainedSelection()) return;
     setState(CLOSED);
   }, [snapshot, editor]);
 
@@ -330,18 +356,20 @@ export function useHyperlinkPopupInstance(active = true): UseHyperlinkPopupResul
       setState((previous) => ({ ...previous, error: true }));
       return false;
     }
-    setState(CLOSED);
+    // Through `close`, not a bare `setState`: applying must also drop the retained
+    // highlight, or the words stay lit over a link that already exists.
+    close();
     return true;
-  }, [editor]);
+  }, [editor, close]);
 
   const unlink = useCallback(() => {
     const hyperlinks = editor?.surface?.hyperlinks;
     const link = stateRef.current.link;
     if (!hyperlinks) return false;
     const removed = hyperlinks.removeHyperlink(link?.id);
-    if (removed) setState(CLOSED);
+    if (removed) close();
     return removed;
-  }, [editor]);
+  }, [editor, close]);
 
   const openTarget = useCallback(() => {
     const navigation = editor?.surface?.navigation;

@@ -30,6 +30,15 @@ export interface SelectionOverlayOptions {
    * beside the cells it describes.
    */
   readonly pageOffsetX?: ReadonlyMap<number, number>;
+  /**
+   * Class for each painted rectangle. Defaults to the cell-selection class, because a cell
+   * rectangle was the only thing this layer drew when it was written.
+   *
+   * A retained TEXT range is drawn here too and must not look like selected cells — one is
+   * "these cells are chosen", the other is "your selection is still here while you type in
+   * this panel". Same geometry, different meaning, so the caller names the class.
+   */
+  readonly className?: string;
 }
 
 /**
@@ -52,7 +61,7 @@ export function paintSelectionOverlay(
     const page = layout.pages[rect.pageIndex];
     if (!page) continue;
     const element = document.createElement('div');
-    element.className = 'docx-cell-selection-rect';
+    element.className = options.className ?? 'docx-cell-selection-rect';
     element.style.position = 'absolute';
     // Page-content coordinates to the sheet space the layer is laid out in.
     const offsetX = options.pageOffsetX?.get(rect.pageIndex) ?? 0;

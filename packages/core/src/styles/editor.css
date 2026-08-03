@@ -2385,6 +2385,17 @@ a.docx-hyperlink:focus-visible {
   background-color: var(--doc-cell-selection);
 }
 
+/*
+ * A selection the engine keeps lit while a panel holds focus.
+ *
+ * The same colour the browser's own `::selection` uses, because it is standing in for exactly
+ * that: the user's highlight did not change, only which element the browser thinks is
+ * focused. A different colour here would read as a different KIND of selection.
+ */
+.docx-paginated-surface .docx-retained-selection-rect {
+  background-color: var(--doc-selection);
+}
+
 /* ========================================================================
  * COMPOUND TOOLBAR (`docx-toolbar` family) — the composition API's default
  * chrome bar, the chrome spec's visual recipe:

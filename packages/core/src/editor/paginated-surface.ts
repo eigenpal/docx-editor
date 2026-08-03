@@ -26,6 +26,7 @@ import {
   createParagraphLayoutCache,
   resolveDefaultSurfaceMeasurer,
   cellSelectionRects,
+  selectionRects,
   caretAt,
   cellSelectionText,
   documentOrder,
@@ -193,6 +194,42 @@ export function mountPaginatedSurface(
    */
   let cellSelection: CellSelection | null = null;
   let lastRejection: string | null = null;
+
+  /**
+   * A range pinned to stay VISIBLY selected while the focus is somewhere else.
+   *
+   * A document has one selection. The moment a panel focuses an input of its own, the browser
+   * moves that selection into the input and the text the user highlighted stops looking
+   * highlighted — which is exactly when they most need to see what the panel is about to act
+   * on. Word and Google Docs both keep the range lit; this is how.
+   *
+   * It is a SIBLING of `selection`, not a replacement: the model selection is untouched, so
+   * the op the panel finally runs still addresses the same characters. This only decides what
+   * the overlay draws, and how long the panel is entitled to stay open.
+   */
+  let retainedSelection: SemanticSelection | null = null;
+
+  /** Document-order comparison of two positions: negative, zero or positive. */
+  function comparePositions(a: SemanticPosition, b: SemanticPosition): number {
+    if (a.paragraphId === b.paragraphId) return a.offset - b.offset;
+    const order = documentOrder(currentLayout);
+    return order.indexOf(a.paragraphId) - order.indexOf(b.paragraphId);
+  }
+
+  /**
+   * Drop the retained range once the caret leaves it.
+   *
+   * "Leaves" is inclusive of both edges, so clicking at either end of your own selection is
+   * still inside it. A COLLAPSED retained position (Ctrl+K with nothing selected) is left the
+   * moment the caret moves at all, which is the same rule with a zero-width range.
+   */
+  function releaseRetainedIfEscaped(next: SemanticSelection): void {
+    if (!retainedSelection) return;
+    const { from, to } = orderedRangeOf(currentLayout, retainedSelection);
+    const head = next.head;
+    if (comparePositions(head, from) >= 0 && comparePositions(head, to) <= 0) return;
+    retainedSelection = null;
+  }
 
   /**
    * The armed typing format: what was pressed (`properties`) over the face the caret had
@@ -684,6 +721,7 @@ export function mountPaginatedSurface(
     // Moving the caret discards a stored caret format — Word's rule. Landing back on the
     // exact armed position (the mirror re-adopting the same caret) keeps it.
     reconcilePendingWith(next);
+    releaseRetainedIfEscaped(next);
     selection = next;
     // Any plain selection cancels a rectangle. A caret placed by a click, a keystroke or an
     // edit is a text selection by definition, and leaving the rectangle behind would keep
@@ -717,6 +755,7 @@ export function mountPaginatedSurface(
     // this runs inside is about to do both.
     adoptSelection: (next) => {
       reconcilePendingWith(next);
+      releaseRetainedIfEscaped(next);
       selection = next;
       desiredX = null;
     },
@@ -757,11 +796,19 @@ export function mountPaginatedSurface(
     paintSelectionOverlay(
       overlayLayer,
       currentLayout,
-      cellSelection ? cellSelectionRects(currentLayout, cellSelection.cellIds) : [],
+      cellSelection
+        ? cellSelectionRects(currentLayout, cellSelection.cellIds)
+        : retainedSelection
+          ? selectionRects(currentLayout, retainedSelection)
+          : [],
       // Pages of differing width are centred individually, so the overlay has to carry the
       // same per-page offset the painter applied or a highlight in a landscape section would
       // sit beside the cells it describes.
-      { scale, pageOffsetX: materializedExtent?.pageOffsetX }
+      {
+        scale,
+        pageOffsetX: materializedExtent?.pageOffsetX,
+        ...(cellSelection ? {} : { className: 'docx-retained-selection-rect' }),
+      }
     );
   }
 
@@ -1013,6 +1060,16 @@ export function mountPaginatedSurface(
     },
 
     hyperlinks,
+    retainSelection: () => {
+      retainedSelection = selection;
+      renderOverlay();
+    },
+    releaseSelection: () => {
+      if (!retainedSelection) return;
+      retainedSelection = null;
+      renderOverlay();
+    },
+    retainedSelection: () => retainedSelection,
 
     navigation,
 
