@@ -9,6 +9,7 @@
 import type { TreeDocxSession } from '@docx-editor.dev/core-contract/binding';
 import type { NavigationCommand } from '@docx-editor.dev/core-contract/layout';
 import type { PaginatedSurface } from './paginated-surface-contract.ts';
+import { plainTextFromTransfer } from './clipboard-plain-text.ts';
 
 const NAVIGATION: Record<string, NavigationCommand> = {
   ArrowLeft: 'left',
@@ -206,6 +207,10 @@ export function createKeyDownHandler(
  * PLAIN TEXT only, deliberately: writing HTML would invite reading it back, and pasted
  * HTML is attacker-controlled markup that has no business reaching a sink here. Rich
  * paste belongs behind the same bounded parse the file path uses.
+ *
+ * A payload carrying ONLY `text/html` is still pasted, for its text — see
+ * clipboard-plain-text.ts. That is a fallback for applications that omit the plain
+ * flavour, not a rich lane: no structure, no markup, no DOM built from the payload.
  */
 export function createClipboardHandlers(
   surface: PaginatedSurface,
@@ -231,7 +236,7 @@ export function createClipboardHandlers(
   };
 
   const onPaste = (event: ClipboardEvent): void => {
-    const text = event.clipboardData?.getData('text/plain');
+    const text = plainTextFromTransfer(event.clipboardData);
     event.preventDefault();
     if (!text) return;
     insertPlainText(text);
@@ -242,10 +247,11 @@ export function createClipboardHandlers(
 
 /** Plain text from an input event's data transfer, if it carries any. */
 function dataTransferText(event: InputEvent): string | null {
-  const data = event.dataTransfer;
-  if (!data) return null;
-  // `text/plain` ONLY. `text/html` from a drag is markup from anywhere on the machine.
-  const text = data.getData('text/plain');
+  // TEXT ONLY, never structure. A drag carries markup from anywhere on the machine, so
+  // the HTML flavour is read for the text inside it and nothing else — see
+  // clipboard-plain-text.ts. Dropping a payload that omits `text/plain` outright is what
+  // made a drop from those applications look like a dead gesture.
+  const text = plainTextFromTransfer(event.dataTransfer);
   return text.length > 0 ? text : null;
 }
 
