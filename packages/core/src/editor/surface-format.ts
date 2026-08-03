@@ -66,7 +66,7 @@ export interface SurfaceFormatDeps {
 
 type FormatMethods = Pick<
   PaginatedSurface,
-  'setRunProperty' | 'setParagraphProperty' | 'toggleRunProperty' | 'formatting'
+  'setRunProperty' | 'setParagraphProperty' | 'toggleRunProperty' | 'formatting' | 'clearFormatting'
 >;
 
 export function createSurfaceFormat(deps: SurfaceFormatDeps): FormatMethods {
@@ -286,17 +286,22 @@ export function createSurfaceFormat(deps: SurfaceFormatDeps): FormatMethods {
 
     toggleRunProperty(localName, attributes) {
       const cells = deps.selectedCells?.();
+      // The VALUE this press means, for a property whose on-state is one member of an
+      // enumeration rather than a boolean: `w:vertAlign` carries superscript AND subscript,
+      // so "is it on" is only answerable against the value being toggled.
+      const value = attributes?.val;
       // A pending entry answers for the toggle state ahead of the document — pressing Bold
       // twice at a caret must cancel, not double-arm.
       const active =
-        pendingPropertyState(deps.pendingFormats(), localName) ??
-        isRunPropertyActive(currentLayout.value, selectionNow.value, localName, cells);
-      // Toggling OFF sends an explicit `val="0"` rather than dropping the element: the
+        pendingPropertyState(deps.pendingFormats(), localName, value) ??
+        isRunPropertyActive(currentLayout.value, selectionNow.value, localName, cells, value);
+      // Toggling OFF sends an explicit off value rather than dropping the element: the
       // property may be inherited from a style, and removing the local override would let the
-      // inherited value come back. `w:u` is a closed enumeration, not a boolean: its off
-      // value is `none`, and `val="0"` is one Word rejects outright.
+      // inherited value come back. Two of these are closed enumerations, not booleans, and
+      // `val="0"` is a value Word rejects in both: `w:u` turns off as `none`, `w:vertAlign`
+      // as `baseline`.
       const incoming = active
-        ? { localName, attributes: { val: localName === 'u' ? 'none' : '0' } }
+        ? { localName, attributes: { val: OFF_VALUES[localName] ?? '0' } }
         : { localName, ...(attributes ? { attributes } : {}) };
       if (cells && cells.length > 0) {
         writeRunPropertyOverCells(cells, incoming);
@@ -315,7 +320,9 @@ export function createSurfaceFormat(deps: SurfaceFormatDeps): FormatMethods {
         const documentActive = isRunPropertyActive(
           currentLayout.value,
           selectionNow.value,
-          localName
+          localName,
+          undefined,
+          value
         );
         if (!active === documentActive) {
           const kept = pending.filter((property) => property.localName !== localName);
@@ -327,5 +334,66 @@ export function createSurfaceFormat(deps: SurfaceFormatDeps): FormatMethods {
       }
       writeRunProperty(from, to, incoming);
     },
+
+    clearFormatting() {
+      // Word's eraser, and Word's split: character formatting is a RANGE, paragraph
+      // formatting is not. The selected text loses its direct `w:rPr`; every paragraph the
+      // selection touches loses its direct `w:pPr` — which includes `w:pStyle`, so the
+      // paragraph falls back to the document's default style — and its mark.
+      //
+      // Every op states an EMPTY property list, which is how the applier is told to drop
+      // what it can name and keep what it cannot: `w:rStyle`, `w:lang`, `w:sectPr`, `w:pBdr`
+      // and the rest survive, because an op that cannot say a thing cannot mean to delete it
+      // (see `mergedPropertyChildren`).
+      const layout = currentLayout.value;
+      const order = documentOrder(layout);
+      const cells = deps.selectedCells?.();
+      const paragraphIds =
+        cells && cells.length > 0
+          ? [...paragraphsInCells(layout, cells)]
+          : paragraphsInRange(order, orderedRange());
+      if (paragraphIds.length === 0) return;
+      const { from, to } = orderedRange();
+      const rectangular = cells !== undefined && cells.length > 0;
+      const ops: TreeDocOp[] = [];
+      for (const paragraphId of paragraphIds) {
+        const text = textOf(paragraphId);
+        // A rectangle stands for whole cells, so every paragraph in it clears entirely.
+        const start = rectangular || paragraphId !== from.paragraphId ? 0 : from.offset;
+        const end = rectangular || paragraphId !== to.paragraphId ? text.length : to.offset;
+        // ONE op for the whole range rather than one per run: the other writes split per run
+        // so each keeps its own bag, and here there is no bag to keep. Clearing is the one
+        // change that legitimately homogenises the range.
+        if (start < end) {
+          ops.push({ op: 'setRunProperties', paragraphId, start, end, properties: [] });
+        }
+        ops.push({ op: 'setParagraphProperties', paragraphId, properties: [] });
+        ops.push({ op: 'setParagraphMarkProperties', paragraphId, properties: [] });
+      }
+      // Nothing is selected at a caret, so the existing text keeps what it has — but the
+      // typing format must go, or the next characters would come out in the formatting the
+      // user just asked to be rid of.
+      deps.setPendingFormats(null);
+      commit(() => session.applyTreeOps(ops, selectionMark()), undefined, {
+        keepCellSelection: rectangular,
+      });
+    },
   };
+}
+
+/** The off value for a property whose on-state is one member of a closed enumeration. */
+const OFF_VALUES: Readonly<Record<string, string>> = {
+  u: 'none',
+  vertAlign: 'baseline',
+};
+
+/** Every paragraph a range touches, in document order — the span paragraph-level writes cover. */
+function paragraphsInRange(
+  order: readonly string[],
+  range: { from: SemanticPosition; to: SemanticPosition }
+): readonly string[] {
+  const firstIndex = order.indexOf(range.from.paragraphId);
+  const lastIndex = order.indexOf(range.to.paragraphId);
+  if (firstIndex === -1 || lastIndex === -1) return [];
+  return order.slice(firstIndex, lastIndex + 1);
 }

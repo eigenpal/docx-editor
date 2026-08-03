@@ -262,6 +262,17 @@ export interface PaginatedSurface {
   /** Set a property on every paragraph the selection touches — alignment, style, spacing. */
   setParagraphProperty(localName: string, attributes?: Record<string, string>): void;
   /**
+   * Word's Clear All Formatting: direct run properties off the selected text, and every
+   * paragraph the selection touches back to the default style with its direct paragraph
+   * properties and mark dropped.
+   *
+   * Only what the document states DIRECTLY — formatting inherited from a style survives, so
+   * the text falls back to its style rather than to nothing. Properties an op cannot name
+   * (`w:rStyle`, `w:lang`, `w:sectPr`, `w:pBdr`) are preserved for the same reason every
+   * other write preserves them.
+   */
+  clearFormatting(): void;
+  /**
    * Formatting as it stands at the selection, for a toolbar to reflect.
    *
    * With a typing format armed at the caret this reports what the NEXT characters typed

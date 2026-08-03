@@ -334,11 +334,19 @@ export function authoredRunPropertiesAt(
  */
 export function pendingPropertyState(
   pending: readonly SurfaceProperty[] | null,
-  localName: string
+  localName: string,
+  /** The value being toggled, for a property whose ON state is one member of an
+   *  enumeration rather than a boolean (`w:vertAlign`). */
+  value?: string
 ): boolean | null {
   const entry = pending?.find((property) => property.localName === localName);
   if (!entry) return null;
   const val = entry.attributes?.val;
+  // `w:vertAlign` armed as `superscript` says NOTHING about whether subscript is on — it
+  // says subscript is off. Comparing presence alone made pressing Subscript over an armed
+  // superscript read as "already on" and write `baseline`, so the press did the opposite of
+  // its label.
+  if (localName === 'vertAlign') return val === value;
   if (localName === 'u') return val !== 'none';
   // ST_OnOff's full off vocabulary (17.17.4): `0`, `false` and `off` all mean off, and the
   // read lane treats them alike. Listing only the two this module WRITES would let a host
@@ -438,7 +446,10 @@ export function isRunPropertyActive(
   layout: SemanticLayout,
   selection: SemanticSelection,
   localName: string,
-  cells?: readonly string[]
+  cells?: readonly string[],
+  /** The value being toggled, for a property whose ON state is one member of an
+   *  enumeration rather than a boolean (`w:vertAlign`). */
+  value?: string
 ): boolean {
   const spans = selectionSpans(layout, selection, cells);
   if (spans.length === 0) return false;
@@ -452,6 +463,11 @@ export function isRunPropertyActive(
         return span.style.underline !== null;
       case 'strike':
         return span.style.strike;
+      case 'vertAlign':
+        // Its OWN value, not "is raised or lowered at all". Presence alone would make
+        // Subscript over superscripted text read as already on, so the press would write
+        // `baseline` and un-raise the text instead of lowering it.
+        return span.style.verticalAlign === value;
       default:
         // Every toggleable mark MUST be listed: answering false for one that is
         // active makes its toggle re-apply forever instead of clearing.

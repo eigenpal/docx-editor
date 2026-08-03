@@ -525,6 +525,19 @@ type EditorCommandShape<T> = {
 export interface EditorCommands extends EditorCommandShape<DocEdits> {
   toggleMark: { mark: string };
   setMarkAttr: { mark: string; attr: string; value: unknown };
+  /**
+   * Word's Clear All Formatting (Home > Font > the eraser).
+   *
+   * Takes direct CHARACTER formatting off the selected text, and resets every paragraph the
+   * selection touches to the document's default paragraph style with its direct paragraph
+   * properties dropped — alignment, indents, spacing, list membership. Character formatting
+   * is a range and paragraph formatting is not, so a partial selection clears the text it
+   * covers and still resets the paragraph it sits in, which is Word's split.
+   *
+   * Formatting inherited from a style is not touched: this removes what the document states
+   * DIRECTLY, so the text falls back to what its style gives it rather than to nothing.
+   */
+  clearFormatting: Record<never, never>;
   setAlignment: { align: 'left' | 'center' | 'right' | 'justify' };
   setIndent: { left?: number; right?: number; firstLine?: number; hanging?: number };
   toggleList: { kind: 'bullet' | 'ordered' };

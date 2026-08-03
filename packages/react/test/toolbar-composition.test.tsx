@@ -633,6 +633,33 @@ describe('enabled state is the engine answer, not a registry constant', () => {
     expect(underline.hasAttribute('data-active')).toBe(true);
   });
 
+  test('superscript, subscript and clear-formatting are live in the default bar', async () => {
+    const { view, editor } = mountToolbar(<DocxEditorToolbar />);
+    await act(async () => {
+      editor().surface!.selectAll();
+    });
+    const button = (slot: string) =>
+      view.container.querySelector(`[data-slot="${slot}"]`) as HTMLButtonElement;
+    for (const slot of ['script.super', 'script.sub', 'format.clear']) {
+      expect(button(slot).disabled, slot).toBe(false);
+      expect(button(slot).title, slot).not.toBe('not wired to an editor command');
+    }
+
+    await act(async () => {
+      button('script.sub').click();
+    });
+    expect(editor().snapshot().formatting?.subscript).toBe(true);
+    expect(button('script.sub').hasAttribute('data-active')).toBe(true);
+    // One property, two values: raising text must not leave BOTH controls pressed.
+    expect(button('script.super').hasAttribute('data-active')).toBe(false);
+
+    await act(async () => {
+      button('format.clear').click();
+    });
+    expect(editor().snapshot().formatting?.subscript).toBe(false);
+    expect(button('script.sub').hasAttribute('data-active')).toBe(false);
+  });
+
   test('the list controls are live, and outdent tracks the engine rather than a flag', async () => {
     const { view, editor } = mountToolbar(<DocxEditorToolbar />);
     await act(async () => {
@@ -654,7 +681,11 @@ describe('enabled state is the engine answer, not a registry constant', () => {
     const { view } = mountToolbar(<DocxEditorToolbar />);
     // `text.link` is deliberately absent: it graduated to a chrome-driven slot (enabled
     // by the engine, dispatched by the popover), so it is no longer an example of one.
-    for (const slot of ['script.super', 'script.sub', 'format.clear']) {
+    // Nor are `script.super`/`script.sub`/`format.clear` — they graduated to real
+    // commands, which is exactly what this list is supposed to shrink by. Comments are
+    // the last unwired control the DEFAULT bar renders; the remaining unwired slots
+    // (image, table) are contextual and not in it.
+    for (const slot of ['review.comments']) {
       const button = view.container.querySelector(`[data-slot="${slot}"]`) as HTMLButtonElement;
       expect(button.disabled, slot).toBe(true);
       expect(button.title, slot).toBe('not wired to an editor command');

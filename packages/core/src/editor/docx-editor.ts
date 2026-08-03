@@ -880,6 +880,12 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
               return formatting.underline === true;
             case 'strike':
               return formatting.strike === true;
+            // One property, two of its values: each is pressed only for its OWN value, so
+            // superscripted text shows Subscript un-pressed rather than both lit.
+            case 'superscript':
+              return formatting.superscript === true;
+            case 'subscript':
+              return formatting.subscript === true;
             default:
               return false;
           }

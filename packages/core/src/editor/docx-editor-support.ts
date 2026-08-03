@@ -78,7 +78,15 @@ export function emptyInteractionFrame(): InteractionFrame {
   return emptyFrameSingleton;
 }
 
-/** Run-property spellings for the marks the surface can toggle, named as OOXML names them. */
+/**
+ * Run-property spellings for the marks the surface can toggle, named as OOXML names them.
+ *
+ * Superscript and subscript are ONE property with two of its three values (`w:vertAlign`,
+ * ST_VerticalAlignRun, 17.3.2.42), not two independent switches. Spelling them as two marks
+ * over one `localName` is what makes them mutually exclusive for free — a property write
+ * replaces the entry with the same name — and it is why the toggle has to compare the VALUE
+ * in force rather than the mere presence of the element.
+ */
 export const MARKS: Readonly<
   Record<string, { localName: string; attributes?: Record<string, string> }>
 > = {
@@ -86,6 +94,8 @@ export const MARKS: Readonly<
   italic: { localName: 'i' },
   underline: { localName: 'u', attributes: { val: 'single' } },
   strike: { localName: 'strike' },
+  superscript: { localName: 'vertAlign', attributes: { val: 'superscript' } },
+  subscript: { localName: 'vertAlign', attributes: { val: 'subscript' } },
 };
 
 export type CommandSupport =
@@ -277,6 +287,8 @@ export function classifyCommand(command: EditorCommand): CommandSupport {
         : { supported: false, reason: resolved.reason, code: resolved.code };
     }
     case 'setAlignment':
+      return { supported: true, mutating: true };
+    case 'clearFormatting':
       return { supported: true, mutating: true };
     case 'setParagraphStyle': {
       // Shape gate only, like `insertText`: whether the styleId names a style the DOCUMENT

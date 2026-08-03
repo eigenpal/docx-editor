@@ -36,6 +36,9 @@ export function execEditorCommand(
       mounted.setRunProperty(resolved.localName, resolved.attributes);
       break;
     }
+    case 'clearFormatting':
+      mounted.clearFormatting();
+      break;
     case 'setAlignment':
       // The contract says `justify`; `w:jc` spells it `both`.
       mounted.setParagraphProperty('jc', {
