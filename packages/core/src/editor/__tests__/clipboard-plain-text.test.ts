@@ -8,7 +8,12 @@ import { GlobalRegistrator } from '@happy-dom/global-registrator';
 if (!GlobalRegistrator.isRegistered) GlobalRegistrator.register();
 
 import { describe, expect, test } from 'bun:test';
-import { plainTextFromHtml, plainTextFromTransfer } from '../clipboard-plain-text.ts';
+import {
+  insertableText,
+  plainTextFromHtml,
+  plainTextFromTransfer,
+} from '../clipboard-plain-text.ts';
+import { isValidXmlText } from '../../store/package/sinks.ts';
 import { createClipboardHandlers } from '../surface-input.ts';
 import type { PaginatedSurface } from '../paginated-surface-contract.ts';
 
@@ -66,6 +71,52 @@ describe('the paste handler', () => {
       'text/html': '<p>collapsed</p>',
     });
     expect(inserted).toEqual(['  spaced  text  ']);
+  });
+});
+
+describe('making pasted text insertable', () => {
+  // Run text is serialized to XML and the store validates it, so ONE illegal character
+  // rejects the op — and one rejected op vetoes the transaction, which is why a paste
+  // carrying a page break used to do nothing at all rather than partially land.
+
+  test('a page break becomes a paragraph break instead of killing the paste', () => {
+    expect(insertableText('alpha\fbeta')).toBe('alpha\nbeta');
+  });
+
+  test('the engine can paste back what it copied across a page break', () => {
+    // `selectedText()` writes U+000C for a page break, so Select All + Copy + Paste fed
+    // this exact shape straight back in and the whole paste was refused.
+    const copied = 'page one\n\fpage two';
+    const insertable = insertableText(copied);
+    expect(isValidXmlText(insertable)).toBe(true);
+    expect(insertable.split('\n')).toEqual(['page one', '', 'page two']);
+  });
+
+  test('CRLF and a lone CR still collapse to one paragraph break', () => {
+    expect(insertableText('a\r\nb\rc')).toBe('a\nb\nc');
+  });
+
+  test('tab, newline and ordinary text survive untouched', () => {
+    expect(insertableText('a\tb\nc')).toBe('a\tb\nc');
+  });
+
+  test('every other control character is dropped rather than refused', () => {
+    expect(insertableText('a\u0001b\u0000c\u001fd')).toBe('abcd');
+    expect(insertableText('a\ufffeb\uffffc')).toBe('abc');
+  });
+
+  test('a valid surrogate pair survives and a lone surrogate is dropped', () => {
+    expect(insertableText('a\u{1F600}b')).toBe('a\u{1F600}b');
+    expect(insertableText('a\ud800b')).toBe('ab');
+    expect(insertableText('a\udc00b')).toBe('ab');
+    expect(insertableText('a\ud800')).toBe('a');
+  });
+
+  test('whatever it returns is always something the store will accept', () => {
+    const hostile = 'x\f\u0001\ud800y\uffff\u{1F600}\r\n\tz\udfff';
+    expect(isValidXmlText(insertableText(hostile))).toBe(true);
+    // …and the guard is meaningful: the raw payload is refused.
+    expect(isValidXmlText(hostile)).toBe(false);
   });
 });
 

@@ -64,6 +64,7 @@ import {
   createClipboardHandlers,
   createKeyDownHandler,
 } from './surface-input.ts';
+import { insertableText } from './clipboard-plain-text.ts';
 import {
   createFurnitureSource,
   createSurfaceStyleDeps,
@@ -1318,9 +1319,10 @@ export function mountPaginatedSurface(
 
   /** Insert text, turning newlines into real paragraph splits rather than literal characters. */
   function insertPlainText(text: string): void {
-    // Normalized first: a Windows clipboard carries CRLF, and a literal CR in run text is
-    // not a paragraph break in OOXML — it is a stray control character.
-    const lines = text.replace(/\r\n?/g, '\n').split('\n');
+    // Normalized first: a Windows clipboard carries CRLF, a page break arrives as a form
+    // feed, and either one left in run text is a control character the store refuses —
+    // which vetoes the whole transaction and makes the paste do nothing at all.
+    const lines = insertableText(text).split('\n');
 
     // ONE COMMIT, TWO OPS, whatever the clipboard holds.
     //

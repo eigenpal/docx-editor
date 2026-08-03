@@ -93,6 +93,58 @@ export function plainTextFromHtml(html: string): string {
 }
 
 /**
+ * Make pasted text insertable, or the whole paste is refused and NOTHING happens.
+ *
+ * Run text is serialized into XML, so the store validates every `insertText` against XML
+ * 1.0 and rejects the op if it fails — and one rejected op vetoes the atomic transaction.
+ * A single stray control character therefore turned an entire paste into a silent no-op.
+ *
+ * This is not a hypothetical payload. `selectedText()` writes U+000C for a page break, so
+ * copying any range that spans one produced text this editor could not paste back into
+ * itself: Select All, Copy, Paste did nothing on any document longer than a page.
+ *
+ * The form feed becomes a paragraph break, which is the honest paragraph-lane reading of a
+ * page break — the same reading a newline already gets. Every other character XML 1.0
+ * forbids is dropped: a control character has no representation in run text, and losing it
+ * beats losing the paste. Mirrors `isValidXmlText` in store/package/sinks.ts; the two must
+ * agree, or this silently hands the store something it will refuse.
+ */
+export function insertableText(text: string): string {
+  let out = '';
+  for (let i = 0; i < text.length; i += 1) {
+    const unit = text.charCodeAt(i);
+    // A page break reads as a paragraph break; CRLF/CR normalize with it.
+    if (unit === 0x0c) {
+      out += '\n';
+      continue;
+    }
+    if (unit === 0x0d) {
+      out += '\n';
+      if (text.charCodeAt(i + 1) === 0x0a) i += 1;
+      continue;
+    }
+    if (unit === 0x09 || unit === 0x0a) {
+      out += text[i]!;
+      continue;
+    }
+    if (unit < 0x20 || unit === 0xfffe || unit === 0xffff) continue;
+    // Surrogates only survive as a well-formed pair; a lone one is refused by the store,
+    // and truncating a payload mid-pair is an easy way to produce one.
+    if (unit >= 0xd800 && unit <= 0xdbff) {
+      const next = text.charCodeAt(i + 1);
+      if (next >= 0xdc00 && next <= 0xdfff) {
+        out += text[i]! + text[i + 1]!;
+        i += 1;
+      }
+      continue;
+    }
+    if (unit >= 0xdc00 && unit <= 0xdfff) continue;
+    out += text[i]!;
+  }
+  return out;
+}
+
+/**
  * The text a paste or drop should insert, whatever flavours the payload carries.
  *
  * `text/plain` wins whenever it is present — it is what the source application chose to
