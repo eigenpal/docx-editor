@@ -492,6 +492,15 @@ export function mountPaginatedSurface(
   let materializedSet: ReadonlySet<number> | undefined;
   /** Sizing the last paint used, so scroll can re-centre when the visible width band moves. */
   let materializedExtent: SurfaceExtent | undefined;
+  /**
+   * The scroller whose SIZE is being watched, and the observer watching it.
+   *
+   * Declared here, above the paint that re-checks them, so `watchScrollerSize` can never be
+   * reached before its own state exists — the wiring below runs late, and a temporal dead
+   * zone would be a ReferenceError thrown out of a repaint.
+   */
+  let viewportObserver: ResizeObserver | null = null;
+  let observedScroller: HTMLElement | null = null;
 
   function applyPageOffsets(extent: SurfaceExtent): void {
     for (const page of currentLayout.pages) {
@@ -539,6 +548,9 @@ export function mountPaginatedSurface(
     // book the paint's own cost to the selection phase.
     lastPaintMs = now() - paintBegan;
     renderOverlay();
+    // The surface may only now have been wrapped in its viewport, so the size watcher
+    // re-resolves its target here rather than trusting what existed at mount.
+    watchScrollerSize();
     selectionSync.mirrorToDom();
     // A scroll reports nothing — nothing about the document or the selection moved. Taking up
     // a pending gesture DID move the selection, so that pass has to report after all.
@@ -1002,6 +1014,9 @@ export function mountPaginatedSurface(
       pagesLayer.removeEventListener('compositionstart', onCompositionStart);
       pagesLayer.removeEventListener('compositionend', onCompositionEnd);
       document.removeEventListener('scroll', onScroll, { capture: true });
+      container.ownerDocument.defaultView?.removeEventListener('resize', onViewportResize);
+      viewportObserver?.disconnect();
+      observedScroller = null;
       pointer?.destroy();
       // Drop pending layout work and stop listening BEFORE the DOM goes, or a commit from
       // another editor sharing this store would paint into a detached container.
@@ -1235,21 +1250,54 @@ export function mountPaginatedSurface(
   // scroller captured with `closest` at mount time is routinely null — and a null one meant
   // no listener at all, so scrolling never built the pages it revealed. Every page past the
   // first screenful stayed blank until some unrelated commit forced a repaint.
-  let scrollScheduled = false;
-  const onScroll = (event: Event): void => {
-    const scroller = surfaceScroller(container);
-    if (!scroller || event.target !== scroller) return;
-    if (scrollScheduled) return;
-    scrollScheduled = true;
+  let rematerializeScheduled = false;
+  /** Coalesce to a frame: twenty events and one event cost the same repaint. */
+  function scheduleRematerialize(): void {
+    if (rematerializeScheduled) return;
+    rematerializeScheduled = true;
     const raf = container.ownerDocument.defaultView?.requestAnimationFrame;
     const run = (): void => {
-      scrollScheduled = false;
+      rematerializeScheduled = false;
       rematerialize();
     };
     if (raf) raf(run);
     else queueMicrotask(run);
+  }
+
+  const onScroll = (event: Event): void => {
+    const scroller = surfaceScroller(container);
+    if (!scroller || event.target !== scroller) return;
+    scheduleRematerialize();
   };
   document.addEventListener('scroll', onScroll, { capture: true, passive: true });
+
+  // WHICH PAGES ARE VISIBLE DEPENDS ON THE VIEWPORT'S SIZE, NOT ONLY ON ITS SCROLL OFFSET.
+  //
+  // `visiblePageSet` reads `clientHeight`, so a viewport that grows reveals pages the last
+  // paint had no reason to build — and a resize fires no `scroll`. Nothing asked for a
+  // repaint, so the newly uncovered sheets stayed blank until the user scrolled or typed:
+  // maximizing the window, closing a side panel, rotating a tablet, or the browser chrome
+  // collapsing on scroll-up all land there.
+  const onViewportResize = (): void => {
+    scheduleRematerialize();
+  };
+  const view = container.ownerDocument.defaultView;
+  view?.addEventListener('resize', onViewportResize, { passive: true });
+  // The window event covers a resized window; an observer covers everything that changes
+  // the scroller WITHOUT one — a collapsing panel, a wrapping toolbar, a CSS change. The
+  // scroller is resolved lazily for the same reason the scroll listener binds to the
+  // document: at mount the host has routinely not wrapped the surface in its viewport yet.
+  viewportObserver =
+    typeof view?.ResizeObserver === 'function' ? new view.ResizeObserver(onViewportResize) : null;
+  function watchScrollerSize(): void {
+    if (!viewportObserver) return;
+    const scroller = surfaceScroller(container);
+    if (scroller === observedScroller) return;
+    viewportObserver.disconnect();
+    observedScroller = scroller;
+    if (scroller) viewportObserver.observe(scroller);
+  }
+  watchScrollerSize();
 
   pointer = createPointerController(
     {

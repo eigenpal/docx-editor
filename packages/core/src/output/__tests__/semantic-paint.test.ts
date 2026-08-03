@@ -173,6 +173,28 @@ describe('the painter is a non-authoritative consumer', () => {
     expect(tabEl.style.width).toBe(`${tabRecord.box.width}px`);
     expect(tabEl.style.overflow).toBe('hidden');
   });
+
+  test('a clipped tab span is aligned to the line top, so it cannot move the baseline', () => {
+    // Regression: the dot leader appeared to float above the words it should sit level
+    // with. The leader was right and the TEXT was displaced. `overflow: hidden` makes an
+    // inline-block's baseline its bottom margin edge (CSS 2.1 §10.8.1), so a
+    // baseline-aligned tab demanded its whole band above the baseline while a glyph run
+    // demands only its ascent. The browser satisfied the tab by pushing the line's common
+    // baseline down, and every word on the line went with it — ~3.4px below the baseline
+    // layout published, on every tabbed line, contents entries included.
+    const container = paint(
+      '<w:p><w:pPr><w:tabs><w:tab w:val="right" w:pos="2400" w:leader="dot"/></w:tabs></w:pPr>' +
+        '<w:r><w:t>Chapter</w:t><w:tab/><w:t>1</w:t></w:r></w:p>'
+    );
+    const runs = [...container.querySelectorAll<HTMLElement>('.layout-run-text')];
+    const tab = runs.find((el) => el.textContent === '\t')!;
+    expect(tab.style.verticalAlign).toBe('top');
+    // Every run that carries glyphs still aligns on the baseline — that is what makes a
+    // mixed-size line share one, and it is the alignment the leader layer mirrors.
+    for (const glyphRun of runs.filter((el) => el.textContent !== '\t')) {
+      expect(glyphRun.style.verticalAlign).toBe('baseline');
+    }
+  });
 });
 
 describe('each run is its own box, so a mixed-size line highlights stepped', () => {
@@ -242,10 +264,10 @@ describe('each run is its own box, so a mixed-size line highlights stepped', () 
 
   test('a tab span gets its own band too, not the full line height', () => {
     // A tab paints with `overflow: hidden`, which makes its inline-block baseline the
-    // BOTTOM edge (CSS2.1 §10.8.1) — so unlike a text run its whole band counts above the
-    // baseline. Inheriting the line height made a small-style tab dominate the line box of
-    // a mixed-size line and push every glyph below the published baseline; its own band
-    // keeps the tab's contribution no larger than the run it belongs with.
+    // BOTTOM edge (CSS2.1 §10.8.1). `vertical-align: top` keeps that out of the line's
+    // baseline math; the band still decides how tall the tab's own box — and so the
+    // selection band drawn over it — comes out, which must be the run it belongs with
+    // rather than the whole line.
     const container = paint(
       '<w:p><w:pPr><w:tabs><w:tab w:val="left" w:pos="2400"/></w:tabs></w:pPr>' +
         '<w:r><w:t>a</w:t><w:tab/></w:r>' +
