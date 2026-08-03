@@ -382,7 +382,11 @@ function applyRevisionPresentation(
   element.dataset.revisionId = format!.id;
   element.dataset.revisionAuthor = format!.author;
   if (format!.date !== undefined) element.dataset.revisionDate = format!.date;
-  element.style.backgroundColor = 'var(--doc-revision-format-tint)';
+  // NO FILL. A tint is right for added and removed text, which is a minority of any page. A
+  // formatting change is not: this fixture carries 18,284 of them, and filling each one turned
+  // most of the document grey — the mark stopped meaning "look here" and became the page's
+  // background. The dashed rule alone still says it, and says it only where it applies.
+  //
   // Dashed, and NOT coloured like an insertion: the words are unchanged. Word's own margin
   // note says "Formatted:"; this is the inline half of the same statement.
   element.style.textDecorationLine = 'underline';
@@ -477,7 +481,12 @@ function paintChangeBars(
     bar.style.position = 'absolute';
     bar.style.top = `${run.top * scale}px`;
     bar.style.height = `${(run.bottom - run.top) * scale}px`;
-    bar.style.left = `${-CHANGE_BAR_OFFSET_PT * scale}px`;
+    // ANCHORED TO THE MARGIN, NOT TO THE PARAGRAPH. The bar is a child of the fragment, whose
+    // left edge is the paragraph's indented column — so an offset from the fragment put the
+    // rule at a different x for every indent level, and a nested list drew a staircase down
+    // the page. Subtracting the fragment's own x lands every bar on one vertical line, which
+    // is what makes a column of them readable as "these lines changed".
+    bar.style.left = `${(-fragment.box.x - CHANGE_BAR_OFFSET_PT) * scale}px`;
     bar.style.width = `${CHANGE_BAR_WIDTH_PT * scale}px`;
     bar.style.pointerEvents = 'none';
     bar.style.backgroundColor = run.deleted

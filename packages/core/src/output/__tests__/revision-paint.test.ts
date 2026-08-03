@@ -228,6 +228,9 @@ describe('changes that decorate no characters', () => {
     expect(span.style.textDecorationStyle).toBe('dashed');
     // Not the insertion colour: nothing was added.
     expect(span.style.textDecorationColor).toBe('var(--doc-revision-format)');
+    // No fill: a document can be almost entirely reformatted, and tinting all of it says
+    // nothing. Added and removed text keeps its tint because it is always a minority.
+    expect(span.style.backgroundColor).toBe('');
     expect(span.dataset.revisionAuthor).toBe('QA');
   });
 });
@@ -248,5 +251,24 @@ describe('tracked text is findable when scanning, not only when reading', () => 
     const root = paint(`<w:p>${run('plain')}</w:p>`);
     const spans = [...root.querySelectorAll<HTMLElement>('.layout-run-text')];
     expect(spans.every((span) => span.style.backgroundColor === '')).toBe(true);
+  });
+});
+
+describe('change bars line up regardless of indentation', () => {
+  test('an indented paragraph puts its bar on the same vertical line as a flush one', () => {
+    // A bar offset from the paragraph's own box lands at a different x for every indent
+    // level, so a nested list draws a staircase instead of a column.
+    const indented =
+      `<w:p>${ins('1', run('flush'))}</w:p>` +
+      `<w:p><w:pPr><w:ind w:left="1440"/></w:pPr>${ins('2', run('indented'))}</w:p>`;
+    const root = paint(indented);
+    const bars = [...root.querySelectorAll<HTMLElement>('.docx-change-bar')];
+    expect(bars).toHaveLength(2);
+    // Both resolve to the same page-relative x once each fragment's own origin is added back.
+    const positions = bars.map((bar) => {
+      const fragment = bar.closest<HTMLElement>('.docx-paragraph-fragment')!;
+      return Math.round(parseFloat(bar.style.left) + parseFloat(fragment.style.left || '0'));
+    });
+    expect(positions[0]).toBe(positions[1]!);
   });
 });
