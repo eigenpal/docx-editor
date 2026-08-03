@@ -12,14 +12,16 @@ import {
 } from '../../store/package/note-properties.ts';
 import { createFixedMeasurer } from '../fixed-measurer.ts';
 import { layoutSemanticDocument } from '../semantic-layout.ts';
+import { enumerateDocumentSections } from '../section-properties.ts';
 import {
   buildPageRefHits,
   computeFootnoteReserves,
+  layoutSemanticDocumentWithNotes,
   provisionalNoteMarks,
   type NotesLayoutInput,
 } from '../note-pagination.ts';
 import { collectNoteReferences } from '../../store/package/note-references.ts';
-import type { PageRecord } from '../semantic-records.ts';
+import type { PageRecord, ParagraphFragmentRecord, SemanticLayout } from '../semantic-records.ts';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 const R = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships';
@@ -104,6 +106,70 @@ function loadNotesDoc(bytes: Uint8Array): {
   return { part, notes };
 }
 
+/** Single-paragraph body with one footnote ref — enough for a controlled mock reflow. */
+function singleRefFootnoteDoc(): Uint8Array {
+  return zipSync({
+    '[Content_Types].xml': strToU8(
+      `<Types xmlns="${CT}">` +
+        '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>' +
+        '<Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>' +
+        '<Override PartName="/word/footnotes.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.footnotes+xml"/>' +
+        '</Types>'
+    ),
+    '_rels/.rels': strToU8(
+      `<Relationships xmlns="${REL}"><Relationship Id="rId1" Type="${R}/officeDocument" Target="word/document.xml"/></Relationships>`
+    ),
+    'word/_rels/document.xml.rels': strToU8(
+      `<Relationships xmlns="${REL}"><Relationship Id="rIdFn" Type="${R}/footnotes" Target="footnotes.xml"/></Relationships>`
+    ),
+    'word/document.xml': strToU8(
+      `<w:document xmlns:w="${W}" xmlns:r="${R}"><w:body>` +
+        '<w:p><w:r><w:t>Body with footnote</w:t><w:footnoteReference w:id="1"/></w:r></w:p>' +
+        '<w:sectPr><w:pgSz w:w="12240" w:h="15840"/><w:pgMar w:top="720" w:right="720" w:bottom="720" w:left="720"/></w:sectPr>' +
+        '</w:body></w:document>'
+    ),
+    'word/footnotes.xml': strToU8(
+      `<w:footnotes xmlns:w="${W}">` +
+        `<w:footnote w:type="separator" w:id="-1"><w:p><w:r><w:separator/></w:r></w:p></w:footnote>` +
+        `<w:footnote w:type="continuationSeparator" w:id="0"><w:p><w:r><w:continuationSeparator/></w:r></w:p></w:footnote>` +
+        `<w:footnote w:id="1"><w:p><w:r><w:t>Note ${'line '.repeat(12)}</w:t></w:r></w:p></w:footnote>` +
+        '</w:footnotes>'
+    ),
+  });
+}
+
+function paraFrag(
+  paragraphId: string,
+  opts: { atomEnd: number; y: number; height: number; width?: number }
+): ParagraphFragmentRecord {
+  return {
+    kind: 'paragraph',
+    id: `${paragraphId}-frag`,
+    paragraphId,
+    fragmentIndex: 0,
+    box: { x: 0, y: opts.y, width: opts.width ?? 400, height: opts.height },
+    range: { start: 0, end: opts.atomEnd },
+    props: [],
+    spacing: { before: 0, after: 0, line: null, lineRule: 'auto' },
+    indent: { start: 0, end: 0, firstLine: 0, hanging: 0 },
+    lines: [],
+  };
+}
+
+function mockPage(
+  index: number,
+  fragments: readonly ParagraphFragmentRecord[],
+  contentHeight: number
+): PageRecord {
+  return {
+    id: `page-${index}`,
+    index,
+    box: { x: 0, y: 0, width: 612, height: contentHeight + 144 },
+    contentBox: { x: 72, y: 72, width: 468, height: contentHeight },
+    fragments,
+  };
+}
+
 describe('footnote bottom reservation', () => {
   test('reference and footnote share a page; body bottom is shortened', () => {
     const { part, notes } = loadNotesDoc(filledPageWithFootnoteDoc());
@@ -184,5 +250,98 @@ describe('footnote bottom reservation', () => {
       expect(b).toBeCloseTo(a, 3);
       expect(bodyUsedHeight(again.pages[i]!)).toBeCloseTo(bodyUsedHeight(layout.pages[i]!), 3);
     }
+  });
+
+  test('moving a citation re-runs body so a stale prior-page reserve is dropped', () => {
+    const { part, notes } = loadNotesDoc(singleRefFootnoteDoc());
+    const sections = enumerateDocumentSections(part);
+    const refs = collectNoteReferences(part);
+    expect(refs.length).toBe(1);
+    const ref = refs[0]!;
+    const contentH = 400;
+    const fillerId = 'filler-para';
+
+    const reserveCalls: Array<ReadonlyMap<number, number>> = [];
+    const runBody = (opts: {
+      pageBottomReserves?: ReadonlyMap<number, number>;
+    }): SemanticLayout => {
+      const reserves = opts.pageBottomReserves ?? new Map<number, number>();
+      reserveCalls.push(new Map(reserves));
+      const r0 = reserves.get(0) ?? 0;
+      const r1 = reserves.get(1) ?? 0;
+      const refFrag = paraFrag(ref.paragraphId, {
+        atomEnd: ref.atomOffset + 1,
+        y: 0,
+        height: 14,
+      });
+      const filler = paraFrag(fillerId, {
+        atomEnd: 4,
+        y: 0,
+        height: Math.max(14, contentH - r0 - 1),
+      });
+
+      if (r0 <= 0 && r1 <= 0) {
+        // Provisional: citation on page 0, body fills the column → unstable vs note height.
+        return {
+          revision: 1,
+          pages: [
+            mockPage(
+              0,
+              [
+                paraFrag(ref.paragraphId, {
+                  atomEnd: ref.atomOffset + 1,
+                  y: 0,
+                  height: contentH,
+                }),
+              ],
+              contentH
+            ),
+          ],
+        };
+      }
+
+      if (r0 > 0) {
+        // Monotonic pass still carries page-0 reserve after the citation moved to page 1.
+        // Publishing this layout without a shrink re-run leaves a footnote-sized hole on page 0.
+        return {
+          revision: 1,
+          pages: [mockPage(0, [filler], contentH), mockPage(1, [refFrag], contentH)],
+        };
+      }
+
+      // Exact computed reserves ({1: h} only): page 0 fills again; citation stays on page 1.
+      return {
+        revision: 1,
+        pages: [
+          mockPage(0, [paraFrag(fillerId, { atomEnd: 4, y: 0, height: contentH })], contentH),
+          mockPage(1, [refFrag], contentH),
+        ],
+      };
+    };
+
+    const layout = layoutSemanticDocumentWithNotes(
+      part,
+      sections,
+      { measurer: notes.measurer, producer: 'footnote-reserves-stale-drop' },
+      notes,
+      runBody
+    );
+
+    // Must re-run after the stable compute that dropped page 0 — not break on the stale layout.
+    expect(reserveCalls.length).toBeGreaterThanOrEqual(3);
+    const lastReserves = reserveCalls[reserveCalls.length - 1]!;
+    expect(lastReserves.has(0)).toBe(false);
+    expect(lastReserves.get(1) ?? 0).toBeGreaterThan(0);
+
+    const page0 = layout.pages[0]!;
+    const host = layout.pages.find((page) =>
+      (page.footnotes?.notes ?? []).some((n) => n.noteId === 1 && !n.continuation)
+    );
+    expect(host).toBeTruthy();
+    expect(host!.index).toBeGreaterThan(0);
+    const noteHeight = host!.footnotes?.box.height ?? 0;
+    expect(noteHeight).toBeGreaterThan(10);
+    // Stale page-0 reserve would leave a note-sized unused band on the prior page.
+    expect(page0.contentBox.height - bodyUsedHeight(page0)).toBeLessThan(noteHeight * 0.5);
   });
 });

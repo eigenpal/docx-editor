@@ -74,36 +74,53 @@ function mergeNumberingShell(snapshot: OoxmlPackage, live: OoxmlPackage): OoxmlP
 }
 
 function mergeHyperlinkShell(snapshot: OoxmlPackage, live: OoxmlPackage): OoxmlPackage {
-  const owner = snapshot.mainDocumentPart;
-  const liveOwner = live.mainDocumentPart;
+  // Persist hyperlink externals for every owning part (body, furniture, notes), not only
+  // the main document — a scoped insert mints onto the story's own `.rels`.
   const liveLinks = live.externalTargets.filter(
-    (entry) => entry.ownerPart === liveOwner && entry.type === HYPERLINK_RELATIONSHIP_TYPE
+    (entry) => entry.type === HYPERLINK_RELATIONSHIP_TYPE
   );
   if (liveLinks.length === 0) return snapshot;
 
   let next = snapshot;
-  const snapInternals = new Set((next.relationships.get(owner) ?? []).map((record) => record.id));
 
   for (const link of liveLinks) {
+    const owner = remapOwnerPart(snapshot, live, link.ownerPart);
+    if (!owner) continue;
     if (next.externalTargets.some((entry) => entry.ownerPart === owner && entry.id === link.id)) {
       continue;
     }
     // Snapshot lifecycle owns this id — do not collide. Leftover hyperlink persistence plus
     // max-based allocation normally prevent this; prefer coherent furniture over a forced merge.
+    const snapInternals = new Set((next.relationships.get(owner) ?? []).map((record) => record.id));
     if (snapInternals.has(link.id)) continue;
 
-    const merged = withExternalHyperlink(next, {
-      ownerPart: owner,
-      id: link.id,
-      type: HYPERLINK_RELATIONSHIP_TYPE,
-      rawTarget: link.rawTarget,
-      sinkSafe: link.sinkSafe,
-    });
+    const merged = withExternalHyperlink(
+      next,
+      {
+        ownerPart: owner,
+        id: link.id,
+        type: HYPERLINK_RELATIONSHIP_TYPE,
+        rawTarget: link.rawTarget,
+        sinkSafe: link.sinkSafe,
+      },
+      owner
+    );
     if (!merged) continue;
     next = merged;
   }
 
   return next;
+}
+
+/** Map a live owner part name onto the snapshot package (main-document name may differ). */
+function remapOwnerPart(
+  snapshot: OoxmlPackage,
+  live: OoxmlPackage,
+  liveOwner: string
+): string | null {
+  if (liveOwner === live.mainDocumentPart) return snapshot.mainDocumentPart;
+  if (snapshot.parts.has(liveOwner)) return liveOwner;
+  return null;
 }
 
 function withInternalRelationship(
@@ -142,8 +159,14 @@ function withInternalRelationship(
   return appendRelsChild(pkg, existing, authored.part.root.children[0], relationships);
 }
 
-function withExternalHyperlink(pkg: OoxmlPackage, link: OoxmlExternalTarget): OoxmlPackage | null {
-  const owner = pkg.mainDocumentPart;
+function withExternalHyperlink(
+  pkg: OoxmlPackage,
+  link: OoxmlExternalTarget,
+  ownerPart: string = pkg.mainDocumentPart
+): OoxmlPackage | null {
+  const owner = ownerPart;
+  if (typeof owner !== 'string' || owner.length === 0) return null;
+  if (owner !== pkg.mainDocumentPart && !pkg.parts.has(owner)) return null;
   const relsName = relsPartNameFor(owner);
   const existing = pkg.parts.get(relsName);
   const authored = readOoxmlPart(

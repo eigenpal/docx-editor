@@ -256,4 +256,133 @@ describe('scoped note editing', () => {
     expect(surface.activeScope()).toEqual({ kind: 'body' });
     surface.destroy();
   });
+
+  test('note hyperlink owns footnotes rels; undo restores; no stray body relationship', () => {
+    const { surface } = mount(noteDoc('Note text'));
+    expect(surface.enterNote('footnote:1')).toBe(true);
+    const paragraphId = surface.state().selection.head.paragraphId;
+    // Skip the projected noteRef atom at offset 0; wrap "Note".
+    surface.setSelection({
+      anchor: { paragraphId, offset: 1 },
+      head: { paragraphId, offset: 5 },
+    });
+    expect(surface.hyperlinks.applyHyperlink({ url: 'https://example.com/note' })).toBe(true);
+
+    const pkg = surface.session.currentPackage();
+    const notesPart = surface.session.partFor({ kind: 'notesPart', noteKind: 'footnote' })!;
+    expect(
+      pkg.externalTargets.some(
+        (entry) =>
+          entry.ownerPart === notesPart.name && entry.rawTarget === 'https://example.com/note'
+      )
+    ).toBe(true);
+    expect(
+      pkg.externalTargets.some(
+        (entry) =>
+          entry.ownerPart === pkg.mainDocumentPart && entry.rawTarget === 'https://example.com/note'
+      )
+    ).toBe(false);
+    expect(JSON.stringify(notesPart.root)).toContain('"kind":"hyperlink"');
+    // Place the caret inside the wrapped range so linkAtCaret does not depend on the
+    // post-insert boundary the commit lands on.
+    surface.setSelection({
+      anchor: { paragraphId, offset: 2 },
+      head: { paragraphId, offset: 2 },
+    });
+    expect(surface.hyperlinks.linkAtCaret()?.href).toBe('https://example.com/note');
+
+    surface.undo();
+    expect(surface.hyperlinks.linkAtCaret()).toBeNull();
+    expect(
+      JSON.stringify(surface.session.partFor({ kind: 'notesPart', noteKind: 'footnote' })!.root)
+    ).not.toContain('"kind":"hyperlink"');
+    expect(
+      surface.session
+        .currentPackage()
+        .externalTargets.some(
+          (entry) =>
+            entry.ownerPart === pkg.mainDocumentPart &&
+            entry.rawTarget === 'https://example.com/note'
+        )
+    ).toBe(false);
+    surface.destroy();
+  });
+
+  test('arrow navigation across note continuations retargets caret host page', () => {
+    const noteParas = Array.from(
+      { length: 40 },
+      (_, i) => `<w:p><w:r><w:t>Note line ${i} ${'x'.repeat(40)}</w:t></w:r></w:p>`
+    ).join('');
+    const bytes = zipSync({
+      '[Content_Types].xml': strToU8(
+        `<Types xmlns="${CT}">` +
+          '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>' +
+          '<Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>' +
+          '<Override PartName="/word/footnotes.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.footnotes+xml"/>' +
+          '</Types>'
+      ),
+      '_rels/.rels': strToU8(
+        `<Relationships xmlns="${REL}"><Relationship Id="rId1" Type="${R}/officeDocument" Target="word/document.xml"/></Relationships>`
+      ),
+      'word/_rels/document.xml.rels': strToU8(
+        `<Relationships xmlns="${REL}"><Relationship Id="rIdFn" Type="${R}/footnotes" Target="footnotes.xml"/></Relationships>`
+      ),
+      'word/document.xml': strToU8(
+        `<w:document xmlns:w="${W}" xmlns:r="${R}"><w:body>` +
+          `<w:p><w:r><w:t>Body</w:t></w:r>` +
+          `<w:r><w:rPr><w:vertAlign w:val="superscript"/></w:rPr>` +
+          `<w:footnoteReference w:id="1"/></w:r></w:p>` +
+          '<w:sectPr><w:pgSz w:w="12240" w:h="7200"/><w:pgMar w:top="720" w:right="720" w:bottom="720" w:left="720"/></w:sectPr>' +
+          '</w:body></w:document>'
+      ),
+      'word/footnotes.xml': strToU8(
+        `<w:footnotes xmlns:w="${W}">` +
+          `<w:footnote w:type="separator" w:id="-1"><w:p><w:r><w:separator/></w:r></w:p></w:footnote>` +
+          `<w:footnote w:type="continuationSeparator" w:id="0"><w:p><w:r><w:continuationSeparator/></w:r></w:p></w:footnote>` +
+          `<w:footnote w:id="1">${noteParas}</w:footnote>` +
+          '</w:footnotes>'
+      ),
+    });
+    const { surface, container } = mount(bytes);
+    const pages = container.querySelector<HTMLElement>('.docx-pages')!;
+    pages.focus();
+
+    const occurrences = surface
+      .layout()
+      .pages.flatMap((page) =>
+        (page.footnotes?.notes ?? [])
+          .filter((note) => note.scopeId === 'footnote:1')
+          .map((note) => ({ pageIndex: page.index, continuation: !!note.continuation }))
+      );
+    expect(occurrences.length).toBeGreaterThan(1);
+    expect(occurrences.some((entry) => entry.continuation)).toBe(true);
+
+    const firstPage = occurrences[0]!.pageIndex;
+    expect(surface.enterNote('footnote:1', undefined, firstPage)).toBe(true);
+    expect(surface.activeScope()).toEqual({ kind: 'note', id: 'footnote:1' });
+
+    const caretPage = () => {
+      const caret = container.querySelector<HTMLElement>('[data-docx-caret]');
+      expect(caret).toBeTruthy();
+      return Number(caret!.closest<HTMLElement>('[data-page-index]')?.dataset.pageIndex);
+    };
+    expect(caretPage()).toBe(firstPage);
+
+    let crossed = false;
+    for (let step = 0; step < 400; step += 1) {
+      const before = surface.state().selection.head;
+      surface.navigate('down');
+      const after = surface.state().selection.head;
+      if (after.paragraphId === before.paragraphId && after.offset === before.offset) break;
+      const hostPage = caretPage();
+      if (hostPage !== firstPage) {
+        crossed = true;
+        expect(surface.activeScope()).toEqual({ kind: 'note', id: 'footnote:1' });
+        expect(hostPage).toBeGreaterThan(firstPage);
+        break;
+      }
+    }
+    expect(crossed).toBe(true);
+    surface.destroy();
+  });
 });

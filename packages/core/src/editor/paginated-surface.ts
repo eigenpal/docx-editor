@@ -466,6 +466,7 @@ export function mountPaginatedSurface(
   });
   const hyperlinks = createHyperlinkOps({
     session,
+    storyScope,
     selection: () => selection,
     orderedRange: () => orderedRange(),
     selectionMark: () => selectionMark(),
@@ -1069,6 +1070,15 @@ export function mountPaginatedSurface(
       );
       if (!moved) return;
       desiredX = moved.desiredX;
+      // Note continuations share one EditorScope across pages: retarget the visual
+      // occurrence before selection/caret paint so the DOM host follows geometry.
+      if (
+        noteOps?.activeNoteScope() &&
+        moved.pageIndex !== undefined &&
+        Number.isInteger(moved.pageIndex)
+      ) {
+        noteOps.setActiveNotePageIndex(moved.pageIndex);
+      }
       setSelection(
         { anchor: extend ? selection.anchor : moved.position, head: moved.position },
         true

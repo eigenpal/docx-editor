@@ -54,6 +54,11 @@ export interface NoteOps {
   exitNote(restoreBody?: boolean): void;
   activeNoteScope(): Extract<ViewScope, { kind: 'note' }> | null;
   activeNotePageIndex(): number | null;
+  /**
+   * Retarget the painted occurrence page while keeping the same note scope.
+   * Used when arrow navigation crosses continuation pages.
+   */
+  setActiveNotePageIndex(pageIndex: number): void;
 }
 
 export function createNoteOps(deps: {
@@ -211,6 +216,12 @@ export function createNoteOps(deps: {
 
     activeNotePageIndex() {
       return activeNotePageIndex;
+    },
+
+    setActiveNotePageIndex(pageIndex) {
+      if (!activeNote || !Number.isInteger(pageIndex)) return;
+      if (activeNotePageIndex === pageIndex) return;
+      activeNotePageIndex = pageIndex;
     },
   };
 }

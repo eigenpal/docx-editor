@@ -14,6 +14,10 @@ import { DocxEditorRoot } from '../src/editor/DocxEditorRoot.tsx';
 import { DocxEditorViewport } from '../src/editor/DocxEditorViewport.tsx';
 import { DocxEditorContent } from '../src/editor/DocxEditorContent.tsx';
 import { DocxEditorNotesChrome, useNoteScopeProbe } from '../src/editor/DocxEditorNotes.tsx';
+import {
+  useNotePropertiesState,
+  type NotePropertiesState,
+} from '../src/editor/useNoteScopeState.ts';
 import { DocxEditorToolbar } from '../src/editor/toolbar/index.ts';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
@@ -127,6 +131,12 @@ function SelectorProbe(): null {
   return null;
 }
 
+function PropertiesProbe(): null {
+  const state = useNotePropertiesState();
+  (globalThis as unknown as { __notePropsProbe?: unknown }).__notePropsProbe = state;
+  return null;
+}
+
 async function enterFootnote(editor: DocxEditorInstance): Promise<void> {
   await act(async () => {
     editor.setActiveScope({ kind: 'note', id: 'footnote:1' });
@@ -136,6 +146,7 @@ async function enterFootnote(editor: DocxEditorInstance): Promise<void> {
 afterEach(() => {
   cleanup();
   delete (globalThis as unknown as { __notesProbe?: unknown }).__notesProbe;
+  delete (globalThis as unknown as { __notePropsProbe?: unknown }).__notePropsProbe;
 });
 
 describe('DocxEditor.NotesChrome', () => {
@@ -398,6 +409,62 @@ describe('DocxEditor.NotesChrome', () => {
       editor().setZoom(1.1);
     });
     const second = (globalThis as unknown as { __notesProbe?: unknown }).__notesProbe;
+    expect(first).toBe(second);
+  });
+
+  test('useNotePropertiesState updates when documentAuthored appears with same resolved values', async () => {
+    const { editor } = mountChrome(footnoteDoc(), <PropertiesProbe />);
+    const first = (globalThis as unknown as { __notePropsProbe?: NotePropertiesState | null })
+      .__notePropsProbe;
+    expect(first).toBeTruthy();
+    expect(first!.footnote.documentAuthored).toBeUndefined();
+
+    await act(async () => {
+      editor().exec({
+        type: 'setNoteProperties',
+        scope: 'document',
+        footnote: { numFmt: 'decimal' },
+      });
+    });
+
+    const second = (globalThis as unknown as { __notePropsProbe?: NotePropertiesState | null })
+      .__notePropsProbe;
+    expect(second).not.toBe(first);
+    expect(second!.footnote.documentAuthored?.numFmt).toBe('decimal');
+    expect(second!.footnote.resolved.numFmt).toBe('decimal');
+  });
+
+  test('useNotePropertiesState updates when resolved numStart changes', async () => {
+    const { editor } = mountChrome(footnoteDoc(), <PropertiesProbe />);
+    const first = (globalThis as unknown as { __notePropsProbe?: NotePropertiesState | null })
+      .__notePropsProbe;
+    expect(first).toBeTruthy();
+    const firstStart = first!.footnote.resolved.numStart;
+
+    await act(async () => {
+      editor().exec({
+        type: 'setNoteProperties',
+        scope: 'document',
+        footnote: { numStart: firstStart + 1 },
+      });
+    });
+
+    const second = (globalThis as unknown as { __notePropsProbe?: NotePropertiesState | null })
+      .__notePropsProbe;
+    expect(second).not.toBe(first);
+    expect(second!.footnote.resolved.numStart).toBe(firstStart + 1);
+  });
+
+  test('useNotePropertiesState keeps reference when unrelated state moves', async () => {
+    const { editor } = mountChrome(footnoteDoc(), <PropertiesProbe />);
+    const first = (globalThis as unknown as { __notePropsProbe?: NotePropertiesState | null })
+      .__notePropsProbe;
+    expect(first).toBeTruthy();
+    await act(async () => {
+      editor().setZoom(1.1);
+    });
+    const second = (globalThis as unknown as { __notePropsProbe?: NotePropertiesState | null })
+      .__notePropsProbe;
     expect(first).toBe(second);
   });
 });

@@ -1574,9 +1574,12 @@ export function computeFootnoteReserves(
     );
     carry = nextCarry;
     const needed = Math.min(area?.box.height ?? 0, maxArea);
-    // Also reserve for carry that didn't fit — force room on next pages via body shrink.
-    const prev = reserves.get(page.index) ?? 0;
-    reserves.set(page.index, Math.max(prev, needed));
+    // Omit zero entries so a page the citation left does not linger as `0` in the map
+    // (convergence compares maps by key set, and body layout treats missing as zero).
+    if (needed > 0) {
+      const prev = reserves.get(page.index) ?? 0;
+      reserves.set(page.index, Math.max(prev, needed));
+    }
   }
 
   // Stable only when the body has already left enough room for the measured reserve.
@@ -1819,9 +1822,57 @@ function paragraphSectionIndexOf(
   return map;
 }
 
+/** Drop non-positive heights so missing and zero compare equal. */
+function compactFootnoteReserves(reserves: ReadonlyMap<number, number>): Map<number, number> {
+  const next = new Map<number, number>();
+  for (const [pageIndex, height] of reserves) {
+    if (height > 0) next.set(pageIndex, height);
+  }
+  return next;
+}
+
+/** True when both maps list the same page → height pairs (zeros ignored). */
+function footnoteReservesEqual(
+  a: ReadonlyMap<number, number>,
+  b: ReadonlyMap<number, number>
+): boolean {
+  const left = compactFootnoteReserves(a);
+  const right = compactFootnoteReserves(b);
+  if (left.size !== right.size) return false;
+  for (const [pageIndex, height] of left) {
+    if ((right.get(pageIndex) ?? 0) !== height) return false;
+  }
+  return true;
+}
+
+/** Monotonic union: each page keeps the larger of the two heights. */
+function growFootnoteReserves(
+  base: ReadonlyMap<number, number>,
+  computed: ReadonlyMap<number, number>
+): Map<number, number> {
+  const next = compactFootnoteReserves(base);
+  for (const [pageIndex, height] of computed) {
+    if (height <= 0) continue;
+    next.set(pageIndex, Math.max(next.get(pageIndex) ?? 0, height));
+  }
+  return next;
+}
+
+function footnoteReservesFingerprint(reserves: ReadonlyMap<number, number>): string {
+  return [...compactFootnoteReserves(reserves)]
+    .map(([pageIndex, height]) => `${pageIndex}=${height}`)
+    .sort()
+    .join(',');
+}
+
 /**
  * Notes path: provisional marks → body layout → reserve → bounded reflow → attach.
  * `runBody` is the coordinator's body layout pass (single- or multi-section).
+ *
+ * Convergence requires the body to have been laid out with exactly the reserves still
+ * needed. Monotonic growth covers the unstable path; a stable-but-mismatched compute
+ * (citation moved off a reserved page) drops stale entries and re-runs. Revisited
+ * reserve fingerprints fail closed via the grow envelope so the loop cannot oscillate.
  */
 export function layoutSemanticDocumentWithNotes<
   Opts extends {
@@ -1840,37 +1891,50 @@ export function layoutSemanticDocumentWithNotes<
   const paragraphSectionIndex = paragraphSectionIndexOf(part, sections);
   const allHits = buildPageRefHits(packageRefs, paragraphSectionIndex);
   const noteMarks = provisionalNoteMarks(allHits, notesInput);
-  let reserves: ReadonlyMap<number, number> = new Map();
+  let usedReserves: ReadonlyMap<number, number> = new Map();
   let fallbackReasons: NotePaginationFallbackReason[] = [];
   let bodyLayout: SemanticLayout = runBody({
     ...optionsWithLists,
     noteMarks,
-    pageBottomReserves: reserves,
+    pageBottomReserves: usedReserves,
   });
+  const appliedFingerprints = new Set<string>([footnoteReservesFingerprint(usedReserves)]);
 
   for (let attempt = 0; attempt < MAX_NOTE_REFLOW_ATTEMPTS; attempt += 1) {
     const computed = computeFootnoteReserves(bodyLayout, allHits, notesInput, noteMarks);
     fallbackReasons = [...computed.reasons];
-    if (computed.stable) {
-      reserves = computed.reserves;
+    // Published pages must reflect the reserves used to produce them — not a later map.
+    if (computed.stable && footnoteReservesEqual(computed.reserves, usedReserves)) {
       break;
     }
-    // Grow reserves monotonically so the loop cannot oscillate.
-    const next = new Map(reserves);
-    for (const [pageIndex, height] of computed.reserves) {
-      next.set(pageIndex, Math.max(next.get(pageIndex) ?? 0, height));
-    }
-    const unchanged =
-      next.size === reserves.size && [...next].every(([k, v]) => (reserves.get(k) ?? 0) === v);
-    reserves = next;
-    if (unchanged) {
+
+    // Unstable: grow only. Stable mismatch: adopt exact computed (drop stale pages).
+    let next = computed.stable
+      ? compactFootnoteReserves(computed.reserves)
+      : growFootnoteReserves(usedReserves, computed.reserves);
+
+    if (footnoteReservesEqual(next, usedReserves)) {
       fallbackReasons.push('note-reflow-exhausted');
       break;
     }
+
+    const nextFp = footnoteReservesFingerprint(next);
+    if (appliedFingerprints.has(nextFp)) {
+      // Shrink↔grow cycle — lock to the monotonic envelope; stop if that is not new.
+      next = growFootnoteReserves(usedReserves, computed.reserves);
+      const envelopeFp = footnoteReservesFingerprint(next);
+      if (footnoteReservesEqual(next, usedReserves) || appliedFingerprints.has(envelopeFp)) {
+        fallbackReasons.push('note-reflow-exhausted');
+        break;
+      }
+    }
+
+    usedReserves = next;
+    appliedFingerprints.add(footnoteReservesFingerprint(usedReserves));
     bodyLayout = runBody({
       ...optionsWithLists,
       noteMarks,
-      pageBottomReserves: reserves,
+      pageBottomReserves: usedReserves,
       // Reflow must not reuse checkpoints sized for a different reserve set.
       session: undefined,
     });

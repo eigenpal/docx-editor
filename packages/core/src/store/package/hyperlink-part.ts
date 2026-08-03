@@ -74,13 +74,19 @@ function withFreshIds(node: OoxmlNode, nextId: () => string): OoxmlNode {
 }
 
 /**
- * The external hyperlink relationship for `url` on the main document part, reusing an
- * existing one with the same target, or `null` when the URL is not something to write.
+ * The external hyperlink relationship for `url` on `ownerPart` (default: main document),
+ * reusing an existing one with the same target, or `null` when the URL is not something to
+ * write.
  *
  * REUSE IS BY EXACT TARGET, matching Word: linking twice to the same address produces one
  * relationship. It is safe because a hyperlink relationship carries nothing but its target —
  * two links sharing one are indistinguishable from two links with identical targets, and
  * retargeting one always mints rather than rewriting (see the edit op).
+ *
+ * Ownership follows the story that holds the `w:hyperlink`: a header/footer or notes part
+ * mints into that part's `.rels`, never into `document.xml.rels`. Passing an owner the
+ * package does not declare fails closed (`null`) so a scoped insert cannot leave a stray
+ * body relationship behind.
  *
  * The URL is refused unless `sanitizeHref` admits it. Storing a `javascript:` target that a
  * FILE authored is required — round-tripping never rewrites a document — but AUTHORING one
@@ -89,7 +95,8 @@ function withFreshIds(node: OoxmlNode, nextId: () => string): OoxmlNode {
  */
 export function ensureHyperlinkRelationship(
   pkg: OoxmlPackage,
-  url: string
+  url: string,
+  ownerPart: string = pkg.mainDocumentPart
 ): EnsuredHyperlinkRelationship | null {
   if (typeof url !== 'string' || url.length === 0 || url.length > MAX_TARGET_LENGTH) return null;
   if (!isValidXmlText(url)) return null;
@@ -102,7 +109,11 @@ export function ensureHyperlinkRelationship(
   // reader a target that resolves against whatever origin opens the file.
   if (!validateExternalTarget(target).ok) return null;
 
-  const owner = pkg.mainDocumentPart;
+  const owner = ownerPart;
+  if (typeof owner !== 'string' || owner.length === 0) return null;
+  // Refuse unknown owners rather than inventing a rels part that points at nothing in the
+  // package — a scoped insert that cannot name its story must fail atomically.
+  if (owner !== pkg.mainDocumentPart && !pkg.parts.has(owner)) return null;
   const reusable = pkg.externalTargets.find(
     (entry) =>
       entry.ownerPart === owner &&

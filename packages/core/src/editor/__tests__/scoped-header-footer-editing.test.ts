@@ -716,4 +716,64 @@ describe('surface-root pointer delegation for HF / notes', () => {
     expect(surface.activeScope()).toEqual({ kind: 'headerFooter', rId: 'rId10' });
     surface.destroy();
   });
+
+  test('header hyperlink owns header rels; undo restores; no stray body relationship', () => {
+    const { surface } = mount(docx({ header: p('HEADER'), body: p('Body') }));
+    expect(surface.enterHeaderFooter({ rId: 'rId10' })).toBe(true);
+    const paragraphId = surface.session.paragraphIdsIn({ kind: 'headerFooter', rId: 'rId10' })[0]!;
+    surface.setSelection({
+      anchor: { paragraphId, offset: 0 },
+      head: { paragraphId, offset: 6 },
+    });
+
+    const beforeBodyExternals = surface.session
+      .currentPackage()
+      .externalTargets.filter((entry) => entry.ownerPart === surface.session.part().name);
+    expect(surface.hyperlinks.applyHyperlink({ url: 'https://example.com/hf' })).toBe(true);
+
+    const pkg = surface.session.currentPackage();
+    const headerPart = surface.session.partFor({ kind: 'headerFooter', rId: 'rId10' })!;
+    const headerLinks = pkg.externalTargets.filter(
+      (entry) => entry.ownerPart === headerPart.name && entry.rawTarget === 'https://example.com/hf'
+    );
+    expect(headerLinks).toHaveLength(1);
+    expect(
+      pkg.externalTargets.filter(
+        (entry) =>
+          entry.ownerPart === pkg.mainDocumentPart && entry.rawTarget === 'https://example.com/hf'
+      )
+    ).toHaveLength(0);
+    expect(
+      pkg.externalTargets.filter((entry) => entry.ownerPart === pkg.mainDocumentPart)
+    ).toHaveLength(beforeBodyExternals.length);
+
+    const link = surface.hyperlinks.linkAtCaret();
+    expect(link?.href).toBe('https://example.com/hf');
+    expect(JSON.stringify(headerPart.root)).toContain('hyperlink');
+    expect(JSON.stringify(surface.session.part().root)).not.toContain('https://example.com/hf');
+
+    surface.undo();
+    expect(surface.hyperlinks.linkAtCaret()).toBeNull();
+    expect(
+      JSON.stringify(surface.session.partFor({ kind: 'headerFooter', rId: 'rId10' })!.root)
+    ).not.toContain('"kind":"hyperlink"');
+    // Relationship leftovers are intentional (Word-compatible); ownership stays on the header.
+    expect(
+      surface.session
+        .currentPackage()
+        .externalTargets.some(
+          (entry) =>
+            entry.ownerPart === headerPart.name && entry.rawTarget === 'https://example.com/hf'
+        )
+    ).toBe(true);
+    expect(
+      surface.session
+        .currentPackage()
+        .externalTargets.some(
+          (entry) =>
+            entry.ownerPart === pkg.mainDocumentPart && entry.rawTarget === 'https://example.com/hf'
+        )
+    ).toBe(false);
+    surface.destroy();
+  });
 });

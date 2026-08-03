@@ -39,6 +39,36 @@ export function useNoteScopeState(): Extract<ViewScope, { kind: 'note' }> | null
 
 export type NotePropertiesState = Exclude<ReturnType<Editor['getNotePropertiesState']>, null>;
 
+type AuthoredNoteNumbering = NonNullable<NotePropertiesState['footnote']['documentAuthored']>;
+
+function authoredNoteNumberingEqual(
+  a: AuthoredNoteNumbering | undefined,
+  b: AuthoredNoteNumbering | undefined
+): boolean {
+  if (a === b) return true;
+  if (!a || !b) return false;
+  return (
+    a.pos === b.pos &&
+    a.numFmt === b.numFmt &&
+    a.numStart === b.numStart &&
+    a.numRestart === b.numRestart
+  );
+}
+
+function notePropertiesSideEqual(
+  a: NotePropertiesState['footnote'],
+  b: NotePropertiesState['footnote']
+): boolean {
+  return (
+    a.resolved.pos === b.resolved.pos &&
+    a.resolved.numFmt === b.resolved.numFmt &&
+    a.resolved.numStart === b.resolved.numStart &&
+    a.resolved.numRestart === b.resolved.numRestart &&
+    authoredNoteNumberingEqual(a.documentAuthored, b.documentAuthored) &&
+    authoredNoteNumberingEqual(a.sectionAuthored, b.sectionAuthored)
+  );
+}
+
 function notePropertiesEqual(
   a: NotePropertiesState | null,
   b: NotePropertiesState | null
@@ -47,12 +77,8 @@ function notePropertiesEqual(
   if (!a || !b) return false;
   return (
     a.sectionIndex === b.sectionIndex &&
-    a.footnote.resolved.pos === b.footnote.resolved.pos &&
-    a.footnote.resolved.numFmt === b.footnote.resolved.numFmt &&
-    a.footnote.resolved.numRestart === b.footnote.resolved.numRestart &&
-    a.endnote.resolved.pos === b.endnote.resolved.pos &&
-    a.endnote.resolved.numFmt === b.endnote.resolved.numFmt &&
-    a.endnote.resolved.numRestart === b.endnote.resolved.numRestart
+    notePropertiesSideEqual(a.footnote, b.footnote) &&
+    notePropertiesSideEqual(a.endnote, b.endnote)
   );
 }
 

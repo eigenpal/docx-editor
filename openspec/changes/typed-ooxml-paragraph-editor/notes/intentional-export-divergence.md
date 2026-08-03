@@ -90,6 +90,8 @@ exemptions go when it lands.
   field inserts) over `useHeaderFooterState`; Vue twin deferred with notes/HF editing.
 - `DocxEditorHeaderFooterChromeProps`
 - `useHeaderFooterState` — selector hook for open HF scope state; Vue twin deferred.
+- `HeaderFooterState` — non-null header/footer snapshot type returned by
+  `useHeaderFooterState`.
 - `DocxEditorNotesChrome` — React-only note chrome (banner, hover preview, context menu,
   properties dialog); Vue twin deferred — notes editing is React-only this change.
 - `DocxEditorNotesChromeProps`

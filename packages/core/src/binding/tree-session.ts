@@ -266,14 +266,16 @@ export interface TreeDocxSession {
    * definition of the same kind is reused rather than duplicated.
    */
   /**
-   * What the MAIN part's relationships answer for one `r:id`: the authored target and
-   * whether it is external. `null` for an id the part does not declare.
+   * What the owning part's relationships answer for one `r:id` under `scope` (default:
+   * body): the authored target and whether it is external. `null` for an id the part does
+   * not declare, or when the scoped part is not open.
    *
    * Live rather than memoized: inserting a link mints a relationship mid-session, and a
    * cached resolver would report the link this session just created as dangling.
    */
   relationshipTarget(
-    relationshipId: string
+    relationshipId: string,
+    scope?: StoryScope
   ): { readonly target: string; readonly external: boolean } | null;
   /**
    * `bookmarkName -> { paragraphId, offset }` over the main part, memoized per revision.
@@ -283,14 +285,17 @@ export interface TreeDocxSession {
    */
   bookmarks(): BookmarkIndex;
   /**
-   * The relationship id for an external hyperlink target, minting one if the package has
-   * none, or `null` when the URL is refused.
+   * The relationship id for an external hyperlink target on the part owning `scope`
+   * (default: body), minting one if that part has none, or `null` when the URL is refused
+   * or the scoped part cannot be resolved.
    *
    * Lives on the PACKAGE, outside `store.transact`, like the numbering definitions: the
    * undoable half is the tree op that names the id. An unreferenced relationship left
-   * behind by an undo is inert and is what Word writes anyway.
+   * behind by an undo is inert and is what Word writes anyway. Scoped inserts mint onto
+   * the story's own `.rels` so a header/footer or note link never creates a stray body
+   * relationship.
    */
-  ensureHyperlinkRelationship(url: string): string | null;
+  ensureHyperlinkRelationship(url: string, scope?: StoryScope): string | null;
   ensureListDefinition(kind: ListKind): string | null;
   /**
    * Declare `level` in the list definition `numId` names, with Word's default format for
@@ -804,9 +809,11 @@ export function openTreeSession(bytes: Uint8Array): OpenTreeSessionResult {
 
       nodeIdOf: (paraId) => paragraphAnchors().nodeByParaId.get(paraId.toUpperCase()) ?? null,
 
-      relationshipTarget: (relationshipId) => {
+      relationshipTarget: (relationshipId, scope = BODY_SCOPE) => {
         const live = currentPackage();
-        return relationshipTargetIn(live, live.mainDocumentPart, relationshipId);
+        const part = packageStore.partFor(scope);
+        if (!part) return null;
+        return relationshipTargetIn(live, part.name, relationshipId);
       },
 
       bookmarks: () => {
@@ -817,14 +824,16 @@ export function openTreeSession(bytes: Uint8Array): OpenTreeSessionResult {
         return bookmarksCache.index;
       },
 
-      ensureHyperlinkRelationship(url) {
+      ensureHyperlinkRelationship(url, scope = BODY_SCOPE) {
         // Package write, not a tree op: the story undo unit names the rId, while the
         // relationship itself is session-persistent across lifecycle package snapshots
         // (see `mergePersistentPackageShell`). Leftover rels are harmless; missing ones are not.
         // `currentPackage()` mints a fresh object per call, so the identity check compares
         // against the SAME instance the write was given.
+        const part = packageStore.partFor(scope);
+        if (!part) return null;
         const before = currentPackage();
-        const ensured = ensureHyperlinkRelationship(before, url);
+        const ensured = ensureHyperlinkRelationship(before, url, part.name);
         if (!ensured) return null;
         if (ensured.pkg !== before) packageStore.replacePackageShell(ensured.pkg);
         return ensured.relationshipId;

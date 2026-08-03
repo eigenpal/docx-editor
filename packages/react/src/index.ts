@@ -86,7 +86,7 @@ export {
   type DocxEditorHeaderFooterChromeProps,
 } from './editor/DocxEditorHeaderFooter';
 export { DocxEditorNotesChrome, type DocxEditorNotesChromeProps } from './editor/DocxEditorNotes';
-export { useHeaderFooterState } from './editor/useHeaderFooterState';
+export { useHeaderFooterState, type HeaderFooterState } from './editor/useHeaderFooterState';
 export {
   useNotePropertiesState,
   useNoteScopeState,

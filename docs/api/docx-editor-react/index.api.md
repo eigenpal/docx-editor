@@ -628,6 +628,9 @@ export { FontUrlSource }
 
 export { generateRulerTicks }
 
+// @public
+export type HeaderFooterState = Exclude<ReturnType<Editor['getHeaderFooterState']>, null>;
+
 // @public (undocumented)
 export function HorizontalRuler(input: HorizontalRulerProps): react__default.ReactElement;
 

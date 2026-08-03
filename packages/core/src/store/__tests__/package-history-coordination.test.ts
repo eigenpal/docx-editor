@@ -1,5 +1,5 @@
-// Package-history coordination: cascaded deleteText as one undo unit, failed-cascade
-// rollback of story history, and identity no-ops for empty convertAllNotes.
+// Package-history coordination: cascaded deleteText / deleteBlock as one undo unit,
+// failed-cascade rollback of story history, and identity no-ops for empty convertAllNotes.
 
 import { describe, expect, test } from 'bun:test';
 import { zipSync, strToU8 } from 'fflate';
@@ -10,6 +10,7 @@ import {
   resolveNotesPart,
   type OoxmlPackage,
 } from '../package/index.ts';
+import type { OoxmlNode, OoxmlPart } from '../package/ooxml-tree.ts';
 import { TreePackageStore } from '../store/tree-package-store.ts';
 import { paragraphTextOf } from '../store/tree-ops.ts';
 import type { TreeModelChange } from '../store/tree-store.ts';
@@ -92,11 +93,36 @@ function firstParagraphId(pkg: OoxmlPackage): string {
   return p.id;
 }
 
+function firstOfKind(part: OoxmlPart, kind: OoxmlNode['kind']): string {
+  const walk = (node: OoxmlNode): string | null => {
+    if (node.kind === 'textValue') return null;
+    if (node.kind === kind) return node.id;
+    for (const child of node.children) {
+      const found = walk(child);
+      if (found) return found;
+    }
+    return null;
+  };
+  const id = walk(part.root);
+  if (!id) throw new Error(`no ${kind}`);
+  return id;
+}
+
 const seededNotes =
   `<w:footnote w:type="separator" w:id="-1"><w:p><w:r><w:separator/></w:r></w:p></w:footnote>` +
   `<w:footnote w:type="continuationSeparator" w:id="0"><w:p><w:r><w:continuationSeparator/></w:r></w:p></w:footnote>` +
   `<w:footnote w:id="1"><w:p><w:r><w:footnoteRef/></w:r><w:r><w:t>one</w:t></w:r></w:p></w:footnote>` +
   `<w:footnote w:id="3"><w:p><w:r><w:t>three</w:t></w:r></w:p></w:footnote>`;
+
+const cellWithNote = `<w:tc><w:p><w:r><w:t>A</w:t><w:footnoteReference w:id="1"/><w:t>Z</w:t></w:r></w:p></w:tc>`;
+const plainCell = (text: string): string => `<w:tc><w:p><w:r><w:t>${text}</w:t></w:r></w:p></w:tc>`;
+const tableWithNote =
+  `<w:tbl><w:tblPr/><w:tblGrid><w:gridCol w:w="100"/><w:gridCol w:w="100"/></w:tblGrid>` +
+  `<w:tr>${cellWithNote}${plainCell('x')}</w:tr>` +
+  `<w:tr>${plainCell('y')}${plainCell('z')}</w:tr></w:tbl>`;
+const nestedTableWithNote =
+  `<w:tbl><w:tblPr/><w:tblGrid><w:gridCol w:w="200"/></w:tblGrid>` +
+  `<w:tr><w:tc><w:p><w:r><w:t>outer</w:t></w:r></w:p>${tableWithNote}<w:p><w:r><w:t/></w:r></w:p></w:tc></w:tr></w:tbl>`;
 
 describe('cascaded deleteText package history unit', () => {
   test('edit → cascade delete → undo → undo restores prior edit; redo is symmetric', () => {
@@ -190,6 +216,121 @@ describe('cascaded deleteText package history unit', () => {
 
     expect(store.redo()).not.toBeNull();
     expect(paragraphTextOf(store.bodyStore().part, paragraphId)).toBe('XA\uFFFCZ');
+  });
+});
+
+describe('cascaded deleteBlock package history unit', () => {
+  test('deleteBlock of table with noteReference cascades body in one undo', () => {
+    const body = `<w:p><w:r><w:t>before</w:t></w:r></w:p>${tableWithNote}<w:p><w:r><w:t>after</w:t></w:r></w:p>`;
+    const store = openStore(build({ body, footnotes: seededNotes }));
+    const tableId = firstOfKind(store.bodyStore().part, 'table');
+    const depthBefore = store.bodyStore().historyDepth;
+    const revBefore = store.packageRevision;
+
+    expect(
+      store.transact({ kind: 'body' }, (ctx) => {
+        ctx.apply({ op: 'deleteBlock', blockId: tableId });
+      }).ok
+    ).toBe(true);
+    expect(
+      findNoteById(resolveNotesPart(store.currentPackage(), 'footnote')!.root, 1)
+    ).toBeUndefined();
+    expect(store.bodyStore().historyDepth).toBe(depthBefore);
+    expect(store.packageRevision).toBe(revBefore + 1);
+
+    expect(store.undo()).not.toBeNull();
+    expect(
+      findNoteById(resolveNotesPart(store.currentPackage(), 'footnote')!.root, 1)
+    ).toBeDefined();
+    expect(firstOfKind(store.bodyStore().part, 'table')).toBe(tableId);
+  });
+
+  test('deleteBlock of outer table cascades noteReference in nested table', () => {
+    const body =
+      `<w:p><w:r><w:t>before</w:t></w:r></w:p>${nestedTableWithNote}` +
+      `<w:p><w:r><w:t>after</w:t></w:r></w:p>`;
+    const store = openStore(build({ body, footnotes: seededNotes }));
+    const outerTableId = firstOfKind(store.bodyStore().part, 'table');
+
+    expect(
+      store.transact({ kind: 'body' }, (ctx) => {
+        ctx.apply({ op: 'deleteBlock', blockId: outerTableId });
+      }).ok
+    ).toBe(true);
+    expect(
+      findNoteById(resolveNotesPart(store.currentPackage(), 'footnote')!.root, 1)
+    ).toBeUndefined();
+    expect(store.undo()).not.toBeNull();
+    expect(
+      findNoteById(resolveNotesPart(store.currentPackage(), 'footnote')!.root, 1)
+    ).toBeDefined();
+  });
+
+  test('failed cascade after deleteBlock rolls back table and note body', () => {
+    const body = `<w:p><w:r><w:t>before</w:t></w:r></w:p>${tableWithNote}<w:p><w:r><w:t>after</w:t></w:r></w:p>`;
+    const pkg = load(build({ body, footnotes: seededNotes }));
+    const main = pkg.parts.get(pkg.mainDocumentPart)!;
+    const store = new TreePackageStore(pkg, main, {
+      cascadeDeletedNoteReferences: () => null,
+    });
+    const tableId = firstOfKind(store.bodyStore().part, 'table');
+    const before = {
+      packageRevision: store.packageRevision,
+      canUndo: store.canUndo,
+      historyDepth: store.bodyStore().historyDepth,
+      note: findNoteById(resolveNotesPart(store.currentPackage(), 'footnote')!.root, 1),
+      tables: store
+        .bodyStore()
+        .part.root.children.find((child) => child.kind === 'body')!
+        .children.filter((child) => child.kind === 'table').length,
+    };
+
+    const failed = store.transact({ kind: 'body' }, (ctx) => {
+      ctx.apply({ op: 'deleteBlock', blockId: tableId });
+    });
+    expect(failed.ok).toBe(false);
+    if (failed.ok) throw new Error('expected cascade failure');
+    expect(failed.detail).toBe('note-cascade-failed');
+    expect(store.packageRevision).toBe(before.packageRevision);
+    expect(store.canUndo).toBe(before.canUndo);
+    expect(store.bodyStore().historyDepth).toBe(before.historyDepth);
+    expect(findNoteById(resolveNotesPart(store.currentPackage(), 'footnote')!.root, 1)).toBe(
+      before.note
+    );
+    expect(
+      store
+        .bodyStore()
+        .part.root.children.find((child) => child.kind === 'body')!
+        .children.filter((child) => child.kind === 'table').length
+    ).toBe(before.tables);
+  });
+
+  test('ordinary deleteBlock without note refs does not cascade', () => {
+    let cascadeCalls = 0;
+    const body =
+      `<w:p><w:r><w:t>before</w:t></w:r></w:p>` +
+      `<w:tbl><w:tblPr/><w:tblGrid><w:gridCol w:w="100"/></w:tblGrid>` +
+      `<w:tr>${plainCell('a')}</w:tr></w:tbl>` +
+      `<w:p><w:r><w:t>after</w:t></w:r></w:p>`;
+    const pkg = load(build({ body, footnotes: seededNotes }));
+    const main = pkg.parts.get(pkg.mainDocumentPart)!;
+    const store = new TreePackageStore(pkg, main, {
+      cascadeDeletedNoteReferences: (_before, after) => {
+        cascadeCalls += 1;
+        return after;
+      },
+    });
+    const tableId = firstOfKind(store.bodyStore().part, 'table');
+
+    expect(
+      store.transact({ kind: 'body' }, (ctx) => {
+        ctx.apply({ op: 'deleteBlock', blockId: tableId });
+      }).ok
+    ).toBe(true);
+    expect(cascadeCalls).toBe(0);
+    expect(
+      findNoteById(resolveNotesPart(store.currentPackage(), 'footnote')!.root, 1)
+    ).toBeDefined();
   });
 });
 

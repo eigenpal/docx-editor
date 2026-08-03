@@ -406,7 +406,8 @@ export interface CascadeDeletedNoteReferencesOptions {
 
 /**
  * Remove note bodies for references that disappeared between two package snapshots.
- * Used when `deleteText` removes a `noteReference` atom so body+ref stay one undo unit.
+ * Used when `deleteText` or `deleteBlock` removes a `noteReference` atom so body+ref stay
+ * one undo unit.
  *
  * Each snapshot gets an independent full visited/part budget. If either scan truncates
  * the cascade fails closed so a hostile package cannot skip body deletion silently —

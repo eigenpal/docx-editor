@@ -32,7 +32,7 @@ import type { NoteKind } from '../package/note-nodes.ts';
 import { mergePersistentPackageShell } from '../package/package-shell-persistence.ts';
 import { ORIGIN_IDS } from '../registry/frozen-ids.ts';
 import type { ImpactClass, TreeDocOp, TreeOpRejection } from './tree-ops.ts';
-import { deleteMayStrandNote } from './tree-package-gates.ts';
+import { deleteBlockMayStrandNote, deleteMayStrandNote } from './tree-package-gates.ts';
 import {
   TreeDocumentStore,
   type SelectionMark,
@@ -95,7 +95,7 @@ export interface TreePackageStoreOptions {
   /** Bound on opened story stores; defaults to {@link DEFAULT_MAX_EDITABLE_STORY_PARTS}. */
   readonly maxEditableStoryParts?: number;
   /**
-   * Test seam for note-reference cascade after `deleteText`. Production uses
+   * Test seam for note-reference cascade after `deleteText` / `deleteBlock`. Production uses
    * {@link cascadeDeletedNoteReferences}.
    */
   readonly cascadeDeletedNoteReferences?: NoteCascadeFn;
@@ -241,8 +241,8 @@ export class TreePackageStore {
   /**
    * Commit ops against one story as ONE transaction / undo unit / ModelChange.
    * Header/footer and notes-part commits publish `impact: 'global'`.
-   * Deleting a `noteReference` via `deleteText` cascades the note body in the same
-   * package undo unit.
+   * Deleting a `noteReference` via `deleteText` or a block subtree via `deleteBlock`
+   * cascades the note body in the same package undo unit.
    */
   transact(
     scope: StoryScope,
@@ -263,19 +263,27 @@ export class TreePackageStore {
     const beforeDepth = store.historyDepth;
     const compositionWasOpen = store.compositionActive;
     const checkpoint = store.checkpoint();
-    // Only `deleteText` can remove noteReference atoms; skip package-wide cascade otherwise.
+    // `deleteText` / `deleteBlock` can remove noteReference atoms; skip package-wide
+    // cascade for every other op. Gates stay local to the op target (paragraph range or
+    // block subtree) so ordinary structural deletion never scans the whole package.
     let mayDeleteNoteAtoms = false;
     const deleteTargets = new Set<string>();
     const result = store.transact(
       (ctx) => {
         build({
           apply: (op) => {
-            if (
-              op.op === 'deleteText' &&
-              !mayDeleteNoteAtoms &&
-              deleteMayStrandNote(this.pkg, store.part, op, deleteTargets)
-            ) {
-              mayDeleteNoteAtoms = true;
+            if (!mayDeleteNoteAtoms) {
+              if (
+                op.op === 'deleteText' &&
+                deleteMayStrandNote(this.pkg, store.part, op, deleteTargets)
+              ) {
+                mayDeleteNoteAtoms = true;
+              } else if (
+                op.op === 'deleteBlock' &&
+                deleteBlockMayStrandNote(this.pkg, store.part, op, deleteTargets)
+              ) {
+                mayDeleteNoteAtoms = true;
+              }
             }
             return ctx.apply(op);
           },
@@ -302,7 +310,7 @@ export class TreePackageStore {
 
     this.syncPackageFromStore(store);
 
-    // Cascade note-body deletion when a reference atom was removed by text delete.
+    // Cascade note-body deletion when a reference atom was removed by text or block delete.
     // Body mutation + cascade share one package history unit; local story history is
     // discarded on promotion so a later undo cannot replay the orphan story entry.
     let cascaded = false;

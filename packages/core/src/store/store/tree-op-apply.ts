@@ -506,13 +506,20 @@ function hyperlinkElement(
       value: target.tooltip,
     });
   }
+  // Declare xmlns:r on the link when it carries r:id. Body stories usually inherit
+  // that binding from w:document, but header/footer and notes parts often only declare
+  // xmlns:w - without a local binding the attribute fails the part invariant.
+  const namespaceBindings =
+    target.relationshipId !== undefined
+      ? [{ prefix: 'r', namespaceUri: RELATIONSHIP_NAMESPACE_URI }]
+      : [];
   return {
     id: nextId(),
     kind: 'hyperlink',
     namespaceUri: WML_NAMESPACE_URI,
     localName: 'hyperlink',
     prefix: 'w',
-    namespaceBindings: [],
+    namespaceBindings,
     attributes,
     children,
   } as unknown as OoxmlNode;
@@ -740,7 +747,23 @@ function applySetHyperlinkTarget(
       value: op.tooltip,
     });
   }
-  const next = { ...link, attributes: [...retained, ...target] } as OoxmlNode;
+  let namespaceBindings = link.namespaceBindings;
+  if (
+    op.relationshipId !== undefined &&
+    !namespaceBindings.some(
+      (binding) => binding.prefix === 'r' && binding.namespaceUri === RELATIONSHIP_NAMESPACE_URI
+    )
+  ) {
+    namespaceBindings = [
+      ...namespaceBindings,
+      { prefix: 'r', namespaceUri: RELATIONSHIP_NAMESPACE_URI },
+    ];
+  }
+  const next = {
+    ...link,
+    namespaceBindings,
+    attributes: [...retained, ...target],
+  } as OoxmlNode;
   const effect: TreeOpEffect = {
     dirty: [owner.id],
     created: [],

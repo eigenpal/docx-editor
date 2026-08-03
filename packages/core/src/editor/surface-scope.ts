@@ -286,7 +286,7 @@ export function setHeaderFooterEditingChrome(
   pagesLayer.classList.toggle('docx-pages--hf-editing', editing);
 }
 
-/** Move the caret within body stops or an open furniture story's stops. */
+/** Move the caret within body stops or an open furniture/note story's stops. */
 export function navigateInActiveScope(
   layout: SemanticLayout,
   position: SemanticPosition,
@@ -295,16 +295,26 @@ export function navigateInActiveScope(
   active: HeaderFooterScopeBinding | null,
   noteScopeId?: string | null,
   measurer?: TextMeasurer
-): { position: SemanticPosition; desiredX: number | null } | null {
+): { position: SemanticPosition; desiredX: number | null; pageIndex?: number } | null {
   const storyStops = active
     ? activeStoryCaretStops(layout, active, measurer)
     : noteScopeId
       ? activeNoteCaretStops(layout, noteScopeId, measurer)
       : null;
-  return moveCaret(layout, position, command, desiredX, {
+  const moved = moveCaret(layout, position, command, desiredX, {
     ...(measurer ? { measurer } : {}),
     ...(storyStops ? { stops: storyStops } : {}),
   });
+  if (!moved) return null;
+  if (!storyStops) return moved;
+  // Prefer an exact stop match so continuation-page geometry carries its pageIndex through
+  // word/line gestures that rebuild the position without returning the stop itself.
+  const stop = storyStops.find(
+    (candidate) =>
+      candidate.position.paragraphId === moved.position.paragraphId &&
+      candidate.position.offset === moved.position.offset
+  );
+  return stop ? { ...moved, pageIndex: stop.pageIndex } : moved;
 }
 
 export function findNoteAtSheetPoint(
