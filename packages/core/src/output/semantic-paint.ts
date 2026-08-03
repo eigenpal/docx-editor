@@ -11,6 +11,7 @@
 // comes from the RESOLVED style rather than from raw authored text.
 
 import { baselineShiftPtOf, TAB_LEADER_GLYPH } from '@docx-editor.dev/core-contract/layout';
+import { authorSlotsOf, revisionPresentationOf } from './revision-presentation.ts';
 import type {
   LineRecord,
   PageRecord,
@@ -43,6 +44,13 @@ export interface PaintContext {
    * a live link there would be the one thing in the furniture that answers a gesture.
    */
   readonly inertLinks?: boolean;
+  /**
+   * Author to colour slot, by order of first appearance across the whole document.
+   *
+   * Resolved once per paint rather than per span: the order is a property of the document, and
+   * deriving it per page would give the same author different colours on different sheets.
+   */
+  readonly authorSlots?: ReadonlyMap<string, number>;
 }
 
 /**
@@ -319,6 +327,71 @@ function positioned(
   return element;
 }
 
+/**
+ * Draw a span as the tracked change it is.
+ *
+ * Applied to the run BOX rather than the inner text layers: `w:u` and `w:strike` already own
+ * those, and a revision's decoration is a second, independent statement about the same glyphs.
+ * Word draws both — struck-through text that was also underlined by its author keeps both rules.
+ *
+ * The colour lands as a custom property on the element rather than a resolved value, so a host
+ * restyling `--doc-review-author-N` under `.ep-root` changes the painted document with it.
+ *
+ * The dataset attributes are the review surface's join key: a card can find its own text, and
+ * the active-item highlight is set by attribute rather than by building a CSS rule out of an
+ * id — comment and revision metadata are attacker-controlled.
+ */
+function applyRevisionPresentation(
+  element: HTMLElement,
+  span: StyleSpanRecord,
+  ctx: PaintContext
+): void {
+  const presentation = revisionPresentationOf(span.revisions, ctx.authorSlots);
+  if (!presentation) return;
+  const { attribution } = presentation;
+  element.classList.add('docx-revision', `docx-revision-${attribution.kind}`);
+  element.dataset.revisionKind = attribution.kind;
+  element.dataset.revisionId = attribution.id;
+  element.dataset.revisionAuthor = attribution.author;
+  if (attribution.date !== undefined) element.dataset.revisionDate = attribution.date;
+  element.style.color = presentation.color;
+  if (presentation.line) {
+    element.style.textDecorationLine = presentation.line;
+    element.style.textDecorationStyle = presentation.decorationStyle;
+    element.style.textDecorationColor = presentation.color;
+  }
+}
+
+/**
+ * The margin rule beside a line that carries a tracked change.
+ *
+ * Furniture: no model range, `aria-hidden`, not editable, and it takes no space in the flow —
+ * it is positioned in the margin the fragment box already leaves, so it can never push text.
+ */
+function paintChangeBar(
+  document: Document,
+  fragment: ParagraphFragmentRecord,
+  line: LineRecord,
+  scale: number
+): HTMLElement {
+  const bar = document.createElement('span');
+  bar.className = 'docx-change-bar';
+  bar.setAttribute('aria-hidden', 'true');
+  bar.contentEditable = 'false';
+  bar.style.position = 'absolute';
+  bar.style.top = `${(line.box.y - fragment.box.y) * scale}px`;
+  bar.style.height = `${line.box.height * scale}px`;
+  // Left of the text column, in the margin, so it never overlaps a glyph.
+  bar.style.left = `${-CHANGE_BAR_OFFSET_PT * scale}px`;
+  bar.style.width = `${CHANGE_BAR_WIDTH_PT * scale}px`;
+  bar.style.backgroundColor = 'var(--doc-review-change-bar)';
+  return bar;
+}
+
+/** Distance from the text column to the change bar, and its thickness, in points. */
+const CHANGE_BAR_OFFSET_PT = 18;
+const CHANGE_BAR_WIDTH_PT = 1.2;
+
 function paintSpan(
   document: Document,
   span: StyleSpanRecord,
@@ -378,6 +451,7 @@ function paintSpan(
     element.contentEditable = 'false';
   }
   applyRunFaceStyle(element, span.style, ctx);
+  applyRevisionPresentation(element, span, ctx);
   // Layout owns advances that the browser cannot reconstruct: horizontal scaling (transform
   // does not reserve space) and OOXML tab stops (`\t` would otherwise paint as a narrow
   // native tab). Both must take the published box width so following runs start where
@@ -619,6 +693,14 @@ function paintFragment(
     }
   }
   for (const line of fragment.lines) {
+    // CHANGE BAR. Word draws a rule in the margin beside every line a revision touches, and it
+    // is the only signal that a change exists at all once the reader is looking at a resolved
+    // view. Derived from the painted spans rather than a layout field: whether a line carries
+    // tracked text is exactly "does any span on it have an attribution", and asking here keeps
+    // the bar in step with what was actually drawn.
+    if (line.spans.some((span) => span.revisions !== undefined && span.revisions.length > 0)) {
+      element.append(paintChangeBar(document, fragment, line, scale));
+    }
     const painted = paintLine(document, line, ctx);
     // Line boxes are page-relative; inside a fragment they are drawn relative to it —
     // BOTH axes. The fragment box already carries the x origin (indent, or a table cell's
@@ -1094,6 +1176,7 @@ export function paintSemanticLayout(
     scale: options.scale ?? 96 / 72,
     ariaHidden: options.ariaHidden ?? true,
     ...(options.fontAlias ? { fontAlias: options.fontAlias } : {}),
+    authorSlots: authorSlotsOf(layout),
   };
   const document = container.ownerDocument;
   // The alias lookup is part of the paint parameters: a page painted before fonts
