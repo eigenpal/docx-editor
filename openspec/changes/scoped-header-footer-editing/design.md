@@ -68,7 +68,7 @@ Reconcile against shipped `@public` members before implementation (`word-fidelit
 | Shipped member | This change |
 | --- | --- |
 | `EditorScope { kind: 'headerFooter'; rId }` | **Use as-is.** Scope activation for furniture editing binds here; no parallel `{sectionIndex, variant}` scope shape. |
-| `editHeaderFooter` / `exitHeaderFooter` / `removeHeaderFooter` | **Wire** in `docx-editor.ts` (today unimplemented). `firstPage` maps to the `first` variant when `w:titlePg` is set. **Patch** — behaviour addition on existing commands. |
+| `editHeaderFooter` / `exitHeaderFooter` / `removeHeaderFooter` | **Wire** in `docx-editor.ts`. Prefer `variant: 'default' \| 'first' \| 'even'`; `firstPage` / `evenPage` remain aliases. Creating a missing `first`/`even` part enables `titlePg` / `evenAndOddHeaders` in the same undo unit. **Patch** — behaviour addition on existing commands. |
 | `getHeaderFooterState(): { editing, sectionIndex } \| null` | **Minor expansion:** add `variant`, `rId`, `inherited`, `partName` (or equivalent) so chrome can render without adapter guesses. Existing fields stay; adapters ignoring new fields remain valid. |
 | `setActiveScope` / `getActiveScope` | **Wire** for furniture scope transitions. **Patch.** |
 | `Editor.getWatermark()` | **Unchanged stub** — watermarks owned by `typed-drawings-and-images`. |

@@ -34,7 +34,10 @@ function build(options: {
   readonly secondSectPr?: string;
   readonly rels?: string;
   readonly headerParts?: Record<string, string>;
+  /** Extra zip entries under their package paths (e.g. header rels, media bytes). */
+  readonly extraEntries?: Record<string, Uint8Array>;
   readonly overrides?: string;
+  readonly defaults?: string;
   readonly settings?: string;
 }): Uint8Array {
   const body =
@@ -49,6 +52,7 @@ function build(options: {
     '[Content_Types].xml': strToU8(
       `<Types xmlns="${CT}">` +
         '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>' +
+        (options.defaults ?? '') +
         '<Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>' +
         (options.overrides ?? '') +
         (options.settings
@@ -70,6 +74,9 @@ function build(options: {
   }
   for (const [name, xml] of Object.entries(options.headerParts ?? {})) {
     entries[name] = strToU8(xml);
+  }
+  for (const [name, bytes] of Object.entries(options.extraEntries ?? {})) {
+    entries[name] = bytes;
   }
   if (options.settings) entries['word/settings.xml'] = strToU8(options.settings);
   return zipSync(entries);
@@ -315,6 +322,140 @@ describe('linkToPrevious / unlinkFromPrevious', () => {
     expect(resolveHeaderFooterResolutionBySection(pkg)[1]!.headers.get('default')!.inherited).toBe(
       true
     );
+  });
+
+  test('unlink clones owned hyperlink and media relationships; save/reopen and GC hold', () => {
+    const HYPERLINK = `${R}/hyperlink`;
+    const IMAGE = `${R}/image`;
+    // Story content only needs resolvable rIds; image rendering is out of scope.
+    const headerWithRels =
+      `<w:hdr xmlns:w="${W}" xmlns:r="${R}">` +
+      '<w:p><w:hyperlink r:id="rId1"><w:r><w:t>link</w:t></w:r></w:hyperlink></w:p>' +
+      '<w:p><w:r><w:t>embed-rId2</w:t></w:r></w:p>' +
+      '</w:hdr>';
+    const store = openStore(
+      build({
+        references: '<w:headerReference w:type="default" r:id="rId7"/>',
+        secondSectPr: '',
+        rels: `<Relationship Id="rId7" Type="${R}/header" Target="header1.xml"/>`,
+        headerParts: { 'word/header1.xml': headerWithRels },
+        overrides: HEADER_OVERRIDE,
+        defaults: '<Default Extension="png" ContentType="image/png"/>',
+        extraEntries: {
+          'word/_rels/header1.xml.rels': strToU8(
+            `<Relationships xmlns="${REL}">` +
+              `<Relationship Id="rId1" Type="${HYPERLINK}" Target="https://example.com/hf" TargetMode="External"/>` +
+              `<Relationship Id="rId2" Type="${IMAGE}" Target="media/image1.png"/>` +
+              '</Relationships>'
+          ),
+          // Bytes present so internal image target stays package-valid; rendering not claimed.
+          'word/media/image1.png': new Uint8Array([0x89, 0x50, 0x4e, 0x47]),
+        },
+      })
+    );
+
+    const unlinked = store.applyLifecycleOp({
+      op: 'unlinkFromPrevious',
+      sectionIndex: 1,
+      kind: 'header',
+      variant: 'default',
+    });
+    expect(unlinked.ok).toBe(true);
+    const live = store.currentPackage();
+    const cloneName =
+      resolveHeaderFooterResolutionBySection(live)[1]!.headers.get('default')!.partName;
+    expect(cloneName).not.toBe('/word/header1.xml');
+
+    const sourceRels = live.relationships.get('/word/header1.xml') ?? [];
+    const cloneRels = live.relationships.get(cloneName) ?? [];
+    expect(
+      cloneRels.map((r) => ({ id: r.id, type: r.type, target: r.rawTarget, mode: r.targetMode }))
+    ).toEqual(
+      sourceRels.map((r) => ({ id: r.id, type: r.type, target: r.rawTarget, mode: r.targetMode }))
+    );
+    expect(cloneRels.map((r) => r.order)).toEqual(sourceRels.map((r) => r.order));
+
+    const cloneExternal = live.externalTargets.filter((e) => e.ownerPart === cloneName);
+    expect(
+      cloneExternal.some((e) => e.id === 'rId1' && e.rawTarget === 'https://example.com/hf')
+    ).toBe(true);
+    const cloneRelsPart = `/word/_rels/${cloneName.slice('/word/'.length)}.rels`;
+    expect(live.parts.has(cloneRelsPart)).toBe(true);
+
+    const reopened = load(writeOoxmlPackage(live));
+    const reopenedCloneRels = reopened.relationships.get(cloneName) ?? [];
+    expect(
+      reopenedCloneRels.map((r) => ({ id: r.id, target: r.rawTarget, mode: r.targetMode }))
+    ).toEqual(cloneRels.map((r) => ({ id: r.id, target: r.rawTarget, mode: r.targetMode })));
+    expect(
+      reopened.externalTargets.some(
+        (e) =>
+          e.ownerPart === cloneName && e.id === 'rId1' && e.rawTarget === 'https://example.com/hf'
+      )
+    ).toBe(true);
+
+    // Relinking GCs the clone part, its owned relationship map entry, and its .rels part.
+    expect(
+      store.applyLifecycleOp({
+        op: 'linkToPrevious',
+        sectionIndex: 1,
+        kind: 'header',
+        variant: 'default',
+      }).ok
+    ).toBe(true);
+    const afterGc = store.currentPackage();
+    expect(afterGc.parts.has(cloneName)).toBe(false);
+    expect(afterGc.parts.has(cloneRelsPart)).toBe(false);
+    expect(afterGc.relationships.has(cloneName)).toBe(false);
+    expect(afterGc.externalTargets.some((e) => e.ownerPart === cloneName)).toBe(false);
+  });
+});
+
+describe('createHeaderFooter with titlePage / evenAndOddHeaders', () => {
+  test('create+titlePage is one undo/redo unit', () => {
+    const store = openStore(blankDoc());
+    expect(
+      store.applyLifecycleOp({
+        op: 'createHeaderFooter',
+        sectionIndex: 0,
+        kind: 'header',
+        variant: 'first',
+        titlePage: true,
+      }).ok
+    ).toBe(true);
+    const after = resolveHeaderFooterResolutionBySection(store.currentPackage())[0]!;
+    expect(after.headers.get('first')?.inherited).toBe(false);
+    expect(after.titlePage).toBe(true);
+
+    store.undo();
+    const undone = resolveHeaderFooterResolutionBySection(store.currentPackage())[0]!;
+    expect(undone.headers.has('first')).toBe(false);
+    expect(undone.titlePage).toBe(false);
+
+    store.redo();
+    const redone = resolveHeaderFooterResolutionBySection(store.currentPackage())[0]!;
+    expect(redone.headers.get('first')?.inherited).toBe(false);
+    expect(redone.titlePage).toBe(true);
+  });
+
+  test('create+evenAndOddHeaders is one undo unit', () => {
+    const store = openStore(blankDoc());
+    expect(
+      store.applyLifecycleOp({
+        op: 'createHeaderFooter',
+        sectionIndex: 0,
+        kind: 'footer',
+        variant: 'even',
+        evenAndOddHeaders: true,
+      }).ok
+    ).toBe(true);
+    expect(
+      resolveHeaderFooterResolutionBySection(store.currentPackage())[0]!.evenAndOddHeaders
+    ).toBe(true);
+    store.undo();
+    expect(
+      resolveHeaderFooterResolutionBySection(store.currentPackage())[0]!.evenAndOddHeaders
+    ).toBe(false);
   });
 });
 

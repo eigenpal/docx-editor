@@ -15,7 +15,6 @@ import {
   type NoteKind,
 } from '../store/package/note-nodes.ts';
 import { resolveNotesPart } from '../store/package/note-references.ts';
-import { listNormalNoteIds } from './surface-note-state.ts';
 
 export interface NoteOps {
   insertNote(noteKind: NoteKind): boolean;
@@ -105,18 +104,7 @@ export function createNoteOps(deps: {
     },
 
     convertAllNotes(fromKind) {
-      const ids = listNormalNoteIds(deps.session, fromKind);
-      if (ids.length === 0) return true;
-      deps.setLastRejection(null);
-      deps.commit(() => {
-        const ops = ids.map((noteId) => ({ op: 'convertNote', fromKind, noteId }) as TreeDocOp);
-        const result = deps.applyOps(ops, deps.selectionMark());
-        if (result.rejected) {
-          deps.setLastRejection(String(result.reason ?? 'rejected'));
-        }
-        return result;
-      });
-      return deps.lastRejection() === null;
+      return commitLifecycle({ op: 'convertAllNotes', fromKind } as TreeDocOp);
     },
 
     setNoteProperties(args) {

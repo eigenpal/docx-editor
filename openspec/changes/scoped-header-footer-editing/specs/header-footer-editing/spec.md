@@ -82,6 +82,21 @@ The scoped header/footer authoring chrome SHALL ship in the React adapter only f
 - **THEN** `paragraph-adapter-acceptance` does not treat headers/footers as a supported editing lane
 - **AND** documentation describes React-only furniture authoring until the follow-up lands
 
+### Requirement: Public editHeaderFooter selects furniture variants
+
+`editHeaderFooter` SHALL accept an explicit `variant` of `default` | `first` | `even`, and SHALL continue to accept `firstPage` / `evenPage` as aliases. Creating a missing `first` part SHALL enable section `w:titlePg` in the same package undo unit; creating a missing `even` part SHALL enable document `w:evenAndOddHeaders` in the same package undo unit.
+
+#### Scenario: Even variant opens programmatically
+
+- **WHEN** a caller executes `editHeaderFooter` with `variant: 'even'` (or `evenPage: true`) on a section without an even header
+- **THEN** the even part is created, `w:evenAndOddHeaders` is enabled, and the scope opens on that part
+- **AND** one undo removes the part and clears the settings flag
+
+#### Scenario: firstPage alias preserved
+
+- **WHEN** a caller executes `editHeaderFooter` with `firstPage: true`
+- **THEN** behaviour matches `variant: 'first'`, including atomic `w:titlePg` enablement
+
 ### Requirement: Behavioral parity with read-only furniture capabilities
 
 The scoped editing model SHALL preserve the read-only furniture capabilities that already ship: per-section resolution and inheritance, section-relative `w:titlePg`, document-relative odd/even selection, flow-height box sizing, tall-header push-down, and layout-time `PAGE` / `NUMPAGES` evaluation keyed by the attaching page.

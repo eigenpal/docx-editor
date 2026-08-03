@@ -46,22 +46,39 @@ type ResolvedNoteProperties = ResolvedFootnoteProperties | ResolvedEndnoteProper
  * IDs are stable; only display numbers change. Non-mutating.
  */
 export function deriveNoteDisplayMarks(
-  _noteKind: NoteKind,
+  noteKind: NoteKind,
   references: readonly NoteReferenceSite[],
   properties: ResolvedNoteProperties
 ): readonly NoteDisplayMark[] {
+  return deriveNoteDisplayMarksResolved(noteKind, references, () => properties);
+}
+
+/**
+ * Derive marks using per-reference-section resolved properties (`numFmt` / `numStart` /
+ * `numRestart`). Restart rules consult each site's own section props.
+ */
+export function deriveNoteDisplayMarksResolved(
+  _noteKind: NoteKind,
+  references: readonly NoteReferenceSite[],
+  resolveProps: (sectionIndex: number) => ResolvedNoteProperties
+): readonly NoteDisplayMark[] {
   const marks: NoteDisplayMark[] = [];
-  let next = properties.numStart;
+  let next: number | null = null;
   let lastSection = -1;
   let lastPage = -1;
 
   for (const site of references) {
+    const properties = resolveProps(site.sectionIndex);
     if (site.customMarkFollows) {
       marks.push({ noteId: site.noteId, mark: null });
       continue;
     }
 
-    if (properties.numRestart === 'eachSect' && site.sectionIndex !== lastSection) {
+    if (next === null) {
+      next = properties.numStart;
+      lastSection = site.sectionIndex;
+      lastPage = site.pageIndex ?? -1;
+    } else if (properties.numRestart === 'eachSect' && site.sectionIndex !== lastSection) {
       next = properties.numStart;
       lastSection = site.sectionIndex;
     } else if (

@@ -432,6 +432,7 @@ export interface PaginatedSurface {
     readonly pageIndex?: number;
     readonly sectionIndex?: number;
     readonly kind?: 'header' | 'footer';
+    readonly variant?: 'default' | 'first' | 'even';
     readonly position?: import('@docx-editor.dev/core-contract/layout').SemanticPosition;
   }): boolean;
   /** Leave furniture editing and restore the prior body selection. */

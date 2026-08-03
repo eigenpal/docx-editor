@@ -46,6 +46,7 @@ export interface HeaderFooterScopeController {
     readonly pageIndex?: number;
     readonly sectionIndex?: number;
     readonly kind?: 'header' | 'footer';
+    readonly variant?: 'default' | 'first' | 'even';
     readonly position?: SemanticPosition;
   }): boolean;
   exitHeaderFooter(): void;
@@ -87,6 +88,7 @@ export function createHeaderFooterScopeController(deps: {
     readonly pageIndex?: number;
     readonly sectionIndex?: number;
     readonly kind?: 'header' | 'footer';
+    readonly variant?: 'default' | 'first' | 'even';
     readonly position?: SemanticPosition;
   }): boolean => {
     if (!args.rId || deps.session.partFor({ kind: 'headerFooter', rId: args.rId }) === null) {
@@ -94,20 +96,40 @@ export function createHeaderFooterScopeController(deps: {
     }
     const layout = deps.layout();
     const found = findStoryForRId(layout, args.rId);
-    if (!found) return false;
     const prior = activeHf;
     const alreadyOpen = prior?.scope.rId === args.rId;
-    const pageIndex = args.pageIndex ?? (alreadyOpen && prior ? prior.pageIndex : found.pageIndex);
-    const kind = args.kind ?? (alreadyOpen && prior ? prior.kind : found.kind);
-    const page = layout.pages[pageIndex] ?? layout.pages[found.pageIndex]!;
-    const story =
-      storyOnPage(page, {
-        scope: { kind: 'headerFooter', rId: args.rId },
+    // Even (or first) furniture may not paint on the current page set — e.g. even on a
+    // one-page document. Fall back to package resolution so programmatic editHeaderFooter
+    // can still open the story after create.
+    const fromPackage = found ? null : resolveFurnitureByRId(deps.session, args.rId);
+    if (!found && !fromPackage) return false;
+
+    const pageIndex =
+      args.pageIndex ?? (alreadyOpen && prior ? prior.pageIndex : (found?.pageIndex ?? 0));
+    const kind =
+      args.kind ?? (alreadyOpen && prior ? prior.kind : (found?.kind ?? fromPackage!.kind));
+    const variant =
+      args.variant ??
+      (alreadyOpen && prior ? prior.variant : (found?.story.variant ?? fromPackage!.variant));
+    const partName =
+      alreadyOpen && prior ? prior.partName : (found?.story.partName ?? fromPackage!.partName);
+    const page = layout.pages[pageIndex] ?? layout.pages[found?.pageIndex ?? 0];
+    const story = (page
+      ? storyOnPage(page, {
+          scope: { kind: 'headerFooter', rId: args.rId },
+          pageIndex,
+          kind,
+          variant,
+          partName,
+        })
+      : null) ??
+      found?.story ?? {
+        scope: { kind: 'headerFooter' as const, rId: args.rId },
         pageIndex,
         kind,
-        variant: alreadyOpen && prior ? prior.variant : found.story.variant,
-        partName: alreadyOpen && prior ? prior.partName : found.story.partName,
-      }) ?? found.story;
+        variant,
+        partName,
+      };
 
     const selection = deps.selection();
     const savedBodySelection = prior
@@ -117,14 +139,16 @@ export function createHeaderFooterScopeController(deps: {
           head: { ...selection.head },
         };
 
+    const sectionIndex =
+      args.sectionIndex ??
+      (alreadyOpen && prior?.sectionIndex !== undefined
+        ? prior.sectionIndex
+        : fromPackage?.sectionIndex);
+
     activeHf = {
       scope: { kind: 'headerFooter', rId: args.rId },
       pageIndex,
-      ...(args.sectionIndex !== undefined
-        ? { sectionIndex: args.sectionIndex }
-        : alreadyOpen && prior?.sectionIndex !== undefined
-          ? { sectionIndex: prior.sectionIndex }
-          : {}),
+      ...(sectionIndex !== undefined ? { sectionIndex } : {}),
       kind,
       variant: story.variant,
       partName: story.partName,
@@ -278,3 +302,27 @@ export type SurfaceLifecycleOp = Extract<
   | { op: 'unlinkFromPrevious' }
   | { op: 'setSectionFurnitureOptions' }
 >;
+
+function resolveFurnitureByRId(
+  session: TreeDocxSession,
+  rId: string
+): {
+  readonly sectionIndex: number;
+  readonly kind: 'header' | 'footer';
+  readonly variant: 'default' | 'first' | 'even';
+  readonly partName: string;
+} | null {
+  const bySection = session.headerFooterResolutionBySection();
+  for (let sectionIndex = 0; sectionIndex < bySection.length; sectionIndex += 1) {
+    const section = bySection[sectionIndex]!;
+    for (const kind of ['header', 'footer'] as const) {
+      const slots = kind === 'header' ? section.headers : section.footers;
+      for (const [variant, slot] of slots) {
+        if (slot.rId === rId) {
+          return { sectionIndex, kind, variant, partName: slot.partName };
+        }
+      }
+    }
+  }
+  return null;
+}

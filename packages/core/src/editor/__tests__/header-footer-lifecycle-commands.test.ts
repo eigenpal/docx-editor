@@ -121,6 +121,91 @@ describe('Editor header/footer lifecycle commands', () => {
     host.remove();
   });
 
+  test('editHeaderFooter firstPage create+titlePg undoes/redoes as one unit', async () => {
+    const { editor, host } = mountEditor(blankDoc());
+    expect(editor.exec({ type: 'editHeaderFooter', position: 'header', firstPage: true }).ok).toBe(
+      true
+    );
+    expect(editor.getHeaderFooterState()?.variant).toBe('first');
+    expect(editor.getHeaderFooterState()?.titlePage).toBe(true);
+    expect(editor.exec({ type: 'exitHeaderFooter' }).ok).toBe(true);
+
+    expect(editor.exec({ type: 'undo' }).ok).toBe(true);
+    const undone = resolveHeaderFooterResolutionBySection(await savedPackage(editor))[0]!;
+    expect(undone.headers.has('first')).toBe(false);
+    expect(undone.titlePage).toBe(false);
+
+    expect(editor.exec({ type: 'redo' }).ok).toBe(true);
+    const redone = resolveHeaderFooterResolutionBySection(await savedPackage(editor))[0]!;
+    expect(redone.headers.get('first')?.inherited).toBe(false);
+    expect(redone.titlePage).toBe(true);
+    editor.destroy();
+    host.remove();
+  });
+
+  test('editHeaderFooter variant/evenPage opens even furniture atomically', async () => {
+    const { editor, host } = mountEditor(blankDoc());
+    expect(editor.can({ type: 'editHeaderFooter', position: 'footer', variant: 'even' }).ok).toBe(
+      true
+    );
+    expect(editor.exec({ type: 'editHeaderFooter', position: 'footer', variant: 'even' }).ok).toBe(
+      true
+    );
+    expect(editor.getHeaderFooterState()?.variant).toBe('even');
+    expect(editor.getHeaderFooterState()?.evenAndOddHeaders).toBe(true);
+    expect(editor.exec({ type: 'exitHeaderFooter' }).ok).toBe(true);
+
+    // Legacy evenPage flag remains supported.
+    const again = mountEditor(blankDoc());
+    expect(
+      again.editor.exec({ type: 'editHeaderFooter', position: 'header', evenPage: true }).ok
+    ).toBe(true);
+    expect(again.editor.getHeaderFooterState()?.variant).toBe('even');
+    expect(again.editor.getHeaderFooterState()?.evenAndOddHeaders).toBe(true);
+    again.editor.destroy();
+    again.host.remove();
+
+    expect(editor.exec({ type: 'undo' }).ok).toBe(true);
+    const undone = resolveHeaderFooterResolutionBySection(await savedPackage(editor))[0]!;
+    expect(undone.footers.has('even')).toBe(false);
+    expect(undone.evenAndOddHeaders).toBe(false);
+    editor.destroy();
+    host.remove();
+  });
+
+  test('editHeaderFooter first variant on inherited section declares without stealing source', async () => {
+    const { editor, host } = mountEditor(inheritedDoc());
+    expect(
+      editor.exec({
+        type: 'editHeaderFooter',
+        position: 'header',
+        variant: 'first',
+        sectionIndex: 1,
+      }).ok
+    ).toBe(true);
+    const state = editor.getHeaderFooterState();
+    expect(state?.sectionIndex).toBe(1);
+    expect(state?.variant).toBe('first');
+    expect(state?.inherited).toBe(false);
+    expect(state?.titlePage).toBe(true);
+
+    const pkg = await savedPackage(editor);
+    const resolution = resolveHeaderFooterResolutionBySection(pkg);
+    expect(resolution[0]!.headers.get('default')?.inherited).toBe(false);
+    expect(resolution[0]!.titlePage).toBe(false);
+    expect(resolution[1]!.headers.get('first')?.inherited).toBe(false);
+    expect(resolution[1]!.titlePage).toBe(true);
+
+    expect(editor.exec({ type: 'exitHeaderFooter' }).ok).toBe(true);
+    expect(editor.exec({ type: 'undo' }).ok).toBe(true);
+    const undone = resolveHeaderFooterResolutionBySection(await savedPackage(editor));
+    expect(undone[1]!.headers.has('first')).toBe(false);
+    expect(undone[1]!.titlePage).toBe(false);
+    expect(undone[0]!.headers.get('default')?.rId).toBe('rId7');
+    editor.destroy();
+    host.remove();
+  });
+
   test('editHeaderFooter on an existing story does not allocate', () => {
     const { editor, host } = mountEditor(inheritedDoc());
     const opened = editor.exec({ type: 'editHeaderFooter', position: 'header' });

@@ -2,14 +2,26 @@
 //
 // Fail-open on load (matching `resolveHeaderFooterParts`): dangling references are
 // retained and reported. Mutation paths that target a missing note fail closed elsewhere.
+//
+// Scans are bounded by visited nodes (not hit count). Package-wide collectors share one
+// visited budget so hostile parts cannot multiply a per-part cap.
 
 import { WML_NAMESPACE_URI } from './ooxml-shared.ts';
-import type { OoxmlNode, OoxmlPart } from './ooxml-tree.ts';
+import type { OoxmlNode, OoxmlParagraphNode, OoxmlPart } from './ooxml-tree.ts';
 import type { OoxmlPackage } from './ooxml-package.ts';
 import { resolveRelationship } from './relationships.ts';
 import {
+  atomicFieldSpansOf,
+  isFieldChrome,
+  isFldChar,
+  isFldSimple,
+  isInstrText,
+} from './field-nodes.ts';
+import {
+  atomicNoteSpansOf,
   findNoteById,
   isNormalNote,
+  isNoteAtomNode,
   noteIdOf,
   noteKindOf,
   noteReferenceKindOf,
@@ -21,7 +33,7 @@ const FOOTNOTES_REL =
   'http://schemas.openxmlformats.org/officeDocument/2006/relationships/footnotes';
 const ENDNOTES_REL = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/endnotes';
 
-/** Cap on reference sites scanned across stories. */
+/** Cap on nodes visited while scanning for note references across stories. */
 export const MAX_NOTE_REFERENCE_SCAN = 20_000;
 
 export type NoteDiagnosticCode = 'dangling-note-reference';
@@ -39,7 +51,23 @@ export interface NoteReferenceHit {
   readonly noteId: number;
   readonly nodeId: string;
   readonly paragraphId: string;
+  /** Canonical UTF-16 atom offset within {@link paragraphId} (U+FFFC model). */
+  readonly atomOffset: number;
   readonly customMarkFollows: boolean;
+}
+
+/** Mutable visited-node budget shared across parts / package snapshots. */
+export interface NoteReferenceScanBudget {
+  visited: number;
+  readonly maxVisited: number;
+  /** Set when a walk stops before finishing because the visited cap was hit. */
+  truncated: boolean;
+}
+
+export function createNoteReferenceScanBudget(
+  maxVisited: number = MAX_NOTE_REFERENCE_SCAN
+): NoteReferenceScanBudget {
+  return { visited: 0, maxVisited, truncated: false };
 }
 
 function isWml(node: OoxmlNode, localName: string): boolean {
@@ -72,6 +100,16 @@ function customMarkFollowsOf(node: OoxmlNode): boolean {
   return !(raw === '0' || raw === 'false' || raw === 'off');
 }
 
+function charge(budget: NoteReferenceScanBudget | undefined): boolean {
+  if (!budget) return true;
+  if (budget.visited >= budget.maxVisited) {
+    budget.truncated = true;
+    return false;
+  }
+  budget.visited += 1;
+  return true;
+}
+
 /** Resolve the footnotes or endnotes part via safe Internal document relationships. */
 export function resolveNotesPart(pkg: OoxmlPackage, noteKind: NoteKind): OoxmlPart | null {
   const typeUri = noteKind === 'footnote' ? FOOTNOTES_REL : ENDNOTES_REL;
@@ -90,55 +128,151 @@ export function resolveNotesPart(pkg: OoxmlPackage, noteKind: NoteKind): OoxmlPa
 }
 
 /**
- * Walk a part for typed/generic note references. Bounded; skips deep hostile nesting.
+ * Collect note references inside one paragraph with canonical UTF-16 atom offsets.
+ * Offset rules mirror `segmentsOf` (fields + note atoms = one unit each).
  */
-export function collectNoteReferences(
-  part: OoxmlPart,
-  options?: { readonly max?: number }
-): readonly NoteReferenceHit[] {
-  const max = options?.max ?? MAX_NOTE_REFERENCE_SCAN;
-  const hits: NoteReferenceHit[] = [];
-  let scanned = 0;
+function collectParagraphNoteReferences(
+  paragraph: OoxmlParagraphNode,
+  hits: NoteReferenceHit[],
+  budget: NoteReferenceScanBudget | undefined,
+  maxHits: number
+): void {
+  if (hits.length >= maxHits || (budget && budget.truncated)) return;
 
-  const walk = (node: OoxmlNode, paragraphId: string | null, depth: number): void => {
-    if (hits.length >= max || scanned >= max || depth > 64) return;
-    scanned += 1;
-    if (node.kind === 'textValue') return;
+  let offset = 0;
+  const fieldAtoms = atomicFieldSpansOf(paragraph);
+  const noteAtoms = atomicNoteSpansOf(paragraph);
+  const atomByBeginId = new Map(fieldAtoms.map((span) => [span.node.id, span]));
+  const noteAtomById = new Map(noteAtoms.map((span) => [span.node.id, span]));
+  const covered = new Set<string>();
+  for (const span of fieldAtoms) {
+    for (const id of span.removeNodeIds) covered.add(id);
+  }
 
-    const nextParagraph = node.kind === 'paragraph' ? node.id : paragraphId;
+  const visitRunChild = (node: OoxmlNode): void => {
+    if (hits.length >= maxHits || (budget && budget.truncated)) return;
+    if (!charge(budget)) return;
 
-    const refKind = noteReferenceKindOf(node);
-    if (refKind) {
-      const noteId = noteIdOf(node);
-      if (noteId !== null && nextParagraph) {
-        hits.push({
-          noteKind: refKind,
-          noteId,
-          nodeId: node.id,
-          paragraphId: nextParagraph,
-          customMarkFollows: customMarkFollowsOf(node),
-        });
+    const fieldAtom = atomByBeginId.get(node.id);
+    if (fieldAtom && fieldAtom.kind === 'complex') {
+      offset += 1;
+      return;
+    }
+    if (covered.has(node.id)) return;
+
+    const noteAtom = noteAtomById.get(node.id);
+    if (noteAtom || isNoteAtomNode(node)) {
+      const refKind = noteReferenceKindOf(node);
+      if (refKind) {
+        const noteId = noteIdOf(node);
+        if (noteId !== null && hits.length < maxHits) {
+          hits.push({
+            noteKind: refKind,
+            noteId,
+            nodeId: node.id,
+            paragraphId: paragraph.id,
+            atomOffset: offset,
+            customMarkFollows: customMarkFollowsOf(node),
+          });
+        }
       }
+      offset += 1;
       return;
     }
 
-    for (const child of node.children) walk(child, nextParagraph, depth + 1);
+    if (
+      isFieldChrome(node) ||
+      isFldChar(node, 'begin') ||
+      isFldChar(node, 'separate') ||
+      isFldChar(node, 'end') ||
+      isInstrText(node)
+    ) {
+      return;
+    }
+    if (node.kind === 'textValue') {
+      offset += node.value.length;
+      return;
+    }
+    if (node.kind === 'tab' || node.kind === 'hardBreak') {
+      offset += 1;
+      return;
+    }
+    if (node.kind === 'runProperties' || node.kind === 'generic') return;
+    if (node.kind === 'text') {
+      for (const child of node.children) visitRunChild(child);
+      return;
+    }
+    for (const child of node.children) visitRunChild(child);
   };
 
-  walk(part.root, null, 0);
+  const visitInline = (child: OoxmlNode): void => {
+    if (hits.length >= maxHits || (budget && budget.truncated)) return;
+    if (!charge(budget)) return;
+
+    if (isFldSimple(child)) {
+      const atom = atomByBeginId.get(child.id);
+      if (atom) offset += 1;
+      return;
+    }
+    if (child.kind === 'run') {
+      for (const grand of child.children) visitRunChild(grand);
+      return;
+    }
+    if (child.kind === 'hyperlink') {
+      for (const inner of child.children) visitInline(inner);
+    }
+  };
+
+  for (const child of paragraph.children) visitInline(child);
+}
+
+/**
+ * Walk a part for typed/generic note references. Bounded by visited nodes; skips deep
+ * hostile nesting. When `budget` is supplied it is shared and mutated in place.
+ */
+export function collectNoteReferences(
+  part: OoxmlPart,
+  options?: {
+    readonly maxHits?: number;
+    readonly budget?: NoteReferenceScanBudget;
+  }
+): readonly NoteReferenceHit[] {
+  const maxHits = options?.maxHits ?? MAX_NOTE_REFERENCE_SCAN;
+  const budget = options?.budget;
+  const hits: NoteReferenceHit[] = [];
+
+  const walk = (node: OoxmlNode, depth: number): void => {
+    if (hits.length >= maxHits || depth > 64) return;
+    if (!charge(budget)) return;
+    if (node.kind === 'textValue') return;
+
+    if (node.kind === 'paragraph') {
+      collectParagraphNoteReferences(node, hits, budget, maxHits);
+      return;
+    }
+
+    for (const child of node.children) walk(child, depth + 1);
+  };
+
+  walk(part.root, 0);
   return hits;
 }
 
-/** Collect references across body + every XML part (bounded). */
-export function collectPackageNoteReferences(pkg: OoxmlPackage): readonly NoteReferenceHit[] {
+/** Collect references across every XML part under one shared visited-node budget. */
+export function collectPackageNoteReferences(
+  pkg: OoxmlPackage,
+  options?: { readonly budget?: NoteReferenceScanBudget }
+): readonly NoteReferenceHit[] {
+  const budget = options?.budget ?? createNoteReferenceScanBudget();
   const hits: NoteReferenceHit[] = [];
-  let remaining = MAX_NOTE_REFERENCE_SCAN;
   for (const part of pkg.parts.values()) {
-    if (remaining <= 0) break;
+    if (budget.truncated || hits.length >= MAX_NOTE_REFERENCE_SCAN) break;
     if (!part.name.endsWith('.xml')) continue;
-    const batch = collectNoteReferences(part, { max: remaining });
+    const batch = collectNoteReferences(part, {
+      maxHits: MAX_NOTE_REFERENCE_SCAN - hits.length,
+      budget,
+    });
     hits.push(...batch);
-    remaining -= batch.length;
   }
   return hits;
 }

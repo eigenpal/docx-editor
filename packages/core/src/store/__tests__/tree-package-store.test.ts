@@ -345,3 +345,43 @@ describe('TreeDocxSession — package-aware HF mutation', () => {
     expect(session.packageRevision()).toBe(0);
   });
 });
+
+describe('TreePackageStore — parked story history across delete/restore', () => {
+  test('edit → delete → undo → undo restores story edit; redo is symmetric', () => {
+    const store = openPackage(bodyAndHeaderDoc());
+    const headerScope: StoryScope = { kind: 'headerFooter', rId: 'rId7' };
+    const headerId = paragraphIds(store.partFor(headerScope)!)[0]!;
+
+    store.transact(headerScope, (ctx) => {
+      ctx.apply({ op: 'insertText', paragraphId: headerId, offset: 0, text: 'EDIT-' });
+    });
+    expect(paragraphTextOf(store.partFor(headerScope)!, headerId)).toBe('EDIT-HEADER');
+    expect(store.openedStoryCount()).toBe(2); // body + opened header
+
+    const deleted = store.applyLifecycleOp({
+      op: 'deleteHeaderFooter',
+      sectionIndex: 0,
+      kind: 'header',
+      variant: 'default',
+    });
+    expect(deleted.ok).toBe(true);
+    expect(store.currentPackage().parts.has('/word/header1.xml')).toBe(false);
+    // Store stays parked for history identity.
+    expect(store.openedStoryCount()).toBe(2);
+
+    // Undo delete — part returns; parked store reconnects with edited content.
+    expect(store.undo()).not.toBeNull();
+    expect(store.currentPackage().parts.has('/word/header1.xml')).toBe(true);
+    expect(paragraphTextOf(store.partFor(headerScope)!, headerId)).toBe('EDIT-HEADER');
+
+    // Undo story edit — no stale revision / missing store.
+    expect(store.undo()).not.toBeNull();
+    expect(paragraphTextOf(store.partFor(headerScope)!, headerId)).toBe('HEADER');
+
+    // Redo edit, then redo delete.
+    expect(store.redo()).not.toBeNull();
+    expect(paragraphTextOf(store.partFor(headerScope)!, headerId)).toBe('EDIT-HEADER');
+    expect(store.redo()).not.toBeNull();
+    expect(store.currentPackage().parts.has('/word/header1.xml')).toBe(false);
+  });
+});

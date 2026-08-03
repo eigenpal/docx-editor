@@ -558,7 +558,7 @@ export const wordFeatures: WordFeature[] = [
     roundTrip: 'full',
     tier: 'community',
     notes:
-      'React: typed scoped header/footer editing (enter/exit story, create/remove, link/unlink to previous, title-page and even/odd options) with PAGE/NUMPAGES/SECTIONPAGES insert chrome. Per-section first/even/default variants paint like Word. Vue chrome deferred. Tracked changes, watermark/drawing authoring, and structural table ops inside furniture are not claimed.',
+      'React: typed scoped header/footer editing (enter/exit story, create/remove, link/unlink to previous, title-page and even/odd options) with PAGE/NUMPAGES/SECTIONPAGES insert chrome. `editHeaderFooter` accepts `variant` / `evenPage` / `firstPage` on the shared Editor contract. Per-section first/even/default variants paint like Word. Vue chrome deferred; Vue can still call the shared commands. Tracked changes, watermark/drawing authoring, and structural table ops inside furniture are not claimed.',
     docsLink: '/docs/1.x/guides/headers-footers',
   },
   {
@@ -624,7 +624,7 @@ export const wordFeatures: WordFeature[] = [
     roundTrip: 'full',
     tier: 'community',
     notes:
-      'First, even, and default variants are selected by the page\'s number in the document (so the alternation carries across section breaks) and editable in an open furniture scope. React header/footer chrome can toggle different even and odd pages (`w:evenAndOddHeaders`); Vue chrome deferred.',
+      'First, even, and default variants are selected by the page\'s number in the document (so the alternation carries across section breaks) and editable in an open furniture scope. Programmatic `editHeaderFooter({ variant: \'even\' })` (or `evenPage: true`) creates/opens the even story and enables `w:evenAndOddHeaders` in one undo unit. React header/footer chrome can toggle different even and odd pages; Vue chrome deferred.',
   },
   {
     id: 'layout.vertical-align',

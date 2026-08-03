@@ -1,3 +1,5 @@
+/* eslint-disable max-lines -- note lifecycle seam: insert/delete/convert/bulk + style rewrite */
+
 // Footnote/endnote package lifecycle: insert, delete, convert, set properties.
 //
 // These mutations touch the main document (or other stories), the notes part,
@@ -33,6 +35,8 @@ import {
   isNoteAtomNode,
   noteIdOf,
   noteKindOf,
+  noteRefKindOf,
+  noteReferenceKindOf,
   noteTypeOf,
   type NoteKind,
   NOTE_ID_MAX,
@@ -53,7 +57,9 @@ import {
 import {
   collectNoteReferences,
   collectPackageNoteReferences,
+  createNoteReferenceScanBudget,
   resolveNotesPart,
+  normalNoteIds,
 } from './note-references.ts';
 import { isValidXmlText } from './sinks.ts';
 import { atomicFieldSpansOf, isFldSimple } from './field-nodes.ts';
@@ -66,6 +72,61 @@ const FOOTNOTES_CT = 'application/vnd.openxmlformats-officedocument.wordprocessi
 const ENDNOTES_CT = 'application/vnd.openxmlformats-officedocument.wordprocessingml.endnotes+xml';
 const MAX_PARTS_SCAN = 256;
 const MAX_SECTIONS = 4_096;
+
+/** Built-in Word character styles for note marks — not user theme aliases. */
+const BUILTIN_NOTE_REFERENCE_STYLE: Readonly<Record<NoteKind, string>> = {
+  footnote: 'FootnoteReference',
+  endnote: 'EndnoteReference',
+};
+
+/**
+ * Rewrite `w:rStyle/@w:val` on a run that directly holds a note citation or body mark.
+ *
+ * Matching rule (bounded): only when the run contains a `noteReference` / `noteRef` atom
+ * (typed or generic `w:footnoteReference`, `w:endnoteReference`, `w:footnoteRef`,
+ * `w:endnoteRef`) AND `w:rPr/w:rStyle/@w:val` exactly equals the source kind's built-in
+ * style (`FootnoteReference` / `EndnoteReference`). Custom style ids, absent `rPr`, and
+ * absent `rStyle` are left unchanged — Word does not require a character style on note
+ * marks for validity; layout resolves marks through element type + cascade defaults.
+ */
+function rewriteRunBuiltinNoteReferenceStyle(
+  run: OoxmlNode,
+  fromKind: NoteKind,
+  toKind: NoteKind
+): OoxmlNode {
+  if (run.kind !== 'run' || fromKind === toKind) return run;
+  if (!run.children.some((child) => isNoteRefAtomInRun(child))) return run;
+
+  const fromStyle = BUILTIN_NOTE_REFERENCE_STYLE[fromKind];
+  const toStyle = BUILTIN_NOTE_REFERENCE_STYLE[toKind];
+
+  let changed = false;
+  const children = run.children.map((child) => {
+    if (child.kind !== 'runProperties') return child;
+    let propsChanged = false;
+    const props = child.children.map((prop) => {
+      if (prop.kind !== 'generic' || prop.localName !== 'rStyle') return prop;
+      const hasFromVal = prop.attributes.some(
+        (attr) => attr.localName === 'val' && attr.value === fromStyle
+      );
+      if (!hasFromVal) return prop;
+      propsChanged = true;
+      changed = true;
+      return {
+        ...prop,
+        attributes: prop.attributes.map((attr) =>
+          attr.localName === 'val' ? { ...attr, value: toStyle } : attr
+        ),
+      };
+    });
+    return propsChanged ? { ...child, children: props } : child;
+  });
+  return changed ? ({ ...run, children } as OoxmlNode) : run;
+}
+
+function isNoteRefAtomInRun(node: OoxmlNode): boolean {
+  return noteReferenceKindOf(node) !== null || noteRefKindOf(node) !== null;
+}
 
 export type NoteLifecycleImpact = 'flow-structural' | 'global';
 
@@ -85,6 +146,14 @@ export type NoteLifecycleOp =
       readonly op: 'convertNote';
       readonly fromKind: NoteKind;
       readonly noteId: number;
+    }
+  | {
+      /**
+       * Convert every normal note of `fromKind` in document order. One atomic package
+       * transaction / undo unit with the same validation as repeated `convertNote`.
+       */
+      readonly op: 'convertAllNotes';
+      readonly fromKind: NoteKind;
     }
   | {
       readonly op: 'setNoteProperties';
@@ -121,7 +190,13 @@ export type NoteLifecycleResult =
       readonly detail?: string;
     };
 
-const LIFECYCLE_OPS = new Set(['insertNote', 'deleteNote', 'convertNote', 'setNoteProperties']);
+const LIFECYCLE_OPS = new Set([
+  'insertNote',
+  'deleteNote',
+  'convertNote',
+  'convertAllNotes',
+  'setNoteProperties',
+]);
 
 export function isNoteLifecycleOp(op: { readonly op: string }): op is NoteLifecycleOp {
   return LIFECYCLE_OPS.has(op.op);
@@ -156,6 +231,8 @@ export function applyNoteLifecycleOp(pkg: OoxmlPackage, op: NoteLifecycleOp): No
       return applyDeleteNote(pkg, op);
     case 'convertNote':
       return applyConvertNote(pkg, op);
+    case 'convertAllNotes':
+      return applyConvertAllNotes(pkg, op);
     case 'setNoteProperties':
       return applySetNoteProperties(pkg, op);
   }
@@ -282,15 +359,19 @@ function applyDeleteNote(
 /**
  * Remove note bodies for references that disappeared between two package snapshots.
  * Used when `deleteText` removes a `noteReference` atom so body+ref stay one undo unit.
+ *
+ * Both snapshots share one visited-node budget; if the scan is truncated the cascade
+ * fails closed so a hostile package cannot skip body deletion silently.
  */
 export function cascadeDeletedNoteReferences(
   before: OoxmlPackage,
   after: OoxmlPackage
 ): OoxmlPackage | null {
-  const beforeHits = collectPackageNoteReferences(before);
-  const afterKeys = new Set(
-    collectPackageNoteReferences(after).map((hit) => `${hit.noteKind}:${hit.noteId}`)
-  );
+  const budget = createNoteReferenceScanBudget();
+  const beforeHits = collectPackageNoteReferences(before, { budget });
+  const afterHits = collectPackageNoteReferences(after, { budget });
+  if (budget.truncated) return null;
+  const afterKeys = new Set(afterHits.map((hit) => `${hit.noteKind}:${hit.noteId}`));
   let next: OoxmlPackage = after;
   const seen = new Set<string>();
   for (const hit of beforeHits) {
@@ -344,7 +425,7 @@ function applyConvertNote(
 
   // Fresh copy into target part with rewritten localName + id.
   const targetNextId = createNodeIdAllocator(targetPart);
-  const moved = rewriteNoteNode(sourceNote, toKind, newId, targetNextId);
+  const moved = rewriteNoteNode(sourceNote, op.fromKind, toKind, newId, targetNextId);
   const appended = insertChildren(targetPart, targetPart.root.id, targetPart.root.children.length, [
     moved,
   ]);
@@ -372,6 +453,45 @@ function applyConvertNote(
     impact: 'global',
     noteId: newId,
     noteKind: toKind,
+    ...(createdPartName ? { createdPartName } : {}),
+  };
+}
+
+function applyConvertAllNotes(
+  pkg: OoxmlPackage,
+  op: Extract<NoteLifecycleOp, { op: 'convertAllNotes' }>
+): NoteLifecycleResult {
+  if (!isNoteKind(op.fromKind)) return fail('invalidArgs', 'fromKind');
+  const sourcePart = resolveNotesPart(pkg, op.fromKind);
+  if (!sourcePart) {
+    // Nothing to convert — idempotent success (matches empty convert-all UI).
+    return { ok: true, package: pkg, impact: 'global' };
+  }
+  const ids = normalNoteIds(sourcePart);
+  if (ids.length === 0) {
+    return { ok: true, package: pkg, impact: 'global' };
+  }
+
+  let next = pkg;
+  let createdPartName: string | undefined;
+  let lastNoteId: number | undefined;
+  const toKind: NoteKind = op.fromKind === 'footnote' ? 'endnote' : 'footnote';
+  for (const noteId of ids) {
+    const result = applyConvertNote(next, {
+      op: 'convertNote',
+      fromKind: op.fromKind,
+      noteId,
+    });
+    if (!result.ok) return result;
+    next = result.package;
+    if (result.createdPartName) createdPartName = result.createdPartName;
+    lastNoteId = result.noteId;
+  }
+  return {
+    ok: true,
+    package: next,
+    impact: 'global',
+    ...(lastNoteId !== undefined ? { noteId: lastNoteId, noteKind: toKind } : {}),
     ...(createdPartName ? { createdPartName } : {}),
   };
 }
@@ -863,6 +983,15 @@ function rewriteReferencesEverywhere(
       const replaced = replaceNode(working, hit.nodeId, replacedNode);
       if (!replaced.ok) return null;
       working = replaced.part;
+      const parentRun = findOwningRun(working, hit.nodeId);
+      if (parentRun) {
+        const styledRun = rewriteRunBuiltinNoteReferenceStyle(parentRun, fromKind, toKind);
+        if (styledRun !== parentRun) {
+          const runReplaced = replaceNode(working, parentRun.id, styledRun);
+          if (!runReplaced.ok) return null;
+          working = runReplaced.part;
+        }
+      }
     }
     next = withPart(next, working);
   }
@@ -871,6 +1000,7 @@ function rewriteReferencesEverywhere(
 
 function rewriteNoteNode(
   source: OoxmlNode,
+  fromKind: NoteKind,
   toKind: NoteKind,
   newId: number,
   nextId: () => string
@@ -908,14 +1038,19 @@ function rewriteNoteNode(
       kind = 'noteRef';
       name = refLocal;
     }
-    return {
+    const mappedChildren = node.children.map(mapNode);
+    let result = {
       ...node,
       id: nextId(),
       kind,
       localName: name,
       attributes,
-      children: node.children.map(mapNode),
+      children: mappedChildren,
     } as OoxmlNode;
+    if (node.kind === 'run') {
+      result = rewriteRunBuiltinNoteReferenceStyle(result, fromKind, toKind);
+    }
+    return result;
   };
   return mapNode(source);
 }

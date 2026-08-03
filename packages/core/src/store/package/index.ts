@@ -305,6 +305,7 @@ export {
   MAX_NOTE_REFERENCE_SCAN,
   collectNoteReferences,
   collectPackageNoteReferences,
+  createNoteReferenceScanBudget,
   diagnoseNoteReferences,
   normalNoteIds,
   notesPartHasId,
@@ -312,6 +313,7 @@ export {
   type NoteDiagnostic,
   type NoteDiagnosticCode,
   type NoteReferenceHit,
+  type NoteReferenceScanBudget,
 } from './note-references.ts';
 export {
   applyNoteLifecycleOp,

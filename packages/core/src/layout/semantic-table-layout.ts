@@ -912,9 +912,7 @@ export function layoutRowFragmentBounded(
     // shorter than the DEFAULT_RUN_STYLE line. Empty / continue cells still need one line.
     const cellBottom = Math.min(
       maxBottom,
-      fitted
-        ? contentBottom + insets.bottom
-        : rowTop + topInset + defaultLineHeight + insets.bottom
+      fitted ? contentBottom + insets.bottom : rowTop + topInset + defaultLineHeight + insets.bottom
     );
     if (cellBottom > rowBottom) rowBottom = cellBottom;
 

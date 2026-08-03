@@ -164,10 +164,23 @@ A `w:tab` node SHALL advance to the next tab stop. The treatment of U+0009 insid
 - **THEN** a new part holding a copy of the inherited content is created and the section gains its own reference
 - **AND** editing the new part does not change the previous section's pages
 
+#### Scenario: Unlink clones owned relationships
+
+- **WHEN** an inherited header owns hyperlink or embedded-media relationships and unlink-from-previous runs
+- **THEN** the clone receives the same relationship ids, types, raw targets, modes, and order under the new part owner
+- **AND** save/reopen preserves those relationships on the clone
+- **AND** external relationship metadata is retained inertly without fetching
+
 #### Scenario: Link garbage-collects an orphan
 
 - **WHEN** link-to-previous removes a section's only reference to a part and no other section references it
-- **THEN** the part, its relationship, and its content-type override are removed in the same transaction
+- **THEN** the part, its main-document relationship, its content-type override, and its owned relationship-map / `.rels` entries are removed in the same transaction
+
+#### Scenario: Create first variant enables titlePg atomically
+
+- **WHEN** create-header-footer runs for the `first` variant with `titlePage: true`
+- **THEN** the part reference and section `w:titlePg` commit as one package transaction
+- **AND** one undo removes both, and one redo restores both
 
 #### Scenario: Link on the first section is refused
 

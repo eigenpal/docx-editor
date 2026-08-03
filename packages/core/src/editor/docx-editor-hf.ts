@@ -18,10 +18,30 @@ export function variantFromFlags(flags: {
   return 'default';
 }
 
+/** Resolve furniture variant: explicit `variant` wins; else firstPage/evenPage flags. */
+export function variantFromCommand(command: {
+  readonly variant?: FurnitureVariant;
+  readonly firstPage?: boolean;
+  readonly evenPage?: boolean;
+}): FurnitureVariant | { readonly ok: false; readonly reason: string } {
+  if (command.variant !== undefined) {
+    if (
+      command.variant === 'default' ||
+      command.variant === 'first' ||
+      command.variant === 'even'
+    ) {
+      return command.variant;
+    }
+    return { ok: false, reason: "variant must be 'default', 'first', or 'even'" };
+  }
+  return variantFromFlags(command);
+}
+
 export function slotArgsFromCommand(
   mounted: PaginatedSurface,
   command: {
     readonly position?: 'header' | 'footer';
+    readonly variant?: FurnitureVariant;
     readonly firstPage?: boolean;
     readonly evenPage?: boolean;
     readonly sectionIndex?: number;
@@ -46,10 +66,15 @@ export function slotArgsFromCommand(
       },
     };
   }
-  const variant =
-    command.firstPage !== undefined || command.evenPage !== undefined
-      ? variantFromFlags(command)
-      : (state?.variant ?? 'default');
+  const hasExplicitVariant =
+    command.variant !== undefined ||
+    command.firstPage !== undefined ||
+    command.evenPage !== undefined;
+  const resolved = hasExplicitVariant ? variantFromCommand(command) : (state?.variant ?? 'default');
+  if (typeof resolved === 'object' && resolved.ok === false) {
+    return { ok: false, refusal: { ok: false, code: 'invalidArgs', reason: resolved.reason } };
+  }
+  const variant = resolved as FurnitureVariant;
   const sectionIndex = command.sectionIndex ?? state?.sectionIndex ?? 0;
   if (!Number.isInteger(sectionIndex) || sectionIndex < 0) {
     return {
@@ -144,32 +169,26 @@ export function execEditHeaderFooter(
     };
   }
   const kind = command.position;
-  const variant = variantFromFlags({ firstPage: command.firstPage });
+  const resolved = variantFromCommand(command);
+  if (typeof resolved === 'object' && resolved.ok === false) {
+    return { ok: false, code: 'invalidArgs', reason: resolved.reason };
+  }
+  const variant = resolved as FurnitureVariant;
   const existing = resolveSlot(mounted, sectionIndex, kind, variant);
   let rId = existing?.rId;
   let created = false;
   if (!rId) {
+    // Create + matching titlePg / evenAndOddHeaders flag is ONE package history unit.
     const createdResult = applyLifecycle(mounted, {
       op: 'createHeaderFooter',
       sectionIndex,
       kind,
       variant,
+      ...(variant === 'first' ? { titlePage: true } : {}),
+      ...(variant === 'even' ? { evenAndOddHeaders: true } : {}),
     });
     if (!createdResult.ok) return createdResult;
     created = true;
-    // First-page furniture only paints when `w:titlePg` is on; enable it after a successful
-    // create. If that write is refused, undo the create so the package is unchanged.
-    if (variant === 'first') {
-      const titled = applyLifecycle(mounted, {
-        op: 'setSectionFurnitureOptions',
-        sectionIndex,
-        titlePage: true,
-      });
-      if (!titled.ok) {
-        mounted.undo();
-        return titled;
-      }
-    }
     rId = resolveSlot(mounted, sectionIndex, kind, variant)?.rId;
   }
   if (!rId) {
@@ -179,7 +198,7 @@ export function execEditHeaderFooter(
       reason: `no ${kind} story is available to edit`,
     };
   }
-  const opened = mounted.enterHeaderFooter({ rId, kind, sectionIndex });
+  const opened = mounted.enterHeaderFooter({ rId, kind, sectionIndex, variant });
   if (!opened) {
     return {
       ok: false,

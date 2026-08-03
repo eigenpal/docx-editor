@@ -349,7 +349,6 @@ export function classifyCommand(command: EditorCommand): CommandSupport {
         typeof command.styleId !== 'string' ||
         command.styleId.length === 0 ||
         command.styleId.length > 128 ||
-        // eslint-disable-next-line no-control-regex
         /[\u0000-\u001f\u007f-\u009f]/.test(command.styleId)
       ) {
         return {
@@ -500,16 +499,45 @@ export function classifyCommand(command: EditorCommand): CommandSupport {
     case 'undo':
     case 'redo':
       return { supported: true, mutating: true };
-    case 'editHeaderFooter':
-      return command.position === 'header' || command.position === 'footer'
-        ? { supported: true, mutating: true }
-        : { supported: false, reason: "editHeaderFooter requires position 'header' or 'footer'" };
+    case 'editHeaderFooter': {
+      if (command.position !== 'header' && command.position !== 'footer') {
+        return {
+          supported: false,
+          reason: "editHeaderFooter requires position 'header' or 'footer'",
+        };
+      }
+      if (
+        command.variant !== undefined &&
+        command.variant !== 'default' &&
+        command.variant !== 'first' &&
+        command.variant !== 'even'
+      ) {
+        return {
+          supported: false,
+          reason: "editHeaderFooter variant must be 'default', 'first', or 'even'",
+        };
+      }
+      return { supported: true, mutating: true };
+    }
     case 'exitHeaderFooter':
       return { supported: true, mutating: false };
     case 'removeHeaderFooter':
     case 'linkHeaderFooterToPrevious':
-    case 'unlinkHeaderFooterFromPrevious':
+    case 'unlinkHeaderFooterFromPrevious': {
+      if (
+        'variant' in command &&
+        command.variant !== undefined &&
+        command.variant !== 'default' &&
+        command.variant !== 'first' &&
+        command.variant !== 'even'
+      ) {
+        return {
+          supported: false,
+          reason: "furniture variant must be 'default', 'first', or 'even'",
+        };
+      }
       return { supported: true, mutating: true };
+    }
     case 'setHeaderFooterOptions': {
       const empty =
         command.titlePage === undefined &&

@@ -409,4 +409,279 @@ describe('note layout + pagination', () => {
     );
     expect(tallH).toBeGreaterThan(shortH);
   });
+
+  test('long footnote on final body page continues onto overflow pages without clipping', () => {
+    // Short page + many note paragraphs so the note outlives the sole body page.
+    const noteParas = Array.from(
+      { length: 80 },
+      (_, i) => `<w:p><w:r><w:t>Note line ${i} ${'x'.repeat(80)}</w:t></w:r></w:p>`
+    ).join('');
+    const bytes = zipSync({
+      '[Content_Types].xml': strToU8(
+        `<Types xmlns="${CT}">` +
+          '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>' +
+          '<Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>' +
+          '<Override PartName="/word/footnotes.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.footnotes+xml"/>' +
+          '</Types>'
+      ),
+      '_rels/.rels': strToU8(
+        `<Relationships xmlns="${REL}"><Relationship Id="rId1" Type="${R}/officeDocument" Target="word/document.xml"/></Relationships>`
+      ),
+      'word/_rels/document.xml.rels': strToU8(
+        `<Relationships xmlns="${REL}"><Relationship Id="rIdFn" Type="${R}/footnotes" Target="footnotes.xml"/></Relationships>`
+      ),
+      'word/document.xml': strToU8(
+        `<w:document xmlns:w="${W}" xmlns:r="${R}"><w:body>` +
+          `<w:p><w:r><w:t>Body</w:t><w:footnoteReference w:id="1"/></w:r></w:p>` +
+          '<w:sectPr><w:pgSz w:w="12240" w:h="7200"/><w:pgMar w:top="720" w:right="720" w:bottom="720" w:left="720"/></w:sectPr>' +
+          '</w:body></w:document>'
+      ),
+      'word/footnotes.xml': strToU8(
+        `<w:footnotes xmlns:w="${W}">` +
+          `<w:footnote w:type="separator" w:id="-1"><w:p><w:r><w:separator/></w:r></w:p></w:footnote>` +
+          `<w:footnote w:type="continuationSeparator" w:id="0"><w:p><w:r><w:continuationSeparator/></w:r></w:p></w:footnote>` +
+          `<w:footnote w:id="1">${noteParas}</w:footnote>` +
+          '</w:footnotes>'
+      ),
+    });
+    const loaded = readOoxmlPackage(bytes);
+    expect(loaded.ok).toBe(true);
+    if (!loaded.ok) throw new Error(loaded.reason);
+    const part = loaded.package.parts.get(loaded.package.mainDocumentPart)!;
+    const documentFootnoteProps = resolveFootnoteProperties(undefined, undefined);
+    const documentEndnoteProps = resolveEndnoteProperties(undefined, undefined);
+    const notes: NotesLayoutInput = {
+      footnotesPart: resolveNotesPart(loaded.package, 'footnote'),
+      endnotesPart: null,
+      footnotePropsBySection: [documentFootnoteProps],
+      endnotePropsBySection: [documentEndnoteProps],
+      documentFootnoteProps,
+      documentEndnoteProps,
+      measurer: createFixedMeasurer(),
+      producer: 'note-continuation-overflow',
+    };
+    const layout = layoutSemanticDocument(part, 1, {
+      measurer: notes.measurer,
+      notes,
+      producer: 'note-continuation-overflow',
+    });
+    expect(layout.pages.length).toBeGreaterThan(1);
+    const noteFragments = layout.pages.flatMap((page) => page.footnotes?.notes ?? []);
+    expect(noteFragments.length).toBeGreaterThan(1);
+    expect(noteFragments.some((n) => n.continuation)).toBe(true);
+    const laidAlone = layoutNoteById(notes.footnotesPart, 1, layout.pages[0]!.contentBox.width, {
+      measurer: notes.measurer,
+      producer: 'note-continuation-overflow',
+    });
+    expect(laidAlone).not.toBeNull();
+    const placedHeight = noteFragments.reduce((sum, n) => sum + n.box.height, 0);
+    expect(placedHeight).toBeGreaterThan(laidAlone!.flowHeight * 0.95);
+  });
+
+  test('long endnotes create overflow pages instead of clamping', () => {
+    const noteParas = Array.from(
+      { length: 50 },
+      (_, i) => `<w:p><w:r><w:t>Endnote ${i} ${'y'.repeat(50)}</w:t></w:r></w:p>`
+    ).join('');
+    const bytes = zipSync({
+      '[Content_Types].xml': strToU8(
+        `<Types xmlns="${CT}">` +
+          '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>' +
+          '<Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>' +
+          '<Override PartName="/word/endnotes.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.endnotes+xml"/>' +
+          '</Types>'
+      ),
+      '_rels/.rels': strToU8(
+        `<Relationships xmlns="${REL}"><Relationship Id="rId1" Type="${R}/officeDocument" Target="word/document.xml"/></Relationships>`
+      ),
+      'word/_rels/document.xml.rels': strToU8(
+        `<Relationships xmlns="${REL}"><Relationship Id="rIdEn" Type="${R}/endnotes" Target="endnotes.xml"/></Relationships>`
+      ),
+      'word/document.xml': strToU8(
+        `<w:document xmlns:w="${W}" xmlns:r="${R}"><w:body>` +
+          `<w:p><w:r><w:t>Body</w:t><w:endnoteReference w:id="1"/></w:r></w:p>` +
+          '<w:sectPr><w:pgSz w:w="12240" w:h="15840"/><w:pgMar w:top="1440" w:right="1440" w:bottom="1440" w:left="1440"/></w:sectPr>' +
+          '</w:body></w:document>'
+      ),
+      'word/endnotes.xml': strToU8(
+        `<w:endnotes xmlns:w="${W}">` +
+          `<w:endnote w:type="separator" w:id="-1"><w:p><w:r><w:separator/></w:r></w:p></w:endnote>` +
+          `<w:endnote w:type="continuationSeparator" w:id="0"><w:p><w:r><w:continuationSeparator/></w:r></w:p></w:endnote>` +
+          `<w:endnote w:id="1">${noteParas}</w:endnote>` +
+          '</w:endnotes>'
+      ),
+    });
+    const loaded = readOoxmlPackage(bytes);
+    expect(loaded.ok).toBe(true);
+    if (!loaded.ok) throw new Error(loaded.reason);
+    const part = loaded.package.parts.get(loaded.package.mainDocumentPart)!;
+    const documentFootnoteProps = resolveFootnoteProperties(undefined, undefined);
+    const documentEndnoteProps = resolveEndnoteProperties(undefined, undefined);
+    const notes: NotesLayoutInput = {
+      footnotesPart: null,
+      endnotesPart: resolveNotesPart(loaded.package, 'endnote'),
+      footnotePropsBySection: [documentFootnoteProps],
+      endnotePropsBySection: [documentEndnoteProps],
+      documentFootnoteProps,
+      documentEndnoteProps,
+      measurer: createFixedMeasurer(),
+      producer: 'note-endnote-overflow',
+    };
+    const layout = layoutSemanticDocument(part, 1, {
+      measurer: notes.measurer,
+      notes,
+      producer: 'note-endnote-overflow',
+    });
+    expect(layout.pages.length).toBeGreaterThan(1);
+    const endnoteStories = layout.pages.flatMap((page) => page.endnotes?.notes ?? []);
+    expect(endnoteStories.length).toBeGreaterThan(1);
+    const laidAlone = layoutNoteById(notes.endnotesPart, 1, layout.pages[0]!.contentBox.width, {
+      measurer: notes.measurer,
+      producer: 'note-endnote-overflow',
+    });
+    expect(laidAlone).not.toBeNull();
+    const placedHeight = endnoteStories.reduce((sum, n) => sum + n.box.height, 0);
+    expect(placedHeight).toBeGreaterThan(laidAlone!.flowHeight * 0.95);
+  });
+
+  test('split multi-page paragraph assigns note ref only to owning fragment page', () => {
+    // Long run before the note ref so the atom lands on a later page fragment.
+    const prefix = 'Word '.repeat(2000);
+    const bytes = zipSync({
+      '[Content_Types].xml': strToU8(
+        `<Types xmlns="${CT}">` +
+          '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>' +
+          '<Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>' +
+          '<Override PartName="/word/footnotes.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.footnotes+xml"/>' +
+          '</Types>'
+      ),
+      '_rels/.rels': strToU8(
+        `<Relationships xmlns="${REL}"><Relationship Id="rId1" Type="${R}/officeDocument" Target="word/document.xml"/></Relationships>`
+      ),
+      'word/_rels/document.xml.rels': strToU8(
+        `<Relationships xmlns="${REL}"><Relationship Id="rIdFn" Type="${R}/footnotes" Target="footnotes.xml"/></Relationships>`
+      ),
+      'word/document.xml': strToU8(
+        `<w:document xmlns:w="${W}" xmlns:r="${R}"><w:body>` +
+          `<w:p><w:r><w:t>${prefix}</w:t><w:footnoteReference w:id="1"/><w:t> tail</w:t></w:r></w:p>` +
+          '<w:sectPr><w:pgSz w:w="12240" w:h="7200"/><w:pgMar w:top="720" w:right="720" w:bottom="720" w:left="720"/></w:sectPr>' +
+          '</w:body></w:document>'
+      ),
+      'word/footnotes.xml': strToU8(
+        `<w:footnotes xmlns:w="${W}">` +
+          `<w:footnote w:type="separator" w:id="-1"><w:p><w:r><w:separator/></w:r></w:p></w:footnote>` +
+          `<w:footnote w:type="continuationSeparator" w:id="0"><w:p><w:r><w:continuationSeparator/></w:r></w:p></w:footnote>` +
+          `<w:footnote w:id="1"><w:p><w:r><w:t>Only once</w:t></w:r></w:p></w:footnote>` +
+          '</w:footnotes>'
+      ),
+    });
+    const loaded = readOoxmlPackage(bytes);
+    expect(loaded.ok).toBe(true);
+    if (!loaded.ok) throw new Error(loaded.reason);
+    const part = loaded.package.parts.get(loaded.package.mainDocumentPart)!;
+    const documentFootnoteProps = resolveFootnoteProperties(undefined, undefined);
+    const documentEndnoteProps = resolveEndnoteProperties(undefined, undefined);
+    const notes: NotesLayoutInput = {
+      footnotesPart: resolveNotesPart(loaded.package, 'footnote'),
+      endnotesPart: null,
+      footnotePropsBySection: [documentFootnoteProps],
+      endnotePropsBySection: [documentEndnoteProps],
+      documentFootnoteProps,
+      documentEndnoteProps,
+      measurer: createFixedMeasurer(),
+      producer: 'note-split-para-ref',
+    };
+    const layout = layoutSemanticDocument(part, 1, {
+      measurer: notes.measurer,
+      notes,
+      producer: 'note-split-para-ref',
+    });
+    expect(layout.pages.length).toBeGreaterThan(1);
+    const pagesWithNote = layout.pages.filter((page) =>
+      (page.footnotes?.notes ?? []).some((n) => n.noteId === 1 && !n.continuation)
+    );
+    expect(pagesWithNote).toHaveLength(1);
+    // Ref must not appear on every page that merely hosts the same paragraph id.
+    const paragraphId = (
+      layout.pages[0]!.fragments.find((f) => f.kind === 'paragraph') as
+        | { paragraphId: string }
+        | undefined
+    )?.paragraphId;
+    expect(paragraphId).toBeTruthy();
+    const pagesHostingParagraph = layout.pages.filter((page) =>
+      page.fragments.some((f) => f.kind === 'paragraph' && f.paragraphId === paragraphId)
+    );
+    expect(pagesHostingParagraph.length).toBeGreaterThan(1);
+    expect(pagesWithNote[0]!.index).toBeGreaterThan(0);
+  });
+
+  test('section footnotePr lowerRoman then decimal starts are painted per section', () => {
+    const bytes = zipSync({
+      '[Content_Types].xml': strToU8(
+        `<Types xmlns="${CT}">` +
+          '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>' +
+          '<Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>' +
+          '<Override PartName="/word/footnotes.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.footnotes+xml"/>' +
+          '</Types>'
+      ),
+      '_rels/.rels': strToU8(
+        `<Relationships xmlns="${REL}"><Relationship Id="rId1" Type="${R}/officeDocument" Target="word/document.xml"/></Relationships>`
+      ),
+      'word/_rels/document.xml.rels': strToU8(
+        `<Relationships xmlns="${REL}"><Relationship Id="rIdFn" Type="${R}/footnotes" Target="footnotes.xml"/></Relationships>`
+      ),
+      'word/document.xml': strToU8(
+        `<w:document xmlns:w="${W}" xmlns:r="${R}"><w:body>` +
+          `<w:p><w:pPr><w:sectPr>` +
+          `<w:footnotePr><w:numFmt w:val="lowerRoman"/><w:numStart w:val="1"/><w:numRestart w:val="eachSect"/></w:footnotePr>` +
+          `</w:sectPr></w:pPr><w:r><w:t>S1</w:t><w:footnoteReference w:id="1"/></w:r></w:p>` +
+          `<w:p><w:r><w:t>S2</w:t><w:footnoteReference w:id="2"/></w:r></w:p>` +
+          `<w:sectPr><w:footnotePr><w:numFmt w:val="decimal"/><w:numStart w:val="10"/><w:numRestart w:val="eachSect"/></w:footnotePr></w:sectPr>` +
+          '</w:body></w:document>'
+      ),
+      'word/footnotes.xml': strToU8(
+        `<w:footnotes xmlns:w="${W}">` +
+          `<w:footnote w:type="separator" w:id="-1"><w:p><w:r><w:separator/></w:r></w:p></w:footnote>` +
+          `<w:footnote w:type="continuationSeparator" w:id="0"><w:p><w:r><w:continuationSeparator/></w:r></w:p></w:footnote>` +
+          `<w:footnote w:id="1"><w:p><w:r><w:t>one</w:t></w:r></w:p></w:footnote>` +
+          `<w:footnote w:id="2"><w:p><w:r><w:t>two</w:t></w:r></w:p></w:footnote>` +
+          '</w:footnotes>'
+      ),
+    });
+    const loaded = readOoxmlPackage(bytes);
+    expect(loaded.ok).toBe(true);
+    if (!loaded.ok) throw new Error(loaded.reason);
+    const part = loaded.package.parts.get(loaded.package.mainDocumentPart)!;
+    const sect0 = resolveFootnoteProperties({
+      numFmt: 'lowerRoman',
+      numStart: 1,
+      numRestart: 'eachSect',
+    });
+    const sect1 = resolveFootnoteProperties({
+      numFmt: 'decimal',
+      numStart: 10,
+      numRestart: 'eachSect',
+    });
+    const documentEndnoteProps = resolveEndnoteProperties(undefined, undefined);
+    const notes: NotesLayoutInput = {
+      footnotesPart: resolveNotesPart(loaded.package, 'footnote'),
+      endnotesPart: null,
+      footnotePropsBySection: [sect0, sect1],
+      endnotePropsBySection: [documentEndnoteProps, documentEndnoteProps],
+      documentFootnoteProps: sect0,
+      documentEndnoteProps,
+      measurer: createFixedMeasurer(),
+      producer: 'note-section-marks',
+    };
+    const layout = layoutSemanticDocument(part, 1, {
+      measurer: notes.measurer,
+      notes,
+      producer: 'note-section-marks',
+    });
+    const marks = layout.pages
+      .flatMap((page) => page.footnotes?.notes ?? [])
+      .filter((n) => !n.continuation)
+      .map((n) => n.mark);
+    expect(marks).toEqual(['i', '10']);
+  });
 });

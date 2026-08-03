@@ -16,10 +16,12 @@ import { withPart } from './ooxml-package.ts';
 import { resolveRelationship } from './relationships.ts';
 import { WML_NAMESPACE_URI } from './ooxml-shared.ts';
 import {
+  cloneOwnedRelationships,
   freeRelationshipId,
   removeRelationship,
   withContentTypeOverride,
   withoutContentTypeOverride,
+  withoutOwnedRelationships,
   withFreshIds,
   withStoryRelationship,
 } from './hf-lifecycle-shell.ts';
@@ -62,6 +64,10 @@ export type HeaderFooterLifecycleOp =
       readonly sectionIndex: number;
       readonly kind: HeaderFooterKind;
       readonly variant: HeaderFooterVariant;
+      /** When true, also set section `w:titlePg` in the same package transaction. */
+      readonly titlePage?: boolean;
+      /** When true, also set document `w:evenAndOddHeaders` in the same package transaction. */
+      readonly evenAndOddHeaders?: boolean;
     }
   | {
       readonly op: 'deleteHeaderFooter';
@@ -213,10 +219,24 @@ function applyCreate(
 
   const referenced = setSectionReference(next, op.sectionIndex, op.kind, op.variant, allocated.rId);
   if (!referenced) return fail('tree-invariant', 'sectPr-reference');
+  next = referenced;
+
+  // First/even creation may enable the matching document/section flag in the SAME
+  // package transaction so one undo restores part + flag together.
+  if (op.titlePage === true) {
+    const titled = patchSectionFurniture(next, op.sectionIndex, { titlePage: true });
+    if (!titled) return fail('tree-invariant', 'sectPr-options');
+    next = titled;
+  }
+  if (op.evenAndOddHeaders === true) {
+    const settings = setEvenAndOddHeaders(next, true);
+    if (!settings) return fail('tree-invariant', 'settings');
+    next = settings;
+  }
 
   return {
     ok: true,
-    package: referenced,
+    package: next,
     impact: 'global',
     createdRId: allocated.rId,
     createdPartName: allocated.partName,
@@ -314,6 +334,11 @@ function applyUnlink(
   if (!cloned) return fail('tree-invariant', 'clone');
 
   let next = withPart(pkg, cloned);
+  // Clone the source part's owned relationships under the new owner so hyperlink /
+  // image / embed rIds in the cloned story remain resolvable (same ids/targets/modes).
+  const owned = cloneOwnedRelationships(next, slot.partName, allocated.partName);
+  if (!owned) return fail('tree-invariant', 'owned-relationships');
+  next = owned;
   const related = withStoryRelationship(next, allocated.rId, allocated.relType, allocated.target);
   if (!related) return fail('tree-invariant', 'relationship');
   next = related;
@@ -743,6 +768,9 @@ function garbageCollectStory(
   const partBytes = new Map(next.partBytes);
   partBytes.delete(partName);
   next = Object.freeze({ ...next, parts, partBytes });
+  // Drop the orphan's owned relationship map / externalTargets / `.rels` entry so
+  // indexes cannot keep dangling owner keys after the part is gone.
+  next = withoutOwnedRelationships(next, partName);
 
   return withoutContentTypeOverride(next, partName);
 }

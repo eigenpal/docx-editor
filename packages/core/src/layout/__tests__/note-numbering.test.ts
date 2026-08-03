@@ -1,7 +1,11 @@
 // Derived note display numbers via shared formatNumFmt.
 
 import { describe, expect, test } from 'bun:test';
-import { deriveNoteDisplayMarks, noteDisplayMarkMap } from '../note-numbering.ts';
+import {
+  deriveNoteDisplayMarks,
+  deriveNoteDisplayMarksResolved,
+  noteDisplayMarkMap,
+} from '../note-numbering.ts';
 import {
   DEFAULT_ENDNOTE_PROPERTIES,
   DEFAULT_FOOTNOTE_PROPERTIES,
@@ -108,5 +112,33 @@ describe('deriveNoteDisplayMarks', () => {
       { ...DEFAULT_ENDNOTE_PROPERTIES, numFmt: 'decimal' }
     );
     expect(marks.map((m) => m.mark)).toEqual(['1', '2']);
+  });
+
+  test('section-scoped numFmt/numStart/numRestart resolve per reference section', () => {
+    const sectionProps = [
+      {
+        ...DEFAULT_FOOTNOTE_PROPERTIES,
+        numFmt: 'lowerRoman',
+        numStart: 1,
+        numRestart: 'eachSect' as const,
+      },
+      {
+        ...DEFAULT_FOOTNOTE_PROPERTIES,
+        numFmt: 'decimal',
+        numStart: 5,
+        numRestart: 'eachSect' as const,
+      },
+    ];
+    const marks = deriveNoteDisplayMarksResolved(
+      'footnote',
+      [
+        { noteId: 1, sectionIndex: 0 },
+        { noteId: 2, sectionIndex: 0 },
+        { noteId: 3, sectionIndex: 1 },
+        { noteId: 4, sectionIndex: 1 },
+      ],
+      (sectionIndex) => sectionProps[sectionIndex] ?? DEFAULT_FOOTNOTE_PROPERTIES
+    );
+    expect(marks.map((m) => m.mark)).toEqual(['i', 'ii', '5', '6']);
   });
 });

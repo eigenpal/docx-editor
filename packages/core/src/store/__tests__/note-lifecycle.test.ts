@@ -6,13 +6,17 @@ import {
   applyNoteLifecycleOp,
   canonicalOoxmlFingerprint,
   collectNoteReferences,
+  collectPackageNoteReferences,
+  createNoteReferenceScanBudget,
   diagnoseNoteReferences,
   findNoteById,
+  isNormalNote,
   noteIdOf,
   noteKindOf,
   noteReferenceKindOf,
   readOoxmlPackage,
   resolveNotesPart,
+  serializeOoxmlPart,
   writeOoxmlPackage,
   type OoxmlPackage,
 } from '../package/index.ts';
@@ -284,6 +288,208 @@ describe('deleteNote / convertNote / cascade', () => {
   });
 });
 
+describe('convertNote reference style rewriting', () => {
+  const endnoteSeeds =
+    `<w:endnote w:type="separator" w:id="-1"><w:p/></w:endnote>` +
+    `<w:endnote w:type="continuationSeparator" w:id="0"><w:p/></w:endnote>`;
+
+  const footnoteWithStyledBody =
+    `<w:footnote w:type="separator" w:id="-1"><w:p><w:r><w:separator/></w:r></w:p></w:footnote>` +
+    `<w:footnote w:type="continuationSeparator" w:id="0"><w:p><w:r><w:continuationSeparator/></w:r></w:p></w:footnote>` +
+    `<w:footnote w:id="1"><w:p>` +
+    `<w:r><w:rPr><w:rStyle w:val="FootnoteReference"/><w:vertAlign w:val="superscript"/></w:rPr><w:footnoteRef/></w:r>` +
+    `<w:r><w:t>one</w:t></w:r>` +
+    `</w:p></w:footnote>`;
+
+  const endnoteWithStyledBody =
+    endnoteSeeds +
+    `<w:endnote w:id="1"><w:p>` +
+    `<w:r><w:rPr><w:rStyle w:val="EndnoteReference"/><w:vertAlign w:val="superscript"/></w:rPr><w:endnoteRef/></w:r>` +
+    `<w:r><w:t>one</w:t></w:r>` +
+    `</w:p></w:endnote>`;
+
+  function citationXml(kind: 'footnote' | 'endnote', id: number, extra = ''): string {
+    const ref = kind === 'footnote' ? 'footnoteReference' : 'endnoteReference';
+    const style = kind === 'footnote' ? 'FootnoteReference' : 'EndnoteReference';
+    return (
+      `<w:p><w:r><w:rPr><w:rStyle w:val="${style}"/>${extra}</w:rPr>` +
+      `<w:${ref} w:id="${id}"/></w:r></w:p>`
+    );
+  }
+
+  test('footnote→endnote rewrites citation and body built-in rStyle', () => {
+    const store = openStore(
+      build({
+        body: citationXml('footnote', 1, '<w:vertAlign w:val="superscript"/>'),
+        footnotes: footnoteWithStyledBody,
+        endnotes: endnoteSeeds,
+      })
+    );
+    const beforeMainFp = canonicalOoxmlFingerprint(
+      store.currentPackage().parts.get(store.currentPackage().mainDocumentPart)!
+    );
+    const result = store.applyLifecycleOp({
+      op: 'convertNote',
+      fromKind: 'footnote',
+      noteId: 1,
+    });
+    expect(result.ok).toBe(true);
+    if (!result.ok) throw new Error(result.reason);
+
+    const pkg = store.currentPackage();
+    const mainXml = serializeOoxmlPart(pkg.parts.get(pkg.mainDocumentPart)!);
+    const endXml = serializeOoxmlPart(resolveNotesPart(pkg, 'endnote')!);
+    expect(mainXml).toContain('<w:endnoteReference');
+    expect(mainXml).toContain('<w:rStyle w:val="EndnoteReference"/>');
+    expect(mainXml).not.toContain('FootnoteReference');
+    expect(endXml).toContain('<w:endnoteRef/>');
+    expect(endXml).toContain('<w:rStyle w:val="EndnoteReference"/>');
+    expect(endXml).toContain('<w:vertAlign w:val="superscript"/>');
+    expect(endXml).not.toContain('FootnoteReference');
+
+    const refs = collectNoteReferences(pkg.parts.get(pkg.mainDocumentPart)!);
+    expect(refs[0]!.noteKind).toBe('endnote');
+
+    const saved = writeOoxmlPackage(pkg);
+    const reopened = load(saved);
+    expect(diagnoseNoteReferences(reopened)).toEqual([]);
+    expect(serializeOoxmlPart(reopened.parts.get(reopened.mainDocumentPart)!)).toContain(
+      'EndnoteReference'
+    );
+
+    store.undo();
+    const undone = store.currentPackage();
+    expect(canonicalOoxmlFingerprint(undone.parts.get(undone.mainDocumentPart)!)).toBe(
+      beforeMainFp
+    );
+    expect(serializeOoxmlPart(undone.parts.get(undone.mainDocumentPart)!)).toContain(
+      'FootnoteReference'
+    );
+    store.redo();
+    expect(serializeOoxmlPart(store.currentPackage().parts.get(pkg.mainDocumentPart)!)).toContain(
+      'EndnoteReference'
+    );
+  });
+
+  test('endnote→footnote rewrites citation and body built-in rStyle', () => {
+    const store = openStore(
+      build({
+        body: citationXml('endnote', 1),
+        footnotes:
+          `<w:footnote w:type="separator" w:id="-1"><w:p/></w:footnote>` +
+          `<w:footnote w:type="continuationSeparator" w:id="0"><w:p/></w:footnote>`,
+        endnotes: endnoteWithStyledBody,
+      })
+    );
+    const result = store.applyLifecycleOp({
+      op: 'convertNote',
+      fromKind: 'endnote',
+      noteId: 1,
+    });
+    expect(result.ok).toBe(true);
+    if (!result.ok) throw new Error(result.reason);
+
+    const pkg = store.currentPackage();
+    const mainXml = serializeOoxmlPart(pkg.parts.get(pkg.mainDocumentPart)!);
+    const fnXml = serializeOoxmlPart(resolveNotesPart(pkg, 'footnote')!);
+    expect(mainXml).toContain('<w:footnoteReference');
+    expect(mainXml).toContain('<w:rStyle w:val="FootnoteReference"/>');
+    expect(mainXml).not.toContain('EndnoteReference');
+    expect(fnXml).toContain('<w:footnoteRef/>');
+    expect(fnXml).toContain('<w:rStyle w:val="FootnoteReference"/>');
+    expect(fnXml).not.toContain('EndnoteReference');
+  });
+
+  test('preserves customMarkFollows and absent rStyle on citation', () => {
+    const body =
+      `<w:p><w:r><w:endnoteReference w:id="1" w:customMarkFollows="1"/></w:r>` +
+      `<w:r><w:rPr><w:rStyle w:val="MyFootnoteLookalike"/></w:rPr><w:t>plain</w:t></w:r></w:p>`;
+    const store = openStore(
+      build({
+        body,
+        footnotes:
+          `<w:footnote w:type="separator" w:id="-1"><w:p/></w:footnote>` +
+          `<w:footnote w:type="continuationSeparator" w:id="0"><w:p/></w:footnote>`,
+        endnotes: endnoteWithStyledBody,
+      })
+    );
+    const result = store.applyLifecycleOp({
+      op: 'convertNote',
+      fromKind: 'endnote',
+      noteId: 1,
+    });
+    expect(result.ok).toBe(true);
+    if (!result.ok) throw new Error(result.reason);
+
+    const mainXml = serializeOoxmlPart(
+      store.currentPackage().parts.get(store.currentPackage().mainDocumentPart)!
+    );
+    expect(mainXml).toContain('w:customMarkFollows="1"');
+    expect(mainXml).not.toContain('<w:rStyle w:val="FootnoteReference"/>');
+    expect(mainXml).toContain('<w:rStyle w:val="MyFootnoteLookalike"/>');
+    const refs = collectNoteReferences(
+      store.currentPackage().parts.get(store.currentPackage().mainDocumentPart)!
+    );
+    expect(refs[0]!.customMarkFollows).toBe(true);
+  });
+
+  test('does not rewrite unrelated runs with same-looking style name', () => {
+    const body =
+      citationXml('footnote', 1) +
+      `<w:p><w:r><w:rPr><w:rStyle w:val="FootnoteReference"/></w:rPr><w:t>not a note</w:t></w:r></w:p>`;
+    const store = openStore(
+      build({
+        body,
+        footnotes: footnoteWithStyledBody,
+        endnotes: endnoteSeeds,
+      })
+    );
+    const result = store.applyLifecycleOp({
+      op: 'convertNote',
+      fromKind: 'footnote',
+      noteId: 1,
+    });
+    expect(result.ok).toBe(true);
+    if (!result.ok) throw new Error(result.reason);
+
+    const mainXml = serializeOoxmlPart(
+      store.currentPackage().parts.get(store.currentPackage().mainDocumentPart)!
+    );
+    const citationHits = (mainXml.match(/EndnoteReference/g) ?? []).length;
+    expect(citationHits).toBe(1);
+    expect(mainXml).toContain(
+      '<w:r><w:rPr><w:rStyle w:val="FootnoteReference"/></w:rPr><w:t>not a note</w:t></w:r>'
+    );
+  });
+
+  test('leaves custom rStyle on note-mark run unchanged', () => {
+    const styledFootnotes =
+      `<w:footnote w:type="separator" w:id="-1"><w:p/></w:footnote>` +
+      `<w:footnote w:type="continuationSeparator" w:id="0"><w:p/></w:footnote>` +
+      `<w:footnote w:id="1"><w:p>` +
+      `<w:r><w:rPr><w:rStyle w:val="MyNoteMark"/></w:rPr><w:footnoteRef/></w:r>` +
+      `<w:r><w:t>x</w:t></w:r></w:p></w:footnote>`;
+    const store = openStore(
+      build({
+        body: citationXml('footnote', 1),
+        footnotes: styledFootnotes,
+        endnotes: endnoteSeeds,
+      })
+    );
+    const result = store.applyLifecycleOp({
+      op: 'convertNote',
+      fromKind: 'footnote',
+      noteId: 1,
+    });
+    expect(result.ok).toBe(true);
+    if (!result.ok) throw new Error(result.reason);
+
+    const endXml = serializeOoxmlPart(resolveNotesPart(store.currentPackage(), 'endnote')!);
+    expect(endXml).toContain('<w:rStyle w:val="MyNoteMark"/>');
+    expect(endXml).not.toContain('EndnoteReference');
+  });
+});
+
 describe('setNoteProperties', () => {
   test('refuses endnote pageBottom and invents nothing on unedited save', () => {
     const store = openStore(build({}));
@@ -413,5 +619,78 @@ describe('TreePackageStore notes coexistence', () => {
     const reopened = load(saved);
     expect(resolveNotesPart(reopened, 'footnote')).not.toBeNull();
     expect(diagnoseNoteReferences(reopened)).toEqual([]);
+  });
+});
+
+describe('convertAllNotes atomic bulk lifecycle', () => {
+  test('converts every footnote in one undo unit with saved round-trip', () => {
+    const body = `<w:p><w:r><w:footnoteReference w:id="1"/><w:t> </w:t><w:footnoteReference w:id="3"/></w:r></w:p>`;
+    const store = openStore(
+      build({
+        body,
+        footnotes: seededNotes,
+        endnotes:
+          `<w:endnote w:type="separator" w:id="-1"><w:p/></w:endnote>` +
+          `<w:endnote w:type="continuationSeparator" w:id="0"><w:p/></w:endnote>`,
+      })
+    );
+    const beforeFp = canonicalOoxmlFingerprint(
+      store.currentPackage().parts.get(store.currentPackage().mainDocumentPart)!
+    );
+    const result = store.applyLifecycleOp({ op: 'convertAllNotes', fromKind: 'footnote' });
+    expect(result.ok).toBe(true);
+    if (!result.ok) throw new Error(result.reason);
+
+    const pkg = store.currentPackage();
+    const fnRoot = resolveNotesPart(pkg, 'footnote')!.root;
+    expect(findNoteById(fnRoot, 1)).toBeUndefined();
+    expect(findNoteById(fnRoot, 3)).toBeUndefined();
+    expect(fnRoot.children.filter((child) => isNormalNote(child)).length).toBe(0);
+    const end = resolveNotesPart(pkg, 'endnote')!;
+    const normalEnds = end.root.children.filter((child) => isNormalNote(child));
+    expect(normalEnds.length).toBe(2);
+    const refs = collectNoteReferences(pkg.parts.get(pkg.mainDocumentPart)!);
+    expect(refs.every((hit) => hit.noteKind === 'endnote')).toBe(true);
+    expect(refs.map((hit) => hit.atomOffset)).toEqual([0, 2]);
+
+    const saved = writeOoxmlPackage(pkg);
+    const reopened = load(saved);
+    expect(diagnoseNoteReferences(reopened)).toEqual([]);
+    expect(
+      collectNoteReferences(reopened.parts.get(reopened.mainDocumentPart)!).map((h) => h.noteKind)
+    ).toEqual(['endnote', 'endnote']);
+
+    // One undo restores the pre-conversion package.
+    store.undo();
+    expect(
+      canonicalOoxmlFingerprint(
+        store.currentPackage().parts.get(store.currentPackage().mainDocumentPart)!
+      )
+    ).toBe(beforeFp);
+    expect(
+      findNoteById(resolveNotesPart(store.currentPackage(), 'footnote')!.root, 1)
+    ).toBeDefined();
+    store.redo();
+    expect(
+      collectNoteReferences(
+        store.currentPackage().parts.get(store.currentPackage().mainDocumentPart)!
+      ).every((hit) => hit.noteKind === 'endnote')
+    ).toBe(true);
+  });
+});
+
+describe('note reference scan budget', () => {
+  test('records atomOffset and shares visited budget across snapshots', () => {
+    const body = `<w:p><w:r><w:t>A</w:t><w:footnoteReference w:id="1"/><w:t>Z</w:t></w:r></w:p>`;
+    const pkg = load(build({ body, footnotes: seededNotes }));
+    const hits = collectNoteReferences(pkg.parts.get(pkg.mainDocumentPart)!);
+    expect(hits).toHaveLength(1);
+    expect(hits[0]!.atomOffset).toBe(1);
+
+    const budget = createNoteReferenceScanBudget(8);
+    collectPackageNoteReferences(pkg, { budget });
+    expect(budget.visited).toBeLessThanOrEqual(8);
+    collectPackageNoteReferences(pkg, { budget });
+    expect(budget.truncated).toBe(true);
   });
 });

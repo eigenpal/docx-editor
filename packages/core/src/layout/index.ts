@@ -274,6 +274,7 @@ export {
 export { layoutHeaderFooterStory } from './hf-layout.ts';
 export {
   deriveNoteDisplayMarks,
+  deriveNoteDisplayMarksResolved,
   noteDisplayMarkMap,
   type NoteDisplayMark,
   type NoteReferenceSite,
@@ -299,7 +300,9 @@ export {
 export {
   attachNotesToLayout,
   computeFootnoteReserves,
+  fragmentOwnsAtomOffset,
   provisionalNoteMarks,
+  MAX_NOTE_OVERFLOW_PAGES,
   MAX_NOTE_REFLOW_ATTEMPTS,
   type NotesLayoutInput,
   type NotesAttachResult,

@@ -713,6 +713,7 @@ export function validateTreeOp(part: OoxmlPart, op: TreeDocOp): TreeOpRejection 
     op.op === 'insertNote' ||
     op.op === 'deleteNote' ||
     op.op === 'convertNote' ||
+    op.op === 'convertAllNotes' ||
     op.op === 'setNoteProperties'
   ) {
     return 'invalidArgs';

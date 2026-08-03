@@ -160,10 +160,14 @@ export class TreePackageStore {
   /**
    * The current package with every opened story store's part merged in.
    * Pure snapshot of authority; callers must not mutate.
+   *
+   * Stores whose parts are absent from the package shell (deleted furniture/notes)
+   * stay parked for undo/redo identity but are not re-injected into the snapshot.
    */
   currentPackage(): OoxmlPackage {
     let next = withPart(this.pkg, this.body.part);
     for (const store of this.stories.values()) {
+      if (!this.pkg.parts.has(store.part.name)) continue;
       next = withPart(next, store.part);
     }
     return next;
@@ -235,13 +239,27 @@ export class TreePackageStore {
     const beforePackage = this.currentPackage();
     const beforeDepth = store.historyDepth;
     const compositionWasOpen = store.compositionActive;
-    const result = store.transact(build, {
-      ...options,
-      story,
-      ...(story.kind === 'headerFooter' || story.kind === 'notesPart'
-        ? { minimumImpact: 'global' as const }
-        : {}),
-    });
+    // Only `deleteText` can remove noteReference atoms; skip package-wide cascade otherwise.
+    let mayDeleteNoteAtoms = false;
+    const result = store.transact(
+      (ctx) => {
+        build({
+          apply: (op) => {
+            if (op.op === 'deleteText') mayDeleteNoteAtoms = true;
+            return ctx.apply(op);
+          },
+          selectionBefore: (selection) => ctx.selectionBefore(selection),
+          selectionAfter: (selection) => ctx.selectionAfter(selection),
+        });
+      },
+      {
+        ...options,
+        story,
+        ...(story.kind === 'headerFooter' || story.kind === 'notesPart'
+          ? { minimumImpact: 'global' as const }
+          : {}),
+      }
+    );
 
     if (!result.ok) {
       return {
@@ -255,7 +273,7 @@ export class TreePackageStore {
 
     // Cascade note-body deletion when a reference atom was removed by text delete.
     let cascaded = false;
-    if (result.change) {
+    if (result.change && mayDeleteNoteAtoms) {
       const afterStory = this.currentPackage();
       const cascadedPkg = cascadeDeletedNoteReferences(beforePackage, afterStory);
       if (cascadedPkg === null) {
@@ -468,30 +486,31 @@ export class TreePackageStore {
    */
   replacePackageShell(pkg: OoxmlPackage): void {
     // Keep opened store parts authoritative over the shell's copies of those names.
+    // Parked (deleted) stores are not re-injected.
     let next = pkg;
     next = withPart(next, this.body.part);
-    for (const store of this.stories.values()) next = withPart(next, store.part);
+    for (const store of this.stories.values()) {
+      if (!pkg.parts.has(store.part.name)) continue;
+      next = withPart(next, store.part);
+    }
     this.pkg = next;
   }
 
   /**
-   * Install a full package snapshot: body + HF stores track the snapshot's parts, orphaned
-   * HF stores close, rId cache rebuilds from remaining relationships.
+   * Install a full package snapshot: body + opened story stores track the snapshot's parts.
+   * Stores whose parts disappeared stay parked (history identity preserved) so a later
+   * package undo can reconnect them; rId cache rebuilds from remaining relationships.
    */
   private installPackageSnapshot(snapshot: OoxmlPackage): void {
     const main = snapshot.parts.get(snapshot.mainDocumentPart);
     if (!main) return;
     this.body.replacePart(main);
 
-    const nextStories = new Map<string, TreeDocumentStore>();
     for (const [name, store] of this.stories) {
       const part = snapshot.parts.get(name);
       if (!part) continue;
       store.replacePart(part);
-      nextStories.set(name, store);
     }
-    this.stories.clear();
-    for (const [name, store] of nextStories) this.stories.set(name, store);
 
     this.rIdToPartName.clear();
     const relationships = snapshot.relationships.get(snapshot.mainDocumentPart) ?? [];
@@ -499,15 +518,21 @@ export class TreePackageStore {
       if (record.type !== HEADER_REL_TYPE && record.type !== FOOTER_REL_TYPE) continue;
       const resolved = resolveRelationship(record);
       if (resolved.mode !== 'Internal' || !resolved.target.ok) continue;
-      if (this.stories.has(resolved.target.partName)) {
+      if (
+        this.stories.has(resolved.target.partName) &&
+        snapshot.parts.has(resolved.target.partName)
+      ) {
         this.rIdToPartName.set(record.id, resolved.target.partName);
       }
     }
 
     this.pkg = snapshot;
-    // Re-overlay open stores so currentPackage stays store-authoritative for live trees.
+    // Re-overlay open stores present in the snapshot so currentPackage stays authoritative.
     this.pkg = withPart(this.pkg, this.body.part);
-    for (const store of this.stories.values()) this.pkg = withPart(this.pkg, store.part);
+    for (const store of this.stories.values()) {
+      if (!this.pkg.parts.has(store.part.name)) continue;
+      this.pkg = withPart(this.pkg, store.part);
+    }
   }
 
   private openNotesPartStore(noteKind: NoteKind): StoryResolveResult {

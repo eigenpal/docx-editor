@@ -326,18 +326,20 @@ describe('semantic table layout', () => {
     expect(tallPara.box.y - tall.box.y).toBeCloseTo(5, 5);
     expect(tallPara.spacing.after).toBeCloseTo(2, 5);
     // Bottom margin stays 1pt; spaceAfter sits above it inside the paragraph box.
-    expect(
-      tall.box.y + tall.box.height - (tallLine.box.y + tallLine.box.height)
-    ).toBeCloseTo(1 + 2, 5);
+    expect(tall.box.y + tall.box.height - (tallLine.box.y + tallLine.box.height)).toBeCloseTo(
+      1 + 2,
+      5
+    );
     expect(tall.box.height).toBeCloseTo(5 + tallLine.box.height + 2 + 1, 5);
 
     const tightPara = tight.blocks[0]!;
     if (tightPara.kind !== 'paragraph') throw new Error('expected paragraph');
     const tightLine = tightPara.lines[0]!;
     expect(tightPara.box.y - tight.box.y).toBeCloseTo(2, 5);
-    expect(
-      tight.box.y + tight.box.height - (tightLine.box.y + tightLine.box.height)
-    ).toBeCloseTo(1, 5);
+    expect(tight.box.y + tight.box.height - (tightLine.box.y + tightLine.box.height)).toBeCloseTo(
+      1,
+      5
+    );
     // Pre-fix floor was 20pt; content-sized row is 2+14+1 = 17.
     expect(tight.box.height).toBeCloseTo(17, 5);
     expect(tight.box.height).toBeLessThan(19);

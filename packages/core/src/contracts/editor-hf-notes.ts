@@ -70,6 +70,8 @@ export interface NotePropertiesState {
 /** Optional slot targeting shared by remove / link / unlink furniture commands. */
 export interface HeaderFooterSlotArgs {
   position?: 'header' | 'footer';
+  /** Prefer over `firstPage` / `evenPage` when selecting a furniture variant. */
+  variant?: FurnitureVariant;
   firstPage?: boolean;
   evenPage?: boolean;
   sectionIndex?: number;
@@ -83,10 +85,21 @@ export interface HeaderFooterSlotArgs {
 export interface EditorHeaderFooterCommands {
   /**
    * Open a header or footer for editing, materialising an empty one if the section has
-   * none — which is what a double-click on the header band means in Word. `firstPage`
-   * selects the `w:titlePg` variant.
+   * none — which is what a double-click on the header band means in Word.
+   *
+   * Prefer `variant` when selecting first/even/default furniture. `firstPage` /
+   * `evenPage` remain supported for existing callers (`firstPage: true` ≡ `variant:
+   * 'first'`; `evenPage: true` ≡ `variant: 'even'`). Creating a missing `first` part
+   * also enables section `w:titlePg` in the same undo unit; creating a missing `even`
+   * part also enables document `w:evenAndOddHeaders` in the same undo unit.
    */
-  editHeaderFooter: { position: 'header' | 'footer'; firstPage?: boolean; sectionIndex?: number };
+  editHeaderFooter: {
+    position: 'header' | 'footer';
+    variant?: FurnitureVariant;
+    firstPage?: boolean;
+    evenPage?: boolean;
+    sectionIndex?: number;
+  };
 
   /** Leave header/footer editing and return to the body. */
   exitHeaderFooter: Record<never, never>;

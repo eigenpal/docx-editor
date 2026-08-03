@@ -263,6 +263,10 @@ export type TreeDocOp =
       readonly sectionIndex: number;
       readonly kind: 'header' | 'footer';
       readonly variant: 'default' | 'first' | 'even';
+      /** When true, also set section `w:titlePg` in the same package transaction. */
+      readonly titlePage?: boolean;
+      /** When true, also set document `w:evenAndOddHeaders` in the same package transaction. */
+      readonly evenAndOddHeaders?: boolean;
     }
   | {
       /** Remove a section's declared header/footer reference; GC when orphaned. Package-level. */
@@ -324,6 +328,14 @@ export type TreeDocOp =
     }
   | {
       /**
+       * Convert every normal footnote↔endnote of `fromKind` in one package transaction.
+       * One ModelChange / undo unit; bounded by notes-part size.
+       */
+      readonly op: 'convertAllNotes';
+      readonly fromKind: 'footnote' | 'endnote';
+    }
+  | {
+      /**
        * Author `w:footnotePr` / `w:endnotePr` at document (settings) or section scope.
        * Refuse endnote `pageBottom`. Package-level; does not invent props on unedited saves.
        */
@@ -374,6 +386,7 @@ export const TREE_DOC_OP_KINDS = [
   'insertNote',
   'deleteNote',
   'convertNote',
+  'convertAllNotes',
   'setNoteProperties',
 ] as const satisfies readonly TreeDocOpKind[];
 

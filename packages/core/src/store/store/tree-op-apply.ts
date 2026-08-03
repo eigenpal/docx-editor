@@ -147,6 +147,7 @@ export function applyTreeOp(part: OoxmlPart, op: TreeDocOp, options?: EditOption
     op.op === 'insertNote' ||
     op.op === 'deleteNote' ||
     op.op === 'convertNote' ||
+    op.op === 'convertAllNotes' ||
     op.op === 'setNoteProperties'
   ) {
     return { ok: false, reason: 'invalidArgs', detail: 'package-lifecycle-op' };
