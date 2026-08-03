@@ -29,10 +29,12 @@ export interface RevisionPresentation {
   readonly line: 'underline' | 'line-through' | null;
   /** `text-decoration-style`; double marks a MOVE, so it reads apart from a plain edit. */
   readonly decorationStyle: 'solid' | 'double';
-  /** CSS custom-property reference for the author's colour. */
+  /** CSS custom-property reference for the colour this revision draws in. */
   readonly color: string;
   /** True when the content is struck from the live document, by any enclosing revision. */
   readonly deleted: boolean;
+  /** The author's colour slot, for surfaces that key on person rather than on kind. */
+  readonly authorColor: string;
 }
 
 /**
@@ -92,7 +94,13 @@ export function revisionPresentationOf(
     // underline its container would have drawn.
     line: deleted && line === 'underline' ? 'line-through' : line,
     decorationStyle: kind === 'moveFrom' || kind === 'moveTo' ? 'double' : 'solid',
-    color: `var(--doc-review-author-${(authorSlots?.get(attribution.author) ?? 0) % REVIEW_AUTHOR_SLOTS})`,
+    // Coloured by KIND, not by author: a reader scanning a page needs "added" and "removed"
+    // to be the two things they can tell apart at a glance, and Word's own default view draws
+    // them that way. The per-author ramp stays available for the review cards, where the
+    // question is "who" rather than "what".
+    color: deleted ? 'var(--doc-revision-deletion)' : 'var(--doc-revision-insertion)',
+    /** The author's slot, for a surface that colours by person instead. */
+    authorColor: `var(--doc-review-author-${(authorSlots?.get(attribution.author) ?? 0) % REVIEW_AUTHOR_SLOTS})`,
     deleted,
   };
 }

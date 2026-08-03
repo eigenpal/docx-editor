@@ -53,7 +53,7 @@ describe('the reader can see which text is tracked', () => {
     const span = spans[0]!;
     expect(span.textContent).toBe('added');
     expect(span.style.textDecorationLine).toBe('underline');
-    expect(span.style.color).toContain('--doc-review-author-');
+    expect(span.style.color).toBe('var(--doc-revision-insertion)');
   });
 
   test('a deletion is struck through', () => {
@@ -82,14 +82,25 @@ describe('the reader can see which text is tracked', () => {
     expect(spans.map((span) => span.dataset.revisionKind)).toEqual(['moveFrom', 'moveTo']);
   });
 
-  test('two authors get different colours', () => {
-    const root = paint(
-      `<w:p>${ins('1', run('mine'), 'Ada')}${ins('2', run('theirs'), 'Grace')}</w:p>`
-    );
+  test('an insertion and a deletion are the two colours a reader tells apart', () => {
+    // Kind, not author: scanning a page, "added" versus "removed" is the distinction that has
+    // to survive a glance. Who made the change is the review card's question.
+    const root = paint(`<w:p>${ins('1', run('added'))}${del('2', delRun('gone'))}</w:p>`);
     const spans = trackedSpans(root);
-    // The collision this guards against is not hypothetical: 'Ada' and 'Grace' hash to the
-    // same slot in an eight-slot ramp, which is why the mapping is order-based.
-    expect(spans[0]!.style.color).not.toBe(spans[1]!.style.color);
+    expect(spans.map((span) => span.style.color)).toEqual([
+      'var(--doc-revision-insertion)',
+      'var(--doc-revision-deletion)',
+    ]);
+  });
+
+  test('two authors still get distinct slots for a surface that colours by person', () => {
+    const layout = layoutSemanticDocument(
+      load(`<w:p>${ins('1', run('mine'), 'Ada')}${ins('2', run('theirs'), 'Grace')}</w:p>`),
+      1,
+      { measurer }
+    );
+    const slots = authorSlotsOf(layout);
+    expect(slots.get('Ada')).not.toBe(slots.get('Grace'));
   });
 
   test('the same author is the same colour wherever they appear', () => {
@@ -137,6 +148,25 @@ describe('change bars', () => {
     expect(root.querySelectorAll('.docx-change-bar')).toHaveLength(1);
   });
 
+  test('contiguous tracked lines merge into ONE rule, not one per line', () => {
+    // Drawn per line, a multi-line edit reads as a dashed rule with a gap at every line
+    // boundary, implying the change stops and restarts.
+    const long = 'word '.repeat(60);
+    const root = paint(`<w:p>${ins('1', run(long))}</w:p>`);
+    const lines = root.querySelectorAll('.layout-line').length;
+    expect(lines).toBeGreaterThan(1);
+    expect(root.querySelectorAll('.docx-change-bar')).toHaveLength(1);
+  });
+
+  test('the rule says what happened, not just that something did', () => {
+    const inserted = paint(`<w:p>${ins('1', run('added'))}</w:p>`);
+    const deleted = paint(`<w:p>${del('2', delRun('gone'))}</w:p>`);
+    expect(inserted.querySelector<HTMLElement>('.docx-change-bar')!.className).toContain(
+      'insertion'
+    );
+    expect(deleted.querySelector<HTMLElement>('.docx-change-bar')!.className).toContain('deletion');
+  });
+
   test('a clean line gets none', () => {
     const root = paint(`<w:p>${run('nothing tracked here')}</w:p>`);
     expect(root.querySelectorAll('.docx-change-bar')).toHaveLength(0);
@@ -144,9 +174,10 @@ describe('change bars', () => {
 
   test('the bar is furniture: no model range, hidden from assistive tech, not editable', () => {
     const root = paint(`<w:p>${ins('1', run('added'))}</w:p>`);
+    const overlay = root.querySelector<HTMLElement>('.docx-change-bars')!;
+    expect(overlay.getAttribute('aria-hidden')).toBe('true');
+    expect(overlay.style.pointerEvents).toBe('none');
     const bar = root.querySelector<HTMLElement>('.docx-change-bar')!;
-    expect(bar.getAttribute('aria-hidden')).toBe('true');
-    expect(bar.contentEditable).toBe('false');
     expect(bar.dataset.paragraphId).toBeUndefined();
     expect(bar.textContent).toBe('');
   });

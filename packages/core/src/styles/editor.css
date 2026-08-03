@@ -126,6 +126,9 @@
   --doc-revision-deletion: #c62828;
   --doc-revision-insertion-tint: rgba(46, 125, 50, 0.05);
   --doc-revision-deletion-tint: rgba(198, 40, 40, 0.05);
+  /* Word's tracked-change palette. Deletions read as removal, insertions as addition, and the
+     margin rules take the same two colours so the margin says WHAT happened, not only that
+     something did. */
   /* Per-AUTHOR review colours. OOXML carries no colour on a revision — Word assigns one per
      author in the application — so this ramp is presentation policy, and overriding a slot
      under `.ep-root` restyles both the painted document and the review cards. Chosen to stay
@@ -138,8 +141,8 @@
   --doc-review-author-5: #a93226;
   --doc-review-author-6: #2e4053;
   --doc-review-author-7: #6c3483;
-  /* Word's margin rule beside any line a revision touches. Deliberately neutral: it says
-     "something changed here", not who changed it. */
+  /* Retained as an override hook for a host that wants one neutral margin rule instead of the
+     kind-coloured pair. Nothing reads it by default. */
   --doc-review-change-bar: #767676;
 
   /* Selected table cells. A native selection is a run of characters and cannot

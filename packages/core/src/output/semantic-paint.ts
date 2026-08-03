@@ -363,34 +363,79 @@ function applyRevisionPresentation(
 }
 
 /**
- * The margin rule beside a line that carries a tracked change.
+ * The margin rules beside the lines that carry tracked changes.
  *
- * Furniture: no model range, `aria-hidden`, not editable, and it takes no space in the flow —
- * it is positioned in the margin the fragment box already leaves, so it can never push text.
+ * CONTIGUOUS lines MERGE into one rule. Drawn per line, a five-line edit reads as five separate
+ * marks with hairline gaps between them at every line boundary — the eye sees a dashed rule
+ * where Word draws a solid one, and the gaps imply the change stops and restarts.
+ *
+ * Coloured by kind, so the margin says what happened as well as that something did. A run of
+ * lines carrying both an insertion and a deletion takes the deletion colour: removed text is
+ * the stronger claim, and it is the one a reviewer scanning the margin must not miss.
+ *
+ * Furniture throughout: one overlay, `aria-hidden`, `pointer-events: none`, no model range, and
+ * positioned in the margin the fragment box already leaves, so it can never move a glyph.
  */
-function paintChangeBar(
+function paintChangeBars(
   document: Document,
   fragment: ParagraphFragmentRecord,
-  line: LineRecord,
   scale: number
-): HTMLElement {
-  const bar = document.createElement('span');
-  bar.className = 'docx-change-bar';
-  bar.setAttribute('aria-hidden', 'true');
-  bar.contentEditable = 'false';
-  bar.style.position = 'absolute';
-  bar.style.top = `${(line.box.y - fragment.box.y) * scale}px`;
-  bar.style.height = `${line.box.height * scale}px`;
-  // Left of the text column, in the margin, so it never overlaps a glyph.
-  bar.style.left = `${-CHANGE_BAR_OFFSET_PT * scale}px`;
-  bar.style.width = `${CHANGE_BAR_WIDTH_PT * scale}px`;
-  bar.style.backgroundColor = 'var(--doc-review-change-bar)';
-  return bar;
+): HTMLElement | null {
+  interface BarRun {
+    top: number;
+    bottom: number;
+    deleted: boolean;
+  }
+  const runs: BarRun[] = [];
+  for (const line of fragment.lines) {
+    const revisions = line.spans.flatMap((span) => span.revisions ?? []);
+    if (revisions.length === 0) continue;
+    const deleted = revisions.some(
+      (revision) => revision.kind === 'delete' || revision.kind === 'moveFrom'
+    );
+    const top = line.box.y - fragment.box.y;
+    const bottom = top + line.box.height;
+    const previous = runs[runs.length - 1];
+    // Touching or overlapping lines of the same claim are one rule.
+    if (previous && previous.deleted === deleted && top <= previous.bottom + 0.5) {
+      previous.bottom = Math.max(previous.bottom, bottom);
+      continue;
+    }
+    runs.push({ top, bottom, deleted });
+  }
+  if (runs.length === 0) return null;
+
+  const overlay = document.createElement('div');
+  overlay.className = 'docx-change-bars';
+  overlay.setAttribute('aria-hidden', 'true');
+  overlay.style.position = 'absolute';
+  overlay.style.inset = '0';
+  overlay.style.pointerEvents = 'none';
+  for (const run of runs) {
+    const bar = document.createElement('div');
+    bar.className = `docx-change-bar docx-change-bar-${run.deleted ? 'deletion' : 'insertion'}`;
+    bar.style.position = 'absolute';
+    bar.style.top = `${run.top * scale}px`;
+    bar.style.height = `${(run.bottom - run.top) * scale}px`;
+    bar.style.left = `${-CHANGE_BAR_OFFSET_PT * scale}px`;
+    bar.style.width = `${CHANGE_BAR_WIDTH_PT * scale}px`;
+    bar.style.pointerEvents = 'none';
+    bar.style.backgroundColor = run.deleted
+      ? 'var(--doc-revision-deletion)'
+      : 'var(--doc-revision-insertion)';
+    overlay.append(bar);
+  }
+  return overlay;
 }
 
-/** Distance from the text column to the change bar, and its thickness, in points. */
-const CHANGE_BAR_OFFSET_PT = 18;
-const CHANGE_BAR_WIDTH_PT = 1.2;
+/**
+ * Distance from the text column to the change bar, and its thickness, in points.
+ *
+ * Close enough to read as belonging to the line, far enough not to collide with a hanging
+ * indent or a list marker.
+ */
+const CHANGE_BAR_OFFSET_PT = 7.5;
+const CHANGE_BAR_WIDTH_PT = 1.5;
 
 function paintSpan(
   document: Document,
@@ -692,15 +737,11 @@ function paintFragment(
       if (leader) element.append(leader);
     }
   }
+  // CHANGE BARS. Word draws a rule in the margin beside every line a revision touches, and it
+  // is the only signal that a change exists at all once the reader is in a resolved view.
+  const bars = paintChangeBars(document, fragment, scale);
+  if (bars) element.append(bars);
   for (const line of fragment.lines) {
-    // CHANGE BAR. Word draws a rule in the margin beside every line a revision touches, and it
-    // is the only signal that a change exists at all once the reader is looking at a resolved
-    // view. Derived from the painted spans rather than a layout field: whether a line carries
-    // tracked text is exactly "does any span on it have an attribution", and asking here keeps
-    // the bar in step with what was actually drawn.
-    if (line.spans.some((span) => span.revisions !== undefined && span.revisions.length > 0)) {
-      element.append(paintChangeBar(document, fragment, line, scale));
-    }
     const painted = paintLine(document, line, ctx);
     // Line boxes are page-relative; inside a fragment they are drawn relative to it —
     // BOTH axes. The fragment box already carries the x origin (indent, or a table cell's
