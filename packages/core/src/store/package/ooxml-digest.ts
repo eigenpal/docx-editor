@@ -194,7 +194,29 @@ function collectGeneric(node: OoxmlNode, out: string[]): void {
     out.push(canonicalOoxmlFingerprint(node));
     return; // fingerprint covers the whole subtree; do not double-count descendants
   }
+  // Bookmark markers are TYPED but they are still preserved evidence, not structure the
+  // digest reconstructs from anything else: they carry no text and no properties, so a
+  // walk that merely recursed past them (they have no children) reported nothing when one
+  // was dropped. Fingerprinting them keeps a lost anchor a reported loss, which is what it
+  // was while they were generic.
+  if (node.kind === 'bookmarkStart' || node.kind === 'bookmarkEnd') {
+    out.push(canonicalOoxmlFingerprint(node));
+    return;
+  }
   for (const child of node.children) collectGeneric(child, out);
+}
+
+/**
+ * A hyperlink's own identity, as a structure token: its authored attributes, sorted.
+ *
+ * The link element itself carries no text, so without this a save that dropped the target
+ * off a link — or changed `w:anchor` — would digest identically to one that kept it.
+ */
+function linkIdentityToken(link: OoxmlElement): string {
+  const attributes = link.attributes
+    .map((attribute) => `${attribute.namespaceUri}|${attribute.localName}=${attribute.value}`)
+    .sort();
+  return `hyperlink(${attributes.join(',')})`;
 }
 
 function digestParagraph(
@@ -208,7 +230,11 @@ function digestParagraph(
   const runProperties: string[][] = [];
   let text = '';
   const genericStructure: string[] = [];
-  for (const child of paragraph.children) {
+  // A `w:hyperlink` contributes its own identity (target, tooltip, history) AND its runs'
+  // text and properties. Digesting the link as an opaque blob would have been the easy
+  // reading, but then editing a word inside a link would show up as "the whole link changed"
+  // and a lost run inside one would not show up at all.
+  const visit = (child: OoxmlNode): void => {
     if (child.kind === 'run') {
       const rPr = child.children.find(
         (grand): grand is OoxmlRunPropertiesNode => grand.kind === 'runProperties'
@@ -218,10 +244,16 @@ function digestParagraph(
       // Includes the run's own `w:rPr`, so a FOREIGN-namespace property child is digested
       // exactly once (there) rather than falling between the two collectors.
       for (const grand of child.children) collectGeneric(grand, genericStructure);
-      continue;
+      return;
+    }
+    if (child.kind === 'hyperlink') {
+      genericStructure.push(linkIdentityToken(child));
+      for (const inner of child.children) visit(inner);
+      return;
     }
     collectGeneric(child, genericStructure);
-  }
+  };
+  for (const child of paragraph.children) visit(child);
   const paraId = paraIdOf(paragraph);
   return {
     ordinal,

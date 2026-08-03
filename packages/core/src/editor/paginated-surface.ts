@@ -19,7 +19,7 @@
 // environment in surface-pages.ts — all re-exported or consumed from this module.
 
 import { openTreeSession, type TreeDocxSession } from '@docx-editor.dev/core-contract/binding';
-import type { TreeDocOp } from '@docx-editor.dev/core-contract/store';
+import { hyperlinkTargetOf, type TreeDocOp } from '@docx-editor.dev/core-contract/store';
 import {
   createLayoutScheduler,
   createLayoutSession,
@@ -83,6 +83,8 @@ import {
 import { createPointerController, type PointerController } from './surface-pointer.ts';
 import { createSurfaceSelectionSync } from './surface-selection-sync.ts';
 import { createSurfaceStructure } from './surface-structure.ts';
+import { createHyperlinkOps } from './surface-hyperlinks.ts';
+import { createSurfaceNavigation } from './surface-navigation.ts';
 
 export type {
   OpenPaginatedResult,
@@ -320,6 +322,26 @@ export function mountPaginatedSurface(
     defaultTabStopPt,
   });
 
+  /**
+   * The engine's ONE hyperlink trust boundary, handed to layout.
+   *
+   * The resolver reads the session's live relationships, so a link inserted this session
+   * resolves immediately rather than only after a save and reopen. `hyperlinkTargetOf`
+   * produces the sanitized projection; everything downstream — paint, click routing, the
+   * popover, the clipboard — consumes only that.
+   */
+  const projectLink = (link: Parameters<typeof hyperlinkTargetOf>[0]) => {
+    const target = hyperlinkTargetOf(link, (id) => session.relationshipTarget(id));
+    if (link.kind === 'textValue') return null;
+    return {
+      id: link.id,
+      kind: target.kind,
+      href: target.href,
+      ...(target.anchor !== undefined ? { anchor: target.anchor } : {}),
+      ...(target.tooltip !== undefined ? { tooltip: target.tooltip } : {}),
+    };
+  };
+
   let currentLayout = layoutOnce();
   // Structural edits — breaks, lists, indent, sections — are their own lane over the same
   // session and commit path.
@@ -380,6 +402,27 @@ export function mountPaginatedSurface(
         level
       ) !== null,
   });
+  const hyperlinks = createHyperlinkOps({
+    session,
+    selection: () => selection,
+    orderedRange: () => orderedRange(),
+    selectionMark: () => selectionMark(),
+    textOf: (paragraphId) => textOf(paragraphId),
+    commit: (run, selectionAfter) => commit(run, selectionAfter),
+  });
+  const navigation = createSurfaceNavigation({
+    pagesLayer,
+    container,
+    scale,
+    layout: () => currentLayout,
+    bookmarks: () => session.bookmarks(),
+    linkById: (linkId) => hyperlinks.linkById(linkId),
+    setSelection: (position) => setSelection(collapsedAt(position)),
+    isCollapsedSelection: () =>
+      selection.anchor.paragraphId === selection.head.paragraphId &&
+      selection.anchor.offset === selection.head.offset,
+    ...(options.onHyperlinkPopover ? { onPopover: options.onHyperlinkPopover } : {}),
+  });
   let desiredX: number | null = null;
 
   function layoutOnce(): SemanticLayout {
@@ -394,6 +437,7 @@ export function mountPaginatedSurface(
       numberingIndex: numberingIndex(),
       sectionFurniture: furnitureSource.sectionFurniture(),
       furniture: furnitureSource.furniture(),
+      projectLink,
     });
     lastLayoutMs = now() - began;
     return layout;
@@ -424,6 +468,7 @@ export function mountPaginatedSurface(
         numberingIndex: numberingIndex(),
         sectionFurniture: furnitureSource.sectionFurniture(),
         furniture: furnitureSource.furniture(),
+        projectLink,
       });
       lastLayoutMs = now() - began;
       return layout;
@@ -967,6 +1012,12 @@ export function mountPaginatedSurface(
       });
     },
 
+    hyperlinks,
+
+    navigation,
+
+    bookmarks: () => session.bookmarks(),
+
     selectedText() {
       // A rectangle copies as a grid — tabs between cells, newlines between rows — because
       // the text range it stands in for would paste back as one run with the grid gone.
@@ -991,7 +1042,11 @@ export function mountPaginatedSurface(
 
     undo: () => restoreSelection(session.undo()),
     redo: () => restoreSelection(session.redo()),
-    focus: () => pagesLayer.focus(),
+    // `preventScroll`: the pages layer is the WHOLE document tall, and focusing it scrolls
+    // it into view — to its top. The first click anywhere in a long document therefore
+    // threw the reader back to page 1 before the caret it had just placed could be seen.
+    // The caret is positioned from layout regardless, so nothing needs the browser's scroll.
+    focus: () => pagesLayer.focus({ preventScroll: true }),
     destroy() {
       document.removeEventListener('selectionchange', onSelectionChange);
       pagesLayer.removeEventListener('keydown', onKeyDown);
@@ -1003,6 +1058,7 @@ export function mountPaginatedSurface(
       pagesLayer.removeEventListener('compositionend', onCompositionEnd);
       document.removeEventListener('scroll', onScroll, { capture: true });
       pointer?.destroy();
+      navigation.destroy();
       // Drop pending layout work and stop listening BEFORE the DOM goes, or a commit from
       // another editor sharing this store would paint into a detached container.
       scheduler.cancel();
@@ -1143,7 +1199,10 @@ export function mountPaginatedSurface(
    * the DOM guessed.
    */
   let pointer: PointerController | null = null;
-  const onKeyDown = createKeyDownHandler(surface);
+  const onKeyDown = createKeyDownHandler(
+    surface,
+    options.onRequestHyperlink ? { onRequestHyperlink: options.onRequestHyperlink } : {}
+  );
   const { onCopy, onCut, onPaste } = createClipboardHandlers(surface, insertPlainText);
   const onBeforeInput = createBeforeInputHandler(surface, {
     isComposing: () => selectionSync.isComposing(),
@@ -1266,7 +1325,11 @@ export function mountPaginatedSurface(
       setSelection: (next) => setSelection(next),
       cellSelection: () => cellSelection,
       setCellSelection: (next) => setCellSelection(next),
-      focus: () => pagesLayer.focus(),
+      // `preventScroll`: the pages layer is the WHOLE document tall, and focusing it scrolls
+      // it into view — to its top. The first click anywhere in a long document therefore
+      // threw the reader back to page 1 before the caret it had just placed could be seen.
+      // The caret is positioned from layout regardless, so nothing needs the browser's scroll.
+      focus: () => pagesLayer.focus({ preventScroll: true }),
     },
     options.pointer ? { mode: options.pointer } : {}
   );

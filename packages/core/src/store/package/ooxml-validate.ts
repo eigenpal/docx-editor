@@ -43,6 +43,9 @@ const KNOWN_ELEMENT_NAMES: Readonly<
   tableCell: [WML_NAMESPACE_URI, 'tc'],
   tableGrid: [WML_NAMESPACE_URI, 'tblGrid'],
   tableProperties: [WML_NAMESPACE_URI, 'tblPr'],
+  hyperlink: [WML_NAMESPACE_URI, 'hyperlink'],
+  bookmarkStart: [WML_NAMESPACE_URI, 'bookmarkStart'],
+  bookmarkEnd: [WML_NAMESPACE_URI, 'bookmarkEnd'],
 };
 
 function knownAttributesAreValid(attributes: readonly OoxmlAttribute[]): boolean {

@@ -51,6 +51,31 @@ const SLOT_COMMANDS: Partial<Record<ChromeSlotId, EditorCommand>> = {
 };
 
 /**
+ * The probe a slot uses to ask "would the engine honour this right now?" when its real
+ * command needs an argument the slot itself cannot supply.
+ *
+ * `text.link` is the case: whether this selection could become a link is the engine's
+ * question, but WHICH link is a URL field's. Chrome that owns a link UI (React's
+ * `ToolbarLink`) asks with this and dispatches through that UI.
+ *
+ * DELIBERATELY NOT in `SLOT_COMMANDS`. Enabled state has one source, and putting the probe
+ * there would enable the control in EVERY adapter — including Vue, which has grown no link
+ * UI, where the result is an enabled button whose click can only be refused. A dead button
+ * is the worse lie: `file.save` was a disabled control for a capability that works, and this
+ * would be an enabled control for one that is not reachable. Vue's slot therefore keeps
+ * reporting the honest "not wired to an editor command" until its popover lands.
+ *
+ * @public
+ */
+export function chromeProbeForSlot(slotId: ChromeSlotId): EditorCommand | null {
+  return CHROME_PROBES[slotId] ?? null;
+}
+
+const CHROME_PROBES: Partial<Record<ChromeSlotId, EditorCommand>> = {
+  'text.link': { type: 'insertHyperlink', href: 'https://example.com' },
+};
+
+/**
  * The public editor command behind one chrome slot, or `null` when the slot is
  * not wired to a command yet (parity-only chrome, or save — which is not a
  * command). The single source of command truth for both adapters.

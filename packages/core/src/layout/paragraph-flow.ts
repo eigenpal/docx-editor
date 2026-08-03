@@ -15,6 +15,7 @@ import {
   propertiesOfRunContainer,
   type FieldPageContext,
   type PositionalTab,
+  type HyperlinkProjector,
   type RunPropertyCascader,
 } from './field-projection.ts';
 import type { ParagraphLayoutCache } from './layout-cache.ts';
@@ -59,6 +60,14 @@ export interface ParagraphFlowOptions {
    * which is the same answer whenever the paragraph carries no indents.
    */
   readonly marginExtent?: { readonly left: number; readonly right: number };
+  /**
+   * Turns a typed `w:hyperlink` into the sanitized record its spans carry.
+   *
+   * Supplied by the document layout, which is the level that can see the package's
+   * relationships. Absent means link runs still measure and paint — they simply carry no
+   * link, which is what a table-cell or furniture pass without a resolver gets.
+   */
+  readonly projectLink?: HyperlinkProjector;
 }
 
 /** One measurable piece of a paragraph: text carrying one property set. */
@@ -346,7 +355,13 @@ export function breakParagraph(
   // `w:firstLine`, left (negative) for `w:hanging`. Every later line starts at the indent.
   const firstLineOffset = flow?.firstLineOffset ?? 0;
 
-  const pieces = piecesOfParagraph(paragraph, inheritedRunProperties, pageContext, cascadeRuns);
+  const pieces = piecesOfParagraph(
+    paragraph,
+    inheritedRunProperties,
+    pageContext,
+    cascadeRuns,
+    flow?.projectLink
+  );
   const emptyStyle =
     inheritedRunProperties.length === 0
       ? DEFAULT_RUN_STYLE
@@ -395,6 +410,7 @@ export function breakParagraph(
         props: piece.props,
         style: piece.style,
         box: { x: lineOrigin() + line.width, y: 0, width: 0, height: breakMetrics.height },
+        ...(piece.link ? { link: piece.link } : {}),
       });
       line.height = Math.max(line.height, breakMetrics.height);
       line.baseline = Math.max(line.baseline, breakMetrics.baseline);
@@ -417,6 +433,7 @@ export function breakParagraph(
         props: piece.props,
         style: piece.style,
         box: { x: lineOrigin() + line.width, y: 0, width: 0, height: breakMetrics.height },
+        ...(piece.link ? { link: piece.link } : {}),
       });
       line.height = Math.max(line.height, breakMetrics.height);
       line.baseline = Math.max(line.baseline, breakMetrics.baseline);
@@ -492,6 +509,7 @@ export function breakParagraph(
                 ),
               }
             : {}),
+          ...(piece.link ? { link: piece.link } : {}),
         });
         line.width += width;
         line.height = Math.max(line.height, metrics.height);
@@ -511,6 +529,7 @@ export function breakParagraph(
         props: piece.props,
         style: piece.style,
         box: { x: lineOrigin() + line.width, y: 0, width, height: metrics.height },
+        ...(piece.link ? { link: piece.link } : {}),
       });
       line.width += width;
       line.height = Math.max(line.height, metrics.height);

@@ -827,7 +827,15 @@
     "urlPlaceholder": "https://example.com",
     "copyLink": "लिंक कॉपी करें",
     "editLink": "लिंक संपादित करें",
-    "removeLink": "लिंक हटाएं"
+    "removeLink": "लिंक हटाएं",
+    "apply": null,
+    "bookmarkTarget": null,
+    "cancel": null,
+    "editTitle": null,
+    "inertTarget": null,
+    "insertTitle": null,
+    "openLink": null,
+    "refused": null
   },
   "headerFooter": {
     "header": "हेडर",

@@ -827,7 +827,15 @@
     "urlPlaceholder": "https://exemple.com",
     "copyLink": "Copier le lien",
     "editLink": "Modifier le lien",
-    "removeLink": "Supprimer le lien"
+    "removeLink": "Supprimer le lien",
+    "apply": null,
+    "bookmarkTarget": null,
+    "cancel": null,
+    "editTitle": null,
+    "inertTarget": null,
+    "insertTitle": null,
+    "openLink": null,
+    "refused": null
   },
   "headerFooter": {
     "header": "En-tête",

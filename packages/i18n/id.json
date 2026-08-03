@@ -843,7 +843,15 @@
     "urlPlaceholder": "https://example.com",
     "copyLink": "Salin Tautan",
     "editLink": "Edit Tautan",
-    "removeLink": "Hapus Tautan"
+    "removeLink": "Hapus Tautan",
+    "apply": null,
+    "bookmarkTarget": null,
+    "cancel": null,
+    "editTitle": null,
+    "inertTarget": null,
+    "insertTitle": null,
+    "openLink": null,
+    "refused": null
   },
   "headerFooter": {
     "header": "Header",

@@ -10,6 +10,7 @@ import type {
   EditorCommand,
   EditorScope,
   ExecResult,
+  HyperlinkInfo,
   PageSetup,
   RunFormatting,
   TableContext,
@@ -105,6 +106,30 @@ export function selectionRangeOf(surface: PaginatedSurface | null): DocRange | n
   return reversed
     ? { from: { paraId: headParaId }, to: { paraId: anchorParaId } }
     : { from: { paraId: anchorParaId }, to: { paraId: headParaId } };
+}
+
+/**
+ * The `hyperlinkAt` query: the link the caret sits in, or null.
+ *
+ * `href` is the SANITIZED projection, so a caller that puts it straight into a DOM
+ * attribute or a `window.open` cannot be handed a scheme the engine refuses. An inert link
+ * — a refused scheme, a dangling relationship — answers with an empty `href`: there IS a
+ * link at that position (an editor should offer to fix or remove it) and there is nothing
+ * to follow.
+ */
+export function hyperlinkAtOf(surface: PaginatedSurface | null): HyperlinkInfo | null {
+  if (!surface) return null;
+  const link = surface.hyperlinks.linkAtCaret();
+  if (!link) return null;
+  const paraId = surface.session.paragraphAnchors().paraIdByNode.get(link.paragraphId);
+  // A `DocRange` addresses paragraphs by `w14:paraId`; without one there is no honest
+  // range to report, and a fabricated one is worse than none.
+  if (paraId === undefined) return null;
+  return {
+    href: link.href ?? '',
+    range: { from: { paraId }, to: { paraId } },
+    ...(link.tooltip !== undefined ? { tooltip: link.tooltip } : {}),
+  };
 }
 
 /**

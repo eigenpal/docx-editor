@@ -15,7 +15,7 @@ import type {
   OoxmlPart,
   OoxmlProperty,
 } from '@docx-editor.dev/core-contract/store';
-import { finalizePageFieldProjection } from './field-projection.ts';
+import { finalizePageFieldProjection, type HyperlinkProjector } from './field-projection.ts';
 import { paragraphLayoutKey, type ParagraphLayoutCache } from './layout-cache.ts';
 import { alignSpans, breakParagraph, type Alignment, type PendingLine } from './paragraph-flow.ts';
 import {
@@ -179,6 +179,15 @@ export interface SemanticLayoutOptions {
    * here — which is why the prepared-block memo does not key on it.
    */
   readonly defaultTabStopPt?: number;
+  /**
+   * Turns a typed `w:hyperlink` into the SANITIZED record its spans carry.
+   *
+   * An option because resolving `r:id` needs the package's relationships, which layout — a
+   * per-part walk — cannot see. Absent means link runs still measure, break and paint;
+   * they simply carry no link, so nothing is clickable and no text is lost. That is the
+   * degradation a headless test or a furniture-only pass gets, and it is the safe one.
+   */
+  readonly projectLink?: HyperlinkProjector;
 }
 
 /** Prepass results by block node, valid while the width and producer both hold. */
@@ -687,6 +696,7 @@ function layoutBlocksWithGeometry(
     styleCascade,
     listItems,
     ...(defaultTabStopPt !== undefined ? { defaultTabStopPt } : {}),
+    ...(options.projectLink ? { projectLink: options.projectLink } : {}),
     borderOwnershipBudget: createTableBorderOwnershipBudget(),
     vMergeResolveBudget: createTableVMergeResolveBudget(),
   };
@@ -726,6 +736,7 @@ function layoutBlocksWithGeometry(
         // The page's text column, so a `w:ptab` measuring against the margin ignores the
         // paragraph's own indents the way Word does.
         marginExtent: { left: 0, right: entry.indent.left + entry.available + entry.indent.right },
+        ...(options.projectLink ? { projectLink: options.projectLink } : {}),
       }
     );
 

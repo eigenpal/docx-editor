@@ -144,6 +144,35 @@ export function execEditorCommand(
       }
       mounted.insertLineBreak();
       break;
+    case 'insertHyperlink': {
+      // `#name` is a bookmark in this document; anything else is an external target and
+      // goes through the package's URL allowlist on the way to a relationship. A refusal
+      // there surfaces as one rather than committing a link with nowhere to go.
+      const internal = command.href.startsWith('#');
+      const applied = mounted.hyperlinks.applyHyperlink({
+        ...(internal ? { anchor: command.href.slice(1) } : { url: command.href }),
+        ...(command.text !== undefined ? { text: command.text } : {}),
+      });
+      if (!applied) {
+        return {
+          ok: false,
+          code: 'invalidArgs',
+          reason:
+            mounted.state().lastRejection ??
+            'the link was refused: the target is not an allowed scheme, or there is no text to link',
+        };
+      }
+      break;
+    }
+    case 'removeHyperlink':
+      if (!mounted.hyperlinks.removeHyperlink()) {
+        return {
+          ok: false,
+          code: 'notFound',
+          reason: 'there is no hyperlink at the selection',
+        };
+      }
+      break;
     case 'insertText':
       mounted.type(command.text);
       break;

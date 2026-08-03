@@ -249,16 +249,30 @@ export function runPropertyEdits(
   if (!paragraph || paragraph.kind === 'textValue') return [];
   const edits: RunPropertyEdit[] = [];
   let offset = 0;
-  for (const child of paragraph.children) {
-    if (child.kind !== 'run') continue;
+  /**
+   * Every run the range covers, at the depth it actually sits at.
+   *
+   * A `w:hyperlink` holds ordinary runs, and skipping it outright was wrong twice over: the
+   * link's own text could not be formatted at all, and — because the offset did not advance
+   * across it either — every run AFTER the link was addressed as if the link's characters did
+   * not exist. Colouring a link then wrote the FOLLOWING run's properties over the link's
+   * text, one character short. This descends exactly where `segmentsOf` does, so the offsets
+   * computed here are the ones the applier resolves.
+   */
+  const visit = (child: OoxmlNode): void => {
+    if (child.kind === 'hyperlink') {
+      for (const inner of child.children) visit(inner);
+      return;
+    }
+    if (child.kind !== 'run') return;
     const runStart = offset;
     offset += addressableLength(child);
     // A run with no addressable content — a field character, a bare `w:rPr` — is not
     // reachable by any range, so no op should name one.
-    if (offset === runStart) continue;
+    if (offset === runStart) return;
     const from = Math.max(runStart, start);
     const to = Math.min(offset, end);
-    if (from >= to) continue;
+    if (from >= to) return;
     edits.push({
       start: from,
       end: to,
@@ -270,7 +284,8 @@ export function runPropertyEdits(
         incoming
       ),
     });
-  }
+  };
+  for (const child of paragraph.children) visit(child);
   return edits;
 }
 

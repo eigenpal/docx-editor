@@ -10,6 +10,7 @@ import type {
   ExecResult,
 } from '@docx-editor.dev/core-contract/contracts/editor';
 import {
+  chromeProbeForSlot,
   commandForSlot,
   commandForSlotValue,
   runSave,
@@ -95,17 +96,45 @@ describe('toolbar command wiring (task M4.0)', () => {
 
   test('an unwired slot is disabled without ever calling the editor', () => {
     const { editor, calls } = fakeEditor(ALLOW);
-    // `text.highlight` graduated to a value-typed slot; `text.link` stays unwired.
-    const state = toolbarCommandState(editor, 'text.link');
+    // `review.comments` has no command and no probe: genuinely unwired, and it says so
+    // without troubling the engine. (`text.highlight` graduated to a value-typed slot and
+    // `text.link` to a chrome-driven one; both now ASK the engine, which is the point.)
+    const state = toolbarCommandState(editor, 'review.comments');
     expect(state.enabled).toBe(false);
     expect(state.disabledReason).toBe('not wired to an editor command');
     expect(calls.can).toEqual([]);
-    expect(runToolbarCommand(editor, 'text.highlight')).toEqual({
+    expect(runToolbarCommand(editor, 'review.comments')).toEqual({
       ok: false,
       code: 'unsupported',
       reason: 'not wired to an editor command',
     });
     expect(calls.exec).toEqual([]);
+  });
+
+  test('a chrome-driven slot stays out of the shared table, and offers a probe instead', () => {
+    const { editor, calls } = fakeEditor(ALLOW);
+    // `text.link` is NOT in `SLOT_COMMANDS`. Putting it there would enable the control in
+    // EVERY adapter — including one with no link UI, where an enabled button can only be
+    // refused, which is the worse lie. Chrome that owns a link UI asks with the probe and
+    // dispatches through that UI; chrome that does not gets the honest unwired answer.
+    expect(commandForSlot('text.link')).toBeNull();
+    expect(toolbarCommandState(editor, 'text.link')).toEqual({
+      id: 'text.link',
+      enabled: false,
+      disabledReason: 'not wired to an editor command',
+      active: false,
+    });
+    expect(calls.can).toEqual([]);
+
+    const probe = chromeProbeForSlot('text.link');
+    expect(probe).toEqual({ type: 'insertHyperlink', href: 'https://example.com' });
+    // The probe is a real command the engine can answer — that is the whole point of it.
+    expect(editor.can(probe!).ok).toBe(true);
+  });
+
+  test('a slot with no link UI has no probe', () => {
+    expect(chromeProbeForSlot('text.bold')).toBeNull();
+    expect(chromeProbeForSlot('review.comments')).toBeNull();
   });
 
   test('a refused control is disabled and carries the engine reason verbatim', () => {

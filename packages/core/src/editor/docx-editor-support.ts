@@ -303,6 +303,33 @@ export function classifyCommand(command: EditorCommand): CommandSupport {
       }
       return { supported: true, mutating: true };
     }
+    case 'insertHyperlink': {
+      if (command.target !== undefined) {
+        return {
+          supported: false,
+          reason: 'DocTarget addressing is not supported; a link applies at the selection',
+        };
+      }
+      // The `href` vocabulary is the WEB's, because that is what the contract declares and
+      // what a host already has: `#name` is a bookmark in this document, anything else is
+      // an external target. The allowlist is applied where the relationship is written, so
+      // `can` reports only what it can check without touching the package.
+      if (typeof command.href !== 'string' || command.href.length === 0) {
+        return {
+          supported: false,
+          code: 'invalidArgs',
+          reason: 'insertHyperlink requires an href',
+        };
+      }
+      return { supported: true, mutating: true };
+    }
+    case 'removeHyperlink':
+      return command.target === undefined
+        ? { supported: true, mutating: true }
+        : {
+            supported: false,
+            reason: 'DocTarget addressing is not supported; unlink acts at the selection',
+          };
     case 'setIndent':
       return command.left !== undefined ||
         command.right !== undefined ||

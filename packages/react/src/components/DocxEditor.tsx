@@ -12,6 +12,7 @@ import { DocxEditorToolbar } from '../editor/toolbar';
 import { DocxEditorHorizontalRuler, DocxEditorVerticalRuler } from '../editor/DocxEditorRulers';
 import { DocxEditorDocumentOutline } from '../editor/DocxEditorOutline';
 import { DocxEditorPageSetupDialog } from '../editor/DocxEditorPageSetup';
+import { DocxEditorHyperLink } from '../editor/DocxEditorHyperLink';
 import { useTranslation } from '../i18n';
 import type { TranslationKey } from '../i18n';
 import type { DocxEditorProps, DocxEditorRef } from '../types';
@@ -116,6 +117,7 @@ const DocxEditorImpl = forwardRef<DocxEditorRef, DocxEditorProps>(function DocxE
     onChange,
     onFontError,
     onSave,
+    hyperlinkPopup,
   } = props;
 
   // Chrome colour mode: 'system' subscribes to the OS setting. Only the chrome
@@ -148,12 +150,17 @@ const DocxEditorImpl = forwardRef<DocxEditorRef, DocxEditorProps>(function DocxE
   // classes) around the primitive Content (the engine's mount point). Chrome-off
   // hosts get the caller's className on the viewport itself; chrome-on hosts theme
   // the viewport with `dark` and put the className on the chrome wrapper below.
+  // The link popover mounts INSIDE the viewport, so ordinary CSS keeps it attached to the
+  // page while the user scrolls — no scroll listener, no per-frame reposition. It renders
+  // nothing until a link click or Ctrl/Cmd+K opens it, and `hyperlinkPopup={false}` drops
+  // the packaged panel while leaving the engine's gestures wired for a host's own UI.
   const viewport = (
     <DocxEditorViewport
       className={chrome ? (isDark ? 'dark' : undefined) : className}
       style={chrome ? SCROLL_AREA_STYLE : undefined}
     >
       <DocxEditorContent />
+      <DocxEditorHyperLink hidden={hyperlinkPopup === false} />
     </DocxEditorViewport>
   );
 
@@ -250,6 +257,11 @@ export interface DocxEditorNamespace extends ForwardRefExoticComponent<
   readonly DocumentOutline: typeof DocxEditorDocumentOutline;
   /** Page Setup dialog — size, orientation, margins — applied as one undo step. */
   readonly PageSetupDialog: typeof DocxEditorPageSetupDialog;
+  /**
+   * The link popover — target readout, copy, edit, unlink — and its parts. Mounted by
+   * default inside the viewport; `hyperlinkPopup={false}` removes it.
+   */
+  readonly HyperLink: typeof DocxEditorHyperLink;
 }
 
 export const DocxEditor: DocxEditorNamespace = Object.assign(DocxEditorImpl, {
@@ -262,4 +274,5 @@ export const DocxEditor: DocxEditorNamespace = Object.assign(DocxEditorImpl, {
   VerticalRuler: DocxEditorVerticalRuler,
   DocumentOutline: DocxEditorDocumentOutline,
   PageSetupDialog: DocxEditorPageSetupDialog,
+  HyperLink: DocxEditorHyperLink,
 });

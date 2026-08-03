@@ -846,7 +846,15 @@
     "urlPlaceholder": "https://example.com",
     "copyLink": "Copy link",
     "editLink": "Edit link",
-    "removeLink": "Remove link"
+    "removeLink": "Remove link",
+    "openLink": "Open link",
+    "apply": "Apply",
+    "cancel": "Cancel",
+    "insertTitle": "Insert link",
+    "editTitle": "Edit link",
+    "inertTarget": "This link points somewhere the editor will not open",
+    "bookmarkTarget": "Goes to a place in this document",
+    "refused": "That link could not be applied. Check the address and try again."
   },
   "headerFooter": {
     "header": "Header",

@@ -24,8 +24,12 @@ import {
   writeOoxmlPackage,
   ensureListDefinition,
   ensureNumberingLevel,
+  ensureHyperlinkRelationship,
+  buildBookmarkIndex,
+  relationshipTargetIn,
   normalizeParagraphIdentity,
   paragraphTextOf,
+  type BookmarkIndex,
   type EmbeddedFont,
   type ListKind,
   type HeaderFooterParts,
@@ -212,6 +216,32 @@ export interface TreeDocxSession {
    * bullet a user asks for has to bring the whole definition with it. An existing
    * definition of the same kind is reused rather than duplicated.
    */
+  /**
+   * What the MAIN part's relationships answer for one `r:id`: the authored target and
+   * whether it is external. `null` for an id the part does not declare.
+   *
+   * Live rather than memoized: inserting a link mints a relationship mid-session, and a
+   * cached resolver would report the link this session just created as dangling.
+   */
+  relationshipTarget(
+    relationshipId: string
+  ): { readonly target: string; readonly external: boolean } | null;
+  /**
+   * `bookmarkName -> { paragraphId, offset }` over the main part, memoized per revision.
+   *
+   * What an internal hyperlink's `w:anchor` resolves through. Keyed on the store revision
+   * because an edit can move, split or delete the paragraph a bookmark sits in.
+   */
+  bookmarks(): BookmarkIndex;
+  /**
+   * The relationship id for an external hyperlink target, minting one if the package has
+   * none, or `null` when the URL is refused.
+   *
+   * Lives on the PACKAGE, outside `store.transact`, like the numbering definitions: the
+   * undoable half is the tree op that names the id. An unreferenced relationship left
+   * behind by an undo is inert and is what Word writes anyway.
+   */
+  ensureHyperlinkRelationship(url: string): string | null;
   ensureListDefinition(kind: ListKind): string | null;
   /**
    * Declare `level` in the list definition `numId` names, with Word's default format for
@@ -426,6 +456,7 @@ export function openTreeSession(bytes: Uint8Array): OpenTreeSessionResult {
     readonly revision: number;
     readonly index: ParagraphAnchorIndex;
   } | null = null;
+  let bookmarksCache: { readonly revision: number; readonly index: BookmarkIndex } | null = null;
   const paragraphAnchors = (): ParagraphAnchorIndex => {
     // Keyed on the store revision, like the outline: a split mints a new paragraph and
     // a join removes one, but between commits the map cannot move.
@@ -619,6 +650,27 @@ export function openTreeSession(bytes: Uint8Array): OpenTreeSessionResult {
       paraIdOf: (nodeId) => paragraphAnchors().paraIdByNode.get(nodeId) ?? null,
 
       nodeIdOf: (paraId) => paragraphAnchors().nodeByParaId.get(paraId.toUpperCase()) ?? null,
+
+      relationshipTarget: (relationshipId) =>
+        relationshipTargetIn(pkg, pkg.mainDocumentPart, relationshipId),
+
+      bookmarks: () => {
+        if (!bookmarksCache || bookmarksCache.revision !== store.revision) {
+          bookmarksCache = { revision: store.revision, index: buildBookmarkIndex(store.part) };
+        }
+        return bookmarksCache.index;
+      },
+
+      ensureHyperlinkRelationship(url) {
+        // Same lane as `ensureListDefinition`: a package write, not a tree op, so it sits
+        // outside the undo stack. `currentPackage()` mints a fresh object per call, so the
+        // identity check compares against the SAME instance the write was given.
+        const before = currentPackage();
+        const ensured = ensureHyperlinkRelationship(before, url);
+        if (!ensured) return null;
+        if (ensured.pkg !== before) pkg = ensured.pkg;
+        return ensured.relationshipId;
+      },
 
       ensureListDefinition(kind) {
         // The numbering part lives on the PACKAGE, not the main-part tree, so this is the

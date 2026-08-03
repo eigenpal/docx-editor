@@ -27,6 +27,7 @@ import type {
   FontConfigurationFragment,
 } from '@docx-editor.dev/core-contract/editor';
 import { DocxEditorContext } from './context';
+import { HyperlinkPopupContext, useHyperlinkPopupInstance } from './useHyperlinkPopup';
 
 /**
  * Props for `DocxEditor.Root`. Creation parameters (`document`, `fonts`, `author`,
@@ -115,5 +116,21 @@ export function DocxEditorRoot(props: DocxEditorRootProps) {
     if (zoom !== undefined) editor?.setZoom(zoom);
   }, [editor, zoom]);
 
-  return <DocxEditorContext.Provider value={editor}>{children}</DocxEditorContext.Provider>;
+  return (
+    <DocxEditorContext.Provider value={editor}>
+      {/* ONE link-popover state per editor, published here so a TOOLBAR button and the
+          popover panel — which are siblings, not ancestor and descendant — see the same
+          open/closed state and only one of them registers with the engine's gestures. */}
+      <HyperlinkPopupProvider>{children}</HyperlinkPopupProvider>
+    </DocxEditorContext.Provider>
+  );
+}
+
+/**
+ * Publishes the popover state. A child of the editor context rather than part of `Root`
+ * itself, because it consumes that context and a component cannot read its own provider.
+ */
+function HyperlinkPopupProvider({ children }: { children?: ReactNode }) {
+  const popup = useHyperlinkPopupInstance(true);
+  return <HyperlinkPopupContext.Provider value={popup}>{children}</HyperlinkPopupContext.Provider>;
 }

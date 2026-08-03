@@ -79,6 +79,29 @@ export interface ParagraphBorderStrokeRecord {
   readonly box: LayoutBox;
 }
 
+/**
+ * The hyperlink a span sits inside, as layout resolved it.
+ *
+ * Already SANITIZED: `href` is the runtime projection produced once at the trust boundary,
+ * and `null` means the link is inert — a refused scheme, or a relationship the package does
+ * not declare. Paint, hit-testing and the popover consume this and never the authored target,
+ * so there is exactly one place a file-derived URL becomes something a browser can follow.
+ *
+ * `id` is the `w:hyperlink` node's canonical id, which is what makes the spans of one link
+ * recognisable as one link across the several lines it wraps onto — and what an unlink or a
+ * retarget addresses.
+ */
+export interface SpanLinkRecord {
+  readonly id: string;
+  readonly kind: 'external' | 'internal' | 'unresolved';
+  /** Sanitized runtime projection: an absolute URL, `#anchor`, or null when inert. */
+  readonly href: string | null;
+  /** Bookmark name for an internal link, so navigation need not re-parse the fragment. */
+  readonly anchor?: string;
+  /** `w:tooltip` — paint puts it on the anchor's `title`. */
+  readonly tooltip?: string;
+}
+
 /** A run of text on one line sharing identical resolved formatting. */
 export interface StyleSpanRecord {
   readonly range: SourceRange;
@@ -111,6 +134,14 @@ export interface StyleSpanRecord {
    * typed there would be — which is what Word draws.
    */
   readonly tabLeaderAdvancePt?: number;
+  /**
+   * The hyperlink this span belongs to, or absent for ordinary text.
+   *
+   * Carried on the SPAN rather than looked up at paint time because a link that wraps
+   * produces one set of spans per line, and paint has no paragraph to walk — only the line
+   * it was handed.
+   */
+  readonly link?: SpanLinkRecord;
 }
 
 export interface LineRecord {

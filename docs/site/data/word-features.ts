@@ -723,16 +723,22 @@ export const wordFeatures: WordFeature[] = [
     rendering: 'full',
     roundTrip: 'full',
     tier: 'community',
+    notes:
+      'Insert, edit and remove with Ctrl/Cmd+K or the toolbar. Targets are allowlisted ' +
+      '(http(s), mailto, tel, ftp); anything else renders inert and still round-trips. ' +
+      'Opening a document never requests a link target — activation is an explicit gesture.',
   },
   {
     id: 'fields.bookmarks',
     name: 'Bookmarks & internal links',
     category: 'fields',
-    editing: 'none',
-    rendering: 'partial',
+    editing: 'partial',
+    rendering: 'full',
     roundTrip: 'full',
     tier: 'community',
-    notes: 'Parsed and preserved losslessly; bookmark editing UI is deferred.',
+    notes:
+      'Internal links jump to their bookmark and move the caret, including targets on ' +
+      'pages that have not been painted yet. Creating and renaming bookmarks is deferred.',
   },
   {
     id: 'fields.page-numbers',

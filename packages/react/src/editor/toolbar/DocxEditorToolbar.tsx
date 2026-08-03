@@ -88,6 +88,10 @@ const SHAPED_PARTS: Partial<Record<ChromeSlotId, PartLike>> = {
   'font.size': ToolbarFontSize,
   'text.color': ToolbarFontColor,
   'text.highlight': ToolbarHighlight,
+  // Insert Link is icon-SHAPED but not command-driven: a link needs a target, so the press
+  // opens the popover instead of running the slot's command. Its enabled state still comes
+  // from the engine, like every other control.
+  'text.link': ToolbarLink,
   'list.lineSpacing': ToolbarLineSpacing,
   'review.editingMode': ToolbarEditingMode,
   'file.save': ToolbarSave,

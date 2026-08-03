@@ -45,7 +45,18 @@ const FORMATTING: Record<string, { localName: string; attributes?: Record<string
   u: { localName: 'u', attributes: { val: 'single' } },
 };
 
-export function createKeyDownHandler(surface: PaginatedSurface): (event: KeyboardEvent) => void {
+export function createKeyDownHandler(
+  surface: PaginatedSurface,
+  hooks: {
+    /**
+     * Ctrl/Cmd+K — Word's Insert Hyperlink. The keymap does not know what a link dialog
+     * looks like, so it reports the request and the host's chrome answers it; a host with
+     * no hyperlink UI simply does not pass this, and the key falls through to the browser
+     * rather than doing something surprising.
+     */
+    readonly onRequestHyperlink?: () => void;
+  } = {}
+): (event: KeyboardEvent) => void {
   return (event: KeyboardEvent): void => {
     const accel = event.metaKey || event.ctrlKey;
     const command = NAVIGATION[event.key];
@@ -126,6 +137,13 @@ export function createKeyDownHandler(surface: PaginatedSurface): (event: Keyboar
     }
     if (accel && event.key.toLowerCase() === 'a') {
       surface.selectAll();
+      event.preventDefault();
+      return;
+    }
+    if (accel && !event.shiftKey && event.key.toLowerCase() === 'k' && hooks.onRequestHyperlink) {
+      // Word's Insert Hyperlink. On an existing link this opens EDIT mode seeded from it,
+      // which is the host's job — the keymap only says the user asked.
+      hooks.onRequestHyperlink();
       event.preventDefault();
       return;
     }

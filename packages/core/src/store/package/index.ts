@@ -69,6 +69,9 @@ export {
   type OoxmlParagraphPropertiesNode,
   type OoxmlTabNode,
   type OoxmlHardBreakNode,
+  type OoxmlHyperlinkNode,
+  type OoxmlBookmarkStartNode,
+  type OoxmlBookmarkEndNode,
   type OoxmlGenericElementNode,
   type OoxmlTextNode,
   type OoxmlElement,
@@ -185,3 +188,20 @@ export {
   w14RootPrefix,
 } from './para-id.ts';
 export { ensureListDefinition, ensureNumberingLevel, type ListKind } from './numbering-part.ts';
+export { buildBookmarkIndex, type BookmarkAnchor, type BookmarkIndex } from './bookmarks.ts';
+export {
+  ensureHyperlinkRelationship,
+  relationshipTargetIn,
+  type EnsuredHyperlinkRelationship,
+} from './hyperlink-part.ts';
+export {
+  HYPERLINK_RELATIONSHIP_TYPE,
+  OFFICE_RELATIONSHIP_NAMESPACE_URI,
+  hyperlinkAnchorOf,
+  hyperlinkRelationshipIdOf,
+  hyperlinkTargetOf,
+  isHyperlinkNode,
+  type HyperlinkKind,
+  type HyperlinkTarget,
+  type RelationshipTargetResolver,
+} from './hyperlink.ts';

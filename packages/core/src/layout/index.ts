@@ -150,6 +150,7 @@ export {
   type ParagraphSpacing,
   type SemanticLayout,
   type SourceRange,
+  type SpanLinkRecord,
   type StyleSpanRecord,
   type TableCellFragmentRecord,
   type TableFragmentRecord,
@@ -214,6 +215,7 @@ export {
   type PageFurniture,
   type SemanticLayoutOptions,
 } from './semantic-layout.ts';
+export type { HyperlinkProjector } from './field-projection.ts';
 export {
   EMPTY_NUMBERING_INDEX,
   MAX_LVL_OVERRIDES,
