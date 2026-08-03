@@ -73,7 +73,7 @@ The case that forces this: accepting a tracked row deletion by removing the `w:d
 
 `list-pagination-break.docx` contains 8 `w:cellIns`, 24 `w:cellDel`, 4 `w:trPrChange`, and 34 `w:tcPrChange`, so refusals are not a theoretical branch. They will be on screen the first time the fixture is opened, and the surface must state the engine's reason rather than hide the card.
 
-### R13: Comment writes need a package-level transaction that does not exist yet
+### R13: Comment writes need a package-level transaction (built)
 
 Found while implementing, not before: `TreeDocumentStore` holds a single part. `private current: OoxmlPart`, and transactions, history and `ModelChange` are all scoped to it. `applyTreeOp(part, op)` takes one part and returns one part.
 
@@ -93,7 +93,13 @@ The seam this needs is a package-level transaction with the same validate-then-a
 
 This is not specific to comments. `typed-notes-footnotes-endnotes` needs it for `footnotes.xml` and `endnotes.xml`; `typed-drawings-and-images` needs it for media parts and their relationships. Whichever change lands it owns it; the others reuse it rather than each growing a private multi-part path.
 
-Until it exists, the review surface renders no reply affordance rather than an inert one, per R12.
+**Built.** The store holds the package and edits a named story part; a transaction stages ops against any part and whole-package edits alongside them, committing as one revision, one `ModelChange` and one history entry. Two package invariants run at that boundary — no relationship to a part the package does not hold, and every part typed — so a transaction may pass through the half-written state but can never publish it.
+
+It turned out far smaller than this section first implied, because most of it existed: one construction site for the store, `withPart` already pure, history already whole-value snapshots, and the `.rels` parts already canonical trees. The genuinely new pieces were the content-types writer and the invariants.
+
+`[Content_Types].xml` and the `.rels` parts are edited as TREES, never regenerated from the parsed index, which case-folds part names and collapses duplicate defaults. Regenerating would rewrite entries nobody touched.
+
+One latent bug fell out: the session kept its own package variable that numbering grafts wrote to while saves read another, so the package had two owners and, predictably, two values.
 
 ### R12: Replying to a tracked change is a comment, because OOXML has nothing else
 

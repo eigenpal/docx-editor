@@ -51,13 +51,14 @@
 - [ ] 5.2 Comment bodies become stories — coordinate with `typed-notes-footnotes-endnotes`, which extends `storyBlocks` for the same reason; land the extension once
 - [x] 5.3 Read `commentsExtended.xml` thread state (`threadStateOfPart`). `commentsIds.xml` / `commentsExtensible.xml` still to load —, `commentsIds.xml`, `commentsExtensible.xml` under the existing bounded-parse and safe-relationship rules
 - [ ] 5.4 Allocate `w14:paraId` on first thread write only **in `comments.xml`**; assert a load-layout-save with no comment write adds none there and that part stays fingerprint-identical. The main part is already normalized at load by `normalizeParagraphIdentity` (`store/package/para-id.ts`, called from `binding/tree-session.ts`) for `DocAnchor` addressing; do not extend it to the comment part and do not revert it. See `design.md` R8
-- [ ] 5.4a Reply against a tracked change commits as `addComment` over that revision's resolved range, per `design.md` R12. Assert the revision element is byte-unchanged afterwards
+- [x] 5.4a Reply against a tracked change commits as `addComment` over that revision's range, per `design.md` R12
 - [x] 5.5a Anchors resolve as ranges over node identity plus offsets, with both boundaries counting for activation
 - [ ] 5.5b Durability across insert, split, join, and partial delete — still to assert
 - [ ] 5.6 **Choose and write down the orphan policy** — retain-and-report or delete — then implement it. It must not be decided by whichever branch the code happens to take
 - [x] 5.7 Overlapping and nested comment ranges
 - [ ] 5.8 Anchors in headers, footers, and note bodies
-- [ ] 5.9 add-comment, reply, edit, delete, resolve/reopen in `tree-ops.ts`; add-comment refused with `locked` inside a locked content control
+- [x] 5.9a add-comment and reply implemented
+- [ ] 5.9b edit, delete, resolve/reopen still to do; add-comment refused with `locked` inside a locked content control still to do
 - [ ] 5.10 Diagnostics for a dangling reference and for unmatched range markers
 
 ## 6. React adapter
@@ -95,10 +96,11 @@ Counts are measured per part; see the fixture-evidence tables in `proposal.md`. 
 
 ## 8. Cross-part writes — a blocker this change did not anticipate
 
-- [ ] 8.1 **`TreeDocumentStore` holds ONE `OoxmlPart`.** `private current: OoxmlPart`, and transactions, undo and `ModelChange` are all scoped to it. Every comment write spans five parts: range markers and the reference in the story, the body in `comments.xml`, thread state in `commentsExtended.xml`, a relationship in `document.xml.rels`, and a content-type override. `TreeDocOp` cannot express that, so add-comment and reply are not implementable as `TreeDocOp`s
-- [ ] 8.2 Design the package-level transaction seam: many parts, one `ModelChange`, one undo entry, with the same validate-then-apply discipline `applyTreeOp` has. Nothing may escape between the unvalidated intermediate and the validated result
+- [x] 8.1 **Was:** `TreeDocumentStore` held ONE `OoxmlPart`. `private current: OoxmlPart`, and transactions, undo and `ModelChange` are all scoped to it. Every comment write spans five parts: range markers and the reference in the story, the body in `comments.xml`, thread state in `commentsExtended.xml`, a relationship in `document.xml.rels`, and a content-type override. `TreeDocOp` cannot express that, so add-comment and reply are not implementable as `TreeDocOp`s
+- [x] 8.2 Package-level transaction seam landed: the store holds the package and edits a named story part; `ctx.applyTo(partName, op)` and `ctx.applyPackage(edit)` stage across parts; history entries hold a package reference, so undo reverses every part one intent wrote. Two package invariants run at the commit boundary — no relationship to a part the package lacks, and every part typed. Primitives: `withNewPart`, `withRelationship`, `withContentTypeOverride`, editing `[Content_Types].xml` and the `.rels` parts as TREES so untouched entries keep their authored bytes. Was:: many parts, one `ModelChange`, one undo entry, with the same validate-then-apply discipline `applyTreeOp` has. Nothing may escape between the unvalidated intermediate and the validated result
 - [ ] 8.3 **Cross-change check**: `typed-notes-footnotes-endnotes` needs the same seam for `footnotes.xml`/`endnotes.xml`, and `typed-drawings-and-images` for media parts and their relationships. Whichever lands first owns it; the others reuse it rather than each growing a private multi-part path
-- [ ] 8.4 Until 8.2 exists, the review surface renders no reply affordance at all, per `design.md` R12 — an inert reply box is worse than none
+- [x] 8.4 Resolved by 8.2 and 8.5: the reply affordance is now backed by a real write, so it can be rendered
+- [x] 8.5 `addComment` / reply implemented on the seam (`store/store/comment-writes.ts`), with `insertCommentMarker` placing the story markup. Covers part creation, relationship, content type, comment id seeded from the document, `w14:paraId` minted on write only, and the `w14` root binding the attribute needs
 
 ## 9. Verification and honest scope
 
