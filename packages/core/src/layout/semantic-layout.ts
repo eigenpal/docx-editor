@@ -1363,6 +1363,7 @@ function layoutBlocksWithGeometry(
         ),
         box: { x: indent.left, y: cursorY, width: available, height: pendingLine.height },
         baseline: pendingLine.baseline,
+        leading: pendingLine.leading,
       };
       lineCounter += 1;
       pending.push(record);

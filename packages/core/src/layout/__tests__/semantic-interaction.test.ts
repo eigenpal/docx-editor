@@ -92,6 +92,35 @@ describe('caret geometry for a model position', () => {
     expect(caretAt(lay(load(paragraph('hi'))), at(P0, 99))).toBeNull();
     expect(caretAt(lay(load(paragraph('hi'))), at('no-such-paragraph', 0))).toBeNull();
   });
+
+  test('an EMPTY spaced paragraph gets a text-height caret, not a line-box one', () => {
+    // There is no run to size the caret against, so the line box is all there is — and on a
+    // double-spaced paragraph that box is mostly leading. Taking it whole drew a caret twice
+    // the height of the text about to be typed, starting a full line above it.
+    const spaced = lay(
+      load(
+        '<w:p><w:pPr><w:spacing w:line="480" w:lineRule="auto"/></w:pPr></w:p>' +
+          '<w:p><w:r><w:t>reference</w:t></w:r></w:p>'
+      )
+    );
+    const emptyLine = spaced.pages[0]!.fragments[0]!;
+    if (emptyLine.kind !== 'paragraph') throw new Error('expected a paragraph');
+    const line = emptyLine.lines[0]!;
+    expect(line.leading).toBeGreaterThan(0);
+
+    const caret = caretAt(spaced, at(P0, 0))!;
+    expect(caret).not.toBeNull();
+    // The glyph band is what is left of the box once the leading is taken off, and it sits
+    // at the bottom — where the text will appear.
+    expect(caret.height).toBe(line.box.height - line.leading);
+    expect(caret.y).toBe(line.box.y + line.leading);
+    // Same height a single-spaced empty paragraph would get: the spacing changed the box,
+    // not the text.
+    const single = lay(load('<w:p/>'));
+    const singleFragment = single.pages[0]!.fragments[0]!;
+    if (singleFragment.kind !== 'paragraph') throw new Error('expected a paragraph');
+    expect(caret.height).toBe(singleFragment.lines[0]!.box.height);
+  });
 });
 
 describe('hit testing', () => {

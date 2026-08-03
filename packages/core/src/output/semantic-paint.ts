@@ -323,7 +323,8 @@ function paintSpan(
   document: Document,
   span: StyleSpanRecord,
   ctx: PaintContext,
-  bandHeightPt: number
+  bandHeightPt: number,
+  extraLeadingPt: number
 ): HTMLElement {
   const element = document.createElement('span');
   element.className = 'layout-run layout-run-text';
@@ -335,11 +336,31 @@ function paintSpan(
   // own size, which is how Word draws it: the band steps with the text.
   element.style.display = 'inline-block';
   element.style.verticalAlign = 'baseline';
-  // The box is only its own size if the run does NOT inherit the line's pixel line-height:
-  // inherited, every run's inner line box is the full line height and the band is one
-  // uniform slab again. The caller passes the height this run's band should be (its own
-  // published height, plus the line's extra leading, capped at the line height).
-  element.style.lineHeight = `${bandHeightPt * ctx.scale}px`;
+  // THE BAND IS THE BOX; THE LEADING DECIDES WHERE THE TEXT SITS IN IT.
+  //
+  // `w:line` above single puts ALL the extra leading ABOVE the text — observed Word
+  // behaviour, not a spec rule; 17.3.1.33 defines the VALUES and says nothing about where
+  // the leading lands, and `applyLineSpacing` is where that decision is made. So the
+  // glyphs sit at the BOTTOM of the line box and `line.baseline` is measured from the line
+  // top with the whole leading already added. Sizing the run by `line-height` alone leaves
+  // the browser to place the glyphs, and CSS always splits leading in HALF — so the text
+  // was painted half a leading ABOVE the baseline layout published, while the caret (which
+  // reads `line.baseline`) was drawn on it. On a double-spaced line that is half a line
+  // apart, and the insertion point sat under the text instead of in it.
+  //
+  // So the leading is PADDING, not line-height. The box is the band, the leading is padded
+  // off the top of it, and what remains is an inner line box exactly as tall as the glyphs —
+  // no half-leading left for CSS to split, and the baseline lands where layout put it.
+  //
+  // Growing the line-height instead lands the same baseline and is wrong for a reason that
+  // does not show up in a geometry test: the browser paints the native selection to the
+  // INNER LINE BOX, so a box one leading shorter than its own line-height bled a leading's
+  // worth of highlight into the line below. Double-spaced text selected as overlapping
+  // stripes, darker where they met, running past the end of the paragraph.
+  element.style.boxSizing = 'border-box';
+  element.style.height = `${bandHeightPt * ctx.scale}px`;
+  element.style.paddingTop = `${extraLeadingPt * ctx.scale}px`;
+  element.style.lineHeight = `${(bandHeightPt - extraLeadingPt) * ctx.scale}px`;
   // ADDRESSABLE ONLY IF IT OWNS OFFSETS. Selection maps through `data-paragraph-id` +
   // `data-start` and reads an endpoint as `start + textContent.length`, so a span whose
   // painted text is wider than its model range hands back an offset the paragraph does not
@@ -515,9 +536,12 @@ function paintLine(document: Document, line: LineRecord, ctx: PaintContext): HTM
   // unchanged. Smaller runs get their own published height plus the line's extra
   // leading (spacing above single keeps a contiguous band, as Word draws it), capped
   // at the line height so an `exact`-spaced line cannot grow past its box.
-  let tallest = 0;
-  for (const span of line.spans) tallest = Math.max(tallest, span.box.height);
-  const leading = Math.max(0, line.box.height - tallest);
+  //
+  // The leading is READ, not recovered from the box. The marker and the tab leader place
+  // their furniture against this same number, and when each of the three derived it for
+  // itself they drifted: the text moved onto the published baseline while the marker
+  // beside it stayed half a leading higher.
+  const leading = line.leading ?? 0;
   // Consecutive spans of the SAME link share one anchor, so a link that spans several
   // formatting runs on one line is one `<a>` — one focus stop, one hover target, one thing
   // a screen reader announces. A link that WRAPS gets one anchor per line, which is the
@@ -526,7 +550,7 @@ function paintLine(document: Document, line: LineRecord, ctx: PaintContext): HTM
   let anchorLinkId: string | null = null;
   for (const span of line.spans) {
     const band = Math.min(span.box.height + leading, line.box.height);
-    const painted = paintSpan(document, span, ctx, band);
+    const painted = paintSpan(document, span, ctx, band, leading);
     const link = span.link;
     if (!link) {
       anchor = null;
@@ -638,6 +662,8 @@ function paintListMarker(
 ): HTMLElement {
   const marker = fragment.marker!;
   const scale = ctx.scale;
+  // The marker belongs to the paragraph's FIRST line, which is the line it is drawn beside.
+  const leading = fragment.lines[0]?.leading ?? 0;
   const element = positioned(document, 'span', marker.box, scale);
   element.className = 'docx-list-marker';
   element.dataset.docxMarker = '';
@@ -656,11 +682,19 @@ function paintListMarker(
   // `paintLine` gives a line fixes it: kill the anonymous strut with `font-size: 0`,
   // apply the published box height as an explicit line-height, and let the glyph align on
   // `baseline` inside it — which is exactly how every run on that line is aligned.
+  //
+  // INCLUDING THE LEADING. `marker.box.height` is the whole post-spacing line box, so on a
+  // spaced line the glyph would centre in it while the text it numbers is bottom-anchored,
+  // and the number floated half a leading above its own sentence. The run treatment is the
+  // whole treatment: an inner line box one leading taller drops the glyph onto the same
+  // baseline `paintSpan` puts the text on.
   element.style.fontSize = '0';
   element.style.lineHeight = `${marker.box.height * scale}px`;
   const glyph = document.createElement('span');
   glyph.style.display = 'inline-block';
   glyph.style.verticalAlign = 'baseline';
+  glyph.style.height = `${marker.box.height * scale}px`;
+  glyph.style.lineHeight = `${(marker.box.height + leading) * scale}px`;
   applyRunFaceStyle(glyph, marker.style, ctx);
   mountRunText(document, glyph, marker.text, marker.style, scale);
   element.append(glyph);
@@ -732,21 +766,30 @@ function paintTabLeader(
   // to and no arithmetic here can second-guess it: strut killed with `font-size: 0`, the
   // published line height as an explicit line-height, and the glyphs as a baseline-aligned
   // inline-block carrying their own BAND height — the run's own height plus the line's
-  // extra leading, capped at the line box. Leaving the band off let the glyphs inherit the
-  // whole line height, and their inner line box then centred them; putting the face on the
-  // container instead gave the strut different metrics from the dots and floated them.
+  // extra leading, capped at the line box — over an inner line box one leading taller, so
+  // a spaced line's leading is padded off the top of the dots exactly as it is off the text.
+  // Leaving the band off let the glyphs inherit the whole line height, and their inner line
+  // box then centred them; putting the face on the container instead gave the strut
+  // different metrics from the dots and floated them.
+  //
+  // The mirror is literal, so it has to be MAINTAINED as one: both sides read `line.leading`,
+  // neither recomputes it, and both spend it as padding rather than line-height. This
+  // structure and `paintSpan`'s drifted apart once already, when only one of them was taught
+  // that the leading sits above the text.
   layer.style.fontSize = '0';
   layer.style.lineHeight = `${line.box.height * scale}px`;
 
-  let tallest = 0;
-  for (const entry of line.spans) tallest = Math.max(tallest, entry.box.height);
-  const band = Math.min(span.box.height + Math.max(0, line.box.height - tallest), line.box.height);
+  const leading = line.leading ?? 0;
+  const band = Math.min(span.box.height + leading, line.box.height);
 
   const glyphs = document.createElement('span');
   glyphs.style.display = 'inline-block';
   glyphs.style.verticalAlign = 'baseline';
   applyRunFaceStyle(glyphs, span.style, ctx);
-  glyphs.style.lineHeight = `${band * scale}px`;
+  glyphs.style.boxSizing = 'border-box';
+  glyphs.style.height = `${band * scale}px`;
+  glyphs.style.paddingTop = `${leading * scale}px`;
+  glyphs.style.lineHeight = `${(band - leading) * scale}px`;
   if (span.tabLeader === 'heavy') glyphs.style.fontWeight = 'bold';
   // ONE GLYPH PER ITS OWN ADVANCE — the leader is the same character typed over and over,
   // and Word spaces it exactly as typing it would. Layout measured that advance in this

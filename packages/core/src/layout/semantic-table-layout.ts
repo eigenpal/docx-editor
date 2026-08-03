@@ -383,6 +383,7 @@ function placeCellParagraph(
         height: pendingLine.height,
       },
       baseline: pendingLine.baseline,
+      leading: pendingLine.leading,
     });
     y += pendingLine.height;
     nextLineIndex = lineIndex + 1;
