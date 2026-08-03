@@ -859,7 +859,8 @@
     "leftIndent": "左缩进",
     "rightIndent": "右缩进",
     "topMargin": "上边距",
-    "bottomMargin": "下边距"
+    "bottomMargin": "下边距",
+    "hangingIndent": null
   },
   "print": {
     "label": "打印",

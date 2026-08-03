@@ -916,6 +916,7 @@
     "horizontal": "Horizontal ruler",
     "vertical": "Vertical ruler",
     "firstLineIndent": "First line indent",
+    "hangingIndent": "Hanging indent",
     "leftIndent": "Left indent",
     "rightIndent": "Right indent",
     "topMargin": "Top margin",

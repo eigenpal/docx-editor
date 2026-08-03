@@ -1,18 +1,35 @@
 /**
- * HorizontalRuler Component — Google Docs style
+ * The horizontal ruler — page margins plus Word's four indent handles.
  *
- * 3 handles only:
- * - Left side: first-line indent (▼ down at top) + left indent (▲ up at bottom)
- * - Right side: right indent (▼ down at top)
+ * Margins are the grey zones at either end; dragging the grey/white boundary moves them.
  *
- * Margins shown as gray zones on the ruler edges.
- * Drag the boundary between gray/white to adjust page margins.
- * Drag tooltip shows value during any drag.
+ * The indent handles are Word's, not Google's three:
+ *
+ *   ▽  first line   at leftMargin + left + firstLine
+ *   △  hanging      at leftMargin + left      — drags `left`, PINS the first-line marker
+ *   ▭  left box     at leftMargin + left      — drags `left`, TAKES the first line with it
+ *   △  right        at pageWidth - rightMargin - right
+ *
+ * The hanging triangle and the left box are coincident horizontally, as in Word, and are
+ * separated vertically instead — the box sits below the strip. They differ only in what a
+ * drag takes with them.
+ *
+ * All the arithmetic lives in the engine (`ruler-indent.ts`), including the snap grid and
+ * the clamps, so this file only converts pixels to twips and paints.
  */
 
-import React, { useState, useRef, useCallback, useEffect } from 'react';
-import type { CSSProperties } from 'react';
+import React, { useCallback, useRef, useState } from 'react';
+import type { CSSProperties, PointerEvent as ReactPointerEvent, KeyboardEvent } from 'react';
 import type { Editor } from '@docx-editor.dev/core-contract/contracts/editor';
+import {
+  dragIndent,
+  handlePosition,
+  SNAP_TWIPS_CM,
+  SNAP_TWIPS_INCH,
+  type RulerIndent,
+  type RulerIndentHandle,
+  type RulerPageMetrics,
+} from '@docx-editor.dev/core-contract/editor';
 import { twipsToPixels, pixelsToTwips, formatPx } from '../../lib/units';
 import { useTranslation } from '../../i18n';
 
@@ -38,19 +55,29 @@ export interface RulerTabStop {
 export interface HorizontalRulerProps {
   pageSetup?: RulerPageSetup | null;
   zoom?: number;
+  /** Whether the MARGIN handles drag. */
   editable?: boolean;
   onLeftMarginChange?: (marginTwips: number) => void;
   onRightMarginChange?: (marginTwips: number) => void;
   /** Fires when a margin drag is released — the moment to commit what the drag previewed. */
   onMarginDragEnd?: () => void;
-  onFirstLineIndentChange?: (indentTwips: number) => void;
-  showFirstLineIndent?: boolean;
-  firstLineIndent?: number;
-  hangingIndent?: boolean;
-  indentLeft?: number;
-  indentRight?: number;
-  onIndentLeftChange?: (indentTwips: number) => void;
-  onIndentRightChange?: (indentTwips: number) => void;
+  /**
+   * Paint the four indent handles.
+   *
+   * Off by default so a ruler with no paragraph context does not show handles pinned at
+   * zero. When on they are painted whatever `indentEditable` says: Word shows the markers
+   * on a read-only document and simply refuses the drag, and hiding them would remove the
+   * only place a reader can see a paragraph's indents.
+   */
+  showIndentHandles?: boolean;
+  /** The paragraph's indent in twips; `firstLine` is SIGNED, negative for a hanging. */
+  indent?: RulerIndent | null;
+  /** Whether the INDENT handles drag — a different capability from `editable`. */
+  indentEditable?: boolean;
+  /** Fires continuously through an indent drag, for the host to preview. */
+  onIndentChange?: (indent: RulerIndent) => void;
+  /** Fires when an indent drag is released — the moment to commit one undoable step. */
+  onIndentDragEnd?: () => void;
   unit?: 'inch' | 'cm';
   className?: string;
   style?: CSSProperties;
@@ -58,7 +85,7 @@ export interface HorizontalRulerProps {
   onTabMarkRemove?: (positionTwips: number) => void;
 }
 
-type MarkerType = 'leftMargin' | 'rightMargin' | 'firstLineIndent' | 'leftIndent' | 'rightIndent';
+type MarkerType = 'leftMargin' | 'rightMargin' | RulerIndentHandle;
 
 // ============================================================================
 // CONSTANTS
@@ -69,25 +96,37 @@ const DEFAULT_MARGIN_TWIPS = 1440;
 const TWIPS_PER_INCH = 1440;
 const TWIPS_PER_CM = 567;
 
-const RULER_HEIGHT = 22;
+/** The band carrying the grey margin zones, the ticks and the labels. */
+const STRIP_HEIGHT = 20;
+/** The left box hangs BELOW the strip, which is how it and the hanging triangle coexist. */
+const BOX_HEIGHT = 6;
+const RULER_HEIGHT = STRIP_HEIGHT + BOX_HEIGHT + 2;
+
 const RULER_TEXT_COLOR = 'var(--doc-text-muted)';
 const RULER_TICK_COLOR = 'var(--doc-text-subtle)';
 const MARGIN_ZONE_COLOR = 'var(--doc-shadow-subtle)';
 const INDENT_COLOR = 'var(--doc-primary)';
 const INDENT_HOVER_COLOR = 'var(--doc-primary-hover)';
-const INDENT_ACTIVE_COLOR = 'var(--doc-primary-hover)';
+const INDENT_DISABLED_COLOR = 'var(--doc-text-subtle)';
 
 const TRI_SIZE = 5; // triangle half-width in px
+const TRI_HEIGHT = 7;
+
+const FLUSH: RulerIndent = { left: 0, right: 0, firstLine: 0 };
 
 // ============================================================================
 // HELPERS
 // ============================================================================
 
 function formatValueForTooltip(twips: number, unit: 'inch' | 'cm'): string {
-  if (unit === 'inch') {
-    return (twips / TWIPS_PER_INCH).toFixed(2) + '"';
-  }
+  if (unit === 'inch') return (twips / TWIPS_PER_INCH).toFixed(2) + '"';
   return (twips / TWIPS_PER_CM).toFixed(1) + ' cm';
+}
+
+/** The keyboard nudge: one grid step, or one twip with Shift for fine placement. */
+function nudgeStep(unit: 'inch' | 'cm', fine: boolean): number {
+  if (fine) return 1;
+  return Math.round(unit === 'cm' ? SNAP_TWIPS_CM : SNAP_TWIPS_INCH);
 }
 
 // ============================================================================
@@ -101,14 +140,11 @@ export function HorizontalRuler({
   onLeftMarginChange,
   onRightMarginChange,
   onMarginDragEnd,
-  onFirstLineIndentChange,
-  showFirstLineIndent = false,
-  firstLineIndent = 0,
-  hangingIndent = false,
-  indentLeft = 0,
-  indentRight = 0,
-  onIndentLeftChange,
-  onIndentRightChange,
+  showIndentHandles = false,
+  indent,
+  indentEditable = false,
+  onIndentChange,
+  onIndentDragEnd,
   unit = 'inch',
   className = '',
   style,
@@ -122,120 +158,154 @@ export function HorizontalRuler({
   const [dragPositionPx, setDragPositionPx] = useState<number | null>(null);
   const rulerRef = useRef<HTMLDivElement>(null);
 
-  // Page dimensions
   const pageWidthTwips = pageSetup?.pageWidthTwips ?? DEFAULT_PAGE_WIDTH_TWIPS;
   const leftMarginTwips = pageSetup?.marginsTwips.left ?? DEFAULT_MARGIN_TWIPS;
   const rightMarginTwips = pageSetup?.marginsTwips.right ?? DEFAULT_MARGIN_TWIPS;
   // The binding gutter narrows the content area exactly as the left margin does, so the
-  // drag clamps must count it — the engine refuses margins that swallow the page.
+  // margin clamps must count it — the engine refuses margins that swallow the page.
   const gutterTwips = pageSetup?.gutterTwips ?? 0;
-  const contentTwips = pageWidthTwips - leftMarginTwips - rightMarginTwips;
 
-  // Pixel conversions
+  const page: RulerPageMetrics = {
+    pageWidth: pageWidthTwips,
+    leftMargin: leftMarginTwips,
+    rightMargin: rightMarginTwips,
+  };
+  const current = indent ?? FLUSH;
+
   const pageWidthPx = twipsToPixels(pageWidthTwips) * zoom;
   const leftMarginPx = twipsToPixels(leftMarginTwips) * zoom;
   const rightMarginPx = twipsToPixels(rightMarginTwips) * zoom;
-  const indentLeftPx = twipsToPixels(indentLeft) * zoom;
-  const indentRightPx = twipsToPixels(indentRight) * zoom;
 
-  // First line indent: hanging goes left, normal goes right
-  const effectiveFirstLineIndent = hangingIndent ? -firstLineIndent : firstLineIndent;
-  const firstLineIndentPx = twipsToPixels(effectiveFirstLineIndent) * zoom;
-
-  // Handle positions (in px from ruler left edge)
-  const leftIndentPosPx = leftMarginPx + indentLeftPx;
-  const rightIndentPosPx = pageWidthPx - rightMarginPx - indentRightPx;
-  const firstLinePosPx = leftMarginPx + indentLeftPx + firstLineIndentPx;
-
-  const handleDragStart = useCallback(
-    (e: React.MouseEvent, marker: MarkerType) => {
-      if (!editable) return;
-      e.preventDefault();
-      e.stopPropagation();
-      setDragging(marker);
+  /** Twips from the page's left sheet edge, for a client x. */
+  const twipsAt = useCallback(
+    (clientX: number): number | null => {
+      const rect = rulerRef.current?.getBoundingClientRect();
+      if (!rect) return null;
+      return pixelsToTwips((clientX - rect.left) / zoom);
     },
-    [editable]
+    [zoom]
   );
 
-  const handleDrag = useCallback(
-    (e: MouseEvent) => {
-      if (!dragging || !rulerRef.current) return;
+  const handleMove = useCallback(
+    (marker: MarkerType, clientX: number, altKey: boolean) => {
+      const positionTwips = twipsAt(clientX);
+      if (positionTwips === null) return;
+      setDragPositionPx(twipsToPixels(positionTwips) * zoom);
 
-      const rect = rulerRef.current.getBoundingClientRect();
-      const x = e.clientX - rect.left;
-      setDragPositionPx(x);
-      const positionTwips = pixelsToTwips(x / zoom);
-
-      if (dragging === 'leftMargin') {
-        const maxMargin = pageWidthTwips - rightMarginTwips - gutterTwips - 720;
-        const rounded = Math.round(Math.max(0, Math.min(positionTwips, maxMargin)));
-        setDragValue(rounded);
-        onLeftMarginChange?.(rounded);
-      } else if (dragging === 'rightMargin') {
-        const fromRight = pageWidthTwips - positionTwips;
-        const maxMargin = pageWidthTwips - leftMarginTwips - gutterTwips - 720;
-        const rounded = Math.round(Math.max(0, Math.min(fromRight, maxMargin)));
-        setDragValue(rounded);
-        onRightMarginChange?.(rounded);
-      } else if (dragging === 'firstLineIndent') {
-        const base = leftMarginTwips + indentLeft;
-        const indentFromBase = positionTwips - base;
-        const maxIndent = contentTwips - indentLeft - indentRight - 720;
-        const rounded = Math.round(Math.max(-indentLeft, Math.min(indentFromBase, maxIndent)));
-        setDragValue(rounded);
-        onFirstLineIndentChange?.(rounded);
-      } else if (dragging === 'leftIndent') {
-        const indentFromMargin = positionTwips - leftMarginTwips;
-        const maxIndent = contentTwips - indentRight - 720;
-        const rounded = Math.round(Math.max(0, Math.min(indentFromMargin, maxIndent)));
-        setDragValue(rounded);
-        onIndentLeftChange?.(rounded);
-      } else if (dragging === 'rightIndent') {
-        const rightEdge = pageWidthTwips - rightMarginTwips;
-        const indentFromRight = rightEdge - positionTwips;
-        const maxIndent = contentTwips - indentLeft - 720;
-        const rounded = Math.round(Math.max(0, Math.min(indentFromRight, maxIndent)));
-        setDragValue(rounded);
-        onIndentRightChange?.(rounded);
+      if (marker === 'leftMargin' || marker === 'rightMargin') {
+        // Margins keep their own clamps: unlike indents these mirror an engine refusal, so
+        // a drag past them would only produce a rejected command.
+        if (marker === 'leftMargin') {
+          const maxMargin = pageWidthTwips - rightMarginTwips - gutterTwips - 720;
+          const rounded = Math.round(Math.max(0, Math.min(positionTwips, maxMargin)));
+          setDragValue(rounded);
+          onLeftMarginChange?.(rounded);
+        } else {
+          const fromRight = pageWidthTwips - positionTwips;
+          const maxMargin = pageWidthTwips - leftMarginTwips - gutterTwips - 720;
+          const rounded = Math.round(Math.max(0, Math.min(fromRight, maxMargin)));
+          setDragValue(rounded);
+          onRightMarginChange?.(rounded);
+        }
+        return;
       }
+      // Alt bypasses the snap grid, as in Word.
+      const next = dragIndent(marker, positionTwips, current, page, { unit, precise: altKey });
+      setDragValue(
+        marker === 'right' ? next.right : marker === 'firstLine' ? next.firstLine : next.left
+      );
+      onIndentChange?.(next);
     },
     [
-      dragging,
+      twipsAt,
       zoom,
       pageWidthTwips,
       leftMarginTwips,
       rightMarginTwips,
       gutterTwips,
-      contentTwips,
-      indentLeft,
-      indentRight,
       onLeftMarginChange,
       onRightMarginChange,
-      onFirstLineIndentChange,
-      onIndentLeftChange,
-      onIndentRightChange,
+      onIndentChange,
+      current,
+      page,
+      unit,
     ]
   );
 
-  const handleDragEnd = useCallback(() => {
-    if (dragging === 'leftMargin' || dragging === 'rightMargin') onMarginDragEnd?.();
-    setDragging(null);
-    setDragValue(null);
-    setDragPositionPx(null);
-  }, [dragging, onMarginDragEnd]);
+  const endDrag = useCallback(
+    (marker: MarkerType) => {
+      if (marker === 'leftMargin' || marker === 'rightMargin') onMarginDragEnd?.();
+      else onIndentDragEnd?.();
+      setDragging(null);
+      setDragValue(null);
+      setDragPositionPx(null);
+    },
+    [onMarginDragEnd, onIndentDragEnd]
+  );
 
-  useEffect(() => {
-    if (dragging) {
-      document.addEventListener('mousemove', handleDrag);
-      document.addEventListener('mouseup', handleDragEnd);
-      return () => {
-        document.removeEventListener('mousemove', handleDrag);
-        document.removeEventListener('mouseup', handleDragEnd);
-      };
-    }
-  }, [dragging, handleDrag, handleDragEnd]);
+  /** Arrow-key operation, so a focusable slider is an operable one (WCAG 2.1.1). */
+  const nudge = useCallback(
+    (marker: RulerIndentHandle, direction: -1 | 1, fine: boolean) => {
+      const at = handlePosition(marker, current, page);
+      const next = dragIndent(marker, at + direction * nudgeStep(unit, fine), current, page, {
+        unit,
+        // A nudge is already an exact step; snapping it again would swallow small moves.
+        precise: true,
+      });
+      onIndentChange?.(next);
+      // No drag to release, so the commit is immediate — one undo entry per keypress.
+      onIndentDragEnd?.();
+    },
+    [current, page, unit, onIndentChange, onIndentDragEnd]
+  );
 
   const ticks = generateTicks(pageWidthTwips, zoom, unit);
+  const indentDraggable = showIndentHandles && indentEditable && onIndentChange !== undefined;
+
+  const marker = (handle: RulerIndentHandle): number =>
+    twipsToPixels(handlePosition(handle, current, page)) * zoom;
+
+  const handleProps = (
+    handle: RulerIndentHandle,
+    labelKey: Parameters<typeof t>[0],
+    value: number
+  ) => ({
+    positionPx: marker(handle),
+    editable: indentDraggable,
+    isDragging: dragging === handle,
+    isHovered: hoveredMarker === handle,
+    onPointerEnter: () => setHoveredMarker(handle),
+    onPointerLeave: () => setHoveredMarker(null),
+    onPointerDown: (event: ReactPointerEvent<HTMLDivElement>) => {
+      if (!indentDraggable) return;
+      event.preventDefault();
+      event.stopPropagation();
+      // Capture, so a pointer that leaves the ruler — or the window — still reports its
+      // move and its release. The old document-level mouse listeners could latch `dragging`
+      // forever when a mouseup landed outside the page.
+      event.currentTarget.setPointerCapture(event.pointerId);
+      setDragging(handle);
+    },
+    onPointerMove: (event: ReactPointerEvent<HTMLDivElement>) => {
+      if (dragging !== handle) return;
+      handleMove(handle, event.clientX, event.altKey);
+    },
+    onPointerUp: (event: ReactPointerEvent<HTMLDivElement>) => {
+      if (dragging !== handle) return;
+      event.currentTarget.releasePointerCapture(event.pointerId);
+      endDrag(handle);
+    },
+    onKeyDown: (event: KeyboardEvent<HTMLDivElement>) => {
+      if (!indentDraggable) return;
+      if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return;
+      event.preventDefault();
+      nudge(handle, event.key === 'ArrowLeft' ? -1 : 1, event.shiftKey);
+    },
+    label: t(labelKey),
+    valueNow: value,
+    valueText: formatValueForTooltip(value, unit),
+    pageWidthTwips,
+  });
 
   return (
     <div
@@ -248,30 +318,45 @@ export function HorizontalRuler({
         backgroundColor: 'transparent',
         overflow: 'visible',
         userSelect: 'none',
+        touchAction: 'none',
         cursor: dragging ? 'ew-resize' : 'default',
         ...style,
       }}
-      role="slider"
+      // A GROUP, not a slider: it contains sliders. It carried `aria-valuemin`/`max` with
+      // no `aria-valuenow`, which describes nothing.
+      role="group"
       aria-label={t('ruler.horizontal')}
-      aria-valuemin={0}
-      aria-valuemax={pageWidthTwips}
     >
-      {/* Gray margin zones — click & drag anywhere in the gray area to adjust margin */}
+      {/* Grey margin zones — drag anywhere in the grey to move the margin. */}
       <div
         style={{
           position: 'absolute',
           top: 0,
           left: 0,
           width: formatPx(leftMarginPx),
-          height: RULER_HEIGHT,
+          height: STRIP_HEIGHT,
           backgroundColor: MARGIN_ZONE_COLOR,
           borderRight: '1px solid var(--doc-shadow-subtle)',
           cursor: editable ? 'ew-resize' : 'default',
           zIndex: 1,
         }}
-        onMouseDown={
-          editable && onLeftMarginChange ? (e) => handleDragStart(e, 'leftMargin') : undefined
+        onPointerDown={
+          editable && onLeftMarginChange
+            ? (event) => {
+                event.preventDefault();
+                event.currentTarget.setPointerCapture(event.pointerId);
+                setDragging('leftMargin');
+              }
+            : undefined
         }
+        onPointerMove={(event) =>
+          dragging === 'leftMargin' && handleMove('leftMargin', event.clientX, event.altKey)
+        }
+        onPointerUp={(event) => {
+          if (dragging !== 'leftMargin') return;
+          event.currentTarget.releasePointerCapture(event.pointerId);
+          endDrag('leftMargin');
+        }}
       />
       <div
         style={{
@@ -279,70 +364,46 @@ export function HorizontalRuler({
           top: 0,
           right: 0,
           width: formatPx(rightMarginPx),
-          height: RULER_HEIGHT,
+          height: STRIP_HEIGHT,
           backgroundColor: MARGIN_ZONE_COLOR,
           borderLeft: '1px solid var(--doc-shadow-subtle)',
           cursor: editable ? 'ew-resize' : 'default',
           zIndex: 1,
         }}
-        onMouseDown={
-          editable && onRightMarginChange ? (e) => handleDragStart(e, 'rightMargin') : undefined
+        onPointerDown={
+          editable && onRightMarginChange
+            ? (event) => {
+                event.preventDefault();
+                event.currentTarget.setPointerCapture(event.pointerId);
+                setDragging('rightMargin');
+              }
+            : undefined
         }
+        onPointerMove={(event) =>
+          dragging === 'rightMargin' && handleMove('rightMargin', event.clientX, event.altKey)
+        }
+        onPointerUp={(event) => {
+          if (dragging !== 'rightMargin') return;
+          event.currentTarget.releasePointerCapture(event.pointerId);
+          endDrag('rightMargin');
+        }}
       />
 
-      {/* Tick marks */}
-      <div style={{ position: 'absolute', inset: 0, pointerEvents: 'none' }}>
+      {/* Tick marks, anchored to the bottom of the strip. */}
+      <div
+        style={{
+          position: 'absolute',
+          top: 0,
+          left: 0,
+          right: 0,
+          height: STRIP_HEIGHT,
+          pointerEvents: 'none',
+        }}
+      >
         {ticks.map((tick, i) => (
           <RulerTick key={i} tick={tick} />
         ))}
       </div>
-
-      {/* === 3 INDENT HANDLES (Google Docs style) === */}
-
-      {/* First-line indent — ▼ down triangle at top-left */}
-      {showFirstLineIndent && (
-        <IndentTriangle
-          direction="down"
-          positionPx={firstLinePosPx}
-          editable={editable}
-          isDragging={dragging === 'firstLineIndent'}
-          isHovered={hoveredMarker === 'firstLineIndent'}
-          onMouseEnter={() => setHoveredMarker('firstLineIndent')}
-          onMouseLeave={() => setHoveredMarker(null)}
-          onMouseDown={(e) => handleDragStart(e, 'firstLineIndent')}
-          label={t('ruler.firstLineIndent')}
-        />
-      )}
-
-      {/* Left indent — ▲ up triangle at bottom-left */}
-      {editable && onIndentLeftChange && (
-        <IndentTriangle
-          direction="up"
-          positionPx={leftIndentPosPx}
-          editable={editable}
-          isDragging={dragging === 'leftIndent'}
-          isHovered={hoveredMarker === 'leftIndent'}
-          onMouseEnter={() => setHoveredMarker('leftIndent')}
-          onMouseLeave={() => setHoveredMarker(null)}
-          onMouseDown={(e) => handleDragStart(e, 'leftIndent')}
-          label={t('ruler.leftIndent')}
-        />
-      )}
-
-      {/* Right indent — ▼ down triangle at top-right */}
-      {editable && onIndentRightChange && (
-        <IndentTriangle
-          direction="down"
-          positionPx={rightIndentPosPx}
-          editable={editable}
-          isDragging={dragging === 'rightIndent'}
-          isHovered={hoveredMarker === 'rightIndent'}
-          onMouseEnter={() => setHoveredMarker('rightIndent')}
-          onMouseLeave={() => setHoveredMarker(null)}
-          onMouseDown={(e) => handleDragStart(e, 'rightIndent')}
-          label={t('ruler.rightIndent')}
-        />
-      )}
 
       {/* Tab stop markers (display only) */}
       {tabMarks?.map((tab) => (
@@ -353,6 +414,28 @@ export function HorizontalRuler({
           onDoubleClick={() => onTabMarkRemove?.(tab.position)}
         />
       ))}
+
+      {/* === WORD'S FOUR INDENT HANDLES === */}
+      {showIndentHandles && (
+        <>
+          <IndentTriangle
+            direction="down"
+            anchor="top"
+            {...handleProps('firstLine', 'ruler.firstLineIndent', current.firstLine)}
+          />
+          <IndentTriangle
+            direction="up"
+            anchor="strip"
+            {...handleProps('hanging', 'ruler.hangingIndent', current.left)}
+          />
+          <IndentBox {...handleProps('left', 'ruler.leftIndent', current.left)} />
+          <IndentTriangle
+            direction="up"
+            anchor="strip"
+            {...handleProps('right', 'ruler.rightIndent', current.right)}
+          />
+        </>
+      )}
 
       {/* Drag tooltip */}
       {dragging && dragValue !== null && dragPositionPx !== null && (
@@ -390,7 +473,7 @@ function RulerTick({ tick }: { tick: TickData }): React.ReactElement {
           style={{
             position: 'absolute',
             left: formatPx(tick.position),
-            top: 3,
+            top: 2,
             transform: 'translateX(-50%)',
             fontSize: '9px',
             color: RULER_TEXT_COLOR,
@@ -405,85 +488,135 @@ function RulerTick({ tick }: { tick: TickData }): React.ReactElement {
   );
 }
 
-/**
- * Indent triangle handle — Google Docs style.
- * direction="down": ▼ anchored at top (first-line indent, right indent)
- * direction="up":   ▲ anchored at bottom (left indent)
- */
-interface IndentTriangleProps {
-  direction: 'up' | 'down';
+/** Everything the four handles share: placement, interaction and accessible value. */
+interface HandleProps {
   positionPx: number;
   editable: boolean;
   isDragging: boolean;
   isHovered: boolean;
-  onMouseEnter: () => void;
-  onMouseLeave: () => void;
-  onMouseDown: (e: React.MouseEvent) => void;
+  onPointerEnter: () => void;
+  onPointerLeave: () => void;
+  onPointerDown: (event: ReactPointerEvent<HTMLDivElement>) => void;
+  onPointerMove: (event: ReactPointerEvent<HTMLDivElement>) => void;
+  onPointerUp: (event: ReactPointerEvent<HTMLDivElement>) => void;
+  onKeyDown: (event: KeyboardEvent<HTMLDivElement>) => void;
   label: string;
+  valueNow: number;
+  valueText: string;
+  pageWidthTwips: number;
 }
 
-function IndentTriangle({
-  direction,
-  positionPx,
-  editable,
-  isDragging,
-  isHovered,
-  onMouseEnter,
-  onMouseLeave,
-  onMouseDown,
-  label,
-}: IndentTriangleProps): React.ReactElement {
-  const color = isDragging ? INDENT_ACTIVE_COLOR : isHovered ? INDENT_HOVER_COLOR : INDENT_COLOR;
-  const triHeight = Math.round(TRI_SIZE * 1.6);
+function handleColor(props: HandleProps): string {
+  if (!props.editable) return INDENT_DISABLED_COLOR;
+  return props.isDragging || props.isHovered ? INDENT_HOVER_COLOR : INDENT_COLOR;
+}
 
-  const containerStyle: CSSProperties = {
+/** The shared wrapper: hit target, focus, and the slider semantics. */
+function handleShell(
+  props: HandleProps,
+  width: number,
+  vertical: CSSProperties
+): CSSProperties & Record<string, unknown> {
+  return {
     position: 'absolute',
-    left: formatPx(positionPx - TRI_SIZE),
-    width: TRI_SIZE * 2,
-    height: triHeight + 2,
-    cursor: editable ? 'ew-resize' : 'default',
-    zIndex: isDragging ? 10 : 4,
-    ...(direction === 'down' ? { top: 0 } : { bottom: 0 }),
+    left: formatPx(props.positionPx - width / 2),
+    width,
+    cursor: props.editable ? 'ew-resize' : 'default',
+    zIndex: props.isDragging ? 10 : 4,
+    touchAction: 'none',
+    ...vertical,
   };
+}
 
-  const triangleStyle: CSSProperties =
-    direction === 'down'
-      ? {
-          position: 'absolute',
-          top: 1,
-          left: 0,
-          width: 0,
-          height: 0,
-          borderLeft: `${TRI_SIZE}px solid transparent`,
-          borderRight: `${TRI_SIZE}px solid transparent`,
-          borderTop: `${triHeight}px solid ${color}`,
-          transition: 'border-top-color 0.1s',
-        }
-      : {
-          position: 'absolute',
-          bottom: 1,
-          left: 0,
-          width: 0,
-          height: 0,
-          borderLeft: `${TRI_SIZE}px solid transparent`,
-          borderRight: `${TRI_SIZE}px solid transparent`,
-          borderBottom: `${triHeight}px solid ${color}`,
-          transition: 'border-bottom-color 0.1s',
-        };
+function sliderAria(props: HandleProps) {
+  return {
+    role: 'slider' as const,
+    'aria-label': props.label,
+    'aria-orientation': 'horizontal' as const,
+    // A slider with no value describes nothing; these were missing entirely.
+    'aria-valuenow': props.valueNow,
+    'aria-valuemin': -props.pageWidthTwips,
+    'aria-valuemax': props.pageWidthTwips,
+    'aria-valuetext': props.valueText,
+    'aria-disabled': props.editable ? undefined : true,
+    tabIndex: props.editable ? 0 : -1,
+  };
+}
+
+interface IndentTriangleProps extends HandleProps {
+  direction: 'up' | 'down';
+  /** `top` rides the top of the strip; `strip` sits on its bottom edge. */
+  anchor: 'top' | 'strip';
+}
+
+function IndentTriangle({ direction, anchor, ...props }: IndentTriangleProps): React.ReactElement {
+  const color = handleColor(props);
+  const vertical: CSSProperties =
+    anchor === 'top'
+      ? { top: 0, height: TRI_HEIGHT + 1 }
+      : { top: STRIP_HEIGHT - TRI_HEIGHT, height: TRI_HEIGHT };
 
   return (
     <div
       className="docx-ruler-indent"
-      style={containerStyle}
-      onMouseEnter={onMouseEnter}
-      onMouseLeave={onMouseLeave}
-      onMouseDown={onMouseDown}
-      role="slider"
-      aria-label={label}
-      aria-orientation="horizontal"
-      tabIndex={editable ? 0 : -1}
+      style={handleShell(props, TRI_SIZE * 2, vertical)}
+      onPointerEnter={props.onPointerEnter}
+      onPointerLeave={props.onPointerLeave}
+      onPointerDown={props.onPointerDown}
+      onPointerMove={props.onPointerMove}
+      onPointerUp={props.onPointerUp}
+      onKeyDown={props.onKeyDown}
+      {...sliderAria(props)}
     >
-      <div style={triangleStyle} />
+      <div
+        style={{
+          position: 'absolute',
+          left: 0,
+          width: 0,
+          height: 0,
+          borderLeft: `${TRI_SIZE}px solid transparent`,
+          borderRight: `${TRI_SIZE}px solid transparent`,
+          ...(direction === 'down'
+            ? { top: 0, borderTop: `${TRI_HEIGHT}px solid ${color}` }
+            : { bottom: 0, borderBottom: `${TRI_HEIGHT}px solid ${color}` }),
+          transition: 'border-color 0.1s',
+        }}
+      />
+    </div>
+  );
+}
+
+/**
+ * The left-indent box — Word's rectangle below the hanging triangle.
+ *
+ * Below rather than beside, which is what lets it share an x with the hanging triangle
+ * without the two fighting over the same hit target.
+ */
+function IndentBox(props: HandleProps): React.ReactElement {
+  return (
+    <div
+      className="docx-ruler-indent docx-ruler-indent--box"
+      style={handleShell(props, TRI_SIZE * 2, { top: STRIP_HEIGHT + 1, height: BOX_HEIGHT })}
+      onPointerEnter={props.onPointerEnter}
+      onPointerLeave={props.onPointerLeave}
+      onPointerDown={props.onPointerDown}
+      onPointerMove={props.onPointerMove}
+      onPointerUp={props.onPointerUp}
+      onKeyDown={props.onKeyDown}
+      {...sliderAria(props)}
+    >
+      <div
+        style={{
+          position: 'absolute',
+          left: 1,
+          top: 0,
+          width: TRI_SIZE * 2 - 2,
+          height: BOX_HEIGHT,
+          backgroundColor: handleColor(props),
+          borderRadius: 1,
+          transition: 'background-color 0.1s',
+        }}
+      />
     </div>
   );
 }
@@ -538,7 +671,7 @@ function TabMarker({ tabMark, positionPx, onDoubleClick }: TabMarkerProps): Reac
       style={{
         position: 'absolute',
         left: formatPx(positionPx - 5),
-        bottom: 0,
+        top: STRIP_HEIGHT - 12,
         width: 10,
         height: 12,
         display: 'flex',
@@ -576,11 +709,11 @@ function generateTicks(pageWidthTwips: number, zoom: number, unit: 'inch' | 'cm'
       if (twipsPos > pageWidthTwips) break;
       const pxPos = twipsToPixels(twipsPos) * zoom;
       if (i % 8 === 0) {
-        ticks.push({ position: pxPos, height: 10, label: i / 8 > 0 ? String(i / 8) : undefined });
+        ticks.push({ position: pxPos, height: 8, label: i / 8 > 0 ? String(i / 8) : undefined });
       } else if (i % 4 === 0) {
-        ticks.push({ position: pxPos, height: 6 });
+        ticks.push({ position: pxPos, height: 5 });
       } else if (i % 2 === 0) {
-        ticks.push({ position: pxPos, height: 4 });
+        ticks.push({ position: pxPos, height: 3 });
       } else {
         ticks.push({ position: pxPos, height: 2 });
       }
@@ -593,9 +726,9 @@ function generateTicks(pageWidthTwips: number, zoom: number, unit: 'inch' | 'cm'
       if (twipsPos > pageWidthTwips) break;
       const pxPos = twipsToPixels(twipsPos) * zoom;
       if (i % 10 === 0) {
-        ticks.push({ position: pxPos, height: 10, label: i / 10 > 0 ? String(i / 10) : undefined });
+        ticks.push({ position: pxPos, height: 8, label: i / 10 > 0 ? String(i / 10) : undefined });
       } else if (i % 5 === 0) {
-        ticks.push({ position: pxPos, height: 6 });
+        ticks.push({ position: pxPos, height: 5 });
       } else {
         ticks.push({ position: pxPos, height: 3 });
       }

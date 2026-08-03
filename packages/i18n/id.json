@@ -884,7 +884,8 @@
     "leftIndent": "Inden Kiri",
     "rightIndent": "Inden Kanan",
     "topMargin": "Margin Atas",
-    "bottomMargin": "Margin Bawah"
+    "bottomMargin": "Margin Bawah",
+    "hangingIndent": null
   },
   "print": {
     "label": "Cetak",

@@ -39,6 +39,19 @@ export {
   type RulerUnit,
 } from './ruler-ticks.ts';
 export {
+  dragIndent,
+  handlePosition,
+  snapTwips,
+  SNAP_TWIPS_CM,
+  SNAP_TWIPS_INCH,
+  TWIPS_PER_CM,
+  TWIPS_PER_INCH,
+  type RulerDragOptions,
+  type RulerIndent,
+  type RulerIndentHandle,
+  type RulerPageMetrics,
+} from './ruler-indent.ts';
+export {
   chromeProbeForSlot,
   commandForSlot,
   commandForSlotValue,

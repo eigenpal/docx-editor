@@ -859,7 +859,8 @@
     "leftIndent": "Recuo esquerdo",
     "rightIndent": "Recuo direito",
     "topMargin": "Margem superior",
-    "bottomMargin": "Margem inferior"
+    "bottomMargin": "Margem inferior",
+    "hangingIndent": null
   },
   "print": {
     "label": "Imprimir",

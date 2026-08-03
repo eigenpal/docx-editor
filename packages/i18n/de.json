@@ -859,7 +859,8 @@
     "leftIndent": "Linker Einzug",
     "rightIndent": "Rechter Einzug",
     "topMargin": "Oberer Seitenrand",
-    "bottomMargin": "Unterer Seitenrand"
+    "bottomMargin": "Unterer Seitenrand",
+    "hangingIndent": null
   },
   "print": {
     "label": "Drucken",

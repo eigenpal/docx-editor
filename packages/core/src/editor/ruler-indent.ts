@@ -8,6 +8,10 @@
 // The vocabulary is the contract's: twips, and ONE signed first-line offset where negative
 // is a hanging indent.
 
+// The unit comes from the tick module rather than being redeclared: the snap grid and the
+// tick cadence are the same grid, and two definitions could drift apart.
+import type { RulerUnit } from './ruler-ticks.ts';
+
 export const TWIPS_PER_INCH = 1440;
 export const TWIPS_PER_CM = 567;
 
@@ -16,7 +20,7 @@ export const SNAP_TWIPS_INCH = TWIPS_PER_INCH / 8;
 /** The centimetre ruler's grid is the millimetre. */
 export const SNAP_TWIPS_CM = TWIPS_PER_CM / 10;
 
-export type RulerUnit = 'inch' | 'cm';
+export type { RulerUnit };
 
 /**
  * The four handles Word's ruler carries.

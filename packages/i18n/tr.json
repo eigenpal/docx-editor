@@ -862,7 +862,8 @@
     "leftIndent": "Sol girinti",
     "rightIndent": "Sağ girinti",
     "topMargin": "Üst kenar boşluğu",
-    "bottomMargin": "Alt kenar boşluğu"
+    "bottomMargin": "Alt kenar boşluğu",
+    "hangingIndent": null
   },
   "print": {
     "label": "Yazdır",
