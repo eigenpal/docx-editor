@@ -267,17 +267,26 @@ describe('each run is its own box, so a mixed-size line highlights stepped', () 
     expect(small!.style.height).toBe('42px'); // 14 own + 28 leading
     expect(big!.style.height).toBe('56px'); // 28 own + 28 leading = the line height
 
-    // THE INVARIANT, not the four numbers. Asserting the constants only re-states what the
-    // source computes: `band + 2 × leading` would satisfy them just as well. What has to
-    // hold is that EVERY run overshoots its band by the SAME leading — that is what puts
-    // them all on one baseline, and what puts that baseline where layout published it.
-    const overshoot = (run: HTMLElement): number =>
-      parseFloat(run.style.lineHeight) - parseFloat(run.style.height);
-    expect(overshoot(small!)).toBe(28);
-    expect(overshoot(big!)).toBe(28);
-    // And the leading is the line's own, not something re-derived per run: the tallest run
-    // fills the line box exactly, so its overshoot IS line height − its own glyph height.
-    expect(overshoot(big!)).toBe(parseFloat(line.style.height) - 28);
+    // THE INVARIANTS, not the numbers. Asserting constants only re-states what the source
+    // computes. Three things have to hold, and each one is a bug this went through:
+    //
+    // 1. Every run is padded by the SAME leading — that is what keeps them on one baseline.
+    // 2. Padding plus inner line box equals the band exactly. Any slack here is highlight
+    //    the browser paints outside the run's own box, which bled a leading of selection
+    //    into the line below when the leading was spent on `line-height` instead.
+    // 3. The leading is the LINE's, not something re-derived per run.
+    const padding = (run: HTMLElement): number => parseFloat(run.style.paddingTop);
+    const inner = (run: HTMLElement): number => parseFloat(run.style.lineHeight);
+    const band = (run: HTMLElement): number => parseFloat(run.style.height);
+
+    expect(padding(small!)).toBe(28);
+    expect(padding(big!)).toBe(28);
+    for (const run of [small!, big!]) {
+      expect(run.style.boxSizing).toBe('border-box');
+      expect(padding(run) + inner(run)).toBe(band(run));
+    }
+    // The tallest run fills the line box, so its padding IS line height − its glyph height.
+    expect(padding(big!)).toBe(parseFloat(line.style.height) - 28);
   });
 
   test('the list marker sits on the same baseline as the text beside it', () => {
@@ -298,11 +307,15 @@ describe('each run is its own box, so a mixed-size line highlights stepped', () 
     paintSemanticLayout(container, layout, { scale: 1 });
     const run = container.querySelector<HTMLElement>('.layout-run-text')!;
     const markerGlyph = container.querySelector<HTMLElement>('[data-docx-marker] span')!;
-    const overshoot = (el: HTMLElement): number =>
-      parseFloat(el.style.lineHeight) - parseFloat(el.style.height);
     // 14 natural, doubled to 28, so 14 of leading — all of it above the text.
-    expect(overshoot(run)).toBe(14);
-    expect(overshoot(markerGlyph)).toBe(overshoot(run));
+    const leading = parseFloat(run.style.paddingTop);
+    expect(leading).toBe(14);
+    // The marker reserves the SAME leading above its glyph. It gets there by a different
+    // route (its box is the whole line, not a run band), so what is pinned is the one
+    // number both sinks read — not the CSS either of them writes.
+    expect(parseFloat(markerGlyph.style.lineHeight) - parseFloat(markerGlyph.style.height)).toBe(
+      leading
+    );
   });
 
   test('a tab span gets its own band too, not the full line height', () => {
