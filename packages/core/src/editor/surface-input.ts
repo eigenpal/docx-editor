@@ -154,12 +154,17 @@ export function createKeyDownHandler(
       return;
     }
     // Word's Ctrl+= / Ctrl+Shift+= — the shortcuts the two controls' own tooltips
-    // advertise, so leaving them unbound would make the label a lie. `event.key` is the
-    // PRODUCED character, so shift over `=` reports `+` on a US layout and `=` on others;
-    // accepting both spellings keeps the pair working either way.
-    if (accel && (event.key === '=' || event.key === '+')) {
-      const mark = event.shiftKey || event.key === '+' ? 'superscript' : 'subscript';
-      surface.toggleRunProperty('vertAlign', { val: mark });
+    // advertise, so leaving them unbound would make the label a lie.
+    //
+    // WHICH of the two is decided by Shift alone, never by the character: `event.key` is
+    // the PRODUCED character, so shifting `=` reports `+` on a US layout, and reading the
+    // character to choose sent Ctrl+`+` to superscript on the layouts where `+` is
+    // unshifted (German) — the opposite of what was pressed. `event.code` is matched as
+    // well so the US pair keeps working whatever the key happens to produce.
+    if (accel && (event.key === '=' || event.key === '+' || event.code === 'Equal')) {
+      surface.toggleRunProperty('vertAlign', {
+        val: event.shiftKey ? 'superscript' : 'subscript',
+      });
       event.preventDefault();
       return;
     }

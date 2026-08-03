@@ -536,6 +536,12 @@ export interface EditorCommands extends EditorCommandShape<DocEdits> {
    *
    * Formatting inherited from a style is not touched: this removes what the document states
    * DIRECTLY, so the text falls back to what its style gives it rather than to nothing.
+   *
+   * A CHARACTER STYLE survives, and so do paragraph borders and hidden text. Those live
+   * outside the property vocabulary an edit can name — a run's `w:rStyle`, `w:vanish` and
+   * `w:bdr`, a paragraph's `w:pBdr` and `w:outlineLvl` — and are preserved rather than
+   * dropped, which is where this stops short of Word: clearing a run that carries a
+   * character style leaves that style's face on it.
    */
   clearFormatting: Record<never, never>;
   setAlignment: { align: 'left' | 'center' | 'right' | 'justify' };

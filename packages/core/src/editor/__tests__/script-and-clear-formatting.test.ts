@@ -191,8 +191,9 @@ describe('superscript and subscript', () => {
 
   test('Word’s Ctrl+= / Ctrl+Shift+= reach the same toggle the buttons do', () => {
     // Both controls' tooltips name these shortcuts, so an unbound key would make the label
-    // a lie. `event.key` is the PRODUCED character: shift over `=` is `+` on a US layout
-    // and `=` elsewhere, and both spellings must mean superscript.
+    // a lie. Shift alone decides which one: `event.key` is the PRODUCED character, so a US
+    // layout reports `+` for Ctrl+Shift+=, and choosing by the character sent Ctrl+`+` to
+    // superscript on the layouts where `+` is unshifted.
     const press = (init: Partial<KeyboardEvent> & { key: string }) =>
       ({
         preventDefault: () => {},
@@ -215,6 +216,10 @@ describe('superscript and subscript', () => {
 
       onKeyDown(press({ key: '+', ctrlKey: true, shiftKey: true }));
       expect(editor.snapshot().formatting?.superscript).toBe(false);
+
+      // A layout where `+` is UNSHIFTED (German) must reach subscript, not superscript.
+      onKeyDown(press({ key: '+', ctrlKey: true }));
+      expect(editor.snapshot().formatting?.subscript).toBe(true);
     });
   });
 
@@ -321,6 +326,51 @@ describe('clear formatting', () => {
         expect(authoredParagraphProperties(editor)).toEqual([['jc=center'], []]);
       }
     );
+  });
+
+  test('on already-clean text it does nothing, and costs no undo step', () => {
+    // An op that names nothing still counts as APPLIED, so emitting three per paragraph
+    // unconditionally published a revision and pushed an undo entry for a press that left
+    // the tree identical — `changed: true` over a document that did not move, and an undo
+    // press that undid nothing.
+    withEditor(p(textRun('plain')), (editor) => {
+      select(editor, [0, 0], [0, 5]);
+      const revision = editor.surface!.session.revision();
+      expect(editor.exec({ type: 'clearFormatting' })).toMatchObject({ changed: false });
+      expect(editor.surface!.session.revision()).toBe(revision);
+      expect(editor.surface!.session.canUndo()).toBe(false);
+    });
+  });
+
+  test('a cleared paragraph is left as one that never had properties', () => {
+    // The mark op must run BEFORE the paragraph op: `setParagraphProperties` cannot name
+    // `w:rPr`, so it preserves the mark, and the applier drops a `w:pPr` only once it has no
+    // children left. The other order left an empty `<w:pPr/>` behind.
+    withEditor(
+      p(textRun('text', '<w:rPr><w:b/></w:rPr>'), '<w:pPr><w:jc w:val="center"/></w:pPr>'),
+      (editor) => {
+        select(editor, [0, 0], [0, 4]);
+        editor.exec({ type: 'clearFormatting' });
+        const paragraph = paragraphNodes(editor)[0]!;
+        if (paragraph.kind === 'textValue') throw new Error('unexpected');
+        expect(paragraph.children.some((child) => child.kind === 'paragraphProperties')).toBe(
+          false
+        );
+      }
+    );
+  });
+
+  test('a mark name off Object.prototype is refused rather than half-accepted', () => {
+    // The marks table is keyed by CALLER input. An object literal answers `constructor` and
+    // `toString` off the prototype chain, so those passed the support gate, reached the
+    // store, and were refused there — `can` said yes and the press did nothing.
+    withEditor(p(textRun('plain')), (editor) => {
+      select(editor, [0, 0], [0, 5]);
+      for (const mark of ['toString', 'constructor', '__proto__']) {
+        const answer = editor.can({ type: 'toggleMark', mark });
+        expect([mark, answer.ok]).toEqual([mark, false]);
+      }
+    });
   });
 
   test('a character style survives — an op cannot name w:rStyle', () => {

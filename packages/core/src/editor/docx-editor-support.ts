@@ -86,17 +86,23 @@ export function emptyInteractionFrame(): InteractionFrame {
  * over one `localName` is what makes them mutually exclusive for free — a property write
  * replaces the entry with the same name — and it is why the toggle has to compare the VALUE
  * in force rather than the mere presence of the element.
+ *
+ * A Map, not an object literal, because the key is CALLER input: an object answers
+ * `constructor` and `toString` off the prototype chain, so `toggleMark` with either name
+ * passed the support gate and reached the store, which then refused the write — `can` said
+ * yes and the press did nothing. `HIGHLIGHT_NAMES` is a Set for the same reason.
  */
-export const MARKS: Readonly<
-  Record<string, { localName: string; attributes?: Record<string, string> }>
-> = {
-  bold: { localName: 'b' },
-  italic: { localName: 'i' },
-  underline: { localName: 'u', attributes: { val: 'single' } },
-  strike: { localName: 'strike' },
-  superscript: { localName: 'vertAlign', attributes: { val: 'superscript' } },
-  subscript: { localName: 'vertAlign', attributes: { val: 'subscript' } },
-};
+export const MARKS: ReadonlyMap<
+  string,
+  { localName: string; attributes?: Record<string, string> }
+> = new Map([
+  ['bold', { localName: 'b' }],
+  ['italic', { localName: 'i' }],
+  ['underline', { localName: 'u', attributes: { val: 'single' } }],
+  ['strike', { localName: 'strike' }],
+  ['superscript', { localName: 'vertAlign', attributes: { val: 'superscript' } }],
+  ['subscript', { localName: 'vertAlign', attributes: { val: 'subscript' } }],
+]);
 
 export type CommandSupport =
   | { readonly supported: true; readonly mutating: boolean }
@@ -277,7 +283,7 @@ export function normalizeSource(source: DocumentSource): Uint8Array | null {
 export function classifyCommand(command: EditorCommand): CommandSupport {
   switch (command.type) {
     case 'toggleMark':
-      return MARKS[command.mark]
+      return MARKS.has(command.mark)
         ? { supported: true, mutating: true }
         : { supported: false, reason: `mark '${command.mark}' is not supported` };
     case 'setMarkAttr': {

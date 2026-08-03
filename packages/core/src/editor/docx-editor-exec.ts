@@ -24,7 +24,7 @@ export function execEditorCommand(
 ): ExecResult | null {
   switch (command.type) {
     case 'toggleMark': {
-      const mark = MARKS[command.mark]!;
+      const mark = MARKS.get(command.mark)!;
       mounted.toggleRunProperty(mark.localName, mark.attributes);
       break;
     }

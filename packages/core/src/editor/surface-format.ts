@@ -16,6 +16,7 @@ import {
   directParagraphMarkProperties,
   directParagraphProperties,
   formattingAt,
+  hasAuthoredRunProperties,
   isAuthorableRunProperty,
   isRunPropertyActive,
   mergedProperties,
@@ -152,16 +153,28 @@ export function createSurfaceFormat(deps: SurfaceFormatDeps): FormatMethods {
           properties: edit.properties,
         });
       }
-      // The mark follows a paragraph the range covers WHOLE and no other: that is what a
-      // list marker inherits its face from, and formatting part of a paragraph must not
-      // restyle its pilcrow. An empty paragraph between the endpoints is covered whole by
-      // definition and has no run to carry the change, so its mark is the only place the
-      // format can live — without it, typing into that line came out unformatted.
-      const covered =
-        index > firstIndex && index < lastIndex
-          ? true
-          : start === 0 && end === text.length && text.length > 0;
-      if (covered && (edits.length > 0 || text.length === 0)) {
+      // The mark follows a paragraph whose PILCROW the selection contains, which is what a
+      // list marker inherits its face from.
+      //
+      // In Word the pilcrow is a character in the stream, so a selection cannot reach the
+      // next paragraph without passing through this one's: every paragraph before the last
+      // has its mark inside the range no matter where the range started. Requiring whole
+      // coverage instead missed the FIRST paragraph of a drag that began mid-text — bolding
+      // from the middle of a bulleted item through the next one left that item's bullet
+      // unbolded while the one below it grew.
+      //
+      // The last paragraph is the one whose pilcrow is genuinely outside the range, so it
+      // keeps the conservative whole-text rule `paragraphMarkOps` applies to a
+      // single-paragraph edit: formatting part of a paragraph must not restyle its mark.
+      //
+      // A paragraph before the last takes its mark whether or not any TEXT of it was
+      // covered, and that is not a detail: dragging from the very end of one paragraph to
+      // the very start of the next selects nothing but the pilcrow between them, and
+      // requiring an edit first left that press with no ops at all — `can` said yes, `exec`
+      // reported `changed: false`, and the document did not move. Same reasoning for an
+      // empty paragraph inside the range, which has no run to carry the change at all.
+      const covered = index < lastIndex || (start === 0 && end === text.length && text.length > 0);
+      if (covered) {
         ops.push({
           op: 'setParagraphMarkProperties',
           paragraphId,
@@ -189,7 +202,10 @@ export function createSurfaceFormat(deps: SurfaceFormatDeps): FormatMethods {
     const ops: TreeDocOp[] = [];
     for (const paragraphId of paragraphsInCells(currentLayout.value, cells)) {
       const text = textOf(paragraphId);
-      if (text.length === 0) continue;
+      // An EMPTY paragraph in a selected cell is still selected: it has no run to carry the
+      // change, so its mark below is the only place the format can live, and skipping it
+      // outright left typing into that line unformatted. Same rule the range walk applies to
+      // an empty paragraph inside its endpoints.
       for (const edit of runPropertyEdits(part, paragraphId, 0, text.length, incoming)) {
         ops.push({
           op: 'setRunProperties' as const,
@@ -345,6 +361,14 @@ export function createSurfaceFormat(deps: SurfaceFormatDeps): FormatMethods {
       // what it can name and keep what it cannot: `w:rStyle`, `w:lang`, `w:sectPr`, `w:pBdr`
       // and the rest survive, because an op that cannot say a thing cannot mean to delete it
       // (see `mergedPropertyChildren`).
+      //
+      // The armed typing format goes FIRST, and unconditionally: nothing is selected at a
+      // caret, so the existing text keeps what it has and the pending entry is the only
+      // formatting the press can actually clear there. Retiring it after the early return
+      // below meant an eraser pressed on a paragraph the layout had not published yet left
+      // the armed format standing, and the next characters typed came out in exactly the
+      // formatting the user had just asked to be rid of.
+      deps.setPendingFormats(null);
       const layout = currentLayout.value;
       const order = documentOrder(layout);
       const cells = deps.selectedCells?.();
@@ -355,6 +379,7 @@ export function createSurfaceFormat(deps: SurfaceFormatDeps): FormatMethods {
       if (paragraphIds.length === 0) return;
       const { from, to } = orderedRange();
       const rectangular = cells !== undefined && cells.length > 0;
+      const part = session.part();
       const ops: TreeDocOp[] = [];
       for (const paragraphId of paragraphIds) {
         const text = textOf(paragraphId);
@@ -364,16 +389,28 @@ export function createSurfaceFormat(deps: SurfaceFormatDeps): FormatMethods {
         // ONE op for the whole range rather than one per run: the other writes split per run
         // so each keeps its own bag, and here there is no bag to keep. Clearing is the one
         // change that legitimately homogenises the range.
-        if (start < end) {
+        //
+        // Each op is emitted only where there is something to drop. An op that names nothing
+        // still counts as APPLIED — the store publishes a revision and pushes an undo entry
+        // for it even though the tree comes back identical — so an unconditional three ops
+        // per paragraph made the eraser report `changed: true` over clean text and cost an
+        // undo press that undid nothing.
+        if (start < end && hasAuthoredRunProperties(part, paragraphId, start, end)) {
           ops.push({ op: 'setRunProperties', paragraphId, start, end, properties: [] });
         }
-        ops.push({ op: 'setParagraphProperties', paragraphId, properties: [] });
-        ops.push({ op: 'setParagraphMarkProperties', paragraphId, properties: [] });
+        // The MARK first: `setParagraphProperties` cannot name `w:rPr`, so it preserves the
+        // mark and leaves the container non-empty, and the applier drops a `w:pPr` only once
+        // it has no children left. Clearing the paragraph first therefore left an empty
+        // `<w:pPr/>` behind, which is not what a paragraph that never had properties
+        // serialises as.
+        if (directParagraphMarkProperties(part, paragraphId).length > 0) {
+          ops.push({ op: 'setParagraphMarkProperties', paragraphId, properties: [] });
+        }
+        if (directParagraphProperties(part, paragraphId).length > 0) {
+          ops.push({ op: 'setParagraphProperties', paragraphId, properties: [] });
+        }
       }
-      // Nothing is selected at a caret, so the existing text keeps what it has — but the
-      // typing format must go, or the next characters would come out in the formatting the
-      // user just asked to be rid of.
-      deps.setPendingFormats(null);
+      if (ops.length === 0) return;
       commit(() => session.applyTreeOps(ops, selectionMark()), undefined, {
         keepCellSelection: rectangular,
       });

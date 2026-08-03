@@ -163,13 +163,24 @@ describe('run formatting across a multi-paragraph selection', () => {
     });
   });
 
-  test('the paragraph mark follows only the paragraphs covered whole', () => {
-    // The mark is what a list marker inherits its face from, so a whole-paragraph change
-    // writes it and a partial one must not.
+  test('the paragraph mark follows every pilcrow the selection contains', () => {
+    // The pilcrow is a character in the stream: a selection reaching paragraph three has
+    // passed through the marks of one and two, whatever offset it started at. Only the
+    // LAST paragraph's mark is outside the range, and it keeps the whole-text rule a
+    // single-paragraph edit uses. The mark is what a list marker inherits its face from,
+    // so getting this wrong left the first bullet of a drag at the old size.
     withEditor(p(textRun('alpha')) + p(textRun('beta')) + p(textRun('gamma')), (editor) => {
       select(editor, [0, 2], [2, 3]);
       editor.exec({ type: 'setMarkAttr', mark: 'fontSize', attr: 'val', value: 52 });
-      expect(authoredMarkProperties(editor)).toEqual([[], ['sz=52'], []]);
+      expect(authoredMarkProperties(editor)).toEqual([['sz=52'], ['sz=52'], []]);
+    });
+  });
+
+  test('a selection ending at the end of the last paragraph takes its mark too', () => {
+    withEditor(p(textRun('alpha')) + p(textRun('beta')), (editor) => {
+      select(editor, [0, 2], [1, 4]);
+      editor.exec({ type: 'setMarkAttr', mark: 'fontSize', attr: 'val', value: 52 });
+      expect(authoredMarkProperties(editor)).toEqual([['sz=52'], ['sz=52']]);
     });
   });
 
@@ -204,6 +215,33 @@ describe('run formatting across a multi-paragraph selection', () => {
       editor.exec({ type: 'toggleMark', mark: 'bold' });
       expect(editor.snapshot().formatting?.bold).toBe(false);
       expect(authoredRunProperties(editor)).toEqual([[['b=0']], [['b=0']]]);
+    });
+  });
+
+  test('an empty FIRST paragraph gets the mark, like an empty one in the middle', () => {
+    // Its pilcrow is inside the range whatever the range started at, and it has no run to
+    // carry the change, so the mark is the only place the format can live.
+    withEditor(p('') + p(textRun('beta')), (editor) => {
+      select(editor, [0, 0], [1, 4]);
+      editor.exec({ type: 'toggleMark', mark: 'bold' });
+      expect(authoredMarkProperties(editor)).toEqual([['b'], ['b']]);
+    });
+  });
+
+  test('a drag across nothing but a paragraph break still formats that pilcrow', () => {
+    // From the end of one paragraph to the start of the next: no TEXT is selected, but the
+    // mark between them is. `can` said yes for this press, so `exec` reporting success over
+    // an unmoved document would be the exact lie the toolbar contract forbids.
+    withEditor(p(textRun('alpha')) + p(textRun('beta')), (editor) => {
+      select(editor, [0, 5], [1, 0]);
+      expect(editor.can({ type: 'toggleMark', mark: 'bold' }).ok).toBe(true);
+      expect(editor.exec({ type: 'toggleMark', mark: 'bold' })).toMatchObject({
+        ok: true,
+        changed: true,
+      });
+      expect(authoredMarkProperties(editor)).toEqual([['b'], []]);
+      // No text was selected, so no run moved.
+      expect(authoredRunProperties(editor)).toEqual([[[]], [[]]]);
     });
   });
 

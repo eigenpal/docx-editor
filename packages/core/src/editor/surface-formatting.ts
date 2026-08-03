@@ -290,6 +290,51 @@ export function runPropertyEdits(
 }
 
 /**
+ * Whether any run the range covers authors a property an op could clear.
+ *
+ * The eraser's "is there anything here to erase" question. Asked because an op that names
+ * nothing still COUNTS as applied: the store publishes a revision and pushes an undo entry
+ * for it even though the tree comes back identical, so pressing Clear Formatting on already
+ * clean text reported `changed: true` and cost an undo press that undid nothing.
+ *
+ * Walks exactly where `runPropertyEdits` walks, so the two can never disagree about which
+ * runs a range covers.
+ */
+export function hasAuthoredRunProperties(
+  part: OoxmlPart,
+  paragraphId: string,
+  start: number,
+  end: number
+): boolean {
+  const paragraph = findNode(part, paragraphId);
+  if (!paragraph || paragraph.kind === 'textValue') return false;
+  let offset = 0;
+  let found = false;
+  const visit = (child: OoxmlNode): void => {
+    if (found) return;
+    if (child.kind === 'hyperlink') {
+      for (const inner of child.children) visit(inner);
+      return;
+    }
+    if (child.kind !== 'run') return;
+    const runStart = offset;
+    offset += addressableLength(child);
+    if (offset === runStart) return;
+    if (Math.max(runStart, start) >= Math.min(offset, end)) return;
+    if (
+      authoredProperties(
+        propertyContainer(child, 'runProperties', 'rPr'),
+        AUTHORABLE_RUN_PROPERTIES
+      ).length > 0
+    ) {
+      found = true;
+    }
+  };
+  for (const child of paragraph.children) visit(child);
+  return found;
+}
+
+/**
  * What a run at the CARET itself authors — the base pending caret formatting merges over.
  *
  * Word's rule for a collapsed caret: the character typed next takes the formatting of the
