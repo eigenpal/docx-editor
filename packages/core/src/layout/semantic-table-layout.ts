@@ -531,6 +531,7 @@ function placeCellParagraph(
       },
       props,
       spacing: { before: appliedBefore, after: appliedAfter },
+      indent,
       ...(bottomBorderRecord ? { bottomBorder: bottomBorderRecord } : {}),
       ...(strokes.length > 0 ? { borders: strokes } : {}),
       ...(shading === undefined ? {} : { shading }),

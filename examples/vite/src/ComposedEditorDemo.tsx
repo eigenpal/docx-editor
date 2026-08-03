@@ -552,8 +552,10 @@ function EditorChrome({
  * so this row carries no pane-aware class of its own.
  */
 function RulerRow() {
+  // NOT `aria-hidden`: the ruler carries four operable indent sliders, and hiding the row
+  // from assistive tech would hide them along with it.
   return (
-    <div className="demo-ruler-row" aria-hidden="true">
+    <div className="demo-ruler-row">
       <DocxEditor.HorizontalRuler />
     </div>
   );

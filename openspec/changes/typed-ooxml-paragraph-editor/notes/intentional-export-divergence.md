@@ -61,6 +61,14 @@ exemptions go when it lands.
   `setPageSetup` command; Vue twin is a composable, lands with the composable layer.
 - `PageSetupUpdate` — the fields `usePageSetup().apply` accepts.
 - `UsePageSetupReturn` — the hook's return type.
+- `useParagraphIndent` — paragraph-indent read/write hook over
+  `snapshot().formatting.indent` and the `setIndent` command; the indent twin of
+  `usePageSetup`, and what the horizontal ruler's four handles are built from. Vue twin
+  is a composable, lands with the composable layer. The read derivation and the ruler
+  drag geometry both live in core (`ruler-indent.ts`), so the Vue twin is wiring rather
+  than reimplementation.
+- `IndentUpdate` — the fields `useParagraphIndent().apply` accepts.
+- `UseParagraphIndentReturn` — the hook's return type.
 - `DocxEditorPageSetupDialog` — context-fed Page Setup dialog part
   (`DocxEditor.PageSetupDialog`) over `usePageSetup`; Vue twin lands with the
   composable layer.

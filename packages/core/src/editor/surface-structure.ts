@@ -63,6 +63,7 @@ type StructureMethods = Pick<
   | 'isListActive'
   | 'toggleList'
   | 'adjustIndent'
+  | 'setIndent'
   | 'canAdjustIndent'
   | 'exitListOnEmptyItem'
   | 'sectionProperties'
@@ -90,6 +91,61 @@ function leftIndentAttributes(
   const attributes: Record<string, string> = { ...(authored ?? {}) };
   if (authored?.start !== undefined) attributes.start = value;
   if (authored?.start === undefined || authored.left !== undefined) attributes.left = value;
+  return attributes;
+}
+
+/**
+ * The same rule as {@link leftIndentAttributes}, for either side, plus removal.
+ *
+ * `null` drops BOTH spellings, which is how "clear this back to the style" differs from
+ * "set it to zero" — a zero blocks the cascade, a missing attribute lets the style through.
+ */
+function writeIndentSide(
+  authored: Readonly<Record<string, string>>,
+  physical: 'left' | 'right',
+  relative: 'start' | 'end',
+  value: number | null
+): Record<string, string> {
+  const attributes: Record<string, string> = { ...authored };
+  if (value === null) {
+    delete attributes[physical];
+    delete attributes[relative];
+    return attributes;
+  }
+  const text = String(value);
+  // Tested against the AUTHORED set, not the copy being built, so the second branch cannot
+  // observe the write the first one just made.
+  const hadRelative = authored[relative] !== undefined;
+  if (hadRelative) attributes[relative] = text;
+  if (!hadRelative || authored[physical] !== undefined) attributes[physical] = text;
+  return attributes;
+}
+
+/**
+ * One SIGNED first-line offset written as the two attributes OOXML spells it with.
+ *
+ * BOTH are always written, the unused one as an explicit `"0"` — never dropped. `w:ind`
+ * cascades attribute by attribute, so dropping the direct `w:hanging` on a paragraph whose
+ * STYLE sets one leaves the style's value in the cascade; hanging then WINS (§17.3.1.12)
+ * and the edit silently does nothing. `adjustIndent` writes its zero for the same reason.
+ */
+function writeFirstLine(
+  authored: Readonly<Record<string, string>>,
+  value: number | null
+): Record<string, string> {
+  const attributes: Record<string, string> = { ...authored };
+  if (value === null) {
+    delete attributes.firstLine;
+    delete attributes.hanging;
+    return attributes;
+  }
+  if (value >= 0) {
+    attributes.firstLine = String(value);
+    attributes.hanging = '0';
+  } else {
+    attributes.hanging = String(-value);
+    attributes.firstLine = '0';
+  }
   return attributes;
 }
 
@@ -409,6 +465,50 @@ export function createSurfaceStructure(deps: SurfaceStructureDeps): StructureMet
             // non-zero left from its style, and removing the attribute would let that
             // come back instead of taking the outdent.
             attributes: leftIndentAttributes(existing?.attributes, String(next)),
+          }),
+        });
+      }
+      if (ops.length === 0) return false;
+      let committed = false;
+      commit(() => {
+        const result = session.applyTreeOps(ops, selectionMark());
+        committed = result.committed;
+        return result;
+      });
+      return committed;
+    },
+
+    setIndent(update) {
+      if (update.left === undefined && update.right === undefined && update.firstLine === undefined)
+        return false;
+      const { from, to } = orderedRange();
+      const order = documentOrder(currentLayout.value);
+      const firstIndex = order.indexOf(from.paragraphId);
+      const lastIndex = order.indexOf(to.paragraphId);
+      if (firstIndex === -1 || lastIndex === -1) return false;
+      const ops: TreeDocOp[] = [];
+      for (const paragraphId of order.slice(firstIndex, lastIndex + 1)) {
+        // Merged over the paragraph's OWN `w:ind`, never the cascade the layout publishes:
+        // an op whose base is the cascade is refused, and `w:ind` carries four independent
+        // settings in one element, so naming one field must leave the others as authored.
+        const direct = directParagraphProperties(session.part(), paragraphId);
+        const authored = direct.find((property) => property.localName === 'ind')?.attributes ?? {};
+        let attributes: Record<string, string> = { ...authored };
+        if (update.left !== undefined) {
+          attributes = writeIndentSide(attributes, 'left', 'start', update.left);
+        }
+        if (update.right !== undefined) {
+          attributes = writeIndentSide(attributes, 'right', 'end', update.right);
+        }
+        if (update.firstLine !== undefined) {
+          attributes = writeFirstLine(attributes, update.firstLine);
+        }
+        ops.push({
+          op: 'setParagraphProperties',
+          paragraphId,
+          properties: mergedProperties(direct, {
+            localName: 'ind',
+            ...(Object.keys(attributes).length > 0 ? { attributes } : {}),
           }),
         });
       }

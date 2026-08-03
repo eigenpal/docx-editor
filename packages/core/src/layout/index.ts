@@ -147,6 +147,7 @@ export {
   type ParagraphBorderSide,
   type ParagraphBorderStrokeRecord,
   type ParagraphFragmentRecord,
+  type ParagraphIndent,
   type ParagraphSpacing,
   type SemanticLayout,
   type SourceRange,

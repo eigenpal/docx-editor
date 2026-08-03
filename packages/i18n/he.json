@@ -859,7 +859,8 @@
     "leftIndent": "כניסה שמאלית",
     "rightIndent": "כניסה ימנית",
     "topMargin": "שוליים עליונים",
-    "bottomMargin": "שוליים תחתונים"
+    "bottomMargin": "שוליים תחתונים",
+    "hangingIndent": null
   },
   "print": {
     "label": "הדפסה",

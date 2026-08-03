@@ -4,6 +4,7 @@
 // the formatting snapshot and the surface interface itself. The composition root in
 // paginated-surface.ts implements and re-exports them, so importers keep one entry point.
 
+import type { IndentFormatting } from '../contracts/types.ts';
 import type { TreeDocxSession } from '@docx-editor.dev/core-contract/binding';
 import type { BookmarkIndex } from '@docx-editor.dev/core-contract/store';
 import type { HyperlinkOps } from './surface-hyperlinks.ts';
@@ -92,6 +93,15 @@ export interface SurfaceFormatting {
   /** `w:spacing/@w:before` and `@w:after` in points, null when the selection disagrees. */
   readonly spaceBeforePt: number | null;
   readonly spaceAfterPt: number | null;
+  /**
+   * Effective indent at the selection, in twips, or null with no selection or inside a
+   * table.
+   *
+   * The one field here that does NOT go null on disagreement: the values are the FIRST
+   * touched paragraph's and `mixed` reports the disagreement per field, because a ruler
+   * must draw its handles somewhere and Word draws them at the first selected paragraph.
+   */
+  readonly indent: IndentFormatting | null;
 }
 
 /**
@@ -198,6 +208,22 @@ export interface PaginatedSurface {
    * where there is no list to demote).
    */
   adjustIndent(direction: 'increase' | 'decrease'): boolean;
+  /**
+   * Set indent to exact values on every paragraph the selection touches — what a ruler
+   * drag and an indent spinner both need, where {@link adjustIndent} only steps.
+   *
+   * Twips. Omitting a field leaves it as authored; `null` CLEARS it, so the paragraph
+   * falls back to its style — distinct from zero, which blocks the cascade.
+   *
+   * `firstLine` is ONE SIGNED offset, negative for a hanging indent; the two OOXML
+   * spellings are written for it, the unused one as an explicit zero. Answers whether
+   * anything was committed.
+   */
+  setIndent(update: {
+    readonly left?: number | null;
+    readonly right?: number | null;
+    readonly firstLine?: number | null;
+  }): boolean;
   /**
    * Whether Increase/Decrease Indent would do anything right now.
    *

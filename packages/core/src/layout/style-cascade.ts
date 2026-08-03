@@ -17,6 +17,7 @@ import type { OoxmlElement, OoxmlNode, OoxmlProperty } from '@docx-editor.dev/co
 import { stableHash } from '../store/comparators/canonical.ts';
 import { isDangerousKey } from '../store/package/safe-record.ts';
 import {
+  indentTwips,
   paragraphAlignment,
   paragraphIndent,
   propertiesOf,
@@ -616,10 +617,18 @@ export function resolveParagraphLayoutInputs(
   } else {
     for (const property of props) {
       if (property.localName !== 'ind') continue;
-      const h = property.attributes?.hanging;
-      const f = property.attributes?.firstLine;
-      if (h && /^\d{1,9}$/.test(h)) hanging = Number(h) / 20;
-      if (f && /^-?\d{1,9}$/.test(f)) firstLine = Math.max(0, Number(f) / 20);
+      // Both go through the clamp `w:left`/`w:right` already use. `w:ind` is
+      // attacker-controlled, and these two were the only indent attributes reaching
+      // geometry unbounded — `w:hanging="999999999"` resolved to 50,000,000pt.
+      const h = indentTwips(property.attributes?.hanging);
+      const f = indentTwips(property.attributes?.firstLine);
+      // `w:hanging` is `ST_TwipsMeasure`, unsigned: a negative one is not a measurement.
+      if (h !== null) hanging = Math.max(0, h) / 20;
+      // `w:firstLine` is DECLARED unsigned, but Word's model keeps one SIGNED first-line
+      // indent and the numbering reader already reads it that way (`numbering-index.ts`).
+      // Flattening a negative to zero here rendered a body paragraph flush where Word
+      // renders a hanging, and made the two readers disagree about the same attribute.
+      if (f !== null) firstLine = f / 20;
     }
   }
   const indent = listItem

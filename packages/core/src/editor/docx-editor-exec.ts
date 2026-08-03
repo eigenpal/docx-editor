@@ -97,12 +97,14 @@ export function execEditorCommand(
       break;
     }
     case 'setIndent': {
-      const attributes: Record<string, string> = {};
-      if (command.left !== undefined) attributes.left = String(command.left);
-      if (command.right !== undefined) attributes.right = String(command.right);
-      if (command.firstLine !== undefined) attributes.firstLine = String(command.firstLine);
-      if (command.hanging !== undefined) attributes.hanging = String(command.hanging);
-      mounted.setParagraphProperty('ind', attributes);
+      // Not `setParagraphProperty`: the write needs the paragraph's AUTHORED attributes to
+      // pick between the `w:left`/`w:start` spellings and to keep the first-line pair
+      // consistent, so it lives beside `adjustIndent` on the surface.
+      mounted.setIndent({
+        ...(command.left !== undefined ? { left: command.left } : {}),
+        ...(command.right !== undefined ? { right: command.right } : {}),
+        ...(command.firstLine !== undefined ? { firstLine: command.firstLine } : {}),
+      });
       break;
     }
     case 'setPageSetup': {

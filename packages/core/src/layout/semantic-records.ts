@@ -167,6 +167,20 @@ export interface LineRecord {
 }
 
 /**
+ * A paragraph's resolved indent in points, in the vocabulary `w:ind` uses.
+ *
+ * `left`/`right` are signed; `hanging` is not (`ST_TwipsMeasure`). `firstLine` is signed
+ * even though the schema declares it unsigned, because Word's model keeps one signed
+ * first-line indent and this engine follows it.
+ */
+export interface ParagraphIndent {
+  readonly left: number;
+  readonly right: number;
+  readonly firstLine: number;
+  readonly hanging: number;
+}
+
+/**
  * The part of one paragraph that sits on one page.
  *
  * A paragraph that crosses a page boundary produces several fragments that all name the SAME
@@ -188,6 +202,20 @@ export interface ParagraphFragmentRecord {
    * already reflect Word's adjacent-collapse against the previous paragraph's after.
    */
   readonly spacing: ParagraphSpacing;
+  /**
+   * The paragraph's EFFECTIVE indent in points, cascade and numbering merge included.
+   *
+   * Published because it is not recoverable from anything else here. `props` carries the
+   * cascaded `w:ind`, but a list paragraph's indent comes from `numbering.xml` and is merged
+   * in after the cascade, so a numbered item that authors no `w:ind` reads zero there while
+   * its text sits indented. The geometry is no better an answer: `box.x` is cell-relative
+   * inside a table and is displaced by float zones.
+   *
+   * `firstLine` and `hanging` are kept as OOXML spells them. A consumer wanting the one
+   * signed first-line offset Word models takes `hanging > 0 ? -hanging : firstLine` —
+   * hanging WINS, it is not summed (ECMA-376 §17.3.1.12).
+   */
+  readonly indent: ParagraphIndent;
   /** Bottom rule on the final fragment when `w:pBdr/w:bottom` resolves; absent otherwise. */
   readonly bottomBorder?: ParagraphBottomBorderRecord;
   /**

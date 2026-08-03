@@ -560,7 +560,23 @@ export interface EditorCommands extends EditorCommandShape<DocEdits> {
    * Word's "Remove space before/after paragraph" differs from setting it to zero.
    */
   setParagraphSpacing: { beforePt?: number | null; afterPt?: number | null };
-  setIndent: { left?: number; right?: number; firstLine?: number; hanging?: number };
+  /**
+   * Exact paragraph indent, in twips, on every paragraph the selection touches.
+   *
+   * Omitting a field leaves it as authored; `null` clears it so the paragraph falls back to
+   * its style, the same distinction `setParagraphSpacing` draws — a zero blocks the cascade,
+   * a missing attribute does not.
+   *
+   * `firstLine` is ONE SIGNED offset from the left indent: negative IS the hanging indent.
+   * OOXML spells it as two mutually exclusive attributes (`w:firstLine`/`w:hanging`, where
+   * hanging wins per §17.3.1.12); collapsing them here means a caller cannot state a
+   * contradiction, and matches the single signed value Word's own model keeps.
+   */
+  setIndent: {
+    left?: number | null;
+    right?: number | null;
+    firstLine?: number | null;
+  };
   toggleList: { kind: 'bullet' | 'ordered' };
 
   insertRow: { where: 'above' | 'below' };

@@ -1282,6 +1282,7 @@ function layoutBlocksWithGeometry(
         },
         props,
         spacing: { before: fragmentBefore, after: appliedAfter },
+        indent,
         ...(bottomBorderRecord ? { bottomBorder: bottomBorderRecord } : {}),
         ...(strokes.length > 0 ? { borders: strokes } : {}),
         ...(shading === undefined

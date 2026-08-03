@@ -33,6 +33,11 @@ export function fragmentSignature(fragment: BlockFragmentRecord): string {
           // pre-edit value.
           fragment.props,
           fragment.spacing,
+          // The EFFECTIVE indent, for the same reason `props` is here. A list paragraph's
+          // indent comes from `numbering.xml`, so a renumber that moves the text but no
+          // other hashed field would converge against the stale fragment and leave the
+          // ruler reading the pre-edit value.
+          fragment.indent,
           fragment.bottomBorder,
           // Every `w:pBdr` stroke, not just the bottom one. A left rule's colour or width
           // moves nothing else that is hashed here — `props` carries `pBdr` without its

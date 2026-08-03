@@ -48,6 +48,7 @@ import { FontSourceSubstitution } from '@docx-editor.dev/core-contract/contracts
 import { FontUrlSource } from '@docx-editor.dev/core-contract/editor';
 import { ForwardRefExoticComponent } from 'react';
 import { generateRulerTicks } from '@docx-editor.dev/core-contract/editor';
+import { IndentFormatting } from '@docx-editor.dev/core-contract/contracts/editor';
 import { loadFonts } from '@docx-editor.dev/core-contract/editor';
 import { LoadFontsRequest } from '@docx-editor.dev/core-contract/editor';
 import { LoadFontsResult } from '@docx-editor.dev/core-contract/editor';
@@ -62,6 +63,7 @@ import { ReactElement } from 'react';
 import { ReactNode } from 'react';
 import { Ref } from 'react';
 import { RefAttributes } from 'react';
+import { RulerIndent } from '@docx-editor.dev/core-contract/editor';
 import { rulerPageBox } from '@docx-editor.dev/core-contract/editor';
 import { RulerTick } from '@docx-editor.dev/core-contract/editor';
 import { RulerUnit } from '@docx-editor.dev/core-contract/editor';
@@ -611,22 +613,11 @@ export function HorizontalRuler(input: HorizontalRulerProps): react__default.Rea
 export interface HorizontalRulerProps {
     // (undocumented)
     className?: string;
-    // (undocumented)
     editable?: boolean;
-    // (undocumented)
-    firstLineIndent?: number;
-    // (undocumented)
-    hangingIndent?: boolean;
-    // (undocumented)
-    indentLeft?: number;
-    // (undocumented)
-    indentRight?: number;
-    // (undocumented)
-    onFirstLineIndentChange?: (indentTwips: number) => void;
-    // (undocumented)
-    onIndentLeftChange?: (indentTwips: number) => void;
-    // (undocumented)
-    onIndentRightChange?: (indentTwips: number) => void;
+    indent?: RulerIndent | null;
+    indentEditable?: boolean;
+    onIndentChange?: (indent: RulerIndent) => void;
+    onIndentDragEnd?: () => void;
     // (undocumented)
     onLeftMarginChange?: (marginTwips: number) => void;
     onMarginDragEnd?: () => void;
@@ -636,8 +627,7 @@ export interface HorizontalRulerProps {
     onTabMarkRemove?: (positionTwips: number) => void;
     // (undocumented)
     pageSetup?: RulerPageSetup | null;
-    // (undocumented)
-    showFirstLineIndent?: boolean;
+    showIndentHandles?: boolean;
     // (undocumented)
     style?: CSSProperties;
     // (undocumented)
@@ -696,6 +686,16 @@ export interface HyperlinkPopupState {
 // @public
 export interface HyperLinkProps extends HyperLinkPartProps {
     preset?: boolean;
+}
+
+// @public
+export interface IndentUpdate {
+    // (undocumented)
+    readonly firstLine?: number | null;
+    // (undocumented)
+    readonly left?: number | null;
+    // (undocumented)
+    readonly right?: number | null;
 }
 
 export { loadFonts }
@@ -1345,6 +1345,16 @@ export interface UsePageSetupReturn {
     readonly apply: (update: PageSetupUpdate) => boolean;
     readonly isEnabled: boolean;
     readonly pageSetup: PageSetup | null;
+}
+
+// @public
+export function useParagraphIndent(): UseParagraphIndentReturn;
+
+// @public
+export interface UseParagraphIndentReturn {
+    readonly apply: (update: IndentUpdate) => boolean;
+    readonly indent: IndentFormatting | null;
+    readonly isEnabled: boolean;
 }
 
 // @public

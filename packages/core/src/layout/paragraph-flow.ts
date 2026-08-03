@@ -235,7 +235,7 @@ export function frozenLine(line: PendingLine): PendingLine {
  */
 export const MAX_PARAGRAPH_INDENT_TWIPS = 31_680;
 
-function indentTwips(raw: string | undefined): number | null {
+export function indentTwips(raw: string | undefined): number | null {
   // Up to 9 digits so an oversized authored value reaches the clamp rather than being read
   // as a measurement; a longer digit string is garbage, and `Number` turns enough of them
   // into `Infinity`, which then poisons every width derived from it.
