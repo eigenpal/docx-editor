@@ -143,12 +143,18 @@ describe('documentFonts', () => {
 describe('documentStyles', () => {
   test('returns the accepted definitions with name fallback and type filtering', () => {
     const session = open(docx({ body: '<w:p><w:r><w:t>x</w:t></w:r></w:p>', styles: STYLES_XML }));
-    expect(session.documentStyles()).toEqual([
+    expect(
+      session.documentStyles().map(({ styleId, name, type }) => ({ styleId, name, type }))
+    ).toEqual([
       { styleId: 'Normal', name: 'Normal', type: 'paragraph' },
       { styleId: 'Strong', name: 'Strong', type: 'character' },
       // Missing w:name falls back to the styleId; the 'weird'-typed style is dropped.
       { styleId: 'TableGrid', name: 'TableGrid', type: 'table' },
     ]);
+    // Every entry carries a preview for a picker to render the row in its own face.
+    for (const entry of session.documentStyles()) {
+      expect(entry.preview).toBeDefined();
+    }
     // Memoized once: the styles part is immutable in-session.
     expect(session.documentStyles()).toBe(session.documentStyles());
   });
@@ -163,7 +169,9 @@ describe('documentStyles', () => {
     const session = open(docx({ body: '<w:p><w:r><w:t>x</w:t></w:r></w:p>', styles }));
     // The over-length styleId is unaddressable (dropped); the control-character name
     // falls back to the valid styleId.
-    expect(session.documentStyles()).toEqual([{ styleId: 'Ok', name: 'Ok', type: 'paragraph' }]);
+    expect(
+      session.documentStyles().map(({ styleId, name, type }) => ({ styleId, name, type }))
+    ).toEqual([{ styleId: 'Ok', name: 'Ok', type: 'paragraph' }]);
   });
 
   test('a document without a styles part answers empty', () => {

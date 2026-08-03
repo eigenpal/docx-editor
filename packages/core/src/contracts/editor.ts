@@ -308,6 +308,17 @@ export interface Editor {
     readonly styleId: string;
     readonly name: string;
     readonly type: string;
+    /**
+     * How the style looks, so a picker can show each entry in its own face rather than a
+     * list of identical rows. Presentation only, and already bounded for a CSS sink.
+     */
+    readonly preview: {
+      readonly fontFamily: string | null;
+      readonly fontSizePt: number | null;
+      readonly bold: boolean;
+      readonly italic: boolean;
+      readonly color: string | null;
+    };
   }[];
 
   /** Font families the document actually uses, for the font picker. */

@@ -561,7 +561,15 @@ export function openTreeSession(bytes: Uint8Array): OpenTreeSessionResult {
       },
 
       documentStyles() {
-        stylesCache ??= collectDocumentStyles(resolveStylesRoot());
+        // Font and size for each style's PREVIEW come from the run-defaults resolver, which
+        // already owns the basedOn chain, `docDefaults` and the theme font scheme — a
+        // picker showing every row in the UI font is the thing this avoids.
+        runDefaultsResolver ??= createRunDefaultsResolver(
+          resolveStylesRoot(),
+          collectDocumentThemeFonts(resolveThemeRoot())
+        );
+        const resolve = runDefaultsResolver;
+        stylesCache ??= collectDocumentStyles(resolveStylesRoot(), (styleId) => resolve(styleId));
         return stylesCache;
       },
 

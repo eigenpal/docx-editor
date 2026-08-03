@@ -33,6 +33,36 @@ import { Slot } from './Slot';
 export interface ParagraphStyleOption {
   readonly styleId: string;
   readonly name: string;
+  /**
+   * How the style looks, for rendering the row in its own face. Every value arrives
+   * already bounded by the engine's derivation (family against the CSS-sink shape, colour
+   * against six hex digits), which is what makes it safe to put in a style object.
+   */
+  readonly preview: {
+    readonly fontFamily: string | null;
+    readonly fontSizePt: number | null;
+    readonly bold: boolean;
+    readonly italic: boolean;
+    readonly color: string | null;
+  };
+}
+
+/**
+ * The row's own typeface, as a React style OBJECT — never a CSS string.
+ *
+ * Size is CLAMPED for the menu rather than shown at its document size: a Title at 28pt
+ * would push every other row off the screen. The proportions still read (a heading is
+ * visibly bigger than body text), which is the whole point of previewing.
+ */
+function previewStyle(preview: ParagraphStyleOption['preview']): React.CSSProperties {
+  const pt = preview.fontSizePt;
+  return {
+    ...(preview.fontFamily ? { fontFamily: preview.fontFamily } : {}),
+    ...(pt ? { fontSize: `${Math.min(Math.max(pt, 9), 20)}px` } : {}),
+    ...(preview.bold ? { fontWeight: 700 } : {}),
+    ...(preview.italic ? { fontStyle: 'italic' } : {}),
+    ...(preview.color ? { color: `#${preview.color}` } : {}),
+  };
 }
 
 const EMPTY_OPTIONS: readonly ParagraphStyleOption[] = Object.freeze([]);
@@ -69,7 +99,11 @@ export function useParagraphStyle(): UseParagraphStyleResult {
         ? editor
             .getDocumentStyles()
             .filter((style) => style.type === 'paragraph')
-            .map((style) => ({ styleId: style.styleId, name: style.name }))
+            .map((style) => ({
+              styleId: style.styleId,
+              name: style.name,
+              preview: style.preview,
+            }))
         : EMPTY_OPTIONS,
     [editor, snapshot]
   );
@@ -197,7 +231,11 @@ function ParagraphStyleItem({ value, asChild, className, children }: ParagraphSt
     },
     className: `docx-toolbar__style-item${className ? ` ${className}` : ''}`,
   };
-  const display = children ?? <span>{option?.name ?? value}</span>;
+  // The default label renders the style's NAME in the style's own face. Custom children
+  // replace it wholesale.
+  const display = children ?? (
+    <span style={option ? previewStyle(option.preview) : undefined}>{option?.name ?? value}</span>
+  );
   if (asChild) return <Slot {...shared}>{display}</Slot>;
   return (
     <button type="button" {...shared}>

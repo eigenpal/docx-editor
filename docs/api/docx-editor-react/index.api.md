@@ -641,6 +641,13 @@ export interface ParagraphStyleNamespace {
 export interface ParagraphStyleOption {
     // (undocumented)
     readonly name: string;
+    readonly preview: {
+        readonly fontFamily: string | null;
+        readonly fontSizePt: number | null;
+        readonly bold: boolean;
+        readonly italic: boolean;
+        readonly color: string | null;
+    };
     // (undocumented)
     readonly styleId: string;
 }

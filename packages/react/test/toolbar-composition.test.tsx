@@ -381,7 +381,8 @@ describe('the shaped parts', () => {
       'word/styles.xml': strToU8(
         `<w:styles xmlns:w="${W}">` +
           '<w:style w:type="paragraph" w:styleId="Normal" w:default="1"><w:name w:val="Normal"/></w:style>' +
-          '<w:style w:type="paragraph" w:styleId="Heading1"><w:name w:val="heading 1"/></w:style>' +
+          '<w:style w:type="paragraph" w:styleId="Heading1"><w:name w:val="heading 1"/>' +
+          '<w:rPr><w:b/><w:color w:val="1F3864"/></w:rPr></w:style>' +
           // A character style must NOT appear among the paragraph options.
           '<w:style w:type="character" w:styleId="Emphasis"><w:name w:val="Emphasis"/></w:style>' +
           '</w:styles>'
@@ -406,6 +407,15 @@ describe('the shaped parts', () => {
       ...view.container.querySelectorAll('[data-slot="styles.style"] [role="option"]'),
     ].map((item) => item.textContent);
     expect(items).toEqual(['Normal', 'heading 1']);
+
+    // Each row renders in the style's OWN face, so the menu previews rather than listing
+    // identical rows. The values come from the engine's bounded derivation and go into a
+    // style OBJECT — never a CSS string.
+    const headingRow = view.container.querySelector(
+      '[data-slot="styles.style"] [role="option"]:nth-of-type(2) span'
+    ) as HTMLElement;
+    expect(headingRow.style.fontWeight).toBe('700');
+    expect(headingRow.style.color.toUpperCase()).toBe('#1F3864');
 
     const heading = [
       ...view.container.querySelectorAll('[data-slot="styles.style"] [role="option"]'),
