@@ -160,10 +160,13 @@ export function mergeListIndent(
     if (property.localName !== 'ind') continue;
     const h = property.attributes?.hanging;
     const f = property.attributes?.firstLine;
-    if (h && /^\d{1,9}$/.test(h)) hanging = clampIndentPt(Number(h) / 20);
-    // `w:firstLine` is read SIGNED: Word keeps one signed first-line indent where a negative
-    // value hangs, which is why it and `w:hanging` are mutually exclusive (§17.3.1.12).
-    if (f && /^-?\d{1,9}$/.test(f)) firstLine = clampIndentPt(Number(f) / 20);
+    // Mutually exclusive (§17.3.1.10, §17.3.1.12): one signed first-line offset, two spellings,
+    // so an `w:ind` stating either replaces both. `w:firstLine` is read SIGNED because Word
+    // keeps a negative value as a hang. A bare `w:left` states neither and leaves them alone.
+    if (h !== undefined || f !== undefined) {
+      hanging = h !== undefined && /^\d{1,9}$/.test(h) ? clampIndentPt(Number(h) / 20) : 0;
+      firstLine = f !== undefined && /^-?\d{1,9}$/.test(f) ? clampIndentPt(Number(f) / 20) : 0;
+    }
   }
   return {
     left: para.left,

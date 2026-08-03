@@ -28,7 +28,7 @@ export interface RevisionPresentation {
   /** `text-decoration-line`, or null when the kind carries none. */
   readonly line: 'underline' | 'line-through' | null;
   /** `text-decoration-style`; double marks a MOVE, so it reads apart from a plain edit. */
-  readonly decorationStyle: 'solid' | 'double';
+  readonly decorationStyle: 'solid' | 'double' | 'dashed';
   /** CSS custom-property reference for the colour this revision draws in. */
   readonly color: string;
   /** True when the content is struck from the live document, by any enclosing revision. */
@@ -93,7 +93,12 @@ export function revisionPresentationOf(
     // A deletion nested in an insertion still reads as removed: the strike wins over the
     // underline its container would have drawn.
     line: deleted && line === 'underline' ? 'line-through' : line,
-    decorationStyle: kind === 'moveFrom' || kind === 'moveTo' ? 'double' : 'solid',
+    // An insertion's rule is DASHED. A solid one is hard to tell from an authored `w:u`, which
+    // underlines plenty of ordinary text in a contract, so two different statements would be
+    // drawn identically. A strike has no such clash and stays solid; a move stays double,
+    // because it is one decision with two halves.
+    decorationStyle:
+      kind === 'moveFrom' || kind === 'moveTo' ? 'double' : kind === 'insert' ? 'dashed' : 'solid',
     // Coloured by KIND, not by author: a reader scanning a page needs "added" and "removed"
     // to be the two things they can tell apart at a glance, and Word's own default view draws
     // them that way. The per-author ramp stays available for the review cards, where the

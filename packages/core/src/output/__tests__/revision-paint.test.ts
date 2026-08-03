@@ -46,13 +46,14 @@ function trackedSpans(root: HTMLElement): HTMLElement[] {
 }
 
 describe('the reader can see which text is tracked', () => {
-  test('an insertion is underlined in its author colour', () => {
+  test('an insertion is underlined, dashed so it cannot be read as authored w:u', () => {
     const root = paint(`<w:p>${run('keep ')}${ins('1', run('added'))}</w:p>`);
     const spans = trackedSpans(root);
     expect(spans.length).toBeGreaterThan(0);
     const span = spans[0]!;
     expect(span.textContent).toBe('added');
     expect(span.style.textDecorationLine).toBe('underline');
+    expect(span.style.textDecorationStyle).toBe('dashed');
     expect(span.style.color).toBe('var(--doc-revision-insertion)');
   });
 
@@ -218,19 +219,21 @@ describe('changes that decorate no characters', () => {
     expect(glyph.dataset.paragraphId).toBeUndefined();
   });
 
-  test('a tracked format change is visible without claiming the words changed', () => {
+  test('a tracked format change carries its provenance and NO inline mark', () => {
+    // At the density real documents reach — 18,284 in the main tracked fixture — a rule under
+    // every reformatted run draws a dotted line beneath nearly every line on the page, and it
+    // competes with the insertions and deletions that are the decisions a reviewer must make.
+    // The attributes stay so the review surface can list it and highlight its range on demand,
+    // which is where Word puts it too: a "Formatted:" note rather than a mark on the words.
     const root = paint(
       `<w:p><w:r><w:rPr><w:b/><w:rPrChange w:id="3" w:author="QA" w:date="D">` +
         `<w:rPr/></w:rPrChange></w:rPr><w:t>reformatted</w:t></w:r></w:p>`
     );
     const span = root.querySelector<HTMLElement>('.docx-revision-format')!;
     expect(span.textContent).toBe('reformatted');
-    expect(span.style.textDecorationStyle).toBe('dashed');
-    // Not the insertion colour: nothing was added.
-    expect(span.style.textDecorationColor).toBe('var(--doc-revision-format)');
-    // No fill: a document can be almost entirely reformatted, and tinting all of it says
-    // nothing. Added and removed text keeps its tint because it is always a minority.
+    expect(span.style.textDecorationLine).toBe('');
     expect(span.style.backgroundColor).toBe('');
+    expect(span.dataset.revisionKind).toBe('format');
     expect(span.dataset.revisionAuthor).toBe('QA');
   });
 });

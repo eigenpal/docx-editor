@@ -618,8 +618,18 @@ export function resolveParagraphLayoutInputs(
       if (property.localName !== 'ind') continue;
       const h = property.attributes?.hanging;
       const f = property.attributes?.firstLine;
-      if (h && /^\d{1,9}$/.test(h)) hanging = Number(h) / 20;
-      if (f && /^-?\d{1,9}$/.test(f)) firstLine = Math.max(0, Number(f) / 20);
+      // `w:hanging` and `w:firstLine` are MUTUALLY EXCLUSIVE (§17.3.1.10, §17.3.1.12): they
+      // are two spellings of one first-line offset, so an `w:ind` that states either one
+      // replaces BOTH. Accumulating them independently let a style's hanging indent survive a
+      // paragraph that explicitly cancelled it with `w:firstLine="0"` — the first line of
+      // every body paragraph then hung out into the left margin while the rest sat indented.
+      //
+      // An `w:ind` that states NEITHER (a bare `w:left`) leaves the inherited offset alone,
+      // which is why this is gated rather than reset on every `ind`.
+      if (h !== undefined || f !== undefined) {
+        hanging = h !== undefined && /^\d{1,9}$/.test(h) ? Number(h) / 20 : 0;
+        firstLine = f !== undefined && /^-?\d{1,9}$/.test(f) ? Math.max(0, Number(f) / 20) : 0;
+      }
     }
   }
   const indent = listItem

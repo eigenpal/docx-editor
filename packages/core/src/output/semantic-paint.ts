@@ -377,21 +377,19 @@ function applyRevisionPresentation(
     return;
   }
 
+  // A tracked FORMAT change gets its provenance and NO inline decoration.
+  //
+  // Marking it inline reads as noise rather than signal at the density real documents carry:
+  // this fixture has 18,284 of them, so a rule under each one drew a dotted line beneath
+  // nearly every line on the page, competing with the insertions and deletions that are the
+  // decisions a reviewer actually has to make. The attributes stay, so the review surface can
+  // still list the change and highlight its range on demand — which is where Word puts it too,
+  // as a "Formatted:" note rather than a mark on the words.
   element.classList.add('docx-revision', 'docx-revision-format');
   element.dataset.revisionKind = 'format';
   element.dataset.revisionId = format!.id;
   element.dataset.revisionAuthor = format!.author;
   if (format!.date !== undefined) element.dataset.revisionDate = format!.date;
-  // NO FILL. A tint is right for added and removed text, which is a minority of any page. A
-  // formatting change is not: this fixture carries 18,284 of them, and filling each one turned
-  // most of the document grey — the mark stopped meaning "look here" and became the page's
-  // background. The dashed rule alone still says it, and says it only where it applies.
-  //
-  // Dashed, and NOT coloured like an insertion: the words are unchanged. Word's own margin
-  // note says "Formatted:"; this is the inline half of the same statement.
-  element.style.textDecorationLine = 'underline';
-  element.style.textDecorationStyle = 'dashed';
-  element.style.textDecorationColor = 'var(--doc-revision-format)';
 }
 
 /**
