@@ -76,6 +76,21 @@ export const NO_STORY_PAGE_FIELDS: StoryPageFieldNeeds = Object.freeze({
  * result fields keep a zero-width range at the insertion offset. Furniture is read-only /
  * non-selectable at the surface; the range still stays canonical-aligned for layout consumers.
  */
+/**
+ * A `w:ptab` — the ABSOLUTE-position tab (ECMA-376 §17.3.3.16), which is what a table of
+ * contents line is actually made of.
+ *
+ * Not a `w:tab`: it carries its own destination and leader instead of advancing to the next
+ * stop in `w:tabs`, so a paragraph needs no tab stops at all to lay one out. A document that
+ * uses these has no `w:tabs` to find, which is why an engine that only models `w:tab` shows
+ * the entries and page numbers run together with no dots between them.
+ */
+export interface PositionalTab {
+  readonly alignment: 'left' | 'center' | 'right';
+  readonly relativeTo: 'margin' | 'indent' | 'leftMargin';
+  readonly leader?: 'dot' | 'hyphen' | 'underscore' | 'middleDot';
+}
+
 export interface FieldAwarePiece {
   readonly text: string;
   readonly props: readonly OoxmlProperty[];
@@ -85,6 +100,49 @@ export interface FieldAwarePiece {
   readonly end: number;
   /** True when text was projected from page context rather than model `w:t`. */
   readonly projected?: boolean;
+  /**
+   * Set when this piece is a `w:ptab`. Its range is ZERO-WIDTH: the element is generic in
+   * the canonical tree and contributes nothing to the paragraph's text, so it must advance
+   * the line without moving a single model offset — anything else and every offset after it
+   * would disagree with the store.
+   */
+  readonly positionalTab?: PositionalTab;
+}
+
+const PTAB_ALIGNMENTS = new Set(['left', 'center', 'right']);
+const PTAB_RELATIVE_TO = new Set(['margin', 'indent', 'leftMargin']);
+const PTAB_LEADERS = new Set(['dot', 'hyphen', 'underscore', 'middleDot']);
+
+/**
+ * Read a `w:ptab` off a run child, or null when it is not one.
+ *
+ * The element is generic in the canonical tree (nothing models it), so this reads its
+ * attributes directly and validates every one against its closed enumeration — the values
+ * come from the file and go on to drive geometry. `w:leader="none"`, and anything
+ * unrecognised, resolves to no leader rather than rejecting the tab: the ADVANCE is still
+ * authored, and dropping it would run the text together.
+ */
+export function positionalTabOf(node: OoxmlNode): PositionalTab | null {
+  if (node.kind === 'textValue' || node.localName !== 'ptab') return null;
+  if (node.namespaceUri !== WML_NAMESPACE_URI) return null;
+  let alignment = 'left';
+  let relativeTo = 'margin';
+  let leader: string | undefined;
+  for (const attribute of node.attributes) {
+    if (attribute.namespaceUri !== WML_NAMESPACE_URI) continue;
+    if (attribute.localName === 'alignment') alignment = attribute.value;
+    else if (attribute.localName === 'relativeTo') relativeTo = attribute.value;
+    else if (attribute.localName === 'leader') leader = attribute.value;
+  }
+  return {
+    alignment: (PTAB_ALIGNMENTS.has(alignment) ? alignment : 'left') as PositionalTab['alignment'],
+    relativeTo: (PTAB_RELATIVE_TO.has(relativeTo)
+      ? relativeTo
+      : 'margin') as PositionalTab['relativeTo'],
+    ...(leader !== undefined && PTAB_LEADERS.has(leader)
+      ? { leader: leader as NonNullable<PositionalTab['leader']> }
+      : {}),
+  };
 }
 
 const MERGEFORMAT_SUFFIX = /\s*\\\*\s*MERGEFORMAT\s*$/i;
@@ -411,7 +469,8 @@ export function piecesOfParagraph(
     style: ResolvedRunStyle,
     projected: boolean,
     start: number,
-    end: number
+    end: number,
+    positionalTab?: PositionalTab
   ): void => {
     if (text.length === 0 && !projected) return;
     if (projected) {
@@ -419,7 +478,7 @@ export function piecesOfParagraph(
       return;
     }
     if (text.length === 0) return;
-    pieces.push({ text, props, style, start, end });
+    pieces.push({ text, props, style, start, end, ...(positionalTab ? { positionalTab } : {}) });
   };
 
   const commitPendingProjection = (): void => {
@@ -456,6 +515,13 @@ export function piecesOfParagraph(
     props: readonly OoxmlProperty[],
     style: ResolvedRunStyle
   ): void => {
+    // A `w:ptab` advances the line but occupies NO model offset, so it is pushed with a
+    // zero-width range and the offset does not move.
+    const positional = positionalTabOf(grand);
+    if (positional) {
+      if (!style.hidden) push('\t', props, style, false, offset, offset, positional);
+      return;
+    }
     const text = modelTextOfRunChild(grand);
     if (text.length === 0) return;
     // Hidden text (`w:vanish`, ECMA-376 §17.3.2.45) is skipped, not emitted-then-hidden: Word

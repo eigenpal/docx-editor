@@ -208,17 +208,22 @@ describe('a box publishes four strokes around the unchanged text column', () => 
     const left = stroke(fragment, 'left');
     const right = stroke(fragment, 'right');
 
-    // Horizontal rules span the text column, `space` away from the lines.
+    // Horizontal rules sit `space` away from the lines vertically.
     expect(top.box.y + top.box.height).toBe(line.box.y - 4);
     expect(bottom.box.y).toBe(line.box.y + line.box.height + 4);
-    expect(top.box.x).toBe(line.box.x);
-    expect(top.box.width).toBe(line.box.width);
 
     // Word draws the side rules beyond the text and never re-breaks the lines for them, so
     // the left rule ends 4pt left of the text and the right one starts 4pt right of it.
     expect(left.box.x + left.box.width).toBe(line.box.x - 4);
     expect(right.box.x).toBe(line.box.x + line.box.width + 4);
-    // Sides run the full height of the frame, corner to corner.
+
+    // THE FOUR EDGES CLOSE. The horizontals reach the side rules rather than stopping at
+    // the text column, or the frame paints as two rules with two detached bars beside it —
+    // which is what a bordered callout looked like. Corner to corner on both axes.
+    expect(top.box.x).toBe(left.box.x);
+    expect(top.box.x + top.box.width).toBe(right.box.x + right.box.width);
+    expect(bottom.box.x).toBe(top.box.x);
+    expect(bottom.box.width).toBe(top.box.width);
     expect(left.box.y).toBe(top.box.y);
     expect(left.box.y + left.box.height).toBe(bottom.box.y + bottom.box.height);
     expect(right.box).toEqual({ ...left.box, x: right.box.x });
@@ -385,5 +390,42 @@ describe('paint draws every published stroke and invents no geometry', () => {
     );
     const rule = container.querySelector<HTMLElement>('.docx-paragraph-border-left')!;
     expect(rule.style.backgroundImage).toContain('to bottom');
+  });
+});
+
+describe('a shaded box is filled across the frame, not just the text band', () => {
+  test('shading covers the bordered rectangle, corner to corner', () => {
+    // A callout is `w:pBdr` plus `w:shd`. Word fills the box the borders draw — the
+    // `w:space` padding included — so a fill clipped to the line area left a pale stripe
+    // floating inside an empty rectangle, which is what every callout looked like.
+    const fragment = paragraphsOf(
+      lay(paragraph('note', `${BOX}<w:shd w:val="clear" w:fill="E8F0FE"/>`))
+    )[0]!;
+    const top = stroke(fragment, 'top');
+    const bottom = stroke(fragment, 'bottom');
+    const left = stroke(fragment, 'left');
+    const right = stroke(fragment, 'right');
+
+    expect(fragment.shading).toBe('E8F0FE');
+    const box = fragment.shadingBox!;
+    expect(box.x).toBe(left.box.x);
+    expect(box.x + box.width).toBe(right.box.x + right.box.width);
+    expect(box.y).toBe(top.box.y);
+    expect(box.y + box.height).toBe(bottom.box.y + bottom.box.height);
+  });
+
+  test('shading WITHOUT borders still fills only the line area', () => {
+    // No frame to fill, so the previous behaviour is the right one — this is the case the
+    // box rule must not have widened.
+    const fragment = paragraphsOf(
+      lay(paragraph('note', '<w:shd w:val="clear" w:fill="E8F0FE"/>'))
+    )[0]!;
+    const line = fragment.lines[0]!;
+    expect(fragment.shadingBox).toEqual({
+      x: line.box.x,
+      y: line.box.y,
+      width: fragment.box.width,
+      height: line.box.height,
+    });
   });
 });

@@ -141,22 +141,57 @@ export function caretStops(layout: SemanticLayout): CaretGeometry[] {
   return stops;
 }
 
+/**
+ * Whether a hard line break is what ended this line.
+ *
+ * The break OCCUPIES a model offset and is published as a zero-width span, so a line that a
+ * Shift+Enter terminated carries it as its last span. That is the one case where a position
+ * shared by two lines is not ambiguous — see `caretAt`.
+ */
+function endsWithLineBreak(line: {
+  readonly spans: readonly { readonly text: string }[];
+}): boolean {
+  return line.spans[line.spans.length - 1]?.text === '\n';
+}
+
 /** Geometry for one model position, or null when it is not laid out. */
 export function caretAt(
   layout: SemanticLayout,
   position: SemanticPosition,
   measurer?: TextMeasurer
 ): CaretGeometry | null {
-  for (const { line, pageIndex } of paragraphLinesIndex(layout).get(position.paragraphId) ?? []) {
+  // A position at a line's END is also the START of the next one, and the first line that
+  // contains it is not always the right answer. After a HARD BREAK it is the wrong one: the
+  // break is what ended the line, so the caret belongs at the start of the line the user
+  // just opened — not a break's width to the right of the last glyph on the line above,
+  // which is what a Shift+Enter looked like. Soft wraps stay on the first match, where the
+  // offset is genuinely shared and the end of the visual line is the conventional answer.
+  let afterBreak: { line: (typeof lines)[number]['line']; pageIndex: number } | null = null;
+  const lines = paragraphLinesIndex(layout).get(position.paragraphId) ?? [];
+  for (const { line, pageIndex } of lines) {
     if (position.offset < line.range.start || position.offset > line.range.end) continue;
+    if (
+      position.offset === line.range.end &&
+      position.offset > line.range.start &&
+      endsWithLineBreak(line)
+    ) {
+      // Remember it, but keep looking for the line that STARTS here. Falling back to it
+      // keeps a caret placed rather than lost if no such line was laid out.
+      afterBreak ??= { line, pageIndex };
+      continue;
+    }
     const box = caretBoxOnLine(line, position.offset, measurer);
+    return { position, x: box.x, y: box.y, height: box.height, lineId: line.id, pageIndex };
+  }
+  if (afterBreak) {
+    const box = caretBoxOnLine(afterBreak.line, position.offset, measurer);
     return {
       position,
       x: box.x,
       y: box.y,
       height: box.height,
-      lineId: line.id,
-      pageIndex,
+      lineId: afterBreak.line.id,
+      pageIndex: afterBreak.pageIndex,
     };
   }
   return null;
