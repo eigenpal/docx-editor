@@ -258,6 +258,16 @@ export type TreeDocOp =
       readonly linkId: string;
     }
   | {
+      /**
+       * Remove a typed block and everything under it.
+       *
+       * Validation restricts this structural operation to `w:p`, `w:tbl`, and `w:tr`, and
+       * refuses removals that would violate required-container or section-mark invariants.
+       */
+      readonly op: 'deleteBlock';
+      readonly blockId: string;
+    }
+  | {
       /** Allocate an empty header/footer part and declare it on a section. Package-level. */
       readonly op: 'createHeaderFooter';
       readonly sectionIndex: number;
@@ -378,6 +388,7 @@ export const TREE_DOC_OP_KINDS = [
   'insertHyperlink',
   'setHyperlinkTarget',
   'removeHyperlink',
+  'deleteBlock',
   'createHeaderFooter',
   'deleteHeaderFooter',
   'linkToPrevious',
@@ -430,6 +441,10 @@ export type TreeOpRejection =
   | 'unsupported-property'
   | 'invalid-property-value'
   | 'not-adjacent-siblings'
+  | 'unknown-block'
+  | 'not-a-block'
+  | 'block-required'
+  | 'carries-section-mark'
   | 'tree-invariant'
   /** Malformed lifecycle args / first-section link — mirrors Editor `invalidArgs`. */
   | 'invalidArgs';
