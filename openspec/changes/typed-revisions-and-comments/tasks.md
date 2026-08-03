@@ -21,7 +21,8 @@
 - [ ] 2.2 Exclude deleted content from the caret space in every display mode
 - [ ] 2.3 Insertion, deletion, and move presentation, each visually distinct
 - [ ] 2.4 Property changes as a paragraph or table indicator, adding no inline text to the flow
-- [ ] 2.5 Display modes: all-markup, proposed result, original. Assert proposed-result layout equals accept-all layout and original equals reject-all
+- [x] 2.5 Display modes: all-markup, proposed result, original. Asserted against accept-all / reject-all output, on synthetic markup and on `issue-319-sections.docx`
+- [ ] 2.5a **Known gap, asserted rather than hidden**: the resolved display modes suppress CONTENT by containment but do not merge paragraph marks, while accept-all does. The two agree on what the document says and disagree on how many paragraphs say it. Block-level projection closes this; the differential test asserts the divergence so it fails when that lands
 - [ ] 2.6 Assert switching display mode publishes no `ModelChange` and leaves the saved package fingerprint-identical
 
 ## 3. Accept and reject
@@ -33,7 +34,7 @@
 - [ ] 3.5 Implement the containment rule declared in `design.md` R6 — the outer decision settles whether the content exists, and an inner revision survives exactly when the content does. Assert the result is identical under depth-first and breadth-first resolution
 - [ ] 3.6 accept-all and reject-all are one transaction, one `ModelChange`, one undo
 - [ ] 3.7 Paragraph-mark revisions: accepting `w:pPr/w:rPr/w:del` merges with the following paragraph, rejecting `w:pPr/w:rPr/w:ins` does the same. Removing the element alone is the wrong behaviour and must be asserted against
-- [ ] 3.8 Per `design.md` R11, every revision kind without defined structural semantics is refused with `unsupported` and no `ModelChange`. Refusing kinds in this pass: `w:cellIns`, `w:cellDel`, `w:cellMerge`, `w:trPr/w:ins`/`w:del`, `w:trPrChange`, `w:tcPrChange`, `w:tblPrChange`, `w:tblPrExChange`, `w:tblGridChange`, `w:sectPrChange`. Assert the tree is unchanged after a refusal
+- [x] 3.8 Per `design.md` R11, every revision kind without defined structural semantics is refused with `unsupported` and no `ModelChange`. Refusing kinds in this pass: `w:cellIns`, `w:cellDel`, `w:cellMerge`, `w:trPr/w:ins`/`w:del`, `w:trPrChange`, `w:tcPrChange`, `w:tblPrChange`, `w:tblPrExChange`, `w:tblGridChange`, `w:sectPrChange`. Assert the tree is unchanged after a refusal
 - [ ] 3.9 Accept/reject resolves within a named part. Assert against the colliding `w:id="0"` in `list-pagination-break.docx`'s `styles.xml` and `document.xml` that neither resolution touches the other part
 
 ## 4. Suggesting mode
