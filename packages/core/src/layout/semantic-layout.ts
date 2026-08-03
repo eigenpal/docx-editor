@@ -18,6 +18,7 @@ import type {
 import { finalizePageFieldProjection, type HyperlinkProjector } from './field-projection.ts';
 import { paragraphLayoutKey, type ParagraphLayoutCache } from './layout-cache.ts';
 import { alignSpans, breakParagraph, type Alignment, type PendingLine } from './paragraph-flow.ts';
+import { DEFAULT_REVISION_DISPLAY_MODE, type RevisionDisplayMode } from './revision-projection.ts';
 import {
   appliedSpaceBefore,
   paragraphBorderExtentPt,
@@ -144,6 +145,16 @@ export interface SemanticLayoutOptions {
   readonly session?: LayoutSession;
   /** Header/footer stories to attach per page; absent means no furniture. */
   readonly furniture?: PageFurniture;
+  /**
+   * Which tracked revisions this pass resolves away (ECMA-376 §17.13).
+   *
+   * `all-markup` (the default) lays out both halves of every change. `proposed` lays out what
+   * the document becomes if every change is accepted; `original` what it was before any of
+   * them. Both are LAYOUT INPUTS: neither applies a `TreeDocOp` nor publishes a `ModelChange`,
+   * so a user who switches to the proposed result, saves, and sends the file has not silently
+   * accepted every proposal in it.
+   */
+  readonly displayMode?: RevisionDisplayMode;
   /**
    * Per-section furniture, index-aligned with `enumerateDocumentSections`.
    *
@@ -356,11 +367,16 @@ function layoutBlocksWithGeometry(
   // The default-tab interval moves every default-interval tab, and the prepared-block memo
   // is keyed by producer — so it belongs here rather than only in the per-paragraph token.
   const defaultTabStopPt = options.defaultTabStopPt;
+  // The display mode changes what every paragraph contains, so it changes every break. Folding
+  // it into `producer` is what makes a mode switch invalidate the break cache AND the session
+  // checkpoints without a `ModelChange`: the document did not change, the projection of it did.
+  const displayMode = options.displayMode ?? DEFAULT_REVISION_DISPLAY_MODE;
   const producer =
     (options.producer ?? 'unversioned-measurer') +
     (styleCascade ? `|sc:${styleCascade.cacheToken}` : '') +
     (listItems && listItems.size > 0 ? `|num:${listItems.size}` : '') +
-    (defaultTabStopPt !== undefined ? `|dts:${defaultTabStopPt}` : '');
+    (defaultTabStopPt !== undefined ? `|dts:${defaultTabStopPt}` : '') +
+    (displayMode === DEFAULT_REVISION_DISPLAY_MODE ? '' : `|rev:${displayMode}`);
 
   const contentWidth = geometry.width - geometry.margin.left - geometry.margin.right;
 
@@ -699,6 +715,7 @@ function layoutBlocksWithGeometry(
     ...(options.projectLink ? { projectLink: options.projectLink } : {}),
     borderOwnershipBudget: createTableBorderOwnershipBudget(),
     vMergeResolveBudget: createTableVMergeResolveBudget(),
+    displayMode,
   };
 
   type PreparedParagraph = Extract<PreparedBlock, { kind: 'paragraph' }>;
@@ -737,6 +754,7 @@ function layoutBlocksWithGeometry(
         // paragraph's own indents the way Word does.
         marginExtent: { left: 0, right: entry.indent.left + entry.available + entry.indent.right },
         ...(options.projectLink ? { projectLink: options.projectLink } : {}),
+        displayMode,
       }
     );
 
@@ -1364,6 +1382,7 @@ function layoutBlocksWithGeometry(
         box: { x: indent.left, y: cursorY, width: available, height: pendingLine.height },
         baseline: pendingLine.baseline,
         leading: pendingLine.leading,
+        ...(pendingLine.deletedRanges ? { deletedRanges: pendingLine.deletedRanges } : {}),
       };
       lineCounter += 1;
       pending.push(record);

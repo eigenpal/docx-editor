@@ -22,6 +22,18 @@ import {
   type OoxmlNode,
   type OoxmlProperty,
 } from '@docx-editor.dev/core-contract/store';
+import {
+  DEFAULT_REVISION_DISPLAY_MODE,
+  MAX_REVISION_DEPTH,
+  NO_REVISIONS,
+  isRevisionWrapper,
+  revisionAttributionOf,
+  revisionsAreDeletion,
+  revisionsVisible,
+  withRevision,
+  type RevisionAttribution,
+  type RevisionDisplayMode,
+} from './revision-projection.ts';
 import { resolveRunStyle, type ResolvedRunStyle } from './run-style.ts';
 import type {
   HeaderFooterStoryRecord,
@@ -113,6 +125,34 @@ export interface FieldAwarePiece {
   readonly positionalTab?: PositionalTab;
   /** The hyperlink this piece came from, already sanitized, or absent for ordinary text. */
   readonly link?: SpanLinkRecord;
+  /**
+   * The revision wrappers enclosing this text, outermost first, absent when untracked.
+   *
+   * A stack rather than a single value because revisions nest: an insertion by one author
+   * inside a deletion by another is ordinary in a two-round review, and both matter — the
+   * outer one decides whether the content exists, the inner one is still someone's pending
+   * decision about it.
+   */
+  readonly revisions?: readonly RevisionAttribution[];
+}
+
+/** A half-open model-offset range, in the paragraph's own UTF-16 offset space. */
+export interface ModelRange {
+  readonly start: number;
+  readonly end: number;
+}
+
+type MutableModelRange = { start: number; end: number };
+
+/** Append a range, coalescing with the previous one when they touch or overlap. */
+function appendModelRange(ranges: MutableModelRange[], start: number, end: number): void {
+  if (end <= start) return;
+  const last = ranges[ranges.length - 1];
+  if (last && last.end >= start) {
+    last.end = Math.max(last.end, end);
+    return;
+  }
+  ranges.push({ start, end });
 }
 
 const PTAB_ALIGNMENTS = new Set(['left', 'center', 'right']);
@@ -411,7 +451,10 @@ export function propertiesOfRunContainer(container: OoxmlNode | undefined): Ooxm
 
 /** Model text contributed by one typed run child (same vocabulary as `paragraphTextOf`). */
 function modelTextOfRunChild(grand: OoxmlNode): string {
-  if (grand.kind === 'text') {
+  // `w:delText` holds real characters at a real position, so it counts in the model offset
+  // space exactly like `w:t`. Whether it is LAID OUT is a separate question, answered by the
+  // enclosing revision and the display mode.
+  if (grand.kind === 'text' || grand.kind === 'deletedText') {
     let text = '';
     for (const value of grand.children) if (value.kind === 'textValue') text += value.value;
     return text;
@@ -467,7 +510,9 @@ export function piecesOfParagraph(
   inheritedRunProperties: readonly OoxmlProperty[] = [],
   pageContext?: FieldPageContext,
   cascadeRuns?: RunPropertyCascader,
-  projectLink?: HyperlinkProjector
+  projectLink?: HyperlinkProjector,
+  displayMode: RevisionDisplayMode = DEFAULT_REVISION_DISPLAY_MODE,
+  deletedRanges?: MutableModelRange[]
 ): FieldAwarePiece[] {
   if (paragraph.kind === 'textValue') return [];
 
@@ -481,6 +526,14 @@ export function piecesOfParagraph(
   const budget = createScanBudget();
   /** When set, suppress model result text because we will emit a live projection at end. */
   let pendingProjection: PendingPageProjection | null = null;
+  /**
+   * The revision wrappers enclosing the run being processed, outermost first.
+   *
+   * Held here rather than threaded through every emitter because the walk is synchronous and
+   * depth-first: it is set on the way into a wrapper and restored on the way out, so every
+   * piece emitted in between sees exactly its own enclosing stack.
+   */
+  let revisions: readonly RevisionAttribution[] = NO_REVISIONS;
 
   const push = (
     text: string,
@@ -493,8 +546,9 @@ export function piecesOfParagraph(
   ): void => {
     if (text.length === 0 && !projected) return;
     const link = currentLink ? { link: currentLink } : {};
+    const attribution = revisions.length === 0 ? {} : { revisions };
     if (projected) {
-      pieces.push({ text, props, style, start, end, projected: true, ...link });
+      pieces.push({ text, props, style, start, end, projected: true, ...link, ...attribution });
       return;
     }
     if (text.length === 0) return;
@@ -506,6 +560,7 @@ export function piecesOfParagraph(
       end,
       ...(positionalTab ? { positionalTab } : {}),
       ...link,
+      ...attribution,
     });
   };
 
@@ -556,7 +611,22 @@ export function piecesOfParagraph(
     // paginates as if it were absent, so measuring it would break pages in the wrong place.
     // The offset still advances — the characters remain in the model and `paragraphTextOf`
     // counts them, so every following piece would desync from tree ops otherwise.
-    if (!style.hidden) push(text, props, style, false, offset, offset + text.length);
+    //
+    // A revision the display mode resolves away is suppressed the same way, and for the same
+    // reason: the offset space belongs to the model, not to the view. `w:delText` outside any
+    // deletion is malformed and is suppressed unconditionally, because the one thing that must
+    // never happen is deleted text flowing as ordinary text.
+    const deleted = revisionsAreDeletion(revisions);
+    const suppressed =
+      style.hidden ||
+      !revisionsVisible(revisions, displayMode) ||
+      (grand.kind === 'deletedText' && !deleted);
+    if (!suppressed) push(text, props, style, false, offset, offset + text.length);
+    // Deleted characters are recorded whether or not they were laid out. They occupy model
+    // offsets in every mode, and the caret must step over them in every mode — including the
+    // proposed result, where they produce no span at all and an offset-by-offset walk would
+    // otherwise stop at invisible positions.
+    if (deleted && deletedRanges) appendModelRange(deletedRanges, offset, offset + text.length);
     offset += text.length;
   };
 
@@ -656,26 +726,52 @@ export function piecesOfParagraph(
     }
   };
 
-  // Typed runs contribute measurable / selectable text — including the runs inside a
-  // `w:hyperlink`, which is a run CONTAINER and not a leaf. Skipping it is what made every
-  // link's words vanish from the painted page while still occupying model offsets. Generic
-  // siblings (including `w:fldSimple`) stay structurally preserved but layout-inert.
-  // Paragraph root counts as depth 0; run children sit at depth 1.
-  if (!consumeScanNode(budget)) return pieces;
+  /**
+   * Walk content in document order, descending through every RUN CONTAINER.
+   *
+   * Typed runs contribute measurable / selectable text. Generic siblings (including
+   * `w:fldSimple`) stay structurally preserved but layout-inert. The exceptions are the two
+   * containers that are not content themselves but hold runs that are:
+   *
+   *   - `w:hyperlink`. Skipping it is what made every link's words vanish from the painted
+   *     page while still occupying model offsets.
+   *   - the revision wrappers. Skipping them dropped tracked content entirely, so the reader
+   *     saw a third text belonging to neither the original nor the proposal.
+   *
+   * Either can hold the other, and a link inside a tracked insertion is ordinary, so the walk
+   * is one recursion rather than two passes.
+   *
+   * The complex-field machine spans runs in document order within the paragraph, so descending
+   * must not restart it — the walk visits runs in the same order a reader sees them, whatever
+   * their nesting.
+   */
   const processInline = (child: OoxmlNode, depth: number): void => {
     if (child.kind === 'run') {
       processRun(child, depth);
       return;
     }
-    if (child.kind !== 'hyperlink') return;
-    if (depth > MAX_STORY_FIELD_SCAN_DEPTH) return;
-    // The link is projected ONCE per element, not per run: sanitization is not free, and a
-    // link's runs must all carry the same record so paint can group them by identity.
-    const previous = currentLink;
-    currentLink = projectLink?.(child) ?? undefined;
+    if (depth > MAX_STORY_FIELD_SCAN_DEPTH || depth >= MAX_REVISION_DEPTH) return;
+    if (child.kind === 'hyperlink') {
+      // The link is projected ONCE per element, not per run: sanitization is not free, and a
+      // link's runs must all carry the same record so paint can group them by identity.
+      const previous = currentLink;
+      currentLink = projectLink?.(child) ?? undefined;
+      for (const inner of child.children) processInline(inner, depth + 1);
+      currentLink = previous;
+      return;
+    }
+    if (!isRevisionWrapper(child)) return;
+    const attribution = revisionAttributionOf(child);
+    if (!attribution) return;
+    if (!consumeScanNode(budget)) return;
+    const enclosing = revisions;
+    revisions = withRevision(enclosing, attribution);
     for (const inner of child.children) processInline(inner, depth + 1);
-    currentLink = previous;
+    revisions = enclosing;
   };
+
+  // Paragraph root counts as depth 0; run children sit at depth 1.
+  if (!consumeScanNode(budget)) return pieces;
   for (const child of paragraph.children) processInline(child, 1);
   // Malformed field missing end: fail closed (no live projection) but keep cached result text.
   abandonPendingProjection();

@@ -126,6 +126,22 @@ function laterLineOwns(layout: SemanticLayout, line: LineRecord, offset: number)
 }
 
 /**
+ * True when this offset sits strictly INSIDE deleted content on the line.
+ *
+ * The boundaries are kept: the position immediately before a deletion and the one immediately
+ * after it are both real places to put a caret, and dropping them would make the deletion
+ * unreachable — including for the accept or reject that resolves it.
+ */
+function insideDeletedContent(line: LineRecord, offset: number): boolean {
+  const ranges = line.deletedRanges;
+  if (ranges === undefined) return false;
+  for (const range of ranges) {
+    if (offset > range.start && offset < range.end) return true;
+  }
+  return false;
+}
+
+/**
  * Every caret stop in the document, in reading order.
  *
  * One per character boundary on every line, plus the line end. Derived rather than stored,
@@ -134,6 +150,10 @@ function laterLineOwns(layout: SemanticLayout, line: LineRecord, offset: number)
  * Ownership of a position SHARED by two lines is decided here exactly as `caretAt` decides
  * it, or the caret the user sees and the stop the arrow keys move to would sit on different
  * rows.
+ *
+ * Offsets inside deleted content are omitted, which is what makes every navigation command
+ * step over a deletion rather than into it: `moveCaret` reads this list and nothing else, so
+ * arrow keys, word jumps, page jumps and Home/End all inherit the rule from one place.
  */
 export function caretStops(layout: SemanticLayout): CaretGeometry[] {
   const stops: CaretGeometry[] = [];
@@ -155,6 +175,7 @@ export function caretStops(layout: SemanticLayout): CaretGeometry[] {
           ) {
             continue;
           }
+          if (insideDeletedContent(line, offset)) continue;
           // A continuation line's first stop is the same model position as the previous
           // line's last, so it is emitted once — by the line that starts there.
           if (offset === line.range.start && offset > fragment.range.start && stops.length > 0) {

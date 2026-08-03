@@ -20,6 +20,8 @@ import type {
   ParagraphSpacing,
 } from './paragraph-style.ts';
 import type { TabLeader } from './paragraph-tabs.ts';
+import type { ModelRange } from './field-projection.ts';
+import type { RevisionAttribution } from './revision-projection.ts';
 import type { ResolvedRunStyle } from './run-style.ts';
 import type { ResolvedCellBorders } from './table-borders.ts';
 
@@ -142,6 +144,14 @@ export interface StyleSpanRecord {
    * it was handed.
    */
   readonly link?: SpanLinkRecord;
+   /**
+   * The revision wrappers this text sits inside, outermost first, absent when untracked.
+   *
+   * Carried on the span for the same reason `style` is: paint and the review surface must read
+   * ONE attribution. A sidebar that re-derived which revision covers a span by walking the tree
+   * could disagree with what was painted, and the card would point at the wrong text.
+   */
+  readonly revisions?: readonly RevisionAttribution[];
 }
 
 export interface LineRecord {
@@ -164,6 +174,17 @@ export interface LineRecord {
    * text sits.
    */
   readonly leading: number;
+   /**
+   * Model ranges on this line covering DELETED content, absent when there is none.
+   *
+   * The caret steps over these rather than entering them: text typed inside a deletion exists
+   * in neither the original nor the proposal, and there is no valid tree for the result.
+   *
+   * Recorded even in display modes that lay the deletion out invisibly, because the offsets
+   * exist in the model in every mode and an offset-by-offset walk would otherwise stop at
+   * positions with no glyph.
+   */
+  readonly deletedRanges?: readonly ModelRange[];
 }
 
 /**

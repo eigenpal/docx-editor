@@ -7,6 +7,7 @@
 // as they were. Application lives in tree-op-apply.ts; both are re-exported via tree-ops.ts.
 
 import type { OoxmlNode, OoxmlParagraphNode, OoxmlPart } from '../package/ooxml-tree.ts';
+import { isContentRevisionKind } from '../package/ooxml-shared.ts';
 import { findNode } from '../package/ooxml-edit.ts';
 import { paragraphPropertiesNodeOf } from './tree-op-nodes.ts';
 import { isValidXmlText } from '../package/sinks.ts';
@@ -553,6 +554,14 @@ export function metricsOfSection(sectPr: OoxmlNode | null): SectionMetrics {
 /**
  * Flatten a paragraph into UTF-16 addressable segments, in document order.
  *
+ * Every RUN CONTAINER is descended: a hyperlink, and the content revision wrappers
+ * (`w:ins`, `w:del`, `w:moveFrom`, `w:moveTo`) — including each nested inside the other,
+ * which is ordinary in a reviewed document with links. `w:delText` counts exactly like
+ * `w:t`. This has to match what layout projects: if the two disagree about which character
+ * sits at an offset, the caret and every tree op land on a different character than the one
+ * under the pointer. Containers nested deeper than the cap are not descended, because a file
+ * is attacker-controlled and preserved-but-unaddressable is the conservative answer.
+ *
  * A HYPERLINK's runs are addressed too. `w:hyperlink` is a run container, not a leaf, and
  * the characters inside a link are ordinary paragraph text: the user selects them, types
  * over them and deletes them like any other. Skipping the container — which is what
@@ -581,25 +590,38 @@ export function segmentsOf(paragraph: OoxmlParagraphNode): Segment[] {
     if (node.kind === 'runProperties' || node.kind === 'generic') return;
     for (const child of node.children) visit(child, runId);
   };
-  const visitInline = (child: OoxmlNode): void => {
+  const visitInline = (child: OoxmlNode, depth: number): void => {
     if (child.kind === 'run') {
       for (const grand of child.children) visit(grand, child.id);
       return;
     }
-    // Bookmark markers and everything generic measure nothing; only a link descends.
-    if (child.kind === 'hyperlink') {
-      for (const inner of child.children) visitInline(inner);
+    if (child.kind === 'textValue' || depth >= MAX_INLINE_CONTAINER_DEPTH) return;
+    // Bookmark and range markers measure nothing; only a run CONTAINER descends. A link and a
+    // revision wrapper are both containers, and either can hold the other.
+    if (child.kind === 'hyperlink' || isContentRevisionKind(child.kind)) {
+      for (const inner of child.children) visitInline(inner, depth + 1);
     }
   };
-  for (const child of paragraph.children) visitInline(child);
+  for (const child of paragraph.children) visitInline(child, 0);
   return segments;
 }
 
-/** The runs a paragraph child owns, at any depth — a `w:r`, or every run inside a link. */
-export function runsUnder(child: OoxmlNode): OoxmlNode[] {
+/** Matches the layout projection's nesting cap; see `segmentsOf`. */
+const MAX_INLINE_CONTAINER_DEPTH = 32;
+
+/**
+ * The runs a paragraph child owns, at any depth — a `w:r`, or every run inside a link or a
+ * revision wrapper.
+ *
+ * Revisions count for the same reason links do: a run inside a `w:ins` is ordinary text that a
+ * property edit must reach, or applying bold across a selection would skip the tracked words
+ * inside it.
+ */
+export function runsUnder(child: OoxmlNode, depth = 0): OoxmlNode[] {
   if (child.kind === 'run') return [child];
-  if (child.kind !== 'hyperlink') return [];
-  return child.children.flatMap((inner) => runsUnder(inner));
+  if (child.kind === 'textValue' || depth >= MAX_INLINE_CONTAINER_DEPTH) return [];
+  if (child.kind !== 'hyperlink' && !isContentRevisionKind(child.kind)) return [];
+  return child.children.flatMap((inner) => runsUnder(inner, depth + 1));
 }
 
 function paragraphLength(paragraph: OoxmlParagraphNode): number {
