@@ -28,6 +28,7 @@ import { openReportIssue } from '../../lib/reportIssue';
 import { useEditorCommand } from '../useEditorCommand';
 import { chromeControlForSlot, chromeIcon, guardToolbarMousedown } from '../toolbar/ToolbarButton';
 import { useMenuContext, useMenuLabel } from './menu-context';
+import { focusBy, focusEdge, panelItems } from './menu-keyboard';
 
 /** Word's insert-table grid is 6 columns by 6 rows. */
 const TABLE_GRID_COLUMNS = 6;
@@ -56,6 +57,12 @@ export interface MenuRowProps {
    * selected" on a Page break row, which is a claim about state it does not have.
    */
   active?: boolean;
+  /**
+   * Present on a row belonging to a MUTUALLY EXCLUSIVE set (the four alignments), which
+   * makes it `menuitemradio` rather than `menuitemcheckbox`. Four independent checkboxes
+   * is a different claim from one-of-four, and a screen reader reads it as such.
+   */
+  selected?: true;
   /** Stable marker for hosts, tests and e2e. */
   slot?: string;
   onSelect?: () => void;
@@ -72,27 +79,50 @@ export interface MenuRowProps {
  * @public
  */
 export function MenuRow(props: MenuRowProps) {
-  const { icon, shortcut, disabled, title, active, slot, onSelect, className, children } = props;
+  const { icon, shortcut, disabled, title, active, selected, slot, onSelect, className, children } =
+    props;
+  const reasonId = useId();
+  // `aria-disabled`, NOT the native attribute. A natively-disabled button leaves the tab
+  // order and stops firing pointer events, so its `title` never renders and a screen
+  // reader walking the menu skips the row entirely — which is the whole "present and
+  // disabled, with the reason" design delivering nothing to the users who most need it.
+  // The APG says a disabled menu item stays focusable for exactly this reason. The reason
+  // itself rides `aria-describedby`, so it is ANNOUNCED rather than hover-only.
+  const describe = disabled && title ? reasonId : undefined;
+  const role =
+    active === undefined
+      ? 'menuitem'
+      : selected === undefined
+        ? 'menuitemcheckbox'
+        : 'menuitemradio';
   return (
     <button
       type="button"
+      role={role}
       className={`docx-toolbar__menu-item docx-menubar__item${className ? ` ${className}` : ''}`}
-      disabled={disabled}
+      // Every row is reachable by the menu's own arrow keys, never by Tab: one tab stop
+      // per menu, which is the menu pattern (and what keeps a 36-cell grid from being 36
+      // tab stops).
+      tabIndex={-1}
       {...(slot ? { 'data-slot': slot } : {})}
       {...(active ? { 'data-active': '' } : {})}
-      {...(disabled ? { 'data-disabled': '' } : {})}
-      {...(active === undefined
-        ? { role: 'menuitem' as const }
-        : { role: 'menuitemcheckbox' as const, 'aria-checked': active })}
+      {...(disabled ? { 'data-disabled': '', 'aria-disabled': true } : {})}
+      {...(active !== undefined ? { 'aria-checked': active } : {})}
+      {...(describe ? { 'aria-describedby': describe } : {})}
       {...(title ? { title } : {})}
       onMouseDown={guardToolbarMousedown}
-      onClick={onSelect}
+      onClick={disabled ? undefined : onSelect}
     >
       <span className="docx-menubar__item-icon" aria-hidden="true">
         {icon}
       </span>
       <span className="docx-menubar__item-label">{children}</span>
       {shortcut ? <span className="docx-menubar__item-shortcut">{shortcut}</span> : null}
+      {describe ? (
+        <span id={reasonId} className="ep-sr-only">
+          {title}
+        </span>
+      ) : null}
     </button>
   );
 }
@@ -132,6 +162,8 @@ export function MenuItem({ slot, labelKey, shortcutKey, className, hidden }: Men
   // `aria-pressed`: marks and alignment toggle, a break insert does not.
   const command = commandForSlot(slot);
   const isToggle = command?.type === 'toggleMark' || command?.type === 'setAlignment';
+  // The four alignments are one-of-four, not four independent toggles.
+  const isRadio = command?.type === 'setAlignment';
   return (
     <MenuRow
       slot={slot}
@@ -140,6 +172,7 @@ export function MenuItem({ slot, labelKey, shortcutKey, className, hidden }: Men
       disabled={!isEnabled}
       {...(disabledReason ? { title: disabledReason } : {})}
       {...(isToggle ? { active: isActive } : {})}
+      {...(isRadio ? { selected: true as const } : {})}
       onSelect={() => {
         execute();
         setOpenMenu(null);
@@ -276,12 +309,33 @@ export interface MenuSubmenuProps {
 export function MenuSubmenu({ labelKey, paths, className, children }: MenuSubmenuProps) {
   const label = useMenuLabel();
   const [open, setOpen] = useState(false);
+  const parentRef = useRef<HTMLButtonElement | null>(null);
+  const panelRef = useRef<HTMLDivElement | null>(null);
+  const panelId = useId();
   const text = label(labelKey);
   return (
     <div
+      role="none"
       className={`docx-menubar__submenu${className ? ` ${className}` : ''}`}
       onMouseEnter={() => setOpen(true)}
       onMouseLeave={() => setOpen(false)}
+      onKeyDown={(event) => {
+        // The APG's submenu keys, and the reason the panel is reachable at all without a
+        // pointer: Right opens and steps in, Left and Escape close and come back to the
+        // parent row. Escape is stopped so it closes THIS panel rather than the whole bar.
+        if (event.key === 'ArrowRight' && document.activeElement === parentRef.current) {
+          event.preventDefault();
+          setOpen(true);
+          queueMicrotask(() => {
+            if (panelRef.current) focusEdge(panelItems(panelRef.current), 'first');
+          });
+        } else if ((event.key === 'ArrowLeft' || event.key === 'Escape') && open) {
+          event.preventDefault();
+          event.stopPropagation();
+          setOpen(false);
+          parentRef.current?.focus();
+        }
+      }}
       // Focus leaving the whole submenu closes it. Without this, a panel opened by
       // TABBING onto the parent stays open forever — `onMouseLeave` cannot fire for a
       // pointer that never arrived, and it then floats over the rows below it.
@@ -290,11 +344,14 @@ export function MenuSubmenu({ labelKey, paths, className, children }: MenuSubmen
       }}
     >
       <button
+        ref={parentRef}
         type="button"
         role="menuitem"
         aria-haspopup="menu"
         aria-expanded={open}
+        aria-controls={open ? panelId : undefined}
         className="docx-toolbar__menu-item docx-menubar__item"
+        tabIndex={-1}
         {...(open ? { 'data-open': '' } : {})}
         onMouseDown={guardToolbarMousedown}
         onFocus={() => setOpen(true)}
@@ -315,9 +372,25 @@ export function MenuSubmenu({ labelKey, paths, className, children }: MenuSubmen
       </button>
       {open ? (
         <div
+          ref={panelRef}
+          id={panelId}
           className="docx-toolbar__menu docx-menubar__menu docx-menubar__submenu-panel"
           role="menu"
           aria-label={text}
+          onKeyDown={(event) => {
+            const panel = panelRef.current;
+            if (!panel) return;
+            const items = panelItems(panel);
+            if (event.key === 'ArrowDown') {
+              event.preventDefault();
+              event.stopPropagation();
+              focusBy(items, document.activeElement, 1);
+            } else if (event.key === 'ArrowUp') {
+              event.preventDefault();
+              event.stopPropagation();
+              focusBy(items, document.activeElement, -1);
+            }
+          }}
         >
           {children}
         </div>
@@ -353,6 +426,10 @@ export function MenuTableGrid({ slot = 'table.insert', className }: MenuTableGri
   const { isEnabled } = useEditorCommand(slot);
   const { setOpenMenu } = useMenuContext();
   const [hover, setHover] = useState<{ rows: number; cols: number } | null>(null);
+  // The cell that holds the grid's single tab stop. A 6x6 of tabbable buttons is 36 tab
+  // stops for a keyboard user; a grid is ONE, with arrows moving inside it.
+  const [cursor, setCursor] = useState({ rows: 1, cols: 1 });
+  const gridRef = useRef<HTMLDivElement | null>(null);
 
   const insert = useCallback(
     (rows: number, cols: number) => {
@@ -366,16 +443,49 @@ export function MenuTableGrid({ slot = 'table.insert', className }: MenuTableGri
     [editor, isEnabled, setOpenMenu]
   );
 
-  const cells: ReactNode[] = [];
+  /**
+   * Move the cursor within the grid and follow it with focus.
+   *
+   * Takes a STEP from the current cell rather than an absolute target, applied through the
+   * functional updater: two key presses in one React batch would both read the same
+   * captured `cursor` and the second would go nowhere, so a fast Right-Right lands one
+   * cell over instead of two.
+   */
+  const move = useCallback((step: { rows?: number; cols?: number; toCol?: number }) => {
+    setCursor((current) => {
+      const next = {
+        rows: Math.min(TABLE_GRID_ROWS, Math.max(1, current.rows + (step.rows ?? 0))),
+        cols: Math.min(
+          TABLE_GRID_COLUMNS,
+          Math.max(1, step.toCol ?? current.cols + (step.cols ?? 0))
+        ),
+      };
+      setHover(next);
+      // Focus follows in a microtask so the cell it targets has been committed with its
+      // new tabIndex.
+      queueMicrotask(() =>
+        gridRef.current
+          ?.querySelector<HTMLElement>(`[data-cell="${next.rows}x${next.cols}"]`)
+          ?.focus()
+      );
+      return next;
+    });
+  }, []);
+
+  const cellRows: ReactNode[] = [];
   for (let row = 1; row <= TABLE_GRID_ROWS; row += 1) {
+    const cells: ReactNode[] = [];
     for (let col = 1; col <= TABLE_GRID_COLUMNS; col += 1) {
       const filled = !!hover && row <= hover.rows && col <= hover.cols;
       cells.push(
         <button
-          key={`${row}x${col}`}
+          key={col}
           type="button"
-          role="menuitem"
+          role="gridcell"
+          data-cell={`${row}x${col}`}
           className="docx-menubar__grid-cell"
+          // Roving tabindex across the whole grid.
+          tabIndex={cursor.rows === row && cursor.cols === col ? 0 : -1}
           {...(filled ? { 'data-filled': '' } : {})}
           aria-label={`${col} × ${row}`}
           onMouseDown={guardToolbarMousedown}
@@ -385,20 +495,41 @@ export function MenuTableGrid({ slot = 'table.insert', className }: MenuTableGri
         />
       );
     }
+    cellRows.push(
+      <div key={row} role="row" className="docx-menubar__grid-row">
+        {cells}
+      </div>
+    );
   }
 
   return (
     <div
+      ref={gridRef}
+      // A 2-D size picker is a GRID, not a list of menu items: `menuitem` on 36 cells
+      // announces them without any positional context, and the roles a menu permits do not
+      // include one for "cell in a 6x6".
+      role="grid"
+      aria-label={`${TABLE_GRID_COLUMNS} × ${TABLE_GRID_ROWS}`}
       className={`docx-menubar__grid${className ? ` ${className}` : ''}`}
       onMouseLeave={() => setHover(null)}
+      onKeyDown={(event) => {
+        if (event.key === 'ArrowRight') move({ cols: 1 });
+        else if (event.key === 'ArrowLeft') move({ cols: -1 });
+        else if (event.key === 'ArrowDown') move({ rows: 1 });
+        else if (event.key === 'ArrowUp') move({ rows: -1 });
+        else if (event.key === 'Home') move({ toCol: 1 });
+        else if (event.key === 'End') move({ toCol: TABLE_GRID_COLUMNS });
+        else return;
+        // Stopped so the grid's arrows do not ALSO walk the menu rows behind it.
+        event.preventDefault();
+        event.stopPropagation();
+      }}
     >
-      <div
-        className="docx-menubar__grid-cells"
-        style={{ gridTemplateColumns: `repeat(${TABLE_GRID_COLUMNS}, 1fr)` }}
-      >
-        {cells}
-      </div>
-      <div className="docx-menubar__grid-caption" role="status">
+      <div className="docx-menubar__grid-cells">{cellRows}</div>
+      {/* Not a live region: `role="status"` here announced on every one of the 36 cells a
+          pointer sweep crosses. The size is already on each cell's accessible name, which
+          is what a screen-reader user actually hears as they move. */}
+      <div className="docx-menubar__grid-caption" aria-hidden="true">
         {hover ? `${hover.cols} × ${hover.rows}` : ''}
       </div>
     </div>
@@ -508,9 +639,15 @@ export interface MenuProps {
  * @public
  */
 export function Menu({ id, labelKey, className, hidden, children }: MenuProps) {
-  const { openMenu, setOpenMenu } = useMenuContext();
+  const { openMenu, setOpenMenu, activeMenu } = useMenuContext();
   const label = useMenuLabel();
   const panelId = useId();
+  const triggerRef = useRef<HTMLButtonElement | null>(null);
+  const panelRef = useRef<HTMLDivElement | null>(null);
+  // Whether the panel was opened BY KEYBOARD, so focus should move into it. A pointer
+  // user's focus must stay put — yanking it into the panel on hover would scroll the page
+  // and fight the mouse.
+  const openedByKey = useRef(false);
   // Set when HOVER switched the bar to this menu. The click that follows a hover-switch
   // must not toggle: the pointer moved onto a closed trigger, hover opened it, and by the
   // time `onClick` runs the state says "already open" — so a plain toggle would close the
@@ -523,17 +660,52 @@ export function Menu({ id, labelKey, className, hidden, children }: MenuProps) {
   const text = label(labelKey ?? registry?.labelKey ?? id);
   const rows =
     children ?? registry?.entries.map((entry, index) => <MenuEntry key={index} entry={entry} />);
+  // Closing returns focus to the trigger. Every close path UNMOUNTS the panel, so without
+  // this the element holding focus disappears and focus falls to <body> — the user is
+  // dumped at the top of the page with no announcement and has to tab back through the
+  // whole header.
+  const closeToTrigger = () => {
+    setOpenMenu(null);
+    triggerRef.current?.focus();
+  };
+
   return (
-    <div className={`docx-menubar__menu-root${className ? ` ${className}` : ''}`} data-menu={id}>
+    // `role="none"` on the wrapper: `menubar` must OWN its `menuitem`s, and an unrole'd
+    // div between them breaks the relationship AT derives item counts and "x of y" from.
+    <div
+      role="none"
+      className={`docx-menubar__menu-root${className ? ` ${className}` : ''}`}
+      data-menu={id}
+    >
       <button
+        ref={triggerRef}
         type="button"
         role="menuitem"
         aria-haspopup="menu"
         aria-expanded={open}
         aria-controls={open ? panelId : undefined}
         className="docx-menubar__trigger"
+        // Roving tabindex: the bar is ONE tab stop, and arrows move within it. Without
+        // this every trigger is a stop and a keyboard user tabs through four of them to
+        // get past the editor's chrome.
+        tabIndex={activeMenu === id ? 0 : -1}
         {...(open ? { 'data-open': '' } : {})}
         onMouseDown={guardToolbarMousedown}
+        onKeyDown={(event) => {
+          if (event.key === 'ArrowDown' || event.key === 'Enter' || event.key === ' ') {
+            event.preventDefault();
+            openedByKey.current = true;
+            setOpenMenu(id);
+          } else if (event.key === 'ArrowUp') {
+            // Word and Docs both open UPWARDS-from-the-bottom on ArrowUp.
+            event.preventDefault();
+            openedByKey.current = true;
+            setOpenMenu(id);
+          } else if (event.key === 'Escape' && open) {
+            event.preventDefault();
+            closeToTrigger();
+          }
+        }}
         onClick={() => {
           if (switchedByHover.current) {
             switchedByHover.current = false;
@@ -557,10 +729,48 @@ export function Menu({ id, labelKey, className, hidden, children }: MenuProps) {
       </button>
       {open ? (
         <div
+          ref={(node) => {
+            panelRef.current = node;
+            // Focus the first row when the panel was opened from the keyboard. Done in the
+            // ref callback rather than an effect so it lands in the same commit the panel
+            // mounts in, with no intermediate frame where focus is nowhere.
+            if (node && openedByKey.current) {
+              openedByKey.current = false;
+              focusEdge(panelItems(node), 'first');
+            }
+          }}
           id={panelId}
           role="menu"
           aria-label={text}
           className="docx-toolbar__menu docx-menubar__menu"
+          onKeyDown={(event) => {
+            const panel = panelRef.current;
+            if (!panel) return;
+            const items = panelItems(panel);
+            const focused = document.activeElement;
+            if (event.key === 'ArrowDown') {
+              event.preventDefault();
+              focusBy(items, focused, 1);
+            } else if (event.key === 'ArrowUp') {
+              event.preventDefault();
+              focusBy(items, focused, -1);
+            } else if (event.key === 'Home') {
+              event.preventDefault();
+              focusEdge(items, 'first');
+            } else if (event.key === 'End') {
+              event.preventDefault();
+              focusEdge(items, 'last');
+            } else if (event.key === 'Escape') {
+              // Stopped here so the root's document listener does not ALSO close the bar
+              // and race the focus restore below.
+              event.preventDefault();
+              event.stopPropagation();
+              closeToTrigger();
+            } else if (event.key === 'Tab') {
+              // Tab leaves the whole widget rather than walking every row: one tab stop.
+              setOpenMenu(null);
+            }
+          }}
         >
           {rows}
         </div>

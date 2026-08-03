@@ -1358,6 +1358,23 @@ export function toolbarCommandState(editor: Editor | null, id: ChromeSlotId): To
             ? { id, enabled: true, disabledReason: null, active: false }
             : { id, enabled: false, disabledReason: canApply.reason, active: false };
         }
+        // A slot with a PROBE has a command shape the engine can judge, even though no fixed
+        // command can be dispatched from a bare click. When the engine REFUSES the probe, that
+        // refusal is the honest reason and it is the engine's own words — quote it rather than
+        // inventing one. When the engine ALLOWS it, the gap is this chrome's, not the engine's,
+        // so the answer falls through below: the capability exists, this control cannot reach
+        // it. That asymmetry is deliberate — reporting "enabled" here would light up
+        // `text.link` in an adapter that has grown no link UI, which is the enabled-dead-button
+        // this table exists to avoid.
+        const // (undocumented)
+        shapeProbe = CHROME_PROBES[id];
+        if (shapeProbe) {
+            const // (undocumented)
+            judged: CanResult = editor.can(shapeProbe);
+            if (!judged.ok) {
+                return { id, enabled: false, disabledReason: judged.reason, active: false };
+            }
+        }
         // Save is wired — just not as a command. Reporting it "not wired to an editor
         // command" told a host the capability is missing when what is actually missing is a
         // COMMAND for it: the control runs `runSave`, and both adapters reach it by branching

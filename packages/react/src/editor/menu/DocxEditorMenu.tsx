@@ -34,6 +34,7 @@ import { DocxEditorPageSetupDialog } from '../DocxEditorPageSetup';
 import type { ToolbarTranslate } from '../toolbar/toolbar-context';
 import { guardToolbarMousedown } from '../toolbar/ToolbarButton';
 import { MenuContext, type MenuContextValue } from './menu-context';
+import { barTriggers } from './menu-keyboard';
 import {
   Menu,
   MenuEntry,
@@ -135,12 +136,42 @@ export interface DocxEditorMenuProps {
   children?: ReactNode;
 }
 
-/** The menu id one child element drives, or null for a non-menu child. */
+const MENU_IDS = new Set<string>(CHROME_MENUS.map((menu) => menu.id));
+
+/**
+ * The menu id one child element drives, or null for a non-menu child.
+ *
+ * Recognizes THREE shapes, because missing any of them is not a no-op — an unrecognized
+ * child is APPENDED, so the bar renders that menu twice and both copies open together
+ * (`Menu` keys purely off `openMenu === id`):
+ *
+ * - a pinned part (`DocxEditor.Menu.File`), by its `docxMenu` static;
+ * - the generic `DocxEditor.Menu.Menu` with an `id` prop, which the namespace documents as
+ *   "a menu of the bar, addressed by registry id" and which carries no static at all;
+ * - either of those wrapped in a Fragment. `Children.toArray` does not flatten Fragment
+ *   ELEMENTS, so `child.type` is a symbol and the naive check falls through — which a host
+ *   hits the moment it maps over its overrides with a `<>…</>` around them.
+ */
 function menuOfChild(child: ReactNode): ChromeMenuId | null {
   if (!isValidElement(child)) return null;
+  if (child.type === Fragment) {
+    // One menu per fragment: a fragment holding two overrides is ambiguous about which
+    // slot it replaces, so it appends rather than guessing.
+    const inner = Children.toArray((child.props as { children?: ReactNode }).children);
+    const ids = inner.map(menuOfChild).filter((id): id is ChromeMenuId => id !== null);
+    return ids.length === 1 ? ids[0]! : null;
+  }
   const type = child.type as { docxMenu?: unknown };
-  if (typeof type !== 'function' && typeof type !== 'object') return null;
-  return typeof type.docxMenu === 'string' ? (type.docxMenu as ChromeMenuId) : null;
+  if (typeof type === 'function' || typeof type === 'object') {
+    if (typeof type.docxMenu === 'string') return type.docxMenu as ChromeMenuId;
+  }
+  // The generic `Menu`: identity comparison against the exported component, then its own
+  // `id` prop. Compared by reference rather than by name — displayName minifies away.
+  if (child.type === Menu) {
+    const id = (child.props as { id?: unknown }).id;
+    if (typeof id === 'string' && MENU_IDS.has(id)) return id as ChromeMenuId;
+  }
+  return null;
 }
 
 function DocxEditorMenuRoot(props: DocxEditorMenuProps) {
@@ -158,6 +189,9 @@ function DocxEditorMenuRoot(props: DocxEditorMenuProps) {
   } = props;
   const editor = useDocxEditor();
   const [openMenu, setOpenMenu] = useState<ChromeMenuId | null>(null);
+  // The bar's single tab stop. Defaults to the first rendered menu; arrowing along the bar
+  // moves it, and opening a menu takes it so Escape returns focus somewhere sensible.
+  const [activeMenu, setActiveMenu] = useState<ChromeMenuId | null>(null);
   const [pageSetupOpen, setPageSetupOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
@@ -181,6 +215,13 @@ function DocxEditorMenuRoot(props: DocxEditorMenuProps) {
       document.removeEventListener('keydown', onKeyDown);
     };
   }, [openMenu]);
+
+  // Opening a menu also claims the tab stop, so Escape has a trigger to return to and a
+  // later Tab leaves from where the user actually was.
+  const openMenuAndFocus = useCallback((id: ChromeMenuId | null) => {
+    setOpenMenu(id);
+    if (id !== null) setActiveMenu(id);
+  }, []);
 
   const packagedOpen = useCallback(() => fileInputRef.current?.click(), []);
 
@@ -242,14 +283,25 @@ function DocxEditorMenuRoot(props: DocxEditorMenuProps) {
     () => ({
       t,
       openMenu,
-      setOpenMenu,
+      setOpenMenu: openMenuAndFocus,
+      activeMenu,
       onOpen: resolvedOpen,
       onSave: resolvedSave,
       onPageSetup: resolvedPageSetup,
       onReportIssue,
       reportIssue,
     }),
-    [t, openMenu, resolvedOpen, resolvedSave, resolvedPageSetup, onReportIssue, reportIssue]
+    [
+      t,
+      openMenu,
+      openMenuAndFocus,
+      activeMenu,
+      resolvedOpen,
+      resolvedSave,
+      resolvedPageSetup,
+      onReportIssue,
+      reportIssue,
+    ]
   );
 
   let content: ReactNode;
@@ -280,13 +332,44 @@ function DocxEditorMenuRoot(props: DocxEditorMenuProps) {
   return (
     <MenuContext.Provider value={context}>
       <div
-        ref={rootRef}
+        ref={(node) => {
+          rootRef.current = node;
+          // Seed the tab stop on the first RENDERED menu rather than on the registry's
+          // first: a bar whose File menu was hidden would otherwise have its only tab stop
+          // on an element that does not exist, and be unreachable by keyboard.
+          if (node && activeMenu === null) {
+            const first = barTriggers(node)[0]?.closest('[data-menu]')?.getAttribute('data-menu');
+            if (first) setActiveMenu(first as ChromeMenuId);
+          }
+        }}
         role="menubar"
+        // Named, because a host page can carry its own menubar beside the editor's and
+        // "menu bar" twice tells a screen-reader user nothing about which is which.
+        aria-label={(t ?? ((key: string) => key))('titleBar.menuBarAriaLabel')}
         data-testid="docx-menubar"
         className={`docx-menubar${className ? ` ${className}` : ''}`}
         // Container-level caret guard (CLAUDE.md focus-stealing pitfall): a disabled row
         // never receives mousedown, so per-row handlers cannot cover it.
         onMouseDown={guardToolbarMousedown}
+        onKeyDown={(event) => {
+          if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return;
+          const bar = rootRef.current;
+          if (!bar) return;
+          // Only the BAR's own arrows. Inside an open panel, Left/Right belong to the
+          // submenu contract and the panel has already stopped them.
+          const triggers = barTriggers(bar);
+          const index = triggers.indexOf(document.activeElement as HTMLElement);
+          if (index === -1) return;
+          event.preventDefault();
+          const step = event.key === 'ArrowRight' ? 1 : -1;
+          const next = triggers[(index + step + triggers.length) % triggers.length];
+          const id = next?.closest('[data-menu]')?.getAttribute('data-menu');
+          if (!id) return;
+          setActiveMenu(id as ChromeMenuId);
+          next?.focus();
+          // Docs' behaviour: arrowing along an OPEN bar keeps browsing the panels.
+          if (openMenu !== null) setOpenMenu(id as ChromeMenuId);
+        }}
       >
         {content}
       </div>

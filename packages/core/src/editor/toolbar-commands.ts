@@ -53,10 +53,10 @@ const SLOT_COMMANDS: Partial<Record<ChromeSlotId, EditorCommand>> = {
   'list.outdent': { type: 'adjustIndent', direction: 'decrease' },
   'insert.pageBreak': { type: 'insertBreak', kind: 'page' },
   'insert.sectionBreakNextPage': { type: 'insertBreak', kind: 'section' },
-  // `insert.sectionBreakContinuous`, `insert.toc` and `insert.watermark` are deliberately
-  // absent: a continuous section break is not in the `insertBreak` vocabulary, and neither
-  // a table of contents nor a watermark is an edit the tree editor executes yet. Each
-  // reports the engine's own refusal rather than a chrome-invented one.
+  // `insert.sectionBreakContinuous` and `insert.toc` are deliberately absent: a continuous
+  // section break is not in the `insertBreak` vocabulary, and a table of contents is not an
+  // edit the tree editor executes. Neither has a command SHAPE to probe with either, so
+  // their disabled reason is this table's, not the engine's — see `toolbarCommandState`.
 };
 
 /**
@@ -82,6 +82,14 @@ export function chromeProbeForSlot(slotId: ChromeSlotId): EditorCommand | null {
 
 const CHROME_PROBES: Partial<Record<ChromeSlotId, EditorCommand>> = {
   'text.link': { type: 'insertHyperlink', href: 'https://example.com' },
+  // Insert image and insert table have a real command shape (`insertImage`/`insertTable`
+  // are in the edit vocabulary), they are simply not executed by this engine yet. Probing
+  // means their disabled tooltip is the ENGINE saying so in its own words instead of chrome
+  // guessing — and the day the engine wires them, `can` starts answering yes and the probe
+  // stops being the reason they are disabled, with no registry edit needed. `data` and
+  // `rows`/`cols` are shape-satisfying placeholders; the probe is never executed.
+  'image.insert': { type: 'insertImage', data: new Uint8Array(0) },
+  'table.insert': { type: 'insertTable', rows: 1, cols: 1 },
   // Page setup is the same shape: whether this document's sections can be rewritten is the
   // engine's question, but WHICH size, orientation and margins is the dialog's. The probe
   // names one field so `classifyCommand`'s "requires at least one field" gate passes; it is
@@ -192,6 +200,21 @@ export function toolbarCommandState(editor: Editor | null, id: ChromeSlotId): To
       return canApply.ok
         ? { id, enabled: true, disabledReason: null, active: false }
         : { id, enabled: false, disabledReason: canApply.reason, active: false };
+    }
+    // A slot with a PROBE has a command shape the engine can judge, even though no fixed
+    // command can be dispatched from a bare click. When the engine REFUSES the probe, that
+    // refusal is the honest reason and it is the engine's own words — quote it rather than
+    // inventing one. When the engine ALLOWS it, the gap is this chrome's, not the engine's,
+    // so the answer falls through below: the capability exists, this control cannot reach
+    // it. That asymmetry is deliberate — reporting "enabled" here would light up
+    // `text.link` in an adapter that has grown no link UI, which is the enabled-dead-button
+    // this table exists to avoid.
+    const shapeProbe = CHROME_PROBES[id];
+    if (shapeProbe) {
+      const judged: CanResult = editor.can(shapeProbe);
+      if (!judged.ok) {
+        return { id, enabled: false, disabledReason: judged.reason, active: false };
+      }
     }
     // Save is wired — just not as a command. Reporting it "not wired to an editor
     // command" told a host the capability is missing when what is actually missing is a

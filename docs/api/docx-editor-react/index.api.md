@@ -765,6 +765,7 @@ export interface MenuRowProps {
     icon?: ReactNode;
     // (undocumented)
     onSelect?: () => void;
+    selected?: true;
     shortcut?: string;
     slot?: string;
     title?: string;

@@ -18,6 +18,13 @@ export interface MenuContextValue {
   /** Which menu is open, or null. Owned by the root so only one panel shows at a time. */
   readonly openMenu: ChromeMenuId | null;
   readonly setOpenMenu: (id: ChromeMenuId | null) => void;
+  /**
+   * Which trigger holds the bar's single tab stop (the roving tabindex). Separate from
+   * `openMenu` because the bar must be tabbable while CLOSED — otherwise a keyboard user
+   * cannot reach it at all — and because arrowing along the bar moves the stop without
+   * opening anything.
+   */
+  readonly activeMenu: ChromeMenuId | null;
   /** Resolved File-row actions; absent renders the row disabled. */
   readonly onOpen: (() => void) | undefined;
   readonly onSave: (() => void) | undefined;
@@ -32,6 +39,7 @@ export const MenuContext = createContext<MenuContextValue>({
   t: undefined,
   openMenu: null,
   setOpenMenu: () => {},
+  activeMenu: null,
   onOpen: undefined,
   onSave: undefined,
   onPageSetup: undefined,

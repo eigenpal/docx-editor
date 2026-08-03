@@ -182,7 +182,7 @@ describe('rows carry the engine, not a paraphrase', () => {
     // Page break lives in the Break submenu, which opens under the pointer.
     openSubmenu(view, 'toolbar.break');
     const pageBreak = row(view, 'insert.pageBreak');
-    expect(pageBreak.disabled).toBe(false);
+    expect(pageBreak.getAttribute('aria-disabled')).toBeNull();
     act(() => {
       fireEvent.click(pageBreak);
     });
@@ -202,19 +202,43 @@ describe('rows carry the engine, not a paraphrase', () => {
     });
     openMenu(view, 'toolbar.insert');
 
-    // Table of contents has no command in the tree editor yet. Present — dropping it
-    // would understate the gap — disabled, and its tooltip is the engine's own words.
+    // Table of contents has no command in the tree editor yet. Present — dropping it would
+    // understate the gap — and disabled via `aria-disabled`, NOT the native attribute, so
+    // it stays focusable and its reason stays announceable.
     const toc = row(view, 'insert.toc');
-    expect(toc.disabled).toBe(true);
+    expect(toc.disabled).toBe(false);
+    expect(toc.getAttribute('aria-disabled')).toBe('true');
+    // No command SHAPE to probe with, so chrome answers — and says which case it is.
     expect(toc.getAttribute('title')).toBe('not wired to an editor command');
+    // The reason is DESCRIBED, not just hovered: a tooltip on a row a pointer may never
+    // touch reaches nobody.
+    const describedBy = toc.getAttribute('aria-describedby');
+    expect(describedBy).toBeTruthy();
+    expect(view.container.querySelector(`#${CSS.escape(describedBy!)}`)?.textContent).toBe(
+      'not wired to an editor command'
+    );
     // The label is still the registry's, so the row reads as itself.
     expect(toc.textContent).toContain('toolbar.tableOfContents');
 
     // Same treatment inside the submenu: the continuous section break is a real Word
     // choice the engine cannot express, so it is shown and refused rather than dropped.
     openSubmenu(view, 'toolbar.break');
-    expect(row(view, 'insert.sectionBreakContinuous').disabled).toBe(true);
-    expect(row(view, 'insert.sectionBreakNextPage').disabled).toBe(false);
+    expect(row(view, 'insert.sectionBreakContinuous').getAttribute('aria-disabled')).toBe('true');
+    expect(row(view, 'insert.sectionBreakNextPage').getAttribute('aria-disabled')).toBeNull();
+  });
+
+  test('a probeable row quotes the ENGINE, not chrome', async () => {
+    // `image.insert` and `table.insert` have a real command shape, so the engine can judge
+    // them — and its refusal is the reason the row shows, rather than a chrome guess.
+    const { view } = mountMenu(<DocxEditorMenu />);
+    await act(async () => {
+      await Promise.resolve();
+    });
+    openMenu(view, 'toolbar.insert');
+    const image = row(view, 'image.insert');
+    expect(image.getAttribute('aria-disabled')).toBe('true');
+    expect(image.getAttribute('title')).toContain('not supported by the tree editor');
+    expect(image.getAttribute('title')).not.toBe('not wired to an editor command');
   });
 
   test('Open and Save work with no configuration at all', async () => {
@@ -225,9 +249,9 @@ describe('rows carry the engine, not a paraphrase', () => {
       await Promise.resolve();
     });
     openMenu(view, 'toolbar.file');
-    expect(row(view, 'file.open').disabled).toBe(false);
-    expect(row(view, 'file.save').disabled).toBe(false);
-    expect(row(view, 'file.pageSetup').disabled).toBe(false);
+    expect(row(view, 'file.open').getAttribute('aria-disabled')).toBeNull();
+    expect(row(view, 'file.save').getAttribute('aria-disabled')).toBeNull();
+    expect(row(view, 'file.pageSetup').getAttribute('aria-disabled')).toBeNull();
     // The shortcut column is filled from the registry's keys.
     expect(row(view, 'file.save').textContent).toContain('toolbar.saveShortcut');
   });
@@ -398,6 +422,158 @@ describe('chrome contracts', () => {
     expect(view.container.querySelector('[data-menu="help"]')).toBeNull();
     // The rest of the bar is untouched.
     expect(view.container.querySelector('[data-menu="insert"]')).not.toBeNull();
+  });
+
+  test('the generic Menu and fragment-wrapped parts override instead of duplicating', () => {
+    // An unrecognized child is APPENDED, so a missed match renders the menu twice and both
+    // copies open together — silent, and exactly what the namespace's documented
+    // "addressed by registry id" shape used to do.
+    const generic = mountMenu(
+      <DocxEditorMenu>
+        <DocxEditorMenu.Menu id="file" className="via-generic" />
+      </DocxEditorMenu>
+    );
+    expect(menuIds(bar(generic.view))).toEqual([...EXPECTED_MENUS]);
+    expect(generic.view.container.querySelectorAll('[data-menu="file"]').length).toBe(1);
+    openMenu(generic.view, 'toolbar.file');
+    expect(generic.view.container.querySelectorAll('[role="menu"]').length).toBe(1);
+    cleanup();
+
+    // `Children.toArray` does not flatten Fragment ELEMENTS, so `child.type` is a symbol.
+    const wrapped = mountMenu(
+      <DocxEditorMenu>
+        <>
+          <DocxEditorMenu.Insert className="via-fragment" />
+        </>
+      </DocxEditorMenu>
+    );
+    expect(menuIds(bar(wrapped.view))).toEqual([...EXPECTED_MENUS]);
+    expect(wrapped.view.container.querySelectorAll('[data-menu="insert"]').length).toBe(1);
+  });
+
+  test('the bar is ONE tab stop, and arrows move along it', () => {
+    const { view } = mountMenu(<DocxEditorMenu />);
+    const triggers = [...view.container.querySelectorAll<HTMLElement>('.docx-menubar__trigger')];
+    // Roving tabindex: four triggers, one reachable by Tab.
+    expect(triggers.filter((t) => t.tabIndex === 0).length).toBe(1);
+    expect(triggers[0]!.tabIndex).toBe(0);
+
+    act(() => {
+      triggers[0]!.focus();
+      fireEvent.keyDown(triggers[0]!, { key: 'ArrowRight' });
+    });
+    expect(document.activeElement).toBe(triggers[1]!);
+    expect(triggers[1]!.tabIndex).toBe(0);
+
+    // Wraps at the end, which is what makes a four-item bar usable.
+    act(() => {
+      fireEvent.keyDown(triggers[1]!, { key: 'ArrowLeft' });
+      fireEvent.keyDown(triggers[0]!, { key: 'ArrowLeft' });
+    });
+    expect(document.activeElement).toBe(triggers[triggers.length - 1]!);
+  });
+
+  test('ArrowDown opens a menu and lands focus on its first row; Escape returns it', () => {
+    const { view } = mountMenu(<DocxEditorMenu />);
+    const file = [...view.container.querySelectorAll<HTMLElement>('.docx-menubar__trigger')][0]!;
+    act(() => {
+      file.focus();
+      fireEvent.keyDown(file, { key: 'ArrowDown' });
+    });
+    expect(document.activeElement).toBe(row(view, 'file.open'));
+
+    // Arrow down the rows.
+    act(() => {
+      fireEvent.keyDown(document.activeElement!, { key: 'ArrowDown' });
+    });
+    expect(document.activeElement).toBe(row(view, 'file.save'));
+
+    // Escape closes AND restores focus — every close path unmounts the panel, so without
+    // the restore the user is dropped on <body> at the top of the page.
+    act(() => {
+      fireEvent.keyDown(document.activeElement!, { key: 'Escape' });
+    });
+    expect(view.container.querySelectorAll('[role="menu"]').length).toBe(0);
+    expect(document.activeElement).toBe(file);
+  });
+
+  test('a disabled row is still focusable, so its reason is reachable', () => {
+    const { view } = mountMenu(<DocxEditorMenu />);
+    openMenu(view, 'toolbar.insert');
+    const toc = row(view, 'insert.toc');
+    act(() => {
+      toc.focus();
+    });
+    // Native `disabled` would have removed it from the tab order and from arrow
+    // navigation entirely — the reason would reach nobody.
+    expect(document.activeElement).toBe(toc);
+    // And it still refuses to act.
+    act(() => {
+      fireEvent.click(toc);
+    });
+    expect(view.container.querySelectorAll('[role="menu"]').length).toBe(1);
+  });
+
+  test('the alignment rows are one-of-four, not four independent toggles', () => {
+    const { view } = mountMenu(<DocxEditorMenu />);
+    openMenu(view, 'toolbar.format');
+    for (const slot of ['alignment.left', 'alignment.center', 'alignment.right']) {
+      expect(row(view, slot).getAttribute('role')).toBe('menuitemradio');
+    }
+    // A mark is a genuine independent toggle.
+    expect(row(view, 'text.bold').getAttribute('role')).toBe('menuitemcheckbox');
+    // And a plain action claims no state at all.
+    openMenu(view, 'toolbar.insert');
+    expect(row(view, 'insert.toc').getAttribute('role')).toBe('menuitem');
+  });
+
+  test('the table grid is a grid with one tab stop, not 36 menu items', async () => {
+    // Rendered only when the engine can insert, so this drives the part directly rather
+    // than waiting on an engine that does not wire `insertTable` yet.
+    const { view } = mountMenu(
+      <DocxEditorMenu preset={false}>
+        <DocxEditorMenu.Menu id="insert">
+          <DocxEditorMenu.TableGrid />
+        </DocxEditorMenu.Menu>
+      </DocxEditorMenu>
+    );
+    openMenu(view, 'toolbar.insert');
+    const grid = view.container.querySelector<HTMLElement>('[role="grid"]')!;
+    expect(grid).not.toBeNull();
+    expect(grid.querySelectorAll('[role="row"]').length).toBe(6);
+    const cells = [...grid.querySelectorAll<HTMLElement>('[role="gridcell"]')];
+    expect(cells.length).toBe(36);
+    expect(cells.filter((cell) => cell.tabIndex === 0).length).toBe(1);
+    // No `menuitem` on a two-dimensional picker.
+    expect(grid.querySelectorAll('[role="menuitem"]').length).toBe(0);
+
+    // Two presses in ONE batch: the cursor composes through a functional update, so the
+    // second press does not read a stale captured value and land one cell short.
+    act(() => {
+      fireEvent.keyDown(grid, { key: 'ArrowRight' });
+      fireEvent.keyDown(grid, { key: 'ArrowDown' });
+    });
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(document.activeElement?.getAttribute('data-cell')).toBe('2x2');
+  });
+
+  test('ARIA containment: the menubar owns its items through role="none" wrappers', () => {
+    const { view } = mountMenu(<DocxEditorMenu />);
+    const menubar = bar(view);
+    expect(menubar.getAttribute('aria-label')).toBe('titleBar.menuBarAriaLabel');
+    // `menubar` -> unrole'd div -> menuitem breaks the required-owned-elements
+    // relationship AT derives item counts and "x of y" announcements from.
+    for (const child of menubar.children) {
+      expect(child.getAttribute('role')).toBe('none');
+    }
+    openMenu(view, 'toolbar.insert');
+    const panel = view.container.querySelector<HTMLElement>('[role="menu"]')!;
+    for (const child of panel.children) {
+      const role = child.getAttribute('role');
+      expect(['menuitem', 'menuitemcheckbox', 'menuitemradio', 'separator', 'none']).toContain(role);
+    }
   });
 
   test('Escape closes the open menu', () => {
