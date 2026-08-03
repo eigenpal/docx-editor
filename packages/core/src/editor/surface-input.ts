@@ -72,6 +72,12 @@ export function createKeyDownHandler(
         (event.altKey || event.ctrlKey)
       ) {
         scoped = event.key === 'ArrowLeft' ? 'wordLeft' : 'wordRight';
+      } else if (event.metaKey && (event.key === 'ArrowLeft' || event.key === 'ArrowRight')) {
+        // Cmd+Arrow is the LINE gesture on macOS, where most keyboards carry no Home/End
+        // key — binding line motion to those alone left it unreachable, and this branch
+        // fell through to character motion that then preventDefault'd the native one.
+        // Keyed on Cmd specifically, not on `accel`: Ctrl+Arrow is word motion above.
+        scoped = event.key === 'ArrowLeft' ? 'lineStart' : 'lineEnd';
       } else if (accel && (event.key === 'ArrowUp' || event.key === 'ArrowDown')) {
         scoped = event.key === 'ArrowUp' ? 'documentStart' : 'documentEnd';
       }
