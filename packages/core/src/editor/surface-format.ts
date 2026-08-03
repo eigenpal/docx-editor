@@ -57,6 +57,11 @@ export interface SurfaceFormatDeps {
    */
   pendingFormats(): readonly SurfaceProperty[] | null;
   setPendingFormats(next: readonly SurfaceProperty[] | null): void;
+  /**
+   * The document's default paragraph style, so a paragraph that names none reports the
+   * style it is actually written in rather than nothing.
+   */
+  defaultParagraphStyleId?(): string | null;
 }
 
 type FormatMethods = Pick<
@@ -222,7 +227,8 @@ export function createSurfaceFormat(deps: SurfaceFormatDeps): FormatMethods {
           selectionNow.value,
           (paragraphId: string, runProperties) =>
             session.effectiveRunDefaults(paragraphId, runProperties),
-          deps.selectedCells?.()
+          deps.selectedCells?.(),
+          deps.defaultParagraphStyleId?.() ?? null
         ),
         deps.pendingFormats()
       ),

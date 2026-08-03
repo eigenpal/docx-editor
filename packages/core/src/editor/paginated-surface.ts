@@ -330,6 +330,7 @@ export function mountPaginatedSurface(
     selectionMark: () => selectionMark(),
     textOf: (paragraphId) => textOf(paragraphId),
     selectedCells: () => cellSelection?.cellIds,
+    defaultParagraphStyleId: () => styleCascade?.defaultParagraphStyleId ?? null,
     pendingFormats: () => pendingAtCaret(),
     setPendingFormats: (next) => {
       if (next === null || next.length === 0) {

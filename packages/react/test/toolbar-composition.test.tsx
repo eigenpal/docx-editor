@@ -402,17 +402,25 @@ describe('the shaped parts', () => {
       '[data-slot="styles.style"] .docx-toolbar__style-trigger'
     ) as HTMLButtonElement;
     expect(trigger.disabled).toBe(false);
-    expect(trigger.textContent).toBe('styles.normalText');
+    // The paragraph names no `w:pStyle`, but it IS written in the document's default
+    // style, and that is what Word's box shows — not a generic placeholder over a style
+    // the menu below lists by name with the tick beside nothing.
+    expect(trigger.textContent).toBe('Normal');
 
     await act(async () => {
       trigger.click();
     });
-    const items = [
-      ...view.container.querySelectorAll('[data-slot="styles.style"] [role="option"]'),
-    ].map((item) => item.textContent);
+    const rows = [...view.container.querySelectorAll('[data-slot="styles.style"] [role="option"]')];
+    // The selected row carries a ✓ glyph, so compare the label span rather than the row.
+    const items = rows.map((row) => row.querySelector('span')?.textContent);
     // Word's gallery order, NOT the order the part lists them in, with the unranked style
     // keeping its document position at the end.
     expect(items).toEqual(['Normal', 'heading 1', 'Callout']);
+    // The paragraph states no `w:pStyle` but IS written in the default style, so the tick
+    // sits on it. Reading "no style" as "nothing selected" left every row unticked while
+    // the trigger showed a placeholder for a style the list names.
+    expect(rows[0]!.getAttribute('aria-selected')).toBe('true');
+    expect(rows[1]!.getAttribute('aria-selected')).toBe('false');
 
     // Each row renders in the style's OWN face, so the menu previews rather than listing
     // identical rows. The values come from the engine's bounded derivation and go into a

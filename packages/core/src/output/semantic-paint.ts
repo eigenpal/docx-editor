@@ -615,10 +615,17 @@ function paintTabLeader(
   layer.style.whiteSpace = 'pre';
   layer.style.pointerEvents = 'none';
   layer.style.userSelect = 'none';
-  // The zero-size strut plus an explicit line-height is how `paintLine` sits its runs, so
-  // reusing it here puts the leader on exactly the baseline the text on this line got.
+  // LEADER DOTS SIT ON THE BASELINE, like the periods they stand in for — Word and Docs
+  // both draw them as ordinary typed punctuation resting on the text baseline, not floating
+  // at the middle of the line.
+  //
+  // A zero-size strut takes its half-leading equally above and below, so its baseline lands
+  // at HALF the line-height: with the full line height that is the vertical centre, which
+  // is where the dots were. Doubling the published baseline puts the strut's baseline at
+  // `line.baseline` from the layer's top instead — the same baseline `paintLine` gave the
+  // text beside it. Anything the taller line-height pushes below the box is clipped.
   layer.style.fontSize = '0';
-  layer.style.lineHeight = `${line.box.height * scale}px`;
+  layer.style.lineHeight = `${2 * line.baseline * scale}px`;
 
   const glyphs = document.createElement('span');
   glyphs.style.display = 'inline-block';

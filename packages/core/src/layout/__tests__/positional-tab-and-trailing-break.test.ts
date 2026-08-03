@@ -157,6 +157,22 @@ describe('a w:ptab leader is PAINTED across the advance, not merely published', 
     expect(addressable.map((span) => span.textContent).join('')).toContain('7');
   });
 
+  test('the dots rest on the text baseline, not the middle of the line', () => {
+    // Word and Docs both draw leader dots as the typed punctuation they stand in for,
+    // sitting on the baseline. The layer uses a zero-size strut, whose baseline lands at
+    // HALF its line-height — with the full line height that is the vertical centre, which
+    // is where the dots floated. The line-height has to be twice the PUBLISHED baseline
+    // for the strut to sit where the text beside it sits.
+    const layout = lay(CONTENTS);
+    const line = paragraphs(layout)[0]!.lines[0]!;
+    const container = painted(CONTENTS);
+    const leader = container.querySelector<HTMLElement>('[data-docx-tab-leader]')!;
+    expect(Number.parseFloat(leader.style.lineHeight)).toBeCloseTo(2 * line.baseline, 5);
+    // Which is NOT the line box — the bug this pins is exactly that mistake.
+    expect(Number.parseFloat(leader.style.lineHeight)).not.toBeCloseTo(line.box.height, 5);
+    expect(line.baseline).toBeLessThan(line.box.height);
+  });
+
   test('a ptab with no leader paints no layer at all', () => {
     const container = painted(
       '<w:p><w:r><w:t>a</w:t><w:ptab w:alignment="right" w:relativeTo="margin"/>' +

@@ -460,7 +460,13 @@ export function formattingAt(
   layout: SemanticLayout,
   selection: SemanticSelection,
   inherited?: InheritedRunDefaults,
-  cells?: readonly string[]
+  cells?: readonly string[],
+  /**
+   * `w:style[@w:default='1'][@w:type='paragraph']` — the style a paragraph that names none
+   * is actually written in. Word's style box shows THAT (normally "Normal"), not a blank:
+   * "no `w:pStyle`" is a statement about the file, not about what the user is looking at.
+   */
+  defaultParagraphStyleId?: string | null
 ): SurfaceFormatting {
   const spans = selectionSpans(layout, selection, cells);
   const styles = spans.map((span) => span.style);
@@ -507,10 +513,18 @@ export function formattingAt(
         ? ('right' as const)
         : ('left' as const);
   });
+  // Resolved per paragraph BEFORE agreement, so a styled paragraph selected together with
+  // an unstyled one still reads as mixed (two different styles), while an unstyled
+  // paragraph on its own reports the default rather than nothing. Comparing raw `w:pStyle`
+  // presence conflated "the selection disagrees" with "this paragraph states no style" and
+  // showed a generic placeholder over a paragraph whose style the menu listed by name —
+  // with the tick beside none of the rows.
   const style =
     paragraphValue(
       (properties) =>
-        properties.find((property) => property.localName === 'pStyle')?.attributes?.val
+        properties.find((property) => property.localName === 'pStyle')?.attributes?.val ??
+        defaultParagraphStyleId ??
+        undefined
     ) ?? null;
   return {
     bold: styles.length > 0 && styles.every((entry) => entry.bold),
