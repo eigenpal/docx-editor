@@ -8,6 +8,7 @@
 
 import type { OoxmlNode, OoxmlParagraphNode, OoxmlPart } from '../package/ooxml-tree.ts';
 import { isContentRevisionKind } from '../package/ooxml-shared.ts';
+import type { RevisionAddress } from './tree-op-revisions.ts';
 import { findNode } from '../package/ooxml-edit.ts';
 import { paragraphPropertiesNodeOf } from './tree-op-nodes.ts';
 import { isValidXmlText } from '../package/sinks.ts';
@@ -153,6 +154,29 @@ export type TreeDocOp =
     }
   | { readonly op: 'joinParagraphs'; readonly firstId: string; readonly secondId: string }
   | {
+      /**
+       * Accept one revision, resolving every site in this part that carries its triple.
+       *
+       * The address is `(id, author, date)` WITHIN the part the op is applied to. `@w:id` is
+       * not unique and not author-scoped, so `(part, id)` would merge two authors' distinct
+       * revisions; and one logical revision — a tracked row insertion — is deliberately many
+       * elements sharing an id, which a uniqueness rule could not express at all.
+       */
+      readonly op: 'acceptRevision';
+      readonly revision: RevisionAddress;
+    }
+  | { readonly op: 'rejectRevision'; readonly revision: RevisionAddress }
+  | {
+      /**
+       * Accept every revision in the part, in ONE transaction and one history entry.
+       *
+       * Deliberately not a loop over `acceptRevision`: a reviewer who accepts a document's
+       * changes made one decision, and one undo should restore all of them.
+       */
+      readonly op: 'acceptAllRevisions';
+    }
+  | { readonly op: 'rejectAllRevisions' }
+  | {
       readonly op: 'setRunProperties';
       readonly paragraphId: string;
       readonly start: number;
@@ -276,6 +300,10 @@ export const TREE_DOC_OP_KINDS = [
   'insertHyperlink',
   'setHyperlinkTarget',
   'removeHyperlink',
+  'acceptRevision',
+  'rejectRevision',
+  'acceptAllRevisions',
+  'rejectAllRevisions',
 ] as const satisfies readonly TreeDocOpKind[];
 
 // Compile-time exhaustiveness, matching the legacy `DOC_OP_KINDS` guard: a new op must be
@@ -317,6 +345,14 @@ export type TreeOpRejection =
   | 'unsupported-property'
   | 'invalid-property-value'
   | 'not-adjacent-siblings'
+  /** No revision in this part carries the addressed `(id, author, date)` triple. */
+  | 'unknown-revision'
+  /**
+   * A matched revision is a kind whose accept/reject semantics are structural and not
+   * implemented. Refusing is deliberate: removing the markup alone would report the decision
+   * applied while leaving the row, cell, or section it describes untouched.
+   */
+  | 'unsupported-revision'
   | 'tree-invariant';
 
 export type TreeOpResult =
@@ -782,6 +818,28 @@ export function validateTreeOp(part: OoxmlPart, op: TreeDocOp): TreeOpRejection 
     if (!link) return 'unknown-paragraph';
     if (link.kind !== 'hyperlink') return 'not-a-paragraph';
     if (op.op === 'setHyperlinkTarget') return validateHyperlinkTarget(op);
+    return null;
+  }
+
+  if (
+    op.op === 'acceptRevision' ||
+    op.op === 'rejectRevision' ||
+    op.op === 'acceptAllRevisions' ||
+    op.op === 'rejectAllRevisions'
+  ) {
+    if (op.op === 'acceptRevision' || op.op === 'rejectRevision') {
+      const address = op.revision;
+      if (typeof address?.id !== 'string' || address.id.length === 0)
+        return 'invalid-property-value';
+      // The schema makes `@w:author` required, so an address without one could not match a
+      // well-formed revision and is a caller error rather than a miss.
+      if (typeof address.author !== 'string') return 'invalid-property-value';
+      if (address.date !== undefined && typeof address.date !== 'string') {
+        return 'invalid-property-value';
+      }
+    }
+    // Presence and resolvability are decided by the same walk that applies the op, so they
+    // are checked there rather than duplicated into a second traversal that could disagree.
     return null;
   }
 

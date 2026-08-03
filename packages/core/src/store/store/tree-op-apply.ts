@@ -23,6 +23,7 @@ import {
   type EditOptions,
 } from '../package/ooxml-edit.ts';
 import { W14_NAMESPACE_URI } from '../package/ooxml-shared.ts';
+import { resolveRevisions } from './tree-op-revisions.ts';
 import {
   isValidParaId,
   mintParaId,
@@ -132,6 +133,21 @@ export function applyTreeOp(part: OoxmlPart, op: TreeDocOp, options?: EditOption
   if (op.op === 'joinParagraphs') return applyJoin(part, op.firstId, op.secondId, options);
   if (op.op === 'setHyperlinkTarget') return applySetHyperlinkTarget(part, op, options);
   if (op.op === 'removeHyperlink') return applyRemoveHyperlink(part, op.linkId, options);
+  if (
+    op.op === 'acceptRevision' ||
+    op.op === 'rejectRevision' ||
+    op.op === 'acceptAllRevisions' ||
+    op.op === 'rejectAllRevisions'
+  ) {
+    const accept = op.op === 'acceptRevision' || op.op === 'acceptAllRevisions';
+    const address =
+      op.op === 'acceptRevision' || op.op === 'rejectRevision' ? op.revision : undefined;
+    const resolved = resolveRevisions(part, accept ? 'accept' : 'reject', address, options);
+    if (!resolved.ok || !resolved.part || !resolved.effect) {
+      return { ok: false, reason: resolved.reason ?? 'tree-invariant' };
+    }
+    return { ok: true, part: resolved.part, effect: resolved.effect };
+  }
   if (op.op === 'setSectionProperties') return applySetSectionProperties(part, op, options);
   if (op.op === 'setSectionMark') return applySetSectionMark(part, op.paragraphId, options);
 
