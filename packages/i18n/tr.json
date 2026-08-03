@@ -58,7 +58,8 @@
       "alignment": "Hizalama",
       "listFormatting": "Liste biçimlendirme",
       "image": "Görsel",
-      "table": "Tablo"
+      "table": "Tablo",
+      "indent": null
     },
     "undo": "Geri al",
     "undoShortcut": "Geri al (Ctrl+Z)",
@@ -963,5 +964,14 @@
       "headings": null
     },
     "title": null
+  },
+  "indent": {
+    "decreaseLeft": null,
+    "decreaseRight": null,
+    "increaseLeft": null,
+    "increaseRight": null,
+    "left": null,
+    "mixed": null,
+    "right": null
   }
 }

@@ -32,7 +32,9 @@ describe('handle positions', () => {
   });
 
   test('the right marker measures in from the right margin', () => {
-    expect(handlePosition('right', { left: 0, right: 720, firstLine: 0 }, PAGE)).toBe(12240 - 1440 - 720);
+    expect(handlePosition('right', { left: 0, right: 720, firstLine: 0 }, PAGE)).toBe(
+      12240 - 1440 - 720
+    );
   });
 });
 

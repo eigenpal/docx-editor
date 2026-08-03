@@ -32,4 +32,10 @@ export {
   type UseParagraphStyleResult,
 } from './ParagraphStyle';
 export { ToolbarAlignment, type ToolbarAlignmentComponent } from './Alignment';
+export {
+  ToolbarIndentLeft,
+  ToolbarIndentRight,
+  type ToolbarIndentComponent,
+  type ToolbarIndentProps,
+} from './steppers';
 export type { ToolbarTranslate } from './toolbar-context';

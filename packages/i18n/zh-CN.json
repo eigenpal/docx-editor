@@ -58,7 +58,8 @@
       "alignment": "对齐",
       "listFormatting": "列表格式",
       "image": "图片",
-      "table": "表格"
+      "table": "表格",
+      "indent": null
     },
     "undo": "撤销",
     "undoShortcut": "撤销(Ctrl+Z)",
@@ -963,5 +964,14 @@
       "headings": null
     },
     "title": null
+  },
+  "indent": {
+    "decreaseLeft": null,
+    "decreaseRight": null,
+    "increaseLeft": null,
+    "increaseRight": null,
+    "left": null,
+    "mixed": null,
+    "right": null
   }
 }

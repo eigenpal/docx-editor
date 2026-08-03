@@ -58,7 +58,8 @@
       "alignment": "Perataan",
       "listFormatting": "Pemformatan Daftar",
       "image": "Gambar",
-      "table": "Tabel"
+      "table": "Tabel",
+      "indent": null
     },
     "undo": "Urungkan",
     "undoShortcut": "Urungkan (Ctrl+Z)",
@@ -963,5 +964,14 @@
       "headings": null
     },
     "title": null
+  },
+  "indent": {
+    "decreaseLeft": null,
+    "decreaseRight": null,
+    "increaseLeft": null,
+    "increaseRight": null,
+    "left": null,
+    "mixed": null,
+    "right": null
   }
 }

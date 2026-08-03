@@ -129,9 +129,7 @@ describe('the effective indent read', () => {
   test('a UNIFORM two-paragraph selection reports the indent, not null', () => {
     // The regression that matters: agreeing over a freshly built object with `===` reports
     // every multi-paragraph selection as mixed, so Select All would hide all four handles.
-    const surface = mount(
-      para('one', IND('w:left="720"')) + para('two', IND('w:left="720"'))
-    );
+    const surface = mount(para('one', IND('w:left="720"')) + para('two', IND('w:left="720"')));
     selectParagraphs(surface, 0, 1);
     const indent = surface.formatting().indent;
     expect(indent?.left).toBe(720);
@@ -139,9 +137,7 @@ describe('the effective indent read', () => {
   });
 
   test('a mixed selection reports the FIRST paragraph and flags the field', () => {
-    const surface = mount(
-      para('one', IND('w:left="720"')) + para('two', IND('w:left="1440"'))
-    );
+    const surface = mount(para('one', IND('w:left="720"')) + para('two', IND('w:left="1440"')));
     selectParagraphs(surface, 0, 1);
     const indent = surface.formatting().indent;
     // Word draws the handles at the first selected paragraph rather than hiding them.

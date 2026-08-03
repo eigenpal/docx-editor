@@ -114,6 +114,11 @@ const VALUE_SLOT_PROBES: Partial<Record<ChromeSlotId, unknown>> = {
   // Single spacing: the one pick every document can honour, so the probe answers the
   // editable gate and nothing narrower.
   'list.lineSpacing': 1,
+  // Zero: always in range, so the probe answers the editable gate and nothing narrower.
+  // WITHOUT these two the steppers fall through to "not wired to an editor command" and
+  // render permanently disabled, whatever the document says.
+  'indent.left': 0,
+  'indent.right': 0,
 };
 
 /**
@@ -141,6 +146,14 @@ export function commandForSlotValue(slotId: ChromeSlotId, value: unknown): Edito
   // host that wants them builds `setLineSpacing` itself.
   if (slotId === 'list.lineSpacing') {
     return { type: 'setLineSpacing', rule: 'multiple', value: value as number };
+  }
+  // One value per call, so the two indent sides need a branch each rather than sharing
+  // one. Twips; `null` clears the indent back to the paragraph's style.
+  if (slotId === 'indent.left') {
+    return { type: 'setIndent', left: value as number | null };
+  }
+  if (slotId === 'indent.right') {
+    return { type: 'setIndent', right: value as number | null };
   }
   const entry = VALUE_SLOT_MARKS[slotId];
   if (!entry) return null;
