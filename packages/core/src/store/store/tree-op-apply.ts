@@ -42,6 +42,7 @@ import {
   parentOf,
   runPropertiesNodeOf,
 } from './tree-op-nodes.ts';
+import { paragraphIdsWithin } from './tree-op-blocks.ts';
 import {
   PARAGRAPH_VOCABULARY,
   RUN_VOCABULARY,
@@ -129,6 +130,7 @@ export function applyTreeOp(part: OoxmlPart, op: TreeDocOp, options?: EditOption
   const rejection = validateTreeOp(part, op);
   if (rejection) return { ok: false, reason: rejection };
 
+  if (op.op === 'deleteBlock') return applyDeleteBlock(part, op.blockId, options);
   if (op.op === 'joinParagraphs') return applyJoin(part, op.firstId, op.secondId, options);
   if (op.op === 'setHyperlinkTarget') return applySetHyperlinkTarget(part, op, options);
   if (op.op === 'removeHyperlink') return applyRemoveHyperlink(part, op.linkId, options);
@@ -1334,6 +1336,31 @@ function applySplitMany(
     child.id === paragraph.id ? [headParagraph, ...tailParagraphs] : [child]
   );
   return fromEdit(replaceChildren(part, parent.id, siblings, options), effect);
+}
+
+/**
+ * Take a whole block out of the tree.
+ *
+ * All of the thinking is in validation — which containers a removal may not empty, which
+ * kinds are removable at all — so the application is the `removeNode` primitive plus an
+ * honest effect. `deleted` names the block AND every paragraph that went with it: a
+ * consumer scoping work by node id has to invalidate the paragraphs, and the block id alone
+ * would leave a layout cache holding entries for paragraphs that no longer exist.
+ */
+function applyDeleteBlock(part: OoxmlPart, blockId: string, options?: EditOptions): TreeOpResult {
+  const block = findNode(part, blockId);
+  if (!block) return { ok: false, reason: 'unknown-block' };
+  const paragraphs = paragraphIdsWithin(block);
+  const effect: TreeOpEffect = {
+    dirty: [],
+    created: [],
+    deleted: [blockId, ...paragraphs.filter((id) => id !== blockId)],
+    dependencyKeys: TEXT_DEPS,
+    // The block SEQUENCE changed, so everything after it can move even though no surviving
+    // paragraph is dirty.
+    impact: 'flow-structural',
+  };
+  return fromEdit(removeNode(part, blockId, options), effect);
 }
 
 function applyJoin(

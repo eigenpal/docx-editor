@@ -90,7 +90,7 @@ export function createSurfaceFormat(deps: SurfaceFormatDeps): FormatMethods {
    * incoming one, and — for every paragraph the range covers WHOLE — the same change to that
    * paragraph's mark over the mark's own properties.
    *
-   * The range is walked the same way `deleteRangeOps` walks it: the tail of the first
+   * The range is walked the same way `planRangeDeletion` walks it: the tail of the first
    * paragraph, every paragraph in between entire, then the head of the last. Formatting used
    * to stop at the first pilcrow, which left the whole run-formatting half of the toolbar
    * disabled on a cross-paragraph selection while the READS (already range-wide) reported

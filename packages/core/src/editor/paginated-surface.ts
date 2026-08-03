@@ -54,10 +54,11 @@ import type {
 import {
   clampedToDocument,
   collapsedAt,
-  deleteRangeOps,
   orderedRangeOf,
+  planRangeDeletion,
   selectedTextIn,
   selectionMarkOf,
+  type RangeDeletionPlan,
 } from './surface-selection-ops.ts';
 import {
   createBeforeInputHandler,
@@ -427,7 +428,7 @@ export function mountPaginatedSurface(
     orderedRange: () => orderedRange(),
     selectionMark: () => selectionMark(),
     collapsedAt: (position) => collapsedAt(position),
-    deleteSelectionOps: () => deleteSelectionOps(),
+    deleteSelectionPlan: () => deleteSelectionPlan(),
     paragraphTextOf: (paragraphId) => textOf(paragraphId),
     // Resolved through `w:numStyleLink` the way LAYOUT resolves markers (§17.9.21):
     // against the raw index a delegating definition has no levels of its own, so every
@@ -876,13 +877,14 @@ export function mountPaginatedSurface(
       // range beginning at the start, so inserting at the head — which may be the far end —
       // puts the text where the removed characters used to be rather than where the user
       // was typing.
-      const start = orderedStart();
+      const plan = deleteSelectionPlan();
+      const start = plan.collapseTo;
       // Consume the stored caret format (armed only at a collapsed caret, so it cannot
       // coexist with the delete ops below): the typed range gets the caret run's own
       // properties plus the armed ones, in the SAME transaction — one undo step.
       const pendingOps = consumePendingFormatOps(start.paragraphId, start.offset, text.length);
       const insertOps: TreeDocOp[] = [
-        ...deleteSelectionOps(),
+        ...plan.ops,
         { op: 'insertText', paragraphId: start.paragraphId, offset: start.offset, text },
       ];
       const redoMark = {
@@ -903,12 +905,11 @@ export function mountPaginatedSurface(
     },
 
     deleteBackward() {
-      const ops = deleteSelectionOps();
-      if (ops.length > 0) {
-        const start = orderedStart();
+      const plan = deleteSelectionPlan();
+      if (plan.ops.length > 0) {
         commit(
-          () => session.applyTreeOps(ops, selectionMark()),
-          () => collapsedAt(start)
+          () => session.applyTreeOps(plan.ops, selectionMark()),
+          () => collapsedAt(plan.collapseTo)
         );
         return;
       }
@@ -958,7 +959,8 @@ export function mountPaginatedSurface(
       // Enter REPLACES a selection, like every other insertion, and splits at its START —
       // splitting at the head left the selected text in place and cut the paragraph at
       // whichever end the user happened to drag to.
-      const position = orderedStart();
+      const plan = deleteSelectionPlan();
+      const position = plan.collapseTo;
       const before = new Set(session.paragraphIds());
       // Word carries the typing format across Enter: bold armed before the split applies
       // to the first characters typed in the new paragraph.
@@ -967,7 +969,7 @@ export function mountPaginatedSurface(
         () =>
           session.applyTreeOps(
             [
-              ...deleteSelectionOps(),
+              ...plan.ops,
               {
                 op: 'splitParagraph',
                 paragraphId: position.paragraphId,
@@ -1132,12 +1134,11 @@ export function mountPaginatedSurface(
     },
 
     deleteSelection() {
-      const ops = deleteSelectionOps();
-      if (ops.length === 0) return false;
-      const start = orderedStart();
+      const plan = deleteSelectionPlan();
+      if (plan.ops.length === 0) return false;
       commit(
-        () => session.applyTreeOps(ops, selectionMark()),
-        () => collapsedAt(start)
+        () => session.applyTreeOps(plan.ops, selectionMark()),
+        () => collapsedAt(plan.collapseTo)
       );
       return true;
     },
@@ -1274,8 +1275,15 @@ export function mountPaginatedSurface(
     return paragraphTextFromLayout(currentLayout, paragraphId);
   }
 
-  /** Ops that remove the current selection, or none when it is collapsed. */
-  function deleteSelectionOps(): Parameters<TreeDocxSession['applyTreeOps']>[0] {
+  /**
+   * The plan that removes the current selection, or an empty one when it is collapsed.
+   *
+   * `collapseTo` rather than `orderedStart()` is what every caller must address afterwards:
+   * a plan that removes a table takes its cell paragraphs with it, so a range beginning in
+   * one has no start left to insert at, and an op naming a paragraph the same transaction
+   * deleted vetoes the whole transaction.
+   */
+  function deleteSelectionPlan(): RangeDeletionPlan {
     // A RECTANGLE is not the range it stands in for. Rows one and two of column one, read as
     // a range, run through every cell between them — so deleting through the range empties
     // cells the drag never covered, which is the exact failure the rectangle exists to
@@ -1287,10 +1295,11 @@ export function mountPaginatedSurface(
         const length = paragraphTextFromLayout(currentLayout, paragraphId).length;
         if (length > 0) ops.push({ op: 'deleteText', paragraphId, start: 0, end: length });
       }
-      return ops;
+      // Nothing structural goes, so the range start is still there to collapse onto.
+      return { ops, collapseTo: orderedStart() };
     }
     const { from, to } = orderedRange();
-    return deleteRangeOps(currentLayout, session.part(), from, to);
+    return planRangeDeletion(currentLayout, session.part(), from, to);
   }
 
   // Event wiring lives HERE rather than in each host, so React, Vue and a plain page get
@@ -1334,9 +1343,10 @@ export function mountPaginatedSurface(
     // the caret's paragraph with a single insert, and one `splitParagraphMany` cuts that
     // paragraph at every newline offset in a single pass — one rebuild of the body's child
     // sequence, however many paragraphs the clipboard carried.
-    const start = orderedStart();
+    const plan = deleteSelectionPlan();
+    const start = plan.collapseTo;
     const joined = lines.join('');
-    const ops: TreeDocOp[] = [...deleteSelectionOps()];
+    const ops: TreeDocOp[] = [...plan.ops];
     // Plain text pasted at a caret takes the armed typing format, like typed text — Word
     // formats a plain paste as if you had typed it. Written over the PRE-SPLIT offsets, so
     // the op runs before `splitParagraphMany` cuts the paragraph up.

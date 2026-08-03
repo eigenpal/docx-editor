@@ -124,8 +124,8 @@ describe('tables on the paginated surface', () => {
     }
   });
 
-  test('deleting a selection that crosses the table clears text without vetoing', () => {
-    const { surface } = mount(BODY);
+  test('deleting a selection that fully contains the table removes it', () => {
+    const { surface, container } = mount(BODY);
     const intro = paragraphIdOf(surface, 'intro');
     const outro = paragraphIdOf(surface, 'outro');
     surface.setSelection({
@@ -133,12 +133,40 @@ describe('tables on the paginated surface', () => {
       head: { paragraphId: outro, offset: 'outro'.length },
     });
     surface.deleteSelection();
+    // One empty paragraph, like every other editor. The table goes with `deleteBlock`,
+    // which is what lets the join reach across it: without a structural removal the text
+    // cleared while every row, cell and border stayed, leaving a blank table skeleton.
+    const ids = surface.session.paragraphIds();
+    expect(ids).toHaveLength(1);
+    expect(paragraphTextOf(surface.session.part(), ids[0]!) ?? '').toBe('');
+    expect(container.querySelectorAll('.docx-table-cell')).toHaveLength(0);
+  });
+
+  test('a table the selection only partially covers survives', () => {
+    const { surface, container } = mount(BODY);
+    const intro = paragraphIdOf(surface, 'intro');
+    const b1 = paragraphIdOf(surface, 'B1');
+    surface.setSelection({
+      anchor: { paragraphId: intro, offset: 0 },
+      // Stops inside the first row, so the second row was never covered.
+      head: { paragraphId: b1, offset: 'B1'.length },
+    });
+    surface.deleteSelection();
     const part = surface.session.part();
-    // Every paragraph in range is emptied; the cell paragraphs survive as empty
-    // paragraphs because cross-cell joins are refused, and the table stays intact.
-    for (const id of surface.session.paragraphIds()) {
-      expect(paragraphTextOf(part, id) ?? '').toBe('');
-    }
-    expect(surface.session.paragraphIds().length).toBeGreaterThanOrEqual(4);
+    // The covered text clears and the structure stays: removing a table the gesture only
+    // reached into would delete rows the user never selected.
+    expect(paragraphTextOf(part, paragraphIdOf(surface, 'A2'))).toBe('A2');
+    expect(paragraphTextOf(part, paragraphIdOf(surface, 'B2'))).toBe('B2');
+    expect(container.querySelectorAll('.docx-table-cell')).toHaveLength(4);
+  });
+
+  test('undo brings the removed table back', () => {
+    const { surface } = mount(BODY);
+    surface.selectAll();
+    surface.deleteSelection();
+    expect(surface.session.paragraphIds()).toHaveLength(1);
+    surface.undo();
+    expect(surface.session.paragraphIds()).toHaveLength(6);
+    expect(paragraphTextOf(surface.session.part(), paragraphIdOf(surface, 'B2'))).toBe('B2');
   });
 });
