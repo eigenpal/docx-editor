@@ -295,6 +295,8 @@ export {
 } from './review-items.ts';
 export {
   DEFAULT_REVISION_DISPLAY_MODE,
+  formatRevisionOf,
+  paragraphMarkRevisionOf,
   revisionsAreDeletion,
   revisionsVisible,
   type RevisionAttribution,

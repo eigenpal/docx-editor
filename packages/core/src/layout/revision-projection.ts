@@ -11,6 +11,7 @@
 // silently accepted every proposal in it.
 
 import {
+  WML_NAMESPACE_URI,
   isContentRevisionKind,
   type OoxmlElement,
   type OoxmlNode,
@@ -23,7 +24,7 @@ import {
  * decision with two halves, and presenting it as an unrelated deletion and insertion invites
  * resolving one without the other, which duplicates or loses the content.
  */
-export type RevisionKind = 'insert' | 'delete' | 'moveFrom' | 'moveTo';
+export type RevisionKind = 'insert' | 'delete' | 'moveFrom' | 'moveTo' | 'format';
 
 /**
  * One revision wrapper's provenance, as authored.
@@ -145,6 +146,71 @@ export function revisionsVisible(
     if (removed) return false;
   }
   return true;
+}
+
+/**
+ * The revision on a paragraph's own MARK, from `w:pPr/w:rPr/w:ins|w:del`.
+ *
+ * `EG_ParaRPrTrackChanges` records that the pilcrow itself was inserted or deleted, which is how
+ * Word writes a paragraph split or merge. It is not content — there is no text to decorate — so
+ * a surface shows it as a mark of its own beside the paragraph, the way Word draws a struck-
+ * through ¶.
+ *
+ * Property-position `w:ins`/`w:del` stay `generic` in the tree deliberately, so this reads them
+ * by name rather than by kind.
+ */
+export function paragraphMarkRevisionOf(paragraph: OoxmlNode): RevisionAttribution | null {
+  if (paragraph.kind === 'textValue') return null;
+  const pPr = paragraph.children.find((child) => child.kind === 'paragraphProperties');
+  if (!pPr || pPr.kind === 'textValue') return null;
+  const rPr = pPr.children.find((child) => child.kind === 'runProperties');
+  if (!rPr || rPr.kind === 'textValue') return null;
+  for (const child of rPr.children) {
+    if (child.kind === 'textValue') continue;
+    if (child.namespaceUri !== WML_NAMESPACE_URI) continue;
+    const kind = child.localName === 'ins' ? 'insert' : child.localName === 'del' ? 'delete' : null;
+    if (kind === null) continue;
+    const date = attributeValue(child, 'date');
+    return {
+      kind,
+      id: attributeValue(child, 'id') ?? '',
+      author: attributeValue(child, 'author') ?? '',
+      ...(date === undefined ? {} : { date }),
+      nodeId: child.id,
+    };
+  }
+  return null;
+}
+
+/**
+ * The tracked FORMAT change on a property list, from `w:rPrChange` or `w:pPrChange`.
+ *
+ * A property change alters no characters, so it has no span of its own to strike or underline.
+ * Word marks the affected text and says what changed; the minimum a reader needs is to see that
+ * this text's formatting is itself a pending decision.
+ *
+ * Read from the flattened property list because that is what layout already carries — the
+ * change wrapper is a `w:rPr`/`w:pPr` child like any other.
+ */
+export function formatRevisionOf(
+  properties: readonly {
+    readonly localName: string;
+    readonly attributes?: Readonly<Record<string, string>>;
+  }[]
+): RevisionAttribution | null {
+  for (const property of properties) {
+    if (property.localName !== 'rPrChange' && property.localName !== 'pPrChange') continue;
+    const attributes = property.attributes ?? {};
+    const date = attributes.date;
+    return {
+      kind: 'format',
+      id: attributes.id ?? '',
+      author: attributes.author ?? '',
+      ...(date === undefined ? {} : { date }),
+      nodeId: '',
+    };
+  }
+  return null;
 }
 
 /** True when this stack of revisions marks its content as deleted from the live document. */

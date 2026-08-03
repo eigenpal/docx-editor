@@ -12,6 +12,7 @@
 
 import { baselineShiftPtOf, TAB_LEADER_GLYPH } from '@docx-editor.dev/core-contract/layout';
 import { authorSlotsOf, revisionPresentationOf } from './revision-presentation.ts';
+import { formatRevisionOf, type RevisionAttribution } from '@docx-editor.dev/core-contract/layout';
 import type {
   LineRecord,
   PageRecord,
@@ -346,20 +347,79 @@ function applyRevisionPresentation(
   span: StyleSpanRecord,
   ctx: PaintContext
 ): void {
+  // A tracked FORMAT change alters no characters, so it has no strike or underline of its own
+  // to wear. It still has to be visible: the reader is looking at text whose appearance is
+  // itself a pending decision. A dashed rule and a tint say "this changed" without claiming
+  // the words were added or removed.
+  const format = formatRevisionOf(span.props);
   const presentation = revisionPresentationOf(span.revisions, ctx.authorSlots);
-  if (!presentation) return;
-  const { attribution } = presentation;
-  element.classList.add('docx-revision', `docx-revision-${attribution.kind}`);
-  element.dataset.revisionKind = attribution.kind;
-  element.dataset.revisionId = attribution.id;
-  element.dataset.revisionAuthor = attribution.author;
-  if (attribution.date !== undefined) element.dataset.revisionDate = attribution.date;
-  element.style.color = presentation.color;
-  if (presentation.line) {
-    element.style.textDecorationLine = presentation.line;
-    element.style.textDecorationStyle = presentation.decorationStyle;
-    element.style.textDecorationColor = presentation.color;
+  if (!presentation && !format) return;
+
+  if (presentation) {
+    const { attribution } = presentation;
+    element.classList.add('docx-revision', `docx-revision-${attribution.kind}`);
+    element.dataset.revisionKind = attribution.kind;
+    element.dataset.revisionId = attribution.id;
+    element.dataset.revisionAuthor = attribution.author;
+    if (attribution.date !== undefined) element.dataset.revisionDate = attribution.date;
+    element.style.color = presentation.color;
+    // The TINT is what makes a change findable when scanning rather than reading. A decoration
+    // alone is a hairline: on a dense page of small type it disappears, and a reviewer skims
+    // straight past an edit. The band is faint enough to leave the text legible.
+    element.style.backgroundColor = presentation.deleted
+      ? 'var(--doc-revision-deletion-tint)'
+      : 'var(--doc-revision-insertion-tint)';
+    if (presentation.line) {
+      element.style.textDecorationLine = presentation.line;
+      element.style.textDecorationStyle = presentation.decorationStyle;
+      element.style.textDecorationColor = presentation.color;
+    }
+    return;
   }
+
+  element.classList.add('docx-revision', 'docx-revision-format');
+  element.dataset.revisionKind = 'format';
+  element.dataset.revisionId = format!.id;
+  element.dataset.revisionAuthor = format!.author;
+  if (format!.date !== undefined) element.dataset.revisionDate = format!.date;
+  element.style.backgroundColor = 'var(--doc-revision-format-tint)';
+  // Dashed, and NOT coloured like an insertion: the words are unchanged. Word's own margin
+  // note says "Formatted:"; this is the inline half of the same statement.
+  element.style.textDecorationLine = 'underline';
+  element.style.textDecorationStyle = 'dashed';
+  element.style.textDecorationColor = 'var(--doc-revision-format)';
+}
+
+/**
+ * The pilcrow beside a paragraph whose MARK was inserted or deleted.
+ *
+ * Word draws it because there is nothing else to draw: the change is to the paragraph break
+ * itself, so no character carries it. A struck-through ¶ is how a reader sees that this
+ * paragraph is being merged into the next one, and an underlined one that it was split here.
+ *
+ * Furniture: no model range, `aria-hidden`, not editable, so it can never be selected, copied
+ * or counted as text.
+ */
+function paintParagraphMark(
+  document: Document,
+  revision: RevisionAttribution,
+  scale: number
+): HTMLElement {
+  const glyph = document.createElement('span');
+  glyph.className = `docx-revision-pmark docx-revision-pmark-${revision.kind}`;
+  glyph.setAttribute('aria-hidden', 'true');
+  glyph.contentEditable = 'false';
+  glyph.dataset.revisionKind = revision.kind;
+  glyph.dataset.revisionId = revision.id;
+  glyph.dataset.revisionAuthor = revision.author;
+  glyph.textContent = '\u00b6';
+  glyph.style.position = 'absolute';
+  glyph.style.pointerEvents = 'none';
+  glyph.style.marginLeft = `${2 * scale}px`;
+  glyph.style.color =
+    revision.kind === 'delete' ? 'var(--doc-revision-deletion)' : 'var(--doc-revision-insertion)';
+  if (revision.kind === 'delete') glyph.style.textDecorationLine = 'line-through';
+  return glyph;
 }
 
 /**
@@ -741,6 +801,17 @@ function paintFragment(
   // is the only signal that a change exists at all once the reader is in a resolved view.
   const bars = paintChangeBars(document, fragment, scale);
   if (bars) element.append(bars);
+  if (fragment.markRevision) {
+    const glyph = paintParagraphMark(document, fragment.markRevision, scale);
+    const last = fragment.lines[fragment.lines.length - 1];
+    if (last) {
+      // At the end of the last line's text, which is where the mark itself sits.
+      const end = last.spans[last.spans.length - 1];
+      glyph.style.top = `${(last.box.y - fragment.box.y) * scale}px`;
+      glyph.style.left = `${((end ? end.box.x + end.box.width : last.box.x) - fragment.box.x) * scale}px`;
+      element.append(glyph);
+    }
+  }
   for (const line of fragment.lines) {
     const painted = paintLine(document, line, ctx);
     // Line boxes are page-relative; inside a fragment they are drawn relative to it —

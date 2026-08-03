@@ -18,7 +18,11 @@ import type {
 import { finalizePageFieldProjection, type HyperlinkProjector } from './field-projection.ts';
 import { paragraphLayoutKey, type ParagraphLayoutCache } from './layout-cache.ts';
 import { alignSpans, breakParagraph, type Alignment, type PendingLine } from './paragraph-flow.ts';
-import { DEFAULT_REVISION_DISPLAY_MODE, type RevisionDisplayMode } from './revision-projection.ts';
+import {
+  DEFAULT_REVISION_DISPLAY_MODE,
+  paragraphMarkRevisionOf,
+  type RevisionDisplayMode,
+} from './revision-projection.ts';
 import {
   appliedSpaceBefore,
   paragraphBorderExtentPt,
@@ -1164,6 +1168,7 @@ function layoutBlocksWithGeometry(
     let endedWithPageBreak = false;
     previousSpaceAfter = 0;
 
+    const markRevision = paragraphMarkRevisionOf(entry.paragraph);
     const flushFragment = (isLast: boolean): void => {
       if (pending.length === 0) return;
       const linesTop = pending[0]!.box.y;
@@ -1301,6 +1306,9 @@ function layoutBlocksWithGeometry(
                   : paragraphShadingBox(pending, indent.left, available)!,
             }),
         ...(marker ? { marker } : {}),
+        // The paragraph MARK lives at the end of the paragraph, so only the final fragment
+        // carries its revision — a paragraph split across pages must not draw two pilcrows.
+        ...(isLast && markRevision ? { markRevision } : {}),
         lines: pending,
         box: { x: indent.left, y: top, width: available, height },
       });

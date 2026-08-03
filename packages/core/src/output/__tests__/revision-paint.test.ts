@@ -182,3 +182,71 @@ describe('change bars', () => {
     expect(bar.textContent).toBe('');
   });
 });
+
+describe('changes that decorate no characters', () => {
+  const mark = (kind: 'ins' | 'del', text: string) =>
+    `<w:p><w:pPr><w:rPr><w:${kind} w:id="9" w:author="QA" w:date="D"/></w:rPr></w:pPr>` +
+    `${run(text)}</w:p>`;
+
+  test('a deleted paragraph mark draws a struck pilcrow', () => {
+    // The change is to the paragraph BREAK, so no character carries it. Without the glyph a
+    // reader has no way to see that this paragraph is being merged into the next one.
+    const root = paint(mark('del', 'merges forward'));
+    const glyph = root.querySelector<HTMLElement>('.docx-revision-pmark')!;
+    expect(glyph.textContent).toBe('¶');
+    expect(glyph.style.textDecorationLine).toBe('line-through');
+    expect(glyph.style.color).toBe('var(--doc-revision-deletion)');
+  });
+
+  test('an inserted paragraph mark draws one in the insertion colour', () => {
+    const root = paint(mark('ins', 'splits here'));
+    const glyph = root.querySelector<HTMLElement>('.docx-revision-pmark')!;
+    expect(glyph.style.color).toBe('var(--doc-revision-insertion)');
+    expect(glyph.style.textDecorationLine).toBe('');
+  });
+
+  test('a clean paragraph draws none', () => {
+    expect(
+      paint(`<w:p>${run('untouched')}</w:p>`).querySelectorAll('.docx-revision-pmark')
+    ).toHaveLength(0);
+  });
+
+  test('the pilcrow is furniture, not text', () => {
+    const glyph = paint(mark('del', 'x')).querySelector<HTMLElement>('.docx-revision-pmark')!;
+    expect(glyph.getAttribute('aria-hidden')).toBe('true');
+    expect(glyph.contentEditable).toBe('false');
+    expect(glyph.dataset.paragraphId).toBeUndefined();
+  });
+
+  test('a tracked format change is visible without claiming the words changed', () => {
+    const root = paint(
+      `<w:p><w:r><w:rPr><w:b/><w:rPrChange w:id="3" w:author="QA" w:date="D">` +
+        `<w:rPr/></w:rPrChange></w:rPr><w:t>reformatted</w:t></w:r></w:p>`
+    );
+    const span = root.querySelector<HTMLElement>('.docx-revision-format')!;
+    expect(span.textContent).toBe('reformatted');
+    expect(span.style.textDecorationStyle).toBe('dashed');
+    // Not the insertion colour: nothing was added.
+    expect(span.style.textDecorationColor).toBe('var(--doc-revision-format)');
+    expect(span.dataset.revisionAuthor).toBe('QA');
+  });
+});
+
+describe('tracked text is findable when scanning, not only when reading', () => {
+  test('an insertion and a deletion each carry a tint', () => {
+    // A hairline decoration disappears on a dense page of small type, and a reviewer skims
+    // straight past the edit.
+    const root = paint(`<w:p>${ins('1', run('added'))}${del('2', delRun('gone'))}</w:p>`);
+    const spans = trackedSpans(root);
+    expect(spans.map((span) => span.style.backgroundColor)).toEqual([
+      'var(--doc-revision-insertion-tint)',
+      'var(--doc-revision-deletion-tint)',
+    ]);
+  });
+
+  test('untracked text keeps no background of its own', () => {
+    const root = paint(`<w:p>${run('plain')}</w:p>`);
+    const spans = [...root.querySelectorAll<HTMLElement>('.layout-run-text')];
+    expect(spans.every((span) => span.style.backgroundColor === '')).toBe(true);
+  });
+});

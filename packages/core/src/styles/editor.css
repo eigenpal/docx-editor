@@ -124,8 +124,12 @@
   /* Revision indicators */
   --doc-revision-insertion: #2e7d32;
   --doc-revision-deletion: #c62828;
-  --doc-revision-insertion-tint: rgba(46, 125, 50, 0.05);
-  --doc-revision-deletion-tint: rgba(198, 40, 40, 0.05);
+  --doc-revision-insertion-tint: rgba(46, 125, 50, 0.09);
+  --doc-revision-deletion-tint: rgba(198, 40, 40, 0.09);
+  /* A tracked FORMAT change: the words are unchanged, so it takes neither the insertion nor
+     the deletion colour. Quiet enough to sit under long runs without shouting. */
+  --doc-revision-format: #6b7f8c;
+  --doc-revision-format-tint: rgba(107, 127, 140, 0.07);
   /* Word's tracked-change palette. Deletions read as removal, insertions as addition, and the
      margin rules take the same two colours so the margin says WHAT happened, not only that
      something did. */
@@ -280,6 +284,8 @@
   --doc-review-author-5: #ff9e80;
   --doc-review-author-6: #b0bec5;
   --doc-review-author-7: #ce93d8;
+  --doc-revision-format: #9fb3bf;
+  --doc-revision-format-tint: rgba(159, 179, 191, 0.12);
   --doc-review-change-bar: #9e9e9e;
   --doc-text: #e8e8e8; /* primary text */
   --doc-text-muted: #a0a0a0; /* secondary text */

@@ -238,6 +238,16 @@ export interface ParagraphFragmentRecord {
    */
   readonly shadingBox?: LayoutBox;
   /**
+   * The revision on this paragraph's own MARK (`w:pPr/w:rPr/w:ins|w:del`), absent when there
+   * is none.
+   *
+   * Carried on the fragment rather than on a span because it decorates no characters: the
+   * pilcrow was inserted or deleted, which is how a split or a merge is recorded. Only the
+   * FINAL fragment carries it — the mark lives at the end of the paragraph, so a paragraph
+   * split across pages must not draw two of them.
+   */
+  readonly markRevision?: RevisionAttribution;
+  /**
    * List marker painted in the hanging-indent slot of the FIRST fragment only.
    *
    * Not part of model text: no UTF-16 range, never contributes to caret/selection offsets,
