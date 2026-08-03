@@ -761,6 +761,46 @@ describe('only the pages on screen are built (task 9.4)', () => {
     scroller.remove();
   });
 
+  test('a selection landing on an unbuilt page builds it, so the caret can go there', () => {
+    // An outline jump, a search hit, any host driving the caret: the target page is exactly
+    // the one virtualization has NOT built. The mirror writes the selection into DOM nodes,
+    // and an unbuilt page has none, so the write silently did nothing — and because
+    // `setSelection` had already declared the two in agreement, the next repaint read the
+    // STALE DOM selection back and overwrote the navigation. The caret stayed at the top of
+    // the document while the viewport scrolled away from it.
+    const many = Array.from({ length: 400 }, (_, i) => paragraph(`paragraph ${i}`)).join('');
+    const scroller = document.createElement('div');
+    scroller.className = 'docx-editor__scroll-container';
+    document.body.append(scroller);
+    const host = document.createElement('div');
+    scroller.append(host);
+    Object.defineProperty(scroller, 'clientHeight', { value: 400, configurable: true });
+    const result = mountPaginatedSurface(host, docx(many), { scale: 1 });
+    if (!result.ok) throw new Error(result.reason);
+    const surface = result.surface;
+
+    const ids = surface.session.paragraphIds();
+    const target = ids[ids.length - 1]!;
+    const targetPage = surface.layout().pages.length - 1;
+    expect(targetPage).toBeGreaterThan(2);
+    const pageEl = (index: number): HTMLElement =>
+      host.querySelector<HTMLElement>(`.docx-page[data-page-index="${index}"]`)!;
+    expect(pageEl(targetPage).dataset.materialized).toBe('false');
+
+    surface.setSelection({
+      anchor: { paragraphId: target, offset: 0 },
+      head: { paragraphId: target, offset: 0 },
+    });
+
+    // The page the caret is on is built, whether or not it is on screen.
+    expect(pageEl(targetPage).dataset.materialized).toBe('true');
+    // And a reveal afterwards — the outline's second step — must not snap it back.
+    surface.revealParagraph(target);
+    expect(surface.state().selection.head.paragraphId).toBe(target);
+    surface.destroy();
+    scroller.remove();
+  });
+
   test('a destroyed surface stops following the viewport', async () => {
     // The resize listener lives on the window, which outlives the surface — left attached
     // it would repaint into a container the host has already thrown away.

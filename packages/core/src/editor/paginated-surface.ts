@@ -647,6 +647,24 @@ export function mountPaginatedSurface(
     if (!flushLayout()) render();
   }
 
+  /**
+   * Whether every page the CURRENT selection touches has been built.
+   *
+   * Read from `materializedSet` rather than recomputed: deciding this from the viewport
+   * would read `scrollTop`, and forcing a layout on a path that runs for every arrow key is
+   * the kind of cost that does not show up until a long document is open. `undefined` means
+   * nothing is virtualized and every page is built, which is the safe reading everywhere
+   * else too.
+   */
+  function selectionPagesBuilt(): boolean {
+    if (!materializedSet) return true;
+    for (const position of [selection.anchor, selection.head]) {
+      const caret = caretAt(currentLayout, position);
+      if (caret && !materializedSet.has(caret.pageIndex)) return false;
+    }
+    return true;
+  }
+
   function setSelection(next: SemanticSelection, keepDesiredX = false): void {
     // Moving the caret discards a stored caret format — Word's rule. Landing back on the
     // exact armed position (the mirror re-adopting the same caret) keeps it.
@@ -657,6 +675,23 @@ export function mountPaginatedSurface(
     // painting cells that are no longer chosen.
     cellSelection = null;
     if (!keepDesiredX) desiredX = null;
+    // THE MIRROR NEEDS NODES TO WRITE INTO, AND AN UNBUILT PAGE HAS NONE.
+    //
+    // A selection can land on a page virtualization has not built — an outline jump, a
+    // search hit, any host driving the caret — and that is precisely the page it lands on,
+    // since the reason to move the caret there is that the user is not looking at it yet.
+    // The mirror then wrote into nodes that do not exist, which fails silently; the caret
+    // stayed where it was, and the next repaint read the STALE DOM selection back and
+    // overwrote the navigation entirely. Building the page first is what makes the write
+    // land: `visiblePageSet` pins the pages the selection touches, so this paint brings the
+    // target into existence wherever it is.
+    if (!selectionPagesBuilt()) {
+      // The MODEL is the newer of the two until that write lands, so this repaint must not
+      // adopt the DOM selection it is about to replace — which is the very stale value the
+      // navigation is trying to leave behind.
+      selectionSync.noteModelMoved();
+      render(false);
+    }
     // SETTLED, not moved: this mirrors into the DOM on the next line, so the two agree before
     // any render can read them back — including a move raised earlier that no render has
     // carried out. `restoreSelection` raises the flag and only `flushLayout` takes it down, so
