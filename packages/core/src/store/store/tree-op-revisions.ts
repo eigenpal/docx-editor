@@ -260,14 +260,32 @@ function textElementFrom(node: OoxmlElement): OoxmlElement {
   return { ...node, kind: 'text', localName: 't' } as OoxmlElement;
 }
 
-/** Turn every `w:delText` under a node back into `w:t`; used when a deletion is rejected. */
+/**
+ * Undo the deleted forms of run content when a deletion is rejected.
+ *
+ * `w:delText` is the deleted form of `w:t`, and `w:delInstrText` is the deleted form of
+ * `w:instrText` (`EG_RunInnerContent`, §17.3.3.7 / §17.16.23). BOTH have to be inverted.
+ * Restoring the text but leaving the instruction in its deleted form outside any `w:del` means
+ * Word stops reading it as an instruction: the field's code is silently lost and the field
+ * never updates again.
+ */
 function withDeletedTextRestored(node: OoxmlNode): OoxmlNode {
   if (node.kind === 'textValue') return node;
   const children = node.children.map(withDeletedTextRestored);
   const rebuilt = children.some((child, index) => child !== node.children[index])
     ? ({ ...node, children } as OoxmlElement)
     : node;
-  return rebuilt.kind === 'deletedText' ? textElementFrom(rebuilt) : rebuilt;
+  if (rebuilt.kind === 'deletedText') return textElementFrom(rebuilt);
+  // `w:delInstrText` has no typed kind — it is layout-inert either way — so it is matched by
+  // name and renamed in place.
+  if (
+    rebuilt.kind === 'generic' &&
+    rebuilt.namespaceUri === WML_NAMESPACE_URI &&
+    rebuilt.localName === 'delInstrText'
+  ) {
+    return { ...rebuilt, localName: 'instrText' } as OoxmlElement;
+  }
+  return rebuilt;
 }
 
 /**
@@ -382,7 +400,19 @@ function rebuild(node: OoxmlNode, plan: RebuildPlan): OoxmlNode[] {
   if (restoring !== undefined && restoring.kind !== 'textValue') {
     const recorded = recordedProperties(restoring);
     if (recorded !== null) {
-      return [{ ...node, children: recorded.map((child) => child) } as OoxmlElement];
+      // `CT_PPrChange` records a `CT_PPrBase`, which BY CONSTRUCTION cannot contain `w:rPr` or
+      // `w:sectPr` — `CT_PPr` is `CT_PPrBase`, then `w:rPr`, then `w:sectPr`, then the change
+      // wrapper. Replacing the container wholesale therefore deletes both. Losing `w:sectPr`
+      // deletes a SECTION BREAK: page size, margins and per-section header/footer references
+      // go with it, and every following paragraph reflows into the previous section.
+      //
+      // `CT_RPrChange` is the opposite case: `CT_RPrOriginal` genuinely is the whole `w:rPr`
+      // content minus the change wrapper, so there wholesale replacement is correct.
+      const preserved =
+        restoring.localName === 'pPrChange'
+          ? node.children.filter((child) => isWmlNamed(child, 'rPr') || isWmlNamed(child, 'sectPr'))
+          : [];
+      return [{ ...node, children: [...recorded, ...preserved] } as OoxmlElement];
     }
   }
 

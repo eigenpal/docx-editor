@@ -34,7 +34,15 @@ const CONTENT_TYPES_PART = '/[Content_Types].xml';
 const CONTENT_TYPES_NAMESPACE = 'http://schemas.openxmlformats.org/package/2006/content-types';
 const RELATIONSHIPS_NAMESPACE = 'http://schemas.openxmlformats.org/package/2006/relationships';
 
-export type PackageInvariantCode = 'dangling-relationship' | 'missing-content-type';
+export type PackageInvariantCode =
+  | 'dangling-relationship'
+  | 'missing-content-type'
+  /** A part occupies a name OPC reserves for package infrastructure. */
+  | 'reserved-part-name'
+  /** Two parts whose names differ only by case, which OPC treats as one part. */
+  | 'duplicate-part-name'
+  /** A part name the OPC screens refuse; `writeZip` would throw on save. */
+  | 'unsafe-part-name';
 
 export interface PackageInvariantIssue {
   readonly code: PackageInvariantCode;
@@ -93,6 +101,58 @@ function element(
   } as OoxmlElement;
 }
 
+/**
+ * Part names no edit may ever create or replace.
+ *
+ * `[Content_Types].xml` and the `.rels` parts are package INFRASTRUCTURE, not content. They are
+ * held as bytes and as trees respectively, and `writeOoxmlPackage` writes `parts` over
+ * `partBytes` — so creating a "part" at one of those names replaces the real one on save. A
+ * document that lost its content types still loads, resolves every part to no type, and opens
+ * with zero trees: the user adds a comment, saves, reopens, and the document is empty with
+ * nothing anywhere reporting an error.
+ *
+ * The names are attacker-reachable because a part name can come from a relationship target in
+ * the file, and `resolveInternalTarget` will happily resolve `../[Content_Types].xml`.
+ */
+function isReservedForCreation(canonical: string): boolean {
+  const key = partNameKey(canonical);
+  return key === partNameKey(CONTENT_TYPES_PART) || /\/_rels\/[^/]*\.rels$/.test(key);
+}
+
+/**
+ * The narrower check the COMMIT boundary applies.
+ *
+ * `.rels` parts are legitimately modelled as trees in `pkg.parts` — that is how a relationship
+ * gets added at all — so flagging them here would reject every real package. Only
+ * `[Content_Types].xml` must never appear as a tree: it is held as bytes, and a tree at that
+ * name would be serialized over the real one on save.
+ */
+function isReservedAsTree(canonical: string): boolean {
+  return partNameKey(canonical) === partNameKey(CONTENT_TYPES_PART);
+}
+
+/** True when the package already holds a part OPC considers the same name. */
+function hasEquivalentPart(pkg: OoxmlPackage, canonical: string): boolean {
+  const key = partNameKey(canonical);
+  for (const name of pkg.parts.keys()) if (partNameKey(name) === key) return true;
+  return false;
+}
+
+/**
+ * A part name an edit is allowed to write, or null.
+ *
+ * Fail CLOSED where `normalizePartName` refuses: its `unsafe-key` screen exists to keep
+ * `__proto__`-style segments out of the part map, and falling back to the raw name defeats it
+ * — the name then survives into the package and `writeZip` throws on save, which strands the
+ * session with unsaveable work.
+ */
+function writablePartName(canonical: string): string | null {
+  const normalized = normalizePartName(canonical);
+  if (!normalized.ok) return null;
+  if (isReservedForCreation(normalized.partName)) return null;
+  return normalized.partName;
+}
+
 /** A node id that cannot collide with a structural-path id in the target part. */
 function mintedId(part: OoxmlPart, hint: string): string {
   return `${part.name}#minted-${hint}`;
@@ -110,8 +170,8 @@ export function withContentTypeOverride(
   partName: string,
   contentType: string
 ): OoxmlPackage {
-  const normalized = normalizePartName(partName);
-  const canonical = normalized.ok ? normalized.partName : partName;
+  const canonical = writablePartName(partName);
+  if (canonical === null) return pkg;
   if (resolveContentTypeOf(pkg, canonical) === contentType) return pkg;
 
   const bytes = pkg.partBytes.get(CONTENT_TYPES_PART);
@@ -159,7 +219,7 @@ export function withRelationship(
   ownerPart: string,
   type: string,
   rawTarget: string
-): { readonly pkg: OoxmlPackage; readonly relationshipId: string } {
+): { readonly pkg: OoxmlPackage; readonly relationshipId: string; readonly ok: boolean } {
   const existing = relationshipsOf(pkg, ownerPart);
   const used = new Set(existing.map((record) => record.id));
   let next = existing.length + 1;
@@ -168,7 +228,12 @@ export function withRelationship(
 
   const relsName = relsPartNameFor(ownerPart);
   const relsPart = pkg.parts.get(relsName);
-  if (!relsPart) return { pkg, relationshipId };
+  // A package whose `.rels` parts are not modelled as trees — one omitting the `rels` content
+  // default, which still loads because relationships are read from the zip entries — cannot
+  // gain a relationship here. Reporting it is the point: writing the comment body and the
+  // story markers with nothing pointing at the part leaves a reference Word repairs away, and
+  // a silent identity return is indistinguishable from "no work needed".
+  if (!relsPart) return { pkg, relationshipId, ok: false };
 
   const record = element(
     mintedId(relsPart, relationshipId),
@@ -183,7 +248,7 @@ export function withRelationship(
     [record],
     { deferValidation: true }
   );
-  if (!appended.ok) return { pkg, relationshipId };
+  if (!appended.ok) return { pkg, relationshipId, ok: false };
 
   const relationships = new Map(pkg.relationships);
   relationships.set(ownerPart, [
@@ -200,6 +265,7 @@ export function withRelationship(
   return {
     pkg: Object.freeze({ ...withPart(pkg, appended.part), relationships }),
     relationshipId,
+    ok: true,
   };
 }
 
@@ -215,8 +281,15 @@ export function withNewPart(
   root: OoxmlElement,
   contentType: string
 ): OoxmlPackage {
-  const normalized = normalizePartName(partName);
-  const canonical = normalized.ok ? normalized.partName : partName;
+  const canonical = writablePartName(partName);
+  // Refusing by returning the package unchanged keeps the primitive pure, and the caller sees
+  // it as "nothing to do". The transaction that wanted the part then fails its own invariant
+  // check rather than publishing a package with a story pointing at a part nobody created.
+  if (canonical === null) return pkg;
+  // OPC part names are case-insensitive, so a `Comments.xml` beside `comments.xml` is a
+  // DUPLICATE, and `writeZip` refuses the whole package on save — after the transaction has
+  // already committed, which strands the session.
+  if (hasEquivalentPart(pkg, canonical)) return pkg;
   const part: OoxmlPart = { id: canonical, name: canonical, contentType, root };
   return withContentTypeOverride(withPart(pkg, part), canonical, contentType);
 }
@@ -253,9 +326,21 @@ export function validatePackageInvariants(pkg: OoxmlPackage): PackageInvariantRe
     }
   }
 
+  const seen = new Map<string, string>();
   for (const name of pkg.parts.keys()) {
     if (resolveContentTypeOf(pkg, name) === null) {
       issues.push({ code: 'missing-content-type', partName: name });
+    }
+    // The same three screens `writablePartName` applies, re-run at the commit boundary. A
+    // primitive can be bypassed; this is what nothing gets published without.
+    if (isReservedAsTree(name)) issues.push({ code: 'reserved-part-name', partName: name });
+    if (!normalizePartName(name).ok) issues.push({ code: 'unsafe-part-name', partName: name });
+    const key = partNameKey(name);
+    const previous = seen.get(key);
+    if (previous !== undefined) {
+      issues.push({ code: 'duplicate-part-name', partName: name, ownerPart: previous });
+    } else {
+      seen.set(key, name);
     }
   }
 
