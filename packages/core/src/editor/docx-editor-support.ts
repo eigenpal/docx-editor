@@ -511,6 +511,37 @@ export function classifyCommand(command: EditorCommand): CommandSupport {
 // a React store comparing by reference does not re-render every subscriber on every tick.
 // ---------------------------------------------------------------------------------------
 
+/**
+ * Compile-time exhaustiveness for `formattingEqual`, in the manner of the content-node
+ * switches: every key of `RunFormatting` is listed, so ADDING a field fails `typecheck`
+ * here until its comparison is written.
+ *
+ * A field the comparator misses is a field the cache reports as unchanged. The previous
+ * object is handed back, a host reading `snapshot().formatting` by reference never sees the
+ * value move, and the control that made the write goes on showing the old state while the
+ * document holds the new one — a silent, one-line-of-omission bug that no test of the write
+ * path can catch, because the write is fine. A comment asking the next author to remember
+ * is not a guarantee; this is.
+ */
+const COMPARED_FORMATTING_KEYS: Record<keyof Required<RunFormatting>, true> = {
+  bold: true,
+  italic: true,
+  underline: true,
+  strike: true,
+  color: true,
+  highlight: true,
+  fontFamily: true,
+  fontSizePt: true,
+  superscript: true,
+  subscript: true,
+  alignment: true,
+  styleId: true,
+  lineSpacing: true,
+  spaceBeforePt: true,
+  spaceAfterPt: true,
+};
+void COMPARED_FORMATTING_KEYS;
+
 /** Value equality for the snapshot's `formatting` sub-object (color compared by value). */
 export function formattingEqual(a: RunFormatting | null, b: RunFormatting | null): boolean {
   if (a === b) return true;
@@ -529,10 +560,6 @@ export function formattingEqual(a: RunFormatting | null, b: RunFormatting | null
     a.styleId !== b.styleId ||
     a.spaceBeforePt !== b.spaceBeforePt ||
     a.spaceAfterPt !== b.spaceAfterPt ||
-    // EVERY field of `RunFormatting` must be compared here. A field this misses is a field
-    // the cache reports as unchanged: the previous object is handed back, and a host reading
-    // `snapshot().formatting` by reference never sees the value move — the write lands in
-    // the document and the control that made it goes on showing the old state.
     a.lineSpacing?.rule !== b.lineSpacing?.rule ||
     a.lineSpacing?.value !== b.lineSpacing?.value
   ) {
