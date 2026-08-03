@@ -50,6 +50,9 @@ export function runFormattingOf(surface: PaginatedSurface | null): RunFormatting
       : {}),
     ...(formatting.alignment ? { alignment: formatting.alignment } : {}),
     ...(formatting.styleId ? { styleId: formatting.styleId } : {}),
+    ...(formatting.lineSpacing ? { lineSpacing: formatting.lineSpacing } : {}),
+    ...(formatting.spaceBeforePt !== null ? { spaceBeforePt: formatting.spaceBeforePt } : {}),
+    ...(formatting.spaceAfterPt !== null ? { spaceAfterPt: formatting.spaceAfterPt } : {}),
   };
 }
 

@@ -110,7 +110,11 @@
     "double": "Double",
     "lineSpacingTitle": "Interligne : {label}",
     "blockSpacingRules": "Espacement des paragraphes",
-    "label": null
+    "label": null,
+    "addSpaceAfter": null,
+    "addSpaceBefore": null,
+    "removeSpaceAfter": null,
+    "removeSpaceBefore": null
   },
   "styles": {
     "selectAriaLabel": "Sélectionner le type de paragraphe",

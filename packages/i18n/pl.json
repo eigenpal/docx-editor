@@ -110,7 +110,11 @@
     "double": "Podwójna",
     "lineSpacingTitle": "Interlinia: {label}",
     "blockSpacingRules": "Odstępy między akapitami",
-    "label": null
+    "label": null,
+    "addSpaceAfter": null,
+    "addSpaceBefore": null,
+    "removeSpaceAfter": null,
+    "removeSpaceBefore": null
   },
   "styles": {
     "selectAriaLabel": "Wybierz styl akapitu",

@@ -113,7 +113,11 @@
     "single": "Single",
     "double": "Double",
     "lineSpacingTitle": "Line spacing: {label}",
-    "blockSpacingRules": "Paragraph spacing"
+    "blockSpacingRules": "Paragraph spacing",
+    "addSpaceBefore": "Add space before paragraph",
+    "removeSpaceBefore": "Remove space before paragraph",
+    "addSpaceAfter": "Add space after paragraph",
+    "removeSpaceAfter": "Remove space after paragraph"
   },
   "styles": {
     "selectAriaLabel": "Select paragraph style",

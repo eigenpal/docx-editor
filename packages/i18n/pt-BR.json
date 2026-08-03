@@ -110,7 +110,11 @@
     "double": "Duplo",
     "lineSpacingTitle": "Espaçamento entre linhas: {label}",
     "blockSpacingRules": "Espaçamento entre parágrafos",
-    "label": null
+    "label": null,
+    "addSpaceAfter": null,
+    "addSpaceBefore": null,
+    "removeSpaceAfter": null,
+    "removeSpaceBefore": null
   },
   "styles": {
     "selectAriaLabel": "Selecionar estilo de parágrafo",

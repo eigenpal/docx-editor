@@ -545,6 +545,21 @@ export interface EditorCommands extends EditorCommandShape<DocEdits> {
    */
   clearFormatting: Record<never, never>;
   setAlignment: { align: 'left' | 'center' | 'right' | 'justify' };
+  /**
+   * Word's Line Spacing, on every paragraph the selection touches.
+   *
+   * `value` is in the unit the RULE implies, which is the unit Word's own dialog uses:
+   * LINES for `multiple` (1, 1.15, 1.5, 2), points for `exact` and `atLeast`. The
+   * OOXML attribute is one number meaning two different quantities depending on
+   * `w:lineRule`, and a caller should not have to know which.
+   */
+  setLineSpacing: { rule: 'multiple' | 'exact' | 'atLeast'; value: number };
+  /**
+   * Space above and below a paragraph, in points, on every paragraph the selection
+   * touches. Omitting a field leaves it as authored; `null` clears it, which is how
+   * Word's "Remove space before/after paragraph" differs from setting it to zero.
+   */
+  setParagraphSpacing: { beforePt?: number | null; afterPt?: number | null };
   setIndent: { left?: number; right?: number; firstLine?: number; hanging?: number };
   toggleList: { kind: 'bullet' | 'ordered' };
 

@@ -261,7 +261,7 @@ export function createSurfaceFormat(deps: SurfaceFormatDeps): FormatMethods {
       writeRunProperty(from, to, incoming);
     },
 
-    setParagraphProperty(localName, attributes) {
+    setParagraphProperty(localName, attributes, options) {
       const { from, to } = orderedRange();
       const order = documentOrder(currentLayout.value);
       const firstIndex = order.indexOf(from.paragraphId);
@@ -273,14 +273,32 @@ export function createSurfaceFormat(deps: SurfaceFormatDeps): FormatMethods {
       // Merged against what each paragraph ITSELF authors, never the cascade the layout
       // publishes: the op replaces the properties it names and drops the ones it does not,
       // so its base has to be the paragraph's own `w:pPr` — see `directParagraphProperties`.
-      const ops = order.slice(firstIndex, lastIndex + 1).map((paragraphId) => ({
-        op: 'setParagraphProperties' as const,
-        paragraphId,
-        properties: mergedProperties(directParagraphProperties(session.part(), paragraphId), {
-          localName,
-          ...(attributes ? { attributes } : {}),
-        }),
-      }));
+      const ops = order.slice(firstIndex, lastIndex + 1).map((paragraphId) => {
+        const own = directParagraphProperties(session.part(), paragraphId);
+        // `mergeAttributes` is for the properties that carry SEVERAL independent settings
+        // in one element. `w:spacing` holds the line rule, the space before and the space
+        // after; replacing it wholesale meant picking a line spacing deleted the paragraph's
+        // space-before, and adding space after deleted the line spacing. A null-valued
+        // attribute REMOVES that one, which is how Word's "Remove space before paragraph"
+        // differs from setting it to zero.
+        const merged = options?.mergeAttributes
+          ? {
+              ...(own.find((property) => property.localName === localName)?.attributes ?? {}),
+              ...attributes,
+            }
+          : (attributes ?? {});
+        const kept = Object.fromEntries(
+          Object.entries(merged).filter(([, value]) => value !== null && value !== undefined)
+        ) as Record<string, string>;
+        return {
+          op: 'setParagraphProperties' as const,
+          paragraphId,
+          properties: mergedProperties(own, {
+            localName,
+            ...(Object.keys(kept).length > 0 ? { attributes: kept } : {}),
+          }),
+        };
+      });
       if (ops.length === 0) return;
       commit(() => session.applyTreeOps(ops, selectionMark()));
     },

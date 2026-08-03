@@ -110,7 +110,11 @@
     "single": "1.0",
     "double": "2.0",
     "lineSpacingTitle": "Jarak antar baris: {label}",
-    "blockSpacingRules": "Jarak antar paragraf"
+    "blockSpacingRules": "Jarak antar paragraf",
+    "addSpaceAfter": null,
+    "addSpaceBefore": null,
+    "removeSpaceAfter": null,
+    "removeSpaceBefore": null
   },
   "styles": {
     "selectAriaLabel": "Pilih gaya paragraf",

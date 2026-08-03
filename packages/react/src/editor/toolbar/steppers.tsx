@@ -107,19 +107,38 @@ function StepperShell(props: StepperShellProps) {
   );
 }
 
+/**
+ * The typed value, or null when it is not a size the engine would accept.
+ *
+ * Deliberately permissive about SHAPE and strict about RANGE: a user typing `10.5` means
+ * 21 half-points, and one typing `10.7` means the nearest the unit can express. Anything
+ * that is not a finite number, or falls outside `w:sz`'s bounds, is not a size at all and
+ * reverts rather than being clamped silently into one the user did not ask for.
+ */
+function parseTypedSize(text: string): number | null {
+  const trimmed = text.trim().replace(/pt$/i, '').trim();
+  if (trimmed === '') return null;
+  const points = Number(trimmed);
+  if (!Number.isFinite(points)) return null;
+  const halfPoints = Math.round(points * 2);
+  if (halfPoints < MIN_HALF_POINTS || halfPoints > MAX_HALF_POINTS) return null;
+  return halfPoints;
+}
+
 function ToolbarFontSizeImpl({ className, hidden }: ToolbarSlotPartProps) {
   const editor = useDocxEditor();
   const sizePt = useEditorState(selectFontSizePt);
   const { isEnabled, disabledReason } = useEditorCommand('font.size');
   const label = useToolbarLabel();
+  const [open, setOpen] = useState(false);
+  /** The text being typed, or null when the box is showing the document's own value. */
+  const [draft, setDraft] = useState<string | null>(null);
+  const rootRef = useRef<HTMLSpanElement | null>(null);
+  const inputRef = useRef<HTMLInputElement | null>(null);
 
-  const apply = useCallback(
-    (points: number) => {
+  const applyHalfPoints = useCallback(
+    (halfPoints: number) => {
       if (!editor) return;
-      const halfPoints = Math.min(
-        MAX_HALF_POINTS,
-        Math.max(MIN_HALF_POINTS, Math.round(points * 2))
-      );
       const command = commandForSlotValue('font.size', halfPoints);
       if (!command) return;
       if (editor.can(command).ok) editor.exec(command);
@@ -127,31 +146,167 @@ function ToolbarFontSizeImpl({ className, hidden }: ToolbarSlotPartProps) {
     [editor]
   );
 
+  const apply = useCallback(
+    (points: number) => {
+      applyHalfPoints(Math.min(MAX_HALF_POINTS, Math.max(MIN_HALF_POINTS, Math.round(points * 2))));
+    },
+    [applyHalfPoints]
+  );
+
+  /** Leave the box: drop the draft, close the list, hand the caret back to the document. */
+  const dismiss = useCallback((refocus: boolean) => {
+    setOpen(false);
+    setDraft(null);
+    inputRef.current?.blur();
+    if (refocus) editorFocus(rootRef.current);
+  }, []);
+
+  // Outside mousedown closes the list, the same pattern the zoom menu uses.
+  useEffect(() => {
+    if (!open) return undefined;
+    const onMouseDown = (event: globalThis.MouseEvent) => {
+      const root = rootRef.current;
+      if (root && event.target instanceof Node && root.contains(event.target)) return;
+      setOpen(false);
+      setDraft(null);
+    };
+    document.addEventListener('mousedown', onMouseDown);
+    return () => document.removeEventListener('mousedown', onMouseDown);
+  }, [open]);
+
   if (hidden) return null;
   const canStep = isEnabled && sizePt !== null;
-  // No agreed size (mixed selection / no selection formatting) shows an em-dash,
-  // matching the FontFamily trigger — never an invented number.
-  const display = sizePt === null ? '—' : String(Math.round(sizePt * 2) / 2);
+  // No agreed size (mixed selection / no selection formatting) shows an em-dash, matching
+  // the FontFamily trigger — never an invented number. A draft in progress wins over both:
+  // the box must show what the user is typing, not what the document still says.
+  const documentValue = sizePt === null ? '—' : String(Math.round(sizePt * 2) / 2);
+  const shown = draft ?? documentValue;
+  const selectedPreset = sizePt === null ? null : Math.round(sizePt * 2) / 2;
+
+  const commitDraft = () => {
+    if (draft === null) return;
+    const halfPoints = parseTypedSize(draft);
+    if (halfPoints !== null) applyHalfPoints(halfPoints);
+  };
+
   return (
-    <StepperShell
-      slot="font.size"
-      className={className}
-      groupLabel={label('fontSize.label')}
-      decreaseLabel={label('fontSize.decrease')}
-      increaseLabel={label('fontSize.increase')}
-      middle={
-        // The boxed value between the ghost − / + halves.
-        <span className="docx-toolbar__stepper-value docx-toolbar__stepper-value--boxed">
-          {display}
-        </span>
-      }
-      canDecrease={canStep && Math.round(sizePt! * 2) > MIN_HALF_POINTS}
-      canIncrease={canStep && Math.round(sizePt! * 2) < MAX_HALF_POINTS}
-      onDecrease={() => apply(prevPreset(sizePt ?? 0, FONT_SIZE_PRESETS_PT, MIN_HALF_POINTS / 2))}
-      onIncrease={() => apply(nextPreset(sizePt ?? 0, FONT_SIZE_PRESETS_PT, MAX_HALF_POINTS / 2))}
+    <span
+      ref={rootRef}
+      className="docx-toolbar__font-size"
+      data-slot="font.size"
       title={disabledReason ?? undefined}
-    />
+    >
+      <StepperShell
+        className={className}
+        groupLabel={label('fontSize.label')}
+        decreaseLabel={label('fontSize.decrease')}
+        increaseLabel={label('fontSize.increase')}
+        middle={
+          // A combobox, not a readout: Word's size box takes a typed value as readily as a
+          // picked one, and 13pt is not on any preset ladder.
+          <input
+            ref={inputRef}
+            type="text"
+            inputMode="decimal"
+            className="docx-toolbar__stepper-value docx-toolbar__stepper-value--boxed docx-toolbar__font-size-input"
+            value={shown}
+            disabled={!isEnabled}
+            role="combobox"
+            aria-expanded={open}
+            aria-haspopup="listbox"
+            aria-label={label('fontSize.label')}
+            autoComplete="off"
+            onChange={(event) => {
+              setDraft(event.target.value);
+              setOpen(true);
+            }}
+            onFocus={(event) => {
+              // Selected on entry, so typing REPLACES the size rather than appending to it.
+              event.target.select();
+              setOpen(true);
+            }}
+            onClick={() => setOpen(true)}
+            onKeyDown={(event) => {
+              if (event.key === 'Enter') {
+                event.preventDefault();
+                commitDraft();
+                dismiss(true);
+              } else if (event.key === 'Escape') {
+                event.preventDefault();
+                dismiss(true);
+              } else if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+                // Word's box steps with the arrows; opening the list on the way is what a
+                // combobox is expected to do.
+                event.preventDefault();
+                setOpen(true);
+                if (sizePt !== null) {
+                  apply(
+                    event.key === 'ArrowDown'
+                      ? prevPreset(sizePt, FONT_SIZE_PRESETS_PT, MIN_HALF_POINTS / 2)
+                      : nextPreset(sizePt, FONT_SIZE_PRESETS_PT, MAX_HALF_POINTS / 2)
+                  );
+                }
+              }
+            }}
+            onBlur={() => {
+              // Committing on blur is what Word does, and it is the only way a click
+              // straight back into the document keeps the size that was typed. Preset rows
+              // suppress their own mousedown, so picking one never reaches this path.
+              commitDraft();
+              setDraft(null);
+            }}
+          />
+        }
+        canDecrease={canStep && Math.round(sizePt! * 2) > MIN_HALF_POINTS}
+        canIncrease={canStep && Math.round(sizePt! * 2) < MAX_HALF_POINTS}
+        onDecrease={() => apply(prevPreset(sizePt ?? 0, FONT_SIZE_PRESETS_PT, MIN_HALF_POINTS / 2))}
+        onIncrease={() => apply(nextPreset(sizePt ?? 0, FONT_SIZE_PRESETS_PT, MAX_HALF_POINTS / 2))}
+      />
+      {open && isEnabled ? (
+        <div
+          className="docx-toolbar__menu docx-toolbar__font-size-menu"
+          role="listbox"
+          aria-label={label('fontSize.listLabel')}
+        >
+          {FONT_SIZE_PRESETS_PT.map((preset) => {
+            const selected = selectedPreset === preset;
+            return (
+              <button
+                key={preset}
+                type="button"
+                role="option"
+                aria-selected={selected}
+                {...(selected ? { 'data-selected': '' } : {})}
+                className="docx-toolbar__menu-item"
+                // Suppressed so the input keeps focus and `onBlur` never fires between the
+                // press and the click — a blur here would commit the draft first and this
+                // pick second, against a size the user had already abandoned.
+                onMouseDown={guardToolbarMousedown}
+                onClick={() => {
+                  apply(preset);
+                  dismiss(true);
+                }}
+              >
+                {preset}
+              </button>
+            );
+          })}
+        </div>
+      ) : null}
+    </span>
   );
+}
+
+/**
+ * Hand the caret back to the document after a toolbar control is done with it.
+ *
+ * The pages layer is the focusable surface; without this a picked or typed size left focus
+ * in the toolbar, so the next keystroke went to the box rather than the document.
+ */
+function editorFocus(from: HTMLElement | null): void {
+  const root = from?.closest('.ep-root') ?? from?.ownerDocument?.body;
+  const pages = root?.querySelector<HTMLElement>('.docx-pages');
+  pages?.focus();
 }
 
 /** The font-size stepper part (`DocxEditorToolbar.FontSize`): wired to `font.size`. */

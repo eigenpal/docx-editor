@@ -296,6 +296,42 @@ export function classifyCommand(command: EditorCommand): CommandSupport {
       return { supported: true, mutating: true };
     case 'clearFormatting':
       return { supported: true, mutating: true };
+    case 'setLineSpacing': {
+      // Bounds are `w:spacing/@w:line`'s own (ST_SignedTwipsMeasure in practice, but Word
+      // rejects a non-positive line height outright). Checked here so a malformed pick is
+      // refused with a typed reason rather than writing a `w:spacing` Word will not open.
+      const rules = ['multiple', 'exact', 'atLeast'];
+      if (!rules.includes(command.rule)) {
+        return {
+          supported: false,
+          code: 'invalidArgs',
+          reason: "setLineSpacing requires a rule of 'multiple', 'exact' or 'atLeast'",
+        };
+      }
+      const raw = command.rule === 'multiple' ? command.value * 240 : command.value * 20;
+      if (!Number.isFinite(command.value) || command.value <= 0 || Math.round(raw) > 31680) {
+        return {
+          supported: false,
+          code: 'invalidArgs',
+          reason: 'setLineSpacing requires a positive value no taller than 1584pt',
+        };
+      }
+      return { supported: true, mutating: true };
+    }
+    case 'setParagraphSpacing': {
+      for (const field of ['beforePt', 'afterPt'] as const) {
+        const value = command[field];
+        if (value === undefined || value === null) continue;
+        if (!Number.isFinite(value) || value < 0 || value > 1584) {
+          return {
+            supported: false,
+            code: 'invalidArgs',
+            reason: `setParagraphSpacing requires ${field} between 0 and 1584 points`,
+          };
+        }
+      }
+      return { supported: true, mutating: true };
+    }
     case 'setParagraphStyle': {
       // Shape gate only, like `insertText`: whether the styleId names a style the DOCUMENT
       // defines is checked at exec, where the styles part is in hand. The bounds mirror the
@@ -490,7 +526,15 @@ export function formattingEqual(a: RunFormatting | null, b: RunFormatting | null
     a.fontFamily !== b.fontFamily ||
     a.fontSizePt !== b.fontSizePt ||
     a.alignment !== b.alignment ||
-    a.styleId !== b.styleId
+    a.styleId !== b.styleId ||
+    a.spaceBeforePt !== b.spaceBeforePt ||
+    a.spaceAfterPt !== b.spaceAfterPt ||
+    // EVERY field of `RunFormatting` must be compared here. A field this misses is a field
+    // the cache reports as unchanged: the previous object is handed back, and a host reading
+    // `snapshot().formatting` by reference never sees the value move — the write lands in
+    // the document and the control that made it goes on showing the old state.
+    a.lineSpacing?.rule !== b.lineSpacing?.rule ||
+    a.lineSpacing?.value !== b.lineSpacing?.value
   ) {
     return false;
   }

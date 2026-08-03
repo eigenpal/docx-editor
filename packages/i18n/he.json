@@ -110,7 +110,11 @@
     "double": "כפול",
     "lineSpacingTitle": "מרחק בין שורות: {label}",
     "blockSpacingRules": "מרחק בין פסקאות",
-    "label": null
+    "label": null,
+    "addSpaceAfter": null,
+    "addSpaceBefore": null,
+    "removeSpaceAfter": null,
+    "removeSpaceBefore": null
   },
   "styles": {
     "selectAriaLabel": "בחר סגנון פסקה",

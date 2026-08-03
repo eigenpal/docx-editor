@@ -18,7 +18,7 @@ import './dom-setup.ts';
 
 import { afterEach, describe, expect, test } from 'bun:test';
 import type { ReactNode } from 'react';
-import { act, cleanup, render } from '@testing-library/react';
+import { act, cleanup, fireEvent, render } from '@testing-library/react';
 import { zipSync, strToU8 } from 'fflate';
 import {
   chromeSlotId,
@@ -259,8 +259,8 @@ describe('the shaped parts', () => {
       editor().surface!.selectAll();
     });
     const stepper = view.container.querySelector('[data-slot="font.size"]')!;
-    const value = stepper.querySelector('.docx-toolbar__stepper-value')!;
-    expect(value.textContent).toBe('12');
+    const value = stepper.querySelector('.docx-toolbar__stepper-value') as HTMLInputElement;
+    expect(value.value).toBe('12');
     const increase = stepper.querySelector('[aria-label="fontSize.increase"]') as HTMLButtonElement;
     expect(increase.disabled).toBe(false);
     await act(async () => {
@@ -269,12 +269,195 @@ describe('the shaped parts', () => {
     // The stepper walks the PRESET ladder (8..12, 14, 16, ...), not a fixed
     // increment: 12pt steps to 14pt, read back from the engine's snapshot.
     expect(editor().snapshot().formatting?.fontSizePt).toBe(14);
-    expect(value.textContent).toBe('14');
+    expect(value.value).toBe('14');
     const decrease = stepper.querySelector('[aria-label="fontSize.decrease"]') as HTMLButtonElement;
     await act(async () => {
       decrease.click();
     });
     expect(editor().snapshot().formatting?.fontSizePt).toBe(12);
+  });
+
+  test('the font-size box opens a preset list, and a pick applies it', async () => {
+    const { view, editor } = mountToolbar(<DocxEditorToolbar />, SIZED_SOURCE);
+    await act(async () => {
+      editor().surface!.selectAll();
+    });
+    const root = view.container.querySelector('[data-slot="font.size"]')!;
+    const input = root.querySelector('input') as HTMLInputElement;
+    expect(input.getAttribute('role')).toBe('combobox');
+    expect(root.querySelector('[role="listbox"]')).toBeNull();
+
+    await act(async () => {
+      input.click();
+    });
+    const list = root.querySelector('[role="listbox"]')!;
+    expect(list).not.toBeNull();
+    const options = [...list.querySelectorAll('[role="option"]')] as HTMLButtonElement[];
+    expect(options.map((option) => option.textContent)).toEqual([
+      '8',
+      '9',
+      '10',
+      '11',
+      '12',
+      '14',
+      '16',
+      '18',
+      '20',
+      '24',
+      '28',
+      '36',
+      '48',
+      '72',
+    ]);
+    // The size in force is the ticked row, so the list opens on the current value.
+    expect(options.find((option) => option.hasAttribute('data-selected'))!.textContent).toBe('12');
+
+    await act(async () => {
+      options.find((option) => option.textContent === '36')!.click();
+    });
+    expect(editor().snapshot().formatting?.fontSizePt).toBe(36);
+    // Picking closes the list and hands the caret back to the document.
+    expect(root.querySelector('[role="listbox"]')).toBeNull();
+  });
+
+  test('a size typed into the box applies on Enter, including one off the ladder', async () => {
+    const { view, editor } = mountToolbar(<DocxEditorToolbar />, SIZED_SOURCE);
+    await act(async () => {
+      editor().surface!.selectAll();
+    });
+    const root = view.container.querySelector('[data-slot="font.size"]')!;
+    const input = root.querySelector('input') as HTMLInputElement;
+
+    await act(async () => {
+      fireEvent.change(input, { target: { value: '13.5' } });
+    });
+    // The draft is what the box shows while it is being typed, not the document's value.
+    expect(input.value).toBe('13.5');
+    await act(async () => {
+      fireEvent.keyDown(input, { key: 'Enter' });
+    });
+    expect(editor().snapshot().formatting?.fontSizePt).toBe(13.5);
+    expect(root.querySelector('[role="listbox"]')).toBeNull();
+  });
+
+  test('Escape abandons the typed value, and nonsense reverts rather than clamping', async () => {
+    const { view, editor } = mountToolbar(<DocxEditorToolbar />, SIZED_SOURCE);
+    await act(async () => {
+      editor().surface!.selectAll();
+    });
+    const root = view.container.querySelector('[data-slot="font.size"]')!;
+    const input = root.querySelector('input') as HTMLInputElement;
+
+    await act(async () => {
+      fireEvent.change(input, { target: { value: '48' } });
+      fireEvent.keyDown(input, { key: 'Escape' });
+    });
+    expect(editor().snapshot().formatting?.fontSizePt).toBe(12);
+    expect(input.value).toBe('12');
+
+    // Out of `w:sz`'s range and not a number at all: neither is a size, so neither is
+    // silently turned into one the user did not ask for.
+    for (const nonsense of ['0', '9999', 'huge', '']) {
+      await act(async () => {
+        fireEvent.change(input, { target: { value: nonsense } });
+        fireEvent.blur(input);
+      });
+      expect([nonsense, editor().snapshot().formatting?.fontSizePt]).toEqual([nonsense, 12]);
+    }
+  });
+
+  test('the line-spacing menu applies a multiple and ticks the one in force', async () => {
+    const { view, editor } = mountToolbar(<DocxEditorToolbar />);
+    await act(async () => {
+      editor().surface!.selectAll();
+    });
+    const root = view.container.querySelector('[data-slot="list.lineSpacing"]')!;
+    const trigger = root.querySelector('button') as HTMLButtonElement;
+    expect(trigger.disabled).toBe(false);
+
+    await act(async () => {
+      trigger.click();
+    });
+    const rows = [...root.querySelectorAll('[role="menuitemradio"]')] as HTMLButtonElement[];
+    expect(rows.map((row) => row.textContent)).toEqual(['1.0', '1.15', '1.5', '2.0', '2.5', '3.0']);
+    // Nothing is ticked before a pick: the fixture states no line spacing at all.
+    expect(rows.some((row) => row.hasAttribute('data-selected'))).toBe(false);
+
+    await act(async () => {
+      rows.find((row) => row.textContent === '1.5')!.click();
+    });
+    expect(editor().snapshot().formatting?.lineSpacing).toEqual({ rule: 'multiple', value: 1.5 });
+    expect(root.querySelector('[role="menu"]')).toBeNull();
+
+    // Reopened, the menu reflects the paragraph rather than a fixed list.
+    await act(async () => {
+      trigger.click();
+    });
+    const ticked = [...root.querySelectorAll('[role="menuitemradio"]')].find((row) =>
+      row.hasAttribute('data-selected')
+    );
+    expect(ticked?.textContent).toBe('1.5');
+  });
+
+  test('the space before/after rows flip between Add and Remove on what is there', async () => {
+    const { view, editor } = mountToolbar(<DocxEditorToolbar />);
+    await act(async () => {
+      editor().surface!.selectAll();
+    });
+    const root = view.container.querySelector('[data-slot="list.lineSpacing"]')!;
+    const trigger = root.querySelector('button') as HTMLButtonElement;
+    const rows = () => [...root.querySelectorAll('[role="menuitem"]')] as HTMLButtonElement[];
+
+    await act(async () => {
+      trigger.click();
+    });
+    expect(rows().map((row) => row.textContent)).toEqual([
+      'lineSpacing.addSpaceBefore',
+      'lineSpacing.addSpaceAfter',
+    ]);
+
+    await act(async () => {
+      rows()[0]!.click();
+    });
+    expect(editor().snapshot().formatting?.spaceBeforePt).toBe(10);
+
+    await act(async () => {
+      trigger.click();
+    });
+    // Word never offers to add space that is already there.
+    expect(rows()[0]!.textContent).toBe('lineSpacing.removeSpaceBefore');
+    await act(async () => {
+      rows()[0]!.click();
+    });
+    expect(editor().snapshot().formatting?.spaceBeforePt).toBeUndefined();
+  });
+
+  test('line spacing and paragraph space are independent settings of one w:spacing', async () => {
+    // They share one element, so a replacing write made each pick delete the other.
+    const { view, editor } = mountToolbar(<DocxEditorToolbar />);
+    await act(async () => {
+      editor().surface!.selectAll();
+    });
+    const root = view.container.querySelector('[data-slot="list.lineSpacing"]')!;
+    const trigger = root.querySelector('button') as HTMLButtonElement;
+
+    await act(async () => {
+      trigger.click();
+    });
+    await act(async () => {
+      (
+        [...root.querySelectorAll('[role="menuitemradio"]')] as HTMLButtonElement[]
+      ).find((row) => row.textContent === '2.0')!.click();
+    });
+    await act(async () => {
+      trigger.click();
+    });
+    await act(async () => {
+      ([...root.querySelectorAll('[role="menuitem"]')] as HTMLButtonElement[])[1]!.click();
+    });
+
+    expect(editor().snapshot().formatting?.lineSpacing).toEqual({ rule: 'multiple', value: 2 });
+    expect(editor().snapshot().formatting?.spaceAfterPt).toBe(10);
   });
 
   test('the zoom stepper drives Editor.setZoom and reads the snapshot back', async () => {

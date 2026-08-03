@@ -110,7 +110,11 @@
     "double": "双倍行距",
     "lineSpacingTitle": "行距: {label}",
     "blockSpacingRules": "段间距",
-    "label": null
+    "label": null,
+    "addSpaceAfter": null,
+    "addSpaceBefore": null,
+    "removeSpaceAfter": null,
+    "removeSpaceBefore": null
   },
   "styles": {
     "selectAriaLabel": "选择段落样式",

@@ -80,6 +80,18 @@ export interface SurfaceFormatting {
   readonly highlight: string | null;
   readonly alignment: 'left' | 'center' | 'right' | 'both' | null;
   readonly styleId: string | null;
+  /**
+   * `w:spacing`'s line rule and its value: LINES for `multiple`, points for the other two
+   * (`w:line` is 240ths of a line under `auto` and twentieths of a point otherwise).
+   * Null when the selection's paragraphs disagree, or state no line spacing at all.
+   */
+  readonly lineSpacing: {
+    readonly rule: 'multiple' | 'exact' | 'atLeast';
+    readonly value: number;
+  } | null;
+  /** `w:spacing/@w:before` and `@w:after` in points, null when the selection disagrees. */
+  readonly spaceBeforePt: number | null;
+  readonly spaceAfterPt: number | null;
 }
 
 /**
@@ -259,8 +271,19 @@ export interface PaginatedSurface {
    * terms as `toggleRunProperty`.
    */
   setRunProperty(localName: string, attributes?: Record<string, string>): void;
-  /** Set a property on every paragraph the selection touches — alignment, style, spacing. */
-  setParagraphProperty(localName: string, attributes?: Record<string, string>): void;
+  /**
+   * Set a property on every paragraph the selection touches — alignment, style, spacing.
+   *
+   * `mergeAttributes` keeps the attributes the call does not name, for the properties that
+   * carry several independent settings in one element: `w:spacing` holds the line rule and
+   * the space before and after, so a line-spacing pick must not delete the space-before. A
+   * null-valued attribute removes just that one.
+   */
+  setParagraphProperty(
+    localName: string,
+    attributes?: Record<string, string | null>,
+    options?: { readonly mergeAttributes?: boolean }
+  ): void;
   /**
    * Word's Clear All Formatting: direct run properties off the selected text, and every
    * paragraph the selection touches back to the default style with its direct paragraph

@@ -110,7 +110,11 @@
     "double": "दुगुना",
     "lineSpacingTitle": "लाइन स्पेसिंग: {label}",
     "blockSpacingRules": "पैराग्राफ स्पेसिंग",
-    "label": null
+    "label": null,
+    "addSpaceAfter": null,
+    "addSpaceBefore": null,
+    "removeSpaceAfter": null,
+    "removeSpaceBefore": null
   },
   "styles": {
     "selectAriaLabel": "पैराग्राफ शैली चुनें",

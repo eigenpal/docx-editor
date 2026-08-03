@@ -2734,6 +2734,71 @@ a.docx-hyperlink:focus-visible {
   font-size: 13px;
 }
 
+/* The font-size box is a COMBOBOX: typed as readily as picked, so it is an input
+ * wearing the boxed value's chrome rather than a readout. */
+.docx-toolbar__font-size {
+  position: relative;
+  display: inline-flex;
+  flex: none;
+}
+
+.docx-toolbar__font-size-input {
+  padding: 0;
+  font: inherit;
+  font-size: 13px;
+  cursor: text;
+}
+
+.docx-toolbar__font-size-input:focus {
+  outline: 2px solid var(--doc-accent);
+  outline-offset: -2px;
+}
+
+.docx-toolbar__font-size-input:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.docx-toolbar__font-size-menu {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  z-index: 30;
+  margin-top: 4px;
+  min-width: 72px;
+  max-height: 280px;
+  overflow-y: auto;
+}
+
+.docx-toolbar__font-size-menu .docx-toolbar__menu-item {
+  min-width: 64px;
+  justify-content: flex-start;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Line spacing: an icon button with a caret, opening Word's combined menu (the
+ * multiples, then the paragraph space-before/after rows). */
+.docx-toolbar__line-spacing {
+  position: relative;
+  display: inline-flex;
+  flex: none;
+}
+
+.docx-toolbar__line-spacing-trigger {
+  gap: 2px;
+  width: auto;
+  padding: 0 4px;
+}
+
+.docx-toolbar__line-spacing-menu {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  z-index: 30;
+  margin-top: 4px;
+  min-width: 232px;
+}
+
 /* The zoom middle: transparent "%" trigger with a caret. */
 .docx-toolbar__stepper-value--menu {
   display: inline-flex;

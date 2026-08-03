@@ -602,6 +602,33 @@ export function formattingAt(
         defaultParagraphStyleId ??
         undefined
     ) ?? null;
+  // `w:spacing` carries three independent things, so they are read as three: the line rule
+  // and its value, and the space before/after. All in the vocabulary a toolbar shows —
+  // LINES for a multiple, points for everything else — because 276 twentieths and 276
+  // 240ths are the same attribute meaning two different quantities, and a control that
+  // showed the raw number would be right half the time.
+  const spacing = (properties: readonly SurfaceProperty[]) =>
+    properties.find((property) => property.localName === 'spacing')?.attributes;
+  const lineSpacingText = paragraphValue((properties) => {
+    const attributes = spacing(properties);
+    const line = Number(attributes?.line);
+    if (!Number.isFinite(line)) return '';
+    // `w:lineRule` defaults to `auto` (17.3.1.33), which is Word's "Multiple".
+    const rule = attributes?.lineRule ?? 'auto';
+    if (rule === 'auto') return `multiple:${Math.round((line / 240) * 100) / 100}`;
+    return `${rule === 'exact' ? 'exact' : 'atLeast'}:${Math.round((line / 20) * 100) / 100}`;
+  });
+  const lineSpacing = ((): SurfaceFormatting['lineSpacing'] => {
+    if (!lineSpacingText) return null;
+    const [rule, value] = lineSpacingText.split(':');
+    return { rule: rule as 'multiple' | 'exact' | 'atLeast', value: Number(value) };
+  })();
+  const spacePt = (attribute: 'before' | 'after') =>
+    paragraphValue((properties) => {
+      const raw = Number(spacing(properties)?.[attribute]);
+      return Number.isFinite(raw) ? Math.round((raw / 20) * 100) / 100 : null;
+    });
+
   return {
     bold: styles.length > 0 && styles.every((entry) => entry.bold),
     italic: styles.length > 0 && styles.every((entry) => entry.italic),
@@ -619,6 +646,9 @@ export function formattingAt(
     highlight: agreed((entry) => entry.highlight),
     alignment,
     styleId: style,
+    lineSpacing,
+    spaceBeforePt: spacePt('before'),
+    spaceAfterPt: spacePt('after'),
   } satisfies SurfaceFormatting;
 }
 

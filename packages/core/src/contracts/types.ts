@@ -149,6 +149,19 @@ export interface RunFormatting {
   readonly alignment?: 'left' | 'center' | 'right' | 'both';
   /** Paragraph style id (`w:pStyle`) at the selection. */
   readonly styleId?: string;
+  /**
+   * Line spacing at the selection, in the unit its rule implies — LINES for `multiple`,
+   * points for `exact` and `atLeast`. The same vocabulary `setLineSpacing` takes, so a
+   * control can show what it reads and send back what it shows. Absent when the
+   * selection's paragraphs disagree or state no line spacing.
+   */
+  readonly lineSpacing?: {
+    readonly rule: 'multiple' | 'exact' | 'atLeast';
+    readonly value: number;
+  };
+  /** Space above and below the paragraph at the selection, in points. */
+  readonly spaceBeforePt?: number;
+  readonly spaceAfterPt?: number;
 }
 
 export interface Table {

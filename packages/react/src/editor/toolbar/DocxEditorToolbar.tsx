@@ -43,7 +43,6 @@ import {
   ToolbarImageProperties,
   ToolbarIndent,
   ToolbarItalic,
-  ToolbarLineSpacing,
   ToolbarLink,
   ToolbarNumberedList,
   ToolbarOutdent,
@@ -60,6 +59,7 @@ import {
   type ToolbarSlotPartComponent,
 } from './parts';
 import { ToolbarFontSize, ToolbarZoom } from './steppers';
+import { ToolbarLineSpacing } from './LineSpacing';
 import { ToolbarFontColor, ToolbarHighlight } from './ColorSplit';
 import { ToolbarAlignment, type ToolbarAlignmentComponent } from './Alignment';
 import { FontFamily, useFontFamily } from './FontFamily';
