@@ -57,27 +57,35 @@ const caretIn = (surface: PaginatedSurface, paragraphId: string) =>
   });
 
 describe('a real document whose list declares only level 0', () => {
-  test('the bullet survives an indent, and the control says so first', () => {
+  test('indenting declares the level and the bullet cycles, as Word does', () => {
     withFixture((surface) => {
       const item = itemNamed(surface, 'First bullet item');
       expect(item.marker?.text).toBe('•');
       caretIn(surface, item.paragraphId);
 
-      expect(surface.canAdjustIndent('increase')).toBe(false);
-      expect(surface.adjustIndent('increase')).toBe(false);
+      expect(surface.canAdjustIndent('increase')).toBe(true);
+      expect(surface.adjustIndent('increase')).toBe(true);
+      // Depth 1 of Word's stock bullet cycle: Courier `o`.
+      expect(itemNamed(surface, 'First bullet item').marker).toMatchObject({
+        text: 'o',
+        level: 1,
+      });
+      // And back out to the item's own authored level.
+      expect(surface.adjustIndent('decrease')).toBe(true);
       expect(itemNamed(surface, 'First bullet item').marker?.text).toBe('•');
     });
   });
 
-  test('the roman numeral survives too', () => {
+  test('the roman numeral cycles through the number formats too', () => {
     withFixture((surface) => {
       const item = itemNamed(surface, 'Introduction');
       expect(item.marker?.text).toBe('I.');
       caretIn(surface, item.paragraphId);
 
-      expect(surface.canAdjustIndent('increase')).toBe(false);
-      expect(surface.adjustIndent('increase')).toBe(false);
-      expect(itemNamed(surface, 'Introduction').marker?.text).toBe('I.');
+      expect(surface.canAdjustIndent('increase')).toBe(true);
+      expect(surface.adjustIndent('increase')).toBe(true);
+      // Depth 1 of Word's default cycle is lowerLetter.
+      expect(itemNamed(surface, 'Introduction').marker?.text).toBe('a.');
     });
   });
 

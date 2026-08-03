@@ -9,7 +9,7 @@ import { GlobalRegistrator } from '@happy-dom/global-registrator';
 if (!GlobalRegistrator.isRegistered) GlobalRegistrator.register();
 
 import { describe, expect, test } from 'bun:test';
-import { zipSync, strToU8 } from 'fflate';
+import { zipSync, unzipSync, strToU8, strFromU8 } from 'fflate';
 import { mountPaginatedSurface, type PaginatedSurface } from '../paginated-surface.ts';
 import { createKeyDownHandler } from '../surface-input.ts';
 
@@ -42,13 +42,26 @@ const NUMBERING =
   '<w:num w:numId="2"><w:abstractNumId w:val="1"/></w:num>' +
   '<w:num w:numId="3"><w:abstractNumId w:val="2"/></w:num></w:numbering>';
 
-function docx(body: string, withNumbering = false): Uint8Array {
+const STY = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles';
+
+interface DocxParts {
+  /** Replaces the default NUMBERING body (the `w:numbering` children). */
+  numberingXml?: string;
+  /** Adds `/word/styles.xml` with these `w:styles` children. */
+  stylesXml?: string;
+}
+
+function docx(body: string, withNumbering = false, parts: DocxParts = {}): Uint8Array {
+  const withStyles = parts.stylesXml !== undefined;
   const files: Record<string, Uint8Array> = {
     '[Content_Types].xml': strToU8(
       `<Types xmlns="${CT}"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>` +
         '<Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>' +
         (withNumbering
           ? '<Override PartName="/word/numbering.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.numbering+xml"/>'
+          : '') +
+        (withStyles
+          ? '<Override PartName="/word/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.styles+xml"/>'
           : '') +
         '</Types>'
     ),
@@ -59,17 +72,29 @@ function docx(body: string, withNumbering = false): Uint8Array {
       `<w:document xmlns:w="${W}"><w:body>${body}</w:body></w:document>`
     ),
   };
+  const rels: string[] = [];
   if (withNumbering) {
-    files['word/numbering.xml'] = strToU8(NUMBERING);
+    files['word/numbering.xml'] = strToU8(
+      parts.numberingXml !== undefined
+        ? `<w:numbering xmlns:w="${W}">${parts.numberingXml}</w:numbering>`
+        : NUMBERING
+    );
+    rels.push(`<Relationship Id="rId9" Type="${NUM}" Target="numbering.xml"/>`);
+  }
+  if (withStyles) {
+    files['word/styles.xml'] = strToU8(`<w:styles xmlns:w="${W}">${parts.stylesXml}</w:styles>`);
+    rels.push(`<Relationship Id="rId8" Type="${STY}" Target="styles.xml"/>`);
+  }
+  if (rels.length > 0) {
     files['word/_rels/document.xml.rels'] = strToU8(
-      `<Relationships xmlns="${REL}"><Relationship Id="rId9" Type="${NUM}" Target="numbering.xml"/></Relationships>`
+      `<Relationships xmlns="${REL}">${rels.join('')}</Relationships>`
     );
   }
   return zipSync(files);
 }
 
-function mount(body: string, withNumbering = false): PaginatedSurface {
-  return mountBytes(docx(body, withNumbering));
+function mount(body: string, withNumbering = false, parts: DocxParts = {}): PaginatedSurface {
+  return mountBytes(docx(body, withNumbering, parts));
 }
 
 function mountBytes(bytes: Uint8Array): PaginatedSurface {
@@ -307,37 +332,49 @@ describe('Bullets and Numbering', () => {
   });
 });
 
-describe('a list definition that declares only level 0', () => {
-  const shallow = (text: string, numId: string) =>
-    `<w:p><w:pPr><w:numPr><w:ilvl w:val="0"/><w:numId w:val="${numId}"/>` +
-    `</w:numPr></w:pPr><w:r><w:t>${text}</w:t></w:r></w:p>`;
+const shallow = (text: string, numId: string) =>
+  `<w:p><w:pPr><w:numPr><w:ilvl w:val="0"/><w:numId w:val="${numId}"/>` +
+  `</w:numPr></w:pPr><w:r><w:t>${text}</w:t></w:r></w:p>`;
 
-  test('indenting refuses rather than erasing the bullet', () => {
-    // numId 2 declares `ilvl 0` only. Demoting to a level it does not declare resolved to
-    // no marker at all: the paragraph silently stopped being a list item and sprang back
-    // to the margin, taking its bullet with it.
+describe('a list definition that declares only level 0', () => {
+  test('indenting DECLARES the missing level rather than erasing the bullet', () => {
+    // numId 2 declares `ilvl 0` only. Demoting to a level it does not declare used to
+    // resolve to no marker at all — and before that was guarded, the paragraph silently
+    // stopped being a list item. Word never greys Increase Indent out here: it defines
+    // the level with its stock bullet for that depth, and so does this.
     const surface = mount(shallow('alpha', '2'), true);
     expect(markerOf(surface)).toMatchObject({ text: '§', level: 0 });
-    expect(surface.adjustIndent('increase')).toBe(false);
+    expect(surface.adjustIndent('increase')).toBe(true);
+    expect(markerOf(surface)).toMatchObject({ text: 'o', level: 1 });
+    // And back: the item's own level 0 still resolves to its authored glyph.
+    expect(surface.adjustIndent('decrease')).toBe(true);
     expect(markerOf(surface)).toMatchObject({ text: '§', level: 0 });
   });
 
-  test('the same holds for a numbered list', () => {
+  test("a numbered list gains Word's default format for the depth", () => {
     const surface = mount(shallow('Introduction', '3'), true);
     expect(markerOf(surface)?.text).toBe('I.');
-    expect(surface.adjustIndent('increase')).toBe(false);
-    expect(markerOf(surface)?.text).toBe('I.');
+    expect(surface.adjustIndent('increase')).toBe(true);
+    // Depth 1 of Word's default cycle is lowerLetter.
+    expect(markerOf(surface)?.text).toBe('a.');
   });
 
-  test('Tab does not destroy it either', () => {
+  test('the declared level survives a save and reopen', () => {
+    const surface = mount(shallow('alpha', '2'), true);
+    expect(surface.adjustIndent('increase')).toBe(true);
+    const reopened = mountBytes(surface.session.save());
+    expect(markerOf(reopened)).toMatchObject({ text: 'o', level: 1 });
+  });
+
+  test('Tab takes the same lane', () => {
     const surface = mount(shallow('alpha', '2'), true);
     createKeyDownHandler(surface)(key({ key: 'Tab' }));
-    expect(markerOf(surface)).toMatchObject({ text: '§', level: 0 });
+    expect(markerOf(surface)).toMatchObject({ text: 'o', level: 1 });
   });
 
-  test('the control reports itself disabled, so the toolbar can grey it out', () => {
+  test('the control stays enabled, greying out only at the ends of the range', () => {
     const surface = mount(shallow('alpha', '2'), true);
-    expect(surface.canAdjustIndent('increase')).toBe(false);
+    expect(surface.canAdjustIndent('increase')).toBe(true);
     expect(surface.canAdjustIndent('decrease')).toBe(false);
   });
 
@@ -346,6 +383,117 @@ describe('a list definition that declares only level 0', () => {
     expect(surface.canAdjustIndent('increase')).toBe(true);
     expect(surface.adjustIndent('increase')).toBe(true);
     expect(markerOf(surface)).toMatchObject({ text: '○', level: 1 });
+  });
+
+  test('nine levels is the ceiling: eight presses declare them all, the ninth refuses', () => {
+    const surface = mount(shallow('alpha', '2'), true);
+    for (let press = 1; press <= 8; press += 1) {
+      expect(surface.adjustIndent('increase')).toBe(true);
+      expect(markerOf(surface)?.level).toBe(press);
+    }
+    expect(surface.canAdjustIndent('increase')).toBe(false);
+    expect(surface.adjustIndent('increase')).toBe(false);
+    expect(markerOf(surface)?.level).toBe(8);
+    // And the whole ladder is still resolvable on the way back down.
+    for (let press = 7; press >= 0; press -= 1) {
+      expect(surface.adjustIndent('decrease')).toBe(true);
+      expect(markerOf(surface)?.level).toBe(press);
+    }
+  });
+
+  test('the declared ORDERED level survives a save and reopen too', () => {
+    const surface = mount(shallow('Introduction', '3'), true);
+    expect(surface.adjustIndent('increase')).toBe(true);
+    const reopened = mountBytes(surface.session.save());
+    expect(markerOf(reopened)).toMatchObject({ text: 'a.', level: 1 });
+  });
+});
+
+describe('numbering.xml that fights the graft', () => {
+  test('a foreign-namespace lvl cannot pass for a declaration', () => {
+    // The write path used to match `lvl` by local name alone while the layout index
+    // requires the WML namespace: `<x:lvl x:ilvl="1">` made "already declared" answer
+    // true, the level op committed, and the marker resolved to NOTHING — the exact
+    // destruction this feature exists to prevent.
+    const hostile =
+      '<w:abstractNum w:abstractNumId="1">' +
+      '<w:lvl w:ilvl="0"><w:numFmt w:val="bullet"/><w:lvlText w:val="§"/>' +
+      '<w:pPr><w:ind w:left="720" w:hanging="360"/></w:pPr></w:lvl>' +
+      '<x:lvl x:ilvl="1" xmlns:x="urn:evil"/>' +
+      '</w:abstractNum>' +
+      '<w:num w:numId="2"><w:abstractNumId w:val="1"/></w:num>';
+    const surface = mount(shallow('alpha', '2'), true, { numberingXml: hostile });
+    expect(markerOf(surface)).toMatchObject({ text: '§', level: 0 });
+    expect(surface.adjustIndent('increase')).toBe(true);
+    expect(markerOf(surface)).toMatchObject({ text: 'o', level: 1 });
+  });
+
+  test('a graft never de-escapes a hostile authored value on save', () => {
+    // The part being edited carries an attacker string that WOULD be markup if it ever
+    // reached the file unescaped. The graft edits the same part; the save must re-escape
+    // the authored value exactly as it arrived.
+    const hostile =
+      '<w:abstractNum w:abstractNumId="1">' +
+      '<w:lvl w:ilvl="0"><w:numFmt w:val="bullet"/>' +
+      '<w:lvlText w:val="&quot;/&gt;&lt;w:sectPr/&gt;&lt;w:lvl w:ilvl=&quot;1&quot;"/>' +
+      '<w:pPr><w:ind w:left="720" w:hanging="360"/></w:pPr></w:lvl>' +
+      '</w:abstractNum>' +
+      '<w:num w:numId="2"><w:abstractNumId w:val="1"/></w:num>';
+    const surface = mount(shallow('alpha', '2'), true, { numberingXml: hostile });
+    expect(surface.adjustIndent('increase')).toBe(true);
+    const saved = strFromU8(unzipSync(surface.session.save())['word/numbering.xml']!);
+    // The payload is still character data, not markup …
+    expect(saved).not.toContain('/><w:sectPr/>');
+    expect(saved).toContain('&lt;w:sectPr/&gt;');
+    // … and the graft itself landed.
+    expect(saved).toContain('Courier New');
+  });
+});
+
+describe('a w:numStyleLink definition', () => {
+  // Word's built-in List Bullet shape: the abstract a paragraph names carries NO levels
+  // and delegates to a style, whose w:numPr names the num that owns the real levels.
+  const linked = (ownerLevels: string) =>
+    '<w:abstractNum w:abstractNumId="0"><w:numStyleLink w:val="ListBullet"/></w:abstractNum>' +
+    `<w:abstractNum w:abstractNumId="1"><w:styleLink w:val="ListBullet"/>${ownerLevels}</w:abstractNum>` +
+    '<w:num w:numId="1"><w:abstractNumId w:val="0"/></w:num>' +
+    '<w:num w:numId="2"><w:abstractNumId w:val="1"/></w:num>';
+  const LINKED_STYLES =
+    '<w:style w:type="paragraph" w:styleId="ListBullet"><w:name w:val="List Bullet"/>' +
+    '<w:pPr><w:numPr><w:numId w:val="2"/></w:numPr></w:pPr></w:style>';
+  const LEVEL_0 =
+    '<w:lvl w:ilvl="0"><w:numFmt w:val="bullet"/><w:lvlText w:val="•"/>' +
+    '<w:pPr><w:ind w:left="720" w:hanging="360"/></w:pPr></w:lvl>';
+  const LEVEL_1 =
+    '<w:lvl w:ilvl="1"><w:numFmt w:val="bullet"/><w:lvlText w:val="○"/>' +
+    '<w:pPr><w:ind w:left="1440" w:hanging="360"/></w:pPr></w:lvl>';
+
+  test('a level the LINK declares indents without any graft', () => {
+    const surface = mount(shallow('alpha', '1'), true, {
+      numberingXml: linked(LEVEL_0 + LEVEL_1),
+      stylesXml: LINKED_STYLES,
+    });
+    expect(markerOf(surface)).toMatchObject({ text: '•', level: 0 });
+    expect(surface.canAdjustIndent('increase')).toBe(true);
+    expect(surface.adjustIndent('increase')).toBe(true);
+    // The LINKED level-1 glyph, not the engine's Courier `o` default — no level was
+    // grafted, the existing declaration resolved through the link.
+    expect(markerOf(surface)).toMatchObject({ text: '○', level: 1 });
+    expect(JSON.stringify(surface.session.part().root)).not.toContain('Courier New');
+  });
+
+  test('a level past the deepest LINKED one refuses rather than shadow-grafting', () => {
+    const surface = mount(shallow('alpha', '1'), true, {
+      numberingXml: linked(LEVEL_0),
+      stylesXml: LINKED_STYLES,
+    });
+    expect(markerOf(surface)).toMatchObject({ text: '•', level: 0 });
+    // A graft onto the delegating abstract would be shadowed by the link resolve, so the
+    // press is a safe no-op: nothing committed, nothing written, marker intact.
+    expect(surface.adjustIndent('increase')).toBe(false);
+    expect(markerOf(surface)).toMatchObject({ text: '•', level: 0 });
+    const reopened = mountBytes(surface.session.save());
+    expect(markerOf(reopened)).toMatchObject({ text: '•', level: 0 });
   });
 });
 

@@ -138,8 +138,11 @@ export interface PaginatedSurface {
    *
    * A NUMBERED or BULLETED paragraph changes LEVEL: `w:numPr/w:ilvl` moves by one, which
    * re-resolves its marker from `numbering.xml` — so a bullet becomes a hollow circle, a
-   * `1.` becomes an `a.`, exactly as Word demotes a list item. Everything else moves its
-   * `w:ind/@left` by one default tab stop, never past the margin.
+   * `1.` becomes an `a.`, exactly as Word demotes a list item. A level the definition
+   * does not declare is DECLARED on the way, with Word's default format for that depth
+   * (its stock bullets and number formats cycle every three levels) — a definition that
+   * stops at `ilvl 0` never blocks the press. Everything else moves its `w:ind/@left` by
+   * one default tab stop, never past the margin.
    *
    * Answers whether anything changed, so a caller can fall back (Tab inserting a tab
    * where there is no list to demote).
@@ -148,9 +151,12 @@ export interface PaginatedSurface {
   /**
    * Whether Increase/Decrease Indent would do anything right now.
    *
-   * A list item at level 0 cannot outdent, and one whose definition declares no deeper
-   * level cannot indent — Word greys both out rather than letting the press silently
-   * destroy the marker.
+   * A list item at level 0 cannot outdent and one at level 8 cannot indent — `w:ilvl`
+   * has nine levels and Word greys the control out at the ends. A missing level
+   * DEFINITION never disables it: `adjustIndent` declares the level as it goes. The one
+   * residue: a `w:numStyleLink` definition missing the level refuses the declaration
+   * (its levels belong to the linked style), so there the press is a safe no-op rather
+   * than a greyed control.
    */
   canAdjustIndent(direction: 'increase' | 'decrease'): boolean;
   /**

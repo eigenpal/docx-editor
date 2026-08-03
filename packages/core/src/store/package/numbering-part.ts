@@ -71,23 +71,26 @@ function levelXml(kind: ListKind, ilvl: number): string {
   // 0.25" per level, with the marker in a 0.25" hanging slot — Word's own list geometry.
   const left = 720 * (ilvl + 1);
   const start = '<w:start w:val="1"/>';
-  // Everything from `w:lvlJc` on: the tail of the sequence, shared by both kinds.
-  const tail =
-    `<w:lvlJc w:val="left"/>` + `<w:pPr><w:ind w:left="${left}" w:hanging="360"/></w:pPr>`;
   if (kind === 'bullet') {
     const bullet = BULLETS[ilvl % BULLETS.length]!;
     return (
       `<w:lvl w:ilvl="${ilvl}">${start}<w:numFmt w:val="bullet"/>` +
-      `<w:lvlText w:val="${bullet.text}"/>${tail}` +
+      `<w:lvlText w:val="${bullet.text}"/><w:lvlJc w:val="left"/>` +
+      `<w:pPr><w:ind w:left="${left}" w:hanging="360"/></w:pPr>` +
       `<w:rPr><w:rFonts w:ascii="${bullet.font}" w:hAnsi="${bullet.font}" w:hint="default"/></w:rPr>` +
       '</w:lvl>'
     );
   }
   const format = NUMBER_FORMATS[ilvl % NUMBER_FORMATS.length]!;
+  // Word's stock template right-aligns its roman levels in a narrower 180-twip hanging
+  // slot (a "viii." grows leftward from the marker edge); the other formats are
+  // left-aligned in the ordinary 360-twip slot.
+  const roman = format === 'lowerRoman';
   // `%N` is the placeholder for level N+1's counter; each level shows only its own.
   return (
     `<w:lvl w:ilvl="${ilvl}">${start}<w:numFmt w:val="${format}"/>` +
-    `<w:lvlText w:val="%${ilvl + 1}."/>${tail}</w:lvl>`
+    `<w:lvlText w:val="%${ilvl + 1}."/><w:lvlJc w:val="${roman ? 'right' : 'left'}"/>` +
+    `<w:pPr><w:ind w:left="${left}" w:hanging="${roman ? 180 : 360}"/></w:pPr></w:lvl>`
   );
 }
 
@@ -113,6 +116,11 @@ const childrenNamed = (node: OoxmlElement, localName: string): OoxmlElement[] =>
   const found: OoxmlElement[] = [];
   for (const child of node.children) {
     if (child.kind === 'textValue' || child.localName !== localName) continue;
+    // Namespace-checked like the layout index's reader: these bytes come out of an
+    // attacker-supplied `.docx`, and a foreign-namespace `<x:lvl>` matched by local name
+    // alone made this module and layout disagree about what is declared — the write path
+    // "saw" a level the index resolves to nothing.
+    if (child.namespaceUri !== W) continue;
     found.push(child as OoxmlElement);
   }
   return found;
@@ -120,6 +128,50 @@ const childrenNamed = (node: OoxmlElement, localName: string): OoxmlElement[] =>
 
 const attribute = (node: OoxmlElement, localName: string): string | undefined =>
   node.attributes.find((entry) => entry.localName === localName)?.value;
+
+/** What one grafted element must look like, verified AFTER the authored XML is parsed. */
+interface AuthoredShape {
+  readonly localName: string;
+  /** An attribute whose value must match exactly, pinning the element to its id. */
+  readonly attribute?: { readonly localName: string; readonly value: string };
+}
+
+/**
+ * Parse engine-authored numbering XML and verify it is EXACTLY the elements the template
+ * meant to produce — same philosophy as `withNumberingContentType`'s post-condition.
+ *
+ * The templates above interpolate only validated integers and engine constants, so this
+ * can never fire today; it exists so a future edit that lets anything else into an
+ * interpolation grafts NOTHING instead of grafting a surprise. Returns the elements in
+ * shape order, or null when the parse or the shape check refuses.
+ */
+function authoredElements(
+  xml: string,
+  shapes: readonly AuthoredShape[]
+): readonly OoxmlElement[] | null {
+  const read = readOoxmlPart(`<w:numbering xmlns:w="${W}">${xml}</w:numbering>`, {
+    name: NUMBERING_PART,
+    contentType: NUMBERING_CONTENT_TYPE,
+  });
+  if (!read.ok) return null;
+  const elements: OoxmlElement[] = [];
+  for (const node of read.part.root.children) {
+    if (node.kind !== 'textValue') elements.push(node as OoxmlElement);
+  }
+  if (elements.length !== shapes.length) return null;
+  for (let index = 0; index < shapes.length; index += 1) {
+    const element = elements[index]!;
+    const shape = shapes[index]!;
+    if (element.namespaceUri !== W || element.localName !== shape.localName) return null;
+    if (
+      shape.attribute &&
+      attribute(element, shape.attribute.localName) !== shape.attribute.value
+    ) {
+      return null;
+    }
+  }
+  return elements;
+}
 
 /**
  * `CT_Numbering`'s child sequence (ECMA-376 17.9.16). ORDER IS LOAD-BEARING.
@@ -214,21 +266,24 @@ export function ensureListDefinition(
 
   const abstractNumId = nextFreeId(abstractNums, 'abstractNumId');
   const numId = nextFreeId(nums, 'numId');
-  // The new definitions are authored as their own document, then GRAFTED under fresh ids.
-  // `w:abstractNum` must precede every `w:num` (17.9.1), and Word's reader is strict about
-  // it, so the two groups are inserted at their own boundaries rather than appended.
-  const authored = readOoxmlPart(
-    `<w:numbering xmlns:w="${W}">` +
-      abstractNumXml(kind, abstractNumId) +
-      `<w:num w:numId="${numId}"><w:abstractNumId w:val="${abstractNumId}"/></w:num>` +
-      '</w:numbering>',
-    { name: NUMBERING_PART, contentType: NUMBERING_CONTENT_TYPE }
+  // The new definitions are authored as their own document, shape-verified, then GRAFTED
+  // under fresh ids. `w:abstractNum` must precede every `w:num` (17.9.1), and Word's
+  // reader is strict about it, so the two groups are inserted at their own boundaries
+  // rather than appended.
+  const authored = authoredElements(
+    abstractNumXml(kind, abstractNumId) +
+      `<w:num w:numId="${numId}"><w:abstractNumId w:val="${abstractNumId}"/></w:num>`,
+    [
+      {
+        localName: 'abstractNum',
+        attribute: { localName: 'abstractNumId', value: String(abstractNumId) },
+      },
+      { localName: 'num', attribute: { localName: 'numId', value: String(numId) } },
+    ]
   );
-  if (!authored.ok) return null;
+  if (!authored) return null;
   const nextId = createNodeIdAllocator(numbering);
-  const [newAbstract, newNum] = authored.part.root.children.map((node) =>
-    withFreshIds(node, nextId)
-  );
+  const [newAbstract, newNum] = authored.map((node) => withFreshIds(node, nextId));
   if (!newAbstract || !newNum) return null;
 
   // Each lands at its CT_NUMBERING_SEQUENCE slot — see `sequenceInsertIndex`. `w:num` is
@@ -262,6 +317,114 @@ export function ensureListDefinition(
     next = declared;
   }
   return { pkg: next, numId: String(numId) };
+}
+
+/**
+ * `CT_AbstractNum`'s child sequence (ECMA-376 17.9.1). ORDER IS LOAD-BEARING.
+ *
+ * `nsid?, multiLevelType?, tmpl?, name?, styleLink?, numStyleLink?, lvl*` is a strict
+ * `xsd:sequence`, so a grafted `w:lvl` must land after every header element. Among the
+ * `w:lvl` siblings themselves the schema imposes no order, but Word writes them by `ilvl`
+ * and this keeps that shape.
+ */
+const CT_ABSTRACT_NUM_SEQUENCE = [
+  'nsid',
+  'multiLevelType',
+  'tmpl',
+  'name',
+  'styleLink',
+  'numStyleLink',
+  'lvl',
+];
+
+/**
+ * A `w:ilvl` attribute parsed with the SAME rule the layout index uses (`integerAttr`), so
+ * "declared" here can never mean something the index refuses to resolve. Null for absent,
+ * non-decimal, or lenient spellings the index rejects (`+1`, `1e0`).
+ */
+function parsedIlvl(node: OoxmlElement): number | null {
+  const raw = attribute(node, 'ilvl');
+  if (raw === undefined || !/^\d{1,9}$/.test(raw)) return null;
+  return Number(raw);
+}
+
+/** Where a new `w:lvl` of `ilvl` belongs among an abstractNum's children. */
+function levelInsertIndex(children: readonly OoxmlNode[], ilvl: number): number {
+  let at = 0;
+  children.forEach((child, index) => {
+    if (child.kind === 'textValue') return;
+    if (child.localName === 'lvl' && (child as OoxmlElement).namespaceUri === W) {
+      if ((parsedIlvl(child as OoxmlElement) ?? 0) < ilvl) at = index + 1;
+      return;
+    }
+    if (CT_ABSTRACT_NUM_SEQUENCE.includes(child.localName)) at = index + 1;
+  });
+  return at;
+}
+
+/**
+ * Declare `level` in the definition `numId` names, with Word's default format for that
+ * level, or refuse.
+ *
+ * Word never greys Increase Indent out on a list item: demoting past the deepest level a
+ * `w:abstractNum` declares makes Word DEFINE the level, cycling its stock bullets
+ * (Symbol •, Courier `o`, Wingdings ▪) or number formats (decimal, lowerLetter,
+ * lowerRoman) by depth. This is that write. An already-declared level returns the package
+ * unchanged, so callers may ask first and act second without a second lookup.
+ *
+ * A delegating definition (`w:numStyleLink`, 17.9.21) is refused: its levels live on the
+ * linked style's definition, and a `w:lvl` grafted here would be shadowed the moment the
+ * link resolves.
+ */
+export function ensureNumberingLevel(
+  pkg: OoxmlPackage,
+  numId: string,
+  level: number,
+  kind: ListKind
+): OoxmlPackage | null {
+  if (!Number.isInteger(level) || level < 0 || level >= LEVEL_COUNT) return null;
+  // `numId` is FILE-DERIVED (a paragraph's `w:numPr`), used here only as a comparison
+  // key — bounded like the layout index bounds ids, so a pathological id cannot make the
+  // lookups below churn through megabyte string comparisons.
+  if (numId.length === 0 || numId.length > 64) return null;
+  const numbering = pkg.parts.get(NUMBERING_PART);
+  if (!numbering) return null;
+  const root = numbering.root;
+
+  const num = childrenNamed(root, 'num').find((node) => attribute(node, 'numId') === numId);
+  const abstractRef = num ? childrenNamed(num, 'abstractNumId')[0] : undefined;
+  const abstractId = abstractRef ? attribute(abstractRef, 'val') : undefined;
+  if (!abstractId) return null;
+  const abstract = childrenNamed(root, 'abstractNum').find(
+    (node) => attribute(node, 'abstractNumId') === abstractId
+  );
+  if (!abstract) return null;
+  if (childrenNamed(abstract, 'numStyleLink').length > 0) return null;
+
+  const levels = childrenNamed(abstract, 'lvl');
+  if (levels.some((node) => parsedIlvl(node) === level)) return pkg;
+  // `CT_AbstractNum` caps `lvl` at nine (17.9.1). An abstract already at the cap whose
+  // levels do not include this one is authored junk (duplicate ilvls); a tenth would make
+  // the part schema-invalid, which Word repairs by dropping it.
+  if (levels.length >= LEVEL_COUNT) return null;
+
+  const authored = authoredElements(levelXml(kind, level), [
+    { localName: 'lvl', attribute: { localName: 'ilvl', value: String(level) } },
+  ]);
+  if (!authored) return null;
+  const nextId = createNodeIdAllocator(numbering);
+  const inserted = insertChildren(
+    numbering,
+    abstract.id,
+    levelInsertIndex(abstract.children, level),
+    [withFreshIds(authored[0]!, nextId)]
+  );
+  if (!inserted.ok) return null;
+
+  return Object.freeze({
+    ...pkg,
+    parts: new Map([...pkg.parts, [NUMBERING_PART, inserted.part]]),
+  });
 }
 
 /** Re-key a grafted subtree so it cannot collide with the part it is joining. */

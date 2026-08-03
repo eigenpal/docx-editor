@@ -252,6 +252,7 @@ export {
   readNumPr,
   resolveStoryListItems,
   walkStoryParagraphs,
+  withNumberingStyleLinks,
   withResolvedListItems,
   type ResolvedListItem,
 } from './list-resolve.ts';

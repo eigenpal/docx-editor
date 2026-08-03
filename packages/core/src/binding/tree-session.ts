@@ -23,6 +23,7 @@ import {
   withPart,
   writeOoxmlPackage,
   ensureListDefinition,
+  ensureNumberingLevel,
   paragraphTextOf,
   type EmbeddedFont,
   type ListKind,
@@ -210,6 +211,19 @@ export interface TreeDocxSession {
    * definition of the same kind is reused rather than duplicated.
    */
   ensureListDefinition(kind: ListKind): string | null;
+  /**
+   * Declare `level` in the list definition `numId` names, with Word's default format for
+   * that depth, or answer false.
+   *
+   * Word never greys Increase Indent out on a list item: demoting past the deepest level
+   * a definition declares makes Word define the level, cycling its stock bullets and
+   * number formats. An already-declared level answers true without changing anything.
+   *
+   * The declaration lives on the PACKAGE, outside the store's history — undoing the edit
+   * that needed it restores the paragraph but leaves the level declared, which is
+   * harmless: an unreferenced level renders nothing and Word writes files full of them.
+   */
+  ensureNumberingLevel(numId: string, level: number, kind: ListKind): boolean;
 }
 
 export type { DocumentStyleEntry } from './document-catalog.ts';
@@ -568,6 +582,22 @@ export function openTreeSession(bytes: Uint8Array): OpenTreeSessionResult {
         numberingRootResolved = false;
         numberingRoot = null;
         return ensured.numId;
+      },
+
+      ensureNumberingLevel(numId, level, kind) {
+        // Same lane as `ensureListDefinition`: the numbering part lives on the PACKAGE,
+        // and the memoized numbering root must forget what it read before this write.
+        // `currentPackage()` mints a fresh object per call, so the identity check must
+        // compare against the SAME instance the write was given.
+        const before = currentPackage();
+        const ensured = ensureNumberingLevel(before, numId, level, kind);
+        if (!ensured) return false;
+        if (ensured !== before) {
+          pkg = ensured;
+          numberingRootResolved = false;
+          numberingRoot = null;
+        }
+        return true;
       },
     },
   };
