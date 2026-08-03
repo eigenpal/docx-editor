@@ -249,7 +249,13 @@ describe('each run is its own box, so a mixed-size line highlights stepped', () 
   test('line spacing above single joins the stepped bands with the extra leading', () => {
     // Double spacing doubles the line box. Word still paints the leading, so every run's
     // band grows by the same extra leading — capped at the line height, which the tallest
-    // run reaches exactly.
+    // run reaches exactly. The band is the run's HEIGHT.
+    //
+    // `line-height` is a leading TALLER than the band, and that is deliberate: the extra
+    // leading of a spaced line sits ABOVE the text (17.3.1.33), so the glyphs belong at the
+    // bottom of the box. CSS centres content in its line box, so a `line-height` equal to
+    // the band would put the text half a leading too HIGH — off the baseline layout
+    // published, and off the caret, which reads that baseline.
     const container = paint(
       '<w:p><w:pPr><w:spacing w:line="480" w:lineRule="auto"/></w:pPr>' +
         '<w:r><w:t>small</w:t></w:r>' +
@@ -258,8 +264,45 @@ describe('each run is its own box, so a mixed-size line highlights stepped', () 
     const line = container.querySelector<HTMLElement>('.docx-line')!;
     expect(line.style.height).toBe('56px'); // 28 natural × 480/240
     const [small, big] = [...line.querySelectorAll<HTMLElement>('.layout-run-text')];
-    expect(small!.style.lineHeight).toBe('42px'); // 14 own + 28 leading
-    expect(big!.style.lineHeight).toBe('56px'); // 28 own + 28 leading = the line height
+    expect(small!.style.height).toBe('42px'); // 14 own + 28 leading
+    expect(big!.style.height).toBe('56px'); // 28 own + 28 leading = the line height
+
+    // THE INVARIANT, not the four numbers. Asserting the constants only re-states what the
+    // source computes: `band + 2 × leading` would satisfy them just as well. What has to
+    // hold is that EVERY run overshoots its band by the SAME leading — that is what puts
+    // them all on one baseline, and what puts that baseline where layout published it.
+    const overshoot = (run: HTMLElement): number =>
+      parseFloat(run.style.lineHeight) - parseFloat(run.style.height);
+    expect(overshoot(small!)).toBe(28);
+    expect(overshoot(big!)).toBe(28);
+    // And the leading is the line's own, not something re-derived per run: the tallest run
+    // fills the line box exactly, so its overshoot IS line height − its own glyph height.
+    expect(overshoot(big!)).toBe(parseFloat(line.style.height) - 28);
+  });
+
+  test('the list marker sits on the same baseline as the text beside it', () => {
+    // These drifted apart once: only the text was taught that a spaced line's leading sits
+    // ABOVE it, so the bullet floated half a leading over its own sentence. One baseline
+    // means one overshoot, pinned together here because no unit test in this file can
+    // observe a rendered baseline — happy-dom does no layout.
+    const layout = layoutOf(
+      '<w:p><w:pPr><w:numPr><w:ilvl w:val="0"/><w:numId w:val="1"/></w:numPr>' +
+        '<w:spacing w:line="480" w:lineRule="auto"/></w:pPr>' +
+        '<w:r><w:t>numbered and double spaced</w:t></w:r></w:p>',
+      `<w:abstractNum w:abstractNumId="1"><w:lvl w:ilvl="0"><w:start w:val="1"/>` +
+        `<w:numFmt w:val="bullet"/><w:lvlText w:val="•"/><w:lvlJc w:val="left"/>` +
+        `<w:pPr><w:ind w:left="720" w:hanging="360"/></w:pPr></w:lvl></w:abstractNum>` +
+        `<w:num w:numId="1"><w:abstractNumId w:val="1"/></w:num>`
+    );
+    const container = document.createElement('div');
+    paintSemanticLayout(container, layout, { scale: 1 });
+    const run = container.querySelector<HTMLElement>('.layout-run-text')!;
+    const markerGlyph = container.querySelector<HTMLElement>('[data-docx-marker] span')!;
+    const overshoot = (el: HTMLElement): number =>
+      parseFloat(el.style.lineHeight) - parseFloat(el.style.height);
+    // 14 natural, doubled to 28, so 14 of leading — all of it above the text.
+    expect(overshoot(run)).toBe(14);
+    expect(overshoot(markerGlyph)).toBe(overshoot(run));
   });
 
   test('a tab span gets its own band too, not the full line height', () => {

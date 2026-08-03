@@ -191,6 +191,17 @@ export interface PendingLine {
   width: number;
   height: number;
   baseline: number;
+  /**
+   * How much of {@link height} is line-spacing leading rather than glyphs.
+   *
+   * PUBLISHED, not re-derived. `applyLineSpacing` decides where the leading goes, and the
+   * whole of it sits ABOVE the text, which is what moves `baseline` down. Paint used to
+   * recover this by subtracting the tallest span height from the line box — an identity
+   * that only holds while the spacing rule is the multiplying one, and that is already
+   * false for an `exact` box clipped below its glyphs. Every consumer reads the one number
+   * the spacing rule produced instead of guessing at it from the box.
+   */
+  leading: number;
   /** When true, layout must start a new page after this line is placed. */
   pageBreakAfter?: boolean;
 }
@@ -212,6 +223,7 @@ export function frozenLine(line: PendingLine): PendingLine {
     width: line.width,
     height: line.height,
     baseline: line.baseline,
+    leading: line.leading,
     ...(line.pageBreakAfter ? { pageBreakAfter: true } : {}),
   }) as PendingLine;
 }
@@ -368,7 +380,15 @@ export function breakParagraph(
       : resolveRunStyle(inheritedRunProperties);
   const rightEdge = indentLeft + available;
   const lines: PendingLine[] = [];
-  let line: PendingLine = { spans: [], start: 0, end: 0, width: 0, height: 0, baseline: 0 };
+  let line: PendingLine = {
+    spans: [],
+    start: 0,
+    end: 0,
+    width: 0,
+    height: 0,
+    baseline: 0,
+    leading: 0,
+  };
 
   // Where the line being built starts, and how much room it has. Only the first differs.
   const lineOffset = (): number => (lines.length === 0 ? firstLineOffset : 0);
@@ -383,9 +403,14 @@ export function breakParagraph(
     }
     // Line spacing applies to the finished box, once, so a paragraph's rule governs every
     // line it produced regardless of which run happened to be tallest.
+    const natural = line.height;
     const spaced = applyLineSpacing(lineSpacing, line.height, line.baseline);
     line.height = spaced.height;
     line.baseline = spaced.baseline;
+    // Never negative: an `exact` box clipped below its glyphs adds no leading, it removes
+    // box. Paint keys its baseline correction off this, and a negative would push the text
+    // the wrong way rather than leaving the clipped line alone.
+    line.leading = Math.max(0, spaced.height - natural);
     lines.push(line);
     line = {
       spans: [],
@@ -394,6 +419,7 @@ export function breakParagraph(
       width: 0,
       height: 0,
       baseline: 0,
+      leading: 0,
     };
   };
 

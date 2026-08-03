@@ -151,6 +151,19 @@ export interface LineRecord {
   readonly box: LayoutBox;
   /** Distance from the line box top to the text baseline. */
   readonly baseline: number;
+  /**
+   * How much of the box is line-spacing leading rather than glyphs, and therefore how far
+   * below the box top the text sits: `w:line` above single puts the WHOLE leading above the
+   * text, so the glyphs are bottom-anchored in the box and {@link baseline} already carries
+   * it.
+   *
+   * Published by the spacing rule rather than recovered by paint. Subtracting the tallest
+   * span height from the box gives the same answer only while the rule is the multiplying
+   * one — it is already wrong for an `exact` box clipped below its glyphs — and three paint
+   * sites each deriving it separately is how they came to disagree about where a line's
+   * text sits.
+   */
+  readonly leading: number;
 }
 
 /**
