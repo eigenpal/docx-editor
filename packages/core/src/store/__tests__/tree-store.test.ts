@@ -346,3 +346,56 @@ describe('projection reconciliation creates no history entry (task 5.6)', () => 
     expect(s.redo()?.origin).toBe(ORIGIN_IDS.mutationRedo);
   });
 });
+
+describe('w14 paragraph identity through history', () => {
+  const W14 = 'http://schemas.microsoft.com/office/word/2010/wordml';
+  const IDENTIFIED =
+    '<w:p w14:paraId="4C000001" w14:textId="4C000001"><w:r><w:t>Hello</w:t></w:r></w:p>';
+
+  function identifiedStore(): { store: TreeDocumentStore; id: string } {
+    const result = readOoxmlPart(
+      `<w:document xmlns:w="${W}" xmlns:w14="${W14}"><w:body>${IDENTIFIED}</w:body></w:document>`,
+      { name: '/word/document.xml', contentType: 'app/xml' }
+    );
+    if (!result.ok) throw new Error(result.reason);
+    return { store: new TreeDocumentStore(result.part), id: paragraphIds(result.part)[0]! };
+  }
+
+  function paraIdAt(s: TreeDocumentStore, paragraphId: string): string | undefined {
+    let found: string | undefined;
+    const walk = (node: OoxmlNode): void => {
+      if (node.kind === 'textValue') return;
+      if (node.id === paragraphId) {
+        found = node.attributes.find(
+          (attribute) => attribute.namespaceUri === W14 && attribute.localName === 'paraId'
+        )?.value;
+        return;
+      }
+      for (const child of node.children) walk(child);
+    };
+    walk(s.part.root);
+    return found;
+  }
+
+  test('undo removes a split-minted paraId; redo restores the identical value', () => {
+    const { store: s, id } = identifiedStore();
+    const body = s.part.root.children[0]! as Extract<OoxmlNode, { children: unknown }>;
+    const originalHead = body.children[0]!;
+    s.transact((ctx) => ctx.apply({ op: 'splitParagraph', paragraphId: id, offset: 2 }));
+    const [head, tail] = paragraphIds(s.part);
+    expect(paraIdAt(s, head!)).toBe('4C000001');
+    const minted = paraIdAt(s, tail!);
+    expect(minted).toMatch(/^[0-9A-F]{8}$/);
+
+    expect(s.undo()).not.toBeNull();
+    // History is whole-part snapshots: the original head OBJECT is back, attributes intact.
+    const bodyAfterUndo = s.part.root.children[0]! as Extract<OoxmlNode, { children: unknown }>;
+    expect(bodyAfterUndo.children[0]).toBe(originalHead);
+    expect(paragraphIds(s.part)).toHaveLength(1);
+
+    expect(s.redo()).not.toBeNull();
+    const [, redoneTail] = paragraphIds(s.part);
+    // Redo replays the post-edit snapshot — the SAME minted id, never a second mint.
+    expect(paraIdAt(s, redoneTail!)).toBe(minted);
+  });
+});

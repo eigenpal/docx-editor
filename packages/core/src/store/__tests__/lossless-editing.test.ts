@@ -204,3 +204,76 @@ describe('an edit survives a save and reopen without losing a class of content',
     expect(Object.keys(lost).length).toBeGreaterThan(0);
   });
 });
+
+describe('w14 paragraph identity is lossless', () => {
+  // Element census cannot see attributes: a serializer dropping every `w14:paraId` would
+  // pass both guards above. Comments and tracked changes anchor to these values, so they
+  // get their own multiset guard — authored VALUES, verbatim, through the real session
+  // lane (open → normalize → edit → save → reopen).
+  const W14 = 'http://schemas.microsoft.com/office/word/2010/wordml';
+  const paraIdValuesOf = (part: OoxmlPart): string[] => {
+    const values: string[] = [];
+    for (const node of walk(part.root)) {
+      if (node.kind === 'textValue') continue;
+      const value = node.attributes?.find(
+        (attribute) => attribute.namespaceUri === W14 && attribute.localName === 'paraId'
+      )?.value;
+      if (value !== undefined) values.push(value);
+    }
+    return values.sort();
+  };
+
+  // All three carry authored Word paraIds (21 / 143 / 335).
+  for (const name of [
+    'example-with-image.docx',
+    'issue-319-sections.docx',
+    'footer-page-number.docx',
+  ]) {
+    test(`${name}: every authored paraId survives an edit, a save and a reopen verbatim`, async () => {
+      const { openTreeSession } = await import('../../binding/tree-session.ts');
+      const opened = openTreeSession(fixture(name));
+      if (!opened.ok) throw new Error(`${name}: ${opened.reason}`);
+      const session = opened.session;
+
+      const authored = paraIdValuesOf(open(name).part);
+      expect(authored.length).toBeGreaterThan(0);
+      // Opening normalizes; these fixtures are already fully identified, so the session
+      // part carries exactly the authored values.
+      expect(paraIdValuesOf(session.part())).toEqual(authored);
+
+      // An ordinary edit plus a split (the one op that MINTS an id).
+      const [first] = session.paragraphIds();
+      session.applyTreeOps([
+        { op: 'insertText', paragraphId: first!, offset: 0, text: 'X' },
+        { op: 'splitParagraph', paragraphId: first!, offset: 1 },
+      ]);
+
+      const reopened = readOoxmlPackage(session.save());
+      if (!reopened.ok) throw new Error(reopened.reason);
+      const after = paraIdValuesOf(reopened.package.parts.get(reopened.package.mainDocumentPart)!);
+
+      // Exactly the authored multiset plus ONE minted tail id — nothing lost, nothing
+      // rewritten, no duplicate.
+      expect(after.length).toBe(authored.length + 1);
+      const remaining = [...after];
+      for (const value of authored) {
+        const at = remaining.indexOf(value);
+        expect(at).toBeGreaterThanOrEqual(0);
+        remaining.splice(at, 1);
+      }
+      expect(remaining).toHaveLength(1);
+      expect(remaining[0]).toMatch(/^[0-9A-F]{8}$/);
+      expect(new Set(after).size).toBe(after.length);
+
+      // Header/footer parts are outside the identity pass: their paraIds (if any) must
+      // come back byte-for-byte from the same save.
+      for (const [partName, part] of reopened.package.parts) {
+        if (!/header\d*\.xml$|footer\d*\.xml$/.test(partName)) continue;
+        const original = readOoxmlPackage(fixture(name));
+        if (!original.ok) continue;
+        const before = original.package.parts.get(partName);
+        if (before) expect(paraIdValuesOf(part)).toEqual(paraIdValuesOf(before));
+      }
+    });
+  }
+});

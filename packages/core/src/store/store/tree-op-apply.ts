@@ -8,6 +8,7 @@
 import { hardBreakAttributes, hardBreakText } from '../package/hard-break.ts';
 import {
   WML_NAMESPACE_URI,
+  type OoxmlAttribute,
   type OoxmlNode,
   type OoxmlParagraphNode,
   type OoxmlPart,
@@ -21,6 +22,14 @@ import {
   replaceNode,
   type EditOptions,
 } from '../package/ooxml-edit.ts';
+import { W14_NAMESPACE_URI } from '../package/ooxml-shared.ts';
+import {
+  isValidParaId,
+  mintParaId,
+  mintedParagraphIdentityAttributes,
+  paraIdOf,
+  usedParaIds,
+} from '../package/para-id.ts';
 import {
   TEXT_DEPS,
   cloneWithNewIds,
@@ -443,6 +452,64 @@ function zeroLengthGoesToHead(
   return closesAnOpenRange(child, openedHere);
 }
 
+/**
+ * A root-declared w14 prefix that still resolves to the w14 URI AT THE PARAGRAPH.
+ *
+ * The root binding alone is not enough: a hostile descendant can rebind the same
+ * prefix (`<w:sdt xmlns:w14="urn:evil">`), and an attribute minted under it would
+ * resolve to the wrong URI at that depth — the commit-boundary delta validation
+ * would then refuse the WHOLE transaction, turning Enter into a silent no-op inside
+ * that subtree. Editing must never lock on hostile input, so each root alias for the
+ * URI is checked against the paragraph's ancestor chain and the first unshadowed one
+ * wins; none → no minting (the tail is simply id-less, as before minting existed).
+ */
+function w14PrefixInScopeAt(part: OoxmlPart, paragraph: OoxmlParagraphNode): string | null {
+  const rootBindings = part.root.namespaceBindings.filter(
+    (binding) => binding.namespaceUri === W14_NAMESPACE_URI && binding.prefix !== ''
+  );
+  if (rootBindings.length === 0) return null;
+  // The paragraph and its ancestors up to (excluding) the root — the nodes whose own
+  // declarations can shadow a root binding at the paragraph's depth.
+  const chain: OoxmlNode[] = [];
+  let node: OoxmlNode | null = paragraph;
+  while (node && node.id !== part.root.id) {
+    chain.push(node);
+    node = parentOf(part, node.id);
+  }
+  for (const binding of rootBindings) {
+    const shadowed = chain.some(
+      (ancestor) =>
+        ancestor.kind !== 'textValue' &&
+        ancestor.namespaceBindings.some(
+          (candidate) =>
+            candidate.prefix === binding.prefix && candidate.namespaceUri !== W14_NAMESPACE_URI
+        )
+    );
+    if (!shadowed) return binding.prefix;
+  }
+  return null;
+}
+
+/**
+ * Whether a split of `paragraph` can mint `w14:paraId`s for its tails: the head must
+ * carry a valid id (its uppercase form seeds the tail mints) and a w14 prefix must be
+ * in scope at the paragraph (a prefixed attribute without a correct in-scope binding
+ * fails the commit-boundary delta validation). In a real session both always hold —
+ * the load-time normalization established them. In low-level harnesses that skip it,
+ * and in hostile prefix-shadowed subtrees, tails stay attribute-less exactly as
+ * before minting existed — never a refused transaction.
+ */
+function splitIdentityOf(
+  part: OoxmlPart,
+  paragraph: OoxmlParagraphNode
+): { readonly headId: string; readonly prefix: string } | null {
+  const headParaId = paraIdOf(paragraph);
+  if (headParaId === null || !isValidParaId(headParaId)) return null;
+  const prefix = w14PrefixInScopeAt(part, paragraph);
+  if (prefix === null) return null;
+  return { headId: headParaId.toUpperCase(), prefix };
+}
+
 function applySplit(
   part: OoxmlPart,
   paragraph: OoxmlParagraphNode,
@@ -520,6 +587,11 @@ function applySplit(
   // onto both halves minted a phantom section (and a spurious page break) on every
   // Enter in a section's last paragraph.
   const headPPr = pPr ? withoutSectionMark(pPr) : undefined;
+  // The HEAD keeps the original paragraph's `w14:paraId` (it is spread below); the tail
+  // is the new paragraph and gets a fresh deterministic mint, exactly as Word assigns a
+  // new id to the paragraph an Enter creates. Seeded by (head id, offset) so one
+  // `splitParagraphMany` and its equivalent sequence of single splits mint identically.
+  const identity = splitIdentityOf(part, paragraph);
   const tailParagraph = {
     id: nextId(),
     kind: 'paragraph',
@@ -527,7 +599,12 @@ function applySplit(
     localName: 'p',
     prefix: 'w',
     namespaceBindings: [],
-    attributes: [],
+    attributes: identity
+      ? mintedParagraphIdentityAttributes(
+          identity.prefix,
+          mintParaId(`${identity.headId}:${offset}`, usedParaIds(part.root))
+        )
+      : [],
     children: pPr ? [cloneWithNewIds(pPr, nextId), ...tailChildren] : tailChildren,
   } as unknown as OoxmlNode;
 
@@ -687,6 +764,23 @@ function applySplitMany(
   // after all the paragraph's content, exactly as the single-split rule keeps it on the
   // tail. Duplicating it minted one phantom section per pasted line.
   const strippedPPr = pPr ? withoutSectionMark(pPr) : undefined;
+  // Tail `w14:paraId`s, minted in DESCENDING piece order: the equivalent sequence of
+  // single splits runs last-offset-first, so its used-set grows from the last tail
+  // backwards. Mirroring that order (including how a repeated offset's seed collision
+  // bumps) keeps `splitParagraphMany` byte-identical to the singles it stands for.
+  const identity = splitIdentityOf(part, paragraph);
+  const tailIdentityAttributes: (readonly OoxmlAttribute[] | null)[] = Array.from(
+    { length: pieceCount },
+    () => null
+  );
+  if (identity) {
+    const used = new Set(usedParaIds(part.root));
+    for (let piece = pieceCount - 1; piece >= 1; piece -= 1) {
+      const value = mintParaId(`${identity.headId}:${offsets[piece - 1]!}`, used);
+      used.add(value);
+      tailIdentityAttributes[piece] = mintedParagraphIdentityAttributes(identity.prefix, value);
+    }
+  }
   const tailParagraphs: OoxmlNode[] = [];
   for (let piece = 1; piece < pieceCount; piece += 1) {
     const last = piece === pieceCount - 1;
@@ -698,7 +792,7 @@ function applySplitMany(
       localName: 'p',
       prefix: 'w',
       namespaceBindings: [],
-      attributes: [],
+      attributes: tailIdentityAttributes[piece] ?? [],
       children: source ? [cloneWithNewIds(source, nextId), ...pieces[piece]!] : pieces[piece]!,
     } as unknown as OoxmlNode);
   }

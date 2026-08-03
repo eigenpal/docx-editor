@@ -216,3 +216,29 @@ describe('the stricter oracle still passes a real save and reopen', () => {
     });
   }
 });
+
+describe('w14 paragraph identity', () => {
+  const W14 = 'http://schemas.microsoft.com/office/word/2010/wordml';
+  const identified = (paraId: string) =>
+    load(
+      `<w:p xmlns:w14="${W14}" w14:paraId="${paraId}" w14:textId="${paraId}"><w:r><w:t>x</w:t></w:r></w:p>`
+    );
+
+  test('w14:paraId — the identity the agent contract anchors on', () => {
+    // Comment threading and DocAnchor addressing reference it; a serializer dropping or
+    // rewriting it must be a difference.
+    mustDiffer(identified('4C000001'), identified('4C000002'));
+    mustDiffer(identified('4C000001'), load('<w:p><w:r><w:t>x</w:t></w:r></w:p>'));
+    expect(differences(identified('4C000001'), identified('4C000002'))).toEqual([
+      '/word/document.xml.p[0].paraId',
+    ]);
+    // Case is not meaning: matching is case-insensitive, so casing alone is no difference.
+    expect(differences(identified('4c00aa01'), identified('4C00AA01'))).toEqual([]);
+  });
+
+  test('other paragraph attributes stay deliberately blind (rsid noise)', () => {
+    const withRsid = load('<w:p w:rsidR="00AB12CD"><w:r><w:t>x</w:t></w:r></w:p>');
+    const without = load('<w:p><w:r><w:t>x</w:t></w:r></w:p>');
+    expect(differences(withRsid, without)).toEqual([]);
+  });
+});

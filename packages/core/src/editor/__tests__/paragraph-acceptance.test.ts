@@ -224,6 +224,22 @@ describe('load, edit, format, save and reopen (task 8.3)', () => {
     expect(canonicalOoxmlFingerprint(after)).toBe(canonicalOoxmlFingerprint(before));
   });
 
+  test('every paragraph carries a valid unique w14:paraId, preserved across save/reopen', () => {
+    // The fixture has none authored — every id here is minted at open. The oracles above
+    // still pass because a reopen reads back exactly what the session serialized.
+    const surface = mount();
+    const ids = surface.session
+      .paragraphIds()
+      .map((paragraphId) => surface.session.paraIdOf(paragraphId));
+    expect(ids.length).toBeGreaterThan(0);
+    for (const id of ids) expect(id).toMatch(/^[0-9A-F]{8}$/);
+    expect(new Set(ids).size).toBe(ids.length);
+    const reopened = mount(surface.session.save());
+    expect(
+      reopened.session.paragraphIds().map((paragraphId) => reopened.session.paraIdOf(paragraphId))
+    ).toEqual(ids);
+  });
+
   test('every accepted property survives the round trip', () => {
     const surface = mount();
     const present = propertyNames(surface.session.save());

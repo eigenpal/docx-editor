@@ -210,3 +210,91 @@ describe('session surface over the tree', () => {
     expect(after.child(1).textContent).toBe('two!');
   });
 });
+
+describe('w14 paragraph identity through the session', () => {
+  test('open establishes a valid unique paraId on every editable paragraph', () => {
+    // The harness declares only xmlns:w — every id here is minted at open, along with
+    // the root binding the minted attributes need.
+    const session = open(
+      docx(
+        '<w:p><w:r><w:t>one</w:t></w:r></w:p>' +
+          '<w:tbl><w:tr><w:tc><w:p><w:r><w:t>cell</w:t></w:r></w:p></w:tc></w:tr></w:tbl>' +
+          '<w:p><w:r><w:t>two</w:t></w:r></w:p>'
+      )
+    );
+    const anchors = session.paragraphAnchors();
+    const ids = session.paragraphIds();
+    expect(ids).toHaveLength(3);
+    for (const id of ids) {
+      const paraId = session.paraIdOf(id);
+      expect(paraId).toMatch(/^[0-9A-F]{8}$/);
+      expect(session.nodeIdOf(paraId!)).toBe(id);
+      expect(session.nodeIdOf(paraId!.toLowerCase())).toBe(id);
+    }
+    expect(new Set(anchors.nodeByParaId.keys()).size).toBe(3);
+  });
+
+  test('save/reopen preserves each paragraph text→paraId pairing', () => {
+    const session = open(
+      docx('<w:p><w:r><w:t>alpha</w:t></w:r></w:p><w:p><w:r><w:t>beta</w:t></w:r></w:p>')
+    );
+    const pairing = session.paragraphIds().map((id) => session.paraIdOf(id));
+    const reopened = open(session.save());
+    expect(reopened.paragraphIds().map((id) => reopened.paraIdOf(id))).toEqual(pairing);
+  });
+
+  test('a projection-lane split mints a fresh id for the new paragraph', () => {
+    const session = open(docx('<w:p><w:r><w:t>headtail</w:t></w:r></w:p>'));
+    const [id] = session.paragraphIds();
+    const before = session.paraIdOf(id!);
+    session.applyTreeOps([{ op: 'splitParagraph', paragraphId: id!, offset: 4 }]);
+    const [head, tail] = session.paragraphIds();
+    expect(session.paraIdOf(head!)).toBe(before!);
+    const minted = session.paraIdOf(tail!);
+    expect(minted).toMatch(/^[0-9A-F]{8}$/);
+    expect(minted).not.toBe(before);
+  });
+
+  test('paragraphAnchors is reference-stable per revision and fresh after commit/undo', () => {
+    const session = open(docx('<w:p><w:r><w:t>hello</w:t></w:r></w:p>'));
+    const first = session.paragraphAnchors();
+    expect(session.paragraphAnchors()).toBe(first);
+    const [id] = session.paragraphIds();
+    session.applyTreeOps([{ op: 'splitParagraph', paragraphId: id!, offset: 2 }]);
+    const afterSplit = session.paragraphAnchors();
+    expect(afterSplit).not.toBe(first);
+    expect(afterSplit.nodeByParaId.size).toBe(2);
+    session.undo();
+    const afterUndo = session.paragraphAnchors();
+    expect(afterUndo).not.toBe(afterSplit);
+    expect(afterUndo.nodeByParaId.size).toBe(1);
+    expect(session.nodeIdOf('no such id')).toBeNull();
+    expect(session.paraIdOf('/word/document.xml#nope')).toBeNull();
+  });
+});
+
+describe('hostile prefix shadowing end to end', () => {
+  test('a subtree shadowing w14 neither locks editing nor loses identity', () => {
+    // Open-time normalization picks an alias outside the conflicting set, so every
+    // paragraph — inside and outside the shadow — is identified, and a split inside
+    // the shadowed subtree still commits AND mints.
+    const session = open(
+      docx(
+        '<w:p><w:r><w:t>outside</w:t></w:r></w:p>' +
+          '<w:sdt xmlns:w14="urn:evil"><w:sdtContent><w:p><w:r><w:t>inside</w:t></w:r></w:p></w:sdtContent></w:sdt>'
+      )
+    );
+    const [outside, inside] = session.paragraphIds();
+    expect(session.paraIdOf(outside!)).toMatch(/^[0-9A-F]{8}$/);
+    expect(session.paraIdOf(inside!)).toMatch(/^[0-9A-F]{8}$/);
+
+    const result = session.applyTreeOps([
+      { op: 'splitParagraph', paragraphId: inside!, offset: 3 },
+    ]);
+    expect(result.committed).toBe(true);
+    const ids = session.paragraphIds().map((id) => session.paraIdOf(id));
+    expect(ids).toHaveLength(3);
+    for (const id of ids) expect(id).toMatch(/^[0-9A-F]{8}$/);
+    expect(new Set(ids).size).toBe(3);
+  });
+});

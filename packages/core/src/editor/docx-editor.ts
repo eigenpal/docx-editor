@@ -40,6 +40,7 @@
 
 import type {
   CanResult,
+  ContainerRef,
   DocumentChange,
   DocumentHandle,
   DocumentSource,
@@ -70,6 +71,7 @@ import {
 } from '@docx-editor.dev/core-contract/layout';
 import {
   deepFreezeValue,
+  docRangeEqual,
   editorError,
   emptyInteractionFrame,
   formattingEqual,
@@ -84,7 +86,9 @@ import {
   currentPage as currentPageOf,
   pageSetupOf,
   gateCommand,
+  paragraphSummaries,
   runFormattingOf,
+  selectionRangeOf,
   totalPages as totalPagesOf,
   tableContextOf,
 } from './docx-editor-derive.ts';
@@ -619,9 +623,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
       parseError,
       editable: surface !== null && surface.session.editable && mode !== 'view',
       zoom,
-      // A DocRange addresses paragraphs by `w14:paraId`; the surface selection addresses
-      // canonical node ids. Until that mapping exists, null is the honest answer.
-      selection: null,
+      selection: selectionRangeOf(surface),
       formatting: runFormattingOf(surface),
       table: tableContextOf(surface),
       image: null,
@@ -656,16 +658,20 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
       const pageSetup = pageSetupEqual(fresh.pageSetup ?? null, previous.pageSetup ?? null)
         ? previous.pageSetup
         : fresh.pageSetup;
-      next = { ...fresh, formatting, page, pageSetup };
+      const selection = docRangeEqual(fresh.selection, previous.selection)
+        ? previous.selection
+        : fresh.selection;
+      next = { ...fresh, formatting, page, pageSetup, selection };
       // Reuse the previous REFERENCE only when neither the caret NOR the document moved.
       //
-      // The snapshot is a lossy projection: `selection` is deliberately null (a `DocRange`
-      // addresses paragraphs by `w14:paraId`, which the surface cannot yet supply), and
-      // nothing in it names the document revision. So two genuinely different states
-      // derive value-equal snapshots, and a host subscribed through `useSyncExternalStore`
-      // never re-renders — freezing every control whose state is a question the snapshot
-      // does not carry, because `toolbarCommandState` re-asks `Editor.can`/`isActive` only
-      // when the store ticks.
+      // The snapshot is a lossy projection: `selection` is paragraph-granular (a
+      // `DocRange` addresses paragraphs by `w14:paraId`, never by offset), and nothing in
+      // it names the document revision. So two genuinely different states — a caret move
+      // WITHIN a paragraph, a structural edit at an unmoved caret — derive value-equal
+      // snapshots, and a host subscribed through `useSyncExternalStore` never re-renders —
+      // freezing every control whose state is a question the snapshot does not carry,
+      // because `toolbarCommandState` re-asks `Editor.can`/`isActive` only when the store
+      // ticks.
       //
       // Caret: Decrease Indent stayed live on a list item already at the outermost level,
       // and the bullet button stayed pressed after the caret moved into a numbered one.
@@ -860,17 +866,23 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
     getActiveScope: (): ViewScope => ({ kind: 'body' }),
 
     query<K extends keyof EditorQueries>(query: { type: K } & EditorQueries[K]) {
-      // Two real answers, and the typed empty value for everything else.
+      // The real answers, and the typed empty value for everything else.
       switch (query.type as keyof EditorQueries) {
         case 'selectedText':
           return (surface?.selectedText() ?? '') as EditorQueryResults[K];
         case 'selectionFormatting':
           return (surface ? snapshotNow().formatting : null) as EditorQueryResults[K];
+        case 'selection':
+          return selectionRangeOf(surface) as EditorQueryResults[K];
+        case 'paragraphs':
+          return paragraphSummaries(
+            surface,
+            (query as { container?: ContainerRef }).container
+          ) as unknown as EditorQueryResults[K];
         case 'isInsideToc':
           return false as EditorQueryResults[K];
         case 'trackedChanges':
         case 'revisions':
-        case 'paragraphs':
         case 'findText':
         case 'contentControls':
         case 'comments':
@@ -884,8 +896,8 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
         case 'variables':
           return {} as EditorQueryResults[K];
         default:
-          // selection, tableContext, hyperlinkAt, watermark, splitCellConfig,
-          // contentControlAt, pageContent — all nullable, all underived.
+          // tableContext, hyperlinkAt, watermark, splitCellConfig, contentControlAt,
+          // pageContent — all nullable, all underived.
           return null as EditorQueryResults[K];
       }
     },

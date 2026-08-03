@@ -6,6 +6,7 @@
 // `getSelectionFormatting()` cannot drift into two derivations of the same thing.
 
 import type {
+  DocRange,
   EditorCommand,
   EditorScope,
   ExecResult,
@@ -13,11 +14,15 @@ import type {
   RunFormatting,
   TableContext,
 } from '../contracts/editor.ts';
+import type { ContainerRef, ParagraphSummary } from '../index.ts';
 import { classifyCommand } from './docx-editor-support.ts';
 
 /** Whether a command may run, and the engine's own refusal when it may not. */
 export type CommandGate = { ok: true } | { ok: false; refusal: Exclude<ExecResult, { ok: true }> };
 import { caretAt, tableContextAt } from '@docx-editor.dev/core-contract/layout';
+import { paragraphTextOf } from '@docx-editor.dev/core-contract/store';
+import { allParagraphs } from '../binding/tree-binding.ts';
+import { paragraphStyleId } from '../binding/document-outline.ts';
 import type { PaginatedSurface } from './paginated-surface-contract.ts';
 
 /**
@@ -68,6 +73,63 @@ export function pageSetupOf(surface: PaginatedSurface | null): PageSetup | null 
     },
     gutterTwips: section.margins.gutterTwips,
   };
+}
+
+/**
+ * THE selection derivation — the surface's (node id, offset) selection expressed in the
+ * contract's vocabulary. `snapshot().selection` and the `selection` query both read this.
+ *
+ * Paragraph-granular by design: endpoints are bare `DocAnchor`s (`{ paraId }`), so a
+ * caret and any selection inside one paragraph both read as
+ * `{from: {paraId: X}, to: {paraId: X}}`. Offsets are deliberately not representable —
+ * `DocAnchor` carries none (an agent cannot compute an offset it has not seen), and
+ * emitting offsetful positional endpoints would reintroduce the addressing the contract
+ * forbids. `from`/`to` are document-ordered regardless of drag direction. The result
+ * round-trips: feeding it back to `setSelection` selects the same paragraphs.
+ */
+export function selectionRangeOf(surface: PaginatedSurface | null): DocRange | null {
+  if (!surface) return null;
+  const { anchor, head } = surface.state().selection;
+  const anchors = surface.session.paragraphAnchors();
+  const anchorParaId = anchors.paraIdByNode.get(anchor.paragraphId);
+  const headParaId = anchors.paraIdByNode.get(head.paragraphId);
+  // Normalization maps every editable paragraph at open, so this misses only when
+  // identity could not be established at all (the fail-open path on a pathological
+  // file) or a pre-layout placeholder id appears — null is the honest answer for both,
+  // never a fabricated range.
+  if (anchorParaId === undefined || headParaId === undefined) return null;
+  const anchorOrdinal = anchors.ordinalByNode.get(anchor.paragraphId) ?? 0;
+  const headOrdinal = anchors.ordinalByNode.get(head.paragraphId) ?? 0;
+  const reversed =
+    headOrdinal < anchorOrdinal || (headOrdinal === anchorOrdinal && head.offset < anchor.offset);
+  return reversed
+    ? { from: { paraId: headParaId }, to: { paraId: anchorParaId } }
+    : { from: { paraId: anchorParaId }, to: { paraId: headParaId } };
+}
+
+/**
+ * The `paragraphs` query: every editable paragraph in reading order, addressed the way
+ * the contract addresses paragraphs. Scope is the MAIN part — a `container` naming any
+ * other story answers `[]` (queries carry no error channel; the paraId map does not
+ * reach those stories yet).
+ */
+export function paragraphSummaries(
+  surface: PaginatedSurface | null,
+  container?: ContainerRef
+): readonly ParagraphSummary[] {
+  if (!surface) return [];
+  if (container !== undefined && container.part !== 'body') return [];
+  const part = surface.session.part();
+  const anchors = surface.session.paragraphAnchors();
+  return allParagraphs(part).map((paragraph) => {
+    const paraId = anchors.paraIdByNode.get(paragraph.id);
+    const styleId = paragraph.kind === 'textValue' ? undefined : paragraphStyleId(paragraph);
+    return {
+      ...(paraId !== undefined ? { paraId } : {}),
+      text: paragraphTextOf(part, paragraph.id) ?? '',
+      ...(styleId !== undefined ? { styleId } : {}),
+    };
+  });
 }
 
 export function totalPages(surface: PaginatedSurface | null): number {

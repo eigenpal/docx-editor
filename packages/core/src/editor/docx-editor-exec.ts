@@ -9,6 +9,7 @@
 import type { EditorCommand, ExecResult } from '../contracts/editor.ts';
 import type { PaginatedSurface } from './paginated-surface-contract.ts';
 import { MARKS, isSurfaceSelection, resolveMarkAttr } from './docx-editor-support.ts';
+import { isDocAnchor, isDocAnchorRange, resolveAnchorSelection } from './anchor-resolution.ts';
 
 /**
  * Run one admitted command against the surface.
@@ -140,8 +141,28 @@ export function execEditorCommand(
     case 'setSelection': {
       if ('range' in command && isSurfaceSelection(command.range)) {
         mounted.setSelection(command.range);
+        // Selection is not document state: nothing to save changed.
+        return { ok: true, changed: false };
       }
-      // Selection is not document state: nothing to save changed.
+      // DocAnchor forms resolve through the session's paraId index. The gate admitted
+      // only anchor-shaped payloads past the surface form, so a fall-through here is a
+      // range with anchor endpoints or an `{ anchor }` position.
+      const payload =
+        'anchor' in command && isDocAnchor(command.anchor)
+          ? { anchor: command.anchor }
+          : 'range' in command && isDocAnchorRange(command.range)
+            ? { range: command.range }
+            : null;
+      if (payload === null) {
+        return { ok: false, code: 'unsupported', reason: 'unsupported selection form' };
+      }
+      const resolved = resolveAnchorSelection(
+        mounted.session.part(),
+        mounted.session.paragraphAnchors(),
+        payload
+      );
+      if (!resolved.ok) return resolved;
+      mounted.setSelection(resolved.selection);
       return { ok: true, changed: false };
     }
     default:
