@@ -177,6 +177,19 @@ export type TreeDocOp =
     }
   | { readonly op: 'rejectAllRevisions' }
   | {
+      /**
+       * Place one piece of comment markup at a model offset.
+       *
+       * Separate from the comment BODY, which lives in another part: this op is the story half
+       * of a comment write, and the two are staged in one package transaction.
+       */
+      readonly op: 'insertCommentMarker';
+      readonly paragraphId: string;
+      readonly offset: number;
+      readonly commentId: string;
+      readonly marker: 'start' | 'end' | 'reference';
+    }
+  | {
       readonly op: 'setRunProperties';
       readonly paragraphId: string;
       readonly start: number;
@@ -304,6 +317,7 @@ export const TREE_DOC_OP_KINDS = [
   'rejectRevision',
   'acceptAllRevisions',
   'rejectAllRevisions',
+  'insertCommentMarker',
 ] as const satisfies readonly TreeDocOpKind[];
 
 // Compile-time exhaustiveness, matching the legacy `DOC_OP_KINDS` guard: a new op must be
@@ -825,6 +839,19 @@ export function validateTreeOp(part: OoxmlPart, op: TreeDocOp): TreeOpRejection 
     if (!link) return 'unknown-paragraph';
     if (link.kind !== 'hyperlink') return 'not-a-paragraph';
     if (op.op === 'setHyperlinkTarget') return validateHyperlinkTarget(op);
+    return null;
+  }
+
+  if (op.op === 'insertCommentMarker') {
+    const paragraph = findNode(part, op.paragraphId);
+    if (!paragraph) return 'unknown-paragraph';
+    if (!isParagraph(paragraph)) return 'not-a-paragraph';
+    if (!Number.isInteger(op.offset) || op.offset < 0 || op.offset > paragraphLength(paragraph)) {
+      return 'offset-out-of-range';
+    }
+    if (typeof op.commentId !== 'string' || !/^\d+$/.test(op.commentId)) {
+      return 'invalid-property-value';
+    }
     return null;
   }
 

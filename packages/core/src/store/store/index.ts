@@ -26,3 +26,11 @@ export {
   type TreeDocumentStoreOptions,
   type TreeModelChange,
 } from './tree-store.ts';
+export {
+  addComment,
+  commentPartNameOf,
+  hasCommentPart,
+  type AddCommentRequest,
+  type AddCommentResult,
+  type CommentAnchorRequest,
+} from './comment-writes.ts';

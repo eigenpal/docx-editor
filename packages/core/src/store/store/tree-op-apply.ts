@@ -24,6 +24,7 @@ import {
 } from '../package/ooxml-edit.ts';
 import { W14_NAMESPACE_URI } from '../package/ooxml-shared.ts';
 import { resolveRevisions } from './tree-op-revisions.ts';
+import { applyInsertCommentMarker } from './tree-op-comments.ts';
 import {
   isValidParaId,
   mintParaId,
@@ -133,6 +134,12 @@ export function applyTreeOp(part: OoxmlPart, op: TreeDocOp, options?: EditOption
   if (op.op === 'joinParagraphs') return applyJoin(part, op.firstId, op.secondId, options);
   if (op.op === 'setHyperlinkTarget') return applySetHyperlinkTarget(part, op, options);
   if (op.op === 'removeHyperlink') return applyRemoveHyperlink(part, op.linkId, options);
+  if (op.op === 'insertCommentMarker') {
+    const paragraph = findNode(part, op.paragraphId);
+    if (!paragraph || paragraph.kind !== 'paragraph')
+      return { ok: false, reason: 'not-a-paragraph' };
+    return applyInsertCommentMarker(part, paragraph, op, options);
+  }
   if (
     op.op === 'acceptRevision' ||
     op.op === 'rejectRevision' ||
@@ -1526,7 +1533,7 @@ function applySetRunProperties(
 }
 
 /** Divide any run straddling `offset` so the offset falls on a run boundary. */
-function splitRunsAt(
+export function splitRunsAt(
   part: OoxmlPart,
   paragraph: OoxmlParagraphNode,
   offset: number,

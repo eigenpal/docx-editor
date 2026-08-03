@@ -665,12 +665,16 @@ export function openTreeSession(bytes: Uint8Array): OpenTreeSessionResult {
 
       ensureHyperlinkRelationship(url) {
         // Same lane as `ensureListDefinition`: a package write, not a tree op, so it sits
-        // outside the undo stack. `currentPackage()` mints a fresh object per call, so the
-        // identity check compares against the SAME instance the write was given.
+        // outside the undo stack. It goes THROUGH the store, because the store owns the
+        // package — writing only to a session-local copy leaves two owners of one value, and
+        // the save then reads the one the write never reached, so the link reopens targetless.
         const before = currentPackage();
         const ensured = ensureHyperlinkRelationship(before, url);
         if (!ensured) return null;
-        if (ensured.pkg !== before) pkg = ensured.pkg;
+        if (ensured.pkg !== before) {
+          store.graftPackage(() => ensured.pkg);
+          pkg = ensured.pkg;
+        }
         return ensured.relationshipId;
       },
 
