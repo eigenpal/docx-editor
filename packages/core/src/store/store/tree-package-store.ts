@@ -35,6 +35,7 @@ import {
   TreeDocumentStore,
   type SelectionMark,
   type TransactOptions,
+  type TreeDocumentCheckpoint,
   type TreeModelChange,
   type TreeStoryRef,
   type TransactionContext,
@@ -132,7 +133,17 @@ export class TreePackageStore {
   private readonly maxEditableStoryParts: number;
   private readonly cascadeNoteReferences: NoteCascadeFn;
   private lastChange: TreeModelChange | null = null;
-  private compositionPartName: string | null = null;
+  /**
+   * Open IME composition session. Captures the package/story checkpoint at begin so a
+   * mid-composition note-ref cascade can promote the whole composition to one package
+   * undo unit (or restore on cancel) instead of a story-only pointer that orphans note bodies.
+   */
+  private compositionSession: {
+    readonly partName: string;
+    readonly beforePackage: OoxmlPackage;
+    readonly storyCheckpoint: TreeDocumentCheckpoint;
+    packageWideEffects: boolean;
+  } | null = null;
   private commitCounter = 0;
 
   constructor(pkg: OoxmlPackage, main: OoxmlPart, options: TreePackageStoreOptions = {}) {
@@ -299,6 +310,10 @@ export class TreePackageStore {
         this.installPackageSnapshot(cascadedPkg);
         if (!compositionWasOpen) {
           store.restoreHistoryStacks(checkpoint);
+        } else if (this.compositionSession) {
+          // Defer package history until endComposition — mark so the whole IME
+          // composition promotes to one package pointer (citation + note body).
+          this.compositionSession.packageWideEffects = true;
         }
         cascaded = true;
       }
@@ -330,40 +345,81 @@ export class TreePackageStore {
   beginComposition(scope: StoryScope, selectionBefore: SelectionMark | null = null): boolean {
     const resolved = this.resolveStory(scope);
     if (!resolved.ok) return false;
+    // Capture package + story stacks before the composition opens so a later cascade can
+    // promote (or cancel-restore) against the pre-composition baseline.
+    if (!this.compositionSession) {
+      this.compositionSession = {
+        partName: resolved.story.partName,
+        beforePackage: this.currentPackage(),
+        storyCheckpoint: resolved.store.checkpoint(),
+        packageWideEffects: false,
+      };
+    }
     resolved.store.beginComposition(selectionBefore);
-    this.compositionPartName = resolved.story.partName;
     return true;
   }
 
   endComposition(): void {
-    const partName = this.compositionPartName;
-    this.compositionPartName = null;
-    if (!partName) {
+    const session = this.compositionSession;
+    this.compositionSession = null;
+    if (!session) {
       this.body.endComposition();
       return;
     }
-    const store = partName === this.body.part.name ? this.body : this.stories.get(partName);
+    const store =
+      session.partName === this.body.part.name ? this.body : this.stories.get(session.partName);
     if (!store) return;
     const beforeDepth = store.historyDepth;
     store.endComposition();
+    if (session.packageWideEffects) {
+      // Discard the local story undo entry endComposition just recorded — the package
+      // pointer owns the unit so undo restores citation and note body together.
+      store.restoreHistoryStacks(session.storyCheckpoint);
+      this.syncPackageFromStore(store);
+      this.pushUndoPointer({
+        kind: 'package',
+        before: session.beforePackage,
+        after: this.currentPackage(),
+      });
+      return;
+    }
     if (store.historyDepth > beforeDepth) {
       const story =
-        partName === this.body.part.name
-          ? ({ kind: 'body', partName } as const)
-          : this.storyRefForPart(partName);
-      if (story) this.pushUndoPointer({ kind: 'story', partName, story });
+        session.partName === this.body.part.name
+          ? ({ kind: 'body', partName: session.partName } as const)
+          : this.storyRefForPart(session.partName);
+      if (story) this.pushUndoPointer({ kind: 'story', partName: session.partName, story });
     }
     this.syncPackageFromStore(store);
   }
 
   cancelComposition(): void {
-    const partName = this.compositionPartName;
-    this.compositionPartName = null;
-    if (!partName) {
+    const session = this.compositionSession;
+    this.compositionSession = null;
+    if (!session) {
       this.body.cancelComposition();
       return;
     }
-    const store = partName === this.body.part.name ? this.body : this.stories.get(partName);
+    const store =
+      session.partName === this.body.part.name ? this.body : this.stories.get(session.partName);
+    if (session.packageWideEffects) {
+      // Cascade already deleted note bodies with no history unit yet — restore the
+      // pre-composition package so cancel cannot strand irreversible note loss.
+      if (store) store.restoreCheckpoint(session.storyCheckpoint);
+      this.installPackageSnapshot(session.beforePackage);
+      this.packageRev += 1;
+      const story =
+        session.partName === this.body.part.name
+          ? ({ kind: 'body', partName: session.partName } as const)
+          : this.storyRefForPart(session.partName);
+      this.publishSynthetic(
+        ORIGIN_IDS.mutationHuman,
+        'global',
+        story ?? { kind: 'body', partName: this.body.part.name },
+        []
+      );
+      return;
+    }
     store?.cancelComposition();
   }
 

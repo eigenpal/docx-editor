@@ -12,23 +12,15 @@ import type { OoxmlNode, OoxmlParagraphNode, OoxmlPart } from './ooxml-tree.ts';
 import type { OoxmlPackage } from './ooxml-package.ts';
 import { resolveRelationship } from './relationships.ts';
 import {
-  atomicFieldSpansOf,
-  isFieldChrome,
-  isFldChar,
-  isFldSimple,
-  isInstrText,
-} from './field-nodes.ts';
-import {
-  atomicNoteSpansOf,
   findNoteById,
   isNormalNote,
-  isNoteAtomNode,
   noteIdOf,
   noteKindOf,
   noteReferenceKindOf,
   type NoteKind,
   MAX_NOTES_PER_PART,
 } from './note-nodes.ts';
+import { segmentsOf } from '../store/tree-op-segments.ts';
 
 const FOOTNOTES_REL =
   'http://schemas.openxmlformats.org/officeDocument/2006/relationships/footnotes';
@@ -43,15 +35,24 @@ export const MAX_NOTE_REFERENCE_SCAN = 20_000;
  */
 export const MAX_NOTE_REFERENCE_PARTS = 256;
 
-export type NoteDiagnosticCode = 'dangling-note-reference';
+export type NoteDiagnosticCode = 'dangling-note-reference' | 'note-reference-scan-truncated';
 
-export interface NoteDiagnostic {
-  readonly code: NoteDiagnosticCode;
-  readonly noteKind: NoteKind;
-  readonly noteId: number;
-  /** Paragraph / container node id when known. */
-  readonly sourceNodeId?: string;
-}
+/**
+ * Load-time note diagnostics. Array API preserved; truncation is signaled as a typed
+ * entry rather than by throwing or rejecting the package.
+ */
+export type NoteDiagnostic =
+  | {
+      readonly code: 'dangling-note-reference';
+      readonly noteKind: NoteKind;
+      readonly noteId: number;
+      /** Paragraph / container node id when known. */
+      readonly sourceNodeId?: string;
+    }
+  | {
+      /** Hard visited/part budget or soft hit cap stopped the scan before full coverage. */
+      readonly code: 'note-reference-scan-truncated';
+    };
 
 export interface NoteReferenceHit {
   readonly noteKind: NoteKind;
@@ -131,7 +132,13 @@ function chargePart(budget: NoteReferenceScanBudget): boolean {
   return true;
 }
 
-/** Resolve the footnotes or endnotes part via safe Internal document relationships. */
+/**
+ * Resolve the footnotes or endnotes part via safe Internal document relationships.
+ *
+ * Unusable matching relationships (External, unsafe target, missing part, wrong root)
+ * are skipped — never fetched, never accepted — so a decoy first match cannot hide a
+ * later usable Internal notes part (same continue-past-bad pattern as settingsPartOf).
+ */
 export function resolveNotesPart(pkg: OoxmlPackage, noteKind: NoteKind): OoxmlPart | null {
   const typeUri = noteKind === 'footnote' ? FOOTNOTES_REL : ENDNOTES_REL;
   const expectedRoot = noteKind === 'footnote' ? 'footnotes' : 'endnotes';
@@ -139,10 +146,10 @@ export function resolveNotesPart(pkg: OoxmlPackage, noteKind: NoteKind): OoxmlPa
   for (const record of relationships) {
     if (record.type !== typeUri) continue;
     const resolved = resolveRelationship(record);
-    if (resolved.mode !== 'Internal' || !resolved.target.ok) return null;
+    if (resolved.mode !== 'Internal' || !resolved.target.ok) continue;
     const part = pkg.parts.get(resolved.target.partName);
-    if (!part) return null;
-    if (part.root.localName !== expectedRoot) return null;
+    if (!part) continue;
+    if (part.root.localName !== expectedRoot) continue;
     return part;
   }
   return null;
@@ -172,9 +179,13 @@ function pushReferenceHit(
 }
 
 /**
- * Collect note references inside one paragraph with canonical UTF-16 atom offsets.
- * Offset rules mirror `segmentsOf` (fields + note atoms = one unit each).
- * Walks hyperlink and generic inline containers so demoted wrappers cannot hide refs.
+ * Collect addressable note references inside one paragraph.
+ *
+ * `atomOffset` is taken from the canonical UTF-16 segment model (`segmentsOf`): typed
+ * `noteReference` segment nodes only. Generic/demoted wrappers (inline SDT husks,
+ * malformed refs) contribute no phantom atoms and must not shift later offsets.
+ * Lifecycle still removes those hits by node id in typed stories; demoted content stays
+ * preserved in-tree for fail-open load without inventing a second address space.
  */
 function collectParagraphNoteReferences(
   paragraph: OoxmlParagraphNode,
@@ -185,91 +196,19 @@ function collectParagraphNoteReferences(
 ): void {
   if (hits.length >= maxHits || (budget && budget.truncated)) return;
 
-  let offset = 0;
-  const fieldAtoms = atomicFieldSpansOf(paragraph);
-  const noteAtoms = atomicNoteSpansOf(paragraph);
-  const atomByBeginId = new Map(fieldAtoms.map((span) => [span.node.id, span]));
-  const noteAtomById = new Map(noteAtoms.map((span) => [span.node.id, span]));
-  const covered = new Set<string>();
-  for (const span of fieldAtoms) {
-    for (const id of span.removeNodeIds) covered.add(id);
+  for (const segment of segmentsOf(paragraph)) {
+    if (hits.length >= maxHits || (budget && budget.truncated)) return;
+    if (!charge(budget)) return;
+    if (segment.node.kind !== 'noteReference') continue;
+    pushReferenceHit(hits, segment.node, paragraph.id, segment.start, partName, maxHits);
   }
-
-  const visitRunChild = (node: OoxmlNode): void => {
-    if (hits.length >= maxHits || (budget && budget.truncated)) return;
-    if (!charge(budget)) return;
-
-    const fieldAtom = atomByBeginId.get(node.id);
-    if (fieldAtom && fieldAtom.kind === 'complex') {
-      offset += 1;
-      return;
-    }
-    if (covered.has(node.id)) return;
-
-    const noteAtom = noteAtomById.get(node.id);
-    if (noteAtom || isNoteAtomNode(node) || noteReferenceKindOf(node) !== null) {
-      pushReferenceHit(hits, node, paragraph.id, offset, partName, maxHits);
-      offset += 1;
-      return;
-    }
-
-    if (
-      isFieldChrome(node) ||
-      isFldChar(node, 'begin') ||
-      isFldChar(node, 'separate') ||
-      isFldChar(node, 'end') ||
-      isInstrText(node)
-    ) {
-      return;
-    }
-    if (node.kind === 'textValue') {
-      offset += node.value.length;
-      return;
-    }
-    if (node.kind === 'tab' || node.kind === 'hardBreak') {
-      offset += 1;
-      return;
-    }
-    if (node.kind === 'runProperties') return;
-    if (node.kind === 'generic') {
-      // Demoted wrappers may still nest runs/refs; charge continues via recursion.
-      for (const child of node.children) visitRunChild(child);
-      return;
-    }
-    if (node.kind === 'text') {
-      for (const child of node.children) visitRunChild(child);
-      return;
-    }
-    for (const child of node.children) visitRunChild(child);
-  };
-
-  const visitInline = (child: OoxmlNode): void => {
-    if (hits.length >= maxHits || (budget && budget.truncated)) return;
-    if (!charge(budget)) return;
-
-    if (isFldSimple(child)) {
-      const atom = atomByBeginId.get(child.id);
-      if (atom) offset += 1;
-      return;
-    }
-    if (child.kind === 'run') {
-      for (const grand of child.children) visitRunChild(grand);
-      return;
-    }
-    // Hyperlink is a typed run container; generic wrappers (demoted SDT/link husks) may
-    // still hold runs or nested containers — walk both so refs cannot hide.
-    if (child.kind === 'hyperlink' || child.kind === 'generic') {
-      for (const inner of child.children) visitInline(inner);
-    }
-  };
-
-  for (const child of paragraph.children) visitInline(child);
 }
 
 /**
- * Walk a part for typed/generic note references. Bounded by visited nodes; skips deep
+ * Walk a part for addressable typed note references. Bounded by visited nodes; skips deep
  * hostile nesting by marking the shared budget truncated. When `budget` is supplied it is
- * shared and mutated in place.
+ * shared and mutated in place. Hits are segment-aligned (`segmentsOf`); demoted wrappers
+ * never invent atomOffsets.
  */
 export function collectNoteReferences(
   part: OoxmlPart,
@@ -331,13 +270,20 @@ export function collectPackageNoteReferences(
 }
 
 /**
- * Load diagnostics for dangling note references. Fail-open: never throws; returns
- * diagnostics for callers to surface. Does not invent missing note bodies.
+ * Load diagnostics for dangling note references. Fail-open: never throws or mutates;
+ * returns diagnostics for callers to surface. Does not invent missing note bodies.
+ *
+ * When the hard visited/part budget truncates or the soft hit cap binds, appends a single
+ * `note-reference-scan-truncated` entry so incomplete coverage is visible without breaking
+ * consumers that filter on `dangling-note-reference`.
  */
 export function diagnoseNoteReferences(pkg: OoxmlPackage): readonly NoteDiagnostic[] {
   const footnotes = resolveNotesPart(pkg, 'footnote');
   const endnotes = resolveNotesPart(pkg, 'endnote');
   const diagnostics: NoteDiagnostic[] = [];
+  const budget = createNoteReferenceScanBudget();
+  const maxHits = MAX_NOTE_REFERENCE_SCAN;
+  const hits = collectPackageNoteReferences(pkg, { budget, maxHits });
 
   const noteExists = (kind: NoteKind, id: number): boolean => {
     const part = kind === 'footnote' ? footnotes : endnotes;
@@ -346,7 +292,7 @@ export function diagnoseNoteReferences(pkg: OoxmlPackage): readonly NoteDiagnost
     return note !== undefined && (isNormalNote(note) || noteKindOf(note) !== null);
   };
 
-  for (const hit of collectPackageNoteReferences(pkg)) {
+  for (const hit of hits) {
     if (noteExists(hit.noteKind, hit.noteId)) continue;
     diagnostics.push({
       code: 'dangling-note-reference',
@@ -355,6 +301,12 @@ export function diagnoseNoteReferences(pkg: OoxmlPackage): readonly NoteDiagnost
       sourceNodeId: hit.nodeId,
     });
     if (diagnostics.length >= MAX_NOTES_PER_PART) break;
+  }
+
+  // Soft maxHits stops without setting budget.truncated; treat a full hit buffer as
+  // incomplete coverage (≥ cap). Exact-cap packages are astronomically rare at 20k.
+  if (budget.truncated || hits.length >= maxHits) {
+    diagnostics.push({ code: 'note-reference-scan-truncated' });
   }
   return diagnostics;
 }

@@ -281,8 +281,8 @@ function applyInsertNote(
   }
   if (!Number.isInteger(op.offset) || op.offset < 0) return fail('invalidArgs', 'offset');
 
-  const located = locateParagraph(pkg, op.paragraphId);
-  if (!located) return fail('invalidArgs', 'paragraph-not-found');
+  const located = locateInsertParagraph(pkg, op.paragraphId);
+  if (!located.ok) return fail('invalidArgs', located.detail);
   const paragraph = located.paragraph;
   const length = paragraphLength(paragraph);
   if (op.offset > length) return fail('invalidArgs', 'offset-out-of-range');
@@ -316,12 +316,15 @@ function applyInsertNote(
   if (!appended.ok) return fail('tree-invariant', 'note-body-insert');
   next = withPart(next, appended.part);
 
-  // Re-locate paragraph after package updates (main part may be unchanged).
+  // Re-locate body paragraph after package updates (main part may be unchanged).
   const storyPart = next.parts.get(located.partName);
   if (!storyPart) return fail('tree-invariant', 'story-missing');
   const storyParagraph = findNode(storyPart, op.paragraphId);
   if (!storyParagraph || storyParagraph.kind !== 'paragraph') {
     return fail('tree-invariant', 'paragraph-missing');
+  }
+  if (!isParagraphUnderBody(storyPart, op.paragraphId)) {
+    return fail('tree-invariant', 'paragraph-not-in-body');
   }
 
   const refLocal = op.noteKind === 'footnote' ? 'footnoteReference' : 'endnoteReference';
@@ -387,21 +390,39 @@ function applyDeleteNote(
   };
 }
 
+export interface CascadeDeletedNoteReferencesOptions {
+  /**
+   * Independent full budgets per snapshot. When omitted each snapshot gets its own
+   * default budget — never share one counter across before/after walks.
+   */
+  readonly beforeBudget?: NoteReferenceScanBudget;
+  readonly afterBudget?: NoteReferenceScanBudget;
+}
+
 /**
  * Remove note bodies for references that disappeared between two package snapshots.
  * Used when `deleteText` removes a `noteReference` atom so body+ref stay one undo unit.
  *
- * Both snapshots share one visited-node budget; if the scan is truncated the cascade
- * fails closed so a hostile package cannot skip body deletion silently.
+ * Each snapshot gets an independent full visited/part budget. If either scan truncates
+ * the cascade fails closed so a hostile package cannot skip body deletion silently —
+ * without accidentally halving capacity by charging both walks to one counter.
  */
 export function cascadeDeletedNoteReferences(
   before: OoxmlPackage,
-  after: OoxmlPackage
+  after: OoxmlPackage,
+  options?: CascadeDeletedNoteReferencesOptions
 ): OoxmlPackage | null {
-  const budget = createNoteReferenceScanBudget();
-  const beforeHits = collectPackageNoteReferences(before, { budget });
-  const afterHits = collectPackageNoteReferences(after, { budget });
-  if (budget.truncated) return null;
+  const beforeBudget = options?.beforeBudget ?? createNoteReferenceScanBudget();
+  const afterBudget = options?.afterBudget ?? createNoteReferenceScanBudget();
+  const beforeHits = collectPackageNoteReferences(before, {
+    budget: beforeBudget,
+    maxHits: Number.POSITIVE_INFINITY,
+  });
+  const afterHits = collectPackageNoteReferences(after, {
+    budget: afterBudget,
+    maxHits: Number.POSITIVE_INFINITY,
+  });
+  if (beforeBudget.truncated || afterBudget.truncated) return null;
   const afterKeys = new Set(afterHits.map((hit) => `${hit.noteKind}:${hit.noteId}`));
   let next: OoxmlPackage = after;
   const seen = new Set<string>();
@@ -676,19 +697,79 @@ function emptyNoteXml(noteKind: NoteKind, noteId: number): string {
 // reference / paragraph helpers
 // ---------------------------------------------------------------------------
 
-function locateParagraph(
+/**
+ * insertNote may only target a paragraph under the main document's `w:body`.
+ * Existing references in headers/footers/notes remain deletable/convertible elsewhere;
+ * authoring new citations into those stories is refused atomically.
+ */
+function locateInsertParagraph(
   pkg: OoxmlPackage,
   paragraphId: string
-): { partName: string; paragraph: OoxmlParagraphNode } | null {
+):
+  | { readonly ok: true; readonly partName: string; readonly paragraph: OoxmlParagraphNode }
+  | {
+      readonly ok: false;
+      readonly detail: 'paragraph-not-found' | 'story-not-body' | 'paragraph-not-in-body';
+    } {
+  const main = pkg.parts.get(pkg.mainDocumentPart);
+  if (main) {
+    const inBody = findParagraphUnderBody(main, paragraphId);
+    if (inBody) {
+      return { ok: true, partName: main.name, paragraph: inBody };
+    }
+  }
+
   const budget = createNoteReferenceScanBudget();
   for (const part of pkg.parts.values()) {
     if (!part.name.endsWith('.xml')) continue;
-    if (budget.parts >= budget.maxParts) return null;
+    if (budget.parts >= budget.maxParts) break;
     budget.parts += 1;
     const node = findNode(part, paragraphId);
     if (node && node.kind === 'paragraph') {
-      return { partName: part.name, paragraph: node };
+      if (part.name === pkg.mainDocumentPart) {
+        return { ok: false, detail: 'paragraph-not-in-body' };
+      }
+      return { ok: false, detail: 'story-not-body' };
     }
+  }
+  return { ok: false, detail: 'paragraph-not-found' };
+}
+
+function findBodyElement(part: OoxmlPart): OoxmlNode | null {
+  for (const child of part.root.children) {
+    if (child.kind === 'body') return child;
+    if (
+      child.kind !== 'textValue' &&
+      child.namespaceUri === WML_NAMESPACE_URI &&
+      child.localName === 'body'
+    ) {
+      return child;
+    }
+  }
+  return null;
+}
+
+function findParagraphUnderBody(part: OoxmlPart, paragraphId: string): OoxmlParagraphNode | null {
+  const body = findBodyElement(part);
+  if (!body) return null;
+  return findParagraphInSubtree(body, paragraphId, 0);
+}
+
+function isParagraphUnderBody(part: OoxmlPart, paragraphId: string): boolean {
+  return findParagraphUnderBody(part, paragraphId) !== null;
+}
+
+function findParagraphInSubtree(
+  node: OoxmlNode,
+  paragraphId: string,
+  depth: number
+): OoxmlParagraphNode | null {
+  if (depth > 64) return null;
+  if (node.kind === 'paragraph' && node.id === paragraphId) return node;
+  if (node.kind === 'textValue') return null;
+  for (const child of node.children) {
+    const found = findParagraphInSubtree(child, paragraphId, depth + 1);
+    if (found) return found;
   }
   return null;
 }

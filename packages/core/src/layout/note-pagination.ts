@@ -46,6 +46,7 @@ import type {
   BlockFragmentRecord,
   NoteAreaRecord,
   NoteStoryRecord,
+  PageNoteStream,
   PageRecord,
   ParagraphFragmentRecord,
   SemanticLayout,
@@ -609,6 +610,36 @@ function bodyUsedHeight(page: PageRecord): number {
   return bottom;
 }
 
+/**
+ * Content-column y (relative to contentBox.y) at which footnotes begin, or the column
+ * bottom when the page has no footnote area. Endnotes must stay strictly above this.
+ */
+function footnoteReservedTop(page: PageRecord): number {
+  if (!page.footnotes) return page.contentBox.height;
+  return Math.max(0, Math.min(page.contentBox.height, page.footnotes.box.y - page.contentBox.y));
+}
+
+/**
+ * Whether a page may host sectEnd/docEnd endnotes in leftover body room.
+ *
+ * Footnote-only continuation/drain sheets are never free endnote hosts — even when their
+ * body fragments are empty and look like unused column space.
+ */
+export function isEndnoteHostEligible(page: PageRecord): boolean {
+  if (page.noteStream === 'footnote-drain') return false;
+  // Untagged safety net: empty body + footnote stories is a drain/continuation sheet.
+  if (page.fragments.length === 0 && (page.footnotes?.notes.length ?? 0) > 0) return false;
+  return true;
+}
+
+/** Last page index that may share endnotes with body (or an empty endnote overflow sheet). */
+function lastEndnoteHostIndex(pages: readonly PageRecord[]): number {
+  for (let i = pages.length - 1; i >= 0; i -= 1) {
+    if (isEndnoteHostEligible(pages[i]!)) return i;
+  }
+  return Math.max(0, pages.length - 1);
+}
+
 function buildFootnoteArea(
   page: PageRecord,
   refs: readonly PageRefHit[],
@@ -819,13 +850,18 @@ function buildFootnoteArea(
   return { area, nextCarry };
 }
 
-function cloneEmptyOverflowPage(template: PageRecord, index: number): PageRecord {
+function cloneEmptyOverflowPage(
+  template: PageRecord,
+  index: number,
+  noteStream?: PageNoteStream
+): PageRecord {
   return {
     id: `page-${index}`,
     index,
     box: template.box,
     contentBox: template.contentBox,
     fragments: [],
+    ...(noteStream ? { noteStream } : {}),
     ...(template.header ? { header: template.header } : {}),
     ...(template.footer ? { footer: template.footer } : {}),
     ...(template.pageFieldSource
@@ -867,8 +903,9 @@ function lastPageIndexForSection(
 
 /**
  * Exclusive upper bound for advancing into existing pages while placing section-end notes:
- * the first page after `sectionIndex`'s last page that has no body content from that section.
- * Overflow sheets are inserted at this boundary so notes never land on a later section's pages.
+ * the first page after this section's body + footnote-drain run that belongs to a later
+ * section. Overflow sheets are inserted at this boundary so notes never land on a later
+ * section's body pages, and stay after this section's footnote drain pages.
  */
 function sectionEndInsertBound(
   pages: readonly PageRecord[],
@@ -877,7 +914,16 @@ function sectionEndInsertBound(
 ): number {
   const last = lastPageIndexForSection(pages, sectionIndex, paragraphSectionIndex);
   for (let i = last + 1; i < pages.length; i += 1) {
-    const sections = pageBodySectionIndexes(pages[i]!, paragraphSectionIndex);
+    const page = pages[i]!;
+    // Footnote drain / endnote overflow sheets still belong to the preceding note stream.
+    if (page.noteStream === 'footnote-drain' || page.noteStream === 'endnote-overflow') {
+      continue;
+    }
+    // Untagged empty-body footnote continuation (pre-tag safety).
+    if (page.fragments.length === 0 && (page.footnotes?.notes.length ?? 0) > 0) {
+      continue;
+    }
+    const sections = pageBodySectionIndexes(page, paragraphSectionIndex);
     if (sections.length === 0) continue;
     if (!sections.includes(sectionIndex)) return i;
   }
@@ -904,6 +950,9 @@ function reindexAndFinalizeFields(pages: readonly PageRecord[]): PageRecord[] {
 /**
  * Place endnotes (or sect/doc-end footnotes) onto `page`, splitting under a continuation
  * separator when they do not fit. Returns unplaced carry for further pages.
+ *
+ * Room accounting reserves any existing footnote area: endnotes stack below body text and
+ * stay strictly above footnotes so the two geometries cannot overlap.
  */
 function buildEndnoteArea(
   page: PageRecord,
@@ -936,8 +985,15 @@ function buildEndnoteArea(
     'endnote'
   );
   const sepHeight = separator.flowHeight;
-  const availableForNotes = Math.max(0, page.contentBox.height - bodyUsedHeight(page) - sepHeight);
-  const fullNoteColumn = Math.max(0, page.contentBox.height - sepHeight);
+  const bodyBottom = bodyUsedHeight(page);
+  // Existing endnotes already consume room below body (merged on re-entry).
+  const existingEndnoteBottom = page.endnotes
+    ? Math.max(bodyBottom, page.endnotes.box.y - page.contentBox.y + page.endnotes.box.height)
+    : bodyBottom;
+  const usableBottom = footnoteReservedTop(page);
+  const availableForNotes = Math.max(0, usableBottom - existingEndnoteBottom - sepHeight);
+  // Full-column split budget also excludes the footnote reservation.
+  const fullNoteColumn = Math.max(0, usableBottom - sepHeight);
   const splitOpts = { fullContentHeight: fullNoteColumn, reasons };
 
   const notes: NoteStoryRecord[] = [];
@@ -1068,8 +1124,7 @@ function buildEndnoteArea(
     return { area: undefined, nextCarry, remainingRefs };
   }
 
-  const bodyBottom = bodyUsedHeight(page);
-  const areaTop = page.contentBox.y + bodyBottom;
+  const areaTop = page.contentBox.y + existingEndnoteBottom;
   let cursorY = areaTop + sepHeight;
   const placedNotes = notes.map((note) => {
     const placed = { ...note, box: { ...note.box, y: cursorY } };
@@ -1078,6 +1133,10 @@ function buildEndnoteArea(
   });
 
   const sepBox = noteSeparatorAreaBox(separator, page.contentBox.x, contentWidth, areaTop);
+  const areaHeight = sepHeight + stackHeight;
+  // Hard clip: never extend into the footnote reservation.
+  const maxHeight = Math.max(0, usableBottom - existingEndnoteBottom);
+  const clippedHeight = Math.min(areaHeight, maxHeight);
 
   return {
     area: {
@@ -1087,7 +1146,7 @@ function buildEndnoteArea(
         x: page.contentBox.x,
         y: areaTop,
         width: contentWidth,
-        height: sepHeight + stackHeight,
+        height: clippedHeight,
       },
       separator: {
         kind: separatorKind,
@@ -1116,7 +1175,7 @@ function drainFootnoteCarryPages(
   let created = 0;
   while (nextCarry.size > 0 && created < MAX_NOTE_OVERFLOW_PAGES) {
     const template = nextPages[nextPages.length - 1]!;
-    const page = cloneEmptyOverflowPage(template, template.index + 1);
+    const page = cloneEmptyOverflowPage(template, template.index + 1, 'footnote-drain');
     const built = buildFootnoteArea(page, [], input, noteMarks, 'pageBottom', nextCarry, reasons);
     nextCarry = built.nextCarry;
     if (!built.area) {
@@ -1133,9 +1192,10 @@ function drainFootnoteCarryPages(
 function insertOverflowPageAt(
   pages: PageRecord[],
   insertAt: number,
-  template: PageRecord
+  template: PageRecord,
+  noteStream: PageNoteStream = 'endnote-overflow'
 ): { pages: PageRecord[]; pageIndex: number } {
-  const page = cloneEmptyOverflowPage(template, insertAt);
+  const page = cloneEmptyOverflowPage(template, insertAt, noteStream);
   const next = [...pages.slice(0, insertAt), page, ...pages.slice(insertAt)];
   return { pages: reindexPages(next), pageIndex: insertAt };
 }
@@ -1211,7 +1271,7 @@ function placeEndnotesFromPage(
         nextPages[Math.min(Math.max(index, 1), nextPages.length) - 1] ??
         nextPages[nextPages.length - 1]!;
       const insertAt = Math.min(index, stopBefore, nextPages.length);
-      const inserted = insertOverflowPageAt(nextPages, insertAt, template);
+      const inserted = insertOverflowPageAt(nextPages, insertAt, template, 'endnote-overflow');
       nextPages = inserted.pages;
       index = inserted.pageIndex;
       // Later-section pages shifted right by one; keep the boundary after the new sheet.
@@ -1219,6 +1279,12 @@ function placeEndnotesFromPage(
       created += 1;
     }
     const page = nextPages[index]!;
+    // Footnote-only drain pages are never free endnote hosts — skip past the drain run
+    // (still before later-section body) so overflow inserts after it.
+    if (!isEndnoteHostEligible(page)) {
+      index += 1;
+      continue;
+    }
     const built = buildEndnoteArea(page, pending, input, noteMarks, placement, carry, reasons, {
       separatorKind,
     });
@@ -1455,9 +1521,11 @@ export function attachNotesToLayout(
   }
 
   if (endnotesDoc.length > 0 && pages.length > 0) {
+    // Start on the last eligible host (body / endnote overflow), never the final
+    // footnote-drain sheet — room above footnotes on the last body page is fair game.
     pages = placeEndnotesFromPage(
       pages,
-      pages.length - 1,
+      lastEndnoteHostIndex(pages),
       endnotesDoc,
       input,
       noteMarks,

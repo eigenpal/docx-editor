@@ -320,6 +320,7 @@ export {
   applyNoteLifecycleOp,
   cascadeDeletedNoteReferences,
   isNoteLifecycleOp,
+  type CascadeDeletedNoteReferencesOptions,
   type NoteLifecycleImpact,
   type NoteLifecycleOp,
   type NoteLifecycleOptions,

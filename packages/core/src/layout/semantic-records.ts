@@ -450,6 +450,15 @@ export interface NoteAreaRecord {
   readonly fallbackReason?: string;
 }
 
+/**
+ * Note-stream ownership for overflow sheets created by note pagination.
+ *
+ * - `footnote-drain`: continuation pages that exist only to finish pageBottom footnotes —
+ *   not free body hosts for sectEnd/docEnd endnotes.
+ * - `endnote-overflow`: sheets inserted to finish sectEnd/docEnd collections.
+ */
+export type PageNoteStream = 'footnote-drain' | 'endnote-overflow';
+
 export interface PageRecord {
   readonly id: string;
   readonly index: number;
@@ -465,6 +474,12 @@ export interface PageRecord {
   readonly footnotes?: NoteAreaRecord;
   /** Endnotes collected on this page (sectEnd / docEnd). */
   readonly endnotes?: NoteAreaRecord;
+  /**
+   * Ownership of note-only overflow sheets. Absent on ordinary body pages.
+   * Layout pagination sets this so endnote hosting does not treat footnote drain
+   * pages as free body space.
+   */
+  readonly noteStream?: PageNoteStream;
   /**
    * Section-local PAGE/SECTIONPAGES inputs for finalize. Absent → physical page index and
    * document-wide section count (empty `w:pgNumType` behaviour).
