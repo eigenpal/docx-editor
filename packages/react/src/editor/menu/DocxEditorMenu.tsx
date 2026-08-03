@@ -34,6 +34,7 @@ import { DocxEditorPageSetupDialog } from '../DocxEditorPageSetup';
 import type { ToolbarTranslate } from '../toolbar/toolbar-context';
 import { guardToolbarMousedown } from '../toolbar/ToolbarButton';
 import { MenuContext, type MenuContextValue, type MenuId } from './menu-context';
+import { download, downloadName } from './download';
 import { barTriggers } from './menu-keyboard';
 import {
   Menu,
@@ -61,43 +62,6 @@ const MENU_PARTS: Record<ChromeMenuId, MenuPartComponent> = {
   insert: MenuInsert,
   help: MenuHelp,
 };
-
-/**
- * A download name from a user-typed title.
- *
- * The title is arbitrary text a user typed, and it lands in a `download` attribute — so
- * path separators and control characters come out before it does, and the result is
- * length-capped. Not an injection sink (the browser treats `download` as a plain name),
- * but a name carrying `../` or a newline is a bad file either way.
- */
-function downloadName(title: string | undefined): string {
-  const base = (title ?? '')
-    .replace(/\.docx$/i, '')
-    // Path separators, the Windows-reserved set, and control characters — including the
-    // newline that would otherwise split the name. Spaces and ordinary punctuation stay:
-    // a title is prose, and "Q3 report - draft" should survive as itself.
-    .replace(/[\u0000-\u001f<>:"/\\|?*]/g, ' ')
-    .replace(/\s+/g, ' ')
-    .trim()
-    .slice(0, 120);
-  return `${base || 'document'}.docx`;
-}
-
-/** Hand DOCX bytes to the browser as a download. */
-function download(buffer: ArrayBuffer, name: string): void {
-  const url = URL.createObjectURL(
-    new Blob([buffer], {
-      type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-    })
-  );
-  const anchor = document.createElement('a');
-  anchor.href = url;
-  anchor.download = name;
-  anchor.click();
-  // Revoked on the next task, not inline: some browsers have not finished reading the
-  // blob when `click()` returns, and a revoked URL cancels the download.
-  setTimeout(() => URL.revokeObjectURL(url), 0);
-}
 
 /** Props for `DocxEditor.Menu`. @public */
 export interface DocxEditorMenuProps {
