@@ -247,6 +247,62 @@ describe('the Word keymap', () => {
     expect(surface.session.bodyText()).toBe('alpha ');
   });
 
+  test('Cmd+Left/Right move to the start and end of the LINE', () => {
+    // On macOS this is the line gesture — most Mac keyboards have no Home/End key at all,
+    // so binding line motion to those alone leaves it unreachable. Character motion here
+    // is the giveaway that the modifier was swallowed.
+    const surface = mount('<w:p><w:r><w:t>alpha beta gamma</w:t></w:r></w:p>');
+    const handler = createKeyDownHandler(surface);
+    const id = surface.session.paragraphIds()[0]!;
+    const caretAt = (offset: number) =>
+      surface.setSelection({
+        anchor: { paragraphId: id, offset },
+        head: { paragraphId: id, offset },
+      });
+    const head = () => surface.state().selection.head.offset;
+
+    caretAt(6);
+    handler(key({ key: 'ArrowRight', metaKey: true }));
+    expect(head()).toBe(16);
+
+    caretAt(6);
+    handler(key({ key: 'ArrowLeft', metaKey: true }));
+    expect(head()).toBe(0);
+  });
+
+  test('Cmd+Shift+Left/Right SELECT to the start and end of the line', () => {
+    const surface = mount('<w:p><w:r><w:t>alpha beta gamma</w:t></w:r></w:p>');
+    const handler = createKeyDownHandler(surface);
+    const id = surface.session.paragraphIds()[0]!;
+    surface.setSelection({
+      anchor: { paragraphId: id, offset: 6 },
+      head: { paragraphId: id, offset: 6 },
+    });
+    handler(key({ key: 'ArrowRight', metaKey: true, shiftKey: true }));
+    expect(surface.selectedText()).toBe('beta gamma');
+  });
+
+  test('Alt/Ctrl+Left still move by WORD, not by line', () => {
+    // The line binding must not swallow the word gesture: Alt+Arrow is word motion on
+    // macOS, Ctrl+Arrow on Windows, and both keep working.
+    const surface = mount('<w:p><w:r><w:t>alpha beta gamma</w:t></w:r></w:p>');
+    const handler = createKeyDownHandler(surface);
+    const id = surface.session.paragraphIds()[0]!;
+    const caretAt = (offset: number) =>
+      surface.setSelection({
+        anchor: { paragraphId: id, offset },
+        head: { paragraphId: id, offset },
+      });
+
+    caretAt(16);
+    handler(key({ key: 'ArrowLeft', altKey: true }));
+    expect(surface.state().selection.head.offset).toBe(11);
+
+    caretAt(16);
+    handler(key({ key: 'ArrowLeft', ctrlKey: true }));
+    expect(surface.state().selection.head.offset).toBe(11);
+  });
+
   test('Ctrl+Y redoes, like Word on Windows', () => {
     const surface = mount('<w:p><w:r><w:t>x</w:t></w:r></w:p>');
     const handler = createKeyDownHandler(surface);
