@@ -175,4 +175,13 @@ export {
   type SemanticDigest,
   type StoryDigest,
 } from './ooxml-digest.ts';
+export {
+  isValidParaId,
+  mintParaId,
+  mintedParagraphIdentityAttributes,
+  normalizeParagraphIdentity,
+  paraIdOf,
+  usedParaIds,
+  w14RootPrefix,
+} from './para-id.ts';
 export { ensureListDefinition, ensureNumberingLevel, type ListKind } from './numbering-part.ts';

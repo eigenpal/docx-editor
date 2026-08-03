@@ -29,6 +29,7 @@
 
 import { hardBreakText } from './hard-break.ts';
 import { MAX_XML_DEPTH } from './xml-reader.ts';
+import { paraIdOf } from './para-id.ts';
 import { canonicalOoxmlFingerprint, WML_NAMESPACE_URI } from './ooxml-tree.ts';
 import type {
   OoxmlElement,
@@ -51,6 +52,13 @@ export interface ParagraphDigest {
    * with the same ordinal and the same text.
    */
   readonly path: string;
+  /**
+   * `w14:paraId`, uppercase-normalized (matching is case-insensitive), or null. This is
+   * MANAGED identity — the agent contract anchors on it and comment threading references
+   * it — so a serializer silently dropping it must be a digest difference. Other paragraph
+   * attributes (`w:rsidR` …) stay deliberately undigested: they are revision noise.
+   */
+  readonly paraId: string | null;
   /** Text content, including tabs and hard breaks as their characters. */
   readonly text: string;
   /** Accepted paragraph properties, as sorted tokens including nested children. */
@@ -214,9 +222,11 @@ function digestParagraph(
     }
     collectGeneric(child, genericStructure);
   }
+  const paraId = paraIdOf(paragraph);
   return {
     ordinal,
     path,
+    paraId: paraId === null ? null : paraId.toUpperCase(),
     text,
     paragraphProperties: propertyTokens(pPr),
     runProperties,
@@ -358,6 +368,7 @@ export function diffSemanticDigests(
       const pb = b.paragraphs[p]!;
       if (pa.text !== pb.text) report(at(`.p[${p}].text`), pa.text, pb.text);
       if (pa.path !== pb.path) report(at(`.p[${p}].path`), pa.path, pb.path);
+      if (pa.paraId !== pb.paraId) report(at(`.p[${p}].paraId`), pa.paraId, pb.paraId);
       if (JSON.stringify(pa.paragraphProperties) !== JSON.stringify(pb.paragraphProperties)) {
         report(at(`.p[${p}].paragraphProperties`), pa.paragraphProperties, pb.paragraphProperties);
       }

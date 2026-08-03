@@ -20,7 +20,12 @@ import {
   type KnownKind,
 } from './ooxml-shared.ts';
 
-export { WML_NAMESPACE_URI, XML_NAMESPACE_URI, XMLNS_NAMESPACE_URI } from './ooxml-shared.ts';
+export {
+  W14_NAMESPACE_URI,
+  WML_NAMESPACE_URI,
+  XML_NAMESPACE_URI,
+  XMLNS_NAMESPACE_URI,
+} from './ooxml-shared.ts';
 export {
   canonicalOoxmlFingerprint,
   ooxmlTreesEqual,

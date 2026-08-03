@@ -172,7 +172,12 @@ describe('createDocxEditor', () => {
     expect(snapshot.parseError).toBeNull();
     expect(snapshot.editable).toBe(true);
     expect(snapshot.zoom).toBe(1);
-    expect(snapshot.selection).toBeNull();
+    // The selection reads in contract vocabulary: DocAnchor endpoints carrying the
+    // paragraph's `w14:paraId` (minted at open), paragraph-granular.
+    expect(snapshot.selection).not.toBeNull();
+    const caretAnchor = snapshot.selection!.from as { paraId: string };
+    expect(caretAnchor.paraId).toMatch(/^[0-9A-F]{8}$/);
+    expect(snapshot.selection!.to).toEqual(snapshot.selection!.from);
     expect(snapshot.table).toBeNull();
     expect(snapshot.image).toBeNull();
     expect(snapshot.page).toEqual({ current: 1, total: 1 });
@@ -503,8 +508,12 @@ describe('createDocxEditor', () => {
     expect(editor.getDisplay()).toEqual([]);
     expect(editor.getCaretRect()).toBeNull();
     expect(editor.hitTest({ x: 0, y: 0 })).toBeNull();
-    expect(editor.query({ type: 'paragraphs' })).toEqual([]);
-    expect(editor.query({ type: 'selection' })).toBeNull();
+    // No longer honest-empty: `paragraphs` and `selection` answer in paraId vocabulary.
+    const paragraphs = editor.query({ type: 'paragraphs' });
+    expect(paragraphs).toHaveLength(1);
+    expect(paragraphs[0]!.text).toBe('hello');
+    expect(paragraphs[0]!.paraId).toMatch(/^[0-9A-F]{8}$/);
+    expect(editor.query({ type: 'selection' })).toEqual(editor.snapshot().selection);
     const dispatch = editor.dispatchInteraction({
       kind: 'focus',
       frameId: { value: 0 },
@@ -836,5 +845,141 @@ describe('setMarkAttr (value-typed run formatting)', () => {
     expect(
       editor.can({ type: 'setMarkAttr', mark: 'fontFamily', attr: 'family', value: 'Arial' }).ok
     ).toBe(true);
+  });
+});
+
+describe('DocAnchor addressing (w14:paraId)', () => {
+  test('snapshot().selection reads in paraId vocabulary and stays reference-stable within a paragraph', () => {
+    const { editor } = mount(p('hello world') + p('second'));
+    const [firstId, secondId] = editor.surface!.session.paragraphIds();
+    const firstParaId = editor.surface!.session.paraIdOf(firstId!)!;
+    const secondParaId = editor.surface!.session.paraIdOf(secondId!)!;
+
+    editor.surface!.setSelection({
+      anchor: { paragraphId: firstId!, offset: 0 },
+      head: { paragraphId: firstId!, offset: 0 },
+    });
+    const atStart = editor.snapshot().selection;
+    expect(atStart).toEqual({ from: { paraId: firstParaId }, to: { paraId: firstParaId } });
+
+    // A caret move WITHIN the paragraph derives a value-equal selection — the previous
+    // sub-object reference must be reused (useSyncExternalStore contract).
+    editor.surface!.setSelection({
+      anchor: { paragraphId: firstId!, offset: 3 },
+      head: { paragraphId: firstId!, offset: 3 },
+    });
+    expect(editor.snapshot().selection).toBe(atStart!);
+
+    // Crossing into another paragraph is a new value.
+    editor.surface!.setSelection({
+      anchor: { paragraphId: secondId!, offset: 1 },
+      head: { paragraphId: secondId!, offset: 1 },
+    });
+    expect(editor.snapshot().selection).toEqual({
+      from: { paraId: secondParaId },
+      to: { paraId: secondParaId },
+    });
+    expect(editor.query({ type: 'selection' })).toEqual(editor.snapshot().selection);
+  });
+
+  test('a backwards drag still reads in document order', () => {
+    const { editor } = mount(p('first') + p('second'));
+    const [firstId, secondId] = editor.surface!.session.paragraphIds();
+    editor.surface!.setSelection({
+      anchor: { paragraphId: secondId!, offset: 3 },
+      head: { paragraphId: firstId!, offset: 1 },
+    });
+    const selection = editor.snapshot().selection!;
+    expect((selection.from as { paraId: string }).paraId).toBe(
+      editor.surface!.session.paraIdOf(firstId!)!
+    );
+    expect((selection.to as { paraId: string }).paraId).toBe(
+      editor.surface!.session.paraIdOf(secondId!)!
+    );
+  });
+
+  test('setSelection by anchor range with search selects the phrase', () => {
+    const { editor } = mount(p('say hello there'));
+    const [id] = editor.surface!.session.paragraphIds();
+    const paraId = editor.surface!.session.paraIdOf(id!)!;
+    expect(
+      editor.can({
+        type: 'setSelection',
+        range: { from: { paraId, search: 'hello' }, to: { paraId, search: 'hello' } },
+      }).ok
+    ).toBe(true);
+    const result = editor.exec({
+      type: 'setSelection',
+      range: { from: { paraId, search: 'hello' }, to: { paraId, search: 'hello' } },
+    });
+    expect(result).toEqual({ ok: true, changed: false });
+    expect(editor.query({ type: 'selectedText' })).toBe('hello');
+  });
+
+  test('a whole-paragraph anchor range selects the full text; { anchor } collapses the caret', () => {
+    const { editor } = mount(p('whole paragraph'));
+    const [id] = editor.surface!.session.paragraphIds();
+    const paraId = editor.surface!.session.paraIdOf(id!)!;
+    expect(
+      editor.exec({ type: 'setSelection', range: { from: { paraId }, to: { paraId } } })
+    ).toEqual({ ok: true, changed: false });
+    expect(editor.query({ type: 'selectedText' })).toBe('whole paragraph');
+
+    expect(editor.exec({ type: 'setSelection', anchor: { paraId } })).toEqual({
+      ok: true,
+      changed: false,
+    });
+    expect(editor.surface!.state().selection).toEqual({
+      anchor: { paragraphId: id!, offset: 0 },
+      head: { paragraphId: id!, offset: 0 },
+    });
+  });
+
+  test('resolution failures surface as typed ExecResults', () => {
+    const { editor } = mount(p('two two'));
+    const [id] = editor.surface!.session.paragraphIds();
+    const paraId = editor.surface!.session.paraIdOf(id!)!;
+    expect(editor.exec({ type: 'setSelection', anchor: { paraId: '0BADF00D' } })).toMatchObject({
+      ok: false,
+      code: 'notFound',
+    });
+    expect(editor.exec({ type: 'setSelection', anchor: { paraId, search: 'two' } })).toMatchObject({
+      ok: false,
+      code: 'ambiguous',
+    });
+  });
+
+  test('snapshot().selection round-trips through setSelection, frozen input unharmed', () => {
+    const { editor } = mount(p('alpha') + p('beta'));
+    const [firstId, secondId] = editor.surface!.session.paragraphIds();
+    editor.surface!.setSelection({
+      anchor: { paragraphId: firstId!, offset: 0 },
+      head: { paragraphId: secondId!, offset: 2 },
+    });
+    const selection = editor.snapshot().selection!;
+    expect(Object.isFrozen(selection)).toBe(true);
+    expect(editor.exec({ type: 'setSelection', range: selection })).toEqual({
+      ok: true,
+      changed: false,
+    });
+    // Feeding the paragraph-granular range back selects those paragraphs in full.
+    expect(editor.query({ type: 'selectedText' })).toBe('alpha\nbeta');
+    expect(editor.snapshot().selection).toEqual(selection);
+  });
+
+  test('paragraphs query walks table cells too, in reading order', () => {
+    const { editor } = mount(
+      p('before') +
+        '<w:tbl><w:tr><w:tc><w:p><w:r><w:t>cell</w:t></w:r></w:p></w:tc></w:tr></w:tbl>' +
+        p('after')
+    );
+    const paragraphs = editor.query({ type: 'paragraphs' });
+    expect(paragraphs.map((paragraph) => paragraph.text)).toEqual(['before', 'cell', 'after']);
+    for (const paragraph of paragraphs) expect(paragraph.paraId).toMatch(/^[0-9A-F]{8}$/);
+    expect(new Set(paragraphs.map((paragraph) => paragraph.paraId)).size).toBe(3);
+    // Other containers are out of the paraId map's scope: typed empty, not an error.
+    expect(
+      editor.query({ type: 'paragraphs', container: { part: 'header', rId: 'rId9' } })
+    ).toEqual([]);
   });
 });

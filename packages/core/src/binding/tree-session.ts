@@ -24,6 +24,7 @@ import {
   writeOoxmlPackage,
   ensureListDefinition,
   ensureNumberingLevel,
+  normalizeParagraphIdentity,
   paragraphTextOf,
   type EmbeddedFont,
   type ListKind,
@@ -64,6 +65,7 @@ import {
   treeToDoc,
 } from './tree-binding.ts';
 import type { TreeBindingRejection } from './tree-binding.ts';
+import { buildParagraphAnchorIndex, type ParagraphAnchorIndex } from './paragraph-anchors.ts';
 
 export interface TreeApplyResult {
   readonly committed: boolean;
@@ -224,11 +226,24 @@ export interface TreeDocxSession {
    * harmless: an unreferenced level renders nothing and Word writes files full of them.
    */
   ensureNumberingLevel(numId: string, level: number, kind: ListKind): boolean;
+  /**
+   * The `w14:paraId` ↔ node-id index over the full editable set of the MAIN part,
+   * memoized per revision. Every editable paragraph carries a valid, part-unique id
+   * (established at open, maintained by the split appliers), so every paragraph is
+   * mapped. Header/footer/footnote paragraphs are not: those stories are addressed
+   * structurally (`DocLocation`) when they become editable.
+   */
+  paragraphAnchors(): ParagraphAnchorIndex;
+  /** `w14:paraId` of a canonical paragraph node id, verbatim, or null. */
+  paraIdOf(nodeId: string): string | null;
+  /** Canonical node id for a `w14:paraId`, matched case-insensitively, or null. */
+  nodeIdOf(paraId: string): string | null;
 }
 
 export type { DocumentStyleEntry } from './document-catalog.ts';
 export type { DocumentThemeColorEntry, ThemeColorSlot } from './document-theme.ts';
 export type { DocumentOutlineEntry } from './document-outline.ts';
+export type { ParagraphAnchorIndex } from './paragraph-anchors.ts';
 
 export type TreeSessionRejection = OoxmlPackageRejection | 'no-main-document-tree';
 
@@ -257,7 +272,14 @@ export function openTreeSession(bytes: Uint8Array): OpenTreeSessionResult {
   const main = pkg.parts.get(pkg.mainDocumentPart);
   if (!main) return { ok: false, reason: 'no-main-document-tree', detail: pkg.mainDocumentPart };
 
-  const store = new TreeDocumentStore(main);
+  // Paragraph identity is established once, here — every paragraph the session edits
+  // carries a valid, part-unique `w14:paraId` from the first revision on, so the op
+  // layer can seed split-tail mints and the contract can address by paraId. A document
+  // already carrying valid ids normalizes to the SAME part reference (byte-stable save).
+  const normalized = normalizeParagraphIdentity(main);
+  if (normalized !== main) pkg = withPart(pkg, normalized);
+
+  const store = new TreeDocumentStore(normalized);
   let headerFooterBySection: readonly HeaderFooterParts[] | null = null;
   let lastChange: TreeModelChange | null = null;
   store.subscribe((change) => {
@@ -400,6 +422,18 @@ export function openTreeSession(bytes: Uint8Array): OpenTreeSessionResult {
     readonly revision: number;
     readonly outline: readonly DocumentOutlineEntry[];
   } | null = null;
+  let anchorsCache: {
+    readonly revision: number;
+    readonly index: ParagraphAnchorIndex;
+  } | null = null;
+  const paragraphAnchors = (): ParagraphAnchorIndex => {
+    // Keyed on the store revision, like the outline: a split mints a new paragraph and
+    // a join removes one, but between commits the map cannot move.
+    if (!anchorsCache || anchorsCache.revision !== store.revision) {
+      anchorsCache = { revision: store.revision, index: buildParagraphAnchorIndex(store.part) };
+    }
+    return anchorsCache.index;
+  };
 
   return {
     ok: true,
@@ -571,6 +605,12 @@ export function openTreeSession(bytes: Uint8Array): OpenTreeSessionResult {
       },
 
       embeddedFonts: resolveEmbeddedFonts,
+
+      paragraphAnchors,
+
+      paraIdOf: (nodeId) => paragraphAnchors().paraIdByNode.get(nodeId) ?? null,
+
+      nodeIdOf: (paraId) => paragraphAnchors().nodeByParaId.get(paraId.toUpperCase()) ?? null,
 
       ensureListDefinition(kind) {
         // The numbering part lives on the PACKAGE, not the main-part tree, so this is the

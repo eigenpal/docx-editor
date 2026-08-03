@@ -21,6 +21,8 @@ export const XML_NAMESPACE_URI = 'http://www.w3.org/XML/1998/namespace';
 export const XMLNS_NAMESPACE_URI = 'http://www.w3.org/2000/xmlns/';
 export const MC_NAMESPACE_URI = 'http://schemas.openxmlformats.org/markup-compatibility/2006';
 export const XSI_NAMESPACE_URI = 'http://www.w3.org/2001/XMLSchema-instance';
+/** The `w14` wordml-2010 extension namespace — `w14:paraId`/`w14:textId` live here. */
+export const W14_NAMESPACE_URI = 'http://schemas.microsoft.com/office/word/2010/wordml';
 export const MC_QNAME_LIST_ATTRIBUTES = new Set([
   'ProcessContent',
   'PreserveElements',

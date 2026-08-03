@@ -6,6 +6,8 @@
 // cached snapshot uses to keep sub-object references stable across re-derivations.
 
 import type {
+  DocAnchor,
+  DocRange,
   DocumentSource,
   EditorCommand,
   EditorError,
@@ -18,6 +20,7 @@ import type {
   SemanticPositionIndex,
 } from '@docx-editor.dev/core-contract/contracts/interaction';
 import type { SemanticSelection as SurfaceSelection } from '@docx-editor.dev/core-contract/layout';
+import { isDocAnchor, isDocAnchorRange } from './anchor-resolution.ts';
 
 /** Recursively freeze plain objects and arrays (idempotent). */
 export function deepFreezeValue<T>(value: T): T {
@@ -214,11 +217,13 @@ function isSurfacePosition(value: unknown): value is SurfaceSelection['anchor'] 
 }
 
 /**
- * The one selection form the surface can honour: paragraph-id + offset endpoints.
+ * The surface's native selection form: paragraph-id + offset endpoints.
  *
- * The contract's other position forms (`DocAnchor`, `DocLocation`, `SemanticTarget`)
- * address the document through indexes this lane does not build yet, so they are refused
- * as unsupported rather than resolved approximately.
+ * `DocAnchor` forms (`{ anchor: { paraId } }`, `{ range: { from, to } }` with anchor
+ * endpoints) are resolved through the session's paraId index at exec time — see
+ * `anchor-resolution.ts`. `DocLocation` and `SemanticTarget` still address the document
+ * through indexes this lane does not build, so they stay refused rather than resolved
+ * approximately.
  */
 export function isSurfaceSelection(value: unknown): value is SurfaceSelection {
   return (
@@ -371,12 +376,17 @@ export function classifyCommand(command: EditorCommand): CommandSupport {
     case 'redo':
       return { supported: true, mutating: true };
     case 'setSelection':
-      return 'range' in command && isSurfaceSelection(command.range)
+      // Shape gate only: whether an anchor's paraId exists (and its `search` phrase is
+      // unique) is a property of the DOCUMENT, checked at exec — the same split as
+      // `insertText`, whose target cannot be pre-verified either.
+      return ('range' in command &&
+        (isSurfaceSelection(command.range) || isDocAnchorRange(command.range))) ||
+        ('anchor' in command && isDocAnchor(command.anchor))
         ? { supported: true, mutating: false }
         : {
             supported: false,
             reason:
-              'only a semantic { anchor: { paragraphId, offset }, head } selection is supported',
+              'setSelection accepts { anchor: { paraId } }, a { range } whose from/to are paraId anchors, or a { range } carrying a semantic { anchor: { paragraphId, offset }, head } selection',
           };
     default:
       return {
@@ -443,6 +453,33 @@ export function pageSetupEqual(a: PageSetup | null, b: PageSetup | null): boolea
     a.marginsTwips.left === b.marginsTwips.left &&
     a.gutterTwips === b.gutterTwips
   );
+}
+
+function docAnchorEndpointEqual(
+  a: DocRange['from'] | undefined,
+  b: DocRange['from'] | undefined
+): boolean {
+  if (a === b) return true;
+  if (!a || !b) return false;
+  const left = a as Partial<DocAnchor>;
+  const right = b as Partial<DocAnchor>;
+  return (
+    left.paraId === right.paraId &&
+    left.search === right.search &&
+    left.occurrence === right.occurrence
+  );
+}
+
+/**
+ * Value equality for the snapshot's `selection`. Emitted ranges carry bare DocAnchor
+ * endpoints, but all anchor fields are compared for honesty; a DocLocation endpoint
+ * (never emitted today) compares unequal unless reference-equal.
+ */
+export function docRangeEqual(a: DocRange | null, b: DocRange | null): boolean {
+  if (a === b) return true;
+  if (!a || !b) return false;
+  if (!isDocAnchorRange(a) || !isDocAnchorRange(b)) return false;
+  return docAnchorEndpointEqual(a.from, b.from) && docAnchorEndpointEqual(a.to, b.to);
 }
 
 /**

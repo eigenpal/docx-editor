@@ -21,14 +21,31 @@ import {
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 const A = 'http://schemas.openxmlformats.org/drawingml/2006/main';
+const W14 = 'http://schemas.microsoft.com/office/word/2010/wordml';
 
 function load(body: string): OoxmlPart {
   const result = readOoxmlPart(
-    `<w:document xmlns:w="${W}" xmlns:a="${A}"><w:body>${body}</w:body></w:document>`,
+    `<w:document xmlns:w="${W}" xmlns:a="${A}" xmlns:w14="${W14}"><w:body>${body}</w:body></w:document>`,
     { name: '/word/document.xml', contentType: 'app/xml' }
   );
   if (!result.ok) throw new Error(result.reason);
   return result.part;
+}
+
+function paraIdAttrOf(part: OoxmlPart, paragraphId: string): string | undefined {
+  let found: string | undefined;
+  const walk = (node: OoxmlNode): void => {
+    if (node.kind === 'textValue') return;
+    if (node.id === paragraphId) {
+      found = node.attributes.find(
+        (attribute) => attribute.namespaceUri === W14 && attribute.localName === 'paraId'
+      )?.value;
+      return;
+    }
+    for (const child of node.children) walk(child);
+  };
+  walk(part.root);
+  return found;
 }
 
 function paragraphIds(part: OoxmlPart): string[] {
@@ -527,6 +544,13 @@ describe('splitParagraphMany equals the sequence of single splits it stands for'
       name: 'tabs and breaks',
       body: '<w:p><w:r><w:t>ab</w:t><w:tab/><w:t>cd</w:t><w:br/><w:t>ef</w:t></w:r></w:p>',
     },
+    {
+      // With identity present, BOTH routes mint tail paraIds — the serialized-XML
+      // equality below is then the byte-level determinism oracle for the minting
+      // scheme, including how a repeated offset's seed collision bumps.
+      name: 'a paragraph carrying w14 identity',
+      body: '<w:p w14:paraId="4C000001" w14:textId="4C000001"><w:r><w:t>alpha bravo charlie</w:t></w:r></w:p>',
+    },
   ];
   // Repeated offsets are legal and mean a blank line: two boundaries at one position put
   // an empty paragraph between them, which is what a paste containing "\n\n" carries.
@@ -809,5 +833,75 @@ describe('a section mark survives a split exactly once (the phantom-section fix)
     // and the body-level sectPr remain.
     const afterMark = serialized.slice(serialized.indexOf('<w:sectPr>') + 1);
     expect(afterMark).toContain('section two');
+  });
+});
+
+describe('split and join carry w14 paragraph identity', () => {
+  const IDENTIFIED =
+    '<w:p w14:paraId="4C000001" w14:textId="4C000001"><w:r><w:t>Hello world</w:t></w:r></w:p>';
+
+  test('split: the head keeps its paraId, the tail gets a fresh valid one', () => {
+    const part = load(IDENTIFIED);
+    const [id] = paragraphIds(part);
+    const next = apply(part, { op: 'splitParagraph', paragraphId: id!, offset: 5 });
+    const [head, tail] = paragraphIds(next);
+    expect(paraIdAttrOf(next, head!)).toBe('4C000001');
+    const tailId = paraIdAttrOf(next, tail!);
+    expect(tailId).toMatch(/^[0-9A-F]{8}$/);
+    expect(tailId).not.toBe('4C000001');
+    expect(Number.parseInt(tailId!, 16)).toBeGreaterThan(0);
+    expect(Number.parseInt(tailId!, 16)).toBeLessThan(0x80000000);
+    // Word writes the pair together; the tail's textId mirrors its paraId.
+    const serialized = serializeOoxmlPart(next);
+    expect(serialized).toContain(`w14:paraId="${tailId}" w14:textId="${tailId}"`);
+  });
+
+  test('split is deterministic: the same split mints the same tail id', () => {
+    const part = load(IDENTIFIED);
+    const [id] = paragraphIds(part);
+    const first = apply(part, { op: 'splitParagraph', paragraphId: id!, offset: 5 });
+    const second = apply(part, { op: 'splitParagraph', paragraphId: id!, offset: 5 });
+    expect(serializeOoxmlPart(first)).toBe(serializeOoxmlPart(second));
+  });
+
+  test('a head without identity mints nothing (low-level harness behavior)', () => {
+    const part = load(SIMPLE);
+    const [id] = paragraphIds(part);
+    const next = apply(part, { op: 'splitParagraph', paragraphId: id!, offset: 5 });
+    const [head, tail] = paragraphIds(next);
+    expect(paraIdAttrOf(next, head!)).toBeUndefined();
+    expect(paraIdAttrOf(next, tail!)).toBeUndefined();
+  });
+
+  test('join: the surviving head keeps ITS paraId and the removed one is gone', () => {
+    const part = load(
+      '<w:p w14:paraId="4C000001" w14:textId="4C000001"><w:r><w:t>Hello </w:t></w:r></w:p>' +
+        '<w:p w14:paraId="4C000002" w14:textId="4C000002"><w:r><w:t>world</w:t></w:r></w:p>'
+    );
+    const [first, second] = paragraphIds(part);
+    const next = apply(part, { op: 'joinParagraphs', firstId: first!, secondId: second! });
+    const [kept] = paragraphIds(next);
+    expect(paraIdAttrOf(next, kept!)).toBe('4C000001');
+    expect(serializeOoxmlPart(next)).not.toContain('4C000002');
+    expect(paragraphTextOf(next, kept!)).toBe('Hello world');
+  });
+});
+
+describe('minting fails soft under hostile prefix shadowing', () => {
+  test('Enter inside a subtree that shadows w14 commits without minting — never a refusal', () => {
+    // The harness root binds w14 correctly; the SDT rebinds it. An attribute minted
+    // under `w14` would resolve to the wrong URI at this depth and the whole
+    // transaction would be refused (`invalid-qname`) — an editing lockout. The split
+    // must instead give up on identity for this tail and keep editing alive.
+    const part = load(
+      '<w:sdt xmlns:w14="urn:evil"><w:sdtContent>' +
+        `<w:p xmlns:wx="${W14}" wx:paraId="4C000009" wx:textId="4C000009"><w:r><w:t>shadowed</w:t></w:r></w:p>` +
+        '</w:sdtContent></w:sdt>'
+    );
+    const [id] = paragraphIds(part);
+    const next = apply(part, { op: 'splitParagraph', paragraphId: id!, offset: 4 });
+    const [head, tail] = paragraphIds(next);
+    expect(paraIdAttrOf(next, head!)).toBe('4C000009');
+    expect(paraIdAttrOf(next, tail!)).toBeUndefined();
   });
 });
