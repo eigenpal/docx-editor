@@ -106,7 +106,14 @@ describe('list-pagination-break.docx', () => {
     for (const block of storyBlocks(body)) {
       if (block.kind !== 'paragraph') continue;
       const modelText = paragraphTextOf(body, block.id) ?? '';
-      for (const piece of piecesOfParagraph(block, [], undefined, undefined, undefined, 'all-markup')) {
+      for (const piece of piecesOfParagraph(
+        block,
+        [],
+        undefined,
+        undefined,
+        undefined,
+        'all-markup'
+      )) {
         if (piece.projected) continue;
         expect(piece.end).toBeLessThanOrEqual(modelText.length);
         expect(modelText.slice(piece.start, piece.end)).toBe(piece.text);

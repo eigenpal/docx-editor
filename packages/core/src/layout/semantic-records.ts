@@ -144,7 +144,7 @@ export interface StyleSpanRecord {
    * it was handed.
    */
   readonly link?: SpanLinkRecord;
-   /**
+  /**
    * The revision wrappers this text sits inside, outermost first, absent when untracked.
    *
    * Carried on the span for the same reason `style` is: paint and the review surface must read
@@ -174,7 +174,7 @@ export interface LineRecord {
    * text sits.
    */
   readonly leading: number;
-   /**
+  /**
    * Model ranges on this line covering DELETED content, absent when there is none.
    *
    * The caret steps over these rather than entering them: text typed inside a deletion exists

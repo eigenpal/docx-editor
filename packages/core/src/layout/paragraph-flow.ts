@@ -75,7 +75,7 @@ export interface ParagraphFlowOptions {
    * link, which is what a table-cell or furniture pass without a resolver gets.
    */
   readonly projectLink?: HyperlinkProjector;
-   /**
+  /**
    * Which revisions this break resolves away.
    *
    * A different mode is a different break — the proposed result drops deleted text, so lines

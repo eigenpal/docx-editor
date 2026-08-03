@@ -175,29 +175,64 @@ describe('display mode selects what layout produces', () => {
   const body = `<w:p>${run('keep ')}${ins('1', run('new '))}${del('2', delRun('old'))}</w:p>`;
 
   test('all-markup shows both halves', () => {
-    const pieces = piecesOfParagraph(firstParagraph(body), [], undefined, undefined, undefined, 'all-markup');
+    const pieces = piecesOfParagraph(
+      firstParagraph(body),
+      [],
+      undefined,
+      undefined,
+      undefined,
+      'all-markup'
+    );
     expect(pieces.map((piece) => piece.text).join('')).toBe('keep new old');
   });
 
   test('the proposed result drops deletions and keeps insertions', () => {
-    const pieces = piecesOfParagraph(firstParagraph(body), [], undefined, undefined, undefined, 'proposed');
+    const pieces = piecesOfParagraph(
+      firstParagraph(body),
+      [],
+      undefined,
+      undefined,
+      undefined,
+      'proposed'
+    );
     expect(pieces.map((piece) => piece.text).join('')).toBe('keep new ');
   });
 
   test('the original drops insertions and keeps deletions', () => {
-    const pieces = piecesOfParagraph(firstParagraph(body), [], undefined, undefined, undefined, 'original');
+    const pieces = piecesOfParagraph(
+      firstParagraph(body),
+      [],
+      undefined,
+      undefined,
+      undefined,
+      'original'
+    );
     expect(pieces.map((piece) => piece.text).join('')).toBe('keep old');
   });
 
   test('a suppressed revision still advances model offsets in every mode', () => {
     // Layout showing fewer characters than the model holds is the same situation `w:vanish`
     // already creates: the offset space belongs to the model, not to the view.
-    const proposed = piecesOfParagraph(firstParagraph(body), [], undefined, undefined, undefined, 'proposed');
+    const proposed = piecesOfParagraph(
+      firstParagraph(body),
+      [],
+      undefined,
+      undefined,
+      undefined,
+      'proposed'
+    );
     expect(proposed.map((piece) => [piece.text, piece.start])).toEqual([
       ['keep ', 0],
       ['new ', 5],
     ]);
-    const original = piecesOfParagraph(firstParagraph(body), [], undefined, undefined, undefined, 'original');
+    const original = piecesOfParagraph(
+      firstParagraph(body),
+      [],
+      undefined,
+      undefined,
+      undefined,
+      'original'
+    );
     expect(original.map((piece) => [piece.text, piece.start])).toEqual([
       ['keep ', 0],
       ['old', 9],
@@ -277,13 +312,18 @@ describe('display mode selects what layout produces', () => {
     // Containment governs: an insertion inside a deletion does not survive the proposed
     // result, because the deletion it sits in was accepted.
     const nested = `<w:p>${del('9', ins('8', run('x')))}</w:p>`;
-    expect(piecesOfParagraph(firstParagraph(nested), [], undefined, undefined, undefined, 'proposed')).toEqual(
-      []
-    );
     expect(
-      piecesOfParagraph(firstParagraph(nested), [], undefined, undefined, undefined, 'original').map(
-        (piece) => piece.text
-      )
+      piecesOfParagraph(firstParagraph(nested), [], undefined, undefined, undefined, 'proposed')
+    ).toEqual([]);
+    expect(
+      piecesOfParagraph(
+        firstParagraph(nested),
+        [],
+        undefined,
+        undefined,
+        undefined,
+        'original'
+      ).map((piece) => piece.text)
     ).toEqual([]);
   });
 });
