@@ -56,6 +56,25 @@ export const CELL_PAD = 3;
 const MAX_CELL_MARGIN_PT = 31_680 / 20;
 
 /**
+ * Soft ceiling on an authored `w:trHeight` (~22"). Hostile `w:val` otherwise becomes a
+ * multi-page row that every pagination preflight and cell box inherits.
+ */
+export const MAX_TABLE_ROW_HEIGHT_PT = 31_680 / 20;
+
+/**
+ * `w:trPr/w:trHeight` (17.4.81) resolved for layout. Points leave the reader already —
+ * twips convert once here, matching every other table geometry boundary.
+ *
+ * Word quirk (matches Form025U and Word's UI export): a present `@w:val` with an omitted
+ * `@w:hRule` is treated as `atLeast`, not ECMA's `auto`. Explicit `auto` still ignores val.
+ */
+export type TableRowHeightRule = 'auto' | 'atLeast' | 'exact';
+
+export type TableRowHeight =
+  | { readonly rule: 'auto' }
+  | { readonly rule: 'atLeast' | 'exact'; readonly valuePt: number };
+
+/**
  * Soft ceiling on one grid column (~22", Word's widest page). `w:gridCol/@w:w` is the one
  * geometry number a file states that every cell box, row box and border stroke inherits, so
  * it is read and clamped exactly like `twipsSide` reads a margin.
@@ -262,6 +281,8 @@ export interface SemanticTableRow {
    * layout fails closed rather than fragmenting or overflowing the content box.
    */
   readonly cantSplit: boolean;
+  /** `w:trPr/w:trHeight` — auto / atLeast floor / exact (clipped) row height. */
+  readonly height: TableRowHeight;
   readonly cells: readonly SemanticTableCell[];
 }
 
@@ -350,6 +371,32 @@ function readFlag(container: OoxmlElement | undefined, localName: string): boole
   if (!flag) return false;
   const value = attributeValue(flag, 'val');
   return value !== '0' && value !== 'false';
+}
+
+const AUTO_ROW_HEIGHT: TableRowHeight = Object.freeze({ rule: 'auto' });
+
+/**
+ * Read `w:trHeight` (17.4.81). Hostile / unreadable values demote to auto so layout still
+ * sizes from content rather than inventing geometry.
+ */
+function readRowHeight(rowProperties: OoxmlElement | undefined): TableRowHeight {
+  const node = rowProperties && childNamed(rowProperties, 'trHeight');
+  if (!node) return AUTO_ROW_HEIGHT;
+  const rawRule = attributeValue(node, 'hRule');
+  const rule: TableRowHeightRule | undefined =
+    rawRule === 'auto' || rawRule === 'exact' || rawRule === 'atLeast' ? rawRule : undefined;
+  if (rule === 'auto') return AUTO_ROW_HEIGHT;
+
+  const rawVal = attributeValue(node, 'val');
+  if (rawVal === undefined || !/^\d{1,9}$/.test(rawVal)) return AUTO_ROW_HEIGHT;
+  const twips = Number(rawVal);
+  if (!Number.isFinite(twips) || twips <= 0) return AUTO_ROW_HEIGHT;
+  const valuePt = Math.min(twips / 20, MAX_TABLE_ROW_HEIGHT_PT);
+  if (!(valuePt > 0)) return AUTO_ROW_HEIGHT;
+
+  // Omitted hRule + present val → atLeast (Word), not ECMA's auto-with-ignored-val.
+  const effective: 'atLeast' | 'exact' = rule === 'exact' ? 'exact' : 'atLeast';
+  return { rule: effective, valuePt };
 }
 
 function twipsSide(node: OoxmlElement | undefined): number | undefined {
@@ -1009,6 +1056,7 @@ export function readTableStructure(
       id: rowNode.id,
       isHeader: readFlag(rowProperties, 'tblHeader'),
       cantSplit: readFlag(rowProperties, 'cantSplit'),
+      height: readRowHeight(rowProperties),
       cells,
     });
   }

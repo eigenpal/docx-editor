@@ -973,7 +973,9 @@ function layoutBlocksWithGeometry(
         }
 
         // Does not fit the remaining band.
-        if (row.cantSplit) {
+        // Exact rows are atomic (Word clips overflow inside the fixed box; they do not
+        // continue across pages). Same keep-together path as `w:cantSplit`.
+        if (row.cantSplit || row.height.rule === 'exact') {
           if (cursorY > 0 && !movedToFreshPage) {
             breakForContinuation(true);
             movedToFreshPage = true;
@@ -981,7 +983,9 @@ function layoutBlocksWithGeometry(
           }
           throw new TablePaginationError(
             'table-row-overheight',
-            `Table row ${row.id} has w:cantSplit and is taller than the available page content`
+            row.height.rule === 'exact'
+              ? `Table row ${row.id} has w:trHeight hRule=exact taller than the available page content`
+              : `Table row ${row.id} has w:cantSplit and is taller than the available page content`
           );
         }
 

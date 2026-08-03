@@ -424,6 +424,7 @@ export {
   DEFAULT_CELL_MARGINS,
   MAX_TABLE_COLUMNS,
   MAX_TABLE_NESTING,
+  MAX_TABLE_ROW_HEIGHT_PT,
   readTableStructure,
   tableOriginX,
   type CellMarginsPt,
@@ -434,6 +435,8 @@ export {
   type SemanticTableRow,
   type SemanticTableStructure,
   type TableAlignment,
+  type TableRowHeight,
+  type TableRowHeightRule,
 } from './semantic-table.ts';
 export { paragraphMarkDeleted, revisionRemovesParagraph } from './revision-visibility.ts';
 export {
