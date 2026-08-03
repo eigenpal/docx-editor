@@ -424,7 +424,9 @@ function EditorChrome({
             onSave={saveDocument}
             onPageSetup={() => setShowPageSetup(true)}
           >
-            <DocxEditor.Menu.File>
+            {/* preset={false}: the demo wants New BETWEEN Open and Save, and stating the
+                order is clearer than merging into it. */}
+            <DocxEditor.Menu.File preset={false}>
               <DocxEditor.Menu.Open />
               <DocxEditor.Menu.Row onSelect={newDocument} disabled={!editor}>
                 New
@@ -433,7 +435,18 @@ function EditorChrome({
               <DocxEditor.Menu.Separator />
               <DocxEditor.Menu.PageSetup />
             </DocxEditor.Menu.File>
+            {/* Row-level override: the packaged rows stay, one is swapped in place. */}
+            <DocxEditor.Menu.Insert>
+              <DocxEditor.Menu.Row
+                icon={<span aria-hidden="true">✎</span>}
+                onSelect={() => window.alert('A host action, in the packaged menu.')}
+              >
+                Clause library
+              </DocxEditor.Menu.Row>
+            </DocxEditor.Menu.Insert>
+            {/* Help is the host's: drop the packaged report row, keep the menu. */}
             <DocxEditor.Menu.Help>
+              <DocxEditor.Menu.ReportIssue hidden />
               <a
                 className="docx-toolbar__menu-item docx-menubar__item"
                 href="https://docx-editor.dev/docs"
@@ -445,6 +458,12 @@ function EditorChrome({
                 <span className="docx-menubar__item-label">Documentation</span>
               </a>
             </DocxEditor.Menu.Help>
+            {/* A menu the library knows nothing about, with the host's own id and label. */}
+            <DocxEditor.Menu.Menu id="review" label="Review">
+              <DocxEditor.Menu.Row onSelect={() => window.alert('Sent for approval.')}>
+                Send for approval
+              </DocxEditor.Menu.Row>
+            </DocxEditor.Menu.Menu>
           </DocxEditor.Menu>
         </div>
 
@@ -499,6 +518,19 @@ function EditorChrome({
           document-derived family in its own typeface. Save is
           live because the toolbar was given an onSave handler. */}
       <DocxEditor.Toolbar t={translate} className="demo-toolbar" onSave={saveDocument}>
+        {/* A host-owned action: no chrome slot, our styling and caret guard. */}
+        <DocxEditor.Toolbar.Action
+          label="Send for review"
+          onSelect={() => window.alert('Sent for review.')}
+          icon={
+            <svg viewBox="0 -960 960 960" width={18} height={18} aria-hidden="true">
+              <path
+                d="M120-160v-640l760 320-760 320Zm80-120 474-200-474-200v140l240 60-240 60v140Z"
+                fill="currentColor"
+              />
+            </svg>
+          }
+        />
         <DocxEditor.Toolbar.FontFamily>
           <DocxEditor.Toolbar.FontFamily.Trigger className="demo-font-trigger" />
           <DocxEditor.Toolbar.FontFamily.Content className="demo-font-menu">

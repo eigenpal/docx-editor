@@ -22,3 +22,4 @@ export {
   type MenuSubmenuProps,
   type MenuTableGridProps,
 } from './parts';
+export type { MenuId } from './menu-context';

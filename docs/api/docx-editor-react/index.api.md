@@ -427,6 +427,7 @@ export const DocxEditorToolbar: DocxEditorToolbarNamespace;
 export interface DocxEditorToolbarNamespace {
     // (undocumented)
     (props: DocxEditorToolbarProps): ReactNode;
+    readonly Action: typeof ToolbarAction;
     // (undocumented)
     readonly AlignCenter: ToolbarPartComponent;
     // (undocumented)
@@ -718,6 +719,9 @@ export interface MenuActionProps {
 export function MenuBar(): react__default.JSX.Element;
 
 // @public
+export type MenuId = ChromeMenuId | (string & {});
+
+// @public
 export interface MenuItemProps {
     // (undocumented)
     className?: string;
@@ -741,8 +745,10 @@ export interface MenuProps {
     // (undocumented)
     className?: string;
     hidden?: boolean;
-    id: ChromeMenuId;
+    id: MenuId;
+    label?: string;
     labelKey?: string;
+    preset?: boolean;
 }
 
 // @public
@@ -1048,6 +1054,23 @@ export function TitleBarRight(input: TitleBarRightProps): react__default.JSX.Ele
 
 // @public
 export function Toolbar(explicitProps: ToolbarProps): react__default.JSX.Element;
+
+// @public
+export interface ToolbarActionProps {
+    active?: boolean;
+    asChild?: boolean;
+    // (undocumented)
+    children?: ReactNode;
+    // (undocumented)
+    className?: string;
+    // (undocumented)
+    disabled?: boolean;
+    disabledReason?: string;
+    icon?: ReactNode;
+    label: string;
+    // (undocumented)
+    onSelect?: () => void;
+}
 
 // @public
 export interface ToolbarAlignmentComponent {

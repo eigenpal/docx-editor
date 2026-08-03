@@ -13,18 +13,30 @@ import { createContext, useContext } from 'react';
 import type { ChromeMenuId } from '@docx-editor.dev/core-contract/editor';
 import type { ToolbarTranslate } from '../toolbar/toolbar-context';
 
+/**
+ * A menu's identity: one of the registry's four, or a HOST'S OWN.
+ *
+ * The `(string & {})` arm keeps the registry ids as editor autocomplete while accepting
+ * any other string, so a product can add "Review" or "Clauses" without the library having
+ * to know about it. Lives here rather than in `parts` because the bar's open/active state
+ * is keyed on it and both modules read that state.
+ *
+ * @public
+ */
+export type MenuId = ChromeMenuId | (string & {});
+
 export interface MenuContextValue {
   readonly t: ToolbarTranslate | undefined;
   /** Which menu is open, or null. Owned by the root so only one panel shows at a time. */
-  readonly openMenu: ChromeMenuId | null;
-  readonly setOpenMenu: (id: ChromeMenuId | null) => void;
+  readonly openMenu: MenuId | null;
+  readonly setOpenMenu: (id: MenuId | null) => void;
   /**
    * Which trigger holds the bar's single tab stop (the roving tabindex). Separate from
    * `openMenu` because the bar must be tabbable while CLOSED — otherwise a keyboard user
    * cannot reach it at all — and because arrowing along the bar moves the stop without
    * opening anything.
    */
-  readonly activeMenu: ChromeMenuId | null;
+  readonly activeMenu: MenuId | null;
   /** Resolved File-row actions; absent renders the row disabled. */
   readonly onOpen: (() => void) | undefined;
   readonly onSave: (() => void) | undefined;

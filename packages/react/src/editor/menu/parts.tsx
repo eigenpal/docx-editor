@@ -12,8 +12,8 @@
 // the menu context, which the root resolves once — host override, else the packaged
 // default — so the row itself holds no policy.
 
-import { useCallback, useId, useRef, useState } from 'react';
-import type { ReactNode } from 'react';
+import { Children, Fragment, isValidElement, useCallback, useId, useRef, useState } from 'react';
+import type { ReactElement, ReactNode } from 'react';
 import {
   CHROME_MENUS,
   chromeProbeForSlot,
@@ -27,7 +27,7 @@ import { useDocxEditor } from '../context';
 import { openReportIssue } from '../../lib/reportIssue';
 import { useEditorCommand } from '../useEditorCommand';
 import { chromeControlForSlot, chromeIcon, guardToolbarMousedown } from '../toolbar/ToolbarButton';
-import { useMenuContext, useMenuLabel } from './menu-context';
+import { useMenuContext, useMenuLabel, type MenuId } from './menu-context';
 import { focusBy, focusEdge, panelItems } from './menu-keyboard';
 
 /** Word's insert-table grid is 6 columns by 6 rows. */
@@ -183,6 +183,11 @@ export function MenuItem({ slot, labelKey, shortcutKey, className, hidden }: Men
     </MenuRow>
   );
 }
+
+// The marker the panel's in-place override reads. `MenuItem` is generic, so its row
+// identity is its `slot` PROP; the pinned parts below carry a fixed `docxSlot` static.
+// Never displayName, which minifies away.
+MenuItem.docxMenuRow = true as const;
 
 // ─────────────────────────────────────────────────────────────────────────────
 // The three host-boundary rows: open, save, page setup
@@ -613,6 +618,92 @@ export function MenuEntry({ entry }: { entry: ChromeMenuEntry }) {
   );
 }
 
+/**
+ * The ROW a child element replaces, or null for a child that is not a row part.
+ *
+ * Two shapes, matching how the toolbar recognizes its own parts: a pinned part carries a
+ * fixed `docxSlot` static (`Menu.Open`, `Menu.Save`, `Menu.PageSetup`, `Menu.ReportIssue`),
+ * and the generic `Menu.Item` carries a `docxMenuRow` marker plus its `slot` PROP. A
+ * single-child Fragment unwraps, because `Children.toArray` does not flatten Fragment
+ * elements and a host mapping over its overrides will wrap them.
+ */
+function rowKeyOfChild(child: ReactNode): string | null {
+  if (!isValidElement(child)) return null;
+  if (child.type === Fragment) {
+    const inner = Children.toArray((child.props as { children?: ReactNode }).children);
+    const keys = inner.map(rowKeyOfChild).filter((key): key is string => key !== null);
+    return keys.length === 1 ? keys[0]! : null;
+  }
+  const type = child.type as { docxSlot?: unknown; docxMenuRow?: unknown };
+  if (typeof type !== 'function' && typeof type !== 'object') return null;
+  if (typeof type.docxSlot === 'string') return type.docxSlot;
+  if (type.docxMenuRow === true) {
+    const slot = (child.props as { slot?: unknown }).slot;
+    if (typeof slot === 'string') return slot;
+  }
+  return null;
+}
+
+/** The row key of one registry entry. Separators and submenus are positional, not keyed. */
+function rowKeyOfEntry(entry: ChromeMenuEntry, index: number): string {
+  if (entry.kind === 'item') return entry.slot;
+  if (entry.kind === 'submenu') return `submenu:${entry.labelKey}`;
+  return `separator:${index}`;
+}
+
+/**
+ * A panel's rows: the registry's arrangement with the host's row children merged IN PLACE.
+ *
+ * The same contract the toolbar root has, one level down, and for the same reason. Without
+ * it, changing ONE row of the Insert menu meant re-listing every row — so a host that
+ * wanted a different Image handler inherited responsibility for the break submenu, the
+ * table picker and the table-of-contents row forever, and silently stopped tracking the
+ * registry the day a row was added.
+ *
+ * `preset={false}` still renders children verbatim: when the ORDER is the point, stating it
+ * is clearer than merging into it.
+ */
+function mergePanel(
+  entries: readonly ChromeMenuEntry[] | undefined,
+  children: ReactNode,
+  preset: boolean
+): ReactNode {
+  if (!preset) return children;
+  const kids = Children.toArray(children);
+  const overrides = new Map<string, ReactElement>();
+  const appended: ReactNode[] = [];
+  for (const child of kids) {
+    const key = rowKeyOfChild(child);
+    // Last override for a row wins, matching how later props win in a spread.
+    if (key) overrides.set(key, child as ReactElement);
+    else appended.push(child);
+  }
+  const base = (entries ?? []).map((entry, index) => {
+    const key = rowKeyOfEntry(entry, index);
+    const override = overrides.get(key);
+    // A `hidden` override renders null where it stands, removing the row.
+    if (override) return <Fragment key={key}>{override}</Fragment>;
+    return <MenuEntry key={key} entry={entry} />;
+  });
+  // Row children that matched no registry row are the host's OWN rows (or a packaged row
+  // in a menu the registry leaves empty, like Help): keep them, in the order given, after
+  // the default set. Dropping them would swallow a row silently. Taken from the overrides
+  // MAP rather than from `kids`, so two children naming the same row collapse to the last
+  // one — which is what makes `<Menu.ReportIssue hidden/>` remove the packaged row rather
+  // than render a second, invisible copy beside it.
+  const registryKeys = new Set((entries ?? []).map(rowKeyOfEntry));
+  const unmatched = [...overrides.entries()]
+    .filter(([key]) => !registryKeys.has(key))
+    .map(([key, element]) => <Fragment key={key}>{element}</Fragment>);
+  return (
+    <>
+      {base}
+      {unmatched}
+      {appended}
+    </>
+  );
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // One menu: trigger + panel
 // ─────────────────────────────────────────────────────────────────────────────
@@ -620,13 +711,25 @@ export function MenuEntry({ entry }: { entry: ChromeMenuEntry }) {
 /** Props for `DocxEditor.Menu.Menu` and the four pinned menu parts. @public */
 export interface MenuProps {
   /** Which menu this is. Only one panel in the bar is open at a time, keyed on this. */
-  id: ChromeMenuId;
+  id: MenuId;
   /** i18n key of the trigger label. Defaults to the registry's. */
   labelKey?: string;
+  /**
+   * Literal trigger label, already resolved. Wins over `labelKey`, and is what a
+   * host-defined menu uses — its name is not in our catalogue and never will be.
+   */
+  label?: string;
   className?: string;
   /** Render nothing — inside the default bar this removes the menu. */
   hidden?: boolean;
-  /** Panel content. Defaults to the registry's rows for this menu. */
+  /**
+   * `false` renders `children` verbatim as the whole panel. Default `true`: the panel is
+   * the registry's rows for this menu, with a row child REPLACING the row it names in
+   * place (`hidden` removes it) and any other child appended. Use `false` when the order
+   * matters and you want to state it yourself.
+   */
+  preset?: boolean;
+  /** Panel content. */
   children?: ReactNode;
 }
 
@@ -638,7 +741,15 @@ export interface MenuProps {
  *
  * @public
  */
-export function Menu({ id, labelKey, className, hidden, children }: MenuProps) {
+export function Menu({
+  id,
+  labelKey,
+  label: literal,
+  className,
+  hidden,
+  preset = true,
+  children,
+}: MenuProps) {
   const { openMenu, setOpenMenu, activeMenu } = useMenuContext();
   const label = useMenuLabel();
   const panelId = useId();
@@ -657,9 +768,8 @@ export function Menu({ id, labelKey, className, hidden, children }: MenuProps) {
   const registry = CHROME_MENUS.find((menu) => menu.id === id);
   const open = openMenu === id;
   if (hidden) return null;
-  const text = label(labelKey ?? registry?.labelKey ?? id);
-  const rows =
-    children ?? registry?.entries.map((entry, index) => <MenuEntry key={index} entry={entry} />);
+  const text = literal ?? label(labelKey ?? registry?.labelKey ?? id);
+  const rows = mergePanel(registry?.entries, children, preset);
   // Closing returns focus to the trigger. Every close path UNMOUNTS the panel, so without
   // this the element holding focus disappears and focus falls to <body> — the user is
   // dumped at the top of the page with no announcement and has to tab back through the
@@ -816,10 +926,10 @@ export interface MenuReportIssueProps {
  *
  * @public
  */
-export function MenuReportIssue({ className, hidden, onSelect }: MenuReportIssueProps) {
-  const { setOpenMenu, onReportIssue } = useMenuContext();
+function MenuReportIssueImpl({ className, hidden, onSelect }: MenuReportIssueProps) {
+  const { setOpenMenu, onReportIssue, reportIssue } = useMenuContext();
   const label = useMenuLabel();
-  if (hidden) return null;
+  if (hidden || reportIssue === false) return null;
   const run = onSelect ?? onReportIssue ?? openReportIssue;
   return (
     <MenuRow
@@ -834,6 +944,20 @@ export function MenuReportIssue({ className, hidden, onSelect }: MenuReportIssue
     </MenuRow>
   );
 }
+
+/**
+ * The report-issue row, with its row-identity marker.
+ *
+ * The key is NOT a `ChromeSlotId` — the row is React's, not the shared registry's — but the
+ * merge only needs a stable string, and using one here is what lets a host write
+ * `<Menu.ReportIssue hidden/>` and have it REPLACE the packaged row rather than render a
+ * second, invisible one beside it.
+ *
+ * @public
+ */
+export const MenuReportIssue = Object.assign(MenuReportIssueImpl, {
+  docxSlot: 'help.reportIssue',
+});
 
 /**
  * Help.
@@ -851,9 +975,13 @@ export function MenuReportIssue({ className, hidden, onSelect }: MenuReportIssue
 function MenuHelpImpl({ children, ...rest }: Omit<MenuProps, 'id'>) {
   const { reportIssue } = useMenuContext();
   if (children === undefined && reportIssue === false) return null;
+  // The packaged row is passed as a CHILD rather than as a fallback, so the ordinary merge
+  // rules reach it: a host adds rows beside it, and `<Menu.ReportIssue hidden/>` removes
+  // just that row without taking the menu with it.
   return (
     <Menu id="help" {...rest}>
-      {children ?? <MenuReportIssue />}
+      <MenuReportIssue />
+      {children}
     </Menu>
   );
 }

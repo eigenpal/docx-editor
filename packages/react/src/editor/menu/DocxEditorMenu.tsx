@@ -33,7 +33,7 @@ import { useDocxEditor } from '../context';
 import { DocxEditorPageSetupDialog } from '../DocxEditorPageSetup';
 import type { ToolbarTranslate } from '../toolbar/toolbar-context';
 import { guardToolbarMousedown } from '../toolbar/ToolbarButton';
-import { MenuContext, type MenuContextValue } from './menu-context';
+import { MenuContext, type MenuContextValue, type MenuId } from './menu-context';
 import { barTriggers } from './menu-keyboard';
 import {
   Menu,
@@ -188,10 +188,10 @@ function DocxEditorMenuRoot(props: DocxEditorMenuProps) {
     children,
   } = props;
   const editor = useDocxEditor();
-  const [openMenu, setOpenMenu] = useState<ChromeMenuId | null>(null);
+  const [openMenu, setOpenMenu] = useState<MenuId | null>(null);
   // The bar's single tab stop. Defaults to the first rendered menu; arrowing along the bar
   // moves it, and opening a menu takes it so Escape returns focus somewhere sensible.
-  const [activeMenu, setActiveMenu] = useState<ChromeMenuId | null>(null);
+  const [activeMenu, setActiveMenu] = useState<MenuId | null>(null);
   const [pageSetupOpen, setPageSetupOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
@@ -218,7 +218,7 @@ function DocxEditorMenuRoot(props: DocxEditorMenuProps) {
 
   // Opening a menu also claims the tab stop, so Escape has a trigger to return to and a
   // later Tab leaves from where the user actually was.
-  const openMenuAndFocus = useCallback((id: ChromeMenuId | null) => {
+  const openMenuAndFocus = useCallback((id: MenuId | null) => {
     setOpenMenu(id);
     if (id !== null) setActiveMenu(id);
   }, []);
@@ -339,7 +339,7 @@ function DocxEditorMenuRoot(props: DocxEditorMenuProps) {
           // on an element that does not exist, and be unreachable by keyboard.
           if (node && activeMenu === null) {
             const first = barTriggers(node)[0]?.closest('[data-menu]')?.getAttribute('data-menu');
-            if (first) setActiveMenu(first as ChromeMenuId);
+            if (first) setActiveMenu(first);
           }
         }}
         role="menubar"
@@ -365,10 +365,10 @@ function DocxEditorMenuRoot(props: DocxEditorMenuProps) {
           const next = triggers[(index + step + triggers.length) % triggers.length];
           const id = next?.closest('[data-menu]')?.getAttribute('data-menu');
           if (!id) return;
-          setActiveMenu(id as ChromeMenuId);
+          setActiveMenu(id);
           next?.focus();
           // Docs' behaviour: arrowing along an OPEN bar keeps browsing the panels.
-          if (openMenu !== null) setOpenMenu(id as ChromeMenuId);
+          if (openMenu !== null) setOpenMenu(id);
         }}
       >
         {content}

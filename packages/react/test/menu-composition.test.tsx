@@ -576,6 +576,98 @@ describe('chrome contracts', () => {
     }
   });
 
+  test('a row child replaces its registry row IN PLACE; others append', () => {
+    // Without this, changing ONE row of Insert meant re-listing every row — inheriting
+    // the break submenu, the table picker and the TOC row forever, and silently ceasing
+    // to track the registry the day a row was added.
+    const { view } = mountMenu(
+      <DocxEditorMenu>
+        <DocxEditorMenu.Insert>
+          <DocxEditorMenu.Item slot="insert.toc" className="my-toc" />
+          <DocxEditorMenu.Row onSelect={() => {}}>Clause library</DocxEditorMenu.Row>
+        </DocxEditorMenu.Insert>
+      </DocxEditorMenu>
+    );
+    openMenu(view, 'toolbar.insert');
+    const slots = [...view.container.querySelectorAll('[role="menu"] > [data-slot]')].map((e) =>
+      e.getAttribute('data-slot')
+    );
+    // The whole registry arrangement is still there, TOC still in its own position.
+    expect(slots).toEqual(['image.insert', 'table.insert', 'insert.toc']);
+    expect(row(view, 'insert.toc').className).toContain('my-toc');
+    // The host's own row appends.
+    expect(view.container.textContent).toContain('Clause library');
+  });
+
+  test('`hidden` on a row child removes just that row, keeping the rest', () => {
+    const { view } = mountMenu(
+      <DocxEditorMenu>
+        <DocxEditorMenu.Insert>
+          <DocxEditorMenu.Item slot="insert.toc" hidden />
+        </DocxEditorMenu.Insert>
+      </DocxEditorMenu>
+    );
+    openMenu(view, 'toolbar.insert');
+    expect(view.container.querySelector('[data-slot="insert.toc"]')).toBeNull();
+    expect(row(view, 'image.insert')).toBeDefined();
+  });
+
+  test('`preset={false}` on a menu states the order itself', () => {
+    const { view } = mountMenu(
+      <DocxEditorMenu>
+        <DocxEditorMenu.File preset={false}>
+          <DocxEditorMenu.Row onSelect={() => {}}>Only this</DocxEditorMenu.Row>
+        </DocxEditorMenu.File>
+      </DocxEditorMenu>
+    );
+    openMenu(view, 'toolbar.file');
+    expect(view.container.querySelector('[data-slot="file.open"]')).toBeNull();
+    expect(view.container.textContent).toContain('Only this');
+  });
+
+  test('Help: the packaged row is a ROW, removable without losing the menu', () => {
+    const { view } = mountMenu(
+      <DocxEditorMenu>
+        <DocxEditorMenu.Help>
+          <DocxEditorMenu.ReportIssue hidden />
+          <DocxEditorMenu.Row onSelect={() => {}}>Documentation</DocxEditorMenu.Row>
+        </DocxEditorMenu.Help>
+      </DocxEditorMenu>
+    );
+    openMenu(view, 'toolbar.help');
+    // Removed, not duplicated: two children naming the same row collapse to the last.
+    expect(view.container.querySelector('[data-slot="help.reportIssue"]')).toBeNull();
+    expect(view.container.textContent).toContain('Documentation');
+    expect(menuIds(bar(view))).toContain('help');
+  });
+
+  test('a host can add a menu of its own, with its own id and label', () => {
+    const { view } = mountMenu(
+      <DocxEditorMenu>
+        <DocxEditorMenu.Menu id="review" label="Review">
+          <DocxEditorMenu.Row onSelect={() => {}}>Send for approval</DocxEditorMenu.Row>
+        </DocxEditorMenu.Menu>
+      </DocxEditorMenu>
+    );
+    // Appended after the default bar, and it is a real menu: it opens, and opening it
+    // closes whichever was open.
+    expect(menuIds(bar(view))).toEqual([...EXPECTED_MENUS, 'review']);
+    openMenu(view, 'toolbar.file');
+    const review = [...view.container.querySelectorAll<HTMLButtonElement>('.docx-menubar__trigger')] //
+      .find((button) => button.textContent === 'Review')!;
+    act(() => {
+      fireEvent.click(review);
+    });
+    expect(view.container.querySelectorAll('[role="menu"]').length).toBe(1);
+    expect(view.container.textContent).toContain('Send for approval');
+    // And it joins the roving tabindex rather than becoming a stray tab stop.
+    expect(
+      [...view.container.querySelectorAll<HTMLElement>('.docx-menubar__trigger')].filter(
+        (t) => t.tabIndex === 0
+      ).length
+    ).toBe(1);
+  });
+
   test('Escape closes the open menu', () => {
     const { view } = mountMenu(<DocxEditorMenu />);
     openMenu(view, 'toolbar.file');

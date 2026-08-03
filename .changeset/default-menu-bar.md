@@ -8,4 +8,6 @@ Every row is a chrome slot, so it shares its label, icon, command and enabled st
 
 Compose a different bar with `DocxEditor.Menu` and its parts (`.File`, `.Insert`, `.Item`, `.Row`, `.Submenu`, `.TableGrid`, …), which replace a menu or a row in place. `menu` also accepts the menu's props directly, so a single row can be redirected without giving up the bar: `menu={{ reportIssue: false }}` drops Help's report-an-issue row, `menu={{ onReportIssue }}` points it at your own support channel, and `menu={{ onPageSetup }}` swaps the dialog.
 
-Ctrl/Cmd+S and Ctrl/Cmd+O are bound, scoped to the editor the user is in — an editor embedded in a larger page leaves the host's own shortcuts alone.
+Ctrl/Cmd+S and Ctrl/Cmd+O are bound, scoped to the editor the user is in — an editor embedded in a larger page leaves the host's own shortcuts alone. The bar is one tab stop with full arrow-key navigation, focus returns to the trigger on close, and refused rows stay focusable so their reason is announced rather than hidden in a tooltip.
+
+Chrome is composable down to a single row. A row child replaces the row it names and leaves the rest of the packaged menu tracking the registry; `preset={false}` states the order yourself. `DocxEditor.Menu.Menu` takes any id, so a product can add a menu of its own beside File/Format/Insert/Help. `DocxEditor.Toolbar.Action` is the toolbar's twin of `Menu.Row` — a host-owned action with the packaged styling and caret handling, and no chrome slot to fake.

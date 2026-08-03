@@ -198,6 +198,11 @@ React-only.
 - `MenuItemProps` — one chrome slot as a row.
 - `MenuRowProps` — a presentational row, for a host action that is not a slot.
 - `MenuActionProps` — the pinned Open/Save/Page-setup rows' props.
+- `MenuId` — a menu's identity: one of the registry's four, or a host's own. The
+  `(string & {})` arm is what lets a product add a menu the library knows nothing about.
+- `ToolbarActionProps` — a host-owned toolbar action with no chrome slot, the twin of
+  `Menu.Row`. Deliberately NOT a shared concept: it carries no engine wiring, so there is
+  nothing for core to own. The Vue twin is markup, and lands with the composable layer.
 - `MenuReportIssueProps` — Help's one packaged row, named so a host can drop it or point
   it at its own support channel rather than this project's tracker.
 - `MenuSeparatorProps`
