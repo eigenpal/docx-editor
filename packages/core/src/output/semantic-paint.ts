@@ -311,7 +311,12 @@ function positioned(
   return element;
 }
 
-function paintSpan(document: Document, span: StyleSpanRecord, ctx: PaintContext): HTMLElement {
+function paintSpan(
+  document: Document,
+  span: StyleSpanRecord,
+  ctx: PaintContext,
+  bandHeightPt: number
+): HTMLElement {
   const element = document.createElement('span');
   element.className = 'layout-run layout-run-text';
   // Each run is its OWN box, aligned on the baseline.
@@ -322,6 +327,11 @@ function paintSpan(document: Document, span: StyleSpanRecord, ctx: PaintContext)
   // own size, which is how Word draws it: the band steps with the text.
   element.style.display = 'inline-block';
   element.style.verticalAlign = 'baseline';
+  // The box is only its own size if the run does NOT inherit the line's pixel line-height:
+  // inherited, every run's inner line box is the full line height and the band is one
+  // uniform slab again. The caller passes the height this run's band should be (its own
+  // published height, plus the line's extra leading, capped at the line height).
+  element.style.lineHeight = `${bandHeightPt * ctx.scale}px`;
   element.dataset.paragraphId = span.range.paragraphId;
   element.dataset.start = String(span.range.start);
   element.dataset.end = String(span.range.end);
@@ -393,7 +403,19 @@ function paintLine(document: Document, line: LineRecord, ctx: PaintContext): HTM
   const gap = interSpanGap(line);
   if (gap > 0) element.style.wordSpacing = `${gap * scale}px`;
 
-  for (const span of line.spans) element.append(paintSpan(document, span, ctx));
+  // Per-run band heights, chosen so the browser's line-box math cannot move a glyph:
+  // the tallest run's band is exactly the line height — the same value every run
+  // inherited before — so the box that decides where the common baseline sits is
+  // unchanged. Smaller runs get their own published height plus the line's extra
+  // leading (spacing above single keeps a contiguous band, as Word draws it), capped
+  // at the line height so an `exact`-spaced line cannot grow past its box.
+  let tallest = 0;
+  for (const span of line.spans) tallest = Math.max(tallest, span.box.height);
+  const leading = Math.max(0, line.box.height - tallest);
+  for (const span of line.spans) {
+    const band = Math.min(span.box.height + leading, line.box.height);
+    element.append(paintSpan(document, span, ctx, band));
+  }
   // A span-less line (empty paragraph) has no inline content, and a browser will not
   // draw a caret at a position with no inline box to measure. The <br> is the anchor;
   // sizing it to the line keeps the caret the paragraph's font height, not the div's

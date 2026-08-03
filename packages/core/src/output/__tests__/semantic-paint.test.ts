@@ -207,6 +207,73 @@ describe('each run is its own box, so a mixed-size line highlights stepped', () 
     expect(container.querySelectorAll('.docx-line')).toHaveLength(1);
   });
 
+  test('a run owns its line-height, so its selection band is its own height', () => {
+    // 11pt next to 22pt on one line. The band the browser draws follows each run's inner
+    // line box, so the run must NOT inherit the line's pixel line-height — inherited, an
+    // 11pt run next to a 22pt one highlighted as one uniform 28px slab.
+    const container = paint(
+      '<w:p><w:r><w:t>small</w:t></w:r>' +
+        '<w:r><w:rPr><w:sz w:val="44"/></w:rPr><w:t>big</w:t></w:r></w:p>'
+    );
+    const line = container.querySelector<HTMLElement>('.docx-line')!;
+    expect(line.style.height).toBe('28px'); // tallest run decides the line
+    const [small, big] = [...line.querySelectorAll<HTMLElement>('.layout-run-text')];
+    expect(small!.style.lineHeight).toBe('14px'); // its own published height
+    // The tallest run's band is exactly the line height — the same value it used to
+    // inherit — so the browser's line-box/baseline math is unchanged by the stepping.
+    expect(big!.style.lineHeight).toBe('28px');
+  });
+
+  test('line spacing above single joins the stepped bands with the extra leading', () => {
+    // Double spacing doubles the line box. Word still paints the leading, so every run's
+    // band grows by the same extra leading — capped at the line height, which the tallest
+    // run reaches exactly.
+    const container = paint(
+      '<w:p><w:pPr><w:spacing w:line="480" w:lineRule="auto"/></w:pPr>' +
+        '<w:r><w:t>small</w:t></w:r>' +
+        '<w:r><w:rPr><w:sz w:val="44"/></w:rPr><w:t>big</w:t></w:r></w:p>'
+    );
+    const line = container.querySelector<HTMLElement>('.docx-line')!;
+    expect(line.style.height).toBe('56px'); // 28 natural × 480/240
+    const [small, big] = [...line.querySelectorAll<HTMLElement>('.layout-run-text')];
+    expect(small!.style.lineHeight).toBe('42px'); // 14 own + 28 leading
+    expect(big!.style.lineHeight).toBe('56px'); // 28 own + 28 leading = the line height
+  });
+
+  test('a tab span gets its own band too, not the full line height', () => {
+    // A tab paints with `overflow: hidden`, which makes its inline-block baseline the
+    // BOTTOM edge (CSS2.1 §10.8.1) — so unlike a text run its whole band counts above the
+    // baseline. Inheriting the line height made a small-style tab dominate the line box of
+    // a mixed-size line and push every glyph below the published baseline; its own band
+    // keeps the tab's contribution no larger than the run it belongs with.
+    const container = paint(
+      '<w:p><w:pPr><w:tabs><w:tab w:val="left" w:pos="2400"/></w:tabs></w:pPr>' +
+        '<w:r><w:t>a</w:t><w:tab/></w:r>' +
+        '<w:r><w:rPr><w:sz w:val="44"/></w:rPr><w:t>big</w:t></w:r></w:p>'
+    );
+    const line = container.querySelector<HTMLElement>('.docx-line')!;
+    expect(line.style.height).toBe('28px');
+    const tab = [...line.querySelectorAll<HTMLElement>('.layout-run-text')].find(
+      (el) => el.textContent === '\t'
+    )!;
+    expect(tab.style.lineHeight).toBe('14px'); // the tab style's own height, not the line's
+  });
+
+  test('an exact line rule below the natural height caps every band at the line', () => {
+    // `exact` can shrink the box below the glyphs (Word clips). Bands must not grow past
+    // the published line height, or a selection would spill over the neighbouring lines.
+    const container = paint(
+      '<w:p><w:pPr><w:spacing w:line="200" w:lineRule="exact"/></w:pPr>' +
+        '<w:r><w:t>small</w:t></w:r>' +
+        '<w:r><w:rPr><w:sz w:val="44"/></w:rPr><w:t>big</w:t></w:r></w:p>'
+    );
+    const line = container.querySelector<HTMLElement>('.docx-line')!;
+    expect(line.style.height).toBe('10px'); // 200 twips exact
+    const [small, big] = [...line.querySelectorAll<HTMLElement>('.layout-run-text')];
+    expect(small!.style.lineHeight).toBe('10px'); // 14 own, capped at the line
+    expect(big!.style.lineHeight).toBe('10px'); // 28 own, capped at the line
+  });
+
   test('superscript keeps a relative offset and is not clipped by the line box', () => {
     const container = paint(
       '<w:p><w:r><w:t>x</w:t></w:r>' +
