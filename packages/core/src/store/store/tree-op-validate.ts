@@ -9,6 +9,7 @@
 import type { OoxmlNode, OoxmlParagraphNode, OoxmlPart } from '../package/ooxml-tree.ts';
 import { findNode } from '../package/ooxml-edit.ts';
 import { paragraphPropertiesNodeOf } from './tree-op-nodes.ts';
+import { validateDeleteBlock } from './tree-op-blocks.ts';
 import { isValidXmlText } from '../package/sinks.ts';
 
 /**
@@ -243,6 +244,25 @@ export type TreeDocOp =
     }
   | {
       /**
+       * Remove a whole BLOCK — a `w:p`, a `w:tbl` or a `w:tr` — and everything under it.
+       *
+       * The only op in the vocabulary that takes a node OUT of the tree. Everything else
+       * edits text, runs or properties, so a range deletion spanning a table could only
+       * empty it: `joinParagraphs` merges adjacent siblings under one parent, and a body
+       * paragraph and a cell paragraph have different parents, so collapsing across a table
+       * is not a paragraph edit at all. The document kept its scaffolding — every row, cell
+       * and border still there, all of it blank — and pasting over the selection looked
+       * like it had done nothing.
+       *
+       * Restricted to the three block kinds the canonical tree types. A run, a text value,
+       * `w:body` or a properties container is refused rather than removed, so this cannot
+       * be used to dismantle markup the paragraph lane does not own.
+       */
+      readonly op: 'deleteBlock';
+      readonly blockId: string;
+    }
+  | {
+      /**
        * Unlink: splice the `w:hyperlink`'s children into the paragraph in its place.
        *
        * The runs keep their identity, their formatting and their order, and any bookmark
@@ -275,6 +295,7 @@ export const TREE_DOC_OP_KINDS = [
   'insertHyperlink',
   'setHyperlinkTarget',
   'removeHyperlink',
+  'deleteBlock',
 ] as const satisfies readonly TreeDocOpKind[];
 
 // Compile-time exhaustiveness, matching the legacy `DOC_OP_KINDS` guard: a new op must be
@@ -316,6 +337,10 @@ export type TreeOpRejection =
   | 'unsupported-property'
   | 'invalid-property-value'
   | 'not-adjacent-siblings'
+  | 'unknown-block'
+  | 'not-a-block'
+  | 'block-required'
+  | 'carries-section-mark'
   | 'tree-invariant';
 
 export type TreeOpResult =
@@ -746,6 +771,8 @@ export function validateTreeOp(part: OoxmlPart, op: TreeDocOp): TreeOpRejection 
     }
     return null;
   }
+
+  if (op.op === 'deleteBlock') return validateDeleteBlock(part, op.blockId);
 
   if (op.op === 'joinParagraphs') {
     const first = findNode(part, op.firstId);

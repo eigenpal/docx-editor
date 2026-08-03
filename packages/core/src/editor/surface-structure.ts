@@ -24,6 +24,7 @@ import {
   paragraphPropertiesOf,
 } from './surface-formatting.ts';
 import type { PaginatedSurface } from './paginated-surface-contract.ts';
+import type { RangeDeletionPlan } from './surface-selection-ops.ts';
 
 /** What the composition root lends this lane: its session, its layout, and its commit. */
 export interface SurfaceStructureDeps {
@@ -38,7 +39,15 @@ export interface SurfaceStructureDeps {
   orderedRange(): { from: SemanticPosition; to: SemanticPosition };
   selectionMark(): { paragraphId: string; start: number; end: number } | null;
   collapsedAt(position: SemanticPosition): SemanticSelection;
-  deleteSelectionOps(): readonly TreeDocOp[];
+  /**
+   * The ops that remove the current selection, and the position that survives them.
+   *
+   * Every insertion below REPLACES the selection and then addresses a paragraph, and the
+   * plan's `collapseTo` is the only position guaranteed to still exist afterwards: a plan
+   * that removes a table takes its cell paragraphs with it, and an op naming one the same
+   * transaction deleted vetoes the whole transaction.
+   */
+  deleteSelectionPlan(): RangeDeletionPlan;
   /** The model text of one paragraph, for telling an empty list item from a filled one. */
   paragraphTextOf(paragraphId: string): string;
   /** Whether `numId` declares `level`, for refusing a demote that would erase the marker. */
@@ -86,7 +95,7 @@ function leftIndentAttributes(
 
 export function createSurfaceStructure(deps: SurfaceStructureDeps): StructureMethods {
   const { session, commit, orderedStart, orderedRange, selectionMark, collapsedAt } = deps;
-  const deleteSelectionOps = deps.deleteSelectionOps;
+  const deleteSelectionPlan = deps.deleteSelectionPlan;
   const currentLayout = {
     get value(): SemanticLayout {
       return deps.layout();
@@ -204,12 +213,13 @@ export function createSurfaceStructure(deps: SurfaceStructureDeps): StructureMet
 
   return {
     insertTab() {
-      const start = orderedStart();
+      const plan = deleteSelectionPlan();
+      const start = plan.collapseTo;
       commit(
         () =>
           session.applyTreeOps(
             [
-              ...deleteSelectionOps(),
+              ...plan.ops,
               { op: 'insertTab', paragraphId: start.paragraphId, offset: start.offset },
             ],
             selectionMark()
@@ -219,12 +229,13 @@ export function createSurfaceStructure(deps: SurfaceStructureDeps): StructureMet
     },
 
     insertLineBreak() {
-      const start = orderedStart();
+      const plan = deleteSelectionPlan();
+      const start = plan.collapseTo;
       commit(
         () =>
           session.applyTreeOps(
             [
-              ...deleteSelectionOps(),
+              ...plan.ops,
               { op: 'insertHardBreak', paragraphId: start.paragraphId, offset: start.offset },
             ],
             selectionMark()
@@ -234,12 +245,13 @@ export function createSurfaceStructure(deps: SurfaceStructureDeps): StructureMet
     },
 
     insertPageBreak() {
-      const start = orderedStart();
+      const plan = deleteSelectionPlan();
+      const start = plan.collapseTo;
       commit(
         () =>
           session.applyTreeOps(
             [
-              ...deleteSelectionOps(),
+              ...plan.ops,
               { op: 'insertPageBreak', paragraphId: start.paragraphId, offset: start.offset },
             ],
             selectionMark()
@@ -453,7 +465,8 @@ export function createSurfaceStructure(deps: SurfaceStructureDeps): StructureMet
     },
 
     insertSectionBreak() {
-      const start = orderedStart();
+      const plan = deleteSelectionPlan();
+      const start = plan.collapseTo;
       const before = new Set(session.paragraphIds());
       let committed = false;
       commit(
@@ -461,7 +474,7 @@ export function createSurfaceStructure(deps: SurfaceStructureDeps): StructureMet
           const result = session.applyTreeOps(
             [
               // A break REPLACES a selection, like every other insertion.
-              ...deleteSelectionOps(),
+              ...plan.ops,
               { op: 'splitParagraph', paragraphId: start.paragraphId, offset: start.offset },
               // The HEAD keeps the original id; it ends the new section, cloning the
               // governing setup so the break changes where pages break, not how they look.
