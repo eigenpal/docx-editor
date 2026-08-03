@@ -54,6 +54,7 @@ export {
   CHROME_MENUS,
   CHROME_UNAVAILABLE_KEY,
   chromeControlCount,
+  chromeMenuSlots,
   chromeSlotId,
   defaultChromeGroups,
   type ChromeControl,
@@ -61,6 +62,12 @@ export {
   type ChromeControlState,
   type ChromeGroup,
   type ChromeGroupId,
+  type ChromeMenu,
+  type ChromeMenuEntry,
+  type ChromeMenuId,
+  type ChromeMenuItemEntry,
+  type ChromeMenuSeparatorEntry,
+  type ChromeMenuSubmenuEntry,
   type ChromeSlotId,
 } from './chrome-controls.ts';
 export {

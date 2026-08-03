@@ -9,6 +9,7 @@ import { DocxEditorRoot } from '../editor/DocxEditorRoot';
 import { DocxEditorViewport } from '../editor/DocxEditorViewport';
 import { useDocxEditorRefApi } from './DocxEditor/hooks/useDocxEditorRefApi';
 import { DocxEditorToolbar } from '../editor/toolbar';
+import { DocxEditorMenu } from '../editor/menu';
 import { DocxEditorHorizontalRuler, DocxEditorVerticalRuler } from '../editor/DocxEditorRulers';
 import { DocxEditorDocumentOutline } from '../editor/DocxEditorOutline';
 import { Navigation as DocxEditorNavigationCompound } from '../editor/navigation';
@@ -87,6 +88,19 @@ const TITLE_BAR_STYLE: CSSProperties = {
   color: 'var(--doc-text)',
 };
 
+/**
+ * Title over menus, the way Word and Docs stack them: the document's name identifies what
+ * you are looking at, the menu bar acts on it. They share a column so the left slot (a
+ * logo) and the right slot (host actions) span both rows.
+ */
+const TITLE_BLOCK_STYLE: CSSProperties = {
+  display: 'flex',
+  flexDirection: 'column',
+  flex: 1,
+  minWidth: 0,
+  gap: 2,
+};
+
 const TITLE_INPUT_STYLE: CSSProperties = {
   flex: 1,
   minWidth: 0,
@@ -130,8 +144,10 @@ const DocxEditorImpl = forwardRef<DocxEditorRef, DocxEditorProps>(function DocxE
     onReady,
     onChange,
     onFontError,
+    onOpen,
     onSave,
     hyperlinkPopup,
+    menu = true,
     navigation = true,
   } = props;
 
@@ -186,19 +202,33 @@ const DocxEditorImpl = forwardRef<DocxEditorRef, DocxEditorProps>(function DocxE
     >
       <div style={TITLE_BAR_STYLE}>
         {renderTitleBarLeft?.()}
-        {onTitleChange ? (
-          <input
-            aria-label={translate('titleBar.documentNameAriaLabel')}
-            value={title ?? ''}
-            placeholder={translate('titleBar.untitled')}
-            onChange={(event) => onTitleChange(event.target.value)}
-            style={TITLE_INPUT_STYLE}
-          />
-        ) : (
-          <span style={{ flex: 1, minWidth: 0, padding: '2px 6px' }}>
-            {title ?? translate('titleBar.untitled')}
-          </span>
-        )}
+        <div style={TITLE_BLOCK_STYLE}>
+          {onTitleChange ? (
+            <input
+              aria-label={translate('titleBar.documentNameAriaLabel')}
+              value={title ?? ''}
+              placeholder={translate('titleBar.untitled')}
+              onChange={(event) => onTitleChange(event.target.value)}
+              style={TITLE_INPUT_STYLE}
+            />
+          ) : (
+            <span style={{ minWidth: 0, padding: '2px 6px' }}>
+              {title ?? translate('titleBar.untitled')}
+            </span>
+          )}
+          {/* File · Format · Insert · Help. Every row is a chrome slot, so it shares its
+              label, icon and enabled state with the toolbar control for the same
+              capability. Open and Save work with no configuration; `onOpen`/`onSave`
+              replace them. */}
+          {menu ? (
+            <DocxEditorMenu
+              t={translate}
+              {...(title !== undefined ? { fileName: title } : {})}
+              {...(onOpen ? { onOpen } : {})}
+              {...(onSave ? { onSave } : {})}
+            />
+          ) : null}
+        </div>
         {onSave ? (
           <button
             type="button"
@@ -269,6 +299,12 @@ export interface DocxEditorNamespace extends ForwardRefExoticComponent<
   readonly Viewport: typeof DocxEditorViewport;
   readonly Content: typeof DocxEditorContent;
   readonly Toolbar: typeof DocxEditorToolbar;
+  /**
+   * The menu bar — File · Format · Insert · Help — with its parts as statics (`.File`,
+   * `.Format`, `.Insert`, `.Help`, `.Item`, `.Row`, `.Submenu`, `.TableGrid`, …). Mounted
+   * by default under the title; `menu={false}` removes it.
+   */
+  readonly Menu: typeof DocxEditorMenu;
   /** Conditional loading screen: renders while there is no document to paint. */
   readonly Loading: typeof DocxEditorLoading;
   /** Context-fed horizontal ruler with draggable margins (props-driven export stays). */
@@ -297,6 +333,7 @@ export const DocxEditor: DocxEditorNamespace = Object.assign(DocxEditorImpl, {
   Viewport: DocxEditorViewport,
   Content: DocxEditorContent,
   Toolbar: DocxEditorToolbar,
+  Menu: DocxEditorMenu,
   Loading: DocxEditorLoading,
   HorizontalRuler: DocxEditorHorizontalRuler,
   VerticalRuler: DocxEditorVerticalRuler,

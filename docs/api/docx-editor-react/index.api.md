@@ -5,6 +5,14 @@
 ```ts
 
 import { CHROME_GROUPS } from '@docx-editor.dev/core-contract/editor';
+import { CHROME_MENUS } from '@docx-editor.dev/core-contract/editor';
+import { ChromeMenu } from '@docx-editor.dev/core-contract/editor';
+import { ChromeMenuEntry } from '@docx-editor.dev/core-contract/editor';
+import { ChromeMenuId } from '@docx-editor.dev/core-contract/editor';
+import { ChromeMenuItemEntry } from '@docx-editor.dev/core-contract/editor';
+import { ChromeMenuSeparatorEntry } from '@docx-editor.dev/core-contract/editor';
+import { chromeMenuSlots } from '@docx-editor.dev/core-contract/editor';
+import { ChromeMenuSubmenuEntry } from '@docx-editor.dev/core-contract/editor';
 import { ChromeSlotId } from '@docx-editor.dev/core-contract/editor';
 import { ColorValue } from '@docx-editor.dev/core-contract/contracts/editor';
 import { commandForSlot } from '@docx-editor.dev/core-contract/editor';
@@ -70,6 +78,22 @@ import { Translations } from '@docx-editor.dev/i18n';
 import { WORD_DEFAULT_FONT } from '@docx-editor.dev/core-contract/editor';
 
 export { CHROME_GROUPS }
+
+export { CHROME_MENUS }
+
+export { ChromeMenu }
+
+export { ChromeMenuEntry }
+
+export { ChromeMenuId }
+
+export { ChromeMenuItemEntry }
+
+export { ChromeMenuSeparatorEntry }
+
+export { chromeMenuSlots }
+
+export { ChromeMenuSubmenuEntry }
 
 export { ChromeSlotId }
 
@@ -165,6 +189,51 @@ export interface DocxEditorLoadingSpinnerProps {
 }
 
 // @public
+export const DocxEditorMenu: DocxEditorMenuNamespace;
+
+// @public
+export interface DocxEditorMenuNamespace {
+    // (undocumented)
+    (props: DocxEditorMenuProps): ReactNode;
+    readonly Entry: typeof MenuEntry;
+    // (undocumented)
+    readonly File: MenuPartComponent;
+    // (undocumented)
+    readonly Format: MenuPartComponent;
+    // (undocumented)
+    readonly Help: MenuPartComponent;
+    // (undocumented)
+    readonly Insert: MenuPartComponent;
+    readonly Item: typeof MenuItem;
+    readonly Menu: typeof Menu;
+    // (undocumented)
+    readonly Open: typeof MenuOpen;
+    // (undocumented)
+    readonly PageSetup: typeof MenuPageSetup;
+    readonly Row: typeof MenuRow;
+    // (undocumented)
+    readonly Save: typeof MenuSave;
+    // (undocumented)
+    readonly Separator: typeof MenuSeparator;
+    // (undocumented)
+    readonly Submenu: typeof MenuSubmenu;
+    readonly TableGrid: typeof MenuTableGrid;
+}
+
+// @public
+export interface DocxEditorMenuProps {
+    // (undocumented)
+    children?: ReactNode;
+    className?: string;
+    fileName?: string;
+    onOpen?: () => void;
+    onPageSetup?: () => void;
+    onSave?: () => void;
+    preset?: boolean;
+    t?: ToolbarTranslate;
+}
+
+// @public
 export interface DocxEditorNamespace extends ForwardRefExoticComponent<DocxEditorProps & RefAttributes<DocxEditorRef>> {
     // (undocumented)
     readonly Content: typeof DocxEditorContent;
@@ -172,6 +241,7 @@ export interface DocxEditorNamespace extends ForwardRefExoticComponent<DocxEdito
     readonly HorizontalRuler: typeof DocxEditorHorizontalRuler;
     readonly HyperLink: typeof DocxEditorHyperLink;
     readonly Loading: typeof DocxEditorLoading;
+    readonly Menu: typeof DocxEditorMenu;
     readonly Navigation: typeof Navigation;
     readonly PageSetupDialog: typeof DocxEditorPageSetupDialog;
     // (undocumented)
@@ -243,10 +313,12 @@ export interface DocxEditorProps {
     hyperlinkPopup?: boolean;
     // (undocumented)
     locale?: string;
+    menu?: boolean;
     mode?: EditorMode;
     navigation?: boolean;
     onChange?: (change: DocumentChange) => void;
     onFontError?: (error: EditorFontError) => void;
+    onOpen?: () => void;
     onReady?: (editor: Editor) => void;
     onSave?: () => void;
     onTitleChange?: (title: string) => void;
@@ -631,8 +703,84 @@ export { LoadFontsResult }
 // @public (undocumented)
 export function Logo(input: LogoProps): react__default.JSX.Element;
 
+// @public
+export interface MenuActionProps {
+    // (undocumented)
+    className?: string;
+    // (undocumented)
+    hidden?: boolean;
+}
+
 // @public (undocumented)
 export function MenuBar(): react__default.JSX.Element;
+
+// @public
+export interface MenuItemProps {
+    // (undocumented)
+    className?: string;
+    hidden?: boolean;
+    labelKey?: string;
+    shortcutKey?: string;
+    slot: ChromeSlotId;
+}
+
+// @public
+export interface MenuPartComponent {
+    // (undocumented)
+    (props: Omit<MenuProps, 'id'>): ReactNode;
+    // (undocumented)
+    readonly docxMenu: ChromeMenuId;
+}
+
+// @public
+export interface MenuProps {
+    children?: ReactNode;
+    // (undocumented)
+    className?: string;
+    hidden?: boolean;
+    id: ChromeMenuId;
+    labelKey?: string;
+}
+
+// @public
+export interface MenuRowProps {
+    active?: boolean;
+    // (undocumented)
+    children?: ReactNode;
+    // (undocumented)
+    className?: string;
+    // (undocumented)
+    disabled?: boolean;
+    icon?: ReactNode;
+    // (undocumented)
+    onSelect?: () => void;
+    shortcut?: string;
+    slot?: string;
+    title?: string;
+}
+
+// @public
+export interface MenuSeparatorProps {
+    // (undocumented)
+    className?: string;
+}
+
+// @public
+export interface MenuSubmenuProps {
+    // (undocumented)
+    children?: ReactNode;
+    // (undocumented)
+    className?: string;
+    labelKey: string;
+    paths?: readonly string[] | null;
+}
+
+// @public
+export interface MenuTableGridProps {
+    // (undocumented)
+    className?: string;
+    slot?: ChromeSlotId;
+}
 
 // @public
 export const NAVIGATION_PANE_GAP = 16;

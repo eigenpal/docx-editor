@@ -51,6 +51,12 @@ const SLOT_COMMANDS: Partial<Record<ChromeSlotId, EditorCommand>> = {
   'list.numbered': { type: 'toggleList', kind: 'ordered' },
   'list.indent': { type: 'adjustIndent', direction: 'increase' },
   'list.outdent': { type: 'adjustIndent', direction: 'decrease' },
+  'insert.pageBreak': { type: 'insertBreak', kind: 'page' },
+  'insert.sectionBreakNextPage': { type: 'insertBreak', kind: 'section' },
+  // `insert.sectionBreakContinuous`, `insert.toc` and `insert.watermark` are deliberately
+  // absent: a continuous section break is not in the `insertBreak` vocabulary, and neither
+  // a table of contents nor a watermark is an edit the tree editor executes yet. Each
+  // reports the engine's own refusal rather than a chrome-invented one.
 };
 
 /**
@@ -76,6 +82,11 @@ export function chromeProbeForSlot(slotId: ChromeSlotId): EditorCommand | null {
 
 const CHROME_PROBES: Partial<Record<ChromeSlotId, EditorCommand>> = {
   'text.link': { type: 'insertHyperlink', href: 'https://example.com' },
+  // Page setup is the same shape: whether this document's sections can be rewritten is the
+  // engine's question, but WHICH size, orientation and margins is the dialog's. The probe
+  // names one field so `classifyCommand`'s "requires at least one field" gate passes; it is
+  // never executed, and the dialog sends the user's real values.
+  'file.pageSetup': { type: 'setPageSetup', orientation: 'portrait' },
 };
 
 /**
@@ -194,6 +205,17 @@ export function toolbarCommandState(editor: Editor | null, id: ChromeSlotId): To
         active: false,
       };
     }
+    // Open is save's twin and gets the same distinction: the capability is there, a
+    // COMMAND for it is not. Bytes come from a picker the host owns and go in through
+    // `Editor.load`, so chrome that has one drives the control itself.
+    if (id === 'file.open') {
+      return {
+        id,
+        enabled: false,
+        disabledReason: 'open is not a command; run it with editor.load(bytes)',
+        active: false,
+      };
+    }
     return { id, enabled: false, disabledReason: 'not wired to an editor command', active: false };
   }
   const result: CanResult = editor.can(command);
@@ -234,6 +256,13 @@ export function runToolbarCommand(editor: Editor | null, id: ChromeSlotId): Exec
         ok: false,
         code: 'unsupported',
         reason: 'save is not a command; run it with runSave(editor)',
+      };
+    }
+    if (id === 'file.open') {
+      return {
+        ok: false,
+        code: 'unsupported',
+        reason: 'open is not a command; run it with editor.load(bytes)',
       };
     }
     return { ok: false, code: 'unsupported', reason: 'not wired to an editor command' };

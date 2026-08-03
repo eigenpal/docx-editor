@@ -47,7 +47,14 @@ export type ChromeSlotId =
 | 'image.insert'
 | 'image.properties'
 | 'table.insert'
-| 'file.save';
+| 'file.open'
+| 'file.save'
+| 'file.pageSetup'
+| 'insert.pageBreak'
+| 'insert.sectionBreakNextPage'
+| 'insert.sectionBreakContinuous'
+| 'insert.toc'
+| 'insert.watermark';
 
 // @public
 export function commandForSlot(slotId: ChromeSlotId): EditorCommand | null {
@@ -402,8 +409,8 @@ default: () => never[];
 }>> & Readonly<{
 onClose?: (() => any) | undefined;
 }>, {
-editor: Editor | null;
 open: boolean;
+editor: Editor | null;
 panels: readonly SidebarPanel[];
 }, {}, {}, {}, string, ComponentProvideOptions, true, {}, any>;
 
@@ -1298,6 +1305,13 @@ export function runToolbarCommand(editor: Editor | null, id: ChromeSlotId): Exec
                 reason: 'save is not a command; run it with runSave(editor)',
             };
         }
+        if (id === 'file.open') {
+            return {
+                ok: false,
+                code: 'unsupported',
+                reason: 'open is not a command; run it with editor.load(bytes)',
+            };
+        }
         return { ok: false, code: 'unsupported', reason: 'not wired to an editor command' };
     }
     const // (undocumented)
@@ -1354,6 +1368,17 @@ export function toolbarCommandState(editor: Editor | null, id: ChromeSlotId): To
                 id,
                 enabled: false,
                 disabledReason: 'save is not a command; run it with runSave(editor)',
+                active: false,
+            };
+        }
+        // Open is save's twin and gets the same distinction: the capability is there, a
+        // COMMAND for it is not. Bytes come from a picker the host owns and go in through
+        // `Editor.load`, so chrome that has one drives the control itself.
+        if (id === 'file.open') {
+            return {
+                id,
+                enabled: false,
+                disabledReason: 'open is not a command; run it with editor.load(bytes)',
                 active: false,
             };
         }

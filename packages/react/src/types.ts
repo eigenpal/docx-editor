@@ -72,8 +72,32 @@ export interface DocxEditorProps {
   title?: string;
   /** Called when the title is edited. Omitting it makes the title read-only. */
   onTitleChange?: (title: string) => void;
-  /** Save handler for the chrome's save control. Runs `Editor.save()` at the host. */
+  /**
+   * Save handler for the chrome's save control and the menu's File › Save row. Runs
+   * `Editor.save()` at the host.
+   *
+   * Without it the title-bar button is absent and File › Save falls back to the packaged
+   * behaviour: `Editor.save()` and a download named after `title`.
+   */
   onSave?: () => void;
+  /**
+   * Open handler for the menu's File › Open row.
+   *
+   * Without it the row falls back to the packaged behaviour: a file picker whose bytes go
+   * to `Editor.load`. Supply this to drive the load from your own storage — the row is
+   * still a user-initiated file READ either way, never a fetch the document can trigger.
+   */
+  onOpen?: () => void;
+  /**
+   * Render the packaged menu bar — File · Format · Insert · Help — under the document
+   * title (`false` removes it).
+   *
+   * Every actionable row is a chrome slot, so it shares its label, icon, command and
+   * enabled state with the toolbar control for the same capability; rows the engine cannot
+   * honour yet render present and disabled with the engine's own reason. Compose
+   * `DocxEditor.Menu` yourself for a different arrangement.
+   */
+  menu?: boolean;
   /**
    * Render the packaged hyperlink popover (`false` removes it).
    *

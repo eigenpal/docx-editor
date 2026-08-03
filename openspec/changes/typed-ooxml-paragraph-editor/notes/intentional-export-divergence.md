@@ -186,6 +186,33 @@ React-only.
 - `NAVIGATION_PANE_INSET`
 - `NAVIGATION_PANE_GAP`
 
+- `DocxEditorMenu` — the compound menu bar (`DocxEditor.Menu`): File · Format · Insert ·
+  Help, derived from `CHROME_MENUS` so a row and its toolbar twin share one label, icon,
+  command and enabled state. It is a consumer of the composition layer above (context,
+  `useEditorCommand`, the Page Setup part), so the Vue twin lands with the composable
+  layer. The registry, the command rows and the styles already live in core, so the Vue
+  part is markup only.
+- `DocxEditorMenuNamespace` — the bar plus its parts as statics.
+- `DocxEditorMenuProps`
+- `MenuProps` — one menu of the bar (`DocxEditor.Menu.Menu`).
+- `MenuItemProps` — one chrome slot as a row.
+- `MenuRowProps` — a presentational row, for a host action that is not a slot.
+- `MenuActionProps` — the pinned Open/Save/Page-setup rows' props.
+- `MenuSeparatorProps`
+- `MenuSubmenuProps`
+- `MenuTableGridProps` — Word's 6×6 insert-table size picker.
+- `MenuPartComponent` — a menu pinned to one registry id.
+- `CHROME_MENUS` — the core menu registry, re-exported for hook-built menu bars beside
+  `CHROME_GROUPS` above; Vue re-exports it when its composable layer lands.
+- `chromeMenuSlots` — every slot the menu bar places, for a parity assertion or a host
+  enumerating reachable capabilities.
+- `ChromeMenu`
+- `ChromeMenuId`
+- `ChromeMenuEntry`
+- `ChromeMenuItemEntry`
+- `ChromeMenuSubmenuEntry`
+- `ChromeMenuSeparatorEntry`
+
 ## Vue-only
 
 - `DocxEditorShellProps`
