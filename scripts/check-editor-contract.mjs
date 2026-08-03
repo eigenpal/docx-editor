@@ -37,6 +37,13 @@ const REACT_PROPS_NOT_YET_IN_VUE = new Set([
   'title',
   'onTitleChange',
   'onSave',
+  // The link popover is part of the provider/hooks layer, which landed React-first: it is
+  // a context-backed hook plus a compound over it, and its Vue twin is the composable form
+  // that lands with the rest of that layer. The ENGINE half is already shared — typed
+  // links, sanitization, click classification, bookmark jumps, the ops, and Vue's
+  // `text.link` enabled state all come from core — so this gap is the panel, not the
+  // capability. Removed when the Vue provider/hooks twin lands.
+  'hyperlinkPopup',
 ]);
 
 function extractInterfaceBody(source, name) {

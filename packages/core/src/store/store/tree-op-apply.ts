@@ -57,7 +57,9 @@ import {
 } from './tree-op-section.ts';
 import {
   isParagraph,
+  runsUnder,
   segmentsOf,
+  type Segment,
   validateTreeOp,
   type OoxmlProperty,
   type TreeDocOp,
@@ -128,6 +130,8 @@ export function applyTreeOp(part: OoxmlPart, op: TreeDocOp, options?: EditOption
   if (rejection) return { ok: false, reason: rejection };
 
   if (op.op === 'joinParagraphs') return applyJoin(part, op.firstId, op.secondId, options);
+  if (op.op === 'setHyperlinkTarget') return applySetHyperlinkTarget(part, op, options);
+  if (op.op === 'removeHyperlink') return applyRemoveHyperlink(part, op.linkId, options);
   if (op.op === 'setSectionProperties') return applySetSectionProperties(part, op, options);
   if (op.op === 'setSectionMark') return applySetSectionMark(part, op.paragraphId, options);
 
@@ -175,6 +179,8 @@ export function applyTreeOp(part: OoxmlPart, op: TreeDocOp, options?: EditOption
       );
     case 'deleteText':
       return applyDeleteText(part, paragraph, op.start, op.end, options);
+    case 'insertHyperlink':
+      return applyInsertHyperlink(part, paragraph, op, options);
     case 'splitParagraph':
       return applySplit(part, paragraph, op.offset, options);
     case 'splitParagraphMany':
@@ -347,21 +353,389 @@ function applyDeleteText(
   }
 
   // Drop runs left with no content. A run holding only `w:rPr` renders nothing and would
-  // otherwise accumulate on every deletion.
+  // otherwise accumulate on every deletion. Runs inside a HYPERLINK are swept too — they
+  // empty exactly the same way — and a link whose last run went with them is removed
+  // outright: a `w:hyperlink` with no runs is a target with nothing to click, and leaving it
+  // behind would make the next character typed at that offset silently join the dead link.
   const after = findNode(current, paragraph.id);
   if (after && after.kind === 'paragraph') {
-    for (const child of after.children) {
-      if (child.kind !== 'run') continue;
-      // A run's children are elements only, so "content" is simply anything that is not
-      // the run's own property container.
-      const hasContent = child.children.some((grand) => !isRunPropertiesNode(grand));
-      if (hasContent) continue;
-      const removed = removeNode(current, child.id, options);
-      if (!removed.ok) return fromEdit(removed, effect);
-      current = removed.part;
-    }
+    const sweep = (children: readonly OoxmlNode[]): TreeOpResult | null => {
+      for (const child of children) {
+        if (child.kind === 'hyperlink') {
+          const nested = sweep(child.children);
+          if (nested) return nested;
+          const link = findNode(current, child.id);
+          if (link && link.kind !== 'textValue' && runsUnder(link).length === 0) {
+            // SPLICE, never remove the subtree. A link emptied of runs can still hold
+            // bookmark and comment-range markers, and removing the element took them with
+            // it — an anchor other links point at, or a `commentRangeEnd` whose start is
+            // still in the paragraph. The same markers written OUTSIDE a link survive the
+            // identical deletion, so removing them here was an inconsistency as well as a
+            // loss. Only the wrapper goes; whatever it held stays where it was.
+            const parent = parentOf(current, child.id);
+            if (!parent) return { ok: false, reason: 'tree-invariant' };
+            const spliced = replaceChildren(
+              current,
+              parent.id,
+              parent.children.flatMap((sibling) =>
+                sibling.id === child.id ? [...link.children] : [sibling]
+              ),
+              options
+            );
+            if (!spliced.ok) return fromEdit(spliced, effect);
+            current = spliced.part;
+          }
+          continue;
+        }
+        if (child.kind !== 'run') continue;
+        // A run's children are elements only, so "content" is simply anything that is not
+        // the run's own property container.
+        const hasContent = child.children.some((grand) => !isRunPropertiesNode(grand));
+        if (hasContent) continue;
+        const removed = removeNode(current, child.id, options);
+        if (!removed.ok) return fromEdit(removed, effect);
+        current = removed.part;
+      }
+      return null;
+    };
+    const failure = sweep(after.children);
+    if (failure) return failure;
   }
   return ok(current, effect);
+}
+
+/** The `r:id` namespace — the one attribute on a `w:hyperlink` that is not in `w:`. */
+const RELATIONSHIP_NAMESPACE_URI =
+  'http://schemas.openxmlformats.org/officeDocument/2006/relationships';
+
+/**
+ * A `w:hyperlink` element with the attributes an op asked for.
+ *
+ * `w:history="1"` is written on every link Word creates — it is the "followed links" flag,
+ * and a link without it reads as an oddity in Word's own UI. Attribute VALUES are validated
+ * by `validateHyperlinkTarget` before this runs, so nothing unescapable reaches the tree; the
+ * serializer escapes on the way out regardless.
+ */
+function hyperlinkElement(
+  nextId: () => string,
+  target: {
+    readonly relationshipId?: string;
+    readonly anchor?: string;
+    readonly tooltip?: string;
+  },
+  children: readonly OoxmlNode[]
+): OoxmlNode {
+  const attributes: OoxmlAttribute[] = [
+    {
+      kind: 'genericExtension',
+      namespaceUri: WML_NAMESPACE_URI,
+      localName: 'history',
+      prefix: 'w',
+      value: '1',
+    },
+  ];
+  if (target.relationshipId !== undefined) {
+    attributes.push({
+      kind: 'genericExtension',
+      namespaceUri: RELATIONSHIP_NAMESPACE_URI,
+      localName: 'id',
+      prefix: 'r',
+      value: target.relationshipId,
+    });
+  }
+  if (target.anchor !== undefined) {
+    attributes.push({
+      kind: 'genericExtension',
+      namespaceUri: WML_NAMESPACE_URI,
+      localName: 'anchor',
+      prefix: 'w',
+      value: target.anchor,
+    });
+  }
+  if (target.tooltip !== undefined) {
+    attributes.push({
+      kind: 'genericExtension',
+      namespaceUri: WML_NAMESPACE_URI,
+      localName: 'tooltip',
+      prefix: 'w',
+      value: target.tooltip,
+    });
+  }
+  return {
+    id: nextId(),
+    kind: 'hyperlink',
+    namespaceUri: WML_NAMESPACE_URI,
+    localName: 'hyperlink',
+    prefix: 'w',
+    namespaceBindings: [],
+    attributes,
+    children,
+  } as unknown as OoxmlNode;
+}
+
+/**
+ * Mark a run with a character style (`w:rStyle`), keeping everything else it carries.
+ *
+ * `w:rStyle` is the FIRST child of `w:rPr` (CT_RPr, ECMA-376 §17.3.2.27) and there is at
+ * most one, so an existing reference is REPLACED in place rather than joined by a second —
+ * two `w:rStyle` children make the `w:rPr` schema-invalid, which Word repairs by dropping
+ * the run's formatting entirely.
+ */
+function withCharacterStyle(node: OoxmlNode, styleId: string, nextId: () => string): OoxmlNode {
+  if (node.kind === 'hyperlink') {
+    return withChildren(
+      node,
+      node.children.map((child) => withCharacterStyle(child, styleId, nextId)),
+      null
+    );
+  }
+  if (node.kind !== 'run') return node;
+  const rStyle = {
+    id: nextId(),
+    kind: 'generic',
+    namespaceUri: WML_NAMESPACE_URI,
+    localName: 'rStyle',
+    prefix: 'w',
+    namespaceBindings: [],
+    attributes: [
+      {
+        kind: 'genericExtension',
+        namespaceUri: WML_NAMESPACE_URI,
+        localName: 'val',
+        prefix: 'w',
+        value: styleId,
+      },
+    ],
+    children: [],
+  } as unknown as OoxmlNode;
+
+  const rPr = runPropertiesNodeOf(node);
+  if (!rPr) {
+    const created = {
+      id: nextId(),
+      kind: 'runProperties',
+      namespaceUri: WML_NAMESPACE_URI,
+      localName: 'rPr',
+      prefix: 'w',
+      namespaceBindings: [],
+      attributes: [],
+      children: [rStyle],
+    } as unknown as OoxmlNode;
+    // `w:rPr` must be the run's first child.
+    return withChildren(node, [created, ...node.children], null);
+  }
+  const withoutOld = rPr.children.filter(
+    (child) =>
+      child.kind === 'textValue' ||
+      child.localName !== 'rStyle' ||
+      // Namespace-checked: an `<x:rStyle>` from a foreign namespace is preserved content,
+      // not the WML character-style reference this replaces.
+      child.namespaceUri !== WML_NAMESPACE_URI
+  );
+  const nextRpr = withChildren(rPr, [rStyle, ...withoutOld], null);
+  return withChildren(
+    node,
+    node.children.map((child) => (child.id === rPr.id ? nextRpr : child)),
+    null
+  );
+}
+
+/**
+ * Wrap `[start, end)` of a paragraph in a `w:hyperlink`.
+ *
+ * The paragraph's inline children are walked once and sorted into three buckets — before the
+ * range, inside it, after it — with any child straddling an edge divided by the SAME
+ * `divideInline` a split uses, so a link that starts mid-word cuts the run exactly where a
+ * paragraph break would. The three buckets are then reassembled with the middle wrapped, in
+ * one `replaceChildren`, so the whole insert is a single tree revision.
+ *
+ * `styleId` marks the wrapped runs with a character style (`w:rStyle`), which is how Word
+ * makes a new link LOOK like one. It is written here rather than through `setRunProperties`
+ * because `w:rStyle` is preserved, not accepted: it is not in the set a property write
+ * replaces, so routing it through one would make a later bold toggle delete it. Direct
+ * formatting on the runs is untouched — a style reference sits beside it, and the cascade
+ * already resolves direct formatting as the winner.
+ */
+function applyInsertHyperlink(
+  part: OoxmlPart,
+  paragraph: OoxmlParagraphNode,
+  op: { readonly start: number; readonly end: number } & {
+    readonly relationshipId?: string;
+    readonly anchor?: string;
+    readonly tooltip?: string;
+    readonly styleId?: string;
+  },
+  options?: EditOptions
+): TreeOpResult {
+  const nextId = createNodeIdAllocator(part);
+  const segments = segmentsOf(paragraph);
+  const before: OoxmlNode[] = [];
+  const inside: OoxmlNode[] = [];
+  const after: OoxmlNode[] = [];
+  const effect: TreeOpEffect = {
+    dirty: [paragraph.id],
+    created: [],
+    deleted: [],
+    dependencyKeys: TEXT_DEPS,
+    impact: 'paragraph-local',
+  };
+
+  let cursor = 0;
+  for (const child of paragraph.children) {
+    if (isParagraphPropertiesNode(child)) continue;
+    const childSegments = segmentsForChild(child, segments);
+    if (childSegments.length === 0) {
+      // Zero-length content takes the bucket its POSITION puts it in: a bookmark marker
+      // inside the linked range belongs inside the link, one before it stays outside.
+      (cursor < op.start ? before : cursor < op.end ? inside : after).push(child);
+      continue;
+    }
+    const childStart = childSegments[0]!.start;
+    const childEnd = childSegments[childSegments.length - 1]!.end;
+    cursor = childEnd;
+    if (childEnd <= op.start) {
+      before.push(child);
+      continue;
+    }
+    if (childStart >= op.end) {
+      after.push(child);
+      continue;
+    }
+    if (childStart >= op.start && childEnd <= op.end) {
+      inside.push(child);
+      continue;
+    }
+    // Straddles an edge. Cut at BOTH offsets in one pass against the original segments.
+    //
+    // Cutting twice in sequence does not work: the second cut would run against a run this
+    // function had just rebuilt, whose fresh node ids appear in no segment, so every child
+    // read as unplaceable and the trailing text silently vanished. The many-way divide
+    // already answers exactly this question — where does each character go, given these
+    // boundaries — measured once against the tree as it stands.
+    const [outsideBefore, within, outsideAfter] = distributeInline(
+      child,
+      [op.start, op.end],
+      3,
+      segments,
+      nextId
+    );
+    before.push(...outsideBefore!);
+    inside.push(...within!);
+    after.push(...outsideAfter!);
+  }
+
+  if (inside.length === 0) return { ok: false, reason: 'invalid-range' };
+  const styled =
+    op.styleId === undefined
+      ? inside
+      : inside.map((child) => withCharacterStyle(child, op.styleId!, nextId));
+  const link = hyperlinkElement(nextId, op, styled);
+  const pPr = paragraphPropertiesNodeOf(paragraph);
+  const children = [...(pPr ? [pPr] : []), ...before, link, ...after];
+  return fromEdit(replaceChildren(part, paragraph.id, children, options), effect);
+}
+
+/** Re-aim a link: one target attribute replaces the other, and the tooltip follows. */
+function applySetHyperlinkTarget(
+  part: OoxmlPart,
+  op: {
+    readonly linkId: string;
+    readonly relationshipId?: string;
+    readonly anchor?: string;
+    readonly tooltip?: string;
+  },
+  options?: EditOptions
+): TreeOpResult {
+  const link = findNode(part, op.linkId);
+  if (!link || link.kind !== 'hyperlink') return { ok: false, reason: 'tree-invariant' };
+  const owner = parentOf(part, link.id);
+  if (!owner) return { ok: false, reason: 'tree-invariant' };
+
+  // RETAIN EVERYTHING THE OP DID NOT NAME. `w:history`, `w:docLocation` and `w:tgtFrame` are
+  // properties of this LINK, not of its target, so re-aiming must not drop them — that is
+  // the difference between editing a URL and replacing the element. `w:docLocation` in
+  // particular names a location INSIDE the target (ECMA-376 §17.16.22), so dropping it on a
+  // retarget would silently change where the link lands. What goes is the old
+  // target attribute (whichever of the two it was, since supplying one supersedes both) and
+  // the old tooltip when a new one was supplied.
+  const retained = link.attributes.filter((attribute) => {
+    if (attribute.namespaceUri === RELATIONSHIP_NAMESPACE_URI && attribute.localName === 'id') {
+      return false;
+    }
+    if (attribute.namespaceUri !== WML_NAMESPACE_URI) return true;
+    if (attribute.localName === 'anchor') return false;
+    if (attribute.localName === 'tooltip') return op.tooltip === undefined;
+    return true;
+  });
+  const target: OoxmlAttribute[] = [];
+  if (op.relationshipId !== undefined) {
+    target.push({
+      kind: 'genericExtension',
+      namespaceUri: RELATIONSHIP_NAMESPACE_URI,
+      localName: 'id',
+      prefix: 'r',
+      value: op.relationshipId,
+    });
+  }
+  if (op.anchor !== undefined) {
+    target.push({
+      kind: 'genericExtension',
+      namespaceUri: WML_NAMESPACE_URI,
+      localName: 'anchor',
+      prefix: 'w',
+      value: op.anchor,
+    });
+  }
+  if (op.tooltip !== undefined) {
+    target.push({
+      kind: 'genericExtension',
+      namespaceUri: WML_NAMESPACE_URI,
+      localName: 'tooltip',
+      prefix: 'w',
+      value: op.tooltip,
+    });
+  }
+  const next = { ...link, attributes: [...retained, ...target] } as OoxmlNode;
+  const effect: TreeOpEffect = {
+    dirty: [owner.id],
+    created: [],
+    deleted: [],
+    dependencyKeys: TEXT_DEPS,
+    impact: 'paragraph-local',
+  };
+  return fromEdit(replaceNode(part, link.id, next, options), effect);
+}
+
+/**
+ * Unlink: splice the link's children into its parent where the link was.
+ *
+ * Everything inside keeps its identity — runs, their `w:rPr`, and any bookmark markers — so
+ * the text, its formatting and every anchor around it are exactly what they were. Only the
+ * wrapper goes. A link with no children removes cleanly rather than leaving an empty slot.
+ */
+function applyRemoveHyperlink(
+  part: OoxmlPart,
+  linkId: string,
+  options?: EditOptions
+): TreeOpResult {
+  const link = findNode(part, linkId);
+  if (!link || link.kind !== 'hyperlink') return { ok: false, reason: 'tree-invariant' };
+  const owner = parentOf(part, link.id);
+  if (!owner) return { ok: false, reason: 'tree-invariant' };
+  const children = owner.children.flatMap((child) =>
+    child.id === link.id ? [...link.children] : [child]
+  );
+  const effect: TreeOpEffect = {
+    dirty: [owner.id],
+    created: [],
+    // `deleted` names PARAGRAPHS the block sequence lost, and an unlink loses none: the
+    // paragraph keeps every run it had. Listing the link node here would tell the scheduler
+    // the flow changed structurally and make every commit re-project the whole document.
+    deleted: [],
+    dependencyKeys: TEXT_DEPS,
+    impact: 'paragraph-local',
+  };
+  return fromEdit(replaceChildren(part, owner.id, children, options), effect);
 }
 
 /**
@@ -510,6 +884,108 @@ function splitIdentityOf(
   return { headId: headParaId.toUpperCase(), prefix };
 }
 
+/** The segments of one paragraph child, at any depth — a run's own, or every run in a link. */
+function segmentsForChild(child: OoxmlNode, segments: readonly Segment[]): Segment[] {
+  const runIds = new Set(runsUnder(child).map((run) => run.id));
+  if (runIds.size === 0) return [];
+  return segments.filter((segment) => runIds.has(segment.runId));
+}
+
+/**
+ * Divide ONE inline paragraph child that straddles a split point.
+ *
+ * A run divides by content: its children go left or right of the offset, and a `w:t` sitting
+ * across it is cut in two, with `w:rPr` duplicated onto both halves so formatting survives.
+ *
+ * A HYPERLINK divides by recursion, and the result is TWO hyperlinks carrying the same
+ * authored attributes — the same target, tooltip and history on each half. That is what Word
+ * writes when Enter lands inside a link, and the alternative (sending the whole link to one
+ * side) either drags text backwards out of the sentence it belongs to or carries it forward
+ * into a paragraph the user meant to be empty. Either half may come back empty, in which case
+ * only the other is emitted; an empty `w:hyperlink` is markup with nothing to click.
+ */
+function divideInline(
+  child: OoxmlNode,
+  offset: number,
+  segments: readonly Segment[],
+  nextId: () => string
+): { readonly head: OoxmlNode | null; readonly tail: OoxmlNode | null } {
+  if (child.kind === 'hyperlink') {
+    const headChildren: OoxmlNode[] = [];
+    const tailChildren: OoxmlNode[] = [];
+    // Where the walk has reached inside this link, so zero-length content between two runs
+    // takes the side its POSITION puts it on — the same rule the paragraph walk applies.
+    //
+    // Seeded from the LINK'S OWN START, not 0. These are absolute paragraph offsets, and
+    // starting at zero said "before every boundary" for content that sits well past one.
+    let cursor = segmentsForChild(child, segments)[0]?.start ?? 0;
+    for (const inner of child.children) {
+      const innerSegments = segmentsForChild(inner, segments);
+      if (innerSegments.length === 0) {
+        (cursor < offset ? headChildren : tailChildren).push(inner);
+        continue;
+      }
+      const start = innerSegments[0]!.start;
+      const end = innerSegments[innerSegments.length - 1]!.end;
+      cursor = end;
+      if (end <= offset) headChildren.push(inner);
+      else if (start >= offset) tailChildren.push(inner);
+      else {
+        const divided = divideInline(inner, offset, segments, nextId);
+        if (divided.head) headChildren.push(divided.head);
+        if (divided.tail) tailChildren.push(divided.tail);
+      }
+    }
+    return {
+      head: headChildren.length > 0 ? withChildren(child, headChildren, null) : null,
+      tail: tailChildren.length > 0 ? withChildren(child, tailChildren, nextId) : null,
+    };
+  }
+
+  if (child.kind !== 'run') return { head: child, tail: null };
+
+  const runSegments = segments.filter((segment) => segment.runId === child.id);
+  const rPr = runPropertiesNodeOf(child);
+  const headContent: OoxmlNode[] = [];
+  const tailContent: OoxmlNode[] = [];
+  for (const grand of child.children) {
+    if (isRunPropertiesNode(grand)) continue;
+    const segment = runSegments.find((candidate) => contains(grand, candidate.node.id));
+    if (!segment) {
+      headContent.push(grand);
+      continue;
+    }
+    if (segment.end <= offset) headContent.push(grand);
+    else if (segment.start >= offset) tailContent.push(grand);
+    else if (segment.node.kind === 'textValue') {
+      const local = offset - segment.start;
+      headContent.push(textElement(nextId, segment.node.value.slice(0, local)));
+      tailContent.push(textElement(nextId, segment.node.value.slice(local)));
+    } else headContent.push(grand);
+  }
+  const clonedRpr = rPr ? cloneWithNewIds(rPr, nextId) : null;
+  return {
+    head:
+      headContent.length > 0 ? runElement(nextId, rPr ? [rPr, ...headContent] : headContent) : null,
+    tail:
+      tailContent.length > 0
+        ? runElement(nextId, clonedRpr ? [clonedRpr, ...tailContent] : tailContent)
+        : null,
+  };
+}
+
+/**
+ * The same element with different children — retaining the original identity, or minting a
+ * fresh one for the copy a split leaves on the other side of the break.
+ */
+function withChildren(
+  node: OoxmlNode,
+  children: readonly OoxmlNode[],
+  nextId: (() => string) | null
+): OoxmlNode {
+  return { ...node, ...(nextId ? { id: nextId() } : {}), children } as OoxmlNode;
+}
+
 function applySplit(
   part: OoxmlPart,
   paragraph: OoxmlParagraphNode,
@@ -530,8 +1006,7 @@ function applySplit(
   const openedHere = new Set<string>();
   for (const child of paragraph.children) {
     if (isParagraphPropertiesNode(child)) continue;
-    const runSegments =
-      child.kind === 'run' ? segments.filter((segment) => segment.runId === child.id) : [];
+    const runSegments = segmentsForChild(child, segments);
     if (runSegments.length === 0) {
       (zeroLengthGoesToHead(child, cursor, offset, openedHere) ? headChildren : tailChildren).push(
         child
@@ -552,33 +1027,9 @@ function applySplit(
       tailChildren.push(child);
       continue;
     }
-    // The run straddles the split: divide its content children, keeping `w:rPr` on BOTH
-    // halves so formatting survives the split.
-    const rPr = runPropertiesNodeOf(child);
-    const headContent: OoxmlNode[] = [];
-    const tailContent: OoxmlNode[] = [];
-    for (const grand of child.children) {
-      if (isRunPropertiesNode(grand)) continue;
-      const segment = runSegments.find((candidate) => contains(grand, candidate.node.id));
-      if (!segment) {
-        headContent.push(grand);
-        continue;
-      }
-      if (segment.end <= offset) headContent.push(grand);
-      else if (segment.start >= offset) tailContent.push(grand);
-      else if (segment.node.kind === 'textValue') {
-        const local = offset - segment.start;
-        headContent.push(textElement(nextId, segment.node.value.slice(0, local)));
-        tailContent.push(textElement(nextId, segment.node.value.slice(local)));
-      } else headContent.push(grand);
-    }
-    if (headContent.length > 0) {
-      headChildren.push(runElement(nextId, rPr ? [rPr, ...headContent] : headContent));
-    }
-    if (tailContent.length > 0) {
-      const clonedRpr = rPr ? cloneWithNewIds(rPr, nextId) : null;
-      tailChildren.push(runElement(nextId, clonedRpr ? [clonedRpr, ...tailContent] : tailContent));
-    }
+    const divided = divideInline(child, offset, segments, nextId);
+    if (divided.head) headChildren.push(divided.head);
+    if (divided.tail) tailChildren.push(divided.tail);
   }
 
   // A `w:sectPr` in the split paragraph's mark belongs to the TAIL: Word splits by
@@ -656,6 +1107,120 @@ function pieceIndexOf(
 }
 
 /**
+ * Spread ONE inline paragraph child that straddles at least one of `offsets` across the
+ * resulting pieces, in piece order.
+ *
+ * The many-way twin of {@link divideInline}: a run divides its content by boundary, keeping
+ * `w:rPr` on every piece it lands in, and a hyperlink recurses and re-wraps each piece's
+ * share in a copy of itself so every fragment of a link stays a link with the same target.
+ * The original identity is kept by the FIRST piece that gets content; later pieces are
+ * clones, matching what the equivalent sequence of single splits produces.
+ */
+function distributeInline(
+  child: OoxmlNode,
+  offsets: readonly number[],
+  pieceCount: number,
+  segments: readonly Segment[],
+  nextId: () => string
+): OoxmlNode[][] {
+  const byPiece: OoxmlNode[][] = Array.from({ length: pieceCount }, () => []);
+
+  if (child.kind === 'hyperlink') {
+    const innerByPiece: OoxmlNode[][] = Array.from({ length: pieceCount }, () => []);
+    // Absolute paragraph offsets, seeded from the link's own start — see `divideInline`.
+    // At zero, `pieceIndexOf` put every zero-length child of a link in the FIRST piece: a
+    // bookmark travelled to a paragraph its text did not, an empty `w:hyperlink` husk was
+    // emitted (which this file's own rule forbids), and the husk kept the original node id
+    // while the real link got a fresh one — so a later retarget addressed the husk.
+    let cursor = segmentsForChild(child, segments)[0]?.start ?? 0;
+    for (const inner of child.children) {
+      const innerSegments = segmentsForChild(inner, segments);
+      if (innerSegments.length === 0) {
+        innerByPiece[pieceIndexOf(offsets, cursor)]!.push(inner);
+        continue;
+      }
+      const start = innerSegments[0]!.start;
+      const end = innerSegments[innerSegments.length - 1]!.end;
+      cursor = end;
+      const startPiece = pieceIndexOf(offsets, start);
+      const endPiece = end > start ? pieceIndexOf(offsets, end - 1) : startPiece;
+      if (startPiece === endPiece) {
+        innerByPiece[startPiece]!.push(inner);
+        continue;
+      }
+      const nested = distributeInline(inner, offsets, pieceCount, segments, nextId);
+      for (let piece = 0; piece < pieceCount; piece += 1) {
+        for (const node of nested[piece]!) innerByPiece[piece]!.push(node);
+      }
+    }
+    let keptOriginal = false;
+    for (let piece = 0; piece < pieceCount; piece += 1) {
+      const children = innerByPiece[piece]!;
+      if (children.length === 0) continue;
+      byPiece[piece]!.push(withChildren(child, children, keptOriginal ? nextId : null));
+      keptOriginal = true;
+    }
+    return byPiece;
+  }
+
+  if (child.kind !== 'run') {
+    byPiece[pieceIndexOf(offsets, 0)]!.push(child);
+    return byPiece;
+  }
+
+  const runSegments = segments.filter((segment) => segment.runId === child.id);
+  const startPiece = pieceIndexOf(offsets, runSegments[0]?.start ?? 0);
+  const rPr = runPropertiesNodeOf(child);
+  const contentByPiece: OoxmlNode[][] = Array.from({ length: pieceCount }, () => []);
+  for (const grand of child.children) {
+    if (isRunPropertiesNode(grand)) continue;
+    const segment = runSegments.find((candidate) => contains(grand, candidate.node.id));
+    if (!segment) {
+      contentByPiece[startPiece]!.push(grand);
+      continue;
+    }
+    if (segment.node.kind !== 'textValue') {
+      contentByPiece[pieceIndexOf(offsets, segment.start)]!.push(grand);
+      continue;
+    }
+    const from = segment.start;
+    const until = segment.end;
+    let sliceStart = from;
+    let piece = pieceIndexOf(offsets, from);
+    let cut = false;
+    for (const boundary of offsets) {
+      if (boundary <= from) continue;
+      if (boundary >= until) break;
+      // A REPEATED boundary yields an empty slice: the piece between two equal offsets
+      // is an empty paragraph, and an empty `w:t` inside it would serialize markup the
+      // equivalent single splits never produce — so the piece advances and nothing is
+      // emitted, exactly as a split at a paragraph edge emits no text.
+      const slice = segment.node.value.slice(sliceStart - from, boundary - from);
+      if (slice.length > 0) contentByPiece[piece]!.push(textElement(nextId, slice));
+      sliceStart = boundary;
+      piece += 1;
+      cut = true;
+    }
+    if (!cut) {
+      // No boundary inside this value: it moves whole, identity intact.
+      contentByPiece[piece]!.push(grand);
+      continue;
+    }
+    const lastSlice = segment.node.value.slice(sliceStart - from);
+    if (lastSlice.length > 0) contentByPiece[piece]!.push(textElement(nextId, lastSlice));
+  }
+  let keptOriginalRpr = false;
+  for (let piece = 0; piece < pieceCount; piece += 1) {
+    const content = contentByPiece[piece]!;
+    if (content.length === 0) continue;
+    const pieceRpr = rPr ? (keptOriginalRpr ? cloneWithNewIds(rPr, nextId) : rPr) : null;
+    keptOriginalRpr = true;
+    byPiece[piece]!.push(runElement(nextId, pieceRpr ? [pieceRpr, ...content] : content));
+  }
+  return byPiece;
+}
+
+/**
  * Split a `w:p` at every offset in one pass.
  *
  * Semantically the sequence of single splits from the last offset to the first, produced
@@ -684,8 +1249,7 @@ function applySplitMany(
   const openedHere = new Set<string>();
   for (const child of paragraph.children) {
     if (isParagraphPropertiesNode(child)) continue;
-    const runSegments =
-      child.kind === 'run' ? segments.filter((segment) => segment.runId === child.id) : [];
+    const runSegments = segmentsForChild(child, segments);
     if (runSegments.length === 0) {
       const piece = pieceIndexOf(
         offsets,
@@ -704,59 +1268,13 @@ function applySplitMany(
     const startPiece = pieceIndexOf(offsets, runStart);
     const endPiece = runEnd > runStart ? pieceIndexOf(offsets, runEnd - 1) : startPiece;
     if (startPiece === endPiece) {
-      // Wholly inside one resulting paragraph: the run survives with its identity.
+      // Wholly inside one resulting paragraph: the child survives with its identity.
       pieces[startPiece]!.push(child);
       continue;
     }
-
-    // The run straddles at least one boundary: divide its content children, keeping
-    // `w:rPr` on every produced piece so formatting survives each break.
-    const rPr = runPropertiesNodeOf(child);
-    const contentByPiece: OoxmlNode[][] = Array.from({ length: pieceCount }, () => []);
-    for (const grand of child.children) {
-      if (isRunPropertiesNode(grand)) continue;
-      const segment = runSegments.find((candidate) => contains(grand, candidate.node.id));
-      if (!segment) {
-        contentByPiece[startPiece]!.push(grand);
-        continue;
-      }
-      if (segment.node.kind !== 'textValue') {
-        contentByPiece[pieceIndexOf(offsets, segment.start)]!.push(grand);
-        continue;
-      }
-      const from = segment.start;
-      const until = segment.end;
-      let sliceStart = from;
-      let piece = pieceIndexOf(offsets, from);
-      let cut = false;
-      for (const boundary of offsets) {
-        if (boundary <= from) continue;
-        if (boundary >= until) break;
-        // A REPEATED boundary yields an empty slice: the piece between two equal offsets
-        // is an empty paragraph, and an empty `w:t` inside it would serialize markup the
-        // equivalent single splits never produce — so the piece advances and nothing is
-        // emitted, exactly as a split at a paragraph edge emits no text.
-        const slice = segment.node.value.slice(sliceStart - from, boundary - from);
-        if (slice.length > 0) contentByPiece[piece]!.push(textElement(nextId, slice));
-        sliceStart = boundary;
-        piece += 1;
-        cut = true;
-      }
-      if (!cut) {
-        // No boundary inside this value: it moves whole, identity intact.
-        contentByPiece[piece]!.push(grand);
-        continue;
-      }
-      const lastSlice = segment.node.value.slice(sliceStart - from);
-      if (lastSlice.length > 0) contentByPiece[piece]!.push(textElement(nextId, lastSlice));
-    }
-    let keptOriginalRpr = false;
+    const distributed = distributeInline(child, offsets, pieceCount, segments, nextId);
     for (let piece = 0; piece < pieceCount; piece += 1) {
-      const content = contentByPiece[piece]!;
-      if (content.length === 0) continue;
-      const pieceRpr = rPr ? (keptOriginalRpr ? cloneWithNewIds(rPr, nextId) : rPr) : null;
-      keptOriginalRpr = true;
-      pieces[piece]!.push(runElement(nextId, pieceRpr ? [pieceRpr, ...content] : content));
+      for (const node of distributed[piece]!) pieces[piece]!.push(node);
     }
   }
 

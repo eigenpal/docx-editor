@@ -144,28 +144,64 @@ export function validateQNameAttributeValues(
  */
 const PPR_ELEMENTS_AFTER_RPR = new Set(['sectPr', 'pPrChange']);
 
+/**
+ * Content that is PRESERVED rather than structural, and may therefore sit anywhere a
+ * `generic` child may sit.
+ *
+ * Bookmark markers are the reason this exists. Word writes them between block-level
+ * siblings as freely as it writes them between runs — around a table, around a row, at the
+ * top of the body — so once they carry a typed kind, every container that previously
+ * accepted them only as `generic` would stop recognising its own children and DEMOTE. A
+ * demoted `w:body` is not a cosmetic loss: nothing downstream finds a paragraph in it, so a
+ * document with one stray bookmark would open blank. Admitting them wherever `generic` is
+ * admitted keeps typing them additive.
+ */
+function isPreservedChild(child: OoxmlNode): boolean {
+  return (
+    child.kind === 'generic' ||
+    child.kind === 'bookmarkStart' ||
+    child.kind === 'bookmarkEnd' ||
+    child.kind === 'hyperlink'
+  );
+}
+
 export function validKnownKind(kind: KnownKind, children: readonly OoxmlNode[]): boolean {
   switch (kind) {
     case 'document':
       return (
-        children.every((child) => child.kind === 'body' || child.kind === 'generic') &&
+        children.every((child) => child.kind === 'body' || isPreservedChild(child)) &&
         children.filter((child) => child.kind === 'body').length === 1
       );
     case 'body':
       return children.every(
-        (child) => child.kind === 'paragraph' || child.kind === 'table' || child.kind === 'generic'
+        (child) => child.kind === 'paragraph' || child.kind === 'table' || isPreservedChild(child)
       );
     case 'paragraph': {
       const properties = children.findIndex((child) => child.kind === 'paragraphProperties');
       return (
         children.every(
           (child) =>
-            child.kind === 'paragraphProperties' || child.kind === 'run' || child.kind === 'generic'
+            child.kind === 'paragraphProperties' || child.kind === 'run' || isPreservedChild(child)
         ) &&
         (properties < 0 || properties === 0) &&
         children.filter((child) => child.kind === 'paragraphProperties').length <= 1
       );
     }
+    /**
+     * A hyperlink holds runs and range markers. Anything else it wraps — a drawing, a
+     * complex field, a nested content control — stays generic AT ITS POSITION rather than
+     * demoting the link, so the runs beside it still paint and the link identity survives.
+     *
+     * `isPreservedChild` admits `hyperlink`, so a link nested in a link stays TYPED. That is
+     * not an accident of sharing the helper: `CT_Hyperlink`'s content model is `EG_PContent`
+     * (ECMA-376 §17.16.22), which lists `w:hyperlink` among its members, so nesting is
+     * schema-legal and a reader that demoted it would stop the inner link's runs painting.
+     */
+    case 'hyperlink':
+      return children.every((child) => child.kind === 'run' || isPreservedChild(child));
+    case 'bookmarkStart':
+    case 'bookmarkEnd':
+      return children.length === 0;
     case 'run': {
       const properties = children.findIndex((child) => child.kind === 'runProperties');
       return (
@@ -175,6 +211,8 @@ export function validKnownKind(kind: KnownKind, children: readonly OoxmlNode[]):
             child.kind === 'text' ||
             child.kind === 'tab' ||
             child.kind === 'hardBreak' ||
+            child.kind === 'bookmarkStart' ||
+            child.kind === 'bookmarkEnd' ||
             child.kind === 'generic'
         ) &&
         (properties < 0 || properties === 0) &&
@@ -213,16 +251,16 @@ export function validKnownKind(kind: KnownKind, children: readonly OoxmlNode[]):
             child.kind === 'tableRow' ||
             child.kind === 'tableProperties' ||
             child.kind === 'tableGrid' ||
-            child.kind === 'generic'
+            isPreservedChild(child)
         ) &&
         children.filter((child) => child.kind === 'tableProperties').length <= 1 &&
         children.filter((child) => child.kind === 'tableGrid').length <= 1
       );
     case 'tableRow':
-      return children.every((child) => child.kind === 'tableCell' || child.kind === 'generic');
+      return children.every((child) => child.kind === 'tableCell' || isPreservedChild(child));
     case 'tableCell':
       return children.every(
-        (child) => child.kind === 'paragraph' || child.kind === 'table' || child.kind === 'generic'
+        (child) => child.kind === 'paragraph' || child.kind === 'table' || isPreservedChild(child)
       );
     case 'tableGrid':
     case 'tableProperties':

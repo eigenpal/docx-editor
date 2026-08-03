@@ -5,6 +5,9 @@
 // paginated-surface.ts implements and re-exports them, so importers keep one entry point.
 
 import type { TreeDocxSession } from '@docx-editor.dev/core-contract/binding';
+import type { BookmarkIndex } from '@docx-editor.dev/core-contract/store';
+import type { HyperlinkOps } from './surface-hyperlinks.ts';
+import type { HyperlinkActivation, SurfaceNavigation } from './surface-navigation.ts';
 import type {
   CellSelection,
   NavigationCommand,
@@ -40,6 +43,20 @@ export interface PaginatedSurfaceOptions {
    */
   readonly pointer?: 'engine' | 'native';
   readonly onChange?: (state: PaginatedSurfaceState) => void;
+  /**
+   * A plain click on an external (or inert) hyperlink, for a host to open its popover with.
+   *
+   * Absent means such a click does nothing. That is deliberate: a host with no popover
+   * mounted must not have clicks silently opening tabs, and the popover is the only path to
+   * activation (see the navigation module's single `window.open` gate).
+   */
+  readonly onHyperlinkPopover?: (activation: HyperlinkActivation) => void;
+  /**
+   * Ctrl/Cmd+K — Word's Insert Hyperlink. The engine reports the request; the host's chrome
+   * decides what a link dialog looks like. A host that passes nothing leaves the key alone
+   * rather than doing something surprising with it.
+   */
+  readonly onRequestHyperlink?: () => void;
 }
 
 /**
@@ -295,6 +312,42 @@ export interface PaginatedSurface {
       readonly reusedPages: number;
     };
   };
+  /**
+   * The hyperlink lane: what link the caret is in, and the insert / retarget / unlink verbs.
+   *
+   * Every verb is one `transact`, so it is one undo step. Targets going IN are host-supplied
+   * and pass the package's own URL allowlist; targets coming OUT are the sanitized
+   * projection, so a caller cannot accidentally hand a refused scheme to a sink.
+   */
+  readonly hyperlinks: HyperlinkOps;
+  /**
+   * Bookmark jumps and the ONE external-activation gate. A host's popover "open" action
+   * calls `openExternal`; nothing else in the engine may call `window.open`.
+   */
+  readonly navigation: SurfaceNavigation;
+  /**
+   * Pin the current selection so it stays VISIBLY selected while focus is elsewhere.
+   *
+   * A document has one selection: the moment a panel focuses an input of its own the browser
+   * takes the highlight off the text, which is when the user most needs to see what the panel
+   * is about to act on. This draws the range on the engine's own overlay instead, so it
+   * survives the focus move. The MODEL selection is untouched — the op the panel finally runs
+   * addresses the same characters it always would.
+   *
+   * The pin releases itself when the caret leaves the range (either edge counts as inside),
+   * which is what lets a host close its panel on "the user clicked somewhere else" without
+   * every adapter reimplementing that comparison.
+   */
+  retainSelection(): void;
+  /** Drop the pin and stop drawing it, whether or not the caret ever left. */
+  releaseSelection(): void;
+  /** The pinned range, or null once it was released or escaped. */
+  retainedSelection(): SemanticSelection | null;
+  /**
+   * `bookmarkName -> position` over the current revision, for resolving an internal link.
+   * First in document order wins a duplicate name, matching Word.
+   */
+  bookmarks(): BookmarkIndex;
   /** The selected text, for copy and cut. */
   selectedText(): string;
   /** Remove the selection, if any. Returns whether anything was deleted. */

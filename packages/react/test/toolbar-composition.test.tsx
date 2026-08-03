@@ -652,7 +652,9 @@ describe('enabled state is the engine answer, not a registry constant', () => {
 
   test('a slot with no command is dead with the engine reason, inside the default bar', () => {
     const { view } = mountToolbar(<DocxEditorToolbar />);
-    for (const slot of ['text.link', 'script.super', 'script.sub', 'format.clear']) {
+    // `text.link` is deliberately absent: it graduated to a chrome-driven slot (enabled
+    // by the engine, dispatched by the popover), so it is no longer an example of one.
+    for (const slot of ['script.super', 'script.sub', 'format.clear']) {
       const button = view.container.querySelector(`[data-slot="${slot}"]`) as HTMLButtonElement;
       expect(button.disabled, slot).toBe(true);
       expect(button.title, slot).toBe('not wired to an editor command');

@@ -86,6 +86,7 @@ import {
   currentPage as currentPageOf,
   pageSetupOf,
   gateCommand,
+  hyperlinkAtOf,
   paragraphSummaries,
   runFormattingOf,
   selectionRangeOf,
@@ -108,6 +109,7 @@ import {
   type PaginatedSurface,
   type PaginatedSurfaceState,
 } from './paginated-surface.ts';
+import type { HyperlinkActivation } from './surface-navigation.ts';
 
 export interface DocxEditorConfig {
   /**
@@ -157,6 +159,21 @@ export interface FontMeasurementState {
 }
 
 /**
+ * The host chrome that answers the engine's hyperlink gestures.
+ *
+ * A CLICK on an external link and Ctrl/Cmd+K both mean "the user wants the link UI", and the
+ * engine deliberately does not know what that looks like. Registered rather than passed at
+ * construction because the chrome mounts after the editor does, and it survives a document
+ * reload — the surface is rebuilt, the handlers are not.
+ */
+export interface HyperlinkChromeHandlers {
+  /** A plain click on an external or inert link: show the popover at `activation.rect`. */
+  readonly onPopover?: (activation: HyperlinkActivation) => void;
+  /** Ctrl/Cmd+K: open insert-or-edit for the selection. */
+  readonly onRequest?: () => void;
+}
+
+/**
  * The concrete facade type: the full `Editor` contract plus the instance-only surface.
  *
  * `surface`, `stateVersion`, `attach` and `detach` live HERE rather than on `Editor`:
@@ -169,6 +186,15 @@ export interface DocxEditorInstance extends Editor {
    * contract does not carry yet (select-all, node-id addressed selection).
    */
   readonly surface: PaginatedSurface | null;
+  /**
+   * Wire the host's hyperlink chrome to the engine's gestures — a click on an external
+   * link, and Ctrl/Cmd+K. Returns an unsubscribe that restores whatever was registered
+   * before, so a popover component can register in an effect and clean up in its teardown.
+   *
+   * Instance-only, like `surface`: it is what a MOUNTING host needs, not what a document
+   * command needs.
+   */
+  setHyperlinkChrome(handlers: HyperlinkChromeHandlers): Unsubscribe;
   /**
    * Monotonic version of the observable editor state. Bumps whenever anything
    * `snapshot()` reports could have moved — a committed change, a selection move, zoom,
@@ -234,6 +260,19 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
    * back the same array while the armed set is unchanged.
    */
   let lastPendingFormat: PaginatedSurfaceState['pendingFormat'] = null;
+  /**
+   * Registered hyperlink chrome, as a STACK — the top entry is live.
+   *
+   * Save-and-restore only survives strictly nested teardown. Two hosts registering and then
+   * unregistering out of order (React does not promise effect-cleanup order between
+   * siblings) had the outer one's cleanup resurrect a handler whose owner had already
+   * unmounted: the engine went on reporting chrome as wired while every click and Ctrl+K
+   * called into a dead component, and the popover silently stopped opening. Splicing by
+   * identity is order-independent.
+   */
+  const hyperlinkChromeStack: HyperlinkChromeHandlers[] = [];
+  const liveHyperlinkChrome = (): HyperlinkChromeHandlers =>
+    hyperlinkChromeStack[hyperlinkChromeStack.length - 1] ?? {};
   let destroyed = false;
 
   /** The measurer built per LOAD from `config.fonts` plus the document's embedded faces. */
@@ -330,6 +369,11 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
         ? { measurer: shapedMeasurer, ...(shapedProducer ? { producer: shapedProducer } : {}) }
         : {}),
       ...(embeddedFaces ? { fontAlias: embeddedFaces.alias } : {}),
+      // Read through the holder rather than captured: the popover mounts AFTER the editor
+      // exists (the provider-first shape), and a document that reloads must not leave the
+      // host's chrome wired to the surface it replaced.
+      onHyperlinkPopover: (activation) => liveHyperlinkChrome().onPopover?.(activation),
+      onRequestHyperlink: () => liveHyperlinkChrome().onRequest?.(),
       onChange: (state) => {
         // The mount-time render reports before `surface` is assigned; nothing observable
         // has changed at that point, so it is not a selection change.
@@ -720,6 +764,17 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
       return surface;
     },
 
+    setHyperlinkChrome(handlers) {
+      hyperlinkChromeStack.push(handlers);
+      return () => {
+        // Splice by IDENTITY, not by position: unregistering out of order must remove this
+        // entry and leave whatever else is registered alone, never resurrect a handler whose
+        // owner has already torn down.
+        const at = hyperlinkChromeStack.lastIndexOf(handlers);
+        if (at >= 0) hyperlinkChromeStack.splice(at, 1);
+      };
+    },
+
     stateVersion: () => stateVersion,
 
     fontMeasurement: () => ({
@@ -903,6 +958,8 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
           ) as unknown as EditorQueryResults[K];
         case 'isInsideToc':
           return false as EditorQueryResults[K];
+        case 'hyperlinkAt':
+          return hyperlinkAtOf(surface) as EditorQueryResults[K];
         case 'trackedChanges':
         case 'revisions':
         case 'findText':
@@ -918,8 +975,8 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
         case 'variables':
           return {} as EditorQueryResults[K];
         default:
-          // tableContext, hyperlinkAt, watermark, splitCellConfig, contentControlAt,
-          // pageContent — all nullable, all underived.
+          // tableContext, watermark, splitCellConfig, contentControlAt, pageContent — all
+          // nullable, all underived.
           return null as EditorQueryResults[K];
       }
     },

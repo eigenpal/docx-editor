@@ -17,9 +17,15 @@
 //   (`styles.style` graduated to the live `ParagraphStyle` compound.)
 
 import { useContext } from 'react';
-import { CHROME_UNAVAILABLE_KEY, type ChromeSlotId } from '@docx-editor.dev/core-contract/editor';
+import {
+  CHROME_UNAVAILABLE_KEY,
+  chromeProbeForSlot,
+  type ChromeSlotId,
+} from '@docx-editor.dev/core-contract/editor';
 import { useDocxEditor } from '../context';
+import { useHyperlinkPopup } from '../useHyperlinkPopup';
 import { ToolbarContext, useToolbarLabel } from './toolbar-context';
+import { Slot } from './Slot';
 import {
   ToolbarButton,
   chromeControlForSlot,
@@ -62,7 +68,6 @@ export const ToolbarBold = definePart('text.bold');
 export const ToolbarItalic = definePart('text.italic');
 export const ToolbarUnderline = definePart('text.underline');
 export const ToolbarStrike = definePart('text.strike');
-export const ToolbarLink = definePart('text.link');
 export const ToolbarClearFormatting = definePart('format.clear');
 export const ToolbarSuperscript = definePart('script.super');
 export const ToolbarSubscript = definePart('script.sub');
@@ -78,6 +83,51 @@ export const ToolbarImageInsert = definePart('image.insert');
 export const ToolbarImageProperties = definePart('image.properties');
 export const ToolbarTableInsert = definePart('table.insert');
 export const ToolbarComments = definePart('review.comments');
+
+/**
+ * Insert Link.
+ *
+ * Enabled state comes from the engine like every other control — `text.link` is wired, and
+ * `toolbarCommandState` asks whether this selection could become a link. The CLICK does not
+ * run the command, because a link needs a target and only the popover can supply one; it
+ * opens the same panel Ctrl/Cmd+K opens, seeded from the link at the caret when there is one.
+ */
+function ToolbarLinkImpl({ className, hidden, icon, asChild, children }: ToolbarPartProps) {
+  const editor = useDocxEditor();
+  const { openAtCaret } = useHyperlinkPopup();
+  // Enabled state comes from the ENGINE, like every other control — but through a probe
+  // this part owns rather than through the shared command table. `text.link` is deliberately
+  // absent from `SLOT_COMMANDS`: putting it there would enable the control in every adapter,
+  // including one with no link UI, where an enabled button can only be refused.
+  const probe = chromeProbeForSlot('text.link');
+  const allowed = editor && probe ? editor.can(probe) : null;
+  const isEnabled = allowed?.ok === true;
+  const disabledReason = allowed && !allowed.ok ? allowed.reason : null;
+  const label = useToolbarLabel();
+  if (hidden) return null;
+  const control = chromeControlForSlot('text.link');
+  const text = label(control?.labelKey ?? 'text.link');
+  const shared = {
+    type: 'button' as const,
+    className: `docx-toolbar__button${className ? ` ${className}` : ''}`,
+    'data-slot': 'text.link',
+    disabled: !isEnabled,
+    ...(!isEnabled ? { 'data-disabled': '' } : {}),
+    'aria-label': text,
+    title: disabledReason ?? text,
+    onMouseDown: guardToolbarMousedown,
+    // Exactly what Ctrl/Cmd+K does — one behaviour, so the button and the shortcut cannot
+    // drift: edit mode pre-filled when the caret is in a link, a fresh insert seeded with
+    // the selected text otherwise, anchored at the caret either way.
+    onClick: () => openAtCaret(),
+  };
+  if (asChild) return <Slot {...shared}>{children}</Slot>;
+  return <button {...shared}>{icon ?? children ?? chromeIcon(control?.paths)}</button>;
+}
+
+export const ToolbarLink: ToolbarPartComponent = Object.assign(ToolbarLinkImpl, {
+  docxSlot: 'text.link' as ChromeSlotId,
+});
 
 /**
  * A disabled combobox-lookalike for a dropdown-shaped control the engine does not

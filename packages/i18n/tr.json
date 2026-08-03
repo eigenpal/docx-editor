@@ -827,7 +827,15 @@
     "urlPlaceholder": "https://ornek.com",
     "copyLink": "Bağlantıyı kopyala",
     "editLink": "Bağlantıyı düzenle",
-    "removeLink": "Bağlantıyı kaldır"
+    "removeLink": "Bağlantıyı kaldır",
+    "apply": null,
+    "bookmarkTarget": null,
+    "cancel": null,
+    "editTitle": null,
+    "inertTarget": null,
+    "insertTitle": null,
+    "openLink": null,
+    "refused": null
   },
   "headerFooter": {
     "header": "Üstbilgi",

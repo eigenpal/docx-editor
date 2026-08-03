@@ -1,0 +1,203 @@
+// Minting the relationship an external hyperlink needs.
+//
+// An external link's target does not live in `document.xml` — the paragraph holds only an
+// `r:id`, and the URL sits in `/word/_rels/document.xml.rels`. So inserting a link is TWO
+// writes in different places, and only one of them is a tree op. This module owns the other,
+// on the same lane as `ensureListDefinition`: the package changes outside `store.transact`,
+// and the tree op that names the id is what the undo stack records.
+//
+// A LEFTOVER RELATIONSHIP IS HARMLESS; A MISSING ONE IS NOT. Undoing an insert removes the
+// `w:hyperlink` but leaves its relationship declared, and an unreferenced hyperlink
+// relationship is something Word writes freely and ignores on load. Removing it eagerly would
+// instead break every redo, and break any other link that had been given the same reused id.
+//
+// The URL here is HOST-supplied (a popover input), not file-derived, but it reaches XML all
+// the same, so it is validated and escaped rather than interpolated on trust.
+
+import { createNodeIdAllocator, insertChildren } from './ooxml-edit.ts';
+import { readOoxmlPart } from './ooxml-tree.ts';
+import type { OoxmlNode } from './ooxml-tree.ts';
+import type { OoxmlPackage } from './ooxml-package.ts';
+import { escapeXmlChecked, isValidXmlText, sanitizeHref } from './sinks.ts';
+import { validateExternalTarget } from './opc-names.ts';
+import { HYPERLINK_RELATIONSHIP_TYPE } from './hyperlink.ts';
+
+const REL = 'http://schemas.openxmlformats.org/package/2006/relationships';
+const RELS_CONTENT_TYPE = 'application/vnd.openxmlformats-package.relationships+xml';
+
+/**
+ * Longest target accepted into a relationship.
+ *
+ * A `.docx` is a zip an attacker controls and so is a paste into a URL field; nothing
+ * downstream benefits from an unbounded one, and every consumer of the rels part pays for it.
+ */
+const MAX_TARGET_LENGTH = 2048;
+
+export interface EnsuredHyperlinkRelationship {
+  readonly pkg: OoxmlPackage;
+  readonly relationshipId: string;
+}
+
+/** `/word/document.xml` -> `/word/_rels/document.xml.rels`. */
+function relsPartNameFor(partName: string): string {
+  const slash = partName.lastIndexOf('/');
+  return `${partName.slice(0, slash)}/_rels/${partName.slice(slash + 1)}.rels`;
+}
+
+/** An `rIdN` no owner in the package already uses. */
+function freeRelationshipId(pkg: OoxmlPackage): string {
+  let max = 0;
+  for (const records of pkg.relationships.values()) {
+    for (const record of records) {
+      const match = /^rId(\d{1,9})$/.exec(record.id);
+      if (match) max = Math.max(max, Number(match[1]));
+    }
+  }
+  // External targets live OUTSIDE `relationships` (that map holds the internal ones), so an
+  // id already spent on a hyperlink would be handed out a second time without this — two
+  // links pointing at one URL, and editing either would silently move the other.
+  for (const external of pkg.externalTargets) {
+    const match = /^rId(\d{1,9})$/.exec(external.id);
+    if (match) max = Math.max(max, Number(match[1]));
+  }
+  return `rId${max + 1}`;
+}
+
+/** Re-key a grafted subtree so it cannot collide with the part it is joining. */
+function withFreshIds(node: OoxmlNode, nextId: () => string): OoxmlNode {
+  if (node.kind === 'textValue') return { ...node, id: nextId() } as OoxmlNode;
+  return {
+    ...node,
+    id: nextId(),
+    children: node.children.map((child) => withFreshIds(child, nextId)),
+  } as OoxmlNode;
+}
+
+/**
+ * The external hyperlink relationship for `url` on the main document part, reusing an
+ * existing one with the same target, or `null` when the URL is not something to write.
+ *
+ * REUSE IS BY EXACT TARGET, matching Word: linking twice to the same address produces one
+ * relationship. It is safe because a hyperlink relationship carries nothing but its target —
+ * two links sharing one are indistinguishable from two links with identical targets, and
+ * retargeting one always mints rather than rewriting (see the edit op).
+ *
+ * The URL is refused unless `sanitizeHref` admits it. Storing a `javascript:` target that a
+ * FILE authored is required — round-tripping never rewrites a document — but AUTHORING one
+ * here is not: there is no legitimate reason for this engine to write a scheme it would then
+ * refuse to open, and writing it would hand the next reader a live target this reader made.
+ */
+export function ensureHyperlinkRelationship(
+  pkg: OoxmlPackage,
+  url: string
+): EnsuredHyperlinkRelationship | null {
+  if (typeof url !== 'string' || url.length === 0 || url.length > MAX_TARGET_LENGTH) return null;
+  if (!isValidXmlText(url)) return null;
+  const projection = sanitizeHref(url);
+  if (!projection.ok || projection.href.length === 0) return null;
+  const target = projection.href;
+  // The same gate the READ side applies, applied on the way in: an authored external
+  // relationship must be an absolute URI. Writing `/admin/delete-account` as
+  // `TargetMode="External"` is not a shape Word produces, and it would hand the next
+  // reader a target that resolves against whatever origin opens the file.
+  if (!validateExternalTarget(target).ok) return null;
+
+  const owner = pkg.mainDocumentPart;
+  const reusable = pkg.externalTargets.find(
+    (entry) =>
+      entry.ownerPart === owner &&
+      entry.type === HYPERLINK_RELATIONSHIP_TYPE &&
+      entry.rawTarget === target
+  );
+  if (reusable) return { pkg, relationshipId: reusable.id };
+
+  const relsName = relsPartNameFor(owner);
+  const existing = pkg.parts.get(relsName);
+  const id = freeRelationshipId(pkg);
+  const authored = readOoxmlPart(
+    `<Relationships xmlns="${REL}">` +
+      `<Relationship Id="${escapeXmlChecked(id, 'relationship id')}"` +
+      ` Type="${HYPERLINK_RELATIONSHIP_TYPE}"` +
+      ` Target="${escapeXmlChecked(target, 'relationship target')}"` +
+      ' TargetMode="External"/>' +
+      '</Relationships>',
+    { name: relsName, contentType: RELS_CONTENT_TYPE }
+  );
+  if (!authored.ok) return null;
+
+  // The external record is what `hyperlinkTargetOf` resolves against, so it is added in the
+  // same breath as the tree node. Writing only the tree left the resolver blind to a link
+  // this session had just created: it painted inert until the document was saved and
+  // reopened.
+  const externalTargets = [
+    ...pkg.externalTargets,
+    {
+      ownerPart: owner,
+      id,
+      type: HYPERLINK_RELATIONSHIP_TYPE,
+      rawTarget: target,
+      sinkSafe: true,
+    },
+  ];
+
+  if (!existing) {
+    return {
+      pkg: Object.freeze({
+        ...pkg,
+        parts: new Map([...pkg.parts, [relsName, authored.part]]),
+        externalTargets,
+      }),
+      relationshipId: id,
+    };
+  }
+  const nextId = createNodeIdAllocator(existing);
+  const node = authored.part.root.children[0];
+  if (!node) return null;
+  const inserted = insertChildren(existing, existing.root.id, existing.root.children.length, [
+    withFreshIds(node, nextId),
+  ]);
+  if (!inserted.ok) return null;
+  return {
+    pkg: Object.freeze({
+      ...pkg,
+      parts: new Map([...pkg.parts, [relsName, inserted.part]]),
+      externalTargets,
+    }),
+    relationshipId: id,
+  };
+}
+
+/**
+ * What a part's relationships answer for one `r:id`, over both maps.
+ *
+ * `relationships` holds the internal records and `externalTargets` the external ones, so a
+ * resolver reading only the first sees every hyperlink as dangling.
+ */
+export function relationshipTargetIn(
+  pkg: OoxmlPackage,
+  ownerPart: string,
+  relationshipId: string
+): {
+  readonly target: string;
+  readonly external: boolean;
+  readonly sinkSafe?: boolean;
+} | null {
+  for (const external of pkg.externalTargets) {
+    if (external.ownerPart === ownerPart && external.id === relationshipId) {
+      // `sinkSafe` travels WITH the target. The package computed it at load
+      // (`validateExternalTarget`: absolute URI, safe scheme) and it answers the question
+      // `sanitizeHref` structurally cannot — whether a target with no scheme at all is
+      // safe to follow. Dropping it here is what let `Target="/admin/delete-account"`
+      // reach a live `href` resolving against the host application's origin.
+      return { target: external.rawTarget, external: true, sinkSafe: external.sinkSafe };
+    }
+  }
+  const internal = (pkg.relationships.get(ownerPart) ?? []).find(
+    (record) => record.id === relationshipId
+  );
+  if (internal) return { target: internal.rawTarget, external: false };
+  return null;
+}
+
+/** Unused ids are never reclaimed, so an unreferenced relationship keeps its slot. */
+export const HYPERLINK_RELATIONSHIP_MAX_TARGET_LENGTH = MAX_TARGET_LENGTH;

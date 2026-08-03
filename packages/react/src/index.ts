@@ -43,6 +43,23 @@ export {
   DocxEditorPageSetupDialog,
   type DocxEditorPageSetupDialogProps,
 } from './editor/DocxEditorPageSetup';
+// The link popover (also reachable as `DocxEditor.HyperLink`) and its headless hook. The
+// parts live on the namespace statics; a host that wants a different panel takes the hook.
+export {
+  DocxEditorHyperLink,
+  type DocxEditorHyperLinkNamespace,
+  type HyperLinkActionProps,
+  type HyperLinkPartProps,
+  type HyperLinkProps,
+} from './editor/DocxEditorHyperLink';
+export {
+  useHyperlinkPopup,
+  useHyperlinkPopupInstance,
+  type HyperlinkPopupAnchor,
+  type HyperlinkPopupMode,
+  type HyperlinkPopupState,
+  type UseHyperlinkPopupResult,
+} from './editor/useHyperlinkPopup';
 export { useEditorState } from './editor/useEditorState';
 export { useEditorCommand, type EditorCommandState } from './editor/useEditorCommand';
 export { useEditorEvent } from './editor/useEditorEvent';

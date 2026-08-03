@@ -255,9 +255,21 @@ describe('no wired toggle is a lie of omission', () => {
     const state = toolbarCommandState(editor, 'file.save');
     expect(state.disabledReason).toBe('save is not a command; run it with runSave(editor)');
     // A genuinely unwired slot keeps the original wording.
+    expect(toolbarCommandState(editor, 'review.comments').disabledReason).toBe(
+      'not wired to an editor command'
+    );
+  });
+
+  test('the link capability is real even though the shared slot is unwired', () => {
+    // `text.link` reports "not wired" because it is not in the shared command table — a
+    // deliberate choice, so an adapter with no link UI does not grow an enabled button it
+    // cannot serve. The CAPABILITY is nonetheless there, and chrome that owns a link UI
+    // asks the engine directly. This pins both halves, so neither can rot alone.
+    const editor = mount(p('alpha'));
     expect(toolbarCommandState(editor, 'text.link').disabledReason).toBe(
       'not wired to an editor command'
     );
+    expect(editor.can({ type: 'insertHyperlink', href: 'https://example.com' }).ok).toBe(true);
   });
 });
 

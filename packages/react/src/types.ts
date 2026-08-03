@@ -74,6 +74,14 @@ export interface DocxEditorProps {
   onTitleChange?: (title: string) => void;
   /** Save handler for the chrome's save control. Runs `Editor.save()` at the host. */
   onSave?: () => void;
+  /**
+   * Render the packaged hyperlink popover (`false` removes it).
+   *
+   * The engine's link GESTURES stay wired either way — a click on a link and Ctrl/Cmd+K
+   * still reach `useHyperlinkPopup()` — so a host that turns this off to render its own
+   * panel loses the packaged UI and nothing else.
+   */
+  hyperlinkPopup?: boolean;
   /** A document to load: DOCX bytes or an existing handle. */
   document?: DocumentSource;
   /** 'edit' (default) or 'view' (read-only). Applied at mount only — not reactive; remount to change. */

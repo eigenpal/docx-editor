@@ -60,6 +60,7 @@ import { RulerUnit } from '@docx-editor.dev/core-contract/editor';
 import { runToolbarCommand } from '@docx-editor.dev/core-contract/editor';
 import { SectionProperties } from '@docx-editor.dev/core-contract/editor';
 import { SurfaceFormatting } from '@docx-editor.dev/core-contract/editor';
+import { SurfaceHyperlink } from '@docx-editor.dev/core-contract/editor';
 import { TextMeasurer } from '@docx-editor.dev/core-contract/editor';
 import { Theme } from '@docx-editor.dev/core-contract/contracts/editor';
 import { ToolbarCommandState } from '@docx-editor.dev/core-contract/editor';
@@ -112,6 +113,31 @@ export interface DocxEditorDocumentOutlineProps {
 // @public
 export function DocxEditorHorizontalRuler(props: DocxEditorRulerProps): ReactElement;
 
+// @public (undocumented)
+export const DocxEditorHyperLink: DocxEditorHyperLinkNamespace;
+
+// @public
+export interface DocxEditorHyperLinkNamespace {
+    // (undocumented)
+    (props: HyperLinkProps): ReturnType<typeof HyperLinkRoot>;
+    // (undocumented)
+    readonly Apply: typeof HyperLinkApply;
+    // (undocumented)
+    readonly Cancel: typeof HyperLinkCancel;
+    // (undocumented)
+    readonly Copy: typeof HyperLinkCopy;
+    // (undocumented)
+    readonly Edit: typeof HyperLinkEdit;
+    // (undocumented)
+    readonly Error: typeof HyperLinkError;
+    // (undocumented)
+    readonly Fields: typeof HyperLinkFields;
+    // (undocumented)
+    readonly Unlink: typeof HyperLinkUnlink;
+    // (undocumented)
+    readonly Url: typeof HyperLinkUrl;
+}
+
 // @public
 export const DocxEditorLoading: DocxEditorLoadingComponent;
 
@@ -143,6 +169,7 @@ export interface DocxEditorNamespace extends ForwardRefExoticComponent<DocxEdito
     readonly Content: typeof DocxEditorContent;
     readonly DocumentOutline: typeof DocxEditorDocumentOutline;
     readonly HorizontalRuler: typeof DocxEditorHorizontalRuler;
+    readonly HyperLink: typeof DocxEditorHyperLink;
     readonly Loading: typeof DocxEditorLoading;
     readonly PageSetupDialog: typeof DocxEditorPageSetupDialog;
     // (undocumented)
@@ -175,6 +202,7 @@ export interface DocxEditorProps {
     readonly colorMode?: 'light' | 'dark' | 'system';
     document?: DocumentSource;
     fonts?: FontConfiguration | FontConfigurationFragment;
+    hyperlinkPopup?: boolean;
     // (undocumented)
     locale?: string;
     mode?: EditorMode;
@@ -503,6 +531,56 @@ export interface HorizontalRulerProps {
     unit?: 'inch' | 'cm';
     // (undocumented)
     zoom?: number;
+}
+
+// @public
+export interface HyperLinkActionProps extends HyperLinkPartProps {
+    icon?: ReactNode;
+}
+
+// @public
+export interface HyperLinkPartProps {
+    asChild?: boolean;
+    // (undocumented)
+    children?: ReactNode;
+    // (undocumented)
+    className?: string;
+    hidden?: boolean;
+}
+
+// @public
+export interface HyperlinkPopupAnchor {
+    // (undocumented)
+    readonly left: number;
+    // (undocumented)
+    readonly top: number;
+}
+
+// @public
+export type HyperlinkPopupMode =
+/** Not shown. */
+'closed'
+/** An existing link: its target, plus copy / edit / unlink. */
+| 'reading'
+/** Text + URL fields, for a new link or a change to an existing one. */
+| 'editing';
+
+// @public
+export interface HyperlinkPopupState {
+    readonly anchor: HyperlinkPopupAnchor | null;
+    readonly canEdit: boolean;
+    readonly copied: boolean;
+    readonly error: boolean;
+    readonly link: SurfaceHyperlink | null;
+    // (undocumented)
+    readonly mode: HyperlinkPopupMode;
+    readonly text: string;
+    readonly url: string;
+}
+
+// @public
+export interface HyperLinkProps extends HyperLinkPartProps {
+    preset?: boolean;
 }
 
 export { loadFonts }
@@ -853,6 +931,31 @@ export interface UseFontFamilyResult {
     readonly options: readonly string[];
     readonly setValue: (family: string) => void;
     readonly value: string | null;
+}
+
+// @public
+export function useHyperlinkPopup(): UseHyperlinkPopupResult;
+
+// @public
+export function useHyperlinkPopupInstance(active?: boolean): UseHyperlinkPopupResult;
+
+// @public
+export interface UseHyperlinkPopupResult {
+    beginEdit: () => void;
+    // (undocumented)
+    close: () => void;
+    commitEdit: () => boolean;
+    copy: () => Promise<boolean>;
+    open: (link?: SurfaceHyperlink | null, anchor?: HyperlinkPopupAnchor | null) => void;
+    openAtCaret: () => void;
+    openTarget: () => boolean;
+    // (undocumented)
+    setText: (text: string) => void;
+    // (undocumented)
+    setUrl: (url: string) => void;
+    // (undocumented)
+    readonly state: HyperlinkPopupState;
+    unlink: () => boolean;
 }
 
 // @public

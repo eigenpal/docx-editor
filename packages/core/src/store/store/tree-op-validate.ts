@@ -40,6 +40,10 @@ export const ACCEPTED_RUN_PROPERTIES = [
   'w', // horizontal scaling
   'kern',
 ] as const;
+// `w:rStyle` is deliberately ABSENT. It is preserved, not accepted: this list is the set a
+// property write REPLACES, so admitting the character style would make a bold toggle delete
+// it. `insertHyperlink` writes `w:rStyle` itself, as part of making the run a link, which is
+// what Word does and what leaves every other write alone.
 
 /** The accepted PARAGRAPH property boundary (design D8). */
 export const ACCEPTED_PARAGRAPH_PROPERTIES = [
@@ -194,6 +198,60 @@ export type TreeDocOp =
        */
       readonly op: 'setSectionMark';
       readonly paragraphId: string;
+    }
+  | {
+      /**
+       * Wrap `[start, end)` of a paragraph in a `w:hyperlink`.
+       *
+       * The RANGE is the link — text and formatting inside it are untouched, and runs that
+       * straddle either edge are divided so the link covers exactly the characters asked
+       * for. Exactly one of `relationshipId` (an external target, already minted on the
+       * package) or `anchor` (a bookmark in this document) names where it goes.
+       *
+       * A collapsed range is refused: a link with no text is markup with nothing to click,
+       * and the caller that wants "insert a link with display text" inserts the text first.
+       */
+      readonly op: 'insertHyperlink';
+      readonly paragraphId: string;
+      readonly start: number;
+      readonly end: number;
+      readonly relationshipId?: string;
+      readonly anchor?: string;
+      readonly tooltip?: string;
+      /**
+       * Character style to mark the linked runs with (`w:rStyle`), normally `Hyperlink`.
+       *
+       * Written HERE rather than through `setRunProperties` because `w:rStyle` is preserved,
+       * not accepted: it is not in the set a property write replaces, and putting it there
+       * would make a later bold toggle delete it. Marking the text is part of making it a
+       * link — Word does both in one operation — so the op that wraps it also styles it.
+       * Omitted for a document that declares no such style.
+       */
+      readonly styleId?: string;
+    }
+  | {
+      /**
+       * Re-aim an existing link. `relationshipId` moves it to another external target,
+       * `anchor` to a bookmark; supplying one CLEARS the other, so a link never ends up
+       * carrying both and resolving by the wrong one.
+       */
+      readonly op: 'setHyperlinkTarget';
+      readonly linkId: string;
+      readonly relationshipId?: string;
+      readonly anchor?: string;
+      readonly tooltip?: string;
+    }
+  | {
+      /**
+       * Unlink: splice the `w:hyperlink`'s children into the paragraph in its place.
+       *
+       * The runs keep their identity, their formatting and their order, and any bookmark
+       * markers inside the link stay exactly where they were. Only the link element goes,
+       * which is what Word's Remove Hyperlink does — the text is not the link's, it was
+       * only wrapped by it.
+       */
+      readonly op: 'removeHyperlink';
+      readonly linkId: string;
     };
 
 export type TreeDocOpKind = TreeDocOp['op'];
@@ -214,6 +272,9 @@ export const TREE_DOC_OP_KINDS = [
   'setParagraphProperties',
   'setSectionProperties',
   'setSectionMark',
+  'insertHyperlink',
+  'setHyperlinkTarget',
+  'removeHyperlink',
 ] as const satisfies readonly TreeDocOpKind[];
 
 // Compile-time exhaustiveness, matching the legacy `DOC_OP_KINDS` guard: a new op must be
@@ -489,7 +550,20 @@ export function metricsOfSection(sectPr: OoxmlNode | null): SectionMetrics {
   };
 }
 
-/** Flatten a paragraph into UTF-16 addressable segments, in document order. */
+/**
+ * Flatten a paragraph into UTF-16 addressable segments, in document order.
+ *
+ * A HYPERLINK's runs are addressed too. `w:hyperlink` is a run container, not a leaf, and
+ * the characters inside a link are ordinary paragraph text: the user selects them, types
+ * over them and deletes them like any other. Skipping the container — which is what
+ * iterating only direct `w:r` children did — left every link's text with no offsets at all,
+ * so `paragraphTextOf` read "Visit  or ." for a sentence that says "Visit Example.com or
+ * Anthropic's website." and layout, selection and the ops all agreed on the wrong string.
+ *
+ * `runId` stays the id of the run the content actually lives in, at whatever depth: the
+ * appliers resolve it with `findNode` and rebuild that run's children, so nesting costs them
+ * nothing.
+ */
 export function segmentsOf(paragraph: OoxmlParagraphNode): Segment[] {
   const segments: Segment[] = [];
   let offset = 0;
@@ -507,11 +581,25 @@ export function segmentsOf(paragraph: OoxmlParagraphNode): Segment[] {
     if (node.kind === 'runProperties' || node.kind === 'generic') return;
     for (const child of node.children) visit(child, runId);
   };
-  for (const child of paragraph.children) {
-    if (child.kind !== 'run') continue;
-    for (const grand of child.children) visit(grand, child.id);
-  }
+  const visitInline = (child: OoxmlNode): void => {
+    if (child.kind === 'run') {
+      for (const grand of child.children) visit(grand, child.id);
+      return;
+    }
+    // Bookmark markers and everything generic measure nothing; only a link descends.
+    if (child.kind === 'hyperlink') {
+      for (const inner of child.children) visitInline(inner);
+    }
+  };
+  for (const child of paragraph.children) visitInline(child);
   return segments;
+}
+
+/** The runs a paragraph child owns, at any depth — a `w:r`, or every run inside a link. */
+export function runsUnder(child: OoxmlNode): OoxmlNode[] {
+  if (child.kind === 'run') return [child];
+  if (child.kind !== 'hyperlink') return [];
+  return child.children.flatMap((inner) => runsUnder(inner));
 }
 
 function paragraphLength(paragraph: OoxmlParagraphNode): number {
@@ -544,6 +632,52 @@ function validateProperties(
       if (!/^[A-Za-z_][\w.-]*$/.test(name)) return 'invalid-property-value';
       if (typeof value !== 'string' || !isValidXmlText(value)) return 'invalid-property-value';
     }
+  }
+  return null;
+}
+
+/** Longest `r:id`, `w:anchor` or `w:tooltip` an op may write. */
+const MAX_HYPERLINK_ATTRIBUTE_LENGTH = 512;
+
+/** Whether `[start, end)` overlaps any text already inside a `w:hyperlink`. */
+function rangeTouchesHyperlink(paragraph: OoxmlParagraphNode, start: number, end: number): boolean {
+  const segments = segmentsOf(paragraph);
+  const linked = new Set<string>();
+  const collect = (node: OoxmlNode, inside: boolean): void => {
+    if (node.kind === 'textValue') return;
+    const within = inside || node.kind === 'hyperlink';
+    if (within && node.kind === 'run') linked.add(node.id);
+    for (const child of node.children) collect(child, within);
+  };
+  for (const child of paragraph.children) collect(child, false);
+  if (linked.size === 0) return false;
+  return segments.some(
+    (segment) => linked.has(segment.runId) && segment.start < end && segment.end > start
+  );
+}
+
+/**
+ * The target half of an insert or a retarget: EXACTLY ONE of relationship or anchor, and
+ * every value legal in XML.
+ *
+ * Both at once is refused rather than resolved by precedence. In a FILE that pair means "a
+ * bookmark inside another document", which the read side honours; as an authored op it means
+ * the caller does not know which it wants, and admitting it would write a link whose
+ * behaviour depends on a resolution rule the caller never saw.
+ */
+function validateHyperlinkTarget(op: {
+  readonly relationshipId?: string;
+  readonly anchor?: string;
+  readonly tooltip?: string;
+}): TreeOpRejection | null {
+  const hasRelationship = op.relationshipId !== undefined;
+  const hasAnchor = op.anchor !== undefined;
+  if (hasRelationship === hasAnchor) return 'invalid-property-value';
+  for (const value of [op.relationshipId, op.anchor, op.tooltip]) {
+    if (value === undefined) continue;
+    if (typeof value !== 'string' || value.length === 0) return 'invalid-property-value';
+    if (value.length > MAX_HYPERLINK_ATTRIBUTE_LENGTH) return 'invalid-property-value';
+    if (!isValidXmlText(value)) return 'invalid-property-value';
   }
   return null;
 }
@@ -618,6 +752,14 @@ export function validateTreeOp(part: OoxmlPart, op: TreeDocOp): TreeOpRejection 
     const second = findNode(part, op.secondId);
     if (!first || !second) return 'unknown-paragraph';
     if (!isParagraph(first) || !isParagraph(second)) return 'not-a-paragraph';
+    return null;
+  }
+
+  if (op.op === 'setHyperlinkTarget' || op.op === 'removeHyperlink') {
+    const link = findNode(part, op.linkId);
+    if (!link) return 'unknown-paragraph';
+    if (link.kind !== 'hyperlink') return 'not-a-paragraph';
+    if (op.op === 'setHyperlinkTarget') return validateHyperlinkTarget(op);
     return null;
   }
 
@@ -703,6 +845,30 @@ export function validateTreeOp(part: OoxmlPart, op: TreeDocOp): TreeOpRejection 
     }
     case 'setParagraphProperties':
       return validateProperties(op.properties, PARAGRAPH_PROPERTY_SET);
+    case 'insertHyperlink': {
+      if (!Number.isInteger(op.start) || !Number.isInteger(op.end)) return 'invalid-range';
+      if (op.start < 0 || op.end > length) return 'offset-out-of-range';
+      // A collapsed range would produce a link with no text: markup with nothing to click,
+      // and nothing for a later unlink to give back.
+      if (op.start >= op.end) return 'invalid-range';
+      if (splitsSurrogate(paragraph, op.start) || splitsSurrogate(paragraph, op.end)) {
+        return 'splits-surrogate-pair';
+      }
+      // Nested links are not a shape Word writes and not one this engine reads: the inner
+      // link's runs would resolve through the outer one's target on every walk that stops
+      // at the first `w:hyperlink` it finds.
+      if (rangeTouchesHyperlink(paragraph, op.start, op.end)) return 'invalid-property-value';
+      if (op.styleId !== undefined) {
+        // Written straight into an attribute, so it is checked here rather than at the sink.
+        if (typeof op.styleId !== 'string' || op.styleId.length === 0) {
+          return 'invalid-property-value';
+        }
+        if (op.styleId.length > MAX_HYPERLINK_ATTRIBUTE_LENGTH || !isValidXmlText(op.styleId)) {
+          return 'invalid-property-value';
+        }
+      }
+      return validateHyperlinkTarget(op);
+    }
     case 'setSectionMark': {
       const pPr = paragraphPropertiesNodeOf(paragraph);
       // A paragraph already ending a section cannot end two.

@@ -777,6 +777,10 @@ export function ComposedEditorDemo({ fixtureUrl }: { fixtureUrl: string }) {
                 <DocxEditor.VerticalRuler />
               </div>
               <DocxEditor.Content />
+              {/* The link popover. Inside the viewport so it stays with the page while
+                  scrolling. `<DocxEditor>` mounts it for you; a composition like this one
+                  places it by name, exactly like the rulers above. */}
+              <DocxEditor.HyperLink />
             </DocxEditor.Viewport>
             {/* Floating diagnostics chrome, above the overlay panels. */}
             <PerfHud />

@@ -158,12 +158,99 @@ export interface OoxmlTablePropertiesNode extends OoxmlElementBase<
 }
 
 export interface OoxmlParagraphNode extends OoxmlElementBase<
-  readonly (OoxmlParagraphPropertiesNode | OoxmlRunNode | OoxmlGenericElementNode)[],
+  readonly (
+    | OoxmlParagraphPropertiesNode
+    | OoxmlRunNode
+    | OoxmlHyperlinkNode
+    | OoxmlBookmarkStartNode
+    | OoxmlBookmarkEndNode
+    | OoxmlGenericElementNode
+  )[],
   readonly OoxmlKnownNodeAttribute[]
 > {
   readonly kind: 'paragraph';
   readonly namespaceUri: typeof WML_NAMESPACE_URI;
   readonly localName: 'p';
+}
+
+/**
+ * `CT_Hyperlink` (ECMA-376 §17.16.22) — a RUN CONTAINER, not a leaf.
+ *
+ * Its runs are part of the paragraph's inline sequence: they measure, paint, select and
+ * take offsets exactly like a run written directly under the `w:p`. Typing the element is
+ * what lets them in; while it was generic, its runs never reached the token stream and the
+ * words inside every link simply did not paint.
+ *
+ * Targets live in the ATTRIBUTES, and §17.16.22 declares exactly six. They divide into two
+ * groups, and the difference is load-bearing:
+ *
+ *   MODELED    `r:id` (a relationship, resolved against the owning part's rels), `w:anchor`
+ *              (a bookmark name in this document) and `w:tooltip`. These are the three the
+ *              ops read and write — `setHyperlinkTarget` sets one target attribute and
+ *              CLEARS the other, so a link never carries both and resolves by the wrong one.
+ *
+ *   PRESERVED  `w:tgtFrame`, `w:docLocation` and `w:history`. Nothing in this engine
+ *              interprets them and no op names them; they survive because attributes are
+ *              carried verbatim, and `setHyperlinkTarget` must leave them exactly as
+ *              authored. That is a REQUIREMENT, not an incidental property of the current
+ *              applier: `w:docLocation` names a location inside the target document, so
+ *              silently dropping it on a retarget would change where a link goes.
+ *              `hyperlink-lossless-editing.test.ts` pins both against a retarget.
+ *
+ * Nothing here is a runtime URL — the sanitized projection is computed separately (see
+ * `hyperlinkTargetOf`), and only that reaches a DOM or navigation sink.
+ *
+ * Bookmark markers are admitted as children because Word writes them inside links; anything
+ * else it can carry (a drawing, a field, a nested SDT) stays `generic` at its position, so a
+ * link around a picture keeps both the picture and the link.
+ *
+ * A link may contain ANOTHER link: §17.16.22's content model is `EG_PContent`, which lists
+ * `w:hyperlink` among its own members. That is why this child union is self-referential
+ * rather than bottoming out at runs. Demoting the inner one to `generic` would have been the
+ * easier type, and it would have reintroduced exactly the bug typing this element fixed —
+ * a generic link's runs never reach the token stream, so the words inside it stop painting.
+ * Every walk that descends a link therefore recurses (`segmentsOf`, `runsUnder`,
+ * `runPropertyEdits`) instead of descending one level.
+ */
+export interface OoxmlHyperlinkNode extends OoxmlElementBase<
+  readonly (
+    | OoxmlRunNode
+    | OoxmlHyperlinkNode
+    | OoxmlBookmarkStartNode
+    | OoxmlBookmarkEndNode
+    | OoxmlGenericElementNode
+  )[],
+  readonly OoxmlKnownNodeAttribute[]
+> {
+  readonly kind: 'hyperlink';
+  readonly namespaceUri: typeof WML_NAMESPACE_URI;
+  readonly localName: 'hyperlink';
+}
+
+/**
+ * `w:bookmarkStart` — a ZERO-LENGTH point anchor (`@w:id`, `@w:name`).
+ *
+ * It takes no text offset and paints nothing; it only marks a position, which is what an
+ * internal hyperlink's `w:anchor` names. Split and join place it by that position, the
+ * behaviour `tree-op-split-anchors.test.ts` pins.
+ */
+export interface OoxmlBookmarkStartNode extends OoxmlElementBase<
+  readonly [],
+  readonly OoxmlKnownNodeAttribute[]
+> {
+  readonly kind: 'bookmarkStart';
+  readonly namespaceUri: typeof WML_NAMESPACE_URI;
+  readonly localName: 'bookmarkStart';
+}
+
+/** `w:bookmarkEnd` — the closing point anchor (`@w:id`), zero-length like its start. */
+export interface OoxmlBookmarkEndNode extends OoxmlElementBase<
+  readonly [],
+  readonly OoxmlKnownNodeAttribute[]
+> {
+  readonly kind: 'bookmarkEnd';
+  readonly namespaceUri: typeof WML_NAMESPACE_URI;
+  readonly localName: 'bookmarkEnd';
 }
 
 export interface OoxmlRunNode extends OoxmlElementBase<
@@ -241,6 +328,9 @@ export type OoxmlElement =
   | OoxmlBodyNode
   | OoxmlParagraphNode
   | OoxmlRunNode
+  | OoxmlHyperlinkNode
+  | OoxmlBookmarkStartNode
+  | OoxmlBookmarkEndNode
   | OoxmlRunPropertiesNode
   | OoxmlTextElementNode
   | OoxmlParagraphPropertiesNode
@@ -335,6 +425,9 @@ const KNOWN_WML_ELEMENTS: Readonly<Record<string, KnownKind>> = {
   tc: 'tableCell',
   tblGrid: 'tableGrid',
   tblPr: 'tableProperties',
+  hyperlink: 'hyperlink',
+  bookmarkStart: 'bookmarkStart',
+  bookmarkEnd: 'bookmarkEnd',
 };
 
 function deepFreezeNode(node: OoxmlNode): OoxmlNode {

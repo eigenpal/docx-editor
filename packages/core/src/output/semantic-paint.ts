@@ -18,6 +18,7 @@ import type {
   ParagraphFragmentRecord,
   ResolvedRunStyle,
   SemanticLayout,
+  SpanLinkRecord,
   StyleSpanRecord,
   TableCellFragmentRecord,
   TableFragmentRecord,
@@ -35,6 +36,13 @@ export interface PaintContext {
    * `undefined` when that family has no aliased face. Engine-minted values only.
    */
   readonly fontAlias?: (family: string) => string | undefined;
+  /**
+   * Paint hyperlinks without an `href` and out of the tab order.
+   *
+   * Set while painting page furniture: headers and footers are read-only in this slice, so
+   * a live link there would be the one thing in the furniture that answers a gesture.
+   */
+  readonly inertLinks?: boolean;
 }
 
 /**
@@ -366,6 +374,78 @@ function paintSpan(
 }
 
 /**
+ * The anchor element wrapping one line's worth of a hyperlink's runs.
+ *
+ * FURNITURE, NEVER AUTHORITY. It carries semantics the run spans cannot — `href`, `title`,
+ * a focus stop, the "link" role assistive technology announces — and nothing else. Selection
+ * mapping, hit-testing and the caret all read the `data-paragraph-id`/`data-start`/
+ * `data-end` on the spans INSIDE it, exactly as they do for plain text, so an anchor can be
+ * added or removed without any of them changing behaviour.
+ *
+ * `href` is the SANITIZED projection layout already produced, never the authored target. A
+ * link whose scheme was refused, whose relationship is missing, or that sits in read-only
+ * page furniture gets no `href` at all: it still paints, still selects, still saves, and
+ * there is no attribute for a click or a keyboard activation to follow.
+ */
+function paintHyperlinkAnchor(
+  document: Document,
+  link: SpanLinkRecord,
+  ctx: PaintContext
+): HTMLElement {
+  const element = document.createElement('a');
+  element.className = 'docx-hyperlink';
+  // The link's identity, so a click can name the `w:hyperlink` it landed on without the
+  // pointer path re-deriving it from geometry.
+  element.dataset.docxLink = link.id;
+  element.dataset.docxLinkKind = link.kind;
+  // NEVER A FOCUS TARGET. The pages layer is the surface's single focus host — a
+  // contenteditable spanning the whole document — and an `<a>` inside it is a competing one.
+  // Chrome focuses an anchor on mousedown, the pointer path then focuses the pages layer
+  // back, and re-focusing an element tens of thousands of pixels tall scrolls the viewport
+  // to its TOP: clicking a link on page 10 threw the reader back to page 1.
+  //
+  // Nothing is lost by taking it out of the tab order, because tabbing was never how a link
+  // is reached here: the caret is, and Ctrl/Cmd+K opens the popover on the link the caret is
+  // in. That is Word's model rather than a browser's tab-through-links model, and it is the
+  // one the rest of this surface already implements.
+  element.setAttribute('tabindex', '-1');
+  // Inert furniture links (headers and footers) are not activation targets either: header
+  // editing is a later slice, so a live `href` there would be the one part of the furniture
+  // that responds to a click.
+  if (!ctx.inertLinks && link.href) {
+    // SAFE: `setAttribute`, and the value is the allowlisted projection from `sanitizeHref`
+    // — `javascript:`/`data:`/`vbscript:`/`file:` never reach here.
+    element.setAttribute('href', link.href);
+    // A same-page bookmark jump is handled by the engine; an external target is opened only
+    // through the popover. Either way the browser must not navigate on its own, which the
+    // surface enforces — this is belt and braces for the print and clipboard paths, where
+    // the anchor leaves the editable surface entirely.
+    if (link.kind === 'external') element.setAttribute('rel', 'noopener noreferrer');
+  }
+  // `w:tooltip` is Word's hover text. `title` takes a plain string, not markup.
+  if (link.tooltip) element.setAttribute('title', link.tooltip);
+  // SHRINK-WRAPPED, BASELINE-ALIGNED — the same box model the runs inside it use.
+  //
+  // A plain `display: inline` anchor measures ZERO HIGH here: the line is a `font-size: 0`
+  // flow, so the inline box's own height is nothing and its rect never grows to cover the
+  // inline-block runs within it. A person could still click the link (the run takes the
+  // click and it bubbles), but nothing that MEASURES could: automation refused it as
+  // invisible, and accessibility and hit-testing saw a link with no extent.
+  //
+  // `inline-block` gives it a box that shrink-wraps its children; `vertical-align: baseline`
+  // keeps that box on the same baseline they were already on, because an inline-block's
+  // baseline is its last line box's — the children's. Layout is unchanged and the element is
+  // now real.
+  element.style.display = 'inline-block';
+  element.style.verticalAlign = 'baseline';
+  // Decoration and colour stay with the RUNS, which carry the resolved `Hyperlink` character
+  // style. Imposing them here would overrule an authored override.
+  element.style.textDecoration = 'none';
+  element.style.color = 'inherit';
+  return element;
+}
+
+/**
  * A line is ONE inline flow, not a row of absolutely positioned words.
  *
  * Layout decides what goes on the line, where the line sits, and where the page breaks —
@@ -425,9 +505,28 @@ function paintLine(document: Document, line: LineRecord, ctx: PaintContext): HTM
   let tallest = 0;
   for (const span of line.spans) tallest = Math.max(tallest, span.box.height);
   const leading = Math.max(0, line.box.height - tallest);
+  // Consecutive spans of the SAME link share one anchor, so a link that spans several
+  // formatting runs on one line is one `<a>` — one focus stop, one hover target, one thing
+  // a screen reader announces. A link that WRAPS gets one anchor per line, which is the
+  // only shape an absolutely-positioned line model can express.
+  let anchor: HTMLElement | null = null;
+  let anchorLinkId: string | null = null;
   for (const span of line.spans) {
     const band = Math.min(span.box.height + leading, line.box.height);
-    element.append(paintSpan(document, span, ctx, band));
+    const painted = paintSpan(document, span, ctx, band);
+    const link = span.link;
+    if (!link) {
+      anchor = null;
+      anchorLinkId = null;
+      element.append(painted);
+      continue;
+    }
+    if (!anchor || anchorLinkId !== link.id) {
+      anchor = paintHyperlinkAnchor(document, link, ctx);
+      anchorLinkId = link.id;
+      element.append(anchor);
+    }
+    anchor.append(painted);
   }
   // A span-less line (empty paragraph) has no inline content, and a browser will not
   // draw a caret at a position with no inline box to measure. The <br> is the anchor;
@@ -882,11 +981,16 @@ function paintPage(
     container.style.width = `${story.box.width * options.scale}px`;
     container.style.height = `${story.box.height * options.scale}px`;
     container.style.overflow = 'hidden';
+    // Furniture links paint styled but inert — see `paintHyperlinkAnchor`.
+    const furnitureCtx: PaintContext & { readonly ariaHidden: boolean } = {
+      ...options,
+      inertLinks: true,
+    };
     for (const fragment of story.fragments) {
       container.append(
         fragment.kind === 'table'
-          ? paintTableFragment(document, fragment, options)
-          : paintFragment(document, fragment, options)
+          ? paintTableFragment(document, fragment, furnitureCtx)
+          : paintFragment(document, fragment, furnitureCtx)
       );
     }
     element.append(container);

@@ -23,7 +23,11 @@ import {
   type OoxmlProperty,
 } from '@docx-editor.dev/core-contract/store';
 import { resolveRunStyle, type ResolvedRunStyle } from './run-style.ts';
-import type { HeaderFooterStoryRecord, SemanticLayout } from './semantic-records.ts';
+import type {
+  HeaderFooterStoryRecord,
+  SemanticLayout,
+  SpanLinkRecord,
+} from './semantic-records.ts';
 
 /** Optional per-run merge of inherited + direct `rPr` (character styles, defaults). */
 export type RunPropertyCascader = (
@@ -107,6 +111,8 @@ export interface FieldAwarePiece {
    * would disagree with the store.
    */
   readonly positionalTab?: PositionalTab;
+  /** The hyperlink this piece came from, already sanitized, or absent for ordinary text. */
+  readonly link?: SpanLinkRecord;
 }
 
 const PTAB_ALIGNMENTS = new Set(['left', 'center', 'right']);
@@ -144,6 +150,16 @@ export function positionalTabOf(node: OoxmlNode): PositionalTab | null {
       : {}),
   };
 }
+
+/**
+ * How layout turns a typed `w:hyperlink` node into the sanitized record spans carry.
+ *
+ * Injected rather than computed here because resolving `r:id` needs the PACKAGE's
+ * relationships and this module only ever sees one part's tree. `null` means the caller
+ * declined to project — the runs still measure and paint, they simply carry no link, which is
+ * the right degradation: text is never lost for want of a target.
+ */
+export type HyperlinkProjector = (link: OoxmlNode) => SpanLinkRecord | null;
 
 const MERGEFORMAT_SUFFIX = /\s*\\\*\s*MERGEFORMAT\s*$/i;
 
@@ -450,12 +466,15 @@ export function piecesOfParagraph(
   paragraph: OoxmlNode,
   inheritedRunProperties: readonly OoxmlProperty[] = [],
   pageContext?: FieldPageContext,
-  cascadeRuns?: RunPropertyCascader
+  cascadeRuns?: RunPropertyCascader,
+  projectLink?: HyperlinkProjector
 ): FieldAwarePiece[] {
   if (paragraph.kind === 'textValue') return [];
 
   const pieces: FieldAwarePiece[] = [];
   let offset = 0;
+  /** The link the walk is currently inside, so every piece it emits is tagged with it. */
+  let currentLink: SpanLinkRecord | undefined;
 
   // Complex-field machine — document order across runs within this paragraph.
   const field = createFieldParseState();
@@ -473,12 +492,21 @@ export function piecesOfParagraph(
     positionalTab?: PositionalTab
   ): void => {
     if (text.length === 0 && !projected) return;
+    const link = currentLink ? { link: currentLink } : {};
     if (projected) {
-      pieces.push({ text, props, style, start, end, projected: true });
+      pieces.push({ text, props, style, start, end, projected: true, ...link });
       return;
     }
     if (text.length === 0) return;
-    pieces.push({ text, props, style, start, end, ...(positionalTab ? { positionalTab } : {}) });
+    pieces.push({
+      text,
+      props,
+      style,
+      start,
+      end,
+      ...(positionalTab ? { positionalTab } : {}),
+      ...link,
+    });
   };
 
   const commitPendingProjection = (): void => {
@@ -628,13 +656,27 @@ export function piecesOfParagraph(
     }
   };
 
-  // Only typed runs contribute measurable / selectable text. Generic siblings (including
-  // `w:fldSimple`) are structurally preserved but layout-inert for model-offset purposes.
+  // Typed runs contribute measurable / selectable text — including the runs inside a
+  // `w:hyperlink`, which is a run CONTAINER and not a leaf. Skipping it is what made every
+  // link's words vanish from the painted page while still occupying model offsets. Generic
+  // siblings (including `w:fldSimple`) stay structurally preserved but layout-inert.
   // Paragraph root counts as depth 0; run children sit at depth 1.
   if (!consumeScanNode(budget)) return pieces;
-  for (const child of paragraph.children) {
-    if (child.kind === 'run') processRun(child, 1);
-  }
+  const processInline = (child: OoxmlNode, depth: number): void => {
+    if (child.kind === 'run') {
+      processRun(child, depth);
+      return;
+    }
+    if (child.kind !== 'hyperlink') return;
+    if (depth > MAX_STORY_FIELD_SCAN_DEPTH) return;
+    // The link is projected ONCE per element, not per run: sanitization is not free, and a
+    // link's runs must all carry the same record so paint can group them by identity.
+    const previous = currentLink;
+    currentLink = projectLink?.(child) ?? undefined;
+    for (const inner of child.children) processInline(inner, depth + 1);
+    currentLink = previous;
+  };
+  for (const child of paragraph.children) processInline(child, 1);
   // Malformed field missing end: fail closed (no live projection) but keep cached result text.
   abandonPendingProjection();
 

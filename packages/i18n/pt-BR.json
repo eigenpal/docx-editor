@@ -824,7 +824,15 @@
     "urlPlaceholder": "https://example.com",
     "copyLink": "Copiar link",
     "editLink": "Editar link",
-    "removeLink": "Remover link"
+    "removeLink": "Remover link",
+    "apply": null,
+    "bookmarkTarget": null,
+    "cancel": null,
+    "editTitle": null,
+    "inertTarget": null,
+    "insertTitle": null,
+    "openLink": null,
+    "refused": null
   },
   "headerFooter": {
     "header": "Cabeçalho",

@@ -117,6 +117,28 @@ part/prop exports go with it.
 - `ParagraphStyleItemProps`
 - `ParagraphStyleNamespace` — ParagraphStyle with `.Trigger`/`.Content`/`.Item` statics.
 
+The hyperlink popover rides the same provider/hooks layer: it is a context-backed hook
+plus a compound over it, so its Vue twin is the composable form and lands with the rest of
+that layer. The ENGINE half is already adapter-neutral — typed links, the sanitized
+projection, click classification, bookmark jumps, the ops and `hyperlinkAt` all live in
+core, and Vue's `text.link` control enables from the same `toolbarCommandState` React's
+does. Only the panel is React-only.
+
+- `DocxEditorHyperLink` — the link popover compound (`Url`/`Copy`/`Edit`/`Unlink`/
+  `Fields`/`Apply`/`Cancel` statics).
+- `DocxEditorHyperLinkNamespace`
+- `HyperLinkProps`
+- `HyperLinkPartProps`
+- `HyperLinkActionProps`
+- `useHyperlinkPopup` — the popover's behavior hook (state / open / close / copy /
+  beginEdit / commitEdit / unlink / openTarget), context-backed so a toolbar button and
+  the panel share one state.
+- `useHyperlinkPopupInstance` — the un-provided form, for a host publishing its own context.
+- `UseHyperlinkPopupResult`
+- `HyperlinkPopupState`
+- `HyperlinkPopupMode`
+- `HyperlinkPopupAnchor`
+
 ## Vue-only
 
 - `DocxEditorShellProps`

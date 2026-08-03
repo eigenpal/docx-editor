@@ -824,7 +824,15 @@
     "urlPlaceholder": "https://example.com",
     "copyLink": "העתק קישור",
     "editLink": "ערוך קישור",
-    "removeLink": "הסר קישור"
+    "removeLink": "הסר קישור",
+    "apply": null,
+    "bookmarkTarget": null,
+    "cancel": null,
+    "editTitle": null,
+    "inertTarget": null,
+    "insertTitle": null,
+    "openLink": null,
+    "refused": null
   },
   "headerFooter": {
     "header": "כותרת עליונה",

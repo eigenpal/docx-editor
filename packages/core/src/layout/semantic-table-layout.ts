@@ -19,7 +19,7 @@
 // `breakParagraph`, so they hit the same cache with keys at the cell's content width.
 
 import type { OoxmlElement } from '@docx-editor.dev/core-contract/store';
-import type { FieldPageContext } from './field-projection.ts';
+import type { FieldPageContext, HyperlinkProjector } from './field-projection.ts';
 import { paragraphLayoutKey, type ParagraphLayoutCache } from './layout-cache.ts';
 import { alignSpans, breakParagraph, type PendingLine } from './paragraph-flow.ts';
 import { collapsedSpaceBefore, paragraphBorderExtentPt } from './paragraph-style.ts';
@@ -122,6 +122,11 @@ export interface TableFlowDeps {
    * paragraph tabs on the same document-wide grid as a body paragraph.
    */
   readonly defaultTabStopPt?: number;
+  /**
+   * Turns a typed `w:hyperlink` into the sanitized record its spans carry. A link in a
+   * table cell is an ordinary link; without this it would paint its text and be dead.
+   */
+  readonly projectLink?: HyperlinkProjector;
   /**
    * Shared sparse ownership-interval budget for border finalize across nested tables in
    * one layout pass. Created once per flow; omit only in isolated unit tests.
@@ -321,6 +326,7 @@ function placeCellParagraph(
       firstLineOffset,
       // A cell's own content box is the column a positional tab measures against.
       marginExtent: { left: 0, right: indent.left + available + indent.right },
+      ...(deps.projectLink ? { projectLink: deps.projectLink } : {}),
     }
   );
 

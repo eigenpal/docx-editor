@@ -824,7 +824,15 @@
     "urlPlaceholder": "https://example.com",
     "copyLink": "复制链接",
     "editLink": "编辑链接",
-    "removeLink": "删除链接"
+    "removeLink": "删除链接",
+    "apply": null,
+    "bookmarkTarget": null,
+    "cancel": null,
+    "editTitle": null,
+    "inertTarget": null,
+    "insertTitle": null,
+    "openLink": null,
+    "refused": null
   },
   "headerFooter": {
     "header": "页眉",

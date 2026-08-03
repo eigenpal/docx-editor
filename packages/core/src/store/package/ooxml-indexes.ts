@@ -91,12 +91,20 @@ function runText(node: OoxmlNode): string {
 function indexParagraph(paragraph: OoxmlElement, ordinal: number): ParagraphIndexEntry {
   const runIds: string[] = [];
   let text = '';
-  for (const child of paragraph.children) {
+  // A `w:hyperlink` is a run CONTAINER: its runs are part of the paragraph's text, so the
+  // index descends into it. Reading only direct `w:r` children left the index disagreeing
+  // with `segmentsOf` about how long every paragraph holding a link was.
+  const visit = (child: OoxmlNode): void => {
     if (child.kind === 'run') {
       runIds.push(child.id);
       text += runText(child);
+      return;
     }
-  }
+    if (child.kind === 'hyperlink') {
+      for (const inner of child.children) visit(inner);
+    }
+  };
+  for (const child of paragraph.children) visit(child);
   return { nodeId: paragraph.id, ordinal, text, runIds };
 }
 

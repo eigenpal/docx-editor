@@ -111,7 +111,10 @@ describe('a split places zero-length content by its position (comprehensive fixt
   const COMMENTED = '/word/document.xml#0.0.110';
 
   test('the fixture paragraphs are the ones under test (guards the premise)', () => {
-    expect(paragraphTextOf(document(), LINKS)).toBe('Visit  or .');
+    // The link text is ADDRESSABLE: a `w:hyperlink` is a run container, so its runs take
+    // paragraph offsets like any other. While it was an opaque child this read
+    // "Visit  or ." — the sentence with its two links deleted out of it.
+    expect(paragraphTextOf(document(), LINKS)).toBe('Visit Example.com or Anthropic’s website.');
     expect(shapeOf(nodeById(document(), LINKS))).toEqual(['r', 'hyperlink', 'r', 'hyperlink', 'r']);
     expect(shapeOf(nodeById(document(), COMMENTED))).toEqual([
       'r',

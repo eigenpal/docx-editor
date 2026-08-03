@@ -155,7 +155,9 @@ describe('the Vue toolbar reads enabled state from the engine', () => {
     // Not wired in the shared command table: the control is visible, disabled, and says
     // WHY in the engine's own words — never an adapter paraphrase, never a claim that
     // the capability is missing when only the wiring is.
-    for (const id of ['text.link', 'script.super', 'script.sub', 'format.clear']) {
+    // `text.link` is deliberately absent: it graduated to a chrome-driven slot, so it is
+    // enabled in both adapters now — Vue's press reports what is missing (a target).
+    for (const id of ['script.super', 'script.sub', 'format.clear']) {
       const button = slot(toolbar, id) as HTMLButtonElement;
       expect(button.disabled, id).toBe(true);
       expect(button.title, id).toBe('not wired to an editor command');
