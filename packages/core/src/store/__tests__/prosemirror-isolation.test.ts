@@ -25,8 +25,7 @@ const REPO = join(PACKAGES, '..');
  * Lanes that must never see ProseMirror.
  *
  * `packages/core` is the PUBLIC contract package — the one task 6.5 names and the one the
- * per-package import rules never covered. Its `spike/` subtree is excluded because it is
- * disposable evidence, guarded separately by the spike-disposability gate.
+ * per-package import rules never covered.
  */
 const PM_FREE_ROOTS: readonly { readonly label: string; readonly dir: string }[] = [
   { label: 'public host contracts', dir: 'core/src' },
@@ -62,7 +61,7 @@ function collectSources(root: string, depth = 0): string[] {
     // `__tests__` now sits INSIDE a lane's source directory (task 10.2 moved the store
     // lane's tests alongside it). These rules are about lane source, and a guard that
     // scanned its own assertions would flag the strings it looks for.
-    if (entry === 'node_modules' || entry === 'dist' || entry === 'spike') continue;
+    if (entry === 'node_modules' || entry === 'dist') continue;
     if (entry === '__tests__' || entry === 'test' || entry === 'tests') continue;
     const full = join(root, entry);
     // Do not cross into a nested lane: `core/src` holds every moved lane as a subdirectory,

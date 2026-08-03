@@ -4,11 +4,6 @@
 public API that `@docx-editor.dev/core` must satisfy. The published package is
 installed from npm.
 
-The nested `spike/` directory holds completed disposable historical evidence.
-It is excluded from this package's exports and TypeScript project and must not
-be imported by production modules. Archived spike proposals are not production
-authority.
-
 It is deliberately named `@docx-editor.dev/core-contract`, not
 `@docx-editor.dev/core`. Sharing the name would make the workspace resolve every
 consumer to this package instead of the published one, silently, since a

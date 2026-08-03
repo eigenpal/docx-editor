@@ -5,8 +5,6 @@
 // Production placement is fixed by document-engine task 1.4. Responsibilities and
 // dependency rules: docs/architecture/production-engine-packages.md. This is a
 // greenfield skeleton; capability implementation lands in the sections that own it.
-//
-// ADR-S9: production modules MUST NOT import from packages/core/spike/**.
 
 /** Stable package identity used by the import-graph / package-authority checks. */
 export const ENGINE_LAYOUT_PACKAGE = '@docx-editor.dev/core-contract/layout' as const;

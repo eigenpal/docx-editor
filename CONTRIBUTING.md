@@ -33,10 +33,6 @@ bun run typecheck
 # Unit tests
 bun test
 
-# Engine spike tests and type checking
-bun run test:spike
-bun run typecheck:spike
-
 # Public API, adapter parity, and locales
 bun run check:parity
 bun run api:check
@@ -64,7 +60,7 @@ Contributors are required to sign our [Contributor License Agreement](CLA.md). T
 1. **Fork** the repository and create a branch from `main`
 2. **Read the code** before modifying it — understand the dual rendering system (see [Architecture](docs/ARCHITECTURE.md))
 3. **Make your changes** — keep them focused and minimal
-4. **Add/update package or spike tests** for your changes
+4. **Add/update package tests** for your changes
 5. **Verify** everything works:
    ```bash
    bun run typecheck && bun test && bun run build:packages
