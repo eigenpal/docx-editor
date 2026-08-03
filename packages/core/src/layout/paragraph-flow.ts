@@ -427,6 +427,22 @@ export function breakParagraph(
       .filter((range) => range.start < end && range.end > start)
       .map((range) => ({ start: Math.max(range.start, start), end: Math.min(range.end, end) }));
 
+  /**
+   * Where the word currently being placed started on this line.
+   *
+   * A word can span RUNS — `<w:del>which</w:del><w:ins>that</w:ins>` is one word, so is
+   * `<w:r><w:b/>un</w:r><w:r>breakable</w:r>` — and a run boundary is not a break opportunity.
+   * Breaking there put half a word at the end of one line and half at the start of the next,
+   * which no word processor does and which changed where every following line broke.
+   *
+   * `-1` means the line has no partial word: the next span may legally start a line.
+   */
+  let wordStartSpan = -1;
+  let wordStartWidth = 0;
+  let wordStartEnd = 0;
+  /** The last character emitted, which decides whether the NEXT span may open a line. */
+  let lastEmitted = '';
+
   const closeLine = (): void => {
     const metrics = measurer.lineMetrics(emptyStyle);
     if (line.height === 0) {
@@ -446,6 +462,8 @@ export function breakParagraph(
     const deleted = deletedWithin(line.start, line.end);
     if (deleted.length > 0) line.deletedRanges = deleted;
     lines.push(line);
+    wordStartSpan = -1;
+    wordStartWidth = 0;
     line = {
       spans: [],
       start: line.end,
@@ -587,7 +605,53 @@ export function breakParagraph(
       // Measured as DRAWN: `w:caps` changes the glyphs, so measuring the source text
       // would size the line for characters the reader never sees.
       const width = measurer.measure(displayText(candidate, piece.style), piece.style);
-      if (line.width + width > lineAvailable() && line.spans.length > 0) closeLine();
+      // A candidate may open a line only at a real break opportunity. Within a piece,
+      // `wordBoundaries` cuts after spaces and tabs, so every candidate but the first is one.
+      // The FIRST candidate of a piece continues whatever the previous piece ended with, so it
+      // is a break opportunity only if that ended in whitespace.
+      const opensWord =
+        consumed > 0 ||
+        lastEmitted === '' ||
+        /[\s\u00a0]$/.test(lastEmitted) ||
+        /^[\s\u00a0]/.test(candidate);
+      if (opensWord) {
+        wordStartSpan = line.spans.length;
+        wordStartWidth = line.width;
+        wordStartEnd = line.end;
+      }
+      if (line.width + width > lineAvailable() && line.spans.length > 0) {
+        if (opensWord || wordStartSpan <= 0) {
+          closeLine();
+        } else {
+          // Mid-word overflow: carry the whole word to the next line rather than splitting it
+          // at a run boundary. The spans already placed for it are lifted off this line, the
+          // line is closed without them, and they are re-laid at the new origin.
+          const carried = line.spans.splice(wordStartSpan);
+          line.width = wordStartWidth;
+          line.end = wordStartEnd;
+          line.height = 0;
+          line.baseline = 0;
+          for (const span of line.spans) {
+            const spanMetrics = measurer.lineMetrics(span.style);
+            line.height = Math.max(line.height, spanMetrics.height);
+            line.baseline = Math.max(line.baseline, spanMetrics.baseline);
+          }
+          closeLine();
+          for (const span of carried) {
+            const spanMetrics = measurer.lineMetrics(span.style);
+            line.spans.push({
+              ...span,
+              box: { ...span.box, x: lineOrigin() + line.width },
+            });
+            line.width += span.box.width;
+            line.height = Math.max(line.height, spanMetrics.height);
+            line.baseline = Math.max(line.baseline, spanMetrics.baseline);
+            line.end = span.range.end;
+          }
+          wordStartSpan = 0;
+          wordStartWidth = 0;
+        }
+      }
       line.spans.push({
         range: spanRange,
         text: candidate,
@@ -601,6 +665,7 @@ export function breakParagraph(
       line.height = Math.max(line.height, metrics.height);
       line.baseline = Math.max(line.baseline, metrics.baseline);
       line.end = piece.projected ? piece.end : piece.start + boundary;
+      lastEmitted = candidate;
       consumed = boundary;
     }
   }
