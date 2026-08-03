@@ -12,6 +12,8 @@ import {
   paragraphFragmentsOf,
   spansInCells,
   spansInSelection,
+  type BlockFragmentRecord,
+  type ParagraphIndent,
   type SemanticLayout,
   type SemanticSelection,
   type StyleSpanRecord,
@@ -68,6 +70,52 @@ export function paragraphPropertiesOf(
     fragmentPropsByLayout.set(layout, index);
   }
   return index.get(paragraphId) ?? [];
+}
+
+/** A paragraph's effective indent, plus whether it sits inside a table. */
+export interface ParagraphIndentEntry {
+  readonly indent: ParagraphIndent;
+  readonly inTable: boolean;
+}
+
+const fragmentIndentByLayout = new WeakMap<SemanticLayout, Map<string, ParagraphIndentEntry>>();
+
+/**
+ * A paragraph's EFFECTIVE indent — cascade plus the numbering merge — from the layout
+ * records, or null for a paragraph the published layout does not carry.
+ *
+ * Not derivable from {@link paragraphPropertiesOf}: a list paragraph's indent comes from
+ * `numbering.xml` and is merged in after the cascade, so a numbered item authoring no
+ * `w:ind` reads zero there while its text sits indented.
+ *
+ * Table membership rides along because it is the ruler's gate, and this is the one walk
+ * that already knows it.
+ */
+export function paragraphIndentOf(
+  layout: SemanticLayout,
+  paragraphId: string
+): ParagraphIndentEntry | null {
+  let index = fragmentIndentByLayout.get(layout);
+  if (!index) {
+    const built = new Map<string, ParagraphIndentEntry>();
+    // Walked here rather than through `paragraphFragmentsOf`, which flattens cell
+    // paragraphs in with body ones — that difference is exactly what this index carries.
+    const visit = (blocks: readonly BlockFragmentRecord[], inTable: boolean): void => {
+      for (const block of blocks) {
+        if (block.kind === 'paragraph') {
+          if (!built.has(block.paragraphId)) {
+            built.set(block.paragraphId, { indent: block.indent, inTable });
+          }
+          continue;
+        }
+        for (const row of block.rows) for (const cell of row.cells) visit(cell.blocks, true);
+      }
+    };
+    for (const page of layout.pages) visit(page.fragments, false);
+    index = built;
+    fragmentIndentByLayout.set(layout, built);
+  }
+  return index.get(paragraphId) ?? null;
 }
 
 /** The D8 paragraph op vocabulary — the only names an op is allowed to carry. */
@@ -628,6 +676,38 @@ export function formattingAt(
       const raw = Number(spacing(properties)?.[attribute]);
       return Number.isFinite(raw) ? Math.round((raw / 20) * 100) / 100 : null;
     });
+  // Indent does NOT go null on disagreement, unlike everything above it: the values are the
+  // FIRST touched paragraph's and `mixed` reports the rest per field. A ruler has to draw
+  // its handles somewhere, and hiding them for Select All — the commonest indent gesture —
+  // is worse than showing the first paragraph's truth, which is what Word shows.
+  const indent = ((): SurfaceFormatting['indent'] => {
+    const entries = touchedParagraphs.map((id) => paragraphIndentOf(layout, id));
+    const first = entries[0];
+    if (!first) return null;
+    // Inside a table the value is correct but unplaceable: it is measured from the cell's
+    // content edge, and a ruler drawn against the page margin does not know the cell.
+    if (entries.some((entry) => entry === null || entry.inTable)) return null;
+    // Points to twips at this boundary, so one representation crosses into the contract.
+    const twips = (points: number): number => Math.round(points * 20);
+    // ONE signed first-line offset, hanging-wins (ECMA-376 §17.3.1.12) — the two spellings
+    // are mutually exclusive, never summed.
+    const signedFirstLine = (value: ParagraphIndent): number =>
+      twips(value.hanging > 0 ? -value.hanging : value.firstLine);
+    const resolved = entries as readonly ParagraphIndentEntry[];
+    const left = twips(first.indent.left);
+    const right = twips(first.indent.right);
+    const firstLine = signedFirstLine(first.indent);
+    return {
+      left,
+      right,
+      firstLine,
+      mixed: {
+        left: resolved.some((entry) => twips(entry.indent.left) !== left),
+        right: resolved.some((entry) => twips(entry.indent.right) !== right),
+        firstLine: resolved.some((entry) => signedFirstLine(entry.indent) !== firstLine),
+      },
+    };
+  })();
 
   return {
     bold: styles.length > 0 && styles.every((entry) => entry.bold),
@@ -649,6 +729,7 @@ export function formattingAt(
     lineSpacing,
     spaceBeforePt: spacePt('before'),
     spaceAfterPt: spacePt('after'),
+    indent,
   } satisfies SurfaceFormatting;
 }
 

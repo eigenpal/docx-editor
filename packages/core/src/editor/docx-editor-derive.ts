@@ -53,6 +53,7 @@ export function runFormattingOf(surface: PaginatedSurface | null): RunFormatting
     ...(formatting.lineSpacing ? { lineSpacing: formatting.lineSpacing } : {}),
     ...(formatting.spaceBeforePt !== null ? { spaceBeforePt: formatting.spaceBeforePt } : {}),
     ...(formatting.spaceAfterPt !== null ? { spaceAfterPt: formatting.spaceAfterPt } : {}),
+    ...(formatting.indent !== null ? { indent: formatting.indent } : {}),
   };
 }
 

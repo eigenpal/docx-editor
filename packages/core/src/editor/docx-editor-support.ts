@@ -20,6 +20,9 @@ import type {
   SemanticPositionIndex,
 } from '@docx-editor.dev/core-contract/contracts/interaction';
 import type { SemanticSelection as SurfaceSelection } from '@docx-editor.dev/core-contract/layout';
+// Direct, not through the layout barrel: this is an internal bound the write shares with
+// the reader, not something the layout package publishes.
+import { MAX_PARAGRAPH_INDENT_TWIPS } from '../layout/paragraph-flow.ts';
 import { isDocAnchor, isDocAnchorRange } from './anchor-resolution.ts';
 
 /** Recursively freeze plain objects and arrays (idempotent). */
@@ -384,13 +387,29 @@ export function classifyCommand(command: EditorCommand): CommandSupport {
             supported: false,
             reason: 'DocTarget addressing is not supported; unlink acts at the selection',
           };
-    case 'setIndent':
-      return command.left !== undefined ||
-        command.right !== undefined ||
-        command.firstLine !== undefined ||
-        command.hanging !== undefined
-        ? { supported: true, mutating: true }
-        : { supported: false, reason: 'setIndent requires at least one indent field' };
+    case 'setIndent': {
+      const fields = [command.left, command.right, command.firstLine];
+      if (fields.every((value) => value === undefined)) {
+        return { supported: false, reason: 'setIndent requires at least one indent field' };
+      }
+      // Bounded here because nothing downstream does: the store validates `w:ind`
+      // attribute NAMES and XML-safety only, so an unchecked value reached the file as
+      // `w:left="NaN"`. The read side clamps out-of-range values; a write refuses them,
+      // because silently storing something other than what was asked for is the worse lie.
+      for (const value of fields) {
+        if (value === undefined || value === null) continue;
+        if (!Number.isInteger(value)) {
+          return { supported: false, reason: 'indent values must be whole twips' };
+        }
+        if (Math.abs(value) > MAX_PARAGRAPH_INDENT_TWIPS) {
+          return {
+            supported: false,
+            reason: `indent values must be within ±${MAX_PARAGRAPH_INDENT_TWIPS} twips`,
+          };
+        }
+      }
+      return { supported: true, mutating: true };
+    }
     case 'toggleList':
       return command.kind === 'bullet' || command.kind === 'ordered'
         ? { supported: true, mutating: true }
@@ -539,6 +558,7 @@ const COMPARED_FORMATTING_KEYS: Record<keyof Required<RunFormatting>, true> = {
   lineSpacing: true,
   spaceBeforePt: true,
   spaceAfterPt: true,
+  indent: true,
 };
 void COMPARED_FORMATTING_KEYS;
 
@@ -561,7 +581,17 @@ export function formattingEqual(a: RunFormatting | null, b: RunFormatting | null
     a.spaceBeforePt !== b.spaceBeforePt ||
     a.spaceAfterPt !== b.spaceAfterPt ||
     a.lineSpacing?.rule !== b.lineSpacing?.rule ||
-    a.lineSpacing?.value !== b.lineSpacing?.value
+    a.lineSpacing?.value !== b.lineSpacing?.value ||
+    // FIELD BY FIELD, like `lineSpacing` above. `indent` is a fresh object on every derive,
+    // so comparing it by reference would report every tick as a change, hand back a new
+    // sub-object each time, and re-render every `snapshot().formatting` subscriber on each
+    // keystroke — the exact opposite of what this cache exists for.
+    a.indent?.left !== b.indent?.left ||
+    a.indent?.right !== b.indent?.right ||
+    a.indent?.firstLine !== b.indent?.firstLine ||
+    a.indent?.mixed.left !== b.indent?.mixed.left ||
+    a.indent?.mixed.right !== b.indent?.mixed.right ||
+    a.indent?.mixed.firstLine !== b.indent?.mixed.firstLine
   ) {
     return false;
   }
