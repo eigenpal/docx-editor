@@ -2,4 +2,4 @@
 '@docx-editor.dev/core': minor
 ---
 
-Keep autofit tables inside the page and read authored cell widths. A table left on Word's autofit layout now scales to the text column instead of running past the right margin, a table that states no `w:tblGrid` takes its columns from `w:tcW` rather than an even split, and a table's reported width is its own rather than always the page width. Tables that ask for fixed layout are still laid out on their grid, overflow included, as Word renders them.
+Resolve table column widths from the widths the document actually authors. `w:tcW` now overrides the `w:tblGrid` seed the way Word resolves them, rows that disagree settle on the widest, and `w:wBefore`/`w:wAfter` size the bands a row skips. `w:tblW` bounds the total — including stretching a table stated as a percentage out to the full text column — and an autofit table no longer renders past the right margin, while a fixed-layout table still lays out on its grid the way Word renders it. Widths stated as `2in` or `33.3%` are read rather than dropped, and a table reports its own width instead of always the page width.
