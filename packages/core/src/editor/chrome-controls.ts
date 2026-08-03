@@ -506,12 +506,6 @@ export const CHROME_GROUPS = [
         paths: GENERATED_ICON_PATHS['format_list_numbered'],
         state: { kind: 'command' },
       },
-      {
-        id: 'watermark',
-        labelKey: 'toolbar.watermark',
-        paths: GENERATED_ICON_PATHS['branding_watermark'],
-        state: { kind: 'command' },
-      },
     ],
   },
 ] as const;
@@ -597,8 +591,7 @@ export type ChromeSlotId =
   | 'insert.pageBreak'
   | 'insert.sectionBreakNextPage'
   | 'insert.sectionBreakContinuous'
-  | 'insert.toc'
-  | 'insert.watermark';
+  | 'insert.toc';
 
 /**
  * Every control id in the chrome, as a literal union. Unique WITHIN a group, not
@@ -794,7 +787,6 @@ export const CHROME_MENUS: readonly ChromeMenu[] = [
         ],
       },
       { kind: 'item', slot: 'insert.toc' },
-      { kind: 'item', slot: 'insert.watermark' },
     ],
   },
   {

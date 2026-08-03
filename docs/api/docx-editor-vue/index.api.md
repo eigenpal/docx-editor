@@ -53,8 +53,7 @@ export type ChromeSlotId =
 | 'insert.pageBreak'
 | 'insert.sectionBreakNextPage'
 | 'insert.sectionBreakContinuous'
-| 'insert.toc'
-| 'insert.watermark';
+| 'insert.toc';
 
 // @public
 export function commandForSlot(slotId: ChromeSlotId): EditorCommand | null {

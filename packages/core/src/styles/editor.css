@@ -3869,11 +3869,6 @@ a.docx-hyperlink:focus-visible {
   border-color: var(--doc-primary);
 }
 
-.ep-root .docx-menubar__grid-cell:disabled {
-  cursor: default;
-  opacity: 0.5;
-}
-
 .ep-root .docx-menubar__grid-caption {
   min-height: 18px;
   padding-top: 6px;
@@ -3881,15 +3876,4 @@ a.docx-hyperlink:focus-visible {
   font-size: 12px;
   line-height: 18px;
   color: var(--doc-text-muted);
-}
-
-/* The engine's own words when a size cannot be inserted. Wraps, because a refusal is a
- * sentence and truncating it would hide the reason. */
-.ep-root .docx-menubar__grid-reason {
-  max-width: 200px;
-  padding-top: 2px;
-  font-size: 11px;
-  line-height: 15px;
-  color: var(--doc-text-muted);
-  white-space: normal;
 }

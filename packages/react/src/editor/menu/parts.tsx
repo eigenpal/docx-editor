@@ -20,6 +20,7 @@ import {
   commandForSlot,
   type ChromeMenuEntry,
   type ChromeMenuId,
+  type ChromeMenuItemEntry,
   type ChromeSlotId,
 } from '@docx-editor.dev/core-contract/editor';
 import { useDocxEditor } from '../context';
@@ -329,22 +330,24 @@ export interface MenuTableGridProps {
  * Word's insert-table size picker: a 6×6 grid that highlights as the pointer sweeps it
  * and reads back the size underneath.
  *
- * The PARENT row discloses this panel and is therefore always interactive; the CELLS
- * carry the engine's answer, so on an engine that cannot insert a table yet the grid is
- * visible, sweeps, and refuses — a panel that opens onto a working-looking grid whose
- * click silently did nothing would be the lie. The reason under the grid is the engine's.
+ * Rendered only when the engine will honour an insert (see `MenuTablePicker`). A panel
+ * that opens onto a grid nothing can be picked from is worse than no panel: the row
+ * cannot act, so it should not disclose — it should look disabled, like every other row
+ * the engine refuses.
  *
  * @public
  */
 export function MenuTableGrid({ slot = 'table.insert', className }: MenuTableGridProps) {
   const editor = useDocxEditor();
-  const { isEnabled, disabledReason } = useEditorCommand(slot);
+  const { isEnabled } = useEditorCommand(slot);
   const { setOpenMenu } = useMenuContext();
   const [hover, setHover] = useState<{ rows: number; cols: number } | null>(null);
 
   const insert = useCallback(
     (rows: number, cols: number) => {
       if (!editor || !isEnabled) return;
+      // can-before-exec even here: the panel opened because the slot was enabled, and the
+      // selection can move under it.
       const command = { type: 'insertTable' as const, rows, cols };
       if (editor.can(command).ok) editor.exec(command);
       setOpenMenu(null);
@@ -362,7 +365,6 @@ export function MenuTableGrid({ slot = 'table.insert', className }: MenuTableGri
           type="button"
           role="menuitem"
           className="docx-menubar__grid-cell"
-          disabled={!isEnabled}
           {...(filled ? { 'data-filled': '' } : {})}
           aria-label={`${col} × ${row}`}
           onMouseDown={guardToolbarMousedown}
@@ -388,10 +390,34 @@ export function MenuTableGrid({ slot = 'table.insert', className }: MenuTableGri
       <div className="docx-menubar__grid-caption" role="status">
         {hover ? `${hover.cols} × ${hover.rows}` : ''}
       </div>
-      {!isEnabled && disabledReason ? (
-        <div className="docx-menubar__grid-reason">{disabledReason}</div>
-      ) : null}
     </div>
+  );
+}
+
+/**
+ * The Insert › Table row: the grid behind a disclosure when the engine can insert one, a
+ * plain disabled row when it cannot.
+ *
+ * Disclosure is not a command, so a submenu parent is normally interactive whatever its
+ * children can do — but that reasoning only holds when SOMETHING in the panel can act.
+ * With every cell refused the caret invites a click that opens a dead grid, and the
+ * engine's refusal ends up as body text in the panel, where a developer-facing string
+ * ("not wired to an editor command") reads as product copy. Both go where every other
+ * refused row puts them: a greyed row whose tooltip carries the engine's words.
+ */
+function MenuTablePicker({ entry }: { entry: ChromeMenuItemEntry }) {
+  const { isEnabled } = useEditorCommand(entry.slot);
+  const control = chromeControlForSlot(entry.slot);
+  if (!isEnabled) {
+    return <MenuItem slot={entry.slot} {...(entry.labelKey ? { labelKey: entry.labelKey } : {})} />;
+  }
+  return (
+    <MenuSubmenu
+      labelKey={entry.labelKey ?? control?.labelKey ?? entry.slot}
+      paths={control?.paths}
+    >
+      <MenuTableGrid slot={entry.slot} />
+    </MenuSubmenu>
   );
 }
 
@@ -435,17 +461,7 @@ export function MenuEntry({ entry }: { entry: ChromeMenuEntry }) {
   if (entry.slot === 'file.open') return <MenuOpen />;
   if (entry.slot === 'file.save') return <MenuSave />;
   if (entry.slot === 'file.pageSetup') return <MenuPageSetup />;
-  if (entry.picker === 'tableGrid') {
-    const control = chromeControlForSlot(entry.slot);
-    return (
-      <MenuSubmenu
-        labelKey={entry.labelKey ?? control?.labelKey ?? entry.slot}
-        paths={control?.paths}
-      >
-        <MenuTableGrid slot={entry.slot} />
-      </MenuSubmenu>
-    );
-  }
+  if (entry.picker === 'tableGrid') return <MenuTablePicker entry={entry} />;
   return (
     <MenuItem
       slot={entry.slot}
