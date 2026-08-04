@@ -60,7 +60,7 @@ import {
 } from './parts';
 import { ToolbarFontSize, ToolbarZoom } from './steppers';
 import { ToolbarLineSpacing } from './LineSpacing';
-import { ToolbarFontColor, ToolbarHighlight } from './ColorSplit';
+import { ToolbarFontColor, ToolbarHighlight, type ToolbarColorSplitComponent } from './ColorSplit';
 import { ToolbarAlignment, type ToolbarAlignmentComponent } from './Alignment';
 import { ToolbarAction } from './ToolbarAction';
 import { FontFamily, useFontFamily } from './FontFamily';
@@ -252,8 +252,8 @@ export interface DocxEditorToolbarNamespace {
   readonly Comments: ToolbarPartComponent;
   readonly FontFamily: typeof FontFamily;
   readonly FontSize: ToolbarSlotPartComponent;
-  readonly FontColor: ToolbarSlotPartComponent;
-  readonly Highlight: ToolbarSlotPartComponent;
+  readonly FontColor: ToolbarColorSplitComponent;
+  readonly Highlight: ToolbarColorSplitComponent;
   readonly Zoom: ToolbarSlotPartComponent;
   readonly StylePicker: typeof ParagraphStyle;
   readonly EditingMode: ToolbarSlotPartComponent;

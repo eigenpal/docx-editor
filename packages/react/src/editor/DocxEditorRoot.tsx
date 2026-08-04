@@ -35,8 +35,8 @@ import {
 
 /**
  * Props for `DocxEditor.Root`. Creation parameters (`document`, `fonts`, `author`,
- * `locale`, `mode`, and the initial `zoom`) are sampled when the instance is created;
- * only `document` and `fonts` identity remount it. A later `zoom` change flows through
+ * `locale`, and the initial `mode`/`zoom`) are sampled when the instance is created;
+ * only `document` and `fonts` identity remount it. Later `mode` and `zoom` changes flow through
  * `Editor.setZoom` so edits, the caret, and the undo history survive.
  *
  * @public

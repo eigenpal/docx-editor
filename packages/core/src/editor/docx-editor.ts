@@ -16,9 +16,23 @@
 //   change/selectionChange/error events, focus, destroy, attach/detach, `query` for
 //   `selectedText` and `selectionFormatting`, and the document catalogs
 //   (`getDocumentFonts`/`getDocumentStyles`, derived from the canonical trees).
-// - HONEST EMPTY: outline, comments, tracked changes, find, image/table context,
-//   watermark, and the geometry/interaction cluster (`getInteractionFrame`, `hitTest`,
-//   `dispatchInteraction`, …) — typed empty values, never invented geometry.
+// - HONEST EMPTY: outline, comments, tracked changes, find, image/table
+//   context, watermark and header/footer state. Every member returns its typed empty
+//   value, never an invented one.
+//
+// THE GEOMETRY/INTERACTION CLUSTER IS GONE, not stubbed. `getInteractionFrame`, `hitTest`,
+// `dispatchInteraction`, `resolvePointer`, the caret and selection rect readers and the
+// accessibility observation were all placeholders here, and none of them had a caller. They
+// were removed from the contract rather than filled in, because the honest-empty rule does
+// NOT extend to them: `getComments()` returning `[]` is a true statement about a document,
+// while `hitTest` returning `null` is indistinguishable from "you clicked the page margin",
+// so a caller could not tell an unimplemented member from a real answer. `getPageGeometry`
+// is the one survivor and is now REAL — it had the cluster's only consumer, and returning
+// `[]` had silently made both Vue rulers render nothing.
+//
+// The surface still owns caret, selection and hit testing internally, through the browser's
+// own selection and `layout/semantic-hit-test.ts`. Re-exposing any of it on this facade is
+// a small wiring job on the day a host needs it.
 // - The `display` event never fires: the surface paints its own pages into the container
 //   rather than handing the host a render list.
 //
@@ -79,6 +93,7 @@ import {
   type TextMeasurer,
 } from '@docx-editor.dev/core-contract/layout';
 import {
+  classifyCommand,
   deepFreezeValue,
   docRangeEqual,
   editorError,
@@ -118,7 +133,6 @@ import {
   type PaginatedSurface,
   type PaginatedSurfaceState,
 } from './paginated-surface.ts';
-import { createHonestEmptyInteractionApi } from './docx-editor-interaction.ts';
 import type {
   DocxEditorConfig,
   DocxEditorInstance,
@@ -131,6 +145,27 @@ export type {
   FontMeasurementState,
   HyperlinkChromeHandlers,
 } from './docx-editor-types.ts';
+
+/**
+ * Points (the layout's unit) to content pixels at 96dpi (every geometry consumer's unit).
+ *
+ * The engine lays out in points — twips / 20 — and paints at `zoom * 96/72`. This is that
+ * same 96/72, applied once, where layout geometry crosses into the public contract.
+ */
+function toContentPixels(box: { x: number; y: number; width: number; height: number }): {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+} {
+  const scale = 96 / 72;
+  return {
+    x: box.x * scale,
+    y: box.y * scale,
+    width: box.width * scale,
+    height: box.height * scale,
+  };
+}
 
 /** The one frozen scope object every snapshot shares, so scope stays reference-equal. */
 const SCOPE_BODY: EditorScope = Object.freeze({ kind: 'body' as const });
@@ -231,7 +266,6 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
   const handlers: { [E in keyof EditorEvents]: Set<EditorEvents[E]> } = {
     change: new Set(),
     selectionChange: new Set(),
-    display: new Set(),
     error: new Set(),
   };
 
@@ -326,6 +360,12 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
     }
     parseError = null;
     surface = result.surface;
+    // A surface is rebuilt on load and on the font remount, and it comes up editable. The
+    // engine's own guards refuse the WRITE, but the pages layer stays `contenteditable`
+    // without this — so a document open for viewing still drew a caret, still opened an IME,
+    // and still told a screen reader it was writable. Reads the CURRENT mode, not just the
+    // constructed one, so a remount after `setEditingMode('viewing')` comes up right.
+    surface.setEditable(editingMode !== 'viewing');
     lastSelection = surface.state().selection;
     unsubscribeSession = surface.session.subscribe((change) => {
       const documentChange: DocumentChange = {
@@ -615,6 +655,18 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
         editingMode !== 'viewing',
       zoom,
       selection: selectionRangeOf(surface),
+      // Whether the selection is a CARET rather than a range.
+      //
+      // Cheap on purpose. The only way to ask this used to be
+      // `query({ type: 'selectedText' }) === ''`, which materializes the whole selected
+      // string to answer a boolean — and hosts ask it from selector functions that re-run on
+      // every tick, so a select-all on a long document allocated megabytes per tick to learn
+      // one bit. `selection` cannot carry it: `DocRange` addresses paragraphs by paraId and
+      // has no offsets, so a caret and a within-paragraph range look identical there.
+      selectionCollapsed:
+        state === null ||
+        (state.selection.anchor.paragraphId === state.selection.head.paragraphId &&
+          state.selection.anchor.offset === state.selection.head.offset),
       formatting: runFormattingOf(surface),
       table: tableContextOf(surface),
       image: null,
@@ -1019,6 +1071,9 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
         surface?.setEditingMode(
           command.mode === 'suggesting' ? 'suggest' : command.mode === 'viewing' ? 'view' : 'edit'
         );
+        // The DOM affordance is separate from the op gate: `setEditingMode` decides what a
+        // write becomes, this decides whether the browser offers one at all.
+        surface?.setEditable(command.mode !== 'viewing');
         bump();
         emitSelectionChange();
         return { ok: true, changed: false };
@@ -1029,10 +1084,16 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
         emitSelectionChange();
         return { ok: true, changed: false };
       }
-      // Viewing refuses every edit, reversibly — the reader chose it and can choose again.
+      // Viewing refuses every EDIT, reversibly — the reader chose it and can choose again.
       // Checked HERE as well as in `can`, because a host that calls `exec` directly is not
       // required to ask first and must not get a write it was told it could not have.
-      if (editingMode === 'viewing') {
+      //
+      // Mutating only. A blanket refusal also blocked `selectAll` and `copy`, which is a
+      // viewer that cannot select or copy the document it exists to show — and it disagreed
+      // with the construction-time `mode: 'view'` path, which has always gated on `mutating`
+      // through `gateCommand`. Same visible state, two behaviours.
+      const viewingGate = classifyCommand(command);
+      if (editingMode === 'viewing' && viewingGate.supported && viewingGate.mutating) {
         return { ok: false, code: 'locked', reason: 'the document is open for viewing' };
       }
       const gated = gateCommand(command, surface, mode, options);
@@ -1066,9 +1127,11 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
         }
         return { ok: true };
       }
-      // Viewing refuses every edit, the same way `mode: 'view'` does at construction — but
-      // reversibly, because the reader chose it and can choose again.
-      if (editingMode === 'viewing') {
+      // Viewing refuses every EDIT, the same way `mode: 'view'` does at construction — but
+      // reversibly, because the reader chose it and can choose again. Mutating only, so a
+      // reader can still select and copy; see the note at the `exec` twin.
+      const viewingSupport = classifyCommand(command);
+      if (editingMode === 'viewing' && viewingSupport.supported && viewingSupport.mutating) {
         return { ok: false, code: 'locked', reason: 'the document is open for viewing' };
       }
       const gated = gateCommand(command, surface, mode, options);
@@ -1343,7 +1406,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
         case 'variables':
           return {} as EditorQueryResults[K];
         default:
-          // tableContext, watermark, splitCellConfig, contentControlAt, pageContent — all
+          // tableContext, watermark, splitCellConfig, contentControlAt — all
           // nullable, all underived.
           return null as EditorQueryResults[K];
       }
@@ -1388,12 +1451,33 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
       return { ok: true, changed: true };
     },
 
-    // Geometry / interaction cluster: typed empties — the surface owns interaction.
-    ...createHonestEmptyInteractionApi({
-      getSurface: () => surface,
-      getMode: () => mode,
-      getEditingMode: () => editingMode,
-    }),
+    /**
+     * Page boxes from the LAYOUT, never from the DOM, in CONTENT PIXELS at 96dpi.
+     *
+     * The unit conversion is the load-bearing part. Layout works in POINTS (twips / 20), and
+     * the surface converts at paint with `scale = zoom * 96/72`; every consumer of this
+     * member works in content pixels — `ruler-ticks.ts` says so in its header and derives
+     * ticks from `PX_PER_INCH = 96`, and React's own ruler computes the same page width
+     * through `twipsToPixels`. Handing points straight out made a Letter page measure 612
+     * where the painted page is 816, so the Vue ruler drew a strip 25% short of its page and
+     * labelled 8.5 inches as six.
+     *
+     * ZOOM IS NOT APPLIED. These are content pixels at 100%; a caller that scales its own
+     * rendering multiplies by `getZoom()`, which is what both rulers already do.
+     *
+     * `layout()` flushes any pending commit first, so a caller measuring straight after an
+     * edit reads the geometry that edit produced rather than the one before it. Virtualized
+     * pages are included: a page with no element yet still has a box, and that is usually
+     * the page a caller is asking about.
+     */
+    getPageGeometry: () =>
+      surface
+        ? surface.layout().pages.map((page) => ({
+            index: page.index,
+            box: toContentPixels(page.box),
+            contentBox: toContentPixels(page.contentBox),
+          }))
+        : [],
 
     relayout() {
       // `layout()` flushes any commit the scheduler has not published yet; the surface

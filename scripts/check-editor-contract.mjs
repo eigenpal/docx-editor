@@ -60,6 +60,13 @@ const REACT_PROPS_NOT_YET_IN_VUE = new Set([
   // twin lands.
   'menu',
   'onOpen',
+  // The right-click menu rides that same provider/hooks layer, and its engine half is the
+  // most shared of the four: `selectAll`, `copy`, `cut` and `paste` are core commands, the
+  // rows ARE the menu bar's rows, every enabled state comes from the same `Editor.can`, the
+  // styles are in the core stylesheet, and the surface's pointer controller already ignores
+  // non-primary buttons so a right-click reaches a menu with the selection intact. The Vue
+  // twin is a panel and a placement rule. Removed when the Vue provider/hooks twin lands.
+  'contextMenu',
 ]);
 
 function extractInterfaceBody(source, name) {

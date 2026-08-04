@@ -18,12 +18,11 @@ import { zipSync, strToU8 } from 'fflate';
 import {
   DocxEditor,
   useDocxEditor,
+  useDocxSource,
   useEditorEvent,
   useFontFamily,
-  composeFontConfiguration,
-  type FontConfiguration,
 } from '@docx-editor.dev/react';
-import { installDefaultFontFaces, loadDefaultFonts } from '@docx-editor.dev/fonts';
+import { defaultFonts } from '@docx-editor.dev/fonts';
 import { createT, en, type TranslationKey } from '@docx-editor.dev/i18n';
 import { BrandLogo } from '../../shared/BrandLogo';
 import { AdapterSwitcher } from '../../shared/AdapterSwitcher';
@@ -553,76 +552,38 @@ function RulerRow() {
 // ─────────────────────────────────────────────────────────────────────────────
 
 export function ComposedEditorDemo({ fixtureUrl }: { fixtureUrl: string }) {
-  const [bytes, setBytes] = useState<Uint8Array | null>(null);
-  const [loadError, setLoadError] = useState<string | null>(null);
   const [colorMode, setColorMode] = useState<'light' | 'dark'>('light');
   const [title, setTitle] = useState('Sample Document');
   const [showOutline, setShowOutline] = useState(false);
-  // Word-default substitute fonts (Carlito for Calibri, Liberation Serif for Times, …)
-  // so wrap and pagination measure Word-accurately instead of on the fixed fallback.
-  // `settled` gates the FIRST mount — fonts and fixture load in parallel, and waiting
-  // for both avoids a visible remount. A load failure settles with no fonts: the
-  // editor opens on the fixed measurer, which is the documented degradation.
-  const [fonts, setFonts] = useState<{
-    settled: boolean;
-    configuration?: FontConfiguration;
-  }>({ settled: false });
 
-  useEffect(() => {
-    let cancelled = false;
-    void (async () => {
-      try {
-        const response = await fetch(fixtureUrl);
-        if (!response.ok) throw new Error(`${response.status} ${response.statusText}`);
-        const buffer = await response.arrayBuffer();
-        if (!cancelled) setBytes(new Uint8Array(buffer));
-      } catch (error) {
-        if (!cancelled) setLoadError(error instanceof Error ? error.message : String(error));
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [fixtureUrl]);
-
-  useEffect(() => {
-    let cancelled = false;
-    void (async () => {
-      try {
-        const fragment = await loadDefaultFonts();
-        // Degradations are diagnosable, not silent: a face that failed to load falls
-        // back to fixed-width measurement for that family only.
-        for (const failure of fragment.failures) {
-          console.warn(`[fonts] ${failure.family} (${failure.file}): ${failure.diagnostic}`);
-        }
-        // Paint-side twin: register the substitutes under the Word family names so
-        // painted glyphs use the same metrics the layout measured with.
-        void installDefaultFontFaces();
-        if (!cancelled) {
-          setFonts({ settled: true, configuration: composeFontConfiguration(fragment) });
-        }
-      } catch {
-        if (!cancelled) setFonts({ settled: true });
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, []);
+  // The whole boot in ONE call: fetch the fixture, load Word's default substitute faces
+  // (Carlito for Calibri, Liberation Serif for Times, …), register them for paint, compose
+  // the configuration, and cancel both if this unmounts.
+  //
+  // The hook holds `document` back until fonts SETTLE — resolved or failed — because layout
+  // measures with them: handing the editor bytes first paginates the whole document on the
+  // fixed fallback and then re-paginates, which reads as the text jumping. A font failure
+  // still releases it, and the editor opens on the fixed measurer, the documented
+  // degradation.
+  const {
+    document: bytes,
+    fonts,
+    error: loadError,
+  } = useDocxSource(fixtureUrl, { fonts: defaultFonts });
 
   return (
     <div
       className={`ep-root demo-app${colorMode === 'dark' ? ' dark' : ''}`}
       data-testid="composed-mount"
     >
-      {bytes && fonts.settled ? (
+      {bytes ? (
         // Authoring is ambient: comments and tracked changes take their `@w:author` from
         // `author`, the way the Office JS API sources it from context. A real app supplies
         // the signed-in user; a demo supplies a name so replies can be written at all.
         <DocxEditor.Root
           document={bytes}
           author="Demo Reviewer"
-          {...(fonts.configuration ? { fonts: fonts.configuration } : {})}
+          {...(fonts ? { fonts } : {})}
           onFontError={(error) => console.warn(`[fonts] ${error.code}: ${error.message}`)}
         >
           <EditorChrome
@@ -673,7 +634,7 @@ export function ComposedEditorDemo({ fixtureUrl }: { fixtureUrl: string }) {
         // A failed fetch is NOT a loading state: it is terminal, and routing it through
         // the polite live region would announce it as progress. Its own assertive region.
         <div className="demo-loading" role="alert">
-          {`Could not load the document: ${loadError}`}
+          {`Could not load the document: ${loadError.message}`}
         </div>
       ) : (
         // The library's loading surface rather than a hand-rolled div: rendered outside

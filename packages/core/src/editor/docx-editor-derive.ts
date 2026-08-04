@@ -251,6 +251,25 @@ export function gateCommand(
       },
     };
   }
+  // Cut, Copy and Delete are gated on the SELECTION, for the reason directly above: a row
+  // that stays live over a collapsed caret does nothing when pressed and looks broken. All
+  // THREE, because they are siblings in one menu — `deleteText` is `deleteSelection()`,
+  // which returns false at a caret, so leaving it out left one of three clipboard-adjacent
+  // rows disagreeing with the other two about the same condition.
+  //
+  // The check is the collapsed comparison, NOT `selectedText() === ''`. Reading the text
+  // builds the entire selected string to answer one bit, and `can` is asked from host
+  // selectors that re-run on every tick — the exact cost `EditorSnapshot.selectionCollapsed`
+  // exists to avoid, which it would be absurd to reintroduce here.
+  if (command.type === 'copy' || command.type === 'cut' || command.type === 'deleteText') {
+    const { anchor, head } = surface.state().selection;
+    if (anchor.paragraphId === head.paragraphId && anchor.offset === head.offset) {
+      return {
+        ok: false,
+        refusal: { ok: false, code: 'unsupported', reason: 'nothing is selected' },
+      };
+    }
+  }
   // The style picker's probe promises "a well-formed pick would be honoured": on a
   // document that defines no paragraph styles, no pick can be — every styleId is refused
   // at exec — so the control must grey out rather than open an empty, dead listbox.

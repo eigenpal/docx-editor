@@ -267,6 +267,55 @@ React-only.
 - `ChromeMenuSubmenuEntry`
 - `ChromeMenuSeparatorEntry`
 
+### The right-click menu
+
+The packaged context menu, part of the same React-first provider/hooks layer as the menu
+bar and the navigation pane. The ENGINE half is already shared and is not deferred:
+`selectAll`, `copy`, `cut` and `paste` are core `EditorCommand`s, every row's enabled state
+comes from the same `Editor.can` both adapters call, and the surface's pointer controller
+already ignores non-primary buttons so that a right-click reaches a menu with the selection
+intact. What defers is the panel.
+
+Its rows ARE the menu bar's rows — `MenuRow`, `MenuItem`, `MenuSubmenu`, `MenuSeparator`
+reused rather than reimplemented — so the Vue twin costs a panel and a placement rule, not a
+second row vocabulary.
+
+- `DocxEditorContextMenu` — the compound. Also reachable as `DocxEditor.ContextMenu`.
+- `DocxEditorContextMenuNamespace`
+- `DocxEditorContextMenuProps`
+  The five packaged rows below are each bound to a fixed `EditorCommand` rather than to a
+  `ChromeSlotId`, because none of the five is a toolbar or menu-bar control and adding
+  registry entries for them would put five dead controls in the default arrangement.
+
+- `ContextMenuCut`
+- `ContextMenuCopy`
+- `ContextMenuPaste`
+- `ContextMenuDelete`
+- `ContextMenuSelectAll`
+- `ContextMenuItem` — a host-owned row with no slot and no command, the right-click twin of
+  `ToolbarAction` and `Menu.Row`. Deliberately NOT a shared concept, for the same reason
+  `ToolbarActionProps` is not: it carries no engine wiring, so there is nothing for core to
+  own.
+- `ContextMenuCommandProps`
+- `ContextMenuItemProps`
+- `ContextMenuAnchor` — where the panel opened, in client coordinates.
+
+### Opening a document
+
+`useDocxSource` is a React hook, and its Vue twin is a composable — the same capability in
+the other framework's idiom, landing with the rest of the provider/hooks layer. Nothing about
+it is engine-side: it fetches bytes, resolves whatever font loader the host passed, composes
+the fragment through the SHARED `composeFontConfiguration`, and cancels both on unmount.
+
+- `useDocxSource`
+- `DocxSource` — a URL or bytes.
+- `DocxFontsSource` — a font value, promise, or loader thunk. The thunk form is why
+  `@docx-editor.dev/fonts` is not a dependency of this package: font BYTES stay out of the
+  bundle of a consumer who brings their own faces.
+- `DocxFontsInput`
+- `UseDocxSourceOptions`
+- `UseDocxSourceResult`
+
 ## Vue-only
 
 - `DocxEditorShellProps`

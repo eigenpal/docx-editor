@@ -8,6 +8,7 @@
 
 import type { EditorCommand, ExecResult } from '../contracts/editor.ts';
 import type { PaginatedSurface } from './paginated-surface-contract.ts';
+import { writeClipboardText } from './clipboard-write.ts';
 import { MARKS, isSurfaceSelection, resolveMarkAttr } from './docx-editor-support.ts';
 import { isDocAnchor, isDocAnchorRange, resolveAnchorSelection } from './anchor-resolution.ts';
 import {
@@ -264,6 +265,23 @@ export function execEditorCommand(
       return execConvertAllNotes(mounted, command);
     case 'setNoteProperties':
       return execSetNoteProperties(mounted, command);
+    case 'selectAll':
+      mounted.selectAll();
+      // Selection is not document state: nothing to save changed.
+      return { ok: true, changed: false };
+    case 'copy':
+      // The gate already refused a collapsed selection, so this read is non-empty.
+      writeClipboardText(mounted.selectedText());
+      return { ok: true, changed: false };
+    case 'cut':
+      // Read BEFORE the delete: `selectedText` answers from the selection, and the delete
+      // is what removes it.
+      writeClipboardText(mounted.selectedText());
+      mounted.deleteSelection();
+      break;
+    case 'paste':
+      mounted.insertPlainText(command.text);
+      break;
     case 'setSelection': {
       if ('range' in command && isSurfaceSelection(command.range)) {
         mounted.setSelection(command.range);

@@ -29,6 +29,7 @@ import {
 import { useDocumentOutline } from './useDocumentOutline';
 import { useDocumentSearch } from './useDocumentSearch';
 import { useNavigationPane, type UseNavigationPaneOptions } from './useNavigationPane';
+import type { NavigationPartProps } from './parts';
 import {
   NavigationClose,
   NavigationFind,
@@ -47,8 +48,15 @@ export interface DocxEditorNavigationProps extends UseNavigationPaneOptions {
    * unless a provider swapped it), matching `<DocxEditor>`'s own default.
    */
   t?: (key: string, params?: Record<string, string | number>) => string;
-  /** Render the collapsed disc button. `false` to place `Navigation.Toggle` yourself. */
-  toggle?: boolean;
+  /**
+   * The collapsed disc button. `false` removes it; an OBJECT is props for the packaged one,
+   * so a host can give it a class without restyling the library's.
+   *
+   * It is a prop rather than something you compose through `children` because the disc is
+   * rendered OUTSIDE the panel: the panel is `inert` while the pane is shut, which is
+   * exactly when the disc has to be clickable.
+   */
+  toggle?: boolean | NavigationPartProps;
   className?: string;
   style?: CSSProperties;
   /** Replaces the default composition (header, tabs, both panels). */
@@ -102,7 +110,9 @@ export function DocxEditorNavigation(props: DocxEditorNavigationProps): ReactEle
           } as CSSProperties
         }
       >
-        {toggle && !pane.open && <NavigationToggle />}
+        {toggle !== false && !pane.open && (
+          <NavigationToggle {...(typeof toggle === 'object' ? toggle : {})} />
+        )}
         <aside
           className="docx-nav__panel-shell"
           aria-label={value.t('navigation.ariaLabel')}

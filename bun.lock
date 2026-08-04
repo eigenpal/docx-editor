@@ -105,6 +105,24 @@
         "typescript": "^6.0.3",
       },
     },
+    "examples/igloo": {
+      "name": "docx-editor-example-igloo",
+      "dependencies": {
+        "@docx-editor.dev/core-contract": "workspace:*",
+        "@docx-editor.dev/fonts": "workspace:*",
+        "@docx-editor.dev/i18n": "workspace:*",
+        "@docx-editor.dev/react": "workspace:*",
+        "react": "^19.0.0",
+        "react-dom": "^19.0.0",
+      },
+      "devDependencies": {
+        "@types/react": "^19.2.17",
+        "@types/react-dom": "^19.0.0",
+        "@vitejs/plugin-react": "^6.0.1",
+        "typescript": "^6.0.3",
+        "vite": "^8.0.10",
+      },
+    },
     "examples/nextjs": {
       "name": "docx-editor-example-nextjs",
       "dependencies": {
@@ -1639,6 +1657,8 @@
     "doctrine": ["doctrine@2.1.0", "", { "dependencies": { "esutils": "^2.0.2" } }, "sha512-35mSku4ZXK0vfCuHEDAwt55dg2jNajHZ1odvF+8SSr82EsZY4QmXfuWso8oEd8zRhVObSN18aM0CjSdoBX7zIw=="],
 
     "docx-editor-example-astro": ["docx-editor-example-astro@workspace:examples/astro"],
+
+    "docx-editor-example-igloo": ["docx-editor-example-igloo@workspace:examples/igloo"],
 
     "docx-editor-example-nextjs": ["docx-editor-example-nextjs@workspace:examples/nextjs"],
 
@@ -3605,6 +3625,8 @@
     "csso/css-tree": ["css-tree@2.2.1", "", { "dependencies": { "mdn-data": "2.0.28", "source-map-js": "^1.0.1" } }, "sha512-OA0mILzGc1kCOCSJerOeqDxDQ4HOh+G8NbOJFOTgOCzpw7fCBubk0fEyxp8AgOL/jvLgYA/uV0cMbe43ElF1JA=="],
 
     "docx-editor-example-astro/typescript": ["typescript@6.0.3", "", { "bin": { "tsc": "bin/tsc", "tsserver": "bin/tsserver" } }, "sha512-y2TvuxSZPDyQakkFRPZHKFm+KKVqIisdg9/CZwm9ftvKXLP8NRWj38/ODjNbr43SsoXqNuAisEf1GdCxqWcdBw=="],
+
+    "docx-editor-example-igloo/typescript": ["typescript@6.0.3", "", { "bin": { "tsc": "bin/tsc", "tsserver": "bin/tsserver" } }, "sha512-y2TvuxSZPDyQakkFRPZHKFm+KKVqIisdg9/CZwm9ftvKXLP8NRWj38/ODjNbr43SsoXqNuAisEf1GdCxqWcdBw=="],
 
     "docx-editor-example-nextjs/typescript": ["typescript@6.0.3", "", { "bin": { "tsc": "bin/tsc", "tsserver": "bin/tsserver" } }, "sha512-y2TvuxSZPDyQakkFRPZHKFm+KKVqIisdg9/CZwm9ftvKXLP8NRWj38/ODjNbr43SsoXqNuAisEf1GdCxqWcdBw=="],
 

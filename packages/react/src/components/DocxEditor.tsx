@@ -18,6 +18,10 @@ import { DocxEditorReview } from '../editor/DocxEditorReview';
 import { DocxEditorHeaderFooterChrome } from '../editor/DocxEditorHeaderFooter';
 import { DocxEditorHyperLink } from '../editor/DocxEditorHyperLink';
 import { DocxEditorNotesChrome } from '../editor/DocxEditorNotes';
+import {
+  ContextMenu as DocxEditorContextMenuCompound,
+  DocxEditorContextMenu,
+} from '../editor/contextmenu';
 import { useTranslation } from '../i18n';
 import type { TranslationKey } from '../i18n';
 import type { DocxEditorProps, DocxEditorRef } from '../types';
@@ -150,6 +154,7 @@ const DocxEditorImpl = forwardRef<DocxEditorRef, DocxEditorProps>(function DocxE
     onOpen,
     onSave,
     hyperlinkPopup,
+    contextMenu = true,
     menu = true,
     navigation = true,
   } = props;
@@ -197,6 +202,12 @@ const DocxEditorImpl = forwardRef<DocxEditorRef, DocxEditorProps>(function DocxE
       {chrome ? <DocxEditorNotesChrome /> : null}
       <DocxEditorContent />
       <DocxEditorHyperLink hidden={hyperlinkPopup === false} />
+      {contextMenu === false ? null : (
+        <DocxEditorContextMenu
+          t={translate}
+          {...(typeof contextMenu === 'object' ? contextMenu : {})}
+        />
+      )}
     </DocxEditorViewport>
   );
 
@@ -342,6 +353,13 @@ export interface DocxEditorNamespace extends ForwardRefExoticComponent<
    * reject and reply. Place it inside the Viewport, beside `DocxEditor.Content`.
    */
   readonly Review: typeof DocxEditorReview;
+  /**
+   * The right-click menu over the painted document, with its rows as statics (`.Cut`,
+   * `.Copy`, `.Paste`, `.Delete`, `.SelectAll`, `.Item`, `.Slot`, `.Submenu`, …). Mounted
+   * by default inside the viewport; `contextMenu={false}` removes it and lets the
+   * browser's own menu through.
+   */
+  readonly ContextMenu: typeof DocxEditorContextMenuCompound;
 }
 
 export const DocxEditor: DocxEditorNamespace = Object.assign(DocxEditorImpl, {
@@ -360,4 +378,5 @@ export const DocxEditor: DocxEditorNamespace = Object.assign(DocxEditorImpl, {
   NotesChrome: DocxEditorNotesChrome,
   HyperLink: DocxEditorHyperLink,
   Review: DocxEditorReview,
+  ContextMenu: DocxEditorContextMenuCompound,
 });

@@ -19,9 +19,6 @@ import { commandForSlot } from '@docx-editor.dev/core-contract/editor';
 import { composeFontConfiguration } from '@docx-editor.dev/core-contract/editor';
 import { createFontSource } from '@docx-editor.dev/core-contract/editor';
 import { CSSProperties } from 'react';
-import { DisplayItem } from '@docx-editor.dev/core-contract/contracts/geometry';
-import { DisplayPage } from '@docx-editor.dev/core-contract/contracts/geometry';
-import { DocPoint } from '@docx-editor.dev/core-contract/contracts/geometry';
 import { DocumentChange } from '@docx-editor.dev/core-contract/contracts/editor';
 import { DocumentHandle } from '@docx-editor.dev/core-contract/contracts/editor';
 import { DocumentSource } from '@docx-editor.dev/core-contract/contracts/editor';
@@ -105,13 +102,73 @@ export { commandForSlot }
 
 export { composeFontConfiguration }
 
+// @public
+export interface ContextMenuAnchor {
+    // (undocumented)
+    readonly x: number;
+    // (undocumented)
+    readonly y: number;
+}
+
+// @public
+export interface ContextMenuCommandProps {
+    // (undocumented)
+    className?: string;
+    hidden?: boolean;
+    icon?: ReactNode;
+    labelKey?: string;
+    shortcutKey?: string;
+}
+
+// @public
+export const ContextMenuCopy: ((input: ContextMenuCommandProps) => react.JSX.Element | null) & {
+    docxRow: string;
+};
+
+// @public
+export const ContextMenuCut: ((input: ContextMenuCommandProps) => react.JSX.Element | null) & {
+    docxRow: string;
+};
+
+// @public
+export const ContextMenuDelete: ((input: ContextMenuCommandProps) => react.JSX.Element | null) & {
+    docxRow: string;
+};
+
+// @public
+export function ContextMenuItem(input: ContextMenuItemProps): react.JSX.Element;
+
+// @public
+export interface ContextMenuItemProps {
+    active?: boolean;
+    // (undocumented)
+    className?: string;
+    // (undocumented)
+    disabled?: boolean;
+    disabledReason?: string;
+    // (undocumented)
+    icon?: ReactNode;
+    label: string;
+    // (undocumented)
+    onSelect?: () => void;
+    shortcut?: string;
+}
+
+// @public
+export function ContextMenuPaste(input: ContextMenuCommandProps): react.JSX.Element | null;
+
+// @public (undocumented)
+export namespace ContextMenuPaste {
+    var // (undocumented)
+    docxRow: "edit.paste";
+}
+
+// @public
+export const ContextMenuSelectAll: ((input: ContextMenuCommandProps) => react.JSX.Element | null) & {
+    docxRow: string;
+};
+
 export { createFontSource }
-
-export { DisplayItem }
-
-export { DisplayPage }
-
-export { DocPoint }
 
 // @public (undocumented)
 export function DocumentName(input: DocumentNameProps): react__default.JSX.Element;
@@ -127,6 +184,43 @@ export function DocxEditorContent(input: DocxEditorContentProps): react.JSX.Elem
 // @public
 export interface DocxEditorContentProps {
     className?: string;
+}
+
+// @public
+export function DocxEditorContextMenu(input: DocxEditorContextMenuProps): react.JSX.Element;
+
+// @public
+export interface DocxEditorContextMenuNamespace {
+    // (undocumented)
+    (props: DocxEditorContextMenuProps): ReactElement;
+    // (undocumented)
+    readonly Copy: typeof ContextMenuCopy;
+    // (undocumented)
+    readonly Cut: typeof ContextMenuCut;
+    // (undocumented)
+    readonly Delete: typeof ContextMenuDelete;
+    readonly Item: typeof ContextMenuItem;
+    // (undocumented)
+    readonly Paste: typeof ContextMenuPaste;
+    readonly Row: typeof MenuRow;
+    // (undocumented)
+    readonly SelectAll: typeof ContextMenuSelectAll;
+    // (undocumented)
+    readonly Separator: typeof MenuSeparator;
+    readonly Slot: typeof MenuItem;
+    // (undocumented)
+    readonly Submenu: typeof MenuSubmenu;
+}
+
+// @public
+export interface DocxEditorContextMenuProps {
+    // (undocumented)
+    children?: ReactNode;
+    className?: string;
+    disabled?: boolean;
+    onOpenChange?: (open: boolean) => void;
+    preset?: boolean;
+    t?: ToolbarTranslate;
 }
 
 // @public
@@ -253,6 +347,7 @@ export interface DocxEditorMenuProps {
 export interface DocxEditorNamespace extends ForwardRefExoticComponent<DocxEditorProps & RefAttributes<DocxEditorRef>> {
     // (undocumented)
     readonly Content: typeof DocxEditorContent;
+    readonly ContextMenu: typeof ContextMenu;
     readonly DocumentOutline: typeof DocxEditorDocumentOutline;
     readonly HeaderFooterChrome: typeof DocxEditorHeaderFooterChrome;
     readonly HorizontalRuler: typeof DocxEditorHorizontalRuler;
@@ -306,7 +401,7 @@ export interface DocxEditorNavigationProps extends UseNavigationPaneOptions {
     // (undocumented)
     style?: CSSProperties;
     t?: (key: string, params?: Record<string, string | number>) => string;
-    toggle?: boolean;
+    toggle?: boolean | NavigationPartProps;
 }
 
 // @public (undocumented)
@@ -337,6 +432,7 @@ export interface DocxEditorProps {
     // (undocumented)
     className?: string;
     readonly colorMode?: 'light' | 'dark' | 'system';
+    contextMenu?: boolean | DocxEditorContextMenuProps;
     document?: DocumentSource;
     fonts?: FontConfiguration | FontConfigurationFragment;
     hyperlinkPopup?: boolean;
@@ -511,13 +607,13 @@ export interface DocxEditorToolbarNamespace {
     // (undocumented)
     readonly EditingMode: ToolbarSlotPartComponent;
     // (undocumented)
-    readonly FontColor: ToolbarSlotPartComponent;
+    readonly FontColor: ToolbarColorSplitComponent;
     // (undocumented)
     readonly FontFamily: typeof FontFamily;
     // (undocumented)
     readonly FontSize: ToolbarSlotPartComponent;
     // (undocumented)
-    readonly Highlight: ToolbarSlotPartComponent;
+    readonly Highlight: ToolbarColorSplitComponent;
     // (undocumented)
     readonly ImageInsert: ToolbarPartComponent;
     // (undocumented)
@@ -582,6 +678,15 @@ export interface DocxEditorViewportProps {
     // (undocumented)
     style?: CSSProperties;
 }
+
+// @public
+export type DocxFontsInput = FontConfiguration | FontConfigurationFragment;
+
+// @public
+export type DocxFontsSource = DocxFontsInput | Promise<DocxFontsInput> | (() => DocxFontsInput | Promise<DocxFontsInput>);
+
+// @public
+export type DocxSource = string | URL | Uint8Array | ArrayBuffer;
 
 export { Editor }
 
@@ -806,6 +911,7 @@ export interface MenuProps {
     // (undocumented)
     className?: string;
     hidden?: boolean;
+    icon?: ReactNode;
     id: MenuId;
     label?: string;
     labelKey?: string;
@@ -1344,7 +1450,25 @@ export interface UseDocumentSearchResult {
 export function useDocxEditor(): DocxEditorInstance | null;
 
 // @public
-export function useEditorCommand(slotId: ChromeSlotId): EditorCommandState;
+export function useDocxSource(source: DocxSource | null | undefined, options?: UseDocxSourceOptions): UseDocxSourceResult;
+
+// @public
+export interface UseDocxSourceOptions {
+    fetchOptions?: RequestInit;
+    // (undocumented)
+    fonts?: DocxFontsSource;
+}
+
+// @public
+export interface UseDocxSourceResult {
+    readonly document: Uint8Array | undefined;
+    readonly error: Error | null;
+    readonly fonts: FontConfiguration | undefined;
+    readonly isLoading: boolean;
+}
+
+// @public
+export function useEditorCommand(target: ChromeSlotId | EditorCommand): EditorCommandState;
 
 // @public
 export function useEditorEvent<E extends keyof EditorEvents>(event: E, handler: EditorEvents[E]): void;

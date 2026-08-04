@@ -181,81 +181,6 @@ export const DEFERRED_DIALOGS: readonly ["findReplace", "hyperlink", "insertImag
 export type DeferredDialogId = (typeof DEFERRED_DIALOGS)[number];
 
 // @public
-export type DisplayItem =
-| {
-    readonly kind: 'text';
-    readonly box: Rect;
-    readonly runs: readonly GlyphRun[];
-    readonly semantic: SemanticTextSpan;
-    readonly clusters: readonly ShapedCluster[];
-    readonly scope: ViewScope;
-    readonly docFrom?: number;
-    readonly docTo?: number;
-    readonly blockId?: number;
-    readonly synthetic?: boolean;
-    readonly interaction?: PositionedInteractionMeta;
-}
-| {
-    readonly kind: 'image';
-    readonly box: Rect;
-    readonly src: ImageRef;
-    readonly semantic: SemanticAtomicSpan;
-    readonly scope: ViewScope;
-    readonly docFrom?: number;
-    readonly docTo?: number;
-    readonly synthetic?: boolean;
-    readonly interaction?: PositionedInteractionMeta;
-}
-| {
-    readonly kind: 'fill';
-    readonly box: Rect;
-    readonly color: ColorValue;
-    readonly interaction?: PositionedInteractionMeta;
-}
-| {
-    readonly kind: 'tableBorder';
-    readonly segments: readonly BorderSeg[];
-    readonly cut?: 'top' | 'bottom';
-}
-| {
-    readonly kind: 'decoration';
-    readonly box: Rect;
-    readonly role: string;
-    readonly refId: string;
-    readonly detail?: Readonly<Record<string, unknown>>;
-    readonly interaction?: PositionedInteractionMeta;
-}
-/**
-* Escape hatch for anything not yet modelled as a first-class variant. Lets
-* the engine ship new positioned content before the contract names it;
-* adapters that don't recognise `name` skip it.
-*/
-| {
-    readonly kind: 'custom';
-    readonly name: string;
-    readonly box: Rect;
-    readonly detail?: unknown;
-    readonly interaction?: PositionedInteractionMeta;
-};
-
-// @public
-export interface DisplayPage {
-    // (undocumented)
-    readonly box: Rect;
-    readonly contentBox: Rect;
-    readonly index: number;
-    // (undocumented)
-    readonly items: readonly DisplayItem[];
-}
-
-// @public @deprecated (undocumented)
-export interface DocPoint {
-    readonly docPos: number;
-    // (undocumented)
-    readonly scope: ViewScope;
-}
-
-// @public
 export interface DocxDocument {
     // (undocumented)
     readonly body: DocumentBody;
@@ -331,9 +256,9 @@ onChange?: ((_change: DocumentChange) => any) | undefined;
 onReady?: ((_editor: Editor) => any) | undefined;
 onFontError?: ((_error: EditorFontError) => any) | undefined;
 }>, {
-author: string;
 fonts: FontConfiguration | FontConfigurationFragment;
 document: DocumentSource;
+author: string;
 zoom: number;
 mode: EditorMode;
 locale: string;
@@ -414,8 +339,8 @@ default: () => never[];
 }>> & Readonly<{
 onClose?: (() => any) | undefined;
 }>, {
-editor: Editor | null;
 open: boolean;
+editor: Editor | null;
 panels: readonly SidebarPanel[];
 }, {}, {}, {}, string, ComponentProvideOptions, true, {}, any>;
 
@@ -517,10 +442,6 @@ export interface Editor {
     can(command: EditorCommand, options?: { scope?: EditorScope }): CanResult;
     // (undocumented)
     destroy(): void;
-    dispatchInteraction(
-    intent: InteractionIntent,
-    options?: { hostMetrics?: InteractionHostMetrics }
-    ): InteractionDispatchResult;
     // (undocumented)
     exec(command: EditorCommand, options?: { scope?: EditorScope }): ExecResult;
     findMatches(
@@ -529,12 +450,8 @@ export interface Editor {
     ): readonly TextMatch[];
     // (undocumented)
     focus(scope?: EditorScope): InteractionOutcome<void>;
-    getAccessibilityObservation(): AccessibilityObservation;
     // (undocumented)
     getActiveScope(): ViewScope;
-    getCaretClientRect(): Rect | null;
-    getCaretGeometry(pos?: EditorPosition): CaretGeometry | null;
-    getCaretRect(pos?: EditorPosition): Rect | null;
     getComments(): readonly {
         readonly id: string;
         readonly text: string;
@@ -542,7 +459,6 @@ export interface Editor {
     }[];
     // (undocumented)
     getCurrentPage(mode?: 'viewport' | 'caret'): number;
-    getDisplay(): readonly DisplayPage[];
     getDocumentFonts(): readonly string[];
     getDocumentHandle(): DocumentHandle;
     getDocumentStyles(): readonly {
@@ -560,9 +476,6 @@ export interface Editor {
     getDocumentThemeColors(): readonly { readonly slot: string; readonly hex: string }[];
     getEditingMode(): DocumentEditingMode;
     getHeaderFooterState(): HeaderFooterState | null;
-    getInputHostObservation(): InputHostObservation | null;
-    getInteractionFrame(): InteractionFrame;
-    getInteractionHostMetrics(): InteractionHostMetrics | null;
     getNotePreviewText(scopeId: string): string | null;
     getNotePropertiesState(): NotePropertiesState | null;
     getOutline(): readonly {
@@ -575,7 +488,6 @@ export interface Editor {
     getRenderScale(): number;
     getReviewItems(): readonly ReviewItemPlacement[];
     getReviewRevision(): number;
-    getScrollGeometry(): ScrollGeometry;
     getSelectedImage(): {
         readonly id: string;
         readonly widthEmu: number;
@@ -596,12 +508,7 @@ export interface Editor {
         readonly italic?: boolean;
         readonly underline?: boolean;
     } | null;
-    getSelectionGeometry(
-    range?: EditorSelection,
-    options?: SelectionGeometryOptions
-    ): SelectionGeometry | null;
     getSelectionPlacement(): { readonly anchorY: number; readonly pageIndex: number } | null;
-    getSelectionRects(range?: EditorSelection, options?: SelectionGeometryOptions): readonly Rect[];
     // (undocumented)
     getTotalPages(): number;
     getTrackedChanges(): readonly {
@@ -612,7 +519,6 @@ export interface Editor {
     getWatermark(): { readonly kind: 'text' | 'image'; readonly text?: string } | null;
     // (undocumented)
     getZoom(): number;
-    hitTest(point: Point, options?: HitTestOptions): SemanticHitTarget | null;
     isActive(command: EditorCommand, options?: { scope?: EditorScope }): boolean;
     isReviewPaneOpen(): boolean;
     load(document: DocumentSource): void;
@@ -627,7 +533,6 @@ export interface Editor {
     rejectReviewItem(key: string): ExecResult;
     relayout(options?: { sync?: boolean }): void;
     replyToReviewItem(key: string, text: string, author?: string): ExecResult;
-    resolvePointer(point: Point, options?: HitTestOptions): InteractionOutcome<SemanticHitTarget>;
     save(): Promise<ArrayBuffer>;
     // (undocumented)
     scrollToBlock(blockId: string): boolean;
@@ -698,14 +603,9 @@ export interface EditorHost {
     getBodyHostEl(): HTMLElement | null;
     // (undocumented)
     getHfHostEl(rId: string): HTMLElement | null;
-    getInteractionHostMetrics?(): InteractionHostMetrics | null;
     // (undocumented)
     getPagesContainer(): HTMLElement | null;
-    getRenderedTextGeometry?(): RenderedTextGeometryPort | null;
     getScrollContainer(): HTMLElement | null;
-    onDisplay?(pages: readonly DisplayPage[]): void;
-    // (undocumented)
-    onScrollRestore?(pending: PendingScrollRestore): void;
     // (undocumented)
     onSelectionChange?(snapshot: EditorSnapshot): void;
     // (undocumented)
@@ -761,6 +661,7 @@ export interface EditorSnapshot {
     readonly scope: EditorScope;
     // (undocumented)
     readonly selection: DocRange | null;
+    readonly selectionCollapsed: boolean;
     // (undocumented)
     readonly table: TableContext | null;
     // (undocumented)

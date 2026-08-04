@@ -1354,6 +1354,12 @@ export function mountPaginatedSurface(
       );
     },
 
+    // The newline-aware sibling of `type`, declared below in this same scope. On the
+    // contract because text arriving from OUTSIDE the editor — a paste from the clipboard,
+    // whether the browser's own event delivered it or a menu row did — is not a lane the
+    // input handlers should own privately.
+    insertPlainText: (text: string) => insertPlainText(text),
+
     deleteBackward() {
       const plan = deleteSelectionPlan();
       if (plan.ops.length > 0) {
@@ -1563,6 +1569,14 @@ export function mountPaginatedSurface(
       const page = currentLayout.pages.find((entry) => entry.index === caret.pageIndex);
       if (!page) return false;
       return scrollToContentY(page.box.y + caret.y, caret.height, options);
+    },
+
+    setEditable(editable) {
+      // The DOM affordance, not the document's own editability: `session.editable` says
+      // whether the FILE can be round-tripped, and this says whether the user may type into
+      // it right now. Both have to be true for an edit to land.
+      pagesLayer.contentEditable = editable ? 'true' : 'false';
+      pagesLayer.setAttribute('aria-readonly', editable ? 'false' : 'true');
     },
 
     selectAll() {

@@ -1,29 +1,36 @@
-// One toolbar control, as a hook.
+// One editor control, as a hook.
 //
-// Built ON `useEditorState`: the enabled/active/reason triple is derived through the
-// shared `toolbarCommandState` helper (the same can-before-exec table both adapters
-// use), selected with a field-wise equality so the component re-renders only when its
-// OWN control's state moves — a bold button sleeps through caret moves that change
-// nothing about bold. `execute` runs through `runToolbarCommand`, which asks
-// `Editor.can` first; a refusal (unwired slot, read-only document, no editor yet) is a
-// safe no-op, with the reason already surfaced on `disabledReason`.
+// Takes EITHER a chrome slot or a raw `EditorCommand`. The slot form derives the
+// enabled/active triple through `toolbarCommandState` — the shared can-before-exec table
+// both adapters use — so a registry control cannot describe itself differently in two
+// places. The command form asks `Editor.can`/`isActive` about the command directly.
+//
+// BOTH forms exist because the registry is not the whole vocabulary. It describes toolbar
+// and menu-bar controls; commands like `cut`, `selectAll` or a host's own `setMarkAttr`
+// action have no slot and never will, and before this took them every such control
+// hand-rolled its own copy of this derivation.
+//
+// Either way the component re-renders only when its OWN answer moves: the slice is
+// compared field-wise, so a bold button sleeps through caret moves that change nothing
+// about bold.
 
-import { useCallback, useMemo } from 'react';
+import { useCallback, useMemo, useRef } from 'react';
 import {
   runToolbarCommand,
   toolbarCommandState,
   type ChromeSlotId,
 } from '@docx-editor.dev/core-contract/editor';
+import type { EditorCommand } from '@docx-editor.dev/core-contract/contracts/editor';
 import { useDocxEditor } from './context';
 import { useEditorState } from './useEditorState';
 
 /**
- * The live state of one chrome slot, plus its action.
+ * The live state of one editor control, plus its action.
  *
  * @public
  */
 export interface EditorCommandState {
-  /** Run the slot's command (can-before-exec). A refusal is a safe no-op. */
+  /** Run the command (can-before-exec). A refusal is a safe no-op. */
   readonly execute: () => void;
   /** Whether the command is currently applied at the selection (bold on bold text). */
   readonly isActive: boolean;
@@ -43,31 +50,90 @@ function commandSliceEqual(a: CommandSlice, b: CommandSlice): boolean {
   return a.active === b.active && a.enabled === b.enabled && a.disabledReason === b.disabledReason;
 }
 
+/** A slot is a string; a command is an object with a `type`. */
+function isSlot(target: ChromeSlotId | EditorCommand): target is ChromeSlotId {
+  return typeof target === 'string';
+}
+
 /**
- * Bind one chrome slot (`'text.bold'`, `'history.undo'`, …) to the editor. The result
- * object is identity-stable while its fields are unchanged, so it can sit in dependency
- * arrays and `memo` props without churn.
+ * A command's value identity, as a string a dependency array can compare.
+ *
+ * Keys are SORTED, so two spellings of the same command (`{ type, mark }` and
+ * `{ mark, type }`) produce one key and do not churn the memo. Commands are small flat
+ * objects of primitives; `insertImage`'s `data` is the one field that is not, and a
+ * `Uint8Array` stringifies to its indices — verbose but stable and correct, and nobody
+ * drives a live control off an image insert.
+ */
+function stableKey(command: EditorCommand): string {
+  return JSON.stringify(command, Object.keys(command).sort());
+}
+
+/**
+ * Bind a chrome slot (`'text.bold'`, `'history.undo'`, …) or a raw `EditorCommand`
+ * (`{ type: 'selectAll' }`) to the editor. The result object is identity-stable while its
+ * fields are unchanged, so it can sit in dependency arrays and `memo` props without churn.
  *
  * @public
  */
-export function useEditorCommand(slotId: ChromeSlotId): EditorCommandState {
+export function useEditorCommand(target: ChromeSlotId | EditorCommand): EditorCommandState {
   const editor = useDocxEditor();
 
-  // The snapshot argument is the change SIGNAL; the state itself comes from the shared
-  // helper, which asks `Editor.can`/`isActive` — the same authority the snapshot's
-  // formatting derives from, re-read at the same version.
+  // A COMMAND OBJECT IS REBUILT EVERY RENDER by most callers (`useEditorCommand({ type:
+  // 'cut' })`), so keying the memos on its identity would resubscribe `useEditorState` on
+  // every frame. The key is therefore the command BY VALUE.
+  //
+  // It has to be by value, not by `type`. Two commands can share a type and mean different
+  // things — `{ mark: 'bold' }` vs `{ mark: 'italic' }`, `value: 'cyan'` vs `'none'` — and
+  // both `can` and `isActive` answer differently for them. Keyed on `type` alone the
+  // selector was never rebuilt, and `useEditorState` short-circuits on snapshot identity
+  // while `snapshot()` is version-cached, so a caller that switched payloads kept the OLD
+  // answer until some unrelated engine event happened to bump the version. Worse, `execute`
+  // reads the live target, so the button rendered one state and ran the other command.
+  const key = isSlot(target) ? target : stableKey(target);
+
+  // Read at call/derivation time rather than closed over, so the value is always the one
+  // the caller last passed. Safe because `key` above changes whenever the value does, which
+  // is what actually drives re-derivation.
+  const latest = useRef(target);
+  latest.current = target;
+
+  // The snapshot argument is the change SIGNAL; the state itself comes from the engine,
+  // re-read at the same version the snapshot describes.
   const selectSlice = useCallback(
     (_snapshot: unknown): CommandSlice => {
-      const state = toolbarCommandState(editor, slotId);
-      return { active: state.active, enabled: state.enabled, disabledReason: state.disabledReason };
+      const current = latest.current;
+      if (isSlot(current)) {
+        const state = toolbarCommandState(editor, current);
+        return {
+          active: state.active,
+          enabled: state.enabled,
+          disabledReason: state.disabledReason,
+        };
+      }
+      if (!editor) return { active: false, enabled: false, disabledReason: null };
+      const allowed = editor.can(current);
+      return {
+        active: editor.isActive(current),
+        enabled: allowed.ok,
+        disabledReason: allowed.ok ? null : (allowed.reason ?? null),
+      };
     },
-    [editor, slotId]
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- keyed on the target's identity-stable shape
+    [editor, key]
   );
   const slice = useEditorState(selectSlice, commandSliceEqual);
 
   const execute = useCallback(() => {
-    runToolbarCommand(editor, slotId);
-  }, [editor, slotId]);
+    const current = latest.current;
+    if (isSlot(current)) {
+      runToolbarCommand(editor, current);
+      return;
+    }
+    // Can-before-exec, the same order `runToolbarCommand` uses: a refusal is a safe no-op
+    // and its reason is already on `disabledReason`.
+    if (editor?.can(current).ok) editor.exec(current);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- keyed on the target's identity-stable shape
+  }, [editor, key]);
 
   return useMemo(
     () => ({

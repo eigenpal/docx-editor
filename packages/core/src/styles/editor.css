@@ -2634,10 +2634,19 @@ a.docx-hyperlink:focus-visible {
   flex: none;
 }
 
-.docx-toolbar__style-trigger > span:first-child {
+/* The truncating label needs a line box TALLER than the glyphs.
+ *
+ * The toolbar sets `13px/1`, so an `overflow: hidden` box inherits a line box exactly as
+ * tall as the font size — and a descender sits below that, so "Heading 1" lost the tail of
+ * its g. The trigger is a 32px flex row centring this span, so the extra leading costs no
+ * layout; it just stops the clip. Same reason on the font-family trigger, where it went
+ * unnoticed only because "Arial" and "Calibri" have no descenders. */
+.docx-toolbar__style-trigger > span:first-child,
+.docx-toolbar__font-family-trigger > span:first-child {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  line-height: 1.4;
 }
 
 .docx-toolbar__font-family-trigger,
@@ -4542,6 +4551,17 @@ a.docx-hyperlink:focus-visible {
   transition: background-color 0.12s ease;
 }
 
+/* An OPT-IN trigger icon. The bar has none by default — Word and Docs do not — so this
+ * only ever applies where a host passed one, and it inherits the trigger's colour so the
+ * glyph tracks hover and open state with the label. */
+.ep-root .docx-menubar__trigger-icon {
+  display: inline-flex;
+  align-items: center;
+  margin-right: 5px;
+  vertical-align: -2px;
+  color: inherit;
+}
+
 .ep-root .docx-menubar__trigger:hover,
 .ep-root .docx-menubar__trigger[data-open] {
   background: var(--doc-bg-hover);
@@ -4663,4 +4683,49 @@ a.docx-hyperlink:focus-visible {
   font-size: 12px;
   line-height: 18px;
   color: var(--doc-text-muted);
+}
+
+/* The painted page stack's default placement: centred, with breathing room above.
+ *
+ * `:where()` on purpose — it matches with ZERO specificity, so any host class on
+ * `DocxEditor.Content` wins without `!important` and without counting selectors. This used
+ * to be an inline style on the element, which a class cannot override at all. */
+:where(.docx-paginated-surface) {
+  margin: 24px auto;
+}
+
+/* ── The context menu ──────────────────────────────────────────────────────────────────
+ *
+ * The right-click panel over the painted document. It IS the shared `.docx-toolbar__menu`
+ * card holding `.docx-menubar__item` rows — the same object the menu bar drops under a
+ * trigger — so a row means the same thing in both places and the disabled treatment has
+ * one definition. What this block adds is only what differs: the panel is placed in client
+ * space by the component rather than relative to a trigger, and it sits above the dialogs
+ * and dropdowns (z-index 40) because it is opened ON them as often as on the page. */
+.ep-root .docx-contextmenu,
+.docx-contextmenu {
+  z-index: 45;
+  min-width: 240px;
+  /* A menu longer than the window scrolls rather than overflowing it. The flip in
+   * `DocxEditorContextMenu` clamps the panel to the top inset when it cannot fit; without
+   * a max height and a scroller, the rows below the fold would be unreachable. */
+  max-height: calc(100vh - 16px);
+  overflow-y: auto;
+}
+
+/* The panel is `position: fixed`, so it renders OUTSIDE the `.ep-root` cascade's usual
+ * geometry but still inside its subtree — the token values resolve, and this block is
+ * duplicated unscoped above so a host that mounts the viewport without the wrapper class
+ * still gets the card. Focus ring on the panel itself is suppressed: it takes focus only
+ * to give the arrow keys a starting point, and a ring around the whole menu reads as a
+ * selected row. */
+.docx-contextmenu:focus {
+  outline: none;
+}
+
+/* Rows inside the context menu carry the menu bar's grid without the menu bar's class
+ * being present on an ancestor, so the icon and shortcut columns are restated here. */
+.docx-contextmenu .docx-menubar__item {
+  gap: 12px;
+  width: 100%;
 }

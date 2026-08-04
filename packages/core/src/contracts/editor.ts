@@ -5,35 +5,16 @@
  */
 
 import type { ContentControlSummary, DocEdits, DocQueries, DocQueryResults } from '../index';
-import type { DisplayPage } from './geometry';
 // Type-only, so the adapters reach the review vocabulary through THIS contract rather than
 // naming the layout lane, which they are not allowed to import.
 import type { ReviewItem, ReviewRevisionKind } from '../layout/review-model.ts';
-import type {
-  AccessibilityObservation,
-  CaretGeometry,
-  HitTestOptions,
-  InputHostObservation,
-  InteractionFrame,
-  InteractionHostMetrics,
-  InteractionIntent,
-  InteractionDispatchResult,
-  InteractionOutcome,
-  RenderedTextGeometryPort,
-  SelectionGeometry,
-  SelectionGeometryOptions,
-  ScrollGeometry,
-  SemanticHitTarget,
-  SemanticSelection,
-  SemanticTarget,
-} from './interaction';
+import type { InteractionOutcome, SemanticSelection, SemanticTarget } from './interaction';
 import type {
   ColorValue,
   ContentControlFilter,
   DocAnchor,
   DocLocation,
   DocRange,
-  Point,
   Rect,
   Revision,
   RunFormatting,
@@ -185,9 +166,10 @@ export interface EditorConfig {
   /** Localized read-only atom labels keyed by block kind (for example `table`); omit to leave atom names unset. */
   accessibilityAtomLabels?: Readonly<Record<string, string>>;
   zoom?: number;
-  /** `'view'` opens the document read-only (no edit surface is mounted) even when it is otherwise
-   *  editable; `'edit'` (default) mounts the editing surface for a patchable document. Sampled at
-   *  construction only — switching mode at runtime is not reactive; recreate the editor to change it. */
+  /** `'view'` opens the document read-only even when it is otherwise editable; `'edit'`
+   *  (default) mounts the editing surface for a patchable document. This is the INITIAL
+   *  value only — move it afterwards with {@link Editor.setEditingMode}, which does not
+   *  rebuild the editor and so keeps the undo history and the reader's place. */
   mode?: 'edit' | 'view';
 }
 
@@ -221,9 +203,9 @@ export type EditorScope =
 export type ViewScope = Exclude<EditorScope, { kind: 'all' }>;
 
 /**
- * A position the engine can resolve. Kept deliberately open: any accepted
- * address form, including a {@link SemanticTarget} or `hitTest` result. New
- * forms may be added without breaking callers, so do not treat this as a closed set.
+ * A position the engine can resolve. Kept deliberately open: any accepted address form,
+ * including a {@link SemanticTarget}. New forms may be added without breaking callers, so do
+ * not treat this as a closed set.
  */
 export type EditorPosition = DocAnchor | DocLocation | SemanticTarget;
 
@@ -235,10 +217,16 @@ export type EditorSelection =
   | SemanticTarget;
 
 /**
- * Everything a framework adapter must supply. The adapter is a renderer and an
- * event forwarder: it hands core DOM to paint into, schedules frames, and
- * receives a positioned `DisplayPage[]` to render. It does not measure, lay
- * out, or interpret the document — core owns all of that.
+ * Everything a framework adapter must supply: DOM to paint into, and a way to coalesce
+ * work. The adapter does not measure, lay out, or interpret the document — core owns all
+ * of that, and paints it directly into the element the adapter hands over.
+ *
+ * IT DOES NOT RECEIVE A RENDER LIST. This interface used to declare `onDisplay`, a sink for
+ * a positioned `DisplayPage[]` core would emit for the adapter to paint. Core never called
+ * it, neither adapter implemented it, and rendering has always worked the other way round —
+ * `Editor.attach(element)`, with core painting into the host's DOM. The declaration
+ * described an architecture that lost, which is a costly thing to leave in a public
+ * contract: it is the first thing someone building a new adapter reads.
  *
  * DOM handles are getters, not values: all of them are null through first
  * render, and React's scroll container can change identity between renders.
@@ -252,10 +240,6 @@ export interface EditorHost {
 
   /** Coalesces engine work. Returns a canceller. */
   scheduleFrame(callback: () => void): () => void;
-  /** Current client scroll/zoom/origin metrics for client-coordinate interaction APIs. */
-  getInteractionHostMetrics?(): InteractionHostMetrics | null;
-  /** Optional browser realization of the current painted text geometry. */
-  getRenderedTextGeometry?(): RenderedTextGeometryPort | null;
   /**
    * Runs after the adapter has flushed its own render: `useLayoutEffect` in
    * React, `nextTick` in Vue. Two phases, because engine paint and adapter
@@ -263,19 +247,11 @@ export interface EditorHost {
    */
   afterCommit?(callback: () => void): void;
 
-  /** Core emitted a fresh positioned render list; paint it. */
-  onDisplay?(pages: readonly DisplayPage[]): void;
-  onScrollRestore?(pending: PendingScrollRestore): void;
   onSelectionChange?(snapshot: EditorSnapshot): void;
   onTotalPages?(total: number): void;
 }
 
 export type CanResult = { ok: true } | { ok: false; code: ExecErrorCode; reason: string };
-
-export interface PendingScrollRestore {
-  readonly top: number;
-  readonly anchorParaId?: string;
-}
 
 export interface Editor {
   /** Load a new document (DOCX bytes or a handle), replacing the current one. */
@@ -551,63 +527,30 @@ export interface Editor {
    */
   setZoom(zoom: number): ExecResult;
 
-  // ─── Interaction frame (coherent display + geometry projection) ────────────
-  /**
-   * The current immutable interaction frame. Display, page/scroll geometry,
-   * semantic selection, caret/selection overlays, focus, composition, and current
-   * page observations are read from this single publication.
-   */
-  getInteractionFrame(): InteractionFrame;
+  // ─── Geometry ──────────────────────────────────────────────────────────────
+  //
+  // ONE MEMBER, deliberately. This contract used to carry a whole interaction and geometry
+  // cluster — an interaction frame, hit testing, caret and selection rects, scroll extent,
+  // typed pointer dispatch — and every one of them was a stub returning null, `[]` or
+  // `unsupported`. Nothing called them, because there was nothing behind them to call.
+  //
+  // A stub is not a free placeholder here. `hitTest` returning `null` is indistinguishable
+  // from the legitimate answer "you clicked the page margin", so a caller could not tell
+  // unimplemented from no-target; `getPageGeometry` returning `[]` silently made Vue's
+  // rulers render nothing at all, and nobody noticed for as long as it shipped. An API that
+  // answers wrongly is worse than one that is absent, because absence is a compile error.
+  //
+  // The capability was never in this contract anyway: pointer hit testing lives in the
+  // layout lane (`layout/semantic-hit-test.ts`) and the paginated surface calls it directly.
+  // Re-exposing any of it here is a small wiring job on the day a host actually needs it.
 
-  // ─── Geometry (core owns layout; the adapter only paints and forwards) ─────
-  /** The current positioned render list from {@link getInteractionFrame}. Also
-   * delivered via the `display` event and `EditorHost.onDisplay`. */
-  getDisplay(): readonly DisplayPage[];
-  /** Selection rectangles in content-pixel space from the current frame; defaults
-   * to the current selection. Empty when collapsed. */
-  getSelectionRects(range?: EditorSelection, options?: SelectionGeometryOptions): readonly Rect[];
-  /** Caret rectangle from the current frame; defaults to the current caret. */
-  getCaretRect(pos?: EditorPosition): Rect | null;
-  /** Frame-bound caret overlay geometry including page and writing direction. */
-  getCaretGeometry(pos?: EditorPosition): CaretGeometry | null;
-  /** Frame-bound visible selection overlay geometry. */
-  getSelectionGeometry(
-    range?: EditorSelection,
-    options?: SelectionGeometryOptions
-  ): SelectionGeometry | null;
-  /**
-   * Resolve client-space coordinates to a semantic hit target. Returns `null` only when no eligible
-   * target exists (e.g. page margin). For typed stale, pending, read-only, invalid, or unsupported
-   * outcomes callers MUST use {@link resolvePointer}; `hitTest` does not surface those rejections.
-   */
-  hitTest(point: Point, options?: HitTestOptions): SemanticHitTarget | null;
-  /** Page boxes from the current interaction frame. */
   /** Page boxes in stack coordinates, each with the text area the engine laid out.
    *  `contentBox` is the page inset by the section margin — rulers draw margin zones from
    *  it instead of assuming a default. The engine's margin is uniform on all four sides
-   *  today, so this must not be presented as per-side fidelity it does not have. */
+   *  today, so this must not be presented as per-side fidelity it does not have.
+   *
+   *  Empty before the first layout, which is the honest answer rather than a guessed page. */
   getPageGeometry(): readonly { index: number; box: Rect; contentBox: Rect }[];
-  /** Scroll extent from the current interaction frame. */
-  getScrollGeometry(): ScrollGeometry;
-  /** Resolve pointer intent with typed stale/pending/read-only outcomes (see driver). */
-  resolvePointer(point: Point, options?: HitTestOptions): InteractionOutcome<SemanticHitTarget>;
-  /**
-   * Dispatch one native interaction intent through the shared controller. Applies engine
-   * effects (selection sync, focus, commands) and returns host passthrough effects for
-   * adapters (capture, release, scroll).
-   */
-  dispatchInteraction(
-    intent: InteractionIntent,
-    options?: { hostMetrics?: InteractionHostMetrics }
-  ): InteractionDispatchResult;
-  /** PM-free accessibility observation projecting the current interaction frame. */
-  getAccessibilityObservation(): AccessibilityObservation;
-  /** PM-free observation of the hidden input-host clip shell when mounted. */
-  getInputHostObservation(): InputHostObservation | null;
-  /** Current host origin, scroll, and zoom used to map published IR geometry to client space. */
-  getInteractionHostMetrics(): InteractionHostMetrics | null;
-  /** Caret rectangle in client coordinates when host metrics and caret geometry exist. */
-  getCaretClientRect(): Rect | null;
 
   /** Replaces the module-scope cache-invalidation calls adapters make today. */
   relayout(options?: { sync?: boolean }): void;
@@ -902,6 +845,52 @@ export interface EditorCommands
   undo: Record<never, never>;
   redo: Record<never, never>;
   setSelection: { anchor: EditorPosition } | { range: EditorSelection };
+
+  // ── Selection and clipboard ─────────────────────────────────────────────────────────
+  //
+  // None of these is new capability: the surface has selected the whole document, read its
+  // selected text and deleted a selection since it was written, and the browser's own
+  // `copy`/`cut`/`paste` events on the pages layer already service the keyboard. They are
+  // here so that a caller NAMING the operation — a right-click menu, a host's own button —
+  // gets one honest `can()` for it, instead of composing it from `selectedText` +
+  // `deleteText` and re-deriving enablement itself, differently, every time.
+
+  /** Select the whole body. Word's Ctrl+A, as a command rather than only a keystroke. */
+  selectAll: Record<never, never>;
+
+  /**
+   * Put the selected text on the clipboard. Reports `changed: false` — the document is
+   * untouched.
+   *
+   * Refused at a collapsed selection: there is nothing to copy, and a live Copy row over an
+   * empty selection silently no-ops.
+   */
+  copy: Record<never, never>;
+
+  /**
+   * Put the selected text on the clipboard and delete it. Refused at a collapsed selection,
+   * and — unlike `copy` — in a read-only document.
+   *
+   * The clipboard write is dispatched but NOT awaited, and its failure does not fail the
+   * command: the deletion has already happened by then, and reporting an edit as failed
+   * because a clipboard write lost a race would be a lie about the document.
+   */
+  cut: Record<never, never>;
+
+  /**
+   * Insert `text` at the selection, replacing it, with newlines becoming real paragraph
+   * boundaries.
+   *
+   * TEXT COMES IN. `exec` is synchronous and reading the clipboard is not — it prompts in
+   * Chrome and is refused outright by Firefox and Safari — so an engine-owned read would
+   * have to either turn every command's result into a promise or lie about this one's. The
+   * caller reads the clipboard inside the click or keystroke that asked for the paste,
+   * which is where the permission gesture belongs, and hands the engine a string.
+   *
+   * Plain text only. There is no rich lane and no `pastePlain` twin, because a second
+   * command would be a second name for exactly this behavior.
+   */
+  paste: { text: string };
 }
 
 export type EditorCommand = {
@@ -919,7 +908,6 @@ export interface EditorQueries extends DocQueries {
   contentControlAt: { filter?: ContentControlFilter };
   isInsideToc: { pos: number };
   trackedChanges: Record<never, never>;
-  pageContent: { page: number };
 }
 
 export type EditorQuery = {
@@ -938,7 +926,6 @@ export interface EditorQueryResults extends DocQueryResults {
   contentControlAt: ContentControlSummary | null;
   isInsideToc: boolean;
   trackedChanges: readonly Revision[];
-  pageContent: DisplayPage | null;
 }
 
 export interface TableContext {
@@ -1033,6 +1020,15 @@ export interface EditorSnapshot {
   readonly editable: boolean;
   readonly zoom: number;
   readonly selection: DocRange | null;
+  /**
+   * Whether the selection is a CARET rather than a range. `true` when nothing is loaded.
+   *
+   * Separate from `selection` because `DocRange` addresses paragraphs by paraId and carries
+   * no offsets, so a caret and a range inside one paragraph are the same value there.
+   * Answering this from `query({ type: 'selectedText' })` builds the whole selected string
+   * to produce one bit, on every tick a host's selector runs.
+   */
+  readonly selectionCollapsed: boolean;
   readonly formatting: RunFormatting | null;
   readonly table: TableContext | null;
   readonly image: ImageContext | null;
@@ -1090,7 +1086,6 @@ export interface EditorError extends Error {
 export interface EditorEvents {
   change: (change: DocumentChange) => void;
   selectionChange: (snapshot: EditorSnapshot) => void;
-  display: (pages: readonly DisplayPage[]) => void;
   error: (error: EditorError) => void;
 }
 

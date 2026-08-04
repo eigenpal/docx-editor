@@ -118,6 +118,23 @@ export {
   type HyperLinkPartProps,
   type HyperLinkProps,
 } from './editor/DocxEditorHyperLink';
+// The right-click menu (also reachable as `DocxEditor.ContextMenu`): the compound over the
+// painted surface and its rows. The rows ARE the menu bar's rows — one row presentation,
+// two panels — so only the parts unique to this surface are exported bare.
+export {
+  DocxEditorContextMenu,
+  ContextMenuCopy,
+  ContextMenuCut,
+  ContextMenuDelete,
+  ContextMenuItem,
+  ContextMenuPaste,
+  ContextMenuSelectAll,
+  type ContextMenuAnchor,
+  type ContextMenuCommandProps,
+  type ContextMenuItemProps,
+  type DocxEditorContextMenuNamespace,
+  type DocxEditorContextMenuProps,
+} from './editor/contextmenu';
 export {
   useHyperlinkPopup,
   useHyperlinkPopupInstance,
@@ -126,6 +143,16 @@ export {
   type HyperlinkPopupState,
   type UseHyperlinkPopupResult,
 } from './editor/useHyperlinkPopup';
+// Opening a document: the fetch, the fonts and the cancellation every host was writing by
+// hand before `DocxEditor` could be given anything to render.
+export {
+  useDocxSource,
+  type DocxFontsInput,
+  type DocxFontsSource,
+  type DocxSource,
+  type UseDocxSourceOptions,
+  type UseDocxSourceResult,
+} from './editor/useDocxSource';
 export { useEditorState } from './editor/useEditorState';
 export { useEditorCommand, type EditorCommandState } from './editor/useEditorCommand';
 export { useEditorEvent } from './editor/useEditorEvent';
@@ -253,11 +280,6 @@ export type {
   EditorScope,
   PageSetup,
 } from '@docx-editor.dev/core-contract/contracts/editor';
-export type {
-  DisplayPage,
-  DisplayItem,
-  DocPoint,
-} from '@docx-editor.dev/core-contract/contracts/geometry';
 export type { DocxDocument } from '@docx-editor.dev/core-contract/contracts/types';
 export { DocxEditorShell } from './components/DocxEditor/DocxEditorShell';
 export { Toolbar, ToolbarButton, ToolbarGroup, type ToolbarProps } from './components/Toolbar';

@@ -17,6 +17,7 @@ export const LOADING_SNAPSHOT: EditorSnapshot = Object.freeze({
   editable: false,
   zoom: 1,
   selection: null,
+  selectionCollapsed: true,
   formatting: null,
   table: null,
   image: null,

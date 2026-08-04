@@ -27,11 +27,9 @@ export function useEditorSnapshot(editor: () => Editor | null): Ref<number> {
     };
     const offChange = next.on('change', bump);
     const offSelection = next.on('selectionChange', bump);
-    const offDisplay = next.on('display', bump);
     dispose = () => {
       offChange();
       offSelection();
-      offDisplay();
     };
     bump();
   };

@@ -2,8 +2,8 @@
 //
 // Everything here is a function of its arguments — no surface, no session, no DOM.
 // The facade closure stays in docx-editor.ts; this module owns command classification,
-// the empty interaction frame, source normalization, and the value-equality rules the
-// cached snapshot uses to keep sub-object references stable across re-derivations.
+// source normalization, and the value-equality rules the cached snapshot uses to keep
+// sub-object references stable across re-derivations.
 
 import type {
   DocAnchor,
@@ -15,10 +15,6 @@ import type {
   PageSetup,
   RunFormatting,
 } from '@docx-editor.dev/core-contract/contracts/editor';
-import type {
-  InteractionFrame,
-  SemanticPositionIndex,
-} from '@docx-editor.dev/core-contract/contracts/interaction';
 import type { SemanticSelection as SurfaceSelection } from '@docx-editor.dev/core-contract/layout';
 // Direct, not through the layout barrel: this is an internal bound the write shares with
 // the reader, not something the layout package publishes.
@@ -36,49 +32,6 @@ export function deepFreezeValue<T>(value: T): T {
   const record = value as Record<string, unknown>;
   for (const key of Object.keys(record)) deepFreezeValue(record[key]);
   return Object.freeze(value);
-}
-
-export const DEFAULT_PAGE_GAP_PX = 24;
-
-function emptySemanticIndex(storyId = ''): SemanticPositionIndex {
-  return {
-    stories: [{ storyId, scope: { kind: 'body' }, blocks: [] }],
-    caretStops: [],
-    ownershipRegions: [],
-  };
-}
-
-let emptyFrameSingleton: InteractionFrame | null = null;
-
-/** The single immutable frame every frame-shaped contract member answers with. */
-export function emptyInteractionFrame(): InteractionFrame {
-  if (emptyFrameSingleton) return emptyFrameSingleton;
-  emptyFrameSingleton = deepFreezeValue({
-    id: { value: 0 },
-    revisions: {
-      modelRevision: 0,
-      layoutRevision: 0,
-      resourceEpoch: 0,
-      configurationEpoch: 0,
-      shapingProvenance: {
-        extensionFingerprint: 'empty',
-        shapingHash: 'empty',
-        producerVersion: 0,
-      },
-    },
-    completeness: { kind: 'complete' as const },
-    display: [],
-    semanticIndex: emptySemanticIndex(),
-    pageGeometry: [],
-    scrollGeometry: { contentHeight: 0, pageTops: [], pageGapPx: DEFAULT_PAGE_GAP_PX },
-    selection: null,
-    caret: null,
-    selectionGeometry: null,
-    focus: { scope: null, focused: false },
-    composition: { active: false, scope: null },
-    currentPage: { viewport: 0, caret: 0 },
-  }) as InteractionFrame;
-  return emptyFrameSingleton;
 }
 
 /**
@@ -585,6 +538,26 @@ export function classifyCommand(command: EditorCommand): CommandSupport {
       return command.footnote !== undefined || command.endnote !== undefined
         ? { supported: true, mutating: true }
         : { supported: false, reason: 'setNoteProperties requires footnote and/or endnote fields' };
+    // Selection is not document state, so neither selecting everything nor copying out of
+    // the selection mutates. `copy` stays available in a read-only document — reading a
+    // contract you may not edit and copying a clause out of it is the whole point of a
+    // viewer. Whether there is anything to copy is a question about the SELECTION, which
+    // this function cannot see; `gateCommand` asks it against the surface.
+    case 'selectAll':
+    case 'copy':
+      return { supported: true, mutating: false };
+    case 'cut':
+      return { supported: true, mutating: true };
+    case 'paste':
+      if (typeof command.text !== 'string') {
+        return { supported: false, code: 'invalidArgs', reason: 'paste requires text' };
+      }
+      // Empty text is refused rather than run. `paste` replaces the selection, so "paste
+      // nothing" over a select-all is a whole-document delete wearing the wrong name — and
+      // an empty clipboard is the ordinary way to reach it.
+      return command.text === ''
+        ? { supported: false, code: 'invalidArgs', reason: 'there is nothing to paste' }
+        : { supported: true, mutating: true };
     case 'setSelection':
       // Shape gate only: whether an anchor's paraId exists (and its `search` phrase is
       // unique) is a property of the DOCUMENT, checked at exec — the same split as
@@ -751,6 +724,10 @@ export function snapshotsEqual(a: EditorSnapshot, b: EditorSnapshot): boolean {
     a.editable === b.editable &&
     a.zoom === b.zoom &&
     a.selection === b.selection &&
+    // Load-bearing: `selection` is a paraId range with no offsets, so collapsing a range
+    // INSIDE one paragraph leaves it identical. Without this compare, a control gated on
+    // the caret/range distinction would never see the moment it changed.
+    a.selectionCollapsed === b.selectionCollapsed &&
     a.formatting === b.formatting &&
     a.table === b.table &&
     a.image === b.image &&
