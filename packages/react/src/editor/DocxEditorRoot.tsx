@@ -21,7 +21,7 @@ import type {
   EditorFontError,
   FontConfiguration,
 } from '@docx-editor.dev/core-contract/contracts/editor';
-import { createDocxEditor } from '@docx-editor.dev/core-contract/editor';
+import { createDocxEditor, defaultTableLabel } from '@docx-editor.dev/core-contract/editor';
 import type {
   DocxEditorInstance,
   FontConfigurationFragment,
@@ -66,6 +66,11 @@ export interface DocxEditorRootProps {
   onChange?: (change: DocumentChange) => void;
   /** Fired with the typed font failure when the shaped-font pipeline rejects. */
   onFontError?: (error: EditorFontError) => void;
+  /**
+   * Localized labels for table insertion furniture. When omitted, core falls back to
+   * bundled English through {@link defaultTableLabel}.
+   */
+  tableInteractionLabel?: (key: 'table.insertRowBelow' | 'table.insertColumnRight') => string;
   children?: ReactNode;
 }
 
@@ -77,7 +82,7 @@ export interface DocxEditorRootProps {
  * @public
  */
 export function DocxEditorRoot(props: DocxEditorRootProps) {
-  const { document: doc, fonts, zoom, children } = props;
+  const { document: doc, fonts, zoom, tableInteractionLabel, children } = props;
 
   // Latest props, read inside effects without retriggering them.
   const propsRef = useRef(props);
@@ -96,6 +101,7 @@ export function DocxEditorRoot(props: DocxEditorRootProps) {
       ...(p.locale !== undefined ? { locale: p.locale } : {}),
       ...(p.mode !== undefined ? { mode: p.mode } : {}),
       ...(p.zoom !== undefined ? { zoom: p.zoom } : {}),
+      ...(p.tableInteractionLabel ? { tableInteractionLabel: p.tableInteractionLabel } : {}),
       onFontError: (error) => propsRef.current.onFontError?.(error),
     });
     const offChange = instance.on('change', (change) => propsRef.current.onChange?.(change));
@@ -120,6 +126,12 @@ export function DocxEditorRoot(props: DocxEditorRootProps) {
   useEffect(() => {
     if (zoom !== undefined) editor?.setZoom(zoom);
   }, [editor, zoom]);
+
+  // Table furniture labels follow the live locale resolver without remounting the editor.
+  useEffect(() => {
+    if (!editor) return;
+    editor.setTableInteractionLabel(tableInteractionLabel ?? defaultTableLabel);
+  }, [editor, tableInteractionLabel]);
 
   // A rail registers itself here so the viewport only reserves a gutter when one is
   // actually composed in. See `ReviewRailContext`.

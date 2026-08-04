@@ -205,16 +205,18 @@ describe('property changes', () => {
   });
 });
 
-describe('a revision kind without defined structural semantics is refused', () => {
-  test('a tracked row deletion is refused rather than half-applied', () => {
-    // Removing the `w:del` inside `w:trPr` would leave the row in the table while presenting
-    // the deletion as accepted: the document would then say the opposite of what was accepted.
+describe('structural revision resolution', () => {
+  test('accepting a complete tracked row deletion removes the row', () => {
     const part = load(
       `<w:tbl><w:tr><w:trPr><w:del w:id="1" w:author="QA" w:date="${QA.date}"/></w:trPr>` +
-        `<w:tc><w:p>${run('cell')}</w:p></w:tc></w:tr></w:tbl>`
+        `<w:tc><w:tcPr><w:cellDel w:id="1" w:author="QA" w:date="${QA.date}"/></w:tcPr>` +
+        `<w:p>${run('cell')}</w:p></w:tc></w:tr>` +
+        `<w:tr><w:tc><w:p>${run('keep')}</w:p></w:tc></w:tr></w:tbl>`
     );
-    expect(refuse(part, accept(QA))).toBe('unsupported-revision');
-    expect(xml(applyTreeOp(part, accept(QA)).ok ? part : part)).toContain('<w:del');
+    const out = xml(apply(part, accept(QA)));
+    expect(out).not.toContain('cell');
+    expect(out).toContain('keep');
+    expect(out).not.toContain('cellDel');
   });
 
   test('a refused kind leaves the tree byte-identical', () => {

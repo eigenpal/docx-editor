@@ -7,9 +7,6 @@
 import { ComponentOptionsMixin } from 'vue';
 import { ComponentProvideOptions } from 'vue';
 import { DefineComponent } from 'vue';
-import { DisplayItem } from '../../core/src/contracts/geometry';
-import { DisplayPage } from '../../core/src/contracts/geometry';
-import { DocPoint } from '../../core/src/contracts/geometry';
 import { ExtractPropTypes } from 'vue';
 import { PropType } from 'vue';
 import { PublicProps } from 'vue';
@@ -54,6 +51,11 @@ export type ChromeSlotId =
 | 'image.insert'
 | 'image.properties'
 | 'table.insert'
+| 'table.borderTarget'
+| 'table.borderColor'
+| 'table.borderStyle'
+| 'table.borderWidth'
+| 'table.cellFill'
 | 'file.open'
 | 'file.save'
 | 'file.pageSetup'
@@ -187,12 +189,6 @@ export const DEFERRED_DIALOGS: readonly ["findReplace", "hyperlink", "insertImag
 // @public (undocumented)
 export type DeferredDialogId = (typeof DEFERRED_DIALOGS)[number];
 
-export { DisplayItem }
-
-export { DisplayPage }
-
-export { DocPoint }
-
 // @public
 export interface DocxDocument {
     // (undocumented)
@@ -269,9 +265,9 @@ onChange?: ((_change: DocumentChange) => any) | undefined;
 onReady?: ((_editor: Editor) => any) | undefined;
 onFontError?: ((_error: EditorFontError) => any) | undefined;
 }>, {
-author: string;
-document: DocumentSource;
 fonts: FontConfiguration | FontConfigurationFragment;
+document: DocumentSource;
+author: string;
 zoom: number;
 mode: EditorMode;
 locale: string;
@@ -521,6 +517,12 @@ export interface Editor {
         readonly underline?: boolean;
     } | null;
     getSelectionPlacement(): { readonly anchorY: number; readonly pageIndex: number } | null;
+    getTableCellSelection(): {
+        readonly tableId: string;
+        readonly rows: { readonly from: number; readonly to: number };
+        readonly columns: { readonly from: number; readonly to: number };
+        readonly cellIds: readonly string[];
+    } | null;
     // (undocumented)
     getTotalPages(): number;
     getTrackedChanges(): readonly {
@@ -555,6 +557,9 @@ export interface Editor {
     setActiveScope(scope: ViewScope): void;
     // (undocumented)
     setEditingMode(mode: DocumentEditingMode): ExecResult;
+    setTableInteractionLabel(
+    resolver: (key: 'table.insertRowBelow' | 'table.insertColumnRight') => string
+    ): void;
     setZoom(zoom: number): ExecResult;
     // (undocumented)
     snapshot(options?: { scope?: EditorScope }): EditorSnapshot;
@@ -1340,6 +1345,9 @@ export interface ToolbarCommandState {
 // @public
 export function toolbarCommandState(editor: Editor | null, id: ChromeSlotId): ToolbarCommandState {
     if (!editor) return { id, enabled: false, disabledReason: 'editor is not ready', active: false };
+    if (isTableChromeSlot(id)) {
+        return tableChromeToolbarState(editor, id);
+    }
     if (id === 'review.editingMode') {
         const // (undocumented)
         mode = editor.getEditingMode?.() ?? 'editing';

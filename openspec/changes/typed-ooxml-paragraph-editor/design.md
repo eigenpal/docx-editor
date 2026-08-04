@@ -82,7 +82,7 @@ Performance conformance uses full-vs-incremental differential output, stable-ref
 - Exact byte-for-byte XML round trips; output is normalized OOXML.
 - Restoring any archived proposal as active authority.
 - Making ProseMirror save/history or DOM-derived geometry authoritative.
-- Claiming tables, drawings, page furniture, notes, fields, collaboration, deterministic PDF/print, or server rendering complete.
+- Claiming tables, drawings, page furniture, notes, fields, collaboration, deterministic PDF/print, or server rendering complete — except the bounded Word-like table-editing slice recorded in D14.
 
 ## Decisions
 
@@ -141,7 +141,7 @@ The private React fixture and paired production acceptance cover:
 
 Still deferred within and around this slice: paragraph-border authoring, since `w:pBdr` is not an accepted paragraph property and no operation writes one; `w:between` in table-cell and header/footer flow; border `w:shadow` and `themeColor`; `w:beforeAutospacing`/`w:afterAutospacing` and the character-unit indent spellings; `w:contextualSpacing` inside table cells; `evenPage`/`oddPage`/`nextColumn` section semantics, which parse but paginate like `nextPage` without the blank page Word inserts to reach the requested parity; multi-column flow; break-type selection when a section mark is inserted; and paired adapter acceptance where those gates apply. Core engine support for the accepted items above does not by itself upgrade public support claims, and `continuous` sections and the five non-bottom border edges are the current live case of that rule: both are implemented and tested in the engine, and neither has paired React/Vue acceptance.
 
-Hyperlinks, fields, comments, tracked changes, images, tables, content controls, headers/footers editing, and footnotes/endnotes are deferred. Generic preservation of those elements does not make them part of paragraph acceptance.
+Hyperlinks, fields, comments, tracked changes, images, content controls, headers/footers editing, and footnotes/endnotes remain deferred for paragraph acceptance. Generic preservation of those elements does not make them part of paragraph acceptance. Bounded Word-like table editing is separately specified in D14 and is not part of the D8 paragraph property boundary.
 
 Alternative rejected: an open-ended “common formatting” boundary. It cannot produce deterministic fixtures, typed-node coverage, or reviewable support claims.
 
@@ -204,6 +204,20 @@ Migration proceeds lane by lane with temporary compatibility aliases, then remov
 
 Alternative rejected: moving files into one directory while removing dependency-lane enforcement. That would make the semantic store transitively depend on DOM, ProseMirror, Yjs, server transports, or output backends and would erase the architecture rather than simplify its packaging.
 
+### D14: Word-like table editing is a bounded tree-authoritative slice
+
+The first table-editing slice covers column resizing, row and column insertion and deletion, hover insertion controls, selected-cell borders and fill, and table-aware context-menu actions. It supports nested tables. Cell merge, cell split, row-height resizing, autofit, distribute-columns commands, and structural edits inside headers, footers, footnotes, or endnotes remain out of scope.
+
+Every authored table change runs through `TreeDocumentStore.transact` as a validated `TreeDocOp`. Painted pages and semantic layout geometry are projections only: interaction furniture may read layout records for placement, but DOM structure and measurements never decide what the operation mutates. Internal divider drags grow one column and shrink its neighbour while preserving table width; dragging the outer-right edge changes the table width. The innermost table under the pointer owns the interaction. A caret targets its current cell; a rectangular cell selection targets every selected cell.
+
+The public editor contract exposes allowlisted border targets and styles (`TableBorderTarget`, `TableBorderStyle`, `TableBorderSpec`), nullable cell fill on `setCellFill`, and explicit resize targets (`TableColumnDividerResizeTarget`, `TableRightEdgeResizeTarget`) stamped with the canonical store `sourceRevision` at capture time. Border targeting follows the Google Docs interaction model: choosing all, outer, inner, top, bottom, left, or right applies the current complete border spec to those edges and makes them the active target; choosing none removes the targeted borders; later colour, line-style, or width changes reapply the complete spec to the active target. Explicit resize and insertion commits MUST refuse when the target's `sourceRevision` does not equal the current store revision, even while an older layout remains published for geometry.
+
+Tables with horizontal or vertical merges disable column insertion, column deletion, and column resizing with a specific refusal reason. Row insertion proceeds only when it cannot break an active vertical-merge chain. Each operation validates its complete target before mutation, publishes one `flow-structural` or property impact, and creates one undo step. Edited XML parts serialize in normalized form; canonical fingerprints and save/reopen semantic digests prove structural preservation.
+
+React and Vue render thin controls over the same core commands, enabled state, and refusal text. Shared core CSS owns table chrome layout and tokens. Production acceptance requires paired adapter tests, browser coverage on a nested-table fixture, and D9 save/reopen gates before public support claims upgrade.
+
+Alternative rejected: reviving the retired ProseMirror resize contract (`readColumnWidths`, `commitColumnResize`, adapter-owned gesture FSMs). That path made adapters geometry authorities and could not target canonical tree identities across pagination and nested tables.
+
 ## Risks / Trade-offs
 
 - [Normalized serialization changes lexical XML details] → Require both the D9 namespace-aware canonical tree fingerprint and save/reopen semantic digest.
@@ -226,7 +240,8 @@ Alternative rejected: moving files into one directory while removing dependency-
 6. Pass paginated private React acceptance against a correct layout, then add change-scoped incremental layout and output virtualization differentially against it.
 7. Consolidate production `engine-*` lanes physically under `packages/core`, preserving dependency and environment guards, and retire each workspace package as its replacement becomes authoritative.
 8. Pass paired React/Vue production gates.
-9. Keep unsupported lanes deferred until their own reviewed changes.
+9. Land the bounded Word-like table-editing slice in vertical order (contract, store ops, editor dispatch, semantic furniture, shared chrome, paired adapters, browser/D9 gates) while keeping merge/split and row-height resize deferred.
+10. Keep other unsupported lanes deferred until their own reviewed changes.
 
 Rollback is package-local until public parity acceptance: disable the private harness and retain the last committed canonical store path. Archived proposals remain evidence and are never restored as competing active changes.
 

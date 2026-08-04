@@ -262,6 +262,11 @@ function walkParagraph(
     // op offset space, so every op past it was refused as out of range.
     if (child.kind === 'hyperlink' || isContentRevisionKind(child.kind)) {
       for (const inner of child.children) visitInline(inner, depth + 1);
+      // The container owns the full span its descendants contributed. Tracked typing uses
+      // this span to descend back into the author's existing `w:ins`; without it, the first
+      // character was addressable but the second saw the wrapper as length zero and was
+      // refused as past the paragraph.
+      record(child, start);
       return;
     }
     // Inline content controls: descend into `w:sdtContent` with a nesting bound.

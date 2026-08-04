@@ -18,6 +18,7 @@ import {
   type PageGeometry,
   type SemanticLayout,
 } from '../index.ts';
+import { fragmentSignature } from '../semantic-fragment-signature.ts';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 
@@ -206,5 +207,53 @@ describe('the cache and the session compose (tasks 9.2, 9.3)', () => {
       session,
     });
     expect(shapeOf(incremental)).toBe(shapeOf(lay(edited, 2)));
+  });
+
+  test('table geometry fields participate in fragment signature equality', () => {
+    const session = createLayoutSession();
+    const tableDoc = load(
+      `<w:tbl><w:tblGrid><w:gridCol w:w="2000"/><w:gridCol w:w="2000"/></w:tblGrid>` +
+        `<w:tr><w:tc><w:p><w:r><w:t>A</w:t></w:r></w:p></w:tc><w:tc><w:p><w:r><w:t>B</w:t></w:r></w:p></w:tc></w:tr></w:tbl>`
+    );
+    const first = layoutSemanticDocument(tableDoc, 1, { measurer, geometry: GEOMETRY, session });
+    const second = layoutSemanticDocument(tableDoc, 2, { measurer, geometry: GEOMETRY, session });
+    const tableA = first.pages[0]!.fragments.find((fragment) => fragment.kind === 'table');
+    const tableB = second.pages[0]!.fragments.find((fragment) => fragment.kind === 'table');
+    expect(tableA?.kind).toBe('table');
+    expect(tableB?.kind).toBe('table');
+    if (tableA?.kind === 'table' && tableB?.kind === 'table') {
+      expect(tableB.nestingDepth).toBe(tableA.nestingDepth);
+      expect(tableB.columnEdges).toEqual(tableA.columnEdges);
+      expect(tableB.rows[0]!.rowIndex).toBe(tableA.rows[0]!.rowIndex);
+    }
+  });
+
+  test('changing nestingDepth columnEdges or rowIndex changes fragmentSignature', () => {
+    const session = createLayoutSession();
+    const tableDoc = load(
+      `<w:tbl><w:tblGrid><w:gridCol w:w="2000"/><w:gridCol w:w="2000"/></w:tblGrid>` +
+        `<w:tr><w:tc><w:p><w:r><w:t>A</w:t></w:r></w:p></w:tc><w:tc><w:p><w:r><w:t>B</w:t></w:r></w:p></w:tc></w:tr></w:tbl>`
+    );
+    const layout = layoutSemanticDocument(tableDoc, 1, { measurer, geometry: GEOMETRY, session });
+    const base = layout.pages[0]!.fragments.find((fragment) => fragment.kind === 'table');
+    expect(base?.kind).toBe('table');
+    if (base?.kind !== 'table') return;
+
+    const deeper = { ...base, nestingDepth: base.nestingDepth + 1 };
+    expect(fragmentSignature(deeper)).not.toBe(fragmentSignature(base));
+
+    const newEdges = [...base.columnEdges];
+    newEdges[newEdges.length - 1] = (newEdges.at(-1) ?? 0) + 1;
+    const retuned = { ...base, columnEdges: newEdges };
+    expect(fragmentSignature(retuned)).not.toBe(fragmentSignature(base));
+
+    const reindexed = {
+      ...base,
+      rows: base.rows.map((row, index) => ({ ...row, rowIndex: index + 1 })),
+    };
+    expect(fragmentSignature(reindexed)).not.toBe(fragmentSignature(base));
+
+    const same = { ...base, rows: [...base.rows] };
+    expect(fragmentSignature(same)).toBe(fragmentSignature(base));
   });
 });

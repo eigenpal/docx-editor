@@ -17,8 +17,6 @@ import { ChromeSlotId } from '@docx-editor.dev/core-contract/editor';
 import { ColorValue } from '@docx-editor.dev/core-contract/contracts/editor';
 import { commandForSlot } from '@docx-editor.dev/core-contract/editor';
 import { composeFontConfiguration } from '@docx-editor.dev/core-contract/editor';
-import { ContentControlSummary } from '@docx-editor.dev/core-contract';
-import { ContentControlType } from '@docx-editor.dev/core-contract';
 import { createFontSource } from '@docx-editor.dev/core-contract/editor';
 import { CSSProperties } from 'react';
 import { DocumentChange } from '@docx-editor.dev/core-contract/contracts/editor';
@@ -71,6 +69,7 @@ import { runToolbarCommand } from '@docx-editor.dev/core-contract/editor';
 import { SectionProperties } from '@docx-editor.dev/core-contract/editor';
 import { SurfaceFormatting } from '@docx-editor.dev/core-contract/editor';
 import { SurfaceHyperlink } from '@docx-editor.dev/core-contract/editor';
+import { TableChromeSlotId } from '@docx-editor.dev/core-contract/editor';
 import { TextMatch } from '@docx-editor.dev/core-contract/contracts/editor';
 import { TextMeasurer } from '@docx-editor.dev/core-contract/editor';
 import { Theme } from '@docx-editor.dev/core-contract/contracts/editor';
@@ -105,63 +104,6 @@ export { commandForSlot }
 export { composeFontConfiguration }
 
 // @public
-export const CONTENT_CONTROL_SLOTS: {
-    readonly showAll: "contentControl.showAll";
-    readonly formFill: "contentControl.formFill";
-    readonly inspector: "contentControl.inspector";
-    readonly remove: "contentControl.remove";
-};
-
-// @public
-export interface ContentControlActionProps extends ContentControlPartProps {
-    // (undocumented)
-    icon?: ReactNode;
-}
-
-// @public
-export interface ContentControlInspectorState {
-    // (undocumented)
-    readonly alias: string | null;
-    // (undocumented)
-    readonly bound: boolean;
-    // (undocumented)
-    readonly controlType: ContentControlType;
-    // (undocumented)
-    readonly effectiveLock: ContentControlLock | null;
-    // (undocumented)
-    readonly id: string;
-    readonly locked: boolean;
-    // (undocumented)
-    readonly placeholder: boolean;
-    readonly removalLocked: boolean;
-    // (undocumented)
-    readonly tag: string | null;
-}
-
-// @public
-export type ContentControlLock = 'unlocked' | 'sdtLocked' | 'contentLocked' | 'sdtContentLocked';
-
-// @public
-export interface ContentControlPartProps {
-    // (undocumented)
-    asChild?: boolean;
-    // (undocumented)
-    children?: ReactNode;
-    // (undocumented)
-    className?: string;
-    // (undocumented)
-    hidden?: boolean;
-}
-
-// @public
-export interface ContentControlProps extends ContentControlPartProps {
-    preset?: boolean;
-}
-
-// @public (undocumented)
-export type ContentControlSlotId = (typeof CONTENT_CONTROL_SLOTS)[keyof typeof CONTENT_CONTROL_SLOTS];
-
-// @public
 export interface ContextMenuAnchor {
     // (undocumented)
     readonly x: number;
@@ -191,6 +133,41 @@ export const ContextMenuCut: ((input: ContextMenuCommandProps) => react.JSX.Elem
 
 // @public
 export const ContextMenuDelete: ((input: ContextMenuCommandProps) => react.JSX.Element | null) & {
+    docxRow: string;
+};
+
+// @public
+export const ContextMenuDeleteTable: ((input: ContextMenuTableRowProps) => react.JSX.Element | null) & {
+    docxRow: string;
+};
+
+// @public
+export const ContextMenuDeleteTableColumn: ((input: ContextMenuTableRowProps) => react.JSX.Element | null) & {
+    docxRow: string;
+};
+
+// @public
+export const ContextMenuDeleteTableRow: ((input: ContextMenuTableRowProps) => react.JSX.Element | null) & {
+    docxRow: string;
+};
+
+// @public
+export const ContextMenuInsertColumnLeft: ((input: ContextMenuTableRowProps) => react.JSX.Element | null) & {
+    docxRow: string;
+};
+
+// @public
+export const ContextMenuInsertColumnRight: ((input: ContextMenuTableRowProps) => react.JSX.Element | null) & {
+    docxRow: string;
+};
+
+// @public
+export const ContextMenuInsertRowAbove: ((input: ContextMenuTableRowProps) => react.JSX.Element | null) & {
+    docxRow: string;
+};
+
+// @public
+export const ContextMenuInsertRowBelow: ((input: ContextMenuTableRowProps) => react.JSX.Element | null) & {
     docxRow: string;
 };
 
@@ -227,6 +204,11 @@ export const ContextMenuSelectAll: ((input: ContextMenuCommandProps) => react.JS
     docxRow: string;
 };
 
+// @public
+export interface ContextMenuTableRowProps extends ContextMenuCommandProps {
+    destructive?: boolean;
+}
+
 export { createFontSource }
 
 // @public (undocumented)
@@ -239,21 +221,6 @@ export const DocxEditor: DocxEditorNamespace;
 
 // @public
 export function DocxEditorContent(input: DocxEditorContentProps): react.JSX.Element;
-
-// @public (undocumented)
-export const DocxEditorContentControl: DocxEditorContentControlNamespace;
-
-// @public
-export interface DocxEditorContentControlNamespace {
-    // (undocumented)
-    (props: ContentControlProps): ReturnType<typeof ContentControlRoot>;
-    // (undocumented)
-    readonly Fields: typeof ContentControlFields;
-    // (undocumented)
-    readonly Header: typeof ContentControlHeader;
-    // (undocumented)
-    readonly Remove: typeof ContentControlRemove;
-}
 
 // @public
 export interface DocxEditorContentProps {
@@ -273,6 +240,20 @@ export interface DocxEditorContextMenuNamespace {
     readonly Cut: typeof ContextMenuCut;
     // (undocumented)
     readonly Delete: typeof ContextMenuDelete;
+    // (undocumented)
+    readonly DeleteTable: typeof ContextMenuDeleteTable;
+    // (undocumented)
+    readonly DeleteTableColumn: typeof ContextMenuDeleteTableColumn;
+    // (undocumented)
+    readonly DeleteTableRow: typeof ContextMenuDeleteTableRow;
+    // (undocumented)
+    readonly InsertColumnLeft: typeof ContextMenuInsertColumnLeft;
+    // (undocumented)
+    readonly InsertColumnRight: typeof ContextMenuInsertColumnRight;
+    // (undocumented)
+    readonly InsertRowAbove: typeof ContextMenuInsertRowAbove;
+    // (undocumented)
+    readonly InsertRowBelow: typeof ContextMenuInsertRowBelow;
     readonly Item: typeof ContextMenuItem;
     // (undocumented)
     readonly Paste: typeof ContextMenuPaste;
@@ -421,7 +402,6 @@ export interface DocxEditorMenuProps {
 export interface DocxEditorNamespace extends ForwardRefExoticComponent<DocxEditorProps & RefAttributes<DocxEditorRef>> {
     // (undocumented)
     readonly Content: typeof DocxEditorContent;
-    readonly ContentControl: typeof DocxEditorContentControl;
     readonly ContextMenu: typeof ContextMenu;
     readonly DocumentOutline: typeof DocxEditorDocumentOutline;
     readonly HeaderFooterChrome: typeof DocxEditorHeaderFooterChrome;
@@ -432,7 +412,6 @@ export interface DocxEditorNamespace extends ForwardRefExoticComponent<DocxEdito
     readonly Navigation: typeof Navigation;
     // (undocumented)
     readonly NotesChrome: typeof DocxEditorNotesChrome;
-    readonly PageNumber: typeof DocxEditorPageNumber;
     readonly PageSetupDialog: typeof DocxEditorPageSetupDialog;
     readonly Review: typeof DocxEditorReview;
     // (undocumented)
@@ -599,6 +578,7 @@ export interface DocxEditorRootProps {
     onChange?: (change: DocumentChange) => void;
     onFontError?: (error: EditorFontError) => void;
     onReady?: (editor: Editor) => void;
+    tableInteractionLabel?: (key: 'table.insertRowBelow' | 'table.insertColumnRight') => string;
     // (undocumented)
     zoom?: number;
 }
@@ -681,14 +661,6 @@ export interface DocxEditorToolbarNamespace {
     // (undocumented)
     readonly Comments: ToolbarPartComponent;
     // (undocumented)
-    readonly ContentControlFormFill: ToolbarPartComponent;
-    // (undocumented)
-    readonly ContentControlInspector: ToolbarPartComponent;
-    // (undocumented)
-    readonly ContentControlRemove: ToolbarPartComponent;
-    // (undocumented)
-    readonly ContentControlShowAll: ToolbarPartComponent;
-    // (undocumented)
     readonly EditingMode: ToolbarSlotPartComponent;
     // (undocumented)
     readonly FontColor: ToolbarColorSplitComponent;
@@ -728,6 +700,11 @@ export interface DocxEditorToolbarNamespace {
     readonly Subscript: ToolbarPartComponent;
     // (undocumented)
     readonly Superscript: ToolbarPartComponent;
+    readonly TableBorderColor: TableBorderColorNamespace;
+    readonly TableBorderStyle: TableBorderStyleNamespace;
+    readonly TableBorderTarget: TableBorderTargetNamespace;
+    readonly TableBorderWidth: TableBorderWidthNamespace;
+    readonly TableCellFill: TableCellFillNamespace;
     // (undocumented)
     readonly TableInsert: ToolbarPartComponent;
     // (undocumented)
@@ -744,7 +721,6 @@ export interface DocxEditorToolbarProps {
     children?: ReactNode;
     className?: string;
     onSave?: () => void;
-    overflow?: boolean;
     preset?: boolean;
     t?: ToolbarTranslate;
 }
@@ -780,7 +756,7 @@ export { EditorCommand }
 // @public
 export interface EditorCommandState {
     readonly disabledReason: string | null;
-    readonly execute: () => void;
+    readonly execute: () => boolean;
     readonly isActive: boolean;
     readonly isEnabled: boolean;
 }
@@ -1328,6 +1304,69 @@ export const SEARCH_DEBOUNCE_MS = 150;
 export const SEARCH_MATCH_LIMIT = 2000;
 
 // @public
+export interface TableBorderColorNamespace extends TableChromePartComponent {
+    readonly Content: (props: TableChromePartProps) => ReactNode;
+    readonly docxSlot: 'table.borderColor';
+    readonly Item: (props: TableChromeItemProps) => ReactNode;
+    readonly Main: (props: TableChromePartProps) => ReactNode;
+    readonly Trigger: (props: TableChromePartProps) => ReactNode;
+}
+
+// @public
+export interface TableBorderStyleNamespace extends TableChromePartComponent {
+    readonly Content: (props: TableChromePartProps) => ReactNode;
+    readonly docxSlot: 'table.borderStyle';
+    readonly Item: (props: TableChromeItemProps) => ReactNode;
+    readonly Trigger: (props: TableChromePartProps) => ReactNode;
+}
+
+// @public
+export interface TableBorderTargetNamespace extends TableChromePartComponent {
+    readonly Content: (props: TableChromePartProps) => ReactNode;
+    readonly docxSlot: 'table.borderTarget';
+    readonly Item: (props: TableChromeItemProps) => ReactNode;
+    readonly Trigger: (props: TableChromePartProps) => ReactNode;
+}
+
+// @public
+export interface TableBorderWidthNamespace extends TableChromePartComponent {
+    readonly Content: (props: TableChromePartProps) => ReactNode;
+    readonly docxSlot: 'table.borderWidth';
+    readonly Item: (props: TableChromeItemProps) => ReactNode;
+    readonly Trigger: (props: TableChromePartProps) => ReactNode;
+}
+
+// @public
+export interface TableCellFillNamespace extends TableChromePartComponent {
+    readonly Content: (props: TableChromePartProps) => ReactNode;
+    readonly docxSlot: 'table.cellFill';
+    readonly Item: (props: TableChromeItemProps) => ReactNode;
+    readonly Main: (props: TableChromePartProps) => ReactNode;
+    readonly Trigger: (props: TableChromePartProps) => ReactNode;
+}
+
+// @public
+export interface TableChromeItemProps extends TableChromePartProps {
+    value: string;
+}
+
+// @public
+export interface TableChromePartComponent extends ToolbarSlotPartComponent {
+    readonly Content: (props: TableChromePartProps) => ReactNode;
+    readonly docxSlot: TableChromeSlotId;
+    readonly Item: (props: TableChromeItemProps) => ReactNode;
+    readonly Trigger: (props: TableChromePartProps) => ReactNode;
+}
+
+// @public
+export interface TableChromePartProps {
+    asChild?: boolean;
+    children?: ReactNode;
+    className?: string;
+    hidden?: boolean;
+}
+
+// @public
 export function TitleBar(input: TitleBarProps): react__default.JSX.Element;
 
 // @public (undocumented)
@@ -1492,41 +1531,6 @@ export interface ToolbarSlotPartProps {
 export type ToolbarTranslate = (key: string) => string;
 
 // @public
-export function useContentControl(): UseContentControlResult;
-
-// @public
-export function useContentControlInstance(): UseContentControlResult;
-
-// @public
-export interface UseContentControlResult {
-    readonly canRemove: boolean;
-    readonly canSetValue: boolean;
-    // (undocumented)
-    readonly closeInspector: () => void;
-    readonly control: ContentControlInspectorState | null;
-    readonly controls: readonly ContentControlSummary[];
-    readonly formFill: boolean;
-    readonly inspectorOpen: boolean;
-    // (undocumented)
-    readonly openInspector: () => void;
-    readonly remove: () => ExecResult;
-    readonly removeDisabledReason: string | null;
-    // (undocumented)
-    readonly setFormFill: (on: boolean) => void;
-    // (undocumented)
-    readonly setShowAll: (show: boolean) => void;
-    readonly setValue: (value: string) => ExecResult;
-    readonly setValueDisabledReason: string | null;
-    readonly showAll: boolean;
-    // (undocumented)
-    readonly toggleFormFill: () => void;
-    // (undocumented)
-    readonly toggleInspector: () => void;
-    // (undocumented)
-    readonly toggleShowAll: () => void;
-}
-
-// @public
 export function useDocumentOutline(): UseDocumentOutlineResult;
 
 // @public
@@ -1597,7 +1601,7 @@ export function useEditorEvent<E extends keyof EditorEvents>(event: E, handler: 
 export function useEditorSnapshot(editor: Editor | null): number;
 
 // @public
-export function useEditorState<T>(selector: (snapshot: EditorSnapshot) => T, isEqual?: (a: T, b: T) => boolean): T;
+export function useEditorState<T>(selector: (snapshot: EditorSnapshot) => T, isEqual?: (a: T, b: T) => boolean, options?: UseEditorStateOptions): T;
 
 // @public
 export function useFontFamily(): UseFontFamilyResult;
@@ -1742,6 +1746,9 @@ export function useStackedReviewPositions(items: readonly {
     readonly gap?: number;
     readonly scale?: number;
 }): ReadonlyMap<string, number>;
+
+// @public
+export function useTableBorderTargetLabel(): string;
 
 // @public
 export const VERSION = "0.0.2";

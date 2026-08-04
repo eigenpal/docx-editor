@@ -145,3 +145,25 @@ Every supported incremental-layout class SHALL be tested against a clean full la
 #### Scenario: Incremental fixture completes
 - **WHEN** text-local, paragraph-local, split/join, or flow-structural fixture edits run incrementally
 - **THEN** semantic layout and display output equal clean full output while recorded work remains limited to the proven invalidation and convergence window
+
+### Requirement: Table interaction geometry
+Semantic layout SHALL publish canonical table, row, and cell identities with resolved column boundaries, outer-right table edges, authored versus repeated fragments, and nesting order sufficient for divider handles, hover insertion controls, and explicit resize targets. Each interaction record SHALL carry the canonical store revision it was derived from as `sourceRevision`. Repeated header copies SHALL appear in geometry but SHALL be marked non-editable.
+
+#### Scenario: Column divider geometry is published
+- **WHEN** a table with explicit grid columns is laid out
+- **THEN** each authored internal divider and the outer-right edge expose stable page coordinates for interaction furniture
+
+#### Scenario: Nested pointer targets the innermost table
+- **WHEN** pointer hit testing resolves a coordinate over nested tables
+- **THEN** the deepest nested table owns the interaction target
+
+#### Scenario: Stale source revision is refused
+- **WHEN** an explicit table target's `sourceRevision` does not equal the current canonical store revision at commit time, including while an older layout remains published for geometry
+- **THEN** the editor refuses the gesture with a typed stale-target reason
+
+### Requirement: Table structural edits invalidate flow
+Row and column insertion, deletion, and column resize commits SHALL publish `flow-structural` impact and SHALL be covered by incremental/full differential layout tests with stable unaffected page identity outside the edited table interval.
+
+#### Scenario: Unaffected pages keep identity after table resize
+- **WHEN** a middle-table column resize converges without repagination before the following page
+- **THEN** preceding and following unchanged pages retain stable identities

@@ -14,6 +14,7 @@ import {
   type OoxmlElement,
   type OoxmlPart,
 } from '../../store/package/ooxml-tree.ts';
+import { applyTreeOp } from '../../store/store/tree-ops.ts';
 import { buildStyleCascadeTable } from '../style-cascade.ts';
 import { readTableStructure } from '../semantic-table.ts';
 import { createFixedMeasurer, layoutSemanticDocument } from '../semantic-layout.ts';
@@ -473,5 +474,44 @@ describe('the table fragment box reports the table’s own width', () => {
       const hit = hitTestPage(layout, 0, { x, y });
       expect(hit?.position.paragraphId).toBe(insideCell);
     }
+  });
+});
+
+describe('store column resize lands in preferred-width readback', () => {
+  test('outer-right resize updates resolved table width in points', () => {
+    const opened = readOoxmlPart(
+      `<w:document xmlns:w="${W}"><w:body>` +
+        `<w:tbl><w:tblPr><w:tblW w:w="6000" w:type="dxa"/></w:tblPr>` +
+        `${grid(2400, 3600)}<w:tr>${cell(tcW('2400'))}${cell(tcW('3600'))}</w:tr></w:tbl>` +
+        `</w:body></w:document>`,
+      { name: '/word/document.xml', contentType: 'app/xml' }
+    );
+    if (!opened.ok) throw new Error(opened.reason);
+    const part = opened.part;
+    const table = part.root.children
+      .flatMap((child) => (child.kind === 'textValue' ? [] : child.children))
+      .find((child) => child.kind === 'table') as OoxmlElement;
+    const tblGridNode = table.children.find(
+      (child) => child.kind !== 'textValue' && child.localName === 'tblGrid'
+    )!;
+    const cols = tblGridNode.children.filter(
+      (child) => child.kind !== 'textValue' && child.localName === 'gridCol'
+    );
+    const result = applyTreeOp(part, {
+      op: 'setTableRightEdgeWidth',
+      tableId: table.id,
+      gridColumnId: cols[1]!.id,
+      columnWidthTwips: 4200,
+      tableWidthTwips: 6600,
+    });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+
+    const editedTable = result.part.root.children
+      .flatMap((child) => (child.kind === 'textValue' ? [] : child.children))
+      .find((child) => child.id === table.id) as OoxmlElement;
+    const structure = readTableStructure(editedTable, CONTENT_WIDTH_PT, 0)!;
+    expect(structure.columnWidthsPt).toEqual([120, 210]);
+    expect(total(structure.columnWidthsPt)).toBeCloseTo(330, 6);
   });
 });

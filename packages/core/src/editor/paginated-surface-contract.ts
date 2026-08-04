@@ -114,6 +114,13 @@ export interface PaginatedSurfaceOptions {
    * rather than doing something surprising with it.
    */
   readonly onRequestHyperlink?: () => void;
+  /**
+   * Localized accessible names for core-owned table insertion furniture.
+   * Defaults to English from `@docx-editor.dev/i18n` when omitted.
+   */
+  readonly tableInteractionLabel?: (
+    key: 'table.insertRowBelow' | 'table.insertColumnRight'
+  ) => string;
 }
 
 /**
@@ -568,7 +575,21 @@ export interface PaginatedSurface {
   /** Reverse the last history entry and put the caret back where it was made. */
   undo(): void;
   redo(): void;
+  /**
+   * Refresh table insertion furniture labels without remounting or relayout.
+   *
+   * @public
+   */
+  refreshTableInteractionLabels(): void;
   focus(): void;
+  /**
+   * Refresh table insertion furniture labels without remounting the surface.
+   *
+   * @public
+   */
+  setTableInteractionLabel(
+    resolver: (key: 'table.insertRowBelow' | 'table.insertColumnRight') => string
+  ): void;
   destroy(): void;
   /** Active editing view — body, or an open header/footer story by rId. */
   activeScope(): ViewScope;
@@ -649,6 +670,10 @@ export interface PaginatedSurface {
   notePropertiesState(): import('./surface-note-state.ts').NotePropertiesStateSnapshot | null;
   /** Plain-text preview for hover chrome — never returns markup. */
   notePreviewText(scopeId: string): string | null;
+  /** Commit one table-command plan as a single store transaction. */
+  applyTableCommandPlan(
+    plan: import('./table-command-plan.ts').TableCommandPlan
+  ): import('../contracts/editor.ts').ExecResult;
 }
 
 export type OpenPaginatedResult =

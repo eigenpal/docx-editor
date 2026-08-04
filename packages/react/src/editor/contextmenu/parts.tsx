@@ -13,11 +13,13 @@
 // takes either form — the slot arm asks `toolbarCommandState`, the command arm asks
 // `Editor.can`/`isActive` directly, and both end at the same authority.
 
-import { useMemo } from 'react';
+import { useMemo, useCallback } from 'react';
 import type { ReactNode } from 'react';
 import type { EditorCommand } from '@docx-editor.dev/core-contract/contracts/editor';
+import { tableChromeIconPaths } from '@docx-editor.dev/core-contract/editor';
 import { useDocxEditor } from '../context';
 import { useEditorCommand } from '../useEditorCommand';
+import { useEditorState } from '../useEditorState';
 import { MenuRow } from '../menu/parts';
 import { useMenuLabel } from '../menu/menu-context';
 import { useContextMenuContext } from './contextmenu-context';
@@ -185,6 +187,204 @@ export function ContextMenuPaste({
 }
 
 ContextMenuPaste.docxRow = 'edit.paste' as const;
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Table context rows — fixed commands, not chrome slots
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** Props for packaged table context-menu rows. @public */
+export interface ContextMenuTableRowProps extends ContextMenuCommandProps {
+  /** When true, the row uses the destructive treatment. */
+  destructive?: boolean;
+}
+
+function defineTableCommandRow(
+  rowId: string,
+  command: EditorCommand,
+  defaults: { labelKey: string; paths: readonly string[]; destructive?: boolean }
+) {
+  const Part = ({ icon, labelKey, className, hidden, destructive }: ContextMenuTableRowProps) => {
+    const { close } = useContextMenuContext();
+    const label = useMenuLabel();
+    const tableVisible = useTableContextMenuVisible();
+    const { isEnabled, disabledReason, execute } = useEditorCommand(command);
+    if (hidden || !tableVisible) return null;
+    return (
+      <MenuRow
+        slot={rowId}
+        icon={icon ?? chromeIcon(defaults.paths)}
+        disabled={!isEnabled}
+        {...(disabledReason ? { title: disabledReason } : {})}
+        className={`${(destructive ?? defaults.destructive) ? 'docx-table-chrome__destructive-row' : ''}${className ? ` ${className}` : ''}`}
+        onSelect={() => {
+          if (execute()) close(true);
+        }}
+      >
+        {label(labelKey ?? defaults.labelKey)}
+      </MenuRow>
+    );
+  };
+  return Object.assign(Part, { docxRow: rowId });
+}
+
+/** Insert a row above the current table row. @public */
+export const ContextMenuInsertRowAbove = defineTableCommandRow(
+  'table.insertRowAbove',
+  { type: 'insertRow', where: 'above' },
+  { labelKey: 'table.insertRowAbove', paths: tableChromeIconPaths('table_rows') }
+);
+
+/** Insert a row below the current table row. @public */
+export const ContextMenuInsertRowBelow = defineTableCommandRow(
+  'table.insertRowBelow',
+  { type: 'insertRow', where: 'below' },
+  { labelKey: 'table.insertRowBelow', paths: tableChromeIconPaths('table_rows') }
+);
+
+/** Insert a column to the left of the current column. @public */
+export const ContextMenuInsertColumnLeft = defineTableCommandRow(
+  'table.insertColumnLeft',
+  { type: 'insertColumn', where: 'left' },
+  { labelKey: 'table.insertColumnLeft', paths: tableChromeIconPaths('view_column') }
+);
+
+/** Insert a column to the right of the current column. @public */
+export const ContextMenuInsertColumnRight = defineTableCommandRow(
+  'table.insertColumnRight',
+  { type: 'insertColumn', where: 'right' },
+  { labelKey: 'table.insertColumnRight', paths: tableChromeIconPaths('view_column') }
+);
+
+/** Delete the current table row. @public */
+export const ContextMenuDeleteTableRow = defineTableCommandRow(
+  'table.deleteRow',
+  { type: 'deleteRow' },
+  {
+    labelKey: 'table.deleteRow',
+    paths: tableChromeIconPaths('delete_sweep'),
+    destructive: true,
+  }
+);
+
+/** Delete the current table column. @public */
+export const ContextMenuDeleteTableColumn = defineTableCommandRow(
+  'table.deleteColumn',
+  { type: 'deleteColumn' },
+  {
+    labelKey: 'table.deleteColumn',
+    paths: tableChromeIconPaths('view_column'),
+    destructive: true,
+  }
+);
+
+/** Delete the entire table. @public */
+export const ContextMenuDeleteTable = defineTableCommandRow(
+  'table.deleteTable',
+  { type: 'deleteTable' },
+  {
+    labelKey: 'table.deleteTable',
+    paths: tableChromeIconPaths('delete'),
+    destructive: true,
+  }
+);
+
+const CELL_VERTICAL_ALIGNMENT_COMMANDS = [
+  {
+    alignment: 'top',
+    labelKey: 'tableAdvanced.top',
+    icon: 'vertical_align_top',
+  },
+  {
+    alignment: 'center',
+    labelKey: 'tableAdvanced.middle',
+    icon: 'vertical_align_center',
+  },
+  {
+    alignment: 'bottom',
+    labelKey: 'tableAdvanced.bottom',
+    icon: 'vertical_align_bottom',
+  },
+] as const;
+
+/** Compact vertical-alignment picker for selected table cells. @public */
+export function ContextMenuCellVerticalAlignment({ hidden }: ContextMenuCommandProps) {
+  const { close } = useContextMenuContext();
+  const label = useMenuLabel();
+  const tableVisible = useTableContextMenuVisible();
+  const top = useEditorCommand({
+    type: 'setTableCellVerticalAlignment',
+    alignment: 'top',
+  });
+  const center = useEditorCommand({
+    type: 'setTableCellVerticalAlignment',
+    alignment: 'center',
+  });
+  const bottom = useEditorCommand({
+    type: 'setTableCellVerticalAlignment',
+    alignment: 'bottom',
+  });
+  const states = [top, center, bottom] as const;
+  if (hidden || !tableVisible) return null;
+  return (
+    <div className="docx-contextmenu__table-align">
+      <span className="docx-contextmenu__table-align-label">
+        {label('tableAdvanced.verticalAlignment')}
+      </span>
+      <div
+        className="docx-contextmenu__table-align-buttons"
+        role="group"
+        aria-label={label('tableAdvanced.verticalAlignment')}
+      >
+        {CELL_VERTICAL_ALIGNMENT_COMMANDS.map((item, index) => {
+          const state = states[index]!;
+          return (
+            <button
+              key={item.alignment}
+              type="button"
+              role="menuitemradio"
+              aria-checked={false}
+              aria-label={label(item.labelKey)}
+              title={state.disabledReason ?? label(item.labelKey)}
+              aria-disabled={!state.isEnabled}
+              className="docx-contextmenu__table-align-button"
+              onMouseDown={(event) => {
+                event.preventDefault();
+                event.stopPropagation();
+              }}
+              onClick={() => {
+                if (state.execute()) close(true);
+              }}
+            >
+              {chromeIcon(tableChromeIconPaths(item.icon))}
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+ContextMenuCellVerticalAlignment.docxRow = 'table.cellVerticalAlignment' as const;
+
+/** Whether table context rows should render for the current selection. @internal */
+export function useTableContextMenuVisible(): boolean {
+  return useEditorState(
+    useCallback((snapshot) => snapshot.table != null, []),
+    (a, b) => a === b
+  );
+}
+
+/** Fixed table context rows in registry order. @internal */
+export const TABLE_CONTEXT_ROWS = [
+  ContextMenuInsertRowAbove,
+  ContextMenuInsertRowBelow,
+  ContextMenuInsertColumnLeft,
+  ContextMenuInsertColumnRight,
+  ContextMenuDeleteTableRow,
+  ContextMenuDeleteTableColumn,
+  ContextMenuDeleteTable,
+  ContextMenuCellVerticalAlignment,
+] as const;
 
 // ─────────────────────────────────────────────────────────────────────────────
 // The host's own row

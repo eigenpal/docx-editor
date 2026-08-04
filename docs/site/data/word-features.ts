@@ -339,25 +339,29 @@ export const wordFeatures: WordFeature[] = [
     roundTrip: 'full',
     tier: 'community',
     notes:
-      'Resize commits Word-compatible twip widths. Agent-API table mutation is read-only for now.',
+      'Core store and React paginated editor: hover row/column insertion, adjacent divider and outer-right resize, and seven table context-menu structural actions. Vue toolbar and context-menu value UI remain deferred; Vue inherits shared command types only. Agent-API table mutation is read-only for now.',
   },
   {
     id: 'tables.borders-shading',
     name: 'Cell borders & shading',
     category: 'tables',
-    editing: 'full',
+    editing: 'partial',
     rendering: 'full',
     roundTrip: 'full',
     tier: 'community',
+    notes:
+      'Selected-cell borders and fill through React contextual toolbar controls (allowlisted styles, nullable clear fill). Vue value chrome deferred. Existing table/cell borders and table-style shading still render and round-trip.',
   },
   {
     id: 'tables.merge',
     name: 'Merged cells (horizontal & vertical)',
     category: 'tables',
-    editing: 'full',
+    editing: 'none',
     rendering: 'full',
     roundTrip: 'full',
     tier: 'community',
+    notes:
+      'Authored merges render and round-trip. Merge and split commands are declared but refused; column insert/delete/resize on merged tables shows the engine reason.',
   },
   {
     id: 'tables.page-break',
@@ -374,10 +378,12 @@ export const wordFeatures: WordFeature[] = [
     id: 'tables.nested',
     name: 'Nested tables',
     category: 'tables',
-    editing: 'full',
+    editing: 'partial',
     rendering: 'full',
     roundTrip: 'full',
     tier: 'community',
+    notes:
+      'Innermost nested table owns resize furniture, structural edits, and selected-cell borders/fill in the React editor; outer tables stay isolated through save/reopen. Vue table chrome deferred.',
   },
   {
     id: 'tables.conditional-formatting',

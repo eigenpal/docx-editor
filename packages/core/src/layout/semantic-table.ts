@@ -145,6 +145,8 @@ export interface SemanticTableCell {
    * the vertical bands for every cell after it.
    */
   readonly gridColumn: number;
+  /** Canonical `w:gridCol` node id for this cell's start column, when the grid is authored. */
+  readonly gridColumnId?: string;
   /** A vMerge cell that is not the restart continues the cell above: box, no content. */
   readonly vMergeContinue: boolean;
   /** `w:vAlign` — defaults to top when omitted/unrecognised. */
@@ -176,6 +178,8 @@ export interface SemanticTableCell {
 
 export interface SemanticTableRow {
   readonly id: string;
+  /** Pending Word row insertion/deletion authored in `w:trPr`. */
+  readonly revisionKind?: 'insert' | 'delete';
   /** `w:trPr/w:tblHeader` — the row repeats atop each page the table continues onto. */
   readonly isHeader: boolean;
   /**
@@ -734,6 +738,7 @@ export function readTableStructure(
         id: cellNode.id,
         gridSpan,
         gridColumn,
+        ...(gridCols[gridColumn]?.id ? { gridColumnId: gridCols[gridColumn]!.id } : {}),
         vMergeContinue: readVMergeContinue(cellProperties),
         vAlign: readVAlign(cellProperties),
         margins: cellMargins,
@@ -749,6 +754,11 @@ export function readTableStructure(
     }
     rows.push({
       id: rowNode.id,
+      ...(rowProperties && childNamed(rowProperties, 'ins')
+        ? { revisionKind: 'insert' as const }
+        : rowProperties && childNamed(rowProperties, 'del')
+          ? { revisionKind: 'delete' as const }
+          : {}),
       isHeader: readFlag(rowProperties, 'tblHeader'),
       cantSplit: readFlag(rowProperties, 'cantSplit'),
       height: readRowHeight(rowProperties),

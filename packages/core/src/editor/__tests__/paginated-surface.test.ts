@@ -9,9 +9,13 @@
 import { GlobalRegistrator } from '@happy-dom/global-registrator';
 if (!GlobalRegistrator.isRegistered) GlobalRegistrator.register();
 
-import { describe, expect, test } from 'bun:test';
+import { describe, expect, test, afterEach } from 'bun:test';
 import { mountPaginatedSurface } from '../paginated-surface.ts';
 import { mount, paragraph, putCaret } from './paginated-surface-fixtures.ts';
+
+afterEach(() => {
+  document.getSelection()?.removeAllRanges();
+});
 
 describe('painted pages, semantic interaction', () => {
   test('it paints pages and exposes the layout revision', () => {

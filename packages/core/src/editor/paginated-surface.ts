@@ -57,6 +57,8 @@ import type {
   PaginatedSurfaceState,
   SurfaceEditingMode,
 } from './paginated-surface-contract.ts';
+import type { ExecResult } from '../contracts/editor.ts';
+import type { TableCommandPlan } from './table-command-plan.ts';
 import {
   clampedToDocument,
   collapsedAt,
@@ -85,6 +87,8 @@ import {
   type SurfaceExtent,
 } from './surface-pages.ts';
 import { createSurfaceCaret } from './surface-caret.ts';
+import { defaultTableLabel, type TableInteractionLabelKey } from './table-chrome.ts';
+import { createSurfaceTableInteraction } from './surface-table-interaction.ts';
 import { createSurfaceFormat } from './surface-format.ts';
 import {
   authoredRunPropertiesAt,
@@ -164,6 +168,10 @@ export function mountPaginatedSurface(
   }
   const session = opened.session;
   let scale = options.scale ?? 96 / 72;
+  const tableLabelState = {
+    resolve:
+      options.tableInteractionLabel ?? ((key: TableInteractionLabelKey) => defaultTableLabel(key)),
+  };
   const VIEWING_REFUSAL = 'the document is open for viewing';
   /** Separates a decision's key from its per-range index. A NUL cannot occur in either. */
   const RANGE_SUFFIX = '\u0000range\u0000';
@@ -247,8 +255,16 @@ export function mountPaginatedSurface(
   commentLayer.style.top = '0';
   commentLayer.style.pointerEvents = 'none';
 
+  const tableFurnitureLayer = document.createElement('div');
+  tableFurnitureLayer.className = 'docx-table-furniture';
+  tableFurnitureLayer.contentEditable = 'false';
+  tableFurnitureLayer.style.position = 'absolute';
+  tableFurnitureLayer.style.left = '0';
+  tableFurnitureLayer.style.top = '0';
+  tableFurnitureLayer.style.pointerEvents = 'none';
+
   container.style.position = 'relative';
-  container.replaceChildren(pagesLayer, commentLayer, overlayLayer);
+  container.replaceChildren(pagesLayer, tableFurnitureLayer, commentLayer, overlayLayer);
 
   const caret = createSurfaceCaret(
     pagesLayer,
@@ -1418,6 +1434,9 @@ export function mountPaginatedSurface(
     overlayLayer.style.height = `${materializedExtent.height * scale}px`;
     commentLayer.style.width = overlayLayer.style.width;
     commentLayer.style.height = overlayLayer.style.height;
+    tableFurnitureLayer.style.width = overlayLayer.style.width;
+    tableFurnitureLayer.style.height = overlayLayer.style.height;
+    tableInteraction.update();
     // Sizing included: the style writes above invalidate layout, and the selection sync
     // right after is what forces the browser to resolve it. Splitting the timer here would
     // book the paint's own cost to the selection phase.
@@ -1520,6 +1539,8 @@ export function mountPaginatedSurface(
     switch (op.op) {
       case 'insertText':
       case 'deleteText':
+      case 'insertTableRow':
+      case 'deleteTableRow':
         return op.revision !== undefined;
       case 'setParagraphMarkRevision':
       case 'proposeParagraphMerge':
@@ -1529,7 +1550,7 @@ export function mountPaginatedSurface(
     }
   }
 
-  /** Text ops become tracked ones while suggesting; everything else is untouched. */
+  /** Suggesting attributes text and structural row edits as Word tracked changes. */
   function trackedOps(ops: readonly TreeDocOp[]): TreeDocOp[] {
     const author = options.author?.trim();
     // `CT_TrackChange` makes `@w:author` required, so with no author there is nothing valid
@@ -1538,7 +1559,14 @@ export function mountPaginatedSurface(
     if (editingMode !== 'suggest' || !author) return [...ops];
     const revision = { author, date: trackedDate() };
     return ops.flatMap((op): TreeDocOp[] => {
-      if (op.op === 'insertText' || op.op === 'deleteText') return [{ ...op, revision }];
+      if (
+        op.op === 'insertText' ||
+        op.op === 'deleteText' ||
+        op.op === 'insertTableRow' ||
+        op.op === 'deleteTableRow'
+      ) {
+        return [{ ...op, revision }];
+      }
       // A SPLIT becomes a real split plus a proposed mark on the first paragraph: the text
       // is already in two paragraphs, and what is being proposed is the break between them.
       // §17.13.5 puts the new mark on the FIRST paragraph, and rejecting it runs the two
@@ -2585,6 +2613,42 @@ export function mountPaginatedSurface(
       return fresh;
     },
     notePreviewText: (scopeId) => notePreviewTextOf(session, scopeId),
+    applyTableCommandPlan(plan: TableCommandPlan): ExecResult {
+      if (!plan.ok) {
+        return { ok: false, code: plan.code, reason: plan.reason };
+      }
+      let committedCaret: {
+        readonly paragraphId: string;
+        readonly start: number;
+        readonly end: number;
+      } | null = null;
+      const unsub = session.subscribe((change) => {
+        committedCaret = change.caret ?? null;
+      });
+      try {
+        const selectionBefore = selectionMark();
+        const adoptCaret = plan.selection.kind === 'adoptCommittedCaret';
+        commit(
+          () => applyOps(plan.ops, selectionBefore),
+          adoptCaret
+            ? () => {
+                if (!committedCaret) return null;
+                return collapsedAt({
+                  paragraphId: committedCaret.paragraphId,
+                  offset: committedCaret.start,
+                });
+              }
+            : undefined,
+          plan.selection.kind === 'preserveSelection' ? { keepCellSelection: true } : undefined
+        );
+      } finally {
+        unsub();
+      }
+      if (lastRejection) {
+        return { ok: false, code: 'invalidArgs', reason: lastRejection };
+      }
+      return { ok: true, changed: true };
+    },
     enterHeaderFooter: (args) => hfScope!.enterHeaderFooter(args),
     exitHeaderFooter: () => hfScope!.exitHeaderFooter(),
     headerFooterState: () => hfScope!.headerFooterStateStable(session.packageRevision()),
@@ -2604,6 +2668,12 @@ export function mountPaginatedSurface(
     // threw the reader back to page 1 before the caret it had just placed could be seen.
     // The caret is positioned from layout regardless, so nothing needs the browser's scroll.
     focus: () => pagesLayer.focus({ preventScroll: true }),
+    setTableInteractionLabel(resolver) {
+      tableLabelState.resolve = resolver;
+    },
+    refreshTableInteractionLabels() {
+      tableInteraction.refreshLabels();
+    },
     destroy() {
       document.removeEventListener('selectionchange', onSelectionChange);
       pagesLayer.removeEventListener('keydown', onKeyDown);
@@ -2618,6 +2688,7 @@ export function mountPaginatedSurface(
       viewportObserver?.disconnect();
       observedScroller = null;
       pointer?.destroy();
+      tableInteraction.destroy();
       navigation.destroy();
       // Drop pending layout work and stop listening BEFORE the DOM goes, or a commit from
       // another editor sharing this store would paint into a detached container.
@@ -2972,6 +3043,36 @@ export function mountPaginatedSurface(
     options.pointer ? { mode: options.pointer } : {}
   );
 
+  const tableInteraction = createSurfaceTableInteraction({
+    pagesLayer,
+    furnitureLayer: tableFurnitureLayer,
+    scale: () => scale,
+    pageOffsetX: (pageIndex) => materializedExtent?.pageOffsetX.get(pageIndex) ?? 0,
+    read: () => ({
+      layout: currentLayout,
+      storeRevision: session.packageRevision(),
+      selection,
+      cellSelection,
+      editingMode,
+      themeColors: session.documentThemeColors(),
+    }),
+    session: () => session,
+    applyTableCommandPlan: (plan) => surface.applyTableCommandPlan(plan),
+    label: (key) => tableLabelState.resolve(key),
+  });
+
   render();
+  const originalSetEditingMode = surface.setEditingMode.bind(surface);
+  surface.setEditingMode = (mode) => {
+    originalSetEditingMode(mode);
+    tableInteraction.update();
+  };
+  surface.setTableInteractionLabel = (resolver) => {
+    tableLabelState.resolve = resolver;
+    tableInteraction.refreshLabels();
+  };
+  surface.refreshTableInteractionLabels = () => {
+    tableInteraction.refreshLabels();
+  };
   return { ok: true, surface };
 }

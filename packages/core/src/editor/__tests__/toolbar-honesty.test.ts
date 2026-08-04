@@ -23,7 +23,15 @@ import { describe, expect, test } from 'bun:test';
 import { zipSync, strToU8 } from 'fflate';
 import { createDocxEditor, type DocxEditorInstance } from '../docx-editor.ts';
 import { CHROME_GROUPS, chromeSlotId, type ChromeSlotId } from '../chrome-controls.ts';
-import { commandForSlot, toolbarCommandState } from '../toolbar-commands.ts';
+import {
+  commandForSlot,
+  runTableCommand,
+  tableCommandToolbarState,
+  toolbarCommandState,
+} from '../toolbar-commands.ts';
+import { tableRowOccurrenceTargetFrom } from '../../layout/table-interaction-targets.ts';
+import { paragraphTextOf } from '../../store/store/tree-ops.ts';
+import { MAX_TABLE_COLUMNS } from '../../store/store/table-constraints.ts';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 const CT = 'http://schemas.openxmlformats.org/package/2006/content-types';
@@ -271,6 +279,78 @@ describe('no wired toggle is a lie of omission', () => {
       'not wired to an editor command'
     );
     expect(editor.can({ type: 'insertHyperlink', href: 'https://example.com' }).ok).toBe(true);
+  });
+});
+
+// Task 7: table commands use tableCommandToolbarState/runTableCommand — slot mapping is Task 9.
+describe('table command toolbar honesty (Task 7)', () => {
+  const TABLE_2X2 =
+    '<w:tbl><w:tblGrid><w:gridCol w:w="2400"/><w:gridCol w:w="3600"/></w:tblGrid>' +
+    `<w:tr><w:tc>${p('A1')}</w:tc><w:tc>${p('B1')}</w:tc></w:tr>` +
+    `<w:tr><w:tc>${p('A2')}</w:tc><w:tc>${p('B2')}</w:tc></w:tr></w:tbl>`;
+
+  function paragraphByText(editor: DocxEditorInstance, text: string): string {
+    for (const id of editor.surface!.session.paragraphIds()) {
+      if (paragraphTextOf(editor.surface!.session.part(), id) === text) return id;
+    }
+    throw new Error(`paragraph ${text} not found`);
+  }
+
+  function tableFragment(editor: DocxEditorInstance) {
+    for (const page of editor.surface!.layout().pages) {
+      const block = page.fragments.find((b) => b.kind === 'table');
+      if (block?.kind === 'table') return block;
+    }
+    throw new Error('no table');
+  }
+
+  test('stale explicit row target refusal matches can and exec', () => {
+    const editor = mount(TABLE_2X2);
+    const surface = editor.surface!;
+    const table = tableFragment(editor);
+    const target = tableRowOccurrenceTargetFrom(surface.session.revision(), {
+      table,
+      row: table.rows[0]!,
+      rowIndex: 0,
+    });
+    surface.type('X');
+    const cmd = { type: 'insertRow' as const, where: 'below' as const, target };
+    const can = editor.can(cmd);
+    expect(tableCommandToolbarState(surface, cmd).disabledReason).toBe('the table target is stale');
+    expect(runTableCommand(editor, cmd)).toEqual(can);
+    expect(can.ok).toBe(false);
+  });
+
+  test('resource limit refusal matches can and exec', () => {
+    const cols = Array.from({ length: MAX_TABLE_COLUMNS }, () => '<w:gridCol w:w="100"/>').join('');
+    const cells = Array.from(
+      { length: MAX_TABLE_COLUMNS },
+      (_, i) => `<w:tc>${p(`c${i}`)}</w:tc>`
+    ).join('');
+    const editor = mount(`<w:tbl><w:tblGrid>${cols}</w:tblGrid><w:tr>${cells}</w:tr></w:tbl>`);
+    const surface = editor.surface!;
+    surface.setSelection({
+      head: { paragraphId: paragraphByText(editor, 'c0'), offset: 1 },
+      anchor: { paragraphId: paragraphByText(editor, 'c0'), offset: 1 },
+    });
+    const cmd = { type: 'insertColumn' as const, where: 'right' as const };
+    const can = editor.can(cmd);
+    expect(tableCommandToolbarState(surface, cmd).disabledReason).toBe(
+      'the table has reached the supported size limit'
+    );
+    expect(runTableCommand(editor, cmd)).toEqual(can);
+  });
+
+  test('enabled insertRow runs through runTableCommand without a chrome slot', () => {
+    const editor = mount(TABLE_2X2);
+    const surface = editor.surface!;
+    surface.setSelection({
+      head: { paragraphId: paragraphByText(editor, 'A1'), offset: 1 },
+      anchor: { paragraphId: paragraphByText(editor, 'A1'), offset: 1 },
+    });
+    const cmd = { type: 'insertRow' as const, where: 'below' as const };
+    expect(tableCommandToolbarState(surface, cmd).enabled).toBe(true);
+    expect(runTableCommand(editor, cmd).ok).toBe(true);
   });
 });
 

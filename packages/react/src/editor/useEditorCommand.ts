@@ -30,8 +30,12 @@ import { useEditorState } from './useEditorState';
  * @public
  */
 export interface EditorCommandState {
-  /** Run the command (can-before-exec). A refusal is a safe no-op. */
-  readonly execute: () => void;
+  /**
+   * Run the command through the can-before-exec path.
+   *
+   * @returns `true` when the engine accepted and ran the command; `false` on refusal.
+   */
+  readonly execute: () => boolean;
   /** Whether the command is currently applied at the selection (bold on bold text). */
   readonly isActive: boolean;
   /** Whether the engine will honour the command right now. */
@@ -123,15 +127,13 @@ export function useEditorCommand(target: ChromeSlotId | EditorCommand): EditorCo
   );
   const slice = useEditorState(selectSlice, commandSliceEqual);
 
-  const execute = useCallback(() => {
+  const execute = useCallback((): boolean => {
     const current = latest.current;
     if (isSlot(current)) {
-      runToolbarCommand(editor, current);
-      return;
+      return runToolbarCommand(editor, current).ok;
     }
-    // Can-before-exec, the same order `runToolbarCommand` uses: a refusal is a safe no-op
-    // and its reason is already on `disabledReason`.
-    if (editor?.can(current).ok) editor.exec(current);
+    if (!editor) return false;
+    return editor.exec(current).ok;
     // eslint-disable-next-line react-hooks/exhaustive-deps -- keyed on the target's identity-stable shape
   }, [editor, key]);
 

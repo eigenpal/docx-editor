@@ -31,6 +31,7 @@
 import { ToolbarEditingMode } from './EditingMode';
 import { Children, Fragment, isValidElement, useMemo } from 'react';
 import type { ReactElement, ReactNode } from 'react';
+import { unwrapFragment } from '../merge-arrangement';
 import {
   chromeSlotId,
   defaultChromeGroups,
@@ -88,6 +89,29 @@ import {
   ToolbarContentControlRemove,
   ToolbarContentControlShowAll,
 } from './ContentControlParts';
+import {
+  TableChromeGroup,
+  ToolbarTableBorderColor,
+  ToolbarTableBorderStyle,
+  ToolbarTableBorderTarget,
+  ToolbarTableBorderWidth,
+  ToolbarTableCellFill,
+  type TableBorderColorNamespace,
+  type TableBorderStyleNamespace,
+  type TableBorderTargetNamespace,
+  type TableBorderWidthNamespace,
+  type TableCellFillNamespace,
+} from './TableControls';
+import { TableChromeProvider } from './useTableChrome';
+
+/** Contextual table chrome slots appended when the caret is inside a table. */
+const TABLE_CHROME_SLOTS: readonly ArrangementKey[] = [
+  'table.borderTarget',
+  'table.borderColor',
+  'table.borderStyle',
+  'table.borderWidth',
+  'table.cellFill',
+];
 
 /**
  * A default-arrangement key: a chrome slot, or `'alignment'` for the MERGED
@@ -134,6 +158,11 @@ const SHAPED_PARTS: Partial<Record<ChromeSlotId, PartLike>> = {
   // `CHROME_GROUPS` registers the `contentControl` group; until then the default bar
   // does not list them (no hand-listed slots), and hosts compose the named parts.
   ...CONTENT_CONTROL_SHAPED_PARTS,
+  'table.borderTarget': ToolbarTableBorderTarget,
+  'table.borderColor': ToolbarTableBorderColor,
+  'table.borderStyle': ToolbarTableBorderStyle,
+  'table.borderWidth': ToolbarTableBorderWidth,
+  'table.cellFill': ToolbarTableCellFill,
 };
 
 /** Icon-button fallback parts, one per slot, created once. */
@@ -189,6 +218,8 @@ function isValueSlot(slot: ArrangementKey): boolean {
 
 /** The slot one child element drives, or null for a non-part child. */
 function slotOfChild(child: ReactNode): ArrangementKey | null {
+  const unwrapped = unwrapFragment(child, slotOfChild);
+  if (unwrapped !== null) return unwrapped as ArrangementKey;
   if (!isValidElement(child)) return null;
   const type = child.type as { docxSlot?: unknown; docxToolbarPart?: unknown };
   if (typeof type !== 'function' && typeof type !== 'object') return null;
@@ -199,7 +230,6 @@ function slotOfChild(child: ReactNode): ArrangementKey | null {
   }
   return null;
 }
-
 /** Props for `DocxEditor.Toolbar`. @public */
 export interface DocxEditorToolbarProps {
   /** Appended after the base `docx-toolbar` class. */
@@ -225,6 +255,25 @@ export interface DocxEditorToolbarProps {
   children?: ReactNode;
 }
 
+/** Whether a node tree contains any contextual table chrome part (recursive child walk). */
+function walkForTableChromeParts(node: ReactNode): boolean {
+  if (node == null || typeof node === 'boolean') return false;
+  if (Array.isArray(node)) return node.some(walkForTableChromeParts);
+  const slot = slotOfChild(node);
+  if (slot != null && (TABLE_CHROME_SLOTS as readonly string[]).includes(slot)) return true;
+  if (isValidElement(node)) {
+    return Children.toArray((node.props as { children?: ReactNode }).children).some(
+      walkForTableChromeParts
+    );
+  }
+  return false;
+}
+
+function includesTableChromeParts(children: ReactNode, preset: boolean): boolean {
+  if (preset) return true;
+  return Children.toArray(children).some(walkForTableChromeParts);
+}
+
 function DocxEditorToolbarRoot(props: DocxEditorToolbarProps) {
   const { className, t, onSave, preset = true, overflow: overflowEnabled = true, children } = props;
   const context = useMemo(() => ({ t, onSave }), [t, onSave]);
@@ -241,12 +290,15 @@ function DocxEditorToolbarRoot(props: DocxEditorToolbarProps) {
   } else {
     const kids = Children.toArray(children);
     const overrides = new Map<ArrangementKey, ReactElement>();
+    const tableOverrides = new Map<ArrangementKey, ReactElement>();
     const appended: ReactNode[] = [];
     for (const child of kids) {
       const slot = slotOfChild(child);
       if (slot && DEFAULT_SLOTS.has(slot)) {
         // Last override for a slot wins, matching how later props win in a spread.
         overrides.set(slot, child as ReactElement);
+      } else if (slot && (TABLE_CHROME_SLOTS as readonly string[]).includes(slot)) {
+        tableOverrides.set(slot, child as ReactElement);
       } else {
         appended.push(child);
       }
@@ -300,6 +352,7 @@ function DocxEditorToolbarRoot(props: DocxEditorToolbarProps) {
     content = (
       <>
         {bar}
+        <TableChromeGroup overrides={tableOverrides} />
         {appended.length > 0 ? (
           // Host children never collapse — the library does not own them — so they are
           // costed as fixed width like a pinned group.
@@ -327,7 +380,11 @@ function DocxEditorToolbarRoot(props: DocxEditorToolbarProps) {
         // Form fields are exempt inside the guard itself.
         onMouseDown={guardToolbarMousedown}
       >
-        {content}
+        {includesTableChromeParts(children, preset) ? (
+          <TableChromeProvider>{content}</TableChromeProvider>
+        ) : (
+          content
+        )}
       </div>
     </ToolbarContext.Provider>
   );
@@ -400,6 +457,16 @@ export interface DocxEditorToolbarNamespace {
   readonly ImageInsert: ToolbarPartComponent;
   readonly ImageProperties: ToolbarPartComponent;
   readonly TableInsert: ToolbarPartComponent;
+  /** Border-edge target picker compound for contextual table chrome. */
+  readonly TableBorderTarget: TableBorderTargetNamespace;
+  /** Border-colour split compound (quick-apply main + swatch dialog). */
+  readonly TableBorderColor: TableBorderColorNamespace;
+  /** Border line-style menu compound. */
+  readonly TableBorderStyle: TableBorderStyleNamespace;
+  /** Border width menu compound. */
+  readonly TableBorderWidth: TableBorderWidthNamespace;
+  /** Cell background fill split compound (quick-apply main + swatch dialog). */
+  readonly TableCellFill: TableCellFillNamespace;
   readonly Comments: ToolbarPartComponent;
   readonly FontFamily: typeof FontFamily;
   readonly FontSize: ToolbarSlotPartComponent;
@@ -448,6 +515,11 @@ export const DocxEditorToolbar: DocxEditorToolbarNamespace = Object.assign(DocxE
   ImageInsert: ToolbarImageInsert,
   ImageProperties: ToolbarImageProperties,
   TableInsert: ToolbarTableInsert,
+  TableBorderTarget: ToolbarTableBorderTarget,
+  TableBorderColor: ToolbarTableBorderColor,
+  TableBorderStyle: ToolbarTableBorderStyle,
+  TableBorderWidth: ToolbarTableBorderWidth,
+  TableCellFill: ToolbarTableCellFill,
   Comments: ToolbarComments,
   FontFamily,
   FontSize: ToolbarFontSize,

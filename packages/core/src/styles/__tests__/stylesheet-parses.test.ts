@@ -38,6 +38,12 @@ describe('the shipped stylesheets parse', () => {
     const css = readFileSync(resolve(repositoryRoot, STYLESHEETS[0]!), 'utf8');
     const root = postcss.parse(css);
     const selectors = new Set<string>();
+    const selectorMentions = (needle: string): boolean => {
+      for (const selector of selectors) {
+        if (selector.includes(needle)) return true;
+      }
+      return false;
+    };
     root.walkRules((rule) => {
       selectors.add(rule.selector);
     });
@@ -47,6 +53,14 @@ describe('the shipped stylesheets parse', () => {
       '.ep-root .docx-nav__stepper',
     ]) {
       expect(selectors.has(selector), selector).toBe(true);
+    }
+    for (const fragment of [
+      '.docx-table-chrome',
+      '.docx-table-chrome__target-btn',
+      '.docx-table-line--dashed',
+      '.docx-table-chrome__destructive-row',
+    ]) {
+      expect(selectorMentions(fragment), fragment).toBe(true);
     }
   });
 });

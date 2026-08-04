@@ -180,11 +180,7 @@ function PerfHud() {
     const frameMs = frameMsRef.current;
     const input = inputRef.current;
     const fontState = editor?.fontMeasurement();
-    const fontValue = fontState
-      ? fontState.resolving
-        ? 'resolving…'
-        : fontState.measurer
-      : '';
+    const fontValue = fontState ? (fontState.resolving ? 'resolving…' : fontState.measurer) : '';
     const key = [
       perf.layoutMs,
       perf.paintMs,
@@ -617,6 +613,7 @@ export function ComposedEditorDemo({ fixtureUrl }: { fixtureUrl: string }) {
               <DocxEditor.HeaderFooterChrome />
               <DocxEditor.NotesChrome />
               <DocxEditor.Content />
+              <DocxEditor.ContextMenu t={translate} />
               {/* The link popover. Inside the viewport so it stays with the page while
                   scrolling. `<DocxEditor>` mounts it for you; a composition like this one
                   places it by name, exactly like the rulers above. */}

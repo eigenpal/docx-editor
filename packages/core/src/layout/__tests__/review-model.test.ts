@@ -117,16 +117,18 @@ describe('changes that decorate no characters still get a card', () => {
     );
   });
 
-  test('a structural revision is listed AND marked read-only', () => {
+  test('a complete tracked row revision is listed and resolvable', () => {
     // It has to be visible: `acceptAllRevisions` refuses if any revision is unresolvable, so
     // an invisible one makes Accept All fail for a reason nothing on screen explains.
     const part = story(
       `<w:tbl><w:tr><w:trPr><w:del w:id="7" w:author="QA" w:date="D"/></w:trPr>` +
-        `<w:tc><w:p>${run('cell')}</w:p></w:tc></w:tr></w:tbl>`
+        `<w:tc><w:tcPr><w:cellDel w:id="7" w:author="QA" w:date="D"/></w:tcPr>` +
+        `<w:p>${run('cell')}</w:p></w:tc></w:tr></w:tbl>`
     );
     const item = revisionsOf(collectReviewItems({ storyPart: part }))[0]!;
     expect(item.revisionKind).toBe('structural');
-    expect(item.readOnly).toBe(true);
+    expect(item.readOnly).toBe(false);
+    expect(item.ranges).toHaveLength(1);
   });
 });
 
@@ -450,9 +452,9 @@ describe('against the tracked fixture', () => {
     expect(kinds.has('delete')).toBe(true);
     expect(kinds.has('format')).toBe(true);
     expect(kinds.has('structural')).toBe(true);
-    // Every structural one is read-only, so no card offers a button the engine refuses.
+    // Complete row revisions are actionable; unsupported structural kinds remain in the queue.
     expect(
-      items.filter((item) => item.revisionKind === 'structural').every((item) => item.readOnly)
+      items.filter((item) => item.revisionKind === 'structural').some((item) => !item.readOnly)
     ).toBe(true);
   });
 });

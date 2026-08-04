@@ -70,7 +70,10 @@ export interface ResolvedRunStyle {
 /** The style a run inherits when it authors nothing. */
 export const DEFAULT_RUN_STYLE: ResolvedRunStyle = Object.freeze({
   fontFamily: null,
-  fontSizePt: 11,
+  // OOXML leaves the terminal fallback application-defined when no level in the style
+  // hierarchy authors `w:sz`. Microsoft Word uses 10pt; 11pt comes from modern Normal
+  // templates explicitly authoring `w:sz="22"`, not from the absence of a size.
+  fontSizePt: 10,
   color: null,
   bold: false,
   italic: false,

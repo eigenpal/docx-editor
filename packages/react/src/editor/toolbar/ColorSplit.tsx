@@ -326,6 +326,35 @@ function FontColorBody(props: PopupBodyProps) {
   );
 }
 
+/** Props for the shared Word-style hex colour picker body. @internal */
+export interface ToolbarHexColorPickerBodyProps {
+  readonly apply: (value: string) => void;
+  readonly current: string | null;
+}
+
+/** Theme matrix, standard row, and custom hex field — shared by font and table pickers. @internal */
+export function ToolbarHexColorPickerBody({
+  apply,
+  current,
+}: ToolbarHexColorPickerBodyProps): ReactNode {
+  const editor = useDocxEditor();
+  const label = useToolbarLabel();
+  const themeEntries = editor?.getDocumentThemeColors() ?? [];
+  const themeHexes =
+    themeEntries.length === THEME_COLUMN_KEYS.length
+      ? themeEntries.map((entry) => entry.hex)
+      : DEFAULT_THEME_HEXES;
+  const normalizedCurrent = current?.toUpperCase() ?? null;
+  return (
+    <FontColorBody
+      apply={apply}
+      label={label}
+      current={normalizedCurrent}
+      themeHexes={themeHexes}
+    />
+  );
+}
+
 /**
  * Word's highlighter palette: the first fifteen names, five per row. `white` stays
  * applicable (documents carry it) but is not offered — Word's picker omits it, and
@@ -495,7 +524,7 @@ export const ToolbarFontColor: ToolbarColorSplitComponent = createColorSplit({
   defaultValue: 'FF0000',
   cssOf: (value) => (value === 'auto' ? '#000000' : `#${value}`),
   clear: { value: 'auto', labelKey: 'colorPicker.automatic' },
-  body: (props) => <FontColorBody {...props} />,
+  body: (props) => <ToolbarHexColorPickerBody apply={props.apply} current={props.current} />,
 });
 
 /**

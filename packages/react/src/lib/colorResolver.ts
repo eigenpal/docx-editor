@@ -1,15 +1,8 @@
 /**
  * Color resolution for the editor chrome.
  *
- * Converts the contract's `ColorValue` (a discriminated union of `hex`,
- * `theme`, and `auto`) to CSS-ready hex strings, and builds the Word-style
- * theme tint/shade matrix the color picker renders.
- *
- * Tint/shade semantics follow ECMA-376 §17.3.2.41: the modifier is the
- * fraction of the base color RETAINED, in 0–1. Tint interpolates each channel
- * toward white (`channel * t + 255 * (1 - t)`); shade interpolates toward
- * black (`channel * s`). The contract's numeric `tint`/`shade` fields carry
- * that fraction directly (the OOXML hex attribute value divided by 255).
+ * Delegates tint/shade/hex/theme resolution to the shared core lowerer so chrome
+ * and table command planning cannot disagree.
  */
 
 import type {
@@ -17,6 +10,12 @@ import type {
   Theme,
   ThemeColorScheme,
 } from '@docx-editor.dev/core-contract/contracts/editor';
+import {
+  applyThemeShade,
+  applyThemeTint,
+  resolveThemeColorHex,
+  validateThemeModifier,
+} from '@docx-editor.dev/core-contract/editor';
 
 /** Office default theme color scheme, used when a document supplies none. */
 const DEFAULT_THEME_COLORS: Readonly<Record<string, string>> = {
@@ -55,11 +54,6 @@ const HIGHLIGHT_COLORS: Readonly<Record<string, string>> = {
   none: '',
 };
 
-/**
- * OOXML uses several names for the same theme slot depending on context
- * (`w:themeColor` values vs. drawingML scheme names); map them all to the
- * scheme keys.
- */
 const THEME_COLOR_ALIASES: Readonly<Record<string, string>> = {
   dk1: 'dk1',
   lt1: 'lt1',
@@ -89,53 +83,6 @@ const THEME_COLOR_ALIASES: Readonly<Record<string, string>> = {
   bg2: 'lt2',
 };
 
-function hexToRgb(hex: string): { r: number; g: number; b: number } {
-  const normalized = hex.replace(/^#/, '').padStart(6, '0').slice(0, 6);
-  const r = parseInt(normalized.slice(0, 2), 16);
-  const g = parseInt(normalized.slice(2, 4), 16);
-  const b = parseInt(normalized.slice(4, 6), 16);
-  return { r: isNaN(r) ? 0 : r, g: isNaN(g) ? 0 : g, b: isNaN(b) ? 0 : b };
-}
-
-function rgbToHex(r: number, g: number, b: number): string {
-  const toHex = (n: number) =>
-    Math.max(0, Math.min(255, Math.round(n)))
-      .toString(16)
-      .padStart(2, '0');
-  return `${toHex(r)}${toHex(g)}${toHex(b)}`.toUpperCase();
-}
-
-/**
- * Blend a color toward white. `keep` is the fraction of the base color
- * retained (1 = unchanged, 0 = white), per ECMA-376 §17.3.2.41.
- */
-function applyTint(hex: string, keep: number): string {
-  if (keep >= 1) return hex.toUpperCase();
-  if (keep <= 0) return 'FFFFFF';
-  const rgb = hexToRgb(hex);
-  return rgbToHex(
-    rgb.r * keep + 255 * (1 - keep),
-    rgb.g * keep + 255 * (1 - keep),
-    rgb.b * keep + 255 * (1 - keep)
-  );
-}
-
-/**
- * Blend a color toward black. `keep` is the fraction of the base color
- * retained (1 = unchanged, 0 = black), per ECMA-376 §17.3.2.41.
- */
-function applyShade(hex: string, keep: number): string {
-  if (keep >= 1) return hex.toUpperCase();
-  if (keep <= 0) return '000000';
-  const rgb = hexToRgb(hex);
-  return rgbToHex(rgb.r * keep, rgb.g * keep, rgb.b * keep);
-}
-
-function clamp01(value: number): number {
-  return Math.max(0, Math.min(1, value));
-}
-
-/** Resolve a theme slot name (any alias) to a hex value, falling back to the Office defaults. */
 function resolveThemeSlotHex(theme: Theme | null | undefined, slot: string): string {
   const key = THEME_COLOR_ALIASES[slot] ?? THEME_COLOR_ALIASES[slot.toLowerCase()] ?? slot;
   const scheme: ThemeColorScheme | undefined = theme?.colorScheme;
@@ -166,16 +113,20 @@ export function resolveColor(
 ): string {
   if (!color || color.kind === 'auto') return `#${defaultColor}`;
   if (color.kind === 'hex') return `#${normalizeHex(color.value) ?? defaultColor}`;
-  let hex = resolveThemeSlotHex(theme, color.slot);
-  if (color.tint !== undefined) hex = applyTint(hex, clamp01(color.tint));
-  else if (color.shade !== undefined) hex = applyShade(hex, clamp01(color.shade));
-  return `#${hex.toUpperCase()}`;
+  const entries = Object.entries(theme?.colorScheme ?? DEFAULT_THEME_COLORS).map(([slot, hex]) => ({
+    slot,
+    hex: String(hex),
+  }));
+  const resolved = resolveThemeColorHex(
+    color,
+    entries as Parameters<typeof resolveThemeColorHex>[1]
+  );
+  return `#${resolved.ok ? resolved.hex : resolveThemeSlotHex(theme, color.slot)}`;
 }
 
 /**
  * Resolve any `ColorValue` to a 6-char uppercase hex string without `#`, or
- * `undefined` when the value is unset/`auto`/unresolvable. Theme slots resolve
- * against the document theme when given, else the Office default scheme.
+ * `undefined` when the value is unset/`auto`/unresolvable.
  */
 export function resolveColorToHex(
   color: ColorValue | undefined | null,
@@ -193,28 +144,14 @@ export function resolveHighlightColor(highlight: string | undefined): string {
   return hex ? `#${hex}` : '';
 }
 
-// ============================================================================
-// THEME COLOR MATRIX FOR THE ADVANCED COLOR PICKER
-// ============================================================================
-
-/** One swatch in the Word-style theme color matrix. */
 export interface ThemeMatrixCell {
-  /** Resolved hex color (6 chars, no #) — exactly what the swatch paints. */
   hex: string;
-  /** Theme slot this column derives from. */
   themeSlot: string;
-  /** Fraction of the base color kept when tinting (ECMA-376 §17.3.2.41). */
   tint?: number;
-  /** Fraction of the base color kept when shading. */
   shade?: number;
-  /** Human-readable label (e.g. "Accent 1, Lighter 60%"). */
   label: string;
 }
 
-/**
- * Column order matching Word's picker:
- * Background 1, Text 1, Background 2, Text 2, Accent 1–6.
- */
 const THEME_MATRIX_COLUMNS: Array<{ slot: string; name: string }> = [
   { slot: 'lt1', name: 'Background 1' },
   { slot: 'dk1', name: 'Text 1' },
@@ -228,10 +165,6 @@ const THEME_MATRIX_COLUMNS: Array<{ slot: string; name: string }> = [
   { slot: 'accent6', name: 'Accent 6' },
 ];
 
-/**
- * Row definitions matching Word's picker. `keep` is the retained fraction
- * handed to tint/shade — e.g. "Lighter 80%" keeps 20% of the base color.
- */
 const THEME_MATRIX_ROWS: Array<{
   type: 'base' | 'tint' | 'shade';
   keep: number;
@@ -245,12 +178,6 @@ const THEME_MATRIX_ROWS: Array<{
   { type: 'shade', keep: 0.5, labelSuffix: ', Darker 50%' },
 ];
 
-/**
- * Generate the 10×6 theme color matrix for the advanced color picker.
- * Falls back to the Office default scheme when the document has none.
- * Each cell's `tint`/`shade` is the exact modifier a picked `ColorValue`
- * should carry, so the swatch and the resolved color cannot disagree.
- */
 export function generateThemeTintShadeMatrix(
   colorScheme?: ThemeColorScheme | null
 ): ThemeMatrixCell[][] {
@@ -264,8 +191,8 @@ export function generateThemeTintShadeMatrix(
         row.type === 'base'
           ? baseHex.toUpperCase()
           : row.type === 'tint'
-            ? applyTint(baseHex, row.keep)
-            : applyShade(baseHex, row.keep);
+            ? applyThemeTint(baseHex, row.keep)
+            : applyThemeShade(baseHex, row.keep);
 
       const cell: ThemeMatrixCell = {
         hex,
@@ -278,3 +205,5 @@ export function generateThemeTintShadeMatrix(
     })
   );
 }
+
+export { applyThemeShade, applyThemeTint, validateThemeModifier };

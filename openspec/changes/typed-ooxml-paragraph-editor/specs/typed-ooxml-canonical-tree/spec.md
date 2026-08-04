@@ -59,3 +59,32 @@ Tree parsing and serialization SHALL enforce finite package/XML limits, safe par
 #### Scenario: Malicious package is rejected
 - **WHEN** a package exceeds a mandatory limit or contains an unsafe traversing part path
 - **THEN** parsing fails before publishing any canonical model
+
+### Requirement: Atomic table TreeDocOps
+Table structural and property edits SHALL commit only as validated `TreeDocOp`s against canonical table, row, cell, and grid-column identities. Each operation SHALL validate its complete target before mutation, publish one `flow-structural` or property impact, and create one undo step.
+
+#### Scenario: Row insertion commits atomically
+- **WHEN** a validated insert-row operation targets a canonical row in an unmerged table
+- **THEN** the store inserts one fresh row with empty cell paragraphs, preserves unrelated node identities, and publishes a single `ModelChange`
+
+#### Scenario: Merged table refuses column edit
+- **WHEN** a column insertion, deletion, or resize operation targets a table with horizontal or vertical merges
+- **THEN** the operation is rejected with a specific reason and the tree revision is unchanged
+
+#### Scenario: Final row or column deletion is refused
+- **WHEN** a delete-row or delete-column operation would remove the table's last row or last grid column
+- **THEN** the operation is rejected without mutation
+
+### Requirement: Lossless table mutation
+Table property edits SHALL patch only the required `w:tblGrid`, `w:tblPr`, `w:trPr`, and `w:tcPr` property containers. Structural operations MAY add or remove the required `w:tr` and `w:tc` nodes. All table operations SHALL preserve unknown and generic descendants, unrelated attributes and namespace declarations, original sibling order outside the changed nodes and properties, revision wrappers and provenance not owned by the operation, comments, bookmarks, fields, drawings, nested tables, and all unaffected node identities.
+
+#### Scenario: Unknown tcPr child survives border edit
+- **WHEN** a selected-cell border operation updates `w:tcBorders` on a cell that also carries an unrecognized `w:tcPr` child
+- **THEN** normalized save preserves that child in source order beside the updated borders
+
+### Requirement: Table edits pass D9 oracles
+Every supported table-editing fixture SHALL pass both the namespace-aware canonical tree fingerprint and the save/reopen semantic digest after normalized serialization.
+
+#### Scenario: Nested table edit survives reopen
+- **WHEN** a nested-table fixture receives row insertion, column resize, border, and fill edits and is saved
+- **THEN** reopening the produced package passes both D9 oracles at the committed revision

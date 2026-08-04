@@ -569,6 +569,7 @@ describe('createDocxEditor', () => {
     expect(editor.getOutline()).toEqual([]);
     expect(editor.getComments()).toEqual([]);
     expect(editor.getSelectedTable()).toBeNull();
+    expect(editor.query({ type: 'tableContext' })).toBeNull();
     expect(editor.getWatermark()).toBeNull();
     // No longer honest-empty: `paragraphs` and `selection` answer in paraId vocabulary.
     const paragraphs = editor.query({ type: 'paragraphs' });

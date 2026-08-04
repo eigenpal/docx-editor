@@ -125,6 +125,21 @@ is still moving.
 - [ ] 13.5 Carry per-cluster caret edges onto style-span records so hit testing inside justified and proportional text is exact rather than interpolated between span edges.
 - [x] 13.6 Answer the contract's `hitTest`/`resolvePointer` on the editor facade. — DECIDED AGAINST, and both members were removed from the contract instead. The stated blocker had since cleared (`binding/paragraph-anchors.ts` maps node ids to `w14:paraId` and back, which is how `EditorSnapshot.selection` derives today), so this was a choice rather than a constraint. The whole geometry/interaction cluster — `hitTest`, `resolvePointer`, `dispatchInteraction`, `getInteractionFrame`, `getDisplay`, the caret/selection rect readers, `getScrollGeometry`, `getAccessibilityObservation` and `EditorHost.onDisplay` — was stubbed and had ZERO callers, and a stub is not free here: `hitTest` returning `null` is indistinguishable from the legitimate "you clicked the page margin", so no caller could tell unimplemented from answered. `getPageGeometry` was the cluster's one real consumer (both Vue rulers) and is now implemented off `surface.layout()`; it had been returning `[]`, which made those rulers render nothing. The hit-test algorithm itself is untouched in `layout/semantic-hit-test.ts`, where the surface's pointer controller calls it, so re-exposing any of this is a small wiring job the day a host needs it.
 
+## 14. Word-like table editing
+
+- [x] 14.1 Record the canonical table-editing contract in the public editor API and OpenSpec — `TableBorderTarget`, `TableBorderStyle`, `TableBorderSpec`, nullable `setCellFill`, explicit resize targets, and requirements for atomic row/column edits, adjacent/right-edge resize, nested-table targeting, selected-cell borders/fill, merge refusals, semantic furniture, React/Vue parity, and D9 save/reopen gates.
+- [ ] 14.2 Add bounded table topology and lossless property patching.
+- [ ] 14.3 Implement row insertion and deletion store operations.
+- [ ] 14.4 Implement column insertion and deletion store operations.
+- [ ] 14.5 Implement Word-like column resize store operations.
+- [ ] 14.6 Implement selected-cell borders and fill store operations.
+- [ ] 14.7 Wire table context, command planning, and editor execution.
+- [ ] 14.8 Publish semantic geometry and add the core table interaction controller.
+- [ ] 14.9 Add shared table chrome, i18n, and CSS.
+- [ ] 14.10 Add React contextual controls and table context rows.
+- [ ] 14.11 Add Vue table toolbar and context-menu parity.
+- [ ] 14.12 Prove browser behavior, save/reopen fidelity, and public release surface.
+
 ## 12. Verification and Completion
 
 - [x] 12.1 Run focused canonical-tree, store, binding, layout, incremental-layout, virtualization, interaction, serializer, package-graph, bundle-graph, and adapter test suites. — All run. The bundle-graph suite the task names now EXISTS (`packages/core/src/__tests__/browser-bundle-graph.test.ts`), and the package-graph suite it names was superseded: the `engine-*` package topology it described was dissolved by 10.6, and its role is now filled by the lane DAG plus that bundle-graph walk. Note on invocation: passing many directory paths to `bun test` at once runs ~25x slower than the whole suite (2030s vs 80s) and two timing-sensitive perf guards can then exceed their limits; the guards pass in isolation and in the aggregate run, so the aggregate run is the reliable signal.

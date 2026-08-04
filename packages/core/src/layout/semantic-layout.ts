@@ -74,6 +74,7 @@ import {
   type CellPlaceCursor,
   type TableFlowDeps,
 } from './semantic-table-layout.ts';
+import { annotateTableFragmentGeometry } from './semantic-table-interaction.ts';
 import { storyBlocks } from './story-roots.ts';
 import { type HeaderFooterStoryLayout } from './hf-layout.ts';
 import { enumerateDocumentSections, geometryOfSection } from './section-properties.ts';
@@ -824,6 +825,7 @@ function layoutBlocksWithGeometry(
     let fragmentIndex = 0;
     let fragmentTop = cursorY;
     let rows: TableRowFragmentRecord[] = [];
+    const rowOrdinals = new Map<string, number>();
     // Authored rows backing the open fragment (includes header repeats) for finalize.
     let sourceRows: (typeof structure.rows)[number][] = [];
     const closeTableFragment = (): void => {
@@ -836,23 +838,26 @@ function layoutBlocksWithGeometry(
         tableDeps.vMergeResolveBudget
       );
       const last = finalized[finalized.length - 1]!;
-      pageFragments.push({
-        kind: 'table',
-        id: `${table.id}#f${fragmentIndex}`,
-        tableId: table.id,
-        fragmentIndex,
-        rows: finalized,
-        box: {
-          x: tableLeft,
-          y: fragmentTop,
-          // The table's own width, not the page's. Reporting `contentWidth` here described
-          // every table as exactly page-wide while its cells spanned whatever the resolved
-          // grid said — narrower for most tables, wider for a fixed-layout one that
-          // genuinely overflows the margin.
-          width: structure.columnWidthsPt.reduce((sum, columnWidth) => sum + columnWidth, 0),
-          height: last.box.y + last.box.height - fragmentTop,
-        },
-      });
+      pageFragments.push(
+        annotateTableFragmentGeometry(
+          {
+            kind: 'table',
+            id: `${table.id}#f${fragmentIndex}`,
+            tableId: table.id,
+            fragmentIndex,
+            rows: finalized,
+            box: {
+              x: tableLeft,
+              y: fragmentTop,
+              width: structure.columnWidthsPt.reduce((sum, columnWidth) => sum + columnWidth, 0),
+              height: last.box.y + last.box.height - fragmentTop,
+            },
+          },
+          structure.columnWidthsPt,
+          0,
+          rowOrdinals
+        )
+      );
       fragmentIndex += 1;
       rows = [];
       sourceRows = [];

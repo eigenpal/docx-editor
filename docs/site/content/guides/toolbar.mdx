@@ -138,6 +138,16 @@ import { ToolbarButton, ToolbarGroup, ToolbarSeparator } from '@docx-editor.dev/
 
 Naming note for 0.x upgraders: the formatting strip was `FormattingBar`, now `Toolbar`; the old composite `Toolbar` is now `EditorToolbar`.
 
+## Table editing (React)
+
+When the caret or a rectangular cell selection is inside a table, the formatting toolbar shows contextual table controls:
+
+- **Resize** — hover a column divider or the table’s right edge; drag to commit Word-compatible twip widths (inner divider resize preserves total table width; outer-right resize changes table width).
+- **Insert rows/columns** — hover the row band or column header band and click the `+` control, or use the table rows on the right-click menu.
+- **Borders and fill** — with one or more cells selected, choose a border target, style, width, and colour, then pick a cell fill (clear fill removes direct shading).
+
+These controls target the **innermost** nested table under the pointer or selection. Merge and split remain unsupported; tables with merged cells refuse column resize/insert/delete with an explicit disabled reason. The Vue adapter does not ship this contextual toolbar or table context-menu rows yet — use React for browser table editing, or call the shared `Editor` table commands headlessly.
+
 ## Next steps
 
 - [Props reference](/docs/1.x/react/props) for the full toolbar prop group

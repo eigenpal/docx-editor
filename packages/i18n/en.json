@@ -756,6 +756,22 @@
     "cellFillColor": "Cell Fill Color",
     "borderColor": "Border Color",
     "borderWidth": "Border width",
+    "clearCellFill": "Clear cell fill",
+    "borderStyles": {
+      "single": "Solid",
+      "dashed": "Dashed",
+      "dotted": "Dotted",
+      "double": "Double",
+      "triple": "Triple",
+      "thick": "Thick"
+    },
+    "borderWidths": {
+      "halfPt": "0.5 pt",
+      "onePt": "1 pt",
+      "oneHalfPt": "1.5 pt",
+      "twoPt": "2 pt",
+      "threePt": "3 pt"
+    },
     "unknownAction": "Unknown Action",
     "borders": {
       "all": "All borders",

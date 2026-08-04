@@ -112,6 +112,9 @@
   /* Status */
   --doc-error: #c5221f; /* error states */
   --doc-error-bg: #fce8e6; /* error backgrounds */
+  --doc-danger: var(--doc-error); /* invalid and refused controls */
+  --doc-destructive: var(--doc-error); /* destructive menu/context rows */
+  --doc-destructive-hover-bg: var(--doc-error-bg);
   --doc-success: #34a853; /* success states */
   --doc-success-bg: #e8f5e9; /* success backgrounds */
   --doc-warning: #f9a825; /* warning states (icon/accent/border) */
@@ -1048,6 +1051,220 @@ a.docx-hyperlink:focus-visible {
   user-select: all;
 }
 
+/* Table interaction furniture (core-owned, semantic geometry). */
+.docx-table-furniture {
+  z-index: 3;
+  pointer-events: none;
+}
+
+.docx-table-divider-handle,
+.docx-table-edge-handle-right {
+  pointer-events: auto;
+}
+
+.docx-table-resize-preview {
+  background-color: var(--doc-primary);
+  opacity: 0.85;
+  pointer-events: none;
+}
+
+.docx-table-insert-row,
+.docx-table-insert-column {
+  pointer-events: auto;
+  width: 16px;
+  height: 16px;
+  padding: 0;
+  border: 1px solid var(--doc-border-dark);
+  border-radius: 2px;
+  background: var(--doc-surface);
+  color: var(--doc-text-muted);
+  font-size: 12px;
+  line-height: 14px;
+  cursor: pointer;
+}
+
+.paged-editor--readonly .docx-table-furniture {
+  display: none !important;
+}
+
+/* Table chrome — contextual border/fill controls (Task 9). */
+.docx-table-chrome {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  flex-wrap: wrap;
+}
+
+.docx-table-chrome__panel {
+  position: absolute;
+  z-index: 40;
+  top: calc(100% + 6px);
+  right: 0;
+  min-width: 150px;
+  background: var(--doc-surface);
+  border: 1px solid var(--doc-border);
+  border-radius: 8px;
+  box-shadow: 0 4px 16px var(--doc-shadow);
+  padding: 6px;
+}
+
+.docx-table-chrome__target-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 2px;
+}
+
+.docx-table-chrome__option,
+.docx-table-chrome__target-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--doc-text);
+  cursor: pointer;
+  transition:
+    background-color 0.12s ease,
+    border-color 0.12s ease;
+}
+
+.docx-table-chrome__option:hover:not(:disabled),
+.docx-table-chrome__target-btn:hover:not(:disabled) {
+  background: var(--doc-bg-hover);
+}
+
+.docx-table-chrome__option:focus-visible,
+.docx-table-chrome__target-btn:focus-visible {
+  outline: 2px solid var(--doc-primary);
+  outline-offset: 1px;
+}
+
+.docx-table-chrome__option:disabled,
+.docx-table-chrome__target-btn:disabled {
+  opacity: 0.3;
+  cursor: default;
+}
+
+.docx-table-chrome__option[data-active='true'],
+.docx-table-chrome__target-btn[data-active='true'] {
+  background: var(--doc-toggle-active-bg);
+  color: var(--doc-toggle-active-fg);
+}
+
+.docx-table-chrome__width-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 6px 12px;
+  border: none;
+  background: transparent;
+  color: var(--doc-text);
+  font-size: 12px;
+  cursor: pointer;
+  text-align: left;
+}
+
+.docx-table-chrome__width-row:hover:not(:disabled) {
+  background: var(--doc-bg-hover);
+}
+
+.docx-table-chrome__width-row:focus-visible {
+  outline: 2px solid var(--doc-primary);
+  outline-offset: -2px;
+}
+
+.docx-table-chrome__width-row:disabled {
+  opacity: 0.3;
+  cursor: default;
+}
+
+.docx-table-chrome__swatch {
+  display: inline-block;
+  width: 16px;
+  height: 16px;
+  border: 1px solid var(--doc-border-dark);
+  border-radius: 2px;
+  background: var(--doc-surface);
+}
+
+.docx-table-line {
+  display: block;
+  width: 50px;
+  height: 1px;
+  background: var(--doc-text);
+  border-radius: 0;
+}
+
+.docx-table-line--single {
+  display: block;
+  width: 50px;
+  height: 1px;
+  background: var(--doc-text);
+}
+
+.docx-table-line--dashed {
+  background: none;
+  border-top: 1px dashed var(--doc-text);
+  height: 0;
+}
+
+.docx-table-line--dotted {
+  background: none;
+  border-top: 1px dotted var(--doc-text);
+  height: 0;
+}
+
+.docx-table-line--double {
+  height: 3px;
+  background: none;
+  border-top: 1px solid var(--doc-text);
+  border-bottom: 1px solid var(--doc-text);
+}
+
+.docx-table-line--triple {
+  height: 5px;
+  background: none;
+  border-top: 1px solid var(--doc-text);
+  border-bottom: 1px solid var(--doc-text);
+  box-shadow: inset 0 1px 0 var(--doc-text);
+}
+
+.docx-table-line--thick {
+  height: 3px;
+  background: var(--doc-text);
+}
+
+.docx-table-chrome__destructive-row {
+  color: var(--doc-destructive);
+}
+
+.docx-table-chrome__destructive-row:hover:not(:disabled) {
+  background: var(--doc-destructive-hover-bg);
+}
+
+@media (max-width: 640px) {
+  .docx-table-chrome {
+    max-width: 100%;
+  }
+
+  .docx-table-chrome__target-grid {
+    grid-template-columns: repeat(4, minmax(28px, 1fr));
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .docx-table-chrome__option,
+  .docx-table-chrome__target-btn,
+  .docx-table-chrome__width-row {
+    transition: none;
+  }
+}
+
 /* ============================================================================
   * LAYOUT TABLE COLUMN RESIZE
   * ============================================================================ */
@@ -1058,7 +1275,7 @@ a.docx-hyperlink:focus-visible {
 
 .layout-table-cell-selected {
   position: relative;
-  outline: 2px solid rgba(66, 133, 244, 0.6);
+  outline: 2px solid var(--doc-selection);
   outline-offset: -2px;
 }
 
@@ -1070,18 +1287,37 @@ a.docx-hyperlink:focus-visible {
   pointer-events: none;
 }
 
-/* ============================================================================
-  * LAYOUT TABLE COLUMN RESIZE
-  * ============================================================================ */
-
 .layout-table-resize-handle {
   background-color: transparent;
   transition: background-color 0.15s;
 }
 
+.layout-table-resize-handle[data-active='true'] {
+  background-color: transparent;
+}
+
+.layout-table-resize-handle[data-active='true']::after,
+.layout-table-edge-handle-right[data-active='true']::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 50%;
+  width: 2px;
+  background-color: var(--doc-primary);
+  opacity: 0.75;
+  pointer-events: none;
+  transform: translateX(-50%);
+}
+
 .layout-table-resize-handle:hover,
 .layout-table-resize-handle.dragging {
-  background-color: rgba(66, 133, 244, 0.6);
+  background-color: transparent;
+}
+
+.layout-table-resize-handle:hover::after,
+.layout-table-resize-handle.dragging::after {
+  opacity: 1;
 }
 
 /* Row resize handles */
@@ -1091,11 +1327,29 @@ a.docx-hyperlink:focus-visible {
   transition: background-color 0.15s;
 }
 
+.layout-table-row-resize-handle[data-active='true']::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  right: 0;
+  left: 0;
+  height: 2px;
+  background-color: var(--doc-primary);
+  opacity: 0.75;
+  pointer-events: none;
+  transform: translateY(-50%);
+}
+
 .layout-table-row-resize-handle:hover,
 .layout-table-row-resize-handle.dragging,
 .layout-table-edge-handle-bottom:hover,
 .layout-table-edge-handle-bottom.dragging {
-  background-color: rgba(66, 133, 244, 0.6);
+  background-color: transparent;
+}
+
+.layout-table-row-resize-handle:hover::after,
+.layout-table-row-resize-handle.dragging::after {
+  opacity: 1;
 }
 
 /* Right edge handle */
@@ -1104,9 +1358,18 @@ a.docx-hyperlink:focus-visible {
   transition: background-color 0.15s;
 }
 
+.layout-table-edge-handle-right[data-active='true'] {
+  background-color: transparent;
+}
+
 .layout-table-edge-handle-right:hover,
 .layout-table-edge-handle-right.dragging {
-  background-color: rgba(66, 133, 244, 0.6);
+  background-color: transparent;
+}
+
+.layout-table-edge-handle-right:hover::after,
+.layout-table-edge-handle-right.dragging::after {
+  opacity: 1;
 }
 
 /* ============================================================================
@@ -1689,6 +1952,33 @@ a.docx-hyperlink:focus-visible {
 
 .layout-revision-change-bar.layout-revision-del {
   background-color: var(--doc-revision-deletion);
+}
+
+.docx-table-row--revision::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: -8px;
+  width: 2px;
+  pointer-events: none;
+}
+
+.docx-table-row--revision.layout-revision-ins::before {
+  background-color: var(--doc-revision-insertion);
+}
+
+.docx-table-row--revision.layout-revision-del::before {
+  background-color: var(--doc-revision-deletion);
+}
+
+.docx-table-row--revision.layout-revision-ins .layout-run-text {
+  color: var(--doc-revision-insertion);
+}
+
+.docx-table-row--revision.layout-revision-del .layout-run-text {
+  color: var(--doc-revision-deletion);
+  text-decoration: line-through;
 }
 
 .layout-revision-pmark {
@@ -5312,4 +5602,50 @@ a.docx-hyperlink:focus-visible {
 .docx-contextmenu .docx-menubar__item {
   gap: 12px;
   width: 100%;
+}
+
+.docx-contextmenu__table-align {
+  padding: 6px 12px 8px;
+}
+
+.docx-contextmenu__table-align-label {
+  display: block;
+  margin-bottom: 6px;
+  color: var(--doc-text-muted);
+  font-size: 12px;
+  line-height: 16px;
+}
+
+.docx-contextmenu__table-align-buttons {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.docx-contextmenu__table-align-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 1px solid var(--doc-border);
+  border-radius: 4px;
+  background: transparent;
+  color: var(--doc-text);
+  cursor: pointer;
+}
+
+.docx-contextmenu__table-align-button:hover:not([aria-disabled='true']) {
+  background: var(--doc-bg-hover);
+}
+
+.docx-contextmenu__table-align-button[aria-disabled='true'] {
+  opacity: 0.3;
+  cursor: default;
+}
+
+.docx-contextmenu__table-align-button:focus-visible {
+  outline: 2px solid var(--doc-primary);
+  outline-offset: 1px;
 }

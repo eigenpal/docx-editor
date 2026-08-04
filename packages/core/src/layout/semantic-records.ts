@@ -347,6 +347,13 @@ export interface TableFragmentRecord {
   readonly tableId: string;
   /** 0 for the first page the table touches, 1 for its continuation, and so on. */
   readonly fragmentIndex: number;
+  /** Nesting depth: 0 for body-level tables, increasing for nested tables. */
+  readonly nestingDepth: number;
+  /**
+   * Resolved column boundary x positions in table-local points, left edge through right edge.
+   * Length is column count + 1.
+   */
+  readonly columnEdges: readonly number[];
   readonly rows: readonly TableRowFragmentRecord[];
   readonly box: LayoutBox;
 }
@@ -354,6 +361,10 @@ export interface TableFragmentRecord {
 export interface TableRowFragmentRecord {
   /** Canonical node id of the `w:tr`. */
   readonly id: string;
+  /** Pending tracked row insertion/deletion, when authored in `w:trPr`. */
+  readonly revisionKind?: 'insert' | 'delete';
+  /** Authored row ordinal within the table; repeats share the original row's index. */
+  readonly rowIndex: number;
   /**
    * True for a `w:tblHeader` row RE-EMITTED at the top of a continuation page. Painted,
    * but excluded from interaction walks so each caret stop exists exactly once.
@@ -373,6 +384,8 @@ export interface TableCellFragmentRecord {
   readonly id: string;
   /** First grid column this cell occupies. */
   readonly gridColumn: number;
+  /** Canonical `w:gridCol` node id for this cell's start column, when authored. */
+  readonly gridColumnId?: string;
   /** Grid columns spanned, already clamped at read time. */
   readonly gridSpan: number;
   /** A vertical-merge continuation paints its box but holds no blocks. */

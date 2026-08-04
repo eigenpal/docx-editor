@@ -91,6 +91,11 @@ const EXPECTED_SLOTS: readonly ChromeSlotId[] = [
   'image.insert',
   'image.properties',
   'table.insert',
+  'table.borderTarget',
+  'table.borderColor',
+  'table.borderStyle',
+  'table.borderWidth',
+  'table.cellFill',
   'file.open',
   'file.save',
   'file.pageSetup',
@@ -146,12 +151,30 @@ describe('legacy chrome descriptor', () => {
       'font.family',
       'font.size',
       'styles.style',
+      'table.borderColor',
+      'table.borderStyle',
+      'table.borderTarget',
+      'table.borderWidth',
+      'table.cellFill',
       'text.color',
       'text.highlight',
     ]);
     for (const slot of valueSlots) {
-      // No fixed command, but a well-formed value resolves to one.
       expect(commandForSlot(slot)).toBeNull();
+      if (slot.startsWith('table.')) {
+        const probe =
+          slot === 'table.borderTarget'
+            ? 'all'
+            : slot === 'table.borderStyle'
+              ? 'single'
+              : slot === 'table.borderWidth'
+                ? 8
+                : slot === 'table.cellFill'
+                  ? { kind: 'hex', value: 'FF0000' }
+                  : { kind: 'hex', value: '000000' };
+        expect(commandForSlotValue(slot, probe)).not.toBeNull();
+        continue;
+      }
       expect(commandForSlotValue(slot, 'Arial')).not.toBeNull();
     }
   });
@@ -238,7 +261,24 @@ describe('legacy chrome descriptor', () => {
   });
 
   test('the count is stable, so a dropped control fails rather than passing quietly', () => {
-    expect(chromeControlCount()).toBe(47);
+    expect(chromeControlCount()).toBe(52);
+  });
+
+  test('the table group is contextual and carries border/fill chrome slots', () => {
+    const table = CHROME_GROUPS.find((g) => g.id === 'table');
+    expect(table?.contextual).toBe(true);
+    const slots = table!.controls.map((c) => chromeSlotId(table!, c));
+    expect(slots).toEqual([
+      'table.insert',
+      'table.borderTarget',
+      'table.borderColor',
+      'table.borderStyle',
+      'table.borderWidth',
+      'table.cellFill',
+    ]);
+    for (const slot of slots.slice(1)) {
+      expect(commandForSlot(slot as ChromeSlotId)).toBeNull();
+    }
   });
 
   test('the menu region carries the chrome menus, in bar order', () => {

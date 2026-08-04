@@ -29,6 +29,57 @@ export function paragraphIdsWithin(node: OoxmlNode): string[] {
   return ids;
 }
 
+/** Body-order paragraph ids for caret recovery after a block removal. */
+function paragraphIdsInDocumentOrder(part: OoxmlPart): string[] {
+  const ids: string[] = [];
+  const walkBlocks = (children: readonly OoxmlNode[]): void => {
+    for (const child of children) {
+      if (child.kind === 'paragraph') {
+        ids.push(child.id);
+      } else if (child.kind === 'table') {
+        for (const row of child.children) {
+          if (row.kind !== 'tableRow') continue;
+          for (const cell of row.children) {
+            if (cell.kind !== 'tableCell') continue;
+            walkBlocks(cell.children);
+          }
+        }
+      }
+    }
+  };
+  const bodyNode =
+    part.root.kind === 'body'
+      ? part.root
+      : part.root.children.find((child) => child.kind === 'body');
+  if (!bodyNode || bodyNode.kind === 'textValue') return ids;
+  walkBlocks(bodyNode.children);
+  return ids;
+}
+
+/**
+ * Nearest surviving paragraph once `blockId` is removed — prefers the last paragraph
+ * before the block in document order, otherwise the first after.
+ */
+export function survivingCaretAfterBlockRemoval(part: OoxmlPart, blockId: string): string | null {
+  const block = findNode(part, blockId);
+  if (!block) return null;
+  const deleted = new Set(paragraphIdsWithin(block));
+  const order = paragraphIdsInDocumentOrder(part);
+  const firstDeletedIndex = order.findIndex((id) => deleted.has(id));
+  if (firstDeletedIndex === -1) {
+    return order.find((id) => !deleted.has(id)) ?? null;
+  }
+  for (let i = firstDeletedIndex - 1; i >= 0; i -= 1) {
+    const id = order[i]!;
+    if (!deleted.has(id)) return id;
+  }
+  for (let i = firstDeletedIndex; i < order.length; i += 1) {
+    const id = order[i]!;
+    if (!deleted.has(id)) return id;
+  }
+  return null;
+}
+
 /** Whether any paragraph would remain in the part once `blockId`'s subtree is gone. */
 function paragraphSurvivesRemoval(part: OoxmlPart, blockId: string): boolean {
   let found = false;
@@ -84,13 +135,15 @@ export function validateDeleteBlock(part: OoxmlPart, blockId: string): TreeOpRej
   }
 
   // A table nested in a cell is the cell's content; taking it out must still leave the
-  // paragraph a cell has to end with.
+  // paragraph a cell has to end with. When other paragraphs survive in the document,
+  // applyDeleteBlock inserts the required empty cell paragraph.
   if (
     block.kind === 'table' &&
     parent.kind === 'tableCell' &&
     remainingChildrenOfKind(parent, 'paragraph', blockId) === 0
   ) {
-    return 'block-required';
+    if (!paragraphSurvivesRemoval(part, blockId)) return 'block-required';
+    return null;
   }
 
   // Whatever the kind: the part must keep somewhere to put the caret. A document with no

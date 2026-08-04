@@ -290,6 +290,11 @@ const DocxEditorImpl = forwardRef<DocxEditorRef, DocxEditorProps>(function DocxE
     viewport
   );
 
+  const tableInteractionLabel = useCallback(
+    (key: 'table.insertRowBelow' | 'table.insertColumnRight') => translate(key),
+    [translate]
+  );
+
   // Root owns the facade: created once per document/fonts identity, zoom follows
   // through `setZoom`, callbacks are read at their latest identity.
   return (
@@ -300,6 +305,7 @@ const DocxEditorImpl = forwardRef<DocxEditorRef, DocxEditorProps>(function DocxE
       {...(locale !== undefined ? { locale } : {})}
       {...(mode !== undefined ? { mode } : {})}
       {...(zoom !== undefined ? { zoom } : {})}
+      tableInteractionLabel={tableInteractionLabel}
       {...(onReady ? { onReady } : {})}
       {...(onChange ? { onChange } : {})}
       {...(onFontError ? { onFontError } : {})}
