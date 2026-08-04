@@ -161,7 +161,7 @@ describe('a scripted write obeys the editing mode', () => {
     const { host } = mount();
     const paragraphs = paragraphsOf(host);
     const response = host.execute({
-      operations: [{ op: 'insertText', paragraph: paragraphs[0]!, offset: 0, text: 'X' }],
+      operations: [{ op: 'insertText', at: { paragraph: paragraphs[0]!, offset: 0 }, text: 'X' }],
     });
     expect({ ok: response.ok, changed: response.changed }).toEqual({ ok: true, changed: true });
     expect(textOf(host, paragraphs[0]!)).toBe('Xalpha');
@@ -176,7 +176,7 @@ describe('a scripted write obeys the editing mode', () => {
     const before = host.revision();
 
     const response = host.execute({
-      operations: [{ op: 'insertText', paragraph: paragraphs[0]!, offset: 0, text: 'X' }],
+      operations: [{ op: 'insertText', at: { paragraph: paragraphs[0]!, offset: 0 }, text: 'X' }],
     });
 
     expect({ ok: response.ok, changed: response.changed }).toEqual({ ok: false, changed: false });
@@ -195,7 +195,7 @@ describe('a scripted write obeys the editing mode', () => {
     editor.surface!.setEditingMode('suggest');
 
     const response = host.execute({
-      operations: [{ op: 'insertText', paragraph: paragraphs[0]!, offset: 0, text: 'Draft' }],
+      operations: [{ op: 'insertText', at: { paragraph: paragraphs[0]!, offset: 0 }, text: 'Draft' }],
     });
 
     expect({ ok: response.ok, changed: response.changed }).toEqual({ ok: true, changed: true });
@@ -214,7 +214,7 @@ describe('a scripted write obeys the editing mode', () => {
     editor.surface!.setEditingMode('suggest');
 
     const response = host.execute({
-      operations: [{ op: 'insertText', paragraph: paragraphs[0]!, offset: 0, text: 'X' }],
+      operations: [{ op: 'insertText', at: { paragraph: paragraphs[0]!, offset: 0 }, text: 'X' }],
     });
 
     expect(response.ok).toBe(false);
@@ -229,11 +229,11 @@ describe('a scripted write obeys the editing mode', () => {
     const paragraphs = paragraphsOf(host);
     editor.surface!.setEditingMode('view');
     host.execute({
-      operations: [{ op: 'insertText', paragraph: paragraphs[0]!, offset: 0, text: 'X' }],
+      operations: [{ op: 'insertText', at: { paragraph: paragraphs[0]!, offset: 0 }, text: 'X' }],
     });
     editor.surface!.setEditingMode('edit');
     const response = host.execute({
-      operations: [{ op: 'insertText', paragraph: paragraphs[0]!, offset: 0, text: 'Y' }],
+      operations: [{ op: 'insertText', at: { paragraph: paragraphs[0]!, offset: 0 }, text: 'Y' }],
     });
     expect(response.ok).toBe(true);
     expect(textOf(host, paragraphs[0]!)).toBe('Yalpha');
@@ -249,7 +249,7 @@ describe('a body handle names the body, wherever the reader is', () => {
     expect(surface.activeScope()).toEqual({ kind: 'headerFooter', rId: 'rId10' });
 
     const response = host.execute({
-      operations: [{ op: 'insertText', paragraph: paragraphs[0]!, offset: 0, text: 'B' }],
+      operations: [{ op: 'insertText', at: { paragraph: paragraphs[0]!, offset: 0 }, text: 'B' }],
     });
 
     expect(response.ok).toBe(true);
@@ -291,7 +291,7 @@ describe('a body write does not drag the reader out of the story they are in', (
     const caretBefore = surface.state().selection;
 
     const response = host.execute({
-      operations: [{ op: 'insertText', paragraph: paragraphs[0]!, offset: 0, text: 'B' }],
+      operations: [{ op: 'insertText', at: { paragraph: paragraphs[0]!, offset: 0 }, text: 'B' }],
     });
     expect(response.ok).toBe(true);
 
@@ -314,7 +314,7 @@ describe('a body write does not drag the reader out of the story they are in', (
     expect(caretBefore.head.paragraphId).toContain('footnotes.xml');
 
     const response = host.execute({
-      operations: [{ op: 'insertText', paragraph: paragraphs[1]!, offset: 0, text: 'B' }],
+      operations: [{ op: 'insertText', at: { paragraph: paragraphs[1]!, offset: 0 }, text: 'B' }],
     });
     expect(response.ok).toBe(true);
 
@@ -341,7 +341,7 @@ describe('a body write does not drag the reader out of the story they are in', (
     });
 
     host.execute({
-      operations: [{ op: 'insertText', paragraph: paragraphs[0]!, offset: 0, text: 'B' }],
+      operations: [{ op: 'insertText', at: { paragraph: paragraphs[0]!, offset: 0 }, text: 'B' }],
     });
 
     const { anchor, head } = surface.state().selection;

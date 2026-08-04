@@ -107,7 +107,7 @@ describe('the browser host over a mounted editor', () => {
     const { host } = mount();
     const { body, paragraphs } = handles(host);
     expect(paragraphs).toHaveLength(2);
-    expect(textOf(host, body)).toBe('alpha\nbeta');
+    expect(textOf(host, body)).toBe('alpha\rbeta');
     expect(textOf(host, paragraphs[1]!)).toBe('beta');
   });
 
@@ -119,7 +119,7 @@ describe('the browser host over a mounted editor', () => {
     const before = editor.snapshot();
 
     const response = host.execute({
-      operations: [{ op: 'insertText', paragraph: paragraphs[0]!, offset: 0, text: 'ZZ' }],
+      operations: [{ op: 'insertText', at: { paragraph: paragraphs[0]!, offset: 0 }, text: 'ZZ' }],
     });
 
     expect({ ok: response.ok, changed: response.changed }).toEqual({ ok: true, changed: true });
@@ -139,7 +139,7 @@ describe('the browser host over a mounted editor', () => {
     expect(textOf(host, paragraphs[0]!)).toContain('typed ');
 
     host.execute({
-      operations: [{ op: 'insertText', paragraph: paragraphs[0]!, offset: 0, text: '#' }],
+      operations: [{ op: 'insertText', at: { paragraph: paragraphs[0]!, offset: 0 }, text: '#' }],
     });
     expect(editor.query({ type: 'selectedText' })).not.toBeUndefined();
     expect(textOf(host, paragraphs[0]!).startsWith('#')).toBe(true);
@@ -150,8 +150,8 @@ describe('the browser host over a mounted editor', () => {
     const { paragraphs } = handles(host);
     const response = host.execute({
       operations: [
-        { op: 'insertText', paragraph: paragraphs[0]!, offset: 0, text: 'good' },
-        { op: 'insertText', paragraph: paragraphs[1]!, offset: 500, text: 'bad' },
+        { op: 'insertText', at: { paragraph: paragraphs[0]!, offset: 0 }, text: 'good' },
+        { op: 'insertText', at: { paragraph: paragraphs[1]!, offset: 500 }, text: 'bad' },
       ],
     });
     expect(response.ok).toBe(false);
@@ -166,7 +166,7 @@ describe('the browser host over a mounted editor', () => {
     const seen: number[] = [];
     host.subscribe((event) => seen.push(event.revision));
     host.execute({
-      operations: [{ op: 'insertText', paragraph: paragraphs[0]!, offset: 0, text: 'x' }],
+      operations: [{ op: 'insertText', at: { paragraph: paragraphs[0]!, offset: 0 }, text: 'x' }],
     });
     expect(seen).toHaveLength(1);
     expect(seen[0]).toBe(host.revision());
@@ -176,7 +176,7 @@ describe('the browser host over a mounted editor', () => {
     const { host, editor } = mount();
     const { paragraphs } = handles(host);
     host.execute({
-      operations: [{ op: 'insertText', paragraph: paragraphs[0]!, offset: 5, text: '!' }],
+      operations: [{ op: 'insertText', at: { paragraph: paragraphs[0]!, offset: 5 }, text: '!' }],
     });
     const saved = host.save();
     expect(saved.ok).toBe(true);
@@ -191,7 +191,7 @@ describe('a detached or destroyed editor', () => {
     const { host, editor } = mount();
     const { paragraphs } = handles(host);
     host.execute({
-      operations: [{ op: 'insertText', paragraph: paragraphs[0]!, offset: 0, text: 'x' }],
+      operations: [{ op: 'insertText', at: { paragraph: paragraphs[0]!, offset: 0 }, text: 'x' }],
     });
     const beforeDetach = host.revision();
 
@@ -215,7 +215,7 @@ describe('a detached or destroyed editor', () => {
     editor.detach();
     editor.attach(document.createElement('div'));
     const response = host.execute({
-      operations: [{ op: 'insertText', paragraph: paragraphs[0]!, offset: 0, text: 'x' }],
+      operations: [{ op: 'insertText', at: { paragraph: paragraphs[0]!, offset: 0 }, text: 'x' }],
     });
     // Either the handle still names a live paragraph (identity survived the remount) or it
     // does not and the host says so. What it must never do is write into a different one.

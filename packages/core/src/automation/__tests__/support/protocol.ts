@@ -56,6 +56,21 @@ export interface Roots {
   readonly body: AutomationHandle;
 }
 
+/**
+ * Save the host's document and open the bytes again.
+ *
+ * The fidelity assertion every edit test ends with: an edit that reads back correctly in the
+ * session that made it but does not survive the serializer has not been applied to a document,
+ * only to a picture of one. Handles do NOT carry over — a new host draws its own token — so the
+ * reopened body is asked its paragraphs afresh, which is also the point.
+ */
+export function reopen(host: AutomationHost): Roots & { readonly host: AutomationHost } {
+  const saved = host.save();
+  if (!saved.ok) throw new Error(`save refused: ${saved.error.code}`);
+  const next = open(saved.bytes);
+  return { host: next, ...roots(next) };
+}
+
 export function roots(host: AutomationHost): Roots {
   const document = handleAt(host.execute({ operations: [{ op: 'getDocument' }] }), 0);
   const body = handleAt(host.execute({ operations: [{ op: 'getBody', document }] }), 0);

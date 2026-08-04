@@ -114,6 +114,21 @@ function sessionPort(editor: DocxEditorInstance): AutomationDocumentPort {
       return { ok: true, changed: result.committed };
     },
     save: () => sync()?.save() ?? null,
+    // The one genuinely browser-only operation, and the reason the port declares it optional:
+    // a headless host has no caret. Positions arrive as canonical paragraph ids and model
+    // offsets — the same vocabulary `SemanticSelection` already uses — so nothing is translated
+    // and there is no second coordinate space that could drift. Collapsing to one end is done
+    // by pointing both ends at it, which is what a caret IS to the surface.
+    select(range, mode) {
+      const surface = editor.surface;
+      if (!surface) return;
+      const anchor = mode === 'end' ? range.end : range.start;
+      const head = mode === 'start' ? range.start : range.end;
+      surface.setSelection({
+        anchor: { paragraphId: anchor.paragraphId, offset: anchor.offset },
+        head: { paragraphId: head.paragraphId, offset: head.offset },
+      });
+    },
     // The EDITOR's change event, not the session's: the facade re-subscribes to each new
     // session across a remount, so a subscription taken here survives one.
     subscribe: (listener) => editor.on('change', () => listener()),

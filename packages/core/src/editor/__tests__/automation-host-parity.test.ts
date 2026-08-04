@@ -186,6 +186,16 @@ function withoutHostToken(value: Transcript): unknown {
   return JSON.parse(JSON.stringify(value).replaceAll(token, '<host>'));
 }
 
+/**
+ * The same normalization for a value that carries refs without a known document handle: find
+ * every host token by shape and collapse it. Used for whole-response comparisons.
+ */
+function normalizeTokens(value: unknown): unknown {
+  const text = JSON.stringify(value);
+  if (text === undefined) return value;
+  return JSON.parse(text.replace(/:[0-9a-f]{32}:/g, ':<host>:'));
+}
+
 /** Reopen saved bytes and describe them with the repository's own fidelity oracles. */
 function oracles(bytes: Uint8Array): { fingerprint: string; digest: unknown } {
   const reopened = readOoxmlPackage(bytes);
@@ -253,8 +263,8 @@ describe('the same write produces the same document in both hosts', () => {
     const { paragraphs } = handlesOf(host);
     return host.execute({
       operations: [
-        { op: 'insertText', paragraph: paragraphs[0]!, offset: 0, text: 'Draft: ' },
-        { op: 'insertText', paragraph: paragraphs[2]!, offset: 0, text: '#' },
+        { op: 'insertText', at: { paragraph: paragraphs[0]!, offset: 0 }, text: 'Draft: ' },
+        { op: 'insertText', at: { paragraph: paragraphs[2]!, offset: 0 }, text: '#' },
       ],
     });
   };
@@ -265,15 +275,21 @@ describe('the same write produces the same document in both hosts', () => {
     const responses = onBoth(hosts, write);
     const after = onBoth(hosts, (host) => host.revision());
 
-    expect({
-      ok: responses.server.ok,
-      changed: responses.server.changed,
-      results: responses.server.results,
-    }).toEqual({
-      ok: responses.browser.ok,
-      changed: responses.browser.changed,
-      results: responses.browser.results,
-    });
+    // Normalized only for the per-host token: the answered spans carry paragraph refs, whose
+    // ordinal half must agree and whose token half must not.
+    expect(
+      normalizeTokens({
+        ok: responses.server.ok,
+        changed: responses.server.changed,
+        results: responses.server.results,
+      })
+    ).toEqual(
+      normalizeTokens({
+        ok: responses.browser.ok,
+        changed: responses.browser.changed,
+        results: responses.browser.results,
+      })
+    );
     expect(responses.server.ok).toBe(true);
     // The absolute number belongs to whoever owns the document — a browser host carries a
     // remount base — so the comparable quantity is what one batch moved.
@@ -319,6 +335,180 @@ describe('the same write produces the same document in both hosts', () => {
   });
 });
 
+describe('the whole operation vocabulary answers identically in both hosts', () => {
+  /**
+   * Every read this slice defines, over the representative document, as one comparable value.
+   *
+   * A per-operation test per host would let a divergence hide in the one nobody paired. The
+   * point of asking all of them at once is that the transcripts are compared WHOLE.
+   */
+  const readEverything = (host: AutomationHost): unknown => {
+    const { body, paragraphs } = handlesOf(host);
+    const first = paragraphs[0]!;
+    const second = paragraphs[1]!;
+    const response = host.execute({
+      operations: [
+        { op: 'getSpanText', span: { body } },
+        {
+          op: 'getSpanText',
+          span: { start: { paragraph: first, offset: 4 }, end: { paragraph: second, offset: 8 } },
+        },
+        {
+          op: 'getSpanParagraphs',
+          span: { start: { paragraph: first, offset: 0 }, end: { paragraph: second, offset: 0 } },
+        },
+        { op: 'getParagraphId', paragraph: first },
+        { op: 'search', body, text: 'e' },
+        { op: 'search', body, text: 'Region', options: { matchCase: true, matchWholeWord: true } },
+        { op: 'search', body, text: 'nothing here' },
+      ],
+    });
+    return { ok: response.ok, changed: response.changed, results: response.results };
+  };
+
+  test('reads over spans, identity and search agree ref for ref', () => {
+    const hosts = bothHosts();
+    const { server, browser } = onBoth(hosts, readEverything);
+    expect(normalizeTokens(server)).toEqual(normalizeTokens(browser));
+  });
+
+  /** Every write this slice defines, in one batch each, then the document that came out. */
+  const writeEverything = (host: AutomationHost): unknown => {
+    const { body, paragraphs } = handlesOf(host);
+    const steps = [
+      host.execute({
+        operations: [
+          {
+            op: 'replaceSpan',
+            span: {
+              start: { paragraph: paragraphs[0]!, offset: 0 },
+              end: { paragraph: paragraphs[0]!, offset: 9 },
+            },
+            text: 'Annual',
+          },
+        ],
+      }),
+      host.execute({
+        operations: [
+          { op: 'insertParagraph', anchor: { paragraph: paragraphs[1]! }, where: 'before', text: 'Summary' },
+        ],
+      }),
+      host.execute({
+        operations: [
+          { op: 'splitParagraph', paragraph: paragraphs[1]!, delimiters: ['by'], trimDelimiters: true },
+        ],
+      }),
+      host.execute({ operations: [{ op: 'deleteParagraph', paragraph: paragraphs[3]! }] }),
+    ];
+    const { body: bodyAgain, paragraphs: after } = handlesOf(host);
+    return {
+      steps: steps.map((step) => ({ ok: step.ok, changed: step.changed, results: step.results })),
+      bodyText: textOf(host, bodyAgain),
+      texts: after.map((paragraph) => textOf(host, paragraph)),
+      sameBody: bodyAgain.ref === body.ref,
+    };
+  };
+
+  test('writes over spans, paragraphs and splits produce the same document', () => {
+    const hosts = bothHosts();
+    const { server, browser } = onBoth(hosts, writeEverything);
+    expect(normalizeTokens(server)).toEqual(normalizeTokens(browser));
+  });
+
+  test('and the same bytes, by fingerprint and digest', () => {
+    const hosts = bothHosts();
+    onBoth(hosts, writeEverything);
+    const saved = onBoth(hosts, savedBytes);
+    expect(oracles(saved.server).fingerprint).toBe(oracles(saved.browser).fingerprint);
+    expect(oracles(saved.server).digest).toEqual(oracles(saved.browser).digest);
+  });
+});
+
+describe('selection is the one thing the two hosts differ about', () => {
+  test('the browser host moves the caret and the headless host refuses to pretend', () => {
+    const hosts = bothHosts();
+    const outcome = onBoth(hosts, (host) => {
+      const { paragraphs } = handlesOf(host);
+      const response = host.execute({
+        operations: [
+          {
+            op: 'selectSpan',
+            span: {
+              start: { paragraph: paragraphs[1]!, offset: 2 },
+              end: { paragraph: paragraphs[1]!, offset: 7 },
+            },
+            mode: 'select',
+          },
+        ],
+      });
+      const first = response.results[0];
+      return {
+        ok: response.ok,
+        // Selecting is not an edit, so neither host may report the document as having moved.
+        changed: response.changed,
+        code: first?.status === 'error' ? first.error.code : first?.status,
+      };
+    });
+
+    expect(outcome.server).toEqual({ ok: false, changed: false, code: 'unsupported-capability' });
+    expect(outcome.browser).toEqual({ ok: true, changed: false, code: 'ok' });
+
+    // And it landed where it was asked to, in the engine's own selection vocabulary.
+    const selection = hosts.editor.surface?.state().selection;
+    expect(selection?.anchor.offset).toBe(2);
+    expect(selection?.head.offset).toBe(7);
+    expect(selection?.anchor.paragraphId).toBe(selection?.head.paragraphId);
+  });
+
+  test('collapsing to one end puts both ends of the selection there', () => {
+    const hosts = bothHosts();
+    const { paragraphs } = handlesOf(hosts.browser);
+    for (const [mode, expected] of [
+      ['start', 2],
+      ['end', 7],
+    ] as const) {
+      const response = hosts.browser.execute({
+        operations: [
+          {
+            op: 'selectSpan',
+            span: {
+              start: { paragraph: paragraphs[1]!, offset: 2 },
+              end: { paragraph: paragraphs[1]!, offset: 7 },
+            },
+            mode,
+          },
+        ],
+      });
+      expect(response.ok).toBe(true);
+      const selection = hosts.editor.surface?.state().selection;
+      expect([selection?.anchor.offset, selection?.head.offset]).toEqual([expected, expected]);
+    }
+  });
+
+  test('a batch that edits a paragraph the selection covers is refused, not misplaced', () => {
+    const hosts = bothHosts();
+    const { paragraphs } = handlesOf(hosts.browser);
+    const response = hosts.browser.execute({
+      operations: [
+        { op: 'insertText', at: { paragraph: paragraphs[1]!, offset: 0 }, text: 'X' },
+        {
+          op: 'selectSpan',
+          span: {
+            start: { paragraph: paragraphs[1]!, offset: 2 },
+            end: { paragraph: paragraphs[1]!, offset: 7 },
+          },
+          mode: 'select',
+        },
+      ],
+    });
+    const second = response.results[1];
+    expect(second?.status === 'error' ? second.error.code : second?.status).toBe(
+      'conflicting-operations'
+    );
+    expect(textOf(hosts.browser, paragraphs[1]!)).toBe('Prepared by the team');
+  });
+});
+
 describe('the two hosts refuse the same things the same way', () => {
   test('a mixed batch with one invalid command writes nothing in either host', () => {
     const hosts = bothHosts();
@@ -329,8 +519,8 @@ describe('the two hosts refuse the same things the same way', () => {
       const revisionBefore = host.revision();
       const response = host.execute({
         operations: [
-          { op: 'insertText', paragraph: paragraphs[0]!, offset: 0, text: 'good' },
-          { op: 'insertText', paragraph: paragraphs[1]!, offset: 9_999, text: 'bad' },
+          { op: 'insertText', at: { paragraph: paragraphs[0]!, offset: 0 }, text: 'good' },
+          { op: 'insertText', at: { paragraph: paragraphs[1]!, offset: 9_999 }, text: 'bad' },
         ],
       });
       return {
@@ -354,12 +544,12 @@ describe('the two hosts refuse the same things the same way', () => {
     const outcome = onBoth(hosts, (host) => {
       const { paragraphs } = handlesOf(host);
       host.execute({
-        operations: [{ op: 'insertText', paragraph: paragraphs[0]!, offset: 0, text: 'X' }],
+        operations: [{ op: 'insertText', at: { paragraph: paragraphs[0]!, offset: 0 }, text: 'X' }],
       });
       const stale = host.revision() - 1;
       const response = host.execute({
         expectedRevision: stale,
-        operations: [{ op: 'insertText', paragraph: paragraphs[0]!, offset: 0, text: 'Y' }],
+        operations: [{ op: 'insertText', at: { paragraph: paragraphs[0]!, offset: 0 }, text: 'Y' }],
       });
       const first = response.results[0];
       return {
@@ -385,7 +575,7 @@ describe('the two hosts refuse the same things the same way', () => {
       const foreign = host === hosts.server ? fromBrowser : fromServer;
       const read = host.execute({ operations: [{ op: 'getText', target: foreign }] });
       const write = host.execute({
-        operations: [{ op: 'insertText', paragraph: foreign, offset: 0, text: 'INJECTED' }],
+        operations: [{ op: 'insertText', at: { paragraph: foreign, offset: 0 }, text: 'INJECTED' }],
       });
       const codeOf = (response: AutomationBatchResponse): unknown => {
         const first = response.results[0];
@@ -410,6 +600,28 @@ describe('the two hosts refuse the same things the same way', () => {
       writeCode: 'invalid-handle',
       ownText: 'Quarterly report',
     });
+  });
+
+  test('a paragraph the batch restructures cannot also be written to, in either host', () => {
+    const hosts = bothHosts();
+    const outcome = onBoth(hosts, (host) => {
+      const { paragraphs } = handlesOf(host);
+      const response = host.execute({
+        operations: [
+          { op: 'insertParagraph', anchor: { paragraph: paragraphs[0]! }, where: 'after', text: 'x' },
+          { op: 'insertText', at: { paragraph: paragraphs[0]!, offset: 0 }, text: 'y' },
+        ],
+      });
+      return {
+        ok: response.ok,
+        changed: response.changed,
+        results: response.results,
+        text: textOf(host, paragraphs[0]!),
+      };
+    });
+    expect(outcome.server).toEqual(outcome.browser);
+    expect(outcome.server.ok).toBe(false);
+    expect(outcome.server.text).toBe('Quarterly report');
   });
 
   test('dispose is idempotent in both, and later operations fail with the same code', () => {
