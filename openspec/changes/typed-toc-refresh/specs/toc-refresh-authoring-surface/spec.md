@@ -1,0 +1,62 @@
+## ADDED Requirements
+
+### Requirement: Honest command and query
+
+The public editor SHALL answer `refreshToc` and `isInsideToc` from real TOC detection rather than stubs.
+
+#### Scenario: isInsideToc follows caret
+
+- **WHEN** the caret is inside a detected TOC field (including SDT-wrapped)
+- **THEN** `query({ type: 'isInsideToc', pos })` returns `true`
+
+#### Scenario: refreshToc is supported when a TOC exists
+
+- **WHEN** the document has a refreshable TOC and is editable
+- **THEN** `can({ type: 'refreshToc' })` succeeds and `exec` runs the pipeline
+
+### Requirement: Insert menu authors a generated TOC
+
+The shared Insert chrome SHALL expose an enabled Table of contents action when the caret is in an editable body paragraph. Activating it SHALL insert an SDT-wrapped TOC field immediately before that paragraph, include heading levels 1–3 with hyperlinks, create bounded heading bookmarks, and derive page numbers through the normal layout pipeline.
+
+#### Scenario: Insert a table of contents
+
+- **WHEN** the user selects Table of contents from the Insert menu in an editable body paragraph
+- **THEN** one generated TOC is inserted, populated from the current outline, painted through shared SDT chrome, and its result rows use the same read-only navigation behavior as refreshed TOCs
+
+#### Scenario: Undo insertion phases
+
+- **WHEN** the user undoes immediately after an insertion whose page-number convergence moved a digit
+- **THEN** the first undo restores the pre-convergence digits and the next removes the inserted TOC and bookmarks
+
+#### Scenario: Convergence that moves nothing is not a step
+
+- **WHEN** page-number convergence finds every digit already correct
+- **THEN** it writes nothing, reports no change, and the insertion or refresh remains a single undo step
+
+### Requirement: Contextual update menu
+
+The engine SHALL open an engine-owned contextual menu when the user right-clicks a detected TOC row, with Update entire table and Update page numbers actions. It SHALL NOT paint a duplicate TOC-specific trigger over SDT boundary chrome.
+
+#### Scenario: Context menu does not steal focus
+
+- **WHEN** the user right-clicks a TOC row or presses an action in its menu
+- **THEN** the native context menu is suppressed, the contenteditable caret is not moved, and no refresh action runs until selected
+
+#### Scenario: Actions are localized
+
+- **WHEN** the TOC update menu is shown
+- **THEN** action labels come from i18n keys and are present in every shipped locale without null fallbacks
+
+### Requirement: TOC row navigation
+
+Detected TOC field and result paragraphs SHALL paint as a generated, read-only navigation surface. They SHALL refuse caret placement, text selection, typing, deletion, and formatting while preserving right-click update actions. Clicking a cached TOC result row SHALL snap the editor viewport to the corresponding outline heading and place the caret there.
+
+#### Scenario: Generated result refuses editing
+
+- **WHEN** pointer, keyboard, IME, or command input targets a detected TOC paragraph
+- **THEN** no caret or range is placed inside it and no document edit is committed
+
+#### Scenario: Row has no authored hyperlink
+
+- **WHEN** the user clicks a TOC result row whose instruction omits the hyperlink switch
+- **THEN** the surface resolves the row through the detected TOC entry order and immediately reveals its heading without smooth scrolling

@@ -78,14 +78,13 @@ const SLOT_COMMANDS: Partial<Record<ChromeSlotId, EditorCommand>> = {
   'insert.pageXofY': { type: 'insertPageField', field: 'PAGE_X_OF_Y' },
   'insert.pageBreak': { type: 'insertBreak', kind: 'page' },
   'insert.sectionBreakNextPage': { type: 'insertBreak', kind: 'section' },
+  'insert.toc': { type: 'insertToc' },
   // Content-control remove maps to the public edit shape; the Editor facade resolves the
   // caret control. Show-all / form-fill / inspector are surface chrome, not commands — see
   // the special cases in `toolbarCommandState` / `runToolbarCommand`.
   'contentControl.remove': { type: 'removeContentControl' },
-  // `insert.sectionBreakContinuous` and `insert.toc` are deliberately absent: a continuous
-  // section break is not in the `insertBreak` vocabulary, and a table of contents is not an
-  // edit the tree editor executes. Neither has a command SHAPE to probe with either, so
-  // their disabled reason is this table's, not the engine's — see `toolbarCommandState`.
+  // `insert.sectionBreakContinuous` is deliberately absent: a continuous section break is
+  // not in the `insertBreak` vocabulary and has no command shape to probe.
 };
 
 /**

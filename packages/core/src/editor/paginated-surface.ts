@@ -5,9 +5,14 @@
 
 import { openTreeSession, type TreeDocxSession } from '@docx-editor.dev/core-contract/binding';
 import {
+  TOC_MAX_PAGE_PASSES,
+  detectBodyTocs,
   findNode,
   hyperlinkTargetOf,
   isContentControl,
+  parseTocInstruction,
+  planTocEntries,
+  validateTreeOp,
   type OoxmlElement,
   type OoxmlNode,
   type TreeDocOp,
@@ -19,6 +24,8 @@ import {
   resolveDefaultSurfaceMeasurer,
   cellSelectionRects,
   keyedRangeRects,
+  formatPageNumber,
+  emptyTocPlaceholderParagraphIds,
   paragraphFragmentsOf,
   reviewItemKey,
   reviewItemsAt,
@@ -37,6 +44,7 @@ import {
   type ContentControlBoundaryRecord,
   type KeyedRange,
   type LayoutScope,
+  type NavigationCommand,
   type ReviewItem,
   type ReviewRevisionKind,
   type SemanticLayout,
@@ -173,6 +181,7 @@ export function mountPaginatedSurface(
       options.tableInteractionLabel ?? ((key: TableInteractionLabelKey) => defaultTableLabel(key)),
   };
   const VIEWING_REFUSAL = 'the document is open for viewing';
+  const TOC_READ_ONLY_REFUSAL = 'the table of contents is generated and read-only';
   /** Separates a decision's key from its per-range index. A NUL cannot occur in either. */
   const RANGE_SUFFIX = '\u0000range\u0000';
   /** One timestamp per edit. The clock is the host's; the store never reads one. */
@@ -297,7 +306,18 @@ export function mountPaginatedSurface(
     }
   );
 
-  const firstParagraph = session.paragraphIds()[0] ?? '';
+  const initialTocParagraphs = new Set(
+    detectBodyTocs(session.part()).flatMap((toc) => [
+      toc.beginParagraphId,
+      ...toc.resultParagraphIds,
+      toc.endParagraphId,
+    ])
+  );
+  const paragraphIds = session.paragraphIds();
+  const firstParagraph =
+    paragraphIds.find((paragraphId) => !initialTocParagraphs.has(paragraphId)) ??
+    paragraphIds[0] ??
+    '';
   let selection: SemanticSelection = {
     anchor: { paragraphId: firstParagraph, offset: 0 },
     head: { paragraphId: firstParagraph, offset: 0 },
@@ -509,6 +529,9 @@ export function mountPaginatedSurface(
       if (editingMode === 'view') {
         return { committed: false, rejected: true, opCount: 0, reason: VIEWING_REFUSAL };
       }
+      if (selectionTouchesToc()) {
+        return { committed: false, rejected: true, opCount: 0, reason: TOC_READ_ONLY_REFUSAL };
+      }
       return session.applyPmDoc(doc);
     },
   };
@@ -601,8 +624,13 @@ export function mountPaginatedSurface(
     isCollapsedSelection: () =>
       selection.anchor.paragraphId === selection.head.paragraphId &&
       selection.anchor.offset === selection.head.offset,
+    onScrolled: () => rematerialize(),
     ...(options.onHyperlinkPopover ? { onPopover: options.onHyperlinkPopover } : {}),
   });
+  pagesLayer.addEventListener('contextmenu', onTocContextMenu);
+  pagesLayer.addEventListener('click', onTocRowClick);
+  pagesLayer.addEventListener('pointermove', onTocPointerMove);
+  pagesLayer.addEventListener('pointerleave', onTocPointerLeave);
   let desiredX: number | null = null;
 
   function layoutDocument(revision: number): SemanticLayout {
@@ -691,25 +719,190 @@ export function mountPaginatedSurface(
     return scheduler.pending() ? scheduler.flush() : false;
   }
 
+  /** TOC chrome is hover-projected; never sticky from caret/click. */
+  let hoveredTocControlId: string | null = null;
+
+  function tocControlIdOf(toc: ReturnType<typeof detectBodyTocs>[number]): string {
+    return toc.contentControlId ?? `toc:${toc.id}`;
+  }
+
+  function tocContainingParagraph(paragraphId: string) {
+    return detectBodyTocs(session.part()).find(
+      (toc) =>
+        toc.beginParagraphId === paragraphId ||
+        toc.endParagraphId === paragraphId ||
+        toc.resultParagraphIds.includes(paragraphId)
+    );
+  }
+
+  /**
+   * Hover retints the chrome ALREADY PAINTED — it must never repaint the document.
+   *
+   * Chrome sends `mousedown` and then `contextmenu` for one right-click. Repainting on the
+   * pointermove that enters a TOC replaced the node the gesture started on, and the
+   * `contextmenu` that followed fired on a detached element, so it never bubbled to this
+   * layer and the first right-click on a TOC did nothing at all. Painted DOM identity is
+   * therefore stable across a hover change, and the attributes move instead.
+   */
+  function applyTocHoverChrome(): void {
+    for (const chrome of pagesLayer.querySelectorAll<HTMLElement>(
+      '.docx-content-control-chrome[data-docx-toc]'
+    )) {
+      if (chrome.getAttribute('data-docx-content-control') === hoveredTocControlId) {
+        chrome.dataset.hover = '';
+        chrome.dataset.boundaryVisible = '';
+        continue;
+      }
+      delete chrome.dataset.hover;
+      // Show-all keeps every boundary visible on its own account; only the hover-owned
+      // visibility goes back off here.
+      if (!showAllContentControls) delete chrome.dataset.boundaryVisible;
+    }
+  }
+
+  function setHoveredTocControlId(next: string | null): void {
+    if (hoveredTocControlId === next) return;
+    hoveredTocControlId = next;
+    applyTocHoverChrome();
+  }
+
+  function onTocPointerMove(event: PointerEvent): void {
+    const paragraph = (event.target as Element | null)?.closest<HTMLElement>('[data-paragraph-id]');
+    const paragraphId = paragraph?.dataset.paragraphId;
+    const toc = paragraphId ? tocContainingParagraph(paragraphId) : null;
+    setHoveredTocControlId(toc ? tocControlIdOf(toc) : null);
+  }
+
+  /**
+   * The paragraph a click or right-click landed on, resolved without trusting the target.
+   *
+   * A gesture that begins on a node some other pass then replaces arrives with a target
+   * that is no longer in the tree, so `closest` finds nothing worth acting on. Hit-testing
+   * the live tree at the same point keeps the gesture rather than dropping it.
+   */
+  function gestureParagraphId(event: MouseEvent): string | undefined {
+    const target = event.target as Element | null;
+    const direct = target?.isConnected
+      ? target.closest<HTMLElement>('[data-paragraph-id]')
+      : undefined;
+    if (direct) return direct.dataset.paragraphId;
+    const view = pagesLayer.ownerDocument;
+    if (typeof view.elementFromPoint !== 'function') return undefined;
+    const hit = view.elementFromPoint(event.clientX, event.clientY);
+    return hit?.closest<HTMLElement>('[data-paragraph-id]')?.dataset.paragraphId;
+  }
+
+  function onTocPointerLeave(): void {
+    setHoveredTocControlId(null);
+  }
+
   function contentControlChromeOptions():
     | {
         readonly showAll?: boolean;
         readonly activeIds?: ReadonlySet<string>;
+        readonly hoverIds?: ReadonlySet<string>;
         readonly checkedIds?: ReadonlySet<string>;
+        readonly additionalBoundaries?: readonly ContentControlBoundaryRecord[];
+        readonly tocControlIds?: ReadonlySet<string>;
+        readonly suppressedIds?: ReadonlySet<string>;
       }
     | undefined {
     const active = contentControlAtCaret();
-    const activeIds = active ? new Set([active.id]) : undefined;
+    const emptyTocBeginIds = emptyTocPlaceholderParagraphIds(session.part());
+    const tocs = detectBodyTocs(session.part());
+    const tocBoundaries = tocs
+      .map((toc) => {
+        const entry = tocBoundary(toc);
+        return entry ? { ...entry, empty: emptyTocBeginIds.has(toc.beginParagraphId) } : null;
+      })
+      .filter((entry) => entry !== null);
+    const tocControlIds = new Set(tocBoundaries.map((entry) => entry.boundary.id));
+    // An empty TOC is identified by its own placeholder box, which is the ONE box the
+    // region gets: a second boundary rectangle and a label chip over an empty region read
+    // as a rendering fault rather than as chrome.
+    const suppressedIds = new Set(
+      tocBoundaries.filter((entry) => entry.empty).map((entry) => entry.boundary.id)
+    );
+    // TOC regions never project caret-active chrome — hoverIds own their visibility.
+    const activeIds = active && !tocControlIds.has(active.id) ? new Set([active.id]) : undefined;
+    const hoverIds = hoveredTocControlId ? new Set([hoveredTocControlId]) : undefined;
     const checkedIds = new Set(
       contentControlsInLayout(currentLayout)
         .filter((control) => control.controlType === 'checkbox' && checkboxChecked(control.id))
         .map((control) => control.id)
     );
-    if (!showAllContentControls && !activeIds && checkedIds.size === 0) return undefined;
+    const additionalBoundaries = tocBoundaries
+      .filter((entry) => entry.additional && !entry.empty)
+      .map((entry) => entry.boundary);
+    if (
+      !showAllContentControls &&
+      !activeIds &&
+      !hoverIds &&
+      checkedIds.size === 0 &&
+      additionalBoundaries.length === 0 &&
+      tocControlIds.size === 0
+    ) {
+      return undefined;
+    }
     return {
       ...(showAllContentControls ? { showAll: true } : {}),
       ...(activeIds ? { activeIds } : {}),
+      ...(hoverIds ? { hoverIds } : {}),
       ...(checkedIds.size > 0 ? { checkedIds } : {}),
+      ...(additionalBoundaries.length > 0 ? { additionalBoundaries } : {}),
+      ...(tocControlIds.size > 0 ? { tocControlIds } : {}),
+      ...(suppressedIds.size > 0 ? { suppressedIds } : {}),
+    };
+  }
+
+  function tocBoundary(toc: ReturnType<typeof detectBodyTocs>[number]): {
+    readonly tocId: string;
+    readonly boundary: ContentControlBoundaryRecord;
+    readonly additional: boolean;
+  } | null {
+    const existing = toc.contentControlId
+      ? contentControlsInLayout(currentLayout).find(
+          (control) => control.id === toc.contentControlId
+        )
+      : undefined;
+    if (existing) return { tocId: toc.id, boundary: existing, additional: false };
+
+    const paragraphIds = new Set([
+      toc.beginParagraphId,
+      ...toc.resultParagraphIds,
+      toc.endParagraphId,
+    ]);
+    const fragments = currentLayout.pages.flatMap((page) => {
+      const boxes = paragraphFragmentsOf(page)
+        .filter((fragment) => paragraphIds.has(fragment.paragraphId))
+        .map((fragment) => fragment.box);
+      if (boxes.length === 0) return [];
+      const left = Math.min(...boxes.map((box) => box.x));
+      const top = Math.min(...boxes.map((box) => box.y));
+      const right = Math.max(...boxes.map((box) => box.x + box.width));
+      const bottom = Math.max(...boxes.map((box) => box.y + box.height));
+      return [
+        {
+          pageIndex: page.index,
+          box: { x: left, y: top, width: right - left, height: bottom - top },
+        },
+      ];
+    });
+    if (fragments.length === 0) return null;
+    return {
+      tocId: toc.id,
+      additional: true,
+      boundary: {
+        id: `toc:${toc.id}`,
+        controlType: 'richText',
+        lock: 'unlocked',
+        effectiveLock: 'unlocked',
+        placeholder: false,
+        bound: false,
+        nestingDepth: 0,
+        level: 'block',
+        fragments,
+      },
     };
   }
 
@@ -980,8 +1173,13 @@ export function mountPaginatedSurface(
     }
   }
 
+  /** Teardown for the open menu's document-level dismiss listeners, if it registered any. */
+  let detachMenuDismiss: (() => void) | null = null;
+
   function closeContentControlMenu(menu: HTMLElement): void {
     const controlId = menu.dataset.docxCcId;
+    detachMenuDismiss?.();
+    detachMenuDismiss = null;
     menu.remove();
     if (controlId) setContentControlWidgetOpen(controlId, false);
   }
@@ -989,6 +1187,112 @@ export function mountPaginatedSurface(
   function removeExistingContentControlMenu(): void {
     const existing = pagesLayer.querySelector<HTMLElement>('.docx-content-control-menu');
     if (existing) closeContentControlMenu(existing);
+  }
+
+  function openTocContextMenu(tocId: string, left: number, top: number): void {
+    if (!options.tocLabels) return;
+    removeExistingContentControlMenu();
+    const menu = document.createElement('div');
+    menu.className = 'docx-content-control-menu';
+    menu.dataset.docxMarker = '';
+    menu.dataset.docxTocMenu = tocId;
+    menu.setAttribute('contenteditable', 'false');
+    menu.setAttribute('role', 'menu');
+    menu.style.position = 'absolute';
+    menu.style.left = `${left}px`;
+    menu.style.top = `${top}px`;
+    menu.style.zIndex = '20';
+    menu.style.pointerEvents = 'auto';
+    menu.addEventListener('pointerdown', (event) => event.stopPropagation());
+
+    for (const [mode, label] of [
+      ['entire', options.tocLabels.entireTable],
+      ['pageNumbers', options.tocLabels.pageNumbersOnly],
+    ] as const) {
+      const action = document.createElement('button');
+      action.type = 'button';
+      action.className = 'docx-content-control-menu-item';
+      action.dataset.docxMarker = '';
+      action.setAttribute('contenteditable', 'false');
+      action.setAttribute('role', 'menuitem');
+      action.textContent = label;
+      action.addEventListener('mousedown', (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        closeContentControlMenu(menu);
+        surface.refreshToc(tocId, mode);
+      });
+      menu.append(action);
+    }
+    pagesLayer.append(menu);
+    // A menu the user cannot dismiss is a trap. Capture phase, so a press that some other
+    // lane would consume — a caret move, a right-click that opens the menu somewhere else —
+    // still closes this one first.
+    const dismiss = (event: Event): void => {
+      const target = event.target;
+      if (target instanceof Node && menu.contains(target)) return;
+      closeContentControlMenu(menu);
+    };
+    const dismissOnEscape = (event: KeyboardEvent): void => {
+      if (event.key !== 'Escape') return;
+      event.preventDefault();
+      closeContentControlMenu(menu);
+    };
+    const owner = pagesLayer.ownerDocument;
+    // `pointerdown` is the load-bearing one: the pointer lane calls `preventDefault` on
+    // several presses — a read-only paragraph, which every TOC row is — and a prevented
+    // press is not guaranteed to produce the compatibility `mousedown` behind it. Listening
+    // to both means no press can leave the menu stranded.
+    const dismissOn = ['pointerdown', 'mousedown', 'contextmenu', 'wheel'] as const;
+    for (const type of dismissOn) owner.addEventListener(type, dismiss, true);
+    owner.addEventListener('keydown', dismissOnEscape, true);
+    owner.defaultView?.addEventListener('blur', dismiss);
+    detachMenuDismiss = () => {
+      for (const type of dismissOn) owner.removeEventListener(type, dismiss, true);
+      owner.removeEventListener('keydown', dismissOnEscape, true);
+      owner.defaultView?.removeEventListener('blur', dismiss);
+    };
+  }
+
+  function onTocContextMenu(event: MouseEvent): void {
+    if (!options.tocLabels || editingMode === 'view') return;
+    const paragraphId = gestureParagraphId(event);
+    if (!paragraphId) return;
+    const toc = detectBodyTocs(session.part()).find(
+      (candidate) =>
+        candidate.beginParagraphId === paragraphId ||
+        candidate.endParagraphId === paragraphId ||
+        candidate.resultParagraphIds.includes(paragraphId)
+    );
+    if (!toc || !canRefreshToc(toc.id)) return;
+    event.preventDefault();
+    event.stopPropagation();
+    const layerRect = pagesLayer.getBoundingClientRect();
+    openTocContextMenu(toc.id, event.clientX - layerRect.left, event.clientY - layerRect.top);
+  }
+
+  function onTocRowClick(event: MouseEvent): void {
+    if (event.button !== 0 || (event.target as Element | null)?.closest('a.docx-hyperlink')) return;
+    if (
+      selection.anchor.paragraphId !== selection.head.paragraphId ||
+      selection.anchor.offset !== selection.head.offset
+    ) {
+      return;
+    }
+    const paragraphId = gestureParagraphId(event);
+    if (!paragraphId) return;
+    const toc = detectBodyTocs(session.part()).find((candidate) =>
+      candidate.resultParagraphIds.includes(paragraphId)
+    );
+    if (!toc) return;
+    const index = toc.resultParagraphIds.indexOf(paragraphId);
+    const outline = session.documentOutline();
+    const excluded = new Set([toc.beginParagraphId, toc.endParagraphId, ...toc.resultParagraphIds]);
+    const entry = planTocEntries(session.part(), outline, toc.instruction, new Map(), excluded)
+      .entries[index];
+    if (!entry) return;
+    event.preventDefault();
+    navigation.goToPosition({ paragraphId: entry.headingParagraphId, offset: 0 });
   }
 
   function openContentControlWidget(controlId: string, kind: string): void {
@@ -1407,8 +1711,11 @@ export function mountPaginatedSurface(
     hfScope?.reconcileOccurrence();
     const activeHf = hfScope?.getActive() ?? null;
     const contentControlChrome = contentControlChromeOptions();
+    const emptyTocIds = emptyTocPlaceholderParagraphIds(session.part());
     paintSemanticLayout(pagesLayer, currentLayout, {
       scale,
+      readOnlyParagraphIds: tocParagraphIds(),
+      ...(emptyTocIds.size > 0 ? { emptyTocPlaceholderIds: emptyTocIds } : {}),
       ...(options.fontAlias ? { fontAlias: options.fontAlias } : {}),
       materialize: materializedSet,
       ariaHidden: false,
@@ -1497,6 +1804,14 @@ export function mountPaginatedSurface(
         rejected: true,
         opCount: 0,
         reason: 'the document is open for viewing',
+      };
+    }
+    if (ops.some(isDocumentEdit) && (selectionTouchesToc() || ops.some((op) => opTouchesToc(op)))) {
+      return {
+        committed: false,
+        rejected: true,
+        opCount: 0,
+        reason: TOC_READ_ONLY_REFUSAL,
       };
     }
     // SUGGESTING with no author cannot write `CT_TrackChange`, and the fallback of writing
@@ -1689,6 +2004,7 @@ export function mountPaginatedSurface(
     reconcilePendingWith(next);
     releaseRetainedIfEscaped(next);
     const previousActive = contentControlAtCaret()?.id ?? null;
+    const previousToc = tocIdAtParagraph(selection.head.paragraphId);
     selection = next;
     // Any plain selection cancels a rectangle. A caret placed by a click, a keystroke or an
     // edit is a text selection by definition, and leaving the rectangle behind would keep
@@ -1728,7 +2044,8 @@ export function mountPaginatedSurface(
     // Content-control caret chrome is furniture keyed on the active control id. A caret move
     // into / out of a control must rebuild paint without a layout pass.
     const nextActive = contentControlAtCaret()?.id ?? null;
-    if (previousActive !== nextActive) {
+    const nextToc = tocIdAtParagraph(selection.head.paragraphId);
+    if (previousActive !== nextActive || previousToc !== nextToc) {
       render(false);
     }
     options.onChange?.(currentState());
@@ -2081,6 +2398,217 @@ export function mountPaginatedSurface(
     );
   }
 
+  function targetToc(tocId?: string) {
+    const tocs = detectBodyTocs(session.part());
+    if (tocId) return tocs.find((toc) => toc.id === tocId) ?? null;
+    const paragraphId = selection.head.paragraphId;
+    return (
+      tocs.find(
+        (toc) =>
+          toc.beginParagraphId === paragraphId ||
+          toc.endParagraphId === paragraphId ||
+          toc.resultParagraphIds.includes(paragraphId)
+      ) ?? (tocs.length === 1 ? tocs[0]! : null)
+    );
+  }
+
+  function tocIdAtParagraph(paragraphId: string): string | null {
+    const toc = detectBodyTocs(session.part()).find(
+      (candidate) =>
+        candidate.beginParagraphId === paragraphId ||
+        candidate.endParagraphId === paragraphId ||
+        candidate.resultParagraphIds.includes(paragraphId)
+    );
+    return toc?.id ?? null;
+  }
+
+  function selectionTouchesToc(): boolean {
+    return (
+      tocIdAtParagraph(selection.anchor.paragraphId) !== null ||
+      tocIdAtParagraph(selection.head.paragraphId) !== null
+    );
+  }
+
+  function opTouchesToc(op: TreeDocOp): boolean {
+    const ids = tocParagraphIds();
+    const inspect = (value: unknown, key = ''): boolean => {
+      if (typeof value === 'string') {
+        return /(?:Id|Ids)$/.test(key) && ids.has(value);
+      }
+      if (Array.isArray(value)) return value.some((entry) => inspect(entry, key));
+      if (!value || typeof value !== 'object') return false;
+      return Object.entries(value).some(([nestedKey, nested]) => inspect(nested, nestedKey));
+    };
+    return inspect(op);
+  }
+
+  function tocParagraphIds(): ReadonlySet<string> {
+    return new Set(
+      detectBodyTocs(session.part()).flatMap((toc) => [
+        toc.beginParagraphId,
+        ...toc.resultParagraphIds,
+        toc.endParagraphId,
+      ])
+    );
+  }
+
+  function pageNumbersFor(
+    layout: SemanticLayout,
+    paragraphIds: readonly string[]
+  ): ReadonlyMap<string, string> {
+    const wanted = new Set(paragraphIds);
+    const result = new Map<string, string>();
+    for (const page of layout.pages) {
+      for (const fragment of paragraphFragmentsOf(page)) {
+        if (!wanted.has(fragment.paragraphId) || result.has(fragment.paragraphId)) continue;
+        const source = page.pageFieldSource;
+        result.set(
+          fragment.paragraphId,
+          formatPageNumber(source?.pageNumber ?? page.index + 1, source?.format)
+        );
+      }
+    }
+    return result;
+  }
+
+  function canRefreshToc(tocId?: string): boolean {
+    if (editingMode === 'view' || !session.editable) return false;
+    const toc = targetToc(tocId);
+    if (!toc) return false;
+    return (
+      validateTreeOp(session.part(), {
+        op: 'rewriteTocPageNumbers',
+        tocId: toc.id,
+        updates: [],
+      }) === null
+    );
+  }
+
+  const INSERT_TOC_INSTRUCTION = 'TOC \\o "1-3" \\h';
+
+  function insertTocOp() {
+    const instruction = parseTocInstruction(INSERT_TOC_INSTRUCTION);
+    if (!instruction) return null;
+    const outline = session.documentOutline();
+    const plan = planTocEntries(
+      session.part(),
+      outline,
+      instruction,
+      pageNumbersFor(
+        surface.layout(),
+        outline.map((entry) => entry.blockId)
+      ),
+      tocParagraphIds()
+    );
+    return {
+      op: 'insertToc' as const,
+      beforeParagraphId: selection.head.paragraphId,
+      instruction: INSERT_TOC_INSTRUCTION,
+      alias: options.tocLabels?.title ?? 'TOC',
+      entries: plan.entries,
+      bookmarksToCreate: plan.bookmarksToCreate,
+    };
+  }
+
+  function canInsertToc(): boolean {
+    if (editingMode === 'view' || !session.editable || selectionTouchesToc()) return false;
+    const op = insertTocOp();
+    return op !== null && validateTreeOp(session.part(), op) === null;
+  }
+
+  function insertToc(): boolean {
+    if (!canInsertToc()) return false;
+    const op = insertTocOp();
+    if (!op) return false;
+    const existing = new Set(detectBodyTocs(session.part()).map((toc) => toc.id));
+    const inserted = session.applyTreeOps([op]);
+    if (!inserted.committed) {
+      lastRejection = inserted.reason ?? 'the table of contents could not be inserted';
+      return false;
+    }
+    const created = detectBodyTocs(session.part()).find((toc) => !existing.has(toc.id));
+    return created ? refreshToc(created.id, 'pageNumbers') : true;
+  }
+
+  function refreshToc(tocId?: string, mode: 'entire' | 'pageNumbers' = 'entire'): boolean {
+    let toc = targetToc(tocId);
+    if (!toc || !canRefreshToc(toc.id)) return false;
+
+    let layout = surface.layout();
+    const outline = session.documentOutline();
+    const excluded = new Set([toc.beginParagraphId, toc.endParagraphId, ...toc.resultParagraphIds]);
+    let plan = planTocEntries(
+      session.part(),
+      outline,
+      toc.instruction,
+      pageNumbersFor(
+        layout,
+        outline.map((entry) => entry.blockId)
+      ),
+      excluded
+    );
+
+    if (mode === 'entire') {
+      const replaced = session.applyTreeOps([
+        {
+          op: 'replaceTocResult',
+          tocId: toc.id,
+          entries: plan.entries,
+          bookmarksToCreate: plan.bookmarksToCreate,
+        },
+      ]);
+      if (!replaced.committed) {
+        lastRejection = replaced.reason ?? 'the table of contents could not be refreshed';
+        return false;
+      }
+      layout = surface.layout();
+      toc = targetToc(toc.id);
+      if (!toc) return true;
+    }
+
+    let previousSignature = '';
+    for (let pass = 0; pass < TOC_MAX_PAGE_PASSES; pass += 1) {
+      const numbers = pageNumbersFor(
+        layout,
+        plan.entries.map((entry) => entry.headingParagraphId)
+      );
+      const updates = toc.resultParagraphIds
+        .slice(0, plan.entries.length)
+        .map((paragraphId, index) => ({
+          paragraphId,
+          pageNumberText:
+            numbers.get(plan.entries[index]!.headingParagraphId) ??
+            plan.entries[index]!.pageNumberText,
+        }));
+      const signature = updates.map((update) => update.pageNumberText).join('\u0000');
+      if (signature === previousSignature) break;
+      previousSignature = signature;
+      const rewritten = session.applyTreeOps([
+        { op: 'rewriteTocPageNumbers', tocId: toc.id, updates },
+      ]);
+      if (!rewritten.committed) {
+        if (rewritten.rejected) {
+          lastRejection = rewritten.reason ?? 'the table of contents page numbers were refused';
+          return false;
+        }
+        break;
+      }
+      layout = surface.layout();
+      toc = targetToc(toc.id) ?? toc;
+      plan = planTocEntries(
+        session.part(),
+        outline,
+        toc.instruction,
+        pageNumbersFor(
+          layout,
+          outline.map((entry) => entry.blockId)
+        ),
+        excluded
+      );
+    }
+    return true;
+  }
+
   const surface: ScaleMutableSurface = {
     session,
     // Flushes first: a commit made straight on the session — undo, or another editor
@@ -2323,7 +2851,7 @@ export function mountPaginatedSurface(
     },
 
     navigate(command, extend = false) {
-      const moved = navigateInActiveScope(
+      let moved = navigateInActiveScope(
         currentLayout,
         selection.head,
         command,
@@ -2333,6 +2861,33 @@ export function mountPaginatedSurface(
         measurer
       );
       if (!moved) return;
+      if (tocIdAtParagraph(moved.position.paragraphId) !== null) {
+        if (extend) return;
+        const backwards = new Set<NavigationCommand>([
+          'left',
+          'wordLeft',
+          'lineStart',
+          'up',
+          'pageUp',
+        ]);
+        const escape: NavigationCommand = backwards.has(command) ? 'left' : 'right';
+        const limit = tocParagraphIds().size + 1;
+        for (let step = 0; step < limit; step += 1) {
+          const next = navigateInActiveScope(
+            currentLayout,
+            moved.position,
+            escape,
+            moved.desiredX,
+            hfScope?.getActive() ?? null,
+            noteScopeId(),
+            measurer
+          );
+          if (!next || next.position.paragraphId === moved.position.paragraphId) return;
+          moved = next;
+          if (tocIdAtParagraph(moved.position.paragraphId) === null) break;
+        }
+        if (tocIdAtParagraph(moved.position.paragraphId) !== null) return;
+      }
       desiredX = moved.desiredX;
       // Note continuations share one EditorScope across pages: retarget the visual
       // occurrence before selection/caret paint so the DOM host follows geometry.
@@ -2471,6 +3026,17 @@ export function mountPaginatedSurface(
 
     hyperlinks,
     contentControls: contentControlsOps,
+    canInsertToc,
+    insertToc,
+    canRefreshToc,
+    refreshToc,
+    isInsideToc: (paragraphId) =>
+      detectBodyTocs(session.part()).some(
+        (toc) =>
+          toc.beginParagraphId === paragraphId ||
+          toc.endParagraphId === paragraphId ||
+          toc.resultParagraphIds.includes(paragraphId)
+      ),
     retainSelection: () => {
       retainedSelection = selection;
       renderOverlay();
@@ -2690,6 +3256,12 @@ export function mountPaginatedSurface(
       pointer?.destroy();
       tableInteraction.destroy();
       navigation.destroy();
+      pagesLayer.removeEventListener('contextmenu', onTocContextMenu);
+      detachMenuDismiss?.();
+      detachMenuDismiss = null;
+      pagesLayer.removeEventListener('click', onTocRowClick);
+      pagesLayer.removeEventListener('pointermove', onTocPointerMove);
+      pagesLayer.removeEventListener('pointerleave', onTocPointerLeave);
       // Drop pending layout work and stop listening BEFORE the DOM goes, or a commit from
       // another editor sharing this store would paint into a detached container.
       scheduler.cancel();
@@ -3039,6 +3611,7 @@ export function mountPaginatedSurface(
       },
       exitHeaderFooter: () => hfScope?.exitHeaderFooter(),
       onContentControlWidget: (controlId, kind) => openContentControlWidget(controlId, kind),
+      isReadOnlyParagraph: (paragraphId) => tocIdAtParagraph(paragraphId) !== null,
     },
     options.pointer ? { mode: options.pointer } : {}
   );

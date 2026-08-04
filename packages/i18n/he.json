@@ -962,7 +962,10 @@
     "runPropertiesChanged": null
   },
   "toc": {
-    "updatePrompt": null
+    "updatePrompt": null,
+    "update": "עדכון תוכן העניינים",
+    "entireTable": "עדכון הטבלה כולה",
+    "pageNumbersOnly": "עדכון מספרי עמודים בלבד"
   },
   "app": {
     "name": null,

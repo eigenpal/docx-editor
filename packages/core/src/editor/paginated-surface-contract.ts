@@ -121,6 +121,13 @@ export interface PaginatedSurfaceOptions {
   readonly tableInteractionLabel?: (
     key: 'table.insertRowBelow' | 'table.insertColumnRight'
   ) => string;
+  /** Localized labels for contextual TOC refresh furniture. */
+  readonly tocLabels?: {
+    readonly title: string;
+    readonly update: string;
+    readonly entireTable: string;
+    readonly pageNumbersOnly: string;
+  };
 }
 
 /**
@@ -495,6 +502,16 @@ export interface PaginatedSurface {
    * Show-all and form-fill are surface chrome and never reflow layout.
    */
   readonly contentControls: ContentControlOps;
+  /** Whether the addressed (or caret-local) body TOC can be refreshed. */
+  canRefreshToc(tocId?: string): boolean;
+  /** Whether a generated body TOC can be inserted before the caret paragraph. */
+  canInsertToc(): boolean;
+  /** Insert and populate a generated body TOC before the caret paragraph. */
+  insertToc(): boolean;
+  /** Refresh cached TOC entries and/or page numbers through the two-pass layout pipeline. */
+  refreshToc(tocId?: string, mode?: 'entire' | 'pageNumbers'): boolean;
+  /** Whether a body paragraph belongs to a detected TOC boundary or cached result. */
+  isInsideToc(paragraphId: string): boolean;
   /**
    * Bookmark jumps and the ONE external-activation gate. A host's popover "open" action
    * calls `openExternal`; nothing else in the engine may call `window.open`.

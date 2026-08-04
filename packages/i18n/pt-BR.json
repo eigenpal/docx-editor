@@ -962,7 +962,10 @@
     "runPropertiesChanged": null
   },
   "toc": {
-    "updatePrompt": null
+    "updatePrompt": null,
+    "update": "Atualizar sumário",
+    "entireTable": "Atualizar tabela inteira",
+    "pageNumbersOnly": "Atualizar apenas números de página"
   },
   "app": {
     "name": null,

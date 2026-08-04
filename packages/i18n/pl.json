@@ -962,7 +962,10 @@
     "runPropertiesChanged": null
   },
   "toc": {
-    "updatePrompt": null
+    "updatePrompt": null,
+    "update": "Aktualizuj spis treści",
+    "entireTable": "Aktualizuj cały spis",
+    "pageNumbersOnly": "Aktualizuj tylko numery stron"
   },
   "app": {
     "name": null,

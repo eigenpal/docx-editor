@@ -962,7 +962,10 @@
     "runPropertiesChanged": null
   },
   "toc": {
-    "updatePrompt": null
+    "updatePrompt": null,
+    "update": "विषय-सूची अपडेट करें",
+    "entireTable": "पूरी तालिका अपडेट करें",
+    "pageNumbersOnly": "केवल पृष्ठ संख्याएँ अपडेट करें"
   },
   "app": {
     "name": null,

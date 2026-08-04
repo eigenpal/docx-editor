@@ -962,7 +962,10 @@
     "runPropertiesChanged": null
   },
   "toc": {
-    "updatePrompt": null
+    "updatePrompt": null,
+    "update": "İçindekiler tablosunu güncelle",
+    "entireTable": "Tüm tabloyu güncelle",
+    "pageNumbersOnly": "Yalnızca sayfa numaralarını güncelle"
   },
   "app": {
     "name": null,

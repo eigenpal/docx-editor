@@ -137,15 +137,11 @@ describe('toolbar command wiring (task M4.0)', () => {
 
   test('an unwired slot is disabled without ever calling the editor', () => {
     const { editor, calls } = fakeEditor(ALLOW);
-    // `insert.toc` has no command and no probe: genuinely unwired, and it says so without
-    // troubling the engine. (`text.highlight` graduated to a value-typed slot, `text.link` to
-    // a chrome-driven one, `review.comments` now toggles the review pane and
-    // `list.lineSpacing` got its own picker; all of them ASK the engine, which is the point.)
-    const state = toolbarCommandState(editor, 'insert.toc');
+    const state = toolbarCommandState(editor, 'insert.sectionBreakContinuous');
     expect(state.enabled).toBe(false);
     expect(state.disabledReason).toBe('not wired to an editor command');
     expect(calls.can).toEqual([]);
-    expect(runToolbarCommand(editor, 'insert.toc')).toEqual({
+    expect(runToolbarCommand(editor, 'insert.sectionBreakContinuous')).toEqual({
       ok: false,
       code: 'unsupported',
       reason: 'not wired to an editor command',
@@ -197,12 +193,9 @@ describe('toolbar command wiring (task M4.0)', () => {
   });
 
   test("a slot with NO command shape still says so in chrome's words, honestly", () => {
-    // `insert.toc` has no entry in the edit vocabulary at all, so there is nothing to
-    // probe with and no engine opinion to quote. Chrome answers, and says which of the
-    // two situations it is.
     const { editor, calls } = fakeEditor(ALLOW);
-    expect(chromeProbeForSlot('insert.toc')).toBeNull();
-    expect(toolbarCommandState(editor, 'insert.toc').disabledReason).toBe(
+    expect(chromeProbeForSlot('insert.sectionBreakContinuous')).toBeNull();
+    expect(toolbarCommandState(editor, 'insert.sectionBreakContinuous').disabledReason).toBe(
       'not wired to an editor command'
     );
     expect(calls.can).toEqual([]);

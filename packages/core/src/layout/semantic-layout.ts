@@ -76,6 +76,11 @@ import {
 } from './semantic-table-layout.ts';
 import { annotateTableFragmentGeometry } from './semantic-table-interaction.ts';
 import { storyBlocks } from './story-roots.ts';
+import {
+  emptyTocPlaceholderParagraphIds,
+  emptyTocSuppressedResultParagraphIds,
+  tocFieldChromeParagraphIds,
+} from './toc-layout.ts';
 import { type HeaderFooterStoryLayout } from './hf-layout.ts';
 import {
   DEFAULT_SECTION_PROPERTIES,
@@ -238,6 +243,21 @@ export interface SemanticLayoutOptions {
   readonly pageBottomReserves?: ReadonlyMap<number, number>;
   /** Derived note marks for body/note projection (provisional or final). */
   readonly noteMarks?: import('./note-projection.ts').NoteMarkContext;
+  /**
+   * Cross-paragraph TOC field begin/end paragraph ids. Empty chrome on these ids suppresses
+   * the caret placeholder line in layout while the tree nodes stay intact for refresh/save.
+   */
+  readonly tocFieldChromeParagraphIds?: ReadonlySet<string>;
+  /**
+   * Begin-paragraph ids of empty TOCs. These keep one layout line so paint can host an
+   * identifiable empty-TOC furniture placeholder (overrides chrome suppression).
+   */
+  readonly emptyTocPlaceholderParagraphIds?: ReadonlySet<string>;
+  /**
+   * Empty result-paragraph ids inside empty TOCs. Suppressed like field chrome so blank
+   * cached rows do not stack under the empty placeholder.
+   */
+  readonly emptyTocSuppressedResultParagraphIds?: ReadonlySet<string>;
 }
 
 /** Prepass results by block node, valid while the width and producer both hold. */
@@ -297,6 +317,12 @@ export function layoutSemanticDocument(
   const optionsWithControlContext: SemanticLayoutOptions = {
     ...options,
     producer: `${options.producer ?? 'unversioned-measurer'}|cc:${controlToken}`,
+    tocFieldChromeParagraphIds:
+      options.tocFieldChromeParagraphIds ?? tocFieldChromeParagraphIds(part),
+    emptyTocPlaceholderParagraphIds:
+      options.emptyTocPlaceholderParagraphIds ?? emptyTocPlaceholderParagraphIds(part),
+    emptyTocSuppressedResultParagraphIds:
+      options.emptyTocSuppressedResultParagraphIds ?? emptyTocSuppressedResultParagraphIds(part),
   };
   // Full-body list resolve so counters continue across sections and table cells.
   const optionsWithLists = withResolvedListItems(optionsWithControlContext, blocks);
@@ -403,6 +429,9 @@ function layoutBlocksWithGeometry(
   // it into `producer` is what makes a mode switch invalidate the break cache AND the session
   // checkpoints without a `ModelChange`: the document did not change, the projection of it did.
   const displayMode = options.displayMode ?? DEFAULT_REVISION_DISPLAY_MODE;
+  const tocChromeParagraphIds = options.tocFieldChromeParagraphIds;
+  const emptyTocPlaceholderIds = options.emptyTocPlaceholderParagraphIds;
+  const emptyTocSuppressedResultIds = options.emptyTocSuppressedResultParagraphIds;
   const producer =
     (options.producer ?? 'unversioned-measurer') +
     (styleCascade ? `|sc:${styleCascade.cacheToken}` : '') +
@@ -827,15 +856,27 @@ function layoutBlocksWithGeometry(
 
   // Shared by placement and by the `w:keepNext` lookahead, which needs the height of the
   // blocks it keeps WITH. Both read the same cache entry, so the lookahead re-measures nothing.
-  const breakBlock = (entry: PreparedParagraph, startOffset = 0) =>
-    breakParagraph(
+  const breakBlock = (entry: PreparedParagraph, startOffset = 0) => {
+    const paragraphId = entry.paragraph.id;
+    const keepEmptyTocPlaceholder = emptyTocPlaceholderIds?.has(paragraphId) ?? false;
+    const suppressChrome =
+      !keepEmptyTocPlaceholder &&
+      ((tocChromeParagraphIds?.has(paragraphId) ?? false) ||
+        (emptyTocSuppressedResultIds?.has(paragraphId) ?? false));
+    return breakParagraph(
       entry.paragraph,
-      entry.paragraph.id,
+      paragraphId,
       entry.indent.left,
       entry.available,
       measurer,
       cache,
-      cache ? (startOffset === 0 ? entry.key : `${entry.key}|from:${startOffset}`) : null,
+      // A suppressed chrome paragraph publishes no line, so it takes no cache entry: a cached
+      // hit would hand back the placeholder line the suppression exists to remove.
+      cache && !suppressChrome
+        ? startOffset === 0
+          ? entry.key
+          : `${entry.key}|from:${startOffset}`
+        : null,
       entry.inheritedRunProperties,
       entry.tabStops,
       undefined,
@@ -852,8 +893,10 @@ function layoutBlocksWithGeometry(
         ...(options.projectLink ? { projectLink: options.projectLink } : {}),
         displayMode,
         ...(options.noteMarks ? { noteMarks: options.noteMarks } : {}),
+        ...(suppressChrome ? { suppressEmptyPlaceholderLine: true } : {}),
       }
     );
+  };
 
   /**
    * Lay out one top-level table with OOXML-aligned row pagination.
@@ -1240,6 +1283,10 @@ function layoutBlocksWithGeometry(
     }
 
     let lines = breakBlock(entry);
+    if (lines.length === 0) {
+      // Cross-paragraph TOC field chrome: tree preserved, no painted row or flow height.
+      continue;
+    }
     const rebreakInCurrentColumn = (startOffset: number): void => {
       const next = prepareBlock(paragraph, columnWidth());
       if (next.kind !== 'paragraph') return;

@@ -109,6 +109,14 @@ import {
   selectionsMatch,
   snapshotsEqual,
 } from './docx-editor-support.ts';
+import {
+  createT,
+  deepMerge,
+  en,
+  locales,
+  type LocaleCode,
+  type LocaleStrings,
+} from '@docx-editor.dev/i18n';
 import { execEditorCommand } from './docx-editor-exec.ts';
 import {
   currentPage as currentPageOf,
@@ -186,6 +194,18 @@ function toContentPixels(box: { x: number; y: number; width: number; height: num
 const SCOPE_BODY: EditorScope = Object.freeze({ kind: 'body' as const });
 
 export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
+  const localeCode =
+    config.locale && config.locale in locales ? (config.locale as LocaleCode) : ('en' as const);
+  const t = createT(
+    deepMerge(en, localeCode === 'en' ? undefined : locales[localeCode]) as LocaleStrings,
+    localeCode
+  );
+  const tocLabels = {
+    title: t('toolbar.tableOfContents'),
+    update: t('toc.update'),
+    entireTable: t('toc.entireTable'),
+    pageNumbersOnly: t('toc.pageNumbersOnly'),
+  };
   let container: HTMLElement | null = config.container ?? null;
   /** Document bytes waiting for a container — set when constructed or loaded detached. */
   let pendingBytes: Uint8Array | null = null;
@@ -356,6 +376,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
         bump();
         emitSelectionChange();
       },
+      tocLabels,
       onChange: (state) => {
         // The mount-time render reports before `surface` is assigned; nothing observable
         // has changed at that point, so it is not a selection change.
@@ -1510,7 +1531,9 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
             (query as { container?: ContainerRef }).container
           ) as unknown as EditorQueryResults[K];
         case 'isInsideToc':
-          return false as EditorQueryResults[K];
+          return (
+            surface ? surface.isInsideToc(surface.state().selection.head.paragraphId) : false
+          ) as EditorQueryResults[K];
         case 'hyperlinkAt':
           return hyperlinkAtOf(surface) as EditorQueryResults[K];
         case 'contentControls':
