@@ -25,7 +25,13 @@ import {
   type ZipRejection,
   DEFAULT_ZIP_LIMITS,
 } from './zip.ts';
-import { readXml, type XmlLimits, type XmlNode } from './xml-reader.ts';
+import {
+  readXml,
+  XML_HARD_MAX_BYTES,
+  type XmlLimits,
+  type XmlNode,
+  type XmlRejection,
+} from './xml-reader.ts';
 import { normalizePartName, type NameRejection } from './opc-names.ts';
 import {
   buildRelationshipSet,
@@ -52,6 +58,50 @@ const OFFICE_DOCUMENT_REL_TYPE =
 
 /** MIME types read into canonical trees. Anything else stays bytes (media, fonts, ...). */
 const XML_CONTENT_TYPE_RE = /(?:\/xml|\+xml)$/i;
+
+type XmlBytesResult =
+  | { readonly ok: true; readonly xml: string }
+  | { readonly ok: false; readonly reason: XmlRejection };
+
+/**
+ * Decode the encodings XML processors are required to recognize without an encoding hint.
+ * The raw-byte ceiling is checked before decoding so UTF-16 input cannot allocate past the
+ * package reader's configured XML budget.
+ */
+function decodeXmlBytes(bytes: Uint8Array, limits?: XmlLimits): XmlBytesResult {
+  const configuredMax = limits?.maxBytes ?? XML_HARD_MAX_BYTES;
+  if (!Number.isFinite(configuredMax) || !Number.isInteger(configuredMax) || configuredMax < 0) {
+    return { ok: false, reason: 'invalid-limits' };
+  }
+  if (bytes.byteLength > Math.min(configuredMax, XML_HARD_MAX_BYTES)) {
+    return { ok: false, reason: 'too-large' };
+  }
+
+  try {
+    if (bytes[0] === 0xff && bytes[1] === 0xfe) {
+      return {
+        ok: true,
+        xml: new TextDecoder('utf-16le', { fatal: true }).decode(bytes.subarray(2)),
+      };
+    }
+    if (bytes[0] === 0xfe && bytes[1] === 0xff) {
+      return {
+        ok: true,
+        xml: new TextDecoder('utf-16be', { fatal: true }).decode(bytes.subarray(2)),
+      };
+    }
+    if (bytes[0] === 0x3c && bytes[1] === 0x00 && bytes[2] === 0x3f && bytes[3] === 0x00) {
+      return { ok: true, xml: new TextDecoder('utf-16le', { fatal: true }).decode(bytes) };
+    }
+    if (bytes[0] === 0x00 && bytes[1] === 0x3c && bytes[2] === 0x00 && bytes[3] === 0x3f) {
+      return { ok: true, xml: new TextDecoder('utf-16be', { fatal: true }).decode(bytes) };
+    }
+    const offset = bytes[0] === 0xef && bytes[1] === 0xbb && bytes[2] === 0xbf ? 3 : 0;
+    return { ok: true, xml: strFromU8(bytes.subarray(offset)) };
+  } catch {
+    return { ok: false, reason: 'parse-error' };
+  }
+}
 
 export interface OoxmlPackageLimits {
   readonly zip?: ZipLimits;
@@ -204,7 +254,9 @@ export function readOoxmlPackage(
 
   const contentTypeBytes = zip.entries.get(CONTENT_TYPES_PART);
   if (!contentTypeBytes) return { ok: false, reason: 'no-content-types' };
-  const contentTypes = readContentTypes(strFromU8(contentTypeBytes), limits.xml);
+  const decodedContentTypes = decodeXmlBytes(contentTypeBytes, limits.xml);
+  if (!decodedContentTypes.ok) return { ok: false, reason: decodedContentTypes.reason };
+  const contentTypes = readContentTypes(decodedContentTypes.xml, limits.xml);
   if (!contentTypes) return { ok: false, reason: 'bad-content-types' };
 
   const maxRelationships = limits.maxRelationships ?? DEFAULT_OOXML_PACKAGE_LIMITS.maxRelationships;
@@ -215,7 +267,9 @@ export function readOoxmlPackage(
   for (const [partName, data] of zip.entries) {
     const owner = relsOwner(partName);
     if (owner === null) continue;
-    const parsed = readXml(strFromU8(data), limits.xml);
+    const decoded = decodeXmlBytes(data, limits.xml);
+    if (!decoded.ok) return { ok: false, reason: decoded.reason, detail: partName };
+    const parsed = readXml(decoded.xml, limits.xml);
     if (!parsed.ok) return { ok: false, reason: parsed.reason, detail: partName };
     for (const element of collectElements(parsed.nodes, 'Relationship')) {
       if (records.length >= maxRelationships) {
@@ -304,11 +358,9 @@ export function readOoxmlPackage(
         detail: `${partName}: ${normalized.reason}`,
       };
     }
-    const read = readOoxmlPart(
-      strFromU8(data),
-      { name: normalized.partName, contentType },
-      limits.xml
-    );
+    const decoded = decodeXmlBytes(data, limits.xml);
+    if (!decoded.ok) return { ok: false, reason: decoded.reason, detail: partName };
+    const read = readOoxmlPart(decoded.xml, { name: normalized.partName, contentType }, limits.xml);
     if (!read.ok) return { ok: false, reason: read.reason, detail: partName };
     parts.set(normalized.partName, read.part);
   }
