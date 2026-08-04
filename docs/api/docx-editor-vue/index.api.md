@@ -7,6 +7,9 @@
 import { ComponentOptionsMixin } from 'vue';
 import { ComponentProvideOptions } from 'vue';
 import { DefineComponent } from 'vue';
+import { DisplayItem } from '../../core/src/contracts/geometry';
+import { DisplayPage } from '../../core/src/contracts/geometry';
+import { DocPoint } from '../../core/src/contracts/geometry';
 import { ExtractPropTypes } from 'vue';
 import { PropType } from 'vue';
 import { PublicProps } from 'vue';
@@ -184,6 +187,12 @@ export const DEFERRED_DIALOGS: readonly ["findReplace", "hyperlink", "insertImag
 // @public (undocumented)
 export type DeferredDialogId = (typeof DEFERRED_DIALOGS)[number];
 
+export { DisplayItem }
+
+export { DisplayPage }
+
+export { DocPoint }
+
 // @public
 export interface DocxDocument {
     // (undocumented)
@@ -260,9 +269,9 @@ onChange?: ((_change: DocumentChange) => any) | undefined;
 onReady?: ((_editor: Editor) => any) | undefined;
 onFontError?: ((_error: EditorFontError) => any) | undefined;
 }>, {
-fonts: FontConfiguration | FontConfigurationFragment;
-document: DocumentSource;
 author: string;
+document: DocumentSource;
+fonts: FontConfiguration | FontConfigurationFragment;
 zoom: number;
 mode: EditorMode;
 locale: string;
