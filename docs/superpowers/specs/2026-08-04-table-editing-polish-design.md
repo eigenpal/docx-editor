@@ -46,22 +46,22 @@ targeting.
 
 ## Border removal
 
-The layout cascade remains unchanged: a cell-level `none` border can yield to a
-table-level outer frame. This matches Word and prevents partial cell formatting from
-silently deleting table formatting.
+The comprehensive Word fixture provides the regression oracle. Its borderless table
+retains six table-level `single` borders while every cell edge has `w:val="none"`;
+Microsoft Word paints no interior lines and no perimeter frame. The current layout
+cascade incorrectly lets the table-level frame show through perimeter cell `none`.
 
 For `setTableBorders` with `scope: 'none'`:
 
-- A full-table `target: 'all'` operation clears all selected cell edges and writes direct
-  `w:tblPr/w:tblBorders` `val="none"` overrides for `top`, `left`, `bottom`, `right`,
-  `insideH`, and `insideV`.
-- An `outside` operation clears table-level perimeter sides only when the selection hull
-  reaches those table edges.
-- Partial selections keep cell-scoped behavior and do not erase table borders outside
-  their hull.
+- The existing cell-level write remains the complete authoring operation.
+- An explicit cell edge with `w:val="none"` suppresses the table-level border on both
+  interior and perimeter sides.
+- An omitted cell edge continues to inherit the matching `tblBorders` side.
+- Partial selections suppress only the cell edges they explicitly clear. The operation
+  does not rewrite unrelated `tblPr` content.
 
-Property patching must preserve unrelated `tblPr` children, unknown attributes,
-namespace bindings, and untouched border-side payload.
+This fix changes border resolution and paint, not the saved OOXML shape. It preserves the
+fixture's source and avoids inventing table-level overrides that Word does not require.
 
 ## Verification
 
@@ -77,4 +77,7 @@ Tests will prove:
 - undo restores the previous cell and table border properties atomically;
 - save and reopen preserve the borderless result and unrelated OOXML.
 
-The existing outer-border cascade test stays unchanged.
+The comprehensive fixture's **18.5 Borderless Table (Invisible Grid)** section must
+produce no border records and no painted border elements. Existing synthetic tests that
+expect perimeter cell `none` to yield to `tblBorders` will be corrected to match the Word
+fixture.
