@@ -626,6 +626,7 @@ export function ComposedEditorDemo({ fixtureUrl }: { fixtureUrl: string }) {
                   the popover — it scrolls with the document rather than chasing it. */}
               <DocxEditor.Review />
             </DocxEditor.Viewport>
+            <DocxEditor.PageNumber />
             {/* Floating diagnostics chrome, above the overlay panels. */}
             <PerfHud />
           </div>
