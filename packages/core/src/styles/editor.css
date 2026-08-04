@@ -3193,89 +3193,75 @@ a.docx-hyperlink:focus-visible {
   cursor: default;
 }
 
-/* ── Header/footer scope chrome (`docx-hf-chrome` family) — React overlay while editing
- * page furniture. UI-only; no document canvas geometry. */
-.docx-hf-chrome {
-  position: sticky;
-  top: 0;
+/* ── Scoped story chrome ──────────────────────────────────────────────────────────────
+ * A quiet label rail follows the active header/footer/note story. React keeps it outside
+ * the engine-painted subtree, while useScopedChromeAnchor places it at the story boundary. */
+.docx-context-bar {
+  position: absolute;
   display: flex;
-  flex-wrap: wrap;
   align-items: center;
-  gap: 8px 12px;
-  padding: 8px 12px;
-  margin: 0 auto 8px;
-  max-width: 100%;
-  background: var(--doc-surface);
-  border: 1px solid var(--doc-border);
-  border-radius: 6px;
-  box-shadow: 0 1px 4px var(--doc-shadow);
-  color: var(--doc-text);
-}
-
-.docx-hf-chrome__title-block {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  min-width: 0;
-  flex: 1 1 160px;
-}
-
-.docx-hf-chrome__title {
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--doc-text);
-}
-
-.docx-hf-chrome__inheritance {
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 24px;
+  box-sizing: border-box;
+  padding: 0 2px 5px;
+  color: var(--doc-primary);
+  background: transparent;
+  border-bottom: 1px dotted var(--doc-primary);
   font-size: 12px;
-  color: var(--doc-text-muted);
+  white-space: nowrap;
+  pointer-events: auto;
 }
 
-.docx-hf-chrome__inheritance-hint {
-  display: block;
-  font-size: 11px;
-  color: var(--doc-text-subtle);
-}
-
-.docx-hf-chrome__inserts {
-  display: inline-flex;
-  align-items: center;
-  gap: 2px;
-  flex: none;
-}
-
-.docx-hf-chrome__actions {
-  display: inline-flex;
+.docx-context-bar__label {
+  display: flex;
+  min-width: 0;
   align-items: center;
   gap: 8px;
-  flex: none;
+}
+
+.docx-context-bar__title {
+  min-width: 0;
+  overflow: hidden;
+  font-weight: 600;
+  text-overflow: ellipsis;
+}
+
+.docx-context-bar__status {
+  max-width: 150px;
+  overflow: hidden;
+  color: var(--doc-text-muted);
+  font-size: 11px;
+  font-weight: 400;
+  text-overflow: ellipsis;
+}
+
+.docx-context-bar__options-trigger {
+  padding: 2px 0 2px 8px;
+  font: inherit;
+  font-weight: 500;
+  color: var(--doc-primary);
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+}
+
+.docx-context-bar__options-trigger::after {
+  content: ' ▾';
+  font-size: 9px;
+}
+
+.docx-context-bar__options-trigger:hover {
+  text-decoration: underline;
+}
+
+.docx-context-bar__options-trigger:focus-visible {
+  outline: 2px solid var(--doc-focus-ring);
+  outline-offset: 2px;
 }
 
 .docx-hf-chrome__options {
   position: relative;
-}
-
-.docx-hf-chrome__options-trigger,
-.docx-hf-chrome__close {
-  font: inherit;
-  font-size: 13px;
-  color: var(--doc-text);
-  background: var(--doc-bg-input);
-  border: 1px solid var(--doc-border-input);
-  border-radius: 4px;
-  padding: 4px 10px;
-  cursor: pointer;
-}
-
-.docx-hf-chrome__options-trigger:hover:not(:disabled),
-.docx-hf-chrome__close:hover:not(:disabled) {
-  background: var(--doc-bg-hover);
-}
-
-.docx-hf-chrome__options-trigger:disabled,
-.docx-hf-chrome__close:disabled {
-  opacity: 0.5;
-  cursor: default;
 }
 
 .docx-hf-chrome__options-menu {
@@ -3357,6 +3343,177 @@ a.docx-hyperlink:focus-visible {
 .docx-hf-chrome__unit {
   font-size: 11px;
   color: var(--doc-text-muted);
+}
+
+.docx-note-properties {
+  position: fixed;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  box-sizing: border-box;
+  padding: 20px;
+  background: var(--doc-overlay);
+}
+
+.docx-note-properties__panel {
+  width: min(620px, 100%);
+  max-height: calc(100vh - 40px);
+  overflow: auto;
+  color: var(--doc-text);
+  background: var(--doc-surface);
+  border: 1px solid var(--doc-border);
+  border-radius: 10px;
+  box-shadow: 0 12px 36px var(--doc-shadow-strong);
+}
+
+.docx-note-properties__title {
+  margin: 0;
+  padding: 18px 20px 14px;
+  font-size: 16px;
+  font-weight: 600;
+  border-bottom: 1px solid var(--doc-border);
+}
+
+.docx-note-properties__body {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 18px 20px;
+}
+
+.docx-note-properties__scope {
+  display: grid;
+  grid-template-columns: 130px minmax(0, 1fr);
+  align-items: center;
+  gap: 12px;
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.docx-note-properties__section {
+  min-width: 0;
+  margin: 0;
+  padding: 14px 16px 16px;
+  background: var(--doc-bg-subtle);
+  border: 1px solid var(--doc-border);
+  border-radius: 8px;
+}
+
+.docx-note-properties__legend {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 5px;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.docx-note-properties__badge {
+  padding: 2px 7px;
+  font-size: 10px;
+  font-weight: 500;
+  color: var(--doc-text-muted);
+  background: var(--doc-surface);
+  border: 1px solid var(--doc-border);
+  border-radius: 9999px;
+}
+
+.docx-note-properties__fields {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.docx-note-properties__field {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--doc-text-muted);
+}
+
+.docx-note-properties__select {
+  width: 100%;
+  min-height: 34px;
+  box-sizing: border-box;
+  padding: 6px 30px 6px 9px;
+  font: inherit;
+  font-size: 13px;
+  color: var(--doc-text);
+  background: var(--doc-surface);
+  border: 1px solid var(--doc-border-input);
+  border-radius: 5px;
+}
+
+.docx-note-properties__select:focus-visible {
+  border-color: var(--doc-primary);
+  outline: 2px solid var(--doc-focus-ring);
+  outline-offset: 1px;
+}
+
+.docx-note-properties__footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 12px 20px 16px;
+  border-top: 1px solid var(--doc-border);
+}
+
+.docx-note-properties__button {
+  min-height: 32px;
+  padding: 6px 14px;
+  font: inherit;
+  font-size: 13px;
+  color: var(--doc-text);
+  background: var(--doc-surface);
+  border: 1px solid var(--doc-border);
+  border-radius: 5px;
+  cursor: pointer;
+}
+
+.docx-note-properties__button:hover {
+  background: var(--doc-bg-hover);
+}
+
+.docx-note-properties__button--primary {
+  color: var(--doc-on-primary);
+  background: var(--doc-primary);
+  border-color: var(--doc-primary);
+}
+
+.docx-note-properties__button--primary:hover {
+  background: var(--doc-primary-hover);
+  border-color: var(--doc-primary-hover);
+}
+
+@media (max-width: 640px) {
+  .docx-context-bar__status {
+    display: none;
+  }
+
+  .docx-context-bar {
+    max-width: calc(100vw - 16px) !important;
+  }
+
+  .docx-note-properties {
+    padding: 12px;
+  }
+
+  .docx-note-properties__panel {
+    max-height: calc(100vh - 24px);
+  }
+
+  .docx-note-properties__scope,
+  .docx-note-properties__fields {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media print {
+  .docx-context-bar {
+    display: none !important;
+  }
 }
 
 /* ── Vue registry-toolbar (`ep-toolbar` family) additions for the same shapes:

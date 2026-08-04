@@ -80,6 +80,7 @@ export function createNoteOps(deps: {
   setSelection: (next: SemanticSelection) => void;
   noteModelMoved: () => void;
   render: () => void;
+  revealNote: (scopeId: string) => number | null;
   notify: () => void;
   lastRejection: () => string | null;
   setLastRejection: (reason: string | null) => void;
@@ -147,6 +148,7 @@ export function createNoteOps(deps: {
     }
     deps.noteModelMoved();
     deps.render();
+    activeNotePageIndex ??= deps.revealNote(activeNote.id);
     deps.notify();
     return true;
   };

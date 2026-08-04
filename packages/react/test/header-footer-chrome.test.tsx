@@ -15,6 +15,7 @@ import { DocxEditorViewport } from '../src/editor/DocxEditorViewport.tsx';
 import { DocxEditorContent } from '../src/editor/DocxEditorContent.tsx';
 import { DocxEditorHeaderFooterChrome } from '../src/editor/DocxEditorHeaderFooter.tsx';
 import { useHeaderFooterState } from '../src/editor/useHeaderFooterState.ts';
+import { useScopedChromeAnchor } from '../src/editor/useScopedChromeAnchor.ts';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 const R = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships';
@@ -22,6 +23,62 @@ const CT = 'http://schemas.openxmlformats.org/package/2006/content-types';
 const REL = 'http://schemas.openxmlformats.org/package/2006/relationships';
 
 const p = (text: string) => `<w:p><w:r><w:t>${text}</w:t></w:r></w:p>`;
+
+function rect(left: number, top: number, width: number, height: number): DOMRect {
+  return {
+    x: left,
+    y: top,
+    left,
+    top,
+    width,
+    height,
+    right: left + width,
+    bottom: top + height,
+    toJSON: () => ({}),
+  } as DOMRect;
+}
+
+const findActiveProbe = (viewport: HTMLElement): HTMLElement | null =>
+  viewport.querySelector<HTMLElement>('[data-docx-hf-active]');
+
+function setStoryRect(node: HTMLDivElement | null, left: number, top: number, width: number): void {
+  if (!node) return;
+  node.getBoundingClientRect = () => {
+    const viewport = node.closest<HTMLElement>('.docx-editor__scroll-container');
+    return rect(left - (viewport?.scrollLeft ?? 0), top - (viewport?.scrollTop ?? 0), width, 30);
+  };
+}
+
+function AnchorProbe({ active }: { active: 'first' | 'second' }): ReactNode {
+  const anchor = useScopedChromeAnchor(findActiveProbe, 'story-label');
+  return (
+    <div
+      className="docx-editor__scroll-container"
+      ref={(node) => {
+        if (!node) return;
+        node.getBoundingClientRect = () => rect(0, 0, 800, 600);
+        Object.defineProperty(node, 'clientWidth', { value: 800, configurable: true });
+      }}
+    >
+      <div className="docx-paginated-surface">
+        {active === 'first' ? (
+          <div
+            key="first"
+            data-docx-hf-active=""
+            ref={(node) => setStoryRect(node, 120, 80, 500)}
+          />
+        ) : (
+          <div
+            key="second"
+            data-docx-hf-active=""
+            ref={(node) => setStoryRect(node, 420, 280, 320)}
+          />
+        )}
+      </div>
+      <div ref={anchor.ref} data-testid="anchor-probe" style={anchor.style} />
+    </div>
+  );
+}
 
 function docxWithHeader(headerText = 'Hdr'): Uint8Array {
   return zipSync({
@@ -96,9 +153,9 @@ function mountChrome(
         instance = editor as DocxEditorInstance;
       }}
     >
-      <DocxEditorHeaderFooterChrome />
       {extra}
       <DocxEditorViewport>
+        <DocxEditorHeaderFooterChrome />
         <DocxEditorContent />
       </DocxEditorViewport>
     </DocxEditorRoot>
@@ -123,16 +180,58 @@ describe('DocxEditor.HeaderFooterChrome', () => {
     expect(view.queryByTestId('docx-hf-chrome')).toBeNull();
   });
 
-  test('shows region and section after editHeaderFooter', async () => {
+  test('story bar follows the focused furniture occurrence', async () => {
+    const view = render(<AnchorProbe active="first" />);
+    await act(async () => {
+      await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+    });
+    expect(view.getByTestId('anchor-probe').style.left).toBe('120px');
+    expect(view.getByTestId('anchor-probe').style.top).toBe('48px');
+
+    await act(async () => {
+      view.rerender(<AnchorProbe active="second" />);
+    });
+    await act(async () => {
+      fireEvent.scroll(view.container.querySelector('.docx-editor__scroll-container')!);
+      await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+    });
+    expect(view.getByTestId('anchor-probe').style.left).toBe('420px');
+  });
+
+  test('story bar scrolls away with its focused occurrence', async () => {
+    const view = render(<AnchorProbe active="first" />);
+    await act(async () => {
+      await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+    });
+    const bar = view.getByTestId('anchor-probe');
+    const initialLeft = bar.style.left;
+    const initialTop = bar.style.top;
+    const viewport = view.container.querySelector('.docx-editor__scroll-container') as HTMLElement;
+
+    viewport.scrollLeft = 50;
+    viewport.scrollTop = 200;
+    await act(async () => {
+      fireEvent.scroll(viewport);
+      await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+    });
+
+    expect(bar.style.left).toBe(initialLeft);
+    expect(bar.style.top).toBe(initialTop);
+  });
+
+  test('shows the active region after editHeaderFooter', async () => {
     const { view, editor } = mountChrome(docxWithHeader());
     await act(async () => {
       const opened = editor().exec({ type: 'editHeaderFooter', position: 'header' });
       expect(opened.ok).toBe(true);
+      await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
     });
     const chrome = view.getByTestId('docx-hf-chrome');
     expect(chrome).toBeTruthy();
+    expect(chrome.style.visibility).toBe('visible');
+    expect(chrome.style.position).toBe('absolute');
     expect(chrome.textContent).toContain('Header');
-    expect(chrome.textContent).toContain('Section 1');
+    expect(chrome.textContent).not.toContain('Section 1');
     expect(chrome.getAttribute('aria-label')).toBe('Header and footer editing');
   });
 
@@ -145,7 +244,7 @@ describe('DocxEditor.HeaderFooterChrome', () => {
     expect(view.getByTestId('docx-hf-inherited').textContent).toContain('Same as previous');
   });
 
-  test('insert slots disabled in body, enabled in scope', async () => {
+  test('options exposes page fields enabled in furniture scope', async () => {
     const { view, editor } = mountChrome(docxWithHeader());
     const pageNumber = () => view.queryByRole('button', { name: 'Insert current page number' });
     expect(pageNumber()).toBeNull();
@@ -153,8 +252,17 @@ describe('DocxEditor.HeaderFooterChrome', () => {
     await act(async () => {
       editor().exec({ type: 'editHeaderFooter', position: 'header' });
     });
-    const button = view.getByRole('button', { name: 'Insert current page number' });
-    expect(button.disabled).toBe(false);
+    await act(async () => {
+      await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+    });
+    const trigger = view.getByRole('button', { name: 'Options', hidden: true });
+    expect(trigger.getAttribute('aria-haspopup')).toBe('menu');
+    fireEvent.click(trigger);
+    const menuItem = view.getByRole('menuitem', {
+      name: 'Insert current page number',
+      hidden: true,
+    }) as HTMLButtonElement;
+    expect(menuItem.disabled).toBe(false);
     const disabled = editor().can({ type: 'insertPageField', field: 'PAGE' });
     expect(disabled.ok).toBe(true);
   });
@@ -181,6 +289,7 @@ describe('DocxEditor.HeaderFooterChrome', () => {
     await act(async () => {
       editor().exec({ type: 'editHeaderFooter', position: 'header' });
     });
+    fireEvent.click(view.getByText('Options'));
     await act(async () => {
       fireEvent.click(view.getByTestId('docx-hf-close'));
     });
@@ -193,6 +302,7 @@ describe('DocxEditor.HeaderFooterChrome', () => {
     await act(async () => {
       editor().exec({ type: 'editHeaderFooter', position: 'header' });
     });
+    fireEvent.click(view.getByText('Options'));
     const close = view.getByTestId('docx-hf-close');
     const event = new MouseEvent('mousedown', { bubbles: true, cancelable: true });
     let prevented = false;

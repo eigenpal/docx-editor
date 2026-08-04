@@ -916,6 +916,7 @@
     "footerDistance": "Footer distance from edge",
     "removeHeader": "Remove header",
     "removeFooter": "Remove footer",
+    "pageNumbers": "Page numbers",
     "insertPageNumber": "Insert current page number",
     "insertTotalPages": "Insert total page count",
     "insertSectionPages": "Insert section page count",

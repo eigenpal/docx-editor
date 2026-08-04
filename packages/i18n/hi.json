@@ -872,7 +872,8 @@
     "insertSectionPages": "अनुभाग पृष्ठ संख्या डालें",
     "insertPageXofY": "पृष्ठ X of Y डालें",
     "pageXofYLabel": "पृष्ठ",
-    "pageXofYSeparator": "में से"
+    "pageXofYSeparator": "में से",
+    "pageNumbers": null
   },
   "image": {
     "placeholder": "चित्र प्लेसहोल्डर",

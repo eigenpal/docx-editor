@@ -869,7 +869,8 @@
     "insertSectionPages": "Inserir contagem de páginas da seção",
     "insertPageXofY": "Inserir página X de Y",
     "pageXofYLabel": "Página",
-    "pageXofYSeparator": "de"
+    "pageXofYSeparator": "de",
+    "pageNumbers": null
   },
   "image": {
     "placeholder": "Espaço reservado para imagem",

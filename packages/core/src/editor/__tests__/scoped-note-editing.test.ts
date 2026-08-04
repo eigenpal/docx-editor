@@ -257,6 +257,28 @@ describe('scoped note editing', () => {
     surface.destroy();
   });
 
+  test('entering a citation reveals its note instead of leaving an off-screen scope open', () => {
+    const scroller = document.createElement('div');
+    scroller.className = 'docx-editor__scroll-container';
+    document.body.append(scroller);
+    const { container, surface } = mount(noteDoc());
+    scroller.append(container);
+    Object.defineProperty(scroller, 'clientHeight', { value: 200, configurable: true });
+    Object.defineProperty(scroller, 'scrollHeight', { value: 10_000, configurable: true });
+    let revealedTop: number | null = null;
+    scroller.scrollTo = ((options: ScrollToOptions) => {
+      revealedTop = options.top ?? null;
+    }) as typeof scroller.scrollTo;
+
+    expect(surface.enterNote('footnote:1')).toBe(true);
+    expect(revealedTop).not.toBeNull();
+    expect(revealedTop!).toBeGreaterThan(0);
+    expect(surface.activeScope()).toEqual({ kind: 'note', id: 'footnote:1' });
+
+    surface.destroy();
+    scroller.remove();
+  });
+
   test('note hyperlink owns footnotes rels; undo restores; no stray body relationship', () => {
     const { surface } = mount(noteDoc('Note text'));
     expect(surface.enterNote('footnote:1')).toBe(true);

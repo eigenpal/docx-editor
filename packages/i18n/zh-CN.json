@@ -869,7 +869,8 @@
     "insertSectionPages": "插入本节页数",
     "insertPageXofY": "插入第 X 页，共 Y 页",
     "pageXofYLabel": "第",
-    "pageXofYSeparator": "页，共"
+    "pageXofYSeparator": "页，共",
+    "pageNumbers": null
   },
   "image": {
     "placeholder": "图片占位符",

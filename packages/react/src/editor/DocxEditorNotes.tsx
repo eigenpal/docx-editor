@@ -7,18 +7,14 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { CSSProperties, MouseEvent, ReactElement } from 'react';
 import type { EditorCommand } from '@docx-editor.dev/core-contract/contracts/editor';
-import { CHROME_GROUPS, chromeSlotId } from '@docx-editor.dev/core-contract/editor';
 import { useTranslation } from '../i18n';
-import type { TranslationKey } from '../i18n';
 import { Z_INDEX } from '../styles/zIndex';
 import { useDocxEditor } from './context';
 import { guardToolbarMousedown } from './toolbar/ToolbarButton';
-import { ToolbarButton } from './toolbar/ToolbarButton';
-import { ToolbarContext } from './toolbar/toolbar-context';
 import { useNotePropertiesState, useNoteScopeState } from './useNoteScopeState';
+import { useScopedChromeAnchor } from './useScopedChromeAnchor';
 
 const NOTE_SCOPE_RE = /^(footnote|endnote):(-?\d{1,10})$/;
-const INSERT_GROUP = CHROME_GROUPS.find((group) => group.id === 'insert')!;
 
 function parseNoteScopeId(
   id: string
@@ -56,6 +52,74 @@ function useCommandGate(command: EditorCommand): { enabled: boolean; reason: str
   }, [editor, command]);
 }
 
+function NoteStoryOptions(props: {
+  readonly onOpenProperties: () => void;
+  readonly onClose: () => void;
+}): ReactElement {
+  const { t } = useTranslation();
+  const [open, setOpen] = useState(false);
+  const menuRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (!open) return undefined;
+    const onDocumentMouseDown = (event: globalThis.MouseEvent) => {
+      if (menuRef.current?.contains(event.target as Node)) return;
+      setOpen(false);
+    };
+    document.addEventListener('mousedown', onDocumentMouseDown);
+    return () => document.removeEventListener('mousedown', onDocumentMouseDown);
+  }, [open]);
+
+  return (
+    <div ref={menuRef} className="docx-hf-chrome__options">
+      <button
+        type="button"
+        className="docx-context-bar__options-trigger"
+        data-testid="docx-notes-options"
+        aria-expanded={open}
+        aria-haspopup="menu"
+        onMouseDown={guardToolbarMousedown}
+        onClick={() => setOpen((value) => !value)}
+      >
+        {t('headerFooter.options')}
+      </button>
+      {open ? (
+        <div
+          className="docx-hf-chrome__options-menu"
+          role="menu"
+          onMouseDown={guardToolbarMousedown}
+        >
+          <button
+            type="button"
+            role="menuitem"
+            className="docx-hf-chrome__menu-item"
+            data-testid="docx-notes-properties"
+            onClick={() => {
+              props.onOpenProperties();
+              setOpen(false);
+            }}
+          >
+            {t('dialogs.footnoteProperties.title')}
+          </button>
+          <div className="docx-hf-chrome__menu-separator" role="separator" />
+          <button
+            type="button"
+            role="menuitem"
+            className="docx-hf-chrome__menu-item"
+            data-testid="docx-notes-close"
+            onClick={() => {
+              props.onClose();
+              setOpen(false);
+            }}
+          >
+            {t('common.close')}
+          </button>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 export function DocxEditorNotesChrome({
   className,
 }: DocxEditorNotesChromeProps): ReactElement | null {
@@ -70,6 +134,21 @@ export function DocxEditorNotesChrome({
   } | null>(null);
   const [propsOpen, setPropsOpen] = useState(false);
   const hideTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const findActiveNote = useCallback(
+    (viewport: HTMLElement) => {
+      if (!noteScope) return null;
+      const candidates = viewport.querySelectorAll<HTMLElement>('[data-docx-note-scope]');
+      return (
+        [...candidates].find(
+          (candidate) =>
+            candidate.matches('[data-docx-note]') &&
+            candidate.dataset.docxNoteScope === noteScope.id
+        ) ?? null
+      );
+    },
+    [noteScope]
+  );
+  const anchor = useScopedChromeAnchor(findActiveNote, 'story-label');
 
   const clearPreview = useCallback(() => {
     if (hideTimer.current) clearTimeout(hideTimer.current);
@@ -88,12 +167,16 @@ export function DocxEditorNotesChrome({
       const ref = target.closest<HTMLElement>('[data-docx-note-ref]');
       if (ref?.dataset.docxNoteScope) {
         event.preventDefault();
+        clearPreview();
+        setMenu(null);
         editor.setActiveScope({ kind: 'note', id: ref.dataset.docxNoteScope });
         return;
       }
       const mark = target.closest<HTMLElement>('[data-docx-note-mark-back]');
       if (mark) {
         event.preventDefault();
+        clearPreview();
+        setMenu(null);
         editor.setActiveScope({ kind: 'body' });
       }
     };
@@ -239,55 +322,19 @@ export function DocxEditorNotesChrome({
     >
       {noteScope && parsedActive ? (
         <div
-          className="docx-notes-chrome__banner"
+          ref={anchor.ref}
+          className="docx-context-bar docx-notes-chrome__banner"
           role="region"
           aria-label={t('notes.chromeAriaLabel')}
           data-testid="docx-notes-banner"
           data-note-scope={noteScope.id}
-          style={{
-            position: 'absolute',
-            top: 0,
-            left: 0,
-            right: 0,
-            zIndex: Z_INDEX.chrome,
-            display: 'flex',
-            gap: 8,
-            alignItems: 'center',
-            padding: '4px 8px',
-            background: 'var(--doc-banner-bg, #f5f5f5)',
-            borderBottom: '1px solid var(--doc-border, #ddd)',
-            fontSize: 12,
-          }}
+          style={{ ...anchor.style, zIndex: Z_INDEX.chrome }}
         >
-          <span>{regionLabel}</span>
-          <ToolbarContext.Provider
-            value={{ t: (key) => t(key as TranslationKey), onSave: undefined }}
-          >
-            <div aria-label={t('formattingBar.groups.insert')}>
-              {INSERT_GROUP.controls
-                .filter((control) => control.id === 'footnote' || control.id === 'endnote')
-                .map((control) => {
-                  const slot = chromeSlotId(INSERT_GROUP, control);
-                  return <ToolbarButton key={slot} slot={slot} />;
-                })}
-            </div>
-          </ToolbarContext.Provider>
-          <button
-            type="button"
-            data-testid="docx-notes-close"
-            onMouseDown={guardToolbarMousedown}
-            onClick={() => editor.setActiveScope({ kind: 'body' })}
-          >
-            {t('notes.closeNote')}
-          </button>
-          <button
-            type="button"
-            data-testid="docx-notes-properties"
-            onMouseDown={guardToolbarMousedown}
-            onClick={() => setPropsOpen(true)}
-          >
-            {t('dialogs.footnoteProperties.title')}
-          </button>
+          <span className="docx-context-bar__title">{regionLabel}</span>
+          <NoteStoryOptions
+            onOpenProperties={() => setPropsOpen(true)}
+            onClose={() => editor.setActiveScope({ kind: 'body' })}
+          />
         </div>
       ) : null}
 
@@ -407,135 +454,161 @@ function NotePropertiesDialog(props: {
 
   return (
     <div
+      className="docx-note-properties"
       role="dialog"
+      aria-modal="true"
       aria-label={t('dialogs.footnoteProperties.title')}
       data-testid="docx-notes-properties-dialog"
-      style={{
-        position: 'fixed',
-        inset: 0,
-        zIndex: Z_INDEX.modal,
-        display: 'grid',
-        placeItems: 'center',
-        background: 'rgba(0,0,0,.32)',
+      style={{ zIndex: Z_INDEX.modal }}
+      onClick={props.onClose}
+      onKeyDown={(event) => {
+        if (event.key === 'Escape') props.onClose();
       }}
-      onMouseDown={guardToolbarMousedown}
     >
       <div
-        style={{
-          background: 'var(--doc-popover-bg, #fff)',
-          padding: 16,
-          minWidth: 280,
-          borderRadius: 4,
-        }}
+        className="docx-note-properties__panel"
+        onClick={(event) => event.stopPropagation()}
+        onMouseDown={(event) => event.stopPropagation()}
       >
-        <h2 style={{ margin: '0 0 12px', fontSize: 14 }}>
-          {t('dialogs.footnoteProperties.title')}
-        </h2>
-        <label>
-          {t('notes.scope')}
-          <select
-            value={scope}
-            onChange={(e) => setScope(e.target.value as 'document' | 'section')}
-          >
-            <option value="document">{t('notes.scopeDocument')}</option>
-            <option value="section">{t('notes.scopeSection')}</option>
-          </select>
-        </label>
-        <fieldset style={{ marginTop: 8 }}>
-          <legend>
-            {t('dialogs.footnoteProperties.footnotes')}
-            {footnoteInherited ? ` ${t('notes.inheritedValue')}` : ''}
-          </legend>
-          <label>
-            {t('dialogs.footnoteProperties.numberFormat')}
-            <select value={footnoteFmt} onChange={(e) => setFootnoteFmt(e.target.value)}>
-              <option value="decimal">{t('dialogs.footnoteProperties.formats.decimal')}</option>
-              <option value="lowerRoman">
-                {t('dialogs.footnoteProperties.formats.lowerRoman')}
-              </option>
-              <option value="upperRoman">
-                {t('dialogs.footnoteProperties.formats.upperRoman')}
-              </option>
-            </select>
-          </label>
-          <label>
-            {t('dialogs.footnoteProperties.numbering')}
-            <select value={footnoteRestart} onChange={(e) => setFootnoteRestart(e.target.value)}>
-              <option value="continuous">
-                {t('dialogs.footnoteProperties.numberingOptions.continuous')}
-              </option>
-              <option value="eachSect">
-                {t('dialogs.footnoteProperties.numberingOptions.restartSection')}
-              </option>
-              <option value="eachPage">
-                {t('dialogs.footnoteProperties.numberingOptions.restartPage')}
-              </option>
-            </select>
-          </label>
-          <label>
-            {t('dialogs.footnoteProperties.position')}
-            <select value={footnotePosition} onChange={(e) => setFootnotePosition(e.target.value)}>
-              <option value="pageBottom">
-                {t('dialogs.footnoteProperties.footnotePositions.bottomOfPage')}
-              </option>
-              <option value="beneathText">
-                {t('dialogs.footnoteProperties.footnotePositions.belowText')}
-              </option>
-            </select>
-          </label>
-        </fieldset>
-        <fieldset style={{ marginTop: 8 }}>
-          <legend>
-            {t('dialogs.footnoteProperties.endnotes')}
-            {endnoteInherited ? ` ${t('notes.inheritedValue')}` : ''}
-          </legend>
-          <label>
-            {t('dialogs.footnoteProperties.numberFormat')}
-            <select value={endnoteFmt} onChange={(e) => setEndnoteFmt(e.target.value)}>
-              <option value="decimal">{t('dialogs.footnoteProperties.formats.decimal')}</option>
-              <option value="lowerRoman">
-                {t('dialogs.footnoteProperties.formats.lowerRoman')}
-              </option>
-              <option value="upperRoman">
-                {t('dialogs.footnoteProperties.formats.upperRoman')}
-              </option>
-            </select>
-          </label>
-          <label>
-            {t('dialogs.footnoteProperties.numbering')}
-            <select value={endnoteRestart} onChange={(e) => setEndnoteRestart(e.target.value)}>
-              <option value="continuous">
-                {t('dialogs.footnoteProperties.numberingOptions.continuous')}
-              </option>
-              <option value="eachSect">
-                {t('dialogs.footnoteProperties.numberingOptions.restartSection')}
-              </option>
-              <option value="eachPage">
-                {t('dialogs.footnoteProperties.numberingOptions.restartPage')}
-              </option>
-            </select>
-          </label>
-          <label>
-            {t('dialogs.footnoteProperties.position')}
+        <h2 className="docx-note-properties__title">{t('dialogs.footnoteProperties.title')}</h2>
+        <div className="docx-note-properties__body">
+          <label className="docx-note-properties__scope">
+            <span>{t('notes.scope')}</span>
             <select
-              value={endnotePosition}
-              data-testid="docx-notes-endnote-position"
-              onChange={(e) => setEndnotePosition(e.target.value)}
+              className="docx-note-properties__select"
+              value={scope}
+              onChange={(e) => setScope(e.target.value as 'document' | 'section')}
             >
-              <option value="docEnd">
-                {t('dialogs.footnoteProperties.endnotePositions.endOfDocument')}
-              </option>
-              <option value="sectEnd">
-                {t('dialogs.footnoteProperties.endnotePositions.endOfSection')}
-              </option>
+              <option value="document">{t('notes.scopeDocument')}</option>
+              <option value="section">{t('notes.scopeSection')}</option>
             </select>
           </label>
-        </fieldset>
-        <div style={{ display: 'flex', gap: 8, marginTop: 12, justifyContent: 'flex-end' }}>
-          <button type="button" onClick={props.onClose}>
+          <fieldset className="docx-note-properties__section">
+            <legend className="docx-note-properties__legend">
+              <span>{t('dialogs.footnoteProperties.footnotes')}</span>
+              {footnoteInherited ? (
+                <span className="docx-note-properties__badge">{t('notes.inheritedValue')}</span>
+              ) : null}
+            </legend>
+            <div className="docx-note-properties__fields">
+              <label className="docx-note-properties__field">
+                <span>{t('dialogs.footnoteProperties.numberFormat')}</span>
+                <select
+                  className="docx-note-properties__select"
+                  value={footnoteFmt}
+                  onChange={(e) => setFootnoteFmt(e.target.value)}
+                >
+                  <option value="decimal">{t('dialogs.footnoteProperties.formats.decimal')}</option>
+                  <option value="lowerRoman">
+                    {t('dialogs.footnoteProperties.formats.lowerRoman')}
+                  </option>
+                  <option value="upperRoman">
+                    {t('dialogs.footnoteProperties.formats.upperRoman')}
+                  </option>
+                </select>
+              </label>
+              <label className="docx-note-properties__field">
+                <span>{t('dialogs.footnoteProperties.numbering')}</span>
+                <select
+                  className="docx-note-properties__select"
+                  value={footnoteRestart}
+                  onChange={(e) => setFootnoteRestart(e.target.value)}
+                >
+                  <option value="continuous">
+                    {t('dialogs.footnoteProperties.numberingOptions.continuous')}
+                  </option>
+                  <option value="eachSect">
+                    {t('dialogs.footnoteProperties.numberingOptions.restartSection')}
+                  </option>
+                  <option value="eachPage">
+                    {t('dialogs.footnoteProperties.numberingOptions.restartPage')}
+                  </option>
+                </select>
+              </label>
+              <label className="docx-note-properties__field">
+                <span>{t('dialogs.footnoteProperties.position')}</span>
+                <select
+                  className="docx-note-properties__select"
+                  value={footnotePosition}
+                  onChange={(e) => setFootnotePosition(e.target.value)}
+                >
+                  <option value="pageBottom">
+                    {t('dialogs.footnoteProperties.footnotePositions.bottomOfPage')}
+                  </option>
+                  <option value="beneathText">
+                    {t('dialogs.footnoteProperties.footnotePositions.belowText')}
+                  </option>
+                </select>
+              </label>
+            </div>
+          </fieldset>
+          <fieldset className="docx-note-properties__section">
+            <legend className="docx-note-properties__legend">
+              <span>{t('dialogs.footnoteProperties.endnotes')}</span>
+              {endnoteInherited ? (
+                <span className="docx-note-properties__badge">{t('notes.inheritedValue')}</span>
+              ) : null}
+            </legend>
+            <div className="docx-note-properties__fields">
+              <label className="docx-note-properties__field">
+                <span>{t('dialogs.footnoteProperties.numberFormat')}</span>
+                <select
+                  className="docx-note-properties__select"
+                  value={endnoteFmt}
+                  onChange={(e) => setEndnoteFmt(e.target.value)}
+                >
+                  <option value="decimal">{t('dialogs.footnoteProperties.formats.decimal')}</option>
+                  <option value="lowerRoman">
+                    {t('dialogs.footnoteProperties.formats.lowerRoman')}
+                  </option>
+                  <option value="upperRoman">
+                    {t('dialogs.footnoteProperties.formats.upperRoman')}
+                  </option>
+                </select>
+              </label>
+              <label className="docx-note-properties__field">
+                <span>{t('dialogs.footnoteProperties.numbering')}</span>
+                <select
+                  className="docx-note-properties__select"
+                  value={endnoteRestart}
+                  onChange={(e) => setEndnoteRestart(e.target.value)}
+                >
+                  <option value="continuous">
+                    {t('dialogs.footnoteProperties.numberingOptions.continuous')}
+                  </option>
+                  <option value="eachSect">
+                    {t('dialogs.footnoteProperties.numberingOptions.restartSection')}
+                  </option>
+                  <option value="eachPage">
+                    {t('dialogs.footnoteProperties.numberingOptions.restartPage')}
+                  </option>
+                </select>
+              </label>
+              <label className="docx-note-properties__field">
+                <span>{t('dialogs.footnoteProperties.position')}</span>
+                <select
+                  className="docx-note-properties__select"
+                  value={endnotePosition}
+                  data-testid="docx-notes-endnote-position"
+                  onChange={(e) => setEndnotePosition(e.target.value)}
+                >
+                  <option value="docEnd">
+                    {t('dialogs.footnoteProperties.endnotePositions.endOfDocument')}
+                  </option>
+                  <option value="sectEnd">
+                    {t('dialogs.footnoteProperties.endnotePositions.endOfSection')}
+                  </option>
+                </select>
+              </label>
+            </div>
+          </fieldset>
+        </div>
+        <div className="docx-note-properties__footer">
+          <button className="docx-note-properties__button" type="button" onClick={props.onClose}>
             {t('common.cancel')}
           </button>
           <button
+            className="docx-note-properties__button docx-note-properties__button--primary"
             type="button"
             data-testid="docx-notes-properties-apply"
             onClick={() => {

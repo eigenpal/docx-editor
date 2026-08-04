@@ -888,7 +888,8 @@
     "insertSectionPages": "Sisipkan jumlah halaman bagian",
     "insertPageXofY": "Sisipkan halaman X dari Y",
     "pageXofYLabel": "Halaman",
-    "pageXofYSeparator": "dari"
+    "pageXofYSeparator": "dari",
+    "pageNumbers": null
   },
   "image": {
     "placeholder": "Placeholder gambar",

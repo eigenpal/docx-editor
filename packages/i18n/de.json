@@ -869,7 +869,8 @@
     "insertSectionPages": "Abschnittsseitenzahl einfügen",
     "insertPageXofY": "Seite X von Y einfügen",
     "pageXofYLabel": "Seite",
-    "pageXofYSeparator": "von"
+    "pageXofYSeparator": "von",
+    "pageNumbers": null
   },
   "image": {
     "placeholder": "Bildplatzhalter",
