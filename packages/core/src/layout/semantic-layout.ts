@@ -76,7 +76,13 @@ import {
 } from './semantic-table-layout.ts';
 import { storyBlocks } from './story-roots.ts';
 import { type HeaderFooterStoryLayout } from './hf-layout.ts';
-import { enumerateDocumentSections, geometryOfSection } from './section-properties.ts';
+import {
+  DEFAULT_SECTION_PROPERTIES,
+  enumerateDocumentSections,
+  geometryOfSection,
+  type SectionColumns,
+} from './section-properties.ts';
+import { resolveSectionColumns } from './section-columns.ts';
 import { layoutSemanticDocumentWithNotes } from './note-pagination.ts';
 import type {
   BlockFragmentRecord,
@@ -288,6 +294,7 @@ export function layoutSemanticDocument(
       ...opts,
       geometry,
       furniture,
+      sectionColumns: section?.properties.columns ?? DEFAULT_SECTION_PROPERTIES.columns,
     });
     const numbering = section?.properties.pageNumbering;
     const annotated: SemanticLayout = {
@@ -338,6 +345,7 @@ function layoutBlocksWithGeometry(
   revision: number,
   options: SemanticLayoutOptions & {
     readonly geometry: PageGeometry;
+    readonly sectionColumns?: SectionColumns;
     readonly lineCounterStart?: number;
     readonly flowStartY?: number;
     readonly spaceBeforeCarry?: number;
@@ -367,7 +375,14 @@ function layoutBlocksWithGeometry(
     (defaultTabStopPt !== undefined ? `|dts:${defaultTabStopPt}` : '') +
     (displayMode === DEFAULT_REVISION_DISPLAY_MODE ? '' : `|rev:${displayMode}`);
 
-  const contentWidth = geometry.width - geometry.margin.left - geometry.margin.right;
+  const pageContentWidth = geometry.width - geometry.margin.left - geometry.margin.right;
+  const columns = resolveSectionColumns(
+    options.sectionColumns ?? DEFAULT_SECTION_PROPERTIES.columns,
+    pageContentWidth
+  );
+  // Prepass and incremental keys use the first region. Placement re-prepares a block when it
+  // enters an unequal-width later column; multi-column passes conservatively skip resume.
+  const contentWidth = columns.widths[0]!;
 
   // PAGE FURNITURE. A header taller than the top-margin remainder pushes the content area
   // down (Word's behaviour), computed as the worst case over the variants in use so the
@@ -420,7 +435,8 @@ function layoutBlocksWithGeometry(
   const noteMarksKey = options.noteMarks
     ? `|nm:${options.noteMarks.reservedMarkText ?? ''}:${options.noteMarks.marks.size}`
     : '';
-  const context = `${producer}|${geometry.width}x${geometry.height}|${geometry.margin.top},${geometry.margin.right},${geometry.margin.bottom},${geometry.margin.left}|lc:${lineCounterStart}|fs:${flowStartY},${spaceBeforeCarry}|pi:${pageIndexStart}${furnitureContext}${notesReserveKey}${noteMarksKey}`;
+  const columnsContext = `|cols:${columns.widths.join(',')};${columns.gaps.join(',')};${columns.separator ? 1 : 0}`;
+  const context = `${producer}|${geometry.width}x${geometry.height}|${geometry.margin.top},${geometry.margin.right},${geometry.margin.bottom},${geometry.margin.left}|lc:${lineCounterStart}|fs:${flowStartY},${spaceBeforeCarry}|pi:${pageIndexStart}${furnitureContext}${notesReserveKey}${noteMarksKey}${columnsContext}`;
 
   const pages: PageRecord[] = [];
   /** Available body height on the page currently being filled (`pages.length`). */
@@ -435,9 +451,9 @@ function layoutBlocksWithGeometry(
   // and the producer. Recomputing the key — a serialization of the paragraph's subtree —
   // for every paragraph on every pass made the prepass, not placement, the cost of an
   // incremental layout: a one-character edit re-keyed the entire document.
-  const prepared = bodies.map((block): PreparedBlock => {
+  const prepareBlock = (block: OoxmlElement, availableWidth: number): PreparedBlock => {
     const memo = preparedBlocks.get(block);
-    if (memo && memo.contentWidth === contentWidth && memo.producer === producer) {
+    if (memo && memo.contentWidth === availableWidth && memo.producer === producer) {
       return memo.entry;
     }
     let entry: PreparedBlock;
@@ -449,7 +465,7 @@ function layoutBlocksWithGeometry(
         key: paragraphLayoutKey({
           paragraph: block,
           properties: [],
-          width: contentWidth,
+          width: availableWidth,
           producer,
         }),
       };
@@ -457,7 +473,7 @@ function layoutBlocksWithGeometry(
       const listItem = listItems?.get(block.id);
       const preparedParagraph = resolveParagraphLayoutInputs(
         block,
-        contentWidth,
+        availableWidth,
         styleCascade,
         listItem
       );
@@ -518,9 +534,10 @@ function layoutBlocksWithGeometry(
         }),
       };
     }
-    preparedBlocks.set(block, { contentWidth, producer, entry });
+    preparedBlocks.set(block, { contentWidth: availableWidth, producer, entry });
     return entry;
-  });
+  };
+  const prepared = bodies.map((block) => prepareBlock(block, contentWidth));
 
   const keys = prepared.map((entry) => entry.key);
   const keepsNext = prepared.map((entry) => entry.kind === 'paragraph' && entry.keeps.keepNext);
@@ -530,11 +547,12 @@ function layoutBlocksWithGeometry(
   const previous = session?.previous ?? null;
   // A geometry or producer change invalidates every checkpoint, because it moves every
   // break; resuming from one would place new content against a stale flow.
-  const resumable = previous !== null && session !== undefined && session.context === context;
+  const comparable = previous !== null && session !== undefined && session.context === context;
+  const resumable = columns.count === 1 && comparable;
 
   /** The first paragraph whose layout inputs differ from the previous pass. */
   let firstChanged = 0;
-  if (resumable) {
+  if (comparable) {
     const limit = Math.min(flowKeys.length, session.keys.length);
     while (firstChanged < limit && flowKeys[firstChanged] === session.keys[firstChanged]) {
       firstChanged += 1;
@@ -563,7 +581,7 @@ function layoutBlocksWithGeometry(
   // NOTHING CHANGED. Every key matches and the document is the same length, so the previous
   // layout still describes it exactly — re-placing it would allocate a second set of
   // identical records and destroy the identity a consumer uses to skip repainting.
-  if (resumable && firstChanged === prepared.length && prepared.length === session.keys.length) {
+  if (comparable && firstChanged === prepared.length && prepared.length === session.keys.length) {
     const unchanged: SemanticLayout = { revision, pages: previous!.pages };
     session.previous = unchanged;
     session.stats = {
@@ -584,11 +602,18 @@ function layoutBlocksWithGeometry(
   }
 
   let pageFragments: BlockFragmentRecord[] = [];
+  let columnIndex = 0;
+  let regionFragmentStart = 0;
+  const columnLeft = (): number => columns.lefts[columnIndex]!;
+  const columnWidth = (): number => columns.widths[columnIndex]!;
+  const regionHasFragments = (): boolean => pageFragments.length > regionFragmentStart;
   // A continuous section resumes the previous section's column rather than opening a
   // sheet, so its first block starts at that column's used height and its first paragraph
   // is NOT at a page top — page-top space-before suppression must not apply to it, and the
   // preceding paragraph's space-after still collapses against its space-before.
   let cursorY = flowStartY;
+  // A continuous section can open its column region below content already on the sheet.
+  let columnRegionTop = flowStartY;
   let lineCounter = lineCounterStart;
   let previousSpaceAfter = spaceBeforeCarry;
   const checkpoints: FlowCheckpoint[] = [];
@@ -660,7 +685,7 @@ function layoutBlocksWithGeometry(
         box: {
           x: box.x + geometry.margin.left,
           y,
-          width: contentWidth,
+          width: pageContentWidth,
           height: laid.flowHeight,
         },
         fragments: laid.fragments,
@@ -682,6 +707,10 @@ function layoutBlocksWithGeometry(
     const box = pageBox(index);
     const header = furnitureFor('header', index, box);
     const footer = furnitureFor('footer', index, box);
+    const usedBottom = pageFragments.reduce(
+      (bottom, fragment) => Math.max(bottom, fragment.box.y + fragment.box.height),
+      columnRegionTop
+    );
     pages.push({
       id: `page-${index}`,
       index,
@@ -689,15 +718,40 @@ function layoutBlocksWithGeometry(
       contentBox: {
         x: box.x + geometry.margin.left,
         y: box.y + effectiveTop,
-        width: contentWidth,
+        width: pageContentWidth,
         height: baseContentHeight,
       },
       fragments: pageFragments,
+      ...(columns.separator
+        ? {
+            columnSeparators: columns.gaps.map((gap, separatorIndex) => ({
+              x: columns.lefts[separatorIndex]! + columns.widths[separatorIndex]! + gap / 2 - 0.375,
+              y: columnRegionTop,
+              width: 0.75,
+              height: Math.max(0, usedBottom - columnRegionTop),
+            })),
+          }
+        : {}),
       ...(header ? { header } : {}),
       ...(footer ? { footer } : {}),
     });
     pageFragments = [];
     cursorY = 0;
+    columnIndex = 0;
+    columnRegionTop = 0;
+    regionFragmentStart = 0;
+  };
+
+  /** Advance through authored columns before opening another physical sheet. */
+  const advanceColumn = (): void => {
+    if (columnIndex + 1 < columns.count) {
+      columnIndex += 1;
+      cursorY = columnRegionTop;
+      previousSpaceAfter = 0;
+      regionFragmentStart = pageFragments.length;
+      return;
+    }
+    flushPage();
   };
 
   // Table layout shares the flow's line counter, paragraph cache, and precomputed list
@@ -733,7 +787,7 @@ function layoutBlocksWithGeometry(
 
   // Shared by placement and by the `w:keepNext` lookahead, which needs the height of the
   // blocks it keeps WITH. Both read the same cache entry, so the lookahead re-measures nothing.
-  const breakBlock = (entry: PreparedParagraph) =>
+  const breakBlock = (entry: PreparedParagraph, startOffset = 0) =>
     breakParagraph(
       entry.paragraph,
       entry.paragraph.id,
@@ -741,7 +795,7 @@ function layoutBlocksWithGeometry(
       entry.available,
       measurer,
       cache,
-      cache ? entry.key : null,
+      cache ? (startOffset === 0 ? entry.key : `${entry.key}|from:${startOffset}`) : null,
       entry.inheritedRunProperties,
       entry.tabStops,
       undefined,
@@ -750,7 +804,8 @@ function layoutBlocksWithGeometry(
         : undefined,
       {
         lineSpacing: entry.lineSpacing,
-        firstLineOffset: firstLineOffsetOf(entry),
+        firstLineOffset: startOffset === 0 ? firstLineOffsetOf(entry) : 0,
+        startOffset,
         // The page's text column, so a `w:ptab` measuring against the margin ignores the
         // paragraph's own indents the way Word does.
         marginExtent: { left: 0, right: entry.indent.left + entry.available + entry.indent.right },
@@ -772,11 +827,12 @@ function layoutBlocksWithGeometry(
    * each continuation page, and rejected when the group itself exceeds a fresh content page.
    */
   const layoutTableInFlow = (table: OoxmlElement): void => {
-    const structure = readTableStructure(table, contentWidth, 0, styleCascade, displayMode);
+    const regionWidth = columnWidth();
+    const structure = readTableStructure(table, regionWidth, 0, styleCascade, displayMode);
     if (!structure || structure.rows.length === 0) return;
     // `w:tblInd` / `w:jc` place the table inside the text column; every row and the fragment
     // box share the one origin so cell geometry and the reported box cannot drift apart.
-    const tableLeft = tableOriginX(structure, contentWidth);
+    let tableLeft = columnLeft() + tableOriginX(structure, regionWidth);
     const headerRows: SemanticTableRow[] = [];
     for (const row of structure.rows) {
       if (row.isHeader) headerRows.push(row);
@@ -845,7 +901,8 @@ function layoutBlocksWithGeometry(
       }
       if (cursorY + groupHeight > contentHeight() + 0.001 && cursorY > 0) {
         closeTableFragment();
-        flushPage();
+        advanceColumn();
+        tableLeft = columnLeft() + tableOriginX(structure, columnWidth());
         fragmentTop = 0;
       }
 
@@ -874,7 +931,8 @@ function layoutBlocksWithGeometry(
 
     const breakForContinuation = (emitHeaders: boolean): void => {
       closeTableFragment();
-      flushPage();
+      advanceColumn();
+      tableLeft = columnLeft() + tableOriginX(structure, columnWidth());
       fragmentTop = 0;
       if (emitHeaders) placeHeaderGroup(true);
     };
@@ -1026,7 +1084,7 @@ function layoutBlocksWithGeometry(
   let converged = false;
   let convergedAt = prepared.length;
   for (let index = startIndex; index < prepared.length; index += 1) {
-    const entry = prepared[index]!;
+    const entry = prepareBlock(bodies[index]!, columnWidth());
 
     // The flow as it stands BEFORE this block: what a later pass resumes from.
     checkpoints[index] = {
@@ -1081,20 +1139,18 @@ function layoutBlocksWithGeometry(
       continue;
     }
 
-    const {
-      paragraph,
-      props,
-      indent,
-      alignment,
-      available,
-      spacing: authoredSpacing,
-      contextualSpacing,
-      styleId,
-      borders,
-      shading,
-      inheritedRunProperties,
-      keeps,
-    } = entry;
+    const paragraph = entry.paragraph;
+    const props = entry.props;
+    let indent = entry.indent;
+    let alignment = entry.alignment;
+    let available = entry.available;
+    const authoredSpacing = entry.spacing;
+    const contextualSpacing = entry.contextualSpacing;
+    const styleId = entry.styleId;
+    const borders = entry.borders;
+    const shading = entry.shading;
+    let inheritedRunProperties = entry.inheritedRunProperties;
+    const keeps = entry.keeps;
     // `w:contextualSpacing` (17.3.1.9) drops the gap between paragraphs of the SAME style.
     // Word's own ListParagraph sets it, so without this every Word-authored list carries a
     // paragraph gap between its items.
@@ -1115,7 +1171,7 @@ function layoutBlocksWithGeometry(
     // A NUMBERED/BULLETED paragraph's first-line slot belongs to the MARKER: `listMarkerBox`
     // places it at `left - hanging`, and Word's `w:suff` puts the text back at `left` — or
     // after the marker, or at the next tab stop past an overflowing one (§17.9.30).
-    const firstLineOffset = firstLineOffsetOf(entry);
+    let firstLineOffset = firstLineOffsetOf(entry);
     const paragraphId = paragraph.id;
     // `w:between` (§17.3.1.24): consecutive paragraphs with IDENTICAL border settings are ONE
     // bordered block in Word — the box opens above the first and closes below the last, and
@@ -1139,7 +1195,17 @@ function layoutBlocksWithGeometry(
       previousSpaceAfter = 0;
     }
 
-    const lines = breakBlock(entry);
+    let lines = breakBlock(entry);
+    const rebreakInCurrentColumn = (startOffset: number): void => {
+      const next = prepareBlock(paragraph, columnWidth());
+      if (next.kind !== 'paragraph') return;
+      indent = next.indent;
+      alignment = next.alignment;
+      available = next.available;
+      inheritedRunProperties = next.inheritedRunProperties;
+      firstLineOffset = startOffset === 0 ? firstLineOffsetOf(next) : 0;
+      lines = [...breakBlock(next, startOffset)];
+    };
 
     // Fit uses unsuppressed lead; top-of-page suppression applies after any flush below.
     {
@@ -1164,12 +1230,13 @@ function layoutBlocksWithGeometry(
         }
       }
       if (cursorY + needed > contentHeight() && cursorY > 0) {
-        flushPage();
+        advanceColumn();
         previousSpaceAfter = 0;
+        rebreakInCurrentColumn(0);
       }
     }
 
-    const atTopOfPage = cursorY === 0 && pageFragments.length === 0;
+    const atTopOfPage = cursorY === 0 && !regionHasFragments();
     const appliedBefore = appliedSpaceBefore(
       spacing.before,
       previousSpaceAfter,
@@ -1197,6 +1264,7 @@ function layoutBlocksWithGeometry(
     const markRevision = paragraphMarkRevisionOf(entry.paragraph);
     const flushFragment = (isLast: boolean): void => {
       if (pending.length === 0) return;
+      const regionX = columnLeft();
       const linesTop = pending[0]!.box.y;
       const top = linesTop - fragmentBefore - fragmentTopExtent;
       const linesBottom =
@@ -1212,11 +1280,11 @@ function layoutBlocksWithGeometry(
       // which is what a callout looked like. Word closes the rectangle, so the horizontal
       // rules span from the left rule's outer edge to the right rule's.
       const boxLeft = borders.left
-        ? indent.left - borders.left.spacePt - borders.left.widthPt
-        : indent.left;
+        ? regionX + indent.left - borders.left.spacePt - borders.left.widthPt
+        : regionX + indent.left;
       const boxRight = borders.right
-        ? indent.left + available + borders.right.spacePt + borders.right.widthPt
-        : indent.left + available;
+        ? regionX + indent.left + available + borders.right.spacePt + borders.right.widthPt
+        : regionX + indent.left + available;
       const boxWidth = Math.max(boxRight - boxLeft, 0);
       if (fragmentTopExtent > 0 && topEdge) {
         const ruleY = linesTop - topEdge.spacePt - topEdge.widthPt;
@@ -1254,7 +1322,7 @@ function layoutBlocksWithGeometry(
           side: 'left',
           edge: borders.left,
           box: {
-            x: indent.left - borders.left.spacePt - borders.left.widthPt,
+            x: regionX + indent.left - borders.left.spacePt - borders.left.widthPt,
             y: sideTop,
             width: borders.left.widthPt,
             height: sideHeight,
@@ -1266,7 +1334,7 @@ function layoutBlocksWithGeometry(
           side: 'right',
           edge: borders.right,
           box: {
-            x: indent.left + available + borders.right.spacePt,
+            x: regionX + indent.left + available + borders.right.spacePt,
             y: sideTop,
             width: borders.right.widthPt,
             height: sideHeight,
@@ -1280,14 +1348,14 @@ function layoutBlocksWithGeometry(
           side: 'bar',
           edge: borders.bar,
           box: {
-            x: indent.left - borders.bar.spacePt - borders.bar.widthPt,
+            x: regionX + indent.left - borders.bar.spacePt - borders.bar.widthPt,
             y: linesTop,
             width: borders.bar.widthPt,
             height: Math.max(linesBottom - linesTop, 0),
           },
         });
       }
-      const marker =
+      const rawMarker =
         fragmentIndex === 0
           ? publishListMarker(
               listItem,
@@ -1295,6 +1363,9 @@ function layoutBlocksWithGeometry(
               pending[0] ? { y: pending[0].box.y, height: pending[0].box.height } : undefined
             )
           : undefined;
+      const marker = rawMarker
+        ? { ...rawMarker, box: { ...rawMarker.box, x: rawMarker.box.x + regionX } }
+        : undefined;
       pageFragments.push({
         kind: 'paragraph',
         id: `${paragraphId}#f${fragmentIndex}`,
@@ -1330,14 +1401,14 @@ function layoutBlocksWithGeometry(
                       width: boxWidth,
                       height: Math.max(contentBottom - contentTop, 0),
                     }
-                  : paragraphShadingBox(pending, indent.left, available)!,
+                  : paragraphShadingBox(pending, regionX + indent.left, available)!,
             }),
         ...(marker ? { marker } : {}),
         // The paragraph MARK lives at the end of the paragraph, so only the final fragment
         // carries its revision — a paragraph split across pages must not draw two pilcrows.
         ...(isLast && markRevision ? { markRevision } : {}),
         lines: pending,
-        box: { x: indent.left, y: top, width: available, height },
+        box: { x: regionX + indent.left, y: top, width: available, height },
       });
       fragmentIndex += 1;
       fragmentStart = pending[pending.length - 1]!.range.end;
@@ -1352,7 +1423,7 @@ function layoutBlocksWithGeometry(
     // future rule that could cycle, and fails OPEN at the natural break rather than throwing.
     let fragmentFirstLine = 0;
     let retreats = 0;
-    const maxRetreats = lines.length + MAX_KEEP_NEXT_CHAIN;
+    let maxRetreats = lines.length + MAX_KEEP_NEXT_CHAIN;
 
     for (let lineIndex = 0; lineIndex < lines.length; lineIndex += 1) {
       const pendingLine = lines[lineIndex]!;
@@ -1364,7 +1435,7 @@ function layoutBlocksWithGeometry(
       ) {
         // `w:widowControl` (§17.3.1.44) / `w:keepLines` (§17.3.1.16) change where a paragraph
         // may be CUT, not where it fits: retreat off a stranded line, or off keepLines whole.
-        const alone = pageFragments.length === 0;
+        const alone = !regionHasFragments();
         const breakAt =
           retreats < maxRetreats
             ? adjustedBreakIndex(lineIndex, fragmentFirstLine, lines.length, keeps, alone)
@@ -1379,11 +1450,21 @@ function layoutBlocksWithGeometry(
         }
         // Moving WHOLE means it now OPENS a page: space-before drops, the top rule travels.
         const movesWhole = retreated && pending.length === 0 && fragmentIndex === 0;
+        const nextOffset = lines[breakAt]!.start;
+        const priorColumnWidth = columnWidth();
         flushFragment(false);
-        flushPage();
+        advanceColumn();
         fragmentBefore = 0;
         if (movesWhole) cursorY = fragmentTopExtent;
         else fragmentTopExtent = 0;
+        if (columnWidth() !== priorColumnWidth) {
+          rebreakInCurrentColumn(nextOffset);
+          maxRetreats = Math.max(maxRetreats, lines.length + MAX_KEEP_NEXT_CHAIN);
+          fragmentFirstLine = 0;
+          if (retreated) retreats += 1;
+          lineIndex = -1;
+          continue;
+        }
         fragmentFirstLine = breakAt;
         if (retreated) {
           retreats += 1;
@@ -1403,18 +1484,23 @@ function layoutBlocksWithGeometry(
           pendingLine.spans.map((span) => ({
             ...span,
             range: { ...span.range, paragraphId },
-            box: { ...span.box, y: cursorY },
+            box: { ...span.box, x: span.box.x + columnLeft(), y: cursorY },
           })),
           measurer,
           // Alignment measures against the box the LINE actually got: a first line carrying
           // `w:firstLine`/`w:hanging` starts elsewhere and has a different width, so centring
           // or justifying it against the paragraph box would push it off its own margins.
-          indent.left + (lineIndex === 0 ? firstLineOffset : 0),
+          columnLeft() + indent.left + (lineIndex === 0 ? firstLineOffset : 0),
           Math.max(1, available - (lineIndex === 0 ? firstLineOffset : 0)),
           alignment,
           isLastLine
         ),
-        box: { x: indent.left, y: cursorY, width: available, height: pendingLine.height },
+        box: {
+          x: columnLeft() + indent.left,
+          y: cursorY,
+          width: available,
+          height: pendingLine.height,
+        },
         baseline: pendingLine.baseline,
         leading: pendingLine.leading,
         ...(pendingLine.deletedRanges ? { deletedRanges: pendingLine.deletedRanges } : {}),
@@ -1422,7 +1508,22 @@ function layoutBlocksWithGeometry(
       lineCounter += 1;
       pending.push(record);
       cursorY += pendingLine.height;
-      if (pendingLine.pageBreakAfter) {
+      if (pendingLine.columnBreakAfter) {
+        const priorColumnWidth = columnWidth();
+        flushFragment(isLastLine);
+        advanceColumn();
+        fragmentBefore = 0;
+        fragmentTopExtent = 0;
+        endedWithPageBreak = true;
+        if (!isLastLine && columnWidth() !== priorColumnWidth) {
+          rebreakInCurrentColumn(pendingLine.end);
+          maxRetreats = Math.max(maxRetreats, lines.length + MAX_KEEP_NEXT_CHAIN);
+          fragmentFirstLine = 0;
+          lineIndex = -1;
+          continue;
+        }
+        fragmentFirstLine = lineIndex + 1;
+      } else if (pendingLine.pageBreakAfter) {
         flushFragment(isLastLine);
         flushPage();
         fragmentBefore = 0;

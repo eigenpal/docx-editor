@@ -54,6 +54,18 @@ describe('the painter is a non-authoritative consumer', () => {
     expect(paint('<w:p><w:r><w:t>x</w:t></w:r></w:p>').dataset.revision).toBe('7');
   });
 
+  test('it paints layout-owned column separators behind the section content', () => {
+    const container = paint(
+      '<w:p><w:r><w:t>left</w:t></w:r></w:p>' +
+        '<w:sectPr><w:cols w:num="2" w:space="720" w:sep="true"/></w:sectPr>'
+    );
+    const separator = container.querySelector<HTMLElement>('.docx-column-separator');
+    expect(separator).not.toBeNull();
+    expect(separator!.style.position).toBe('absolute');
+    expect(separator!.style.pointerEvents).toBe('none');
+    expect(separator!.getAttribute('contenteditable')).toBe('false');
+  });
+
   test('LINE positions come from the records, not from the browser', () => {
     // Where the boundary sits: layout decides what is on a line and where the line goes;
     // the browser places glyphs within it. So a line carries published coordinates and its

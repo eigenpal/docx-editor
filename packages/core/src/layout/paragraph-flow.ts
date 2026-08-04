@@ -57,6 +57,8 @@ export interface ParagraphFlowOptions {
   readonly lineSpacing?: ParagraphLineSpacing;
   /** First-line offset from the paragraph indent: `w:firstLine` right, `w:hanging` left. */
   readonly firstLineOffset?: number;
+  /** Re-break only the unplaced suffix when an unequal-width column follows. */
+  readonly startOffset?: number;
   /**
    * The containing text column — the page content box, or a table cell's — in the same
    * coordinates as `indentLeft`.
@@ -105,6 +107,7 @@ interface Piece {
   };
   /** Zero-width `w:ptab` destination metadata. */
   readonly positionalTab?: PositionalTab;
+  readonly breakKind?: FieldAwarePiece['breakKind'];
   /** Sanitized hyperlink this piece belongs to. */
   readonly link?: import('./semantic-records.ts').SpanLinkRecord;
 }
@@ -231,6 +234,8 @@ export interface PendingLine {
   leading: number;
   /** When true, layout must start a new page after this line is placed. */
   pageBreakAfter?: boolean;
+  /** When true, layout must advance to the next authored section column. */
+  columnBreakAfter?: boolean;
   /** Model ranges on this line covering deleted content; see {@link LineRecord.deletedRanges}. */
   deletedRanges?: readonly ModelRange[];
 }
@@ -254,6 +259,7 @@ export function frozenLine(line: PendingLine): PendingLine {
     baseline: line.baseline,
     leading: line.leading,
     ...(line.pageBreakAfter ? { pageBreakAfter: true } : {}),
+    ...(line.columnBreakAfter ? { columnBreakAfter: true } : {}),
     ...(line.deletedRanges ? { deletedRanges: Object.freeze(line.deletedRanges) } : {}),
   }) as PendingLine;
 }
@@ -401,7 +407,7 @@ export function breakParagraph(
   // from the emitted spans, because in the proposed result a deletion produces no span at all
   // and its offsets would otherwise look like ordinary empty positions.
   const deletedRanges: { start: number; end: number }[] = [];
-  const pieces = piecesOfParagraph(
+  const allPieces = piecesOfParagraph(
     paragraph,
     inheritedRunProperties,
     pageContext,
@@ -411,6 +417,19 @@ export function breakParagraph(
     flow?.displayMode ?? DEFAULT_REVISION_DISPLAY_MODE,
     deletedRanges
   );
+  const startOffset = Math.max(0, flow?.startOffset ?? 0);
+  const pieces = allPieces.flatMap((piece): FieldAwarePiece[] => {
+    if (piece.end <= startOffset) return [];
+    if (piece.start >= startOffset) return [piece];
+    const trim = startOffset - piece.start;
+    return [
+      {
+        ...piece,
+        text: piece.projected ? piece.text : piece.text.slice(trim),
+        start: startOffset,
+      },
+    ];
+  });
   /** Carried onto every span so paint and the review surface read one attribution. */
   const revisionsOf = (piece: FieldAwarePiece): { revisions?: readonly RevisionAttribution[] } =>
     piece.revisions === undefined ? {} : { revisions: piece.revisions };
@@ -422,8 +441,8 @@ export function breakParagraph(
   const lines: PendingLine[] = [];
   let line: PendingLine = {
     spans: [],
-    start: 0,
-    end: 0,
+    start: startOffset,
+    end: startOffset,
     width: 0,
     height: 0,
     baseline: 0,
@@ -494,6 +513,25 @@ export function breakParagraph(
 
   for (let pieceIndex = 0; pieceIndex < pieces.length; pieceIndex += 1) {
     const piece = pieces[pieceIndex]!;
+    if (piece.breakKind === 'column') {
+      const breakMetrics = measurer.lineMetrics(piece.style);
+      line.spans.push({
+        range: { paragraphId, start: piece.start, end: piece.end },
+        text: piece.text,
+        props: piece.props,
+        style: piece.style,
+        box: { x: lineOrigin() + line.width, y: 0, width: 0, height: breakMetrics.height },
+        ...(piece.link ? { link: piece.link } : {}),
+        ...revisionsOf(piece),
+      });
+      line.height = Math.max(line.height, breakMetrics.height);
+      line.baseline = Math.max(line.baseline, breakMetrics.baseline);
+      line.end = piece.end;
+      closeLine();
+      lines[lines.length - 1]!.columnBreakAfter = true;
+      trailingLineBreak = false;
+      continue;
+    }
     if (piece.text === PAGE_BREAK_CHAR) {
       const breakMetrics = measurer.lineMetrics(piece.style);
       line.spans.push({

@@ -17,12 +17,14 @@
 
 import {
   atomicFieldSpansOf,
+  hardBreakKind,
   hardBreakText,
   isFldSimple,
   WML_NAMESPACE_URI,
   type OoxmlNode,
   type OoxmlParagraphNode,
   type OoxmlProperty,
+  type HardBreakKind,
 } from '@docx-editor.dev/core-contract/store';
 import {
   allowlistedPageField,
@@ -158,6 +160,8 @@ export interface FieldAwarePiece {
    * would disagree with the store.
    */
   readonly positionalTab?: PositionalTab;
+  /** Typed hard-break intent; model text remains one newline-compatible UTF-16 unit. */
+  readonly breakKind?: HardBreakKind;
   /** The hyperlink this piece came from, already sanitized, or absent for ordinary text. */
   readonly link?: SpanLinkRecord;
   /**
@@ -409,6 +413,7 @@ export function piecesOfParagraph(
     end: number,
     extras?: {
       readonly positionalTab?: PositionalTab;
+      readonly breakKind?: HardBreakKind;
       readonly measureText?: string;
       readonly noteNav?: FieldAwarePiece['noteNav'];
     }
@@ -439,6 +444,7 @@ export function piecesOfParagraph(
       start,
       end,
       ...(extras?.positionalTab ? { positionalTab: extras.positionalTab } : {}),
+      ...(extras?.breakKind ? { breakKind: extras.breakKind } : {}),
       ...link,
       ...attribution,
     });
@@ -556,7 +562,11 @@ export function piecesOfParagraph(
       style.hidden ||
       !revisionsVisible(revisions, displayMode) ||
       (grand.kind === 'deletedText' && !deleted);
-    if (!suppressed) push(text, props, style, false, offset, offset + text.length);
+    if (!suppressed) {
+      push(text, props, style, false, offset, offset + text.length, {
+        ...(grand.kind === 'hardBreak' ? { breakKind: hardBreakKind(grand) } : {}),
+      });
+    }
     // Deleted characters are recorded whether or not they were laid out. They occupy model
     // offsets in every mode, and the caret must step over them in every mode — including the
     // proposed result, where they produce no span at all and an offset-by-offset walk would
