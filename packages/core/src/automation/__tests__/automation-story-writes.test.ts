@@ -15,8 +15,11 @@ import {
   p,
   paragraphsOf,
   paragraphTexts,
+  pWithSection,
   refusal,
   row,
+  savedMainXml,
+  sdt,
   spanAt,
   spansAt,
   storyText,
@@ -161,15 +164,137 @@ describe('replacing a span', () => {
     expect(response.ok).toBe(true);
     expect(paragraphTexts(host, body)).toEqual(['al-ma']);
   });
+});
 
-  test('clearing a whole story leaves one paragraph holding nothing', () => {
+// Replacing THE WHOLE STORY is not the same operation as replacing a stretch of one, and the
+// difference is the reason these tests are their own describe. A stretch is deleted by removing
+// text and joining what is left of the two ends; a story that holds a table cannot be joined —
+// `joinParagraphs` refuses across a cell boundary, and rightly so — so "empty this story" is
+// planned STRUCTURALLY: take the blocks out, keep one paragraph to write into. `Body.clear()` and
+// `Body.insertText(…, 'Replace')` are the two members that mean this, and a document with a table
+// in it is not an edge case for them, it is the ordinary shape of a report.
+describe('replacing a whole story', () => {
+  test('empties a story whose blocks include a table, cell paragraphs and all', () => {
+    const host = open(docx(p('alpha') + table(row(cell(p('One')), cell(p('Two')))) + p('omega')));
+    const body = bodyOf(host);
+    expect(paragraphTexts(host, body)).toEqual(['alpha', 'One', 'Two', 'omega']);
+
+    const response = host.execute({
+      operations: [{ op: 'replaceSpan', span: { body }, text: '' }],
+    });
+
+    expect(response.ok).toBe(true);
+    expect(paragraphTexts(host, body)).toEqual(['']);
+    expect(storyText(host, body)).toBe('');
+    // The table is GONE, not merely emptied: a story cleared of its text that still paints a
+    // two-by-two grid is not a cleared story.
+    expect(savedMainXml(host)).not.toContain('<w:tbl>');
+  });
+
+  test('writes the replacement text into the paragraph it keeps', () => {
+    const host = open(docx(p('alpha') + table(row(cell(p('One')))) + p('omega')));
+    const body = bodyOf(host);
+    const response = host.execute({
+      operations: [{ op: 'replaceSpan', span: { body }, text: 'fresh' }],
+    });
+    expect(response.ok).toBe(true);
+    expect(paragraphTexts(host, body)).toEqual(['fresh']);
+    // And it answers the span the text now occupies, in that paragraph.
+    const span = spanAt(response, 0);
+    expect([span.start.offset, span.end.offset]).toEqual([0, 5]);
+    expect(span.start.paragraph.ref).toBe(span.end.paragraph.ref);
+  });
+
+  test('the paragraph it keeps is the story\u2019s first, which keeps its identity', () => {
+    const host = open(docx(p('alpha') + table(row(cell(p('One')))) + p('omega')));
+    const body = bodyOf(host);
+    const [first] = paragraphsOf(host, body) as [AutomationHandle];
+    host.execute({ operations: [{ op: 'replaceSpan', span: { body }, text: 'fresh' }] });
+    // The handle a caller already held still names the paragraph, so a script can clear a story
+    // and go on writing to the paragraph it cleared.
+    expect(textAt(host.execute({ operations: [{ op: 'getText', target: first }] }), 0)).toBe(
+      'fresh'
+    );
+  });
+
+  test('survives save and reopen', () => {
+    const host = open(docx(p('alpha') + table(row(cell(p('One')), cell(p('Two')))) + p('omega')));
+    const body = bodyOf(host);
+    host.execute({ operations: [{ op: 'replaceSpan', span: { body }, text: 'only this' }] });
+    const reopened = reopen(host);
+    expect(paragraphTexts(reopened.host, reopened.body)).toEqual(['only this']);
+  });
+
+  test('keeps a paragraph whose mark ends a section, and empties it instead', () => {
+    // Deleting it would merge the section into the next one — taking that section's page size and
+    // headers over every page this one governed — so the store refuses to, and so does this. The
+    // story ends up with the text it was told to have and the sections it started with.
+    const host = open(docx(pWithSection('first section') + p('second section')));
+    const body = bodyOf(host);
+    const response = host.execute({
+      operations: [{ op: 'replaceSpan', span: { body }, text: 'after' }],
+    });
+    expect(response.ok).toBe(true);
+    expect(paragraphTexts(host, body)).toEqual(['after']);
+    expect(savedMainXml(host)).toContain('<w:sectPr>');
+  });
+
+  test('keeps a paragraph inside a block content control, because the control is not a block it removes', () => {
+    const host = open(docx(sdt(p('inside')) + p('outside')));
+    const body = bodyOf(host);
+    const response = host.execute({
+      operations: [{ op: 'replaceSpan', span: { body }, text: '' }],
+    });
+    expect(response.ok).toBe(true);
+    expect(paragraphTexts(host, body)).toEqual(['']);
+    expect(savedMainXml(host)).toContain('<w:sdt>');
+  });
+
+  test('refuses a story with no paragraph of its own rather than deleting the only one there is', () => {
+    // A `w:body` whose every block is a table is markup Word does not author — it always keeps a
+    // paragraph after a final table — and emptying it would need a paragraph created at the top
+    // level, which is not in this slice's op vocabulary. Refused whole, with the document intact.
+    const host = open(docx(table(row(cell(p('One'))))));
+    const body = bodyOf(host);
+    const response = host.execute({
+      operations: [{ op: 'replaceSpan', span: { body }, text: '' }],
+    });
+    expect(refusal(response)).toBe('invalid-offset');
+    expect(paragraphTexts(host, body)).toEqual(['One']);
+  });
+
+  test('is one claim on every paragraph in the story, so a second edit in the batch is refused', () => {
+    const host = open(docx(p('alpha') + p('beta')));
+    const body = bodyOf(host);
+    const list = paragraphsOf(host, body);
+    const response = host.execute({
+      operations: [
+        { op: 'replaceSpan', span: { body }, text: 'fresh' },
+        { op: 'insertText', at: { paragraph: list[1]!, offset: 0 }, text: 'X' },
+      ],
+    });
+    expect(errorAt(response, 1)).toBe('conflicting-operations');
+    expect(paragraphTexts(host, body)).toEqual(['alpha', 'beta']);
+  });
+
+  test('an empty story is still refused rather than answered', () => {
+    const host = open(docx(''));
+    const body = bodyOf(host);
+    expect(
+      refusal(host.execute({ operations: [{ op: 'replaceSpan', span: { body }, text: '' }] }))
+    ).toBe('invalid-offset');
+  });
+
+  test('a story of plain paragraphs still ends as one paragraph holding nothing', () => {
     const host = open(docx(p('alpha') + p('beta')));
     const body = bodyOf(host);
     host.execute({ operations: [{ op: 'replaceSpan', span: { body }, text: '' }] });
     expect(paragraphTexts(host, body)).toEqual(['']);
     expect(storyText(host, body)).toBe('');
   });
+});
 
+describe('replacing a span that is not the whole story', () => {
   test('a span that would join across a table cell is refused, and nothing is written', () => {
     const host = open(docx(table(row(cell(p('One')), cell(p('Two'))))));
     const body = bodyOf(host);
@@ -227,9 +352,13 @@ describe('inserting a paragraph', () => {
 
     const created = handleAt(response, 0);
     expect(created.kind).toBe('paragraph');
-    expect(textAt(host.execute({ operations: [{ op: 'getText', target: created }] }), 0)).toBe('two');
+    expect(textAt(host.execute({ operations: [{ op: 'getText', target: created }] }), 0)).toBe(
+      'two'
+    );
     // The anchor still names the paragraph it named before.
-    expect(textAt(host.execute({ operations: [{ op: 'getText', target: list[0]! }] }), 0)).toBe('one');
+    expect(textAt(host.execute({ operations: [{ op: 'getText', target: list[0]! }] }), 0)).toBe(
+      'one'
+    );
   });
 
   test('before another one, without the anchor coming to name the new paragraph', () => {
@@ -247,8 +376,12 @@ describe('inserting a paragraph', () => {
     expect(paragraphTexts(host, body)).toEqual(['one', 'two', 'three']);
 
     const created = handleAt(response, 0);
-    expect(textAt(host.execute({ operations: [{ op: 'getText', target: created }] }), 0)).toBe('one');
-    expect(textAt(host.execute({ operations: [{ op: 'getText', target: list[0]! }] }), 0)).toBe('two');
+    expect(textAt(host.execute({ operations: [{ op: 'getText', target: created }] }), 0)).toBe(
+      'one'
+    );
+    expect(textAt(host.execute({ operations: [{ op: 'getText', target: list[0]! }] }), 0)).toBe(
+      'two'
+    );
     expect(created.ref).not.toBe(list[0]!.ref);
   });
 
@@ -256,7 +389,9 @@ describe('inserting a paragraph', () => {
     const host = open(docx(p('one')));
     const body = bodyOf(host);
     host.execute({
-      operations: [{ op: 'insertParagraph', anchor: { body, at: 'last' }, where: 'after', text: 'two' }],
+      operations: [
+        { op: 'insertParagraph', anchor: { body, at: 'last' }, where: 'after', text: 'two' },
+      ],
     });
     expect(paragraphTexts(host, body)).toEqual(['one', 'two']);
   });
@@ -295,16 +430,16 @@ describe('inserting a paragraph', () => {
           { op: 'insertParagraph', anchor: { paragraph: list[0]! }, where: 'after', text: 'two' },
         ],
       }),
-      0,
+      0
     );
     const paraId = textAt(
       host.execute({ operations: [{ op: 'getParagraphId', paragraph: created }] }),
-      0,
+      0
     );
     expect(paraId).toMatch(/^[0-9A-F]{8}$/);
     const other = textAt(
       host.execute({ operations: [{ op: 'getParagraphId', paragraph: list[0]! }] }),
-      0,
+      0
     );
     expect(paraId).not.toBe(other);
   });
@@ -337,10 +472,10 @@ describe('inserting a paragraph', () => {
     expect(paragraphTexts(host, body)).toEqual(['one', '1', 'two', '2']);
     expect(handleAt(response, 0).ref).not.toBe(handleAt(response, 1).ref);
     expect(
-      textAt(host.execute({ operations: [{ op: 'getText', target: handleAt(response, 0) }] }), 0),
+      textAt(host.execute({ operations: [{ op: 'getText', target: handleAt(response, 0) }] }), 0)
     ).toBe('1');
     expect(
-      textAt(host.execute({ operations: [{ op: 'getText', target: handleAt(response, 1) }] }), 0),
+      textAt(host.execute({ operations: [{ op: 'getText', target: handleAt(response, 1) }] }), 0)
     ).toBe('2');
   });
 
@@ -448,14 +583,18 @@ describe('splitting a paragraph', () => {
     const body = bodyOf(host);
     const list = paragraphsOf(host, body);
     expect(
-      refusal(host.execute({ operations: [{ op: 'splitParagraph', paragraph: list[0]!, delimiters: [] }] })),
+      refusal(
+        host.execute({
+          operations: [{ op: 'splitParagraph', paragraph: list[0]!, delimiters: [] }],
+        })
+      )
     ).toBe('unsupported-content');
     expect(
       refusal(
         host.execute({
           operations: [{ op: 'splitParagraph', paragraph: list[0]!, delimiters: [''] }],
-        }),
-      ),
+        })
+      )
     ).toBe('unsupported-content');
   });
 
@@ -618,7 +757,10 @@ describe('selection is a capability, not an approximation', () => {
       operations: [
         {
           op: 'selectSpan',
-          span: { start: { paragraph: list[0]!, offset: 0 }, end: { paragraph: list[0]!, offset: 3 } },
+          span: {
+            start: { paragraph: list[0]!, offset: 0 },
+            end: { paragraph: list[0]!, offset: 3 },
+          },
           mode: 'select',
         },
       ],

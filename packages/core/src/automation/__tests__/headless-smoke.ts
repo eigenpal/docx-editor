@@ -66,7 +66,11 @@ if (paragraphs?.status !== 'ok' || paragraphs.value.kind !== 'handles') {
 
 const written = host.execute({
   operations: [
-    { op: 'insertText', at: { paragraph: paragraphs.value.handles[0]!, offset: 0 }, text: 'still ' },
+    {
+      op: 'insertText',
+      at: { paragraph: paragraphs.value.handles[0]!, offset: 0 },
+      text: 'still ',
+    },
   ],
 });
 check(written.ok && written.changed, 'the insert did not commit');

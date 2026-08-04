@@ -117,7 +117,9 @@ export interface BatchPlanner {
    * papered over, because binding a slot to the wrong paragraph would hand back a handle that
    * names the wrong thing forever.
    */
-  settle(post: AutomationDocumentReads): { readonly ok: true } | { readonly ok: false; readonly detail: string };
+  settle(
+    post: AutomationDocumentReads
+  ): { readonly ok: true } | { readonly ok: false; readonly detail: string };
 }
 
 function error(code: AutomationErrorCode, message: string, detail?: string): AutomationError {
@@ -137,7 +139,7 @@ function query(value: AutomationValue): PlannedOperation {
 /** Every occurrence of any delimiter in `text`, non-overlapping, in order. */
 function delimiterOccurrences(
   text: string,
-  delimiters: readonly string[],
+  delimiters: readonly string[]
 ): readonly { readonly start: number; readonly length: number }[] {
   const found: { start: number; length: number }[] = [];
   let cursor = 0;
@@ -156,6 +158,15 @@ function delimiterOccurrences(
     cursor = best.start + best.length;
   }
   return found;
+}
+
+/** Whether both ends of a range still name a paragraph and an offset inside it. */
+function placeable(range: ResolvedRange, reads: AutomationDocumentReads): boolean {
+  for (const point of [range.start, range.end]) {
+    const text = reads.paragraphText(point.paragraphId);
+    if (text === null || point.offset > text.length) return false;
+  }
+  return true;
 }
 
 /** `[start, end)` narrowed past leading and trailing whitespace. */
@@ -183,6 +194,16 @@ export function createBatchPlanner(host: BatchPlannerHost): BatchPlanner {
   /** Paragraphs a command has restructured, and paragraphs any command has touched. */
   const restructured = new Set<string>();
   const touched = new Set<string>();
+  /**
+   * Paragraphs a queued selection covers.
+   *
+   * Tracked because a selection is applied AFTER the transaction while its coordinates were
+   * resolved BEFORE it, so a batch that both selects a paragraph and changes it would move the
+   * reader's caret to a position the change invalidated — or into a paragraph the change removed.
+   * Which of the two the caller wrote first cannot matter, and this is the half that makes it not:
+   * `planSelect` looks at what has been edited, and every edit looks at this.
+   */
+  const selected = new Set<string>();
   /** Identity moves to apply after the commit: the caller's handle for `from` must name `to`. */
   const retargets: { readonly from: string; readonly slot: Slot }[] = [];
   const selections: { readonly range: ResolvedRange; readonly mode: AutomationSelectionMode }[] =
@@ -191,13 +212,25 @@ export function createBatchPlanner(host: BatchPlannerHost): BatchPlanner {
 
   const positionOf = (slot: Slot): number => order.indexOf(slot);
 
+  /** Refuse when a paragraph a queued selection covers is about to be changed. */
+  const selectionConflict = (paragraphId: string): PlannedOperation | null =>
+    selected.has(paragraphId)
+      ? refuse(
+          'conflicting-operations',
+          'this batch selects a paragraph it also edits',
+          paragraphId
+        )
+      : null;
+
   /** Claim a paragraph for a structural command, or say why it cannot be claimed. */
   const claim = (paragraphId: string): PlannedOperation | null => {
+    const selection = selectionConflict(paragraphId);
+    if (selection) return selection;
     if (restructured.has(paragraphId) || touched.has(paragraphId)) {
       return refuse(
         'conflicting-operations',
         'another operation in this batch already changes that paragraph',
-        paragraphId,
+        paragraphId
       );
     }
     restructured.add(paragraphId);
@@ -207,11 +240,13 @@ export function createBatchPlanner(host: BatchPlannerHost): BatchPlanner {
 
   /** Record a non-structural touch, or say why the paragraph is already spoken for. */
   const touch = (paragraphId: string): PlannedOperation | null => {
+    const selection = selectionConflict(paragraphId);
+    if (selection) return selection;
     if (restructured.has(paragraphId)) {
       return refuse(
         'conflicting-operations',
         'another operation in this batch restructures that paragraph',
-        paragraphId,
+        paragraphId
       );
     }
     touched.add(paragraphId);
@@ -231,14 +266,26 @@ export function createBatchPlanner(host: BatchPlannerHost): BatchPlanner {
   const searchScope = (
     scope: ResolvedSpan,
     text: string,
-    options: AutomationSearchOptions | undefined,
+    options: AutomationSearchOptions | undefined
   ): PlannedOperation => {
     if (options?.matchWildcards === true)
-      return refuse('unsupported-capability', 'wildcard search is not implemented', 'matchWildcards');
+      return refuse(
+        'unsupported-capability',
+        'wildcard search is not implemented',
+        'matchWildcards'
+      );
     if (options?.ignorePunct === true)
-      return refuse('unsupported-capability', 'ignoring punctuation is not implemented', 'ignorePunct');
+      return refuse(
+        'unsupported-capability',
+        'ignoring punctuation is not implemented',
+        'ignorePunct'
+      );
     if (options?.ignoreSpace === true)
-      return refuse('unsupported-capability', 'ignoring whitespace is not implemented', 'ignoreSpace');
+      return refuse(
+        'unsupported-capability',
+        'ignoring whitespace is not implemented',
+        'ignoreSpace'
+      );
     if (!isSearchableQuery(text))
       return refuse('unsupported-content', 'that is not a query this host will scan for', 'text');
 
@@ -283,7 +330,7 @@ export function createBatchPlanner(host: BatchPlannerHost): BatchPlanner {
       return refuse(
         'unsupported-content',
         'text carrying a paragraph mark is not written by this host',
-        'paragraph-mark-in-text',
+        'paragraph-mark-in-text'
       );
     }
     const conflict = touch(at.paragraphId);
@@ -309,7 +356,7 @@ export function createBatchPlanner(host: BatchPlannerHost): BatchPlanner {
       return refuse(
         'unsupported-content',
         'text carrying a paragraph mark is not written by this host',
-        'paragraph-mark-in-text',
+        'paragraph-mark-in-text'
       );
     }
 
@@ -340,7 +387,12 @@ export function createBatchPlanner(host: BatchPlannerHost): BatchPlanner {
       const last = range.end.paragraphId;
       const headLength = (reads.paragraphText(first) ?? '').length;
       if (range.start.offset < headLength)
-        ops.push({ op: 'deleteText', paragraphId: first, start: range.start.offset, end: headLength });
+        ops.push({
+          op: 'deleteText',
+          paragraphId: first,
+          start: range.start.offset,
+          end: headLength,
+        });
       if (range.end.offset > 0)
         ops.push({ op: 'deleteText', paragraphId: last, start: 0, end: range.end.offset });
       for (const middle of ids.slice(1, -1)) ops.push({ op: 'deleteBlock', blockId: middle });
@@ -362,10 +414,102 @@ export function createBatchPlanner(host: BatchPlannerHost): BatchPlanner {
     return { ok: true, kind: 'command', ops, answer };
   };
 
+  /**
+   * Empty the WHOLE story and write `text` into what is left of it.
+   *
+   * Not the same plan as replacing a stretch of a story, and the difference is structural. A
+   * stretch is deleted by removing text and joining what remains of the two ends; a story that
+   * holds a table has no such join — `joinParagraphs` refuses across a cell boundary, because two
+   * cells' paragraphs are not adjacent siblings — so "empty this story" takes the BLOCKS out
+   * instead and keeps one paragraph to write into. That is also what Word leaves behind: a body
+   * with no paragraph at all is not a document, it is a document with nowhere to put the caret.
+   *
+   * WHAT SURVIVES IS DELIBERATE. A paragraph whose mark ends a section stays and is emptied rather
+   * than removed, because removing it would merge its section into the next one and take that
+   * section's page size, orientation and headers over every page this one governed. A paragraph
+   * inside a block-level content control stays for a plainer reason: `deleteBlock` does not name a
+   * `w:sdt`, so the control is not a block this plan can remove, and emptying its paragraphs is the
+   * honest half of the job. Everything else — paragraphs, tables — goes.
+   */
+  const planReplaceStory = (text: string): PlannedOperation => {
+    if (typeof text !== 'string')
+      return refuse('unsupported-content', 'replaceSpan needs text', 'text');
+    if (PARAGRAPH_BREAKING.test(text)) {
+      return refuse(
+        'unsupported-content',
+        'text carrying a paragraph mark is not written by this host',
+        'paragraph-mark-in-text'
+      );
+    }
+
+    const blocks = reads.bodyBlocks;
+    const removed = blocks.filter((block) => block.removable);
+    const survivors = blocks
+      .filter((block) => !block.removable)
+      .flatMap((block) => block.paragraphIds);
+
+    // One paragraph has to remain to hold the text. When something already has to stay — a section
+    // mark, a content control's contents — that IS the remainder and nothing is kept on its
+    // account; otherwise the story's first paragraph is kept, so a caller's handle for it goes on
+    // naming a paragraph and a script can clear a story and keep writing to it.
+    const keeper =
+      survivors.length === 0 ? removed.find((block) => block.kind === 'paragraph') : undefined;
+    if (!keeper && survivors.length === 0) {
+      // Every block is a table (or the story is empty). Emptying this story would need a paragraph
+      // CREATED at the top level, which is not an op this slice has — and inventing one here would
+      // mean guessing at its properties. Refused whole; the document is untouched.
+      return refuse(
+        'invalid-offset',
+        'that story holds no paragraph this host can write into',
+        'no-top-level-paragraph'
+      );
+    }
+
+    // Every paragraph in the story belongs to this one command: it either goes away or is emptied,
+    // so a second operation addressing any of them in this batch is planned against text that will
+    // not be there.
+    for (const paragraphId of reads.bodyParagraphIds) {
+      const conflict = claim(paragraphId);
+      if (conflict) return conflict;
+    }
+
+    const ops: TreeDocOp[] = [];
+    // Reading order, so the text lands in the first paragraph the story still has.
+    const kept: string[] = (keeper ? [keeper.id] : [...survivors]).sort(
+      (a, b) => reads.indexOf(a) - reads.indexOf(b)
+    );
+    const target = kept[0] as string;
+
+    for (const paragraphId of kept) {
+      const length = (reads.paragraphText(paragraphId) ?? '').length;
+      if (length > 0) ops.push({ op: 'deleteText', paragraphId, start: 0, end: length });
+    }
+    for (const block of removed) {
+      if (block.id === keeper?.id) continue;
+      ops.push({ op: 'deleteBlock', blockId: block.id });
+    }
+    if (text.length > 0) ops.push({ op: 'insertText', paragraphId: target, offset: 0, text });
+
+    for (const block of removed) {
+      if (block.id === keeper?.id) continue;
+      for (const paragraphId of block.paragraphIds) {
+        const slot = slotById.get(paragraphId);
+        if (slot) order.splice(positionOf(slot), 1);
+      }
+    }
+
+    const start: ResolvedPoint = { paragraphId: target, index: reads.indexOf(target), offset: 0 };
+    const answer = (): AutomationValue => ({
+      kind: 'span',
+      span: spanOf({ start, end: { ...start, offset: text.length } }),
+    });
+    return { ok: true, kind: 'command', ops, answer };
+  };
+
   const planInsertParagraph = (
     anchor: ResolvedPoint,
     where: 'before' | 'after',
-    text: string,
+    text: string
   ): PlannedOperation => {
     if (typeof text !== 'string')
       return refuse('unsupported-content', 'insertParagraph needs text', 'text');
@@ -373,7 +517,7 @@ export function createBatchPlanner(host: BatchPlannerHost): BatchPlanner {
       return refuse(
         'unsupported-content',
         'a paragraph mark inside a paragraph\u2019s text is not written by this host',
-        'paragraph-mark-in-text',
+        'paragraph-mark-in-text'
       );
     }
     const conflict = claim(anchor.paragraphId);
@@ -413,7 +557,7 @@ export function createBatchPlanner(host: BatchPlannerHost): BatchPlanner {
     paragraph: ResolvedPoint,
     delimiters: readonly string[],
     trimDelimiters: boolean,
-    trimSpacing: boolean,
+    trimSpacing: boolean
   ): PlannedOperation => {
     if (!Array.isArray(delimiters) || delimiters.length === 0)
       return refuse('unsupported-content', 'split needs at least one delimiter', 'delimiters');
@@ -421,7 +565,11 @@ export function createBatchPlanner(host: BatchPlannerHost): BatchPlanner {
       return refuse('unsupported-content', 'too many delimiters', String(delimiters.length));
     for (const delimiter of delimiters) {
       if (typeof delimiter !== 'string' || delimiter.length === 0)
-        return refuse('unsupported-content', 'a delimiter must be a non-empty string', 'delimiters');
+        return refuse(
+          'unsupported-content',
+          'a delimiter must be a non-empty string',
+          'delimiters'
+        );
       if (delimiter.length > MAX_DELIMITER_LENGTH)
         return refuse('unsupported-content', 'that delimiter is too long', 'delimiters');
     }
@@ -484,7 +632,7 @@ export function createBatchPlanner(host: BatchPlannerHost): BatchPlanner {
       parts.forEach((part, index) => {
         const id = part.id;
         if (id === null) return;
-        const piece = post.paragraphText(id) ?? (pieces[index] ?? '');
+        const piece = post.paragraphText(id) ?? pieces[index] ?? '';
         const [from, to] = trimSpacing ? trimmed(piece, 0, piece.length) : [0, piece.length];
         const handle = handles.paragraph(id);
         spans.push({
@@ -510,25 +658,24 @@ export function createBatchPlanner(host: BatchPlannerHost): BatchPlanner {
     };
   };
 
-  const planSelect = (
-    range: ResolvedRange,
-    mode: AutomationSelectionMode,
-  ): PlannedOperation => {
+  const planSelect = (range: ResolvedRange, mode: AutomationSelectionMode): PlannedOperation => {
     if (!capabilities.selection || !host.select)
       return refuse('unsupported-capability', 'this host has no reader to move', 'selection');
     if (mode !== 'select' && mode !== 'start' && mode !== 'end')
       return refuse('unknown-operation', 'that is not a selection mode', String(mode));
     // Selecting is applied after the transaction, so a batch that also EDITS one of the
     // paragraphs the selection covers would place a caret using coordinates the edit moved.
-    for (const paragraphId of spanParagraphIds(range, reads)) {
+    const covered = spanParagraphIds(range, reads);
+    for (const paragraphId of covered) {
       if (touched.has(paragraphId)) {
         return refuse(
           'conflicting-operations',
           'this batch edits a paragraph the selection covers',
-          paragraphId,
+          paragraphId
         );
       }
     }
+    for (const paragraphId of covered) selected.add(paragraphId);
     selections.push({ range, mode });
     return { ok: true, kind: 'command', ops: [], answer: () => APPLIED };
   };
@@ -567,7 +714,11 @@ export function createBatchPlanner(host: BatchPlannerHost): BatchPlanner {
           return query({ kind: 'text', text: reads.bodyText() });
         const paragraph = resolveParagraphHandle(operation.target, handles, reads);
         if (!paragraph.ok)
-          return refuse(paragraph.code, 'that handle does not name a body or a paragraph', paragraph.detail);
+          return refuse(
+            paragraph.code,
+            'that handle does not name a body or a paragraph',
+            paragraph.detail
+          );
         return query({
           kind: 'text',
           text: reads.paragraphText(paragraph.value.paragraphId) ?? '',
@@ -603,18 +754,37 @@ export function createBatchPlanner(host: BatchPlannerHost): BatchPlanner {
       }
 
       case 'replaceSpan': {
+        // A SPAN OVER A WHOLE STORY IS A DIFFERENT OPERATION, and it is told apart by what the
+        // caller NAMED rather than by comparing endpoints: `{ body }` means "all of it" — what
+        // `Body.clear()` and `Body.insertText(…, 'Replace')` mean — and only that request may take
+        // blocks out of the story. Two explicit endpoints that happen to reach both ends stay a
+        // text edit, because a caller who addressed text asked for a text edit.
+        if ('body' in operation.span) {
+          if (!handles.resolve(operation.span.body, 'body'))
+            return refuse('invalid-handle', 'that handle does not name a body', 'body');
+          return planReplaceStory(operation.text);
+        }
         const resolved = resolveSpanRef(operation.span, handles, reads);
         if (!resolved.ok) return refuse(resolved.code, 'that span is not a place', resolved.detail);
         if (!resolved.value)
-          return refuse('invalid-offset', 'that story holds no paragraph to write into', 'empty-story');
+          return refuse(
+            'invalid-offset',
+            'that story holds no paragraph to write into',
+            'empty-story'
+          );
         return planReplaceSpan(resolved.value, operation.text);
       }
 
       case 'insertParagraph': {
         const anchor = resolveParagraphRef(operation.anchor, handles, reads);
-        if (!anchor.ok) return refuse(anchor.code, 'that is not a paragraph to insert beside', anchor.detail);
+        if (!anchor.ok)
+          return refuse(anchor.code, 'that is not a paragraph to insert beside', anchor.detail);
         if (operation.where !== 'before' && operation.where !== 'after')
-          return refuse('unknown-operation', 'that is not a place to insert', String(operation.where));
+          return refuse(
+            'unknown-operation',
+            'that is not a place to insert',
+            String(operation.where)
+          );
         return planInsertParagraph(anchor.value, operation.where, operation.text);
       }
 
@@ -626,7 +796,7 @@ export function createBatchPlanner(host: BatchPlannerHost): BatchPlanner {
           paragraph.value,
           operation.delimiters,
           operation.trimDelimiters === true,
-          operation.trimSpacing === true,
+          operation.trimSpacing === true
         );
       }
 
@@ -650,7 +820,7 @@ export function createBatchPlanner(host: BatchPlannerHost): BatchPlanner {
         return refuse(
           'unknown-operation',
           'this host does not implement that operation',
-          String(unknown.op),
+          String(unknown.op)
         );
       }
     }
@@ -683,7 +853,15 @@ export function createBatchPlanner(host: BatchPlannerHost): BatchPlanner {
       for (const retarget of retargets) {
         if (retarget.slot.id) handles.retarget(retarget.from, retarget.slot.id);
       }
-      for (const selection of selections) host.select?.(selection.range, selection.mode);
+      // LAST GATE BEFORE A CARET MOVES. Planning already refuses a batch that selects a paragraph
+      // it also changes, so a selection reaching here should describe the committed document
+      // exactly. "Should" is the reason for the check: if it does not — a planner bug, an op with
+      // an effect this file did not model — the right outcome is that no caret moves, not that one
+      // moves to a position that has stopped meaning what it meant.
+      for (const selection of selections) {
+        if (!placeable(selection.range, post)) continue;
+        host.select?.(selection.range, selection.mode);
+      }
       return { ok: true };
     },
   };

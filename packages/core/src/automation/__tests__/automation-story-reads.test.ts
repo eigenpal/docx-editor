@@ -86,7 +86,9 @@ describe('paragraph identity', () => {
     const host = open(docx(pWithId('alpha', '1A2B3C4D')));
     const { body } = roots(host);
     const [paragraph] = paragraphsOf(host, body);
-    const response = host.execute({ operations: [{ op: 'getParagraphId', paragraph: paragraph! }] });
+    const response = host.execute({
+      operations: [{ op: 'getParagraphId', paragraph: paragraph! }],
+    });
     expect(textAt(response, 0)).toBe('1A2B3C4D');
   });
 
@@ -97,7 +99,9 @@ describe('paragraph identity', () => {
     const read = () =>
       list.map((paragraph, index) =>
         textAt(
-          host.execute({ operations: list.map((h) => ({ op: 'getParagraphId' as const, paragraph: h })) }),
+          host.execute({
+            operations: list.map((h) => ({ op: 'getParagraphId' as const, paragraph: h })),
+          }),
           index
         )
       );
@@ -150,7 +154,10 @@ describe('a span of a story', () => {
       operations: [
         {
           op: 'getSpanText',
-          span: { start: { paragraph: list[0]!, offset: 3 }, end: { paragraph: list[2]!, offset: 2 } },
+          span: {
+            start: { paragraph: list[0]!, offset: 3 },
+            end: { paragraph: list[2]!, offset: 2 },
+          },
         },
       ],
     });
@@ -172,7 +179,10 @@ describe('a span of a story', () => {
       operations: [
         {
           op: 'getSpanParagraphs',
-          span: { start: { paragraph: list[0]!, offset: 1 }, end: { paragraph: list[1]!, offset: 1 } },
+          span: {
+            start: { paragraph: list[0]!, offset: 1 },
+            end: { paragraph: list[1]!, offset: 1 },
+          },
         },
       ],
     });
@@ -191,7 +201,10 @@ describe('a span of a story', () => {
       operations: [
         {
           op: 'getSpanText',
-          span: { start: { paragraph: list[1]!, offset: 0 }, end: { paragraph: list[0]!, offset: 0 } },
+          span: {
+            start: { paragraph: list[1]!, offset: 0 },
+            end: { paragraph: list[0]!, offset: 0 },
+          },
         },
       ],
     });
@@ -293,19 +306,24 @@ describe('searching a story', () => {
   test('finds text inside a table cell, because those paragraphs are in the story', () => {
     const host = open(docx(`${p('head')}${table(row(cell(p('needle'))))}`));
     const { body } = roots(host);
-    const response = host.execute({ operations: [{ op: 'search', scope: { body }, text: 'needle' }] });
+    const response = host.execute({
+      operations: [{ op: 'search', scope: { body }, text: 'needle' }],
+    });
     expect(spansAt(response, 0)).toHaveLength(1);
   });
 
   test('is case-insensitive by default and case-sensitive when asked', () => {
     const host = open(docx(p('Alpha alpha')));
     const { body } = roots(host);
-    expect(spansAt(host.execute({ operations: [{ op: 'search', scope: { body }, text: 'alpha' }] }), 0))
-      .toHaveLength(2);
+    expect(
+      spansAt(host.execute({ operations: [{ op: 'search', scope: { body }, text: 'alpha' }] }), 0)
+    ).toHaveLength(2);
     expect(
       spansAt(
         host.execute({
-          operations: [{ op: 'search', scope: { body }, text: 'alpha', options: { matchCase: true } }],
+          operations: [
+            { op: 'search', scope: { body }, text: 'alpha', options: { matchCase: true } },
+          ],
         }),
         0
       )
@@ -318,7 +336,9 @@ describe('searching a story', () => {
     expect(
       spansAt(
         host.execute({
-          operations: [{ op: 'search', scope: { body }, text: 'cat', options: { matchWholeWord: true } }],
+          operations: [
+            { op: 'search', scope: { body }, text: 'cat', options: { matchWholeWord: true } },
+          ],
         }),
         0
       )
@@ -328,14 +348,18 @@ describe('searching a story', () => {
   test('counts repeated text without overlapping', () => {
     const host = open(docx(p('aaaa')));
     const { body } = roots(host);
-    expect(spansAt(host.execute({ operations: [{ op: 'search', scope: { body }, text: 'aa' }] }), 0))
-      .toHaveLength(2);
+    expect(
+      spansAt(host.execute({ operations: [{ op: 'search', scope: { body }, text: 'aa' }] }), 0)
+    ).toHaveLength(2);
   });
 
   test('stops at the result cap instead of allocating one entry per character', () => {
     const host = open(docx(p('x'.repeat(5000))));
     const { body } = roots(host);
-    const spans = spansAt(host.execute({ operations: [{ op: 'search', scope: { body }, text: 'x' }] }), 0);
+    const spans = spansAt(
+      host.execute({ operations: [{ op: 'search', scope: { body }, text: 'x' }] }),
+      0
+    );
     expect(spans.length).toBeLessThanOrEqual(2000);
     expect(spans.length).toBe(2000);
   });
@@ -421,7 +445,10 @@ describe('searching a story', () => {
   test('a span a search returned reads back as the text that was searched for', () => {
     const host = open(docx(p('find me here')));
     const { body } = roots(host);
-    const found = spansAt(host.execute({ operations: [{ op: 'search', scope: { body }, text: 'me' }] }), 0);
+    const found = spansAt(
+      host.execute({ operations: [{ op: 'search', scope: { body }, text: 'me' }] }),
+      0
+    );
     const response = host.execute({ operations: [{ op: 'getSpanText', span: found[0]! }] });
     expect(textAt(response, 0)).toBe('me');
   });

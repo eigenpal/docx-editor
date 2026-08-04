@@ -307,7 +307,9 @@ describe('refusals are typed, and a refused batch writes nothing', () => {
     const host = open();
     const { paragraphs } = handles(host);
     const response = host.execute({
-      operations: [{ op: 'insertText', at: { paragraph: paragraphs[0]!, offset: 0 }, text: '\u0000' }],
+      operations: [
+        { op: 'insertText', at: { paragraph: paragraphs[0]!, offset: 0 }, text: '\u0000' },
+      ],
     });
     expect(response.ok).toBe(false);
     expect(errorCodeAt(response, 0)).toBe('transaction-refused');

@@ -35,7 +35,7 @@ import {
 
 /** A fixture that already carries the identity Word writes, so an open mints nothing. */
 const AUTHORED = docx(
-  pWithId('alpha', '11111111') + pWithId('beta', '22222222') + pWithId('gamma', '33333333'),
+  pWithId('alpha', '11111111') + pWithId('beta', '22222222') + pWithId('gamma', '33333333')
 );
 
 function savedMainPart(host: AutomationHost): OoxmlPart {
@@ -62,7 +62,7 @@ function bodyOf(host: AutomationHost): AutomationHandle {
 /** Each paragraph's `w14:paraId`, as the saved document writes it. */
 function identitiesOf(
   host: AutomationHost,
-  paragraphs: readonly AutomationHandle[],
+  paragraphs: readonly AutomationHandle[]
 ): readonly string[] {
   const response = host.execute({
     operations: paragraphs.map((paragraph) => ({ op: 'getParagraphId' as const, paragraph })),
@@ -146,7 +146,12 @@ describe('a structural edit survives the serializer', () => {
     const list = paragraphsOf(host, bodyOf(host));
     host.execute({
       operations: [
-        { op: 'insertParagraph', anchor: { paragraph: list[0]! }, where: 'after', text: 'inserted' },
+        {
+          op: 'insertParagraph',
+          anchor: { paragraph: list[0]! },
+          where: 'after',
+          text: 'inserted',
+        },
       ],
     });
 
@@ -179,8 +184,11 @@ describe('a structural edit survives the serializer', () => {
   test('a deletion inside a table leaves the table, its row and its other cell alone', () => {
     const source = docx(
       table(
-        row(cell(pWithId('One', '55555555'), pWithId('Extra', '66666666')), cell(pWithId('Two', '77777777'))),
-      ),
+        row(
+          cell(pWithId('One', '55555555'), pWithId('Extra', '66666666')),
+          cell(pWithId('Two', '77777777'))
+        )
+      )
     );
     const host = open(source);
     const list = paragraphsOf(host, bodyOf(host));

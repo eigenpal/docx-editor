@@ -195,7 +195,9 @@ describe('a scripted write obeys the editing mode', () => {
     editor.surface!.setEditingMode('suggest');
 
     const response = host.execute({
-      operations: [{ op: 'insertText', at: { paragraph: paragraphs[0]!, offset: 0 }, text: 'Draft' }],
+      operations: [
+        { op: 'insertText', at: { paragraph: paragraphs[0]!, offset: 0 }, text: 'Draft' },
+      ],
     });
 
     expect({ ok: response.ok, changed: response.changed }).toEqual({ ok: true, changed: true });

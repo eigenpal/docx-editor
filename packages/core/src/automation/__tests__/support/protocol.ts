@@ -4,7 +4,7 @@
 // canonical tree and the one transaction path, so a stub would let the protocol agree with
 // itself and prove nothing.
 
-import { strToU8, zipSync } from 'fflate';
+import { strFromU8, strToU8, unzipSync, zipSync } from 'fflate';
 import { createServerAutomationHost } from '../../server-host.ts';
 import type {
   AutomationBatchResponse,
@@ -41,9 +41,30 @@ export const p = (text: string): string =>
 export const pWithId = (text: string, paraId: string): string =>
   `<w:p w14:paraId="${paraId}" w14:textId="${paraId}"><w:r><w:t xml:space="preserve">${text}</w:t></w:r></w:p>`;
 
+/**
+ * A paragraph that ENDS A SECTION: its mark carries a `w:sectPr` (17.6.17).
+ *
+ * Removing such a paragraph would merge its section into the next one, taking that section's
+ * page size and headers over every page it governed, so the store refuses to delete it. It is
+ * here because "empty the whole story" has to mean something for a document with two sections.
+ */
+export const pWithSection = (text: string): string =>
+  `<w:p><w:pPr><w:sectPr><w:pgSz w:w="11906" w:h="16838"/></w:sectPr></w:pPr>` +
+  `<w:r><w:t xml:space="preserve">${text}</w:t></w:r></w:p>`;
+
 export const cell = (...blocks: string[]): string => `<w:tc>${blocks.join('')}</w:tc>`;
 export const row = (...cells: string[]): string => `<w:tr>${cells.join('')}</w:tr>`;
 export const table = (...rows: string[]): string => `<w:tbl>${rows.join('')}</w:tbl>`;
+/** A block-level content control wrapping blocks. `deleteBlock` does not name one. */
+export const sdt = (...blocks: string[]): string =>
+  `<w:sdt><w:sdtPr/><w:sdtContent>${blocks.join('')}</w:sdtContent></w:sdt>`;
+
+/** The saved `word/document.xml`, for assertions about markup an edit had to keep. */
+export function savedMainXml(host: AutomationHost): string {
+  const saved = host.save();
+  if (!saved.ok) throw new Error(`save refused: ${saved.error.code}`);
+  return strFromU8(unzipSync(saved.bytes)['word/document.xml'] as Uint8Array);
+}
 
 export function open(bytes: Uint8Array): AutomationHost {
   const opened = createServerAutomationHost(bytes);
@@ -112,7 +133,10 @@ export function spanAt(response: AutomationBatchResponse, index: number): Automa
   return result.value.span;
 }
 
-export function spansAt(response: AutomationBatchResponse, index: number): readonly AutomationSpan[] {
+export function spansAt(
+  response: AutomationBatchResponse,
+  index: number
+): readonly AutomationSpan[] {
   const result = response.results[index];
   if (result?.status !== 'ok' || result.value.kind !== 'spans') {
     throw new Error(`expected spans at ${index}: ${describe(response, index)}`);

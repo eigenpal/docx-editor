@@ -48,7 +48,7 @@ function ok<T>(value: T): Resolution<T> {
 export function resolveParagraphHandle(
   handle: AutomationHandle,
   handles: AutomationHandleTable,
-  reads: AutomationDocumentReads,
+  reads: AutomationDocumentReads
 ): Resolution<ResolvedPoint> {
   const resolved = handles.resolve(handle, 'paragraph');
   if (!resolved || resolved.kind !== 'paragraph')
@@ -69,7 +69,7 @@ function checkBody(handle: AutomationHandle, handles: AutomationHandleTable): Re
 export function resolveEndpoint(
   endpoint: AutomationEndpoint,
   handles: AutomationHandleTable,
-  reads: AutomationDocumentReads,
+  reads: AutomationDocumentReads
 ): Resolution<ResolvedPoint> {
   const paragraph = resolveParagraphHandle(endpoint.paragraph, handles, reads);
   if (!paragraph.ok) return paragraph;
@@ -84,7 +84,7 @@ export function resolveEndpoint(
 export function resolvePoint(
   point: AutomationPoint,
   handles: AutomationHandleTable,
-  reads: AutomationDocumentReads,
+  reads: AutomationDocumentReads
 ): Resolution<ResolvedPoint> {
   if ('paragraph' in point) {
     if (!('at' in point)) return resolveEndpoint(point, handles, reads);
@@ -129,7 +129,7 @@ function wholeStory(reads: AutomationDocumentReads): ResolvedSpan {
 export function resolveSpanRef(
   span: AutomationSpanRef,
   handles: AutomationHandleTable,
-  reads: AutomationDocumentReads,
+  reads: AutomationDocumentReads
 ): Resolution<ResolvedSpan> {
   if ('body' in span) {
     const body = checkBody(span.body, handles);
@@ -154,7 +154,7 @@ export function resolveSpanRef(
 export function resolveParagraphRef(
   ref: AutomationParagraphRef,
   handles: AutomationHandleTable,
-  reads: AutomationDocumentReads,
+  reads: AutomationDocumentReads
 ): Resolution<ResolvedPoint> {
   if ('paragraph' in ref) return resolveParagraphHandle(ref.paragraph, handles, reads);
   const body = checkBody(ref.body, handles);
@@ -168,7 +168,7 @@ export function resolveParagraphRef(
 /** The canonical ids a span covers, in reading order. */
 export function spanParagraphIds(
   span: ResolvedSpan,
-  reads: AutomationDocumentReads,
+  reads: AutomationDocumentReads
 ): readonly string[] {
   if (!span) return [];
   return reads.bodyParagraphIds.slice(span.start.index, span.end.index + 1);
@@ -184,7 +184,7 @@ export function spanParagraphIds(
 export function spanText(
   span: ResolvedSpan,
   reads: AutomationDocumentReads,
-  paragraphMark: string,
+  paragraphMark: string
 ): string {
   if (!span) return '';
   const ids = spanParagraphIds(span, reads);

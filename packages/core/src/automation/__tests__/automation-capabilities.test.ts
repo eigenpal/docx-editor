@@ -186,9 +186,9 @@ describe('the operation vocabulary declares which operations write', () => {
       'deleteParagraph',
       'selectSpan',
     ]);
-    expect(isAutomationCommand({ op: 'insertText', at: { paragraph: FORGED, offset: 0 }, text: 'x' })).toBe(
-      true
-    );
+    expect(
+      isAutomationCommand({ op: 'insertText', at: { paragraph: FORGED, offset: 0 }, text: 'x' })
+    ).toBe(true);
     expect(isAutomationCommand({ op: 'getDocument' })).toBe(false);
     expect(isAutomationCommand({ op: 'getText', target: FORGED })).toBe(false);
   });

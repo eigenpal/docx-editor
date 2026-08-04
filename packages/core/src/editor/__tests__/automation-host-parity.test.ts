@@ -359,7 +359,12 @@ describe('the whole operation vocabulary answers identically in both hosts', () 
         },
         { op: 'getParagraphId', paragraph: first },
         { op: 'search', scope: { body }, text: 'e' },
-        { op: 'search', scope: { body }, text: 'Region', options: { matchCase: true, matchWholeWord: true } },
+        {
+          op: 'search',
+          scope: { body },
+          text: 'Region',
+          options: { matchCase: true, matchWholeWord: true },
+        },
         { op: 'search', scope: { body }, text: 'nothing here' },
       ],
     });
@@ -390,12 +395,22 @@ describe('the whole operation vocabulary answers identically in both hosts', () 
       }),
       host.execute({
         operations: [
-          { op: 'insertParagraph', anchor: { paragraph: paragraphs[1]! }, where: 'before', text: 'Summary' },
+          {
+            op: 'insertParagraph',
+            anchor: { paragraph: paragraphs[1]! },
+            where: 'before',
+            text: 'Summary',
+          },
         ],
       }),
       host.execute({
         operations: [
-          { op: 'splitParagraph', paragraph: paragraphs[1]!, delimiters: ['by'], trimDelimiters: true },
+          {
+            op: 'splitParagraph',
+            paragraph: paragraphs[1]!,
+            delimiters: ['by'],
+            trimDelimiters: true,
+          },
         ],
       }),
       host.execute({ operations: [{ op: 'deleteParagraph', paragraph: paragraphs[3]! }] }),
@@ -421,6 +436,48 @@ describe('the whole operation vocabulary answers identically in both hosts', () 
     const saved = onBoth(hosts, savedBytes);
     expect(oracles(saved.server).fingerprint).toBe(oracles(saved.browser).fingerprint);
     expect(oracles(saved.server).digest).toEqual(oracles(saved.browser).digest);
+  });
+
+  /** Emptying the whole story — the fixture's table, its cell paragraphs and all. */
+  const replaceTheStory = (host: AutomationHost): unknown => {
+    const { body } = handlesOf(host);
+    const response = host.execute({
+      operations: [{ op: 'replaceSpan', span: { body }, text: 'nothing but this' }],
+    });
+    const { paragraphs: after } = handlesOf(host);
+    return {
+      ok: response.ok,
+      changed: response.changed,
+      results: response.results,
+      texts: after.map((paragraph) => textOf(host, paragraph)),
+    };
+  };
+
+  test('emptying a story that holds a table is the same structural edit in both', () => {
+    // The write the browser host is most likely to diverge on: it is the one that takes BLOCKS out
+    // of the story, so it repaints pages and re-flows the surface rather than editing a run. Both
+    // sides go through the same planner and the same one transaction, and this is what says so.
+    const hosts = bothHosts();
+    const { server, browser } = onBoth(hosts, replaceTheStory);
+    expect(normalizeTokens(server)).toEqual(normalizeTokens(browser));
+    expect((server as { texts: string[] }).texts).toEqual(['nothing but this']);
+  });
+
+  test('and the document it leaves saves to the same bytes', () => {
+    const hosts = bothHosts();
+    onBoth(hosts, replaceTheStory);
+    const saved = onBoth(hosts, savedBytes);
+    expect(oracles(saved.server).fingerprint).toBe(oracles(saved.browser).fingerprint);
+    expect(oracles(saved.server).digest).toEqual(oracles(saved.browser).digest);
+    // And reopening what the BROWSER saved finds the story the edit left, not the one it started
+    // with: the edit reached the document rather than the picture of it on screen.
+    const reopened = createServerAutomationHost(saved.browser);
+    if (!reopened.ok) throw new Error(`saved bytes did not reopen: ${reopened.reason}`);
+    const { body, paragraphs } = handlesOf(reopened.host);
+    expect(paragraphs.map((paragraph) => textOf(reopened.host, paragraph))).toEqual([
+      'nothing but this',
+    ]);
+    expect(textOf(reopened.host, body)).toBe('nothing but this');
   });
 });
 
@@ -506,6 +563,109 @@ describe('selection is the one thing the two hosts differ about', () => {
       'conflicting-operations'
     );
     expect(textOf(hosts.browser, paragraphs[1]!)).toBe('Prepared by the team');
+  });
+
+  // THE OTHER ORDER IS THE SAME BATCH. A selection is applied after the transaction, so it does
+  // not matter which of the two the caller wrote first: if this batch both selects a paragraph and
+  // changes it, the caret would be placed with offsets the edit moved — or into a paragraph the
+  // edit removed. The first version of this planner only looked backwards, which meant
+  // `[select, edit]` committed the edit and then moved the reader's caret to a stale position.
+  describe('and it does not matter which way round the two are written', () => {
+    test('selecting a paragraph and then writing into it is refused', () => {
+      const hosts = bothHosts();
+      const { paragraphs } = handlesOf(hosts.browser);
+      const before = hosts.editor.surface?.state().selection;
+      const response = hosts.browser.execute({
+        operations: [
+          {
+            op: 'selectSpan',
+            span: {
+              start: { paragraph: paragraphs[1]!, offset: 2 },
+              end: { paragraph: paragraphs[1]!, offset: 7 },
+            },
+            mode: 'select',
+          },
+          { op: 'insertText', at: { paragraph: paragraphs[1]!, offset: 0 }, text: 'X' },
+        ],
+      });
+      const second = response.results[1];
+      expect(second?.status === 'error' ? second.error.code : second?.status).toBe(
+        'conflicting-operations'
+      );
+      // Neither half happened: the text is untouched AND the caret never moved.
+      expect(textOf(hosts.browser, paragraphs[1]!)).toBe('Prepared by the team');
+      expect(hosts.editor.surface?.state().selection).toEqual(before);
+    });
+
+    test('selecting a paragraph and then deleting it is refused', () => {
+      const hosts = bothHosts();
+      const { paragraphs } = handlesOf(hosts.browser);
+      const response = hosts.browser.execute({
+        operations: [
+          { op: 'selectSpan', span: { paragraph: paragraphs[1]! }, mode: 'select' },
+          { op: 'deleteParagraph', paragraph: paragraphs[1]! },
+        ],
+      });
+      const second = response.results[1];
+      expect(second?.status === 'error' ? second.error.code : second?.status).toBe(
+        'conflicting-operations'
+      );
+      expect(textOf(hosts.browser, paragraphs[1]!)).toBe('Prepared by the team');
+    });
+
+    test('selecting a paragraph and then splitting it is refused', () => {
+      const hosts = bothHosts();
+      const { paragraphs } = handlesOf(hosts.browser);
+      const response = hosts.browser.execute({
+        operations: [
+          { op: 'selectSpan', span: { paragraph: paragraphs[1]! }, mode: 'start' },
+          { op: 'splitParagraph', paragraph: paragraphs[1]!, delimiters: [' '] },
+        ],
+      });
+      const second = response.results[1];
+      expect(second?.status === 'error' ? second.error.code : second?.status).toBe(
+        'conflicting-operations'
+      );
+      expect(textOf(hosts.browser, paragraphs[1]!)).toBe('Prepared by the team');
+    });
+
+    test('selecting a paragraph and then clearing the whole story is refused', () => {
+      const hosts = bothHosts();
+      const { body, paragraphs } = handlesOf(hosts.browser);
+      const response = hosts.browser.execute({
+        operations: [
+          { op: 'selectSpan', span: { paragraph: paragraphs[1]! }, mode: 'select' },
+          { op: 'replaceSpan', span: { body }, text: '' },
+        ],
+      });
+      const second = response.results[1];
+      expect(second?.status === 'error' ? second.error.code : second?.status).toBe(
+        'conflicting-operations'
+      );
+      expect(textOf(hosts.browser, paragraphs[1]!)).toBe('Prepared by the team');
+    });
+
+    test('but selecting one paragraph and editing ANOTHER is an ordinary batch', () => {
+      const hosts = bothHosts();
+      const { paragraphs } = handlesOf(hosts.browser);
+      const response = hosts.browser.execute({
+        operations: [
+          {
+            op: 'selectSpan',
+            span: {
+              start: { paragraph: paragraphs[1]!, offset: 2 },
+              end: { paragraph: paragraphs[1]!, offset: 7 },
+            },
+            mode: 'select',
+          },
+          { op: 'insertText', at: { paragraph: paragraphs[0]!, offset: 0 }, text: 'X' },
+        ],
+      });
+      expect(response.ok).toBe(true);
+      expect(textOf(hosts.browser, paragraphs[0]!)).toBe('XQuarterly report');
+      const selection = hosts.editor.surface?.state().selection;
+      expect([selection?.anchor.offset, selection?.head.offset]).toEqual([2, 7]);
+    });
   });
 });
 
@@ -608,7 +768,12 @@ describe('the two hosts refuse the same things the same way', () => {
       const { paragraphs } = handlesOf(host);
       const response = host.execute({
         operations: [
-          { op: 'insertParagraph', anchor: { paragraph: paragraphs[0]! }, where: 'after', text: 'x' },
+          {
+            op: 'insertParagraph',
+            anchor: { paragraph: paragraphs[0]! },
+            where: 'after',
+            text: 'x',
+          },
           { op: 'insertText', at: { paragraph: paragraphs[0]!, offset: 0 }, text: 'y' },
         ],
       });
