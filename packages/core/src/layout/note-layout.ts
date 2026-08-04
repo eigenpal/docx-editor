@@ -1,0 +1,384 @@
+// Per-note story layout (typed footnotes / endnotes).
+//
+// Each typed note node is a story laid out at content width with no body pagination —
+// same shape as header/footer furniture ({@link layoutHeaderFooterStory}), but notes
+// consume body space on the referencing page (or collect at sect/doc end) and are
+// selectable editable content rather than `[data-docx-hf]` furniture.
+//
+// Line / fragment ids are namespaced by note kind + id so the body's incremental
+// convergence counter never moves because a note changed. Resource accounting is
+// bounded: hostile note counts and over-tall flows fail closed with named reasons.
+
+import type { OoxmlElement, OoxmlNode, OoxmlPart } from '@docx-editor.dev/core-contract/store';
+import {
+  findNoteById,
+  formatNoteScopeId,
+  isContinuationSeparatorNode,
+  isNormalNote,
+  isNoteRefNode,
+  isSeparatorNode,
+  noteIdOf,
+  noteKindOf,
+  noteTypeOf,
+  notesOf,
+  type NoteKind,
+  MAX_NOTES_PER_PART,
+} from '../store/package/note-nodes.ts';
+import type { ParagraphLayoutCache } from './layout-cache.ts';
+import type { NoteMarkContext } from './note-projection.ts';
+import type { PendingLine } from './paragraph-flow.ts';
+import { paragraphBorders } from './paragraph-style.ts';
+import { flowBlocksInBox } from './semantic-table-layout.ts';
+import type { BlockFragmentRecord, LayoutBox, TextMeasurer } from './semantic-records.ts';
+import type { StyleCascadeTable } from './style-cascade.ts';
+import { noteStoryBlocks } from './story-roots.ts';
+
+/** Hard ceiling on notes laid out in one pass (fail closed beyond). */
+export const MAX_NOTES_LAID_OUT = MAX_NOTES_PER_PART;
+
+/** Hard ceiling on fragments emitted for one note (split / continuation). */
+export const MAX_NOTE_FRAGMENTS = 512;
+
+/** Default separator rule height when the document supplies no separator note. */
+export const DEFAULT_NOTE_SEPARATOR_HEIGHT_PT = 6;
+
+/** Default separator rule width as a fraction of content width. */
+export const DEFAULT_NOTE_SEPARATOR_WIDTH_RATIO = 1 / 3;
+
+export type NoteLayoutFallbackReason =
+  | 'note-count-limit'
+  | 'note-fragment-limit'
+  | 'note-reflow-exhausted'
+  | 'note-height-cap'
+  /** Authored separator/continuationSeparator taller than the content column. */
+  | 'note-separator-height-cap'
+  | 'missing-note-body'
+  | 'dangling-note-reference';
+
+export interface NoteStoryLayout {
+  readonly noteKind: NoteKind;
+  readonly noteId: number;
+  /** `footnote:N` / `endnote:N` — matches EditorScope note id encoding. */
+  readonly scopeId: string;
+  readonly noteType: ReturnType<typeof noteTypeOf>;
+  /** Story-relative fragments; origin at the story box's top-left. */
+  readonly fragments: readonly BlockFragmentRecord[];
+  /** Height the blocks flow to (points). */
+  readonly flowHeight: number;
+  /** True when layout hit a named bound and returned a truncated / empty story. */
+  readonly fallbackReason?: NoteLayoutFallbackReason;
+}
+
+/** Paint style for Word-default / marker-only separator rules (not CSS inventing content). */
+export type NoteSeparatorRuleStyle = 'single' | 'double';
+
+export interface NoteSeparatorLayout {
+  readonly kind: 'separator' | 'continuationSeparator';
+  readonly fragments: readonly BlockFragmentRecord[];
+  readonly flowHeight: number;
+  /** True when the engine synthesized a default rule (document had none). */
+  readonly synthetic: boolean;
+  /**
+   * Layout-owned rule when the separator is marker-only (`w:separator` /
+   * `w:continuationSeparator`) or fully synthetic. Absent when an authored separator
+   * story has real paragraph/run/border content that paint should render as fragments.
+   */
+  readonly ruleStyle?: NoteSeparatorRuleStyle;
+  /** Set when an oversize authored separator was replaced with a synthetic rule. */
+  readonly fallbackReason?: NoteLayoutFallbackReason;
+}
+
+export interface LayoutNoteStoryOptions {
+  readonly measurer: TextMeasurer;
+  readonly producer: string;
+  readonly cache?: ParagraphLayoutCache<readonly PendingLine[]>;
+  readonly styleCascade?: StyleCascadeTable;
+  readonly defaultTabStopPt?: number;
+  /** Derived display marks for noteRef projection inside the note body. */
+  readonly noteMarks?: NoteMarkContext;
+  /**
+   * Cap on flow height for a single note story (points). Hostile notes must not allocate
+   * unbounded page fragments; overflow is split by the pagination layer, not here.
+   */
+  readonly maxFlowHeightPt?: number;
+}
+
+/**
+ * Stable line-id namespace for one note. Body line counters compare these as opaque strings
+ * and must not collide with `line-N` / `hf-…` ids.
+ */
+export function noteLineIdPrefix(noteKind: NoteKind, noteId: number): string {
+  return `note-${noteKind}-${noteId}`;
+}
+
+/** Collect normal (body) notes from a notes part, bounded. */
+export function normalNotesOf(part: OoxmlPart | null | undefined): readonly OoxmlElement[] {
+  if (!part) return [];
+  const out: OoxmlElement[] = [];
+  for (const note of notesOf(part.root)) {
+    if (out.length >= MAX_NOTES_LAID_OUT) break;
+    if (!isNormalNote(note)) continue;
+    out.push(note);
+  }
+  return out;
+}
+
+/** Find separator / continuationSeparator note body in a notes part. */
+export function findSeparatorNote(
+  part: OoxmlPart | null | undefined,
+  kind: 'separator' | 'continuationSeparator'
+): OoxmlElement | undefined {
+  if (!part) return undefined;
+  for (const note of notesOf(part.root)) {
+    if (noteTypeOf(note) === kind) return note;
+  }
+  return undefined;
+}
+
+/**
+ * Lay one note node out at `contentWidth`.
+ *
+ * Does not paginate. Callers that need splits ask for fragments and cut at paragraph/line
+ * boundaries in the note-pagination layer.
+ */
+export function layoutNoteStory(
+  note: OoxmlNode,
+  contentWidth: number,
+  options: LayoutNoteStoryOptions
+): NoteStoryLayout | null {
+  const noteKind = noteKindOf(note);
+  const noteId = noteIdOf(note);
+  if (!noteKind || noteId === null) return null;
+
+  const scopeId = formatNoteScopeId(noteKind, noteId);
+  const blocks = noteStoryBlocks(note);
+  const prefix = noteLineIdPrefix(noteKind, noteId);
+  let lineCounter = 0;
+  const width = Math.max(1, contentWidth);
+  const maxHeight = options.maxFlowHeightPt ?? Number.POSITIVE_INFINITY;
+
+  // noteRef atoms have no @w:id — bind display marks to this story's scope.
+  const noteMarks: NoteMarkContext | undefined = options.noteMarks
+    ? { ...options.noteMarks, activeNoteKey: scopeId }
+    : { marks: new Map(), activeNoteKey: scopeId };
+
+  const flow = flowBlocksInBox(blocks, 0, width, 0, 0, {
+    measurer: options.measurer,
+    cache: options.cache,
+    producer: `${options.producer}|${scopeId}`,
+    nextLineId: () => `${prefix}-line-${lineCounter++}`,
+    styleCascade: options.styleCascade,
+    noteMarks,
+    ...(options.defaultTabStopPt !== undefined
+      ? { defaultTabStopPt: options.defaultTabStopPt }
+      : {}),
+  });
+
+  let fragments = flow.blocks;
+  let flowHeight = flow.bottom;
+  let fallbackReason: NoteLayoutFallbackReason | undefined;
+
+  if (fragments.length > MAX_NOTE_FRAGMENTS) {
+    fragments = fragments.slice(0, MAX_NOTE_FRAGMENTS);
+    const last = fragments[fragments.length - 1];
+    flowHeight = last ? last.box.y + last.box.height : 0;
+    fallbackReason = 'note-fragment-limit';
+  }
+
+  if (flowHeight > maxHeight) {
+    // Truncate to fragments that fit; pagination continues the remainder.
+    const kept: BlockFragmentRecord[] = [];
+    let bottom = 0;
+    for (const fragment of fragments) {
+      const next = fragment.box.y + fragment.box.height;
+      if (next > maxHeight + 0.001 && kept.length > 0) break;
+      kept.push(fragment);
+      bottom = next;
+    }
+    fragments = kept;
+    flowHeight = bottom;
+    fallbackReason = fallbackReason ?? 'note-height-cap';
+  }
+
+  return {
+    noteKind,
+    noteId,
+    scopeId,
+    noteType: noteTypeOf(note),
+    fragments,
+    flowHeight,
+    ...(fallbackReason ? { fallbackReason } : {}),
+  };
+}
+
+/** Layout a note by id from a notes part; null when missing. */
+export function layoutNoteById(
+  part: OoxmlPart | null | undefined,
+  noteId: number,
+  contentWidth: number,
+  options: LayoutNoteStoryOptions
+): NoteStoryLayout | null {
+  if (!part) return null;
+  const note = findNoteById(part.root, noteId);
+  if (!note) return null;
+  return layoutNoteStory(note, contentWidth, options);
+}
+
+/**
+ * Word-default paint style for a separator marker.
+ *
+ * Footnote and endnote separators both use a short single rule. A full-width double
+ * border on a body heading (e.g. the comprehensive fixture’s end banner) is ordinary
+ * paragraph `w:pBdr` ownership and must not transfer onto the note separator record.
+ * Authored separator stories with real paragraph/run/border content bypass this via
+ * fragment paint.
+ */
+export function defaultNoteSeparatorRuleStyle(
+  _noteKind: NoteKind,
+  _kind: 'separator' | 'continuationSeparator'
+): NoteSeparatorRuleStyle {
+  return 'single';
+}
+
+/**
+ * True when a separator note contains only OOXML separator markers (and empty noteRef
+ * atoms Word often authors beside them) — no measurable text or paragraph borders.
+ */
+export function isMarkerOnlySeparatorNote(note: OoxmlNode): boolean {
+  const blocks = noteStoryBlocks(note);
+  if (blocks.length === 0) return true;
+  for (const block of blocks) {
+    if (block.kind !== 'paragraph') return false;
+    const pPr = block.children.find((child) => child.kind === 'paragraphProperties');
+    if (Object.keys(paragraphBorders(pPr)).length > 0) return false;
+    if (!paragraphIsMarkerOnly(block)) return false;
+  }
+  return true;
+}
+
+function paragraphIsMarkerOnly(paragraph: OoxmlElement): boolean {
+  for (const child of paragraph.children) {
+    if (child.kind === 'textValue') continue;
+    if (child.kind === 'paragraphProperties') continue;
+    if (child.kind === 'run') {
+      if (!runIsMarkerOnly(child)) return false;
+      continue;
+    }
+    // Any other block-level / inline content is authored geometry.
+    return false;
+  }
+  return true;
+}
+
+function runIsMarkerOnly(run: OoxmlElement): boolean {
+  for (const child of run.children) {
+    if (child.kind === 'textValue') continue;
+    if (child.kind === 'runProperties') continue;
+    if (isSeparatorNode(child) || isContinuationSeparatorNode(child) || isNoteRefNode(child)) {
+      continue;
+    }
+    if (child.kind === 'text') {
+      const text = child.children.map((c) => c.value).join('');
+      if (text.trim().length > 0) return false;
+      continue;
+    }
+    return false;
+  }
+  return true;
+}
+
+/**
+ * Layout the document's separator note, or synthesize a short horizontal rule.
+ *
+ * Marker-only / missing separators emit no paragraph fragments — paint draws the rule
+ * from {@link NoteSeparatorLayout.ruleStyle} + box geometry. Authored separators with
+ * real paragraph/run/border content keep their fragment story (including `w:pBdr`).
+ *
+ * When `maxFlowHeightPt` is set and an authored separator exceeds it, the engine fails
+ * closed to a short synthetic rule ({@link note-separator-height-cap}) so note pagination
+ * cannot burn the overflow budget on zero-progress separator-only pages.
+ */
+export function layoutNoteSeparator(
+  part: OoxmlPart | null | undefined,
+  kind: 'separator' | 'continuationSeparator',
+  contentWidth: number,
+  options: LayoutNoteStoryOptions,
+  noteKind: NoteKind,
+  maxFlowHeightPt?: number
+): NoteSeparatorLayout {
+  const ruleStyle = defaultNoteSeparatorRuleStyle(noteKind, kind);
+  const authored = findSeparatorNote(part, kind);
+  if (authored) {
+    if (isMarkerOnlySeparatorNote(authored)) {
+      return {
+        kind,
+        fragments: [],
+        flowHeight: DEFAULT_NOTE_SEPARATOR_HEIGHT_PT,
+        synthetic: false,
+        ruleStyle,
+      };
+    }
+    const laid = layoutNoteStory(authored, contentWidth, options);
+    if (laid && laid.flowHeight > 0) {
+      const cap = maxFlowHeightPt ?? Number.POSITIVE_INFINITY;
+      if (laid.flowHeight > cap + 0.001) {
+        return {
+          kind,
+          fragments: [],
+          flowHeight: DEFAULT_NOTE_SEPARATOR_HEIGHT_PT,
+          synthetic: true,
+          ruleStyle,
+          fallbackReason: 'note-separator-height-cap',
+        };
+      }
+      return {
+        kind,
+        fragments: laid.fragments,
+        flowHeight: laid.flowHeight,
+        synthetic: false,
+      };
+    }
+  }
+  return {
+    kind,
+    fragments: [],
+    flowHeight: DEFAULT_NOTE_SEPARATOR_HEIGHT_PT,
+    synthetic: true,
+    ruleStyle,
+  };
+}
+
+/** Default rule geometry for a synthetic / marker-only separator, story-relative. */
+export function syntheticSeparatorBox(contentWidth: number, flowHeight: number): LayoutBox {
+  const width = Math.max(1, contentWidth * DEFAULT_NOTE_SEPARATOR_WIDTH_RATIO);
+  return {
+    x: 0,
+    y: Math.max(0, (flowHeight - 0.75) / 2),
+    width,
+    height: 0.75,
+  };
+}
+
+/** Absolute separator box: short rule for marker/synthetic, full width for authored stories. */
+export function noteSeparatorAreaBox(
+  separator: NoteSeparatorLayout,
+  contentX: number,
+  contentWidth: number,
+  areaTop: number
+): LayoutBox {
+  if (separator.ruleStyle !== undefined || separator.synthetic) {
+    const relative = syntheticSeparatorBox(contentWidth, separator.flowHeight);
+    return {
+      x: contentX + relative.x,
+      y: areaTop + relative.y,
+      width: relative.width,
+      height: Math.max(relative.height, separator.ruleStyle === 'double' ? 2.25 : 0.75),
+    };
+  }
+  return {
+    x: contentX,
+    y: areaTop,
+    width: contentWidth,
+    height: separator.flowHeight,
+  };
+}

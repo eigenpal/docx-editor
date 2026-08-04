@@ -89,6 +89,12 @@ const EXPECTED_SLOTS: readonly ChromeSlotId[] = [
   'file.open',
   'file.save',
   'file.pageSetup',
+  'insert.footnote',
+  'insert.endnote',
+  'insert.pageNumber',
+  'insert.totalPages',
+  'insert.sectionPages',
+  'insert.pageXofY',
   'insert.pageBreak',
   'insert.sectionBreakNextPage',
   'insert.sectionBreakContinuous',
@@ -213,7 +219,7 @@ describe('legacy chrome descriptor', () => {
   });
 
   test('the count is stable, so a dropped control fails rather than passing quietly', () => {
-    expect(chromeControlCount()).toBe(37);
+    expect(chromeControlCount()).toBe(43);
   });
 
   test('the menu region carries the chrome menus, in bar order', () => {

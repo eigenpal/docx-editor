@@ -287,6 +287,94 @@ describe('semantic table layout', () => {
     expect(para.box.y).toBe(cell.box.y + 4);
   });
 
+  test('asymmetric tcMar and final-paragraph spaceAfter size the row without CELL_PAD floor', () => {
+    // Top 100 twips (5pt), bottom 20 twips (1pt). Final para after=40 twips (2pt).
+    // Measured line is 14pt → natural height 5+14+2+1 = 22 when after applies; a tighter
+    // companion cell below also proves the old defaultLineHeight+2*CELL_PAD (20) seed is gone.
+    const part = loadPart(
+      '<w:tbl>' +
+        tr(
+          tc(
+            '<w:p><w:pPr><w:spacing w:after="40"/></w:pPr><w:r><w:t>end</w:t></w:r></w:p>',
+            '<w:tcPr><w:tcMar>' +
+              '<w:top w:w="100" w:type="dxa"/>' +
+              '<w:left w:w="40" w:type="dxa"/>' +
+              '<w:bottom w:w="20" w:type="dxa"/>' +
+              '<w:right w:w="40" w:type="dxa"/>' +
+              '</w:tcMar></w:tcPr>'
+          )
+        ) +
+        tr(
+          tc(
+            p('short'),
+            '<w:tcPr><w:tcMar>' +
+              '<w:top w:w="40" w:type="dxa"/>' +
+              '<w:left w:w="40" w:type="dxa"/>' +
+              '<w:bottom w:w="20" w:type="dxa"/>' +
+              '<w:right w:w="40" w:type="dxa"/>' +
+              '</w:tcMar></w:tcPr>'
+          )
+        ) +
+        '</w:tbl>'
+    );
+    const [row0, row1] = allTableFragments(layout(part))[0]!.rows;
+    const tall = row0!.cells[0]!;
+    const tight = row1!.cells[0]!;
+    const tallPara = tall.blocks[0]!;
+    if (tallPara.kind !== 'paragraph') throw new Error('expected paragraph');
+    const tallLine = tallPara.lines[tallPara.lines.length - 1]!;
+    expect(tallPara.box.y - tall.box.y).toBeCloseTo(5, 5);
+    expect(tallPara.spacing.after).toBeCloseTo(2, 5);
+    // Bottom margin stays 1pt; spaceAfter sits above it inside the paragraph box.
+    expect(tall.box.y + tall.box.height - (tallLine.box.y + tallLine.box.height)).toBeCloseTo(
+      1 + 2,
+      5
+    );
+    expect(tall.box.height).toBeCloseTo(5 + tallLine.box.height + 2 + 1, 5);
+
+    const tightPara = tight.blocks[0]!;
+    if (tightPara.kind !== 'paragraph') throw new Error('expected paragraph');
+    const tightLine = tightPara.lines[0]!;
+    expect(tightPara.box.y - tight.box.y).toBeCloseTo(2, 5);
+    expect(tight.box.y + tight.box.height - (tightLine.box.y + tightLine.box.height)).toBeCloseTo(
+      1,
+      5
+    );
+    // Pre-fix floor was 20pt; content-sized row is 2+14+1 = 17.
+    expect(tight.box.height).toBeCloseTo(17, 5);
+    expect(tight.box.height).toBeLessThan(19);
+  });
+
+  test('nested table trailing paragraph keeps distinct host bottom margin', () => {
+    const nested = `<w:tbl>${tr(tc(p('in')))}</w:tbl>`;
+    const part = loadPart(
+      '<w:tbl>' +
+        tr(
+          tc(
+            p('before') +
+              nested +
+              '<w:p><w:pPr><w:spacing w:before="80"/></w:pPr><w:r><w:t>after nested</w:t></w:r></w:p>',
+            '<w:tcPr><w:tcMar>' +
+              '<w:top w:w="80" w:type="dxa"/>' +
+              '<w:bottom w:w="40" w:type="dxa"/>' +
+              '<w:left w:w="40" w:type="dxa"/>' +
+              '<w:right w:w="40" w:type="dxa"/>' +
+              '</w:tcMar></w:tcPr>'
+          )
+        ) +
+        '</w:tbl>'
+    );
+    const host = allTableFragments(layout(part))[0]!.rows[0]!.cells[0]!;
+    const after = host.blocks[host.blocks.length - 1]!;
+    if (after.kind !== 'paragraph') throw new Error('expected trailing paragraph');
+    const lastLine = after.lines[after.lines.length - 1]!;
+    const padTop = host.blocks[0]!.box.y - host.box.y;
+    const padBottom = host.box.y + host.box.height - (lastLine.box.y + lastLine.box.height);
+    expect(padTop).toBeCloseTo(4, 5);
+    expect(padBottom).toBeCloseTo(2, 5);
+    expect(after.spacing.before).toBeCloseTo(4, 5);
+  });
+
   test('vAlign center shifts cell content within the row', () => {
     const part = loadPart(
       '<w:tbl>' +

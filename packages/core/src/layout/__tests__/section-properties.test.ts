@@ -5,7 +5,13 @@
 // and a document claiming a page a mile tall must not be able to make the engine try.
 
 import { describe, expect, test } from 'bun:test';
-import { readOoxmlPart, type OoxmlPart } from '@docx-editor.dev/core-contract/store';
+import { zipSync, strToU8, strFromU8, unzipSync } from 'fflate';
+import {
+  readOoxmlPackage,
+  readOoxmlPart,
+  writeOoxmlPackage,
+  type OoxmlPart,
+} from '@docx-editor.dev/core-contract/store';
 import {
   DEFAULT_SECTION_PROPERTIES,
   enumerateDocumentSections,
@@ -14,6 +20,9 @@ import {
 } from '../index.ts';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
+const R = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships';
+const CT = 'http://schemas.openxmlformats.org/package/2006/content-types';
+const REL = 'http://schemas.openxmlformats.org/package/2006/relationships';
 
 function load(body: string): OoxmlPart {
   const result = readOoxmlPart(`<w:document xmlns:w="${W}"><w:body>${body}</w:body></w:document>`, {
@@ -241,5 +250,68 @@ describe('titlePg on/off semantics', () => {
     const sections = enumerateDocumentSections(part);
     expect(sections[0]!.properties.titlePage).toBe(true);
     expect(sections[1]!.properties.titlePage).toBe(false);
+  });
+});
+
+describe('w:pgNumType authored vs default', () => {
+  test('absent pgNumType leaves pageNumbering undefined', () => {
+    const section = readSectionProperties(withSection('<w:pgSz w:w="12240" w:h="15840"/>'));
+    expect(section.pageNumbering).toBeUndefined();
+  });
+
+  test('empty pgNumType reports no authored values', () => {
+    const section = readSectionProperties(withSection('<w:pgNumType/>'));
+    expect(section.pageNumbering).toEqual({});
+  });
+
+  test('start, fmt, chapStyle, and chapSep are read when authored', () => {
+    const section = readSectionProperties(
+      withSection(
+        '<w:pgNumType w:start="3" w:fmt="lowerRoman" w:chapStyle="1" w:chapSep="period"/>'
+      )
+    );
+    expect(section.pageNumbering).toEqual({
+      start: 3,
+      fmt: 'lowerRoman',
+      chapStyle: 1,
+      chapSep: 'period',
+    });
+  });
+
+  test('hostile pgNumType attributes are dropped rather than invented', () => {
+    const section = readSectionProperties(
+      withSection(
+        '<w:pgNumType w:start="-9" w:fmt="&lt;script&gt;" w:chapStyle="99" w:chapSep="boom"/>'
+      )
+    );
+    expect(section.pageNumbering).toEqual({});
+  });
+
+  test('empty pgNumType round-trips as an empty element', () => {
+    const bytes = zipSync({
+      '[Content_Types].xml': strToU8(
+        `<Types xmlns="${CT}">` +
+          '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>' +
+          '<Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>' +
+          '</Types>'
+      ),
+      '_rels/.rels': strToU8(
+        `<Relationships xmlns="${REL}"><Relationship Id="rId1" Type="${R}/officeDocument" Target="word/document.xml"/></Relationships>`
+      ),
+      'word/document.xml': strToU8(
+        `<w:document xmlns:w="${W}"><w:body><w:p><w:r><w:t>x</w:t></w:r></w:p>` +
+          `<w:sectPr><w:pgNumType/></w:sectPr></w:body></w:document>`
+      ),
+    });
+    const loaded = readOoxmlPackage(bytes);
+    expect(loaded.ok).toBe(true);
+    if (!loaded.ok) return;
+    const part = loaded.package.parts.get(loaded.package.mainDocumentPart)!;
+    expect(readSectionProperties(part).pageNumbering).toEqual({});
+    const saved = writeOoxmlPackage(loaded.package);
+    const reopened = unzipSync(saved);
+    const xml = strFromU8(reopened['word/document.xml']!);
+    expect(xml).toMatch(/<w:pgNumType\s*\/>/);
+    expect(xml).not.toMatch(/<w:pgNumType[^>]+\w+=/);
   });
 });

@@ -140,9 +140,20 @@ export default [
     settings: { react: { version: 'detect' } },
   },
 
-  // Vue adapter: no React imports.
-  { files: ['packages/vue/src/**/*.{ts,tsx,vue}'], rules: restrictReact },
-
+  // Vue adapter: no React imports, and none of React's hook rules.
+  //
+  // `react-hooks/rules-of-hooks` keys off the `use` PREFIX, so it reads a Vue composable
+  // called inside `setup()` as a React hook called outside a component and errors. The
+  // convention it is enforcing does not exist here — Vue has no rules-of-hooks ordering
+  // contract — so the rule can only ever produce false positives in this package.
+  {
+    files: ['packages/vue/src/**/*.{ts,tsx,vue}'],
+    rules: {
+      ...restrictReact,
+      'react-hooks/rules-of-hooks': 'off',
+      'react-hooks/exhaustive-deps': 'off',
+    },
+  },
   // React adapter: no Vue imports.
   { files: ['packages/react/src/**/*.{ts,tsx}'], rules: restrictVue },
 

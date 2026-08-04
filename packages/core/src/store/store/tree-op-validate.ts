@@ -1,649 +1,35 @@
-// The op vocabulary and pre-application validation (tree-ops seam).
+// Pre-application validation for tree ops (tree-ops seam).
 //
-// This module owns what an op IS — the declarative, JSON-safe `TreeDocOp` shapes, the
-// accepted property boundaries, the effect/rejection contracts — plus the segment model
-// that flattens a paragraph into UTF-16 addressable units, and `validateTreeOp`, which
-// runs BEFORE any tree work so a rejected op leaves the tree, revision and indexes exactly
-// as they were. Application lives in tree-op-apply.ts; both are re-exported via tree-ops.ts.
+// `validateTreeOp` runs BEFORE any tree work so a rejected op leaves the tree, revision
+// and indexes exactly as they were. The op vocabulary lives in tree-op-types.ts; the
+// segment model in tree-op-segments.ts; section addressing in tree-op-section-address.ts.
+// Application lives in tree-op-apply.ts; public entry is tree-ops.ts.
 
 import type { OoxmlNode, OoxmlParagraphNode, OoxmlPart } from '../package/ooxml-tree.ts';
 import { findNode } from '../package/ooxml-edit.ts';
-import { paragraphPropertiesNodeOf } from './tree-op-nodes.ts';
-import { validateDeleteBlock } from './tree-op-blocks.ts';
 import { isValidXmlText } from '../package/sinks.ts';
-
-/**
- * The accepted RUN property boundary (design D8), as the OOXML element names that carry it.
- *
- * An explicit allowlist rather than "any `w:rPr` child": a property outside D8 has no
- * resolver, no layout behavior and no support claim, so accepting it here would let an
- * operation assert support the engine does not have. Unknown properties still ROUND-TRIP —
- * they are generic nodes in the tree — they simply cannot be authored by an op.
- */
-export const ACCEPTED_RUN_PROPERTIES = [
-  'rFonts', // font family
-  'sz', // half-point size
-  'szCs',
-  'color',
-  'b', // bold
-  'bCs',
-  'i', // italic
-  'iCs',
-  'u', // underline variant and color
-  'strike',
-  'dstrike', // double strike
-  'highlight',
-  'vertAlign', // superscript / subscript
-  'position', // baseline offset
-  'caps',
-  'smallCaps',
-  'spacing', // character spacing
-  'w', // horizontal scaling
-  'kern',
-] as const;
-// `w:rStyle` is deliberately ABSENT. It is preserved, not accepted: this list is the set a
-// property write REPLACES, so admitting the character style would make a bold toggle delete
-// it. `insertHyperlink` writes `w:rStyle` itself, as part of making the run a link, which is
-// what Word does and what leaves every other write alone.
-
-/** The accepted PARAGRAPH property boundary (design D8). */
-export const ACCEPTED_PARAGRAPH_PROPERTIES = [
-  'pStyle',
-  'jc', // alignment
-  'spacing', // before/after + line spacing and rule
-  'ind', // left/right/first-line/hanging indents
-  'tabs',
-  'numPr', // numbering identity and level
-  'keepNext',
-  'keepLines',
-  'widowControl',
-  'pageBreakBefore',
-  'shd', // shading
-] as const;
-
-export type AcceptedRunProperty = (typeof ACCEPTED_RUN_PROPERTIES)[number];
-export type AcceptedParagraphProperty = (typeof ACCEPTED_PARAGRAPH_PROPERTIES)[number];
+import { validateDeleteBlock } from './tree-op-blocks.ts';
+import { paragraphPropertiesNodeOf } from './tree-op-nodes.ts';
+import {
+  bodyNodeOf,
+  isTableNested,
+  metricsOfSection,
+  plannedSectionDimensions,
+  sectionChild,
+  targetSectionNodes,
+} from './tree-op-section-address.ts';
+import { isParagraph, paragraphLength, segmentsOf, splitsSurrogate } from './tree-op-segments.ts';
+import {
+  ACCEPTED_PARAGRAPH_PROPERTIES,
+  ACCEPTED_RUN_PROPERTIES,
+  TREE_DOC_OP_KINDS,
+  type OoxmlProperty,
+  type TreeDocOp,
+  type TreeOpRejection,
+} from './tree-op-types.ts';
 
 const RUN_PROPERTY_SET: ReadonlySet<string> = new Set(ACCEPTED_RUN_PROPERTIES);
 const PARAGRAPH_PROPERTY_SET: ReadonlySet<string> = new Set(ACCEPTED_PARAGRAPH_PROPERTIES);
-
-/**
- * One authored property: an element name plus its `w:`-namespace attributes.
- *
- * Modeled as name+attributes rather than a typed record per property because that is what
- * the tree holds, so an op maps to nodes without a lossy intermediate vocabulary. Attribute
- * VALUES are validated as XML text; their meaning is the resolver's business.
- */
-export interface OoxmlProperty {
-  readonly localName: string;
-  readonly attributes?: Readonly<Record<string, string>>;
-}
-
-export type TreeDocOp =
-  | {
-      readonly op: 'insertText';
-      readonly paragraphId: string;
-      readonly offset: number;
-      readonly text: string;
-    }
-  | {
-      readonly op: 'deleteText';
-      readonly paragraphId: string;
-      readonly start: number;
-      readonly end: number;
-    }
-  | { readonly op: 'insertTab'; readonly paragraphId: string; readonly offset: number }
-  | { readonly op: 'insertHardBreak'; readonly paragraphId: string; readonly offset: number }
-  | { readonly op: 'insertPageBreak'; readonly paragraphId: string; readonly offset: number }
-  | {
-      /**
-       * Move a numbered paragraph to another `w:numPr/w:ilvl`.
-       *
-       * A list item's LEVEL is what selects its format out of `numbering.xml`, so this is
-       * the op behind Increase/Decrease Indent on a list: the marker changes with it. A
-       * paragraph carrying no `w:numPr` is refused rather than silently numbered.
-       */
-      readonly op: 'setListLevel';
-      readonly paragraphId: string;
-      readonly level: number;
-    }
-  | {
-      /**
-       * Put a paragraph in a list, or take it out of one.
-       *
-       * `numId` names a `w:num` in `numbering.xml`; null removes `w:numPr` entirely, which
-       * is what turning a bullet off means. Everything else in `w:pPr` survives.
-       */
-      /**
-       * Run properties of the PARAGRAPH MARK (`w:pPr/w:rPr`, ECMA-376 17.3.1.29).
-       *
-       * The mark carries the formatting a paragraph's own pilcrow has, and Word keeps it
-       * in step whenever formatting is applied to a whole paragraph. It is what a list
-       * marker inherits its face from — so without it, sizing a bulleted paragraph leaves
-       * the bullet at the old size.
-       */
-      readonly op: 'setParagraphMarkProperties';
-      readonly paragraphId: string;
-      readonly properties: readonly OoxmlProperty[];
-    }
-  | {
-      readonly op: 'setListNumbering';
-      readonly paragraphId: string;
-      readonly numId: string | null;
-      readonly level?: number;
-    }
-  | { readonly op: 'splitParagraph'; readonly paragraphId: string; readonly offset: number }
-  | {
-      /**
-       * Split one `w:p` at MANY offsets in a single op.
-       *
-       * Equivalent to applying `splitParagraph` at each offset from the last to the first,
-       * but the paragraph's content is cut in one pass and the parent's child sequence is
-       * rebuilt once. A plain-text paste is a paragraph mark per line: as individual ops,
-       * a large paste rebuilt the body — and re-sliced the pasted text — once per line,
-       * which is quadratic in paste size.
-       */
-      readonly op: 'splitParagraphMany';
-      readonly paragraphId: string;
-      /**
-       * Non-decreasing UTF-16 offsets; each produces one paragraph boundary. A repeated
-       * offset produces an empty paragraph between the two boundaries — a blank line.
-       */
-      readonly offsets: readonly number[];
-    }
-  | { readonly op: 'joinParagraphs'; readonly firstId: string; readonly secondId: string }
-  | {
-      readonly op: 'setRunProperties';
-      readonly paragraphId: string;
-      readonly start: number;
-      readonly end: number;
-      readonly properties: readonly OoxmlProperty[];
-    }
-  | {
-      readonly op: 'setParagraphProperties';
-      readonly paragraphId: string;
-      readonly properties: readonly OoxmlProperty[];
-    }
-  | {
-      /**
-       * Set page-setup fields — page size, orientation, margins — on every targeted
-       * `w:sectPr`: all of them (Word's "Apply to: Whole document", the default) or
-       * only the one governing `anchorParagraphId`. A document whose write must reach
-       * the implicit tail section gets a body-level `w:sectPr` minted as the body's
-       * last child. Omitted fields are left exactly as authored per section. Explicit
-       * dimensions are written literally; `orientation` WITHOUT dimensions swaps each
-       * section's own (see `plannedSectionDimensions`), so distinct paper sizes
-       * survive a whole-document flip.
-       */
-      readonly op: 'setSectionProperties';
-      readonly pageWidthTwips?: number;
-      readonly pageHeightTwips?: number;
-      readonly orientation?: 'portrait' | 'landscape';
-      readonly marginTopTwips?: number;
-      readonly marginRightTwips?: number;
-      readonly marginBottomTwips?: number;
-      readonly marginLeftTwips?: number;
-      /**
-       * Word's "Apply to: This section": update only the section GOVERNING this
-       * paragraph — the nearest mid-body `w:sectPr` at or after it, else the body-level
-       * one. Absent means every section.
-       */
-      readonly anchorParagraphId?: string;
-    }
-  | {
-      /**
-       * End a section AT this paragraph: mint a `w:pPr/w:sectPr` cloning the governing
-       * section's effective page setup, so the blocks up to and including this paragraph
-       * become their own section (a next-page section break). The paragraph must not
-       * already carry one.
-       */
-      readonly op: 'setSectionMark';
-      readonly paragraphId: string;
-    }
-  | {
-      /**
-       * Wrap `[start, end)` of a paragraph in a `w:hyperlink`.
-       *
-       * The RANGE is the link — text and formatting inside it are untouched, and runs that
-       * straddle either edge are divided so the link covers exactly the characters asked
-       * for. Exactly one of `relationshipId` (an external target, already minted on the
-       * package) or `anchor` (a bookmark in this document) names where it goes.
-       *
-       * A collapsed range is refused: a link with no text is markup with nothing to click,
-       * and the caller that wants "insert a link with display text" inserts the text first.
-       */
-      readonly op: 'insertHyperlink';
-      readonly paragraphId: string;
-      readonly start: number;
-      readonly end: number;
-      readonly relationshipId?: string;
-      readonly anchor?: string;
-      readonly tooltip?: string;
-      /**
-       * Character style to mark the linked runs with (`w:rStyle`), normally `Hyperlink`.
-       *
-       * Written HERE rather than through `setRunProperties` because `w:rStyle` is preserved,
-       * not accepted: it is not in the set a property write replaces, and putting it there
-       * would make a later bold toggle delete it. Marking the text is part of making it a
-       * link — Word does both in one operation — so the op that wraps it also styles it.
-       * Omitted for a document that declares no such style.
-       */
-      readonly styleId?: string;
-    }
-  | {
-      /**
-       * Re-aim an existing link. `relationshipId` moves it to another external target,
-       * `anchor` to a bookmark; supplying one CLEARS the other, so a link never ends up
-       * carrying both and resolving by the wrong one.
-       */
-      readonly op: 'setHyperlinkTarget';
-      readonly linkId: string;
-      readonly relationshipId?: string;
-      readonly anchor?: string;
-      readonly tooltip?: string;
-    }
-  | {
-      /**
-       * Remove a whole BLOCK — a `w:p`, a `w:tbl` or a `w:tr` — and everything under it.
-       *
-       * The only op in the vocabulary that takes a node OUT of the tree. Everything else
-       * edits text, runs or properties, so a range deletion spanning a table could only
-       * empty it: `joinParagraphs` merges adjacent siblings under one parent, and a body
-       * paragraph and a cell paragraph have different parents, so collapsing across a table
-       * is not a paragraph edit at all. The document kept its scaffolding — every row, cell
-       * and border still there, all of it blank — and pasting over the selection looked
-       * like it had done nothing.
-       *
-       * Restricted to the three block kinds the canonical tree types. A run, a text value,
-       * `w:body` or a properties container is refused rather than removed, so this cannot
-       * be used to dismantle markup the paragraph lane does not own.
-       */
-      readonly op: 'deleteBlock';
-      readonly blockId: string;
-    }
-  | {
-      /**
-       * Unlink: splice the `w:hyperlink`'s children into the paragraph in its place.
-       *
-       * The runs keep their identity, their formatting and their order, and any bookmark
-       * markers inside the link stay exactly where they were. Only the link element goes,
-       * which is what Word's Remove Hyperlink does — the text is not the link's, it was
-       * only wrapped by it.
-       */
-      readonly op: 'removeHyperlink';
-      readonly linkId: string;
-    };
-
-export type TreeDocOpKind = TreeDocOp['op'];
-
-export const TREE_DOC_OP_KINDS = [
-  'insertText',
-  'deleteText',
-  'insertTab',
-  'insertHardBreak',
-  'insertPageBreak',
-  'setListLevel',
-  'setListNumbering',
-  'setParagraphMarkProperties',
-  'splitParagraph',
-  'splitParagraphMany',
-  'joinParagraphs',
-  'setRunProperties',
-  'setParagraphProperties',
-  'setSectionProperties',
-  'setSectionMark',
-  'insertHyperlink',
-  'setHyperlinkTarget',
-  'removeHyperlink',
-  'deleteBlock',
-] as const satisfies readonly TreeDocOpKind[];
-
-// Compile-time exhaustiveness, matching the legacy `DOC_OP_KINDS` guard: a new op must be
-// listed here or this fails to typecheck, so it can never be silently unvalidated.
-type _MissingTreeOp = Exclude<TreeDocOpKind, (typeof TREE_DOC_OP_KINDS)[number]>;
-const _treeOpsExhaustive: _MissingTreeOp extends never ? true : ['missing', _MissingTreeOp] = true;
-void _treeOpsExhaustive;
-
-/**
- * How far a committed op can reach, so layout can scope its work (task 5.2).
- *
- * `text-local` touches one paragraph's characters; `paragraph-local` changes one
- * paragraph's own properties; `flow-structural` changes the block sequence and can
- * repaginate everything after it.
- */
-export type ImpactClass = 'text-local' | 'paragraph-local' | 'flow-structural';
-
-export interface TreeOpEffect {
-  readonly dirty: readonly string[];
-  readonly created: readonly string[];
-  readonly deleted: readonly string[];
-  readonly split?: { readonly from: string; readonly tail: string };
-  /** One entry per boundary of a many-way split, in document order. */
-  readonly splits?: readonly { readonly from: string; readonly tail: string }[];
-  readonly join?: { readonly kept: string; readonly removed: string };
-  readonly dependencyKeys: readonly string[];
-  readonly impact: ImpactClass;
-}
-
-export type TreeOpRejection =
-  | 'unknown-op'
-  | 'unknown-paragraph'
-  | 'not-a-paragraph'
-  | 'offset-out-of-range'
-  | 'invalid-range'
-  | 'not-a-list-paragraph'
-  | 'splits-surrogate-pair'
-  | 'invalid-text'
-  | 'unsupported-property'
-  | 'invalid-property-value'
-  | 'not-adjacent-siblings'
-  | 'unknown-block'
-  | 'not-a-block'
-  | 'block-required'
-  | 'carries-section-mark'
-  | 'tree-invariant';
-
-export type TreeOpResult =
-  | { readonly ok: true; readonly part: OoxmlPart; readonly effect: TreeOpEffect }
-  | { readonly ok: false; readonly reason: TreeOpRejection; readonly detail?: string };
-
-/** One addressable unit of paragraph text: a text value, a tab, or a hard break. */
-export interface Segment {
-  readonly runId: string;
-  readonly node: OoxmlNode;
-  readonly start: number;
-  readonly end: number;
-}
-
-export function isParagraph(node: OoxmlNode | null): node is OoxmlParagraphNode {
-  return node !== null && node.kind === 'paragraph';
-}
-
-// ---------------------------------------------------------------------------------------
-// Section addressing (setSectionProperties).
-//
-// The store may not import the layout package (the dependency points the other way), so
-// the few section reads validation needs — current dimensions and margins, to refuse a
-// write that leaves no content area — are derived here with the same clamps the layout
-// reader applies. Fields an op does not touch fall back to what the document effectively
-// uses today, which is exactly what the merged write will leave in place.
-// ---------------------------------------------------------------------------------------
-
-/** The `w:body` element of a part, or null when the root holds none. */
-export function bodyNodeOf(
-  part: OoxmlPart
-): (OoxmlNode & { children: readonly OoxmlNode[] }) | null {
-  const walk = (node: OoxmlNode): (OoxmlNode & { children: readonly OoxmlNode[] }) | null => {
-    if (node.kind === 'textValue') return null;
-    if (node.kind === 'body') return node;
-    for (const child of node.children ?? []) {
-      const found = walk(child);
-      if (found) return found;
-    }
-    return null;
-  };
-  return walk(part.root);
-}
-
-/** The body-level `w:sectPr` (a generic node), or null. */
-export function bodySectionOf(part: OoxmlPart): OoxmlNode | null {
-  const body = bodyNodeOf(part);
-  if (!body) return null;
-  for (const child of body.children) {
-    if (child.kind !== 'textValue' && 'localName' in child && child.localName === 'sectPr') {
-      return child;
-    }
-  }
-  return null;
-}
-
-/**
- * EVERY `w:sectPr` in the part, in document order: the mid-body ones (inside a
- * paragraph's `w:pPr`, ending a section) and the body-level one last.
- *
- * A page-setup write is "apply to whole document" — Word's dialog default — so it must
- * reach all of them. Updating only the body-level section leaves a multi-section
- * document saying "portrait, portrait, …, landscape", which any per-section consumer
- * (Word itself) then renders as a mixed-orientation document.
- */
-export function allSectionNodes(part: OoxmlPart): OoxmlNode[] {
-  const found: OoxmlNode[] = [];
-  const walk = (node: OoxmlNode): void => {
-    if (node.kind === 'textValue') return;
-    // A `sectPr` inside a table is not a section Word recognises and layout ignores it;
-    // writing to one would make the dialog appear to do nothing.
-    if (node.kind === 'table') return;
-    if ('localName' in node && node.localName === 'sectPr') {
-      found.push(node);
-      return;
-    }
-    for (const child of node.children ?? []) walk(child);
-  };
-  walk(part.root);
-  return found;
-}
-
-/** Whether a node sits inside a `w:tbl` — where a section mark must not be minted. */
-export function isTableNested(part: OoxmlPart, nodeId: string): boolean {
-  let nested = false;
-  let found = false;
-  const walk = (node: OoxmlNode, inTable: boolean): void => {
-    if (found || node.kind === 'textValue') return;
-    if (node.id === nodeId) {
-      nested = inTable;
-      found = true;
-      return;
-    }
-    const below = inTable || node.kind === 'table';
-    for (const child of node.children ?? []) walk(child, below);
-  };
-  walk(part.root, false);
-  return nested;
-}
-
-/** A `w:`-namespace attribute value by local name, off any element node. */
-export function sectionAttribute(node: OoxmlNode | null, name: string): string | undefined {
-  if (!node || node.kind === 'textValue' || !('attributes' in node)) return undefined;
-  for (const entry of node.attributes ?? []) {
-    if (entry.localName === name) return entry.value;
-  }
-  return undefined;
-}
-
-/** A named child element of a section container. */
-export function sectionChild(node: OoxmlNode | null, localName: string): OoxmlNode | null {
-  if (!node || node.kind === 'textValue') return null;
-  for (const child of node.children ?? []) {
-    if (child.kind !== 'textValue' && 'localName' in child && child.localName === localName) {
-      return child;
-    }
-  }
-  return null;
-}
-
-export interface SectionMetrics {
-  readonly widthTwips: number;
-  readonly heightTwips: number;
-  readonly topTwips: number;
-  readonly rightTwips: number;
-  readonly bottomTwips: number;
-  readonly leftTwips: number;
-  readonly headerTwips: number;
-  readonly footerTwips: number;
-  readonly gutterTwips: number;
-}
-
-const clampedTwips = (raw: string | undefined, fallback: number, max: number): number => {
-  if (raw === undefined || !/^-?\d{1,7}$/.test(raw)) return fallback;
-  const value = Number(raw);
-  if (!Number.isFinite(value) || value <= 0 || value > max) return fallback;
-  return value;
-};
-
-const clampedMargin = (raw: string | undefined, fallback: number): number => {
-  if (raw === undefined || !/^-?\d{1,7}$/.test(raw)) return fallback;
-  const value = Number(raw);
-  if (!Number.isFinite(value) || Math.abs(value) > 31680) return fallback;
-  return value;
-};
-
-/** What the document EFFECTIVELY uses today — declared values under the read-side clamps,
- *  Word's defaults where it says nothing. */
-export function currentSectionMetrics(part: OoxmlPart): SectionMetrics {
-  return metricsOfSection(bodySectionOf(part));
-}
-
-type SectionWriteOp = Extract<TreeDocOp, { op: 'setSectionProperties' }>;
-
-/**
- * The dimensions ONE section ends up with under this op — the single source both
- * validation and application read, so a value the check approved is exactly the value
- * written. An orientation change WITHOUT explicit dimensions swaps the section's own
- * current dimensions, so distinct paper sizes survive a whole-document orientation flip.
- */
-export function plannedSectionDimensions(
-  metrics: SectionMetrics,
-  op: SectionWriteOp
-): { readonly widthTwips: number; readonly heightTwips: number } {
-  let width = op.pageWidthTwips ?? metrics.widthTwips;
-  let height = op.pageHeightTwips ?? metrics.heightTwips;
-  if (
-    op.orientation !== undefined &&
-    op.pageWidthTwips === undefined &&
-    op.pageHeightTwips === undefined
-  ) {
-    const long = Math.max(metrics.widthTwips, metrics.heightTwips);
-    const short = Math.min(metrics.widthTwips, metrics.heightTwips);
-    width = op.orientation === 'landscape' ? long : short;
-    height = op.orientation === 'landscape' ? short : long;
-  }
-  return { widthTwips: width, heightTwips: height };
-}
-
-/**
- * The sections this op writes: the one governing the anchor paragraph, or all of them.
- * `null` entries mean "the body-level section, which must be minted".
- */
-export function targetSectionNodes(
-  part: OoxmlPart,
-  anchorParagraphId: string | undefined
-): readonly (OoxmlNode | null)[] {
-  if (anchorParagraphId === undefined) {
-    const all = allSectionNodes(part);
-    // A body-level section governs the tail even when the document never wrote one; a
-    // whole-document write must reach that implicit section too, so it is minted.
-    return bodySectionOf(part) ? all : [...all, null];
-  }
-  // The governing section of a paragraph: the first paragraph AT or AFTER it (in
-  // document order) carrying a `w:pPr/w:sectPr`, else the body-level section. The
-  // anchor may sit inside a table (the table belongs to a section), but a table-nested
-  // `sectPr` is never a boundary — Word does not recognise one.
-  let seenAnchor = false;
-  let governing: OoxmlNode | null | undefined;
-  const walk = (node: OoxmlNode, inTable: boolean): void => {
-    if (governing !== undefined || node.kind === 'textValue') return;
-    if (node.kind === 'paragraph') {
-      if (node.id === anchorParagraphId) seenAnchor = true;
-      if (seenAnchor && !inTable) {
-        const pPr = paragraphPropertiesNodeOf(node);
-        const sectPr = pPr ? sectionChild(pPr, 'sectPr') : null;
-        if (sectPr) governing = sectPr;
-      }
-      return;
-    }
-    const below = inTable || node.kind === 'table';
-    for (const child of node.children ?? []) walk(child, below);
-  };
-  walk(part.root, false);
-  return [governing ?? bodySectionOf(part)];
-}
-
-/** The effective metrics of ONE section node (null reads as Word's defaults). */
-export function metricsOfSection(sectPr: OoxmlNode | null): SectionMetrics {
-  const pgSz = sectionChild(sectPr, 'pgSz');
-  const pgMar = sectionChild(sectPr, 'pgMar');
-  return {
-    widthTwips: clampedTwips(sectionAttribute(pgSz, 'w'), 12240, 63360),
-    heightTwips: clampedTwips(sectionAttribute(pgSz, 'h'), 15840, 63360),
-    topTwips: clampedMargin(sectionAttribute(pgMar, 'top'), 1440),
-    rightTwips: clampedMargin(sectionAttribute(pgMar, 'right'), 1440),
-    bottomTwips: clampedMargin(sectionAttribute(pgMar, 'bottom'), 1440),
-    leftTwips: clampedMargin(sectionAttribute(pgMar, 'left'), 1440),
-    headerTwips: clampedMargin(sectionAttribute(pgMar, 'header'), 720),
-    footerTwips: clampedMargin(sectionAttribute(pgMar, 'footer'), 720),
-    gutterTwips: clampedMargin(sectionAttribute(pgMar, 'gutter'), 0),
-  };
-}
-
-/**
- * Flatten a paragraph into UTF-16 addressable segments, in document order.
- *
- * A HYPERLINK's runs are addressed too. `w:hyperlink` is a run container, not a leaf, and
- * the characters inside a link are ordinary paragraph text: the user selects them, types
- * over them and deletes them like any other. Skipping the container — which is what
- * iterating only direct `w:r` children did — left every link's text with no offsets at all,
- * so `paragraphTextOf` read "Visit  or ." for a sentence that says "Visit Example.com or
- * Anthropic's website." and layout, selection and the ops all agreed on the wrong string.
- *
- * `runId` stays the id of the run the content actually lives in, at whatever depth: the
- * appliers resolve it with `findNode` and rebuild that run's children, so nesting costs them
- * nothing.
- */
-export function segmentsOf(paragraph: OoxmlParagraphNode): Segment[] {
-  const segments: Segment[] = [];
-  let offset = 0;
-  const visit = (node: OoxmlNode, runId: string): void => {
-    if (node.kind === 'textValue') {
-      segments.push({ runId, node, start: offset, end: offset + node.value.length });
-      offset += node.value.length;
-      return;
-    }
-    if (node.kind === 'tab' || node.kind === 'hardBreak') {
-      segments.push({ runId, node, start: offset, end: offset + 1 });
-      offset += 1;
-      return;
-    }
-    if (node.kind === 'runProperties' || node.kind === 'generic') return;
-    for (const child of node.children) visit(child, runId);
-  };
-  const visitInline = (child: OoxmlNode): void => {
-    if (child.kind === 'run') {
-      for (const grand of child.children) visit(grand, child.id);
-      return;
-    }
-    // Bookmark markers and everything generic measure nothing; only a link descends.
-    if (child.kind === 'hyperlink') {
-      for (const inner of child.children) visitInline(inner);
-    }
-  };
-  for (const child of paragraph.children) visitInline(child);
-  return segments;
-}
-
-/** The runs a paragraph child owns, at any depth — a `w:r`, or every run inside a link. */
-export function runsUnder(child: OoxmlNode): OoxmlNode[] {
-  if (child.kind === 'run') return [child];
-  if (child.kind !== 'hyperlink') return [];
-  return child.children.flatMap((inner) => runsUnder(inner));
-}
-
-function paragraphLength(paragraph: OoxmlParagraphNode): number {
-  const segments = segmentsOf(paragraph);
-  return segments.length === 0 ? 0 : segments[segments.length - 1]!.end;
-}
-
-/** Whether an offset falls between the halves of a surrogate pair. */
-function splitsSurrogate(paragraph: OoxmlParagraphNode, offset: number): boolean {
-  for (const segment of segmentsOf(paragraph)) {
-    if (segment.node.kind !== 'textValue') continue;
-    if (offset <= segment.start || offset >= segment.end) continue;
-    const local = offset - segment.start;
-    const before = segment.node.value.charCodeAt(local - 1);
-    const after = segment.node.value.charCodeAt(local);
-    if (before >= 0xd800 && before <= 0xdbff && after >= 0xdc00 && after <= 0xdfff) return true;
-  }
-  return false;
-}
 
 function validateProperties(
   properties: readonly OoxmlProperty[],
@@ -710,6 +96,50 @@ function validateHyperlinkTarget(op: {
 /** Structural validation, run before any tree work so a rejection changes nothing. */
 export function validateTreeOp(part: OoxmlPart, op: TreeDocOp): TreeOpRejection | null {
   if (!TREE_DOC_OP_KINDS.includes(op.op)) return 'unknown-op';
+
+  // Package-level furniture ops cannot run against a single part. Shape-check here so
+  // applyTreeOp refuses them; TreePackageStore.applyLifecycleOp is the commit path.
+  if (
+    op.op === 'createHeaderFooter' ||
+    op.op === 'deleteHeaderFooter' ||
+    op.op === 'linkToPrevious' ||
+    op.op === 'unlinkFromPrevious'
+  ) {
+    if (!Number.isInteger(op.sectionIndex) || op.sectionIndex < 0) return 'invalidArgs';
+    if (op.kind !== 'header' && op.kind !== 'footer') return 'invalidArgs';
+    if (op.variant !== 'default' && op.variant !== 'first' && op.variant !== 'even') {
+      return 'invalidArgs';
+    }
+    return 'invalidArgs';
+  }
+  if (op.op === 'setSectionFurnitureOptions') {
+    const empty =
+      op.titlePage === undefined &&
+      op.evenAndOddHeaders === undefined &&
+      op.headerDistanceTwips === undefined &&
+      op.footerDistanceTwips === undefined;
+    if (empty) return 'invalidArgs';
+    for (const value of [op.headerDistanceTwips, op.footerDistanceTwips]) {
+      if (value === undefined) continue;
+      if (!Number.isInteger(value) || value < 0 || value > 31680) return 'invalidArgs';
+    }
+    if (
+      op.sectionIndex !== undefined &&
+      (!Number.isInteger(op.sectionIndex) || op.sectionIndex < 0)
+    ) {
+      return 'invalidArgs';
+    }
+    return 'invalidArgs';
+  }
+  if (
+    op.op === 'insertNote' ||
+    op.op === 'deleteNote' ||
+    op.op === 'convertNote' ||
+    op.op === 'convertAllNotes' ||
+    op.op === 'setNoteProperties'
+  ) {
+    return 'invalidArgs';
+  }
 
   if (op.op === 'setSectionProperties') {
     const dims = [op.pageWidthTwips, op.pageHeightTwips];
@@ -832,6 +262,21 @@ export function validateTreeOp(part: OoxmlPart, op: TreeDocOp): TreeOpRejection 
       if (splitsSurrogate(paragraph, op.offset)) return 'splits-surrogate-pair';
       return null;
     }
+    case 'insertPageField': {
+      if (!Number.isInteger(op.offset) || op.offset < 0 || op.offset > length) {
+        return 'offset-out-of-range';
+      }
+      if (splitsSurrogate(paragraph, op.offset)) return 'splits-surrogate-pair';
+      if (
+        op.field !== 'PAGE' &&
+        op.field !== 'NUMPAGES' &&
+        op.field !== 'SECTIONPAGES' &&
+        op.field !== 'PAGE_X_OF_Y'
+      ) {
+        return 'invalidArgs';
+      }
+      return null;
+    }
     case 'splitParagraph': {
       if (!Number.isInteger(op.offset) || op.offset < 0 || op.offset > length) {
         return 'offset-out-of-range';
@@ -909,3 +354,34 @@ export function validateTreeOp(part: OoxmlPart, op: TreeDocOp): TreeOpRejection 
       return 'unknown-op';
   }
 }
+
+// Backward-compatible re-exports: callers that imported vocabulary/segmentation/section
+// helpers from this module keep resolving here. Canonical homes are the modules above.
+export {
+  ACCEPTED_PARAGRAPH_PROPERTIES,
+  ACCEPTED_RUN_PROPERTIES,
+  TREE_DOC_OP_KINDS,
+  type AcceptedParagraphProperty,
+  type AcceptedRunProperty,
+  type ImpactClass,
+  type OoxmlProperty,
+  type TreeDocOp,
+  type TreeDocOpKind,
+  type TreeOpEffect,
+  type TreeOpRejection,
+  type TreeOpResult,
+} from './tree-op-types.ts';
+export { isParagraph, runsUnder, segmentsOf, type Segment } from './tree-op-segments.ts';
+export {
+  allSectionNodes,
+  bodyNodeOf,
+  bodySectionOf,
+  currentSectionMetrics,
+  isTableNested,
+  metricsOfSection,
+  plannedSectionDimensions,
+  sectionAttribute,
+  sectionChild,
+  targetSectionNodes,
+  type SectionMetrics,
+} from './tree-op-section-address.ts';

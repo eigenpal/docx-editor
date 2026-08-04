@@ -10,7 +10,13 @@ The gap is sharper than the ledger records. `packages/core/src/layout/story-root
 
 ### N1: Note nodes are typed, note bodies are ordinary block content
 
-Adding `footnotes`, `endnotes`, `note`, and `noteReference` to the kind union follows D1's rule: type what layout needs, leave the rest generic. A note body is not a special content model — `CT_FtnEdn` holds `EG_BlockLevelElts`, the same group the body holds — so the note node's children are the existing typed paragraph and table kinds. That is what makes "a note is a story" a two-line change to `storyBlocks` rather than a parallel layout path.
+Adding `footnotes`, `endnotes`, `note`, `noteReference`, and the run-inner marks
+`noteRef` / `separator` / `continuationSeparator` to the kind union follows D1's
+rule: type what layout needs, leave the rest generic. D8 expansion for this
+vocabulary (including run-inner marks) is accepted. A note body is not a special
+content model — `CT_FtnEdn` holds `EG_BlockLevelElts`, the same group the body
+holds — so the note node's children are the existing typed paragraph and table
+kinds. Authored `ST_FtnEdn` `normal` is preserved (not normalised away).
 
 Rejected: keeping notes generic and special-casing them in layout. Layout would then read `localName` strings, which is exactly the DOM-authority pattern D1 and D5 forbid.
 
@@ -46,7 +52,18 @@ A note operation always changes the referencing page's available height, so its 
 
 ### N7: One editing scope, rebound to the focused note
 
-A document with 200 footnotes must not mount 200 editing surfaces. The painted surface is already the editable surface; a note body is a region of it with its own story identity. Focus selects the story; the surface does not multiply.
+A document with 200 footnotes must not mount 200 editing surfaces. The painted
+surface is already the editable surface; a note body is a region of it with its
+own story identity. Focus selects the story; the surface does not multiply.
+
+`EditorScope` keeps the shipped `{ kind: 'note'; id: string }` arm. The id encodes
+kind + signed note id as `footnote:<id>` / `endnote:<id>` (helpers
+`formatNoteScopeId` / `parseNoteScopeId`). Do not invent a parallel
+`{ noteKind, noteId }` scope union.
+
+`TreePackageStore` opens **one lazy store per notes part**
+(`StoryScope { kind: 'notesPart'; noteKind }`), resolved through safe document
+relationships — not one store per note. Editing focus still uses `EditorScope.note`.
 
 ### N8: The fixture's separator defect is tolerated, not imitated
 
@@ -60,6 +77,18 @@ Both separator notes in the comprehensive fixture contain a `w:footnoteRef` run 
 
 3. **Interaction with tracked changes.** Inserting a note in suggesting mode should track the reference and mark the body inserted, and rejecting the insertion should remove both. That is owned by `typed-revisions-and-comments`; this change must not invent a second revision model. Whichever lands second reconciles.
 
-4. **D8 boundary expansion.** D8 says expanding the accepted property boundary requires a reviewed specification change. This change expands it with note references, note-body block content, and note properties. If the review disagrees on any of the three, the boundary — not the implementation — is what moves.
+4. **D8 boundary expansion.** **Accepted** for typed note vocabulary including
+   run-inner marks (`noteRef`, `separator`, `continuationSeparator`), note
+   references, note-body block content, and note properties (`CT_FtnProps` /
+   `CT_EdnProps`). Numbering reuses shared `formatNumFmt` — no forked
+   `ST_NumberFormat`.
 
 5. **Vue parity.** Out of scope by request. `paragraph-adapter-acceptance` gates production support on paired adapters, so this change alone cannot produce a support claim. Task 7.1 records that rather than letting the omission read as completion.
+
+### Settled ownership (layout follow-up)
+
+- Footnote positions include all four `ST_FtnPos` values (`pageBottom`,
+  `beneathText`, `sectEnd`, `docEnd`). Endnote positions are `sectEnd` /
+  `docEnd` only (`pageBottom` refused at mutation).
+- Endnote separator paint at `docEnd` remains open question 1 (Word comparison).
+- Layout/surface integration is a follow-up once shared layout files are free.

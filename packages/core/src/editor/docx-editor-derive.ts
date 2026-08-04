@@ -179,11 +179,39 @@ export function gateCommand(
   mode: 'edit' | 'view',
   options?: { scope?: EditorScope }
 ): CommandGate {
-  if (options?.scope && options.scope.kind !== 'body') {
-    return {
-      ok: false,
-      refusal: { ok: false, code: 'unsupported', reason: 'only the body scope is supported' },
-    };
+  // Scope option: body and the currently open furniture story are writable; `all` and
+  // unrelated scopes stay refused. When omitted, the surface's active scope is used.
+  if (options?.scope) {
+    if (options.scope.kind === 'all') {
+      return {
+        ok: false,
+        refusal: { ok: false, code: 'unsupported', reason: 'the all scope is read-only' },
+      };
+    }
+    if (options.scope.kind === 'note' || options.scope.kind === 'frame') {
+      return {
+        ok: false,
+        refusal: {
+          ok: false,
+          code: 'unsupported',
+          reason: `scope kind '${options.scope.kind}' is not supported`,
+        },
+      };
+    }
+    if (options.scope.kind === 'headerFooter') {
+      const active = surface?.activeScope?.() ?? { kind: 'body' as const };
+      if (active.kind !== 'headerFooter' || active.rId !== options.scope.rId) {
+        // Explicit HF scope only when that story is the active editing surface.
+        return {
+          ok: false,
+          refusal: {
+            ok: false,
+            code: 'unsupported',
+            reason: 'open that header or footer before dispatching against its scope',
+          },
+        };
+      }
+    }
   }
   const support = classifyCommand(command);
   if (!support.supported) {
@@ -251,6 +279,46 @@ export function gateCommand(
       refusal: { ok: false, code: 'unsupported', reason: 'nothing to redo' },
     };
   }
+  if (command.type === 'insertPageField') {
+    const active = surface.activeScope?.() ?? { kind: 'body' as const };
+    if (active.kind !== 'headerFooter') {
+      return {
+        ok: false,
+        refusal: {
+          ok: false,
+          code: 'unsupported',
+          reason: 'insertPageField requires an open header or footer scope',
+        },
+      };
+    }
+  }
+  if (command.type === 'insertNote') {
+    const active = surface.activeScope?.() ?? { kind: 'body' as const };
+    if (active.kind !== 'body') {
+      return {
+        ok: false,
+        refusal: {
+          ok: false,
+          code: 'unsupported',
+          reason: 'insertNote requires body scope',
+        },
+      };
+    }
+  }
+  if (command.type === 'linkHeaderFooterToPrevious') {
+    const state = surface.headerFooterState?.();
+    const sectionIndex = command.sectionIndex ?? state?.sectionIndex ?? 0;
+    if (sectionIndex === 0) {
+      return {
+        ok: false,
+        refusal: {
+          ok: false,
+          code: 'invalidArgs',
+          reason: 'the first section cannot link to a previous header or footer',
+        },
+      };
+    }
+  }
   return { ok: true };
 }
 
@@ -275,5 +343,29 @@ export function tableContextOf(surface: PaginatedSurface | null): TableContext |
     // A rectangle reports its top-left, which is where its commands are anchored.
     rowIndex: cells ? cells.rows.from : context.rowIndex,
     columnIndex: cells ? cells.columns.from : context.columnIndex,
+  };
+}
+
+/** Half-point reshape of `snapshot().formatting` for `getSelectionFormatting`. */
+export function selectionFormattingHalfPoints(formatting: RunFormatting | null): {
+  bold?: boolean;
+  italic?: boolean;
+  underline?: boolean;
+  fontFamily?: string;
+  fontSizeHalfPoints?: number;
+  styleId?: string;
+  alignment?: string;
+} | null {
+  if (!formatting) return null;
+  return {
+    ...(formatting.bold !== undefined ? { bold: formatting.bold } : {}),
+    ...(formatting.italic !== undefined ? { italic: formatting.italic } : {}),
+    ...(formatting.underline !== undefined ? { underline: formatting.underline } : {}),
+    ...(formatting.fontFamily ? { fontFamily: formatting.fontFamily } : {}),
+    ...(formatting.fontSizePt !== undefined
+      ? { fontSizeHalfPoints: Math.round(formatting.fontSizePt * 2) }
+      : {}),
+    ...(formatting.styleId ? { styleId: formatting.styleId } : {}),
+    ...(formatting.alignment ? { alignment: formatting.alignment } : {}),
   };
 }

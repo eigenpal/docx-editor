@@ -14,7 +14,9 @@ import { DocxEditorHorizontalRuler, DocxEditorVerticalRuler } from '../editor/Do
 import { DocxEditorDocumentOutline } from '../editor/DocxEditorOutline';
 import { Navigation as DocxEditorNavigationCompound } from '../editor/navigation';
 import { DocxEditorPageSetupDialog } from '../editor/DocxEditorPageSetup';
+import { DocxEditorHeaderFooterChrome } from '../editor/DocxEditorHeaderFooter';
 import { DocxEditorHyperLink } from '../editor/DocxEditorHyperLink';
+import { DocxEditorNotesChrome } from '../editor/DocxEditorNotes';
 import { useTranslation } from '../i18n';
 import type { TranslationKey } from '../i18n';
 import type { DocxEditorProps, DocxEditorRef } from '../types';
@@ -190,6 +192,8 @@ const DocxEditorImpl = forwardRef<DocxEditorRef, DocxEditorProps>(function DocxE
       className={chrome ? (isDark ? 'dark' : undefined) : className}
       style={chrome ? SCROLL_AREA_STYLE : undefined}
     >
+      {chrome ? <DocxEditorHeaderFooterChrome /> : null}
+      {chrome ? <DocxEditorNotesChrome /> : null}
       <DocxEditorContent />
       <DocxEditorHyperLink hidden={hyperlinkPopup === false} />
     </DocxEditorViewport>
@@ -324,6 +328,9 @@ export interface DocxEditorNamespace extends ForwardRefExoticComponent<
   readonly Navigation: typeof DocxEditorNavigationCompound;
   /** Page Setup dialog — size, orientation, margins — applied as one undo step. */
   readonly PageSetupDialog: typeof DocxEditorPageSetupDialog;
+  /** Header/footer scope chrome while editing page furniture. */
+  readonly HeaderFooterChrome: typeof DocxEditorHeaderFooterChrome;
+  readonly NotesChrome: typeof DocxEditorNotesChrome;
   /**
    * The link popover — target readout, copy, edit, unlink — and its parts. Mounted by
    * default inside the viewport; `hyperlinkPopup={false}` removes it.
@@ -343,5 +350,7 @@ export const DocxEditor: DocxEditorNamespace = Object.assign(DocxEditorImpl, {
   DocumentOutline: DocxEditorDocumentOutline,
   Navigation: DocxEditorNavigationCompound,
   PageSetupDialog: DocxEditorPageSetupDialog,
+  HeaderFooterChrome: DocxEditorHeaderFooterChrome,
+  NotesChrome: DocxEditorNotesChrome,
   HyperLink: DocxEditorHyperLink,
 });

@@ -50,6 +50,22 @@ function spanFor(node: Node): { element: Element; identity: SpanIdentity } | nul
   return null;
 }
 
+/** The header/footer container open for editing, when any. */
+function activeHeaderFooterRoot(root: Element): Element | null {
+  return root.querySelector('[data-docx-hf-active]');
+}
+
+/**
+ * Search roots for painted spans, preferring the active header/footer when one is open.
+ *
+ * Shared header/footer parts paint the same paragraph ids on every page; the active
+ * container is the caret target the user entered.
+ */
+function spanSearchRoots(root: Element): readonly Element[] {
+  const active = activeHeaderFooterRoot(root);
+  return active ? [active, root] : [root];
+}
+
 /** The first painted span at, above, or inside a node — whichever comes first in DOM order. */
 function spanAtOrInside(
   node: Node,
@@ -115,13 +131,20 @@ export function positionFromDomPoint(
 ): SemanticPosition | null {
   if (!root.contains(node)) return null;
 
-  // Header/footer furniture is painted, not editable (phase 2): its spans carry the same
-  // data attributes as body spans but name paragraphs of ANOTHER part, which the session
-  // cannot address. Refuse explicitly rather than letting clamping snap the caret to the
-  // first body paragraph.
   const nearestElement =
     node.nodeType === Node.ELEMENT_NODE ? (node as Element) : node.parentElement;
-  if (nearestElement?.closest('[data-docx-hf]')) return null;
+
+  // Live-projected PAGE/NUMPAGES fields are inert furniture: they carry no editable model
+  // text until typed fields land.
+  if (nearestElement?.closest('[data-docx-field]')) return null;
+
+  // Header/footer furniture is painted, not editable, unless this copy is the active scope.
+  const headerFooter = nearestElement?.closest('[data-docx-hf]');
+  if (headerFooter && !headerFooter.hasAttribute('data-docx-hf-active')) return null;
+
+  // While a header/footer is open, the body content box is inert — the user is editing
+  // furniture, not the story.
+  if (activeHeaderFooterRoot(root) && nearestElement?.closest('.docx-page-content')) return null;
 
   // A LIST MARKER is furniture with one honest answer. It carries no source range, so it
   // cannot be mapped through a child index — but it is painted at the paragraph's own start,
@@ -232,7 +255,18 @@ function domPointFromPosition(
   root: Element,
   position: SemanticPosition
 ): { node: Node; offset: number } | null {
-  const spans = root.querySelectorAll('[data-paragraph-id][data-start]');
+  for (const searchRoot of spanSearchRoots(root)) {
+    const point = domPointFromPositionIn(searchRoot, position);
+    if (point) return point;
+  }
+  return null;
+}
+
+function domPointFromPositionIn(
+  searchRoot: Element,
+  position: SemanticPosition
+): { node: Node; offset: number } | null {
+  const spans = searchRoot.querySelectorAll('[data-paragraph-id][data-start]');
   let fallback: { node: Node; offset: number } | null = null;
   let emptyLine: Element | null = null;
   for (const span of spans) {
@@ -257,7 +291,7 @@ function domPointFromPosition(
   // yet it still has exactly one caret position. Without this the caret vanished after every
   // Enter, and Select All drew no highlight at all on a document ending in a blank
   // paragraph, which is nearly every document Word writes.
-  emptyLine = lineOfParagraph(root, position.paragraphId);
+  emptyLine = lineOfParagraph(searchRoot, position.paragraphId);
   return emptyLine ? { node: emptyLine, offset: 0 } : null;
 }
 

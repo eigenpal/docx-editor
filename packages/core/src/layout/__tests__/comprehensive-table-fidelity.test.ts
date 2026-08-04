@@ -106,4 +106,62 @@ describe('comprehensive fixture table fidelity', () => {
     expect(br!.shading).toBe('E8F5E9');
     expect(tr!.borders?.bottom).toEqual({ style: 'dotted', color: '339933', widthPt: 0.125 });
   });
+
+  test('§6.1 nested-table host bottom pad matches authored tcMar; §6.2 follows tightly', () => {
+    const layout = layoutFixture();
+    const outer = findTable(layout, 'Text after nested table');
+    const host = outer.rows[1]!.cells[0]!;
+    const mixed = outer.rows[1]!.cells[1]!;
+    const afterNested = host.blocks[host.blocks.length - 1]!;
+    expect(afterNested.kind).toBe('paragraph');
+    if (afterNested.kind !== 'paragraph') throw new Error('unreachable');
+    const afterLine = afterNested.lines[afterNested.lines.length - 1]!;
+    const hostPadTop = host.blocks[0]!.box.y - host.box.y;
+    const hostPadBottom = host.box.y + host.box.height - (afterLine.box.y + afterLine.box.height);
+    // Outer tcMar top=bottom=80 twips (+ hairline border) — must stay symmetric and small.
+    expect(hostPadTop).toBeCloseTo(4.125, 2);
+    expect(hostPadBottom).toBeCloseTo(4.125, 2);
+    // Top pad must not regress when bottom shrinks.
+    expect(hostPadTop).toBeGreaterThan(3.5);
+
+    const nested = host.blocks.find((block) => block.kind === 'table');
+    expect(nested?.kind).toBe('table');
+    if (!nested || nested.kind !== 'table') throw new Error('unreachable');
+    // Inner tcMar 40 twips each side: no defaultLineHeight+2*CELL_PAD (20pt) floor.
+    expect(nested.rows[0]!.box.height).toBeLessThan(18);
+    const inner = nested.rows[0]!.cells[0]!;
+    const innerPara = inner.blocks[0]!;
+    expect(innerPara.box.y - inner.box.y).toBeCloseTo(2.125, 2);
+    expect(inner.box.y + inner.box.height - (innerPara.box.y + innerPara.box.height)).toBeCloseTo(
+      2.125,
+      2
+    );
+
+    // Mixed cell stretches with the row; excess is row equalization, not host bottom pad.
+    const imagePara = mixed.blocks[mixed.blocks.length - 1]!;
+    expect(imagePara.kind).toBe('paragraph');
+    if (imagePara.kind !== 'paragraph') throw new Error('unreachable');
+    const imageLine = imagePara.lines[imagePara.lines.length - 1]!;
+    const mixedPadBottom =
+      mixed.box.y + mixed.box.height - (imageLine.box.y + imageLine.box.height);
+    expect(mixedPadBottom).toBeLessThan(20);
+
+    let section62Y: number | undefined;
+    for (const page of layout.pages) {
+      for (const fragment of page.fragments) {
+        if (fragment.kind !== 'paragraph') continue;
+        const text = fragment.lines
+          .flatMap((line) => line.spans)
+          .map((span) => span.text)
+          .join('');
+        if (text.includes('6.2 Triple-Nested')) {
+          section62Y = fragment.box.y;
+        }
+      }
+    }
+    expect(section62Y).toBeDefined();
+    // Pre-fix §6.2 sat at ~217pt under the inflated nested rows; content-sized rows pull it up.
+    expect(section62Y!).toBeLessThan(210);
+    expect(section62Y!).toBeGreaterThan(outer.box.y + outer.box.height);
+  });
 });

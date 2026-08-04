@@ -76,6 +76,14 @@ export interface LayoutSession {
   stats: LayoutSessionStats;
   /** Present when the last pass was multi-section; child sessions live here. */
   multi: MultiSectionLayoutState | null;
+  /**
+   * Page-bottom footnote reserves from the last published notes layout.
+   *
+   * Seeded into the next {@link layoutSemanticDocumentWithNotes} call so the first body
+   * pass already matches the reserved context key — without this, every notes document
+   * starts empty, mismatches, and throws away the session on reflow.
+   */
+  notePageBottomReserves: ReadonlyMap<number, number> | null;
 }
 
 /**
@@ -93,5 +101,6 @@ export function createLayoutSession(): LayoutSession {
     endsOpenPage: true,
     stats: { placed: 0, total: 0, reusedPages: 0, fullPasses: 0 },
     multi: null,
+    notePageBottomReserves: null,
   };
 }

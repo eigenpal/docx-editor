@@ -77,6 +77,7 @@ import { Theme } from '@docx-editor.dev/core-contract/contracts/editor';
 import { ToolbarCommandState } from '@docx-editor.dev/core-contract/editor';
 import { toolbarCommandState } from '@docx-editor.dev/core-contract/editor';
 import { Translations } from '@docx-editor.dev/i18n';
+import { ViewScope } from '@docx-editor.dev/core-contract/contracts/editor';
 import { WORD_DEFAULT_FONT } from '@docx-editor.dev/core-contract/editor';
 
 export { CHROME_GROUPS }
@@ -135,6 +136,15 @@ export interface DocxEditorDocumentOutlineProps {
     leftOffset?: number;
     onClose?: () => void;
     topOffset?: number;
+}
+
+// @public
+export function DocxEditorHeaderFooterChrome(input: DocxEditorHeaderFooterChromeProps): ReactElement | null;
+
+// @public
+export interface DocxEditorHeaderFooterChromeProps {
+    // (undocumented)
+    className?: string;
 }
 
 // @public
@@ -243,11 +253,14 @@ export interface DocxEditorNamespace extends ForwardRefExoticComponent<DocxEdito
     // (undocumented)
     readonly Content: typeof DocxEditorContent;
     readonly DocumentOutline: typeof DocxEditorDocumentOutline;
+    readonly HeaderFooterChrome: typeof DocxEditorHeaderFooterChrome;
     readonly HorizontalRuler: typeof DocxEditorHorizontalRuler;
     readonly HyperLink: typeof DocxEditorHyperLink;
     readonly Loading: typeof DocxEditorLoading;
     readonly Menu: typeof DocxEditorMenu;
     readonly Navigation: typeof Navigation;
+    // (undocumented)
+    readonly NotesChrome: typeof DocxEditorNotesChrome;
     readonly PageSetupDialog: typeof DocxEditorPageSetupDialog;
     // (undocumented)
     readonly Root: typeof DocxEditorRoot;
@@ -292,6 +305,15 @@ export interface DocxEditorNavigationProps extends UseNavigationPaneOptions {
     style?: CSSProperties;
     t?: (key: string, params?: Record<string, string | number>) => string;
     toggle?: boolean;
+}
+
+// @public (undocumented)
+export function DocxEditorNotesChrome(input: DocxEditorNotesChromeProps): ReactElement | null;
+
+// @public
+export interface DocxEditorNotesChromeProps {
+    // (undocumented)
+    className?: string;
 }
 
 // @public
@@ -606,6 +628,9 @@ export { FontUrlSource }
 
 export { generateRulerTicks }
 
+// @public
+export type HeaderFooterState = Exclude<ReturnType<Editor['getHeaderFooterState']>, null>;
+
 // @public (undocumented)
 export function HorizontalRuler(input: HorizontalRulerProps): react__default.ReactElement;
 
@@ -864,6 +889,9 @@ export function NavigationTitle(input: NavigationPartProps): ReactElement;
 
 // @public
 export function NavigationToggle(input: NavigationPartProps): ReactElement;
+
+// @public (undocumented)
+export type NotePropertiesState = Exclude<ReturnType<Editor['getNotePropertiesState']>, null>;
 
 // @public
 export type OutlineHeading = ReturnType<Editor['getOutline']>[number];
@@ -1277,6 +1305,9 @@ export interface UseFontFamilyResult {
 }
 
 // @public
+export function useHeaderFooterState(): HeaderFooterState | null;
+
+// @public
 export function useHyperlinkPopup(): UseHyperlinkPopupResult;
 
 // @public
@@ -1336,6 +1367,14 @@ export interface UseNavigationPaneResult {
 
 // @public
 export function useNavigationShift(): number;
+
+// @public
+export function useNotePropertiesState(): NotePropertiesState | null;
+
+// @public
+export function useNoteScopeState(): Extract<ViewScope, {
+    kind: 'note';
+}> | null;
 
 // @public
 export function usePageSetup(): UsePageSetupReturn;

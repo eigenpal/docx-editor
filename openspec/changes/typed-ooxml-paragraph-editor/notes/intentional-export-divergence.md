@@ -86,6 +86,25 @@ exemptions go when it lands.
   hand-copying its class name.
 - `DocxEditorLoadingSpinnerProps`
 - `DocxEditorLoadingComponent` — the part plus its `.Spinner` static.
+- `DocxEditorHeaderFooterChrome` — React-only scoped HF chrome (region label, options,
+  field inserts) over `useHeaderFooterState`; Vue twin deferred with notes/HF editing.
+- `DocxEditorHeaderFooterChromeProps`
+- `useHeaderFooterState` — selector hook for open HF scope state; Vue twin deferred.
+- `HeaderFooterState` — non-null header/footer snapshot type returned by
+  `useHeaderFooterState`.
+- `DocxEditorNotesChrome` — React-only note chrome (banner, hover preview, context menu,
+  properties dialog); Vue twin deferred — notes editing is React-only this change.
+- `DocxEditorNotesChromeProps`
+- `useNoteScopeState` — selector hook for the open note scope; Vue twin deferred with
+  `DocxEditorNotesChrome`.
+- `useNotePropertiesState` — selector hook over `Editor.getNotePropertiesState()`; Vue
+  twin deferred.
+- `NotePropertiesState` — non-null note-properties snapshot type returned by
+  `useNotePropertiesState`.
+
+These HF/notes exports are intentional React-first surface. Pairing them into Vue
+composables/parts is a tracked follow-up before any adapter-support claim; do not treat
+preservation of disabled Vue slots as parity.
 
 The compound toolbar (default set with in-place slot overrides, generic Button part,
 FontFamily compound + hook) landed React-first on the composition layer above. Vue's

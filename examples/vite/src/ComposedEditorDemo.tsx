@@ -660,6 +660,10 @@ export function ComposedEditorDemo({ fixtureUrl }: { fixtureUrl: string }) {
               <div className="demo-vruler" aria-hidden="true">
                 <DocxEditor.VerticalRuler />
               </div>
+              {/* Furniture / note chrome — sugar `<DocxEditor chrome>` mounts these; a
+                  composed tree must place them by name or enter/exit has no overlay UI. */}
+              <DocxEditor.HeaderFooterChrome />
+              <DocxEditor.NotesChrome />
               <DocxEditor.Content />
               {/* The link popover. Inside the viewport so it stays with the page while
                   scrolling. `<DocxEditor>` mounts it for you; a composition like this one

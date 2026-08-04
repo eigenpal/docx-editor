@@ -47,6 +47,16 @@ export interface SurfaceCaretInput {
    * letter rather than beside it.
    */
   readonly measurer?: TextMeasurer;
+  /** When true, hide the engine caret (range selection / IME still take precedence). */
+  readonly suppress?: boolean;
+  /**
+   * Prefer this sheet when the same paragraph paints on multiple pages (open shared HF).
+   */
+  readonly preferredPageIndex?: number;
+  /** Host for an open header/footer or note whose caret geometry is story-relative. */
+  readonly scopedHost?: HTMLElement | null;
+  /** Distinguishes stable placement keys for the two scoped story kinds. */
+  readonly scopedHostKind?: 'headerFooter' | 'note';
 }
 
 export interface SurfaceCaret {
@@ -102,6 +112,8 @@ export function createSurfaceCaret(
   let steadyTimer: ReturnType<typeof setTimeout> | null = null;
   /** The geometry last painted, so a repaint in place is told from a real move. */
   let placed: string | null = null;
+  /** Last scoped host whose native caret was suppressed. */
+  let suppressedHost: HTMLElement | null = null;
 
   function hasFocus(): boolean {
     const active = document.activeElement;
@@ -125,6 +137,8 @@ export function createSurfaceCaret(
     element.classList.remove(STEADY_CLASS);
     element.remove();
     pagesLayer.style.removeProperty('caret-color');
+    suppressedHost?.style.removeProperty('caret-color');
+    suppressedHost = null;
   }
 
   /** Hold the caret solid while it is moving, then let the blink resume. */
@@ -138,11 +152,11 @@ export function createSurfaceCaret(
   }
 
   function update(): void {
-    if (composing || !hasFocus()) {
+    if (composing || !hasFocus() || read().suppress) {
       hide();
       return;
     }
-    const { layout, selection } = read();
+    const { layout, selection, scopedHost, scopedHostKind, preferredPageIndex, measurer } = read();
     // A range selection shows the browser's highlight; an insertion point inside it would
     // claim a position the selection does not have.
     if (!isCollapsed(selection)) {
@@ -151,29 +165,40 @@ export function createSurfaceCaret(
     }
     // Measured, not interpolated: the caret has to sit at a glyph edge, and a span's advance
     // divided by its character count only lands there in a monospaced face.
-    const geometry = caretAt(layout, selection.head, read().measurer);
+    const geometry = caretAt(layout, selection.head, {
+      ...(measurer ? { measurer } : {}),
+      ...(preferredPageIndex !== undefined ? { preferredPageIndex } : {}),
+    });
     if (!geometry || !Number.isInteger(geometry.pageIndex)) {
       hide();
       return;
     }
-    // Only a MATERIALIZED page has a content box; an off-screen one is a sized shell, and
-    // the caret has nowhere to be painted until it is built.
-    const content = pagesLayer.querySelector<HTMLElement>(
-      `[data-page-index="${geometry.pageIndex}"] > .docx-page-content`
-    );
-    if (!content) {
+    // Open scoped story: parent into the story host (story-relative coords). Body: page
+    // content box (content-relative coords). Never paint scoped geometry into the body box.
+    const host =
+      scopedHost ??
+      pagesLayer.querySelector<HTMLElement>(
+        `[data-page-index="${geometry.pageIndex}"] > .docx-page-content`
+      );
+    if (!host) {
       hide();
       return;
     }
     element.style.left = `${geometry.x * scale}px`;
     element.style.top = `${geometry.y * scale}px`;
     element.style.height = `${geometry.height * scale}px`;
-    if (element.parentNode !== content) content.append(element);
+    if (element.parentNode !== host) host.append(element);
     // Suppress the native caret only while ours is up, and inline so it beats the
-    // `[contenteditable='true']` rule in the stylesheet.
+    // `[contenteditable='true']` rule in the stylesheet — pages layer AND scoped story.
     pagesLayer.style.caretColor = 'transparent';
+    if (suppressedHost && suppressedHost !== scopedHost) {
+      suppressedHost.style.removeProperty('caret-color');
+    }
+    suppressedHost = scopedHost ?? null;
+    suppressedHost?.style.setProperty('caret-color', 'transparent');
 
-    const key = `${geometry.pageIndex}:${geometry.x}:${geometry.y}:${geometry.height}`;
+    const hostKind = host === scopedHost ? (scopedHostKind ?? 'scoped') : 'body';
+    const key = `${geometry.pageIndex}:${hostKind}:${geometry.x}:${geometry.y}:${geometry.height}`;
     if (key !== placed) {
       placed = key;
       markMoving();

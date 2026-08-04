@@ -50,6 +50,12 @@ export type ChromeSlotId =
 | 'file.open'
 | 'file.save'
 | 'file.pageSetup'
+| 'insert.footnote'
+| 'insert.endnote'
+| 'insert.pageNumber'
+| 'insert.totalPages'
+| 'insert.sectionPages'
+| 'insert.pageXofY'
 | 'insert.pageBreak'
 | 'insert.sectionBreakNextPage'
 | 'insert.sectionBreakContinuous'
@@ -550,13 +556,12 @@ export interface Editor {
         };
     }[];
     getDocumentThemeColors(): readonly { readonly slot: string; readonly hex: string }[];
-    getHeaderFooterState(): {
-        readonly editing: 'header' | 'footer' | null;
-        readonly sectionIndex: number;
-    } | null;
+    getHeaderFooterState(): HeaderFooterState | null;
     getInputHostObservation(): InputHostObservation | null;
     getInteractionFrame(): InteractionFrame;
     getInteractionHostMetrics(): InteractionHostMetrics | null;
+    getNotePreviewText(scopeId: string): string | null;
+    getNotePropertiesState(): NotePropertiesState | null;
     getOutline(): readonly {
         readonly text: string;
         readonly level: number;
@@ -706,7 +711,13 @@ export type EditorQuery = {
 export type EditorScope =
 | { kind: 'body' }
 | { kind: 'headerFooter'; rId: string }
-/** A footnote/endnote region, addressed by note id. */
+/**
+* A footnote/endnote region.
+*
+* `id` encodes kind + signed note id as `footnote:<id>` or `endnote:<id>`
+* (e.g. `footnote:2`). Use `formatNoteScopeId` / `parseNoteScopeId` from the
+* store package. Do not invent a parallel `{ noteKind, noteId }` scope arm.
+*/
 | { kind: 'note'; id: string }
 /** A text box or floating frame with its own content, addressed by id. */
 | { kind: 'frame'; id: string }

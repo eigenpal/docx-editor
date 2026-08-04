@@ -34,17 +34,24 @@ export function selectionMarkOf(
   return { paragraphId: selection.head.paragraphId, start, end };
 }
 
-/** The selection in DOCUMENT order, whichever way the user dragged it. */
+/**
+ * The selection in DOCUMENT order, whichever way the user dragged it.
+ *
+ * `order` defaults to the body's document order; a header/footer scope passes its own
+ * (scoped) paragraph order so a selection dragged inside furniture orders correctly instead
+ * of falling back to indices from a document order it does not belong to.
+ */
 export function orderedRangeOf(
   layout: SemanticLayout,
-  selection: SemanticSelection
+  selection: SemanticSelection,
+  order?: readonly string[]
 ): { from: SemanticPosition; to: SemanticPosition } {
   const { anchor, head } = selection;
   if (anchor.paragraphId === head.paragraphId) {
     return anchor.offset <= head.offset ? { from: anchor, to: head } : { from: head, to: anchor };
   }
-  const order = documentOrder(layout);
-  return order.indexOf(anchor.paragraphId) <= order.indexOf(head.paragraphId)
+  const effectiveOrder = order ?? documentOrder(layout);
+  return effectiveOrder.indexOf(anchor.paragraphId) <= effectiveOrder.indexOf(head.paragraphId)
     ? { from: anchor, to: head }
     : { from: head, to: anchor };
 }
@@ -70,18 +77,19 @@ export function clampedToDocument(
 export function selectedTextIn(
   layout: SemanticLayout,
   from: SemanticPosition,
-  to: SemanticPosition
+  to: SemanticPosition,
+  order?: readonly string[]
 ): string {
   if (from.paragraphId === to.paragraphId) {
     return paragraphTextFromLayout(layout, from.paragraphId).slice(from.offset, to.offset);
   }
-  const order = documentOrder(layout);
-  const firstIndex = order.indexOf(from.paragraphId);
-  const lastIndex = order.indexOf(to.paragraphId);
+  const effectiveOrder = order ?? documentOrder(layout);
+  const firstIndex = effectiveOrder.indexOf(from.paragraphId);
+  const lastIndex = effectiveOrder.indexOf(to.paragraphId);
   if (firstIndex === -1 || lastIndex === -1) return '';
   const parts = [paragraphTextFromLayout(layout, from.paragraphId).slice(from.offset)];
   for (let index = firstIndex + 1; index < lastIndex; index += 1) {
-    parts.push(paragraphTextFromLayout(layout, order[index]!));
+    parts.push(paragraphTextFromLayout(layout, effectiveOrder[index]!));
   }
   parts.push(paragraphTextFromLayout(layout, to.paragraphId).slice(0, to.offset));
   // Paragraphs are newline-separated, which is what a paste target expects.
@@ -154,7 +162,8 @@ export function planRangeDeletion(
   layout: SemanticLayout,
   part: OoxmlPart,
   from: SemanticPosition,
-  to: SemanticPosition
+  to: SemanticPosition,
+  order?: readonly string[]
 ): RangeDeletionPlan {
   const textOf = (paragraphId: string): string => paragraphTextFromLayout(layout, paragraphId);
   if (from.paragraphId === to.paragraphId) {
@@ -167,9 +176,9 @@ export function planRangeDeletion(
     };
   }
 
-  const order = documentOrder(layout);
-  const firstIndex = order.indexOf(from.paragraphId);
-  const lastIndex = order.indexOf(to.paragraphId);
+  const effectiveOrder = order ?? documentOrder(layout);
+  const firstIndex = effectiveOrder.indexOf(from.paragraphId);
+  const lastIndex = effectiveOrder.indexOf(to.paragraphId);
   if (firstIndex === -1 || lastIndex === -1) return { ops: [], collapseTo: from };
 
   // FULLY covered: the range holds the whole paragraph, mark to mark. The endpoints qualify
@@ -177,7 +186,7 @@ export function planRangeDeletion(
   // gesture actually covered, never for being adjacent to it.
   const covered = new Set<string>();
   for (let index = firstIndex; index <= lastIndex; index += 1) {
-    const id = order[index]!;
+    const id = effectiveOrder[index]!;
     const wholeParagraph =
       index === firstIndex
         ? from.offset === 0
@@ -200,7 +209,7 @@ export function planRangeDeletion(
   if (tableOfParagraph.has(from.paragraphId)) {
     survivorIndex = -1;
     for (let index = firstIndex + 1; index <= lastIndex; index += 1) {
-      if (!tableOfParagraph.has(order[index]!)) {
+      if (!tableOfParagraph.has(effectiveOrder[index]!)) {
         survivorIndex = index;
         break;
       }
@@ -215,7 +224,7 @@ export function planRangeDeletion(
       survivorIndex = firstIndex;
     }
   }
-  const survivorId = order[survivorIndex]!;
+  const survivorId = effectiveOrder[survivorIndex]!;
   const collapseTo: SemanticPosition =
     survivorIndex === firstIndex ? from : { paragraphId: survivorId, offset: 0 };
 
@@ -223,7 +232,7 @@ export function planRangeDeletion(
   // Text first, and only for paragraphs that will still be there — a paragraph inside a
   // removed table needs no trimming, and trimming it would be work the removal undoes.
   for (let index = firstIndex; index <= lastIndex; index += 1) {
-    const id = order[index]!;
+    const id = effectiveOrder[index]!;
     if (tableOfParagraph.has(id)) continue;
     const length = textOf(id).length;
     const start = index === firstIndex ? from.offset : 0;
@@ -264,7 +273,7 @@ export function planRangeDeletion(
   let groupHead = survivorId;
   let previous = survivorId;
   for (let index = survivorIndex + 1; index <= lastIndex; index += 1) {
-    const id = order[index]!;
+    const id = effectiveOrder[index]!;
     if (tableOfParagraph.has(id)) continue; // going with its table; nothing to join
     if (consecutiveSiblings(previous, id)) {
       ops.push({ op: 'joinParagraphs', firstId: groupHead, secondId: id });

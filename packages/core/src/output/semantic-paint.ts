@@ -10,6 +10,8 @@
 // `createElement` plus `textContent` and never from an HTML string, and every style value
 // comes from the RESOLVED style rather than from raw authored text.
 
+/* eslint-disable max-lines -- paint seam; note areas live in semantic-paint-notes.ts */
+
 import { baselineShiftPtOf, TAB_LEADER_GLYPH } from '@docx-editor.dev/core-contract/layout';
 import type {
   LineRecord,
@@ -23,6 +25,7 @@ import type {
   TableCellFragmentRecord,
   TableFragmentRecord,
 } from '@docx-editor.dev/core-contract/layout';
+import { paintPageNoteAreas } from './semantic-paint-notes.ts';
 
 /**
  * What the run painters need beyond the records: the pixel scale, and the optional
@@ -80,6 +83,20 @@ export interface PaintOptions {
    * family, so a file can never shadow a family name the host page uses.
    */
   readonly fontAlias?: (family: string) => string | undefined;
+  /**
+   * Relationship id of the header/footer story currently open for editing.
+   *
+   * When set, the matching `[data-docx-hf]` container is editable and every body
+   * `.docx-page-content` box is inert; all other furniture stays read-only.
+   */
+  readonly activeHeaderFooterRId?: string;
+  /**
+   * Sheet that hosts the active visual occurrence of a shared furniture part.
+   *
+   * Required with {@link activeHeaderFooterRId} so only one painted copy receives
+   * `data-docx-hf-active` / the engine caret when the same rId appears on many pages.
+   */
+  readonly activeHeaderFooterPageIndex?: number;
 }
 
 const HEX = /^[0-9A-Fa-f]{6}$/;
@@ -404,6 +421,27 @@ function paintSpan(
     element.style.verticalAlign = 'top';
   }
   mountRunText(document, element, span.text, span.style, ctx.scale);
+  if (span.projected) {
+    element.dataset.docxField = '';
+    element.setAttribute('contenteditable', 'false');
+    // Note citations stay pointer-interactive for navigation; PAGE fields stay inert.
+    if (span.noteNav) {
+      element.style.userSelect = 'none';
+      if (span.noteNav.direction === 'to-note') {
+        element.dataset.docxNoteRef = '';
+        element.dataset.docxNoteScope = span.noteNav.scopeId;
+        if (span.text.length > 0) {
+          element.setAttribute('aria-description', span.text);
+        }
+      } else {
+        element.dataset.docxNoteMarkBack = '';
+        element.dataset.docxNoteScope = span.noteNav.scopeId;
+      }
+    } else {
+      element.style.pointerEvents = 'none';
+      element.style.userSelect = 'none';
+    }
+  }
   return element;
 }
 
@@ -984,7 +1022,11 @@ function paintTableFragment(
 function paintPage(
   document: Document,
   page: PageRecord,
-  options: PaintContext & { readonly ariaHidden: boolean },
+  options: PaintContext & {
+    readonly ariaHidden: boolean;
+    readonly activeHeaderFooterRId?: string;
+    readonly activeHeaderFooterPageIndex?: number;
+  },
   materialize: boolean
 ): HTMLElement {
   const element = positioned(document, 'div', page.box, options.scale);
@@ -1013,6 +1055,9 @@ function paintPage(
   content.style.top = `${(page.contentBox.y - page.box.y) * options.scale}px`;
   content.style.width = `${page.contentBox.width * options.scale}px`;
   content.style.height = `${page.contentBox.height * options.scale}px`;
+  if (options.activeHeaderFooterRId) {
+    content.setAttribute('contenteditable', 'false');
+  }
   for (const fragment of page.fragments) {
     content.append(
       fragment.kind === 'table'
@@ -1022,6 +1067,9 @@ function paintPage(
   }
   element.append(content);
 
+  // Footnotes / endnotes — editable stories inside the sheet (not [data-docx-hf] furniture).
+  paintPageNoteAreas(document, element, page, options, paintFragment, paintTableFragment);
+
   // Page furniture (phase 2, read-only): painted inside the sheet but OUTSIDE the content
   // box, inert to editing. `data-docx-hf` is what dom-selection uses to refuse mapping a
   // browser caret inside the furniture back to a model position.
@@ -1030,7 +1078,19 @@ function paintPage(
     const container = document.createElement('div');
     container.className = 'docx-hf';
     container.dataset.docxHf = story.kind;
-    container.setAttribute('contenteditable', 'false');
+    if (story.rId) container.dataset.docxRId = story.rId;
+    const active =
+      !!options.activeHeaderFooterRId &&
+      !!story.rId &&
+      options.activeHeaderFooterRId === story.rId &&
+      (options.activeHeaderFooterPageIndex === undefined ||
+        options.activeHeaderFooterPageIndex === page.index);
+    if (active) {
+      container.dataset.docxHfActive = '';
+      container.setAttribute('contenteditable', 'true');
+    } else {
+      container.setAttribute('contenteditable', 'false');
+    }
     container.style.position = 'absolute';
     container.style.left = `${(story.box.x - page.box.x) * options.scale}px`;
     container.style.top = `${(story.box.y - page.box.y) * options.scale}px`;
@@ -1094,11 +1154,18 @@ export function paintSemanticLayout(
     scale: options.scale ?? 96 / 72,
     ariaHidden: options.ariaHidden ?? true,
     ...(options.fontAlias ? { fontAlias: options.fontAlias } : {}),
+    ...(options.activeHeaderFooterRId
+      ? { activeHeaderFooterRId: options.activeHeaderFooterRId }
+      : {}),
+    ...(options.activeHeaderFooterPageIndex !== undefined
+      ? { activeHeaderFooterPageIndex: options.activeHeaderFooterPageIndex }
+      : {}),
   };
   const document = container.ownerDocument;
   // The alias lookup is part of the paint parameters: a page painted before fonts
-  // registered must not be reused verbatim afterwards.
-  const parameters = `${resolved.scale}|${resolved.ariaHidden}|${resolved.fontAlias ? aliasIdentity(resolved.fontAlias) : ''}`;
+  // registered must not be reused verbatim afterwards. Occurrence page is included so
+  // moving the caret host across shared furniture copies rebuilds active markers.
+  const parameters = `${resolved.scale}|${resolved.ariaHidden}|${resolved.fontAlias ? aliasIdentity(resolved.fontAlias) : ''}|${resolved.activeHeaderFooterRId ?? ''}|${resolved.activeHeaderFooterPageIndex ?? ''}`;
   const previous = retainedPaints.get(container);
   const reusable =
     previous && previous.parameters === parameters

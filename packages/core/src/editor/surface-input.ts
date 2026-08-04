@@ -7,9 +7,13 @@
 // instead of three hand-written keymaps that drift.
 
 import type { TreeDocxSession } from '@docx-editor.dev/core-contract/binding';
-import type { NavigationCommand } from '@docx-editor.dev/core-contract/layout';
+import type { NavigationCommand, SemanticSelection } from '@docx-editor.dev/core-contract/layout';
+import type { StoryScope, TreeDocOp } from '@docx-editor.dev/core-contract/store';
 import type { PaginatedSurface } from './paginated-surface-contract.ts';
 import { plainTextFromTransfer } from './clipboard-plain-text.ts';
+
+type SelectionMark = { paragraphId: string; start: number; end: number };
+type TreeApplyResult = ReturnType<TreeDocxSession['applyTreeOps']>;
 
 const NAVIGATION: Record<string, NavigationCommand> = {
   ArrowLeft: 'left',
@@ -59,7 +63,34 @@ export function createKeyDownHandler(
   } = {}
 ): (event: KeyboardEvent) => void {
   return (event: KeyboardEvent): void => {
+    if (event.key === 'Escape' && surface.activeScope().kind === 'headerFooter') {
+      surface.exitHeaderFooter();
+      event.preventDefault();
+      return;
+    }
+    if (event.key === 'Escape' && surface.activeScope().kind === 'note') {
+      surface.exitNote();
+      event.preventDefault();
+      return;
+    }
+    // Word: Ctrl/Cmd+Alt+F footnote, Ctrl/Cmd+Alt+D endnote.
+    if ((event.ctrlKey || event.metaKey) && event.altKey && !event.shiftKey) {
+      const key = event.key.toLowerCase();
+      if (key === 'f') {
+        event.preventDefault();
+        surface.insertNote('footnote');
+        return;
+      }
+      if (key === 'd') {
+        event.preventDefault();
+        surface.insertNote('endnote');
+        return;
+      }
+    }
     const accel = event.metaKey || event.ctrlKey;
+    // Engine-driven navigation owns caret motion in body AND open furniture. Furniture
+    // stops come from story-scoped layout geometry (tab advances, projected fields), so
+    // the browser never walks a painted `\t` width as if it were model offsets.
     const command = NAVIGATION[event.key];
     if (command) {
       let scoped: NavigationCommand = command;
@@ -88,7 +119,8 @@ export function createKeyDownHandler(
     }
     if (event.key === 'PageUp' || event.key === 'PageDown') {
       // A page is a real unit here — every caret stop knows its sheet — so this moves ONE
-      // page. Ctrl/Cmd is Word's jump to the document edge.
+      // page. Ctrl/Cmd is Word's jump to the document edge. Open furniture stays within the
+      // story stops (single-sheet furniture → document edge of that story).
       surface.navigate(
         accel
           ? event.key === 'PageUp'
@@ -399,4 +431,66 @@ export function paragraphReplacePlan(
   }
   if (ops.length === 0) return null;
   return { ops, caret: prefix + inserted.length };
+}
+
+/**
+ * Plain-text insert used by clipboard paste and beforeinput insertText: one
+ * commit that inserts joined lines then splits at every newline boundary.
+ */
+export function createInsertPlainText(deps: {
+  orderedStart: () => { paragraphId: string; offset: number };
+  deleteSelectionOps: () => readonly TreeDocOp[];
+  selectionMark: () => SelectionMark | null;
+  storyScope: () => StoryScope;
+  session: TreeDocxSession;
+  commit: (
+    run: () => TreeApplyResult | boolean,
+    selectionAfter?: () => SemanticSelection | null
+  ) => void;
+  applyOps: (ops: readonly TreeDocOp[], mark: SelectionMark | null) => TreeApplyResult;
+  collapsedAt: (pos: { paragraphId: string; offset: number }) => SemanticSelection;
+}): (text: string) => void {
+  return (text: string): void => {
+    const lines = text.replace(/\r\n?/g, '\n').split('\n');
+    const start = deps.orderedStart();
+    const joined = lines.join('');
+    const ops: TreeDocOp[] = [...deps.deleteSelectionOps()];
+    if (joined.length > 0) {
+      ops.push({
+        op: 'insertText',
+        paragraphId: start.paragraphId,
+        offset: start.offset,
+        text: joined,
+      });
+    }
+    const boundaries: number[] = [];
+    let consumed = 0;
+    for (let index = 0; index < lines.length - 1; index += 1) {
+      consumed += lines[index]!.length;
+      boundaries.push(start.offset + consumed);
+    }
+    if (boundaries.length > 0) {
+      ops.push({ op: 'splitParagraphMany', paragraphId: start.paragraphId, offsets: boundaries });
+    }
+    if (ops.length === 0) return;
+
+    const before = new Set(deps.session.paragraphIdsIn(deps.storyScope()));
+    const lastLine = lines[lines.length - 1]!;
+    deps.commit(
+      () => deps.applyOps(ops, deps.selectionMark()),
+      () => {
+        if (boundaries.length === 0) {
+          return deps.collapsedAt({
+            paragraphId: start.paragraphId,
+            offset: start.offset + lastLine.length,
+          });
+        }
+        const minted = deps.session
+          .paragraphIdsIn(deps.storyScope())
+          .filter((id) => !before.has(id));
+        const landing = minted[minted.length - 1];
+        return landing ? deps.collapsedAt({ paragraphId: landing, offset: lastLine.length }) : null;
+      }
+    );
+  };
 }

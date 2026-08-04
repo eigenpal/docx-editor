@@ -181,7 +181,10 @@ export function validKnownKind(kind: KnownKind, children: readonly OoxmlNode[]):
       return (
         children.every(
           (child) =>
-            child.kind === 'paragraphProperties' || child.kind === 'run' || isPreservedChild(child)
+            child.kind === 'paragraphProperties' ||
+            child.kind === 'run' ||
+            child.kind === 'fldSimple' ||
+            isPreservedChild(child)
         ) &&
         (properties < 0 || properties === 0) &&
         children.filter((child) => child.kind === 'paragraphProperties').length <= 1
@@ -213,6 +216,12 @@ export function validKnownKind(kind: KnownKind, children: readonly OoxmlNode[]):
             child.kind === 'hardBreak' ||
             child.kind === 'bookmarkStart' ||
             child.kind === 'bookmarkEnd' ||
+            child.kind === 'fldChar' ||
+            child.kind === 'instrText' ||
+            child.kind === 'noteReference' ||
+            child.kind === 'noteRef' ||
+            child.kind === 'separator' ||
+            child.kind === 'continuationSeparator' ||
             child.kind === 'generic'
         ) &&
         (properties < 0 || properties === 0) &&
@@ -241,6 +250,26 @@ export function validKnownKind(kind: KnownKind, children: readonly OoxmlNode[]):
       return children.every((child) => child.kind === 'textValue');
     case 'tab':
     case 'hardBreak':
+      return children.length === 0;
+    case 'fldChar':
+      // `w:ffData` and any other payload stay generic — never typed as executable.
+      return children.every((child) => child.kind === 'generic');
+    case 'instrText':
+      return children.every((child) => child.kind === 'textValue');
+    case 'fldSimple':
+      return children.every((child) => child.kind === 'run' || child.kind === 'generic');
+    case 'footnotes':
+    case 'endnotes':
+      return children.every((child) => child.kind === 'note' || child.kind === 'generic');
+    case 'note':
+      // Same block content model as body — paragraphs and tables; misplaced knowns demote.
+      return children.every(
+        (child) => child.kind === 'paragraph' || child.kind === 'table' || child.kind === 'generic'
+      );
+    case 'noteReference':
+    case 'noteRef':
+    case 'separator':
+    case 'continuationSeparator':
       return children.length === 0;
     // Table arms are deliberately permissive (no ordering constraints): demotion to
     // generic on any violation is the safe fallback, and generic round-trips losslessly.

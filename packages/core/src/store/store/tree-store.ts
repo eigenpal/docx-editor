@@ -26,6 +26,23 @@ export interface SelectionMark {
   readonly end: number;
 }
 
+/**
+ * Which editable story a ModelChange came from.
+ *
+ * Mirrors `EditorScope` for body and header/footer — `{ kind: 'headerFooter'; rId }` —
+ * so package-aware mutation and the public scope contract stay one vocabulary. Body
+ * commits omit `rId`; header/footer commits carry the relationship id that addressed
+ * the part. Notes parts use `{ kind: 'notesPart'; noteKind }` (one store per part).
+ */
+export type TreeStoryRef =
+  | { readonly kind: 'body'; readonly partName: string }
+  | { readonly kind: 'headerFooter'; readonly partName: string; readonly rId: string }
+  | {
+      readonly kind: 'notesPart';
+      readonly partName: string;
+      readonly noteKind: 'footnote' | 'endnote';
+    };
+
 export interface TreeModelChange {
   readonly change: 'model-change';
   readonly fromRevision: number;
@@ -42,6 +59,11 @@ export interface TreeModelChange {
   readonly dependencyKeys: readonly string[];
   /** The widest impact among the transaction's ops — what layout must scope to. */
   readonly impact: ImpactClass;
+  /**
+   * Story that published this change. Absent on body-only store publishes that predate
+   * package-aware targeting; `TreePackageStore` always sets it.
+   */
+  readonly story?: TreeStoryRef;
 }
 
 export type TransactResult =
@@ -66,6 +88,13 @@ export interface TransactOptions {
    * the call site rather than leaving it implied.
    */
   readonly scope?: 'transaction' | 'command';
+  /**
+   * Floor on the published impact. Header/footer story edits use `global` so every page
+   * sharing the part invalidates rather than keeping stale furniture.
+   */
+  readonly minimumImpact?: ImpactClass;
+  /** Story identity stamped onto the published ModelChange (package-aware targeting). */
+  readonly story?: TreeStoryRef;
 }
 
 interface HistoryEntry {
@@ -79,11 +108,27 @@ const IMPACT_RANK: Record<ImpactClass, number> = {
   'text-local': 0,
   'paragraph-local': 1,
   'flow-structural': 2,
+  global: 3,
 };
 
 export interface TreeDocumentStoreOptions {
   /** Bound on retained history entries. Oldest entries drop first. */
   readonly historyLimit?: number;
+}
+
+/**
+ * Opaque document+history checkpoint for package-coordinator rollback.
+ * Used when a story mutation may promote to a package undo unit (note-ref cascade).
+ */
+export interface TreeDocumentCheckpoint {
+  readonly part: OoxmlPart;
+  readonly revision: number;
+  readonly undoStack: readonly HistoryEntry[];
+  readonly redoStack: readonly HistoryEntry[];
+  readonly composition: {
+    readonly entry: HistoryEntry;
+    readonly committed: boolean;
+  } | null;
 }
 
 export class TreeDocumentStore {
@@ -94,6 +139,8 @@ export class TreeDocumentStore {
   private readonly redoStack: HistoryEntry[] = [];
   private readonly subscribers = new Set<(change: TreeModelChange) => void>();
   private readonly historyLimit: number;
+  /** Package-aware story tag applied to publishes (including undo/redo). */
+  private storyRef: TreeStoryRef | null = null;
 
   /** Open composition, if any. While set, transactions extend one entry (task 5.5). */
   private composition: {
@@ -105,6 +152,14 @@ export class TreeDocumentStore {
   constructor(part: OoxmlPart, options: TreeDocumentStoreOptions = {}) {
     this.current = part;
     this.historyLimit = options.historyLimit ?? 200;
+  }
+
+  /**
+   * Stamp story identity onto subsequent publishes for this store (including undo/redo).
+   * Used by the package coordinator so history navigation keeps the same scope tag.
+   */
+  setStoryRef(story: TreeStoryRef | null): void {
+    this.storyRef = story;
   }
 
   get part(): OoxmlPart {
@@ -125,6 +180,58 @@ export class TreeDocumentStore {
   }
   get compositionActive(): boolean {
     return this.composition !== null;
+  }
+
+  /**
+   * Replace the current part without recording history, but advance the revision so
+   * revision-keyed projections cannot survive a package snapshot install.
+   */
+  replacePart(part: OoxmlPart): void {
+    if (part === this.current) return;
+    this.current = part;
+    this.rev += 1;
+  }
+
+  /**
+   * Snapshot part, revision, and undo/redo stacks so the package coordinator can roll
+   * back a story transaction that fails after commit (e.g. note-reference cascade) or
+   * discard a local history entry when promoting to a package undo unit.
+   */
+  checkpoint(): TreeDocumentCheckpoint {
+    return {
+      part: this.current,
+      revision: this.rev,
+      undoStack: this.undoStack.slice(),
+      redoStack: this.redoStack.slice(),
+      composition: this.composition
+        ? { entry: { ...this.composition.entry }, committed: this.composition.committed }
+        : null,
+    };
+  }
+
+  /** Full restore — part, revision, history stacks, and composition. */
+  restoreCheckpoint(checkpoint: TreeDocumentCheckpoint): void {
+    this.current = checkpoint.part;
+    this.rev = checkpoint.revision;
+    this.undoStack.length = 0;
+    this.undoStack.push(...checkpoint.undoStack);
+    this.redoStack.length = 0;
+    this.redoStack.push(...checkpoint.redoStack);
+    this.composition = checkpoint.composition
+      ? { entry: { ...checkpoint.composition.entry }, committed: checkpoint.composition.committed }
+      : null;
+  }
+
+  /**
+   * Restore undo/redo stacks only, keeping the current part and revision.
+   * Used when a story mutation is promoted to a package history pointer so the local
+   * orphan entry does not steal a later undo.
+   */
+  restoreHistoryStacks(checkpoint: TreeDocumentCheckpoint): void {
+    this.undoStack.length = 0;
+    this.undoStack.push(...checkpoint.undoStack);
+    this.redoStack.length = 0;
+    this.redoStack.push(...checkpoint.redoStack);
   }
 
   subscribe(listener: (change: TreeModelChange) => void): () => void {
@@ -156,7 +263,7 @@ export class TreeDocumentStore {
     const deleted = new Set<string>();
     const dependencyKeys = new Set<string>();
     const splitJoin: TreeModelChange['splitJoin'][number][] = [];
-    let impact: ImpactClass = 'text-local';
+    let impact: ImpactClass = options.minimumImpact ?? 'text-local';
     let selectionBefore: SelectionMark | null = null;
     let selectionAfter: SelectionMark | null = null;
 
@@ -245,16 +352,25 @@ export class TreeDocumentStore {
 
     this.current = working;
     this.rev += 1;
+    if (options.story) this.storyRef = options.story;
+    if (options.minimumImpact && IMPACT_RANK[options.minimumImpact] > IMPACT_RANK[impact]) {
+      impact = options.minimumImpact;
+    }
     return {
       ok: true,
-      change: this.publish(origin, beforeRevision, {
-        dirty,
-        created,
-        deleted,
-        dependencyKeys,
-        splitJoin,
-        impact,
-      }),
+      change: this.publish(
+        origin,
+        beforeRevision,
+        {
+          dirty,
+          created,
+          deleted,
+          dependencyKeys,
+          splitJoin,
+          impact,
+        },
+        options.story ?? this.storyRef ?? undefined
+      ),
     };
   }
 
@@ -306,7 +422,7 @@ export class TreeDocumentStore {
     });
     this.current = entry.part;
     this.rev += 1;
-    return this.publish(ORIGIN_IDS.mutationUndo, beforeRevision, null);
+    return this.publish(ORIGIN_IDS.mutationUndo, beforeRevision, null, this.storyRef ?? undefined);
   }
 
   redo(): TreeModelChange | null {
@@ -321,7 +437,7 @@ export class TreeDocumentStore {
     });
     this.current = entry.part;
     this.rev += 1;
-    return this.publish(ORIGIN_IDS.mutationRedo, beforeRevision, null);
+    return this.publish(ORIGIN_IDS.mutationRedo, beforeRevision, null, this.storyRef ?? undefined);
   }
 
   /** The selection to restore for the entry `undo()` would reverse next. */
@@ -349,7 +465,8 @@ export class TreeDocumentStore {
       dependencyKeys: Set<string>;
       splitJoin: TreeModelChange['splitJoin'][number][];
       impact: ImpactClass;
-    } | null
+    } | null,
+    story?: TreeStoryRef
   ): TreeModelChange {
     this.commitCounter += 1;
     const change: TreeModelChange = {
@@ -364,8 +481,14 @@ export class TreeDocumentStore {
       splitJoin: effects ? effects.splitJoin : [],
       dependencyKeys: effects ? [...effects.dependencyKeys] : [],
       // Undo and redo restore a whole previous tree, so their reach is not knowable from
-      // one op's effect — treat them as structural and let layout re-derive.
-      impact: effects ? effects.impact : 'flow-structural',
+      // one op's effect — treat them as structural and let layout re-derive. Header/footer
+      // story undos stay `global` so shared furniture cannot go stale.
+      impact: effects
+        ? effects.impact
+        : story?.kind === 'headerFooter'
+          ? 'global'
+          : 'flow-structural',
+      ...(story ? { story } : {}),
     };
     for (const listener of this.subscribers) listener(change);
     return change;

@@ -14,30 +14,35 @@
 import type { Node as PMNode } from 'prosemirror-model';
 import {
   ORIGIN_IDS,
-  TreeDocumentStore,
+  TreePackageStore,
   readEmbeddedFonts,
   readOoxmlPackage,
   resolveHeaderFooterParts,
   resolveHeaderFooterPartsBySection,
+  resolveHeaderFooterResolutionBySection,
   resolveRelationship,
-  withPart,
   writeOoxmlPackage,
   ensureListDefinition,
   ensureNumberingLevel,
   ensureHyperlinkRelationship,
   buildBookmarkIndex,
   relationshipTargetIn,
+  isHeaderFooterLifecycleOp,
+  isNoteLifecycleOp,
   normalizeParagraphIdentity,
   paragraphTextOf,
   type BookmarkIndex,
   type EmbeddedFont,
   type ListKind,
   type HeaderFooterParts,
+  type HeaderFooterSectionResolution,
   type OoxmlElement,
   type OoxmlPackage,
   type OoxmlPackageRejection,
   type OoxmlPart,
   type SelectionMark,
+  type StoryScope,
+  type StoryTargetRejection,
   type TreeDocOp,
   type TreeModelChange,
 } from '@docx-editor.dev/core-contract/store';
@@ -81,7 +86,7 @@ export interface TreeApplyResult {
   readonly rejected: boolean;
   readonly opCount: number;
   /** Present when the edit was refused, so a host can report WHY rather than a silent no-op. */
-  readonly reason?: TreeBindingRejection | string;
+  readonly reason?: TreeBindingRejection | StoryTargetRejection | string;
 }
 
 export interface TreeDocxSession {
@@ -89,21 +94,38 @@ export interface TreeDocxSession {
   readonly editable: boolean;
   /** Canonical node ids of the body paragraphs, in order. */
   paragraphIds(): string[];
-  /** The current canonical part — what layout reads. Never mutated by the caller. */
+  /**
+   * Canonical node ids of paragraphs in a story scope. Defaults to the body.
+   * Header/footer scopes address the part `EditorScope { kind: 'headerFooter'; rId }` names.
+   */
+  paragraphIdsIn(scope?: StoryScope): string[];
+  /** The current canonical BODY part — what layout reads for the main story. */
   part(): OoxmlPart;
+  /** The current part for a story scope, or null when the target is refused. */
+  partFor(scope: StoryScope): OoxmlPart | null;
+  /**
+   * The current package with every opened story store merged in. Authority for layout
+   * resolution and save — never a swapped single-part view.
+   */
+  currentPackage(): OoxmlPackage;
   /**
    * Commit typed tree ops directly, as ONE transaction.
    *
    * The paginated surface has no ProseMirror doc to diff, so it addresses the model the way
    * the ops already do — by node id and offset — rather than round-tripping an edit through
    * a projection just to have it diffed back out.
+   *
+   * `scope` defaults to the body. Pass `{ kind: 'headerFooter', rId }` to target an existing
+   * header/footer part; the transaction publishes one ModelChange (HF → `global` impact)
+   * and one undo unit without swapping the body store.
    */
   applyTreeOps(
     ops: readonly TreeDocOp[],
     selectionBefore?: SelectionMark | null,
-    selectionAfter?: SelectionMark | null
+    selectionAfter?: SelectionMark | null,
+    scope?: StoryScope
   ): TreeApplyResult;
-  /** Project the current revision into a ProseMirror doc. */
+  /** Project the current BODY revision into a ProseMirror doc. */
   projectDoc(): PMNode;
   /** Re-project incrementally from the last committed change, reusing untouched paragraphs. */
   reconcile(previousDoc: PMNode): PMNode;
@@ -115,11 +137,18 @@ export interface TreeDocxSession {
    * wastes work and races the next keystroke.
    */
   lastCommitWasStructural(): boolean;
-  /** Map an edited doc to tree ops and commit them as ONE transaction. */
+  /** Map an edited BODY doc to tree ops and commit them as ONE transaction. */
   applyPmDoc(doc: PMNode): TreeApplyResult;
   /** Body text, paragraphs joined by newlines, read from the CANONICAL tree. */
   bodyText(): string;
+  /** Text of a story scope, paragraphs joined by newlines. */
+  storyText(scope: StoryScope): string | null;
+  /** Body-store revision (independent of header/footer store revisions). */
   revision(): number;
+  /** Per-story revision, or null when the target is refused. */
+  revisionFor(scope: StoryScope): number | null;
+  /** Package-wide revision — bumps on any story commit (body or HF). */
+  packageRevision(): number;
   canUndo(): boolean;
   canRedo(): boolean;
   /**
@@ -132,19 +161,19 @@ export interface TreeDocxSession {
    */
   undo(): SelectionMark | null;
   redo(): SelectionMark | null;
-  beginComposition(): void;
+  beginComposition(scope?: StoryScope): void;
   endComposition(): void;
   subscribe(onChange: (change: TreeModelChange) => void): () => void;
   /** Serialize the whole package back to DOCX bytes. */
   save(): Uint8Array;
   /**
-   * The resolved header/footer parts of the section, by variant (phase 2, read-only).
+   * The resolved header/footer parts of the section, by variant (phase 2).
    *
    * Returns the FINAL section's effective parts after OOXML inheritance. Prefer
    * `headerFooterPartsBySection` for multi-section pagination.
    *
-   * Immutable for the session's lifetime: header/footer EDITING is a later slice, so a
-   * host may key derived layout by part object identity.
+   * Re-resolved after any package revision so an edited shared part is visible everywhere
+   * it is attached.
    */
   headerFooterParts(): HeaderFooterParts;
   /**
@@ -153,9 +182,14 @@ export interface TreeDocxSession {
    */
   headerFooterPartsBySection(): readonly HeaderFooterParts[];
   /**
+   * Per-section resolution with declared-vs-inherited metadata for "Same as previous"
+   * chrome. Index-aligned with `headerFooterPartsBySection`.
+   */
+  headerFooterResolutionBySection(): readonly HeaderFooterSectionResolution[];
+  /**
    * Font family names the document uses, from every `w:rFonts` in the CURRENT main
    * part plus the styles and header/footer parts — validated, deduplicated, sorted.
-   * Memoized per main-part revision (the other parts are immutable in-session).
+   * Memoized per package revision.
    */
   documentFonts(): readonly string[];
   /**
@@ -232,14 +266,16 @@ export interface TreeDocxSession {
    * definition of the same kind is reused rather than duplicated.
    */
   /**
-   * What the MAIN part's relationships answer for one `r:id`: the authored target and
-   * whether it is external. `null` for an id the part does not declare.
+   * What the owning part's relationships answer for one `r:id` under `scope` (default:
+   * body): the authored target and whether it is external. `null` for an id the part does
+   * not declare, or when the scoped part is not open.
    *
    * Live rather than memoized: inserting a link mints a relationship mid-session, and a
    * cached resolver would report the link this session just created as dangling.
    */
   relationshipTarget(
-    relationshipId: string
+    relationshipId: string,
+    scope?: StoryScope
   ): { readonly target: string; readonly external: boolean } | null;
   /**
    * `bookmarkName -> { paragraphId, offset }` over the main part, memoized per revision.
@@ -249,14 +285,17 @@ export interface TreeDocxSession {
    */
   bookmarks(): BookmarkIndex;
   /**
-   * The relationship id for an external hyperlink target, minting one if the package has
-   * none, or `null` when the URL is refused.
+   * The relationship id for an external hyperlink target on the part owning `scope`
+   * (default: body), minting one if that part has none, or `null` when the URL is refused
+   * or the scoped part cannot be resolved.
    *
    * Lives on the PACKAGE, outside `store.transact`, like the numbering definitions: the
    * undoable half is the tree op that names the id. An unreferenced relationship left
-   * behind by an undo is inert and is what Word writes anyway.
+   * behind by an undo is inert and is what Word writes anyway. Scoped inserts mint onto
+   * the story's own `.rels` so a header/footer or note link never creates a stray body
+   * relationship.
    */
-  ensureHyperlinkRelationship(url: string): string | null;
+  ensureHyperlinkRelationship(url: string, scope?: StoryScope): string | null;
   ensureListDefinition(kind: ListKind): string | null;
   /**
    * Declare `level` in the list definition `numId` names, with Word's default format for
@@ -275,8 +314,8 @@ export interface TreeDocxSession {
    * The `w14:paraId` ↔ node-id index over the full editable set of the MAIN part,
    * memoized per revision. Every editable paragraph carries a valid, part-unique id
    * (established at open, maintained by the split appliers), so every paragraph is
-   * mapped. Header/footer/footnote paragraphs are not: those stories are addressed
-   * structurally (`DocLocation`) when they become editable.
+   * mapped. Header/footer paragraphs become addressable through `partFor` once their
+   * story store is open.
    */
   paragraphAnchors(): ParagraphAnchorIndex;
   /** `w14:paraId` of a canonical paragraph node id, verbatim, or null. */
@@ -289,6 +328,7 @@ export type { DocumentStyleEntry } from './document-catalog.ts';
 export type { DocumentThemeColorEntry, ThemeColorSlot } from './document-theme.ts';
 export type { DocumentOutlineEntry } from './document-outline.ts';
 export type { ParagraphAnchorIndex } from './paragraph-anchors.ts';
+export type { StoryScope, StoryTargetRejection } from '@docx-editor.dev/core-contract/store';
 
 export type TreeSessionRejection = OoxmlPackageRejection | 'no-main-document-tree';
 
@@ -313,25 +353,49 @@ export function openTreeSession(bytes: Uint8Array): OpenTreeSessionResult {
     };
   }
 
-  let pkg: OoxmlPackage = loaded.package;
-  const main = pkg.parts.get(pkg.mainDocumentPart);
-  if (!main) return { ok: false, reason: 'no-main-document-tree', detail: pkg.mainDocumentPart };
+  const pkgLoaded: OoxmlPackage = loaded.package;
+  const main = pkgLoaded.parts.get(pkgLoaded.mainDocumentPart);
+  if (!main)
+    return { ok: false, reason: 'no-main-document-tree', detail: pkgLoaded.mainDocumentPart };
 
   // Paragraph identity is established once, here — every paragraph the session edits
   // carries a valid, part-unique `w14:paraId` from the first revision on, so the op
   // layer can seed split-tail mints and the contract can address by paraId. A document
   // already carrying valid ids normalizes to the SAME part reference (byte-stable save).
   const normalized = normalizeParagraphIdentity(main);
-  if (normalized !== main) pkg = withPart(pkg, normalized);
+  const packageStore = new TreePackageStore(pkgLoaded, normalized);
 
-  const store = new TreeDocumentStore(normalized);
-  let headerFooterBySection: readonly HeaderFooterParts[] | null = null;
+  let headerFooterBySection: {
+    readonly packageRevision: number;
+    readonly parts: readonly HeaderFooterParts[];
+    readonly resolution: readonly HeaderFooterSectionResolution[];
+  } | null = null;
   let lastChange: TreeModelChange | null = null;
-  store.subscribe((change) => {
+  packageStore.subscribe((change) => {
     lastChange = change;
   });
 
-  const currentPackage = (): OoxmlPackage => withPart(pkg, store.part);
+  const bodyStore = () => packageStore.bodyStore();
+  const currentPackage = (): OoxmlPackage => packageStore.currentPackage();
+  const BODY_SCOPE: StoryScope = Object.freeze({ kind: 'body' as const });
+
+  const resolvedHeaderFooterBySection = (): {
+    readonly parts: readonly HeaderFooterParts[];
+    readonly resolution: readonly HeaderFooterSectionResolution[];
+  } => {
+    if (
+      !headerFooterBySection ||
+      headerFooterBySection.packageRevision !== packageStore.packageRevision
+    ) {
+      const resolution = resolveHeaderFooterResolutionBySection(currentPackage());
+      headerFooterBySection = {
+        packageRevision: packageStore.packageRevision,
+        resolution,
+        parts: resolveHeaderFooterPartsBySection(currentPackage()),
+      };
+    }
+    return headerFooterBySection;
+  };
 
   // The styles / numbering parts, resolved once through the main part's relationships
   // (the same resolution discipline `resolveHeaderFooterParts` uses), with conventional
@@ -345,17 +409,18 @@ export function openTreeSession(bytes: Uint8Array): OpenTreeSessionResult {
   const resolveStylesRoot = (): OoxmlElement | null => {
     if (stylesRootResolved) return stylesRoot;
     stylesRootResolved = true;
-    const record = (pkg.relationships.get(pkg.mainDocumentPart) ?? []).find(
+    const live = currentPackage();
+    const record = (live.relationships.get(live.mainDocumentPart) ?? []).find(
       (rel) => rel.type === STYLES_REL_TYPE
     );
     let part: OoxmlPart | undefined;
     if (record) {
       const resolved = resolveRelationship(record);
       if (resolved.mode === 'Internal' && resolved.target.ok) {
-        part = pkg.parts.get(resolved.target.partName);
+        part = live.parts.get(resolved.target.partName);
       }
     }
-    part ??= pkg.parts.get('/word/styles.xml');
+    part ??= live.parts.get('/word/styles.xml');
     stylesRoot = part?.root ?? null;
     return stylesRoot;
   };
@@ -365,17 +430,18 @@ export function openTreeSession(bytes: Uint8Array): OpenTreeSessionResult {
   const resolveNumberingRoot = (): OoxmlElement | null => {
     if (numberingRootResolved) return numberingRoot;
     numberingRootResolved = true;
-    const record = (pkg.relationships.get(pkg.mainDocumentPart) ?? []).find(
+    const live = currentPackage();
+    const record = (live.relationships.get(live.mainDocumentPart) ?? []).find(
       (rel) => rel.type === NUMBERING_REL_TYPE
     );
     let part: OoxmlPart | undefined;
     if (record) {
       const resolved = resolveRelationship(record);
       if (resolved.mode === 'Internal' && resolved.target.ok) {
-        part = pkg.parts.get(resolved.target.partName);
+        part = live.parts.get(resolved.target.partName);
       }
     }
-    part ??= pkg.parts.get('/word/numbering.xml');
+    part ??= live.parts.get('/word/numbering.xml');
     numberingRoot = part?.root ?? null;
     return numberingRoot;
   };
@@ -385,22 +451,23 @@ export function openTreeSession(bytes: Uint8Array): OpenTreeSessionResult {
   // see, so layout has to be handed them separately.
   const SETTINGS_REL_TYPE =
     'http://schemas.openxmlformats.org/officeDocument/2006/relationships/settings';
-  let settingsRootResolved = false;
+  let settingsRootRevision = -1;
   let settingsRoot: OoxmlElement | null = null;
   const resolveSettingsRoot = (): OoxmlElement | null => {
-    if (settingsRootResolved) return settingsRoot;
-    settingsRootResolved = true;
-    const record = (pkg.relationships.get(pkg.mainDocumentPart) ?? []).find(
+    if (settingsRootRevision === packageStore.packageRevision) return settingsRoot;
+    settingsRootRevision = packageStore.packageRevision;
+    const live = currentPackage();
+    const record = (live.relationships.get(live.mainDocumentPart) ?? []).find(
       (rel) => rel.type === SETTINGS_REL_TYPE
     );
     let part: OoxmlPart | undefined;
     if (record) {
       const resolved = resolveRelationship(record);
       if (resolved.mode === 'Internal' && resolved.target.ok) {
-        part = pkg.parts.get(resolved.target.partName);
+        part = live.parts.get(resolved.target.partName);
       }
     }
-    part ??= pkg.parts.get('/word/settings.xml');
+    part ??= live.parts.get('/word/settings.xml');
     settingsRoot = part?.root ?? null;
     return settingsRoot;
   };
@@ -414,17 +481,18 @@ export function openTreeSession(bytes: Uint8Array): OpenTreeSessionResult {
   const resolveThemeRoot = (): OoxmlElement | null => {
     if (themeRootResolved) return themeRoot;
     themeRootResolved = true;
-    const record = (pkg.relationships.get(pkg.mainDocumentPart) ?? []).find(
+    const live = currentPackage();
+    const record = (live.relationships.get(live.mainDocumentPart) ?? []).find(
       (rel) => rel.type === THEME_REL_TYPE
     );
     let part: OoxmlPart | undefined;
     if (record) {
       const resolved = resolveRelationship(record);
       if (resolved.mode === 'Internal' && resolved.target.ok) {
-        part = pkg.parts.get(resolved.target.partName);
+        part = live.parts.get(resolved.target.partName);
       }
     }
-    part ??= pkg.parts.get('/word/theme/theme1.xml');
+    part ??= live.parts.get('/word/theme/theme1.xml');
     themeRoot = part?.root ?? null;
     return themeRoot;
   };
@@ -438,18 +506,19 @@ export function openTreeSession(bytes: Uint8Array): OpenTreeSessionResult {
   let embeddedFontsCache: readonly EmbeddedFont[] | null = null;
   const resolveEmbeddedFonts = (): readonly EmbeddedFont[] => {
     if (embeddedFontsCache) return embeddedFontsCache;
-    const record = (pkg.relationships.get(pkg.mainDocumentPart) ?? []).find(
+    const live = currentPackage();
+    const record = (live.relationships.get(live.mainDocumentPart) ?? []).find(
       (rel) => rel.type === FONT_TABLE_REL_TYPE
     );
     let part: OoxmlPart | undefined;
     if (record) {
       const resolved = resolveRelationship(record);
       if (resolved.mode === 'Internal' && resolved.target.ok) {
-        part = pkg.parts.get(resolved.target.partName);
+        part = live.parts.get(resolved.target.partName);
       }
     }
-    part ??= pkg.parts.get('/word/fontTable.xml');
-    embeddedFontsCache = Object.freeze(readEmbeddedFonts(pkg, part));
+    part ??= live.parts.get('/word/fontTable.xml');
+    embeddedFontsCache = Object.freeze(readEmbeddedFonts(live, part));
     return embeddedFontsCache;
   };
 
@@ -481,8 +550,9 @@ export function openTreeSession(bytes: Uint8Array): OpenTreeSessionResult {
   } | null = null;
   let bookmarksCache: { readonly revision: number; readonly index: BookmarkIndex } | null = null;
   const paragraphAnchors = (): ParagraphAnchorIndex => {
-    // Keyed on the store revision, like the outline: a split mints a new paragraph and
+    // Keyed on the body-store revision, like the outline: a split mints a new paragraph and
     // a join removes one, but between commits the map cannot move.
+    const store = bodyStore();
     if (!anchorsCache || anchorsCache.revision !== store.revision) {
       anchorsCache = { revision: store.revision, index: buildParagraphAnchorIndex(store.part) };
     }
@@ -496,17 +566,54 @@ export function openTreeSession(bytes: Uint8Array): OpenTreeSessionResult {
       // is no per-block gate, because the conditions the legacy gate tested — captured
       // source range, fully-captured slice, projectable runs — are all properties of the
       // byte-range model, not of the document.
-      editable: allParagraphs(store.part).length > 0,
+      editable: allParagraphs(bodyStore().part).length > 0,
 
       // The full editable set, cell paragraphs included: selection clamping, Enter's
       // minted-tail diff and select-all in the paginated surface address these by node id.
-      paragraphIds: () => allParagraphs(store.part).map((paragraph) => paragraph.id),
+      paragraphIds: () => allParagraphs(bodyStore().part).map((paragraph) => paragraph.id),
 
-      part: () => store.part,
+      paragraphIdsIn(scope = BODY_SCOPE) {
+        const part = packageStore.partFor(scope);
+        if (!part) return [];
+        return allParagraphs(part).map((paragraph) => paragraph.id);
+      },
 
-      applyTreeOps(ops, selectionBefore, selectionAfter) {
+      part: () => bodyStore().part,
+
+      partFor: (scope) => packageStore.partFor(scope),
+
+      currentPackage,
+
+      applyTreeOps(ops, selectionBefore, selectionAfter, scope = BODY_SCOPE) {
         if (ops.length === 0) return { committed: false, rejected: false, opCount: 0 };
-        const result = store.transact((ctx) => {
+        const lifecycleCount = ops.filter(
+          (op) => isHeaderFooterLifecycleOp(op) || isNoteLifecycleOp(op)
+        ).length;
+        if (lifecycleCount > 0) {
+          // Lifecycle ops are package-level transactions; refuse mixing with story ops or
+          // batching multiple lifecycle ops into one call (each is its own ModelChange).
+          if (lifecycleCount !== ops.length || ops.length !== 1) {
+            return {
+              committed: false,
+              rejected: true,
+              opCount: ops.length,
+              reason: 'invalidArgs',
+            };
+          }
+          const result = packageStore.applyLifecycleOp(ops[0]!);
+          if (!result.ok) {
+            return {
+              committed: false,
+              rejected: true,
+              opCount: 1,
+              // Prefer the lifecycle detail (`first-section`, `not-declared`, …) so Editor
+              // gates can surface engine reasons rather than a bare `invalidArgs`.
+              reason: result.detail ?? result.reason,
+            };
+          }
+          return { committed: true, rejected: false, opCount: 1 };
+        }
+        const result = packageStore.transact(scope, (ctx) => {
           // Recorded BEFORE the ops run, so undo restores where the caret was when the user
           // made the edit rather than where it ended up afterwards.
           if (selectionBefore !== undefined) ctx.selectionBefore(selectionBefore);
@@ -522,23 +629,25 @@ export function openTreeSession(bytes: Uint8Array): OpenTreeSessionResult {
         return { committed: true, rejected: false, opCount: ops.length };
       },
 
-      projectDoc: () => treeToDoc(store.part),
+      projectDoc: () => treeToDoc(bodyStore().part),
 
-      reconcile: (previousDoc) => reconcileDoc(previousDoc, store.part, lastChange),
+      reconcile: (previousDoc) => reconcileDoc(previousDoc, bodyStore().part, lastChange),
 
       lastCommitWasStructural: () =>
         lastChange !== null &&
         (lastChange.created.length > 0 ||
           lastChange.deleted.length > 0 ||
-          lastChange.splitJoin.length > 0),
+          lastChange.splitJoin.length > 0 ||
+          lastChange.impact === 'global'),
 
       applyPmDoc(doc) {
+        const store = bodyStore();
         const mapped = docToTreeOps(store.part, doc);
         if (!mapped.ok) {
           return { committed: false, rejected: true, opCount: 0, reason: mapped.reason };
         }
         if (mapped.ops.length === 0) return { committed: false, rejected: false, opCount: 0 };
-        const result = store.transact((ctx) => {
+        const result = packageStore.transact(BODY_SCOPE, (ctx) => {
           for (const op of mapped.ops) ctx.apply(op);
         });
         if (!result.ok) {
@@ -552,53 +661,61 @@ export function openTreeSession(bytes: Uint8Array): OpenTreeSessionResult {
         return { committed: true, rejected: false, opCount: mapped.ops.length };
       },
 
-      bodyText: () => projectedText(store),
+      bodyText: () => projectedText(bodyStore().part),
 
-      revision: () => store.revision,
-      canUndo: () => store.canUndo,
-      canRedo: () => store.canRedo,
+      storyText(scope) {
+        const part = packageStore.partFor(scope);
+        if (!part) return null;
+        return allParagraphs(part)
+          .map((paragraph) => paragraphTextOf(part, paragraph.id) ?? '')
+          .join('\n');
+      },
+
+      revision: () => bodyStore().revision,
+      revisionFor: (scope) => packageStore.revisionFor(scope),
+      packageRevision: () => packageStore.packageRevision,
+      canUndo: () => packageStore.canUndo,
+      canRedo: () => packageStore.canRedo,
       undo: () => {
-        const selection = store.selectionForUndo();
-        return store.undo() === null ? null : selection;
+        const selection = packageStore.selectionForUndo();
+        return packageStore.undo() === null ? null : selection;
       },
       redo: () => {
-        const selection = store.selectionForRedo();
-        return store.redo() === null ? null : selection;
+        const selection = packageStore.selectionForRedo();
+        return packageStore.redo() === null ? null : selection;
       },
-      beginComposition: () => store.beginComposition(),
-      endComposition: () => store.endComposition(),
+      beginComposition: (scope = BODY_SCOPE) => {
+        packageStore.beginComposition(scope);
+      },
+      endComposition: () => packageStore.endComposition(),
 
       subscribe(onChange) {
-        return store.subscribe(onChange);
+        return packageStore.subscribe(onChange);
       },
 
       save() {
-        pkg = currentPackage();
-        return writeOoxmlPackage(pkg);
+        return writeOoxmlPackage(currentPackage());
       },
 
-      headerFooterParts() {
-        headerFooterBySection ??= resolveHeaderFooterPartsBySection(pkg);
-        return (
-          headerFooterBySection[headerFooterBySection.length - 1] ?? resolveHeaderFooterParts(pkg)
-        );
+      headerFooterParts: () => {
+        const bySection = resolvedHeaderFooterBySection().parts;
+        return bySection[bySection.length - 1] ?? resolveHeaderFooterParts(currentPackage());
       },
-
-      headerFooterPartsBySection() {
-        headerFooterBySection ??= resolveHeaderFooterPartsBySection(pkg);
-        return headerFooterBySection;
-      },
+      headerFooterPartsBySection: () => resolvedHeaderFooterBySection().parts,
+      headerFooterResolutionBySection: () => resolvedHeaderFooterBySection().resolution,
 
       documentFonts() {
-        // Keyed on the store revision: an edit can add or remove a run-level
-        // `w:rFonts`, but the styles and header/footer parts cannot change in-session.
-        if (fontsCache && fontsCache.revision === store.revision) return fontsCache.fonts;
-        headerFooterBySection ??= resolveHeaderFooterPartsBySection(pkg);
-        const roots: OoxmlElement[] = [store.part.root];
+        // Keyed on the package revision: body or header/footer edits can add or remove a
+        // run-level `w:rFonts`.
+        if (fontsCache && fontsCache.revision === packageStore.packageRevision) {
+          return fontsCache.fonts;
+        }
+        const bySection = resolvedHeaderFooterBySection().parts;
+        const roots: OoxmlElement[] = [bodyStore().part.root];
         const styles = resolveStylesRoot();
         if (styles) roots.push(styles);
         const seen = new Set<OoxmlPart>();
-        for (const section of headerFooterBySection) {
+        for (const section of bySection) {
           for (const part of section.headers.values()) {
             if (seen.has(part)) continue;
             seen.add(part);
@@ -610,7 +727,10 @@ export function openTreeSession(bytes: Uint8Array): OpenTreeSessionResult {
             roots.push(part.root);
           }
         }
-        fontsCache = { revision: store.revision, fonts: collectDocumentFonts(roots) };
+        fontsCache = {
+          revision: packageStore.packageRevision,
+          fonts: collectDocumentFonts(roots),
+        };
         return fontsCache.fonts;
       },
 
@@ -643,6 +763,7 @@ export function openTreeSession(bytes: Uint8Array): OpenTreeSessionResult {
           resolveStylesRoot(),
           collectDocumentThemeFonts(resolveThemeRoot())
         );
+        const store = bodyStore();
         if (!pStyleCache || pStyleCache.revision !== store.revision) {
           const byId = new Map<string, string | null>();
           for (const paragraph of allParagraphs(store.part)) {
@@ -656,8 +777,9 @@ export function openTreeSession(bytes: Uint8Array): OpenTreeSessionResult {
       },
 
       documentOutline() {
-        // Keyed on the store revision, like the fonts: typing inside a heading or
+        // Keyed on the body-store revision, like the fonts: typing inside a heading or
         // splitting one changes the outline, but the styles part is immutable.
+        const store = bodyStore();
         if (outlineCache && outlineCache.revision === store.revision) return outlineCache.outline;
         outlineCache = {
           revision: store.revision,
@@ -667,9 +789,10 @@ export function openTreeSession(bytes: Uint8Array): OpenTreeSessionResult {
       },
 
       findText(query, options) {
+        const store = bodyStore();
         const key = `${options?.matchCase === true ? 'c' : ''}${
           options?.wholeWord === true ? 'w' : ''
-        }${options?.limit ?? ''} ${query}`;
+        }${options?.limit ?? ''}${'\u0000'}${query}`;
         if (searchCache && searchCache.revision === store.revision && searchCache.key === key) {
           return searchCache.result;
         }
@@ -686,34 +809,44 @@ export function openTreeSession(bytes: Uint8Array): OpenTreeSessionResult {
 
       nodeIdOf: (paraId) => paragraphAnchors().nodeByParaId.get(paraId.toUpperCase()) ?? null,
 
-      relationshipTarget: (relationshipId) =>
-        relationshipTargetIn(pkg, pkg.mainDocumentPart, relationshipId),
+      relationshipTarget: (relationshipId, scope = BODY_SCOPE) => {
+        const live = currentPackage();
+        const part = packageStore.partFor(scope);
+        if (!part) return null;
+        return relationshipTargetIn(live, part.name, relationshipId);
+      },
 
       bookmarks: () => {
+        const store = bodyStore();
         if (!bookmarksCache || bookmarksCache.revision !== store.revision) {
           bookmarksCache = { revision: store.revision, index: buildBookmarkIndex(store.part) };
         }
         return bookmarksCache.index;
       },
 
-      ensureHyperlinkRelationship(url) {
-        // Same lane as `ensureListDefinition`: a package write, not a tree op, so it sits
-        // outside the undo stack. `currentPackage()` mints a fresh object per call, so the
-        // identity check compares against the SAME instance the write was given.
+      ensureHyperlinkRelationship(url, scope = BODY_SCOPE) {
+        // Package write, not a tree op: the story undo unit names the rId, while the
+        // relationship itself is session-persistent across lifecycle package snapshots
+        // (see `mergePersistentPackageShell`). Leftover rels are harmless; missing ones are not.
+        // `currentPackage()` mints a fresh object per call, so the identity check compares
+        // against the SAME instance the write was given.
+        const part = packageStore.partFor(scope);
+        if (!part) return null;
         const before = currentPackage();
-        const ensured = ensureHyperlinkRelationship(before, url);
+        const ensured = ensureHyperlinkRelationship(before, url, part.name);
         if (!ensured) return null;
-        if (ensured.pkg !== before) pkg = ensured.pkg;
+        if (ensured.pkg !== before) packageStore.replacePackageShell(ensured.pkg);
         return ensured.relationshipId;
       },
 
       ensureListDefinition(kind) {
-        // The numbering part lives on the PACKAGE, not the main-part tree, so this is the
-        // one edit that does not go through `store.transact`. The memoized numbering root
-        // is cleared so layout re-reads the definitions this just added.
+        // The numbering part lives on the PACKAGE, not the main-part tree. Definitions are
+        // monotonic in-session and persist across lifecycle package undo/redo so story
+        // `numId` references cannot go dead. The memoized numbering root is cleared so
+        // layout re-reads the definitions this just added.
         const ensured = ensureListDefinition(currentPackage(), kind);
         if (!ensured) return null;
-        pkg = ensured.pkg;
+        packageStore.replacePackageShell(ensured.pkg);
         numberingRootResolved = false;
         numberingRoot = null;
         return ensured.numId;
@@ -728,7 +861,7 @@ export function openTreeSession(bytes: Uint8Array): OpenTreeSessionResult {
         const ensured = ensureNumberingLevel(before, numId, level, kind);
         if (!ensured) return false;
         if (ensured !== before) {
-          pkg = ensured;
+          packageStore.replacePackageShell(ensured);
           numberingRootResolved = false;
           numberingRoot = null;
         }
@@ -746,9 +879,9 @@ export function openTreeSession(bytes: Uint8Array): OpenTreeSessionResult {
  * so body text silently disagreed with the offsets the ops and the layout use. A caret at
  * offset 12 and a `bodyText().slice(12)` have to mean the same place.
  */
-function projectedText(store: TreeDocumentStore): string {
-  return bodyParagraphs(store.part)
-    .map((paragraph) => paragraphTextOf(store.part, paragraph.id) ?? '')
+function projectedText(part: OoxmlPart): string {
+  return bodyParagraphs(part)
+    .map((paragraph) => paragraphTextOf(part, paragraph.id) ?? '')
     .join('\n');
 }
 

@@ -33,7 +33,6 @@ import {
 } from './style-cascade.ts';
 import { paragraphShadingBox } from './ooxml-shading.ts';
 import {
-  CELL_PAD,
   MAX_TABLE_NESTING,
   readTableStructure,
   tableOriginX,
@@ -116,6 +115,8 @@ export interface TableFlowDeps {
   readonly styleCascade?: StyleCascadeTable;
   /** When set (header/footer page projection), PAGE/NUMPAGES resolve against this context. */
   readonly pageContext?: FieldPageContext;
+  /** Derived footnote/endnote marks for noteReference / noteRef projection. */
+  readonly noteMarks?: import('./note-projection.ts').NoteMarkContext;
   /**
    * Precomputed body-story list items (including cell paragraphs). Absent for header/footer
    * stories that do not share the body counter stream.
@@ -331,6 +332,7 @@ function placeCellParagraph(
       // A cell's own content box is the column a positional tab measures against.
       marginExtent: { left: 0, right: indent.left + available + indent.right },
       ...(deps.projectLink ? { projectLink: deps.projectLink } : {}),
+      ...(deps.noteMarks ? { noteMarks: deps.noteMarks } : {}),
     }
   );
 
@@ -801,6 +803,12 @@ export interface LayoutRowBoundedResult {
  * Height-budgeted row layout for pagination. Content stays at or above `rowTop` and at or
  * below `maxBottom`. Cells that cannot place anything leave empty boxes; callers decide
  * whether to move the row, continue splitting, or fail closed.
+ *
+ * `w:trHeight` (17.4.81):
+ * - `auto` — content-sized (no invented floor);
+ * - `atLeast` — floor the finished fragment to the authored minimum when it fits the
+ *   budget; mid-row page splits stay content-driven so the floor cannot overflow the page;
+ * - `exact` — fixed height, content clipped (Word 17.18.37). Overflow is not continued.
  */
 export function layoutRowFragmentBounded(
   row: SemanticTableRow,
@@ -823,6 +831,14 @@ export function layoutRowFragmentBounded(
   // resolved grid put it.
   const gap = Number.isFinite(cellSpacingPt) && cellSpacingPt > 0 ? cellSpacingPt / 2 : 0;
   const defaultLineHeight = deps.measurer.lineMetrics(DEFAULT_RUN_STYLE).height;
+  const heightRule = row.height;
+  const exactHeightPt = heightRule.rule === 'exact' ? heightRule.valuePt : undefined;
+  const atLeastHeightPt = heightRule.rule === 'atLeast' ? heightRule.valuePt : undefined;
+  // Exact rows clip to their authored box; never flow past it even when the page allows more.
+  const flowMaxBottom =
+    exactHeightPt === undefined
+      ? maxBottom
+      : Math.min(maxBottom, rowTop + Math.max(0, exactHeightPt));
 
   interface FlowedCell {
     readonly cell: SemanticTableCell;
@@ -841,8 +857,11 @@ export function layoutRowFragmentBounded(
   const flowed: FlowedCell[] = [];
   let anyFitted = false;
   let anyNestedBlocked = false;
-  // Minimum row band even for empty/vMerge-continue cells.
-  let rowBottom = Math.min(maxBottom, rowTop + defaultLineHeight + 2 * CELL_PAD);
+  // Grow from the row top. Empty / vMerge-continue cells contribute one default line plus
+  // THEIR authored insets below; fitted cells contribute measured content only. Seeding with
+  // `defaultLineHeight + 2 * CELL_PAD` used to force ~20pt rows even when tcMar was tighter
+  // and the cell's own line was shorter — nested tables picked that up as blank bottom pad.
+  let rowBottom = rowTop;
 
   for (let cellIndex = 0; cellIndex < row.cells.length; cellIndex += 1) {
     const cell = row.cells[cellIndex]!;
@@ -867,7 +886,7 @@ export function layoutRowFragmentBounded(
     const topInset = isContinuation ? borderExtentPt(cell.borders.top) : insets.top;
     const contentTop = rowTop + topInset;
     // Always reserve bottom inset so the fragment never paints into the margin/border band.
-    const contentMaxBottom = maxBottom - insets.bottom;
+    const contentMaxBottom = flowMaxBottom - insets.bottom;
 
     let blocks: readonly BlockFragmentRecord[] = [];
     let contentBottom = contentTop;
@@ -902,9 +921,12 @@ export function layoutRowFragmentBounded(
       }
     }
 
+    // Fitted content owns the height (including its final paragraph's spaceAfter). Do not
+    // re-floor with defaultLineHeight — that invented bottom pad when the measured line was
+    // shorter than the DEFAULT_RUN_STYLE line. Empty / continue cells still need one line.
     const cellBottom = Math.min(
-      maxBottom,
-      Math.max(contentBottom + insets.bottom, rowTop + topInset + defaultLineHeight + insets.bottom)
+      flowMaxBottom,
+      fitted ? contentBottom + insets.bottom : rowTop + topInset + defaultLineHeight + insets.bottom
     );
     if (cellBottom > rowBottom) rowBottom = cellBottom;
 
@@ -924,14 +946,35 @@ export function layoutRowFragmentBounded(
     });
   }
 
-  // Coordinate fragment height: tallest placed content, never past maxBottom.
-  rowBottom = Math.min(maxBottom, Math.max(rowBottom, rowTop));
+  // Coordinate fragment height: tallest placed content, never past the flow budget.
+  rowBottom = Math.min(flowMaxBottom, Math.max(rowBottom, rowTop));
   for (const entry of flowed) {
     const needed = entry.fitted
       ? entry.contentBottom + entry.insets.bottom
       : rowTop + entry.insets.top + defaultLineHeight + entry.insets.bottom;
-    if (needed > rowBottom && needed <= maxBottom + 0.001) {
+    if (needed > rowBottom && needed <= flowMaxBottom + 0.001) {
       rowBottom = needed;
+    }
+  }
+  rowBottom = Math.min(flowMaxBottom, rowBottom);
+
+  // Exact: force the authored height (clamped to the page budget) and clip leftover content.
+  // atLeast: floor a finished fragment when the minimum fits; never push past maxBottom.
+  let clipExact = false;
+  if (exactHeightPt !== undefined) {
+    const exactBottom = rowTop + exactHeightPt;
+    if (exactBottom <= maxBottom + 0.001) {
+      rowBottom = exactBottom;
+      clipExact = true;
+    } else {
+      // Exact taller than remaining band — keep content-sized clamp; pagination fails closed.
+      rowBottom = Math.min(maxBottom, rowBottom);
+    }
+  } else if (atLeastHeightPt !== undefined) {
+    const minBottom = rowTop + atLeastHeightPt;
+    const contentComplete = flowed.every((entry) => entry.complete);
+    if (contentComplete && minBottom <= maxBottom + 0.001) {
+      if (minBottom > rowBottom) rowBottom = minBottom;
     }
   }
   rowBottom = Math.min(maxBottom, rowBottom);
@@ -940,9 +983,10 @@ export function layoutRowFragmentBounded(
   const cells: TableCellFragmentRecord[] = flowed.map((entry) => {
     let blocks = entry.blocks;
     // vAlign only when the cell finished on this fragment (no more continuation).
+    const cellComplete = clipExact ? true : entry.complete;
     if (
       !entry.cell.vMergeContinue &&
-      entry.complete &&
+      cellComplete &&
       entry.cell.vAlign !== 'top' &&
       blocks.length > 0
     ) {
@@ -966,8 +1010,13 @@ export function layoutRowFragmentBounded(
     };
   });
 
-  const remainderCursors = flowed.map((entry) => entry.nextCursor);
-  const complete = flowed.every((entry) => entry.complete);
+  // Exact clips: leftover cell content is not continued onto the next page (17.18.37).
+  const remainderCursors = clipExact
+    ? null
+    : flowed.every((entry) => entry.complete)
+      ? null
+      : flowed.map((entry) => entry.nextCursor);
+  const complete = clipExact || flowed.every((entry) => entry.complete);
 
   return {
     record: {
@@ -979,7 +1028,7 @@ export function layoutRowFragmentBounded(
     },
     bottom: rowBottom,
     remainder: complete ? null : remainderCursors,
-    fitted: anyFitted || row.cells.every((cell) => cell.vMergeContinue),
+    fitted: anyFitted || row.cells.every((cell) => cell.vMergeContinue) || clipExact,
     nestedSplitBlocked: anyNestedBlocked,
   };
 }

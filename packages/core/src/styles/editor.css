@@ -138,6 +138,8 @@
   --doc-shadow-strong: rgba(0, 0, 0, 0.3);
   --doc-shadow-subtle: rgba(0, 0, 0, 0.06);
   --doc-overlay: rgba(0, 0, 0, 0.5); /* modal backdrops */
+  /* Open header/footer: body + inactive furniture opacity (screen chrome only; print resets). */
+  --doc-hf-dim-opacity: 0.45;
 
   /* Sidebar card elevation (Google-grey, compound) — shared by React's
     * cardStyles.ts and the Vue comment/tracked-change cards so both match. */
@@ -276,6 +278,7 @@
   --doc-card-shadow-strong: 0 1px 3px rgba(0, 0, 0, 0.5), 0 4px 8px 3px rgba(0, 0, 0, 0.3);
   --doc-shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.5), 0 4px 6px -4px rgba(0, 0, 0, 0.5);
   --doc-overlay: rgba(0, 0, 0, 0.7);
+  --doc-hf-dim-opacity: 0.4;
   --doc-focus-ring: rgba(78, 157, 255, 0.45);
   --doc-selection: rgba(78, 157, 255, 0.32);
 
@@ -2372,6 +2375,48 @@ a.docx-hyperlink:focus-visible {
   outline: none;
 }
 
+/* Inactive furniture: Word-like affordance that the band is enterable. Active band and
+ * open-scope dimming live under `.docx-pages--hf-editing` so screen chrome never mutates
+ * painted ink for print (print media resets opacity). */
+.docx-paginated-surface .docx-hf:not([data-docx-hf-active]),
+.docx-pages .docx-hf:not([data-docx-hf-active]) {
+  cursor: text;
+}
+
+.docx-pages--hf-editing .docx-page-content {
+  opacity: var(--doc-hf-dim-opacity);
+  pointer-events: none;
+  transition: opacity 0.15s ease;
+}
+
+.docx-pages--hf-editing .docx-hf:not([data-docx-hf-active]) {
+  opacity: var(--doc-hf-dim-opacity);
+  cursor: default;
+  transition: opacity 0.15s ease;
+}
+
+.docx-pages--hf-editing .docx-hf[data-docx-hf-active] {
+  cursor: text;
+  opacity: 1;
+}
+
+.docx-pages--hf-editing .docx-hf[data-docx-hf-active][data-docx-hf='header'] {
+  border-bottom: 1px dotted var(--doc-primary);
+}
+
+.docx-pages--hf-editing .docx-hf[data-docx-hf-active][data-docx-hf='footer'] {
+  border-top: 1px dotted var(--doc-primary);
+}
+
+@media print {
+  .docx-pages--hf-editing .docx-page-content,
+  .docx-pages--hf-editing .docx-hf {
+    opacity: 1 !important;
+    pointer-events: auto !important;
+    border: none !important;
+  }
+}
+
 /* The one highlight a native selection cannot express: a rectangle of table cells. Drawn on
    a sibling layer of the pages — never inside them, where the page painter would sweep it
    away and a keystroke could land in it. */
@@ -3084,6 +3129,172 @@ a.docx-hyperlink:focus-visible {
 .docx-toolbar__swatch-apply:disabled {
   opacity: 0.4;
   cursor: default;
+}
+
+/* ── Header/footer scope chrome (`docx-hf-chrome` family) — React overlay while editing
+ * page furniture. UI-only; no document canvas geometry. */
+.docx-hf-chrome {
+  position: sticky;
+  top: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  padding: 8px 12px;
+  margin: 0 auto 8px;
+  max-width: 100%;
+  background: var(--doc-surface);
+  border: 1px solid var(--doc-border);
+  border-radius: 6px;
+  box-shadow: 0 1px 4px var(--doc-shadow);
+  color: var(--doc-text);
+}
+
+.docx-hf-chrome__title-block {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  flex: 1 1 160px;
+}
+
+.docx-hf-chrome__title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--doc-text);
+}
+
+.docx-hf-chrome__inheritance {
+  font-size: 12px;
+  color: var(--doc-text-muted);
+}
+
+.docx-hf-chrome__inheritance-hint {
+  display: block;
+  font-size: 11px;
+  color: var(--doc-text-subtle);
+}
+
+.docx-hf-chrome__inserts {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  flex: none;
+}
+
+.docx-hf-chrome__actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex: none;
+}
+
+.docx-hf-chrome__options {
+  position: relative;
+}
+
+.docx-hf-chrome__options-trigger,
+.docx-hf-chrome__close {
+  font: inherit;
+  font-size: 13px;
+  color: var(--doc-text);
+  background: var(--doc-bg-input);
+  border: 1px solid var(--doc-border-input);
+  border-radius: 4px;
+  padding: 4px 10px;
+  cursor: pointer;
+}
+
+.docx-hf-chrome__options-trigger:hover:not(:disabled),
+.docx-hf-chrome__close:hover:not(:disabled) {
+  background: var(--doc-bg-hover);
+}
+
+.docx-hf-chrome__options-trigger:disabled,
+.docx-hf-chrome__close:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.docx-hf-chrome__options-menu {
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+  min-width: 260px;
+  padding: 6px 0;
+  background: var(--doc-surface);
+  border: 1px solid var(--doc-border);
+  border-radius: 6px;
+  box-shadow: 0 4px 16px var(--doc-shadow);
+  z-index: var(--doc-z-dropdown, 100);
+}
+
+.docx-hf-chrome__menu-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 6px 12px;
+  font-size: 13px;
+  color: var(--doc-text);
+  cursor: pointer;
+}
+
+.docx-hf-chrome__menu-row--distance {
+  align-items: center;
+}
+
+.docx-hf-chrome__menu-row input[type='checkbox'] {
+  margin-top: 2px;
+  flex: none;
+}
+
+.docx-hf-chrome__menu-row input[type='number'] {
+  width: 64px;
+  padding: 4px 6px;
+  font-size: 13px;
+  border: 1px solid var(--doc-border-input);
+  border-radius: 4px;
+  background: var(--doc-surface);
+  color: var(--doc-text);
+}
+
+.docx-hf-chrome__menu-hint {
+  display: block;
+  font-size: 11px;
+  color: var(--doc-text-subtle);
+}
+
+.docx-hf-chrome__menu-item {
+  display: block;
+  width: 100%;
+  padding: 6px 12px;
+  font: inherit;
+  font-size: 13px;
+  text-align: left;
+  color: var(--doc-text);
+  background: transparent;
+  border: none;
+  cursor: pointer;
+}
+
+.docx-hf-chrome__menu-item:hover:not(:disabled) {
+  background: var(--doc-bg-hover);
+}
+
+.docx-hf-chrome__menu-item:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.docx-hf-chrome__menu-separator {
+  height: 1px;
+  margin: 4px 0;
+  background: var(--doc-border);
+}
+
+.docx-hf-chrome__unit {
+  font-size: 11px;
+  color: var(--doc-text-muted);
 }
 
 /* ── Vue registry-toolbar (`ep-toolbar` family) additions for the same shapes:

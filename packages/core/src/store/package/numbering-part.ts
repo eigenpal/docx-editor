@@ -15,6 +15,7 @@ import { createNodeIdAllocator, insertChildren } from './ooxml-edit.ts';
 import { readOoxmlPart } from './ooxml-tree.ts';
 import type { OoxmlElement, OoxmlNode, OoxmlPart } from './ooxml-tree.ts';
 import type { OoxmlPackage } from './ooxml-package.ts';
+import { partNameKey } from './opc-names.ts';
 import type { RelationshipRecord } from './relationships.ts';
 import { readXml, type XmlNode } from './xml-reader.ts';
 
@@ -510,6 +511,10 @@ function freeRelationshipId(pkg: OoxmlPackage): string {
       if (match) max = Math.max(max, Number(match[1]));
     }
   }
+  for (const external of pkg.externalTargets) {
+    const match = /^rId(\d{1,9})$/.exec(external.id);
+    if (match) max = Math.max(max, Number(match[1]));
+  }
   return `rId${max + 1}`;
 }
 
@@ -541,7 +546,7 @@ const NUMBERING_OVERRIDE = `<Override PartName="${NUMBERING_PART}" ContentType="
  * there is nothing here to escape.
  */
 function withNumberingContentType(pkg: OoxmlPackage): OoxmlPackage | null {
-  const declared = pkg.contentTypes.overrides.get(NUMBERING_PART.toLowerCase());
+  const declared = pkg.contentTypes.overrides.get(partNameKey(NUMBERING_PART));
   if (declared === NUMBERING_CONTENT_TYPE) return pkg;
   // An override claiming a DIFFERENT type for this part cannot be joined by a second one:
   // duplicate overrides fail closed on the next read, so refuse rather than corrupt.
@@ -573,7 +578,7 @@ function withNumberingContentType(pkg: OoxmlPackage): OoxmlPackage | null {
       defaults: pkg.contentTypes.defaults,
       overrides: new Map([
         ...pkg.contentTypes.overrides,
-        [NUMBERING_PART.toLowerCase(), NUMBERING_CONTENT_TYPE],
+        [partNameKey(NUMBERING_PART), NUMBERING_CONTENT_TYPE],
       ]),
     }),
   });

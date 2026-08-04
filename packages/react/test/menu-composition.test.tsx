@@ -593,7 +593,13 @@ describe('chrome contracts', () => {
       e.getAttribute('data-slot')
     );
     // The whole registry arrangement is still there, TOC still in its own position.
-    expect(slots).toEqual(['image.insert', 'table.insert', 'insert.toc']);
+    expect(slots).toEqual([
+      'image.insert',
+      'table.insert',
+      'insert.footnote',
+      'insert.endnote',
+      'insert.toc',
+    ]);
     expect(row(view, 'insert.toc').className).toContain('my-toc');
     // The host's own row appends.
     expect(view.container.textContent).toContain('Clause library');

@@ -7,6 +7,7 @@
 import type { IndentFormatting } from '../contracts/types.ts';
 import type { TreeDocxSession } from '@docx-editor.dev/core-contract/binding';
 import type { BookmarkIndex } from '@docx-editor.dev/core-contract/store';
+import type { ViewScope } from '../contracts/editor.ts';
 import type { HyperlinkOps } from './surface-hyperlinks.ts';
 import type { HyperlinkActivation, SurfaceNavigation } from './surface-navigation.ts';
 import type {
@@ -418,6 +419,85 @@ export interface PaginatedSurface {
   redo(): void;
   focus(): void;
   destroy(): void;
+  /** Active editing view — body, or an open header/footer story by rId. */
+  activeScope(): ViewScope;
+  /** Activate a view scope. Returns false when a header/footer rId cannot be opened. */
+  setActiveScope(scope: ViewScope): boolean;
+  /**
+   * Open a header/footer story for editing on the painted surface.
+   * Refuses dangling / unknown relationship ids.
+   */
+  enterHeaderFooter(args: {
+    readonly rId: string;
+    readonly pageIndex?: number;
+    readonly sectionIndex?: number;
+    readonly kind?: 'header' | 'footer';
+    readonly variant?: 'default' | 'first' | 'even';
+    readonly position?: import('@docx-editor.dev/core-contract/layout').SemanticPosition;
+  }): boolean;
+  /** Leave furniture editing and restore the prior body selection. */
+  exitHeaderFooter(): void;
+  /** Chrome read-model for the open furniture scope, or null when editing the body. */
+  headerFooterState(): {
+    readonly editing: 'header' | 'footer' | null;
+    readonly sectionIndex: number;
+    readonly variant?: 'default' | 'first' | 'even';
+    readonly rId?: string;
+    readonly partName?: string;
+    readonly inherited?: boolean;
+    readonly titlePage?: boolean;
+    readonly evenAndOddHeaders?: boolean;
+    readonly headerDistanceTwips?: number;
+    readonly footerDistanceTwips?: number;
+  } | null;
+  /**
+   * Commit one package-level furniture lifecycle op (create/delete/link/unlink/options).
+   * Flushes layout so the next enter/rebind sees the new resolution.
+   */
+  applyHeaderFooterLifecycle(op: {
+    readonly op:
+      | 'createHeaderFooter'
+      | 'deleteHeaderFooter'
+      | 'linkToPrevious'
+      | 'unlinkFromPrevious'
+      | 'setSectionFurnitureOptions';
+    readonly sectionIndex?: number;
+    readonly kind?: 'header' | 'footer';
+    readonly variant?: 'default' | 'first' | 'even';
+    readonly titlePage?: boolean;
+    readonly evenAndOddHeaders?: boolean;
+    readonly headerDistanceTwips?: number;
+    readonly footerDistanceTwips?: number;
+  }): { readonly ok: true } | { readonly ok: false; readonly reason: string };
+  /** Insert an allowlisted page field at the caret in the open HF story. */
+  insertPageField(field: 'PAGE' | 'NUMPAGES' | 'SECTIONPAGES' | 'PAGE_X_OF_Y'): boolean;
+  /** Insert a footnote/endnote at the body caret. */
+  insertNote(noteKind: 'footnote' | 'endnote'): boolean;
+  deleteNote(noteKind: 'footnote' | 'endnote', noteId: number): boolean;
+  convertNote(fromKind: 'footnote' | 'endnote', noteId: number): boolean;
+  convertAllNotes(fromKind: 'footnote' | 'endnote'): boolean;
+  setNoteProperties(args: {
+    readonly scope: 'document' | 'section';
+    readonly sectionIndex?: number;
+    readonly footnote?: {
+      readonly numFmt?: string;
+      readonly numRestart?: string;
+      readonly position?: string;
+      readonly numStart?: number;
+    };
+    readonly endnote?: {
+      readonly numFmt?: string;
+      readonly numRestart?: string;
+      readonly position?: string;
+      readonly numStart?: number;
+    };
+  }): boolean;
+  enterNote(scopeId: string, position?: { paragraphId: string; offset: number }): boolean;
+  exitNote(): void;
+  /** Resolved/authored note properties for the caret section — chrome read-model. */
+  notePropertiesState(): import('./surface-note-state.ts').NotePropertiesStateSnapshot | null;
+  /** Plain-text preview for hover chrome — never returns markup. */
+  notePreviewText(scopeId: string): string | null;
 }
 
 export type OpenPaginatedResult =

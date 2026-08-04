@@ -347,7 +347,7 @@ function serializeNode(
     })
     .join('');
   const elementAttributes =
-    node.kind === 'text'
+    node.kind === 'text' || node.kind === 'instrText'
       ? normalizedWmlTextAttributes(node.attributes, wmlTextValueOf(node))
       : node.attributes;
   validateQNameAttributeValues(elementAttributes, bindings, node.namespaceUri, node.localName);
@@ -434,6 +434,7 @@ function significantChildren(node: OoxmlElement, preserve: boolean): readonly Oo
       child.kind !== 'textValue' ||
       preserve ||
       node.kind === 'text' ||
+      node.kind === 'instrText' ||
       !hasElementChild ||
       hasNonWhitespaceText ||
       !/^\s*$/.test(child.value)
@@ -449,7 +450,7 @@ function fingerprintNode(
   const bindings = new Map(inheritedBindings);
   for (const binding of node.namespaceBindings) bindings.set(binding.prefix, binding.namespaceUri);
   const elementAttributes =
-    node.kind === 'text'
+    node.kind === 'text' || node.kind === 'instrText'
       ? normalizedWmlTextAttributes(node.attributes, wmlTextValueOf(node))
       : node.attributes;
   const ownSpace = xmlSpaceValue(elementAttributes);

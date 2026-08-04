@@ -9,18 +9,20 @@
 // runs BEFORE any tree work, so a rejected op leaves the tree, revision and indexes exactly
 // as they were.
 //
-// This module is the entry point. The op vocabulary and validation live in
-// tree-op-validate.ts; application lives in tree-op-apply.ts.
+// This module is the entry point. Vocabulary, segmentation, and validation live in
+// tree-op-types / tree-op-segments / tree-op-validate; application lives in tree-op-apply.ts.
 
 export {
   ACCEPTED_PARAGRAPH_PROPERTIES,
   ACCEPTED_RUN_PROPERTIES,
   TREE_DOC_OP_KINDS,
+  segmentsOf,
   validateTreeOp,
   type AcceptedParagraphProperty,
   type AcceptedRunProperty,
   type ImpactClass,
   type OoxmlProperty,
+  type Segment,
   type TreeDocOp,
   type TreeDocOpKind,
   type TreeOpEffect,
