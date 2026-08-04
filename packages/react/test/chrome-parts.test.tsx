@@ -114,8 +114,20 @@ describe('the context-fed ruler parts', () => {
     const ruler = view.container.querySelector('.docx-horizontal-ruler') as HTMLElement;
     expect(ruler).not.toBeNull();
     expect(ruler.style.width).toBe('816px');
+    expect(ruler.style.flexShrink).toBe('0');
     // Word's four indent handles: first-line, hanging, left, right.
     expect(view.container.querySelectorAll('.docx-ruler-indent').length).toBe(4);
+  });
+
+  test('HorizontalRuler follows the document viewport horizontally', () => {
+    const { view } = mountWith(<DocxEditorHorizontalRuler />, PLAIN_SOURCE);
+    const viewport = view.container.querySelector('.docx-editor__scroll-container') as HTMLElement;
+    const ruler = view.container.querySelector('.docx-horizontal-ruler') as HTMLElement;
+
+    viewport.scrollLeft = 125;
+    fireEvent.scroll(viewport);
+
+    expect(ruler.style.transform).toBe('translateX(-125px)');
   });
 
   test('dragging the left margin zone commits ONE setPageSetup step on release', async () => {
