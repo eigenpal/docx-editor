@@ -30,6 +30,7 @@ import {
   paragraphsOf,
   pWithId,
   row,
+  savedMainXml,
   table,
 } from './support/protocol.ts';
 
@@ -133,6 +134,74 @@ describe('an edit changes the document, and only where it was made', () => {
       operations: [
         { op: 'insertText', at: { paragraph: list[0]!, offset: 0 }, text: 'good' },
         { op: 'insertText', at: { paragraph: list[1]!, offset: 999 }, text: 'bad' },
+      ],
+    });
+    expect(response.ok).toBe(false);
+    expect(canonicalOoxmlFingerprint(savedMainPart(host))).toBe(before);
+  });
+});
+
+describe('a formatting edit survives the serializer, and stays where it was made', () => {
+  test('a font write changes one paragraph and leaves the others structurally identical', () => {
+    const before = semanticDigest([savedMainPart(open(AUTHORED))]);
+
+    const host = open(AUTHORED);
+    const list = paragraphsOf(host, bodyOf(host));
+    const response = host.execute({
+      operations: [
+        { op: 'setFont', span: { paragraph: list[1]! }, font: { bold: true, size: 12 } },
+      ],
+    });
+    expect(response.ok).toBe(true);
+
+    const differences = diffSemanticDigests(before, semanticDigest([savedMainPart(host)]));
+    const changed = differences.map((difference) => difference.path).join(' ');
+    expect(changed).not.toContain('alpha');
+    expect(changed).not.toContain('gamma');
+
+    // And the formatted document is a fixed point, so the properties were written as properties
+    // rather than as something the next save normalizes differently.
+    expect([...savedBytes(host)]).toEqual([...savedBytes(open(savedBytes(host)))]);
+  });
+
+  test('a paragraph-format write keeps the paragraph properties it was not asked about', () => {
+    // `setParagraphProperties` REPLACES the container it writes, so this is the assertion that the
+    // op carried the paragraph's existing children forward: a write of one attribute that dropped
+    // the paragraph's style and numbering would still pass every read of the attribute written.
+    const source = docx(
+      '<w:p w14:paraId="88888888"><w:pPr><w:pStyle w:val="Quote"/>' +
+        '<w:numPr><w:ilvl w:val="0"/><w:numId w:val="3"/></w:numPr>' +
+        '<w:spacing w:before="240"/></w:pPr><w:r><w:t>listed</w:t></w:r></w:p>'
+    );
+    const host = open(source);
+    const list = paragraphsOf(host, bodyOf(host));
+    const response = host.execute({
+      operations: [
+        {
+          op: 'setParagraphFormat',
+          paragraph: { paragraph: list[0]! },
+          format: { leftIndent: 18 },
+        },
+      ],
+    });
+    expect(response.ok).toBe(true);
+
+    const saved = savedMainXml(host);
+    expect(saved).toContain('w:val="Quote"');
+    expect(saved).toContain('w:numId w:val="3"');
+    expect(saved).toContain('w:before="240"');
+    expect(saved).toContain('w:left="360"');
+    expect([...savedBytes(host)]).toEqual([...savedBytes(open(savedBytes(host)))]);
+  });
+
+  test('a refused formatting write leaves the document structurally where it was', () => {
+    const host = open(AUTHORED);
+    const list = paragraphsOf(host, bodyOf(host));
+    const before = canonicalOoxmlFingerprint(savedMainPart(host));
+    const response = host.execute({
+      operations: [
+        { op: 'setFont', span: { paragraph: list[0]! }, font: { bold: true } },
+        { op: 'setFont', span: { paragraph: list[1]! }, font: { color: 'not a colour' } },
       ],
     });
     expect(response.ok).toBe(false);

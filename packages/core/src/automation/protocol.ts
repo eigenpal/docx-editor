@@ -11,6 +11,7 @@
 // the moment it crosses one. That is also why nothing in this file names an `OoxmlNode`, a
 // store, or a DOM node: a value a consumer receives must not be a reference into the engine.
 
+import type { AutomationFontRead, AutomationParagraphFormatRead } from './formatting.ts';
 import type { AutomationOperation } from './operations.ts';
 
 /** What kind of document object a handle names. */
@@ -142,6 +143,15 @@ export type AutomationValue =
   | { readonly kind: 'text'; readonly text: string }
   | { readonly kind: 'span'; readonly span: AutomationSpan }
   | { readonly kind: 'spans'; readonly spans: readonly AutomationSpan[] }
+  /**
+   * A bag of property values, rather than a document object.
+   *
+   * Typed per KIND rather than as one generic record, for the same reason the operation
+   * vocabulary is: a caller destructures a named shape, and a new kind of answer has to be
+   * declared before it can be sent. A record keyed by strings would let a host answer anything.
+   */
+  | { readonly kind: 'font'; readonly font: AutomationFontRead }
+  | { readonly kind: 'paragraphFormat'; readonly format: AutomationParagraphFormatRead }
   /** A command that committed. The observable effect is the response's revision/changed. */
   | { readonly kind: 'applied' };
 

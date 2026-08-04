@@ -27,6 +27,7 @@ import {
   type ResolvedLoadOptions,
 } from '../runtime/model-support.ts';
 import { ParagraphCollection, RangeCollection, type PromisedItem } from './collections.ts';
+import { Font } from './font.ts';
 import {
   insertableText,
   rangeTextLocation,
@@ -39,6 +40,7 @@ import { searchOptions, type SearchOptions } from './search-options.ts';
 
 export class Range extends ModelObject implements PromisedItem {
   #paragraphs: ParagraphCollection | undefined;
+  #font: Font | undefined;
 
   /** @internal A range a read already found. */
   static at(context: RequestContext, label: string, address: ObjectAddress): Range {
@@ -74,6 +76,12 @@ export class Range extends ModelObject implements PromisedItem {
    */
   get text(): string {
     return this.loadedProperty<string>('text');
+  }
+
+  /** The character formatting of the characters this range covers. */
+  get font(): Font {
+    this.#font ??= Font.of(this.context, `${this.path.label}.font`, this.path, 'span');
+    return this.#font;
   }
 
   /** The paragraphs this range covers, in reading order. */

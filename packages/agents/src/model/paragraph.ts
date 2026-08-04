@@ -19,13 +19,17 @@
 import {
   ObjectPath,
   fail,
+  hydratedApplied,
+  hydratedParagraphFormat,
   hydratedSpan,
+  type AutomationAlignment,
   type AutomationHandle,
   type ObjectAddress,
   type RequestContext,
   type ResolvedLoadOptions,
 } from '../runtime/model-support.ts';
 import { RangeCollection, type PromisedItem } from './collections.ts';
+import { Font } from './font.ts';
 import { besideLocation, insertableText, paragraphTextLocation } from './locations.ts';
 import { ModelObject } from './model-object.ts';
 import { Range } from './range.ts';
@@ -34,6 +38,9 @@ import { Range } from './range.ts';
 const MAX_DELIMITERS = 16;
 
 export class Paragraph extends ModelObject implements PromisedItem {
+  #font: Font | undefined;
+  #format: Record<string, unknown> | undefined;
+
   /** @internal A paragraph a read has already named. */
   static at(context: RequestContext, label: string, address: ObjectAddress): Paragraph {
     if (address.kind !== 'handle') fail({ code: 'InvalidObjectPath', target: label });
@@ -73,6 +80,83 @@ export class Paragraph extends ModelObject implements PromisedItem {
    */
   get uniqueLocalId(): string {
     return this.loadedProperty<string>('uniqueLocalId');
+  }
+
+  /** The character formatting of this paragraph's characters, and of its paragraph mark. */
+  get font(): Font {
+    this.#font ??= Font.of(this.context, `${this.path.label}.font`, this.path, 'paragraph');
+    return this.#font;
+  }
+
+  /**
+   * How the paragraph's lines are aligned, or `Unknown` where it authors no alignment.
+   *
+   * `Unknown` rather than `Left`: a paragraph that states nothing may still be centred by its
+   * style, and naming a side would be a claim about the cascade this lane does not resolve.
+   */
+  get alignment(): AutomationAlignment {
+    return this.loadedProperty<AutomationAlignment>('alignment');
+  }
+
+  set alignment(value: AutomationAlignment) {
+    this.#authorFormat('alignment', requireAlignment(value, `${this.path.label}.alignment`));
+  }
+
+  /** Points. Negative for a hanging indent — the first line starting left of the rest. */
+  get firstLineIndent(): number {
+    return this.loadedProperty<number>('firstLineIndent');
+  }
+
+  set firstLineIndent(value: number) {
+    this.#authorFormat(
+      'firstLineIndent',
+      requirePoints(value, `${this.path.label}.firstLineIndent`)
+    );
+  }
+
+  /** Points. */
+  get leftIndent(): number {
+    return this.loadedProperty<number>('leftIndent');
+  }
+
+  set leftIndent(value: number) {
+    this.#authorFormat('leftIndent', requirePoints(value, `${this.path.label}.leftIndent`));
+  }
+
+  /** Points. */
+  get rightIndent(): number {
+    return this.loadedProperty<number>('rightIndent');
+  }
+
+  set rightIndent(value: number) {
+    this.#authorFormat('rightIndent', requirePoints(value, `${this.path.label}.rightIndent`));
+  }
+
+  /** Points between the paragraph's lines. */
+  get lineSpacing(): number {
+    return this.loadedProperty<number>('lineSpacing');
+  }
+
+  set lineSpacing(value: number) {
+    this.#authorFormat('lineSpacing', requirePoints(value, `${this.path.label}.lineSpacing`));
+  }
+
+  /** Points above the paragraph. */
+  get spaceBefore(): number {
+    return this.loadedProperty<number>('spaceBefore');
+  }
+
+  set spaceBefore(value: number) {
+    this.#authorFormat('spaceBefore', requirePoints(value, `${this.path.label}.spaceBefore`));
+  }
+
+  /** Points below the paragraph. */
+  get spaceAfter(): number {
+    return this.loadedProperty<number>('spaceAfter');
+  }
+
+  set spaceAfter(value: number) {
+    this.#authorFormat('spaceAfter', requirePoints(value, `${this.path.label}.spaceAfter`));
   }
 
   /** Empty this paragraph's text, leaving the paragraph itself where it is. */
@@ -170,7 +254,7 @@ export class Paragraph extends ModelObject implements PromisedItem {
   }
 
   protected override onLoad(request: ResolvedLoadOptions): void {
-    const selected = this.selection(request, ['text', 'uniqueLocalId']);
+    const selected = this.selection(request, ['text', 'uniqueLocalId', ...FORMAT_FIELDS]);
     const handle = this.#handle();
     if (selected.includes('text')) {
       this.loadTextInto('text', () => ({ op: 'getText', target: handle }));
@@ -178,12 +262,96 @@ export class Paragraph extends ModelObject implements PromisedItem {
     if (selected.includes('uniqueLocalId')) {
       this.loadTextInto('uniqueLocalId', () => ({ op: 'getParagraphId', paragraph: handle }));
     }
+    const format = FORMAT_FIELDS.filter((field) => selected.includes(field));
+    if (format.length === 0) return;
+    // ONE read for however many of them were asked for: they all come out of the same `w:pPr`, so
+    // a read each would send several operations about one element and make the cost of a load
+    // depend on how many fields the caller happened to name.
+    const label = `${this.path.label}.paragraphFormat`;
+    this.read(
+      label,
+      () => ({ op: 'getParagraphFormat', paragraph: { paragraph: handle } }),
+      (value) => {
+        const read = hydratedParagraphFormat(value, label);
+        for (const field of format) this.setLoadedProperty(field, read[field]);
+      }
+    );
+  }
+
+  /**
+   * Accumulate paragraph-property assignments into ONE write per sync.
+   *
+   * Same reason as `Font`: a paragraph-property op carries the paragraph's whole authored bag so it
+   * can replace the container, and the host refuses a second one in the same batch because it would
+   * have been built from the tree the first already changed. The bag is snapshotted and cleared at
+   * dispatch, so what is assigned after a sync belongs to the next one.
+   */
+  #authorFormat(field: FormatField, value: unknown): void {
+    this.requireAddressable();
+    if (this.#format) {
+      this.#format[field] = value;
+      return;
+    }
+    const pending: Record<string, unknown> = { [field]: value };
+    this.#format = pending;
+    const handle = this.#handle();
+    const label = `${this.path.label}.${field}`;
+    this.commandAnswering(
+      `${this.path.label}.paragraphFormat`,
+      () => {
+        this.#format = undefined;
+        return { op: 'setParagraphFormat', paragraph: { paragraph: handle }, format: pending };
+      },
+      (answer) => {
+        hydratedApplied(answer, label);
+      }
+    );
   }
 
   #handle(): AutomationHandle {
     this.requireAddressable();
     return this.path.handle();
   }
+}
+
+/** The paragraph's own paragraph properties, as this model spells them. */
+const FORMAT_FIELDS = [
+  'alignment',
+  'firstLineIndent',
+  'leftIndent',
+  'rightIndent',
+  'lineSpacing',
+  'spaceBefore',
+  'spaceAfter',
+] as const;
+
+type FormatField = (typeof FORMAT_FIELDS)[number];
+
+const ALIGNMENTS: readonly AutomationAlignment[] = [
+  'Left',
+  'Centered',
+  'Right',
+  'Justified',
+] as const;
+
+/**
+ * An alignment a write may name.
+ *
+ * `Mixed` and `Unknown` are READ answers — "they disagree" and "nothing is stated" — and there is
+ * nothing for a write to mean by either. Refusing says so rather than picking a side.
+ */
+function requireAlignment(value: unknown, target: string): AutomationAlignment {
+  if (!ALIGNMENTS.includes(value as AutomationAlignment)) {
+    fail({ code: 'InvalidArgument', target });
+  }
+  return value as AutomationAlignment;
+}
+
+function requirePoints(value: unknown, target: string): number {
+  if (typeof value !== 'number' || !Number.isFinite(value)) {
+    fail({ code: 'InvalidArgument', target });
+  }
+  return value;
 }
 
 function requireDelimiters(value: unknown, target: string): readonly string[] {

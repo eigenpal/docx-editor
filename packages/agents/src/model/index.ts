@@ -8,6 +8,7 @@
 export { Body } from './body.ts';
 export { ParagraphCollection, RangeCollection } from './collections.ts';
 export { Document } from './document.ts';
+export { Font } from './font.ts';
 export type {
   BesideLocation,
   BodyInsertParagraphLocation,

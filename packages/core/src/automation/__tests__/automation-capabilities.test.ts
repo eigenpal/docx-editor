@@ -185,6 +185,8 @@ describe('the operation vocabulary declares which operations write', () => {
       'splitParagraph',
       'deleteParagraph',
       'selectSpan',
+      'setFont',
+      'setParagraphFormat',
     ]);
     expect(
       isAutomationCommand({ op: 'insertText', at: { paragraph: FORGED, offset: 0 }, text: 'x' })

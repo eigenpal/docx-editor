@@ -50,6 +50,21 @@ export {
   type AddCommentResult,
   type CommentAnchorRequest,
 } from './comment-writes.ts';
+export {
+  AUTHORABLE_PARAGRAPH_PROPERTIES,
+  AUTHORABLE_RUN_PROPERTIES,
+  authoredProperties,
+  directParagraphMarkProperties,
+  directParagraphProperties,
+  formatOwnedRunIds,
+  isAuthorableRunProperty,
+  mergedProperties,
+  propertyContainer,
+  runAddressRanges,
+  runPropertyEdits,
+  runsCovering,
+  type RunPropertyEdit,
+} from './direct-properties.ts';
 export { collectRevisionSites, type RevisionAddress } from './tree-op-revisions.ts';
 export {
   SEARCH_MATCH_LIMIT,

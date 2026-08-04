@@ -87,6 +87,19 @@ async function readEverything(runtime: DocxEditorRuntime): Promise<unknown> {
       await context.sync();
     }
 
+    // Formatting, over a document with a style cascade in it: the heading's bold is DIRECT and its
+    // size is inherited, so the two hosts have to agree about which of those is readable here.
+    const storyFont = body.font;
+    storyFont.load();
+    const headingFont = paragraphs.items[0]?.font;
+    headingFont?.load();
+    const rangeFont = cased.items[0]?.font;
+    rangeFont?.load();
+    for (const paragraph of paragraphs.items) {
+      paragraph.load(['alignment', 'leftIndent', 'spaceBefore', 'lineSpacing']);
+    }
+    await context.sync();
+
     return {
       bodyText: body.text,
       paragraphs: paragraphs.items.map((paragraph) => paragraph.text),
@@ -99,6 +112,15 @@ async function readEverything(runtime: DocxEditorRuntime): Promise<unknown> {
       wholeWord: cased.items.map((range) => range.text),
       rangeParagraphs: firstRangeParagraphs?.items.map((paragraph) => paragraph.text) ?? [],
       nullObject: missing.isNullObject,
+      storyFont: { bold: storyFont.bold, size: storyFont.size },
+      headingFont: { bold: headingFont?.bold, size: headingFont?.size },
+      rangeFont: { bold: rangeFont?.bold, name: rangeFont?.name },
+      paragraphFormat: paragraphs.items.map((paragraph) => ({
+        alignment: paragraph.alignment,
+        leftIndent: paragraph.leftIndent,
+        spaceBefore: paragraph.spaceBefore,
+        lineSpacing: paragraph.lineSpacing,
+      })),
     };
   });
 }
@@ -117,6 +139,15 @@ async function writeEverything(runtime: DocxEditorRuntime): Promise<unknown> {
     paragraphs.items[3]!.clear();
     await context.sync();
 
+    // Formatting writes, in the shape a consumer writes them: several fields on one object, then
+    // one sync. The heading is left alone because the split above already owns it this batch.
+    const formatted = paragraphs.items[1]!;
+    formatted.font.italic = true;
+    formatted.font.size = 13;
+    formatted.alignment = 'Justified';
+    formatted.leftIndent = 24;
+    await context.sync();
+
     appended.load('text');
     written.load('text');
     pieces.load();
@@ -126,12 +157,25 @@ async function writeEverything(runtime: DocxEditorRuntime): Promise<unknown> {
 
     const after = context.document.body;
     after.load('text');
+    const formattedAgain = after.paragraphs;
+    formattedAgain.load();
+    await context.sync();
+    for (const paragraph of formattedAgain.items) {
+      paragraph.font.load(['italic', 'size']);
+      paragraph.load(['alignment', 'leftIndent']);
+    }
     await context.sync();
     return {
       appended: appended.text,
       written: written.text,
       pieces: pieces.items.map((piece) => piece.text),
       bodyText: after.text,
+      formatting: formattedAgain.items.map((paragraph) => ({
+        italic: paragraph.font.italic,
+        size: paragraph.font.size,
+        alignment: paragraph.alignment,
+        leftIndent: paragraph.leftIndent,
+      })),
     };
   });
 }

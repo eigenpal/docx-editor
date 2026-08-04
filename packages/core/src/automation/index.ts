@@ -39,6 +39,15 @@ export type {
   AutomationValue,
 } from './protocol.ts';
 
+// Formatting: what a span agrees about its characters, and what a write may author.
+export type {
+  AutomationAlignment,
+  AutomationFontRead,
+  AutomationFontWrite,
+  AutomationParagraphFormatRead,
+  AutomationParagraphFormatWrite,
+} from './formatting.ts';
+
 // The operation vocabulary.
 export {
   AUTOMATION_COMMAND_OPERATIONS,

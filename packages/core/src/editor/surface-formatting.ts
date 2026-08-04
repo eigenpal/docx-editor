@@ -19,12 +19,12 @@ import {
   type StyleSpanRecord,
 } from '@docx-editor.dev/core-contract/layout';
 import {
-  ACCEPTED_PARAGRAPH_PROPERTIES,
-  ACCEPTED_RUN_PROPERTIES,
+  AUTHORABLE_RUN_PROPERTIES,
+  authoredProperties,
+  directParagraphMarkProperties,
   findNode,
-  nullRecord,
-  segmentsOf,
-  WML_NAMESPACE_URI,
+  propertyContainer,
+  runAddressRanges,
   type OoxmlNode,
   type OoxmlPart,
 } from '@docx-editor.dev/core-contract/store';
@@ -119,265 +119,23 @@ export function paragraphIndentOf(
   return index.get(paragraphId) ?? null;
 }
 
-/** The D8 paragraph op vocabulary — the only names an op is allowed to carry. */
-const AUTHORABLE_PARAGRAPH_PROPERTIES: ReadonlySet<string> = new Set(ACCEPTED_PARAGRAPH_PROPERTIES);
-
-/** The D8 run op vocabulary, for `w:rPr` on a run and on the paragraph mark alike. */
-const AUTHORABLE_RUN_PROPERTIES: ReadonlySet<string> = new Set(ACCEPTED_RUN_PROPERTIES);
-
-/**
- * Whether an op may name this run property at all.
- *
- * The stored-marks lane needs this AT ARM TIME. Every other write reaches the store in the
- * same turn as the press, so a name the store refuses surfaces immediately; an ARMED
- * property is not applied until the user types, and it rides the keystroke's own
- * transaction — a name outside the vocabulary would take the typed characters down with
- * it, silently, on every keystroke until the caret moved.
+/*
+ * What a node itself AUTHORS, and how a property write splits per run, live in the store lane
+ * (`store/direct-properties.ts`): the automation lane's object model writes formatting on a
+ * server with no layout in it, and it must reach the same answers this lane's toolbar does. They
+ * are re-exported here under the names the editor lane already used.
  */
-export function isAuthorableRunProperty(localName: string): boolean {
-  return AUTHORABLE_RUN_PROPERTIES.has(localName);
-}
-
-/**
- * A node's own property container (`w:pPr`, `w:rPr`) among its children.
- *
- * A container the canonical read demoted to generic is still the node's own properties —
- * matching only the typed kind lost the whole set.
- */
-function propertyContainer(
-  parent: OoxmlNode | null | undefined,
-  kind: 'paragraphProperties' | 'runProperties',
-  localName: 'pPr' | 'rPr'
-): OoxmlNode | undefined {
-  if (!parent || parent.kind === 'textValue') return undefined;
-  const children: readonly OoxmlNode[] = parent.children;
-  return children.find(
-    (child) =>
-      child.kind === kind ||
-      (child.kind === 'generic' &&
-        child.localName === localName &&
-        child.namespaceUri === WML_NAMESPACE_URI)
-  );
-}
-
-/** What a container itself authors, narrowed to the names an op is allowed to carry. */
-function authoredProperties(
-  container: OoxmlNode | undefined,
-  authorable: ReadonlySet<string>
-): readonly SurfaceProperty[] {
-  if (!container || container.kind === 'textValue') return [];
-  const properties: SurfaceProperty[] = [];
-  for (const child of container.children) {
-    if (child.kind === 'textValue' || !authorable.has(child.localName)) continue;
-    // Null-prototype: these keys come from the file (D14).
-    const attributes = nullRecord<string>();
-    for (const entry of child.attributes) attributes[entry.localName] = entry.value;
-    properties.push(
-      Object.keys(attributes).length > 0
-        ? { localName: child.localName, attributes }
-        : { localName: child.localName }
-    );
-  }
-  return properties;
-}
-
-/**
- * What a paragraph itself authors: its own `w:pPr`, from the canonical tree, narrowed to
- * the properties an op can express.
- *
- * The base a paragraph write merges against MUST be this and not the layout's bag. The
- * layout's is the CASCADE, and echoing that back had two effects a user could see. It was
- * refused outright — `setParagraphProperties` rejects any name outside D8, and the cascade
- * routinely carries `w:outlineLvl` (every Heading, 17.3.1.20) and `w:contextualSpacing`
- * (Word's List Paragraph), so pressing Centre on a heading did nothing at all. What did get
- * through restated style-inherited values as DIRECT formatting, which is a silent change of
- * meaning: a paragraph that merely inherited its alignment now states it, and editing the
- * style no longer moves it.
- *
- * Properties outside the vocabulary are dropped from the OP, not from the paragraph: the
- * applier keeps every `w:pPr` child an op cannot name (the mark, `w:sectPr`, `w:pBdr`,
- * `w:outlineLvl`) exactly as authored.
- */
-export function directParagraphProperties(
-  part: OoxmlPart,
-  paragraphId: string
-): readonly SurfaceProperty[] {
-  const paragraph = findNode(part, paragraphId);
-  return authoredProperties(
-    propertyContainer(paragraph, 'paragraphProperties', 'pPr'),
-    AUTHORABLE_PARAGRAPH_PROPERTIES
-  );
-}
-
-/**
- * What a paragraph MARK itself authors: `w:pPr/w:rPr`, narrowed to the run vocabulary.
- *
- * Same rule as a run's own `w:rPr`, for the same reason — the mark is a run property
- * container, and `setParagraphMarkProperties` rewrites the names its op carries. Handing it
- * the layout's cascade wrote the whole inherited face onto the pilcrow as DIRECT formatting:
- * a `w:lang` and a `w:noProof` that only ever lived in `w:docDefaults` were minted into the
- * mark of every paragraph the user bolded.
- */
-export function directParagraphMarkProperties(
-  part: OoxmlPart,
-  paragraphId: string
-): readonly SurfaceProperty[] {
-  const paragraph = findNode(part, paragraphId);
-  const pPr = propertyContainer(paragraph, 'paragraphProperties', 'pPr');
-  return authoredProperties(
-    propertyContainer(pPr, 'runProperties', 'rPr'),
-    AUTHORABLE_RUN_PROPERTIES
-  );
-}
-
-/**
- * Merge one property into a set, replacing any entry with the same name.
- *
- * `setRunProperties` and `setParagraphProperties` REPLACE the whole container, so sending
- * one property alone deleted every other: pressing Bold stripped a run's font, size and
- * colour, and pressing Centre stripped a paragraph's style, numbering and indents.
- */
-export function mergedProperties(
-  existing: readonly SurfaceProperty[],
-  incoming: SurfaceProperty
-): SurfaceProperty[] {
-  const kept = existing.filter((entry) => entry.localName !== incoming.localName);
-  return [...kept, incoming];
-}
-
-/** One run's share of a range edit: the slice it covers and the properties to write there. */
-export interface RunPropertyEdit {
-  readonly start: number;
-  readonly end: number;
-  readonly properties: readonly SurfaceProperty[];
-  /**
-   * When set, `setRunProperties` formats only these runs (field result ownership). Needed
-   * when several result runs share one atom offset so each keeps its own merged bag.
-   */
-  readonly targetRunIds?: readonly string[];
-}
-
-/**
- * A range run-property change, split into ONE edit per run it covers, each merged over that
- * run's own `w:rPr`.
- *
- * Neither half of that is optional. The base MUST be the run's own properties: the layout
- * publishes the CASCADE (`w:docDefaults` + the style chain + direct), and echoing it back had
- * two effects a user could see. It was refused outright — `setRunProperties` rejects any name
- * outside D8, and Word's own `styles.xml` puts `w:lang` and `w:noProof` in
- * `docDefaults/rPrDefault` (17.7.5.3), so on a document Word wrote, Bold did nothing at all
- * and said nothing. What did get through restated inherited values as DIRECT formatting, so a
- * run that merely inherited its font now stated it and editing the style no longer moved it.
- *
- * And the split MUST be per run: the op REPLACES the properties it names across its whole
- * range, so one op carrying one run's bag over a mixed selection homogenised it — bolding
- * `hello ` + `Georgia` rewrote the second run's `w:rFonts` with the first's. Runs are addressed
- * by offset rather than by id because these edits apply in sequence and the applier splits
- * runs at the range edges; offsets are unmoved by a property write, ids are not.
- */
-/** Per-run UTF-16 ranges from `segmentsOf` (fields/notes collapse to one unit on begin). */
-function runAddressRanges(
-  paragraph: Extract<OoxmlNode, { kind: 'paragraph' }>
-): Map<string, { start: number; end: number }> {
-  const runRanges = new Map<string, { start: number; end: number }>();
-  for (const segment of segmentsOf(paragraph)) {
-    const ids =
-      segment.formatRunIds && segment.formatRunIds.length > 0
-        ? segment.formatRunIds
-        : segment.runId
-          ? [segment.runId]
-          : [];
-    for (const runId of ids) {
-      const existing = runRanges.get(runId);
-      if (!existing) runRanges.set(runId, { start: segment.start, end: segment.end });
-      else {
-        existing.start = Math.min(existing.start, segment.start);
-        existing.end = Math.max(existing.end, segment.end);
-      }
-    }
-  }
-  return runRanges;
-}
-
-/** Runs that own field-result formatting for atoms in this paragraph. */
-function formatOwnedRunIds(
-  paragraph: Extract<OoxmlNode, { kind: 'paragraph' }>
-): ReadonlySet<string> {
-  const ids = new Set<string>();
-  for (const segment of segmentsOf(paragraph)) {
-    if (!segment.formatRunIds) continue;
-    for (const runId of segment.formatRunIds) ids.add(runId);
-  }
-  return ids;
-}
-
-/**
- * A range run-property change, split into ONE edit per run it covers, each merged over that
- * run's own `w:rPr`.
- *
- * Neither half of that is optional. The base MUST be the run's own properties: the layout
- * publishes the CASCADE (`w:docDefaults` + the style chain + direct), and echoing it back had
- * two effects a user could see. It was refused outright — `setRunProperties` rejects any name
- * outside D8, and Word's own `styles.xml` puts `w:lang` and `w:noProof` in
- * `docDefaults/rPrDefault` (17.7.5.3), so on a document Word wrote, Bold did nothing at all
- * and said nothing. What did get through restated inherited values as DIRECT formatting, so a
- * run that merely inherited its font now stated it and editing the style no longer moved it.
- *
- * And the split MUST be per run: the op REPLACES the properties it names across its whole
- * range, so one op carrying one run's bag over a mixed selection homogenised it — bolding
- * `hello ` + `Georgia` rewrote the second run's `w:rFonts` with the first's. Runs are addressed
- * by offset rather than by id because these edits apply in sequence and the applier splits
- * runs at the range edges; offsets are unmoved by a property write, ids are not.
- */
-export function runPropertyEdits(
-  part: OoxmlPart,
-  paragraphId: string,
-  start: number,
-  end: number,
-  incoming: SurfaceProperty
-): readonly RunPropertyEdit[] {
-  const paragraph = findNode(part, paragraphId);
-  if (!paragraph || paragraph.kind !== 'paragraph') return [];
-  const edits: RunPropertyEdit[] = [];
-  // Field/note atoms contribute one unit on the begin run (segmentsOf). Hyperlink descent
-  // keeps link text addressable — skipping `w:hyperlink` used to mis-offset every run after.
-  // Field format ownership maps the atom onto result runs via `formatRunIds`.
-  const runRanges = runAddressRanges(paragraph);
-  const formatOwned = formatOwnedRunIds(paragraph);
-  const visit = (child: OoxmlNode): void => {
-    if (child.kind === 'hyperlink') {
-      for (const inner of child.children) visit(inner);
-      return;
-    }
-    if (
-      child.kind === 'fldSimple' ||
-      (child.kind === 'generic' && child.localName === 'fldSimple')
-    ) {
-      for (const inner of child.children) visit(inner);
-      return;
-    }
-    if (child.kind !== 'run') return;
-    const range = runRanges.get(child.id);
-    if (!range || range.end <= range.start) return;
-    const from = Math.max(range.start, start);
-    const to = Math.min(range.end, end);
-    if (from >= to) return;
-    edits.push({
-      start: from,
-      end: to,
-      properties: mergedProperties(
-        authoredProperties(
-          propertyContainer(child, 'runProperties', 'rPr'),
-          AUTHORABLE_RUN_PROPERTIES
-        ),
-        incoming
-      ),
-      ...(formatOwned.has(child.id) ? { targetRunIds: [child.id] } : {}),
-    });
-  };
-  for (const child of paragraph.children) visit(child);
-  return edits;
-}
+export {
+  authoredProperties,
+  directParagraphMarkProperties,
+  directParagraphProperties,
+  isAuthorableRunProperty,
+  mergedProperties,
+  propertyContainer,
+  runAddressRanges,
+  runPropertyEdits,
+  type RunPropertyEdit,
+} from '@docx-editor.dev/core-contract/store';
 
 /**
  * Whether any run the range covers authors a property an op could clear.

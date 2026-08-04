@@ -34,6 +34,19 @@ import {
   isSearchableQuery,
   SEARCH_MATCH_LIMIT,
 } from '../store/store/text-match.ts';
+import {
+  directParagraphMarkProperties,
+  mergedProperties,
+  runPropertyEdits,
+} from '../store/store/direct-properties.ts';
+import {
+  fontProperties,
+  fontRead,
+  paragraphFormatProperties,
+  paragraphFormatRead,
+  type AutomationFontWrite,
+  type AutomationParagraphFormatWrite,
+} from './formatting.ts';
 import type { AutomationHandleTable } from './handles.ts';
 import type {
   AutomationOperation,
@@ -54,6 +67,7 @@ import {
   resolveParagraphRef,
   resolvePoint,
   resolveSpanRef,
+  spanOffsets,
   spanParagraphIds,
   spanText,
   spanValue,
@@ -194,6 +208,8 @@ export function createBatchPlanner(host: BatchPlannerHost): BatchPlanner {
   /** Paragraphs a command has restructured, and paragraphs any command has touched. */
   const restructured = new Set<string>();
   const touched = new Set<string>();
+  /** Property containers a command has written, as `container:paragraphId` (`claimFormatting`). */
+  const formatted = new Set<string>();
   /**
    * Paragraphs a queued selection covers.
    *
@@ -250,6 +266,37 @@ export function createBatchPlanner(host: BatchPlannerHost): BatchPlanner {
       );
     }
     touched.add(paragraphId);
+    return null;
+  };
+
+  /**
+   * Claim one of a paragraph's property CONTAINERS for a formatting write.
+   *
+   * Per container rather than per paragraph, and the distinction is the difference between the
+   * ordinary shape of a formatting script working and not. A property write replaces the container
+   * it names, so each op carries that container's existing children forward — read from the tree
+   * as it was BEFORE the batch. Two writes to the SAME container are therefore refused: the second
+   * carries children the first has already superseded, so the caller would have asked for two
+   * things and silently got one. Two writes to DIFFERENT containers are independent — the run and
+   * mark properties a font write touches are exactly the children a paragraph-property write keeps
+   * as authored, and the other way round — so `font.bold = true` and `alignment = 'Right'` on one
+   * paragraph in one sync are one batch and both land.
+   */
+  const claimFormatting = (
+    paragraphId: string,
+    container: 'runs' | 'paragraph'
+  ): PlannedOperation | null => {
+    const claimed = `${container}:${paragraphId}`;
+    if (formatted.has(claimed)) {
+      return refuse(
+        'conflicting-operations',
+        'another operation in this batch already writes that formatting',
+        paragraphId
+      );
+    }
+    const conflict = touch(paragraphId);
+    if (conflict) return conflict;
+    formatted.add(claimed);
     return null;
   };
 
@@ -658,6 +705,103 @@ export function createBatchPlanner(host: BatchPlannerHost): BatchPlanner {
     };
   };
 
+  /**
+   * Author run properties over a span.
+   *
+   * One `setRunProperties` op per RUN the span covers — not per paragraph — each carrying that
+   * run's own authored properties with the request merged over them. Both halves of that are
+   * load-bearing, and `runPropertyEdits` is the one implementation of them: the op replaces the
+   * container it writes, so a per-paragraph op would homogenise a mixed selection onto one run's
+   * font, and an op that did not carry the run's bag forward would delete the colour of every run
+   * it resized.
+   *
+   * The paragraph MARK's own `w:rPr` is written for every paragraph the span covers WHOLE, which
+   * is what Word does and is not cosmetic: a list marker takes its face from the pilcrow, so a
+   * whole-paragraph size change that skipped it leaves the bullet at the old size.
+   *
+   * A span covering no characters is refused: there is nothing to format, and writing the mark
+   * alone would format a paragraph the caller addressed as a caret.
+   */
+  const planSetFont = (range: ResolvedRange, request: AutomationFontWrite): PlannedOperation => {
+    const part = reads.bodyPart;
+    if (!part) return refuse('document-unavailable', 'this host holds no document right now');
+    const properties = fontProperties(request ?? {});
+    if (!properties.ok)
+      return refuse(
+        'unsupported-content',
+        'that is not formatting this host writes',
+        properties.detail
+      );
+    const ops: TreeDocOp[] = [];
+    for (const share of spanOffsets(range, reads)) {
+      if (share.end <= share.start && !share.whole) continue;
+      const conflict = claimFormatting(share.paragraphId, 'runs');
+      if (conflict) return conflict;
+      for (const edit of runPropertyEdits(
+        part,
+        share.paragraphId,
+        share.start,
+        share.end,
+        properties.value
+      )) {
+        ops.push({
+          op: 'setRunProperties',
+          paragraphId: share.paragraphId,
+          start: edit.start,
+          end: edit.end,
+          properties: edit.properties,
+          ...(edit.targetRunIds ? { targetRunIds: edit.targetRunIds } : {}),
+        });
+      }
+      if (share.whole) {
+        ops.push({
+          op: 'setParagraphMarkProperties',
+          paragraphId: share.paragraphId,
+          properties: mergedProperties(
+            directParagraphMarkProperties(part, share.paragraphId),
+            properties.value
+          ),
+        });
+      }
+    }
+    if (ops.length === 0)
+      return refuse(
+        'invalid-offset',
+        'that range covers no characters to format',
+        'collapsed-range'
+      );
+    return { ok: true, kind: 'command', ops, answer: () => APPLIED };
+  };
+
+  const planSetParagraphFormat = (
+    paragraph: ResolvedPoint,
+    request: AutomationParagraphFormatWrite
+  ): PlannedOperation => {
+    const part = reads.bodyPart;
+    if (!part) return refuse('document-unavailable', 'this host holds no document right now');
+    const properties = paragraphFormatProperties(part, paragraph.paragraphId, request ?? {});
+    if (!properties.ok)
+      return refuse(
+        'unsupported-content',
+        'that is not paragraph formatting this host writes',
+        properties.detail
+      );
+    const conflict = claimFormatting(paragraph.paragraphId, 'paragraph');
+    if (conflict) return conflict;
+    return {
+      ok: true,
+      kind: 'command',
+      ops: [
+        {
+          op: 'setParagraphProperties',
+          paragraphId: paragraph.paragraphId,
+          properties: properties.value,
+        },
+      ],
+      answer: () => APPLIED,
+    };
+  };
+
   const planSelect = (range: ResolvedRange, mode: AutomationSelectionMode): PlannedOperation => {
     if (!capabilities.selection || !host.select)
       return refuse('unsupported-capability', 'this host has no reader to move', 'selection');
@@ -798,6 +942,40 @@ export function createBatchPlanner(host: BatchPlannerHost): BatchPlanner {
           operation.trimDelimiters === true,
           operation.trimSpacing === true
         );
+      }
+
+      case 'getFont': {
+        const resolved = resolveSpanRef(operation.span, handles, reads);
+        if (!resolved.ok) return refuse(resolved.code, 'that span is not a place', resolved.detail);
+        const part = reads.bodyPart;
+        if (!part) return refuse('document-unavailable', 'this host holds no document right now');
+        return query({ kind: 'font', font: fontRead(part, spanOffsets(resolved.value, reads)) });
+      }
+
+      case 'setFont': {
+        const resolved = resolveSpanRef(operation.span, handles, reads);
+        if (!resolved.ok) return refuse(resolved.code, 'that span is not a place', resolved.detail);
+        if (!resolved.value)
+          return refuse('invalid-offset', 'that story holds no paragraph to format', 'empty-story');
+        return planSetFont(resolved.value, operation.font);
+      }
+
+      case 'getParagraphFormat': {
+        const paragraph = resolveParagraphRef(operation.paragraph, handles, reads);
+        if (!paragraph.ok)
+          return refuse(paragraph.code, 'that is not a paragraph', paragraph.detail);
+        const part = reads.bodyPart;
+        if (!part) return refuse('document-unavailable', 'this host holds no document right now');
+        const format = paragraphFormatRead(part, paragraph.value.paragraphId);
+        if (!format) return refuse('invalid-handle', 'that handle does not name a paragraph');
+        return query({ kind: 'paragraphFormat', format });
+      }
+
+      case 'setParagraphFormat': {
+        const paragraph = resolveParagraphRef(operation.paragraph, handles, reads);
+        if (!paragraph.ok)
+          return refuse(paragraph.code, 'that is not a paragraph', paragraph.detail);
+        return planSetParagraphFormat(paragraph.value, operation.format);
       }
 
       case 'deleteParagraph': {

@@ -7,7 +7,9 @@
 // exchange that actually disagreed.
 
 import type {
+  AutomationFontRead,
   AutomationHandle,
+  AutomationParagraphFormatRead,
   AutomationSpan,
   AutomationValue,
 } from '@docx-editor.dev/core-contract/automation';
@@ -43,6 +45,19 @@ export function hydratedSpan(value: AutomationValue, target: string): Automation
 export function hydratedSpans(value: AutomationValue, target: string): readonly AutomationSpan[] {
   if (value.kind !== 'spans') throw wrongShape(target);
   return value.spans;
+}
+
+export function hydratedFont(value: AutomationValue, target: string): AutomationFontRead {
+  if (value.kind !== 'font') throw wrongShape(target);
+  return value.font;
+}
+
+export function hydratedParagraphFormat(
+  value: AutomationValue,
+  target: string
+): AutomationParagraphFormatRead {
+  if (value.kind !== 'paragraphFormat') throw wrongShape(target);
+  return value.format;
 }
 
 /** A command's answer. There is nothing in it: the effect is the batch having committed. */

@@ -17,6 +17,7 @@
 // CREATES a paragraph cannot name it in advance — the canonical node does not exist yet — so
 // those operations answer after the commit, from the state they made. See `plan.ts`.
 
+import type { AutomationFontWrite, AutomationParagraphFormatWrite } from './formatting.ts';
 import type { AutomationEndpoint, AutomationHandle } from './protocol.ts';
 
 /**
@@ -171,6 +172,30 @@ export type AutomationOperation =
       /** Drop leading and trailing whitespace from each resulting paragraph. */
       readonly trimSpacing?: boolean;
     }
+  /**
+   * What the characters a span covers AGREE about their formatting.
+   *
+   * Not "what does this text look like": a value inherited from `styles.xml` reads as no agreed
+   * value, because this lane reads what the document authors and a write merges against the
+   * same thing. See `formatting.ts`.
+   */
+  | { readonly op: 'getFont'; readonly span: AutomationSpanRef }
+  /**
+   * Author run properties over a span. Only the fields present are written.
+   *
+   * A span covering a WHOLE paragraph also writes the paragraph MARK's own `w:rPr`, which is
+   * what Word does — the pilcrow carries the formatting a list marker inherits its face from,
+   * so sizing a bulleted paragraph without it leaves the bullet at the old size.
+   */
+  | { readonly op: 'setFont'; readonly span: AutomationSpanRef; readonly font: AutomationFontWrite }
+  /** One paragraph's own paragraph properties, in points. */
+  | { readonly op: 'getParagraphFormat'; readonly paragraph: AutomationParagraphRef }
+  /** Author paragraph properties. Only the fields present are written. */
+  | {
+      readonly op: 'setParagraphFormat';
+      readonly paragraph: AutomationParagraphRef;
+      readonly format: AutomationParagraphFormatWrite;
+    }
   /** Remove a paragraph and everything in it. */
   | { readonly op: 'deleteParagraph'; readonly paragraph: AutomationHandle }
   /**
@@ -195,6 +220,8 @@ export const AUTOMATION_QUERY_OPERATIONS = [
   'getSpanText',
   'getParagraphId',
   'search',
+  'getFont',
+  'getParagraphFormat',
 ] as const satisfies readonly AutomationOperationKind[];
 
 /** Operations that write. Every one of these goes through the single transaction path. */
@@ -205,6 +232,8 @@ export const AUTOMATION_COMMAND_OPERATIONS = [
   'splitParagraph',
   'deleteParagraph',
   'selectSpan',
+  'setFont',
+  'setParagraphFormat',
 ] as const satisfies readonly AutomationOperationKind[];
 
 // Compile-time exhaustiveness: a new operation must be classified as a query or a command, or

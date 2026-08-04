@@ -14,8 +14,10 @@ export { ClientResult, clientResult } from './client-result.ts';
 export { DocxEditorError, fail, type DocxEditorErrorCode } from './errors.ts';
 export {
   hydratedApplied,
+  hydratedFont,
   hydratedHandle,
   hydratedHandles,
+  hydratedParagraphFormat,
   hydratedSpan,
   hydratedSpans,
   hydratedText,
@@ -32,8 +34,13 @@ export type { ActionSort, QueuedAction } from './queue.ts';
 export { RequestContext } from './request-context.ts';
 export { selectedProperties } from './selection.ts';
 export type {
+  AutomationAlignment,
+  AutomationFontRead,
+  AutomationFontWrite,
   AutomationHandle,
   AutomationOperation,
+  AutomationParagraphFormatRead,
+  AutomationParagraphFormatWrite,
   AutomationPoint,
   AutomationSearchOptions,
   AutomationSpan,

@@ -21,6 +21,7 @@ import {
   type ResolvedLoadOptions,
 } from '../runtime/model-support.ts';
 import { ParagraphCollection, RangeCollection } from './collections.ts';
+import { Font } from './font.ts';
 import { bodyParagraphLocation, bodyTextLocation, insertableText } from './locations.ts';
 import { ModelObject } from './model-object.ts';
 import { Paragraph } from './paragraph.ts';
@@ -29,6 +30,7 @@ import { searchOptions, type SearchOptions } from './search-options.ts';
 
 export class Body extends ModelObject {
   #paragraphs: ParagraphCollection | undefined;
+  #font: Font | undefined;
 
   /** @internal The main story of the document this context is running against. */
   static main(context: RequestContext, label: string): Body {
@@ -52,6 +54,12 @@ export class Body extends ModelObject {
   get paragraphs(): ParagraphCollection {
     this.#paragraphs ??= this.paragraphsUnder(`${this.path.label}.paragraphs`);
     return this.#paragraphs;
+  }
+
+  /** The character formatting of the whole story: what all of it agrees on, and what a write sets. */
+  get font(): Font {
+    this.#font ??= Font.of(this.context, `${this.path.label}.font`, this.path, 'body');
+    return this.#font;
   }
 
   /**

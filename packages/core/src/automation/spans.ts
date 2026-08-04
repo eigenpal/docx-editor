@@ -174,6 +174,37 @@ export function spanParagraphIds(
   return reads.bodyParagraphIds.slice(span.start.index, span.end.index + 1);
 }
 
+/** One paragraph's share of a span: the offsets inside it the span actually reaches. */
+export interface SpanOffsets {
+  readonly paragraphId: string;
+  readonly start: number;
+  readonly end: number;
+  /** Whether the span reaches from the paragraph's first offset to its last. */
+  readonly whole: boolean;
+}
+
+/**
+ * A span broken into one entry per paragraph it covers, clipped at its own two ends.
+ *
+ * The vocabulary every per-character operation needs: formatting, link wrapping and bookmark
+ * containment all ask "which characters of which paragraph", and each computing the clipping
+ * itself is how two of them end up disagreeing at a paragraph boundary.
+ */
+export function spanOffsets(
+  span: ResolvedSpan,
+  reads: AutomationDocumentReads
+): readonly SpanOffsets[] {
+  if (!span) return [];
+  const ids = spanParagraphIds(span, reads);
+  const last = ids.length - 1;
+  return ids.map((paragraphId, position) => {
+    const length = (reads.paragraphText(paragraphId) ?? '').length;
+    const start = position === 0 ? span.start.offset : 0;
+    const end = position === last ? span.end.offset : length;
+    return { paragraphId, start, end, whole: start === 0 && end === length };
+  });
+}
+
 /**
  * The text a span covers, with a paragraph mark at every paragraph boundary it crosses.
  *
