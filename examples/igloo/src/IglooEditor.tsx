@@ -83,7 +83,7 @@ export function IglooEditor({ fixtureUrl }: IglooEditorProps) {
             <IglooMark />
             <div className="igloo-brand__text">
               <h1>Igloo Editor</h1>
-              <p>Every customization point of the React adapter, in one theme.</p>
+              <p>Same editor. Colder.</p>
             </div>
           </header>
           <IglooMenu />
