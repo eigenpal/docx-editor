@@ -11,7 +11,8 @@
 // decision made from a cached read being applied to a document that has since moved — the case
 // the whole read-decide-write shape of a batching API invites. A context that has not read
 // anything has nothing to be stale about, so its writes go out unconditionally, which is what an
-// unconditional command wants.
+// unconditional command wants. Adopting an object counts as having read: its loaded state came
+// from some revision, and the run that writes from it is the one that has to be conditional.
 //
 // EACH CONTEXT IS ITS OWN. Two runs on one runtime never share a queue, so their actions cannot
 // interleave into one batch however their awaits happen to schedule. See `runtime.ts` for why
@@ -74,6 +75,8 @@ export class RequestContext {
           });
         }
       },
+      isFinished: () => this.#finished,
+      readRevision: () => this.#readRevision,
       register: (object) => {
         this.#created.add(object as ClientObject);
       },
@@ -84,6 +87,10 @@ export class RequestContext {
         this.#tracked.delete(object as ClientObject);
       },
       isTracked: (object) => this.#tracked.has(object as ClientObject),
+      disown: (object) => {
+        this.#created.delete(object as ClientObject);
+        this.#tracked.delete(object as ClientObject);
+      },
     };
     this.#trackedObjects = new TrackedObjects(this.#internals, (object) =>
       this.#created.has(object)
@@ -149,24 +156,63 @@ export class RequestContext {
   }
 
   /**
-   * Take over an object a previous run tracked.
+   * Take over an object a PREVIOUS run tracked.
    *
-   * The two refusals are the whole point of adoption being explicit. An object from another
-   * runtime names a document this host never opened — its handles would resolve against the
-   * wrong document, or not at all. An object that was released has already had its lifetime
-   * applied, and reviving it would make `trackedObjects` advisory.
+   * Three refusals, and adoption is explicit so that each of them can happen here rather than as
+   * something strange later:
+   *
+   * ANOTHER RUNTIME. Its handles name a document this host never opened, so they would resolve
+   * against the wrong document or not at all.
+   *
+   * A RUN STILL IN FLIGHT. The object is that run's, and rebinding it would send that run's next
+   * call into this context's queue — two runs' work in one batch, which is precisely what a
+   * context per run exists to prevent — while leaving two registries claiming its lifetime. So the
+   * handover waits for the owner to finish, and nothing about the object moves in the meantime.
+   *
+   * NOT TRACKED. A released object has already had its lifetime applied, and reviving it would
+   * make `trackedObjects` advisory.
+   *
+   * A successful handover is a MOVE: the source gives up its claims, this context takes them, and
+   * the revision the source had read at comes along — the object's loaded state was read then, and
+   * a write computed from it has to be conditional on that, not on whatever the document is at by
+   * the time this run writes.
    */
   #adopt(object: ClientObject): void {
-    const internals = object.context[INTERNALS];
+    const source = object.context;
+    // Already ours: `run([kept, kept], ...)` asks for one handover, not a second from itself.
+    if (source === this) return;
+
+    const internals = source[INTERNALS];
     if (internals.session !== this.#session.id) {
       throw new DocxEditorError({ code: 'InvalidObjectPath' });
+    }
+    // Before the tracking check: an object whose run is still going has not been released,
+    // whatever it is or is not tracked by, so `InvalidObjectPath` would be the wrong answer.
+    if (!internals.isFinished()) {
+      throw new DocxEditorError({ code: 'ObjectInUse' });
     }
     if (!internals.isTracked(object)) {
       throw new DocxEditorError({ code: 'InvalidObjectPath' });
     }
+
+    const carried = internals.readRevision();
+    internals.disown(object);
     object[REBIND](this);
     this.#created.add(object);
     this.#tracked.add(object);
+    if (carried !== null) this.#carryRead(carried);
+  }
+
+  /**
+   * Inherit a revision an adopted object's state was read at.
+   *
+   * The OLDEST of them when several objects are adopted: a batch is conditional on one revision,
+   * and the newest would let a decision made from the oldest object's state be applied to a
+   * document that had moved past it — the exact thing being prevented.
+   */
+  #carryRead(revision: number): void {
+    this.#readRevision =
+      this.#readRevision === null ? revision : Math.min(this.#readRevision, revision);
   }
 
   /**

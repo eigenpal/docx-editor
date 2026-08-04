@@ -27,6 +27,8 @@ export type DocxEditorErrorCode =
   | 'ValueNotLoaded'
   /** The object is no longer addressable: its run ended and it was not tracked. */
   | 'InvalidObjectPath'
+  /** The object still belongs to a run that has not finished, so it cannot be handed over. */
+  | 'ObjectInUse'
   /** An argument or load option this API does not accept. */
   | 'InvalidArgument'
   /** The host cannot do this at all — a capability it reports false. */
@@ -56,6 +58,9 @@ const MESSAGES: Readonly<Record<DocxEditorErrorCode, string>> = Object.freeze({
   InvalidObjectPath:
     'the object is no longer usable. Objects are released when their run ends unless ' +
     'context.trackedObjects.add(...) kept them.',
+  ObjectInUse:
+    'the object still belongs to a run that has not finished. Await that run before passing the ' +
+    'object to another one.',
   InvalidArgument: 'the argument is not one this API accepts.',
   NotSupported: 'this document host does not support that operation.',
   InvalidRequestContext: 'the request context has finished. Start another run to continue.',

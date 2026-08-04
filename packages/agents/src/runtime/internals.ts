@@ -48,10 +48,26 @@ export interface ContextInternals {
    * disposed. `target` names the object or property the caller was reaching for.
    */
   assertUsable(target?: string): void;
+  /**
+   * Whether this context's run has ended.
+   *
+   * Narrower than `assertUsable`, and asked by adoption for a reason: a LIVE context's objects are
+   * still its own, and taking one would interleave that run's next call into another run's batch.
+   */
+  isFinished(): boolean;
+  /** The revision this context last read at, or `null` if it has never read. */
+  readRevision(): number | null;
   register(object: RuntimeManagedObject): void;
   track(object: RuntimeManagedObject): void;
   untrack(object: RuntimeManagedObject): void;
   isTracked(object: RuntimeManagedObject): boolean;
+  /**
+   * Give up every claim on an object: it belongs to another context now.
+   *
+   * The other half of a rebind. Without it the object would still be in this context's registries
+   * — two owners for one lifetime, one of which could release it out from under the other.
+   */
+  disown(object: RuntimeManagedObject): void;
 }
 
 /** What a context may do to a proxy it owns. */

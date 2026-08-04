@@ -186,10 +186,12 @@ describe('a write made from a read the document has moved past', () => {
     runtime.dispose();
   });
 
-  test('a write behind a read is conditional; a write behind no read is not', async () => {
-    // The rule stated both ways round. A context that decided something from a cached read says
-    // which revision it read at; a context that read nothing has nothing to be stale about, and
-    // making its commands conditional would refuse ordinary unconditional writes for no reason.
+  test('a write behind a read is conditional, and adopting the object carries that read along', async () => {
+    // A context that decided something from a cached read says which revision it read at — and so
+    // does a context that ADOPTED an object carrying that read. The alternative would be an
+    // unconditional first write in the adopting run, computed from state a revision old: see
+    // `runtime-adoption.test.ts` for the corruption that invites. A context that has read nothing
+    // and adopted nothing still writes unconditionally, which is tested there too.
     const spy = spyHost(openHost());
     const runtime = createRuntime({ host: spy.host, save: true });
 
@@ -206,13 +208,14 @@ describe('a write made from a read the document has moved past', () => {
       return first;
     });
 
+    const readAt = spy.host.revision();
     spy.reset();
     await runtime.run(kept, async (context) => {
-      kept.insertText('write-only ', 0);
+      kept.insertText('adopted-then-write ', 0);
       await context.sync();
     });
     expect(spy.requests).toHaveLength(1);
-    expect(spy.requests[0]?.expectedRevision).toBeUndefined();
+    expect(spy.requests[0]?.expectedRevision).toBe(readAt);
     runtime.dispose();
   });
 });
