@@ -29,6 +29,11 @@ enabled state are the library's — and none of them had to be reimplemented to 
 the `--doc-*` palette, so restating that palette under one scope re-themes the toolbar, menu
 bar, panels, pickers, rulers and navigation pane at once. `igloo.css` is mostly that list.
 
+The navigation pane is the sharpest example: it has no panel at all here, just white headings
+floating on the sea. That is `--doc-*` restated on `.igloo-nav` and nothing else — custom
+properties inherit, so the scope IS the override, and the shell, tabs, search box, rows,
+hover and current-item states all follow without one library class being touched.
+
 **A host action still asks the engine.** `Freeze this passage` has no chrome slot, so its
 label, glyph and effect are the demo's — but whether it may run comes from `Editor.can` on
 the very command it will exec, so it cannot offer something about to be refused, and its

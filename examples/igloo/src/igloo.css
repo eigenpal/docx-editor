@@ -386,29 +386,55 @@
   box-shadow: 0 12px 26px rgba(4, 32, 52, 0.45);
 }
 
-/* ── The navigation pane as an ice core ───────────────────────────────────────────── */
+/* ── The navigation pane: open water ─────────────────────────────────────────────────
+ *
+ * No panel at all — the headings float directly on the sea. This is the theme's clearest
+ * demonstration of the token contract: the pane is built entirely on `--doc-*`, so
+ * restating those variables ON THE PANE re-themes every part of it — shell, tabs, search
+ * box, rows, hover and current-item states — without touching one library class or
+ * reimplementing a single component. Custom properties inherit, so the scope is the
+ * override.
+ *
+ * White-on-water needs the shadow: the sea runs from pale ice at the horizon to near-black
+ * at the bottom, so a fixed text colour cannot have contrast against all of it. The shadow
+ * supplies the dark side wherever the water goes light. */
+.igloo-nav {
+  --doc-bg: transparent;
+  --doc-surface: transparent;
+  --doc-text: #f4fcff;
+  --doc-text-muted: rgba(238, 250, 255, 0.72);
+  --doc-text-subtle: rgba(238, 250, 255, 0.55);
+  /* Higher than a placeholder would need on a flat panel: the background here MOVES, so
+     a floe drifting behind the search box briefly halves the effective contrast. */
+  --doc-text-placeholder: rgba(238, 250, 255, 0.66);
+  --doc-primary: #a9e2ff;
+  --doc-primary-light: rgba(255, 255, 255, 0.18);
+  --doc-bg-hover: rgba(255, 255, 255, 0.12);
+  --doc-bg-input: rgba(255, 255, 255, 0.1);
+  --doc-border: rgba(255, 255, 255, 0.28);
+  --doc-border-input: rgba(255, 255, 255, 0.35);
+  --doc-border-light: rgba(255, 255, 255, 0.2);
+}
 
-/* The PANEL, not the pane root. The root spans the whole gutter whether the pane is open
-   or shut, so skinning it paints a large empty slab beside a closed pane. */
 .igloo-nav .docx-nav__panel-shell {
-  background: rgba(233, 248, 255, 0.92);
-  backdrop-filter: blur(14px);
-  border: 1px solid rgba(255, 255, 255, 0.6);
-  border-radius: 14px;
-  box-shadow: 0 18px 36px rgba(4, 32, 52, 0.45);
-  overflow: hidden;
+  text-shadow: 0 1px 3px rgba(3, 26, 42, 0.85);
 }
 
-/* Nothing is drawn at all while the pane is shut, except its toggle. */
-.igloo-nav:not(.docx-nav--open) .docx-nav__panel-shell {
-  background: none;
-  border: none;
-  box-shadow: none;
+/* The toggle disc keeps a plate: it sits alone over the water with no label beside it, so
+ * a bare outline would be hard to find. */
+.igloo-nav .docx-nav__toggle {
+  background: rgba(233, 248, 255, 0.22);
+  border-color: rgba(255, 255, 255, 0.4);
+  color: #f4fcff;
 }
 
-/* Strata: each heading row gets a layer line, so the outline reads as a drilled core. */
-.igloo-nav .docx-nav--open [role='treeitem'] {
-  border-bottom: 1px solid rgba(150, 205, 232, 0.35);
+.igloo-nav .docx-nav__toggle:hover {
+  background: rgba(233, 248, 255, 0.34);
+}
+
+/* Strata: a layer line under each heading, so the outline reads as a drilled ice core. */
+.igloo-nav .docx-nav__heading {
+  border-bottom: 1px solid rgba(255, 255, 255, 0.14);
 }
 
 /* ── Pickers ──────────────────────────────────────────────────────────────────────── */
