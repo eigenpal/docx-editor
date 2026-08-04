@@ -51,3 +51,14 @@ export {
   type CommentAnchorRequest,
 } from './comment-writes.ts';
 export { collectRevisionSites, type RevisionAddress } from './tree-op-revisions.ts';
+export {
+  SEARCH_MATCH_LIMIT,
+  SEARCH_QUERY_MAX,
+  findOccurrences,
+  foldCase,
+  isSearchableQuery,
+  isWholeWord,
+  type TextMatchOptions,
+  type TextOccurrence,
+  type TextOccurrences,
+} from './text-match.ts';

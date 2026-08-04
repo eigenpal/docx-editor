@@ -121,10 +121,11 @@ describe('reading the document', () => {
     expect(textOf(host, paragraphs[1]!)).toBe('beta');
   });
 
-  test('the body reads as its paragraphs, joined', () => {
+  test('the body reads as its paragraphs, joined by a paragraph mark', () => {
     const host = open();
     const { body } = handles(host);
-    expect(textOf(host, body)).toBe('alpha\nbeta');
+    // A carriage return, which is the separator Word's own text properties use.
+    expect(textOf(host, body)).toBe('alpha\rbeta');
   });
 
   test('the same object asked for twice is the same handle', () => {
@@ -175,7 +176,7 @@ describe('writing through the one canonical path', () => {
     host.subscribe((event) => events.push(event.revision));
 
     const response = host.execute({
-      operations: [{ op: 'insertText', paragraph: paragraphs[0]!, offset: 0, text: 'X' }],
+      operations: [{ op: 'insertText', at: { paragraph: paragraphs[0]!, offset: 0 }, text: 'X' }],
     });
 
     expect({ ok: response.ok, changed: response.changed }).toEqual({ ok: true, changed: true });
@@ -189,7 +190,7 @@ describe('writing through the one canonical path', () => {
     const host = open();
     const { paragraphs } = handles(host);
     host.execute({
-      operations: [{ op: 'insertText', paragraph: paragraphs[1]!, offset: 4, text: '!' }],
+      operations: [{ op: 'insertText', at: { paragraph: paragraphs[1]!, offset: 4 }, text: '!' }],
     });
     const saved = host.save();
     expect(saved.ok).toBe(true);
@@ -213,8 +214,8 @@ describe('writing through the one canonical path', () => {
     host.subscribe((event) => events.push(event.revision));
     const response = host.execute({
       operations: [
-        { op: 'insertText', paragraph: paragraphs[0]!, offset: 0, text: '<' },
-        { op: 'insertText', paragraph: paragraphs[1]!, offset: 0, text: '>' },
+        { op: 'insertText', at: { paragraph: paragraphs[0]!, offset: 0 }, text: '<' },
+        { op: 'insertText', at: { paragraph: paragraphs[1]!, offset: 0 }, text: '>' },
       ],
     });
     expect(response.ok).toBe(true);
@@ -229,13 +230,13 @@ describe('refusals are typed, and a refused batch writes nothing', () => {
     const host = open();
     const { paragraphs } = handles(host);
     host.execute({
-      operations: [{ op: 'insertText', paragraph: paragraphs[0]!, offset: 0, text: 'X' }],
+      operations: [{ op: 'insertText', at: { paragraph: paragraphs[0]!, offset: 0 }, text: 'X' }],
     });
     const before = textOf(host, paragraphs[0]!);
 
     const response = host.execute({
       expectedRevision: 0,
-      operations: [{ op: 'insertText', paragraph: paragraphs[0]!, offset: 0, text: 'Y' }],
+      operations: [{ op: 'insertText', at: { paragraph: paragraphs[0]!, offset: 0 }, text: 'Y' }],
     });
 
     expect(response.ok).toBe(false);
@@ -256,7 +257,7 @@ describe('refusals are typed, and a refused batch writes nothing', () => {
     const { paragraphs } = handles(host);
     const response = host.execute({
       expectedRevision: host.revision(),
-      operations: [{ op: 'insertText', paragraph: paragraphs[0]!, offset: 0, text: 'X' }],
+      operations: [{ op: 'insertText', at: { paragraph: paragraphs[0]!, offset: 0 }, text: 'X' }],
     });
     expect(response.ok).toBe(true);
   });
@@ -266,7 +267,7 @@ describe('refusals are typed, and a refused batch writes nothing', () => {
     const { paragraphs } = handles(host);
     const forged = { kind: 'paragraph', ref: 'paragraph:999' } as unknown as AutomationHandle;
     const response = host.execute({
-      operations: [{ op: 'insertText', paragraph: forged, offset: 0, text: 'X' }],
+      operations: [{ op: 'insertText', at: { paragraph: forged, offset: 0 }, text: 'X' }],
     });
     expect(response.ok).toBe(false);
     expect(errorCodeAt(response, 0)).toBe('invalid-handle');
@@ -287,7 +288,7 @@ describe('refusals are typed, and a refused batch writes nothing', () => {
     const { paragraphs } = handles(host);
     for (const offset of [6, -1, 1.5, Number.NaN]) {
       const response = host.execute({
-        operations: [{ op: 'insertText', paragraph: paragraphs[0]!, offset, text: 'X' }],
+        operations: [{ op: 'insertText', at: { paragraph: paragraphs[0]!, offset }, text: 'X' }],
       });
       expect({ offset, code: errorCodeAt(response, 0) }).toEqual({
         offset,
@@ -297,7 +298,7 @@ describe('refusals are typed, and a refused batch writes nothing', () => {
     // The end of the paragraph is a legal insertion point, so the bound is not off by one.
     expect(
       host.execute({
-        operations: [{ op: 'insertText', paragraph: paragraphs[0]!, offset: 5, text: '!' }],
+        operations: [{ op: 'insertText', at: { paragraph: paragraphs[0]!, offset: 5 }, text: '!' }],
       }).ok
     ).toBe(true);
   });
@@ -306,7 +307,7 @@ describe('refusals are typed, and a refused batch writes nothing', () => {
     const host = open();
     const { paragraphs } = handles(host);
     const response = host.execute({
-      operations: [{ op: 'insertText', paragraph: paragraphs[0]!, offset: 0, text: '\u0000' }],
+      operations: [{ op: 'insertText', at: { paragraph: paragraphs[0]!, offset: 0 }, text: '\u0000' }],
     });
     expect(response.ok).toBe(false);
     expect(errorCodeAt(response, 0)).toBe('transaction-refused');
@@ -325,8 +326,8 @@ describe('refusals are typed, and a refused batch writes nothing', () => {
 
     const response = host.execute({
       operations: [
-        { op: 'insertText', paragraph: paragraphs[0]!, offset: 0, text: 'good' },
-        { op: 'insertText', paragraph: paragraphs[1]!, offset: 99, text: 'bad' },
+        { op: 'insertText', at: { paragraph: paragraphs[0]!, offset: 0 }, text: 'good' },
+        { op: 'insertText', at: { paragraph: paragraphs[1]!, offset: 99 }, text: 'bad' },
       ],
     });
 
@@ -346,7 +347,7 @@ describe('refusals are typed, and a refused batch writes nothing', () => {
     const response = host.execute({
       operations: [
         { op: 'getText', target: body },
-        { op: 'insertText', paragraph: paragraphs[0]!, offset: 99, text: 'bad' },
+        { op: 'insertText', at: { paragraph: paragraphs[0]!, offset: 99 }, text: 'bad' },
         { op: 'getText', target: paragraphs[0]! },
       ],
     });

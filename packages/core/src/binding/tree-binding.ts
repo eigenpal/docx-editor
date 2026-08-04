@@ -12,9 +12,11 @@
 
 import { Node as PMNode } from 'prosemirror-model';
 import {
+  collectStoryParagraphs,
   findNode,
   isPageBreakNode,
   PAGE_BREAK_CHAR,
+  storyRootsOf,
   type OoxmlNode,
   type OoxmlPart,
   type OoxmlProperty,
@@ -163,54 +165,15 @@ export function bodyParagraphs(part: OoxmlPart): OoxmlNode[] {
  * select-all all need the full set.
  */
 export function allParagraphs(part: OoxmlPart): OoxmlNode[] {
-  const MAX_SDT_NESTING = 32;
+  // The walk itself lives in the store lane (`story-blocks.ts`) because the automation lane
+  // asks the same question and the two must not answer it differently — a paragraph inside a
+  // nested table or a content control has to be in the story for both, or an offset computed
+  // through one and applied through the other lands in a different paragraph.
   const paragraphs: OoxmlNode[] = [];
-  const walkBlocks = (children: readonly OoxmlNode[], sdtDepth = 0): void => {
-    for (const child of children) {
-      if (child.kind === 'paragraph') {
-        paragraphs.push(child);
-      } else if (child.kind === 'table') {
-        for (const row of child.children) {
-          if (row.kind !== 'tableRow') continue;
-          for (const cell of row.children) {
-            if (cell.kind !== 'tableCell') continue;
-            walkBlocks(cell.children, sdtDepth);
-          }
-        }
-      } else if (
-        child.kind === 'generic' &&
-        child.localName === 'sdt' &&
-        sdtDepth < MAX_SDT_NESTING
-      ) {
-        // Block SDT content flattens transparently, matching the layout's story walk —
-        // the paragraphs inside a content control are editable plain paragraphs.
-        for (const inner of child.children) {
-          if (inner.kind !== 'textValue' && inner.localName === 'sdtContent') {
-            walkBlocks(inner.children, sdtDepth + 1);
-          }
-        }
-      }
-    }
-  };
-  const walk = (node: OoxmlNode): void => {
-    if (node.kind === 'textValue') return;
-    // Body, header, footer, and typed note bodies are the story roots that hold editable
-    // block content. Notes parts nest notes under footnotes/endnotes; each note is a story.
-    if (node.kind === 'body' || node.localName === 'hdr' || node.localName === 'ftr') {
-      walkBlocks(node.children);
-      return;
-    }
-    if (node.kind === 'note') {
-      walkBlocks(node.children);
-      return;
-    }
-    if (node.kind === 'footnotes' || node.kind === 'endnotes') {
-      for (const child of node.children) walk(child);
-      return;
-    }
-    for (const child of node.children) walk(child);
-  };
-  walk(part.root);
+  for (const story of storyRootsOf(part)) {
+    if (story.root.kind === 'textValue') continue;
+    collectStoryParagraphs(story.root.children, paragraphs, 0);
+  }
   return paragraphs;
 }
 

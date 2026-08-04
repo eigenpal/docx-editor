@@ -66,6 +66,17 @@ export interface AutomationHandleTable {
   /** The handle for a canonical paragraph id, minted once and reused thereafter. */
   paragraph(paragraphId: string): AutomationHandle<'paragraph'>;
   /**
+   * Point an already-issued paragraph handle at a different canonical id.
+   *
+   * For the one structural case where a paragraph's CONTENT moves to a new node while the old
+   * node keeps the id: inserting a paragraph before another one is a text insert plus a split,
+   * and the split leaves the head — the new paragraph — on the original node. Without this, a
+   * consumer's reference to the paragraph it inserted before would silently name the paragraph
+   * it just created. Nothing else in the lane may call this: an identity that can be re-aimed
+   * for convenience is not an identity.
+   */
+  retarget(fromParagraphId: string, toParagraphId: string): void;
+  /**
    * What a handle names, or null when this table never minted it or the caller's declared
    * kind disagrees with what was minted. Both are `invalid-handle` to the protocol: a ref
    * whose kind can be talked into something else is not opaque.
@@ -112,6 +123,16 @@ export function createHandleTable(): AutomationHandleTable {
       const handle = mint('paragraph', { kind: 'paragraph', paragraphId });
       refByParagraph.set(paragraphId, handle.ref);
       return handle;
+    },
+    retarget(fromParagraphId, toParagraphId) {
+      const ref = refByParagraph.get(fromParagraphId);
+      // Nobody ever asked for this paragraph, so no reference can be pointing at the wrong one.
+      if (!ref || fromParagraphId === toParagraphId) return;
+      refByParagraph.delete(fromParagraphId);
+      targets.set(ref, { kind: 'paragraph', paragraphId: toParagraphId });
+      // The destination is a node this transaction created, so it cannot already have a ref;
+      // guarded anyway, because two refs naming one paragraph would break handle identity.
+      if (!refByParagraph.has(toParagraphId)) refByParagraph.set(toParagraphId, ref);
     },
     resolve(handle, expected) {
       if (!isHandleShaped(handle)) return null;

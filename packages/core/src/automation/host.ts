@@ -19,6 +19,7 @@
 import type { OoxmlPackage } from '../store/package/ooxml-package.ts';
 import type { TreeDocOp } from '../store/store/tree-ops.ts';
 import { createHandleTable } from './handles.ts';
+import { createBatchPlanner, type PlannedOperation } from './plan.ts';
 import { documentReads, type AutomationDocumentReads } from './reads.ts';
 import type { AutomationOperation } from './operations.ts';
 import type {
@@ -32,7 +33,6 @@ import type {
   AutomationOperationResult,
   AutomationSaveResult,
   AutomationUnsubscribe,
-  AutomationValue,
 } from './protocol.ts';
 import type { AutomationDocumentPort } from './document-port.ts';
 
@@ -42,7 +42,6 @@ export interface AutomationHostComposition {
 }
 
 const SKIPPED: AutomationOperationResult = Object.freeze({ status: 'skipped' as const });
-const APPLIED: AutomationValue = Object.freeze({ kind: 'applied' as const });
 
 function automationError(
   code: AutomationErrorCode,
@@ -51,23 +50,6 @@ function automationError(
 ): AutomationError {
   return Object.freeze(detail === undefined ? { code, message } : { code, message, detail });
 }
-
-/**
- * A planned operation, with the query/command split in the TYPE.
- *
- * A command carries the `TreeDocOp` it will commit, so a command that plans successfully
- * without producing an edit is not expressible — it would otherwise report `applied` while
- * writing nothing, and no runtime check catches that as reliably as not allowing it.
- */
-type PlannedOperation =
-  | { readonly ok: true; readonly kind: 'query'; readonly value: AutomationValue }
-  | {
-      readonly ok: true;
-      readonly kind: 'command';
-      readonly value: AutomationValue;
-      readonly op: TreeDocOp;
-    }
-  | { readonly ok: false; readonly error: AutomationError };
 
 /**
  * A batch that answered nothing: the failure at its index, `skipped` everywhere else.
@@ -115,88 +97,6 @@ export function createAutomationHost(composition: AutomationHostComposition): Au
     return value;
   };
 
-  const plan = (
-    operation: AutomationOperation,
-    content: AutomationDocumentReads
-  ): PlannedOperation => {
-    switch (operation.op) {
-      case 'getDocument':
-        return { ok: true, kind: 'query', value: { kind: 'handle', handle: handles.document() } };
-
-      case 'getBody': {
-        if (!handles.resolve(operation.document, 'document')) return invalidHandle('document');
-        return { ok: true, kind: 'query', value: { kind: 'handle', handle: handles.body() } };
-      }
-
-      case 'getParagraphs': {
-        if (!handles.resolve(operation.body, 'body')) return invalidHandle('body');
-        const list = content.bodyParagraphIds.map((id) => handles.paragraph(id));
-        return { ok: true, kind: 'query', value: { kind: 'handles', handles: list } };
-      }
-
-      case 'getText': {
-        if (handles.resolve(operation.target, 'body')) {
-          return { ok: true, kind: 'query', value: { kind: 'text', text: content.bodyText() } };
-        }
-        const paragraph = handles.resolve(operation.target, 'paragraph');
-        if (!paragraph || paragraph.kind !== 'paragraph') return invalidHandle('body|paragraph');
-        const text = content.paragraphText(paragraph.paragraphId);
-        // A handle this host minted whose paragraph is no longer in the body: the ref is
-        // real, the object is gone. `invalid-handle` rather than empty text, so a consumer
-        // holding a stale reference is told rather than shown a plausible answer.
-        if (text === null) return invalidHandle('paragraph-not-in-body');
-        return { ok: true, kind: 'query', value: { kind: 'text', text } };
-      }
-
-      case 'insertText': {
-        const paragraph = handles.resolve(operation.paragraph, 'paragraph');
-        if (!paragraph || paragraph.kind !== 'paragraph') return invalidHandle('paragraph');
-        const text = content.paragraphText(paragraph.paragraphId);
-        if (text === null) return invalidHandle('paragraph-not-in-body');
-        if (typeof operation.text !== 'string') {
-          return {
-            ok: false,
-            error: automationError('unknown-operation', 'insertText needs text', 'text'),
-          };
-        }
-        const { offset } = operation;
-        if (!Number.isInteger(offset) || offset < 0 || offset > text.length) {
-          return {
-            ok: false,
-            error: automationError(
-              'invalid-offset',
-              'offset is outside the paragraph',
-              `${String(offset)} not in 0..${text.length}`
-            ),
-          };
-        }
-        return {
-          ok: true,
-          kind: 'command',
-          value: APPLIED,
-          op: {
-            op: 'insertText',
-            paragraphId: paragraph.paragraphId,
-            offset,
-            text: operation.text,
-          },
-        };
-      }
-
-      default: {
-        const unknown = operation as { readonly op?: unknown };
-        return {
-          ok: false,
-          error: automationError(
-            'unknown-operation',
-            'this host does not implement that operation',
-            String(unknown.op)
-          ),
-        };
-      }
-    }
-  };
-
   const execute = (request: AutomationBatchRequest): AutomationBatchResponse => {
     const operations: readonly AutomationOperation[] = Array.isArray(request?.operations)
       ? request.operations
@@ -235,37 +135,76 @@ export function createAutomationHost(composition: AutomationHostComposition): Au
       );
     }
 
-    const content = readsOf(pkg);
-    const results: AutomationOperationResult[] = [];
+    const planner = createBatchPlanner({
+      handles,
+      reads: readsOf(pkg),
+      capabilities,
+      ...(port.select ? { select: port.select.bind(port) } : {}),
+    });
+
+    // PLAN EVERYTHING FIRST. A query's answer is final here; a command's is a closure, because
+    // a paragraph a command creates has no identity until the transaction lands.
+    const planned: Extract<PlannedOperation, { readonly ok: true }>[] = [];
     const ops: TreeDocOp[] = [];
     let firstCommand = -1;
     for (let index = 0; index < operations.length; index += 1) {
-      const operation = operations[index]!;
-      const planned = plan(operation, content);
-      if (!planned.ok) return refuse(operations, index, planned.error, revision);
-      results.push({ status: 'ok', value: planned.value });
-      if (planned.kind === 'command') {
+      const step = planner.plan(operations[index]!);
+      if (!step.ok) return refuse(operations, index, step.error, revision);
+      planned.push(step);
+      if (step.kind === 'command') {
         if (firstCommand < 0) firstCommand = index;
-        ops.push(planned.op);
+        ops.push(...step.ops);
       }
     }
 
-    if (ops.length === 0) return { ok: true, results, revision, changed: false };
+    let changed = false;
+    if (ops.length > 0) {
+      const applied = port.apply(ops);
+      if (!applied.ok) {
+        return refuse(
+          operations,
+          firstCommand < 0 ? 0 : firstCommand,
+          automationError(
+            'transaction-refused',
+            'the document store refused the transaction',
+            applied.reason
+          ),
+          revision
+        );
+      }
+      changed = applied.changed;
+    }
 
-    const applied = port.apply(ops);
-    if (!applied.ok) {
+    // The committed state, which is the previous one when nothing was written.
+    const after = port.currentPackage();
+    if (!after) {
+      return refuse(
+        operations,
+        0,
+        automationError('document-unavailable', 'this host holds no document right now'),
+        revision
+      );
+    }
+    const post = readsOf(after);
+    const settled = planner.settle(post);
+    if (!settled.ok) {
       return refuse(
         operations,
         firstCommand < 0 ? 0 : firstCommand,
         automationError(
           'transaction-refused',
-          'the document store refused the transaction',
-          applied.reason
+          'the transaction did not produce the document the batch planned',
+          settled.detail
         ),
-        revision
+        port.revision()
       );
     }
-    return { ok: true, results, revision: port.revision(), changed: applied.changed };
+
+    const results: AutomationOperationResult[] = planned.map((step) => ({
+      status: 'ok',
+      value: step.kind === 'query' ? step.value : step.answer(post),
+    }));
+    return { ok: true, results, revision: port.revision(), changed };
   };
 
   return {
@@ -306,12 +245,5 @@ export function createAutomationHost(composition: AutomationHostComposition): Au
       port.dispose();
       reads = null;
     },
-  };
-}
-
-function invalidHandle(detail: string): PlannedOperation {
-  return {
-    ok: false,
-    error: automationError('invalid-handle', 'that handle does not name what it claims', detail),
   };
 }

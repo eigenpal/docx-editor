@@ -344,3 +344,12 @@ export {
   readTrackingSettings,
   type DocumentTrackingSettings,
 } from './tracking-settings.ts';
+export {
+  MAX_STORY_SDT_NESTING,
+  bodyStoryRoot,
+  collectStoryParagraphs,
+  storyParagraphs,
+  storyRootsOf,
+  type OoxmlStoryKind,
+  type OoxmlStoryRoot,
+} from './story-blocks.ts';

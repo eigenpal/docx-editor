@@ -178,8 +178,15 @@ describe('the operation vocabulary declares which operations write', () => {
   test('exactly the command operations are commands', () => {
     // A proxy layer deciding whether a batch needs a write path reads this, so it must not
     // drift from the union the host actually treats as a command.
-    expect([...AUTOMATION_COMMAND_OPERATIONS]).toEqual(['insertText']);
-    expect(isAutomationCommand({ op: 'insertText', paragraph: FORGED, offset: 0, text: 'x' })).toBe(
+    expect([...AUTOMATION_COMMAND_OPERATIONS]).toEqual([
+      'insertText',
+      'replaceSpan',
+      'insertParagraph',
+      'splitParagraph',
+      'deleteParagraph',
+      'selectSpan',
+    ]);
+    expect(isAutomationCommand({ op: 'insertText', at: { paragraph: FORGED, offset: 0 }, text: 'x' })).toBe(
       true
     );
     expect(isAutomationCommand({ op: 'getDocument' })).toBe(false);

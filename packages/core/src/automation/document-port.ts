@@ -40,6 +40,22 @@ export interface AutomationDocumentPort {
   apply(ops: readonly TreeDocOp[]): AutomationPortApplyResult;
   /** DOCX bytes through the normalizing serializer, or null when there is no document. */
   save(): Uint8Array | null;
+  /**
+   * Put a reader's selection or caret on a stretch of the body.
+   *
+   * OPTIONAL, and the one thing about a host that is genuinely not portable: a headless host
+   * has no caret to move, so it omits this and reports `selection: false` rather than
+   * pretending. Called AFTER the batch's transaction, never during it. Positions are canonical
+   * paragraph ids and model offsets — the same vocabulary the ops take, so there is no second
+   * coordinate space to keep in step.
+   */
+  select?(
+    range: {
+      readonly start: { readonly paragraphId: string; readonly offset: number };
+      readonly end: { readonly paragraphId: string; readonly offset: number };
+    },
+    mode: 'select' | 'start' | 'end'
+  ): void;
   /** Fires once per committed change. */
   subscribe(listener: () => void): () => void;
   /** Release what the port holds. Idempotent. */

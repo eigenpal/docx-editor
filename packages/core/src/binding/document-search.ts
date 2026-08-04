@@ -22,35 +22,23 @@
 // skipping tables and other non-paragraph blocks". Table-cell text is therefore not found
 // yet; widening to `allParagraphs` needs the contract's ordinal to be redefined first.
 
-import { paragraphTextOf } from '@docx-editor.dev/core-contract/store';
+import {
+  SEARCH_MATCH_LIMIT,
+  SEARCH_QUERY_MAX,
+  findOccurrences,
+  isSearchableQuery,
+  paragraphTextOf,
+} from '@docx-editor.dev/core-contract/store';
 import type { OoxmlNode, OoxmlPart } from '../store/package/ooxml-tree.ts';
 import { bodyParagraphs } from './tree-binding.ts';
 
-/**
- * Longest accepted query. A query is host input, not file content, but the scan is
- * proportional to it and there is no legitimate find phrase this long.
- */
-export const SEARCH_QUERY_MAX = 256;
-
-/**
- * Most matches one search returns. A single-character query against a long document
- * would otherwise allocate an entry per character; the scan stops here instead. A caller
- * showing a result count treats a full array as "at least this many".
- */
-export const SEARCH_MATCH_LIMIT = 2000;
+export { SEARCH_MATCH_LIMIT, SEARCH_QUERY_MAX };
 
 /** Characters of surrounding paragraph text carried on each side of a match. */
 const CONTEXT_RADIUS = 48;
 
 /** Control characters are flattened to spaces in every string that leaves this module. */
 const CONTROL_CHARS_ALL = /[\u0000-\u001F\u007F-\u009F]/g;
-
-/**
- * A word character for the whole-word test: any Unicode letter or number, plus the
- * underscore. Applied to ONE character at a time, so there is nothing for a backtracking
- * engine to explode on.
- */
-const WORD_CHAR = /[\p{L}\p{N}_]/u;
 
 /** How a search is narrowed. Both flags default to off, matching Word's initial state. */
 export interface DocumentSearchOptions {
@@ -157,37 +145,6 @@ function runAddressAt(
   return { index: 0, offset };
 }
 
-/**
- * Lower-case `text` WITHOUT changing its length.
- *
- * `String.prototype.toLowerCase` can expand (Turkish dotted capital I lowercases to two
- * code units), and an expansion mid-paragraph would slide every offset after it — the
- * match would be reported at the wrong place. The per-unit fallback folds only the
- * characters that stay one unit, so an expanding character simply compares
- * case-sensitively. That is a real degradation, and it is the safe direction: a missed
- * case-insensitive match beats a match reported at an offset the editor then selects.
- */
-function foldCase(text: string): string {
-  const folded = text.toLowerCase();
-  if (folded.length === text.length) return folded;
-  let out = '';
-  for (let index = 0; index < text.length; index += 1) {
-    const char = text[index]!;
-    const lower = char.toLowerCase();
-    out += lower.length === 1 ? lower : char;
-  }
-  return out;
-}
-
-/** Whether a match at `[start, end)` in `text` stands alone as a word. */
-function isWholeWord(text: string, start: number, end: number): boolean {
-  const before = start > 0 ? text[start - 1] : undefined;
-  const after = end < text.length ? text[end] : undefined;
-  if (before !== undefined && WORD_CHAR.test(before)) return false;
-  if (after !== undefined && WORD_CHAR.test(after)) return false;
-  return true;
-}
-
 /** Bound and flatten one file-derived string on its way out of this module. */
 function bounded(raw: string, max: number): string {
   return raw.replace(CONTROL_CHARS_ALL, ' ').slice(0, max);
@@ -206,20 +163,19 @@ export function collectTextMatches(
   options: DocumentSearchOptions = {}
 ): DocumentSearchResult {
   const empty: DocumentSearchResult = { matches: [], truncated: false };
-  if (typeof query !== 'string') return empty;
-  if (query.length === 0 || query.length > SEARCH_QUERY_MAX) return empty;
+  if (!isSearchableQuery(query)) return empty;
 
   const limit =
     options.limit !== undefined && Number.isInteger(options.limit) && options.limit > 0
       ? Math.min(options.limit, SEARCH_MATCH_LIMIT)
       : SEARCH_MATCH_LIMIT;
-  const matchCase = options.matchCase === true;
-  const wholeWord = options.wholeWord === true;
-  const needle = matchCase ? query : foldCase(query);
+  const scan = {
+    ...(options.matchCase === undefined ? {} : { matchCase: options.matchCase }),
+    ...(options.wholeWord === undefined ? {} : { wholeWord: options.wholeWord }),
+  };
 
   const matches: DocumentSearchMatch[] = [];
   let paragraphIndex = 0;
-  let truncated = false;
 
   for (const paragraph of bodyParagraphs(part)) {
     if (!isElement(paragraph)) continue;
@@ -227,40 +183,33 @@ export function collectTextMatches(
     paragraphIndex += 1;
     const text = paragraphTextOf(part, paragraph.id) ?? '';
     if (text.length === 0) continue;
-    const haystack = matchCase ? text : foldCase(text);
 
+    // One global budget, not one per paragraph: the cap is on the whole search.
+    const found = findOccurrences(text, query, limit - matches.length, scan);
     // Run starts are derived once per paragraph that has a hit, not per paragraph:
     // most paragraphs in a document do not match, and the walk is the expensive half.
     let starts: number[] | null = null;
-    let cursor = haystack.indexOf(needle);
-    while (cursor >= 0) {
-      const end = cursor + needle.length;
-      if (!wholeWord || isWholeWord(text, cursor, end)) {
-        if (matches.length >= limit) {
-          truncated = true;
-          return { matches, truncated };
-        }
-        starts ??= runStarts(paragraph);
-        const address = runAddressAt(starts, cursor);
-        matches.push({
-          blockId: paragraph.id,
-          start: cursor,
-          length: needle.length,
-          paragraphIndex: index,
-          runIndex: address.index,
-          runOffset: address.offset,
-          text: bounded(text.slice(cursor, end), SEARCH_QUERY_MAX),
-          contextBefore: bounded(
-            text.slice(Math.max(0, cursor - CONTEXT_RADIUS), cursor),
-            CONTEXT_RADIUS
-          ),
-          contextAfter: bounded(text.slice(end, end + CONTEXT_RADIUS), CONTEXT_RADIUS),
-        });
-      }
-      // Non-overlapping: resume past this occurrence, not one character into it.
-      cursor = haystack.indexOf(needle, end);
+    for (const occurrence of found.matches) {
+      const end = occurrence.start + occurrence.length;
+      starts ??= runStarts(paragraph);
+      const address = runAddressAt(starts, occurrence.start);
+      matches.push({
+        blockId: paragraph.id,
+        start: occurrence.start,
+        length: occurrence.length,
+        paragraphIndex: index,
+        runIndex: address.index,
+        runOffset: address.offset,
+        text: bounded(text.slice(occurrence.start, end), SEARCH_QUERY_MAX),
+        contextBefore: bounded(
+          text.slice(Math.max(0, occurrence.start - CONTEXT_RADIUS), occurrence.start),
+          CONTEXT_RADIUS
+        ),
+        contextAfter: bounded(text.slice(end, end + CONTEXT_RADIUS), CONTEXT_RADIUS),
+      });
     }
+    if (found.truncated) return { matches, truncated: true };
   }
 
-  return { matches, truncated };
+  return { matches, truncated: false };
 }

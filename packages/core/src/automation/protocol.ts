@@ -78,6 +78,23 @@ export type AutomationErrorCode =
   /** The operation is not one this protocol version defines. */
   | 'unknown-operation'
   /**
+   * The value asked to be written is one this host will not write — text carrying a paragraph
+   * mark, a delimiter set with nothing in it. Not `invalid-offset` and not
+   * `unsupported-capability`: the request is well-formed and the host is capable, the CONTENT
+   * is the problem, and writing an approximation of it would mean something else.
+   */
+  | 'unsupported-content'
+  /**
+   * Two operations in one batch make claims on the same paragraph that cannot both hold.
+   *
+   * A batch is one ordered transaction, so its commands are planned against the state at its
+   * start. That is unambiguous until two of them restructure the same paragraph — inserting a
+   * paragraph before it AND writing into it, splitting it twice — where the second command's
+   * positions describe a paragraph the first one already reshaped. Refusing the batch is the
+   * only answer that is not a guess; the caller sequences them across two syncs.
+   */
+  | 'conflicting-operations'
+  /**
    * The host is live but has no document to act on right now — a browser host whose editor
    * is detached between mounts. Distinct from `disposed`: the host may answer again later.
    */
@@ -91,11 +108,40 @@ export interface AutomationError {
   readonly detail?: string;
 }
 
+/**
+ * One end of a stretch of a story: a paragraph, and a UTF-16 offset in it.
+ *
+ * The only addressing vocabulary in this protocol. A stable paragraph handle plus a model
+ * offset is what the tree ops take, what selection uses and what the layout reports — so a
+ * position a consumer reads and a position it then writes at mean the same thing. Painted DOM
+ * indices and document-wide character counters appear nowhere: the first is a picture, and the
+ * second is a coordinate space no part of the engine maintains.
+ */
+export interface AutomationEndpoint {
+  /**
+   * Typed as a handle of any kind on purpose. A ref is opaque, so the only thing that can
+   * establish what one names is the host that minted it — every operation resolves the kind at
+   * the boundary and answers `invalid-handle`. Narrowing the phantom here would add a
+   * compile-time check that holds only inside this repository, while forcing a cast at every
+   * point an object model carries a handle it received from a response.
+   */
+  readonly paragraph: AutomationHandle;
+  readonly offset: number;
+}
+
+/** A stretch of a story between two endpoints, in reading order. */
+export interface AutomationSpan {
+  readonly start: AutomationEndpoint;
+  readonly end: AutomationEndpoint;
+}
+
 /** What an operation answered with. */
 export type AutomationValue =
   | { readonly kind: 'handle'; readonly handle: AutomationHandle }
   | { readonly kind: 'handles'; readonly handles: readonly AutomationHandle[] }
   | { readonly kind: 'text'; readonly text: string }
+  | { readonly kind: 'span'; readonly span: AutomationSpan }
+  | { readonly kind: 'spans'; readonly spans: readonly AutomationSpan[] }
   /** A command that committed. The observable effect is the response's revision/changed. */
   | { readonly kind: 'applied' };
 

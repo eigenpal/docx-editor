@@ -126,7 +126,7 @@ describe('refs are scoped to the host that minted them', () => {
     const own = paragraphsOf(victim)[0]!;
 
     const response = victim.execute({
-      operations: [{ op: 'insertText', paragraph: stolen, offset: 0, text: 'INJECTED' }],
+      operations: [{ op: 'insertText', at: { paragraph: stolen, offset: 0 }, text: 'INJECTED' }],
     });
 
     expect(response.ok).toBe(false);

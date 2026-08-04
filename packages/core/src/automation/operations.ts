@@ -1,40 +1,171 @@
-// The initial typed operation vocabulary.
+// The typed operation vocabulary.
 //
-// Deliberately small. This is the slice that has to prove the whole architecture end to end
-// — name the document, walk its body, read a paragraph, write into one at an offset — and
-// every one of those crosses the full path from the protocol down to
-// `TreeDocumentStore.transact` and back. Anything that does not add a new KIND of crossing
-// (a second read shape, a second command shape) is a later addition to this union rather
-// than a reason to widen the protocol.
+// Small on purpose, and it grows by KIND of crossing rather than by convenience. Every
+// operation here is either a read derived from one canonical package snapshot, or a command
+// that turns into `TreeDocOp`s and commits through the single transaction path. Nothing in
+// between exists: there is no "read after write in the same batch", because a batch is one
+// atomic transaction and a query that answered post-commit state would describe a document
+// nobody had published yet.
 //
-// Text addressing is the engine's own vocabulary and nothing else: a paragraph's stable
-// identity plus a UTF-16 model offset. That is what the tree ops take, what selection uses
-// and what the layout reports, so an automation write lands exactly where a typed one would.
+// ADDRESSING IS ONE VOCABULARY: a stable paragraph handle plus a UTF-16 model offset
+// (`AutomationEndpoint`). A position may also be given as a story EDGE — the start or the end
+// of a body — because an object model that wants "append to the document" would otherwise have
+// to list every paragraph first just to find the last one, and the host already knows.
+//
+// WHERE A HANDLE IS RESOLVED matters for what a command can answer. A read names objects that
+// already exist, so its answer is available while the batch is being planned. A command that
+// CREATES a paragraph cannot name it in advance — the canonical node does not exist yet — so
+// those operations answer after the commit, from the state they made. See `plan.ts`.
 
-import type { AutomationHandle } from './protocol.ts';
+import type { AutomationEndpoint, AutomationHandle } from './protocol.ts';
+
+/**
+ * A position in a story.
+ *
+ * Either exact, or one of a story's two edges. `{ body, at: 'end' }` is the position after the
+ * last character of the last paragraph, which is what "append" means.
+ */
+export type AutomationPoint =
+  | AutomationEndpoint
+  | { readonly body: AutomationHandle; readonly at: 'start' | 'end' };
+
+/**
+ * A stretch of a story to read, replace, or select.
+ *
+ * `{ body }` is the whole story — every paragraph, first offset to last. Spelling it as its own
+ * shape rather than making the caller find the edges keeps "replace the body" a single
+ * operation, which is what makes it one transaction.
+ */
+export type AutomationSpanRef =
+  | { readonly start: AutomationPoint; readonly end: AutomationPoint }
+  | { readonly body: AutomationHandle };
+
+/**
+ * Which paragraph a structural command is anchored at.
+ *
+ * A story edge resolves to its first or last paragraph. An empty story has neither, and the
+ * command is refused rather than inventing a block: creating a paragraph in a story that holds
+ * none is a different operation than inserting beside one, and this protocol has only the
+ * second (see the object model's recorded omissions).
+ */
+export type AutomationParagraphRef =
+  | { readonly paragraph: AutomationHandle }
+  | { readonly body: AutomationHandle; readonly at: 'first' | 'last' };
+
+/**
+ * How a story search is narrowed.
+ *
+ * Every flag is either honoured or REFUSED — never accepted and ignored. A search that quietly
+ * dropped `matchWildcards` would answer plain-text matches to a caller who asked for pattern
+ * ones, which is worse than saying no.
+ */
+export interface AutomationSearchOptions {
+  readonly matchCase?: boolean;
+  readonly matchWholeWord?: boolean;
+  /** Not supported; `true` is refused. Punctuation-insensitive matching is not implemented. */
+  readonly ignorePunct?: boolean;
+  /** Not supported; `true` is refused. Whitespace-insensitive matching is not implemented. */
+  readonly ignoreSpace?: boolean;
+  /** Not supported; `true` is refused. There is no wildcard grammar behind this protocol. */
+  readonly matchWildcards?: boolean;
+  /** Tighten the result cap. Clamped to the engine's own limit; never raised past it. */
+  readonly limit?: number;
+}
+
+/** Where a selection lands. `start`/`end` collapse it to one edge of the span. */
+export type AutomationSelectionMode = 'select' | 'start' | 'end';
 
 export type AutomationOperation =
   /** The document itself — the root every other handle is reached through. */
   | { readonly op: 'getDocument' }
   /** The main story of a document. */
   | { readonly op: 'getBody'; readonly document: AutomationHandle }
-  /** The body's paragraphs, in document order. */
-  | { readonly op: 'getParagraphs'; readonly body: AutomationHandle }
-  /** Text of a body or a paragraph. A body reads as its paragraphs joined by newlines. */
-  | { readonly op: 'getText'; readonly target: AutomationHandle }
   /**
-   * Insert text into a paragraph at a UTF-16 model offset.
+   * A story's paragraphs, in reading order.
    *
-   * Offsets in one batch are validated against the state at the start of the batch, but the
-   * commands apply in order INSIDE one transaction — so two inserts into the same paragraph
-   * shift each other exactly as two sequential edits would. Addressing distinct paragraphs
-   * keeps a batch order-independent.
+   * Includes paragraphs inside tables — descending through rows, cells and nested tables — and
+   * inside block-level content controls, because those are ordinary editable paragraphs and
+   * Word's own paragraph collection contains them. A story with no paragraphs answers none.
+   */
+  | { readonly op: 'getParagraphs'; readonly body: AutomationHandle }
+  /** The paragraphs a span covers, in reading order. */
+  | { readonly op: 'getSpanParagraphs'; readonly span: AutomationSpanRef }
+  /**
+   * Text of a body or a paragraph.
+   *
+   * A story reads as its paragraphs joined by a carriage return — one paragraph mark, one
+   * `\r` — which is the separator Word's own text property uses.
+   */
+  | { readonly op: 'getText'; readonly target: AutomationHandle }
+  /** Text between two endpoints, with a carriage return at every paragraph mark crossed. */
+  | { readonly op: 'getSpanText'; readonly span: AutomationSpanRef }
+  /**
+   * A paragraph's own identity as the DOCUMENT writes it (`w14:paraId`).
+   *
+   * Not an index and not a handle ref: it survives paragraphs being inserted or deleted around
+   * it, and it is the same value a file written by Word carries.
+   */
+  | { readonly op: 'getParagraphId'; readonly paragraph: AutomationHandle }
+  /** Every occurrence of `text` in a story, in reading order, as spans. */
+  | {
+      readonly op: 'search';
+      readonly body: AutomationHandle;
+      readonly text: string;
+      readonly options?: AutomationSearchOptions;
+    }
+  /**
+   * Insert text at a position. Answers the span the inserted text occupies.
+   *
+   * Offsets in one batch are validated against the state at the START of the batch, and the
+   * commands apply in order INSIDE one transaction — so two insertions into the same paragraph
+   * shift each other exactly as two sequential edits would, and the second answer's offsets are
+   * the ones it was planned with. Addressing distinct paragraphs keeps a batch
+   * order-independent.
+   */
+  | { readonly op: 'insertText'; readonly at: AutomationPoint; readonly text: string }
+  /**
+   * Replace a span with text, which may be empty — that is how a deletion is spelled.
+   *
+   * A span that crosses paragraph marks removes the paragraphs between its endpoints and joins
+   * what is left, because that is what deleting a stretch of a document means. A join across a
+   * table-cell boundary is refused by the canonical mutation path, and the whole batch is then
+   * refused: half a deletion is not an outcome this protocol offers.
+   */
+  | { readonly op: 'replaceSpan'; readonly span: AutomationSpanRef; readonly text: string }
+  /**
+   * Insert a paragraph beside another one. Answers the NEW paragraph's handle.
+   *
+   * Resolved after the commit, because the paragraph it names does not exist until then.
    */
   | {
-      readonly op: 'insertText';
-      readonly paragraph: AutomationHandle;
-      readonly offset: number;
+      readonly op: 'insertParagraph';
+      readonly anchor: AutomationParagraphRef;
+      readonly where: 'before' | 'after';
       readonly text: string;
+    }
+  /**
+   * Split a paragraph at every occurrence of any delimiter. Answers a span per resulting
+   * paragraph, in reading order, including the one that keeps the original identity.
+   */
+  | {
+      readonly op: 'splitParagraph';
+      readonly paragraph: AutomationHandle;
+      readonly delimiters: readonly string[];
+      /** Drop the delimiter characters themselves. */
+      readonly trimDelimiters?: boolean;
+      /** Drop leading and trailing whitespace from each resulting paragraph. */
+      readonly trimSpacing?: boolean;
+    }
+  /** Remove a paragraph and everything in it. */
+  | { readonly op: 'deleteParagraph'; readonly paragraph: AutomationHandle }
+  /**
+   * Put the reader's selection on a span. Requires the `selection` capability, so a headless
+   * host refuses it rather than pretending to have a caret.
+   */
+  | {
+      readonly op: 'selectSpan';
+      readonly span: AutomationSpanRef;
+      readonly mode: AutomationSelectionMode;
     };
 
 export type AutomationOperationKind = AutomationOperation['op'];
@@ -44,13 +175,33 @@ export const AUTOMATION_QUERY_OPERATIONS = [
   'getDocument',
   'getBody',
   'getParagraphs',
+  'getSpanParagraphs',
   'getText',
+  'getSpanText',
+  'getParagraphId',
+  'search',
 ] as const satisfies readonly AutomationOperationKind[];
 
 /** Operations that write. Every one of these goes through the single transaction path. */
 export const AUTOMATION_COMMAND_OPERATIONS = [
   'insertText',
+  'replaceSpan',
+  'insertParagraph',
+  'splitParagraph',
+  'deleteParagraph',
+  'selectSpan',
 ] as const satisfies readonly AutomationOperationKind[];
+
+// Compile-time exhaustiveness: a new operation must be classified as a query or a command, or
+// this fails to typecheck. Without it a new operation would default to "not a command" and
+// silently skip the transaction path.
+type _Unclassified = Exclude<
+  AutomationOperationKind,
+  (typeof AUTOMATION_QUERY_OPERATIONS)[number] | (typeof AUTOMATION_COMMAND_OPERATIONS)[number]
+>;
+const _operationsClassified: _Unclassified extends never ? true : ['unclassified', _Unclassified] =
+  true;
+void _operationsClassified;
 
 const COMMANDS: ReadonlySet<string> = new Set(AUTOMATION_COMMAND_OPERATIONS);
 
