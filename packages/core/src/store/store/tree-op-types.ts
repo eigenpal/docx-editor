@@ -70,19 +70,102 @@ export interface OoxmlProperty {
   readonly attributes?: Readonly<Record<string, string>>;
 }
 
+/**
+ * The identity of one revision WITHIN a part: `@w:id`, `@w:author` and `@w:date` together.
+ *
+ * `@w:id` is not unique and not author-scoped, so `(part, id)` alone would merge two authors'
+ * distinct revisions; and one logical revision — a tracked row insertion — is deliberately
+ * many elements sharing an id, which a uniqueness rule could not express at all.
+ */
+export interface RevisionAddress {
+  readonly id: string;
+  readonly author: string;
+  /** Absent when the file wrote no `@w:date`; part of the identity either way. */
+  readonly date?: string;
+}
+
+/** Who a tracked edit is attributed to. `CT_TrackChange` requires an author. */
+export interface RevisionAttributionInput {
+  readonly author: string;
+  /** ISO-8601. Omitted writes no `@w:date`. */
+  readonly date?: string;
+}
+
 export type TreeDocOp =
   | {
       readonly op: 'insertText';
       readonly paragraphId: string;
       readonly offset: number;
       readonly text: string;
+      /**
+       * Write this as a TRACKED insertion, attributed here.
+       *
+       * On the op rather than on the store, so suggesting stays a decision the surface makes
+       * per edit and the write vocabulary stays explicit — a global "everything is tracked
+       * now" flag is exactly what `DocEdits` refuses, because it makes the meaning of an op
+       * depend on state the op does not carry.
+       */
+      readonly revision?: RevisionAttributionInput;
     }
   | {
       readonly op: 'deleteText';
       readonly paragraphId: string;
       readonly start: number;
       readonly end: number;
+      /** Write this as a TRACKED deletion — the characters stay, wrapped in `w:del`. */
+      readonly revision?: RevisionAttributionInput;
     }
+  | {
+      /**
+       * Mark a paragraph's own MARK as inserted or deleted (`w:pPr/w:rPr/w:ins|w:del`,
+       * §17.13.5). The change is to the paragraph break itself, so no character carries it.
+       */
+      readonly op: 'setParagraphMarkRevision';
+      readonly paragraphId: string;
+      readonly kind: 'ins' | 'del';
+      readonly revision: RevisionAttributionInput;
+    }
+  | {
+      /**
+       * Propose merging this paragraph into its PREDECESSOR by striking the predecessor's
+       * mark. Addressed by the SECOND paragraph so a multi-paragraph delete marks each
+       * paragraph's own predecessor rather than stamping the group head N times.
+       */
+      readonly op: 'proposeParagraphMerge';
+      readonly paragraphId: string;
+      readonly revision: RevisionAttributionInput;
+    }
+  | {
+      /**
+       * Place one piece of comment markup at a model offset.
+       *
+       * Separate from the comment BODY, which lives in another part: this op is the story half
+       * of a comment write, and the two are staged in one package transaction.
+       */
+      readonly op: 'insertCommentMarker';
+      readonly paragraphId: string;
+      readonly offset: number;
+      readonly commentId: string;
+      readonly marker: 'start' | 'end' | 'reference';
+    }
+  | {
+      /**
+       * Accept one revision, resolving every site in this part that carries its triple.
+       */
+      readonly op: 'acceptRevision';
+      readonly revision: RevisionAddress;
+    }
+  | { readonly op: 'rejectRevision'; readonly revision: RevisionAddress }
+  | {
+      /**
+       * Accept every revision in the part, in ONE transaction and one history entry.
+       *
+       * Deliberately not a loop over `acceptRevision`: a reviewer who accepts a document's
+       * changes made one decision, and one undo should restore all of them.
+       */
+      readonly op: 'acceptAllRevisions';
+    }
+  | { readonly op: 'rejectAllRevisions' }
   | { readonly op: 'insertTab'; readonly paragraphId: string; readonly offset: number }
   | { readonly op: 'insertHardBreak'; readonly paragraphId: string; readonly offset: number }
   | { readonly op: 'insertPageBreak'; readonly paragraphId: string; readonly offset: number }
@@ -377,6 +460,13 @@ export type TreeDocOpKind = TreeDocOp['op'];
 export const TREE_DOC_OP_KINDS = [
   'insertText',
   'deleteText',
+  'setParagraphMarkRevision',
+  'proposeParagraphMerge',
+  'insertCommentMarker',
+  'acceptRevision',
+  'rejectRevision',
+  'acceptAllRevisions',
+  'rejectAllRevisions',
   'insertTab',
   'insertHardBreak',
   'insertPageBreak',
@@ -451,6 +541,21 @@ export type TreeOpRejection =
   | 'not-a-block'
   | 'block-required'
   | 'carries-section-mark'
+  /** The transaction named a part the package does not hold. */
+  | 'unknown-part'
+  /**
+   * The transaction would have published a package that does not open: a relationship
+   * pointing at a part nobody created, or a part with no declared content type.
+   */
+  | 'package-invariant'
+  /** No revision in this part carries the addressed `(id, author, date)` triple. */
+  | 'unknown-revision'
+  /**
+   * A matched revision is a kind whose accept/reject semantics are structural and not
+   * implemented. Refusing is deliberate: removing the markup alone would report the decision
+   * applied while leaving the row, cell, or section it describes untouched.
+   */
+  | 'unsupported-revision'
   | 'tree-invariant'
   /** Malformed lifecycle args / first-section link — mirrors Editor `invalidArgs`. */
   | 'invalidArgs';

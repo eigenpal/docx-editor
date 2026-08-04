@@ -18,6 +18,7 @@
 import type { OoxmlElement, OoxmlNode } from '@docx-editor.dev/core-contract/store';
 import { shadingFillFromElement } from './ooxml-shading.ts';
 import { revisionRemovesParagraph } from './revision-visibility.ts';
+import type { RevisionDisplayMode } from './revision-projection.ts';
 import {
   EMPTY_TABLE_CELL_STYLE_FORMATTING,
   EMPTY_TABLE_FORMATTING,
@@ -555,7 +556,9 @@ export function readTableStructure(
   table: OoxmlNode,
   contentWidthPt: number,
   depth: number,
-  styleCascade?: StyleCascadeTable
+  styleCascade?: StyleCascadeTable,
+  /** Which revisions the view resolves away; only the proposed result performs the join. */
+  displayMode: RevisionDisplayMode = 'all-markup'
 ): SemanticTableStructure | null {
   if (depth >= MAX_TABLE_NESTING) return null;
   if (table.kind !== 'table') return null;
@@ -720,7 +723,7 @@ export function readTableStructure(
         // A paragraph a tracked revision has removed claims a full line box while rendering
         // nothing; a cell of them is a stack of blank lines that pushes the rest of the table
         // down the page.
-        if (child.kind === 'paragraph' && revisionRemovesParagraph(child)) continue;
+        if (child.kind === 'paragraph' && revisionRemovesParagraph(child, displayMode)) continue;
         if (child.kind === 'paragraph' || child.kind === 'table') blocks.push(child);
       }
       cells.push({

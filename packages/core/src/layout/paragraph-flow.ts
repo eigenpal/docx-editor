@@ -13,11 +13,18 @@ import {
 import {
   piecesOfParagraph,
   propertiesOfRunContainer,
+  type FieldAwarePiece,
   type FieldPageContext,
   type PositionalTab,
   type HyperlinkProjector,
+  type ModelRange,
   type RunPropertyCascader,
 } from './field-projection.ts';
+import {
+  DEFAULT_REVISION_DISPLAY_MODE,
+  type RevisionAttribution,
+  type RevisionDisplayMode,
+} from './revision-projection.ts';
 import type { ParagraphLayoutCache } from './layout-cache.ts';
 import {
   EMPTY_TAB_STOPS,
@@ -68,6 +75,13 @@ export interface ParagraphFlowOptions {
    * link, which is what a table-cell or furniture pass without a resolver gets.
    */
   readonly projectLink?: HyperlinkProjector;
+  /**
+   * Which revisions this break resolves away.
+   *
+   * A different mode is a different break — the proposed result drops deleted text, so lines
+   * wrap elsewhere — so it belongs in the caller's cache key alongside line spacing.
+   */
+  readonly displayMode?: RevisionDisplayMode;
   /** Derived footnote/endnote marks for noteReference / noteRef projection. */
   readonly noteMarks?: import('./note-projection.ts').NoteMarkContext;
 }
@@ -217,6 +231,8 @@ export interface PendingLine {
   leading: number;
   /** When true, layout must start a new page after this line is placed. */
   pageBreakAfter?: boolean;
+  /** Model ranges on this line covering deleted content; see {@link LineRecord.deletedRanges}. */
+  deletedRanges?: readonly ModelRange[];
 }
 
 /**
@@ -238,6 +254,7 @@ export function frozenLine(line: PendingLine): PendingLine {
     baseline: line.baseline,
     leading: line.leading,
     ...(line.pageBreakAfter ? { pageBreakAfter: true } : {}),
+    ...(line.deletedRanges ? { deletedRanges: Object.freeze(line.deletedRanges) } : {}),
   }) as PendingLine;
 }
 
@@ -380,14 +397,23 @@ export function breakParagraph(
   // `w:firstLine`, left (negative) for `w:hanging`. Every later line starts at the indent.
   const firstLineOffset = flow?.firstLineOffset ?? 0;
 
+  // Model ranges the caret must step over. Collected during the piece walk rather than derived
+  // from the emitted spans, because in the proposed result a deletion produces no span at all
+  // and its offsets would otherwise look like ordinary empty positions.
+  const deletedRanges: { start: number; end: number }[] = [];
   const pieces = piecesOfParagraph(
     paragraph,
     inheritedRunProperties,
     pageContext,
     cascadeRuns,
     flow?.projectLink,
-    flow?.noteMarks
+    flow?.noteMarks,
+    flow?.displayMode ?? DEFAULT_REVISION_DISPLAY_MODE,
+    deletedRanges
   );
+  /** Carried onto every span so paint and the review surface read one attribution. */
+  const revisionsOf = (piece: FieldAwarePiece): { revisions?: readonly RevisionAttribution[] } =>
+    piece.revisions === undefined ? {} : { revisions: piece.revisions };
   const emptyStyle =
     inheritedRunProperties.length === 0
       ? DEFAULT_RUN_STYLE
@@ -409,6 +435,28 @@ export function breakParagraph(
   const lineOrigin = (): number => indentLeft + lineOffset();
   const lineAvailable = (): number => Math.max(1, available - lineOffset());
 
+  /** The deleted ranges overlapping one line, clipped to it. */
+  const deletedWithin = (start: number, end: number): ModelRange[] =>
+    deletedRanges
+      .filter((range) => range.start < end && range.end > start)
+      .map((range) => ({ start: Math.max(range.start, start), end: Math.min(range.end, end) }));
+
+  /**
+   * Where the word currently being placed started on this line.
+   *
+   * A word can span RUNS — `<w:del>which</w:del><w:ins>that</w:ins>` is one word, so is
+   * `<w:r><w:b/>un</w:r><w:r>breakable</w:r>` — and a run boundary is not a break opportunity.
+   * Breaking there put half a word at the end of one line and half at the start of the next,
+   * which no word processor does and which changed where every following line broke.
+   *
+   * `-1` means the line has no partial word: the next span may legally start a line.
+   */
+  let wordStartSpan = -1;
+  let wordStartWidth = 0;
+  let wordStartEnd = 0;
+  /** The last character emitted, which decides whether the NEXT span may open a line. */
+  let lastEmitted = '';
+
   const closeLine = (): void => {
     const metrics = measurer.lineMetrics(emptyStyle);
     if (line.height === 0) {
@@ -425,7 +473,11 @@ export function breakParagraph(
     // box. Paint keys its baseline correction off this, and a negative would push the text
     // the wrong way rather than leaving the clipped line alone.
     line.leading = Math.max(0, spaced.height - natural);
+    const deleted = deletedWithin(line.start, line.end);
+    if (deleted.length > 0) line.deletedRanges = deleted;
     lines.push(line);
+    wordStartSpan = -1;
+    wordStartWidth = 0;
     line = {
       spans: [],
       start: line.end,
@@ -451,6 +503,7 @@ export function breakParagraph(
         style: piece.style,
         box: { x: lineOrigin() + line.width, y: 0, width: 0, height: breakMetrics.height },
         ...(piece.link ? { link: piece.link } : {}),
+        ...revisionsOf(piece),
       });
       line.height = Math.max(line.height, breakMetrics.height);
       line.baseline = Math.max(line.baseline, breakMetrics.baseline);
@@ -474,6 +527,7 @@ export function breakParagraph(
         style: piece.style,
         box: { x: lineOrigin() + line.width, y: 0, width: 0, height: breakMetrics.height },
         ...(piece.link ? { link: piece.link } : {}),
+        ...revisionsOf(piece),
       });
       line.height = Math.max(line.height, breakMetrics.height);
       line.baseline = Math.max(line.baseline, breakMetrics.baseline);
@@ -555,8 +609,11 @@ export function breakParagraph(
               }
             : {}),
           ...(piece.link ? { link: piece.link } : {}),
+          // destination rather than re-derived from the paragraph at paint time.
+          ...(destination.leader ? { tabLeader: destination.leader } : {}),
           ...(layoutOwned && !piece.positionalTab ? { projected: true as const } : {}),
           ...(piece.noteNav ? { noteNav: piece.noteNav } : {}),
+          ...revisionsOf(piece),
         });
         line.width += width;
         line.height = Math.max(line.height, metrics.height);
@@ -571,7 +628,53 @@ export function breakParagraph(
       // a wider measureText (eachPage) while painting the real digits.
       const measureSource = piece.measureText ?? candidate;
       const width = measurer.measure(displayText(measureSource, piece.style), piece.style);
-      if (line.width + width > lineAvailable() && line.spans.length > 0) closeLine();
+      // A candidate may open a line only at a real break opportunity. Within a piece,
+      // `wordBoundaries` cuts after spaces and tabs, so every candidate but the first is one.
+      // The FIRST candidate of a piece continues whatever the previous piece ended with, so it
+      // is a break opportunity only if that ended in whitespace.
+      const opensWord =
+        consumed > 0 ||
+        lastEmitted === '' ||
+        /[\s\u00a0]$/.test(lastEmitted) ||
+        /^[\s\u00a0]/.test(candidate);
+      if (opensWord) {
+        wordStartSpan = line.spans.length;
+        wordStartWidth = line.width;
+        wordStartEnd = line.end;
+      }
+      if (line.width + width > lineAvailable() && line.spans.length > 0) {
+        if (opensWord || wordStartSpan <= 0) {
+          closeLine();
+        } else {
+          // Mid-word overflow: carry the whole word to the next line rather than splitting it
+          // at a run boundary. The spans already placed for it are lifted off this line, the
+          // line is closed without them, and they are re-laid at the new origin.
+          const carried = line.spans.splice(wordStartSpan);
+          line.width = wordStartWidth;
+          line.end = wordStartEnd;
+          line.height = 0;
+          line.baseline = 0;
+          for (const span of line.spans) {
+            const spanMetrics = measurer.lineMetrics(span.style);
+            line.height = Math.max(line.height, spanMetrics.height);
+            line.baseline = Math.max(line.baseline, spanMetrics.baseline);
+          }
+          closeLine();
+          for (const span of carried) {
+            const spanMetrics = measurer.lineMetrics(span.style);
+            line.spans.push({
+              ...span,
+              box: { ...span.box, x: lineOrigin() + line.width },
+            });
+            line.width += span.box.width;
+            line.height = Math.max(line.height, spanMetrics.height);
+            line.baseline = Math.max(line.baseline, spanMetrics.baseline);
+            line.end = span.range.end;
+          }
+          wordStartSpan = 0;
+          wordStartWidth = 0;
+        }
+      }
       line.spans.push({
         range: spanRange,
         text: candidate,
@@ -581,11 +684,13 @@ export function breakParagraph(
         ...(piece.link ? { link: piece.link } : {}),
         ...(layoutOwned && !piece.positionalTab ? { projected: true as const } : {}),
         ...(piece.noteNav ? { noteNav: piece.noteNav } : {}),
+        ...revisionsOf(piece),
       });
       line.width += width;
       line.height = Math.max(line.height, metrics.height);
       line.baseline = Math.max(line.baseline, metrics.baseline);
       line.end = layoutOwned ? piece.end : piece.start + boundary;
+      lastEmitted = candidate;
       consumed = boundary;
     }
   }

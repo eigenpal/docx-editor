@@ -33,6 +33,8 @@ export type HonestEmptyInteractionApi = Pick<
 export function createHonestEmptyInteractionApi(deps: {
   getSurface: () => PaginatedSurface | null;
   getMode: () => 'edit' | 'view';
+  /** The LIVE editing mode, which Viewing changes without remounting. */
+  getEditingMode?: () => 'editing' | 'suggesting' | 'viewing';
 }): HonestEmptyInteractionApi {
   return {
     getInteractionFrame: () => emptyInteractionFrame(),
@@ -64,7 +66,13 @@ export function createHonestEmptyInteractionApi(deps: {
         scope: { kind: 'body' as const },
         frameId: emptyInteractionFrame().id,
         modelRevision: surface?.session.revision() ?? 0,
-        editable: surface !== null && surface.session.editable && deps.getMode() !== 'view',
+        // The LIVE mode, not only the construction-time one: hosts gate their chrome on
+        // this, and it read `true` while every command was being refused with `locked`.
+        editable:
+          surface !== null &&
+          surface.session.editable &&
+          deps.getMode() !== 'view' &&
+          deps.getEditingMode?.() !== 'viewing',
         name: { kind: 'absent' as const },
         entries: [],
         focus: { scope: null, focused: false },

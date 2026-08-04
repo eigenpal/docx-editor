@@ -313,6 +313,47 @@ export {
 export { noteMarkKey, projectedNoteMarkText, type NoteMarkContext } from './note-projection.ts';
 export { storyBlocks, noteStoryBlocks } from './story-roots.ts';
 export {
+  commentAnchorsOfStory,
+  commentsOfPart,
+  threadStateOfPart,
+  W15_NAMESPACE_URI,
+  type CommentAnchor,
+  type CommentPosition,
+  type CommentRecord,
+  type CommentThreadState,
+} from './comment-anchors.ts';
+export {
+  activeReviewItem,
+  collectReviewItems,
+  commentBodyText,
+  commentInitials,
+  commentItemsOf,
+  paragraphOrderOfPart,
+  reviewAnchorIndex,
+  reviewItemGeometry,
+  reviewItemKey,
+  reviewItemsAt,
+  revisionItemsOf,
+  type ReviewCommentItem,
+  type ReviewItem,
+  type ReviewModelInput,
+  type ReviewParagraphAnchor,
+  type ReviewPosition,
+  type ReviewRange,
+  type ReviewRevisionItem,
+  type ReviewRevisionKind,
+} from './review-model.ts';
+export {
+  DEFAULT_REVISION_DISPLAY_MODE,
+  formatRevisionOf,
+  paragraphMarkRevisionOf,
+  revisionsAreDeletion,
+  revisionsVisible,
+  type RevisionAttribution,
+  type RevisionDisplayMode,
+  type RevisionKind,
+} from './revision-projection.ts';
+export {
   createShapedMeasurer,
   type LayoutShapingOptions,
   type ShapedMeasurerOptions,
@@ -411,6 +452,7 @@ export {
   hitTestSemantic,
   moveCaret,
   paragraphTextFromLayout,
+  keyedRangeRects,
   selectionRects,
   spansInSelection,
   wordBoundary,
@@ -418,6 +460,7 @@ export {
   type CaretGeometry,
   type MoveCaretOptions,
   type NavigationCommand,
+  type KeyedRange,
   type SelectionRect,
   type SemanticPosition,
   type SemanticSelection,

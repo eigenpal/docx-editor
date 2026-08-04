@@ -165,7 +165,11 @@ export class TreePackageStore {
     this.maxEditableStoryParts = options.maxEditableStoryParts ?? DEFAULT_MAX_EDITABLE_STORY_PARTS;
     this.cascadeNoteReferences =
       options.cascadeDeletedNoteReferences ?? cascadeDeletedNoteReferences;
-    this.body = new TreeDocumentStore(main, { historyLimit: this.historyLimit });
+    // The WHOLE package, not the part alone. A transaction that writes several parts in one
+    // unit — a comment's markers in the story plus its body in `comments.xml` plus the
+    // relationship and content-type override — needs the package as its working set, and a
+    // store handed one part rebuilds a stub package the invariant check then refuses.
+    this.body = new TreeDocumentStore(this.pkg, main.name, { historyLimit: this.historyLimit });
     this.body.setStoryRef({ kind: 'body', partName: main.name });
     // Body is always open; HF stores are opened lazily and count against the cap.
   }
@@ -282,6 +286,10 @@ export class TreePackageStore {
     const result = store.transact(
       (ctx) => {
         build({
+          // The whole context is forwarded, not a hand-picked three: `applyTo` and
+          // `applyPackage` are how a transaction writes the comment or numbering part in the
+          // same unit as the story, and rebuilding the object dropped them.
+          ...ctx,
           apply: (op) => {
             if (!mayDeleteNoteAtoms) {
               if (

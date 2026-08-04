@@ -220,6 +220,41 @@ export function validateTreeOp(part: OoxmlPart, op: TreeDocOp): TreeOpRejection 
     return null;
   }
 
+  if (op.op === 'insertCommentMarker') {
+    const paragraph = findNode(part, op.paragraphId);
+    if (!paragraph) return 'unknown-paragraph';
+    if (!isParagraph(paragraph)) return 'not-a-paragraph';
+    if (!Number.isInteger(op.offset) || op.offset < 0 || op.offset > paragraphLength(paragraph)) {
+      return 'offset-out-of-range';
+    }
+    if (typeof op.commentId !== 'string' || !/^\d+$/.test(op.commentId)) {
+      return 'invalid-property-value';
+    }
+    return null;
+  }
+
+  if (
+    op.op === 'acceptRevision' ||
+    op.op === 'rejectRevision' ||
+    op.op === 'acceptAllRevisions' ||
+    op.op === 'rejectAllRevisions'
+  ) {
+    if (op.op === 'acceptRevision' || op.op === 'rejectRevision') {
+      const address = op.revision;
+      if (typeof address?.id !== 'string' || address.id.length === 0)
+        return 'invalid-property-value';
+      // The schema makes `@w:author` required, so an address without one could not match a
+      // well-formed revision and is a caller error rather than a miss.
+      if (typeof address.author !== 'string') return 'invalid-property-value';
+      if (address.date !== undefined && typeof address.date !== 'string') {
+        return 'invalid-property-value';
+      }
+    }
+    // Presence and resolvability are decided by the same walk that applies the op, so they
+    // are checked there rather than duplicated into a second traversal that could disagree.
+    return null;
+  }
+
   const paragraph = findNode(part, op.paragraphId);
   if (!paragraph) return 'unknown-paragraph';
   if (!isParagraph(paragraph)) return 'not-a-paragraph';
@@ -236,6 +271,20 @@ export function validateTreeOp(part: OoxmlPart, op: TreeDocOp): TreeOpRejection 
     }
     case 'setListLevel': {
       if (!Number.isInteger(op.level) || op.level < 0 || op.level > 8) return 'invalid-range';
+      return null;
+    }
+    case 'proposeParagraphMerge': {
+      if (typeof op.revision?.author !== 'string' || op.revision.author.length === 0) {
+        return 'invalid-property-value';
+      }
+      return null;
+    }
+    case 'setParagraphMarkRevision': {
+      if (op.kind !== 'ins' && op.kind !== 'del') return 'invalid-range';
+      // `CT_TrackChange` makes `@w:author` required, so a mark with none is invalid XML.
+      if (typeof op.revision?.author !== 'string' || op.revision.author.length === 0) {
+        return 'invalid-property-value';
+      }
       return null;
     }
     case 'setParagraphMarkProperties':
@@ -365,6 +414,8 @@ export {
   type AcceptedRunProperty,
   type ImpactClass,
   type OoxmlProperty,
+  type RevisionAddress,
+  type RevisionAttributionInput,
   type TreeDocOp,
   type TreeDocOpKind,
   type TreeOpEffect,

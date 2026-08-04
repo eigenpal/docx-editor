@@ -47,10 +47,18 @@ export function paragraphMarkDeleted(paragraph: OoxmlNode): boolean {
 /**
  * Whether the paragraph would put any text on the page.
  *
- * Deliberately mirrors the container recursion layout itself performs: typed runs and the
- * runs inside a `w:hyperlink` contribute, and any other container (including `w:del` and
- * `w:ins`) does not. If that recursion ever changes, this must change with it or a paragraph
- * that now renders could be suppressed.
+ * Judged in the view this suppression MODELS: the one where the mark deletion has been
+ * accepted and the paragraph joined the next. There, deleted content is gone and inserted
+ * content stays, so `w:del` and `w:moveFrom` render nothing while `w:ins` and `w:moveTo` are
+ * descended into like any other run container — as is `w:hyperlink`, and either can hold the
+ * other.
+ *
+ * Not mode-parameterised on purpose. `storyBlocks` is indexed by section addressing, so a
+ * block list that changed shape with the display mode would move section boundaries under it.
+ *
+ * Descending into insertions is load-bearing: a paragraph whose mark is struck and whose
+ * content is an insertion is Word's shape for "this line was added, then merged upward", and
+ * treating its content as unrendered dropped the added words from every mode.
  */
 function rendersNoText(node: OoxmlNode, depth: number): boolean {
   if (node.kind === 'textValue') return true;
@@ -72,7 +80,11 @@ function rendersNoText(node: OoxmlNode, depth: number): boolean {
       }
       continue;
     }
-    if (child.kind === 'hyperlink' && !rendersNoText(child, depth + 1)) return false;
+    const descends =
+      child.kind === 'hyperlink' ||
+      child.kind === 'revisionInsert' ||
+      child.kind === 'revisionMoveTo';
+    if (descends && !rendersNoText(child, depth + 1)) return false;
   }
   return true;
 }
@@ -81,8 +93,16 @@ function rendersNoText(node: OoxmlNode, depth: number): boolean {
  * True when a tracked revision has removed this paragraph from the rendered document, so
  * layout should emit no box for it at all.
  */
-export function revisionRemovesParagraph(paragraph: OoxmlNode): boolean {
+export function revisionRemovesParagraph(
+  paragraph: OoxmlNode,
+  displayMode: 'all-markup' | 'proposed' | 'original' = 'proposed'
+): boolean {
   if (paragraph.kind !== 'paragraph') return false;
+  // ORIGINAL rejects every revision, so the mark deletion is rejected too and the paragraph
+  // stays — with the words its `w:del` was hiding. ALL-MARKUP shows the deletion struck
+  // through, which is also a line. Only the PROPOSED result actually performs the join, and
+  // it is the only view this suppression describes.
+  if (displayMode !== 'proposed') return false;
   if (!paragraphMarkDeleted(paragraph)) return false;
   return rendersNoText(paragraph, 0);
 }

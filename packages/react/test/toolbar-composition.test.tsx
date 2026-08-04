@@ -585,16 +585,37 @@ describe('the shaped parts', () => {
     expect(editor().snapshot().formatting?.highlight).toBe('cyan');
   });
 
-  test('an undriven dropdown renders as a DISABLED combobox-lookalike, never a control', () => {
+  test('every dropdown-shaped slot is now a real control, so none renders as a lookalike', () => {
+    // This used to pin the picker LOOKALIKE — a disabled combobox for a dropdown-shaped slot
+    // the engine did not own. Both slots that needed it grew real controls (`list.lineSpacing`
+    // and `review.editingMode`), so the lookalike has no subject left and the helper that
+    // built it is gone. What matters now is the opposite: neither renders inert.
     const { view } = mountToolbar(<DocxEditorToolbar />);
-    for (const slot of ['review.editingMode']) {
-      const picker = view.container.querySelector(`[data-slot="${slot}"]`)!;
-      expect(picker.tagName).toBe('SPAN');
-      expect(picker.getAttribute('aria-disabled')).toBe('true');
-      expect(picker.className).toContain('docx-toolbar__picker');
-      // No interactive element inside: nothing to click, nothing faked.
-      expect(picker.querySelector('button')).toBeNull();
+    for (const slot of ['list.lineSpacing', 'review.editingMode']) {
+      const part = view.container.querySelector(`[data-slot="${slot}"]`)!;
+      expect(part).not.toBeNull();
+      expect(part.getAttribute('aria-disabled')).not.toBe('true');
+      expect(part.querySelector('button')).not.toBeNull();
     }
+  });
+
+  test('the editing-mode control shows the current mode and switches it', () => {
+    const { view, editor } = mountToolbar(<DocxEditorToolbar />);
+    const trigger = view.container.querySelector('[data-testid="editing-mode-trigger"]')!;
+    expect(trigger.getAttribute('data-mode')).toBe('editing');
+
+    act(() => {
+      (trigger as HTMLButtonElement).click();
+    });
+    const suggesting = view.container.querySelector('[data-testid="editing-mode-suggesting"]')!;
+    act(() => {
+      (suggesting as HTMLButtonElement).click();
+    });
+
+    expect(editor().getEditingMode()).toBe('suggesting');
+    expect(
+      view.container.querySelector('[data-testid="editing-mode-trigger"]')!.getAttribute('data-mode')
+    ).toBe('suggesting');
   });
 
   test('the style picker lists the DOCUMENT paragraph styles and a pick applies one', async () => {
@@ -912,19 +933,22 @@ describe('enabled state is the engine answer, not a registry constant', () => {
     expect(outdent.disabled).toBe(false);
   });
 
-  test('a slot with no command is dead with the engine reason, inside the default bar', () => {
+  test('the default bar has no dead controls left', () => {
+    // This test carried a shrinking list of slots the default bar rendered with no command
+    // behind them — `text.link`, then `script.super`/`script.sub`/`format.clear`, and last
+    // `review.comments`, which now toggles the review pane. The list is empty, so the
+    // assertion inverts: nothing the default bar renders may report "not wired". The
+    // remaining unwired slots (image, table, TOC) are contextual and not in this bar.
     const { view } = mountToolbar(<DocxEditorToolbar />);
-    // `text.link` is deliberately absent: it graduated to a chrome-driven slot (enabled
-    // by the engine, dispatched by the popover), so it is no longer an example of one.
-    // Nor are `script.super`/`script.sub`/`format.clear` — they graduated to real
-    // commands, which is exactly what this list is supposed to shrink by. Comments are
-    // the last unwired control the DEFAULT bar renders; the remaining unwired slots
-    // (image, table) are contextual and not in it.
-    for (const slot of ['review.comments']) {
-      const button = view.container.querySelector(`[data-slot="${slot}"]`) as HTMLButtonElement;
-      expect(button.disabled, slot).toBe(true);
-      expect(button.title, slot).toBe('not wired to an editor command');
-    }
+    // The compound parts put `data-slot` on a wrapper and the tooltip on the button inside
+    // it, so scanning `[data-slot]` for a title was blind to exactly the parts this covers.
+    // Scan every element carrying the reason, then name the slot by walking up to it.
+    const controls = [...view.container.querySelectorAll('[data-slot]')];
+    expect(controls.length).toBeGreaterThan(10);
+    const dead = [...view.container.querySelectorAll('[title]')].filter(
+      (part) => part.getAttribute('title') === 'not wired to an editor command'
+    );
+    expect(dead.map((part) => part.closest('[data-slot]')?.getAttribute('data-slot'))).toEqual([]);
   });
 
   test('a wired control the engine refuses NOW shows the engine reason', async () => {

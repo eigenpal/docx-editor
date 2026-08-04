@@ -38,3 +38,12 @@ export {
   type StoryTargetRejection,
   type TreePackageStoreOptions,
 } from './tree-package-store.ts';
+export {
+  addComment,
+  commentPartNameOf,
+  hasCommentPart,
+  type AddCommentRequest,
+  type AddCommentResult,
+  type CommentAnchorRequest,
+} from './comment-writes.ts';
+export { collectRevisionSites, type RevisionAddress } from './tree-op-revisions.ts';

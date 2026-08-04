@@ -48,12 +48,21 @@ const narrow = `${grid(1440, 1440)}<w:tr>${cell()}${cell()}</w:tr>`;
 const structureOf = (bodyXml: string) =>
   readTableStructure(tableNode(bodyXml), CONTENT_WIDTH_PT, 0)!;
 
-function layoutBody(bodyXml: string) {
-  return layoutSemanticDocument(documentOf(bodyXml), 0, { measurer: createFixedMeasurer() });
+function layoutBody(
+  bodyXml: string,
+  displayMode: 'all-markup' | 'proposed' | 'original' = 'all-markup'
+) {
+  return layoutSemanticDocument(documentOf(bodyXml), 0, {
+    measurer: createFixedMeasurer(),
+    displayMode,
+  });
 }
 
-function firstTable(bodyXml: string): TableFragmentRecord {
-  const fragment = layoutBody(bodyXml)
+function firstTable(
+  bodyXml: string,
+  displayMode: 'all-markup' | 'proposed' | 'original' = 'all-markup'
+): TableFragmentRecord {
+  const fragment = layoutBody(bodyXml, displayMode)
     .pages.flatMap((page) => page.fragments)
     .find((item): item is TableFragmentRecord => item.kind === 'table');
   if (!fragment) throw new Error('no table fragment');
@@ -202,10 +211,14 @@ describe('a tracked revision can remove a paragraph from the rendered document',
   });
 
   test('the removed paragraph claims no line box in the body flow', () => {
+    // In the PROPOSED result, which is the view this suppression describes: the mark deletion
+    // is accepted there, so the join actually happens. All-markup still shows the paragraph
+    // with its text struck through, and the case below pins that.
     const layout = layoutBody(
       `<w:p><w:r><w:t>above</w:t></w:r></w:p>` +
         markDeleted(deletedRun('gone')) +
-        `<w:p><w:r><w:t>below</w:t></w:r></w:p>`
+        `<w:p><w:r><w:t>below</w:t></w:r></w:p>`,
+      'proposed'
     );
     const paragraphs = layout.pages
       .flatMap((page) => page.fragments)
@@ -222,15 +235,37 @@ describe('a tracked revision can remove a paragraph from the rendered document',
     expect(paragraphs[1]!.box.y).toBeCloseTo(paragraphs[0]!.box.y + paragraphs[0]!.box.height, 6);
   });
 
+  test('all-markup keeps the paragraph, because the struck words are still on the page', () => {
+    // The suppression describes the accepted view only. A reviewer reading the markup has to
+    // see what is being removed, so the paragraph renders with its text struck through.
+    const layout = layoutBody(
+      `<w:p><w:r><w:t>above</w:t></w:r></w:p>` +
+        markDeleted(deletedRun('gone')) +
+        `<w:p><w:r><w:t>below</w:t></w:r></w:p>`
+    );
+    const text = layout.pages
+      .flatMap((page) => page.fragments)
+      .filter((f): f is ParagraphFragmentRecord => f.kind === 'paragraph')
+      .map((p) =>
+        p.lines
+          .flatMap((l) => l.spans)
+          .map((s) => s.text)
+          .join('')
+      );
+    expect(text).toEqual(['above', 'gone', 'below']);
+  });
+
   test('a cell of removed paragraphs collapses instead of stacking blank lines', () => {
     const dead = markDeleted(deletedRun('gone')).repeat(8);
     const tall = firstTable(
       `<w:tbl><w:tblPr/>${grid(1440, 1440)}` +
-        `<w:tr><w:tc>${dead}<w:p><w:r><w:t>real</w:t></w:r></w:p></w:tc>${cell()}</w:tr></w:tbl>`
+        `<w:tr><w:tc>${dead}<w:p><w:r><w:t>real</w:t></w:r></w:p></w:tc>${cell()}</w:tr></w:tbl>`,
+      'proposed'
     );
     const plain = firstTable(
       `<w:tbl><w:tblPr/>${grid(1440, 1440)}` +
-        `<w:tr><w:tc><w:p><w:r><w:t>real</w:t></w:r></w:p></w:tc>${cell()}</w:tr></w:tbl>`
+        `<w:tr><w:tc><w:p><w:r><w:t>real</w:t></w:r></w:p></w:tc>${cell()}</w:tr></w:tbl>`,
+      'proposed'
     );
     expect(tall.box.height).toBeCloseTo(plain.box.height, 6);
   });

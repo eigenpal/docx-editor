@@ -16,6 +16,7 @@
 
 import type { OoxmlElement, OoxmlNode, OoxmlPart } from '@docx-editor.dev/core-contract/store';
 import { revisionRemovesParagraph } from './revision-visibility.ts';
+import type { RevisionDisplayMode } from './revision-projection.ts';
 
 /** Nested `w:sdt` wrappers deeper than this stop flattening; content stays preserved. */
 const MAX_SDT_NESTING = 32;
@@ -36,7 +37,7 @@ function storyRootOf(part: OoxmlPart): OoxmlElement | undefined {
   return findBody(root);
 }
 
-function collectStoryBlocks(root: OoxmlElement): OoxmlElement[] {
+function collectStoryBlocks(root: OoxmlElement, displayMode: RevisionDisplayMode): OoxmlElement[] {
   const blocks: OoxmlElement[] = [];
   const collect = (children: readonly OoxmlNode[], depth: number): void => {
     for (const child of children) {
@@ -44,7 +45,7 @@ function collectStoryBlocks(root: OoxmlElement): OoxmlElement[] {
         // A paragraph whose mark AND content a tracked revision deleted is not part of the
         // rendered document; without this it reaches pagination with no spans and still
         // claims a full line box.
-        if (child.kind === 'paragraph' && revisionRemovesParagraph(child)) continue;
+        if (child.kind === 'paragraph' && revisionRemovesParagraph(child, displayMode)) continue;
         blocks.push(child);
         continue;
       }
@@ -65,10 +66,13 @@ function collectStoryBlocks(root: OoxmlElement): OoxmlElement[] {
  * The story's blocks — paragraphs and tables — in document order, flattening through
  * block-level SDT wrappers.
  */
-export function storyBlocks(part: OoxmlPart): OoxmlElement[] {
+export function storyBlocks(
+  part: OoxmlPart,
+  displayMode: RevisionDisplayMode = 'all-markup'
+): OoxmlElement[] {
   const root = storyRootOf(part);
   if (!root) return [];
-  return collectStoryBlocks(root);
+  return collectStoryBlocks(root, displayMode);
 }
 
 /**
@@ -77,7 +81,10 @@ export function storyBlocks(part: OoxmlPart): OoxmlElement[] {
  * The footnotes/endnotes part root is never a story; each note is laid out independently
  * so line ids and incremental convergence stay namespaced by note identity.
  */
-export function noteStoryBlocks(note: OoxmlNode): OoxmlElement[] {
+export function noteStoryBlocks(
+  note: OoxmlNode,
+  displayMode: RevisionDisplayMode = 'all-markup'
+): OoxmlElement[] {
   if (note.kind !== 'note') return [];
-  return collectStoryBlocks(note);
+  return collectStoryBlocks(note, displayMode);
 }

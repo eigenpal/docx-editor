@@ -1,0 +1,557 @@
+// Adding a comment, and replying to one.
+//
+// This is the write the package transaction exists for. One reply touches the story (three
+// markers), `comments.xml` (the body, created if the package has none), `commentsExtended.xml`
+// (the parent link, likewise), the relationship part and the content types. All of it commits
+// together or none of it does, so there is never a story referencing a comment that does not
+// exist, and one undo takes the whole reply back.
+//
+// Replying to a TRACKED CHANGE lands here too. OOXML gives `w:ins` and `w:del` no body and no
+// thread — they carry `(@w:id, @w:author, @w:date)` and nothing else — so a reply against a
+// revision is a comment anchored over that revision's range. There is no other faithful reading.
+
+import {
+  relationshipsOf,
+  resolveContentTypeOf,
+  withNewPart,
+  withRelationship,
+} from '../package/package-edit.ts';
+import { withPart, type OoxmlPackage } from '../package/ooxml-package.ts';
+import { insertChildren, findNode, replaceNode } from '../package/ooxml-edit.ts';
+import { resolveInternalTarget } from '../package/opc-names.ts';
+import {
+  WML_NAMESPACE_URI,
+  readOoxmlPart,
+  type OoxmlElement,
+  type OoxmlNode,
+  type OoxmlPart,
+} from '../package/ooxml-tree.ts';
+import { W14_NAMESPACE_URI, XML_NAMESPACE_URI } from '../package/ooxml-shared.ts';
+import { isValidParaId, mintParaId, usedParaIds, w14RootPrefix } from '../package/para-id.ts';
+import type { TreeDocumentStore } from './tree-store.ts';
+import type { TreeOpRejection } from './tree-op-validate.ts';
+
+const COMMENTS_PART = '/word/comments.xml';
+const COMMENTS_EXTENDED_PART = '/word/commentsExtended.xml';
+const COMMENTS_TYPE = 'application/vnd.openxmlformats-officedocument.wordprocessingml.comments+xml';
+const COMMENTS_EXTENDED_TYPE =
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.commentsExtended+xml';
+const COMMENTS_REL = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/comments';
+const COMMENTS_EXTENDED_REL =
+  'http://schemas.microsoft.com/office/2011/relationships/commentsExtended';
+const W15_NAMESPACE_URI = 'http://schemas.microsoft.com/office/word/2012/wordml';
+
+/** Where a comment is anchored, in the model offset space of one story. */
+export interface CommentAnchorRequest {
+  readonly paragraphId: string;
+  readonly start: number;
+  /** May sit in the same paragraph or a later one; `endParagraphId` names it when it differs. */
+  readonly end: number;
+  readonly endParagraphId?: string;
+}
+
+export interface AddCommentRequest {
+  readonly anchor: CommentAnchorRequest;
+  /** Required by `CT_TrackChange`. A comment without one writes invalid XML. */
+  readonly author: string;
+  readonly initials?: string;
+  /** ISO-8601. Absent writes no `@w:date`, because inventing one is a content change. */
+  readonly date?: string;
+  readonly text: string;
+  /** The comment this replies to. Its thread link is written to `commentsExtended.xml`. */
+  readonly replyToCommentId?: string;
+}
+
+export type AddCommentResult =
+  | { readonly ok: true; readonly commentId: string }
+  | { readonly ok: false; readonly reason: TreeOpRejection | 'invalid-author' };
+
+function attribute(
+  node: OoxmlElement,
+  namespaceUri: string,
+  localName: string
+): string | undefined {
+  for (const entry of node.attributes) {
+    if (entry.localName === localName && entry.namespaceUri === namespaceUri) return entry.value;
+  }
+  return undefined;
+}
+
+function wmlAttr(localName: string, value: string): OoxmlElement['attributes'][number] {
+  return {
+    kind: 'genericExtension' as const,
+    namespaceUri: WML_NAMESPACE_URI,
+    localName,
+    prefix: 'w',
+    value,
+  };
+}
+
+/**
+ * Build an element with an explicit KIND.
+ *
+ * Typed rather than generic on purpose: everything that reads comments matches on kind, so a
+ * body written as generic nodes would serialize correctly and be invisible to the reader in the
+ * same session — the comment would appear only after a save and reopen.
+ */
+function element(
+  id: string,
+  kind: OoxmlElement['kind'],
+  namespaceUri: string,
+  prefix: string,
+  localName: string,
+  attributes: OoxmlElement['attributes'],
+  children: readonly OoxmlNode[],
+  bindings: readonly { prefix: string; namespaceUri: string }[] = []
+): OoxmlElement {
+  return {
+    id,
+    kind,
+    namespaceUri,
+    localName,
+    prefix,
+    namespaceBindings: bindings,
+    attributes,
+    children,
+  } as OoxmlElement;
+}
+
+/** The comment part this story points at, or the conventional name when it has none yet. */
+function commentsPartNameFor(pkg: OoxmlPackage, storyPartName: string): string {
+  for (const record of relationshipsOf(pkg, storyPartName)) {
+    if (record.type !== COMMENTS_REL) continue;
+    const resolved = resolveInternalTarget(storyPartName, record.rawTarget);
+    if (resolved.ok) return resolved.partName;
+  }
+  return COMMENTS_PART;
+}
+
+function extendedPartNameFor(pkg: OoxmlPackage, storyPartName: string): string {
+  for (const record of relationshipsOf(pkg, storyPartName)) {
+    if (record.type !== COMMENTS_EXTENDED_REL) continue;
+    const resolved = resolveInternalTarget(storyPartName, record.rawTarget);
+    if (resolved.ok) return resolved.partName;
+  }
+  return COMMENTS_EXTENDED_PART;
+}
+
+/** Highest `w:comment/@w:id` in the part, so the next is seeded from the document. */
+function nextCommentId(part: OoxmlPart | undefined): string {
+  if (!part) return '0';
+  let highest = -1;
+  const visit = (node: OoxmlNode): void => {
+    if (node.kind === 'textValue') return;
+    if (node.kind === 'comment') {
+      const raw = attribute(node, WML_NAMESPACE_URI, 'id');
+      // `ST_DecimalNumber` is unbounded in the schema and signed 32-bit in Word, so a value
+      // outside that range is ignored for seeding rather than used and overflowed.
+      if (raw !== undefined && /^\d{1,10}$/.test(raw)) {
+        const value = Number(raw);
+        if (Number.isSafeInteger(value) && value <= 2_147_483_647 && value > highest) {
+          highest = value;
+        }
+      }
+    }
+    for (const child of node.children) visit(child);
+  };
+  visit(part.root);
+  return String(highest + 1);
+}
+
+/** Every `w14:paraId` already used anywhere in the package, so a mint cannot collide. */
+function paraIdsInPackage(pkg: OoxmlPackage): Set<string> {
+  const used = new Set<string>();
+  for (const part of pkg.parts.values()) {
+    for (const value of usedParaIds(part.root)) used.add(value);
+  }
+  return used;
+}
+
+/** The `w14:paraId` of a comment's first paragraph, when it has one. */
+function paraIdOfComment(part: OoxmlPart | undefined, commentId: string): string | null {
+  if (!part) return null;
+  let found: string | null = null;
+  const visit = (node: OoxmlNode): void => {
+    if (found !== null || node.kind === 'textValue') return;
+    if (node.kind === 'comment' && attribute(node, WML_NAMESPACE_URI, 'id') === commentId) {
+      for (const child of node.children) {
+        if (child.kind !== 'paragraph') continue;
+        const value = attribute(child, W14_NAMESPACE_URI, 'paraId');
+        if (value !== undefined && isValidParaId(value)) found = value.toUpperCase();
+        return;
+      }
+      return;
+    }
+    for (const child of node.children) visit(child);
+  };
+  visit(part.root);
+  return found;
+}
+
+/** The paragraph a comment's `w14:paraId` belongs on: its first, which is where Word puts it. */
+function firstParagraphOfComment(
+  part: OoxmlPart | undefined,
+  commentId: string
+): OoxmlElement | null {
+  if (!part) return null;
+  let found: OoxmlElement | null = null;
+  const visit = (node: OoxmlNode): void => {
+    if (found !== null || node.kind === 'textValue') return;
+    if (node.kind === 'comment' && attribute(node, WML_NAMESPACE_URI, 'id') === commentId) {
+      for (const child of node.children) {
+        if (child.kind === 'paragraph') {
+          found = child;
+          return;
+        }
+      }
+      return;
+    }
+    for (const child of node.children) visit(child);
+  };
+  visit(part.root);
+  return found;
+}
+
+/**
+ * Bind the `w14` prefix on a part root if it is not bound already.
+ *
+ * `w14:paraId` cannot be written into a part whose root does not declare the namespace: the
+ * attribute's prefix would resolve to nothing and the tree invariants reject it as an invalid
+ * QName. Word's own comment parts often do not declare `w14`, because until something needs a
+ * paraId nothing in them uses it.
+ */
+function withW14Binding(part: OoxmlPart): { part: OoxmlPart; prefix: string } {
+  const existing = w14RootPrefix(part.root);
+  if (existing !== null) return { part, prefix: existing };
+  const bound: OoxmlElement = {
+    ...part.root,
+    namespaceBindings: [
+      ...part.root.namespaceBindings,
+      { prefix: 'w14', namespaceUri: W14_NAMESPACE_URI },
+    ],
+  } as OoxmlElement;
+  return { part: { ...part, root: bound }, prefix: 'w14' };
+}
+
+/** `<w:comment>` with one paragraph of plain text, carrying a minted `w14:paraId`. */
+function commentElement(
+  commentId: string,
+  paraId: string,
+  request: AddCommentRequest,
+  paraIdPrefix: string
+): OoxmlElement {
+  const base = `${COMMENTS_PART}#comment-${commentId}`;
+  // `xml:space="preserve"` when the body has an edge space, which is what a conformant
+  // reader is entitled to drop — Word writes the attribute for exactly this case. Omitted
+  // otherwise, so an ordinary reply adds no attribute the file did not need.
+  const preservesSpace = request.text !== request.text.trim();
+  const text = element(
+    `${base}.t`,
+    'text',
+    WML_NAMESPACE_URI,
+    'w',
+    't',
+    preservesSpace
+      ? [
+          {
+            kind: 'xmlSpace' as const,
+            namespaceUri: XML_NAMESPACE_URI,
+            localName: 'space' as const,
+            prefix: 'xml' as const,
+            value: 'preserve' as const,
+          },
+        ]
+      : [],
+    [{ id: `${base}.tv`, kind: 'textValue', value: request.text }]
+  );
+  // Word's own shape: the body carries `CommentText`, and the run carries
+  // `CommentReference`. Without them a comment renders in body formatting and the pane loses
+  // the styling every other editor gives it.
+  const runProperties = element(
+    `${base}.rPr`,
+    'runProperties',
+    WML_NAMESPACE_URI,
+    'w',
+    'rPr',
+    [],
+    [
+      element(
+        `${base}.rStyle`,
+        'generic',
+        WML_NAMESPACE_URI,
+        'w',
+        'rStyle',
+        [wmlAttr('val', 'CommentReference')],
+        []
+      ),
+    ]
+  );
+  const run = element(`${base}.r`, 'run', WML_NAMESPACE_URI, 'w', 'r', [], [runProperties, text]);
+  const paragraphProperties = element(
+    `${base}.pPr`,
+    'paragraphProperties',
+    WML_NAMESPACE_URI,
+    'w',
+    'pPr',
+    [],
+    [
+      element(
+        `${base}.pStyle`,
+        'generic',
+        WML_NAMESPACE_URI,
+        'w',
+        'pStyle',
+        [wmlAttr('val', 'CommentText')],
+        []
+      ),
+    ]
+  );
+  const paragraph = element(
+    `${base}.p`,
+    'paragraph',
+    WML_NAMESPACE_URI,
+    'w',
+    'p',
+    [
+      {
+        kind: 'genericExtension' as const,
+        namespaceUri: W14_NAMESPACE_URI,
+        localName: 'paraId',
+        prefix: paraIdPrefix,
+        value: paraId,
+      },
+    ],
+    [paragraphProperties, run]
+  );
+  return element(
+    base,
+    'comment',
+    WML_NAMESPACE_URI,
+    'w',
+    'comment',
+    [
+      wmlAttr('id', commentId),
+      wmlAttr('author', request.author),
+      ...(request.initials === undefined ? [] : [wmlAttr('initials', request.initials)]),
+      ...(request.date === undefined ? [] : [wmlAttr('date', request.date)]),
+    ],
+    [paragraph]
+  );
+}
+
+function emptyPart(name: string, xml: string): OoxmlElement | null {
+  const parsed = readOoxmlPart(xml, { name, contentType: 'application/xml' });
+  return parsed.ok ? parsed.part.root : null;
+}
+
+/**
+ * Add a comment, or a reply, in ONE transaction.
+ *
+ * The comment id and the `w14:paraId` are computed before the transaction opens, because the
+ * story markers have to carry the same id the body does and deriving each separately is how the
+ * two come to disagree.
+ *
+ * `w14:paraId` is minted here and only here: on a comment WRITE. Allocating on load would
+ * rewrite a document nobody edited and break fingerprint equality on an untouched round trip.
+ */
+export function addComment(store: TreeDocumentStore, request: AddCommentRequest): AddCommentResult {
+  // `CT_TrackChange` makes `@w:author` required, so a comment without one is invalid XML.
+  // Refusing here makes that state unrepresentable rather than repaired later.
+  if (typeof request.author !== 'string' || request.author.length === 0) {
+    return { ok: false, reason: 'invalid-author' };
+  }
+
+  const pkg = store.package;
+  const storyPartName = store.part.name;
+  const commentsName = commentsPartNameFor(pkg, storyPartName);
+  const extendedName = extendedPartNameFor(pkg, storyPartName);
+  const commentsPart = pkg.parts.get(commentsName);
+  const commentId = nextCommentId(commentsPart);
+  const paraId = mintParaId(`${commentsName}#${commentId}`, paraIdsInPackage(pkg));
+
+  // A reply's parent needs a `w14:paraId`, because `w15:commentsEx` keys the thread by it and
+  // guessing the parent by position is exactly what R7 refuses. Plenty of real files have
+  // none — `w14:paraId` is an extension, and an export from another editor omits it — so one
+  // is MINTED for the parent as part of this same transaction rather than refusing the reply.
+  // That is a write during an edit, which is allowed; what is not allowed is stamping a
+  // document nobody edited, and this touches only the comment being replied to.
+  const existingParentParaId =
+    request.replyToCommentId === undefined
+      ? null
+      : paraIdOfComment(commentsPart, request.replyToCommentId);
+  const parentTarget =
+    request.replyToCommentId !== undefined && existingParentParaId === null
+      ? firstParagraphOfComment(commentsPart, request.replyToCommentId)
+      : null;
+  // A reply to a comment the part does not hold cannot be linked to anything.
+  if (request.replyToCommentId !== undefined && existingParentParaId === null && !parentTarget) {
+    return { ok: false, reason: 'unknown-revision' };
+  }
+  const mintedParentParaId = parentTarget
+    ? mintParaId(
+        `${commentsName}#parent-${request.replyToCommentId}`,
+        new Set([...paraIdsInPackage(pkg), paraId])
+      )
+    : null;
+  const parentParaId = existingParentParaId ?? mintedParentParaId;
+
+  const endParagraphId = request.anchor.endParagraphId ?? request.anchor.paragraphId;
+
+  const result = store.transact((ctx) => {
+    // The comment part first, so the relationship the story needs already has a target.
+    ctx.applyPackage((current) => {
+      if (current.parts.has(commentsName)) return current;
+      const root = emptyPart(commentsName, `<w:comments xmlns:w="${WML_NAMESPACE_URI}"/>`);
+      if (!root) return current;
+      const withCommentsPart = withNewPart(current, commentsName, root, COMMENTS_TYPE);
+      return withRelationship(withCommentsPart, storyPartName, COMMENTS_REL, 'comments.xml').pkg;
+    });
+
+    if (parentTarget && mintedParentParaId) {
+      ctx.applyPackage((current) => {
+        const part = current.parts.get(commentsName);
+        if (!part) return current;
+        const bound = withW14Binding(part);
+        const target = findNode(bound.part, parentTarget.id);
+        if (!target || target.kind !== 'paragraph') return withPart(current, bound.part);
+        const stamped = replaceNode(
+          bound.part,
+          target.id,
+          element(
+            target.id,
+            'paragraph',
+            target.namespaceUri,
+            target.prefix ?? 'w',
+            target.localName,
+            [
+              ...target.attributes,
+              {
+                kind: 'genericExtension' as const,
+                namespaceUri: W14_NAMESPACE_URI,
+                localName: 'paraId',
+                prefix: bound.prefix,
+                value: mintedParentParaId,
+              },
+            ],
+            target.children
+          ),
+          { deferValidation: true }
+        );
+        return withPart(current, stamped.ok ? stamped.part : bound.part);
+      });
+    }
+
+    ctx.applyPackage((current) => {
+      const part = current.parts.get(commentsName);
+      if (!part) return current;
+      const bound = withW14Binding(part);
+      const appended = insertChildren(
+        bound.part,
+        bound.part.root.id,
+        bound.part.root.children.length,
+        [commentElement(commentId, paraId, request, bound.prefix)],
+        { deferValidation: true }
+      );
+      return appended.ok ? withPart(current, appended.part) : current;
+    });
+
+    // Thread state only when there is a thread. A file with no reply gains no sibling part,
+    // which is what keeps an untouched round trip untouched.
+    if (parentParaId !== null) {
+      ctx.applyPackage((current) => {
+        if (current.parts.has(extendedName)) return current;
+        const root = emptyPart(extendedName, `<w15:commentsEx xmlns:w15="${W15_NAMESPACE_URI}"/>`);
+        if (!root) return current;
+        const withExtended = withNewPart(current, extendedName, root, COMMENTS_EXTENDED_TYPE);
+        return withRelationship(
+          withExtended,
+          storyPartName,
+          COMMENTS_EXTENDED_REL,
+          'commentsExtended.xml'
+        ).pkg;
+      });
+
+      ctx.applyPackage((current) => {
+        const part = current.parts.get(extendedName);
+        if (!part) return current;
+        const entry = element(
+          `${extendedName}#ex-${paraId}`,
+          'generic',
+          W15_NAMESPACE_URI,
+          'w15',
+          'commentEx',
+          [
+            {
+              kind: 'genericExtension' as const,
+              namespaceUri: W15_NAMESPACE_URI,
+              localName: 'paraId',
+              prefix: 'w15',
+              value: paraId,
+            },
+            {
+              kind: 'genericExtension' as const,
+              namespaceUri: W15_NAMESPACE_URI,
+              localName: 'paraIdParent',
+              prefix: 'w15',
+              value: parentParaId,
+            },
+            {
+              kind: 'genericExtension' as const,
+              namespaceUri: W15_NAMESPACE_URI,
+              localName: 'done',
+              prefix: 'w15',
+              value: '0',
+            },
+          ],
+          []
+        );
+        const appended = insertChildren(part, part.root.id, part.root.children.length, [entry], {
+          deferValidation: true,
+        });
+        return appended.ok ? withPart(current, appended.part) : current;
+      });
+    }
+
+    // The story markers last. The END goes in before the START when both are in one paragraph,
+    // because inserting at the start would otherwise shift nothing — the markers occupy no
+    // offsets — but the run split at the start reshapes the children the end index counts.
+    ctx.applyTo(storyPartName, {
+      op: 'insertCommentMarker',
+      paragraphId: endParagraphId,
+      offset: request.anchor.end,
+      commentId,
+      marker: 'end',
+    });
+    ctx.applyTo(storyPartName, {
+      op: 'insertCommentMarker',
+      paragraphId: endParagraphId,
+      offset: request.anchor.end,
+      commentId,
+      marker: 'reference',
+    });
+    ctx.applyTo(storyPartName, {
+      op: 'insertCommentMarker',
+      paragraphId: request.anchor.paragraphId,
+      offset: request.anchor.start,
+      commentId,
+      marker: 'start',
+    });
+  });
+
+  if (!result.ok) return { ok: false, reason: result.reason };
+  return { ok: true, commentId };
+}
+
+/** A comment part exists and declares the comment content type. */
+export function hasCommentPart(pkg: OoxmlPackage, storyPartName: string): boolean {
+  const name = commentsPartNameFor(pkg, storyPartName);
+  return pkg.parts.has(name) && resolveContentTypeOf(pkg, name) === COMMENTS_TYPE;
+}
+
+/** Exposed so a surface can tell "no comment part yet" from "no comments". */
+export function commentPartNameOf(pkg: OoxmlPackage, storyPartName: string): string {
+  return commentsPartNameFor(pkg, storyPartName);
+}
+
+/** Re-exported so callers do not re-derive the node lookup. */
+export { findNode };

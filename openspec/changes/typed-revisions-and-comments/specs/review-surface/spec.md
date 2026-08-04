@@ -1,5 +1,14 @@
 ## ADDED Requirements
 
+### Requirement: The surface presents the document's markup, and invents none
+
+The review surface SHALL present what ECMA-376 Part 1 markup states — who proposed a change, over which characters, and of which kind — and SHALL NOT synthesize a decision the markup does not carry. Where the surface groups several elements into one card, the grouping SHALL be derived from their recorded identity or their anchors, never from the wording of their text.
+
+#### Scenario: Nothing on a card comes from prose
+
+- **WHEN** a revision or comment carries text that reads like a classification
+- **THEN** the card's kind, author, date, and grouping still come from the markup alone
+
 ### Requirement: The declared review chrome slots become wired
 
 `review.comments` and `review.editingMode` already exist in the chrome registry and are absent from the slot→command table, so they render disabled with "not wired to an editor command". Both SHALL be wired. The registry SHALL additionally gain `review.accept`, `review.reject`, `review.acceptAll`, `review.rejectAll`, and `review.displayMode`. `ChromeSlotId` is public API forever, so these ids SHALL NOT be renamed after they ship.
@@ -43,10 +52,46 @@ The adapter SHALL present comment threads and revisions in a sidebar, each ancho
 - **WHEN** the user selects a comment card
 - **THEN** the anchored range is highlighted and scrolled into view
 
-#### Scenario: Selecting text shows its comments
+### Requirement: The caret activates the review item it sits in
 
-- **WHEN** the caret enters a commented range
-- **THEN** that comment's card is brought forward
+Placing the caret inside a commented range or a revision SHALL make that item the active one: its card opens, showing the thread and the reply affordance, and the anchored range is highlighted in the document. Activation SHALL be derived from the selection against layout ranges, so a caret arriving by click, by keyboard, or by navigation activates identically.
+
+#### Scenario: Caret in a commented range opens its thread
+
+- **WHEN** the caret is placed inside a range covered by a comment
+- **THEN** that comment's card becomes active, its replies are shown, and its reply affordance is ready for input without a further click
+- **AND** the anchored range is highlighted in the document
+
+#### Scenario: Caret in a revision opens its card
+
+- **WHEN** the caret is placed inside a `w:ins` or `w:del`
+- **THEN** that revision's card becomes active, showing author, date, and its accept and reject actions
+- **AND** any comment anchored over the same range is shown with it
+
+#### Scenario: The caret at a range boundary still activates
+
+- **WHEN** the caret rests exactly at the end of a commented or revised range, with the range entirely before it
+- **THEN** the item still activates, because both sides of the caret are considered
+
+#### Scenario: Nested ranges activate the innermost
+
+- **WHEN** the caret sits inside two overlapping comment ranges
+- **THEN** the innermost range's card is the active one, and the containing item stays listed and reachable
+
+#### Scenario: Activation is a view state, not an edit
+
+- **WHEN** the caret moves in and out of review items
+- **THEN** no `TreeDocOp` is applied and no `ModelChange` is published
+
+#### Scenario: Leaving the item deactivates it
+
+- **WHEN** the caret moves to a position covered by no comment and no revision
+- **THEN** no card is active and no range is highlighted as active
+
+#### Scenario: A resolved comment does not steal activation
+
+- **WHEN** the caret enters a range whose only comment is resolved
+- **THEN** that comment is not activated, so a resolved thread does not reopen itself as the user types
 
 #### Scenario: Threads render as threads only when the file says so
 

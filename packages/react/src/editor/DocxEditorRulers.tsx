@@ -16,7 +16,8 @@ import type { EditorSnapshot } from '@docx-editor.dev/core-contract/contracts/ed
 import type { RulerIndent } from '@docx-editor.dev/core-contract/editor';
 import { HorizontalRuler, type RulerPageSetup } from '../components/ui/HorizontalRuler';
 import { VerticalRuler } from '../components/ui/VerticalRuler';
-import { useDocxEditor } from './context';
+import { useContext } from 'react';
+import { ReviewRailContext, useDocxEditor } from './context';
 import { useEditorState } from './useEditorState';
 import { usePageSetup } from './usePageSetup';
 import { useParagraphIndent } from './useParagraphIndent';
@@ -161,10 +162,12 @@ export function DocxEditorHorizontalRuler(props: DocxEditorRulerProps): ReactEle
   const zoom = useEditorState(selectZoom);
   const { pending, preview, commit } = useMarginDrag();
   const indentDrag = useIndentDrag();
-  // The ruler sits ABOVE the scroll container, so an open navigation pane displaces the
-  // page without displacing the ruler unless the ruler is told. Same value, same easing,
-  // so the tick marks stay over the page they measure. Zero when no pane is mounted.
+  // The ruler measures the page, so it has to move with the page — and BOTH panes move it.
+  // The ruler sits ABOVE the scroll container, so it has to be told about each: the
+  // navigation pane displaces the page from the left, the review pane reserves a gutter on
+  // the right. Same values, same easing, so the ticks stay over the page they measure.
   const shift = useNavigationShift();
+  const reserved = useReviewGutter();
   return (
     <HorizontalRuler
       pageSetup={previewed(pageSetup, pending)}
@@ -181,16 +184,41 @@ export function DocxEditorHorizontalRuler(props: DocxEditorRulerProps): ReactEle
       unit={props.unit ?? 'inch'}
       className={props.className ?? ''}
       style={{
+        marginRight: reserved,
         ...props.style,
         // The ruler is centred by its host row, so the same rule applies as to the page:
         // a left offset of S moves a centred box by S/2. Feeding the ruler the SAME px the
         // viewport pads by keeps the two in lockstep at every window width.
         marginInlineStart: shift,
-        transition: 'margin-inline-start 0.2s ease',
+        // `margin`, not one edge: the review pane moves the other side, and animating only
+        // `margin-inline-start` left the ruler snapping while the page glided.
+        transition: 'margin 0.2s ease',
       }}
     />
   );
 }
+
+/**
+ * The gutter the review pane reserves, in pixels.
+ *
+ * Read from the engine's pane state rather than from a prop, because the ruler and the
+ * scroller must agree: two components deciding independently is how a ruler ends up an inch
+ * off the page it is measuring.
+ */
+function useReviewGutter(): number {
+  // The SNAPSHOT, not the review hook — the ruler needs one boolean, not the queue. And no
+  // gutter at all unless a rail is mounted to occupy it.
+  const paneOpen = useEditorState(selectPaneOpen);
+  const rail = useContext(ReviewRailContext);
+  if ((rail?.mounted ?? 0) === 0) return 0;
+  return paneOpen ? REVIEW_PANE_GUTTER : REVIEW_MARKERS_GUTTER;
+}
+
+const selectPaneOpen = (snapshot: EditorSnapshot): boolean => snapshot.reviewPaneOpen ?? true;
+
+/** Kept in step with the `[data-review-pane]` rules in the core stylesheet. */
+const REVIEW_PANE_GUTTER = 316;
+const REVIEW_MARKERS_GUTTER = 44;
 
 /**
  * The vertical ruler as a context-fed part (`DocxEditor.VerticalRuler`): page height,

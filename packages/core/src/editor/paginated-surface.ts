@@ -11,6 +11,10 @@ import {
   createParagraphLayoutCache,
   resolveDefaultSurfaceMeasurer,
   cellSelectionRects,
+  keyedRangeRects,
+  paragraphFragmentsOf,
+  reviewItemKey,
+  reviewItemsAt,
   selectionRects,
   caretAt,
   cellSelectionText,
@@ -21,18 +25,26 @@ import {
   withNumberingStyleLinks,
   wordBoundary,
   type CellSelection,
+  type KeyedRange,
   type LayoutScope,
+  type ReviewItem,
+  type ReviewRevisionKind,
   type SemanticLayout,
   type SemanticPosition,
   type SemanticSelection,
 } from '@docx-editor.dev/core-contract/layout';
-import { paintSelectionOverlay, paintSemanticLayout } from '@docx-editor.dev/core-contract/output';
+import {
+  paintSelectionOverlay,
+  paintSemanticLayout,
+  type OverlayRect,
+} from '@docx-editor.dev/core-contract/output';
 import { tryCreateBrowserCanvasContext } from './browser-canvas-context.ts';
 import type {
   OpenPaginatedResult,
   PaginatedSurface,
   PaginatedSurfaceOptions,
   PaginatedSurfaceState,
+  SurfaceEditingMode,
 } from './paginated-surface-contract.ts';
 import {
   clampedToDocument,
@@ -118,6 +130,13 @@ export function mountPaginatedSurface(
   }
   const session = opened.session;
   const scale = options.scale ?? 96 / 72;
+  const VIEWING_REFUSAL = 'the document is open for viewing';
+  /** Separates a decision's key from its per-range index. A NUL cannot occur in either. */
+  const RANGE_SUFFIX = '\u0000range\u0000';
+  /** One timestamp per edit. The clock is the host's; the store never reads one. */
+  // SECONDS precision, like Word. Milliseconds are valid `xsd:dateTime` but no other editor
+  // writes them, and two revisions differing only in milliseconds never group.
+  const trackedDate = (): string => `${new Date().toISOString().slice(0, 19)}Z`;
   // Editor seam creates the canvas; layout only consumes the injected context.
   const defaults = options.measurer
     ? null
@@ -169,8 +188,21 @@ export function mountPaginatedSurface(
   overlayLayer.style.top = '0';
   overlayLayer.style.pointerEvents = 'none';
 
+  // Commented text, highlighted the way Word highlights it. Its own layer OVER the pages —
+  // under them the band is invisible, because a page paints an opaque sheet — and the band
+  // multiplies rather than covers, which is what a real highlighter does: the yellow darkens
+  // the paper and leaves the black glyphs black.
+  const commentLayer = document.createElement('div');
+  commentLayer.className = 'docx-comment-overlay';
+  commentLayer.contentEditable = 'false';
+  commentLayer.setAttribute('aria-hidden', 'true');
+  commentLayer.style.position = 'absolute';
+  commentLayer.style.left = '0';
+  commentLayer.style.top = '0';
+  commentLayer.style.pointerEvents = 'none';
+
   container.style.position = 'relative';
-  container.replaceChildren(pagesLayer, overlayLayer);
+  container.replaceChildren(pagesLayer, commentLayer, overlayLayer);
 
   const caret = createSurfaceCaret(pagesLayer, scale, () => {
     const active = hfScope?.getActive() ?? null;
@@ -349,12 +381,6 @@ export function mountPaginatedSurface(
   const noteScopeId = () => noteOps?.activeNoteScope()?.id ?? null;
   const paragraphOrder = () =>
     scopedDocumentOrder(currentLayout, hfScope?.getActive() ?? null, noteScopeId());
-  const applyOps = (
-    ops: Parameters<TreeDocxSession['applyTreeOps']>[0],
-    before?: Parameters<TreeDocxSession['applyTreeOps']>[1],
-    after?: Parameters<TreeDocxSession['applyTreeOps']>[2]
-  ) => session.applyTreeOps(ops, before, after, storyScope());
-
   // Phase timers, one slot per phase rather than a log: the state reports the LAST pass,
   // and a host that wants history samples `onChange`. `performance.now()` where the host
   // has one — monotonic, sub-millisecond — and wall clock where it does not (a bare test
@@ -396,11 +422,32 @@ export function mountPaginatedSurface(
     };
   };
 
+  /**
+   * The session as every lane sees it: the mode rules applied to `applyTreeOps`.
+   *
+   * Gating one function inside this file was not enough. Breaks, lists, indent, section
+   * properties, formatting, hyperlinks and the IME readback are their own lanes over the
+   * SAME session, and each called `applyTreeOps` on it directly — so a "read-only" document
+   * still took Ctrl-B, a page-orientation change and a bullet toggle, and suggesting mode
+   * wrote an untracked tab or line break while the user believed they were proposing.
+   * Wrapping the session is the only place that covers a lane nobody has written yet.
+   */
+  const gatedSession: TreeDocxSession = {
+    ...session,
+    applyTreeOps: (ops, before, after) => applyOps(ops, before, after),
+    applyPmDoc: (doc) => {
+      if (editingMode === 'view') {
+        return { committed: false, rejected: true, opCount: 0, reason: VIEWING_REFUSAL };
+      }
+      return session.applyPmDoc(doc);
+    },
+  };
+
   let currentLayout = layoutOnce();
   // Structural edits — breaks, lists, indent, sections — are their own lane over the same
   // session and commit path.
   const format = createSurfaceFormat({
-    session,
+    session: gatedSession,
     storyScope,
     paragraphOrder,
     layout: () => currentLayout,
@@ -437,7 +484,7 @@ export function mountPaginatedSurface(
     },
   });
   const structure = createSurfaceStructure({
-    session,
+    session: gatedSession,
     storyScope,
     paragraphOrder,
     layout: () => currentLayout,
@@ -465,7 +512,7 @@ export function mountPaginatedSurface(
       ) !== null,
   });
   const hyperlinks = createHyperlinkOps({
-    session,
+    session: gatedSession,
     storyScope,
     selection: () => selection,
     orderedRange: () => orderedRange(),
@@ -658,11 +705,14 @@ export function mountPaginatedSurface(
     container.style.height = `${materializedExtent.height * scale}px`;
     overlayLayer.style.width = `${materializedExtent.width * scale}px`;
     overlayLayer.style.height = `${materializedExtent.height * scale}px`;
+    commentLayer.style.width = overlayLayer.style.width;
+    commentLayer.style.height = overlayLayer.style.height;
     // Sizing included: the style writes above invalidate layout, and the selection sync
     // right after is what forces the browser to resolve it. Splitting the timer here would
     // book the paint's own cost to the selection phase.
     lastPaintMs = now() - paintBegan;
     renderOverlay();
+    renderCommentHighlights();
     // The surface may only now have been wrapped in its viewport, so the size watcher
     // re-resolves its target here rather than trusting what existed at mount.
     watchScrollerSize();
@@ -691,6 +741,101 @@ export function mountPaginatedSurface(
       return;
     }
     render(false);
+  }
+
+  let editingMode: SurfaceEditingMode = options.editingMode ?? 'edit';
+
+  /**
+   * Commit ops, attributing them when the surface is suggesting.
+   *
+   * ONE interception point rather than an argument threaded through a dozen emit sites: the
+   * ops are built all over this file, and a site that forgot to pass the attribution would
+   * silently write an untracked edit in suggesting mode — the failure nobody notices until
+   * the document has already lost the proposal.
+   */
+  function applyOps(
+    ops: readonly TreeDocOp[],
+    selectionBefore?: Parameters<TreeDocxSession['applyTreeOps']>[1],
+    selectionAfter?: Parameters<TreeDocxSession['applyTreeOps']>[2]
+  ): ReturnType<TreeDocxSession['applyTreeOps']> {
+    // VIEWING refuses every write here rather than only at the facade. The keymap and
+    // `beforeinput` are wired to this surface, not to `Editor.exec`, so a facade-only gate
+    // left the document fully typeable while the toolbar reported it read-only.
+    if (editingMode === 'view') {
+      return {
+        committed: false,
+        rejected: true,
+        opCount: 0,
+        reason: 'the document is open for viewing',
+      };
+    }
+    // SUGGESTING with no author cannot write `CT_TrackChange`, and the fallback of writing
+    // an untracked edit is only tolerable when nothing is destroyed. A deletion in that
+    // state removes text the reviewer was promised they could get back.
+    // EVERY edit, not just the destructive ones. Letting insertions through wrote permanent
+    // changes to someone else's document while the pill said Suggesting and the review pane
+    // stayed empty — half the keyboard proposing and half editing outright.
+    if (editingMode === 'suggest' && !options.author?.trim() && ops.some(isDocumentEdit)) {
+      return {
+        committed: false,
+        rejected: true,
+        opCount: 0,
+        reason: 'suggesting needs an author before it can propose a change',
+      };
+    }
+
+    // `storyScope()` so an edit inside a header, a footer or a note is applied to that story
+    // rather than to the body.
+    return session.applyTreeOps(trackedOps(ops), selectionBefore, selectionAfter, storyScope());
+  }
+
+  /** Ops that change the DOCUMENT, as opposed to reading or resolving it. */
+  function isDocumentEdit(op: TreeDocOp): boolean {
+    return (
+      op.op !== 'acceptRevision' &&
+      op.op !== 'rejectRevision' &&
+      op.op !== 'acceptAllRevisions' &&
+      op.op !== 'rejectAllRevisions'
+    );
+  }
+
+  /** Text ops become tracked ones while suggesting; everything else is untouched. */
+  function trackedOps(ops: readonly TreeDocOp[]): TreeDocOp[] {
+    const author = options.author?.trim();
+    // `CT_TrackChange` makes `@w:author` required, so with no author there is nothing valid
+    // to write. The edit lands untracked rather than being refused: losing the user's typing
+    // to a missing configuration value would be the worse failure.
+    if (editingMode !== 'suggest' || !author) return [...ops];
+    const revision = { author, date: trackedDate() };
+    return ops.flatMap((op): TreeDocOp[] => {
+      if (op.op === 'insertText' || op.op === 'deleteText') return [{ ...op, revision }];
+      // A SPLIT becomes a real split plus a proposed mark on the first paragraph: the text
+      // is already in two paragraphs, and what is being proposed is the break between them.
+      // §17.13.5 puts the new mark on the FIRST paragraph, and rejecting it runs the two
+      // back together.
+      if (op.op === 'splitParagraph') {
+        return [
+          op,
+          {
+            op: 'setParagraphMarkRevision' as const,
+            paragraphId: op.paragraphId,
+            kind: 'ins' as const,
+            revision,
+          },
+        ];
+      }
+      // A JOIN becomes a proposal to remove the mark BETWEEN the paragraphs, which belongs
+      // to the first — and the paragraphs stay where they are. Joining them outright made
+      // rejecting restore the words but not the boundary, so the original was unrecoverable.
+      if (op.op === 'joinParagraphs') {
+        // Addressed by the SECOND paragraph: the mark being proposed away belongs to
+        // whichever paragraph precedes it, and a multi-paragraph delete emits a join per
+        // paragraph with `firstId` pinned to the group head — so naming the first stamped
+        // one paragraph N times and left the rest untouched.
+        return [{ op: 'proposeParagraphMerge' as const, paragraphId: op.secondId, revision }];
+      }
+      return [op];
+    });
   }
 
   function commit(
@@ -815,6 +960,12 @@ export function mountPaginatedSurface(
     selectionSync.noteSelectionSettled();
     selectionSync.mirrorToDom();
     renderOverlay();
+    // A dismissal is dismissed for where the caret WAS; any move re-asks the question, which
+    // is how the reader reopens an item — by clicking back into its text.
+    dismissedReviewKey = null;
+    // The caret decides which item is OPEN, so a move re-classes the bands. The rectangles
+    // themselves are cached against the layout and are not recomputed here.
+    renderCommentHighlights();
     options.onChange?.(currentState());
   }
 
@@ -908,7 +1059,226 @@ export function mountPaginatedSurface(
     selectionSync.noteSelectionSettled();
     selectionSync.mirrorToDom();
     renderOverlay();
+    // A dismissal is dismissed for where the caret WAS; any move re-asks the question, which
+    // is how the reader reopens an item — by clicking back into its text.
+    dismissedReviewKey = null;
+    // The caret decides which item is OPEN, so a move re-classes the bands. The rectangles
+    // themselves are cached against the layout and are not recomputed here.
+    renderCommentHighlights();
     options.onChange?.(currentState());
+  }
+
+  /**
+   * Comment bands, computed ONCE per layout and re-classed on a caret move.
+   *
+   * The rectangles depend only on the layout and the comment ranges, so recomputing them
+   * because the caret moved would re-walk the document on every arrow key. What the caret
+   * changes is which band is the active one, and that is a class.
+   */
+  let commentRectCache: {
+    layout: SemanticLayout;
+    revision: number;
+    pages: ReadonlySet<number> | undefined;
+    rects: readonly (OverlayRect & { key: string })[];
+  } | null = null;
+
+  /**
+   * A small window around the caret, for when the real visible set is unknown.
+   *
+   * Not a guess at what is on screen — a bound. A band outside it is not drawn, and the next
+   * paint with a real scroller draws it.
+   */
+  function caretPageWindow(): ReadonlySet<number> {
+    const caret = caretAt(currentLayout, selection.head);
+    const centre = caret?.pageIndex ?? 0;
+    const window_ = new Set<number>();
+    for (let page = centre - 1; page <= centre + 1; page += 1) {
+      if (page >= 0 && page < currentLayout.pages.length) window_.add(page);
+    }
+    return window_;
+  }
+
+  /** Paragraph id to the page it starts on, built once per layout. */
+  const paragraphPageCache = new WeakMap<SemanticLayout, Map<string, number>>();
+  function paragraphPagesOf(layout: SemanticLayout): Map<string, number> {
+    const cached = paragraphPageCache.get(layout);
+    if (cached) return cached;
+    const index = new Map<string, number>();
+    for (const page of layout.pages) {
+      for (const fragment of paragraphFragmentsOf(page)) {
+        if (!index.has(fragment.paragraphId)) index.set(fragment.paragraphId, page.index);
+      }
+    }
+    paragraphPageCache.set(layout, index);
+    return index;
+  }
+
+  function commentRects(): readonly (OverlayRect & { key: string })[] {
+    const revision = session.revision();
+    // When the scroller is unknown — before mount, in a hidden container, in a host that is
+    // not the packaged viewport — `materializedSet` is undefined, and "measure every band on
+    // every page" is 30ms per keystroke on exactly the documents that can least afford it.
+    // The caret's page and its neighbours are a bound that is always available.
+    const pages = materializedSet ?? caretPageWindow();
+    if (
+      commentRectCache?.layout === currentLayout &&
+      commentRectCache.revision === revision &&
+      equalPageSets(commentRectCache.pages, pages)
+    ) {
+      return commentRectCache.rects;
+    }
+    const paragraphPages = paragraphPagesOf(currentLayout);
+    /** Skip an item that cannot be on screen, before measuring anything about it. */
+    const onScreen = (from: string, to: string): boolean => {
+      if (!pages) return true;
+      // EITHER end. Testing only the start dropped the band for a comment spanning pages
+      // 1–5 the moment page 1 scrolled away, so the highlight vanished from the middle of
+      // its own range. `keyedRangeRects` clips to the visible pages anyway; this is only a
+      // pre-filter, and a false keep costs one range's measurement.
+      const start = paragraphPages.get(from);
+      const end = paragraphPages.get(to);
+      if (start === undefined || end === undefined) return true;
+      for (let page = Math.min(start, end); page <= Math.max(start, end); page += 1) {
+        if (pages.has(page)) return true;
+      }
+      return false;
+    };
+    const ranges: KeyedRange[] = [];
+    for (const item of session.reviewItems()) {
+      if (item.kind === 'comment') {
+        if (item.range === null || item.resolved) continue;
+        if (!onScreen(item.range.start.paragraphId, item.range.end.paragraphId)) continue;
+        ranges.push({
+          key: reviewItemKey(item),
+          from: { paragraphId: item.range.start.paragraphId, offset: item.range.start.offset },
+          to: { paragraphId: item.range.end.paragraphId, offset: item.range.end.offset },
+        });
+        continue;
+      }
+      // Revisions are measured in the SAME pass and drawn only when active: tracked text
+      // already carries an underline, a strike and a margin bar, so banding all of it would
+      // repeat what the decoration says and leave a page of edits as one solid wash.
+      const key = reviewItemKey(item);
+      for (const [index, range] of item.ranges.entries()) {
+        if (!onScreen(range.start.paragraphId, range.end.paragraphId)) continue;
+        ranges.push({
+          key: item.ranges.length === 1 ? key : `${key}${RANGE_SUFFIX}${index}`,
+          from: { paragraphId: range.start.paragraphId, offset: range.start.offset },
+          to: { paragraphId: range.end.paragraphId, offset: range.end.offset },
+        });
+      }
+    }
+    const byKey = keyedRangeRects(currentLayout, ranges, pages);
+    const rects: (OverlayRect & { key: string })[] = [];
+    for (const [key, found] of byKey) for (const rect of found) rects.push({ ...rect, key });
+    commentRectCache = { layout: currentLayout, revision, pages, rects };
+    return rects;
+  }
+
+  /**
+   * Paragraph id to document position, memoized per layout AND per open story.
+   *
+   * `paragraphOrder` publishes the ids in order; the containment test needs to compare two
+   * paragraphs, which an array cannot do without a scan per comparison. The story is part of
+   * the key because entering a header or a note changes the order without changing the
+   * layout, and a cache keyed on the layout alone would answer with the body's positions.
+   */
+  const documentOrderIndexCache = new WeakMap<SemanticLayout, Map<string, Map<string, number>>>();
+  function documentOrderIndexOf(layout: SemanticLayout): Map<string, number> {
+    const scopeKey = `${hfScope?.getActive()?.scope.rId ?? ''}\u0000${noteScopeId() ?? ''}`;
+    let byScope = documentOrderIndexCache.get(layout);
+    if (!byScope) {
+      byScope = new Map();
+      documentOrderIndexCache.set(layout, byScope);
+    }
+    const cached = byScope.get(scopeKey);
+    if (cached) return cached;
+    const index = new Map<string, number>();
+    for (const [position, id] of paragraphOrder().entries()) index.set(id, position);
+    byScope.set(scopeKey, index);
+    return index;
+  }
+
+  /** Which comment the caret is in, so its band reads as the open one. */
+  /**
+   * A dismissed item, until the caret next moves.
+   *
+   * Lives HERE rather than in a host, because the band and the card must agree: the surface
+   * paints one and publishes the other, and a copy of this flag on either side of that line
+   * is a copy that can disagree.
+   */
+  let dismissedReviewKey: string | null = null;
+
+  function activeReviewAtCaret(): ReviewItem | null {
+    const at = selection?.head;
+    if (!at) return null;
+    // The covering items, innermost first, minus the one the reader dismissed. Returning
+    // null for a dismissed innermost item hid every item under it too: dismissing a comment
+    // that wraps a revision meant the revision could never become active either.
+    const covering = reviewItemsAt(
+      session.reviewItems(),
+      at,
+      documentOrderIndexOf(currentLayout)
+    ).filter(
+      (item) =>
+        !(item.kind === 'comment' && item.resolved) && reviewItemKey(item) !== dismissedReviewKey
+    );
+    return covering[0] ?? null;
+  }
+
+  /** The class a band draws in, or null when this range should not be drawn at all. */
+  function bandClassFor(
+    key: string,
+    active: ReviewItem | null,
+    byKey: ReadonlyMap<string, ReviewItem>
+  ): string | null {
+    // A revision's key is suffixed per range when one decision covers several sites, so the
+    // active test compares the DECISION, not the site. Split on NUL, which an author name
+    // cannot contain — `#` can, and an author called `A#b` never saw their band light up.
+    const parts = key.split(RANGE_SUFFIX);
+    const decision = parts[0]!;
+    const isActive = active !== null && decision === reviewItemKey(active);
+    if (key.startsWith('comment-')) {
+      return isActive ? 'docx-comment-band docx-comment-band--active' : 'docx-comment-band';
+    }
+    const item = byKey.get(decision);
+    if (!item || item.kind !== 'revision') return null;
+    // In the revision's OWN colour — green for text arriving, red for text leaving — so the
+    // band never contradicts the decoration beneath it. A REPLACEMENT is one decision in two
+    // colours: its leading ranges are the struck half, the rest is what took their place, and
+    // painting the pair one neutral grey said "something changed here" about an edit whose
+    // two halves the page is already colouring.
+    const index = parts.length > 1 ? Number(parts[1]) : 0;
+    const kindOf = (revisionKind: ReviewRevisionKind): 'delete' | 'insert' | 'other' => {
+      if (revisionKind === 'delete' || revisionKind === 'moveFrom') return 'delete';
+      if (revisionKind === 'insert' || revisionKind === 'moveTo') return 'insert';
+      if (revisionKind === 'replace' && item.replacedRangeCount !== undefined) {
+        return index < item.replacedRangeCount ? 'delete' : 'insert';
+      }
+      return 'other';
+    };
+    const kind = kindOf(item.revisionKind);
+    // Every pending change carries a band, faint until it is the open one. A tracked page
+    // with no tint at all made "which of these is selected" a question about a 1px margin
+    // bar; a page where only the active one tints made the others look resolved.
+    return `docx-revision-band docx-revision-band--${kind}${isActive ? ' docx-revision-band--active' : ''}`;
+  }
+
+  function renderCommentHighlights(): void {
+    const active = activeReviewAtCaret();
+    // Once per paint, not once per rect: a decision spanning many lines asked the same
+    // question for every one of them.
+    const byKey = new Map<string, ReviewItem>();
+    for (const item of session.reviewItems()) byKey.set(reviewItemKey(item), item);
+    const bands: OverlayRect[] = [];
+    for (const rect of commentRects()) {
+      const className = bandClassFor(rect.key, active, byKey);
+      if (className) bands.push({ ...rect, className });
+    }
+    paintSelectionOverlay(commentLayer, currentLayout, bands, {
+      scale,
+      ...(materializedExtent ? { pageOffsetX: materializedExtent.pageOffsetX } : {}),
+    });
   }
 
   /** Draw the selected cells, or clear the layer when nothing is selected that way. */
@@ -954,14 +1324,23 @@ export function mountPaginatedSurface(
       // coexist with the delete ops below): the typed range gets the caret run's own
       // properties plus the armed ones, in the SAME transaction — one undo step.
       const pendingOps = consumePendingFormatOps(start.paragraphId, start.offset, text.length);
+      // In SUGGESTING the deletion keeps its characters, so the selection's start offset is
+      // still the start of the struck words — inserting there put the replacement BEFORE
+      // them. Word puts it after, and only then are the two halves adjacent, which is what
+      // lets the pane fold them into one `Replaced "x" with "y"` card. Mid-sentence
+      // replacements were showing as two unrelated decisions, and a reviewer could accept
+      // one half.
+      const struck = editingMode === 'suggest' ? orderedRange() : null;
+      const insertAt =
+        struck && struck.to.paragraphId === start.paragraphId ? struck.to.offset : start.offset;
       const insertOps: TreeDocOp[] = [
         ...plan.ops,
-        { op: 'insertText', paragraphId: start.paragraphId, offset: start.offset, text },
+        { op: 'insertText', paragraphId: start.paragraphId, offset: insertAt, text },
       ];
       const redoMark = {
         paragraphId: start.paragraphId,
-        start: start.offset + text.length,
-        end: start.offset + text.length,
+        start: insertAt + text.length,
+        end: insertAt + text.length,
       };
       commit(
         () =>
@@ -971,7 +1350,7 @@ export function mountPaginatedSurface(
             selectionMark(),
             redoMark
           ),
-        () => collapsedAt({ paragraphId: start.paragraphId, offset: start.offset + text.length })
+        () => collapsedAt({ paragraphId: start.paragraphId, offset: insertAt + text.length })
       );
     },
 
@@ -1209,6 +1588,62 @@ export function mountPaginatedSurface(
     },
     retainedSelection: () => retainedSelection,
 
+    publishedLayout: () => currentLayout,
+
+    commitReviewOps: (run) =>
+      commit(
+        // Reported as a RESULT, not a boolean: `commit` reads the refusal reason off it, and
+        // a boolean made every refused accept clear `lastRejection` instead of setting it.
+        () => {
+          // Resolving a revision or writing a comment is a WRITE, so viewing refuses it here
+          // too. These paths reach the store through the session directly rather than
+          // through `applyOps`, so the lane gate above never sees them.
+          if (editingMode === 'view') {
+            return { committed: false, rejected: true, opCount: 0, reason: VIEWING_REFUSAL };
+          }
+          const result = run();
+          return {
+            committed: result.committed,
+            rejected: !result.committed,
+            opCount: 0,
+            ...(typeof result.reason === 'string' ? { reason: result.reason } : {}),
+          };
+        },
+        () => {
+          // The layout is FLUSHED first, because the clamp needs post-edit lengths and this
+          // thunk runs before the repaint. Resolving a revision can remove the very characters
+          // the caret was in; an offset left past the end refuses every keystroke that follows
+          // it, which is what made the document look frozen after an Accept.
+          flushLayout();
+          // Raise the flag AGAIN. It is one-shot, `commit` raised it before this thunk ran,
+          // and the flush above consumed it — so the render that follows read the stale DOM
+          // selection back over the clamp and the caret jumped to the paragraph start.
+          selectionSync.noteModelMoved();
+          return clampedToDocument(currentLayout, session.paragraphIds(), selection);
+        }
+      ),
+
+    editingMode: () => editingMode,
+    setEditingMode: (mode) => {
+      editingMode = mode;
+      // The old refusal described the old mode. Left standing, a host rendering it showed
+      // "the document is open for viewing" over a document that had just become editable.
+      lastRejection = null;
+      options.onChange?.(currentState());
+    },
+
+    activeReviewKey: () => {
+      const active = activeReviewAtCaret();
+      return active ? reviewItemKey(active) : null;
+    },
+    dismissActiveReview: () => {
+      const active = activeReviewAtCaret();
+      if (!active) return;
+      dismissedReviewKey = reviewItemKey(active);
+      renderCommentHighlights();
+      options.onChange?.(currentState());
+    },
+
     navigation,
 
     bookmarks: () => session.bookmarks(),
@@ -1234,6 +1669,25 @@ export function mountPaginatedSurface(
     setCellSelection,
     layoutSession: () => layoutSession,
 
+    undo: () => {
+      // Undo is a WRITE. It reached the session directly, so a document the toolbar called
+      // read-only silently rewound under the reader's hands — the one lane that walked past
+      // `applyOps`, `applyPmDoc` and `commitReviewOps` alike.
+      if (editingMode === 'view') {
+        lastRejection = VIEWING_REFUSAL;
+        options.onChange?.(currentState());
+        return;
+      }
+      restoreSelection(session.undo());
+    },
+    redo: () => {
+      if (editingMode === 'view') {
+        lastRejection = VIEWING_REFUSAL;
+        options.onChange?.(currentState());
+        return;
+      }
+      restoreSelection(session.redo());
+    },
     activeScope: () => {
       const note = noteOps?.activeNoteScope();
       if (note) return note;
@@ -1279,8 +1733,6 @@ export function mountPaginatedSurface(
       lastRejection: () => lastRejection,
     }),
 
-    undo: () => restoreSelection(session.undo()),
-    redo: () => restoreSelection(session.redo()),
     // `preventScroll`: the pages layer is the WHOLE document tall, and focusing it scrolls
     // it into view — to its top. The first click anywhere in a long document therefore
     // threw the reader back to page 1 before the caret it had just placed could be seen.

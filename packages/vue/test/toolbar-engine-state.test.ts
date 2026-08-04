@@ -172,23 +172,26 @@ describe('the Vue toolbar reads enabled state from the engine', () => {
     expect(editor.snapshot().formatting?.alignment).toBe('center');
   });
 
-  test('a slot with no command stays dead, with the ENGINE’s reason as the tooltip', async () => {
+  test('nothing the default bar renders is dead any more', async () => {
     const { toolbar } = mountToolbar();
     await nextTick();
-    // Not wired in the shared command table: the control is visible, disabled, and says
-    // WHY in the engine's own words — never an adapter paraphrase, never a claim that
-    // the capability is missing when only the wiring is.
-    // `text.link` is deliberately absent: it graduated to a chrome-driven slot, so it is
-    // enabled in both adapters now — Vue's press reports what is missing (a target).
-    // Nor are `script.super`/`script.sub`/`format.clear` — they graduated to real
-    // commands, which is exactly what this list is supposed to shrink by. Comments are
-    // the last unwired control the DEFAULT bar renders; the remaining unwired slots
-    // (image, table) are contextual and not in it.
-    for (const id of ['review.comments']) {
-      const button = slot(toolbar, id) as HTMLButtonElement;
-      expect(button.disabled, id).toBe(true);
-      expect(button.title, id).toBe('not wired to an editor command');
-    }
+    // This carried a shrinking list of slots with no command behind them: `script.super`,
+    // `script.sub` and `format.clear` graduated to real commands, and `review.comments` now
+    // toggles the review pane. One is left, so the assertion pins the WHOLE set rather than
+    // sampling it — a new dead control fails here, and so does a stale entry. The remaining
+    // unwired slots (image, table, TOC) are contextual and not in this bar.
+    // `[data-testid^="toolbar-"]`, because the Vue toolbar emits no `data-slot` at all — a
+    // selector borrowed from React matched nothing and the assertion could never fail.
+    const controls = [...toolbar.querySelectorAll('[data-testid^="toolbar-"]')];
+    expect(controls.length).toBeGreaterThan(10);
+    const dead = controls.filter(
+      (part) => part.getAttribute('title') === 'not wired to an editor command'
+    );
+    // `text.link` is the one left, and for a reason particular to THIS adapter: the slot is
+    // deliberately absent from the shared command table so an adapter with no link UI cannot
+    // grow an enabled button it can only refuse, and Vue has no link popover to drive it. It
+    // comes off this list when Vue gets one — not before.
+    expect(dead.map((part) => part.getAttribute('data-testid'))).toEqual(['toolbar-text.link']);
   });
 
   test('a wired control the engine refuses NOW is disabled with the engine’s reason', async () => {

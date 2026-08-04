@@ -954,7 +954,12 @@
   },
   "editingMode": {
     "editing": null,
-    "label": null
+    "label": null,
+    "editingHint": null,
+    "suggesting": null,
+    "suggestingHint": null,
+    "viewing": null,
+    "viewingHint": null
   },
   "navigation": {
     "ariaLabel": null,
@@ -1005,5 +1010,22 @@
     "convertAllFootnotes": "将所有脚注转换为尾注",
     "convertAllEndnotes": "将所有尾注转换为脚注",
     "inheritedValue": "（继承）"
+  },
+  "review": {
+    "accept": null,
+    "ariaLabel": null,
+    "commentRefused": null,
+    "deleted": null,
+    "empty": null,
+    "inserted": null,
+    "movedFrom": null,
+    "movedTo": null,
+    "reject": null,
+    "replaced": null,
+    "replacedWith": null,
+    "reply": null,
+    "replyRefused": null,
+    "showPane": null,
+    "structural": null
   }
 }

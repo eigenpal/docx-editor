@@ -44,7 +44,17 @@ function canonicalFixturePlugin(): Plugin {
     name: 'docx-editor-canonical-fixture',
     configureServer(server) {
       server.middlewares.use((req, res, next) => {
-        const source = req.url ? fixtures.get(req.url.split('?')[0]!) : undefined;
+        const url = req.url ? req.url.split('?')[0]! : '';
+        // The named entries above are what BUILD emits. In dev, any fixture is reachable by
+        // name so `?fixture=<name>.docx` can point at one without editing this file — the
+        // name is sanitized to a bare filename and resolved inside `e2e/fixtures/`, so a
+        // crafted URL cannot walk out of it.
+        const devFixture =
+          fixtures.get(url) ??
+          (/^\/[\w.-]+\.docx$/.test(url)
+            ? path.join(monorepoRoot, 'e2e/fixtures', path.basename(url))
+            : undefined);
+        const source = devFixture;
         if (!source) return next();
         readFile(source)
           .then((bytes) => {

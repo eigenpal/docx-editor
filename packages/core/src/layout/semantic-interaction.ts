@@ -162,6 +162,22 @@ function laterLineOwns(layout: SemanticLayout, line: LineRecord, offset: number)
 }
 
 /**
+ * True when this offset sits strictly INSIDE deleted content on the line.
+ *
+ * The boundaries are kept: the position immediately before a deletion and the one immediately
+ * after it are both real places to put a caret, and dropping them would make the deletion
+ * unreachable — including for the accept or reject that resolves it.
+ */
+function insideDeletedContent(line: LineRecord, offset: number): boolean {
+  const ranges = line.deletedRanges;
+  if (ranges === undefined) return false;
+  for (const range of ranges) {
+    if (offset > range.start && offset < range.end) return true;
+  }
+  return false;
+}
+
+/**
  * True when `offset` sits strictly inside a span that is not a 1:1 model↔paint mapping
  * (projected PAGE digits, leaders) — those interiors are not navigable caret stops.
  * Tabs keep a 1:1 `\t` range; their wide box is still only two stops (before/after).
@@ -223,6 +239,10 @@ function pushLineCaretStops(
       }
     }
     if (isNonNavigableInterior(line, offset)) continue;
+    // Deleted content is skipped for the same reason and by the same lane: `moveCaret` reads
+    // this list and nothing else, so arrow keys, word jumps, page jumps and Home/End all
+    // inherit "step over a deletion, never into it" from one place.
+    if (insideDeletedContent(line, offset)) continue;
     stops.push({
       position: { paragraphId: line.range.paragraphId, offset },
       x: xWithinLine(line, offset, measurer),
@@ -415,6 +435,61 @@ export function selectionRects(
     }
   }
   return rects;
+}
+
+/** A model range to highlight, and the key the caller knows it by. */
+export interface KeyedRange {
+  readonly key: string;
+  readonly from: SemanticPosition;
+  readonly to: SemanticPosition;
+}
+
+/**
+ * Rectangles for MANY ranges in ONE pass over the lines.
+ *
+ * Not `selectionRects` in a loop. That walks every page, fragment and line per range, and a
+ * contract with two hundred comments would re-walk the whole document two hundred times on
+ * every layout — the highlight would cost more than the layout it decorates. One pass tests
+ * each line against every range instead, which is the same work a single selection does.
+ */
+export function keyedRangeRects(
+  layout: SemanticLayout,
+  ranges: readonly KeyedRange[],
+  /**
+   * Pages to measure, or every page when absent.
+   *
+   * A band that is not on screen is not painted, so measuring it is pure cost — and it is
+   * cost paid per keystroke, because an edit republishes the layout. Bounding this to the
+   * materialized pages is what keeps typing in a heavily reviewed document as fast as
+   * typing in a clean one.
+   */
+  pages?: ReadonlySet<number>
+): Map<string, SelectionRect[]> {
+  const found = new Map<string, SelectionRect[]>();
+  if (ranges.length === 0) return found;
+  for (const page of layout.pages) {
+    if (pages && !pages.has(page.index)) continue;
+    for (const fragment of paragraphFragmentsOf(page)) {
+      for (const line of fragment.lines) {
+        for (const range of ranges) {
+          const overlap = lineOverlap(layout, line, range.from, range.to);
+          if (!overlap) continue;
+          const startX = xWithinLine(line, overlap.start);
+          const endX = xWithinLine(line, overlap.end);
+          const rects = found.get(range.key) ?? [];
+          rects.push({
+            pageIndex: page.index,
+            x: Math.min(startX, endX),
+            y: line.box.y,
+            width: Math.abs(endX - startX),
+            height: line.box.height,
+          });
+          found.set(range.key, rects);
+        }
+      }
+    }
+  }
+  return found;
 }
 
 /** The part of `line` covered by a selection, in the line's own offsets. */

@@ -13,6 +13,8 @@
 /* eslint-disable max-lines -- paint seam; note areas live in semantic-paint-notes.ts */
 
 import { baselineShiftPtOf, TAB_LEADER_GLYPH } from '@docx-editor.dev/core-contract/layout';
+import { authorSlotsOf, revisionPresentationOf } from './revision-presentation.ts';
+import { formatRevisionOf, type RevisionAttribution } from '@docx-editor.dev/core-contract/layout';
 import type {
   LineRecord,
   PageRecord,
@@ -46,6 +48,13 @@ export interface PaintContext {
    * a live link there would be the one thing in the furniture that answers a gesture.
    */
   readonly inertLinks?: boolean;
+  /**
+   * Author to colour slot, by order of first appearance across the whole document.
+   *
+   * Resolved once per paint rather than per span: the order is a property of the document, and
+   * deriving it per page would give the same author different colours on different sheets.
+   */
+  readonly authorSlots?: ReadonlyMap<string, number>;
 }
 
 /**
@@ -336,6 +345,187 @@ function positioned(
   return element;
 }
 
+/**
+ * Draw a span as the tracked change it is.
+ *
+ * Applied to the run BOX rather than the inner text layers: `w:u` and `w:strike` already own
+ * those, and a revision's decoration is a second, independent statement about the same glyphs.
+ * Word draws both — struck-through text that was also underlined by its author keeps both rules.
+ *
+ * The colour lands as a custom property on the element rather than a resolved value, so a host
+ * restyling `--doc-review-author-N` under `.ep-root` changes the painted document with it.
+ *
+ * The dataset attributes are the review surface's join key: a card can find its own text, and
+ * the active-item highlight is set by attribute rather than by building a CSS rule out of an
+ * id — comment and revision metadata are attacker-controlled.
+ */
+function applyRevisionPresentation(
+  element: HTMLElement,
+  span: StyleSpanRecord,
+  ctx: PaintContext
+): void {
+  // A tracked FORMAT change alters no characters, so it has no strike or underline of its own
+  // to wear. It still has to be visible: the reader is looking at text whose appearance is
+  // itself a pending decision. A dashed rule and a tint say "this changed" without claiming
+  // the words were added or removed.
+  const format = formatRevisionOf(span.props);
+  const presentation = revisionPresentationOf(span.revisions, ctx.authorSlots);
+  if (!presentation && !format) return;
+
+  if (presentation) {
+    const { attribution } = presentation;
+    element.classList.add('docx-revision', `docx-revision-${attribution.kind}`);
+    element.dataset.revisionKind = attribution.kind;
+    element.dataset.revisionId = attribution.id;
+    element.dataset.revisionAuthor = attribution.author;
+    if (attribution.date !== undefined) element.dataset.revisionDate = attribution.date;
+    element.style.color = presentation.color;
+    // The TINT is what makes a change findable when scanning rather than reading. A decoration
+    // alone is a hairline: on a dense page of small type it disappears, and a reviewer skims
+    // straight past an edit.
+    //
+    // The WASH, not the full tint. This layer covers every tracked change in the document; the
+    // band layer covers only the open one and adds the full tint over this. Painting both at
+    // full strength gave pending and open changes the same weight — the pale/open distinction
+    // the band exists to draw never appeared, because this was already at the band's colour.
+    element.style.backgroundColor = presentation.deleted
+      ? 'var(--doc-revision-deletion-wash)'
+      : 'var(--doc-revision-insertion-wash)';
+    if (presentation.line) {
+      element.style.textDecorationLine = presentation.line;
+      element.style.textDecorationStyle = presentation.decorationStyle;
+      element.style.textDecorationColor = presentation.color;
+    }
+    return;
+  }
+
+  // A tracked FORMAT change gets its provenance and NO inline decoration.
+  //
+  // Marking it inline reads as noise rather than signal at the density real documents carry:
+  // this fixture has 18,284 of them, so a rule under each one drew a dotted line beneath
+  // nearly every line on the page, competing with the insertions and deletions that are the
+  // decisions a reviewer actually has to make. The attributes stay, so the review surface can
+  // still list the change and highlight its range on demand — which is where Word puts it too,
+  // as a "Formatted:" note rather than a mark on the words.
+  element.classList.add('docx-revision', 'docx-revision-format');
+  element.dataset.revisionKind = 'format';
+  element.dataset.revisionId = format!.id;
+  element.dataset.revisionAuthor = format!.author;
+  if (format!.date !== undefined) element.dataset.revisionDate = format!.date;
+}
+
+/**
+ * The pilcrow beside a paragraph whose MARK was inserted or deleted.
+ *
+ * Word draws it because there is nothing else to draw: the change is to the paragraph break
+ * itself, so no character carries it. A struck-through ¶ is how a reader sees that this
+ * paragraph is being merged into the next one, and an underlined one that it was split here.
+ *
+ * Furniture: no model range, `aria-hidden`, not editable, so it can never be selected, copied
+ * or counted as text.
+ */
+function paintParagraphMark(
+  document: Document,
+  revision: RevisionAttribution,
+  scale: number
+): HTMLElement {
+  const glyph = document.createElement('span');
+  glyph.className = `docx-revision-pmark docx-revision-pmark-${revision.kind}`;
+  glyph.setAttribute('aria-hidden', 'true');
+  glyph.contentEditable = 'false';
+  glyph.dataset.revisionKind = revision.kind;
+  glyph.dataset.revisionId = revision.id;
+  glyph.dataset.revisionAuthor = revision.author;
+  glyph.textContent = '\u00b6';
+  glyph.style.position = 'absolute';
+  glyph.style.pointerEvents = 'none';
+  glyph.style.marginLeft = `${2 * scale}px`;
+  glyph.style.color =
+    revision.kind === 'delete' ? 'var(--doc-revision-deletion)' : 'var(--doc-revision-insertion)';
+  if (revision.kind === 'delete') glyph.style.textDecorationLine = 'line-through';
+  return glyph;
+}
+
+/**
+ * The margin rules beside the lines that carry tracked changes.
+ *
+ * CONTIGUOUS lines MERGE into one rule. Drawn per line, a five-line edit reads as five separate
+ * marks with hairline gaps between them at every line boundary — the eye sees a dashed rule
+ * where Word draws a solid one, and the gaps imply the change stops and restarts.
+ *
+ * Coloured by kind, so the margin says what happened as well as that something did. A run of
+ * lines carrying both an insertion and a deletion takes the deletion colour: removed text is
+ * the stronger claim, and it is the one a reviewer scanning the margin must not miss.
+ *
+ * Furniture throughout: one overlay, `aria-hidden`, `pointer-events: none`, no model range, and
+ * positioned in the margin the fragment box already leaves, so it can never move a glyph.
+ */
+function paintChangeBars(
+  document: Document,
+  fragment: ParagraphFragmentRecord,
+  scale: number
+): HTMLElement | null {
+  interface BarRun {
+    top: number;
+    bottom: number;
+    deleted: boolean;
+  }
+  const runs: BarRun[] = [];
+  for (const line of fragment.lines) {
+    const revisions = line.spans.flatMap((span) => span.revisions ?? []);
+    if (revisions.length === 0) continue;
+    const deleted = revisions.some(
+      (revision) => revision.kind === 'delete' || revision.kind === 'moveFrom'
+    );
+    const top = line.box.y - fragment.box.y;
+    const bottom = top + line.box.height;
+    const previous = runs[runs.length - 1];
+    // Touching or overlapping lines of the same claim are one rule.
+    if (previous && previous.deleted === deleted && top <= previous.bottom + 0.5) {
+      previous.bottom = Math.max(previous.bottom, bottom);
+      continue;
+    }
+    runs.push({ top, bottom, deleted });
+  }
+  if (runs.length === 0) return null;
+
+  const overlay = document.createElement('div');
+  overlay.className = 'docx-change-bars';
+  overlay.setAttribute('aria-hidden', 'true');
+  overlay.style.position = 'absolute';
+  overlay.style.inset = '0';
+  overlay.style.pointerEvents = 'none';
+  for (const run of runs) {
+    const bar = document.createElement('div');
+    bar.className = `docx-change-bar docx-change-bar-${run.deleted ? 'deletion' : 'insertion'}`;
+    bar.style.position = 'absolute';
+    bar.style.top = `${run.top * scale}px`;
+    bar.style.height = `${(run.bottom - run.top) * scale}px`;
+    // ANCHORED TO THE MARGIN, NOT TO THE PARAGRAPH. The bar is a child of the fragment, whose
+    // left edge is the paragraph's indented column — so an offset from the fragment put the
+    // rule at a different x for every indent level, and a nested list drew a staircase down
+    // the page. Subtracting the fragment's own x lands every bar on one vertical line, which
+    // is what makes a column of them readable as "these lines changed".
+    bar.style.left = `${(-fragment.box.x - CHANGE_BAR_OFFSET_PT) * scale}px`;
+    bar.style.width = `${CHANGE_BAR_WIDTH_PT * scale}px`;
+    bar.style.pointerEvents = 'none';
+    bar.style.backgroundColor = run.deleted
+      ? 'var(--doc-revision-deletion)'
+      : 'var(--doc-revision-insertion)';
+    overlay.append(bar);
+  }
+  return overlay;
+}
+
+/**
+ * Distance from the text column to the change bar, and its thickness, in points.
+ *
+ * Close enough to read as belonging to the line, far enough not to collide with a hanging
+ * indent or a list marker.
+ */
+const CHANGE_BAR_OFFSET_PT = 7.5;
+const CHANGE_BAR_WIDTH_PT = 1.5;
+
 function paintSpan(
   document: Document,
   span: StyleSpanRecord,
@@ -395,6 +585,7 @@ function paintSpan(
     element.contentEditable = 'false';
   }
   applyRunFaceStyle(element, span.style, ctx);
+  applyRevisionPresentation(element, span, ctx);
   // Layout owns advances that the browser cannot reconstruct: horizontal scaling (transform
   // does not reserve space) and OOXML tab stops (`\t` would otherwise paint as a narrow
   // native tab). Both must take the published box width so following runs start where
@@ -654,6 +845,21 @@ function paintFragment(
       if (!span.tabLeader) continue;
       const leader = paintTabLeader(document, fragment, line, span, ctx);
       if (leader) element.append(leader);
+    }
+  }
+  // CHANGE BARS. Word draws a rule in the margin beside every line a revision touches, and it
+  // is the only signal that a change exists at all once the reader is in a resolved view.
+  const bars = paintChangeBars(document, fragment, scale);
+  if (bars) element.append(bars);
+  if (fragment.markRevision) {
+    const glyph = paintParagraphMark(document, fragment.markRevision, scale);
+    const last = fragment.lines[fragment.lines.length - 1];
+    if (last) {
+      // At the end of the last line's text, which is where the mark itself sits.
+      const end = last.spans[last.spans.length - 1];
+      glyph.style.top = `${(last.box.y - fragment.box.y) * scale}px`;
+      glyph.style.left = `${((end ? end.box.x + end.box.width : last.box.x) - fragment.box.x) * scale}px`;
+      element.append(glyph);
     }
   }
   for (const line of fragment.lines) {
@@ -1154,6 +1360,7 @@ export function paintSemanticLayout(
     scale: options.scale ?? 96 / 72,
     ariaHidden: options.ariaHidden ?? true,
     ...(options.fontAlias ? { fontAlias: options.fontAlias } : {}),
+    authorSlots: authorSlotsOf(layout),
     ...(options.activeHeaderFooterRId
       ? { activeHeaderFooterRId: options.activeHeaderFooterRId }
       : {}),

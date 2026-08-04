@@ -114,8 +114,8 @@ describe('the context-fed ruler parts', () => {
     const ruler = view.container.querySelector('.docx-horizontal-ruler') as HTMLElement;
     expect(ruler).not.toBeNull();
     expect(ruler.style.width).toBe('816px');
-    // Indent drag handles stay absent: the indent-drag lane is not wired.
-    expect(view.container.querySelectorAll('.docx-ruler-indent').length).toBe(0);
+    // Word's four indent handles: first-line, hanging, left, right.
+    expect(view.container.querySelectorAll('.docx-ruler-indent').length).toBe(4);
   });
 
   test('dragging the left margin zone commits ONE setPageSetup step on release', async () => {
@@ -123,19 +123,24 @@ describe('the context-fed ruler parts', () => {
     const ruler = view.container.querySelector('.docx-horizontal-ruler') as HTMLElement;
     // The left margin zone is the ruler's first child (the gray band).
     const leftZone = ruler.firstElementChild as HTMLElement;
+    // happy-dom has no pointer capture; the component guards on its presence.
+    Object.assign(leftZone, {
+      setPointerCapture: () => {},
+      releasePointerCapture: () => {},
+    });
     const before = editor().getDocumentHandle().revision;
     await act(async () => {
-      fireEvent.mouseDown(leftZone, { clientX: 96 });
+      fireEvent.pointerDown(leftZone, { pointerId: 1, clientX: 96 });
     });
     await act(async () => {
       // happy-dom reports a zero rect, so clientX IS the ruler-local x: 48px → 720 twips.
-      fireEvent.mouseMove(document, { clientX: 64 });
-      fireEvent.mouseMove(document, { clientX: 48 });
+      fireEvent.pointerMove(leftZone, { pointerId: 1, clientX: 64 });
+      fireEvent.pointerMove(leftZone, { pointerId: 1, clientX: 48 });
     });
     // Nothing commits while the drag previews.
     expect(editor().getDocumentHandle().revision).toBe(before);
     await act(async () => {
-      fireEvent.mouseUp(document);
+      fireEvent.pointerUp(leftZone, { pointerId: 1, clientX: 48 });
     });
     expect(editor().getPageSetup()!.marginsTwips.left).toBe(720);
     // One transaction: a single undo restores the original margin.

@@ -57,6 +57,20 @@ const KNOWN_ELEMENT_NAMES: Readonly<
   hyperlink: [WML_NAMESPACE_URI, 'hyperlink'],
   bookmarkStart: [WML_NAMESPACE_URI, 'bookmarkStart'],
   bookmarkEnd: [WML_NAMESPACE_URI, 'bookmarkEnd'],
+  deletedText: [WML_NAMESPACE_URI, 'delText'],
+  revisionInsert: [WML_NAMESPACE_URI, 'ins'],
+  revisionDelete: [WML_NAMESPACE_URI, 'del'],
+  revisionMoveFrom: [WML_NAMESPACE_URI, 'moveFrom'],
+  revisionMoveTo: [WML_NAMESPACE_URI, 'moveTo'],
+  moveFromRangeStart: [WML_NAMESPACE_URI, 'moveFromRangeStart'],
+  moveFromRangeEnd: [WML_NAMESPACE_URI, 'moveFromRangeEnd'],
+  moveToRangeStart: [WML_NAMESPACE_URI, 'moveToRangeStart'],
+  moveToRangeEnd: [WML_NAMESPACE_URI, 'moveToRangeEnd'],
+  commentRangeStart: [WML_NAMESPACE_URI, 'commentRangeStart'],
+  commentRangeEnd: [WML_NAMESPACE_URI, 'commentRangeEnd'],
+  commentReference: [WML_NAMESPACE_URI, 'commentReference'],
+  comments: [WML_NAMESPACE_URI, 'comments'],
+  comment: [WML_NAMESPACE_URI, 'comment'],
 };
 
 function knownAttributesAreValid(attributes: readonly OoxmlAttribute[]): boolean {

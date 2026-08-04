@@ -332,8 +332,8 @@ onReady?: ((_editor: Editor) => any) | undefined;
 onFontError?: ((_error: EditorFontError) => any) | undefined;
 }>, {
 author: string;
-document: DocumentSource;
 fonts: FontConfiguration | FontConfigurationFragment;
+document: DocumentSource;
 zoom: number;
 mode: EditorMode;
 locale: string;
@@ -414,8 +414,8 @@ default: () => never[];
 }>> & Readonly<{
 onClose?: (() => any) | undefined;
 }>, {
-open: boolean;
 editor: Editor | null;
+open: boolean;
 panels: readonly SidebarPanel[];
 }, {}, {}, {}, string, ComponentProvideOptions, true, {}, any>;
 
@@ -512,6 +512,8 @@ export interface DocxEditorToolbarProps {
 
 // @public (undocumented)
 export interface Editor {
+    acceptReviewItem(key: string): ExecResult;
+    addComment(text: string, author?: string): ExecResult;
     can(command: EditorCommand, options?: { scope?: EditorScope }): CanResult;
     // (undocumented)
     destroy(): void;
@@ -556,6 +558,7 @@ export interface Editor {
         };
     }[];
     getDocumentThemeColors(): readonly { readonly slot: string; readonly hex: string }[];
+    getEditingMode(): DocumentEditingMode;
     getHeaderFooterState(): HeaderFooterState | null;
     getInputHostObservation(): InputHostObservation | null;
     getInteractionFrame(): InteractionFrame;
@@ -569,6 +572,9 @@ export interface Editor {
     }[];
     getPageGeometry(): readonly { index: number; box: Rect; contentBox: Rect }[];
     getPageSetup(): PageSetup | null;
+    getRenderScale(): number;
+    getReviewItems(): readonly ReviewItemPlacement[];
+    getReviewRevision(): number;
     getScrollGeometry(): ScrollGeometry;
     getSelectedImage(): {
         readonly id: string;
@@ -594,6 +600,7 @@ export interface Editor {
     range?: EditorSelection,
     options?: SelectionGeometryOptions
     ): SelectionGeometry | null;
+    getSelectionPlacement(): { readonly anchorY: number; readonly pageIndex: number } | null;
     getSelectionRects(range?: EditorSelection, options?: SelectionGeometryOptions): readonly Rect[];
     // (undocumented)
     getTotalPages(): number;
@@ -607,6 +614,7 @@ export interface Editor {
     getZoom(): number;
     hitTest(point: Point, options?: HitTestOptions): SemanticHitTarget | null;
     isActive(command: EditorCommand, options?: { scope?: EditorScope }): boolean;
+    isReviewPaneOpen(): boolean;
     load(document: DocumentSource): void;
     // (undocumented)
     on<E extends keyof EditorEvents>(event: E, handler: EditorEvents[E]): Unsubscribe;
@@ -615,15 +623,21 @@ export interface Editor {
     query: { type: K } & EditorQueries[K],
     options?: { scope?: EditorScope }
     ): EditorQueryResults[K];
+    // (undocumented)
+    rejectReviewItem(key: string): ExecResult;
     relayout(options?: { sync?: boolean }): void;
+    replyToReviewItem(key: string, text: string, author?: string): ExecResult;
     resolvePointer(point: Point, options?: HitTestOptions): InteractionOutcome<SemanticHitTarget>;
     save(): Promise<ArrayBuffer>;
     // (undocumented)
     scrollToBlock(blockId: string): boolean;
     scrollToPage(pageNumber: number): boolean;
     selectMatch(match: TextMatch): ExecResult;
+    setActiveReviewItem(key: string | null): void;
     // (undocumented)
     setActiveScope(scope: ViewScope): void;
+    // (undocumented)
+    setEditingMode(mode: DocumentEditingMode): ExecResult;
     setZoom(zoom: number): ExecResult;
     // (undocumented)
     snapshot(options?: { scope?: EditorScope }): EditorSnapshot;
@@ -730,16 +744,19 @@ export interface EditorSnapshot {
     readonly canRedo?: boolean;
     readonly canUndo?: boolean;
     readonly editable: boolean;
+    readonly editingMode?: DocumentEditingMode;
     // (undocumented)
     readonly formatting: RunFormatting | null;
     // (undocumented)
     readonly image: ImageContext | null;
     readonly isLoading: boolean;
+    readonly lastRejection?: string | null;
     // (undocumented)
     readonly page: { readonly current: number; readonly total: number };
     readonly pageSetup?: PageSetup | null;
     // (undocumented)
     readonly parseError: string | null;
+    readonly reviewPaneOpen?: boolean;
     // (undocumented)
     readonly scope: EditorScope;
     // (undocumented)
@@ -1303,10 +1320,17 @@ export function runSave(editor: Editor | null): Promise<ArrayBuffer> {
 }
 
 // @public
-export function runToolbarCommand(editor: Editor | null, id: ChromeSlotId): ExecResult {
+export function runToolbarCommand(
+editor: Editor | null,
+id: ChromeSlotId,
+value?: unknown
+): ExecResult {
     if (!editor) return { ok: false, code: 'unsupported', reason: 'editor is not ready' };
     const // (undocumented)
-    command = commandForSlot(id);
+    command =
+    value === undefined
+    ? commandForSlot(id)
+    : (commandForSlotValue(id, value) ?? commandForSlot(id));
     if (!command) {
         if (id === 'file.save') {
             return {
@@ -1348,11 +1372,29 @@ export interface ToolbarCommandState {
     readonly enabled: boolean;
     // (undocumented)
     readonly id: ChromeSlotId;
+    readonly value?: string;
 }
 
 // @public
 export function toolbarCommandState(editor: Editor | null, id: ChromeSlotId): ToolbarCommandState {
     if (!editor) return { id, enabled: false, disabledReason: 'editor is not ready', active: false };
+    if (id === 'review.editingMode') {
+        const // (undocumented)
+        mode = editor.getEditingMode?.() ?? 'editing';
+        // Enabled state comes from the ENGINE, like every other control: a document opened
+        // read-only refuses the switch, and the control must say so rather than look live.
+        const // (undocumented)
+        probe = editor.can(
+        commandForSlotValue(id, mode === 'editing' ? 'suggesting' : 'editing')!
+        );
+        return {
+            id,
+            enabled: probe.ok,
+            disabledReason: probe.ok ? null : probe.reason,
+            active: false,
+            value: mode,
+        };
+    }
     const // (undocumented)
     command = commandForSlot(id);
     if (!command) {

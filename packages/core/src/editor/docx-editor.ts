@@ -35,6 +35,21 @@
 // derivation instead of N. When it re-derives, the previous `formatting` and `page`
 // sub-objects are reused if value-equal, so selector results stay reference-stable too.
 
+import {
+  commentBodyText,
+  commentInitials,
+  documentOrder,
+  paragraphFragmentsOf,
+  reviewAnchorIndex,
+  reviewItemGeometry,
+  reviewItemKey,
+  type ReviewItem,
+  type ReviewParagraphAnchor,
+  type ReviewRange,
+  type SemanticLayout,
+  type SemanticPosition,
+} from '../layout/index.ts';
+import type { DocumentEditingMode, ReviewItemPlacement } from '../contracts/editor.ts';
 import type {
   CanResult,
   ContainerRef,
@@ -124,6 +139,12 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
   let container: HTMLElement | null = config.container ?? null;
   /** Document bytes waiting for a container — set when constructed or loaded detached. */
   let pendingBytes: Uint8Array | null = null;
+  /**
+   * How edits are written. `mode: 'view'` at construction opens in viewing; everything else
+   * opens in editing, and the toolbar moves between all three. Declared here because the
+   * surface is handed it at mount, and a document reload keeps the reader's choice.
+   */
+  let editingMode: DocumentEditingMode = config.mode === 'view' ? 'viewing' : 'editing';
   const mode = config.mode ?? 'edit';
   let zoom =
     config.zoom !== undefined &&
@@ -254,6 +275,11 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
     teardownSurface();
     const result = mountPaginatedSurface(container, bytes, {
       scale: scaleOf(),
+      // Suggesting needs both: an author to attribute a proposal to, and the mode itself,
+      // which survives a document reload because the reader chose it, not the file.
+      ...(config.author ? { author: config.author } : {}),
+      editingMode:
+        editingMode === 'suggesting' ? 'suggest' : editingMode === 'viewing' ? 'view' : 'edit',
       ...(shapedMeasurer
         ? { measurer: shapedMeasurer, ...(shapedProducer ? { producer: shapedProducer } : {}) }
         : {}),
@@ -580,7 +606,13 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
       // cannot open is not still arriving, and `parseError` is how that is reported.
       isLoading: parseError === null && surface === null && pendingBytes === null,
       parseError,
-      editable: surface !== null && surface.session.editable && mode !== 'view',
+      // The LIVE mode, not only the construction-time one: hosts gate their chrome on this,
+      // and it read `true` while every command was being refused with `locked`.
+      editable:
+        surface !== null &&
+        surface.session.editable &&
+        mode !== 'view' &&
+        editingMode !== 'viewing',
       zoom,
       selection: selectionRangeOf(surface),
       formatting: runFormattingOf(surface),
@@ -590,6 +622,9 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
       canUndo: state?.canUndo ?? false,
       canRedo: state?.canRedo ?? false,
       pageSetup: pageSetupOf(surface),
+      reviewPaneOpen,
+      editingMode,
+      lastRejection: state?.lastRejection ?? null,
     };
   }
 
@@ -653,6 +688,232 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
       parseError = 'a DocumentHandle cannot be re-loaded; pass DOCX bytes';
       emitError(editorError('unsupported', parseError));
     }
+  }
+
+  /**
+   * A counter that moves when the queue could differ, and not otherwise.
+   *
+   * Three inputs, because any one alone misses a case. The store REVISION covers edits, but a
+   * freshly loaded document starts back at revision 0 — a sidebar keyed on that alone stays
+   * empty forever after the first load, which is exactly how this was found. The SURFACE
+   * IDENTITY covers the load. The ACTIVE KEY covers a caret move, which changes no document
+   * state at all but does change which card is open.
+   *
+   * A monotonic tick rather than a hash of the three, so a subscriber can compare with `!==`
+   * and never sees a value repeat after an edit is undone.
+   */
+  let reviewTick = 0;
+  let reviewSurface: unknown = null;
+  let reviewSeenRevision = -1;
+  let reviewSeenActive: string | null = null;
+  let reviewSeenPaneOpen = true;
+  let reviewSeenSelectionAnchor: number | null = null;
+
+  function reviewRevision(): number {
+    const revision = surface?.session.revision() ?? -1;
+    const active = activeReviewKeyNow();
+    // The selection is an input too: the "comment on this" affordance appears and moves with
+    // it, and a counter blind to it left the button absent no matter what was selected.
+    const selectionAnchor = selectionPlacement()?.anchorY ?? null;
+    if (
+      surface !== reviewSurface ||
+      revision !== reviewSeenRevision ||
+      active !== reviewSeenActive ||
+      reviewPaneOpen !== reviewSeenPaneOpen ||
+      selectionAnchor !== reviewSeenSelectionAnchor
+    ) {
+      reviewSurface = surface;
+      reviewSeenRevision = revision;
+      reviewSeenActive = active;
+      reviewSeenPaneOpen = reviewPaneOpen;
+      reviewSeenSelectionAnchor = selectionAnchor;
+      reviewTick += 1;
+    }
+    return reviewTick;
+  }
+
+  /*
+   * The ACTIVE card is the one the caret is in — not something a click stores. Clicking a
+   * card selects its range, so both routes converge on one rule, and a caret arriving by
+   * keyboard, by find, or by an outline jump opens the same card a click would. A stored key
+   * would have had to be invalidated by every one of those. The surface answers, because it
+   * also paints the band, and two derivations of "which item is open" can disagree.
+   */
+
+  function firstReviewRange(item: ReviewItem): ReviewRange | null {
+    if (item.kind === 'comment') return item.range;
+    return item.ranges[0] ?? null;
+  }
+
+  /**
+   * Paragraph anchors, built once per layout.
+   *
+   * Keyed on the layout OBJECT: a published layout is immutable, so the index is valid for
+   * exactly as long as that object is the current one, and a new revision brings a new one.
+   */
+  const anchorIndexCache = new WeakMap<SemanticLayout, Map<string, ReviewParagraphAnchor>>();
+  function anchorIndexOf(layout: SemanticLayout): Map<string, ReviewParagraphAnchor> {
+    const cached = anchorIndexCache.get(layout);
+    if (cached) return cached;
+    const index = reviewAnchorIndex(layout, (page) => paragraphFragmentsOf(page));
+    anchorIndexCache.set(layout, index);
+    return index;
+  }
+
+  /** Word writes `@w:date` to the second; milliseconds group with nothing. */
+  const secondsPrecisionNow = (): string => `${new Date().toISOString().slice(0, 19)}Z`;
+
+  /** Open by default: a document with comments should show them without being asked. */
+  let reviewPaneOpen = true;
+
+  /** Paragraph id to document position, memoized per layout. */
+  const paragraphOrderCache = new WeakMap<SemanticLayout, Map<string, number>>();
+  function paragraphOrderOf(layout: SemanticLayout): Map<string, number> {
+    const cached = paragraphOrderCache.get(layout);
+    if (cached) return cached;
+    const index = new Map<string, number>();
+    for (const [position, id] of documentOrder(layout).entries()) index.set(id, position);
+    paragraphOrderCache.set(layout, index);
+    return index;
+  }
+
+  /**
+   * The range a new comment would cover: the RETAINED pin when a panel took focus, else the
+   * live selection. Null when nothing is selected, or the selection is a caret.
+   */
+  function commentTargetRange(): { from: SemanticPosition; to: SemanticPosition } | null {
+    const selection = surface?.retainedSelection() ?? surface?.state().selection ?? null;
+    if (!selection) return null;
+    const { anchor, head } = selection;
+    if (anchor.paragraphId === head.paragraphId && anchor.offset === head.offset) return null;
+    const layout = surface?.publishedLayout();
+    if (!layout) return null;
+    // Document order, not the order the user swept in: a backwards drag has its head first.
+    // Through the memoized INDEX, not `indexOf` over the id list — this runs on every
+    // snapshot read, and a linear scan of a 2432-paragraph document twice per read is the
+    // kind of cost that only shows up on the documents that can least afford it.
+    const order = paragraphOrderOf(layout);
+    const anchorIndex = order.get(anchor.paragraphId) ?? -1;
+    const headIndex = order.get(head.paragraphId) ?? -1;
+    if (anchorIndex === -1 || headIndex === -1) return null;
+    const forwards =
+      anchorIndex < headIndex || (anchorIndex === headIndex && anchor.offset <= head.offset);
+    return forwards ? { from: anchor, to: head } : { from: head, to: anchor };
+  }
+
+  /** Where a comment on the current selection would sit. */
+  function selectionPlacement(): { readonly anchorY: number; readonly pageIndex: number } | null {
+    const range = commentTargetRange();
+    const layout = surface?.publishedLayout();
+    if (!range || !layout) return null;
+    const anchor = anchorIndexOf(layout).get(range.from.paragraphId);
+    if (!anchor) return null;
+    const line = anchor.lines?.find((entry) => range.from.offset < entry.range.end);
+    return {
+      pageIndex: anchor.pageIndex,
+      anchorY: anchor.contentY + (line ? line.box.y : anchor.fragmentY),
+    };
+  }
+
+  /** Which item is open, as the SURFACE reports it — it also paints the band. */
+  function activeReviewKeyNow(): string | null {
+    return surface?.activeReviewKey() ?? null;
+  }
+
+  /**
+   * The queue plus geometry, re-derived per call and cheap because the session memoizes the
+   * queue itself per revision.
+   */
+
+  function reviewPlacements(): readonly ReviewItemPlacement[] {
+    const items = surface?.session.reviewItems() ?? [];
+    // The PUBLISHED layout, never `layout()`: that one flushes pending work, and a rail
+    // asking for it on every keystroke turned each one into a synchronous full pass.
+    const layout = surface?.publishedLayout() ?? null;
+    const anchors = layout ? anchorIndexOf(layout) : null;
+    const activeReviewKey = activeReviewKeyNow();
+    return items.map((item) => {
+      const key = reviewItemKey(item);
+      const geometry = anchors ? reviewItemGeometry(item, anchors) : null;
+      const comment = item.kind === 'comment' ? item.comment : null;
+      return {
+        key,
+        id: item.id,
+        kind: item.kind,
+        ...(item.kind === 'revision' ? { revisionKind: item.revisionKind } : {}),
+        author: comment ? comment.author : item.kind === 'revision' ? item.author : '',
+        initials: comment ? commentInitials(comment) : initialsOfAuthor(authorOfItem(item)),
+        ...(dateOfItem(item) !== undefined ? { date: dateOfItem(item)! } : {}),
+        text: comment ? commentBodyText(comment) : item.kind === 'revision' ? item.text : '',
+        ...(item.kind === 'revision' && item.replacedText
+          ? { replacedText: item.replacedText }
+          : {}),
+        ...(item.kind === 'comment' ? { resolved: item.resolved } : {}),
+        ...(item.kind === 'comment' && item.parentId !== undefined
+          ? { parentId: item.parentId }
+          : {}),
+        replyIds: item.kind === 'comment' ? item.replyIds : [],
+        readOnly: item.kind === 'revision' ? item.readOnly : false,
+        anchorY: geometry?.y ?? null,
+        pageIndex: geometry?.pageIndex ?? null,
+        isActive: key === activeReviewKey,
+        item,
+      };
+    });
+  }
+
+  function authorOfItem(item: ReviewItem): string {
+    return item.kind === 'comment' ? item.comment.author : item.author;
+  }
+
+  function dateOfItem(item: ReviewItem): string | undefined {
+    return item.kind === 'comment' ? item.comment.date : item.date;
+  }
+
+  /** Initials from a name, for a revision — `CT_TrackChange` carries no `@w:initials`. */
+  function initialsOfAuthor(author: string): string {
+    const words = author.trim().split(/\s+/).filter(Boolean);
+    if (words.length === 0) return '?';
+    return words
+      .slice(0, 2)
+      .map((word) => word[0]!.toUpperCase())
+      .join('');
+  }
+
+  function resolveReviewItem(key: string, action: 'accept' | 'reject'): ExecResult {
+    const placement = reviewPlacements().find((entry) => entry.key === key);
+    const item = placement?.item as ReviewItem | undefined;
+    if (!item || item.kind !== 'revision') {
+      return { ok: false, code: 'notFound', reason: 'no revision with that key' };
+    }
+    if (item.readOnly) {
+      return {
+        ok: false,
+        code: 'unsupported',
+        reason: 'this revision kind has no structural accept/reject yet',
+      };
+    }
+    // EVERY address the card stands for, in ONE transaction. A replacement is two revisions
+    // in the file and one decision to the reviewer; resolving half of it — the deletion
+    // accepted, the replacement text still pending — is a state nobody asked for and one
+    // undo would not take back.
+    let applied: { committed: boolean; reason?: unknown } | undefined;
+    surface?.commitReviewOps(() => {
+      applied = surface!.session.applyTreeOps(
+        item.addresses.map((revision) =>
+          action === 'accept'
+            ? ({ op: 'acceptRevision', revision } as const)
+            : ({ op: 'rejectRevision', revision } as const)
+        )
+      );
+      return applied;
+    });
+    if (!applied?.committed) {
+      const reason =
+        typeof applied?.reason === 'string' ? applied.reason : 'the revision was refused';
+      return { ok: false, code: 'unsupported', reason };
+    }
+    return { ok: true, changed: true };
   }
 
   const editor: DocxEditorInstance = {
@@ -739,6 +1000,41 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
     },
 
     exec(command, options) {
+      // A view command: it edits nothing, so it runs before the document gate, and it works
+      // on a document that failed to open — the pane is still the reader's to close. Not on a
+      // DESTROYED editor, though: there is no reader left.
+      if (destroyed && (command.type === 'toggleReviewPane' || command.type === 'setEditingMode')) {
+        return { ok: false, code: 'notFound', reason: 'the editor was destroyed' };
+      }
+      if (command.type === 'setEditingMode') {
+        // A document opened with `mode: 'view'` is read-only for the session. Letting the
+        // control move off Viewing put "Editing" on the pill of a document where every
+        // command was still refused.
+        if (mode === 'view' && command.mode !== 'viewing') {
+          return { ok: false, code: 'locked', reason: 'this document was opened for viewing' };
+        }
+        editingMode = command.mode;
+        // The SURFACE decides what an op becomes, so it has to hear about this; `viewing`
+        // additionally gates every command below through `gateCommand`.
+        surface?.setEditingMode(
+          command.mode === 'suggesting' ? 'suggest' : command.mode === 'viewing' ? 'view' : 'edit'
+        );
+        bump();
+        emitSelectionChange();
+        return { ok: true, changed: false };
+      }
+      if (command.type === 'toggleReviewPane') {
+        reviewPaneOpen = !reviewPaneOpen;
+        bump();
+        emitSelectionChange();
+        return { ok: true, changed: false };
+      }
+      // Viewing refuses every edit, reversibly — the reader chose it and can choose again.
+      // Checked HERE as well as in `can`, because a host that calls `exec` directly is not
+      // required to ask first and must not get a write it was told it could not have.
+      if (editingMode === 'viewing') {
+        return { ok: false, code: 'locked', reason: 'the document is open for viewing' };
+      }
       const gated = gateCommand(command, surface, mode, options);
       if (!gated.ok) return gated.refusal;
       const mounted = surface!;
@@ -758,6 +1054,23 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
     },
 
     can(command, options): CanResult {
+      if (command.type === 'toggleReviewPane' || command.type === 'setEditingMode') {
+        // Not on a destroyed instance, and not for a mode this document refuses. `can` is
+        // the one thing chrome trusts; answering `ok` for an editor that no longer exists is
+        // the invention the enabled-state rule exists to prevent.
+        // `notFound` rather than a new code: a destroyed editor answers the same way for
+        // every command, and the established contract for "there is nothing here" is this.
+        if (destroyed) return { ok: false, code: 'notFound', reason: 'the editor was destroyed' };
+        if (command.type === 'setEditingMode' && mode === 'view' && command.mode !== 'viewing') {
+          return { ok: false, code: 'locked', reason: 'this document was opened for viewing' };
+        }
+        return { ok: true };
+      }
+      // Viewing refuses every edit, the same way `mode: 'view'` does at construction — but
+      // reversibly, because the reader chose it and can choose again.
+      if (editingMode === 'viewing') {
+        return { ok: false, code: 'locked', reason: 'the document is open for viewing' };
+      }
       const gated = gateCommand(command, surface, mode, options);
       return gated.ok ? { ok: true } : gated.refusal;
     },
@@ -766,6 +1079,8 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
     // agreement rule, the same one `toggleRunProperty` toggles against. Everything else
     // stays honest-false until its derivation exists.
     isActive(command) {
+      if (command.type === 'toggleReviewPane') return reviewPaneOpen;
+      if (command.type === 'setEditingMode') return editingMode === command.mode;
       const formatting = surface ? snapshotNow().formatting : null;
       if (!formatting) return false;
       switch (command.type) {
@@ -856,10 +1171,140 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
     getPageSetup: () => pageSetupOf(surface),
 
     getWatermark: () => null,
+    getTrackedChanges: () =>
+      (surface?.session.reviewItems() ?? [])
+        .filter((item) => item.kind === 'revision')
+        .map((item) => ({
+          id: item.id,
+          kind: item.kind === 'revision' ? item.revisionKind : 'revision',
+          ...(item.kind === 'revision' && item.author ? { author: item.author } : {}),
+        })),
+
+    getReviewItems: () => reviewPlacements(),
+
+    addComment(text: string, author?: string): ExecResult {
+      const range = commentTargetRange();
+      if (!range || !surface) {
+        return { ok: false, code: 'invalidArgs', reason: 'a comment needs a selected range' };
+      }
+      const writer = (author ?? config.author ?? '').trim();
+      if (writer.length === 0 || text.trim().length === 0) {
+        return {
+          ok: false,
+          code: 'invalidArgs',
+          reason: 'a comment needs both an author and text',
+        };
+      }
+      let created: string | null = null;
+      surface.commitReviewOps(() => {
+        created = surface!.session.replyToComment(
+          null,
+          {
+            paragraphId: range.from.paragraphId,
+            start: range.from.offset,
+            end: range.to.offset,
+            ...(range.to.paragraphId === range.from.paragraphId
+              ? {}
+              : { endParagraphId: range.to.paragraphId }),
+          },
+          text,
+          writer,
+          secondsPrecisionNow()
+        );
+        return { committed: created !== null };
+      });
+      if (created === null) {
+        return { ok: false, code: 'unsupported', reason: 'the comment could not be committed' };
+      }
+      // The retained pin has done its job: the range is now a comment, and the comment's own
+      // band is what marks it from here.
+      surface.releaseSelection();
+      return { ok: true, changed: true };
+    },
+
+    getSelectionPlacement: () => selectionPlacement(),
+
+    getRenderScale: () => scaleOf(),
+
+    isReviewPaneOpen: () => reviewPaneOpen,
+
+    getEditingMode: () => editingMode,
+    setEditingMode: (mode) => editor.exec({ type: 'setEditingMode', mode }),
+
+    getReviewRevision: () => reviewRevision(),
+
+    setActiveReviewItem(key: string | null) {
+      // Dismissing is the only thing a key of `null` can mean here: the caret decides which
+      // card is open, and a card the reader closed stays closed until the caret next moves.
+      if (key === null) {
+        surface?.dismissActiveReview();
+        bump();
+        emitSelectionChange();
+        return;
+      }
+      const placement = reviewPlacements().find((entry) => entry.key === key);
+      const item = placement?.item;
+      const range = item ? firstReviewRange(item) : null;
+      if (!range || !surface) return;
+      // Card to document: put the CARET at the range's start. Selecting the whole range
+      // instead turned the text grey and — because a range selection is what the "comment on
+      // this" affordance keys on — offered to add a second comment on top of the one the
+      // reader had just opened. The band already marks the range; the caret only has to land
+      // inside it for the card to stay open and the document to scroll there.
+      surface.setSelection({
+        anchor: { paragraphId: range.start.paragraphId, offset: range.start.offset },
+        head: { paragraphId: range.start.paragraphId, offset: range.start.offset },
+      });
+    },
+
+    acceptReviewItem: (key: string) => resolveReviewItem(key, 'accept'),
+    rejectReviewItem: (key: string) => resolveReviewItem(key, 'reject'),
+
+    replyToReviewItem(key: string, text: string, author?: string): ExecResult {
+      const placement = reviewPlacements().find((entry) => entry.key === key);
+      const item = placement?.item as ReviewItem | undefined;
+      if (!item || !surface) {
+        return { ok: false, code: 'notFound', reason: 'no review item with that key' };
+      }
+      const range = firstReviewRange(item);
+      if (!range) {
+        return { ok: false, code: 'invalidArgs', reason: 'the item has no anchorable range' };
+      }
+      const writer = (author ?? config.author ?? '').trim();
+      if (writer.length === 0 || text.trim().length === 0) {
+        return { ok: false, code: 'invalidArgs', reason: 'a reply needs both an author and text' };
+      }
+      // Against a REVISION this is a comment over that revision's range: OOXML gives `w:ins`
+      // and `w:del` no body and no thread, so there is nowhere else for the text to live.
+      const parent = item.kind === 'comment' ? item.id : null;
+      let created: string | null = null;
+      surface.commitReviewOps(() => {
+        created = surface!.session.replyToComment(
+          parent,
+          {
+            paragraphId: range.start.paragraphId,
+            start: range.start.offset,
+            end: range.end.offset,
+          },
+          text,
+          writer,
+          // Word stamps every comment it writes, and a card with no date reads as older
+          // than the ones around it. The clock is the HOST's, which is why the store takes
+          // the value rather than reading one: a store that called `Date.now()` could not
+          // be tested for a deterministic round trip.
+          secondsPrecisionNow()
+        );
+        return { committed: created !== null };
+      });
+      if (created === null) {
+        return { ok: false, code: 'unsupported', reason: 'the reply could not be committed' };
+      }
+      return { ok: true, changed: true };
+    },
+
     getHeaderFooterState: () => surface?.headerFooterState() ?? null,
     getNotePropertiesState: () => surface?.notePropertiesState?.() ?? null,
     getNotePreviewText: (scopeId) => surface?.notePreviewText?.(scopeId) ?? null,
-    getTrackedChanges: () => [],
     setActiveScope(scope: ViewScope) {
       if (surface?.setActiveScope(scope)) bump();
     },
@@ -947,6 +1392,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
     ...createHonestEmptyInteractionApi({
       getSurface: () => surface,
       getMode: () => mode,
+      getEditingMode: () => editingMode,
     }),
 
     relayout() {

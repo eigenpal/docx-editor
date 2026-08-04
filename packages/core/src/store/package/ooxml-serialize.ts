@@ -347,7 +347,11 @@ function serializeNode(
     })
     .join('');
   const elementAttributes =
-    node.kind === 'text' || node.kind === 'instrText'
+    // `w:delText` is `CT_Text` exactly as `w:t` is (§17.3.3.7), so it needs the same
+    // `xml:space` normalization. Without it, striking " b " wrote `<w:delText> b </w:delText>`
+    // with no attribute, a conformant reader dropped the edge spaces, and REJECTING the
+    // deletion later restored the words with the spacing already gone.
+    node.kind === 'text' || node.kind === 'deletedText' || node.kind === 'instrText'
       ? normalizedWmlTextAttributes(node.attributes, wmlTextValueOf(node))
       : node.attributes;
   validateQNameAttributeValues(elementAttributes, bindings, node.namespaceUri, node.localName);
@@ -450,7 +454,11 @@ function fingerprintNode(
   const bindings = new Map(inheritedBindings);
   for (const binding of node.namespaceBindings) bindings.set(binding.prefix, binding.namespaceUri);
   const elementAttributes =
-    node.kind === 'text' || node.kind === 'instrText'
+    // `w:delText` is `CT_Text` exactly as `w:t` is (§17.3.3.7), so it needs the same
+    // `xml:space` normalization. Without it, striking " b " wrote `<w:delText> b </w:delText>`
+    // with no attribute, a conformant reader dropped the edge spaces, and REJECTING the
+    // deletion later restored the words with the spacing already gone.
+    node.kind === 'text' || node.kind === 'deletedText' || node.kind === 'instrText'
       ? normalizedWmlTextAttributes(node.attributes, wmlTextValueOf(node))
       : node.attributes;
   const ownSpace = xmlSpaceValue(elementAttributes);

@@ -10,18 +10,9 @@
 // - `definePart(slot)`: a live `ToolbarButton` for an ICON-shaped chrome control. A
 //   slot the engine has not wired renders disabled with the engine's own reason — the
 //   registry's parity rule (visible, never dropped, never faked).
-// - `definePicker(slot)`: a DISABLED COMBOBOX-LOOKALIKE for a dropdown-shaped control
-//   whose behavior the engine does not own yet (`review.editingMode`). It shows the
-//   registry's placeholder value and a chevron, exactly like the Vue registry toolbar's
-//   picker, and deliberately does nothing. (`styles.style` graduated to the live
-//   `ParagraphStyle` compound, and `list.lineSpacing` to `ToolbarLineSpacing`.)
 
 import { useContext } from 'react';
-import {
-  CHROME_UNAVAILABLE_KEY,
-  chromeProbeForSlot,
-  type ChromeSlotId,
-} from '@docx-editor.dev/core-contract/editor';
+import { chromeProbeForSlot, type ChromeSlotId } from '@docx-editor.dev/core-contract/editor';
 import { useDocxEditor } from '../context';
 import { useHyperlinkPopup } from '../useHyperlinkPopup';
 import { ToolbarContext, useToolbarLabel } from './toolbar-context';
@@ -128,47 +119,6 @@ function ToolbarLinkImpl({ className, hidden, icon, asChild, children }: Toolbar
 export const ToolbarLink: ToolbarPartComponent = Object.assign(ToolbarLinkImpl, {
   docxSlot: 'text.link' as ChromeSlotId,
 });
-
-/**
- * A disabled combobox-lookalike for a dropdown-shaped control the engine does not
- * drive yet. Mirrors the Vue registry toolbar's picker: the registry placeholder
- * value, a chevron, and the unavailable reason for assistive technology. It is a
- * <span>, not a <button> — there is no action to take, and faking one would claim a
- * capability the engine does not have.
- */
-function definePicker(slot: ChromeSlotId): ToolbarSlotPartComponent {
-  const Part = ({ className, hidden }: ToolbarSlotPartProps) => {
-    const label = useToolbarLabel();
-    if (hidden) return null;
-    const control = chromeControlForSlot(slot);
-    const text = label(control?.labelKey ?? slot);
-    const value = control?.valueKey ? label(control.valueKey) : (control?.valueText ?? '');
-    return (
-      <span
-        className={`docx-toolbar__picker${className ? ` ${className}` : ''}`}
-        data-slot={slot}
-        aria-disabled="true"
-        // A <span> takes no focus itself, but a mousedown still blurs the editor; the
-        // container guard covers this too — belt and braces like the Vue picker.
-        onMouseDown={guardToolbarMousedown}
-      >
-        {/* Dropdown-shaped controls can carry a leading glyph (the line-spacing
-            icon, the editing-mode pencil) ahead of the value text. */}
-        {chromeIcon(control?.paths)}
-        {value ? <span className="docx-toolbar__picker-value">{value}</span> : null}
-        <span className="docx-toolbar__picker-caret" aria-hidden="true">
-          ▾
-        </span>
-        <span className="ep-sr-only">{`${text} — ${label(CHROME_UNAVAILABLE_KEY)}`}</span>
-      </span>
-    );
-  };
-  return Object.assign(Part, { docxSlot: slot });
-}
-
-export const ToolbarEditingMode = definePicker('review.editingMode');
-// Line spacing is dropdown-SHAPED in the chrome spec (icon + caret), so its
-// undriven rendering is the picker lookalike, not a bare icon button.
 
 /**
  * The save control. Save is not an engine command (`Editor.save()` returns bytes the

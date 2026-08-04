@@ -12,6 +12,8 @@
 // collapse to a single honest statement of what the part contains.
 
 import type { Node as PMNode } from 'prosemirror-model';
+import { collectReviewItems, type ReviewItem } from '../layout/review-model.ts';
+import { addComment } from '../store/store/comment-writes.ts';
 import {
   ORIGIN_IDS,
   TreePackageStore,
@@ -240,6 +242,24 @@ export interface TreeDocxSession {
    * in-session.
    */
   documentOutline(): readonly DocumentOutlineEntry[];
+
+  /**
+   * Every pending review decision in the document, memoized per revision.
+   *
+   * Derived from the canonical TREE — the queue is a property of the document, and one derived
+   * from laid-out spans empties by half whenever the reader switches to a resolved view.
+   */
+  reviewItems(): readonly ReviewItem[];
+
+  /** Reply to a comment, or add one over a revision's range. Returns the new comment's id. */
+  replyToComment(
+    parentCommentId: string | null,
+    anchor: { paragraphId: string; start: number; end: number; endParagraphId?: string },
+    text: string,
+    author: string,
+    /** ISO-8601. Omitted writes no `@w:date`, because inventing one is a content change. */
+    date?: string
+  ): string | null;
   /**
    * Every occurrence of `query` in the BODY story, in document order, addressed in the
    * same offset vocabulary the tree ops and the surface selection use — so a match can be
@@ -370,6 +390,8 @@ export function openTreeSession(bytes: Uint8Array): OpenTreeSessionResult {
     readonly parts: readonly HeaderFooterParts[];
     readonly resolution: readonly HeaderFooterSectionResolution[];
   } | null = null;
+  /** Memoized per package revision: the queue only changes when the document does. */
+  let reviewCache: { revision: number; items: readonly ReviewItem[] } | null = null;
   let lastChange: TreeModelChange | null = null;
   packageStore.subscribe((change) => {
     lastChange = change;
@@ -837,6 +859,51 @@ export function openTreeSession(bytes: Uint8Array): OpenTreeSessionResult {
         if (!ensured) return null;
         if (ensured.pkg !== before) packageStore.replacePackageShell(ensured.pkg);
         return ensured.relationshipId;
+      },
+
+      reviewItems() {
+        const store = bodyStore();
+        if (!reviewCache || reviewCache.revision !== store.revision) {
+          const pkg = currentPackage();
+          reviewCache = {
+            revision: store.revision,
+            items: collectReviewItems({
+              storyPart: store.part,
+              commentsPart: pkg.parts.get('/word/comments.xml'),
+              commentsExtendedPart: pkg.parts.get('/word/commentsExtended.xml'),
+            }),
+          };
+        }
+        return reviewCache.items;
+      },
+
+      replyToComment(parentCommentId, anchor, text, author, date) {
+        const store = bodyStore();
+        const result = addComment(store, {
+          anchor: {
+            paragraphId: anchor.paragraphId,
+            start: anchor.start,
+            end: anchor.end,
+            // A range that ends in a LATER paragraph is ordinary in OOXML: the start and end
+            // markers are independent elements. Dropping the end paragraph would anchor the
+            // comment to an offset in the wrong one.
+            ...(anchor.endParagraphId === undefined
+              ? {}
+              : { endParagraphId: anchor.endParagraphId }),
+          },
+          author,
+          text,
+          ...(date === undefined ? {} : { date }),
+          ...(parentCommentId === null ? {} : { replyToCommentId: parentCommentId }),
+        });
+        if (!result.ok) return null;
+        // A comment write creates PARTS — `comments.xml`, `commentsExtended.xml`, their
+        // relationships and content types. Those live on the package, and the transaction
+        // wrote them into the story store's copy of it, so the coordinator has to be told or
+        // `currentPackage()` keeps answering with a package that has no comment part and the
+        // reply reads back as never written.
+        packageStore.replacePackageShell(store.package);
+        return result.commentId;
       },
 
       ensureListDefinition(kind) {

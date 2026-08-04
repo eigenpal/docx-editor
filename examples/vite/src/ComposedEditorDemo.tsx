@@ -518,19 +518,6 @@ function EditorChrome({
           document-derived family in its own typeface. Save is
           live because the toolbar was given an onSave handler. */}
       <DocxEditor.Toolbar t={translate} className="demo-toolbar" onSave={saveDocument}>
-        {/* A host-owned action: no chrome slot, our styling and caret guard. */}
-        <DocxEditor.Toolbar.Action
-          label="Send for review"
-          onSelect={() => window.alert('Sent for review.')}
-          icon={
-            <svg viewBox="0 -960 960 960" width={18} height={18} aria-hidden="true">
-              <path
-                d="M120-160v-640l760 320-760 320Zm80-120 474-200-474-200v140l240 60-240 60v140Z"
-                fill="currentColor"
-              />
-            </svg>
-          }
-        />
         <DocxEditor.Toolbar.FontFamily>
           <DocxEditor.Toolbar.FontFamily.Trigger className="demo-font-trigger" />
           <DocxEditor.Toolbar.FontFamily.Content className="demo-font-menu">
@@ -629,8 +616,12 @@ export function ComposedEditorDemo({ fixtureUrl }: { fixtureUrl: string }) {
       data-testid="composed-mount"
     >
       {bytes && fonts.settled ? (
+        // Authoring is ambient: comments and tracked changes take their `@w:author` from
+        // `author`, the way the Office JS API sources it from context. A real app supplies
+        // the signed-in user; a demo supplies a name so replies can be written at all.
         <DocxEditor.Root
           document={bytes}
+          author="Demo Reviewer"
           {...(fonts.configuration ? { fonts: fonts.configuration } : {})}
           onFontError={(error) => console.warn(`[fonts] ${error.code}: ${error.message}`)}
         >
@@ -669,6 +660,10 @@ export function ComposedEditorDemo({ fixtureUrl }: { fixtureUrl: string }) {
                   scrolling. `<DocxEditor>` mounts it for you; a composition like this one
                   places it by name, exactly like the rulers above. */}
               <DocxEditor.HyperLink />
+              {/* The review rail: tracked changes and comments as cards beside the page,
+                  with accept / reject / reply. Inside the viewport for the same reason as
+                  the popover — it scrolls with the document rather than chasing it. */}
+              <DocxEditor.Review />
             </DocxEditor.Viewport>
             {/* Floating diagnostics chrome, above the overlay panels. */}
             <PerfHud />

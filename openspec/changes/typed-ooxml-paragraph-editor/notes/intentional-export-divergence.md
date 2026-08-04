@@ -166,6 +166,26 @@ does. Only the panel is React-only.
 - `HyperlinkPopupMode`
 - `HyperlinkPopupAnchor`
 
+### Review surface (React only, for now)
+
+The review rail and its hook. Vue has no twin yet, and the engine members behind them
+(`getReviewItems`, `acceptReviewItem`, `addComment`, …) are on the shared `Editor` contract,
+so a Vue host can already reach the capability — what is missing is the chrome.
+
+One thing blocks a faithful Vue twin beyond the component work: the compose box pins the
+selection with `editor.surface.retainSelection()`, and `surface` is the escape hatch, not
+the contract. Publishing retain/release on `Editor` is the prerequisite.
+
+- `DocxEditorReview`
+- `DocxEditorReviewNamespace`
+- `ReviewActionProps`
+- `ReviewPartProps`
+- `ReviewProps`
+- `useReview`
+- `useReviewOf`
+- `useStackedReviewPositions`
+- `ReviewItemView`
+- `UseReviewReturn`
 The navigation pane rides the same provider/hooks layer: a compound plus three behavior
 hooks over the context-published editor, so its Vue twin is the composable form and lands
 with the rest of that layer. The ENGINE half is already adapter-neutral — the search

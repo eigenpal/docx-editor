@@ -13,6 +13,7 @@ import {
   isInstrText,
 } from '../package/field-nodes.ts';
 import { atomicNoteSpansOf, isNoteAtomNode } from '../package/note-nodes.ts';
+import { isContentRevisionKind } from '../package/ooxml-shared.ts';
 
 /** One addressable unit of paragraph text: text, tab, hard break, or atomic field. */
 export interface Segment {
@@ -120,13 +121,14 @@ export function segmentsOf(paragraph: OoxmlParagraphNode): Segment[] {
       return;
     }
     if (node.kind === 'runProperties' || node.kind === 'generic') return;
-    if (node.kind === 'text') {
+    if (node.kind === 'text' || node.kind === 'deletedText') {
       for (const child of node.children) visitRunChild(child, runId);
       return;
     }
     for (const child of node.children) visitRunChild(child, runId);
   };
-  const visitInline = (child: OoxmlNode): void => {
+  const visitInline = (child: OoxmlNode, depth: number): void => {
+    if (child.kind === 'textValue' || depth >= MAX_INLINE_CONTAINER_DEPTH) return;
     if (isFldSimple(child)) {
       const atom = atomByBeginId.get(child.id);
       if (atom) emitAtom(atom);
@@ -136,20 +138,31 @@ export function segmentsOf(paragraph: OoxmlParagraphNode): Segment[] {
       for (const grand of child.children) visitRunChild(grand, child.id);
       return;
     }
-    // Bookmark markers and everything generic measure nothing; only a link descends.
-    if (child.kind === 'hyperlink') {
-      for (const inner of child.children) visitInline(inner);
+    // Bookmark and range markers measure nothing; only a run CONTAINER descends. A link and a
+    // revision wrapper are both containers, and either can hold the other — a link inside a
+    // tracked insertion is ordinary. Not descending is what made tracked text invisible to the
+    // op offset space, so every op past it was refused as out of range.
+    if (child.kind === 'hyperlink' || isContentRevisionKind(child.kind)) {
+      for (const inner of child.children) visitInline(inner, depth + 1);
     }
   };
-  for (const child of paragraph.children) visitInline(child);
+  for (const child of paragraph.children) visitInline(child, 0);
   return segments;
 }
 
-/** The runs a paragraph child owns, at any depth — a `w:r`, or every run inside a link. */
-export function runsUnder(child: OoxmlNode): OoxmlNode[] {
+/** Matches the layout projection's nesting cap; see `segmentsOf`. */
+const MAX_INLINE_CONTAINER_DEPTH = 32;
+
+/**
+ * The runs a paragraph child owns, at any depth — a `w:r`, or every run inside a container.
+ *
+ * Links and revision wrappers are both run containers, and either can hold the other.
+ */
+export function runsUnder(child: OoxmlNode, depth = 0): OoxmlNode[] {
   if (child.kind === 'run') return [child];
-  if (child.kind !== 'hyperlink') return [];
-  return child.children.flatMap((inner) => runsUnder(inner));
+  if (child.kind === 'textValue' || depth >= MAX_INLINE_CONTAINER_DEPTH) return [];
+  if (child.kind !== 'hyperlink' && !isContentRevisionKind(child.kind)) return [];
+  return child.children.flatMap((inner) => runsUnder(inner, depth + 1));
 }
 
 /** UTF-16 length of a paragraph under the shared segment model. */

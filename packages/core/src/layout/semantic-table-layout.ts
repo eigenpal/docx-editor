@@ -22,6 +22,7 @@ import type { OoxmlElement } from '@docx-editor.dev/core-contract/store';
 import type { FieldPageContext, HyperlinkProjector } from './field-projection.ts';
 import { paragraphLayoutKey, type ParagraphLayoutCache } from './layout-cache.ts';
 import { alignSpans, breakParagraph, type PendingLine } from './paragraph-flow.ts';
+import type { RevisionDisplayMode } from './revision-projection.ts';
 import { collapsedSpaceBefore, paragraphBorderExtentPt } from './paragraph-style.ts';
 import { tabStopsFingerprint, withDefaultTabInterval } from './paragraph-tabs.ts';
 import { DEFAULT_RUN_STYLE } from './run-style.ts';
@@ -142,6 +143,12 @@ export interface TableFlowDeps {
    * pass. Exhaustion fails soft (remaining restarts keep rowSpan 1).
    */
   readonly vMergeResolveBudget?: TableVMergeResolveBudget;
+  /**
+   * Which tracked revisions this pass resolves away. A cell paragraph must resolve the same
+   * mode as a body paragraph, or one table would show the proposed result while the text
+   * around it showed the original.
+   */
+  readonly displayMode?: RevisionDisplayMode;
 }
 
 /**
@@ -332,6 +339,7 @@ function placeCellParagraph(
       // A cell's own content box is the column a positional tab measures against.
       marginExtent: { left: 0, right: indent.left + available + indent.right },
       ...(deps.projectLink ? { projectLink: deps.projectLink } : {}),
+      displayMode: deps.displayMode,
       ...(deps.noteMarks ? { noteMarks: deps.noteMarks } : {}),
     }
   );
@@ -390,6 +398,7 @@ function placeCellParagraph(
       },
       baseline: pendingLine.baseline,
       leading: pendingLine.leading,
+      ...(pendingLine.deletedRanges ? { deletedRanges: pendingLine.deletedRanges } : {}),
     });
     y += pendingLine.height;
     nextLineIndex = lineIndex + 1;
@@ -1196,7 +1205,13 @@ function emitNestedTable(
 ): { readonly fragment: TableFragmentRecord; readonly bottom: number } | null {
   if (depth >= MAX_TABLE_NESTING) return null;
   const containerWidth = Math.max(1, right - left);
-  const structure = readTableStructure(table, containerWidth, depth, deps.styleCascade);
+  const structure = readTableStructure(
+    table,
+    containerWidth,
+    depth,
+    deps.styleCascade,
+    deps.displayMode
+  );
   if (!structure || structure.rows.length === 0) return null;
   // A nested table is placed inside its CELL's content box by the same rules a top-level one
   // is placed inside the text column.

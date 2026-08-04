@@ -622,13 +622,26 @@ export function resolveParagraphLayoutInputs(
       // geometry unbounded — `w:hanging="999999999"` resolved to 50,000,000pt.
       const h = indentTwips(property.attributes?.hanging);
       const f = indentTwips(property.attributes?.firstLine);
-      // `w:hanging` is `ST_TwipsMeasure`, unsigned: a negative one is not a measurement.
-      if (h !== null) hanging = Math.max(0, h) / 20;
-      // `w:firstLine` is DECLARED unsigned, but Word's model keeps one SIGNED first-line
-      // indent and the numbering reader already reads it that way (`numbering-index.ts`).
-      // Flattening a negative to zero here rendered a body paragraph flush where Word
-      // renders a hanging, and made the two readers disagree about the same attribute.
-      if (f !== null) firstLine = f / 20;
+      // `w:hanging` and `w:firstLine` are MUTUALLY EXCLUSIVE (§17.3.1.10, §17.3.1.12): they
+      // are two spellings of one first-line offset, so an `w:ind` that states either one
+      // replaces BOTH. Accumulating them independently let a style's hanging indent survive a
+      // paragraph that explicitly cancelled it with `w:firstLine="0"` — the first line of
+      // every body paragraph then hung out into the left margin while the rest sat indented.
+      //
+      // An `w:ind` that states NEITHER (a bare `w:left`) leaves the inherited offset alone,
+      // which is why this is gated rather than reset on every `ind`.
+      if (
+        property.attributes?.hanging !== undefined ||
+        property.attributes?.firstLine !== undefined
+      ) {
+        // `w:hanging` is `ST_TwipsMeasure`, unsigned: a negative one is not a measurement.
+        hanging = h !== null ? Math.max(0, h) / 20 : 0;
+        // `w:firstLine` is DECLARED unsigned, but Word's model keeps one SIGNED first-line
+        // indent and the numbering reader already reads it that way (`numbering-index.ts`).
+        // Flattening a negative to zero here rendered a body paragraph flush where Word
+        // renders a hanging, and made the two readers disagree about the same attribute.
+        firstLine = f !== null ? f / 20 : 0;
+      }
     }
   }
   const indent = listItem

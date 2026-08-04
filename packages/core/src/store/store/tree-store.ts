@@ -16,6 +16,8 @@
 // it, so undo is a pointer swap and history costs nothing per entry.
 
 import { validateOoxmlPartDelta, type OoxmlPart } from '../package/ooxml-tree.ts';
+import { withPart, type OoxmlPackage } from '../package/ooxml-package.ts';
+import { validatePackageInvariants } from '../package/package-edit.ts';
 import { ORIGIN_IDS } from '../registry/frozen-ids.ts';
 import { applyTreeOp, type ImpactClass, type TreeDocOp, type TreeOpRejection } from './tree-ops.ts';
 
@@ -71,8 +73,23 @@ export type TransactResult =
   | { readonly ok: false; readonly reason: TreeOpRejection; readonly detail?: string };
 
 export interface TransactionContext {
-  /** Stage one op. Returns false once the transaction has failed; further ops are ignored. */
+  /** Stage one op against the STORY part. Returns false once the transaction has failed. */
   apply(op: TreeDocOp): boolean;
+  /**
+   * Stage one op against a named part.
+   *
+   * A comment body lives in `comments.xml` and is edited by the same ops that edit the story,
+   * so this is `apply` with the target named rather than a second vocabulary.
+   */
+  applyTo(partName: string, op: TreeDocOp): boolean;
+  /**
+   * Stage a whole-package edit: a new part, a relationship, a content-type override.
+   *
+   * The edit is a pure function of the working package, so a rejected transaction discards it
+   * with everything else. Returning the SAME package is a no-op, not a failure — a primitive
+   * that finds nothing to do says so that way.
+   */
+  applyPackage(edit: (pkg: OoxmlPackage) => OoxmlPackage): boolean;
   /** The selection to restore when this entry is undone. */
   selectionBefore(selection: SelectionMark | null): void;
   /** The selection to restore when this entry is redone. */
@@ -98,7 +115,15 @@ export interface TransactOptions {
 }
 
 interface HistoryEntry {
-  readonly part: OoxmlPart;
+  /**
+   * The whole package as it was, not just the story part.
+   *
+   * Affordable for the same reason a part snapshot was: parts are immutable and deep-frozen, so
+   * a package snapshot is a Map of references and every part the transaction did not touch is
+   * object-identical to the one before it. Undo stays a pointer swap, and it now reverses every
+   * part one intent wrote rather than only the story.
+   */
+  readonly pkg: OoxmlPackage;
   readonly revision: number;
   readonly selectionBefore: SelectionMark | null;
   readonly selectionAfter: SelectionMark | null;
@@ -116,12 +141,32 @@ export interface TreeDocumentStoreOptions {
   readonly historyLimit?: number;
 }
 
+/** A package holding exactly one part, for callers that never open a real one. */
+function singlePartPackage(part: OoxmlPart): OoxmlPackage {
+  return Object.freeze({
+    parts: new Map([[part.name, part]]),
+    partBytes: new Map(),
+    relationships: new Map(),
+    externalTargets: [],
+    contentTypes: {
+      defaults: new Map(),
+      overrides: new Map([[part.name.toLowerCase(), part.contentType]]),
+    },
+    mainDocumentPart: part.name,
+  }) as OoxmlPackage;
+}
+
 /**
  * Opaque document+history checkpoint for package-coordinator rollback.
  * Used when a story mutation may promote to a package undo unit (note-ref cascade).
  */
 export interface TreeDocumentCheckpoint {
-  readonly part: OoxmlPart;
+  /**
+   * The whole package, not one part. The store owns the package so a transaction spanning
+   * several parts is one publication — a checkpoint of only the story part could not roll
+   * back the comment or numbering part the same transaction wrote.
+   */
+  readonly pkg: OoxmlPackage;
   readonly revision: number;
   readonly undoStack: readonly HistoryEntry[];
   readonly redoStack: readonly HistoryEntry[];
@@ -132,7 +177,9 @@ export interface TreeDocumentCheckpoint {
 }
 
 export class TreeDocumentStore {
-  private current: OoxmlPart;
+  private current: OoxmlPackage;
+  /** The part `apply` targets and `part` returns: the story this store is editing. */
+  private readonly storyPartName: string;
   private rev = 0;
   private commitCounter = 0;
   private readonly undoStack: HistoryEntry[] = [];
@@ -149,8 +196,29 @@ export class TreeDocumentStore {
     committed: boolean;
   } | null = null;
 
-  constructor(part: OoxmlPart, options: TreeDocumentStoreOptions = {}) {
-    this.current = part;
+  /**
+   * Open a store over a package, editing the named story part.
+   *
+   * A bare part is accepted and wrapped in a single-part package, so callers that never open a
+   * real package — tests, headless tooling — are unaffected by the widening.
+   */
+  constructor(
+    source: OoxmlPart | OoxmlPackage,
+    storyPartNameOrOptions?: string | TreeDocumentStoreOptions,
+    maybeOptions: TreeDocumentStoreOptions = {}
+  ) {
+    const isPart = 'root' in source;
+    // The story name was added in front of the options, so the two-argument form that predates
+    // it still means what it always did. Overloading on the argument's type keeps every
+    // existing call site — `new TreeDocumentStore(part, { historyLimit })` — working.
+    const storyPartName =
+      typeof storyPartNameOrOptions === 'string' ? storyPartNameOrOptions : undefined;
+    const options =
+      typeof storyPartNameOrOptions === 'object' && storyPartNameOrOptions !== null
+        ? storyPartNameOrOptions
+        : maybeOptions;
+    this.current = isPart ? singlePartPackage(source) : source;
+    this.storyPartName = storyPartName ?? (isPart ? source.name : source.mainDocumentPart);
     this.historyLimit = options.historyLimit ?? 200;
   }
 
@@ -162,7 +230,15 @@ export class TreeDocumentStore {
     this.storyRef = story;
   }
 
+  /** The story part being edited. Unchanged for every caller that predates the widening. */
   get part(): OoxmlPart {
+    const story = this.current.parts.get(this.storyPartName);
+    if (!story) throw new Error(`story part missing: ${this.storyPartName}`);
+    return story;
+  }
+
+  /** Every part, including the ones a multi-part transaction wrote. */
+  get package(): OoxmlPackage {
     return this.current;
   }
   get revision(): number {
@@ -183,12 +259,29 @@ export class TreeDocumentStore {
   }
 
   /**
+   * Replace the package OUTSIDE the transaction and history lanes.
+   *
+   * For package writes that are not a user intent and publish no revision: grafting
+   * `numbering.xml` into a document that never had one, which the caller performs as a
+   * precondition of the list op that follows. Those edits were previously kept in a package
+   * variable beside the store, which meant two owners of one value and, predictably, two
+   * values — a graft written to one and a save read from the other.
+   *
+   * Deliberately narrow and deliberately awkward to reach for: anything a user did belongs in
+   * `transact`, where it gets a revision, an undo entry and the invariant checks.
+   */
+  graftPackage(edit: (pkg: OoxmlPackage) => OoxmlPackage): void {
+    this.current = edit(this.current);
+  }
+
+  /**
    * Replace the current part without recording history, but advance the revision so
    * revision-keyed projections cannot survive a package snapshot install.
    */
   replacePart(part: OoxmlPart): void {
-    if (part === this.current) return;
-    this.current = part;
+    const existing = this.current.parts.get(part.name);
+    if (part === existing) return;
+    this.current = withPart(this.current, part);
     this.rev += 1;
   }
 
@@ -199,7 +292,7 @@ export class TreeDocumentStore {
    */
   checkpoint(): TreeDocumentCheckpoint {
     return {
-      part: this.current,
+      pkg: this.current,
       revision: this.rev,
       undoStack: this.undoStack.slice(),
       redoStack: this.redoStack.slice(),
@@ -211,7 +304,7 @@ export class TreeDocumentStore {
 
   /** Full restore — part, revision, history stacks, and composition. */
   restoreCheckpoint(checkpoint: TreeDocumentCheckpoint): void {
-    this.current = checkpoint.part;
+    this.current = checkpoint.pkg;
     this.rev = checkpoint.revision;
     this.undoStack.length = 0;
     this.undoStack.push(...checkpoint.undoStack);
@@ -258,6 +351,8 @@ export class TreeDocumentStore {
     let working = this.current;
     let failure: { reason: TreeOpRejection; detail?: string } | null = null;
     let applied = 0;
+    /** Parts this transaction rewrote, so the commit validates those and no others. */
+    const touched = new Set<string>();
     const dirty = new Set<string>();
     const created = new Set<string>();
     const deleted = new Set<string>();
@@ -267,28 +362,51 @@ export class TreeDocumentStore {
     let selectionBefore: SelectionMark | null = null;
     let selectionAfter: SelectionMark | null = null;
 
+    const applyToPart = (partName: string, op: TreeDocOp): boolean => {
+      if (failure) return false;
+      const target = working.parts.get(partName);
+      if (!target) {
+        failure = { reason: 'unknown-part', detail: partName };
+        return false;
+      }
+      // Validation of the whole part is DEFERRED to the commit below: per-op it made a
+      // many-op transaction quadratic in document size, and nothing between here and the
+      // commit can observe the intermediate parts. Op-level input validation still runs
+      // inside `applyTreeOp` before any tree work.
+      const result = applyTreeOp(target, op, { deferValidation: true });
+      if (!result.ok) {
+        failure = { reason: result.reason, ...(result.detail ? { detail: result.detail } : {}) };
+        return false;
+      }
+      working = withPart(working, result.part);
+      touched.add(partName);
+      applied += 1;
+      for (const id of result.effect.dirty) dirty.add(id);
+      for (const id of result.effect.created) created.add(id);
+      for (const id of result.effect.deleted) deleted.add(id);
+      for (const key of result.effect.dependencyKeys) dependencyKeys.add(key);
+      if (result.effect.split) splitJoin.push({ split: result.effect.split });
+      for (const split of result.effect.splits ?? []) splitJoin.push({ split });
+      if (result.effect.join) splitJoin.push({ join: result.effect.join });
+      if (IMPACT_RANK[result.effect.impact] > IMPACT_RANK[impact]) impact = result.effect.impact;
+      return true;
+    };
+
     build({
-      apply: (op) => {
+      apply: (op) => applyToPart(this.storyPartName, op),
+      applyTo: (partName, op) => applyToPart(partName, op),
+      applyPackage: (edit) => {
         if (failure) return false;
-        // Validation of the whole part is DEFERRED to the commit below: per-op it made a
-        // many-op transaction quadratic in document size, and nothing between here and the
-        // commit can observe the intermediate parts. Op-level input validation still runs
-        // inside `applyTreeOp` before any tree work.
-        const result = applyTreeOp(working, op, { deferValidation: true });
-        if (!result.ok) {
-          failure = { reason: result.reason, ...(result.detail ? { detail: result.detail } : {}) };
-          return false;
+        const next = edit(working);
+        if (next === working) return true;
+        for (const [name, part] of next.parts) {
+          if (working.parts.get(name) !== part) touched.add(name);
         }
-        working = result.part;
+        working = next;
         applied += 1;
-        for (const id of result.effect.dirty) dirty.add(id);
-        for (const id of result.effect.created) created.add(id);
-        for (const id of result.effect.deleted) deleted.add(id);
-        for (const key of result.effect.dependencyKeys) dependencyKeys.add(key);
-        if (result.effect.split) splitJoin.push({ split: result.effect.split });
-        for (const split of result.effect.splits ?? []) splitJoin.push({ split });
-        if (result.effect.join) splitJoin.push({ join: result.effect.join });
-        if (IMPACT_RANK[result.effect.impact] > IMPACT_RANK[impact]) impact = result.effect.impact;
+        // A new or removed part re-flows nothing by itself, but the caller pairs it with the
+        // story edit that references it, and that edit reports its own impact.
+        if (IMPACT_RANK['flow-structural'] > IMPACT_RANK[impact]) impact = 'flow-structural';
         return true;
       },
       selectionBefore: (selection) => {
@@ -316,12 +434,35 @@ export class TreeDocumentStore {
     // identical to it, so only the changed subtrees need walking. An invalid result
     // abandons the whole transaction — no revision, no history entry, no notification —
     // exactly as a per-op rejection would have, so nothing invalid is ever published.
-    const validation = validateOoxmlPartDelta(before, working);
-    if (!validation.ok) {
+    for (const name of touched) {
+      const previous = before.parts.get(name);
+      const next = working.parts.get(name);
+      if (next === undefined) continue;
+      // A part this transaction CREATED has no previous tree to diff against, so it is
+      // validated whole; an edited part is validated as a delta, because everything the ops
+      // did not touch is object-identical to a tree that was already validated.
+      const validation = previous
+        ? validateOoxmlPartDelta(previous, next)
+        : validateOoxmlPartDelta(next, next);
+      if (!validation.ok) {
+        return {
+          ok: false,
+          reason: 'tree-invariant',
+          detail: JSON.stringify(validation.issues),
+        };
+      }
+    }
+
+    // Package invariants are checked HERE and nowhere else, for the same reason part
+    // validation moved to the commit: a transaction may pass through a package that has a
+    // relationship to a part it has not created yet, as long as nothing can observe it. What
+    // must never be published is a package Word refuses to open.
+    const packageValidation = validatePackageInvariants(working);
+    if (!packageValidation.ok) {
       return {
         ok: false,
-        reason: 'tree-invariant',
-        detail: JSON.stringify(validation.issues),
+        reason: 'package-invariant',
+        detail: JSON.stringify(packageValidation.issues),
       };
     }
 
@@ -341,7 +482,7 @@ export class TreeDocumentStore {
         };
       } else {
         this.pushUndo({
-          part: before,
+          pkg: before,
           revision: beforeRevision,
           selectionBefore,
           selectionAfter,
@@ -384,7 +525,7 @@ export class TreeDocumentStore {
     if (this.composition) return; // already open; nested starts are a no-op, not an error
     this.composition = {
       entry: {
-        part: this.current,
+        pkg: this.current,
         revision: this.rev,
         selectionBefore,
         selectionAfter: null,
@@ -415,12 +556,12 @@ export class TreeDocumentStore {
     if (!entry) return null;
     const beforeRevision = this.rev;
     this.redoStack.push({
-      part: this.current,
+      pkg: this.current,
       revision: this.rev,
       selectionBefore: entry.selectionBefore,
       selectionAfter: entry.selectionAfter,
     });
-    this.current = entry.part;
+    this.current = entry.pkg;
     this.rev += 1;
     return this.publish(ORIGIN_IDS.mutationUndo, beforeRevision, null, this.storyRef ?? undefined);
   }
@@ -430,12 +571,12 @@ export class TreeDocumentStore {
     if (!entry) return null;
     const beforeRevision = this.rev;
     this.undoStack.push({
-      part: this.current,
+      pkg: this.current,
       revision: this.rev,
       selectionBefore: entry.selectionBefore,
       selectionAfter: entry.selectionAfter,
     });
-    this.current = entry.part;
+    this.current = entry.pkg;
     this.rev += 1;
     return this.publish(ORIGIN_IDS.mutationRedo, beforeRevision, null, this.storyRef ?? undefined);
   }

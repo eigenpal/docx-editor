@@ -28,6 +28,7 @@ import {
 } from './field-projection.ts';
 import type { ParagraphLayoutCache } from './layout-cache.ts';
 import type { PendingLine } from './paragraph-flow.ts';
+import type { RevisionDisplayMode } from './revision-projection.ts';
 import { flowBlocksInBox } from './semantic-table-layout.ts';
 import type {
   BlockFragmentRecord,
@@ -140,7 +141,8 @@ export function layoutHeaderFooterStory(
   styleCascade?: StyleCascadeTable,
   pageContext?: FieldPageContext,
   maxPageContextEntries: number = DEFAULT_MAX_HF_PAGE_CONTEXT_ENTRIES,
-  defaultTabStopPt?: number
+  defaultTabStopPt?: number,
+  displayMode?: RevisionDisplayMode
 ): HeaderFooterStoryLayout {
   const needs = detectStoryPageFields(part.root);
   const contextCache = createBoundedContextCache(maxPageContextEntries);
@@ -164,11 +166,14 @@ export function layoutHeaderFooterStory(
     const flow = flowBlocksInBox(blocks, 0, Math.max(1, contentWidth), 0, 0, {
       measurer,
       cache,
-      producer: producer + token,
+      // The mode is part of the producer for the same reason it is in the body: it changes
+      // every break, and a header carrying revisions must resolve the same mode as the body.
+      producer: producer + token + (displayMode ? `|rev:${displayMode}` : ''),
       nextLineId: () => `hf-${part.name}-line-${lineCounter++}`,
       styleCascade,
       pageContext: effectiveCtx,
       ...(defaultTabStopPt !== undefined ? { defaultTabStopPt } : {}),
+      ...(displayMode ? { displayMode } : {}),
     });
 
     const story: HeaderFooterStoryLayout = {

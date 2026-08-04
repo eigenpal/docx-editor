@@ -24,6 +24,11 @@ import {
 import { paragraphLayoutKey, type ParagraphLayoutCache } from './layout-cache.ts';
 import { alignSpans, breakParagraph, type Alignment, type PendingLine } from './paragraph-flow.ts';
 import {
+  DEFAULT_REVISION_DISPLAY_MODE,
+  paragraphMarkRevisionOf,
+  type RevisionDisplayMode,
+} from './revision-projection.ts';
+import {
   appliedSpaceBefore,
   paragraphBorderExtentPt,
   collapsedSpaceBefore,
@@ -149,6 +154,16 @@ export interface SemanticLayoutOptions {
   /** Header/footer stories to attach per page; absent means no furniture. */
   readonly furniture?: PageFurniture;
   /**
+   * Which tracked revisions this pass resolves away (ECMA-376 §17.13).
+   *
+   * `all-markup` (the default) lays out both halves of every change. `proposed` lays out what
+   * the document becomes if every change is accepted; `original` what it was before any of
+   * them. Both are LAYOUT INPUTS: neither applies a `TreeDocOp` nor publishes a `ModelChange`,
+   * so a user who switches to the proposed result, saves, and sends the file has not silently
+   * accepted every proposal in it.
+   */
+  readonly displayMode?: RevisionDisplayMode;
+  /**
    * Per-section furniture, index-aligned with `enumerateDocumentSections`.
    *
    * When present, multi-section layout attaches each section's own headers/footers (after
@@ -252,7 +267,7 @@ export function layoutSemanticDocument(
   options: SemanticLayoutOptions
 ): SemanticLayout {
   const sections = enumerateDocumentSections(part);
-  const blocks = storyBlocks(part);
+  const blocks = storyBlocks(part, options.displayMode ?? DEFAULT_REVISION_DISPLAY_MODE);
   // Full-body list resolve so counters continue across sections and table cells.
   const optionsWithLists = withResolvedListItems(options, blocks);
 
@@ -337,11 +352,16 @@ function layoutBlocksWithGeometry(
   // The default-tab interval moves every default-interval tab, and the prepared-block memo
   // is keyed by producer — so it belongs here rather than only in the per-paragraph token.
   const defaultTabStopPt = options.defaultTabStopPt;
+  // The display mode changes what every paragraph contains, so it changes every break. Folding
+  // it into `producer` is what makes a mode switch invalidate the break cache AND the session
+  // checkpoints without a `ModelChange`: the document did not change, the projection of it did.
+  const displayMode = options.displayMode ?? DEFAULT_REVISION_DISPLAY_MODE;
   const producer =
     (options.producer ?? 'unversioned-measurer') +
     (styleCascade ? `|sc:${styleCascade.cacheToken}` : '') +
     (listItems && listItems.size > 0 ? `|num:${listItems.size}` : '') +
-    (defaultTabStopPt !== undefined ? `|dts:${defaultTabStopPt}` : '');
+    (defaultTabStopPt !== undefined ? `|dts:${defaultTabStopPt}` : '') +
+    (displayMode === DEFAULT_REVISION_DISPLAY_MODE ? '' : `|rev:${displayMode}`);
 
   const contentWidth = geometry.width - geometry.margin.left - geometry.margin.right;
 
@@ -692,6 +712,7 @@ function layoutBlocksWithGeometry(
     ...(options.noteMarks ? { noteMarks: options.noteMarks } : {}),
     borderOwnershipBudget: createTableBorderOwnershipBudget(),
     vMergeResolveBudget: createTableVMergeResolveBudget(),
+    displayMode,
   };
 
   type PreparedParagraph = Extract<PreparedBlock, { kind: 'paragraph' }>;
@@ -730,6 +751,7 @@ function layoutBlocksWithGeometry(
         // paragraph's own indents the way Word does.
         marginExtent: { left: 0, right: entry.indent.left + entry.available + entry.indent.right },
         ...(options.projectLink ? { projectLink: options.projectLink } : {}),
+        displayMode,
         ...(options.noteMarks ? { noteMarks: options.noteMarks } : {}),
       }
     );
@@ -746,7 +768,7 @@ function layoutBlocksWithGeometry(
    * each continuation page, and rejected when the group itself exceeds a fresh content page.
    */
   const layoutTableInFlow = (table: OoxmlElement): void => {
-    const structure = readTableStructure(table, contentWidth, 0, styleCascade);
+    const structure = readTableStructure(table, contentWidth, 0, styleCascade, displayMode);
     if (!structure || structure.rows.length === 0) return;
     // `w:tblInd` / `w:jc` place the table inside the text column; every row and the fragment
     // box share the one origin so cell geometry and the reported box cannot drift apart.
@@ -1168,6 +1190,7 @@ function layoutBlocksWithGeometry(
     let endedWithPageBreak = false;
     previousSpaceAfter = 0;
 
+    const markRevision = paragraphMarkRevisionOf(entry.paragraph);
     const flushFragment = (isLast: boolean): void => {
       if (pending.length === 0) return;
       const linesTop = pending[0]!.box.y;
@@ -1306,6 +1329,9 @@ function layoutBlocksWithGeometry(
                   : paragraphShadingBox(pending, indent.left, available)!,
             }),
         ...(marker ? { marker } : {}),
+        // The paragraph MARK lives at the end of the paragraph, so only the final fragment
+        // carries its revision — a paragraph split across pages must not draw two pilcrows.
+        ...(isLast && markRevision ? { markRevision } : {}),
         lines: pending,
         box: { x: indent.left, y: top, width: available, height },
       });
@@ -1387,6 +1413,7 @@ function layoutBlocksWithGeometry(
         box: { x: indent.left, y: cursorY, width: available, height: pendingLine.height },
         baseline: pendingLine.baseline,
         leading: pendingLine.leading,
+        ...(pendingLine.deletedRanges ? { deletedRanges: pendingLine.deletedRanges } : {}),
       };
       lineCounter += 1;
       pending.push(record);

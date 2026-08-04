@@ -63,6 +63,7 @@ import { ReactElement } from 'react';
 import { ReactNode } from 'react';
 import { Ref } from 'react';
 import { RefAttributes } from 'react';
+import { ReviewItemPlacement } from '@docx-editor.dev/core-contract/contracts/editor';
 import { RulerIndent } from '@docx-editor.dev/core-contract/editor';
 import { rulerPageBox } from '@docx-editor.dev/core-contract/editor';
 import { RulerTick } from '@docx-editor.dev/core-contract/editor';
@@ -262,6 +263,7 @@ export interface DocxEditorNamespace extends ForwardRefExoticComponent<DocxEdito
     // (undocumented)
     readonly NotesChrome: typeof DocxEditorNotesChrome;
     readonly PageSetupDialog: typeof DocxEditorPageSetupDialog;
+    readonly Review: typeof DocxEditorReview;
     // (undocumented)
     readonly Root: typeof DocxEditorRoot;
     // (undocumented)
@@ -372,6 +374,40 @@ export interface DocxEditorRef {
     snapshot(options?: {
         scope?: EditorScope;
     }): EditorSnapshot;
+}
+
+// @public (undocumented)
+export const DocxEditorReview: DocxEditorReviewNamespace;
+
+// @public
+export interface DocxEditorReviewNamespace {
+    // (undocumented)
+    (props: ReviewProps): ReturnType<typeof ReviewRoot>;
+    // (undocumented)
+    readonly Accept: typeof ReviewAccept;
+    readonly AddComment: typeof ReviewAddComment;
+    // (undocumented)
+    readonly Author: typeof ReviewAuthor;
+    // (undocumented)
+    readonly Avatar: typeof ReviewAvatar;
+    // (undocumented)
+    readonly Card: typeof ReviewCard;
+    readonly Draft: typeof ReviewDraft;
+    // (undocumented)
+    readonly Empty: typeof ReviewEmpty;
+    // (undocumented)
+    readonly List: typeof ReviewList;
+    readonly Markers: typeof ReviewMarkers;
+    // (undocumented)
+    readonly Reject: typeof ReviewReject;
+    // (undocumented)
+    readonly Replies: typeof ReviewReplies;
+    // (undocumented)
+    readonly Reply: typeof ReviewReply;
+    // (undocumented)
+    readonly Summary: typeof ReviewSummary;
+    // (undocumented)
+    readonly Time: typeof ReviewTime;
 }
 
 // @public
@@ -1057,6 +1093,32 @@ export { PX_PER_CM }
 
 export { PX_PER_INCH }
 
+// @public
+export interface ReviewActionProps extends ReviewPartProps {
+    icon?: ReactNode;
+}
+
+// @public
+export type ReviewItemView = ReviewItemPlacement;
+
+// @public
+export interface ReviewPartProps {
+    asChild?: boolean;
+    // (undocumented)
+    children?: ReactNode;
+    // (undocumented)
+    className?: string;
+    hidden?: boolean;
+}
+
+// @public
+export interface ReviewProps extends ReviewPartProps {
+    filter?: (item: ReviewItemView) => boolean;
+    gap?: number;
+    preset?: boolean;
+    stack?: boolean;
+}
+
 // @public (undocumented)
 export const RULER_WIDTH = 20;
 
@@ -1406,6 +1468,36 @@ export interface UseParagraphStyleResult {
     readonly setValue: (styleId: string) => void;
     readonly value: string | null;
 }
+
+// @public
+export function useReview(): UseReviewReturn;
+
+// @public
+export function useReviewOf(editor: Editor | null): UseReviewReturn;
+
+// @public (undocumented)
+export interface UseReviewReturn {
+    readonly accept: (item: ReviewItemView) => void;
+    readonly activeKey: string | null;
+    readonly comment: (text: string, author?: string) => boolean;
+    readonly items: readonly ReviewItemView[];
+    readonly paneOpen: boolean;
+    readonly ready: boolean;
+    readonly reject: (item: ReviewItemView) => void;
+    readonly reply: (item: ReviewItemView, text: string, author?: string) => boolean;
+    readonly selectionAnchorY: number | null;
+    readonly setActive: (key: string | null) => void;
+    readonly setPaneOpen: (open: boolean) => void;
+}
+
+// @public
+export function useStackedReviewPositions(items: readonly {
+    readonly key: string;
+    readonly anchorY: number | null;
+}[], heights: ReadonlyMap<string, number>, options?: {
+    readonly gap?: number;
+    readonly scale?: number;
+}): ReadonlyMap<string, number>;
 
 // @public
 export const VERSION = "0.0.2";

@@ -24,7 +24,8 @@ Two chrome slots already name the intent: `review.comments` and `review.editingM
 
 - Add typed kinds for the revision family to `packages/core/src/store/package/ooxml-tree.ts`: `w:ins`, `w:del`, `w:delText`, `w:delInstrText`, `w:moveFrom`, `w:moveTo`, `w:moveFromRangeStart`/`End`, `w:moveToRangeStart`/`End`, the four `w:customXml*RangeStart`/`End` pairs, and the property-change wrappers `w:rPrChange`, `w:pPrChange`, `w:tblPrChange`, `w:tblPrExChange`, `w:tcPrChange`, `w:trPrChange`, `w:sectPrChange`, `w:tblGridChange`, plus `w:cellIns`, `w:cellDel`, `w:cellMerge`.
 - **Three different base types, and they do not agree.** `w:ins` / `w:del` / `w:moveFrom` / `w:moveTo` and the property-change wrappers extend `CT_TrackChange` → `CT_Markup`: `@w:id` required, `@w:author` required, `@w:date` optional. The move **range starts** (`w:moveFromRangeStart`, `w:moveToRangeStart`) are `CT_MoveBookmark` → `CT_Bookmark`: `@w:name` **required**, `@w:author` required, and `@w:date` **required**, plus `@w:colFirst` / `@w:colLast`. The move **range ends** are `CT_MarkupRange` → `CT_Markup`: **no author and no date at all**. Requiring an author on a range end refuses valid files; writing one emits invalid XML.
-- `@w:name` on the move range markers is the **join key** that pairs a `moveFrom` with its `moveTo`. Pairing is by name, not by proximity or id.
+- Confirmed against `list-pagination-break.docx`: every `w:moveFromRangeStart` / `w:moveToRangeStart` carries `@w:name`, `@w:author`, and `@w:date`; every `w:moveFromRangeEnd` / `w:moveToRangeEnd` carries `@w:id` and nothing else.
+- **Two different join keys, and conflating them is wrong.** `@w:name` pairs a `moveFrom` **range** with its `moveTo` **range**. `@w:id` pairs a range **start** with its own range **end**. In `list-pagination-break.docx` the four named pairs (`move234347936`–`move234347939`) each carry different ids on the two halves, so pairing halves by id finds nothing; and each range end repeats its start's id, so pairing a start to an end by name finds nothing. Both keys are required, for different joins.
 - **Paragraph-mark revisions.** `w:pPr/w:rPr` is `CT_ParaRPr`, which opens with the `EG_ParaRPrTrackChanges` group: `w:ins`, `w:del`, `w:moveFrom`, `w:moveTo`. These mark *the paragraph mark itself*, and they are how Word records a paragraph split or merge. Accepting a deleted paragraph mark merges the paragraph with the following one.
 - **Row and cell revisions carry their own semantics.** `CT_TrPr` holds `w:ins` / `w:del` / `w:trPrChange`; `CT_TcPr` holds `w:cellIns` / `w:cellDel` / `w:cellMerge`. Accepting a tracked row deletion removes the row, not merely the `w:del` element inside its `w:trPr`.
 - **Revision identity is the `(id, author, date)` triple, within a named part.** `@w:id` is `ST_DecimalNumber` with no uniqueness constraint and no author scoping: two authors' revisions may share an id in one part, and one logical revision deliberately spans many elements sharing an id — a tracked row insertion is `w:trPr/w:ins` on the row plus `w:cellIns` on every cell. Addressing by `(part, id)` merges the first case and cannot express the second.
@@ -100,16 +101,44 @@ Tracked changes — **entirely absent from this fixture**:
 
 - Zero `w:ins`, zero `w:del`, zero `w:delText`, zero `w:moveFrom` / `w:moveTo`, zero `w:rPrChange` / `w:pPrChange` / `w:tblPrChange`, zero `w:rsid`, and no `w:trackRevisions` in `word/settings.xml`.
 
-**The repository is not short of tracked-change fixtures.** Existing coverage in `e2e/fixtures/`:
+**The repository is not short of tracked-change fixtures.** Element counts below are measured per part, counting start tags only.
 
-| Fixture | Coverage |
+`list-pagination-break.docx` — the broadest corpus in the repository:
+
+| Part | Counts |
 | --- | --- |
-| `list-pagination-break.docx` | 1114 `w:ins`, 1396 `w:del`, 1761 `w:delText`, 14 `w:moveFrom` / `w:moveTo`, plus `w:rPrChange` and `w:pPrChange` at scale |
-| `issue-68-large-comments-suggestions.docx` | 212 `w:ins`, 105 `w:del`, **and `word/commentsExtended.xml`** |
-| `issue-319-sections.docx` | insertions, deletions, `w:rPrChange`, `w:pPrChange` |
-| `endnotes-tracked-changes.docx` | revisions inside a note part |
+| `document.xml` | 554 `w:ins`, 1396 `w:del`, 1761 `w:delText`, 6 `w:moveFrom`, 7 `w:moveTo`, 4 of each move range marker, 18284 `w:rPrChange`, 222 `w:pPrChange`, 34 `w:tcPrChange`, 4 `w:trPrChange`, 4 `w:tblPrExChange`, 2 `w:tblGridChange`, 1 `w:tblPrChange`, 1 `w:sectPrChange`, 8 `w:cellIns`, 24 `w:cellDel`, 635 `w14:paraId` |
+| `header3.xml` | 5 `w:ins`, 1 `w:rPrChange` — revisions in a header story |
+| `endnotes.xml`, `footnotes.xml`, six other headers and footers | 1–2 `w:pPrChange` each |
+| `styles.xml` | 2 `w:pPrChange`, 2 `w:rPrChange` — **inside style definitions**, on `Normal` and `NoList1` |
 
-Roughly 20 fixtures carry `w14:paraId` and two carry `commentsExtended.xml`, so threading and durable-id work has real input too. Task §7 is therefore an inventory-then-fill exercise, not a from-scratch authoring block. What remains genuinely uncovered is narrower: the move **range markers** with `@w:name` pairing, row and cell revisions (`w:cellIns` / `w:cellDel` / `w:cellMerge`, `w:trPr/w:ins`), `w:sectPrChange`, and a deliberately nested two-author case.
+`issue-319-sections.docx`:
+
+| Part | Counts |
+| --- | --- |
+| `document.xml` | 85 `w:ins`, 106 `w:del`, 95 `w:delText`, 1 `w:delInstrText`, 26 `w:rPrChange`, 7 `w:pPrChange` |
+| `footer1.xml`, `footer3.xml` | 10 `w:ins`, 8 `w:del`, 34 `w:delText`, 2 `w:delInstrText` — revisions in footer stories |
+
+`issue-68-large-comments-suggestions.docx` — 106 `w:ins`, 105 `w:del`, 212 comments, 212 of each comment range marker and reference, 212 `w14:paraId` **in `comments.xml`** and zero in `document.xml`.
+
+`endnotes-tracked-changes.docx` — exactly one `w:ins`, in `endnotes.xml`. `document.xml` has none.
+
+Three consequences the fixtures make concrete:
+
+- **Move range markers, row and cell revisions, `w:sectPrChange`, `w:tblPrExChange`, `w:tblGridChange`, and `w:delInstrText` are already covered.** They do not need authoring. Earlier drafts of this proposal listed all of them as gaps.
+- **Revisions are not a body-only concern.** Headers, footers, endnotes, and `styles.xml` all carry them today. A traversal that only walks `document.xml` misses live cases in the repository's own fixtures.
+- **Ids collide across parts, in a real file.** The `styles.xml` property changes carry `w:id="0"` and `w:id="1"`, which are also in use in `document.xml`. This is the concrete case that makes part-scoped addressing mandatory rather than defensive.
+
+What remains genuinely uncovered:
+
+| Gap | Why no fixture covers it |
+| --- | --- |
+| A **comment reply** | `issue-68` ships `commentsExtended.xml`, but every one of its 212 `w15:commentEx` entries carries `w15:done` **only**. There are zero `w15:paraIdParent` attributes in the repository. Threading has no fixture at all. |
+| `commentsIds.xml`, `commentsExtensible.xml` | No package contains either part. |
+| An **orphaned move half** | The four named pairs in `list-pagination-break.docx` are all complete. |
+| `w:cellMerge` | Zero occurrences in any fixture. |
+| A **nested two-author revision** | Not present. |
+| Overlapping or nested comment ranges, and a comment anchored outside the body | Not present. |
 
 ## Impact
 
