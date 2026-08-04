@@ -10,7 +10,11 @@ if (!GlobalRegistrator.isRegistered) GlobalRegistrator.register();
 
 import { describe, expect, test } from 'bun:test';
 import { zipSync, strToU8 } from 'fflate';
-import { mountPaginatedSurface, type PaginatedSurface } from '../paginated-surface.ts';
+import {
+  mountPaginatedSurface,
+  setPaginatedSurfaceScale,
+  type PaginatedSurface,
+} from '../paginated-surface.ts';
 import { absorbPlaceholderControls } from '../surface-pointer.ts';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
@@ -185,6 +189,24 @@ describe('a press beside the text', () => {
     );
     // 30 in the old frame is -10 in the new one: the margin, so the start of the line.
     expect(offsets(mounted.surface)).toEqual([0, 0]);
+    mounted.surface.destroy();
+  });
+
+  test('a click at the newly scaled glyph still lands on the same semantic offset', () => {
+    const mounted = mount(paragraph('hello world'));
+    expect(setPaginatedSurfaceScale(mounted.surface, 2)).toBe(true);
+    mounted.pages.dispatchEvent(
+      new PointerEvent('pointerdown', {
+        bubbles: true,
+        cancelable: true,
+        button: 0,
+        pointerId: 1,
+        pointerType: 'mouse',
+        clientX: 100 + MARGIN * 2 + 36 * 2,
+        clientY: 50 + MARGIN * 2 + 5 * 2,
+      })
+    );
+    expect(offsets(mounted.surface)).toEqual([6, 6]);
     mounted.surface.destroy();
   });
 });

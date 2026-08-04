@@ -63,6 +63,14 @@ export function createKeyDownHandler(
   } = {}
 ): (event: KeyboardEvent) => void {
   return (event: KeyboardEvent): void => {
+    // FAIL SOFT on a chord someone else already claimed.
+    //
+    // This keymap is wired to the painted pages, which sit inside the host's own chrome, and
+    // hosts bind accelerators of their own — React's live zoom takes Ctrl/Cmd+`=`/`-`/`0` in
+    // the CAPTURE phase, and Word's subscript/superscript is bound to the same `=` chord
+    // below. Both firing made one keystroke zoom AND rewrite the selection's run properties.
+    // A prevented event has an owner, so there is nothing left here to do.
+    if (event.defaultPrevented) return;
     if (event.key === 'Escape' && surface.activeScope().kind === 'headerFooter') {
       surface.exitHeaderFooter();
       event.preventDefault();
@@ -201,8 +209,13 @@ export function createKeyDownHandler(
       event.preventDefault();
       return;
     }
-    // Word's Ctrl+= / Ctrl+Shift+= — the shortcuts the two controls' own tooltips
-    // advertise, so leaving them unbound would make the label a lie.
+    // Word's Ctrl+= / Ctrl+Shift+=, kept for hosts that leave the chord to this keymap.
+    //
+    // The two controls' tooltips no longer advertise it: React's live zoom claims the same
+    // chord in the capture phase (the `defaultPrevented` return at the top of this handler),
+    // so the chrome registry names subscript and superscript plainly rather than promising a
+    // keystroke that zooms there. The binding stays because it is still the only way to reach
+    // these toggles from the keyboard in a host with no zoom handler.
     //
     // WHICH of the two is decided by Shift alone, never by the character: `event.key` is
     // the PRODUCED character, so shifting `=` reports `+` on a US layout, and reading the

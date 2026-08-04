@@ -166,6 +166,20 @@ describe('legacy chrome descriptor', () => {
     expect(commandForSlot('text.underline')).not.toBeNull();
   });
 
+  test('the script controls name no keyboard chord, because React zoom owns that one', () => {
+    // `formattingBar.subscriptShortcut` / `...superscriptShortcut` render as
+    // "Subscript (Ctrl+=)" / "Superscript (Ctrl+Shift+=)". React's live zoom claims Ctrl/Cmd
+    // `=` and its shifted spelling, so those tooltips would tell a React user to press a chord
+    // that zooms instead. The plain keys are true in every host; both toggles stay reachable
+    // from the button the tooltip is on, and the engine keymap still binds the chord for hosts
+    // that mount no zoom handler.
+    const script = CHROME_GROUPS.find((group) => group.id === 'script')!;
+    expect(script.controls.map((control) => control.labelKey)).toEqual([
+      'formattingBar.superscript',
+      'formattingBar.subscript',
+    ]);
+  });
+
   test('every control has a label key and no control hardcodes English', () => {
     for (const group of CHROME_GROUPS) {
       expect(group.labelKey).toMatch(/^[a-z][a-zA-Z]*\./);
