@@ -54,6 +54,17 @@ bun run compat:generate
 bun run compat:check-drift
 ```
 
+`compat:check-drift` always fetches, extracts, and diffs whatever
+`@types/office-js` version is currently published — including one with no
+reviewed entry in `fetch-office-reference.mjs`'s
+`PINNED_DEFINITELY_TYPED_COMMITS` yet, since a version bump is exactly how
+real drift arrives. In that case its output is prefixed `REVIEW REQUIRED:`:
+the symbol/member delta is still complete, but `compat:fetch-reference` (the
+write path) will keep refusing to run until a maintainer reviews the new
+version and adds its exact DefinitelyTyped source commit to
+`PINNED_DEFINITELY_TYPED_COMMITS` — unreviewed upstream data is never written
+to `compat/provenance.json`/`compat/reference/word.reference.json`.
+
 ## Why two layers of comparison
 
 `scripts/lib/shape-compare.mjs` does a strict, textual/AST-level per-overload
