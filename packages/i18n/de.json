@@ -88,7 +88,8 @@
     "clearFormatting": "Formatierung löschen",
     "commentsAndChanges": "Kommentare & Änderungen",
     "moreItems": "{count, plural, one {# weiteres Element} other {# weitere Elemente}}",
-    "unavailableInPreview": null
+    "unavailableInPreview": null,
+    "more": null
   },
   "alignment": {
     "alignLeft": "Linksbündig",

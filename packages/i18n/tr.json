@@ -88,7 +88,8 @@
     "clearFormatting": "Biçimlendirmeyi temizle",
     "commentsAndChanges": null,
     "moreItems": null,
-    "unavailableInPreview": null
+    "unavailableInPreview": null,
+    "more": null
   },
   "alignment": {
     "alignLeft": "Sola hizala",

@@ -90,6 +90,7 @@
     "imagePropertiesShortcut": "Image properties (alt text, border)...",
     "clearFormatting": "Clear formatting",
     "commentsAndChanges": "Comments & Changes",
+    "more": "More",
     "moreItems": "{count, plural, one {# more item} other {# more items}}",
     "unavailableInPreview": "Not available in this preview build"
   },

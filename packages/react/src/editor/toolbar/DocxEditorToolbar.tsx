@@ -19,6 +19,14 @@
 // whole toolbar with one customized button. A part child with `hidden` removes its
 // slot (the part renders null where it stands). Non-part children append after the
 // default set. `preset={false}` opts out entirely: children render verbatim.
+//
+// ONE ROW, MEASURED. The bar used to wrap to a second and third row when it ran out of
+// width, which on a laptop beside an open navigation pane cost more vertical space than the
+// first page of the document. Now it measures itself and moves whole GROUPS into a "⋯"
+// menu (`useToolbarOverflow` for the measurement, `toolbar-overflow.ts` for the policy).
+// That is why the default arrangement below is a list of groups rather than a flat list of
+// slots: a group is the unit that collapses, and its registry label becomes the panel's
+// section heading. `overflow={false}` restores wrapping.
 
 import { ToolbarEditingMode } from './EditingMode';
 import { Children, Fragment, isValidElement, useMemo } from 'react';
@@ -29,7 +37,15 @@ import {
   type ChromeSlotId,
 } from '@docx-editor.dev/core-contract/editor';
 import { ToolbarContext, type ToolbarTranslate } from './toolbar-context';
-import { ToolbarButton, guardToolbarMousedown } from './ToolbarButton';
+import { ToolbarButton, chromeControlForSlot, guardToolbarMousedown } from './ToolbarButton';
+import {
+  ToolbarOverflow,
+  ToolbarOverflowControl,
+  ToolbarOverflowItem,
+  type ToolbarOverflowSection,
+} from './ToolbarOverflow';
+import { collapseOrder, TOOLBAR_PINNED_GROUPS } from './toolbar-overflow';
+import { FIXED_ATTRIBUTE, GROUP_ATTRIBUTE, useToolbarOverflow } from './useToolbarOverflow';
 import {
   ToolbarAlignCenter,
   ToolbarAlignJustify,
@@ -79,8 +95,19 @@ import {
  */
 type ArrangementKey = ChromeSlotId | 'alignment';
 
-/** The default arrangement, as slot entries with separators between groups. */
-type DefaultEntry = { kind: 'slot'; slot: ArrangementKey; Part: PartLike } | { kind: 'separator' };
+/** One default-arrangement entry: the slot and the part that draws it. */
+interface DefaultEntry {
+  readonly slot: ArrangementKey;
+  readonly Part: PartLike;
+}
+
+/** A registry group as the toolbar renders it: the collapse unit and a panel section. */
+interface DefaultGroup {
+  readonly id: string;
+  readonly labelKey: string;
+  readonly entries: readonly DefaultEntry[];
+}
+
 type PartLike = (props: { hidden?: boolean }) => ReactNode;
 
 /**
@@ -126,20 +153,39 @@ function iconPart(slot: ChromeSlotId): PartLike {
  * editing-mode picker (contextual slots stay available for composition) — with the
  * alignment group merged into ONE dropdown under the `'alignment'` key.
  */
-const DEFAULT_ARRANGEMENT: readonly DefaultEntry[] = defaultChromeGroups().flatMap(
-  (group, index) => {
-    const entries: DefaultEntry[] = index > 0 ? [{ kind: 'separator' }] : [];
-    if (group.id === 'alignment') {
-      entries.push({ kind: 'slot', slot: 'alignment', Part: ToolbarAlignment });
-      return entries;
-    }
-    for (const control of group.controls) {
-      const slot = chromeSlotId(group, control);
-      entries.push({ kind: 'slot', slot, Part: SHAPED_PARTS[slot] ?? iconPart(slot) });
-    }
-    return entries;
+const DEFAULT_GROUPS: readonly DefaultGroup[] = defaultChromeGroups().map((group) => {
+  if (group.id === 'alignment') {
+    return {
+      id: group.id,
+      labelKey: group.labelKey,
+      entries: [{ slot: 'alignment' as ArrangementKey, Part: ToolbarAlignment }],
+    };
   }
+  return {
+    id: group.id,
+    labelKey: group.labelKey,
+    entries: group.controls.map((control) => {
+      const slot = chromeSlotId(group, control);
+      return { slot: slot as ArrangementKey, Part: SHAPED_PARTS[slot] ?? iconPart(slot) };
+    }),
+  };
+});
+
+/** Every slot the default arrangement draws, for recognizing an override child. */
+const DEFAULT_SLOTS: ReadonlySet<ArrangementKey> = new Set(
+  DEFAULT_GROUPS.flatMap((group) => group.entries.map((entry) => entry.slot))
 );
+
+/** Collapsible group ids in bar order, and the order they collapse in. */
+const COLLAPSIBLE = DEFAULT_GROUPS.map((group) => group.id).filter(
+  (id) => !TOOLBAR_PINNED_GROUPS.has(id)
+);
+const COLLAPSE_ORDER = collapseOrder(COLLAPSIBLE);
+
+/** Slots whose panel row is the CONTROL itself, because it shows a value. */
+function isValueSlot(slot: ArrangementKey): boolean {
+  return slot === 'alignment' || slot in SHAPED_PARTS;
+}
 
 /** The slot one child element drives, or null for a non-part child. */
 function slotOfChild(child: ReactNode): ArrangementKey | null {
@@ -171,12 +217,23 @@ export interface DocxEditorToolbarProps {
    * part children override their slots in place, others append.
    */
   preset?: boolean;
+  /**
+   * `false` lets the bar WRAP to more rows instead of collapsing groups into the "⋯"
+   * menu when it runs out of width. Default `true`.
+   */
+  overflow?: boolean;
   children?: ReactNode;
 }
 
 function DocxEditorToolbarRoot(props: DocxEditorToolbarProps) {
-  const { className, t, onSave, preset = true, children } = props;
+  const { className, t, onSave, preset = true, overflow: overflowEnabled = true, children } = props;
   const context = useMemo(() => ({ t, onSave }), [t, onSave]);
+
+  // Only the preset arrangement has groups to collapse; `preset={false}` is the host's own
+  // markup, and moving pieces of it into a menu would be the library rearranging a bar it
+  // does not own.
+  const measuring = preset && overflowEnabled;
+  const { attach, overflow } = useToolbarOverflow(measuring, COLLAPSIBLE, COLLAPSE_ORDER);
 
   let content: ReactNode;
   if (!preset) {
@@ -187,28 +244,70 @@ function DocxEditorToolbarRoot(props: DocxEditorToolbarProps) {
     const appended: ReactNode[] = [];
     for (const child of kids) {
       const slot = slotOfChild(child);
-      if (slot && DEFAULT_ARRANGEMENT.some((e) => e.kind === 'slot' && e.slot === slot)) {
+      if (slot && DEFAULT_SLOTS.has(slot)) {
         // Last override for a slot wins, matching how later props win in a spread.
         overrides.set(slot, child as ReactElement);
       } else {
         appended.push(child);
       }
     }
+
+    const render = (entry: DefaultEntry): ReactNode => {
+      // A `hidden` override renders null where it stands, removing the slot.
+      const override = overrides.get(entry.slot);
+      if (override) return override;
+      const Part = entry.Part;
+      return <Part />;
+    };
+
+    const bar: ReactNode[] = [];
+    const sections: ToolbarOverflowSection[] = [];
+    let drawn = 0;
+    for (const group of DEFAULT_GROUPS) {
+      if (overflow.has(group.id)) {
+        const rows = group.entries.flatMap((entry) => {
+          const row = overflowRow(entry, overrides, t, group.labelKey, render);
+          if (row === null) return [];
+          return [<Fragment key={entry.slot}>{row}</Fragment>];
+        });
+        if (rows.length === 0) continue;
+        sections.push({
+          id: group.id,
+          labelKey: group.labelKey,
+          children: rows,
+        });
+        continue;
+      }
+      // The separator belongs BETWEEN what is on screen. Keyed on the group so a collapse
+      // does not renumber the ones that stayed.
+      if (drawn > 0) bar.push(<ToolbarSeparator key={`separator-${group.id}`} />);
+      drawn += 1;
+      const pinned = TOOLBAR_PINNED_GROUPS.has(group.id);
+      bar.push(
+        <div
+          key={group.id}
+          className="docx-toolbar__group"
+          // Pinned groups are costed as fixed width rather than offered to the fit.
+          {...(pinned ? { [FIXED_ATTRIBUTE]: '' } : { [GROUP_ATTRIBUTE]: group.id })}
+        >
+          {group.entries.map((entry) => (
+            <Fragment key={entry.slot}>{render(entry)}</Fragment>
+          ))}
+        </div>
+      );
+    }
+
     content = (
       <>
-        {DEFAULT_ARRANGEMENT.map((entry, index) => {
-          if (entry.kind === 'separator') return <ToolbarSeparator key={`separator-${index}`} />;
-          const override = overrides.get(entry.slot);
-          // A `hidden` override renders null where it stands, removing the slot.
-          if (override) return <Fragment key={entry.slot}>{override}</Fragment>;
-          const Part = entry.Part;
-          return (
-            <Fragment key={entry.slot}>
-              <Part />
-            </Fragment>
-          );
-        })}
-        {appended}
+        {bar}
+        {appended.length > 0 ? (
+          // Host children never collapse — the library does not own them — so they are
+          // costed as fixed width like a pinned group.
+          <div className="docx-toolbar__group" {...{ [FIXED_ATTRIBUTE]: '' }}>
+            {appended}
+          </div>
+        ) : null}
+        {sections.length > 0 ? <ToolbarOverflow sections={sections} /> : null}
       </>
     );
   }
@@ -216,9 +315,13 @@ function DocxEditorToolbarRoot(props: DocxEditorToolbarProps) {
   return (
     <ToolbarContext.Provider value={context}>
       <div
+        ref={attach}
         role="toolbar"
         data-testid="docx-toolbar"
         className={`docx-toolbar${className ? ` ${className}` : ''}`}
+        // One row when the bar measures itself, wrapping when it does not: the stylesheet
+        // reads this rather than guessing from a breakpoint.
+        {...(measuring ? { 'data-overflow': '' } : {})}
         // Container-level caret guard (CLAUDE.md focus-stealing pitfall): a disabled
         // button never receives mousedown, so per-button handlers cannot cover it.
         // Form fields are exempt inside the guard itself.
@@ -228,6 +331,43 @@ function DocxEditorToolbarRoot(props: DocxEditorToolbarProps) {
       </div>
     </ToolbarContext.Provider>
   );
+}
+
+/** True when an override child removes its slot from the arrangement. */
+function isHiddenOverride(override: ReactElement | undefined): boolean {
+  if (!override) return false;
+  return Boolean((override.props as { hidden?: boolean }).hidden);
+}
+
+/** One row in a collapsed group's overflow panel, or null when hidden. */
+function overflowRow(
+  entry: DefaultEntry,
+  overrides: Map<ArrangementKey, ReactElement>,
+  t: ToolbarTranslate | undefined,
+  groupLabelKey: string,
+  render: (entry: DefaultEntry) => ReactNode
+): ReactNode {
+  const override = overrides.get(entry.slot);
+  if (isHiddenOverride(override)) return null;
+  if (override || isValueSlot(entry.slot)) {
+    return (
+      <ToolbarOverflowControl label={labelOf(t, entry, groupLabelKey)}>
+        {render(entry)}
+      </ToolbarOverflowControl>
+    );
+  }
+  return <ToolbarOverflowItem slot={entry.slot as ChromeSlotId} />;
+}
+
+/** A panel control row's label: the slot's own registry label, else its group's. */
+function labelOf(
+  t: ToolbarTranslate | undefined,
+  entry: DefaultEntry,
+  groupLabelKey: string
+): string {
+  const control = entry.slot === 'alignment' ? null : chromeControlForSlot(entry.slot);
+  const key = control?.labelKey ?? groupLabelKey;
+  return t?.(key) ?? key;
 }
 
 /** The toolbar with its parts attached as statics. @public */

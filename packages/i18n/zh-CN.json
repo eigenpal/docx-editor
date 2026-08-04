@@ -88,7 +88,8 @@
     "clearFormatting": "清除格式",
     "commentsAndChanges": null,
     "moreItems": null,
-    "unavailableInPreview": null
+    "unavailableInPreview": null,
+    "more": null
   },
   "alignment": {
     "alignLeft": "左对齐",

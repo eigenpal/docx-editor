@@ -88,7 +88,8 @@
     "clearFormatting": "Hapus Pemformatan",
     "commentsAndChanges": "Komentar & Perubahan",
     "moreItems": "{count} item lainnya",
-    "unavailableInPreview": null
+    "unavailableInPreview": null,
+    "more": null
   },
   "alignment": {
     "alignLeft": "Rata Kiri",
