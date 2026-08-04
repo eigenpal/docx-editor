@@ -88,7 +88,27 @@ export interface ParagraphOffsetIndex {
   lengthOf(node: OoxmlNode | string): number;
 }
 
+/**
+ * MEMOIZED ON NODE IDENTITY. A paragraph node is immutable — a transaction rebuilds the path
+ * to what it edited and leaves every other paragraph object-identical — so the index derived
+ * from one can be reused until that paragraph itself changes.
+ *
+ * This is not a micro-optimization. Three whole-document readers call this per paragraph on
+ * every commit (the review queue, the comment anchors, the tracked-change writer), so on a
+ * long document one keystroke re-walked every paragraph in the file several times over, and
+ * the cost showed up as typing latency that grew with document length.
+ */
+const offsetIndexCache = new WeakMap<OoxmlParagraphNode, ParagraphOffsetIndex>();
+
 export function paragraphOffsetIndex(paragraph: OoxmlParagraphNode): ParagraphOffsetIndex {
+  const cached = offsetIndexCache.get(paragraph);
+  if (cached) return cached;
+  const index = buildParagraphOffsetIndex(paragraph);
+  offsetIndexCache.set(paragraph, index);
+  return index;
+}
+
+function buildParagraphOffsetIndex(paragraph: OoxmlParagraphNode): ParagraphOffsetIndex {
   const spans = new Map<string, OffsetSpan>();
   const segments = walkParagraph(paragraph, spans);
   const length = segments.length === 0 ? 0 : segments[segments.length - 1]!.end;

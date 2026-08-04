@@ -130,10 +130,6 @@ export function withNumberingStyleLinks(
   return resolveNumberingStyleLinks(index, (styleId) => numIdForStyle(styleCascade, styleId));
 }
 
-function paragraphHasIndent(props: readonly OoxmlProperty[]): boolean {
-  return props.some((property) => property.localName === 'ind');
-}
-
 /** Bound a file-derived indent both ways — negative is legal, unbounded is not. */
 function clampIndentPt(pt: number): number {
   if (!Number.isFinite(pt)) return 0;
@@ -142,38 +138,93 @@ function clampIndentPt(pt: number): number {
   return pt;
 }
 
-/**
- * Merge level indent with paragraph indent.
- *
- * Level indent is the base for list paragraphs; an authored paragraph/style `w:ind`
- * replaces left/right (and hanging/firstLine when present on that `ind`).
- */
-export function mergeListIndent(
-  levelIndent: NumberingLevelIndent,
-  paragraphProps: readonly OoxmlProperty[]
-): NumberingLevelIndent {
-  if (!paragraphHasIndent(paragraphProps)) return levelIndent;
-  const para = paragraphIndent(paragraphProps);
-  let hanging = levelIndent.hanging;
-  let firstLine = levelIndent.firstLine;
-  for (const property of paragraphProps) {
+/** The first-line slot as one `w:ind` states it, or null when it states neither spelling. */
+function firstLineOffsetOf(
+  props: readonly OoxmlProperty[]
+): { hanging: number; firstLine: number } | null {
+  let found: { hanging: number; firstLine: number } | null = null;
+  for (const property of props) {
     if (property.localName !== 'ind') continue;
     const h = property.attributes?.hanging;
     const f = property.attributes?.firstLine;
     // Mutually exclusive (§17.3.1.10, §17.3.1.12): one signed first-line offset, two spellings,
     // so an `w:ind` stating either replaces both. `w:firstLine` is read SIGNED because Word
     // keeps a negative value as a hang. A bare `w:left` states neither and leaves them alone.
-    if (h !== undefined || f !== undefined) {
-      hanging = h !== undefined && /^\d{1,9}$/.test(h) ? clampIndentPt(Number(h) / 20) : 0;
-      firstLine = f !== undefined && /^-?\d{1,9}$/.test(f) ? clampIndentPt(Number(f) / 20) : 0;
-    }
+    if (h === undefined && f === undefined) continue;
+    found = {
+      hanging: h !== undefined && /^\d{1,9}$/.test(h) ? clampIndentPt(Number(h) / 20) : 0,
+      firstLine: f !== undefined && /^-?\d{1,9}$/.test(f) ? clampIndentPt(Number(f) / 20) : 0,
+    };
   }
-  return {
-    left: para.left,
-    right: para.right,
-    hanging,
-    firstLine,
+  return found;
+}
+
+/** Whether any `w:ind` in the list states left (or its `w:start` spelling). */
+function statesLeft(props: readonly OoxmlProperty[]): boolean {
+  return props.some(
+    (property) =>
+      property.localName === 'ind' &&
+      (property.attributes?.left !== undefined || property.attributes?.start !== undefined)
+  );
+}
+
+function statesRight(props: readonly OoxmlProperty[]): boolean {
+  return props.some(
+    (property) =>
+      property.localName === 'ind' &&
+      (property.attributes?.right !== undefined || property.attributes?.end !== undefined)
+  );
+}
+
+/**
+ * The effective indent of a list paragraph: STYLE, then the numbering LEVEL, then DIRECT.
+ *
+ * Word applies a level's `w:pPr/w:ind` between the paragraph style and the paragraph's own
+ * formatting, per attribute — and the ordering matters on real documents. A converted
+ * agreement numbers its `(a)` items with a level stating `left=1512 hanging=738` under a
+ * `ListParagraph` style stating `left=775 hanging=624`, and states only `hanging="737"` on
+ * the paragraph itself. Reading the flattened cascade as "the paragraph's indent" gave the
+ * STYLE's 775 to a level that had overridden it, so every lettered sub-item hung a full
+ * indent step to the left of where Word puts it.
+ *
+ * `inherited` is the cascade WITHOUT the paragraph's own `w:pPr` (defaults, table cell style,
+ * style chain); `direct` is that `w:pPr` alone.
+ */
+export function mergeListIndent(
+  levelIndent: NumberingLevelIndent,
+  inherited: readonly OoxmlProperty[],
+  direct: readonly OoxmlProperty[] = []
+): NumberingLevelIndent {
+  // A level built by hand (a unit test, not a file) carries no presence record; it then
+  // states nothing and the style still wins, which is the behaviour those callers had.
+  const levelStates = levelIndent.stated ?? {
+    left: false,
+    right: false,
+    firstLineOffset: false,
   };
+  const inheritedIndent = paragraphIndent(inherited);
+  const directIndent = paragraphIndent(direct);
+  const levelOffset = { hanging: levelIndent.hanging, firstLine: levelIndent.firstLine };
+
+  const left = statesLeft(direct)
+    ? directIndent.left
+    : levelStates.left
+      ? levelIndent.left
+      : statesLeft(inherited)
+        ? inheritedIndent.left
+        : levelIndent.left;
+  const right = statesRight(direct)
+    ? directIndent.right
+    : levelStates.right
+      ? levelIndent.right
+      : statesRight(inherited)
+        ? inheritedIndent.right
+        : levelIndent.right;
+  const firstLineOffset =
+    firstLineOffsetOf(direct) ??
+    (levelStates.firstLineOffset ? levelOffset : (firstLineOffsetOf(inherited) ?? levelOffset));
+
+  return { left, right, ...firstLineOffset };
 }
 
 /**
@@ -254,8 +305,14 @@ export function resolveStoryListItems(
     const advanced = counters.advance(numPr.numId, numPr.ilvl);
     if (!advanced) continue;
 
-    const indentProps = cascaded ? cascaded.paragraphProperties : propertiesOf(pPr);
-    const indent = mergeListIndent(advanced.level.indent, indentProps);
+    // Split, not flattened: the level's indent outranks the STYLE's and is outranked by the
+    // paragraph's OWN `w:pPr`, so the merge needs the two tiers apart.
+    const directProps = propertiesOf(pPr);
+    const indent = mergeListIndent(
+      advanced.level.indent,
+      cascaded?.inheritedParagraphProperties ?? [],
+      directProps
+    );
     const markerProps = cascadeRunProperties(
       cascaded?.runProperties ?? [],
       advanced.level.runProperties,

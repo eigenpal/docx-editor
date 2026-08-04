@@ -267,6 +267,7 @@ export function validateTreeOp(part: OoxmlPart, op: TreeDocOp): TreeOpRejection 
       }
       if (typeof op.text !== 'string' || !isValidXmlText(op.text)) return 'invalid-text';
       if (splitsSurrogate(paragraph, op.offset)) return 'splits-surrogate-pair';
+      if (op.bias !== undefined && op.bias !== 'left' && op.bias !== 'right') return 'invalidArgs';
       return null;
     }
     case 'setListLevel': {

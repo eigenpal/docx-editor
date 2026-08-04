@@ -106,6 +106,16 @@ export type TreeDocOp =
        * depend on state the op does not carry.
        */
       readonly revision?: RevisionAttributionInput;
+      /**
+       * Which side of a run BOUNDARY the text joins. Default `'left'` — Word's typing rule:
+       * the next character takes the formatting of the character before the caret.
+       *
+       * `'right'` is for a caller that is not typing but placing text inside the run that
+       * STARTS at the offset — the hyperlink editor rewriting a link's display text, where
+       * landing left of the boundary would put the new text outside the link. Ignored when
+       * the offset falls strictly inside a run, which has no boundary to choose.
+       */
+      readonly bias?: 'left' | 'right';
     }
   | {
       readonly op: 'deleteText';
