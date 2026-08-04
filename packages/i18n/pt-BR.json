@@ -61,7 +61,8 @@
       "listFormatting": "Formatação de lista",
       "image": "Imagem",
       "table": "Tabela",
-      "insert": "Inserir"
+      "insert": "Inserir",
+      "contentControl": "Controles de conteúdo"
     },
     "undo": "Desfazer",
     "undoShortcut": "Desfazer (Ctrl+Z)",
@@ -993,6 +994,44 @@
       "headings": null
     },
     "title": null
+  },
+  "contentControl": {
+    "formFill": "Modo de preenchimento de formulário",
+    "group": "Controles de conteúdo",
+    "inspector": "Propriedades do controle de conteúdo",
+    "inspectorPanel": {
+      "alias": "Título",
+      "bound": "Vinculado a dados",
+      "boundNote": "Este controle está vinculado a dados externos. A edição foi recusada.",
+      "empty": "—",
+      "lock": "Bloqueio",
+      "lockedNote": "A edição de conteúdo está bloqueada neste controle.",
+      "no": "Não",
+      "placeholder": "Marcador de posição",
+      "tag": "Marca",
+      "title": "Controle de conteúdo",
+      "type": "Tipo",
+      "yes": "Sim"
+    },
+    "lock": {
+      "contentLocked": "Conteúdo bloqueado",
+      "sdtContentLocked": "Controle de conteúdo e conteúdo bloqueados",
+      "sdtLocked": "Controle de conteúdo bloqueado",
+      "unlocked": "Desbloqueado"
+    },
+    "noControl": "Posicione o cursor dentro de um controle de conteúdo",
+    "remove": "Remover controle de conteúdo",
+    "showAll": "Mostrar limites dos controles de conteúdo",
+    "types": {
+      "checkbox": "Caixa de seleção",
+      "comboBox": "Caixa de combinação",
+      "date": "Data",
+      "dropdown": "Lista suspensa",
+      "picture": "Imagem",
+      "plainText": "Texto sem formatação",
+      "repeatingSection": "Seção repetitiva",
+      "richText": "Rich Text"
+    }
   },
   "notes": {
     "editingBanner": "Editando nota",

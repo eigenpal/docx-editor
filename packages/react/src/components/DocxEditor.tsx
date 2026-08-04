@@ -23,6 +23,7 @@ import {
   ContextMenu as DocxEditorContextMenuCompound,
   DocxEditorContextMenu,
 } from '../editor/contextmenu';
+import { DocxEditorContentControl } from '../editor/DocxEditorContentControl';
 import { useTranslation } from '../i18n';
 import type { TranslationKey } from '../i18n';
 import type { DocxEditorProps, DocxEditorRef } from '../types';
@@ -209,6 +210,7 @@ const DocxEditorImpl = forwardRef<DocxEditorRef, DocxEditorProps>(function DocxE
           {...(typeof contextMenu === 'object' ? contextMenu : {})}
         />
       )}
+      <DocxEditorContentControl />
     </DocxEditorViewport>
   );
 
@@ -366,6 +368,12 @@ export interface DocxEditorNamespace extends ForwardRefExoticComponent<
    * browser's own menu through.
    */
   readonly ContextMenu: typeof DocxEditorContextMenuCompound;
+  /**
+   * The content-control inspector — alias, tag, type, lock, placeholder, bound — and
+   * remove-keeping-content. Mounted by default inside the viewport; opens from the
+   * `contentControl.inspector` chrome slot.
+   */
+  readonly ContentControl: typeof DocxEditorContentControl;
 }
 
 export const DocxEditor: DocxEditorNamespace = Object.assign(DocxEditorImpl, {
@@ -386,4 +394,5 @@ export const DocxEditor: DocxEditorNamespace = Object.assign(DocxEditorImpl, {
   HyperLink: DocxEditorHyperLink,
   Review: DocxEditorReview,
   ContextMenu: DocxEditorContextMenuCompound,
+  ContentControl: DocxEditorContentControl,
 });

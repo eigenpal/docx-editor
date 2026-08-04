@@ -7,6 +7,9 @@
 import { ComponentOptionsMixin } from 'vue';
 import { ComponentProvideOptions } from 'vue';
 import { DefineComponent } from 'vue';
+import { DisplayItem } from '../../core/src/contracts/geometry';
+import { DisplayPage } from '../../core/src/contracts/geometry';
+import { DocPoint } from '../../core/src/contracts/geometry';
 import { ExtractPropTypes } from 'vue';
 import { PropType } from 'vue';
 import { PublicProps } from 'vue';
@@ -44,6 +47,10 @@ export type ChromeSlotId =
 | 'format.clear'
 | 'review.comments'
 | 'review.editingMode'
+| 'contentControl.showAll'
+| 'contentControl.formFill'
+| 'contentControl.inspector'
+| 'contentControl.remove'
 | 'image.insert'
 | 'image.properties'
 | 'table.insert'
@@ -180,6 +187,12 @@ export const DEFERRED_DIALOGS: readonly ["findReplace", "hyperlink", "insertImag
 // @public (undocumented)
 export type DeferredDialogId = (typeof DEFERRED_DIALOGS)[number];
 
+export { DisplayItem }
+
+export { DisplayPage }
+
+export { DocPoint }
+
 // @public
 export interface DocxDocument {
     // (undocumented)
@@ -256,9 +269,9 @@ onChange?: ((_change: DocumentChange) => any) | undefined;
 onReady?: ((_editor: Editor) => any) | undefined;
 onFontError?: ((_error: EditorFontError) => any) | undefined;
 }>, {
-fonts: FontConfiguration | FontConfigurationFragment;
-document: DocumentSource;
 author: string;
+document: DocumentSource;
+fonts: FontConfiguration | FontConfigurationFragment;
 zoom: number;
 mode: EditorMode;
 locale: string;
@@ -457,7 +470,6 @@ export interface Editor {
         readonly text: string;
         readonly resolved: boolean;
     }[];
-    // (undocumented)
     getCurrentPage(mode?: 'viewport' | 'caret'): number;
     getDocumentFonts(): readonly string[];
     getDocumentHandle(): DocumentHandle;
@@ -1227,6 +1239,55 @@ id: ChromeSlotId,
 value?: unknown
 ): ExecResult {
     if (!editor) return { ok: false, code: 'unsupported', reason: 'editor is not ready' };
+    if (id === 'contentControl.showAll') {
+        const // (undocumented)
+        surface = surfaceOf(editor);
+        if (!surface) return { ok: false, code: 'unsupported', reason: 'editor is not ready' };
+        surface.contentControls.setShowAll(!surface.contentControls.showAll());
+        return { ok: true, changed: false };
+    }
+    if (id === 'contentControl.formFill') {
+        const // (undocumented)
+        surface = surfaceOf(editor);
+        if (!surface) return { ok: false, code: 'unsupported', reason: 'editor is not ready' };
+        surface.contentControls.setFormFill(!surface.contentControls.formFill());
+        return { ok: true, changed: false };
+    }
+    if (id === 'contentControl.inspector') {
+        // Inspector is a host chrome surface: the slot enables when a control is at the caret.
+        // Opening the panel is the adapter's job — there is nothing for the engine to execute.
+        const // (undocumented)
+        surface = surfaceOf(editor);
+        if (!surface) return { ok: false, code: 'unsupported', reason: 'editor is not ready' };
+        if (!surface.state().contentControls.activeControlId) {
+            return { ok: false, code: 'notFound', reason: 'no content control at the selection' };
+        }
+        return { ok: true, changed: false };
+    }
+    if (id === 'contentControl.remove') {
+        const // (undocumented)
+        surface = surfaceOf(editor);
+        if (!surface) return { ok: false, code: 'unsupported', reason: 'editor is not ready' };
+        const // (undocumented)
+        activeId = surface.state().contentControls.activeControlId;
+        if (!activeId) {
+            return { ok: false, code: 'notFound', reason: 'no content control at the selection' };
+        }
+        const // (undocumented)
+        reason = surface.contentControls.disabledReason(activeId, 'remove');
+        if (reason) return { ok: false, code: reason === 'bound' ? 'bound' : 'locked', reason };
+        const // (undocumented)
+        removed = surface.contentControls.remove(activeId);
+        return removed
+        ? { ok: true, changed: true }
+        : {
+            ok: false,
+            code:
+            (surface.state().lastRejection as 'locked' | 'bound' | 'notFound' | undefined) ??
+            'unsupported',
+            reason: surface.state().lastRejection ?? 'removeContentControl was refused',
+        };
+    }
     const // (undocumented)
     command =
     value === undefined
@@ -1294,6 +1355,40 @@ export function toolbarCommandState(editor: Editor | null, id: ChromeSlotId): To
             disabledReason: probe.ok ? null : probe.reason,
             active: false,
             value: mode,
+        };
+    }
+    // Surface-owned content-control chrome toggles. Enabled whenever the editor is mounted;
+    // `active` reflects snapshot surface state when the facade publishes it, else false.
+    // Adapters that drive the surface directly also read `surface.state().contentControls`.
+    if (id === 'contentControl.showAll' || id === 'contentControl.formFill') {
+        const // (undocumented)
+        surface = surfaceOf(editor);
+        const // (undocumented)
+        cc = surface?.state().contentControls;
+        const // (undocumented)
+        active =
+        id === 'contentControl.showAll' ? (cc?.showAll ?? false) : (cc?.formFill ?? false);
+        return {
+            id,
+            enabled: surface !== null,
+            disabledReason: surface ? null : 'editor is not ready',
+            active,
+        };
+    }
+    if (id === 'contentControl.inspector') {
+        const // (undocumented)
+        surface = surfaceOf(editor);
+        if (!surface)
+        return { id, enabled: false, disabledReason: 'editor is not ready', active: false };
+        const // (undocumented)
+        activeId = surface.state().contentControls.activeControlId;
+        return activeId
+        ? { id, enabled: true, disabledReason: null, active: false }
+        : {
+            id,
+            enabled: false,
+            disabledReason: 'no content control at the selection',
+            active: false,
         };
     }
     const // (undocumented)

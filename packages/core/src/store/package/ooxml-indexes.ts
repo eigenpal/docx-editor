@@ -10,6 +10,12 @@
 // index that invented its own would let a stale projection claim to be current.
 
 import { hardBreakText } from './hard-break.ts';
+import {
+  contentControlContentOf,
+  isContentControl,
+  walkAllStoryParagraphs,
+  walkParagraphInline,
+} from './content-control-walk.ts';
 import type { OoxmlElement, OoxmlNode, OoxmlPart } from './ooxml-tree.ts';
 import { WML_NAMESPACE_URI } from './ooxml-tree.ts';
 import type { OoxmlPackage } from './ooxml-package.ts';
@@ -83,6 +89,13 @@ function runText(node: OoxmlNode): string {
   if (node.kind === 'hardBreak') return hardBreakText(node);
   if (node.kind === 'generic') return '';
   if (node.kind === 'runProperties' || node.kind === 'paragraphProperties') return '';
+  if (node.kind === 'hyperlink' || isContentControl(node)) {
+    let text = '';
+    const children =
+      node.kind === 'hyperlink' ? node.children : (contentControlContentOf(node) ?? []);
+    for (const child of children) text += runText(child);
+    return text;
+  }
   let text = '';
   for (const child of node.children) text += runText(child);
   return text;
@@ -98,13 +111,9 @@ function indexParagraph(paragraph: OoxmlElement, ordinal: number): ParagraphInde
     if (child.kind === 'run') {
       runIds.push(child.id);
       text += runText(child);
-      return;
-    }
-    if (child.kind === 'hyperlink') {
-      for (const inner of child.children) visit(inner);
     }
   };
-  for (const child of paragraph.children) visit(child);
+  walkParagraphInline(paragraph.children, 0, visit);
   return { nodeId: paragraph.id, ordinal, text, runIds };
 }
 
@@ -123,9 +132,9 @@ function indexStory(part: OoxmlPart): StoryIndexEntry | null {
   const body = findBody(part.root);
   if (!body) return null;
   const paragraphs: ParagraphIndexEntry[] = [];
-  for (const child of body.children) {
-    if (child.kind === 'paragraph') paragraphs.push(indexParagraph(child, paragraphs.length));
-  }
+  walkAllStoryParagraphs(body.children, 0, (paragraph) => {
+    paragraphs.push(indexParagraph(paragraph, paragraphs.length));
+  });
   return { partName: part.name, rootId: body.id, paragraphs };
 }
 

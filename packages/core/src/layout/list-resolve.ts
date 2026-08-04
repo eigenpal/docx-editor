@@ -24,6 +24,7 @@ import { mapSymbolPuaText } from './symbol-encoding.ts';
 import { resolveRunStyle, type ResolvedRunStyle } from './run-style.ts';
 import { paragraphIndent, propertiesOf } from './paragraph-flow.ts';
 import type { TextMeasurer } from './semantic-records.ts';
+import { collectFlowBlocks } from '../store/package/content-control-walk.ts';
 
 export interface ResolvedListItem {
   readonly numId: string;
@@ -248,21 +249,9 @@ export function walkStoryParagraphs(
         if (row.kind !== 'tableRow') continue;
         for (const cell of row.children) {
           if (cell.kind !== 'tableCell') continue;
-          const inner: OoxmlElement[] = [];
-          for (const child of cell.children) {
-            if (child.kind === 'paragraph' || child.kind === 'table') inner.push(child);
-            if (child.kind === 'generic' && child.localName === 'sdt' && depth < maxTableDepth) {
-              for (const sdtChild of child.children) {
-                if (isElement(sdtChild) && sdtChild.localName === 'sdtContent') {
-                  for (const content of sdtChild.children) {
-                    if (content.kind === 'paragraph' || content.kind === 'table') {
-                      inner.push(content);
-                    }
-                  }
-                }
-              }
-            }
-          }
+          // Flatten cell SDTs under the shared content-control budget; table nesting still
+          // uses `maxTableDepth` for the table walk itself.
+          const inner = collectFlowBlocks(cell.children);
           visit(inner, depth + 1);
         }
       }

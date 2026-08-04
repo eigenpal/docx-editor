@@ -153,6 +153,22 @@ export {
   type UseDocxSourceOptions,
   type UseDocxSourceResult,
 } from './editor/useDocxSource';
+export {
+  useContentControl,
+  useContentControlInstance,
+  CONTENT_CONTROL_SLOTS,
+  type ContentControlInspectorState,
+  type ContentControlLock,
+  type ContentControlSlotId,
+  type UseContentControlResult,
+} from './editor/useContentControl';
+export {
+  DocxEditorContentControl,
+  type DocxEditorContentControlNamespace,
+  type ContentControlActionProps,
+  type ContentControlPartProps,
+  type ContentControlProps,
+} from './editor/DocxEditorContentControl';
 export { useEditorState } from './editor/useEditorState';
 export { useEditorCommand, type EditorCommandState } from './editor/useEditorCommand';
 export { useEditorEvent } from './editor/useEditorEvent';

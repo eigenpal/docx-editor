@@ -78,20 +78,32 @@ import { storyBlocks } from './story-roots.ts';
 import { type HeaderFooterStoryLayout } from './hf-layout.ts';
 import { enumerateDocumentSections, geometryOfSection } from './section-properties.ts';
 import { layoutSemanticDocumentWithNotes } from './note-pagination.ts';
-import type {
-  BlockFragmentRecord,
-  HeaderFooterStoryRecord,
-  LayoutBox,
-  LineRecord,
-  PageGeometry,
-  PageRecord,
-  ParagraphBorderStrokeRecord,
-  ParagraphBottomBorderRecord,
-  SemanticLayout,
-  TableRowFragmentRecord,
-  TextMeasurer,
+import {
+  DEFAULT_PAGE_GEOMETRY,
+  effectiveContentControlLock,
+  unionLayoutBoxes,
+  type BlockFragmentRecord,
+  type ContentControlBoundaryRecord,
+  type ContentControlGeometryFragment,
+  type ContentControlLevel,
+  type ContentControlLock,
+  type ContentControlMappedType,
+  type HeaderFooterStoryRecord,
+  type LayoutBox,
+  type LineRecord,
+  type PageGeometry,
+  type PageRecord,
+  type ParagraphBorderStrokeRecord,
+  type ParagraphBottomBorderRecord,
+  type SemanticLayout,
+  type TableRowFragmentRecord,
+  type TextMeasurer,
 } from './semantic-records.ts';
-import { DEFAULT_PAGE_GEOMETRY } from './semantic-records.ts';
+import {
+  MAX_CONTENT_CONTROL_NESTING as MAX_SDT_NESTING,
+  contentControlContentChildren,
+  isContentControl,
+} from '../store/package/content-control-walk.ts';
 import type { NumberingIndex } from './numbering-index.ts';
 import { firstLineShift, withResolvedListItems, type ResolvedListItem } from './list-resolve.ts';
 import { publishListMarker } from './list-marker.ts';
@@ -272,8 +284,15 @@ export function layoutSemanticDocument(
   const displayMode = options.displayMode ?? DEFAULT_REVISION_DISPLAY_MODE;
   const sections = enumerateDocumentSections(part, displayMode);
   const blocks = storyBlocks(part, displayMode);
+  // Wrapper-only metadata (alias/tag/lock/…) lives outside flattened paragraph nodes. Fold a
+  // fingerprint into the producer so incremental identity reuse cannot keep stale boundaries.
+  const controlToken = contentControlContextToken(part);
+  const optionsWithControlContext: SemanticLayoutOptions = {
+    ...options,
+    producer: `${options.producer ?? 'unversioned-measurer'}|cc:${controlToken}`,
+  };
   // Full-body list resolve so counters continue across sections and table cells.
-  const optionsWithLists = withResolvedListItems(options, blocks);
+  const optionsWithLists = withResolvedListItems(optionsWithControlContext, blocks);
 
   const runBody = (opts: SemanticLayoutOptions): SemanticLayout => {
     if (sections.length > 1) {
@@ -290,15 +309,20 @@ export function layoutSemanticDocument(
       furniture,
     });
     const numbering = section?.properties.pageNumbering;
-    const annotated: SemanticLayout = {
-      revision: laid.layout.revision,
-      pages: withPageFieldSources(
-        laid.pages,
-        numbering?.start ?? 1,
-        laid.pages.length,
-        numbering?.fmt
-      ),
-    };
+    // Carry boundary metadata through field annotation so a no-change resume still early-exits
+    // in `attachContentControlBoundaries` instead of allocating a fresh `pages` array.
+    const annotated: SemanticLayout = withContentControlMetadata(
+      {
+        revision: laid.layout.revision,
+        pages: withPageFieldSources(
+          laid.pages,
+          numbering?.start ?? 1,
+          laid.pages.length,
+          numbering?.fmt
+        ),
+      },
+      laid.layout
+    );
     const finalized = finalizePageFieldProjection(annotated);
     if (opts.session) {
       opts.session.multi = null;
@@ -307,11 +331,21 @@ export function layoutSemanticDocument(
     return finalized;
   };
 
+  const finish = (layout: SemanticLayout): SemanticLayout => {
+    const withBoundaries = attachContentControlBoundaries(layout, part, controlToken);
+    if (options.session) {
+      options.session.previous = withBoundaries;
+    }
+    return withBoundaries;
+  };
+
   if (!options.notes) {
-    return runBody(optionsWithLists);
+    return finish(runBody(optionsWithLists));
   }
 
-  return layoutSemanticDocumentWithNotes(part, sections, optionsWithLists, options.notes, runBody);
+  return finish(
+    layoutSemanticDocumentWithNotes(part, sections, optionsWithLists, options.notes, runBody)
+  );
 }
 
 interface BlockLayoutResult {
@@ -564,7 +598,12 @@ function layoutBlocksWithGeometry(
   // layout still describes it exactly — re-placing it would allocate a second set of
   // identical records and destroy the identity a consumer uses to skip repainting.
   if (resumable && firstChanged === prepared.length && prepared.length === session.keys.length) {
-    const unchanged: SemanticLayout = { revision, pages: previous!.pages };
+    // Keep prior content-control boundaries: `finish` re-attaches them and must see the same
+    // token/list to return `pages` by identity rather than mapping a twin array.
+    const unchanged: SemanticLayout = withContentControlMetadata(
+      { revision, pages: previous!.pages },
+      previous!
+    );
     session.previous = unchanged;
     session.stats = {
       placed: 0,
@@ -1493,6 +1532,606 @@ function layoutBlocksWithGeometry(
     };
   }
   return { layout, pages, lineCounter, endCursorY, endSpaceAfter, endsOpenPage };
+}
+
+// ---------------------------------------------------------------------------------------
+// Content-control boundary records
+// ---------------------------------------------------------------------------------------
+
+const WML_NS = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
+const W14_NS = 'http://schemas.microsoft.com/office/word/2010/wordml';
+const W15_NS = 'http://schemas.microsoft.com/office/word/2012/wordml';
+
+function wmlValOf(node: OoxmlNode): string | undefined {
+  if (node.kind === 'textValue') return undefined;
+  for (const attribute of node.attributes) {
+    if (attribute.localName === 'val' && attribute.namespaceUri === WML_NS) return attribute.value;
+  }
+  return undefined;
+}
+
+function contentControlPropertiesOf(control: OoxmlElement): OoxmlElement | undefined {
+  for (const child of control.children) {
+    if (child.kind === 'textValue') continue;
+    if (child.kind === 'contentControlProperties' || child.localName === 'sdtPr') return child;
+  }
+  return undefined;
+}
+
+function propertyChild(
+  properties: OoxmlElement | undefined,
+  localName: string
+): OoxmlElement | undefined {
+  if (!properties) return undefined;
+  for (const child of properties.children) {
+    if (child.kind === 'textValue') continue;
+    if (child.localName === localName) return child;
+  }
+  return undefined;
+}
+
+function propertyVal(properties: OoxmlElement | undefined, localName: string): string | undefined {
+  const child = propertyChild(properties, localName);
+  return child ? wmlValOf(child) : undefined;
+}
+
+function parseContentControlLock(value: string | undefined): ContentControlLock {
+  if (value === 'sdtLocked' || value === 'contentLocked' || value === 'sdtContentLocked') {
+    return value;
+  }
+  return 'unlocked';
+}
+
+function mapContentControlType(properties: OoxmlElement | undefined): ContentControlMappedType {
+  if (!properties) return 'richText';
+  for (const child of properties.children) {
+    if (child.kind === 'textValue') continue;
+    const kind = child.kind;
+    const localName = child.localName;
+    const namespaceUri = child.namespaceUri;
+    // Typed markers after the SDT merge; `localName` covers demoted/generic fallbacks.
+    // Do not match `kind === 'text'` — that is `w:t`, not `CT_SdtText` (`contentControlText`).
+    if (kind === 'contentControlDropDownList' || localName === 'dropDownList') return 'dropdown';
+    if (kind === 'contentControlComboBox' || localName === 'comboBox') return 'comboBox';
+    if (kind === 'contentControlDate' || localName === 'date') return 'date';
+    if (localName === 'picture') return 'picture';
+    if (kind === 'contentControlText' || localName === 'text') return 'plainText';
+    if (localName === 'richText') return 'richText';
+    if (
+      kind === 'contentControlCheckbox' ||
+      (localName === 'checkbox' && namespaceUri === W14_NS)
+    ) {
+      return 'checkbox';
+    }
+    if (localName === 'repeatingSection' && namespaceUri === W15_NS) {
+      return 'repeatingSection';
+    }
+  }
+  return 'richText';
+}
+
+function controlLevelOf(control: OoxmlElement): ContentControlLevel {
+  const classify = (nodes: readonly OoxmlNode[], depth: number): ContentControlLevel | null => {
+    for (const child of nodes) {
+      if (child.kind === 'textValue') continue;
+      if (child.kind === 'tableRow') return 'row';
+      if (child.kind === 'tableCell') return 'cell';
+      if (child.kind === 'paragraph' || child.kind === 'table') return 'block';
+      if (isContentControl(child) && depth < MAX_SDT_NESTING) {
+        const nested = classify(contentControlContentChildren(child), depth + 1);
+        if (nested) return nested;
+      }
+    }
+    return null;
+  };
+  return classify(contentControlContentChildren(control), 0) ?? 'inline';
+}
+
+/**
+ * Fingerprint of every control wrapper's chrome metadata — not its content.
+ *
+ * Changing alias/tag/lock/type/placeholder/binding without touching nested paragraphs still
+ * changes this token, which is folded into the layout producer.
+ */
+export function contentControlContextToken(part: OoxmlPart): string {
+  const parts: string[] = [];
+  const walk = (node: OoxmlNode, depth: number): void => {
+    if (node.kind === 'textValue') return;
+    if (isContentControl(node)) {
+      if (depth >= MAX_SDT_NESTING) return;
+      const properties = contentControlPropertiesOf(node);
+      parts.push(
+        [
+          node.id,
+          propertyVal(properties, 'alias') ?? '',
+          propertyVal(properties, 'tag') ?? '',
+          parseContentControlLock(propertyVal(properties, 'lock')),
+          mapContentControlType(properties),
+          propertyChild(properties, 'showingPlcHdr') ? '1' : '0',
+          propertyChild(properties, 'dataBinding') ? '1' : '0',
+        ].join(':')
+      );
+      for (const inner of contentControlContentChildren(node)) walk(inner, depth + 1);
+      return;
+    }
+    for (const child of node.children) walk(child, depth);
+  };
+  walk(part.root, 0);
+  return parts.join('|');
+}
+
+/** Addressable UTF-16 length of an inline node — mirrors the store / layout offset model. */
+function addressableInlineLength(node: OoxmlNode): number {
+  if (node.kind === 'textValue') return node.value.length;
+  if (node.kind === 'tab' || node.kind === 'hardBreak') return 1;
+  if (node.kind === 'runProperties' || node.kind === 'paragraphProperties') return 0;
+  if (node.kind === 'generic') return 0;
+  if (isContentControl(node)) {
+    let total = 0;
+    for (const inner of contentControlContentChildren(node))
+      total += addressableInlineLength(inner);
+    return total;
+  }
+  let total = 0;
+  for (const child of node.children) total += addressableInlineLength(child);
+  return total;
+}
+
+interface CollectedControl {
+  readonly control: OoxmlElement;
+  readonly nestingDepth: number;
+  readonly lockStack: readonly ContentControlLock[];
+  readonly level: ContentControlLevel;
+  readonly paragraphId?: string;
+  readonly range?: { readonly start: number; readonly end: number };
+  readonly blockIds: readonly string[];
+}
+
+function collectControls(part: OoxmlPart): CollectedControl[] {
+  const out: CollectedControl[] = [];
+
+  const collectBlocks = (nodes: readonly OoxmlNode[], into: string[]): void => {
+    for (const child of nodes) {
+      if (child.kind === 'paragraph' || child.kind === 'table') {
+        into.push(child.id);
+        continue;
+      }
+      if (isContentControl(child)) {
+        collectBlocks(contentControlContentChildren(child), into);
+        continue;
+      }
+      if (child.kind === 'tableRow' || child.kind === 'tableCell') {
+        collectBlocks(child.children, into);
+      }
+    }
+  };
+
+  const walkInline = (
+    nodes: readonly OoxmlNode[],
+    paragraphId: string,
+    offset: number,
+    depth: number,
+    lockStack: readonly ContentControlLock[]
+  ): number => {
+    let cursor = offset;
+    for (const child of nodes) {
+      if (child.kind === 'textValue' || child.kind === 'paragraphProperties') continue;
+      if (isContentControl(child)) {
+        if (depth >= MAX_SDT_NESTING) {
+          cursor += addressableInlineLength(child);
+          continue;
+        }
+        const properties = contentControlPropertiesOf(child);
+        const lock = parseContentControlLock(propertyVal(properties, 'lock'));
+        const nextStack = [...lockStack, lock];
+        const start = cursor;
+        const end = walkInline(
+          contentControlContentChildren(child),
+          paragraphId,
+          cursor,
+          depth + 1,
+          nextStack
+        );
+        out.push({
+          control: child,
+          nestingDepth: depth,
+          lockStack: nextStack,
+          level: 'inline',
+          paragraphId,
+          range: { start, end },
+          blockIds: [],
+        });
+        cursor = end;
+        continue;
+      }
+      if (child.kind === 'hyperlink') {
+        cursor = walkInline(child.children, paragraphId, cursor, depth, lockStack);
+        continue;
+      }
+      cursor += addressableInlineLength(child);
+    }
+    return cursor;
+  };
+
+  const walkBlocks = (
+    nodes: readonly OoxmlNode[],
+    depth: number,
+    lockStack: readonly ContentControlLock[]
+  ): void => {
+    for (const child of nodes) {
+      if (child.kind === 'textValue') continue;
+      if (child.kind === 'paragraph') {
+        walkInline(child.children, child.id, 0, depth, lockStack);
+        continue;
+      }
+      if (child.kind === 'table') {
+        for (const row of child.children) {
+          if (row.kind !== 'tableRow') continue;
+          walkBlocks([row], depth, lockStack);
+        }
+        continue;
+      }
+      if (child.kind === 'tableRow') {
+        for (const cell of child.children) {
+          if (cell.kind === 'tableCell') walkBlocks(cell.children, depth, lockStack);
+          else if (isContentControl(cell)) walkBlocks([cell], depth, lockStack);
+        }
+        continue;
+      }
+      if (!isContentControl(child)) continue;
+      if (depth >= MAX_SDT_NESTING) continue;
+      const properties = contentControlPropertiesOf(child);
+      const lock = parseContentControlLock(propertyVal(properties, 'lock'));
+      const nextStack = [...lockStack, lock];
+      const level = controlLevelOf(child);
+      const content = contentControlContentChildren(child);
+      if (level === 'inline') {
+        // Inline at body level is malformed; still walk content for nested discovery.
+        walkBlocks(content, depth + 1, nextStack);
+        continue;
+      }
+      const blockIds: string[] = [];
+      collectBlocks(content, blockIds);
+      out.push({
+        control: child,
+        nestingDepth: depth,
+        lockStack: nextStack,
+        level,
+        blockIds,
+      });
+      walkBlocks(content, depth + 1, nextStack);
+    }
+  };
+
+  const body = part.root.children.find((child) => child.kind === 'body');
+  if (body && body.kind !== 'textValue') walkBlocks(body.children, 0, []);
+  return out;
+}
+
+interface PlacedBlockBox {
+  readonly pageIndex: number;
+  readonly blockId: string;
+  readonly box: LayoutBox;
+}
+
+interface PlacedSpanBox {
+  readonly pageIndex: number;
+  readonly paragraphId: string;
+  readonly start: number;
+  readonly end: number;
+  readonly box: LayoutBox;
+}
+
+/**
+ * Deterministic work accounting for boundary generation.
+ *
+ * This is intentionally local to the layout implementation (it is not re-exported by the
+ * package entry point). Tests use it to pin resource growth without depending on wall time.
+ */
+export interface ContentControlBoundaryWork {
+  geometryEntries: number;
+  blockLookups: number;
+  blockCandidates: number;
+  paragraphLookups: number;
+  spanCandidates: number;
+  pageFragments: number;
+}
+
+interface PlacedGeometryIndex {
+  readonly blocksById: ReadonlyMap<string, readonly PlacedBlockBox[]>;
+  readonly spansByParagraph: ReadonlyMap<string, readonly PlacedSpanBox[]>;
+}
+
+function placedGeometryOf(
+  layout: SemanticLayout,
+  work?: ContentControlBoundaryWork
+): PlacedGeometryIndex {
+  const blocksById = new Map<string, PlacedBlockBox[]>();
+  const spansByParagraph = new Map<string, PlacedSpanBox[]>();
+  const addBlock = (entry: PlacedBlockBox): void => {
+    work && (work.geometryEntries += 1);
+    const entries = blocksById.get(entry.blockId);
+    if (entries) entries.push(entry);
+    else blocksById.set(entry.blockId, [entry]);
+  };
+  const addSpan = (entry: PlacedSpanBox): void => {
+    work && (work.geometryEntries += 1);
+    const entries = spansByParagraph.get(entry.paragraphId);
+    if (entries) entries.push(entry);
+    else spansByParagraph.set(entry.paragraphId, [entry]);
+  };
+  const visit = (pageIndex: number, fragment: BlockFragmentRecord): void => {
+    if (fragment.kind === 'paragraph') {
+      addBlock({ pageIndex, blockId: fragment.paragraphId, box: fragment.box });
+      for (const line of fragment.lines) {
+        for (const span of line.spans) {
+          addSpan({
+            pageIndex,
+            paragraphId: span.range.paragraphId,
+            start: span.range.start,
+            end: span.range.end,
+            box: span.box,
+          });
+        }
+      }
+      return;
+    }
+    addBlock({ pageIndex, blockId: fragment.tableId, box: fragment.box });
+    for (const row of fragment.rows) {
+      if (row.isHeaderRepeat) continue;
+      for (const cell of row.cells) {
+        for (const inner of cell.blocks) visit(pageIndex, inner);
+      }
+    }
+  };
+  for (const page of layout.pages) {
+    for (const fragment of page.fragments) visit(page.index, fragment);
+  }
+  return { blocksById, spansByParagraph };
+}
+
+function fragmentsForBlockControl(
+  blockIds: readonly string[],
+  geometry: PlacedGeometryIndex,
+  work?: ContentControlBoundaryWork
+): ContentControlGeometryFragment[] {
+  const byPage = new Map<number, LayoutBox[]>();
+  const seen = new Set<string>();
+  for (const blockId of blockIds) {
+    if (seen.has(blockId)) continue;
+    seen.add(blockId);
+    work && (work.blockLookups += 1);
+    for (const entry of geometry.blocksById.get(blockId) ?? []) {
+      work && (work.blockCandidates += 1);
+      const list = byPage.get(entry.pageIndex);
+      if (list) list.push(entry.box);
+      else byPage.set(entry.pageIndex, [entry.box]);
+    }
+  }
+  return [...byPage.entries()]
+    .sort(([a], [b]) => a - b)
+    .flatMap(([pageIndex, boxes]) => {
+      const box = unionLayoutBoxes(boxes);
+      return box ? [{ pageIndex, box }] : [];
+    });
+}
+
+function fragmentsForInlineControl(
+  paragraphId: string,
+  range: { readonly start: number; readonly end: number },
+  geometry: PlacedGeometryIndex,
+  work?: ContentControlBoundaryWork
+): ContentControlGeometryFragment[] {
+  work && (work.paragraphLookups += 1);
+  const placed = geometry.spansByParagraph.get(paragraphId) ?? [];
+  const byPage = new Map<number, LayoutBox[]>();
+  // Paragraph spans are emitted in source-range order. Binary search skips all spans ending
+  // before this control, so sibling controls do not repeatedly scan the paragraph prefix.
+  let low = 0;
+  let high = placed.length;
+  while (low < high) {
+    work && (work.spanCandidates += 1);
+    const middle = low + ((high - low) >> 1);
+    const beforeStart =
+      range.start === range.end
+        ? placed[middle]!.end < range.start
+        : placed[middle]!.end <= range.start;
+    if (beforeStart) low = middle + 1;
+    else high = middle;
+  }
+  for (let index = low; index < placed.length; index += 1) {
+    const span = placed[index]!;
+    work && (work.spanCandidates += 1);
+    if (span.end <= range.start) continue;
+    if (span.start >= range.end) break;
+    const list = byPage.get(span.pageIndex);
+    if (list) list.push(span.box);
+    else byPage.set(span.pageIndex, [span.box]);
+  }
+  // Empty range (empty control): fall back to a zero-width box at the caret when a span
+  // touches the insertion point, otherwise leave fragments empty.
+  if (byPage.size === 0 && range.start === range.end) {
+    for (let index = low; index < placed.length; index += 1) {
+      const span = placed[index]!;
+      work && (work.spanCandidates += 1);
+      if (span.start > range.start) break;
+      if (range.start > span.end) continue;
+      const x =
+        span.start === span.end
+          ? span.box.x
+          : span.box.x +
+            (span.box.width * (range.start - span.start)) / Math.max(1, span.end - span.start);
+      return [
+        { pageIndex: span.pageIndex, box: { x, y: span.box.y, width: 0, height: span.box.height } },
+      ];
+    }
+  }
+  return [...byPage.entries()]
+    .sort(([a], [b]) => a - b)
+    .flatMap(([pageIndex, boxes]) => {
+      const box = unionLayoutBoxes(boxes);
+      return box ? [{ pageIndex, box }] : [];
+    });
+}
+
+function boundaryRecordOf(
+  collected: CollectedControl,
+  geometry: PlacedGeometryIndex,
+  work?: ContentControlBoundaryWork
+): ContentControlBoundaryRecord {
+  const properties = contentControlPropertiesOf(collected.control);
+  const alias = propertyVal(properties, 'alias');
+  const tag = propertyVal(properties, 'tag');
+  const lock = collected.lockStack[collected.lockStack.length - 1] ?? 'unlocked';
+  const fragments =
+    collected.level === 'inline' && collected.paragraphId && collected.range
+      ? fragmentsForInlineControl(collected.paragraphId, collected.range, geometry, work)
+      : fragmentsForBlockControl(collected.blockIds, geometry, work);
+  return {
+    id: collected.control.id,
+    ...(alias !== undefined ? { alias } : {}),
+    ...(tag !== undefined ? { tag } : {}),
+    controlType: mapContentControlType(properties),
+    lock,
+    effectiveLock: effectiveContentControlLock(collected.lockStack),
+    placeholder: propertyChild(properties, 'showingPlcHdr') !== undefined,
+    bound: propertyChild(properties, 'dataBinding') !== undefined,
+    nestingDepth: collected.nestingDepth,
+    level: collected.level,
+    fragments,
+  };
+}
+
+function sameGeometryFragments(
+  left: readonly ContentControlGeometryFragment[],
+  right: readonly ContentControlGeometryFragment[]
+): boolean {
+  if (left.length !== right.length) return false;
+  for (let index = 0; index < left.length; index += 1) {
+    const a = left[index]!;
+    const b = right[index]!;
+    if (a === b) continue;
+    if (a.pageIndex !== b.pageIndex) return false;
+    if (
+      a.box.x !== b.box.x ||
+      a.box.y !== b.box.y ||
+      a.box.width !== b.box.width ||
+      a.box.height !== b.box.height
+    ) {
+      return false;
+    }
+  }
+  return true;
+}
+
+function sameBoundaryRecord(
+  left: ContentControlBoundaryRecord,
+  right: ContentControlBoundaryRecord
+): boolean {
+  return (
+    left.id === right.id &&
+    left.alias === right.alias &&
+    left.tag === right.tag &&
+    left.controlType === right.controlType &&
+    left.lock === right.lock &&
+    left.effectiveLock === right.effectiveLock &&
+    left.placeholder === right.placeholder &&
+    left.bound === right.bound &&
+    left.nestingDepth === right.nestingDepth &&
+    left.level === right.level &&
+    sameGeometryFragments(left.fragments, right.fragments)
+  );
+}
+
+function sameBoundaryList(
+  left: readonly ContentControlBoundaryRecord[] | undefined,
+  right: readonly ContentControlBoundaryRecord[]
+): boolean {
+  if (!left) return right.length === 0;
+  if (left.length !== right.length) return false;
+  for (let index = 0; index < left.length; index += 1) {
+    if (!sameBoundaryRecord(left[index]!, right[index]!)) return false;
+  }
+  return true;
+}
+
+/** Copy layout-level content-control metadata onto a pages/revision shell. */
+function withContentControlMetadata(
+  layout: Pick<SemanticLayout, 'revision' | 'pages'>,
+  source: SemanticLayout
+): SemanticLayout {
+  return {
+    revision: layout.revision,
+    pages: layout.pages,
+    ...(source.contentControls !== undefined ? { contentControls: source.contentControls } : {}),
+    ...(source.controlContextToken !== undefined
+      ? { controlContextToken: source.controlContextToken }
+      : {}),
+  };
+}
+
+/**
+ * Publish content-control boundary records onto a laid-out document.
+ *
+ * Page fragment identity is preserved when a page's control list is unchanged; metadata-only
+ * edits replace the page wrapper so consumers never read a stale `contentControls` array from
+ * an identity-reused page. When no page wrapper needs rewriting, the prior `pages` array is
+ * kept by reference so a no-change resume still satisfies `layout.pages` identity.
+ */
+export function attachContentControlBoundaries(
+  layout: SemanticLayout,
+  part: OoxmlPart,
+  token = contentControlContextToken(part),
+  work?: ContentControlBoundaryWork
+): SemanticLayout {
+  const collected = collectControls(part);
+  const geometry = placedGeometryOf(layout, work);
+  const contentControls = collected.map((entry) => boundaryRecordOf(entry, geometry, work));
+  const byPage = new Map<number, ContentControlBoundaryRecord[]>();
+  for (const record of contentControls) {
+    for (const fragment of record.fragments) {
+      work && (work.pageFragments += 1);
+      const list = byPage.get(fragment.pageIndex);
+      const pageRecord = { ...record, fragments: [fragment] };
+      if (list) list.push(pageRecord);
+      else byPage.set(fragment.pageIndex, [pageRecord]);
+    }
+  }
+
+  if (
+    layout.controlContextToken === token &&
+    sameBoundaryList(layout.contentControls, contentControls) &&
+    layout.pages.every((page) =>
+      sameBoundaryList(page.contentControls, byPage.get(page.index) ?? [])
+    )
+  ) {
+    return layout;
+  }
+
+  let pagesChanged = false;
+  const mapped = layout.pages.map((page) => {
+    const pageControls = byPage.get(page.index) ?? [];
+    if (sameBoundaryList(page.contentControls, pageControls)) return page;
+    if (pageControls.length === 0 && !page.contentControls) return page;
+    pagesChanged = true;
+    return { ...page, contentControls: pageControls };
+  });
+  const pages = pagesChanged ? mapped : layout.pages;
+
+  if (
+    pages === layout.pages &&
+    layout.controlContextToken === token &&
+    sameBoundaryList(layout.contentControls, contentControls)
+  ) {
+    return layout;
+  }
+
+  return {
+    revision: layout.revision,
+    pages,
+    contentControls,
+    controlContextToken: token,
+  };
 }
 
 export { createFixedMeasurer } from './fixed-measurer.ts';

@@ -401,6 +401,40 @@ export const CHROME_GROUPS = [
     ],
   },
   {
+    // Content-control authoring chrome (typed-content-controls). Show-all and form-fill are
+    // surface toggles; inspector and remove are contextual to the caret control. Slot ids are
+    // public forever — renaming any is a breaking change.
+    id: 'contentControl',
+    labelKey: 'contentControl.group',
+    contextual: true,
+    controls: [
+      {
+        id: 'showAll',
+        labelKey: 'contentControl.showAll',
+        paths: GENERATED_ICON_PATHS['visibility'],
+        state: { kind: 'command' },
+      },
+      {
+        id: 'formFill',
+        labelKey: 'contentControl.formFill',
+        paths: GENERATED_ICON_PATHS['edit_note'],
+        state: { kind: 'command' },
+      },
+      {
+        id: 'inspector',
+        labelKey: 'contentControl.inspector',
+        paths: GENERATED_ICON_PATHS['tune'],
+        state: { kind: 'command' },
+      },
+      {
+        id: 'remove',
+        labelKey: 'contentControl.remove',
+        paths: GENERATED_ICON_PATHS['delete'],
+        state: { kind: 'command' },
+      },
+    ],
+  },
+  {
     id: 'image',
     labelKey: 'formattingBar.groups.image',
     contextual: true,
@@ -578,6 +612,7 @@ export type ChromeGroupId =
   | 'list'
   | 'format'
   | 'review'
+  | 'contentControl'
   | 'image'
   | 'table'
   | 'file'
@@ -618,6 +653,10 @@ export type ChromeSlotId =
   | 'format.clear'
   | 'review.comments'
   | 'review.editingMode'
+  | 'contentControl.showAll'
+  | 'contentControl.formFill'
+  | 'contentControl.inspector'
+  | 'contentControl.remove'
   | 'image.insert'
   | 'image.properties'
   | 'table.insert'

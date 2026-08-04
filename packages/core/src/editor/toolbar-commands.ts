@@ -23,6 +23,13 @@ import type {
   ExecResult,
 } from '@docx-editor.dev/core-contract/contracts/editor';
 import type { ChromeSlotId } from './chrome-controls.ts';
+import type { PaginatedSurface } from './paginated-surface-contract.ts';
+
+/** Instance-only surface on the concrete facade — not part of the public `Editor` contract. */
+function surfaceOf(editor: Editor): PaginatedSurface | null {
+  const candidate = editor as Editor & { readonly surface?: PaginatedSurface | null };
+  return candidate.surface ?? null;
+}
 
 /**
  * The one slot → engine-command table.
@@ -62,6 +69,10 @@ const SLOT_COMMANDS: Partial<Record<ChromeSlotId, EditorCommand>> = {
   'insert.pageXofY': { type: 'insertPageField', field: 'PAGE_X_OF_Y' },
   'insert.pageBreak': { type: 'insertBreak', kind: 'page' },
   'insert.sectionBreakNextPage': { type: 'insertBreak', kind: 'section' },
+  // Content-control remove maps to the public edit shape; the Editor facade resolves the
+  // caret control. Show-all / form-fill / inspector are surface chrome, not commands — see
+  // the special cases in `toolbarCommandState` / `runToolbarCommand`.
+  'contentControl.remove': { type: 'removeContentControl' },
   // `insert.sectionBreakContinuous` and `insert.toc` are deliberately absent: a continuous
   // section break is not in the `insertBreak` vocabulary, and a table of contents is not an
   // edit the tree editor executes. Neither has a command SHAPE to probe with either, so
@@ -226,6 +237,35 @@ export function toolbarCommandState(editor: Editor | null, id: ChromeSlotId): To
       value: mode,
     };
   }
+  // Surface-owned content-control chrome toggles. Enabled whenever the editor is mounted;
+  // `active` reflects snapshot surface state when the facade publishes it, else false.
+  // Adapters that drive the surface directly also read `surface.state().contentControls`.
+  if (id === 'contentControl.showAll' || id === 'contentControl.formFill') {
+    const surface = surfaceOf(editor);
+    const cc = surface?.state().contentControls;
+    const active =
+      id === 'contentControl.showAll' ? (cc?.showAll ?? false) : (cc?.formFill ?? false);
+    return {
+      id,
+      enabled: surface !== null,
+      disabledReason: surface ? null : 'editor is not ready',
+      active,
+    };
+  }
+  if (id === 'contentControl.inspector') {
+    const surface = surfaceOf(editor);
+    if (!surface)
+      return { id, enabled: false, disabledReason: 'editor is not ready', active: false };
+    const activeId = surface.state().contentControls.activeControlId;
+    return activeId
+      ? { id, enabled: true, disabledReason: null, active: false }
+      : {
+          id,
+          enabled: false,
+          disabledReason: 'no content control at the selection',
+          active: false,
+        };
+  }
   const command = commandForSlot(id);
   if (!command) {
     // A value-typed slot has no fixed command, but it still has an honest enabled
@@ -315,6 +355,48 @@ export function runToolbarCommand(
   value?: unknown
 ): ExecResult {
   if (!editor) return { ok: false, code: 'unsupported', reason: 'editor is not ready' };
+  if (id === 'contentControl.showAll') {
+    const surface = surfaceOf(editor);
+    if (!surface) return { ok: false, code: 'unsupported', reason: 'editor is not ready' };
+    surface.contentControls.setShowAll(!surface.contentControls.showAll());
+    return { ok: true, changed: false };
+  }
+  if (id === 'contentControl.formFill') {
+    const surface = surfaceOf(editor);
+    if (!surface) return { ok: false, code: 'unsupported', reason: 'editor is not ready' };
+    surface.contentControls.setFormFill(!surface.contentControls.formFill());
+    return { ok: true, changed: false };
+  }
+  if (id === 'contentControl.inspector') {
+    // Inspector is a host chrome surface: the slot enables when a control is at the caret.
+    // Opening the panel is the adapter's job — there is nothing for the engine to execute.
+    const surface = surfaceOf(editor);
+    if (!surface) return { ok: false, code: 'unsupported', reason: 'editor is not ready' };
+    if (!surface.state().contentControls.activeControlId) {
+      return { ok: false, code: 'notFound', reason: 'no content control at the selection' };
+    }
+    return { ok: true, changed: false };
+  }
+  if (id === 'contentControl.remove') {
+    const surface = surfaceOf(editor);
+    if (!surface) return { ok: false, code: 'unsupported', reason: 'editor is not ready' };
+    const activeId = surface.state().contentControls.activeControlId;
+    if (!activeId) {
+      return { ok: false, code: 'notFound', reason: 'no content control at the selection' };
+    }
+    const reason = surface.contentControls.disabledReason(activeId, 'remove');
+    if (reason) return { ok: false, code: reason === 'bound' ? 'bound' : 'locked', reason };
+    const removed = surface.contentControls.remove(activeId);
+    return removed
+      ? { ok: true, changed: true }
+      : {
+          ok: false,
+          code:
+            (surface.state().lastRejection as 'locked' | 'bound' | 'notFound' | undefined) ??
+            'unsupported',
+          reason: surface.state().lastRejection ?? 'removeContentControl was refused',
+        };
+  }
   const command =
     value === undefined
       ? commandForSlot(id)

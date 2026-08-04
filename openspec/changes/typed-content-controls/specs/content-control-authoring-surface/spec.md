@@ -1,5 +1,24 @@
 ## ADDED Requirements
 
+### Requirement: The React adapter owns the full authoring surface
+
+The interactive control surface — widgets, form-fill navigation, boundary chrome, inspector, and remove-control — SHALL land in the React adapter. Vue is explicitly deferred; no paired production support claim follows from this change alone.
+
+#### Scenario: Vue does not claim parity
+
+- **WHEN** this change merges without a Vue follow-up
+- **THEN** no documentation or gate describes content-control authoring as adapter-paired
+
+### Requirement: Chrome slots wire the authoring surface
+
+`CHROME_GROUPS` SHALL gain a contextual `contentControl` group with public `ChromeSlotId` values `contentControl.showAll`, `contentControl.formFill`, `contentControl.inspector`, and `contentControl.remove`. The slots remain available for explicit composition but SHALL NOT appear permanently in the default toolbar.
+
+#### Scenario: Content-control slots are contextual
+
+- **WHEN** `DocxEditor.Toolbar` renders with default parts
+- **THEN** the content-control group is omitted from the permanent toolbar
+- **AND** consumers may still compose its registered slots explicitly
+
 ### Requirement: Typed controls offer an interactive widget
 
 The painted surface SHALL offer a widget for each control type that has a value: a menu of `w:listItem` entries for a dropdown and a combo box, a date picker for a date control, and a toggle for a `w14:checkbox` control. Each widget SHALL commit through set-content-control-value, so it is an ordinary undoable edit.
@@ -66,12 +85,22 @@ The surface SHALL offer a navigation mode in which Tab and Shift+Tab move betwee
 
 ### Requirement: Control boundaries are visible on demand, not always
 
-Control chrome — a boundary indicator and the control's alias — SHALL be shown when the caret is inside the control or when a show-all-controls affordance is enabled, and SHALL NOT be painted permanently over every control.
+Value controls SHALL keep their compact type affordance visible. The active or hovered control SHALL show a boundary indicator and its alias. When show-all-controls is enabled, every inactive control SHALL show a subtle boundary indicator without its alias. Boundaries and aliases SHALL NOT be visibly painted permanently over every control.
 
 #### Scenario: Chrome on caret entry
 
 - **WHEN** the caret enters a control
 - **THEN** its boundary and alias are shown
+
+#### Scenario: Chrome on hover
+
+- **WHEN** the pointer hovers over a control
+- **THEN** it receives the same boundary and alias treatment as the active control
+
+#### Scenario: Value affordances remain discoverable
+
+- **WHEN** a dropdown, combo box, date, or checkbox control is inactive
+- **THEN** its compact widget remains visible without permanently showing its boundary or alias
 
 #### Scenario: Chrome is not document content
 
@@ -81,7 +110,8 @@ Control chrome — a boundary indicator and the control's alias — SHALL be sho
 #### Scenario: Show-all mode
 
 - **WHEN** the user enables show-all-controls
-- **THEN** every control's boundary is indicated, and disabling it removes them with no reflow
+- **THEN** every control's boundary is indicated subtly, while aliases remain hidden unless the control is active
+- **AND** disabling it removes the boundaries with no reflow
 
 ### Requirement: Control inspector and removal
 
@@ -91,6 +121,13 @@ The adapter SHALL expose an inspector reporting a control's tag, alias, type, lo
 
 - **WHEN** the caret is inside a control
 - **THEN** the inspector shows that control's tag, alias, type, and lock, read from the boundary record
+- **AND** `locked` reflects content-edit lock per the nested lock union, not removal-only `sdtLocked`
+
+#### Scenario: Inspector reports removal lock separately
+
+- **WHEN** the caret is inside a control that is `sdtLocked` only
+- **THEN** the inspector shows `locked: false` for content edit
+- **AND** the remove action is disabled with the engine's reason
 
 #### Scenario: Remove keeps content
 

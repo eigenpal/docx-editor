@@ -61,7 +61,8 @@
       "listFormatting": "Liste biçimlendirme",
       "image": "Görsel",
       "table": "Tablo",
-      "insert": "Ekle"
+      "insert": "Ekle",
+      "contentControl": "İçerik denetimleri"
     },
     "undo": "Geri al",
     "undoShortcut": "Geri al (Ctrl+Z)",
@@ -993,6 +994,44 @@
       "headings": null
     },
     "title": null
+  },
+  "contentControl": {
+    "formFill": "Form doldurma modu",
+    "group": "İçerik denetimleri",
+    "inspector": "İçerik denetimi özellikleri",
+    "inspectorPanel": {
+      "alias": "Başlık",
+      "bound": "Veriye bağlı",
+      "boundNote": "Bu denetim harici verilere bağlı. Düzenleme reddedildi.",
+      "empty": "—",
+      "lock": "Kilit",
+      "lockedNote": "Bu denetimde içerik düzenleme kilitli.",
+      "no": "Hayır",
+      "placeholder": "Yer tutucu",
+      "tag": "Etiket",
+      "title": "İçerik denetimi",
+      "type": "Tür",
+      "yes": "Evet"
+    },
+    "lock": {
+      "contentLocked": "İçerik kilitli",
+      "sdtContentLocked": "İçerik denetimi ve içerik kilitli",
+      "sdtLocked": "İçerik denetimi kilitli",
+      "unlocked": "Kilitsiz"
+    },
+    "noControl": "İmleci bir içerik denetiminin içine yerleştirin",
+    "remove": "İçerik denetimini kaldır",
+    "showAll": "İçerik denetimi sınırlarını göster",
+    "types": {
+      "checkbox": "Onay kutusu",
+      "comboBox": "Birleşik kutu",
+      "date": "Tarih",
+      "dropdown": "Açılan liste",
+      "picture": "Resim",
+      "plainText": "Düz metin",
+      "repeatingSection": "Yinelenen bölüm",
+      "richText": "Zengin metin"
+    }
   },
   "notes": {
     "editingBanner": "Not düzenleniyor",

@@ -64,7 +64,8 @@
       "listFormatting": "List formatting",
       "image": "Image",
       "table": "Table",
-      "insert": "Insert"
+      "insert": "Insert",
+      "contentControl": "Content controls"
     },
     "undo": "Undo",
     "undoShortcut": "Undo (Ctrl+Z)",
@@ -894,6 +895,44 @@
     "inertTarget": "This link points somewhere the editor will not open",
     "bookmarkTarget": "Goes to a place in this document",
     "refused": "That link could not be applied. Check the address and try again."
+  },
+  "contentControl": {
+    "group": "Content controls",
+    "showAll": "Show content control boundaries",
+    "formFill": "Form-fill mode",
+    "inspector": "Content control properties",
+    "remove": "Remove content control",
+    "noControl": "Place the caret inside a content control",
+    "inspectorPanel": {
+      "title": "Content control",
+      "alias": "Title",
+      "tag": "Tag",
+      "type": "Type",
+      "lock": "Lock",
+      "placeholder": "Placeholder",
+      "bound": "Data bound",
+      "empty": "—",
+      "yes": "Yes",
+      "no": "No",
+      "boundNote": "This control is bound to external data. Editing is refused.",
+      "lockedNote": "Content editing is locked on this control."
+    },
+    "types": {
+      "richText": "Rich text",
+      "plainText": "Plain text",
+      "checkbox": "Checkbox",
+      "dropdown": "Dropdown list",
+      "comboBox": "Combo box",
+      "date": "Date",
+      "picture": "Picture",
+      "repeatingSection": "Repeating section"
+    },
+    "lock": {
+      "unlocked": "Unlocked",
+      "sdtLocked": "Content control locked",
+      "contentLocked": "Contents locked",
+      "sdtContentLocked": "Content control and contents locked"
+    }
   },
   "headerFooter": {
     "chromeAriaLabel": "Header and footer editing",

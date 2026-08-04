@@ -28,6 +28,7 @@ import type {
 } from '@docx-editor.dev/core-contract/editor';
 import { DocxEditorContext, ReviewRailContext, type ReviewRailRegistry } from './context';
 import { HyperlinkPopupContext, useHyperlinkPopupInstance } from './useHyperlinkPopup';
+import { ContentControlContext, useContentControlInstance } from './useContentControl';
 import {
   NavigationLayoutContext,
   createNavigationLayoutStore,
@@ -147,7 +148,9 @@ export function DocxEditorRoot(props: DocxEditorRootProps) {
           {/* ONE link-popover state per editor, published here so a TOOLBAR button and the
               popover panel — which are siblings, not ancestor and descendant — see the same
               open/closed state and only one of them registers with the engine's gestures. */}
-          <HyperlinkPopupProvider>{children}</HyperlinkPopupProvider>
+          <HyperlinkPopupProvider>
+            <ContentControlProvider>{children}</ContentControlProvider>
+          </HyperlinkPopupProvider>
         </NavigationLayoutContext.Provider>
       </DocxEditorContext.Provider>
     </ReviewRailContext.Provider>
@@ -161,4 +164,10 @@ export function DocxEditorRoot(props: DocxEditorRootProps) {
 function HyperlinkPopupProvider({ children }: { children?: ReactNode }) {
   const popup = useHyperlinkPopupInstance(true);
   return <HyperlinkPopupContext.Provider value={popup}>{children}</HyperlinkPopupContext.Provider>;
+}
+
+/** One content-control chrome state per editor — inspector open + mode toggles. */
+function ContentControlProvider({ children }: { children?: ReactNode }) {
+  const chrome = useContentControlInstance();
+  return <ContentControlContext.Provider value={chrome}>{children}</ContentControlContext.Provider>;
 }

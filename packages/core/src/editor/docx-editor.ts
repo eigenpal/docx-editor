@@ -71,6 +71,7 @@ import {
 import type {
   CanResult,
   ContainerRef,
+  ContentControlFilter,
   DocumentChange,
   DocumentHandle,
   EditorError,
@@ -121,6 +122,13 @@ import {
   totalPages as totalPagesOf,
   tableContextOf,
 } from './docx-editor-derive.ts';
+import {
+  canContentControlCommand,
+  contentControlAtOf,
+  contentControlsOf,
+  execContentControlCommand,
+  isContentControlEditorCommand,
+} from './content-controls.ts';
 import {
   createLayoutShaping,
   disposeLayoutShaping,
@@ -1155,6 +1163,11 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
         emitSelectionChange();
         return { ok: true, changed: false };
       }
+      if (isContentControlEditorCommand(command)) {
+        const gated = canContentControlCommand(command, surface, mode, options);
+        if (!gated.ok) return gated;
+        return execContentControlCommand(surface!, command);
+      }
       // Viewing refuses every EDIT, reversibly — the reader chose it and can choose again.
       // Checked HERE as well as in `can`, because a host that calls `exec` directly is not
       // required to ask first and must not get a write it was told it could not have.
@@ -1201,6 +1214,9 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
           if (restriction) return restriction;
         }
         return { ok: true };
+      }
+      if (isContentControlEditorCommand(command)) {
+        return canContentControlCommand(command, surface, mode, options);
       }
       // Viewing refuses every EDIT, the same way `mode: 'view'` does at construction — but
       // reversibly, because the reader chose it and can choose again. Mutating only, so a
@@ -1466,10 +1482,14 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
           return false as EditorQueryResults[K];
         case 'hyperlinkAt':
           return hyperlinkAtOf(surface) as EditorQueryResults[K];
+        case 'contentControls':
+          return contentControlsOf(
+            surface,
+            (query as { filter?: ContentControlFilter }).filter
+          ) as unknown as EditorQueryResults[K];
         case 'trackedChanges':
         case 'revisions':
         case 'findText':
-        case 'contentControls':
         case 'comments':
           return [] as unknown as EditorQueryResults[K];
         case 'styles':
@@ -1480,9 +1500,13 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
           } as unknown as EditorQueryResults[K];
         case 'variables':
           return {} as EditorQueryResults[K];
+        case 'contentControlAt':
+          return contentControlAtOf(
+            surface,
+            (query as { filter?: ContentControlFilter }).filter
+          ) as unknown as EditorQueryResults[K];
         default:
-          // tableContext, watermark, splitCellConfig, contentControlAt — all
-          // nullable, all underived.
+          // tableContext, watermark, splitCellConfig, pageContent — nullable, underived.
           return null as EditorQueryResults[K];
       }
     },

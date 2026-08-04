@@ -6,7 +6,12 @@
 // selection and part, so every function is a plain input-to-output computation.
 
 import type { TreeDocxSession } from '@docx-editor.dev/core-contract/binding';
-import { parentNodeOf, type OoxmlNode, type OoxmlPart } from '@docx-editor.dev/core-contract/store';
+import {
+  parentNodeOf,
+  type OoxmlElement,
+  type OoxmlNode,
+  type OoxmlPart,
+} from '@docx-editor.dev/core-contract/store';
 import {
   documentOrder,
   paragraphTextFromLayout,
@@ -110,6 +115,11 @@ export interface RangeDeletionPlan {
   readonly collapseTo: SemanticPosition;
 }
 
+type TreeOp = Parameters<TreeDocxSession['applyTreeOps']>[0][number];
+/** Store unwrap op — typed in the content-control lane; planned here, validated there. */
+type RemoveContentControlOp = { readonly op: 'removeContentControl'; readonly controlId: string };
+type PlannedOp = TreeOp | RemoveContentControlOp;
+
 /** Every paragraph id inside a subtree, in document order. */
 function paragraphIdsUnder(node: OoxmlNode): string[] {
   const ids: string[] = [];
@@ -120,6 +130,19 @@ function paragraphIdsUnder(node: OoxmlNode): string[] {
   };
   walk(node);
   return ids;
+}
+
+/** Kind string — narrow unions grow; planning must accept typed SDTs as they land. */
+function kindOf(node: OoxmlNode): string {
+  return node.kind;
+}
+
+function isContentControl(node: OoxmlNode): boolean {
+  return node.kind !== 'textValue' && kindOf(node) === 'contentControl';
+}
+
+function isContentControlContent(node: OoxmlNode): boolean {
+  return node.kind !== 'textValue' && kindOf(node) === 'contentControlContent';
 }
 
 /**
@@ -151,12 +174,56 @@ function removableTablesIn(
 }
 
 /**
+ * Fully covered block content controls that this plan can unwrap.
+ *
+ * `removeContentControl` keeps the content and drops the wrapper, so a select-all delete does
+ * not leave empty SDT shells that then act as join boundaries. Controls nested inside a
+ * removable table are skipped — `deleteBlock` on the table already takes them. Nested
+ * controls inside a removable control ARE collected: unwrap keeps nested wrappers, so each
+ * fully covered shell must be named or it survives as an empty container.
+ *
+ * Lock state is NOT read here. The store refuses `removeContentControl` on a locked control
+ * atomically; duplicating that authority in the planner would drift the moment either side
+ * moved. A control the range does not fully cover is simply never planned for removal and
+ * remains a join boundary.
+ */
+function removableContentControlsIn(
+  part: OoxmlPart,
+  covered: ReadonlySet<string>,
+  removableTables: ReadonlyMap<string, readonly string[]>
+): Set<string> {
+  const removable = new Set<string>();
+  const walk = (node: OoxmlNode, underRemovableTable: boolean): void => {
+    if (node.kind === 'textValue') return;
+    if (node.kind === 'table' && removableTables.has(node.id)) {
+      for (const child of node.children) walk(child, true);
+      return;
+    }
+    if (isContentControl(node)) {
+      const paragraphs = paragraphIdsUnder(node);
+      if (
+        !underRemovableTable &&
+        paragraphs.length > 0 &&
+        paragraphs.every((id) => covered.has(id))
+      ) {
+        removable.add(node.id);
+      }
+      for (const child of node.children) walk(child, underRemovableTable);
+      return;
+    }
+    for (const child of node.children) walk(child, underRemovableTable);
+  };
+  walk(part.root, false);
+  return removable;
+}
+
+/**
  * The plan that removes a document-ordered range, or an empty one when it is collapsed.
  *
  * A selection spanning paragraphs is trimmed at both ends and then JOINED back into one,
  * which is what makes selecting three paragraphs and typing behave like every other editor.
- * The order matters: trim first, remove blocks, join last, so each join sees the text that
- * is meant to survive and the sibling sequence the removals leave behind.
+ * The order matters: trim first, remove blocks / unwrap controls, join last, so each join
+ * sees the text that is meant to survive and the sibling sequence the removals leave behind.
  */
 export function planRangeDeletion(
   layout: SemanticLayout,
@@ -201,6 +268,7 @@ export function planRangeDeletion(
   for (const [tableId, paragraphs] of removableTables) {
     for (const id of paragraphs) tableOfParagraph.set(id, tableId);
   }
+  const removableControls = removableContentControlsIn(part, covered, removableTables);
 
   // The SURVIVOR hosts the caret and everything joined into it, so it cannot be a paragraph
   // this plan removes. When the range starts inside a removable table, the first covered
@@ -221,6 +289,8 @@ export function planRangeDeletion(
       const kept = tableOfParagraph.get(from.paragraphId)!;
       for (const id of removableTables.get(kept) ?? []) tableOfParagraph.delete(id);
       removableTables.delete(kept);
+      // Controls that lived only under the kept table were skipped for removal already; any
+      // that were collected independently stay planned — they are not under a removable table.
       survivorIndex = firstIndex;
     }
   }
@@ -228,7 +298,7 @@ export function planRangeDeletion(
   const collapseTo: SemanticPosition =
     survivorIndex === firstIndex ? from : { paragraphId: survivorId, offset: 0 };
 
-  const ops: Parameters<TreeDocxSession['applyTreeOps']>[0][number][] = [];
+  const ops: PlannedOp[] = [];
   // Text first, and only for paragraphs that will still be there — a paragraph inside a
   // removed table needs no trimming, and trimming it would be work the removal undoes.
   for (let index = firstIndex; index <= lastIndex; index += 1) {
@@ -245,31 +315,67 @@ export function planRangeDeletion(
   // removal the text cleared everywhere while every row, cell and border stayed — pages of
   // blank table skeletons, and a paste over the selection that looked like a no-op.
   for (const tableId of removableTables.keys()) ops.push({ op: 'deleteBlock', blockId: tableId });
+  // Fully covered content controls unwrap (content kept) so emptied shells do not survive as
+  // join boundaries. Lock refusal is the store's job on the atomic transaction.
+  for (const controlId of removableControls) {
+    ops.push({ op: 'removeContentControl', controlId });
+  }
 
   // Then collapse the emptied paragraphs, WITHIN runs of consecutive sibling `w:p` elements
-  // — reading a removed table as transparent, because by the time a join applies that table
-  // is gone and the paragraphs either side of it really are adjacent. A join the store still
+  // — reading a removed table OR a planned-unwrapped control as transparent, because by the
+  // time a join applies those nodes are gone and the paragraphs either side really are
+  // adjacent. A control this plan does not unwrap stays a boundary. A join the store still
   // refuses (across a table this plan did not remove, or out of a cell) is not planned at
   // all: it would veto the whole atomic transaction, and the honest reading of that gesture
   // is one empty paragraph left beside each block boundary the range did not fully cover.
-  const positionsByParent = new Map<string, Map<string, number>>();
-  const consecutiveSiblings = (before: string, after: string): boolean => {
-    const parent = parentNodeOf(part, after);
-    if (!parent || parentNodeOf(part, before) !== parent) return false;
-    let positions = positionsByParent.get(parent.id);
-    if (!positions) {
-      positions = new Map<string, number>();
-      for (const [at, child] of parent.children.entries()) positions.set(child.id, at);
-      positionsByParent.set(parent.id, positions);
+
+  /** Host a paragraph lands under after planned unwraps (removable control shells dissolve). */
+  const eventualHost = (paragraphId: string): OoxmlElement | null => {
+    let host = parentNodeOf(part, paragraphId);
+    while (host && isContentControlContent(host)) {
+      const control = parentNodeOf(part, host.id);
+      if (!control || !removableControls.has(control.id)) break;
+      host = parentNodeOf(part, control.id);
     }
-    const start = positions.get(before);
-    const end = positions.get(after);
-    if (start === undefined || end === undefined || end <= start) return false;
-    for (let at = start + 1; at < end; at += 1) {
-      if (!removableTables.has(parent.children[at]!.id)) return false;
-    }
-    return true;
+    return host;
   };
+
+  /**
+   * Paragraph ids that become direct children of `host` after planned table deletes and
+   * control unwraps — the sequence joins actually see.
+   */
+  const eventualParagraphsUnder = (host: OoxmlElement): string[] => {
+    const ids: string[] = [];
+    const visit = (nodes: readonly OoxmlNode[]): void => {
+      for (const child of nodes) {
+        if (child.kind === 'textValue') continue;
+        if (removableTables.has(child.id)) continue;
+        if (removableControls.has(child.id)) {
+          const content = child.children.find(isContentControlContent);
+          if (content && content.kind !== 'textValue') visit(content.children);
+          continue;
+        }
+        if (child.kind === 'paragraph') {
+          ids.push(child.id);
+          continue;
+        }
+        // A non-removed wrapper (locked / partial control, cell, …) is opaque: its paragraphs
+        // do not become siblings of `host`'s other children.
+      }
+    };
+    visit(host.children);
+    return ids;
+  };
+
+  const consecutiveSiblings = (before: string, after: string): boolean => {
+    const host = eventualHost(before);
+    if (!host || eventualHost(after) !== host) return false;
+    const sequence = eventualParagraphsUnder(host);
+    const start = sequence.indexOf(before);
+    const end = sequence.indexOf(after);
+    return start !== -1 && end === start + 1;
+  };
+
   let groupHead = survivorId;
   let previous = survivorId;
   for (let index = survivorIndex + 1; index <= lastIndex; index += 1) {
@@ -284,5 +390,5 @@ export function planRangeDeletion(
     }
     previous = id;
   }
-  return { ops, collapseTo };
+  return { ops: ops as RangeDeletionPlan['ops'], collapseTo };
 }

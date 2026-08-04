@@ -149,6 +149,15 @@ export function createKeyDownHandler(
       return;
     }
     if (event.key === 'Tab') {
+      // Form-fill mode: Tab / Shift+Tab move between editable content controls (tabIndex,
+      // then document order), skipping locked / bound ones. Explicit mode only — ordinary
+      // Tab keeps list indent / tab-character behaviour, including inside table cells.
+      if (surface.contentControls.formFill()) {
+        if (surface.contentControls.navigate(event.shiftKey ? 'previous' : 'next')) {
+          event.preventDefault();
+          return;
+        }
+      }
       // In a LIST, Tab demotes and Shift+Tab promotes — the list level, so the marker
       // changes with it. Outside one, Tab is a tab character and Shift+Tab outdents,
       // which is what Word does.

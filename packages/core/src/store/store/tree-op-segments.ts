@@ -14,6 +14,11 @@ import {
 } from '../package/field-nodes.ts';
 import { atomicNoteSpansOf, isNoteAtomNode } from '../package/note-nodes.ts';
 import { isContentRevisionKind } from '../package/ooxml-shared.ts';
+import {
+  MAX_CONTENT_CONTROL_NESTING,
+  contentControlContentOf,
+  isContentControlNode,
+} from './tree-op-nodes.ts';
 
 /** One addressable unit of paragraph text: text, tab, hard break, or atomic field. */
 export interface Segment {
@@ -46,6 +51,11 @@ export function isParagraph(node: OoxmlNode | null): node is OoxmlParagraphNode 
  * iterating only direct `w:r` children did — left every link's text with no offsets at all,
  * so `paragraphTextOf` read "Visit  or ." for a sentence that says "Visit Example.com or
  * Anthropic's website." and layout, selection and the ops all agreed on the wrong string.
+ *
+ * Inline CONTENT CONTROLS are the same class of wrapper: their `w:sdtContent` runs join the
+ * paragraph's offset stream with no break opportunity at the boundary. Nesting is bounded
+ * (`MAX_CONTENT_CONTROL_NESTING`); beyond the bound the wrapper is opaque so recursion
+ * cannot exhaust the stack.
  *
  * `runId` stays the id of the run the content actually lives in, at whatever depth: the
  * appliers resolve it with `findNode` and rebuild that run's children, so nesting costs them
@@ -215,6 +225,17 @@ function walkParagraph(
       record(node, start);
       return;
     }
+    // Misplaced typed control inside a run (should demote on read) — stay opaque so a
+    // husk cannot invent atoms the way a paragraph-level inline control legitimately does.
+    if (isContentControlNode(node)) {
+      record(node, start);
+      return;
+    }
+    if (node.kind === 'text' || node.kind === 'deletedText') {
+      for (const child of node.children) visitRunChild(child, runId);
+      record(node, start);
+      return;
+    }
     for (const child of node.children) visitRunChild(child, runId);
     record(node, start);
   };
@@ -241,6 +262,14 @@ function walkParagraph(
     // op offset space, so every op past it was refused as out of range.
     if (child.kind === 'hyperlink' || isContentRevisionKind(child.kind)) {
       for (const inner of child.children) visitInline(inner, depth + 1);
+      return;
+    }
+    // Inline content controls: descend into `w:sdtContent` with a nesting bound.
+    if (isContentControlNode(child) && depth < MAX_CONTENT_CONTROL_NESTING) {
+      const content = contentControlContentOf(child);
+      if (content) {
+        for (const inner of content.children) visitInline(inner, depth + 1);
+      }
     }
     record(child, start);
   };
@@ -254,13 +283,20 @@ const MAX_INLINE_CONTAINER_DEPTH = 32;
 /**
  * The runs a paragraph child owns, at any depth — a `w:r`, or every run inside a container.
  *
- * Links and revision wrappers are both run containers, and either can hold the other.
+ * Links, revision wrappers, and inline content controls are all run containers.
  */
 export function runsUnder(child: OoxmlNode, depth = 0): OoxmlNode[] {
   if (child.kind === 'run') return [child];
   if (child.kind === 'textValue' || depth >= MAX_INLINE_CONTAINER_DEPTH) return [];
-  if (child.kind !== 'hyperlink' && !isContentRevisionKind(child.kind)) return [];
-  return child.children.flatMap((inner) => runsUnder(inner, depth + 1));
+  if (child.kind === 'hyperlink' || isContentRevisionKind(child.kind)) {
+    return child.children.flatMap((inner) => runsUnder(inner, depth + 1));
+  }
+  if (isContentControlNode(child) && depth < MAX_CONTENT_CONTROL_NESTING) {
+    const content = contentControlContentOf(child);
+    if (!content) return [];
+    return content.children.flatMap((inner) => runsUnder(inner, depth + 1));
+  }
+  return [];
 }
 
 /** UTF-16 length of a paragraph under the shared segment model. */

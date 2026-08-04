@@ -65,6 +65,13 @@ import { ToolbarAlignment, type ToolbarAlignmentComponent } from './Alignment';
 import { ToolbarAction } from './ToolbarAction';
 import { FontFamily, useFontFamily } from './FontFamily';
 import { ParagraphStyle, useParagraphStyle } from './ParagraphStyle';
+import {
+  CONTENT_CONTROL_SHAPED_PARTS,
+  ToolbarContentControlFormFill,
+  ToolbarContentControlInspector,
+  ToolbarContentControlRemove,
+  ToolbarContentControlShowAll,
+} from './ContentControlParts';
 
 /**
  * A default-arrangement key: a chrome slot, or `'alignment'` for the MERGED
@@ -96,6 +103,10 @@ const SHAPED_PARTS: Partial<Record<ChromeSlotId, PartLike>> = {
   'list.lineSpacing': ToolbarLineSpacing,
   'review.editingMode': ToolbarEditingMode,
   'file.save': ToolbarSave,
+  // Content-control chrome: mode toggles and inspector/remove. Keys only apply once
+  // `CHROME_GROUPS` registers the `contentControl` group; until then the default bar
+  // does not list them (no hand-listed slots), and hosts compose the named parts.
+  ...CONTENT_CONTROL_SHAPED_PARTS,
 };
 
 /** Icon-button fallback parts, one per slot, created once. */
@@ -258,6 +269,10 @@ export interface DocxEditorToolbarNamespace {
   readonly StylePicker: typeof ParagraphStyle;
   readonly EditingMode: ToolbarSlotPartComponent;
   readonly Save: ToolbarSlotPartComponent;
+  readonly ContentControlShowAll: ToolbarPartComponent;
+  readonly ContentControlFormFill: ToolbarPartComponent;
+  readonly ContentControlInspector: ToolbarPartComponent;
+  readonly ContentControlRemove: ToolbarPartComponent;
 }
 
 /**
@@ -302,6 +317,10 @@ export const DocxEditorToolbar: DocxEditorToolbarNamespace = Object.assign(DocxE
   StylePicker: ParagraphStyle,
   EditingMode: ToolbarEditingMode,
   Save: ToolbarSave,
+  ContentControlShowAll: ToolbarContentControlShowAll,
+  ContentControlFormFill: ToolbarContentControlFormFill,
+  ContentControlInspector: ToolbarContentControlInspector,
+  ContentControlRemove: ToolbarContentControlRemove,
 });
 
 export { useFontFamily, useParagraphStyle };

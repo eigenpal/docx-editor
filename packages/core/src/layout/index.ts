@@ -129,11 +129,19 @@ export {
 } from './resolved-cache.ts';
 export {
   DEFAULT_PAGE_GEOMETRY,
+  contentControlsOfLayout,
+  effectiveContentControlLock,
   fragmentsOfParagraph,
   lineAtPosition,
   linesOf,
   paragraphFragmentsOf,
+  unionLayoutBoxes,
   type BlockFragmentRecord,
+  type ContentControlBoundaryRecord,
+  type ContentControlGeometryFragment,
+  type ContentControlLevel,
+  type ContentControlLock,
+  type ContentControlMappedType,
   type HeaderFooterStoryRecord,
   type LayoutBox,
   type LineRecord,
@@ -311,7 +319,13 @@ export {
   type PageRefIndex,
 } from './note-pagination.ts';
 export { noteMarkKey, projectedNoteMarkText, type NoteMarkContext } from './note-projection.ts';
-export { storyBlocks, noteStoryBlocks } from './story-roots.ts';
+export { storyBlocks, noteStoryBlocks, MAX_SDT_NESTING } from './story-roots.ts';
+export {
+  collectFlowBlocks,
+  contentControlContentChildren,
+  isContentControl,
+  isContentControlContent,
+} from '../store/package/content-control-walk.ts';
 export {
   commentAnchorsOfStory,
   commentsOfPart,
@@ -429,6 +443,7 @@ export {
 } from './semantic-cell-selection.ts';
 export {
   DEFAULT_VERTICAL_WEIGHT,
+  contentControlAtPoint,
   hitTestPage,
   hitTestSheet,
   isFurniturePoint,
@@ -446,6 +461,8 @@ export {
   caretStops,
   caretStopsForBlocks,
   compositionAnchor,
+  contentControlAtSemantic,
+  contentControlsInLayout,
   documentOrder,
   // `hitTest` is already taken by the legacy painted-geometry lane; this one answers in
   // MODEL coordinates, so it is named for what it returns rather than shadowing that.

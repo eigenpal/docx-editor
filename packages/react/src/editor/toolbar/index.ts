@@ -34,3 +34,9 @@ export {
 } from './ParagraphStyle';
 export { ToolbarAlignment, type ToolbarAlignmentComponent } from './Alignment';
 export type { ToolbarTranslate } from './toolbar-context';
+export {
+  ToolbarContentControlShowAll,
+  ToolbarContentControlFormFill,
+  ToolbarContentControlInspector,
+  ToolbarContentControlRemove,
+} from './ContentControlParts';
