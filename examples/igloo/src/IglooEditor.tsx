@@ -116,6 +116,14 @@ export function IglooEditor({ fixtureUrl }: IglooEditorProps) {
                 berg tracks the page as it scrolls. */}
             <div className="igloo-stage">
               <Iceberg />
+              {/* The vertical ruler rides inside the STAGE, not pinned to the viewport's
+                  left edge the way the packaged layout puts it. The packaged position exists
+                  so an opening navigation pane never moves the page; here the pane floats
+                  over open water and moves nothing, and a ruler alone in the middle of the
+                  sea reads as debris rather than as a measure of the page beside it. */}
+              <div className="igloo-vrulerbar" aria-hidden="true">
+                <DocxEditor.VerticalRuler className="igloo-ruler" />
+              </div>
               <DocxEditor.Content className="igloo-page" />
             </div>
 

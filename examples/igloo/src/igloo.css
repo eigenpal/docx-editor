@@ -260,6 +260,23 @@
   background: transparent;
 }
 
+/* The vertical ruler's rail, inside the stage so it TRACKS the page.
+ *
+ * `top` must match the stage's own top padding — the ruler measures from the page's top
+ * edge, and this is what puts its zero there. Light tokens because it hangs over the water:
+ * the packaged ruler draws in `--doc-text-muted`/`--doc-text-subtle`, which are deep-water
+ * blues in this theme and vanish against the sea. */
+.igloo-vrulerbar {
+  --doc-text-muted: rgba(240, 252, 255, 0.85);
+  --doc-text-subtle: rgba(240, 252, 255, 0.55);
+  position: absolute;
+  top: 120px;
+  left: -30px;
+  z-index: 2;
+  pointer-events: none;
+  filter: drop-shadow(0 1px 2px rgba(3, 26, 42, 0.8));
+}
+
 .igloo-stage {
   position: relative;
   width: fit-content;
