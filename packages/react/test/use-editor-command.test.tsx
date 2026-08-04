@@ -130,7 +130,7 @@ describe('a raw command target', () => {
   });
 
   test('execute runs the command, can-before-exec', async () => {
-    let run: (() => void) | null = null;
+    let run: (() => boolean) | null = null;
     function Probe() {
       const { execute } = useEditorCommand({ type: 'selectAll' });
       run = execute;
@@ -139,14 +139,14 @@ describe('a raw command target', () => {
     const { editor } = mount(<Probe />);
 
     await act(async () => {
-      run!();
+      expect(run!()).toBe(true);
     });
 
     expect(editor().snapshot().selectionCollapsed).toBe(false);
   });
 
-  test('a refused command is a safe no-op rather than a throw', () => {
-    let run: (() => void) | null = null;
+  test('execute returns false when the engine refuses', () => {
+    let run: (() => boolean) | null = null;
     function Probe() {
       const { execute } = useEditorCommand({ type: 'cut' });
       run = execute;
@@ -155,11 +155,60 @@ describe('a raw command target', () => {
     const { editor } = mount(<Probe />);
     const before = editor().snapshot().revision;
 
-    // Collapsed caret: `can` says no, so `execute` must not reach `exec`.
-    act(() => {
-      run!();
-    });
-
+    expect(run!()).toBe(false);
     expect(editor().snapshot().revision).toBe(before);
+  });
+
+  test('execute returns exec.ok, not a preceding can check', async () => {
+    let run: (() => boolean) | null = null;
+    function Probe() {
+      const { execute } = useEditorCommand({ type: 'insertRow', where: 'below' });
+      run = execute;
+      return null;
+    }
+    const TABLE = zipSync({
+      '[Content_Types].xml': strToU8(
+        `<Types xmlns="${CT}"><Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/></Types>`
+      ),
+      '_rels/.rels': strToU8(
+        `<Relationships xmlns="${REL}"><Relationship Id="rId1" Type="${OD}" Target="word/document.xml"/></Relationships>`
+      ),
+      'word/document.xml': strToU8(
+        `<w:document xmlns:w="${W}"><w:body>` +
+          '<w:tbl><w:tblGrid><w:gridCol w:w="2400"/><w:gridCol w:w="3600"/></w:tblGrid>' +
+          '<w:tr><w:tc><w:p><w:r><w:t>A1</w:t></w:r></w:p></w:tc>' +
+          '<w:tc><w:p><w:r><w:t>B1</w:t></w:r></w:p></w:tc></w:tr></w:tbl>' +
+          '</w:body></w:document>'
+      ),
+    });
+    let instance: DocxEditorInstance | null = null;
+    render(
+      <DocxEditorRoot
+        document={TABLE}
+        onReady={(editor) => {
+          instance = editor as DocxEditorInstance;
+        }}
+      >
+        <DocxEditorViewport>
+          <DocxEditorContent />
+          <Probe />
+        </DocxEditorViewport>
+      </DocxEditorRoot>
+    );
+    await act(async () => {});
+    const editor = instance!;
+    const paragraphId = editor.surface!.session.paragraphIds()[0]!;
+    await act(async () => {
+      editor.surface!.setSelection({
+        anchor: { paragraphId, offset: 1 },
+        head: { paragraphId, offset: 1 },
+      });
+    });
+    const revisionBefore = editor.surface!.session.revision();
+    const origExec = editor.exec.bind(editor);
+    editor.exec = () => ({ ok: false, reason: 'stale admission' });
+    expect(editor.can({ type: 'insertRow', where: 'below' }).ok).toBe(true);
+    expect(run!()).toBe(false);
+    expect(editor.surface!.session.revision()).toBe(revisionBefore);
   });
 });

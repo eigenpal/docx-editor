@@ -36,9 +36,17 @@ import {
   ContextMenuCopy,
   ContextMenuCut,
   ContextMenuDelete,
+  ContextMenuDeleteTable,
+  ContextMenuDeleteTableColumn,
+  ContextMenuDeleteTableRow,
+  ContextMenuInsertColumnLeft,
+  ContextMenuInsertColumnRight,
+  ContextMenuInsertRowAbove,
+  ContextMenuInsertRowBelow,
   ContextMenuItem,
   ContextMenuPaste,
   ContextMenuSelectAll,
+  useTableContextMenuVisible,
 } from './parts';
 
 /** Distance kept between the panel and the window edge when it flips. @internal */
@@ -70,7 +78,7 @@ type DefaultEntry =
   | { readonly kind: 'row'; readonly id: string; readonly render: () => ReactElement }
   | { readonly kind: 'separator'; readonly id: string };
 
-const DEFAULT_SET: readonly DefaultEntry[] = [
+const BASE_DEFAULT_SET: readonly DefaultEntry[] = [
   { kind: 'row', id: 'edit.cut', render: () => <ContextMenuCut /> },
   { kind: 'row', id: 'edit.copy', render: () => <ContextMenuCopy /> },
   { kind: 'row', id: 'edit.paste', render: () => <ContextMenuPaste /> },
@@ -98,6 +106,51 @@ const DEFAULT_SET: readonly DefaultEntry[] = [
     render: () => <MenuItem slot="review.comments" labelKey="comments.addComment" />,
   },
 ];
+
+function tableContextEntries(): readonly DefaultEntry[] {
+  return [
+    { kind: 'separator', id: 'sep.table' },
+    {
+      kind: 'row',
+      id: ContextMenuInsertRowAbove.docxRow,
+      render: () => <ContextMenuInsertRowAbove />,
+    },
+    {
+      kind: 'row',
+      id: ContextMenuInsertRowBelow.docxRow,
+      render: () => <ContextMenuInsertRowBelow />,
+    },
+    { kind: 'separator', id: 'sep.table.columns' },
+    {
+      kind: 'row',
+      id: ContextMenuInsertColumnLeft.docxRow,
+      render: () => <ContextMenuInsertColumnLeft />,
+    },
+    {
+      kind: 'row',
+      id: ContextMenuInsertColumnRight.docxRow,
+      render: () => <ContextMenuInsertColumnRight />,
+    },
+    { kind: 'separator', id: 'sep.table.destructive' },
+    {
+      kind: 'row',
+      id: ContextMenuDeleteTableRow.docxRow,
+      render: () => <ContextMenuDeleteTableRow />,
+    },
+    {
+      kind: 'row',
+      id: ContextMenuDeleteTableColumn.docxRow,
+      render: () => <ContextMenuDeleteTableColumn />,
+    },
+    { kind: 'row', id: ContextMenuDeleteTable.docxRow, render: () => <ContextMenuDeleteTable /> },
+  ];
+}
+
+/** Build the default set, optionally including table rows. @internal */
+export function contextMenuDefaultSet(tableContextVisible: boolean): readonly DefaultEntry[] {
+  if (!tableContextVisible) return BASE_DEFAULT_SET;
+  return [...BASE_DEFAULT_SET, ...tableContextEntries()];
+}
 
 /**
  * The row id a child drives, or null when it is the host's own content.
@@ -155,6 +208,11 @@ export function DocxEditorContextMenu({
   children,
 }: DocxEditorContextMenuProps) {
   const editor = useDocxEditor();
+  const tableContextVisible = useTableContextMenuVisible();
+  const defaultSet = useMemo(
+    () => contextMenuDefaultSet(tableContextVisible),
+    [tableContextVisible]
+  );
   const hostRef = useRef<HTMLDivElement | null>(null);
   const panelRef = useRef<HTMLDivElement | null>(null);
   const [anchor, setAnchor] = useState<ContextMenuAnchor | null>(null);
@@ -356,7 +414,7 @@ export function DocxEditorContextMenu({
               }}
             >
               {mergeArrangement({
-                entries: DEFAULT_SET,
+                entries: defaultSet,
                 children,
                 preset,
                 keyOfEntry: (entry) => entry.id,
@@ -384,6 +442,13 @@ export interface DocxEditorContextMenuNamespace {
   readonly Paste: typeof ContextMenuPaste;
   readonly Delete: typeof ContextMenuDelete;
   readonly SelectAll: typeof ContextMenuSelectAll;
+  readonly InsertRowAbove: typeof ContextMenuInsertRowAbove;
+  readonly InsertRowBelow: typeof ContextMenuInsertRowBelow;
+  readonly InsertColumnLeft: typeof ContextMenuInsertColumnLeft;
+  readonly InsertColumnRight: typeof ContextMenuInsertColumnRight;
+  readonly DeleteTableRow: typeof ContextMenuDeleteTableRow;
+  readonly DeleteTableColumn: typeof ContextMenuDeleteTableColumn;
+  readonly DeleteTable: typeof ContextMenuDeleteTable;
   /** A host-owned row: no slot, no command, the host's own label and action. */
   readonly Item: typeof ContextMenuItem;
   /** Any chrome slot as a live row (`<ContextMenu.Slot slot="text.bold" />`). */
@@ -400,6 +465,13 @@ export const ContextMenu: DocxEditorContextMenuNamespace = Object.assign(DocxEdi
   Paste: ContextMenuPaste,
   Delete: ContextMenuDelete,
   SelectAll: ContextMenuSelectAll,
+  InsertRowAbove: ContextMenuInsertRowAbove,
+  InsertRowBelow: ContextMenuInsertRowBelow,
+  InsertColumnLeft: ContextMenuInsertColumnLeft,
+  InsertColumnRight: ContextMenuInsertColumnRight,
+  DeleteTableRow: ContextMenuDeleteTableRow,
+  DeleteTableColumn: ContextMenuDeleteTableColumn,
+  DeleteTable: ContextMenuDeleteTable,
   Item: ContextMenuItem,
   Slot: MenuItem,
   Row: MenuRow,

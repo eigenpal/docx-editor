@@ -25,7 +25,7 @@ import {
   replaceNode,
   type EditOptions,
 } from '../package/ooxml-edit.ts';
-import { W14_NAMESPACE_URI } from '../package/ooxml-shared.ts';
+import { wmlFreshNamespaceContextAt } from '../package/wml-namespace.ts';
 import { resolveRevisions } from './tree-op-revisions.ts';
 import { applyInsertCommentMarker } from './tree-op-comments.ts';
 import {
@@ -41,6 +41,7 @@ import {
   mintedParagraphIdentityAttributes,
   paraIdOf,
   usedParaIds,
+  w14PrefixInScopeAt,
 } from '../package/para-id.ts';
 import {
   TEXT_DEPS,
@@ -70,7 +71,7 @@ import {
   runPropertiesNodeOf,
   sdtPrChild,
 } from './tree-op-nodes.ts';
-import { paragraphIdsWithin } from './tree-op-blocks.ts';
+import { paragraphIdsWithin, survivingCaretAfterBlockRemoval } from './tree-op-blocks.ts';
 import {
   PARAGRAPH_VOCABULARY,
   RUN_VOCABULARY,
@@ -93,6 +94,12 @@ import type {
   TreeOpRejection,
   TreeOpResult,
 } from './tree-op-types.ts';
+import {
+  applyTableRowOp,
+  applyTableColumnOp,
+  applyTableResizeOp,
+  applyTableCellPropertyOp,
+} from './tree-op-tables.ts';
 import { contentControlAtCaret, validateTreeOp } from './tree-op-validate.ts';
 
 /**
@@ -167,6 +174,17 @@ function runElement(nextId: () => string, children: readonly OoxmlNode[]): Ooxml
 export function applyTreeOp(part: OoxmlPart, op: TreeDocOp, options?: EditOptions): TreeOpResult {
   const rejection = validateTreeOp(part, op);
   if (rejection) return { ok: false, reason: rejection };
+
+  if (op.op === 'insertTableRow' || op.op === 'deleteTableRow')
+    return applyTableRowOp(part, op, options);
+  if (op.op === 'insertTableColumn' || op.op === 'deleteTableColumn')
+    return applyTableColumnOp(part, op, options);
+  if (op.op === 'setTableColumnWidths' || op.op === 'setTableRightEdgeWidth') {
+    return applyTableResizeOp(part, op, options);
+  }
+  if (op.op === 'setTableCellBorders' || op.op === 'setTableCellFill') {
+    return applyTableCellPropertyOp(part, op, options);
+  }
 
   if (op.op === 'deleteBlock') return applyDeleteBlock(part, op.blockId, options);
   if (op.op === 'joinParagraphs') return applyJoin(part, op.firstId, op.secondId, options);
@@ -1551,7 +1569,7 @@ function closesARange(node: OoxmlNode): boolean {
 function rangeKey(localName: string, node: OoxmlNode): string | null {
   if (node.kind === 'textValue') return null;
   const id = node.attributes.find((attribute) => attribute.localName === 'id');
-  return id ? `${localName}${id.value}` : null;
+  return id ? `${localName}\0${id.value}` : null;
 }
 
 function opensARange(node: OoxmlNode): string | null {
@@ -1596,53 +1614,6 @@ function zeroLengthGoesToHead(
   return closesAnOpenRange(child, openedHere);
 }
 
-/**
- * A root-declared w14 prefix that still resolves to the w14 URI AT THE PARAGRAPH.
- *
- * The root binding alone is not enough: a hostile descendant can rebind the same
- * prefix (`<w:sdt xmlns:w14="urn:evil">`), and an attribute minted under it would
- * resolve to the wrong URI at that depth — the commit-boundary delta validation
- * would then refuse the WHOLE transaction, turning Enter into a silent no-op inside
- * that subtree. Editing must never lock on hostile input, so each root alias for the
- * URI is checked against the paragraph's ancestor chain and the first unshadowed one
- * wins; none → no minting (the tail is simply id-less, as before minting existed).
- */
-function w14PrefixInScopeAt(part: OoxmlPart, paragraph: OoxmlParagraphNode): string | null {
-  const rootBindings = part.root.namespaceBindings.filter(
-    (binding) => binding.namespaceUri === W14_NAMESPACE_URI && binding.prefix !== ''
-  );
-  if (rootBindings.length === 0) return null;
-  // The paragraph and its ancestors up to (excluding) the root — the nodes whose own
-  // declarations can shadow a root binding at the paragraph's depth.
-  const chain: OoxmlNode[] = [];
-  let node: OoxmlNode | null = paragraph;
-  while (node && node.id !== part.root.id) {
-    chain.push(node);
-    node = parentOf(part, node.id);
-  }
-  for (const binding of rootBindings) {
-    const shadowed = chain.some(
-      (ancestor) =>
-        ancestor.kind !== 'textValue' &&
-        ancestor.namespaceBindings.some(
-          (candidate) =>
-            candidate.prefix === binding.prefix && candidate.namespaceUri !== W14_NAMESPACE_URI
-        )
-    );
-    if (!shadowed) return binding.prefix;
-  }
-  return null;
-}
-
-/**
- * Whether a split of `paragraph` can mint `w14:paraId`s for its tails: the head must
- * carry a valid id (its uppercase form seeds the tail mints) and a w14 prefix must be
- * in scope at the paragraph (a prefixed attribute without a correct in-scope binding
- * fails the commit-boundary delta validation). In a real session both always hold —
- * the load-time normalization established them. In low-level harnesses that skip it,
- * and in hostile prefix-shadowed subtrees, tails stay attribute-less exactly as
- * before minting existed — never a refused transaction.
- */
 function splitIdentityOf(
   part: OoxmlPart,
   paragraph: OoxmlParagraphNode
@@ -2222,20 +2193,82 @@ function applySplitMany(
  * consumer scoping work by node id has to invalidate the paragraphs, and the block id alone
  * would leave a layout cache holding entries for paragraphs that no longer exist.
  */
+function tableAncestorOf(part: OoxmlPart, nodeId: string): OoxmlElement | null {
+  let current: string | null = nodeId;
+  while (current) {
+    const node = findNode(part, current);
+    if (!node || node.kind === 'textValue') return null;
+    if (node.kind === 'table') return node;
+    const parent = parentOf(part, current);
+    current = parent?.id ?? null;
+  }
+  return null;
+}
+
+function emptyCellParagraph(
+  part: OoxmlPart,
+  anchorTable: OoxmlElement,
+  nextId: () => string,
+  seed: string
+): OoxmlParagraphNode {
+  const wml = wmlFreshNamespaceContextAt(part, anchorTable);
+  const used = usedParaIds(part.root);
+  const identity: OoxmlAttribute[] = [];
+  const w14Prefix = w14PrefixInScopeAt(part, anchorTable);
+  if (w14Prefix !== null) {
+    const paraIdValue = mintParaId(seed, used);
+    identity.push(...mintedParagraphIdentityAttributes(w14Prefix, paraIdValue));
+  }
+  return {
+    id: nextId(),
+    kind: 'paragraph',
+    namespaceUri: WML_NAMESPACE_URI,
+    localName: 'p',
+    ...(wml.elementPrefix === undefined ? {} : { prefix: wml.elementPrefix }),
+    namespaceBindings: [],
+    attributes: identity,
+    children: [],
+  } as OoxmlParagraphNode;
+}
+
 function applyDeleteBlock(part: OoxmlPart, blockId: string, options?: EditOptions): TreeOpResult {
   const block = findNode(part, blockId);
   if (!block) return { ok: false, reason: 'unknown-block' };
+  const caretParagraphId = survivingCaretAfterBlockRemoval(part, blockId);
+  if (!caretParagraphId) return { ok: false, reason: 'block-required' };
+  const parent = parentOf(part, blockId);
+  const cellNeedsParagraph =
+    block.kind === 'table' &&
+    parent?.kind === 'tableCell' &&
+    parent.children.every((child) => child.kind !== 'paragraph');
   const paragraphs = paragraphIdsWithin(block);
+  const created: string[] = [];
   const effect: TreeOpEffect = {
     dirty: [],
-    created: [],
+    created,
     deleted: [blockId, ...paragraphs.filter((id) => id !== blockId)],
     dependencyKeys: TEXT_DEPS,
-    // The block SEQUENCE changed, so everything after it can move even though no surviving
-    // paragraph is dirty.
     impact: 'flow-structural',
+    caret: { paragraphId: caretParagraphId },
   };
-  return fromEdit(removeNode(part, blockId, options), effect);
+  const removed = removeNode(part, blockId, options);
+  if (!removed.ok) return { ok: false, reason: 'unknown-block' };
+  if (!cellNeedsParagraph || !parent) return fromEdit(removed, effect);
+  const anchorTable = tableAncestorOf(removed.part, parent.id);
+  if (!anchorTable) return fromEdit(removed, effect);
+  const nextId = createNodeIdAllocator(removed.part);
+  const paragraph = emptyCellParagraph(removed.part, anchorTable, nextId, `${blockId}:cell-p`);
+  const cell = findNode(removed.part, parent.id);
+  if (!cell || cell.kind === 'textValue') return fromEdit(removed, effect);
+  const inserted = insertChildren(
+    removed.part,
+    parent.id,
+    cell.children.length,
+    [paragraph],
+    options
+  );
+  if (!inserted.ok) return { ok: false, reason: 'tree-invariant' };
+  return fromEdit(inserted, { ...effect, created: [...created, paragraph.id] });
 }
 
 function applyJoin(

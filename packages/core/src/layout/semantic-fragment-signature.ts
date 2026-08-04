@@ -20,6 +20,8 @@ export function fragmentSignature(fragment: BlockFragmentRecord): string {
           fragment.id,
           fragment.tableId,
           fragment.fragmentIndex,
+          fragment.nestingDepth,
+          fragment.columnEdges,
           fragment.box,
           fragment.rows,
         ])

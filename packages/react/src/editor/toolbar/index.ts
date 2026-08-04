@@ -33,6 +33,23 @@ export {
   type UseParagraphStyleResult,
 } from './ParagraphStyle';
 export { ToolbarAlignment, type ToolbarAlignmentComponent } from './Alignment';
+export {
+  ToolbarTableBorderColor,
+  ToolbarTableBorderStyle,
+  ToolbarTableBorderTarget,
+  ToolbarTableBorderWidth,
+  ToolbarTableCellFill,
+  useTableBorderTargetLabel,
+  type TableBorderColorNamespace,
+  type TableBorderStyleNamespace,
+  type TableBorderTargetNamespace,
+  type TableBorderWidthNamespace,
+  type TableCellFillNamespace,
+  type TableChromeItemProps,
+  type TableChromePartComponent,
+  type TableChromePartProps,
+} from './TableControls';
+export { TableChromeProvider } from './useTableChrome';
 export type { ToolbarTranslate } from './toolbar-context';
 export {
   ToolbarContentControlShowAll,

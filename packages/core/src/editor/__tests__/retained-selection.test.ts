@@ -14,7 +14,7 @@
 import { GlobalRegistrator } from '@happy-dom/global-registrator';
 if (!GlobalRegistrator.isRegistered) GlobalRegistrator.register();
 
-import { describe, expect, test } from 'bun:test';
+import { describe, expect, test, afterEach } from 'bun:test';
 import { zipSync, strToU8 } from 'fflate';
 import {
   mountPaginatedSurface,
@@ -46,6 +46,15 @@ const P = (index: number) => `/word/document.xml#0.0.${index}`;
 const BODY =
   '<w:p><w:r><w:t>Visit example today</w:t></w:r></w:p>' +
   '<w:p><w:r><w:t>Second paragraph here</w:t></w:r></w:p>';
+
+afterEach(() => {
+  document.getSelection()?.removeAllRanges();
+  for (const node of [...document.body.children]) {
+    if (node instanceof HTMLElement && node.classList.contains('docx-paginated-surface')) {
+      node.remove();
+    }
+  }
+});
 
 interface Mounted {
   readonly surface: PaginatedSurface;

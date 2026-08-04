@@ -23,9 +23,9 @@
 // point per column — a zero-width column is unrecoverable downstream.
 
 import type { OoxmlElement } from '@docx-editor.dev/core-contract/store';
+import { MAX_TABLE_COLUMNS } from '../store/store/table-constraints.ts';
 
-/** Far above anything Word authors (its UI caps at 63) while keeping allocation bounded. */
-export const MAX_TABLE_COLUMNS = 1024;
+export { MAX_TABLE_COLUMNS };
 
 /**
  * Soft ceiling on one grid column (~22", Word's widest page). `w:gridCol/@w:w` is the one

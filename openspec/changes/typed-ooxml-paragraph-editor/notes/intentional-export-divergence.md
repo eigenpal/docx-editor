@@ -318,6 +318,29 @@ second row vocabulary.
 - `ContextMenuItemProps`
 - `ContextMenuAnchor` — where the panel opened, in client coordinates.
 
+### Table contextual chrome (React only, for now)
+
+Task 10 landed five contextual toolbar parts and seven fixed table context-menu rows on the React composition layer. Core owns the commands, furniture geometry, enabled state, and refusal text; Vue reaches the same `Editor` commands headlessly but does not ship the value/target UI yet. Pairing is explicitly deferred per user decision on Task 12 — do not treat disabled Vue slots as parity.
+
+- `DocxEditorToolbarNamespace.TableBorderTarget` (and `.TableBorderColor`, `.TableBorderStyle`, `.TableBorderWidth`, `.TableCellFill`)
+- `TableBorderTargetNamespace`
+- `TableBorderColorNamespace`
+- `TableBorderStyleNamespace`
+- `TableBorderWidthNamespace`
+- `TableCellFillNamespace`
+- `TableChromePartProps`
+- `TableChromePartComponent`
+- `TableChromeItemProps`
+- `useTableBorderTargetLabel`
+- `ContextMenuTableRowProps`
+- `ContextMenuInsertRowAbove`
+- `ContextMenuInsertRowBelow`
+- `ContextMenuInsertColumnLeft`
+- `ContextMenuInsertColumnRight`
+- `ContextMenuDeleteTableRow`
+- `ContextMenuDeleteTableColumn`
+- `ContextMenuDeleteTable`
+
 ### Opening a document
 
 `useDocxSource` is a React hook, and its Vue twin is a composable — the same capability in

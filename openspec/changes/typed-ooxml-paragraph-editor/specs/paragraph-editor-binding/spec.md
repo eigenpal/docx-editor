@@ -66,3 +66,14 @@ Save and layout code MUST NOT consume `EditorState`, `EditorView`, ProseMirror d
 #### Scenario: Editor view is absent
 - **WHEN** a committed paragraph document is saved or laid out without mounting ProseMirror
 - **THEN** the result is produced from the same canonical tree used by an interactive editor
+
+### Requirement: Table commands are tree-authoritative
+Table structural edits, column resize commits, and selected-cell border/fill commands SHALL plan and execute against the committed canonical tree rather than ProseMirror document content or mounted DOM. Each accepted table command SHALL create one semantic history entry.
+
+#### Scenario: Toolbar table command commits once
+- **WHEN** a user invokes insert row, delete column, set table borders, or clear cell fill from chrome
+- **THEN** the engine commits the corresponding validated tree operation in one transaction and reconciles projections from its `ModelChange`
+
+#### Scenario: Explicit resize target commits on pointer-up
+- **WHEN** a column divider or outer-right resize gesture completes with an explicit target whose `sourceRevision` matches the current canonical store revision
+- **THEN** one tree operation commits on pointer-up and Escape cancels without mutation

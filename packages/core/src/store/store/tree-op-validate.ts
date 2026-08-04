@@ -29,6 +29,12 @@ import {
   paragraphPropertiesNodeOf,
 } from './tree-op-nodes.ts';
 import {
+  validateTableRowOp,
+  validateTableColumnOp,
+  validateTableResizeOp,
+  validateTableCellPropertyOp,
+} from './tree-op-tables.ts';
+import {
   bodyNodeOf,
   isTableNested,
   metricsOfSection,
@@ -442,6 +448,15 @@ export function validateTreeOp(part: OoxmlPart, op: TreeDocOp): TreeOpRejection 
       if (restriction) return restriction;
     }
     return validateDeleteBlock(part, op.blockId);
+  }
+  if (op.op === 'insertTableRow' || op.op === 'deleteTableRow') return validateTableRowOp(part, op);
+  if (op.op === 'insertTableColumn' || op.op === 'deleteTableColumn')
+    return validateTableColumnOp(part, op);
+  if (op.op === 'setTableColumnWidths' || op.op === 'setTableRightEdgeWidth') {
+    return validateTableResizeOp(part, op);
+  }
+  if (op.op === 'setTableCellBorders' || op.op === 'setTableCellFill') {
+    return validateTableCellPropertyOp(part, op);
   }
 
   if (op.op === 'joinParagraphs') {

@@ -470,6 +470,43 @@ export const CHROME_GROUPS = [
         paths: GENERATED_ICON_PATHS['table'],
         state: { kind: 'command' },
       },
+      {
+        id: 'borderTarget',
+        shape: 'dropdown',
+        labelKey: 'table.borders.tooltip',
+        paths: GENERATED_ICON_PATHS['border_all'],
+        state: { kind: 'value' },
+      },
+      {
+        id: 'borderColor',
+        shape: 'colorSplit',
+        swatch: '#000000',
+        labelKey: 'table.borderColor',
+        paths: GENERATED_ICON_PATHS['border_color'],
+        state: { kind: 'value' },
+      },
+      {
+        id: 'borderStyle',
+        shape: 'dropdown',
+        labelKey: 'table.borders.styleAriaLabel',
+        paths: GENERATED_ICON_PATHS['border_horizontal'],
+        state: { kind: 'value' },
+      },
+      {
+        id: 'borderWidth',
+        shape: 'dropdown',
+        labelKey: 'table.borderWidth',
+        paths: GENERATED_ICON_PATHS['line_weight'],
+        state: { kind: 'value' },
+      },
+      {
+        id: 'cellFill',
+        shape: 'colorSplit',
+        swatch: '#ffffff',
+        labelKey: 'table.cellFillColor',
+        paths: GENERATED_ICON_PATHS['format_color_fill'],
+        state: { kind: 'value' },
+      },
     ],
   },
   {
@@ -666,6 +703,11 @@ export type ChromeSlotId =
   | 'image.insert'
   | 'image.properties'
   | 'table.insert'
+  | 'table.borderTarget'
+  | 'table.borderColor'
+  | 'table.borderStyle'
+  | 'table.borderWidth'
+  | 'table.cellFill'
   | 'file.open'
   | 'file.save'
   | 'file.pageSetup'

@@ -379,6 +379,19 @@ export interface Editor {
     readonly cell: { readonly row: number; readonly column: number } | null;
   } | null;
 
+  /** Live rectangular cell selection, if any. `null` when the caret is not in a cell rectangle. */
+  getTableCellSelection(): {
+    readonly tableId: string;
+    readonly rows: { readonly from: number; readonly to: number };
+    readonly columns: { readonly from: number; readonly to: number };
+    readonly cellIds: readonly string[];
+  } | null;
+
+  /** Update table furniture aria labels without remounting the editor. */
+  setTableInteractionLabel(
+    resolver: (key: 'table.insertRowBelow' | 'table.insertColumnRight') => string
+  ): void;
+
   /** Section page setup — size, orientation and margins — for the page-setup dialog. */
   getPageSetup(): PageSetup | null;
 
@@ -649,6 +662,80 @@ export interface ReviewItemPlacement {
  */
 export type DocumentEditingMode = 'editing' | 'suggesting' | 'viewing';
 
+/** Which cell edges a table border command targets. */
+export type TableBorderTarget =
+  | 'all'
+  | 'outside'
+  | 'inside'
+  | 'none'
+  | 'top'
+  | 'bottom'
+  | 'left'
+  | 'right';
+
+/** Concrete scopes that apply a complete border spec. */
+export type TableBorderEdgeTarget = Exclude<TableBorderTarget, 'none'>;
+
+/**
+ * Allowlisted OOXML table border line styles.
+ *
+ * Kept identical to `store/table-border-style.ts`; `table-border-style-parity.test-d.ts`
+ * fails if the contract and store vocabularies drift.
+ */
+export type TableBorderStyle = 'single' | 'dashed' | 'dotted' | 'double' | 'triple' | 'thick';
+
+/** Complete border spec for {@link EditorCommands.setTableBorders}. Size is in eighths of a point. */
+export interface TableBorderSpec {
+  readonly style: TableBorderStyle;
+  readonly size: number;
+  readonly color: ColorValue;
+}
+
+/**
+ * Adjacent grid columns addressed by an internal divider resize gesture.
+ *
+ * `sourceRevision` is captured from the store revision when the target is built.
+ * Commit MUST refuse when it does not equal the current store revision, even if an older layout
+ * remains published for geometry.
+ */
+export interface TableColumnDividerResizeTarget {
+  readonly sourceRevision: number;
+  readonly tableId: string;
+  readonly leftGridColumnId: string;
+  readonly rightGridColumnId: string;
+  readonly isHeaderRepeat: boolean;
+}
+
+/**
+ * Last grid column and table width addressed by an outer-right-edge resize gesture.
+ *
+ * `sourceRevision` is captured from the store revision when the target is built.
+ * Commit MUST refuse when it does not equal the current store revision, even if an older layout
+ * remains published for geometry.
+ */
+export interface TableRightEdgeResizeTarget {
+  readonly sourceRevision: number;
+  readonly tableId: string;
+  readonly gridColumnId: string;
+  readonly isHeaderRepeat: boolean;
+}
+
+/** Explicit row occurrence for furniture/context commands. */
+export interface TableRowOccurrenceTarget {
+  readonly sourceRevision: number;
+  readonly tableId: string;
+  readonly rowId: string;
+  readonly isHeaderRepeat: boolean;
+}
+
+/** Explicit column occurrence for furniture/context commands. */
+export interface TableColumnOccurrenceTarget {
+  readonly sourceRevision: number;
+  readonly tableId: string;
+  readonly gridColumnId: string;
+  readonly isHeaderRepeat: boolean;
+}
+
 export interface EditorCommands
   extends EditorCommandShape<DocEdits>, EditorHeaderFooterCommands, EditorNoteCommands {
   /** Switch how edits are written. A view command: it changes no document state. */
@@ -717,24 +804,42 @@ export interface EditorCommands
   };
   toggleList: { kind: 'bullet' | 'ordered' };
 
-  insertRow: { where: 'above' | 'below' };
-  insertColumn: { where: 'left' | 'right' };
-  deleteRow: Record<never, never>;
-  deleteColumn: Record<never, never>;
+  insertRow: { where: 'above' | 'below'; target?: TableRowOccurrenceTarget };
+  insertColumn: { where: 'left' | 'right'; target?: TableColumnOccurrenceTarget };
+  deleteRow: { target?: TableRowOccurrenceTarget };
+  deleteColumn: { target?: TableColumnOccurrenceTarget };
   deleteTable: Record<never, never>;
   mergeCells: Record<never, never>;
   splitCell: { rows: number; cols: number };
-  setCellFill: { color: ColorValue };
+  /** Selected-cell fill. `null` clears direct fill so the table-style cascade applies again. */
+  setCellFill: { color: ColorValue | null };
   toggleHeaderRow: Record<never, never>;
   /**
-   * Table and cell borders, in the vocabulary legacy's table toolbar uses: a scope
-   * (every edge, the outside ring, the inside grid, one named edge, or none) plus the
-   * border spec the toolbar carries — style, size in eighths of a point, and colour.
-   * `scope: 'none'` removes borders and ignores `spec`.
+   * Selected-cell borders. Concrete edge scopes require a complete spec;
+   * `{ scope: 'none', target }` clears only that active edge target and MUST NOT carry `spec`.
    */
-  setTableBorders: {
-    scope: 'all' | 'outside' | 'inside' | 'none' | 'top' | 'bottom' | 'left' | 'right';
-    spec?: { style: string; size: number; color: ColorValue };
+  setTableBorders:
+    | { scope: 'none'; target: TableBorderEdgeTarget }
+    | { scope: TableBorderEdgeTarget; spec: TableBorderSpec };
+
+  /**
+   * Commit an internal column-divider resize from an explicit pointer target.
+   * Widths are twips for the adjacent pair; their sum must match the pre-drag total.
+   */
+  commitTableColumnDividerResize: {
+    target: TableColumnDividerResizeTarget;
+    leftWidthTwips: number;
+    rightWidthTwips: number;
+  };
+
+  /**
+   * Commit an outer-right table-edge resize from an explicit pointer target.
+   * Updates the last grid column and overall table width together.
+   */
+  commitTableRightEdgeResize: {
+    target: TableRightEdgeResizeTarget;
+    columnWidthTwips: number;
+    tableWidthTwips: number;
   };
 
   /**

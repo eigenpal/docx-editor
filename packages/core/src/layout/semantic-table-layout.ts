@@ -55,6 +55,7 @@ import type {
 } from './semantic-records.ts';
 import { firstLineShift, type ResolvedListItem } from './list-resolve.ts';
 import { publishListMarker } from './list-marker.ts';
+import { annotateTableFragmentGeometry } from './semantic-table-interaction.ts';
 import {
   borderExtentPt,
   resolveTableCellBorderGrid,
@@ -1009,6 +1010,7 @@ export function layoutRowFragmentBounded(
     return {
       id: entry.cell.id,
       gridColumn: entry.gridColumn,
+      ...(entry.cell.gridColumnId ? { gridColumnId: entry.cell.gridColumnId } : {}),
       gridSpan: entry.cell.gridSpan,
       vMergeContinue: entry.cell.vMergeContinue,
       ...(entry.cell.vMergeContinue ? { paintInert: true as const } : {}),
@@ -1030,6 +1032,7 @@ export function layoutRowFragmentBounded(
   return {
     record: {
       id: row.id,
+      rowIndex: 0,
       isHeaderRepeat,
       ...(isContinuation ? { isContinuation: true as const } : {}),
       cells,
@@ -1240,17 +1243,21 @@ function emitNestedTable(
     deps.vMergeResolveBudget
   );
   const width = sumCols(structure.columnWidthsPt, 0, structure.columnWidthsPt.length);
-  // Bottom tracks flow cursor (row stack), not overflow from expanded vMerge boxes —
-  // restart overflow is painted within the same vertical band already reserved by continue rows.
+  const rowOrdinals = new Map<string, number>();
   return {
-    fragment: {
-      kind: 'table',
-      id: `${table.id}#f0`,
-      tableId: table.id,
-      fragmentIndex: 0,
-      rows,
-      box: { x: tableLeft, y: top, width, height: y - top },
-    },
+    fragment: annotateTableFragmentGeometry(
+      {
+        kind: 'table',
+        id: `${table.id}#f0`,
+        tableId: table.id,
+        fragmentIndex: 0,
+        rows,
+        box: { x: tableLeft, y: top, width, height: y - top },
+      },
+      structure.columnWidthsPt,
+      depth,
+      rowOrdinals
+    ),
     bottom: y,
   };
 }
@@ -1290,15 +1297,21 @@ export function layoutTableFragment(
     deps.vMergeResolveBudget
   );
   const width = sumCols(structure.columnWidthsPt, 0, structure.columnWidthsPt.length);
+  const rowOrdinals = new Map<string, number>();
   return {
-    fragment: {
-      kind: 'table',
-      id: `${tableId}#f${fragmentIndex}`,
-      tableId,
-      fragmentIndex,
-      rows,
-      box: { x: left, y: top, width, height: y - top },
-    },
+    fragment: annotateTableFragmentGeometry(
+      {
+        kind: 'table',
+        id: `${tableId}#f${fragmentIndex}`,
+        tableId,
+        fragmentIndex,
+        rows,
+        box: { x: left, y: top, width, height: y - top },
+      },
+      structure.columnWidthsPt,
+      depth,
+      rowOrdinals
+    ),
     bottom: y,
   };
 }

@@ -145,6 +145,8 @@ export interface SemanticTableCell {
    * the vertical bands for every cell after it.
    */
   readonly gridColumn: number;
+  /** Canonical `w:gridCol` node id for this cell's start column, when the grid is authored. */
+  readonly gridColumnId?: string;
   /** A vMerge cell that is not the restart continues the cell above: box, no content. */
   readonly vMergeContinue: boolean;
   /** `w:vAlign` — defaults to top when omitted/unrecognised. */
@@ -734,6 +736,7 @@ export function readTableStructure(
         id: cellNode.id,
         gridSpan,
         gridColumn,
+        ...(gridCols[gridColumn]?.id ? { gridColumnId: gridCols[gridColumn]!.id } : {}),
         vMergeContinue: readVMergeContinue(cellProperties),
         vAlign: readVAlign(cellProperties),
         margins: cellMargins,

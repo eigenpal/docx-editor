@@ -19,6 +19,7 @@
 // requires, and the collision bump provides it.
 
 import { MC_NAMESPACE_URI, W14_NAMESPACE_URI, WML_NAMESPACE_URI } from './ooxml-shared.ts';
+import { parentNodeOf } from './ooxml-edit.ts';
 import type { OoxmlAttribute, OoxmlElement, OoxmlNode, OoxmlPart } from './ooxml-tree.ts';
 import { validateOoxmlPart } from './ooxml-validate.ts';
 
@@ -105,6 +106,35 @@ export function usedParaIds(root: OoxmlElement): ReadonlySet<string> {
 export function w14RootPrefix(root: OoxmlElement): string | null {
   for (const binding of root.namespaceBindings) {
     if (binding.namespaceUri === W14_NAMESPACE_URI && binding.prefix !== '') return binding.prefix;
+  }
+  return null;
+}
+
+/**
+ * A root-declared w14 prefix that still resolves to the w14 URI at `node`.
+ *
+ * A hostile descendant can rebind the same prefix (`xmlns:w14="urn:evil"`), so each
+ * root alias is checked against the node's ancestor chain and the first unshadowed one wins.
+ */
+export function w14PrefixInScopeAt(part: OoxmlPart, node: OoxmlElement): string | null {
+  const rootBindings = part.root.namespaceBindings.filter(
+    (binding) => binding.namespaceUri === W14_NAMESPACE_URI && binding.prefix !== ''
+  );
+  if (rootBindings.length === 0) return null;
+  const chain: OoxmlElement[] = [];
+  let current: OoxmlElement | null = node;
+  while (current && current.id !== part.root.id) {
+    chain.push(current);
+    current = parentNodeOf(part, current.id);
+  }
+  for (const binding of rootBindings) {
+    const shadowed = chain.some((ancestor) =>
+      ancestor.namespaceBindings.some(
+        (candidate) =>
+          candidate.prefix === binding.prefix && candidate.namespaceUri !== W14_NAMESPACE_URI
+      )
+    );
+    if (!shadowed) return binding.prefix;
   }
   return null;
 }

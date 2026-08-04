@@ -1,0 +1,502 @@
+// Semantic table interaction geometry and hit index over layout records.
+//
+// Furniture reads ONLY these records — never painted DOM — to place handles and map pointer
+// targets to canonical ids. Each index is a pure WeakMap cache of one layout's captured
+// geometry; `sourceRevision` is always `layout.revision` at build time.
+
+import type {
+  BlockFragmentRecord,
+  LayoutBox,
+  SemanticLayout,
+  TableFragmentRecord,
+  TableRowFragmentRecord,
+} from './semantic-records.ts';
+import { pageAtY } from './semantic-hit-test.ts';
+
+/** Cumulative column boundary positions in table-local points. */
+export function columnEdgesFromWidths(columnWidthsPt: readonly number[]): readonly number[] {
+  const edges: number[] = [0];
+  let x = 0;
+  for (const width of columnWidthsPt) {
+    x += width;
+    edges.push(x);
+  }
+  return edges;
+}
+
+/** Assign authored row ordinals; header repeats reuse the original row's index. */
+export function annotateRowIndex(
+  record: TableRowFragmentRecord,
+  ordinals: Map<string, number>
+): TableRowFragmentRecord {
+  let rowIndex = ordinals.get(record.id);
+  if (rowIndex === undefined) {
+    if (record.isHeaderRepeat) {
+      rowIndex = 0;
+    } else {
+      rowIndex = ordinals.size;
+      ordinals.set(record.id, rowIndex);
+    }
+  }
+  return { ...record, rowIndex };
+}
+
+/** Attach nesting depth and resolved column edges to a table fragment. */
+export function annotateTableFragmentGeometry(
+  fragment: Omit<TableFragmentRecord, 'nestingDepth' | 'columnEdges'> & {
+    readonly nestingDepth?: number;
+    readonly columnEdges?: readonly number[];
+  },
+  columnWidthsPt: readonly number[],
+  nestingDepth: number,
+  rowOrdinals: Map<string, number>
+): TableFragmentRecord {
+  return {
+    ...fragment,
+    nestingDepth,
+    columnEdges: fragment.columnEdges ?? columnEdgesFromWidths(columnWidthsPt),
+    rows: fragment.rows.map((row) => annotateRowIndex(row, rowOrdinals)),
+  };
+}
+
+export interface TableInteractionOccurrence {
+  readonly pageIndex: number;
+  readonly table: TableFragmentRecord;
+  readonly row: TableRowFragmentRecord;
+  readonly rowOrdinal: number;
+  readonly nestingDepth: number;
+  readonly editable: boolean;
+  readonly pageContentBox: LayoutBox;
+}
+
+export type TableInteractionHit =
+  | {
+      readonly kind: 'columnDivider';
+      readonly pageIndex: number;
+      readonly sourceRevision: number;
+      readonly tableId: string;
+      readonly rowId: string;
+      readonly leftGridColumnId: string;
+      readonly rightGridColumnId: string;
+      readonly isHeaderRepeat: boolean;
+      readonly nestingDepth: number;
+      readonly edgeX: number;
+      readonly sheetY: number;
+    }
+  | {
+      readonly kind: 'rightEdge';
+      readonly pageIndex: number;
+      readonly sourceRevision: number;
+      readonly tableId: string;
+      readonly rowId: string;
+      readonly gridColumnId: string;
+      readonly isHeaderRepeat: boolean;
+      readonly nestingDepth: number;
+      readonly edgeX: number;
+      readonly sheetY: number;
+    }
+  | {
+      readonly kind: 'insertRow';
+      readonly pageIndex: number;
+      readonly sourceRevision: number;
+      readonly tableId: string;
+      readonly rowId: string;
+      readonly isHeaderRepeat: boolean;
+      readonly nestingDepth: number;
+    }
+  | {
+      readonly kind: 'insertColumn';
+      readonly pageIndex: number;
+      readonly sourceRevision: number;
+      readonly tableId: string;
+      readonly rowId: string;
+      readonly gridColumnId: string;
+      readonly isHeaderRepeat: boolean;
+      readonly nestingDepth: number;
+    }
+  | {
+      readonly kind: 'tableBody';
+      readonly pageIndex: number;
+      readonly sourceRevision: number;
+      readonly tableId: string;
+      readonly nestingDepth: number;
+      readonly editable: boolean;
+    };
+
+export interface TableInteractionIndex {
+  /** Store revision stamped on the layout when geometry was captured. */
+  readonly sourceRevision: number;
+  readonly occurrences: readonly TableInteractionOccurrence[];
+}
+
+const indexCache = new WeakMap<SemanticLayout, TableInteractionIndex>();
+
+const DIVIDER_HIT_PX = 4;
+const INSERT_ROW_BAND_PX = 6;
+/** Matches `paintInsertControl` column furniture offset above the table top. */
+const INSERT_COLUMN_BAND_PX = 14;
+
+const HIT_SPECIFICITY: Record<TableInteractionHit['kind'], number> = {
+  columnDivider: 4,
+  rightEdge: 4,
+  insertRow: 3,
+  insertColumn: 3,
+  tableBody: 0,
+};
+
+function visitTableBlocks(
+  blocks: readonly BlockFragmentRecord[],
+  pageIndex: number,
+  pageContentBox: LayoutBox,
+  nestingDepth: number,
+  visit: (occ: TableInteractionOccurrence) => void
+): void {
+  for (const block of blocks) {
+    if (block.kind !== 'table') continue;
+    const depth = block.nestingDepth ?? nestingDepth;
+    for (const row of block.rows) {
+      visit({
+        pageIndex,
+        table: block,
+        row,
+        rowOrdinal: row.rowIndex,
+        nestingDepth: depth,
+        editable: !row.isHeaderRepeat,
+        pageContentBox,
+      });
+      for (const cell of row.cells) {
+        visitTableBlocks(cell.blocks, pageIndex, pageContentBox, depth + 1, visit);
+      }
+    }
+  }
+}
+
+/** Build or retrieve the cached interaction index for one published layout. */
+export function tableInteractionIndex(layout: SemanticLayout): TableInteractionIndex {
+  const cached = indexCache.get(layout);
+  if (cached) return cached;
+
+  const occurrences: TableInteractionOccurrence[] = [];
+  for (let pageIndex = 0; pageIndex < layout.pages.length; pageIndex += 1) {
+    const page = layout.pages[pageIndex]!;
+    visitTableBlocks(page.fragments, pageIndex, page.contentBox, 0, (occ) => {
+      occurrences.push(occ);
+    });
+  }
+
+  const index: TableInteractionIndex = Object.freeze({
+    sourceRevision: layout.revision,
+    occurrences: Object.freeze(occurrences),
+  });
+  indexCache.set(layout, index);
+  return index;
+}
+
+/** True when the index was built from this layout revision. */
+export function isInteractionIndexFresh(
+  index: TableInteractionIndex,
+  layout: SemanticLayout
+): boolean {
+  return index.sourceRevision === layout.revision;
+}
+
+/** Page-content coordinates to sheet-space points (contentBox is already sheet-relative). */
+export function pageContentToSheet(
+  pageIndex: number,
+  x: number,
+  y: number,
+  layout: SemanticLayout
+): { readonly x: number; readonly y: number } {
+  const page = layout.pages[pageIndex];
+  if (!page) return { x, y };
+  return {
+    x: page.contentBox.x + x,
+    y: page.contentBox.y + y,
+  };
+}
+
+/** Sheet-space points to page-content coordinates (semantic, without paint offset). */
+export function sheetToPageContent(
+  layout: SemanticLayout,
+  sheetX: number,
+  sheetY: number,
+  pageOffsetX: (pageIndex: number) => number = () => 0,
+  scale = 1
+): { readonly pageIndex: number; readonly x: number; readonly y: number } | null {
+  const scaledX = sheetX / scale;
+  const scaledY = sheetY / scale;
+  const pageIndex = pageAtY(layout, scaledY);
+  if (pageIndex < 0) return null;
+  const page = layout.pages[pageIndex]!;
+  return {
+    pageIndex,
+    x: scaledX - page.contentBox.x - pageOffsetX(pageIndex),
+    y: scaledY - page.contentBox.y,
+  };
+}
+
+/** Stable identity for hover furniture refresh within one table. */
+export function tableInteractionHitIdentity(hit: TableInteractionHit): string {
+  const revision = hit.sourceRevision;
+  switch (hit.kind) {
+    case 'columnDivider':
+      return `${revision}:${hit.kind}:${hit.pageIndex}:${hit.tableId}:${hit.rowId}:${hit.isHeaderRepeat}:${hit.leftGridColumnId}:${hit.rightGridColumnId}:${hit.edgeX}`;
+    case 'rightEdge':
+      return `${revision}:${hit.kind}:${hit.pageIndex}:${hit.tableId}:${hit.rowId}:${hit.isHeaderRepeat}:${hit.gridColumnId}:${hit.edgeX}`;
+    case 'insertRow':
+      return `${revision}:${hit.kind}:${hit.pageIndex}:${hit.tableId}:${hit.rowId}:${hit.isHeaderRepeat}`;
+    case 'insertColumn':
+      return `${revision}:${hit.kind}:${hit.pageIndex}:${hit.tableId}:${hit.rowId}:${hit.gridColumnId}:${hit.isHeaderRepeat}`;
+    case 'tableBody':
+      return `${revision}:${hit.kind}:${hit.pageIndex}:${hit.tableId}:${hit.nestingDepth}:${hit.editable}`;
+  }
+}
+
+/** Canonical target identity ignoring captured revision (for relayout refresh). */
+export function tableInteractionTargetIdentity(hit: TableInteractionHit): string {
+  switch (hit.kind) {
+    case 'columnDivider':
+      return `${hit.kind}:${hit.pageIndex}:${hit.tableId}:${hit.rowId}:${hit.isHeaderRepeat}:${hit.leftGridColumnId}:${hit.rightGridColumnId}:${hit.edgeX}`;
+    case 'rightEdge':
+      return `${hit.kind}:${hit.pageIndex}:${hit.tableId}:${hit.rowId}:${hit.isHeaderRepeat}:${hit.gridColumnId}:${hit.edgeX}`;
+    case 'insertRow':
+      return `${hit.kind}:${hit.pageIndex}:${hit.tableId}:${hit.rowId}:${hit.isHeaderRepeat}`;
+    case 'insertColumn':
+      return `${hit.kind}:${hit.pageIndex}:${hit.tableId}:${hit.rowId}:${hit.gridColumnId}:${hit.isHeaderRepeat}`;
+    case 'tableBody':
+      return `${hit.kind}:${hit.pageIndex}:${hit.tableId}:${hit.nestingDepth}:${hit.editable}`;
+  }
+}
+
+/** Resolve a retained insertion target against a fresh interaction index. */
+export function resolveTableInteractionInsertHit(
+  index: TableInteractionIndex,
+  prior: Extract<TableInteractionHit, { kind: 'insertRow' | 'insertColumn' }>
+): Extract<TableInteractionHit, { kind: 'insertRow' | 'insertColumn' }> | null {
+  if (prior.kind === 'insertRow') {
+    for (const occ of index.occurrences) {
+      if (occ.pageIndex !== prior.pageIndex) continue;
+      if (occ.table.tableId !== prior.tableId) continue;
+      if (occ.row.id !== prior.rowId) continue;
+      if (occ.row.isHeaderRepeat !== prior.isHeaderRepeat) continue;
+      if (!occ.editable) return null;
+      return {
+        kind: 'insertRow',
+        pageIndex: occ.pageIndex,
+        sourceRevision: index.sourceRevision,
+        tableId: occ.table.tableId,
+        rowId: occ.row.id,
+        isHeaderRepeat: occ.row.isHeaderRepeat,
+        nestingDepth: occ.nestingDepth,
+      };
+    }
+    return null;
+  }
+
+  for (const occ of index.occurrences) {
+    if (occ.pageIndex !== prior.pageIndex) continue;
+    if (occ.table.tableId !== prior.tableId) continue;
+    if (occ.row.id !== prior.rowId) continue;
+    if (occ.row.isHeaderRepeat !== prior.isHeaderRepeat) continue;
+    if (!occ.editable) continue;
+    for (let col = 0; col < occ.table.columnEdges.length - 1; col += 1) {
+      const gridColumnId = gridColumnIdAt(occ.row, col);
+      if (gridColumnId !== prior.gridColumnId) continue;
+      return {
+        kind: 'insertColumn',
+        pageIndex: occ.pageIndex,
+        sourceRevision: index.sourceRevision,
+        tableId: occ.table.tableId,
+        rowId: occ.row.id,
+        gridColumnId,
+        isHeaderRepeat: occ.row.isHeaderRepeat,
+        nestingDepth: occ.nestingDepth,
+      };
+    }
+  }
+  return null;
+}
+
+function gridColumnIdAt(row: TableRowFragmentRecord, columnIndex: number): string | null {
+  for (const cell of row.cells) {
+    if (cell.gridColumn === columnIndex) return cell.gridColumnId ?? null;
+  }
+  return null;
+}
+
+function tableLocalPoint(
+  layout: SemanticLayout,
+  occ: TableInteractionOccurrence,
+  sheetX: number,
+  sheetY: number,
+  pageOffsetX: number
+): { readonly x: number; readonly y: number } | null {
+  const page = layout.pages[occ.pageIndex];
+  if (!page) return null;
+  const contentX = sheetX - page.contentBox.x - pageOffsetX;
+  const contentY = sheetY - page.contentBox.y;
+  const table = occ.table;
+  const localX = contentX - table.box.x;
+  const localY = contentY - table.box.y;
+  if (
+    localX < -DIVIDER_HIT_PX ||
+    localY < -INSERT_COLUMN_BAND_PX ||
+    localX > table.box.width + DIVIDER_HIT_PX ||
+    localY > table.box.height + INSERT_ROW_BAND_PX
+  ) {
+    return null;
+  }
+  return { x: localX, y: localY };
+}
+
+function dividerHit(
+  index: TableInteractionIndex,
+  occ: TableInteractionOccurrence,
+  localX: number,
+  localY: number,
+  layout: SemanticLayout
+): TableInteractionHit | null {
+  if (occ.row.isHeaderRepeat) return null;
+  const table = occ.table;
+  if (
+    localY < occ.row.box.y - occ.table.box.y ||
+    localY > occ.row.box.y - occ.table.box.y + occ.row.box.height
+  ) {
+    return null;
+  }
+  for (let edgeIndex = 1; edgeIndex < table.columnEdges.length - 1; edgeIndex += 1) {
+    const edgeX = table.columnEdges[edgeIndex]!;
+    if (Math.abs(localX - edgeX) > DIVIDER_HIT_PX) continue;
+    const left = gridColumnIdAt(occ.row, edgeIndex - 1);
+    const right = gridColumnIdAt(occ.row, edgeIndex);
+    if (!left || !right) continue;
+    const page = layout.pages[occ.pageIndex]!;
+    return {
+      kind: 'columnDivider',
+      pageIndex: occ.pageIndex,
+      sourceRevision: index.sourceRevision,
+      tableId: table.tableId,
+      rowId: occ.row.id,
+      leftGridColumnId: left,
+      rightGridColumnId: right,
+      isHeaderRepeat: occ.row.isHeaderRepeat,
+      nestingDepth: occ.nestingDepth,
+      edgeX,
+      sheetY: page.contentBox.y + table.box.y + localY,
+    };
+  }
+  const rightEdge = table.columnEdges.at(-1)!;
+  if (Math.abs(localX - rightEdge) <= DIVIDER_HIT_PX) {
+    const lastCol = table.columnEdges.length - 2;
+    const gridColumnId = gridColumnIdAt(occ.row, lastCol);
+    if (!gridColumnId) return null;
+    const page = layout.pages[occ.pageIndex]!;
+    return {
+      kind: 'rightEdge',
+      pageIndex: occ.pageIndex,
+      sourceRevision: index.sourceRevision,
+      tableId: table.tableId,
+      rowId: occ.row.id,
+      gridColumnId,
+      isHeaderRepeat: occ.row.isHeaderRepeat,
+      nestingDepth: occ.nestingDepth,
+      edgeX: rightEdge,
+      sheetY: page.contentBox.y + table.box.y + localY,
+    };
+  }
+  return null;
+}
+
+/**
+ * Deepest-first table interaction hit at a sheet-space point.
+ *
+ * Returns the innermost nested table when several overlap.
+ */
+export function findTableInteractionAt(
+  index: TableInteractionIndex,
+  sheetX: number,
+  sheetY: number,
+  layout: SemanticLayout,
+  pageOffsetX = 0,
+  pageIndexHint?: number
+): TableInteractionHit | null {
+  const pageIndex = pageIndexHint ?? pageAtY(layout, sheetY);
+  const offsetX = pageIndex >= 0 ? pageOffsetX : 0;
+
+  let best: TableInteractionHit | null = null;
+  let bestDepth = -1;
+  let bestSpecificity = -1;
+
+  const consider = (hit: TableInteractionHit | null): void => {
+    if (!hit) return;
+    const specificity = HIT_SPECIFICITY[hit.kind];
+    if (
+      hit.nestingDepth < bestDepth ||
+      (hit.nestingDepth === bestDepth && specificity <= bestSpecificity)
+    ) {
+      return;
+    }
+    bestDepth = hit.nestingDepth;
+    bestSpecificity = specificity;
+    best = hit;
+  };
+
+  for (const occ of index.occurrences) {
+    if (pageIndex >= 0 && occ.pageIndex !== pageIndex) continue;
+    const local = tableLocalPoint(layout, occ, sheetX, sheetY, offsetX);
+    if (!local) continue;
+
+    consider(
+      dividerHit(index, occ, local.x, local.y, layout) ?? {
+        kind: 'tableBody',
+        pageIndex: occ.pageIndex,
+        sourceRevision: index.sourceRevision,
+        tableId: occ.table.tableId,
+        nestingDepth: occ.nestingDepth,
+        editable: occ.editable,
+      }
+    );
+
+    if (!occ.editable) continue;
+
+    const rowTop = occ.row.box.y - occ.table.box.y;
+    if (
+      local.x <= INSERT_ROW_BAND_PX &&
+      Math.abs(local.y - (rowTop + occ.row.box.height / 2)) <=
+        occ.row.box.height / 2 + INSERT_ROW_BAND_PX
+    ) {
+      consider({
+        kind: 'insertRow',
+        pageIndex: occ.pageIndex,
+        sourceRevision: index.sourceRevision,
+        tableId: occ.table.tableId,
+        rowId: occ.row.id,
+        isHeaderRepeat: occ.row.isHeaderRepeat,
+        nestingDepth: occ.nestingDepth,
+      });
+    }
+
+    for (let col = 0; col < occ.table.columnEdges.length - 1; col += 1) {
+      const left = occ.table.columnEdges[col]!;
+      const right = occ.table.columnEdges[col + 1]!;
+      const midX = (left + right) / 2;
+      if (Math.abs(local.x - midX) > (right - left) / 2 + 2) continue;
+      if (local.y > INSERT_COLUMN_BAND_PX) continue;
+      const gridColumnId = gridColumnIdAt(occ.row, col);
+      if (!gridColumnId) continue;
+      consider({
+        kind: 'insertColumn',
+        pageIndex: occ.pageIndex,
+        sourceRevision: index.sourceRevision,
+        tableId: occ.table.tableId,
+        rowId: occ.row.id,
+        gridColumnId,
+        isHeaderRepeat: occ.row.isHeaderRepeat,
+        nestingDepth: occ.nestingDepth,
+      });
+      break;
+    }
+  }
+
+  return best;
+}
