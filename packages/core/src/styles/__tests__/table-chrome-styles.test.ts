@@ -79,4 +79,19 @@ describe('table chrome stylesheet contract (Task 9 fix round 2)', () => {
     expect(serialized).toMatch(/opacity:\s*0\.3/);
     expect(serialized).toMatch(/outline:\s*2px\s+solid\s+var\(--doc-primary\)/);
   });
+
+  test('table menus overlay the toolbar instead of growing its flex row', () => {
+    const css = readFileSync(cssPath, 'utf8');
+    const root = postcss.parse(tableChromeBlock(css), { from: cssPath });
+    const declarations = new Map<string, string>();
+    root.walkRules('.docx-table-chrome__panel', (rule) => {
+      rule.walkDecls((decl) => {
+        declarations.set(decl.prop, decl.value.trim());
+      });
+    });
+    expect(declarations.get('position')).toBe('absolute');
+    expect(declarations.get('top')).toBe('calc(100% + 6px)');
+    expect(declarations.get('right')).toBe('0');
+    expect(Number(declarations.get('z-index'))).toBeGreaterThan(0);
+  });
 });

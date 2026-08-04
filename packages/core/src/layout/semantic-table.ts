@@ -178,6 +178,8 @@ export interface SemanticTableCell {
 
 export interface SemanticTableRow {
   readonly id: string;
+  /** Pending Word row insertion/deletion authored in `w:trPr`. */
+  readonly revisionKind?: 'insert' | 'delete';
   /** `w:trPr/w:tblHeader` — the row repeats atop each page the table continues onto. */
   readonly isHeader: boolean;
   /**
@@ -752,6 +754,11 @@ export function readTableStructure(
     }
     rows.push({
       id: rowNode.id,
+      ...(rowProperties && childNamed(rowProperties, 'ins')
+        ? { revisionKind: 'insert' as const }
+        : rowProperties && childNamed(rowProperties, 'del')
+          ? { revisionKind: 'delete' as const }
+          : {}),
       isHeader: readFlag(rowProperties, 'tblHeader'),
       cantSplit: readFlag(rowProperties, 'cantSplit'),
       height: readRowHeight(rowProperties),

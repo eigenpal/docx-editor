@@ -441,6 +441,8 @@ export type TreeDocOp =
       readonly tableId: string;
       readonly rowId: string;
       readonly where: 'above' | 'below';
+      /** When present, author the row as a Word tracked insertion. */
+      readonly revision?: RevisionAttributionInput;
     }
   | {
       /** Delete one canonical table row; refuses the final row. */
@@ -449,6 +451,8 @@ export type TreeDocOp =
       readonly rowId: string;
       /** Optional anchor cell for column-aware caret recovery after deletion. */
       readonly referenceCellId?: string;
+      /** When present, retain the row and author a Word tracked deletion. */
+      readonly revision?: RevisionAttributionInput;
     }
   | {
       /** Insert one grid column left or right of a canonical `w:gridCol`. */

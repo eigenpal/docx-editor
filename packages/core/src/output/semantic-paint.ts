@@ -1228,6 +1228,12 @@ function paintTableFragment(
   for (const row of fragment.rows) {
     const rowElement = positioned(document, 'div', row.box, scale);
     rowElement.className = 'docx-table-row';
+    if (row.revisionKind) {
+      rowElement.classList.add(
+        'docx-table-row--revision',
+        row.revisionKind === 'insert' ? 'layout-revision-ins' : 'layout-revision-del'
+      );
+    }
     rowElement.dataset.rowId = row.id;
     if (row.isHeaderRepeat) rowElement.dataset.headerRepeat = 'true';
     rowElement.style.left = `${(row.box.x - fragment.box.x) * scale}px`;

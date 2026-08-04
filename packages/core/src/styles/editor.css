@@ -1096,6 +1096,11 @@ a.docx-hyperlink:focus-visible {
 }
 
 .docx-table-chrome__panel {
+  position: absolute;
+  z-index: 40;
+  top: calc(100% + 6px);
+  right: 0;
+  min-width: 150px;
   background: var(--doc-surface);
   border: 1px solid var(--doc-border);
   border-radius: 8px;
@@ -1897,6 +1902,33 @@ a.docx-hyperlink:focus-visible {
 
 .layout-revision-change-bar.layout-revision-del {
   background-color: var(--doc-revision-deletion);
+}
+
+.docx-table-row--revision::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: -8px;
+  width: 2px;
+  pointer-events: none;
+}
+
+.docx-table-row--revision.layout-revision-ins::before {
+  background-color: var(--doc-revision-insertion);
+}
+
+.docx-table-row--revision.layout-revision-del::before {
+  background-color: var(--doc-revision-deletion);
+}
+
+.docx-table-row--revision.layout-revision-ins .layout-run-text {
+  color: var(--doc-revision-insertion);
+}
+
+.docx-table-row--revision.layout-revision-del .layout-run-text {
+  color: var(--doc-revision-deletion);
+  text-decoration: line-through;
 }
 
 .layout-revision-pmark {

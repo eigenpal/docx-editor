@@ -361,6 +361,8 @@ export interface TableFragmentRecord {
 export interface TableRowFragmentRecord {
   /** Canonical node id of the `w:tr`. */
   readonly id: string;
+  /** Pending tracked row insertion/deletion, when authored in `w:trPr`. */
+  readonly revisionKind?: 'insert' | 'delete';
   /** Authored row ordinal within the table; repeats share the original row's index. */
   readonly rowIndex: number;
   /**

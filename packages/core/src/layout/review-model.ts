@@ -65,7 +65,7 @@ export type ReviewRevisionKind =
   | 'format'
   /** `w:pPr/w:rPr/w:ins|w:del` — a paragraph split or merge. */
   | 'paragraphMark'
-  /** A row, cell, section or grid revision: structural, and not resolvable yet. */
+  /** A row, cell, section or grid revision. Supported row revisions are resolvable. */
   | 'structural';
 
 export interface ReviewRevisionItem {
@@ -218,6 +218,47 @@ function locateSites(part: OoxmlPart): Map<string, SiteLocation> {
     for (const child of node.children) walk(child, depth + 1);
   };
   walk(part.root, 0);
+
+  const anchorTrackedRows = (node: OoxmlNode, depth: number): void => {
+    if (node.kind === 'textValue' || depth > 64) return;
+    if (node.kind === 'tableRow') {
+      let paragraph: OoxmlParagraphNode | null = null;
+      const firstParagraph = (candidate: OoxmlNode, nestedDepth: number): void => {
+        if (paragraph || candidate.kind === 'textValue' || nestedDepth > 64) return;
+        if (candidate.kind === 'paragraph') {
+          paragraph = candidate;
+          return;
+        }
+        for (const child of candidate.children) firstParagraph(child, nestedDepth + 1);
+      };
+      firstParagraph(node, 0);
+      if (paragraph) {
+        const placeMarkers = (
+          candidate: OoxmlNode,
+          parentName: string | undefined,
+          nestedDepth: number
+        ): void => {
+          if (candidate.kind === 'textValue' || nestedDepth > 64) return;
+          if (candidate.kind === 'paragraph') return;
+          const rowMarker =
+            parentName === 'trPr' &&
+            (candidate.localName === 'ins' || candidate.localName === 'del');
+          const cellMarker =
+            parentName === 'tcPr' &&
+            (candidate.localName === 'cellIns' || candidate.localName === 'cellDel');
+          if (rowMarker || cellMarker) {
+            located.set(candidate.id, { paragraphId: paragraph!.id, start: 0, end: 0 });
+          }
+          for (const child of candidate.children) {
+            placeMarkers(child, candidate.localName, nestedDepth + 1);
+          }
+        };
+        placeMarkers(node, undefined, 0);
+      }
+    }
+    for (const child of node.children) anchorTrackedRows(child, depth + 1);
+  };
+  anchorTrackedRows(part.root, 0);
   return located;
 }
 
@@ -332,10 +373,25 @@ export function revisionItemsOf(part: OoxmlPart): ReviewRevisionItem[] {
     // date per editing burst, so an insertion and a deletion can legally share the triple —
     // and grouping on it alone showed them as one `insert` card with both texts run together,
     // whose Accept deleted the half the card claimed to be inserting.
-    const key = `${site.node.localName}\u0000${addressKey(address)}`;
+    const key =
+      kind === 'structural'
+        ? `structural\u0000${addressKey(address)}`
+        : `${site.node.localName}\u0000${addressKey(address)}`;
     const existing = byAddress.get(key);
     if (existing) {
-      if (range) existing.ranges.push(range);
+      if (
+        range &&
+        !existing.ranges.some(
+          (candidate) =>
+            candidate.partName === range.partName &&
+            candidate.start.paragraphId === range.start.paragraphId &&
+            candidate.start.offset === range.start.offset &&
+            candidate.end.paragraphId === range.end.paragraphId &&
+            candidate.end.offset === range.end.offset
+        )
+      ) {
+        existing.ranges.push(range);
+      }
       if (kind !== 'structural' && existing.revisionKind === 'structural') {
         existing.revisionKind = kind;
       }

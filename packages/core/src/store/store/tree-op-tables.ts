@@ -47,12 +47,19 @@ import {
   patchTblGridColumn,
   patchTblPrChild,
   patchTcPrChild,
+  patchTrPrChild,
 } from './tree-op-table-properties.ts';
 import { paragraphIdsWithin } from './tree-op-blocks.ts';
 import { fromEdit, TEXT_DEPS } from './tree-op-nodes.ts';
 import { isWmlElement, wmlAttributeValue, wmlChildNamed } from './tree-op-table-shared.ts';
 import { readEditableTableTopology, type EditableTableTopology } from './tree-op-table-topology.ts';
-import type { TreeOpEffect, TreeOpRejection, TreeOpResult } from './tree-op-types.ts';
+import { nextRevisionId } from './tree-op-tracked.ts';
+import type {
+  RevisionAttributionInput,
+  TreeOpEffect,
+  TreeOpRejection,
+  TreeOpResult,
+} from './tree-op-types.ts';
 
 const TR_PR_STRIP = new Set(['ins', 'del', 'trPrChange']);
 const TC_PR_STRIP = new Set(['vMerge', 'hMerge', 'cellIns', 'cellDel', 'cellMerge', 'tcPrChange']);
@@ -79,12 +86,14 @@ export type TableRowDocOp =
       readonly tableId: string;
       readonly rowId: string;
       readonly where: 'above' | 'below';
+      readonly revision?: RevisionAttributionInput;
     }
   | {
       readonly op: 'deleteTableRow';
       readonly tableId: string;
       readonly rowId: string;
       readonly referenceCellId?: string;
+      readonly revision?: RevisionAttributionInput;
     };
 
 export type TableColumnDocOp =
@@ -314,6 +323,70 @@ function freshWmlElement(
     attributes,
     children,
   } as OoxmlElement;
+}
+
+function trackedRevisionAttributes(
+  revisionId: string,
+  revision: RevisionAttributionInput,
+  wml: WmlFreshNamespaceContext
+): OoxmlAttribute[] {
+  const attribute = (localName: string, value: string): OoxmlAttribute => ({
+    kind: 'genericExtension',
+    namespaceUri: WML_NAMESPACE_URI,
+    localName,
+    prefix: wml.attributePrefix,
+    value,
+  });
+  return [
+    attribute('id', revisionId),
+    attribute('author', revision.author),
+    ...(revision.date === undefined ? [] : [attribute('date', revision.date)]),
+  ];
+}
+
+function withTrackedRowMarker(
+  row: OoxmlTableRowNode,
+  markerKind: 'ins' | 'del',
+  revisionId: string,
+  revision: RevisionAttributionInput,
+  nextId: () => string,
+  wml: WmlFreshNamespaceContext
+): OoxmlTableRowNode {
+  const rowMarker = freshWmlElement(
+    markerKind,
+    nextId,
+    wml,
+    trackedRevisionAttributes(revisionId, revision, wml)
+  );
+  const existingTrPr = wmlChildNamed(row, 'trPr');
+  const trPr = existingTrPr ?? freshWmlElement('trPr', nextId, wml, []);
+  const patchedTrPr = patchTrPrChild(trPr, rowMarker);
+  if (!patchedTrPr.ok) return row;
+
+  const cellMarkerKind = markerKind === 'ins' ? 'cellIns' : 'cellDel';
+  const children = row.children.map((child): OoxmlNode => {
+    if (child.kind !== 'tableCell') {
+      return child === existingTrPr ? patchedTrPr.container : child;
+    }
+    const marker = freshWmlElement(
+      cellMarkerKind,
+      nextId,
+      wml,
+      trackedRevisionAttributes(revisionId, revision, wml)
+    );
+    const existingTcPr = wmlChildNamed(child, 'tcPr');
+    const tcPr = existingTcPr ?? freshWmlElement('tcPr', nextId, wml, []);
+    const patchedTcPr = patchTcPrChild(tcPr, marker);
+    if (!patchedTcPr.ok) return child;
+    const cellChildren = existingTcPr
+      ? child.children.map((candidate) =>
+          candidate === existingTcPr ? patchedTcPr.container : candidate
+        )
+      : [patchedTcPr.container, ...child.children];
+    return Object.freeze({ ...child, children: cellChildren }) as OoxmlTableCellNode;
+  });
+  if (!existingTrPr) children.unshift(patchedTrPr.container);
+  return Object.freeze({ ...row, children }) as OoxmlTableRowNode;
 }
 
 function freshTableRow(
@@ -613,6 +686,14 @@ export function validateTableRowOp(
   op: TableRowDocOp,
   limits: TableTopologyLimits = DEFAULT_TABLE_TOPOLOGY_LIMITS
 ): TreeOpRejection | null {
+  if (
+    op.revision !== undefined &&
+    (typeof op.revision.author !== 'string' ||
+      op.revision.author.trim().length === 0 ||
+      (op.revision.date !== undefined && typeof op.revision.date !== 'string'))
+  ) {
+    return 'invalid-property-value';
+  }
   const resolved = resolveTableTopologyLimits(limits);
   const topologyResult = readEditableTableTopology(part.root, op.tableId, resolved);
   if (!topologyResult.ok) return mapTopologyRejection(topologyResult.reason);
@@ -650,7 +731,18 @@ export function applyInsertTableRow(
   if (plan === null) return { ok: false, reason: 'tree-invariant' };
 
   const nextId = createNodeIdAllocator(part);
-  const { row: insertedRow, paragraphIds } = buildInsertedRow(plan, part, topology.table, nextId);
+  const built = buildInsertedRow(plan, part, topology.table, nextId);
+  const insertedRow = op.revision
+    ? withTrackedRowMarker(
+        built.row,
+        'ins',
+        nextRevisionId(part)(),
+        op.revision,
+        nextId,
+        wmlFreshNamespaceContextAt(part, topology.table)
+      )
+    : built.row;
+  const paragraphIds = built.paragraphIds;
   const insertAt = rowChildIndex(topology.table, op.rowId);
   if (insertAt === -1) return { ok: false, reason: 'unknown-row' };
   const childIndex = op.where === 'above' ? insertAt : insertAt + 1;
@@ -708,6 +800,26 @@ export function applyDeleteTableRow(
   if (!caretParagraphId) return { ok: false, reason: 'tree-invariant' };
 
   const paragraphs = paragraphIdsWithin(row);
+  if (op.revision) {
+    const nextId = createNodeIdAllocator(part);
+    const trackedRow = withTrackedRowMarker(
+      row,
+      'del',
+      nextRevisionId(part)(),
+      op.revision,
+      nextId,
+      wmlFreshNamespaceContextAt(part, topologyResult.topology.table)
+    );
+    const effect: TreeOpEffect = {
+      dirty: [op.tableId, op.rowId],
+      created: [],
+      deleted: [],
+      dependencyKeys: TEXT_DEPS,
+      impact: 'flow-structural',
+      caret: { paragraphId: caretParagraphId },
+    };
+    return fromEdit(replaceNode(part, op.rowId, trackedRow, options), effect);
+  }
   const effect: TreeOpEffect = {
     dirty: [op.tableId],
     created: [],

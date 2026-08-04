@@ -1539,6 +1539,8 @@ export function mountPaginatedSurface(
     switch (op.op) {
       case 'insertText':
       case 'deleteText':
+      case 'insertTableRow':
+      case 'deleteTableRow':
         return op.revision !== undefined;
       case 'setParagraphMarkRevision':
       case 'proposeParagraphMerge':
@@ -1548,7 +1550,7 @@ export function mountPaginatedSurface(
     }
   }
 
-  /** Text ops become tracked ones while suggesting; everything else is untouched. */
+  /** Suggesting attributes text and structural row edits as Word tracked changes. */
   function trackedOps(ops: readonly TreeDocOp[]): TreeDocOp[] {
     const author = options.author?.trim();
     // `CT_TrackChange` makes `@w:author` required, so with no author there is nothing valid
@@ -1557,7 +1559,14 @@ export function mountPaginatedSurface(
     if (editingMode !== 'suggest' || !author) return [...ops];
     const revision = { author, date: trackedDate() };
     return ops.flatMap((op): TreeDocOp[] => {
-      if (op.op === 'insertText' || op.op === 'deleteText') return [{ ...op, revision }];
+      if (
+        op.op === 'insertText' ||
+        op.op === 'deleteText' ||
+        op.op === 'insertTableRow' ||
+        op.op === 'deleteTableRow'
+      ) {
+        return [{ ...op, revision }];
+      }
       // A SPLIT becomes a real split plus a proposed mark on the first paragraph: the text
       // is already in two paragraphs, and what is being proposed is the break between them.
       // §17.13.5 puts the new mark on the FIRST paragraph, and rejecting it runs the two

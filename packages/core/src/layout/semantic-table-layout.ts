@@ -1032,6 +1032,7 @@ export function layoutRowFragmentBounded(
   return {
     record: {
       id: row.id,
+      ...(row.revisionKind ? { revisionKind: row.revisionKind } : {}),
       rowIndex: 0,
       isHeaderRepeat,
       ...(isContinuation ? { isContinuation: true as const } : {}),
