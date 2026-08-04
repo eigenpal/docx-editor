@@ -17,9 +17,16 @@
 // dropping it would lose text. Only the intersection is removed.
 
 import type { OoxmlNode } from '@docx-editor.dev/core-contract/store';
+import { MAX_REVISION_DEPTH } from './revision-projection.ts';
 
-/** Matches the layout walk's own container recursion; see `piecesOfParagraph`. */
-const MAX_INLINE_DEPTH = 8;
+/**
+ * Matches the layout walk's own container recursion; see `piecesOfParagraph`.
+ *
+ * Taken FROM that walk rather than restated. At a local 8 against layout's 32, a paragraph
+ * nested past 8 was called empty here while layout still emitted its spans — so file-
+ * controlled nesting, which costs an attacker nothing, dropped visible text from the page.
+ */
+const MAX_INLINE_DEPTH = MAX_REVISION_DEPTH;
 
 function childNamed(node: OoxmlNode, localName: string): OoxmlNode | undefined {
   if (node.kind === 'textValue') return undefined;

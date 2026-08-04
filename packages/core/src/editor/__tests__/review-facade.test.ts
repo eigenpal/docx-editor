@@ -390,7 +390,10 @@ describe('suggesting mode', () => {
     const cards = editor.getReviewItems();
     expect(cards).toHaveLength(1);
     expect(cards[0]!.revisionKind).toBe('replace');
-    expect(cards[0]!.replacedText).toBe('ence and second endn');
+    // The reference measures ONE model unit, exactly as `segmentsOf` counts it, so [19, 39)
+    // is "ence" + the reference + " and second end". Counting it as nothing shifted every
+    // offset past it by one and struck a character the user had not selected.
+    expect(cards[0]!.replacedText).toBe('ence and second end');
     expect(cards[0]!.text).toBe('note');
   });
 
@@ -411,11 +414,11 @@ describe('suggesting mode', () => {
 
     expect(editor.acceptReviewItem(editor.getReviewItems()[0]!.key).ok).toBe(true);
     // Nothing left pending: every `w:del` the one edit produced is resolved, not just the
-    // first. The struck words are gone and "note" took their place; the endnote reference
-    // survives as the object-replacement atom it occupies one model position as, because the
-    // selection ran through it rather than removing the note.
+    // first. The struck words are gone and "note" took their place \u2014 the endnote reference
+    // among them, because the selection covered the one model unit it occupies and Word
+    // deletes a note whose mark a deletion runs through.
     expect(editor.getReviewItems()).toHaveLength(0);
-    expect(bodyTextOf(editor)).toBe('First endnote refer\ufffcnoteote');
+    expect(bodyTextOf(editor)).toBe('First endnote refernotenote');
   });
 
   test('typing over a selection is ONE card: replaced x with y', () => {

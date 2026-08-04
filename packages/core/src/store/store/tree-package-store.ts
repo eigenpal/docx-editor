@@ -50,6 +50,14 @@ import {
 
 type NoteCascadeFn = (before: OoxmlPackage, after: OoxmlPackage) => OoxmlPackage | null;
 
+/** Revision ops whose result can remove a note reference along with the content it sits in. */
+const RESOLUTION_OPS: ReadonlySet<string> = new Set([
+  'acceptRevision',
+  'rejectRevision',
+  'acceptAllRevisions',
+  'rejectAllRevisions',
+]);
+
 const HEADER_REL_TYPE =
   'http://schemas.openxmlformats.org/officeDocument/2006/relationships/header';
 const FOOTER_REL_TYPE =
@@ -301,6 +309,14 @@ export class TreePackageStore {
                 op.op === 'deleteBlock' &&
                 deleteBlockMayStrandNote(this.pkg, store.part, op, deleteTargets)
               ) {
+                mayDeleteNoteAtoms = true;
+              } else if (RESOLUTION_OPS.has(op.op)) {
+                // Accepting a deletion, or rejecting an insertion, removes the content the
+                // revision covers — and a note reference measures one model unit, so a
+                // selection struck through one carries the reference away with it. The gate
+                // cannot be narrowed to a paragraph range the way `deleteText` is, because a
+                // revision's sites are wherever the file put them; the cascade itself is a
+                // before/after diff and does nothing when no reference actually went.
                 mayDeleteNoteAtoms = true;
               }
             }

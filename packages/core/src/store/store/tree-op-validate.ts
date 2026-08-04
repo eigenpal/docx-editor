@@ -422,7 +422,15 @@ export {
   type TreeOpRejection,
   type TreeOpResult,
 } from './tree-op-types.ts';
-export { isParagraph, runsUnder, segmentsOf, type Segment } from './tree-op-segments.ts';
+export {
+  isParagraph,
+  paragraphOffsetIndex,
+  runsUnder,
+  segmentsOf,
+  type OffsetSpan,
+  type ParagraphOffsetIndex,
+  type Segment,
+} from './tree-op-segments.ts';
 export {
   allSectionNodes,
   bodyNodeOf,

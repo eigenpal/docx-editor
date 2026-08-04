@@ -438,6 +438,12 @@ export function cascadeDeletedNoteReferences(
     seen.add(key);
     // Only cascade normal positive ids — never delete separator notes via text delete.
     if (hit.noteId <= 0) continue;
+    // A reference whose BODY the package never held has stranded nothing, so there is
+    // nothing to cascade. `applyDeleteNote` refuses on a missing part or a missing body, and
+    // treating that refusal as a failed cascade rolled the user's edit back: deleting a
+    // reference to a note the file does not define made the delete itself impossible.
+    const notesPart = resolveNotesPart(next, hit.noteKind);
+    if (!notesPart || !findNoteById(notesPart.root, hit.noteId)) continue;
     const result = applyDeleteNote(next, {
       op: 'deleteNote',
       noteKind: hit.noteKind,

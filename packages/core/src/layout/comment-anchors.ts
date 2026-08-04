@@ -23,9 +23,10 @@ import {
   WML_NAMESPACE_URI,
   type OoxmlElement,
   type OoxmlNode,
+  type OoxmlParagraphNode,
   type OoxmlPart,
 } from '@docx-editor.dev/core-contract/store';
-import { isContentRevisionKind } from '@docx-editor.dev/core-contract/store';
+import { isContentRevisionKind, paragraphOffsetIndex } from '@docx-editor.dev/core-contract/store';
 import { storyBlocks } from './story-roots.ts';
 
 /** The `w15` namespace: `commentsExtended.xml` — thread parent and resolved state. */
@@ -99,17 +100,6 @@ function wml(node: OoxmlElement, localName: string): string | undefined {
   return attribute(node, WML_NAMESPACE_URI, localName);
 }
 
-/** Characters one run child contributes to the model offset space. */
-function textLengthOfRunChild(node: OoxmlNode): number {
-  if (node.kind === 'text' || node.kind === 'deletedText') {
-    let length = 0;
-    for (const value of node.children) if (value.kind === 'textValue') length += value.value.length;
-    return length;
-  }
-  if (node.kind === 'tab' || node.kind === 'hardBreak') return 1;
-  return 0;
-}
-
 interface MarkerPoint {
   readonly commentId: string;
   readonly kind: 'start' | 'end';
@@ -119,34 +109,42 @@ interface MarkerPoint {
 /**
  * Comment range markers inside one paragraph, with the model offset each sits at.
  *
- * Mirrors the offset rule used by `segmentsOf` and the layout piece walk: runs contribute their
- * text, revision wrappers are descended into, everything else is skipped. A marker between two
- * runs takes the offset of the boundary it sits on, because it occupies no characters itself.
+ * Offsets come from `paragraphOffsetIndex` — `segmentsOf`'s own walk — rather than from a
+ * private character count. A marker occupies no characters, so it takes the offset of the
+ * boundary it sits on, and that boundary is only right if everything before it measured what
+ * the ops and the caret say it measures. The private count got two things wrong: it never
+ * descended into `w:hyperlink`, so a comment after a link anchored short by the link's length
+ * and markers written INSIDE one — which is what Word writes when you comment on link text —
+ * yielded no anchor at all and reported the comment orphaned; and it gave a note reference or
+ * an atomic field nothing where the model gives them one unit each.
  */
-function markersInParagraph(paragraph: OoxmlElement): MarkerPoint[] {
+function markersInParagraph(paragraph: OoxmlParagraphNode): MarkerPoint[] {
+  const offsets = paragraphOffsetIndex(paragraph);
   const points: MarkerPoint[] = [];
-  let offset = 0;
   const walk = (children: readonly OoxmlNode[], depth: number): void => {
     for (const child of children) {
       if (child.kind === 'textValue') continue;
-      if (child.kind === 'run') {
-        for (const grand of child.children) offset += textLengthOfRunChild(grand);
-        continue;
-      }
       if (child.kind === 'commentRangeStart' || child.kind === 'commentRangeEnd') {
         const id = wml(child, 'id');
-        if (id !== undefined) {
+        const span = offsets.spanOf(child);
+        // A marker the offset walk never reached — under a container it does not descend, or
+        // past the nesting cap — has no position to report. It is left out, and the comment
+        // is reported orphaned rather than anchored at a guessed offset.
+        if (id !== undefined && span) {
           points.push({
             commentId: id,
             kind: child.kind === 'commentRangeStart' ? 'start' : 'end',
-            offset,
+            offset: span.start,
           });
         }
         continue;
       }
+      // A link is a run container like a revision wrapper, and either can hold the other.
       // Depth is bounded for the same reason the layout walk bounds it: nesting is the
       // cheapest unbounded axis in an attacker-controlled file.
-      if (isContentRevisionKind(child.kind) && depth < 32) walk(child.children, depth + 1);
+      if ((child.kind === 'hyperlink' || isContentRevisionKind(child.kind)) && depth < 32) {
+        walk(child.children, depth + 1);
+      }
     }
   };
   walk(paragraph.children, 0);
@@ -216,8 +214,8 @@ export function commentAnchorsOfStory(part: OoxmlPart): CommentAnchor[] {
 }
 
 /** Paragraphs inside a table, in document order, including nested tables. */
-function paragraphsWithin(node: OoxmlElement): OoxmlElement[] {
-  const found: OoxmlElement[] = [];
+function paragraphsWithin(node: OoxmlElement): OoxmlParagraphNode[] {
+  const found: OoxmlParagraphNode[] = [];
   const visit = (current: OoxmlNode, depth: number): void => {
     if (current.kind === 'textValue' || depth > 32) return;
     if (current.kind === 'paragraph') {

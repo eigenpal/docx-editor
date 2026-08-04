@@ -11,8 +11,10 @@
 import {
   WML_NAMESPACE_URI,
   collectRevisionSites,
+  paragraphOffsetIndex,
   type OoxmlElement,
   type OoxmlNode,
+  type OoxmlParagraphNode,
   type OoxmlPart,
   type RevisionAddress,
 } from '@docx-editor.dev/core-contract/store';
@@ -173,23 +175,6 @@ function textUnder(node: OoxmlNode): string {
   return text;
 }
 
-/**
- * A run's length in the MODEL OFFSET SPACE, which is the space ops and the caret use.
- *
- * A tab and a break each measure one, exactly as `segmentsOf` counts them. Counting only
- * characters put every card in a paragraph containing a tab at the wrong offset: the range
- * the pane reported was short by one per tab, so the caret inside a revision activated the
- * wrong card and the highlight band landed a character early.
- */
-function runLength(run: OoxmlNode): number {
-  if (run.kind === 'textValue') return run.value.length;
-  if (run.kind === 'tab' || run.kind === 'hardBreak') return 1;
-  if (run.kind === 'runProperties' || run.kind === 'generic') return 0;
-  let total = 0;
-  for (const child of run.children) total += runLength(child);
-  return total;
-}
-
 /** The `w:p` a node sits inside, and the model offset it starts at within that paragraph. */
 interface SiteLocation {
   readonly paragraphId: string;
@@ -202,22 +187,41 @@ interface SiteLocation {
  *
  * One walk rather than a lookup per site: `resolveRevisions` learned the same lesson the hard
  * way, where a per-site tree walk inside a per-site loop made accept-all quadratic.
+ *
+ * Offsets come from `paragraphOffsetIndex`, which is `segmentsOf`'s walk. A private one here
+ * measured a run by summing its text and gave a note reference, an atomic field and a field's
+ * instruction text the wrong lengths, so every card in a paragraph holding one reported a
+ * range the caret and the ops disagreed with.
  */
 function locateSites(part: OoxmlPart): Map<string, SiteLocation> {
   const located = new Map<string, SiteLocation>();
-  const walkParagraph = (paragraph: OoxmlElement): void => {
-    let offset = 0;
+  const walkParagraph = (paragraph: OoxmlParagraphNode): void => {
+    const offsets = paragraphOffsetIndex(paragraph);
+    const place = (node: OoxmlNode, start: number, end: number, depth: number): void => {
+      if (node.kind === 'textValue' || depth > 64) return;
+      located.set(node.id, { paragraphId: paragraph.id, start, end });
+      for (const child of node.children) place(child, start, end, depth + 1);
+    };
     const visit = (node: OoxmlNode, depth: number): void => {
       if (node.kind === 'textValue' || depth > 64) return;
+      const span = offsets.spanOf(node);
       if (node.kind === 'run') {
-        offset += runLength(node);
+        if (!span) return;
+        located.set(node.id, { paragraphId: paragraph.id, start: span.start, end: span.end });
+        // A run's OWN properties anchor over the run. `w:rPrChange` is a revision that
+        // decorates no characters and lives in `w:rPr`, so stopping at the run left it with
+        // no geometry at all: its card sorted to the end of the rail, painted no band, and
+        // the caret in tracked-formatted text activated nothing while accept and reject
+        // stayed on offer.
+        for (const child of node.children) {
+          if (child.kind === 'runProperties') place(child, span.start, span.end, depth + 1);
+        }
         return;
       }
-      const start = offset;
+      if (span)
+        located.set(node.id, { paragraphId: paragraph.id, start: span.start, end: span.end });
       for (const child of node.children) visit(child, depth + 1);
-      located.set(node.id, { paragraphId: paragraph.id, start, end: offset });
     };
-    // Content first, so `offset` has reached the paragraph's end before the MARK is placed.
     for (const child of paragraph.children) {
       if (child.kind === 'paragraphProperties') continue;
       visit(child, 0);
@@ -227,14 +231,7 @@ function locateSites(part: OoxmlPart): Map<string, SiteLocation> {
     // card never opened when the caret was at the break that made it, `setActiveReviewItem`
     // threw the caret to the paragraph start, and the zero-width range painted no band.
     const properties = paragraph.children.find((child) => child.kind === 'paragraphProperties');
-    if (properties) {
-      const markVisit = (node: OoxmlNode, depth: number): void => {
-        if (node.kind === 'textValue' || depth > 64) return;
-        located.set(node.id, { paragraphId: paragraph.id, start: offset, end: offset });
-        for (const child of node.children) markVisit(child, depth + 1);
-      };
-      markVisit(properties, 0);
-    }
+    if (properties) place(properties, offsets.length, offsets.length, 0);
   };
   const walk = (node: OoxmlNode, depth: number): void => {
     if (node.kind === 'textValue' || depth > 64) return;
@@ -538,6 +535,17 @@ export function commentItemsOf(
   for (const comment of comments) {
     const anchor = anchorById.get(comment.id);
     if (!anchor || anchor.orphaned) continue;
+    // A ZERO-WIDTH range is evidence of nothing. Two comments that both cover no characters
+    // sit at the same offset for any number of reasons — adjacent markers, a range the
+    // producer wrote empty — and reading that as a thread put two unrelated authors in one
+    // card. Only a range with characters in it can say "these two remarks are about the same
+    // words".
+    if (
+      anchor.start.paragraphId === anchor.end.paragraphId &&
+      anchor.start.offset === anchor.end.offset
+    ) {
+      continue;
+    }
     const span =
       `${anchor.start.paragraphId}:${anchor.start.offset}` +
       `|${anchor.end.paragraphId}:${anchor.end.offset}`;

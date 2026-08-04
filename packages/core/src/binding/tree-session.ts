@@ -13,7 +13,11 @@
 
 import type { Node as PMNode } from 'prosemirror-model';
 import { collectReviewItems, type ReviewItem } from '../layout/review-model.ts';
-import { addComment } from '../store/store/comment-writes.ts';
+import {
+  addComment,
+  commentPartNameOf,
+  commentsExtendedPartNameOf,
+} from '../store/store/comment-writes.ts';
 import {
   ORIGIN_IDS,
   TreePackageStore,
@@ -82,6 +86,10 @@ import {
 } from './tree-binding.ts';
 import type { TreeBindingRejection } from './tree-binding.ts';
 import { buildParagraphAnchorIndex, type ParagraphAnchorIndex } from './paragraph-anchors.ts';
+import {
+  readTrackingSettings,
+  type DocumentTrackingSettings,
+} from '../store/package/tracking-settings.ts';
 
 export interface TreeApplyResult {
   readonly committed: boolean;
@@ -217,6 +225,15 @@ export interface TreeDocxSession {
    * Settings editing is a later slice, so this is immutable for the session.
    */
   settingsRoot(): OoxmlElement | null;
+  /**
+   * What `settings.xml` says about tracking — `w:trackRevisions`, the tracked-changes
+   * protection, and the two do-not-track switches.
+   *
+   * Read from the document rather than assumed, because Word records the tracking state on
+   * the FILE: a package that asks to be edited as tracked changes, presented as an ordinary
+   * editable one, takes its first keystroke as an untracked edit.
+   */
+  trackingSettings(): DocumentTrackingSettings;
   /**
    * The theme's ten picker colours (`a:clrScheme`), in Word's column order, or `[]`
    * when the package has no complete scheme. Memoized once: the theme part is
@@ -774,6 +791,7 @@ export function openTreeSession(bytes: Uint8Array): OpenTreeSessionResult {
       numberingRoot: () => resolveNumberingRoot(),
 
       settingsRoot: () => resolveSettingsRoot(),
+      trackingSettings: () => readTrackingSettings(resolveSettingsRoot()),
 
       documentThemeColors() {
         themeColorsCache ??= collectDocumentThemeColors(resolveThemeRoot());
@@ -865,12 +883,16 @@ export function openTreeSession(bytes: Uint8Array): OpenTreeSessionResult {
         const store = bodyStore();
         if (!reviewCache || reviewCache.revision !== store.revision) {
           const pkg = currentPackage();
+          // Resolved through the story's own relationships, exactly as the WRITE side
+          // resolves them. Hardcoding `/word/comments.xml` here made the reader disagree
+          // with the writer for any package that names its comment part something else —
+          // the comment was written and then never read back.
           reviewCache = {
             revision: store.revision,
             items: collectReviewItems({
               storyPart: store.part,
-              commentsPart: pkg.parts.get('/word/comments.xml'),
-              commentsExtendedPart: pkg.parts.get('/word/commentsExtended.xml'),
+              commentsPart: pkg.parts.get(commentPartNameOf(pkg, store.part.name)),
+              commentsExtendedPart: pkg.parts.get(commentsExtendedPartNameOf(pkg, store.part.name)),
             }),
           };
         }
@@ -879,6 +901,14 @@ export function openTreeSession(bytes: Uint8Array): OpenTreeSessionResult {
 
       replyToComment(parentCommentId, anchor, text, author, date) {
         const store = bodyStore();
+        // The story store keeps a package of its OWN, and package-level writes that are not
+        // story intents — a `numbering.xml` graft, a minted hyperlink relationship — land on
+        // the coordinator's copy through `replacePackageShell`. Without this graft the comment
+        // transaction builds on a package that never saw them, and publishing its result back
+        // overwrites them: a `w:numPr` or an `r:id` left dangling on save by an unrelated
+        // reply. `graftPackage` is the narrow lane for exactly this — a package write that is
+        // not a user intent and publishes no revision.
+        store.graftPackage(() => packageStore.currentPackage());
         const result = addComment(store, {
           anchor: {
             paragraphId: anchor.paragraphId,

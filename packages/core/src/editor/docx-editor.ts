@@ -64,6 +64,10 @@ import {
   type SemanticPosition,
 } from '../layout/index.ts';
 import type { DocumentEditingMode, ReviewItemPlacement } from '../contracts/editor.ts';
+import {
+  NO_TRACKING_SETTINGS,
+  type DocumentTrackingSettings,
+} from '../store/package/tracking-settings.ts';
 import type {
   CanResult,
   ContainerRef,
@@ -180,6 +184,15 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
    * surface is handed it at mount, and a document reload keeps the reader's choice.
    */
   let editingMode: DocumentEditingMode = config.mode === 'view' ? 'viewing' : 'editing';
+  /**
+   * True once the reader has moved the mode themselves.
+   *
+   * A document reload must not undo their choice: `w:trackRevisions` says what the FILE asks
+   * for, and the reader saying otherwise outranks it for the rest of the session.
+   */
+  let readerChoseMode = false;
+  /** A refusal this facade made before the surface could see the request; see `snapshot`. */
+  let facadeRejection: string | null = null;
   const mode = config.mode ?? 'edit';
   let zoom =
     config.zoom !== undefined &&
@@ -360,6 +373,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
     }
     parseError = null;
     surface = result.surface;
+    adoptDocumentTracking();
     // A surface is rebuilt on load and on the font remount, and it comes up editable. The
     // engine's own guards refuse the WRITE, but the pages layer stays `contenteditable`
     // without this — so a document open for viewing still drew a caret, still opened an IME,
@@ -676,7 +690,11 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
       pageSetup: pageSetupOf(surface),
       reviewPaneOpen,
       editingMode,
-      lastRejection: state?.lastRejection ?? null,
+      // The facade's own refusal wins while it stands: the surface never saw the request.
+      // A document that ASKS for tracked changes and cannot get them — no author configured
+      // — is refused before any keystroke reaches the surface, so there is nothing in the
+      // surface state to report it. Cleared the moment the surface refuses anything itself.
+      lastRejection: state?.lastRejection ?? facadeRejection,
     };
   }
 
@@ -914,6 +932,55 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
     });
   }
 
+  /** What the OPEN document asks for, or nothing when no document is mounted. */
+  function documentTracking(): DocumentTrackingSettings {
+    return surface?.session.trackingSettings() ?? NO_TRACKING_SETTINGS;
+  }
+
+  /**
+   * Enter suggesting mode when the DOCUMENT asked for it.
+   *
+   * `w:trackRevisions` is a property of the file, not of the reader, so a package that
+   * carries it opens in suggesting — otherwise the first keystroke is an untracked edit in a
+   * document whose author asked for the opposite, with the pill reading "Editing".
+   *
+   * Two things override it, and both are the reader's own decision rather than the file's:
+   * a document opened `mode: 'view'` stays viewing, and a mode the reader has already moved
+   * off is not moved back on a reload. With no author configured the mode is not entered —
+   * suggesting refuses every edit without one — and the reason is published rather than the
+   * request being dropped in silence.
+   */
+  function adoptDocumentTracking(): void {
+    if (mode === 'view' || editingMode !== 'editing' || readerChoseMode) return;
+    if (!documentTracking().trackRevisions) return;
+    if (!config.author) {
+      facadeRejection = 'this document asks for tracked changes, but no author is configured';
+      return;
+    }
+    editingMode = 'suggesting';
+    surface?.setEditingMode('suggest');
+  }
+
+  /**
+   * The document's own refusal of a mode change, or null.
+   *
+   * `w:documentProtection/@w:edit="trackedChanges"` says the document permits editing ONLY as
+   * tracked changes, so leaving suggesting is refused. It is ADVISORY and never presented as
+   * enforcement — the password hash is not verified and the file is editable by anyone
+   * holding it — but ignoring it silently produces exactly the untracked edits its author
+   * asked not to have. Viewing is always reachable: reading less than the document permits
+   * is not something a protection setting has an interest in.
+   */
+  function modeRestriction(next: DocumentEditingMode): ExecResult | null {
+    if (next !== 'editing') return null;
+    if (!documentTracking().restrictedToTrackedChanges) return null;
+    return {
+      ok: false,
+      code: 'locked',
+      reason: 'this document permits editing only as tracked changes',
+    };
+  }
+
   function authorOfItem(item: ReviewItem): string {
     return item.kind === 'comment' ? item.comment.author : item.author;
   }
@@ -1065,6 +1132,10 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
         if (mode === 'view' && command.mode !== 'viewing') {
           return { ok: false, code: 'locked', reason: 'this document was opened for viewing' };
         }
+        const restriction = modeRestriction(command.mode);
+        if (restriction) return restriction;
+        readerChoseMode = true;
+        facadeRejection = null;
         editingMode = command.mode;
         // The SURFACE decides what an op becomes, so it has to hear about this; `viewing`
         // additionally gates every command below through `gateCommand`.
@@ -1124,6 +1195,10 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
         if (destroyed) return { ok: false, code: 'notFound', reason: 'the editor was destroyed' };
         if (command.type === 'setEditingMode' && mode === 'view' && command.mode !== 'viewing') {
           return { ok: false, code: 'locked', reason: 'this document was opened for viewing' };
+        }
+        if (command.type === 'setEditingMode') {
+          const restriction = modeRestriction(command.mode);
+          if (restriction) return restriction;
         }
         return { ok: true };
       }

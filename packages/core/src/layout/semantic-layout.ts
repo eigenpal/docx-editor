@@ -266,8 +266,12 @@ export function layoutSemanticDocument(
   revision: number,
   options: SemanticLayoutOptions
 ): SemanticLayout {
-  const sections = enumerateDocumentSections(part);
-  const blocks = storyBlocks(part, options.displayMode ?? DEFAULT_REVISION_DISPLAY_MODE);
+  // ONE display mode for both. `blockStart` / `blockEndExclusive` index into this exact block
+  // list, so enumerating sections over a differently-filtered one slices with indices that
+  // do not belong to it and lands body text under the wrong section's page geometry.
+  const displayMode = options.displayMode ?? DEFAULT_REVISION_DISPLAY_MODE;
+  const sections = enumerateDocumentSections(part, displayMode);
+  const blocks = storyBlocks(part, displayMode);
   // Full-body list resolve so counters continue across sections and table cells.
   const optionsWithLists = withResolvedListItems(options, blocks);
 

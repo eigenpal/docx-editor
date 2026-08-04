@@ -11,6 +11,7 @@ import { resolve } from 'node:path';
 import {
   TreeDocumentStore,
   addComment,
+  commentPartNameOf,
   readOoxmlPackage,
   serializeOoxmlPart,
   writeOoxmlPackage,
@@ -378,5 +379,77 @@ describe('paraId is minted on write and only on write', () => {
     );
     expect(comment?.paraId).toMatch(/^[0-9A-F]{8}$/i);
     expect(comment?.paraId).not.toBe('00000000');
+  });
+});
+
+// A relationship is a claim a FILE makes, and a `.docx` is a file an attacker wrote.
+describe('a crafted comments relationship cannot redirect the write', () => {
+  const COMMENTS_REL =
+    'http://schemas.openxmlformats.org/officeDocument/2006/relationships/comments';
+
+  test('a comments relationship pointing at a part of another type is ignored', () => {
+    const pkg = fixture();
+    // `settings.xml` is a real part of the package, declaring the settings content type.
+    // Declaring a comments relationship at it is legal XML and is what a crafted package
+    // does: without a content-type check the comment body, and everything a reader trusts
+    // about it, is written straight into another part.
+    const target = [...pkg.parts.keys()].find((name) => name.endsWith('/settings.xml'));
+    expect(target).toBeDefined();
+    const owner = pkg.mainDocumentPart;
+    const crafted: OoxmlPackage = {
+      ...pkg,
+      relationships: new Map(pkg.relationships).set(owner, [
+        // The file's OWN comments relationship, replaced — which is what a crafted package
+        // ships, not an extra one appended after a legitimate one.
+        ...(pkg.relationships.get(owner) ?? []).filter((record) => record.type !== COMMENTS_REL),
+        {
+          id: 'rIdEvil',
+          ownerPart: owner,
+          type: COMMENTS_REL,
+          rawTarget: 'settings.xml',
+          targetMode: 'Internal' as const,
+        },
+      ]),
+    };
+
+    expect(commentPartNameOf(crafted, owner)).toBe('/word/comments.xml');
+
+    const store = new TreeDocumentStore(crafted, owner);
+    const settingsBefore = serializeOoxmlPart(crafted.parts.get(target!)!);
+    const anchor = paragraphWithText(store.part, 10);
+    const result = addComment(store, {
+      anchor: { paragraphId: anchor.id, start: 0, end: 5 },
+      author: 'QA Reviewer',
+      date: '2026-08-03T10:00:00Z',
+      text: 'redirected?',
+    });
+    expect(result.ok).toBe(true);
+    // The settings part is byte-identical: nothing about this write reached it.
+    expect(serializeOoxmlPart(store.package.parts.get(target!)!)).toBe(settingsBefore);
+    expect(serializeOoxmlPart(store.package.parts.get('/word/comments.xml')!)).toContain(
+      'redirected?'
+    );
+  });
+
+  test('a relationship naming a part the package does not hold is still honoured', () => {
+    // The check is on the target's declared TYPE, not on the name. A package whose comment
+    // part is simply called something else must keep working, and the part this write is
+    // about to create is typed by this write.
+    const pkg = fixture();
+    const owner = pkg.mainDocumentPart;
+    const crafted: OoxmlPackage = {
+      ...pkg,
+      relationships: new Map(pkg.relationships).set(owner, [
+        ...(pkg.relationships.get(owner) ?? []).filter((record) => record.type !== COMMENTS_REL),
+        {
+          id: 'rIdComments',
+          ownerPart: owner,
+          type: COMMENTS_REL,
+          rawTarget: 'review/comments.xml',
+          targetMode: 'Internal' as const,
+        },
+      ]),
+    };
+    expect(commentPartNameOf(crafted, owner)).toBe('/word/review/comments.xml');
   });
 });

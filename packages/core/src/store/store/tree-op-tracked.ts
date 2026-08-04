@@ -17,6 +17,14 @@
 //   - deleting your own pending insertion REMOVES it, because there is nothing to propose to
 //     anyone else — the text never existed for them;
 //   - deleting inside an existing `w:del` does nothing, since it is already gone.
+//
+// EVERY length here comes from `paragraphOffsetIndex`, which is `segmentsOf`'s own walk. This
+// module used to carry a private `lengthOf` that summed text characters, and it disagreed with
+// the authority on three things: a note reference and an atomic field measure ONE unit each and
+// it gave them none, and a field's `w:instrText` measures nothing and it counted its
+// characters. In any paragraph holding a footnote, an endnote or a field, that put a tracked
+// insert at the wrong offset, refused an insert at the true paragraph end as out of range, and
+// struck one character too many while leaving the reference standing.
 
 import {
   WML_NAMESPACE_URI,
@@ -31,17 +39,8 @@ import {
   replaceChildren,
 } from '../package/ooxml-edit.ts';
 import { TEXT_DEPS, fromEdit } from './tree-op-nodes.ts';
+import { paragraphOffsetIndex, type ParagraphOffsetIndex } from './tree-op-segments.ts';
 import type { RevisionAttributionInput, TreeOpEffect, TreeOpResult } from './tree-op-validate.ts';
-
-/** Length of a node in the model offset space, matching `segmentsOf`. */
-function lengthOf(node: OoxmlNode): number {
-  if (node.kind === 'textValue') return node.value.length;
-  if (node.kind === 'tab' || node.kind === 'hardBreak') return 1;
-  if (node.kind === 'runProperties' || node.kind === 'generic') return 0;
-  let total = 0;
-  for (const child of node.children) total += lengthOf(child);
-  return total;
-}
 
 function attr(localName: string, value: string) {
   return {
@@ -270,6 +269,55 @@ interface Cursor {
 }
 
 /**
+ * The nodes an ATOM occupies, split into the one that carries its offset and the rest.
+ *
+ * A complex field is one addressable unit spread over five or six runs — `w:fldChar begin`,
+ * `w:instrText`, `w:fldChar separate`, the cached result, `w:fldChar end`. `segmentsOf` gives
+ * the whole thing ONE model position, at the begin node, and lists every other node it
+ * swallows. A tracked edit has to respect that grouping or it writes markup no reader can
+ * resolve: a `begin` inside a `w:del` with its `end` outside is a field whose deletion cannot
+ * be accepted without orphaning the rest of it, and text typed at the field's model end lands
+ * between the chrome runs, inside the instruction, where it is invisible and stays invisible.
+ */
+interface AtomNodes {
+  /** The node the atom's single offset belongs to — its `begin`, or the `w:fldSimple`. */
+  readonly begin: ReadonlySet<string>;
+  /** Everything else the atom swallows: instruction, separator, cached result, end. */
+  readonly tail: ReadonlySet<string>;
+}
+
+function atomNodesOf(offsets: ParagraphOffsetIndex): AtomNodes {
+  const begin = new Set<string>();
+  const tail = new Set<string>();
+  for (const segment of offsets.segments) {
+    if (!segment.removeNodeIds || segment.removeNodeIds.length === 0) continue;
+    begin.add(segment.node.id);
+    for (const id of segment.removeNodeIds) {
+      if (id !== segment.node.id) tail.add(id);
+    }
+  }
+  return { begin, tail };
+}
+
+/** A run's content — everything but its `w:rPr`. */
+function contentOf(node: OoxmlNode): readonly OoxmlNode[] {
+  return childrenOf(node).filter((child) => !isRunProperties(child));
+}
+
+/** A run holding nothing but an atom's TAIL: chrome, and never a position of its own. */
+function isAtomTailRun(node: OoxmlNode, atoms: AtomNodes): boolean {
+  if (node.kind !== 'run') return false;
+  const content = contentOf(node);
+  return content.length > 0 && content.every((child) => atoms.tail.has(child.id));
+}
+
+/** A run holding an atom's addressable node — the one position the whole atom has. */
+function holdsAtomBegin(node: OoxmlNode, atoms: AtomNodes): boolean {
+  if (node.kind !== 'run') return false;
+  return contentOf(node).some((child) => atoms.begin.has(child.id));
+}
+
+/**
  * Insert `text` at `offset` as a tracked insertion.
  *
  * Returns the paragraph's new children, or null when the offset was never reached — which
@@ -286,6 +334,7 @@ export function applyInsertTracked(
 ): TreeOpResult {
   const mint = createNodeIdAllocator(part);
   const mintRevision = nextRevisionId(part);
+  const offsets = paragraphOffsetIndex(paragraph);
   const effect: TreeOpEffect = {
     dirty: [paragraph.id],
     created: [],
@@ -294,6 +343,7 @@ export function applyInsertTracked(
     impact: 'text-local',
   };
   const cursor: Cursor = { offset: 0 };
+  const atoms = atomNodesOf(offsets);
   let placed = false;
 
   // Typing over a selection arrives as a deletion and an insertion in ONE transaction, the
@@ -303,7 +353,14 @@ export function applyInsertTracked(
   // Only a deletion from THIS edit joins: `adjacentDeletion` matches on author alone, and a
   // deletion the same author made last month is also adjacent. Adopting its date would
   // backdate today's edit into last month's revision and make rejecting one reject both.
-  const replaced = adjacentDeletion(paragraph, offset, offset, revision.author, revision.date);
+  const replaced = adjacentDeletion(
+    paragraph,
+    offsets,
+    offset,
+    offset,
+    revision.author,
+    revision.date
+  );
   const attribution: RevisionAttributionInput = replaced
     ? { author: revision.author, ...(replaced.date === undefined ? {} : { date: replaced.date }) }
     : revision;
@@ -321,9 +378,19 @@ export function applyInsertTracked(
         out.push(node);
         continue;
       }
-      const length = lengthOf(node);
+      const length = offsets.lengthOf(node);
       const start = cursor.offset;
       const end = start + length;
+
+      // Chrome of an atom already passed: never a place to put words. A field's instruction,
+      // separator, cached result and end run all measure nothing and all sit at the same
+      // offset as each other, so the first of them would take an insertion aimed at the
+      // position AFTER the field — putting the typed text inside the field, where it is
+      // invisible to every reader including this one.
+      if (isAtomTailRun(node, atoms)) {
+        out.push(node);
+        continue;
+      }
 
       // A container the offset falls inside: descend, and let the split happen at the run.
       //
@@ -356,6 +423,26 @@ export function applyInsertTracked(
         continue;
       }
 
+      // INSIDE struck text. The caret can rest there — all-markup shows the words, so the
+      // reader can put it between two of them — and the module's rule is that an insertion
+      // goes BESIDE a deletion, never into it. Only the start boundary implemented that, so
+      // every interior offset was refused `offset-out-of-range`: a caret the surface had
+      // placed, at a position the offset model calls valid, that would take no typing.
+      // A deletion stays contiguous, so the words go after it, which is also the order a
+      // replacement reads in.
+      if (
+        !placed &&
+        offset > start &&
+        offset < end &&
+        node.kind !== 'textValue' &&
+        (node.kind === 'revisionDelete' || node.kind === 'revisionMoveFrom')
+      ) {
+        cursor.offset = end;
+        out.push(node, wrap([]));
+        placed = true;
+        continue;
+      }
+
       // A BOUNDARY against something that is not a run — a revision wrapper, a hyperlink,
       // a bookmark. Nothing here can be split, so the insertion goes beside it, and which
       // side is the whole question.
@@ -380,12 +467,22 @@ export function applyInsertTracked(
         continue;
       }
 
+      // The END boundary of an atom's begin run is the END of the WHOLE atom, and the atom's
+      // remaining runs are still to come. Placing here would put the words between the
+      // field's `begin` and its instruction; deferring lets the tail runs pass and the
+      // insertion land after the field, which is where the model offset points.
+      if (holdsAtomBegin(node, atoms) && offset === end && offset !== start) {
+        cursor.offset = end;
+        out.push(node);
+        continue;
+      }
+
       if (node.kind === 'run' && offset >= start && offset <= end) {
         const own = insertionAuthor([...stack, node]);
         // Inside our OWN pending insertion: extend it. A second `w:ins` nested in the first
         // says two people proposed the same words, which is not what happened.
         if (own === revision.author) {
-          out.push(splitRunAndInsert(mint, node, offset - start, text, false));
+          out.push(splitRunAndInsert(mint, offsets, node, offset - start, text, false));
           placed = true;
           cursor.offset = end + text.length;
           continue;
@@ -398,7 +495,7 @@ export function applyInsertTracked(
         } else if (offset === end) {
           out.push(node, wrap(properties));
         } else {
-          const [head, tail] = splitRun(mint, node, offset - start);
+          const [head, tail] = splitRun(mint, offsets, node, offset - start);
           out.push(head, wrap(properties), tail);
         }
         placed = true;
@@ -424,14 +521,19 @@ export function applyInsertTracked(
 }
 
 /** Split a run at a local offset, keeping its `w:rPr` on both halves. */
-function splitRun(mint: () => string, run: OoxmlNode, local: number): [OoxmlNode, OoxmlNode] {
+function splitRun(
+  mint: () => string,
+  offsets: ParagraphOffsetIndex,
+  run: OoxmlNode,
+  local: number
+): [OoxmlNode, OoxmlNode] {
   const properties = childrenOf(run).filter(isRunProperties);
   const head: OoxmlNode[] = [];
   const tail: OoxmlNode[] = [];
   let seen = 0;
   for (const child of childrenOf(run)) {
     if (isRunProperties(child)) continue;
-    const length = lengthOf(child);
+    const length = offsets.lengthOf(child);
     if (seen + length <= local) head.push(child);
     else if (seen >= local) tail.push(child);
     else if (child.kind === 'text' || child.kind === 'deletedText') {
@@ -452,12 +554,13 @@ function splitRun(mint: () => string, run: OoxmlNode, local: number): [OoxmlNode
 /** Put `text` into an existing run at a local offset — the extend-my-own-insertion path. */
 function splitRunAndInsert(
   mint: () => string,
+  offsets: ParagraphOffsetIndex,
   run: OoxmlNode,
   local: number,
   text: string,
   deleted: boolean
 ): OoxmlNode {
-  const [head, tail] = splitRun(mint, run, local);
+  const [head, tail] = splitRun(mint, offsets, run, local);
   const content = [
     ...childrenOf(head).filter((child) => !isRunProperties(child)),
     textNode(mint, text, deleted),
@@ -527,7 +630,8 @@ export function applyDeleteTracked(
   // The whole `CT_TrackChange` triple is joined, not just the id: a reader identifies a
   // revision by (id, author, date), so a fresh timestamp per keystroke split the run back
   // into one card per character even with the id shared.
-  const adjacent = adjacentDeletion(paragraph, start, end, revision.author, revision.date);
+  const offsets = paragraphOffsetIndex(paragraph);
+  const adjacent = adjacentDeletion(paragraph, offsets, start, end, revision.author, revision.date);
   const revisionId = adjacent?.id ?? mintRevision();
   const attribution: RevisionAttributionInput = adjacent
     ? { author: revision.author, ...(adjacent.date === undefined ? {} : { date: adjacent.date }) }
@@ -540,6 +644,19 @@ export function applyDeleteTracked(
     impact: 'text-local',
   };
   const cursor: Cursor = { offset: 0 };
+  // The nodes of every atom whose single model unit falls INSIDE the struck range. An atom is
+  // one addressable unit, so it goes whole: striking a field's `begin` and leaving its
+  // instruction, separator, result and `end` standing wrote a field no reader can resolve, and
+  // accepting that deletion removed the `begin` and orphaned the rest of it in the file.
+  const struck = new Set<string>();
+  for (const segment of offsets.segments) {
+    if (!segment.removeNodeIds || segment.removeNodeIds.length === 0) continue;
+    if (segment.start < start || segment.end > end) continue;
+    for (const id of segment.removeNodeIds) struck.add(id);
+  }
+  /** A run carrying part of a struck atom, whether or not it carries the offset itself. */
+  const carriesStruckAtom = (node: OoxmlNode): boolean =>
+    node.kind !== 'textValue' && contentOf(node).some((child) => struck.has(child.id));
 
   const strike = (nodes: readonly OoxmlNode[]): OoxmlNode =>
     build(mint(), 'revisionDelete', 'del', revisionAttributes(revisionId, attribution), nodes);
@@ -547,11 +664,29 @@ export function applyDeleteTracked(
   const rebuild = (nodes: readonly OoxmlNode[], stack: readonly OoxmlNode[]): OoxmlNode[] => {
     const out: OoxmlNode[] = [];
     for (const node of nodes) {
-      const length = lengthOf(node);
+      const length = offsets.lengthOf(node);
       const from = cursor.offset;
       const to = from + length;
 
-      if (to <= start || from >= end || length === 0) {
+      // A `w:fldSimple` cannot go inside a `w:del`: `CT_RunTrackChange` takes
+      // `EG_ContentRunContent`, which has no `fldSimple` in it. Word strikes one by putting
+      // the deletion INSIDE the field, around its runs, and so does this.
+      if (struck.has(node.id) && node.kind !== 'textValue' && isWmlNamed(node, 'fldSimple')) {
+        cursor.offset = to;
+        out.push({
+          ...node,
+          children: mergedRevisions(
+            node.children.map((child) =>
+              child.kind === 'run' && !insideDeletion(stack)
+                ? strike([toDeleted(mint, child)])
+                : child
+            )
+          ),
+        } as OoxmlNode);
+        continue;
+      }
+
+      if ((to <= start || from >= end || length === 0) && !carriesStruckAtom(node)) {
         cursor.offset = to;
         out.push(node);
         continue;
@@ -587,7 +722,7 @@ export function applyDeleteTracked(
       }
       const own = insertionAuthor(stack) === revision.author;
       const covered = { from: Math.max(start, from) - from, to: Math.min(end, to) - from };
-      const pieces = splitRunThree(mint, node, covered.from, covered.to);
+      const pieces = splitRunThree(mint, offsets, node, covered.from, covered.to, struck);
       if (pieces.before) out.push(pieces.before);
       if (pieces.covered) {
         // Our own pending insertion: remove rather than strike. The words were never anyone
@@ -658,6 +793,7 @@ function sameRevision(a: OoxmlElement, b: OoxmlElement): boolean {
  */
 function adjacentDeletion(
   paragraph: OoxmlParagraphNode,
+  offsets: ParagraphOffsetIndex,
   start: number,
   end: number,
   author: string,
@@ -665,14 +801,8 @@ function adjacentDeletion(
   within: string | undefined
 ): { readonly id: string; readonly date: string | undefined } | null {
   let found: { readonly id: string; readonly date: string | undefined } | null = null;
-  let offset = 0;
-  const visit = (node: OoxmlNode, enclosing: string | null): void => {
-    if (found !== null || node.kind === 'textValue') {
-      if (node.kind === 'textValue') offset += node.value.length;
-      return;
-    }
-    const length = lengthOf(node);
-    let own = enclosing;
+  const visit = (node: OoxmlNode): void => {
+    if (found !== null || node.kind === 'textValue') return;
     if (node.kind === 'revisionDelete') {
       const attributes = node.attributes;
       const whose = attributes.find(
@@ -682,11 +812,11 @@ function adjacentDeletion(
       const id = attributes.find(
         (attribute) => attribute.namespaceUri === WML_NAMESPACE_URI && attribute.localName === 'id'
       );
-      if (whose?.value === author && id) {
-        // Its own span, before descending: `offset` is still this node's start.
-        const from = offset;
-        const to = offset + length;
-        if (to === start || from === end) {
+      // A wrapper the offset walk never reached has no span, so it cannot be adjacent to
+      // anything: joining it would put this edit under an id at an unknown position.
+      const span = offsets.spanOf(node);
+      if (whose?.value === author && id && span) {
+        if (span.end === start || span.start === end) {
           const when = attributes.find(
             (attribute) =>
               attribute.namespaceUri === WML_NAMESPACE_URI && attribute.localName === 'date'
@@ -695,25 +825,23 @@ function adjacentDeletion(
           found = { id: id.value, date: when?.value };
           return;
         }
-        own = id.value;
       }
     }
-    if (node.kind === 'tab' || node.kind === 'hardBreak') {
-      offset += 1;
-      return;
-    }
-    for (const child of node.children) visit(child, own);
+    for (const child of node.children) visit(child);
   };
-  for (const child of paragraph.children) visit(child, null);
+  for (const child of paragraph.children) visit(child);
   return found;
 }
 
 /** Split a run into the part before the range, the covered part, and the part after. */
 function splitRunThree(
   mint: () => string,
+  offsets: ParagraphOffsetIndex,
   run: OoxmlNode,
   from: number,
-  to: number
+  to: number,
+  /** Nodes an atom being struck swallows; covered by identity, since they measure nothing. */
+  struckAtomNodes: ReadonlySet<string> = new Set()
 ): { before: OoxmlNode | null; covered: OoxmlNode | null; after: OoxmlNode | null } {
   const properties = childrenOf(run).filter(isRunProperties);
   const withProperties = (content: readonly OoxmlNode[]): OoxmlNode | null =>
@@ -733,10 +861,16 @@ function splitRunThree(
   let seen = 0;
   for (const child of childrenOf(run)) {
     if (isRunProperties(child)) continue;
-    const length = lengthOf(child);
+    const length = offsets.lengthOf(child);
     const childFrom = seen;
     const childTo = seen + length;
     seen = childTo;
+    // An atom's chrome measures nothing, so no offset comparison can place it. It goes with
+    // the unit it belongs to, which is being struck.
+    if (struckAtomNodes.has(child.id)) {
+      covered.push(child);
+      continue;
+    }
     if (childTo <= from) {
       before.push(child);
       continue;
